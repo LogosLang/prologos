@@ -3567,6 +3567,120 @@
   (check-equal? (read-all-forms-string "{:a 1}") '(($brace-params :a 1)))
   (check-equal? (read-all-forms-string "schema S\n  :f Int") '((schema S (:f Int)))))
 
+;; ============================================================
+;; D4.P4c-2 condition (c) prerequisites — THE TABLE'S MEASURED MISSES
+;; ============================================================
+;;
+;; The rows above pin the table as DESIGNED. These pin what MEASURING it found,
+;; and they are the reason the owner scoped P4c-2's close as full unwrap-coverage
+;; repair rather than consumer-hardening alone: the enumeration missed FOUR
+;; distinct shapes inside a single session, which is the record that disqualifies
+;; it as the safety property.
+;;
+;; ⚠ EVERY expectation below was MEASURED at HEAD before being written, never
+;; recalled — the two guessed baselines earlier in this phase both produced pins
+;; that failed for the wrong reason.
+;;
+;; The misses come in TWO DIRECTIONS, and only one of them is a leak:
+;;   UNDER-REACH — the table misses a form, `($bcast-step …)` survives into its
+;;                 binder position, and the consumer reads it as an extra
+;;                 positional parameter. This is the 3-arity class.
+;;   OVER-REACH  — the walk unwraps PAST the binder region and silently strips a
+;;                 legitimate broadcast out of a BODY. Condition (c) structurally
+;;                 CANNOT catch this one: no sentinel survives for a refusal arm
+;;                 to see. It is inert only until P4c-3 gives `$bcast-step` a
+;;                 consumer, at which point it becomes a silent wrong answer.
+
+;; ---- UNDER-REACH 1: the private-suffix family (a LIVE end-to-end regression) ----
+
+(test-case "P4c-2 (c): private-suffix heads bind too — `defn-` / `def-` / `spec-`"
+  ;; `private-form-base` (macros.rkt) normalizes the `-` suffix at PREPARSE,
+  ;; strictly AFTER this post-pass — so at unwrap time the head is literally
+  ;; `defn-` and the table's `memq` misses. Eleven suffixed heads exist.
+  (check-equal? (read-all-forms-string "defn- f [x:Int] x") '((defn- f (x :Int) x)))
+  (check-equal? (read-all-forms-string "spec- f [x:Int] -> Int") '((spec- f (x :Int) -> Int)))
+  (check-equal? (read-all-forms-string "def- x:Int := 5") '((def- x :Int := 5))))
+
+(test-case "P4c-2 (c): the private-suffix leak is a LIVE REGRESSION — end to end"
+  ;; ⚠ THE ONLY END-TO-END REGRESSION P4c-2 INTRODUCED, isolated by an A/B against
+  ;; a worktree pinned at 182f1678 (the pre-mint baseline): there it prints
+  ;; "priv : Int -> Int defined." and "7 : Int" at ZERO errors; at the mint commit
+  ;; it is 2 errors. The corpus A/B could not see it — 161 files, and not one
+  ;; combines a private form with a fused annotation.
+  ;;
+  ;; This pin is END-TO-END on purpose. Every one of the 18 reader-level pins in
+  ;; the block above stayed green through this regression, which is the same
+  ;; blindness that lets `def x:Int := 5` hold a green datum pin while aborting
+  ;; the whole file in production.
+  (check-equal? (run-ws "defn- priv [x:Int] x\n[priv 7]\n")
+                '("priv : Int -> Int defined." "7 : Int")))
+
+;; ---- UNDER-REACH 2: a form with TWO binder groups ----
+
+(test-case "P4c-2 (c): an implicit-binder group does not consume the param group"
+  ;; `scan-for-param-heads` disarms after the FIRST group it meets, so a leading
+  ;; `{A}` eats the arming and the real param group leaks. `{A B : Type}` before
+  ;; `[x:A]` is idiomatic per prologos-syntax.md § Type annotations, so this is a
+  ;; first-class spelling, not a corner.
+  (check-equal? (read-all-forms-string "spec f {A} [x:Int] -> Int")
+                '((spec f ($brace-params A) (x :Int) -> Int)))
+  (check-equal? (read-all-forms-string "defn f {A} [x:Int] x")
+                '((defn f ($brace-params A) (x :Int) x))))
+
+;; ---- UNDER-REACH 3: `defmacro` ----
+
+(test-case "P4c-2 (c): `defmacro`'s param group binds — it is in no table"
+  ;; A live binding param group (lib/prologos/core.prologos: `defmacro when
+  ;; [$cond $body] …`) that appears in none of the three head lists.
+  (check-equal? (read-all-forms-string "defmacro when [$c:Int $b] $c")
+                '((defmacro when ($c :Int $b) $c))))
+
+;; ---- UNDER-REACH 4: single-line `$pipe` arms ----
+
+(test-case "P4c-2 (c): a SINGLE-LINE arm group unwraps like the multi-line one"
+  ;; ⚠ SPELLING-SPECIFIC, and the existing arm pins above only cover the
+  ;; multi-line form — where `$pipe` becomes a SUB-GROUP whose head is `$pipe`,
+  ;; so `apply-binder-unwrap`'s explicit arm fires. Written on ONE line the
+  ;; `$pipe` stays a flat sibling under `match`, which is not a param head, and
+  ;; the arm is never reached. Measured: the multi-line spelling is CORRECT today
+  ;; and must stay so; only the flat one leaks.
+  (check-equal? (read-all-forms-string "match v | c a:Int -> a")
+                '((match v $pipe c a :Int -> a)))
+  ;; the idiomatic spelling — already green, pinned here so a fix cannot trade
+  ;; one spelling for the other
+  (check-equal? (read-all-forms-string "match v\n  | c a:Int -> a")
+                '((match v ($pipe c a :Int -> a)))))
+
+;; ---- OVER-REACH: a BODY broadcast must survive ----
+
+(test-case "P4c-2 (c): `let` without `:=` must not strip a body broadcast"
+  ;; `unwrap-binders-until-terminator` runs to the END of the list when no
+  ;; terminator is found, and `:=` is OPTIONAL in WS `let` — so the body's
+  ;; broadcast is silently unwrapped. Measured today: `(let x 5 (users :name))`.
+  ;; The binder region here is the name plus an optional fused annotation; the
+  ;; value and body are not binders.
+  (check-equal? (read-all-forms-string "def z := 0\nlet x 5\n  users:name")
+                '((def z := 0) (let x 5 (users ($bcast-step :name)))))
+  ;; the `:=` spelling already behaves — pinned so the bound cannot regress it
+  (check-equal? (read-all-forms-string "def z := 0\nlet x := 5\n  users:name")
+                '((def z := 0) (let x := 5 (users ($bcast-step :name))))))
+
+(test-case "P4c-2 (c): an arms-only `defn` must not strip its arm BODY's broadcast"
+  ;; `scan-for-param-heads` stays armed through every SYMBOL, so with no bracket
+  ;; group to consume the arming it runs on until it meets ANY list — which for
+  ;; an arms-only clause is the body's own `($bcast-step …)`. Arms-only `defn` is
+  ;; the PRIMARY multi-arity form per CLAUDE.md, so this is the common shape.
+  ;; Measured today: `(defn f ($pipe a -> users :name))` — stripped.
+  (check-equal? (read-all-forms-string "defn f\n  | a -> users:name")
+                '((defn f ($pipe a -> users ($bcast-step :name)))))
+  ;; two arms already behave (arm 1's group consumes the arming) — pinned so the
+  ;; fix does not trade the one-arm case for the two-arm case
+  (check-equal? (read-all-forms-string "defn f\n  | 0 -> 1\n  | a -> users:name")
+                '((defn f ($pipe 0 -> 1) ($pipe a -> users ($bcast-step :name)))))
+  ;; and a header param group must still leave the body alone
+  (check-equal? (read-all-forms-string "defn f [a]\n  users:name")
+                '((defn f (a) (users ($bcast-step :name))))))
+
 (test-case "P4c-2: the QUOTE bucket declines — it is neither expression nor binder"
   ;; `'` lexes as a loose token with no grouper arm, so it is pushed as a
   ;; SIBLING and the keyword IS byte-adjacent — the mint would fire in

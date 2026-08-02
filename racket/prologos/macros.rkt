@@ -2752,20 +2752,11 @@
 
 ;; Helper: detect private suffix forms (defn-, def-, data-, deftype-, defmacro-).
 ;; Returns the base keyword symbol (e.g., 'defn for 'defn-) or #f.
-(define (private-form-base head)
-  (case head
-    [(defn-)    'defn]
-    [(def-)     'def]
-    [(data-)    'data]
-    [(deftype-) 'deftype]
-    [(defmacro-) 'defmacro]
-    [(spec-)    'spec]
-    [(trait-)   'trait]
-    [(impl-)    'impl]
-    [(bundle-)  'bundle]
-    [(property-) 'property]
-    [(functor-)  'functor]
-    [else #f]))
+;;
+;; MOVED to reader-forms.rkt (CIU T6 D4.P4c-2 condition (c)) and imported from
+;; there. The reader post-pass binder unwrap needs the identical answer at
+;; READER time — earlier than this file runs — and parse-reader.rkt cannot
+;; require macros.rkt. ONE definition, two layers; see the note at the new site.
 
 ;; Helper: extract the defined name(s) from a top-level form datum.
 ;; Returns a list of symbols for auto-export.

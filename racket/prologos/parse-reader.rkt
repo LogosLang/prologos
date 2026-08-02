@@ -2772,8 +2772,22 @@
 ;; an APPLICATION.
 
 ;; Heads whose PARAM GROUP (the first bracket group after the head/name) binds.
+;; `defmacro` is a member: its `[$cond $body]` group binds macro pattern vars
+;; (lib/prologos/core.prologos:45) and it appeared in NO list until condition (c).
 (define binder-param-heads
-  '(defn fn spec property functor rel defr))
+  '(defn fn spec property functor rel defr defmacro))
+
+;; ⚠ THE HEAD TESTS NORMALIZE THE PRIVATE SUFFIX. `private-form-base` lives in
+;; reader-forms.rkt (this module already requires it) precisely so the reader
+;; and preparse cannot disagree about what `defn-` is. Without this, every one
+;; of the ELEVEN suffixed heads missed its table entry and leaked — a measured,
+;; end-to-end regression, invisible to a 161-file corpus A/B because no tracked
+;; file happens to pair a private form with a fused annotation.
+(define (binder-head-base hd)
+  (and (symbol? hd) (or (private-form-base hd) hd)))
+
+(define (binder-param-head? hd)
+  (let ([b (binder-head-base hd)]) (and b (memq b binder-param-heads) #t)))
 
 ;; `trait` is DEEP, not param-scan: its method params live inside nested lists
 ;; headed by the METHOD NAME (an arbitrary symbol), so there is no head to key
@@ -2809,8 +2823,9 @@
        (if (andmap eq? kids kids*) stx (datum->syntax #f kids* stx stx)))]
     [else stx]))
 
-;; Unwrap only up to a terminator (`:=` / `->`), leaving the VALUE or BODY side
-;; alone — a broadcast is legal there and must survive.
+;; A `$pipe` ARM's pattern region: everything up to the ARROW. Patterns NEST
+;; (`| [cons h:Int t] -> h`), so sub-groups are unwrapped DEEP here — unlike a
+;; `def`/`let` prefix, where a group is a value and must be left alone.
 (define (unwrap-binders-until-terminator kids)
   (let loop ([ks kids] [acc '()] [done? #f])
     (cond
@@ -2823,6 +2838,52 @@
          (loop (cdr ks)
                (cons (if term? k (unwrap-binders-deep k)) acc)
                term?))])))
+
+(define (group-stx? k) (and (syntax? k) (list? (syntax-e k))))
+
+(define (group-headed-by? k sym)
+  (and (group-stx? k)
+       (let ([d (syntax-e k)])
+         (and (pair? d) (syntax? (car d)) (eq? (syntax-e (car d)) sym)))))
+
+;; `def` / `let`: the binder region is the NAME plus an OPTIONAL fused
+;; annotation. Nothing more.
+;;
+;; ⚠ THIS REPLACED A TERMINATOR *SEARCH*, and the difference is a silent wrong
+;; answer. `:=` is OPTIONAL in WS `let`, so when the search found no terminator
+;; it ran to the END of the list and unwrapped the BODY — measured:
+;; `let x 5` + a body `users:name` came back as `(let x 5 (users :name))`, the
+;; broadcast silently stripped. Condition (c) structurally CANNOT catch that
+;; direction, because no sentinel survives for a refusal arm to see; only a
+;; correct bound can. Inert today (the sentinel has no consumer until P4c-3),
+;; which is exactly why it needed pinning rather than waiting.
+(define (unwrap-binder-prefix kids)
+  (if (or (null? kids) (not (pair? kids)))
+      kids
+      (let* ([nm (car kids)]
+             [d (and (syntax? nm) (syntax-e nm))]
+             [rest (cdr kids)])
+        (cond
+          [(not (symbol? d)) kids]
+          [(and (pair? rest) (bcast-step-stx? (car rest)))
+           (cons nm (cons (unwrap-bcast-step (car rest)) (cdr rest)))]
+          [else kids]))))
+
+;; An aligned `let` block's entries are built by `classify-let-block` DURING this
+;; same pass — after the recursive descent — so they never get their own
+;; `apply-binder-unwrap` call and must be handled here. Each entry is
+;; `(name annot? value…)`, i.e. exactly a binder prefix.
+(define (unwrap-let-block k)
+  (let* ([kids (syntax-e k)]
+         [kids* (cons (car kids)
+                      (map (lambda (e)
+                             (if (group-stx? e)
+                                 (let* ([ek (syntax-e e)]
+                                        [ek* (unwrap-binder-prefix ek)])
+                                   (if (eq? ek* ek) e (datum->syntax #f ek* e e)))
+                                 e))
+                           (cdr kids)))])
+    (if (andmap eq? kids kids*) k (datum->syntax #f kids* k k))))
 
 ;; The per-form rule. Returns the kids list, unwrapped where this form binds.
 (define (apply-binder-unwrap kids)
@@ -2844,13 +2905,13 @@
           ;; Owner-caught; named by neither the audit nor the options panel.
           [(eq? hd '$pipe)
            (cons h (unwrap-binders-until-terminator (cdr kids)))]
-          ;; `def` / `let`: bind up to `:=` — then SCAN the remainder, because a
-          ;; nested binder form (`def q := rel [a:Int] …`) lives past the
-          ;; terminator and owns its own param group.
-          [(and (symbol? hd) (memq hd binder-region-heads))
-           (cons h (scan-for-param-heads (unwrap-binders-until-terminator (cdr kids))))]
+          ;; `def` / `let`: the NAME + an optional fused annotation — then SCAN
+          ;; the remainder, because a nested binder form (`def q := rel [a:Int] …`)
+          ;; lives past the terminator and owns its own param group.
+          [(memq (binder-head-base hd) binder-region-heads)
+           (cons h (scan-for-param-heads (unwrap-binder-prefix (cdr kids))))]
           ;; `trait`: deep — see binder-deep-heads.
-          [(and (symbol? hd) (memq hd binder-deep-heads))
+          [(memq (binder-head-base hd) binder-deep-heads)
            (cons h (map unwrap-binders-deep (cdr kids)))]
           [else (scan-for-param-heads kids)]))))
 
@@ -2859,20 +2920,80 @@
 ;; head-test cannot see it. Scan the list: after any param-head symbol, the next
 ;; GROUP-shaped element is a binder region. Body elements are untouched, so a
 ;; broadcast in a body still survives.
+;; ⚠ THIS CONSUMES BINDER REGIONS EXPLICITLY. It used to carry a STICKY `armed?`
+;; flag that survived every intervening SYMBOL and was discharged by the next
+;; LIST of any kind. Three measured defects followed from that one shortcut, and
+;; they pull in opposite directions — which is why a flag cannot express the
+;; grammar and a region walk can:
+;;
+;;   · a leading implicit-binder group ate the arming, so the REAL param group
+;;     leaked (`spec f {A} [x:Int]` — an idiomatic spelling);
+;;   · with no bracket group to discharge it the flag ran on into the BODY and
+;;     stripped a legitimate broadcast (`defn f | a -> users:name`, arms-only
+;;     being the PRIMARY multi-arity form);
+;;   · and a `$pipe` sub-group was mistaken for the param group, so the first
+;;     arm's annotation unwrapped BY ACCIDENT — which is why the multi-line arm
+;;     pins were green while the flat spelling leaked.
+;;
+;; The grammar is: HEAD · optional NAME · zero or more implicit `{…}` groups ·
+;; ONE param group · then BODY, which is never touched. `$pipe` arms are their
+;; own regions, running to the ARROW.
 (define (scan-for-param-heads kids)
-  (let loop ([ks kids] [acc '()] [armed? #f])
+  (let loop ([ks kids] [acc '()])
     (cond
       [(null? ks) (reverse acc)]
       [else
        (let* ([k (car ks)]
-              [d (and (syntax? k) (syntax-e k))]
-              [group? (and (syntax? k) (list? d))])
+              [d (and (syntax? k) (syntax-e k))])
          (cond
-           [(and armed? group?)
-            (loop (cdr ks) (cons (unwrap-binders-deep k) acc) #f)]
-           [(and (symbol? d) (memq d binder-param-heads))
-            (loop (cdr ks) (cons k acc) #t)]
-           [else (loop (cdr ks) (cons k acc) armed?)]))])))
+           ;; a FLAT `$pipe` arm (the single-line spelling): the pattern region
+           ;; runs to the arrow. The multi-line spelling arrives as a sub-group
+           ;; and is handled by `apply-binder-unwrap`'s own `$pipe` arm.
+           [(eq? d '$pipe)
+            (let-values ([(region rest) (take-arm-region (cdr ks))])
+              (loop rest (append (reverse region) (cons k acc))))]
+           ;; an aligned `let` block, built during this pass — see unwrap-let-block.
+           [(group-headed-by? k '$let-block)
+            (loop (cdr ks) (cons (unwrap-let-block k) acc))]
+           ;; a param head (private suffix normalized): take its binder region.
+           [(binder-param-head? d)
+            (let-values ([(region rest) (take-param-region (cdr ks))])
+              (loop rest (append (reverse region) (cons k acc))))]
+           [else (loop (cdr ks) (cons k acc))]))])))
+
+;; The pattern side of a `$pipe` arm, up to (not including) the arrow.
+(define (take-arm-region ks)
+  (let loop ([ks ks] [acc '()])
+    (cond
+      [(null? ks) (values (reverse acc) '())]
+      [else
+       (let* ([k (car ks)]
+              [d (and (syntax? k) (syntax-e k))])
+         (if (and (symbol? d) (memq d binder-region-terminators))
+             (values (reverse acc) ks)
+             (loop (cdr ks) (cons (unwrap-binders-deep k) acc))))])))
+
+;; After a param head: an optional NAME symbol, then any implicit `{…}` binder
+;; groups, then exactly ONE param group. Stops there — the next group is the
+;; BODY (`defn f [a:Int] [g users:name]` must keep its broadcast), and a
+;; `$pipe` group is an ARM, not params.
+(define (take-param-region ks)
+  (define-values (name-part rest0)
+    (if (and (pair? ks)
+             (let ([d (and (syntax? (car ks)) (syntax-e (car ks)))])
+               (and (symbol? d) (not (memq d binder-region-terminators)))))
+        (values (list (car ks)) (cdr ks))
+        (values '() ks)))
+  (let loop ([ks rest0] [acc '()])
+    (cond
+      ;; implicit binder groups may precede the param group, any number of them
+      [(and (pair? ks) (group-headed-by? (car ks) '$brace-params))
+       (loop (cdr ks) (cons (unwrap-binders-deep (car ks)) acc))]
+      ;; the param group itself — exactly one, and never a `$pipe` arm
+      [(and (pair? ks) (group-stx? (car ks)) (not (group-headed-by? (car ks) '$pipe)))
+       (values (append name-part (reverse (cons (unwrap-binders-deep (car ks)) acc)))
+               (cdr ks))]
+      [else (values (append name-part (reverse acc)) ks)])))
 
 (define (transform-let-blocks-stx stx)
   (define lst (syntax->list stx))
