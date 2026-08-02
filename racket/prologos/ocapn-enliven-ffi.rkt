@@ -1,5 +1,7 @@
 #lang racket/base
 
+(require racket/random file/sha1)
+
 ;;;
 ;;; ocapn-enliven-ffi.rkt — the GIFTER's side of a third-party handoff.
 ;;;
@@ -39,11 +41,20 @@
 ;;;     having won.
 ;;;
 ;;;   ocapn-gift-id : (String -> String)
-;;;     A fresh gift id, `prefix` ++ a counter. Ids must be unique: the gift
-;;;     table is keyed BY gift id, its lookup returns the newest match and its
-;;;     removal removes EVERY match, so two outstanding handoffs sharing one
-;;;     id cross-wire and then delete each other. This was a process-wide
-;;;     literal once.
+;;;     A fresh gift id, `prefix` ++ 128 random bits in hex. Ids must be
+;;;     unique: the gift table is keyed BY gift id, its lookup returns the
+;;;     newest match and its removal removes EVERY match, so two outstanding
+;;;     handoffs sharing one id cross-wire and then delete each other. This
+;;;     was a process-wide literal once, and then a counter from 0.
+;;;
+;;;     A counter met uniqueness but not the other requirement nobody had
+;;;     written down: ids must be UNGUESSABLE. The table is exporter-global
+;;;     and `deposit-gift` is reachable by any peer that completes a
+;;;     handshake, so a peer that deposits `prefix3` before the honest gifter
+;;;     does shadows the real entry — the newest match wins — and the genuine
+;;;     give then fails to authenticate against the attacker's key. Guessing
+;;;     "3" is not hard. `bs-add-gift` refuses a duplicate id as well; that
+;;;     makes the attack unrepresentable rather than merely infeasible.
 ;;;
 ;;; The parked VALUE is opaque here — the Prologos side encodes its fields as
 ;;; Syrup and hands over the bytes. That keeps the field list in one place
@@ -62,8 +73,6 @@
 ;; "<cid>:<slot>" -> the parked enliven, Syrup-encoded by the caller
 (define pending (make-hash))
 
-(define gift-counter 0)
-
 (define (ocapn-enliven-park key blob)
   (call-with-semaphore lock (lambda () (hash-set! pending key blob)))
   #t)
@@ -79,16 +88,13 @@
       (cond [(hash-has-key? pending key) (hash-remove! pending key) #t]
             [else #f]))))
 
+;; No lock: `crypto-random-bytes` needs no shared state, and there is none
+;; left here to protect.
 (define (ocapn-gift-id prefix)
-  (call-with-semaphore lock
-    (lambda ()
-      (define n gift-counter)
-      (set! gift-counter (add1 n))
-      (format "~a~a" prefix n))))
+  (string-append prefix (bytes->hex-string (crypto-random-bytes 16))))
 
 (define (ocapn-enliven-reset!)
-  (call-with-semaphore lock
-    (lambda () (hash-clear! pending) (set! gift-counter 0))))
+  (call-with-semaphore lock (lambda () (hash-clear! pending))))
 
 (define ocapn-enliven-ffi-registry
   (hasheq

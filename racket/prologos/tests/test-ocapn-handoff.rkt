@@ -401,3 +401,50 @@
   (check-true (ocapn-handoff-claim "sess|side|1"))
   (ocapn-handoff-reset!)
   (check-false (ocapn-handoff-used? "sess|side|0")))
+
+;; ----------------------------------------------------------------
+;; Gift ids: unguessable, and a duplicate cannot shadow
+;; ----------------------------------------------------------------
+;;
+;; The gift table is exporter-GLOBAL (deposit and withdraw are on different
+;; connections) and `deposit-gift` is reachable by any peer that finishes a
+;; handshake. Lookup returns the NEWEST match and removal removes EVERY match,
+;; so an id a peer can predict is an id it can shadow: deposit first, and the
+;; honest give then fails to authenticate against the attacker's key -- and the
+;; honest entry is deleted alongside the attacker's.
+
+(require (only-in "../ocapn-enliven-ffi.rkt" ocapn-gift-id))
+
+(test-case "handoff/gift ids are unguessable, not a counter"
+  (define a (ocapn-gift-id "p-"))
+  (define b (ocapn-gift-id "p-"))
+  (check-not-equal? a b)
+  (check-equal? (string-length a) (+ 2 32) "128 bits, hex")
+  (check-true (regexp-match? #px"^p-[0-9a-f]{32}$" a))
+  ;; The property a counter fails: knowing one id tells you nothing about the
+  ;; next. 20 draws, no repeats and no arithmetic relationship to check beyond
+  ;; distinctness -- the point is that "the one after p-3" is not a thing.
+  (define draws (for/list ([_ (in-range 20)]) (ocapn-gift-id "p-")))
+  (check-equal? (length (remove-duplicates draws)) 20))
+
+(test-case "handoff/the FIRST deposit of an id wins"
+  ;; Not the newest. `gift-lookup-loop` returns the newest match, so without
+  ;; the guard the second deposit is what a withdrawal would find.
+  (check-contains
+   (run-last
+    (string-append
+     "(eval (bs-lookup-gift \"g\" (bs-add-gift \"g\" (suc (suc zero))"
+     "                             (bs-add-gift \"g\" (suc zero) bridge-state-empty))))"))
+   "1"))
+
+(test-case "handoff/a second depositor cannot rebind an id to its own key"
+  ;; The key is what `give-authentic-for-gift?` checks the give against, so
+  ;; rebinding it is the whole attack: the honest gifter's give stops
+  ;; verifying.
+  (check-contains
+   (run-last
+    (string-append
+     "(eval (unwrap-or \"NONE\" (bs-gifter-key \"g\""
+     "  (bs-add-gift \"g\" (suc (suc zero)) (bs-set-peer-key \"ATTACKER\""
+     "    (bs-add-gift \"g\" (suc zero) (bs-set-peer-key \"HONEST\" bridge-state-empty)))))))"))
+   "HONEST"))

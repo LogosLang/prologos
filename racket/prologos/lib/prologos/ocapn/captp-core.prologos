@@ -1041,11 +1041,6 @@ defn bs-remove-entry
 
 ;; --- Gifts proper ---
 
-spec bs-add-gift String Nat BridgeState -> BridgeState
-  :doc "Record a deposited gift (gift-id -> exported-pos), bound to this session's peer."
-defn bs-add-gift [gid xid st]
-  bs-add-entry gid xid gk-gift [bs-peer-key st] st
-
 ;; The public key of the peer that deposited `gid`, if we hold that gift.
 spec gifter-key-loop [List GiftEntry] String -> [Option String]
 defn gifter-key-loop [entries gid]
@@ -1069,6 +1064,32 @@ spec bs-remove-gift String BridgeState -> BridgeState
   :doc "Drop a gift entry by gift-id, after a withdraw consumes it."
 defn bs-remove-gift [gid st]
   bs-remove-entry gid gk-gift st
+
+;; FIRST DEPOSIT WINS. The gift table is exporter-GLOBAL (the deposit and the
+;; withdraw are on different connections, so `publish-gifts` shares gk-gift
+;; entries across all of them), and `deposit-gift` is reachable by any peer that
+;; completes a handshake. Without this, a peer that names an id someone else is
+;; about to use lands its entry FIRST in the list — `gift-lookup-loop` returns
+;; the newest match — and the honest gifter's give then fails
+;; `give-authentic-for-gift?` against the attacker's key. Its deposit is also
+;; deleted along with the attacker's, because `bs-remove-gift` removes EVERY
+;; match.
+;;
+;; Ids are now unguessable (`ocapn-gift-id`, 128 random bits), so the race is
+;; already infeasible to win. This makes it unrepresentable instead, which is
+;; the difference between "they cannot guess it" and "guessing it would not
+;; help". The two together are the fix; neither is redundant.
+;;
+;; The refused deposit is SILENT — `deposit-gift` has no reply channel upstream
+;; (fire-and-forget, `third_party_handoffs.py:292-299`), so there is nowhere to
+;; report it. A gifter whose deposit is refused sees its receiver's withdrawal
+;; park forever, which is the same symptom as never depositing.
+spec bs-add-gift String Nat BridgeState -> BridgeState
+  :doc "Record a deposited gift (gift-id -> exported-pos), bound to this session's peer. A gift-id already in the table is left alone."
+defn bs-add-gift [gid xid st]
+  match [bs-lookup-gift gid st]
+    | some _ -> st
+    | none   -> bs-add-entry gid xid gk-gift [bs-peer-key st] st
 
 ;; --- Parked withdrawals ---
 
