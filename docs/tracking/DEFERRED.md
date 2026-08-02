@@ -2408,6 +2408,44 @@ to update. Every new sentinel is otherwise a latent whole-file abort.
 Cheap first probe: enumerate every `$`-headed symbol the reader can emit and run
 `pattern-var?` over the set.
 
+> ✅ **DISCHARGED 2026-08-01 — commit `446070fc`, as the structural fix this
+> entry asked for, not as more exclusions.**
+>
+> Both triggers had fired: the `:` mint (`b1399016`) landed a new sentinel
+> (`$bcast-step`), and the def-seam work was touching macro expansion.
+>
+> The prescribed probe was run first and the count was worse than this entry
+> knew: **24** reader-minted `$` heads were absent from `pattern-var?`, not two.
+> Among them `$nat-literal`, `$rat-literal`, `$list-tail`, `$pipe-gt`,
+> `$quasiquote`, `$unquote`, `$rest`, `$typed-hole` — so a defmacro template
+> containing an ordinary **`5N`**, **`1/2`** or **`|>`** was a whole-file abort,
+> not just the exotic `#{…}` / `.( … )` this entry names.
+>
+> Fix taken is the one prescribed: `datum-subst` now asks whether the symbol is a
+> DECLARED macro parameter — i.e. a key in `bindings` — instead of consulting a
+> negative list. Sentinels are correct by construction and a newly-minted one can
+> never reintroduce the class.
+>
+> A/B on this entry's OWN two examples, base `969bfd6c` vs `446070fc`:
+>
+> | example | base | after |
+> |---|---|---|
+> | `defmacro getm [$u] [$u.(a + b)]` + use | ABORT, zero results | file completes; 1 per-command error |
+> | `#{1 2 3}` in a template + use | ABORT, zero results | file completes; 1 per-command error |
+>
+> ⚠ Scope of the discharge, stated precisely: the **whole-file abort** is gone —
+> which is what this entry filed. `.( … )` and `#{…}` inside a macro template
+> still do not *evaluate* correctly (they now surface as ordinary per-command
+> errors). That residue is the mixfix/set-literal semantics question, tracked
+> separately by items 1 and 4 in this section; it is not this entry's ask.
+>
+> Named cost, eyes open: a genuine typo (`$usr` for `$u`) no longer raises at
+> substitution — it passes through and fails downstream as an ordinary unbound
+> variable, i.e. a per-command error naming the symbol rather than a whole-file
+> abort. The `$var ...` SPLICE branch keeps its error. Pins:
+> `tests/test-defmacro.rkt` (datum-level + a new Level-3 `process-file` block —
+> the datum pins cannot observe an abort).
+
 ### 4. `.{ }` inside `.( )` aborts, and inside a parenless `defr` goal is SILENT
 
 Two more P1b-ii adversarial-verify findings, **both verified NOT regressions**
