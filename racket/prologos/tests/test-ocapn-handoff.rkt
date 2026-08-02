@@ -266,3 +266,138 @@
   (check-contains
    (run-last "(eval (let (kp (gen-keypair-raw unit)) (verify-raw (pubkey-raw kp) \"msg\" (sign-bytes kp \"msg\"))))")
    "true"))
+
+;; ----------------------------------------------------------------
+;; Binding a handoff-receive to the connection it arrives on
+;; ----------------------------------------------------------------
+;;
+;; Until these fields were checked, a signed `desc:handoff-receive` was a
+;; BEARER TOKEN at our exporter: both were read, but only to build the replay
+;; identity. Upstream asserts on the session field
+;; (tests/third_party_handoffs.py:123,159).
+;;
+;; Pinned against the DERIVATION, not against our output — the same discipline
+;; as the identity tests above, and for the same reason: an encoded-vs-raw
+;; side-id bug produces a plausible 32-byte digest either way.
+
+(test-case "handoff/a peer we cannot identify cannot be bound to"
+  ;; The legacy unsigned two-field handshake leaves `bs-peer-key` empty, and a
+  ;; handoff from an unidentified peer is refused rather than waved through.
+  (check-contains
+   (run-last "(eval (str::eq (peer-side-id-of bridge-state-empty) \"\"))")
+   "true"))
+
+(test-case "handoff/the peer's side-id hashes the ENCODED key, not the raw q"
+  (check-contains
+   (run-last
+    (string-append
+     "(eval (let (q (pubkey-raw (gen-keypair-raw unit))"
+     "            st (bs-set-peer-key q bridge-state-empty))"
+     "        (str::eq (peer-side-id-of st)"
+     "                 (side-id-of-encoded-key (gcrypt-pubkey-bytes q)))))"))
+   "true")
+  ;; And is NOT the hash of the raw key -- the trap this is named for.
+  (check-contains
+   (run-last
+    (string-append
+     "(eval (let (q (pubkey-raw (gen-keypair-raw unit))"
+     "            st (bs-set-peer-key q bridge-state-empty))"
+     "        (str::eq (peer-side-id-of st) (side-id-of-encoded-key q))))"))
+   "false"))
+
+;; A decoded desc:handoff-receive naming session/side, for the binding checks.
+;;
+;; The give has to be ENCODED bytes, not an arbitrary string: the 4th field is
+;; spliced VERBATIM (deliberately -- re-encoding a decoded give would invalidate
+;; its signature), so a raw placeholder makes the whole record undecodable and
+;; every field read comes back `none`. Which reads as "does not bind" -- so the
+;; three negative cases below would pass for the wrong reason, and the positive
+;; case is what catches it.
+(define (receive-naming sess side)
+  (format
+   (string-append
+    "(unwrap-or syrup-null (decode-value"
+    "  (handoff-receive-bytes ~a ~a zero (encode (syrup-symbol \"G\")))))")
+   sess side))
+
+(test-case "handoff/a receive naming this session and this side BINDS"
+  (check-contains
+   (run-last
+    (format "(eval (receive-binds-to? ~a \"A\" \"B\"))"
+            (receive-naming "(session-id-of \"A\" \"B\")" "\"B\"")))
+   "true"))
+
+(test-case "handoff/a receive naming ANOTHER side does not bind"
+  ;; The property that turns a leaked receive into a denial rather than a
+  ;; theft: it is useless to anyone but the peer that made it.
+  (check-contains
+   (run-last
+    (format "(eval (receive-binds-to? ~a \"A\" \"B\"))"
+            (receive-naming "(session-id-of \"A\" \"B\")" "\"C\"")))
+   "false"))
+
+(test-case "handoff/a receive aimed at ANOTHER exporter does not bind"
+  ;; Same receiver, same side-id, different exporter: only the session field
+  ;; distinguishes them, which is exactly why it has to be checked.
+  (check-contains
+   (run-last
+    (format "(eval (receive-binds-to? ~a \"A\" \"B\"))"
+            (receive-naming "(session-id-of \"OTHER-EXPORTER\" \"B\")" "\"B\"")))
+   "false"))
+
+(test-case "handoff/a receive missing its session field does not bind"
+  (check-contains
+   (run-last
+    (string-append
+     "(eval (receive-binds-to? (unwrap-or syrup-null "
+     "  (decode-value (record-bytes \"desc:handoff-receive\" nil))) \"A\" \"B\"))"))
+   "false"))
+
+;; ----------------------------------------------------------------
+;; The replay set outlives the connection
+;; ----------------------------------------------------------------
+;;
+;; It used to live on BridgeState, which dies when the connection does — so
+;; withdraw, reconnect, replay the identical signed receive was a double-spend
+;; for the price of a reconnect. A session id is derived only from the two
+;; side-ids, so reconnecting with the same key reproduces it exactly; nothing
+;; about the identity is per-connection. Upstream happens to generate a fresh
+;; keypair per session (utils/captp.py:49-50), which is what made the
+;; per-connection set look safe. An attacker is under no such obligation.
+
+(require (only-in "../ocapn-handoff-ffi.rkt"
+                  ocapn-handoff-claim ocapn-handoff-used? ocapn-handoff-reset!))
+
+(test-case "handoff/an identity can be claimed once"
+  (ocapn-handoff-reset!)
+  (check-false (ocapn-handoff-used? "sess|side|0"))
+  (check-true (ocapn-handoff-claim "sess|side|0"))
+  (check-true (ocapn-handoff-used? "sess|side|0"))
+  (check-false (ocapn-handoff-claim "sess|side|0")
+               "a second claim of one identity is a replay"))
+
+(test-case "handoff/the claim is test-and-set, not check-then-mark"
+  ;; The two-call form is a race with the same shape as the bug above: the
+  ;; server gives each connection its own thread, so two connections replaying
+  ;; one receive concurrently would both read \"unused\" and both proceed.
+  ;; Exactly one of N concurrent claimants may win.
+  (ocapn-handoff-reset!)
+  (define results
+    (let ([out '()] [sema (make-semaphore 1)])
+      (define ts
+        (for/list ([_ (in-range 16)])
+          (thread (lambda ()
+                    (define r (ocapn-handoff-claim "contended"))
+                    (call-with-semaphore sema (lambda () (set! out (cons r out))))))))
+      (for-each thread-wait ts)
+      out))
+  (check-equal? (length (filter values results)) 1
+                "exactly one claimant may win")
+  (ocapn-handoff-reset!))
+
+(test-case "handoff/distinct identities do not collide"
+  (ocapn-handoff-reset!)
+  (check-true (ocapn-handoff-claim "sess|side|0"))
+  (check-true (ocapn-handoff-claim "sess|side|1"))
+  (ocapn-handoff-reset!)
+  (check-false (ocapn-handoff-used? "sess|side|0")))

@@ -83,9 +83,33 @@ require [prologos::ocapn::promise :refer-all]
         ;; wire-nat moved to prologos::ocapn::syrup (2026-07-27) — it reads a
         ;; SyrupValue as a table position, which is a SyrupValue concern.
         [prologos::ocapn::syrup      :refer [wire-nat]]
-        [prologos::ocapn::crypto     :refer [verify-raw]]
+        [prologos::ocapn::crypto     :refer [verify-raw pubkey-raw
+                                             side-id-of-encoded-key session-id-of]]
+        ;; For the ENCODED public-key s-expression: a side-id hashes that, not
+        ;; the raw q we hold in `bs-peer-key`. See `receive-bound-to-connection?`.
+        [prologos::ocapn::handshake  :refer [gcrypt-pubkey-bytes]]
         [prologos::ocapn::behavior   :refer [beh-resolver]]
         [prologos::data::list :refer [append cons nil]]
+
+;; The process signing key, by handle — the same one the handshake presented.
+;; The exporter needs it for exactly one thing: deriving OUR side-id, so a
+;; `desc:handoff-receive` can be checked against the session it names.
+;;
+;; `identity-present?` and not `handle == 0`: crypto-ffi numbers handles from
+;; 0 and the server's identity is the first keypair it generates, so 0 is the
+;; REAL handle in production. Testing against it read our own identity as
+;; absent and refused every legitimate handoff — three conformance tests, all
+;; breaking as "unbound", with the key sitting right there.
+foreign racket "ocapn-identity-ffi.rkt"
+  [ocapn-identity-keypair :as identity-keypair : Nat -> Nat]
+  [ocapn-identity-present? :as identity-present? : Nat -> Bool]
+
+;; The PROCESS-WIDE replay set for handoff identities. Test-and-set: #t means
+;; "was unused, now claimed", #f means "replay". Process-wide and not on
+;; BridgeState because BridgeState dies with the connection, and a replay after
+;; a reconnect is the whole attack — see ocapn-handoff-ffi.rkt.
+foreign racket "ocapn-handoff-ffi.rkt"
+  [ocapn-handoff-claim :as handoff-claim-identity : String -> Bool]
 
 ;; Build the bytes for an outbound op:deliver targeting an
 ;; answer-pos:
@@ -499,12 +523,14 @@ defn refr-to-syrup [r]
 ;; With a kind field the collision is not merely unlikely, it is
 ;; unrepresentable: `bs-add-gift` is the only writer of `gk-gift` and every
 ;; lookup filters on kind.
+;;
+;; There used to be a third kind, `gk-used`, holding spent handoff identities.
+;; It is gone: a spent identity has to outlive the connection, and everything
+;; in this table dies with it. The replay set is process-wide now
+;; (ocapn-handoff-ffi.rkt).
 data GiftKind
   ;; A real deposited gift. Key = the peer's gift-id bytes, pos = export.
   gk-gift
-  ;; A SPENT handoff identity, so a receive cannot be replayed. Key = the
-  ;; (session, side, count) identity, pos unused.
-  gk-used
   ;; A PARKED withdrawal, awaiting its deposit. Key = the gift-id, pos = the
   ;; local promise the withdrawer is waiting on.
   gk-park
@@ -512,9 +538,8 @@ data GiftKind
 spec kind-eq? GiftKind GiftKind -> Bool
 defn kind-eq? [a b]
   match a
-    | gk-gift -> match b | gk-gift -> true | gk-used -> false | gk-park -> false
-    | gk-used -> match b | gk-gift -> false | gk-used -> true | gk-park -> false
-    | gk-park -> match b | gk-gift -> false | gk-used -> false | gk-park -> true
+    | gk-gift -> match b | gk-gift -> true | gk-park -> false
+    | gk-park -> match b | gk-gift -> false | gk-park -> true
 
 data GiftEntry
   gift-entry : String -> Nat -> GiftKind -> String
@@ -542,7 +567,6 @@ defn ge-kind
 ;;   gk-park  the re-encoded bytes of the signed `desc:handoff-give` that
 ;;            arrived with the withdrawal, held until the deposit shows up and
 ;;            supplies the key to check it against.
-;;   gk-used  unused ("").
 spec ge-aux GiftEntry -> String
 defn ge-aux
   | gift-entry _ _ _ a -> a
@@ -1045,19 +1069,6 @@ spec bs-remove-gift String BridgeState -> BridgeState
   :doc "Drop a gift entry by gift-id, after a withdraw consumes it."
 defn bs-remove-gift [gid st]
   bs-remove-entry gid gk-gift st
-
-;; --- Single-use handoff identities ---
-
-spec bs-mark-used String BridgeState -> BridgeState
-  :doc "Record that a handoff identity has been spent."
-defn bs-mark-used [ident st]
-  bs-add-entry ident zero gk-used "" st
-
-spec bs-identity-used? String BridgeState -> Bool
-defn bs-identity-used? [ident st]
-  match [gift-lookup-loop [bs-gifts st] ident gk-used]
-    | none  -> false
-    | some _ -> true
 
 ;; --- Parked withdrawals ---
 
@@ -1823,9 +1834,10 @@ defn handoff-receive-gift-id [v]
 ;; exactly that triple (re-depositing the gift first, so gift-consumption alone
 ;; does NOT catch it) and requires a `break`.
 ;;
-;; The used-set shares the gift table, discriminated by `gk-used` rather than
-;; by a key prefix — see `GiftKind`. A peer cannot write a `gk-used` entry, so
-;; it cannot pre-poison someone else's replay marker.
+;; The used-set is process-wide (ocapn-handoff-ffi.rkt), not on BridgeState:
+;; a spent identity has to outlive the connection it was spent on, or a
+;; reconnect resurrects it. No peer can pre-poison someone else's marker,
+;; because nothing but a bound, validly-signed withdrawal ever writes one.
 ;;
 ;; The identity itself is built by LENGTH-PREFIXING each part. Joining
 ;; peer-controlled strings with a bare separator made `(sess "A|B", side "C")`
@@ -1897,6 +1909,81 @@ defn withdraw-gift-id [signed-receive]
   match [sig-envelope-object signed-receive]
     | none    -> [none String]
     | some hr -> handoff-receive-gift-id hr
+
+
+;; ===========================================================
+;; Binding a handoff-receive to THIS connection
+;; ===========================================================
+;;
+;; A `desc:handoff-receive` names the session and the side it was made for.
+;; Until those fields are CHECKED they are decoration: a signed receive is a
+;; BEARER TOKEN, redeemable by whoever holds it. Both were read here — but only
+;; to build the replay identity, never compared against anything.
+;;
+;; Two distinct properties come from checking them:
+;;
+;;   side    == this peer's side-id   — the receive was made by the peer we are
+;;              talking to, so a leaked or stolen one is useless to anybody
+;;              else. This is what makes a leak a denial rather than a theft.
+;;
+;;   session == session-id(ours, theirs) — the receive was aimed at US. Without
+;;              it, a receive a receiver built for exporter X is equally good at
+;;              exporter Y: both see the same receiver side-id, and only the
+;;              session id distinguishes the intended exporter.
+;;
+;; Upstream treats the session field as the binding and asserts on it
+;; (tests/third_party_handoffs.py:123,159).
+;;
+;; Both sides are derived, never stored: the peer's from `bs-peer-key` (its
+;; op:start-session), ours from the process identity. A side-id hashes the
+;; ENCODED public-key s-expression, so the raw q has to be wrapped back up in
+;; its gcrypt form first — `side-id-of-encoded-key` is named for that trap.
+
+;; "" when there is no identity to speak of. Both callers treat "" as REFUSE,
+;; which is the honest answer: an exporter that cannot say who it is has no
+;; business honouring a handoff addressed to it.
+spec our-side-id-or-empty Unit -> String
+defn our-side-id-or-empty [u]
+  match [identity-present? zero]
+    | false -> ""
+    | true  -> side-id-of-encoded-key [gcrypt-pubkey-bytes [pubkey-raw [identity-keypair zero]]]
+
+;; "" when the peer sent the legacy unsigned handshake, i.e. when we do not
+;; know who it is — and a handoff from an unidentified peer cannot be bound.
+spec peer-side-id-of BridgeState -> String
+defn peer-side-id-of [st]
+  match [str::eq [bs-peer-key st] ""]
+    | true  -> ""
+    | false -> side-id-of-encoded-key [gcrypt-pubkey-bytes [bs-peer-key st]]
+
+;; A missing field reads as "", which cannot equal a side-id, so malformed
+;; fails here as well as unbound. `session-id-of` sorts its arguments, so the
+;; order these are passed in does not matter.
+spec receive-binds-to? SyrupValue String String -> Bool
+defn receive-binds-to? [hr ours theirs]
+  match [str::eq [unwrap-or "" [handoff-side-of hr]] theirs]
+    | false -> false
+    | true  -> str::eq [unwrap-or "" [handoff-session-of hr]] [session-id-of ours theirs]
+
+spec receive-bound-with-sides SyrupValue String String -> Bool
+defn receive-bound-with-sides [hr ours theirs]
+  match [str::eq ours ""]
+    | true  -> false
+    | false -> receive-binds-to? hr ours theirs
+
+spec receive-bound-to-connection? SyrupValue BridgeState -> Bool
+defn receive-bound-to-connection? [hr st]
+  let theirs := [peer-side-id-of st]
+    match [str::eq theirs ""]
+      | true  -> false
+      | false -> receive-bound-with-sides hr [our-side-id-or-empty unit] theirs
+
+spec receive-bound-to-session? SyrupValue BridgeState -> Bool
+  :doc "Does this signed handoff-receive name the session and side of THIS connection?"
+defn receive-bound-to-session? [signed-receive st]
+  match [sig-envelope-object signed-receive]
+    | none    -> false
+    | some hr -> receive-bound-to-connection? hr st
 
 
 ;; ===========================================================
@@ -2217,12 +2304,11 @@ spec withdraw-promise-bytes Nat Nat -> String
 defn withdraw-promise-bytes [rm-pos p]
   listener-notify-bytes rm-pos [syrup-list [cons [syrup-symbol "fulfill"] [cons [syrup-tagged "desc:import-promise" [syrup-nat p]] [nil SyrupValue]]]]
 
-spec park-reply Nat String String Nat String Vat BridgeState -> BridgeStep
-defn park-reply [rm-pos gid ident p give-bytes v2 st]
+spec park-reply Nat String Nat String Vat BridgeState -> BridgeStep
+defn park-reply [rm-pos gid p give-bytes v2 st]
   bridge-step v2
     [bs-append-pending-out [withdraw-promise-bytes rm-pos p]
-      [bs-add-park gid p give-bytes
-        [bs-mark-used ident st]]]
+      [bs-add-park gid p give-bytes st]]
 
 ;; The signed give, re-encoded, so the deposit that arrives later can be
 ;; checked against it. "" when the receive carries no give — that withdrawal
@@ -2233,19 +2319,19 @@ defn parked-give-bytes [signed-receive]
     | none    -> ""
     | some sg -> wire::re-encode sg
 
-;; The receive is consumed at PARK time, not at settle time: it has been acted
-;; upon, so a replay of the same (session, side, count) must still be refused.
-spec withdraw-park Nat String String SyrupValue Vat BridgeState -> BridgeStep
-defn withdraw-park [rm-pos gid ident signed-receive v st]
+;; The receive was consumed by `withdraw-with-identity`, above BOTH of these:
+;; parking is acting on it, so a replay of the same (session, side, count) has
+;; to be refused whether or not the deposit has arrived yet.
+spec withdraw-park Nat String SyrupValue Vat BridgeState -> BridgeStep
+defn withdraw-park [rm-pos gid signed-receive v st]
   let alloc := [fresh-promise v]
-    park-reply rm-pos gid ident [alloc-id alloc] [parked-give-bytes signed-receive] [alloc-vat alloc] st
+    park-reply rm-pos gid [alloc-id alloc] [parked-give-bytes signed-receive] [alloc-vat alloc] st
 
-spec do-withdraw Nat String String Nat Vat BridgeState -> BridgeStep
-defn do-withdraw [rm-pos gid ident xid v st]
+spec do-withdraw Nat String Nat Vat BridgeState -> BridgeStep
+defn do-withdraw [rm-pos gid xid v st]
   bridge-step v
     [bs-append-pending-out [withdraw-fulfill-bytes rm-pos xid]
-      [bs-mark-used ident
-        [bs-remove-gift gid [bs-incr-export xid st]]]]
+      [bs-remove-gift gid [bs-incr-export xid st]]]
 
 ;; The gift is in hand, so its depositing peer's key is too: check that the
 ;; give was actually signed by that peer before honouring the withdrawal.
@@ -2255,31 +2341,43 @@ defn give-authentic-for-gift? [gid signed-receive st]
     | none   -> false
     | some q -> give-authentic-for-key? q signed-receive
 
-spec withdraw-authenticated Nat String String Nat SyrupValue Vat BridgeState -> BridgeStep
-defn withdraw-authenticated [rm-pos gid ident xid signed-receive v st]
+spec withdraw-authenticated Nat String Nat SyrupValue Vat BridgeState -> BridgeStep
+defn withdraw-authenticated [rm-pos gid xid signed-receive v st]
   match [give-authentic-for-gift? gid signed-receive st]
     | false -> bridge-step v [bs-append-pending-out [withdraw-break-bytes rm-pos "unauthenticated-handoff"] st]
-    | true  -> do-withdraw rm-pos gid ident xid v st
+    | true  -> do-withdraw rm-pos gid xid v st
 
-spec withdraw-known-gid Nat String String SyrupValue Vat BridgeState -> BridgeStep
-defn withdraw-known-gid [rm-pos gid ident signed-receive v st]
+spec withdraw-known-gid Nat String SyrupValue Vat BridgeState -> BridgeStep
+defn withdraw-known-gid [rm-pos gid signed-receive v st]
   match [bs-lookup-gift gid st]
     ;; Not a failure: the gifter may simply not have deposited yet. Answer with
     ;; a promise and park it (see § PARKED withdrawals above). The give is
     ;; parked ALONGSIDE it, because nothing can authenticate it until the
     ;; deposit arrives and names the gifter.
-    | none     -> withdraw-park rm-pos gid ident signed-receive v st
-    | some xid -> withdraw-authenticated rm-pos gid ident xid signed-receive v st
+    | none     -> withdraw-park rm-pos gid signed-receive v st
+    | some xid -> withdraw-authenticated rm-pos gid xid signed-receive v st
 
 ;; A handoff-receive is SINGLE-USE. Consuming the gift is not enough on its
 ;; own: upstream's invalid-handoff-count test re-deposits the gift before
 ;; replaying the same receive, so the gift is present again and the replay
 ;; would succeed. The (session, side, count) identity is what must not repeat.
+;;
+;; The set is PROCESS-WIDE (ocapn-handoff-ffi.rkt), not on BridgeState. It was
+;; on BridgeState, which dies with the connection — so withdraw, reconnect,
+;; replay was a double-spend for the price of a reconnect. A session id is
+;; derived only from the two side-ids, so reconnecting with the same key
+;; reproduces it exactly; nothing about the identity is per-connection.
+;;
+;; One test-and-set rather than a check and a later mark, because the server
+;; gives each connection its own thread and the gap between the two is the
+;; same race in miniature. Claiming here means a withdrawal refused further
+;; down has still burned its identity — safe ONLY because the binding check
+;; above has already established that the identity belongs to this peer.
 spec withdraw-with-identity Nat String String SyrupValue Vat BridgeState -> BridgeStep
 defn withdraw-with-identity [rm-pos gid ident signed-receive v st]
-  match [bs-identity-used? ident st]
-    | true  -> bridge-step v [bs-append-pending-out [withdraw-break-bytes rm-pos "replayed-handoff"] st]
-    | false -> withdraw-known-gid rm-pos gid ident signed-receive v st
+  match [handoff-claim-identity ident]
+    | false -> bridge-step v [bs-append-pending-out [withdraw-break-bytes rm-pos "replayed-handoff"] st]
+    | true  -> withdraw-known-gid rm-pos gid signed-receive v st
 
 spec withdraw-with-gid Nat String SyrupValue Vat BridgeState -> BridgeStep
 defn withdraw-with-gid [rm-pos gid signed-receive v st]
@@ -2293,13 +2391,40 @@ defn withdraw-with-gift-lookup [rm-pos signed-receive v st]
     | none     -> bridge-step v [bs-append-pending-out [withdraw-break-bytes rm-pos "malformed-handoff"] st]
     | some gid -> withdraw-with-gid rm-pos gid signed-receive v st
 
+;; The binding is checked BEFORE the identity is claimed and before the gift is
+;; looked up. Order is load-bearing in both directions: a receive that does not
+;; name this connection must not be able to burn an identity (that would be a
+;; denial-of-service against the honest receiver), and it must not learn whether
+;; a gift was deposited either.
+;; "no-identity" is OUR fault, not the peer's: we hold no signing key, so we
+;; cannot say whether the receive names us. Distinguishing it costs a line and
+;; is worth one — conflated with the peer's case it reads as "your handoff is
+;; bad" while the actual fault is a server that never called
+;; `ocapn-identity-set!`. Nothing secret is disclosed either way; the peer can
+;; compute both bound fields itself.
+;;
+;; The side-vs-session split is deliberately NOT reported. It was, briefly, as
+;; a diagnostic — and it is what found the 0-is-a-real-handle bug in about a
+;; minute after `unbound-handoff` alone had said nothing for twenty.
+spec bind-failure-reason BridgeState -> String
+defn bind-failure-reason [st]
+  match [identity-present? zero]
+    | false -> "no-identity"
+    | true  -> "unbound-handoff"
+
+spec withdraw-bound Nat SyrupValue Vat BridgeState -> BridgeStep
+defn withdraw-bound [rm-pos signed-receive v st]
+  match [receive-bound-to-session? signed-receive st]
+    | false -> bridge-step v [bs-append-pending-out [withdraw-break-bytes rm-pos [bind-failure-reason st]] st]
+    | true  -> withdraw-with-gift-lookup rm-pos signed-receive v st
+
 ;; The signature is checked BEFORE the gift is looked up, so a forged receive
 ;; can neither consume a gift nor learn whether one was deposited.
 spec withdraw-with-receive Nat SyrupValue Vat BridgeState -> BridgeStep
 defn withdraw-with-receive [rm-pos signed-receive v st]
   match [signed-receive-valid? signed-receive]
     | false -> bridge-step v [bs-append-pending-out [withdraw-break-bytes rm-pos "bad-signature"] st]
-    | true  -> withdraw-with-gift-lookup rm-pos signed-receive v st
+    | true  -> withdraw-bound rm-pos signed-receive v st
 
 spec withdraw-from-rest [List SyrupValue] [Option Nat] Vat BridgeState -> [Option BridgeStep]
 defn withdraw-from-rest [rest rm v st]

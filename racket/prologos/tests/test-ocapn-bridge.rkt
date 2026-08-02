@@ -2392,6 +2392,47 @@
                            "\")))) (suc zero)))) (suc zero)))")))
    "false"))
 
+(require (only-in "../crypto-ffi.rkt" crypto-gen-keypair)
+         (only-in "../ocapn-identity-ffi.rkt"
+                  ocapn-identity-set! ocapn-identity-reset!))
+
+;; The frame goes through the whole inbound path; only the break reason differs
+;; between these two cases.
+(define (withdraw-break-reason hex)
+  (extract-value-bytes
+   (run-last
+    (format
+     (string-append
+      "(eval (let (op (unwrap-or (op-deliver zero syrup-null none none) "
+      "                  (decode-op (hex-to-bytes \"~a\")))"
+      "                step (captp-incoming-with-state op empty-vat bridge-state-empty))"
+      "          (framed-concat (bs-pending-out (bridge-step-state step)))))")
+     hex))))
+
+(test-case "handoff/an exporter with no signing key refuses, and says so"
+  ;; Refusing is right -- we cannot tell whether the receive names us. But the
+  ;; fault is OURS (nobody called ocapn-identity-set!), and reporting it as a
+  ;; bad handoff would point the operator at the peer.
+  (ocapn-identity-reset!)
+  (check-contains (withdraw-break-reason handoff-frame-good) "break")
+  (check-contains (withdraw-break-reason handoff-frame-good) "no-identity"))
+
+(test-case "handoff/a VALID receive naming another session BREAKS as unbound-handoff"
+  ;; The same real frame as the verification tests above -- signature intact,
+  ;; so it gets past `signed-receive-valid?`. It names the session and side of
+  ;; the connection it was captured on, which is not this one.
+  ;;
+  ;; Before the binding check existed this reached the gift lookup: both fields
+  ;; were read, but only to build the replay identity, so a signed receive was
+  ;; a BEARER TOKEN -- redeemable by anyone holding it, at any exporter.
+  ;;
+  ;; It must break BEFORE the identity is claimed, or an unbound receive could
+  ;; burn an honest receiver's identity, and BEFORE the gift lookup, or it
+  ;; learns whether a gift was deposited.
+  (ocapn-identity-set! (crypto-gen-keypair))
+  (check-contains (withdraw-break-reason handoff-frame-good) "unbound-handoff")
+  (ocapn-identity-reset!))
+
 (test-case "handoff/a bad signature BREAKS the withdraw, and breaks it as bad-signature"
   ;; End to end through the bridge: the reply must say `break`, and the check
   ;; must happen BEFORE the gift lookup -- otherwise a forged receive could
