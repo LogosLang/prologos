@@ -2739,3 +2739,36 @@ user-visible need. Flip site (one line each + re-pins): typing-core
 `select-below-entries` and reduction `below-entries` currently RESET `seen`
 at the `@sub` boundary — subject-root = thread `seen` through instead; then
 flip the `server.{host^_}` pins to `{:server {:server-host …}}`.
+
+---
+
+## OCapN third-party handoff — adversarial review backlog (2026-08-01)
+
+Four adversarial reviews of the handoff migration (branch
+`claude/ocapn-prologos-implementation-auLxZ`, at `b998b18b`) found nine issues
+that were fixed and roughly twenty that were not. The full record, with
+concrete failure modes and file:line for each, is
+[`2026-08-01_OCAPN_HANDOFF_REVIEW_FINDINGS.md`](2026-08-01_OCAPN_HANDOFF_REVIEW_FINDINGS.md).
+
+Highest-value items, in the order that document recommends:
+
+- **S1 + S2 (security, one bug).** The exporter never binds a
+  `desc:handoff-receive` to the connection it arrives on, and the used-set is
+  per-connection — together a double-spend across reconnects. Fixing either
+  alone is unsound.
+- **S3.** Gift ids are a predictable sequential counter; a peer can shadow an
+  honest deposit by guessing a small integer.
+- **C1.** `reserve-export-id` loses its reservation when the enlivened
+  sturdyref names the connection it arrived on, rolling `next-id` back so a
+  promise can alias an actor.
+- **A2.** Decompose the ~1100-line driver into `captp-handoff.prologos` +
+  `captp-frames.prologos`; this is also how the remaining test debt gets paid.
+- **A3 (design task, not a refactor).** The per-connection vat is the root
+  cause of three of the four process-global tables and of the cross-vat
+  reach-in behind C1. Fixing it removes code.
+- **A4.** Two identical-arm `match` sites guard every outbound dial and send;
+  an arm-collapsing optimisation would delete the outbound path with a green
+  suite.
+- **U1–U3 (upstream/main).** The LET grouping regression, the ~N^2.17
+  `build-tree-from-domains`, and `driver.rkt:3150` discarding the error name
+  and srcloc.

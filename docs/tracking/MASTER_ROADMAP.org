@@ -747,7 +747,21 @@ any Series.
 | OCapN Interop | 2026-05-04 | [[file:2026-04-29_OCAPN_INTEROP_DESIGN.md][Design]], [[file:2026-04-27_GOBLIN_PITFALLS.md][Pitfalls]] | [[file:2026-05-04_OCAPN_INTEROP_PIR.md][PIR]] | Phase 0 port + Phases 1–21 wire interop & vat bridge. 25 test files / 225 cases. Cross-impl CI gate against ~@endo/ocapn~ (JS). Phases 22+23 DEFERRED (language blockers). [[https://github.com/LogosLang/prologos/pull/28][PR #28]]. |
 | OCapN Pipelining + GC (Phases 37–53) | 2026-05-18 | [[file:2026-04-27_GOBLIN_PITFALLS.md][Pitfalls]] | TODO PIR | Branch ~claude/ocapn-prologos-implementation-auLxZ~. Phases 37–46 (pipelining state machine: senders/receivers + wire-out forwarding + break-forwarding + plain-value-as-error + cross-impl gates). 47 (pipelined-msgs GC). 48 (op:listen notification). 49 (break/plain-value interop). 50 (declarative release queue). 51 (late op:listen + ordering). 52 (gift-table state scaffolding). 53 (OCapN protocols as session types — specification + duality). 188 bridge/pipelining/etc. tests + 23 protocol tests + 3 interop tests all green. Three-vat handoff TRACK in flight: 52b (wire ops) + 54 (multi-conn state) + 55 (outbound dial) + 56 (desc:import-object resolution) + 57 (three-process interop) PENDING. |
 
-** Outstanding work on the OCapN branch
+** OCapN handoff migration + adversarial review (2026-08-01)
+
+The three-vat handoff track below is DONE: both the gifter and receiver roles
+now run in Prologos (=interop-driver.prologos=), the Racket byte-scanners are
+deleted, and conformance is 24/24 with nothing handoff-related on the Racket
+side. Gaps-document entries §0.2 and §1.7 M8 are closed.
+
+Four adversarial reviews then found nine further issues (fixed) and roughly
+twenty still open — including a CRITICAL redeem-without-identity-binding that
+was fixed, and a double-spend at the exporter that was NOT. Backlog:
+[[file:2026-08-01_OCAPN_HANDOFF_REVIEW_FINDINGS.md][Handoff review findings]].
+Language/tooling traps found on the way are pitfalls #52–#57 in
+[[file:2026-04-27_GOBLIN_PITFALLS.md][Goblin Pitfalls]].
+
+** Outstanding work on the OCapN branch (PRE-DATES the above; rows 54–57 are stale)
 
 The OCapN branch (~claude/ocapn-prologos-implementation-auLxZ~) ships
 specification and scaffolding for the three-vat handoff, but several

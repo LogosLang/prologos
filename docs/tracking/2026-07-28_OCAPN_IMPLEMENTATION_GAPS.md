@@ -111,7 +111,20 @@ so those slots name our tables, not the peer's. The verification pass caught
 it (our own decoder rejected the result); it is reverted, and the finding is
 open below.
 
-### Nothing is open
+### Nothing from THIS INVENTORY is open — but see the review findings
+
+⚠ **This section's scope is the 2026-07-28 inventory only.** Four adversarial
+reviews on 2026-08-01, after the handoff migration landed, found further
+issues — nine fixed, and roughly twenty still open across security,
+correctness, architecture and upstream. Those are recorded in
+[`2026-08-01_OCAPN_HANDOFF_REVIEW_FINDINGS.md`](2026-08-01_OCAPN_HANDOFF_REVIEW_FINDINGS.md),
+NOT here. Do not read "all are closed" below as "the surface is clean"; it
+means "every entry written down on 2026-07-28 has been dealt with".
+
+In particular §0.2's third stated consequence — that the roles were "not
+covered by the unit suite" — was left standing when the finding was marked
+closed. It is now addressed (`tests/test-ocapn-handoff.rkt`), but the closure
+claim preceded the fix.
 
 Thirteen entries were open after the first remediation pass, and §0.3 and
 §1.7 M7 were open from §0. **All are closed** — twelve by being fixed, two
