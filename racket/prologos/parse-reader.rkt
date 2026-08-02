@@ -2800,6 +2800,26 @@
 (define binder-region-heads '(def let))
 (define binder-region-terminators '(:= ->))
 
+;; ⭐ THE ENABLE-SET — the inverted default made explicit and greppable.
+;;
+;; These are the contexts in which a minted `$bcast-step` SURVIVES the post-pass.
+;; It is EMPTY at P4c-2, by ruling, and that is a deliberate staging rather than
+;; an omission: the sentinel has NO downstream consumer until P4c-3 (it has not
+;; joined `access-sentinel?` and has no parser arm), so preserving it anywhere
+;; buys nothing today and costs the one thing this track keeps paying for — a
+;; SPELLING-DEPENDENT surface. With the set empty and the walk uniform, the whole
+;; mint is provably equivalent to not minting at all, which is what makes
+;; "regression-free" a checkable property instead of a promise.
+;;
+;; ⚠ DO NOT read the empty set as "the machinery is unused". The binder-region
+;; walk below is fully built and exercised; what is switched off is only the
+;; PRESERVATION side. P4c-3 turns contexts on here, one at a time, as it wires
+;; the consumer — and each addition is a deliberate, testable act rather than an
+;; accident of which spelling happened to nest.
+(define broadcast-enabled-contexts '())
+
+(define (broadcast-preservation-active?) (pair? broadcast-enabled-contexts))
+
 (define (bcast-step-stx? x)
   (and (syntax? x)
        (let ([d (syntax-e x)])
@@ -2808,7 +2828,18 @@
 ;; `($bcast-step |:Int|)` → `|:Int|`, VERBATIM. A plain cadr: the mint wrapped
 ;; the colon-symbol untouched precisely so this never re-derives the lexeme
 ;; (that would be a second copy of the recognizer — the F1b.7g class).
-(define (unwrap-bcast-step x) (cadr (syntax-e x)))
+;; ⚠ THE GUARD IS LOAD-BEARING, and its absence was a WHOLE-FILE ABORT. A user
+;; can write the internal head with no payload — `defn f [$bcast-step] 1` — and
+;; an unguarded `cadr` then raises a raw Racket contract violation at READER
+;; time, outside any per-command handler, losing every command in the file. That
+;; is the exact failure the P1a marker seat exists to eliminate, and it is the
+;; THIRD time in this track an unguarded `car`/`cadr` on a sentinel payload has
+;; produced it (P1a's `$retired-selection`, P4c-2's `apply-binder-unwrap`, here).
+;; Found by the P4c-2 adversarial verify. A malformed sentinel is returned
+;; UNTOUCHED so the parser's own arms give it a per-command diagnostic.
+(define (unwrap-bcast-step x)
+  (let ([d (syntax-e x)])
+    (if (and (pair? d) (pair? (cdr d))) (cadr d) x)))
 
 ;; Unwrap every `$bcast-step` in a subtree, recursing through sub-groups.
 ;; Required because arm patterns NEST: `defn g | [cons h:Int t] -> h` puts the
@@ -2864,10 +2895,53 @@
              [d (and (syntax? nm) (syntax-e nm))]
              [rest (cdr kids)])
         (cond
+          ;; ⚠ THE BRACKET SPELLING. `let [x:Int := 5 y:Nat := 6] body` puts the
+          ;; bindings in a GROUP, so the first kid is not a symbol. This arm used
+          ;; to bail here, which regressed a DOCUMENTED `let` spelling to a hard
+          ;; error dumping the raw sentinel (prologos-syntax.md § let lists the
+          ;; bracket form, and says all spellings MIX freely). Each binding
+          ;; inside is itself a name-plus-optional-annotation prefix, but they
+          ;; run together in ONE flat group, so unwrap an annotation wherever it
+          ;; FOLLOWS a symbol — values keep their broadcasts because a value is
+          ;; never in that slot.
+          [(and (syntax? nm) (list? d))
+           (cons (unwrap-bracket-bindings nm) rest)]
           [(not (symbol? d)) kids]
           [(and (pair? rest) (bcast-step-stx? (car rest)))
            (cons nm (cons (unwrap-bcast-step (car rest)) (cdr rest)))]
           [else kids]))))
+
+;; A flat `let [x:Int := 5 y:Nat := 6]` bindings group: unwrap a `$bcast-step`
+;; only where it directly follows a SYMBOL (the annotation slot).
+(define (unwrap-bracket-bindings grp)
+  (let* ([ks (syntax-e grp)]
+         [ks* (let loop ([ks ks] [prev-sym? #f] [acc '()])
+                (cond
+                  [(null? ks) (reverse acc)]
+                  [else
+                   (let* ([k (car ks)]
+                          [d (and (syntax? k) (syntax-e k))])
+                     (cond
+                       [(and prev-sym? (bcast-step-stx? k))
+                        (loop (cdr ks) #f (cons (unwrap-bcast-step k) acc))]
+                       [else (loop (cdr ks) (symbol? d) (cons k acc))]))]))])
+    (if (andmap eq? ks ks*) grp (datum->syntax #f ks* grp grp))))
+
+;; A SPLICED `def`/`let`: the same bounded prefix, but starting after the head
+;; symbol wherever it sits in a sibling list. Returns (values region rest).
+(define (take-region-prefix ks)
+  (let ([pre (unwrap-binder-prefix ks)])
+    (let loop ([n 0] [xs pre])
+      (cond
+        [(null? xs) (values pre '())]
+        [(let ([d (and (syntax? (car xs)) (syntax-e (car xs)))])
+           (and (symbol? d) (memq d binder-region-terminators)))
+         (values (take-prefix pre (+ n 1)) (list-tail pre (+ n 1)))]
+        [(>= n 2) (values (take-prefix pre n) (list-tail pre n))]
+        [else (loop (+ n 1) (cdr xs))]))))
+
+(define (take-prefix xs n)
+  (if (or (zero? n) (null? xs)) '() (cons (car xs) (take-prefix (cdr xs) (- n 1)))))
 
 ;; An aligned `let` block's entries are built by `classify-let-block` DURING this
 ;; same pass — after the recursive descent — so they never get their own
@@ -2901,6 +2975,11 @@
       (let* ([h (car kids)]
              [hd (and (syntax? h) (syntax-e h))])
         (cond
+          ;; Enable-set EMPTY (P4c-2) → unwrap uniformly, everywhere. Placed as
+          ;; the FIRST arm so no head-specific rule can carve out a survivor and
+          ;; reintroduce the spelling-dependence this exists to prevent.
+          [(not (broadcast-preservation-active?))
+           (map unwrap-binders-deep kids)]
           ;; `$pipe` ARMS (defn AND match): the ARROW splits pattern from body.
           ;; Owner-caught; named by neither the audit nor the options panel.
           [(eq? hd '$pipe)
@@ -2913,7 +2992,30 @@
           ;; `trait`: deep — see binder-deep-heads.
           [(memq (binder-head-base hd) binder-deep-heads)
            (cons h (map unwrap-binders-deep (cdr kids)))]
-          [else (scan-for-param-heads kids)]))))
+          ;; ⭐ THE INVERTED DEFAULT (owner ruling, 2026-08-01). An UNRECOGNIZED
+          ;; head unwraps EVERYTHING.
+          ;;
+          ;; This walk used to leave an unknown form untouched, so a missed head
+          ;; meant the sentinel SURVIVED into that form's binder position and
+          ;; broke working code. Measured cost of that direction: `capability`,
+          ;; `Pi`, `Sigma`, `DSend` and `DRecv` each went from defining cleanly
+          ;; to a hard error — five more rows on top of the four this phase had
+          ;; already found, in a table that had by then failed nine times.
+          ;;
+          ;; Inverted, a miss can only mean "broadcast does not fire in this
+          ;; position YET": the fused annotation still works, and the broadcast
+          ;; reports LOUDLY (measured: `Could not infer type`, per-command, file
+          ;; continues) rather than silently. Errors may become meanings, never
+          ;; the reverse — the same monotonicity §9's strict-first waypoint is
+          ;; ratified on.
+          ;;
+          ;; ⚠ THE ENUMERATION DOES NOT VANISH, IT MOVES — do not read this as
+          ;; retiring the table. Recognized heads still preserve their BODIES, so
+          ;; the table is now "where broadcast SURVIVES" instead of "where
+          ;; annotations survive". What changed is only the direction a miss
+          ;; fails in, and that is the whole of the ruling. P4c-3 enables each
+          ;; expression context deliberately as it wires the consumer.
+          [else (scan-for-param-heads (map unwrap-binders-deep kids))]))))
 
 ;; A param-group head is not always the form HEAD. `def q := rel [a:Int] &> …`
 ;; puts `rel` and its group as SIBLINGS inside the `def` element list, so a
@@ -2958,6 +3060,18 @@
            ;; a param head (private suffix normalized): take its binder region.
            [(binder-param-head? d)
             (let-values ([(region rest) (take-param-region (cdr ks))])
+              (loop rest (append (reverse region) (cons k acc))))]
+           ;; ⚠ A REGION HEAD IS NOT ALWAYS THE FORM HEAD EITHER — the same
+           ;; blindness this function already fixes for PARAM heads, which was
+           ;; applied to those and not to these. `binder-region-heads` was
+           ;; consulted ONLY by `apply-binder-unwrap`'s head test, so a `let`
+           ;; appearing as a SIBLING was invisible: `def q := let x:Int 5` and
+           ;; `defn f | a -> let z:Int := 5 …` both leaked, and both dumped the
+           ;; internal sentinel at the user. Two of `let`'s five documented
+           ;; spellings, regressed from working. Found by the P4c-2 adversarial
+           ;; verify; corpus-invisible (zero tracked fused spliced lets).
+           [(memq (binder-head-base d) binder-region-heads)
+            (let-values ([(region rest) (take-region-prefix (cdr ks))])
               (loop rest (append (reverse region) (cons k acc))))]
            [else (loop (cdr ks) (cons k acc))]))])))
 
@@ -3502,14 +3616,36 @@
 (define (bcast-step-trigger? vec i result item type)
   (and (memq type '(keyword colon-annotation))
        (adjacent-to-base? vec i result item)
-       (not (prev-token-quote? vec i))))
+       (not (prev-token-not-emitted? vec i))))
 
-;; Is the physically preceding token a loose quote? (See the decline above.)
-(define (prev-token-quote? vec i)
+;; ⚠ THE DECLINE IS A CLASS, NOT A LIST OF SPECIAL CASES — and it was shipped as
+;; a list of one, which cost a BLOCKING regression.
+;;
+;; `adjacent-to-base?` asks whether the PHYSICALLY preceding token abuts this
+;; one. But the base it means is the last thing in `result` — the accumulated
+;; group — and those two disagree for every token that `group-items` consumes
+;; WITHOUT EMITTING. For such a token the "base" is invisible to the adjacency
+;; test, so a purely cosmetic character reads as something to broadcast off.
+;;
+;; The quote decline was written for exactly this reason, and its own comment
+;; names the general shape: "a loose token that `group-items` has no arm for".
+;; The COMMA is the same shape and was missed — `{:a 1,:b 2}` minted a broadcast
+;; in EXPRESSION position (where the binder unwrap structurally cannot rescue
+;; it), firing in 7 of 7 collection contexts and regressing ordinary map, list,
+;; vector, set and argument syntax. Invisible to the 161-file corpus A/B: no
+;; tracked `.prologos` writes `,:` (the pretty-printer emits `", "`, with the
+;; space). Found by the P4c-2 adversarial verify.
+;;
+;; So this predicate is keyed on the PROPERTY — "grouping skips this token" —
+;; and any future skipped token joins by adding it HERE, next to the reason.
+(define non-emitting-token-lexemes '("'" ","))
+
+(define (prev-token-not-emitted? vec i)
   (and (> i 0)
        (let ([prev (vector-ref vec (- i 1))])
          (and (token-entry? prev)
-              (equal? (token-entry-lexeme prev) "'")))))
+              (member (token-entry-lexeme prev) non-emitting-token-lexemes)
+              #t))))
 
 (define (prev-token-reader-form-head? vec i)
   (and (> i 0)
