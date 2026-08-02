@@ -1157,6 +1157,7 @@
        (not (eq? x '$nil-dot-key))      ; RETIRED sentinel (D4.P1a) — still emitted by the reader
        (not (eq? x '$retired-selection)) ; D4.P1a retirement marker (parser converts to guided error)
        (not (eq? x '$let-error))        ; LET P1 syntax-failure marker (parser converts to per-command parse error)
+       (not (eq? x '$def-error))        ; DEF SEAM: the $let-error sibling — same LOUD-if-missed class as $dot-brace below
        (not (eq? x '$let-block))        ; LET P3 aligned-block sentinel (reader-validated; expand-let consumes)
        (not (eq? x '$goal-rhs))         ; SolveCarrier P2: let binding-RHS paren marker (parser consumes)
        (not (eq? x '$let-noop-body))    ; top-level let: bodyless placeholder (let-bindings->nested-fn consumes)
@@ -4887,6 +4888,49 @@
 ;; Expand def := assignment syntax into standard def form.
 ;; (def name := value) → (def name value)
 ;; (def name : T1 T2 ... := value) → (def name ($angle-type T1 T2 ...) value)
+;; (def name :T := value)          → same as the spaced form (FUSED spelling)
+;;
+;; ============================================================
+;; DEF SEAM (2026-08-01): the fused spelling, and the error CHANNEL.
+;; ============================================================
+;; TWO defects lived in this function's `cond`, and they are separable.
+;;
+;; (1) THE FUSED SPELLING WAS UNREACHABLE. After the reader's binder unwrap,
+;;     `def x:Int := 5` arrives as the datum `(def x :Int := 5)` — ONE
+;;     colon-symbol where the spaced form has two (`:` then `Int`). So `before`
+;;     was `(:Int)`: length 1, and its car is `:Int`, not `:`. Both accepting
+;;     arms declined and it fell to `[else]`.
+;;
+;; (2) `[else]` WAS A RAW RAISE, i.e. a WHOLE-FILE ABORT. Preparse runs
+;;     OUTSIDE driver.rkt's per-command loop with no handler, so the raise took
+;;     down every command in the file — `def a := 1` written ABOVE the bad line
+;;     never ran either. Zero results, one Racket stack trace. Same silence
+;;     class as the `let` family's 20 raise sites (LET P1) and DEFERRED's `ns`
+;;     name-guard entry.
+;;
+;; Both were LIVE and PRE-EXISTING (reproduced at 182f1678, before the CIU T6
+;; path-selection work). They hid behind a GREEN pin: test-path-selection.rkt
+;; asserts `read-all-forms-string "def x:Int := 5"` → `(def x :Int := 5)` and
+;; passes, because the READER is correct — the defect was one layer down, here.
+;; Every pin on this input was reader-level. See tests/test-def-seam.rkt, which
+;; pins it at Level 3 (a real file through process-file, with sibling commands
+;; on both sides) — the only level at which a whole-file abort is observable.
+;;
+;; WHY NORMALIZE RATHER THAN ADD A THIRD ARM: the fused spelling is REWRITTEN to
+;; the spaced token shape, so there stays exactly ONE annotation arm and ONE
+;; emission site below. The two spellings then cannot drift apart — they are the
+;; same code path, not two paths asserted equal by a test. That is the anti-
+;; second-copy discipline reader-forms.rkt states in its own header (the F1b.7g
+;; rule), applied here: this function does not re-test the fused shape, it calls
+;; `fused-type-annot?` / `fused-annot->type-symbol` — the ONE recognizer pair.
+;;
+;; Reusing that predicate is also what keeps NON-types out. `:0`/`:7` are
+;; MULTIPLICITIES (no type name starts with a digit — the Q_N4 ruling, whose
+;; original defect was a hand-rolled list silently eating `:7` as a type name),
+;; and `:w`/`:m` are multiplicities by name. `fused-type-annot?` already draws
+;; exactly that line, so they fall through to the channel below rather than
+;; being invented into types. `def` has no multiplicity surface at all —
+;; parse-def takes name / optional type / body (parser.rkt § parse-def).
 (define (expand-def-assign datum)
   (define name (cadr datum))
   (define rest (cddr datum))  ; tokens after name
@@ -4894,23 +4938,81 @@
   (cond
     [(not assign-pos) datum]
     [else
-     (define before (take rest assign-pos))
+     (define before0 (take rest assign-pos))
      (define after (drop rest (+ assign-pos 1)))
-     (when (null? after)
-       (error 'def "def: expected at least one value after :="))
      ;; Auto-wrap multi-token RHS as application: `some 42N` → `(some 42N)`
      ;; In WS mode, juxtaposed tokens after := form an application.
      (define value (if (= (length after) 1) (car after) after))
+     ;; FUSED → SPACED normalization (fix 1). `(:Int)` becomes `(: Int)`, which
+     ;; is byte-identical to what the reader hands us for `def x : Int := 5`.
+     ;; Single-token by construction, so this can only ever produce the 2-token
+     ;; spaced shape; multi-token types keep their spaced spelling.
+     (define before
+       (if (and (= (length before0) 1) (fused-type-annot? (car before0)))
+           (list ': (fused-annot->type-symbol (car before0)))
+           before0))
      (cond
+       ;; A `:=` with nothing after it. Was a raise; now the channel (fix 2).
+       [(null? after)
+        `($def-error ,(format "def ~a: expected a value after `:=`" name))]
        ;; No type annotation: (def name := value) → (def name value)
        [(null? before)
         `(def ,name ,value)]
        ;; Type annotation with colon: (def name : T1 T2 ... := value)
+       ;; — reached by BOTH the spaced spelling and the normalized fused one.
        [(and (>= (length before) 2) (eq? (car before) ':))
         (define type-tokens (cdr before))
         `(def ,name ($angle-type ,@type-tokens) ,value)]
+       ;; ── THE CHANNEL (fix 2) ─────────────────────────────────────────────
+       ;; Everything the expander cannot read is a PER-COMMAND error VALUE, via
+       ;; the `$def-error` marker datum — the `$let-error` seat's sibling, and
+       ;; the same conversion arm in parser.rkt (which supplies the loc the
+       ;; datum layer cannot carry). The marker REPLACES the form, exactly as
+       ;; `expand-let` returns `($let-error msg)` in place of the let.
+       ;;
+       ;; No `with-handlers` boundary is needed here, unlike the let family:
+       ;; that family raises from 20 sites buried in recursive helpers whose
+       ;; returns are consumed as DATA, so it needed a handler at its entry.
+       ;; This function has exactly ONE failure site — right here — so it can
+       ;; simply RETURN the marker. Returning beats catching when you can.
        [else
-        (error 'def "def: unexpected tokens before :=: ~a" before)])]))
+        `($def-error ,(def-assign-error-message name before))])]))
+
+;; The `[else]` message. Guiding, not generic: each shape gets told what it
+;; actually wrote and what to write instead. These are reachable user inputs —
+;; the fused/spaced confusion, the UCS-reserved chained annotation, and the
+;; multiplicity-in-type-position slip — not defensive filler.
+(define (def-assign-error-message name before)
+  (define (spellings)
+    (format "write `def ~a : T := value` (or the fused `def ~a:T := value`)" name name))
+  (cond
+    ;; `def x:A:B := 5` — the reader splits a chain into successive colon
+    ;; symbols. Reserved for UCS; split-glued-name-datum refuses the sexp
+    ;; spelling with the same reason, so keep the wording aligned.
+    [(and (>= (length before) 2) (andmap fused-type-annot? before))
+     (format "def ~a: chained type annotation ~a is not supported (reserve for UCS) — ~a"
+             name
+             (string-join (map symbol->string before) "")
+             (spellings))]
+    ;; `def x:List Nat := 5` — the fused spelling is SINGLE-TOKEN by rule
+    ;; (reader-forms.rkt § fused annotations; `defn` params and `let` bindings
+    ;; carry the same restriction). Refusing is correct; saying "unexpected
+    ;; tokens" would not tell the user the rule they tripped.
+    [(and (>= (length before) 2) (fused-type-annot? (car before)))
+     (format "def ~a: a fused type annotation is single-token — write the spaced form `def ~a : ~a := value`"
+             name name (string-join (cons (symbol->string
+                                           (fused-annot->type-symbol (car before)))
+                                          (map (lambda (t) (format "~a" t)) (cdr before)))
+                                    " "))]
+    ;; `def x:0 := 5` / `def x:w := 5` — a multiplicity where a type belongs.
+    [(and (= (length before) 1)
+          (colon-symbol? (car before))
+          (not (eq? (car before) ':)))
+     (format "def ~a: `~a` is a multiplicity, not a type — `def` takes a type annotation; ~a"
+             name (car before) (spellings))]
+    [else
+     (format "def ~a: unexpected tokens before `:=`: ~a — ~a"
+             name before (spellings))]))
 
 ;; ========================================
 ;; Built-in pre-parse macros
