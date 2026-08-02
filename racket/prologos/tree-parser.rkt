@@ -49,7 +49,49 @@
       (rrb-to-list (parse-tree-node-children node))
       '()))
 
-;; Get source location from a node or token
+;; Get source location from a node or token.
+;;
+;; ⚠ THIS IS THE SEAM BETWEEN THE TWO SPINES' LINE NUMBERING. It used to leak
+;; the tree's INTERNAL representation straight into surf nodes, and that leak
+;; is what defused driver.rkt's dual-spine merge:
+;;
+;;   - a node's `srcloc` field is `(list line col start-pos end-pos)` whose line
+;;     is **0-BASED** (`make-indent-rrb-from-char-rrb` starts its `source-line`
+;;     counter at 0, parse-reader.rkt) and whose col/start/end are hardcoded 0
+;;     ("simplified srcloc", parse-reader.rkt);
+;;   - the PREPARSE spine produces srcloc **STRUCTS** whose line is **1-BASED**
+;;     (`pos->line-col` starts at 1 → `datum-srcloc`, parser.rkt).
+;;
+;; driver.rkt's `merge-preparse-and-tree-parser` keys BOTH spines by line, so
+;; the conventions must agree or the lookup silently MISPAIRS form N with form
+;; N+1. Worse, three downstream consumers require the STRUCT specifically and
+;; degrade or RAISE on a bare list: `format-srcloc` (source-location.rkt —
+;; struct accessors; a list raises `srcloc-file: contract violation`), the LSP's
+;; `srcloc->range` (lsp/diagnostics.rkt — a non-struct falls back to 0:0), and
+;; `register-definition-location!` (driver.rkt), whose values are .pnet-
+;; serialized where only the struct shape is registered (pnet-serialize.rkt).
+;;
+;; So the node branch emits a real, 1-based srcloc STRUCT — ONE srcloc language
+;; across both spines, rather than a normalisation hack at the merge key.
+;;
+;; The TOKEN branch is a separate, still-open defect: `token-entry`
+;; (parse-reader.rkt) carries no line/col, only positions, so its line is
+;; FABRICATED as 0. Recovering it needs the source text, which is not in scope
+;; here (`current-source-str` is "" on the process-file path). It keeps its list
+;; shape and its real positions; it does not reach the merge key, because
+;; top-level forms are always NODES. See docs/tracking/2026-08-02_LOC_TO_LINE_MERGE_DEFECT.md.
+;; ⚠ MEASURED, 2026-08-02: converting the node branch to a real 1-based srcloc
+;; STRUCT here is the change that makes driver.rkt's merge key work — and doing
+;; so makes the tree spine start WINNING ~694 of 5,171 corpus forms, which
+;; **REGRESSES BADLY**: corpus errors 359 → 724 across 35 files (not one file
+;; improved) and 32 test files fail. The legacy `parse-*-tree` family below has
+;; never been exercised in production (the tree spine won 0 forms, ever) and its
+;; arms have gone stale — keyword literals, mixfix, dot-access, let-blocks,
+;; records and path-selection all mis-parse. So the conversion is NOT applied;
+;; the defusal is instead made deliberate and explicit at the key itself
+;; (`loc->line`, driver.rkt). Restoring the tree spine means: apply the struct
+;; conversion here, then repair those arms. See
+;; docs/tracking/2026-08-02_LOC_TO_LINE_MERGE_DEFECT.md.
 (define (item-srcloc item)
   (cond
     [(parse-tree-node? item) (parse-tree-node-srcloc item)]

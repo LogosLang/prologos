@@ -2438,12 +2438,52 @@
   ;; Generated defs from data/trait/impl have source lines that DON'T appear
   ;; in tree parser output → always from preparse (correct).
 
-  ;; Helper: extract source line from a srcloc (handles both srcloc struct and raw tuple)
+  ;; Helper: extract the merge key (a source line) from a surf's srcloc.
+  ;;
+  ;; ⚠ THE TREE SPINE HAS NO COMPARABLE KEY, AND THAT IS DELIBERATE HERE.
+  ;;
+  ;; This function used to read:
+  ;;     [(srcloc? loc) (srcloc-line loc)]
+  ;;     [(and (list? loc) (>= (length loc) 2)) (cadr loc)]  ;; "(file line col span) or (line col pos span)"
+  ;;     [(and (pair? loc) (number? (car loc))) (car loc)]   ;; "(line col pos span)"
+  ;; The middle arm swallows EVERY list of length ≥ 2, so the third arm — the one
+  ;; whose comment describes the shape the tree spine actually produces — was
+  ;; UNREACHABLE, and the middle arm returned the tree's hardcoded col (always 0)
+  ;; rather than a line. Preparse keys on a real 1-based line, so the lookup in
+  ;; `tree-by-line` below could never match. MEASURED over the 163-file corpus:
+  ;; the tree spine won **0 of 5,171 forms** — i.e. `[else tree-surf]` has never
+  ;; once fired, for the entire life of this code.
+  ;;
+  ;; Simply repairing the arm order does NOT fix it, and is far WORSE than the
+  ;; bug (measured, 2026-08-02): the two spines number lines on different bases —
+  ;; the tree 0-BASED (`make-indent-rrb-from-char-rrb`, parse-reader.rkt) and
+  ;; preparse 1-BASED (`pos->line-col` → `datum-srcloc`, parser.rkt) — so a
+  ;; numeric-head key pairs form N's preparse surf with form N+1's tree surf.
+  ;; `same-form-type?` waves that through whenever the neighbours are the same
+  ;; kind. On a 3-line file of `def`s it silently redefines `b` as `c` and leaves
+  ;; `a` unbound; across the corpus, 176 of 242 such hits (73%) were mispairings.
+  ;;
+  ;; Normalising the base as well (i.e. making `item-srcloc` emit a real 1-based
+  ;; srcloc struct) DOES produce a correct key — and then the tree spine wins ~694
+  ;; forms and **REGRESSES**: corpus errors 359 → 724 over 35 files with not one
+  ;; improvement, and 32 test files fail. The legacy `parse-*-tree` arms have gone
+  ;; stale precisely because they never ran.
+  ;;
+  ;; So: the tree spine's srcloc yields **#f**, `tree-by-line` maps it to a
+  ;; `gensym` (its own already-present "non-matchable" branch), and preparse
+  ;; stays authoritative. That is EXACTLY today's behaviour — but on purpose and
+  ;; stated, rather than as a side effect of a broken cond. Turning the tree
+  ;; spine on is a real project: emit srcloc structs from `item-srcloc`, then
+  ;; repair the stale arms. See docs/tracking/2026-08-02_LOC_TO_LINE_MERGE_DEFECT.md.
   (define (loc->line loc)
     (cond
       [(srcloc? loc) (srcloc-line loc)]
-      [(and (list? loc) (>= (length loc) 2)) (cadr loc)]  ;; (file line col span) or (line col pos span)
-      [(and (pair? loc) (number? (car loc))) (car loc)]    ;; (line col pos span) as first element
+      ;; tree spine: (list line col start-pos end-pos), line 0-based, col/pos
+      ;; hardcoded 0 — no key commensurable with preparse's. Say so.
+      [(and (pair? loc) (number? (car loc))) #f]
+      ;; (file line col span) — non-numeric head. No producer reaches this today;
+      ;; kept because the merge accepts srclocs from callers it does not own.
+      [(and (list? loc) (>= (length loc) 2)) (cadr loc)]
       [else #f]))
 
   ;; Helper: extract source line from a surf
@@ -2525,6 +2565,7 @@
          (let ([m (prologos-error-message s)])
            (and (string? m)
                 (string-suffix? m "should have been processed before parsing")))))
+
   (for/list ([s (in-list preparse-surfs)]
              #:unless (consumed-form-residue? s))
     (cond
