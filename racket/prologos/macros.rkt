@@ -1258,13 +1258,51 @@
 ;; ========================================
 ;; Replaces pattern variables with their bound values.
 ;; Handles $name ... for splicing lists.
+;; ============================================================
+;; A TEMPLATE'S PATTERN VARIABLES ARE THE ONES THE PATTERN BOUND (2026-08-01).
+;; ============================================================
+;; This used to `error` on any `$`-headed symbol the bindings did not contain —
+;; a raise, at PREPARSE, i.e. a WHOLE-FILE ABORT with zero results. And the set
+;; it aborted on was not typos: it was READER SENTINELS. `pattern-var?` decides
+;; by NAME (`$`-prefixed, minus a hand-maintained denylist), but the reader mints
+;; `$`-headed sentinels for ordinary surface syntax, and `datum-subst` recurses
+;; into every element INCLUDING list heads. So a defmacro template containing a
+;; Nat literal was an abort:
+;;
+;;   defmacro mk [$u]        ;; template holds ($nat-literal 5)
+;;     [pair $u 5N]          ;; → "Unbound pattern variable in template: $nat-literal"
+;;
+;; MEASURED at 969bfd6c: `5N`, `1/2` and `|>` in a template each abort the whole
+;; file. The denylist was missing TWENTY-FOUR reader-minted sentinels, among them
+;; `$nat-literal`, `$rat-literal`, `$list-tail`, `$pipe-gt`, `$mixfix`,
+;; `$quasiquote`, `$unquote`, `$rest`, `$typed-hole` — and `$bcast-step`, minted
+;; by the `:` mint one commit earlier (b1399016). That last one is the THIRD
+;; recorded instance of this exact regression: the file already carries the
+;; `$dot-brace` note ("caught by adversarial verify") and `$select`'s
+;; "LOUD-if-missed: whole-file abort in a defmacro template".
+;;
+;; A denylist cannot be the answer — it has to re-enumerate every sentinel the
+;; reader will ever mint, forever, and it has now failed three times. The
+;; STRUCTURAL answer is already in hand: `bindings` IS the authority. A pattern
+;; variable is, by definition, one the PATTERN bound. Anything else is a literal
+;; and passes through. Reader sentinels then work BY CONSTRUCTION, and a new
+;; sentinel can never reintroduce this class.
+;;
+;; NAMED COST, eyes open: a genuine typo (`$usr` for `$u`) no longer raises here;
+;; it passes through and fails downstream as an ordinary unbound variable — a
+;; PER-COMMAND error naming the symbol, instead of a whole-file abort. Strictly
+;; better reporting for the typo, and correct for the sentinel. The `$var ...`
+;; SPLICE branch below keeps its error: a sentinel is a list HEAD followed by its
+;; payload, never a bare symbol followed by `...`, so that arm cannot be tripped
+;; by one and its signal stays clean.
+;;
+;; `pattern-var?`'s denylist still governs the PATTERN side (datum-match), which
+;; is a separate question and out of scope here.
 (define (datum-subst template bindings)
   (cond
-    ;; Pattern variable: substitute
+    ;; Pattern variable: substitute. Bound ⇒ a variable; unbound ⇒ a literal.
     [(pattern-var? template)
-     (hash-ref bindings template
-               (lambda ()
-                 (error 'defmacro "Unbound pattern variable in template: ~a" template)))]
+     (hash-ref bindings template (lambda () template))]
     ;; List template: handle splicing
     [(list? template)
      (datum-subst-list template bindings)]

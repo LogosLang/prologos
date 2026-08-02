@@ -6,7 +6,50 @@
 ;;;
 
 (require rackunit
-         "../macros.rkt")
+         racket/file
+         racket/list
+         "../macros.rkt"
+         "../errors.rkt"
+         "../driver.rkt"
+         "../global-env.rkt"
+         "../namespace.rkt"
+         "test-support.rkt")
+
+;; ---- Level 3 fixture (used only by the containment block at the end) --------
+;; A raise during preparse is a WHOLE-FILE abort, and that is observable ONLY
+;; through a real file with sibling commands on both sides of the offending one.
+;; The datum-level pins above cannot see it: they call `datum-subst` directly.
+(define-values (pre-global-env pre-ns-context pre-module-reg
+                pre-trait-reg pre-impl-reg pre-param-impl-reg)
+  (parameterize ([current-file-module-network-ref (make-module-network)]
+                 [current-ns-context #f]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry]
+                 [current-param-impl-registry prelude-param-impl-registry])
+    (install-module-loader!)
+    (process-string "(ns defmacro-pre)")
+    (values (global-env-snapshot) (current-ns-context) (current-module-registry)
+            (current-trait-registry) (current-impl-registry)
+            (current-param-impl-registry))))
+
+(define (run-file-ws s)
+  (define tmp (make-temporary-file "prologos-defmacro-~a.prologos"))
+  (call-with-output-file tmp #:exists 'replace (lambda (out) (display s out)))
+  (define result
+    (parameterize ([current-file-module-network-ref
+                    (module-network-add-import (make-module-network)
+                                               (module-network-from-snapshot pre-global-env))]
+                   [current-ns-context pre-ns-context]
+                   [current-module-registry pre-module-reg]
+                   [current-trait-registry pre-trait-reg]
+                   [current-impl-registry pre-impl-reg]
+                   [current-param-impl-registry pre-param-impl-reg])
+      (process-file (path->string tmp))))
+  (delete-file tmp)
+  result)
 
 ;; ========================================
 ;; datum-match tests
@@ -99,9 +142,98 @@
   (check-equal? (datum-subst '(foo $args ... bar) (hasheq '$args '(1 2 3)))
                 '(foo 1 2 3 bar)))
 
-(test-case "datum-subst: unbound variable error"
+;; ========================================
+;; A template's pattern variables are the ones the PATTERN BOUND (2026-08-01)
+;; ========================================
+;; ⚠ THE PIN BELOW WAS FLIPPED, and it is the whole point of this block.
+;;
+;; `datum-subst` used to `error` on any `$`-headed symbol missing from the
+;; bindings. `pattern-var?` decides by NAME — `$`-prefixed minus a
+;; hand-maintained denylist — but the READER mints `$`-headed sentinels for
+;; ordinary surface syntax, and `datum-subst` recurses into every element
+;; including list heads. So the error did not fire on typos; it fired on
+;; SENTINELS, as a raise at preparse, i.e. a WHOLE-FILE ABORT.
+;;
+;; Measured at 969bfd6c: a defmacro template containing `5N`, `1/2` or `|>`
+;; each took the whole file down with zero results. The denylist was missing
+;; TWENTY-FOUR reader-minted sentinels. A denylist cannot be the answer — it
+;; must re-enumerate every sentinel the reader will ever mint, and it had
+;; already failed twice before (`$dot-brace` and `$select` both carry
+;; "whole-file abort in a defmacro template" notes in macros.rkt) and a third
+;; time for `$bcast-step`, minted one commit earlier by the `:` mint.
+;;
+;; `bindings` is the authority: a pattern variable is one the PATTERN bound.
+;; Anything else is a literal. Sentinels then work BY CONSTRUCTION.
+
+(test-case "datum-subst: an UNBOUND $-symbol is a literal, not an error"
+  ;; Was `(check-exn exn:fail? …)`. That pin encoded the abort as intended
+  ;; behaviour, which is why the sentinel class survived three sightings.
+  (check-equal? (datum-subst '$unbound (hasheq)) '$unbound)
+  ;; …and a BOUND one still substitutes, which is the property that matters.
+  (check-equal? (datum-subst '$x (hasheq '$x 42)) 42))
+
+(test-case "datum-subst: reader sentinels survive a template by construction"
+  ;; The four measured aborts, at the datum level. These are not exotic: they
+  ;; are a Nat literal, a rational, a list literal and a pipeline.
+  (for ([sentinel (in-list '($nat-literal $rat-literal $list-literal $pipe-gt
+                             $bcast-step $mixfix $quasiquote $typed-hole))])
+    (define template (list 'f (list sentinel 5) '$u))
+    (check-equal? (datum-subst template (hasheq '$u 'arg))
+                  (list 'f (list sentinel 5) 'arg)
+                  (format "~a must pass through a template untouched" sentinel))))
+
+(test-case "L3: a sentinel-bearing macro template does NOT abort the file"
+  ;; THE CONTAINMENT PIN. Before the fix each of these returned NOTHING —
+  ;; `process-file` raised out of preparse, so `def before-marker` (written
+  ;; ABOVE the macro use) never ran either. The datum-level pins above cannot
+  ;; observe that; only a real file with siblings can.
+  (for ([lit (in-list '("5N" "1/2" "'[1 2 3]"))])
+    (define rs (run-file-ws
+                (string-append
+                 "ns dm-l3\n"
+                 "def before-marker := 1\n"
+                 "defn pair [p q] p\n"
+                 "defmacro mk [$u]\n"
+                 "  [pair $u " lit "]\n"
+                 "def used := [mk 9]\n"
+                 "def after-marker := 2\n")))
+    ;; 4 results: before-marker, pair, used, after-marker (defmacro is consumed)
+    (check-equal? (length rs) 4
+                  (format "template with ~a must not kill the file; got: ~v" lit rs))
+    (check-false (prologos-error? (first rs))
+                 (format "~a: the command BEFORE the macro must run" lit))
+    (check-false (prologos-error? (last rs))
+                 (format "~a: the command AFTER it must run" lit))))
+
+(test-case "L3: `$bcast-step` in a template reaches the user's own diagnostic"
+  ;; The third sighting of this regression, minted by the `:` mint (b1399016)
+  ;; one commit before this fix. Its guided P4c-2 message ("broadcast … is not
+  ;; implemented yet") already existed — the abort was MASKING it. Pinning the
+  ;; message proves the sentinel now flows to its real consumer rather than
+  ;; being eaten as a pattern variable.
+  (define rs (run-file-ws (string-append
+                           "ns dm-bcast\n"
+                           "def before-marker := 1\n"
+                           "defmacro getb [$u]\n"
+                           "  [$u:field]\n"
+                           "def m := {:field 7}\n"
+                           "getb m\n"
+                           "def after-marker := 2\n")))
+  (check-equal? (length rs) 4 (format "got: ~v" rs))
+  (check-false (prologos-error? (first rs)) "the command BEFORE must run")
+  (check-false (prologos-error? (last rs)) "the command AFTER must run")
+  (define msgs (for/list ([r (in-list rs)] #:when (prologos-error? r))
+                 (prologos-error-message r)))
+  (check-equal? (length msgs) 1 (format "expected exactly one error; got: ~v" rs))
+  (check-true (regexp-match? #rx"broadcast" (car msgs))
+              (format "the P4c-2 diagnostic must reach the user, got: ~v" (car msgs))))
+
+(test-case "datum-subst: the SPLICE branch keeps its unbound error"
+  ;; Deliberately NOT relaxed. A sentinel is a list HEAD followed by its
+  ;; payload, never a bare symbol followed by `...`, so this arm cannot be
+  ;; tripped by one and its typo signal stays clean.
   (check-exn exn:fail?
-    (lambda () (datum-subst '$unbound (hasheq)))))
+    (lambda () (datum-subst '(foo $args ...) (hasheq)))))
 
 ;; ========================================
 ;; preparse-expand-form tests
