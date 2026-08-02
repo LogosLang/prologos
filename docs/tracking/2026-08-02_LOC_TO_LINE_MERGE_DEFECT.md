@@ -79,6 +79,39 @@ count**. Two deltas, both explained:
   surf. The file's own diagnostic for `'()` (line 98) now surfaces. An
   improvement.
 
+### Why the spine regresses: **14 distinct defects across 4 layers**, not a stale arm
+
+Classified by per-cluster root-cause analysis over the 35 regressed files, with an
+adversarial synthesis pass. The headline: the tree spine is a **~1,970-line partial
+re-implementation of an 8,212-line parser**, frozen at an older vocabulary — and it
+consumes a **lossier input** than preparse does.
+
+| Layer | Defect | Severity |
+|---|---|---|
+| **Input contract** | Tree consumes lexeme STRINGS, re-deriving numbers with a bare `string->number`; the reader already classified and valued them exactly (`#e` prefix). `1.5f32` becomes **1.5 × 10³²**; `1e23` is off by 8,388,608 | **SILENT** |
+| **Input contract** | Tree parses **UNEXPANDED** source (`read-to-tree` on `source-str`); preparse runs `preparse-expand-all` first. Prelude `defmacro`, trait-type applications, schema seal + `:default` fill, `validate` wrappers are all invisible to it. **Not repairable inside `tree-parser.rkt` at all** — it needs a pipeline change | loud |
+| Dispatch | Atom table is **11 of 42** symbols (`Keyword`, `Rat`, `Unit`, all `Posit*`/`Float*`/`Quire*`, `zero`, `nil`, `refl` …) | loud; **silent** where a prelude value shadows the type name |
+| Dispatch | Head dispatch is **~58 of ~357** (`Map`, `Set`, `PVec`, all `pvec-*`/`map-*`/`set-*` primitives …) | loud; **silent** when a prelude binding shadows a primitive |
+| Dispatch | `parse-form-tree`'s `[else]` is a **non-error** fallthrough; `at-group`, `set-group` and `error` reach it unarmed. `@[1]` → `1`; `#{not true}` → `false` | **SILENT** |
+| Stale arm | `{…}` built as the retired `surf-map-assoc` chain, never `surf-map-literal` — so CIU T6's closed-record seeding never runs. **First divergence in ≥8 of the 35 files** | loud |
+| Stale arm | `<A -> B>` hardcodes multiplicity `'m0` (**erased**); preparse uses `#f` → `mw`. The sexp sibling 200 lines away is correct | **SILENT** |
+| Stale arm | `<A * B>` with a non-binder LHS emits `surf-pair` (a **value**) instead of `surf-sigma` (a **type**) | loud |
+| Stale arm | `parse-check-tree` reads positionally, so `check e : T` takes the `:` token as the type and **discards `T`** | loud |
+| Stale arm | `parse-defn-tree` reads 3 fixed positions, so a multi-token return type **silently discards the body** | **SILENT** |
+| Merge | The error branch `(or tree-match s)` has **zero guards** — no `same-form-type?`, no spec-store. It converted `spec {:0 …}` / `{:1 …}` QTT errors into definitions where the substituted tree surf's binders are all `#f` → `mw`: **a declared-linear parameter silently becomes unrestricted** | **SILENT / soundness** |
+
+**Only five surf kinds can ever be swapped** (`same-form-type?` admits six and
+`surf-defn-multi` is never produced by the tree spine). **All five are broken.**
+
+**⚠ Correction to my own gate.** I reported leg B as "359 → 724 errors". That
+**understates** it: two files that are **clean (0 errors) at HEAD** abort entirely
+under leg B — `examples/unified-matching.prologos` (91 results lost) and
+`lib/prologos/core/abstract-domains.prologos` (23 lost). An error-COUNT gate cannot
+see a whole-file abort, and it cannot see the silent rows either: a full-output
+census found 6 value-level flips with the error count unchanged, including
+`"localhost" : String` → `<error> : String` and `b : Bool` → `b : Goal`.
+**Any future attempt must gate on full output, never on error counts.**
+
 ### Three downstream consumers that independently block the spine (none were in §4)
 
 A winning tree surf carries a **4-element list** where every downstream consumer
@@ -103,6 +136,30 @@ text, and **`process-file` does not parameterize `current-source-str`** (it is
 the LEGACY `parse-*-tree` branch while the **string** path (REPL/LSP/tests) takes
 `parse-eval-tree-for-cell` — **the two pipelines run different parsers.** Adjudicate
 that before any spine revival; it decides which parser the merge would trust.
+
+### ⚠ The strongest criticism of the fix as shipped — recorded, not resolved
+
+The adversarial synthesis argues the guard is in the **wrong place**: defusing at
+`loc->line` leaves *a loaded gun*, because emitting a real srcloc struct from
+`item-srcloc` is a change **three downstream consumers legitimately want**, and the
+next person who makes it silently re-arms 694 form-swaps across five broken form
+kinds. Its recommendation is to invert `[else tree-surf]` → `preparse-surf` as well,
+so the safety is a property of the **merge** rather than of an srcloc accident.
+
+That is a fair criticism and the reasoning is sound. It was **not** taken here
+because §5 step 4 explicitly reserves that inversion as an owner ruling, and
+because the mitigation is currently a comment at exactly the site that would re-arm
+it (`item-srcloc`). **If the owner rules for inversion, the change is one line.**
+
+The synthesis's own counter-argument is worth carrying: inverting `[else]` makes
+the tree spine *permanently* unexercised, which is the very mechanism that rotted
+it — and the merge then costs a full second parse of every file for nothing. Its
+preferred end state is a **differential oracle** (`pipeline.md` § "Exhaustive
+Walkers"): assert `tree-surf ≡ preparse-surf` over the corpus, fail the build on
+divergence, and admit tree surfs only where equivalence is proven — the allowlist
+growing as arms are repaired. That instrument would have caught all fourteen
+defects *before* the key was ever touched. It does not exist yet, so there is
+nothing to gate on today.
 
 ### Owner decision remaining
 
