@@ -4386,7 +4386,63 @@ predicted diffs attributable to the MINT alone.
 
 Status: ✅ P4c-1 COMPLETE.
 
-Status: ⬜ P4c-2..5 (co-design complete; implementation opens at P4c-2).
+##### §5.P4c-2 — The mint + the reader-post-pass binder unwrap  (mini-design 2026-08-01)
+
+**THE BINDER TABLE, MEASURED — not enumerated from memory.** Q_U16 booked "a
+permanent hand-maintained enumeration" of binding forms. The mini-design
+measured its actual membership at HEAD by probing which forms carry a fused
+annotation that the mint would capture, and the result **corrects the design in
+both directions and is materially larger than assumed**:
+
+| MINT FIRES (binder position — unwrap owed) | MINT DOES NOT FIRE |
+|---|---|
+| `def x:Int` · `defn f [a:Int]` · `fn [x:Int]` · `spec g [a:Int]` · `let x:Int` · `property` · `functor` · `trait` METHOD params · **`$pipe` ARMS** (`defn` AND `match`) · `rel [a:Int]` · `defr [a:Int]` | **`?x:Nat` in ANY form** — glued into ONE token by `narrow-var-annot` (pri 96) · `schema`'s `:f` (branch-initial ⇒ empty local result) · SPACED `x : T` anywhere · map keys `{:a 1}` (branch-initial) · keyword args `f x :name` (spaced) |
+
+`impl` needs NO entry — the walk recurses and the inner `defn` covers it.
+
+**THREE findings the census produced that no prior enumeration named:**
+1. **`$pipe` arms fire** — `match v | c a:Int -> a` → `($pipe c a :Int -> a)`,
+   and `defn f | a:Int -> a` likewise. Named by neither the audit, the options
+   panel, nor the first draft of this table (owner-caught).
+2. **PATTERNS NEST**: `defn g | [cons h:Int t] -> h` →
+   `($pipe (cons h :Int t) -> h)`. The unwrap CANNOT scan an arm's top-level
+   items — it must recurse into pattern sub-groups.
+3. **`defr`/`rel` ARE members via the BARE-NAME spelling** even though their
+   `?`-prefixed form is immune. An earlier draft of this table declared `defr`
+   OUT on the strength of the `?a:Nat` probe alone — an under-count committed
+   and corrected inside one session, by measuring rather than listing.
+
+**⚠ THE DISCRIMINATOR IS THE SPELLING, NOT THE FORM — and that changes Q_U16's
+booked cost.** Every form with a bracketed param group is a member for the
+bare-name spelling, so the table is NEAR-UNIVERSAL rather than the five entries
+the ruling implied. A near-universal allow-list is a weaker structure than what
+was accepted; recorded as a correction to the ruling's cost, not smuggled in.
+**Owner ruled [2026-08-01]: take the table as measured**, with the loud-refusal
+hardening at the 17 consumer sites so a MISSING entry surfaces as a guided
+error on first use rather than as a wrong parse.
+
+**⭐ THE TREE ALREADY SOLVES THIS COLLISION LEXICALLY, for one vocabulary.**
+`?x:Nat` never fires because `narrow-var-annot` glues it into ONE token — the
+`?` prefix is a lexical marker meaning "this is a binder", making the collision
+STRUCTURALLY IMPOSSIBLE instead of managing it downstream. Recorded because it
+is the shape a future simplification would take (and the shape X.close should
+weigh), not proposed for v1: requiring a marker on ordinary binders would change
+the fused surface the owner ruled MORE important than broadcast.
+
+**Condition (a) is documented AT THE SEAT and is not theoretical**:
+parse-reader.rkt:2586-2596 records that the first draft of this walk rebuilt
+every stx-list and DROPPED SYNTAX PROPERTIES — including POL.9's
+`prologos-paren-origin` — silently degrading an implicit-solve paren goal to an
+APPLICATION. The unwrap must be eq?-preserving for untouched forms.
+
+**Drift risks named before code**: the table missing a form (mitigated by the
+consumer hardening) · the eq?-preservation trap above · twin drift between the
+two groupers · the quote bucket (`':hello`) where the mint fires in EXPRESSION
+position and no binder unwrap can rescue it.
+
+Status: ⬜ (mini-design complete; the table is settled and measured).
+
+Status: ⬜ P4c-3..5.
 
 ### §5.P5 — Ruling B + factoring
 
