@@ -4440,7 +4440,69 @@ consumer hardening) · the eq?-preservation trap above · twin drift between the
 two groupers · the quote bucket (`':hello`) where the mint fires in EXPRESSION
 position and no binder unwrap can rescue it.
 
-Status: ⬜ (mini-design complete; the table is settled and measured).
+**LANDED (the mint + the unwrap) — but P4c-2 is NOT COMPLETE**; condition (c)
+is outstanding, see below.
+
+**The mint**: one shared trigger `bcast-step-trigger?` (= `adjacent-to-base?` +
+a token-type test + the quote decline), consumed by BOTH groupers rather than
+copied. Positional, so `.N`/brackets/parens/closers joined the focus set free.
+⚠ **The payload is wrapped VERBATIM** — `($bcast-step |:name|)`, not a stripped
+`name`. My pins first asserted the stripped form; that would have forced the
+unwrap to re-add `:`, i.e. a SECOND copy of the recognizer's accept-set — the
+F1b.7g class. The unwrap is therefore a plain `cadr`.
+
+**The unwrap** needed THREE rules the mini-design had not separated:
+- **terminator-bounded** (`def` · `let` · `$pipe` arms) — up to `:=` / `->`,
+  never past, so values and arm BODIES keep their broadcasts;
+- **param-head SCAN** (`defn` `fn` `spec` `property` `functor` `rel` `defr`) —
+  because `rel` is a SIBLING in `def q := rel [a:Int] …`, not a form head, and
+  a head-test structurally cannot see it;
+- **deep** (`trait`) — method params sit inside lists headed by the METHOD
+  NAME, so there is nothing to key on. Safe ONLY because a trait body is
+  signatures with no expression bodies; **this entry must narrow if `trait`
+  ever gains default method bodies.**
+
+**⚠ CORRECTION TO THIS DOCUMENT — the predicted A/B diff set is ZERO, not
+SEVEN.** §5.P4c's named seven-site set was computed against the mint WITHOUT
+Q_U16's unwrap. With the unwrap those sites ROUND-TRIP (mint→unwrap = identity),
+so the datum never moves: **161 files, ZERO diffs**. Verified it discriminates
+rather than trusting the number — zero-where-seven-was-predicted is exactly what
+a silently-broken gate looks like. The same lexeme separates the two readings:
+`users:Int` → `($bcast-step :Int)` while `let x:Int 5` → `(let x :Int 5 x)`.
+A future reader must not treat the mismatch as a regression.
+
+**⚠ A REGRESSION I INTRODUCED, caught by an EARLIER PHASE'S pin.**
+`apply-binder-unwrap` did `(car kids)` unguarded — but `kids` is not always a
+list: `classify-let-block`'s FAIL path returns a SYNTAX OBJECT wrapping
+`($let-error …)`. A contained let-LAYOUT error became a `car: contract
+violation`, i.e. a WHOLE-FILE ABORT. parse-reader.rkt carries a "CONTRACT
+REPAIR" note documenting that exact hazard, and I reintroduced it roughly one
+screen below the note. Caught by test-let-blocks' pin named *"a top-level
+let-block LAYOUT error is CONTAINED, not a file abort"* — a pin written by an
+earlier phase doing its job against a later phase's author.
+
+**THE EIGHT DELIBERATE FLIPS** (tests/test-parse-reader.rkt:494-516) updated and
+annotated IN PLACE as flips — third consecutive phase where the prior rung's
+flagship pin flips. Their two neighbours must NOT move and are load-bearing:
+`x:0abc`/`x:10abc` (annotation arm declines, colon shatters — OUTSIDE the
+trigger) and `{:10 v}`/`{:0 v}` (branch-initial ⇒ empty local result).
+
+**Also recorded — a second guessed baseline this session**: the quote-bucket pin
+first asserted `(quote :hello)`; the datum is `(|'| :hello)`, the loose `'`
+being exactly WHY the bucket needs a decline. A pin that asserts a REMEMBERED
+baseline is the one shape that ships vacuously green.
+
+Suite **9758 / 478 / 0** · battery 294 → **312** · acceptance 52/52 · A/B ZERO.
+
+**⬜ OUTSTANDING — Q_U16 condition (c), and P4c-2 does not close without it**:
+the LOUD-REFUSAL hardening at the 17 binder-consumer sites (11 `fused-type-annot?`
++ 6 `colon-symbol?`, across 8 functions), so a MISSING table row surfaces as a
+guided "a broadcast step cannot appear in a binder position" error rather than
+falling to a generic arm — the 3-arity class. Until it lands, the table's
+failure mode is SILENT, which is precisely the property the ruling booked the
+hardening to remove.
+
+Status: 🔄 (mint + unwrap landed; condition (c) outstanding).
 
 Status: ⬜ P4c-3..5.
 

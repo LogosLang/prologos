@@ -53,6 +53,8 @@
  ;; that made it the suggested home. surface-rewrite.rkt already requires THIS
  ;; module (:26), so the edge exists and exporting is cycle-free by construction.
  adjacent-to-base?
+ ;; D4.P4c-2: THE `:` gate trigger — both groupers consume this one predicate.
+ bcast-step-trigger?
 
  ;; Cell constructors for propagator network
  create-parse-cells
@@ -2740,6 +2742,138 @@
         orig
         k)))
 
+;; ============================================================
+;; D4.P4c-2 (Q_U16) — THE BINDER UNWRAP, at the READER POST-PASS
+;; ============================================================
+;;
+;; WHY HERE AND NOWHERE ELSE. `$bcast-step` must join `access-sentinel?` to
+;; inherit all FOUR `rewrite-dot-access` seats (macros.rkt :1965 · :2672 ·
+;; :6316 · :6702) — two of which run inside PREPARSE, so a parser-side unwrap
+;; is unreachable. But the fold RUNS OVER BINDER POSITIONS (`defn f [x.a] x` →
+;; a 3-arity function at ZERO errors). This walk runs at READER time and
+;; therefore provably precedes all four seats. That is the whole of Q_U16.
+;;
+;; THE TABLE IS MEASURED, not enumerated from memory (D4 §5.P4c-2). Members:
+;;   def · defn · fn · spec · let · property · functor · trait (method params)
+;;   · rel · defr · and `$pipe` ARMS in defn AND match.
+;; Immune by construction: `?x:T` (glued to ONE token by narrow-var-annot),
+;; branch-initial `:k`, and every SPACED spelling — none of them ever mints.
+;;
+;; ⚠ BOOKED COST, stated plainly (Q_U16 condition): this table is a PERMANENT
+;; hand-maintained enumeration with NO retirement plan. Its failure mode is a
+;; missed form silently reading a binder annotation as a broadcast step — the
+;; 3-arity class. The consumer hardening is what makes that LOUD; this walk
+;; alone does not.
+;;
+;; ⚠ EQ?-PRESERVING BY CONSTRUCTION — see the note on `transform-let-blocks-stx`
+;; below. An untouched form MUST keep its original syntax object, properties
+;; included: the first draft of that walk dropped POL.9's
+;; `prologos-paren-origin` and silently degraded an implicit-solve paren goal to
+;; an APPLICATION.
+
+;; Heads whose PARAM GROUP (the first bracket group after the head/name) binds.
+(define binder-param-heads
+  '(defn fn spec property functor rel defr))
+
+;; `trait` is DEEP, not param-scan: its method params live inside nested lists
+;; headed by the METHOD NAME (an arbitrary symbol), so there is no head to key
+;; on. Deep unwrap is safe here because a trait body is SIGNATURES ONLY — no
+;; expression bodies for a broadcast to live in. If trait ever gains default
+;; method bodies, this entry must narrow.
+(define binder-deep-heads '(trait))
+
+;; Heads whose binder region runs from the head to a TERMINATOR.
+(define binder-region-heads '(def let))
+(define binder-region-terminators '(:= ->))
+
+(define (bcast-step-stx? x)
+  (and (syntax? x)
+       (let ([d (syntax-e x)])
+         (and (pair? d) (syntax? (car d)) (eq? (syntax-e (car d)) '$bcast-step)))))
+
+;; `($bcast-step |:Int|)` → `|:Int|`, VERBATIM. A plain cadr: the mint wrapped
+;; the colon-symbol untouched precisely so this never re-derives the lexeme
+;; (that would be a second copy of the recognizer — the F1b.7g class).
+(define (unwrap-bcast-step x) (cadr (syntax-e x)))
+
+;; Unwrap every `$bcast-step` in a subtree, recursing through sub-groups.
+;; Required because arm patterns NEST: `defn g | [cons h:Int t] -> h` puts the
+;; annotation inside a constructor pattern, so scanning an arm's top-level
+;; items is not enough.
+(define (unwrap-binders-deep stx)
+  (cond
+    [(bcast-step-stx? stx) (unwrap-bcast-step stx)]
+    [(and (syntax? stx) (list? (syntax-e stx)))
+     (let* ([kids (syntax-e stx)]
+            [kids* (map unwrap-binders-deep kids)])
+       (if (andmap eq? kids kids*) stx (datum->syntax #f kids* stx stx)))]
+    [else stx]))
+
+;; Unwrap only up to a terminator (`:=` / `->`), leaving the VALUE or BODY side
+;; alone — a broadcast is legal there and must survive.
+(define (unwrap-binders-until-terminator kids)
+  (let loop ([ks kids] [acc '()] [done? #f])
+    (cond
+      [(null? ks) (reverse acc)]
+      [done? (append (reverse acc) ks)]
+      [else
+       (let* ([k (car ks)]
+              [d (and (syntax? k) (syntax-e k))]
+              [term? (and (symbol? d) (memq d binder-region-terminators))])
+         (loop (cdr ks)
+               (cons (if term? k (unwrap-binders-deep k)) acc)
+               term?))])))
+
+;; The per-form rule. Returns the kids list, unwrapped where this form binds.
+(define (apply-binder-unwrap kids)
+  ;; ⚠ kids is NOT always a list. `classify-let-block`'s FAIL path returns
+  ;; `let-block-error`'s value — a SYNTAX OBJECT wrapping `($let-error "…")` —
+  ;; and this file's own CONTRACT REPAIR note (on transform-let-blocks-elems)
+  ;; documents that hazard verbatim. The first cut of this function did
+  ;; `(car kids)` unguarded and turned a contained let-LAYOUT error into a
+  ;; `car: contract violation`, i.e. a whole-file abort: the precise defect that
+  ;; note exists to prevent, reintroduced one screen below it. Caught by
+  ;; test-let-blocks' "a top-level let-block LAYOUT error is CONTAINED, not a
+  ;; file abort" pin — which is exactly what that pin is for.
+  (if (or (not (pair? kids)) (null? kids))
+      kids
+      (let* ([h (car kids)]
+             [hd (and (syntax? h) (syntax-e h))])
+        (cond
+          ;; `$pipe` ARMS (defn AND match): the ARROW splits pattern from body.
+          ;; Owner-caught; named by neither the audit nor the options panel.
+          [(eq? hd '$pipe)
+           (cons h (unwrap-binders-until-terminator (cdr kids)))]
+          ;; `def` / `let`: bind up to `:=` — then SCAN the remainder, because a
+          ;; nested binder form (`def q := rel [a:Int] …`) lives past the
+          ;; terminator and owns its own param group.
+          [(and (symbol? hd) (memq hd binder-region-heads))
+           (cons h (scan-for-param-heads (unwrap-binders-until-terminator (cdr kids))))]
+          ;; `trait`: deep — see binder-deep-heads.
+          [(and (symbol? hd) (memq hd binder-deep-heads))
+           (cons h (map unwrap-binders-deep (cdr kids)))]
+          [else (scan-for-param-heads kids)]))))
+
+;; A param-group head is not always the form HEAD. `def q := rel [a:Int] &> …`
+;; puts `rel` and its group as SIBLINGS inside the `def` element list, so a
+;; head-test cannot see it. Scan the list: after any param-head symbol, the next
+;; GROUP-shaped element is a binder region. Body elements are untouched, so a
+;; broadcast in a body still survives.
+(define (scan-for-param-heads kids)
+  (let loop ([ks kids] [acc '()] [armed? #f])
+    (cond
+      [(null? ks) (reverse acc)]
+      [else
+       (let* ([k (car ks)]
+              [d (and (syntax? k) (syntax-e k))]
+              [group? (and (syntax? k) (list? d))])
+         (cond
+           [(and armed? group?)
+            (loop (cdr ks) (cons (unwrap-binders-deep k) acc) #f)]
+           [(and (symbol? d) (memq d binder-param-heads))
+            (loop (cdr ks) (cons k acc) #t)]
+           [else (loop (cdr ks) (cons k acc) armed?)]))])))
+
 (define (transform-let-blocks-stx stx)
   (define lst (syntax->list stx))
   (if (not lst)
@@ -2747,7 +2881,9 @@
       (let* ([kids0 (skip-reader-form-body (map transform-let-blocks-stx lst) lst)]
              [kids (absorb-let-siblings kids0)]
              [kids1 (if (let-headed? kids) (classify-let-block kids) kids)]
-             [kids* (mark-let-goal-rhs kids1)])   ;; total — see its own note
+             [kids* (mark-let-goal-rhs kids1)]
+             ;; D4.P4c-2: the binder unwrap, LAST so it sees the classified form.
+             [kids* (apply-binder-unwrap kids*)])
         (if (and (eq? kids* kids1) (eq? kids1 kids) (eq? kids kids0) (andmap eq? kids0 lst))
             stx
             (datum->syntax #f kids* stx stx)))))
@@ -2756,7 +2892,13 @@
 (define (transform-let-blocks-elems elems)
   (define elems*
     (absorb-let-siblings (skip-reader-form-body (map transform-let-blocks-stx elems) elems)))
-  (let ([r (mark-let-goal-rhs (if (let-headed? elems*) (classify-let-block elems*) elems*))])
+  ;; D4.P4c-2: the binder unwrap must run at BOTH post-pass entries. This one
+  ;; handles a TOP-LEVEL form's element list (`def x:Int := 5`); its sibling in
+  ;; `transform-let-blocks-stx` handles NESTED forms (a `defn` inside an `impl`
+  ;; body). Wiring only the latter left every top-level binder unwrapped —
+  ;; caught by the binder-row pins, which is what they are for.
+  (let ([r (apply-binder-unwrap
+            (mark-let-goal-rhs (if (let-headed? elems*) (classify-let-block elems*) elems*)))])
     ;; ⚠ CONTRACT REPAIR (pre-existing LET-track defect, verified by neutralising
     ;; the P2 additions and reproducing at base shape). This entry point is
     ;; documented to return an ELEMENT LIST, and `tree-node->stx-elements` hands
@@ -3221,6 +3363,33 @@
 
 ;; Is the physically preceding token a READER-FORM HEAD (`racket{…}`)? Consults
 ;; the ONE registry (reader-forms.rkt) — never an inline literal.
+;; D4.P4c-2 (Q_U16 / Q_U8) — THE `:` GATE TRIGGER, shared by both groupers.
+;;
+;; Fires when a `keyword` (`:name`) or `colon-annotation` (`:0`/`:w`/`:m`) token
+;; is BYTE-ADJACENT to a non-empty local result. Positional, NOT an enumerated
+;; context list — `.N`, brackets, braces, parens and closers all join the focus
+;; set FREE because `adjacent-to-base?` consults no token type.
+;;
+;; ⚠ The QUOTE DECLINE is load-bearing, not tidiness. `'` lexes as a loose token
+;; that `group-items` has no arm for, so it is pushed as a SIBLING and the
+;; keyword after it IS byte-adjacent — `':hello` would mint in EXPRESSION
+;; position, where the binder unwrap cannot rescue it. One live corpus site
+;; (examples/homoiconicity.prologos:96). Modelled on `prev-token-reader-form-head?`.
+;;
+;; ⚠ `colon-annotation` classifies to its OWN type since P4c-1 (Q_U16b); before
+;; that promotion it was `'symbol` and this predicate could not have seen it.
+(define (bcast-step-trigger? vec i result item type)
+  (and (memq type '(keyword colon-annotation))
+       (adjacent-to-base? vec i result item)
+       (not (prev-token-quote? vec i))))
+
+;; Is the physically preceding token a loose quote? (See the decline above.)
+(define (prev-token-quote? vec i)
+  (and (> i 0)
+       (let ([prev (vector-ref vec (- i 1))])
+         (and (token-entry? prev)
+              (equal? (token-entry-lexeme prev) "'")))))
+
 (define (prev-token-reader-form-head? vec i)
   (and (> i 0)
        (let ([prev (vector-ref vec (- i 1))])
@@ -3583,6 +3752,20 @@
             ;; handled by the tokenizer's qq-depth channel. The datum
             ;; extraction (group-items) sees comma tokens that the tokenizer
             ;; decided NOT to skip.
+            ;; D4.P4c-2: the `:` gate — mint the ω step sentinel. Count-preserving
+            ;; (`(users :name)` → `(users ($bcast-step name))`, 2 items either
+            ;; way), which is why the Q_N3 agreement guard cannot see it and a
+            ;; third guard shape is owed.
+            [(bcast-step-trigger? vec i result item type)
+             (let-values ([(ln cl) (pos->line-col source-str (token-entry-start-pos item))])
+               (loop (+ i 1)
+                     (cons (make-stx (list (make-stx '$bcast-step source ln cl
+                                                     (+ (token-entry-start-pos item) 1) 0)
+                                           (token-entry->stx item source source-str))
+                                     source ln cl
+                                     (+ (token-entry-start-pos item) 1)
+                                     (- (token-entry-end-pos item) (token-entry-start-pos item)))
+                           result)))]
             ;; Regular token
             [else
              (loop (+ i 1) (cons (token-entry->stx item source source-str) result))])]

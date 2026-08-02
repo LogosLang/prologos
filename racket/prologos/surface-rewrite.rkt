@@ -583,6 +583,15 @@
             ;; Comma → skip (cosmetic separator)
             [(eq? type 'comma)
              (loop (+ i 1) result)]
+            ;; D4.P4c-2: the `:` gate — the Q_N7 TWIN of parse-reader's arm,
+            ;; consuming THE SAME trigger predicate rather than a second copy.
+            ;; The tree layer carries the token through unchanged (it mints TAGS
+            ;; only for delimited regions, and `$bcast-step` is a non-opener —
+            ;; §Q8.5 sentinel site 2 is N/A here, proved in-tree by
+            ;; `tag-dot-access` having zero producers). What this arm must do is
+            ;; AGREE about adjacency so the two groupers do not diverge.
+            [(bcast-step-trigger? vec i result item type)
+             (loop (+ i 1) (cons item result))]
             ;; Regular token → add to result
             [else
              (loop (+ i 1) (cons item result))])]

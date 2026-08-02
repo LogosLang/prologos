@@ -3439,9 +3439,142 @@
   ;; The whole point of landing this in P4c-1 rather than P4c-2: a token-TYPE
   ;; change must not move a single datum, so the A/B baseline stays clean and
   ;; P4c-2's seven predicted diffs are attributable to the MINT alone.
-  (check-equal? (read-all-forms-string "users:0") '((users :0)))
+  ;; ⚠ DELIBERATE FLIP at P4c-2 — `users:0` now MINTS (Q_U16b makes it a legal
+  ;; ω step). Listed as a flip rather than silenced: this is the P4c hazard that
+  ;; says the prior rung's flagship pin flips, for the third consecutive phase.
+  (check-equal? (read-all-forms-string "users:0") '((users ($bcast-step :0))))
   (check-equal? (read-all-forms-string "[fn [x :0 Int] x]") '((fn (x :0 Int) x)))
-  (check-equal? (read-all-forms-string "users:w") '((users :w)))
+  (check-equal? (read-all-forms-string "users:w") '((users ($bcast-step :w))))  ;; deliberate flip, as above
   ;; baseline MEASURED, not guessed — the first draft of this pin asserted
   ;; `(((:0 v)))` from memory and failed for the wrong reason.
   (check-equal? (read-all-forms-string "{:0 v}") '(($brace-params :0 v))))
+
+;; ============================================================
+;; D4.P4c-2 — the `:` MINT + the reader-post-pass BINDER UNWRAP (Q_U16)
+;; ============================================================
+;;
+;; Q_U8 as ruled could not be built: §Q8.5 site 8 (join `access-sentinel?` +
+;; take a fold arm) and parser position-dispatch are MUTUALLY EXCLUSIVE,
+;; because the preparse fold RUNS OVER BINDER POSITIONS (`defn f [x.a] x` →
+;; a 3-arity function at ZERO errors). Q_U16 keeps BOTH surfaces by moving the
+;; unwrap to the READER POST-PASS, which provably precedes all FOUR
+;; `rewrite-dot-access` seats (macros.rkt :1965 · :2672 · :6316 · :6702).
+;;
+;; So the contract is TWO-SIDED and both sides need pins:
+;;   EXPRESSION position → the mint SURVIVES as `($bcast-step k)`
+;;   BINDER position     → the post-pass UNWRAPS it back to the bare `:k`
+;;
+;; The binder table is MEASURED (D4 §5.P4c-2), not enumerated from memory.
+
+;; ---- side 1: the mint fires in EXPRESSION position ----
+
+(test-case "P4c-2: `users:name` mints the broadcast step, payload VERBATIM"
+  ;; ⚠ The payload is the COLON-SYMBOL `:name`, not a stripped `name`. This pin
+  ;; first asserted the stripped form — which would have forced the unwrap to
+  ;; re-add `:`, i.e. a SECOND copy of the recognizer's accept-set: the exact
+  ;; F1b.7g drift class reader-forms.rkt exists to forbid. `token-entry->stx`'s
+  ;; keyword arm already yields `|:name|`; the mint WRAPS it untouched so the
+  ;; unwrap is a plain `cadr`.
+  (check-equal? (read-all-forms-string "users:name") '((users ($bcast-step :name)))))
+
+(test-case "P4c-2: the ordinal band mints too (Q_U16b — `users:0` is a legal ω step)"
+  (check-equal? (read-all-forms-string "users:0") '((users ($bcast-step :0))))
+  (check-equal? (read-all-forms-string "users:w") '((users ($bcast-step :w)))))
+
+(test-case "P4c-2: the mint is POSITIONAL — closers and `.N` join the focus set FREE"
+  ;; `adjacent-to-base?` consults NO token type, so these come free under the
+  ;; positional rule and would each have needed a hand entry under an
+  ;; enumerated one.
+  (check-equal? (read-all-forms-string "xs[0]:n") '((xs ($postfix-index 0) ($bcast-step :n))))
+  (check-equal? (read-all-forms-string "(f x):name") '(((f x) ($bcast-step :name)))))
+
+;; ---- side 2: BINDER positions unwrap — one row per MEASURED table entry ----
+;;
+;; ⚠ THESE ARE INVARIANCE PINS, GREEN BEFORE AND AFTER. Before the mint they
+;; pass trivially (there is nothing to unwrap); their job is to go RED the
+;; moment the mint LEAKS into a binder position. So "green" here is only
+;; evidence once side 1 is green too — read the two sides together.
+;;
+;; A missing row is the 3-arity class: the binder consumer meets
+;; `($bcast-step Int)` where it expects `:Int` and falls to a generic arm. The
+;; consumer hardening makes that LOUD; these pins make it VISIBLE.
+
+(test-case "P4c-2 binder row: def"
+  (check-equal? (read-all-forms-string "def x:Int := 5") '((def x :Int := 5))))
+
+(test-case "P4c-2 binder row: defn param group"
+  (check-equal? (read-all-forms-string "defn f [a:Int b:Int] a")
+                '((defn f (a :Int b :Int) a))))
+
+(test-case "P4c-2 binder row: fn param group"
+  (check-equal? (read-all-forms-string "[fn [x:Int] x]") '((fn (x :Int) x))))
+
+(test-case "P4c-2 binder row: spec param group"
+  (check-equal? (read-all-forms-string "spec g [a:Int] -> Int") '((spec g (a :Int) -> Int))))
+
+(test-case "P4c-2 binder row: let binding"
+  (check-equal? (read-all-forms-string "let x:Int 5\n  x") '((let x :Int 5 x))))
+
+(test-case "P4c-2 binder row: property + functor param groups"
+  (check-equal? (read-all-forms-string "property p [x:Int] x") '((property p (x :Int) x)))
+  (check-equal? (read-all-forms-string "functor F [x:Int] x") '((functor F (x :Int) x))))
+
+(test-case "P4c-2 binder row: trait METHOD params"
+  (check-equal? (read-all-forms-string "trait T {A}\n  m [x:Int] : A")
+                '((trait T ($brace-params A) (m (x :Int) : A)))))
+
+(test-case "P4c-2 binder row: rel / defr param groups (the BARE-NAME spelling)"
+  ;; The `?`-prefixed spelling is immune (glued by narrow-var-annot); the
+  ;; bare-name one is NOT. An earlier draft of the table declared defr OUT on
+  ;; the `?a:Nat` probe alone — the under-count this row exists to pin.
+  (check-equal? (read-all-forms-string "defr r [a:Int]") '((defr r (a :Int))))
+  (check-equal? (read-all-forms-string "def q := rel [a:Int] &> foo a")
+                '((def q := rel (a :Int) $clause-sep foo a))))
+
+(test-case "P4c-2 binder row: `$pipe` ARMS — defn AND match"
+  ;; Owner-caught; named by neither the audit nor the options panel.
+  (check-equal? (read-all-forms-string "defn f\n  | a:Int -> a") '((defn f ($pipe a :Int -> a))))
+  (check-equal? (read-all-forms-string "match v\n  | c a:Int -> a")
+                '((match v ($pipe c a :Int -> a)))))
+
+(test-case "P4c-2 binder row: `$pipe` arm patterns NEST"
+  ;; The unwrap cannot scan an arm's top-level items — the annotation is inside
+  ;; a constructor pattern sub-group.
+  (check-equal? (read-all-forms-string "defn g\n  | [cons h:Int t] -> h")
+                '((defn g ($pipe (cons h :Int t) -> h)))))
+
+(test-case "P4c-2 binder row: a header param group AND arms in ONE form"
+  (check-equal? (read-all-forms-string "defn k [x:Int]\n  | 0 -> x")
+                '((defn k (x :Int) ($pipe 0 -> x)))))
+
+;; ---- the IMMUNE set: these must not move, and two of them are load-bearing ----
+
+(test-case "P4c-2: the `?`-prefixed spelling is immune — ONE glued token"
+  ;; narrow-var-annot (pri 96) glues it, so the mint structurally cannot fire.
+  ;; This is the tree's own lexical solution to the collision, for one vocabulary.
+  (check-equal? (read-all-forms-string "defr r [?a:Nat]") '((defr r (?a:Nat))))
+  (check-equal? (read-all-forms-string "def q := rel [?x:Nat] &> foo x")
+                '((def q := rel (?x:Nat) $clause-sep foo x))))
+
+(test-case "P4c-2: SPACED never mints — contiguity is the discriminator (§Q8.3)"
+  (check-equal? (read-all-forms-string "def x : Int := 5") '((def x : Int := 5)))
+  (check-equal? (read-all-forms-string "f x :name") '((f x :name)))
+  (check-equal? (read-all-forms-string "[fn [x :0 Int] x]") '((fn (x :0 Int) x))))
+
+(test-case "P4c-2: BRANCH-INITIAL never mints — the local result is empty"
+  ;; These two are declared safe-by-construction in the P4c hazard list and
+  ;; must NOT be touched: admitting bare `colon` to the trigger would break them.
+  (check-equal? (read-all-forms-string "{:a 1}") '(($brace-params :a 1)))
+  (check-equal? (read-all-forms-string "schema S\n  :f Int") '((schema S (:f Int)))))
+
+(test-case "P4c-2: the QUOTE bucket declines — it is neither expression nor binder"
+  ;; `'` lexes as a loose token with no grouper arm, so it is pushed as a
+  ;; SIBLING and the keyword IS byte-adjacent — the mint would fire in
+  ;; expression position where no binder unwrap can rescue it. One live corpus
+  ;; site (examples/homoiconicity.prologos:96). Declined via the
+  ;; `prev-token-reader-form-head?` shape.
+  ;; ⚠ baseline MEASURED. My first draft asserted `(quote :hello)` from memory;
+  ;; the quote is a LOOSE `|'|` symbol with no grouper arm — which is exactly
+  ;; WHY the bucket exists. Second guessed-baseline in this slice; the earlier
+  ;; one was `{:0 v}` at P4c-1. Measure the baseline, always.
+  (check-equal? (read-all-forms-string "':hello") '((|'| :hello))))

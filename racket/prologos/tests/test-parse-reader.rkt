@@ -490,15 +490,25 @@
 ;; discriminated by position, not by lexeme.
 ;; ============================================================
 
+;; ⚠ D4.P4c-2 — THE EIGHT DELIBERATE FLIPS. The datums below changed because
+;; the `:` gate now mints `$bcast-step` for a keyword/colon-annotation token
+;; byte-adjacent to a non-empty local result (Q_U8 mint, Q_U16 unwrap). They are
+;; listed as flips in §5.P4c-2's test delta, NOT silenced: this is the third
+;; consecutive phase in which the PRIOR rung's flagship pin flips, and an
+;; unannounced flip reads as a regression at suite time.
+;; ⚠ Two neighbours must NOT move and are load-bearing: `x:0abc`/`x:10abc`
+;; (the annotation arm declines, the colon shatters to a bare `colon`, which is
+;; OUTSIDE the trigger) and `{:10 v}`/`{:0 v}` (branch-initial ⇒ EMPTY local
+;; result). Admitting bare `colon` to the trigger would break both.
 (test-case "Q_M8: :10 is ONE token, like :0…:9 (was: `:` + `10`)"
-  (check-equal? (read-all-forms-string "users:10") '((users :10)))
-  (check-equal? (read-all-forms-string "users:127") '((users :127))))
+  (check-equal? (read-all-forms-string "users:10") '((users ($bcast-step :10))))
+  (check-equal? (read-all-forms-string "users:127") '((users ($bcast-step :127)))))
 
 (test-case "Q_M8: single-digit and w/m forms are UNCHANGED (must-not-break)"
-  (check-equal? (read-all-forms-string "users:0") '((users :0)))
-  (check-equal? (read-all-forms-string "users:9") '((users :9)))
-  (check-equal? (read-all-forms-string "users:w") '((users :w)))
-  (check-equal? (read-all-forms-string "users:m") '((users :m))))
+  (check-equal? (read-all-forms-string "users:0") '((users ($bcast-step :0))))
+  (check-equal? (read-all-forms-string "users:9") '((users ($bcast-step :9))))
+  (check-equal? (read-all-forms-string "users:w") '((users ($bcast-step :w))))
+  (check-equal? (read-all-forms-string "users:m") '((users ($bcast-step :m)))))
 
 (test-case "Q_M8: the trailing ident-continue GUARD still declines after the LAST digit"
   ;; The widened digit run must test `not ident-continue?` AFTER the last digit,
@@ -512,8 +522,8 @@
   (check-equal? (read-all-forms-string "x:0abc") '((x : 0 abc)))
   (check-equal? (read-all-forms-string "x:10abc") '((x : 10 abc)))
   ;; …while the LETTER arm still yields keywords, which is why the guard exists:
-  (check-equal? (read-all-forms-string "x:where") '((x :where)))
-  (check-equal? (read-all-forms-string "x:wm") '((x :wm))))
+  (check-equal? (read-all-forms-string "x:where") '((x ($bcast-step :where))))
+  (check-equal? (read-all-forms-string "x:wm") '((x ($bcast-step :wm)))))
 
 (test-case "Q_M8: {:10 v} is a legal map key — the LATENT DEFECT this repairs"
   ;; `{:0 v}`, `{:1 v}`, `{:9 v}` were legal today while `{:10 v}` SHATTERED
