@@ -892,14 +892,32 @@
   ;; audit's "does P2 create a NEW instance of a known family?" pass caught it.
   ;; (`ns foo[2]` mints the same sentinel and is equally nonsense, so the
   ;; message names the SEGMENT rather than asserting which glyph was used.)
-  (when (for/or ([e (in-list (cddr datum))])
-          (and (pair? e) (memq (car e) '($dot-access $postfix-index))))
-    (error 'ns
-      (format (string-append
-               "namespace name cannot contain a `.`/`[…]` segment (those are the "
-               "record access operators). Use `::` for a hierarchical namespace "
-               "(e.g. `~a::…`) or a single segment (e.g. `~a`).")
-              (cadr datum) (cadr datum))))
+  ;; ⭐ D4.P4c-1 — POLARITY INVERTED. This was a NEGATIVE list of two known-bad
+  ;; sentinel heads (`$dot-access` / `$postfix-index`), which is why `ns
+  ;; foo:bar` SILENTLY DROPPED `:bar` at ZERO errors: a bare keyword is not a
+  ;; pair, so it matched nothing and fell through as if it were an option. That
+  ;; is a LIVE instance of the `b0db8f3e` class, not a prospective one — probed
+  ;; end-to-end, `ns foo:bar` defined namespace `foo` and reported 0 errors.
+  ;;
+  ;; `ns` accepts exactly ONE option (`:no-prelude`, read just below), so the
+  ;; total form is a POSITIVE ALLOW-LIST: anything in the tail that is not that
+  ;; option is refused. This is the same inversion `definitely-not-map?` took at
+  ;; P2.b slice 1, and it closes the class rather than extending it — D4 records
+  ;; THREE unclosed instances of the negative-list shape, and P4c-2's
+  ;; `$bcast-step` would have been a fourth.
+  ;;
+  ;; The message still names the SEGMENT rather than asserting which glyph was
+  ;; used, because several spellings reach here (`.name` · `[2]` · `:bar` · a
+  ;; future minted sentinel) and naming the wrong one is worse than naming none.
+  (for ([e (in-list (cddr datum))])
+    (unless (eq? e ':no-prelude)
+      (error 'ns
+        (format (string-append
+                 "namespace name cannot contain a `~a` segment (those are the "
+                 "record access / broadcast operators). Use `::` for a "
+                 "hierarchical namespace (e.g. `~a::…`) or a single segment "
+                 "(e.g. `~a`). The only option `ns` accepts is `:no-prelude`.")
+                (if (pair? e) (car e) e) (cadr datum) (cadr datum)))))
   (define ns-sym (cadr datum))
   (define no-prelude?
     (and (>= (length datum) 3)

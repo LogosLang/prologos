@@ -2831,3 +2831,36 @@ that `[k]` admits a **COMPUTED key** (an expr) while the selector payload is
 declared STATIC data with no exprs inside and `select-step-kind` is a closed
 union. Stating it structurally also says exactly when the follow-up becomes
 possible: when the payload can carry exprs.
+
+### 31. The `ns` name guard RAISES — it is a WHOLE-FILE ABORT, not a per-command error  (filed 2026-08-01 at D4.P4c-1, owner-requested)
+
+`validate-ns-declaration`'s refusal (namespace.rkt, the guard P4c-1 just made
+TOTAL) is a raw Racket `(error 'ns …)`, not a `parse-error` VALUE. So a bad
+namespace segment takes down the WHOLE FILE — no later command runs, and the
+user sees a Racket-level error rather than a guided per-command diagnostic.
+
+**This is the Q_L4 class**, and P1a built the marker-form seat precisely for it:
+per the POL.4 conversion discipline a per-command error is a VALUE, never a
+raise. The seat is already in use for the retired-selection family
+(`$retired-selection` → `parse-error`, parser.rkt's `retirement-message` arm).
+
+**Why it is filed rather than fixed in P4c-1**: P4c-1's prerequisite was
+TOTALITY (the guard was a negative list that silently dropped `ns foo:bar` at
+zero errors — a live `b0db8f3e` instance). The error CHANNEL is a separate
+concern with its own blast radius, and widening the slice to change it would
+have been scope creep. **Named consequence, eyes open**: making the guard total
+converts `ns foo:bar` from a SILENT DROP into a WHOLE-FILE ABORT. That is
+strictly better — loud beats silent, and it is monotone — but it is harsher
+than the guided per-command error the project's own discipline calls for.
+
+**Shape of the fix**: route the refusal through the marker-form seat so it
+returns a `parse-error` value; the message text P4c-1 wrote is already correct
+and can move verbatim. Test-pinned today at
+`tests/test-path-selection.rkt` (the P4c-1 block) with `check-exn` — those pins
+flip to result-list assertions when the channel converts, and the pin comments
+say so.
+
+**Owner**: requested at the P4c-1 checkpoint (2026-08-01) — "make sure that `ns`
+whole-file abort issue is noted for follow-up at some point in this track."
+Candidate home: P4c's close, or X.close's doc-truth/diagnostics sweep.
+

@@ -42,6 +42,17 @@
  tokenize-char-rrb
  register-token-pattern!
  register-default-token-patterns!
+ ;; D4.P4c-1: THE adjacency predicate, exported so the SECOND grouper
+ ;; (surface-rewrite.rkt's `group-items-to-tree`) consumes this definition
+ ;; instead of hand-inlining the four conjuncts. It had drifted into a live
+ ;; second copy — the F1b.7g class — and P4c-2 would have written a third.
+ ;; ⚠ NOT hoisted to reader-forms.rkt (the P4c options panel's recommendation):
+ ;; this predicate is over the `token-entry` STRUCT, defined here at :183, so
+ ;; moving it there would drag the struct along and break that module's
+ ;; deliberate "requires nothing project-local" invariant — the very property
+ ;; that made it the suggested home. surface-rewrite.rkt already requires THIS
+ ;; module (:26), so the edge exists and exporting is cycle-free by construction.
+ adjacent-to-base?
 
  ;; Cell constructors for propagator network
  create-parse-cells
@@ -1163,8 +1174,14 @@
    (token-pattern 'arrow (lambda (rrb pos) (recognize-arrow rrb pos))
                   (lambda (s p l) 'symbol) 98))
   (register-token-pattern!
+   ;; D4.P4c-1 (Q_U16b): classifies to its OWN type, not 'symbol. `users:0` is a
+   ;; legal ω step, so P4c-2's `:` gate must dispatch this band at GROUPING —
+   ;; and while it classified to 'symbol it was type-indistinguishable from any
+   ;; ordinary identifier. Type refinement AT THE CLASSIFIER is that layer's
+   ;; designed purpose (`negative-number` returns three types from one
+   ;; recognizer), not an asymmetry carved out for one sibling.
    (token-pattern 'colon-annotation (lambda (rrb pos) (recognize-colon-annotation rrb pos))
-                  (lambda (s p l) 'symbol) 97))  ;; :0, :w before bare colon
+                  (lambda (s p l) 'colon-annotation) 97))  ;; :0, :w before bare colon
   ;; D4.P1b-i: `?x:Nat` as ONE token — before `symbol` (50), which would stop
   ;; at the colon. Contiguity is the discriminator: `?m :name` (spaced) is
   ;; untouched, so keyword arguments after a logic variable still work.
@@ -2135,6 +2152,8 @@
            (substring lexeme 1 (- (string-length lexeme) 1))
            lexeme)]
       [(keyword) (string->symbol lexeme)]
+      ;; D4.P4c-1: the compat twin — kept IDENTICAL to its sibling above.
+      [(colon-annotation) (string->symbol lexeme)]
       [(char) (if (= (string-length lexeme) 3)
                   (string-ref lexeme 1)  ;; 'X' → X
                   lexeme)]
@@ -2328,6 +2347,14 @@
                      (substring lexeme 1 (- (string-length lexeme) 1)))
                     lexeme)]
       [(keyword) (string->symbol lexeme)]
+      ;; D4.P4c-1: EXPLICIT, never the [else]. Its safety as a fallthrough would
+      ;; be a coincidence of two identity-returning else-arms at the exact site
+      ;; this file documents as its silent-miss hazard (the `dot-ordinal`
+      ;; incident: "no raise, no diagnostic, wrong datum"). Coincidental safety
+      ;; expires silently. The VALUE is unchanged from the 'symbol era — that
+      ;; invariance is what keeps the promotion datum-invisible and the P4c-2
+      ;; A/B baseline clean.
+      [(colon-annotation) (string->symbol lexeme)]
       [(char) (cond
                 ;; 'X' char literal → the char
                 [(and (= (string-length lexeme) 3)

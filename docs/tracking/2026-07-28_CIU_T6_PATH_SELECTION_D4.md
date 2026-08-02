@@ -4330,7 +4330,62 @@ path is `racket/prologos/tools/form-deps.rkt`, not `tools/form-deps.rkt`.
 for `:w`/`:m`: **both recognizers match at length 2 and priority 97>95 silently
 decides.**
 
-Status: ⬜ (co-design complete; implementation opens at P4c-1).
+##### §5.P4c-1 — Prerequisites + the classifier promotion  ✅
+
+**No new surface.** Three deliverables, two of which were LIVE defects.
+
+1. **`adjacent-to-base?` is now THE definition, consumed by both groupers.**
+   ⚠ **The options panel's recommended home was WRONG**, and checking the
+   dependency gave a simpler answer: the predicate is over the `token-entry`
+   STRUCT (parse-reader.rkt:183), so hoisting it to `reader-forms.rkt` would
+   drag the struct along and break that module's deliberate "requires nothing
+   project-local" invariant — the very property that made it the suggested
+   home. `surface-rewrite.rkt` **already requires parse-reader.rkt** (:26), so
+   EXPORTING is cycle-free by construction. The hand-inlined four-conjunct copy
+   at surface-rewrite.rkt:550-556 is deleted; P4c-2 would have made it a third.
+2. **The `ns` name guard is TOTAL, by POLARITY INVERSION.** It was a NEGATIVE
+   list of two sentinel heads, which is why **`ns foo:bar` SILENTLY DROPPED
+   `:bar` at ZERO errors** — probe-verified end-to-end, a LIVE `b0db8f3e`
+   instance, not a prospective one. `ns` accepts exactly ONE option
+   (`:no-prelude`), so the total form is a positive ALLOW-LIST: the same
+   inversion `definitely-not-map?` took at P2.b slice 1. This CLOSES the class
+   (D4 recorded three unclosed instances) instead of adding a fourth entry.
+   ⚠ **Named consequence**: the guard RAISES rather than returning a
+   per-command error value, so `ns foo:bar` goes from a silent drop to a
+   WHOLE-FILE ABORT. Strictly better and monotone, but harsher than the
+   discipline calls for — filed as **DEFERRED 31** (owner-requested), channel
+   conversion deliberately out of this slice's scope.
+3. **`colon-annotation` classifies to its own token type** (Q_U16b), with
+   **EXPLICIT arms at BOTH `case type` sites** (`token-entry->stx` and its
+   compat twin) rather than relying on `[else]` — whose safety would have been
+   a coincidence of two identity-returning else-arms at the exact site this file
+   documents as its silent-miss hazard.
+
+**Test delta +9** (7 in the track file, incl. the ns refusal + its message +
+the totality-preservation pair + the datum-invisibility pin; 3 in
+`test-parse-reader.rkt` beside their siblings, where
+`register-default-token-patterns!` is called at :23).
+
+⚠ **THREE OF MY OWN PINS FAILED FOR THE WRONG REASON and were corrected before
+implementation** — the discipline caught the author: one read `(car rs)` on a
+lone `ns` line that yields NO results; one asserted a GUESSED datum baseline for
+`{:0 v}` (it is `($brace-params :0 v)`) — a baseline pin asserting a guessed
+baseline is worse than none; and two were mutually incoherent about the error
+channel. **And the FALSE-ZERO footgun bit the author of the pins**: a direct
+`tokenize-char-rrb` without `register-default-token-patterns!` returned every
+character as its own `symbol` token — the exact hazard
+`tools/reader-corpus-ab.rkt:74` carries a tripwire for.
+
+**CORPUS A/B: 161 files, ZERO DIFFS**, both legs pinned to ONE immutable
+`git archive` snapshot with only the code differing (the owner's tree has 6
+dirty `.prologos` files; a working-tree read would have measured the tree —
+3rd sighting of that class). That zero is the point of landing these three
+together: it is the clean attribution baseline that makes P4c-2's SEVEN
+predicted diffs attributable to the MINT alone.
+
+Status: ✅ P4c-1 COMPLETE.
+
+Status: ⬜ P4c-2..5 (co-design complete; implementation opens at P4c-2).
 
 ### §5.P5 — Ruling B + factoring
 

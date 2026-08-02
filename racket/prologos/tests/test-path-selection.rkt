@@ -3369,3 +3369,79 @@
   (check-regexp-match #rx"^r\\.a$" (format "~a" (list-ref rs 1)))
   (check-regexp-match #rx"^r\\.a\\.b$" (format "~a" (last rs))
                       "nesting must compose, not render as r.a{b} or a raw sentinel"))
+
+;; ============================================================
+;; D4.P4c-1 — the two PREREQUISITES + the classifier promotion
+;; ============================================================
+;;
+;; P4c-1 carries NO new surface. It lands three things the P4c grounding audit
+;; (wf_d7c035da-cee) found are owed under EVERY option, two of which are LIVE
+;; DEFECTS at HEAD rather than prospective ones:
+;;
+;;   1. `adjacent-to-base?` hoisted to reader-forms.rkt — surface-rewrite.rkt
+;;      hand-inlines the same four conjuncts today (a live F1b.7g drift
+;;      instance), and P4c-2 would otherwise write them a THIRD time.
+;;   2. The `ns` name guard made TOTAL — `ns foo:bar` SILENTLY DROPS `:bar` at
+;;      ZERO errors today (probe-verified). The guard's `memq` catches only
+;;      `$dot-access`/`$postfix-index`, and `:bar` is a bare symbol.
+;;   3. `colon-annotation` promoted to a real token type (Q_U16b) — its
+;;      classifier returns `'symbol` today, so `:0`/`:w`/`:m` are
+;;      type-indistinguishable from any identifier and the P4c-2 gate could not
+;;      dispatch on them.
+
+;; ---- (2) the `ns` guard: a LIVE silent drop, and the fix is a POLARITY
+;;         INVERSION, not another memq entry ----
+;;
+;; `ns` accepts exactly ONE option (`:no-prelude`, namespace.rkt:904-906). So
+;; the total guard is a positive ALLOW-LIST of that option with everything else
+;; refused — the same inversion `definitely-not-map?` took at P2.b slice 1 —
+;; rather than a negative list of known-bad heads that must be extended every
+;; time a new sentinel is minted. D4 records THREE unclosed instances of this
+;; class; the inversion closes them all instead of opening a fourth.
+
+(test-case "P4c-1: `ns foo:bar` REFUSES — the segment is not silently dropped"
+  ;; RED at HEAD: defines ns `foo`, drops `:bar`, reports ZERO errors.
+  (check-exn exn:fail? (lambda () (run-ws-raw "ns foo:bar\ndef x := 1\n"))
+             "a colon segment in an ns name must be REFUSED, not silently dropped"))
+
+(test-case "P4c-1: the ns refusal names the segment and offers `::`"
+  ;; Same CHANNEL as pin 1 — the guard raises, so the message is read off the
+  ;; exn, not off a result list. (The first draft read `(car rs)`, which is
+  ;; incoherent with a raising guard and contract-violated on '().)
+  (check-exn (lambda (e)
+               (and (exn:fail? e)
+                    (regexp-match? #rx"namespace name" (exn-message e))
+                    (regexp-match? #rx"::" (exn-message e))))
+             (lambda () (run-ws-raw "ns foo:bar\ndef x := 1\n"))
+             "the refusal must name the namespace name and offer `::` as the remedy"))
+
+(test-case "P4c-1: the ns guard stays TOTAL for the shapes it already caught"
+  ;; ⚠ RECORDED, not endorsed: this guard RAISES (a raw Racket `error`), it does
+  ;; not return a per-command `parse-error` VALUE — so it is a WHOLE-FILE ABORT,
+  ;; the Q_L4 class P1a built the marker-form seat to prevent. Pinning the true
+  ;; behaviour rather than the behaviour I assumed; the raise→value conversion
+  ;; is a NAMED follow-up, deliberately out of P4c-1's scope because the
+  ;; prerequisite is totality, not the error CHANNEL.
+  (check-exn exn:fail? (lambda () (run-ws-raw "ns foo.bar\ndef x := 1\n"))
+             "dot segment — already caught, must stay caught")
+  (check-exn exn:fail? (lambda () (run-ws-raw "ns foo[2]\ndef x := 1\n"))
+             "index segment — already caught, must stay caught"))
+
+(test-case "P4c-1: the ns guard does NOT refuse its one legitimate option"
+  ;; The inversion's whole risk is over-refusing. `:no-prelude` is the ONLY
+  ;; option `ns` accepts (namespace.rkt:904-906) and must survive.
+  (check-false (ormap prologos-error? (run-ws-raw "ns foo :no-prelude\n"))
+               ":no-prelude is a legitimate ns option and must NOT be refused")
+  (check-false (ormap prologos-error? (run-ws-raw "ns foo::bar\n"))
+               "`::` is the hierarchical separator, glued into ONE symbol — never a segment"))
+
+(test-case "P4c-1: the promotion is DATUM-INVISIBLE — zero corpus A/B diffs owed"
+  ;; The whole point of landing this in P4c-1 rather than P4c-2: a token-TYPE
+  ;; change must not move a single datum, so the A/B baseline stays clean and
+  ;; P4c-2's seven predicted diffs are attributable to the MINT alone.
+  (check-equal? (read-all-forms-string "users:0") '((users :0)))
+  (check-equal? (read-all-forms-string "[fn [x :0 Int] x]") '((fn (x :0 Int) x)))
+  (check-equal? (read-all-forms-string "users:w") '((users :w)))
+  ;; baseline MEASURED, not guessed — the first draft of this pin asserted
+  ;; `(((:0 v)))` from memory and failed for the wrong reason.
+  (check-equal? (read-all-forms-string "{:0 v}") '(($brace-params :0 v))))

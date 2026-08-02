@@ -547,13 +547,12 @@
              ;; The logic mirrors parse-reader's `adjacent-to-base?` /
              ;; `prev-token-reader-form-head?`, including the `(pair? result)`
              ;; conjunct that keeps `'[{…}` / `@[{…}` out of the select reading.
+             ;; D4.P4c-1: was a hand-inlined copy of parse-reader's four
+             ;; conjuncts — a live F1b.7g drift instance, and P4c-2's `:` gate
+             ;; would have made it a THIRD. Now consumes THE definition.
              (define adjacent?
                (and (eq? type 'lbrace)
-                    (pair? result)
-                    (> i 0)
-                    (let ([prev (vector-ref vec (- i 1))])
-                      (and (token-entry? prev)
-                           (= (token-entry-end-pos prev) (token-entry-start-pos item))))))
+                    (adjacent-to-base? vec i result item)))
              (define head-form?
                (and adjacent?
                     (let ([prev (vector-ref vec (- i 1))])

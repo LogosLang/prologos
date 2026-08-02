@@ -1654,3 +1654,48 @@
   (check-equal? (read-all-forms-string "1.5")     '(($decimal-literal 3/2)))
   (check-equal? (read-all-forms-string "3.14")    '(($decimal-literal 157/50)))
   (check-equal? (read-all-forms-string "[+ 1 2.5]") '((+ 1 ($decimal-literal 5/2)))))
+
+;; ============================================================
+;; D4.P4c-1 (Q_U16b) — `colon-annotation` becomes a REAL token type
+;; ============================================================
+;;
+;; Q_U16b rules `users:0` a legal ω step, so P4c-2's `:` gate must dispatch on
+;; the ordinal band at GROUPING. It cannot today: `recognize-colon-annotation`'s
+;; registered classifier is `(lambda (s p l) 'symbol)`, so `:0`/`:w`/`:m` are
+;; type-indistinguishable from any ordinary identifier.
+;;
+;; The rival mechanism (carry a pattern-provenance field on `token-entry`) was
+;; measured at 25 constructor sites across 7 files — and sre-rewrite.rkt holds 4
+;; of them, borrowing `token-entry` as a general-purpose term carrier
+;; ('binding/'sample/'constant), which makes it a struct-OWNERSHIP question.
+;; Classifier promotion wins on cost by an order of magnitude. It is filed
+;; separately on its OWN merits ($exp-literal + $rat-literal, both
+;; self-documented as identity-erased), NOT as a scheduled revert of this.
+;;
+;; These pins live HERE, beside their siblings and the eight datum pins that
+;; flip at P4c-2, because this file calls `register-default-token-patterns!` at
+;; :23 — a direct `tokenize-char-rrb` without it matches NOTHING and returns a
+;; FALSE ZERO (the footgun `tools/reader-corpus-ab.rkt:74` carries a tripwire
+;; for; it bit the author of these pins once before they were written).
+
+(test-case "P4c-1: `:0` carries the colon-annotation TOKEN TYPE, not 'symbol"
+  (define toks (token-types-from-rrb (tokenize-char-rrb (make-char-rrb-from-string "users:0"))))
+  (check-equal? (cdr (list-ref toks 1)) ":0" "fixture sanity: the lexeme is the one we mean")
+  (check-equal? (car (list-ref toks 1)) 'colon-annotation
+                "the ordinal band must be type-dispatchable at grouping (Q_U16b)"))
+
+(test-case "P4c-1: the `:w`/`:m` letter arm carries it too"
+  (for ([s '("users:w" "users:m")] [lex '(":w" ":m")])
+    (define toks (token-types-from-rrb (tokenize-char-rrb (make-char-rrb-from-string s))))
+    (check-equal? (cdr (list-ref toks 1)) lex)
+    (check-equal? (car (list-ref toks 1)) 'colon-annotation s)))
+
+(test-case "P4c-1: the promotion does NOT disturb the `keyword` band"
+  ;; `:name` already carries its own type. Note `x:Int` and `users:userName` are
+  ;; BOTH 'keyword — type-identical — which is precisely why Q_U16's position
+  ;; dispatch is needed and why no token-type test can separate binder from
+  ;; expression in this band.
+  (for ([s '("users:userName" "x:Int")] [lex '(":userName" ":Int")])
+    (define toks (token-types-from-rrb (tokenize-char-rrb (make-char-rrb-from-string s))))
+    (check-equal? (car (list-ref toks 1)) 'keyword s)
+    (check-equal? (cdr (list-ref toks 1)) lex)))
