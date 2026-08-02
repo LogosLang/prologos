@@ -3907,3 +3907,157 @@
                 'dissolve)
   (check-equal? (ormap select-step-cont (list 'a 'b (make-select-bcast 'name))) #f)
   (check-equal? (ormap select-step-cont (list 'a 'b '(@key k dissolve))) 'dissolve))
+
+;; ============================================================
+;; D4.P4c-4a — THE TEST SEAM + per-context dispatch (DEFERRED 38)
+;; ============================================================
+;; Until now `broadcast-enabled-contexts` was an unexported `define` and
+;; `broadcast-preservation-active?` was `(pair? …)` — a GLOBAL boolean that never
+;; consulted the list's contents. Two consequences, both of which these pins are
+;; the first to close: no test could grant ANY context (so the entire preservation
+;; walk was validated by SOURCE MUTATION only — the route that let three
+;; enumeration gaps through this arc), and the first grant of anything would have
+;; switched preservation on EVERYWHERE.
+;;
+;; It is now a parameter keyed on the node's own HEAD. What a "context" is, and
+;; why it can be nothing else, is argued at the definition site: the walk is
+;; strictly POST-ORDER (`transform-let-blocks-stx` recurses into children BEFORE
+;; classify/unwrap) and neither walker takes an inherited-context argument, so an
+;; outer grant CANNOT reach inward.
+;;
+;; ⚠ MECHANISM, NOT POLICY. What an UNKNOWN head does inside a granted region is
+;; DEFERRED 32's open half and is deliberately untouched here.
+
+(test-case "P4c-4a: the default is EMPTY and behaviour is unchanged"
+  ;; the regression anchor — with nothing granted the walk unwraps uniformly, so
+  ;; the mint stays equivalent to not minting
+  (check-equal? (broadcast-enabled-contexts) '())
+  (check-equal? (read-all-forms-string "def q := users:name") '((def q := users :name)))
+  (check-equal? (read-all-forms-string "defn f [x:Int] x") '((defn f (x :Int) x)))
+  (check-equal? (read-all-forms-string "defn f [x] [g users:name]")
+                '((defn f (x) (g users :name)))))
+
+(test-case "P4c-4a: a grant PRESERVES — and only in the granted head"
+  (parameterize ([broadcast-enabled-contexts '(def)])
+    ;; granted: the sentinel survives the post-pass
+    (check-equal? (read-all-forms-string "def q := users:name")
+                  '((def q := users ($bcast-step :name))))
+    ;; NOT granted: `defn` is untouched by a `def` grant.
+    (check-equal? (read-all-forms-string "defn f [x:Int] x") '((defn f (x :Int) x))))
+  ;; ⚠ AND THE CONVERSE, WHICH IS THE PIN THAT ACTUALLY DISCRIMINATES. The
+  ;; assertion above passes under the OLD global `(pair? …)` too, because the
+  ;; scanner handles `defn`'s param region identically either way — verified by
+  ;; mutation, and a pin that cannot fail is a dead tripwire this track has
+  ;; already shipped once. This one cannot pass globally: granting `defn` must
+  ;; leave `def`'s VALUE position stripped, whereas a global switch would run
+  ;; `def`'s own arm and preserve it.
+  (parameterize ([broadcast-enabled-contexts '(defn)])
+    (check-equal? (read-all-forms-string "def q := users:name")
+                  '((def q := users :name)))))
+
+(test-case "P4c-4a: the grant normalizes the ELEVEN private-suffix spellings"
+  ;; `binder-head-base` is the one normalizer, so granting `def` covers `def-`
+  ;; by construction — a separate `def-` entry would be the F1b.7g drift class,
+  ;; and the private-suffix miss was a LIVE end-to-end regression at P4c-2.
+  (parameterize ([broadcast-enabled-contexts '(def)])
+    (check-equal? (read-all-forms-string "def- q := users:name")
+                  '((def- q := users ($bcast-step :name))))))
+
+(test-case "P4c-4a: preserve is NOT transitive, and that is STRUCTURAL"
+  ;; A body sub-group is a SEPARATE NODE with its own head, visited bottom-up
+  ;; before any ancestor's rule runs. So granting the outer form cannot reach
+  ;; into it — `[g users:name]` has head `g`, which is not granted, and is
+  ;; stripped even under a `defn` grant. This is the measured answer to the
+  ;; owner's "is preserve transitive?" question: NO, and not by policy.
+  (parameterize ([broadcast-enabled-contexts '(defn)])
+    (check-equal? (read-all-forms-string "defn f [x] [g users:name]")
+                  '((defn f (x) (g users :name)))))
+  ;; ⚠ AND GRANTING THE INNER HEAD DOES NOT HELP EITHER — this assertion was
+  ;; WRONG when first written (it expected preservation) and the pin caught it.
+  ;; `g` is granted, so the walk reaches the head-classification cond — and then
+  ;; falls to `[else]`, where the scanner recognizes nothing and the UNKNOWN-HEAD
+  ;; arm blanket-strips. That arm is POLICY (DEFERRED 32's open half) and this
+  ;; slice deliberately does not touch it.
+  ;;
+  ;; So the seam is real but application-position broadcast is still dead, and
+  ;; now that fact is pinned by a SHIPPABLE TEST instead of by source mutation —
+  ;; which is the whole point of the slice. It also re-confirms from the other
+  ;; direction what P4c-3 measured: no grant can make `[g users:name]` work while
+  ;; an ordinary application head is "unknown".
+  (parameterize ([broadcast-enabled-contexts '(g)])
+    (check-equal? (read-all-forms-string "defn f [x] [g users:name]")
+                  '((defn f (x) (g users :name))))))
+
+(test-case "P4c-4a: a grant needs the WHOLE ANCESTOR CHAIN, not just the node"
+  ;; ⚠ THE HALF OF THE SCOPING STORY MY OWN COMMENT MISSED, found by the
+  ;; adversarial verify. The inward direction (an outer grant cannot reach into a
+  ;; sub-group) is pinned above. The OUTWARD direction is the operative one and
+  ;; runs the other way: an UNGRANTED ANCESTOR destroys what a granted descendant
+  ;; preserved, because the not-granted arm calls `unwrap-binders-deep`, which
+  ;; recurses THROUGH sub-groups already visited.
+  ;;
+  ;; PRE-EXISTING, not introduced by per-node dispatch — the old global switch
+  ;; stripped these identically. Pinned because it is what decides whether
+  ;; P4c-4b's first real grant works.
+  (parameterize ([broadcast-enabled-contexts '(def)])
+    ;; top level: the chain is trivially satisfied
+    (check-equal? (read-all-forms-string "def q := users:name")
+                  '((def q := users ($bcast-step :name))))
+    ;; nested under an UNGRANTED head: stripped by the ancestor, not by its own rule
+    (check-equal? (read-all-forms-string "[wrap [def q := users:name]]")
+                  '((wrap (def q := users :name)))))
+  ;; granting the ancestor is necessary but NOT sufficient — its own rule must
+  ;; also leave the position alone. `wrap` is unknown to both the cond and the
+  ;; scanner, so its `[else]` blanket-strips even when granted.
+  (parameterize ([broadcast-enabled-contexts '(def wrap)])
+    (check-equal? (read-all-forms-string "[wrap [def q := users:name]]")
+                  '((wrap (def q := users :name)))))
+  ;; whereas `defn` DOES leave its body alone, so the chain holds through it
+  (parameterize ([broadcast-enabled-contexts '(def defn)])
+    (check-equal? (read-all-forms-string "defn f [x]\n  def q := users:name")
+                  '((defn f (x) (def q := users ($bcast-step :name)))))))
+
+(test-case "P4c-4a: the enable-set is GUARDED — a malformed grant cannot abort the file"
+  ;; This parameter exists to be set BY HAND from a test, so dropping the list is
+  ;; the natural typo. Unguarded, `(parameterize ([… 'def]) …)` raised
+  ;; `memq: not a proper list` from inside the reader post-pass at READ time —
+  ;; outside any per-command handler, i.e. a WHOLE-FILE ABORT, and the fourth
+  ;; instance of that shape in this track. Guarding at the parameterize makes the
+  ;; membership test total by CONSTRUCTION. (Found by the adversarial verify.)
+  (check-exn exn:fail? (lambda () (broadcast-enabled-contexts 'def)))
+  (check-exn exn:fail? (lambda () (broadcast-enabled-contexts '(1 2))))
+  (check-exn exn:fail? (lambda () (broadcast-enabled-contexts "def")))
+  ;; `'(#f)` specifically: `binder-head-base` answers #f for a non-symbol head,
+  ;; and `(memq #f '(#f))` is TRUTHY — so without the guard a `'(#f)` grant would
+  ;; have granted every GROUP-headed node. My totality comment had claimed
+  ;; `(memq #f …)` is #f for every list, which is simply false.
+  (check-exn exn:fail? (lambda () (broadcast-enabled-contexts '(#f))))
+  ;; and a well-formed grant is accepted
+  (check-equal? (parameterize ([broadcast-enabled-contexts '(def defn)])
+                  (broadcast-enabled-contexts))
+                '(def defn)))
+
+(test-case "P4c-4a: the membership test is TOTAL on any head shape"
+  ;; `binder-head-base` answers #f for a non-symbol, and `(memq #f …)` is #f for
+  ;; every list — so a group-headed or malformed node is simply not granted,
+  ;; rather than erroring or matching by accident.
+  (parameterize ([broadcast-enabled-contexts '(def defn let trait)])
+    (check-equal? (read-all-forms-string "[[a b] users:name]")
+                  '(((a b) users :name))))
+  ;; an empty grant list and a grant of an unrelated head behave identically
+  (parameterize ([broadcast-enabled-contexts '(no-such-form)])
+    (check-equal? (read-all-forms-string "def q := users:name")
+                  '((def q := users :name)))))
+
+(test-case "P4c-4a: the seam reaches the REAL pipeline, not just the reader harness"
+  ;; Level 2. The reader-harness pins above prove the walk; this proves the
+  ;; parameter is actually in force through `process-string-ws`, which is the
+  ;; door users come through. A surviving sentinel reaches the parser's
+  ;; `bcast-step` arm and reports the guided NOT-YET — the first time in this
+  ;; track that message has been reachable from a test rather than from a
+  ;; mutated build.
+  (parameterize ([broadcast-enabled-contexts '(def)])
+    (define out (with-handlers ([(lambda (_) #t) (lambda (e) (format "~a" e))])
+                  (format "~a" (run-ws-raw-last "def q := users:name"))))
+    (check-true (regexp-match? #rx"not implemented yet" out)
+                (format "expected the guided not-yet message, got: ~a" out))))

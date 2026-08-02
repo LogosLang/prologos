@@ -3030,6 +3030,28 @@ like every other walk over the vocabulary. ⚠ **Measure before landing** —
 compute `name` under a guard that ADMITS `sub` (`'(key caret sub)`), so raising
 on `sub` could break a live path. That is why it is booked rather than done here.
 
+### 41. Two unclassified parameters have drifted past the lint baseline — NOT from this track
+
+Surfaced 2026-08-02 running `racket tools/lint-parameters.rkt` while registering
+`broadcast-enabled-contexts` (D4.P4c-4a). Two parameters are unclassified AND
+absent from `tools/parameter-lint-baseline.txt`, so they were added after the
+last baseline save without being classified:
+
+- `current-check-fire-invariants?` — `propagator.rkt:2229`
+- `current-residuation-enabled?` — `global-env.rkt:67`
+
+**Deliberately NOT resolved here, and deliberately NOT `--save-baseline`d**: that
+command rewrites the whole file and would have silently accepted both alongside
+mine, which is precisely the drift the lint exists to catch. Mine was added by
+hand with its rationale instead.
+
+Each needs the same three-way triage the lint offers: test-registered (add to
+`test-support.rkt`'s parameterize blocks), migrated to a cell (PM Track 12), or
+baselined with a written reason. ⚠ Note the trap found while triaging mine —
+five of test-support's six parameterize blocks are PER-RUN helpers, so
+registering a parameter there RESETS it inside the helpers a test uses; that is
+correct for accumulating registries and wrong for a test-settable config.
+
 ## CIU T6 D4.P4b-ii spin-offs (filed 2026-08-01 at the b-ii close — from the mini-audit, the adversarial verify, and the close's own triage)
 
 ### 24. `select-block-hint` runs the `'path` column inside an ERROR FORMATTER, with four side-effect classes — NEWLY LIVE
