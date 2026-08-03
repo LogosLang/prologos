@@ -997,6 +997,42 @@
   (check-false (regexp-match? #rx"Unbound variable" r)
                "the pre-P2 lie: the stranded bare `|.|` was reported instead"))
 
+(test-case "P2 item 10: the 0-tuple branch IS reachable — via an empty tuple SLICE"
+  ;; `format-closed-tuple-oob`'s `(if (zero? arity) " (the tuple has no
+  ;; positions)" …)` shipped with no test and was filed as possibly
+  ;; STRUCTURALLY UNREACHABLE — "either construct the reaching case and pin it,
+  ;; or delete the arm; do not leave it as decoration".
+  ;;
+  ;; It is reachable, and the filing was looking at the wrong producer. Its
+  ;; reasoning — `@[]` types as `[PVec _]`, not a 0-field nat row — is CORRECT
+  ;; and is pinned below. But `pvec-slice` on a closed tuple has its own
+  ;; row-building branch (typing-core.rkt, the col-3 slice arm) whose field list
+  ;; is literally `'()` when the range is empty:
+  ;;
+  ;;     (make-record 'nat (if (>= lo-n hi*) '() …) 'closed)
+  ;;
+  ;; So an empty slice of a tuple IS a closed 0-field nat row, and an ordinal on
+  ;; it takes the zero-arity branch. Keep the arm.
+  (define all (run-ws-raw
+    "def t := @[1 \"a\"]\ndef s := [pvec-slice t 1N 1N]\ns.0\n"))
+  (check-false (ormap prologos-error? (take all 2))
+               (format "the two defs must succeed first: ~v" all))
+  (define r (format "~a" (last all)))
+  (check-regexp-match #rx"0-tuple" r "must name the arity")
+  (check-regexp-match #rx"no positions" r
+                      "the zero-arity branch, not the valid-indices one")
+  (check-false (regexp-match? #rx"valid indices" r)
+               "0 positions has no valid-index range to offer"))
+
+(test-case "P2 item 10: an empty PVec literal is not a 0-tuple (the filing's premise, pinned)"
+  ;; The half of the filing that was right, and the reason the arm looked dead:
+  ;; `@[]` types as `[PVec _]`, so it never reaches the tuple path at all.
+  ;; Pinned so that a future change making `@[]` a 0-tuple shows up HERE, beside
+  ;; the branch that would then have a second producer.
+  (define r (run-ws-last "def e := @[]\ne\n"))
+  (check-regexp-match #rx"PVec" r)
+  (check-false (regexp-match? #rx"tuple" r)))
+
 ;; ---------- the LYING DIAGNOSTICS this phase actually repairs ----------
 ;; P2's real headline, unclaimed by §5.P2: because `x.0` was THREE datum items,
 ;; every arity-checking context blamed something else entirely.

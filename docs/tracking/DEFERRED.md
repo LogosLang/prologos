@@ -3475,14 +3475,43 @@ where P2's own regression came from: adding arms there without an A/B against
 a pinned baseline is how a correct diagnostic gets suppressed. Whoever takes
 this should A/B each new arm the way the P2 adjudicator did.
 
-### 10. `format-closed-tuple-oob`'s zero-arity branch may be structurally unreachable
+### 10. ✅ RESOLVED 2026-08-03 — `format-closed-tuple-oob`'s zero-arity branch IS reachable; the reaching case is now pinned
 
-`(if (zero? arity) " (the tuple has no positions)" …)` (typing-errors.rkt)
-ships with no test and no demonstrated reachability: `@[]` types as
-`[PVec _]`, not a 0-field nat row, so it takes the runtime path instead. This
-is the VAG's own red flag — a defensive guard whose guarded condition may be
-impossible. Either construct the reaching case and pin it, or delete the arm.
-Do not leave it as decoration.
+The filing offered two outcomes — "construct the reaching case and pin it, or
+delete the arm" — and the first one is correct. **KEEP the arm.**
+
+Its premise was right and its conclusion was not, which is worth separating.
+`@[]` really does type as `[PVec _]` rather than a 0-field nat row, so the
+literal path never reaches the branch (now pinned as its own case). But the
+filing looked at one producer. `pvec-slice` on a closed tuple has its OWN
+row-building branch whose field list is literally `'()` when the range is
+empty:
+
+```racket
+(make-record 'nat (if (>= lo-n hi*) '() …) 'closed)   ;; typing-core.rkt, col-3 slice arm
+```
+
+So an empty slice of a tuple IS a closed 0-field nat row, and an ordinal on it
+takes the zero-arity branch:
+
+```
+def t := @[1 "a"]                  ;; ⟨Int String⟩
+def s := [pvec-slice t 1N 1N]      ;; ⟨⟩
+s.0
+;; => Could not infer type — index 0 is out of range for the 0-tuple ⟨⟩
+;;    (the tuple has no positions)
+```
+
+Two pins in `tests/test-path-selection.rkt`: the reaching case (asserting the
+zero-arity phrasing AND the ABSENCE of the "valid indices" clause, since a
+0-position tuple has no range to offer), and the filing's own premise, so that
+a future change making `@[]` a 0-tuple surfaces beside the branch it would give
+a second producer.
+
+**Method note worth keeping**: "may be unreachable" was decided by enumerating
+the CONSTRUCTORS of the type in question — six `make-record 'nat` sites — not
+by reasoning about the surface syntax. The surface-level argument is what made
+it look dead.
 
 ### 11. ~~The `.N` trailing guard blocks `^`~~ — DISSOLVED 2026-07-29 by ruling Q_T4a
 
