@@ -1008,22 +1008,33 @@ residue-letter entries — divergent gates/double-count):
      QUANTIFIER, not a path, and needs semantics before it can be enforced. Its
      top hop IS required now (unambiguous, and independent of that ruling).
 
-   ⚠ **Found while probing this, filed not fixed — a wildcard `:requires` is
-   unusable AND unsafe in a `.prologos` file.** `:requires [:address.*]` is a
-   hard registration error in WS mode (the reader splits `:m.*` into `:m` `.`
-   `*` — the wildcard spelling only survives the native sexp reader, which is
-   why `test-selection-compose.rkt` exercises it happily). That alone would be
-   a syntax gap. What makes it a defect is what happens NEXT: preparse
-   pre-registers every selection as a STUB (`macros.rkt:3044`, empty
-   requires/provides, so `known-type-name?` works during spec processing), and
-   the failed elaboration never replaces it. So the file reports one error and
-   then carries a live selection that **requires nothing and validates
-   everything**. Verified: `[validate W2 …]` returns `ok` for any input after
-   the registration error. Two candidate fixes — poison or remove the stub when
-   the declaration errors (structural, needs a way to distinguish a stub from a
-   legitimately-empty selection: `loc = #f` is suggestive but not reliable), or
-   fix the WS tokenization of `.*` so the error does not arise for the spelling
-   users will actually write. The second does not close the class.
+   ⚠ **Found while probing this, and FIXED the same day — a failed selection
+   declaration left a live selection that validated everything.** Preparse
+   pre-registers every selection as a STUB (`macros.rkt`, empty
+   requires/provides) so `known-type-name?` recognizes the name during spec
+   processing. When the declaration then FAILED, nothing replaced the stub —
+   `validate` found it, saw no required fields, and returned `ok` FOR ANY
+   INPUT. The file reported one error and then carried a selection that
+   accepted anything, which is worse than the error.
+
+   The reachable trigger is a wildcard `:requires` in a `.prologos` file: the
+   WS reader splits `:m.*` into `:m` `.` `*`, so it is a hard registration
+   error there. (The wildcard spelling survives only the native sexp reader,
+   which is why `test-selection-compose.rkt` exercises it happily — another
+   instance of the sexp-green ≠ WS-correct rule in `prologos-syntax.md`.)
+
+   Fixed with an explicit `stub?` field on `selection-entry` and a check in
+   `validate`'s elaboration arm. The two obvious cheaper markers do NOT work
+   and the reason is worth keeping: `requires-paths = '()` is legitimate (a
+   selection may have only `:provides`), and `srcloc = #f` is taken — typing-core
+   mints synthetic sub-selections with no location. 5 construction sites, all
+   enumerated per the struct-field checklist (4 `selection-entry` calls + the
+   `regN!` registration); zero `struct-copy` sites.
+
+   **Still open: the WS tokenization of `.*` itself.** A wildcard `:requires`
+   remains unwritable in a `.prologos` file — it now fails loudly at both ends
+   instead of failing loudly and then silently accepting, but the spelling the
+   docs describe still does not parse in the primary surface.
 
 `defr : Schema` fact-row runtime validation rides the same charter (an adapter
 over the positional discharge, parser.rkt `parse-defr-schema-typed`).

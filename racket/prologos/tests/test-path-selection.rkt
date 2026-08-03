@@ -2948,3 +2948,29 @@
                       (run-ws-pre-last (string-append setup "[validate NmOnly {:nm \"a\" :ag 9}]\n")))
   (check-regexp-match #rx":nm prologos::data::reason::missing-required"
                       (run-ws-pre-last (string-append setup "[validate NmOnly {:ag 9}]\n"))))
+
+
+(test-case "a selection whose declaration FAILED is not usable"
+  ;; Found while probing item 4. Every selection is pre-registered at preparse
+  ;; with empty requires/provides so `known-type-name?` works during spec
+  ;; processing; when the declaration then fails, nothing replaces the stub.
+  ;; `validate` found it, saw no required fields, and returned `ok` FOR ANY
+  ;; INPUT — so the file reported one error and then carried a selection that
+  ;; validated everything, which is worse than the error.
+  ;;
+  ;; The reachable trigger is a wildcard `:requires` in a .prologos file: the
+  ;; WS reader splits `:m.*` into `:m` `.` `*`, so it never parses as a path.
+  (define src (string-append
+               "schema Wz\n  :z String\n"
+               "schema Wo\n  :m Wz\n  :other String\n"
+               "(selection Wsel from Wo :requires [:m.*])\n"
+               "[validate Wsel {:other \"o\"}]\n"))
+  (define rs (run-ws-pre src))
+  ;; the declaration still errors — that part was always true
+  (check-true (ormap (lambda (r) (regexp-match? #rx"expected keyword field path" r)) rs)
+              "the malformed :requires must still be reported")
+  ;; …and the validate must NOT come back ok
+  (check-false (ormap (lambda (r) (regexp-match? #rx"result::ok" r)) rs)
+               "THE BUG: validating against the stub accepted any value")
+  (check-true (ormap (lambda (r) (regexp-match? #rx"never completed" r)) rs)
+              "and it should say why, not just fail"))

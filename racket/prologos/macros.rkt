@@ -211,6 +211,7 @@
          selection-entry-provides-paths
          selection-entry-includes-names
          selection-entry-srcloc
+         selection-entry-stub?
          register-selection!
          lookup-selection
          ;; Session WS desugaring (exported for testing)
@@ -988,7 +989,16 @@
 ;; provides-paths: list of Racket keywords
 ;; includes-names: list of symbols (other selection names)
 ;; srcloc: source location of the selection form
-(struct selection-entry (name schema-name requires-paths provides-paths includes-names srcloc) #:transparent)
+;; stub?: #t for the PREPARSE pre-registration only (2026-08-03).
+;;
+;; The stub exists so `known-type-name?` recognizes the name while specs are
+;; processed, long before the form elaborates. When the declaration then FAILS
+;; — a malformed `:requires` path, an unknown parent field — the stub is never
+;; replaced, and it has empty requires/provides, so a selection that reports an
+;; error also silently VALIDATES EVERYTHING. `'()` cannot mark it: a selection
+;; with no `:requires` is legitimate, and `srcloc = #f` is taken (typing-core
+;; mints synthetic sub-selections with no location). Hence an explicit flag.
+(struct selection-entry (name schema-name requires-paths provides-paths includes-names srcloc stub?) #:transparent)
 
 ;; Selection store: symbol → selection-entry
 (define current-selection-registry (make-parameter (hasheq)))
@@ -3041,7 +3051,9 @@
            (define sel-name (cadr eff-datum))
            (define schema-name (cadddr eff-datum))
            ;; Minimal pre-registration — full validation happens during elaboration
-           (register-selection! sel-name (selection-entry sel-name schema-name '() '() '() #f)))]
+           (register-selection! sel-name
+                                (selection-entry sel-name schema-name '() '() '() #f
+                                                 #t)))]  ;; stub? — see the struct comment
         [else (void)])))
 
   ;; ============================================================

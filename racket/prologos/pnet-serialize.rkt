@@ -513,7 +513,7 @@
   ;; a raw vector that PRINTS like the struct it impersonates.
   (regN! schema-field    #f #f #f #f)           ;; keyword type-datum default-val check-pred
   (regN! schema-entry    #f '() #f #f)          ;; name fields closed? srcloc
-  (regN! selection-entry #f #f '() '() '() #f)  ;; name schema-name requires-paths provides-paths includes-names srcloc
+  (regN! selection-entry #f #f '() '() '() #f #f)  ;; name schema-name requires-paths provides-paths includes-names srcloc stub?
   (regN! session-entry   #f #f #f)              ;; name session-type srcloc
   (regN! strategy-entry  #f '() #f)             ;; name properties srcloc
   (regN! process-entry   #f #f #f '() #f)       ;; name session-type proc-body caps srcloc

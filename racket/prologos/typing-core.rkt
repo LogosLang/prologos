@@ -1303,7 +1303,8 @@
                                         suffixes  ;; requires-paths = path suffixes
                                         '()       ;; provides-paths = empty
                                         '()       ;; includes-names = empty
-                                        #f))      ;; srcloc = synthetic
+                                        #f        ;; srcloc = synthetic
+                                        #f))      ;; stub? = no, this one is real
                        ;; Install as type in global-env (4A.c-iii-a: always-mnr)
                        (global-env-add-type-only sub-name (expr-Type (lzero)))
                        (expr-fvar sub-name))]))]))]

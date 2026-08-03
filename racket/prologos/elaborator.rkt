@@ -3200,6 +3200,24 @@
           (prologos-error loc (format "validate: unknown schema ~a — declare it with `schema ~a …` first" sname sname))]
          [(and sel (not parent))
           (prologos-error loc (format "validate: selection ~a's parent schema ~a is not registered" sname (selection-entry-schema-name sel)))]
+         ;; 2026-08-03: the preparse STUB is not a usable selection.
+         ;;
+         ;; Every selection is pre-registered at preparse with empty
+         ;; requires/provides so `known-type-name?` recognizes the name during
+         ;; spec processing. If the declaration then fails — a malformed
+         ;; `:requires` path is the reachable case, since the WS reader splits
+         ;; `:m.*` into three tokens — nothing replaces the stub. `validate`
+         ;; found it, saw no required fields, and returned `ok` FOR ANY INPUT.
+         ;; The file reported one error and then carried a selection that
+         ;; validated everything, which is worse than the error.
+         [(and sel (selection-entry-stub? sel))
+          (prologos-error loc
+                          (format (string-append
+                                   "validate: selection ~a was never completed — its declaration "
+                                   "failed (see the error on that line). Until it is fixed this "
+                                   "name requires nothing, so validating against it would accept "
+                                   "any value.")
+                                  sname))]
          [else
           (define required-names
             (list 'prologos::data::result::Result 'prologos::data::reason::Reason
@@ -4139,10 +4157,10 @@
            (define eff-prov (path-union (append prov incl-prov)))
            ;; Register the selection with effective (resolved) paths
            (register-selection! name-fqn
-                                (selection-entry name-fqn schema-fqn eff-req eff-prov incl loc))
+                                (selection-entry name-fqn schema-fqn eff-req eff-prov incl loc #f))
            (unless (eq? name-fqn name-short)
              (register-selection! name-short
-                                  (selection-entry name-short schema-fqn eff-req eff-prov incl loc)))
+                                  (selection-entry name-short schema-fqn eff-req eff-prov incl loc #f)))
            ;; Return result for driver to install as type in global-env
            (list 'selection name-fqn name-short schema-name)])])]))
 
