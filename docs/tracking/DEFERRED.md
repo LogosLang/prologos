@@ -3287,6 +3287,24 @@ grows a frame concept. P1b-ii's `dot-lbrace` is deliberately justified on its ow
 terms (Q_M5's plain-`'rbrace` closer) rather than by analogy to this sibling —
 "match your siblings" would have inherited the bug.
 
+🔶 **Reason (c) is GONE (2026-08-03): the divergence is now PINNED.**
+`tests/test-parse-reader.rkt` asserts both halves of `(a .( b ) c)` — the datum
+layer retaining `c` inside `(a ($mixfix b) c)`, and the tree layer emitting a
+plain `paren-group` with `c` expelled as a sibling — under a header saying
+plainly that it pins a DEFECT and must be read before "fixing" what it asserts.
+It also guards against a `mixfix-group` tag reappearing, since D4.P1a deleted
+that tag AND its ~445-line consumer.
+
+Reasons (a) and (b) are unchanged and still block the actual fix. What changed
+is that the shape can no longer move UNNOTICED — which was the third reason,
+and the only one about risk rather than design. When a track picks this up,
+that test is the one to update, and its failure is the signal.
+
+**Contrast worth recording**: the sibling divergence on `<`-adjacent braces
+(§ D4.P1b-iii spin-off 5) WAS fixable and is fixed — the two groupers now share
+`has-matching-rangle?`. The difference is exactly (a)+(b): there, a predicate
+existed to share; here, there is a deleted tag and a missing frame concept.
+
 ### 2. ✅ PROBED 2026-08-03 — the three group tags DO produce silent garbage, and the merge no longer admits it
 
 The entry asked for exactly one thing — *"feed `#{…}`, `@[…]`, `~[…]` through
