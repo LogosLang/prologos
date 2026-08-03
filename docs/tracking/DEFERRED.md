@@ -155,7 +155,7 @@ The diagnostic half of this is already fixed (`7efc781d`): the
   `surf-arrow`'s multiplicity as `_` and substituted 'mw, so `A -1> B` and
   `A -> B` were indistinguishable to every consumer.
 
-## ✅ CLOSED `PLACEHOLDER4` — `expand-expression` has no general error propagation (filed 2026-07-31, fixed 2026-08-02)
+## ✅ CLOSED `14dfbdd7` — `expand-expression` has no general error propagation (filed 2026-07-31, fixed 2026-08-02)
 
 Fixed the way the entry asked for — by construction, not by arming the other
 twenty-eight arms. Every recursive descent goes through `expand-child`, which
