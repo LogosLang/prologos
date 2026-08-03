@@ -2291,11 +2291,40 @@
   ;; datum->syntax expects: line ≥ 1 or #f, col ≥ 0 or #f, pos ≥ 1 or #f, span ≥ 0 or #f
   ;; pos must be ≥ 1 (1-based). Callers pass either 0-based token positions
   ;; (converted via make-stx-from-token) or already-1-based positions from syntax objects.
+  ;;
+  ;; #f is accepted for every field, as the line above always said it was. It
+  ;; was not: the guards compared with `>` first, so a #f line raised a raw
+  ;; Racket contract violation out of the reader — losing the WHOLE FILE, with
+  ;; no per-command error and no source location to point at.
+  ;;
+  ;; #f arrives here legitimately. This function MAPS 0 to #f for line and
+  ;; column, so any syntax object it builds for an empty form and any later
+  ;; caller reading `(syntax-line …)` back off it hands #f straight back in. A
+  ;; bare top-level `[]` did exactly that round trip (`read-all-forms-from-tree`
+  ;; re-wrapping a `'()` element) and took the file down with it.
+  (define (pos-or-f v) (and (real? v) (> v 0) v))
+  (define (nonneg-or-f v) (and (real? v) (>= v 0) v))
   (datum->syntax #f datum (list source
-                                (if (> line 0) line #f)
-                                (if (>= col 0) col #f)
-                                (if (> pos 0) pos 1)
-                                (if (>= span 0) span #f))))
+                                (pos-or-f line)
+                                (nonneg-or-f col)
+                                (or (pos-or-f pos) 1)
+                                (nonneg-or-f span))))
+
+;; The source range spanning `first`..`last`, as (values line col pos span),
+;; tolerating syntax objects with no location. Three sites computed this inline
+;; with `(- (+ (syntax-position last) (syntax-span last)) (syntax-position
+;; first))`, which raises on #f rather than degrading to "no location" — and a
+;; raise here is a whole-file abort, since this all runs before any command.
+(define (stx-range first last)
+  (define p1 (syntax-position first))
+  (define p2 (syntax-position last))
+  (define s2 (syntax-span last))
+  (values (syntax-line first)
+          (syntax-column first)
+          p1
+          (if (and (real? p1) (real? p2) (real? s2))
+              (max 1 (- (+ p2 s2) p1))
+              #f)))
 
 ;; Convert a token-entry → syntax object
 (define (token-entry->stx entry source source-str)
@@ -2469,11 +2498,8 @@
 (define (wrap-stx-list elems source)
   (if (null? elems)
       (make-stx '() source 0 0 0 0)
-      (let ([first (car elems)] [last (last-stx elems)])
-        (make-stx elems source (syntax-line first) (syntax-column first)
-                  (syntax-position first)
-                  (max 1 (- (+ (syntax-position last) (syntax-span last))
-                            (syntax-position first)))))))
+      (let-values ([(line col pos span) (stx-range (car elems) (last-stx elems))])
+        (make-stx elems source line col pos span))))
 
 ;; Convert a parse-tree-node to syntax elements.
 ;; Uses flatten-then-group on the FULL token sequence (depth-first)
@@ -3570,14 +3596,8 @@
     [(null? elems) (make-stx '() source 0 0 0 0)]
     [(= (length elems) 1) (car elems)]
     [else
-     (define first (car elems))
-     (define last (last-stx elems))
-     (make-stx elems source
-               (syntax-line first)
-               (syntax-column first)
-               (syntax-position first)
-               (max 1 (- (+ (syntax-position last) (syntax-span last))
-                         (syntax-position first))))]))
+     (define-values (line col pos span) (stx-range (car elems) (last-stx elems)))
+     (make-stx elems source line col pos span)]))
 
 (define (last-stx lst)
   (if (null? (cdr lst)) (car lst) (last-stx (cdr lst))))
@@ -3626,14 +3646,8 @@
       [(and (= (length elems) 1) (pair? (syntax-e (car elems))))
        (car elems)]
       [else
-       (define first (car elems))
-       (define last (last-stx elems))
-       (make-stx elems source
-                 (syntax-line first)
-                 (syntax-column first)
-                 (syntax-position first)
-                 (max 1 (- (+ (syntax-position last) (syntax-span last))
-                           (syntax-position first))))])))
+       (define-values (line col pos span) (stx-range (car elems) (last-stx elems)))
+       (make-stx elems source line col pos span)])))
 
 ;; Compatibility: read-all-forms-string replacement
 (define (compat-read-all-forms-string str)

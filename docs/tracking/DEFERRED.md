@@ -512,16 +512,55 @@ value diagnostic seat, migrate the tilde diagnostic onto it (emit a marker,
 convert per-command). Owner of the remedy: D4.X.close triage (or fold into
 P1a if trivially cheap once the seat exists). Recorded in D4 §5.P1.
 
-## 🐛 DEFECT — bare top-level `[]` hard-aborts the reader with a raw contract violation (found 2026-07-28, the D4.P1 mini-audit)
+## ✅ CLOSED `PLACEHOLDER2` — bare top-level `[]` hard-aborts the reader (filed 2026-07-28, fixed 2026-08-02)
 
-A standalone `[]` as a top-level form dies inside the reader: parse-reader.rkt
-:2160-2161 emits a position-0 stx → `syntax-position` #f → macros.rkt:2804
-`max`/`-` on #f → raw Racket contract violation, whole file lost. `[f []]`,
-`def x := []`, `a []` are all fine — the defect is the bare-top-level shape
-only. Adjacent to (but distinct from) D4.P1a's `x[]` reject-batch item, which
-covers the POSTFIX-adjacent empty bracket; this is the standalone form.
-Fix candidate: guard the position-0 emission or route through the P1a
-diagnostic seat. Recorded in D4 §5.P1.
+The chain was one step longer than the filing's: a `'()` element gets a syntax
+object with line 0, `make-stx` maps 0 → #f (as it is supposed to), and the
+re-wrap in `read-all-forms-from-tree` reads that #f back and hands it to
+`make-stx` again — whose guards compared with `>` BEFORE checking for #f. So
+the crash was `>` on #f, not `max`/`-`, and it fired from the re-wrap rather
+than the emission.
+
+`make-stx` now accepts #f in every field, which its own comment always claimed
+it did. The three inline `(- (+ (syntax-position last) (syntax-span last))
+(syntax-position first))` sites are one `stx-range` helper that degrades to "no
+location" instead of raising. `tests/test-reader-robustness.rkt` pins that the
+file SURVIVES — 2 of its 3 cases fail against the previous commit.
+
+**Residual, smaller and separate (filed below).** `[]` no longer aborts, but it
+does not error consistently either.
+
+## 🐛 DEFECT — a bare top-level `[]` yields the WRONG command's result when another form follows (found 2026-08-02, splitting out of the abort fix above)
+
+The reader is not at fault — it produces exactly `(())` for the `[]` line in
+both cases below. Downstream diverges:
+
+```
+ns p
+[]                       ;; → ERROR: Unexpected datum: ()   (correct)
+```
+
+```
+ns p
+def a := 1
+[]
+def b := 2
+def c := 3
+;; → 4 results for 5 commands, and out of order:
+;;    "a : Int defined."  "c : Int defined."  "b : Int defined."  "c : Int defined."
+```
+
+So `[]` silently takes the LAST command's result, `c` is reported twice, and
+the error that fires when `[]` stands alone does not fire here. Zero errors
+reported. Silence, not noise — worse than the abort it replaced, though far
+narrower.
+
+`parse-datum` sends `()` (a non-pair) to `parse-error "Unexpected datum: ()"`,
+and the top-level form is `(())` — a PAIR — so it goes to `parse-list`
+instead. Why that path errors when the form stands alone and not when it does
+not is the thing to find; suspect the preparse pass over the whole form list.
+Start at `preparse-expand-all` (macros.rkt) with the two form lists above,
+which differ only in length.
 
 ## 🐛 DEFECT — `def X :=` + multi-key layout body fails; identical body without `:=` works (filed 2026-07-28, the D5 critique)
 
