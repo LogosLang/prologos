@@ -2475,9 +2475,31 @@
   ;; stated, rather than as a side effect of a broken cond. Turning the tree
   ;; spine on is a real project: emit srcloc structs from `item-srcloc`, then
   ;; repair the stale arms. See docs/tracking/2026-08-02_LOC_TO_LINE_MERGE_DEFECT.md.
+  ;; ⚠ AND THE SAME HOLE EXISTS ON THE STRUCT ARM, in the OTHER pipeline.
+  ;; Everything above is measured on the `process-file` path, where the tree
+  ;; spine's srcloc is a LIST. The `process-string-ws` path (REPL, LSP, the test
+  ;; suite) sets `current-source-str`, so `parse-form-tree` takes the datum branch
+  ;; and its surfs come from `parse-datum (datum->syntax #f …)` — syntax with NO
+  ;; position, so `datum-srcloc` yields `(srcloc "<unknown>" 0 0 0)`: a STRUCT
+  ;; whose line is 0. Verified 2026-08-02. A bare `(srcloc-line loc)` returns 0,
+  ;; which is TRUTHY, so every tree surf keys 0 and collides — and any preparse
+  ;; surf whose syntax also lost its line (`datum-srcloc`'s `(or (syntax-line stx) 0)`)
+  ;; keys 0 too and can match one. That is the same channel that produced the
+  ;; corpus's single accidental substitution, and the list arm below does not
+  ;; close it.
+  ;;
+  ;; So reject line 0 outright: srclocs here are **1-BASED** (see
+  ;; `srcloc->range`, lsp/diagnostics.rkt), `srcloc-unknown` IS `(srcloc … 0 0 0)`,
+  ;; and `datum-srcloc` uses 0 as its "no position" fallback. **Line 0 is not a
+  ;; line — it is the unknown sentinel — and an unknown position must never serve
+  ;; as an identity key.** This is the better-motivated guard of the two: it keys
+  ;; on whether the position is KNOWN, not on how it happens to be represented.
   (define (loc->line loc)
     (cond
-      [(srcloc? loc) (srcloc-line loc)]
+      [(srcloc? loc)
+       (let ([l (srcloc-line loc)])
+         ;; 0 (or #f) = unknown, never a key. Real lines are >= 1.
+         (and (number? l) (> l 0) l))]
       ;; tree spine: (list line col start-pos end-pos), line 0-based, col/pos
       ;; hardcoded 0 — no key commensurable with preparse's. Say so.
       [(and (pair? loc) (number? (car loc))) #f]
