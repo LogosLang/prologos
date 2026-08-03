@@ -4776,4 +4776,21 @@
             (= (vector-length va) (vector-length vb))
             (for/and ([i (in-range 1 (vector-length va))]) ; skip struct-name at 0
               (conv-nf (vector-ref va i) (vector-ref vb i)))))]
+    ;; Substitution-containment defect, META half (2026-08-03): the struct walk
+    ;; above stops at a RACKET VECTOR, which is exactly where a champ/hset/rrb
+    ;; keeps its entries — `(vector? …)` is not `(struct? …)`. Those fell to
+    ;; `equal?`, which is STRICTER than conv: no hole-as-wildcard, no
+    ;; meta-identity rule.
+    ;;
+    ;; The failure direction is the OPPOSITE of `occurs?`'s and worth stating:
+    ;; this was INCOMPLETE, not unsound — it answered #f where conv should say
+    ;; #t (a hole inside a map value or a vector element failed to act as a
+    ;; wildcard, while a bare hole worked), so it could reject a valid
+    ;; conversion but never accept an invalid one. Probed before fixing.
+    ;;
+    ;; Read-only, like `occurs?`, which is why this half is a recursion arm and
+    ;; the substituting walkers still need the reconstructive treatment.
+    [(and (vector? a) (vector? b))
+     (and (= (vector-length a) (vector-length b))
+          (for/and ([x (in-vector a)] [y (in-vector b)]) (conv-nf x y)))]
     [else (equal? a b)]))

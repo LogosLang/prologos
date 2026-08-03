@@ -2850,9 +2850,25 @@ blocking.
 > `champ-sentinel` serializer already use. Reading needs no such care, which is
 > why it is one line here and a design slice there.
 >
-> **Still open**: the `zonk` / `zonk-at-depth` / `default-metas` half, and
-> `conv-nf` (independent, still unverified). The #58 P3 `loose-bvar` memo
-> coupling below applies to THAT half — `occurs?` does not memoize.
+> ✅ **`conv-nf` ALSO DONE 2026-08-03 — verified, and INCOMPLETE rather than
+> unsound.** Same cause, same one-arm fix, opposite failure direction: the
+> struct walk stopped at the entry VECTOR, so container entries fell to
+> `equal?`, which is STRICTER than conv — no hole-as-wildcard, no
+> meta-identity rule. Probed: a hole inside a champ VALUE or an rrb ELEMENT
+> did NOT act as a wildcard, while a bare hole did.
+>
+> So it answered #f where conv should say #t: it could REJECT a valid
+> conversion, never ACCEPT an invalid one. Worth stating precisely, because it
+> is the reverse of `occurs?`'s failure and only one of the two was a soundness
+> bug. Both negatives are pinned alongside the positives — a "fix" that simply
+> returned #t for containers would satisfy the positives on its own.
+>
+> **Still open**: the `zonk` / `zonk-at-depth` / `default-metas` half — the
+> SUBSTITUTING walkers. Both read-only members of the family are now closed;
+> what remains needs the reconstructive treatment, because substituting inside
+> a champ rewrites keys whose stored hashes came from the old ones. The #58 P3
+> `loose-bvar` memo coupling below applies to THAT half — neither `occurs?` nor
+> `conv-nf` memoizes.
 >
 > ⚠ **NEW COUPLING — GitHub #58 P3 (`94cfbcbd`, 2026-07-27) constrains this slice.**
 > `loose-bvar.rkt` memoizes each term's loose-bvar range in a weak **`eq?`-keyed**

@@ -448,3 +448,39 @@
                         (expr-champ (champ-insert champ-empty
                                                   (equal-hash-code occ-key)
                                                   occ-key occ-meta)))))
+
+;; ========================================
+;; `conv-nf` sees INTO containers too (same defect family, opposite direction)
+;; ========================================
+;;
+;; `conv-nf` walks structs generically and stopped at the same RACKET VECTOR
+;; `occurs?` did — so container entries fell to `equal?`, which is STRICTER
+;; than conv: no hole-as-wildcard, no meta-identity rule.
+;;
+;; The failure direction is the OPPOSITE of `occurs?`'s and is why this one is
+;; not a soundness bug: it answered #f where conv should say #t, so it could
+;; REJECT a valid conversion but never ACCEPT an invalid one. Both negatives
+;; below are asserted for exactly that reason — a "fix" that just returns #t
+;; for containers would satisfy the positives alone.
+
+(require (only-in "../reduction.rkt" conv-nf))
+
+(define conv-key (expr-keyword 'a))
+(define (conv-map v)
+  (expr-champ (champ-insert champ-empty (equal-hash-code conv-key) conv-key v)))
+
+(test-case "conv-nf: a hole inside a champ VALUE acts as a wildcard"
+  (check-true (conv-nf (conv-map (expr-hole)) (conv-map (expr-Int)))))
+
+(test-case "conv-nf: a hole inside an rrb ELEMENT acts as a wildcard"
+  (check-true (conv-nf (expr-rrb (rrb-from-list (list (expr-hole))))
+                       (expr-rrb (rrb-from-list (list (expr-Int)))))))
+
+(test-case "conv-nf: containers with DIFFERENT contents still differ"
+  ;; The negatives that keep the fix honest.
+  (check-false (conv-nf (conv-map (expr-Int)) (conv-map (expr-Nat))))
+  (check-false (conv-nf (expr-rrb (rrb-from-list (list (expr-Int))))
+                        (expr-rrb (rrb-from-list (list (expr-Nat)))))))
+
+(test-case "conv-nf: identical containers convert (control)"
+  (check-true (conv-nf (conv-map (expr-Int)) (conv-map (expr-Int)))))
