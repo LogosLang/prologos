@@ -423,3 +423,44 @@
   ;; macro is used — per-command, with a srcloc, file intact. Better than the
   ;; whole-file abort it replaces.
   (check-equal? (datum-subst '($typoo) (hasheq '$x 1)) '($typoo)))
+
+;; ========================================
+;; pp-datum renders ACCESS SENTINELS (D4.P1b-iii spin-off 7)
+;; ========================================
+;;
+;; Every access sentinel rendered as a RAW SENTINEL — `($dot-access foo)`
+;; verbatim — while `$brace-params` rendered. Any diagnostic printing a datum
+;; that contains an access form leaked compiler internals into user-facing
+;; text.
+;;
+;; The expected spellings mirror the READER's own emission shapes
+;; (parse-reader's `token-entry->stx` / `group-items`), not a guess: e.g.
+;; `nil-dot-access` strips TWO leading chars from the lexeme, which is `?.`.
+
+(require (only-in "../pretty-print.rkt" pp-datum))
+
+(test-case "pp-datum: access sentinels render as their surface spelling"
+  (check-equal? (pp-datum '($dot-access foo))       ".foo")
+  (check-equal? (pp-datum '($nil-dot-access foo))   "?.foo")
+  (check-equal? (pp-datum '($broadcast-access foo)) "*.foo")
+  (check-equal? (pp-datum '($dot-key :k))           ".:k")
+  (check-equal? (pp-datum '($nil-dot-key :k))       "?.:k")
+  (check-equal? (pp-datum '($postfix-index 0))      "[0]")
+  (check-equal? (pp-datum '($select-brace a b))     "{a b}")
+  (check-equal? (pp-datum '($dot-brace a b))        ".{a b}"))
+
+(test-case "pp-datum: no access sentinel survives into rendered text"
+  ;; The property, independent of the individual spellings above: whatever the
+  ;; rendering is, the internal `$name` must not appear in it. This is what a
+  ;; user-facing diagnostic actually depends on.
+  (for ([d (in-list '(($dot-access foo) ($nil-dot-access foo) ($broadcast-access foo)
+                      ($dot-key :k) ($nil-dot-key :k) ($postfix-index 0)
+                      ($select-brace a b) ($dot-brace a b)
+                      ($brace-params A B) ($set-literal 1) ($vec-literal 1)))])
+    (define out (pp-datum d))
+    (check-false (regexp-match? #rx"[$]" out)
+                 (format "~v leaked a sentinel: ~a" d out))))
+
+(test-case "pp-datum: sentinels nested inside an ordinary form render too"
+  ;; The realistic diagnostic shape — the sentinel is never the whole datum.
+  (check-equal? (pp-datum '(f ($dot-access bar) 1)) "(f .bar 1)"))

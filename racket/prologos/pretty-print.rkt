@@ -1651,6 +1651,51 @@
          [(eq? h '$lseq-literal)
           (format "~~[~a]" (pp-datum-list (cdr d)))]
 
+         ;; ---- ACCESS SENTINELS (D4.P1b-iii spin-off 7, 2026-08-03) ----
+         ;; Every one of these rendered as a RAW SENTINEL — `($dot-access foo)`
+         ;; verbatim in user-facing text — while `$brace-params` above
+         ;; rendered. Any diagnostic that prints a datum containing an access
+         ;; form leaked compiler internals to the reader.
+         ;;
+         ;; The shapes are the reader's own (parse-reader's `token-entry->stx`
+         ;; and `group-items`), so these mirror emission rather than guessing.
+         ;; `$dot-key` / `$nil-dot-key` / `$broadcast-access` are RETIRED
+         ;; sentinels the reader still emits, and rendering them is precisely
+         ;; how their guided retirement errors read.
+
+         ;; ($dot-access field) → .field
+         [(and (eq? h '$dot-access) (pair? (cdr d)) (null? (cddr d)))
+          (format ".~a" (pp-datum (cadr d)))]
+
+         ;; ($nil-dot-access field) → ?.field
+         [(and (eq? h '$nil-dot-access) (pair? (cdr d)) (null? (cddr d)))
+          (format "?.~a" (pp-datum (cadr d)))]
+
+         ;; ($broadcast-access field) → *.field   (RETIRED surface)
+         [(and (eq? h '$broadcast-access) (pair? (cdr d)) (null? (cddr d)))
+          (format "*.~a" (pp-datum (cadr d)))]
+
+         ;; ($dot-key :k) → .:k   ·   ($nil-dot-key :k) → ?.:k   (RETIRED)
+         [(and (eq? h '$dot-key) (pair? (cdr d)) (null? (cddr d)))
+          (format ".~a" (pp-datum (cadr d)))]
+         [(and (eq? h '$nil-dot-key) (pair? (cdr d)) (null? (cddr d)))
+          (format "?.~a" (pp-datum (cadr d)))]
+
+         ;; ($postfix-index e ...) → [e ...]
+         [(eq? h '$postfix-index)
+          (format "[~a]" (pp-datum-list (cdr d)))]
+
+         ;; ($select-brace item ...) → {item ...}
+         ;; The ADJACENT brace; its non-adjacent sibling is $brace-params above,
+         ;; and both spell the same way — the distinction is where they attach,
+         ;; which the surrounding datum already shows.
+         [(eq? h '$select-brace)
+          (format "{~a}" (pp-datum-list (cdr d)))]
+
+         ;; ($dot-brace item ...) → .{item ...}
+         [(eq? h '$dot-brace)
+          (format ".{~a}" (pp-datum-list (cdr d)))]
+
          ;; ($rest-param name) → ...name
          [(and (eq? h '$rest-param) (pair? (cdr d)) (null? (cddr d)))
           (format "...~a" (pp-datum (cadr d)))]

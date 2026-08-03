@@ -3463,10 +3463,30 @@ user-facing text. Both binder walkers would need a marker arm. Filed rather than
 widened because P1b-iii had already grown well past its designed scope; the honest
 behaviour is pinned so a future change cannot silence it.
 
-Related, same family: `pp-datum` (pretty-print.rkt) has no arm for ANY access
-sentinel — `$select-brace`, `$dot-brace`, `$postfix-index`, `$nil-dot-access`,
-`$broadcast-access` all render as raw sentinels; only `$brace-params` renders. And
-`tools/form-deps.rkt`'s `syntax-keywords` lists four sentinels and omits five.
+Related, same family — ✅ **BOTH FIXED 2026-08-03**:
+
+- **`pp-datum` now renders every access sentinel** at its surface spelling
+  (`.foo`, `?.foo`, `*.foo`, `.:k`, `?.:k`, `[0]`, `{a b}`, `.{a b}`), mirroring
+  the READER's own emission shapes rather than guessing — `nil-dot-access`
+  strips two leading chars, which are `?.`. Beyond the per-sentinel spellings,
+  a PROPERTY test asserts no `$` survives into rendered output for any of them:
+  whatever the spelling, a user-facing diagnostic depends on the internal name
+  not leaking.
+- **`tools/form-deps.rkt` filters `$`-headed symbols STRUCTURALLY** instead of
+  listing them. Its `syntax-keywords` named ten and omitted roughly thirty
+  (`$nil-dot-access`, `$postfix-index`, `$select-brace`, `$dot-brace`,
+  `$list-literal`, `$vec-literal`, `$quasiquote`, `$rest`, the whole
+  numeric-literal family, the error markers…), and every omission was a
+  SPURIOUS DEPENDENCY in the tool's output. Same shape and same fix as the
+  `datum-subst` polarity inversion above — a `$`-headed symbol is a sentinel or
+  a macro pattern variable, never a dependency, so one predicate replaces the
+  list and cannot drift as sentinels are added.
+
+**Still open** is the item this was "related to": the two BINDER walkers still
+have no marker arm, so `def f := [fn [x base{a}] x]` and `spec idf{A} A -> A`
+still report from the binder walker. The message no longer dumps a raw
+`$retired-selection` — `pp-datum` renders it now — but the walkers themselves
+are untouched.
 
 ### 8. ✅ FIXED 2026-08-03 — polarity inverted; the 23-sentinel residual is gone by construction
 
