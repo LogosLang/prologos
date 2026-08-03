@@ -3468,7 +3468,41 @@ sentinel — `$select-brace`, `$dot-brace`, `$postfix-index`, `$nil-dot-access`,
 `$broadcast-access` all render as raw sentinels; only `$brace-params` renders. And
 `tools/form-deps.rkt`'s `syntax-keywords` lists four sentinels and omits five.
 
-### 8. `pattern-var?`'s residual is 23 of 33, not 2 — and `'[1 2]` in a macro template ABORTS TODAY
+### 8. ✅ FIXED 2026-08-03 — polarity inverted; the 23-sentinel residual is gone by construction
+
+The filing's prescription was taken as written: **"the fix is inverting the
+predicate's polarity, not 23 more exclusions."**
+
+`datum-subst` no longer raises on a `$`-symbol missing from `bindings` — it
+passes it through. The only thing that makes a symbol a template pattern
+variable is being BOUND by the macro's pattern, and `bindings` knows that
+exactly, so every reader sentinel is safe BY CONSTRUCTION and the census stops
+mattering. Same change for the `$var ...` splice arm: an UNBOUND head is not a
+splice.
+
+Verified before and after at the unit level — all 23 censused sentinels
+(`$list-literal`, `$vec-literal`, `$pipe-gt`, `$quasiquote`, `$rest`,
+`$typed-hole`, …) raised beforehand and pass through now — and end to end, a
+defmacro whose template builds a list expands correctly.
+
+**Three things worth carrying forward:**
+
+- **`pattern-var?`'s exclusion list is NOT now redundant and must not be
+  deleted as belt-and-suspenders.** `datum-match` uses the same predicate on
+  the PATTERN side, where a sentinel must match LITERALLY rather than bind
+  anything. Two different questions, one predicate; only the template side is
+  inverted. Noted at the call site so the next reader does not "clean it up".
+  Item 3's two additions above remain correct for that side.
+- **What the inversion costs, named rather than glossed**: a typo'd template
+  variable (`$boddy` for `$body`) no longer raises during expansion. It passes
+  through and surfaces at the USE SITE as an ordinary unbound-variable error
+  naming `$boddy` — per-command, with a srcloc, file intact. Probed, not
+  assumed. That is a better failure mode than the abort, not merely a cheaper
+  one.
+- **Two existing tests asserted the OLD polarity and were deliberately
+  changed**, including one added earlier the same day. They are rewritten to
+  assert pass-through with the reason recorded in place, not deleted — a test
+  that changes meaning should say why at the point of change.
 
 Item 3 above named `$set-literal` and `$mixfix`. A full census of every `$`-headed
 symbol the reader can emit puts the real number at **23 of 33**:

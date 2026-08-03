@@ -1270,11 +1270,36 @@
 ;; Handles $name ... for splicing lists.
 (define (datum-subst template bindings)
   (cond
-    ;; Pattern variable: substitute
+    ;; Pattern variable: substitute.
+    ;;
+    ;; AN UNBOUND `$`-SYMBOL PASSES THROUGH — it is not an error here. This is
+    ;; the polarity inversion D4.P1b-iii spin-off 8 prescribes, and the reason
+    ;; is that the raise it replaces was a WHOLE-FILE ABORT with zero results.
+    ;;
+    ;; `pattern-var?` carries a hand-maintained exclusion list of reader
+    ;; sentinels, and a census put the residual at 23 of 33 — `$list-literal`,
+    ;; `$vec-literal`, `$pipe-gt`, `$quasiquote`, `$rest`, `$typed-hole` and
+    ;; the rest all still raised, so a plain quoted list inside a defmacro
+    ;; template took the file down. Every sentinel added to that list was one
+    ;; more instance of the same bug, which is exactly the shape `pipeline.md`
+    ;; § "Exhaustive Walkers" says to solve STRUCTURALLY rather than by
+    ;; enumeration: here the structural answer is that the ONLY thing that
+    ;; makes a symbol a pattern variable is being BOUND by the macro's pattern,
+    ;; and `bindings` already knows that exactly.
+    ;;
+    ;; `pattern-var?`'s exclusion list is NOT made redundant by this and must
+    ;; not be deleted as belt-and-suspenders: `datum-match` uses it on the
+    ;; PATTERN side, where a sentinel appearing in a macro's pattern must match
+    ;; LITERALLY rather than bind anything. Two different questions, one
+    ;; predicate; only the TEMPLATE side is inverted here.
+    ;;
+    ;; WHAT IS LOST, named rather than glossed: a typo'd template variable
+    ;; (`$boddy` for `$body`) no longer raises here. It passes through and
+    ;; surfaces at the USE SITE as an ordinary unbound-variable error naming
+    ;; `$boddy` — per-command, with a srcloc, and the file survives. That is a
+    ;; better failure mode than the abort, not merely a cheaper one.
     [(pattern-var? template)
-     (hash-ref bindings template
-               (lambda ()
-                 (error 'defmacro "Unbound pattern variable in template: ~a" template)))]
+     (hash-ref bindings template template)]
     ;; List template: handle splicing
     [(list? template)
      (datum-subst-list template bindings)]
@@ -1286,12 +1311,14 @@
   (cond
     [(null? elems) '()]
     ;; Check for splice: $var ...
+    ;; A splice is `$var ...` where $var is BOUND. An unbound `$`-symbol
+    ;; followed by `...` is not a splice — it falls to the regular-element arm
+    ;; and passes through, for the same reason as the scalar case above.
     [(and (>= (length elems) 2)
           (pattern-var? (car elems))
-          (eq? (cadr elems) '...))
-     (let ([val (hash-ref bindings (car elems)
-                          (lambda ()
-                            (error 'defmacro "Unbound pattern variable: ~a" (car elems))))])
+          (eq? (cadr elems) '...)
+          (hash-has-key? bindings (car elems)))
+     (let ([val (hash-ref bindings (car elems))])
        (unless (list? val)
          (error 'defmacro "Splice variable ~a must be bound to a list, got: ~a"
                 (car elems) val))

@@ -87,16 +87,15 @@
     (check-false (pattern-var? s)
                  (format "~a is a reader sentinel, not a pattern variable" s))))
 
-(test-case "datum-subst: a sentinel in a template passes through; a real var still raises"
-  ;; The behavioural half. `$dot-access` is the control that was always right;
-  ;; the other two are the ones that raised. `$x` proves the exclusion list did
-  ;; not disable the mechanism it guards.
+(test-case "datum-subst: a sentinel in a template passes through"
+  ;; `$dot-access` is the control that was always right; the other two were
+  ;; excluded from `pattern-var?` alongside it. Since the polarity inversion
+  ;; below, ALL unbound `$`-symbols pass through, so this is now one case of a
+  ;; general rule rather than three special ones — kept because these are the
+  ;; two the D4.P1b-ii filing named.
   (check-equal? (datum-subst (list '$set-literal 1) (hasheq)) '($set-literal 1))
   (check-equal? (datum-subst (list '$mixfix 1) (hasheq)) '($mixfix 1))
-  (check-equal? (datum-subst (list '$dot-access 1) (hasheq)) '($dot-access 1))
-  (check-exn exn:fail?
-             (lambda () (datum-subst (list '$x) (hasheq)))
-             "a genuine unbound pattern variable must still raise"))
+  (check-equal? (datum-subst (list '$dot-access 1) (hasheq)) '($dot-access 1)))
 
 ;; ========================================
 ;; datum-subst tests
@@ -129,9 +128,17 @@
   (check-equal? (datum-subst '(foo $args ... bar) (hasheq '$args '(1 2 3)))
                 '(foo 1 2 3 bar)))
 
-(test-case "datum-subst: unbound variable error"
-  (check-exn exn:fail?
-    (lambda () (datum-subst '$unbound (hasheq)))))
+(test-case "datum-subst: an unbound variable PASSES THROUGH (polarity inverted 2026-08-03)"
+  ;; This test asserted a RAISE until D4.P1b-iii item 8. The raise was a
+  ;; whole-file abort on the preparse path, and `pattern-var?`'s hand-kept
+  ;; exclusion list was the only thing holding 23 reader sentinels out of it —
+  ;; so `'[1 2]` inside a template took the file down. The polarity is now
+  ;; "bound ⇒ substitute", which makes every sentinel safe by construction.
+  ;;
+  ;; Deliberately CHANGED, not deleted: an unbound template variable is still
+  ;; wrong, it now fails at the USE site as an ordinary unbound-variable error
+  ;; naming the symbol, per-command and with a srcloc.
+  (check-equal? (datum-subst '$unbound (hasheq)) '$unbound))
 
 ;; ========================================
 ;; preparse-expand-form tests
@@ -368,3 +375,51 @@
     (check-equal? (length results) 2)
     (check-equal? (syntax->datum (car results)) '(check zero : Nat))
     (check-equal? (syntax->datum (cadr results)) '(eval zero))))
+
+;; ========================================
+;; Template polarity: an UNBOUND `$`-symbol passes through (D4.P1b-iii item 8)
+;; ========================================
+;;
+;; `datum-subst` used to RAISE on any `$`-symbol not in `bindings`, and
+;; `pattern-var?`'s hand-maintained exclusion list was the only thing keeping
+;; reader sentinels out of that raise. A census put the residual at 23 of 33 —
+;; so a plain quoted list inside a defmacro template took the WHOLE FILE down.
+;;
+;; The fix is the polarity, not 23 more exclusions: the only thing that makes a
+;; symbol a pattern variable is being BOUND by the macro's pattern, and
+;; `bindings` knows that exactly. Every sentinel is then safe BY CONSTRUCTION.
+;;
+;; These tests enumerate the census rather than sampling it — the defect was a
+;; per-member gap, and a test checking one or two members passed throughout.
+
+(define reader-sentinels-in-templates
+  '($clause-sep $compose $decimal-literal $exp-literal $facts-sep
+    $float-literal $list-literal $list-tail $lseq-literal $mixfix
+    $narrow-eq $nat-literal $pipe $pipe-gt $posit-literal $quasiquote
+    $rat-literal $rest $rest-param $set-literal $typed-hole $unquote
+    $vec-literal))
+
+(test-case "datum-subst: every censused reader sentinel passes through a template"
+  (for ([sym (in-list reader-sentinels-in-templates)])
+    (check-equal? (datum-subst (list sym 1 2) (hasheq '$x 99))
+                  (list sym 1 2)
+                  (format "~a must survive a template unchanged" sym))))
+
+(test-case "datum-subst: a BOUND variable still substitutes, scalar and spliced"
+  (check-equal? (datum-subst '$x (hasheq '$x 42)) 42)
+  (check-equal? (datum-subst '($x) (hasheq '$x 42)) '(42))
+  (check-equal? (datum-subst '($xs ...) (hasheq '$xs '(1 2 3))) '(1 2 3)))
+
+(test-case "datum-subst: a bound splice variable that is NOT a list still raises"
+  ;; The one raise worth keeping: the variable IS bound, so this is a genuine
+  ;; misuse rather than an unrecognized symbol.
+  (check-exn exn:fail?
+             (lambda () (datum-subst '($x ...) (hasheq '$x 1)))))
+
+(test-case "datum-subst: a TYPO'D template variable passes through, to fail at the USE site"
+  ;; What the inversion costs, pinned so it is a decision rather than a
+  ;; surprise. `$typoo` is not bound and is not a sentinel; it survives
+  ;; substitution and becomes an ordinary unbound-variable error where the
+  ;; macro is used — per-command, with a srcloc, file intact. Better than the
+  ;; whole-file abort it replaces.
+  (check-equal? (datum-subst '($typoo) (hasheq '$x 1)) '($typoo)))
