@@ -253,6 +253,24 @@
        (let ([v (struct->vector e)])
          (for/or ([i (in-range 1 (vector-length v))])
            (check (vector-ref v i))))]
+      ;; Substitution-containment defect, META half (2026-08-03): a RACKET
+      ;; VECTOR is where a CHAMP/HSET/RRB actually stores its entries, and the
+      ;; struct walk above stops dead at it — `(vector? …)` is not `(struct? …)`.
+      ;; So a meta inside a map VALUE or a set KEY was invisible to the occur
+      ;; check, which answered #f and would admit a CYCLIC SOLUTION. Probed
+      ;; directly before fixing: `occurs?` on a champ holding the meta as a
+      ;; value → #f, on an hset holding it as a key → #f, while the bare meta,
+      ;; a Record field and a plain application all → #t.
+      ;;
+      ;; `occurs?` is READ-ONLY, which is why this half is fixable here and the
+      ;; `zonk` / `default-metas` half is not: substituting INSIDE a champ
+      ;; rewrites keys whose stored hashes were computed from the old ones, so
+      ;; that side needs the reconstructive treatment `nf`'s NbE fix and the
+      ;; `champ-sentinel` serializer already use. Reading needs no such care.
+      ;;
+      ;; Non-expr vector contents (a node's stored hash codes are fixnums) hit
+      ;; the `[else #f]` arm and cost one type test each.
+      [(vector? e) (for/or ([x (in-vector e)]) (check x))]
       [else #f])))
 
 ;; ========================================
