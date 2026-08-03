@@ -54,6 +54,12 @@
  ;; Embedded lattice merge functions
  rrb-embedded-merge
 
+ ;; D4.P1b-iii spin-off 5: exported so surface-rewrite's `langle` arm can make
+ ;; the SAME decision this file's does — whether a `<` opens an angle group at
+ ;; all. The two groupers diverged on `<`-adjacent braces precisely because
+ ;; only one of them consulted this.
+ has-matching-rangle?
+
  ;; Phase 3a: Read API
  (struct-out parse-tree)
  read-to-tree

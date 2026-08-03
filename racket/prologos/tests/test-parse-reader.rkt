@@ -17,7 +17,7 @@
          (only-in "../parse-reader.rkt" read-all-forms-string)
          ;; D4.P1b-ii Q_N3: the two-grouper agreement guard needs the OTHER
          ;; grouping implementation (surface-rewrite's tree layer).
-         (only-in "../surface-rewrite.rkt" group-tree-node))
+         (only-in "../surface-rewrite.rkt" group-tree-node refine-tag))
 
 ;; Helper: register patterns once
 (register-default-token-patterns!)

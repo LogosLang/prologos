@@ -3411,7 +3411,39 @@ rather than a not-yet stub.
 
 ## CIU T6 D4.P1b-iii spin-offs (filed 2026-07-29, from adversarial verify)
 
-### 5. The two groupers DIVERGE on `<`-adjacent braces — and it is live on the disclose surface
+### 5. ✅ FIXED 2026-08-03 — the two groupers now agree on `<`
+
+`surface-rewrite`'s `langle` arm opened an angle group UNCONDITIONALLY;
+`parse-reader`'s consults `has-matching-rangle?` and falls back to operator-`<`.
+So `m<{a}` grouped as `angle-group(brace-group)` at the TREE layer while the
+DATUM layer read `m < ($select-brace a)`.
+
+Fixed as the filing predicted — *"almost certainly by giving surface-rewrite
+the same `has-matching-rangle?` fallback parse-reader has"*. The predicate is
+now EXPORTED and SHARED rather than re-implemented, which is the only version
+that cannot drift again; `surface-rewrite` already required `parse-reader`, so
+no cycle. An unmatched `<` falls through to the generic token arm, which is
+exactly what makes the two agree: the reader treats it as a plain operator
+token and now so does the tree layer.
+
+Verified on three inputs, both layers each:
+
+| input | angle group? |
+|---|---|
+| `m<{a}` | NO on both (was: tree YES, datum NO) |
+| `<Int>` | YES on both — the control an unconditional fallback would kill |
+| `m < 3` | NO on both |
+
+Pinned in `test-parse-reader.rkt` as AGREEMENT assertions — each input checked
+on both sides in the same test — rather than as three separate expectations,
+because the property is that they match, not what either says alone.
+
+Suite green (542 files / 10495 tests) including the `<`-disclose surface at
+`lib/examples/foray.prologos:674`, which the filing named as the live case.
+
+Original filing follows.
+
+**Original**: the two groupers DIVERGE on `<`-adjacent braces
 
 `m<{a}` and the spec's disclose spelling `users:<{0.userName^}` yield `$select-brace`
 at the datum layer but `brace-group` at the tree layer. Root cause: parse-reader's
