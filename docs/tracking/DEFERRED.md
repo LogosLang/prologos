@@ -3039,7 +3039,7 @@ point the fourth direction can be gated with the same local-only discipline.
 > actionable + the debug rule) and `DEVELOPMENT_LESSONS.org` § "infer / inferQ
 > Are Twins" (the record). Kept below for the history.
 
-## (historical) Un-arm'd AST node → spurious "Multiplicity violation" — 3rd data point (captured 2026-07-25)
+## ✅ CLOSED 2026-08-03 — (historical) Un-arm'd AST node → spurious "Multiplicity violation" — 3rd data point (captured 2026-07-25)
 
 **A recurring BUG CLASS, not a single defect.** When an AST node has no `inferQ`
 arm, qtt's tu-error fallback propagates the failure and `checkQ-top` reports the
@@ -3052,8 +3052,31 @@ actual problem. Three confirmed instances:
 | 2 | `def x := solve (…)` (Rel T1 POL.5, `485f4e7d`) | fixed |
 | 3 | `def m := {:f [fn …]}` (first SEEN through `validate`, 2026-07-24) | ✅ fixed `cdb535ac` |
 
-**Two actions, both owed:**
-- *Fix instance 3* — the same shape as POL.5's one-arm fix.
+**Both actions are DONE — verified 2026-08-03, and the second was already
+done when this entry was written:**
+
+- *Fix instance 3* — landed at `cdb535ac` (the entry already carried the ✅).
+  Re-probed at HEAD: all three triggers now define cleanly —
+  `def m0 := {}` → `{ | _}`, `def m := {:f [fn [x : Int] x]}` →
+  `{:f Int -> Int}`, `def x := solve (p ?a)` → `[PVec {:a Int}]`. No
+  multiplicity violation from any of them.
+- *Promote the CLASS* — **already present in BOTH required forms**, which is
+  what `workflow.md` § "A promoted lesson gets TWO forms" asks for and what
+  this entry was tracking:
+  - the ambient one-liner in `.claude/rules/pipeline.md` § "New AST Node"
+    item 8, carrying the debug rule verbatim and pointing down;
+  - the full record in `DEVELOPMENT_LESSONS.org` § "infer / inferQ Are Twins —
+    a Missing Arm Makes the DIAGNOSTIC Lie", with the three-instance table,
+    the why-it-hides paragraph, and the structural fix direction.
+
+  Nothing was owed here; the entry outlived the work. Worth noting because a
+  "promote this" item that is silently already done is the same class of stale
+  as a "this is broken" item that is silently already fixed — and this session
+  has now found several of each.
+
+**Original framing follows.**
+
+- *(original)* Fix instance 3 — the same shape as POL.5's one-arm fix.
 - *Promote the CLASS* to `DEVELOPMENT_LESSONS.org`: at 3 data points this is
   codification-ready. The lesson is diagnostic, not just corrective — **a
   "Multiplicity violation" on a `def` whose body is a non-lambda should be
