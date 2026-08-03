@@ -150,3 +150,39 @@ selection NameOnly from Person :requires [:name]
 [validate NameOnly {:age 9}]
 ;;27=>~ :name prologos::data::reason::missing-required
 ;;   ← the :requires read-capability MISS is the selection's runtime residual
+
+;; --- 2026-08-03: SUB-SCHEMA DESCENT (the deep-walker charter, item 3) ---------
+;; Before this, a field typed by another schema got the 'any (unwitnessable)
+;; tag, so validate accepted data whose NESTED field held the wrong type — while
+;; the STATIC seal rejected the same mistake in a literal. For the headline flow
+;; (external data → validate → Result) the asymmetry ran the wrong way round.
+
+schema Endpoint
+  :host String
+  :port Int
+
+schema Deployment
+  :label String
+  :target Endpoint
+;;28=> Endpoint : [Type 0] defined.
+;;29=> Deployment : [Type 0] defined.
+
+[validate Deployment {:label "prod" :target {:host "h" :port 443}}]
+;;30=>~ prologos::data::result::ok
+;;   ← a well-formed nested value still passes
+
+[validate Deployment {:label "prod" :target {:host "h" :port "443"}}]
+;;31=>~ :target [prologos::data::reason::type-mismatch
+;;   ← THE FIX: the nested :port is a String in an Int slot. Was `ok`.
+
+[validate Deployment {:label "prod" :target {:host "h" :port "443"}}]
+;;32=>~ Map (:port is String)
+;;   ← and the `got` payload names the offending inner field. Reporting a bare
+;;     "Map" here would be true and useless — the value IS a map; WHICH field is
+;;     wrong is the entire question.
+
+[validate Deployment {:label "prod" :target {:host "h"}}]
+;;33=>~ prologos::data::result::ok
+;;   ← a MISSING nested key stays the PLAN's business (it owns `required?` and
+;;     reports against the right key); the witness must not relabel it as a
+;;     type-mismatch on the PARENT field.

@@ -901,7 +901,7 @@ entry gates** (round-6 rulings, track doc §2a):
    where the generalization lands; D17's `{}` keyword-commitment is one
    recoverable seed site.
 
-## CIU T6 F1b.5: the deep-walker charter — ONE mechanism, one entry (D27.5, 2026-07-17)
+## 🔶 PARTIAL — CIU T6 F1b.5: the deep-walker charter (D27.5, 2026-07-17; item 3 sub-schema descent DONE 2026-08-03, items 1/2/4 open)
 
 Validate v1 is ONE-LEVEL with STRUCTURAL depth symmetry (it consumes the same
 field-set enumeration as `schema->row` — never a second one-level implementation).
@@ -931,20 +931,64 @@ residue-letter entries — divergent gates/double-count):
 `defr : Schema` fact-row runtime validation rides the same charter (an adapter
 over the positional discharge, parser.rkt `parse-defr-schema-typed`).
 
-**✏ 2026-07-18 (hand-testing) — the nested-`validate`-descent gap is DEMO-RELEVANT,
-may fold into Path Selection.** Hand-test verified at `f108c19b`: `[validate
-Config badcfg]` where `badcfg.server.port = "x"` returns **`ok`** (accepts the
-bad nested `:server` — the witness treats a nested-schema field's champ value as
-opaque/accept-on-uncertainty per the one-level D28 posture). ASYMMETRY worth
-noting: the STATIC seal DOES descend (a bad nested *literal* is caught at commit),
-but runtime `validate` does not — precisely the demo's headline flow (external
-data → `validate` → `Result`) would report `ok` on a config whose inner fields
-are wrong. This is items #1/#3 above (container/nested + sub-schema descent).
-Owner steer (2026-07-18): does NOT need building yet, but "could very likely be
-included in the Path Selection work" (which precedes the return to demo work) —
-so this walker-descent may graduate WITH Path Selection rather than as a
-standalone charter trigger. Entry-gate (a) [a real nested-schema demo consumer]
-is the watch.
+**✅ ITEM 3 (sub-schema descent) FIXED 2026-08-03 — the nested-`validate`
+asymmetry is closed.** Re-probed at HEAD first and the report was still exactly
+true: `[validate Config bad]` with `bad.server.port = "x"` returned **`ok`**.
+The framing that made it worth doing ahead of the rest of the charter is that
+it was an **ASYMMETRY, not a missing feature** — the STATIC seal descends into
+a nested literal and rejects the bad inner field; runtime `validate` did not.
+Runtime validate is the demo's headline flow (external data → validate →
+Result), so the two ran the wrong way round relative to each other.
+
+**The fix is a fifth tag kind, not a second validator.** `field-type->witness-tag`
+gained a `(row (K . T) …)` arm and `value-witnesses-tag?` gained its
+interpreter. Depth comes from the TYPE's own shape, so a schema nested three
+deep tags three deep with no depth parameter; the projection reuses
+`schema->row` rather than re-enumerating fields. Tags stay plain s-expressions,
+so `.pnet` serialization needed no change at all.
+
+Four things worth carrying forward:
+
+- **A schema NAME does not `whnf` through to its row.** Verified by
+  instrumenting the bake: `whnf` leaves `(expr-fvar 'M::Server)` alone. The
+  registry lookup is what resolves it — the first cut matched only
+  `expr-Record` and changed nothing, which is how this was found.
+- **The seen-set is load-bearing, and was proved so rather than assumed.**
+  `schema Node :next Node` is expressible TODAY (a field type is a bare name
+  through the same registry). Removing the guard hangs the probe — verified,
+  25 s timeout, exit 124. On a cycle the tag degrades to `'any`: the D28
+  posture, and the honest form of the charter's "depth discipline" gate —
+  cyclic descent is DECLINED, not silently mis-tagged.
+- **Two deliberate ACCEPTS keep err-polarity.** A non-map value accepts (the
+  witness must not assert a type error it cannot substantiate), and a MISSING
+  nested key accepts (absence is the PLAN's business — it owns `required?` and
+  reports against the right key; from here it would surface as a type-mismatch
+  on the PARENT field, naming the wrong thing). The arm rejects on exactly one
+  condition: a key that is PRESENT and definitively fails its own tag.
+- **The `got` payload names the path.** `type-mismatch "Server" "Map"` is true
+  and useless — the value IS a map; which field is wrong is the whole question.
+  `witness-got-string` walks to the first failing key: `"Map (:port is String)"`,
+  or `"Map (:b.:c is String)"` when the miss is deeper. Non-row tags are
+  untouched, pinned by a test.
+
+Both sub-schema spellings work: a named schema (`:target Endpoint`) and the
+inline layout form (`:s` / indented sub-fields → the auto-registered
+`Parent__s`). Pinned at unit level (`tests/test-field-witness.rkt`, +6 cases)
+and Level 3 (`examples/2026-07-17-ciu-t6-f1b5-validate.prologos`, markers
+28-33 — including the good case, the missing-key case, and the payload text).
+
+⚠ **Found in passing, filed rather than fixed**: a BRACE in schema-field type
+position (`:s { :n Int }`) is not the inline-sub-schema spelling — it elaborates
+to `(expr-app (expr-app (expr-fvar '$brace-params) …) …)`, a garbage head that
+tags `'any` and silently witnesses nothing. The layout form is the supported
+one. This is the `{…}`-in-type-position disambiguation the owner already owns
+(see § the row-annotation ruling), so it is not fixed here.
+
+**Items #1 (container/nested traversal), #2 (tier-2 element recursion) and #4
+(nested/wildcard selection requires-paths) remain open** — a list-typed field
+still does not check its elements, and a selection's deep `:requires` still
+defers. Entry-gate (a) [a real nested-schema demo consumer] stays the watch for
+those.
 
 **Entry gates**: (a) a real consumer with nested/container schema shapes — the
 P-Real demo schemas are the watched trigger (checked at F1b.5-p0; list-typed

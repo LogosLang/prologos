@@ -499,12 +499,51 @@
         [(expr-Float32? t) 'Float32] [(expr-Float64? t) 'Float64]
         [else #f]))
 
-(define (field-type->witness-tag ft)
+(define (field-type->witness-tag ft [seen '()])
   (let ([t (whnf ft)])
+    (eprintf "TAGPROBE t=~v sch=~v\n" t (and (expr-fvar? t) (and (lookup-schema-by-name (expr-fvar-name t)) #t)))
     (cond
       ;; union: ⋃ of branch tags (mirrors field-type-satisfies? some-branch)
       [(expr-union? t)
-       (cons 'union (map field-type->witness-tag (flatten-union t)))]
+       (cons 'union (map (lambda (b) (field-type->witness-tag b seen))
+                         (flatten-union t)))]
+      ;; ---- SUB-SCHEMA / nested-row descent ------------------------------
+      ;; A field typed by ANOTHER SCHEMA (`:server Server`) or by an inline row
+      ;; type. Emits a structural `(row (K . T) …)` tag so the runtime witness
+      ;; can DESCEND into the nested value.
+      ;;
+      ;; This is the deep-walker charter's item 3, and the defect it closes is
+      ;; an ASYMMETRY rather than a missing feature: the STATIC seal descends
+      ;; into a nested literal and rejects a bad inner field, while runtime
+      ;; `validate` returned `ok` on the same mistake in data — `[validate
+      ;; Config bad]` with `bad.server.port` a String in an Int slot. Runtime
+      ;; validate is the demo's headline flow (external data → validate →
+      ;; Result), so the asymmetry ran exactly the wrong way round. Both
+      ;; field-type shapes reach here because a schema NAME does not whnf
+      ;; through to its row (verified — `whnf` leaves `(expr-fvar 'M::Server)`
+      ;; alone); the registry lookup is what resolves it, and `schema->row` is
+      ;; the ONE projection already used for that, not a second enumeration.
+      ;;
+      ;; ⚠ THE SEEN-SET IS NOT SPECULATIVE. Recursion is on FIELD TYPES, and a
+      ;; schema field's type is a bare name resolved through the same registry,
+      ;; so `schema Node :next Node` is expressible TODAY and would recur
+      ;; forever. On a cycle the tag degrades to 'any — the D28 posture: a
+      ;; recursive schema is un-witnessable at bake time, and accepting is
+      ;; strictly better than either looping or false-rejecting. (This is also
+      ;; the honest form of the charter's "depth discipline" gate: cyclic
+      ;; descent is declined, not silently mis-tagged.)
+      ;;
+      ;; 'nat rows (tuples) are deliberately NOT tagged: the runtime arm keys by
+      ;; keyword into a champ, and a tuple is an rrb. Positional descent is its
+      ;; own shape and would need its own arm on both sides.
+      [(and (expr-fvar? t)
+            (not (memq (expr-fvar-name t) seen))
+            (lookup-schema-by-name (expr-fvar-name t)))
+       => (lambda (schema)
+            (row-witness-tag (schema->row schema)
+                             (cons (expr-fvar-name t) seen)))]
+      [(and (expr-Record? t) (eq? (expr-Record-key-domain t) 'keyword))
+       (row-witness-tag t seen)]
       ;; primitive: the subtype closure over the witnessable slice
       [(prim-type-expr->tag t)
        (cons 'prim
@@ -531,6 +570,14 @@
       ;; functions (Pi), type vars, unknown/abstract heads, higher-kinded —
       ;; unwitnessable → skip
       [else 'any])))
+
+;; A keyword row → its `(row (K . T) …)` tag. Shared by the two arms above so
+;; the schema route and the inline-row route cannot produce different shapes.
+(define (row-witness-tag rec seen)
+  (cons 'row
+        (for/list ([f (in-list (expr-Record-fields rec))])
+          (cons (car f)
+                (field-type->witness-tag (record-field-type (cdr f)) seen)))))
 
 ;; Look up a field keyword in a schema's field list.
 ;; Returns the schema-field or #f.

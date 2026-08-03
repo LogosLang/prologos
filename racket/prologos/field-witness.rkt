@@ -23,6 +23,9 @@
 ;;                      functions, type vars, unknown/higher-kinded — checked
 ;;                      statically at the seal boundary, not re-witnessed here)
 ;;   (union T1 T2 ...)  accept if ANY Ti accepts (mirrors field-type-satisfies?)
+;;   (row (K . T) ...)  a keyword-domain ROW (a nested schema, or an inline row
+;;                      type): the value must be a map, and every listed key it
+;;                      ACTUALLY HAS must witness that key's tag. See the arm.
 ;;
 ;; SAFETY DIRECTION (D28 err-polarity): on ANY uncertainty the witness ACCEPTS.
 ;; A false REJECT (erroring on data the static seal accepted) is strictly worse
@@ -36,9 +39,11 @@
 (require racket/list
          racket/string
          "syntax.rkt"
+         (only-in "champ.rkt" champ-lookup)
          (only-in "macros.rkt" lookup-ctor ctor-meta-type-name))
 
 (provide value-witnesses-tag?
+         witness-got-string
          value->prim-tag
          value->ctor-type-name
          value-kind-string
@@ -105,6 +110,37 @@
           (and tn (eq? tn (cadr tag)) #t))]
        [(union)
         (ormap (lambda (t) (value-witnesses-tag? v t)) (cdr tag))]
+       ;; ---- SUB-SCHEMA / nested-row descent ------------------------------
+       ;; The gap this closes: a field typed by another schema got tag 'any
+       ;; (`field-type->witness-tag`'s unwitnessable fallback), so `[validate
+       ;; Config bad]` where `bad.server.port` was a String in an Int slot came
+       ;; back `ok` — the demo's headline flow (external data → validate →
+       ;; Result) silently accepting wrong data. The STATIC seal descends into a
+       ;; nested literal; runtime validate did not. That asymmetry was the bug.
+       ;;
+       ;; Two deliberate ACCEPTS keep the D28 err-polarity (never false-reject),
+       ;; and they are why this is a witness rather than a second validator:
+       ;;   - a non-map value accepts. The field type says "row", but a value
+       ;;     that is not a champ may be an un-reduced term or a shape the
+       ;;     static seal already owns. Rejecting here would be the witness
+       ;;     asserting a type error it cannot substantiate.
+       ;;   - a MISSING key accepts. Absence is the PLAN's business — it has
+       ;;     `required?` and emits `missing-required` against the right key. A
+       ;;     nested miss reported from here would surface as a type-mismatch on
+       ;;     the PARENT field, naming the wrong thing.
+       ;; So this rejects on exactly one condition: a key that is PRESENT and
+       ;; whose value definitively fails its own tag. That is the case the
+       ;; static seal catches for literals, and it is now caught for data.
+       [(row)
+        (cond
+          [(not (expr-champ? v)) #t]
+          [else
+           (let ([c (expr-champ-racket-champ v)])
+             (for/and ([kt (in-list (cdr tag))])
+               (let* ([kexpr (expr-keyword (car kt))]
+                      [found (champ-lookup c (equal-hash-code kexpr) kexpr)])
+                 (or (eq? found 'none)
+                     (value-witnesses-tag? found (cdr kt))))))])]
        ;; unknown tag head → accept (forward-compatible; never false-reject)
        [else #t])]
     ;; malformed / unexpected tag shape → accept
@@ -122,6 +158,52 @@
     [(expr-lam? v) "function"]
     [else "value"]))
 
+;; ---- the "got" payload -----------------------------------------------------
+;; What to put in a `type-mismatch` Reason's second slot. For every tag kind but
+;; `row` this is just the value's kind, exactly as before.
+;;
+;; For a row it must do better, and the reason is concrete: the tag sits on the
+;; PARENT field, so a nested failure reported as plain `"Map"` says
+;; `type-mismatch "Server" "Map"` — true, useless, and actively misleading,
+;; since the value IS a map and the reader is left to guess which of its fields
+;; is wrong. This walks to the first key that actually failed and names it with
+;; its path, so the same failure reads `"Map (:port is String)"`, or
+;; `"Map (:b.:c is Nat)"` when the miss is deeper.
+;;
+;; FIRST failing key, not all of them: the Reason payload is one string, and the
+;; champ-fold order is deterministic. Collecting every miss is a Reason-shape
+;; question (the err champ is keyed by the PARENT field here), not a string one.
+(define (witness-got-string v tag)
+  (define detail
+    (and (pair? tag) (eq? (car tag) 'row) (expr-champ? v)
+         (let descend ([v v] [tag tag] [path '()])
+           (and (expr-champ? v)
+                (let ([c (expr-champ-racket-champ v)])
+                  (for/or ([kt (in-list (cdr tag))])
+                    (let* ([kexpr (expr-keyword (car kt))]
+                           [found (champ-lookup c (equal-hash-code kexpr) kexpr)]
+                           [p (cons (car kt) path)])
+                      (cond
+                        [(eq? found 'none) #f]
+                        [(value-witnesses-tag? found (cdr kt)) #f]
+                        ;; a nested row miss: keep descending so the path is
+                        ;; the full one rather than stopping at the outermost
+                        ;; field that "is a Map".
+                        [(and (pair? (cdr kt)) (eq? (car (cdr kt)) 'row))
+                         (or (descend found (cdr kt) p)
+                             (format "~a is ~a"
+                                     (path->string* p) (value-kind-string found)))]
+                        [else (format "~a is ~a"
+                                      (path->string* p) (value-kind-string found))]))))))))
+  (if detail
+      (string-append (value-kind-string v) " (" detail ")")
+      (value-kind-string v)))
+
+(define (path->string* rev-path)
+  (string-join (for/list ([k (in-list (reverse rev-path))])
+                 (string-append ":" (symbol->string k)))
+               "."))
+
 ;; ---- tag introspection (for the skip-set discipline test) ------------------
 ;; A tag SKIPS (concedes witnessing) iff it is 'any, at top level or inside a
 ;; union. The D28 skip-set-discipline test asserts the RIGHT shapes skip:
@@ -131,6 +213,11 @@
   (cond
     [(eq? tag 'any) #t]
     [(and (pair? tag) (eq? (car tag) 'union)) (ormap witness-tag-skip? (cdr tag))]
+    ;; A row concedes exactly when it can reject nothing — no fields, or every
+    ;; field's own tag skips. Any witnessable field makes the row witnessable,
+    ;; which is what the discipline test needs to see for a nested schema.
+    [(and (pair? tag) (eq? (car tag) 'row))
+     (andmap (lambda (kt) (witness-tag-skip? (cdr kt))) (cdr tag))]
     [else #f]))
 
 ;; Structural well-formedness — the totality assertion: a tag is one of the
@@ -144,4 +231,11 @@
      (and (pair? (cdr tag)) (symbol? (cadr tag)) (null? (cddr tag)))]
     [(and (pair? tag) (eq? (car tag) 'union))
      (and (pair? (cdr tag)) (andmap witness-tag-well-formed? (cdr tag)))]
+    ;; `(row (K . T) ...)` — an EMPTY row is well-formed (an empty schema is a
+    ;; legal, if useless, declaration), unlike union/prim/ctor which all carry a
+    ;; non-empty payload by construction.
+    [(and (pair? tag) (eq? (car tag) 'row))
+     (andmap (lambda (kt) (and (pair? kt) (symbol? (car kt))
+                               (witness-tag-well-formed? (cdr kt))))
+             (cdr tag))]
     [else #f]))

@@ -140,3 +140,81 @@
                             '(Nil Posit16 Posit32)))])
     (check-true (witness-tag-well-formed? (tag-of d))
                 (format "~a produced a non-well-formed tag" d))))
+
+;; ============================================================================
+;; SUB-SCHEMA / nested-row descent (the deep-walker charter's item 3, 2026-08-03)
+;;
+;; Before this, a field typed by another schema fell to the 'any skip, so
+;; `[validate Config bad]` returned `ok` on data whose nested field held the
+;; wrong type — while the STATIC seal caught the identical mistake in a
+;; literal. The asymmetry ran the wrong way round for the demo's headline flow
+;; (external data → validate → Result).
+;; ============================================================================
+
+(require (only-in "../macros.rkt" register-schema! schema-entry schema-field)
+         (only-in "../champ.rkt" champ-empty champ-insert))
+
+(define (mk-champ . kvs)
+  (let loop ([kvs kvs] [c champ-empty])
+    (if (null? kvs)
+        (expr-champ c)
+        (let ([k (expr-keyword (car kvs))])
+          (loop (cddr kvs)
+                (champ-insert c (equal-hash-code k) k (cadr kvs)))))))
+
+(test-case "witness/row-tag from a NAMED sub-schema"
+  (register-schema! 'WInner
+                    (schema-entry 'WInner (list (schema-field 'c 'Int #f #f)) #f #f))
+  (check-equal? (tag-of 'WInner) '(row (c prim Nat Int))
+                "a schema NAME must tag as a row, not skip to 'any")
+  (check-false (witness-tag-skip? (tag-of 'WInner))
+               "a row with a witnessable field is witnessable")
+  (check-true (witness-tag-well-formed? (tag-of 'WInner))))
+
+(test-case "witness/row descends into a nested value"
+  (register-schema! 'WInner2
+                    (schema-entry 'WInner2 (list (schema-field 'c 'Int #f #f)) #f #f))
+  (define tag (tag-of 'WInner2))
+  (check-true  (value-witnesses-tag? (mk-champ 'c (expr-int 1)) tag)  "a good inner value passes")
+  (check-false (value-witnesses-tag? (mk-champ 'c (expr-string "z")) tag)
+               "THE BUG: a String in an Int slot used to pass"))
+
+(test-case "witness/row ACCEPTS on the two deliberate uncertainties"
+  ;; Both are err-polarity, not oversight, and each has a different owner.
+  (register-schema! 'WInner3
+                    (schema-entry 'WInner3 (list (schema-field 'c 'Int #f #f)) #f #f))
+  (define tag (tag-of 'WInner3))
+  (check-true (value-witnesses-tag? (mk-champ) tag)
+              "a MISSING key is the plan's business (it has required?), not the witness's")
+  (check-true (value-witnesses-tag? (expr-int 5) tag)
+              "a non-map value: the witness must not assert a type error it cannot substantiate"))
+
+(test-case "witness/a RECURSIVE schema terminates by degrading to 'any"
+  ;; The seen-set is not speculative: a schema field's type is a bare name
+  ;; resolved through the same registry, so this shape is expressible TODAY.
+  ;; Verified by removing the guard — the probe hung rather than erroring.
+  (register-schema! 'WNode
+                    (schema-entry 'WNode
+                                  (list (schema-field 'label 'String #f #f)
+                                        (schema-field 'next 'WNode #f #f))
+                                  #f #f))
+  (define tag (tag-of 'WNode))
+  (check-equal? tag '(row (label prim String) (next . any))
+                "the cycle degrades to 'any — accept, never loop or false-reject")
+  (check-true (witness-tag-well-formed? tag))
+  ;; and the non-recursive field still witnesses through it
+  (check-false (value-witnesses-tag? (mk-champ 'label (expr-int 1)) tag)))
+
+(test-case "witness/got-string names the failing path, not just \"Map\""
+  ;; `type-mismatch \"Server\" \"Map\"` is true and useless — the value IS a map;
+  ;; which of its fields is wrong is the whole question.
+  (register-schema! 'WDeepIn
+                    (schema-entry 'WDeepIn (list (schema-field 'c 'Int #f #f)) #f #f))
+  (register-schema! 'WDeepOut
+                    (schema-entry 'WDeepOut (list (schema-field 'b 'WDeepIn #f #f)) #f #f))
+  (define tag (tag-of 'WDeepOut))
+  (check-equal? (witness-got-string
+                 (mk-champ 'b (mk-champ 'c (expr-string "z"))) tag)
+                "Map (:b.:c is String)")
+  ;; a non-row tag is untouched — this must not change any existing payload
+  (check-equal? (witness-got-string (expr-string "z") (tag-of 'Int)) "String"))

@@ -1891,7 +1891,7 @@
                                      (expr-fvar default-uneval-name)
                                      (expr-app (expr-app (expr-fvar typemis-name)
                                                          (expr-string type-str))
-                                               (expr-string (value-kind-string val)))))
+                                               (expr-string (witness-got-string val tag)))))
                    #t)]
             [else
              ;; :check pred (baked expr-lam; beta via nf)
