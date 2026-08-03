@@ -450,6 +450,16 @@
     (error 'spine-census "pass .prologos files explicitly (the driver script supplies the corpus)"))
   (define targets (map string->path files))
   (define modes (if (memq mode-sel '(both all)) '(legacy datum raw-datum) (list mode-sel)))
+  (when (> (length modes) 1)
+    (eprintf "⚠ spine-census: multi-mode run. Registries are NOT reset between files or
+")
+    (eprintf "  modes, so later modes see more pollution than earlier ones. Figures from a
+")
+    (eprintf "  multi-mode run are NOT comparable to single-mode figures — A/B with the same
+")
+    (eprintf "  --mode and the same file list. See the header.
+
+"))
   (define rows
     (append* (for*/list ([m (in-list modes)] [p (in-list targets)])
                (census-file p m verbose?))))

@@ -3248,6 +3248,12 @@ pinned by `tests/test-dual-spine-merge-key.rkt`. These are the residuals.
    | raw-datum (tree-as-READER, RAW node) | 1542/1568 = 98% | 26 |
    | **raw-datum + the macros.rkt where-pass fix** | **1544/1558 = 99%** | **14** |
 
+   ⚠ The first three rows are `--mode all` figures and the last is `--mode
+   raw-datum`; they are **not** strictly comparable (the tool never resets
+   registries between files, and `--mode all` runs modes outer, so later modes
+   see more pollution). Same-mode, the where-pass delta is **23 → 14**. Always
+   A/B with the same `--mode`.
+
    Still an owner ruling — but the thing to rule on is unification vs. keeping
    preparse authoritative forever, not "commission vs retire".
 
@@ -3267,8 +3273,18 @@ pinned by `tests/test-dual-spine-merge-key.rkt`. These are the residuals.
    whether 98% is permanent."* That was reasoning, not measurement, and it was
    **refuted**: `-single` gets the spec injection fine and merely left the `where`
    clause un-discharged, because it skipped `maybe-inject-where` — a pass `-all`
-   runs twice. Fixed (`41697413`), 26 → 14, pinned by
+   runs twice. Fixed (`41697413`), **23 → 14 same-mode** (I first published this
+   as "26 → 14", which compared an `--mode all` baseline against a `--mode
+   raw-datum` result — the instrument's own pollution, not the code's), pinned by
    `tests/test-preparse-expand-parity.rkt`.
+
+   ⚠ And the damage was worse than the census's one-line summary suggested: it
+   reports only the FIRST structural difference, so it printed `preparse: $Add-A
+   / tree: x`, which reads cosmetic. Dumping the real surfs for `arithmetic`'s
+   `defn +` showed the tree body was **`(surf-var where)`** — the dangling
+   `where` consumed AS THE FUNCTION BODY, with the real body `[add x y]`
+   silently discarded and ZERO errors. Read past the first divergence line
+   before judging a class cosmetic.
 
    **The open question is now the remaining 14**, a different and smaller set:
    `surf-map-literal` ×3, `surf-solve` ×3, `surf-nat-type` ×1, and 7 bound-variable

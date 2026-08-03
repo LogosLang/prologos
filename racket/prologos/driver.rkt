@@ -846,9 +846,26 @@
                                  (begin
                                    (pp-expr (time-phase! zonk (freeze ty)))))))))]
 
-                  ;; (expand datum) — show preparse expansion
+                  ;; (expand datum) — show preparse expansion.
+                  ;;
+                  ;; ⚠ GUARDED because `preparse-expand-single` can RAISE, and
+                  ;; that is NEW as of the where-injection fix (macros.rkt): it
+                  ;; now mirrors `preparse-expand-all`'s `maybe-inject-where`
+                  ;; pass, which errors on a `where` clause whose constraint
+                  ;; heads are not resolvable traits/bundles. Before that fix
+                  ;; `-single` could not reach the raise at all, so this call
+                  ;; site was safe unwrapped and no longer is.
+                  ;;
+                  ;; The handler belongs HERE, not in `-single`: making `-single`
+                  ;; swallow the failure would put it back out of step with
+                  ;; `-all` — which is the exact divergence class the fix closed.
+                  ;; An INSPECTION command should report a bad expansion; it
+                  ;; should not be the reason the expander lies.
                   [(list 'expand datum)
-                   (pp-datum (preparse-expand-single datum))]
+                   (with-handlers ([exn:fail?
+                                    (lambda (e)
+                                      (format "expand: ~a" (exn-message e)))])
+                     (pp-datum (preparse-expand-single datum)))]
 
                   ;; (expand-1 datum) — show single-step preparse expansion
                   [(list 'expand-1 datum)
