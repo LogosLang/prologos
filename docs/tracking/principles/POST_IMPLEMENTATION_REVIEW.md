@@ -1,3 +1,9 @@
+> **⚠ GENERATED ARTIFACT — STALE. Read `POST_IMPLEMENTATION_REVIEW.org` instead.**
+> `POST_IMPLEMENTATION_REVIEW.org` is the canonical source (`workflow.md`: "ALL edits MUST go to the
+> `.org`"). This export was last regenerated 2026-03-24; the source has changed as
+> recently as 2026-07-26, so claims here may already have been retracted there.
+> Regenerating needs org-export (emacs or pandoc).
+
 - [Purpose](#org756992b)
 - [The Questions a PIR Must Answer](#orgc0ef11e)
   - [Factual Foundation](#org7287500)

@@ -1,3 +1,9 @@
+> **⚠ GENERATED ARTIFACT — STALE. Read `RELATIONAL_LANGUAGE_VISION.org` instead.**
+> `RELATIONAL_LANGUAGE_VISION.org` is the canonical source (`workflow.md`: "ALL edits MUST go to the
+> `.org`"). This export was last regenerated 2026-02-26; the source has changed as
+> recently as 2026-07-25, so claims here may already have been retracted there.
+> Regenerating needs org-export (emacs or pandoc).
+
 - [The Core Idea: Relations as First-Class Duals of Functions](#orge87c734)
 - [Syntax Decisions](#orgd93b20e)
   - [Delimiter Distinction: `(...)` vs `[...]`](#orga6d32f7)

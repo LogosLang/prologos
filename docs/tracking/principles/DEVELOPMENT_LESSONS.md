@@ -1,3 +1,9 @@
+> **⚠ GENERATED ARTIFACT — STALE. Read `DEVELOPMENT_LESSONS.org` instead.**
+> `DEVELOPMENT_LESSONS.org` is the canonical source (`workflow.md`: "ALL edits MUST go to the
+> `.org`"). This export was last regenerated 2026-02-25; the source has changed as
+> recently as 2026-07-28, so claims here may already have been retracted there.
+> Regenerating needs org-export (emacs or pandoc).
+
 - [Why We Track and Document Efforts](#org2828266)
 - [Workflow Lessons](#orge630dd0)
   - [Phase-Gated Implementation](#org13c1d5d)

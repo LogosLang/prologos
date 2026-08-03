@@ -1,3 +1,9 @@
+> **⚠ GENERATED ARTIFACT — STALE. Read `WORK_STRUCTURE.org` instead.**
+> `WORK_STRUCTURE.org` is the canonical source (`workflow.md`: "ALL edits MUST go to the
+> `.org`"). This export was last regenerated 2026-03-24; the source has changed as
+> recently as 2026-05-19, so claims here may already have been retracted there.
+> Regenerating needs org-export (emacs or pandoc).
+
 - [Purpose](#orgf36cd04)
 - [1. The Work Unit Hierarchy](#orgd4a7cd1)
   - [1.1 Series](#org356fd41)

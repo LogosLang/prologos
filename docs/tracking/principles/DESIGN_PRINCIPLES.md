@@ -1,3 +1,9 @@
+> **⚠ GENERATED ARTIFACT — STALE. Read `DESIGN_PRINCIPLES.org` instead.**
+> `DESIGN_PRINCIPLES.org` is the canonical source (`workflow.md`: "ALL edits MUST go to the
+> `.org`"). This export was last regenerated 2026-03-24; the source has changed as
+> recently as 2026-05-18, so claims here may already have been retracted there.
+> Regenerating needs org-export (emacs or pandoc).
+
 - [Core Values](#org1fb5c6e)
   - [Correctness Through Types](#orge765c87)
   - [Simplicity of Foundation](#orga658b0c)

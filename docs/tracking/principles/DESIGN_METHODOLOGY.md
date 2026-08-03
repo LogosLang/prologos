@@ -1,3 +1,9 @@
+> **⚠ GENERATED ARTIFACT — STALE. Read `DESIGN_METHODOLOGY.org` instead.**
+> `DESIGN_METHODOLOGY.org` is the canonical source (`workflow.md`: "ALL edits MUST go to the
+> `.org`"). This export was last regenerated 2026-03-24; the source has changed as
+> recently as 2026-07-27, so claims here may already have been retracted there.
+> Regenerating needs org-export (emacs or pandoc).
+
 - [Purpose](#orgde6edf9)
 - [The Five Stages](#orga92e01f)
   - [Stage 1: Deep Research](#orgb833a67)

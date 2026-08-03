@@ -1,3 +1,9 @@
+> **⚠ GENERATED ARTIFACT — STALE. Read `MASTER_ROADMAP.org` instead.**
+> `MASTER_ROADMAP.org` is the canonical source (`workflow.md`: "ALL edits MUST go to the
+> `.org`"). This export was last regenerated 2026-03-24; the source has changed as
+> recently as 2026-08-02, so claims here may already have been retracted there.
+> Regenerating needs org-export (emacs or pandoc).
+
 - [Purpose](#org15bdd7a)
 - [Active Series](#org502485c)
   - [Propagator Migration  — *Bringing elaboration state onto the propagator network*](#org430a7d0)

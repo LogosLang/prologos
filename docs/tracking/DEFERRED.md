@@ -2304,20 +2304,33 @@ actual problem. Three confirmed instances:
 
 ---
 
-## Generated `.md` twins are STALE relative to their canonical `.org` sources (captured 2026-07-25, X.close doc-truth)
+## 🔶 PARTIAL `PLACEHOLDER10` — generated `.md` twins are STALE (captured 2026-07-25; hazard closed 2026-08-02, regeneration + keep/delete still open)
 
-`workflow.md` states `.org` is canonical and the `.md` is a generated export.
-The X.close doc-truth sweep corrected the overstated performance claims in
-`LANGUAGE_VISION.org` and `RELATIONAL_LANGUAGE_VISION.org`; their `.md` twins
-still carry the OLD text (`grep -c "30ms" RELATIONAL_LANGUAGE_VISION.md` → 2).
+**Broader than the entry had it: ELEVEN stale exports, not two**, and some by
+five months — `DEVELOPMENT_LESSONS.md` last regenerated 2026-02-25 against an
+`.org` edited 2026-07-28, `MASTER_ROADMAP.md` 2026-03-24 against a source
+edited today. `tools/check-doc-twins.sh` reports them (11 of 70 `.org` files
+have an export; staleness judged by LAST COMMIT TIME, not mtime — a fresh clone
+gives every file the same mtime, so mtime reports nothing on CI and everything
+locally).
 
-**Why it matters**: an agent (or a person) grepping the principles directory can
-land on the `.md` and read a claim the `.org` has already retracted — precisely
-the failure the sweep was fixing. The twins need regeneration from org-export,
-and it is worth deciding whether the `.md` exports should exist in-tree at all
-(they have no consumer that the `.org` doesn't serve).
+**The stated harm is closed.** Each stale export now opens with a banner naming
+its `.org`, the two dates, and the fact that its claims may already have been
+retracted at the source. Someone who greps the principles directory and lands
+on the `.md` is told, at the top of the file, that they are reading a stale
+generated artifact.
 
----
+**Still open, and deliberately not decided here:**
+
+1. **Regeneration.** Needs org-export; neither emacs nor pandoc is present in
+   this environment, so it cannot be done from here.
+2. **Whether the exports should be in-tree at all.** The entry's own question,
+   and it is the owner's — deleting twelve committed documents is not a call to
+   make as a side effect of a staleness sweep. If they go, the checker and the
+   banners go with them.
+
+The checker exits 0 by design: it REPORTS. Gating on it would gate work on a
+tool the environment may not have.
 
 ## ✅ RESOLVED (2026-07-25, X.close ruling Q_N1) — the goal keywords now take the implicit solve
 

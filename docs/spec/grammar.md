@@ -1,3 +1,9 @@
+> **⚠ GENERATED ARTIFACT — STALE. Read `grammar.org` instead.**
+> `grammar.org` is the canonical source (`workflow.md`: "ALL edits MUST go to the
+> `.org`"). This export was last regenerated 2026-02-27; the source has changed as
+> recently as 2026-07-02, so claims here may already have been retracted there.
+> Regenerating needs org-export (emacs or pandoc).
+
 - [Introduction](#org68bb08e)
 - [Lexical Grammar](#orgad4de3d)
   - [Comments](#orgdb987f9)
