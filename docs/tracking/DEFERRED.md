@@ -1204,7 +1204,7 @@ skip+warn policy; these lift the skips / harden the substrate.
 
 ---
 
-## ✅ CLOSED `PLACEHOLDER9` — bench-ab.rkt `--refs` for multi-way comparison (issue #63, fixed 2026-08-02)
+## ✅ CLOSED `6e38d214` — bench-ab.rkt `--refs` for multi-way comparison (issue #63, fixed 2026-08-02)
 
 `--refs HEAD~1` for A/B, `--refs A,B,C` for multi-way, `--md FILE` for a
 markdown table, `--output` for JSON. One GIT WORKTREE per ref, built there and
