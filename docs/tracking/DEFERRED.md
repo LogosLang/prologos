@@ -1833,9 +1833,31 @@ pass); the WS pipeline does not reach it. Unchanged since 2026-03-08.
 - Fix requires deeper integration between narrowing substitution env and DT body traversal
 - Source: C3 analysis, 2026-03-08
 
-### Multi-arity `|` relation variants — zero-arg solve path
-- `solve-goal`'s zero-arg path infers arity from first variant only
-- Fix: iterate all variants or require explicit args for multi-arity rels
+### ⬜ NOT REPRODUCIBLE — Multi-arity `|` relation variants — zero-arg solve path
+
+Filed as "`solve-goal`'s zero-arg path infers arity from first variant only;
+fix: iterate all variants or require explicit args for multi-arity rels".
+Probed 2026-08-03 and **the trigger is not constructible at HEAD**, so the fix
+has nothing to fix. Reclassified rather than deleted, because the underlying
+single-`arity` field is real and the note is where this belongs if variants
+ever become arity-heterogeneous.
+
+What the probes show:
+- **A `defr` has ONE param header, so its variants cannot differ in arity.**
+  `defr p [?x]` with a `|| 2 3` row does not create a 2-ary variant — the row
+  CHUNKS by the header arity into rows `2` and `3` (probed: `1 2 3`), which is
+  the documented facts-block behaviour.
+- **Redefining `defr p` at a different arity REPLACES rather than
+  accumulates**, so there is still exactly one arity per name. A stale-arity
+  query then gets the guided SWI-style error — "Unknown procedure: p/1 —
+  however, there are definitions for: p/2" — not a silent wrong answer.
+- **The zero-arg path works** against whichever relation is current:
+  `(p)` on a 1-ary `p` returns one empty row per fact.
+- `relation-info-arity` has exactly ONE reader in the tree
+  (`relation-register`, rebuilding the struct); nothing dispatches on it.
+
+Re-open only with a repro in which one relation NAME carries variants of
+differing arity.
 
 ---
 
