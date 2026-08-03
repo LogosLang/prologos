@@ -1204,6 +1204,16 @@
                       (stx->datum (car args))
                       "let: malformed let expression")
                   #f)]
+    ;; …and the same channel for `.( )` mixfix. Its three failure modes
+    ;; (incomparable precedence groups, an empty `.( )`, a trailing token) used
+    ;; to RAISE out of `preparse-expand-all` and cost the whole file. Same
+    ;; (pair? args) guard, LOAD-BEARING for the same reason.
+    [(and (symbol? head) (eq? head '$mixfix-error))
+     (parse-error loc
+                  (if (and (pair? args) (string? (stx->datum (car args))))
+                      (stx->datum (car args))
+                      "mixfix: malformed .( ) expression")
+                  #f)]
     ;; …and the raw retired sentinels (targetless shapes the fold passes through)
     [(and (symbol? head) (eq? head '$dot-key))
      (retired-selection-error 'dot-key (and (pair? args) (stx->datum (car args))) loc)]

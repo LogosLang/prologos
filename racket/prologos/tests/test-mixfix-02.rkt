@@ -267,18 +267,26 @@
   ;; a :: b + c — :: has right-bp = 20, + has left-bp = 20
   ;; parse: a as lhs, see :: (bp 20 > 0), consume, recurse with min-bp=20, context-group=cons
   ;;   in recursion: parse b, see + (bp 20, context-group=cons), incomparable → error!
-  (check-exn #rx"no defined precedence relationship"
-    (lambda () (preparse-expand-form '($mixfix a :: b + c)))))
+  ;; A marker datum, not a raise: see test-mixfix-01's empty-expression case.
+  (define result (preparse-expand-form '($mixfix a :: b + c)))
+  (check-equal? (car result) '$mixfix-error (format "got: ~v" result))
+  (check-true (regexp-match? #rx"no defined precedence relationship" (cadr result))
+              (format "got: ~v" result)))
 
 ;; --- Error diagnostics ---
 
 (test-case "pratt: error on empty mixfix"
-  (check-exn #rx"Empty"
-    (lambda () (preparse-expand-form '($mixfix)))))
+  (define result (preparse-expand-form '($mixfix)))
+  (check-equal? (car result) '$mixfix-error (format "got: ~v" result))
+  (check-true (regexp-match? #rx"Empty" (cadr result)) (format "got: ~v" result)))
 
 (test-case "pratt: error on trailing operator"
-  (check-exn #rx"Unexpected end"
-    (lambda () (preparse-expand-form '($mixfix a +)))))
+  ;; `parse-primary`'s end-of-input error is a user syntax error too, so it is
+  ;; on the same channel — found because the first pass converted only the three
+  ;; raises in `parse-expr` and this one kept aborting.
+  (define result (preparse-expand-form '($mixfix a +)))
+  (check-equal? (car result) '$mixfix-error (format "got: ~v" result))
+  (check-true (regexp-match? #rx"Unexpected end" (cadr result)) (format "got: ~v" result)))
 
 ;; ========================================
 ;; I. Phase 4 tests: pattern matching with .(...)

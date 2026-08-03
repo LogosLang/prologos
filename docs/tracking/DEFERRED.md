@@ -534,21 +534,37 @@ Still Num Track 1 territory, as originally filed. What has changed is that it
 is now a three-line repro with a named mechanism and a demonstrated runtime
 violation, instead of a suspicion.
 
-## 🐛 DEFECT — live `.( )` mixfix errors RAISE and abort the whole file (found 2026-07-28, the D4.P1a adversarial verify)
+## ✅ CLOSED `PLACEHOLDER6` — live `.( )` mixfix errors RAISE and abort the whole file (filed 2026-07-28, fixed 2026-08-02)
 
-An incomparable-precedence-group error or an empty `.( )` raises out of
-`preparse-expand-all` (macros.rkt `parse-expr` → `pratt-parse` →
-`preparse-expand-form` → driver.rkt `process-file-inner`) and kills the file
-with ZERO result lines. Repro: a file containing `.( 1 + 2 )` /
-`.( 1 :: '[2 3] ++ '[4] )` / `.( 3 + 4 )` → exit 1, no output, uncaught
-`mixfix: Operators from groups 'additive' and 'cons' have no defined
-precedence relationship`. Byte-identical at HEAD — **not** a P1a regression.
-Notable because it is the SAME failure class D4 ruling Q_L4 documents for the
-old `$mixfix-retired` raiser, on the surviving mixfix path: **D4.P1a built the
-per-command marker seat (`$retired-selection` → `parse-error` VALUE,
-parser.rkt) that these errors should route through.** Fix candidate: emit a
-marker/error-value from the pratt path instead of raising. Recorded in D4
-§5.P1a close notes.
+Fixed via the seat the entry named. `expand-mixfix-form` collapses its own
+failures to a `($mixfix-error msg)` datum; parser.rkt turns that into a
+`parse-error` VALUE with the form's location. Same channel as LET P1's
+`$let-error` — reused rather than duplicated, so there is one mechanism for
+"a preparse expander failed" and not two.
+
+```
+0: a : Int defined.
+1: ERROR: Operators from groups 'additive' and 'cons' have no defined precedence relationship — use [] for explicit grouping
+2: b : Int defined.
+--- 1 errors ---
+```
+
+Genuinely PER-COMMAND, unlike the reader raises: expansion is per-form, so the
+commands before AND after the bad one still run. Pinned in both directions —
+each failure mode reports, and a well-formed `.( 1 + 2 )` still evaluates.
+
+A distinguished `exn:mixfix` struct (mirroring `exn:let-syntax`) rather than
+catching `exn:fail?`, so a genuine Racket-level bug inside the parse still
+surfaces as itself instead of being reported to the user as a syntax error.
+
+**Five raise sites, not three.** The first pass converted the three in
+`parse-expr` and left `parse-primary`'s two, which kept aborting — caught
+because a test pinned the surviving raise. Converting a family and stopping at
+the ones you happened to grep for is the same shape as the walker defects
+elsewhere in this file.
+
+Three tests that pinned the raise are updated to pin the marker; that is the
+change the entry existed to make, not collateral.
 
 ## 🔶 PARTIAL `5da580f9` — the tilde-number reader diagnostic (filed 2026-07-28; the silence is fixed, the per-command routing is not)
 

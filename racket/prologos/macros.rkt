@@ -1157,6 +1157,7 @@
        (not (eq? x '$nil-dot-key))      ; RETIRED sentinel (D4.P1a) — still emitted by the reader
        (not (eq? x '$retired-selection)) ; D4.P1a retirement marker (parser converts to guided error)
        (not (eq? x '$let-error))        ; LET P1 syntax-failure marker (parser converts to per-command parse error)
+       (not (eq? x '$mixfix-error))     ; mixfix syntax-failure marker (same channel as $let-error)
        (not (eq? x '$let-block))        ; LET P3 aligned-block sentinel (reader-validated; expand-let consumes)
        (not (eq? x '$goal-rhs))         ; SolveCarrier P2: let binding-RHS paren marker (parser consumes)
        (not (eq? x '$let-noop-body))    ; top-level let: bodyless placeholder (let-bindings->nested-fn consumes)
@@ -4972,6 +4973,19 @@
   (raise (exn:let-syntax (apply format fmt args)
                          (current-continuation-marks))))
 
+;; The same shape for `.( )` mixfix, and for the same reason. `pratt-parse` and
+;; `expand-mixfix-form` raised plain `(error 'mixfix …)`, which escapes through
+;; `preparse-expand-all` and takes the WHOLE FILE with it: no results, no error
+;; count, a raw Racket `context...:` dump. A distinguished struct is what lets
+;; `expand-mixfix-form` catch its OWN failures without also swallowing a genuine
+;; Racket-level bug from somewhere inside the parse — the distinction
+;; `exn:let-syntax` was minted for, and the reason not to reach for `exn:fail?`.
+(struct exn:mixfix exn:fail () #:transparent)
+
+(define (mixfix-error fmt . args)
+  (raise (exn:mixfix (apply format fmt args)
+                     (current-continuation-marks))))
+
 (define (expand-let datum)
   (with-handlers ([exn:let-syntax?
                    (lambda (e) `($let-error ,(exn-message e)))])
@@ -6515,7 +6529,10 @@
     (define tok (peek))
     (cond
       [(not tok)
-       (error 'mixfix "Unexpected end of expression in .{...}")]
+       ;; `mixfix-error`, not `error`: this is a user syntax error like the
+       ;; three below it, and it belongs on the same per-command channel rather
+       ;; than escaping `preparse-expand-all` and costing the file.
+       (mixfix-error "Unexpected end of expression in .{...}")]
       ;; Unary minus: - followed by non-operator
       [(and (symbol? tok) (eq? tok '-)
             (let ([next-pos (+ 1 (unbox pos))])
@@ -6534,7 +6551,7 @@
        (advance!)
        tok]
       [else
-       (error 'mixfix "Expected expression, got operator: ~a" tok)]))
+       (mixfix-error "Expected expression, got operator: ~a" tok)]))
 
   ;; Build operator result, respecting swap? flag for > and >=
   (define (make-op-result op lhs rhs)
@@ -6597,9 +6614,9 @@
             (when (and context-group (not (eq? context-group op-grp)))
               (define cmp (compare-groups op-grp context-group groups))
               (when (eq? cmp 'incomparable)
-                (error 'mixfix
-                       (format "Operators from groups '~a' and '~a' have no defined precedence relationship — use [] for explicit grouping"
-                               op-grp context-group))))
+                (mixfix-error
+                 "Operators from groups '~a' and '~a' have no defined precedence relationship — use [] for explicit grouping"
+                 op-grp context-group)))
             ;; Chained comparison detection: if we have a last-chain-rhs (from a previous
             ;; comparison) and the current op is also comparison, chain.
             (cond
@@ -6638,10 +6655,10 @@
                (loop result new-chain-rhs)])])])))
 
   (if (= len 0)
-      (error 'mixfix "Empty .( ) mixfix expression")
+      (mixfix-error "Empty .( ) mixfix expression")
       (let ([result (parse-expr 0)])
         (unless (at-end?)
-          (error 'mixfix "Unexpected token after expression: ~a" (peek)))
+          (mixfix-error "Unexpected token after expression: ~a" (peek)))
         result)))
 
 ;; --- Effective operator table (merges builtin + user-defined) ---
@@ -6677,10 +6694,20 @@
   ;; consume ("Unexpected token after expression"). Folding it to (map-get p :x)
   ;; first makes it an ordinary operand. Any residue in pratt-parse's result is
   ;; cleaned by the caller's re-expansion of this macro's output.
+  ;; A mixfix failure is a PER-COMMAND parse error, not a whole-file abort. The
+  ;; run collapses to a single `($mixfix-error msg)` datum carrying the real
+  ;; message; parser.rkt turns it into a `parse-error` VALUE with this form's
+  ;; loc. Same channel as `$let-error`, for the same reason and by the same
+  ;; precedent — an unhandled raise here escapes `preparse-expand-all` and costs
+  ;; every command in the file, including the ones already read.
+  ;;
+  ;; ONLY `exn:mixfix?`: a genuine Racket-level bug inside the parse must still
+  ;; surface as itself rather than be reported to the user as a syntax error.
   (define tokens (rewrite-dot-access (cdr datum)))
-  (if (null? tokens)
-      (error 'mixfix "Empty .( ) mixfix expression")
-      (pratt-parse tokens (effective-operator-table) (effective-precedence-groups))))
+  (with-handlers ([exn:mixfix? (lambda (e) `($mixfix-error ,(exn-message e)))])
+    (if (null? tokens)
+        (mixfix-error "Empty .( ) mixfix expression")
+        (pratt-parse tokens (effective-operator-table) (effective-precedence-groups)))))
 
 ;; Track 10 Phase 2c: register built-in expanders in the lookup table FIRST,
 ;; then register them in the preparse registry (which stores symbols, not closures).

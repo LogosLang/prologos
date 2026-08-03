@@ -107,3 +107,39 @@
               (format "got: ~v" stray-amp))
   (check-true (string-contains? (format "~a" stray-amp) "a : Int defined.")
               (format "the earlier command was lost: ~v" stray-amp)))
+
+;; ----------------------------------------------------------------
+;; `.( )` mixfix failures are per-command
+;; ----------------------------------------------------------------
+;;
+;; These raised out of `preparse-expand-all` and cost the whole file: no
+;; results, no error count, a raw Racket `context...:` dump. Unlike the reader
+;; raises above, this one IS recoverable per-command — expansion is per-form, so
+;; the failing form can collapse to a marker datum and the rest of the file runs.
+;;
+;; Same channel as LET P1's `$let-error`, deliberately: one mechanism for
+;; "a preparse expander failed", not a second one alongside it.
+
+(test-case "reader/an incomparable-precedence mixfix errors, and only there"
+  (define results (run-file-lines "ns mx\ndef a := 1\n.( 1 :: '[2 3] ++ '[4] )\ndef b := 2\n"))
+  (check-true (list? results))
+  (define text (string-join (map (lambda (r) (format "~a" r)) results) "\n"))
+  (check-true (string-contains? text "no defined precedence relationship")
+              (format "got: ~v" results))
+  (check-true (string-contains? text "a :") (format "the command BEFORE was lost: ~v" results))
+  (check-true (string-contains? text "b :") (format "the command AFTER was lost: ~v" results)))
+
+(test-case "reader/an empty .( ) errors, and only there"
+  (define results (run-file-lines "ns mx2\ndef a := 1\n.( )\ndef b := 2\n"))
+  (check-true (list? results))
+  (define text (string-join (map (lambda (r) (format "~a" r)) results) "\n"))
+  (check-true (string-contains? text "Empty .( ) mixfix expression") (format "got: ~v" results))
+  (check-true (string-contains? text "a :") (format "the command BEFORE was lost: ~v" results))
+  (check-true (string-contains? text "b :") (format "the command AFTER was lost: ~v" results)))
+
+(test-case "reader/a WELL-FORMED mixfix still evaluates"
+  ;; The conversion must not have turned working mixfix into an error channel.
+  (define results (run-file-lines "ns mx3\ndef a := 1\n.( 1 + 2 )\ndef b := 2\n"))
+  (check-true (list? results))
+  (check-false (ormap prologos-error? results) (format "expected no errors: ~v" results))
+  (check-true (string-contains? (format "~a" results) "3") (format "got: ~v" results)))
