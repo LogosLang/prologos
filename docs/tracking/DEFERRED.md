@@ -1204,19 +1204,26 @@ skip+warn policy; these lift the skips / harden the substrate.
 
 ---
 
-## Tooling: Extend bench-ab.rkt with --refs for multi-way A/B/C+ comparison
+## ✅ CLOSED `PLACEHOLDER9` — bench-ab.rkt `--refs` for multi-way comparison (issue #63, fixed 2026-08-02)
 
-- **GitHub Issue**: [#63](https://github.com/LogosLang/prologos/issues/63) (PRIMARY surface; queryable; linkable from PRs)
-- **MASTER_ROADMAP.org**: forward-references at OE Series Track 1 (weighted parsing) + PReduce Track 4 (cost-guided extraction)
-- **Origin**: PPN 4C Tropical Quantale Addendum 1C-vi A/B/C report (2026-05-16; `docs/tracking/2026-05-16_TROPICAL_1C_VI_ABC_REPORT.md`); design doc §13.7 cross-track note flagged as "small tool enhancement"
-- **Scope**: `tools/bench-ab.rkt` currently supports A/B (`--ref HEAD~1`); extend with `--refs` accepting multiple commit refs for multi-way comparison; markdown table generation option
-- **Consumed by**: OE Series Track 1 (weighted parsing with cost-extraction variants); PReduce Track 4 (cost-guided extraction with multiple strategies); future PAR tracks (parallel scheduler variants comparison)
-- **Not in scope for 1C-vi**: A and B baselines for THIS addendum's report are captured data files (OLD struct-field counter RETIRED at 1C-iv-b; live A re-measurement structurally impossible); a markdown report sufficed (β3 resolution per §10.0.7)
-- **Multi-surface tracking discipline**: this entry is part of a dual-surface pattern (Issue + MASTER_ROADMAP forward-refs + this entry, all cross-referenced) — codification candidate from §10.0.7 ("Multi-surface tracking with cross-references is more durable than DEFERRED.md alone"; user observation: "capturing in deferred is not meaningful follow up and likely will be work lost")
-- **Estimated scope**: ~50-100 LoC + tests
-- **Not blocked on anything** — can be implemented when a consuming track has the multi-variant comparison need
+`--refs HEAD~1` for A/B, `--refs A,B,C` for multi-way, `--md FILE` for a
+markdown table, `--output` for JSON. One GIT WORKTREE per ref, built there and
+run from there; the benchmark PROGRAMS always come from the working tree, so
+what is compared is the compiler and not the input. No stash and no checkout —
+the working tree is never touched, which is the standing rule. A ref that fails
+to build is reported and EXCLUDED rather than silently measured against the
+working tree's driver.
 
----
+**This closed a live hazard, not just a gap.** The tool DOCUMENTED a `--ref`
+flag it never had: the header advertised it, `workflow.md` instructed it, and
+`run-ab-comparison` ran the B leg against the same tree with a comment saying
+so ("same code for now; with --ref would checkout different code"). Anyone
+following the documentation measured identical code twice and read the
+difference as a result. Both rules files had been amended to warn that the flag
+did not exist; they now describe the one that does.
+
+Consumers named in the original entry (OE Track 1, PReduce Track 4, PAR
+scheduler variants) are unblocked.
 
 ## HIGH PRIORITY: Propagator/Cell Allocation Efficiency Track
 
