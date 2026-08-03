@@ -50,7 +50,7 @@
 ;;;
 ;;;     LEGACY      428/1454 = 29%   (1026 divergences)
 ;;;     DATUM       954/1162 = 82%   ( 208 divergences)
-;;;     RAW-DATUM  1542/1568 = 98%   (  26 divergences)
+;;;     RAW-DATUM  1544/1558 = 99%   (  14 divergences)  [after the macros.rkt fix]
 ;;;
 ;;; The DATUM->RAW-DATUM jump has one cause. `tree-node->stx-elements` FLATTENS a
 ;;; node and RE-GROUPS it, and the `$…` sentinels are minted by that regrouping
@@ -62,13 +62,23 @@
 ;;; and `$list-literal`/`$brace-params`/`$vec-literal`/`$angle-type` all collapse
 ;;; to bare applications. Feeding the UNGROUPED node fixes every one of them.
 ;;;
-;;; ⚠ THE RESIDUAL 26 ARE STRUCTURAL, NOT COSMETIC — I guessed wrong and checked.
-;;; They look like generated-name noise (`$Add-A`, `$Eq-A`, `$Lattice-A`) but are
-;;; not: `preparse: $Add-A` vs `tree: x` is an implicit DICTIONARY BINDER that
-;;; whole-file `preparse-expand-all` inserts from cross-form `spec`/trait context
-;;; and per-form `preparse-expand-single` cannot see. That is the one defect class
-;;; no converter fix reaches; it needs the tree spine to have whole-file expansion
-;;; context. So 98% is the realistic ceiling for the datum path as architected.
+;;; ⚠ THE 98% FIGURE ABOVE IS SUPERSEDED — it is now 99% (14 divergences), and the
+;;; correction matters more than the number. The residual presented as implicit
+;;; dictionary binders (`$Add-A`, `$Eq-A`, `$Lattice-A`). This header previously
+;;; asserted they were a STRUCTURAL CEILING: "whole-file `preparse-expand-all`
+;;; inserts these from cross-form spec context and per-form
+;;; `preparse-expand-single` cannot see it, so 98% is the realistic maximum."
+;;;
+;;; THAT WAS REASONING, NOT MEASUREMENT, AND IT WAS WRONG. Running the two
+;;; expanders back to back on the same datum with registries populated — exactly
+;;; the state the tree spine runs in — showed `-single` performing the spec
+;;; injection FINE and simply leaving the `where` clause un-discharged.
+;;; `maybe-inject-where` is called twice in `-all` and was called zero times in
+;;; `-single`. Not missing information: a MISSING PASS (fixed, macros.rkt; pinned
+;;; by tests/test-preparse-expand-parity.rkt). Mirroring it took 26 -> 14.
+;;;
+;;; The lesson for anyone reading a number out of this tool: a plausible
+;;; explanation for a residual is not a measurement of it. Run the experiment.
 ;;;
 ;;; Usage:
 ;;;   racket tools/spine-census.rkt FILE ...           — all three modes

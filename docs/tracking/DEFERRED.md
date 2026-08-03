@@ -3223,22 +3223,33 @@ correcting the key REGRESSES the corpus (errors 359→724, 32 test files fail), 
 the spine is now held shut on purpose at `tree-spine-admitted?` (driver.rkt),
 pinned by `tests/test-dual-spine-merge-key.rkt`. These are the residuals.
 
-1. **⭐ THE DECISION: commission the tree spine, or retire the merge.** Everything
-   else here is downstream of it, and it is now decidable with numbers rather
-   than argument. `racket tools/spine-census.rkt <files>` measures agreement
-   where both spines produced a surf:
+1. **⭐ THE DECISION — and it is NOT the binary this entry was first filed under.**
+   Originally written as "commission the tree spine, or retire the merge". The
+   census then established that `parse-eval-tree-for-cell` is **not a parser**: it
+   converts tree → datum → `parse-datum`, *the same parser preparse uses*. So the
+   system does not have two parsers competing. It has **ONE parser and TWO
+   READERS**, and the merge is comparing a parser against itself.
+
+   The real option is therefore **UNIFICATION**: one parser (`parse-datum`), two
+   readers, delete the 1,971-line legacy `parse-*-tree` family, and retire the
+   merge — because comparing `parse-datum(readerA)` against `parse-datum(readerB)`
+   has no adjudication left to do. Any residual difference is a **reader** bug,
+   which belongs in a test, not in a runtime merge. That is the completeness
+   answer: one atom table, one head dispatch, **by construction**, which is why
+   all 14 defect classes become impossible rather than fixed.
+
+   `racket tools/spine-census.rkt <files>` measures agreement where both spines
+   produced a surf:
 
    | tree-spine mode | agreement | divergences |
    |---|---|---|
    | legacy (`parse-*-tree`, a 2nd PARSER) | 428/1454 = 29% | 1026 |
    | datum (tree-as-READER, grouped node) | 954/1162 = 82% | 208 |
-   | **raw-datum** (tree-as-READER, RAW node) | **1542/1568 = 98%** | **26** |
+   | raw-datum (tree-as-READER, RAW node) | 1542/1568 = 98% | 26 |
+   | **raw-datum + the macros.rkt where-pass fix** | **1544/1558 = 99%** | **14** |
 
-   The case for RETIRE is that at 98% the tree spine is *nearly preparse by
-   construction* — same parser, same source — so what it contributes to the
-   MERGE is unclear, and the merge's own comment calls it "a throwaway bridge"
-   that PPN Track 3–4 dissolves. The case for COMMISSION is that 98% is close and
-   the remaining work is bounded. **Not decided here; it is an owner ruling.**
+   Still an owner ruling — but the thing to rule on is unification vs. keeping
+   preparse authoritative forever, not "commission vs retire".
 
 2. **The `current-raw-node` production change — measured, NOT landed.** It is the
    designed hook (tree-parser.rkt reads `(or (current-raw-node) node)` for the
@@ -3246,17 +3257,23 @@ pinned by `tests/test-dual-spine-merge-key.rkt`. These are the residuals.
    path simply binds it `#f` (driver.rkt). Setting it is what takes agreement
    82%→98%. **Deliberately not landed**: with the admission gate shut it changes
    nothing observable, so landing it alone is machinery with nothing behind it —
-   the exact shape CIU T6 D4.P4c-3 already hit. It belongs WITH item 1's ruling.
+   the exact shape CIU T6 D4.P4c-3 already hit. It is step 1 of unification, not a
+   standalone change.
 
-3. **The 98% ceiling is structural, and I first mis-called it.** The residual 26
-   present as generated-name noise (`$Add-A`, `$Eq-A`, `$Lattice-A`) and I
-   assumed gensym numbering; checking showed `preparse: $Add-A` vs `tree: x` —
-   an implicit **dictionary binder** that whole-file `preparse-expand-all`
-   inserts from cross-form `spec`/trait context and per-form
-   `preparse-expand-single` cannot see. No converter fix reaches this class. Open
-   question: can the tree spine be given whole-file expansion context at all, or
-   is 98% permanent? They cluster in 7 files (arithmetic 5, map-tutorial-demo 3,
-   conversions 2, then singles) — a small, concrete starting set.
+3. **⚠ THE "98% CEILING" WAS WRONG — corrected 2026-08-02, and the correction is
+   the useful part.** This item originally read: *"the residual 26 are structural;
+   whole-file `preparse-expand-all` inserts the dict binders from cross-form spec
+   context and per-form `preparse-expand-single` cannot see it; open question
+   whether 98% is permanent."* That was reasoning, not measurement, and it was
+   **refuted**: `-single` gets the spec injection fine and merely left the `where`
+   clause un-discharged, because it skipped `maybe-inject-where` — a pass `-all`
+   runs twice. Fixed (`41697413`), 26 → 14, pinned by
+   `tests/test-preparse-expand-parity.rkt`.
+
+   **The open question is now the remaining 14**, a different and smaller set:
+   `surf-map-literal` ×3, `surf-solve` ×3, `surf-nat-type` ×1, and 7 bound-variable
+   name differences. Nobody has characterised them. Do NOT assume they are
+   structural — that assumption has now been wrong twice on this exact question.
 
 4. **The error-recovery branch is UNGUARDED, and it is the merge's most
    defensible future role.** `(or tree-match s)` (driver.rkt) has no
