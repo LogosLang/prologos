@@ -910,6 +910,47 @@ residue-letter entries — divergent gates/double-count):
 
 1. **Container/nested-seal traversal depth** (the driver top-node class — def-forcing
    + eval arm see only top nodes; a seal nested in a pair/list escapes both).
+
+   **Re-probed 2026-08-03 — still exactly true, and here is the shape:**
+
+   ```
+   schema Pos
+     :n Int :check (> _ 0)
+
+   def top    := [Pos {:n 0}]          ;; ERROR: panic … forced at commit  ✓
+   def inlist := '[[Pos {:n 0}]]       ;; inlist : (List Pos) defined.     ✗
+   def inpair := {:a [Pos {:n 0}]}     ;; inpair : {:a Pos} defined.       ✗
+   def infn   := [fn [x : Int] [Pos {:n 0}]]  ;; defined.                  ✗
+   ```
+
+   Deliberately NOT built, and the reasons are worth stating rather than
+   leaving as a gap:
+
+   - **The lambda case must stay out.** A seal under a binder may reference the
+     bound variable, so forcing it at commit means evaluating a body that has
+     not been applied. Any walk here has to route around the binder inventory
+     (`substitution.rkt`'s `shift`: lam / Pi / Sigma / reduce) — the same
+     discipline `pipeline.md` § Exhaustive Walkers states for depth-routing
+     walkers. That is not the hard part, but it does mean the walk cannot be
+     the naive generic one.
+   - **`expr-subfields` is not sufficient.** It reads transparent struct fields,
+     so it finds the seal in a cons SPINE (`inlist`) but NOT in `{:a …}` — a
+     champ's payload is a Racket data structure, not an expr field. Covering
+     the map/set/vector carriers means the container-aware deep walk, which is
+     the same family as this session's `occurs?` / `conv-nf` containment fixes.
+   - **It runs on the commit path for EVERY def**, where today's cost is a
+     cheap shape gate (`seal-application-body?`). A full structural walk of
+     every def body is a different order of expense, and it should be measured
+     before it is added, not after.
+   - The charter's own position is that **runtime discharge for nested seals is
+     `validate`'s job** (F1b.5) — and validate now descends properly (items 2,
+     3 and 4-nested, all 2026-08-03), so the alternative it names is
+     substantially stronger than it was when this bound was set.
+
+   What would change the calculus: a real program committing a bad nested seal
+   in practice. Until then the honest statement is that the commit-time forcer
+   is top-node-only BY DESIGN, and the four-line repro above is the test to
+   write the day that design changes.
 2. ✅ **DONE 2026-08-03 — tier-2 element recursion.** The entry's own honest
    reason was the fix's shape: `ctor-meta` already carried params +
    field-types, and what was unbuilt was the param-substitution + recursion +
