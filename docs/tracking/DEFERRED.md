@@ -2386,7 +2386,7 @@ control.
 
 ## Infrastructure / Performance
 
-### 🔶 PARTIAL — Compiled Module Cache (BUILT; and probing it 2026-08-03 found a WRONG-ANSWER bug)
+### ✅ RESOLVED — Compiled Module Cache (BUILT already; probing it 2026-08-03 found a WRONG-ANSWER bug, fixed same day)
 
 **Built and on by default.** The `.pnet` cache is the feature this entry asked
 for: `pnet-path-for-module` keys by module name, `pnet-stale?` gates on file
@@ -2427,19 +2427,40 @@ recorded in `pnet-serialize.rkt` (v3→v7, several of them explicitly "stale
 cache made the suite green/red wrongly") are the same class hitting from
 different directions.
 
-**Two candidate fixes, neither taken**:
-1. *Blunt, correct, cheap to write*: extend `infrastructure-stale?` to also
-   compare against the newest mtime of any `.prologos` under the lib paths —
-   the exact precedent `driver_rkt.zo` already sets. Cost: one stdlib edit
-   invalidates all ~55 prelude caches (~3-4 s regeneration, per the v4→v5
-   note's own measurement).
-2. *Narrow, better, more work*: record each module's dependency list in its
-   `.pnet` at serialize time and check those sources transitively. Note the
-   dep-edges field WAS present and was retired as write-only (PPN 4C Addendum
-   Phase 4B.1), so this means re-adding it with a consumer this time.
+**✅ FIXED 2026-08-03 — option 1 taken.** `pnet-stale?` now also consults
+`lib-sources-stale?`: the newest mtime of any `.prologos` under the lib paths,
+compared against the cache file. Deliberately blunt, and choosing it is not a
+new policy — it is the SAME SHAPE as the `driver_rkt.zo` check directly above
+it, applied to the second input class. A `.pnet` is a function of the Racket
+compiler AND of every `.prologos` that fed it; the zo check already answers
+"the compiler changed", this answers "a library source changed".
 
-Choosing between "always correct, sometimes slow" and "correct with
-bookkeeping" is a build-policy call, hence filed rather than taken.
+Cost, measured: the scan is ~60 ms once per process (memoized), and is paid
+only when a lib source is actually edited. Suite 542 files / 10472 tests at
+212 s, inside the documented 5-10% variance band, and a warm run still reports
+"55 prelude module caches ready" — the cache is still being HIT, which is the
+thing a careless fix would have destroyed.
+
+Option 2 (record each module's dep list in its `.pnet` and walk it
+transitively) remains the better answer if the blunt invalidation ever bites
+in practice; it needs the dep-edges field re-added with a consumer, having been
+retired as write-only at PPN 4C Addendum Phase 4B.1.
+
+**Two implementation traps, both caught by tests rather than by reasoning**:
+- **The memo must be KEYED BY THE LIB PATHS.** `current-lib-paths` genuinely
+  varies within a process — every test that builds a temp lib rebinds it — so
+  a single unkeyed box answers for the wrong directory set. The first cut used
+  one box and turned `test-pnet-registry-restore`'s intended cache HITS into
+  misses, failing two assertions written precisely to catch "a MISS produces
+  the correct answer and proves nothing".
+- **A test for this needs THREE phases, not two.** "Edit → new answer" also
+  passes if the cache never hits at all — which is the easiest way to "fix"
+  this and the worst. `tests/test-pnet-dep-staleness.rkt` asserts a warm run
+  still serves the OLD answer from cache BEFORE any edit, and only then that
+  the edit is seen. It also resets the MODULE REGISTRY per run: a module
+  already registered is never re-loaded from disk at all, so a shared registry
+  makes phase 3 report phase 1's answer regardless of the cache. Verified to
+  fail against the unfixed code.
 
 - Source: `docs/tracking/2026-02-19_PIPE_COMPOSE_AUDIT.md`
 

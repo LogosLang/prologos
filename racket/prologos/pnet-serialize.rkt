@@ -96,6 +96,7 @@
          relink-foreign-marshallers!
          foreign-module-path->require-spec
          pnet-stale?
+         reset-lib-source-staleness-cache!
          pnet-path-for-module
          ;; The format's shape, exported so a test can pin it — it was a bare
          ;; literal inside two functions that disagreed by construction (31 on
@@ -837,11 +838,90 @@
        (> (file-or-directory-modify-seconds driver-zo-path)
           (file-or-directory-modify-seconds pnet-path))))
 
+;; ============================================================
+;; Transitive-source staleness (2026-08-03)
+;; ============================================================
+;;
+;; `source-hash-for-module` compares ONE file's mtime — the module's own — so a
+;; module whose DEPENDENCY changed is reported fresh, and its cached env
+;; snapshot still carries the dependency's OLD contributions. That is not a
+;; freshness nicety; it is a silent WRONG ANSWER. Verified before fixing:
+;;
+;;   base:  defn basev [x] [int+ x 1]
+;;   mid:   imports base;  defn midv [x] [basev x]
+;;   user:  imports mid;   def r := [midv 10]        => 11
+;;
+;; edit `base` to `[int+ x 100]`, re-run the USER file only:
+;;   cache ON, mid.pnet present  -> 11   ← the pre-edit answer
+;;   cache OFF                   -> 110
+;;   cache ON, mid.pnet deleted  -> 110
+;;
+;; This is the SAME SHAPE as the driver.zo check directly above, applied to the
+;; second input class: a `.pnet` is a function of the Racket compiler AND of
+;; every `.prologos` source that fed it. The zo check already answers "the
+;; compiler changed"; this answers "a library source changed".
+;;
+;; DELIBERATELY BLUNT — newest mtime across ALL library sources, not a
+;; per-module dependency set. The precise alternative is to record each
+;; module's dep list in its `.pnet` and walk it, which is better and which the
+;; dep-edges field once existed for; it was RETIRED as write-only (PPN 4C
+;; Addendum Phase 4B.1), so the precise version means re-adding it with a
+;; consumer. Choosing correct-and-slightly-blunt over correct-with-bookkeeping
+;; follows the driver.zo precedent rather than inventing a policy. The cost is
+;; paid ONLY when a `.prologos` under a lib path is edited, and is one cache
+;; regeneration sweep (~3-4 s for the ~55 prelude modules, per the v4->v5 note).
+;;
+;; MEMOIZED per process, KEYED BY THE LIB PATHS. The scan is one
+;; `directory-list` walk and a load of N modules would otherwise repeat it N
+;; times — but `current-lib-paths` genuinely varies within a process (every
+;; test that builds a temp lib rebinds it), so a single unkeyed box answers for
+;; the WRONG directory set. That is not theoretical: the first cut used one box
+;; and turned `test-pnet-registry-restore`'s intended cache HITS into misses,
+;; failing two assertions written precisely to catch "a MISS produces the
+;; correct answer and proves nothing".
+(define lib-sources-newest-cache (make-hash))
+
+(define (newest-lib-source-seconds)
+  (define key (map (lambda (p) (if (path? p) (path->string p) (format "~a" p)))
+                   (current-lib-paths)))
+  (cond
+    [(hash-ref lib-sources-newest-cache key #f) => values]
+    [else
+     (define newest
+       (for*/fold ([acc 0])
+                  ([root (in-list (current-lib-paths))]
+                   #:when (and (path-string? root) (directory-exists? root)))
+         (let walk ([dir root] [acc acc])
+           (for/fold ([acc acc])
+                     ([p (in-list (with-handlers ([exn:fail? (lambda (_) '())])
+                                    (directory-list dir #:build? #t)))])
+             (cond
+               [(directory-exists? p) (walk p acc)]
+               [(regexp-match? #rx"[.]prologos$" (path->string p))
+                (max acc (with-handlers ([exn:fail? (lambda (_) 0)])
+                           (file-or-directory-modify-seconds p)))]
+               [else acc])))))
+     (hash-set! lib-sources-newest-cache key newest)
+     newest]))
+
+;; Exported so a test can force a re-scan after writing a source file; also the
+;; honest escape hatch for a long-lived process that DOES edit lib sources.
+(define (reset-lib-source-staleness-cache!)
+  (hash-clear! lib-sources-newest-cache))
+
+(define (lib-sources-stale? pnet-path)
+  (and (file-exists? pnet-path)
+       (> (newest-lib-source-seconds)
+          (file-or-directory-modify-seconds pnet-path))))
+
 (define (pnet-stale? ns-sym source-path)
   (define pnet-path (pnet-path-for-module ns-sym))
   (or (not (file-exists? pnet-path))
       ;; Track 10B: check infrastructure staleness (Racket code changed)
       (infrastructure-stale? pnet-path)
+      ;; …and library-source staleness (a `.prologos` this module may depend on
+      ;; changed). Without this a dependency edit returns the PRE-EDIT answer.
+      (lib-sources-stale? pnet-path)
       (let ([cached-data (with-handlers ([exn? (lambda (_) #f)])
                            (call-with-input-file pnet-path read))])
         (or (not cached-data)
