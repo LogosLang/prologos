@@ -26,7 +26,8 @@
          "../namespace.rkt"
          "../metavar-store.rkt"
          "../syntax.rkt"
-         "../substitution.rkt")
+         "../substitution.rkt"
+         (only-in "../pretty-print.rkt" pp-session))
 
 ;; ========================================
 ;; Helpers

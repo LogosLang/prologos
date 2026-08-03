@@ -1804,7 +1804,7 @@ gating parameter has been added.
 
 ---
 
-## FL Narrowing — WS Surface Gaps
+## FL Narrowing — WS Surface Gaps (1 of 3 open: higher-order narrowing in WS)
 
 ### ✅ RESOLVED — Nested Constructor Patterns in Match Arms (re-probed 2026-08-02)
 
@@ -1902,7 +1902,7 @@ place usage outside tests and tools, and no multi-network scheduling.
 
 ---
 
-## IO Library — TRIAGED 2026-08-02 (3 done, 1 half-stale)
+## IO Library — TRIAGED 2026-08-02 (3 done; the 4th's open half verified + reclassified 2026-08-03)
 
 Four of the five entries below were probed. Three describe work that is
 implemented AND has passing tests; a fourth is half stale. Nothing here was
@@ -1915,8 +1915,24 @@ built by this triage — it was all already in the tree.
 `io-sess-recv?`, and the constructors are live in `session-lattice.rkt` and
 `session-propagators.rkt`. `test-io-dep-session-01/02.rkt` pass (22 tests).
 
-The other half — "elaborator discards binder name" — is NOT verified either
-way; it needs a repro this probe did not construct.
+The other half — "elaborator discards binder name" — is **VERIFIED 2026-08-03,
+and reclassified: TRUE but not an IO defect.** Repro: `session DepNamed / !:
+myname Nat / ! myname / end` displays as `[![x <Nat>] . [!x . end]]` — the
+source name `myname` is gone and `x` is synthesised.
+
+There is no name field to discard INTO: `sess-dsend` / `sess-drecv` are
+`(type cont)`, which is the system-wide de Bruijn convention rather than a
+session oversight. `expr-Pi` is `(mult domain codomain)` and `expr-lam` is
+`(mult type body)`, equally nameless, and `pp-expr` synthesises display names
+with `fresh-name` for all of them — a lambda parameter loses its name
+identically (pinned as the control).
+
+So retaining source names is a **binder-provenance feature spanning every
+binder in the language** — a presentation-design decision, sibling to the
+`?`-field display ambiguity and the FQN-display-verbosity question, and not an
+implementer's call. Both facts are pinned in `test-io-dep-session-01.rkt` as
+CURRENT behaviour, so the claim no longer rests on nobody having tried it, and
+whichever assertion changes marks the day provenance lands.
 - Reader, preparse, surface syntax, parser, IR, type-checker, pretty-printer are ALL complete
 - Source: `docs/tracking/2026-03-05_IO_IMPLEMENTATION_DESIGN.md` §7
 
@@ -2179,7 +2195,7 @@ Tracked there; not a separate item.
 Functions with Int literal patterns compile to `boolrec`+`int-eq`, not
 invertible for narrowing. The entry calls it a design limitation and it is.
 
-## Surface Syntax Issues — TRIAGED 2026-08-02 (2 of 3 stale)
+## ✅ CLOSED — Surface Syntax Issues (TRIAGED 2026-08-02; all three sub-items resolved or reclassified, header corrected 2026-08-03)
 
 ### ✅ RESOLVED — WS-Mode `:=` Body Parsing with Multi-Form Bodies
 
