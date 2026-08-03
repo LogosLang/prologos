@@ -215,6 +215,57 @@
                             (and (closed-nat-row? tm)
                                  (not (record-lookup-field tm idx))
                                  (format-closed-tuple-oob tm idx names)))))))
+            ;; ---- the two MIRROR cases (D4.P2 item 9, added 2026-08-03) ----
+            ;; Q_R5 gave the nat domain its own OOB branch; its two neighbours
+            ;; still fell through to a bare "Could not infer type". The
+            ;; adjudicator singled out the first of these — an ORDINAL on a
+            ;; KEYWORD row is the most plausible first-contact error on a new
+            ;; positional surface, and Q_R5's own rationale was "the first
+            ;; thing a user would hit".
+            ;;
+            ;; Placed AFTER the ordinal branch and BEFORE the keyword branch,
+            ;; deliberately: each is guarded on the OPPOSITE domain to the
+            ;; branch it sits next to, so no input can match two of them. The
+            ;; filing's warning is why that matters — "the branch order in
+            ;; `closed-row-miss-hint` is exactly where P2's own regression came
+            ;; from; adding arms without an A/B against a pinned baseline is
+            ;; how a correct diagnostic gets suppressed". A/B'd on a
+            ;; seven-shape battery: the four previously-good messages are
+            ;; byte-identical after.
+
+            ;; ORDINAL key on a KEYWORD-domain row: `cfg.0`
+            (let ([mk (projection-parts x)])
+              (and mk
+                   (let ([idx (ordinal-key-index (cdr mk))])
+                     (and idx
+                          (let ([tm (whnf (infer ctx (car mk)))])
+                            (and (expr-Record? tm)
+                                 (eq? (expr-Record-key-domain tm) 'keyword)
+                                 (format
+                                  (string-append
+                                   "Could not infer type — `.~a` is ORDINAL access, but ~a is a "
+                                   "keyword row: its fields are NAMED. Write `.field` "
+                                   "(available: ~a).")
+                                  idx (pp-expr tm names)
+                                  (string-join
+                                   (for/list ([f (in-list (expr-Record-fields tm))])
+                                     (format ":~a" (car f)))
+                                   " "))))))))
+
+            ;; KEYWORD key on a NAT-domain row (tuple): `het.name`
+            (let ([mk (projection-parts x)])
+              (and mk
+                   (expr-keyword? (cdr mk))
+                   (let ([tm (whnf (infer ctx (car mk)))])
+                     (and (expr-Record? tm)
+                          (eq? (expr-Record-key-domain tm) 'nat)
+                          (format
+                           (string-append
+                            "Could not infer type — `:~a` names a field, but ~a is a tuple: "
+                            "its slots are POSITIONAL. Write `.N` (valid indices 0–~a).")
+                           (expr-keyword-name (cdr mk)) (pp-expr tm names)
+                           (max 0 (sub1 (length (expr-Record-fields tm)))))))))
+
             (let ([mk (projection-parts x)])
                  (and mk
                       (expr-keyword? (cdr mk))

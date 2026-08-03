@@ -3801,7 +3801,37 @@ literal hijacking `closed-row-miss-hint`; see typing-errors.rkt's
 `token-entry->compat` sibling arm; the layer-error comment). These are what
 SURVIVED as deliberate non-goals.
 
-### 9. The ordinal miss-hint is narrower than the surface `.N` opens
+### 9. 🔶 The ordinal miss-hint — the TWO MIRROR CASES fixed 2026-08-03; two shapes remain
+
+The two the adjudicator cared about are done:
+
+- **`cfg.0` — an ordinal on a KEYWORD row.** *"`.0` is ORDINAL access, but
+  `{:a Int :b Int}` is a keyword row: its fields are NAMED. Write `.field`
+  (available: :a :b)."*
+- **`het.name` — a keyword on a NAT row.** *"`:name` names a field, but
+  `⟨Int String⟩` is a tuple: its slots are POSITIONAL. Write `.N` (valid
+  indices 0–1)."*
+
+Both were bare *"Could not infer type"*.
+
+**The filing's warning was the operative instruction** — *"the branch order in
+`closed-row-miss-hint` is exactly where P2's own regression came from; adding
+arms there without an A/B against a pinned baseline is how a correct
+diagnostic gets suppressed. Whoever takes this should A/B each new arm the way
+the P2 adjudicator did."* Done: a seven-shape battery captured before and
+after, and the diff is EXACTLY the two target lines — the four
+previously-good messages are byte-identical, and both valid projections still
+project. Those four are now pinned as the A/B test, not just run once.
+
+Each new arm is guarded on the OPPOSITE key domain to the branch beside it, so
+no input can match two of them; that is what makes the placement safe rather
+than lucky.
+
+**Still open — the two remaining shapes from the original four:** ordinal OOB
+in CHECK position (inside a spec'd body) rather than infer, and `.N` on a
+non-tuple carrier (Int, String).
+
+**Original:** the ordinal miss-hint is narrower than the surface `.N` opens
 
 Q_R5 gave the nat key-domain its own `closed-row-miss-hint` branch, so a
 het-tuple index out of range now names index and arity. Four adjacent shapes

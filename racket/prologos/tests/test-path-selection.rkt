@@ -1128,6 +1128,42 @@
                "the sentinel arm fired on a binder with no sentinel")
   (check-false (regexp-match? #rx"#<syntax" r) "raw syntax objects leaked"))
 
+(test-case "P2 item 9: an ORDINAL on a keyword row names the mistake"
+  ;; The adjudicator singled this one out: an ordinal on a keyword row is the
+  ;; most plausible first-contact error on a new positional surface, and it
+  ;; fell through to a bare "Could not infer type".
+  (define r (run-ws-last "def cfg := {:a 1 :b 2}\ncfg.0\n"))
+  (check-regexp-match #rx"ORDINAL access" r)
+  (check-regexp-match #rx"keyword row" r)
+  (check-regexp-match #rx":a :b" r "must list the fields that DO exist"))
+
+(test-case "P2 item 9: a KEYWORD on a tuple names the mirror mistake"
+  (define r (run-ws-last "def het := @[1 \"x\"]\nhet.name\n"))
+  (check-regexp-match #rx"names a field" r)
+  (check-regexp-match #rx"tuple" r)
+  (check-regexp-match #rx"0.1" r "must name the valid index range"))
+
+(test-case "P2 item 9: the FOUR neighbouring messages are unchanged (the A/B)"
+  ;; The filing's warning is the reason this test exists: "the branch order in
+  ;; `closed-row-miss-hint` is exactly where P2's own regression came from —
+  ;; adding arms there without an A/B against a pinned baseline is how a
+  ;; correct diagnostic gets suppressed."
+  ;;
+  ;; Each new arm is guarded on the OPPOSITE key domain to the branch beside
+  ;; it, so no input can match two. These four pin that.
+  (check-regexp-match #rx"is not present in the record"
+                      (run-ws-last "def cfg := {:a 1}\ncfg.missing\n")
+                      "keyword miss on a keyword row")
+  (check-regexp-match #rx"out of range for the 2-tuple"
+                      (run-ws-last "def het := @[1 \"x\"]\nhet.9\n")
+                      "ordinal OOB on a tuple")
+  (check-regexp-match #rx"^1 : Int"
+                      (run-ws-last "def het := @[1 \"x\"]\nhet.0\n")
+                      "a VALID ordinal still projects")
+  (check-regexp-match #rx"^1 : Int"
+                      (run-ws-last "def cfg := {:a 1}\ncfg.a\n")
+                      "a VALID field still projects"))
+
 ;; ---------- the LYING DIAGNOSTICS this phase actually repairs ----------
 ;; P2's real headline, unclaimed by §5.P2: because `x.0` was THREE datum items,
 ;; every arity-checking context blamed something else entirely.
