@@ -770,24 +770,31 @@ exporting schemas — none exist today; the demo is single-file); (b) or the
 first stale-baked-plan incident in practice. Until then the class is documented
 here + at §13.8.
 
-## PM: resolution bridges capture registry cell-ids while they are still #f (found at GitHub #78, 2026-07-27)
+## ✅ CLOSED `PLACEHOLDER13` — resolution bridges capture registry cell-ids while they are still #f (found 2026-07-27, fixed 2026-08-02)
 
-VERIFIED at `a892f951`, separate from #78 and deliberately NOT swept into it.
-`make-pure-trait-bridge-factory` (`resolution.rkt:460-462`) and
-`make-pure-hasmethod-bridge-factory` (`:552-555`) read
-`(current-impl-registry-cell-id)` / `(current-param-impl-registry-cell-id)`
-**eagerly**, outside the returned lambda — and both factories are invoked at
-`driver.rkt:3623-3624`, at **module level**, where those cell-ids are still
-`#f` and stay `#f` for the life of the process. `read-persistent-registry-cell`
-(`resolution.rkt:408-413`) has **no parameter fallback**: it returns `(hasheq)`
-unconditionally on a `#f` cid. Net effect: the pure trait/hasmethod bridges
-read an EMPTY impl registry in every process.
+Took the **read-at-fire-time** option, not the defer-into-the-lambda one. The
+lambda is called at INSTALL time, which is also before some paths have
+identified the cells — deferring one level would have moved the bug rather than
+removed it. Fire time is the only point at which the answer is guaranteed
+current, and it costs a parameter read on a path that is already ambient:
+`read-persistent-registry-cell` reads `current-persistent-registry-net-box`
+ambiently inside these same fire functions, so no new assumption is added.
 
-Opposite polarity to #78 (which was write-to-param/read-from-cell; this is
-read-from-a-cell-that-was-never-identified), and the same half-migration root.
-Silent in both cases. **Fix shape**: defer the capture into the lambda, or read
-the cid at fire time. **Constraint**: this is a prerequisite for PM Track 12's
-read-path work — see `2026-07-27_PM_TRACK12_REGISTRY_READ_PATH_NOTE.md` §2.4.
+The three captured cell-ids and their six parameter passes are GONE rather than
+deferred — the fire functions read `(current-impl-registry-cell-id)` and friends
+at the point of use. A stale capture is now unrepresentable instead of merely
+fixed.
+
+**Test shape, stated honestly.** This defect is silent because the pure bridges
+are not the production trait-resolution path, so there is no behavioural
+assertion that fails before and passes after. What the tests pin is the ARITY of
+the fire functions (which changes exactly when the plumbing is removed), that
+both factories survive construction with the cell-ids unset — the module-level
+situation — and that ordinary trait dispatch still works, since the factories
+really are built at module level.
+
+Unblocks PM Track 12's read-path work, which named this as a prerequisite
+(`2026-07-27_PM_TRACK12_REGISTRY_READ_PATH_NOTE.md` §2.4).
 
 ## ✅ CLOSED `97c113c7` — `.pnet` positional format has no arity assertion (filed 2026-07-27, fixed 2026-08-02)
 
