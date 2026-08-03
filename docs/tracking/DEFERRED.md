@@ -62,28 +62,63 @@ merge). It now DEFERS to preparse per the driver's own architecture comment —
 a structural single-implementation move with no demonstrated behavioral delta,
 claimed as exactly that. The defer is named scaffolding; it retires when the
 form-cell path grows a real let.
-## 🐛 Cross-FILE spec-store leakage within a batch worker (diagnosed 2026-07-31, LET P1 gate)
+## ✅ CLOSED `7efc781d` — Cross-FILE spec-store leakage within a batch worker (filed 2026-07-31, fixed 2026-08-02)
 
-**Symptom**: `test-defn-multiarg-patterns.rkt` registered `(spec c Handle2 -1> Nat)`
-via `run-ns-ws-all`; `test-new-lattice-cell.rkt`, running LATER IN THE SAME
-BATCH WORKER, died with "spec: def c has both a spec and inline type
-annotation" on its own `def c : CellId`. Passes alone; order-dependent; surfaced
-when LET P1's +1 test file reshuffled worker assignment. (Unblocked by renaming
-the spec to `hconsume` at `49f51c14` — that removes the collision, NOT the leak.)
+**Root cause, confirmed.** The 2026-07-31 note's prime suspect was right:
+`run-ns-*` handed every call the shared `prelude-persistent-registry-net-box`
+UNFORKED, so the cell-backed spec store was one table for the life of the
+worker process. `spec-store-lookup` (macros.rkt:496) reads the CELL FIRST and
+falls back to the parameter; the worker's per-file snapshot restores the
+PARAMETER, which that read never consults. The dual write to both is what made
+the restore look complete.
 
-**Mechanism (partially diagnosed — finish before fixing)**: the batch worker
-DOES restore the spec store per file — `restore-macros-registry-snapshot!`
-(tools/batch-worker.rkt:223) and `current-spec-store` IS in the snapshot vector
-(macros.rkt:713 region). So the leak rides something the snapshot does not
-cover: prime suspect is the CELL-BACKED registry layer — `run-ns-ws-all` passes
-`prelude-persistent-registry-net-box` UNFORKED (test-support.rkt:195 region),
-so a spec cell written there is shared across every file in the worker process,
-and cell-first reads see it. That is the pipeline.md Two-Context class, sibling
-of the 2026-06-29/07-14 batch-isolation incidents in testing.md.
+**Fix**: fork `current-persistent-registry-net-box` per call, alongside the
+prop network `run-ns-*` already forked, seeded FROM the prelude box so
+prelude registrations survive. Five lines in `test-support.rkt`;
+`tests/test-batch-isolation.rkt` pins both directions (nothing leaks forward,
+the prelude still arrives).
 
-**Watch**: any NEW test file addition reshuffles workers and can surface the
-next collision pair. Single-letter spec/def names in test strings are collision
-bait until fixed.
+**How it was finally caught**: bisection to a TWO-FILE deterministic repro
+(`test-defn-multiarg-patterns` then `test-error-messages`, `--jobs 1`), after
+five sightings across two separate DEFERRED entries — this one and the OCapN
+backlog's X2. The second symptom was the instructive one: a leaked
+`(spec ok2 Nat -> Nat)` turned a `defn ok2` that must INFER into one that
+CHECKS, and the failure read "cannot infer the type of an unannotated
+parameter" — naming an engine that was working perfectly. Same lying-diagnostic
+shape as `infer`/`inferQ`, from a different cause.
+
+**Lesson worth keeping**: an order-dependent batch flake is reproducible.
+`--jobs 1 --all` makes the order deterministic, and bisecting the prefix
+against the failing file found the culprit in six runs. Three earlier sessions
+re-observed it instead.
+
+## 🐛 `[x : T]` works for `fn` but is a PARSE ERROR for a `defn` parameter list (found 2026-08-02)
+
+```
+defn f [n : Nat]      ;; parse error: "defn requires: (defn name [x <T> ...] …)"
+  [+ n 2N]
+[f 3N]                ;; …then a cascading "Unbound variable: f"
+
+def g := [fn [x : Nat] [+ x 2N]]   ;; fine
+defn h [n:Nat]                      ;; fine (fused)
+  [+ n 2N]
+```
+
+Verified at WS-string AND file level. Two things to decide:
+
+1. **Should `defn` accept the spaced form?** `fn` does, `let` does not (fused
+   only, single-token types — `prologos-syntax.md`), and `defn` currently
+   follows `let`. If that is deliberate, the `defn requires:` parse error
+   should say so in WS terms — it currently prints SEXP syntax
+   (`(defn name [x <T> ...] <ReturnType> body)`) at a WS-mode parse failure,
+   which is its own small defect.
+2. **The cascade.** A `defn` that fails to parse (or to type) still produces a
+   second, misleading `Unbound variable` for the name it was defining. The
+   real error is the first one; the second is what the user reads.
+
+The diagnostic half of this is already fixed (`7efc781d`): the
+"cannot infer the type of an unannotated parameter" hint used to recommend
+`[x : T]` — advice that does not parse in the position it was given for.
 
 ## ✅ CLOSED — the two eliminator usage residuals (QTT P6 + P7, 2026-07-31)
 
@@ -2763,10 +2798,23 @@ Highest-value items, in the order that document recommends:
 - ~~**C1.**~~ FIXED `cc9ff44e`. `reserve-export-id` lost its reservation when
   the enlivened sturdyref named the connection it arrived on. `run-step` now
   stashes before draining.
+- ~~**C4.**~~ FIXED `7efc781d`. `nat-of-payload` accepted `<desc:export [5]>`
+  while captp-wire rejected it — two readers of one descriptor.
+- ~~**C5.**~~ FIXED `7efc781d`. `peer-location-key` is implemented twice across
+  the language boundary and had diverged on unparseable locations. Both refuse
+  now, pinned by a differential oracle (`test-ocapn-location-key.rkt`).
+- ~~**X2.**~~ FIXED `7efc781d` — not a flake, the cross-file spec leak. See the
+  batch-isolation entry above.
 - **C6 (new).** `ocapn-gift-stash` replaces the whole gift list rather than
   merging, so two connections depositing concurrently lose one gift. The same
   lost update as C1, one layer out; masked today only by the process-wide
-  `validate-sema`.
+  `validate-sema`. **Not fixable as a patch**: `GiftEntry` is opaque to Racket
+  by design (the FFI passes unrecognised types through unmarshalled), so the
+  FFI cannot merge two lists, and Racket cannot construct a Prologos `nil`/
+  `cons` to build one. The honest fix is per-gift add/remove keyed by gift-id
+  with an index-based read, i.e. an FFI redesign. Sits with C2, whose point is
+  the same: the accidental `validate-sema` serialisation is what makes all of
+  this look safe.
 - **A2.** Decompose the ~1100-line driver into `captp-handoff.prologos` +
   `captp-frames.prologos`; this is also how the remaining test debt gets paid.
 - **A3 (design task, not a refactor).** The per-connection vat is the root
