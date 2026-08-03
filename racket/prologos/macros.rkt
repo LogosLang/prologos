@@ -272,6 +272,8 @@
          spec-entry-metadata
          register-spec!
          lookup-spec
+         lookup-spec/qualified
+         spec-bare-name
          process-spec
          extract-where-clause
          ;; Phase 1b: Auto-implicit detection
@@ -498,6 +500,23 @@
 
 (define (lookup-spec name)
   (hash-ref (read-spec-store) name #f))
+
+;; The bare (last) segment of a possibly-`::`-qualified name.
+(define (spec-bare-name fname)
+  (define s (symbol->string fname))
+  (define idx (let loop ([i (- (string-length s) 1)])
+                (cond [(< i 1) #f]
+                      [(and (char=? (string-ref s i) #\:)
+                            (char=? (string-ref s (sub1 i)) #\:))
+                       i]
+                      [else (loop (sub1 i))])))
+  (if idx (string->symbol (substring s (add1 idx))) fname))
+
+;; Look up a spec for a name that may be QUALIFIED — FQN first, bare second.
+(define (lookup-spec/qualified fname)
+  (or (lookup-spec fname)
+      (let ([bare (spec-bare-name fname)])
+        (and (not (eq? bare fname)) (lookup-spec bare)))))
 
 ;; Track 3 Phase 3: cell-primary reader for propagated specs
 (define (read-propagated-specs)

@@ -3621,8 +3621,16 @@
             ;; prelude is what an explicit import is for
             (current-own-import-specs
              (hash-set (current-own-import-specs) name spec-entry)))
+          ;; issue #66 (2026-08-03): file the spec under BOTH the bare name
+          ;; (unchanged — the race, and everything that depends on it, stays
+          ;; exactly as it was) and the QUALIFIED `module::name`. The qualified
+          ;; key is what makes `lookup-spec/qualified` exact: a call that
+          ;; resolved to a specific module now finds that module's spec instead
+          ;; of whichever import last won the bare-name write.
           (current-spec-store
-            (hash-set (current-spec-store) name spec-entry))
+            (hash-set (hash-set (current-spec-store) name spec-entry)
+                      (string->symbol (format "~a::~a" (module-info-namespace mod) name))
+                      spec-entry))
           ;; Phase 2c: dual-write spec-store to cell
           (macros-cell-write! (current-spec-store-cell-id) (hasheq name spec-entry))
           ;; Mark as propagated so own-module defs can override silently

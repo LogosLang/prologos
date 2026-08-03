@@ -196,3 +196,70 @@
   (check-false (warns? (string-append "ns dupwarn-d\n\n"
                                       "imports prologos::data::list\n"
                                       "imports prologos::data::list\n\ndef q := 1\n"))))
+
+
+;; ============================================================================
+;; issue #66 — a QUALIFIED call reaches its own module's spec (2026-08-03).
+;;
+;; The store keys by bare symbol with last-write-wins, so the loser of the race
+;; had no reachable spec at all: every call to it — even one naming its module
+;; explicitly — got the winner's implicit-argument count. Import propagation now
+;; also files each spec under `module::name`, and the three lookup sites probe
+;; the qualified key first.
+;;
+;; This does NOT fix the bare-name race (an unqualified `map` still resolves by
+;; import order; W3001 reports when that is ambiguous). It makes the WORKAROUND
+;; the warning recommends — "qualify the call" — actually work.
+;; ============================================================================
+
+(test-case "issue-66/a qualified call to the RACE LOSER now elaborates"
+  ;; Failing-test-first: with the qualified probe removed this file reports
+  ;; "Could not infer type" and then cascades to "Unbound variable" — verified
+  ;; by A/B, not assumed. `collections` is imported FIRST so `list` wins the
+  ;; bare-name write, making the collections spec the unreachable one.
+  (define rs (run-file-results
+              (string-append "ns issue66-a\n\n"
+                             "imports prologos::core::collections\n"
+                             "imports prologos::data::list\n\n"
+                             "def xs := '[1 2 3]\n"
+                             "def c := [prologos::core::collections::length xs]\n"
+                             "c\n")))
+  (check-false (ormap (lambda (r) (regexp-match? #rx"Could not infer type" r)) rs)
+               (format "the qualified call must elaborate: ~v" rs))
+  ;; What it does AFTER elaborating differs by environment, and the assertion
+  ;; is written to be true in both. Through `run-file.rkt` (full lib load) it
+  ;; evaluates to `3N`. In this fixture the `Reducible List` instance is not
+  ;; present, so it reaches a NO-INSTANCE error instead — which is the point:
+  ;; collections' `length` carries `where (Reducible C)`, so finding its spec
+  ;; means the dict gets inserted and the missing instance becomes visible.
+  ;; Before the fix the call never got that far; it failed on the implicit
+  ;; COUNT, which said nothing true about the program.
+  (check-false (ormap (lambda (r) (regexp-match? #rx"Unbound variable xs" r)) rs)
+               (format "elaboration must not cascade from the count: ~v" rs)))
+
+(test-case "issue-66/the WINNER's qualified call keeps working"
+  ;; The other direction — the fix must not break the side that already worked.
+  (define rs (run-file-results
+              (string-append "ns issue66-b\n\n"
+                             "imports prologos::core::collections\n"
+                             "imports prologos::data::list\n\n"
+                             "def xs := '[1 2 3]\n"
+                             "def d := [prologos::data::list::length xs]\n"
+                             "d\n")))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"3N : Nat" r)) rs)
+              (format "~v" rs)))
+
+(test-case "issue-66/an UNQUALIFIED call is unchanged — the race is not fixed"
+  ;; Stated honestly: this slice makes the qualified workaround work. The bare
+  ;; name still resolves by import order, which is what W3001 exists to report.
+  (define rs (run-file-results
+              (string-append "ns issue66-c\n\n"
+                             "imports prologos::core::collections\n"
+                             "imports prologos::data::list\n\n"
+                             "def xs := '[1 2 3]\n"
+                             "def e := [length xs]\n"
+                             "e\n")))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"3N : Nat" r)) rs)
+              (format "~v" rs))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"W3001" r)) rs)
+              "and the ambiguity is still reported"))

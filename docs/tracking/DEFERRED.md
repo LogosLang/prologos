@@ -1562,7 +1562,7 @@ skip+warn policy; these lift the skips / harden the substrate.
   `+ - *` keywords cover bare-call ergonomics; `mul`/`eq?`/`compare`/`neg`/`abs`
   already derive first-class fine).
 
-### 2. Spec-store bare-name keying — silent clobber (structural defect) [issue #66]
+### 2. 🔶 Spec-store bare-name keying — silent clobber (structural defect) [issue #66] — QUALIFIED lookup fixed 2026-08-03; the race itself is open
 
 - **What**: the spec registry keys by BARE symbol with silent last-write-wins:
   `register-spec!` (`macros.rkt:480-482`), import spec-propagation
@@ -1574,6 +1574,39 @@ skip+warn policy; these lift the skips / harden the substrate.
 - **Fix direction**: FQN-keyed spec store (or module-scoped shadowing with
   deliberate resolution order). Crosses the module system — candidate for a
   PM-series follow-up. Blocks item 1's clean resolution.
+
+**🔶 THE QUALIFIED HALF LANDED 2026-08-03.** Import propagation now files each
+spec under `module::name` as well as the bare name, and the three elaborator
+lookup sites probe the qualified key first. So **the workaround W3001
+recommends — "qualify the call" — actually works now**, where before it did
+not: the loser of the bare-name race had NO reachable spec at all, so even a
+call naming its module explicitly got the winner's implicit-argument count.
+
+Observable, and verified failing-test-first rather than assumed: with
+`prologos::core::collections` imported first (so `list` wins the bare write), a
+qualified `[prologos::core::collections::length xs]` reported *"Could not infer
+type"* and cascaded to *"Unbound variable"*. It now elaborates.
+
+⚠ **A first A/B of this measured the same binary twice** — a `cd` in a `&&`
+chain failed, the rebuild never ran, and both legs printed identical output,
+which read as "the change does nothing". The workflow rules record exactly this
+trap; it cost a wrong conclusion until the run was redone with absolute paths.
+The eventual instrumented probe (`FQNDIFF`) showed the qualified key resolving
+to a *different* spec entry on every qualified call — the code path was live all
+along.
+
+**This does NOT fix the race**, and the entry stays open for that reason: a
+genuinely unqualified `map` still resolves by import order. What changed is that
+there is now a working escape hatch, and W3001 names it. The remaining work is
+the module-scoped store — and it now has a measured target: **the prelude's own
+12 order-dependent spec names**, which W3001 deliberately does not report
+because a user cannot act on them.
+
+Bare-name behaviour is untouched by construction (FQN first, bare fallback), so
+this can only turn a wrong answer into a right one. Three byte-identical
+hand-inlined strip-then-lookup loops in `elaborator.rkt` collapsed into the one
+`lookup-spec/qualified` helper on the way — otherwise the FQN probe would have
+had to be added three times.
 
 ### 3. Zero-arg / output-position-only trait methods as context-resolved values
 

@@ -373,16 +373,12 @@
   ;; Look up spec where-constraints for position-based trait detection.
   ;; The function name may be namespace-qualified (e.g., 'ns::my-neq),
   ;; but specs are registered with bare names. Strip the NS prefix.
-  (define bare-fname
-    (let ([s (symbol->string fname)])
-      (define idx (let loop ([i (- (string-length s) 1)])
-                    (cond [(< i 1) #f]
-                          [(and (char=? (string-ref s i) #\:)
-                                (char=? (string-ref s (sub1 i)) #\:))
-                           i]
-                          [else (loop (sub1 i))])))
-      (if idx (string->symbol (substring s (add1 idx))) fname)))
-  (define spec-entry (lookup-spec bare-fname))
+  ;; issue #66 (2026-08-03): FQN FIRST, bare second. This was a
+  ;; hand-inlined strip-then-lookup-bare loop, one of three
+  ;; byte-identical copies; the shared helper adds the qualified
+  ;; probe so a call that resolved to a specific module gets that
+  ;; module's spec instead of whichever won the bare-name race.
+  (define spec-entry (lookup-spec/qualified fname))
   (define where-constraints
     (if (and spec-entry (spec-entry? spec-entry))
         (spec-entry-where-constraints spec-entry)
@@ -590,16 +586,12 @@
   (define mults (collect-pi-mults func-type))
   (define n-m0 (leading-m0-count mults))
   ;; Check if function has spec with where-constraints
-  (define bare-name
-    (let ([s (symbol->string fname)])
-      (define idx (let loop ([i (- (string-length s) 1)])
-                    (cond [(< i 1) #f]
-                          [(and (char=? (string-ref s i) #\:)
-                                (char=? (string-ref s (sub1 i)) #\:))
-                           i]
-                          [else (loop (sub1 i))])))
-      (if idx (string->symbol (substring s (add1 idx))) fname)))
-  (define spec (lookup-spec bare-name))
+  ;; issue #66 (2026-08-03): FQN FIRST, bare second. This was a
+  ;; hand-inlined strip-then-lookup-bare loop, one of three
+  ;; byte-identical copies; the shared helper adds the qualified
+  ;; probe so a call that resolved to a specific module gets that
+  ;; module's spec instead of whichever won the bare-name race.
+  (define spec (lookup-spec/qualified fname))
   (define n-constraints
     (if (and spec (spec-entry? spec))
         (length (spec-entry-where-constraints spec))
@@ -667,16 +659,12 @@
 ;; Check if a function name has a variadic spec (rest-type non-#f).
 ;; Strips namespace prefix to find the bare name for lookup.
 (define (varargs-spec-info fname)
-  (define bare-name
-    (let ([s (symbol->string fname)])
-      (define idx (let loop ([i (- (string-length s) 1)])
-                    (cond [(< i 1) #f]
-                          [(and (char=? (string-ref s i) #\:)
-                                (char=? (string-ref s (sub1 i)) #\:))
-                           i]
-                          [else (loop (sub1 i))])))
-      (if idx (string->symbol (substring s (add1 idx))) fname)))
-  (define spec (lookup-spec bare-name))
+  ;; issue #66 (2026-08-03): FQN FIRST, bare second. This was a
+  ;; hand-inlined strip-then-lookup-bare loop, one of three
+  ;; byte-identical copies; the shared helper adds the qualified
+  ;; probe so a call that resolved to a specific module gets that
+  ;; module's spec instead of whichever won the bare-name race.
+  (define spec (lookup-spec/qualified fname))
   (and spec (spec-entry? spec) (spec-entry-rest-type spec) spec))
 
 ;; ========================================
