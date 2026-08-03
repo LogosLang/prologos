@@ -2063,6 +2063,13 @@
       ;; Structural forms (not reducible at head)
       (expr-lam? e) (expr-pair? e) (expr-union? e)
       (expr-vcons? e) (expr-vnil? e)
+      ;; The Fin constructors, alongside their Vec counterparts. Canonical by
+      ;; the same argument: `whnf-impl/match` has no bare-head arm for either
+      ;; (both appear only under `nf` congruence), so reaching the full match
+      ;; can only end at `[_ e]`. Added when `vindex` gained its computation
+      ;; rules — its congruence arm now whnf's the INDEX, so these are on a
+      ;; path that is actually taken.
+      (expr-fzero? e) (expr-fsuc? e)
       ;; D4.P4a: container VALUE carriers. This list held every container
       ;; TYPE former (Map/Set/PVec/TVec/TMap/TSet/Record) and ZERO of the
       ;; value carriers, so every champ/rrb/hset reaching whnf paid the full
@@ -2170,6 +2177,18 @@
     ;; Vec eliminators: vhead/vtail on vcons
     [(expr-vhead _ _ (expr-vcons _ _ hd _)) (whnf hd)]
     [(expr-vtail _ _ (expr-vcons _ _ _ tl)) (whnf tl)]
+    ;; …and vindex, which had NO computation rule at all (QTT P5 residual 1):
+    ;; it appeared only as an `nf` congruence arm, so it type-checked and
+    ;; multiplicity-checked and then sat there as a stuck term. The two rules
+    ;; are forced by the indices — `i : Fin n` and `v : Vec A n` step in
+    ;; lockstep, so a canonical index always meets a canonical vector:
+    ;;   vindex(A, n, fzero(m),   vcons(A, m, hd, tl)) -> hd
+    ;;   vindex(A, n, fsuc(m, j), vcons(A, m, _,  tl)) -> vindex(A, m, j, tl)
+    ;; The recursive arm rebuilds at length `m` (the tail's length), not `n`,
+    ;; because that is the length `tl` actually has.
+    [(expr-vindex _ _ (expr-fzero _) (expr-vcons _ _ hd _)) (whnf hd)]
+    [(expr-vindex t _ (expr-fsuc m j) (expr-vcons _ _ _ tl))
+     (whnf (expr-vindex t m j tl))]
 
     ;; Foreign function application: accumulate args, call when arity reached
     [(expr-app (expr-foreign-fn name proc arity args marshal-in marshal-out src-mod rkt-name) arg)
@@ -2232,6 +2251,14 @@
     [(expr-vtail t n v)
      (let ([v* (whnf v)])
        (if (equal? v* v) e (whnf (expr-vtail t n v*))))]
+    ;; vindex needs BOTH the index and the vector canonical, so reduce both and
+    ;; retry if either moved. Reducing only the vector (the vhead/vtail shape)
+    ;; would leave `vindex(A, n, [f x], vcons …)` stuck on a computable index.
+    [(expr-vindex t n i v)
+     (let ([i* (whnf i)] [v* (whnf v)])
+       (if (and (equal? i* i) (equal? v* v))
+           e
+           (whnf (expr-vindex t n i* v*))))]
 
     ;; ---- Int iota rules: compute when arguments are int literals ----
 

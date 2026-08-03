@@ -140,6 +140,56 @@
                         (expr-vcons (expr-Nat) (expr-zero) (expr-suc (expr-zero)) (expr-vnil (expr-Nat)))))
                 (expr-vnil (expr-Nat))))
 
+;; --- vindex (QTT P5 residual 1: it had NO computation rule at all) ---
+;;
+;; `vhead` and `vtail` computed; `vindex` appeared only as an `nf` congruence
+;; arm, so it type-checked and multiplicity-checked and then sat as a stuck
+;; term. The two iota rules are forced by the indices — `i : Fin n` and
+;; `v : Vec A n` step in lockstep, so a canonical index always meets a
+;; canonical vector.
+
+;; A 3-vector of Ints: 10, 20, 30. Lengths descend 2, 1, 0 as the tail shrinks.
+(define (int-vec3)
+  (expr-vcons (expr-Int) (expr-nat-val 2) (expr-int 10)
+    (expr-vcons (expr-Int) (expr-nat-val 1) (expr-int 20)
+      (expr-vcons (expr-Int) (expr-nat-val 0) (expr-int 30)
+        (expr-vnil (expr-Int))))))
+
+(define (fin n) ;; the n-th Fin index, as fsuc^n(fzero)
+  (let loop ([k n] [acc (expr-fzero (expr-zero))])
+    (if (zero? k) acc (loop (sub1 k) (expr-fsuc (expr-zero) acc)))))
+
+(test-case "whnf: vindex at each position"
+  ;; Position 2 is the one that matters most: it needs the recursive arm to
+  ;; fire TWICE, so an arm that descended the vector without descending the
+  ;; index would still pass at position 0.
+  (check-equal? (whnf (expr-vindex (expr-Int) (expr-nat-val 3) (fin 0) (int-vec3)))
+                (expr-int 10))
+  (check-equal? (whnf (expr-vindex (expr-Int) (expr-nat-val 3) (fin 1) (int-vec3)))
+                (expr-int 20))
+  (check-equal? (whnf (expr-vindex (expr-Int) (expr-nat-val 3) (fin 2) (int-vec3)))
+                (expr-int 30)))
+
+(test-case "whnf: vindex reduces a non-canonical INDEX, not just the vector"
+  ;; The congruence arm has to whnf both. Modelled on vhead/vtail's arm, which
+  ;; reduces only the vector — copying that shape here would leave a computable
+  ;; index stuck.
+  (define idx (expr-app (expr-lam 'mw (expr-Nat) (expr-fsuc (expr-zero) (expr-fzero (expr-zero))))
+                        (expr-zero)))
+  (check-equal? (whnf (expr-vindex (expr-Int) (expr-nat-val 3) idx (int-vec3)))
+                (expr-int 20)))
+
+(test-case "whnf: vindex reduces a non-canonical VECTOR too"
+  (define v (expr-app (expr-lam 'mw (expr-Nat) (int-vec3)) (expr-zero)))
+  (check-equal? (whnf (expr-vindex (expr-Int) (expr-nat-val 3) (fin 1) v))
+                (expr-int 20)))
+
+(test-case "whnf: vindex on a neutral index stays STUCK, and does not loop"
+  ;; The congruence arm retries only when something moved; a free variable in
+  ;; index position must terminate at the original term rather than spin.
+  (define stuck (expr-vindex (expr-Int) (expr-nat-val 3) (expr-fvar 'i) (int-vec3)))
+  (check-equal? (whnf stuck) stuck))
+
 ;; ========================================
 ;; Boolrec tests
 ;; ========================================

@@ -236,11 +236,34 @@ P5 (`9f0ddede` + `7b14fffe`) armed the 8 nodes and DELETED
 `contains-unsupported-qtt?`. These surfaced and were deliberately not fixed in
 that commit; item 4 has since closed.
 
-1. **`expr-vindex` is STUCK** — `whnf` has computation rules for `vhead`/`vtail`
-   on a canonical `vcons` (reduction.rkt) but NONE for `vindex`, which appears
-   only as an `nf` congruence arm. So `vindex` now type-checks and
-   multiplicity-checks but does not compute. Pre-existing, unrelated to QTT;
-   filed so "Vec is supported now" is not over-read.
+1. ✅ **FIXED 2026-08-03 — `expr-vindex` was STUCK.** `whnf` had computation
+   rules for `vhead`/`vtail` on a canonical `vcons` but NONE for `vindex`,
+   which appeared only as an `nf` congruence arm — so it type-checked,
+   multiplicity-checked, and then sat there.
+
+   Two iota rules, forced by the indices (`i : Fin n` and `v : Vec A n` step
+   in lockstep, so a canonical index always meets a canonical vector):
+   `vindex(A, n, fzero(m), vcons(A, m, hd, tl)) → hd` and
+   `vindex(A, n, fsuc(m, j), vcons(A, m, _, tl)) → vindex(A, m, j, tl)`. The
+   recursive arm rebuilds at `m`, the TAIL's length, not `n`.
+
+   The congruence arm is deliberately NOT a copy of `vhead`/`vtail`'s: those
+   reduce only the vector, which is right for them and wrong here, since
+   `vindex` needs the INDEX canonical too. Copying the neighbouring shape
+   would have left `vindex(A, n, [f x], vcons …)` stuck on a computable index.
+   Pinned as its own case.
+
+   `expr-fzero` / `expr-fsuc` joined `whnf-trivial?` alongside `vcons`/`vnil`
+   in the same commit — same canonical-form argument (no bare-head arm exists
+   for either), and the new congruence arm whnf's the index, so they are now
+   on a path that is actually taken.
+
+   Pinned at two levels: `test-reduction.rkt` for the iota + congruence rules
+   (including a neutral index that must stay stuck without looping), and
+   `test-vec-index-ws.rkt` at Level 3, because a rule that fires on hand-built
+   terms can still be unreachable through the elaborator. Position 2 is the
+   load-bearing case in both — it needs the recursive arm to fire twice, so an
+   implementation handling only `fzero` passes position 0.
 2. ✅ **FIXED 2026-08-03 — Vec/Fin nodes had no `pnet-serialize` registration.**
    Nine nodes, not seven (`expr-Vec` and `expr-Fin` themselves were missing
    too). All nine now register, pinned by `tests/test-pnet-vec-fin.rkt` — the
