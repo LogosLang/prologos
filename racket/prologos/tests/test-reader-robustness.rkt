@@ -248,3 +248,34 @@
   (define results (run-file-lines "ns ma3\ndef r := match 5\n  | 0 -> 111\n  | n -> 222\nr\n"))
   (check-false (ormap prologos-error? results) (format "expected success: ~v" results))
   (check-true (string-contains? (format "~a" results) "222") (format "got: ~v" results)))
+
+(test-case "defn/a non-symbol name is a per-command error, not a contract violation"
+  ;; `defn 5 [x] x` reached `symbol->string` on the 5 and died with a raw
+  ;; contract violation — whole-file abort — while `parse-defn-multi`'s
+  ;; `(unless (symbol? name) (parse-error …))` sat above it, computing the right
+  ;; diagnosis and discarding it.
+  ;;
+  ;; Fixing that one guard only MOVED the crash, to `qualify-name` in the
+  ;; driver, because a different `defn` shape was taking the call. The name is
+  ;; checked once at the entry now, before any shape dispatch, so every shape is
+  ;; covered — including ones added later.
+  (define results (run-file-lines "ns dn\ndef a := 1\ndefn 5 [x]\n  x\ndef b := 2\n"))
+  (check-true (list? results) "the file aborted instead of reporting")
+  (define text (string-join (map (lambda (r) (format "~a" r)) results) "\n"))
+  (check-true (string-contains? text "expected a name") (format "got: ~v" results))
+  (check-false (string-contains? text "contract violation") (format "got: ~v" results))
+  (check-true (string-contains? text "a :") (format "command BEFORE lost: ~v" results))
+  (check-true (string-contains? text "b :") (format "command AFTER lost: ~v" results)))
+
+(test-case "defn/every shape still parses"
+  ;; The entry check runs before shape dispatch, so it must not have disturbed
+  ;; any of them. One of each.
+  (define results
+    (run-file-lines
+     (string-append
+      "ns dn2\n"
+      "defn bare [x]\n  x\n"                       ;; bare params
+      "spec typed Nat -> Nat\ndefn typed [n]\n  n\n" ;; spec-driven
+      "defn multi\n  | 0 -> 1\n  | n -> 2\n"        ;; multi-clause
+      "[bare 1]\n[typed 0N]\n[multi 0]\n")))
+  (check-false (ormap prologos-error? results) (format "a defn shape broke: ~v" results)))

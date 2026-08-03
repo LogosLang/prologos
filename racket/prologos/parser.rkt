@@ -4459,10 +4459,17 @@
                      check-from)))))
 
 ;; Parse a multi-body defn: defn name "doc" | clause1 | clause2 ...
+;;
+;; The guards RETURN their errors. `(unless (symbol? name) (parse-error …))`
+;; computes the error and discards it, and `defn 5 [x]` then reached
+;; `symbol->string` on the 5 — a raw contract violation and a whole-file abort,
+;; with the correct diagnosis computed and unused one line above. Same shape as
+;; the eight in `parse-match-pattern-arm`; see the note there.
 (define (parse-defn-multi args loc)
+ (let/ec return
   (define name (stx->datum (car args)))
   (unless (symbol? name)
-    (parse-error loc (format "defn: expected name, got ~a" name) name))
+    (return (parse-error loc (format "defn: expected a name, got ~a" name) name)))
   ;; Skip optional docstring
   (define-values (docstring clause-args)
     (let ([rest (cdr args)])
@@ -4471,7 +4478,7 @@
           (values (stx->datum (car rest)) (cdr rest))
           (values #f rest))))
   (when (null? clause-args)
-    (parse-error loc (format "defn ~a: multi-body defn requires at least one clause" name) #f))
+    (return (parse-error loc (format "defn ~a: a multi-body defn needs at least one `|` clause" name) #f)))
   ;; Detect: defn f [params] | arms syntax
   ;; First clause-arg is a bracket form (param list, NOT $pipe-prefixed),
   ;; then optionally `: RetType` tokens, then all remaining are $pipe forms.
@@ -4510,7 +4517,7 @@
          (parse-defn-clause clause-stx name loc)))
      (define first-err (findf prologos-error? clauses))
      (if first-err first-err
-         (surf-defn-multi name docstring clauses loc))]))
+         (surf-defn-multi name docstring clauses loc))])))
 
 ;; ========================================
 ;; defn f [params] | pattern arms syntax
@@ -5034,6 +5041,21 @@
 ;; Parse defn: (defn name : type [params...] body)
 ;; ========================================
 (define (parse-defn args loc)
+  ;; The NAME is checked once, here, before any shape dispatch.
+  ;;
+  ;; Each shape below had (or lacked) its own name guard, and the ones that had
+  ;; it DISCARDED the error — so `defn 5 [x] x` reached `symbol->string` on the
+  ;; 5 and died with a raw contract violation, a whole-file abort. Fixing the
+  ;; guard in `parse-defn-multi` alone just moved the crash to `qualify-name`
+  ;; in the driver, because a different shape was taking the call. One check at
+  ;; the entry covers every shape, including ones added later.
+  (define nm (and (pair? args) (stx->datum (car args))))
+  (cond
+    [(not (symbol? nm))
+     (parse-error loc (format "defn: expected a name, got ~a" nm) nm)]
+    [else (parse-defn-shape args loc)]))
+
+(define (parse-defn-shape args loc)
   ;; NEWEST: (defn name {A B} [param <T> ...] <ReturnType> body) — with implicit type params
   ;; Sprint 10: (defn name [x y z] <ReturnType> body) — bare params, types inferred
   ;; NEW: (defn name [param <T> ...] <ReturnType> body) — typed binders

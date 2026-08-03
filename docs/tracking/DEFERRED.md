@@ -92,6 +92,39 @@ shape as `infer`/`inferQ`, from a different cause.
 against the failing file found the culprit in six runs. Three earlier sessions
 re-observed it instead.
 
+## 🐛 CLASS — `(when C (parse-error …))` computes a diagnostic and throws it away (censused 2026-08-02; 2 crashers fixed, 29 sites unaudited)
+
+`parse-error` RETURNS a value; it does not raise. So `(unless X (parse-error
+…))` evaluates the error, discards it, and falls through — and the code after
+the guard runs with exactly the condition the guard was written to reject.
+
+**31 sites in `parser.rkt`** match this shape. Two were confirmed to detonate
+and are fixed:
+
+- `parse-match-pattern-arm`, EIGHT guards → `match 5 | 0 111` died on
+  `take: contract violation` (`902ca588`).
+- `defn` with a non-symbol name → `symbol->string: contract violation`. Note
+  the shape of that one: fixing `parse-defn-multi`'s guard alone MOVED the
+  crash to `qualify-name` in the driver, because a different `defn` shape was
+  taking the call. The name is checked once at `parse-defn`'s entry now, before
+  shape dispatch.
+
+`parse-map-literal` carries a comment describing this defect being fixed there
+in July ("It was a value-discarding `when` that fell through to the loop below
+and hard-crashed"). Found once, not swept.
+
+**The other 29 are unaudited.** A probe of seven malformed inputs found the two
+above; the rest either recover downstream or are unreachable from the surface,
+and telling which is which needs a probe per site. Three outcomes are possible
+per site: a crash (fix), a worse-but-survivable error (fix), or genuinely dead
+(delete the guard, since a discarded error is not a guard).
+
+**Do not mass-convert.** Each site needs its own probe: some fall through to
+code that produces a BETTER error, and turning the discarded one into a return
+would regress the message. The structural answer — make `parse-error` raise, or
+give the parser an error monad — is a bigger change than this file should
+decide.
+
 ## 🔶 PARTIAL `db65045a` — `[x : T]` works for `fn` but is a PARSE ERROR for a `defn` parameter list (found 2026-08-02; message fixed same day, the syntax question is the owner's)
 
 ```
