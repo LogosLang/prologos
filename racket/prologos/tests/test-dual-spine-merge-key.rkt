@@ -20,29 +20,33 @@
 ;;; layers, two of which cannot be repaired inside tree-parser.rkt at all.
 ;;; So the merge is deliberately kept preparse-authoritative.
 ;;;
-;;; ⚠ THE FAILURE MODE THIS FILE EXISTS TO CATCH. That defusal lives in
-;;; `loc->line`, and it is defeated by a change that is INDEPENDENTLY CORRECT:
-;;; making `item-srcloc` (tree-parser.rkt) emit a real 1-based `srcloc` struct is
-;;; something three downstream consumers legitimately want — `format-srcloc`
-;;; RAISES on the bare list a tree surf carries today, the LSP's `srcloc->range`
-;;; degrades every diagnostic to 0:0, and `register-definition-location!`'s
-;;; values are .pnet-serialized where only the struct shape is registered. The
-;;; moment anyone makes that change, the key works again and 694 form-swaps
-;;; re-arm SILENTLY, without that person ever touching `loc->line`.
+;;; ⚠ WHAT THIS FILE CATCHES, AND WHAT IT DELIBERATELY DOES NOT.
 ;;;
-;;; A comment cannot stop that. These assertions can: each construct below is one
-;;; the tree spine parses DIFFERENTLY, so re-arming the merge flips it. If this
-;;; file starts failing, the merge has been re-armed — read
+;;; The defusal lives at the ADMISSION GATE — `tree-spine-admitted?` in
+;;; driver.rkt's `merge-preparse-and-tree-parser`. These assertions fail if that
+;;; gate is opened without first repairing the tree spine's arms. Each construct
+;;; below is one the tree spine parses DIFFERENTLY, so admitting it flips them.
+;;; If this file starts failing, someone opened the gate — read
 ;;; docs/tracking/2026-08-02_LOC_TO_LINE_MERGE_DEFECT.md before "fixing" it.
 ;;;
-;;; VERIFIED TO TRIP (2026-08-02): with the `item-srcloc` struct conversion
-;;; applied, ALL FOUR assertions fail, e.g.
-;;;   [0] "#(struct:unbound-variable-error (0 0 25 32) Unbound variable Keyword)"
-;;;   [3] "church : [[Pi [x :0 <Int>] Int]] Int -> Int defined."   <- SILENT
-;;; Note [0]'s srcloc is the raw LIST `(0 0 25 32)` — `item-srcloc`'s TOKEN branch,
-;;; which that conversion does not cover. That list is what makes `format-srcloc`
-;;; raise `expected: srcloc?`, so a re-armed build fails here twice over: on these
-;;; assertions and on a contract violation in error display.
+;;; It does NOT trip on making `item-srcloc` (tree-parser.rkt) emit a real
+;;; 1-based `srcloc` struct — and that is the POINT, not a gap. That change is
+;;; independently correct (`format-srcloc` RAISES on the bare list a tree surf
+;;; carries today; the LSP's `srcloc->range` degrades every diagnostic to 0:0;
+;;; `register-definition-location!`'s values are .pnet-serialized where only the
+;;; struct shape is registered). An earlier version of this fix guarded at the
+;;; merge KEY, where that correct change silently re-armed 694 form-swaps; the
+;;; gate was moved precisely so a guard is not defeated by someone else doing the
+;;; right thing.
+;;;
+;;; BOTH DIRECTIONS VERIFIED (2026-08-02):
+;;;  · `item-srcloc` struct conversion applied  -> this file PASSES (guard holds)
+;;;  · `tree-spine-admitted?` flipped to #t     -> this file FAILS, e.g.
+;;;      [0] "#(struct:unbound-variable-error (0 0 25 32) Unbound variable Keyword)"
+;;;      [3] "church : [[Pi [x :0 <Int>] Int]] Int -> Int defined."   <- SILENT
+;;;    Note [0]'s srcloc is the raw LIST `(0 0 25 32)` — `item-srcloc`'s TOKEN
+;;;    branch, which the struct conversion does not cover either. That list is
+;;;    what makes `format-srcloc` raise `expected: srcloc?`.
 ;;; ═══════════════════════════════════════════════════════════════════════════
 
 (require rackunit
