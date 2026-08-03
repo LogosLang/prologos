@@ -280,11 +280,29 @@ that commit; item 4 has since closed.
    breaks), which is exactly why this would drift silently.
 4. ✅ CLOSED `63dea0b6` — *(was: the J arm drops its base's usage entirely.)*
    Folded into P7.
-5. **`expr-foreign-fn`'s type is arity-wrong once `args` is non-empty** — both
-   `typing-core`'s infer arm and P5's QTT twin return the FULL registered Pi
-   rather than the remainder after `(length args)` applications. They agree with
-   each other, so this is twin-parity, not drift; fixing it means fixing both.
-   Reachable only via the hole-section `whnf` path.
+5. ✅ **FIXED 2026-08-03 — `expr-foreign-fn`'s type was arity-wrong once `args`
+   was non-empty.** `global-env-lookup-type` returns the FULL registered Pi,
+   which is the node's type only while `args` is empty; `reduction.rkt`'s
+   partial-application arm appends whnf'd arguments and returns the updated
+   node, so the reported type was wrong by exactly `(length args)`.
+
+   `infer` now peels one Pi per accumulated argument, `subst`-ing each into the
+   codomain (not a bare unwrap — a dependent foreign signature's later domains
+   can mention the earlier arguments). Over-application returns `expr-error`
+   rather than a type wrong by a different amount.
+
+   **The entry said fixing it meant fixing both arms; it meant fixing one.**
+   `inferQ` already delegates the TYPE to `infer` — the no-drift twin pattern —
+   so the peel lands in a single place and the QTT arm inherits it. The
+   caveat comment in `qtt.rkt` is updated in the same commit rather than left
+   describing a defect that is gone.
+
+   Pinned by `tests/test-foreign-fn-arity.rkt`, at the arms directly: the
+   accumulating node is built only inside `whnf` on the hole-section path, so
+   no source program reaches it and a behavioural test would pass with the bug
+   in place — the same reason the sibling walker defect (`2df675d5`) needed
+   direct tests. The twins' AGREEMENT is asserted at every arity, because
+   agreement is the property that made the defect safe to leave.
 
 ## ✅ FIXED 2026-08-03 — `.pnet` registration gaps by SIBLING, not by node (found while fixing QTT P5 residual 2)
 

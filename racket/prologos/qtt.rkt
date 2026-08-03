@@ -553,12 +553,12 @@
     ;; fold is written out anyway rather than hardcoding zero, so a value that
     ;; did carry args would still have them counted.
     ;;
-    ;; ⚠ TYPE CAVEAT, shared with the typing twin: `global-env-lookup-type`
-    ;; returns the FULL registered Pi, which is arity-wrong for a node that has
-    ;; already accumulated args (it should be the remainder after (length args)
-    ;; applications). typing-core's infer arm has the identical flaw, so this
-    ;; matches its twin rather than silently diverging — filed in DEFERRED.md
-    ;; rather than fixed here, because fixing it means fixing both.
+    ;; The TYPE comes from `infer` (the no-drift twin pattern), which is where
+    ;; the arity was fixed: `global-env-lookup-type` returns the FULL registered
+    ;; Pi — correct only for `args = '()` — and typing-core's arm now peels one
+    ;; Pi per accumulated argument, substituting each into the codomain. Both
+    ;; arms were wrong by exactly `(length args)`; delegating means one fix
+    ;; served both, which is why the residual said fixing it meant fixing both.
     [(expr-foreign-fn _ _ _ args _ _ _ _)
      (let ([ty (infer ctx e)])
        (if (expr-error? ty)

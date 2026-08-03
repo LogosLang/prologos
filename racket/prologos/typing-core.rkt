@@ -3005,8 +3005,40 @@
          [_ (expr-error)]))]
 
     ;; ---- Foreign function: look up type from global env ----
-    [(expr-foreign-fn name _ _ _ _ _ _ _)
-     (or (global-env-lookup-type name) (expr-error))]
+    ;; …then PEEL one Pi per already-accumulated argument. `global-env-lookup-type`
+    ;; returns the FULL registered Pi, which is the type of the node with an
+    ;; EMPTY `args`; once `reduction.rkt`'s partial-application arm has appended
+    ;; k arguments, the node's type is the remainder after k applications.
+    ;;
+    ;; Returning the full Pi was arity-wrong by exactly `(length args)`. It has
+    ;; been invisible because every position reachable from elaboration has
+    ;; `args = '()` — the accumulating node is built only inside `whnf`, on the
+    ;; hole-section path — so the peel is a no-op on the common path and the
+    ;; loop simply stops being wrong on the uncommon one.
+    ;;
+    ;; `subst` on the codomain, not a bare unwrap: a dependent foreign
+    ;; signature's later domains can mention the earlier arguments, and the
+    ;; argument expression is what they must mention.
+    ;;
+    ;; qtt's `inferQ` twin delegates HERE for the type (the no-drift twin
+    ;; pattern), so fixing this fixes both — which was the reason the residual
+    ;; said fixing it means fixing both.
+    [(expr-foreign-fn name _ _ args _ _ _ _)
+     (let ([full (global-env-lookup-type name)])
+       (cond
+         [(not full) (expr-error)]
+         [(null? args) full]
+         [else
+          (let loop ([ty full] [as args])
+            (cond
+              [(null? as) ty]
+              [else
+               (match (whnf ty)
+                 [(expr-Pi _ _ cod) (loop (subst 0 (car as) cod) (cdr as))]
+                 ;; more accumulated args than the registered type has Pis —
+                 ;; the node is malformed, and saying so beats handing back a
+                 ;; type that is wrong by a different amount.
+                 [_ (expr-error)])]))]))]
 
     ;; ---- PropNetwork type constructors ----
     [(expr-net-type) (expr-Type (lzero))]
