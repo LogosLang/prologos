@@ -608,13 +608,47 @@
      (append (branch-result-leaves (expr-boolrec-true-case x) ctx)
              (branch-result-leaves (expr-boolrec-false-case x) ctx))]
     [(expr-reduce? x)
-     (append*
-      (for/list ([arm (in-list (expr-reduce-arms x))])
-        (branch-result-leaves
-         (expr-reduce-arm-body arm)
+     ;; Derive each arm's binder types from the SCRUTINEE's type, exactly as
+     ;; `check-reduce-structural` does — `reduce-scrutinee-decompose` +
+     ;; `reduce-arm-ctx`, already exported for qtt.rkt's twin, so this is a
+     ;; third consumer of one derivation rather than a fourth copy of it.
+     ;;
+     ;; Extending with `(expr-hole)` per binding (what this did) is what made
+     ;; the hint give up on the commonest shape there is: an arm that READS its
+     ;; pattern-bound field. `defn f | zero -> "s" | suc n -> n` inferred `n`'s
+     ;; type as a hole, `type-unreportable?` refused it, fewer than two
+     ;; reportable types survived, and the caller fell back to "cannot infer the
+     ;; type of an unannotated parameter … add a `spec`" — advice that is false
+     ;; twice over, since the parameter is not the problem and a spec may well
+     ;; be present.
+     ;;
+     ;; Hole extension stays as the FALLBACK, not as an error: the scrutinee
+     ;; type may not infer here (this runs on an already-failing path), or the
+     ;; type may have no constructor metadata (the Church-fold case
+     ;; `reduce-scrutinee-decompose` reports as #f). Both must keep degrading to
+     ;; "unreportable, drop the leaf" rather than guessing — a WRONG binder type
+     ;; would put a wrong type in a user-facing message, which is worse than the
+     ;; message this replaces.
+     (let* ([scrut-ty (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+                        (whnf (infer ctx (expr-reduce-scrutinee x))))]
+            [decomposable? (and (expr? scrut-ty) (not (expr-error? scrut-ty)))])
+       (define-values (tc-name t-args)
+         (if decomposable?
+             (with-handlers ([(lambda (_) #t) (lambda (_) (values #f '()))])
+               (reduce-scrutinee-decompose scrut-ty))
+             (values #f '())))
+       (define (hole-ctx arm)
          (for/fold ([c ctx])
                    ([_ (in-range (expr-reduce-arm-binding-count arm))])
-           (ctx-extend c (expr-hole) 'mw)))))]
+           (ctx-extend c (expr-hole) 'mw)))
+       (append*
+        (for/list ([arm (in-list (expr-reduce-arms x))])
+          (define derived
+            (and tc-name
+                 (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+                   (reduce-arm-ctx ctx arm tc-name t-args))))
+          (branch-result-leaves (expr-reduce-arm-body arm)
+                                (or derived (hole-ctx arm))))))]
     [(and (expr-app? x) (expr-lam? (expr-app-func x)))
      (let* ([lam (expr-app-func x)]
             [arg-ty (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
@@ -657,7 +691,7 @@
    " branches of an `if` all share ONE result type"
    " (a union result type is not inferred here)."))
 
-(define (branch-result-mismatch-hint ctx e names)
+(define (branch-result-mismatch-hint ctx e names [expected #f])
   (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
     ;; Peel lambdas to reach the branch spine. Generated clause lambdas are
     ;; hole-domain by construction (macros.rkt:10282/:10294); an annotated
@@ -665,12 +699,29 @@
     ;; stays sound. Reaching the spine with ZERO peels is fine and intended — a
     ;; plain `def x : Int := if c 1 "x"` gets the branch message instead of a
     ;; bare "Type mismatch".
-    (let peel ([x e] [c ctx])
+    ;;
+    ;; `expected` (the type the caller was CHECKING against) is peeled in
+    ;; lockstep, and its domain supplies the binder type wherever the lambda's
+    ;; own is a hole. Without it the parameter enters the ctx as a hole, the
+    ;; SCRUTINEE's type is then a hole, and `branch-result-leaves` cannot
+    ;; decompose it to derive the arms' field types — which is exactly the
+    ;; shape the hint used to give up on. `spec f Nat -> Nat` supplies `Nat`
+    ;; here; with no spec `expected` is still whatever the def seam had, and
+    ;; when it runs out the fallback is the hole, i.e. the previous behaviour.
+    (let peel ([x e] [c ctx] [want expected])
+      (define (want-dom) (and (expr? want)
+                              (let ([w (whnf want)])
+                                (and (expr-Pi? w) (expr-Pi-domain w)))))
+      (define (want-cod) (and (expr? want)
+                              (let ([w (whnf want)])
+                                (and (expr-Pi? w) (expr-Pi-codomain w)))))
       (cond
         [(and (expr-lam? x)
               (let ([d (expr-lam-type x)])
                 (or (expr-hole? d) (expr-meta? d))))
-         (peel (expr-lam-body x) (ctx-extend c (expr-lam-type x) 'mw))]
+         (peel (expr-lam-body x)
+               (ctx-extend c (or (want-dom) (expr-lam-type x)) 'mw)
+               (want-cod))]
         [(not (or (expr-reduce? x) (expr-boolrec? x))) #f]
         [else
          (let* ([leaves (branch-result-leaves x c)]
@@ -923,7 +974,10 @@
                    [branch-result-msg
                     (and (not seal-msg)
                          (not seal-type-msg)
-                         (branch-result-mismatch-hint ctx e names))]
+                         ;; `t` is the type being CHECKED against — its domains
+                         ;; are what let the peel give the parameter a real
+                         ;; type instead of a hole.
+                         (branch-result-mismatch-hint ctx e names t))]
                    [cross-ctor-msg
                     (and (not seal-msg)
                          (not seal-type-msg)

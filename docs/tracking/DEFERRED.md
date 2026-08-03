@@ -540,24 +540,36 @@ Three pieces stayed out, deliberately:
    semantic change here alters `if` typing project-wide. **Blocked on** the
    dedicated typing-propagator-network debugging session those entries call for.
 
-2. **Unreportable branch types → the old message still shows, and is still
-   wrong there.** The hint fires only when it can EXHIBIT two inferred,
-   non-convertible, REPORTABLE branch types; a type mentioning a hole or a de
-   Bruijn variable is refused (that filter is what keeps wrong types and `_` /
-   `?bvar0` artifacts out of user-facing prose). The common shape it gives up on
-   is a branch that READS its pattern-bound field, because `branch-result-leaves`
-   extends the arm ctx with `(expr-hole)` per binding rather than the
-   constructor's real field types:
-   `defn f | zero -> "s" | suc n -> n` (with or without `spec f Nat -> Nat`)
-   still reports "cannot infer the type of an unannotated parameter … Annotate
-   the parameter or add a `spec`" — and that advice is false: the parameter is
-   not the problem and a spec is already present. Fix path, non-blocked and
-   mechanical: export the arm-binder ctx derivation `check-reduce-structural`
-   already performs (typing-core.rkt:4451-4473 — `instantiate-pi-chain` +
-   `extend-ctx-with-fields`) and call it from the leaf walk, the "one derivation,
-   two consumers, cannot drift" pattern already used for `select-project` and
-   `seal-missing-required`. Needs the peeled ctx to carry the expected Pi's
-   domain so the scrutinee type is decomposable.
+2. ✅ **FIXED 2026-08-03 — an arm that READS its pattern-bound field now gets
+   the branch message.** `defn f | zero -> "s" | suc n -> n` reported "cannot
+   infer the type of an unannotated parameter … add a `spec`" — advice false
+   twice over, since the parameter is not the problem and a spec may be
+   present. Now: *"Type mismatch between branches … these disagree: String vs
+   Nat"*, with and without a spec.
+
+   The entry's fix path was right and its final sentence was the load-bearing
+   half. **Both halves are required and either alone is invisible:**
+   - `branch-result-leaves` derives each arm's binder types via
+     `reduce-scrutinee-decompose` + `reduce-arm-ctx` — already exported for
+     qtt.rkt's twin, so this is a THIRD consumer of one derivation, not a
+     fourth copy.
+   - `branch-result-mismatch-hint` now takes the EXPECTED type and peels it in
+     lockstep with the lambdas, so a hole-domain parameter gets its real type
+     from the Pi's domain. Without this the parameter is a hole, so the
+     SCRUTINEE is a hole, so there is nothing to decompose and the first half
+     changes nothing. Verified in that order — the arm-ctx change alone left
+     the probe reporting the old message verbatim.
+
+   Hole extension REMAINS as the fallback, deliberately: the scrutinee type may
+   not infer (this runs on an already-failing path) and the type may have no
+   constructor metadata (the Church-fold case). Both must keep degrading to
+   "unreportable, drop the leaf" — a WRONG binder type would put a wrong type
+   in a user-facing message, which is worse than the message being replaced.
+
+   Three cases added to `test-error-messages.rkt`: the spec'd shape, the
+   un-spec'd shape, and — the one the message tests could not catch — a
+   field-reading arm that AGREES and must still type-check, since every other
+   test in this block only ever looks at failing programs.
 
 3. **Guarded clause groups** are now walked (the branch-neutral rewrite dropped
    the `expr-int-eq` target gate that had excluded them), but see the crash entry

@@ -457,6 +457,51 @@
               (format "got: ~v" msg))
   (check-false (regexp-match? branch-mismatch-rx msg) (format "got: ~v" msg)))
 
+(test-case "branch-result mismatch: an arm that READS its pattern-bound field (L2)"
+  ;; The residual the fix left open: `branch-result-leaves` extended each arm's
+  ;; ctx with `(expr-hole)` per binding rather than the constructor's real field
+  ;; types, so an arm that reads its binding inferred a hole,
+  ;; `type-unreportable?` refused it, fewer than two reportable types survived,
+  ;; and the caller fell back to the parameter hint — advice that is false
+  ;; twice over here, since the parameter is not the problem and a `spec` is
+  ;; present.
+  ;;
+  ;; Two things were needed and BOTH are load-bearing: the arm ctx now comes
+  ;; from `reduce-arm-ctx` (the derivation `check-reduce-structural` and qtt's
+  ;; twin already share), and the peel threads the EXPECTED type so the
+  ;; parameter — hence the scrutinee — has a real type to decompose. Fixing
+  ;; only the first leaves this case reporting the old message, because the
+  ;; scrutinee is still a hole.
+  (define r (run-ns-ws-last
+             "ns t\nspec c5 Nat -> Nat\ndefn c5\n  | zero  -> \"s\"\n  | suc n -> n\n"))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (define msg (prologos-error-message r))
+  (check-true (regexp-match? branch-mismatch-rx msg) (format "got: ~v" msg))
+  (check-true (regexp-match? #rx"String" msg) (format "got: ~v" msg))
+  (check-true (regexp-match? #rx"Nat" msg) (format "got: ~v" msg))
+  (check-false (regexp-match? #rx"cannot infer the type of an unannotated" msg)
+               (format "got: ~v" msg)))
+
+(test-case "branch-result mismatch: field-reading arm with NO spec (L2)"
+  ;; Same shape without a `spec`. The peel falls back to whatever the def seam
+  ;; was checking against; the point is that it must not REGRESS to the
+  ;; parameter hint when the expected type runs out.
+  (define r (run-ns-ws-last
+             "ns t\ndefn c6\n  | zero  -> \"s\"\n  | suc n -> n\n"))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (define msg (prologos-error-message r))
+  (check-true (regexp-match? branch-mismatch-rx msg) (format "got: ~v" msg))
+  (check-false (regexp-match? #rx"cannot infer the type of an unannotated" msg)
+               (format "got: ~v" msg)))
+
+(test-case "a field-reading arm that AGREES still type-checks (control)"
+  ;; The derived arm ctx must not turn a working program into an error. This is
+  ;; the control the arm-ctx change could break and the message tests could not
+  ;; detect: they only ever look at failing programs.
+  (define r (run-ns-ws-last
+             "ns t\nspec c7 Nat -> Nat\ndefn c7\n  | zero  -> 0N\n  | suc n -> n\n"))
+  (check-false (prologos-error? r) (format "expected success, got: ~v" r)))
+
 (test-case "matching clause result types still type-check (control, L2)"
   ;; the working case must stay working — both routes
   (define r1 (run-ns-ws-last "ns t\ndefn ok1\n  | 0 -> {:a 1}\n  | n -> {:a 9}\n"))
