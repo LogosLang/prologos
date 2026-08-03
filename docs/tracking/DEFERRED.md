@@ -496,7 +496,7 @@ union-speculation × implicit instantiation. Adjacent to (possibly the same as)
 the existing "Union-type checking hangs the type-checker (BSP non-quiescence)"
 entry below — **triage whether they are one defect** before opening work.
 
-## 🔶 PARTIAL `PLACEHOLDER3` — the tilde-number reader diagnostic (filed 2026-07-28; the silence is fixed, the per-command routing is not)
+## 🔶 PARTIAL `5da580f9` — the tilde-number reader diagnostic (filed 2026-07-28; the silence is fixed, the per-command routing is not)
 
 **Fixed**: it is a reported error now, not a raw Racket `context...:` dump with
 exit 1 and zero output. Two changes — reader raises carry LINE AND COLUMN
