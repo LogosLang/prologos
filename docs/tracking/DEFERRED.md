@@ -512,7 +512,7 @@ value diagnostic seat, migrate the tilde diagnostic onto it (emit a marker,
 convert per-command). Owner of the remedy: D4.X.close triage (or fold into
 P1a if trivially cheap once the seat exists). Recorded in D4 §5.P1.
 
-## ✅ CLOSED `PLACEHOLDER2` — bare top-level `[]` hard-aborts the reader (filed 2026-07-28, fixed 2026-08-02)
+## ✅ CLOSED `4efe236c` — bare top-level `[]` hard-aborts the reader (filed 2026-07-28, fixed 2026-08-02)
 
 The chain was one step longer than the filing's: a `'()` element gets a syntax
 object with line 0, `make-stx` maps 0 → #f (as it is supposed to), and the
