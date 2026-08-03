@@ -1272,14 +1272,26 @@ failure was a raw `ns-context-refer-map` contract violation, now a named error
 - **Blocked on**: transient types not exposed at Prologos type level;
   pipe fusion requires elaborator changes
 
-### HKT Partial Application for Map Trait Instances
-- Enable `Map K` as `Type -> Type` constructor
-- Requires type-system-level partial application support
+### HKT Partial Application for Map Trait Instances — CONFIRMED (probed 2026-08-02)
+
+Stands as filed, and the probe says why cleanly: `Seqable`/`Buildable`/
+`Reducible` instances exist for List, LSeq, PVec and Set — all of which are
+ALREADY `Type -> Type` — and for Map alone there is none, because `Map K` needs
+partial application to have that kind.
 - **Blocked on**: unbuilt type system feature
 
-### `Seq` as Proper Trait (deftype → trait migration)
-- Enables trait resolver auto-dispatch for Seq
-- Requires careful refactoring of deftype/trait boundary
+### `Seq` as Proper Trait (deftype → trait migration) — CONFIRMED, and narrower than it reads (probed 2026-08-02)
+
+`deftype [Seq $S] …` is at `book/collection-traits.prologos:118` — still a
+deftype, so the entry stands. What it does NOT mean is that the collection
+traits generally are deftypes: `Seqable`, `Buildable`, `Foldable` and
+`Reducible` are all proper `trait` declarations in
+`core/collection-traits.prologos`, with instances for List, LSeq, PVec and Set,
+and generic `map`/`filter`/`reduce`/`length`/`to-list` dispatch through them
+(verified: `[length xs]` on a List → `3N`).
+
+So this is one straggler in a family that already migrated, not a pending
+migration of the family.
 - **Blocked on**: design uncertainty about deftype vs trait dispatch
 
 ### Clause-Style Constraint Matching (Layer 2 Specialization)
@@ -1563,7 +1575,11 @@ DEFERRED_COMPLETE.md at the 2026-07-16 F1b-opening triage.)*
 
 ## Session Types — Concurrent Runtime
 
-### Full Concurrent Session Execution (NOT STARTED)
+### Full Concurrent Session Execution (NOT STARTED) — CONFIRMED (probed 2026-08-02)
+
+Accurate. The TYPE side of async exists — `sess-async-send` / `sess-async-recv`
+are in `session-lattice.rkt` — but there is no concurrent runtime: no thread or
+place usage outside tests and tools, and no multi-network scheduling.
 - Buffered channels, `!!`/`??` runtime distinction, multiple concurrent prop-networks
 - Distributed propagator scheduling, promise cell lifecycle, fairness guarantees
 - **Blocked on**: Multi-network runtime infrastructure, Racket-level concurrency primitives
