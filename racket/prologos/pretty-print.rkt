@@ -488,12 +488,27 @@
      (let ([body (string-join
                   (for/list ([fld (in-list fields)])
                     (if (eq? kd 'keyword)
-                        ;; F1b.3 (D24): 'unknown marks display as a `?` label
-                        ;; suffix ({:a? Int | _}). Known edge: a 'present field
-                        ;; whose label itself ends in `?` is indistinguishable
-                        ;; (accepted display-only ambiguity, syntax.rkt spec).
-                        (format ":~a~a ~a" (car fld)
+                        ;; F1b.3 (D24): a presence-'unknown field is marked with
+                        ;; a `?`.
+                        ;;
+                        ;; ⚠ THE MARKER IS A PREFIX, NOT A SUFFIX (2026-08-03),
+                        ;; and the position is what makes it unambiguous rather
+                        ;; than merely different. As a SUFFIX it collided:
+                        ;; F1b.7g made `?`-terminated keys readable, so a field
+                        ;; literally NAMED `active?` and present rendered
+                        ;; `{:active? Bool}` — identical to an optional field
+                        ;; named `active`. Two different row types printed the
+                        ;; same string.
+                        ;;
+                        ;; A PREFIX cannot collide, by the reader's own grammar:
+                        ;; `recognize-keyword` requires `char-alphabetic?` for
+                        ;; the character after the colon, so no user field can
+                        ;; ever be named `?active`. The marker lives in a
+                        ;; position the lexer reserves, which makes the
+                        ;; distinction structural instead of conventional.
+                        (format ":~a~a ~a"
                                 (if (eq? (record-field-presence (cdr fld)) 'unknown) "?" "")
+                                (car fld)
                                 (pp-expr (record-field-type (cdr fld)) names))
                         (pp-expr (record-field-type (cdr fld)) names)))
                   " ")]

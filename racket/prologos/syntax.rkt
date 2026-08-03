@@ -692,9 +692,14 @@
 ;; consulted ONLY by arm-level GUARDS (C_Cons containment treats 'unknown labels as
 ;; non-required) and by the gated-identically projection reads (an 'unknown hit mints a fresh
 ;; meta exactly like a tail miss — D24/Q7, courtesy-upgrade rejected).
-;; Display: 'unknown fields render with a `?` label suffix ({:a? Int | _}). NOTE the edge:
-;; a 'present field whose LABEL itself ends in `?` (predicate-named keys) is visually
-;; indistinguishable — accepted display-only ambiguity, revisit if it bites.
+;; Display: 'unknown fields render with a `?` label PREFIX ({:?a Int | _}).
+;; ⚠ It was a SUFFIX until 2026-08-03 and that was ambiguous: F1b.7g made
+;; `?`-terminated keys writable, so a 'present field literally named `active?`
+;; rendered `{:active? Bool}` — identical to an OPTIONAL field named `active`.
+;; A prefix cannot collide, by the reader's own grammar: `recognize-keyword`
+;; requires `char-alphabetic?` after the colon, so no user field is ever named
+;; `?active`. The marker now lives in a position the lexer reserves, which makes
+;; the distinction structural rather than conventional.
 (struct record-field (type presence) #:transparent)
 
 ;; Map a procedure over every field TYPE of a record, preserving labels/presence/tail/key-domain.

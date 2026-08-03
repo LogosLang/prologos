@@ -3071,3 +3071,34 @@
                           "defn boom9 [x]\n  [panic \"NESTED\"]\n"
                           "def q := {:x [boom9 1]}\n")))
   (check-false (ormap prologos-error? rs)))
+
+
+;; ============================================================================
+;; The presence marker moved from SUFFIX to PREFIX (2026-08-03).
+;;
+;; F1b.7g made `?`-terminated keys readable, so a field literally named
+;; `active?` and PRESENT rendered `{:active? Bool}` — identical to an OPTIONAL
+;; field named `active`. Two different row types printed the same string.
+;; ============================================================================
+
+(test-case "presence-unknown marks with a `?` PREFIX, which cannot collide"
+  ;; The dynamic-dissoc writer is what mints 'unknown presences.
+  (define r (run-ws-pre-last
+             (string-append "def mm := {:active? true :n 1}\n"
+                            "def kk : Keyword := :n\n"
+                            "def dd := [map-dissoc mm kk]\n"
+                            "dd\n")))
+  ;; all three cases distinguishable at once: `:?n` is field `n` optional,
+  ;; `:?active?` is field `active?` optional — and a PRESENT `active?` would
+  ;; render `:active?`, which neither of these is.
+  (check-regexp-match #rx":[?]n Int" r "an optional field marks in FRONT")
+  (check-regexp-match #rx":[?]active[?] Bool" r
+                      "a `?`-named field that is ALSO optional shows both, unambiguously")
+  (check-false (regexp-match? #rx":n[?]" r) "the suffix spelling is gone"))
+
+(test-case "a PRESENT `?`-named field still renders as itself"
+  ;; The other half of the ambiguity: this must NOT gain a marker.
+  (define r (run-ws-pre-last "def mp := {:active? true}\nmp\n"))
+  (check-regexp-match #rx":active[?] Bool" r)
+  (check-false (regexp-match? #rx":[?]active" r)
+               "a present field must carry no presence marker"))

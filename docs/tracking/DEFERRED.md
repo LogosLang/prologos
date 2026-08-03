@@ -1405,7 +1405,31 @@ is rejected (needs ≥1 of requires/provides/includes).
    the same 7 imperative arms `schema-fvar->row-or-self` (typing-core) already
    touches; couples to the strict-vs-carried-fields semantics question in item 2.
 
-## CIU T6: named-`?`-field vs presence-optional DISPLAY ambiguity (7g surfaced, owner-acknowledged 2026-07-19)
+## ✅ RESOLVED 2026-08-03 — CIU T6: named-`?`-field vs presence-optional DISPLAY ambiguity (7g surfaced, owner-acknowledged 2026-07-19)
+
+**Fixed by MOVING the marker, not by inventing a new one.** The entry offered
+three presentation options (a leading `?`, a space, `{:active [?] Bool}`); the
+leading `?` is the one with a structural argument behind it, so it is the one
+that shipped. `recognize-keyword` requires `char-alphabetic?` for the character
+after the colon, so **no user field can ever be named `?active`** — the marker
+now occupies a position the lexer reserves, which makes the distinction
+impossible to collide with rather than merely unlikely to. A space or a bracket
+form would have been equally readable and equally conventional; this one cannot
+be defeated by a field name.
+
+All three cases are now distinct in one rendering:
+`:n` present · `:?n` optional · `:active?` a present field NAMED `active?` ·
+`:?active?` that same field, optional.
+
+Display-layer only, exactly as the entry predicted — no reader or typing touch.
+Cost: 3 acceptance markers in `2026-07-06-ciu-t6-f1-records.prologos` (the
+suffix spelling was pinned there), the `syntax.rkt` presence-lattice spec, and
+2 new test cases pinning both halves — the optional field marks in FRONT, and a
+present `?`-named field gains no marker at all.
+
+Original entry follows.
+
+## (original) CIU T6: named-`?`-field vs presence-optional DISPLAY ambiguity
 
 F1b.7g made `?`/`!`-suffixed keyword keys read whole (`:active?` is now a valid
 field/key name). This makes a PRE-EXISTING, display-only ambiguity newly
