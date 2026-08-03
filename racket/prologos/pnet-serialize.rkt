@@ -458,6 +458,26 @@
   (reg3! expr-reduce-arm 'ctor 0 (expr-unit))
   (reg3! expr-Eq (expr-Nat) (expr-zero) (expr-zero))
 
+  ;; QTT P5 residual 2: the Vec/Fin family — 9 nodes, ZERO registrations until
+  ;; 2026-08-03. Harmless only while no cached module contains one, and P5 is
+  ;; exactly what changed that: it made Vec/Fin defs pass the QTT gate for the
+  ;; first time, so they can now reach a library body and be cached.
+  ;;
+  ;; The failure this prevents does not look like a missing registration. An
+  ;; unregistered tag does not error at cache read — the reader's unknown-tag
+  ;; fallback returns a raw VECTOR, which then fails the first struct `match`
+  ;; to touch it, arbitrarily far away, with an error that PRINTS like the real
+  ;; struct (`#(struct:expr-vcons …)`). See `pipeline.md` item 6.
+  (reg2! expr-Vec (expr-Nat) (expr-zero))
+  (reg1! expr-Fin (expr-zero))
+  (reg1! expr-vnil (expr-Nat))
+  (regN! expr-vcons (expr-Nat) (expr-zero) (expr-unit) (expr-unit))
+  (reg1! expr-fzero (expr-zero))
+  (reg2! expr-fsuc (expr-zero) (expr-unit))
+  (reg3! expr-vhead (expr-Nat) (expr-zero) (expr-unit))
+  (reg3! expr-vtail (expr-Nat) (expr-zero) (expr-unit))
+  (regN! expr-vindex (expr-Nat) (expr-zero) (expr-unit) (expr-unit))
+
   ;; --- Four-arg ---
   (regN! expr-natrec (expr-Nat) (expr-unit) (expr-unit) (expr-zero))
   (regN! expr-boolrec (expr-Bool) (expr-unit) (expr-unit) (expr-true))
@@ -616,8 +636,28 @@
   ;; library use is the Q11 Posit->Float instances.
   (for ([op (list expr-generic-from-rat expr-generic-from-int)])
     (auto-cache! op d d))
-  ;; Int/Rat ops
-  (for ([op (list expr-int-add expr-int-sub expr-int-mul expr-int-div expr-int-lt expr-int-eq)])
+  ;; …and the TWELVE SIBLINGS of those two, unregistered until 2026-08-03.
+  ;; This is `pipeline.md`'s "a fix applied to one member of a family but not
+  ;; its siblings" verbatim: from-rat/from-int were registered because they
+  ;; detonated (the Q11 Posit→Float instances), and the arithmetic and
+  ;; comparison nodes right beside them were left. Same landmine, same family,
+  ;; and these are the ones a user actually writes — every `+` `-` `*` `/` `<`
+  ;; in a generic context elaborates to one.
+  (for ([op (list expr-generic-add expr-generic-sub expr-generic-mul expr-generic-div
+                  expr-generic-lt expr-generic-le expr-generic-gt expr-generic-ge
+                  expr-generic-eq expr-generic-mod)])
+    (auto-cache! op d d))
+  (for ([op (list expr-generic-negate expr-generic-abs)])
+    (auto-cache! op d))
+  ;; Posit sqrt + from-nat: the Float lists below carry `sqrt`, the Posit lists
+  ;; above do not, and neither carries `from-nat`. Same sibling gap.
+  (for ([op (list expr-p8-sqrt expr-p16-sqrt expr-p32-sqrt expr-p64-sqrt
+                  expr-p8-from-nat expr-p16-from-nat expr-p32-from-nat expr-p64-from-nat)])
+    (auto-cache! op d))
+  ;; Int ops
+  (for ([op (list expr-int-add expr-int-sub expr-int-mul expr-int-div expr-int-lt expr-int-eq
+                  ;; `le` and `mod` were missing while `lt` and `eq` were present.
+                  expr-int-le expr-int-mod)])
     (auto-cache! op d d))
   (for ([op (list expr-int-neg expr-int-abs)])
     (auto-cache! op d))

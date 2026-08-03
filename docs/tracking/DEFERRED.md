@@ -241,13 +241,16 @@ that commit; item 4 has since closed.
    only as an `nf` congruence arm. So `vindex` now type-checks and
    multiplicity-checks but does not compute. Pre-existing, unrelated to QTT;
    filed so "Vec is supported now" is not over-read.
-2. **Vec/Fin nodes have no `pnet-serialize` registration** — zero `reg!`/
-   `auto-cache!` entries for the 7 constructor/eliminator nodes. Harmless today
-   (no cached module contains one), but the moment a lib or user module caches a
-   Vec term the reader's unknown-tag fallback returns a raw VECTOR impostor that
-   fails a struct match arbitrarily far away — `pipeline.md` item 6's documented
-   misleading-failure class. P5 is the natural trigger point because it makes
-   Vec/Fin defs pass the gate for the first time.
+2. ✅ **FIXED 2026-08-03 — Vec/Fin nodes had no `pnet-serialize` registration.**
+   Nine nodes, not seven (`expr-Vec` and `expr-Fin` themselves were missing
+   too). All nine now register, pinned by `tests/test-pnet-vec-fin.rkt` — the
+   assertion is `struct?` FIRST and `equal?` second, because the failure mode
+   is a raw VECTOR that PRINTS like the struct, so an `equal?`-only check can
+   pass a vector against a vector.
+
+   **Probing this found a larger, verified gap and it is filed below** — the
+   same landmine sits under the `expr-generic-*` arithmetic family and two
+   other sibling sets. Fixed in the same commit.
 3. **The Redex model has no QTT rules for Vec/Fin** — `redex/qtt.rkt` has
    grammar/typing/reduction for them but zero usage rules, so P5's seven usage
    rules ship spec-unbacked. The soundness property stays vacuously true (nothing
@@ -259,6 +262,44 @@ that commit; item 4 has since closed.
    rather than the remainder after `(length args)` applications. They agree with
    each other, so this is twin-parity, not drift; fixing it means fixing both.
    Reachable only via the hole-section `whnf` path.
+
+## ✅ FIXED 2026-08-03 — `.pnet` registration gaps by SIBLING, not by node (found while fixing QTT P5 residual 2)
+
+`pipeline.md` names this shape — *"a fix applied to one member of a container
+family but not its siblings"* — and the `.pnet` tag tables are full of it,
+because each registration was added when that particular node DETONATED.
+
+Verified in-process (construct the node, `deep-struct->serializable` →
+`deep-serializable->struct`, assert the result is a `struct?` and not a raw
+vector), so these are measurements rather than inferences:
+
+| Family | Registered before | MISSING before |
+|---|---|---|
+| `expr-generic-*` | `from-int`, `from-rat` (they bit — the Q11 Posit→Float instances) | `add sub mul div lt le gt ge eq mod negate abs` — **12** |
+| `expr-int-*` | `add sub mul div lt eq` | `le`, `mod` — **2** |
+| Posit ops | the 12-op list per width, ×4 widths | `sqrt`, `from-nat` per width — **8** |
+| Vec/Fin | none | all **9** (P5 residual 2 above) |
+
+The generic set is the alarming one: those are not exotic nodes. Every generic
+`+ - * / < <= > >= = mod`, `negate`, `abs` a user writes elaborates to one, and
+the family's OTHER two members are registered specifically because they caused
+a months-latent crash. All 31 now register; pinned per-member in
+`tests/test-pnet-vec-fin.rkt` (enumerated, not sampled — the defect IS the
+per-member gap, so a test that checked one member per family would have passed
+against every one of these).
+
+**A blanket coverage test was attempted and is NOT the answer as written.** A
+reflective sweep over all 345 `expr-*` structs — build a dummy, round-trip it —
+reports 130 failures, and that number is NOT trustworthy: dummy field values
+are ill-formed for the sentinel-serialized containers (`expr-champ`,
+`expr-hset`, `expr-rrb`, the transients), which serialize RECONSTRUCTIVELY and
+legitimately reject a dummy payload. It also produced at least one outright
+false positive (`expr-Symbol`, which round-trips correctly when checked
+in-process). Treat 130 as an upper bound that needs per-node triage, not as a
+defect count. The residual — auditing the rest, and deciding which nodes are
+deliberately non-persistable (`expr-prop-network`, `expr-opaque`, the
+transients) versus simply missed — is real work and is **not** done. Reproduce
+the sweep with the recipe above before trusting any number in it.
 
 ## ✅ CLOSED `2df675d5` — `expr-foreign-fn` treated as a closed leaf (filed 2026-07-30, fixed 2026-08-02)
 
