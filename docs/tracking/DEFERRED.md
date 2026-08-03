@@ -4156,7 +4156,30 @@ Highest-value items, in the order that document recommends:
   reach-in behind C1. Fixing it removes code.
 - **A4.** Two identical-arm `match` sites guard every outbound dial and send;
   an arm-collapsing optimisation would delete the outbound path with a green
-  suite.
+  suite. **Re-verified 2026-08-03: the hazard is LIVE.** `run-step-drain`
+  (interop-driver.prologos) still reads
+
+  ```
+  match [drain-dials [step-out-reqs cid cs op step]]
+    | true  -> emit-after-stash stashed [append [conn-step-outbound step] [withdraw-frames cid op]]
+    | false -> emit-after-stash stashed [append [conn-step-outbound step] [withdraw-frames cid op]]
+  ```
+
+  — byte-identical arms, and `drain-dials` is reachable ONLY as the scrutinee.
+
+  **A cheap regression test was considered and deliberately NOT written.** The
+  obvious one — call `drain-dials` from Prologos and assert the dial FFI queue
+  received the request (`ocapn-dial-request` / `-drain` / `-reset!` are all
+  exported, so it is easy) — would still PASS after someone collapsed
+  `run-step-drain`'s arms, because it never goes through `run-step-drain`. A
+  guard that cannot fail in the scenario it names is decoration, which is
+  exactly what D4.P2 item 10 says not to leave behind. Covering the real
+  hazard needs a test that drives a full `run-step` and then asserts the queue
+  is non-empty; that is OCapN-setup-heavy and belongs with the A4 work itself.
+
+  The principled fix is unchanged: extend `OutReq` to a `StateReq` so
+  stash/park/publish drain like sends do, instead of depending on seven
+  hand-maintained matches.
 - ~~**U1.**~~ FIXED 2026-08-03. A `let` whose VALUE sits on a continuation line
   mis-grouped: the BODY line was folded into the value's argument list, so
 
