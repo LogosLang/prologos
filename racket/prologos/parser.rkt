@@ -1226,6 +1226,19 @@
                       (stx->datum (car args))
                       "mixfix: malformed .( ) expression")
                   #f)]
+    ;; …and the same channel for READER-level rejections (today: the removed
+    ;; `~N` approximate literal). These used to raise during TOKENIZATION,
+    ;; which is strictly worse than a parse-time raise: tokenization finishes
+    ;; before any command runs, so there was no token stream left to run the
+    ;; file's other commands from and the whole file was lost. Carrying a
+    ;; marker in the token stream costs nothing and makes it per-command. Same
+    ;; (pair? args) guard, LOAD-BEARING for the same reason.
+    [(and (symbol? head) (eq? head '$reader-error))
+     (parse-error loc
+                  (if (and (pair? args) (string? (stx->datum (car args))))
+                      (stx->datum (car args))
+                      "reader: malformed input")
+                  #f)]
     ;; …and the raw retired sentinels (targetless shapes the fold passes through)
     [(and (symbol? head) (eq? head '$dot-key))
      (retired-selection-error 'dot-key (and (pair? args) (stx->datum (car args))) loc)]

@@ -1300,15 +1300,15 @@
   (register-token-pattern!
    (token-pattern 'tilde-lbracket (lambda (rrb pos) (recognize-tilde-lbracket rrb pos))
                   (lambda (s p l) 'tilde-lbracket) 85))
-  ;; (N6c) ~N approximate literals removed — the pattern now raises a
-  ;; migration hint (fires on the production tokenizer, any entry path)
+  ;; (N6c) ~N approximate literals removed — the token carries a MARKER, and
+  ;; `token-entry->stx` turns it into `($reader-error "msg")` so the parser
+  ;; reports one per-command error (the `$let-error` channel). It used to
+  ;; RAISE here, which cost the whole file: tokenization completes before any
+  ;; command runs, so a raise leaves no token stream to run the other commands
+  ;; from. The message survived the change; the other commands now do too.
   (register-token-pattern!
    (token-pattern 'tilde-number (lambda (rrb pos) (recognize-removed-tilde-number rrb pos))
-                  (lambda (s p l)
-                    (define-values (line col) (rrb-line-col s p))
-                    (error 'prologos-reader
-                           "line ~a, column ~a: `~~` approximate literals were removed — bare decimals are Posit32 (3.14); use pNN literals for other widths (3.14p16, or 3.14p for Posit64)"
-                           line col))
+                  (lambda (s p l) 'tilde-number)
                   86))
   ;; Backtick and comma (quasiquote/unquote)
   (register-token-pattern!
@@ -2407,6 +2407,14 @@
       [else (string->symbol lexeme)]))
 
   (case type
+    ;; (N6c) `~N` — removed. A reader-level rejection that is nonetheless a
+    ;; PER-COMMAND error: the marker rides the token stream to the parser,
+    ;; which converts it exactly like `$let-error`. The loc lives on the syntax
+    ;; object now, so the text no longer spells out line and column.
+    [(tilde-number)
+     (make-stx (list (make-stx '$reader-error source line col pos1 0)
+                     "`~` approximate literals were removed — bare decimals are Posit32 (3.14); use pNN literals for other widths (3.14p16, or 3.14p for Posit64)")
+               source line col pos1 span)]
     ;; Compound tokens that produce sentinel syntax lists
     [(dot-access)
      (define field-sym (string->symbol (substring lexeme 1)))

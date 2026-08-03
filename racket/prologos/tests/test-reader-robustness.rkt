@@ -18,7 +18,9 @@
          "../driver.rkt"
          "../namespace.rkt"
          "../macros.rkt"
-         "../errors.rkt")
+         "../errors.rkt"
+         ;; the project's OWN srcloc (4 fields), not racket/base's
+         (only-in "../source-location.rkt" srcloc-line srcloc-col))
 
 (define (run-file-lines src)
   (define f (make-prologos-temp-file))
@@ -67,21 +69,35 @@
   (check-true (>= (length results) 1)
               "an aborted file returns nothing at all"))
 
-(test-case "reader/a reader raise becomes a reported error, with a position"
+(test-case "reader/a reader rejection is PER-COMMAND, and says where"
   ;; `~3` (approximate literals, removed) used to escape as a raw Racket
   ;; message plus a `context...:` dump: exit 1, zero result lines, no error
   ;; COUNT, and no indication of WHERE. The loudest possible failure presented
   ;; as the quietest.
   ;;
-  ;; Tokenization finishes before any command runs, so the commands really are
-  ;; unrecoverable here — what is recoverable is saying so properly.
+  ;; The first fix caught the raise and reported it, which left the whole file
+  ;; still lost — "tokenization finishes before any command runs, so the
+  ;; commands really are unrecoverable here" was true of a RAISE and only of a
+  ;; raise. The tokenizer now emits a `($reader-error msg)` MARKER instead, on
+  ;; the same channel as `$let-error`, so the rejection rides the token stream
+  ;; to the parser and costs exactly one command.
   (define results (run-file-lines "ns rt\ndef a := 1\na\ndef b := ~3\nb\n"))
   (check-true (list? results) "the file aborted instead of reporting")
   (define text (string-join (map (lambda (r) (format "~a" r)) results) "\n"))
   (check-true (string-contains? text "approximate literals were removed")
               (format "got: ~v" results))
-  (check-true (regexp-match? #rx"line 4" text)
-              (format "the diagnostic does not say WHERE: ~v" results)))
+  ;; WHERE: on the srcloc now, not spelled into the message text. Line 4 is
+  ;; the `~3`; column 9 is the tilde itself, not the start of the line.
+  (define err (findf prologos-error? results))
+  (check-true (and err #t) (format "no error reported: ~v" results))
+  (check-equal? (srcloc-line (prologos-error-srcloc err)) 4 (format "~v" err))
+  (check-equal? (srcloc-col (prologos-error-srcloc err)) 9 (format "~v" err))
+  ;; …and the commands on either side of it survive. This is the half the
+  ;; first fix could not deliver.
+  (check-true (string-contains? text "a : Int defined.")
+              (format "a command BEFORE the bad one was lost: ~v" results))
+  (check-true (string-contains? text "Unbound variable")
+              (format "the command AFTER the bad one was lost: ~v" results)))
 
 (test-case "reader/the tokenizer-validation raises are not the live path"
   ;; The validation loop in `tokenize-string` raises on a negative Nat literal
@@ -91,8 +107,10 @@
   ;;
   ;; Pinned as a negative on purpose. Those raises read like they own these
   ;; cases; they do not, and the next person to "fix" one should find that out
-  ;; here rather than by editing dead code. The live whole-file raiser is the
-  ;; tilde TOKEN PATTERN (above), which fires during tokenization proper.
+  ;; here rather than by editing dead code. The tilde TOKEN PATTERN (above) was
+  ;; the one live whole-file raiser; it no longer raises at all, so `tokenize-
+  ;; string`'s loop is now the only raising code left in the reader — and it is
+  ;; test-only (`compat-tokenize-string` has no production caller).
   (define bad-nat (run-file-lines "ns rt2\ndef a := 1\ndef b := -3N\n"))
   (check-true (list? bad-nat))
   (check-true (string-contains? (format "~a" bad-nat)

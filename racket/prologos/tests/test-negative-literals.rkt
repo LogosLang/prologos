@@ -133,11 +133,13 @@
 ;; ========================================
 
 (test-case "neg-lit/tokenize: ~N forms are rejected with a migration hint (N6c)"
-  ;; ~ approximate literals were removed; negatives included.
+  ;; ~ approximate literals were removed; negatives included. The tokenizer no
+  ;; longer RAISES — it emits a `tilde-number` token that the parser turns into
+  ;; one per-command error, so the rest of the file survives.
   (for ([src (in-list (list "~-42" "~-3.14" "~-3/7" "~-3N"))])
-    (check-exn (regexp "approximate literals were removed")
-               (lambda () (tokenize-string src))
-               (format "~a should raise the migration hint" src))))
+    (define toks (tokenize-string src))
+    (check-true (for/or ([t (in-list toks)]) (eq? (compat-token-type t) 'tilde-number))
+                (format "~a should tokenize to a tilde-number marker, got: ~v" src toks))))
 
 ;; ========================================
 ;; 5. Non-Regression: Arrows Still Work

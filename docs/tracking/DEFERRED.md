@@ -558,39 +558,61 @@ elsewhere in this file.
 Three tests that pinned the raise are updated to pin the marker; that is the
 change the entry existed to make, not collateral.
 
-## 🔶 PARTIAL `5da580f9` — the tilde-number reader diagnostic (filed 2026-07-28; the silence is fixed, the per-command routing is not)
+## ✅ CLOSED — the tilde-number reader diagnostic (filed 2026-07-28; silence fixed `5da580f9`, per-command routing fixed 2026-08-03)
 
-**Fixed**: it is a reported error now, not a raw Racket `context...:` dump with
-exit 1 and zero output. Two changes — reader raises carry LINE AND COLUMN
-(`rrb-line-col`, computed from the char buffer, since tokenization runs before
-any syntax object exists), and `process-file-inner` guards the READ step,
-turning a reader raise into one ordinary Prologos error with a normal error
-count.
+**Was fixed at `5da580f9`**: it became a reported error rather than a raw
+Racket `context...:` dump with exit 1 and zero output. Reader raises carry LINE
+AND COLUMN (`rrb-line-col`, computed from the char buffer, since tokenization
+runs before any syntax object exists), and `process-file-inner` guards the READ
+step.
+
+**Now fixed too — the file's other commands survive.** The old entry said this
+"needs the reader to EMIT A MARKER instead of raising — the D4.P1a
+`parse-error`-value seat", and that is exactly what it took. The `tilde-number`
+token pattern no longer raises; it tags the token, `token-entry->stx` emits
+`($reader-error "msg")`, and `parser.rkt` converts it on the same channel as
+`$let-error` / `$mixfix-error` (plus the `macros.rkt` head-symbol exclusion the
+channel requires). One command lost, not the file:
 
 ```
-0: ERROR: reader: prologos-reader: line 4, column 9: `~` approximate literals
-   were removed — bare decimals are Posit32 (3.14); use pNN literals …
---- 1 errors ---
+"a : Int defined."
+(parse-error (srcloc … 3 9 3) "`~` approximate literals were removed — …")
+"c : Int defined."
 ```
 
-**Still open**: the file's other commands are still lost, because the raise
-happens during tokenization and there is no token stream left to run them
-from. That needs the reader to EMIT A MARKER instead of raising — the D4.P1a
-`parse-error`-value seat — which also means updating the five test files that
-currently `check-exn` on the raise (test-lseq-literal, test-negative-literals,
-test-num-lit, test-numeric-display ×2). Unchanged remedy, unchanged owner.
+Two things worth knowing if this channel is extended again:
 
-**Narrow the guard, not the blast radius**: guarding the whole `surfs`
-computation instead of just the read ALSO swallowed raises from
-`preparse-expand-all` that tests rely on escaping (a numeric `ns` segment).
-Turning a REJECTION into a report is a different decision from turning an
-ABORT into one; only the second was wanted. Caught by the suite, two files.
+- **The `token-pattern`'s third field is the TYPE function, not a value
+  function.** Returning a marker symbol from it renames the token TYPE, so the
+  `token-entry->stx` arm keyed on the old name silently stops firing and the
+  token falls through two `[else]`s to a bare symbol — `~32` came out as an
+  unbound variable with no diagnostic at all. Same silent-fallthrough shape the
+  `.N` ordinal-access arm is annotated for at that site.
+- **The location moved off the message and onto the srcloc**, so the text no
+  longer spells "line 4, column 9". A test asserting `#rx"line 4"` against the
+  message string is asserting the OLD delivery mechanism; assert
+  `srcloc-line` / `srcloc-col` instead.
+
+The five `check-exn` test files the entry named are updated (4 files, 5 cases —
+`test-lseq-literal`, `test-negative-literals`, `test-num-lit`,
+`test-numeric-display`), each now asserting the rejection is REPORTED rather
+than raised. `test-reader-robustness` additionally pins that the commands on
+either side survive — the half `5da580f9` could not deliver.
+
+**Narrow the guard, not the blast radius** (unchanged, still load-bearing):
+guarding the whole `surfs` computation instead of just the read ALSO swallowed
+raises from `preparse-expand-all` that tests rely on escaping (a numeric `ns`
+segment). Turning a REJECTION into a report is a different decision from
+turning an ABORT into one; only the second was wanted. Caught by the suite, two
+files.
 
 **Also learned, and pinned as a negative** (`test-reader-robustness.rkt`): the
 sibling raises in `tokenize-string`'s validation loop — negative Nat literal,
 stray `&` — are NOT reachable for the obvious inputs. A per-command check gets
-there first with a real srcloc, which is strictly better. They read like they
-own those cases and they do not.
+there first with a real srcloc, which is strictly better. With the tilde
+pattern no longer raising, that loop is the only raising code left in the
+reader, and `compat-tokenize-string` has no production caller — it is a
+test-only compatibility path.
 
 ## ✅ CLOSED `4efe236c` — bare top-level `[]` hard-aborts the reader (filed 2026-07-28, fixed 2026-08-02)
 

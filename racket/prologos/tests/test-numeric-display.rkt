@@ -158,7 +158,8 @@
     (check-equal? (value-part d1) "1")))
 
 (test-case "~N input is rejected with a migration hint (N6c)"
-  (check-exn (regexp "approximate literals were removed")
-             (lambda () (run-ns-ws-last "~3.14")))
-  (check-exn (regexp "approximate literals were removed")
-             (lambda () (run-ns-ws-last "~42"))))
+  ;; Reported, not raised — per-command since 2026-08-03.
+  (for ([src (in-list (list "~3.14" "~42"))])
+    (check-true (string-contains? (format "~a" (run-ns-ws-last src))
+                                  "approximate literals were removed")
+                (format "~a lost its migration hint" src))))

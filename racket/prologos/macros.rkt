@@ -1158,6 +1158,7 @@
        (not (eq? x '$retired-selection)) ; D4.P1a retirement marker (parser converts to guided error)
        (not (eq? x '$let-error))        ; LET P1 syntax-failure marker (parser converts to per-command parse error)
        (not (eq? x '$mixfix-error))     ; mixfix syntax-failure marker (same channel as $let-error)
+       (not (eq? x '$reader-error))     ; reader-level rejection marker (same channel; today: removed ~N literals)
        (not (eq? x '$let-block))        ; LET P3 aligned-block sentinel (reader-validated; expand-let consumes)
        (not (eq? x '$goal-rhs))         ; SolveCarrier P2: let binding-RHS paren marker (parser consumes)
        (not (eq? x '$let-noop-body))    ; top-level let: bodyless placeholder (let-bindings->nested-fn consumes)

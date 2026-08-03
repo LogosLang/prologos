@@ -94,8 +94,10 @@
   (check-true (string-contains? (run-ns-ws-last "3.14p32") "Posit32") "3.14p32 stays Posit32")
   (check-true (string-contains? (run-ns-ws-last "3.14f64") "Float64") "3.14f64 stays Float64")
   ;; (N6c) the ~ marker is gone — stale input gets a migration hint
-  (check-exn (regexp "approximate literals were removed")
-             (lambda () (run-ns-ws-last "~3.14"))))
+  ;; Reported, not raised — the rejection is now per-command (N6c residual
+  ;; closed 2026-08-03).
+  (check-true (string-contains? (format "~a" (run-ns-ws-last "~3.14"))
+                                "approximate literals were removed")))
 
 ;; ========================================
 ;; N1 integral exponent stays Int (non-regression)
