@@ -58,7 +58,12 @@
          "../errors.rkt"
          "../driver.rkt"
          "../tree-parser.rkt"  ;; §11: current-source-str, current-raw-node
-         (only-in "../typing-propagators.rkt" current-attribute-map-cell-id))  ;; Track 4B Phase 6b
+         (only-in "../typing-propagators.rkt" current-attribute-map-cell-id)  ;; Track 4B Phase 6b
+         ;; Rel T1: `pipeline.md` § "New Racket Parameter" names this file as
+         ;; item 3 of the checklist and the relation store was missing from it,
+         ;; so a `defr` in one test file stayed visible to the next in the same
+         ;; worker — and `solve` saw a store that was not the ambient one.
+         (only-in "../relations.rkt" current-relation-store))
 
 ;; Track 10 Phase 3a: Read .pnet cache setting from environment
 ;; The test runner sets PROLOGOS_PNET_CACHE=1 when cache is enabled and =0
@@ -104,6 +109,10 @@
 (define ready-module-loader           (current-module-loader))
 (define ready-spec-propagation-handler (current-spec-propagation-handler))
 (define ready-foreign-handler         (current-foreign-handler))
+;; The relation store is an immutable hasheq, so re-binding the post-prelude
+;; value per file is complete isolation: a file's `defr`s build a NEW store and
+;; cannot reach the next file.
+(define ready-relation-store          (current-relation-store))
 ;; global-env.rkt — Layer-2 params retired (4A.c-iii-e); resolution is the mnr cascade.
 ;; Track 7 Phase 6g: Snapshot persistent registry network CONTENTS (not box identity).
 ;; Each test file gets a fresh box with the post-prelude network contents,
@@ -230,6 +239,7 @@
          [current-module-loader           ready-module-loader]
          [current-spec-propagation-handler ready-spec-propagation-handler]
          [current-foreign-handler         ready-foreign-handler]
+         [current-relation-store          ready-relation-store]
          [current-persistent-registry-net-box
           (and ready-persistent-registry-net-contents
                (box ready-persistent-registry-net-contents))]  ;; Track 7 Phase 6g: fresh box per file

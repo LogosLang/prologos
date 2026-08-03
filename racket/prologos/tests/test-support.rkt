@@ -35,7 +35,14 @@
          "../namespace.rkt"
          "../warnings.rkt"           ;; Track 7 Phase 6d: init-warning-cells!
          "../global-constraints.rkt"  ;; Track 7 Phase 6d: init-narrow-cells!
-         (only-in "../propagator.rkt" with-forked-network)) ;; Track 10 Phase 3c: network fork
+         (only-in "../propagator.rkt" with-forked-network) ;; Track 10 Phase 3c: network fork
+         ;; Rel T1: the relation store is a parameter, and `pipeline.md`
+         ;; § "New Racket Parameter" names THIS FILE and batch-worker.rkt as
+         ;; items 2 and 3 of the checklist. It was in neither, so `solve` in a
+         ;; `run-ns*` context saw a store that was not the ambient one — typing
+         ;; as untyped where production types, silently. Instance #7 of that
+         ;; class.
+         (only-in "../relations.rkt" current-relation-store))
 
 (provide ;; Pre-loaded prelude registries
          prelude-module-registry
@@ -176,6 +183,10 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 10 Phase 3c: fork replaces 8 network params
                  [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
+                 ;; Immutable hasheq, so binding the current value is a full
+                 ;; per-call isolation: a `defr` inside the call rebinds a NEW
+                 ;; store and cannot escape.
+                 [current-relation-store (current-relation-store)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
                  )
@@ -207,6 +218,10 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 10 Phase 3c: fork replaces 8 network params
                  [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
+                 ;; Immutable hasheq, so binding the current value is a full
+                 ;; per-call isolation: a `defr` inside the call rebinds a NEW
+                 ;; store and cannot escape.
+                 [current-relation-store (current-relation-store)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
                  )
@@ -243,6 +258,10 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 10 Phase 3c: fork replaces 8 network params
                  [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
+                 ;; Immutable hasheq, so binding the current value is a full
+                 ;; per-call isolation: a `defr` inside the call rebinds a NEW
+                 ;; store and cannot escape.
+                 [current-relation-store (current-relation-store)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
                  )
@@ -273,6 +292,10 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 10 Phase 3c: fork replaces 8 network params
                  [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
+                 ;; Immutable hasheq, so binding the current value is a full
+                 ;; per-call isolation: a `defr` inside the call rebinds a NEW
+                 ;; store and cannot escape.
+                 [current-relation-store (current-relation-store)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
                  )
@@ -304,6 +327,10 @@
                    [current-error-port stderr-out]
                    ;; Track 10 Phase 3c: fork replaces 8 network params
                    [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
+                 ;; Immutable hasheq, so binding the current value is a full
+                 ;; per-call isolation: a `defr` inside the call rebinds a NEW
+                 ;; store and cannot escape.
+                 [current-relation-store (current-relation-store)]
                    [current-module-registry-cell-id   #f]
                    [current-ns-context-cell-id        #f]
                    )

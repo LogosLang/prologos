@@ -2336,22 +2336,28 @@ cases for the POL.8/POL.9 grammar.
 
 ---
 
-## Rel T1 — `current-relation-store` is not threaded into test-support or batch-worker (captured 2026-07-25; pre-existing, design-acknowledged)
+## ✅ CLOSED `PLACEHOLDER12` — `current-relation-store` is not threaded into test-support or batch-worker (captured 2026-07-25, fixed 2026-08-02)
 
-`grep -c current-relation-store` = **0** in BOTH
-`racket/prologos/tests/test-support.rkt` and
-`racket/prologos/tools/batch-worker.rkt`. Consequence: in the `run-ns*` and
-batch-worker contexts the relation store is not the ambient one, so `solve`
-types as untyped where production would type it — **silently**. Design §6.9
-recommended threading it and accepted the gap.
+Threaded into both files the checklist names. The store is an immutable hasheq,
+so re-binding the ambient value per call (test-support) and the post-prelude
+value per file (batch-worker) is COMPLETE isolation: a `defr` inside builds a
+new store and cannot escape.
 
-This is instance **#7** of the two-context boundary bug class that
-`pipeline.md` § "New Racket Parameter" (items 2+3) exists to prevent — the
-checklist names exactly these two files. Worth treating as an architectural
-signal rather than a seventh individual fix: the class recurs because the
-parameter set is discovered by grep rather than declared in one place.
+`tests/test-relation-store-isolation.rkt` pins all three directions — nothing
+leaks forward, the caller's binding survives a call, and register-then-query
+within ONE call still works. 2 of its 3 cases fail against the previous commit.
 
----
+**On the entry's own framing** ("worth treating as an architectural signal
+rather than a seventh individual fix: the class recurs because the parameter
+set is discovered by grep rather than declared in one place") — that is right,
+and the architectural fix is still open. What this changes is that instance #7
+is no longer silently live while the general answer is designed, and the leak
+is now pinned by a test rather than by a grep that has to be remembered.
+
+Note the same session closed the CELL-BACKED half of the identical class (the
+cross-file spec-store leak, above). Two instances of one boundary, both live,
+found from opposite directions — one by bisecting a flake, one by reading a
+DEFERRED entry.
 
 ## ✅ RESOLVED (2026-07-25, `bb45d2a0`) — SC now has its regression test
 
