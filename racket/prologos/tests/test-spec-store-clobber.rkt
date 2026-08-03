@@ -342,3 +342,45 @@
   (when e
     (check-equal? (spec-entry-where-constraints e) '()
                   "and it must be List's own, unconstrained, spec")))
+
+
+;; ============================================================================
+;; The TRAIT registry surface, censused (issue #67, 2026-08-03).
+;;
+;; The filing lists three collision surfaces and says the trait registry and
+;; import shadowing are "NOT censused". This censuses the first.
+;;
+;; ⚠ THE FINDING IS AN ASYMMETRY, and it is visible in fifty lines of
+;; `macros.rkt`. `register-impl!` checks for a duplicate and RAISES:
+;;
+;;     (when (and existing (not (eq? … )))
+;;       (error 'impl "Duplicate instance: ~a already registered …"))
+;;
+;; `register-trait!`, immediately above it, is a bare `hash-set` — no check, no
+;; error, no warning. So two registries with the same shape and the same hazard
+;; ship opposite policies, and nothing says which is intended.
+;;
+;; No diagnostic is built here, and the reason is the one W3001 already had to
+;; answer: preparse walks the declarations more than once (instrumenting
+;; `register-trait!` shows THREE overwrite events for two declarations), so a
+;; naive error fires spuriously. Deciding error-vs-warn, and whether same-file
+;; redefinition is legitimate at all (`defn` redefinition is), is a policy call.
+;; What is locked here is the behaviour, so that call is made deliberately.
+;; ============================================================================
+
+(test-case "issue-67/a trait can be silently REDEFINED"
+  (define rs (run-file-results
+              (string-append "ns trait-redef\n\n"
+                             "trait Shrinkable {A}\n  shrink : A -> A\n\n"
+                             "trait Shrinkable {A}\n  shrink : A -> A\n  grow : A -> A\n\n"
+                             "def z := 1\n")))
+  ;; no error, no warning — that is the defect
+  (check-false (ormap (lambda (r) (regexp-match? #rx"[Dd]uplicate" r)) rs)
+               (format "if a diagnostic ever lands, THIS is the assertion that flips: ~v" rs))
+  ;; and the second definition wins: `grow` exists
+  (check-true (ormap (lambda (r) (regexp-match? #rx"Shrinkable-grow" r)) rs)
+              (format "the redefinition took effect silently: ~v" rs))
+  ;; …including re-typing the FIRST trait's accessor, which is the part that
+  ;; would bite: `Shrinkable-shrink` is defined twice, with different types.
+  (check-true (>= (length (filter (lambda (r) (regexp-match? #rx"Shrinkable-shrink" r)) rs)) 2)
+              (format "~v" rs)))

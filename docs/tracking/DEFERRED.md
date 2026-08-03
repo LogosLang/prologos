@@ -1734,10 +1734,31 @@ the intended message. A perturbation that does not fail proves nothing about the
 test — only about the perturbation — and stopping at the first one would have
 shipped a guard never seen to fire.
 
-Remaining, unchanged: the trait-registry (`macros.rkt`) + import-shadowing
-(`namespace.rkt` value bindings) surfaces get no diagnostic and are still
-uncensused. Note WHY the census is not a one-liner there, since the spec census
-already paid for this lesson: a final-state diff cannot see an overwrite, so it
+**✅ THIRD SLICE 2026-08-03 — the TRAIT registry is now censused too**, and the
+finding is an ASYMMETRY sitting fifty lines apart in `macros.rkt`:
+
+- `register-impl!` checks for a duplicate and **RAISES** ("Duplicate instance:
+  ~a already registered …").
+- `register-trait!`, immediately above it, is a bare `hash-set` — no check, no
+  error, no warning.
+
+Two registries with the same shape and the same hazard ship OPPOSITE policies,
+and nothing anywhere says which is intended. Measured: a trait redefined in one
+file silently wins, and re-types the FIRST trait's accessor — `Shrinkable-shrink`
+is defined twice with different types, at zero errors. Pinned in
+`tests/test-spec-store-clobber.rkt`; if a diagnostic lands, that test's
+`check-false` on "duplicate" is the assertion that flips.
+
+No diagnostic built, for the reason W3001 already had to answer: preparse walks
+the declarations more than once (instrumenting `register-trait!` shows THREE
+overwrite events for two declarations), so a naive error fires spuriously.
+Deciding error-vs-warn — and whether same-file trait redefinition is legitimate
+at all, given `defn` redefinition is — is a policy call, and the point of
+locking the behaviour is that the call gets made deliberately.
+
+Remaining: the import-shadowing surface (`namespace.rkt` VALUE bindings) is
+still uncensused. Note WHY that census is not a one-liner, since the spec census
+already paid for the lesson: a final-state diff cannot see an overwrite, so it
 needs registration-EVENT instrumentation — the same reason instrumenting
 `register-spec!` reported zero collisions while the propagation site had 14.
 
