@@ -2872,7 +2872,7 @@ F1b sexp-green ≠ WS-correct class). MITIGATION: the wrong message's action
 shape: detect a kw item immediately after a caret-bearing step in
 `segment-select-items` and emit the splitter's message.
 
-### 22. ✅ CLOSED `PLACEHOLDER15` — arrowless match arms raw-crash the reader (fixed 2026-08-02)
+### 22. ✅ CLOSED `902ca588` — arrowless match arms raw-crash the reader (fixed 2026-08-02)
 
 Not the marker-seat class after all, and simpler than that: the diagnostic was
 already there and was being THROWN AWAY. `parse-match-pattern-arm` had EIGHT
