@@ -203,10 +203,14 @@ Both directions pinned: the message names constructor, owning type and
 scrutinee type; and a second case asserts the hint stays SILENT on an unrelated
 mismatch. A hint that fires wrongly is worse than no hint.
 
-## 🐛 Two soundness holes on the STRICT path, found while grounding P6 (2026-07-31)
+## ✅ CLOSED — two soundness holes on the STRICT path, found while grounding P6 (2026-07-31)
 
-Both confirmed by probe at `7584c16e`, both independent of P6/P7. **Both are now
-FIXED — see the CLOSED entry above.** Retained for the mechanisms.
+Both confirmed by probe at `7584c16e`, both independent of P6/P7. **Both were
+FIXED at the time — see the CLOSED entry above.** Retained for the mechanisms,
+which are still the best description of how each hole worked; the open-bug
+marker on this entry was left behind by mistake and is corrected here
+(2026-08-02). Hole 2's diagnostic was improved separately — see the
+cross-constructor hint entry above.
 
 1. **An unknown constructor in a match pattern silently becomes an irrefutable
    VARIABLE pattern**, making every later arm dead code with zero diagnostics.
