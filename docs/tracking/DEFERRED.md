@@ -483,19 +483,6 @@ parser.rkt) that these errors should route through.** Fix candidate: emit a
 marker/error-value from the pratt path instead of raising. Recorded in D4
 §5.P1a close notes.
 
-## 🐛 DEFECT — union-typed def + implicit-binder spec + call HANGS the type checker (found 2026-07-28, the D4.P1a adversarial verify)
-
-Five-command repro, >10 min CPU-bound, never completes: `ns c1` /
-`def u : <Int | String> := 42` / `u` / `spec identity2 {A : Type} A -> A` /
-`defn identity2 [x] x` / `[identity2 7]`. Dropping EITHER the bare `u` use OR
-the final call completes in seconds. Kill backtrace pins
-`typing-propagators.rkt:3009 infer-on-network/full` → `driver.rkt:693
-process-command` — after parse, in typing. Reproduced on a pristine HEAD copy,
-so pre-existing and unrelated to the P1a surface deletions. Likely
-union-speculation × implicit instantiation. Adjacent to (possibly the same as)
-the existing "Union-type checking hangs the type-checker (BSP non-quiescence)"
-entry below — **triage whether they are one defect** before opening work.
-
 ## 🔶 PARTIAL `5da580f9` — the tilde-number reader diagnostic (filed 2026-07-28; the silence is fixed, the per-command routing is not)
 
 **Fixed**: it is a reported error now, not a raw Racket `context...:` dump with
@@ -1081,6 +1068,44 @@ skip+warn policy; these lift the skips / harden the substrate.
   file (`examples/2026-07-17-ciu-t6-f1b3-width.prologos`) rather than appended to
   the main file. Possible connection to the transient full-suite mass-stalls
   (2 data points) — check when this gets its session.
+- **✏ 2026-08-02 — TRIAGED (answering the D4.P1a entry's "are they one defect?"): YES, one defect.**
+  The D4.P1a five-command repro (union def + implicit-binder spec + call) is an
+  INSTANCE of this class, and that entry is folded in here. More usefully, the
+  repro is **three commands**, and the third is `[int+ 1 2]`:
+
+  ```
+  ns w
+  def x : <Int | String> := 42
+  x
+  [int+ 1 2]              ;; ← hangs here
+  ```
+
+  Ingredient matrix (each row is one file, 25 s timeout):
+
+  | file | 3rd command | result |
+  |---|---|---|
+  | union def, USE, `[int+ 1 2]` | application | **HANG** |
+  | union def, USE, `[+ 1 2]` | application (trait) | **HANG** |
+  | union def, USE, `[+ 1.5 2.5]` | application (float) | **HANG** |
+  | union def, USE, `def y := 1` | def | completes |
+  | union def, USE, `42` / `"s"` | literal | completes |
+  | union def, USE, `x` | variable | completes |
+  | union def, `[int+ 1 2]` (no use) | — | completes |
+  | `Int` def (not union), USE, `[int+ 1 2]` | — | completes |
+
+  So all three ingredients are required and each is narrow: **a union-typed
+  def, a command that USES it, and a later command containing an
+  APPLICATION**. Notably `[int+ …]` is monomorphic — so this is NOT trait
+  resolution, which the two filed repros (`+`, a polymorphic spec) both
+  suggested. Initialising the union def with a String instead of an Int also
+  hangs, so it is not the chosen branch either. `[the <Int | String> x]` works
+  as the USE, so it is not specific to a bare reference.
+
+  That points at the `:type`-facet union join failing to converge once an
+  application's inference joins into it — consistent with the original
+  `attribute-map-merge-fn` finding, and a much smaller thing to instrument
+  than an 86-command acceptance file.
+
 - **Not blocked** — needs a dedicated debugging session on the typing propagator network.
 
 ---
