@@ -235,7 +235,7 @@ that commit; item 4 has since closed.
    each other, so this is twin-parity, not drift; fixing it means fixing both.
    Reachable only via the hole-section `whnf` path.
 
-## ✅ CLOSED `PLACEHOLDER` — `expr-foreign-fn` treated as a closed leaf (filed 2026-07-30, fixed 2026-08-02)
+## ✅ CLOSED `2df675d5` — `expr-foreign-fn` treated as a closed leaf (filed 2026-07-30, fixed 2026-08-02)
 
 The comment *"opaque leaf — no Prologos sub-expressions"* was false in SIX
 walkers, not two: `shift`, `subst`, `nf`, `uses-bvar0?`, and all three of
