@@ -1689,26 +1689,37 @@ Existing pre-4C off-network registries (`register-domain!`, `register-typing-rul
 
 ---
 
-## Surface Syntax Issues
+## Surface Syntax Issues — TRIAGED 2026-08-02 (2 of 3 stale)
 
-### WS-Mode `:=` Body Parsing with Multi-Form Bodies
-- `def x : List Nat := cons 1N [cons 2N nil]` fails — `expand-def-assign` requires exactly one form after `:=`
-- Fix: wrap multiple elements as implicit application
-- **Not blocked**
-- Source: `examples/unified-matching.prologos` Section 5
+### ✅ RESOLVED — WS-Mode `:=` Body Parsing with Multi-Form Bodies
 
-### Multi-Bracket defn Not Supported
-- `defn f [a] [b] body` doesn't work in sexp or WS mode
-- Standard pattern is uncurried single-bracket: `defn f [a b] body`
-- **Not blocked**: requires parser extension
-- Source: `examples/unified-matching.prologos` Section 11
+The entry said `def x : List Nat := cons 1N [cons 2N nil]` fails because
+`expand-def-assign` requires exactly one form after `:=`. It does not: it wraps
+a multi-token RHS as an application, which is the fix the entry asked for.
+Verified with the entry's exact example, with and without the annotation, and
+with the source file's own `def sample-list : List Nat := cons 1N [cons 2N
+[cons 3N nil]]`.
 
-### WS Mode Path Expression Disambiguation
-- `.{` conflict between mixfix and path branching syntax
-- Sexp mode works correctly. WS disambiguation deferred.
-- Source: Phase 3e-e plan (2026-03-03)
+`examples/unified-matching.prologos` carried that line COMMENTED OUT under an
+"Ideal syntax (commented out — WS := body parsing issue)" note. It is
+uncommented and the file runs 0 errors. The note outlived the behaviour it
+described — worth remembering when reading an example's own ISSUE comments.
 
----
+### ⬜ NOT A DEFECT — Multi-Bracket defn
+
+`defn f [a] [b] body` does not work in either mode, and the entry itself says
+the standard pattern is the uncurried single-bracket form —
+`prologos-syntax.md` makes that the convention ("Uncurried"). So this is a
+design NON-GOAL, not a gap. It produces a clean per-command error naming what
+it expected, not a crash. Reclassified rather than closed: if curried `defn`
+is ever wanted, this is where the note lives.
+
+### ✅ SUPERSEDED — WS Mode Path Expression Disambiguation (`.{`)
+
+The `.{` conflict has a ruling and a diagnostic since CIU T6 D4.P1b-ii:
+`cfg.{a}` at top level now gives the guided per-command error "a `.{…}`
+sub-block belongs inside a select block — write `x{server.{host port}}`; at top
+level, `x{…}` selects and `x.k` accesses". The entry predates that work.
 
 ## LSP / Editor Support
 
