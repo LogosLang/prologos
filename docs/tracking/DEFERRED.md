@@ -3306,7 +3306,28 @@ narrower than stated), or they are three latent silent-garbage paths.
 **Cheap first probe**: feed `#{…}`, `@[…]`, `~[…]` through the tree layer and
 check whether the tree-parser result is admitted or rejected by the merge.
 
-### 3. Reader sentinels that are still MACRO PATTERN VARIABLES (`$set-literal`, `$mixfix`)
+### 3. ✅ FIXED 2026-08-03 — Reader sentinels that were still MACRO PATTERN VARIABLES (`$set-literal`, `$mixfix`)
+
+Both are excluded now, and the whole list is ENUMERATED in a test
+(`tests/test-defmacro.rkt`) rather than sampled — the defect IS the per-member
+gap, and a test checking one or two sentinels passed for the entire time these
+two were missing.
+
+**Demonstrated at the unit level rather than argued**, because the source-level
+repro would not reproduce for me: `(datum-subst (list '$set-literal 1)
+(hasheq))` RAISED *"Unbound pattern variable in template: $set-literal"* while
+the sibling `$dot-access` passed through unchanged. That is the mechanism the
+filing describes, and a raise on the preparse path is what makes it a
+whole-file abort wherever it IS reachable. A behavioural test would have proved
+nothing here — same reasoning as `test-foreign-fn-walkers.rkt`.
+
+The companion assertion matters as much as the fix: a genuine `$x` must still
+raise, so the exclusion list cannot be widened into disabling the mechanism it
+guards.
+
+Original filing follows.
+
+**Original**: `pattern-var?` excludes eleven reader sentinels, but not all
 
 `pattern-var?` (macros.rkt:1144+) excludes eleven reader sentinels, but **not all
 of them**. Probe-verified at D4.P1b-ii: `(pattern-var? '$set-literal)` → `#t` and

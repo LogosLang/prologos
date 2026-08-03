@@ -68,6 +68,36 @@
   ;; Single $ is not a pattern var (need at least one char after $)
   (check-false (pattern-var? '$)))
 
+(test-case "pattern-var?: EVERY reader sentinel is excluded — enumerated, not sampled"
+  ;; D4.P1b-ii spin-off 3. `$set-literal` and `$mixfix` answered #t while their
+  ;; ten siblings answered #f — the whole exclusion list exists because a
+  ;; sentinel treated as a pattern variable makes `datum-subst` RAISE inside a
+  ;; defmacro template, and a raise on the preparse path is a WHOLE-FILE ABORT.
+  ;;
+  ;; Enumerated rather than spot-checked, because the defect IS the per-member
+  ;; gap: a test sampling one or two sentinels passed for the whole time these
+  ;; two were missing.
+  (for ([s (in-list '($angle-type $brace-params $foreign-block
+                      $dot-access $nil-dot-access $postfix-index
+                      $broadcast-access $dot-key $nil-dot-key
+                      $retired-selection $let-error $mixfix-error
+                      $reader-error $let-block $goal-rhs $let-noop-body
+                      $dot-brace $select-brace $select
+                      $set-literal $mixfix))])
+    (check-false (pattern-var? s)
+                 (format "~a is a reader sentinel, not a pattern variable" s))))
+
+(test-case "datum-subst: a sentinel in a template passes through; a real var still raises"
+  ;; The behavioural half. `$dot-access` is the control that was always right;
+  ;; the other two are the ones that raised. `$x` proves the exclusion list did
+  ;; not disable the mechanism it guards.
+  (check-equal? (datum-subst (list '$set-literal 1) (hasheq)) '($set-literal 1))
+  (check-equal? (datum-subst (list '$mixfix 1) (hasheq)) '($mixfix 1))
+  (check-equal? (datum-subst (list '$dot-access 1) (hasheq)) '($dot-access 1))
+  (check-exn exn:fail?
+             (lambda () (datum-subst (list '$x) (hasheq)))
+             "a genuine unbound pattern variable must still raise"))
+
 ;; ========================================
 ;; datum-subst tests
 ;; ========================================

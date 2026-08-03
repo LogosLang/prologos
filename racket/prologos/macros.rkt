@@ -1165,6 +1165,16 @@
        (not (eq? x '$dot-brace))        ; D4.P1b-ii `.{ }` sub-block sentinel — see below
        (not (eq? x '$select-brace))     ; D4.P1b-iii adjacent-brace select block
        (not (eq? x '$select))           ; D4.P3a fused select head (LOUD-if-missed: whole-file abort in a defmacro template)
+       ;; D4.P1b-ii spin-off 3 (2026-08-03): the last two holdouts. Every
+       ;; sibling above was excluded; these two were not, and
+       ;; `(pattern-var? '$set-literal)` / `(pattern-var? '$mixfix)` answered
+       ;; #t while their ten siblings answered #f. Demonstrated at the unit
+       ;; level rather than argued: `(datum-subst (list '$set-literal 1)
+       ;; (hasheq))` RAISED "Unbound pattern variable in template" where
+       ;; `$dot-access` passed through unchanged. A raise on the preparse path
+       ;; is a whole-file abort, which is why every other sentinel is here.
+       (not (eq? x '$set-literal))      ; reader sentinel for `#{…}` set literals
+       (not (eq? x '$mixfix))           ; reader sentinel for `.( … )` mixfix groups
        ;; ⚠ WHY $dot-brace IS HERE (caught by adversarial verify, pre-commit):
        ;; omitting it made `.{ }` inside a defmacro TEMPLATE read as a macro
        ;; pattern variable, so datum-subst raised "Unbound pattern variable" —
