@@ -279,3 +279,41 @@
       "defn multi\n  | 0 -> 1\n  | n -> 2\n"        ;; multi-clause
       "[bare 1]\n[typed 0N]\n[multi 0]\n")))
   (check-false (ormap prologos-error? results) (format "a defn shape broke: ~v" results)))
+
+;; ----------------------------------------------------------------
+;; The value-discarding-guard sweep
+;; ----------------------------------------------------------------
+;;
+;; `parse-error` RETURNS a value. `(unless C (parse-error …))` therefore
+;; computes the diagnosis, discards it, and runs the code the guard rejected.
+;;
+;; A probe of every site of that shape in parser.rkt found five that detonated
+;; into raw Racket contract violations — whole-file aborts, with the correct
+;; diagnosis computed and unused. All five are below. Each asserts BOTH that
+;; the message is Prologos's own AND that the commands around it survive,
+;; because a per-command error and an abort are indistinguishable from the
+;; message alone.
+
+(define (check-per-command src what)
+  (define results (run-file-lines (string-append "ns g\ndef a := 1\n" src "def b := 2\n")))
+  (check-true (list? results) (format "~a: the file aborted" what))
+  (define text (string-join (map (lambda (r) (format "~a" r)) results) "\n"))
+  (check-false (string-contains? text "contract violation")
+               (format "~a: raw contract violation: ~v" what results))
+  (check-true (string-contains? text "a :") (format "~a: command BEFORE lost: ~v" what results))
+  (check-true (string-contains? text "b :") (format "~a: command AFTER lost: ~v" what results)))
+
+(test-case "guards/a defn with no parameters but | arms"
+  (check-per-command "defn h []\n  | -> 1\n" "arity 0"))
+
+(test-case "guards/a defn pattern arm with no ->"
+  (check-per-command "defn i [x]\n  | 0 1\n" "arm without arrow"))
+
+(test-case "guards/a defn pattern arm with nothing after ->"
+  (check-per-command "defn j [x]\n  | 0 ->\n" "arm without body"))
+
+(test-case "guards/a defn clause with nothing after ->"
+  (check-per-command "defn p\n  | 0 ->\n" "clause without body"))
+
+(test-case "guards/a strategy with a non-symbol name"
+  (check-per-command "strategy 5\n" "strategy name"))

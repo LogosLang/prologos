@@ -92,38 +92,48 @@ shape as `infer`/`inferQ`, from a different cause.
 against the failing file found the culprit in six runs. Three earlier sessions
 re-observed it instead.
 
-## 🐛 CLASS — `(when C (parse-error …))` computes a diagnostic and throws it away (censused 2026-08-02; 2 crashers fixed, 29 sites unaudited)
+## ✅ CLOSED `PLACEHOLDER16` — `(when C (parse-error …))` computes a diagnostic and throws it away (censused + swept 2026-08-02)
 
-`parse-error` RETURNS a value; it does not raise. So `(unless X (parse-error
-…))` evaluates the error, discards it, and falls through — and the code after
-the guard runs with exactly the condition the guard was written to reject.
+`parse-error` RETURNS a value; it does not raise. So `(unless C (parse-error
+…))` evaluates the diagnosis, discards it, and falls through into the code the
+guard was written to reject.
 
-**31 sites in `parser.rkt`** match this shape. Two were confirmed to detonate
-and are fixed:
+**Censused and PROBED, not estimated.** Every site of that shape in
+`parser.rkt` was probed with an input that triggers its condition. Five
+detonated into raw Racket contract violations — whole-file aborts, zero
+commands, with the correct diagnosis computed and unused:
 
-- `parse-match-pattern-arm`, EIGHT guards → `match 5 | 0 111` died on
-  `take: contract violation` (`902ca588`).
-- `defn` with a non-symbol name → `symbol->string: contract violation`. Note
-  the shape of that one: fixing `parse-defn-multi`'s guard alone MOVED the
-  crash to `qualify-name` in the driver, because a different `defn` shape was
-  taking the call. The name is checked once at `parse-defn`'s entry now, before
-  shape dispatch.
+| input | was | now |
+|---|---|---|
+| `match 5 \| 0 111` | `take: contract violation` | names the missing `->` |
+| `defn 5 [x]` | `symbol->string: contract violation` | "expected a name, got 5" |
+| `defn h [] \| -> 1` | `car: contract violation` | "no parameters, so its `\|` arms have nothing to match on" |
+| `defn i [x] \| 0 1` | `take: contract violation` | "a pattern arm needs `->`" |
+| `defn j [x] \| 0 ->` | `car: contract violation` | "nothing after its `->`" |
+| `strategy 5` | `symbol->string: contract violation` | "expected a name, got 5" |
 
-`parse-map-literal` carries a comment describing this defect being fixed there
-in July ("It was a value-discarding `when` that fell through to the loop below
-and hard-crashed"). Found once, not swept.
+The rest recover downstream or are unreachable from the surface — which is why
+the sweep was probe-driven rather than a mass conversion. Some sites fall
+through to code that produces a BETTER error, and converting those would
+regress the message.
 
-**The other 29 are unaudited.** A probe of seven malformed inputs found the two
-above; the rest either recover downstream or are unreachable from the surface,
-and telling which is which needs a probe per site. Three outcomes are possible
-per site: a crash (fix), a worse-but-survivable error (fix), or genuinely dead
-(delete the guard, since a discarded error is not a guard).
+**Two lessons worth keeping.**
 
-**Do not mass-convert.** Each site needs its own probe: some fall through to
-code that produces a BETTER error, and turning the discarded one into a return
-would regress the message. The structural answer — make `parse-error` raise, or
-give the parser an error monad — is a bigger change than this file should
-decide.
+*Fixing one guard can just move the crash.* `defn 5 [x]` still died after
+`parse-defn-multi`'s guard was fixed, because a different `defn` shape was
+taking the call — the name is checked once at `parse-defn`'s entry now, before
+shape dispatch, so every shape is covered including ones added later.
+
+*This was found once and not swept.* `parse-map-literal` — the function
+immediately below the match-arm parser — carries a comment describing this
+exact defect being fixed there in July: "It was a value-discarding `when` that
+fell through to the loop below and hard-crashed."
+
+**Still open (structural, not a defect):** `parse-error` returning rather than
+raising is what makes this shape writable at all. Making it raise, or giving
+the parser an error monad, would make the class unrepresentable — a bigger call
+than a sweep should make. Until then the shape can be reintroduced by the next
+guard someone writes.
 
 ## 🔶 PARTIAL `db65045a` — `[x : T]` works for `fn` but is a PARSE ERROR for a `defn` parameter list (found 2026-08-02; message fixed same day, the syntax question is the owner's)
 

@@ -4479,6 +4479,15 @@
           (values #f rest))))
   (when (null? clause-args)
     (return (parse-error loc (format "defn ~a: a multi-body defn needs at least one `|` clause" name) #f)))
+  ;; `defn f []` with `|` arms leaves an EMPTY param bracket as the first
+  ;; clause-arg, and the `(car d)` on it below is a raw contract violation —
+  ;; whole-file abort. A zero-parameter function has nothing for its arms to
+  ;; match on, so the arms are the error, and saying that is more use than
+  ;; saying `car`.
+  (when (and (pair? clause-args) (null? (stx->datum (car clause-args))))
+    (return (parse-error loc
+              (format "defn ~a: this defn has no parameters, so its `|` arms have nothing to match on" name)
+              #f)))
   ;; Detect: defn f [params] | arms syntax
   ;; First clause-arg is a bracket form (param list, NOT $pipe-prefixed),
   ;; then optionally `: RetType` tokens, then all remaining are $pipe forms.
@@ -4526,6 +4535,11 @@
 ;; Desugars to defn-pattern-clause list, compiled by compile-pattern-group.
 
 (define (parse-defn-params-and-patterns name docstring clause-args ret-type-tokens loc)
+ (let/ec return
+  ;; `(car clause-args)` on an empty list is a raw contract violation and a
+  ;; whole-file abort, so the emptiness is checked before it is taken.
+  (when (null? clause-args)
+    (return (parse-error loc (format "defn ~a: expected a parameter list" name) #f)))
   ;; First element is param list, rest (after ret-type-tokens) are $pipe pattern arms
   (define params-stx (car clause-args))
   ;; Skip param bracket and ret-type-tokens to get $pipe arms
@@ -4566,8 +4580,8 @@
         ;; Bare params: [x y z]
         [else (length elems)])))
   (when (= arity 0)
-    (parse-error loc
-      (format "defn ~a: params+patterns syntax requires at least one parameter" name) #f))
+    (return (parse-error loc
+      (format "defn ~a: the `[params] | arms` form needs at least one parameter" name) #f)))
   ;; Register user-facing param names for bound-arg display in narrowing/solve.
   ;; Extract names from the bracket: [x y] → (x y), [x : T, y : T] → (x y)
   (let ([elems (map stx->datum param-elems)])
@@ -4634,16 +4648,20 @@
       (parse-defn-param-pattern-arm arm-stx name arity loc)))
   (define first-err (findf prologos-error? clauses))
   (if first-err first-err
-      (surf-defn-multi name docstring clauses loc)))
+      (surf-defn-multi name docstring clauses loc))))
 
 ;; Parse one arm of defn f [params] | pat... -> body into a defn-pattern-clause.
+;; The guards RETURN. See `parse-match-pattern-arm` for the class: `parse-error`
+;; returns a value, so `(unless C (parse-error …))` computes the diagnosis,
+;; discards it, and falls through into the code the guard was rejecting.
 (define (parse-defn-param-pattern-arm arm-stx name arity loc)
+ (let/ec return
   (define d (stx->datum arm-stx))
   (define parts
     (if (syntax? arm-stx) (syntax->list arm-stx)
         (if (list? d) (map (lambda (x) (datum->syntax #f x)) d) #f)))
   (unless parts
-    (parse-error loc (format "defn ~a: pattern arm must be a list" name) #f))
+    (return (parse-error loc (format "defn ~a: pattern arm must be a list" name) #f)))
   ;; Strip $pipe
   (define cleaned
     (if (and (not (null? parts)) (eq? (stx->datum (car parts)) '$pipe))
@@ -4653,11 +4671,11 @@
     (for/or ([p (in-list cleaned)] [i (in-naturals)])
       (and (eq? (stx->datum p) '->) i)))
   (unless arrow-idx
-    (parse-error loc (format "defn ~a: pattern arm missing ->" name) #f))
+    (return (parse-error loc (format "defn ~a: a pattern arm needs `->`; write `| PATTERN -> BODY`" name) #f)))
   (define pre-arrow (take cleaned arrow-idx))
   (define body-parts (drop cleaned (+ arrow-idx 1)))
   (when (null? body-parts)
-    (parse-error loc (format "defn ~a: pattern arm missing body after ->" name) #f))
+    (return (parse-error loc (format "defn ~a: this pattern arm has nothing after its `->`" name) #f)))
 
   ;; Split pre-arrow into pattern forms and optional guard at `when`
   (define-values (pat-forms guard-forms)
@@ -4682,10 +4700,18 @@
     (if (= (length body-parts) 1) (car body-parts)
         (datum->syntax #f (map stx->datum body-parts) (car body-parts))))
   (define body (parse-datum body-stx))
-  (when (prologos-error? body) body)
+  (when (prologos-error? body) (return body))
   ;; Parse patterns based on arity
   (define patterns
     (cond
+      ;; Arity 0 has no arm below — `else` is "arity > 1" — so it fell through
+      ;; to an empty pattern list and crashed downstream on `(car patterns)`.
+      ;; `defn f []` with `| … -> …` arms is the shape; a zero-parameter
+      ;; function has nothing to match on, so the arms are the error.
+      [(= arity 0)
+       (return (parse-error loc
+                 (format "defn ~a: this defn has no parameters, so its `|` arms have nothing to match on" name)
+                 #f))]
       ;; Arity 1: group ALL forms into a single pattern
       [(= arity 1)
        (cond
@@ -4709,7 +4735,7 @@
          (parse-single-pattern pf loc))]))
   (define first-err (findf prologos-error? patterns))
   (if first-err first-err
-      (defn-pattern-clause patterns guard body loc)))
+      (defn-pattern-clause patterns guard body loc))))
 
 ;; ========================================
 ;; Pattern parsing for pattern-based defn clauses
@@ -4859,6 +4885,7 @@
 ;;    or: ($pipe [params...] <RetType> body) — arity clause
 ;;    or: ($pipe [patterns...] -> body)       — pattern clause
 (define (parse-defn-clause clause-stx name loc)
+ (let/ec return
   (define d (stx->datum clause-stx))
   (define parts
     (if (syntax? clause-stx) (syntax->list clause-stx)
@@ -4914,11 +4941,11 @@
              (parse-datum guard-stx))))
      (define body-parts (drop cleaned (+ arrow-idx 1)))
      (when (and (pair? guard-forms) (null? pattern-stxs))
-       (parse-error loc (format "defn ~a: `when` guard with no pattern before it" name) #f))
+       (return (parse-error loc (format "defn ~a: a `when` guard needs a pattern before it" name) #f)))
      (when (null? pattern-stxs)
-       (parse-error loc (format "defn ~a: pattern clause needs at least one pattern before ->" name) #f))
+       (return (parse-error loc (format "defn ~a: a pattern clause needs at least one pattern before `->`" name) #f)))
      (when (null? body-parts)
-       (parse-error loc (format "defn ~a: pattern clause missing body after ->" name) #f))
+       (return (parse-error loc (format "defn ~a: this pattern clause has nothing after its `->`" name) #f)))
      (define body-stx
        (if (= (length body-parts) 1)
            (car body-parts)
@@ -5035,7 +5062,7 @@
                  (defn-clause full-type param-names body loc)])])]
           [else
            (parse-error loc (format "defn ~a: clause expected <ReturnType>, : ReturnType, or -> for pattern clause, got ~a"
-                                    name (stx->datum ret-type-stx)) #f)])])]))
+                                    name (stx->datum ret-type-stx)) #f)])])])))
 
 ;; ========================================
 ;; Parse defn: (defn name : type [params...] body)
@@ -7027,10 +7054,12 @@
   (cond
     [(< (length args) 1)
      (parse-error loc "strategy requires a name: (strategy Name :key val ...)" #f)]
+    ;; Hoisted out of the `else` arm below, where it was a value-discarding
+    ;; `unless` and `strategy 5` reached `symbol->string` on the 5.
+    [(not (symbol? (stx->datum (car args))))
+     (parse-error loc (format "strategy: expected a name, got ~a" (stx->datum (car args))) #f)]
     [else
      (define name (stx->datum (car args)))
-     (unless (symbol? name)
-       (parse-error loc (format "strategy: expected name, got ~a" name) #f))
      ;; Collect remaining items as raw datum property pairs
      (define props
        (let loop ([remaining (cdr args)] [acc '()])
