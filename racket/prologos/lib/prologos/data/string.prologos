@@ -66,3 +66,20 @@ foreign racket "racket/base" [string-normalize-nfc :as normalize-nfc : String ->
 foreign racket "racket/base" [string-normalize-nfd :as normalize-nfd : String -> String]
 foreign racket "racket/base" [string-normalize-nfkc :as normalize-nfkc : String -> String]
 foreign racket "racket/base" [string-normalize-nfkd :as normalize-nfkd : String -> String]
+
+;; --- Grapheme clusters (UAX #29) ---
+;;
+;; A user-perceived character. "é" written as e + U+0301 is TWO code points and
+;; one grapheme; a ZWJ family emoji is five code points and one grapheme. Any
+;; operation a person would describe in terms of "characters" — counting,
+;; truncating, reversing — means graphemes, not `length` and `ref`.
+;;
+;; Bridged to Racket, which already carries the UAX #29 tables. Reimplementing
+;; the segmentation state machine here would mean ~30KB of Unicode data for a
+;; result the runtime already computes.
+;;
+;; `grapheme-span` gives the number of CODE POINTS in the cluster beginning at
+;; an index, which is the primitive everything else is built from — see
+;; `graphemes` and `grapheme-reverse` in `prologos::core::string-ops`.
+foreign racket "racket/base" [string-grapheme-count :as grapheme-count : String -> Int]
+foreign racket "racket/base" [string-grapheme-span :as grapheme-span : String -> Int -> Int]

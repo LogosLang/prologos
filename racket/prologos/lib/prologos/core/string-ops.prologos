@@ -498,3 +498,34 @@ defn closest [target candidates limit]
   match candidates
     | nil -> [none String]
     | cons c rest -> [closest-loop target rest [levenshtein target c] c limit]
+
+;; ========================================
+;; Grapheme clusters (String Library Phase 4a)
+;; ========================================
+;; The primitives are FFI bridges in `prologos::data::string`
+;; (`str::grapheme-count`, `str::grapheme-span`); these build on them.
+;;
+;; The entry filed this as "Requires UAX #29 state machine (~30KB Unicode
+;; tables)" with a bridge listed only as a MITIGATION. The bridge is the whole
+;; answer: Racket already carries the tables, and a ZWJ family emoji comes back
+;; as one cluster from five code points.
+
+spec graphemes-loop String Int Int -> [List String]
+defn graphemes-loop [s len i]
+  if [int-lt i len] [let [n [str::grapheme-span s i]] [cons [str::slice s i [int+ i n]] [graphemes-loop s len [int+ i n]]]] nil
+
+spec graphemes String -> [List String]
+  :doc "Split a string into its grapheme clusters — user-perceived characters, not code points."
+defn graphemes [s]
+  [graphemes-loop s [str::length s] 0]
+
+spec cat-rev-loop [List String] String -> String
+defn cat-rev-loop [xs acc]
+  match xs
+    | nil -> acc
+    | cons h t -> [cat-rev-loop t [str::append h acc]]
+
+spec grapheme-reverse String -> String
+  :doc "Reverse a string by grapheme cluster, so combining marks and ZWJ sequences stay with their base."
+defn grapheme-reverse [s]
+  [cat-rev-loop [graphemes s] ""]

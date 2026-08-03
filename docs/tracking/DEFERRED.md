@@ -1299,10 +1299,26 @@ prose or library.
 
 ## String Library
 
-### Phase 4a: Grapheme Cluster Operations
-- `string-graphemes`, `string-grapheme-count`, grapheme-aware `string-reverse`
-- Requires UAX #29 state machine (~30KB Unicode tables)
-- **Mitigation**: FFI to Racket's `string-grapheme-span` or ICU library
+### ✅ SHIPPED — Phase 4a: Grapheme Cluster Operations (2026-08-02)
+
+`str::grapheme-count`, `str::grapheme-span`, `graphemes`, `grapheme-reverse`.
+
+**The entry's "Mitigation" was the whole answer.** It reads as though UAX #29
+tables were the work and the FFI bridge a fallback; the bridge IS the
+implementation, because Racket already carries the tables. A ZWJ family emoji
+comes back as one cluster from five code points. Two lines of `foreign racket`
+plus a walk over `grapheme-span`.
+
+Worth noting how close this came to not being tried: it was written off in the
+same breath as sorted collections and regex, on the strength of "~30KB Unicode
+tables" — while the line directly beneath it said what to do instead.
+
+**Tested where clusters and code points DIFFER**, since ASCII proves nothing
+here — `graphemes "abc"` is right whether or not the implementation understands
+clusters. The load-bearing case: reverse NFD `"éa"` by grapheme and re-compose,
+which gives `"aé"`. A code-point reverse moves the accent onto the `a` and
+composes to `"áe"` — same length, same grapheme count, different string. Only
+comparing content catches it.
 
 ### ✅ SHIPPED `1e00ac95` — Phase 4b: Unicode Normalization (2026-08-02)
 

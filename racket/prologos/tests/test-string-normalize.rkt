@@ -176,3 +176,49 @@
 (test-case "closest/an exact match is its own nearest"
   (define r (lev "[closest \"left\" [cons \"length\" [cons \"left\" nil]] 3]\n"))
   (check-true (string-contains? (format "~a" r) "left") (format "got: ~v" r)))
+
+;; ----------------------------------------------------------------
+;; Grapheme clusters (Phase 4a)
+;; ----------------------------------------------------------------
+;;
+;; The entry filed this as "Requires UAX #29 state machine (~30KB Unicode
+;; tables)", with an FFI bridge listed only as a MITIGATION. The bridge is the
+;; whole answer — Racket carries the tables.
+;;
+;; ASCII proves nothing here: `graphemes "abc"` is right whether the
+;; implementation understands clusters or just splits code points. Every test
+;; below uses a string where the two differ.
+
+(define g-pre
+  (string-append
+   "ns gr\n"
+   "require [prologos::data::string :as str :refer []]\n"
+   "require [prologos::data::list :refer [List nil cons length]]\n"
+   "require [prologos::core::string-ops :refer [graphemes grapheme-reverse normalize nfc nfd]]\n"))
+
+(define (g s) (run-ns-ws-last (string-append g-pre s)))
+
+(test-case "graphemes/a combining mark does not count as its own character"
+  ;; NFD "éa" is THREE code points and TWO graphemes. A code-point split says 3.
+  (check-true (string-contains? (format "~a" (g "[str::length [normalize nfd \"éa\"]]\n")) "3 : Int")
+              "the fixture is not decomposed — the rest of this test proves nothing")
+  (check-true (string-contains? (format "~a" (g "[str::grapheme-count [normalize nfd \"éa\"]]\n")) "2 : Int"))
+  (check-true (string-contains? (format "~a" (g "[length [graphemes [normalize nfd \"éa\"]]]\n")) "2N")))
+
+(test-case "graphemes/reversing keeps a combining mark with its base"
+  ;; THE test for this feature. Reverse NFD "éa" by grapheme and re-compose:
+  ;; "aé". A code-point reverse moves the accent onto the "a" and composes to
+  ;; "áe" instead — same length, same grapheme count, different string. Only
+  ;; comparing the content catches it.
+  (define r (g "[str::eq [normalize nfc [grapheme-reverse [normalize nfd \"éa\"]]] \"aé\"]\n"))
+  (check-false (prologos-error? r) (format "got: ~v" r))
+  (check-true (string-contains? (format "~a" r) "true")
+              (format "the mark did not travel with its base: ~v" r)))
+
+(test-case "graphemes/round-trips through a reverse"
+  (define r (g "[str::eq [grapheme-reverse [grapheme-reverse [normalize nfd \"éab\"]]] [normalize nfd \"éab\"]]\n"))
+  (check-true (string-contains? (format "~a" r) "true") (format "got: ~v" r)))
+
+(test-case "graphemes/ASCII still behaves"
+  (check-true (string-contains? (format "~a" (g "[grapheme-reverse \"abc\"]\n")) "cba"))
+  (check-true (string-contains? (format "~a" (g "[length [graphemes \"abc\"]]\n")) "3N")))
