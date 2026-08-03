@@ -1068,3 +1068,75 @@
   (define w (deprecation-warning 'old-fn #f))
   (check-equal? (format-deprecation-warning w)
                 "warning: old-fn is deprecated"))
+
+;; ========================================
+;; :examples are CHECKED (Spec System Phase 2, first bullet)
+;; ========================================
+;;
+;; The metadata surface has stored `:examples` since it landed, and nothing ever
+;; read it: a deliberately wrong example was accepted in silence, 0 errors. An
+;; unchecked example is worse than no example, because it reads as a guarantee.
+;;
+;; The check is narrow ON PURPOSE. Only a genuine value mismatch between a call
+;; and an expected value that BOTH evaluated cleanly is reported; anything that
+;; fails to elaborate or evaluate is skipped, because an example may legitimately
+;; reference a helper defined later in the file. Two of the cases below exist to
+;; pin that boundary rather than the happy path.
+
+(define (spec-example-run src)
+  (parameterize ([current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    ;; `process-string` returns a LIST of per-command results; the definition
+    ;; under test is the last one.
+    (let ([rs (process-string src)])
+      (if (list? rs) (last rs) rs))))
+
+(test-case "spec-examples: a WRONG example is a per-command error"
+  (define r (spec-example-run
+    (string-append "(ns exchk1)\n"
+                   "(spec dbl Nat -> Nat ($brace-params :examples ((dbl 2N) => 999N)))\n"
+                   "(defn dbl (n) (add n n))")))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (define msg (prologos-error-message r))
+  ;; names the example, what it really evaluates to, and what was claimed —
+  ;; all three, because any one alone leaves the reader guessing
+  (check-true (regexp-match? #rx"does not hold" msg) (format "got: ~v" msg))
+  (check-true (regexp-match? #rx"dbl 2N" msg) (format "got: ~v" msg))
+  (check-true (regexp-match? #rx"4N" msg) (format "got: ~v" msg))
+  (check-true (regexp-match? #rx"999N" msg) (format "got: ~v" msg)))
+
+(test-case "spec-examples: a CORRECT example defines cleanly"
+  (define r (spec-example-run
+    (string-append "(ns exchk2)\n"
+                   "(spec d2 Nat -> Nat ($brace-params :examples ((d2 2N) => 4N)))\n"
+                   "(defn d2 (n) (add n n))")))
+  (check-false (prologos-error? r) (format "expected success, got: ~v" r)))
+
+(test-case "spec-examples: MULTIPLE examples, the wrong one is caught"
+  ;; A first-example-only check would pass this.
+  (define r (spec-example-run
+    (string-append "(ns exchk3)\n"
+                   "(spec d3 Nat -> Nat ($brace-params :examples ((d3 2N) => 4N) ((d3 3N) => 7N)))\n"
+                   "(defn d3 (n) (add n n))")))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (check-true (regexp-match? #rx"d3 3N" (prologos-error-message r))
+              (format "the SECOND example is the failing one: ~v" r)))
+
+(test-case "spec-examples: no examples at all is unaffected (control)"
+  (define r (spec-example-run
+    "(ns exchk4)\n(spec d4 Nat -> Nat)\n(defn d4 (n) (add n n))"))
+  (check-false (prologos-error? r) (format "expected success, got: ~v" r)))
+
+(test-case "spec-examples: an UNEVALUABLE example is SKIPPED, not reported"
+  ;; The boundary that makes this usable: an example naming something that does
+  ;; not resolve at definition time must not fail the definition. Reporting
+  ;; those would make `:examples` unusable in the files that most want it.
+  (define r (spec-example-run
+    (string-append "(ns exchk5)\n"
+                   "(spec d5 Nat -> Nat ($brace-params :examples ((d5 (nonexistent-helper 2N)) => 4N)))\n"
+                   "(defn d5 (n) (add n n))")))
+  (check-false (prologos-error? r) (format "an unevaluable example must be skipped, got: ~v" r)))

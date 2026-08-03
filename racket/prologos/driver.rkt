@@ -1937,7 +1937,11 @@
                                        (ns-context-current-ns (current-ns-context))))
                          (global-env-add fqn zonked-type bound-value)
                          (register-definition-location! fqn def-srcloc))
-                       (format "~a : ~a defined." name (pp-expr zonked-type))])])])])])])])]
+                       ;; Spec Phase 2 (first bullet): a stored `:examples` entry
+                       ;; is CHECKED here — the first point at which the
+                       ;; definition it describes actually exists.
+                       (or (spec-example-mismatch name def-srcloc)
+                           (format "~a : ~a defined." name (pp-expr zonked-type)))])])])])])])])]
     ;; Existing annotated path (type annotation present)
     [else
      ;; 1. Elaborate type
@@ -2147,8 +2151,12 @@
                                              (ns-context-current-ns (current-ns-context))))
                                (global-env-add fqn zonked-type bound-value)
                                (register-definition-location! fqn def-srcloc))
-                             (format "~a : ~a defined."
-                                     name (pp-expr zonked-type))])])]
+                             ;; …and on the ANNOTATED path too. Both seams, or
+                             ;; an example silently stops being checked the
+                             ;; moment someone adds a type annotation.
+                             (or (spec-example-mismatch name def-srcloc)
+                                 (format "~a : ~a defined."
+                                         name (pp-expr zonked-type)))])])]
                       )])])])])])])]))
 
 ;; ========================================
@@ -2864,6 +2872,75 @@
   (print-cell-metrics-report! (collect-cell-metrics))
   (print-quiescence-stats! qs)
   final-results)
+
+;; ========================================
+;; Spec `:examples` checking (Spec System Phase 2, first bullet)
+;; ========================================
+;;
+;; `:examples ((f 3N) => 4N)` has parsed and been stored since the metadata
+;; surface landed, and NOTHING EVER READ IT: a deliberately wrong example was
+;; accepted in silence, 0 errors. An unchecked example is worse than no example,
+;; because it reads as a guarantee.
+;;
+;; Scope, deliberately narrow. Each example's CALL and its EXPECTED value go
+;; through the same elaborate -> infer -> nf path a top-level expression takes,
+;; and only a genuine VALUE MISMATCH between two sides that BOTH evaluated
+;; cleanly is reported.
+;;
+;; Everything else is SKIPPED, and that is the design rather than a shortcut. An
+;; example may legitimately not be checkable at definition time — it can name a
+;; helper defined later in the file, or mention a type whose instance arrives
+;; with a later `impl`. Reporting those as failures would make `:examples`
+;; unusable in exactly the files that most want it. A mismatch between two
+;; successfully-computed normal forms has no such excuse, and that is the check.
+;;
+;; The reentrancy is real and is why every step is guarded: this runs INSIDE a
+;; definition's commit, so an escaping raise would cost the command that just
+;; succeeded. On any exception the example is skipped, never reported.
+(define (spec-example-mismatch name loc)
+  ;; specs are stored under the BARE name (the clobber-prone keying censused in
+  ;; tests/test-spec-store-clobber.rkt), so a qualified def must strip first.
+  (define exs (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+                (define-values (_p short) (split-qualified-name name))
+                (spec-examples (or short name))))
+  (and (list? exs)
+       (for/or ([ex (in-list exs)])
+         (check-one-spec-example name ex loc))))
+
+;; Evaluate one datum the way a bare top-level expression is evaluated.
+;; Returns the normal form, or #f if it could not be computed for ANY reason.
+(define (eval-example-datum d)
+  (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+    (define surf (parse-datum (datum->syntax #f d)))
+    (and (not (prologos-error? surf))
+         (let ([e (elaborate surf)])
+           (and (not (prologos-error? e))
+                (not (expr-error? e))
+                (let ([ty (infer/err ctx-empty e)])
+                  (and (not (prologos-error? ty))
+                       (let ([v (nf (rewrite-specializations (freeze e)))])
+                         (and (not (expr-error? v))
+                              (not (expr-panic? v))
+                              v)))))))))
+
+(define (check-one-spec-example name ex loc)
+  ;; The stored shape is `(CALL => EXPECTED)` — three elements with the literal
+  ;; `=>` in the middle. Anything else is not an example this understands.
+  (and (list? ex) (= (length ex) 3) (eq? (cadr ex) '=>)
+       (let ([got (eval-example-datum (car ex))]
+             [want (eval-example-datum (caddr ex))])
+         (and got want
+              (not (equal? got want))
+              (type-mismatch-error
+               (or loc srcloc-unknown)
+               (format (string-append
+                        "example for `~a` does not hold: `~a` evaluates to ~a, "
+                        "but the spec's `:examples` says ~a")
+                       name (car ex) (pp-expr got) (pp-expr want))
+               (pp-expr want)
+               (pp-expr got)
+               (format "~a" (car ex))
+               '())))))
 
 ;; ========================================
 ;; Module Loading

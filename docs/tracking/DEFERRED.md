@@ -1753,7 +1753,7 @@ pass vacuously.
 
 ## Spec System — Phase 2+
 
-### Phase 2: Example and Property Checking (QuickCheck-style) — CONFIRMED, with the surface already built (probed 2026-08-02)
+### 🔶 Phase 2: Example and Property Checking (QuickCheck-style) — EXAMPLES now checked (2026-08-03); properties/generation still open
 
 Accurate on the CHECKING, which is what the entry is about. Decisive probe: a
 deliberately wrong `:examples [[2 999]]` on a doubling function is accepted
@@ -1765,7 +1765,29 @@ Worth knowing before starting, though: the metadata SURFACE is done.
 `:invariant` combined with `:pre`/`:post`, and a warning when a property's
 `:where` constraints are not covered by the spec's. So this phase is the
 checker, not the syntax.
-- Type-check and run `:examples` entries as tests
+- ✅ **DONE 2026-08-03 — run `:examples` entries as tests.** The stored
+  examples are now CHECKED at the point the definition they describe first
+  exists, on BOTH def seams (inferred and annotated — wiring only one means an
+  example silently stops being checked the moment someone adds a type
+  annotation). The entry's own repro is the test: a wrong `((dbl 2N) => 999N)`
+  on a doubling function is now a per-command error naming the example, what it
+  really evaluates to, and what was claimed.
+
+  **Deliberately narrow, and the narrowness is the design.** Only a genuine
+  value mismatch between a call and an expected value that BOTH evaluated
+  cleanly is reported. Anything that fails to elaborate or evaluate is SKIPPED,
+  because an example may legitimately name a helper defined later in the file
+  or a type whose instance arrives with a later `impl` — reporting those would
+  make `:examples` unusable in exactly the files that most want it. Two of the
+  five tests pin that boundary rather than the happy path.
+
+  Reentrancy is guarded at every step: this runs INSIDE a definition's commit,
+  so an escaping raise would cost the command that just succeeded.
+
+  Still open in this phase: the `Gen` trait for type-directed random
+  generation, property checking for `:properties` / `:laws`, `:pre`/`:post`
+  contract wrapping with blame, and the variance / `:compose` / `:identity` /
+  `:exists` work below.
 - `Gen` trait for type-directed random generation
 - Property checking for `:properties` and `:laws`
 - Contract wrapping: `:pre`/`:post` generate runtime checks with blame
