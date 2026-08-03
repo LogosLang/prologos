@@ -360,3 +360,68 @@ defn normalize [form s]
     | nfd -> [str::normalize-nfd s]
     | nfkc -> [str::normalize-nfkc s]
     | nfkd -> [str::normalize-nfkd s]
+
+;; ========================================
+;; Unicode normalization (UAX #15) -- the form selector
+;; ========================================
+;; The four normalizers are FFI bindings in `prologos::data::string`
+;; (`str::normalize-nfc` and friends), which is where the Racket bridge belongs.
+;; The TYPE and the dispatcher live here because that module is a prelude-less
+;; leaf: a `match` over a user `data` needs machinery it does not have.
+
+data NormForm
+  nfc
+  nfd
+  nfkc
+  nfkd
+
+spec normalize NormForm String -> String
+defn normalize [form s]
+  match form
+    | nfc -> [str::normalize-nfc s]
+    | nfd -> [str::normalize-nfd s]
+    | nfkc -> [str::normalize-nfkc s]
+    | nfkd -> [str::normalize-nfkd s]
+
+;; ========================================
+;; String similarity (String Library Phase 4c) -- PARTIAL
+;; ========================================
+;; The common-prefix half of the entry's ask. Edit distance is NOT here; see
+;; the DEFERRED entry for why (a row-wise DP cannot be written efficiently
+;; without a sharing construct in this position, and comes back as a stuck term).
+;;
+;; Style follows the rest of this file: `int-lt` / `int-eq` rather than `<` / `=`
+;; (`<` is a WS delimiter), and `if` on ONE line.
+
+;; `int-min` is not a primitive and there is no int module to hold it.
+spec imin Int Int -> Int
+defn imin [x y]
+  if [int-lt x y] x y
+
+spec common-prefix-loop String String Int Int -> Int
+defn common-prefix-loop [a b limit i]
+  if [int-lt i limit] [if [char::eq [str::ref a i] [str::ref b i]] [common-prefix-loop a b limit [int+ i 1]] i] i
+
+spec common-prefix-length String String -> Int
+  :doc "Length of the longest common prefix of two strings."
+defn common-prefix-length [a b]
+  [common-prefix-loop a b [imin [str::length a] [str::length b]] 0]
+
+spec common-prefix String String -> String
+  :doc "The longest common prefix of two strings."
+defn common-prefix [a b]
+  [str::slice a 0 [common-prefix-length a b]]
+
+spec common-suffix-loop String String Int Int Int -> Int
+defn common-suffix-loop [a b alen blen k]
+  if [int-lt k [imin alen blen]] [if [char::eq [str::ref a [int- alen [int+ k 1]]] [str::ref b [int- blen [int+ k 1]]]] [common-suffix-loop a b alen blen [int+ k 1]] k] k
+
+spec common-suffix-length String String -> Int
+  :doc "Length of the longest common suffix of two strings."
+defn common-suffix-length [a b]
+  [common-suffix-loop a b [str::length a] [str::length b] 0]
+
+spec common-suffix String String -> String
+  :doc "The longest common suffix of two strings."
+defn common-suffix [a b]
+  [str::slice a [int- [str::length a] [common-suffix-length a b]] [str::length a]]

@@ -80,3 +80,43 @@
     (define r (run (format "[str::~a \"abc\"]\n" f)))
     (check-false (prologos-error? r) (format "~a: ~v" f r))
     (check-true (string-contains? (format "~a" r) "abc") (format "~a: ~v" f r))))
+
+;; ----------------------------------------------------------------
+;; String similarity (Phase 4c) — the common-prefix half
+;; ----------------------------------------------------------------
+;;
+;; Edit distance is deliberately absent; see the DEFERRED entry. The
+;; common-prefix/suffix functions are the part that can be written here.
+
+(define sim-pre
+  (string-append
+   "ns sim\n"
+   "require [prologos::data::string :as str :refer []]\n"
+   "require [prologos::core::string-ops :refer [common-prefix common-prefix-length common-suffix common-suffix-length]]\n"))
+
+(define (sim s) (run-ns-ws-last (string-append sim-pre s)))
+
+(test-case "similarity/common-prefix returns the shared leading run"
+  (check-true (string-contains? (format "~a" (sim "[common-prefix \"foobar\" \"foobaz\"]\n")) "fooba")))
+
+(test-case "similarity/common-prefix is empty when nothing is shared"
+  ;; The boundary that a loop with an off-by-one gets wrong.
+  (define r (sim "[common-prefix \"abc\" \"xyz\"]\n"))
+  (check-false (prologos-error? r) (format "got: ~v" r))
+  (check-true (string-contains? (format "~a" r) "\"\"") (format "expected empty: ~v" r)))
+
+(test-case "similarity/common-prefix stops at the shorter string"
+  ;; Reading past the end of the shorter input is the other way to get this
+  ;; wrong, and it would be an index error rather than a wrong answer.
+  (define r (sim "[common-prefix-length \"ab\" \"abcdef\"]\n"))
+  (check-false (prologos-error? r) (format "got: ~v" r))
+  (check-true (string-contains? (format "~a" r) "2") (format "got: ~v" r)))
+
+(test-case "similarity/common-suffix returns the shared trailing run"
+  (check-true (string-contains? (format "~a" (sim "[common-suffix \"running\" \"jogging\"]\n")) "ing"))
+  (check-true (string-contains? (format "~a" (sim "[common-suffix-length \"abc\" \"xbc\"]\n")) "2")))
+
+(test-case "similarity/common-suffix is empty when nothing is shared"
+  (define r (sim "[common-suffix \"abc\" \"xyz\"]\n"))
+  (check-false (prologos-error? r) (format "got: ~v" r))
+  (check-true (string-contains? (format "~a" r) "\"\"") (format "expected empty: ~v" r)))

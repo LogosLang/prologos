@@ -1324,9 +1324,34 @@ NFC does NOT fold the ligature, so the canonical/compatibility distinction is
 pinned in both directions. One case checks that NFC and NFD disagree at all,
 which is what rules out a dispatcher that ignores its form argument.
 
-### Phase 4c: String Similarity & Diffing
-- Jaro distance, common prefix, Myers difference
-- Useful for "did you mean?" suggestions in error messages
+### 🔶 PARTIAL — Phase 4c: String Similarity & Diffing (2026-08-02)
+
+**Shipped**: `common-prefix`, `common-prefix-length`, `common-suffix`,
+`common-suffix-length` in `prologos::core::string-ops`. Tested at the
+boundaries that a loop gets wrong — nothing shared, and one string a prefix of
+the other (which is an index error rather than a wrong answer if mishandled).
+
+**NOT shipped, and the reason is a language finding worth more than the
+function was.** Edit distance was written as the standard row-wise DP — the
+classic table kept one row deep — and it does not evaluate: a 3×3 distance
+comes back as a stuck term rather than a number.
+
+The cause is sharing. Each cell's value is needed TWICE (as the row entry, and
+as the next cell's `left`), as is the cell above it. Written the obvious way
+that doubles the work per cell and the whole thing is exponential. The natural
+fix is a `let`, and a multi-line `let` inside an `if` is a parse error in this
+position; passing the value down as a parameter instead does NOT help, because
+lazy reduction re-evaluates the argument at each use rather than sharing it.
+
+So: a standard dynamic program cannot be expressed efficiently here today. That
+is a real constraint on the library — Myers diff and Jaro both need the same
+shape — and it is worth deciding deliberately rather than rediscovering per
+function. Options are a `let` that parses in this position, a strictness
+annotation, or an FFI bridge for the distance itself (Racket has no built-in
+Levenshtein, so that means writing it in Racket).
+
+**Repro**: `[levenshtein "abc" "abc"]` with the row-fold implementation;
+the stuck term names `lev-row-cell` and `lev-nth` unreduced.
 
 ### Phase 4d: Regex Integration
 - Depends on a regex library (not yet designed)
