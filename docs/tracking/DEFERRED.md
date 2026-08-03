@@ -3681,7 +3681,26 @@ a match arm containing `v[0]^` whole-file aborted where HEAD recovered
 per-command) and eight SIGNIFICANT defects in the uncommitted diff — all
 FIXED pre-commit (see D4 §5.P3b close notes). These survived as filings:
 
-### 21. `k^:x` keyword rename target — the splitter's `#\:` arm is dead in WS mode
+### 21. ✅ FIXED 2026-08-03 — `k^:x` now gets the splitter's message
+
+`cfg{server^:x}` gave "block keys are written bare — `x{server}`, not
+`x{:server}`" instead of the rename-target refusal. It now gives:
+
+> `` `server^:x` — a rename target is a bare label, not a keyword (write
+> `server^x`) ``
+
+Fixed exactly as the filing prescribed: `segment-select-items` detects a
+keyword item immediately after a CARET-TERMINATED item and emits the
+splitter's message, so both readers say the same thing about the same input.
+
+The gate is narrow on purpose — caret-terminated item AND a following keyword.
+Without it the arm would swallow the ordinary `cfg{:server}` mistake, whose
+generic message is the correct one there; that case is pinned as a control
+alongside the working `cfg{server^x}` rename.
+
+Original filing follows.
+
+**Original**: the splitter's `#\:` arm is dead in WS mode
 
 `cfg{server.host^:x}` gets the block-keys-bare message instead of the
 splitter's keyword-target refusal: in WS mode the lexeme does not glue

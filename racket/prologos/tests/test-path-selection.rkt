@@ -1057,6 +1057,48 @@
   (check-regexp-match #rx"is not a record" r)
   (check-false (regexp-match? #rx"capability-restricted" r)))
 
+(test-case "P3b item 21: `k^:x` gets the RENAME-TARGET message, not the bare-keys one"
+  ;; In WS mode the lexeme does NOT glue through the colon, so `server^:x`
+  ;; arrives as TWO items — `server^` and the keyword `:x` — and
+  ;; `split-caret-lexeme`'s own `#\:` arm never fires: it is reachable from
+  ;; sexp-mode datums only (the F1b sexp-green ≠ WS-correct class). The input
+  ;; fell through to "block keys are written bare", whose ACTION happens to
+  ;; resolve it — degraded, not lying — but which names the wrong construct.
+  (define r (run-ws-last
+    (string-append
+     "schema Cfg\n  :server String\n"
+     "def cfg : Cfg := {:server \"h\"}\n"
+     "cfg{server^:x}\n")))
+  (check-regexp-match #rx"rename target" r "must name the RENAME TARGET")
+  (check-regexp-match #rx"server\\^x" r "must show the working spelling")
+  (check-false (regexp-match? #rx"block keys are written bare" r)
+               "the generic message named the wrong construct"))
+
+(test-case "P3b item 21: a plain `:key` in a block KEEPS the bare-keys message"
+  ;; The new arm is gated on a CARET-BEARING item immediately before the
+  ;; keyword. Without that gate it would swallow the ordinary mistake, whose
+  ;; own message is the right one.
+  (define r (run-ws-last
+    (string-append
+     "schema Cfg\n  :server String\n"
+     "def cfg : Cfg := {:server \"h\"}\n"
+     "cfg{:server}\n")))
+  (check-regexp-match #rx"written bare" r)
+  (check-false (regexp-match? #rx"rename target" r)))
+
+(test-case "P3b item 21: the working rename still works (control)"
+  (define r (run-ws-last
+    (string-append
+     "schema Cfg\n  :server String\n"
+     "def cfg : Cfg := {:server \"h\"}\n"
+     "cfg{server^x}\n")))
+  (check-regexp-match #rx":x" r "the field is renamed")
+  (check-false (prologos-error? (run-ws-raw-last
+    (string-append
+     "schema Cfg\n  :server String\n"
+     "def cfg : Cfg := {:server \"h\"}\n"
+     "cfg{server^x}\n")))))
+
 ;; ---------- the LYING DIAGNOSTICS this phase actually repairs ----------
 ;; P2's real headline, unclaimed by §5.P2: because `x.0` was THREE datum items,
 ;; every arity-checking context blamed something else entirely.

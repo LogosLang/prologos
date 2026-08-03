@@ -1098,6 +1098,23 @@
             ;; must take the ONE Q_T4a message, not the P3c branch pointer.
             [(and (number? it) (pair? (cdr items)) (caret-ish? (cadr items)))
              (fail ordinal-rekey-message)]
+            ;; `k^:x` (D4.P3b item 21): in WS mode the lexeme does NOT glue
+            ;; through the colon, so this arrives as TWO items — `k^` and the
+            ;; keyword `:x` — and the splitter's own `#\:` arm never fires (it
+            ;; is reachable from sexp-mode datums only: the F1b sexp-green ≠
+            ;; WS-correct class). Without this the input fell through to the
+            ;; generic "block keys are written bare" message, whose ACTION
+            ;; happens to resolve it — degraded, not lying — but which names
+            ;; the wrong construct. Detect the shape here and give the
+            ;; splitter's message, so both readers say the same thing.
+            [(and (re-key-sym? it)
+                  (let ([str (symbol->string it)])
+                    (char=? (string-ref str (sub1 (string-length str))) #\^))
+                  (pair? (cdr items))
+                  (kw-sym? (cadr items)))
+             (fail (format "`~a~a` — a rename target is a bare label, not a keyword (write `~a~a`)"
+                           it (cadr items)
+                           it (substring (symbol->string (cadr items)) 1)))]
             ;; ---- `^`-bearing branch head → the splitter
             [(re-key-sym? it)
              (split-step it (lambda (step)
