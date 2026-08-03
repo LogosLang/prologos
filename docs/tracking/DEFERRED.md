@@ -1345,6 +1345,37 @@ skip+warn policy; these lift the skips / harden the substrate.
 
 ### 4. Registry silent-overwrite: no duplicate-binding diagnostics [issue #67]
 
+**🔶 FIRST SLICE LANDED 2026-08-03 — the census is now mechanical, the
+diagnostic is NOT built.** Item 4 asks for a duplicate-binding diagnostic and
+notes it "would have made the N6d-i collision census mechanical instead of
+forensic". `tests/test-spec-store-clobber.rkt` makes the census mechanical
+without deciding the diagnostic's shape (a fifth warning category is a real
+addition — struct + cell + register/init/reset + emit + format + driver wiring
+— and the DEFAULT-ON-vs-opt-in question is a UX call).
+
+Measured, not asserted: importing `prologos::data::list` and
+`prologos::core::collections` into one module makes **12 spec names**
+order-dependent — `all? any? concat drop filter find head length map reduce
+reduce1 take` — with no error and no warning. The surviving spec depends purely
+on import order.
+
+Three findings from building it, all of which cost a wrong first attempt:
+- **The collision is at IMPORT PROPAGATION, not `register-spec!`.**
+  Instrumenting `register-spec!` (the site item 2 names first) reports ZERO
+  collisions for the same program: module bodies each load with a fresh spec
+  store, so the overwrite only happens in the IMPORTING module, via
+  `current-spec-propagation-handler`.
+- **"Last import wins" is FALSE as a general rule.** A first cut asserted it
+  and `sum` falsified it. Order-DEPENDENCE is the claim that holds; that is
+  what the test locks.
+- **A plain prelude load collides zero times**, which is why this has stayed
+  invisible — nothing on the ordinary path imports two overlapping modules into
+  one place.
+
+Remaining, unchanged: the diagnostic itself, and the trait-registry
+(`macros.rkt`) + import-shadowing (`namespace.rkt`) surfaces, which are NOT
+censused.
+
 - **What**: every collision surface found by the N6d-i audit fails SILENTLY —
   trait registry (`macros.rkt:6228-6231`), spec store, import shadowing
   (`namespace.rkt:833` "MUST BE LAST — shadowing depends on ordering") are all
