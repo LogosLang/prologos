@@ -92,7 +92,7 @@ shape as `infer`/`inferQ`, from a different cause.
 against the failing file found the culprit in six runs. Three earlier sessions
 re-observed it instead.
 
-## 🔶 PARTIAL `PLACEHOLDER11` — `[x : T]` works for `fn` but is a PARSE ERROR for a `defn` parameter list (found 2026-08-02; message fixed same day, the syntax question is the owner's)
+## 🔶 PARTIAL `db65045a` — `[x : T]` works for `fn` but is a PARSE ERROR for a `defn` parameter list (found 2026-08-02; message fixed same day, the syntax question is the owner's)
 
 ```
 defn f [n : Nat]      ;; parse error
