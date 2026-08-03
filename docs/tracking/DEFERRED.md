@@ -1705,10 +1705,41 @@ Shape, and each piece has a reason:
   collisions under the current one. Found exactly that way — the four W3001
   tests passed one at a time and three failed in file order.
 
+**A CORRECTION to the paragraph above, made after reading the code rather than
+the numbers.** The prelude's 12 "collisions" are not latent bugs — they are a
+DELIBERATE shadow, and `namespace.rkt` says so at the site:
+
+    ;; These shadow List-specific names (map, filter, reduce, etc.) with
+    ;; generic versions that work on any Seqable/Buildable/Foldable collection.
+    ;; MUST BE LAST — shadowing depends on ordering.
+
+So W3001 declining to report them is right for a second reason: they are
+intended. Describing them as "12 order-dependent spec names" as though they were
+a defect overstated it, and the overstatement came from reading a measurement
+without reading the code that produced it.
+
+**The real exposure on this surface is that the invariant is enforced by a
+COMMENT.** Move that `imports` line up and twelve names silently change meaning
+with the suite green. `tests/test-spec-store-clobber.rkt` now pins it: every one
+of the twelve must resolve to the CONSTRAINED (collections) spec, and the
+qualified List spec must still be reachable. Asserted via where-constraints
+rather than whole entries — those are what drive implicit-argument counts, and
+what W3001 itself gates on, so the pin tracks the property that actually breaks
+call sites instead of failing on innocuous edits.
+
+⚠ **Sensitivity verified, and the FIRST perturbation did not trip it**: moving
+the collections import a few entries earlier changed nothing, because the new
+position was still after `prologos::data::list`. Moving it to FIRST fails with
+the intended message. A perturbation that does not fail proves nothing about the
+test — only about the perturbation — and stopping at the first one would have
+shipped a guard never seen to fire.
+
 Remaining, unchanged: the trait-registry (`macros.rkt`) + import-shadowing
-(`namespace.rkt`) surfaces, which are NOT censused and get no diagnostic. And
-the **12 prelude-internal collisions are now a known, unreported fact** — they
-are the thing item 2's FQN-keyed store would actually fix.
+(`namespace.rkt` value bindings) surfaces get no diagnostic and are still
+uncensused. Note WHY the census is not a one-liner there, since the spec census
+already paid for this lesson: a final-state diff cannot see an overwrite, so it
+needs registration-EVENT instrumentation — the same reason instrumenting
+`register-spec!` reported zero collisions while the propagation site had 14.
 
 - **What**: every collision surface found by the N6d-i audit fails SILENTLY —
   trait registry (`macros.rkt:6228-6231`), spec store, import shadowing

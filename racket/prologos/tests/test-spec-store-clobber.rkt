@@ -64,6 +64,60 @@
 (define list-then-coll (spec-store-after 'prologos::data::list 'prologos::core::collections))
 (define coll-then-list (spec-store-after 'prologos::core::collections 'prologos::data::list))
 
+;; ============================================================================
+;; The PRELUDE's shadowing order, made executable (2026-08-03).
+;;
+;; `namespace.rkt` ends its prelude import list with
+;;
+;;     ;; MUST BE LAST — shadowing depends on ordering.
+;;     (imports [prologos::core::collections :refer [map filter reduce …]])
+;;
+;; That is a DELIBERATE shadow — the generic collection functions are meant to
+;; win over the List-specific ones — and it is exactly the set W3001 declines to
+;; report, because a user cannot act on it.
+;;
+;; The exposure is not the shadowing; it is that the invariant is enforced by a
+;; COMMENT. Move that `imports` line up and twelve names silently change
+;; meaning, with the suite green. This turns the comment into a mechanism.
+;;
+;; Deliberately asserted via the spec's WHERE-CONSTRAINTS rather than by
+;; comparing whole entries: the constraints are what drive implicit-argument
+;; counts, so they are the property whose silent change actually breaks call
+;; sites — and the same property W3001 gates on. A whole-entry check would also
+;; fail on innocuous edits to either module.
+;;
+;; SENSITIVITY VERIFIED, and the first attempt did NOT trip it: moving the
+;; collections import a few entries earlier changed nothing, because the
+;; position it moved to was still after `prologos::data::list`. Moving it to
+;; FIRST in `prelude-imports` fails the test with the intended message. Worth
+;; recording — a perturbation that does not fail proves nothing about the test,
+;; only about the perturbation, and stopping at the first one would have shipped
+;; a guard I had not actually seen fire.
+;; ============================================================================
+
+;; ⚠ COMPUTED HERE, beside the other stores, not beside its tests. The first
+;; draft defined it at the END of the file, after every test-case had already
+;; run `install-module-loader!` and mutated the registries — and it came back
+;; PARTIAL (`filter` absent, the qualified keys missing), so the assertions
+;; failed for contamination rather than for the invariant. Same lesson the
+;; shared-fixture rule states: load once, up front, before anything can move.
+(define prelude-spec-store
+  (parameterize ([current-file-module-network-ref (make-module-network)]
+                 [current-ns-context #f]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry]
+                 [current-param-impl-registry prelude-param-impl-registry]
+                 [current-persistent-registry-net-box prelude-persistent-registry-net-box]
+                 [current-spec-store (hasheq)])
+    (install-module-loader!)
+    (process-string "(ns prelude-shadow-probe)")
+    (current-spec-store)))
+
+
+
 ;; Names each module registers a spec for, that the other ALSO registers with a
 ;; DIFFERENT entry. Derived, not hand-listed — a hand list would drift.
 (define colliding
@@ -263,3 +317,28 @@
               (format "~v" rs))
   (check-true (ormap (lambda (r) (regexp-match? #rx"W3001" r)) rs)
               "and the ambiguity is still reported"))
+
+(test-case "prelude/the generic collection functions WIN the shadow"
+  ;; Every one of these is exported by both `prologos::data::list` (no
+  ;; where-constraints) and `prologos::core::collections` (Seqable/Reducible/
+  ;; Buildable constraints). Collections must be the survivor.
+  (for ([n (in-list '(map filter reduce reduce1 length concat
+                      any? all? find take drop head))])
+    (define e (hash-ref prelude-spec-store n #f))
+    (check-true (and e #t) (format "~a should have a spec in the prelude" n))
+    (when e
+      (check-true (pair? (spec-entry-where-constraints e))
+                  (format (string-append
+                           "~a resolved to the UNCONSTRAINED (List-specific) spec — "
+                           "the collections import in namespace.rkt's prelude list "
+                           "is no longer last, and twelve names just changed meaning")
+                          n)))))
+
+(test-case "prelude/and the qualified List spec is still reachable"
+  ;; The other half of the shadow: shadowing must not make the shadowed module's
+  ;; spec unreachable — that was issue #66, fixed by the qualified key.
+  (define e (hash-ref prelude-spec-store 'prologos::data::list::length #f))
+  (check-true (and e #t) "the qualified key must exist")
+  (when e
+    (check-equal? (spec-entry-where-constraints e) '()
+                  "and it must be List's own, unconstrained, spec")))
