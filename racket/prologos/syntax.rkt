@@ -739,17 +739,21 @@
 ;; Map proc over every EXPR slot of a validate node (subject + per-field
 ;; default/pred), preserving all atoms — the record-map-field-types pattern:
 ;; the plan-spine walk lives in ONE place for shift/subst/zonk/nf/pp.
+;;
+;; ⚠ REBUILT BY POSITION, NOT BY ARITY (2026-08-03). This used to spell out
+;; seven `list-ref`s, so every slot added to a plan entry silently TRUNCATED
+;; here — the entry came back one field shorter after any shift/subst/zonk/nf,
+;; and the reduction arm's `(list-ref entry N)` then read the wrong slot or
+;; raised, arbitrarily far from the addition. Slots 2 and 3 are the only EXPR
+;; slots; everything else is an atom carried through untouched, so mapping the
+;; spine generically is both shorter and correct for any future arity.
+;; (`pipeline.md` § Exhaustive Walkers — prefer the structural answer.)
 (define (validate-map-exprs proc v)
   (expr-validate (expr-validate-schema-name v)
                  (expr-validate-closed? v)
                  (for/list ([entry (in-list (expr-validate-plan v))])
-                   (list (car entry)
-                         (cadr entry)
-                         (let ([d (caddr entry)]) (and d (proc d)))
-                         (let ([p (cadddr entry)]) (and p (proc p)))
-                         (list-ref entry 4)
-                         (list-ref entry 5)
-                         (list-ref entry 6)))  ; F1b.5-s4: required-on-miss? (atom)
+                   (for/list ([x (in-list entry)] [i (in-naturals)])
+                     (if (and (or (= i 2) (= i 3)) x) (proc x) x)))
                  (proc (expr-validate-subject v))
                  (expr-validate-names v)))
 

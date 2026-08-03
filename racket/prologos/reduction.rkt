@@ -1863,6 +1863,14 @@
        ;; absent+no-default+NOT-required → a partial-view SKIP (D22.4 amendment 2:
        ;; :requires is a read-capability, not a completeness contract).
        (define required? (list-ref entry 6))
+       ;; 2026-08-03 (walker charter item 4): the REMAINDER of each deep
+       ;; `:requires` path whose top hop is this field. `'()` for a schema and
+       ;; for any field with no deep requirement, which is almost all of them.
+       ;; Read defensively: a plan baked before this slot existed (a `.pnet`
+       ;; written by an older build, or a hand-built plan in a test) is one
+       ;; entry short, and a missing deep-requires list means exactly "no deep
+       ;; requirements" — the correct reading, not a crash.
+       (define req-subpaths (if (> (length entry) 7) (list-ref entry 7) '()))
        (define kexpr (expr-keyword kw))
        (define khash (equal-hash-code kexpr))
        (define found (champ-lookup c khash kexpr))
@@ -1876,6 +1884,40 @@
               (loop (cdr entries) okc errc any-err?))]  ; SKIP (view: optional field)
          [else
           (define val (nf (if (eq? found 'none) default found)))
+          ;; The deep-`:requires` read-capability, checked INSIDE this field's
+          ;; value. Reported under the full dotted path (`:address.zip`) rather
+          ;; than under the top hop, because the err champ is keyed by field and
+          ;; `{:address missing-required}` would be a lie — `:address` is right
+          ;; there. `missing-required` is the correct Reason: this IS a
+          ;; read-capability miss, just one level in.
+          ;;
+          ;; A non-map value on the path is a MISS, not an accept: unlike the
+          ;; type WITNESS (which declines to assert what it cannot read), a
+          ;; `:requires` is a claim about reachability, and a path that cannot
+          ;; be walked is unreachable by definition.
+          (define deep-misses
+            (for/list ([sp (in-list req-subpaths)]
+                       #:unless (let walk ([v val] [steps sp])
+                                  (and (expr-champ? v)
+                                       (let* ([k (expr-keyword (car steps))]
+                                              [hit (champ-lookup (expr-champ-racket-champ v)
+                                                                 (equal-hash-code k) k)])
+                                         (and (not (eq? hit 'none))
+                                              (or (null? (cdr steps))
+                                                  (walk (nf hit) (cdr steps))))))))
+              sp))
+          (define (add-deep-misses e a)
+            (if (null? deep-misses)
+                (values e a)
+                (values (for/fold ([e e]) ([sp (in-list deep-misses)])
+                          (let ([k (expr-keyword
+                                    (string->symbol
+                                     (string-join (cons (symbol->string kw)
+                                                        (map symbol->string sp))
+                                                  ".")))])
+                            (champ-insert e (equal-hash-code k) k
+                                          (expr-fvar missing-name))))
+                        #t)))
           (cond
             ;; type-witness (the s1 acceptance tags; skip-safe by construction)
             [(not (value-witnesses-tag? val tag))
@@ -1899,12 +1941,14 @@
              (cond
                ;; no :check on this field → passes
                [(not pred-result)
-                (loop (cdr entries) (champ-insert okc khash kexpr val) errc any-err?)]
+                (let-values ([(e a) (add-deep-misses errc any-err?)])
+                  (loop (cdr entries) (champ-insert okc khash kexpr val) e a))]
                ;; panic in a pred → the panic IS the node's result (D27.3)
                [(expr-panic? pred-result) pred-result]
                ;; a clean Bool result: true passes, false is a check-failed
                [(expr-true? pred-result)
-                (loop (cdr entries) (champ-insert okc khash kexpr val) errc any-err?)]
+                (let-values ([(e a) (add-deep-misses errc any-err?)])
+                  (loop (cdr entries) (champ-insert okc khash kexpr val) e a))]
                [(expr-false? pred-result)
                 (loop (cdr entries) okc
                       (champ-insert errc khash kexpr

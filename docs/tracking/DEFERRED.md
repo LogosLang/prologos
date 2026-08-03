@@ -901,7 +901,7 @@ entry gates** (round-6 rulings, track doc §2a):
    where the generalization lands; D17's `{}` keyword-commitment is one
    recoverable seed site.
 
-## 🔶 PARTIAL — CIU T6 F1b.5: the deep-walker charter (D27.5, 2026-07-17; items 2 + 3 DONE 2026-08-03, items 1/4 open)
+## 🔶 PARTIAL — CIU T6 F1b.5: the deep-walker charter (D27.5, 2026-07-17; items 2 + 3 + 4-nested DONE 2026-08-03; item 1 and the wildcard half open)
 
 Validate v1 is ONE-LEVEL with STRUCTURAL depth symmetry (it consumes the same
 field-set enumeration as `schema->row` — never a second one-level implementation).
@@ -971,15 +971,59 @@ residue-letter entries — divergent gates/double-count):
 3. **Sub-schema descent** (auto-registered `Parent__field` entries carry
    check/default = #f — stripped at registration; a one-level engine hitting a
    sub-schema-typed field has no defined deep disposition).
-4. **Nested / wildcard selection requires-paths** (F1b.5-s4, `0f95d544`):
-   selection-validate enforces only SINGLE-SEGMENT `:requires` (a length-1
-   keyword-path `(#:name)`) as the read-capability miss-check. A deep path
-   (`:address.zip` → `(#:address #:zip)`, incl. its top hop) or a wildcard
-   (`:address.*` → `(#:address *)`) defers — it is the SAME descent mechanism as
-   #3 applied to a selection's read-capability (descend into the `:address`
-   sub-value to check `:zip`). A selection with deep requires still gets full
-   type/:check/closedness validation at s4; only the nested read-capability miss
-   isn't caught yet. Filtered at the bake (`(null? (cdr path))` ∧ keyword head).
+4. 🔶 **NESTED requires-paths DONE 2026-08-03; wildcards still deferred.**
+   The `(null? (cdr path))` filter dropped a deep path WHOLE, so
+   `:requires [:address.zip]` enforced **nothing** — and the more surprising
+   half is that it did not enforce its TOP HOP either. An absent `:address` was
+   not a read-capability miss, though `:requires [:address]` would have caught
+   it: the longer name silently turned the requirement off.
+
+   Two halves, both landed:
+   - the top hop joins `req-syms`, so an absent `:address` is a miss exactly as
+     `:name` would be;
+   - the REMAINDER rides the plan entry (a new slot 7) and the runtime descends
+     it inside the present field's value.
+
+   Reported under the FULL dotted path (`{:address.zip missing-required}`)
+   rather than under the top hop, because the err champ is keyed by field and
+   `{:address missing-required}` would be a lie — `:address` is right there.
+   `missing-required` is the correct Reason: this IS a read-capability miss,
+   one level in.
+
+   **A non-map on the path is a MISS, not an accept** — deliberately the
+   OPPOSITE call from the type witness one item up. The witness declines to
+   assert what it cannot read; a `:requires` is a claim about REACHABILITY, and
+   a path that cannot be walked is unreachable by definition.
+
+   Two notes for whoever does the wildcard half:
+   - `validate-map-exprs` (syntax.rkt) used to rebuild plan entries with seven
+     explicit `list-ref`s, so adding slot 7 would have **silently TRUNCATED**
+     every entry on any shift/subst/zonk/nf, detonating later at an unrelated
+     `list-ref`. It now maps the entry spine generically and transforms only the
+     two EXPR slots — correct for any future arity by construction
+     (`pipeline.md` § Exhaustive Walkers). The reduction arm reads slot 7
+     defensively for the same reason: a plan baked by an older build is one
+     entry short, and absent deep-requires means exactly "none".
+   - the wildcard remainder still defers: "every key under here" is a
+     QUANTIFIER, not a path, and needs semantics before it can be enforced. Its
+     top hop IS required now (unambiguous, and independent of that ruling).
+
+   ⚠ **Found while probing this, filed not fixed — a wildcard `:requires` is
+   unusable AND unsafe in a `.prologos` file.** `:requires [:address.*]` is a
+   hard registration error in WS mode (the reader splits `:m.*` into `:m` `.`
+   `*` — the wildcard spelling only survives the native sexp reader, which is
+   why `test-selection-compose.rkt` exercises it happily). That alone would be
+   a syntax gap. What makes it a defect is what happens NEXT: preparse
+   pre-registers every selection as a STUB (`macros.rkt:3044`, empty
+   requires/provides, so `known-type-name?` works during spec processing), and
+   the failed elaboration never replaces it. So the file reports one error and
+   then carries a live selection that **requires nothing and validates
+   everything**. Verified: `[validate W2 …]` returns `ok` for any input after
+   the registration error. Two candidate fixes — poison or remove the stub when
+   the declaration errors (structural, needs a way to distinguish a stub from a
+   legitimately-empty selection: `loc = #f` is suggestive but not reliable), or
+   fix the WS tokenization of `.*` so the error does not arise for the spelling
+   users will actually write. The second does not close the class.
 
 `defr : Schema` fact-row runtime validation rides the same charter (an adapter
 over the positional discharge, parser.rkt `parse-defr-schema-typed`).

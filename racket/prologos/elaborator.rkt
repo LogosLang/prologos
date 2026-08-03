@@ -3231,13 +3231,42 @@
                 (define src-schema (or schema-entry parent))
                 (define fields (schema-entry-fields src-schema))
                 (define closed? (schema-entry-closed? src-schema))
+                ;; F1b.5-s4 required-of a SELECTION's :requires read-capability.
+                ;;
+                ;; 2026-08-03 (walker charter item 4): DEEP paths participate
+                ;; now. `:requires [:address.zip]` used to be dropped whole by
+                ;; the `(null? (cdr p))` filter, so it enforced NOTHING — not
+                ;; even its top hop, which is a plain single-segment
+                ;; requirement wearing a longer name. Two halves:
+                ;;   - the TOP HOP joins req-syms, so an absent `:address` is a
+                ;;     read-capability miss exactly as `:name` would be;
+                ;;   - the REMAINDER rides the plan entry (slot 7) and the
+                ;;     runtime descends it inside the present field's value.
+                ;; A WILDCARD segment (`:address.*`) still defers: "every key
+                ;; under here" is a quantifier, not a path, and needs its own
+                ;; semantics before it can be enforced.
+                (define (kw->sym k) (string->symbol (keyword->string k)))
+                (define (path-syms p)
+                  (and (pair? p) (andmap keyword? p) (map kw->sym p)))
+                (define sel-paths
+                  (if sel (selection-entry-requires-paths sel) '()))
+                ;; fully-keyword paths carry a descendable remainder
+                (define req-paths (filter values (map path-syms sel-paths)))
+                ;; …but the TOP HOP is required for EVERY path whose head is a
+                ;; keyword, wildcards included. `:address.*` cannot say what it
+                ;; wants under `:address` until the quantifier has semantics,
+                ;; but it unambiguously wants `:address` — so requiring the head
+                ;; is strictly right and independent of that ruling.
                 (define req-syms
-                  (if sel
-                      (for/list ([p (in-list (selection-entry-requires-paths sel))]
-                                 #:when (and (pair? p) (null? (cdr p)) (keyword? (car p))))
-                        (string->symbol (keyword->string (car p))))
-                      '()))
+                  (remove-duplicates
+                   (for/list ([p (in-list sel-paths)]
+                              #:when (and (pair? p) (keyword? (car p))))
+                     (kw->sym (car p)))))
                 (define (required-of kw) (or (not sel) (and (memq kw req-syms) #t)))
+                (define (req-subpaths-of kw)
+                  (for/list ([p (in-list req-paths)]
+                             #:when (and (eq? (car p) kw) (pair? (cdr p))))
+                    (cdr p)))
                 ;; the Result's S argument: resolve `sname` (the schema OR
                 ;; selection name) to its ns-QUALIFIED form (F1b.5-s3 — try
                 ;; qualified FIRST so S is the SAME fvar the `the`/annotation
@@ -3295,7 +3324,8 @@
                           (cons (list kw tag default-expr pred-expr type-str
                                       (and (schema-field-check-pred f)
                                            (format "~a" (schema-field-check-pred f)))
-                                      (required-of kw))  ; F1b.5-s4: required-on-miss?
+                                      (required-of kw)      ; F1b.5-s4: required-on-miss?
+                                      (req-subpaths-of kw)) ; 2026-08-03: deep :requires
                                 acc)])])))
                 (if (prologos-error? plan-or-err)
                     plan-or-err

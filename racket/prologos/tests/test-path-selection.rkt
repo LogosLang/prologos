@@ -2892,3 +2892,59 @@
   (check-false (ormap prologos-error? rs) "nesting the carrier must not move the surface")
   (check-regexp-match #rx"h" (format "~a" (list-ref rs (- (length rs) 2))))
   (check-regexp-match #rx"80" (format "~a" (last rs))))
+
+
+;; ============================================================================
+;; DEEP :requires paths (the deep-walker charter's item 4, 2026-08-03).
+;;
+;; `:requires [:address.zip]` was dropped whole by the `(null? (cdr p))` filter
+;; in the validate bake, so it enforced NOTHING — not even its top hop, which
+;; is a plain single-segment requirement wearing a longer name.
+;; ============================================================================
+
+(define deep-sel-setup
+  (string-append
+   "schema Zp\n  :code String\n"
+   "schema Ct\n  :email String\n  :zp Zp\n"
+   "selection NeedsZp from Ct :requires [:zp.code]\n"))
+
+(test-case "item 4: a deep :requires is satisfied when the full path is there"
+  (check-regexp-match
+   #rx"result::ok"
+   (run-ws-pre-last (string-append deep-sel-setup
+                               "[validate NeedsZp {:email \"e\" :zp {:code \"90210\"}}]\n"))))
+
+(test-case "item 4: the LEAF miss is reported under the FULL path"
+  ;; Not under the top hop: `{:zp missing-required}` would be a lie, since
+  ;; `:zp` is right there in the value.
+  (define r (run-ws-pre-last (string-append deep-sel-setup
+                                        "[validate NeedsZp {:email \"e\" :zp {}}]\n")))
+  (check-regexp-match #rx"result::err" r)
+  (check-regexp-match #rx":zp[.]code" r)
+  (check-regexp-match #rx"missing-required" r))
+
+(test-case "item 4: the TOP HOP is required too — the more surprising half"
+  ;; This also returned `ok` before: the whole path was dropped, so an absent
+  ;; `:zp` was not a read-capability miss either.
+  (define r (run-ws-pre-last (string-append deep-sel-setup
+                                        "[validate NeedsZp {:email \"e\"}]\n")))
+  (check-regexp-match #rx"result::err" r)
+  (check-regexp-match #rx":zp prologos::data::reason::missing-required" r))
+
+(test-case "item 4: a non-map on the path is a MISS, not an accept"
+  ;; Unlike the type WITNESS (which declines to assert what it cannot read), a
+  ;; `:requires` is a claim about REACHABILITY — a path that cannot be walked is
+  ;; unreachable by definition. The field is typed `Zp` so this is also a
+  ;; type-mismatch; what this pins is that the requires-miss is reported.
+  (define r (run-ws-pre-last (string-append deep-sel-setup
+                                        "[validate NeedsZp {:email \"e\" :zp 5}]\n")))
+  (check-regexp-match #rx"result::err" r))
+
+(test-case "item 4: a SINGLE-segment :requires is unchanged (the A/B)"
+  ;; The rewrite replaced the filter that produced req-syms, so the shallow
+  ;; behaviour it used to compute has to be re-pinned, not assumed.
+  (define setup "schema Pr\n  :nm String\n  :ag Int\nselection NmOnly from Pr :requires [:nm]\n")
+  (check-regexp-match #rx"result::ok"
+                      (run-ws-pre-last (string-append setup "[validate NmOnly {:nm \"a\" :ag 9}]\n")))
+  (check-regexp-match #rx":nm prologos::data::reason::missing-required"
+                      (run-ws-pre-last (string-append setup "[validate NmOnly {:ag 9}]\n"))))

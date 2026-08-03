@@ -232,3 +232,36 @@ schema Ports
 [validate Ports {:nums @[80] :labels {:a 1}}]
 ;;42=>~ Map (the value at :a is Int)
 ;;   ← and a Map checks BOTH its keys and its values
+
+;; --- 2026-08-03: DEEP :requires paths (the deep-walker charter, item 4) -------
+;; `:requires [:address.zip]` was dropped whole by a single-segment filter, so
+;; it enforced NOTHING — not even its top hop, which is a plain single-segment
+;; requirement wearing a longer name.
+
+schema Zip
+  :code String
+schema Contact
+  :email String
+  :zip Zip
+
+;;43=> Zip : [Type 0] defined.
+;;44=> Contact : [Type 0] defined.
+
+selection NeedsZipCode from Contact :requires [:zip.code]
+;;45=> selection NeedsZipCode from Contact registered.
+
+[validate NeedsZipCode {:email "e" :zip {:code "90210"}}]
+;;46=>~ prologos::data::result::ok
+;;   ← the full path is reachable
+
+[validate NeedsZipCode {:email "e" :zip {}}]
+;;47=>~ :zip.code prologos::data::reason::missing-required
+;;   ← THE FIX (deep half): the top hop is there, the leaf is not. Reported
+;;     under the FULL path — `{:zip missing-required}` would be a lie, since
+;;     `:zip` is right there.
+
+[validate NeedsZipCode {:email "e"}]
+;;48=>~ :zip prologos::data::reason::missing-required
+;;   ← THE FIX (top-hop half): an absent `:zip` is a read-capability miss
+;;     exactly as a single-segment `:requires` would be. This case returned
+;;     `ok` too, which is the more surprising half of the gap.
