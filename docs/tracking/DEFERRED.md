@@ -2031,7 +2031,7 @@ readers/languages. The UCS track inherits the substrate + bridges it to the exis
 - BSP-LE Master Track 3 retirement obligation: [`2026-03-21_BSP_LE_MASTER.md`](2026-03-21_BSP_LE_MASTER.md).
 - **Process note**: the A.4 investigation was lengthened by a WS-syntax probe error (one-line fact rows `|| 5 3` parse as one wrong-arity row → spurious empty results, masqueraded as a tabling failure). Probes need multi-line fact rows.
 
-## ✅ CLOSED `PLACEHOLDER14` — solver term conversion drops pvec/map literals (captured 2026-07-25, fixed 2026-08-02)
+## ✅ CLOSED `10f5a080` — solver term conversion drops pvec/map literals (captured 2026-07-25, fixed 2026-08-02)
 
 Not in the conversion functions the entry named. `ground->prologos-expr`
 (reduction.rkt) filtered AST nodes through a HAND-ENUMERATED list of thirteen
