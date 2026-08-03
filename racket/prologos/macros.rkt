@@ -4901,15 +4901,36 @@
        (error 'def "def: expected at least one value after :="))
      ;; Auto-wrap multi-token RHS as application: `some 42N` → `(some 42N)`
      ;; In WS mode, juxtaposed tokens after := form an application.
+     ;;
+     ;; EXCEPT when every token is a keyword- or dash-headed group. That is a
+     ;; MAP BODY written in layout:
+     ;;
+     ;;     def r :=
+     ;;       :eu {:host "eu.example.com" :port 443}
+     ;;       :us {:host "us.example.com" :port 443}
+     ;;
+     ;; Wrapping it as an application built `((:eu …) (:us …))` and the def
+     ;; failed with "Could not infer type" — a message naming typing for what is
+     ;; a layout seam. The byte-identical body WITHOUT `:=` worked, because it
+     ;; reaches `rewrite-implicit-map` with its keyword tail intact. So these are
+     ;; SPLICED and the same rewrite handles both spellings, rather than a second
+     ;; map-building path being added here.
+     ;;
+     ;; Multi-token only: a single keyword group already spliced correctly
+     ;; (`(def r ((:eu 1)))` → the tail rewrite fires), and narrowing the change
+     ;; keeps the application default untouched.
+     (define map-body? (and (> (length after) 1) (all-keyword-or-dash-headed? after)))
      (define value (if (= (length after) 1) (car after) after))
      (cond
        ;; No type annotation: (def name := value) → (def name value)
        [(null? before)
-        `(def ,name ,value)]
+        (if map-body? `(def ,name ,@after) `(def ,name ,value))]
        ;; Type annotation with colon: (def name : T1 T2 ... := value)
        [(and (>= (length before) 2) (eq? (car before) ':))
         (define type-tokens (cdr before))
-        `(def ,name ($angle-type ,@type-tokens) ,value)]
+        (if map-body?
+            `(def ,name ($angle-type ,@type-tokens) ,@after)
+            `(def ,name ($angle-type ,@type-tokens) ,value))]
        [else
         (error 'def "def: unexpected tokens before :=: ~a" before)])]))
 

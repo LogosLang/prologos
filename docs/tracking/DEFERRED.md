@@ -650,32 +650,31 @@ not is the thing to find; suspect the preparse pass over the whole form list.
 Start at `preparse-expand-all` (macros.rkt) with the two form lists above,
 which differ only in length.
 
-## 🐛 DEFECT — `def X :=` + multi-key layout body fails; identical body without `:=` works (filed 2026-07-28, the D5 critique)
+## ✅ CLOSED `PLACEHOLDER7` — `def X :=` + multi-key layout body fails (filed 2026-07-28, fixed 2026-08-02)
 
-**Repro (byte-identical bodies, A/B verified at `2b1b383d`)**:
-```
-def r1 :=
-  :eu {:host "eu.example.com" :port 443}
-  :us {:host "us.example.com" :port 443}
-;; → ERROR: Could not infer type
+`expand-def-assign` (macros.rkt) auto-wraps a multi-token RHS as an
+APPLICATION — which is right for `def x := some 42N` and wrong for a layout map
+body, where it built `((:eu …) (:us …))`. Hence "Could not infer type": the
+diagnostic named typing for what the entry correctly called a parse/layout
+seam.
 
-def r2
-  :eu {:host "eu.example.com" :port 443}
-  :us {:host "us.example.com" :port 443}
-;; → r2 : {:eu {:host String :port Int} :us {:host String :port Int}} defined.
-```
-Trigger is fiddly (≥2 top-level keys, or ≥2 dash items with a multi-line
-`@[…]`) — evidence of a defect, not a documented restriction. Single-line
-`:=` bodies work. The diagnostic ("Could not infer type") names the wrong
-thing — it is a PARSE/layout seam, not typing. Found while running the Path
-Selection spec's Appendix fixtures (4 of its `def X :=` forms hit this).
-Workaround in corpus files: use the `def X` (no `:=`) implicit-map form.
-Owner ruled 2026-07-28: filed as **issue #80**
-(https://github.com/LogosLang/prologos/issues/80, OPEN). Adjacent context: the
-implicit-map-def WS path was touched by the 2026-07-18 hand-testing arc
-(`ff31d237` — process-string-ws parity), so the seam has history.
+The no-`:=` spelling worked because it reaches `rewrite-implicit-map` with its
+keyword tail intact. So the fix SPLICES an all-keyword/dash-headed RHS instead
+of wrapping it, and both spellings go through the one rewrite — rather than a
+second map-building path being added on the `:=` side.
 
----
+Narrow by construction: multi-token AND every token keyword- or dash-headed. A
+single keyword group already spliced correctly, and anything else keeps the
+application default.
+
+The test is an A/B — the two spellings must agree — because asserting on either
+one alone would have passed throughout the divergence.
+
+**Found while testing, NOT this defect and still open**: `def r : {:a Int :b Int}`
+fails with "Expression is not a valid type" in ALL THREE spellings (`:=`
+layout, no-`:=` layout, and single-line `:= {:a 1 :b 2}`). A map literal as a
+TYPE annotation, independent of the layout seam; it behaved identically before
+this fix.
 
 ## ✅ RESOLVED — CIU T6 F1b: D23 posture-flip (DEPLOYED F1b.6 `7bcbca69`, 2026-07-18)
 

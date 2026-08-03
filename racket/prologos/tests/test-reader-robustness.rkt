@@ -143,3 +143,42 @@
   (check-true (list? results))
   (check-false (ormap prologos-error? results) (format "expected no errors: ~v" results))
   (check-true (string-contains? (format "~a" results) "3") (format "got: ~v" results)))
+
+;; ----------------------------------------------------------------
+;; `def X :=` with a layout map body
+;; ----------------------------------------------------------------
+
+(test-case "layout/a multi-key layout body means the same with := as without"
+  ;; `def r :=` followed by keyword-headed lines used to build an APPLICATION
+  ;; -- `((:eu …) (:us …))` -- and fail with "Could not infer type", naming
+  ;; typing for what is a layout seam. The byte-identical body WITHOUT `:=`
+  ;; worked, because it reached `rewrite-implicit-map` with its keyword tail
+  ;; intact.
+  ;;
+  ;; The A/B is the test: the two spellings have to agree, and asserting on
+  ;; only one of them would have passed throughout the divergence.
+  (define with-assign
+    (run-file-lines "ns ly\ndef r1 :=\n  :eu {:host \"e\" :port 443}\n  :us {:host \"u\" :port 443}\n"))
+  (define without-assign
+    (run-file-lines "ns ly2\ndef r2\n  :eu {:host \"e\" :port 443}\n  :us {:host \"u\" :port 443}\n"))
+  (check-false (ormap prologos-error? with-assign)
+               (format "the := spelling failed: ~v" with-assign))
+  (check-false (ormap prologos-error? without-assign)
+               (format "the no-:= spelling failed: ~v" without-assign))
+  ;; Same inferred type, modulo the name.
+  (define (type-of results name)
+    (regexp-replace (regexp (string-append "^" name " : ")) (format "~a" (car results)) ""))
+  (check-equal? (type-of with-assign "r1") (type-of without-assign "r2")))
+
+(test-case "layout/a multi-token RHS is still an application"
+  ;; The narrow part. Only an all-keyword-headed RHS is a map body; anything
+  ;; else keeps the application default, which is what `def x := some 42N`
+  ;; depends on.
+  (define rs (run-file-lines "ns ly3\ndef x := some 42N\nx\n"))
+  (check-false (ormap prologos-error? rs) (format "expected success, got: ~v" rs))
+  (check-true (string-contains? (format "~a" rs) "Option") (format "got: ~v" rs)))
+
+(test-case "layout/a single-key layout body still works"
+  (define rs (run-file-lines "ns ly4\ndef r3 :=\n  :eu 1\nr3\n"))
+  (check-false (ormap prologos-error? rs) (format "expected success, got: ~v" rs))
+  (check-true (string-contains? (format "~a" rs) ":eu") (format "got: ~v" rs)))
