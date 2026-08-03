@@ -2831,6 +2831,29 @@ blocking.
 > cyclic solutions). Next step is a probe of a champ carrying an *unsolved* meta
 > through zonk and through `occurs?`; also `conv-nf` (independent, unverified).
 >
+> ✅ **`occurs?` HALF DONE 2026-08-03 — it WAS unsound, and is fixed.** The
+> probe the entry asked for, run: `occurs?` answered **#f** for a meta held as
+> a champ VALUE and as an hset KEY, while answering #t for the bare meta, a
+> Record field and a plain application. An unsound occur-check that would admit
+> a cyclic solution, exactly as feared.
+>
+> Cause: `occurs?` walks structs generically via `struct->vector`, and a
+> champ/hset/rrb stores its entries in a RACKET VECTOR inside its nodes —
+> `(vector? …)` is not `(struct? …)`, so the walk stopped dead there. One
+> `vector?` arm closes it; verified on champ value, hset key and rrb element,
+> with a different-meta negative so the fix is not simply "yes".
+>
+> **Why this half was fixable and the others are not**: `occurs?` is READ-ONLY.
+> `zonk` / `zonk-at-depth` / `default-metas` SUBSTITUTE, and substituting inside
+> a champ rewrites keys whose stored hashes were computed from the old ones —
+> that side needs the reconstructive treatment `nf`'s NbE fix and the
+> `champ-sentinel` serializer already use. Reading needs no such care, which is
+> why it is one line here and a design slice there.
+>
+> **Still open**: the `zonk` / `zonk-at-depth` / `default-metas` half, and
+> `conv-nf` (independent, still unverified). The #58 P3 `loose-bvar` memo
+> coupling below applies to THAT half — `occurs?` does not memoize.
+>
 > ⚠ **NEW COUPLING — GitHub #58 P3 (`94cfbcbd`, 2026-07-27) constrains this slice.**
 > `loose-bvar.rkt` memoizes each term's loose-bvar range in a weak **`eq?`-keyed**
 > table, sound today precisely *because* `shift`/`subst` are the identity on
