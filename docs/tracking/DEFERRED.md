@@ -3179,14 +3179,36 @@ point of change. Named in design §8 prose; not filed, not test-pinned.
 
 ---
 
-## Rel T1 — `docs/spec/grammar.ebnf` predates the POL syntax cluster (captured 2026-07-25)
+## 🔶 PARTIAL — `docs/spec/grammar.ebnf` predated the POL syntax cluster (captured 2026-07-25; the two SOURCE artifacts updated 2026-08-03)
 
-The formal grammar describes none of what shipped: `clause-body = '&>' , { goal }`
-(no parenless goals, no layout), `fact-row = expr , { expr }` (no `|` row
-separators), goals always parenthesized (no implicit solve), and `rel-params` has
-no `:`-type alternative (C.b.1's fused `?x:Int`). It also still describes the
-dead-in-WS `?var:C1:C2` narrow-var surface, which now COLLIDES with C.b.1's
-spelling. The `.org`/`.md`/`.tex`/`.pdf` renderings inherit all of it.
+**Both hand-maintained sources now describe what shipped.** `grammar.ebnf`
+§5.28 and `grammar.org` § Relational Language were updated together:
+
+- `clause-body` — the `&>` head-token fork (a `(` head is a SEQUENCE of paren
+  goals; a symbol head is EXACTLY ONE goal whose inner parens are ARGUMENTS,
+  which is what makes `not (= c n)` parse), plus the three continuation-line
+  rules and the `(foo)` requirement for a zero-arg goal on its own line. The
+  layout rules are stated as PROSE beside the productions, deliberately: they
+  cannot be expressed in pure EBNF, and pretending otherwise is how the
+  previous version came to describe a language nobody writes.
+- `fact-row` / `fact-line` — `|` row separators, each segment matching arity
+  exactly, empty segment an error, and the chunk-by-arity default whose partial
+  remainder is a loud error.
+- `goal` — the implicit `solve` at command position, its scope (top-level
+  commands and `def` RHS only, NOT general expression position), the four goal
+  keywords that take it, the `guard`/`cut` exclusion, the bracket spelling's
+  functional readings, and the institutionalized WS-vs-sexp paren divergence.
+- `rel-params` — C.b.1's fused `?x:Int`.
+- `narrow-var` — kept, but marked RESERVED with the collision spelled out,
+  rather than left reading as live surface.
+
+`grammar.org` additionally gained the BAGS-not-sets ruling (`solve` returns one
+row per derivation path; duplicates are ℕ-semiring provenance, not a bug).
+
+**Still open**: the `.md` / `.tex` / `.pdf` renderings are GENERATED from the
+`.org` and remain stale — they cannot be regenerated in this environment (no
+emacs/pandoc), which is the same blocker as the § generated `.md` twins entry.
+The two hand-maintained sources are correct; the exports are not.
 
 ---
 
