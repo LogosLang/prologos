@@ -1598,10 +1598,9 @@ skip+warn policy; these lift the skips / harden the substrate.
   (exactly this item). N6f-a retired the `plus/minus/times/divide/negate-fn/abs-fn` wrappers
   (commit `a556f38e`) but LEFT `sum`/`product` explicit-dict pending this resolution.
 
-### 4. Registry silent-overwrite: no duplicate-binding diagnostics [issue #67]
+### 4. ✅ Registry silent-overwrite: duplicate-binding diagnostics [issue #67] — SPEC-STORE SURFACE DONE 2026-08-03
 
-**🔶 FIRST SLICE LANDED 2026-08-03 — the census is now mechanical, the
-diagnostic is NOT built.** Item 4 asks for a duplicate-binding diagnostic and
+**🔶 FIRST SLICE — the census is mechanical.** Item 4 asks for a duplicate-binding diagnostic and
 notes it "would have made the N6d-i collision census mechanical instead of
 forensic". `tests/test-spec-store-clobber.rkt` makes the census mechanical
 without deciding the diagnostic's shape (a fifth warning category is a real
@@ -1627,9 +1626,56 @@ Three findings from building it, all of which cost a wrong first attempt:
   invisible — nothing on the ordinary path imports two overlapping modules into
   one place.
 
-Remaining, unchanged: the diagnostic itself, and the trait-registry
-(`macros.rkt`) + import-shadowing (`namespace.rkt`) surfaces, which are NOT
-censused.
+**✅ SECOND SLICE LANDED 2026-08-03 — W3001, the diagnostic itself, DEFAULT-ON.**
+
+The filing said "the DEFAULT-ON-vs-opt-in question is a UX call". It was
+settled by measurement, and the measurement moved twice — both times because a
+probe contradicted the previous number, which is the part worth keeping:
+
+1. First claim: *"a plain prelude load collides zero times"*, from the census's
+   `register-spec!` instrumentation. **Wrong for this purpose** — that is a
+   different SITE. At the PROPAGATION site the prelude collides on **12 names
+   by itself** (`all? any? concat drop filter find head length map reduce
+   reduce1 take`), because it imports both `prologos::data::list` and
+   `prologos::core::collections`. So a naive default-on warns on every file
+   anyone ever writes. **That is a real finding about the prelude**, recorded
+   here, and it is item 1's clobber set seen from the other end.
+2. Second attempt compared against the whole spec store, which then fired on a
+   SINGLE explicit `imports prologos::data::list` (14 names) — because an
+   explicit import shadows the prelude, which is what explicit imports are FOR.
+
+The rule that survived is **actionability**: warn when the user's OWN imports
+collide with EACH OTHER, and only then. Prelude-internal is the project's
+problem, not the user's; shadowing the prelude is deliberate. What is left is
+the case the user created and can fix — and on that set default-on has no false
+positives, which is what earns it the default.
+
+Shape, and each piece has a reason:
+- **The gate is "the implicit-argument shape DIFFERS"** (where-constraints +
+  implicit-binders), not "a write happened" — so re-importing the same module
+  twice is silent. Measured: all 14 collisions in the realistic pair differ, so
+  the gate costs no coverage here; it exists for the cases where it would.
+- **ONE line listing the names**, not one per name. The realistic pair collides
+  on 12 at once and the sentence is identical for each; the list IS the
+  information.
+- **No winner is named.** The first cut said "X wins here" and the probe
+  falsified it immediately — preparse walks the import list TWICE, so every
+  name warned once per direction with OPPOSITE winners. The census had already
+  established that "last import wins" is FALSE (`sum` is the counterexample);
+  order-DEPENDENCE is the true claim, so that is what the message makes.
+- **File-level, not per-command.** These are raised during preparse, before any
+  command runs, so `reset-warning-cells!` (per command) would wipe them before
+  anything could report them — and leaving them in the per-command channel
+  would repeat all 12 under every command in the file. Appended once by
+  `process-file-inner`, which also gives it a per-FILE reset. That reset is not
+  optional: without it a long-lived process reports every earlier file's
+  collisions under the current one. Found exactly that way — the four W3001
+  tests passed one at a time and three failed in file order.
+
+Remaining, unchanged: the trait-registry (`macros.rkt`) + import-shadowing
+(`namespace.rkt`) surfaces, which are NOT censused and get no diagnostic. And
+the **12 prelude-internal collisions are now a known, unreported fact** — they
+are the thing item 2's FQN-keyed store would actually fix.
 
 - **What**: every collision surface found by the N6d-i audit fails SILENTLY —
   trait registry (`macros.rkt:6228-6231`), spec store, import shadowing

@@ -1405,6 +1405,10 @@
   (define coercion-warns (remove-duplicates (reverse (read-coercion-warnings))))
   (define deprecation-warns (reverse (read-deprecation-warnings)))
   (define capability-warns (reverse (read-capability-warnings)))
+  ;; issue #67 duplicate-binding warnings are deliberately NOT in this list:
+  ;; they are a FILE-level fact raised during preparse, so per-command display
+  ;; would repeat all of them under every command in the file. They are appended
+  ;; once by `process-file-inner` instead.
   (define all-warning-strs
     (append (map format-coercion-warning coercion-warns)
             (map format-deprecation-warning deprecation-warns)
@@ -2851,6 +2855,12 @@
     (process-file-inner abs-path #:verbose verbose?)))
 
 (define (process-file-inner path #:verbose [verbose? #f])
+  ;; issue #67: clear the file-level duplicate-binding accumulator. It is not in
+  ;; `reset-warning-cells!` because that runs per COMMAND and these are raised
+  ;; during preparse, before any command — but without a per-FILE clear a
+  ;; long-lived process (the batch worker, a test file running several
+  ;; programs) reports every earlier file's collisions under the current one.
+  (reset-duplicate-binding-warnings!)
   (define path-str (if (string? path) path (path->string path)))
   (define ws? (regexp-match? #rx"\\.prologos$" path-str))
   ;; PPN Track 2B Phase 2: WS files use tree parser merge.
@@ -2955,7 +2965,25 @@
   ;; finalized result (cell ground → "x : T defined."; still def-bot → unbound
   ;; error). BEFORE the diagnostics loop, so a never-grounded forward-ref's
   ;; file-end unbound error is emitted like an immediate typo.
-  (define final-results (finalize-residuations results))
+  (define final-results0 (finalize-residuations results))
+  ;; issue #67: duplicate-binding warnings are a FILE-level fact, not a
+  ;; per-command one — they are raised while the import set is resolved during
+  ;; PREPARSE, before any command runs, so they cannot ride the per-command
+  ;; warning channel (which `reset-warning-cells!` clears at the head of every
+  ;; command). Appending them once at the end is the shape that matches when
+  ;; they actually happen, and it reaches every consumer of `process-file`
+  ;; rather than just the CLI.
+  (define final-results
+    (let ([names (sort (remove-duplicates
+                        (map duplicate-binding-warning-name
+                             (read-duplicate-binding-warnings)))
+                       symbol<?)])
+      (if (null? names)
+          final-results0
+          ;; ONE line, not one per name. The realistic pair collides on 14
+          ;; names at once, and 14 near-identical paragraphs would bury the
+          ;; file's actual results — the list IS the information.
+          (append final-results0 (list (format-duplicate-binding-warning names))))))
   ;; Emit formatted error diagnostics to stderr when enabled (test runner integration)
   (when (current-emit-error-diagnostics)
     (for ([r (in-list final-results)])
@@ -3567,6 +3595,32 @@
                                 names))])
         (define spec-entry (hash-ref mod-specs name #f))
         (when spec-entry
+          ;; issue #67 (2026-08-03): the store keys by BARE symbol with silent
+          ;; last-write-wins, so this line is where two modules exporting the
+          ;; same spec name quietly pick a winner by import order — and the
+          ;; loser's call sites then get the wrong implicit-argument count.
+          ;;
+          ;; The gate is "the implicit-argument shape DIFFERS", not "the entries
+          ;; differ": a re-import of the same spec, or two entries that agree on
+          ;; where-constraints and implicit-binders, cannot change how any call
+          ;; elaborates and must stay silent. Measured on the realistic pair
+          ;; (`prologos::data::list` + `prologos::core::collections`) all 14
+          ;; collisions ARE observable by this gate, and a plain prelude load
+          ;; produces none — which is what makes the warning default-on rather
+          ;; than opt-in.
+          (unless (current-suppress-duplicate-binding-warnings?)
+            (let ([prev (hash-ref (current-own-import-specs) name #f)])
+              (when (and prev
+                         (not (and (equal? (spec-entry-where-constraints prev)
+                                           (spec-entry-where-constraints spec-entry))
+                                   (equal? (spec-entry-implicit-binders prev)
+                                           (spec-entry-implicit-binders spec-entry)))))
+                (emit-duplicate-binding-warning! name)))
+            ;; compared against the file's OWN imports, not the whole spec
+            ;; store — the store already holds the prelude, and shadowing the
+            ;; prelude is what an explicit import is for
+            (current-own-import-specs
+             (hash-set (current-own-import-specs) name spec-entry)))
           (current-spec-store
             (hash-set (current-spec-store) name spec-entry))
           ;; Phase 2c: dual-write spec-store to cell

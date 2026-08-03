@@ -30,6 +30,7 @@
 ;;;     why this has stayed invisible.
 
 (require rackunit
+         racket/file
          racket/list
          racket/set
          "test-support.rkt"
@@ -141,3 +142,57 @@
   ;; rather than from anything ambient in the fixture.
   (check-equal? (spec-store-after 'prologos::data::list) list-only)
   (check-equal? (spec-store-after 'prologos::core::collections) coll-only))
+
+
+;; ============================================================================
+;; W3001 — the duplicate-binding diagnostic (issue #67, 2026-08-03).
+;;
+;; The census above locks the DEFECT; these lock the DIAGNOSTIC. Both halves
+;; matter: a warning that fires on the ordinary path is worse than no warning,
+;; because people learn to ignore it.
+;; ============================================================================
+
+(define (run-file-results src)
+  (define tmp (make-temporary-file "prologos-dupwarn-~a.prologos"))
+  (call-with-output-file tmp #:exists 'replace (lambda (o) (display src o)))
+  (define rs (parameterize ([current-lib-paths (list prelude-lib-dir)]
+                            [current-module-registry prelude-module-registry])
+               (install-module-loader!)
+               (process-file (path->string tmp))))
+  (delete-file tmp)
+  (map (lambda (r) (format "~a" r)) rs))
+
+(define (warns? src)
+  (ormap (lambda (r) (regexp-match? #rx"W3001" r)) (run-file-results src)))
+
+(test-case "W3001/two OWN imports that collide are reported"
+  (define rs (run-file-results
+              "ns dupwarn-a\n\nimports prologos::data::list\nimports prologos::core::collections\n\ndef z := 1\n"))
+  (define w (findf (lambda (r) (regexp-match? #rx"W3001" r)) rs))
+  (check-true (and w #t) "the collision must be reported")
+  ;; the NAMES are the information — the sentence is the same for all of them
+  (for ([n (in-list '("map" "reduce" "filter" "length" "head" "concat"))])
+    (check-true (regexp-match? (regexp n) w) (format "~a should be listed: ~a" n w)))
+  ;; ONE line, not one per name
+  (check-equal? (length (filter (lambda (r) (regexp-match? #rx"W3001" r)) rs)) 1))
+
+(test-case "W3001/the PRELUDE's own collisions are NOT reported"
+  ;; Measured: the prelude collides on 12 names by itself, because it imports
+  ;; both list and collections. Real, and filed — but not something a user can
+  ;; act on, and reporting it would put the same 12 names under every file
+  ;; anyone ever writes.
+  (check-false (warns? "ns dupwarn-b\n\ndef q := 1\n")
+               "an ordinary file must be silent"))
+
+(test-case "W3001/shadowing the prelude with ONE import is NOT reported"
+  ;; `imports prologos::data::list` rebinds 14 prelude names on its own. That is
+  ;; what an explicit import is FOR; warning on it would make importing noisy.
+  (check-false (warns? "ns dupwarn-c\n\nimports prologos::data::list\n\ndef q := 1\n")
+               "a single explicit import must be silent"))
+
+(test-case "W3001/re-importing the SAME module twice is not a collision"
+  ;; Same spec entries, so nothing about any call site changes. The gate is
+  ;; "the implicit-argument shape differs", not "a write happened".
+  (check-false (warns? (string-append "ns dupwarn-d\n\n"
+                                      "imports prologos::data::list\n"
+                                      "imports prologos::data::list\n\ndef q := 1\n"))))

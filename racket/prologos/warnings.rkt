@@ -33,6 +33,16 @@
          process-cap-warning-message
          emit-process-cap-warning!
          format-process-cap-warning
+         ;; Duplicate-binding warnings (W3001) — issue #67
+         current-duplicate-binding-warnings
+         duplicate-binding-warning
+         duplicate-binding-warning?
+         duplicate-binding-warning-name
+         emit-duplicate-binding-warning!
+         format-duplicate-binding-warning
+         read-duplicate-binding-warnings
+         reset-duplicate-binding-warnings!
+         current-duplicate-binding-warnings-cell-id
          ;; Phase 2c: Warning cell infrastructure
          current-warnings-prop-net-box
          current-warnings-prop-cell-write
@@ -50,7 +60,8 @@
          ;; PPN 4C Phase 2: facet SRE registration
          warnings-facet-merge)
 
-(require "infra-cell.rkt"        ;; merge-list-append
+(require racket/string
+         "infra-cell.rkt"        ;; merge-list-append
          "propagator.rkt"        ;; Track 7 Phase 2: net-new-cell, net-cell-read, net-cell-write
          "metavar-store.rkt"     ;; Track 7 Phase 2: current-persistent-registry-net-box
          (only-in "sre-core.rkt" make-sre-domain register-domain!)  ;; PPN 4C Phase 2
@@ -67,6 +78,7 @@
 (define current-coercion-warnings-cell-id (make-parameter #f))
 (define current-deprecation-warnings-cell-id (make-parameter #f))
 (define current-capability-warnings-cell-id (make-parameter #f))
+(define current-duplicate-binding-warnings-cell-id (make-parameter #f))
 
 ;; Helper: write a warning to a list cell in the persistent network.
 ;; Track 7 Phase 2: targets persistent registry network directly.
@@ -89,7 +101,9 @@
     (current-deprecation-warnings-cell-id dw-cid)
     (define-values (net3 capw-cid) (net-new-cell net2 (current-capability-warnings) merge-list-append))
     (current-capability-warnings-cell-id capw-cid)
-    (set-box! prn-box net3)))
+    (define-values (net4 dbw-cid) (net-new-cell net3 (current-duplicate-binding-warnings) merge-list-append))
+    (current-duplicate-binding-warnings-cell-id dbw-cid)
+    (set-box! prn-box net4)))
 
 ;; Per-command reset: clear the (grows-only) warning cells on the persistent
 ;; registry network back to '(). These cells are per-command EPHEMERAL but live
@@ -109,6 +123,11 @@
     (define net1 (clr net0 (current-coercion-warnings-cell-id)))
     (define net2 (clr net1 (current-deprecation-warnings-cell-id)))
     (define net3 (clr net2 (current-capability-warnings-cell-id)))
+    ;; issue #67: the duplicate-binding cell is NOT cleared here. It accumulates
+    ;; a FILE-level fact — raised while the import set is resolved during
+    ;; preparse, before any command runs — so a per-command clear would wipe it
+    ;; before anything could report it. `process-file-inner` reads it once at the
+    ;; end; the per-command channel is the wrong lifetime for this category.
     (set-box! prn-box net3)))
 
 ;; Legacy: per-command warning cell creation.
@@ -137,6 +156,10 @@
 (define (read-capability-warnings)
   (define v (warnings-cell-read-safe (current-capability-warnings-cell-id)))
   (if v (unwrap-tagged-list v) (current-capability-warnings)))
+
+(define (read-duplicate-binding-warnings)
+  (define v (warnings-cell-read-safe (current-duplicate-binding-warnings-cell-id)))
+  (if v (unwrap-tagged-list v) (current-duplicate-binding-warnings)))
 
 ;; ========================================
 ;; Coercion warnings
@@ -237,6 +260,88 @@
           (process-cap-warning-code w)
           (process-cap-warning-name w)
           (process-cap-warning-message w)))
+
+;; ========================================
+;; Duplicate-binding warnings (W3001) — issue #67
+;; ========================================
+;;
+;; The spec store keys by BARE symbol with silent last-write-wins, so importing
+;; two modules that both export a spec for `map` leaves ONE of them, chosen by
+;; import order, with no signal at all. The loser's call sites then get the
+;; WRONG implicit-argument count.
+;;
+;; DEFAULT-ON, and that was the open question in the filing ("the
+;; DEFAULT-ON-vs-opt-in question is a UX call"). It was settled by measuring
+;; rather than by taste. Two numbers decided it:
+;;
+;;   - Importing `prologos::data::list` + `prologos::core::collections` — the
+;;     realistic pair — collides on 14 spec names, and ALL FOURTEEN differ in
+;;     where-constraints AND implicit-binders. There is no benign-clobber class
+;;     to filter out: every collision in the censused set is behaviourally live.
+;;     So default-on has no false positives to apologise for.
+;;   - A plain prelude load collides ZERO times. The ordinary path is silent,
+;;     which is why this stayed invisible and why turning it on is not noisy for
+;;     programs that do not create the ambiguity.
+;;
+;; An opt-in nobody enables is decoration — this project's own "Validated Is Not
+;; Deployed" lesson — and a warning that fires only on genuine, order-dependent
+;; ambiguity does not need an opt-out.
+(define current-duplicate-binding-warnings (make-parameter '()))
+
+;; name: the bare symbol more than one import bound.
+;;
+;; ⚠ THE WINNER IS DELIBERATELY NOT RECORDED, and that is a correction rather
+;; than a simplification. The first cut named it ("X wins here") and the probe
+;; falsified the claim immediately: preparse walks the import list TWICE, so
+;; each name warned once per direction with OPPOSITE winners. Even without the
+;; double pass the claim would have been wrong — the census
+;; (`test-spec-store-clobber.rkt`) established that "last import wins" is FALSE
+;; as a general rule; `sum` is the counterexample. What is TRUE, and what the
+;; census does lock, is that the outcome is order-DEPENDENT. So that is what
+;; the message says.
+(struct duplicate-binding-warning (name) #:transparent)
+
+;; Per-FILE reset. This category is deliberately absent from
+;; `reset-warning-cells!` (which runs per COMMAND and would wipe it before
+;; anything could report it), so it needs its own clearing point — otherwise a
+;; long-lived process running many files accumulates every file's warnings and
+;; reports them all under the second one. Found exactly that way: the four
+;; W3001 tests passed one at a time and three failed in file order.
+(define (reset-duplicate-binding-warnings!)
+  (current-duplicate-binding-warnings '())
+  (define prn-box (current-persistent-registry-net-box))
+  (define cid (current-duplicate-binding-warnings-cell-id))
+  ;; The cell-id parameter outlives any particular network: a test that swaps
+  ;; the persistent-registry net box (test-pnet-registry-restore does) leaves a
+  ;; live id naming a cell the current net has never heard of. Nothing to clear
+  ;; is not an error — the parameter reset above already covers the no-network
+  ;; path — so this mirrors `warnings-cell-read-safe`'s existing handler rather
+  ;; than raising into an unrelated caller.
+  (when (and prn-box cid)
+    (with-handlers ([exn:fail? (lambda (_) (void))])
+      (set-box! prn-box (net-cell-reset (unbox prn-box) cid '())))))
+
+(define (emit-duplicate-binding-warning! name)
+  (define w (duplicate-binding-warning name))
+  (current-duplicate-binding-warnings (cons w (current-duplicate-binding-warnings)))
+  (warnings-cell-write! (current-duplicate-binding-warnings-cell-id) (list w)))
+
+;; Takes the whole NAME LIST and renders ONE line. The realistic pair collides
+;; on 14 names at once, and 14 near-identical paragraphs would bury the file's
+;; actual results — the list of names IS the information here, and the
+;; explanation is the same sentence for every one of them.
+;;
+;; The message names the remedy, because the remedy is what the reader needs:
+;; the ambiguity is resolvable by qualifying the call or importing selectively.
+(define (format-duplicate-binding-warning names)
+  (format (string-append
+           "W3001: ~a name~a bound by more than one import with different "
+           "implicit-argument counts (~a). Which one survives depends on import "
+           "ORDER, and call sites of the other get the wrong argument count — "
+           "qualify the call (`Module::name`) or import selectively.")
+          (length names)
+          (if (= 1 (length names)) " is" "s are")
+          (string-join (map symbol->string names) " ")))
 
 ;; ============================================================
 ;; PPN 4C Phase 2: :warnings facet SRE domain registration (A9)
