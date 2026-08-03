@@ -2304,7 +2304,7 @@ actual problem. Three confirmed instances:
 
 ---
 
-## 🔶 PARTIAL `PLACEHOLDER10` — generated `.md` twins are STALE (captured 2026-07-25; hazard closed 2026-08-02, regeneration + keep/delete still open)
+## 🔶 PARTIAL `9a5ef0c6` — generated `.md` twins are STALE (captured 2026-07-25; hazard closed 2026-08-02, regeneration + keep/delete still open)
 
 **Broader than the entry had it: ELEVEN stale exports, not two**, and some by
 five months — `DEVELOPMENT_LESSONS.md` last regenerated 2026-02-25 against an
