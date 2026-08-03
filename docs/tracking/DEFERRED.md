@@ -92,116 +92,37 @@ shape as `infer`/`inferQ`, from a different cause.
 against the failing file found the culprit in six runs. Three earlier sessions
 re-observed it instead.
 
-## 🐛 `[x : T]` works for `fn` but is a PARSE ERROR for a `defn` parameter list (found 2026-08-02)
+## 🔶 PARTIAL `PLACEHOLDER11` — `[x : T]` works for `fn` but is a PARSE ERROR for a `defn` parameter list (found 2026-08-02; message fixed same day, the syntax question is the owner's)
 
 ```
-defn f [n : Nat]      ;; parse error: "defn requires: (defn name [x <T> ...] …)"
+defn f [n : Nat]      ;; parse error
   [+ n 2N]
-[f 3N]                ;; …then a cascading "Unbound variable: f"
+[f 3N]                ;; …then a cascading "Unbound variable"
 
 def g := [fn [x : Nat] [+ x 2N]]   ;; fine
 defn h [n:Nat]                      ;; fine (fused)
   [+ n 2N]
 ```
 
-Verified at WS-string AND file level. Two things to decide:
+**Fixed: the message.** It used to print SEXP syntax
+(`(defn name [x <T> ...] <ReturnType> body)`) at a WS-mode parse failure, so it
+named neither the actual problem nor a spelling that works. It now says the
+fused form is what a `defn` parameter list takes, shows it, offers `spec` as
+the alternative, and notes that the spaced form works for `fn` — with the sexp
+grammar kept in parentheses for sexp-mode readers. The test RUNS the advice
+rather than matching its text.
 
-1. **Should `defn` accept the spaced form?** `fn` does, `let` does not (fused
-   only, single-token types — `prologos-syntax.md`), and `defn` currently
-   follows `let`. If that is deliberate, the `defn requires:` parse error
-   should say so in WS terms — it currently prints SEXP syntax
-   (`(defn name [x <T> ...] <ReturnType> body)`) at a WS-mode parse failure,
-   which is its own small defect.
-2. **The cascade.** A `defn` that fails to parse (or to type) still produces a
-   second, misleading `Unbound variable` for the name it was defining. The
-   real error is the first one; the second is what the user reads.
+**Still open — an owner call, not a defect:** should `defn` accept the spaced
+form? `fn` does; `let` does not (fused only, single-token types, per
+`prologos-syntax.md`); `defn` currently follows `let`. If that is deliberate,
+this entry closes as documentation.
 
-The diagnostic half of this is already fixed (`7efc781d`): the
-"cannot infer the type of an unannotated parameter" hint used to recommend
-`[x : T]` — advice that does not parse in the position it was given for.
-
-## ✅ CLOSED — the two eliminator usage residuals (QTT P6 + P7, 2026-07-31)
-
-- **The Church-fold agreement hole** → ✅ `e5810cfe`. It was LIVE, not theoretical:
-  a linear resource dropped inside an unanalysable branch — and in a second
-  variant DOUBLE-FREED — type-checked clean and RAN, while the byte-identical
-  Bool-scrutinee control was rejected. The skip swallowed NESTED violations.
-- **natrec's step counted once** → ✅ `63dea0b6`, and the filing was WRONG about
-  scope: natrec has zero shipped uses; the same defect sat in 8 HOF primitives
-  with 121 shipped uses. Fixed across 9 nodes / 28 sites / both twins. Also
-  reframed — it is the app rule (scale an argument by its binder multiplicity)
-  finally applied, not a tightening: a user-written HOF capturing a linear was
-  already rejected; only the built-in twins accepted it.
-- **The J arm's dropped base usage** (filed below at P5) → ✅ `63dea0b6`, folded
-  into P7 by owner direction.
-
-## ✅ CLOSED — the three pattern-matching soundness items (2026-07-31)
-
-- **Unreachable arms** → ✅ `55aac8c4`. Broader than filed: the reported
-  "unknown ctor becomes a catch-all" was one instance of a general defect — an
-  arm after ANY irrefutable arm is dropped by the pattern compiler and therefore
-  never TYPE-CHECKED, so `match v (n -> 1N) (zero -> "dead")` defined clean with
-  a String body where a Nat was expected. Fixed as a REACHABILITY check, which
-  needs no heuristic about whether a lowercase name was "meant" as a constructor.
-  Required a second fix to be usable: `expand-expression` had no error
-  propagation, so the message arrived as
-  "Cannot elaborate: #(struct:prologos-error …)" — propagation added at the
-  `surf-def` command boundary and at `surf-lam`.
-- **Cross-type constructor** → ✅ `09e68e60`. `ctor-belongs-to-type?` consults the
-  same registry `reduce-scrutinee-decompose` uses, and DECLINES when membership
-  is undecidable, so it rejects only what it can show is foreign.
-- **Linear destructuring via multi-clause `defn`** → ✅ `6d4e8c73`, and the ROOT
-  CAUSE was much wider than the filed symptom: `extract-pi-binders` matched a
-  `surf-arrow`'s multiplicity as `_` and substituted 'mw, so `A -1> B` and
-  `A -> B` were indistinguishable to every consumer.
-
-## ✅ CLOSED `14dfbdd7` — `expand-expression` has no general error propagation (filed 2026-07-31, fixed 2026-08-02)
-
-Fixed the way the entry asked for — by construction, not by arming the other
-twenty-eight arms. Every recursive descent goes through `expand-child`, which
-escapes to the top of the current expansion the moment a child expands to an
-error. No arm has to remember, and an arm added tomorrow cannot forget.
-
-An escape rather than a threaded Either: the arms are ordinary constructor
-applications, and making them all monadic would be a rewrite of a walker, which
-is how walkers acquire this class of bug in the first place.
-
-The hand-armed `surf-lam` check is REMOVED rather than kept alongside — two
-mechanisms for one job is how a bug in the new one stays hidden until the old
-one goes.
-
-`tests/test-expand-error-propagation.rkt` grades by DEPTH on purpose: depth 0
-passed before the fix and still passes, depths 1 and 2 are what leaked, and a
-fix that armed one more arm would pass depth 1 and fail depth 2. It also pins
-that the SOURCE LOCATION survives — wrapping did not only print
-`#(struct:prologos-error …)`, it replaced the srcloc with `<unknown>:0:0`, so
-the line was lost along with the message.
-
-## ✅ CLOSED `0da17830` — a specific message for a foreign constructor in a match arm (filed 2026-07-31, fixed 2026-08-02)
-
-Was:
-
-    Type mismatch
-      Expected: [Pi [x <Bool>] Nat]
-      Got:      <could not infer>
-
-Now:
-
-    `mk-b3` is a constructor of `Box3`, not `Bool` — that arm can never match.
-    Either the constructor name is wrong for a `Bool`, or the scrutinee was
-    meant to be a `Box3`.
-
-Built as the entry specified: a post-hoc `(e) → string-or-#f` hint in
-`typing-errors`' ordered chain, beside the branch-result and QTT ones. It
-RE-DERIVES the fact from the failing expression (the binder type is the
-scrutinee type; `lookup-ctor` gives each arm constructor's owning type) rather
-than being threaded down from `reduce-arm-ctx`'s `#f` — a post-hoc hint cannot
-make a rejection wrong, only better explained, and it returns #f whenever it
-cannot show the arm is foreign.
-
-Both directions pinned: the message names constructor, owning type and
-scrutinee type; and a second case asserts the hint stays SILENT on an unrelated
-mismatch. A hint that fires wrongly is worse than no hint.
+**Still open — the cascade.** A `defn` that fails to parse still produces a
+second `Unbound variable` for the name it was defining, and that rendering does
+not even show the name. Each command reporting its own problem is defensible;
+suppressing the second would mean tracking "this name failed to define", which
+is a feature rather than a fix. Left as a known, now-secondary annoyance: the
+first message tells the user what to do.
 
 ## ✅ CLOSED — two soundness holes on the STRICT path, found while grounding P6 (2026-07-31)
 

@@ -5105,7 +5105,21 @@
               [else (surf-defn name ty params bd loc)]))]))]
 
     [else
-     (parse-error loc "defn requires: (defn name [x <T> ...] <ReturnType> body) or (defn name : type [params] body)" #f)]))
+     ;; The commonest way to land here is a SPACED parameter annotation —
+     ;; `defn f [n : Nat]`. That works for `fn` and not for a `defn` parameter
+     ;; list, which takes the fused form (single-token types only), exactly like
+     ;; `let`. Worth naming, because the message that used to be here showed
+     ;; SEXP syntax at a WS-mode parse failure and the reader then hit a second,
+     ;; unrelated "Unbound variable" for the name they were defining.
+     (parse-error
+      loc
+      (string-append
+       "defn: could not read the parameter list or body. In WS mode a typed "
+       "parameter is FUSED — `defn f [n:Nat]`, single-token types only — or "
+       "give the types in a `spec`. The spaced form `[n : Nat]` works for `fn` "
+       "but not here. (sexp: `(defn name [x <T> ...] <ReturnType> body)` or "
+       "`(defn name : type [params] body)`.)")
+      #f)]))
 
 ;; ========================================
 ;; Parse defn with implicit type params: (defn name {A B} [params...] <RetType> body)

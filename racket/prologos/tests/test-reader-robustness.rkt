@@ -182,3 +182,29 @@
   (define rs (run-file-lines "ns ly4\ndef r3 :=\n  :eu 1\nr3\n"))
   (check-false (ormap prologos-error? rs) (format "expected success, got: ~v" rs))
   (check-true (string-contains? (format "~a" rs) ":eu") (format "got: ~v" rs)))
+
+;; ----------------------------------------------------------------
+;; The `defn` parameter-list message
+;; ----------------------------------------------------------------
+
+(test-case "defn/a spaced parameter annotation is told what to write instead"
+  ;; `defn f [n : Nat]` is a parse error — the spaced form works for `fn`, and a
+  ;; `defn` parameter list takes the fused form, like `let`. The message used to
+  ;; print SEXP syntax at a WS-mode failure, so it named neither the actual
+  ;; problem nor a spelling that works here.
+  (define results (run-file-lines "ns dfn\ndef a := 1\ndefn f [n : Nat]\n  [+ n 2N]\ndef b := 2\n"))
+  (check-true (list? results))
+  (define text (string-join (map (lambda (r) (format "~a" r)) results) "\n"))
+  (check-true (string-contains? text "[n:Nat]")
+              (format "the message does not show a spelling that works: ~v" results))
+  (check-true (string-contains? text "spec")
+              (format "the message does not mention the other option: ~v" results))
+  ;; …and the commands around it still run.
+  (check-true (string-contains? text "a :") (format "command BEFORE lost: ~v" results))
+  (check-true (string-contains? text "b :") (format "command AFTER lost: ~v" results)))
+
+(test-case "defn/the fused form the message recommends actually parses"
+  ;; The pin that makes the message mean something: run its advice.
+  (define results (run-file-lines "ns dfn2\ndefn f [n:Nat]\n  [+ n 2N]\n[f 3N]\n"))
+  (check-false (ormap prologos-error? results) (format "the advice does not parse: ~v" results))
+  (check-true (string-contains? (format "~a" results) "5") (format "got: ~v" results)))
