@@ -2386,8 +2386,61 @@ control.
 
 ## Infrastructure / Performance
 
-### Compiled Module Cache
-- Persistent compilation cache keyed by module path + source hash
+### 🔶 PARTIAL — Compiled Module Cache (BUILT; and probing it 2026-08-03 found a WRONG-ANSWER bug)
+
+**Built and on by default.** The `.pnet` cache is the feature this entry asked
+for: `pnet-path-for-module` keys by module name, `pnet-stale?` gates on file
+existence + `infrastructure-stale?` (driver.zo newer than the cache) + exact
+`PNET_VERSION` equality + `source-hash-for-module`, and
+`current-use-pnet-cache?` defaults `#t`. The entry predates it.
+
+**🐛 But `source-hash-for-module` is path + MTIME, not a content hash, and
+there is NO transitive-dependency invalidation — so a stale cache returns a
+WRONG ANSWER, silently.** Its own comment admits the shape ("Full
+implementation would hash file contents + transitive deps"); what was missing
+was that this is a correctness bug rather than a freshness nicety.
+
+Verified repro (2026-08-03), three modules, one edit:
+
+```
+prologos::dep::base   defn basev [x] [int+ x 1]
+prologos::dep::mid    imports base;  defn midv [x] [basev x]
+user                  imports mid;   def r := [midv 10]     ;; => 11
+```
+
+Edit `base` to `[int+ x 100]` and re-run **the user file only**:
+
+| condition | result |
+|---|---|
+| cache ON, `mid.pnet` present | **11** ← WRONG, pre-edit answer |
+| cache OFF (`current-use-pnet-cache? #f`) | 110 ✓ |
+| cache ON, `mid.pnet` deleted | 110 ✓ |
+
+`mid`'s own mtime never changed, so `pnet-stale?` calls it fresh, and `mid`'s
+cached env snapshot still carries `base`'s old contributions. Nothing warns.
+
+**Why it has stayed invisible**: `infrastructure-stale?` invalidates
+everything whenever `driver_rkt.zo` is newer, so any RACKET edit sweeps the
+cache — which is most development. The exposure is edits to `.prologos`
+LIBRARY sources with no Racket change, and the repeated `PNET_VERSION` bumps
+recorded in `pnet-serialize.rkt` (v3→v7, several of them explicitly "stale
+cache made the suite green/red wrongly") are the same class hitting from
+different directions.
+
+**Two candidate fixes, neither taken**:
+1. *Blunt, correct, cheap to write*: extend `infrastructure-stale?` to also
+   compare against the newest mtime of any `.prologos` under the lib paths —
+   the exact precedent `driver_rkt.zo` already sets. Cost: one stdlib edit
+   invalidates all ~55 prelude caches (~3-4 s regeneration, per the v4→v5
+   note's own measurement).
+2. *Narrow, better, more work*: record each module's dependency list in its
+   `.pnet` at serialize time and check those sources transitively. Note the
+   dep-edges field WAS present and was retired as write-only (PPN 4C Addendum
+   Phase 4B.1), so this means re-adding it with a consumer this time.
+
+Choosing between "always correct, sometimes slow" and "correct with
+bookkeeping" is a build-policy call, hence filed rather than taken.
+
 - Source: `docs/tracking/2026-02-19_PIPE_COMPOSE_AUDIT.md`
 
 ### Bytecode Compilation
