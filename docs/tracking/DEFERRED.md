@@ -901,56 +901,54 @@ entry gates** (round-6 rulings, track doc §2a):
    where the generalization lands; D17's `{}` keyword-commitment is one
    recoverable seed site.
 
-## 🔶 PARTIAL — CIU T6 F1b.5: the deep-walker charter (D27.5, 2026-07-17; items 2 + 3 + 4-nested DONE 2026-08-03; item 1 and the wildcard half open)
+## 🔶 PARTIAL — CIU T6 F1b.5: the deep-walker charter (D27.5, 2026-07-17; items 1, 2, 3 + 4-nested ALL DONE 2026-08-03; only the `:requires` WILDCARD half remains, and it is a syntax ruling)
 
 Validate v1 is ONE-LEVEL with STRUCTURAL depth symmetry (it consumes the same
 field-set enumeration as `schema->row` — never a second one-level implementation).
 THREE deferrals are ONE walker mechanism and live in THIS single entry (never
 residue-letter entries — divergent gates/double-count):
 
-1. **Container/nested-seal traversal depth** (the driver top-node class — def-forcing
-   + eval arm see only top nodes; a seal nested in a pair/list escapes both).
-
-   **Re-probed 2026-08-03 — still exactly true, and here is the shape:**
+1. ✅ **DONE 2026-08-03 — nested-seal traversal on the commit path.** The
+   forcer was TOP-NODE-ONLY, so of these four only the first was caught:
 
    ```
-   schema Pos
-     :n Int :check (> _ 0)
-
-   def top    := [Pos {:n 0}]          ;; ERROR: panic … forced at commit  ✓
-   def inlist := '[[Pos {:n 0}]]       ;; inlist : (List Pos) defined.     ✗
-   def inpair := {:a [Pos {:n 0}]}     ;; inpair : {:a Pos} defined.       ✗
-   def infn   := [fn [x : Int] [Pos {:n 0}]]  ;; defined.                  ✗
+   def top    := [Pos {:n 0}]                 ;; ERROR at commit   ✓
+   def inlist := '[[Pos {:n 0}]]              ;; defined.          ✗
+   def inpair := {:a [Pos {:n 0}]}            ;; defined.          ✗
+   def infn   := [fn [x : Int] [Pos {:n 0}]]  ;; defined.          ✗
    ```
 
-   Deliberately NOT built, and the reasons are worth stating rather than
-   leaving as a gap:
+   `inlist` and `inpair` are now caught. `infn` deliberately is NOT, and that
+   exclusion is load-bearing rather than an omission: a seal under a BINDER may
+   reference the bound variable, so forcing it evaluates a body that has not
+   been applied — it can panic on a value the program never constructs, or get
+   stuck on an open term. The walk stops at the full binder inventory
+   (`substitution.rkt`'s `shift`: lam / Pi / Sigma / reduce), and skips
+   `expr-reduce` WHOLE rather than descending its scrutinee — conservative, and
+   the arms are where the binders live.
 
-   - **The lambda case must stay out.** A seal under a binder may reference the
-     bound variable, so forcing it at commit means evaluating a body that has
-     not been applied. Any walk here has to route around the binder inventory
-     (`substitution.rkt`'s `shift`: lam / Pi / Sigma / reduce) — the same
-     discipline `pipeline.md` § Exhaustive Walkers states for depth-routing
-     walkers. That is not the hard part, but it does mean the walk cannot be
-     the naive generic one.
-   - **`expr-subfields` is not sufficient.** It reads transparent struct fields,
-     so it finds the seal in a cons SPINE (`inlist`) but NOT in `{:a …}` — a
-     champ's payload is a Racket data structure, not an expr field. Covering
-     the map/set/vector carriers means the container-aware deep walk, which is
-     the same family as this session's `occurs?` / `conv-nf` containment fixes.
-   - **It runs on the commit path for EVERY def**, where today's cost is a
-     cheap shape gate (`seal-application-body?`). A full structural walk of
-     every def body is a different order of expense, and it should be measured
-     before it is added, not after.
-   - The charter's own position is that **runtime discharge for nested seals is
-     `validate`'s job** (F1b.5) — and validate now descends properly (items 2,
-     3 and 4-nested, all 2026-08-03), so the alternative it names is
-     substantially stronger than it was when this bound was set.
+   **The walk is generic `struct->vector` recursion, not `expr-subfields`, and
+   that is required rather than stylistic**: `expr-subfields` reads transparent
+   expr FIELDS, so it finds the cons-spine case (`inlist`) and NOT the champ one
+   (`inpair`), whose payload is a Racket data structure. Same container-blindness
+   that produced this session's `occurs?` / `conv-nf` defects. Both carriers are
+   test-pinned side by side, so the walk cannot regress to the shallower one and
+   stay green. An opaque struct yields a 1-element vector and is simply not
+   descended, so nothing here can error on a carrier it does not model.
 
-   What would change the calculus: a real program committing a bad nested seal
-   in practice. Until then the honest statement is that the commit-time forcer
-   is top-node-only BY DESIGN, and the four-line repro above is the test to
-   write the day that design changes.
+   **Gated on the schema registry being non-empty**, which is what makes it
+   affordable on the commit path: a program declaring no schemas pays one
+   `hash-count`, and where schemas exist the walk is O(body) — the same order as
+   the zonk and nf already performed on that body. Suite unchanged at ~71 s.
+
+   ⚠ **The asymmetry with `def-panic-error` is deliberate.** That one keeps its
+   top-node bound (pinned at `test-path-selection.rkt` B8, and again beside its
+   counterpart now). A seal is a COMMIT-TIME CONTRACT — D22's ruling is that
+   tabulation FORCES — so a failing one is an error whether or not anything
+   reads it. A bare `panic` inside a constructed value is an ordinary lazy value
+   the program may never force, and erroring on it would make laziness
+   unobservable.
+
 2. ✅ **DONE 2026-08-03 — tier-2 element recursion.** The entry's own honest
    reason was the fix's shape: `ctor-meta` already carried params +
    field-types, and what was unbuilt was the param-substitution + recursion +

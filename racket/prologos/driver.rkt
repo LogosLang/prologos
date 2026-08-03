@@ -279,6 +279,60 @@
            (expr-lam? (expr-app-func body))
            (schema-ann? (expr-app-arg body)))))
 
+;; ---- NESTED seals (deep-walker charter item 1, 2026-08-03) -----------------
+;;
+;; The bound above was TOP-NODE-ONLY, so of these four only the first was
+;; caught and the other three committed silently:
+;;
+;;   def top    := [Pos {:n 0}]                 ;; ERROR at commit   ✓
+;;   def inlist := '[[Pos {:n 0}]]              ;; defined.          ✗
+;;   def inpair := {:a [Pos {:n 0}]}            ;; defined.          ✗
+;;   def infn   := [fn [x : Int] [Pos {:n 0}]]  ;; defined.          ✗
+;;
+;; `inlist` and `inpair` are now caught. `infn` deliberately is NOT, and that
+;; is the load-bearing exclusion rather than an omission: a seal under a BINDER
+;; may reference the bound variable, so forcing it means evaluating a body that
+;; has not been applied — which can panic on a value the program never
+;; constructs, or get stuck on an open term. The binder inventory is
+;; `substitution.rkt`'s `shift` (lam / Pi / Sigma / reduce), and this walk stops
+;; at all four. `expr-reduce` is skipped WHOLE rather than descended into its
+;; scrutinee: conservative, and the arms are where the binders are.
+;;
+;; The walk is generic `struct->vector` recursion, not `expr-subfields`, and
+;; that is required rather than stylistic: `expr-subfields` reads transparent
+;; expr FIELDS, so it finds the seal in a cons spine (`inlist`) but not inside a
+;; champ (`inpair`), whose payload is a Racket data structure. This is the same
+;; container-blindness that produced the `occurs?` / `conv-nf` defects. An
+;; opaque struct yields a 1-element vector and is simply not descended, so
+;; nothing here can error on a carrier it does not understand.
+;;
+;; ⚠ This deliberately does NOT extend to `def-panic-error`, whose top-node
+;; bound stays (pinned at tests/test-path-selection.rkt B8). The asymmetry is
+;; principled, not an oversight: a seal is a COMMIT-TIME CONTRACT — D22's
+;; ruling is that tabulation FORCES — so a failing one is an error whether or
+;; not anything reads it. A bare `panic` sitting inside a constructed value is
+;; an ordinary lazy value the program may never force, and erroring on it would
+;; make laziness unobservable.
+;;
+;; GATED ON THE SCHEMA REGISTRY BEING NON-EMPTY. Without a gate this walks every
+;; def body in every program at commit; with it, a program that declares no
+;; schemas pays one `hash-count`. Where schemas DO exist the walk is O(body),
+;; the same order as the zonk and nf already performed on that body.
+(define (nested-seal-panic-error zonked-body def-srcloc)
+  (and (positive? (hash-count (read-schema-registry)))
+       (let scan ([v zonked-body])
+         (cond
+           [(and (expr? v) (seal-application-body? v))
+            (seal-forcing-error v def-srcloc)]
+           [(or (expr-lam? v) (expr-Pi? v) (expr-Sigma? v) (expr-reduce? v)) #f]
+           [(struct? v)
+            (let ([vec (struct->vector v)])
+              (for/or ([i (in-range 1 (vector-length vec))])
+                (scan (vector-ref vec i))))]
+           [(pair? v) (or (scan (car v)) (scan (cdr v)))]
+           [(vector? v) (for/or ([x (in-vector v)]) (scan x))]
+           [else #f]))))
+
 ;; Returns a prologos-error when the forced seal body panics; #f otherwise
 ;; (usable directly as a cond => guard).
 (define (seal-forcing-error zonked-body def-srcloc)
@@ -1909,7 +1963,7 @@
                    [(prologos-error? qtt-ok) qtt-ok]
                    ;; CIU T6 F1b.4c (D22/M3): seal-scoped def-forcing —
                    ;; tabulation FORCES; a failing :check errors at commit.
-                   [(seal-forcing-error zonked-body def-srcloc) => values]
+                   [(nested-seal-panic-error zonked-body def-srcloc) => values]
                    [else
                     ;; POL.10 (owner-ruled 2026-07-24, SECOND pass): `def` binds
                     ;; the WHNF-REDUCED value — SNAPSHOT semantics. Evaluation
@@ -2135,7 +2189,7 @@
                          ;; CIU T6 F1b.4c (D22/M3): seal-scoped def-forcing
                          ;; (see the inferred-path twin) — un-register like
                          ;; the QTT-failure arm above.
-                         [(seal-forcing-error zonked-body def-srcloc)
+                         [(nested-seal-panic-error zonked-body def-srcloc)
                           => (lambda (err) (remove-failed-definition! name) err)]
                          [else
                           ;; POL.10: bind the WHNF-reduced value (snapshot) —

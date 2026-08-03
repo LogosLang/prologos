@@ -265,3 +265,29 @@ selection NeedsZipCode from Contact :requires [:zip.code]
 ;;   ← THE FIX (top-hop half): an absent `:zip` is a read-capability miss
 ;;     exactly as a single-segment `:requires` would be. This case returned
 ;;     `ok` too, which is the more surprising half of the gap.
+
+;; --- 2026-08-03: NESTED SEAL FORCING (the deep-walker charter, item 1) --------
+;; The commit-time forcer was TOP-NODE-ONLY, so a failing seal one level inside
+;; a list or a map committed silently while the same seal at top level errored.
+
+schema Psn
+  :n Int :check (> _ 0)
+;;49=> Psn : [Type 0] defined.
+
+def seal-in-map := {:a [Psn {:n 0}]}
+;;50=>~ sealed definition forced at commit
+;;   ← THE FIX (map carrier): a champ's payload is a Racket structure, so the
+;;     expr-field walk cannot see this one — it needs the container-aware walk
+
+def seal-in-list := '[[Psn {:n 0}]]
+;;51=>~ sealed definition forced at commit
+;;   ← THE FIX (cons spine)
+
+def seal-under-binder := [fn [q : Int] [Psn {:n 0}]]
+;;52=>~ seal-under-binder : Int ->
+;;   ← DELIBERATELY NOT forced: a seal under a binder may reference the bound
+;;     variable, so forcing it evaluates a body that has not been applied
+
+def seals-ok := {:a '[[Psn {:n 5}] [Psn {:n 6}]]}
+;;53=>~ seals-ok : {:a [prologos::data::list::List
+;;   ← and correct nesting must still commit, at any depth

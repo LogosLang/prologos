@@ -2974,3 +2974,58 @@
                "THE BUG: validating against the stub accepted any value")
   (check-true (ormap (lambda (r) (regexp-match? #rx"never completed" r)) rs)
               "and it should say why, not just fail"))
+
+
+;; ============================================================================
+;; NESTED SEAL FORCING (the deep-walker charter's item 1, 2026-08-03).
+;;
+;; The commit-time forcer was top-node-only, so `def top := [Pos {:n 0}]`
+;; errored while the same seal one level inside a list or a map committed
+;; silently.
+;; ============================================================================
+
+(define seal-schema "schema Psx\n  :n Int :check (> _ 0)\n")
+
+(test-case "item 1: a failing seal inside a MAP literal is caught"
+  (define rs (run-ws-pre (string-append seal-schema "def m := {:a [Psx {:n 0}]}\n")))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"failed check" r)) rs)
+              "THE BUG: a seal nested in a map committed silently"))
+
+(test-case "item 1: a failing seal inside a LIST is caught"
+  ;; `expr-subfields` would find this one and NOT the map case above — the
+  ;; cons spine is expr fields, a champ's payload is a Racket structure. Both
+  ;; are here so the walk cannot regress to the shallower one and stay green.
+  (define rs (run-ws-pre (string-append seal-schema "def l := '[[Psx {:n 0}]]\n")))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"failed check" r)) rs)))
+
+(test-case "item 1: a seal under a BINDER is deliberately NOT forced"
+  ;; The load-bearing exclusion. A seal under a binder may reference the bound
+  ;; variable, so forcing it evaluates a body that has not been applied — it
+  ;; could panic on a value the program never constructs. If this ever flips,
+  ;; it flips in a test.
+  (define rs (run-ws-pre-raw (string-append seal-schema
+                                            "def f := [fn [x : Int] [Psx {:n 0}]]\n")))
+  (check-false (ormap prologos-error? rs)
+               "forcing under a binder would evaluate an unapplied body"))
+
+(test-case "item 1: PASSING seals still commit at every depth"
+  ;; The other half — the walk must not turn correct nesting into an error.
+  (define rs (run-ws-pre-raw
+              (string-append seal-schema
+                             "def a := [Psx {:n 5}]\n"
+                             "def b := '[[Psx {:n 5}] [Psx {:n 6}]]\n"
+                             "def c := {:k [Psx {:n 5}]}\n"
+                             "def d := {:k '[{:j [Psx {:n 7}]}]}\n")))
+  (check-false (ormap prologos-error? rs)))
+
+(test-case "item 1: a bare nested PANIC keeps its top-node bound (the asymmetry)"
+  ;; Not an oversight. A seal is a commit-time CONTRACT (D22: tabulation
+  ;; forces), so a failing one is an error whether or not anything reads it. A
+  ;; bare panic inside a constructed value is an ordinary lazy value the
+  ;; program may never force, and erroring on it would make laziness
+  ;; unobservable. This is the B8 pin restated next to its counterpart.
+  (define rs (run-ws-raw (string-append
+                          "spec boom9 Int -> Int\n"
+                          "defn boom9 [x]\n  [panic \"NESTED\"]\n"
+                          "def q := {:x [boom9 1]}\n")))
+  (check-false (ormap prologos-error? rs)))
