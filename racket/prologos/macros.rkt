@@ -9933,12 +9933,55 @@
 ;; ========================================
 ;; Expand expressions (walk sub-expressions for the-fn)
 ;; ========================================
+
+;; ========================================
+;; Error propagation through the expansion walk
+;; ========================================
+;;
+;; `expand-expression-inner` is a structural rebuild with ~30 arms, and an
+;; error VALUE produced anywhere inside it used to be WRAPPED into the
+;; surrounding node and carried to the elaborator, which reported it as
+;;
+;;     Cannot elaborate: #(struct:prologos-error …)
+;;
+;; — the struct, printed. Two arms had been armed by hand (`surf-def`'s body at
+;; the command boundary, and `surf-lam`), which covers the common case and
+;; leaves every deeper producer leaking that way.
+;;
+;; Arming the other twenty-eight is exactly the exhaustive-walker hazard
+;; `pipeline.md` warns about: the next arm added inherits the bug, silently, and
+;; a green suite says nothing. So propagation is by CONSTRUCTION instead —
+;; every recursive descent goes through `expand-child`, which escapes to the top
+;; of this expansion the moment a child expands to an error. No arm has to
+;; remember, and an arm added tomorrow cannot forget.
+;;
+;; An escape rather than a threaded Either because the arms are ordinary
+;; constructor applications; making them all monadic would be a rewrite, and a
+;; rewrite of a walker is how walkers acquire the bugs in the first place.
+(define current-expand-escape (make-parameter #f))
+
+(define (expand-child s)
+  (define r (expand-expression-inner s))
+  (cond
+    [(prologos-error? r)
+     (define esc (current-expand-escape))
+     (if esc (esc r) r)]
+    [else r]))
+
 (define (expand-expression surf)
+  ;; Reentrant: an inner call installs its own escape, so an error still stops
+  ;; at the nearest enclosing `expand-expression` rather than unwinding past it.
+  (let/ec return
+    (parameterize ([current-expand-escape return])
+      (expand-expression-inner surf))))
+
+
+(define (expand-expression-inner surf)
   (match surf
     ;; the-fn — desugar
     [(surf-the-fn _ _ _ _)
      (define result (desugar-the-fn surf))
-     (if (prologos-error? result) result (expand-expression result))]
+     (if (prologos-error? result) result (expand-child result))]
     ;; Walk sub-expressions
     ;; Placeholder desugaring: _ in app args → anonymous lambda
     ;; (add 1 _) → (fn [$_0] (add 1 $_0))
@@ -9968,7 +10011,7 @@
                [result (foldr (lambda (name inner)
                                 (surf-lam (binder-info name #f (surf-hole loc)) inner loc))
                               new-app names)])
-          (expand-expression result))]
+          (expand-child result))]
        ;; Numbered holes: positional placeholders with explicit ordering
        [has-numbered
         (let* (;; Collect all indices
@@ -9997,79 +10040,75 @@
                                                        #f (surf-hole loc))
                                           inner loc))
                               new-app sorted-indices)])
-          (expand-expression result))]
+          (expand-child result))]
        ;; No holes: just recurse on sub-expressions
        [else
-        (surf-app (expand-expression fn) (map expand-expression args) loc)])]
+        (surf-app (expand-child fn) (map expand-child args) loc)])]
     [(surf-lam binder body loc)
-     ;; Propagate an error VALUE out of the body rather than wrapping it in a
-     ;; lambda. `expand-expression` is otherwise a structural rebuild with no
-     ;; error propagation, so an error produced during expansion (today: an
-     ;; unreachable match arm) would be carried into the elaborator and surface
-     ;; as "Cannot elaborate: #(struct:prologos-error …)". This arm is where a
-     ;; `defn` body lands, which is the common case; deeper nestings still leak
-     ;; that way — tracked in DEFERRED rather than by arming every arm here,
-     ;; which is the exhaustive-walker hazard pipeline.md warns about.
-     (let ([b (expand-expression body)])
-       (if (prologos-error? b) b (surf-lam binder b loc)))]
+     ;; No hand-armed error check here any more. `expand-child` escapes on an
+     ;; error child, so this arm — and every other one — propagates by
+     ;; construction. Keeping the old check alongside it would be two
+     ;; mechanisms for one job, which is how the bug in the new one stays
+     ;; hidden until the old one is removed.
+     (surf-lam binder (expand-child body) loc)]
     [(surf-ann type term loc)
-     (surf-ann (expand-expression type) (expand-expression term) loc)]
+     (surf-ann (expand-child type) (expand-child term) loc)]
     [(surf-pair e1 e2 loc)
-     (surf-pair (expand-expression e1) (expand-expression e2) loc)]
+     (surf-pair (expand-child e1) (expand-child e2) loc)]
     [(surf-fst e loc)
-     (surf-fst (expand-expression e) loc)]
+     (surf-fst (expand-child e) loc)]
     [(surf-snd e loc)
-     (surf-snd (expand-expression e) loc)]
+     (surf-snd (expand-child e) loc)]
     [(surf-suc e loc)
-     (surf-suc (expand-expression e) loc)]
+     (surf-suc (expand-child e) loc)]
     [(surf-pi binder body loc)
-     (surf-pi binder (expand-expression body) loc)]
+     (surf-pi binder (expand-child body) loc)]
     [(surf-arrow m dom cod loc)
-     (surf-arrow m (expand-expression dom) (expand-expression cod) loc)]
+     (surf-arrow m (expand-child dom) (expand-child cod) loc)]
     [(surf-sigma binder body loc)
-     (surf-sigma binder (expand-expression body) loc)]
+     (surf-sigma binder (expand-child body) loc)]
     [(surf-eq type lhs rhs loc)
-     (surf-eq (expand-expression type) (expand-expression lhs) (expand-expression rhs) loc)]
+     (surf-eq (expand-child type) (expand-child lhs) (expand-child rhs) loc)]
     [(surf-natrec mot base step target loc)
-     (surf-natrec (expand-expression mot) (expand-expression base)
-                  (expand-expression step) (expand-expression target) loc)]
+     (surf-natrec (expand-child mot) (expand-child base)
+                  (expand-child step) (expand-child target) loc)]
     [(surf-boolrec mot tc fc target loc)
-     (surf-boolrec (expand-expression mot) (expand-expression tc)
-                   (expand-expression fc) (expand-expression target) loc)]
+     (surf-boolrec (expand-child mot) (expand-child tc)
+                   (expand-child fc) (expand-child target) loc)]
     [(surf-J mot base left right proof loc)
-     (surf-J (expand-expression mot) (expand-expression base)
-             (expand-expression left) (expand-expression right)
-             (expand-expression proof) loc)]
+     (surf-J (expand-child mot) (expand-child base)
+             (expand-child left) (expand-child right)
+             (expand-child proof) loc)]
     ;; Rich pattern match — compile via compile-match-tree, then re-expand
     [(surf-match-patterns scrutinee arms loc)
      (define compiled (compile-match-expression scrutinee arms loc))
      ;; compile-match-expression may return a prologos-error VALUE (an
      ;; unreachable arm) — propagate it rather than re-expanding it, which would
      ;; surface as "Cannot elaborate: #(struct:prologos-error …)".
-     (if (prologos-error? compiled) compiled (expand-expression compiled))]
+     (if (prologos-error? compiled) compiled (expand-child compiled))]
     ;; Reduce — walk scrutinee and arm bodies
     [(surf-reduce scrutinee arms loc)
-     (surf-reduce (expand-expression scrutinee)
+     (surf-reduce (expand-child scrutinee)
                   (map (lambda (arm)
                          (reduce-arm (reduce-arm-ctor-name arm)
                                      (reduce-arm-bindings arm)
-                                     (expand-expression (reduce-arm-body arm))
+                                     (expand-child (reduce-arm-body arm))
                                      (reduce-arm-srcloc arm)))
                        arms)
                   loc)]
     ;; Narrowing expression — expand sub-expressions (Phase 1e)
     [(surf-narrow lhs rhs vars loc constraint-map)
-     (surf-narrow (expand-expression lhs) (expand-expression rhs) vars loc constraint-map)]
+     (surf-narrow (expand-child lhs) (expand-child rhs) vars loc constraint-map)]
     ;; Constraint forms — expand sub-expressions (Phase 3c)
     [(surf-all-different vars loc)
-     (surf-all-different (map expand-expression vars) loc)]
+     (surf-all-different (map expand-child vars) loc)]
     [(surf-element index list-expr var loc)
-     (surf-element (expand-expression index) (expand-expression list-expr)
-                   (expand-expression var) loc)]
+     (surf-element (expand-child index) (expand-child list-expr)
+                   (expand-child var) loc)]
     [(surf-cumulative tasks capacity loc)
-     (surf-cumulative (expand-expression tasks) (expand-expression capacity) loc)]
+     (surf-cumulative (expand-child tasks) (expand-child capacity) loc)]
     [(surf-minimize cost-var loc)
-     (surf-minimize (expand-expression cost-var) loc)]
+     (surf-minimize (expand-child cost-var) loc)]
     ;; Leaf forms — pass through
     [_ surf]))
 

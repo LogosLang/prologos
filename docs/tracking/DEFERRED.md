@@ -155,16 +155,27 @@ The diagnostic half of this is already fixed (`7efc781d`): the
   `surf-arrow`'s multiplicity as `_` and substituted 'mw, so `A -1> B` and
   `A -> B` were indistinguishable to every consumer.
 
-## 🐛 `expand-expression` has no general error propagation (2026-07-31)
+## ✅ CLOSED `PLACEHOLDER4` — `expand-expression` has no general error propagation (filed 2026-07-31, fixed 2026-08-02)
 
-`expand-expression` is a structural rebuild; an error VALUE produced during
-expansion is wrapped into the surrounding node and carried to the elaborator,
-which reports it as `Cannot elaborate: #(struct:prologos-error …)` — the struct,
-printed. `55aac8c4` added propagation at the `surf-def` command boundary and at
-`surf-lam`, which covers a def body (the common case), but a producer nested
-deeper still leaks that way. Arming every arm is the exhaustive-walker hazard
-`pipeline.md` warns about; the structural answer is a reflective rebuild that
-propagates by construction, or an error-carrying surface node.
+Fixed the way the entry asked for — by construction, not by arming the other
+twenty-eight arms. Every recursive descent goes through `expand-child`, which
+escapes to the top of the current expansion the moment a child expands to an
+error. No arm has to remember, and an arm added tomorrow cannot forget.
+
+An escape rather than a threaded Either: the arms are ordinary constructor
+applications, and making them all monadic would be a rewrite of a walker, which
+is how walkers acquire this class of bug in the first place.
+
+The hand-armed `surf-lam` check is REMOVED rather than kept alongside — two
+mechanisms for one job is how a bug in the new one stays hidden until the old
+one goes.
+
+`tests/test-expand-error-propagation.rkt` grades by DEPTH on purpose: depth 0
+passed before the fix and still passes, depths 1 and 2 are what leaked, and a
+fix that armed one more arm would pass depth 1 and fail depth 2. It also pins
+that the SOURCE LOCATION survives — wrapping did not only print
+`#(struct:prologos-error …)`, it replaced the srcloc with `<unknown>:0:0`, so
+the line was lost along with the message.
 
 ## 🐛 A specific message for a foreign constructor in a match arm (2026-07-31)
 
