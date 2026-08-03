@@ -534,7 +534,7 @@ Still Num Track 1 territory, as originally filed. What has changed is that it
 is now a three-line repro with a named mechanism and a demonstrated runtime
 violation, instead of a suspicion.
 
-## ✅ CLOSED `PLACEHOLDER6` — live `.( )` mixfix errors RAISE and abort the whole file (filed 2026-07-28, fixed 2026-08-02)
+## ✅ CLOSED `c4aa917c` — live `.( )` mixfix errors RAISE and abort the whole file (filed 2026-07-28, fixed 2026-08-02)
 
 Fixed via the seat the entry named. `expand-mixfix-form` collapses its own
 failures to a `($mixfix-error msg)` datum; parser.rkt turns that into a
