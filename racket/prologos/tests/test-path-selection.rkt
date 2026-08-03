@@ -1099,6 +1099,35 @@
      "def cfg : Cfg := {:server \"h\"}\n"
      "cfg{server^x}\n")))))
 
+(test-case "P1b-iii item 7: a select block in a BINDER position gets a guided error"
+  ;; The message came from the binder walker, never mentioned select blocks,
+  ;; and dumped raw syntax objects INCLUDING ABSOLUTE FILE PATHS into
+  ;; user-facing text. Both halves are fixed: the walker recognises an access
+  ;; sentinel anywhere in the binder datum, and the datum is deep-stripped
+  ;; before rendering.
+  ;; assert on the MESSAGE, which is what `emit-error-diagnostic` shows the
+  ;; user. The struct's payload field legitimately holds the datum (it feeds
+  ;; `Near:`), so asserting on the whole printed struct would be asserting
+  ;; more than the user ever sees.
+  (define e (run-ws-raw-last "def base := {:a 1}\ndef f := [fn [x base{a}] x]\n"))
+  (check-true (prologos-error? e) (format "~v" e))
+  (define r (prologos-error-message e))
+  (check-regexp-match #rx"binder cannot contain" r "must name the actual problem")
+  (check-regexp-match #rx"base\\{a\\}" r "must render the select at its surface spelling")
+  (check-false (regexp-match? #rx"#<syntax" r) "raw syntax objects leaked")
+  (check-false (regexp-match? #rx"[$]select" r) "the internal sentinel leaked"))
+
+(test-case "P1b-iii item 7: an ordinary malformed binder keeps its message, minus the syntax dump"
+  ;; The sentinel arm must not swallow every bad binder — and the GENERIC
+  ;; message was dumping raw syntax objects too, so it gets the same strip.
+  (define e (run-ws-raw-last "def bad := [fn [1 2] x]\n"))
+  (check-true (prologos-error? e) (format "~v" e))
+  (define r (prologos-error-message e))
+  (check-regexp-match #rx"Expected binder" r)
+  (check-false (regexp-match? #rx"binder cannot contain" r)
+               "the sentinel arm fired on a binder with no sentinel")
+  (check-false (regexp-match? #rx"#<syntax" r) "raw syntax objects leaked"))
+
 ;; ---------- the LYING DIAGNOSTICS this phase actually repairs ----------
 ;; P2's real headline, unclaimed by §5.P2: because `x.0` was THREE datum items,
 ;; every arity-checking context blamed something else entirely.

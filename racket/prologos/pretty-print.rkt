@@ -1696,6 +1696,12 @@
          [(eq? h '$dot-brace)
           (format ".{~a}" (pp-datum-list (cdr d)))]
 
+         ;; ($select subject branch ...) → subject{branch ...}
+         ;; D4.P3a's FUSED select head — the one that survives preparse, and
+         ;; therefore the one a binder-position diagnostic actually meets.
+         [(and (eq? h '$select) (pair? (cdr d)))
+          (format "~a{~a}" (pp-datum (cadr d)) (pp-datum-list (cddr d)))]
+
          ;; ($rest-param name) → ...name
          [(and (eq? h '$rest-param) (pair? (cdr d)) (null? (cddr d)))
           (format "...~a" (pp-datum (cadr d)))]

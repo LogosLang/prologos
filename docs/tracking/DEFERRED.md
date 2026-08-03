@@ -3482,11 +3482,37 @@ Related, same family — ✅ **BOTH FIXED 2026-08-03**:
   a macro pattern variable, never a dependency, so one predicate replaces the
   list and cannot drift as sentinels are added.
 
-**Still open** is the item this was "related to": the two BINDER walkers still
-have no marker arm, so `def f := [fn [x base{a}] x]` and `spec idf{A} A -> A`
-still report from the binder walker. The message no longer dumps a raw
-`$retired-selection` — `pp-datum` renders it now — but the walkers themselves
-are untouched.
+✅ **And the item this was "related to" is now fixed too (2026-08-03).**
+`parse-binder`'s two failure arms recognise an access sentinel ANYWHERE in the
+binder datum and give a guided message:
+
+> a binder cannot contain a field-access or select form — `(x base{a})` is an
+> access expression, and a parameter position takes a NAME (`[x]`), a typed
+> binder (`[x <T>]` / `(x : T)`) or the fused form `[x:T]`. Bind the value
+> first, then access it in the body.
+
+Three details the first cut got wrong, each caught by probing rather than
+reasoning:
+
+- **The sentinel is `$select`, not `$retired-selection`** as the filing said —
+  the FUSED select head from D4.P3a is what survives preparse and reaches the
+  binder walker. `pp-datum` gained a `$select` arm so it renders `base{a}`.
+- **The scan must cover the WHOLE datum, not its head.** The sentinel arrives
+  as the SECOND element of `(x ($select base a))`; a head-only test finds
+  nothing.
+- **`stx->datum` is SHALLOW**, so the datum is a list whose ELEMENTS are still
+  syntax objects — the first version printed
+  `#<syntax:/abs/path/f.prologos:5:10 x>` in the new message, reintroducing the
+  exact leak one layer down. A deep strip is applied to the message AND to the
+  error's payload field, which feeds `Near:` and would otherwise put them back
+  by a different route. The GENERIC "Expected binder" message got the same
+  strip — it was dumping syntax objects too.
+
+Pinned in `tests/test-path-selection.rkt`, asserting on the MESSAGE rather
+than the printed struct: the payload legitimately holds the datum, so
+asserting on the whole struct would assert more than a user ever sees. A
+malformed binder with NO sentinel is pinned as a control, since the new arm
+must not swallow every bad binder.
 
 ### 8. ✅ FIXED 2026-08-03 — polarity inverted; the 23-sentinel residual is gone by construction
 

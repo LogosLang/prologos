@@ -29,6 +29,10 @@
                   colon-symbol? digit-headed-colon-symbol?
                   fused-type-annot? fused-annot->type-symbol))
 
+;; pp-datum only — for the binder-position access-sentinel message. No cycle:
+;; pretty-print.rkt does not require parser.rkt.
+(require (only-in "pretty-print.rkt" pp-datum))
+
 (provide parse-datum
          parse-toplevel-datum  ;; Rel T1 POL.9: command-position paren-goal dispatch
          parse-string
@@ -4317,14 +4321,70 @@
               (if (prologos-error? rest) rest
                   (cons first rest)))))))
 
+;; An ACCESS SENTINEL inside a binder position — `[fn [x base{a}] x]`,
+;; `spec idf{A} A -> A`. The binder walkers' generic message dumps the raw
+;; datum, which means SYNTAX OBJECTS with absolute file paths and an internal
+;; sentinel name, and never mentions the construct the user actually wrote
+;; (D4.P1b-iii spin-off 7).
+;;
+;; Returns the guided message, or #f when the datum holds no sentinel — so the
+;; generic message still owns every other malformed binder.
+;;
+;; The scan is over the WHOLE datum rather than its head: the sentinel arrives
+;; as the second element of `(x ($select base a))`, not as the form's head, and
+;; a head-only test finds nothing. Sentinel names come from `pattern-var?`'s
+;; access family in macros.rkt; a name not listed simply falls through to the
+;; generic message, which is the pre-existing behaviour.
+(define access-sentinel-names
+  '($select $select-brace $dot-brace $dot-access $nil-dot-access
+    $postfix-index $broadcast-access $dot-key $nil-dot-key
+    $retired-selection))
+
+(define (binder-access-sentinel d)
+  (let scan ([x d])
+    (cond
+      [(and (symbol? x) (memq x access-sentinel-names)) x]
+      [(syntax? x) (scan (syntax-e x))]
+      [(pair? x) (or (scan (car x)) (scan (cdr x)))]
+      [else #f])))
+
+;; DEEP-strip before rendering. `stx->datum` is SHALLOW, so `d` is typically a
+;; LIST whose ELEMENTS are still syntax objects — printing it embeds
+;; `#<syntax:/abs/path/f.prologos:5:10 x>` in user-facing text, which is the
+;; leak this item is about, reintroduced one layer down. `syntax->datum` on the
+;; outer value is not enough either, precisely because the outer value is a
+;; plain list here. Recurse over both shapes.
+(define (strip-syntax-deep x)
+  (cond
+    [(syntax? x) (strip-syntax-deep (syntax-e x))]
+    [(pair? x) (cons (strip-syntax-deep (car x)) (strip-syntax-deep (cdr x)))]
+    [else x]))
+
+(define (binder-sentinel-message d)
+  (let ([sent (binder-access-sentinel d)])
+    (and sent
+         (format
+          (string-append
+           "a binder cannot contain a field-access or select form — `~a` is an "
+           "access expression, and a parameter position takes a NAME (`[x]`), "
+           "a typed binder (`[x <T>]` / `(x : T)`) or the fused form `[x:T]`. "
+           "Bind the value first, then access it in the body.")
+          (pp-datum (strip-syntax-deep d))))))
+
 ;; ========================================
 ;; Parse binder: (x : T) or (x :m T)
 ;; ========================================
 (define (parse-binder stx loc)
   (define d (stx->datum stx))
   (cond
+    ;; the PAYLOAD is stripped too — it feeds the `Near:` rendering, so an
+    ;; unstripped one puts the syntax objects back in front of the user by a
+    ;; different route than the message.
+    [(binder-sentinel-message d) => (lambda (m) (parse-error loc m (strip-syntax-deep d)))]
     [(not (pair? d))
-     (parse-error loc (format "Expected binder [x <T>], got ~a" d) d)]
+     (parse-error loc (format "Expected binder [x <T>], got ~a"
+                              (pp-datum (strip-syntax-deep d)))
+                  (strip-syntax-deep d))]
     [else
      (define parts
        (if (syntax? stx) (syntax->list stx) d))
@@ -4410,10 +4470,17 @@
             [ty (binder-info name #f ty)]
             [else (binder-info name #f (surf-hole loc))]))]
 
+       ;; the PAYLOAD is stripped too — it feeds the `Near:` rendering, so an
+    ;; unstripped one puts the syntax objects back in front of the user by a
+    ;; different route than the message.
+    [(binder-sentinel-message d) => (lambda (m) (parse-error loc m (strip-syntax-deep d)))]
        [else
+        ;; …and the generic message gets the same deep strip, for the same
+        ;; reason: it dumped raw syntax objects with absolute paths too.
         (parse-error loc
-                     (format "Expected binder [x <T>] or (x : T), got ~a" d)
-                     d)])]))
+                     (format "Expected binder [x <T>] or (x : T), got ~a"
+                             (pp-datum (strip-syntax-deep d)))
+                     (strip-syntax-deep d))])]))
 
 ;; Check if a symbol is a multiplicity annotation
 (define (mult-annot? s)

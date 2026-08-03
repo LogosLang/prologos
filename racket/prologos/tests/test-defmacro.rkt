@@ -447,7 +447,10 @@
   (check-equal? (pp-datum '($nil-dot-key :k))       "?.:k")
   (check-equal? (pp-datum '($postfix-index 0))      "[0]")
   (check-equal? (pp-datum '($select-brace a b))     "{a b}")
-  (check-equal? (pp-datum '($dot-brace a b))        ".{a b}"))
+  (check-equal? (pp-datum '($dot-brace a b))        ".{a b}")
+  ;; the FUSED select head — the one that survives preparse, and therefore the
+  ;; one a binder-position diagnostic actually meets
+  (check-equal? (pp-datum '($select base a))        "base{a}"))
 
 (test-case "pp-datum: no access sentinel survives into rendered text"
   ;; The property, independent of the individual spellings above: whatever the
@@ -455,7 +458,7 @@
   ;; user-facing diagnostic actually depends on.
   (for ([d (in-list '(($dot-access foo) ($nil-dot-access foo) ($broadcast-access foo)
                       ($dot-key :k) ($nil-dot-key :k) ($postfix-index 0)
-                      ($select-brace a b) ($dot-brace a b)
+                      ($select-brace a b) ($dot-brace a b) ($select base a)
                       ($brace-params A B) ($set-literal 1) ($vec-literal 1)))])
     (define out (pp-datum d))
     (check-false (regexp-match? #rx"[$]" out)
