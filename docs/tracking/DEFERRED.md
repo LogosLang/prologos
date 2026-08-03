@@ -1324,34 +1324,38 @@ NFC does NOT fold the ligature, so the canonical/compatibility distinction is
 pinned in both directions. One case checks that NFC and NFD disagree at all,
 which is what rules out a dispatcher that ignores its form argument.
 
-### 🔶 PARTIAL — Phase 4c: String Similarity & Diffing (2026-08-02)
+### ✅ SHIPPED — Phase 4c: String Similarity & Diffing (2026-08-02)
 
-**Shipped**: `common-prefix`, `common-prefix-length`, `common-suffix`,
-`common-suffix-length` in `prologos::core::string-ops`. Tested at the
-boundaries that a loop gets wrong — nothing shared, and one string a prefix of
-the other (which is an index error rather than a wrong answer if mishandled).
+`common-prefix`, `common-prefix-length`, `common-suffix`,
+`common-suffix-length`, `levenshtein`, and `closest` (the "did you mean?"
+helper the entry named as the use), all in `prologos::core::string-ops`.
 
-**NOT shipped, and the reason is a language finding worth more than the
-function was.** Edit distance was written as the standard row-wise DP — the
-classic table kept one row deep — and it does not evaluate: a 3×3 distance
-comes back as a stuck term rather than a number.
+**A correction to what this entry said an hour earlier.** It was filed as
+PARTIAL, with edit distance declared unwritable: the row-wise DP came back as a
+stuck term, and I concluded that "a standard dynamic program cannot be
+expressed efficiently here today" and that this constrained Myers diff and Jaro
+too.
 
-The cause is sharing. Each cell's value is needed TWICE (as the row entry, and
-as the next cell's `left`), as is the cell above it. Written the obvious way
-that doubles the work per cell and the whole thing is exponential. The natural
-fix is a `let`, and a multi-line `let` inside an `if` is a parse error in this
-position; passing the value down as a parameter instead does NOT help, because
-lazy reduction re-evaluates the argument at each use rather than sharing it.
+That was wrong, and wrong in a way worth recording. The diagnosis was right —
+each cell's value is needed twice, computing it inline doubles the work per
+cell, and the whole thing goes exponential — but the conclusion was not. I had
+tried a MULTI-LINE `let` (a parse error in that position) and parameter-passing
+(no sharing under lazy reduction), and generalised from two failures to "no
+sharing construct works here". The BRACKET `let` on one line works, gives
+sharing, and edit distance evaluates: `kitten`/`sitting` = 3.
 
-So: a standard dynamic program cannot be expressed efficiently here today. That
-is a real constraint on the library — Myers diff and Jaro both need the same
-shape — and it is worth deciding deliberately rather than rediscovering per
-function. Options are a `let` that parses in this position, a strictness
-annotation, or an FFI bridge for the distance itself (Racket has no built-in
-Levenshtein, so that means writing it in Racket).
+Two failures are not a survey. The entry claimed a language limitation on that
+basis, which would have been read as settled by whoever picked up Myers diff.
 
-**Repro**: `[levenshtein "abc" "abc"]` with the row-fold implementation;
-the stuck term names `lev-row-cell` and `lev-nth` unreduced.
+Tested against the shape of the bug rather than around it: the
+identical-strings case is the 3×3 that used to return a stuck term, so
+"returns a number at all" is the assertion; `flaw`/`lawn` catches an
+implementation that only walks one diagonal; and `closest` is pinned to answer
+`none` when nothing is within the limit, since a confident wrong suggestion is
+worse than none.
+
+Myers difference is still not implemented — it is a different algorithm, not
+blocked by this.
 
 ### Phase 4d: Regex Integration
 - Depends on a regex library (not yet designed)

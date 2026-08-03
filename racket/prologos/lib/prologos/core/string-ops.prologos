@@ -425,3 +425,76 @@ spec common-suffix String String -> String
   :doc "The longest common suffix of two strings."
 defn common-suffix [a b]
   [str::slice a [int- [str::length a] [common-suffix-length a b]] [str::length a]]
+
+;; --- Levenshtein edit distance ---
+;;
+;; Row-at-a-time dynamic programming: the classic table kept one row deep.
+;; O(|a|*|b|) time, O(|a|) space.
+;;
+;; The `let` is load-bearing, not tidiness. Each cell's value is needed TWICE
+;; (as the row entry, and as the next cell's `left`) and so is the cell above
+;; it; computing them inline doubles the work per cell and makes the whole
+;; thing exponential — a 3x3 distance then exceeds the reduction budget and
+;; comes back as a stuck term rather than a number. Passing them down as
+;; parameters does not fix it either.
+;;
+;; It has to be the BRACKET `let` on one line: a multi-line `let` in this
+;; position is a parse error.
+
+spec lev-nth [List Int] Int -> Int
+defn lev-nth [xs n]
+  match xs
+    | nil -> 0
+    | cons h t -> if [int-eq n 0] h [lev-nth t [int- n 1]]
+
+spec lev-last-go Int [List Int] -> Int
+defn lev-last-go [h t]
+  match t
+    | nil -> h
+    | cons h2 t2 -> [lev-last-go h2 t2]
+
+spec lev-last [List Int] -> Int
+defn lev-last [xs]
+  match xs
+    | nil -> 0
+    | cons h t -> [lev-last-go h t]
+
+spec lev-step Char Char Int Int Int -> Int
+defn lev-step [ca cb up left diag]
+  if [char::eq ca cb] diag [imin [int+ diag 1] [imin [int+ up 1] [int+ left 1]]]
+
+spec lev-row-loop String Char [List Int] Int Int Int Int -> [List Int]
+defn lev-row-loop [a cb prev alen i left diag]
+  if [int-lt i alen] [let [up [lev-nth prev [int+ i 1]]] [let [cell [lev-step [str::ref a i] cb up left diag]] [cons cell [lev-row-loop a cb prev alen [int+ i 1] cell up]]]] nil
+
+spec lev-rows String String Int Int Int [List Int] -> [List Int]
+defn lev-rows [a b alen blen j prev]
+  if [int-lt j blen] [lev-rows a b alen blen [int+ j 1] [cons [int+ j 1] [lev-row-loop a [str::ref b j] prev alen 0 [int+ j 1] [lev-nth prev 0]]]] prev
+
+spec lev-init Int Int -> [List Int]
+defn lev-init [alen i]
+  if [int-lt i [int+ alen 1]] [cons i [lev-init alen [int+ i 1]]] nil
+
+spec levenshtein String String -> Int
+  :doc "Edit distance: the fewest single-character insertions, deletions or substitutions turning one string into the other."
+defn levenshtein [a b]
+  [lev-last [lev-rows a b [str::length a] [str::length b] 0 [lev-init [str::length a] 0]]]
+
+;; --- "Did you mean?" ---
+;;
+;; The threshold is the caller's, because the right one depends on what is being
+;; suggested over: a typo in a three-letter keyword and a typo in a thirty-letter
+;; identifier are not the same distance apart.
+
+spec closest-loop String [List String] Int String Int -> [Option String]
+defn closest-loop [target candidates best-d best limit]
+  match candidates
+    | nil -> if [int-lt limit best-d] [none String] [some String best]
+    | cons c rest -> [let [d [levenshtein target c]] [if [int-lt d best-d] [closest-loop target rest d c limit] [closest-loop target rest best-d best limit]]]
+
+spec closest String [List String] Int -> [Option String]
+  :doc "The candidate closest to `target` by edit distance, if one is within `limit`."
+defn closest [target candidates limit]
+  match candidates
+    | nil -> [none String]
+    | cons c rest -> [closest-loop target rest [levenshtein target c] c limit]

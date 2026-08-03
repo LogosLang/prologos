@@ -120,3 +120,59 @@
   (define r (sim "[common-suffix \"abc\" \"xyz\"]\n"))
   (check-false (prologos-error? r) (format "got: ~v" r))
   (check-true (string-contains? (format "~a" r) "\"\"") (format "expected empty: ~v" r)))
+
+;; ----------------------------------------------------------------
+;; Edit distance and "did you mean?"
+;; ----------------------------------------------------------------
+;;
+;; The `let` in `lev-row-loop` is load-bearing. Each cell's value is needed
+;; twice (row entry, and the next cell's `left`), as is the cell above it;
+;; computing them inline doubles the work per cell and the whole thing goes
+;; exponential — a 3×3 distance then exceeds the reduction budget and returns a
+;; STUCK TERM rather than a number. That is why `distance-of-equal-strings`
+;; below is not a trivial case: it is the one that failed.
+
+(define lev-pre
+  (string-append
+   "ns lev\n"
+   "require [prologos::data::list :refer [List nil cons]]\n"
+   "require [prologos::core::string-ops :refer [levenshtein closest]]\n"))
+
+(define (lev s) (run-ns-ws-last (string-append lev-pre s)))
+
+(test-case "levenshtein/identical strings are distance 0"
+  ;; Not a trivial case — this is the size that returned a stuck term before
+  ;; the sharing was fixed. A result that is a NUMBER at all is the assertion.
+  (define r (lev "[levenshtein \"abc\" \"abc\"]\n"))
+  (check-false (prologos-error? r) (format "got: ~v" r))
+  (check-true (string-contains? (format "~a" r) "0 : Int")
+              (format "expected 0, got (a stuck term is the old failure): ~v" r)))
+
+(test-case "levenshtein/one substitution is distance 1"
+  (check-true (string-contains? (format "~a" (lev "[levenshtein \"abc\" \"abd\"]\n")) "1 : Int")))
+
+(test-case "levenshtein/kitten to sitting is 3"
+  ;; The textbook case: substitute k→s, substitute e→i, insert g.
+  (check-true (string-contains? (format "~a" (lev "[levenshtein \"kitten\" \"sitting\"]\n")) "3 : Int")))
+
+(test-case "levenshtein/an empty string costs its length"
+  (check-true (string-contains? (format "~a" (lev "[levenshtein \"\" \"abc\"]\n")) "3 : Int")))
+
+(test-case "levenshtein/flaw to lawn is 2"
+  ;; One deletion and one insertion at opposite ends — catches an
+  ;; implementation that only walks one diagonal.
+  (check-true (string-contains? (format "~a" (lev "[levenshtein \"flaw\" \"lawn\"]\n")) "2 : Int")))
+
+(test-case "closest/picks the nearest candidate within the limit"
+  (define r (lev "[closest \"lenght\" [cons \"length\" [cons \"left\" [cons \"list\" nil]]] 3]\n"))
+  (check-true (string-contains? (format "~a" r) "length") (format "got: ~v" r)))
+
+(test-case "closest/answers none when nothing is close enough"
+  ;; The limit has to actually gate, or every typo gets a confident wrong
+  ;; suggestion — worse than no suggestion.
+  (define r (lev "[closest \"zzzzzz\" [cons \"length\" [cons \"left\" nil]] 2]\n"))
+  (check-true (string-contains? (format "~a" r) "none") (format "got: ~v" r)))
+
+(test-case "closest/an exact match is its own nearest"
+  (define r (lev "[closest \"left\" [cons \"length\" [cons \"left\" nil]] 3]\n"))
+  (check-true (string-contains? (format "~a" r) "left") (format "got: ~v" r)))
