@@ -684,3 +684,50 @@
   (define r (run-ns-last "(ns ub5)\n(spec b5 Int -> Int)\n(defn b5 (x) (int+ x 1))"))
   (check-false (prologos-error? r) (format "expected success, got: ~v" r))
   (check-true (regexp-match? #rx"b5 : Int -> Int" (format "~a" r)) (format "got: ~v" r)))
+
+;; ========================================
+;; A module-load failure names WHERE and WHAT (OCapN review U3)
+;; ========================================
+;;
+;; `load-module` raised with only `prologos-error-message`, so a library
+;; module's error arrived as a bare "Unbound variable" — no NAME and no
+;; SRCLOC. The reader was left to find the offending line by hand in a module
+;; they may not have written, and both facts were on the error struct the
+;; whole time.
+;;
+;; It now renders with `format-error`, the same renderer the per-command path
+;; uses, so a failure inside an imported module reads exactly like the same
+;; failure in a top-level file.
+
+(require racket/file (only-in racket/string string-contains?))
+
+(test-case "module-load failure: names the file, the line, and the variable"
+  (define lib (make-temporary-file "prologos-u3-~a" 'directory))
+  (define dir (build-path lib "prologos" "u3t"))
+  (make-directory* dir)
+  (call-with-output-file (build-path dir "bad.prologos") #:exists 'truncate
+    (lambda (o) (display (string-append "ns prologos::u3t::bad\n\n"
+                                        "spec f Int -> Int\n"
+                                        "defn f [x] [nonexistent-fn x]\n") o)))
+  (define user (build-path lib "user.prologos"))
+  (call-with-output-file user #:exists 'truncate
+    (lambda (o) (display "ns u3tuser\n\nimports prologos::u3t::bad\n\ndef r := 1\n" o)))
+  (define msg
+    (with-handlers ([exn:fail? exn-message])
+      (parameterize ([current-lib-paths (list lib)])
+        (install-module-loader!)
+        (process-file user))
+      "NO ERROR RAISED"))
+  ;; the three facts that were missing, asserted separately so a partial
+  ;; regression says which one went
+  (check-true (string-contains? msg "nonexistent-fn")
+              (format "the offending NAME is missing: ~a" msg))
+  (check-true (string-contains? msg "bad.prologos")
+              (format "the offending FILE is missing: ~a" msg))
+  (check-true (regexp-match? #rx"bad[.]prologos:[0-9]+:[0-9]+" msg)
+              (format "the LINE:COLUMN is missing: ~a" msg))
+  ;; …and it still says which module failed to load, which was the one thing
+  ;; the old message did carry
+  (check-true (string-contains? msg "prologos::u3t::bad")
+              (format "the module name is missing: ~a" msg))
+  (delete-directory/files lib #:must-exist? #f))

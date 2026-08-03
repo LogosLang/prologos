@@ -4157,6 +4157,23 @@ Highest-value items, in the order that document recommends:
 - **A4.** Two identical-arm `match` sites guard every outbound dial and send;
   an arm-collapsing optimisation would delete the outbound path with a green
   suite.
-- **U1–U3 (upstream/main).** The LET grouping regression, the ~N^2.17
-  `build-tree-from-domains`, and `driver.rkt:3150` discarding the error name
-  and srcloc.
+- **U1–U2 (upstream/main).** The LET grouping regression and the ~N^2.17
+  `build-tree-from-domains`.
+- ~~**U3.**~~ FIXED 2026-08-03. `load-module` raised with only
+  `prologos-error-message`, so a library module's error arrived as a bare
+  *"imports: Error loading module X: Unbound variable"* — no NAME, no SRCLOC,
+  leaving the reader to find the line by hand in a module they may not have
+  written. Both facts were on the error struct the whole time. It now renders
+  with `format-error`, the same renderer the per-command path uses, so a
+  failure inside an imported module reads exactly like the same failure in a
+  top-level file:
+
+  ```
+  imports: Error loading module prologos::u3::bad:
+  Error at …/bad.prologos:4:0
+    Unbound variable: nonexistent-fn
+  ```
+
+  Pinned in `test-error-messages.rkt`, asserting the name, the file, the
+  `line:column`, AND that the module name the old message DID carry is still
+  there — four separate checks so a partial regression says which fact went.

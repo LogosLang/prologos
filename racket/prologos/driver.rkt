@@ -3323,8 +3323,15 @@
          (unless (prologos-error? surf)
            (define result (process-command/solve-guard surf))
            (when (prologos-error? result)
-             (error 'imports "Error loading module ~a: ~a"
-                    ns-sym (prologos-error-message result)))))
+             ;; OCapN review U3: this passed only `prologos-error-message`, so a
+             ;; library module's error arrived as bare "Unbound variable" — no
+             ;; NAME and no SRCLOC, leaving the reader to find the offending
+             ;; line by hand in a module they may not have written. Both were
+             ;; on the struct the whole time. `format-error` is the renderer
+             ;; the per-command path already uses, so a module-load failure now
+             ;; reads exactly like the same failure in a top-level file.
+             (error 'imports "Error loading module ~a:\n~a"
+                    ns-sym (format-error result)))))
 
        ;; IO-H: Run capability inference after module definitions are processed
        (run-post-compilation-inference!)
