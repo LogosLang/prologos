@@ -57,14 +57,22 @@
   (check-equal? (tag-of 'TotallyUnknownAbstractType) 'any))
 
 (test-case "witness/data-type-head-ctor-route"
-  ;; a CONFIRMED data type (registered ctors) → (ctor Name); the tier-2 HEAD
-  ;; route. Element args are NOT recursed (deferred to the walker charter).
+  ;; a CONFIRMED data type (registered ctors). The HEAD check is what this arm
+  ;; has always done; since 2026-08-03 it also carries the per-constructor,
+  ;; per-field tags (tier-2 element recursion) when they can be computed.
   (parameterize ([current-type-meta (hasheq 'Color '(red green)
                                              'Option '(none some))])
+    ;; `Color`'s ctors have no registered ctor-meta here (this fixture sets
+    ;; type-meta only), so `data-witness-tag` DECLINES and the old tag stands.
+    ;; That fallback is the safety story — where the refinement cannot be
+    ;; computed, behaviour is unchanged rather than guessed.
     (check-equal? (tag-of 'Color) '(ctor Color))
-    ;; applied container head: (Option Int) → head-only (ctor Option)
+    ;; `Option`'s ctors ARE registered (the prelude), so the applied form
+    ;; refines: `(Option Int)` now knows `some`'s field is an Int.
+    ;; This assertion USED to read '(ctor Option) — the pin on the old,
+    ;; element-blind behaviour, which is exactly what item 2 set out to change.
     (check-equal? (field-type->witness-tag (schema-field-type->expr '(Option Int)))
-                  '(ctor Option))))
+                  '(data Option 1 (none) (some (prim Nat Int))))))
 
 ;; ---- the interpreter (runtime, value × tag → Bool) -------------------------
 
@@ -218,3 +226,75 @@
                 "Map (:b.:c is String)")
   ;; a non-row tag is untouched — this must not change any existing payload
   (check-equal? (witness-got-string (expr-string "z") (tag-of 'Int)) "String"))
+
+;; ============================================================================
+;; TIER-2 ELEMENT RECURSION (the deep-walker charter's item 2, 2026-08-03)
+;;
+;; `(ctor Name)` asserted only that the value's constructor belonged to the
+;; type — nothing about its ARGUMENTS. So a `(List String)` field accepted
+;; `[cons 1 nil]` and an `(Option Int)` field accepted `[some "z"]`.
+;; ============================================================================
+
+(define (mk-some ty v)
+  (expr-app (expr-app (expr-fvar 'prologos::data::option::some) ty) v))
+(define (mk-nil ty) (expr-app (expr-fvar 'prologos::data::list::nil) ty))
+(define (mk-cons ty h t)
+  (expr-app (expr-app (expr-app (expr-fvar 'prologos::data::list::cons) ty) h) t))
+
+(test-case "witness/data tag knows the ELEMENT type"
+  (define t (field-type->witness-tag (schema-field-type->expr '(Option Int))))
+  (check-equal? t '(data Option 1 (none) (some (prim Nat Int))))
+  (check-true  (value-witnesses-tag? (mk-some (expr-Int) (expr-int 1)) t))
+  (check-false (value-witnesses-tag? (mk-some (expr-Int) (expr-string "z")) t)
+               "THE BUG: [some \"z\"] used to satisfy an (Option Int) field"))
+
+(test-case "witness/`self` makes a list check EVERY element, not just the head"
+  ;; The load-bearing case, and the reason `self` exists at all: an
+  ;; implementation that only checked the head passes a bad element at
+  ;; position 0 and fails at position 2. (Same shape as the vindex
+  ;; position-2 lesson — a rule that fires once is not a rule that recurses.)
+  (define t (field-type->witness-tag (schema-field-type->expr '(List String))))
+  (define (lst . vs)
+    (foldr (lambda (v acc) (mk-cons (expr-String) v acc)) (mk-nil (expr-String)) vs))
+  (check-true (value-witnesses-tag?
+               (lst (expr-string "a") (expr-string "b") (expr-string "c")) t))
+  (check-false (value-witnesses-tag?
+                (lst (expr-int 1) (expr-string "b") (expr-string "c")) t)
+               "bad element at position 0")
+  (check-false (value-witnesses-tag?
+                (lst (expr-string "a") (expr-string "b") (expr-int 1)) t)
+               "bad element at POSITION 2 — this is the one `self` is for")
+  (check-true (value-witnesses-tag? (mk-nil (expr-String)) t) "the empty list passes"))
+
+(test-case "witness/data ACCEPTS on arity uncertainty, rejects only a real miss"
+  (define t (field-type->witness-tag (schema-field-type->expr '(Option Int))))
+  ;; a PARTIAL application: the args do not line up with the field tags, so no
+  ;; comparison is meaningful and the witness must not invent one.
+  (check-true (value-witnesses-tag? (expr-app (expr-fvar 'prologos::data::option::some)
+                                              (expr-Int))
+                                    t)
+              "a partially-applied ctor must accept, not reject")
+  ;; the HEAD check is unchanged from (ctor …): a value of a different type
+  ;; still rejects, exactly as before.
+  (check-false (value-witnesses-tag? (expr-int 1) t)))
+
+(test-case "witness/data DECLINES to a (ctor …) tag when it cannot compute"
+  ;; No ctor-meta registered for these names, so the refinement is not
+  ;; computable and the pre-existing tag must stand — unchanged behaviour is
+  ;; the fallback, never a guess.
+  (parameterize ([current-type-meta (hasheq 'MysteryT '(mystery-a mystery-b))])
+    (check-equal? (tag-of 'MysteryT) '(ctor MysteryT))))
+
+(test-case "witness/data got-string composes through both levels"
+  (define t (field-type->witness-tag
+             (schema-field-type->expr '(List (Option Int)))))
+  (define bad (mk-cons (expr-Int) (mk-some (expr-Int) (expr-string "z"))
+                       (mk-nil (expr-Int))))
+  (check-equal? (witness-got-string bad t)
+                "List (cons field 0 is Option (some field 0 is String))"))
+
+(test-case "witness/data tags are well-formed and never skip"
+  (for ([d (in-list '((Option Int) (List String) (List (Option Int))))])
+    (define t (field-type->witness-tag (schema-field-type->expr d)))
+    (check-true (witness-tag-well-formed? t) (format "~a → ~a" d t))
+    (check-false (witness-tag-skip? t) (format "~a must stay witnessable" d))))

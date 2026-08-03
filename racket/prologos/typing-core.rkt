@@ -501,7 +501,6 @@
 
 (define (field-type->witness-tag ft [seen '()])
   (let ([t (whnf ft)])
-    (eprintf "TAGPROBE t=~v sch=~v\n" t (and (expr-fvar? t) (and (lookup-schema-by-name (expr-fvar-name t)) #t)))
     (cond
       ;; union: ⋃ of branch tags (mirrors field-type-satisfies? some-branch)
       [(expr-union? t)
@@ -557,19 +556,116 @@
        (field-type->witness-tag
         (schema-field-type->expr (refined-name->base (bare-name (expr-fvar-name t)))))]
       ;; a CONFIRMED data type (bare head OR applied container head with
-      ;; registered ctors): the tier-2 HEAD route — element args are NOT
-      ;; recursed (deferred to the walker charter). Only emit (ctor …) when the
-      ;; head genuinely has ctors, else fall to 'any (never false-reject an
-      ;; abstract/type-var field).
-      [(let-values ([(head _args) (decompose-type-app t)])
+      ;; registered ctors). Only fires when the head genuinely has ctors, else
+      ;; falls to 'any (never false-reject an abstract/type-var field).
+      ;;
+      ;; TIER-2 ELEMENT RECURSION (the walker charter's item 2, 2026-08-03):
+      ;; this used to emit a bare `(ctor Name)` — "the value's ctor belongs to
+      ;; this type" and nothing about its ARGUMENTS. So a `(List String)` field
+      ;; accepted `[cons 1 nil]` and an `(Option Int)` field accepted
+      ;; `[some "z"]`: validate returned `ok` on data that is wrong, which is
+      ;; the same class of silent acceptance as the sub-schema gap above.
+      ;;
+      ;; `data-witness-tag` computes the per-constructor, per-field tags by
+      ;; substituting the applied type arguments into each ctor's registered
+      ;; field-type datums. The charter's own note was right that the METADATA
+      ;; already existed (`ctor-meta` carries params + field-types) and that
+      ;; what was missing is the substitution + recursion + depth discipline.
+      ;;
+      ;; It returns #f — falling through to the old `(ctor Name)` — whenever
+      ;; anything is not fully determined: a ctor with no registered meta, an
+      ;; arity that does not line up, a field-type datum that will not convert.
+      ;; That fallback is the whole safety story: the precise tag is a strict
+      ;; refinement of the old one, and where it cannot be computed the old
+      ;; behaviour stands rather than a guess.
+      [(let-values ([(head args) (decompose-type-app t)])
          (and head
               (let* ([bare (bare-name head)]
                      [ctors (lookup-type-ctors bare)])
-                (and (pair? ctors) bare))))
-       => (lambda (bare) (list 'ctor bare))]
+                (and (pair? ctors)
+                     (cons bare (or (data-witness-tag bare ctors args t seen)
+                                    (list 'ctor bare)))))))
+       => cdr]
       ;; functions (Pi), type vars, unknown/abstract heads, higher-kinded —
       ;; unwitnessable → skip
       [else 'any])))
+
+;; `(data Name NSKIP (Ctor FieldTag …) …)` — the per-constructor field tags for
+;; an applied (or bare) data type, or #f to decline.
+;;
+;; NSKIP is the count of leading TYPE arguments a constructor value carries:
+;; `[some 1]` reduces to `(some Int 1)` and `[cons 1 nil]` to
+;; `(cons Int 1 (cons Int 2 (nil ?m)))`, so the runtime has to step over the
+;; erased type params before it reaches the fields. It comes from the ctor's own
+;; `params`, not from a count of the applied arguments, because a BARE data type
+;; (`Color`) has zero of both and must still tag.
+;;
+;; `self` marks a field whose substituted type IS the type being tagged — the
+;; `(List A)` tail of `cons`. The runtime re-enters the whole tag there, which
+;; is what makes a list check EVERY element rather than just its head. Without
+;; it this function would not terminate on any recursive type.
+;;
+;; DECLINES (returns #f) rather than guessing, in every one of these cases:
+;;   - a ctor name with no registered `ctor-meta`
+;;   - more params than applied arguments (a partially-applied type constructor)
+;;   - a field-type datum that will not convert (`schema-field-type->expr`
+;;     raises on shapes it does not model, and that raise must not escape into
+;;     the elaborator)
+;;   - the type is already on the `seen` path (mutual recursion: A holds a B
+;;     holds an A). `self` covers DIRECT recursion; anything longer degrades to
+;;     `(ctor …)`, which is the pre-existing precision, not a regression.
+(define (data-witness-tag bare ctors args t seen)
+  (and (not (memq bare seen))
+       (with-handlers ([exn:fail? (lambda (_) #f)])
+         (let ([seen* (cons bare seen)]
+               [nskip (box #f)])
+           (let ([entries
+                  (for/list ([cname (in-list ctors)])
+                    (define meta (or (lookup-ctor cname)
+                                     (lookup-ctor (bare-name cname))))
+                    (unless meta (raise (make-exn:fail "no meta" (current-continuation-marks))))
+                    (define pnames
+                      (for/list ([p (in-list (ctor-meta-params meta))])
+                        (if (pair? p) (car p) p)))
+                    (when (> (length pnames) (length args))
+                      (raise (make-exn:fail "arity" (current-continuation-marks))))
+                    (define nsk (length pnames))
+                    (cond [(unbox nskip) => (lambda (n)
+                                              (unless (= n nsk)
+                                                (raise (make-exn:fail "nskip" (current-continuation-marks)))))]
+                          [else (set-box! nskip nsk)])
+                    (define env (map cons pnames args))
+                    (cons (bare-name cname)
+                          (for/list ([ft (in-list (ctor-meta-field-types meta))])
+                            (define fe (field-datum->expr/subst ft env))
+                            (if (equal? (whnf fe) t)
+                                'self
+                                (field-type->witness-tag fe seen*)))))])
+             (list* 'data bare (or (unbox nskip) 0) entries))))))
+
+;; A field-type DATUM → expr, with type parameters substituted by the applied
+;; argument EXPRS. `schema-field-type->expr` cannot do this itself: its input is
+;; a datum and the substitutions are exprs, so the two live on different sides
+;; of the conversion. Every non-parameter leaf defers to it, so the resolution
+;; rules (ns-context, global-env, bare fallback) stay in ONE place.
+(define (field-datum->expr/subst datum env)
+  (cond
+    [(and (symbol? datum) (assq datum env)) => cdr]
+    [(and (pair? datum) (eq? (car datum) '$union))
+     (let build ([parts (cdr datum)])
+       (if (null? (cdr parts))
+           (field-datum->expr/subst (car parts) env)
+           (expr-union (field-datum->expr/subst (car parts) env)
+                       (build (cdr parts)))))]
+    [(and (pair? datum) (eq? (car datum) '$arrow))
+     (expr-Pi 'mw
+              (field-datum->expr/subst (cadr datum) env)
+              (field-datum->expr/subst (caddr datum) env))]
+    [(and (list? datum) (>= (length datum) 2))
+     (for/fold ([acc (field-datum->expr/subst (car datum) env)])
+               ([a (in-list (cdr datum))])
+       (expr-app acc (field-datum->expr/subst a env)))]
+    [else (schema-field-type->expr datum)]))
 
 ;; A keyword row → its `(row (K . T) …)` tag. Shared by the two arms above so
 ;; the schema route and the inline-row route cannot produce different shapes.

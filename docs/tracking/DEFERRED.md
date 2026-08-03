@@ -901,7 +901,7 @@ entry gates** (round-6 rulings, track doc §2a):
    where the generalization lands; D17's `{}` keyword-commitment is one
    recoverable seed site.
 
-## 🔶 PARTIAL — CIU T6 F1b.5: the deep-walker charter (D27.5, 2026-07-17; item 3 sub-schema descent DONE 2026-08-03, items 1/2/4 open)
+## 🔶 PARTIAL — CIU T6 F1b.5: the deep-walker charter (D27.5, 2026-07-17; items 2 + 3 DONE 2026-08-03, items 1/4 open)
 
 Validate v1 is ONE-LEVEL with STRUCTURAL depth symmetry (it consumes the same
 field-set enumeration as `schema->row` — never a second one-level implementation).
@@ -910,11 +910,54 @@ residue-letter entries — divergent gates/double-count):
 
 1. **Container/nested-seal traversal depth** (the driver top-node class — def-forcing
    + eval arm see only top nodes; a seal nested in a pair/list escapes both).
-2. **Tier-2 element recursion** (`(List Int)` fields checking each element).
-   HONEST reason (D28 corrected the false one): `ctor-meta` ALREADY carries
-   field-types/params/rec-flags runtime-readable (macros.rkt `ctor-meta` +
-   `lookup-ctor`) — what is unbuilt is the param-substitution + recursion +
-   depth discipline (recursive-schema edge), NOT metadata.
+2. ✅ **DONE 2026-08-03 — tier-2 element recursion.** The entry's own honest
+   reason was the fix's shape: `ctor-meta` already carried params +
+   field-types, and what was unbuilt was the param-substitution + recursion +
+   depth discipline. All three landed.
+
+   `(ctor Name)` asserted only that a value's constructor belonged to the type
+   and NOTHING about its arguments, so a `(List String)` field accepted
+   `[cons 1 nil]` and an `(Option Int)` field accepted `[some "z"]` — the same
+   silent-acceptance class as item 3, one level in. The tag is now
+   `(data Name NSKIP (Ctor FieldTag …) …)`, computed by substituting the
+   applied type arguments into each constructor's registered field-type datums.
+
+   - **NSKIP** is the count of erased type params a constructor VALUE carries:
+     `[some 1]` reduces to `(some Int 1)`, `[cons 1 nil]` to
+     `(cons Int 1 (cons Int 2 (nil ?m)))`. It comes from the ctor's own
+     `params`, not from counting applied arguments, so a bare data type
+     (`Color`, zero of both) still tags.
+   - **`self`** marks a field whose substituted type IS the type being tagged
+     — `cons`'s `(List A)` tail. The runtime re-enters the whole tag there,
+     which is what makes a list check EVERY element instead of its head. It is
+     also what makes the bake terminate at all. Test-pinned at POSITION 2
+     specifically: an implementation that only checks the head passes position
+     0 and fails position 2 (the same shape as the `vindex` position-2 lesson).
+   - **`data-witness-tag` DECLINES to the old `(ctor Name)`** on any ctor with
+     no registered meta, any arity that does not line up, and any field-type
+     datum that will not convert. That fallback is the entire safety story for
+     an arm this broad: the new tag is a strict refinement, and where it cannot
+     be computed the previous behaviour stands rather than a guess. Pinned.
+   - Runtime ACCEPTS on an unknown constructor and on a spine whose field count
+     differs from the tag's (a partial application) — uncertainty, per D28. The
+     HEAD check is byte-identical to `(ctor …)`'s, so this can only reject a
+     strict superset of what the old tag rejected, and only on an argument.
+
+   The `got` payload composes through the levels:
+   `"List (cons field 0 is Option (some field 0 is String))"`.
+
+   Blast radius was the reason for the full-suite gate rather than a targeted
+   run — this arm fires on EVERY ctor-typed schema field. Exactly one test
+   changed: the assertion that pinned `(tag-of '(Option Int))` as
+   `'(ctor Option)`, i.e. the pin on the element-blind behaviour this item
+   existed to remove.
+
+   **Still not element-checked: the non-ctor CARRIERS** — `(PVec T)`,
+   `(Map K V)`, `(Set T)`. Their values are rrb / champ / hset, not
+   constructor applications, so they never reach this arm and stay at `'any`
+   (`[validate Vecd {:xs @[1 "z"]}]` returns `ok`). Each needs its own carrier
+   arm on both sides; the carriers are directly readable, so this is small, and
+   it is the obvious next slice.
 3. **Sub-schema descent** (auto-registered `Parent__field` entries carry
    check/default = #f — stripped at registration; a one-level engine hitting a
    sub-schema-typed field has no defined deep disposition).

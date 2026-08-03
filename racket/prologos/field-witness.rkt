@@ -141,6 +141,58 @@
                       [found (champ-lookup c (equal-hash-code kexpr) kexpr)])
                  (or (eq? found 'none)
                      (value-witnesses-tag? found (cdr kt))))))])]
+       ;; ---- TIER-2 ELEMENT RECURSION -------------------------------------
+       ;; `(data Name NSKIP (Ctor FieldTag …) …)` — the refinement of `(ctor
+       ;; Name)`, which asserted only that the value's constructor belonged to
+       ;; the type and said nothing about its ARGUMENTS. So a `(List String)`
+       ;; field accepted `[cons 1 nil]` and an `(Option Int)` field accepted
+       ;; `[some "z"]`.
+       ;;
+       ;; The head check is IDENTICAL to `(ctor …)`'s — same predicate, same
+       ;; rejection — so this can only ever reject a strict superset of what
+       ;; the old tag rejected, and only on a field argument.
+       ;;
+       ;; NSKIP steps over the erased type params a constructor value carries
+       ;; (`[some 1]` reduces to `(some Int 1)`). `self` re-enters the whole
+       ;; tag, which is what makes a list check every element rather than its
+       ;; head only.
+       ;;
+       ;; Three ACCEPTS, all uncertainty (D28), and each names a real shape:
+       ;;   - a constructor absent from the tag's entries: the type's ctor set
+       ;;     changed under us, or the value came from a different module's
+       ;;     registration. Not our call to reject.
+       ;;   - a spine whose field count differs from the tag's: a PARTIAL
+       ;;     application, or extra implicit arguments we did not model. The
+       ;;     arguments do not line up with the tags, so no comparison is
+       ;;     meaningful.
+       ;;   - anything the head check already accepted (that path is unchanged).
+       [(data)
+        (let* ([tname (cadr tag)]
+               [nskip (caddr tag)]
+               [entries (cdddr tag)]
+               [tn (value->ctor-type-name v)])
+          (cond
+            ;; the (ctor …) check, verbatim — head must belong to this type
+            [(not (and tn (eq? tn tname))) #f]
+            [else
+             (let* ([spine (let collect ([e v] [acc '()])
+                             (if (expr-app? e)
+                                 (collect (expr-app-func e) (cons (expr-app-arg e) acc))
+                                 acc))]
+                    [head (let peel ([e v]) (if (expr-app? e) (peel (expr-app-func e)) e))]
+                    [cname (and (expr-fvar? head) (short-name (expr-fvar-name head)))]
+                    [entry (and cname (assq cname entries))])
+               (cond
+                 [(not entry) #t]                              ; unknown ctor → accept
+                 [(< (length spine) nskip) #t]                 ; malformed spine → accept
+                 [else
+                  (let ([fields (list-tail spine nskip)]
+                        [ftags (cdr entry)])
+                    (cond
+                      [(not (= (length fields) (length ftags))) #t]  ; partial app → accept
+                      [else
+                       (for/and ([fv (in-list fields)] [ft (in-list ftags)])
+                         (value-witnesses-tag? fv (if (eq? ft 'self) tag ft)))]))]))]))]
        ;; unknown tag head → accept (forward-compatible; never false-reject)
        [else #t])]
     ;; malformed / unexpected tag shape → accept
@@ -174,7 +226,40 @@
 ;; champ-fold order is deterministic. Collecting every miss is a Reason-shape
 ;; question (the err champ is keyed by the PARENT field here), not a string one.
 (define (witness-got-string v tag)
-  (define detail
+  (define data-detail
+    (and (pair? tag) (eq? (car tag) 'data)
+         (let descend ([v v] [tag tag])
+           (let* ([nskip (caddr tag)]
+                  [entries (cdddr tag)]
+                  [spine (let collect ([e v] [acc '()])
+                           (if (expr-app? e)
+                               (collect (expr-app-func e) (cons (expr-app-arg e) acc))
+                               acc))]
+                  [head (expr-app-head v)]
+                  [cname (and (expr-fvar? head) (short-name (expr-fvar-name head)))]
+                  [entry (and cname (assq cname entries))])
+             (and entry (>= (length spine) nskip)
+                  (let ([fields (list-tail spine nskip)]
+                        [ftags (cdr entry)])
+                    (and (= (length fields) (length ftags))
+                         (for/or ([fv (in-list fields)]
+                                  [ft (in-list ftags)]
+                                  [i (in-naturals)])
+                           (let ([ft* (if (eq? ft 'self) tag ft)])
+                             (cond
+                               [(value-witnesses-tag? fv ft*) #f]
+                               ;; keep descending a `self` field so the report
+                               ;; names the element that is actually wrong,
+                               ;; rather than the outermost cons
+                               [(eq? ft 'self) (or (descend fv tag)
+                                                   (format "~a field ~a is ~a"
+                                                           cname i (value-kind-string fv)))]
+                               ;; compose, so a bad Option inside a List reads
+                               ;; "cons field 0 is Option (some field 0 is String)"
+                               ;; rather than stopping at "is Option"
+                               [else (format "~a field ~a is ~a"
+                                             cname i (witness-got-string fv ft*))]))))))))))
+  (define row-detail
     (and (pair? tag) (eq? (car tag) 'row) (expr-champ? v)
          (let descend ([v v] [tag tag] [path '()])
            (and (expr-champ? v)
@@ -193,8 +278,13 @@
                          (or (descend found (cdr kt) p)
                              (format "~a is ~a"
                                      (path->string* p) (value-kind-string found)))]
+                        ;; anything else: compose with this same function, so a
+                        ;; row field holding a bad LIST reports both levels —
+                        ;; ":tags is List (cons field 0 is Int)".
                         [else (format "~a is ~a"
-                                      (path->string* p) (value-kind-string found))]))))))))
+                                      (path->string* p)
+                                      (witness-got-string found (cdr kt)))]))))))))
+  (define detail (or data-detail row-detail))
   (if detail
       (string-append (value-kind-string v) " (" detail ")")
       (value-kind-string v)))
@@ -218,6 +308,9 @@
     ;; which is what the discipline test needs to see for a nested schema.
     [(and (pair? tag) (eq? (car tag) 'row))
      (andmap (lambda (kt) (witness-tag-skip? (cdr kt))) (cdr tag))]
+    ;; a `data` tag never skips: its head check alone can reject, exactly as
+    ;; `(ctor …)` could.
+    [(and (pair? tag) (eq? (car tag) 'data)) #f]
     [else #f]))
 
 ;; Structural well-formedness — the totality assertion: a tag is one of the
@@ -238,4 +331,15 @@
      (andmap (lambda (kt) (and (pair? kt) (symbol? (car kt))
                                (witness-tag-well-formed? (cdr kt))))
              (cdr tag))]
+    ;; (data Name NSKIP (Ctor FieldTag ...) ...) — `self` is well-formed only
+    ;; inside a data tag, which is why it is checked here and not at top level.
+    [(and (pair? tag) (eq? (car tag) 'data))
+     (and (>= (length tag) 3) (symbol? (cadr tag))
+          (exact-nonnegative-integer? (caddr tag))
+          (andmap (lambda (e)
+                    (and (pair? e) (symbol? (car e))
+                         (andmap (lambda (ft)
+                                   (or (eq? ft 'self) (witness-tag-well-formed? ft)))
+                                 (cdr e))))
+                  (cdddr tag)))]
     [else #f]))

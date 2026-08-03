@@ -186,3 +186,28 @@ schema Deployment
 ;;   ← a MISSING nested key stays the PLAN's business (it owns `required?` and
 ;;     reports against the right key); the witness must not relabel it as a
 ;;     type-mismatch on the PARENT field.
+
+;; --- 2026-08-03: TIER-2 ELEMENT RECURSION (the deep-walker charter, item 2) ---
+;; `(ctor Name)` asserted only that a value's constructor belonged to the type
+;; and nothing about its ARGUMENTS, so a `(List String)` field accepted a list
+;; of Ints. The tag now carries each constructor's per-field tags.
+
+schema Manifest
+  :names (List String)
+;;34=> Manifest : [Type 0] defined.
+
+[validate Manifest {:names '["a" "b"]}]
+;;35=>~ prologos::data::result::ok
+;;   ← a homogeneous list of the right element type still passes
+
+[validate Manifest {:names [cons 7 nil]}]
+;;36=>~ :names [prologos::data::reason::type-mismatch
+;;   ← THE FIX: an Int element in a (List String) field. Was `ok`.
+
+[validate Manifest {:names [cons 7 nil]}]
+;;37=>~ List (cons field 0 is Int)
+;;   ← and the payload names the constructor and field position
+
+[validate Manifest {:names nil}]
+;;38=>~ prologos::data::result::ok
+;;   ← the empty list has no elements to disagree with anything
