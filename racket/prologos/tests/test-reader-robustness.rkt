@@ -317,3 +317,33 @@
 
 (test-case "guards/a strategy with a non-symbol name"
   (check-per-command "strategy 5\n" "strategy name"))
+
+;; ----------------------------------------------------------------
+;; Nested constructor patterns (DEFERRED said these were broken)
+;; ----------------------------------------------------------------
+
+(test-case "match/a nested constructor pattern binds the CONSTRUCTOR, not a variable"
+  ;; DEFERRED (FL Narrowing, 2026-03-08) said `| suc zero -> body` treats `zero`
+  ;; as a variable name, so the arm would match ANY `suc m`. Re-probed
+  ;; 2026-08-02: it does not — and nothing was pinning that, precisely because
+  ;; the entry said it was broken.
+  ;;
+  ;; The discriminating case is `pred 3N`. If `zero` were a variable, `suc zero`
+  ;; would match it and the answer would be 99; it is 2, so the arm is a real
+  ;; constructor pattern and the later `suc m` arm took it.
+  (define results
+    (run-file-lines
+     (string-append
+      "ns np\n"
+      "spec pred Nat -> Nat\n"
+      "defn pred [n]\n"
+      "  match n\n"
+      "    | suc zero -> 99N\n"
+      "    | suc m -> m\n"
+      "    | zero -> 0N\n"
+      "pred 1N\npred 3N\npred 0N\n")))
+  (check-false (ormap prologos-error? results) (format "expected success: ~v" results))
+  (define text (format "~a" results))
+  (check-true (string-contains? text "99N") "the `suc zero` arm did not fire for 1N")
+  (check-true (string-contains? text "2N")
+              "`suc zero` swallowed `suc m` — `zero` is being read as a variable"))

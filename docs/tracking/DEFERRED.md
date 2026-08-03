@@ -1376,15 +1376,30 @@ scheduler variants) are unblocked.
 
 ## FL Narrowing — WS Surface Gaps
 
-### Nested Constructor Patterns in Match Arms
-- `| suc zero -> body` treats `zero` as a variable name, not the constructor
-- Root cause: `parse-reduce-arm` doesn't recurse into `parse-single-pattern`
-- **Workaround**: Use `defn` pattern clauses with double brackets
-- Source: C2 investigation, 2026-03-08
+### ✅ RESOLVED — Nested Constructor Patterns in Match Arms (re-probed 2026-08-02)
 
-### Higher-Order Narrowing in WS Mode
-- `[apply-op ?f 3N 2N] = 5N` doesn't trigger HO narrowing via WS pipeline
-- Infrastructure works at sexp/API level (23 tests pass)
+The entry said `| suc zero -> body` treats `zero` as a variable, so the arm
+would match any `suc m`. It does not:
+
+```
+defn pred [n]
+  match n
+    | suc zero -> 99N
+    | suc m    -> m
+    | zero     -> 0N
+
+pred 1N  => 99N     pred 3N => 2N     pred 0N => 0N
+```
+
+`pred 3N` is the discriminating case — a variable reading would make it 99.
+Now pinned in `tests/test-reader-robustness.rkt`; nothing was pinning it
+before, precisely because this entry said it was broken.
+
+### Higher-Order Narrowing in WS Mode — CONFIRMED STILL TRUE (re-probed 2026-08-02)
+
+`narrow [apply-op ?f 3N 2N] = 5N` returns `nil` in a `.prologos` file — no
+solutions, no error. The infrastructure works at sexp/API level (23 tests
+pass); the WS pipeline does not reach it. Unchanged since 2026-03-08.
 - Fix requires deeper integration between narrowing substitution env and DT body traversal
 - Source: C3 analysis, 2026-03-08
 
