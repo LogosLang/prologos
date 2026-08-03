@@ -1679,41 +1679,43 @@ Existing pre-4C off-network registries (`register-domain!`, `register-typing-rul
 
 ---
 
-## Relational/Unification — PUnify Surface Gaps
+## Relational/Unification — PUnify Surface Gaps — TRIAGED 2026-08-02 (5 of 7 stale)
 
-### Module-path (`::`) resolution in defr clauses
-- `str::concat` unbound inside `defr` clause bodies in `is` goals
-- Root cause: `::` lookup doesn't resolve in relational elaboration context
-- Source: acceptance file §H4, §K2
+All seven came from one acceptance file's section notes. Re-probed; five no
+longer describe the compiler, and are now pinned in
+`tests/test-punify-surface.rkt` — because a DEFERRED entry saying "X is broken"
+suppresses the test that would catch X regressing, which is exactly what
+happened with the nested-constructor-pattern entry above.
 
-### solve-one type inference in defn body
-- `solve-one` in `defn` body returns `_` type; `solve` works in same position
-- Source: acceptance file §J
+### ✅ RESOLVED — Module-path (`::`) resolution in defr clauses
+`(is s [str::append "a" "b"])` inside a `defr` clause gives `"ab"`.
 
-### `=` with prelude constructors in defr body
-- Prelude constructors (some/none) in `=` goals inside `defr` fail
-- Source: acceptance file §K
+### ✅ RESOLVED — solve-one type inference in defn body
+`defn one-sol [u] solve-one (edge a b)` types as `_ -> {:a Int :b Int}`, not
+`_`. Both `solve` and `solve-one` derive the row type.
 
-### Parameterized types in data constructor arguments
-- `data Box A := box [List A]` fails with not-a-type-error
-- Source: acceptance file §G
+### ✅ RESOLVED — `=` with prelude constructors in defr body
+`(= o [some 1])` inside a `defr` clause works. (Minor residual: the row TYPE
+shows `:o _` while the value is right — the same static/runtime row-type
+question the solver-collection fix addressed for maps, one notch further out.)
 
-### `eq?` trait method not in prelude scope
-- `Eq` trait's `eq?` not directly callable from prelude
-- Workaround: concrete equality functions (`int-eq`, `str-eq`)
-- Source: acceptance file §M
+### ✅ NEVER A DEFECT — Parameterized types in data constructor arguments
+The entry's example, `data Box A := box [List A]`, is not Prologos syntax — a
+syntax error filed as a type-system gap. Written as `data Box {A : Type} | box
+[List A]` it works and the constructor gets its Pi type.
 
-### head + match inference failure
-- `[head '[1 2 3]]` followed by pattern match fails type inference
-- Pre-existing issue, not PUnify-introduced
-- Source: acceptance file §G6
+### ✅ RESOLVED — `eq?` trait method not in prelude scope
+`[eq? 1 1]` and `[eq? "a" "a"]` both give `true`. The listed workaround
+(concrete `int-eq` / `str-eq`) is unnecessary.
 
-### Narrowing limited to constructor-based patterns
-- Functions with Int literal patterns compile to `boolrec+int-eq`, not invertible for narrowing
-- Design limitation, not a bug
-- Source: acceptance file §I
+### ⤳ MOVED — head + match inference failure
+`def h := [head '[1 2 3]]` fails, and it is the SAME defect as the merged
+higher-order-on-a-def-RHS entry above (bare command works, `def` RHS does not).
+Tracked there; not a separate item.
 
----
+### ⬜ STANDS — Narrowing limited to constructor-based patterns
+Functions with Int literal patterns compile to `boolrec`+`int-eq`, not
+invertible for narrowing. The entry calls it a design limitation and it is.
 
 ## Surface Syntax Issues — TRIAGED 2026-08-02 (2 of 3 stale)
 
