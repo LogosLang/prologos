@@ -3280,7 +3280,36 @@ path today, and #58's scope was the reducer. The fix is mechanical once wanted �
 `shift-arg`'s guard applies verbatim. **Do it when session-typed code gets a real
 workload**, or fold it into any track that touches `sessions.rkt`.
 
-### 2. `zonk-at-depth` re-shifts per meta occurrence
+### 2. ✅ MEASURED 2026-08-03 — `zonk-at-depth`'s re-shift is negligible; NO FIX WARRANTED
+
+The entry said "unmeasured — it may be entirely fine, since solutions are
+usually small. **Measure before fixing**; #58's whole lesson is that the layer
+you assume is the cost usually isn't." Measured, by counting every execution of
+the `(> depth 0)` shift branch and the SIZE of each solution shifted:
+
+| workload | shift calls | total nodes shifted | max nodes in one shift |
+|---|---|---|---|
+| synthetic (`map`/`reduce`, duplicated defs) | 145 | 137 | **2** |
+| `examples/2026-07-17-ciu-t6-f1b4-seal.prologos` | **0** | 0 | 0 |
+| `examples/2026-03-20-punify-p3-acceptance.prologos` | **0** | 0 | 0 |
+
+The hypothesis is confirmed with numbers rather than assumed. Solutions being
+re-shifted are 0–2 nodes, and on two real acceptance files the branch **never
+executes at all**. There is no O(N²) here to fix: the "re-walked once per
+occurrence" term is a two-node walk, and applying #58's `shift-arg` guard would
+add a whole-term `loose-bvar-range` computation to buy back nothing — which is
+precisely the regression #58 measured when the guard was placed where the
+repetition ISN'T (198.6 s → 240.9 s on the full suite).
+
+**Closed as measured, not as fixed.** Re-open only with a workload that makes
+the shift-call count large AND the shifted terms big.
+
+**Reproduce**: box a `(vector calls total-nodes max-nodes)` counter around the
+`(> depth 0)` branch in `zonk-at-depth`'s `expr-meta` arm, sizing each
+`zonked-sol` by transparent-struct node count. Instrument REMOVED after
+measuring — same reasoning as item 3 above.
+
+**Original**: `zonk-at-depth` re-shifts per meta occurrence
 
 `racket/prologos/zonk.rkt:557` does `(shift depth 0 zonked-sol)` once per meta
 occurrence, with depth incremented at each binder (:590/:592/:594). Same shape:
