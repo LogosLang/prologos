@@ -689,9 +689,20 @@
   (or (string-prefix? s "prologos::data::")
       (string-prefix? s "prologos::core::")))
 
-;;; ---- BEGIN GENERATED PRELUDE ----
-;; The prelude: a curated list of imports specs emitted into user namespaces.
-;; Generated from lib/prologos/book/PRELUDE by tools/gen-prelude.rkt.
+;; The prelude: a curated list of import specs emitted into user namespaces.
+;;
+;; THIS LIST IS THE SOURCE OF TRUTH — hand-maintained; edit it directly.
+;; A lib/prologos/book/PRELUDE manifest used to mirror it, with
+;; tools/gen-prelude.rkt regenerating this block from that manifest. Both
+;; were retired 2026-08-03: the generator ran ONE WAY (manifest -> here) and
+;; had no reverse mode, so the two 2026-03-11 shadowing fixes that landed
+;; here only — 87fcfa9a7 (sum/product) and 35a989de5 (nat:: alias) — never
+;; propagated back, and regenerating would have silently reverted them.
+;;
+;; ORDERING MATTERS: later :refer entries shadow earlier ones for the same
+;; name. prologos::core::collections MUST stay last (see the note at its
+;; entry below) so its generic map/filter/reduce shadow the List-specific
+;; versions above.
 (define prelude-imports
   '(;; ---- Core combinators (not a book chapter) ----
     (imports [prologos::core :refer-all])
@@ -861,7 +872,6 @@
                                                   vec list-to-seq pvec-to-seq
                                                   set-to-seq into-vec
                                                   into-list into-set]])))
-;;; ---- END GENERATED PRELUDE ----
 
 ;; ========================================
 ;; Pre-parse Directive Processing

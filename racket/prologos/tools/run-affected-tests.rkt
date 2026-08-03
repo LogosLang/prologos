@@ -491,60 +491,6 @@
              (run-tests test-paths project-root))])])]))
 
 ;; ============================================================
-;; Prelude drift check
-;; ============================================================
-;;
-;; Runs `gen-prelude.rkt --validate` to ensure the PRELUDE manifest
-;; matches namespace.rkt. Prints a warning if they're out of sync.
-
-(define (check-prelude-drift! project-root)
-  (define gen-prelude-path
-    (path->string (build-path project-root "tools" "gen-prelude.rkt")))
-  (define manifest-path
-    (build-path project-root "lib" "prologos" "book" "PRELUDE"))
-  ;; Only check if the PRELUDE manifest exists (graceful skip otherwise)
-  (when (file-exists? manifest-path)
-    (define-values (proc out in err)
-      (subprocess #f #f #f racket-path gen-prelude-path "--validate"))
-    (close-output-port in)
-    (subprocess-wait proc)
-    (define stdout-text (port->string out))
-    (define stderr-text (port->string err))
-    (close-input-port out)
-    (close-input-port err)
-    (cond
-      [(zero? (subprocess-status proc))
-       (void)]  ;; all good, silent
-      [else
-       ;; A non-zero exit means EITHER real drift OR the validator itself
-       ;; failed to run. Distinguish them: only the former produces a
-       ;; "Validation FAILED:" summary line on stdout.
-       (define summary
-         (for/first ([line (in-list (string-split stdout-text "\n"))]
-                     #:when (string-prefix? (string-trim line) "Validation FAILED:"))
-           (string-trim line)))
-       (cond
-         [summary
-          (printf "\n⚠  PRELUDE DRIFT DETECTED\n")
-          (printf "   The PRELUDE manifest and namespace.rkt disagree.\n")
-          (printf "   ~a\n" summary)
-          (printf "   Inspect:  racket tools/gen-prelude.rkt --validate\n")
-          ;; Deliberately NOT recommending `--write` here. It regenerates
-          ;; namespace.rkt FROM the manifest and has no reverse mode, so
-          ;; when namespace.rkt is the side that moved — which is how this
-          ;; warning usually arises — running it silently deletes imports.
-          (printf "   Do NOT run `--write` before reading that output: it is\n")
-          (printf "   one-directional (manifest -> namespace.rkt) and silently\n")
-          (printf "   DELETES every prelude import the manifest happens to lack.\n\n")]
-         [else
-          (printf "\n⚠  PRELUDE DRIFT CHECK FAILED TO RUN\n")
-          (printf "   gen-prelude.rkt --validate exited ~a without a verdict.\n"
-                  (subprocess-status proc))
-          (unless (string=? (string-trim stderr-text) "")
-            (printf "   stderr: ~a\n" (string-trim stderr-text)))
-          (printf "\n")])])))
-
-;; ============================================================
 ;; Batch test execution with shared prelude
 ;; ============================================================
 ;;
@@ -708,9 +654,6 @@
                (eprintf "⚠ .pnet generation left no stamp (generation may have failed); workers will re-elaborate the prelude from source\n")))))]
     [else
      (putenv "PROLOGOS_PNET_CACHE" "0")])
-
-  ;; Check PRELUDE manifest against namespace.rkt (catch drift early)
-  (check-prelude-drift! project-root)
 
   ;; PM Track 10C: Work-stealing dispatch with LPT scheduling.
   ;; Sort files by historical wall time (heaviest first) for optimal
