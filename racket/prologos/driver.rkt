@@ -2517,12 +2517,25 @@
         (and (surf-defn? a) (surf-defn? b))
         (and (surf-defn-multi? a) (surf-defn-multi? b))))
 
+  ;; A line number is a MATCH KEY only if it is a real source line. `#f` was
+  ;; already excluded; 0 was not, and 0 is the project's unknown-location
+  ;; sentinel — `stx->loc` folds a missing `syntax-line` to 0, and
+  ;; `srcloc-unknown` is `(srcloc … 0 0 0)`. So every located-nowhere surf on
+  ;; one spine matched every located-nowhere surf on the other.
+  ;;
+  ;; That is not hypothetical: a bare top-level `[]` produces a preparse
+  ;; parse-error at line 0, the tree spine routinely carries one line-0 surf,
+  ;; and the two silently merged — the `[]` command adopted a LATER command's
+  ;; result, that command's result appeared twice, and the "Unexpected datum:
+  ;; ()" error that fires when `[]` stands alone never fired. Zero errors
+  ;; reported, wrong answers returned.
+  (define (real-line? l) (and (exact-integer? l) (> l 0)))
   ;; Build source-line → tree-surf map (non-errors only)
   (define tree-by-line
     (for/hasheq ([s (in-list tree-surfs)]
                  #:when (not (prologos-error? s)))
       (define line (surf-source-line s))
-      (if line (values line s) (values (gensym) s))))  ;; gensym for non-matchable
+      (if (real-line? line) (values line s) (values (gensym) s))))  ;; gensym for non-matchable
 
   ;; Per-form merge function: given preparse's surf and tree parser's surf (or #f),
   ;; resolve which to use. This IS the cell merge function — both pipelines write,
@@ -2581,11 +2594,11 @@
     (cond
       [(prologos-error? s)
        (define line (loc->line (prologos-error-srcloc s)))
-       (define tree-match (and line (hash-ref tree-by-line line #f)))
+       (define tree-match (and (real-line? line) (hash-ref tree-by-line line #f)))
        (or tree-match s)]
       [else
        (define line (surf-source-line s))
-       (define tree-match (and line (hash-ref tree-by-line line #f)))
+       (define tree-match (and (real-line? line) (hash-ref tree-by-line line #f)))
        (merge-form s tree-match)])))
 
 ;; PPN Track 3 Phase 4: Cell pipeline runs alongside merge.

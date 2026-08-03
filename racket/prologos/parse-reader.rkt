@@ -2521,11 +2521,26 @@
 (define (mixfix-close? ct)
   (eq? ct 'mixfix-rparen))
 
-(define (wrap-stx-list elems source)
-  (if (null? elems)
-      (make-stx '() source 0 0 0 0)
-      (let-values ([(line col pos span) (stx-range (car elems) (last-stx elems))])
-        (make-stx elems source line col pos span))))
+;; `#:at` supplies a location for the EMPTY case, where there are no elements to
+;; take a range from. Without it an empty group is located nowhere, and "nowhere"
+;; is not inert: `make-stx` maps 0 to #f, `stx-range` then propagates #f up to the
+;; enclosing form, and a downstream consumer that keys on line number sees the
+;; project's unknown-location sentinel rather than a line. A bare top-level `[]`
+;; rode that all the way into `merge-preparse-and-tree-parser`, whose line-keyed
+;; merge matched it against an unrelated command's surf.
+;;
+;; The opening bracket's own token is the natural answer — an empty group is at
+;; the bracket. Callers that have it should pass it.
+(define (wrap-stx-list elems source #:at [at-token #f] #:source-str [source-str #f])
+  (cond
+    [(pair? elems)
+     (let-values ([(line col pos span) (stx-range (car elems) (last-stx elems))])
+       (make-stx elems source line col pos span))]
+    [(and at-token source-str)
+     (define start (token-entry-start-pos at-token))
+     (define-values (line col) (pos->line-col source-str start))
+     (make-stx '() source line col (+ start 1) 0)]
+    [else (make-stx '() source 0 0 0 0)]))
 
 ;; Convert a parse-tree-node to syntax elements.
 ;; Uses flatten-then-group on the FULL token sequence (depth-first)
@@ -3321,7 +3336,8 @@
                    ;; invisible to every existing match arm; the sexp reader
                    ;; (native (…) reading) never attaches it, so sexp
                    ;; application is untouched by construction.
-                   (let ([grp (wrap-stx-list inner source)])
+                   (let ([grp (wrap-stx-list inner source
+                                             #:at item #:source-str source-str)])
                      (loop next-i
                            (cons (if (eq? type 'lparen)
                                      (syntax-property grp 'prologos-paren-origin #t)

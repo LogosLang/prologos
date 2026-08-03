@@ -640,6 +640,18 @@
     [(pair? d)
      (parse-list d loc stx)]
 
+    ;; Empty group → nil. The tree spine has always said this
+    ;; (`parse-bracket-group-tree`: "empty brackets = nil"), and `def x := []`
+    ;; is tested as the empty list. THIS spine said "Unexpected datum: ()", and
+    ;; the disagreement was invisible only because of a second bug: an empty
+    ;; group carried no source line, the merge treated its unknown-location
+    ;; sentinel as a line, and the error surf got swapped for whatever other
+    ;; located-nowhere surf the tree spine happened to hold. That accident was
+    ;; doing the recovery. With the merge key tightened, the two spines have to
+    ;; actually agree — so they do.
+    [(null? d)
+     (surf-nil loc)]
+
     [else
      (parse-error loc (format "Unexpected datum: ~a" d) d)]))
 

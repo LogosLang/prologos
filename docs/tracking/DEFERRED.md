@@ -610,37 +610,53 @@ file SURVIVES — 2 of its 3 cases fail against the previous commit.
 **Residual, smaller and separate (filed below).** `[]` no longer aborts, but it
 does not error consistently either.
 
-## 🐛 DEFECT — a bare top-level `[]` yields the WRONG command's result when another form follows (found 2026-08-02, splitting out of the abort fix above)
+## ✅ FIXED 2026-08-03 — a bare top-level `[]` yielded the WRONG command's result when another form followed (found 2026-08-02, splitting out of the abort fix above)
 
-The reader is not at fault — it produces exactly `(())` for the `[]` line in
-both cases below. Downstream diverges:
+The filing was accurate and its two guesses were both wrong, in a way worth
+recording. It said "the reader is not at fault" and pointed at
+`preparse-expand-all`. The reader WAS at fault, `preparse-expand-all` was not
+involved, and the entry's control case — `[]` alone erroring, annotated
+"(correct)" — was the third bug rather than the baseline.
 
-```
-ns p
-[]                       ;; → ERROR: Unexpected datum: ()   (correct)
-```
+**Three faults, each masking the others.**
 
-```
-ns p
-def a := 1
-[]
-def b := 2
-def c := 3
-;; → 4 results for 5 commands, and out of order:
-;;    "a : Int defined."  "c : Int defined."  "b : Int defined."  "c : Int defined."
-```
+1. **The reader located an empty group nowhere.** `wrap-stx-list` had no
+   elements to take a range from and passed 0 for line and column; `make-stx`
+   maps 0 to `#f`; `stx-range` then propagated `#f` up to the enclosing form.
+   The opening bracket's token was sitting in the caller, unused. Fixed with an
+   `#:at` fallback — an empty group is located at its bracket.
 
-So `[]` silently takes the LAST command's result, `c` is reported twice, and
-the error that fires when `[]` stands alone does not fire here. Zero errors
-reported. Silence, not noise — worse than the abort it replaced, though far
-narrower.
+2. **`merge-preparse-and-tree-parser` treated line 0 as a line.** The merge keys
+   the two parse spines against each other BY SOURCE LINE, and 0 is the
+   project's unknown-location sentinel (`srcloc-unknown` is `(srcloc … 0 0 0)`,
+   and `stx->loc` folds a missing `syntax-line` to 0). So every located-nowhere
+   surf on one spine matched every located-nowhere surf on the other — and the
+   tree spine routinely carries one. Fixed with a `real-line?` guard on both
+   the map build and the lookup.
 
-`parse-datum` sends `()` (a non-pair) to `parse-error "Unexpected datum: ()"`,
-and the top-level form is `(())` — a PAIR — so it goes to `parse-list`
-instead. Why that path errors when the form stands alone and not when it does
-not is the thing to find; suspect the preparse pass over the whole form list.
-Start at `preparse-expand-all` (macros.rkt) with the two form lists above,
-which differ only in length.
+3. **The two spines disagreed about what an empty group MEANS.** The tree spine
+   has always said nil (`parse-bracket-group-tree`: "empty brackets = nil") and
+   `def x := []` is tested as the empty list; `parse-datum` said "Unexpected
+   datum: ()". Fault 2 was papering over fault 3 — the error surf got swapped
+   for the tree surf by the very collision that was corrupting everything else,
+   so `def x := []` worked BY ACCIDENT. Tightening the merge key exposed it on
+   the first suite run, which is the useful thing about removing an accident.
+   `parse-datum` now returns `surf-nil` for `'()`, so the spines agree.
+
+**Consequence for the entry's "(correct)" annotation**: a bare `[]` is no
+longer an error, it evaluates to nil — the same thing it means in `def x := []`
+and the same thing the tree spine has always said. The inconsistency was the
+error, not the value.
+
+The defect was also broader than filed: `def y := ()` in a multi-command file
+corrupted results identically (`z` reported twice), so it was every empty
+group anywhere, not just a bare top-level `[]`.
+
+Pinned by `tests/test-empty-group-toplevel.rkt` at all three levels — reader
+location, one-result-per-command-in-order, and both spines agreeing on nil in
+value position. The end-to-end assertion checks COUNT, ORDER and NO-DUPLICATE
+together; asserting only that `a`, `b` and `c` each appear would have passed
+throughout the bug, since they all did — one of them twice.
 
 ## ✅ CLOSED `c38f175a` — `def X :=` + multi-key layout body fails (filed 2026-07-28, fixed 2026-08-02)
 
