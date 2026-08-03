@@ -4685,8 +4685,18 @@
     [(expr-narrow func args target vars)
      (expr-narrow (nf func) (map nf args) (nf target) vars)]
 
-    ;; Foreign function: opaque leaf (already in WHNF)
-    [(expr-foreign-fn _ _ _ _ _ _ _ _) e]
+    ;; Foreign function. NOT a closed leaf: `args` ACCUMULATES whnf'd Prologos
+    ;; argument expressions on the partial-application path
+    ;; (reduction.rkt:2176), so a node reachable under a binder can hold an
+    ;; OPEN term. The comment here used to say "opaque leaf -- no Prologos
+    ;; sub-expressions", asserting an invariant nothing enforced: the
+    ;; `expr-champ` shape from pipeline.md § "Exhaustive Walkers", where the
+    ;; same claim cost silently dropped arguments and variable capture.
+    [(expr-foreign-fn name proc arity args mi mo sm rn)
+     (define args* (map nf args))
+     (if (andmap eq? args args*)
+         e
+         (expr-foreign-fn name proc arity args* mi mo sm rn))]
 
     ;; Union types: normalize components
     [(expr-union l r) (expr-union (nf l) (nf r))]

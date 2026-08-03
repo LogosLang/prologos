@@ -518,8 +518,18 @@
     ;; Unapplied type constructor (HKT) — no metas inside
     [(expr-tycon _) e]
 
-    ;; Foreign function (opaque leaf)
-    [(expr-foreign-fn _ _ _ _ _ _ _ _) e]
+    ;; Foreign function. NOT a closed leaf: `args` ACCUMULATES whnf'd Prologos
+    ;; argument expressions on the partial-application path
+    ;; (reduction.rkt:2176), so a node reachable under a binder can hold an
+    ;; OPEN term. The comment here used to say "opaque leaf -- no Prologos
+    ;; sub-expressions", asserting an invariant nothing enforced: the
+    ;; `expr-champ` shape from pipeline.md § "Exhaustive Walkers", where the
+    ;; same claim cost silently dropped arguments and variable capture.
+    [(expr-foreign-fn name proc arity args mi mo sm rn)
+     (define args* (map (lambda (a) (zonk a)) args))
+     (if (andmap eq? args args*)
+         e
+         (expr-foreign-fn name proc arity args* mi mo sm rn))]
 
     ;; Reduce (pattern matching)
     [(expr-reduce scrut arms structural?)
@@ -1004,8 +1014,18 @@
     ;; Unapplied type constructor (HKT) — no metas inside
     [(expr-tycon _) e]
 
-    ;; Foreign function (opaque leaf)
-    [(expr-foreign-fn _ _ _ _ _ _ _ _) e]
+    ;; Foreign function. NOT a closed leaf: `args` ACCUMULATES whnf'd Prologos
+    ;; argument expressions on the partial-application path
+    ;; (reduction.rkt:2176), so a node reachable under a binder can hold an
+    ;; OPEN term. The comment here used to say "opaque leaf -- no Prologos
+    ;; sub-expressions", asserting an invariant nothing enforced: the
+    ;; `expr-champ` shape from pipeline.md § "Exhaustive Walkers", where the
+    ;; same claim cost silently dropped arguments and variable capture.
+    [(expr-foreign-fn name proc arity args mi mo sm rn)
+     (define args* (map (lambda (a) (zonk-at-depth depth a)) args))
+     (if (andmap eq? args args*)
+         e
+         (expr-foreign-fn name proc arity args* mi mo sm rn))]
 
     ;; Reduce (pattern matching)
     [(expr-reduce scrut arms structural?)
@@ -1480,8 +1500,18 @@
     [(expr-union l r) (expr-union (default-metas l) (default-metas r))]
     ;; Unapplied type constructor (HKT) — no metas inside
     [(expr-tycon _) e]
-    ;; Foreign function (opaque leaf)
-    [(expr-foreign-fn _ _ _ _ _ _ _ _) e]
+    ;; Foreign function. NOT a closed leaf: `args` ACCUMULATES whnf'd Prologos
+    ;; argument expressions on the partial-application path
+    ;; (reduction.rkt:2176), so a node reachable under a binder can hold an
+    ;; OPEN term. The comment here used to say "opaque leaf -- no Prologos
+    ;; sub-expressions", asserting an invariant nothing enforced: the
+    ;; `expr-champ` shape from pipeline.md § "Exhaustive Walkers", where the
+    ;; same claim cost silently dropped arguments and variable capture.
+    [(expr-foreign-fn name proc arity args mi mo sm rn)
+     (define args* (map (lambda (a) (default-metas a)) args))
+     (if (andmap eq? args args*)
+         e
+         (expr-foreign-fn name proc arity args* mi mo sm rn))]
     [(expr-reduce scrut arms structural?)
      (expr-reduce (default-metas scrut)
                   (map (lambda (arm)

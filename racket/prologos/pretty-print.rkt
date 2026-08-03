@@ -1419,7 +1419,14 @@
     [(expr-generic-abs a) (uses-bvar0? a)]
     [(expr-generic-from-int t a) (or (uses-bvar0? t) (uses-bvar0? a))]
     [(expr-generic-from-rat t a) (or (uses-bvar0? t) (uses-bvar0? a))]
-    [(expr-foreign-fn _ _ _ _ _ _ _ _) #f]
+    ;; Foreign function. NOT a closed leaf: `args` ACCUMULATES whnf'd Prologos
+    ;; argument expressions on the partial-application path
+    ;; (reduction.rkt:2176), so a node reachable under a binder can hold an
+    ;; OPEN term. The comment here used to say "opaque leaf -- no Prologos
+    ;; sub-expressions", asserting an invariant nothing enforced: the
+    ;; `expr-champ` shape from pipeline.md § "Exhaustive Walkers", where the
+    ;; same claim cost silently dropped arguments and variable capture.
+    [(expr-foreign-fn _ _ _ args _ _ _ _) (ormap uses-bvar0? args)]
     [(expr-reduce scrut arms _)
      (or (uses-bvar0? scrut)
          (ormap (lambda (arm) (uses-bvar0? (expr-reduce-arm-body arm))) arms))]

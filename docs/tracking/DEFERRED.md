@@ -235,26 +235,23 @@ that commit; item 4 has since closed.
    each other, so this is twin-parity, not drift; fixing it means fixing both.
    Reachable only via the hole-section `whnf` path.
 
-## 🐛 LATENT — `expr-foreign-fn` is treated as a closed leaf by `shift`/`subst` but ACCUMULATES Prologos exprs (found 2026-07-30)
+## ✅ CLOSED `PLACEHOLDER` — `expr-foreign-fn` treated as a closed leaf (filed 2026-07-30, fixed 2026-08-02)
 
-`substitution.rkt`'s `shift` and `subst` both have
-`[(expr-foreign-fn _ _ _ _ _ _ _ _) e]` with the comment *"opaque leaf — no
-Prologos sub-expressions"*. That comment is FALSE: `reduction.rkt`'s partial-
-application arm appends whnf'd argument expressions into the `args` field and
-returns the updated node when arity is not yet reached. So a node reachable
-under a binder could hold an open term that `subst` then refuses to descend.
+The comment *"opaque leaf — no Prologos sub-expressions"* was false in SIX
+walkers, not two: `shift`, `subst`, `nf`, `uses-bvar0?`, and all three of
+`zonk` / `zonk-at-depth` / `default-metas`. `reduction.rkt`'s partial-
+application arm appends whnf'd argument expressions into `args`, so a node
+reachable under a binder can hold an open term.
 
-This is the exact shape `pipeline.md` § "Exhaustive Walkers" documents (the
-`expr-champ` "closed leaf" comment asserting an invariant nothing enforced ⇒
-beta silently drops arguments / `shift` never renumbers ⇒ capture).
+All six now descend `args`, `eq?`-preserving when nothing changed (so the
+GitHub #58 P1 sharing property survives). `tests/test-foreign-fn-walkers.rkt`
+goes at the walkers DIRECTLY — 5 of its 7 cases fail against the previous
+commit, which is the point: the original filing correctly noted the defect is
+not reachable from any source program today, so a behavioural test would have
+passed with the bug in place. That is how it survived to be found by reading.
 
-**Probed, NOT reproducible** at `9c75e046`: a partially-applied 2-ary foreign
-under a lambda (`def g := [fn [x : String] [append x "!"]]`, then `[g "hi"]`),
-and a top-level partial (`def p := [append "pre-"]` then `[p "post"]`), both give
-correct values — the accumulation does not survive to a substitution point in
-practice, because substitution happens on the enclosing `expr-app` before `whnf`
-ever builds the partial. So: a live tripwire, not a live bug. Worth either
-enforcing the invariant or descending `args` in both walkers.
+Kept the tripwire framing: this arms the invariant rather than relying on the
+reduction order that currently hides it.
 
 ## ✅ RULED + SHIPPED — `m0 ⊔ m1`: a linear resource MUST be consumed on every path (2026-07-30)
 

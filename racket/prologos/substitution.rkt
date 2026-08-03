@@ -535,8 +535,18 @@
     ;; Unapplied type constructor (HKT) — no bound variables inside
     [(expr-tycon _) e]
 
-    ;; Foreign function (opaque leaf — no Prologos sub-expressions)
-    [(expr-foreign-fn _ _ _ _ _ _ _ _) e]
+    ;; Foreign function. NOT a closed leaf: `args` ACCUMULATES whnf'd Prologos
+    ;; argument expressions on the partial-application path
+    ;; (reduction.rkt:2176), so a node reachable under a binder can hold an
+    ;; OPEN term. The comment here used to say "opaque leaf -- no Prologos
+    ;; sub-expressions", asserting an invariant nothing enforced: the
+    ;; `expr-champ` shape from pipeline.md § "Exhaustive Walkers", where the
+    ;; same claim cost silently dropped arguments and variable capture.
+    [(expr-foreign-fn name proc arity args mi mo sm rn)
+     (define args* (map (lambda (a) (shift delta cutoff a)) args))
+     (if (andmap eq? args args*)
+         e
+         (expr-foreign-fn name proc arity args* mi mo sm rn))]
 
     ;; Reduce: scrutinee is non-binding, arm bodies have binding-count binders
     [(expr-reduce scrut arms structural?)
@@ -1054,8 +1064,18 @@
     ;; Unapplied type constructor (HKT) — no bound variables inside
     [(expr-tycon _) e]
 
-    ;; Foreign function (opaque leaf — no Prologos sub-expressions)
-    [(expr-foreign-fn _ _ _ _ _ _ _ _) e]
+    ;; Foreign function. NOT a closed leaf: `args` ACCUMULATES whnf'd Prologos
+    ;; argument expressions on the partial-application path
+    ;; (reduction.rkt:2176), so a node reachable under a binder can hold an
+    ;; OPEN term. The comment here used to say "opaque leaf -- no Prologos
+    ;; sub-expressions", asserting an invariant nothing enforced: the
+    ;; `expr-champ` shape from pipeline.md § "Exhaustive Walkers", where the
+    ;; same claim cost silently dropped arguments and variable capture.
+    [(expr-foreign-fn name proc arity args mi mo sm rn)
+     (define args* (map (lambda (a) (subst k s a)) args))
+     (if (andmap eq? args args*)
+         e
+         (expr-foreign-fn name proc arity args* mi mo sm rn))]
 
     ;; Reduce: arm bodies have binding-count binders
     [(expr-reduce scrut arms structural?)
