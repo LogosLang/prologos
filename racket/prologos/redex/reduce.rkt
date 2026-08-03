@@ -63,7 +63,17 @@
         "vhead-vcons")
    (--> (vtail e_t e_n (vcons e_t2 e_n2 e_hd e_tl))
         e_tl
-        "vtail-vcons")))
+        "vtail-vcons")
+   ;; vindex: the two iota rules the kernel gained 2026-08-03 (QTT P5
+   ;; residual 1). The indices force the shape — `i : Fin n` and `v : Vec A n`
+   ;; step in lockstep, so a canonical index always meets a canonical vector.
+   ;; The recursive rule rebuilds at the TAIL's length `e_m`, not the original.
+   (--> (vindex e_t e_n (fzero e_m) (vcons e_t2 e_n2 e_hd e_tl))
+        e_hd
+        "vindex-fzero")
+   (--> (vindex e_t e_n (fsuc e_m e_j) (vcons e_t2 e_n2 e_hd e_tl))
+        (vindex e_t e_m e_j e_tl)
+        "vindex-fsuc")))
 
 ;; ========================================
 ;; WHNF metafunction
@@ -99,6 +109,9 @@
   ;; Vec eliminators on constructors
   [(whnf (vhead e_t e_n (vcons e_t2 e_n2 e_hd e_tl))) (whnf e_hd)]
   [(whnf (vtail e_t e_n (vcons e_t2 e_n2 e_hd e_tl))) (whnf e_tl)]
+  [(whnf (vindex e_t e_n (fzero e_m) (vcons e_t2 e_n2 e_hd e_tl))) (whnf e_hd)]
+  [(whnf (vindex e_t e_n (fsuc e_m e_j) (vcons e_t2 e_n2 e_hd e_tl)))
+   (whnf (vindex e_t e_m e_j e_tl))]
 
   ;; === Head reduction for stuck compound terms ===
   ;; Try reducing the head/scrutinee first; if it changes, retry.
@@ -133,6 +146,14 @@
   [(whnf (vtail e_t e_n e_v))
    (whnf (vtail e_t e_n (whnf e_v)))
    (side-condition (not (equal? (term e_v) (term (whnf e_v)))))]
+  ;; vindex needs BOTH the index and the vector canonical — deliberately NOT
+  ;; the vhead/vtail shape above, which reduces only the vector. Mirrors the
+  ;; kernel's congruence arm; reducing the vector alone would leave a
+  ;; computable index stuck.
+  [(whnf (vindex e_t e_n e_i e_v))
+   (whnf (vindex e_t e_n (whnf e_i) (whnf e_v)))
+   (side-condition (not (and (equal? (term e_i) (term (whnf e_i)))
+                             (equal? (term e_v) (term (whnf e_v))))))]
 
   ;; === Base case: already in WHNF ===
   [(whnf e) e])

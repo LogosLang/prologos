@@ -274,10 +274,37 @@ that commit; item 4 has since closed.
    **Probing this found a larger, verified gap and it is filed below** — the
    same landmine sits under the `expr-generic-*` arithmetic family and two
    other sibling sets. Fixed in the same commit.
-3. **The Redex model has no QTT rules for Vec/Fin** — `redex/qtt.rkt` has
-   grammar/typing/reduction for them but zero usage rules, so P5's seven usage
-   rules ship spec-unbacked. The soundness property stays vacuously true (nothing
-   breaks), which is exactly why this would drift silently.
+3. ✅ **FIXED 2026-08-03 — the Redex model had no QTT rules for Vec/Fin.**
+   All seven are mirrored now: `vnil` / `vcons` / `fzero` / `fsuc` as `checkQ`
+   arms (check-only by necessity — `infer` has no case for any of the four, so
+   without them the conversion fallback delegates to `inferQ`, hits its
+   `tu-error` fallback, and every annotated Vec/Fin term fails as a
+   multiplicity violation), and `vhead` / `vtail` / `vindex` as `inferQ` arms
+   delegating the TYPE to `infer` — the same no-drift twin pattern the kernel
+   uses at those arms.
+
+   `redex/reduce.rkt` also gained `vindex`'s two iota rules plus its congruence
+   rule, since residual 1 (above) had just added them to the kernel and the
+   model would otherwise have drifted the other way in the same session.
+
+   12 new cases in `redex/tests/test-qtt.rkt` (39 total, up from 27). The
+   load-bearing ones assert the DIFFERENCE the rules make rather than just
+   their presence: the same linear variable in `vcons`'s head AND tail reports
+   `mw` and is REJECTED at top level (a join would have said `m1` and permitted
+   the duplication), and `vindex` at position 1 needs the recursive reduction
+   rule to fire — an implementation handling only `fzero` passes position 0.
+
+   ⚠ **Found doing this, and it is the more important half.** The Redex model
+   was NOT BEING RUN AT ALL in this environment: `raco pkg show redex` reported
+   the package absent, and `tools/run-affected-tests.rkt` only scans `tests/`,
+   never `redex/tests/`. No workflow mentions redex either
+   (`grep -rn redex .github/workflows/` is empty). So the model could have
+   drifted arbitrarily far from the kernel with zero signal — which is
+   precisely the failure this residual predicted, one level up from where it
+   predicted it. The 177 model tests pass at HEAD after installing redex
+   locally, so nothing had drifted yet. **Wiring `redex/tests/` into the suite
+   (or into CI) is a dependency decision and is NOT done** — it would put the
+   `redex` package on every contributor's machine. Filed for the owner.
 4. ✅ CLOSED `63dea0b6` — *(was: the J arm drops its base's usage entirely.)*
    Folded into P7.
 5. ✅ **FIXED 2026-08-03 — `expr-foreign-fn`'s type was arity-wrong once `args`

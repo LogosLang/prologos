@@ -205,6 +205,51 @@
              [_ 'tu-error]))]
         [_ 'tu-error]))]
 
+  ;; ---- Vec eliminators (QTT P5's usage rules, mirrored 2026-08-03) ----
+  ;;
+  ;; Usage passes the SUBJECT's usage through unchanged — the projection
+  ;; stance `fst`/`snd` already take above. The discarded part of the vector
+  ;; (the tail for vhead, the head for vtail, every other element for vindex)
+  ;; is weakening, which is invisible to variable-level usage accounting, just
+  ;; as `fst` discarding a pair's second component is.
+  ;;
+  ;; A/n are type-level indices and contribute nothing; for `vindex` the INDEX
+  ;; does contribute, because it is a runtime value (`i : Fin n`), and it is
+  ;; checked rather than inferred for the same reason the kernel checks it.
+  ;;
+  ;; The TYPE is delegated to `infer` — the no-drift twin pattern the kernel
+  ;; uses at these same three arms. These rules compute USAGE.
+
+  [(inferQ Gamma (vhead e_A e_n e_v))
+   ,(let ([ty (term (infer Gamma (vhead e_A e_n e_v)))])
+      (if (equal? ty (term err))
+          'tu-error
+          (let ([r (term (checkQ Gamma e_v (Vec e_A (suc e_n))))])
+            (match r
+              [`(bu #t ,u) (list 'tu ty u)]
+              [_ 'tu-error]))))]
+
+  [(inferQ Gamma (vtail e_A e_n e_v))
+   ,(let ([ty (term (infer Gamma (vtail e_A e_n e_v)))])
+      (if (equal? ty (term err))
+          'tu-error
+          (let ([r (term (checkQ Gamma e_v (Vec e_A (suc e_n))))])
+            (match r
+              [`(bu #t ,u) (list 'tu ty u)]
+              [_ 'tu-error]))))]
+
+  ;; vindex consumes BOTH the index and the vector, so its usage is the SUM,
+  ;; not a passthrough. `add-usage`, not a join: both are read, so both happen.
+  [(inferQ Gamma (vindex e_A e_n e_i e_v))
+   ,(let ([ty (term (infer Gamma (vindex e_A e_n e_i e_v)))])
+      (if (equal? ty (term err))
+          'tu-error
+          (let ([ri (term (checkQ Gamma e_i (Fin e_n)))]
+                [rv (term (checkQ Gamma e_v (Vec e_A e_n)))])
+            (match* (ri rv)
+              [(`(bu #t ,ui) `(bu #t ,uv)) (list 'tu ty (add-usage ui uv))]
+              [(_ _) 'tu-error]))))]
+
   ;; Fallback: cannot infer
   [(inferQ Gamma e)
    ,'tu-error])
@@ -255,6 +300,45 @@
         ;; refl against Eq
         [('refl `(Eq ,_ ,e1 ,e2))
          (list 'bu (equal? #t (term (conv ,e1 ,e2))) (zero-usage n))]
+
+        ;; ---- Vec / Fin constructors (QTT P5's usage rules) ----
+        ;;
+        ;; CHECK arms by necessity, not by preference: `infer` has no case for
+        ;; any of the four, so without them the conversion fallback delegates
+        ;; to `inferQ`, hits its `tu-error` fallback, and every annotated
+        ;; Vec/Fin term fails as a multiplicity violation — a diagnostic naming
+        ;; a subsystem that is working perfectly.
+        ;;
+        ;; The usage split follows the runtime/type-level split in each form,
+        ;; and it is not guesswork: `whnf`'s computation rules DISCARD the type
+        ;; and length fields and consume only head/tail, so the indices are
+        ;; erased and contribute NO usage while head/tail contribute their own.
+
+        ;; vnil(A) : Vec(A, zero) — A is type-level, so no usage at all.
+        [(`(vnil ,_) `(Vec ,_ ,_)) (list 'bu #t (zero-usage n))]
+
+        ;; vcons(A, k, head, tail) — head and tail each consumed ONCE.
+        ;; add-usage, not a join: both are stored, so both happen. This is
+        ;; sequential composition, not alternation, which is what makes a
+        ;; linear value consed into a vector consumed exactly once.
+        [(`(vcons ,a1 ,n1 ,hd ,tl) `(Vec ,_ ,_))
+         (let ([r-hd (term (checkQ Gamma ,hd ,a1))]
+               [r-tl (term (checkQ Gamma ,tl (Vec ,a1 ,n1)))])
+           (match* (r-hd r-tl)
+             [(`(bu #t ,u-hd) `(bu #t ,u-tl))
+              (list 'bu #t (add-usage u-hd u-tl))]
+             [(_ _) (list 'bu #f (zero-usage n))]))]
+
+        ;; fzero(k) : Fin(suc k) — k is the type-level bound; nothing runs.
+        [(`(fzero ,_) `(Fin ,_)) (list 'bu #t (zero-usage n))]
+
+        ;; fsuc(k, i) : Fin(suc k) — `i` is the runtime predecessor, `k` the
+        ;; bound. Mirrors the `suc` arm at the top, which counts its argument.
+        [(`(fsuc ,n1 ,i) `(Fin ,_))
+         (let ([r (term (checkQ Gamma ,i (Fin ,n1)))])
+           (match r
+             [`(bu #t ,u) (list 'bu #t u)]
+             [_ (list 'bu #f (zero-usage n))]))]
 
         ;; Conversion fallback: infer and compare
         [(_ _)

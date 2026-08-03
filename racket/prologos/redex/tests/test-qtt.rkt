@@ -164,6 +164,109 @@
             #t)
 
 ;; ========================================
+;; Vec / Fin usage rules (QTT P5 residual 3)
+;; ========================================
+;;
+;; P5 armed seven usage rules in the kernel and the model had NONE, so they
+;; shipped spec-unbacked. The soundness property stayed vacuously true —
+;; nothing broke — which is exactly why the gap would have drifted silently.
+;;
+;; The vectors below are one-element and two-element Vec Nats. `vnil`/`fzero`
+;; carry only type-level payload, so their usage is zero; `vcons`/`fsuc`
+;; carry runtime payload, so theirs is not.
+
+;; --- constructors: type-level indices contribute NOTHING ---
+
+;; vnil(Nat) : Vec(Nat, zero) in a LINEAR context uses the variable zero times,
+;; so a linear binder is left unconsumed and the top-level check must FAIL.
+;; This is the assertion that distinguishes "zero usage" from "no rule at all":
+;; without the arm the conversion fallback also fails, but for the wrong reason.
+(test-equal (term (checkQ ((Nat m1) ()) (vnil Nat) (Vec Nat zero)))
+            '(bu #t (m0)))
+
+(test-equal (term (checkQ ((Nat m1) ()) (fzero zero) (Fin (suc zero))))
+            '(bu #t (m0)))
+
+;; --- vcons: head and tail are ADDED, not joined ---
+
+;; A linear variable in the head position is consumed exactly once.
+(test-equal (term (checkQ ((Nat m1) ())
+                          (vcons Nat zero (bvar 0) (vnil Nat))
+                          (Vec Nat (suc zero))))
+            '(bu #t (m1)))
+
+;; …and the SAME linear variable in head AND tail is consumed twice, which
+;; `mult-add` reports as mw. This is the sequential-composition claim: a
+;; join would have said m1 and silently permitted the duplication.
+(test-equal (term (checkQ ((Nat m1) ())
+                          (vcons Nat (suc zero) (bvar 0)
+                                 (vcons Nat zero (bvar 0) (vnil Nat)))
+                          (Vec Nat (suc (suc zero)))))
+            '(bu #t (mw)))
+
+;; …so the top-level check REJECTS it: a linear resource used twice.
+(test-equal (checkQ-top '((Nat m1) ())
+                        (term (vcons Nat (suc zero) (bvar 0)
+                                     (vcons Nat zero (bvar 0) (vnil Nat))))
+                        (term (Vec Nat (suc (suc zero)))))
+            #f)
+
+;; …while using it once is accepted.
+(test-equal (checkQ-top '((Nat m1) ())
+                        (term (vcons Nat zero (bvar 0) (vnil Nat)))
+                        (term (Vec Nat (suc zero))))
+            #t)
+
+;; --- fsuc: the predecessor is a RUNTIME value and is counted ---
+
+(test-equal (term (checkQ (((Fin zero) m1) ())
+                          (fsuc zero (bvar 0))
+                          (Fin (suc zero))))
+            '(bu #t (m1)))
+
+;; --- eliminators: usage passes through the subject ---
+
+;; vhead of a vector whose head is a linear variable consumes it once.
+(test-equal (term (inferQ ((Nat m1) ())
+                          (vhead Nat zero
+                                 (ann (vcons Nat zero (bvar 0) (vnil Nat))
+                                      (Vec Nat (suc zero))))))
+            (list 'tu (term Nat) '(m1)))
+
+;; vtail, same subject, same usage — the DISCARDED head is weakening, which is
+;; invisible to variable-level accounting exactly as `fst` discarding a pair's
+;; second component is.
+(test-equal (term (inferQ ((Nat m1) ())
+                          (vtail Nat zero
+                                 (ann (vcons Nat zero (bvar 0) (vnil Nat))
+                                      (Vec Nat (suc zero))))))
+            (list 'tu (term (Vec Nat zero)) '(m1)))
+
+;; vindex ADDS the index's usage to the vector's — both are read, so both
+;; happen. Here the index is closed, so the sum is the vector's alone.
+(test-equal (term (inferQ ((Nat m1) ())
+                          (vindex Nat (suc zero) (fzero zero)
+                                  (ann (vcons Nat zero (bvar 0) (vnil Nat))
+                                       (Vec Nat (suc zero))))))
+            (list 'tu (term Nat) '(m1)))
+
+;; ========================================
+;; Vec / Fin reduction (QTT P5 residual 1 — the kernel's vindex iota rules)
+;; ========================================
+
+(test-equal (term (whnf (vindex Nat (suc zero) (fzero zero)
+                                (vcons Nat zero (suc zero) (vnil Nat)))))
+            (term (suc zero)))
+
+;; The recursive rule, which must fire before the base one can apply. An
+;; implementation handling only `fzero` passes the case above and fails here.
+(test-equal (term (whnf (vindex Nat (suc (suc zero))
+                                (fsuc (suc zero) (fzero zero))
+                                (vcons Nat (suc zero) zero
+                                       (vcons Nat zero (suc zero) (vnil Nat))))))
+            (term (suc zero)))
+
+;; ========================================
 ;; Summary
 ;; ========================================
 (test-results)
