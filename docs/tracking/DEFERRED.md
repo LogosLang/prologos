@@ -1227,8 +1227,19 @@ scheduler variants) are unblocked.
 
 ## Collections — Deferred Items
 
-### Stage I: Transducer Runners for Non-List
-- `into-vec`, `into-set` runners using transducer protocol + transient builders
+### Stage I: Transducer Runners for Non-List — PARTLY STALE (re-probed 2026-08-02)
+
+`into-vec` and `into-set` EXIST — `lib/prologos/book/collection-functions.prologos:235`,
+typed `{A} [LSeq A] -> [PVec A]`. What is blocked is the transducer-protocol
+form of them and pipe fusion, not the runners themselves.
+
+They are also **not reachable**: they live in a `book/` chapter file, and those
+have no `ns` declaration, so importing one fails. That failure used to be a raw
+`ns-context-refer-map: contract violation` — whole file lost, naming a struct
+accessor. It now says what is wrong (`namespace.rkt`, commit below); making the
+book's definitions importable is a separate question about whether `book/` is
+prose or library.
+
 - Pipe fusion for non-List input types
 - **Blocked on**: transient types not exposed at Prologos type level;
   pipe fusion requires elaborator changes

@@ -491,6 +491,30 @@
   (struct-copy ns-context ctx
     [alias-map (hash-set (ns-context-alias-map ctx) alias ns-sym)]))
 
+
+;; The ns-context, or a named error.
+;;
+;; `load-module` parameterizes `current-ns-context` to #f, and a file with NO
+;; `ns` declaration never sets one — the `book/` chapter files are all like
+;; this, being prose rather than importable modules. When such a file processes
+;; its OWN `require`s there is no namespace to add them to, and
+;; `ns-context-add-refer` died on `ns-context-refer-map: contract violation,
+;; given: #f`: a raw Racket error, whole file lost, naming a struct accessor.
+;;
+;; The message names the module being IMPORTED, because that is what this
+;; function is given — but the fault is with the IMPORTER, and it says so. An
+;; earlier draft blamed the imported module and was wrong: the first module to
+;; trip it (`prologos::core::collection-traits`) has an `ns` on line 1.
+(define (require-ns-context ns-sym)
+  (or (current-ns-context)
+      (error 'imports
+             (string-append
+              "cannot import ~a: no namespace is in scope. The IMPORTING file has"
+              " no `ns` declaration — the `book/` chapter files are prose, not"
+              " importable modules, so importing one (or anything that pulls one"
+              " in) fails here.")
+             ns-sym)))
+
 ;; Add specific referred names: (require [prologos::data::nat :refer [add mult]])
 ;; Maps each short name → fully-qualified name
 (define (ns-context-add-refer ctx ns-sym names)
@@ -1025,7 +1049,7 @@
                        "~a does not export ~a (exports: ~a)"
                        ns-sym name exports))))
           (current-ns-context
-           (ns-context-add-refer (current-ns-context) ns-sym names))
+           (ns-context-add-refer (require-ns-context ns-sym) ns-sym names))
           ;; Propagate specs for imported names (needed for implicit arg insertion
           ;; of where-constraint dicts in HKT generic functions)
           (when (and mod (current-spec-propagation-handler))
@@ -1035,13 +1059,13 @@
          ;; :refer-all (WS reader may strip colon: 'refer-all or ':refer-all)
          [(memq (car dirs) '(:refer-all refer-all))
           (current-ns-context
-           (ns-context-add-refer-all (current-ns-context) ns-sym))
+           (ns-context-add-refer-all (require-ns-context ns-sym) ns-sym))
           ;; Also add explicit refers for all exports so they resolve without registry lookup
           (when mod
             (define exports (module-info-exports mod))
             (unless (and (pair? exports) (eq? (car exports) ':all))
               (current-ns-context
-               (ns-context-add-refer (current-ns-context) ns-sym exports)))
+               (ns-context-add-refer (require-ns-context ns-sym) ns-sym exports)))
             ;; Propagate specs for all exported names
             (when (current-spec-propagation-handler)
               ((current-spec-propagation-handler) mod exports)))
