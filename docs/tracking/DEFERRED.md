@@ -1735,27 +1735,47 @@ level, `x{…}` selects and `x.k` accesses". The entry predates that work.
 
 ---
 
-## QTT / Multiplicity
+## 🐛 A higher-order list function on a `def` RHS fails; the same expression as a bare command works (merged + re-probed 2026-08-02)
 
-### QTT multiplicity violation with generic trait-constrained functions in defn bodies
-- Generic `map`/`filter`/`reduce` fail QTT checking due to erased trait dict params
-- **Blocked on**: QTT rework for dict-param handling or propagator integration
-- Workaround: use list-specific functions or keep expressions standalone
-- Source: LSP Tier 4 testing
+This replaces TWO entries that were two symptoms of one defect — "QTT
+multiplicity violation with generic trait-constrained functions in defn bodies"
+and "`+` `-` `*` `/` should work as higher-order generic functions". Both came
+from LSP Tier 4 testing; both are re-probed here.
 
----
+**Sharp repro:**
 
-## Arithmetic / Operator Dispatch
+```
+reduce + 0 '[1 2 3]             ;; => 6 : Int   <- bare command: WORKS
+def a := reduce + 0 '[1 2 3]    ;; => ERROR: Multiplicity violation
+def b := reduce int+ 0 '[1 2 3] ;; => ERROR: Multiplicity violation
+def c := map negate '[1 2]      ;; => ERROR: Expression is not a valid type
+def d := '[1 2 3]               ;; => ok
+def e := + 1 2                  ;; => ok
+```
 
-### `+` `-` `*` `/` should work as higher-order generic functions
-- Currently parser keywords, can't be passed to `map`/`reduce` or use `_` placeholders
-- First-class wrappers (`plus`, `minus`, `times`, `divide`) exist as workarounds
-- Source: LSP Tier 4 testing
+**Not about first-class operators.** `int+` is monomorphic and fails
+identically, so the "`+` is a parser keyword and cannot be passed" framing is
+wrong. First-class operators WORK — `reduce + 0 '[1 2 3]` gives 6 and
+`map negate '[1 2 3]` gives `'[-1 -2 -3]`. Numerics N6e-E2 landed that and
+`prologos-syntax.md` documents it; the old entry's premise is stale.
 
-### Trait-constrained functions can't be passed bare to higher-order functions
-- `reduce plus 0 '[1 2 3 4 5]` fails — elaborator can't auto-insert dict args in HO position
-- **Blocked on**: elaborator enhancement for automatic eta-expansion + dictionary insertion
-- Source: LSP Tier 4 testing
+**Nor is the offered workaround real.** The entry says "First-class wrappers
+(`plus`, `minus`, `times`, `divide`) exist as workarounds". `plus` is UNBOUND —
+`grep -rn "defn plus" lib/` finds nothing.
+
+**The def seam is what breaks it**, and annotating does not help: `def a : Int
+:= reduce + 0 '[1 2 3]` fails the same way, as does `[the Int [reduce ...]]`.
+Inside a `spec` + `defn` the definition is accepted but the CALL leaves a stuck
+unreduced term instead of a value.
+
+**Where to start**: `pipeline.md` § "infer / inferQ Are Twins" — a "Multiplicity
+violation" on a `def` whose body is not a lambda is an un-arm'd node until
+proven otherwise, and the def seam checks in CHECK mode, so the INFER position
+is the one that fails. That is exactly the shape here. All eight
+`expr-generic-*` nodes DO have arms in both `typing-core` and `qtt`, so the gap
+is elsewhere on the application / implicit-instantiation path — `map` failing
+with "Expression is not a valid type" rather than a multiplicity error points at
+implicit type-argument elaboration.
 
 ---
 
