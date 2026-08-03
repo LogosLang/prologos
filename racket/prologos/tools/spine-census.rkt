@@ -41,17 +41,39 @@
 ;;;     not as a parser. The drift classes are impossible here BY CONSTRUCTION,
 ;;;     because there is only one atom table and one head dispatch.
 ;;;
-;;; So `--mode both` is not thoroughness for its own sake; it is the measurement
-;;; that decides whether unifying on the datum path is the architectural win it
-;;; looks like. `merge-preparse-and-tree-parser` already RECEIVES `source-str`
-;;; and merely declines to bind it, so the unification is a one-line change —
-;;; which is exactly why it must be measured before anyone reaches for it.
+;;;   RAW-DATUM mode — as DATUM, plus `current-raw-node` bound to the matching
+;;;     node from the UNGROUPED tree. This is the DESIGNED hook (tree-parser.rkt
+;;;     reads `(or (current-raw-node) node)` for exactly this conversion, and
+;;;     form-cells.rkt sets it) which the merge path simply binds to #f.
+;;;
+;;; MEASURED over all 163 files — agreement where BOTH spines produced a surf:
+;;;
+;;;     LEGACY      428/1454 = 29%   (1026 divergences)
+;;;     DATUM       954/1162 = 82%   ( 208 divergences)
+;;;     RAW-DATUM  1542/1568 = 98%   (  26 divergences)
+;;;
+;;; The DATUM->RAW-DATUM jump has one cause. `tree-node->stx-elements` FLATTENS a
+;;; node and RE-GROUPS it, and the `$…` sentinels are minted by that regrouping
+;;; FROM THE BRACKET TOKENS. On the grouped tree those tokens are already
+;;; consumed into group nodes, and `flatten-with-boundaries` emits only
+;;; indent-open/indent-close around a child — dropping its TAG. So:
+;;;     preparse  (def xs := ($list-literal 1 2 3))
+;;;     tree      (def xs := (1 2 3))
+;;; and `$list-literal`/`$brace-params`/`$vec-literal`/`$angle-type` all collapse
+;;; to bare applications. Feeding the UNGROUPED node fixes every one of them.
+;;;
+;;; ⚠ THE RESIDUAL 26 ARE STRUCTURAL, NOT COSMETIC — I guessed wrong and checked.
+;;; They look like generated-name noise (`$Add-A`, `$Eq-A`, `$Lattice-A`) but are
+;;; not: `preparse: $Add-A` vs `tree: x` is an implicit DICTIONARY BINDER that
+;;; whole-file `preparse-expand-all` inserts from cross-form `spec`/trait context
+;;; and per-form `preparse-expand-single` cannot see. That is the one defect class
+;;; no converter fix reaches; it needs the tree spine to have whole-file expansion
+;;; context. So 98% is the realistic ceiling for the datum path as architected.
 ;;;
 ;;; Usage:
-;;;   racket tools/spine-census.rkt                 — whole tracked corpus
-;;;   racket tools/spine-census.rkt FILE ...        — specific files
-;;;   racket tools/spine-census.rkt --mode legacy   — one mode only
-;;;   racket tools/spine-census.rkt --verbose       — per-divergence detail
+;;;   racket tools/spine-census.rkt FILE ...           — all three modes
+;;;   racket tools/spine-census.rkt --mode raw-datum   — one mode only
+;;;   racket tools/spine-census.rkt --verbose          — per-divergence detail
 ;;;
 
 (require racket/list
@@ -61,6 +83,7 @@
          racket/port
          racket/cmdline
          "../parse-reader.rkt"
+         "../rrb.rkt"
          "../surface-rewrite.rkt"
          "../tree-parser.rkt"
          "../parser.rkt"
@@ -231,13 +254,48 @@
 (define (preparse-surfs src source-name)
   (map parse-toplevel-datum (preparse-expand-all (ws-syntaxes src source-name))))
 
-(define (tree-surfs src datum-mode?)
+;; THREE tree-spine configurations:
+;;   'legacy    — current-source-str "" : the parse-*-tree family (a 2nd PARSER)
+;;   'datum     — current-source-str set: tree-node->stx-form on the GROUPED node
+;;   'raw-datum — as 'datum, but with `current-raw-node` bound to the matching
+;;                node from the UNGROUPED tree.
+;;
+;; ⚠ Why 'raw-datum exists. `tree-node->stx-elements` FLATTENS a node and then
+;; RE-GROUPS it, and the `$…` sentinels (`$list-literal`, `$brace-params`,
+;; `$vec-literal`, `$angle-type`) are minted by that regrouping FROM THE BRACKET
+;; TOKENS. On the grouped tree those tokens have already been consumed into group
+;; nodes, and `flatten-with-boundaries` emits only `indent-open`/`indent-close`
+;; around a child node — it drops the node's TAG. So the sentinel head is lost:
+;;   preparse  (def xs := ($list-literal 1 2 3))
+;;   tree      (def xs := (1 2 3))
+;; `current-raw-node` is the DESIGNED hook for this (tree-parser.rkt uses
+;; `(or (current-raw-node) node)` for exactly this conversion, and form-cells.rkt
+;; sets it from a raw-node map) — but the merge path binds it to #f.
+(define (tree-surfs src mode)
   (register-default-token-patterns!)
   (define pt (read-to-tree src))
-  (define root (rewrite-tree (refine-tag (group-tree-node (parse-tree-root pt)))))
-  (parameterize ([current-source-str (if datum-mode? src "")]
-                 [current-raw-node #f])
-    (parse-top-level-forms-from-tree root)))
+  (define grouped (rewrite-tree (refine-tag (group-tree-node (parse-tree-root pt)))))
+  (cond
+    [(not (eq? mode 'raw-datum))
+     (parameterize ([current-source-str (if (eq? mode 'datum) src "")]
+                    [current-raw-node #f])
+       (parse-top-level-forms-from-tree grouped))]
+    [else
+     ;; line -> ungrouped (refine-tag-only) node, mirroring form-cells.rkt's raw-map
+     (define raw-root (refine-tag (parse-tree-root (read-to-tree src))))
+     (define raw-by-line
+       (for/hash ([c (in-list (rrb-to-list (parse-tree-node-children raw-root)))]
+                  #:when (parse-tree-node? c)
+                  #:when (let ([l (parse-tree-node-srcloc c)])
+                           (and (pair? l) (number? (car l)))))
+         (values (car (parse-tree-node-srcloc c)) c)))
+     (parameterize ([current-source-str src])
+       (for/list ([c (in-list (rrb-to-list (parse-tree-node-children grouped)))])
+         (define line (and (parse-tree-node? c)
+                           (let ([l (parse-tree-node-srcloc c)])
+                             (and (pair? l) (number? (car l)) (car l)))))
+         (parameterize ([current-raw-node (and line (hash-ref raw-by-line line #f))])
+           (parse-form-tree c))))]))
 
 ;; ⚠ PAIRING IS NOT DONE BY SOURCE LINE, and that is a finding, not a shortcut.
 ;;
@@ -290,7 +348,7 @@
                                           (if (exn? e) (exn-message e) (format "~a" e))
                                           "" "" "")))])
     (define ps-all (preparse-surfs src name))
-    (define ts-all (tree-surfs src (eq? mode 'datum)))
+    (define ts-all (tree-surfs src mode))
     ;; eligible = the six kinds `same-form-type?` admits. NOTE: a bare top-level
     ;; expression is NOT one — preparse leaves it as surf-app / surf-num-lit /…,
     ;; never surf-eval — so the merge's reach is much narrower than "six kinds"
@@ -367,19 +425,19 @@
               (row-a r) (row-b r)))))
 
 (module+ main
-  (define mode-sel 'both)
+  (define mode-sel 'all)
   (define verbose? #f)
   (define files
     (command-line
      #:program "spine-census"
      #:once-each
-     [("--mode") m "legacy | datum | both (default both)" (set! mode-sel (string->symbol m))]
+     [("--mode") m "legacy | datum | raw-datum | all (default all)" (set! mode-sel (string->symbol m))]
      [("--verbose") "Show individual divergences" (set! verbose? #t)]
      #:args fs fs))
   (when (null? files)
     (error 'spine-census "pass .prologos files explicitly (the driver script supplies the corpus)"))
   (define targets (map string->path files))
-  (define modes (if (eq? mode-sel 'both) '(legacy datum) (list mode-sel)))
+  (define modes (if (memq mode-sel '(both all)) '(legacy datum raw-datum) (list mode-sel)))
   (define rows
     (append* (for*/list ([m (in-list modes)] [p (in-list targets)])
                (census-file p m verbose?))))
