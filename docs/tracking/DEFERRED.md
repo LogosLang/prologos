@@ -868,20 +868,32 @@ Silent in both cases. **Fix shape**: defer the capture into the lambda, or read
 the cid at fire time. **Constraint**: this is a prerequisite for PM Track 12's
 read-path work — see `2026-07-27_PM_TRACK12_REGISTRY_READ_PATH_NOTE.md` §2.4.
 
-## PM: `.pnet` positional format has no arity assertion (found at GitHub #78 P2, 2026-07-27)
+## ✅ CLOSED `PLACEHOLDER8` — `.pnet` positional format has no arity assertion (filed 2026-07-27, fixed 2026-08-02)
 
-`serialize-module-state` and `deserialize-module-state` exchange a bare
-positional list, and `driver.rkt`'s cache-hit arm is its ONLY consumer (verified
-tree-wide). Nothing asserts the length or names the slots. Appending is safe;
-**inserting** a slot anywhere before the tail would silently shift every later
-position, and because every registry slot is a hasheq the types are
-indistinguishable — the failure would be silent wrong registries, i.e. exactly
-the #78 severity-1/2 class. The `PNET_VERSION` gate is the only thing standing
-between a mis-ordered write and a mis-read.
+Took the "assert the length" option, on BOTH sides, plus the named constant the
+entry implied:
 
-Cheap hardening: assert the deserialized length matches an expected constant,
-or move to a keyed/named representation. Not urgent (one consumer, exact
-version gate), but the blast radius is silent-wrong-answer.
+- `PNET_SLOT_COUNT` (31) sits beside `PNET_VERSION`, exported, with the rule
+  that it moves with the version — a payload of a different shape IS a
+  different format.
+- **The writer asserts before writing**, so a mis-ordered build fails on the
+  machine that made it instead of becoming a shifted read somewhere else.
+- **The reader requires EXACT equality**, replacing a `>= 14` minimum. A short
+  or long payload is now a cache miss rather than a shifted read.
+
+The write side already knew the count; the read side accepted anything from 14
+up. The two disagreed by construction, and nothing said so.
+
+Removed while there: 18 per-slot `(>= (length raw) N)` guards and the 18
+`(if s-X … (hasheq))` fallbacks behind them. Both were unreachable — the
+version gate already required an exact match, and the code said so itself
+("the length guards here are vestigial … but they are kept in the existing
+style"). A second mechanism standing in front of the version gate, hiding what
+it does; keeping it alongside the new assertion would be the same mistake
+twice.
+
+`tests/test-pnet-slot-count.rkt` pins the constant so a change to it is
+deliberate rather than a quiet adjustment to make the new assertion pass.
 
 ## CIU T6: inference on unannotated params (projection + arithmetic) — records ergonomics (hand-testing, 2026-07-18)
 

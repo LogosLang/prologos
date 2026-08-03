@@ -97,6 +97,11 @@
          foreign-module-path->require-spec
          pnet-stale?
          pnet-path-for-module
+         ;; The format's shape, exported so a test can pin it — it was a bare
+         ;; literal inside two functions that disagreed by construction (31 on
+         ;; the write side, a `>= 14` minimum on the read side).
+         PNET_VERSION
+         PNET_SLOT_COUNT
          ;; For testing
          make-serializer
          deep-struct->serializable
@@ -187,6 +192,23 @@
 ;; holding a Set has cross-process hashes baked in, and exact equality is the
 ;; only reliable sweep.
 (define PNET_VERSION 10)
+
+;; How many slots the positional payload has, for THIS version.
+;;
+;; `serialize-module-state` and `deserialize-module-state` exchange a bare
+;; positional list and driver.rkt's cache-hit arm is its only consumer, so
+;; nothing named the slots or checked the count. Appending is safe; INSERTING a
+;; slot anywhere before the tail shifts every later position — and because
+;; almost every slot is a hasheq, the types are indistinguishable. The failure
+;; mode is silent wrong registries, which is the #78 severity class exactly.
+;;
+;; Checked on BOTH sides. The writer asserts before it writes, so a mis-ordered
+;; build fails at the machine that made it rather than at whoever reads the
+;; cache; the reader requires exact equality, so a short or long payload is a
+;; cache miss instead of a shifted read.
+;;
+;; Bump this with PNET_VERSION whenever the payload gains or loses a slot.
+(define PNET_SLOT_COUNT 31)
 
 ;; ============================================================
 ;; Serialization: struct->vector + gensym tagging + foreign-proc
@@ -871,6 +893,12 @@
              s-user-ops             ;; 29
              s-user-precs           ;; 30
              ))
+     ;; The count is part of the format, so a mismatch here is a bug in THIS
+     ;; function, caught at write time rather than becoming a shifted read.
+     (unless (= (length pnet-data) PNET_SLOT_COUNT)
+       (error 'serialize-module-state
+              "payload has ~a slots, PNET_SLOT_COUNT is ~a — a slot was added or removed without bumping the constant (and PNET_VERSION)"
+              (length pnet-data) PNET_SLOT_COUNT))
      (define pnet-path (pnet-path-for-module ns-sym))
      (make-directory* (path-only pnet-path))
      ;; Atomic write: write to temp, then rename
@@ -890,9 +918,12 @@
               (list? raw)
               (= (car raw) PNET_VERSION)
               (equal? (cadr raw) (source-hash-for-module ns-sym source-path))
-              ;; Valid — reconstruct
-              ;; Phase 2e: includes 10 registries (indices 7-16)
-              (and (>= (length raw) 14)  ;; minimum version with 7 registries
+              ;; Valid — reconstruct.
+              ;; EXACT length, not a minimum. The version gate above already
+              ;; requires an exact match, so a payload of this version always
+              ;; has every slot; a `>=` here let a short or mis-ordered file
+              ;; through to a shifted read instead of failing as a cache miss.
+              (and (= (length raw) PNET_SLOT_COUNT)
                    (let ([s-env   (list-ref raw 2)]
                          [s-specs (list-ref raw 3)]
                          [s-locs  (list-ref raw 4)]
@@ -905,27 +936,24 @@
                          [s-coerce  (list-ref raw 12)]
                          [s-cap     (list-ref raw 13)])
                      ;; Phase 2e: also extract trait + impl registries if present
-                     (define s-trait (and (>= (length raw) 17) (list-ref raw 14)))
-                     (define s-impl  (and (>= (length raw) 17) (list-ref raw 15)))
-                     (define s-pimpl (and (>= (length raw) 17) (list-ref raw 16)))
-                     (define s-spec-reg (and (>= (length raw) 18) (list-ref raw 17)))
-                     (define s-tycon-a  (and (>= (length raw) 19) (list-ref raw 18)))
-                     (define s-bundle  (and (>= (length raw) 20) (list-ref raw 19)))
-                     (define s-dparam (and (>= (length raw) 21) (list-ref raw 20)))
-                     (define s-tlaws  (and (>= (length raw) 22) (list-ref raw 21)))
-                     (define s-props  (and (>= (length raw) 23) (list-ref raw 22)))
-                     (define s-funcs  (and (>= (length raw) 24) (list-ref raw 23)))
-                     ;; #78 P2 (v4): indices 24-30. The length guards here are
-                     ;; vestigial — pnet-stale? and the gate above both require
-                     ;; EXACT version equality, so a v4 file always has all 31
-                     ;; slots — but they are kept in the existing style.
-                     (define s-schema    (and (>= (length raw) 25) (list-ref raw 24)))
-                     (define s-selection (and (>= (length raw) 26) (list-ref raw 25)))
-                     (define s-session   (and (>= (length raw) 27) (list-ref raw 26)))
-                     (define s-strategy  (and (>= (length raw) 28) (list-ref raw 27)))
-                     (define s-process   (and (>= (length raw) 29) (list-ref raw 28)))
-                     (define s-userops   (and (>= (length raw) 30) (list-ref raw 29)))
-                     (define s-userprecs (and (>= (length raw) 31) (list-ref raw 30)))
+                     (define s-trait (list-ref raw 14))
+                     (define s-impl  (list-ref raw 15))
+                     (define s-pimpl (list-ref raw 16))
+                     (define s-spec-reg (list-ref raw 17))
+                     (define s-tycon-a  (list-ref raw 18))
+                     (define s-bundle  (list-ref raw 19))
+                     (define s-dparam (list-ref raw 20))
+                     (define s-tlaws  (list-ref raw 21))
+                     (define s-props  (list-ref raw 22))
+                     (define s-funcs  (list-ref raw 23))
+                     ;; #78 P2 (v4): indices 24-30.
+                     (define s-schema    (list-ref raw 24))
+                     (define s-selection (list-ref raw 25))
+                     (define s-session   (list-ref raw 26))
+                     (define s-strategy  (list-ref raw 27))
+                     (define s-process   (list-ref raw 28))
+                     (define s-userops   (list-ref raw 29))
+                     (define s-userprecs (list-ref raw 30))
                      (list (deep-serializable->struct s-env)
                            (deep-serializable->struct s-specs)
                            (deep-serializable->struct s-locs)
@@ -938,28 +966,30 @@
                            (deep-serializable->struct s-sub)
                            (deep-serializable->struct s-coerce)
                            (deep-serializable->struct s-cap)
-                           ;; 3 new registries (or empty if old .pnet format)
-                           (if s-trait (deep-serializable->struct s-trait) (hasheq))
-                           (if s-impl  (deep-serializable->struct s-impl)  (hasheq))
-                           (if s-pimpl (deep-serializable->struct s-pimpl) (hasheq))
-                           (if s-spec-reg (deep-serializable->struct s-spec-reg) (hash))
-                           (if s-tycon-a (deep-serializable->struct s-tycon-a) (hasheq))
-                           (if s-bundle (deep-serializable->struct s-bundle) (hasheq))
-                           (if s-dparam (deep-serializable->struct s-dparam) (hasheq))
-                           (if s-tlaws (deep-serializable->struct s-tlaws) (hasheq))
-                           (if s-props (deep-serializable->struct s-props) (hasheq))
-                           (if s-funcs (deep-serializable->struct s-funcs) (hasheq))
+                           ;; The "or empty if old .pnet format" fallbacks that
+                           ;; used to guard these are gone with the length
+                           ;; guards: an exact-length payload of this version
+                           ;; always has every slot, so the fallbacks were
+                           ;; unreachable — a second mechanism standing in front
+                           ;; of the version gate and hiding what it does.
+                           (deep-serializable->struct s-trait)
+                           (deep-serializable->struct s-impl)
+                           (deep-serializable->struct s-pimpl)
+                           (deep-serializable->struct s-spec-reg)
+                           (deep-serializable->struct s-tycon-a)
+                           (deep-serializable->struct s-bundle)
+                           (deep-serializable->struct s-dparam)
+                           (deep-serializable->struct s-tlaws)
+                           (deep-serializable->struct s-props)
+                           (deep-serializable->struct s-funcs)
                            ;; #78 P2 (v4) — returned positions 21-27.
-                           ;; Defaults match each parameter's own default so a
-                           ;; restore fold preserves key-comparison semantics
-                           ;; (all 7 default to hasheq; none is equal?-keyed).
-                           (if s-schema    (deep-serializable->struct s-schema)    (hasheq))
-                           (if s-selection (deep-serializable->struct s-selection) (hasheq))
-                           (if s-session   (deep-serializable->struct s-session)   (hasheq))
-                           (if s-strategy  (deep-serializable->struct s-strategy)  (hasheq))
-                           (if s-process   (deep-serializable->struct s-process)   (hasheq))
-                           (if s-userops   (deep-serializable->struct s-userops)   (hasheq))
-                           (if s-userprecs (deep-serializable->struct s-userprecs) (hasheq))
+                           (deep-serializable->struct s-schema)
+                           (deep-serializable->struct s-selection)
+                           (deep-serializable->struct s-session)
+                           (deep-serializable->struct s-strategy)
+                           (deep-serializable->struct s-process)
+                           (deep-serializable->struct s-userops)
+                           (deep-serializable->struct s-userprecs)
                            )))))))
 
 ;; ============================================================
