@@ -496,21 +496,39 @@ union-speculation × implicit instantiation. Adjacent to (possibly the same as)
 the existing "Union-type checking hangs the type-checker (BSP non-quiescence)"
 entry below — **triage whether they are one defect** before opening work.
 
-## 🐛 DEFECT — the tilde-number reader diagnostic is a WHOLE-FILE ABORT (found 2026-07-28, the D4.P1 mini-audit)
+## 🔶 PARTIAL `PLACEHOLDER3` — the tilde-number reader diagnostic (filed 2026-07-28; the silence is fixed, the per-command routing is not)
 
-**Repro (probe-verified at `5c171caa`)**: a file containing `def a := 1` /
-`a` / `def b := ~3` / … run via `tools/run-file.rkt` prints ONLY the
-`prologos-reader: ~ approximate literals were removed …` message plus a raw
-Racket `context...:` dump — the earlier commands' output NEVER appears, and
-there is no per-command error count. Structural cause: the classifier `error`
-fires inside `tokenize-char-rrb` while `read-all-syntax-ws`
-(driver.rkt:2226) tokenizes the ENTIRE file before any command runs — so any
-classifier-level raise is a whole-file abort by construction. This is the
-exact silence class the P2 loud-tier work exists to prevent, sitting in the
-reader. **Remedy**: once CIU T6 D4.P1a lands the marker-form + `parse-error`
-value diagnostic seat, migrate the tilde diagnostic onto it (emit a marker,
-convert per-command). Owner of the remedy: D4.X.close triage (or fold into
-P1a if trivially cheap once the seat exists). Recorded in D4 §5.P1.
+**Fixed**: it is a reported error now, not a raw Racket `context...:` dump with
+exit 1 and zero output. Two changes — reader raises carry LINE AND COLUMN
+(`rrb-line-col`, computed from the char buffer, since tokenization runs before
+any syntax object exists), and `process-file-inner` guards the READ step,
+turning a reader raise into one ordinary Prologos error with a normal error
+count.
+
+```
+0: ERROR: reader: prologos-reader: line 4, column 9: `~` approximate literals
+   were removed — bare decimals are Posit32 (3.14); use pNN literals …
+--- 1 errors ---
+```
+
+**Still open**: the file's other commands are still lost, because the raise
+happens during tokenization and there is no token stream left to run them
+from. That needs the reader to EMIT A MARKER instead of raising — the D4.P1a
+`parse-error`-value seat — which also means updating the five test files that
+currently `check-exn` on the raise (test-lseq-literal, test-negative-literals,
+test-num-lit, test-numeric-display ×2). Unchanged remedy, unchanged owner.
+
+**Narrow the guard, not the blast radius**: guarding the whole `surfs`
+computation instead of just the read ALSO swallowed raises from
+`preparse-expand-all` that tests rely on escaping (a numeric `ns` segment).
+Turning a REJECTION into a report is a different decision from turning an
+ABORT into one; only the second was wanted. Caught by the suite, two files.
+
+**Also learned, and pinned as a negative** (`test-reader-robustness.rkt`): the
+sibling raises in `tokenize-string`'s validation loop — negative Nat literal,
+stray `&` — are NOT reachable for the obvious inputs. A per-command check gets
+there first with a real srcloc, which is strictly better. They read like they
+own those cases and they do not.
 
 ## ✅ CLOSED `4efe236c` — bare top-level `[]` hard-aborts the reader (filed 2026-07-28, fixed 2026-08-02)
 

@@ -66,3 +66,44 @@
   (check-true (list? results))
   (check-true (>= (length results) 1)
               "an aborted file returns nothing at all"))
+
+(test-case "reader/a reader raise becomes a reported error, with a position"
+  ;; `~3` (approximate literals, removed) used to escape as a raw Racket
+  ;; message plus a `context...:` dump: exit 1, zero result lines, no error
+  ;; COUNT, and no indication of WHERE. The loudest possible failure presented
+  ;; as the quietest.
+  ;;
+  ;; Tokenization finishes before any command runs, so the commands really are
+  ;; unrecoverable here — what is recoverable is saying so properly.
+  (define results (run-file-lines "ns rt\ndef a := 1\na\ndef b := ~3\nb\n"))
+  (check-true (list? results) "the file aborted instead of reporting")
+  (define text (string-join (map (lambda (r) (format "~a" r)) results) "\n"))
+  (check-true (string-contains? text "approximate literals were removed")
+              (format "got: ~v" results))
+  (check-true (regexp-match? #rx"line 4" text)
+              (format "the diagnostic does not say WHERE: ~v" results)))
+
+(test-case "reader/the tokenizer-validation raises are not the live path"
+  ;; The validation loop in `tokenize-string` raises on a negative Nat literal
+  ;; and on a stray `&`. Both now report line and column — but neither is
+  ;; REACHABLE for the obvious input, because a per-command check gets there
+  ;; first with a real srcloc.
+  ;;
+  ;; Pinned as a negative on purpose. Those raises read like they own these
+  ;; cases; they do not, and the next person to "fix" one should find that out
+  ;; here rather than by editing dead code. The live whole-file raiser is the
+  ;; tilde TOKEN PATTERN (above), which fires during tokenization proper.
+  (define bad-nat (run-file-lines "ns rt2\ndef a := 1\ndef b := -3N\n"))
+  (check-true (list? bad-nat))
+  (check-true (string-contains? (format "~a" bad-nat)
+                                "N suffix requires a non-negative integer")
+              (format "got: ~v" bad-nat))
+  (check-true (string-contains? (format "~a" bad-nat) "a : Int defined.")
+              (format "the earlier command was lost: ~v" bad-nat))
+
+  (define stray-amp (run-file-lines "ns rt3\ndef a := 1\n&\n"))
+  (check-true (list? stray-amp))
+  (check-true (string-contains? (format "~a" stray-amp) "Unbound variable")
+              (format "got: ~v" stray-amp))
+  (check-true (string-contains? (format "~a" stray-amp) "a : Int defined.")
+              (format "the earlier command was lost: ~v" stray-amp)))

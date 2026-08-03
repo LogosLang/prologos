@@ -189,6 +189,23 @@
   #:transparent)
 
 ;; A registered token pattern
+
+;; Line (1-based) and column (0-based) of a character offset in the char buffer.
+;;
+;; For diagnostics raised DURING TOKENIZATION. Those run before any syntax
+;; object exists, so there is no other way for them to say WHERE — and a reader
+;; raise takes the whole file with it, which makes "where" the only thing the
+;; reader can still offer. Every one of them used to report a bare message and
+;; a Racket `context...:` dump.
+;;
+;; O(pos), which is fine on a path that is about to abort.
+(define (rrb-line-col rrb pos)
+  (let loop ([i 0] [line 1] [col 0])
+    (cond
+      [(or (>= i pos) (>= i (rrb-size rrb))) (values line col)]
+      [(char=? (rrb-get rrb i) #\newline) (loop (add1 i) (add1 line) 0)]
+      [else (loop (add1 i) line (add1 col))])))
+
 (struct token-pattern
   (name        ;; symbol: pattern identifier
    recognizer  ;; (string pos) → match-length | #f
@@ -1288,8 +1305,10 @@
   (register-token-pattern!
    (token-pattern 'tilde-number (lambda (rrb pos) (recognize-removed-tilde-number rrb pos))
                   (lambda (s p l)
+                    (define-values (line col) (rrb-line-col s p))
                     (error 'prologos-reader
-                           "`~~` approximate literals were removed — bare decimals are Posit32 (3.14); use pNN literals for other widths (3.14p16, or 3.14p for Posit64)"))
+                           "line ~a, column ~a: `~~` approximate literals were removed — bare decimals are Posit32 (3.14); use pNN literals for other widths (3.14p16, or 3.14p for Posit64)"
+                           line col))
                   86))
   ;; Backtick and comma (quasiquote/unquote)
   (register-token-pattern!
@@ -2206,10 +2225,15 @@
     (define entry (rrb-get disamb-rrb i))
     (define type (set-first (token-entry-types entry)))
     (define lexeme (token-entry-lexeme entry))
+    ;; Every raise in this loop reports line and column. They abort the whole
+    ;; file (tokenization completes before any command runs), so the position
+    ;; is the only thing they can still tell the reader.
+    (define-values (err-line err-col) (rrb-line-col char-rrb (token-entry-start-pos entry)))
     ;; Reject negative Nats (-3N)
     (when (and (eq? type 'nat-literal)
                (string-contains? lexeme "-"))
-      (error 'tokenize-string "Negative Nat literal not allowed: ~a" lexeme))
+      (error 'tokenize-string "line ~a, column ~a: Negative Nat literal not allowed: ~a"
+             err-line err-col lexeme))
     ;; (N6c) Reject stray ~ with a migration hint: `~N` approximate literals
     ;; were removed (`~[` LSeq is tokenized earlier and never reaches here).
     (when (and (eq? type 'symbol)
@@ -2219,10 +2243,12 @@
                         (let ([c (string-ref lexeme 1)])
                           (or (char-numeric? c) (char=? c #\-))))))
       (error 'prologos-reader
-             "`~~` approximate literals were removed — bare decimals are Posit32 (3.14); use pNN literals for other widths (3.14p16, or 3.14p for Posit64)"))
+             "line ~a, column ~a: `~~` approximate literals were removed — bare decimals are Posit32 (3.14); use pNN literals for other widths (3.14p16, or 3.14p for Posit64)"
+             err-line err-col))
     ;; Reject standalone & (must use &> for rule clauses)
     (when (and (eq? type 'symbol) (equal? lexeme "&"))
-      (error 'prologos-reader "Unexpected & — use &> for rule clauses"))
+      (error 'prologos-reader "line ~a, column ~a: Unexpected & — use &> for rule clauses"
+             err-line err-col))
     ;; Reject standalone . (must use .name for dot-access)
     (when (and (eq? type 'symbol) (equal? lexeme "."))
       (error 'prologos-reader "Unexpected character: .")))

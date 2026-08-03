@@ -2722,6 +2722,22 @@
   (define ws? (regexp-match? #rx"\\.prologos$" path-str))
   ;; PPN Track 2B Phase 2: WS files use tree parser merge.
   ;; .rkt sexp files use original port-based reading (D.3 F3: minimum blast radius).
+  ;; A raise from the READER is a whole-file abort by construction: tokenizing
+  ;; and grouping finish before any command runs. Uncaught, it escaped as a raw
+  ;; Racket message plus a `context...:` dump, with exit 1, no result lines and
+  ;; no error COUNT — the loudest possible failure presented as the quietest.
+  ;;
+  ;; Caught here it becomes one ordinary Prologos error, reported through the
+  ;; same channel as everything else. The reader's own raises now carry line and
+  ;; column, so the message says where.
+  ;;
+  ;; This does NOT make the failure per-command — every command in the file is
+  ;; still lost, because there is no token stream to run them from. That needs
+  ;; the reader to emit a marker instead of raising, and is tracked separately.
+  (define (reader-failure-surf e)
+    (list (parse-error (srcloc path-str 0 0 0)
+                       (format "reader: ~a" (exn-message e))
+                       #f)))
   (define surfs
     (cond
       [ws?
@@ -2731,10 +2747,22 @@
        (define file-port (open-input-file path))
        (define str (port->string file-port))
        (close-input-port file-port)
-       (define raw-stxs (read-all-syntax-ws (open-input-string str) path-str))
-       (define expanded-stxs (preparse-expand-all raw-stxs))
-       (define preparse-surfs (map parse-toplevel-datum expanded-stxs))
-       (merge-preparse-and-tree-parser str preparse-surfs)]
+       ;; ONLY the read is guarded, and deliberately so. Wrapping the whole
+       ;; `surfs` computation also swallowed raises from `preparse-expand-all`
+       ;; that callers rely on escaping (a numeric `ns` segment, for one) —
+       ;; turning a REJECTION into a report is a different decision from
+       ;; turning an ABORT into one, and only the second is wanted here.
+       (define raw-stxs
+         (with-handlers ([exn:fail? (lambda (e) (cons 'reader-failed e))])
+           (read-all-syntax-ws (open-input-string str) path-str)))
+       (cond
+         ;; A list of syntax objects can never have this head.
+         [(and (pair? raw-stxs) (eq? (car raw-stxs) 'reader-failed))
+          (reader-failure-surf (cdr raw-stxs))]
+         [else
+          (define expanded-stxs (preparse-expand-all raw-stxs))
+          (define preparse-surfs (map parse-toplevel-datum expanded-stxs))
+          (merge-preparse-and-tree-parser str preparse-surfs)])]
       [else
        ;; .rkt sexp path: UNCHANGED
        (define port (open-input-file path))
