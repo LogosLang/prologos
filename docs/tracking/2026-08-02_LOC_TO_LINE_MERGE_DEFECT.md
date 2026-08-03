@@ -1,7 +1,8 @@
 # `loc->line` mis-extracts the line for tree surfs — the dual-spine merge is defused by a one-line defect
 
 **Filed** 2026-08-02 at the CIU T6 D4.P4c-4 mini-audit · **Status** ✅ **RESOLVED
-2026-08-02** (`d4e32398`) — but **not the way this note proposed**; see [§0](#outcome) ·
+2026-08-02** (`d4e32398`, `8f437a5c`, `385d3ec1`) — but **not the way this note
+proposed**; see [§0](#outcome) ·
 **Not** CIU T6 work — it is shared parser machinery and its blast radius is the
 whole dual-spine merge.
 
@@ -54,17 +55,24 @@ real key, `0`, bound to the file's last non-error tree surf.
   literals. §5 step 2 anticipated exactly this: "the tree spine's arms have gone
   stale." They have — precisely *because* they never ran.
 
-### The resolution shipped (`d4e32398`)
+### The resolution shipped (`d4e32398` → `8f437a5c` → `385d3ec1`)
 
-The measurement picks none of §5 step 4's options cleanly, so: **make the defusal
-deliberate at the key.** A tree-shaped srcloc yields `#f`, and `tree-by-line`'s
-already-present `(gensym)` non-matchable branch takes it. Preparse stays
-authoritative — which is what already happens, now for a **stated reason** rather
-than a broken `cond`.
+The measurement picks none of §5 step 4's options cleanly. The landing arrived in
+three steps, each correcting the one before — the sequence is the record:
 
-Option 2 (flip `[else tree-surf]` → `preparse-surf`) was **not** taken: it inverts
-a documented design decision *and* would leave the **unguarded** error-recovery
-path enabled while disabling the guarded one — backwards.
+- **`d4e32398`** — make the defusal deliberate **at the key**: a tree-shaped
+  srcloc yields `#f`. Correct behaviour, wrong home (see below).
+- **`8f437a5c`** — close the **string-mode hole** in that fix (the
+  `process-string-ws` path carries a srcloc *struct with line 0*, which is truthy,
+  so the list arm never fired there), and **pin the invariant with a test** — the
+  first commit shipped +0 tests against this project's own rule.
+- **`385d3ec1`** — move the spine guard to an **admission gate**, splitting the
+  identity-key rule from the parse-fitness claim.
+
+Option 2 (flip `[else tree-surf]` → `preparse-surf`) was **not** taken, and the
+reason sharpened on inspection: it would leave the **unguarded** error-recovery
+path enabled while disabling the guarded one, and it makes `merge-form` a constant
+function. See the guard's-home section below.
 
 **Gates.** Suite **9,799 tests / 479 files / 0 failures** (baseline). Corpus A/C
 over all 163 files: total errors **359 = 359**, **no file changed its error
@@ -137,29 +145,56 @@ the LEGACY `parse-*-tree` branch while the **string** path (REPL/LSP/tests) take
 `parse-eval-tree-for-cell` — **the two pipelines run different parsers.** Adjudicate
 that before any spine revival; it decides which parser the merge would trust.
 
-### ⚠ The strongest criticism of the fix as shipped — recorded, not resolved
+### ✅ The guard's home — criticism upheld, and acted on (`385d3ec1`)
 
-The adversarial synthesis argues the guard is in the **wrong place**: defusing at
+The adversarial synthesis argued the guard was in the **wrong place**: defusing at
 `loc->line` leaves *a loaded gun*, because emitting a real srcloc struct from
 `item-srcloc` is a change **three downstream consumers legitimately want**, and the
-next person who makes it silently re-arms 694 form-swaps across five broken form
-kinds. Its recommendation is to invert `[else tree-surf]` → `preparse-surf` as well,
-so the safety is a property of the **merge** rather than of an srcloc accident.
+next person who makes it silently re-arms 694 form-swaps. **Upheld** — and the
+synthesis's own counter-argument does *not* survive the measurement: it said
+inverting would leave the spine "permanently unexercised, which is what rotted
+it," but the spine has **never** been exercised (0 wins ever), so that cost is
+already fully paid.
 
-That is a fair criticism and the reasoning is sound. It was **not** taken here
-because §5 step 4 explicitly reserves that inversion as an owner ruling, and
-because the mitigation is currently a comment at exactly the site that would re-arm
-it (`item-srcloc`). **If the owner rules for inversion, the change is one line.**
+**The root of the confusion: two propositions were sharing one `cond`.**
 
-The synthesis's own counter-argument is worth carrying: inverting `[else]` makes
-the tree spine *permanently* unexercised, which is the very mechanism that rotted
-it — and the merge then costs a full second parse of every file for nothing. Its
-preferred end state is a **differential oracle** (`pipeline.md` § "Exhaustive
-Walkers"): assert `tree-surf ≡ preparse-surf` over the corpus, fail the build on
-divergence, and admit tree surfs only where equivalence is proven — the allowlist
-growing as arms are repaired. That instrument would have caught all fourteen
-defects *before* the key was ever touched. It does not exist yet, so there is
-nothing to gate on today.
+1. *An unknown position is not an identity.* A hygiene rule about identity keys —
+   true regardless of the tree spine, true if it is deleted, true if it is
+   commissioned tomorrow. **Stays in `loc->line`**, now stated as its own rule and
+   applied uniformly to all three srcloc shapes.
+2. *The tree spine's output is not fit to win.* A claim about **parse fitness**,
+   with 14 measured defects behind it. Position-knowledge was only ever a **proxy**
+   for it — and proxies drift from their targets, which is exactly why a correct
+   change defeated the guard. **Moved to an admission gate**,
+   `tree-spine-admitted?` (default `#f`), which empties `tree-by-line`.
+
+**Why admission and not `merge-form`'s `[else]`** — the option that looked obvious,
+and the one the synthesis actually recommended. Two disqualifiers: every other arm
+of `merge-form` already returns `preparse-surf`, so flipping `[else]` makes it a
+**constant function** ignoring its second argument; and the **error-recovery branch
+reads `tree-by-line` directly with no guards at all**, so flipping `[else]` would
+leave the tree spine's only live role being its **unguarded** one — the path where
+the QTT bypass rides in. Gating admission covers **both** consumers.
+
+**Both directions verified**, which is the whole point of the move: with the
+`item-srcloc` struct conversion applied `test-dual-spine-merge-key` now **passes**
+(it previously failed); with `tree-spine-admitted?` flipped to `#t` it **fails**.
+
+**The dead-parse cost, measured before proposing removal** (200-rep microbench):
+47 µs (`bool-logic`) / 119 µs (`first-class-paths`) / 227 µs (`ciu-t6-f1-records`) /
+327 µs (`homoiconicity`) / 872 µs (`data/list`), against whole-file wall of
+0.41–4.23 s — **0.003 %–0.09 % of runtime**. Removing `parse-top-level-forms-from-tree`
+is **not** a performance win, so it stays; and that is right anyway, because on the
+string path it routes through `preparse-expand-single`, which may register macros
+as a **side effect**. Skipping it would be a behavioural change dressed as an
+optimisation, for no measurable gain.
+
+**Still open — the instrument.** The gate should become a **set of eligible form
+kinds** rather than a boolean, but not before a **differential oracle**
+(`pipeline.md` § "Exhaustive Walkers") exists to decide membership: assert
+`tree-surf ≡ preparse-surf` corpus-wide and fail the build on divergence. It would
+have caught all fourteen defects before the key was ever touched. Landing the set
+first would repeat CIU T6 D4.P4c-3's "nothing behind the switch."
 
 ### Owner decision remaining
 
