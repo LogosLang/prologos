@@ -901,7 +901,7 @@ entry gates** (round-6 rulings, track doc §2a):
    where the generalization lands; D17's `{}` keyword-commitment is one
    recoverable seed site.
 
-## 🔶 PARTIAL — CIU T6 F1b.5: the deep-walker charter (D27.5, 2026-07-17; items 1, 2, 3 + 4-nested ALL DONE 2026-08-03; only the `:requires` WILDCARD half remains, and it is a syntax ruling)
+## 🔶 PARTIAL — CIU T6 F1b.5: the deep-walker charter (D27.5, 2026-07-17; ALL FOUR ITEMS DONE 2026-08-03. Residue (e)'s AUTO-discharge and the wildcard QUANTIFIER semantics are what remain — both design questions, not gaps)
 
 Validate v1 is ONE-LEVEL with STRUCTURAL depth symmetry (it consumes the same
 field-set enumeration as `schema->row` — never a second one-level implementation).
@@ -1047,6 +1047,23 @@ residue-letter entries — divergent gates/double-count):
      QUANTIFIER, not a path, and needs semantics before it can be enforced. Its
      top hop IS required now (unambiguous, and independent of that ruling).
 
+   ✅ **The wildcard SPELLING now parses in WS mode (2026-08-03).** It did not,
+   and the reason is the reader's six-member dot band discriminating on the
+   SECOND character: `*` belongs to `recognize-broadcast-access`, which needs
+   an identifier AFTER the star (`.*field`). A star at the END of a path
+   matched nothing in the band, so the dot fell through as a bare `|.|` symbol
+   and `reconstitute-path-list` — which collected only `$dot-access` segments —
+   stopped, leaving `(:address |.| *)` for the selection parser to reject.
+   Sexp-green, WS-broken: `test-selection-compose.rkt` exercised the spelling
+   happily through the native reader.
+
+   Two arms, and the second is NOT a variation of the first: `.*` is the
+   bare-dot-then-star pair, while **`.**` arrives as `($broadcast-access *)`**
+   — the star consumed as the marker and the SECOND star as the "field" — so
+   handling only `.*` leaves `.**` erroring. Both are test-pinned. A wildcard
+   segment is TERMINAL (nothing follows `*` in a path), which is what lets the
+   collect loop append-and-stop.
+
    ⚠ **Found while probing this, and FIXED the same day — a failed selection
    declaration left a live selection that validated everything.** Preparse
    pre-registers every selection as a STUB (`macros.rkt`, empty
@@ -1070,10 +1087,11 @@ residue-letter entries — divergent gates/double-count):
    enumerated per the struct-field checklist (4 `selection-entry` calls + the
    `regN!` registration); zero `struct-copy` sites.
 
-   **Still open: the WS tokenization of `.*` itself.** A wildcard `:requires`
-   remains unwritable in a `.prologos` file — it now fails loudly at both ends
-   instead of failing loudly and then silently accepting, but the spelling the
-   docs describe still does not parse in the primary surface.
+   The WS tokenization of `.*` — which was the reachable trigger for this — is
+   FIXED above, so the stub path now needs a different way in (a `:requires`
+   naming a field the parent schema lacks is the one the test uses). The stub
+   guard stays regardless: ANY failing declaration leaves the same stub, and
+   the guard is about the stub, not about the particular way in.
 
 `defr : Schema` fact-row runtime validation rides the same charter (an adapter
 over the positional discharge, parser.rkt `parse-defr-schema-typed`).

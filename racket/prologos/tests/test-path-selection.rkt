@@ -2958,22 +2958,64 @@
   ;; INPUT — so the file reported one error and then carried a selection that
   ;; validated everything, which is worse than the error.
   ;;
-  ;; The reachable trigger is a wildcard `:requires` in a .prologos file: the
-  ;; WS reader splits `:m.*` into `:m` `.` `*`, so it never parses as a path.
+  ;; ⚠ The trigger used to be a wildcard `:requires`, which did not tokenize in
+  ;; WS mode. That is FIXED, so this now uses a path naming a field the parent
+  ;; schema does not have — any failing declaration leaves the same stub, and
+  ;; the point of the test is the stub, not the particular way in.
   (define src (string-append
                "schema Wz\n  :z String\n"
                "schema Wo\n  :m Wz\n  :other String\n"
-               "(selection Wsel from Wo :requires [:m.*])\n"
+               "selection Wsel from Wo :requires [:nosuchfield]\n"
                "[validate Wsel {:other \"o\"}]\n"))
   (define rs (run-ws-pre src))
   ;; the declaration still errors — that part was always true
-  (check-true (ormap (lambda (r) (regexp-match? #rx"expected keyword field path" r)) rs)
-              "the malformed :requires must still be reported")
+  (check-true (ormap (lambda (r) (regexp-match? #rx"nosuchfield" r)) rs)
+              "the bad :requires path must still be reported")
   ;; …and the validate must NOT come back ok
   (check-false (ormap (lambda (r) (regexp-match? #rx"result::ok" r)) rs)
                "THE BUG: validating against the stub accepted any value")
   (check-true (ormap (lambda (r) (regexp-match? #rx"never completed" r)) rs)
               "and it should say why, not just fail"))
+
+;; ---- the WILDCARD `:requires` spelling, now readable in WS mode ------------
+
+(test-case "a wildcard :requires parses in a .prologos file"
+  ;; `:address.*` used to be a hard registration error in WS: the reader's
+  ;; six-member dot band discriminates on the SECOND character and `*` belongs
+  ;; to broadcast-access, which needs an identifier after the star. A star at
+  ;; the END of a path matched nothing, so the dot fell through as a bare `|.|`
+  ;; and the selection parser reported "expected keyword field path, got '|.|".
+  ;; The spelling worked only under the native sexp reader — sexp-green,
+  ;; WS-broken.
+  (define setup (string-append
+                 "schema Wz2\n  :z String\n  :y Int\n"
+                 "schema Wo2\n  :m Wz2\n  :other String\n"))
+  (define rs (run-ws-pre (string-append setup
+                                        "selection Wc from Wo2 :requires [:m.*]\n"
+                                        "[validate Wc {:m {:z \"v\" :y 1} :other \"o\"}]\n")))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"registered" r)) rs)
+              "the selection must register")
+  (check-true (ormap (lambda (r) (regexp-match? #rx"result::ok" r)) rs))
+  ;; and its TOP HOP is required, which is unambiguous even though the
+  ;; quantifier under it is not yet enforced
+  (check-regexp-match
+   #rx":m prologos::data::reason::missing-required"
+   (run-ws-pre-last (string-append setup
+                                   "selection Wc2 from Wo2 :requires [:m.*]\n"
+                                   "[validate Wc2 {:other \"o\"}]\n"))))
+
+(test-case "`.**` reconstitutes too, and it is NOT the bare-dot shape"
+  ;; `.**` arrives as ($broadcast-access *) — the star consumed as the marker
+  ;; and the SECOND star as the "field" — so it needs its own arm, not the
+  ;; bare-`.` one. Worth its own case: handling only `.*` leaves `.**` erroring.
+  (define rs (run-ws-pre (string-append
+                          "schema Wz3\n  :z String\n"
+                          "schema Wo3\n  :m Wz3\n  :other String\n"
+                          "selection Wd from Wo3 :requires [:m.** :other]\n"
+                          "[validate Wd {:m {:z \"v\"} :other \"o\"}]\n")))
+  (check-false (ormap (lambda (r) (regexp-match? #rx"expected keyword field path" r)) rs)
+               "`.**` must reconstitute, not strand a token")
+  (check-true (ormap (lambda (r) (regexp-match? #rx"result::ok" r)) rs)))
 
 
 ;; ============================================================================

@@ -2873,22 +2873,68 @@
 
 ;; Reconstitute a single vector arg list: each element may be
 ;; a keyword :name, or a sequence (:address ($dot-access zip)) → :address.zip
+;;
+;; 2026-08-03 — WILDCARD segments join the same reconstitution. `:address.*`
+;; does NOT arrive as a `$dot-access`: the reader's six-member dot band
+;; discriminates on the second character, and `*` belongs to
+;; `recognize-broadcast-access`, which requires an identifier AFTER the star
+;; (`.*field`). A star at the end of a path matches nothing in the band, so the
+;; dot falls through as a bare `|.|` symbol and the star follows as its own.
+;; The old collect loop saw neither and stopped, leaving `(:address |.| *)` —
+;; which the selection parser then reported as "expected keyword field path,
+;; got '|.|".
+;;
+;; The consequence was worse than an unusable spelling: preparse had already
+;; pre-registered the selection as a stub, so the file reported that error and
+;; then carried a selection requiring NOTHING (fixed separately the same day).
+;;
+;; Scope is exactly one shape — inside a selection vector arg, immediately
+;; after a keyword-like head, a bare `.` followed by `*` or `**`. Everywhere
+;; else a bare `.` is untouched and still errors as before.
+(define (dot-symbol? x) (and (symbol? x) (eq? x '|.|)))
+(define (wildcard-symbol? x) (and (symbol? x) (memq x '(* **)) #t))
+
 (define (reconstitute-path-list items)
   (let loop ([remaining items] [acc '()])
     (cond
       [(null? remaining) (reverse acc)]
-      ;; A keyword followed by ($dot-access field) chains — reconstitute
+      ;; A keyword followed by ($dot-access field) chains — or by a bare
+      ;; `. *` wildcard pair — reconstitute
       [(and (keyword-like-symbol? (car remaining))
             (pair? (cdr remaining))
             (let ([next (cadr remaining)])
-              (and (pair? next) (eq? (car next) '$dot-access))))
-       ;; Collect all consecutive $dot-access segments
+              (or (and (pair? next) (eq? (car next) '$dot-access))
+                  (and (pair? next) (eq? (car next) '$broadcast-access))
+                  (and (dot-symbol? next)
+                       (pair? (cddr remaining))
+                       (wildcard-symbol? (caddr remaining))))))
+       ;; Collect all consecutive segments, of either shape
        (define base-str (symbol->string (car remaining)))
        (define-values (path-str rest)
          (let collect ([r (cdr remaining)] [segs (list base-str)])
-           (if (and (pair? r) (pair? (car r)) (eq? (caar r) '$dot-access))
-               (collect (cdr r) (append segs (list (symbol->string (cadar r)))))
-               (values (string-join segs ".") r))))
+           (cond
+             [(and (pair? r) (pair? (car r)) (eq? (caar r) '$dot-access))
+              (collect (cdr r) (append segs (list (symbol->string (cadar r)))))]
+             [(and (pair? r) (dot-symbol? (car r))
+                   (pair? (cdr r)) (wildcard-symbol? (cadr r)))
+              ;; a wildcard is TERMINAL — nothing can follow `*` in a path, so
+              ;; this both appends and stops.
+              (values (string-join (append segs (list (symbol->string (cadr r)))) ".")
+                      (cddr r))]
+             ;; `.**` is NOT the bare-dot shape: `recognize-broadcast-access`
+             ;; matches `.` `*` and any ident-continue third char, and `*` is
+             ;; one — so `.**` arrives as `($broadcast-access *)`, the star
+             ;; consumed as the marker and the SECOND star as the "field". The
+             ;; segment is therefore the star plus that field: `**`. (A genuine
+             ;; `.*name` would reconstitute to `*name`, which is not a wildcard
+             ;; and gets the path parser's ordinary unknown-segment error —
+             ;; which is the right outcome for a spelling that means nothing.)
+             [(and (pair? r) (pair? (car r)) (eq? (caar r) '$broadcast-access))
+              (values (string-join
+                       (append segs (list (string-append "*" (symbol->string (cadar r)))))
+                       ".")
+                      (cdr r))]
+             [else (values (string-join segs ".") r)])))
        (loop rest (cons (string->symbol path-str) acc))]
       [else
        (loop (cdr remaining) (cons (car remaining) acc))])))
