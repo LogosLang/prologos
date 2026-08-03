@@ -295,16 +295,34 @@ that commit; item 4 has since closed.
    rule to fire — an implementation handling only `fzero` passes position 0.
 
    ⚠ **Found doing this, and it is the more important half.** The Redex model
-   was NOT BEING RUN AT ALL in this environment: `raco pkg show redex` reported
-   the package absent, and `tools/run-affected-tests.rkt` only scans `tests/`,
-   never `redex/tests/`. No workflow mentions redex either
-   (`grep -rn redex .github/workflows/` is empty). So the model could have
-   drifted arbitrarily far from the kernel with zero signal — which is
-   precisely the failure this residual predicted, one level up from where it
-   predicted it. The 177 model tests pass at HEAD after installing redex
-   locally, so nothing had drifted yet. **Wiring `redex/tests/` into the suite
-   (or into CI) is a dependency decision and is NOT done** — it would put the
-   `redex` package on every contributor's machine. Filed for the owner.
+   was NOT BEING RUN AT ALL: `raco pkg show redex` reported the package absent
+   in the dev container, `tools/run-affected-tests.rkt` discovers tests by
+   scanning `tests/` only so `redex/tests/` was never in the set, and no
+   workflow mentions redex (`grep -rn redex .github/workflows/` is empty). The
+   spec could have drifted arbitrarily far from the kernel with a green suite
+   throughout — precisely the failure this residual predicted, one level up
+   from where it predicted it. Nothing had drifted: all 177 model tests pass at
+   HEAD once redex is installed. But that is luck, not a control.
+
+   **Partly closed the same day** by `tests/test-redex-model.rkt`, which runs
+   the five model files from the ordinary suite (one `test-case` each, 539
+   files / 10448 tests green). Two details that make it a real gate rather than
+   a shape:
+   - **Failure is detected by OUTPUT, not by exception.** Redex's `test-equal`
+     RECORDS a mismatch and `test-results` PRINTS the tally; neither raises, so
+     `raco test` exits 0 on a model failing every case. The wrapper asserts the
+     success shape (`"All N tests passed."`). Verified by planting a failing
+     `test-equal` in `redex/tests/test-subst.rkt` and confirming the wrapper
+     fails with the file, line, actual and expected — then reverting.
+   - It also asserts the model directory was found and holds ≥5 files, so a
+     moved path cannot make the file pass vacuously.
+
+   **STILL OPEN, and it is the load-bearing half:** the wrapper SKIPS (with a
+   stderr banner naming the install command) when the `redex` package is
+   absent, so a green suite still does not PROVE the model was checked. Making
+   it mandatory means pinning `redex` as a project dependency or installing it
+   in CI — a dependency decision, hence the owner's. Until then this is a
+   ratchet, not a gate.
 4. ✅ CLOSED `63dea0b6` — *(was: the J arm drops its base's usage entirely.)*
    Folded into P7.
 5. ✅ **FIXED 2026-08-03 — `expr-foreign-fn`'s type was arity-wrong once `args`
