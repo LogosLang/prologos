@@ -3240,9 +3240,13 @@ goal is to retire whole-file aborts by volume, these come first.
 > [Track 3 § Phase 7 status](2026-04-01_PPN_TRACK3_DESIGN.md#p7-status).
 >
 > Per-item deltas: **1** reduced to the form-cell wiring · **4 RESOLVED by
-> removal** · **6 UNBLOCKED** (the legacy family is now unreachable from
-> production) · **2 / 5 moot for the merge** (no tree leg to feed) though the
-> `parse-form-tree` mode fork itself still exists · **3 / 7 unchanged**.
+> removal** · **6 ⛔ RULED DO-NOT-DELETE 2026-08-03** — reader/parser unification
+> is LHC / PPN 4D multi-track work, not a fix-chip deletion; item 6 now carries the
+> full grounding audit, including the refutation of its own "~1,971 lines / 33
+> functions" figure and of "deletable as a standalone change" · **2 / 5 moot for
+> the merge** (no tree leg to feed) though the `parse-form-tree` mode fork itself
+> still exists, and **5 is COUPLED to 6** (see item 6's abort finding) ·
+> **3 / 7 unchanged**.
 
 Context: `docs/tracking/2026-08-02_LOC_TO_LINE_MERGE_DEFECT.md` §0. The merge key
 was broken three ways; the tree spine has won **0 of 5,171 corpus forms, ever**;
@@ -3378,16 +3382,86 @@ pinned by `tests/test-dual-spine-merge-key.rkt`. These are the residuals.
    path takes the datum conversion (82%). Unadjudicated. It decides which parser
    a commissioned merge would start trusting, so it is upstream of item 1.
 
-6. ⭐ **UNBLOCKED 2026-08-03 (`2d7813ef`) — it is now unreachable from production
-   and deletable as a standalone change.** After the tree leg went,
-   `parse-form-tree`'s only remaining callers are its own internal recursion, its
-   `module+ test` block, `tools/spine-census.rkt` (the instrument — keep it
-   working), and `extract-surfs-from-form-cells` (**zero production callers**).
-   ⚠ Deleting the family therefore also means deciding what happens to
-   `spine-census.rkt`'s legacy mode and to `extract-surfs-from-form-cells` — which
-   is Phase 7's intended surf source, so it must NOT be collaterally deleted.
-   Maintenance win, **not** a speedup: legacy parse measured ~0% of pipeline time.
-   Original entry follows.
+6. ⛔ **DO NOT DELETE — OWNER RULING 2026-08-03. This is LHC / PPN 4D work, not a
+   fix-chip deletion.** The ultimate goal is running **100% on the propagator
+   network** (the Logos Hyperlattice Compiler, toward self-hosting). Unifying the
+   reader/parser onto that stratum is a **larger multi-track effort**, and
+   deleting the tree parser from inside a bug-fix chip would pre-empt it.
+
+   **The supporting measurement, which also dissolves the "delete it, the datum
+   route covers it" argument**: `net-add-propagator` + `elab-add-propagator` count
+   is **0** across all four parse-layer files (`tree-parser.rkt`,
+   `parse-reader.rkt`, `surface-rewrite.rkt`, `form-cells.rkt`). **Both** branches
+   are off-network, so deleting one buys nothing on-network — it just removes the
+   thing PPN 4D is the eventual successor to. (This also settles the apparent
+   conflict with [Track 3 §11's](2026-04-01_PPN_TRACK3_DESIGN.md) "tree-parsing is
+   canonical": §11 described an aspiration the code never acquired, so neither
+   deleting nor keeping the arms advances or retreats from it.)
+
+   <a id="stepb-audit"></a>
+   **A full Stage-4 grounding audit ran before the ruling (`wf_d604bfc7-776`, 6
+   agents / 1.2M tokens, HEAD-pinned, every load-bearing claim R-lens-verified on
+   the main thread). Its findings are banked below because they are the map anyone
+   returning here will need — and because two of them refute this very entry.**
+
+   ⚠ **THIS ENTRY'S OWN NUMBER WAS WRONG, AND IT IS THE DANGEROUS KIND OF WRONG.**
+   "~1,971 lines / 33 functions" is not a measurement of the legacy family: it is
+   `wc -l` of the **whole file** at the filing revision (`1971`, to the digit) and
+   `grep -c '^(define (parse-.*-tree'` over it (`33`, to the digit). That glob
+   **captures `parse-eval-tree-for-cell`** — the datum route any revival needs —
+   and at HEAD the keeper sits 35 lines from a deletable near-twin
+   (`parse-eval-tree-for-cell` :742 KEEP / `parse-eval-tree` :777). **The figure is
+   the sweep that would delete the wrong thing.**
+
+   ⚠ **AND "deletable as a standalone change" IS REFUTED.** The datum route
+   **cannot run** with `current-source-str` unbound: `pos->line-col`
+   (parse-reader.rkt) does `(string-ref str i)` with only an `i >= pos` guard and
+   no length check, so on `""` it RAISES — reproduced. The raise is **unguarded at
+   both levels** (`tree-node->stx-form` is called OUTSIDE the `with-handlers` in
+   `parse-eval-tree-for-cell`; `extract-surfs-from-form-cells`'s verified-tags arm
+   has no handler while its sibling `else` arm does), so the failure mode is a
+   **whole-file ABORT**. On the `process-file` path — which never binds the
+   parameter — the legacy arms are therefore the **only branch that functions**.
+   Items 5 and 6 are **coupled**: deleting the arms without first binding
+   `current-source-str` turns every `.prologos` file into an abort. (5th instance
+   of the unguarded-parameter/whole-file-abort shape in this track.)
+
+   **The real partition** (measured with `read-syntax` + `port-next-location`, not
+   grep): legacy-only arms = **10 fns / 342 lines**; **ungated** expression
+   machinery that fires regardless of `current-source-str` = **34 fns / 915
+   lines**; the datum route = **1 fn / 34 lines**; wholly dead = **6 fns / 49
+   lines**. Which of these is even *eligible* depends on which caller you
+   preserve — `extract-surfs-from-form-cells` is 16-tag-gated, but
+   `parse-top-level-forms-from-tree` (spine-census + the micro-bench) is not.
+
+   **Three further findings, none previously recorded:**
+   - **9 `case` arms are already SHADOWED-DEAD.** Racket `case` is first-match
+     (verified), and session/defproc/defr/solver/subtype/selection/capability/
+     foreign/strategy appear BOTH at `tree-parser.rkt:147-148` and again later —
+     so `parse-session-tree`, `parse-defproc-tree`, `parse-defr-tree` and
+     `parse-solver-tree` are unreachable in **both** modes, and the
+     `capability`/`foreign`/`strategy` error stubs never fire.
+   - **srcloc loss is a Phase 7 revival blocker.** Every surf
+     `extract-surfs-from-form-cells` produces carries `("<unknown>" 0 0 0)` —
+     both arms end in `(datum->syntax #f expanded)`. Also `form-cells.rkt`
+     **mutates** `current-raw-node` rather than parameterizing it, so a file-path
+     revival must bind BOTH parameters or leak across files.
+   - **The 16-symbol tag list is duplicated** with no shared constant
+     (`tree-parser.rkt:147-148` vs `form-cells.rkt`'s `tree-parser-verified-tags`)
+     — verified identical today; silent divergence if either drifts.
+
+   **The suite is BLIND to all of this**: `tree-parser.rkt`'s 26-case
+   `module+ test` block is never collected (the runner enumerates `tests/` only)
+   and no `tests/` file requires `tree-parser.rkt`. A green suite is **zero
+   evidence** here. Also: `tools/spine-census.rkt`'s `--mode` **defaults to `all`,
+   which includes `legacy`** — any future deletion breaks the instrument's default
+   invocation, not an opt-in flag.
+
+   Finally: this entry's "legacy parse measured ~0% of pipeline time" has **no
+   backing measurement anywhere in `docs/`**. It is nonetheless true *a fortiori* —
+   `parse-form-tree` has zero production callers, so legacy parse is 0% **by
+   construction**. Restate it that way; do not cite a measurement that does not
+   exist. Original entry follows.
 
    **The legacy `parse-*-tree` family is ~1,971 lines / 33 functions of DUPLICATED
    parsing** whose 14 classified defects (see the defect note §0) exist *because*

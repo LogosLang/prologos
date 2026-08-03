@@ -172,17 +172,27 @@
        [(brace-group) (parse-brace-group-tree children loc)]
        ;; CIU T6 D4.P1b-ii — `.{ }` mid-path sub-block. P1b-ii makes it LEX and
        ;; GROUP; its SEMANTICS land at P3 (blocks). An explicit error arm is
-       ;; MANDATORY, not cosmetic: the `else` fallthrough at the bottom of this
-       ;; dispatch calls parse-expr-tree SILENTLY for any node with children
-       ;; (always true for a group), and driver.rkt admits tree output whenever
-       ;; it is non-error ∧ same-form-type ∧ same-line — so a missing arm would
-       ;; let a garbage surf-app BEAT preparse's version. ("Unhandled form"
-       ;; below is unreachable from here; it lives in the top-level-form case.)
+       ;; still wanted: the `else` fallthrough at the bottom of this dispatch
+       ;; calls parse-expr-tree SILENTLY for any node with children (always true
+       ;; for a group), so without an arm the tag yields a garbage surf-app.
+       ;; ("Unhandled form" below is unreachable from here; it lives in the
+       ;; top-level-form case.)
+       ;;
+       ;; ⚠ RATIONALE CORRECTED 2026-08-03 (`2d7813ef`). This comment used to end
+       ;; "…and driver.rkt admits tree output whenever it is non-error ∧
+       ;; same-form-type ∧ same-line — so a missing arm would let a garbage
+       ;; surf-app BEAT preparse's version." **There is no longer any tree leg for
+       ;; it to beat**: PPN Track 3 Phase 7's second half deleted `tree-surfs` /
+       ;; `tree-by-line` / `merge-form` from driver.rkt, so nothing in production
+       ;; consumes this dispatch's output at all. The arm still matters — but for
+       ;; the FUTURE consumer (`extract-surfs-from-form-cells`, Phase 7's intended
+       ;; surf source, currently caller-less), not for a merge that no longer
+       ;; exists. Keep the arm; do not carry the old reason forward as if live.
        [(dot-brace-group select-brace-group)
-        ;; D4.P1b-ii/iii. An explicit arm is MANDATORY: the `else` fallthrough
-        ;; calls parse-expr-tree SILENTLY for any node with children, and
-        ;; driver.rkt admits tree output when non-error ∧ same-form-type ∧
-        ;; same-line — so a missing arm lets a garbage surf BEAT preparse's.
+        ;; D4.P1b-ii/iii. An explicit arm is wanted for the same reason as above
+        ;; (the `else` fallthrough calls parse-expr-tree SILENTLY for any node
+        ;; with children) — and see the ⚠ note above: the merge-admission
+        ;; rationale this used to cite was deleted at `2d7813ef`.
         ;; For `select-brace-group` the stakes are higher than for its sibling:
         ;; `brace-group` has a NON-ERROR handler right above, so without this
         ;; arm an adjacent `x{…}` would silently become a MAP LITERAL.
@@ -225,9 +235,23 @@
 
        ;; --- Preparse-consumed forms (remaining stubs) ---
        ;; These are handled by preparse: registration, generation, or specialized
-       ;; desugaring. The tree parser returns explicit errors so the merge's
-       ;; error filter catches them. Without these stubs, the `else` fallthrough
-       ;; would call parse-expr-tree and produce garbage surf-app nodes.
+       ;; desugaring. The stubs return explicit errors so a consumer's error
+       ;; filter catches them; without them the `else` fallthrough would call
+       ;; parse-expr-tree and produce garbage surf-app nodes.
+       ;;
+       ;; ⚠ TWO CORRECTIONS (2026-08-03):
+       ;;  · "so the MERGE's error filter catches them" — the merge's tree leg was
+       ;;    deleted at `2d7813ef`; there is no merge consumer. The intended future
+       ;;    consumer is `extract-surfs-from-form-cells` (form-cells.rkt).
+       ;;  · **NINE of the arms in this dispatch are already SHADOWED-DEAD** and
+       ;;    can never fire, because Racket `case` is FIRST-MATCH and these tags
+       ;;    also appear in the top-level-form arm above (`:147-148`):
+       ;;    session, defproc, defr, solver, subtype, selection, capability,
+       ;;    foreign, strategy. So `capability` / `foreign` / `strategy` below do
+       ;;    NOT error — they take the top arm. Do not "fix" this by reordering:
+       ;;    that is a behavioural change to the parser and belongs to the
+       ;;    reader/parser unification work (LHC / PPN 4D), not here. Recorded in
+       ;;    DEFERRED § "Dual-spine parser merge".
        [(bundle) (parse-error-result loc "bundle: consumed by preparse")]
        [(capability) (parse-error-result loc "capability: consumed by preparse")]
        [(defmacro) (parse-error-result loc "defmacro: consumed by preparse")]
