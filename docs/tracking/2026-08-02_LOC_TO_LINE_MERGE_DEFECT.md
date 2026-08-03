@@ -74,9 +74,12 @@ reason sharpened on inspection: it would leave the **unguarded** error-recovery
 path enabled while disabling the guarded one, and it makes `merge-form` a constant
 function. See the guard's-home section below.
 
-**Gates.** Suite **9,799 tests / 479 files / 0 failures** (baseline). Corpus A/C
-over all 163 files: total errors **359 = 359**, **no file changed its error
-count**. Two deltas, both explained:
+**Gates.** Suite **9,804 tests / 480 files / 0 failures** at `385d3ec1` — the
+baseline was 9,799 / 479, and the delta is exactly the 5 new tests in 1 new file
+(`tests/test-dual-spine-merge-key.rkt`). Corpus over all 163 files, final state vs
+the `ab55a99b` baseline: total errors **359 = 359**, **no file changed its error
+count**, and the two intermediate commits contribute **zero** further drift. Two
+deltas overall, both explained:
 - 11 files differ **only** in generated-name counters (`?meta3125` → `?meta3005`),
   because more entries now take the pre-existing gensym branch.
 - **One** real change — `homoiconicity.prologos` result 16, `Unbound variable` →
