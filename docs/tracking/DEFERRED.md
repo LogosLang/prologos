@@ -2336,7 +2336,7 @@ cases for the POL.8/POL.9 grammar.
 
 ---
 
-## ✅ CLOSED `PLACEHOLDER12` — `current-relation-store` is not threaded into test-support or batch-worker (captured 2026-07-25, fixed 2026-08-02)
+## ✅ CLOSED `790dfa53` — `current-relation-store` is not threaded into test-support or batch-worker (captured 2026-07-25, fixed 2026-08-02)
 
 Threaded into both files the checklist names. The store is an immutable hasheq,
 so re-binding the ambient value per call (test-support) and the post-prelude
