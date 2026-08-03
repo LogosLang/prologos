@@ -868,7 +868,7 @@ Silent in both cases. **Fix shape**: defer the capture into the lambda, or read
 the cid at fire time. **Constraint**: this is a prerequisite for PM Track 12's
 read-path work — see `2026-07-27_PM_TRACK12_REGISTRY_READ_PATH_NOTE.md` §2.4.
 
-## ✅ CLOSED `PLACEHOLDER8` — `.pnet` positional format has no arity assertion (filed 2026-07-27, fixed 2026-08-02)
+## ✅ CLOSED `97c113c7` — `.pnet` positional format has no arity assertion (filed 2026-07-27, fixed 2026-08-02)
 
 Took the "assert the length" option, on BOTH sides, plus the named constant the
 entry implied:
