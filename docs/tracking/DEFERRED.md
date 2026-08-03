@@ -177,7 +177,7 @@ that the SOURCE LOCATION survives — wrapping did not only print
 `#(struct:prologos-error …)`, it replaced the srcloc with `<unknown>:0:0`, so
 the line was lost along with the message.
 
-## ✅ CLOSED `PLACEHOLDER5` — a specific message for a foreign constructor in a match arm (filed 2026-07-31, fixed 2026-08-02)
+## ✅ CLOSED `0da17830` — a specific message for a foreign constructor in a match arm (filed 2026-07-31, fixed 2026-08-02)
 
 Was:
 
