@@ -7583,7 +7583,24 @@
 ;; Parse a single match arm into a match-pattern-arm.
 ;; Match is always arity-1 (single scrutinee), so all pattern forms before ->
 ;; are grouped into a single pattern via parse-single-pattern.
+;; Every guard below RETURNS its error. They used to compute one and throw it
+;; away — `(unless arrow-idx (parse-error …))` evaluates the error, discards the
+;; value, and falls through to `(take cleaned arrow-idx)` with `arrow-idx` = #f.
+;; So `match 5 | 0 111` (no `->`) died on a raw `take: contract violation`:
+;; whole-file abort, zero commands, and a message about `take` rather than the
+;; missing arrow that the code had already diagnosed correctly one line above.
+;;
+;; EIGHT of them, in a function whose immediate neighbour `parse-map-literal`
+;; carries a comment describing this exact defect being fixed there ("It was a
+;; value-discarding `when` that fell through to the loop below and hard-crashed").
+;; Found in one function, left in its sibling.
+;;
+;; An escape rather than restructuring into a cond chain: the guards are spread
+;; through a sequence of interdependent `define`s, and threading them into
+;; nested conds is how a parser acquires a different bug.
 (define (parse-match-pattern-arm arm-stx loc)
+ (let/ec return
+  (define (fail msg) (return (parse-error loc msg #f)))
   (define d (stx->datum arm-stx))
   (define parts
     (cond
@@ -7591,8 +7608,7 @@
       [(list? d) (map (lambda (x) (datum->syntax #f x)) d)]
       [(list? arm-stx) (map (lambda (x) (datum->syntax #f x)) arm-stx)]
       [else #f]))
-  (unless parts
-    (parse-error loc "match arm must be a list" #f))
+  (unless parts (fail "match arm must be a list"))
 
   ;; Skip leading $pipe if present (WS mode)
   (define cleaned
@@ -7606,15 +7622,15 @@
     (for/or ([p (in-list cleaned)] [i (in-naturals)])
       (and (eq? (stx->datum p) '->) i)))
   (unless arrow-idx
-    (parse-error loc "match arm missing -> separator" #f))
+    (fail (string-append
+           "match arm is missing its `->`. Each arm is `| PATTERN -> BODY`; "
+           "write `| 0 -> 111` rather than `| 0 111`.")))
 
   (define pre-arrow (take cleaned arrow-idx))
   (define body-parts (drop cleaned (+ arrow-idx 1)))
 
-  (when (null? pre-arrow)
-    (parse-error loc "match arm missing pattern" #f))
-  (when (null? body-parts)
-    (parse-error loc "match arm missing body after ->" #f))
+  (when (null? pre-arrow) (fail "match arm is missing its pattern, before the `->`"))
+  (when (null? body-parts) (fail "match arm is missing its body, after the `->`"))
 
   ;; Split pre-arrow into pattern forms and optional guard at `when`
   (define-values (pat-forms guard-forms)
@@ -7624,8 +7640,7 @@
           (values (take pre-arrow when-idx) (drop pre-arrow (+ when-idx 1)))
           (values pre-arrow '()))))
 
-  (when (null? pat-forms)
-    (parse-error loc "match arm missing pattern" #f))
+  (when (null? pat-forms) (fail "match arm is missing its pattern, before the `->`"))
 
   ;; Parse guard expression (if present)
   (define guard
@@ -7635,7 +7650,7 @@
                              (datum->syntax #f (map stx->datum guard-forms)
                                             (car guard-forms)))])
           (parse-datum guard-stx))))
-  (when (and guard (prologos-error? guard)) guard)
+  (when (and guard (prologos-error? guard)) (return guard))
 
   ;; Parse body
   (define body-stx
@@ -7646,7 +7661,7 @@
                        (map stx->datum body-parts)
                        (car body-parts))))
   (define body (parse-datum body-stx))
-  (when (prologos-error? body) body)
+  (when (prologos-error? body) (return body))
 
   ;; Parse pattern: match is arity-1, group all forms into one pattern.
   ;; Single form → parse directly via parse-single-pattern.
@@ -7662,9 +7677,9 @@
        (parse-single-pattern
         (datum->syntax #f (map stx->datum pat-forms) (car pat-forms))
         loc)]))
-  (when (prologos-error? pattern) pattern)
+  (when (prologos-error? pattern) (return pattern))
 
-  (match-pattern-arm (list pattern) guard body loc))
+  (match-pattern-arm (list pattern) guard body loc)))
 
 ;; ========================================
 ;; Convenience: parse from string

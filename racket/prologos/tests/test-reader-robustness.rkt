@@ -208,3 +208,43 @@
   (define results (run-file-lines "ns dfn2\ndefn f [n:Nat]\n  [+ n 2N]\n[f 3N]\n"))
   (check-false (ormap prologos-error? results) (format "the advice does not parse: ~v" results))
   (check-true (string-contains? (format "~a" results) "5") (format "got: ~v" results)))
+
+;; ----------------------------------------------------------------
+;; Match arms: a diagnostic that was computed and thrown away
+;; ----------------------------------------------------------------
+;;
+;; `parse-match-pattern-arm` had EIGHT guards of the form
+;;
+;;     (unless arrow-idx (parse-error loc "match arm missing -> separator" #f))
+;;
+;; — which evaluates the error, DISCARDS the value, and falls through. So an
+;; arm without `->` reached `(take cleaned arrow-idx)` with `arrow-idx` = #f and
+;; died on a raw `take: contract violation`: whole-file abort, zero commands,
+;; and a message about `take` while the correct diagnosis sat one line above,
+;; computed and unused.
+;;
+;; Its immediate neighbour `parse-map-literal` carries a comment describing this
+;; exact defect being fixed there. Found in one function, left in its sibling.
+
+(test-case "match/an arm missing its -> is a per-command error naming the arrow"
+  (define results (run-file-lines "ns ma\ndef a := 1\nmatch 5\n  | 0 111\ndef b := 2\n"))
+  (check-true (list? results) "the file aborted instead of reporting")
+  (define text (string-join (map (lambda (r) (format "~a" r)) results) "\n"))
+  (check-true (string-contains? text "->")
+              (format "the message does not name the arrow: ~v" results))
+  (check-false (string-contains? text "take:")
+               (format "still the raw contract violation: ~v" results))
+  (check-true (string-contains? text "a :") (format "command BEFORE lost: ~v" results))
+  (check-true (string-contains? text "b :") (format "command AFTER lost: ~v" results)))
+
+(test-case "match/an arm missing its body is reported too"
+  ;; A sibling guard in the same function, discarded the same way.
+  (define results (run-file-lines "ns ma2\ndef a := 1\nmatch 5\n  | 0 ->\ndef b := 2\n"))
+  (check-true (list? results))
+  (check-true (string-contains? (format "~a" results) "a :")
+              (format "the file aborted: ~v" results)))
+
+(test-case "match/a well-formed match still evaluates"
+  (define results (run-file-lines "ns ma3\ndef r := match 5\n  | 0 -> 111\n  | n -> 222\nr\n"))
+  (check-false (ormap prologos-error? results) (format "expected success: ~v" results))
+  (check-true (string-contains? (format "~a" results) "222") (format "got: ~v" results)))

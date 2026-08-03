@@ -2872,16 +2872,38 @@ F1b sexp-green ≠ WS-correct class). MITIGATION: the wrong message's action
 shape: detect a kw item immediately after a caret-bearing step in
 `segment-select-items` and emit the splitter's message.
 
-### 22. Arrowless match arms raw-crash the reader — pre-existing, the Q_L4 marker-seat class
+### 22. ✅ CLOSED `PLACEHOLDER15` — arrowless match arms raw-crash the reader (fixed 2026-08-02)
 
-`match 5\n  | 0 111` (no `->`) dies with a raw `take: contract violation`
-from `parse-match-pattern-arm` (parser.rkt ~:7392): whole-file abort, zero
-commands output. Verified select-free and pre-existing at HEAD by the P3b
-adjudicator (it was the crash SITE of the P3b BLOCKING finding, but the
-arrowless input class crashes on its own). The fix belongs to the match
-parser (a guided per-command error naming the missing `->`), not to
-selection. Same family as the `.( )` mixfix raises and the tilde abort —
-the marker-seat / POL.4 conversion discipline applied to match arms.
+Not the marker-seat class after all, and simpler than that: the diagnostic was
+already there and was being THROWN AWAY. `parse-match-pattern-arm` had EIGHT
+guards shaped
+
+```racket
+(unless arrow-idx (parse-error loc "match arm missing -> separator" #f))
+```
+
+which evaluates the error, DISCARDS the value, and falls through — so
+`(take cleaned arrow-idx)` ran with `arrow-idx` = #f and died on a raw
+`take: contract violation`. Whole-file abort, zero commands, and a message
+about `take` while the correct diagnosis sat one line above, computed and
+unused.
+
+Its immediate neighbour `parse-map-literal` carries a comment describing this
+EXACT defect being fixed there ("It was a value-discarding `when` that fell
+through to the loop below and hard-crashed"). Found in one function, left in
+its sibling — the same one-member-of-a-family shape as the walker defects.
+
+All eight now return, via an escape (the guards are spread through a sequence
+of interdependent `define`s; threading them into nested conds is how a parser
+acquires a different bug). The arrow message names the fix:
+
+```
+ERROR: match arm is missing its `->`. Each arm is `| PATTERN -> BODY`;
+       write `| 0 -> 111` rather than `| 0 111`.
+```
+
+Per-command, so the commands before and after still run. Pinned, with a
+well-formed `match` alongside.
 
 ### 23. `^_`/`^-_` synth scope: SUBJECT-ROOT preferred over the shipped branch-of-its-block — flip when it next matters (ruled Q_U4, 2026-07-30)
 
