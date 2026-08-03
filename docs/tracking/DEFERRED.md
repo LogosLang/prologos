@@ -650,7 +650,7 @@ not is the thing to find; suspect the preparse pass over the whole form list.
 Start at `preparse-expand-all` (macros.rkt) with the two form lists above,
 which differ only in length.
 
-## ✅ CLOSED `PLACEHOLDER7` — `def X :=` + multi-key layout body fails (filed 2026-07-28, fixed 2026-08-02)
+## ✅ CLOSED `c38f175a` — `def X :=` + multi-key layout body fails (filed 2026-07-28, fixed 2026-08-02)
 
 `expand-def-assign` (macros.rkt) auto-wraps a multi-token RHS as an
 APPLICATION — which is right for `def x := some 42N` and wrong for a layout map
