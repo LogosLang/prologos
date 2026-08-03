@@ -129,8 +129,95 @@
   (check-true (regexp-match? #rx"^110 : Int" after-edit)
               (format "stale cache served the pre-edit answer: ~a" after-edit)))
 
+;; ------------------------------------------------------------------
+;; Phase 4 — the SCHEMA carrier, which is the shape the DEFERRED entry
+;; ("CIU T6: the cross-module schema channel", gap 1) actually names.
+;;
+;; Worth its own phase rather than trusting phases 1-3 to cover it. A schema
+;; does not reach a dependent the way `basev` does: GitHub #78 P2 serializes the
+;; schema registry into the `.pnet` (v4, indices 24-30) and re-registers it on a
+;; cache HIT, and the dependent bakes the schema's `:default` chain into its own
+;; AST at elaboration. So the stale value can be carried by two different
+;; mechanisms here, and "the contents are correct on a hit" (which #78 fixed) is
+;; a separate question from "the hit was legitimate" (which this fixes). The
+;; entry drew exactly that line and left the second half open.
+;;
+;; ⚠ THE MIDDLE MODULE IS NOT DECORATION, and the first draft of this phase
+;; omitted it and PASSED WITH THE FIX DISABLED. If the user file imports the
+;; schema module directly, that module's OWN mtime changed, so
+;; `source-hash-for-module` invalidates its `.pnet` unaided and the phase proves
+;; nothing about dependency staleness. The bake has to happen one module in:
+;; `schmid` imports the schema and commits `:default` into its own AST, so
+;; `schmid.prologos` is untouched by the edit — which is precisely the case the
+;; own-mtime check cannot see. Same three-level shape as phases 1-3, and for the
+;; same reason.
+;; ------------------------------------------------------------------
+
+(define sch-dir (build-path lib-root "prologos" "pnetdep"))
+
+(define (write-schema! port-default)
+  (call-with-output-file (build-path sch-dir "sch.prologos") #:exists 'truncate
+    (lambda (o)
+      (display (string-append
+                "ns prologos::pnetdep::sch\n\n"
+                "schema Cfg\n"
+                "  :host String\n"
+                (format "  :port Int :default ~a\n" port-default))
+               o))))
+
+;; The middle module — this is where the schema's `:default` gets BAKED.
+(call-with-output-file (build-path sch-dir "schmid.prologos") #:exists 'truncate
+  (lambda (o)
+    (display (string-append
+              "ns prologos::pnetdep::schmid\n\n"
+              "imports prologos::pnetdep::sch\n\n"
+              "def baked-port : Int := [map-get (the Cfg {:host \"h\"}) :port]\n")
+             o)))
+
+(define sch-user (build-path lib-root "schuser.prologos"))
+(call-with-output-file sch-user #:exists 'truncate
+  (lambda (o)
+    (display (string-append
+              "ns pnetdepschuser\n\n"
+              "imports prologos::pnetdep::schmid\n\n"
+              "baked-port\n")
+             o)))
+
+(write-schema! 80)
+
+(define (run-sch-user)
+  (install-module-loader!)
+  (reset-lib-source-staleness-cache!)
+  (parameterize ([current-lib-paths (list lib-root)]
+                 [current-module-registry prelude-module-registry]
+                 [current-use-pnet-cache? #t]
+                 [current-pnet-write-enabled? #t])
+    (format "~a" (last (process-file sch-user)))))
+
+(define sch-cold (run-sch-user))
+(define sch-warm (run-sch-user))
+
+(test-case "pnet-dep/phase 4: the schema's :default arrives, and the cache serves it"
+  (check-true (regexp-match? #rx"^80 : Int" sch-cold) (format "got: ~a" sch-cold))
+  (check-equal? sch-warm sch-cold "a warm run must agree — the cache must be live")
+  (check-true (file-exists? (pnet-path-for-module 'prologos::pnetdep::schmid))
+              "the load should have WRITTEN a .pnet for the BAKING module"))
+
+(write-schema! 8080)
+(let* ([pnet (pnet-path-for-module 'prologos::pnetdep::schmid)]
+       [src (build-path sch-dir "sch.prologos")]
+       [t (+ 2 (max (file-or-directory-modify-seconds pnet)
+                    (file-or-directory-modify-seconds src)))])
+  (file-or-directory-modify-seconds src t))
+
+(test-case "pnet-dep/phase 4: editing the DEFINING module's schema is seen (8080)"
+  (define r (run-sch-user))
+  (check-true (regexp-match? #rx"^8080 : Int" r)
+              (format "a stale cache served the pre-edit :default: ~a" r)))
+
 ;; Cleanup — the .pnet files land in the shared cache dir, not the temp lib.
-(for ([m (in-list '(prologos::pnetdep::base prologos::pnetdep::mid))])
+(for ([m (in-list '(prologos::pnetdep::base prologos::pnetdep::mid
+                    prologos::pnetdep::sch prologos::pnetdep::schmid))])
   (define p (pnet-path-for-module m))
   (when (file-exists? p) (delete-file p)))
 (delete-directory/files lib-root #:must-exist? #f)

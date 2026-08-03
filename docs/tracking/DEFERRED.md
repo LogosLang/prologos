@@ -961,10 +961,10 @@ era — gate: the §3b blame-latch citation verified concrete at F1b.5-p0 (else
 re-anchor; an invented placeholder gate is forbidden). s4 does NOT close this
 entry (auto-discharge is the deferred half).
 
-## CIU T6: the cross-module schema channel — staleness + cache-hit registration (probe-found at F1b.5-p0, 2026-07-17)
+## ✅ RESOLVED — CIU T6: the cross-module schema channel (probe-found at F1b.5-p0, 2026-07-17; last gap closed 2026-08-03)
 
-> **TRIAGED 2026-07-27 (GitHub #78 X.close): gaps 2 and 3 are RESOLVED; gap 1
-> remains open.** This entry called its own fix shape correctly ten days early
+> **TRIAGED 2026-07-27 (GitHub #78 X.close): gaps 2 and 3 RESOLVED. Gap 1
+> RESOLVED 2026-08-03 — all three are now closed.** This entry called its own fix shape correctly ten days early
 > — "serialize the schema registry into `.pnet` (the ctor-registry precedent:
 > serialize + cache-hit merge + load-module capture/re-propagation)" is exactly
 > what #78 P2 shipped (`54358a5f`).
@@ -984,13 +984,35 @@ entry (auto-discharge is the deferred half).
 >   `save-macros-registry-snapshot`, and `tools/batch-worker.rkt` save/restores
 >   via it at `:98`/`:223`). The F1b.5-s1 hygiene rider this entry anticipated
 >   did land.
-> - **Gap 1 — STILL OPEN**: `.pnet` validity is still own-source mtime +
->   `driver_rkt.zo` stamp only; no content/dep hashing. A dependency's schema
->   changing still does not invalidate a dependent's cache. #78 P2 makes the
->   *contents* correct on a hit; it does nothing about *when* a hit is
->   legitimate. **Entry gate met** — the "first real cross-module schema
->   consumer" gate was overtaken by #78, so gap 1 is now the sole remaining
->   piece and should be scheduled rather than gated.
+> - **Gap 1 — RESOLVED 2026-08-03.** `pnet-stale?` now also consults
+>   `lib-sources-stale?`: the newest mtime across every `.prologos` under
+>   `current-lib-paths`, compared against the `.pnet`'s own. A dependency's
+>   schema changing DOES invalidate a dependent's cache now. #78 P2 made the
+>   *contents* correct on a hit; this decides *when* a hit is legitimate, which
+>   is the line this entry drew.
+>
+>   **Deliberately blunt, and the bluntness is the design.** It is the newest
+>   mtime across all library sources rather than a per-module dependency set.
+>   The precise alternative — record each module's dep list in its `.pnet` and
+>   walk it — needs the `dep-edges` field re-added WITH a consumer (it was
+>   retired as write-only at PPN 4C Addendum Phase 4B.1). Correct-and-blunt
+>   follows the `driver.zo` precedent already sitting one line above rather than
+>   inventing a second policy; the cost is one cache-regeneration sweep (~3-4 s
+>   for the ~55 prelude modules) and it is paid only when a lib `.prologos` is
+>   actually edited. Memoized per process and **keyed by the lib paths** — a
+>   single unkeyed box answers for the wrong directory set, which turned
+>   `test-pnet-registry-restore`'s intended cache HITS into misses on the first
+>   cut.
+>
+>   Pinned by `tests/test-pnet-dep-staleness.rkt`, phases 1-3 (a `defn` through
+>   a middle module) and phase 4 (this entry's own shape: a schema whose
+>   `:default` is baked into a middle module's AST). Both are three-level
+>   chains, and **that is load-bearing rather than thorough** — the first draft
+>   of phase 4 had the user file import the schema module directly, so the
+>   schema module's own mtime invalidated its own `.pnet` and the phase passed
+>   with the fix disabled. Verified by A/B: with `lib-sources-stale?` stubbed to
+>   `#f`, phases 3 and 4 both fail with the pre-edit answer; with it live, all
+>   five pass.
 
 PRE-EXISTING class, probe-verified at `6584b443` (F1b.5-p0 agents; full record
 design doc §13.8 ✏ items 6-7). THREE coupled gaps, ONE channel fix:
