@@ -92,7 +92,7 @@ shape as `infer`/`inferQ`, from a different cause.
 against the failing file found the culprit in six runs. Three earlier sessions
 re-observed it instead.
 
-## ✅ CLOSED `PLACEHOLDER16` — `(when C (parse-error …))` computes a diagnostic and throws it away (censused + swept 2026-08-02)
+## ✅ CLOSED `ccf7adb0` — `(when C (parse-error …))` computes a diagnostic and throws it away (censused + swept 2026-08-02)
 
 `parse-error` RETURNS a value; it does not raise. So `(unless C (parse-error
 …))` evaluates the diagnosis, discards it, and falls through into the code the
