@@ -3801,7 +3801,7 @@ literal hijacking `closed-row-miss-hint`; see typing-errors.rkt's
 `token-entry->compat` sibling arm; the layer-error comment). These are what
 SURVIVED as deliberate non-goals.
 
-### 9. 🔶 The ordinal miss-hint — the TWO MIRROR CASES fixed 2026-08-03; two shapes remain
+### 9. ✅ RESOLVED 2026-08-03 — all FOUR shapes of the ordinal miss-hint now land
 
 The two the adjudicator cared about are done:
 
@@ -3827,9 +3827,50 @@ Each new arm is guarded on the OPPOSITE key domain to the branch beside it, so
 no input can match two of them; that is what makes the placement safe rather
 than lucky.
 
-**Still open — the two remaining shapes from the original four:** ordinal OOB
-in CHECK position (inside a spec'd body) rather than infer, and `.N` on a
-non-tuple carrier (Int, String).
+**The remaining two shapes landed the same day**, A/B'd the same way (a
+fifteen-shape battery this time, so the six already-good messages act as
+controls; the diff is exactly the target lines).
+
+- **`.N` / `.field` on a NON-projectable carrier** — `n.0` where `n : Int`,
+  `s.0` where `s : String`, `n.name`, `g.0` on a function. All four
+  Record-guarded branches decline on these, so the whole chain fell through to
+  a bare *"Could not infer type"* naming neither the carrier nor its type. Now:
+  *"`.0` is positional access, but `n` has type Int, which has no positions.
+  `.N` needs a tuple ⟨…⟩ or a PVec."*
+
+  **The POSITIVE list is the load-bearing part**, and it is `definitely-not-map?`'s
+  lesson (`pipeline.md` § Exhaustive Walkers) applied to types. The obvious
+  guard — "the carrier's type is not a Record" — is WRONG, and not marginally:
+  `closed-row-miss-hint` recurses into subterms, so it would fire on a PVec
+  carrier whose projection is perfectly fine whenever some *sibling* subterm is
+  what actually failed, and OUTRANK the real message. `unprojectable-type?`
+  instead enumerates the types that provably have neither fields nor positions
+  (Int/Nat/Rat/Posit*/Bool/Char/String/Unit/Pi) and defaults to #f, so the
+  claim is self-evidently true everywhere it can fire and an unrecognized
+  carrier declines by construction. Pinned by a test that asserts a PVec is
+  never called unprojectable.
+
+- **Ordinal OOB in CHECK position.** `def q : Int := het.9` reported a bare
+  *"Type mismatch Int <could not infer>"* while the identical expression
+  unannotated — or under `(the Int …)` — got the full *"index 9 is out of
+  range for the 2-tuple ⟨Int String⟩ — valid indices 0–1"*. **Adding a type
+  annotation made the diagnostic strictly worse**, which is backwards, and that
+  is the real defect here rather than the missing text.
+
+  Fixed by calling the SAME `closed-row-miss-hint` from the check door, gated
+  on `(expr-error? actual)` — the check failed *because* inference gave up, so
+  the infer-door hint is describing this very failure and transfers verbatim.
+  Placed LAST in the check-side `or`: every message above it knows the expected
+  type and this one does not, so it can only ever replace the bare fallback.
+  One hint, two consumers — the doors cannot drift.
+
+**A test-harness trap worth the next person's time**: the first draft spelled
+its helpers `f` and `g`, and broke a test fifty lines further down that passed
+in isolation and failed only in file order. `run-ws` restores the module /
+trait / impl / bundle registries from the shared snapshot per run — but the
+SPEC STORE is not among them, so a `spec f …` stays live for every later run in
+the file and a subsequent `def f := …` gets checked against it. Renaming is the
+fix; the shared-fixture pattern does not isolate specs.
 
 **Original:** the ordinal miss-hint is narrower than the surface `.N` opens
 

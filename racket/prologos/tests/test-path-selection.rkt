@@ -1164,6 +1164,58 @@
                       (run-ws-last "def cfg := {:a 1}\ncfg.a\n")
                       "a VALID field still projects"))
 
+;; ---- item 9, second half: the two shapes left open by the first pass ----
+;;
+;; ⚠ The spec'd names below are UNIQUE (`p2bf`, `p2bg`) on purpose. `run-ws`
+;; restores the module/trait/impl/bundle registries from the shared snapshot per
+;; run, but the SPEC STORE is not among them — a `spec f …` registered by one
+;; test is still live for the next, and a later `def f := …` then gets checked
+;; against it. Drafting these with `f` and `g` broke "lying diagnostic 2" fifty
+;; lines further down, which passed in isolation and failed only in file order.
+
+(test-case "P2 item 9b: a projection off a NON-projectable carrier names the type"
+  ;; All four Record branches decline when the carrier isn't a row, so these
+  ;; got a bare "Could not infer type" — neither carrier nor type named.
+  (define n (run-ws-last "def n := 5\nn.0\n"))
+  (check-regexp-match #rx"positional access" n)
+  (check-regexp-match #rx"type Int, which has no positions" n)
+  (define s (run-ws-last "def s := \"hi\"\ns.0\n"))
+  (check-regexp-match #rx"type String, which has no positions" s)
+  (define f (run-ws-last "def n := 5\nn.name\n"))
+  (check-regexp-match #rx"field access" f)
+  (check-regexp-match #rx"type Int, which has no fields" f)
+  ;; A Pi is unprojectable too — there is no UFCS in Prologos.
+  (check-regexp-match #rx"has no positions"
+                      (run-ws-last "spec p2bg Int -> Int\ndefn p2bg [x] x\np2bg.0\n")))
+
+(test-case "P2 item 9b: the POSITIVE list declines on a projectable carrier"
+  ;; The polarity is the whole point. `search` recurses into subterms, so a
+  ;; "not a Record" guard would fire on a PVec carrier whose projection is
+  ;; FINE and outrank the real message. A PVec must keep projecting, and a
+  ;; genuine OOB on one must keep its own (runtime) message.
+  (check-regexp-match #rx"^1 : Int" (run-ws-last "def v := @[1 2 3]\nv.0\n"))
+  (check-false (regexp-match? #rx"has no positions"
+                              (run-ws-last "def v := @[1 2 3]\nv.9\n"))
+               "a PVec must never be called unprojectable"))
+
+(test-case "P2 item 9b: ANNOTATING an expression no longer degrades its diagnostic"
+  ;; `def q : Int := het.9` reported a bare "Type mismatch Int <could not
+  ;; infer>" while the same expression unannotated got the full OOB message.
+  ;; Adding a type annotation made the error strictly worse.
+  (define annotated (run-ws-last "def het := @[1 \"x\"]\ndef q : Int := het.9\n"))
+  (check-regexp-match #rx"out of range for the 2-tuple" annotated)
+  (check-regexp-match #rx"valid indices 0.1" annotated))
+
+(test-case "P2 item 9b: the check door yields to every more-specific message"
+  ;; The hint is LAST in the check-side `or` — it may only replace the bare
+  ;; "Type mismatch" fallback. This shape has both a projection failure AND an
+  ;; unannotated parameter; the parameter hint is the specific one and wins.
+  (define r (run-ws-last "def het := @[1 \"x\"]\nspec p2bf Int -> Int\ndefn p2bf [n] het.9\n"))
+  (check-regexp-match #rx"unannotated parameter" r)
+  ;; And a REAL expected-vs-got mismatch (actual infers fine) is untouched.
+  (check-regexp-match #rx"Type mismatch"
+                      (run-ws-last "def bad : Int := \"str\"\n")))
+
 ;; ---------- the LYING DIAGNOSTICS this phase actually repairs ----------
 ;; P2's real headline, unclaimed by §5.P2: because `x.0` was THREE datum items,
 ;; every arity-checking context blamed something else entirely.

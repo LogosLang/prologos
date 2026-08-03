@@ -193,6 +193,23 @@
        (and (exact-nonnegative-integer? n) n))]
     [else #f]))
 
+;; Types that provably carry NEITHER fields NOR positions, so that a projection
+;; off them cannot succeed under any elaboration. Positive list, conservative
+;; #f default — see the branch that consumes it for why the polarity is
+;; load-bearing rather than stylistic.
+;;
+;; Absent on purpose: `expr-Record` (the four branches above own it), PVec /
+;; Map / List and every other carrier ctor (projectable), `expr-meta` and
+;; `expr-fvar` (unknown — a schema fvar resolves to a row).
+(define (unprojectable-type? t)
+  (or (expr-Int? t) (expr-Nat? t) (expr-Rat? t)
+      (expr-Posit8? t) (expr-Posit16? t) (expr-Posit32? t) (expr-Posit64? t)
+      (expr-Bool? t) (expr-Char? t) (expr-String? t)
+      (expr-Unit? t)
+      ;; a function has no projections either — there is no UFCS in Prologos,
+      ;; `x.f` is `[map-get x :f]` and nothing else.
+      (expr-Pi? t)))
+
 (define (closed-row-miss-hint ctx e names)
   (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
     (let search ([x e])
@@ -279,6 +296,49 @@
                              (eq? (expr-Record-tail tm) 'closed)
                              (not (record-lookup-field tm (expr-keyword-name (cdr mk))))
                              (format-closed-row-miss tm (expr-keyword-name (cdr mk)) names)))))
+
+            ;; ---- NON-PROJECTABLE CARRIER (D4.P2 item 9, second half) ----
+            ;; The four branches above all require the carrier's type to be a
+            ;; Record. Project off anything else — `n.0` where `n : Int`,
+            ;; `s.0` where `s : String` — and the whole chain declined, so the
+            ;; user got a bare "Could not infer type" naming neither the
+            ;; carrier nor its type. That is the same gap Q_R5 opened this
+            ;; function to close, one carrier-kind over.
+            ;;
+            ;; ⚠ THE POSITIVE LIST IS THE POINT, and it is `definitely-not-map?`'s
+            ;; lesson (`pipeline.md` § Exhaustive Walkers) applied to types: a
+            ;; NEGATIVE guard ("not a Record") would fire on every carrier the
+            ;; hint has no business judging — a PVec (`v.0` is VALID and reaches
+            ;; here whenever some *sibling* subterm is what failed), a Map, a
+            ;; type meta, a schema fvar, and every carrier kind added later.
+            ;; `search` recurses into subterms, so a false positive here does
+            ;; not merely add noise: it OUTRANKS the real message. Enumerating
+            ;; POSITIVELY the types that provably have neither fields nor
+            ;; positions makes the claim self-evidently true at every site it
+            ;; can fire, and makes an unrecognized carrier decline by default.
+            (let ([mk (projection-parts x)])
+              (and mk
+                   (let ([tm (whnf (infer ctx (car mk)))])
+                     (and (unprojectable-type? tm)
+                          (let ([carrier (pp-expr (car mk) names)]
+                                [ty (pp-expr tm names)])
+                            (cond
+                              [(ordinal-key-index (cdr mk))
+                               => (lambda (idx)
+                                    (format
+                                     (string-append
+                                      "Could not infer type — `.~a` is positional access, but ~a "
+                                      "has type ~a, which has no positions. `.N` needs a tuple "
+                                      "⟨…⟩ or a PVec.")
+                                     idx carrier ty))]
+                              [(expr-keyword? (cdr mk))
+                               (format
+                                (string-append
+                                 "Could not infer type — `.~a` is field access, but ~a has type "
+                                 "~a, which has no fields. `.field` needs a record {…} or a map.")
+                                (expr-keyword-name (cdr mk)) carrier ty)]
+                              [else #f]))))))
+
                (ormap search (expr-subfields x)))))))
 
 ;; ========================================
@@ -1079,11 +1139,36 @@
                           "it is used here in a way that requires a known type "
                           "(e.g. field projection `.field` or arithmetic). "
                           "Add a `spec`, or annotate the parameter with the "
-                          "fused form (`[x:T]`, single-token types only)."))])
+                          "fused form (`[x:T]`, single-token types only)."))]
+                   ;; CIU T6 D4.P2 item 9 (2026-08-03): the projection hints on
+                   ;; the CHECK door.
+                   ;;
+                   ;; `def q : Int := het.9` reported a bare "Type mismatch Int
+                   ;; <could not infer>" while the identical expression one
+                   ;; line up — unannotated, or under `(the Int …)` — got the
+                   ;; full "index 9 is out of range for the 2-tuple ⟨Int
+                   ;; String⟩ — valid indices 0–1". ADDING an annotation made
+                   ;; the diagnostic strictly worse, which is backwards.
+                   ;;
+                   ;; The gate is `(expr-error? actual)`: the check failed
+                   ;; BECAUSE inference gave up, so the infer-door hint is
+                   ;; describing this very failure and transfers verbatim.
+                   ;; When `actual` is a real type the mismatch is a genuine
+                   ;; expected-vs-got and this must stay out of the way.
+                   ;;
+                   ;; LAST in the `or` on purpose: every message above it is
+                   ;; more specific (it knows `t`; this one does not), so this
+                   ;; can only ever replace the bare fallback. One hint, two
+                   ;; consumers — the two doors cannot drift.
+                   [row-miss-msg
+                    (and (not seal-msg) (not seal-type-msg) (not branch-result-msg)
+                         (not cross-ctor-msg) (not infer-hint-msg)
+                         (expr-error? actual)
+                         (closed-row-miss-hint ctx e names))])
               (type-mismatch-error
                loc
                (or seal-msg seal-type-msg branch-result-msg cross-ctor-msg
-                   infer-hint-msg
+                   infer-hint-msg row-miss-msg
                    "Type mismatch")
                (pp-expr t names)
                (if (expr-error? actual) "<could not infer>" (pp-expr actual names))
