@@ -76,6 +76,8 @@
 ;;;   racket tools/spine-census.rkt --verbose          — per-divergence detail
 ;;;
 
+(provide diff srcloc-index mask-index-for)
+
 (require racket/list
          racket/string
          racket/file
