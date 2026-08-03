@@ -516,10 +516,33 @@
       [(zero? (subprocess-status proc))
        (void)]  ;; all good, silent
       [else
-       (printf "\n⚠  PRELUDE DRIFT DETECTED\n")
-       (printf "   PRELUDE manifest and namespace.rkt are out of sync.\n")
-       (printf "   Run: racket tools/gen-prelude.rkt --write\n")
-       (printf "   to regenerate namespace.rkt from the manifest.\n\n")])))
+       ;; A non-zero exit means EITHER real drift OR the validator itself
+       ;; failed to run. Distinguish them: only the former produces a
+       ;; "Validation FAILED:" summary line on stdout.
+       (define summary
+         (for/first ([line (in-list (string-split stdout-text "\n"))]
+                     #:when (string-prefix? (string-trim line) "Validation FAILED:"))
+           (string-trim line)))
+       (cond
+         [summary
+          (printf "\n⚠  PRELUDE DRIFT DETECTED\n")
+          (printf "   The PRELUDE manifest and namespace.rkt disagree.\n")
+          (printf "   ~a\n" summary)
+          (printf "   Inspect:  racket tools/gen-prelude.rkt --validate\n")
+          ;; Deliberately NOT recommending `--write` here. It regenerates
+          ;; namespace.rkt FROM the manifest and has no reverse mode, so
+          ;; when namespace.rkt is the side that moved — which is how this
+          ;; warning usually arises — running it silently deletes imports.
+          (printf "   Do NOT run `--write` before reading that output: it is\n")
+          (printf "   one-directional (manifest -> namespace.rkt) and silently\n")
+          (printf "   DELETES every prelude import the manifest happens to lack.\n\n")]
+         [else
+          (printf "\n⚠  PRELUDE DRIFT CHECK FAILED TO RUN\n")
+          (printf "   gen-prelude.rkt --validate exited ~a without a verdict.\n"
+                  (subprocess-status proc))
+          (unless (string=? (string-trim stderr-text) "")
+            (printf "   stderr: ~a\n" (string-trim stderr-text)))
+          (printf "\n")])])))
 
 ;; ============================================================
 ;; Batch test execution with shared prelude

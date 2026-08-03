@@ -18,6 +18,7 @@
          racket/string
          racket/path
          racket/list
+         racket/set
          racket/format
          racket/port)
 
@@ -238,37 +239,148 @@
 
   (reverse result))
 
-;; Compare generated prelude against current namespace.rkt.
-;; Compares require entries only (ignoring comments and whitespace).
+;; Structurally parse one entry string.
+;;   "(imports [MOD :as A :refer [n ...]])"
+;;     -> (list module-sym alias-or-#f refer-seteq refer-all?)
+;; Returns #f for anything unparseable, which is then left out of the
+;; comparison rather than being reported as a bogus difference.
+(define (parse-import-entry str)
+  (define form (with-handlers ([exn:fail? (lambda (e) #f)])
+                 (read (open-input-string str))))
+  (and form (list? form) (>= (length form) 2)
+       (let ([inner (cadr form)])
+         (and (list? inner) (pair? inner) (symbol? (car inner))
+              (let loop ([rest (cdr inner)] [alias #f] [refer (seteq)] [all? #f])
+                (cond
+                  [(null? rest) (list (car inner) alias refer all?)]
+                  [(eq? (car rest) ':refer-all) (loop (cdr rest) alias refer #t)]
+                  [(and (eq? (car rest) ':as) (pair? (cdr rest)))
+                   (loop (cddr rest) (cadr rest) refer all?)]
+                  [(and (eq? (car rest) ':refer) (pair? (cdr rest)) (list? (cadr rest)))
+                   (loop (cddr rest) alias (set-union refer (list->seteq (cadr rest))) all?)]
+                  [else (loop (cdr rest) alias refer all?)]))))))
+
+;; Aggregate a prelude text block BY MODULE.
+;;
+;; A single module legitimately appears in several entries — the trait imports
+;; are split across up to four (core::eq, core::ord, core::algebra each recur).
+;; What matters semantically is the set of names the namespace ends up
+;; importing for a module, not which entry carried each name, so union them.
+;;
+;; Returns (values ordered-module-list
+;;                 hash[module -> (list refer-set alias-set refer-all?)])
+(define (aggregate-block text)
+  (define h (make-hasheq))
+  (define order '())
+  (for ([s (in-list (extract-import-entries text))])
+    (define p (parse-import-entry s))
+    (when p
+      (define m (car p))
+      (unless (hash-has-key? h m) (set! order (cons m order)))
+      (define prev (hash-ref h m (list (seteq) (seteq) #f)))
+      (hash-set! h m (list (set-union (car prev) (caddr p))
+                           (if (cadr p) (set-add (cadr prev) (cadr p)) (cadr prev))
+                           (or (caddr prev) (cadddr p))))))
+  (values (reverse order) h))
+
+(define (fmt-names s)
+  (string-join (sort (map symbol->string (set->list s)) string<?) " "))
+
+;; Compare the manifest-generated prelude against namespace.rkt BY SET.
+;;
+;; Compares module membership, then per-module :refer-name membership, :as
+;; alias, and :refer-all. This replaced a POSITIONAL comparison, which
+;; cascaded: namespace.rkt held modules the manifest lacked, and each such
+;; insertion shifted every later entry, so ~6 real differences were reported
+;; as "35 entries differ". That made the suite's drift warning unactionable
+;; noise, which is why it went ignored.
+;;
+;; Order is still checked, because the manifest header notes that later
+;; :refer entries shadow earlier ones for the same name — but it is reported
+;; as ONE finding rather than one per shifted entry.
 (define (validate-prelude manifest-path ns-path)
   (define content-lines (read-prelude-manifest manifest-path))
   (define generated (generate-prelude-string content-lines))
   (define current (extract-current-prelude ns-path))
 
-  (define gen-reqs (extract-import-entries generated))
-  (define cur-reqs (extract-import-entries current))
+  (define-values (gen-order gen-h) (aggregate-block generated))
+  (define-values (cur-order cur-h) (aggregate-block current))
+  (define gen-mods (list->seteq gen-order))
+  (define cur-mods (list->seteq cur-order))
 
-  (printf "Generated: ~a import entries from PRELUDE manifest\n" (length gen-reqs))
-  (printf "Current:   ~a import entries in namespace.rkt\n" (length cur-reqs))
+  (printf "PRELUDE manifest : ~a modules\n" (length gen-order))
+  (printf "namespace.rkt    : ~a modules\n" (length cur-order))
+  (printf "\n`--write` regenerates namespace.rkt FROM the manifest, so every\n")
+  (printf "\"only in namespace.rkt\" item below would be DELETED by it.\n")
 
-  (define max-len (max (length gen-reqs) (length cur-reqs)))
-  (define diffs 0)
-  (for ([i (in-range max-len)])
-    (define gr (if (< i (length gen-reqs)) (list-ref gen-reqs i) "<missing>"))
-    (define cr (if (< i (length cur-reqs)) (list-ref cur-reqs i) "<missing>"))
-    (unless (string=? gr cr)
+  (define only-cur (sort (set->list (set-subtract cur-mods gen-mods)) symbol<?))
+  (define only-gen (sort (set->list (set-subtract gen-mods cur-mods)) symbol<?))
+  (define diffs (+ (length only-cur) (length only-gen)))
+
+  (unless (null? only-cur)
+    (printf "\n  Modules only in namespace.rkt — `--write` DELETES these:\n")
+    (for ([m (in-list only-cur)])
+      (printf "    ~a\n        :refer [~a]\n" m (fmt-names (car (hash-ref cur-h m))))))
+
+  (unless (null? only-gen)
+    (printf "\n  Modules only in the manifest — `--write` ADDS these:\n")
+    (for ([m (in-list only-gen)]) (printf "    ~a\n" m)))
+
+  (define shared (sort (set->list (set-intersect gen-mods cur-mods)) symbol<?))
+  (define shown-header? #f)
+  (for ([m (in-list shared)])
+    (define g (hash-ref gen-h m))
+    (define c (hash-ref cur-h m))
+    (define refer-lost  (set-subtract (car c) (car g)))
+    (define refer-added (set-subtract (car g) (car c)))
+    (define alias-lost  (set-subtract (cadr c) (cadr g)))
+    (define alias-added (set-subtract (cadr g) (cadr c)))
+    (define all-differs? (not (eq? (caddr g) (caddr c))))
+    (when (or (not (set-empty? refer-lost))  (not (set-empty? refer-added))
+              (not (set-empty? alias-lost))  (not (set-empty? alias-added))
+              all-differs?)
       (set! diffs (add1 diffs))
-      (when (<= diffs 10)
-        (printf "\n  DIFF at entry ~a:\n    generated: ~a\n    current:   ~a\n" (add1 i) gr cr))))
+      (unless shown-header?
+        (printf "\n  Modules on both sides, but differing:\n")
+        (set! shown-header? #t))
+      (printf "    ~a\n" m)
+      (unless (set-empty? alias-lost)
+        (printf "        :as only in namespace.rkt (DELETED): ~a\n" (fmt-names alias-lost)))
+      (unless (set-empty? alias-added)
+        (printf "        :as only in manifest (ADDED):        ~a\n" (fmt-names alias-added)))
+      (when all-differs?
+        (printf "        :refer-all  namespace.rkt=~a  manifest=~a\n" (caddr c) (caddr g)))
+      (unless (set-empty? refer-lost)
+        (printf "        :refer only in namespace.rkt (DELETED): ~a\n" (fmt-names refer-lost)))
+      (unless (set-empty? refer-added)
+        (printf "        :refer only in manifest (ADDED):        ~a\n" (fmt-names refer-added)))))
+
+  ;; Order check over the modules both sides share — ONE finding, not N.
+  (define gen-shared (filter (lambda (m) (set-member? cur-mods m)) gen-order))
+  (define cur-shared (filter (lambda (m) (set-member? gen-mods m)) cur-order))
+  (unless (equal? gen-shared cur-shared)
+    (set! diffs (add1 diffs))
+    (define idx (for/first ([gm (in-list gen-shared)]
+                            [cm (in-list cur-shared)]
+                            [i (in-naturals)]
+                            #:when (not (eq? gm cm)))
+                  i))
+    (printf "\n  Module ORDER differs (later :refer shadows earlier, so this is semantic):\n")
+    (when idx
+      (printf "        first divergence at shared position ~a: manifest=~a  namespace.rkt=~a\n"
+              (add1 idx) (list-ref gen-shared idx) (list-ref cur-shared idx))))
 
   (cond
-    [(= diffs 0)
-     (printf "\nValidation PASSED: all ~a import entries match\n" (length gen-reqs))
+    [(zero? diffs)
+     (printf "\nValidation PASSED: manifest and namespace.rkt agree (~a modules).\n"
+             (length gen-order))
      #t]
     [else
-     (when (> diffs 10)
-       (printf "\n  ... and ~a more differences\n" (- diffs 10)))
-     (printf "\nValidation FAILED: ~a entries differ\n" diffs)
+     (printf "\nValidation FAILED: ~a module~a differ.\n"
+             diffs (if (= diffs 1) "" "s"))
+     (printf "`--write` is ONE-DIRECTIONAL (manifest -> namespace.rkt) and has no\n")
+     (printf "reverse mode. Reconcile by hand before running it, or the deletions\n")
+     (printf "listed above are silent.\n")
      #f]))
 
 ;; ========================================
