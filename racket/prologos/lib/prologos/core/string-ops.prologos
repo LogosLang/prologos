@@ -338,3 +338,25 @@ defn chunks-dispatch [n s len]
 spec chunks Int -> String -> [List String]
 defn chunks [n s]
   chunks-dispatch n s [str::length s]
+
+;; ========================================
+;; Unicode normalization (UAX #15) -- the form selector
+;; ========================================
+;; The four normalizers themselves are FFI bindings in `prologos::data::string`
+;; (`str::normalize-nfc` and friends), which is where the Racket bridge belongs.
+;; The TYPE and the dispatcher live here because that module is a prelude-less
+;; leaf: a `match` over a user `data` needs machinery it does not have.
+
+data NormForm
+  nfc
+  nfd
+  nfkc
+  nfkd
+
+spec normalize NormForm String -> String
+defn normalize [form s]
+  match form
+    | nfc -> [str::normalize-nfc s]
+    | nfd -> [str::normalize-nfd s]
+    | nfkc -> [str::normalize-nfkc s]
+    | nfkd -> [str::normalize-nfkd s]

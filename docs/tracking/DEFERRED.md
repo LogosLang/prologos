@@ -1304,9 +1304,25 @@ prose or library.
 - Requires UAX #29 state machine (~30KB Unicode tables)
 - **Mitigation**: FFI to Racket's `string-grapheme-span` or ICU library
 
-### Phase 4b: Unicode Normalization
-- `string-normalize : NormForm -> String -> String` (NFC/NFD/NFKC/NFKD)
-- Bridge to Racket's `string-normalize-nfc` etc. via FFI
+### ✅ SHIPPED `PLACEHOLDER17` — Phase 4b: Unicode Normalization (2026-08-02)
+
+`normalize : NormForm -> String -> String` with `nfc` / `nfd` / `nfkc` / `nfkd`,
+bridged to Racket's implementations as the entry specified.
+
+**Split across two modules, and the split is not cosmetic.** The four FFI
+bindings live in `prologos::data::string` beside the other Racket bridges; the
+`NormForm` type and the `normalize` dispatcher live in
+`prologos::core::string-ops`, because `data/string.prologos` is a prelude-less
+leaf and a `match` over a user `data` needs machinery it does not have. Putting
+the type there fails the module load with a bare "Type mismatch" — worth knowing
+before adding any other `data` to a leaf lib module.
+
+`tests/test-string-normalize.rkt` asserts PROPERTIES of each form rather than
+snapshots: NFD lengthens a precomposed character, NFC shortens a decomposed one,
+NFKC folds a ligature, NFKD folds a circled digit, and — the one that matters —
+NFC does NOT fold the ligature, so the canonical/compatibility distinction is
+pinned in both directions. One case checks that NFC and NFD disagree at all,
+which is what rules out a dispatcher that ignores its form argument.
 
 ### Phase 4c: String Similarity & Diffing
 - Jaro distance, common prefix, Myers difference

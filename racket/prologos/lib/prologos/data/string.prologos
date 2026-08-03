@@ -37,3 +37,32 @@ foreign racket "racket/string" [string-suffix? :as ends-with? : String -> String
 foreign racket "racket/base" [string-upcase :as upper : String -> String]
 foreign racket "racket/base" [string-downcase :as lower : String -> String]
 foreign racket "racket/base" [string-titlecase :as capitalize : String -> String]
+
+;; --- Unicode normalization (UAX #15) ---
+;;
+;; The four normalization forms, bridged to Racket rather than reimplemented:
+;; the alternative is a UAX #15 decomposition table, and the runtime already
+;; carries one.
+;;
+;; Which one to use, since picking wrong is the usual mistake:
+;;
+;;   NFC  canonical decomposition then canonical COMPOSITION. Store and
+;;        transmit this one; it is what W3C and most wire formats expect.
+;;   NFD  canonical decomposition only. For stripping diacritics or indexing
+;;        by base letter.
+;;   NFKC compatibility decomposition then canonical composition. Folds
+;;        formatting distinctions. LOSSY -- search keys and identifier
+;;        folding, never round-tripping user data.
+;;   NFKD compatibility decomposition only. Lossy in the same way.
+;;
+;; Canonical equivalence is why this matters: two strings a reader cannot tell
+;; apart, and that a font renders identically, are NOT `eq` unless they are in
+;; the same form. Normalize both sides before comparing text a person typed.
+;;
+;; The `NormForm` type and the `normalize` dispatcher live in
+;; `prologos::core::string-ops`: this module is a prelude-less leaf, and a
+;; `match` over a user `data` needs machinery it does not have.
+foreign racket "racket/base" [string-normalize-nfc :as normalize-nfc : String -> String]
+foreign racket "racket/base" [string-normalize-nfd :as normalize-nfd : String -> String]
+foreign racket "racket/base" [string-normalize-nfkc :as normalize-nfkc : String -> String]
+foreign racket "racket/base" [string-normalize-nfkd :as normalize-nfkd : String -> String]
