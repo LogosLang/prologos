@@ -2031,40 +2031,37 @@ readers/languages. The UCS track inherits the substrate + bridges it to the exis
 - BSP-LE Master Track 3 retirement obligation: [`2026-03-21_BSP_LE_MASTER.md`](2026-03-21_BSP_LE_MASTER.md).
 - **Process note**: the A.4 investigation was lengthened by a WS-syntax probe error (one-line fact rows `|| 5 3` parse as one wrong-arity row → spurious empty results, masqueraded as a tabling failure). Probes need multi-line fact rows.
 
-## Solver term conversion drops pvec/map literals — unify with a collection literal yields `unknown` (captured 2026-07-25, surfaced by Rel T1 B3.2's mini-audit)
+## ✅ CLOSED `PLACEHOLDER14` — solver term conversion drops pvec/map literals (captured 2026-07-25, fixed 2026-08-02)
 
-**PRE-EXISTING, live, and a static/runtime DISAGREEMENT.** Unifying a relational
-variable with a collection LITERAL produces the runtime value `unknown`, while
-the static type is derived correctly:
+Not in the conversion functions the entry named. `ground->prologos-expr`
+(reduction.rkt) filtered AST nodes through a HAND-ENUMERATED list of thirteen
+predicates in front of an `unknown` fallback:
 
-```
-defr mp [?x ?m]
-  &> (edge x z) (= m {:a 1})
-
-solve (mp x m)
-;; '[{:m unknown, :x 1} …] : [List {:m {:a Int} :x Int}]
-;;        ^^^^^^^ runtime            ^^^^^^^^ static — they disagree
+```racket
+[(or (expr-zero? v) (expr-suc? v) … (expr-champ? v) (expr-lam? v) (expr-pair? v)) v]
+[else (expr-fvar (if (symbol? v) v 'unknown))]
 ```
 
-Same for `(= v '[1 2])` (there the static side holes, so only the runtime
-`unknown` shows). Scalars are fine (`(= tag "lit")` → `"lit" : String`), so the
-gap is specific to the collection literals in the AST↔solver-term conversion
-(`normalize-ast-to-solver-term` / `solver-term->prologos-expr`).
+Maps and vectors were not on it, so they fell through and the fallback returned
+the SYMBOL `unknown`, quietly. That is the exhaustive-walker shape `pipeline.md`
+warns about, in a place nobody had looked for it — the third instance found this
+session, after the `expr-foreign-fn` walkers and the mixfix raise sites.
 
-**Why it matters beyond cosmetics**: (a) B3.1 derives the row type correctly, so
-this is the one place where the static row type and the actual row provably
-disagree — the CbC key/type agreement B3.0 worked to preserve; (b) it BLOCKS the
-only reachable surface case of B3.2's FILL path (a hole-typed field whose values
-are ground); (c) the DEMO through-line loads records as facts (`:from`), which is
-adjacent territory.
+Fixed structurally: `(expr? v)`. The fallback exists to catch RAW RACKET values
+arriving from the solver's normalization boundary — strings, booleans, integers,
+all handled just above — not to filter AST nodes. Every expr passes through now,
+including the ones added tomorrow.
 
-**Not chased** at discovery: B3.2's scope was the display seam, and this is a
-solver-representation defect. The B3.2 FILL path is unit-pinned so it is correct
-the day this lands.
+Verified for map, list AND pvec. The runtime row now agrees with the static row
+type (`:v {:a 1}` under `{:v {:a Int}}`), which was the entry's real point:
+this was the one place the two provably disagreed.
 
-### Cross-references
-- Surfaced by: Rel T1 B3.2 mini-audit (2026-07-25), design §6.10.
-- Probe: `(= m {:a 1})` / `(= v '[1 2])` in a rule body, then `solve`.
+**Why it survived**: scalars were always fine. A test written with a string or
+an integer literal passes either way, so the control case is in the test file
+alongside the three that fail without the fix.
+
+Unblocks the B3.2 FILL path, whose only reachable surface case this was
+blocking.
 
 ## Substitution containment defect — runtime collections as closed leaves (captured 2026-07-24, spin-out from Rel T1 POL.10)
 

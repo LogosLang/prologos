@@ -334,11 +334,21 @@
     [(string? v) (expr-string v)]
     [(boolean? v) (if v (expr-true) (expr-false))]
     [(exact-integer? v) (expr-int v)]
-    ;; Already an AST expression
-    [(or (expr-zero? v) (expr-suc? v) (expr-nat-val? v) (expr-true? v) (expr-false? v)
-         (expr-string? v) (expr-int? v) (expr-keyword? v) (expr-fvar? v)
-         (expr-app? v) (expr-champ? v) (expr-lam? v) (expr-pair? v))
-     v]
+    ;; Already an AST expression — ANY of them.
+    ;;
+    ;; This was a hand-enumerated list of thirteen predicates in front of an
+    ;; `unknown` fallback, which is the exhaustive-walker shape `pipeline.md`
+    ;; warns about: a node kind not on the list falls through and the fallback
+    ;; does the wrong thing QUIETLY. It did. A relational variable unified with
+    ;; a collection literal came back as the symbol `unknown` while the static
+    ;; row type was derived correctly — the one place the static row type and
+    ;; the actual row provably disagreed.
+    ;;
+    ;; `expr?` is the whole point of the fallback anyway: it exists to catch RAW
+    ;; RACKET values arriving from the solver's normalization boundary (strings,
+    ;; booleans, integers, handled above), not to filter AST nodes. Every expr
+    ;; passes through, including the ones added tomorrow.
+    [(expr? v) v]
     [else (expr-fvar (if (symbol? v) v 'unknown))]))
 
 ;; ── Rel T1 Aspect B (typed solution rows), entry-gate (b) ──────────────────────
