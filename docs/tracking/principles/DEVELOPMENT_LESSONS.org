@@ -1850,3 +1850,84 @@ Origin: 2026-07-26 worktree session (commits =31d27c83= context →
 foreign-resolver fix). Ambient one-liner: =.claude/rules/testing.md= §
 "Test files require production modules by RELATIVE path" (extended with the
 lib-foreign surface + resolver pointer).
+
+** A Raise on the Parse/Expansion Path Is a WHOLE-FILE Abort, Not an Error
+
+*The lesson*: Prologos reports per-COMMAND errors — a bad form yields a
+=prologos-error= surf, the file keeps going, and the user sees =--- N errors ---=.
+That recovery exists only for values that FLOW. A Racket exception RAISED on the
+reader / preparse / parse path has no such seat: it escapes =process-file=
+entirely and the file produces **nothing** — not even the forms that already
+succeeded before it. The blast radius is categorically different from the thing
+it looks like, and the two are indistinguishable in a commit diff.
+
+*The diagnostic tell, and it is unmistakable once known*: the file prints NOTHING
+— not even the definitions ABOVE the offending line. A per-command error prints
+everything up to and past it. So "=def before := 1= / bad form / =def after := 2=
+printed nothing, not even =before=" is the signature; the moment output stops
+being partial and starts being empty, stop looking at the form that failed and
+look for a raise.
+
+*Why it keeps happening*: the raise sites are not in the error machinery, they
+are in ORDINARY total-looking helpers — =symbol->string= on a number,
+=string-ref= past the end, =list-ref= past the end, =datum-subst= on an
+unrecognized sentinel. Each is a partial function called on an input the author
+believed impossible. And the belief is usually recorded in a comment rather than
+enforced by a guard.
+
+*Two recurring generators*:
+1. *A NEW SENTINEL, AN OLD RECOGNIZER.* Adding a reader sentinel (=$dot-key=,
+   =$dot-brace=, =$list-literal=, =$postfix-index=…) obliges every recognizer
+   that switches on sentinel identity — =pattern-var?=, =access-sentinel?=, the
+   fold arms — to learn it. Miss one and the sentinel reaches a partial helper.
+   =pattern-var?='s residual was measured at *23 of 33* — including
+   =$list-literal=, so a ='[1 2]= inside a =defmacro= TEMPLATE is a whole-file
+   abort *today*.
+2. *AN UNGUARDED PARAMETER.* A path reads an ambient parameter whose default is
+   the impossible input. =current-source-str= defaults to =""=; =pos->line-col=
+   (=parse-reader.rkt=) loops =[(>= i pos) …]= then =(string-ref str i)= with NO
+   length check, so =""= with any =pos > 0= raises. Worse, it was unguarded at
+   BOTH levels: the call sits OUTSIDE its own =with-handlers=, and the caller's
+   sibling arm has a handler while the arm in question does not.
+
+*Sightings* (partial; the class recurs across CIU T6 and the dual-spine arc):
+- =.( )= mixfix errors raising through preparse (pre-existing, filed).
+- =$dot-brace= absent from =pattern-var?= ⇒ =datum-subst= raised on a =.{ }=
+  inside a defmacro template. Caught by the adversarial verify as BLOCKING,
+  under a GREEN suite — same site P1a had already fixed for =$dot-key=.
+- =$postfix-index= design-time: a numeric payload would hit =symbol->string= on
+  =10=. Avoided by ruling, not by a guard.
+- P3b ordinal-rekey: the first seat replaced the WHOLE datum, so an arrowless
+  =match= arm raw-crashed the reader. Verify-caught, BLOCKING, 7th consecutive
+  slice.
+- A guarded clause group ⇒ raw =list-ref: index too large=.
+- CIU T6 D4.P4c-4a: an unguarded parameter admitting a whole-file abort (the
+  4th instance counted within that track alone).
+- Dual-spine step (B), 2026-08-03: the datum route × unbound =current-source-str=
+  (above). Found by AUDIT before any deletion shipped — the one time the class
+  was caught in design rather than in review.
+
+*Why a green suite is no defence*: several sightings were BLOCKING and the suite
+was green for all of them. A whole-file abort in an =examples/= or =lib/= file
+shows up as that file producing no results — which an error-COUNT gate reads as
+"no errors". This is the same instrument blindness recorded under the dual-spine
+corpus A/B: *count-based gates cannot see whole-file aborts*, and must be
+replaced by FULL-OUTPUT comparison.
+
+*What to do*:
+- Adding a sentinel? Sweep every recognizer that switches on sentinel identity,
+  and add a =defmacro=-template case to the tests — the template path is the one
+  that raises.
+- Calling a partial helper on parse-path data? Either make it total or guard the
+  CALL — and check the guard actually encloses the call (the
+  =parse-eval-tree-for-cell= case had a =with-handlers= that did not).
+- Gating a change over the corpus? Compare FULL OUTPUT. Error counts are blind
+  here by construction.
+- Reviewing? If a file's output is EMPTY rather than partial, suspect a raise
+  before suspecting the form.
+
+Origin: promoted 2026-08-03 from the dual-spine parser-merge arc, after the class
+had accumulated across CIU T6 D4 (P1a, P3b, P4c-4a) and this arc with **zero**
+entries in either the ambient rules tier or this document — the exact
+"lesson lives only in the dailies" failure =workflow.md= names. Ambient one-liner:
+=.claude/rules/pipeline.md= § "A Raise on the Parse/Expansion Path".
