@@ -3288,7 +3288,36 @@ a solution term re-walked once per occurrence. Unmeasured — it may be entirely
 fine, since solutions are usually small. **Measure before fixing**; #58's whole
 lesson is that the layer you assume is the cost usually isn't.
 
-### 3. The whnf/nf cache is now `eq?`-keyed — its hit rate is UNMEASURED
+### 3. ✅ MEASURED 2026-08-03 — the `eq?`-keyed whnf cache DOES hit, 12–25% on type-checking-heavy work
+
+The entry asked for exactly one thing: *"nobody has measured the hit rate on
+type-checking-heavy workloads with genuinely repeated structural subterms."*
+Measured, by instrumenting `whnf`'s cache path with hit/miss counters and
+running three workloads:
+
+| workload | hits | misses | hit rate |
+|---|---|---|---|
+| synthetic (`map`/`reduce` over repeated list literals, dup'd defs) | 156 | 1161 | **11.8%** |
+| `examples/2026-07-17-ciu-t6-f1b4-seal.prologos` (records + schemas) | 161 | 769 | **17.3%** |
+| `examples/2026-03-20-punify-p3-acceptance.prologos` | 307 | 911 | **25.2%** |
+
+**The reading**: the `eq?` cache is NOT doing nothing outside the accumulator
+workload. On the accumulator, `hasheq` benchmarked indistinguishable from no
+cache at all — the honest reading the entry recorded — but that is a property
+of THAT workload's term shapes, not of the cache. Type-checking-heavy code
+re-whnfs the same term OBJECTS often enough for identity keying to pay.
+
+So there is no case here for reverting to `equal?` keying (which cost
+647,773× at N=512 in isolation, per #58) to chase the structural hits `eq?`
+loses. Whether those lost hits are worth a second, structurally-keyed tier
+remains open — but it is now a question with a baseline instead of a guess.
+
+**Reproduce**: box a `(vector hits misses)` counter around `whnf`'s
+`current-whnf-cache` lookup, bump on hit and on miss, and `process-file` the
+workload. The instrument was REMOVED after measuring rather than left in —
+`whnf`'s cache path is the hottest in the compiler and an unconditional
+unbox-and-branch there is exactly the cost #58 was about. The numbers above
+are the deliverable; the hook was scaffolding.
 
 #58 P2 (`cf1791ce`) changed all three per-command caches from `equal?` to `eq?`
 keying, which was a 15.7× win at N=256 and suite-neutral. But it necessarily
