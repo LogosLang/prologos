@@ -749,7 +749,19 @@
         (with-handlers ([exn:fail? (lambda (e)
                                      (parse-error-result loc (format "eval: ~a" (exn-message e))))])
           ;; Apply ALL WS normalizations (same as extract-surfs datum path)
-          (define flat (flatten-ws-datum datum))
+          ;;
+          ;; ⚠ `rewrite-implicit-map` MUST PRECEDE `flatten-ws-datum`, and running
+          ;; it later does not substitute. It keys on the reader's keyword
+          ;; GROUPING — the `(:name "a")` sub-lists — which flattening destroys.
+          ;; `preparse-expand-subforms` (macros.rkt) does call it, but by then the
+          ;; datum is already flat, so it matches nothing and silently no-ops.
+          ;; MEASURED: this accounted for 3 of the 7 confirmed tree/preparse
+          ;; divergences (`surf-map-literal` collapsing to `surf-keyword` in
+          ;; map-tutorial-demo). form-cells.rkt's datum path already gets this
+          ;; right and says why at its own site — this arm had drifted from it.
+          ;; Double application is harmless and is the established pattern there:
+          ;; once rewritten, the second call matches nothing.
+          (define flat (flatten-ws-datum (rewrite-implicit-map datum)))
           (define session-desugared
             (cond
               [(and (pair? flat) (eq? (car flat) 'session))
