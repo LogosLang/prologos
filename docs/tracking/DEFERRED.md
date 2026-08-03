@@ -3257,6 +3257,41 @@ pinned by `tests/test-dual-spine-merge-key.rkt`. These are the residuals.
    Still an owner ruling — but the thing to rule on is unification vs. keeping
    preparse authoritative forever, not "commission vs retire".
 
+1b. **⚠ WHICH SIDE DOES PPN BUILD OFF? — settled 2026-08-03, and it inverts the
+   risk I had described.** The worry was that retiring the wrong side would damage
+   the substrate PPN 4C/4D returns to. There are **THREE** layers here and they
+   are routinely conflated:
+
+   | layer | owner | state | touched by this arc? |
+   |---|---|---|---|
+   | the reader's 5 parse cells (char·indent·token·bracket·tree, `parse-reader.rkt`) | PPN Track 1 | cells landed, **propagator wiring unbuilt**; scoped by [4D §12](2026-05-19_PPN_4D_IMPLEMENTATION_DRAFT_NOTE.md) | **NO** |
+   | the per-form cells (`form-cells.rkt`, source-line keyed) | PPN Track 3 | written, read by nothing **yet** | **NO** |
+   | the merge's tree leg (`parse-top-level-forms-from-tree` → `tree-by-line` → `merge-form`) | the merge | never fired, now gated off | **YES — only this** |
+
+   **PPN Track 3 Phase 7's own design says to DELETE the merge.** Verbatim
+   ([Track 3 design](2026-04-01_PPN_TRACK3_DESIGN.md) §"Phase 7: Pure Merge
+   Function + Shared Cells"): *"**Delete**: `merge-preparse-and-tree-parser`,
+   `merge-form`, source-line-keyed identity matching, `tree-by-line` hash
+   building. Total ~80 lines from driver.rkt."* Phase 7 shipped only its first
+   half (`40d07caa`, "form cells wired into driver pipeline") — the cells went in,
+   the deletion never happened, and the comment *"Phase 7 will switch
+   process-command to read from these cells"* was written **in that same commit**.
+   It is Phase 7's own unfinished second half, reading as future work from a phase
+   already marked ✅.
+
+   **So retirement is not a departure from PPN's plan — it IS PPN's plan, left
+   unfinished.** The per-form cells are the intended REPLACEMENT for the merge,
+   which is exactly why they must **not** be deleted: their write-only state is
+   the "propagator wiring unbuilt" condition PPN Master row 3 documents, not
+   abandonment. ⚠ I previously called them "dead weight" and "not a reason to
+   preserve anything" — **that was the genuinely dangerous characterisation**, and
+   it was wrong. Deleting them would delete PPN Track 3's deliverable.
+
+   **PPN 4C is unaffected either way**: it is "Elaboration completely on-network —
+   9 axes", elaborator-side. Neither 4C nor 4D mentions
+   `merge-preparse-and-tree-parser`, `tree-by-line`, or
+   `parse-top-level-forms-from-tree` anywhere.
+
 2. **The `current-raw-node` production change — measured, NOT landed.** It is the
    designed hook (tree-parser.rkt reads `(or (current-raw-node) node)` for the
    datum conversion; form-cells.rkt sets it from a raw-node map) and the merge
