@@ -71,6 +71,10 @@ layout ruling rather than a message fix.
    itself is the QTT track's recorded option-(c) deliberate deferral
    (an `expr-reduce` arm for `infer`/`inferQ` — new typing policy).
 
+   **Same gap as § CIU T6 two standing WS-surface non-blockers item 2**
+   (established 2026-08-03): both are "`infer` has no `expr-reduce` case", met
+   from two different directions. One owner ruling closes both.
+
 ## ✅ WITHDRAWN, with a correction — "the `:=` let chain is BROKEN in UNSPECCED defns" was issue #70 in a let costume (filed 2026-07-31, corrected same day at LET P2 `e8a41a9a`)
 
 **The filing was WRONG and is withdrawn.** Its repro used `[+ a [+ x y]]` —
@@ -1200,13 +1204,47 @@ neither blocks records-correct-in-principle; filed so the doc-truth is honest.
    would not have shown that — 3 < 5 either way — so the failing case is the
    test, and both are pinned in `tests/test-punify-surface.rkt`. The prescribed
    `(> 5 _)` workaround is no longer needed.
-2. **`match` with an INLINE `validate` scrutinee fails inference** — CONFIRMED
-   still true (re-probed 2026-08-02: "Could not infer type"). —
-   `match [validate S e] | ok v -> … | err es -> …` fails to infer the scrutinee's
-   `Result S E` type inline; **def-bind first** (`def r := [validate S e]` then
-   `match r …`) works. Route-sensitivity in the checker's inline-vs-def-bound
-   scrutinee inference (the F1a col-3/p0 literal/binding-route-sensitivity class).
-   Found at F1b.5-s2.
+2. **`match` with an INLINE `validate` scrutinee fails inference** — still open,
+   but the 2026-08-03 probe **narrowed it and corrected the diagnosis**. It is
+   NOT route-sensitivity in inline-vs-def-bound scrutinee inference; that
+   framing is wrong in both directions:
+   - an inline APPLICATION scrutinee infers fine
+     (`match [cons 1N nil] | nil -> … | cons h t -> …`), so "inline" is not the
+     discriminator;
+   - def-binding is not the only workaround — ANNOTATING the match
+     (`def m : String := match [validate S e] …`) works too, because it
+     re-enters CHECK mode. Worth knowing: a user is likelier to reach for an
+     annotation than for a `def`.
+
+   **The mechanism, verified**: three deliberate designs compose into a hole.
+   (1) `expr-validate` is registered with return-type `#f` — "position stays ⊥
+   → the refusal checks re-route to the imperative checker (which owns the
+   rule)". (2) `untyped-interior-position` (CIU T6 F1b.2, D26 route-soundness)
+   finds that ⊥ interior position after quiescence and re-routes the WHOLE
+   command to the imperative checker. (3) the imperative `infer` has NO
+   `expr-reduce` case — reduce is check-only there by design. So the network
+   declines because of (1)+(2), and the imperative checker cannot take it
+   because of (3).
+
+   **This is not validate-specific.** ANY node with a `#f` typing rule
+   (`expr-refl`, `expr-cut`, `expr-hole`, `expr-error`) inside a `match` tree
+   hits the same wall.
+
+   **Blocked on the SAME owner ruling already recorded elsewhere**: the QTT
+   track's deliberate option-(c) deferral, "an `expr-reduce` arm for
+   `infer`/`inferQ` — new typing policy" (see § LET track residuals item 3,
+   which is the same gap wearing a different symptom: an unannotated `match`
+   as a `let` binding VALUE). Fixing it any other way means reversing (1) —
+   CIU T6's decision that the imperative checker owns validate — or weakening
+   (2), whose over-approximation is deliberately safe. Neither is an
+   implementer's call.
+
+   Boundary pinned in `tests/test-validate-match-scrutinee.rkt`: the three
+   routes that must keep working, plus the failing one asserted to fail
+   LOUDLY — one per-command error naming the term, with the commands on either
+   side intact. A wrong type here would be far worse than an error, and that
+   assertion is what would catch it. If the policy call lands, the last case is
+   the one to flip.
 
 ## CIU T6 → Rel: typed solution rows — MOVED to the Rel series (2026-07-19)
 
