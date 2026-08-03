@@ -1227,18 +1227,26 @@ scheduler variants) are unblocked.
 
 ## Collections — Deferred Items
 
-### Stage I: Transducer Runners for Non-List — PARTLY STALE (re-probed 2026-08-02)
+### 🔶 PARTIAL — Stage I: Transducer Runners for Non-List (re-probed 2026-08-02)
 
-`into-vec` and `into-set` EXIST — `lib/prologos/book/collection-functions.prologos:235`,
-typed `{A} [LSeq A] -> [PVec A]`. What is blocked is the transducer-protocol
-form of them and pipe fusion, not the runners themselves.
+**`into-vec`, `into-set` and `into-list` EXIST and are importable** from
+`prologos::core::collections` — a real module with an `ns` — and have since
+commit `7c04a89f`. Verified end to end: `[into-vec [list-to-lseq Int xs]]`
+gives `@[1 2 3] : [PVec Int]`. Pinned in
+`tests/test-collection-runners.rkt`, contents and all, since a runner that
+produced an EMPTY PVec would satisfy the type check.
 
-They are also **not reachable**: they live in a `book/` chapter file, and those
-have no `ns` declaration, so importing one fails. That failure used to be a raw
-`ns-context-refer-map: contract violation` — whole file lost, naming a struct
-accessor. It now says what is wrong (`namespace.rkt`, commit below); making the
-book's definitions importable is a separate question about whether `book/` is
-prose or library.
+**Still open**: the TRANSDUCER-PROTOCOL form of these, and pipe fusion for
+non-List inputs. Those are what the "transient types not exposed at Prologos
+type level" note is about. The runners themselves were never blocked on it.
+
+**A correction to an earlier note in this same session.** I first probed these
+by importing `prologos::book::collection-functions`, which is a chapter file
+with no `ns` and therefore not importable, and concluded the functions were
+unreachable — writing exactly that into this entry. They were reachable from
+`core::collections` the whole time. (That probe was not wasted: the import
+failure was a raw `ns-context-refer-map` contract violation, now a named error
+— see the imports fix above.)
 
 - Pipe fusion for non-List input types
 - **Blocked on**: transient types not exposed at Prologos type level;
