@@ -1566,7 +1566,38 @@ and generic `map`/`filter`/`reduce`/`length`/`to-list` dispatch through them
 
 So this is one straggler in a family that already migrated, not a pending
 migration of the family.
-- **Blocked on**: design uncertainty about deftype vs trait dispatch
+
+**Sharpened 2026-08-03 — what a migration would actually cost.** Two
+hypotheses were checked and BOTH were wrong, so they are recorded rather than
+left for the next person to re-form:
+
+- *"It is a pedagogical contrast — the book chapter shows the dictionary
+  encoding on purpose."* NO. Both `core/collection-traits.prologos` and
+  `book/collection-traits.prologos` carry EIGHT `trait` declarations and
+  exactly ONE `deftype`, in the same file, with no framing that distinguishes
+  it. It really is an inconsistency.
+- *"It is dead vocabulary, so migrating it satisfies nobody."* NO. There is a
+  live instance: `def list-seq [pair list-seq-first [pair list-seq-rest
+  list-seq-empty?]]` with `spec list-seq [Seq List]`, hand-assembled as a
+  nested Sigma, in BOTH `core/list.prologos:144` and `book/lists.prologos:713`,
+  and `tests/test-trait-impl-04-02.rkt` passes it explicitly to `seq-length` /
+  `seq-drop` / `seq-any?` / `seq-all?`.
+
+So the migration is real work with a real consumer: `trait Seq {S : Type ->
+Type}` + `impl Seq List` replacing the hand-assembled dict, the three
+accessors reworked from explicit `fst`/`snd` projection to where-constraints,
+across two library files, with `test-trait-impl-04-02`'s explicit-dict call
+sites to convert.
+
+**And the "design uncertainty" now has a name**: migrating puts three new
+trait-METHOD names (`first` / `rest` / `empty?`) into the global method
+namespace — the same bare-name namespace whose silent last-write-wins is
+censused in `tests/test-spec-store-clobber.rkt` (issue #66/#67, 12 names
+already order-dependent). `empty?` in particular is a name the collection
+family is likely to want more than once. That is the collision question to
+settle BEFORE the migration, not after.
+- **Blocked on**: the method-name collision question above (issue #66), not on
+  deftype-vs-trait dispatch, which the four migrated siblings already settled
 
 ### Clause-Style Constraint Matching (Layer 2 Specialization)
 - Enable prioritized dispatch over disjoint trait constraints via `|` clause syntax
