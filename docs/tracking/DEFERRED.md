@@ -1211,12 +1211,32 @@ scheduler variants) are unblocked.
 
 ## Numerics Tower
 
-### Phase 4: Float32/Float64
-- 13 AST nodes per width (type, literal, add/sub/mul/div, neg/abs/sqrt, lt/le, from-nat, if-nan)
-- Special values: ±Inf, NaN (multiple bit patterns, unlike Posit's single NaR)
-- Cross-family conversions: Float↔Posit, Float↔Rat, Float↔Int
-- Numeric trait instances: Add/Sub/Mul/Div/Neg/Abs/Eq/Ord for Float32/Float64
-- Open: literal form for IEEE floats vs Posit (currently `~3.14` is Posit32)
+### 🔶 LARGELY DONE — Phase 4: Float32/Float64 (re-probed 2026-08-02)
+
+Listed as pending; it is essentially all present, and nothing was pinning it
+BECAUSE the entry said it was not. Now pinned in
+`tests/test-numerics-float.rkt`.
+
+| entry item | probe |
+|---|---|
+| types + literals | `3.14f32` → Float32, `3.14f64` → Float64 |
+| Add/Sub/Mul/Div/Neg/Abs | all dispatch: `[+ 1.5f32 2.5f32]` → `4f32` |
+| Eq / Ord | `lt`, `le`, `compare` → `lt-ord` |
+| Special values ±Inf | `[/ 1.0f64 0.0f64]` → `+inf.0`; `float-finite?` sees it |
+| Float↔Rat, Float↔Int, Float↔Float32 | `float-to-rat` → `1/2`, `float-to-int` → `3`, `float-to-float32` |
+| "Open: literal form vs Posit (`~3.14` is Posit32)" | resolved by N6c — `~` literals removed, bare `3.14` is Posit32, `3.14f32`/`f64` are the IEEE forms |
+
+**Residual, unverified**: `sqrt` (no `float-sqrt` found), `if-nan`, NaN
+specifically, and Float↔Posit. Those are the honest remainder of the list.
+
+**Found while probing** — `[from-int Float64 3]` died on a raw
+`surf-from-int: arity mismatch` at parse time, taking the whole file.
+`from-int` and `from-nat` were in the BINARY operator table while their
+constructors are unary, so the binary arm called a 2-argument constructor with
+three. One argument reached the application path and worked, which is why it
+went unnoticed. Moved to the unary table; now a per-command "from-int expects 1
+argument, got 2".
+
 - Source: `docs/tracking/2026-02-19_NUMERICS_TOWER_ROADMAP.md`
 
 ### Numeric Literal Polymorphism

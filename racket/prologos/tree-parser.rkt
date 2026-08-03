@@ -335,8 +335,6 @@
    "map-get" surf-map-get  "map-assoc" surf-map-assoc
    ;; Pair
    "pair" surf-pair
-   ;; From-int / from-nat
-   "from-int" surf-from-int  "from-nat" surf-from-nat
    ))
 
 (define builtin-unary-ops
@@ -354,6 +352,13 @@
    ;; Cross-width Float conversions (Numerics N3e-rest)
    "float-finite?" surf-float-finite  "float-to-rat" surf-float-to-rat
    "float-to-int" surf-float-to-int   "float-to-float32" surf-float-to-float32
+   ;; From-int / from-nat. These were in the BINARY table, and their
+   ;; constructors are unary: `(surf-from-int n loc)`. So the binary arm called
+   ;; a 2-argument constructor with three, and `[from-int Float64 3]` died on a
+   ;; raw `surf-from-int: arity mismatch` — at parse time, taking the whole file
+   ;; with it. One arg reached `parse-application-tree` and worked, which is why
+   ;; it went unnoticed.
+   "from-int" surf-from-int  "from-nat" surf-from-nat
    ))
 
 ;; (N6e-E3) Explicit-hole section over a builtin op keyword (D-N6E.1):
