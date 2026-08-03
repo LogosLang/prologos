@@ -22,6 +22,11 @@
          "errors.rkt"
          "pretty-print.rkt"
          "global-env.rkt"
+         ;; For the cross-constructor hint: `lookup-ctor` gives a constructor's
+         ;; OWNING type, which is the whole content of the message. No cycle —
+         ;; typing-core already requires macros, and macros requires nothing here.
+         (only-in "macros.rkt" lookup-ctor ctor-meta-type-name)
+         (only-in "namespace.rkt" split-qualified-name)
          "elab-speculation-bridge.rkt"
          "atms.rkt"
          ;; PPN 4C 3C.c.3 (2026-05-24): translator + struct constructor for
@@ -734,6 +739,59 @@
 ;;     honest scaffolding framing)
 ;;   - union-exhaustion-error.derivation-chain field shape FLIPS atomically
 ;;     to (listof derivation-chain) per Q-B.2 + Q-C.6 locks
+
+;; ========================================
+;; Hint: a match arm naming another type's constructor
+;; ========================================
+;;
+;; `reduce-arm-ctx` REJECTS such an arm, and is right to — a `Bool` is never a
+;; `Box3`, so the arm can never match. But it rejects by returning #f, which
+;; surfaces as the generic "Type mismatch": accurate, and no help at all. The
+;; reader is left to spot the foreign name inside a pretty-printed expr.
+;;
+;; The hint re-derives the fact rather than being threaded down from the
+;; rejection: the failing expression still carries everything needed — the
+;; scrutinee's type from the lambda binder, and each arm's constructor name —
+;; and a post-hoc hint cannot make the rejection wrong, only better explained.
+;; Same shape as the branch-result and QTT hints in the chain below.
+;;
+;; Returns #f whenever it cannot show the arm is foreign, so it can only ever
+;; ADD information to a rejection that has already happened.
+(define (cross-ctor-arm-hint e)
+  ;; `bare-name` is typing-core-internal; this is the same one-liner
+  ;; ('prologos::data::list::List → 'List). A hint that got it wrong could only
+  ;; fail to fire, never fire wrongly.
+  (define (bare s)
+    (define-values (_p short) (split-qualified-name s))
+    (or short s))
+  (define (owning-type cname)
+    (define meta (and cname (lookup-ctor cname)))
+    (and meta (ctor-meta-type-name meta)))
+  ;; The shape a `defn` produces: the binder type IS the scrutinee type.
+  (define scrut-tc
+    (match e
+      [(expr-lam _ dom (expr-reduce _ _ _))
+       (let-values ([(tc _args) (reduce-scrutinee-decompose dom)]) tc)]
+      [_ #f]))
+  (define hit
+    (and scrut-tc
+         (match e
+           [(expr-lam _ _ (expr-reduce _ arms _))
+            (for/or ([arm (in-list arms)])
+              (define cname (expr-reduce-arm-ctor-name arm))
+              (define owner (owning-type cname))
+              (and owner
+                   (not (eq? (bare owner) (bare scrut-tc)))
+                   (cons cname owner)))]
+           [_ #f])))
+  (and hit
+       (format (string-append
+                "`~a` is a constructor of `~a`, not `~a` — that arm can never "
+                "match. Either the constructor name is wrong for a `~a`, or the "
+                "scrutinee was meant to be a `~a`.")
+               (bare (car hit)) (bare (cdr hit)) (bare scrut-tc)
+               (bare scrut-tc) (bare (cdr hit)))))
+
 (define (check/err ctx e t [loc srcloc-unknown] [names '()])
   (if (check ctx e t)
       #t
@@ -866,9 +924,15 @@
                     (and (not seal-msg)
                          (not seal-type-msg)
                          (branch-result-mismatch-hint ctx e names))]
+                   [cross-ctor-msg
+                    (and (not seal-msg)
+                         (not seal-type-msg)
+                         (not branch-result-msg)
+                         (cross-ctor-arm-hint e))]
                    [infer-hint-msg
                     (and (not seal-msg)
                          (not branch-result-msg)
+                         (not cross-ctor-msg)
                          (expr-error? actual)
                          (expr-lam? e)
                          (let ([dom (expr-lam-type e)])
@@ -895,7 +959,8 @@
                           "fused form (`[x:T]`, single-token types only)."))])
               (type-mismatch-error
                loc
-               (or seal-msg seal-type-msg branch-result-msg infer-hint-msg
+               (or seal-msg seal-type-msg branch-result-msg cross-ctor-msg
+                   infer-hint-msg
                    "Type mismatch")
                (pp-expr t names)
                (if (expr-error? actual) "<could not infer>" (pp-expr actual names))

@@ -177,13 +177,31 @@ that the SOURCE LOCATION survives — wrapping did not only print
 `#(struct:prologos-error …)`, it replaced the srcloc with `<unknown>:0:0`, so
 the line was lost along with the message.
 
-## 🐛 A specific message for a foreign constructor in a match arm (2026-07-31)
+## ✅ CLOSED `PLACEHOLDER5` — a specific message for a foreign constructor in a match arm (filed 2026-07-31, fixed 2026-08-02)
 
-`09e68e60` rejects it, but through the generic "Type mismatch" — accurate, not
-lying, but it does not say *"`mk-b3` is a constructor of `Box3`, not `Bool`"*.
-Wants the post-hoc hint pattern (a `(ctx e names) → string-or-#f` helper in
-`typing-errors`' ordered chain, as used for the branch-result and QTT
-diagnostics).
+Was:
+
+    Type mismatch
+      Expected: [Pi [x <Bool>] Nat]
+      Got:      <could not infer>
+
+Now:
+
+    `mk-b3` is a constructor of `Box3`, not `Bool` — that arm can never match.
+    Either the constructor name is wrong for a `Bool`, or the scrutinee was
+    meant to be a `Box3`.
+
+Built as the entry specified: a post-hoc `(e) → string-or-#f` hint in
+`typing-errors`' ordered chain, beside the branch-result and QTT ones. It
+RE-DERIVES the fact from the failing expression (the binder type is the
+scrutinee type; `lookup-ctor` gives each arm constructor's owning type) rather
+than being threaded down from `reduce-arm-ctx`'s `#f` — a post-hoc hint cannot
+make a rejection wrong, only better explained, and it returns #f whenever it
+cannot show the arm is foreign.
+
+Both directions pinned: the message names constructor, owning type and
+scrutinee type; and a second case asserts the hint stays SILENT on an unrelated
+mismatch. A hint that fires wrongly is worse than no hint.
 
 ## 🐛 Two soundness holes on the STRICT path, found while grounding P6 (2026-07-31)
 

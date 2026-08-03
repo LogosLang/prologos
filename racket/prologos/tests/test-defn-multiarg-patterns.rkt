@@ -309,7 +309,28 @@
         "(data Box3 (mk-b3 : Nat))\n"
         "(spec crossctor Bool -> Nat)\n"
         "(defn crossctor [b] (match b (true -> 1N) (mk-b3 x -> 2N)))"))))
-  (check-true (prologos-error? r) (format "expected an error, got: ~v" r)))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  ;; …and it SAYS SO. The rejection landed first through the generic "Type
+  ;; mismatch" — accurate, and leaving the reader to spot the foreign name in a
+  ;; pretty-printed expr. The hint names the constructor, the type it actually
+  ;; belongs to, and the type being matched.
+  (define msg (format "~a" (prologos-error-message r)))
+  (check-true (string-contains? msg "mk-b3") (format "got: ~v" msg))
+  (check-true (string-contains? msg "Box3") (format "got: ~v" msg))
+  (check-true (string-contains? msg "Bool") (format "got: ~v" msg))
+  (check-false (string=? msg "Type mismatch")
+               "the generic message is back — the hint stopped firing"))
+
+(test-case "cross-ctor/the hint does not fire on an ordinary type mismatch"
+  ;; It is post-hoc and best-effort, so the thing to pin is that it stays quiet
+  ;; when it has nothing to say — a hint that fires wrongly is worse than none.
+  (define r
+    (with-handlers ([(lambda (_) #t) (lambda (e) e)])
+      (run-last "(spec notctor Bool -> Nat)\n(defn notctor [b] \"nope\")")))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (define msg (format "~a" (prologos-error-message r)))
+  (check-false (string-contains? msg "can never match")
+               (format "the cross-ctor hint fired on an unrelated mismatch: ~v" msg)))
 
 (test-case "cross-ctor/the type's OWN constructors still work"
   ;; The membership test must not reject legitimate arms — including a match on
