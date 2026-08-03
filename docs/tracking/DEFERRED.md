@@ -2929,9 +2929,29 @@ Two distinct gaps at the same seam:
    At top level the same program gives the good message. Fix direction: give
    the def seam a pre-typing goal-head validation, or make the solve row-type
    computation surface a typed error instead of a non-type.
-2. **Row-type annotations on `def` don't parse.**
+2. **Row-type annotations on `def` don't parse** — and the 2026-08-03 probe
+   narrows WHY, and identifies it as the SAME gap as § D4.P3a item 19.
    `def r : [List {:f String}] := (goal)` → "Expression is not a valid type",
    though the very same type is what the echo PRINTS for the unannotated def.
+
+   **It is not the parser and it is not `is-type`.** Both were suspects and
+   both are innocent:
+   - `is-type` ACCEPTS an `expr-Record` — checked directly:
+     `(is-type ctx-empty (make-record 'keyword …))` → `#t`, and `infer` gives
+     `(Type 0)`.
+   - the annotation reaches the checker as a value that merely PRINTS like a
+     row (`{:f String}` in the error text), so the failure is in what a `{…}`
+     ELABORATES TO in type position, not in whether rows are types.
+
+   In type position `{…}` is already spoken for: it is the IMPLICIT-BINDER
+   surface (`spec idf {A} A -> A`, verified working). So a row-literal
+   annotation needs a disambiguation RULING between implicit binders,
+   `$select-brace`, and row types — a language-design call, not a fix.
+
+   **Same gap as § "CIU T6 D4.P3a spin-offs" item 19** ("Row-literal type
+   annotations have NO working spelling — the dropped 'annotate' remedy"),
+   which the owner already ratified as *"annotate comes back when it's real"*.
+   One ruling closes both entries; neither should be worked separately.
 
 **Pinned**: `tests/test-rel-t1-pol.rkt` § "POL.9b: def-seam PARITY on bad heads"
 asserts message EQUALITY between the two spellings, so a fix to either is
@@ -3843,7 +3863,7 @@ is honest per its inputs (Horn D trusts sourced-'present); the fix belongs at
 the dyn-assoc typing rule. The reduction-layer panic stays unreachable
 (verified: the dissoc route refuses at typing).
 
-### 19. Row-literal type annotations have NO working spelling — the dropped "annotate" remedy
+### 19. Row-literal type annotations have NO working spelling — the dropped "annotate" remedy  ·  SAME GAP as § Rel T1 POL.9b item 2 (cross-linked 2026-08-03)
 
 `def q : {:a Int} := {:a 1}` → "Expression is not a valid type";
 `[fn [m : {:host String}] m.host]` fails select-free; zero in-tree uses. The
