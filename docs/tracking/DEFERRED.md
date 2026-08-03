@@ -3643,7 +3643,27 @@ the select refusal messages as advice-that-does-not-work — an adaptation the
 owner RATIFIED 2026-07-30 ("annotate comes back when it's real"). Re-add to
 the messages when row annotations become writable (PX / F-carrier adjacent).
 
-### 20. SELECTION-typed subjects refuse as 'subject-other — capability-alignment deferred
+### 20. 🔶 SELECTION-typed subjects refuse as 'subject-other — the interim MESSAGE landed 2026-08-03; capability-aware projection still deferred
+
+The entry named "a guided selection-aware message would be a cheap interim
+improvement". Done. A selection-typed subject now gets:
+
+> select: the subject is the selection `NameOnly`, and a select block does not
+> project THROUGH a selection. A selection is a capability-restricted view
+> (`:requires`), so projecting through it would bypass the restriction it
+> exists to enforce — this is a deliberate refusal, not a shape mismatch.
+> Select from the underlying record instead.
+
+The old text said "the subject is not a record", which is TRUE of a thing that
+is precisely a restricted record VIEW — so it sent the reader to check their
+subject's shape rather than their intent. Two pins in
+`tests/test-path-selection.rkt`: the selection case, and a genuinely non-record
+subject that must KEEP the generic message (the new arm must not become the
+only thing `subject-other` can say).
+
+**Unchanged**: `select-project` still does not project through selection-typed
+subjects, and should not until selection values grow their capability-aware
+projection. The original entry follows.
 
 `select-project` projects through SCHEMA-typed subjects (the verify's
 convergent fix) but deliberately NOT through selection-typed ones: a

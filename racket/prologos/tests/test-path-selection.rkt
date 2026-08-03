@@ -1033,6 +1033,30 @@
   (check-regexp-match #rx"PVec" r)
   (check-false (regexp-match? #rx"tuple" r)))
 
+(test-case "P3a item 20: a SELECTION-typed subject refuses with a selection-aware message"
+  ;; The refusal is DELIBERATE policy, not a shape mismatch: a selection is a
+  ;; capability-restricted view (`:requires`), and projecting through one
+  ;; without the read-capability check would bypass the restriction it exists
+  ;; to enforce. The old message said "the subject is not a record", which is
+  ;; true of a thing that is precisely a restricted record VIEW, and sends the
+  ;; reader to check their subject's shape instead of their intent.
+  (define r (run-ws-last
+    (string-append
+     "schema Person\n  :name String\n  :age Int\n"
+     "selection NameOnly from Person :requires [:name]\n"
+     "def u : NameOnly := {:name \"hana\" :age 9}\n"
+     "u{name}\n")))
+  (check-regexp-match #rx"selection" r "must name what the subject actually is")
+  (check-regexp-match #rx"capability-restricted" r "must say WHY it refuses")
+  (check-false (regexp-match? #rx"is not a record" r)
+               "the old message: true, and unhelpful about a restricted record view"))
+
+(test-case "P3a item 20: a genuinely non-record subject keeps the generic message"
+  ;; The selection arm must not become the only thing `subject-other` can say.
+  (define r (run-ws-last "def n := 5\nn{a}\n"))
+  (check-regexp-match #rx"is not a record" r)
+  (check-false (regexp-match? #rx"capability-restricted" r)))
+
 ;; ---------- the LYING DIAGNOSTICS this phase actually repairs ----------
 ;; P2's real headline, unclaimed by §5.P2: because `x.0` was THREE datum items,
 ;; every arity-checking context blamed something else entirely.

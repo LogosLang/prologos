@@ -286,9 +286,27 @@
           "Could not infer type — select: `~a`~a is not a field of a vector element position — a vector subject takes ordinal steps (`.N`) or ordinal branches (`x{N M}`)"
           (or label "the step")
           (if (null? path) "" (format " (branch `~a`)" branch-str)))
-         (format
-          "Could not infer type — select: the subject~a is not a record; a select block projects fields of a keyword row"
-          (if (null? path) "" (format " (branch `~a`)" branch-str))))]
+         ;; DEFERRED D4.P3a item 20's "cheap interim improvement". A
+         ;; SELECTION-typed subject is refused DELIBERATELY, not because its
+         ;; shape is wrong: a selection is a capability-restricted VIEW
+         ;; (F1b.5-s4 `:requires`), and projecting through one without the
+         ;; read-capability check would bypass the restriction. Saying "is not a
+         ;; record" of a thing that is precisely a restricted record view sends
+         ;; the reader to check their subject's shape, which is fine.
+         (if (and (expr-fvar? row) (lookup-selection-by-name (expr-fvar-name row)))
+             (format
+              (string-append
+               "Could not infer type — select: the subject~a is the selection `~a`, "
+               "and a select block does not project THROUGH a selection. A "
+               "selection is a capability-restricted view (`:requires`), so "
+               "projecting through it would bypass the restriction it exists to "
+               "enforce — this is a deliberate refusal, not a shape mismatch. "
+               "Select from the underlying record instead.")
+              (if (null? path) "" (format " (branch `~a`)" branch-str))
+              (expr-fvar-name row))
+             (format
+              "Could not infer type — select: the subject~a is not a record; a select block projects fields of a keyword row"
+              (if (null? path) "" (format " (branch `~a`)" branch-str)))))]
     ;; ---- D4.P3c: the ordinal fail kinds ----
     [(ordinal-oob)
      (string-append
