@@ -685,3 +685,50 @@
   (check-equal? (length two) 2 (format "two chains → two forms, got: ~v" two))
   (check-true (regexp-match? #rx"3" (format "~a" (first two))) "the first chain evaluates")
   (check-true (last-is-18? two) "…and so does the second"))
+
+;; ---------------------------------------------------------------------------
+;; LET residual #1 (DEFERRED "LET track residuals"): the message named the
+;; wrong thing.
+;; ---------------------------------------------------------------------------
+;;
+;; `[fn [n : Int] let k := 4 [int+ n k]]` is a per-command error already — that
+;; part of the residual was fine. What was not fine was WHAT it said: "fn: all
+;; parameters except body must be bare symbols or a binder (x : T)", which
+;; sends the reader to stare at `n`, which is correct. The actual fault is that
+;; brackets suspend indent grouping, so the fn's bracket swallowed the whole
+;; `let` and its tokens arrived as PARAMETERS.
+;;
+;; The detection is not "is `let` among the params" — by the time the parser
+;; sees them, `expand-let` has already run over the argument list, found no
+;; body, and rewritten the let to a `($let-error msg)` marker. Two traps in one
+;; predicate: match the MARKER (not the symbol), and unwrap the marker's head
+;; with `stx->datum`, which is SHALLOW.
+
+(test-case "let-fn/a let swallowed by an fn bracket says so"
+  (define rs (run-file-ws
+    "ns letfn\ndef f := [fn [n : Int] let k := 4 [int+ n k]]\n"))
+  (define e (last rs))
+  (check-true (prologos-error? e) (format "expected an error, got: ~v" e))
+  (define msg (format "~a" e))
+  (check-true (regexp-match? #rx"read as a PARAMETER" msg)
+              (format "generic message survived: ~v" msg))
+  (check-true (regexp-match? #rx"suspend indent grouping" msg)
+              (format "no explanation of WHY: ~v" msg)))
+
+(test-case "let-fn/the suggested workaround actually works"
+  ;; A hint that names a fix nobody has run is worse than no hint. Pin it.
+  (define rs (run-file-ws
+    "ns letfn2\ndef f := [fn [n : Int] (let k := 4 [int+ n k])]\ndef r := [f 1]\n"))
+  (check-false (prologos-error? (last rs)) (format "got: ~v" (last rs)))
+  (check-true (regexp-match? #rx"r : Int" (format "~a" (last rs)))
+              (format "got: ~v" (last rs))))
+
+(test-case "let-fn/a genuine non-let bad parameter keeps the generic message"
+  ;; The hint must not become the only message the fn arm can emit.
+  (define rs (run-file-ws "ns letfn3\ndef g := [fn 5 [int+ 1 2]]\n"))
+  (define msg (format "~a" (last rs)))
+  (check-true (prologos-error? (last rs)) (format "expected an error, got: ~v" msg))
+  (check-true (regexp-match? #rx"bare symbols or a binder" msg)
+              (format "got: ~v" msg))
+  (check-false (regexp-match? #rx"read as a PARAMETER" msg)
+               (format "let hint fired on a non-let param: ~v" msg)))

@@ -1521,7 +1521,37 @@
                            (surf-lam (binder-info name #f (surf-hole loc)) inner loc))
                          body param-names))]
              [else
-              (parse-error loc "fn: all parameters except body must be bare symbols or a binder (x : T)" #f)])])]
+              ;; A `let` among the "parameters" is the commonest way to land
+              ;; here, and the generic message names the wrong thing entirely.
+              ;; `[fn [n : Int] let k := 4 [int+ n k]]` puts the whole let INSIDE
+              ;; the fn's bracket — brackets suspend indent grouping, so the
+              ;; bracket swallows the let's tokens and they arrive as parameters.
+              ;; Saying "parameters must be bare symbols" sends the reader to
+              ;; look at `n`, which is fine.
+              ;;
+              ;; By the time we see it the let is USUALLY no longer the symbol
+              ;; `let`: `expand-let` has already run over the fn's argument list
+              ;; and, finding no body, rewritten it to a `($let-error msg)`
+              ;; marker. Match both — the marker for the expanded case, the bare
+              ;; symbol for the paths that reach the parser unexpanded.
+              (if (ormap (lambda (a)
+                           (let ([d (stx->datum a)])
+                             ;; `stx->datum` is SHALLOW, so a marker's head is
+                             ;; still a syntax object — unwrap it too.
+                             (or (eq? d 'let)
+                                 (and (pair? d)
+                                      (eq? (stx->datum (car d)) '$let-error)))))
+                         params)
+                  (parse-error
+                   loc
+                   (string-append
+                    "fn: a `let` here is being read as a PARAMETER. Brackets "
+                    "suspend indent grouping, so `[fn [x : T] let y := v body]` "
+                    "puts the whole `let` inside the fn's bracket. Parenthesize "
+                    "it — `[fn [x : T] (let y := v body)]` — or hoist the "
+                    "binding out of the fn.")
+                   #f)
+                  (parse-error loc "fn: all parameters except body must be bare symbols or a binder (x : T)" #f))])])]
 
        ;; (Pi (x : T) body) or (Pi (x :m T) body)
        [(Pi)

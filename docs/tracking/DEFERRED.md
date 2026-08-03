@@ -17,24 +17,52 @@ Deferral".
 
 ## LET track residuals (X.close sweep, 2026-07-31 — track COMPLETE, `feb79740`)
 
-Three small items survive the track, none blocking, all verified at HEAD:
+Three small items survived the track. Both were re-probed 2026-08-03 and both
+filings were ACCURATE — the first is now fixed, the second is confirmed as a
+layout ruling rather than a message fix.
 
-1. **`let` inside a BRACKETED `fn` body fails with a misleading message.**
-   `[fn [n : Int] let k := 4 [int+ n k]]` → "fn: all parameters except body
-   must be bare symbols or a binder" — the let line is consumed as fn
-   PARAMETERS (brackets suspend indent grouping, so the fn's bracket swallows
-   the tokens). Per-command since LET P1 (it was a whole-file abort), but the
-   form does not work and the message names the wrong thing. Workaround: use a
-   parenthesized `(let x := 4 body)` or hoist. Found by the P0 grounding
-   (unfiled then); the fix wants fn-side layout work, not let-side.
+1. ✅ **FIXED 2026-08-03 — `let` inside a BRACKETED `fn` body said the wrong
+   thing.** `[fn [n : Int] let k := 4 [int+ n k]]` → "fn: all parameters except
+   body must be bare symbols or a binder", which sends the reader to stare at
+   `n`, which is fine. The let line is consumed as fn PARAMETERS (brackets
+   suspend indent grouping, so the fn's bracket swallows the tokens). The
+   filing said "the fix wants fn-side layout work" — that is true of making the
+   form WORK, but the message was fixable on its own, and the message was the
+   complaint. `parser.rkt`'s fn arm now detects the case and says so, names the
+   cause, and gives the parenthesized workaround.
 
-2. **The 2-line forgot-body shape gives a mediocre error.** `let x 4 / y 5`
-   (one continuation line — below the aligned discipline's ≥2 activation)
-   falls to the legacy shorthand as `(let x 4 (y 5))`, body = apply y to 5 →
-   "Unbound variable y". An error, loud, but not the guided no-body message
-   the ≥3-line shape gets. Documented at P3 (design doc §9); a fix needs the
-   1-continuation case disambiguated, which collides with the nested-form's
-   byte-transparency — revisit only if users actually hit it.
+   Two traps sat in the detection, and the first cut hit both. (a) The
+   predicate cannot look for the symbol `let`: `expand-let` has already run
+   over the fn's argument list, found no body, and rewritten it to a
+   `($let-error msg)` marker before the parser sees it — so `params` holds a
+   marker form, not `let`. (b) `stx->datum` is SHALLOW (`syntax-e`), so the
+   marker's head is still a syntax object and `(eq? (car d) '$let-error)` is
+   false. Both silent: the hint simply did not fire and the generic message
+   came out unchanged, which reads exactly like "the edit didn't take."
+
+   Pinned by three cases in `tests/test-let-blocks.rkt`: the new message
+   fires, the workaround it suggests actually runs (a hint naming a fix nobody
+   has executed is worse than no hint), and a genuine non-let bad parameter
+   (`[fn 5 …]`) still gets the generic message.
+
+2. **The 2-line forgot-body shape gives a mediocre error — NOT a message fix.**
+   Re-probed: `let x 4 / y 5` (one continuation line — below the aligned
+   discipline's ≥2 activation) falls to the legacy shorthand as
+   `(let x 4 (y 5))` → "Unbound variable y". Loud and per-command, but not the
+   guided no-body message the ≥3-line shape gets.
+
+   The 2026-08-03 probe establishes WHY the cheap fix is not available, which
+   the original filing gestured at ("collides with the nested-form's
+   byte-transparency") without pinning. `classify-let-block` bails at
+   `(< (length cont-elems) 2)`, and with the reader indent-GROUPING a deeper
+   line into one element, `y 5` is a single element — so the forgot-body arm at
+   `parse-reader.rkt:2848` is unreachable for this shape. Reclassifying it
+   means declaring that a continuation at exactly the HEAD BINDING's column is
+   a binding rather than a body — and that column is currently a legal body
+   position in the nested shorthand (`let xs [foo]` / `       [bar xs]` aligns
+   by coincidence and works today). So this is an owner ruling on layout
+   semantics, not a diagnostic improvement, and it stays deferred on that
+   basis. Revisit only if users actually hit it.
 
 3. **Unannotated `match` as a binding VALUE** dies on the QTT infer-position
    debt (generic multiplicity message). NOT a let item — the layout produces
