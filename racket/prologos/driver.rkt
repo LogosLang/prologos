@@ -2407,28 +2407,67 @@
     (reset-meta-store!)
     (process-string-ws-inner s)))
 
-;; PPN Track 2B Phase 1: Shared merge function
-;; Merges preparse output with tree parser output for WS-mode processing.
+;; ═══════════════════════════════════════════════════════════════════════════
+;; PPN Track 3 Phase 7, second half — THE MERGE'S TREE LEG IS GONE (2026-08-03)
+;; ═══════════════════════════════════════════════════════════════════════════
+;;
 ;; preparse-surfs: result of (map parse-datum (preparse-expand-all stxs))
 ;; source-str: the original source string (for read-to-tree)
-;; Returns: merged surf list (preparse generated defs + tree parser user forms)
+;; Returns: the surf list `process-surfs` consumes.
 ;;
-;; NOTE: This merge is a throwaway bridge. In the propagator-only architecture
-;; (PPN Track 3-4), each form gets a cell, both pipelines write, the lattice
-;; join resolves. The merge disappears entirely. See D.3 F10 discussion.
+;; WHAT THIS USED TO BE. A two-spine merge: the tree spine parsed the same
+;; source independently, `tree-by-line` keyed both spines by source line, and
+;; `merge-form` ended `[else tree-surf]` — "tree parser wins for user forms".
+;;
+;; WHY IT IS GONE, MEASURED (163-file corpus, 5,171 forms):
+;;   · the tree spine won **0 forms**, and never had — the key was broken three
+;;     ways at once since the code was written;
+;;   · correcting the key is not the fix — the spine then wins ~694 forms and the
+;;     corpus REGRESSES (errors 359 → 724 across 35 files with not one
+;;     improvement, two clean files lost to whole-file aborts, 32 test files
+;;     fail). 14 distinct defects across 4 layers, two of them input-contract
+;;     defects unreachable from inside tree-parser.rkt;
+;;   · and the census settled what the merge even WAS: the tree spine's datum
+;;     path feeds `parse-datum` — the SAME parser preparse uses. So this never
+;;     adjudicated between two parsers. It compared one parser against itself
+;;     across two READERS, where there is nothing to adjudicate: any residual
+;;     difference is a reader bug and belongs in a test, not in a runtime merge.
+;;
+;; THIS IS NOT A NEW DECISION — it is this phase's own designed deliverable,
+;; shipped half-done. PPN Track 3's design says verbatim: *"Delete:
+;; `merge-preparse-and-tree-parser`, `merge-form`, source-line-keyed identity
+;; matching, `tree-by-line` hash building. Total ~80 lines from driver.rkt."*
+;; `40d07caa` landed only the first half (form cells wired IN); the deletion
+;; never happened, and the comment "Phase 7 will switch process-command to read
+;; from these cells" was written in that same commit — its own unfinished half.
+;;
+;; ⚠ THE FUNCTION IS LOAD-BEARING; "retire" meant REDUCE, not delete. It still
+;; runs the reader and the form-cell pipeline, and it still returns the surf list.
+;; Three layers are routinely conflated here — only the third was removed:
+;;   (1) the reader's 5 parse cells (parse-reader.rkt)  — PPN Track 1  — KEEP
+;;   (2) the per-form cells (form-cells.rkt)            — PPN Track 3  — KEEP
+;;   (3) the merge's tree leg                           — this         — GONE
+;;
+;; What remains before Phase 7 is fully closed: wire (2) into `process-command`
+;; so the form cells are READ, then the preparse pass-through here goes too.
+;; See docs/tracking/2026-08-02_LOC_TO_LINE_MERGE_DEFECT.md and
+;; DEFERRED.md § "Dual-spine parser merge".
 (define (merge-preparse-and-tree-parser source-str preparse-surfs)
   (register-default-token-patterns!)
-  ;; Tree pipeline: read-to-tree → G(0) → T(0) → rewrite → parse
+  ;; Reader pipeline. `pt` is still needed: the FORM-CELL block below derives its
+  ;; own `tree-top-level-forms` from it. The G(0)/T(0)/rewrite/parse chain that
+  ;; used to follow fed ONLY the merge's tree leg and went with it — see the
+  ;; header. Those functions are untouched and still have live callers
+  ;; (surface-rewrite.rkt internally, tools/spine-census.rkt, the Track 3
+  ;; micro-benchmark, tests/test-parse-reader.rkt).
   (define pt (read-to-tree source-str))
-  (define grouped-root (group-tree-node (parse-tree-root pt)))
-  (define refined-root (refine-tag grouped-root))
-  (define rewritten-root (rewrite-tree refined-root))
-  (define tree-surfs (parse-top-level-forms-from-tree rewritten-root))
 
   ;; PPN Track 3 Phase 6+3a: create per-form cells on the elab-network.
-  ;; This runs alongside the merge — the form cells hold the tree-parser
-  ;; pipeline output in Pocket Universe cells with dependency-set transforms.
-  ;; Phase 7 will switch process-command to read from these cells.
+  ;; ⚠ KEEP. These are Track 3's DELIVERABLE and the merge's intended
+  ;; replacement. They are write-only today (`current-form-cell-map` /
+  ;; `current-spec-cell-map` are set here and read nowhere) — that is the
+  ;; "cells landed, propagator wiring unbuilt" state PPN Master row 3 documents,
+  ;; NOT abandonment. Deleting them would delete Phase 7's other half.
   (define net-box (current-prop-net-box))
   (when net-box
     (define enet (unbox net-box))
@@ -2441,179 +2480,22 @@
     ;; Store cell maps for downstream consumption
     (current-form-cell-map cell-map)
     (current-spec-cell-map spec-map))
-  ;; Track 2B: Source-line-keyed merge.
-  ;; Each source form is identified by its source line. Both pipelines process
-  ;; the same source, so surfs for the same source line correspond.
+  ;; The surf list. Preparse ordering preserved (Pass 5b hoisting for generated
+  ;; defs). One filter remains; both former tree-spine lookups are gone with the
+  ;; leg — they could only ever miss (the gate emptied `tree-by-line`), so their
+  ;; removal is behaviour-neutral.
   ;;
-  ;; Tree parser output used when: (a) non-error, (b) same form type as preparse,
-  ;; (c) same source line. Preparse used for: generated defs (synthetic positions),
-  ;; forms where tree parser errored, and forms where tree parser is absent.
-  ;;
-  ;; This avoids the queue alignment problem: no positional counting,
-  ;; identity-based matching via source line.
-  ;;
-  ;; Generated defs from data/trait/impl have source lines that DON'T appear
-  ;; in tree parser output → always from preparse (correct).
-
-  ;; Helper: extract the merge key (a source line) from a surf's srcloc.
-  ;;
-  ;; THIS FUNCTION ANSWERS ONE QUESTION: *is this position a usable identity?*
-  ;; It deliberately says NOTHING about which spine a surf came from — that is a
-  ;; claim about parse fitness, and it lives at the admission gate below
-  ;; (`tree-spine-admitted?`). Keeping the two apart matters: an earlier version
-  ;; of this fix expressed "the tree spine must not win" AS "the tree spine has no
-  ;; position", which is a PROXY — and the proxy is defeated by a change that is
-  ;; independently correct (giving the tree spine real srcloc structs, which three
-  ;; downstream consumers want). A guard that evaporates when someone else does
-  ;; the right thing is the wrong guard.
-  ;;
-  ;; The rule, which holds regardless of anything about the tree spine:
-  ;; **line 0 is not a line — it is the UNKNOWN sentinel — and an unknown position
-  ;; must never serve as an identity key.** Srclocs here are 1-BASED (see
-  ;; `srcloc->range`, lsp/diagnostics.rkt), `srcloc-unknown` IS `(srcloc … 0 0 0)`,
-  ;; and `datum-srcloc` (parser.rkt) falls back to `(or (syntax-line stx) 0)` for
-  ;; syntax with no position. Keying on 0 means "everything I do not know about is
-  ;; the same form" — which is exactly how the corpus's one accidental
-  ;; substitution happened.
-  ;;
-  ;; ⚠ The two list arms are legacy shapes. They were in the WRONG ORDER for the
-  ;; whole life of this function — `(list? loc)` with length ≥ 2 swallows every
-  ;; numeric-head tuple, so the `(number? (car loc))` arm, whose comment described
-  ;; the shape the tree spine actually produced, was UNREACHABLE, and the live arm
-  ;; returned the tree's hardcoded col (always 0) instead of a line. Order is
-  ;; restored here; correctness no longer DEPENDS on it, because admission is
-  ;; gated below. See docs/tracking/2026-08-02_LOC_TO_LINE_MERGE_DEFECT.md.
-  (define (loc->line loc)
-    (cond
-      [(srcloc? loc)
-       (let ([l (srcloc-line loc)])
-         ;; 0 (or #f) = unknown, never a key. Real lines are >= 1.
-         (and (number? l) (> l 0) l))]
-      [(and (pair? loc) (number? (car loc)))   ;; (line col start-pos end-pos)
-       (let ([l (car loc)]) (and (number? l) (> l 0) l))]
-      [(and (list? loc) (>= (length loc) 2))   ;; (file line col span)
-       (let ([l (cadr loc)]) (and (number? l) (> l 0) l))]
-      [else #f]))
-
-  ;; Helper: extract source line from a surf
-  (define (surf-source-line s)
-    (cond
-      [(surf-def? s) (loc->line (surf-def-srcloc s))]
-      [(surf-defn? s) (loc->line (surf-defn-srcloc s))]
-      [(surf-defn-multi? s) (loc->line (surf-defn-multi-srcloc s))]
-      [(surf-eval? s) (loc->line (surf-eval-srcloc s))]
-      [(surf-check? s) (loc->line (surf-check-srcloc s))]
-      [(surf-infer? s) (loc->line (surf-infer-srcloc s))]
-      [else #f]))
-
-  ;; Helper: same form type?
-  (define (same-form-type? a b)
-    (or (and (surf-eval? a) (surf-eval? b))
-        (and (surf-check? a) (surf-check? b))
-        (and (surf-infer? a) (surf-infer? b))
-        (and (surf-def? a) (surf-def? b))
-        (and (surf-defn? a) (surf-defn? b))
-        (and (surf-defn-multi? a) (surf-defn-multi? b))))
-
-  ;; ═══════════════════════════════════════════════════════════════════════════
-  ;; THE ADMISSION GATE — the tree spine is NOT eligible to win. On purpose.
-  ;; ═══════════════════════════════════════════════════════════════════════════
-  ;;
-  ;; MEASURED 2026-08-02 over the 163-file corpus (5,171 forms): the tree spine
-  ;; wins **0 forms**, and never has — the merge key was broken three ways at
-  ;; once since the code was written. Correcting the key is NOT the fix: with a
-  ;; correct key the tree spine wins ~694 forms and the corpus REGRESSES — errors
-  ;; 359 → 724 across 35 files with not one improvement, two clean files lost to
-  ;; whole-file aborts, and 32 test files fail. Classification found **14 distinct
-  ;; defects across 4 layers**; the `same-form-type?` list above admits six surf
-  ;; kinds, the tree spine never produces `surf-defn-multi`, and **all five of the
-  ;; remaining kinds are broken**. Two of the fourteen are input-contract defects
-  ;; that cannot be repaired inside tree-parser.rkt at all (it re-derives numbers
-  ;; from lexeme strings, losing the reader's exactness; and it parses UNEXPANDED
-  ;; source, so preparse macros / schema seal / validate are invisible to it).
-  ;;
-  ;; ⚠ WHY THE GATE IS *HERE* AND NOT AT THE KEY OR AT `merge-form`'s `[else]`:
-  ;;
-  ;;  · Not at the KEY (`loc->line`): position-knowledge is a PROXY for parse
-  ;;    fitness. The proxy is defeated by an independently-correct change — give
-  ;;    the tree spine real srcloc structs (which `format-srcloc`, the LSP's
-  ;;    `srcloc->range`, and `register-definition-location!` all want) and the key
-  ;;    starts working while the parses stay wrong. A guard that evaporates when
-  ;;    someone else does the right thing is the wrong guard.
-  ;;  · Not at `merge-form`'s `[else]`: every other arm already returns
-  ;;    `preparse-surf`, so flipping it makes `merge-form` a constant function
-  ;;    that ignores its second argument. Worse, the ERROR-recovery branch below
-  ;;    reads `tree-by-line` directly and has NO guards at all — no
-  ;;    `same-form-type?`, no spec-store — so flipping `[else]` would leave the
-  ;;    tree spine's only live role being its UNGUARDED one. That branch is where
-  ;;    a QTT bypass rides in: substituting a tree surf whose binders are all `#f`
-  ;;    turns a declared-LINEAR `spec {:1 …}` parameter into `mw`.
-  ;;
-  ;;  Gating ADMISSION covers BOTH consumers, says the thing we actually believe,
-  ;;  and is invariant under the srcloc fix.
-  ;;
-  ;; TO COMMISSION THE TREE SPINE: this flag is where it turns on, and it should
-  ;; become a SET of eligible form kinds rather than a boolean — but not before
-  ;; there is something to decide membership WITH. That instrument is a
-  ;; differential oracle (`pipeline.md` § "Exhaustive Walkers"): assert
-  ;; `tree-surf ≡ preparse-surf` corpus-wide and fail the build on divergence. It
-  ;; would have caught all fourteen defects before the key was ever touched.
-  ;; Pinned by tests/test-dual-spine-merge-key.rkt — that file fails if this is
-  ;; flipped without repairing the arms. See
-  ;; docs/tracking/2026-08-02_LOC_TO_LINE_MERGE_DEFECT.md.
-  (define tree-spine-admitted? #f)
-
-  ;; Build source-line → tree-surf map (non-errors only).
-  ;; Empty while the gate is closed, so BOTH lookups below miss and preparse is
-  ;; authoritative for every form.
-  (define tree-by-line
-    (if (not tree-spine-admitted?)
-        (hasheq)
-        (for/hasheq ([s (in-list tree-surfs)]
-                     #:when (not (prologos-error? s)))
-          (define line (surf-source-line s))
-          (if line (values line s) (values (gensym) s)))))  ;; gensym for non-matchable
-
-  ;; Per-form merge function: given preparse's surf and tree parser's surf (or #f),
-  ;; resolve which to use. This IS the cell merge function — both pipelines write,
-  ;; the merge resolves. Executed here as a map operation, not a scan.
-  (define spec-store (current-spec-store))
-
-  (define (merge-form preparse-surf tree-surf)
-    (cond
-      ;; No tree parser output for this form → preparse
-      [(not tree-surf) preparse-surf]
-      ;; Form type mismatch → preparse (safety)
-      [(not (same-form-type? preparse-surf tree-surf)) preparse-surf]
-      ;; Rel T1 POL.9b: the preparse spine is the ONLY pipeline that can see
-      ;; the reader's 'prologos-paren-origin mark (the tree spine's legacy
-      ;; def path has no source text for srcloc/property recovery). When the
-      ;; two spines DISAGREE in category — preparse parsed the def body as a
-      ;; solve (the paren-goal dispatch fired) while the tree parsed it as an
-      ;; application — preparse is authoritative. Explicit `def := solve (…)`
-      ;; parses as solve on BOTH spines, so its merge is unchanged.
-      [(and (surf-def? preparse-surf) (surf-def? tree-surf)
-            (surf-solve? (surf-def-body preparse-surf))
-            (not (surf-solve? (surf-def-body tree-surf))))
-       preparse-surf]
-      ;; Spec-annotated → preparse (has spec type injected)
-      [(and (surf-def? preparse-surf) (hash-ref spec-store (surf-def-name preparse-surf) #f)) preparse-surf]
-      [(and (surf-defn? preparse-surf) (hash-ref spec-store (surf-defn-name preparse-surf) #f)) preparse-surf]
-      [(and (surf-defn-multi? preparse-surf) (hash-ref spec-store (surf-defn-multi-name preparse-surf) #f)) preparse-surf]
-      ;; Both pipelines produced valid output → tree parser wins for user forms
-      [else tree-surf]))
-
-  ;; Apply merge-form to each preparse surf, using tree-by-line for lookup.
-  ;; Preparse ordering preserved (Pass 5b hoisting for generated defs).
-  ;;
-  ;; (N6e-E5.2, issue #69(b)) Preparse ERROR surfs are NO LONGER silently
-  ;; dropped. Previously the #:when filter vanished any preparse-mangled form
-  ;; (and often the file tail) with zero diagnostics — and ALSO discarded the
-  ;; tree parser's successful recovery of that form, because tree surfs only
-  ;; surface via the preparse spine. Now: recovery-first — if the tree parser
-  ;; parsed the errored form's source line, use the tree surf; otherwise KEEP
-  ;; the error surf, which downstream already reports (results passthrough +
-  ;; emit-error-diagnostic).
+  ;; (N6e-E5.2, issue #69(b)) Preparse ERROR surfs are NOT silently dropped —
+  ;; that half stands and is what this `for/list` still delivers by returning `s`.
+  ;; The other half of #69(b), "recovery-first" (substitute the tree parser's
+  ;; version of a form preparse mangled), is REMOVED rather than disabled: it was
+  ;; the merge's most defensible future role, but it read `tree-by-line` with NO
+  ;; guards at all — no `same-form-type?`, no spec-store, unlike the four on the
+  ;; `[else]` path — and it is where a QTT bypass rode in (substituting a tree
+  ;; surf whose binders are all `#f` turns a declared-LINEAR `spec {:1 …}`
+  ;; parameter into `mw`). If recovery is ever wanted back it must be built ON
+  ;; the form cells with a `same-form-type?` guard, not restored as it was.
+  ;; Filed as DEFERRED § "Dual-spine parser merge" item 4.
   ;;
   ;; EXCEPTION — consumed-form residue: ns/require/provide are PREPARSE-
   ;; processed (side effects); the parser's "X should have been processed
@@ -2629,15 +2511,7 @@
 
   (for/list ([s (in-list preparse-surfs)]
              #:unless (consumed-form-residue? s))
-    (cond
-      [(prologos-error? s)
-       (define line (loc->line (prologos-error-srcloc s)))
-       (define tree-match (and line (hash-ref tree-by-line line #f)))
-       (or tree-match s)]
-      [else
-       (define line (surf-source-line s))
-       (define tree-match (and line (hash-ref tree-by-line line #f)))
-       (merge-form s tree-match)])))
+    s))
 
 ;; PPN Track 3 Phase 4: Cell pipeline runs alongside merge.
 ;; Merge remains the surf source (proven, handles all forms).

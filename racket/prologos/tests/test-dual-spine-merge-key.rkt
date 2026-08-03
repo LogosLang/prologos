@@ -20,33 +20,41 @@
 ;;; layers, two of which cannot be repaired inside tree-parser.rkt at all.
 ;;; So the merge is deliberately kept preparse-authoritative.
 ;;;
-;;; ⚠ WHAT THIS FILE CATCHES, AND WHAT IT DELIBERATELY DOES NOT.
+;;; ⚠ WHAT THIS FILE CATCHES — AND THE MECHANISM IT GUARDS HAS CHANGED ONCE.
 ;;;
-;;; The defusal lives at the ADMISSION GATE — `tree-spine-admitted?` in
-;;; driver.rkt's `merge-preparse-and-tree-parser`. These assertions fail if that
-;;; gate is opened without first repairing the tree spine's arms. Each construct
-;;; below is one the tree spine parses DIFFERENTLY, so admitting it flips them.
-;;; If this file starts failing, someone opened the gate — read
+;;; HISTORY, because the file's name and its assertions now outlive two different
+;;; guards, and knowing which one you are looking at matters:
+;;;   1. originally the defusal was at the merge KEY (`loc->line`) — WRONG PLACE:
+;;;      giving the tree spine real `srcloc` structs is an independently correct
+;;;      change (`format-srcloc` RAISES on the bare list a tree surf carries; the
+;;;      LSP's `srcloc->range` degrades every diagnostic to 0:0;
+;;;      `register-definition-location!`'s values are .pnet-serialized where only
+;;;      the struct shape is registered) and it silently re-armed 694 form-swaps.
+;;;      A guard defeated by someone else doing the right thing is the wrong guard.
+;;;   2. then at an ADMISSION GATE (`tree-spine-admitted?`), which survived that.
+;;;   3. NOW: there is no gate, because **there is no tree leg to gate**. PPN
+;;;      Track 3 Phase 7's second half removed it — `tree-surfs`, `tree-by-line`
+;;;      and `merge-form` are gone from driver.rkt; the merge is the preparse
+;;;      pass-through plus the `consumed-form-residue?` filter, and it keeps the
+;;;      form-cell block (Track 3's deliverable, and the intended replacement).
+;;;
+;;; SO WHAT THIS PINS NOW: that these four constructs are parsed by PREPARSE.
+;;; Each was chosen because the legacy `parse-*-tree` arms parse it DIFFERENTLY,
+;;; so the assertions flip the moment any tree-spine output is admitted again —
+;;; whether by a new merge, by wiring the form cells to produce surfs, or by
+;;; reviving `extract-surfs-from-form-cells` (which still calls `parse-form-tree`
+;;; and today has ZERO production callers). If this file starts failing, someone
+;;; re-admitted the tree spine — read
 ;;; docs/tracking/2026-08-02_LOC_TO_LINE_MERGE_DEFECT.md before "fixing" it.
 ;;;
-;;; It does NOT trip on making `item-srcloc` (tree-parser.rkt) emit a real
-;;; 1-based `srcloc` struct — and that is the POINT, not a gap. That change is
-;;; independently correct (`format-srcloc` RAISES on the bare list a tree surf
-;;; carries today; the LSP's `srcloc->range` degrades every diagnostic to 0:0;
-;;; `register-definition-location!`'s values are .pnet-serialized where only the
-;;; struct shape is registered). An earlier version of this fix guarded at the
-;;; merge KEY, where that correct change silently re-armed 694 form-swaps; the
-;;; gate was moved precisely so a guard is not defeated by someone else doing the
-;;; right thing.
-;;;
-;;; BOTH DIRECTIONS VERIFIED (2026-08-02):
-;;;  · `item-srcloc` struct conversion applied  -> this file PASSES (guard holds)
+;;; VERIFIED WHEN THE GATE STILL EXISTED (2026-08-02) — kept because it is the
+;;; evidence that these four assertions actually discriminate:
+;;;  · `item-srcloc` struct conversion applied  -> this file PASSES
 ;;;  · `tree-spine-admitted?` flipped to #t     -> this file FAILS, e.g.
 ;;;      [0] "#(struct:unbound-variable-error (0 0 25 32) Unbound variable Keyword)"
 ;;;      [3] "church : [[Pi [x :0 <Int>] Int]] Int -> Int defined."   <- SILENT
 ;;;    Note [0]'s srcloc is the raw LIST `(0 0 25 32)` — `item-srcloc`'s TOKEN
-;;;    branch, which the struct conversion does not cover either. That list is
-;;;    what makes `format-srcloc` raise `expected: srcloc?`.
+;;;    branch. That list is what makes `format-srcloc` raise `expected: srcloc?`.
 ;;; ═══════════════════════════════════════════════════════════════════════════
 
 (require rackunit
@@ -59,8 +67,10 @@
 
 ;; process-file a fixture string under a fresh per-file mnr (isolation).
 ;; process-file — NOT process-string-ws — is load-bearing: only the FILE path
-;; leaves `current-source-str` unset, which is what routes the tree spine through
-;; the legacy `parse-*-tree` arms these constructs discriminate against.
+;; leaves `current-source-str` unset, which is what routed the tree spine through
+;; the legacy `parse-*-tree` arms these constructs discriminate against. (That
+;; fork still exists in `parse-form-tree`; the merge simply no longer reaches it.
+;; Keep using process-file so a revival is caught on the path it would revive on.)
 (define (run-file-fixture str)
   (define tmp (make-temporary-file "mergekey-~a.prologos"))
   (call-with-output-file tmp #:exists 'replace
