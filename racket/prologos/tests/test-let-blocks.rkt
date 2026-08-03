@@ -732,3 +732,71 @@
               (format "got: ~v" msg))
   (check-false (regexp-match? #rx"read as a PARAMETER" msg)
                (format "let hint fired on a non-let param: ~v" msg)))
+
+;; ---------------------------------------------------------------------------
+;; U1 (OCapN handoff review): a `let` whose VALUE is on a continuation line
+;; ---------------------------------------------------------------------------
+;;
+;; A head binding ending in `:=` has NO VALUE on its line, but
+;; `classify-let-block` accepted it as the aligned surface anyway — which
+;; assumes the head line IS a complete binding. The body line was then folded
+;; into the value's ARGUMENT LIST:
+;;
+;;     defn g [n]
+;;       let x :=
+;;           [f n 1]
+;;         [int+ x 10]
+;;
+;; became `[f n 1 [int+ x 10]]` → "Too many arguments to 'f'", expected 2 got
+;; 3, naming a function the user never mis-called. Two sites in the OCapN tree
+;; were worked around by re-indenting; the compiler defect was not fixed.
+;;
+;; ⚠ The filing was specific about the test: "a regression test MUST run
+;; through `imports`, not `process-string` — the failure is on the module-load
+;; path". Honoured — the module-load path is where U1 actually cost a day, and
+;; a `process-string` test would not have exercised it.
+
+(test-case "let-u1/a continuation-line VALUE binds correctly, through imports"
+  (define lib (make-temporary-file "prologos-u1-~a" 'directory))
+  (define dir (build-path lib "prologos" "u1t"))
+  (make-directory* dir)
+  (call-with-output-file (build-path dir "m.prologos") #:exists 'truncate
+    (lambda (o)
+      (display (string-append
+                "ns prologos::u1t::m\n\n"
+                "spec f Int Int -> Int\n"
+                "defn f [a b] [int+ a b]\n\n"
+                "spec g Int -> Int\n"
+                "defn g [n]\n"
+                "  let x :=\n"
+                "      [f n 1]\n"
+                "    [int+ x 10]\n")
+               o)))
+  (define user (build-path lib "user.prologos"))
+  (call-with-output-file user #:exists 'truncate
+    (lambda (o)
+      (display (string-append "ns u1tuser\n\n"
+                              "imports prologos::u1t::m\n\n"
+                              "def r := [g 5]\nr\n") o)))
+  (define out
+    (with-handlers ([exn:fail? (lambda (e) (format "RAISED: ~a" (exn-message e)))])
+      (parameterize ([current-lib-paths (list lib)])
+        (install-module-loader!)
+        (process-file user))))
+  (check-true (list? out) (format "the module failed to load: ~a" out))
+  ;; g 5 = f 5 1 = 6, then + 10 = 16. Assert the VALUE: a mis-grouped
+  ;; `[f n 1 [int+ x 10]]` is an arity error, so "no error" alone would also
+  ;; pass a fix that merely stopped erroring.
+  (check-true (regexp-match? #rx"16" (format "~a" (last out)))
+              (format "~v" out))
+  (delete-directory/files lib #:must-exist? #f))
+
+(test-case "let-u1/the ALIGNED block and SIBLING chain still work (controls)"
+  ;; The guard declines the aligned reading only when the head line ENDS at
+  ;; `:=`. These are the two shapes it must not touch.
+  (define aligned (run-file-ws "ns u1c1\ndef z :=\n  let x 4\n      y 5\n    [+ x y]\nz\n"))
+  (check-false (prologos-error? (last aligned)) (format "~v" aligned))
+  (check-true (regexp-match? #rx"9" (format "~a" (last aligned))) (format "~v" aligned))
+  (define chain (run-file-ws "ns u1c2\ndef w :=\n  let a := 1\n  let b := 2\n    [+ a b]\nw\n"))
+  (check-false (prologos-error? (last chain)) (format "~v" chain))
+  (check-true (regexp-match? #rx"3" (format "~a" (last chain))) (format "~v" chain)))

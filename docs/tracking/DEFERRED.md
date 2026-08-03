@@ -4157,8 +4157,33 @@ Highest-value items, in the order that document recommends:
 - **A4.** Two identical-arm `match` sites guard every outbound dial and send;
   an arm-collapsing optimisation would delete the outbound path with a green
   suite.
-- **U1–U2 (upstream/main).** The LET grouping regression and the ~N^2.17
-  `build-tree-from-domains`.
+- ~~**U1.**~~ FIXED 2026-08-03. A `let` whose VALUE sits on a continuation line
+  mis-grouped: the BODY line was folded into the value's argument list, so
+
+  ```
+  defn g [n]
+    let x :=
+        [f n 1]
+      [int+ x 10]
+  ```
+
+  became `[f n 1 [int+ x 10]]` — *"Too many arguments to 'f'", expected 2 got
+  3*, naming a function the user never mis-called. Two sites in this tree were
+  worked around by re-indenting (`38a4e523`); the compiler defect was not.
+
+  Fixed exactly where the filing said: `classify-let-block` now declines the
+  aligned reading when the head binding ENDS at `:=`, since that shape has no
+  value on its line and the aligned surface assumes the head line IS a
+  complete binding. Declining hands the form to the nested/continuation-value
+  path, which reads it correctly. Narrow by construction — the aligned block
+  and the sibling `:=` chain are pinned as controls.
+
+  The filing was also specific about the TEST — *"a regression test must run
+  through `imports`, not `process-string` — the failure is on the module-load
+  path"* — and that is honoured. The test asserts the VALUE (16), not merely
+  the absence of an error: a mis-grouped call is an arity error, so
+  "no error" alone would pass a fix that merely stopped erroring.
+- **U2 (upstream/main).** The ~N^2.17 `build-tree-from-domains`.
 - ~~**U3.**~~ FIXED 2026-08-03. `load-module` raised with only
   `prologos-error-message`, so a library module's error arrived as a bare
   *"imports: Error loading module X: Unbound variable"* — no NAME, no SRCLOC,

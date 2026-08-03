@@ -2868,6 +2868,26 @@
        ;; bracket-binding head (car of head-elems is a group) or empty head:
        ;; not the aligned surface.
        [(or (null? head-elems) (pair? (syntax-e (car head-elems)))) elems]
+       ;; OCapN review U1: a head binding ending in `:=` has NO VALUE on its
+       ;; line, so the aligned-block reading — which assumes the head line IS a
+       ;; complete binding — mis-groups: the BODY line gets folded into the
+       ;; value's argument list. Verified before fixing:
+       ;;
+       ;;     defn g [n]
+       ;;       let x :=
+       ;;           [f n 1]
+       ;;         [int+ x 10]
+       ;;
+       ;; became `[f n 1 [int+ x 10]]` — "Too many arguments to 'f'", expected
+       ;; 2 got 3, naming a function the user never mis-called.
+       ;;
+       ;; Declining here hands the form to the nested/continuation-value path,
+       ;; which is the one that reads "value on the following line" correctly.
+       ;; Narrow by construction: it fires only when the head line ENDS at the
+       ;; `:=`, which is exactly the shape with no value to bind.
+       [(let ([last-head (last head-elems)])
+          (eq? (syntax-e last-head) ':=))
+        elems]
        [else
         (define cols (sort (remove-duplicates (map syntax-column cont-elems)) <))
         (define body-col (car cols))
