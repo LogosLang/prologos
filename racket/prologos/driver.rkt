@@ -1821,6 +1821,12 @@
        ;; status-quo-equivalent; the 4B.5.b SCC pass owns it).
        [(try-defer-general-body name def-srcloc body '()) => values]
        [else
+        ;; POL.9b: the goal-head classification runs BEFORE typing — after it,
+        ;; the failure is already a non-type and the head is unrecoverable.
+        (define head-err (solve-head-error body))
+        (cond
+         [head-err head-err]
+         [else
         ;; Track 4B Phase 9: on-network first, fallback for unhandled
         (define inferred-type
           (time-phase! type-check
@@ -1941,7 +1947,7 @@
                        ;; is CHECKED here — the first point at which the
                        ;; definition it describes actually exists.
                        (or (spec-example-mismatch name def-srcloc)
-                           (format "~a : ~a defined." name (pp-expr zonked-type)))])])])])])])])]
+                           (format "~a : ~a defined." name (pp-expr zonked-type)))])])])])])])])])]
     ;; Existing annotated path (type annotation present)
     [else
      ;; 1. Elaborate type
@@ -2158,6 +2164,42 @@
                                  (format "~a : ~a defined."
                                          name (pp-expr zonked-type)))])])]
                       )])])])])])])]))
+
+;; ========================================
+;; Rel T1 POL.9b — goal-head validation at the DEF seam
+;; ========================================
+;;
+;; At top level `(dbl 3)` on a FUNCTION gives the guiding message
+;; "dbl is a function — application is written [dbl …]; parens make a
+;; relational goal". On a `def` the same program gave the generic "Expression
+;; is not a valid type", because the def arm TYPE-CHECKS the body before
+;; evaluating it, so the runtime classifier in `solve-app-goal` never fires.
+;;
+;; This runs that same classifier — `raise-unknown-relation-error`, now
+;; exported rather than re-derived — before typing, and converts its raise into
+;; an ordinary per-command error. Returns #f when the body is not a solve, or
+;; when the head IS a registered relation, so every other def is untouched.
+;;
+;; Both `def` spellings inherit it: the implicit `def r := (goal)` and the
+;; explicit `def r := solve (goal)` elaborate to the same `expr-solve`, which is
+;; why `test-rel-t1-pol.rkt`'s parity assertion keeps holding.
+(define (solve-head-error body)
+  (define goal
+    (cond
+      [(expr-solve? body) (expr-solve-goal body)]
+      [(expr-solve-one? body) (expr-solve-one-goal body)]
+      [(expr-solve-with? body) (expr-solve-with-goal body)]
+      [else #f]))
+  (and (expr-goal-app? goal)
+       (let ([nm (expr-goal-app-name goal)])
+         (and (not (relation-lookup (current-relation-store) nm))
+              (with-handlers ([(lambda (e) #t)
+                               (lambda (e)
+                                 (prologos-error
+                                  #f
+                                  (if (exn? e) (exn-message e) (format "~a" e))))])
+                (raise-unknown-relation-error 'solve nm)
+                #f)))))
 
 ;; ========================================
 ;; Process a multi-body defn group

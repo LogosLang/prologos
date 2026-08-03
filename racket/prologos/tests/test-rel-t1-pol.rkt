@@ -812,16 +812,41 @@
                  (string-append P9FIX "def r := solve (fruit-color f \"blue\")\nr")))
   (check-equal? paren expl))
 
-(test-case "POL.9b: def-seam PARITY on bad heads (pre-existing diagnostic, pinned)"
-  ;; Both spellings hit the same pre-existing def-seam type error — the
-  ;; guiding function diagnostic does not reach the def seam yet (typing
-  ;; precedes evaluation there). Pinned so a future diagnostic fix shows.
+(test-case "POL.9b: def-seam PARITY on bad heads — and the GUIDING message now reaches it"
+  ;; This test was written to pin a KNOWN GAP: both spellings hit the same
+  ;; generic "not a valid type" because the def arm types the body before
+  ;; evaluating, so `solve-app-goal`'s classifier never fired there. It said
+  ;; "pinned so a future diagnostic fix shows" — and on 2026-08-03 it showed.
+  ;;
+  ;; The def seam now runs `raise-unknown-relation-error` — the SAME classifier
+  ;; the runtime solver uses, exported rather than re-derived — before typing.
+  ;; PARITY is the invariant and still holds; what changed is the message both
+  ;; spellings get.
   (define paren (result-msg (run-ns-ws-last
                              (string-append P9FIX "def bad := (dbl 3)"))))
   (define expl  (result-msg (run-ns-ws-last
                              (string-append P9FIX "def bad := solve (dbl 3)"))))
   (check-equal? paren expl "paren spelling ≡ explicit solve spelling")
-  (check-true (string-contains? paren "not a valid type") paren))
+  (check-true (string-contains? paren "is a function") paren)
+  (check-true (string-contains? paren "[dbl") paren)
+  (check-false (string-contains? paren "not a valid type") paren))
+
+(test-case "POL.9b: the def seam agrees with TOP LEVEL on a bad head"
+  ;; The point of the fix, stated as the property rather than the string: the
+  ;; same program at top level and on a `def` RHS must classify the same way.
+  ;; The top-level message was always right; the def seam is what moved.
+  (define top (result-msg (run-ns-ws-last (string-append P9FIX "(dbl 3)"))))
+  (define deffed (result-msg (run-ns-ws-last
+                              (string-append P9FIX "def bad := (dbl 3)"))))
+  (check-equal? top deffed "top level and def seam must classify a bad head alike"))
+
+(test-case "POL.9b: a REAL relation on a def RHS is untouched (control)"
+  ;; The guard returns #f for a head that IS registered, so every working
+  ;; solve-on-a-def keeps working. Without this the fix could be "all defs
+  ;; error" and the parity assertion above would still pass.
+  (define r (run-ns-ws-last
+             (string-append P9FIX "def good := (fruit-color f \"blue\")\ngood")))
+  (check-true (string? r) (result-msg r)))
 
 (test-case "POL.9b: bare/bracket def RHS stays application-value"
   (define r (run-ns-ws-last

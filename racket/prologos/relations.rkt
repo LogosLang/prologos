@@ -78,6 +78,11 @@
  collect-ast-vars
  ;; Clause-variable collection (used by the adaptive dispatcher's body-local check)
  collect-clause-vars
+ ;; Rel T1 POL.9b (2026-08-03): exported so the DEF SEAM can run the same
+ ;; head classification the runtime solver does. The def arm type-checks before
+ ;; evaluating, so `solve-app-goal`'s call never fires there and the guiding
+ ;; message never reached a `def`. One derivation, two consumers.
+ raise-unknown-relation-error
  ;; Rel T1 A.3: static floundering / range-restriction gate
  check-relation-floundering
  clause-floundering-msg

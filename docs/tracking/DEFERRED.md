@@ -2893,7 +2893,35 @@ inherited it and pinned it).
 
 Two distinct gaps at the same seam:
 
-1. **Guiding diagnostics don't reach the def seam.** `def bad := (dbl 3)`
+1. ✅ **FIXED 2026-08-03 — guiding diagnostics now reach the def seam.**
+   `def bad := (dbl 3)` and `def bad := solve (dbl 3)` both give
+   *"solve: dbl is a function — application is written [dbl …]; parens make a
+   relational goal"* — the same message top level always gave.
+
+   Taken as the entry prescribed ("give the def seam a pre-typing goal-head
+   validation"). `raise-unknown-relation-error` is EXPORTED and called from the
+   def arm BEFORE typing, with its raise converted to an ordinary per-command
+   error. One derivation, two consumers — re-deriving the classification would
+   have been the `infer`/`inferQ` twin-drift shape.
+
+   Order is load-bearing: after typing, the failure is already a non-type and
+   the head is unrecoverable, which is exactly why the message never arrived.
+
+   `tests/test-rel-t1-pol.rkt` was WRITTEN to catch this — "pinned so a future
+   diagnostic fix shows" — and it did, asserting the old
+   `"not a valid type"` text. Updated rather than deleted: PARITY between the
+   two spellings is the invariant and still holds; only the message both get
+   changed. Two tests added — that the def seam and TOP LEVEL now classify a
+   bad head IDENTICALLY (the property, not the string), and that a REAL
+   relation on a def RHS still works, since without that control "every def
+   errors" would satisfy the parity assertion too.
+
+   **Item 2 below is unchanged**: row-type annotations on `def` still do not
+   parse.
+
+   Original filing follows.
+
+**Original item 1**: `def bad := (dbl 3)`
    (or `:= solve (dbl 3)`) dies with the generic *"Expression is not a valid
    type"* — the def arm type-checks the body BEFORE evaluation, so the runtime
    classifier (`raise-unknown-relation-error`, relations.rkt) never fires and
