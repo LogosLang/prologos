@@ -4662,6 +4662,33 @@
   ;; If constraints were stripped, append `where` so maybe-inject-where adds them back.
   ;; Phase 3a: Only standard constraints go in the where clause; HasMethod params are already
   ;; in the typed bracket.
+  ;;
+  ;; Several body forms headed by a BARE SYMBOL means an application was written
+  ;; without brackets — `defn bump [x] int+ x 1` instead of `[int+ x 1]` — and
+  ;; splicing them produced
+  ;; `(defn bump [x <Int>] <Int> int+ x 1)`, which parses as a THREE-parameter
+  ;; typed defn and dies as "Type mismatch … [fn [x <Int>] [fn [y <Int>] [fn [z
+  ;; <Int>] [int+ y z]]]]": a message about a lambda the user never wrote.
+  ;;
+  ;; The good message already exists — WITHOUT a spec the same source gets
+  ;; "defn: expected <ReturnType> or : ReturnType, got int+" from the parser's
+  ;; bare-params guard. The spec path was simply bypassing it. So: decline to
+  ;; inject and hand the datum back unchanged, and that guard speaks.
+  ;;
+  ;; Declining rather than raising is deliberate — this runs inside
+  ;; `preparse-expand-all`, where a raise costs the WHOLE FILE. The parser's
+  ;; error is a per-command value.
+  ;;
+  ;; The BARE-SYMBOL head is load-bearing and was learned the hard way: "a
+  ;; well-formed defn under a spec has exactly one body form" is FALSE. A `let`
+  ;; CHAIN is legitimately several forms at this stage — `let x 4` / `let y 5` /
+  ;; body — because the sibling-chain merge runs later. Declining on mere
+  ;; multiplicity dropped the spec's types for every specced let-chain defn and
+  ;; broke two `test-let-blocks` cases. Those forms are LISTS; only the
+  ;; unbracketed-application mistake leads with a bare symbol.
+  (cond
+    [(and (> (length body-forms) 1) (symbol? (car body-forms))) datum]
+    [else
   (define base-defn
     (cond
       [(or (null? where-constraints) user-provides-dicts?)
@@ -4675,7 +4702,7 @@
   (if (null? brace-forms)
       base-defn
       (let ([after-name (cddr base-defn)])
-        `(defn ,name ,@brace-forms ,@after-name))))
+        `(defn ,name ,@brace-forms ,@after-name)))]))
 
 ;; Inject spec types into a multi-arity defn datum.
 ;; Each $pipe clause gets its corresponding spec branch type.

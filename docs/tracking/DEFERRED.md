@@ -2221,13 +2221,36 @@ command passed throughout and proves nothing here — plus one that asserts the
 def and the command PRINT IDENTICALLY, since the disagreement was the defect,
 and a unit table for the multiplicity relation in both directions.
 
-**Found while probing, NOT this defect**: an unbracketed application as a
-`defn` body (`defn bump [x] int+ x 1`) reads its trailing tokens as extra
-PARAMETERS — `fn x. fn y. fn z. int+ y z` — and fails with a type mismatch
-naming a 3-parameter lambda. Bracketing the body is the documented form and
-every example in `prologos-syntax.md` uses it, so this is a diagnostic-quality
-item, not a semantics one. Unrelated to HOFs: a monomorphic `int+` body fails
-identically.
+**Found while probing, NOT this defect — ✅ FIXED 2026-08-03**: an unbracketed
+application as a `defn` body (`defn bump [x] int+ x 1`) reported, WITH a spec
+present, "Type mismatch … `[fn [x <Int>] [fn [y <Int>] [fn [z <Int>] [int+ y
+z]]]]`" — a message about a three-parameter lambda the user never wrote.
+
+Two faults, and the first hid the second. `inject-spec-into-defn` spliced
+`,@body-forms` unconditionally, so three body forms became
+`(defn bump [x <Int>] <Int> int+ x 1)` — which parses as a THREE-parameter
+typed defn, bypassing the parser's bare-params guard entirely. WITHOUT a spec
+the same source already produced a proper parse error, so the two paths
+disagreed about the same mistake and only the spec'd one was misleading.
+
+Fixed by DECLINING to inject (rather than raising — this runs inside
+`preparse-expand-all`, where a raise costs the whole file) so the parser's
+guard speaks, and by making that guard name the actual mistake instead of the
+return-type slot: *"defn bump: the body looks like an application written
+without brackets — write `[int+ …]`."*
+
+⚠ **The guard's BARE-SYMBOL head is load-bearing, and the obvious predicate is
+wrong.** "A well-formed defn under a spec has exactly one body form" is FALSE:
+a `let` CHAIN is legitimately several forms at injection time, because the
+sibling-chain merge runs later. Declining on mere multiplicity dropped the
+spec's types for every specced let-chain defn and broke two `test-let-blocks`
+cases — caught by the suite, not by reasoning. Those forms are LISTS; only the
+unbracketed-application mistake leads with a bare symbol.
+
+Pinned in `test-error-messages.rkt`, including an assertion that the spec'd and
+un-spec'd paths now report the SAME message (a test on either alone would have
+missed the disagreement that was the whole defect) and the specced let-chain
+control.
 
 ---
 

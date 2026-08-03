@@ -5325,6 +5325,22 @@
                        all-binders))
               (define param-names (map binder-info-name all-binders))
               (surf-defn name full-type param-names body loc)])])]
+       ;; More than one form after the parameter list, headed by a plain symbol,
+       ;; is almost always an application written without brackets:
+       ;; `defn bump [x] int+ x 1` instead of `defn bump [x] [int+ x 1]`. Say so
+       ;; — the generic message names the RETURN TYPE slot, which sends the
+       ;; reader looking for a type annotation they never meant to write.
+       [(and (>= (length rest-args) 2)
+             (symbol? (stx->datum ret-type-stx)))
+        (parse-error
+         loc
+         (format (string-append
+                  "defn ~a: the body looks like an application written without "
+                  "brackets — write `[~a …]`. A `defn` takes ONE body form after "
+                  "its parameter list; everything after `~a` was read as more of "
+                  "the definition, not as arguments to it.")
+                 name (stx->datum ret-type-stx) (stx->datum ret-type-stx))
+         #f)]
        [else
         (parse-error loc (format "defn: expected <ReturnType> or : ReturnType, got ~a"
                                  (stx->datum ret-type-stx)) #f)])]))
@@ -5396,6 +5412,22 @@
                        binders))
               (define param-names (map binder-info-name binders))
               (surf-defn name full-type param-names body loc)])])]
+       ;; More than one form after the parameter list, headed by a plain symbol,
+       ;; is almost always an application written without brackets:
+       ;; `defn bump [x] int+ x 1` instead of `defn bump [x] [int+ x 1]`. Say so
+       ;; — the generic message names the RETURN TYPE slot, which sends the
+       ;; reader looking for a type annotation they never meant to write.
+       [(and (>= (length rest-args) 2)
+             (symbol? (stx->datum ret-type-stx)))
+        (parse-error
+         loc
+         (format (string-append
+                  "defn ~a: the body looks like an application written without "
+                  "brackets — write `[~a …]`. A `defn` takes ONE body form after "
+                  "its parameter list; everything after `~a` was read as more of "
+                  "the definition, not as arguments to it.")
+                 name (stx->datum ret-type-stx) (stx->datum ret-type-stx))
+         #f)]
        [else
         (parse-error loc (format "defn: expected <ReturnType> or : ReturnType, got ~a"
                                  (stx->datum ret-type-stx)) #f)])]))
@@ -5545,6 +5577,22 @@
                        binders))
               (define param-names (map binder-info-name binders))
               (surf-defn name full-type param-names body loc)])])]
+       ;; More than one form after the parameter list, headed by a plain symbol,
+       ;; is almost always an application written without brackets:
+       ;; `defn bump [x] int+ x 1` instead of `defn bump [x] [int+ x 1]`. Say so
+       ;; — the generic message names the RETURN TYPE slot, which sends the
+       ;; reader looking for a type annotation they never meant to write.
+       [(and (>= (length rest-args) 2)
+             (symbol? (stx->datum ret-type-stx)))
+        (parse-error
+         loc
+         (format (string-append
+                  "defn ~a: the body looks like an application written without "
+                  "brackets — write `[~a …]`. A `defn` takes ONE body form after "
+                  "its parameter list; everything after `~a` was read as more of "
+                  "the definition, not as arguments to it.")
+                 name (stx->datum ret-type-stx) (stx->datum ret-type-stx))
+         #f)]
        [else
         (parse-error loc (format "defn: expected <ReturnType> or : ReturnType, got ~a"
                                  (stx->datum ret-type-stx)) #f)])]))

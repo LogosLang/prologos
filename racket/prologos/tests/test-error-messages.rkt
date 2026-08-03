@@ -621,3 +621,66 @@
   (check-true (regexp-match? branch-mismatch-rx msg) (format "got: ~v" msg))
   (check-false (regexp-match? #rx"cannot infer the type of an unannotated" msg)
                (format "got: ~v" msg)))
+
+;; ---------------------------------------------------------------------------
+;; An unbracketed application as a `defn` body
+;; ---------------------------------------------------------------------------
+;;
+;; `defn bump [x] int+ x 1` (rather than `[int+ x 1]`) reported, WITH a spec
+;; present, "Type mismatch … [fn [x <Int>] [fn [y <Int>] [fn [z <Int>] [int+ y
+;; z]]]]" — a message about a three-parameter lambda the user never wrote.
+;;
+;; Two faults, and the first hid the second. `inject-spec-into-defn` spliced
+;; `,@body-forms` unconditionally, so three body forms became
+;; `(defn bump [x <Int>] <Int> int+ x 1)`, which parses as a THREE-parameter
+;; typed defn — bypassing the parser's bare-params guard entirely. Without a
+;; spec the same source already got a proper parse error, so the two paths
+;; disagreed about the same mistake.
+;;
+;; Fix: under a spec, more than one body form means the mistake, so decline to
+;; inject and let the parser's guard speak. Declining rather than raising is
+;; deliberate — this runs inside `preparse-expand-all`, where a raise costs the
+;; whole file. And the guard's message now names the actual mistake instead of
+;; the return-type slot.
+
+(define unbracketed-body-rx #rx"application written without brackets")
+
+(test-case "unbracketed defn body: WITH a spec (the path that was bypassed)"
+  (define r (run-ns-last "(ns ub1)\n(spec b1 Int -> Int)\n(defn b1 (x) int+ x 1)"))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (define msg (prologos-error-message r))
+  (check-true (regexp-match? unbracketed-body-rx msg) (format "got: ~v" msg))
+  ;; names the head token, so the suggested spelling is actionable
+  (check-true (regexp-match? #rx"int\\+" msg) (format "got: ~v" msg))
+  ;; and no longer talks about a lambda the user never wrote
+  (check-false (regexp-match? #rx"Type mismatch" msg) (format "got: ~v" msg)))
+
+(test-case "unbracketed defn body: WITHOUT a spec — the two paths agree"
+  ;; The no-spec path always errored; the point is that both now give the SAME
+  ;; message. A test on either alone would have missed the disagreement.
+  (define with-spec
+    (prologos-error-message
+     (run-ns-last "(ns ub2)\n(spec b2 Int -> Int)\n(defn b2 (x) int+ x 1)")))
+  (define no-spec
+    (prologos-error-message (run-ns-last "(ns ub3)\n(defn b2 (x) int+ x 1)")))
+  (check-true (regexp-match? unbracketed-body-rx no-spec) (format "got: ~v" no-spec))
+  (check-equal? no-spec with-spec
+                "the spec'd and un-spec'd paths must report the same mistake"))
+
+(test-case "unbracketed defn body: a specced LET CHAIN is not the mistake (control)"
+  ;; The guard's bare-symbol head is load-bearing, and this is why. "A
+  ;; well-formed defn under a spec has exactly one body form" is FALSE: a `let`
+  ;; chain is legitimately several forms at injection time, because the
+  ;; sibling-chain merge runs later. Declining on mere multiplicity dropped the
+  ;; spec's types for every specced let-chain defn. Those forms are LISTS; only
+  ;; the mistake leads with a bare symbol.
+  (define r (run-ns-ws-last
+             "ns ub4\nspec b4 Int -> Int\ndefn b4 [n]\n  let a := 4\n  let b := 5\n    [+ n [+ a b]]\n"))
+  (check-false (prologos-error? r) (format "expected success, got: ~v" r)))
+
+(test-case "a well-formed spec'd defn still works (control)"
+  ;; The guard declines injection on >1 body form; this is the one-form case it
+  ;; must not touch. 1872 `defn` sites in lib/ ride on this.
+  (define r (run-ns-last "(ns ub5)\n(spec b5 Int -> Int)\n(defn b5 (x) (int+ x 1))"))
+  (check-false (prologos-error? r) (format "expected success, got: ~v" r))
+  (check-true (regexp-match? #rx"b5 : Int -> Int" (format "~a" r)) (format "got: ~v" r)))
