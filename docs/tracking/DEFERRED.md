@@ -989,14 +989,14 @@ touch).
 Two known, low-severity surface gaps found across the F1b arc — workarounds exist,
 neither blocks records-correct-in-principle; filed so the doc-truth is honest.
 
-1. **`<`-check-preds are unusable in WS files** — a `<`-leading form (`:check (< _ 5)`)
-   is mis-read: `<` opens an angle-type reader GROUP in WS mode, so the predicate
-   never parses as a comparison. **Workaround: `(> N _)`** (reversed direction:
-   `:check (> 5 _)` means "field < 5"; the `>`/`>=` normalizer handles the arg
-   swap). Same CLASS as the 7g `?`-in-keyword-token gap (a WS-reader charset/
-   grouping issue) — the reader-level fix would let `<` inside a check pred read as
-   the operator, not the angle-group opener. Pre-existing; not records-specific.
-2. **`match` with an INLINE `validate` scrutinee fails inference** —
+1. ✅ **RESOLVED — `<`-check-preds work in WS files** (re-probed 2026-08-02).
+   `:check (< _ 5)` parses AND the predicate is live: `{:n 3}` validates `ok`,
+   `{:n 7}` comes back `err {:n check-failed "(< _ 5)"}`. The passing case alone
+   would not have shown that — 3 < 5 either way — so the failing case is the
+   test, and both are pinned in `tests/test-punify-surface.rkt`. The prescribed
+   `(> 5 _)` workaround is no longer needed.
+2. **`match` with an INLINE `validate` scrutinee fails inference** — CONFIRMED
+   still true (re-probed 2026-08-02: "Could not infer type"). —
    `match [validate S e] | ok v -> … | err es -> …` fails to infer the scrutinee's
    `Result S E` type inline; **def-bind first** (`def r := [validate S e]` then
    `match r …`) works. Route-sensitivity in the checker's inline-vs-def-bound

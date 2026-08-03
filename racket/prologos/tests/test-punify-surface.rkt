@@ -70,3 +70,29 @@
   ;; concrete equality functions (`int-eq`, `str-eq`)."
   (check-true (string-contains? (format "~a" (run-ns-ws-last "ns pu5\n[eq? 1 1]\n")) "true"))
   (check-true (string-contains? (format "~a" (run-ns-ws-last "ns pu6\n[eq? \"a\" \"a\"]\n")) "true")))
+
+;; ----------------------------------------------------------------
+;; CIU T6 WS-surface non-blockers, re-probed
+;; ----------------------------------------------------------------
+
+(test-case "schema/a `<` check predicate works in a WS file"
+  ;; DEFERRED (CIU T6, 2026-07-19) said a `<`-leading form is mis-read in WS
+  ;; mode — "`<` opens an angle-type reader GROUP, so the predicate never parses
+  ;; as a comparison" — and prescribed the reversed `(> 5 _)` as the workaround.
+  ;;
+  ;; Re-probed 2026-08-02: it parses AND the predicate is live. The passing case
+  ;; alone would not show that (3 < 5 either way), so the failing case is what
+  ;; makes this a test: `{:n 7}` must come back `err` naming the predicate.
+  (define good (run-ns-ws-last
+                "ns cw\nschema S3\n  :n Int :check (< _ 5)\n[validate S3 {:n 3}]\n"))
+  (check-false (prologos-error? good) (format "got: ~v" good))
+  (check-true (string-contains? (format "~a" good) "ok") (format "got: ~v" good))
+
+  (define bad (run-ns-ws-last
+               "ns cw2\nschema S4\n  :n Int :check (< _ 5)\n[validate S4 {:n 7}]\n"))
+  (check-false (prologos-error? bad) (format "got: ~v" bad))
+  (define text (format "~a" bad))
+  (check-true (string-contains? text "err")
+              (format "the `<` predicate parsed but is not live: ~v" bad))
+  (check-true (string-contains? text "(< _ 5)")
+              (format "the failure does not name the predicate: ~v" bad)))
