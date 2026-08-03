@@ -3212,3 +3212,80 @@ already cons, so a marker can ride today): `macros.rkt:3348` bare `solver` and
 `macros.rkt:3360` bare `schema` — both verified live whole-file aborts. If the
 goal is to retire whole-file aborts by volume, these come first.
 
+
+---
+
+## Dual-spine parser merge (filed 2026-08-02 at the `loc->line` defect close, `d4e32398`..`eec12ea2`)
+
+Context: `docs/tracking/2026-08-02_LOC_TO_LINE_MERGE_DEFECT.md` §0. The merge key
+was broken three ways; the tree spine has won **0 of 5,171 corpus forms, ever**;
+correcting the key REGRESSES the corpus (errors 359→724, 32 test files fail), so
+the spine is now held shut on purpose at `tree-spine-admitted?` (driver.rkt),
+pinned by `tests/test-dual-spine-merge-key.rkt`. These are the residuals.
+
+1. **⭐ THE DECISION: commission the tree spine, or retire the merge.** Everything
+   else here is downstream of it, and it is now decidable with numbers rather
+   than argument. `racket tools/spine-census.rkt <files>` measures agreement
+   where both spines produced a surf:
+
+   | tree-spine mode | agreement | divergences |
+   |---|---|---|
+   | legacy (`parse-*-tree`, a 2nd PARSER) | 428/1454 = 29% | 1026 |
+   | datum (tree-as-READER, grouped node) | 954/1162 = 82% | 208 |
+   | **raw-datum** (tree-as-READER, RAW node) | **1542/1568 = 98%** | **26** |
+
+   The case for RETIRE is that at 98% the tree spine is *nearly preparse by
+   construction* — same parser, same source — so what it contributes to the
+   MERGE is unclear, and the merge's own comment calls it "a throwaway bridge"
+   that PPN Track 3–4 dissolves. The case for COMMISSION is that 98% is close and
+   the remaining work is bounded. **Not decided here; it is an owner ruling.**
+
+2. **The `current-raw-node` production change — measured, NOT landed.** It is the
+   designed hook (tree-parser.rkt reads `(or (current-raw-node) node)` for the
+   datum conversion; form-cells.rkt sets it from a raw-node map) and the merge
+   path simply binds it `#f` (driver.rkt). Setting it is what takes agreement
+   82%→98%. **Deliberately not landed**: with the admission gate shut it changes
+   nothing observable, so landing it alone is machinery with nothing behind it —
+   the exact shape CIU T6 D4.P4c-3 already hit. It belongs WITH item 1's ruling.
+
+3. **The 98% ceiling is structural, and I first mis-called it.** The residual 26
+   present as generated-name noise (`$Add-A`, `$Eq-A`, `$Lattice-A`) and I
+   assumed gensym numbering; checking showed `preparse: $Add-A` vs `tree: x` —
+   an implicit **dictionary binder** that whole-file `preparse-expand-all`
+   inserts from cross-form `spec`/trait context and per-form
+   `preparse-expand-single` cannot see. No converter fix reaches this class. Open
+   question: can the tree spine be given whole-file expansion context at all, or
+   is 98% permanent? They cluster in 7 files (arithmetic 5, map-tutorial-demo 3,
+   conversions 2, then singles) — a small, concrete starting set.
+
+4. **The error-recovery branch is UNGUARDED, and it is the merge's most
+   defensible future role.** `(or tree-match s)` (driver.rkt) has no
+   `same-form-type?` and no spec-store check, unlike the four guards on the
+   `[else]` path. It converted `spec {:0 …}` / `{:1 …}` QTT errors into
+   definitions whose binders are all `#f` → `mw` — **a declared-LINEAR parameter
+   silently becoming unrestricted**. Dead today (the gate empties `tree-by-line`,
+   so both lookups miss), live the moment anyone opens the gate. If any part of
+   the spine is commissioned first, this path plus a `same-form-type?` guard is
+   the likeliest candidate — but it must be guarded BEFORE, not after.
+
+5. **`process-file` and `process-string-ws` run DIFFERENT tree parsers**, and the
+   fork is an accident: `parse-form-tree` branches on whether `current-source-str`
+   is bound, and only the string path binds it. So the FILE path — the primary
+   design target — takes the legacy `parse-*-tree` arms (29%) while the string
+   path takes the datum conversion (82%). Unadjudicated. It decides which parser
+   a commissioned merge would start trusting, so it is upstream of item 1.
+
+6. **The legacy `parse-*-tree` family is ~1,971 lines / 33 functions of DUPLICATED
+   parsing** whose 14 classified defects (see the defect note §0) exist *because*
+   duplication lets tables drift — atom table 11 of parser.rkt's 42, head
+   dispatch ~58 of ~357. Under a RETIRE ruling it is deletable outright; under
+   COMMISSION-on-the-datum-path it is deletable too, since the datum path does
+   not use it. Either way it is dead weight; the only question is when.
+
+7. **Smaller, verified, not blocking**: `item-srcloc`'s TOKEN branch still
+   fabricates line/col as `0 0` in a raw list (tree-parser.rkt), and
+   `format-srcloc` (source-location.rkt) calls `srcloc-file` with no `srcloc?`
+   guard — so a list-shaped srcloc RAISES `contract violation` rather than
+   printing. Unreachable while the gate is shut. `pos->line-col` already exists
+   and is exported for the recovery; do not write a new one.
+
