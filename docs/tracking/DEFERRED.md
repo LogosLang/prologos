@@ -3217,6 +3217,33 @@ goal is to retire whole-file aborts by volume, these come first.
 
 ## Dual-spine parser merge (filed 2026-08-02 at the `loc->line` defect close, `d4e32398`..`eec12ea2`)
 
+> **⭐ STATUS 2026-08-03 — THE TREE LEG IS GONE (`2d7813ef`).** Owner ruling: finish
+> PPN Track 3 Phase 7. `merge-preparse-and-tree-parser` is now the preparse
+> pass-through + `consumed-form-residue?` filter, **keeping the form-cell block**;
+> `tree-surfs` / `tree-by-line` / `merge-form` / the admission gate / both lookups
+> are deleted (−195/+69 driver.rkt). Gates: corpus A/B on FULL OUTPUT against a
+> `git archive` pin at `f0bce056`, both legs on the SAME 163 inputs — errors
+> 359 = 359, aborts 26 = 26, no file changed its error count, and **zero differing
+> lines after normalising generated-name counters** (the only raw diff is gensym /
+> meta numbering, because the tree leg no longer allocates). Suite 9819/482/0.
+>
+> ⚠ **AND THE HISTORY WAS NOT WHAT WE THOUGHT.** Phase 7's tracker row read
+> `✅ … No merge` for four months and was wrong **twice**: (a) at `5d3b597c` the
+> cell pipeline was wired into `process-string-ws` ONLY — `process-file`, the
+> primary design target, never left the merge; (b) `19d9f8aea` (Rel T1 SC,
+> 2026-07-20) then reverted the string path to the merge as well, because
+> cell-pipeline-only **dropped preparse-macro support** (`solver` / `schema` /
+> `defmacro` broke in REPL/LSP). That revert removed
+> `extract-surfs-from-form-cells`'s last caller — which is exactly why the form
+> cells are write-only. **The remaining work is not wiring; it is solving the
+> preparse-macro problem that caused the revert.** See
+> [Track 3 § Phase 7 status](2026-04-01_PPN_TRACK3_DESIGN.md#p7-status).
+>
+> Per-item deltas: **1** reduced to the form-cell wiring · **4 RESOLVED by
+> removal** · **6 UNBLOCKED** (the legacy family is now unreachable from
+> production) · **2 / 5 moot for the merge** (no tree leg to feed) though the
+> `parse-form-tree` mode fork itself still exists · **3 / 7 unchanged**.
+
 Context: `docs/tracking/2026-08-02_LOC_TO_LINE_MERGE_DEFECT.md` §0. The merge key
 was broken three ways; the tree spine has won **0 of 5,171 corpus forms, ever**;
 correcting the key REGRESSES the corpus (errors 359→724, 32 test files fail), so
@@ -3326,7 +3353,15 @@ pinned by `tests/test-dual-spine-merge-key.rkt`. These are the residuals.
    name differences. Nobody has characterised them. Do NOT assume they are
    structural — that assumption has now been wrong twice on this exact question.
 
-4. **The error-recovery branch is UNGUARDED, and it is the merge's most
+4. ✅ **RESOLVED BY REMOVAL 2026-08-03 (`2d7813ef`)** — the branch went with the
+   tree leg, deliberately rather than left disabled. It was dead already (the gate
+   emptied `tree-by-line`), so removal was behaviour-neutral. ⚠ If recovery-first
+   is ever wanted back it must be rebuilt **on the form cells WITH a
+   `same-form-type?` guard** — not restored as it was. Issue #69(b)'s other half
+   (preparse error surfs are not silently dropped) stands and is what the
+   surviving `for/list` delivers. Original entry follows.
+
+   **The error-recovery branch is UNGUARDED, and it is the merge's most
    defensible future role.** `(or tree-match s)` (driver.rkt) has no
    `same-form-type?` and no spec-store check, unlike the four guards on the
    `[else]` path. It converted `spec {:0 …}` / `{:1 …}` QTT errors into
@@ -3343,7 +3378,18 @@ pinned by `tests/test-dual-spine-merge-key.rkt`. These are the residuals.
    path takes the datum conversion (82%). Unadjudicated. It decides which parser
    a commissioned merge would start trusting, so it is upstream of item 1.
 
-6. **The legacy `parse-*-tree` family is ~1,971 lines / 33 functions of DUPLICATED
+6. ⭐ **UNBLOCKED 2026-08-03 (`2d7813ef`) — it is now unreachable from production
+   and deletable as a standalone change.** After the tree leg went,
+   `parse-form-tree`'s only remaining callers are its own internal recursion, its
+   `module+ test` block, `tools/spine-census.rkt` (the instrument — keep it
+   working), and `extract-surfs-from-form-cells` (**zero production callers**).
+   ⚠ Deleting the family therefore also means deciding what happens to
+   `spine-census.rkt`'s legacy mode and to `extract-surfs-from-form-cells` — which
+   is Phase 7's intended surf source, so it must NOT be collaterally deleted.
+   Maintenance win, **not** a speedup: legacy parse measured ~0% of pipeline time.
+   Original entry follows.
+
+   **The legacy `parse-*-tree` family is ~1,971 lines / 33 functions of DUPLICATED
    parsing** whose 14 classified defects (see the defect note §0) exist *because*
    duplication lets tables drift — atom table 11 of parser.rkt's 42, head
    dispatch ~58 of ~357. Under a RETIRE ruling it is deletable outright; under
