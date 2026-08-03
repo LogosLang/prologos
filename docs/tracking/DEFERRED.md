@@ -480,25 +480,59 @@ down instead of becoming a per-command error. Likely cause: the guard row's
 pattern list is arity-adjusted for a 1-column group while `param-names` still
 holds two entries, so `compile-match-tree` indexes past the list.
 
-## 🐛 DEFECT — the branch-result join silently ACCEPTS a float branch against a String branch (found 2026-07-30)
+## 🐛 DEFECT — a numeric-LITERAL first branch adopts any second-branch type (found 2026-07-30; mechanism nailed down 2026-08-02, fix still needs a design call)
 
-**Repro** (independently verified at `5e6d9f41`, pre-existing; the in-file
-control errors correctly in the same run):
+**It is worse than "accepts a String".** Investigated as the entry asked
+(failing-test-first); the shape is a numeric literal in the FIRST branch
+adopting whatever type the second branch has, and the accepted definition is
+genuinely unsound at runtime:
 
 ```
-ns pre2
-defn ctl | 0 -> 1   | n -> "x"    ;; ERROR (correct — Int vs String)
-defn d8  | 0 -> 1.5 | n -> "x"    ;; d8 : Int -> String defined  ← NO error
+defn d8  | 0 -> 1.5 | n -> "x"     ;; d8 : Int -> String   ← accepted
+[d8 0]                             ;; ⇒ 1.5 : String       ← a Posit32 labelled String
+defn d11 | 0 -> 1.5 | n -> true    ;; d11 : Int -> Bool    ← accepted
+[d11 0]                            ;; ⇒ 1.5 : Bool
+defn d10 | 0 -> 1.5 | n -> 2       ;; d10 : Int -> Int     ← 1.5 collapsed INTO an Int
+defn d9  | 0 -> "x" | n -> 1.5     ;; ERROR (correct)      ← order-asymmetric
+defn ctl | 0 -> 1   | n -> "x"     ;; ERROR (correct)      ← integral literal is fine
 ```
 
-So the first-arm-wins join is not merely strict, it is **unsound for a
-Rat/Posit-literal first branch**: the definition is accepted with result type
-`String`. Found while adversarially verifying the branch-result diagnostic;
-the diagnostic cannot see it because `check` never fails. Suspect the numeric
-literal's flexible typing (the widening/defaulting path) satisfies the motive
-meta and then re-solves against `String`. Wants a failing-test-first
-investigation on the numeric-literal side of the join — plausibly Num Track 1
-territory.
+**Mechanism (confirmed, not suspected).** `check`'s N4 arm
+(typing-core.rkt ~:3382) has three cases for a numeric literal against
+expected type `T`: concrete-numeric → representability-gated solve; **meta →
+`(unify ctx alpha T)`, "link + defer"**; anything else → #f. The branch join
+checks branch 1 against the motive META, so the literal takes the link. Branch
+2 then solves that meta to `String` — and `alpha` IS that meta, so it becomes
+`String`. **Nothing ever re-validates.** The "defer" in the comment names an
+obligation that is never discharged.
+
+`d10` shows the same hole eating representability, not just numeric-ness:
+`collapse-num-lit` (zonk.rkt:58) explicitly says *"Representability is validated
+in check-mode; here we trust the resolved type"*, and on this path check-mode
+never validated, so it builds `(expr-int 3/2)` — a malformed Int literal.
+
+Order-asymmetric because branch 1 gets the meta and branch 2 gets a concrete
+type: `"x"` first means `1.5` is checked against `String`, which correctly
+takes the `[else #f]` case.
+
+**Why no fix here.** Discharging the obligation is a design call in the numeric
+tower, not a local patch. The candidates each have a cost:
+
+1. **Constraint on the meta** ("must resolve to a numeric type representable
+   for this literal"), swept like trait constraints. Correct, and needs a
+   general "meta satisfies predicate" facility this codebase does not have —
+   the constraint system is `(trait-name, type-args)`.
+2. **Post-typing validation walk** before `default-metas` erases the evidence
+   (`freeze` = zonk then default). Cheap, but it is a second mechanism checking
+   what check-mode was supposed to have checked.
+3. **Gate `collapse-num-lit` on representability.** Strictly right — it stops
+   `(expr-int 3/2)` being built — but it does NOT fix the type-level
+   unsoundness: `default-metas` then falls back to the notation default, giving
+   a Posit32 value under a `String` type. Do not mistake this one for a fix.
+
+Still Num Track 1 territory, as originally filed. What has changed is that it
+is now a three-line repro with a named mechanism and a demonstrated runtime
+violation, instead of a suspicion.
 
 ## 🐛 DEFECT — live `.( )` mixfix errors RAISE and abort the whole file (found 2026-07-28, the D4.P1a adversarial verify)
 
