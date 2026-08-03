@@ -1448,7 +1448,18 @@ pass vacuously.
 
 ## Spec System — Phase 2+
 
-### Phase 2: Example and Property Checking (QuickCheck-style)
+### Phase 2: Example and Property Checking (QuickCheck-style) — CONFIRMED, with the surface already built (probed 2026-08-02)
+
+Accurate on the CHECKING, which is what the entry is about. Decisive probe: a
+deliberately wrong `:examples [[2 999]]` on a doubling function is accepted
+silently, 0 errors.
+
+Worth knowing before starting, though: the metadata SURFACE is done.
+`:examples`, `:pre`, `:post`, `:properties` all parse and are stored
+(`macros.rkt` :3791-3848), and some validation already runs — an error for
+`:invariant` combined with `:pre`/`:post`, and a warning when a property's
+`:where` constraints are not covered by the spec's. So this phase is the
+checker, not the syntax.
 - Type-check and run `:examples` entries as tests
 - `Gen` trait for type-directed random generation
 - Property checking for `:properties` and `:laws`
@@ -1498,12 +1509,20 @@ pass vacuously.
 - **Blocked on**: session type design (Phase 9), dependent capabilities (Phase 7e-7g)
 - Source: `docs/tracking/2026-03-01_1500_CAPABILITIES_AS_TYPES_DESIGN.md` §Phase 8d
 
-### Galois Connections — Remaining Deferred
+### Galois Connections — Remaining Deferred — CONFIRMED (probed 2026-08-02)
+
+`connect-domains` does not exist anywhere in the tree, so that half stands. The
+substrate it would wrap does: `GaloisConnection` with `-alpha`/`-gamma`
+accessors and an `Interval` domain are in `prologos::core::lattice`, with 14
+passing tests in `test-galois-connection.rkt`.
 - `connect-domains` Prologos-level wrapper (needs AST keyword or FFI)
 - Additional abstract domains (Congruence, Pointer, etc.)
 - Source: `docs/tracking/2026-02-27_1026_GALOIS_CONNECTIONS_ABSTRACT_INTERPRETATION.md`
 
-### Propagator-First Phase 3e: Reduction Cache Cells — NOT STARTED
+### Propagator-First Phase 3e: Reduction Cache Cells — CONFIRMED NOT STARTED (probed 2026-08-02)
+
+`current-track-reduction-deps?` does not exist in the tree, so not even the
+gating parameter has been added.
 - Convert whnf/nf/nat-value caches to write-through cells
 - Gated behind `current-track-reduction-deps?` parameter (off for batch, on for LSP)
 - **Risk**: Performance regression in batch mode
