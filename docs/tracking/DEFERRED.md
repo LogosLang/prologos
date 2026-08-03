@@ -1304,7 +1304,7 @@ prose or library.
 - Requires UAX #29 state machine (~30KB Unicode tables)
 - **Mitigation**: FFI to Racket's `string-grapheme-span` or ICU library
 
-### ✅ SHIPPED `PLACEHOLDER17` — Phase 4b: Unicode Normalization (2026-08-02)
+### ✅ SHIPPED `1e00ac95` — Phase 4b: Unicode Normalization (2026-08-02)
 
 `normalize : NormForm -> String -> String` with `nfc` / `nfd` / `nfkc` / `nfkd`,
 bridged to Racket's implementations as the entry specified.
