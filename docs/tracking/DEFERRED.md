@@ -1381,8 +1381,33 @@ worse than none.
 Myers difference is still not implemented — it is a different algorithm, not
 blocked by this.
 
-### Phase 4d: Regex Integration
-- Depends on a regex library (not yet designed)
+### 🔶 PARTIAL — Phase 4d: Regex Integration (2026-08-02)
+
+`str::regex-match?`, `str::regex-replace`, `str::regex-replace-all`,
+`str::regex-quote` — bridged to Racket's engine.
+
+The entry deferred this on "depends on a regex library (not yet designed)". A
+Prologos-level regex AST is indeed undesigned; the RUNTIME has an engine, and a
+string-pattern bridge needs no new type. Fourth section this session where
+"blocked" turned out to mean "not tried".
+
+**Known trade, stated rather than hidden**: the pattern is a STRING, recompiled
+by Racket on every call. Correct, and slower than a compiled pattern in a loop.
+When the Prologos-level design lands it can add a compiled `Regex` handle
+without changing what these signatures mean.
+
+**Syntax is Racket `regexp`, not `pregexp`** — `\d` and `\w` are pregexp-only;
+write `[0-9]` and `[a-zA-Z0-9_]`.
+
+**Still open**: the designed API — a `Regex` type, compiled patterns, match
+GROUPS (the bridge returns Bool, not captures, because a capture list needs
+list marshalling across the FFI), and split.
+
+Tested where a wrong implementation would still pass a naive test: `match?` in
+BOTH directions; `replace` vs `replace-all` against each other, since a test of
+one would not notice them wired to the same function; and `regex-quote` with an
+assertion that the UNQUOTED pattern does match, so the escaping test cannot
+pass vacuously.
 
 ### Phase 4e: Rope / TextBuffer Type
 - B-tree rope with O(log n) concat/split

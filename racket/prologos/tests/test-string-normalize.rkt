@@ -222,3 +222,44 @@
 (test-case "graphemes/ASCII still behaves"
   (check-true (string-contains? (format "~a" (g "[grapheme-reverse \"abc\"]\n")) "cba"))
   (check-true (string-contains? (format "~a" (g "[length [graphemes \"abc\"]]\n")) "3N")))
+
+;; ----------------------------------------------------------------
+;; Regular expressions (Phase 4d)
+;; ----------------------------------------------------------------
+;;
+;; The entry deferred this on "depends on a regex library (not yet designed)".
+;; A Prologos-level regex AST is indeed undesigned — but the RUNTIME has an
+;; engine, and a string-pattern bridge needs no new type.
+
+(define rx-pre
+  (string-append
+   "ns rx\n"
+   "require [prologos::data::string :as str :refer []]\n"))
+
+(define (rx s) (run-ns-ws-last (string-append rx-pre s)))
+
+(test-case "regex/match? answers both ways"
+  ;; Both directions, because a `regex-match?` that always answered #t would
+  ;; pass a positive-only test.
+  (check-true (string-contains? (format "~a" (rx "[str::regex-match? \"^[0-9]+$\" \"12345\"]\n")) "true"))
+  (check-true (string-contains? (format "~a" (rx "[str::regex-match? \"^[0-9]+$\" \"12a45\"]\n")) "false")))
+
+(test-case "regex/replace substitutes the first match only"
+  (check-true (string-contains? (format "~a" (rx "[str::regex-replace \"a+\" \"baaad\" \"X\"]\n")) "bXd")))
+
+(test-case "regex/replace-all substitutes every match"
+  ;; The distinction between the two is the reason both exist; a test of only
+  ;; one would not notice them being wired to the same function.
+  (check-true (string-contains? (format "~a" (rx "[str::regex-replace-all \"a\" \"banana\" \"o\"]\n")) "bonono"))
+  (check-true (string-contains? (format "~a" (rx "[str::regex-replace \"a\" \"banana\" \"o\"]\n")) "bonana")))
+
+(test-case "regex/quote makes a pattern literal"
+  ;; The load-bearing case. UNQUOTED, `a.b` matches "axb" — `.` is any
+  ;; character. Quoted, it must not. Anyone building a pattern from user input
+  ;; needs this and almost never remembers it.
+  (check-true (string-contains? (format "~a" (rx "[str::regex-match? \"a.b\" \"axb\"]\n")) "true")
+              "the fixture is wrong — an unquoted `a.b` should match \"axb\"")
+  (check-true (string-contains? (format "~a" (rx "[str::regex-match? [str::regex-quote \"a.b\"] \"axb\"]\n")) "false")
+              "regex-quote did not escape the metacharacter")
+  (check-true (string-contains? (format "~a" (rx "[str::regex-match? [str::regex-quote \"a.b\"] \"a.b\"]\n")) "true")
+              "regex-quote broke the literal match it is supposed to preserve"))

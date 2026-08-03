@@ -83,3 +83,26 @@ foreign racket "racket/base" [string-normalize-nfkd :as normalize-nfkd : String 
 ;; `graphemes` and `grapheme-reverse` in `prologos::core::string-ops`.
 foreign racket "racket/base" [string-grapheme-count :as grapheme-count : String -> Int]
 foreign racket "racket/base" [string-grapheme-span :as grapheme-span : String -> Int -> Int]
+
+;; --- Regular expressions ---
+;;
+;; Bridged to Racket's regexp engine. The DEFERRED entry deferred this on
+;; "depends on a regex library (not yet designed)" — a Prologos-level regex AST
+;; is indeed undesigned, but the RUNTIME has an engine, and a string-pattern
+;; bridge needs no new type.
+;;
+;; The pattern is a STRING, compiled by Racket on each call. That is the honest
+;; trade for having no `Regex` type yet: correct, and slower than a compiled
+;; pattern would be in a loop. When the Prologos-level design lands it can
+;; introduce a compiled handle without changing these signatures' meaning.
+;;
+;; Syntax is Racket's `regexp` (POSIX-ish extended), not `pregexp` (Perl-ish).
+;; The difference bites on `\d` and `\w`, which are pregexp-only — write
+;; `[0-9]` and `[a-zA-Z0-9_]`.
+;;
+;; `regex-quote` escapes a string so it matches literally, which is what any
+;; caller building a pattern from user input needs and almost never remembers.
+foreign racket "racket/base" [regexp-match? :as regex-match? : String -> String -> Bool]
+foreign racket "racket/base" [regexp-replace :as regex-replace : String -> String -> String -> String]
+foreign racket "racket/base" ["regexp-replace*" :as regex-replace-all : String -> String -> String -> String]
+foreign racket "racket/base" [regexp-quote :as regex-quote : String -> String]
