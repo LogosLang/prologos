@@ -1831,7 +1831,23 @@
         (cond
           [(prologos-error? inferred-type) inferred-type]
           [else
-           (define ty-ok (is-type/err ctx-empty inferred-type))
+           ;; ZONK FIRST. `infer` returns a type whose metas may be solved in
+           ;; the store but not yet substituted into the term, and `is-type`
+           ;; reads the term. A meta-headed application — which is what an
+           ;; implicit higher-kinded argument leaves behind, e.g. `map`'s
+           ;; `{C : Type -> Type}` — is not a type by inspection, so the check
+           ;; failed on a perfectly good type.
+           ;;
+           ;; The tell was in the error itself: `is-type/err` renders with
+           ;; `pp-expr`, which DOES follow solutions, so the message read
+           ;; "Expression is not a valid type: [List Int]" — naming a valid
+           ;; type. A diagnostic that pretty-prints through a resolution its
+           ;; own predicate did not perform will always look like nonsense.
+           ;;
+           ;; Intermediate `zonk`, not `freeze`: unsolved metas must stay
+           ;; unsolved here (defaulting them is the commit path's job, further
+           ;; down), so a genuinely undetermined type still fails.
+           (define ty-ok (is-type/err ctx-empty (zonk inferred-type)))
            (cond
              [(prologos-error? ty-ok) ty-ok]
              [else

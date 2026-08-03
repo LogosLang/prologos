@@ -1973,47 +1973,62 @@ level, `x{…}` selects and `x.k` accesses". The entry predates that work.
 
 ---
 
-## 🐛 A higher-order list function on a `def` RHS fails; the same expression as a bare command works (merged + re-probed 2026-08-02)
+## ✅ FIXED 2026-08-03 — a higher-order list function on a `def` RHS failed; the same expression as a bare command worked (merged + re-probed 2026-08-02, fixed 2026-08-03)
 
-This replaces TWO entries that were two symptoms of one defect — "QTT
-multiplicity violation with generic trait-constrained functions in defn bodies"
-and "`+` `-` `*` `/` should work as higher-order generic functions". Both came
-from LSP Tier 4 testing; both are re-probed here.
+The entry was accurate throughout, including its two negative findings (not
+about first-class operators; the offered `plus`/`minus` workaround does not
+exist), and its "where to start" pointer at `pipeline.md` § "infer / inferQ Are
+Twins" named the right SHAPE. The cause was one layer under that: not a missing
+`inferQ` arm, but a comparison the two passes make differently.
 
-**Sharp repro:**
+**Two independent faults, each with a lying diagnostic.**
 
-```
-reduce + 0 '[1 2 3]             ;; => 6 : Int   <- bare command: WORKS
-def a := reduce + 0 '[1 2 3]    ;; => ERROR: Multiplicity violation
-def b := reduce int+ 0 '[1 2 3] ;; => ERROR: Multiplicity violation
-def c := map negate '[1 2]      ;; => ERROR: Expression is not a valid type
-def d := '[1 2 3]               ;; => ok
-def e := + 1 2                  ;; => ok
-```
+1. **"Multiplicity violation" was a KIND mismatch.** A type constructor's kind
+   is `Pi m0 Type Type` — its type argument really is erased — while a spec's
+   `{C : Type -> Type}` writes an unannotated arrow, which defaults to `mw`.
+   `subtype?` demanded the two multiplicities be IDENTICAL, so `List` did not
+   fit `C` and the whole application spine failed to infer.
 
-**Not about first-class operators.** `int+` is monomorphic and fails
-identically, so the "`+` is a parser keyword and cannot be passed" framing is
-wrong. First-class operators WORK — `reduce + 0 '[1 2 3]` gives 6 and
-`map negate '[1 2 3]` gives `'[-1 -2 -3]`. Numerics N6e-E2 landed that and
-`prologos-syntax.md` documents it; the old entry's premise is stale.
+   It reached only the QTT pass because typing-core sees `C` as an unsolved
+   META, and meta-solving never compares multiplicities — only the post-freeze
+   QTT check meets the concrete `List`. That is why the bare command worked:
+   it runs no `checkQ-top` at all. The command "working" was never evidence
+   the term was well-formed.
 
-**Nor is the offered workaround real.** The entry says "First-class wrappers
-(`plus`, `minus`, `times`, `divide`) exist as workarounds". `plus` is UNBOUND —
-`grep -rn "defn plus" lib/` finds nothing.
+   Fixed in `subtype-predicate.rkt`, and not by new policy: Pi multiplicity is
+   an UPPER BOUND on the function's use of its argument, and `compatible 'mw
+   'm0` is already `#t` everywhere else in the system. The new arm applies that
+   same predicate structurally (normalize t1's mult to t2's, then delegate to
+   the existing structural walk), so it loosens exactly as far as `compatible`
+   and no further — `mw <: m1` stays false, which is the unsoundness the
+   ordering exists to prevent.
 
-**The def seam is what breaks it**, and annotating does not help: `def a : Int
-:= reduce + 0 '[1 2 3]` fails the same way, as does `[the Int [reduce ...]]`.
-Inside a `spec` + `defn` the definition is accepted but the CALL leaves a stuck
-unreduced term instead of a value.
+2. **"Expression is not a valid type" ran `is-type` on an UNZONKED type.** An
+   implicit higher-kinded argument leaves a meta-headed application behind,
+   which is not a type by inspection. The tell was inside the message: it
+   renders with `pp-expr`, which DOES follow solutions, so it printed
+   "not a valid type: [List Int]" — naming a valid type. A diagnostic that
+   pretty-prints through a resolution its own predicate did not perform will
+   always read as nonsense; that mismatch is the thing to notice. Fixed by
+   zonking before the check (intermediate `zonk`, not `freeze` — a genuinely
+   undetermined type must still fail).
 
-**Where to start**: `pipeline.md` § "infer / inferQ Are Twins" — a "Multiplicity
-violation" on a `def` whose body is not a lambda is an un-arm'd node until
-proven otherwise, and the def seam checks in CHECK mode, so the INFER position
-is the one that fails. That is exactly the shape here. All eight
-`expr-generic-*` nodes DO have arms in both `typing-core` and `qtt`, so the gap
-is elsewhere on the application / implicit-instantiation path — `map` failing
-with "Expression is not a valid type" rather than a multiplicity error points at
-implicit type-argument elaboration.
+All six lines of the entry's sharp repro now work, `def a : Int := reduce + 0
+'[1 2 3]` works on the annotated seam too, and a HOF inside a spec'd `defn`
+returns a real value rather than the stuck term the entry recorded.
+
+Pinned by `tests/test-hof-def-seam.rkt`. Every case is a `def` — the bare
+command passed throughout and proves nothing here — plus one that asserts the
+def and the command PRINT IDENTICALLY, since the disagreement was the defect,
+and a unit table for the multiplicity relation in both directions.
+
+**Found while probing, NOT this defect**: an unbracketed application as a
+`defn` body (`defn bump [x] int+ x 1`) reads its trailing tokens as extra
+PARAMETERS — `fn x. fn y. fn z. int+ y z` — and fails with a type mismatch
+naming a 3-parameter lambda. Bracketing the body is the documented form and
+every example in `prologos-syntax.md` uses it, so this is a diagnostic-quality
+item, not a semantics one. Unrelated to HOFs: a monomorphic `int+` body fails
+identically.
 
 ---
 
