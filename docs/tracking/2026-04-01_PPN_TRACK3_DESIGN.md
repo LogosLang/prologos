@@ -33,7 +33,7 @@
 | 4 | Cell pipeline ONLY — single code path | ✅ | `5d3b597c`. Cell surfs are THE output. No preparse fallback. Preparse runs for registration side effects only. Single-parser: raw node → datum → normalize → expand-single → parse-datum. |
 | 5 | Dependency-set Pocket Universe | ✅ | `9f3c63dc`. Powerset transforms. |
 | 6 | Per-form cells + production dispatch | ✅ | `7a2a4bd0`. One cell per form on elab-network. |
-| 7 | Cell pipeline wired into driver | ✅ | `40d07caa` + `5d3b597c`. extract-surfs-from-form-cells produces ALL surfs. No merge. |
+| 7 | Cell pipeline wired into driver | 🔄 | Tree leg DELETED `2d7813ef`; form cells still WRITE-ONLY. ⚠ the old ✅ was wrong twice — see [§Phase 7 status](#p7-status). |
 | 8 | parser.rkt retirement | ⬜ RESTORED | §11 pivot: tree-parser is canonical. parse-datum retired from WS path. Requires G1-G7 gap closure (§11.4). |
 | 9 | Acceptance + A/B benchmarks + verification | ✅ | 383/383 GREEN, 7491 tests, 133.0s. A/B: zero meaningful regression (14 programs, 5 runs). 2 "significant" within noise (±3.5%). Acceptance: 0 errors. |
 | 10 | PIR + documentation | ✅ | [PIR](2026-04-02_PPN_TRACK3_PIR.md). 16 questions answered. 11-PIR longitudinal survey. §11 addendum. |
@@ -636,6 +636,44 @@ For each top-level form:
 7. Generated-def propagator fires when registrations are present — creates additional form cells
 
 **Dispatch IS a propagator**: The dispatch function is the fire body of a propagator installed on each form cell. It reads the form's keyword from the tree-node, looks up the production in the registry, and fires the production's parse function. This is NOT a standalone function call — it's a propagator that fires when the form cell reaches the appropriate transform state.
+
+<a id="p7-status"></a>
+
+### Phase 7 — ACTUAL STATUS (corrected 2026-08-03, `2d7813ef`)
+
+⚠ **The tracker carried `✅ … extract-surfs-from-form-cells produces ALL surfs.
+No merge.` for four months. It was wrong twice over**, and the second way is the
+one that matters for whoever finishes this.
+
+**(1) It was overstated when written.** At `5d3b597c` the CELL pipeline was wired
+into `process-string-ws-inner-impl` only. `process-file-inner` — the **primary
+design target** — never left `merge-preparse-and-tree-parser`. "No merge" was
+true of one of the two entry paths.
+
+**(2) Then the remaining half was REVERTED, for a real reason.** `19d9f8aea`
+(Rel T1 SC, 2026-07-20) put `process-string-ws` back on the merge:
+cell-pipeline-only had dropped **preparse-macro support** — `solver`, `schema`,
+`defmacro` failed in the REPL / LSP / WS-string path because the tree spine sees
+them un-expanded. That revert removed `extract-surfs-from-form-cells`'s last
+caller, which is why the per-form cells have been **write-only** ever since, and
+why the tracker row silently stopped describing reality.
+
+**What `2d7813ef` did**: deleted the merge's TREE LEG (`tree-surfs`,
+`tree-by-line`, `merge-form`, the admission gate, both lookups) — the part that
+had never once fired (0 of 5,171 corpus forms, measured) and whose revival
+regresses badly. The merge function is now the preparse pass-through + the
+`consumed-form-residue?` filter, and it **keeps the form-cell block**.
+
+**What remains, and the wall in front of it**: making the form cells READ — i.e.
+restoring `extract-surfs-from-form-cells` as the surf source — is blocked by
+exactly what caused the `19d9f8aea` revert. **Preparse macros must keep working.**
+Do not re-attempt the wiring without a plan for `solver`/`schema`/`defmacro`;
+that is the actual content of Phase 7's last step, and it is not a wiring task.
+
+Consolation: after `2d7813ef` the legacy `parse-*-tree` family is unreachable
+from production (`parse-form-tree`'s only callers are its own recursion, its
+`module+ test` block, `tools/spine-census.rkt`, and the caller-less
+`extract-surfs-from-form-cells`), so ~1,971 lines are deletable independently.
 
 ### Phase 7: Pure Merge Function + Shared Cells
 

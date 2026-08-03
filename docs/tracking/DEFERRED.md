@@ -3234,3 +3234,268 @@ already cons, so a marker can ride today): `macros.rkt:3348` bare `solver` and
 `macros.rkt:3360` bare `schema` — both verified live whole-file aborts. If the
 goal is to retire whole-file aborts by volume, these come first.
 
+
+---
+
+## Dual-spine parser merge (filed 2026-08-02 at the `loc->line` defect close, `d4e32398`..`eec12ea2`)
+
+> **⭐ STATUS 2026-08-03 — THE TREE LEG IS GONE (`2d7813ef`).** Owner ruling: finish
+> PPN Track 3 Phase 7. `merge-preparse-and-tree-parser` is now the preparse
+> pass-through + `consumed-form-residue?` filter, **keeping the form-cell block**;
+> `tree-surfs` / `tree-by-line` / `merge-form` / the admission gate / both lookups
+> are deleted (−195/+69 driver.rkt). Gates: corpus A/B on FULL OUTPUT against a
+> `git archive` pin at `f0bce056`, both legs on the SAME 163 inputs — errors
+> 359 = 359, aborts 26 = 26, no file changed its error count, and **zero differing
+> lines after normalising generated-name counters** (the only raw diff is gensym /
+> meta numbering, because the tree leg no longer allocates). Suite 9819/482/0.
+>
+> ⚠ **AND THE HISTORY WAS NOT WHAT WE THOUGHT.** Phase 7's tracker row read
+> `✅ … No merge` for four months and was wrong **twice**: (a) at `5d3b597c` the
+> cell pipeline was wired into `process-string-ws` ONLY — `process-file`, the
+> primary design target, never left the merge; (b) `19d9f8aea` (Rel T1 SC,
+> 2026-07-20) then reverted the string path to the merge as well, because
+> cell-pipeline-only **dropped preparse-macro support** (`solver` / `schema` /
+> `defmacro` broke in REPL/LSP). That revert removed
+> `extract-surfs-from-form-cells`'s last caller — which is exactly why the form
+> cells are write-only. **The remaining work is not wiring; it is solving the
+> preparse-macro problem that caused the revert.** See
+> [Track 3 § Phase 7 status](2026-04-01_PPN_TRACK3_DESIGN.md#p7-status).
+>
+> Per-item deltas: **1** reduced to the form-cell wiring · **4 RESOLVED by
+> removal** · **6 ⛔ RULED DO-NOT-DELETE 2026-08-03** — reader/parser unification
+> is LHC / PPN 4D multi-track work, not a fix-chip deletion; item 6 now carries the
+> full grounding audit, including the refutation of its own "~1,971 lines / 33
+> functions" figure and of "deletable as a standalone change" · **2 / 5 moot for
+> the merge** (no tree leg to feed) though the `parse-form-tree` mode fork itself
+> still exists, and **5 is COUPLED to 6** (see item 6's abort finding) ·
+> **3 / 7 unchanged**.
+
+Context: `docs/tracking/2026-08-02_LOC_TO_LINE_MERGE_DEFECT.md` §0. The merge key
+was broken three ways; the tree spine has won **0 of 5,171 corpus forms, ever**;
+correcting the key REGRESSES the corpus (errors 359→724, 32 test files fail), so
+the spine is now held shut on purpose at `tree-spine-admitted?` (driver.rkt),
+pinned by `tests/test-dual-spine-merge-key.rkt`. These are the residuals.
+
+1. **⭐ THE DECISION — and it is NOT the binary this entry was first filed under.**
+   Originally written as "commission the tree spine, or retire the merge". The
+   census then established that `parse-eval-tree-for-cell` is **not a parser**: it
+   converts tree → datum → `parse-datum`, *the same parser preparse uses*. So the
+   system does not have two parsers competing. It has **ONE parser and TWO
+   READERS**, and the merge is comparing a parser against itself.
+
+   The real option is therefore **UNIFICATION**: one parser (`parse-datum`), two
+   readers, delete the 1,971-line legacy `parse-*-tree` family, and retire the
+   merge — because comparing `parse-datum(readerA)` against `parse-datum(readerB)`
+   has no adjudication left to do. Any residual difference is a **reader** bug,
+   which belongs in a test, not in a runtime merge. That is the completeness
+   answer: one atom table, one head dispatch, **by construction**, which is why
+   all 14 defect classes become impossible rather than fixed.
+
+   `racket tools/spine-census.rkt <files>` measures agreement where both spines
+   produced a surf:
+
+   | tree-spine mode | agreement | divergences |
+   |---|---|---|
+   | legacy (`parse-*-tree`, a 2nd PARSER) | 428/1454 = 29% | 1026 |
+   | datum (tree-as-READER, grouped node) | 954/1162 = 82% | 208 |
+   | raw-datum (tree-as-READER, RAW node) | 1542/1568 = 98% | 26 |
+   | **raw-datum + the macros.rkt where-pass fix** | **1544/1558 = 99%** | **14** |
+
+   ⚠ The first three rows are `--mode all` figures and the last is `--mode
+   raw-datum`; they are **not** strictly comparable (the tool never resets
+   registries between files, and `--mode all` runs modes outer, so later modes
+   see more pollution). Same-mode, the where-pass delta is **23 → 14**. Always
+   A/B with the same `--mode`.
+
+   Still an owner ruling — but the thing to rule on is unification vs. keeping
+   preparse authoritative forever, not "commission vs retire".
+
+1b. **⚠ WHICH SIDE DOES PPN BUILD OFF? — settled 2026-08-03, and it inverts the
+   risk I had described.** The worry was that retiring the wrong side would damage
+   the substrate PPN 4C/4D returns to. There are **THREE** layers here and they
+   are routinely conflated:
+
+   | layer | owner | state | touched by this arc? |
+   |---|---|---|---|
+   | the reader's 5 parse cells (char·indent·token·bracket·tree, `parse-reader.rkt`) | PPN Track 1 | cells landed, **propagator wiring unbuilt**; scoped by [4D §12](2026-05-19_PPN_4D_IMPLEMENTATION_DRAFT_NOTE.md) | **NO** |
+   | the per-form cells (`form-cells.rkt`, source-line keyed) | PPN Track 3 | written, read by nothing **yet** | **NO** |
+   | the merge's tree leg (`parse-top-level-forms-from-tree` → `tree-by-line` → `merge-form`) | the merge | never fired, now gated off | **YES — only this** |
+
+   **PPN Track 3 Phase 7's own design says to DELETE the merge.** Verbatim
+   ([Track 3 design](2026-04-01_PPN_TRACK3_DESIGN.md) §"Phase 7: Pure Merge
+   Function + Shared Cells"): *"**Delete**: `merge-preparse-and-tree-parser`,
+   `merge-form`, source-line-keyed identity matching, `tree-by-line` hash
+   building. Total ~80 lines from driver.rkt."* Phase 7 shipped only its first
+   half (`40d07caa`, "form cells wired into driver pipeline") — the cells went in,
+   the deletion never happened, and the comment *"Phase 7 will switch
+   process-command to read from these cells"* was written **in that same commit**.
+   It is Phase 7's own unfinished second half, reading as future work from a phase
+   already marked ✅.
+
+   **So retirement is not a departure from PPN's plan — it IS PPN's plan, left
+   unfinished.** The per-form cells are the intended REPLACEMENT for the merge,
+   which is exactly why they must **not** be deleted: their write-only state is
+   the "propagator wiring unbuilt" condition PPN Master row 3 documents, not
+   abandonment. ⚠ I previously called them "dead weight" and "not a reason to
+   preserve anything" — **that was the genuinely dangerous characterisation**, and
+   it was wrong. Deleting them would delete PPN Track 3's deliverable.
+
+   **PPN 4C is unaffected either way**: it is "Elaboration completely on-network —
+   9 axes", elaborator-side. Neither 4C nor 4D mentions
+   `merge-preparse-and-tree-parser`, `tree-by-line`, or
+   `parse-top-level-forms-from-tree` anywhere.
+
+2. **The `current-raw-node` production change — measured, NOT landed.** It is the
+   designed hook (tree-parser.rkt reads `(or (current-raw-node) node)` for the
+   datum conversion; form-cells.rkt sets it from a raw-node map) and the merge
+   path simply binds it `#f` (driver.rkt). Setting it is what takes agreement
+   82%→98%. **Deliberately not landed**: with the admission gate shut it changes
+   nothing observable, so landing it alone is machinery with nothing behind it —
+   the exact shape CIU T6 D4.P4c-3 already hit. It is step 1 of unification, not a
+   standalone change.
+
+3. **⚠ THE "98% CEILING" WAS WRONG — corrected 2026-08-02, and the correction is
+   the useful part.** This item originally read: *"the residual 26 are structural;
+   whole-file `preparse-expand-all` inserts the dict binders from cross-form spec
+   context and per-form `preparse-expand-single` cannot see it; open question
+   whether 98% is permanent."* That was reasoning, not measurement, and it was
+   **refuted**: `-single` gets the spec injection fine and merely left the `where`
+   clause un-discharged, because it skipped `maybe-inject-where` — a pass `-all`
+   runs twice. Fixed (`41697413`), **23 → 14 same-mode** (I first published this
+   as "26 → 14", which compared an `--mode all` baseline against a `--mode
+   raw-datum` result — the instrument's own pollution, not the code's), pinned by
+   `tests/test-preparse-expand-parity.rkt`.
+
+   ⚠ And the damage was worse than the census's one-line summary suggested: it
+   reports only the FIRST structural difference, so it printed `preparse: $Add-A
+   / tree: x`, which reads cosmetic. Dumping the real surfs for `arithmetic`'s
+   `defn +` showed the tree body was **`(surf-var where)`** — the dangling
+   `where` consumed AS THE FUNCTION BODY, with the real body `[add x y]`
+   silently discarded and ZERO errors. Read past the first divergence line
+   before judging a class cosmetic.
+
+   **The open question is now the remaining 14**, a different and smaller set:
+   `surf-map-literal` ×3, `surf-solve` ×3, `surf-nat-type` ×1, and 7 bound-variable
+   name differences. Nobody has characterised them. Do NOT assume they are
+   structural — that assumption has now been wrong twice on this exact question.
+
+4. ✅ **RESOLVED BY REMOVAL 2026-08-03 (`2d7813ef`)** — the branch went with the
+   tree leg, deliberately rather than left disabled. It was dead already (the gate
+   emptied `tree-by-line`), so removal was behaviour-neutral. ⚠ If recovery-first
+   is ever wanted back it must be rebuilt **on the form cells WITH a
+   `same-form-type?` guard** — not restored as it was. Issue #69(b)'s other half
+   (preparse error surfs are not silently dropped) stands and is what the
+   surviving `for/list` delivers. Original entry follows.
+
+   **The error-recovery branch is UNGUARDED, and it is the merge's most
+   defensible future role.** `(or tree-match s)` (driver.rkt) has no
+   `same-form-type?` and no spec-store check, unlike the four guards on the
+   `[else]` path. It converted `spec {:0 …}` / `{:1 …}` QTT errors into
+   definitions whose binders are all `#f` → `mw` — **a declared-LINEAR parameter
+   silently becoming unrestricted**. Dead today (the gate empties `tree-by-line`,
+   so both lookups miss), live the moment anyone opens the gate. If any part of
+   the spine is commissioned first, this path plus a `same-form-type?` guard is
+   the likeliest candidate — but it must be guarded BEFORE, not after.
+
+5. **`process-file` and `process-string-ws` run DIFFERENT tree parsers**, and the
+   fork is an accident: `parse-form-tree` branches on whether `current-source-str`
+   is bound, and only the string path binds it. So the FILE path — the primary
+   design target — takes the legacy `parse-*-tree` arms (29%) while the string
+   path takes the datum conversion (82%). Unadjudicated. It decides which parser
+   a commissioned merge would start trusting, so it is upstream of item 1.
+
+6. ⛔ **DO NOT DELETE — OWNER RULING 2026-08-03. This is LHC / PPN 4D work, not a
+   fix-chip deletion.** The ultimate goal is running **100% on the propagator
+   network** (the Logos Hyperlattice Compiler, toward self-hosting). Unifying the
+   reader/parser onto that stratum is a **larger multi-track effort**, and
+   deleting the tree parser from inside a bug-fix chip would pre-empt it.
+
+   **The supporting measurement, which also dissolves the "delete it, the datum
+   route covers it" argument**: `net-add-propagator` + `elab-add-propagator` count
+   is **0** across all four parse-layer files (`tree-parser.rkt`,
+   `parse-reader.rkt`, `surface-rewrite.rkt`, `form-cells.rkt`). **Both** branches
+   are off-network, so deleting one buys nothing on-network — it just removes the
+   thing PPN 4D is the eventual successor to. (This also settles the apparent
+   conflict with [Track 3 §11's](2026-04-01_PPN_TRACK3_DESIGN.md) "tree-parsing is
+   canonical": §11 described an aspiration the code never acquired, so neither
+   deleting nor keeping the arms advances or retreats from it.)
+
+   <a id="stepb-audit"></a>
+   **A full Stage-4 grounding audit ran before the ruling (`wf_d604bfc7-776`, 6
+   agents / 1.2M tokens, HEAD-pinned, every load-bearing claim R-lens-verified on
+   the main thread). Its findings are banked below because they are the map anyone
+   returning here will need — and because two of them refute this very entry.**
+
+   ⚠ **THIS ENTRY'S OWN NUMBER WAS WRONG, AND IT IS THE DANGEROUS KIND OF WRONG.**
+   "~1,971 lines / 33 functions" is not a measurement of the legacy family: it is
+   `wc -l` of the **whole file** at the filing revision (`1971`, to the digit) and
+   `grep -c '^(define (parse-.*-tree'` over it (`33`, to the digit). That glob
+   **captures `parse-eval-tree-for-cell`** — the datum route any revival needs —
+   and at HEAD the keeper sits 35 lines from a deletable near-twin
+   (`parse-eval-tree-for-cell` :742 KEEP / `parse-eval-tree` :777). **The figure is
+   the sweep that would delete the wrong thing.**
+
+   ⚠ **AND "deletable as a standalone change" IS REFUTED.** The datum route
+   **cannot run** with `current-source-str` unbound: `pos->line-col`
+   (parse-reader.rkt) does `(string-ref str i)` with only an `i >= pos` guard and
+   no length check, so on `""` it RAISES — reproduced. The raise is **unguarded at
+   both levels** (`tree-node->stx-form` is called OUTSIDE the `with-handlers` in
+   `parse-eval-tree-for-cell`; `extract-surfs-from-form-cells`'s verified-tags arm
+   has no handler while its sibling `else` arm does), so the failure mode is a
+   **whole-file ABORT**. On the `process-file` path — which never binds the
+   parameter — the legacy arms are therefore the **only branch that functions**.
+   Items 5 and 6 are **coupled**: deleting the arms without first binding
+   `current-source-str` turns every `.prologos` file into an abort. (5th instance
+   of the unguarded-parameter/whole-file-abort shape in this track.)
+
+   **The real partition** (measured with `read-syntax` + `port-next-location`, not
+   grep): legacy-only arms = **10 fns / 342 lines**; **ungated** expression
+   machinery that fires regardless of `current-source-str` = **34 fns / 915
+   lines**; the datum route = **1 fn / 34 lines**; wholly dead = **6 fns / 49
+   lines**. Which of these is even *eligible* depends on which caller you
+   preserve — `extract-surfs-from-form-cells` is 16-tag-gated, but
+   `parse-top-level-forms-from-tree` (spine-census + the micro-bench) is not.
+
+   **Three further findings, none previously recorded:**
+   - **9 `case` arms are already SHADOWED-DEAD.** Racket `case` is first-match
+     (verified), and session/defproc/defr/solver/subtype/selection/capability/
+     foreign/strategy appear BOTH at `tree-parser.rkt:147-148` and again later —
+     so `parse-session-tree`, `parse-defproc-tree`, `parse-defr-tree` and
+     `parse-solver-tree` are unreachable in **both** modes, and the
+     `capability`/`foreign`/`strategy` error stubs never fire.
+   - **srcloc loss is a Phase 7 revival blocker.** Every surf
+     `extract-surfs-from-form-cells` produces carries `("<unknown>" 0 0 0)` —
+     both arms end in `(datum->syntax #f expanded)`. Also `form-cells.rkt`
+     **mutates** `current-raw-node` rather than parameterizing it, so a file-path
+     revival must bind BOTH parameters or leak across files.
+   - **The 16-symbol tag list is duplicated** with no shared constant
+     (`tree-parser.rkt:147-148` vs `form-cells.rkt`'s `tree-parser-verified-tags`)
+     — verified identical today; silent divergence if either drifts.
+
+   **The suite is BLIND to all of this**: `tree-parser.rkt`'s 26-case
+   `module+ test` block is never collected (the runner enumerates `tests/` only)
+   and no `tests/` file requires `tree-parser.rkt`. A green suite is **zero
+   evidence** here. Also: `tools/spine-census.rkt`'s `--mode` **defaults to `all`,
+   which includes `legacy`** — any future deletion breaks the instrument's default
+   invocation, not an opt-in flag.
+
+   Finally: this entry's "legacy parse measured ~0% of pipeline time" has **no
+   backing measurement anywhere in `docs/`**. It is nonetheless true *a fortiori* —
+   `parse-form-tree` has zero production callers, so legacy parse is 0% **by
+   construction**. Restate it that way; do not cite a measurement that does not
+   exist. Original entry follows.
+
+   **The legacy `parse-*-tree` family is ~1,971 lines / 33 functions of DUPLICATED
+   parsing** whose 14 classified defects (see the defect note §0) exist *because*
+   duplication lets tables drift — atom table 11 of parser.rkt's 42, head
+   dispatch ~58 of ~357. Under a RETIRE ruling it is deletable outright; under
+   COMMISSION-on-the-datum-path it is deletable too, since the datum path does
+   not use it. Either way it is dead weight; the only question is when.
+
+7. **Smaller, verified, not blocking**: `item-srcloc`'s TOKEN branch still
+   fabricates line/col as `0 0` in a raw list (tree-parser.rkt), and
+   `format-srcloc` (source-location.rkt) calls `srcloc-file` with no `srcloc?`
+   guard — so a list-shaped srcloc RAISES `contract violation` rather than
+   printing. Unreachable while the gate is shut. `pos->line-col` already exists
+   and is exported for the recovery; do not write a new one.
+

@@ -843,8 +843,17 @@
 ;; angle-bracket-conflicted comparison spellings. The hint rides the error's
 ;; message field (rendered by errors.rkt when non-default). NOTE: bare `lt`
 ;; and `eq` never reach here — they resolve to String foreign fns (the
-;; silent-shadow class, filed separately); bare `<` never reaches elaboration
-;; (issue #69(a) reader tokenization).
+;; silent-shadow class, filed separately).
+;;
+;; ⚠ CORRECTED 2026-08-02. This comment used to end "bare `<` never reaches
+;; elaboration (issue #69(a) reader tokenization)", and `'<` was omitted from
+;; the table on that basis. It was true when written and is FALSE now: #69(a)'s
+;; own fix — bare `<` no longer opens an angle group unless a matching `rangle`
+;; exists — is exactly what lets `<` flow through to elaboration. So the token
+;; the issue is NAMED AFTER was the only comparison operator with no guidance
+;; (`<=`, `>=`, `>` all had it), which is the worst possible one to miss.
+;; A fix invalidating the assumption that justified an omission elsewhere:
+;; verified by probe, not by reading.
 (define unbound-op-hint-table
   (let ([cmp-hint
          (string-append
@@ -860,7 +869,7 @@
     (hasheq
      'mod "hint: mod is a keyword; for a first-class value use the section [mod _ _]"
      'le cmp-hint 'gt cmp-hint 'ge cmp-hint
-     '<= angle-hint '>= angle-hint '> angle-hint
+     '< angle-hint '<= angle-hint '>= angle-hint '> angle-hint
      'q8-fma quire-hint 'q16-fma quire-hint 'q32-fma quire-hint 'q64-fma quire-hint
      'q8-to quire-hint 'q16-to quire-hint 'q32-to quire-hint 'q64-to quire-hint
      'p8-if-nar if-nar-hint 'p16-if-nar if-nar-hint

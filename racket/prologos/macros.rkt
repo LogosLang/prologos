@@ -2235,7 +2235,23 @@
        ;; defn — spec injection
        [(eq? head 'defn)
         (define injected (maybe-inject-spec datum))
-        (preparse-expand-form injected)]
+        ;; ⚠ MIRRORS preparse-expand-all's where-injection pass (:3225-3232).
+        ;; Without it, `spec f … where (Add A)` + `defn f` came out of -single
+        ;; with the `where` clause STILL ATTACHED and no implicit dict parameter,
+        ;; while -all produced `$Add-A`. The two expanders feed DIFFERENT spines
+        ;; (-all the preparse spine, -single the tree spine + form-cells), and
+        ;; driver.rkt's merge compares their outputs — so a pass present in one
+        ;; and absent in the other reads as a PARSER divergence that is nothing
+        ;; of the kind. MEASURED: this single omission was 12 of the 26 remaining
+        ;; tree/preparse divergences across the 163-file corpus (98% -> 99%).
+        ;; Invisible until now only because the tree spine's output is not
+        ;; admitted (`tree-spine-admitted?`, driver.rkt).
+        ;; Pinned by tests/test-preparse-expand-parity.rkt.
+        (define where-injected
+          (if (and (pair? injected) (eq? (car injected) 'defn) (memq 'where injected))
+              (maybe-inject-where injected)
+              injected))
+        (preparse-expand-form where-injected)]
        ;; Everything else — standard preparse
        [else (preparse-expand-form datum)])]
     [else (preparse-expand-form datum)]))
