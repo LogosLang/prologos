@@ -469,3 +469,19 @@
       "        (let (b (reserve-export-id 4242N))"
       "          (nat-eq? a b))))")))
   (check-contains r "false"))
+
+;; ----------------------------------------------------------------
+;; One reader per descriptor
+;; ----------------------------------------------------------------
+
+(test-case "handoff/a desc position is the BARE payload, never a list"
+  ;; Two readers of one descriptor is the bug this pins. captp-wire's
+  ;; `unwrap-target-tagged` takes `wire-nat` and nothing else; the driver used
+  ;; to fall back to element 0 of a list, so `<desc:export [5]>` was a valid
+  ;; target on one side of the same program and malformed on the other.
+  (check-contains
+   (run-last "(eval (unwrap-or 999N (desc-position (syrup-tagged \"desc:export\" (syrup-nat 5N)))))")
+   "5")
+  (check-contains
+   (run-last "(eval (unwrap-or 999N (desc-position (syrup-tagged \"desc:export\" (syrup-list (cons (syrup-nat 5N) nil))))))")
+   "999"))

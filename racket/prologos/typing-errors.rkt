@@ -873,11 +873,26 @@
                          (expr-lam? e)
                          (let ([dom (expr-lam-type e)])
                            (or (expr-hole? dom) (expr-meta? dom)))
+                         ;; The suggested spelling is FUSED (`[x:T]`), which
+                         ;; works everywhere. This message used to say
+                         ;; `[x : T]`, and the spaced form works for `fn` but
+                         ;; is a PARSE ERROR for a `defn` parameter list —
+                         ;; verified at both string and file level. Since this
+                         ;; message cannot tell which one it is looking at (by
+                         ;; the time it fires, both are `expr-lam`), it has to
+                         ;; name the spelling that is valid for both.
+                         ;;
+                         ;; The old advice sent the reader to a parse error, and
+                         ;; then to a cascading "Unbound variable" for the name
+                         ;; they were trying to define. `spec` comes first
+                         ;; because it is the answer that always works —
+                         ;; the fused form takes single-token types only.
                          (string-append
                           "cannot infer the type of an unannotated parameter — "
                           "it is used here in a way that requires a known type "
                           "(e.g. field projection `.field` or arithmetic). "
-                          "Annotate the parameter (`[x : T]`) or add a `spec`."))])
+                          "Add a `spec`, or annotate the parameter with the "
+                          "fused form (`[x:T]`, single-token types only)."))])
               (type-mismatch-error
                loc
                (or seal-msg seal-type-msg branch-result-msg infer-hint-msg

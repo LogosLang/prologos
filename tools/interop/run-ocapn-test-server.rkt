@@ -389,16 +389,30 @@
 ;; address. Upstream mints ADDRESS as `uuid.uuid4().hex` per netlayer
 ;; (netlayers/testing_only_tcp.py:49-56), so it is unique per peer.
 ;;
-;; A location we cannot parse falls back to its raw bytes — usable as a
-;; key, just encoding-sensitive, which is where we started.
+;; #f for a location we cannot parse, and that is the point.
+;;
+;; This must agree, byte for byte, with `peer-location-key` in
+;; interop-driver.prologos — the registry is written HERE and read THERE, so a
+;; disagreement is an entry one half can never look up. It used to fall back to
+;; the raw location bytes on a parse failure while the Prologos side returned
+;; `none`, which registered the peer under a key the driver could not
+;; construct: present, findable by nothing.
+;;
+;; Refusing is what makes the two agree with nothing to coordinate. A fallback
+;; would have to agree as well, and it could not: this side keys off the
+;; ORIGINAL frame bytes (`syv-src`) while Prologos would have to re-encode a
+;; decoded value, so any peer whose encoder is not byte-identical to ours
+;; diverges silently. There is nothing to agree about when neither side
+;; produces a key.
+;;
+;; `test-ocapn-location-key.rkt` pins the agreement rather than asserting it.
 (define (location-key loc-bytes)
   (define v (syrup-parse loc-bytes))
-  (or (and v
-           (syv-record? v #"ocapn-peer")
-           (let ([transport (and (syv-arg v 0) (syv-text (syv-arg v 0)))]
-                 [address (and (syv-arg v 1) (syv-text (syv-arg v 1)))])
-             (and transport address (bytes-append transport #"\0" address))))
-      loc-bytes))
+  (and v
+       (syv-record? v #"ocapn-peer")
+       (let ([transport (and (syv-arg v 0) (syv-text (syv-arg v 0)))]
+             [address (and (syv-arg v 1) (syv-text (syv-arg v 1)))])
+         (and transport address (bytes-append transport #"\0" address)))))
 
 ;; The value of hint `k`, as a string. HINTS is a Syrup DICT with STRING
 ;; keys upstream (`{"host": …, "port": …}`, testing_only_tcp.py:53-55).
@@ -737,21 +751,29 @@
 
 (define (record-open-conn! hello cout cid)
   (define e (conn-entry cout (peer-hello-pubkey-bytes hello) (peer-hello-side-id hello) cid))
+  (define key (peer-hello-location-key hello))
   (with-state
-    (hash-update! open-conns (peer-hello-location-key hello) (lambda (es) (cons e es)) '())
+    (when key
+      (hash-update! open-conns key (lambda (es) (cons e es)) '()))
     (hash-set! pubkey-by-out cout (peer-hello-pubkey-bytes hello))
     (hash-set! out-by-cid cid cout))
+  ;; A peer whose location does not parse still gets a connection and a port —
+  ;; we can answer it. What it does not get is a NAME, so nothing can ask to
+  ;; reach it by one. Registering it under an unusable key would say otherwise.
+  (unless key
+    (printf "ocapn-test-server: conn ~a has an unparseable location; not registering it by name~n" cid))
   ;; And tell the PROLOGOS side, which resolves a location to a connection
   ;; when a role asks to reach a peer by name. The SIDE-ID goes with it: a
   ;; give redeemed over a session that was already open needs that session's
   ;; id, and the id is derived from the two side-ids, so registering only the
   ;; connection would let a role find it and then be unable to name it.
-  (when (getenv "OCAPN_FRAME_HEX")
+  (when (and key (getenv "OCAPN_FRAME_HEX"))
     (printf "ocapn-test-server: REGISTER conn ~a key-hex ~a~n"
-            cid (bytes->hex-string (peer-hello-location-key hello))))
-  (ocapn-peer-register (bytes->string/latin-1 (peer-hello-location-key hello))
-                       cid
-                       (bytes->string/latin-1 (peer-hello-side-id hello)))
+            cid (bytes->hex-string key)))
+  (when key
+    (ocapn-peer-register (bytes->string/latin-1 key)
+                         cid
+                         (bytes->string/latin-1 (peer-hello-side-id hello))))
   (void))
 
 ;; Write everything the Prologos side queued for a connection other than the
@@ -791,12 +813,18 @@
     (define key (peer-hello-location-key hello))
     (define cid
       (with-state
-        (define es (hash-ref open-conns key '()))
+        (define es (if key (hash-ref open-conns key '()) '()))
         (define mine (findf (lambda (e) (eq? (conn-entry-out e) cout)) es))
         (define left (filter (lambda (e) (not (eq? (conn-entry-out e) cout))) es))
-        (if (null? left) (hash-remove! open-conns key) (hash-set! open-conns key left))
+        (when key
+          (if (null? left) (hash-remove! open-conns key) (hash-set! open-conns key left)))
         (hash-remove! pubkey-by-out cout)
-        (and mine (conn-entry-cid mine))))
+        ;; A nameless connection (unparseable location) was never in
+        ;; `open-conns`, so its cid has to come from the port map instead --
+        ;; otherwise its `out-by-cid` entry outlives the socket, and every
+        ;; later queued send addressed to that cid writes to a closed port.
+        (or (and mine (conn-entry-cid mine))
+            (for/first ([(c p) (in-hash out-by-cid)] #:when (eq? p cout)) c))))
     ;; And out of the PROLOGOS-side registry and the port map. Leaving them is
     ;; not merely untidy: `reach-exporter` takes its already-open branch on any
     ;; non-zero lookup, so a stale entry makes it CLAIM a parked give and write
@@ -806,7 +834,8 @@
     ;; reconnect.
     (when cid
       (with-state (hash-remove! out-by-cid cid))
-      (ocapn-peer-forget (bytes->string/latin-1 key) cid)))
+      (when key
+        (ocapn-peer-forget (bytes->string/latin-1 key) cid))))
   (void))
 
 ;; The newest still-open connection to that peer, or #f.

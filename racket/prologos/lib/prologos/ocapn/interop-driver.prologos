@@ -916,17 +916,22 @@ defn nat-of-syrup [o]
 ;; ocapn-peer with three, desc:sig-envelope with two) read fine through
 ;; `record-args-of` while the one-field descriptors silently produced nothing.
 ;; Both shapes are accepted rather than guessed at.
-spec nat-of-payload SyrupValue -> [Option Nat]
-defn nat-of-payload [payload]
-  match [wire-nat payload]
-    | some n -> some n
-    | none   -> nat-of-syrup [nth-syrup [syrup-list-or-nil payload] zero]
-
+;; `wire-nat` and nothing else. All three tags this accepts name ONE-argument
+;; records, so the payload is the bare position — the bare-value rule for
+;; single-argument Syrup records, which is the thing that catches people out
+;; here.
+;;
+;; There used to be a fallback reading element 0 of a list payload, so
+;; `<desc:export [5]>` was accepted HERE while captp-wire's
+;; `unwrap-target-tagged` rejected it: two readers of one descriptor,
+;; disagreeing, with the looser one on the driver side. Collapsing exactly that
+;; `<tag [a b]>` / `<tag a b>` conflation is recorded as a FIX in the gaps
+;; document (Theme C); this had quietly reintroduced it.
 spec desc-position-for String SyrupValue -> [Option Nat]
 defn desc-position-for [tag payload]
   match [desc-tag? tag]
     | false -> [none Nat]
-    | true  -> nat-of-payload payload
+    | true  -> wire-nat payload
 
 spec desc-position SyrupValue -> [Option Nat]
 defn desc-position [v]

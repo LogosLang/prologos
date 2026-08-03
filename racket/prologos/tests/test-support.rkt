@@ -180,8 +180,20 @@
                  [current-ns-context-cell-id        #f]
                  )
     (with-forked-network current-prop-net-box
-      (install-module-loader!)
-      (last (process-string s)))))
+     ;; …and the PERSISTENT REGISTRY network too. Forking only the prop net
+     ;; left the cell-backed registries (spec store, preparse registry, schema
+     ;; registry) on ONE shared network for the life of the batch-worker
+     ;; process, and `spec-store-lookup` reads the CELL FIRST
+     ;; (macros.rkt:496) — so a `spec` registered by one test FILE was still
+     ;; there for the next. The per-file snapshot the worker takes restores
+     ;; the `current-spec-store` PARAMETER, which the cell read never
+     ;; consults; the dual-write is what hid it.
+     ;;
+     ;; Forking from the prelude box keeps everything the prelude registered
+     ;; and discards what this call writes.
+     (with-forked-network current-persistent-registry-net-box
+        (install-module-loader!)
+        (last (process-string s))))))
 
 ;; Process a string and return ALL results (list).
 (define (run-ns-all s)
@@ -199,8 +211,20 @@
                  [current-ns-context-cell-id        #f]
                  )
     (with-forked-network current-prop-net-box
-      (install-module-loader!)
-      (process-string s))))
+     ;; …and the PERSISTENT REGISTRY network too. Forking only the prop net
+     ;; left the cell-backed registries (spec store, preparse registry, schema
+     ;; registry) on ONE shared network for the life of the batch-worker
+     ;; process, and `spec-store-lookup` reads the CELL FIRST
+     ;; (macros.rkt:496) — so a `spec` registered by one test FILE was still
+     ;; there for the next. The per-file snapshot the worker takes restores
+     ;; the `current-spec-store` PARAMETER, which the cell read never
+     ;; consults; the dual-write is what hid it.
+     ;;
+     ;; Forking from the prelude box keeps everything the prelude registered
+     ;; and discards what this call writes.
+     (with-forked-network current-persistent-registry-net-box
+        (install-module-loader!)
+        (process-string s)))))
 
 ;; ========================================
 ;; WS-mode helpers (primary design target)
@@ -223,8 +247,20 @@
                  [current-ns-context-cell-id        #f]
                  )
     (with-forked-network current-prop-net-box
-      (install-module-loader!)
-      (last (process-string-ws s)))))
+     ;; …and the PERSISTENT REGISTRY network too. Forking only the prop net
+     ;; left the cell-backed registries (spec store, preparse registry, schema
+     ;; registry) on ONE shared network for the life of the batch-worker
+     ;; process, and `spec-store-lookup` reads the CELL FIRST
+     ;; (macros.rkt:496) — so a `spec` registered by one test FILE was still
+     ;; there for the next. The per-file snapshot the worker takes restores
+     ;; the `current-spec-store` PARAMETER, which the cell read never
+     ;; consults; the dual-write is what hid it.
+     ;;
+     ;; Forking from the prelude box keeps everything the prelude registered
+     ;; and discards what this call writes.
+     (with-forked-network current-persistent-registry-net-box
+        (install-module-loader!)
+        (last (process-string-ws s))))))
 
 (define (run-ns-ws-all s)
   (parameterize ([current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
@@ -241,8 +277,20 @@
                  [current-ns-context-cell-id        #f]
                  )
     (with-forked-network current-prop-net-box
-      (install-module-loader!)
-      (process-string-ws s))))
+     ;; …and the PERSISTENT REGISTRY network too. Forking only the prop net
+     ;; left the cell-backed registries (spec store, preparse registry, schema
+     ;; registry) on ONE shared network for the life of the batch-worker
+     ;; process, and `spec-store-lookup` reads the CELL FIRST
+     ;; (macros.rkt:496) — so a `spec` registered by one test FILE was still
+     ;; there for the next. The per-file snapshot the worker takes restores
+     ;; the `current-spec-store` PARAMETER, which the cell read never
+     ;; consults; the dual-write is what hid it.
+     ;;
+     ;; Forking from the prelude box keeps everything the prelude registered
+     ;; and discards what this call writes.
+     (with-forked-network current-persistent-registry-net-box
+        (install-module-loader!)
+        (process-string-ws s)))))
 
 ;; ========================================
 ;; GDE-4: Structured error testing helpers
@@ -260,7 +308,19 @@
                    [current-ns-context-cell-id        #f]
                    )
       (with-forked-network current-prop-net-box
-        (process-string s))))
+     ;; …and the PERSISTENT REGISTRY network too. Forking only the prop net
+     ;; left the cell-backed registries (spec store, preparse registry, schema
+     ;; registry) on ONE shared network for the life of the batch-worker
+     ;; process, and `spec-store-lookup` reads the CELL FIRST
+     ;; (macros.rkt:496) — so a `spec` registered by one test FILE was still
+     ;; there for the next. The per-file snapshot the worker takes restores
+     ;; the `current-spec-store` PARAMETER, which the cell read never
+     ;; consults; the dual-write is what hid it.
+     ;;
+     ;; Forking from the prelude box keeps everything the prelude registered
+     ;; and discards what this call writes.
+     (with-forked-network current-persistent-registry-net-box
+          (process-string s)))))
   (cons results (get-output-string stderr-out)))
 
 ;; Assert that an error has a non-empty provenance field.
