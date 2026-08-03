@@ -1571,27 +1571,44 @@ DEFERRED_COMPLETE.md at the 2026-07-16 F1b-opening triage.)*
 
 ---
 
-## IO Library
+## IO Library — TRIAGED 2026-08-02 (3 done, 1 half-stale)
 
-### Dependent Send/Receive (`!:`/`?:`) (Phase IO-J)
-- Two small gaps: elaborator discards binder name, runtime predicates exclude dsend/drecv
+Four of the five entries below were probed. Three describe work that is
+implemented AND has passing tests; a fourth is half stale. Nothing here was
+built by this triage — it was all already in the tree.
+
+### 🔶 Dependent Send/Receive (`!:`/`?:`) (Phase IO-J) — HALF STALE (re-probed 2026-08-02)
+
+"Runtime predicates exclude dsend/drecv" is no longer true: `io-bridge.rkt`
+:111-112 includes `sess-dsend?` / `sess-drecv?` in both `io-sess-send?` and
+`io-sess-recv?`, and the constructors are live in `session-lattice.rkt` and
+`session-propagators.rkt`. `test-io-dep-session-01/02.rkt` pass (22 tests).
+
+The other half — "elaborator discards binder name" — is NOT verified either
+way; it needs a repro this probe did not construct.
 - Reader, preparse, surface syntax, parser, IR, type-checker, pretty-printer are ALL complete
-- **Not blocked** — can be implemented immediately
 - Source: `docs/tracking/2026-03-05_IO_IMPLEMENTATION_DESIGN.md` §7
 
-### IO Bridge Propagators (Phase IO-B)
-- `io-bridge-cell` type, side-effecting IO propagator, wiring into `run-to-quiescence`
-- **Blocked on**: Nothing
+### ✅ DONE — IO Bridge Propagators (Phase IO-B) (re-probed 2026-08-02)
+
+`io-bridge.rkt` provides `make-io-bridge-cell` and `make-io-bridge-propagator`
+with the IO state lattice. `test-io-bridge-01.rkt` passes — bot identity, top
+absorbing, valid/invalid transitions, idempotence, cell creation at io-bot.
 - Source: `docs/tracking/2026-03-05_IO_IMPLEMENTATION_DESIGN.md` §5
 
-### Boundary Operations: `open`/`connect`/`listen` (Phase IO-C / IO-J)
-- Capability-gated channel creation for external resources
-- **Blocked on**: IO bridge propagators
+### ✅ DONE — Boundary Operations (Phase IO-C / IO-J) (re-probed 2026-08-02)
+
+`test-io-boundary-01.rkt` passes: channel creation, session cell init, read
+delivering to msg-in, write sessions, a nonexistent file going to io-top,
+session end closing the port, and `proc-open`. It was listed as blocked on IO
+bridge propagators, which are themselves done.
 - Source: `docs/tracking/2026-03-05_IO_IMPLEMENTATION_DESIGN.md` §6
 
-### Opaque Type Marshalling (Phase IO-A1)
-- `expr-opaque` wrapper struct for Racket values (file ports, db connections)
-- **Blocked on**: Nothing
+### ✅ DONE — Opaque Type Marshalling (Phase IO-A1) (re-probed 2026-08-02)
+
+`expr-opaque` exists in `syntax.rkt`, is marshalled in `foreign.rkt` (:239,
+:332) and walked in `reduction.rkt` (:3799, :4671). `test-io-opaque-01.rkt`
+passes, 13 tests.
 - Source: `docs/tracking/2026-03-05_IO_IMPLEMENTATION_DESIGN.md` §4
 
 ### `Path` Type (Phase IO-A2)
