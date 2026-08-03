@@ -3287,7 +3287,37 @@ grows a frame concept. P1b-ii's `dot-lbrace` is deliberately justified on its ow
 terms (Q_M5's plain-`'rbrace` closer) rather than by analogy to this sibling —
 "match your siblings" would have inherited the bug.
 
-### 2. Three group tags ride the SILENT tree-parser fallthrough — benign or not, unverified
+### 2. ✅ PROBED 2026-08-03 — the three group tags DO produce silent garbage, and the merge no longer admits it
+
+The entry asked for exactly one thing — *"feed `#{…}`, `@[…]`, `~[…]` through
+the tree layer and check whether the tree-parser result is admitted or rejected
+by the merge"* — and both halves now have answers.
+
+**The tree layer really does produce garbage, silently.** All three become an
+application of the first element to the rest, with no error:
+
+```
+def a := #{1 2}   ->  surf-def a (surf-app (surf-int-lit 1) ((surf-int-lit 2)))
+def b := @[1 2]   ->  the same
+def c := ~[1 2]   ->  the same
+```
+
+So the "a new tag needs an arm" obligation Q_N1 states as absolute is REAL, and
+these three violate it. That half of the inconsistency stands.
+
+**The merge does not admit it — and the reason is today's, not yesterday's.**
+Those garbage surfs carry srcloc line 0, and until 2026-08-03 the merge treated
+line 0 as a MATCHABLE LINE (see § the bare top-level `[]` entry, where a
+located-nowhere preparse error was swapped for a located-nowhere tree surf).
+The `real-line?` guard added there closes this path too: a line-0 tree surf can
+no longer key against anything. Verified end to end — `#{1 2}` is `[Set Int]`,
+`@[1 2]` is `[PVec Int]`, `~[1 2]` is `[LSeq Int]`.
+
+**So: not currently exploitable, and NOT structurally safe.** The protection is
+the merge key, not the tags. Anything that gives one of these tree surfs a real
+source line — a tree-parser srcloc improvement, most obviously — re-opens it
+immediately, and the surfs would then WIN (non-error ∧ same form type ∧ same
+line). The three arms are still owed.
 
 `set-group`, `at-group` and `tilde-group` are minted at surface-rewrite.rkt
 :519/:527/:528 and have **zero** tree-parser dispatch arms and zero non-test
