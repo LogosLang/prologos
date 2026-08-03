@@ -770,7 +770,7 @@ exporting schemas — none exist today; the demo is single-file); (b) or the
 first stale-baked-plan incident in practice. Until then the class is documented
 here + at §13.8.
 
-## ✅ CLOSED `PLACEHOLDER13` — resolution bridges capture registry cell-ids while they are still #f (found 2026-07-27, fixed 2026-08-02)
+## ✅ CLOSED `65edc1a4` — resolution bridges capture registry cell-ids while they are still #f (found 2026-07-27, fixed 2026-08-02)
 
 Took the **read-at-fire-time** option, not the defer-into-the-lambda one. The
 lambda is called at INSTALL time, which is also before some paths have
