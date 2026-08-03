@@ -211,3 +211,24 @@ schema Manifest
 [validate Manifest {:names nil}]
 ;;38=>~ prologos::data::result::ok
 ;;   ← the empty list has no elements to disagree with anything
+
+;; --- 2026-08-03: the NON-CTOR CARRIERS (PVec / Set / Map) --------------------
+;; These never reach the ctor route — their values are an rrb, an hset and a
+;; champ rather than constructor applications — so they sat at the 'any skip.
+
+schema Ports
+  :nums (PVec Int)
+  :labels (Map Keyword String)
+;;39=> Ports : [Type 0] defined.
+
+[validate Ports {:nums @[80 443] :labels {:a "x"}}]
+;;40=>~ prologos::data::result::ok
+
+[validate Ports {:nums @[80 "443"] :labels {:a "x"}}]
+;;41=>~ PVec (element 1 is String)
+;;   ← THE FIX: a String element in a (PVec Int) field, at position 1 rather
+;;     than 0 so a head-only check would not catch it. Was `ok`.
+
+[validate Ports {:nums @[80] :labels {:a 1}}]
+;;42=>~ Map (the value at :a is Int)
+;;   ← and a Map checks BOTH its keys and its values

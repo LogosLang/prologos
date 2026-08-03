@@ -555,6 +555,31 @@
       [(and (expr-fvar? t) (refined-name? (bare-name (expr-fvar-name t))))
        (field-type->witness-tag
         (schema-field-type->expr (refined-name->base (bare-name (expr-fvar-name t)))))]
+      ;; ---- the NON-CTOR CARRIERS: PVec / Map / Set --------------------------
+      ;; These three never reach the ctor arm below — their values are an rrb, a
+      ;; champ and an hset, not constructor applications — so they sat at 'any
+      ;; and a `(PVec Int)` field accepted `@[1 "z"]`. Their elements are
+      ;; directly readable from the carrier, so no ctor-meta or spine walking is
+      ;; involved; each is just "recurse on the element tag".
+      ;;
+      ;; A POSITIVE list of three known heads, matched by BARE name, with the
+      ;; arity checked: an unrecognized head still falls through to the ctor arm
+      ;; and then to 'any. Nothing here can fire on a carrier we have not
+      ;; modelled.
+      [(let-values ([(head args) (decompose-type-app t)])
+         (and head
+              (let ([bare (bare-name head)])
+                (cond
+                  [(and (eq? bare 'PVec) (= (length args) 1))
+                   (list 'pvec (field-type->witness-tag (car args) seen))]
+                  [(and (eq? bare 'Set) (= (length args) 1))
+                   (list 'hset (field-type->witness-tag (car args) seen))]
+                  [(and (eq? bare 'Map) (= (length args) 2))
+                   (list 'hmap
+                         (field-type->witness-tag (car args) seen)
+                         (field-type->witness-tag (cadr args) seen))]
+                  [else #f]))))
+       => values]
       ;; a CONFIRMED data type (bare head OR applied container head with
       ;; registered ctors). Only fires when the head genuinely has ctors, else
       ;; falls to 'any (never false-reject an abstract/type-var field).

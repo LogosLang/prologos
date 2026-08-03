@@ -952,12 +952,22 @@ residue-letter entries — divergent gates/double-count):
    `'(ctor Option)`, i.e. the pin on the element-blind behaviour this item
    existed to remove.
 
-   **Still not element-checked: the non-ctor CARRIERS** — `(PVec T)`,
-   `(Map K V)`, `(Set T)`. Their values are rrb / champ / hset, not
-   constructor applications, so they never reach this arm and stay at `'any`
-   (`[validate Vecd {:xs @[1 "z"]}]` returns `ok`). Each needs its own carrier
-   arm on both sides; the carriers are directly readable, so this is small, and
-   it is the obvious next slice.
+   **The non-ctor CARRIERS landed in the same session** — `(PVec T)`,
+   `(Map K V)`, `(Set T)`. Their values are an rrb, a champ and an hset rather
+   than constructor applications, so they never reached the `data` arm and sat
+   at `'any`: `[validate Vecd {:xs @[1 "z"]}]` returned `ok`. Tags `(pvec T)` /
+   `(hmap K V)` / `(hset T)`; elements come straight off the carrier, so there
+   is no ctor-meta or spine walking involved. A POSITIVE list of three known
+   heads matched by BARE name with the arity checked — an unrecognized head
+   still falls through to the ctor arm and then to `'any`, so nothing here can
+   fire on a carrier that has not been modelled. A `Map` checks BOTH keys and
+   values. A value of the wrong carrier kind ACCEPTS (same call as the `row`
+   arm), and a TRANSIENT PVec accepts unread — it is a mutable handle mid-build,
+   so a verdict from it is about a state that may not be the one committed.
+
+   `value-kind-string` gained the two carrier kinds while here: without them a
+   `(PVec Int)` mismatch reported got=`"value"`, which names nothing at all.
+   Now `"PVec (element 1 is String)"` / `"Map (the value at :a is Int)"`.
 3. **Sub-schema descent** (auto-registered `Parent__field` entries carry
    check/default = #f — stripped at registration; a one-level engine hitting a
    sub-schema-typed field has no defined deep disposition).

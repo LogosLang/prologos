@@ -26,6 +26,12 @@
 ;;   (row (K . T) ...)  a keyword-domain ROW (a nested schema, or an inline row
 ;;                      type): the value must be a map, and every listed key it
 ;;                      ACTUALLY HAS must witness that key's tag. See the arm.
+;;   (data N K (C T ...) ...)  an applied data type: the value's ctor must
+;;                      belong to N (the (ctor N) check verbatim) and each of
+;;                      its fields must witness that ctor's field tag, after
+;;                      stepping over K erased type args. `T` may be `self`.
+;;   (pvec T) (hset T) (hmap K V)   the non-ctor carriers — every element (or
+;;                      key/value) must witness the element tag.
 ;;
 ;; SAFETY DIRECTION (D28 err-polarity): on ANY uncertainty the witness ACCEPTS.
 ;; A false REJECT (erroring on data the static seal accepted) is strictly worse
@@ -39,7 +45,8 @@
 (require racket/list
          racket/string
          "syntax.rkt"
-         (only-in "champ.rkt" champ-lookup)
+         (only-in "champ.rkt" champ-lookup champ-keys champ-entries)
+         (only-in "rrb.rkt" rrb-to-list)
          (only-in "macros.rkt" lookup-ctor ctor-meta-type-name))
 
 (provide value-witnesses-tag?
@@ -193,6 +200,40 @@
                       [else
                        (for/and ([fv (in-list fields)] [ft (in-list ftags)])
                          (value-witnesses-tag? fv (if (eq? ft 'self) tag ft)))]))]))]))]
+       ;; ---- the NON-CTOR CARRIERS ----------------------------------------
+       ;; PVec / Set / Map values are an rrb, an hset and a champ — not
+       ;; constructor applications — so they never reach the `data` arm and sat
+       ;; at 'any: a `(PVec Int)` field accepted `@[1 "z"]`. Elements come
+       ;; straight off the carrier, so these are just "recurse on the element
+       ;; tag" with no spine walking.
+       ;;
+       ;; Each accepts a value of the WRONG carrier kind rather than rejecting
+       ;; it. That looks lax but is the same call as the `row` arm: the carrier
+       ;; mismatch is the static seal's to make, and a witness that cannot read
+       ;; the value has nothing to say about its elements.
+       ;;
+       ;; A TRANSIENT PVec (`expr-trrb`) accepts unread — it is a mutable
+       ;; handle mid-build, so any verdict taken from it is about a state that
+       ;; may not be the one committed.
+       [(pvec)
+        (cond
+          [(expr-rrb? v)
+           (for/and ([e (in-list (rrb-to-list (expr-rrb-racket-rrb v)))])
+             (value-witnesses-tag? e (cadr tag)))]
+          [else #t])]
+       [(hset)
+        (cond
+          [(expr-hset? v)
+           (for/and ([e (in-list (champ-keys (expr-hset-racket-champ v)))])
+             (value-witnesses-tag? e (cadr tag)))]
+          [else #t])]
+       [(hmap)
+        (cond
+          [(expr-champ? v)
+           (for/and ([kv (in-list (champ-entries (expr-champ-racket-champ v)))])
+             (and (value-witnesses-tag? (car kv) (cadr tag))
+                  (value-witnesses-tag? (cdr kv) (caddr tag))))]
+          [else #t])]
        ;; unknown tag head → accept (forward-compatible; never false-reject)
        [else #t])]
     ;; malformed / unexpected tag shape → accept
@@ -207,6 +248,11 @@
     [(value->prim-tag v) => symbol->string]
     [(value->ctor-type-name v) => symbol->string]
     [(expr-champ? v) "Map"]
+    ;; the non-ctor carriers — added with their witness arms (2026-08-03).
+    ;; Without these a `(PVec Int)` mismatch reported got="value", which names
+    ;; nothing at all.
+    [(or (expr-rrb? v) (expr-trrb? v)) "PVec"]
+    [(expr-hset? v) "Set"]
     [(expr-lam? v) "function"]
     [else "value"]))
 
@@ -259,6 +305,35 @@
                                ;; rather than stopping at "is Option"
                                [else (format "~a field ~a is ~a"
                                              cname i (witness-got-string fv ft*))]))))))))))
+  ;; the non-ctor carriers: name the offending element / entry.
+  (define carrier-detail
+    (and (pair? tag)
+         (case (car tag)
+           [(pvec)
+            (and (expr-rrb? v)
+                 (for/or ([e (in-list (rrb-to-list (expr-rrb-racket-rrb v)))]
+                          [i (in-naturals)])
+                   (and (not (value-witnesses-tag? e (cadr tag)))
+                        (format "element ~a is ~a" i (witness-got-string e (cadr tag))))))]
+           [(hset)
+            (and (expr-hset? v)
+                 (for/or ([e (in-list (champ-keys (expr-hset-racket-champ v)))])
+                   (and (not (value-witnesses-tag? e (cadr tag)))
+                        (format "an element is ~a" (witness-got-string e (cadr tag))))))]
+           [(hmap)
+            (and (expr-champ? v)
+                 (for/or ([kv (in-list (champ-entries (expr-champ-racket-champ v)))])
+                   (cond
+                     [(not (value-witnesses-tag? (car kv) (cadr tag)))
+                      (format "a key is ~a" (witness-got-string (car kv) (cadr tag)))]
+                     [(not (value-witnesses-tag? (cdr kv) (caddr tag)))
+                      (format "the value at ~a is ~a"
+                              (if (expr-keyword? (car kv))
+                                  (string-append ":" (symbol->string (expr-keyword-name (car kv))))
+                                  (value-kind-string (car kv)))
+                              (witness-got-string (cdr kv) (caddr tag)))]
+                     [else #f])))]
+           [else #f])))
   (define row-detail
     (and (pair? tag) (eq? (car tag) 'row) (expr-champ? v)
          (let descend ([v v] [tag tag] [path '()])
@@ -284,7 +359,7 @@
                         [else (format "~a is ~a"
                                       (path->string* p)
                                       (witness-got-string found (cdr kt)))]))))))))
-  (define detail (or data-detail row-detail))
+  (define detail (or data-detail carrier-detail row-detail))
   (if detail
       (string-append (value-kind-string v) " (" detail ")")
       (value-kind-string v)))
@@ -311,6 +386,13 @@
     ;; a `data` tag never skips: its head check alone can reject, exactly as
     ;; `(ctor …)` could.
     [(and (pair? tag) (eq? (car tag) 'data)) #f]
+    ;; a carrier tag can reject only through its ELEMENT tag — a `(PVec _)` over
+    ;; an unwitnessable element type genuinely concedes, and must say so or the
+    ;; discipline test would read it as coverage it does not have.
+    [(and (pair? tag) (memq (car tag) '(pvec hset)))
+     (witness-tag-skip? (cadr tag))]
+    [(and (pair? tag) (eq? (car tag) 'hmap))
+     (and (witness-tag-skip? (cadr tag)) (witness-tag-skip? (caddr tag)))]
     [else #f]))
 
 ;; Structural well-formedness — the totality assertion: a tag is one of the
@@ -331,6 +413,12 @@
      (andmap (lambda (kt) (and (pair? kt) (symbol? (car kt))
                                (witness-tag-well-formed? (cdr kt))))
              (cdr tag))]
+    [(and (pair? tag) (memq (car tag) '(pvec hset)))
+     (and (= (length tag) 2) (witness-tag-well-formed? (cadr tag)))]
+    [(and (pair? tag) (eq? (car tag) 'hmap))
+     (and (= (length tag) 3)
+          (witness-tag-well-formed? (cadr tag))
+          (witness-tag-well-formed? (caddr tag)))]
     ;; (data Name NSKIP (Ctor FieldTag ...) ...) — `self` is well-formed only
     ;; inside a data tag, which is why it is checked here and not at top level.
     [(and (pair? tag) (eq? (car tag) 'data))

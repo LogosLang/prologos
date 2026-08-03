@@ -298,3 +298,60 @@
     (define t (field-type->witness-tag (schema-field-type->expr d)))
     (check-true (witness-tag-well-formed? t) (format "~a → ~a" d t))
     (check-false (witness-tag-skip? t) (format "~a must stay witnessable" d))))
+
+;; ============================================================================
+;; The NON-CTOR CARRIERS: PVec / Set / Map (2026-08-03, with the tier-2 work).
+;;
+;; These three never reach the `data` arm — their values are an rrb, an hset and
+;; a champ, not constructor applications — so they sat at 'any and a
+;; `(PVec Int)` field accepted `@[1 "z"]`.
+;; ============================================================================
+
+(require (only-in "../rrb.rkt" rrb-from-list))
+
+(test-case "witness/PVec checks its elements"
+  (define t (field-type->witness-tag (schema-field-type->expr '(PVec Int))))
+  (check-equal? t '(pvec (prim Nat Int)))
+  (check-true  (value-witnesses-tag?
+                (expr-rrb (rrb-from-list (list (expr-int 1) (expr-int 2)))) t))
+  (check-false (value-witnesses-tag?
+                (expr-rrb (rrb-from-list (list (expr-int 1) (expr-string "z")))) t)
+               "THE BUG: @[1 \"z\"] used to satisfy a (PVec Int) field")
+  (check-true (value-witnesses-tag? (expr-rrb (rrb-from-list '())) t)
+              "an empty PVec has no elements to disagree"))
+
+(test-case "witness/Map checks BOTH keys and values"
+  (define t (field-type->witness-tag
+             (schema-field-type->expr '(Map Keyword String))))
+  (check-equal? t '(hmap (prim Keyword) (prim String)))
+  (check-true  (value-witnesses-tag? (mk-champ 'a (expr-string "x")) t))
+  (check-false (value-witnesses-tag? (mk-champ 'a (expr-int 1)) t)
+               "a wrong VALUE type must reject"))
+
+(test-case "witness/a carrier accepts a value of the WRONG carrier kind"
+  ;; Same call as the `row` arm: the carrier mismatch is the static seal's to
+  ;; make, and a witness that cannot read the value has nothing to say about
+  ;; its elements.
+  (define t (field-type->witness-tag (schema-field-type->expr '(PVec Int))))
+  (check-true (value-witnesses-tag? (expr-string "not a pvec") t)))
+
+(test-case "witness/a carrier SKIPS honestly when its element type is unwitnessable"
+  ;; `(PVec <Int -> Int>)` can reject nothing, and must say so — otherwise the
+  ;; discipline test reads it as coverage it does not have.
+  (check-true (witness-tag-skip?
+               (field-type->witness-tag
+                (schema-field-type->expr '(PVec ($arrow Int Int)))))
+              "an unwitnessable element type makes the carrier a skip")
+  (check-false (witness-tag-skip?
+                (field-type->witness-tag (schema-field-type->expr '(PVec Int)))))) 
+
+(test-case "witness/carrier got-strings name the offending element"
+  (check-equal? (witness-got-string
+                 (expr-rrb (rrb-from-list (list (expr-int 1) (expr-string "z"))))
+                 (field-type->witness-tag (schema-field-type->expr '(PVec Int))))
+                "PVec (element 1 is String)")
+  (check-equal? (witness-got-string
+                 (mk-champ 'a (expr-int 1))
+                 (field-type->witness-tag
+                  (schema-field-type->expr '(Map Keyword String))))
+                "Map (the value at :a is Int)"))
