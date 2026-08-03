@@ -1708,13 +1708,42 @@
 
   ;; Step 1: Map each token to its content-line index
   ;; (by comparing token start-pos to line boundaries in char-rrb)
+  ;;
+  ;; OCapN review U2: this was quadratic TWICE OVER, and measured at 28.3 s to
+  ;; build the tree for one 4066-line file (captp-core).
+  ;;   (a) `find-line-start-pos` rescanned char-rrb FROM ZERO for every content
+  ;;       line — O(lines x chars).
+  ;;   (b) `find-content-line-for-pos` did a linear walk using `list-ref` on a
+  ;;       LIST, per token — O(tokens x lines^2) in the worst case, because
+  ;;       `list-ref` is itself O(i).
+  ;; Fixed as the filing prescribed: ONE pass over the characters to build a
+  ;; line-start VECTOR, then binary search per token.
+  (define source-line-starts
+    ;; index = source line number, value = its first char position. One scan.
+    (let* ([n (rrb-size char-rrb)]
+           [starts (make-vector (add1 n) 0)])   ;; upper bound: every char a newline
+      ;; starts[0] is 0 by initialization and each newline records the NEXT
+      ;; line's start. Do NOT write at EOF: `line` there is the LAST line,
+      ;; whose start was already recorded, and overwriting it with the
+      ;; end-of-buffer position silently moves that whole line's tokens.
+      ;; (Cost me 28 suite failures on the first cut.)
+      (let loop ([pos 0] [line 0])
+        (cond
+          [(>= pos n) starts]
+          [(char=? (rrb-get char-rrb pos) #\newline)
+           (vector-set! starts (add1 line) (add1 pos))
+           (loop (add1 pos) (add1 line))]
+          [else (loop (add1 pos) line)]))))
+
   (define line-boundaries
-    ;; For each content line, find its start position in the source
-    (for/list ([li (in-range (rrb-size content-line-indices))])
-      (define source-line (rrb-get content-line-indices li))
-      ;; Find the position of this source line in the char-rrb
-      ;; (count newlines to find line start)
-      (find-line-start-pos char-rrb source-line)))
+    ;; For each content line, its start position — a VECTOR, so the per-token
+    ;; lookup below can binary-search instead of walking a list.
+    (build-vector (rrb-size content-line-indices)
+                  (lambda (li)
+                    (let ([source-line (rrb-get content-line-indices li)])
+                      (if (< source-line (vector-length source-line-starts))
+                          (vector-ref source-line-starts source-line)
+                          (rrb-size char-rrb))))))
 
   ;; Step 2: Assign tokens to content lines
   (define line-tokens (make-vector n-lines '()))
@@ -1827,12 +1856,23 @@
           [else (loop (+ pos 1) line)]))))
 
 ;; Helper: find which content line a character position belongs to
+;; The greatest i < n-lines with (<= boundaries[i] pos), or 0 if none.
+;; `line-boundaries` is a VECTOR of monotonically-increasing line starts, so
+;; this is a binary search. It was a linear walk with `list-ref` on a LIST —
+;; O(lines^2) per token — and is the second half of the U2 quadratic.
 (define (find-content-line-for-pos pos line-boundaries n-lines)
-  (let loop ([i (- n-lines 1)])
-    (cond
-      [(< i 0) 0]
-      [(<= (list-ref line-boundaries i) pos) i]
-      [else (loop (- i 1))])))
+  (define hi-bound (min n-lines (vector-length line-boundaries)))
+  (cond
+    [(<= hi-bound 0) 0]
+    [(< pos (vector-ref line-boundaries 0)) 0]
+    [else
+     (let loop ([lo 0] [hi (sub1 hi-bound)])
+       (if (>= lo hi)
+           lo
+           (let ([mid (quotient (+ lo hi 1) 2)])
+             (if (<= (vector-ref line-boundaries mid) pos)
+                 (loop mid hi)
+                 (loop lo (sub1 mid))))))]))
 
 
 ;; ============================================================

@@ -4183,7 +4183,30 @@ Highest-value items, in the order that document recommends:
   path"* — and that is honoured. The test asserts the VALUE (16), not merely
   the absence of an error: a mis-grouped call is an arity error, so
   "no error" alone would pass a fix that merely stopped erroring.
-- **U2 (upstream/main).** The ~N^2.17 `build-tree-from-domains`.
+- ~~**U2.**~~ FIXED 2026-08-03. `build-tree-from-domains` was quadratic TWICE
+  over, and the measured cost was far worse than the filing's estimate:
+
+  | | before | after |
+  |---|---|---|
+  | `read-to-tree` on captp-core (4066 lines) | **28,337 ms** | **84–91 ms** (~310×) |
+  | FULL TEST SUITE (542 files) | ~220 s | **72 s** (~3×) |
+
+  Two independent quadratics, exactly as filed: `find-line-start-pos` rescanned
+  the character buffer FROM ZERO for every content line (O(lines × chars)), and
+  `find-content-line-for-pos` walked a LIST with `list-ref` for every token —
+  O(tokens × lines²), since `list-ref` is itself O(i). Fixed as prescribed: ONE
+  pass building a line-start VECTOR, then binary search per token.
+
+  ⚠ **The first cut broke 28 test files**, and the bug is worth recording
+  because it is invisible in the common case: the line-start scan wrote at EOF
+  as well as at each newline, and at EOF the loop's `line` is the LAST line —
+  whose start was already recorded — so the write moved that whole line's
+  tokens to the end of the buffer. It only shows on a file WITHOUT a trailing
+  newline, which is exactly the shape a hand-written fixture tends not to have.
+  Pinned in `test-parse-reader.rkt` alongside a blank-and-indented-line case.
+
+  This is also the single largest developer-experience change in the session:
+  the suite went from ~3.7 minutes to ~1.2.
 - ~~**U3.**~~ FIXED 2026-08-03. `load-module` raised with only
   `prologos-error-message`, so a library module's error arrived as a bare
   *"imports: Error loading module X: Unbound variable"* — no NAME, no SRCLOC,

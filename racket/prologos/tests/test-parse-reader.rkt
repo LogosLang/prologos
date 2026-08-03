@@ -1701,3 +1701,38 @@
   ;; parenthesis in the written form, i.e. it is not among its children.
   (check-true (regexp-match? #rx"paren-group.*\"b\".*\"c\"" tree-str)
               "shape moved — re-derive whether `c` is still expelled"))
+
+;; ========================================
+;; U2: the tree builder is linear, and correct at EOF
+;; ========================================
+;;
+;; `build-tree-from-domains` was quadratic TWICE: `find-line-start-pos`
+;; rescanned the character buffer from zero for EVERY content line, and
+;; `find-content-line-for-pos` walked a LIST with `list-ref` for EVERY token.
+;; Measured at 28.3 s to build the tree for one 4066-line file; 91 ms after.
+;;
+;; The correctness case below is the one that cost 28 suite failures on the
+;; first cut: the line-start scan wrote at EOF as well as at each newline, and
+;; at EOF `line` is the LAST line — whose start had already been recorded — so
+;; the write moved that whole line's tokens to the end of the buffer. A file
+;; WITHOUT a trailing newline is where that shows, and it is exactly the shape
+;; a hand-written fixture tends not to have.
+
+(test-case "U2: a file with NO trailing newline parses identically to one with"
+  (register-default-token-patterns!)
+  (define without "ns a\ndef x := 1\ndef y := 2")
+  (define with    "ns a\ndef x := 1\ndef y := 2\n")
+  (define (forms src) (map syntax->datum (read-all-forms-from-tree (read-to-tree src) src "t")))
+  (check-equal? (forms without) '((ns a) (def x := 1) (def y := 2))
+                "the LAST line's tokens moved — the EOF write-back bug")
+  (check-equal? (forms without) (forms with)
+                "trailing newline must not change the parse"))
+
+(test-case "U2: token-to-line assignment survives blank and indented lines"
+  ;; Blank lines advance the SOURCE line counter without producing a content
+  ;; line, which is precisely where a line-start vector indexed by the wrong
+  ;; counter goes wrong. Indented continuations exercise the same mapping.
+  (register-default-token-patterns!)
+  (define src "ns a\n\ndef x := 1\n\n\ndefn f [n]\n  [int+ n 1]\n")
+  (check-equal? (map syntax->datum (read-all-forms-from-tree (read-to-tree src) src "t"))
+                '((ns a) (def x := 1) (defn f (n) (int+ n 1)))))
