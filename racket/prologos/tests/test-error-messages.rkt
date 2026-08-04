@@ -788,41 +788,53 @@
 ;; The remedy TABLE behind that hint (measured 2026-08-04)
 ;; ========================================
 ;;
-;; The hint used to lead with "Add a `spec`", on the recorded grounds that it
-;; "is the answer that always works". There is one shape where it does not, and
-;; it is one a reader of this message is likely to be looking at. Measured:
+;; The hint says "Add a `spec`, or annotate". Both halves are now true, but one
+;; of them was not: a body that is exactly a `.field` projection reached spec
+;; injection with its access sentinel still raw, looked like two body forms led
+;; by a bare symbol, and was DECLINED — silently. `spec e Point -> Int` +
+;; `defn e [p] gpt.x` defined `e : _ -> Int` at zero errors, and
+;; `[e "not a point"]` was then accepted. Fixed in macros.rkt.
 ;;
-;;   spec + `defn h [p] p.x`             → FAILS   ← the corner
-;;   spec + `defn h [p] [map-get p :x]`  → works
-;;   spec + `defn h [p] [int+ p.x 0]`    → works   (nested projection)
-;;   spec + `defn h [p] 5`               → works   (propagation itself is fine)
-;;   `defn h [p:Point] p.x`              → works   (annotation has no corner)
-;;
-;; WS only, order-independent, pre-existing (verified against a build of the
-;; preceding commit — this is not fallout from the item 17 fold change).
-;; These pin the table so message and behaviour cannot drift apart again: if
-;; the corner is ever closed, the first test fails and the message should be
-;; relaxed in the same commit.
+;; These pin the whole table so the message and the behaviour cannot drift
+;; apart again. They are Level 3 (WS FILE) on purpose: the corner was WS-only —
+;; the identical program in sexp always succeeded, so a `process-string` test
+;; would have asserted the opposite of the real behaviour.
 ;;
 ;; WARNING: each case uses its OWN defn name. `process-file` restores the
-;; module / trait / impl registries but NOT the spec store, so a shared `h`
-;; leaks across these runs and the later ones get checked against an earlier
-;; spec — surfacing as the unrelated "type has 1 type parameters but defn has 2
-;; params". Same trap documented in tests/test-capability-spec-forms.rkt.
+;; module / trait / impl registries but NOT the spec store, so a shared name
+;; leaks across these runs and surfaces as an unrelated "type has 1 type
+;; parameters but defn has 2 params". Same trap documented in
+;; tests/test-capability-spec-forms.rkt.
 
-(test-case "unannotated-param remedy: `spec` does NOT fix a BARE .field body (the corner)"
+(define POINT-SCHEMA "schema Point\n  :x Int\n  :y Int\n")
+
+(test-case "unannotated-param remedy: `spec` fixes a BARE .field body (was silently declined)"
   (define rs (run-ws-file-results
-              (string-append "ns t1d\n"
-                             "schema Point\n  :x Int\n  :y Int\n"
+              (string-append "ns t1d\n" POINT-SCHEMA
                              "spec hd Point -> Int\n"
                              "defn hd [p] p.x\n")))
-  (check-true (ormap (lambda (r) (regexp-match? #rx"unannotated parameter" r)) rs)
-              (format "the corner closed — relax the hint in the same commit: ~v" rs)))
+  (check-false (ormap (lambda (r) (regexp-match? #rx"unannotated parameter" r)) rs)
+               (format "~v" rs))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"hd : .*Point -> Int" r)) rs)
+              (format "the spec did not reach the parameter: ~v" rs)))
 
-(test-case "unannotated-param remedy: `spec` DOES fix the same projection written out"
+(test-case "unannotated-param: a declined spec is UNSOUND, not just unhelpful"
+  ;; The reason the case above is a bug and not a diagnostic nit. With the spec
+  ;; declined, the defn took `_ -> Int` and call sites stopped being checked.
   (define rs (run-ws-file-results
-              (string-append "ns t1g\n"
-                             "schema Point\n  :x Int\n  :y Int\n"
+              (string-append "ns t1j\n" POINT-SCHEMA
+                             "def gpt := [the Point {:x 1 :y 2}]\n"
+                             "spec ej Point -> Int\n"
+                             "defn ej [p] gpt.x\n"
+                             "[ej \"not a point\"]\n")))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"ej : .*Point -> Int" r)) rs)
+              (format "the spec was dropped again: ~v" rs))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"ERROR|error" r)) rs)
+              (format "a String argument to a Point parameter was ACCEPTED: ~v" rs)))
+
+(test-case "unannotated-param remedy: `spec` fixes the same projection written out"
+  (define rs (run-ws-file-results
+              (string-append "ns t1g\n" POINT-SCHEMA
                              "spec hg Point -> Int\n"
                              "defn hg [p] [map-get p :x]\n")))
   (check-false (ormap (lambda (r) (regexp-match? #rx"unannotated parameter" r)) rs)
@@ -830,44 +842,43 @@
 
 (test-case "unannotated-param remedy: a NESTED .field projection is fine under a spec"
   (define rs (run-ws-file-results
-              (string-append "ns t1h\n"
-                             "schema Point\n  :x Int\n  :y Int\n"
+              (string-append "ns t1h\n" POINT-SCHEMA
                              "spec hh Point -> Int\n"
                              "defn hh [p] [int+ p.x 0]\n")))
   (check-false (ormap (lambda (r) (regexp-match? #rx"unannotated parameter" r)) rs)
                (format "~v" rs)))
 
-(test-case "unannotated-param: spec propagation itself is FINE (isolating control)"
-  ;; Same spec, body that does not project → the param type lands. This is what
-  ;; makes the case above a narrow corner rather than missing propagation.
+(test-case "unannotated-param remedy: the fused annotation works with no spec"
   (define rs (run-ws-file-results
-              (string-append "ns t1e\n"
-                             "schema Point\n  :x Int\n  :y Int\n"
-                             "spec he Point -> Int\n"
-                             "defn he [p] 5\n")))
-  (check-false (ormap (lambda (r) (regexp-match? #rx"unannotated parameter" r)) rs)
-               (format "~v" rs))
-  (check-true (ormap (lambda (r) (regexp-match? #rx"Point -> Int" r)) rs)
-              (format "the spec's param type did not land: ~v" rs)))
-
-(test-case "unannotated-param remedy: the fused annotation has NO corner"
-  (define rs (run-ws-file-results
-              (string-append "ns t1i\n"
-                             "schema Point\n  :x Int\n  :y Int\n"
+              (string-append "ns t1i\n" POINT-SCHEMA
                              "defn hi [p:Point] p.x\n")))
   (check-false (ormap (lambda (r) (regexp-match? #rx"unannotated parameter" r)) rs)
                (format "~v" rs)))
 
-(test-case "unannotated-param remedy: `spec` DOES fix the arithmetic case"
+(test-case "unannotated-param remedy: `spec` fixes the arithmetic case"
   (define r (run-ns-last "(ns t1a)\n(spec k Int -> Int)\n(defn k [x] (+ x 1))"))
   (check-false (prologos-error? r) (format "spec should fix arithmetic: ~v" r)))
 
-(test-case "unannotated-param hint names the remedy that always works FIRST"
-  ;; Q_T2's rule (owner, 2026-07-30: "annotate comes back when it's real")
-  ;; applied here: the message must not present `spec` as unconditional.
+(test-case "spec injection still DECLINES an unbracketed application (the guard's target)"
+  ;; The guard this fix narrowed exists to catch `defn bump [x] int+ x 1`, where
+  ;; splicing the spec's types produced a phantom three-parameter lambda. It must
+  ;; still fire — including when the mistake CONTAINS a projection, which is the
+  ;; case a naive "no sentinels present" relaxation would have broken.
+  (define plain (run-ws-file-results
+                 (string-append "ns t1k\n"
+                                "spec bump Int -> Int\n"
+                                "defn bump [x] int+ x 1\n")))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"without brackets" r)) plain)
+              (format "~v" plain))
+  (define with-proj (run-ws-file-results
+                     (string-append "ns t1l\n" POINT-SCHEMA
+                                    "spec bump2 Point -> Int\n"
+                                    "defn bump2 [p] int+ p.x 1\n")))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"without brackets" r)) with-proj)
+              (format "a projection inside the mistake disarmed the guard: ~v" with-proj)))
+
+(test-case "unannotated-param hint: both advertised remedies are named"
   (define r (run-ns-last "(ns t1f)\n(defn g [p] (map-get p :x))"))
   (define m (prologos-error-message r))
-  (check-true (regexp-match? #rx"fused form" m) (format "got: ~v" m))
-  (check-true (regexp-match? #rx"always works" m) (format "got: ~v" m))
-  (check-true (regexp-match? #rx"not when the body is exactly" m)
-              (format "the spec caveat is missing: ~v" m)))
+  (check-true (regexp-match? #rx"Add a `spec`" m) (format "got: ~v" m))
+  (check-true (regexp-match? #rx"fused form" m) (format "got: ~v" m)))

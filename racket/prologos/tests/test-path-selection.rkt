@@ -1210,11 +1210,31 @@
   ;; The hint is LAST in the check-side `or` — it may only replace the bare
   ;; "Type mismatch" fallback. This shape has both a projection failure AND an
   ;; unannotated parameter; the parameter hint is the specific one and wins.
-  (define r (run-ws-last "def het := @[1 \"x\"]\nspec p2bf Int -> Int\ndefn p2bf [n] het.9\n"))
+  ;;
+  ;; ⚠ The spec was REMOVED from this shape on 2026-08-04. It used to read
+  ;; `spec p2bf Int -> Int` + `defn p2bf [n] het.9`, which relied — without
+  ;; saying so — on that spec being silently DECLINED, because a body that is
+  ;; exactly a projection tripped `inject-spec-into-defn`'s bare-symbol guard.
+  ;; With that fixed the parameter is properly typed from the spec, so the
+  ;; shape no longer HAS an unannotated parameter and the more specific
+  ;; out-of-range message surfaces instead (asserted just below). Dropping the
+  ;; spec restores the two-failures-at-once shape this case is actually about.
+  (define r (run-ws-last "def het := @[1 \"x\"]\ndefn p2bf [n] het.9\n"))
   (check-regexp-match #rx"unannotated parameter" r)
   ;; And a REAL expected-vs-got mismatch (actual infers fine) is untouched.
   (check-regexp-match #rx"Type mismatch"
                       (run-ws-last "def bad : Int := \"str\"\n")))
+
+(test-case "P2 item 9b: WITH a spec, the parameter is typed and the real error shows"
+  ;; The other half of the note above, pinned: the spec now reaches the
+  ;; parameter even though the body is a bare projection, so what is left is
+  ;; the genuine defect — index 9 on a 2-tuple — instead of a complaint about
+  ;; the parameter. If the spec is ever silently declined again, this reverts
+  ;; to "unannotated parameter" and fails here.
+  (define r (run-ws-last "def het := @[1 \"x\"]\nspec p2bg Int -> Int\ndefn p2bg [n] het.9\n"))
+  (check-regexp-match #rx"out of range for the 2-tuple" r)
+  (check-false (regexp-match #rx"unannotated parameter" r)
+               (format "the spec was declined again: ~a" r)))
 
 ;; ---------- the LYING DIAGNOSTICS this phase actually repairs ----------
 ;; P2's real headline, unclaimed by §5.P2: because `x.0` was THREE datum items,

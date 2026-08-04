@@ -4978,8 +4978,33 @@
   ;; multiplicity dropped the spec's types for every specced let-chain defn and
   ;; broke two `test-let-blocks` cases. Those forms are LISTS; only the
   ;; unbracketed-application mistake leads with a bare symbol.
+  ;;
+  ;; 2026-08-04: "leads with a bare symbol" was ALSO false in the other
+  ;; direction, and that half was a SOUNDNESS hole rather than a bad message.
+  ;; An access sentinel is still raw at this point, so a body that is exactly a
+  ;; projection arrives as `(gpt ($dot-access x))` — two forms, led by the bare
+  ;; symbol that is merely the projection's BASE. The guard fired, the spec was
+  ;; declined, and — unlike the unbracketed-application case — nothing spoke
+  ;; afterwards, because once folded the body is a perfectly well-formed single
+  ;; form. `spec e1 Point -> Int` + `defn e1 [p] gpt.x` defined `e1 : _ -> Int`
+  ;; at ZERO errors, and `[e1 "not a point"]` was then accepted.
+  ;;
+  ;; So the guard counts the forms the body will actually HAVE once folded.
+  ;; Each access sentinel consumes exactly one preceding element, so that count
+  ;; is `length - sentinels` — no need to fold here (and the fold UNWRAPS a
+  ;; single result, `(gpt ($dot-access x))` → `(map-get gpt :x)`, so its length
+  ;; could not be used for this test anyway).
+  ;;
+  ;; This keeps the original guard exactly where it was aimed:
+  ;;   (int+ x ($dot-access a) 1)  → 4-1 = 3 forms, bare head → DECLINE, and the
+  ;;                                 parser's good message speaks (unchanged)
+  ;;   (gpt ($dot-access x))       → 2-1 = 1 form            → inject
+  ;;   (int+ x 1)                  → 3-0 = 3, bare head      → DECLINE (unchanged)
+  ;;   ((let x 4) (let y 5) body)  → head is a LIST          → inject (unchanged)
+  (define effective-body-form-count
+    (- (length body-forms) (length (filter access-sentinel? body-forms))))
   (cond
-    [(and (> (length body-forms) 1) (symbol? (car body-forms))) datum]
+    [(and (> effective-body-form-count 1) (symbol? (car body-forms))) datum]
     [else
   (define base-defn
     (cond

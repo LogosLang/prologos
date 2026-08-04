@@ -1355,50 +1355,70 @@ annotate `[x : T]` or add a `spec`").
 Neither blocks records-correct-in-principle (annotate or spec is the workaround);
 the mitigation makes the workaround discoverable.
 
-### 🐛 Re-probed 2026-08-04 — both claims hold, and the MITIGATION was advertising a remedy that has a corner
+### ✅ Re-probed 2026-08-04 — claim 1's "or a spec" was NOT TRUE, and the reason was a SOUNDNESS hole (now fixed)
 
-Both soft spots still reproduce, and the mitigation message is live. But the
-message led with "Add a `spec`" on the recorded grounds that it "is the answer
-that always works", and that is not true of the shape a reader of this message
-is most likely to be staring at. Measured, all at Level 3 (WS file):
+Both soft spots still reproduce as filed when there is neither annotation nor
+spec — those are correctly routed to F-row and Num Track 2 and are untouched.
 
-| program | result |
-|---|---|
-| `spec h Point -> Int` + `defn h [p] p.x` | ❌ **fails** |
-| `spec h Point -> Int` + `defn h [p] [map-get p :x]` | ✅ works |
-| `spec h Point -> Int` + `defn h [p] [int+ p.x 0]` | ✅ works (nested projection) |
-| `spec h Point -> Int` + `defn h [p] 5` | ✅ works — `h : Point -> Int` |
-| `defn h [p:Point] p.x` | ✅ works |
-| sexp `(spec h Point -> Int)` + `(defn h [p] (map-get p :x))` | ✅ works |
+But the entry's stated workaround — "annotate **or spec** is the workaround" —
+was false for the projection case, and the reason turned out to be worse than a
+missing feature.
 
-So spec propagation is fine, dot-access is fine, and they compose fine when the
-projection is NESTED. The failure is exactly **"the defn body IS a bare `.field`
-projection"** — and it is **WS-only**: the identical program in sexp succeeds,
-which is why a `process-string` test would have asserted the opposite of the
-real behaviour. (The three-level rule earning its keep; the pins are Level 3.)
+**The hole.** A `defn` whose body is EXACTLY a `.field` projection reaches spec
+injection with its access sentinel still raw, so `defn e [p] gpt.x` arrives as
+the two body forms `(gpt ($dot-access x))`. `inject-spec-into-defn` declines
+when the body has >1 form led by a bare symbol — a guard aimed at the
+unbracketed-application mistake (`defn bump [x] int+ x 1`), whose comment
+asserted "only the unbracketed-application mistake leads with a bare symbol".
+A projection's BASE is a bare symbol too.
 
-**Not fallout from the item 17 fold change** — verified against a build of the
-preceding commit (`6ea34b86`), which behaves identically.
+So the spec was **silently dropped**, and unlike the case the guard was built
+for, nothing spoke afterwards — once folded the body is a well-formed single
+form, so the parser had nothing to complain about:
 
-**Suspected mechanism, NOT confirmed**: `parse-defn` branches on
-`(length rest-args)` — one element means "body only, infer the return type",
-more means "return type + body" (parser.rkt ~:5627). A body that is exactly
-`p.x` arrives as the two siblings `p` + `($dot-access …)`, which is the same
-sibling-count confusion item 17 fixed at head-macro dispatch. `(expand …)`
-shows both spellings folding to the identical datum, so whatever differs is not
-visible at the sexp preparse level — it is in the WS defn path. Left filed
-rather than guessed at.
+```
+spec e1 Point -> Int
+defn e1 [p] gpt.x       ⇒  e1 : _ -> Int     ← 0 errors, spec ignored
+[e1 "not a point"]      ⇒  1 : Int           ← ACCEPTED
+```
 
-**Done here**: the message no longer advertises `spec` as unconditional —
+The declared parameter type was not enforced at call sites. A green suite says
+nothing about this class; it was found by asking why the entry's own stated
+workaround did not work.
 
-> Annotate the parameter with the fused form (`[x:T]`, single-token types only)
-> — that always works. A `spec` usually works too, but not when the body is
-> exactly a `.field` projection.
+**Fixed** (macros.rkt) by counting the forms the body will have once folded —
+each access sentinel consumes exactly one preceding element, so that count is
+`length - sentinels`. The guard keeps firing exactly where it was aimed:
 
-Seven pins in `tests/test-error-messages.rkt` fix the whole table, including the
-controls that make this a narrow corner rather than missing propagation. If the
-corner is ever closed the first pin fails, and the message must be relaxed in
-the same commit. Do NOT attempt the deep fixes
+| body forms | effective | verdict |
+|---|---|---|
+| `(int+ x ($dot-access a) 1)` | 3 | DECLINE — the good message still speaks |
+| `(int+ x 1)` | 3 | DECLINE — unchanged |
+| `(gpt ($dot-access x))` | 1 | inject |
+| `((let x 4) (let y 5) body)` | head is a list | inject — unchanged |
+
+(A first attempt simply skipped the guard when any sentinel was present. That
+would have disarmed it for `defn bump2 [p] int+ p.x 1` — the mistake WITH a
+projection in it. Pinned as its own test.)
+
+**WS-only**: the identical program in sexp always succeeded, so the pins are
+Level 3. **Not fallout from item 17** — verified against a build of the
+preceding commit.
+
+Nine pins in `tests/test-error-messages.rkt` fix the whole remedy table,
+including the unsoundness itself (a `String` passed to a `Point` parameter must
+be refused) and the guard's original target. Verified they fail with the fix
+reverted.
+
+**Knock-on**: one pin in `test-path-selection.rkt` was silently relying on this
+bug — it wrote a spec and expected the "unannotated parameter" message, which
+only appeared because the spec was being declined. Rewritten to drop the spec
+(restoring the two-failures-at-once shape it is about), plus a new pin for the
+improved spec'd behaviour.
+
+**The mitigation message is unchanged in the end** — "Add a `spec`, or annotate
+…" is now true, because the counterexample was fixed rather than the claim
+weakened. It was briefly reworded to state the corner; that wording is reverted. Do NOT attempt the deep fixes
 in a records slice — they are their own tracks.
 
 ## CIU T6: schema EXTENSION / inclusion — un-named future design track (owner brewing, hand-testing 2026-07-18)
