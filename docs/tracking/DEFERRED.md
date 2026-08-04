@@ -2643,7 +2643,7 @@ checker, not the syntax.
 
 ---
 
-## 🐛 A NON-EXHAUSTIVE match returns a junk VALUE at zero errors (found 2026-08-03)
+## ✅ RESOLVED 2026-08-03 — a NON-EXHAUSTIVE match returned a junk VALUE at zero errors (found and fixed same day)
 
 ```
 spec p1 Nat -> Nat
@@ -2670,13 +2670,34 @@ you did not cover".
 non-exhaustiveness diagnostic at all, only the comment `;; No rows —
 unreachable branch (incomplete pattern match)` at the site that plants the hole.
 
-**Why it is not fixed here**: error-vs-warning is a language-policy call.
-Partial functions are legal in some languages and an error in most
-dependently-typed ones, and Prologos has holes as a first-class feature, which
-argues for a WARNING rather than a hard error. The warning machinery exists and
-gained a category the same day (W3001), so the mechanism is cheap; the decision
-is not. Whoever takes it should also measure how much existing code relies on
-partial matches before choosing severity.
+**✅ FIXED the same day — W3002, a default-on WARNING.** The severity question
+answered itself once measured, which is the same route W3001 took:
+
+| corpus | `__match-fail` holes planted |
+|---|---|
+| full prelude load | **0** |
+| F1-records acceptance file | 0 |
+| F1b5-validate acceptance file | 0 |
+| OCapN acceptance file | **1** |
+
+So the ordinary path is silent and the signal is precise — it does NOT fire on
+every constructor split, only where coverage genuinely fails. A warning rather
+than an error because Prologos has typed holes as a FIRST-CLASS feature (a
+user-written `??foo` is accepted at 0 errors on purpose), so a partial function
+is not obviously illegal here the way it is in Agda or Idris. What is not
+defensible is silence about a hole the COMPILER inserted.
+
+⚠ **It paid for itself on its first run.** The single hit was `step-cell` in
+`lib/prologos/ocapn/behavior.prologos`: `syrup-bytes` was added to `SyrupValue`
+at Phase 19 and that match was never extended, so `step-cell` on a bytes
+argument had been returning `??__match-fail` at zero errors ever since. Fixed in
+the same commit, and the module is now pinned clean — if another `SyrupValue`
+constructor lands without extending the match, the warning fires there again.
+
+Pinned in `tests/test-inexhaustive-match-warning.rkt`, including the two halves
+that decide whether it is usable rather than noisy: an exhaustive match must
+stay silent, and the `_` catch-all the message recommends must actually silence
+it.
 
 Found while probing "Extended Pattern Matching in `.{...}`" below — the
 unsupported view pattern `.{n + 1}` produced exactly this silent failure, which

@@ -257,6 +257,12 @@ defn step-cell
   | state [syrup-int _]     -> no-op state
   | state [syrup-string _]  -> no-op state
   | state [syrup-symbol _]  -> no-op state
+  ;; syrup-bytes was added to the SyrupValue data type at Phase 19 and this
+  ;; match was never extended, so `step-cell` on a bytes argument fell through
+  ;; to `??__match-fail` — a typed hole at ActStep, returned silently at zero
+  ;; errors. Surfaced by W3002 (the non-exhaustive-match warning) the day it
+  ;; landed; nothing had noticed in the interim.
+  | state [syrup-bytes _]   -> no-op state
   | state [syrup-list _]    -> no-op state
   | state [syrup-refr _]    -> no-op state
   | state [syrup-promise _] -> no-op state

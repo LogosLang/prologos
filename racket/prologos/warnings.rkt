@@ -42,6 +42,15 @@
          format-duplicate-binding-warning
          read-duplicate-binding-warnings
          reset-duplicate-binding-warnings!
+         ;; Non-exhaustive match warnings (W3002)
+         current-inexhaustive-match-warnings
+         inexhaustive-match-warning
+         inexhaustive-match-warning?
+         inexhaustive-match-warning-loc-str
+         emit-inexhaustive-match-warning!
+         format-inexhaustive-match-warning
+         read-inexhaustive-match-warnings
+         current-inexhaustive-match-warnings-cell-id
          current-duplicate-binding-warnings-cell-id
          ;; Phase 2c: Warning cell infrastructure
          current-warnings-prop-net-box
@@ -79,6 +88,7 @@
 (define current-deprecation-warnings-cell-id (make-parameter #f))
 (define current-capability-warnings-cell-id (make-parameter #f))
 (define current-duplicate-binding-warnings-cell-id (make-parameter #f))
+(define current-inexhaustive-match-warnings-cell-id (make-parameter #f))
 
 ;; Helper: write a warning to a list cell in the persistent network.
 ;; Track 7 Phase 2: targets persistent registry network directly.
@@ -103,7 +113,9 @@
     (current-capability-warnings-cell-id capw-cid)
     (define-values (net4 dbw-cid) (net-new-cell net3 (current-duplicate-binding-warnings) merge-list-append))
     (current-duplicate-binding-warnings-cell-id dbw-cid)
-    (set-box! prn-box net4)))
+    (define-values (net5 imw-cid) (net-new-cell net4 (current-inexhaustive-match-warnings) merge-list-append))
+    (current-inexhaustive-match-warnings-cell-id imw-cid)
+    (set-box! prn-box net5)))
 
 ;; Per-command reset: clear the (grows-only) warning cells on the persistent
 ;; registry network back to '(). These cells are per-command EPHEMERAL but live
@@ -122,7 +134,11 @@
     (define (clr net cid) (if cid (net-cell-reset net cid '()) net))
     (define net1 (clr net0 (current-coercion-warnings-cell-id)))
     (define net2 (clr net1 (current-deprecation-warnings-cell-id)))
-    (define net3 (clr net2 (current-capability-warnings-cell-id)))
+    (define net3a (clr net2 (current-capability-warnings-cell-id)))
+    ;; W3002 IS cleared per command — unlike W3001, a non-exhaustive match
+    ;; belongs to the definition being processed, so the per-command channel is
+    ;; the right lifetime and a stale one must not follow the next command.
+    (define net3 (clr net3a (current-inexhaustive-match-warnings-cell-id)))
     ;; issue #67: the duplicate-binding cell is NOT cleared here. It accumulates
     ;; a FILE-level fact — raised while the import set is resolved during
     ;; preparse, before any command runs — so a per-command clear would wipe it
@@ -156,6 +172,10 @@
 (define (read-capability-warnings)
   (define v (warnings-cell-read-safe (current-capability-warnings-cell-id)))
   (if v (unwrap-tagged-list v) (current-capability-warnings)))
+
+(define (read-inexhaustive-match-warnings)
+  (define v (warnings-cell-read-safe (current-inexhaustive-match-warnings-cell-id)))
+  (if v (unwrap-tagged-list v) (current-inexhaustive-match-warnings)))
 
 (define (read-duplicate-binding-warnings)
   (define v (warnings-cell-read-safe (current-duplicate-binding-warnings-cell-id)))
@@ -260,6 +280,50 @@
           (process-cap-warning-code w)
           (process-cap-warning-name w)
           (process-cap-warning-message w)))
+
+;; ========================================
+;; Non-exhaustive match warnings (W3002) — 2026-08-03
+;; ========================================
+;;
+;; A pattern match with no matching row compiles to a typed hole named
+;; `__match-fail` (macros.rkt), and a typed hole is a legal term that types at
+;; anything. So a partial function SILENTLY returned a hole at its declared
+;; return type:
+;;
+;;   spec p1 Nat -> Nat
+;;   defn p1
+;;     | zero -> 1N
+;;   [p1 5N]   ⇒  ??__match-fail : Nat        (0 errors, before this)
+;;
+;; A WARNING rather than an error, and the severity is the whole design
+;; question. Prologos has typed holes as a FIRST-CLASS feature — a user-written
+;; `??foo` is accepted at 0 errors on purpose — so a partial function is not
+;; obviously illegal here the way it is in Agda or Idris. What is not defensible
+;; is silence about a hole the COMPILER inserted because a case was missed.
+;;
+;; DEFAULT-ON, decided by measurement rather than taste, the same way W3001 was:
+;;   - a full prelude load plants ZERO `__match-fail` holes;
+;;   - the F1-records and F1b5-validate acceptance files: zero;
+;;   - the OCapN acceptance file: exactly ONE.
+;; So the ordinary path is silent and the signal is precise — it fires where a
+;; match is genuinely incomplete, not on every constructor split.
+(define current-inexhaustive-match-warnings (make-parameter '()))
+
+(struct inexhaustive-match-warning (loc-str) #:transparent)
+
+(define (emit-inexhaustive-match-warning! loc-str)
+  (define w (inexhaustive-match-warning loc-str))
+  (current-inexhaustive-match-warnings (cons w (current-inexhaustive-match-warnings)))
+  (warnings-cell-write! (current-inexhaustive-match-warnings-cell-id) (list w)))
+
+(define (format-inexhaustive-match-warning w)
+  (format (string-append
+           "W3002: this pattern match does not cover every case~a. An uncovered "
+           "input yields `??__match-fail` — a typed hole at the declared return "
+           "type — rather than an error, so the gap is silent at runtime. Add "
+           "the missing patterns, or a `_` catch-all if partiality is intended.")
+          (let ([l (inexhaustive-match-warning-loc-str w)])
+            (if (and l (not (equal? l ""))) (format " (~a)" l) ""))))
 
 ;; ========================================
 ;; Duplicate-binding warnings (W3001) — issue #67

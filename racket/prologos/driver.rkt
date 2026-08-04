@@ -1409,8 +1409,12 @@
   ;; they are a FILE-level fact raised during preparse, so per-command display
   ;; would repeat all of them under every command in the file. They are appended
   ;; once by `process-file-inner` instead.
+  ;; W3002: deduped like the coercion warnings — one line per distinct site,
+  ;; not one per compilation attempt of the same match.
+  (define inexhaustive-warns (remove-duplicates (reverse (read-inexhaustive-match-warnings))))
   (define all-warning-strs
-    (append (map format-coercion-warning coercion-warns)
+    (append (map format-inexhaustive-match-warning inexhaustive-warns)
+            (map format-coercion-warning coercion-warns)
             (map format-deprecation-warning deprecation-warns)
             (map (lambda (w)
                    (cond

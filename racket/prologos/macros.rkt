@@ -26,6 +26,7 @@
          "surface-syntax.rkt"
          "source-location.rkt"
          "errors.rkt"
+         (only-in "warnings.rkt" emit-inexhaustive-match-warning!)
          "namespace.rkt"
          "global-env.rkt"
          "infra-cell.rkt"        ;; Phase 2a: merge functions for registry cells
@@ -10729,7 +10730,14 @@
   ;; Build the default branch from variable/wildcard rows
   (define default-branch
     (if (null? default-rows)
-        (surf-typed-hole '__match-fail loc)
+        (begin
+       ;; W3002 (2026-08-03): a match with no covering row plants a typed hole,
+       ;; which types at anything — so the gap was silent. Warn where it is
+       ;; planted, which is the only place that knows the coverage failed.
+       ;; Measured before choosing default-on: a full prelude load plants ZERO
+       ;; of these, so the ordinary path stays quiet.
+       (emit-inexhaustive-match-warning! (format-srcloc loc))
+       (surf-typed-hole '__match-fail loc))
         ;; Remove the dispatch column from default rows (it matched as var/wildcard)
         ;; and compile the remaining columns
         (let* ([adjusted-rows
@@ -10822,7 +10830,14 @@
   (cond
     ;; No rows — unreachable branch (incomplete pattern match)
     [(null? rows)
-     (surf-typed-hole '__match-fail loc)]
+     (begin
+       ;; W3002 (2026-08-03): a match with no covering row plants a typed hole,
+       ;; which types at anything — so the gap was silent. Warn where it is
+       ;; planted, which is the only place that knows the coverage failed.
+       ;; Measured before choosing default-on: a full prelude load plants ZERO
+       ;; of these, so the ordinary path stays quiet.
+       (emit-inexhaustive-match-warning! (format-srcloc loc))
+       (surf-typed-hole '__match-fail loc))]
     ;; First row is all variables → base case: bind and return body
     [(for/and ([pat (in-list (caar rows))])
        (pattern-is-variable? pat))
