@@ -2968,8 +2968,20 @@ So the constraint is registered as unresolved in BOTH cases, and what differs
 is whether something later DISCHARGES it. The failure is in deferred-constraint
 resolution, not in binder scoping — which means chasing
 `current-capability-scope` (the natural first move, and the one taken here) is
-a dead end. Start at `register-capability-constraint!` and whatever is supposed
-to retire those entries.
+a dead end.
+
+**The discharge condition, traced**: `check-unresolved-capability-constraints`
+(`trait-resolution.rkt`) reports E2001 for every registered constraint
+`#:when (not (meta-solved? meta-id))`. So a constraint is retired by its META
+being solved, nothing else. Elaboration solves it only on the EXACT-functor
+branch; the subtype branch deliberately leaves it unsolved ("type checker
+accepts `(expr-meta)` optimistically") and does not register a constraint at
+all; the `else` branch registers and leaves it unsolved.
+
+That is where to start: in the working case something solves that meta between
+registration and the sweep, and in the failing case nothing does. Both files
+reach the same `else` branch with an empty scope, so the divergence is entirely
+downstream of elaboration.
 
 This is the same class as the cross-module schema channel closed earlier in this
 file (#78 P2): a registry populated during a nested module load not reaching the
