@@ -2924,23 +2924,28 @@ fixture-fidelity gap that bit `test-float-lib` the same day, in the opposite
 direction — there the fixture was wrong and the product fine; here the product
 is broken and the fixture hides it.
 
-**✅ ROOT CAUSE ISOLATED 2026-08-03 — it is a load-ORDERING bug, and there is a
-one-line workaround.** Importing the capabilities module FIRST makes csv import
-and work:
+⚠ **A LOAD-ORDERING WORKAROUND WAS FILED HERE AND IS WITHDRAWN — it was a STALE
+CACHE.** The claim was that `imports capabilities` before `imports csv` makes it
+work, which it appeared to do, repeatably. It does not: **delete
+`data/cache/pnet/prologos/core/csv.pnet` and the same file fails identically.**
+The earlier success was a `.pnet` written under some other condition being
+served for a module that cannot actually elaborate.
 
-```
-ns csvpre
-imports [prologos::core::capabilities :refer []]   ;; ← this line
-imports [prologos::core::csv :refer [parse-csv]]
-def r := [parse-csv "a,b"]                          ;; ✓ '['["a" "b"]]
-```
+So the honest statement is stronger than the one it replaces: **there is no
+workaround. `prologos::core::csv` cannot be imported, by any spelling, in any
+order.**
 
-Without that line, the same file fails at load. So the module is not broken and
-the capability forms are not wrong — **the capability registrations made while
-the PRELUDE loads `capabilities` do not reach a sibling module's load.** csv is
-`:no-prelude`, requires `capabilities` itself, and that require is evidently
-served from an already-loaded module without re-establishing the registrations
-the capability SCOPE check needs.
+And the cache behaviour is worth its own note: a `.pnet` can serve a module that
+does NOT elaborate. `pnet-stale?` gates on source mtime + infrastructure stamp +
+version, none of which know the cached module was never valid — so once such a
+file exists, the module appears to work until something invalidates it. That is
+how a broken module can look fine for a whole session, and it is why the
+"workaround" survived several probes before failing.
+
+**What the evidence still supports**: the capability registrations made while
+the PRELUDE loads `capabilities` do not reach csv's load. csv is `:no-prelude`,
+requires `capabilities` itself, and that require is served from an
+already-loaded module without re-establishing what the capability check needs.
 
 ⚠ **Reordering csv's OWN requires does not help** — tried, putting
 `require capabilities` ahead of `require io` inside the module, and it still
@@ -2993,8 +2998,9 @@ Confirming evidence, each a single-variable change:
 - imported `ReadCap` under `:no-prelude` → E2001 not in scope
 - **locally-declared** capability under `:no-prelude` → works
 - imported `ReadCap` WITH the prelude → works
-- csv through a harness with a PRE-BUILT `prelude-module-registry` → works,
-  with the `.pnet` cache both on and off (so it is not a cache-staleness issue)
+- csv through a harness with a PRE-BUILT `prelude-module-registry` → works —
+  ⚠ but that harness ran with a `.pnet` present, so per the withdrawal above it
+  is NOT independent evidence. Re-run it cold before relying on it.
 
 **The prelude-dependence framing below was the first cut and is superseded** by
 the ordering finding above; kept because the probes are still the evidence:
