@@ -5775,6 +5775,15 @@ perturbation run says exactly three of them (the three `if` shapes) fail without
 the hoist — the `cond` and `let` pins pass either way and are there as
 regression cover, not as evidence.
 
+**Example-corpus A/B** (15 reachable examples — every one whose source pairs a
+head macro with an access sentinel — each run against a worktree built at the
+pre-fix commit): **no behavioural difference**. Three files differ textually and
+all three are non-behavioural: two carry stack-trace line numbers shifted by
+exactly the 25 lines this change inserts into `macros.rkt` (the errors are
+pre-existing broken imports, identical either side), and one differs only in a
+meta-variable ID suffix (`?suc0_2093` vs `?suc0_1941`) — allocation-order
+numbering, which the F1-records example already documents as varying.
+
 **A genuine type error is NOT masked**: `(if true cfg{a} 5)` still errors,
 because a select block yields the ROW `{:a Int}`, not `Int` — the entry's own
 example was ill-typed independent of the ordering bug. Pinned, so "item 17 is
