@@ -2942,6 +2942,13 @@ the PRELUDE loads `capabilities` do not reach a sibling module's load.** csv is
 served from an already-loaded module without re-establishing the registrations
 the capability SCOPE check needs.
 
+⚠ **Reordering csv's OWN requires does not help** — tried, putting
+`require capabilities` ahead of `require io` inside the module, and it still
+fails to load. So the fix is not available inside the module: the registrations
+have to be established in the IMPORTER's scope before csv loads, which is why
+the workaround is a line at the import site. Anyone reaching for the obvious
+in-module fix should know it was already tried.
+
 This is the same class as the cross-module schema channel closed earlier in this
 file (#78 P2): a registry populated during a nested module load not reaching the
 next one. Note the registry IS serialized into `.pnet` (slot 13) and IS
