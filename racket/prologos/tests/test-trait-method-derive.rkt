@@ -62,7 +62,16 @@
      ;; instead of a comment. `reduce`'s neighbour above does NOT do that job:
      ;; verified by A/B, `[reduce int+ 0 '[1 2 3]]` is byte-identical with the
      ;; reduce skip lifted, so it protects nothing.
-     "eval [join \"-\" '[\"x\" \"y\"]]")
+     "eval [join \"-\" '[\"x\" \"y\"]]"
+     ;; …and the other two hand-listed skips, for the same reason. The skip set
+     ;; became MOSTLY COMPUTED on 2026-08-03 — `derivable-method?` now declines
+     ;; to derive over a name something else already binds, which replaced
+     ;; `add`/`sub`/`reduce` in the hand list. These four calls were verified
+     ;; byte-identical against the pre-change baseline; pinning them is what
+     ;; makes "the guard replaced the list without changing anything" a fact
+     ;; rather than a claim.
+     "eval [add 2N 3N]"
+     "eval [sub 5N 2N]")
     "\n")))
 
 (define (evals-only rs)
@@ -88,8 +97,16 @@
 
 (test-case "derive/skip-set-preserves-string-join"
   ;; THE guard. Lifting `join` from the skip set breaks this outright, and
-  ;; nothing else in the suite notices.
+  ;; nothing else in the suite notices. It is also the ONE skip that cannot be
+  ;; computed away: when its trait is processed, `string-ops` has not loaded,
+  ;; so there is no binding for `derivable-method?`'s guard to see.
   (check-equal? (list-ref ev 7) "\"x-y\" : String"))
+
+(test-case "derive/computed-skip-preserves-nat-add-and-sub"
+  ;; `add`/`sub` left the hand list and are now handled by the computed guard.
+  ;; Byte-identical to the hand-list baseline, which is the assertion.
+  (check-equal? (list-ref ev 8) "5N : Nat")
+  (check-equal? (list-ref ev 9) "3N : Nat"))
 
 ;; --- structural exclusions stay unbound (constants / output-only) ---
 (test-case "derive/exclusions-remain-unbound"

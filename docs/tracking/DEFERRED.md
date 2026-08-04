@@ -1635,9 +1635,34 @@ a DIFFERENT module" rather than "bound at all", which is the same
 module-provenance question issue #66 and POL.9c both wait on — and it needs the
 elaboration-vs-module-load two-context care `pipeline.md` records.
 
-**Not shipped.** A half-tuned predicate that changes derive behaviour globally
-is worse than a list of four names that is honest about being a list. Recorded
-so the next attempt starts from 4 rather than 24.
+**✅ SHIPPED 2026-08-03 after the residual was diagnosed — the list is down
+from FOUR names to ONE.** The 4 leftovers were not an ordering problem in the
+sense first guessed; they were the MULTI-PASS one. Preparse re-walks the forms,
+so on the second pass the name is bound *by our own wrapper from the first*, and
+a naive `(not (global-env-lookup-type mname))` then declines to regenerate the
+def — the wrapper silently disappears. Adding a `derived-wrapper-names` set, so
+the guard can tell "someone else binds this" from "we bound this last pass",
+takes it to 1. (Same multi-pass shape as the trait registry registering three
+times for two declarations, one entry up.)
+
+Progression, measured on the 24 files that break when the list is emptied:
+**24 failures → 4 (naive guard) → 1 (re-derivation fix) → 0 (with `join`
+listed).** Full suite green, 543 files.
+
+**`join` is the one that cannot be computed away**, and the reason is load
+ORDER: when the trait carrying it is processed, `string-ops` has not been
+loaded, so there is no binding for the guard to see. The derived wrapper then
+shadows string-ops' `join` at the **VALUE** level — not the spec-store clobber
+this entry originally blamed, so no spec-store fix reaches it either. Seeing it
+needs the whole program's name universe up front: the module-provenance
+question this item and issue #66 both wait on.
+
+⚠ **And `join` is exactly the one the suite could not see** — per-method A/B
+called it safe, the full suite agreed, and `[join "-" '["x" "y"]]` fails
+outright with it derived. All four calls are now pinned in
+`test-trait-method-derive.rkt`, verified byte-identical against the pre-change
+hand-list baseline, so "the guard replaced the list without changing anything"
+is a fact rather than a claim.
 
 **So the honest state is**: `add`/`sub` are hard-blocked (measured, loudly).
 `join` is blocked, now with a test that says so.

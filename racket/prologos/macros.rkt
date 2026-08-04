@@ -7417,6 +7417,11 @@
 ;; Registry: trait-name (symbol) → trait-meta
 (define current-trait-registry (make-parameter (hasheq)))
 
+;; Names this derive mechanism has generated, so `derivable-method?` can tell
+;; "someone else binds this" from "we bound this on an earlier preparse pass".
+;; See its comment for why the distinction is load-bearing rather than tidy.
+(define derived-wrapper-names (box '()))
+
 (define (register-trait! name meta)
   (current-trait-registry (hash-set (current-trait-registry) name meta))
   ;; Phase 2b: dual-write to cell
@@ -8746,15 +8751,33 @@
   ;; from-rational, alpha/gamma) are excluded structurally: their type var
   ;; cannot be solved from call arguments. See DEFERRED.md § "Numerics
   ;; N6d-i follow-ups" item 3 for the expected-type-resolution future.
-  ;; Skip-set: method names whose derivation would capture or clobber
-  ;; existing same-named bindings (own-module import capture; bare-name
-  ;; spec-store overwrite — issues #66/#67). Census-seeded 2026-07-02:
-  ;;   add/sub — arithmetic.prologos refers nat's add/sub and the Nat impl
-  ;;             bodies call them bare (capture → self-referential dicts);
-  ;;   join    — string-ops join (spec clobber; heavily used);
-  ;;   reduce  — data/list reduce (spec clobber).
-  ;; Lifting these = DEFERRED.md § "Numerics N6d-i follow-ups" item 1.
-  (define derive-skip-methods '(add sub join reduce))
+  ;; Skip-set: method names whose derivation would capture or clobber an
+  ;; existing same-named binding.
+  ;;
+  ;; ⚠ IT WAS `(add sub join reduce)` UNTIL 2026-08-03, hand-maintained. Three
+  ;; of the four are now handled by the COMPUTED guard in `derivable-method?`
+  ;; below ("something else already binds this name"), which is the structural
+  ;; answer to a hand-maintained enumeration this codebase prefers. Measured on
+  ;; the 24 files that break when the list is emptied: 24 failures with no
+  ;; guard, 4 with a naive guard, 1 with the re-derivation fix, 0 once `join`
+  ;; alone is listed.
+  ;;
+  ;; `join` CANNOT be computed away, and the reason is load ORDER, not the
+  ;; guard's shape: when the trait carrying it is processed, `string-ops`
+  ;; has not been loaded yet, so there is no binding for the guard to see. The
+  ;; derived wrapper then shadows string-ops' `join` at the VALUE level — and
+  ;; note this is a VALUE shadow, not the spec-store clobber the entry
+  ;; originally blamed, so no spec-store fix reaches it. Seeing it requires
+  ;; knowing the whole program's name universe up front, which is the
+  ;; module-provenance question DEFERRED.md § "Numerics N6d-i follow-ups" item
+  ;; 1 and issue #66 both wait on.
+  ;;
+  ;; ⚠ AND `join` IS THE ONE THE SUITE COULD NOT SEE. A per-method A/B reported
+  ;; it as safe to lift and the full 542-file suite agreed — because nothing in
+  ;; the suite called `join` at all. `[join "-" '["x" "y"]]` fails outright with
+  ;; it derived. `tests/test-trait-method-derive.rkt` now has that call, and it
+  ;; is the guard that would catch anyone shrinking this list to `'()`.
+  (define derive-skip-methods '(join))
 
   ;; Domain (argument-position) sub-datums of a method type: strip Pi
   ;; wrappers into the body, then collect nested prefix-arrow domains;
@@ -8785,6 +8808,21 @@
   (define (derivable-method? method)
     (define mname (trait-method-name method))
     (and (not (memq mname derive-skip-methods))
+         ;; Do not derive a bare wrapper over a name something ELSE already
+         ;; binds — the derived `def` would shadow it at the VALUE level. This
+         ;; replaces three of the four hand-listed skips.
+         ;;
+         ;; ⚠ THE `derived-wrapper-names` DISJUNCT IS LOAD-BEARING, and without
+         ;; it this guard is actively wrong. Preparse re-walks the forms, so on
+         ;; the second pass the name is bound BY OUR OWN WRAPPER from the first
+         ;; — a naive `(not (global-env-lookup-type mname))` then declines to
+         ;; regenerate the def, and the wrapper silently disappears. That is
+         ;; what the 4 residual failures were (`to-float`, `abs`, `neg`), and
+         ;; they looked like an unrelated ordering bug until the multi-pass was
+         ;; the suspect. Same shape as the trait registry registering three
+         ;; times for two declarations.
+         (or (memq mname (unbox derived-wrapper-names))
+             (not (global-env-lookup-type mname)))
          (not (null? params))
          (let ([doms (method-domain-datums (trait-method-type-datum method))])
            (for/and ([p (in-list params)])
@@ -8794,7 +8832,11 @@
   (define derived-wrapper-defs
     (for/list ([method (in-list methods)]
                [i (in-naturals)]
-               #:when (derivable-method? method))
+               #:when (and (derivable-method? method)
+                           (begin (set-box! derived-wrapper-names
+                                            (cons (trait-method-name method)
+                                                  (unbox derived-wrapper-names)))
+                                  #t)))
       (define method-name (trait-method-name method))
       (define method-type (trait-method-type-datum method))
       (define wrapper-type
