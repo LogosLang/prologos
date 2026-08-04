@@ -1547,7 +1547,33 @@ the TWO unbound representations (unresolved var → own-name fvar vs missing key
 first `'optional` clients); (e) display posture vs D23 (untyped relations ⇒ rows
 of metas).
 
-## CIU T6 (post-F1b): explain restructure — provenance beside the rows
+## CIU T6 (post-F1b): explain restructure — provenance beside the rows — RE-PROBED 2026-08-03, entry ACCURATE and its guard VERIFIED
+
+The interim clobber guard the entry describes is real and works. Measured:
+
+```
+defr provrel [?provenance]
+  || "x"
+explain (provrel provenance)
+⇒ @[{:provenance "x"}]              ← the BINDING wins; no metadata inserted
+```
+
+versus an ordinary query, where the metadata is present:
+
+```
+defr color [?c]
+  || "red"
+     "blue"
+explain (color c)
+⇒ @[{:c "red"  :provenance {:depth 0N :clause-id :color/1-0 …}}
+    {:c "blue" :provenance {…}}]
+```
+
+So binding-wins-on-collision holds for the live reserved key, and a query
+variable named `?certainty` also round-trips cleanly. The structural point the
+entry makes stands unchanged — provenance is merged INTO the row's namespace
+rather than sitting beside it, so the two can only ever coexist by one of them
+yielding. Not blocked; open when the explain surface next gets attention.
 
 Explain's reserved `:certainty`/`:cycle` keys merge into the SAME champ namespace
 as query-var keys (reduction.rkt explain merges) — the right eventual shape is a
