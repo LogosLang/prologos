@@ -1347,6 +1347,38 @@ annotate `[x : T]` or add a `spec`").
    `p : {:x _ | _}` from `p.x` and solve it structurally. Now more tractable
    (rows exist post-F1a/F1b) but still extension-typing scope (§12.5 pins / the
    one-solver era). Entry gate: F-row opens.
+
+   > **The minimal version was BUILT, MEASURED UNSOUND, and reverted
+   > (2026-08-04). Worth recording, because it looks right.** Adding an
+   > `expr-meta` arm to `expr-map-get`'s typing that solves the meta to the
+   > weakest supporting row — `{:k ?v | _}`, via `unify` for the `solve-meta!`
+   > coupling — delivers exactly what this entry describes, for ONE field:
+   >
+   > ```
+   > defn f [p] p.x        ⇒ f : {:x _ | _} -> _        ← the constraint, inferred
+   > [f {:x 42 :y "o"}]    ⇒ 42
+   > [f {:x "str"}]        ⇒ "str"                      ← polymorphic in the field
+   > ```
+   >
+   > It breaks on the SECOND field. `defn g [p] [int+ p.a p.b]` infers only
+   > `{:a Int | _}`: the second projection hits an already-solved DYN row, and a
+   > dyn-row miss mints a fresh meta (D19) instead of EXTENDING the row. The
+   > demand for `:b` is silently dropped — and then:
+   >
+   > ```
+   > [g {:a 1}]   ⇒ [int+ 1 <error>] : Int      ← at ZERO errors
+   > ```
+   >
+   > A clean "cannot infer" refusal becomes an `<error>` embedded in a result
+   > the command reports as successful. Strictly worse than the status quo, so
+   > it is not shipped.
+   >
+   > **What this pins down for whoever opens F-row**: the load-bearing piece is
+   > not solving the meta initially — that part is ten lines. It is **row
+   > EXTENSION on an already-solved dyn row**, i.e. a genuinely row-polymorphic
+   > unifier where the tail is a variable that accumulates field demands, rather
+   > than the D19 mint-a-meta-on-miss behaviour. "Solve it structurally" in the
+   > line above is doing all the work in that sentence.
 2. **Generic `+`/arithmetic on an untyped param** — `defn f [x] [+ x 1]` fails
    standalone (pre-existing): `+` needs `x`'s type. **Deep fix = Num Track 2**
    (generic `Num` / constraint-as-type): constrain `x : Num`-ish from `[+ x 1]`.
