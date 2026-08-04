@@ -5682,7 +5682,59 @@ which corrupted instead of erroring) was a pipe-local pre-fold; the general
 fix is running the fold before head-macro dispatch — an ordering change with
 wide blast radius that needs its own slice. `match` folds correctly already.
 
-### 18. Dyn-key `map-assoc` mints a type/value DESYNC that selection then launders — pre-existing upstream
+### 18. ✅ FIXED 2026-08-04 — dyn-key `map-assoc` widens colliding field types instead of lying
+
+Reproduced exactly as filed, then fixed where the entry said the fix belonged:
+the dyn-assoc typing rule.
+
+D16's dynamic-key extension kept every known field's TYPE **verbatim** while
+flipping only the tail. But a dynamic key may be any one of those very labels,
+so the row kept `:host String` over a runtime 42. Each kept field now widens to
+`<T | V>` — an unknown key hits AT MOST ONE label, so every field is either
+unchanged or replaced by the inserted value, and the union is the join of
+exactly those two possibilities. `record-widen-all-with` (typing-core) is the
+TYPE-side dual of D24's `record-mark-all-unknown`:
+
+> dynamic dissoc — presence becomes uncertain, type-if-present stays a fact
+> dynamic assoc  — presence stays a fact, TYPE-if-present becomes uncertain
+
+It is also *tighter* than the D24 sibling's per-field fresh meta, because assoc
+KNOWS V where `update-in`'s arbitrary fn does not.
+
+**Cost is zero where the types already agree**: `build-union-type` dedups, so
+`<Int | Int>` collapses back and the F1a.2 p1b acceptance line
+(`map-assoc {:a 1} kk 5` → `{:a Int | _}`) is byte-identical. Across the
+row-reachable example corpus, A/B'd against HEAD in a separate worktree, the
+ONLY behavioural difference was the intended one.
+
+The laundering the entry named is gone with it: `def sel := d3{host}` now
+records `{:host <Int | String>}` instead of a CLOSED `{:host String}`.
+`select-project` was already honest per its inputs, as filed — it returns the
+field type verbatim, so fixing the input fixed the output. The
+reduction-layer panic stays unreachable.
+
+⚠ **What NOT to conclude from an expression echo.** `d3{host}` at the REPL
+still prints `{:host Int}`, because an expression command display-narrows a
+union against the value it actually produced (the documented display-only
+refinement, walled off from static typing). Only the type a `def` RECORDS can
+launder, and that is what the pins assert — four in
+`tests/test-path-selection.rkt`, including a control that homogeneous assoc is
+unchanged.
+
+**Spun off and fixed alongside** (`pretty-print.rkt`): a union in a row field
+now prints with its `<…>`. This change made union field types reachable from
+ordinary dynamic-key assoc for the first time, and bare they are ambiguous
+three ways — `{:host Int | String :port Int | _}` reads as a row whose tail is
+`| String :port Int | _`. `<…>` is the union's only source spelling, so this
+renders what a user would write rather than inventing a display-only bracket.
+Four snapshots in `test-rel-t1-typed-rows.rkt` and two example markers updated.
+
+**Still open, NOT fixed here** (separate, pre-existing, wider churn): the same
+ambiguity exists for `[Map String Int | String]` — is that `Map String <Int |
+String>` or `<Map String Int | String>`? Type-application argument positions
+have the same problem rows had. Out of scope for item 18.
+
+**Original filing:**
 
 `def d3 := [map-assoc base kh 42]` (kh dynamic `:host`) types
 `{:host String … | _}` while the runtime value holds `{:host 42 …}` — the

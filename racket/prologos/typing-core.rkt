@@ -1071,6 +1071,37 @@
        (if cf (values #f cf) (values (select-assemble-row comps) #f)))]
     [else (select-step-kind-unhandled 'select-below-field (car steps))]))
 
+;; CIU T6 D4.P3a item 18: the TYPE-side sibling of syntax.rkt's
+;; `record-mark-all-unknown` (D24's dynamic-DISSOC writer). The two are duals:
+;;
+;;   dynamic dissoc — presence becomes uncertain, type-if-present stays a fact
+;;   dynamic assoc  — presence stays a fact, TYPE-if-present becomes uncertain
+;;
+;; An unknown key hits AT MOST ONE label, so after the assoc each known field
+;; is either unchanged or replaced by the inserted value — and `<T | V>` is the
+;; join of exactly those two possibilities. Sound, and tighter than D24's
+;; per-field fresh meta because assoc KNOWS V (update-in's arbitrary fn does not).
+;;
+;; Without this the row kept `:host String` while the runtime value held
+;; `:host 42`, and a select then LAUNDERED the desync into a CLOSED
+;; `{:host String}` over an Int — stripping even the `| _` that had at least
+;; advertised uncertainty. That laundering was item 18.
+;;
+;; Homogeneous assoc is unaffected: build-union-type dedups, so <Int | Int>
+;; collapses back to Int and `map-assoc {:a 1} kk 5` still types `{:a Int | _}`.
+;;
+;; Presence is CARRIED, not forced to 'present: a row that reached here through
+;; a prior dynamic dissoc has 'unknown fields, and adding one unknown key does
+;; not make any particular one of them present again.
+(define (record-widen-all-with rec vt)
+  (expr-Record (expr-Record-key-domain rec)
+               (for/list ([fld (in-list (expr-Record-fields rec))])
+                 (cons (car fld)
+                       (record-field
+                        (build-union-type (list (record-field-type (cdr fld)) vt))
+                        (record-field-presence (cdr fld)))))
+               'dyn))
+
 (define (record-value-bound ctx rec [src (dyn-row-source 'dyn-row-values)])
   (cond
     [(eq? (expr-Record-tail rec) 'dyn)
@@ -2299,11 +2330,23 @@
                (if (expr-error? vt) (expr-error) (record-extend rec kw vt)))]
             [_
              ;; CIU T6 F1a.2 p1b (D16): dynamic-key extension keeps the KNOWN
-             ;; fields and flips the tail to 'dyn — strictly more informative
-             ;; than the old (Map Keyword Open). The inserted value's type is
-             ;; not recorded (bounds-free tail; named cost, §12.2).
-             (if (and (check ctx k (expr-Keyword)) (not (expr-error? (infer ctx v))))
-                 (make-record (expr-Record-key-domain rec) (expr-Record-fields rec) 'dyn)
+             ;; field LABELS and flips the tail to 'dyn — strictly more
+             ;; informative than the old (Map Keyword Open).
+             ;;
+             ;; D4.P3a item 18: each kept field's TYPE widens to <T | V>. D16
+             ;; kept the types verbatim, which was UNSOUND — the dynamic key
+             ;; may be any one of those very labels, so `map-assoc {:host
+             ;; String …} kh 42` claimed `:host String` over a runtime 42. The
+             ;; tail is still bounds-free (V is not recorded there, the §12.2
+             ;; named cost); what changed is that V is now recorded where it
+             ;; CAN land — see record-widen-all-with.
+             ;;
+             ;; Evaluation order is load-bearing: the key check short-circuits
+             ;; `infer`, so a non-Keyword key reports only its own error, as
+             ;; before.
+             (if (check ctx k (expr-Keyword))
+                 (let ([vt (infer ctx v)])
+                   (if (expr-error? vt) (expr-error) (record-widen-all-with rec vt)))
                  (expr-error))])]
          [(expr-Map kt vt)
           (cond

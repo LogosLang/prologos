@@ -123,10 +123,10 @@ defr val [?k ?v]
 ;;19=> val : _ defined.
 
 solve (val k v)
-;;20=> @[{:k :a, :v 1} {:k :b, :v "two"}] : [PVec {:k Keyword :v Int | String}]
+;;20=> @[{:k :a, :v 1} {:k :b, :v "two"}] : [PVec {:k Keyword :v <Int | String>}]
 
 def only-a := solve (val :a v)
-;;21=> only-a : [PVec {:v Int | String}] defined.
+;;21=> only-a : [PVec {:v <Int | String>}] defined.
 
 solve (val :a v)
 ;;22=> @[{:v 1}] : [PVec {:v Int}]

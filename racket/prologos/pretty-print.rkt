@@ -485,7 +485,22 @@
     ;; Record/tuple structural-row type (CIU T6 F1): keyword-domain → {:a Int :b String};
     ;; nat-domain → ⟨Int String⟩ (tuple, F1a-col). dyn tail → trailing " | _" (F1a.2).
     [(expr-Record kd fields tail)
-     (let ([body (string-join
+     ;; A UNION field type must carry its `<…>` here, even though pp-expr
+     ;; renders unions bare elsewhere. In a row, a bare `|` is ambiguous three
+     ;; ways: against the next field, against the `| _` dyn-tail marker, and
+     ;; against a tuple's next position. `{:host Int | String :port Int | _}`
+     ;; reads as a row whose tail is `| String :port Int | _`. `<…>` is also
+     ;; the only spelling a union has in source, so this renders what a user
+     ;; would write rather than inventing a display-only bracket.
+     ;;
+     ;; Surfaced 2026-08-04 by the D4.P3a item 18 fix, which made union field
+     ;; types reachable from ordinary dynamic-key assoc for the first time.
+     (let* ([pp-field-type
+             (lambda (t)
+               (if (expr-union? t)
+                   (format "<~a>" (pp-expr t names))
+                   (pp-expr t names)))]
+            [body (string-join
                   (for/list ([fld (in-list fields)])
                     (if (eq? kd 'keyword)
                         ;; F1b.3 (D24): a presence-'unknown field is marked with
@@ -509,8 +524,8 @@
                         (format ":~a~a ~a"
                                 (if (eq? (record-field-presence (cdr fld)) 'unknown) "?" "")
                                 (car fld)
-                                (pp-expr (record-field-type (cdr fld)) names))
-                        (pp-expr (record-field-type (cdr fld)) names)))
+                                (pp-field-type (record-field-type (cdr fld))))
+                        (pp-field-type (record-field-type (cdr fld)))))
                   " ")]
            [dyn (if (eq? tail 'dyn) " | _" "")])
        (if (eq? kd 'keyword)

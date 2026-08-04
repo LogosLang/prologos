@@ -1561,6 +1561,74 @@
   (check-regexp-match #rx"validate" r)
   (check-false (regexp-match #rx"annotate" r) "an unimplementable remedy re-appeared"))
 
+;; ---- D4.P3a item 18: the dyn-assoc type/value DESYNC, and its laundering ----
+;;
+;; The entry's exact repro. At HEAD the D16 dynamic-key extension kept every
+;; known field's TYPE verbatim while flipping only the tail, so
+;; `map-assoc {:host String …} kh 42` typed `:host String` over a runtime 42 —
+;; and a select then laundered that into a CLOSED `{:host String}`, stripping
+;; even the `| _` that had at least advertised uncertainty.
+;;
+;; The fix widens each kept field to `<T | V>` (typing-core's
+;; record-widen-all-with): an unknown key hits at most one label, so each field
+;; is either unchanged or replaced by V.
+;;
+;; ⚠ These assert on the type a `def` RECORDS, not on an expression echo. An
+;; expression command display-narrows a union against the value it actually
+;; produced (the documented display-only refinement), which would show
+;; `{:host String}` here and hide the whole defect. The def's announced type is
+;; the type it STORES — that is the static one, and the only one that can
+;; launder.
+
+(test-case "P3a ⭐ item 18: dyn-key assoc widens colliding field types instead of lying"
+  (define rs (run-ws-raw (string-append
+                          "def base := {:host \"localhost\" :port 8080}\n"
+                          "def kh := :host\n"
+                          "def d3 := [map-assoc base kh 42]\n")))
+  (check-false (ormap prologos-error? rs))
+  (define r (format "~a" (last rs)))
+  ;; :host may now be the inserted Int OR the original String
+  (check-regexp-match #rx":host <Int [|] String>" r)
+  ;; :port is Int either way — build-union-type dedups <Int | Int> back to Int,
+  ;; so the widening costs nothing where the types already agree
+  (check-regexp-match #rx":port Int " r)
+  (check-regexp-match #rx"[|] _\\}" r "the dyn tail survives the widening"))
+
+(test-case "P3a item 18: the select no longer launders — the RECORDED row keeps the union"
+  (define rs (run-ws-raw (string-append
+                          "def base := {:host \"localhost\" :port 8080}\n"
+                          "def kh := :host\n"
+                          "def d3 := [map-assoc base kh 42]\n"
+                          "def sel := d3{host}\n")))
+  (check-false (ormap prologos-error? rs))
+  ;; was `{:host String}` — a CLOSED row claiming String over an Int
+  (check-regexp-match #rx"sel : \\{:host <Int [|] String>\\}" (format "~a" (last rs))))
+
+(test-case "P3a item 18: homogeneous dyn-key assoc is UNCHANGED (the no-cost pin)"
+  ;; The F1a.2 p1b acceptance line: `map-assoc {:a 1} kk 5` still types
+  ;; `{:a Int | _}`. If the widening ever starts showing up here it has stopped
+  ;; deduping, and every dynamic assoc in the tree just got noisier.
+  (define rs (run-ws-raw (string-append
+                          "def q := {:a 1}\n"
+                          "def kk := :a\n"
+                          "def q2 := [map-assoc q kk 5]\n")))
+  (check-false (ormap prologos-error? rs))
+  (check-regexp-match #rx"q2 : \\{:a Int [|] _\\}" (format "~a" (last rs))))
+
+(test-case "P3a item 18: a union field type prints with its `<…>` inside a row"
+  ;; Bare, `{:host Int | String :port Int | _}` reads as a row whose TAIL is
+  ;; `| String :port Int | _`. The brackets are not decoration: they are the
+  ;; only spelling a union has in source, and without them a row with a union
+  ;; field is ambiguous against both the next field and the dyn-tail marker.
+  (define rs (run-ws-raw (string-append
+                          "def base := {:host \"localhost\" :port 8080}\n"
+                          "def kh := :host\n"
+                          "def d3 := [map-assoc base kh 42]\n")))
+  (define r (format "~a" (last rs)))
+  (check-regexp-match #rx"<Int [|] String>" r)
+  (check-false (regexp-match #rx":host Int [|] String" r)
+               "the union lost its brackets — the row is ambiguous again"))
+
 (test-case "P3a: a keyed block on a TUPLE (nat row) is a loud refusal"
   (define rs (run-ws-raw (string-append
                           "def het := @[7 \"seven\" :seven]\n"
