@@ -2271,9 +2271,38 @@ did not exist; they now describe the one that does.
 Consumers named in the original entry (OE Track 1, PReduce Track 4, PAR
 scheduler variants) are unblocked.
 
-## HIGH PRIORITY: Propagator/Cell Allocation Efficiency Track
+## 🔶 Propagator/Cell Allocation Efficiency Track — the top-3 ALL SHIPPED; one is validated-not-deployed (re-probed 2026-08-04)
 
-### Design Track for Efficient Prop/Cell Allocation
+**The audit's headline number is stale and two of its three optimizations are
+in the tree.** Measured at HEAD:
+
+| audit claim | measured |
+|---|---|
+| "`struct-copy prop-network` (13-field copy) is dominant cost" | `prop-network` is **3 fields** — `(struct prop-network (hot warm cold))` |
+| "25 call sites" | ~53 `struct-copy prop-network` sites, but each copies 3 fields, not 13 |
+| Top-3 (1) mutable worklist/fuel in the quiescence loop | ✅ shipped — BSP-LE Track 0 Phase 3c, `propagator.rkt:2699` "mutable worklist/fuel drain pattern" |
+| Top-3 (2) field-group struct splitting (hot/warm/cold) | ✅ shipped — BSP-LE Track 0 Phase 3b; the struct IS the hot/warm/cold grouping this recommended |
+| Top-3 (3) batch cell registration via transient CHAMP | ⚠ **built, tested, NOT DEPLOYED** |
+
+**(3) is the live item, and it is the "Validated ≠ Deployed" shape named in
+`workflow.md`.** `net-new-cells-batch` exists (`propagator.rkt:1487`), is
+exported, and has six passing cases in `test-propagator.rkt` — and has **zero
+production callers**. Every `net-new-cell` site in the tree still allocates one
+at a time (macros.rkt 25, session-runtime.rkt 16, propagator.rkt 13, zonk.rkt
+12, reduction.rkt 10, infra-cell.rkt 10, parser.rkt 9, substitution.rkt 8, …).
+
+A track that ends with the new path unused has a gap, not a safety net. The
+remaining work is the deployment phase: find the sites that allocate N cells in
+sequence, convert them, and benchmark — which is also what the entry's own
+"Next step" asked for. Not attempted here; it wants the A/B discipline
+(`bench-ab --refs`), not a triage pass.
+
+**Not re-verified**: the audit's *thesis* (that allocation efficiency has
+disproportionate leverage). It may well still hold — but with the 13-field copy
+gone, the baseline it was measured against no longer exists, so any new claim
+needs a fresh measurement rather than a citation.
+
+### (original) Design Track for Efficient Prop/Cell Allocation
 - **Audit complete**: `docs/tracking/2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md` (commit `f7bd03d`)
 - **Thesis**: Any even modest gains in allocation efficiency will have disproportionate effect across the entire infrastructure — every part of the system creates cells and propagators at scale
 - **Key findings**: `struct-copy prop-network` (13-field copy) is dominant cost; 25 call sites; 6 optimization opportunities identified preserving pure data-in/data-out contract
