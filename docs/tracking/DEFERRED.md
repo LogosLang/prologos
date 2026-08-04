@@ -3970,10 +3970,51 @@ level, `x{…}` selects and `x.k` accesses". The entry predates that work.
 - **Blocked on**: full propagator integration (cell-per-node architecture)
 - Source: LSP Tier 2, commit `712c45a`
 
-### Cross-module go-to-definition
-- Only works for symbols defined in current file
-- **Blocked on**: cross-module location tracking in module registry
+### ✅ Cross-module go-to-definition — IMPLEMENTED 2026-08-04; the stated blocker was already gone
+
+`get-definition-location` answered with the CURRENT document's uri in every
+branch, which is why it only ever worked in-file. But the named blocker —
+"cross-module location tracking in module registry" — had already been built:
+`module-info` carries `definition-locations` (populated by
+`register-definition-location!` during elaboration) and `file-path`. Nothing
+consulted them.
+
+Now a fallback, reached only after the in-file lookups miss, searches the loaded
+modules and answers with the defining file. `foldr` from a document that does
+not define it resolves to `lib/prologos/data/list.prologos`.
+
+**Two traps, both of which make a wrong implementation look like an unimplemented
+one — recorded because each cost a debugging cycle:**
+
+1. **`lsp-state-module-registry` is dead.** Its setter is never called anywhere
+   in `server.rkt`; the field is `#f` from `make-initial-state` onward. The
+   registry actually lives in the per-document REPL session (and the prelude
+   cache). Searching the obvious field finds nothing, silently.
+2. **`module-info-definition-locations` is an ACCUMULATING ambient snapshot** —
+   it holds every location recorded up to that module's load, not only that
+   module's own definitions. Pairing a hit with the holding module's `file-path`
+   therefore attributes definitions to whatever module happened to load next:
+   measured, `foldr` resolved to `core/abstract-domains.prologos`, a file
+   containing **zero** occurrences of the word. The fix takes the file from the
+   SRCLOC, which knows its own source. (That snapshot behaviour is worth its own
+   look — it means every module carries a copy of everything before it.)
+
+Lookup is two-pass — exact short name before qualified suffix — and visits
+modules in ns-symbol order, so an ambiguous name resolves the same way every
+time instead of following hash iteration.
+
+Three pins in `tests/test-lsp-goto-definition.rkt`, the suite's first coverage of
+this handler: the cross-module hit (asserting the answer names a DIFFERENT and
+correct file — "found something" would have passed on the in-file fallback), an
+in-file definition still winning over a module one, and an undefined name still
+resolving to nothing. Verified they fail with the new branch disabled.
+
 - Source: LSP Tier 2, commit `12ea616`
+
+### Token-level srcloc precision — still open, blocker NOT re-probed
+The sibling item above it in this section is untouched; its "blocked on full
+propagator integration" claim has not been re-probed and should not be assumed
+accurate given this one's was stale.
 
 ---
 

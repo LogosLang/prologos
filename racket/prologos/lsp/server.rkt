@@ -40,7 +40,16 @@
          ;; suite coverage — the Level-3 gap that let the 4A.b regression land invisibly.
          make-initial-state
          get-or-create-session!
-         eval-in-session-raw!)
+         eval-in-session-raw!
+         ;; 2026-08-04: cross-module go-to-definition. Same reasoning as above —
+         ;; the handler had no coverage, which is how "blocked on cross-module
+         ;; location tracking" survived as a claim while the tracking existed.
+         ;; `lsp-state-document-contents` rides along because the handler reads
+         ;; the open-document text first and answers json-null when there is
+         ;; none — a test that skipped it would assert on that early return.
+         get-definition-location
+         lsp-state-document-contents
+         lsp-state-definition-locations)
 
 ;; ============================================================
 ;; Server state
@@ -718,13 +727,65 @@
              [found-loc
               (hasheq 'uri uri 'range (srcloc->range found-loc))]
              [else
-              ;; Fallback: regex scan for definition in current document
-              (define def-line (find-definition-line text word))
+              ;; CROSS-MODULE (2026-08-04). Every branch above answers with the
+              ;; CURRENT document's uri, which is why go-to-definition only ever
+              ;; worked in-file. DEFERRED listed this as blocked on "cross-module
+              ;; location tracking in the module registry" — that tracking already
+              ;; exists: `module-info` carries `definition-locations` (populated by
+              ;; `register-definition-location!` during elaboration) AND
+              ;; `file-path`. Nothing was consulting them.
+              (define cross (cross-module-definition state uri word))
               (cond
-                [def-line
-                 (hasheq 'uri uri
-                         'range (make-range def-line 0 def-line (string-length word)))]
-                [else (json-null)])])])])]))
+                [cross cross]
+                [else
+                 ;; Fallback: regex scan for definition in current document
+                 (define def-line (find-definition-line text word))
+                 (cond
+                   [def-line
+                    (hasheq 'uri uri
+                            'range (make-range def-line 0 def-line (string-length word)))]
+                   [else (json-null)])])])])])]))
+
+;; Find where `word` is defined in any LOADED module, and answer with THAT
+;; definition's own file. Returns an LSP Location, or #f.
+;;
+;; ⚠ The file comes from the SRCLOC, not from `module-info-file-path`. A
+;; module's `definition-locations` is an ACCUMULATING ambient snapshot — it
+;; holds every location recorded up to that module's load, not only its own
+;; definitions — so pairing a hit with the holding module's path attributes
+;; definitions to whatever module happened to load after them. Measured: `foldr`
+;; resolved to `core/abstract-domains.prologos`, a file containing zero
+;; occurrences of the word. The srcloc knows its own file; trust that.
+;;
+;; Two passes, exact short name before qualified suffix, so `foo` prefers a
+;; definition actually named `foo` over some `a::b::foo`. Within a pass, modules
+;; are visited in ns-symbol order, so an ambiguous name resolves the same way
+;; every time rather than following hash iteration.
+(define (definition-search-registry state uri)
+  (define session (hash-ref (lsp-state-repl-sessions state) uri #f))
+  (or (and session (repl-session-module-registry session))
+      (let ([pc (lsp-state-prelude-cache state)])
+        (and pc (prelude-cache-module-registry pc)))))
+
+(define (cross-module-definition state uri word)
+  (define sym (string->symbol word))
+  (define suffix (string-append "::" word))
+  (define registry (definition-search-registry state uri))
+  (define (scan match?)
+    (and (hash? registry)
+         (for/or ([ns (in-list (sort (hash-keys registry) symbol<?))])
+           (define mod (hash-ref registry ns #f))
+           (and (module-info? mod)
+                (let ([locs (module-info-definition-locations mod)])
+                  (and (hash? locs)
+                       (for/first ([(k v) (in-hash locs)]
+                                   #:when (and (match? k) (srcloc? v) (srcloc-file v)))
+                         v)))))))
+  (define loc (or (scan (lambda (k) (eq? k sym)))
+                  (scan (lambda (k) (string-suffix? (symbol->string k) suffix)))))
+  (and loc
+       (hasheq 'uri (path->uri (srcloc-file loc))
+               'range (srcloc->range loc))))
 
 ;; Extract the word (identifier) at the given line and character position.
 (define (word-at-position text line char)
