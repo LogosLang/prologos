@@ -2924,6 +2924,54 @@ fixture-fidelity gap that bit `test-float-lib` the same day, in the opposite
 direction — there the fixture was wrong and the product fine; here the product
 is broken and the fixture hides it.
 
+**✅ DEFECT 1 FIXED 2026-08-03 — a capability in a spec was AUTO-GENERALIZED
+into a type variable.** `known-type-name?` (macros.rkt) did not consult the
+capability registry, so Phase 1b's auto-detect — which keeps any capitalized
+symbol that function does not claim — turned every capability name in a spec
+into a fresh `{X : Type}` binder:
+
+```
+spec rd ReadCap -0> String -> String
+defn rd [_cap path] path
+⇒ rd : [Pi [x :0 <[Type 0]>] [Pi [y :0 <x>] String -> String]]     ← BEFORE
+⇒ rd : [Pi [x :0 <ReadCap>] String -> String]                       ← AFTER
+```
+
+`ReadCap` became a type VARIABLE, `_cap` got that variable's type, the binder
+never registered as a capability, and the scope stayed empty. **The error then
+pointed at the CALL SITE** ("E2001: … not available in scope") while the damage
+was done in the SPEC — which is exactly why every hypothesis recorded below was
+reasonable and wrong. Referring the name explicitly does not help: the
+auto-detect asks `known-type-name?`, not the environment.
+
+One arm, beside the existing schema/selection/trait/bundle arms. Pinned in
+`tests/test-capability-spec-forms.rkt`.
+
+⚠ **DEFECT 2 IS NOT FIXED, deliberately — csv is hit by BOTH and remains
+unimportable.** The scope search compares functor names with `eq?`, while the
+two sides are qualified differently: the requirement comes from a foreign
+decl's `:requires (ReadCap)` (bare), and the binder's type under an explicit
+`require` elaborates to `prologos::core::capabilities::ReadCap`. Comparing on
+the bare segment is a one-line change (`spec-bare-name`, the helper already
+used for issue #66) and it DOES make csv import and run cold. Written,
+measured, held back for two reasons:
+
+1. **It loosens a SECURITY check** — the scope search is what refuses IO in a
+   capability-free context. One full-suite failure of `test-io-main-01`'s "IO
+   without cap in scope should produce E2001" was observed with it applied
+   (6/6 in isolation and 3/4 full suites afterwards, and `run-no-cap`
+   hard-sets the scope to `'()` so the change is provably inert there) — but a
+   security check that failed once should not ship on a probability argument.
+2. **It surfaces a THIRD problem.** With the capability resolved, `read-csv`
+   elaborates to
+   `[fn [x :0 <ReadCap>] [fn [y <String>] [parse-csv [read-file x y]]]]` — the
+   erased capability threaded into `read-file` as a RUNTIME argument (the
+   `:requires (Cap)` foreign wrapper adds capability token args), which QTT
+   rejects as a multiplicity violation. So the fix reveals another link rather
+   than completing the chain.
+
+Re-open with the multiplicity question answered.
+
 ⚠ **A LOAD-ORDERING WORKAROUND WAS FILED HERE AND IS WITHDRAWN — it was a STALE
 CACHE.** The claim was that `imports capabilities` before `imports csv` makes it
 work, which it appeared to do, repeatably. It does not: **delete
