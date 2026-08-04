@@ -21,7 +21,10 @@
          racket/file
          "test-support.rkt"
          "../driver.rkt"
-         "../namespace.rkt")
+         "../namespace.rkt"
+         (only-in "../macros.rkt"
+                  current-preparse-registry current-trait-registry
+                  current-impl-registry current-param-impl-registry))
 
 (define (run-float src)
   (define tmp (make-temporary-file "prologos-floatlib-~a.prologos"))
@@ -30,8 +33,20 @@
                           "ns floatlibtest\n\n"
                           "imports [prologos::data::float :as flt :refer []]\n\n"
                           src) o)))
+  ;; ⚠ THE REGISTRIES ARE NOT OPTIONAL. A first cut parameterized only
+  ;; `current-lib-paths` + `current-module-registry`, and the direct foreign
+  ;; calls (`flt::sqrt`) worked fine — they need no dispatch. `to-posit` /
+  ;; `to-float` do, and came back "No instance of ToPosit32 for Float64" while
+  ;; the identical file through `run-file.rkt` gave `NaR`. That divergence is
+  ;; the fixture's, not the compiler's: without the impl/trait registries the
+  ;; prelude's instances are invisible. It also passed twice before failing,
+  ;; because a batch neighbour had already loaded them into the process.
   (define rs (parameterize ([current-lib-paths (list prelude-lib-dir)]
-                            [current-module-registry prelude-module-registry])
+                            [current-module-registry prelude-module-registry]
+                            [current-preparse-registry prelude-preparse-registry]
+                            [current-trait-registry prelude-trait-registry]
+                            [current-impl-registry prelude-impl-registry]
+                            [current-param-impl-registry prelude-param-impl-registry])
                (install-module-loader!)
                (process-file (path->string tmp))))
   (delete-file tmp)

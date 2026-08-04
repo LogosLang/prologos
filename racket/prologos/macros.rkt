@@ -4652,6 +4652,78 @@
 ;; Returns: (defn name [x ($angle-type Nat) y ($angle-type Nat)] ($angle-type Nat) body)
 ;; When implicit-binders is non-empty, prepends ($brace-params ...) so the parser
 ;; handles implicit type parameters: (defn name ($brace-params A B) [typed-bracket] ret body)
+;; ============================================================
+;; Spec System Phase 2: `:pre` / `:post` runtime contracts
+;; ============================================================
+;;
+;; The surface has parsed and stored since the metadata work; nothing consumed
+;; it, so `spec sd Int Int -> Int :pre [fn [x][fn [y][not [eq? y 0]]]]` let
+;; `[sd 6 0]` through at zero errors. Declaring a contract and having it not
+;; run is worse than not offering the syntax.
+;;
+;; Surface per `2026-02-22_EXTENDED_SPEC_DESIGN.org` §Phase 2, unchanged:
+;; `:pre` is a function of the ARGS, `:post` a function of the args plus the
+;; RETURN. Both are ordinary Prologos expressions, so they are applied, not
+;; interpreted — nothing here knows what a predicate looks like.
+;;
+;; Lowering, on the RAW defn before `inject-spec-into-defn` adds types (so the
+;; parameter names are still bare and there is nothing to un-annotate):
+;;
+;;   :pre    (boolrec _ BODY (panic "…") (PRE p1 … pn))
+;;   :post   ((fn (r : _) (boolrec _ r (panic "…") (POST p1 … pn r))) BODY)
+;;
+;; `boolrec` rather than `match` because `if` already lowers to it three
+;; hundred lines down and it is a plain 4-element datum — no arm construction,
+;; no `$pipe` shapes, nothing that has to survive a later preparse pass. The
+;; `:post` form is a beta-redex rather than a `let` for the same reason: a
+;; `let` datum emitted HERE would still need `expand-let` to run over it, and
+;; this runs inside preparse.
+;;
+;; ⚠ SINGLE BODY FORM ONLY, and the guard is explicit rather than assumed. A
+;; multi-form body (a `let` chain, mainly) is a sequence, and folding a
+;; sequence into `boolrec`'s single `then` slot would need it re-associated
+;; correctly — which is `expand-let`'s job, not this function's. A
+;; multi-form body with a contract is left UNWRAPPED rather than
+;; mis-wrapped; `contract-unwrappable?` is what the caller reports on.
+(define (contract-metadata-parts metadata)
+  (if (and metadata (hash? metadata))
+      (values (hash-ref metadata ':pre #f) (hash-ref metadata ':post #f))
+      (values #f #f)))
+
+(define (contract-wrappable? datum)
+  ;; (defn name [params] body) with exactly one body form
+  (and (list? datum) (>= (length datum) 4)
+       (list? (caddr datum))
+       (= (length (cdddr datum)) 1)))
+
+(define (wrap-contract-checks datum metadata name)
+  (define-values (pre post) (contract-metadata-parts metadata))
+  (cond
+    [(and (not pre) (not post)) datum]
+    [(not (contract-wrappable? datum)) datum]
+    [else
+     (define params
+       (for/list ([x (in-list (caddr datum))])
+         (cond [(and (list? x) (= (length x) 2) (eq? (car x) '$rest-param)) (cadr x)]
+               [(and (list? x) (>= (length x) 1) (symbol? (car x))) (car x)]
+               [else x])))
+     (define body (cadddr datum))
+     (define body/post
+       (if post
+           `((fn (,'$contract-result : _)
+                 (boolrec _ ,'$contract-result
+                          (panic ,(format "~a: :post violated" name))
+                          (,post ,@params ,'$contract-result)))
+             ,body)
+           body))
+     (define body/pre
+       (if pre
+           `(boolrec _ ,body/post
+                     (panic ,(format "~a: :pre violated" name))
+                     (,pre ,@params))
+           body/post))
+     (append (take datum 3) (list body/pre))]))
+
 (define (inject-spec-into-defn datum spec-tokens [where-constraints '()] [implicit-binders '()])
   (define name (cadr datum))
   (define rest (cddr datum))  ;; ([x y] body ...)
@@ -4944,9 +5016,13 @@
            (error 'spec "spec for ~a is multi-arity but defn ~a is single-body"
                   name name)]
           [else
-           (inject-spec-into-defn datum (car (spec-entry-type-datums spec))
-                                  (spec-entry-where-constraints spec)
-                                  (spec-entry-implicit-binders spec))])]
+           (inject-spec-into-defn
+            ;; Spec Phase 2: apply `:pre`/`:post` BEFORE type injection, while
+            ;; the parameter names are still bare.
+            (wrap-contract-checks datum (spec-entry-metadata spec) name)
+            (car (spec-entry-type-datums spec))
+            (spec-entry-where-constraints spec)
+            (spec-entry-implicit-binders spec))])]
        ;; Defn has inline types — if propagated spec, override silently;
        ;; if own-module spec, error (user mistake).
        [(defn-has-type-annotation? rest)

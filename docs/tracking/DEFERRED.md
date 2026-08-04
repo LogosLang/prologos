@@ -2456,8 +2456,49 @@ checker, not the syntax.
   `:exists` work below.
 - `Gen` trait for type-directed random generation
 - Property checking for `:properties` and `:laws`
-- **Contract wrapping: `:pre`/`:post` generate runtime checks with blame.**
-  Re-probed 2026-08-03 — verified, not assumed:
+- ✅ **DONE 2026-08-03 — contract wrapping: `:pre`/`:post` now RUN.**
+
+  Lowered in `wrap-contract-checks` (macros.rkt), applied to the raw defn
+  BEFORE `inject-spec-into-defn` adds types, so the parameter names are still
+  bare and there is nothing to un-annotate:
+
+  ```
+  :pre    (boolrec _ BODY (panic "…") (PRE p1 … pn))
+  :post   ((fn (r : _) (boolrec _ r (panic "…") (POST p1 … pn r))) BODY)
+  ```
+
+  `boolrec` rather than `match` because `if` already lowers to it and it is a
+  plain 4-element datum — no arm construction, nothing that has to survive a
+  later preparse pass. `:post` is a beta-redex rather than a `let` for the same
+  reason: a `let` emitted here would still need `expand-let` to run over it,
+  and this runs INSIDE preparse. The predicates are APPLIED, not interpreted —
+  nothing in the lowering knows what a predicate looks like, which is what
+  keeps the design doc's surface intact.
+
+  The message names the spec and which contract (`sd: :pre violated`), since a
+  bare panic leaves the reader to find both.
+
+  **Stated non-goal, guarded rather than assumed**: a MULTI-FORM body (a `let`
+  chain) is left UNWRAPPED. Folding a sequence into `boolrec`'s single `then`
+  slot needs it re-associated, which is `expand-let`'s job. `contract-wrappable?`
+  makes that explicit, and a test pins that such a definition still WORKS —
+  declining to wrap must not break the function.
+
+  Tests: `tests/test-spec-contracts.rkt`, 5 cases. The load-bearing ones are
+  the `:post` that reads BOTH args and return (a lowering passing only the
+  result could not tell those cases apart), the no-contract spec (this sits on
+  the path of every spec'd defn in every program), and the multi-form non-goal.
+
+  ⚠ **A test-fixture lesson from the same commit**: `test-float-lib.rkt`
+  parameterized only `current-lib-paths` + `current-module-registry`. Direct
+  foreign calls worked; `to-posit` needed trait dispatch and came back "No
+  instance of ToPosit32 for Float64" while the identical file through
+  `run-file.rkt` gave `NaR`. The divergence was the FIXTURE's. It also passed
+  twice before failing, because a batch neighbour had already loaded the
+  registries into the process — the passes-alone-fails-in-batch signature,
+  running in reverse.
+
+  **Original probe** (kept — it is the failing case the fix had to close):
 
   ```
   spec sd Int Int -> Int
