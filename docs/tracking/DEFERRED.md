@@ -2327,13 +2327,28 @@ pred 1N  => 99N     pred 3N => 2N     pred 0N => 0N
 Now pinned in `tests/test-reader-robustness.rkt`; nothing was pinning it
 before, precisely because this entry said it was broken.
 
-### Higher-Order Narrowing in WS Mode — CONFIRMED STILL TRUE (re-probed 2026-08-02)
+### Higher-Order Narrowing in WS Mode — CONFIRMED STILL TRUE (re-probed 2026-08-02 and again 2026-08-03)
 
 `narrow [apply-op ?f 3N 2N] = 5N` returns `nil` in a `.prologos` file — no
-solutions, no error. The infrastructure works at sexp/API level (23 tests
-pass); the WS pipeline does not reach it. Unchanged since 2026-03-08.
+solutions, no error. Unchanged since 2026-03-08.
 - Fix requires deeper integration between narrowing substitution env and DT body traversal
 - Source: C3 analysis, 2026-03-08
+
+⚠ **A CORRECTION to this entry's own claim (2026-08-03).** It said "the
+infrastructure works at sexp/API level (23 tests pass); the WS pipeline does not
+reach it". The 23 tests are the narrowing suite in GENERAL — grepping every
+narrowing test file (`test-narrowing-01`, `-search-01`, `-search-02`,
+`test-narrow-syntax-01/02`, `test-trait-narrowing-01`) finds **no higher-order
+case at all, at any level**. So "works at sexp level" is not something the suite
+establishes; it is an inference from adjacent coverage, and the gap may be
+narrower or wider than stated. Anyone starting the fix should verify the sexp
+claim FIRST rather than assuming half the problem is already solved.
+
+**Now pinned** in `tests/test-narrowing-search-01.rkt`: the query raises no
+error and returns the empty solution set. Locked deliberately as SILENCE,
+because `nil` is indistinguishable from a genuine "no solution exists" — that
+indistinguishability is what makes this worse than an error, and it is the
+assertion that flips when the gap closes.
 
 ### ⬜ NOT REPRODUCIBLE — Multi-arity `|` relation variants — zero-arg solve path
 
