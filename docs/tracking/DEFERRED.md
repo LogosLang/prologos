@@ -4504,7 +4504,17 @@ spec-store leak, closed above. Worth keeping the sighting on file.
 
 ## FREE_ORDERING migration to propagator-native module loading — captured at PPN 4C Phase 4 mini-design (2026-05-25)
 
-The `macros.rkt:2366-2460` `preparse-expand-all` 3-pass mechanism + `tools/form-deps.rkt` SCC analysis delivers **name-level residuation at preparse time** (3-pass pre-registration of declaration names: ns/imports → no-dep declarations → spec+impl → main loop). Per Audit C (PPN 4C addendum §18.10.4): this is imperative scaffolding that delivers name-level residuation; Phase 4 introduces value-level residuation at elaboration time; the two layers compose.
+> ⚠ **Coordinates re-verified 2026-08-04 — both citations below had drifted.**
+> `preparse-expand-all` is at **macros.rkt:3078** (not 2366-2460; that range is
+> now the let-syntax containment handler, unrelated), and its passes have grown
+> a member: Pass 0 (:3103), Pass 1 (:3153), **Pass 1.5** — def-bot
+> pre-allocation, PPN 4C Addendum Phase 4B.2-b (:3178) — and Pass 2. The
+> module-level cycle check is at **driver.rkt:3203**, not 1872-1874.
+> `tools/form-deps.rkt` still exists. The entry's substance is unaffected; the
+> line numbers would have sent the next reader to the wrong function, and the
+> pass inventory is what the migration has to reproduce.
+
+The `preparse-expand-all` 3-pass mechanism (now 4 passes) + `tools/form-deps.rkt` SCC analysis delivers **name-level residuation at preparse time** (pre-registration of declaration names: ns/imports → no-dep declarations → spec+impl → main loop). Per Audit C (PPN 4C addendum §18.10.4): this is imperative scaffolding that delivers name-level residuation; Phase 4 introduces value-level residuation at elaboration time; the two layers compose.
 
 **User direction (2026-05-25)**: *"having an imperative multi-pass parsing would be a regression for the lattice-fixpoint compiler that we hold as our North Star vision. This work should likely also migrate and be updated to our propagator-native approaches. Sounds like work to be done on module-loading on network, though; not in current scope."*
 
@@ -4522,8 +4532,8 @@ Replace 3-pass imperative preparse with propagator-native cell-based name regist
 - Source audit: PPN 4C addendum [§18.10.4 (FREE_ORDERING at preparse layer)](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) + [§18.5 (PM 12 boundary)](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) + [§18.11 (cyclic definitions principle)](2026-04-21_PPN_4C_PHASE_9_DESIGN.md)
 - Original FREE_ORDERING design: [`2026-02-28_1800_FREE_ORDERING.md`](2026-02-28_1800_FREE_ORDERING.md)
 - Literate book context: [`2026-02-28_1400_LITERATE_BOOK_SYSTEM.md`](2026-02-28_1400_LITERATE_BOOK_SYSTEM.md) Phase 5a/5b/5c
-- Implementation: `macros.rkt:2366-2460` (`preparse-expand-all`), `tools/form-deps.rkt` (SCC analysis)
-- Module-level cycle detection (related, same retirement target): `driver.rkt:1872-1874` (`loading-set` "Circular dependency detected")
+- Implementation: `macros.rkt:3078` (`preparse-expand-all`), `tools/form-deps.rkt` (SCC analysis) — coordinates re-verified 2026-08-04
+- Module-level cycle detection (related, same retirement target): `driver.rkt:3203` ("Circular dependency detected")
 - Future track (where this retires): module-loading-on-network follow-up — PM Track 12 + post-Phase-4 + possibly PPN Track 4D coordination
 
 ## Rel T1 A.2b DFS-routing scaffolding → BSP-LE Track 3 (captured 2026-07-19, commit `bcd02d6d`)
