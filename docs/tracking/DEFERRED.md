@@ -2705,14 +2705,22 @@ is what made the general case visible.
 
 ## Syntax — Mixfix
 
-### Statement-Like Forms in `.{...}`
+### Statement-Like Forms in `.{...}` — ACCURATE (re-probed 2026-08-03)
 - Keep `.{...}` purely expression-oriented for now
+- Probe: a `let` inside `.{…}` fails at the `def` seam
+  (*"def requires: (def name <type> body)"*) — the block never reaches mixfix
+  parsing. Expression-only, as the entry says.
 
 ### `do` Notation Inside `.{...}`
 - Prefer dedicated `do` blocks for monadic code
 
-### `functor :compose` Auto-Registration of Mixfix Symbol
+### `functor :compose` Auto-Registration of Mixfix Symbol — ACCURATE, and its PREREQUISITE is also unbuilt (re-probed 2026-08-03)
 - Deferred due to coupling concerns
+- Probe: `:compose` appears nowhere in the compiler — `process-functor` does not
+  parse it, and the only mentions in the tree are two identical comments in
+  `collection-traits.prologos` saying *"Phase 2+ will use :compose"*. So this is
+  not "auto-registration is deferred while `:compose` works"; the key itself
+  does not exist. Anyone taking this builds `:compose` first.
 
 ### Extended Pattern Matching in `.{...}` — ACCURATE, and it fails SILENTLY (re-probed 2026-08-03)
 - E.g., `.{n + 1}` → `suc n` (Agda view patterns)
