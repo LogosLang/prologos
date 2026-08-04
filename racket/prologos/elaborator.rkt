@@ -4470,11 +4470,32 @@
     [(surf-proc-link chan1 chan2 _loc)
      (proc-link chan1 chan2)]
 
-    [(surf-proc-rec _label _loc)
-     ;; Tail recursion marker — at process level, this is a jump back
-     ;; In the core AST, we don't have a direct rec process form;
-     ;; for now emit as a sentinel that typing-sessions can handle
-     (proc-stop)]  ;; TODO: S4 will add proper process recursion propagator
+    [(surf-proc-rec label loc)
+     ;; Process-level recursion is NOT implemented. This used to elaborate to
+     ;; `(proc-stop)` with the note "emit as a sentinel that typing-sessions can
+     ;; handle" — and that note was wrong in the way that matters.
+     ;;
+     ;; `proc-stop` is not a sentinel typing-sessions can recognize; it is the
+     ;; genuine terminal process, and its typing arm (typing-sessions.rkt:129)
+     ;; both REQUIRES every channel to be ended and actively SOLVES any
+     ;; remaining session metas to `sess-end`. So `(proc-rec Loop)` under a
+     ;; recursive session type did not merely lose its label — it committed the
+     ;; channel to terminating, and the recursion vanished silently.
+     ;;
+     ;; The session TYPE side does have recursion (`sess-mu` / `sess-svar`,
+     ;; sessions.rkt:39-40); the process side is the missing half, and building
+     ;; it is S4 work. Until then this refuses, because a loud refusal is what
+     ;; the rest of this compiler does with an unimplementable construct — the
+     ;; alternative was a process that type-checks as terminating and isn't.
+     ;;
+     ;; No WS spelling reaches here; `(proc-rec …)` is sexp-only today.
+     (prologos-error loc
+                 (format (string-append
+                          "process recursion is not implemented — `(proc-rec ~a)` has no core "
+                          "form yet, and elaborating it as `stop` would type the process as "
+                          "TERMINATING (stop requires every channel ended). Session TYPES can "
+                          "recurse (`rec`/`sess-mu`); processes cannot yet.")
+                         label))]
 
     ;; S5b: Boundary operations
     [(surf-proc-open path-surf sess-type-surf cap-sym cont-surf _loc)

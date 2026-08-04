@@ -3547,6 +3547,42 @@ this file, and it would send anyone picking up the track to rebuild what exists.
 
 ---
 
+## 🔶 Session Types — PROCESS recursion is unimplemented (filed 2026-08-04; the discard is now LOUD)
+
+**Never previously filed** — it lived as a `TODO` in `elaborator.rkt` and
+nowhere else. Found by sweeping for defects recorded only in code comments.
+
+`(proc-rec Label)` parsed correctly into `surf-proc-rec` with its label, and
+then elaboration threw the label away and emitted `(proc-stop)`, under a comment
+calling that "a sentinel that typing-sessions can handle".
+
+**It is not a sentinel.** `proc-stop`'s typing arm (`typing-sessions.rkt:129`)
+REQUIRES every channel to be ended, and actively SOLVES any remaining session
+metas to `sess-end`. So a recursive process was typed as **terminating**, and
+the recursion vanished at **zero errors** — the process type-checked against a
+protocol it does not implement.
+
+The asymmetry is the shape of the gap: session **TYPES** can recurse
+(`sess-mu` / `sess-svar`, `sessions.rkt:39-40`); **processes** cannot. Building
+the process half is S4 work and is NOT done here.
+
+**Done here**: the discard is now a loud per-command refusal naming the label
+and saying why `stop` is not an acceptable stand-in — so the next person does
+not re-apply the same "harmless sentinel" reasoning. Suite green with it (550
+files / 10658), i.e. nothing in the tree depended on the silent behaviour.
+
+**Reach**: sexp-only. No WS spelling routes to `proc-rec` today, so this was
+reachable only by writing the sexp IR form directly.
+
+**Coverage note worth keeping**: the one existing test
+(`test-process-parse-01.rkt`) asserts the PARSE — that the label survives into
+`surf-proc-rec` — and stops exactly where the defect began. Two pins added in
+`tests/test-proc-recursion-refusal.rkt`, including a control that a genuinely
+terminating process still elaborates (a refusal that also fired on `proc-stop`
+would otherwise pass).
+
+---
+
 ## Session Types — Parameterized/Indexed Sessions & Bounded Liveness
 
 ### Parameterized (Indexed) Session Types (RESEARCH)
