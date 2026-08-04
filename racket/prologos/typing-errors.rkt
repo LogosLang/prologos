@@ -1309,14 +1309,49 @@
 ;; ========================================
 ;; Is-type with error reporting
 ;; ========================================
+;; An all-keyword map LITERAL, as the elaborator builds one: an
+;; `expr-map-assoc` spine bottoming out at `expr-map-empty`
+;; (elaborator.rkt § surf-map-literal).
+;;
+;; D4.P3a item 19: `def q : {:a Int} := {:a 1}` reaches is-type with exactly
+;; this shape, and the generic "Expression is not a valid type" sends the
+;; reader to check whether `Int` is a type. The problem is the `{…}`.
+;;
+;; Keyword-only ON PURPOSE. A non-keyword literal elaborates to
+;; `expr-map-literal` (a different node) and never arrives here — every probe
+;; of that route reports from another site instead ("Type mismatch" on a def,
+;; "Could not infer type" under `fn`). An arm for it would be dead code
+;; asserting a reachability nothing demonstrates.
+(define (keyword-row-literal? e)
+  (let loop ([e e])
+    (cond
+      [(expr-map-assoc? e)
+       (and (expr-keyword? (expr-map-assoc-k e)) (loop (expr-map-assoc-m e)))]
+      [(expr-map-empty? e) #t]
+      [else #f])))
+
 ;; Returns (or/c #t prologos-error?)
 ;; Sprint 9: optional `names` for de Bruijn recovery in error messages
 (define (is-type/err ctx e [loc srcloc-unknown] [names '()])
   (if (is-type ctx e)
       #t
-      (not-a-type-error loc
-                         "Expression is not a valid type"
-                         (pp-expr e names))))
+      (not-a-type-error
+       loc
+       ;; Deliberately does NOT promise a spelling. Whether `{…}` can mean a
+       ;; row in type position is an open owner ruling — `{}` already means the
+       ;; implicit-binder group there (`{A B : Type}`), so the two would
+       ;; collide. Until that is settled the honest message names the collision
+       ;; and points at what DOES work today, which is inference: `def q :=
+       ;; {:a 1}` infers `{:a Int}` exactly.
+       (if (keyword-row-literal? e)
+           (string-append
+            "a row type has no writable spelling yet — in type position `{…}` is "
+            "the implicit-binder group (`{A B : Type}`), so this reads as a map "
+            "literal, not a row.\n"
+            "  Drop the annotation and let inference mint the row: `def q := {:a 1}` "
+            "gives `q : {:a Int}`.")
+           "Expression is not a valid type")
+       (pp-expr e names))))
 
 ;; ========================================
 ;; QTT multiplicity check with error reporting

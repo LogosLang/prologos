@@ -5745,7 +5745,45 @@ is honest per its inputs (Horn D trusts sourced-'present); the fix belongs at
 the dyn-assoc typing rule. The reduction-layer panic stays unreachable
 (verified: the dissoc route refuses at typing).
 
-### 19. Row-literal type annotations have NO working spelling — the dropped "annotate" remedy  ·  SAME GAP as § Rel T1 POL.9b item 2 (cross-linked 2026-08-03)
+### 19. 🔶 Row-literal type annotations have NO working spelling — the REFUSAL is now guided (2026-08-04); the spelling still needs the owner ruling  ·  SAME GAP as § Rel T1 POL.9b item 2
+
+Re-probed 2026-08-04: all three spellings still fail, exactly as filed
+(`def q : {:a Int} := {:a 1}`, `[fn [m : {:host String}] m.host]`, and the
+angle-bracket `<{:a Int}>` the entry does not mention).
+
+**What changed**: the `def` route no longer says "Expression is not a valid
+type" — a message that sends the reader to check whether `Int` is a type when
+the problem is the `{…}`. It now says:
+
+> a row type has no writable spelling yet — in type position `{…}` is the
+> implicit-binder group (`{A B : Type}`), so this reads as a map literal, not a
+> row.
+>   Drop the annotation and let inference mint the row: `def q := {:a 1}` gives
+>   `q : {:a Int}`.
+
+This deliberately does NOT promise a spelling — that is the open ruling. It
+names the actual collision and gives the remedy that works today. A test runs
+the remedy, so if inference ever stops minting `{:a Int}` the message cannot
+keep advertising it.
+
+**Still open, and the reason this is 🔶 not ✅**:
+
+1. **The ruling itself.** `{…}` in type position already means the implicit
+   binder group; a row spelling has to either disambiguate or pick another
+   delimiter. Unchanged.
+2. **The `fn`-parameter route reports from a DIFFERENT site.**
+   `[fn [m : {:host String}] m.host]` gives "Could not infer type", not the
+   guided message — it never reaches `is-type/err`. Same for a non-keyword
+   literal, which elaborates to `expr-map-literal` and reports "Type mismatch"
+   on a def. So one of the entry's two original spellings is still generic.
+   Fixing that means finding the annotation-checking site on the `fn` path;
+   not attempted here.
+
+The Q_T2 remedy list still omits "annotate" from the select refusal messages,
+and should keep omitting it until a spelling exists (owner RATIFIED 2026-07-30,
+"annotate comes back when it's real").
+
+**Original filing:**
 
 `def q : {:a Int} := {:a 1}` → "Expression is not a valid type";
 `[fn [m : {:host String}] m.host]` fails select-free; zero in-tree uses. The

@@ -731,3 +731,40 @@
   (check-true (string-contains? msg "prologos::u3t::bad")
               (format "the module name is missing: ~a" msg))
   (delete-directory/files lib #:must-exist? #f))
+
+;; ========================================
+;; D4.P3a item 19 — the row-annotation refusal names the `{…}` collision
+;; ========================================
+;;
+;; `def q : {:a Int} := {:a 1}` used to report the bare "Expression is not a
+;; valid type", which sends the reader to check whether `Int` is a type. The
+;; problem is the `{…}`: in type position that is the implicit-binder group
+;; (`{A B : Type}`), so a row annotation has no writable spelling.
+;;
+;; The message deliberately does NOT promise one — whether `{…}` can also mean
+;; a row there is an open owner ruling. It points at what works TODAY, which is
+;; inference, and the second test pins that the advice is true by running it.
+
+(test-case "item19/a row annotation names the binder-group collision, not `Int`"
+  (define rs (run-ns "(def q : {:a Int} := {:a 1})"))
+  (define msg (format "~a" (last rs)))
+  (check-true (string-contains? msg "row type has no writable spelling")
+              (format "generic not-a-type message survived: ~a" msg))
+  (check-true (string-contains? msg "{A B : Type}")
+              (format "the message must name the colliding form: ~a" msg))
+  ;; the remedy must be the one that works, not "annotate it properly"
+  (check-true (string-contains? msg "inference") (format "no working remedy: ~a" msg)))
+
+(test-case "item19/the remedy the message gives actually works"
+  ;; If this ever fails, the message is giving advice the compiler no longer
+  ;; honours — worse than the generic text it replaced.
+  (define rs (run-ns "(def q := {:a 1})"))
+  (check-regexp-match #rx"q : \\{:a Int\\}" (format "~a" (last rs))))
+
+(test-case "item19/a genuinely non-row bad type KEEPS the generic message"
+  ;; The guided arm must not become the only thing is-type/err can say. A
+  ;; keyword-row literal is the ONLY shape that reaches it.
+  (define rs (run-ns "(def q : 42 := 1)"))
+  (define msg (format "~a" (last rs)))
+  (check-false (string-contains? msg "row type has no writable spelling")
+               (format "the row arm swallowed a non-row input: ~a" msg)))
