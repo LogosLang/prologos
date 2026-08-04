@@ -925,6 +925,42 @@
   (check-true (string? r) (result-msg r))
   (check-true (string-contains? r "42")))
 
+(test-case "POL.9c/Q_B: the FOURTH direction — defr over a prior multi-arity defn — IS gated"
+  ;; DEFERRED.md said this direction was deliberately UNGATED and routed the
+  ;; fix to PM 12/12B, on the premise that "multi-arity base names live only in
+  ;; the ambient current-multi-defn-registry, which carries no module
+  ;; provenance". Probed 2026-08-04: false at HEAD. A multi-arity `defn` ALSO
+  ;; takes a local global-env binding, so `global-env-lookup-local` sees it and
+  ;; the existing Q_B gate covers this direction like the other three.
+  ;;
+  ;; Pinned in BOTH spellings, because the entry's premise was specifically
+  ;; about the registry rather than the spec: with a `spec` and without one.
+  (define with-spec
+    (result-msg (run-ns-ws-last
+                 (string-append "ns qb8\n"
+                                "spec zzz Nat -> Bool\n"
+                                "defn zzz\n  | zero -> true\n  | suc _ -> false\n"
+                                "defr zzz [?x]\n  || 1\n"))))
+  (check-true (string-contains? with-spec "already defined as a function/value") with-spec)
+  (define no-spec
+    (result-msg (run-ns-ws-last
+                 (string-append "ns qb9\n"
+                                "defn www\n  | zero -> true\n  | suc _ -> false\n"
+                                "defr www [?x]\n  || 1\n"))))
+  (check-true (string-contains? no-spec "already defined as a function/value") no-spec))
+
+(test-case "POL.9c/Q_B CANARY: defr over an IMPORTED multi-defn stays legal"
+  ;; The entry's stated reason for leaving the direction ungated was that
+  ;; gating "would fire on prelude multi-defns (`nth` and friends)". It does
+  ;; not — the gate is local-only, and `nth` arrives through the cascade. This
+  ;; is the canary for that specific fear, alongside the `xor` one above.
+  (define r (run-ns-ws-last
+             (string-append "ns qb10\n"
+                            "defr nth [?a ?b]\n  || 1 2 | 3 4\n"
+                            "solve (nth x y)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "{:x 1, :y 2}") r))
+
 (test-case "POL.9c/Q_B: multi-arity defn BASE name gated against a prior defr"
   (define m (result-msg (run-ns-ws-last
                          (string-append "ns qb7\n"

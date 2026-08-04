@@ -4590,7 +4590,43 @@ typing-core's solve row-type path.
 
 ---
 
-## Rel T1 POL.9c — the `defr`-against-prior-multi-arity-`defn` direction is UNGATED (captured 2026-07-25, by design; unblocks at **PM 12/12B**)
+## ✅ STALE — Rel T1 POL.9c: the `defr`-against-prior-multi-arity-`defn` direction is GATED after all (re-probed 2026-08-04)
+
+**The premise is false at HEAD, so the PM 12/12B routing was unnecessary.**
+
+The entry held that this fourth direction could not be gated because
+"multi-arity base names live only in the ambient `current-multi-defn-registry`,
+which carries no module provenance". Probed both spellings:
+
+```
+defn zzz | zero -> true | suc _ -> false     (with a spec, and without)
+defr zzz [?x] || 1
+  ⇒ defr zzz: zzz is already defined as a function/value in this module …
+```
+
+A multi-arity `defn` ALSO takes a local global-env binding, so
+`global-env-lookup-local` — which is how the other three directions enforce
+local-only — sees it, and `check-crosskind-collision` covers this direction
+exactly like them.
+
+And the entry's stated FEAR does not materialise: it worried that gating "would
+fire on prelude multi-defns (`nth` and friends)" and break refer-import
+shadowing. `defr nth` over the prelude's multi-defn runs clean at 0 errors and
+answers the query — imports arrive through the cascade, not the module's own
+binding, so the local-only gate correctly ignores them.
+
+**Not bisected** — this may have been true when filed (2026-07-25) and closed by
+later work, or the premise may have been wrong from the start. Recorded as
+measured, without attributing a fix.
+
+Two pins added to `tests/test-rel-t1-pol.rkt`: the gate in both `defn`
+spellings, and an imported-multi-defn canary for the fear.
+
+`current-multi-defn-registry` IS still a bare `make-parameter` holding a hasheq
+(multi-dispatch.rkt:24) — a textbook on-network.md red flag, and still worth PM
+12's attention. It just is not what blocks this gate.
+
+### (original) the direction is UNGATED — routing to PM 12/12B
 
 > Routed 2026-07-25: the blocker is the multi-defn registry's lack of module
 > provenance, which PM Track 12 removes by bringing it on-network — see
