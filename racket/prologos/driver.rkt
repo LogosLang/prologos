@@ -3159,11 +3159,25 @@
       (define delta   (cadddr row))
       (define folded
         (for/fold ([reg (param)]) ([(k v) (in-hash delta)])
-          ;; The non-hash arm mirrors the pre-#78 behavior at the three
-          ;; equal?-keyed sites. Note it DISCARDS any prior non-hash content
-          ;; rather than preserving it — it is a fallback that never fires
-          ;; today, not a hardening measure.
-          (if (hash? reg) (hash-set reg k v) (hash k v))))
+          ;; The non-hash arm mirrored the pre-#78 behavior at the three
+          ;; equal?-keyed sites, and DISCARDED any prior non-hash content
+          ;; rather than preserving it — described in this comment as "a
+          ;; fallback that never fires today, not a hardening measure".
+          ;;
+          ;; 2026-08-04: made that an ASSERTION instead of a silent discard. A
+          ;; claim that a branch never fires, with nothing checking it, is the
+          ;; shape that turns into a silent wrong answer the day it does — and
+          ;; this particular branch throws away a whole registry. If it never
+          ;; fires, this changes nothing (suite + corpus confirm); if it ever
+          ;; does, the loss is loud at the site instead of invisible downstream.
+          (unless (hash? reg)
+            (error 'macros-registry-fold
+                   (string-append
+                    "registry ~a holds a non-hash value ~e — the pre-#78 fallback "
+                    "would have DISCARDED it. This branch was documented as "
+                    "never firing; it fired.")
+                   param reg))
+          (hash-set reg k v)))
       (list param cell-id delta folded)))
   ;; Phase 2 — commit.
   (for ([p (in-list pending)])
