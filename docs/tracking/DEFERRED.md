@@ -2851,8 +2851,39 @@ happened with the nested-constructor-pattern entry above.
 
 ### ✅ RESOLVED — `=` with prelude constructors in defr body
 `(= o [some 1])` inside a `defr` clause works. (Minor residual: the row TYPE
-shows `:o _` while the value is right — the same static/runtime row-type
-question the solver-collection fix addressed for maps, one notch further out.)
+shows `:o _` while the value is right.)
+
+**The residual is DIAGNOSED 2026-08-03**, and it is not the "static/runtime
+row-type question" this line originally guessed. Measured by instrumenting
+`observe-row-field-types` (typing-core.rkt), which is the display-time
+refinement that fills a hole from what the rows actually contain:
+
+```
+solve (lit  ?o)   ;; = o 1          →  [PVec {:o Int}]     ✓
+solve (strv ?o)   ;; = o "s"        →  [PVec {:o String}]  ✓
+solve (optv ?o)   ;; = o [some 1]   →  [PVec {:o _}]       ✗
+```
+
+The observation IS reached for the constructor case and then discarded, because
+`(infer ctx-empty …)` returns `expr-error` on the stored value. The stored value
+is the reason:
+
+```
+val = (expr-app (expr-fvar 'some) (expr-int 1))
+```
+
+— a BARE `some` with **no implicit type argument**. A normally-elaborated
+`[some 1]` is `(prologos::data::option::some Int 1)`. So the solver keeps the
+raw clause-body term rather than an elaborated expr, and nothing downstream can
+type it. That also explains the display: `[some 1]` here vs
+`[prologos::data::option::some Int 1]` everywhere else.
+
+**So the fix is in the relational engine** — elaborate constructor terms in
+`defr` clause bodies — not in the display layer. A display-layer patch is
+possible (resolve the bare head through the ctor registry and derive the type
+from `ctor-meta`, the way `field-witness.rkt`'s `value->ctor-type-name` does)
+and would only ever replace a hole, but it would be papering over an
+unelaborated term rather than fixing it.
 
 ### ✅ NEVER A DEFECT — Parameterized types in data constructor arguments
 The entry's example, `data Box A := box [List A]`, is not Prologos syntax — a
