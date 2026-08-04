@@ -3467,6 +3467,46 @@ this file, and it would send anyone picking up the track to rebuild what exists.
 | Per-domain factory callbacks (3) | 4C addendum S2.d-followup audit (2026-04-25) | ⬜ flagged | `current-prop-fresh-mult-cell` (driver.rkt:2600), `current-prop-fresh-level-cell` (similar), `current-prop-fresh-sess-cell` (similar). Each is a Racket parameter holding a fresh-cell allocation closure. Used in fresh-X-meta legacy fallback path for pre-init test contexts. | Set at module-load with default `#f`; populated by driver.rkt during init. Read in fresh-X-meta legacy path (when universe is not initialized — bare-metavar-store tests not loading elaborator-network.rkt). | **PM Track 12 retires**: when test fixture infrastructure goes on-network, the pre-init fallback paths can collapse entirely — tests would call `init-meta-universes!` at setup. S2.e reviews whether these fallbacks remain needed; if not, retires before PM 12. Per D.3 §7.5.14.1 + §7.5.14.3. |
 | `current-prop-mult-cell-write` write callback (1) | 4C addendum S2.c-iv adversarial VAG (2026-04-24) | ⬜ flagged | Racket parameter holding mult-cell write closure (driver.rkt:2605 → `elab-mult-cell-write`). Used in solve-mult-meta! legacy path. Note: level/session don't have analogous write callbacks — they use direct `elab-cell-write` in their legacy paths. Asymmetry is mult-specific (legacy artifact). | Set at module-load; read in solve-mult-meta! legacy fallback path only. Post-S2.c-iv mult universe-active, legacy path dead → callback becomes unread. | **PM Track 12 retires** with mult store/champ-box. S2.e could retire earlier (no PM 12 dependency for the callback itself; only the data store it writes to). Per D.3 §7.5.14.3. |
 
+### 🐛 the CELL lint has rusted too — same class, and it blocks wiring (found 2026-08-03)
+
+Checked immediately after wiring the parameter lint, on the theory that a
+sibling guard nobody runs would have drifted the same way. It has.
+`racket tools/lint-cells.rkt --strict` exits **1**:
+
+```
+Cell-creation site classification (110 production sites, 146 files scanned)
+  registered   : 77
+  unregistered : 16 sites, 10 unique merge fns
+    baseline-accepted : 5
+    NEW (not in baseline) : 11 sites, 6 unique
+```
+
+The eleven, none of them from this session:
+
+| merge fn | sites |
+|---|---|
+| `type-unify-or-top` | `cap-type-bridge.rkt:197`, `elaborator-network.rkt:374/377/380`, `session-type-bridge.rkt:121/131` |
+| `type-merge` / `mult-merge` / `level-merge` / `session-merge` | `meta-universe.rkt:187/189/191/193` |
+| `attr-map-merge` | `data/probes/2026-05-24-…-empirical-probe.rkt:74` |
+
+The baseline was last touched **2026-04-20** — three and a half months of
+accumulation with nothing checking, which is exactly the parameter lint's story
+one file over.
+
+**Why this one is NOT wired here.** The parameter lint could be closed because
+its two unreviewed flags turned out to be accepted state, so baselining them was
+a decision rather than a shrug. These eleven are different: the right resolution
+for a merge function is option 1 — `register-merge-fn!/lattice` — and that is a
+DESIGN act per function (each needs a domain plus algebraic-property
+declarations, per `propagator-design.md` § Tier 2 SRE registration). Ten of the
+eleven are the per-domain universe merges and the type-unify bridge, i.e. load-
+bearing SRE surface belonging to PPN 4C, not something to classify from the
+outside.
+
+**So the order is: resolve the eleven, then wire the gate** — the same third-gate
+seat in `tools/git-hooks/pre-commit` the parameter lint now occupies. Until
+then this is a guard that reports honestly and that nothing runs.
+
 ### 🐛 the parameter-lint guard is STILL UNWIRED, and has rusted again (2026-08-03)
 
 The 2026-06-01 note below says the guard "rusted — it isn't wired into
