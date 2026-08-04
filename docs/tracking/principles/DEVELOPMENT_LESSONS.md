@@ -1,7 +1,8 @@
 > **⚠ GENERATED ARTIFACT — STALE. Read `DEVELOPMENT_LESSONS.org` instead.**
 > `DEVELOPMENT_LESSONS.org` is the canonical source (`workflow.md`: "ALL edits MUST go to the
-> `.org`"). This export was last regenerated 2026-02-25; the source has changed as
-> recently as 2026-07-28, so claims here may already have been retracted there.
+> `.org`"). Claims here may already have been retracted at the source.
+> For how far behind this export is RIGHT NOW, run `tools/check-doc-twins.sh`
+> — it reads both files' last commit times, so it cannot itself go stale.
 > Regenerating needs org-export (emacs or pandoc).
 
 - [Why We Track and Document Efforts](#org2828266)

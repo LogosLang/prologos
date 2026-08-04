@@ -4640,11 +4640,24 @@ have an export; staleness judged by LAST COMMIT TIME, not mtime — a fresh clon
 gives every file the same mtime, so mtime reports nothing on CI and everything
 locally).
 
-**The stated harm is closed.** Each stale export now opens with a banner naming
-its `.org`, the two dates, and the fact that its claims may already have been
-retracted at the source. Someone who greps the principles directory and lands
-on the `.md` is told, at the top of the file, that they are reading a stale
-generated artifact.
+**The stated harm is closed.** Each stale export opens with a banner naming its
+`.org` and the fact that its claims may already have been retracted at the
+source. Someone who greps the principles directory and lands on the `.md` is
+told, at the top of the file, that they are reading a stale generated artifact.
+
+⚠ **The banners USED TO CARRY THE TWO DATES, and that was a bug in the fix —
+demonstrated within hours (2026-08-03).** A hardcoded "last regenerated X; source
+changed as recently as Y" goes stale the moment the source moves again. It did:
+this session edited `grammar.org` for the POL syntax cluster, and
+`grammar.md`'s banner still claimed the source had last changed 2026-07-02. A
+staleness warning that is itself stale is worse than none — it invites the
+reader to trust a number.
+
+All 11 banners are now DATE-FREE and point at `tools/check-doc-twins.sh`, which
+computes the answer live from both files' last commit times and therefore cannot
+rot. The count the entry quotes has also moved: **1 of 70 exports is behind
+today, not 11** — and that one is `grammar.md`, stale because of this session's
+own `.org` edit.
 
 **Still open, and deliberately not decided here:**
 

@@ -1,7 +1,8 @@
 > **⚠ GENERATED ARTIFACT — STALE. Read `LANGUAGE_VISION.org` instead.**
 > `LANGUAGE_VISION.org` is the canonical source (`workflow.md`: "ALL edits MUST go to the
-> `.org`"). This export was last regenerated 2026-03-02; the source has changed as
-> recently as 2026-07-25, so claims here may already have been retracted there.
+> `.org`"). Claims here may already have been retracted at the source.
+> For how far behind this export is RIGHT NOW, run `tools/check-doc-twins.sh`
+> — it reads both files' last commit times, so it cannot itself go stale.
 > Regenerating needs org-export (emacs or pandoc).
 
 - [The Elevator Pitch](#orgfd17594)
