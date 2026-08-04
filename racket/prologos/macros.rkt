@@ -4203,6 +4203,26 @@
          (define merged-val
            (cond
              [(and (= (length val) 1) (string? (car val))) (car val)]
+             ;; ⚠ A NESTED `$brace-params` VALUE MUST BE PARSED, not stored raw
+             ;; (2026-08-03). The sexp path does this (see the `:mixfix` arm in
+             ;; `parse-spec-metadata`); this WS path did not, so
+             ;; `spec f … :mixfix {:symbol xxor :group logical-and}` stored the
+             ;; raw `($brace-params :symbol xxor :group logical-and)` list where
+             ;; the consumer expects a hash.
+             ;;
+             ;; And the mismatch was SILENT: `maybe-register-mixfix-operator`
+             ;; guards on `(hash? mixfix-meta)`, so a non-hash simply did
+             ;; nothing — the spec defined cleanly, no error, and the operator
+             ;; was never registered. `.( true xxor false )` then failed with
+             ;; "Unexpected token after expression: xxor", pointing at the USE
+             ;; site while the declaration was the thing that silently didn't
+             ;; take. Sexp-green, WS-broken — the class `prologos-syntax.md`
+             ;; names, and mixfix declaration is a WS-only feature in practice.
+             [(and (= (length val) 1) (pair? (car val))
+                   (let ([h (caar val)])
+                     (or (eq? h '$brace-params)
+                         (and (syntax? h) (eq? (syntax-e h) '$brace-params)))))
+              (parse-spec-metadata (car val))]
              [(= (length val) 1) (car val)]
              [else val]))
          (loop (cdr remaining) kept (hash-set meta key merged-val))]

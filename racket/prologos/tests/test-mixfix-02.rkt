@@ -427,3 +427,73 @@
              "[j-id 3N]\n")))
   (check-equal? (length results) 3 (format "commands swallowed: ~a" results))
   (check-equal? (last results) "3N : Nat"))
+
+;; ============================================================================
+;; WS-mode `:mixfix` metadata (2026-08-03).
+;;
+;; The unit tests above drive `process-spec` with the SEXP datum directly, and
+;; passed throughout while the WS surface — the one users write — silently did
+;; nothing. `spec f … :mixfix {:symbol xxor :group logical-and}` stored the raw
+;; `($brace-params :symbol xxor :group logical-and)` list where
+;; `maybe-register-mixfix-operator` expects a hash; its `(hash? mixfix-meta)`
+;; guard then made the mismatch a no-op. The spec defined cleanly, no error, and
+;; the operator was never registered — so `.( true xxor false )` failed with
+;; "Unexpected token after expression: xxor", pointing at the USE site.
+;;
+;; Level 3 (process-file) deliberately, since that is the level the gap lived
+;; at: this file's existing L1 coverage could not see it.
+;; ============================================================================
+
+(require racket/file (only-in "../driver.rkt" process-file))
+
+(define (ws-file-results src)
+  (define tmp (make-temporary-file "prologos-mixws-~a.prologos"))
+  (call-with-output-file tmp #:exists 'replace (lambda (o) (display src o)))
+  (define rs (parameterize ([current-lib-paths (list prelude-lib-dir)]
+                            [current-module-registry prelude-module-registry])
+               (install-module-loader!)
+               (process-file (path->string tmp))))
+  (delete-file tmp)
+  (map (lambda (r) (format "~a" r)) rs))
+
+(test-case "mixfix/WS `:mixfix` metadata registers the operator"
+  (define rs (ws-file-results
+              (string-append "ns mixws-a\n\n"
+                             "spec f5 Bool Bool -> Bool\n"
+                             "  :mixfix {:symbol xxor :group logical-and}\n"
+                             "defn f5 [a b] a\n\n"
+                             "def r := .( true xxor false )\n"
+                             "r\n")))
+  (check-false (ormap (lambda (x) (regexp-match? #rx"Unexpected token" x)) rs)
+               (format "the operator was not registered: ~v" rs))
+  (check-true (ormap (lambda (x) (regexp-match? #rx"^true : Bool" x)) rs)
+              (format "~v" rs)))
+
+(test-case "mixfix/a UNICODE operator symbol works"
+  ;; DEFERRED.md § Syntax — Mixfix, Phase 4 lists "Unicode operator symbols" as
+  ;; deferred. They work — the blocker was the WS registration above, not the
+  ;; symbol. Pinned so the entry's correction stays true.
+  (define rs (ws-file-results
+              (string-append "ns mixws-b\n\n"
+                             "spec f7 Bool Bool -> Bool\n"
+                             "  :mixfix {:symbol ⊕ :group logical-and}\n"
+                             "defn f7 [a b] a\n\n"
+                             "def r := .( true ⊕ false )\n"
+                             "r\n")))
+  (check-false (ormap (lambda (x) (regexp-match? #rx"Unexpected token" x)) rs)
+               (format "~v" rs))
+  (check-true (ormap (lambda (x) (regexp-match? #rx"^true : Bool" x)) rs)
+              (format "~v" rs)))
+
+(test-case "mixfix/spec metadata must be on a CONTINUATION line (the bound)"
+  ;; Same-line metadata fails, and not gracefully — it reports "Type mismatch",
+  ;; which says nothing about metadata. True for `:doc` as well as `:mixfix`, so
+  ;; it is the inline METADATA form that is unsupported, not mixfix. Pinned as a
+  ;; known bound rather than left to be rediscovered; if it is ever supported,
+  ;; this is the assertion that flips.
+  (define rs (ws-file-results
+              (string-append "ns mixws-c\n\n"
+                             "spec f8 Bool Bool -> Bool :mixfix {:symbol yyor :group logical-and}\n"
+                             "defn f8 [a b] a\n")))
+  (check-true (ormap (lambda (x) (regexp-match? #rx"[Tt]ype mismatch" x)) rs)
+              (format "~v" rs)))

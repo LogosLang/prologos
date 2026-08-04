@@ -2657,9 +2657,34 @@ checker, not the syntax.
 ### Extended Pattern Matching in `.{...}`
 - E.g., `.{n + 1}` → `suc n` (Agda view patterns)
 
-### Phase 4: Advanced Mixfix
-- Unicode operator symbols, postfix operators, full mixfix patterns
+### 🔶 Phase 4: Advanced Mixfix — UNICODE SYMBOLS WORK (re-probed 2026-08-03)
+- ~~Unicode operator symbols~~ — **they work**, and the thing that made them
+  look unsupported was a separate WS-surface bug, now fixed (below).
+  `spec f Bool Bool -> Bool` / `:mixfix {:symbol ⊕ :group logical-and}` then
+  `.( true ⊕ false )` evaluates. Pinned in `tests/test-mixfix-02.rkt`.
+- Postfix operators, full mixfix patterns — still open, not probed.
 - Source: `docs/tracking/2026-02-23_MIXFIX_SYNTAX_DESIGN.org`
+
+⚠ **The reason this looked deferred: WS `:mixfix` metadata silently did
+nothing.** `spec f … :mixfix {:symbol xxor :group logical-and}` stored the raw
+`($brace-params :symbol xxor :group logical-and)` list where
+`maybe-register-mixfix-operator` expects a hash — the sexp path parses it (the
+`:mixfix` arm of `parse-spec-metadata`), the WS path did not. The consumer's
+`(hash? mixfix-meta)` guard then made the mismatch a NO-OP: the spec defined
+cleanly, no error, and the operator was never registered. `.( true xxor false )`
+failed with *"Unexpected token after expression: xxor"* — pointing at the USE
+site while the declaration was what silently failed.
+
+`tests/test-mixfix-02.rkt` had unit coverage that passed throughout, because it
+drives `process-spec` with the SEXP datum directly. Mixfix declaration is a
+WS-only feature in practice, so the tested surface and the used surface were
+disjoint. Now covered at Level 3.
+
+⚠ **Known bound, newly pinned: spec metadata must be on a CONTINUATION LINE.**
+Same-line `spec f … :doc "x"` or `… :mixfix {…}` fails, and reports *"Type
+mismatch"* — a message that says nothing about metadata. True for `:doc` too, so
+it is the inline metadata FORM that is unsupported rather than anything about
+mixfix.
 
 ---
 
