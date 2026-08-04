@@ -1188,6 +1188,7 @@
        (not (eq? x '$let-error))        ; LET P1 syntax-failure marker (parser converts to per-command parse error)
        (not (eq? x '$mixfix-error))     ; mixfix syntax-failure marker (same channel as $let-error)
        (not (eq? x '$reader-error))     ; reader-level rejection marker (same channel; today: removed ~N literals)
+       (not (eq? x '$preparse-error))   ; preparse FORM-processing failure (same channel; contains a whole-file abort)
        (not (eq? x '$let-block))        ; LET P3 aligned-block sentinel (reader-validated; expand-let consumes)
        (not (eq? x '$goal-rhs))         ; SolveCarrier P2: let binding-RHS paren marker (parser consumes)
        (not (eq? x '$let-noop-body))    ; top-level let: bodyless placeholder (let-bindings->nested-fn consumes)
@@ -3185,11 +3186,65 @@
       (when (and (list? d) (>= (length d) 2) (symbol? (cadr d)))
         (hash-set! generated-decl-names (cadr d) #t))))
 
+  ;; ---- per-FORM failure containment (2026-08-03) --------------------------
+  ;;
+  ;; Every `(error 'functor …)` / `(error 'trait …)` / `(error 'spec …)` in the
+  ;; ~150 raise sites below used to take the WHOLE FILE down: preparse runs
+  ;; before any command, so an escaping raise left no expansion to run anything
+  ;; from. The user saw a raw Racket message plus a `context...:` dump, exit 1,
+  ;; and NO numbered results at all — not even for the commands that had
+  ;; already succeeded. The loudest possible failure presented as the quietest,
+  ;; which is the same class already fixed for the reader (`$reader-error`),
+  ;; `let` (`$let-error`) and `.( )` mixfix (`$mixfix-error`).
+  ;;
+  ;; This is the containment for the rest of them, and it reuses that channel
+  ;; rather than adding a fourth: the failing form is replaced by a
+  ;; `($preparse-error msg)` marker, which `parser.rkt` turns into an ordinary
+  ;; per-command `parse-error` VALUE. Commands before AND after the bad form
+  ;; still run.
+  ;;
+  ;; ⚠ THE GUARD IS THE WHOLE DESIGN. It converts ONLY an exception whose
+  ;; message begins `"<this form's head>: "` — which is exactly the shape
+  ;; Racket's `(error 'functor "…")` produces for the form currently being
+  ;; processed. Anything else RE-RAISES: a genuine internal bug inside
+  ;; `process-trait` must keep surfacing as itself rather than being reported
+  ;; to the user as their syntax error. Blanket `exn:fail?` catching here would
+  ;; be scaffolding that hides truth, and this file already carries a comment
+  ;; (§18.21.19 Q2) about a Pass-0 `with-handlers` doing precisely that.
+  ;; ⚠ CONTEXT-ESTABLISHING FORMS ARE EXCLUDED, and this is not caution — it was
+  ;; measured. `ns` / `imports` / `exports` / `foreign` set up the environment
+  ;; every later form depends on, so a failure there genuinely invalidates the
+  ;; rest of the file. Containing them lets it proceed and produce a CASCADE
+  ;; that buries the real diagnostic: with `imports` contained, a file whose
+  ;; import fails for "no namespace is in scope" carried on and reported
+  ;; "Unbound variable: module" instead — a named, deliberately-built message
+  ;; replaced by a downstream symptom (`tests/test-import-no-ns.rkt` caught it).
+  ;;
+  ;; A malformed `functor` or `trait` does not have that property: the forms
+  ;; around it are independent of it, which is exactly why containing THOSE is
+  ;; an improvement and containing these is not.
+  (define uncontained-heads '(ns imports require exports provide foreign))
+
+  (define (contain-form-error eff-head thunk on-error)
+    (with-handlers ([(lambda (e)
+                       (and (exn:fail? e)
+                            (symbol? eff-head)
+                            (not (memq eff-head uncontained-heads))
+                            (string-prefix? (exn-message e)
+                                            (string-append (symbol->string eff-head) ": "))))
+                     (lambda (e) (on-error (exn-message e)))])
+      (thunk)))
+
   (define result
     (for/fold ([acc '()])
               ([stx (in-list stxs)])
       (define datum (syntax->datum stx))
       (define head (and (pair? datum) (car datum)))
+      (define eff-head-for-containment
+        (or (and head (private-form-base head)) head))
+      (contain-form-error
+       eff-head-for-containment
+       (lambda ()
       (cond
         ;; ns — set namespace context and consume
         [(and (pair? datum) (eq? head 'ns))
@@ -3613,7 +3668,11 @@
              ;; onto the rebuilt form, so a top-level paren group keeps its
              ;; 'prologos-paren-origin mark even when a preparse rewrite
              ;; (e.g. dot-access) fires inside it.
-             (cons (datum->syntax #f expanded stx stx) acc))])))
+             (cons (datum->syntax #f expanded stx stx) acc))]))
+       ;; the containment handler: replace the failing form with the marker the
+       ;; parser already knows how to turn into a per-command error
+       (lambda (msg)
+         (cons (datum->syntax #f (list '$preparse-error msg) stx) acc)))))
   ;; ============================================================
   ;; Phase 5b: Hoist data/trait-generated defs before user forms
   ;; ============================================================

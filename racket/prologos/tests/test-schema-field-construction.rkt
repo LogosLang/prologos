@@ -125,8 +125,12 @@ def wf : WithFn := {:name \"a\" :cb idi}\n
   ;; the pre-existing missing-type / bad-keyword raises in parse-schema-fields),
   ;; not a returned prologos-error — honest refusal; richer field types are
   ;; F-carrier / walker-era work.
-  (check-exn
+  (check-regexp-match
    #rx"field type shape"
-   (lambda ()
+    ;; 2026-08-03: a preparse FORM failure is a per-command error VALUE now
+    ;; (macros.rkt § per-FORM failure containment), not an escaping raise.
+    ;; Converting also TIGHTENS this: bare `exn:fail?` was satisfied by any
+    ;; failure at all; it now has to be this one.
+   (format "~a"
      (run-file-string "ns fc7\n
 schema BadShape\n  :p <Int * String>\n"))))

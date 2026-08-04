@@ -3102,3 +3102,56 @@
   (check-regexp-match #rx":active[?] Bool" r)
   (check-false (regexp-match? #rx":[?]active" r)
                "a present field must carry no presence marker"))
+
+
+;; ============================================================================
+;; PREPARSE FORM-failure containment (2026-08-03).
+;;
+;; Every `(error 'functor …)` / `(error 'trait …)` / `(error 'spec …)` in
+;; macros.rkt — ~150 sites — used to take the WHOLE FILE down. Preparse runs
+;; before any command, so an escaping raise left no expansion to run anything
+;; from: a raw Racket message plus a `context...:` dump, exit 1, and NO numbered
+;; results at all, not even for commands that had already succeeded.
+;;
+;; Same class already fixed for the reader (`$reader-error`), `let`
+;; (`$let-error`) and `.( )` mixfix (`$mixfix-error`); this reuses that channel
+;; rather than adding a fourth.
+;; ============================================================================
+
+(test-case "preparse containment: a bad declaration does not take the file down"
+  (define rs (run-ws-pre-raw
+              (string-append "def before := 1\n"
+                             "functor Broken := nope\n"
+                             "def after := 2\n"
+                             "after\n")))
+  ;; the malformed form is ONE counted error…
+  (check-true (ormap prologos-error? rs) "the bad declaration must be reported")
+  ;; …and the commands on BOTH sides of it still ran, which is the whole point
+  (check-true (ormap (lambda (r) (regexp-match? #rx"before" (format "~a" r))) rs)
+              (format "the command BEFORE it was lost: ~v" rs))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"^2 : Int" (format "~a" r))) rs)
+              (format "the command AFTER it was lost: ~v" rs)))
+
+(test-case "preparse containment: TWO bad declarations are two errors, not one abort"
+  (define rs (run-ws-pre-raw
+              (string-append "def a := 1\n"
+                             "functor B1 := nope\n"
+                             "trait B2 X\n  m : X\n"
+                             "def z := 3\n"
+                             "z\n")))
+  (check-equal? (length (filter prologos-error? rs)) 2 (format "~v" rs))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"^3 : Int" (format "~a" r))) rs)
+              (format "~v" rs)))
+
+(test-case "preparse containment: CONTEXT-establishing forms are NOT contained"
+  ;; `ns` / `imports` / `exports` / `foreign` set up what every later form
+  ;; depends on, so a failure there genuinely invalidates the rest. Containing
+  ;; them was tried and measured worse: with `imports` contained, a file whose
+  ;; import failed for "no namespace is in scope" carried on and reported
+  ;; "Unbound variable: module" — a named, deliberately-built diagnostic
+  ;; replaced by a downstream symptom.
+  (define raised?
+    (with-handlers ([(lambda (_) #t) (lambda (_) #t)])
+      (run-ws-pre-raw "imports prologos::nonexistent::module\ndef q := 1\n")
+      #f))
+  (check-true raised? "an imports failure must still stop the file"))

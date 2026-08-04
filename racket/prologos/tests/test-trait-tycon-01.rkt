@@ -221,8 +221,16 @@
   ;; Known issue: explicit kind annotation uses (-> Type Type) datum,
   ;; but trait registry stores (-> (Type 0) (Type 0)). These differ under equal?.
   ;; This should error with a kind mismatch (documenting the known limitation).
-  (check-exn exn:fail?
-    (lambda ()
-      (run-last
+  (check-regexp-match
+   #rx"spec"
+    ;; 2026-08-03: a preparse FORM failure is a per-command error VALUE now
+    ;; (macros.rkt § per-FORM failure containment), not an escaping raise.
+    ;; Converting also TIGHTENS this: bare `exn:fail?` was satisfied by any
+    ;; failure at all; it now has to be this one.
+   ;; NOTE `run-last` keeps only the LAST result — which is the `defn` line
+   ;; succeeding. The spec's error is an earlier one, so the whole list is
+   ;; formatted.
+   (format "~a"
+      (run
         "(spec bad-len {C : (-> Type Type)} {A : Type} (C A) -> Nat where (Seqable C))
          (defn bad-len [xs] zero)"))))

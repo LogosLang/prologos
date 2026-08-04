@@ -1918,6 +1918,60 @@ parameter save/restore interacts with rackcheck's config. Suspect the shared
 `make-config #:tests 50` and any implicit deadline before suspecting the
 worker.
 
+## ✅ RESOLVED 2026-08-03 — a malformed DECLARATION took the whole file down (found while probing the Mixfix entry)
+
+Not previously filed as its own entry; found because a bad `functor` while
+probing § Syntax — Mixfix produced a raw Racket `context...:` dump with **zero
+numbered results**, and a bad `trait` had done the same an hour earlier.
+
+**The class**: ~150 `(error 'functor …)` / `(error 'trait …)` / `(error 'spec …)`
+sites in `macros.rkt`. Preparse finishes before any command runs, so an escaping
+raise left no expansion to run anything from — the file's already-successful
+commands vanished along with the bad one. The loudest possible failure presented
+as the quietest, which is the same class already fixed three times for other
+paths: the reader (`$reader-error`), `let` (`$let-error`), and `.( )` mixfix
+(`$mixfix-error`).
+
+**Fixed by reusing that channel, not adding a fourth.** The preparse dispatch
+contains a form's failure and emits a `($preparse-error msg)` marker in its
+place; `parser.rkt` turns it into an ordinary per-command `parse-error` value.
+Commands before AND after the bad declaration still run:
+
+```
+0: before : Int defined.
+1: ERROR: functor: functor ⊕: requires :unfolds type expression
+2: ERROR: trait: trait Bad: method must be (name : type ...), got A
+3: after : Int defined.
+4: 2 : Int
+--- 2 errors ---
+```
+
+**Two design points, each measured rather than assumed:**
+
+- **The guard converts ONLY an exception whose message begins with the form's
+  own head** (`"functor: "` for a `functor`), which is exactly what Racket's
+  `(error 'functor …)` produces. Anything else RE-RAISES, so a genuine
+  internal bug inside `process-trait` still surfaces as itself. Verified by
+  planting `(car '())` inside `process-trait`: it comes out as a `car:
+  contract violation` with its context, not as the user's syntax error. A
+  blanket `exn:fail?` catch here would be scaffolding that hides truth, and
+  this file already carries a comment about a Pass-0 `with-handlers` doing
+  exactly that.
+
+- **CONTEXT-establishing forms are excluded** — `ns`, `imports`, `exports`,
+  `foreign`. They set up what every later form depends on, so a failure there
+  genuinely invalidates the rest. This was tried both ways: with `imports`
+  contained, a file whose import failed for *"no namespace is in scope"*
+  carried on and reported *"Unbound variable: module"* instead — a named,
+  deliberately-built diagnostic replaced by a downstream symptom.
+  `tests/test-import-no-ns.rkt` caught it, which is why that test existed.
+
+**Cost: 6 test files.** Each asserted `check-exn` on a preparse form, i.e. they
+pinned the whole-file-abort contract. Converted to assert the per-command error
+VALUE with the same message — and four of them TIGHTENED in the process, since
+they were `check-exn exn:fail?`, satisfied by any failure at all, and now have
+to match the actual message.
+
 ## BUG: Union-type checking hangs the type-checker (BSP non-quiescence)
 
 - **Found**: 2026-06-29 hunting a `foray.prologos` type-check hang (DEMO Series session).

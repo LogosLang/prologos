@@ -254,11 +254,24 @@
   (check-equal? (hash-ref md ':compose #f) 'xf-compose))
 
 (test-case "process-functor: error when :unfolds missing"
-  (check-exn
-    exn:fail?
-    (lambda ()
-      (functor-for 'Bad
-        "(functor Bad ($brace-params A : (Type 0)) ($brace-params :doc \"oops\"))"))))
+  ;; 2026-08-03: a preparse FORM failure is now a per-command error VALUE
+  ;; rather than an escaping raise (macros.rkt § per-FORM failure
+  ;; containment). What this test asserts is unchanged; the channel moved.
+  ;; Tightened while converting: the old assertion was bare `exn:fail?`, which
+  ;; any failure would have satisfied. Now it names the message.
+  ;; NOTE `functor-for` discards the results and returns `(lookup-functor …)`,
+  ;; so the error has to be read off `process-string` directly.
+  (check-regexp-match
+   #rx"unfolds"
+   (format "~a"
+    (parameterize ([current-spec-store (hasheq)]
+                   [current-property-store (hasheq)]
+                   [current-functor-store (hasheq)]
+                   [current-preparse-registry (current-preparse-registry)]
+                   [current-trait-registry (hasheq)]
+                   [current-trait-laws (hasheq)])
+      (process-string
+       "(functor Bad ($brace-params A : (Type 0)) ($brace-params :doc \"oops\"))")))))
 
 ;; ========================================
 ;; 5. ?? Typed holes — reader and parser

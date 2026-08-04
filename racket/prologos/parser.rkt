@@ -1254,6 +1254,20 @@
     ;; file's other commands from and the whole file was lost. Carrying a
     ;; marker in the token stream costs nothing and makes it per-command. Same
     ;; (pair? args) guard, LOAD-BEARING for the same reason.
+    ;; …and the same channel for a PREPARSE FORM-processing failure. Every
+    ;; `(error 'functor …)` / `(error 'trait …)` / `(error 'spec …)` in
+    ;; macros.rkt used to escape preparse and take the whole file with it —
+    ;; preparse finishes before any command runs, so there was no expansion
+    ;; left to run the file's other commands from, and the user got a raw
+    ;; Racket message plus a `context...:` dump with zero numbered results.
+    ;; macros.rkt's dispatch now contains the failure per FORM and emits this
+    ;; marker in its place; the commands before and after it still run.
+    [(and (symbol? head) (eq? head '$preparse-error))
+     (parse-error loc
+                  (if (and (pair? args) (string? (stx->datum (car args))))
+                      (stx->datum (car args))
+                      "malformed declaration")
+                  #f)]
     [(and (symbol? head) (eq? head '$reader-error))
      (parse-error loc
                   (if (and (pair? args) (string? (stx->datum (car args))))

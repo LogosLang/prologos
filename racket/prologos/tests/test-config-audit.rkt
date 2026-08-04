@@ -231,9 +231,14 @@
   (check-equal? (functor-entry-name fe) 'MyAlias))
 
 (test-case "G4: functor conflicting with data type → error"
-  (check-exn
+  ;; 2026-08-03: a preparse FORM failure is now a per-command error VALUE, not
+  ;; an escaping raise (macros.rkt § per-FORM failure containment) — the file's
+  ;; other commands survive it. The message assertion is what this test is
+  ;; about and is unchanged; only the channel it arrives on moved.
+  (check-regexp-match
    #rx"functor `Result` conflicts with existing data type"
-   (lambda ()
+   (format "~a"
+    (let ()
      (parameterize ([current-spec-store (hasheq)]
                     [current-property-store (hasheq)]
                     [current-functor-store (hasheq)]
@@ -246,12 +251,13 @@
        ;; Register a data type constructor
        (register-ctor! 'Result (ctor-meta 'Result '() '() #f 0))
        ;; Now try to register functor with same name — should error
-       (process-string-ws "functor Result {A : Type}\n  :unfolds A\n")))))
+       (process-string-ws "functor Result {A : Type}\n  :unfolds A\n"))))))
 
 (test-case "G4: functor conflicting with type name → error"
-  (check-exn
+  (check-regexp-match
    #rx"functor `MyData` conflicts with existing data type"
-   (lambda ()
+   (format "~a"
+    (let ()
      (parameterize ([current-spec-store (hasheq)]
                     [current-property-store (hasheq)]
                     [current-functor-store (hasheq)]
@@ -261,7 +267,7 @@
                     [current-ctor-registry (hasheq)]
                     [current-type-meta (hasheq 'MyData '())]
                     [current-bundle-registry (hasheq)])
-       (process-string-ws "functor MyData {A : Type}\n  :unfolds A\n")))))
+       (process-string-ws "functor MyData {A : Type}\n  :unfolds A\n"))))))
 
 ;; ========================================
 ;; Section 5: :pre/:post/:invariant parsing + mutual exclusion (G1 + O6)

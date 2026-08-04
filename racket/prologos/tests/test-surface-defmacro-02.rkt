@@ -144,9 +144,13 @@
 
 (test-case "defmacro/malformed-error"
   ;; Missing template
-  (check-exn exn:fail?
-    (lambda ()
-      (run-ns "(ns dm25)\n(defmacro (bad))"))))
+  (check-regexp-match
+   #rx"defmacro"
+    ;; 2026-08-03: a preparse FORM failure is a per-command error VALUE now
+    ;; (macros.rkt § per-FORM failure containment), not an escaping raise.
+    ;; Converting also TIGHTENS this: bare `exn:fail?` was satisfied by any
+    ;; failure at all; it now has to be this one.
+   (format "~a" (run-ns "(ns dm25)\n(defmacro (bad))"))))
 
 
 (test-case "defmacro/infinite-loop-error"

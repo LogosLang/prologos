@@ -245,8 +245,16 @@
 (test-case "D2 conflict: explicit wrong kind + where constraint — error"
   ;; If user explicitly writes {C : Type -> Type -> Type} but where (Seqable C)
   ;; expects Type -> Type, should error
-  (check-exn exn:fail?
-    (lambda ()
+  (check-regexp-match
+   #rx"spec"
+    ;; 2026-08-03: a preparse FORM failure is a per-command error VALUE now
+    ;; (macros.rkt § per-FORM failure containment), not an escaping raise.
+    ;; Converting also TIGHTENS this: bare `exn:fail?` was satisfied by any
+    ;; failure at all; it now has to be this one.
+   ;; NOTE `run-ns-with-spec-store` returns TWO values; the error is in the
+   ;; first (the results list).
+   (format "~a"
+      (let-values ([(rs _store)
       (run-ns-with-spec-store
         (string-append
           "(ns test-d2-conflict :no-prelude)\n"
@@ -254,7 +262,8 @@
           "(imports [prologos::data::lseq :refer [LSeq]])\n"
           "(spec my-conflict ($brace-params C : Type -> Type -> Type)"
           "  ($brace-params A)"
-          "  (C A) -> (LSeq A) where (Seqable C))\n")))))
+          "  (C A) -> (LSeq A) where (Seqable C))\n"))])
+        rs))))
 
 ;; ========================================
 ;; 5. Metadata :where syntax
