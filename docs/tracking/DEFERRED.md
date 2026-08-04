@@ -1562,6 +1562,38 @@ skip+warn policy; these lift the skips / harden the substrate.
   `+ - *` keywords cover bare-call ergonomics; `mul`/`eq?`/`compare`/`neg`/`abs`
   already derive first-class fine).
 
+**MEASURED 2026-08-03 — the four are NOT one class, and the suite cannot tell
+you which.** Lifting each skip individually and running the affected files:
+
+| lifted | affected-file result |
+|---|---|
+| `add` | 24 failures |
+| `sub` | 21 failures |
+| `join` | all pass |
+| `reduce` | all pass |
+
+`join` + `reduce` lifted together were **green on the FULL suite** (542 files).
+That is the wrong conclusion, and the probe that corrected it is the point:
+
+⚠ **`join` CANNOT lift. With it lifted, `[join "-" '["x" "y"]]` fails outright**
+— "Could not infer type", cascading to "Unbound variable". The entire suite
+stayed green because **nothing in it calls `join` at all**. The entry's stated
+reason for the `join` skip ("string-ops join — spec clobber; heavily used") was
+correct the whole time; there was simply no test able to say so.
+
+That gap is now closed: `tests/test-trait-method-derive.rkt` gains a `join`
+case, verified to FAIL with the skip lifted. Note also that its neighbour —
+"derive/skip-set-preserves-list-reduce", which looks like it guards `reduce` —
+does **not**: A/B shows `[reduce int+ 0 '[1 2 3]]` is byte-identical with the
+`reduce` skip lifted. It is a documentation pin, and is now labelled as one.
+
+**So the honest state is**: `add`/`sub` are hard-blocked (measured, loudly).
+`join` is blocked, now with a test that says so. `reduce` shows no breakage
+under the suite, the affected files, targeted probes, or an examples-corpus
+diff — but "no breakage found" is exactly what was true of `join` an hour
+earlier, so **it stays skipped until issue #66's race is actually fixed**
+rather than lifted on the strength of an absence.
+
 ### 2. 🔶 Spec-store bare-name keying — silent clobber (structural defect) [issue #66] — QUALIFIED lookup fixed 2026-08-03; the race itself is open
 
 - **What**: the spec registry keys by BARE symbol with silent last-write-wins:
@@ -1773,6 +1805,37 @@ needs registration-EVENT instrumentation — the same reason instrumenting
   first slice.
 
 ---
+
+## 🐛 `test-properties.rkt` reports a NONDETERMINISTIC test count under batch (found 2026-08-03)
+
+Noticed while diffing per-file test counts across two full-suite runs (the
+runner records them in `data/benchmarks/timings.jsonl`, which is what made this
+visible at all). Same commit, same file set:
+
+```
+test-properties.rkt   baseline 13  ->  another run 8
+```
+
+Run alone via `--tests`, it reports **13** consistently. So under the batch
+worker it sometimes executes 5 fewer `check-property` cases — and **passes
+either way**, because rackcheck reports success for the cases it did run.
+
+Not diagnosed. Two things make it worth an entry rather than a shrug:
+
+- **A green suite with fewer cases is indistinguishable from a green suite.**
+  These are the property tests — subject reduction, unification soundness, zonk
+  idempotence, nf fixpoint. Silently running 8 of 13 is a coverage hole nothing
+  reports.
+- **It was found by a COUNT diff, not by a failure.** The only reason it
+  surfaced is that an unrelated A/B (the N6d-i derive skip set) moved the total
+  by 5 and the number had to be explained. Without that it would have kept
+  alternating unnoticed.
+
+First things to check: whether `check-property`'s case count depends on a seed
+or on wall-clock budget, and whether the batch worker's per-file timeout or its
+parameter save/restore interacts with rackcheck's config. Suspect the shared
+`make-config #:tests 50` and any implicit deadline before suspecting the
+worker.
 
 ## BUG: Union-type checking hangs the type-checker (BSP non-quiescence)
 

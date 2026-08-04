@@ -47,7 +47,22 @@
      "eval [compare 1 2]"
      "eval [neg 5]"
      ;; skip-set: list's reduce is NOT clobbered by Reducible's method
-     "eval [reduce int+ 0 '[1 2 3]]")
+     "eval [reduce int+ 0 '[1 2 3]]"
+     ;; skip-set: string-ops `join` is NOT clobbered by the Monoid-ish method.
+     ;;
+     ;; ⚠ ADDED 2026-08-03 BECAUSE THE SUITE DID NOT COVER IT. A per-method
+     ;; A/B of the skip set (lift one, run the 24 affected files) reported
+     ;; `join` and `reduce` as both liftable — and `join` is NOT: with it
+     ;; lifted, `[join "-" '["x" "y"]]` fails outright with "Could not infer
+     ;; type" and cascades to "Unbound variable". The green suite said
+     ;; otherwise because nothing in it called `join` at all.
+     ;;
+     ;; This is the case that makes the skip-set entry's own reason for
+     ;; `join` ("string-ops join — spec clobber; heavily used") executable
+     ;; instead of a comment. `reduce`'s neighbour above does NOT do that job:
+     ;; verified by A/B, `[reduce int+ 0 '[1 2 3]]` is byte-identical with the
+     ;; reduce skip lifted, so it protects nothing.
+     "eval [join \"-\" '[\"x\" \"y\"]]")
     "\n")))
 
 (define (evals-only rs)
@@ -66,7 +81,15 @@
   (check-equal? (list-ref ev 5) "-5 : Int"))
 
 (test-case "derive/skip-set-preserves-list-reduce"
+  ;; NOTE: this one is a documentation pin, not a guard — A/B shows it passes
+  ;; with the `reduce` skip lifted too. The guard that bites is the `join` one
+  ;; below.
   (check-equal? (list-ref ev 6) "6 : Int"))
+
+(test-case "derive/skip-set-preserves-string-join"
+  ;; THE guard. Lifting `join` from the skip set breaks this outright, and
+  ;; nothing else in the suite notices.
+  (check-equal? (list-ref ev 7) "\"x-y\" : String"))
 
 ;; --- structural exclusions stay unbound (constants / output-only) ---
 (test-case "derive/exclusions-remain-unbound"
