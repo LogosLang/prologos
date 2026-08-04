@@ -1588,11 +1588,22 @@ does **not**: A/B shows `[reduce int+ 0 '[1 2 3]]` is byte-identical with the
 `reduce` skip lifted. It is a documentation pin, and is now labelled as one.
 
 **So the honest state is**: `add`/`sub` are hard-blocked (measured, loudly).
-`join` is blocked, now with a test that says so. `reduce` shows no breakage
-under the suite, the affected files, targeted probes, or an examples-corpus
-diff — but "no breakage found" is exactly what was true of `join` an hour
-earlier, so **it stays skipped until issue #66's race is actually fixed**
-rather than lifted on the strength of an absence.
+`join` is blocked, now with a test that says so.
+
+`reduce` shows no breakage anywhere it was looked for — the full suite, the 24
+affected files, targeted probes of four call shapes, and an **examples-corpus
+A/B: all 50 `examples/*.prologos` run through `run-file.rkt` in both states,
+total diff FOUR LINES, and the only difference is a gensym counter
+(`?suc0_8381` vs `?suc0_1973`)**. That is as close to byte-identical as the
+corpus can report.
+
+**It stays skipped anyway.** "No breakage found" is precisely what the full
+suite said about `join` an hour earlier, and `join` was broken in the most
+basic call anyone would write. The corpus is a stronger instrument than the
+suite was — it exercises real programs — but it is still an absence, and the
+skip exists to protect against a named mechanism (issue #66's bare-name race)
+that has not been fixed. Lift it when the race is fixed, not when a search for
+counterexamples comes up empty.
 
 ### 2. 🔶 Spec-store bare-name keying — silent clobber (structural defect) [issue #66] — QUALIFIED lookup fixed 2026-08-03; the race itself is open
 
