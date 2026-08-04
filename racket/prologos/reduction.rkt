@@ -557,14 +557,22 @@
 ;; a de Bruijn variable FREE w.r.t. the container boundary is the poisoned
 ;; shape: shift/subst treat these containers as closed leaves (BY CONTRACT
 ;; under ruling (D) — champ is a closed runtime map value), so a later beta
-;; over the enclosing binder silently drops the argument or captures. Until the
-;; SUB.3 fix (NbE open-the-binder) makes the shape unconstructible, refuse to
-;; PERSIST it at the three nf-persisting boundaries (solve/solve-one is-goal
-;; answer rows + validate base-ok) — a loud per-command error via the POL.4
-;; exn:prologos-solve pattern instead of a silent wrong answer. Deliberately
-;; NOT at shift/subst (no srcloc/command context) and NOT at the champ mint
-;; (fires on correct display-only code — driver.rkt legitimately nf's eval
-;; results for display).
+;; over the enclosing binder silently drops the argument or captures.
+;;
+;; ⚠ "Until the SUB.3 fix …" is how this read until 2026-08-04, and SUB.3
+;; LANDED at `7ea49168` — NbE open-the-binder makes the shape unconstructible,
+;; and SUB.3b (`036b59f7`) closed the narrowing sibling. The tripwire is NOT a
+;; stopgap awaiting that fix; per the design doc's SUB.3a row it is
+;; deliberately KEPT as the standing invariant guard — "an assertion, not a
+;; dual mechanism". Do not remove it on the strength of SUB.3 being done: being
+;; done is precisely what the assertion now asserts.
+;;
+;; It refuses to PERSIST the poisoned shape at the three nf-persisting
+;; boundaries (solve/solve-one is-goal answer rows + validate base-ok) — a loud
+;; per-command error via the POL.4 exn:prologos-solve pattern instead of a
+;; silent wrong answer. Deliberately NOT at shift/subst (no srcloc/command
+;; context) and NOT at the champ mint (fires on correct display-only code —
+;; driver.rkt legitimately nf's eval results for display).
 ;;
 ;; The walk is depth-aware INSIDE containers: a bvar bound by a binder that is
 ;; itself inside the container (e.g. an answer row holding a closed lambda,
