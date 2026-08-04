@@ -2506,10 +2506,33 @@ settle BEFORE the migration, not after.
 - **Not blocked**, but separate from Layer 1 (fold+build doesn't need this)
 - Source: `docs/tracking/2026-02-28_2200_CLAUSE_STYLE_CONSTRAINT_MATCHING.md`
 
-### Sorted Collections (SortedMap, SortedSet) — ACCURATE (re-probed 2026-08-03)
+### Sorted Collections (SortedMap, SortedSet) — ACCURATE, and the blocker is specifically PERSISTENCE (sharpened 2026-08-04)
 - B+ tree or red-black tree backends
 - **Blocked on**: backend infrastructure not yet built
 - Probe: `sorted-map-empty` is `Unbound variable`; nothing sorted-keyed exists.
+
+> **Why the shortcut that closed four sibling entries does NOT apply here.**
+> Numerics Phase 4, String 4a/4b/4c/4d all turned out to be "blocked" only
+> until someone tried a `foreign racket` bridge, because Racket already carried
+> the implementation (Unicode tables, normalization, regex engine, float ops).
+> The obvious next move is to try the same here, and it fails for a specific
+> reason worth recording so nobody re-derives it:
+>
+> - Racket DOES ship ordered dictionaries — `data/skip-list` and
+>   `data/splay-tree`, both verified working (a skip-list over `datum-order`
+>   returns `((1 . "a") (2 . "b") (3 . "c"))` from out-of-order inserts).
+> - Both are **MUTABLE** (`skip-list-set!`, `splay-tree-set!`). Prologos
+>   collections are persistent, so a functional `sorted-assoc` over a mutable
+>   backend has to COPY per operation — O(n) per insert, which is worse than the
+>   sorted-assoc-list it would replace and defeats the point of the entry.
+> - The distribution has no persistent ordered dictionary, and the tree's own
+>   persistent structures (`champ.rkt`, `rrb.rkt`) are **unordered**.
+>
+> So the missing piece is precisely a **persistent** balanced ordered structure —
+> a weight-balanced or red-black tree in the same class of hand-written work as
+> CHAMP and RRB, not a bridge. That is genuine construction, and it carries API
+> decisions (how `Ord` dictionaries thread through; whether it joins the `Seq`
+> protocol) that belong with the owner, not with a triage pass.
   Worth noting what DOES exist next door, since it is the nearest thing anyone
   will reach for: `sort` is bound (it fails on a bare `[sort '[3 1 2]]` with
   "Could not infer type", i.e. it wants an expected type or an Ord dict, not
