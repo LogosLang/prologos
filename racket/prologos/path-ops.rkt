@@ -16,19 +16,9 @@
          path-head
          path-tail)
 
-;; Check if a symbol is a cons-like name (bare or module-qualified)
-(define (cons-name? name)
-  (let ([s (symbol->string name)])
-    (or (string=? s "cons")
-        (let ([len (string-length s)])
-          (and (>= len 6) (string=? (substring s (- len 6)) "::cons"))))))
-
-;; Check if a symbol is a nil-like name
-(define (nil-name? name)
-  (let ([s (symbol->string name)])
-    (or (string=? s "nil")
-        (let ([len (string-length s)])
-          (and (>= len 5) (string=? (substring s (- len 5)) "::nil"))))))
+;; (cons-name? / nil-name? removed 2026-08-04 — they existed only for the
+;; Prologos cons-chain walker in path-from-segments, which the FFI boundary
+;; never actually hands a cons chain. Dead with it.)
 
 ;; path-segments : expr-path -> (List Keyword)
 ;; Extract the first branch's segments as a Prologos list.
@@ -40,51 +30,40 @@
                    '()))
   ;; D4.P4b-i: segments are bare SYMBOLS internally (the step encoding), so
   ;; the FFI boundary marshals them back to Prologos keyword VALUES here.
-  ;; ⚠ PRE-EXISTING (characterized at f072c115, NOT caused by the encoding
-  ;; change): this shim whole-file ABORTS anyway — it builds a Prologos
-  ;; cons-chain while the foreign marshaller expects a RACKET list, so the
-  ;; declared `Path -> [List Keyword]` never marshalled. Filed; `from-segments`
-  ;; and `path-append` are dead with it.
-  (foldr (lambda (seg acc) (expr-app (expr-app (expr-fvar 'cons) (expr-keyword seg)) acc))
-         (expr-nil) segs))
+  ;;
+  ;; ✅ FIXED 2026-08-04. This used to build a Prologos CONS-CHAIN, while
+  ;; `marshal-racket->prologos` for a `(List T)` return type wants a **Racket
+  ;; list** whose elements it marshals individually (`foreign.rkt:304-309`) —
+  ;; so the declared `Path -> [List Keyword]` raised "Cannot marshal to List —
+  ;; expected Racket list" and took the whole file down with it. The comment
+  ;; here recorded that and left it; `from-segments` and `path-append` were
+  ;; dead alongside.
+  ;;
+  ;; A Racket list it is. `Keyword` is a PASSTHROUGH type in the marshaller
+  ;; (`:326`), i.e. the element must ALREADY be a Prologos IR value — hence
+  ;; `expr-keyword` per element rather than a bare symbol.
+  (map expr-keyword segs))
 
 ;; path-from-segments : (List Keyword) -> expr-path
-;; Build a single-branch path from a Prologos list of keywords.
+;; Build a single-branch path from a list of keywords.
+;;
+;; ✅ FIXED 2026-08-04, the inbound twin of the defect above. This walked a
+;; Prologos CONS-CHAIN (expr-nil / curried `cons` applications, with arms for
+;; the type-arg-carrying spellings) — but `marshal-prologos->racket` for a
+;; `(List T)` PARAMETER hands the shim a plain **Racket list**
+;; (`foreign.rkt:214-217`), so every call died in the `[else]` arm with
+;; "expected a List, got (#(struct:expr-keyword a) …)" — the Racket list it was
+;; already being given, reported as if it were the wrong thing.
+;;
+;; The cons-chain walker is gone rather than kept as a fallback: the marshaller
+;; is the only caller, it always passes a Racket list, and a second accepted
+;; shape here would just hide the next boundary mismatch.
 (define (path-from-segments lst)
   (define segs
-    (let loop ([l lst] [acc '()])
-      (cond
-        ;; expr-nil — end of list
-        [(expr-nil? l) (reverse acc)]
-        ;; nil fvar — legacy nil form
-        [(and (expr-fvar? l) (nil-name? (expr-fvar-name l))) (reverse acc)]
-        ;; (nil A) — nil applied to type arg
-        [(and (expr-app? l)
-              (let ([f (expr-app-func l)])
-                (and (expr-fvar? f) (nil-name? (expr-fvar-name f)))))
-         (reverse acc)]
-        ;; ((cons x) xs) or (((cons A) x) xs) — curried constructor, possibly with type arg
-        [(and (expr-app? l)
-              (expr-app? (expr-app-func l))
-              (let ([inner (expr-app-func (expr-app-func l))])
-                (or (and (expr-fvar? inner) (cons-name? (expr-fvar-name inner)))
-                    ;; (((cons A) x) xs) — cons applied to type arg first
-                    (and (expr-app? inner)
-                         (let ([innermost (expr-app-func inner)])
-                           (and (expr-fvar? innermost) (cons-name? (expr-fvar-name innermost))))))))
-         (define xs (expr-app-arg l))
-         (define head-app (expr-app-func l))
-         ;; Head extraction: skip type arg if present
-         (define head
-           (if (and (expr-app? (expr-app-func head-app))
-                    (let ([f (expr-app-func (expr-app-func head-app))])
-                      (and (expr-fvar? f) (cons-name? (expr-fvar-name f)))))
-               ;; (((cons A) x) xs) — head = x (skip type arg A)
-               (expr-app-arg head-app)
-               ;; ((cons x) xs) — head = x
-               (expr-app-arg head-app)))
-         (loop xs (cons head acc))]
-        [else (error 'path-from-segments "expected a List, got ~a" l)])))
+    (cond
+      [(list? lst) lst]
+      [else (error 'path-from-segments
+                   "expected a Racket list from the FFI boundary, got ~a" lst)]))
   ;; D4.P4b-i: the inverse boundary — Prologos keyword VALUES in, bare symbols
   ;; (the step encoding) out. A non-keyword segment is refused rather than
   ;; coerced: coercing an unrecognized segment into a key is precisely the

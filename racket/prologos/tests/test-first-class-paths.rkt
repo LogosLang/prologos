@@ -175,3 +175,52 @@
 (test-case "ws: :key^alias rename tokenizes (no parse error)"
   (check-false (string-contains? (R 5) "expected keyword field path"))
   (check-true (string-contains? (R 5) ":a1")))
+
+;; ========================================
+;; The path FFI list boundary (2026-08-04)
+;; ========================================
+;;
+;; `path-segments : Path -> [List Keyword]` built a Prologos CONS-CHAIN while
+;; `marshal-racket->prologos` for a `(List T)` return wants a RACKET list
+;; (foreign.rkt) — so it raised "Cannot marshal to List" and took the whole file
+;; down. `path-from-segments` had the inbound twin: it walked a cons chain while
+;; the marshaller hands it a plain Racket list, dying with "expected a List, got
+;; (#(struct:expr-keyword a) …)" — the list it was already being given.
+;;
+;; `path-ops.rkt` recorded the outbound half in a comment and left it, noting
+;; `from-segments` and `path-append` were "dead with it". They were. These pin
+;; the whole set, because a test of `segments` alone would not have noticed that
+;; the ROUND TRIP was what nobody could do.
+
+(define path-ffi-results
+  (run-ws (string-append
+           "ns fcpffi\n\n"
+           "imports [prologos::core::path :as p :refer []]\n\n"
+           "def pa := [p::from-segments '[:a :b]]\n"
+           "def pb := [p::from-segments '[:c]]\n"
+           "[p::segments pa]\n"
+           "[p::segments [p::path-append pa pb]]\n"
+           "[p::depth [p::path-append pa pb]]\n"
+           "[p::head pa]\n"
+           "[p::segments [p::tail pa]]\n")))
+
+(define (PF i) (format "~a" (list-ref path-ffi-results i)))
+
+(test-case "path-ffi: a [List Keyword] return marshals at all (was a whole-file abort)"
+  (check-true (string-contains? (PF 2) ":a") (PF 2))
+  (check-true (string-contains? (PF 2) ":b") (PF 2))
+  (check-false (string-contains? (PF 2) "Cannot marshal") (PF 2)))
+
+(test-case "path-ffi: the ROUND TRIP works — from-segments ∘ segments"
+  ;; the inbound half. `pa` above is built BY from-segments, so if that leg were
+  ;; still broken every case in this block would fail at the def.
+  (check-true (string-contains? (PF 0) "Path") (PF 0)))
+
+(test-case "path-ffi: path-append is alive (it was dead with the boundary)"
+  (check-true (string-contains? (PF 3) ":c") (PF 3))
+  (check-true (string-contains? (PF 4) "3") (PF 4)))
+
+(test-case "path-ffi: head and tail still marshal single keywords / paths"
+  (check-true (string-contains? (PF 5) ":a") (PF 5))
+  (check-true (string-contains? (PF 6) ":b") (PF 6))
+  (check-false (string-contains? (PF 6) ":a") (PF 6)))
