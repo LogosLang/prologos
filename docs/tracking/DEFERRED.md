@@ -2530,9 +2530,38 @@ settle BEFORE the migration, not after.
 >
 > So the missing piece is precisely a **persistent** balanced ordered structure —
 > a weight-balanced or red-black tree in the same class of hand-written work as
-> CHAMP and RRB, not a bridge. That is genuine construction, and it carries API
-> decisions (how `Ord` dictionaries thread through; whether it joins the `Seq`
-> protocol) that belong with the owner, not with a triage pass.
+> CHAMP and RRB, not a bridge.
+>
+> ### ✅ THE BACKEND IS BUILT (2026-08-04) — `racket/prologos/ordered-map.rkt`
+>
+> A persistent weight-balanced tree (Adams / Nievergelt-Reingold, DELTA=3
+> RATIO=2): `om-set` / `om-ref` / `om-remove` / `om-min` / `om-max` / `om-fold`
+> / `om-to-list` / `om-keys` / `om-values` / `om-count` / `om-from-list`.
+> Weight-balanced rather than red-black because the invariant IS a size ratio,
+> so every node already carries the subtree count `om-count` and any future
+> rank/select need.
+>
+> **The order relation is a PARAMETER, not baked in** — deliberately. How an
+> `Ord` dictionary threads through at the Prologos level, and whether SortedMap
+> joins the `Seq` protocol, are API decisions for the owner. This module is the
+> backend only and does not pre-empt them.
+>
+> 16 tests (`tests/test-ordered-map.rkt`). The three load-bearing ones assert
+> what a sorted assoc list would ALSO pass, which is what makes them the reason
+> to have a tree at all:
+> - **BALANCE** under ascending, descending, and delete-heavy input — a depth
+>   bound, not eyeballed shape. Verified they FAIL with `balance` stubbed to a
+>   plain rebuild — and the differential test keeps PASSING there, because a
+>   degenerate tree is still *correct*. That is exactly why balance needs its
+>   own assertion.
+> - **PERSISTENCE** — an old handle unchanged by later writes, plus a 50-version
+>   chain. The property that made bridging `data/skip-list` wrong.
+> - **A differential oracle** against a sorted assoc list over 600 deterministic
+>   mixed insert/remove ops, catching a rotation that loses or duplicates an
+>   entry — which a shallow-but-corrupt tree would otherwise hide.
+>
+> **Still open**: the Prologos-level `SortedMap` / `SortedSet` surface, i.e. the
+> owner API decisions above. The blocker this entry named is gone.
   Worth noting what DOES exist next door, since it is the nearest thing anyone
   will reach for: `sort` is bound (it fails on a bare `[sort '[3 1 2]]` with
   "Could not infer type", i.e. it wants an expected type or an Ord dict, not
