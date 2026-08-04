@@ -2456,7 +2456,41 @@ checker, not the syntax.
   `:exists` work below.
 - `Gen` trait for type-directed random generation
 - Property checking for `:properties` and `:laws`
-- Contract wrapping: `:pre`/`:post` generate runtime checks with blame
+- **Contract wrapping: `:pre`/`:post` generate runtime checks with blame.**
+  Re-probed 2026-08-03 — verified, not assumed:
+
+  ```
+  spec sd Int Int -> Int
+    :pre [fn [x : Int] [fn [y : Int] [not [eq? y 0]]]]
+  defn sd [x y] [int* x y]
+
+  [sd 6 0]        ;; => 0 : Int      ← violates :pre, ZERO errors
+  ```
+
+  The surface is DONE and the semantics are absent: the metadata parses, the
+  spec registers, and nothing anywhere consumes `:pre`/`:post` except the G1
+  guard that rejects combining `:invariant` with them.
+
+  **It is unblocked, which is the useful finding.** The design doc
+  (`2026-02-22_EXTENDED_SPEC_DESIGN.org` §Phase 2) specifies the surface
+  exactly — `:pre` is a function of the ARGS, `:post` a function of args plus
+  the return — so there is no semantics call left to make. And
+  `inject-spec-into-defn` (macros.rkt) already has both halves a wrapper needs
+  in hand: `param-names` and `body-forms`. The rewrite shape is
+  `match [pre-fn p1 p2 …] | true -> <body> | false -> panic`, with `:post`
+  binding the result first.
+
+  NOT started here deliberately: it is a FEATURE with a design doc, and the
+  project's own methodology gives those a phased design and a PIR rather than
+  one commit in a sweep. What was missing before today was the verified current
+  state and the note that nothing blocks it; both are now on record.
+
+  ⚠ And one probe correction worth keeping, since it is the third time this
+  session: my first attempt used `:pre [> _ 0]` — the SCHEMA `:check` spelling.
+  That is not what the design doc specifies for specs, and the `_` hole has no
+  meaning for a multi-parameter function. A second probe failed on `int-div`
+  being unbound and briefly looked like `:pre` breaking the spec; the control
+  (same spec, no `:pre`) failed identically. Run the control.
 - Variance inference, `:compose`/`:identity` verification, `:exists` integration
 - Source: `docs/tracking/2026-02-22_EXTENDED_SPEC_DESIGN.org`,
   `docs/tracking/2026-02-27_2300_SPEC_FUNCTOR_AUDIT.md` (Tier 3)
