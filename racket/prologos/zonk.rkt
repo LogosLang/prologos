@@ -54,12 +54,38 @@
 ;; N4: collapse a resolved numeric literal to its concrete node for type `ty`.
 ;; Returns #f if `ty` is not a concrete numeric type (caller keeps the transient
 ;; expr-num-lit). Encoders mirror the elaborate-time literal paths (posit-encode,
-;; exact->inexact / flsingle). Representability is validated in check-mode; here we
-;; trust the resolved type (Int ⇒ val integral, Nat ⇒ integral + nonneg).
+;; exact->inexact / flsingle).
+;;
+;; ⚠ THE Int/Nat GUARDS ARE CHECKED, NOT TRUSTED (2026-08-03). This comment used
+;; to read "Representability is validated in check-mode; here we trust the
+;; resolved type (Int ⇒ val integral, Nat ⇒ integral + nonneg)" — and on one
+;; path check-mode never validates, so the trust was misplaced and this built
+;; `(expr-int 3/2)`: a MALFORMED Int literal, printed as `3/2 : Int`.
+;;
+;; The path is DEFERRED.md § "a numeric-LITERAL first branch adopts any
+;; second-branch type". `check`'s N4 arm has three cases for a literal against
+;; expected type T; the META case does `(unify ctx alpha T)` and defers. Branch
+;; 1 of a multi-clause `defn` is checked against the motive meta, so a literal
+;; there takes that link; branch 2 then solves the meta to something concrete,
+;; `alpha` IS that meta, and nothing re-validates. The "defer" in that arm's own
+;; comment names an obligation that is never discharged.
+;;
+;; This is that entry's option 3, and its framing is worth preserving verbatim:
+;; "strictly right — it stops `(expr-int 3/2)` being built — but it does NOT fix
+;; the type-level unsoundness". It does not. `defn d8 | 0 -> 1.5 | n -> "x"` is
+;; still accepted as `Int -> String` and `[d8 0]` still yields a Posit32 value
+;; under a String type. What changes is only that a malformed NODE is no longer
+;; constructed: declining here keeps the transient `expr-num-lit`, which
+;; `default-metas` then resolves by notation. A well-formed value at a wrong
+;; type is recoverable; an `expr-int` holding 3/2 can crash any consumer that
+;; believes the struct's own contract.
+;;
+;; Discharging the obligation properly is Num Track 1 territory — see the entry
+;; for the three candidates and why the other two are not local patches.
 (define (collapse-num-lit val integral? ty)
   (cond
-    [(expr-Int? ty)     (expr-int val)]
-    [(expr-Nat? ty)     (expr-nat-val val)]
+    [(expr-Int? ty)     (and (exact-integer? val) (expr-int val))]
+    [(expr-Nat? ty)     (and (exact-nonnegative-integer? val) (expr-nat-val val))]
     [(expr-Rat? ty)     (expr-rat val)]
     [(expr-Posit8? ty)  (expr-posit8  (posit8-encode  val))]
     [(expr-Posit16? ty) (expr-posit16 (posit16-encode val))]

@@ -615,7 +615,7 @@ down instead of becoming a per-command error. Likely cause: the guard row's
 pattern list is arity-adjusted for a 1-column group while `param-names` still
 holds two entries, so `compile-match-tree` indexes past the list.
 
-## 🐛 DEFECT — a numeric-LITERAL first branch adopts any second-branch type (found 2026-07-30; mechanism nailed down 2026-08-02, fix still needs a design call)
+## 🐛 DEFECT — a numeric-LITERAL first branch adopts any second-branch type (found 2026-07-30; mechanism nailed down 2026-08-02; the MALFORMED-NODE half fixed 2026-08-03, the type-level unsoundness still needs a design call)
 
 **It is worse than "accepts a String".** Investigated as the entry asked
 (failing-test-first); the shape is a numeric literal in the FIRST branch
@@ -660,10 +660,35 @@ tower, not a local patch. The candidates each have a cost:
 2. **Post-typing validation walk** before `default-metas` erases the evidence
    (`freeze` = zonk then default). Cheap, but it is a second mechanism checking
    what check-mode was supposed to have checked.
-3. **Gate `collapse-num-lit` on representability.** Strictly right — it stops
-   `(expr-int 3/2)` being built — but it does NOT fix the type-level
-   unsoundness: `default-metas` then falls back to the notation default, giving
-   a Posit32 value under a `String` type. Do not mistake this one for a fix.
+3. ✅ **DONE 2026-08-03 — gate `collapse-num-lit` on representability.** Taken
+   because it is the one candidate that is local and obviously correct, and its
+   own warning here is preserved rather than quietly dropped: **this is NOT a
+   fix**. `default-metas` still falls back to the notation default, so
+   `defn d8 | 0 -> 1.5 | n -> "x"` is still accepted at `Int -> String` and
+   `[d8 0]` still yields a numeric value under a `String` type.
+
+   What changes is that a MALFORMED NODE is no longer constructed. `[d10 0]`
+   went from **`3/2 : Int`** — an `expr-int` whose payload is a ratio — to
+   `1.5 : Int`. A well-formed value at a wrong type is recoverable by whatever
+   fixes the type-level hole; an `expr-int` holding 3/2 can crash any consumer
+   that believes the struct's own contract, arbitrarily far from here.
+
+   The guard also corrects a comment that had become false:
+   `collapse-num-lit` said *"Representability is validated in check-mode; here
+   we trust the resolved type"* — and on THIS path check-mode never validates,
+   which is exactly how the malformed node got built. Trusted, now checked.
+
+   Nat's guard is `exact-nonnegative-integer?`, not `exact-integer?` — the
+   nonneg half is the piece a naive reading drops, and it has its own test.
+
+   Pinned in `tests/test-branch-numlit-wellformed.rkt`, verified failing against
+   the ungated code. Four cases, and TWO of them are the boundary rather than
+   the win: one asserts the type-level unsoundness is STILL PRESENT (so nobody
+   reads this as closed), and one asserts ordinary literals — `Int`, `Nat`,
+   bare decimal, `Rat` — are untouched, since the guard sits on a path every
+   numeric literal in every program takes.
+
+   **Items 1 and 2 remain the actual fix**, and the entry stays open for them.
 
 Still Num Track 1 territory, as originally filed. What has changed is that it
 is now a three-line repro with a named mechanism and a demonstrated runtime
