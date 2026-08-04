@@ -2949,6 +2949,28 @@ have to be established in the IMPORTER's scope before csv loads, which is why
 the workaround is a line at the import site. Anyone reaching for the obvious
 in-module fix should know it was already tried.
 
+⚠ **AND THE MECHANISM IS NOT WHAT THE ERROR SUGGESTS — instrumented 2026-08-03,
+and this is the finding that saves the next person the most time.** The obvious
+reading of E2001 ("not available in scope") is that the `_cap` binder failed to
+enter `current-capability-scope`. Instrumenting says otherwise:
+
+- `capability-type?` FINDS `ReadCap` — no registry miss for it at any point.
+- `current-capability-scope` is `'()` at the failing `read-file` call, and NOT
+  ONE of the 1763 lambda binders elaborated during csv's load registers as a
+  capability. So the scope is empty for a reason upstream of the lookup.
+- **Most importantly: the E2001 fires identically in the WORKING file.** The
+  `imports capabilities` / `imports csv` version that succeeds end-to-end emits
+  exactly the same `CAPSCOPE need=ReadCap scope='()` and the same E1004/E2001
+  text during csv's load — and then completes with `r` defined and the value
+  printed.
+
+So the constraint is registered as unresolved in BOTH cases, and what differs
+is whether something later DISCHARGES it. The failure is in deferred-constraint
+resolution, not in binder scoping — which means chasing
+`current-capability-scope` (the natural first move, and the one taken here) is
+a dead end. Start at `register-capability-constraint!` and whatever is supposed
+to retire those entries.
+
 This is the same class as the cross-module schema channel closed earlier in this
 file (#78 P2): a registry populated during a nested module load not reaching the
 next one. Note the registry IS serialized into `.pnet` (slot 13) and IS
