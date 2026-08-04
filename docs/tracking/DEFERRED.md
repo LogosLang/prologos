@@ -3467,6 +3467,37 @@ this file, and it would send anyone picking up the track to rebuild what exists.
 | Per-domain factory callbacks (3) | 4C addendum S2.d-followup audit (2026-04-25) | ⬜ flagged | `current-prop-fresh-mult-cell` (driver.rkt:2600), `current-prop-fresh-level-cell` (similar), `current-prop-fresh-sess-cell` (similar). Each is a Racket parameter holding a fresh-cell allocation closure. Used in fresh-X-meta legacy fallback path for pre-init test contexts. | Set at module-load with default `#f`; populated by driver.rkt during init. Read in fresh-X-meta legacy path (when universe is not initialized — bare-metavar-store tests not loading elaborator-network.rkt). | **PM Track 12 retires**: when test fixture infrastructure goes on-network, the pre-init fallback paths can collapse entirely — tests would call `init-meta-universes!` at setup. S2.e reviews whether these fallbacks remain needed; if not, retires before PM 12. Per D.3 §7.5.14.1 + §7.5.14.3. |
 | `current-prop-mult-cell-write` write callback (1) | 4C addendum S2.c-iv adversarial VAG (2026-04-24) | ⬜ flagged | Racket parameter holding mult-cell write closure (driver.rkt:2605 → `elab-mult-cell-write`). Used in solve-mult-meta! legacy path. Note: level/session don't have analogous write callbacks — they use direct `elab-cell-write` in their legacy paths. Asymmetry is mult-specific (legacy artifact). | Set at module-load; read in solve-mult-meta! legacy fallback path only. Post-S2.c-iv mult universe-active, legacy path dead → callback becomes unread. | **PM Track 12 retires** with mult store/champ-box. S2.e could retire earlier (no PM 12 dependency for the callback itself; only the data store it writes to). Per D.3 §7.5.14.3. |
 
+### ✅ RESOLVED 2026-08-03 — the DEP TABLE had rusted, and it was mis-selecting tests
+
+Third guard checked in the same sweep, and the one with teeth:
+`racket tools/update-deps.rkt --check` — the command `CLAUDE.md` lists under
+"Validate deps" — exited **1** with **501 mismatches** across four dependency
+tables. `tools/dep-graph.rkt` was last regenerated **2026-07-02**.
+
+**This one was not cosmetic: the table drives affected-test SELECTION.** A stale
+entry means `run-affected-tests.rkt` (the project's PRIMARY test command, per
+`testing.md`) runs the wrong set — silently, and in the dangerous direction.
+Measured on one module:
+
+```
+mentions of `prologos::core::csv` in the dep table
+  before: 1        after: 3
+```
+
+The missing dependents included **`test-io-main-01.rkt`**, which imports
+`prologos::core::csv` in its own preamble. So a change to `csv.prologos` would
+NOT have run that test. (Not hypothetical for this session — csv turned out to
+be the most defect-dense module in the tree.)
+
+Regenerated with `--write`; `--check` now exits 0 and the full suite is green at
+548 files / 10625 tests. 791 insertions, 294 deletions in the table.
+
+⚠ **Same rust class as the two lints above** — three guards, all documented, all
+with nothing running them, all drifted. The dep table is the one that was
+actively degrading the test signal rather than merely accumulating debt. It has
+no natural pre-commit seat (regeneration is not a per-commit act), so the
+candidate seat is CI or the post-commit hook.
+
 ### 🐛 the CELL lint has rusted too — same class, and it blocks wiring (found 2026-08-03)
 
 Checked immediately after wiring the parameter lint, on the theory that a
