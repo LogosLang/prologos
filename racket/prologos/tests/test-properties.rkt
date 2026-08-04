@@ -15,7 +15,7 @@
          "../global-env.rkt"
          (prefix-in tc: "../typing-core.rkt")
          "../performance-counters.rkt"
-         "test-generators.rkt"
+         "generators.rkt"
          "../driver.rkt")
 
 ;; ============================================================

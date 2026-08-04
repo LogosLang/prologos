@@ -1992,7 +1992,54 @@ needs registration-EVENT instrumentation — the same reason instrumenting
 
 ---
 
-## 🐛 `test-properties.rkt` reports a NONDETERMINISTIC test count under batch (found 2026-08-03)
+## ✅ FIXED 2026-08-04 — `test-properties.rkt` reported a nondeterministic test count (found 2026-08-03)
+
+**Diagnosed, fixed, and the entry's own alarm CORRECTED.**
+
+`test-generators.rkt` was a library and a test file at once: it exported the
+generators AND ran five `check-property` self-tests at module top level.
+rackunit counts a check when it RUNS, and Racket instantiates a module once per
+process — so within a batch worker, whichever of the two files was reached
+first got the five, and the other got none.
+
+That accounts for every number:
+
+| layout | generators | properties | sum |
+|---|---|---|---|
+| the two files land in DIFFERENT workers | 5 | 13 | 18 |
+| SAME worker, generators first | 5 | 8 | 13 |
+
+Work-stealing picks between those per run. The recorded history in
+`timings.jsonl` shows exactly this alternation and — the giveaway — shows
+`test-generators.rkt` at **5 every single time**, never 0.
+
+⚠ **Which makes this entry's central claim WRONG, and it was mine.** It said
+"silently running 8 of 13 is a coverage hole nothing reports". There was no
+coverage hole: the five self-tests always ran, and in the different-worker case
+they ran TWICE (once per process) — the 18 was the anomaly, not the 13. What
+actually varied was ATTRIBUTION between two files. The entry reasoned from a
+count diff to a coverage claim without checking the other file's count, which
+was sitting in the same records and would have refuted it immediately.
+
+**Fix** — split the double duty, which is the actual defect:
+
+- `tests/generators.rkt` — the library. Deliberately NOT named `test-*.rkt`,
+  because that prefix is exactly what the runner collects (run-affected-tests
+  `:401`).
+- `tests/test-generators.rkt` — the five self-tests, requiring the library.
+- `tests/test-properties.rkt` — requires the library, so requiring generators
+  has no test side effects.
+
+Now constant: **generators 5, properties 8**, under `--jobs 1` and under full
+work-stealing alike. Suite total drops 10634 → **10629**, which is the five
+self-tests no longer running twice.
+
+**The transferable bit**: a module that is both a library and a test file has a
+test count that depends on who imports it first. Anything requiring a
+`test-*.rkt` file is suspect for this — these two were the only such pair in the
+tree, checked.
+
+## (original filing) `test-properties.rkt` reports a NONDETERMINISTIC test count
 
 Noticed while diffing per-file test counts across two full-suite runs (the
 runner records them in `data/benchmarks/timings.jsonl`, which is what made this
