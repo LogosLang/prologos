@@ -3485,21 +3485,28 @@ wiring it rather than refreshing the baseline again.
 Those six are now baselined (they are the same class as the existing
 `current-coercion-warnings` / `-cell-id` entries, which sit in the baseline too).
 
-**Two remain flagged, deliberately not baselined** — they are pre-existing drift
-from other work and nobody has reviewed them:
+The other two were then REVIEWED rather than blanket-baselined, since baselining
+someone else's parameters unread is exactly the rot this guard exists to catch:
 
-```
-current-check-fire-invariants?  (propagator.rkt:2231)
-current-residuation-enabled?    (global-env.rkt:68)
-```
+- `current-check-fire-invariants?` (propagator.rkt) — used only by
+  `tests/test-scheduler-odiff.rkt`, which parameterizes it locally. A debug flag
+  with one consumer; legitimately exported.
+- `current-residuation-enabled?` (global-env.rkt) — read at five sites in
+  `driver.rkt` and parameterized there; genuinely cross-module.
 
-Baselining someone else's parameters unreviewed is exactly the rot this guard
-exists to catch, so `--strict` still exits 1 — honestly.
+Both are accepted state, so both are now baselined and `--strict` exits **0**.
 
-**The fix is to wire it**, not to refresh again: `tools/install-git-hooks.sh`
-already installs a pre-commit hook that runs `check-parens.sh`, so there is an
-obvious seat. A guard nobody runs is not a guard, and the 2026-06-01 entry
-proves the baseline-refresh response does not hold.
+**✅ AND IT IS NOW WIRED — the actual fix.** `tools/git-hooks/pre-commit` gains
+a third gate running `lint-parameters.rkt --strict`, beside the existing
+paren-balance and stdout-clean gates. Whole-tree rather than staged-file-scoped
+(a per-file view cannot tell "new" from "already accepted"), and gated on a
+production `.rkt` being staged, so it costs one Racket startup only when it
+could matter.
+
+The hook comment records why, because the history is the argument: the
+2026-06-01 response to this guard failing was to refresh its baseline, and the
+guard promptly rusted again. **Updating the baseline stays a legitimate option —
+but it should be a DECISION, and it was previously the automatic one.**
 
 ### parameter-lint baseline refresh (2026-06-01, during PPN 4C 4A.c-iii-c)
 

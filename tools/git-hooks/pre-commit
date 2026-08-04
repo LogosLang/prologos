@@ -2,9 +2,10 @@
 #
 # pre-commit — fast lint gates on staged .rkt files
 #
-# Two gates, both fast (each ~1s for typical staged set):
+# Three gates, all fast (each ~1s for typical staged set):
 #   1. tools/check-parens.sh        — delimiter balance via Racket's reader
 #   2. tools/check-stdout-clean.rkt — module-load stdout pollution
+#   3. tools/lint-parameters.rkt    — new unbaselined exported parameters
 #
 # Bypass: git commit --no-verify  (emergencies only).
 #
@@ -17,6 +18,14 @@
 #     files outside targeted-tests verification, breaking `raco pkg install`
 #     and downstream CI on every open PR. PR #29 fixed the immediate bug;
 #     this hook prevents recurrence.
+#   - lint-parameters: wired 2026-08-03, after the guard rusted TWICE. Its
+#     DEFERRED entry recorded on 2026-06-01 that `--strict` had been silently
+#     failing on 16 unbaselined parameters because "it isn't wired into
+#     pre-commit/CI, so nothing ran it" — and the response was to refresh the
+#     baseline, not to wire it. By 2026-08-03 it had drifted again to 8, six of
+#     them added that same day by someone following every other rule in
+#     pipeline.md's new-parameter checklist except the one nothing enforced.
+#     A guard nobody runs is not a guard; refreshing its baseline is not a fix.
 #   - check-stdout-clean: surfaced 2026-04-28 — VS Code LSP failed with
 #     "Header must provide a Content-Length property" because 5 top-level
 #     (verify-rewrite-rule ...) calls in sre-rewrite.rkt printed #t to
@@ -50,4 +59,21 @@ fi
 prod_files=$(echo "$files" | grep -v -E '/(tests|benchmarks|examples|tools|lib)/' || true)
 if [ -n "$prod_files" ]; then
   "$RACKET" "$REPO_ROOT/tools/check-stdout-clean.rkt" $prod_files
+fi
+
+# Gate 3: no NEW unbaselined exported parameters.
+#
+# Whole-tree, not staged-file-scoped, because the lint compares against a
+# baseline of accepted parameters — a per-file view cannot tell "new" from
+# "already accepted". It is still fast (one Racket startup, one scan).
+#
+# Runs only when a production .rkt is staged: tests and tools do not add the
+# exported-parameter surface this guards.
+#
+# On failure the message lists the offending names and the four resolutions
+# (test-register / migrate to a cell / keep private / update the baseline).
+# Updating the baseline is a real option, but it should be a DECISION — that it
+# was previously the automatic response is why this gate exists.
+if [ -n "$prod_files" ]; then
+  "$RACKET" "$REPO_ROOT/racket/prologos/tools/lint-parameters.rkt" --strict
 fi

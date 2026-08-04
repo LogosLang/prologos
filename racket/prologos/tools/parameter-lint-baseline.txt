@@ -20,6 +20,7 @@ current-capability-warnings
 current-capability-warnings-cell-id
 current-cell-id-namespace
 current-cfa-result
+current-check-fire-invariants?
 current-clock-cell-id
 current-coercion-registry
 current-coercion-registry-cell-id
@@ -133,6 +134,7 @@ current-relation-store
 current-relation-store-version
 current-relational-env
 current-repl-mode
+current-residuation-enabled?
 current-resolution-executor-pure
 current-retry-unify
 current-schema-registry
