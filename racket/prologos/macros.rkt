@@ -7869,7 +7869,29 @@
       (lookup-trait sym)      ;; trait → known (not a variable)
       (lookup-bundle sym)     ;; bundle → known (not a variable)
       (lookup-schema sym)     ;; schema → known type (not a variable)
-      (lookup-selection sym)))  ;; selection → known type (not a variable)
+      (lookup-selection sym)   ;; selection → known type (not a variable)
+      ;; ⚠ CAPABILITIES (2026-08-03). Without this arm every capability name in
+      ;; a spec was AUTO-GENERALIZED into a fresh `{X : Type}` implicit binder,
+      ;; because the auto-detect at Phase 1b keeps any capitalized symbol that
+      ;; `known-type-name?` does not claim.
+      ;;
+      ;; The damage was silent and total for the positional spelling:
+      ;;
+      ;;   spec rd ReadCap -0> String -> String
+      ;;   defn rd [_cap path] path
+      ;;   ⇒ rd : [Pi [x :0 <[Type 0]>] [Pi [y :0 <x>] String -> String]]
+      ;;
+      ;; — `ReadCap` became a type VARIABLE and `_cap` got that variable's type,
+      ;; so the binder never registered as a capability, the capability scope
+      ;; stayed empty, and any call needing that capability failed with
+      ;; "E2001: Required capability ReadCap not available in scope" — an error
+      ;; that points at the call site while the damage was done in the spec.
+      ;;
+      ;; `prologos::core::csv` is the tree's only user of that spelling and has
+      ;; been UNIMPORTABLE as a result, with two green E2E test files over it.
+      ;; Referring the name explicitly does not help: the auto-detect asks
+      ;; `known-type-name?`, not the environment.
+      (capability-type? sym)))  ;; capability → known type (not a variable)
 
 ;; Phase 1b: Check if a symbol starts with an uppercase letter (type variable candidate)
 (define (capitalized-symbol? sym)
