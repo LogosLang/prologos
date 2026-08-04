@@ -3323,15 +3323,44 @@ point adding a function to a module nobody can import.
 
 ## Effectful Computation on Propagators — Remaining
 
-### Phase 2: Architecture A+D — Propagator-Native Effectful IO (NOT STARTED)
+### 🔶 Phase 2: Architecture A+D — Propagator-Native Effectful IO — **"NOT STARTED" IS STALE; it is substantially BUILT** (re-probed 2026-08-03)
+
+The entry says NOT STARTED and lists "16 sub-phases across 6 phases (AD-A
+through AD-F)". Grepping the tree for those very markers finds them spanning
+**A through F, across 12 files**, with five dedicated modules:
+
+| module | sub-phases |
+|---|---|
+| `effect-ordering.rkt` | AD-A0, AD-D, AD-D1, AD-D2, AD-D3, AD-F2 |
+| `effect-position.rkt` | AD-A2 |
+| `effect-bridge.rkt` | AD-B, AD-B1, AD-B2 |
+| `session-runtime.rkt` | AD-C, AD-C1, AD-C2, AD-E, AD-F1 |
+| `effect-executor.rkt` | AD-E, AD-E1, AD-E2, AD-E3, AD-F2, AD-F3 |
+
+plus AD-B wiring in `parser.rkt` / `macros.rkt` / `elaborator.rkt` /
+`typing-core.rkt` / `typing-propagators.rkt` / `typing-errors.rkt` and AD-F2 in
+`driver.rkt`. That is ~15 of the 16 numbered sub-phases with code against them.
+
+And it is **tested**: 9 files — `test-effect-bridge-01`, `-collection-01`,
+`-executor-01`, `-ordering-01`, `-position-01`, `test-session-runtime-01`
+through `-04` — **207 cases, all passing**.
+
+**What this entry needs is a status audit, not implementation.** Someone should
+walk the design doc's 16 sub-phases against the markers and record which are
+genuinely complete, which are partial, and which are absent — the one thing a
+grep cannot tell you is whether a marker means "done" or "started here". Until
+then "NOT STARTED" is actively misleading: it is the single most wrong line in
+this file, and it would send anyone picking up the track to rebuild what exists.
+
 - Session types as causal clocks, effect ordering via Galois connection
-- 16 sub-phases across 6 phases (AD-A through AD-F)
 - **Not blocked**: All phases buildable without concurrent runtime
 - Source: `docs/tracking/2026-03-07_ARCHITECTURE_AD_IMPLEMENTATION_DESIGN.org`
 
 ### Phase 3: Full Reactive Effect Integration (RESEARCH)
 - Architecture C — topological scheduling of effect propagators with freeze semantics
-- **Blocked on**: Phase 2 completion
+- **Blocked on**: Phase 2 completion — ⚠ and per the re-probe above, Phase 2 is
+  much further along than this entry assumes, so the block may be softer than
+  it reads. Confirm Phase 2's real status before treating this as gated.
 - Source: `docs/tracking/2026-03-06_EFFECTFUL_PROPAGATORS_RESEARCH.md` §5c
 
 ---
