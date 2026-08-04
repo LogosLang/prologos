@@ -333,12 +333,25 @@
 ;;
 ;; The message names the remedy, because the remedy is what the reader needs:
 ;; the ambiguity is resolvable by qualifying the call or importing selectively.
+;;
+;; ⚠ IT DELIBERATELY DOES NOT CLAIM A CONSEQUENCE IT CANNOT DEMONSTRATE. The
+;; first version said "call sites of the other get the wrong argument count",
+;; borrowed from the DEFERRED entry. Probed afterwards, and it did not hold for
+;; a BARE call: value resolution and spec propagation both follow import order
+;; over the same import list, so they AGREE, and an unqualified `[length xs]`
+;; with both modules imported gives the right answer — verified identical with
+;; the qualified-lookup probe removed, i.e. it was never broken. The case that
+;; WAS broken is a QUALIFIED call to the race's loser, and that one is fixed.
+;;
+;; So what remains true, and all the message now says, is that the NAME is
+;; ambiguous and which module answers to it depends on import order. That is
+;; worth telling someone — they may get a different function than they meant —
+;; but it is a question of MEANING, not of a corrupted argument count.
 (define (format-duplicate-binding-warning names)
   (format (string-append
            "W3001: ~a name~a bound by more than one import with different "
-           "implicit-argument counts (~a). Which one survives depends on import "
-           "ORDER, and call sites of the other get the wrong argument count — "
-           "qualify the call (`Module::name`) or import selectively.")
+           "implicit-argument counts (~a). Which one you get depends on import "
+           "ORDER — qualify the call (`Module::name`) or import selectively.")
           (length names)
           (if (= 1 (length names)) " is" "s are")
           (string-join (map symbol->string names) " ")))

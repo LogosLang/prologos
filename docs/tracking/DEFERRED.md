@@ -1638,7 +1638,24 @@ counterexamples comes up empty.
   lookup (`elaborator.rkt:567-576`). Two same-named specs from different
   modules (e.g. nat's `add` vs a generic `add`; a derived `reduce` vs
   `list.prologos`'s `reduce`) overwrite each other in any module importing
-  both — the loser's call sites get WRONG implicit-argument counts, silently.
+  both.
+
+  ⚠ **"the loser's call sites get WRONG implicit-argument counts" — CORRECTED
+  2026-08-03, after trying to reproduce it.** The claim holds for a QUALIFIED
+  call to the loser (probed: "Could not infer type", cascading; now fixed by the
+  qualified key). It does NOT hold for a BARE call, and the reason is
+  structural: value resolution and spec propagation both follow import order
+  over the same import list, so **they agree**. Measured — an unqualified
+  `[length xs]` with both modules imported gives the right answer, and it is
+  byte-identical with the qualified-lookup probe removed, i.e. it was never
+  broken. Instrumenting the lookup shows why: a bare `[length xs]` arrives at
+  the spec site already resolved to `prologos::data::list::length`.
+
+  The W3001 message was written from the un-reproduced claim and has been
+  corrected to say only what holds: the NAME is ambiguous and which module
+  answers to it depends on import order. Worth telling someone — they may get a
+  different function than they meant — but a question of MEANING, not of a
+  corrupted argument count.
 - **Fix direction**: FQN-keyed spec store (or module-scoped shadowing with
   deliberate resolution order). Crosses the module system — candidate for a
   PM-series follow-up. Blocks item 1's clean resolution.
@@ -1664,7 +1681,8 @@ to a *different* spec entry on every qualified call — the code path was live a
 along.
 
 **This does NOT fix the race**, and the entry stays open for that reason: a
-genuinely unqualified `map` still resolves by import order. What changed is that
+genuinely unqualified `map` still resolves by import order. (What that costs is
+narrower than this entry originally claimed — see the correction above.) What changed is that
 there is now a working escape hatch, and W3001 names it. The remaining work is
 the module-scoped store — and it now has a measured target: **the prelude's own
 12 order-dependent spec names**, which W3001 deliberately does not report
