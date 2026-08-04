@@ -3965,7 +3965,7 @@ level, `x{…}` selects and `x.k` accesses". The entry predates that work.
 
 ## LSP / Editor Support
 
-### 🔶 Token-level srcloc precision — REAL, caused by SPEC INJECTION, and the filed blocker is wrong (re-probed 2026-08-04)
+### ✅ FIXED 2026-08-04 — token-level srcloc precision; the cause was SPEC INJECTION and the filed blocker was wrong
 
 ⚠ **This entry was corrected the same day it was first re-probed.** The first
 pass concluded "only a WS layout-continued body loses precision" — wrong, and
@@ -4001,13 +4001,33 @@ integration (cell-per-node architecture)". `surf-var` carries its own srcloc
 (`elaborator.rkt:1055`) and threads it into `unbound-variable-error` (`:824`) —
 demonstrably exact in every shape that does not pass through spec injection.
 
-**Fix shape** (not attempted): keep the body forms as syntax objects across
-injection, or re-attach their locations at the rebuild. There is in-tree
-precedent — Rel T1 POL.9b does exactly this surgery for the `def x := (…)` RHS
-(`macros.rkt` `rebuild-def-preserving-rhs`), splicing the original stx back when
-the datum survived unchanged. Doing the same for spec-injected defn bodies is
-the slice. It matters more than the entry implies: most of the stdlib is
-spec'd, so this is the common case, not an edge one.
+**Fixed** by `splice-preserved-tail` (`macros.rkt`): before the rebuild,
+re-attach the ORIGINAL syntax objects to any trailing elements the rewrite left
+untouched. Spec injection only replaces the parameter bracket and inserts a
+return type, so the body forms match by suffix and come back with their own
+locations. Substitution is gated on `equal?` of the datums, so it can only add
+location information — the datum that lands in the tree is the one that was
+already going there. Follows the Rel T1 POL.9b precedent (`def x := (…)`).
+
+After: `spec n Int -> Int` / `defn n [x]` / `  [int+ x undef_withspec]` reports
+**5:10 span 14** — the token — where it reported 9:0 span 35, the whole defn.
+
+⚠ **Scoped to `defn`, and that is load-bearing, not caution.** The first version
+spliced every rebuilt form and broke **15 tests across 5 files**, all "X is a
+relation, not a function". The `def` leg decides its RHS's command position by
+comparing `(last final-datum)` against the RHS *datum*; handed a syntax object
+it compares unequal, `value-stx` goes `#f`, the `'prologos-defrhs-command` stamp
+never lands, and a paren GOAL silently reverts to an application. The def leg
+already preserves its own RHS syntax and needs no help.
+
+Three pins in `tests/test-error-messages.rkt` assert exact line/col/span for a
+spec'd multi-line body, a spec'd single-line body, and — as the control that
+distinguishes "coarsened everything" from "coarsened only the spec'd path" — a
+spec-LESS body that was already precise. Verified the two spec'd pins fail with
+the splice disabled and the control does not.
+
+Suite 549 files / 10649 green; 15-example corpus A/B against HEAD shows only the
+usual meta-id suffix difference.
 
 - Source: LSP Tier 2, commit `712c45a`
 

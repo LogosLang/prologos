@@ -882,3 +882,64 @@
   (define m (prologos-error-message r))
   (check-true (regexp-match? #rx"Add a `spec`" m) (format "got: ~v" m))
   (check-true (regexp-match? #rx"fused form" m) (format "got: ~v" m)))
+
+;; ========================================
+;; Token-level srcloc precision under a spec (2026-08-04)
+;; ========================================
+;;
+;; DEFERRED listed this as "errors point to enclosing `defn` instead of exact
+;; token", blocked on "full propagator integration (cell-per-node)". Neither
+;; half held: `surf-var` carries its own srcloc and the elaborator threads it,
+;; and precision was already exact everywhere EXCEPT a defn carrying a `spec`.
+;;
+;; Cause: `datum` is `(syntax->datum stx)` — a recursive strip — so a form that
+;; gets REWRITTEN is re-wrapped by `(datum->syntax #f final-datum stx)`, which
+;; stamps the whole form's location onto every new sub-object. Spec injection
+;; rewrites; a spec-less defn does not, and returns its original syntax intact.
+;;
+;; The fix re-attaches the original syntax objects to trailing elements the
+;; rewrite left untouched (the body forms). These pin the DELTA — a bare
+;; "is it precise" assertion would have passed before the fix on the spec-less
+;; case and proved nothing.
+
+(define (unbound-srcloc src)
+  ;; → (list line col span) of the first Unbound-variable error, or #f
+  (define tmp (make-temporary-file "prologos-srcloc-~a.prologos"))
+  (call-with-output-file tmp #:exists 'replace (lambda (o) (display src o)))
+  (define rs (parameterize ([current-lib-paths (list prelude-lib-dir)]
+                            [current-module-registry prelude-module-registry])
+               (install-module-loader!)
+               (process-file (path->string tmp))))
+  (delete-file tmp)
+  (for/or ([r (in-list rs)])
+    (and (prologos-error? r)
+         (regexp-match? #rx"Unbound variable" (prologos-error-message r))
+         (let ([l (prologos-error-srcloc r)])
+           (and l (list (srcloc-line l) (srcloc-col l) (srcloc-span l)))))))
+
+(test-case "srcloc/a spec'd defn reports the TOKEN, not the enclosing defn"
+  ;; `undef_withspec` is 14 chars, on line 5 at column 10.
+  (define got (unbound-srcloc (string-append "ns srcA\n\n"
+                                             "spec n Int -> Int\n"
+                                             "defn n [x]\n"
+                                             "  [int+ x undef_withspec]\n")))
+  (check-equal? got (list 5 10 14)
+                (format "expected the token at 5:10 span 14, got ~v" got)))
+
+(test-case "srcloc/single-line spec'd defn body too"
+  ;; The shape that showed layout was NOT the variable: one line, still a spec.
+  ;; `undef_1line` is 11 chars, on line 4 at column 19.
+  (define got (unbound-srcloc (string-append "ns srcB\n\n"
+                                             "spec p Int -> Int\n"
+                                             "defn p [x] [int+ x undef_1line]\n")))
+  (check-equal? got (list 4 19 11)
+                (format "expected the token at 4:19 span 11, got ~v" got)))
+
+(test-case "srcloc/a spec-LESS defn was already precise (the control)"
+  ;; This one passed before the fix. It is here so a regression that coarsens
+  ;; everything is distinguishable from one that only coarsens the spec'd path.
+  (define got (unbound-srcloc (string-append "ns srcC\n\n"
+                                             "defn m [x]\n"
+                                             "  [int+ x undef_nospec]\n")))
+  (check-equal? got (list 4 10 12)
+                (format "expected the token at 4:10 span 12, got ~v" got)))

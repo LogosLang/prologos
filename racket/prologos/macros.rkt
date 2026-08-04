@@ -3645,7 +3645,54 @@
                            [(eq? (let ([e (car es)]) (if (syntax? e) (syntax-e e) e)) ':=)
                             (and (pair? (cdr es)) (null? (cddr es)) (cadr es))]
                            [else (loop (cdr es))]))))))
-         (define (rebuild-def-preserving-rhs final-datum)
+         ;; Re-attach the ORIGINAL syntax objects to any trailing elements the
+         ;; rewrite left untouched, so their inner srclocs survive the rebuild.
+         ;;
+         ;; Why this is needed at all: `datum` is `(syntax->datum stx)` — a
+         ;; RECURSIVE strip — so a form that gets rewritten is re-wrapped by
+         ;; `(datum->syntax #f final-datum stx)`, which stamps the WHOLE FORM's
+         ;; location onto every freshly-created sub-object. A form that is NOT
+         ;; rewritten returns its original `stx` and keeps perfect locations.
+         ;;
+         ;; Measured consequence before this (2026-08-04): every `defn` carrying
+         ;; a `spec` reported errors at the defn's own line/col/span instead of
+         ;; at the offending token, because spec injection rebuilds the form.
+         ;; A defn WITHOUT a spec was exact. Most of the stdlib is spec'd, so
+         ;; the coarse case was the common one.
+         ;;
+         ;; Spec injection only replaces the parameter bracket and inserts a
+         ;; return type — the BODY forms come through untouched. So matching by
+         ;; suffix recovers exactly them. Substitution is by `equal?` on the
+         ;; datum, so it can only ever add location information: the datum that
+         ;; ends up in the tree is the one that was already going there.
+         ;; ⚠ `defn` ONLY, and that scoping is load-bearing rather than
+         ;; conservative. The `def` leg below decides the RHS's command position
+         ;; by comparing `(last final-datum)` against the RHS DATUM — hand it a
+         ;; syntax object there and the comparison fails, `value-stx` goes #f,
+         ;; the `'prologos-defrhs-command` stamp is never applied, and a paren
+         ;; GOAL silently reverts to an application. Measured: 15 failures
+         ;; across 5 files, all "X is a relation, not a function". The def leg
+         ;; already preserves its own RHS syntax; it needs no help here.
+         (define (splice-preserved-tail final-datum)
+           (define orig (and (syntax? stx) (syntax->list stx)))
+           (cond
+             [(not (eq? head 'defn)) final-datum]
+             [(or (not orig) (not (list? final-datum))) final-datum]
+             [else
+              ;; walk both from the right while the datums agree
+              (define n
+                (let loop ([o (reverse orig)] [f (reverse final-datum)] [n 0])
+                  (cond
+                    [(or (null? o) (null? f)) n]
+                    [(equal? (syntax->datum (car o)) (car f))
+                     (loop (cdr o) (cdr f) (add1 n))]
+                    [else n])))
+              (if (zero? n)
+                  final-datum
+                  (append (take final-datum (- (length final-datum) n))
+                          (take-right orig n)))]))
+         (define (rebuild-def-preserving-rhs final-datum0)
+           (define final-datum (splice-preserved-tail final-datum0))
            (define (head-of d) (and (pair? d)
                                     (let ([h (car d)])
                                       (if (syntax? h) (syntax-e h) h))))
