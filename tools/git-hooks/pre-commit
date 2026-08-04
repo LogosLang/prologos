@@ -34,7 +34,17 @@
 
 set -e
 
+# The owner's macOS install first, then whatever is on PATH. Without the
+# fallback every Racket gate below exits 127 on a Linux checkout, and `set -e`
+# turns that into "all commits blocked" — a hook that cannot run is not a gate.
 RACKET="/Applications/Racket v9.0/bin/racket"
+if [ ! -x "$RACKET" ]; then
+  RACKET="$(command -v racket || true)"
+  if [ -z "$RACKET" ]; then
+    echo "pre-commit: no racket found (checked /Applications/Racket v9.0 and PATH)" >&2
+    exit 1
+  fi
+fi
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 if [ -z "$REPO_ROOT" ]; then
@@ -42,16 +52,26 @@ if [ -z "$REPO_ROOT" ]; then
   exit 1
 fi
 
-# Get staged .rkt files (added or modified, not deleted)
-files=$(git diff --cached --name-only --diff-filter=AM | grep '\.rkt$' || true)
+staged=$(git diff --cached --name-only --diff-filter=AM || true)
 
-if [ -z "$files" ]; then
-  # No .rkt files staged — nothing to check
+# Get staged .rkt files (added or modified, not deleted)
+files=$(echo "$staged" | grep '\.rkt$' || true)
+
+# Gate 4's inputs are computed HERE, before the .rkt early-exit: the PRELUDE
+# manifest has no extension, so a commit touching only the manifest would
+# otherwise slip past every gate.
+prelude_files=$(echo "$staged" \
+  | grep -E '(racket/prologos/namespace\.rkt|racket/prologos/lib/prologos/book/PRELUDE)$' || true)
+
+if [ -z "$files" ] && [ -z "$prelude_files" ]; then
+  # Nothing this hook checks — done
   exit 0
 fi
 
 # Gate 1: paren balance on the staged files
-"$REPO_ROOT/tools/check-parens.sh" $files
+if [ -n "$files" ]; then
+  "$REPO_ROOT/tools/check-parens.sh" $files
+fi
 
 # Gate 2: stdout-clean check on the staged files
 # Skip if no production .rkt files staged (the racket script also filters,
@@ -76,4 +96,33 @@ fi
 # was previously the automatic response is why this gate exists.
 if [ -n "$prod_files" ]; then
   "$RACKET" "$REPO_ROOT/racket/prologos/tools/lint-parameters.rkt" --strict
+fi
+
+# Gate 4: the PRELUDE manifest and namespace.rkt agree.
+#
+# Runs only when one of the two is staged — this is a two-file invariant, and
+# nothing else can break it.
+#
+# Wired 2026-08-04. The suite runner had been PRINTING this drift on every run
+# and telling the reader to fix it with `gen-prelude --write`, which regenerates
+# namespace.rkt FROM the manifest. That advice was backwards for 6 of the 8
+# hunks that had accumulated: namespace.rkt was AHEAD (println, first/second/
+# rest, the datum imports, nth-int/take-int/drop-int/length-int, eq-check,
+# ord-compare — all live and all missing from the manifest), so following it
+# would have deleted working prelude bindings.
+#
+# A warning nobody acts on decays into noise; a warning whose advice is
+# destructive is worse. Blocking at the commit that causes the drift is what
+# keeps "the manifest is the single source of truth" true rather than aspirational.
+if [ -n "$prelude_files" ]; then
+  if ! "$RACKET" "$REPO_ROOT/racket/prologos/tools/gen-prelude.rkt" --validate >/dev/null 2>&1; then
+    echo "pre-commit: PRELUDE manifest and namespace.rkt disagree." >&2
+    echo "  Run: racket racket/prologos/tools/gen-prelude.rkt --validate" >&2
+    echo "  to see which entries differ, and WHICH WAY." >&2
+    echo "" >&2
+    echo "  Do not reach straight for --write: it regenerates namespace.rkt FROM" >&2
+    echo "  the manifest, so if your change landed in namespace.rkt it will be" >&2
+    echo "  discarded. Update the manifest to match instead." >&2
+    exit 1
+  fi
 fi

@@ -18,11 +18,14 @@
 ;; ---- Foundation data types ----
 (imports [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])
 (imports [prologos::data::bool     :refer [not and or xor bool-eq implies nand nor]])
-(imports [prologos::data::nat      :refer [add mult double pred zero? sub pow
-                                           le? lt? gt? ge? nat-eq? min max
-                                           bool-to-nat clamp]])
+(imports [prologos::data::nat      :as nat :refer [zero?]])
 (imports [prologos::data::pair     :refer [swap map-fst map-snd bimap dup uncurry]])
 (imports [prologos::data::eq       :refer [sym cong trans]])
+;; Datum: code-as-data for quote/quasiquote
+(imports [prologos::data::datum   :refer [Datum datum-sym datum-kw datum-nat
+                                          datum-int datum-rat datum-bool
+                                          datum-nil datum-cons
+                                          sym? kw? nat? int? rat? bool? nil? cons?]])
 
 ;; ---- Char & String data operations ----
 ;; Most operations accessed via module alias: char::code, str::length, etc.
@@ -40,7 +43,7 @@
 ;; List: full API unqualified (wins all name-conflict tiebreaks)
 (imports [prologos::data::list :refer [List nil cons foldr reduce length
                                        map filter append head tail singleton
-                                       reverse sum product any? all? find
+                                       reverse any? all? find
                                        nth last replicate range concat
                                        concat-map take drop split-at
                                        take-while drop-while partition
@@ -48,11 +51,16 @@
                                        elem dedup count scanl iterate-n
                                        intercalate sort-on reduce1 foldr1
                                        init span break prefix-of? suffix-of?
-                                       delete find-index]])
+                                       delete find-index
+                                       nth-int take-int drop-int length-int]])
 
 ;; ---- Core traits (type class definitions) ----
-(imports [prologos::core::eq :refer [Eq eq? eq-neq nat-eq Char--Eq--dict String--Eq--dict]])
-(imports [prologos::core::ord :refer [Ord compare PartialOrd partial-compare PartialOrd-partial-compare
+;; N6d-i: derived bare-name method wrappers (eq?, compare, mul, div, neg,
+;; abs) added to the curated refers — spec propagation is refer-gated, and
+;; the wrappers' where-constraint spec entries drive call-site dict holes.
+;; (add/sub/join/reduce are derive-skipped; see DEFERRED.md N6d-i.)
+(imports [prologos::core::eq :refer [Eq eq? eq-check eq-neq nat-eq Char--Eq--dict String--Eq--dict]])
+(imports [prologos::core::ord :refer [Ord compare ord-compare PartialOrd partial-compare PartialOrd-partial-compare
                                       nat-ord ord-lt ord-le ord-gt ord-ge ord-eq
                                       ord-min ord-max Char--Ord--dict String--Ord--dict]])
 (imports [prologos::core::arithmetic :refer [Add Sub Mul Div Neg Abs mul div neg abs + - * / negate String--Add--dict]])
@@ -101,9 +109,8 @@
 ;; ---- Collection conversions (now in prologos::core::collections) ----
 
 ;; ---- Generic numeric operations + first-class arithmetic ----
-;; sum, product, int-range are in prologos::core::algebra (loaded via :refer-all above)
-;; (the plus/minus/times/divide/negate-fn/abs-fn wrappers were retired in N6f —
-;;  use the first-class operator names + - * / negate abs directly)
+;; sum, product, int-range, plus, minus, times, divide, negate-fn, abs-fn
+;; are now in prologos::core::algebra (loaded via :refer-all above)
 
 ;; ---- Instance registration (side-effect only, :refer []) ----
 ;; eq-instances + eq-numeric-instances merged into prologos::core::eq
@@ -148,6 +155,10 @@
 ;; + subtype hierarchy (ReadCap <: FsCap <: SysCap, etc.)
 (imports [prologos::core::capabilities :refer []])
 
+;; ---- IO convenience functions (IO-D2) ----
+;; Only print/println in prelude; read-ln/read-file/write-file need explicit import
+(imports [prologos::core::io :refer [print println]])
+
 ;; ---- Propagator helpers ----
 (imports [prologos::core::propagator :refer [new-lattice-cell new-widenable-cell]])
 
@@ -164,6 +175,7 @@
                                               length concat any? all?
                                               to-list find take drop
                                               into head empty? rest-seq
+                                              first second rest
                                               coll-map coll-filter coll-length coll-to-list
                                               vec list-to-seq pvec-to-seq
                                               set-to-seq into-vec

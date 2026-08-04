@@ -529,8 +529,14 @@
       [else
        (printf "\n⚠  PRELUDE DRIFT DETECTED\n")
        (printf "   PRELUDE manifest and namespace.rkt are out of sync.\n")
-       (printf "   Run: racket tools/gen-prelude.rkt --write\n")
-       (printf "   to regenerate namespace.rkt from the manifest.\n\n")])))
+       (printf "   Run: racket tools/gen-prelude.rkt --validate   to see WHICH WAY.\n\n")
+       (printf "   ⚠ Do NOT reach straight for --write. Drift goes both ways: the\n")
+       (printf "     manifest is nominally source-of-truth, but edits land in\n")
+       (printf "     namespace.rkt, so --write can DELETE working prelude bindings.\n")
+       (printf "     (2026-08-04: this warning had been firing while namespace.rkt\n")
+       (printf "     was AHEAD in 6 of 8 hunks — println, first/second/rest and the\n")
+       (printf "     datum imports all worked and were absent from the manifest.\n")
+       (printf "     Following the old advice would have removed them.)\n\n")])))
 
 ;; ============================================================
 ;; Batch test execution with shared prelude
