@@ -2643,6 +2643,45 @@ checker, not the syntax.
 
 ---
 
+## 🐛 A NON-EXHAUSTIVE match returns a junk VALUE at zero errors (found 2026-08-03)
+
+```
+spec p1 Nat -> Nat
+defn p1
+  | zero -> 1N
+
+[p1 0N]   ⇒ 1N : Nat
+[p1 5N]   ⇒ ??__match-fail : Nat        ← 0 errors
+```
+
+A pattern match with no matching row compiles to a typed hole named
+`__match-fail` (`macros.rkt`, two sites), and a typed hole is a legal term that
+types at anything. So a partial function **silently returns a hole at its
+declared return type** rather than failing.
+
+The hole mechanism itself is deliberate and fine — a user-written `??foo` is
+also accepted at 0 errors, which is the Agda/Idris hole story. What is different
+here is that **the user did not write this hole; the compiler inserted it
+because their match was incomplete**. Silence is defensible for a hole someone
+typed on purpose and much less so for one that means "your function has a case
+you did not cover".
+
+**Not filed anywhere before this** — grepping the tree finds no
+non-exhaustiveness diagnostic at all, only the comment `;; No rows —
+unreachable branch (incomplete pattern match)` at the site that plants the hole.
+
+**Why it is not fixed here**: error-vs-warning is a language-policy call.
+Partial functions are legal in some languages and an error in most
+dependently-typed ones, and Prologos has holes as a first-class feature, which
+argues for a WARNING rather than a hard error. The warning machinery exists and
+gained a category the same day (W3001), so the mechanism is cheap; the decision
+is not. Whoever takes it should also measure how much existing code relies on
+partial matches before choosing severity.
+
+Found while probing "Extended Pattern Matching in `.{...}`" below — the
+unsupported view pattern `.{n + 1}` produced exactly this silent failure, which
+is what made the general case visible.
+
 ## Syntax — Mixfix
 
 ### Statement-Like Forms in `.{...}`
@@ -2654,15 +2693,24 @@ checker, not the syntax.
 ### `functor :compose` Auto-Registration of Mixfix Symbol
 - Deferred due to coupling concerns
 
-### Extended Pattern Matching in `.{...}`
+### Extended Pattern Matching in `.{...}` — ACCURATE, and it fails SILENTLY (re-probed 2026-08-03)
 - E.g., `.{n + 1}` → `suc n` (Agda view patterns)
+- Probe: `defn pr | .{n + 1} -> n | zero -> 99N` **defines with 0 errors**, and
+  `[pr 5N]` then returns `??__match-fail : Nat` — the pattern never matches and
+  nothing says so. `[pr 0N]` correctly gives `99N`, so the arm that IS supported
+  works and only the view pattern is inert.
+- That silence is the general non-exhaustive-match behaviour, not something
+  specific to view patterns — filed as its own entry above.
 
 ### 🔶 Phase 4: Advanced Mixfix — UNICODE SYMBOLS WORK (re-probed 2026-08-03)
 - ~~Unicode operator symbols~~ — **they work**, and the thing that made them
   look unsupported was a separate WS-surface bug, now fixed (below).
   `spec f Bool Bool -> Bool` / `:mixfix {:symbol ⊕ :group logical-and}` then
   `.( true ⊕ false )` evaluates. Pinned in `tests/test-mixfix-02.rkt`.
-- Postfix operators, full mixfix patterns — still open, not probed.
+- Postfix operators — **probed 2026-08-03, accurate**: a `:mixfix` symbol used
+  postfix (`.( 3N ! )`) fails with "Unexpected end of expression in `.{...}`".
+  The Pratt parser has no postfix slot.
+- Full mixfix patterns — still open, not probed.
 - Source: `docs/tracking/2026-02-23_MIXFIX_SYNTAX_DESIGN.org`
 
 ⚠ **The reason this looked deferred: WS `:mixfix` metadata silently did
