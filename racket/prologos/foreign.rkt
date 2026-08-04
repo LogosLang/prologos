@@ -358,6 +358,23 @@
     [(expr-Rat)     'Rat]
     [(expr-Char)    'Char]
     [(expr-String)  'String]
+    ;; ⚠ ADDED 2026-08-03. Both marshallers have carried `Float32`/`Float64`
+    ;; cases since Numerics N3f — `float32->flonum` / `flonum->float64` and
+    ;; their siblings, with a comment explaining that the FFI is "the
+    ;; legitimate NaN/Inf round-trip point". None of it was REACHABLE: this
+    ;; function produced no such tag, so a `Float64`-typed foreign argument
+    ;; fell to the `Passthrough` catch-all and the raw `expr-float64` STRUCT
+    ;; was handed to the Racket function. Symptom is a contract violation
+    ;; naming the struct (`sqrt: contract violation … given: (expr-float64
+    ;; 4.0)`), which reads like a bad declaration rather than a missing arm.
+    ;;
+    ;; Note the shape of the miss: the passthrough default is what made it
+    ;; silent-ish, the same catch-all-does-the-wrong-thing pattern
+    ;; `pipeline.md` § Exhaustive Walkers describes. A type this function does
+    ;; not know becomes "the Racket side handles IR values directly", which is
+    ;; true for `Path`/`Keyword` and false for everything else.
+    [(expr-Float32) 'Float32]
+    [(expr-Float64) 'Float64]
     ;; Passthrough types: Path, Keyword — Racket functions operate on IR values directly
     [(expr-Path)    'Path]
     [(expr-Keyword) 'Keyword]

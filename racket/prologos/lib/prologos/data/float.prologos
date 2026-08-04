@@ -1,0 +1,44 @@
+ns prologos::data::float
+
+;; ========================================
+;; Prologos Float Library
+;; Foreign imports for IEEE-754 operations from Racket.
+;; ========================================
+;;
+;; These are the residual items DEFERRED.md § "Numerics Tower" Phase 4 listed as
+;; "Residual, unverified": sqrt, NaN specifically, if-nan, and Float↔Posit. All
+;; five were genuinely absent (probed 2026-08-03 — five `Unbound variable`s).
+;;
+;; Shipped as `foreign racket` bindings rather than as compiler primitives, and
+;; that choice is the Phase 4a/4b precedent restated: adding a float primitive
+;; the AST way touches NINE files (parser, syntax, typing-core, reduction, zonk,
+;; substitution, pretty-print, qtt, pnet-serialize — the `pipeline.md`
+;; checklist), and buys nothing here because Racket already implements every one
+;; of these exactly. `foreign.rkt` already marshals Float64 in both directions,
+;; so there is no new machinery at all.
+;;
+;; The parser-keyword float ops (`float-finite?`, `float-to-rat`, …) stay where
+;; they are; this module ADDS to them rather than duplicating any.
+
+;; --- Roots and powers ---
+;; NOTE the module split: `sqrt`/`exp`/`log`/`expt` are `racket/base`;
+;; `nan?`/`infinite?` are `racket/math`. Getting it wrong is a LOUD
+;; whole-module failure ("name is not provided"), not a silent miss.
+foreign racket "racket/base" [sqrt :as sqrt : Float64 -> Float64]
+foreign racket "racket/base" [expt :as expt : Float64 -> Float64 -> Float64]
+foreign racket "racket/base" [exp :as exp : Float64 -> Float64]
+foreign racket "racket/base" [log :as log : Float64 -> Float64]
+
+;; --- NaN and infinity predicates ---
+;; `float-finite?` (a parser keyword) already answers "neither NaN nor ±Inf".
+;; These two SPLIT that: a NaN and an infinity are both non-finite, and code
+;; that has to distinguish them could not, which is what the entry meant by
+;; "NaN specifically".
+foreign racket "racket/math" [nan? :as nan? : Float64 -> Bool]
+foreign racket "racket/math" [infinite? :as infinite? : Float64 -> Bool]
+
+;; --- Rounding ---
+foreign racket "racket/base" [floor :as floor : Float64 -> Float64]
+foreign racket "racket/base" [ceiling :as ceiling : Float64 -> Float64]
+foreign racket "racket/base" [truncate :as truncate : Float64 -> Float64]
+foreign racket "racket/base" [round :as round : Float64 -> Float64]

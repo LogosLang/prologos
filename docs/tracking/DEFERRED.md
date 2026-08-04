@@ -2101,7 +2101,7 @@ scheduler variants) are unblocked.
 
 ## Numerics Tower
 
-### 🔶 LARGELY DONE — Phase 4: Float32/Float64 (re-probed 2026-08-02)
+### 🔶 LARGELY DONE — Phase 4: Float32/Float64 (re-probed 2026-08-02; residuals mostly closed 2026-08-03)
 
 Listed as pending; it is essentially all present, and nothing was pinning it
 BECAUSE the entry said it was not. Now pinned in
@@ -2118,6 +2118,42 @@ BECAUSE the entry said it was not. Now pinned in
 
 **Residual, unverified**: `sqrt` (no `float-sqrt` found), `if-nan`, NaN
 specifically, and Float↔Posit. Those are the honest remainder of the list.
+
+**✅ MOSTLY CLOSED 2026-08-03.** Probed first — five `Unbound variable`s, so the
+residual was accurate, not stale. `prologos::data::float` now provides `sqrt`,
+`expt`, `exp`, `log`, `nan?`, `infinite?`, `floor`, `ceiling`, `truncate`,
+`round`.
+
+Shipped as `foreign racket` bindings, which is the Phase 4a/4b precedent
+restated: the AST route costs NINE files per primitive (the `pipeline.md`
+checklist) and buys nothing when Racket already implements each one exactly.
+
+`nan?` + `infinite?` are BOTH there deliberately — that is what "NaN
+specifically" needed. `float-finite?` (a parser keyword) answers "neither NaN
+nor ±Inf", so code holding a non-finite value could not tell which it had.
+
+⚠ **AND THE FFI's FLOAT MARSHALLING WAS DEAD CODE.** Both marshallers in
+`foreign.rkt` have carried `Float32`/`Float64` cases since Numerics N3f —
+`float64->flonum`, `flonum->float64` and siblings, with a comment calling the
+FFI "the legitimate NaN/Inf round-trip point". **None of it was reachable**:
+`base-type-name` had no Float arms, so a `Float64`-typed foreign argument fell
+to the `Passthrough` catch-all and the raw `expr-float64` STRUCT went to the
+Racket function. The symptom is `sqrt: contract violation … given:
+(expr-float64 4.0)`, which reads like a bad declaration rather than a missing
+arm — and it is a RAISE, so it takes the file down.
+
+Note the shape: the `Passthrough` default is what made it silent-ish. A type
+`base-type-name` does not know becomes "the Racket side handles IR values
+directly" — true for `Path`/`Keyword`, false for everything else. Same
+catch-all-does-the-wrong-thing pattern as `pipeline.md` § Exhaustive Walkers.
+Two arms fixed it and made ~30 lines of existing marshalling live.
+
+**Still open from the residual**: `if-nan` (a combinator, not a primitive — it
+wants the `p32-if-nar` treatment as a lib function) and Float↔Posit in the
+FFI-marshalled direction. `conversions.prologos` already has
+`From Float64 Posit*` impls built on `float-finite?` + `float-to-rat`, so the
+Prologos-level conversion exists; what is absent is a direct foreign one, which
+may not be wanted at all.
 
 **Found while probing** — `[from-int Float64 3]` died on a raw
 `surf-from-int: arity mismatch` at parse time, taking the whole file.
