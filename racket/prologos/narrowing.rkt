@@ -479,12 +479,26 @@
 ;;   arg-cells   — list of cell-ids for function arguments
 ;;   result-cell — cell-id for function result
 (define (narrow-function net name tree arity)
-  ;; Create argument cells (initially bot — unknown)
+  ;; Create argument cells (initially bot — unknown), ALL AT ONCE.
+  ;;
+  ;; This was a `for/fold` threading the network through `arity` independent
+  ;; allocations — the shape `on-network.md` names as a red flag ("for/fold
+  ;; threading a network through independent operations → should be
+  ;; all-at-once"). The arguments do not depend on each other; nothing here
+  ;; needed sequencing.
+  ;;
+  ;; `net-new-cells-batch` (BSP-LE Track 0 Phase 4) does the whole set through
+  ;; transient CHAMP builders, producing ONE persistent network update instead
+  ;; of `arity` of them. It had been exported and tested since Phase 4 with
+  ;; ZERO production callers — the "Validated ≠ Deployed" gap recorded in
+  ;; DEFERRED § Propagator/Cell Allocation Efficiency. This is its first.
+  ;;
+  ;; Ordering is preserved: the batch returns ids in spec order over a
+  ;; contiguous range, which is what the old `(append cells (list cid))` built.
   (define-values (net1 arg-cells)
-    (for/fold ([n net] [cells '()])
-              ([i (in-range arity)])
-      (let-values ([(n* cid) (net-new-cell n term-bot term-merge term-contradiction?)])
-        (values n* (append cells (list cid))))))
+    (net-new-cells-batch net
+                         (for/list ([_i (in-range arity)])
+                           (list term-bot term-merge term-contradiction?))))
   ;; Create result cell (initially bot)
   (define-values (net2 result-cell)
     (net-new-cell net1 term-bot term-merge term-contradiction?))

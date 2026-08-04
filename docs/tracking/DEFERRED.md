@@ -2284,18 +2284,39 @@ in the tree.** Measured at HEAD:
 | Top-3 (2) field-group struct splitting (hot/warm/cold) | ✅ shipped — BSP-LE Track 0 Phase 3b; the struct IS the hot/warm/cold grouping this recommended |
 | Top-3 (3) batch cell registration via transient CHAMP | ⚠ **built, tested, NOT DEPLOYED** |
 
-**(3) is the live item, and it is the "Validated ≠ Deployed" shape named in
-`workflow.md`.** `net-new-cells-batch` exists (`propagator.rkt:1487`), is
-exported, and has six passing cases in `test-propagator.rkt` — and has **zero
-production callers**. Every `net-new-cell` site in the tree still allocates one
-at a time (macros.rkt 25, session-runtime.rkt 16, propagator.rkt 13, zonk.rkt
-12, reduction.rkt 10, infra-cell.rkt 10, parser.rkt 9, substitution.rkt 8, …).
+**(3) — and the deployment attempt found there is nothing to deploy it to
+(2026-08-04).** `net-new-cells-batch` exists (`propagator.rkt:1487`), is
+exported, has six passing cases, and had zero production callers. Reading that
+as the "Validated ≠ Deployed" shape, I went looking for the N-sequential-cell
+sites to convert. There are none:
 
-A track that ends with the new path unused has a gap, not a safety net. The
-remaining work is the deployment phase: find the sites that allocate N cells in
-sequence, convert them, and benchmark — which is also what the entry's own
-"Next step" asked for. Not attempted here; it wants the A/B discipline
-(`bench-ab --refs`), not a triage pass.
+- The whole tree contains exactly **one** site allocating N cells in a loop —
+  `narrow-function` (`narrowing.rkt`), and it has **no production callers**
+  (only `test-narrowing-01.rkt`, every call at **arity 1**, where a "batch" is
+  one cell).
+- The two other loop-adjacent sites are not N-cell allocations at all:
+  `relations.rkt:761` allocates ONE viability cell (the loop builds a set), and
+  `build-var-env` (`:2019`) allocates **one compound `scope-cell` for all
+  variables at once**.
+
+That last one is the answer. The architecture moved past this optimization:
+`propagator-design.md` § Cell Allocation Efficiency prescribes "separate cells
+for separate concerns, **compound cells for cohesive scopes**", and the codebase
+follows it — logic-variable scopes, decision state, commitment tracking are each
+ONE compound cell, not N. Batch allocation answers "how do I make N allocations
+cheap"; compound cells answer "why are there N allocations". **The audit
+(2026-03-20) predates that discipline**, so its third optimization was
+superseded rather than left undone.
+
+Converted the one site anyway (`narrowing.rkt`), because its `for/fold`
+threading a network through independent allocations is the red flag
+`on-network.md` names — but it is **test-only at arity 1, so there is no perf
+benefit to report, and this should not be read as "the batch API is now
+deployed"**. It is not.
+
+**Recommendation**: retire (3) as superseded, or re-scope it as "audit for
+remaining N-cell groups that should become compound cells" — which is the
+question the current architecture actually asks.
 
 **Not re-verified**: the audit's *thesis* (that allocation efficiency has
 disproportionate leverage). It may well still hold — but with the 13-field copy
