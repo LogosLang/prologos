@@ -2820,8 +2820,27 @@ differing arity.
 
 ## Type System — HKT
 
-### HKT-9: Constraint Inference from Usage
-- Method-triggered constraint generation algorithm designed, gated behind feature flag
+### 🔶 HKT-9: Constraint Inference from Usage — BUILT and TESTED, flag OFF (re-probed 2026-08-03)
+
+The entry says "algorithm designed, gated behind feature flag", which
+understates it in one direction and overstates the gap in the other. Probed:
+
+- **It is implemented**, not merely designed: `try-infer-constraint-from-method`
+  in `elaborator.rkt`, wired into the bare-name resolution chain.
+- **It is tested**: `tests/test-constraint-inference.rkt`, 11 cases, all
+  passing, driven with the flag ON.
+- `current-infer-constraints-mode?` defaults `#f`, so none of it is reachable
+  in an ordinary program.
+
+⚠ **So this is the "Validated Is Not Deployed" shape that `workflow.md` calls a
+BLOCKING red flag** — "a track that ends with `use-X? = #f` has a gap, not a
+safety net" — and it should be triaged as that rather than as unstarted design
+work. Two honest paths: flip the default and re-validate, or record the reason
+it must stay off. The rationale in the code is a DESIGN objection, not a
+correctness one ("no mainstream language does this and it adds complexity"),
+which makes it exactly the kind of call the flag is deferring rather than
+answering.
+
 - Source: `docs/tracking/2026-02-20_2100_HKT_GENERIFICATION.md`
 
 ---
