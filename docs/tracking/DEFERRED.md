@@ -2361,12 +2361,31 @@ settle BEFORE the migration, not after.
 
 ## Collections — Data Structures Roadmap
 
-### Phase 3: Specialized Structures (NOT STARTED)
-- 3a: SortedMap + SortedSet (B+ Tree)
-- 3b: Deque (Finger Tree)
-- 3c: PriorityQueue (Pairing Heap)
+### 🔶 Phase 3: Specialized Structures — 3g is BUILT; 3a-3c genuinely not started (re-probed 2026-08-03)
+- 3a: SortedMap + SortedSet (B+ Tree) — **not started**, confirmed: no B+/finger
+  tree or pairing-heap code anywhere in the tree.
+- 3b: Deque (Finger Tree) — not started, same probe.
+- 3c: PriorityQueue (Pairing Heap) — not started, same probe.
 - 3d-3f: **Subsumed by Logic Engine** — LVars, LVar-Map/Set, PropNetwork
-- 3g: Length-Indexed Vec (dependent types over collections)
+- 3g: ✅ **Length-Indexed Vec — BUILT.** `expr-Vec` / `expr-Fin` are AST nodes
+  with `vnil` / `vcons` / `vhead` / `vtail` / `vindex` / `fzero` / `fsuc` as
+  parser keywords. Verified end to end:
+
+  ```
+  def v : <Vec Int 3N> := (vcons Int 2N 10 (vcons Int 1N 20 (vcons Int 0N 30 (vnil Int))))
+  def h : Int := (vhead Int 2N v)              ⇒ 10
+  def i : Int := (vindex Int 3N (fsuc 2N (fzero 1N)) v)   ⇒ 20
+  ```
+
+  `vindex`'s iota rules landed 2026-08-03 (see § Residuals from QTT P5 item 1);
+  before that it type-checked and sat stuck. Covered at the reduction level
+  (`test-reduction.rkt`), at Level 3 (`test-vec-index-ws.rkt`) and in the Redex
+  model (`redex/tests/test-qtt.rkt`).
+
+  ⚠ Two surface notes, both load-bearing for anyone using it: the annotation is
+  REQUIRED (`def v : <Vec Int 3N> := …`), and these are parser keywords, so they
+  take PARENS — `[vcons …]` fails with "Could not infer type" while
+  `(vcons …)` works.
 - Source: `docs/tracking/2026-02-19_CORE_DATA_STRUCTURES_ROADMAP.md`
 
 ### Phase 4: Integration + Advanced (NOT STARTED)
@@ -2375,7 +2394,8 @@ settle BEFORE the migration, not after.
 - 4c: Actor/Place Integration (cross-actor persistent collections)
 - 4d: ConcurrentMap (Ctrie — lock-free concurrent hash map)
 - 4e: SymbolTable (ART — Adaptive Radix Tree for string keys)
-- 4f: **Subsumed by Logic Engine Phase 4** — UnionFind
+- 4f: **Subsumed by Logic Engine Phase 4** — UnionFind (confirmed present:
+  `union-find.rkt`, 28 definitions)
 - Source: `docs/tracking/2026-02-19_CORE_DATA_STRUCTURES_ROADMAP.md`
 
 ### Linear Enforcement for Transient Handles
