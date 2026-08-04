@@ -1612,6 +1612,33 @@ case, verified to FAIL with the skip lifted. Note also that its neighbour —
 does **not**: A/B shows `[reduce int+ 0 '[1 2 3]]` is byte-identical with the
 `reduce` skip lifted. It is a documentation pin, and is now labelled as one.
 
+**THE BLOCKER IS NOT (only) THE SPEC STORE — measured 2026-08-03.** After
+issue #66's qualified-lookup fix landed, the skips were re-tested: still 24
+failures with all four lifted. So the entry's attribution to "spec-CLOBBER
+only" is incomplete. The derived wrapper is a top-level `def` under the BARE
+method name, so it shadows the imported function's **VALUE**, not just its
+spec — and no spec-store fix reaches that.
+
+**The skip set is mechanizable, and here is how far a one-line predicate gets.**
+Adding `(not (global-env-lookup-type mname))` + `(not (lookup-spec mname))` to
+`derivable-method?` — "do not derive a name something already binds" — and
+emptying the hand-maintained list takes the affected-file failures from
+**24 to 4**. That is the structural answer this codebase prefers to a
+hand-maintained enumeration, and it is most of the way there.
+
+The remaining 4 are all in `test-firstclass-ops.rkt` and are an ORDERING
+problem, not a counterexample to the idea: the predicate as written skips a
+derive whenever the name is bound AT THAT MOMENT, which over-fires for methods
+whose binding comes from a module loaded earlier in the same prelude sweep
+(`to-float`, `abs`, `neg`). The predicate wants to be "bound by an import from
+a DIFFERENT module" rather than "bound at all", which is the same
+module-provenance question issue #66 and POL.9c both wait on — and it needs the
+elaboration-vs-module-load two-context care `pipeline.md` records.
+
+**Not shipped.** A half-tuned predicate that changes derive behaviour globally
+is worse than a list of four names that is honest about being a list. Recorded
+so the next attempt starts from 4 rather than 24.
+
 **So the honest state is**: `add`/`sub` are hard-blocked (measured, loudly).
 `join` is blocked, now with a test that says so.
 
