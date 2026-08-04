@@ -1629,6 +1629,65 @@
   (check-false (regexp-match #rx":host Int [|] String" r)
                "the union lost its brackets — the row is ambiguous again"))
 
+;; ---- D4.P3a item 17: the fold runs BEFORE head-macro dispatch ----
+;;
+;; A registered head macro used to be handed the RAW datum: the access-sentinel
+;; fold lives in `preparse-expand-subforms`, which is only reached when the head
+;; is NOT a macro. So `if` / `cond` / `let` saw `($select-brace …)` and
+;; `($dot-access …)` as EXTRA SIBLINGS of their base, and complained about
+;; arity: `(if true cfg{a} 5)` gave "boolrec expects 4 arguments, got 3" plus a
+;; cascading "Unbound variable" — an arity message for an ordering problem.
+;;
+;; `expand-pipe-block` already carried this fold locally (it was the P3a
+;; verify's BLOCKING catch, where the pipe corrupted a select SILENTLY instead
+;; of erroring). The fix hoists that same call above head-macro dispatch.
+
+(test-case "P3a ⭐ item 17: a select block inside `if` folds before the macro sees it"
+  (define rs (run-ws-raw (string-append P3A-CFG "(if true cfg{name} cfg{name})\n")))
+  (check-false (ormap prologos-error? rs)
+               (format "the head macro still sees a raw sentinel: ~v" rs))
+  (check-regexp-match #rx"\\{:name \"GuildHall\"\\}" (format "~a" (last rs))))
+
+(test-case "P3a item 17: dot-access inside `if`"
+  (define rs (run-ws-raw (string-append P3A-CFG "(if true cfg.name \"other\")\n")))
+  (check-false (ormap prologos-error? rs))
+  (check-regexp-match #rx"GuildHall" (format "~a" (last rs))))
+
+(test-case "P3a item 17: postfix index inside `if`"
+  (define rs (run-ws-raw "def xs := @[10 20 30]\n(if true xs[0] 5)\n"))
+  (check-false (ormap prologos-error? rs))
+  (check-regexp-match #rx"^10 : Int" (format "~a" (last rs))))
+
+(test-case "P3a item 17: dot-access in a `cond` GUARD and body"
+  ;; the guard is a dot-access to a Bool field — this fixture is :no-prelude,
+  ;; so a guard like `[eq? cfg.name …]` would fail on `eq?`, not on the fold
+  (define rs (run-ws-raw (string-append
+                          P3A-CFG
+                          "def picked :=\n"
+                          "  cond\n"
+                          "    | cfg.server.ssl.enabled -> cfg.version\n"
+                          "    | true -> \"none\"\n"
+                          "picked\n")))
+  (check-false (ormap prologos-error? rs) (format "~v" rs))
+  (check-regexp-match #rx"1[.]0[.]0" (format "~a" (last rs))))
+
+(test-case "P3a item 17: `let` binding a dot-access inside a defn body"
+  ;; the entry's other named victim — it used to dump internal syntax
+  (define rs (run-ws-raw (string-append
+                          P3A-CFG
+                          "def f := [fn [x : Int] [let s := cfg.database.pool-size [+ s x]]]\n"
+                          "[f 10]\n")))
+  (check-false (ormap prologos-error? rs) (format "~v" rs))
+  (check-regexp-match #rx"^20 : Int" (format "~a" (last rs))))
+
+(test-case "P3a item 17: a select is still a ROW, so a genuine branch mismatch STILL errors"
+  ;; The fold must not paper over typing. `cfg{name}` is `{:name String}`, not
+  ;; String — joining it with a bare string is a real mismatch and must stay one.
+  ;; Without this, "item 17 is fixed" could mean "if stopped checking".
+  (define rs (run-ws-raw (string-append P3A-CFG "(if true cfg{name} \"plain\")\n")))
+  (check-true (ormap prologos-error? rs)
+              (format "a row-vs-String branch join must still refuse: ~v" rs)))
+
 (test-case "P3a: a keyed block on a TUPLE (nat row) is a loud refusal"
   (define rs (run-ws-raw (string-append
                           "def het := @[7 \"seven\" :seven]\n"

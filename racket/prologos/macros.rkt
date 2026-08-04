@@ -2090,6 +2090,31 @@
                datum
                (list* '$select subj* (cddr datum))))
          datum)]
+    ;; D4.P3a item 17: fold access sentinels BEFORE head-macro dispatch.
+    ;;
+    ;; A registered head macro used to be handed the RAW datum, because the
+    ;; fold lives in `preparse-expand-subforms` — which this arm only reaches
+    ;; when there is NO macro. So `(if true cfg{a} 5)` arrived at `if` as
+    ;; `(if true cfg ($select-brace …) 5)`: an extra sibling, reported as
+    ;; "boolrec expects 4 arguments, got 3" — an arity complaint for an
+    ;; ordering problem, plus a cascading "Unbound variable".
+    ;;
+    ;; `expand-pipe-block` already carried this fold locally (the P3a verify's
+    ;; BLOCKING catch, where appending an accumulator into a raw sentinel
+    ;; payload corrupted the select SILENTLY at 0 errors). This hoists the same
+    ;; call to cover every head macro instead of the one that drew blood.
+    ;;
+    ;; Safe to run twice: the fold is a fixpoint, so the later pass in
+    ;; `preparse-expand-subforms` is a no-op. Safe to run HERE specifically:
+    ;; every form that must keep its sentinels raw — `$foreign-block`,
+    ;; `$brace-params`, `$select-brace`/`$dot-brace`, `$select` — is matched by
+    ;; an arm ABOVE this one and never arrives.
+    [(and (pair? datum) (symbol? (car datum))
+          (not (equal? (rewrite-dot-access datum) datum)))
+     (define folded (rewrite-dot-access datum))
+     (if (list? folded)
+         (preparse-expand-form folded reg depth)
+         folded)]
     ;; List form — check head symbol for macros
     [(and (pair? datum) (symbol? (car datum)))
      (define entry (hash-ref reg (car datum) #f))

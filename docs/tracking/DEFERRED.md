@@ -5706,7 +5706,47 @@ value belongs). Same family: `def cfg{a} := 5` (def-LHS select) aborts at the
 def parser — dot baseline identical. P3a makes `x{…}` a shipped surface that
 now walks into both.
 
-### 17. Registered head-macros (`if` / `cond` / `let`) see RAW access sentinels — CONFIRMED still true (re-probed 2026-08-03)
+### 17. ✅ FIXED 2026-08-04 — the access-sentinel fold now runs BEFORE head-macro dispatch
+
+The general fix the entry named, done: `rewrite-dot-access` is hoisted above
+head-macro dispatch in `preparse-expand-form`, so every registered head macro
+sees folded sentinels instead of raw ones.
+
+**Why it was broken**: the fold lives in `preparse-expand-subforms`, which that
+arm only reaches when the head is NOT a macro. A macro head short-circuited to
+`resolved(datum)` on the raw list, where `($select-brace …)` and
+`($dot-access …)` are EXTRA SIBLINGS of their base — hence "boolrec expects 4
+arguments, got 3": an arity complaint for an ordering problem.
+
+`expand-pipe-block` already carried this exact call locally (the P3a verify's
+BLOCKING catch, where appending an accumulator into a raw sentinel payload
+corrupted a select SILENTLY at 0 errors). This hoists the same one line to
+cover every head macro rather than the one that drew blood.
+
+**Safety**: the fold is a fixpoint, so the later pass in
+`preparse-expand-subforms` is a no-op; and every form that must keep its
+sentinels raw — `$foreign-block`, `$brace-params`, `$select-brace`/`$dot-brace`,
+`$select` — is matched by an arm ABOVE this one and never arrives.
+
+⚠ **The entry over-claimed, and the correction matters for the next reader.**
+It named `if` / `cond` / `let`. Re-probed against a worktree built at the
+pre-fix commit: only **`if`** was still broken. `cond` with a dot-access guard,
+`cond` with a select body, bracket-`let`, and WS-layout `let` in a defn body ALL
+worked before this change — including the entry's own `let s := cfg{a}` example,
+which it said "dumps internal syntax". Something between the filing and now
+fixed those; not bisected. Six pins in `tests/test-path-selection.rkt`, and the
+perturbation run says exactly three of them (the three `if` shapes) fail without
+the hoist — the `cond` and `let` pins pass either way and are there as
+regression cover, not as evidence.
+
+**A genuine type error is NOT masked**: `(if true cfg{a} 5)` still errors,
+because a select block yields the ROW `{:a Int}`, not `Int` — the entry's own
+example was ill-typed independent of the ordering bug. Pinned, so "item 17 is
+fixed" can never come to mean "`if` stopped checking".
+
+**Original filing:**
+
+### (original) Registered head-macros (`if` / `cond` / `let`) see RAW access sentinels
 
 Still exactly as filed. `(if true cfg{a} 5)` gives *"boolrec expects 4
 arguments, got 3"* plus a cascading "Unbound variable" — per-command, file
