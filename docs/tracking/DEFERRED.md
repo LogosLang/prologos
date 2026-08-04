@@ -1379,6 +1379,29 @@ annotate `[x : T]` or add a `spec`").
    > unifier where the tail is a variable that accumulates field demands, rather
    > than the D19 mint-a-meta-on-miss behaviour. "Solve it structurally" in the
    > line above is doing all the work in that sentence.
+   >
+   > **Scoped 2026-08-04** so the size is known before anyone starts.
+   > `expr-Record`'s tail is a SYMBOL (`'closed` / `'dyn`); a row variable needs
+   > it to admit a meta. Measured surface:
+   >
+   > - **28** `expr-Record-tail` sites across 5 files (typing-core 17, syntax 5,
+   >   unify 4, union-types 1, typing-errors 1)
+   > - **83** literal `'closed`/`'dyn` occurrences — every `(eq? tail 'dyn)`
+   >   becomes an `open-tail?` predicate, and missing one silently mis-classifies
+   >   an open row as closed
+   > - a new **row-unification** case (two rows, both with variable tails), which
+   >   is where the soundness lives
+   > - the `pipeline.md` struct-field checklist: every walker — `shift`,
+   >   `subst`, all three `zonk`s, `pretty-print`, `occurs?` — must descend into
+   >   a meta tail, and per that file's § Exhaustive Walkers a missed arm here is
+   >   silent
+   >
+   > Not a slice. A rejected shortcut worth naming: a syntactic pre-pass over the
+   > `defn` body collecting `(map-get p :k)` demands up front would fix the
+   > direct multi-field case soundly, but leaves the same hole for a param passed
+   > opaquely to a callee that projects it — the demand is invisible to the scan.
+   > That is the second plausible-looking version of this fix; it fails for a
+   > different reason than the first.
 2. **Generic `+`/arithmetic on an untyped param** — `defn f [x] [+ x 1]` fails
    standalone (pre-existing): `+` needs `x`'s type. **Deep fix = Num Track 2**
    (generic `Num` / constraint-as-type): constrain `x : Num`-ish from `[+ x 1]`.
