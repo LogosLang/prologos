@@ -2924,19 +2924,65 @@ fixture-fidelity gap that bit `test-float-lib` the same day, in the opposite
 direction — there the fixture was wrong and the product fine; here the product
 is broken and the fixture hides it.
 
-**Where to look**: `csv.prologos:44-47` —
+**ROOT CAUSE, isolated 2026-08-03: capability satisfaction is PRELUDE-DEPENDENT,
+and `csv` is `:no-prelude`.** The identical function works or fails purely on
+that:
 
 ```
-spec read-csv ReadCap -0> String -> [List [List String]]
-defn read-csv [_cap path]
-  parse-csv [read-file path]
+ns capform                                   ;; full prelude
+spec rd1 {cap :0 ReadCap} String -> String
+defn rd1 [path] [read-file path]             ;; ✓ 0 errors
+
+ns capnp :no-prelude                         ;; same body, same spec
+require [prologos::core::io :refer [read-file]]
+require [prologos::core::capabilities :refer-all]
+defn rd2 [path] [read-file path]             ;; ✗ E2001 not in scope
 ```
 
-`read-file` requires ReadCap; `_cap` is bound and never passed to it. The
-capability is not threaded through the body. Both the capability and impl
-registries ARE captured and re-propagated across module loads
-(`driver.rkt` `mod-capability-reg` / `mod-impl-reg`), so the propagation
-machinery is not the gap — this looks like the module's own code.
+`:refer-all` on `capabilities` does not help, so it is not a matter of naming
+the right export. Something the PRELUDE establishes — and an explicit `require`
+of the capabilities module does not — is what makes a `:requires`-annotated
+foreign call satisfiable.
+
+**Consequence beyond csv: no `:no-prelude` library module can call a
+capability-annotated foreign function at all.** That is a structural hole in
+the library layer, since `:no-prelude` is exactly what stdlib modules use to
+avoid circularity. `prologos::core::io` escapes it only because it *declares*
+`read-file` without ever calling it.
+
+⚠ **THE TWO CAPABILITY FORMS DO DIFFERENT JOBS, AND `csv` NEEDS BOTH — this is
+the real finding, and it was learned by trying the fix and watching it fail.**
+Rewriting csv's `spec read-csv ReadCap -0> String -> …` to the brace form the
+E2001 diagnostic literally recommends (`{cap :0 ReadCap}`) does not fix the
+import, AND it breaks `test-io-main-01.rkt` with a different error:
+
+```
+E2004: capability security violation — authority roots with
+       undeclared transitive capabilities:
+  `prologos::core::csv::read-csv` requires undeclared: {ReadCap}
+```
+
+So:
+- the **positional `ReadCap -0>`** form is what DECLARES the requirement, which
+  the transitive authority check (E2004) reads;
+- the **brace `{cap :0 ReadCap}`** form is what puts the capability IN SCOPE,
+  which the satisfaction check (E2001) reads.
+
+Neither implies the other, and a module that both declares and uses a
+capability appears to need both — or the machinery needs one to imply the
+other. **That is a capability-subsystem design question, not a module bug**,
+which is why the attempted fix was REVERTED rather than shipped: it traded a
+load failure for a security-check failure and left the module no more
+importable.
+
+Two things were checked and are NOT the cause: both the capability and impl
+registries ARE captured and re-propagated across module loads (`driver.rkt`
+`mod-capability-reg` / `mod-impl-reg`).
+
+⚠ Also worth keeping: the module's own tests already call `(read-csv "path")`
+with ONE argument — i.e. against the brace signature, not the positional one
+that is actually written. The declaration and its tests disagree, and the
+fixture hides that too.
 
 **The `parse-csv-maps` item below is moot until this is fixed**: there is no
 point adding a function to a module nobody can import.
