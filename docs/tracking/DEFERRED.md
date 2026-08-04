@@ -3543,12 +3543,33 @@ LINT-ACCURACY problems:
   `compound-tagged-merge`. It is genuinely unregistered, and registering it IS a
   design act (domain + algebraic properties) — but it is ONE decision, not six.
 
-**So the order is: fix the lint's two accuracy problems, register
-`type-unify-or-top`, then wire the gate** into the same third-gate seat in
-`tools/git-hooks/pre-commit` that the parameter lint now occupies. That is a
-much smaller job than the first draft implied, and worth doing — a guard that
-cries wolf on local variables is one people learn to baseline reflexively, which
-is how it rusted in the first place.
+**✅ BOTH ACCURACY PROBLEMS FIXED 2026-08-03.** `tools/lint-cells.rkt` now
+excludes `/data/probes/` from its production scan, and recognises a name bound
+by a local `(define NAME (current-…))` as a parameterized-passthrough rather
+than an unregistrable merge function. The report went from
+
+```
+110 production sites … NEW (not in baseline): 11 sites, 6 unique
+```
+to
+```
+109 production sites … NEW (not in baseline):  6 sites, 1 unique
+```
+
+— exactly the reduction the analysis predicted, which is the check that the
+diagnosis was right rather than merely plausible.
+
+**One item remains, and it is a real design decision**: `type-unify-or-top` is
+unregistered at 6 sites (`cap-type-bridge.rkt:197`,
+`elaborator-network.rkt:374/377/380`, `session-type-bridge.rkt:121/131`).
+Registering it via `register-merge-fn!/lattice` means declaring its domain and
+algebraic properties — PPN 4C surface, and not something to decide from outside
+the track.
+
+**Then wire the gate** into the same third-gate seat in
+`tools/git-hooks/pre-commit` that the parameter lint now occupies. The guard
+cannot be wired while it exits 1, so that one registration is the whole
+remaining blocker.
 
 ### 🐛 the parameter-lint guard is STILL UNWIRED, and has rusted again (2026-08-03)
 
