@@ -2891,9 +2891,64 @@ passes, 13 tests.
 - Binary data type. Not needed for text IO but needed for binary IO, SQLite FFI, network
 - Source: `docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md` §12.3
 
+### 🐛 `prologos::core::csv` CANNOT BE IMPORTED — found 2026-08-03, PRE-EXISTING
+
+Found while probing the `parse-csv-maps` entry below. **Every ordinary program
+that imports this module fails at load**, under every spelling:
+
+```
+imports [prologos::core::csv :refer []]           → Error loading module
+imports [prologos::core::csv :refer [parse-csv]]  → Error loading module
+
+error[E1004]: no instance found for (ReadCap ReadCap)
+  --> lib/prologos/core/csv.prologos:46:0
+  E2001: Required capability ReadCap not available in scope.
+```
+
+`prologos::core::io` and `prologos::core::fio` import fine, so it is specific to
+this module, not to capability-annotated modules generally.
+
+**Not a regression — verified against a pre-session worktree at `7efc781d`,
+where it fails identically.** (One difference: there it was a raw whole-file
+abort with a Racket `context...:` dump; at HEAD it is a proper per-command
+error, from the preparse containment fix above. Better presentation of the same
+break.)
+
+⚠ **AND TWO TEST FILES COVER THIS MODULE AND PASS.** `test-io-csv-02.rkt`
+("CSV module E2E tests … through the compilation pipeline") and
+`test-io-main-01.rkt` are green. They build a fixture that parameterizes
+`current-impl-registry prelude-impl-registry` and friends; the production path
+through `process-file` does not get the same, and that is where it breaks. So
+the module is covered by E2E tests, and no user can import it. That is the same
+fixture-fidelity gap that bit `test-float-lib` the same day, in the opposite
+direction — there the fixture was wrong and the product fine; here the product
+is broken and the fixture hides it.
+
+**Where to look**: `csv.prologos:44-47` —
+
+```
+spec read-csv ReadCap -0> String -> [List [List String]]
+defn read-csv [_cap path]
+  parse-csv [read-file path]
+```
+
+`read-file` requires ReadCap; `_cap` is bound and never passed to it. The
+capability is not threaded through the body. Both the capability and impl
+registries ARE captured and re-propagated across module loads
+(`driver.rkt` `mod-capability-reg` / `mod-impl-reg`), so the propagation
+machinery is not the gap — this looks like the module's own code.
+
+**The `parse-csv-maps` item below is moot until this is fixed**: there is no
+point adding a function to a module nobody can import.
+
 ### CSV Maps — `parse-csv-maps`
 - Header-aware CSV parsing returning `List [Map String String]`
-- **Blocked on**: `map-from-pairs` function
+- **Blocked on**: `map-from-pairs` function — ⚠ **and that blocker looks
+  MISNAMED.** `map-from-seq : LSeq (MapEntry K V) -> Map K V` exists in both
+  `prologos::core::map` and `prologos::book::maps`. Whether the gap is really a
+  pairs-shaped variant, or just a list→LSeq hop away from what is already
+  there, was not established — but "the function does not exist" is not what
+  the tree says. Blocked behind the import failure above regardless.
 - Source: IO-G plan
 
 ---
