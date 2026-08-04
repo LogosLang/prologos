@@ -1433,10 +1433,13 @@
             (string-append "the parameter of type " (pp-expr ty names))
             (pp-mult-user declared)
             (pp-mult-user actual))]
-          ;; Nothing proven — keep the message that shipped before P4.
+          ;; Nothing proven. Pass #f for the two analysis fields rather than
+          ;; the literal strings "declared"/"actual" this used to send — those
+          ;; rendered as `Declared multiplicity: declared`, which reads as data
+          ;; and is not. The renderer omits a #f field entirely.
           [_
            (multiplicity-error loc
                                "Multiplicity violation"
                                (pp-expr e names)
-                               "declared"
-                               "actual")]))))
+                               #f
+                               #f)]))))

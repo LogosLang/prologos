@@ -2962,13 +2962,26 @@ measured, held back for two reasons:
    (6/6 in isolation and 3/4 full suites afterwards, and `run-no-cap`
    hard-sets the scope to `'()` so the change is provably inert there) — but a
    security check that failed once should not ship on a probability argument.
-2. **It surfaces a THIRD problem.** With the capability resolved, `read-csv`
-   elaborates to
+2. **It surfaces a THIRD problem — verified REAL, not a fixture artifact.**
+   With the capability resolved, `read-csv` elaborates to
    `[fn [x :0 <ReadCap>] [fn [y <String>] [parse-csv [read-file x y]]]]` — the
    erased capability threaded into `read-file` as a RUNTIME argument (the
-   `:requires (Cap)` foreign wrapper adds capability token args), which QTT
-   rejects as a multiplicity violation. So the fix reveals another link rather
-   than completing the chain.
+   `:requires (Cap)` foreign wrapper adds capability token args), and QTT
+   rejects it.
+
+   ⚠ **This was nearly written off as a fixture artifact** because csv appeared
+   to import and run cleanly through `run-file.rkt` with the scope fix applied.
+   It did not: that run was served from a warm `.pnet`. **Clearing the entire
+   `data/cache/pnet` directory reproduces the multiplicity violation on the
+   production path, every time.** That is the THIRD time this module's cache has
+   produced a false success in one session — see the withdrawn workaround above.
+   For anything involving csv, clear the whole cache directory, not just the
+   module's own file.
+
+   What makes it puzzling rather than obvious: the foreign binder IS erased —
+   `handle-foreign-decl` builds `Pi (c :0 ReadCap) …` — so passing an `m0`
+   variable into an `m0` position should be legal QTT. Whatever rejects it is
+   not the arity or the multiplicity annotation as written.
 
 Re-open with the multiplicity question answered.
 
