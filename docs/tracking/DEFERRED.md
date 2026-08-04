@@ -4551,7 +4551,15 @@ spec-store leak, closed above. Worth keeping the sighting on file.
 
 **Phase 11b inheritance**: Phase 11b mini-design RE-WEIGHS (a)/(b)/(c) variants with trace-monoidal-category-theory framing (Joyal-Street-Verity 1996; Hasegawa 1997; Abramsky-Haghverdi-Scott 2002) as research input. The skip-gated canary's `[diagnosis] retract:` substring assertion captures the PRE-3C.c shape; Phase 11b's chosen restoration shape may differ — canary updated alongside restoration.
 
-**Restoration path infrastructure (per §9.5.5.1 T2 audit)**: `solver-state-explain-hypothesis`, `solver-state-assumptions`, `solver-state-minimal-diagnoses`, `nogood-explanation` struct, `assumption` struct, `greedy-hitting-set` algorithm all present + battle-tested. `build-derivation-chain` + `format-context-diagnosis` + `format-atms-conflict` (typing-errors.rkt:173-280) STILL IN PRODUCTION for the NON-union path (type-mismatch-error). Restoration would be MECHANICAL GLUE (~50-100 LoC) re-calling existing helpers in union path — NOT new infrastructure.
+**Restoration path infrastructure (per §9.5.5.1 T2 audit)**: `solver-state-explain-hypothesis`, `solver-state-assumptions`, `solver-state-minimal-diagnoses`, `nogood-explanation` struct, `assumption` struct, `greedy-hitting-set` algorithm all present + battle-tested.
+
+> ⚠ **Qualification added 2026-08-04 — "battle-tested" is true of the PLUMBING, not of the RESULT.** Read before restoring anything on this basis:
+>
+> - `solver-state-minimal-diagnoses` (plural) returns **at most ONE** diagnosis — `(list diagnosis)` on a single greedy run, `'()` otherwise. It never enumerates alternatives.
+> - That diagnosis is not necessarily **minimum**. `greedy-hitting-set` (`atms.rkt:158`) is the max-degree greedy heuristic: repeatedly take the assumption appearing in the most remaining nogoods. Standard, and standardly approximate — so a restored `[diagnosis] retract: …` can advise retracting MORE than necessary.
+> - Ties are broken by **hash iteration order** (`for/fold` over `in-hash` with strict `>`, so first-encountered max wins). Deterministic within a build, arbitrary as advice: on a tie, which assumption gets blamed carries no meaning.
+>
+> `atms.rkt:701` carries the one-line form of this as a `TODO` ("Replace with tropical semiring CSP when available") and it had **never been filed**. Tropical *fuel* infrastructure exists (`tropical-fuel.rkt`, `tropical-fuel-primitives.rkt`); a tropical-semiring CSP solver does not, so the TODO is honest future work rather than a stale claim. Exact minimum-hitting-set enumeration is independently tractable at these nogood counts if Phase 11b wants the guarantee without the CSP. `build-derivation-chain` + `format-context-diagnosis` + `format-atms-conflict` (typing-errors.rkt:173-280) STILL IN PRODUCTION for the NON-union path (type-mismatch-error). Restoration would be MECHANICAL GLUE (~50-100 LoC) re-calling existing helpers in union path — NOT new infrastructure.
 
 ### KR-2: Derivation-step field sparsity for sexp-fed steps
 
