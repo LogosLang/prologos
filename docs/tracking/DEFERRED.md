@@ -2924,9 +2924,39 @@ fixture-fidelity gap that bit `test-float-lib` the same day, in the opposite
 direction — there the fixture was wrong and the product fine; here the product
 is broken and the fixture hides it.
 
-**ROOT CAUSE, isolated 2026-08-03: capability satisfaction is PRELUDE-DEPENDENT,
-and `csv` is `:no-prelude`.** The identical function works or fails purely on
-that:
+**✅ ROOT CAUSE ISOLATED 2026-08-03 — it is a load-ORDERING bug, and there is a
+one-line workaround.** Importing the capabilities module FIRST makes csv import
+and work:
+
+```
+ns csvpre
+imports [prologos::core::capabilities :refer []]   ;; ← this line
+imports [prologos::core::csv :refer [parse-csv]]
+def r := [parse-csv "a,b"]                          ;; ✓ '['["a" "b"]]
+```
+
+Without that line, the same file fails at load. So the module is not broken and
+the capability forms are not wrong — **the capability registrations made while
+the PRELUDE loads `capabilities` do not reach a sibling module's load.** csv is
+`:no-prelude`, requires `capabilities` itself, and that require is evidently
+served from an already-loaded module without re-establishing the registrations
+the capability SCOPE check needs.
+
+This is the same class as the cross-module schema channel closed earlier in this
+file (#78 P2): a registry populated during a nested module load not reaching the
+next one. Note the registry IS serialized into `.pnet` (slot 13) and IS
+deserialized, and `load-module` captures and re-propagates it
+(`mod-capability-reg`) — so the pieces exist and the gap is in when they apply.
+
+Confirming evidence, each a single-variable change:
+- imported `ReadCap` under `:no-prelude` → E2001 not in scope
+- **locally-declared** capability under `:no-prelude` → works
+- imported `ReadCap` WITH the prelude → works
+- csv through a harness with a PRE-BUILT `prelude-module-registry` → works,
+  with the `.pnet` cache both on and off (so it is not a cache-staleness issue)
+
+**The prelude-dependence framing below was the first cut and is superseded** by
+the ordering finding above; kept because the probes are still the evidence:
 
 ```
 ns capform                                   ;; full prelude
@@ -2944,11 +2974,11 @@ the right export. Something the PRELUDE establishes — and an explicit `require
 of the capabilities module does not — is what makes a `:requires`-annotated
 foreign call satisfiable.
 
-**Consequence beyond csv: no `:no-prelude` library module can call a
-capability-annotated foreign function at all.** That is a structural hole in
-the library layer, since `:no-prelude` is exactly what stdlib modules use to
-avoid circularity. `prologos::core::io` escapes it only because it *declares*
-`read-file` without ever calling it.
+**Consequence beyond csv**: any `:no-prelude` library module that CALLS a
+capability-annotated foreign function is exposed to this, and `:no-prelude` is
+exactly what stdlib modules use to avoid circularity. `prologos::core::io`
+escapes only because it *declares* `read-file` without ever calling it — csv is
+the first module to actually call one.
 
 ⚠ **THE TWO CAPABILITY FORMS DO DIFFERENT JOBS, AND `csv` NEEDS BOTH — this is
 the real finding, and it was learned by trying the fix and watching it fail.**
