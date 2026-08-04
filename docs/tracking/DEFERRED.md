@@ -3382,16 +3382,39 @@ this file, and it would send anyone picking up the track to rebuild what exists.
 
 ## Propagator-First Elaboration Migration
 
-### TMS-Aware Infrastructure Cells + Structural State — NOT STARTED
+### ⚠ TMS-Aware Infrastructure Cells + Structural State — **the FIX PATH is obsolete** (re-probed 2026-08-03)
 - Infrastructure cells and elab-network structural fields are NOT TMS-managed
 - `restore-meta-state!` cannot be retired until this is addressed
-- **Fix path**: (1) infra cells → TMS-aware via `net-new-tms-cell`, (2) meta-info/id-map → TMS cells
+- ~~**Fix path**: (1) infra cells → TMS-aware via `net-new-tms-cell`, (2) meta-info/id-map → TMS cells~~
+- ⚠ **`net-new-tms-cell` NO LONGER EXISTS as a production mechanism, and the
+  migration went the OPPOSITE way.** PPN 4C 1A-iii-a Step 1 S1.a (2026-04-22)
+  moved the type-meta cell factory *from* `net-new-tms-cell` *to* `net-new-cell`
+  with the `tagged-cell-value` substrate — `elaborator-network.rkt` records it
+  as "the last production consumer of `net-new-tms-cell`", after which "the
+  entire TMS mechanism (struct, read/write/commit, factory,
+  `current-speculation-stack` parameter) becomes dead and is retired in
+  subsequent sub-phases S1.b-e".
+
+  So the entry proposes migrating TO a mechanism that has since been deleted.
+  **The goal may still be right; the route is not.** Whoever takes this should
+  restate it against `tagged-cell-value` — which the same comment names as "the
+  sole speculation mechanism for on-network state" — and note that the
+  off-network residue it is really about (meta-info CHAMP + constraint store +
+  id-map) is already routed to Phase 4 + PM Track 12.
 - **Placement**: PPN Track 4 (Elaboration as Attribute Evaluation) — putting elaboration on the network with formal propagator edges requires TMS-aware cells. Relabeled from "Track 8 prerequisite" (2026-03-30): PPN Track 4 IS the elaboration-on-network track.
 - Source: Track 6 Phase 5b findings (commit `cb393bb`)
 
-### Unify type inference and trait resolution under the propagator network — NOT STARTED
-- Current elaboration uses propagator network for cells but NOT formal propagator edges
+### 🔶 Unify type inference and trait resolution under the propagator network — **the first bullet is STALE** (re-probed 2026-08-03)
+- ~~Current elaboration uses propagator network for cells but NOT formal propagator edges~~ —
+  `typing-propagators.rkt` carries `install-typing-network`, and its own Network
+  Reality Check block answers the three questions affirmatively: *"1.
+  net-add-propagator: YES — install-typing-network calls it per position. 2.
+  net-cell-write produces result: YES — fire-fns write to type-map. 3. Cell
+  trace: form cell (type-map ⊥) → propagator fires → cell write → cascade →
+  quiescence → cell read (result)."* Formal propagator edges exist for typing.
 - Constraint solving driven by imperative retry loops, not propagator scheduler
+  — not re-probed; this half may well still hold, and it is the substantive part
+  of the entry.
 - **Placement**: PPN Track 4 (Elaboration as Attribute Evaluation, IS SRE Track 2C). Relabeled (2026-03-30): this IS Track 4's core scope.
 - Source: `docs/tracking/2026-03-11_1800_PROPAGATOR_FIRST_MIGRATION.md`
 
