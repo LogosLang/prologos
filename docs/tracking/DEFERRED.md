@@ -3524,19 +3524,31 @@ The baseline was last touched **2026-04-20** — three and a half months of
 accumulation with nothing checking, which is exactly the parameter lint's story
 one file over.
 
-**Why this one is NOT wired here.** The parameter lint could be closed because
-its two unreviewed flags turned out to be accepted state, so baselining them was
-a decision rather than a shrug. These eleven are different: the right resolution
-for a merge function is option 1 — `register-merge-fn!/lattice` — and that is a
-DESIGN act per function (each needs a domain plus algebraic-property
-declarations, per `propagator-design.md` § Tier 2 SRE registration). Ten of the
-eleven are the per-domain universe merges and the type-unify bridge, i.e. load-
-bearing SRE surface belonging to PPN 4C, not something to classify from the
-outside.
+**⚠ CORRECTION to this entry's own first draft (same day).** It said "ten of the
+eleven are load-bearing SRE surface … a DESIGN act per function". Looking
+properly, the eleven reduce to **one** real unregistered merge function plus two
+LINT-ACCURACY problems:
 
-**So the order is: resolve the eleven, then wire the gate** — the same third-gate
-seat in `tools/git-hooks/pre-commit` the parameter lint now occupies. Until
-then this is a guard that reports honestly and that nothing runs.
+- **4 sites are LOCAL VARIABLES, not merge functions.** `meta-universe.rkt:187-193`
+  reads `type-merge` / `mult-merge` / `level-merge` / `session-merge` from
+  `(current-type-universe-merge)` and friends — local `define`s of a parameter
+  read. The lint reports the local binding NAME. Registering "type-merge" would
+  be meaningless; there is no such function. Baselining them would record noise.
+- **1 site is a PROBE FILE** — `data/probes/2026-05-24-…-empirical-probe.rkt:74`
+  — counted among "110 production sites". Probe files are not production; that
+  is a scoping bug in the lint's file selection.
+- **6 sites are one genuine function**: `type-unify-or-top`
+  (`cap-type-bridge.rkt`, `elaborator-network.rkt` ×3, `session-type-bridge.rkt`
+  ×2), which is what the four universe locals wrap via
+  `compound-tagged-merge`. It is genuinely unregistered, and registering it IS a
+  design act (domain + algebraic properties) — but it is ONE decision, not six.
+
+**So the order is: fix the lint's two accuracy problems, register
+`type-unify-or-top`, then wire the gate** into the same third-gate seat in
+`tools/git-hooks/pre-commit` that the parameter lint now occupies. That is a
+much smaller job than the first draft implied, and worth doing — a guard that
+cries wolf on local variables is one people learn to baseline reflexively, which
+is how it rusted in the first place.
 
 ### 🐛 the parameter-lint guard is STILL UNWIRED, and has rusted again (2026-08-03)
 
