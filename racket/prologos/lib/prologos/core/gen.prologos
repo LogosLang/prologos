@@ -1,0 +1,79 @@
+ns prologos::core::gen
+
+;; ========================================
+;; Gen — type-directed value generation
+;; ========================================
+;;
+;; The gate for Spec System Phase 2's remaining half: property checking for
+;; `:properties` and trait `:laws`. A law like Eq's
+;;
+;;   :name "reflexive"  :forall {x : A}  :holds [eq? x x]
+;;
+;; is stored fully structured already; what was missing is any way to produce
+;; the `x`. `Gen` is that.
+;;
+;; ⚠ SEEDED, NOT RANDOM, and deliberately. `gen` is a pure function of a seed,
+;; so a law failure is REPRODUCIBLE from the seed alone — no capturing and
+;; replaying a random state, and no test that fails once a week. The caller
+;; varies the seed to vary the sample; the generator itself never has a hidden
+;; state to get out of sync.
+;;
+;; The distributions are intentionally small and boring (a bounded window
+;; around zero, both signs where the type allows). Laws are falsified by
+;; ordinary values far more often than by extreme ones, and a wide range would
+;; mostly buy slow arithmetic. Edge cases belong in `:examples`, which check
+;; specific values and already run.
+
+exports Gen gen
+
+trait Gen {A}
+  gen : Int -> A
+  :doc "Produce a value of type A from a seed. Pure: the same seed always gives the same value."
+
+;; --- Int: a window straddling zero, so sign-sensitive laws get both ---
+impl Gen Int
+  defn gen [s : Int] <Int>
+    int- [int-mod [int-abs s] 200] 100
+
+;; --- Nat: NOT PROVIDED, and the reason is a real gap ---
+;;
+;; There is no Int -> Nat conversion anywhere in the tower. `from-nat` goes the
+;; other way (Nat -> Int), `conversions.prologos` has `impl ToInt Nat` and no
+;; inverse, and no `to-nat` / `int-to-nat` exists. So a seeded Nat generator has
+;; nothing to build on short of counting `suc` from `zero`, which is O(n) in the
+;; value and absurd for this purpose.
+;;
+;; Worth stating plainly because Nat is the type trait laws mention most (Eq,
+;; Ord and the numeric traits all have Nat instances), so this is the first
+;; thing the law checker will want. The fix is a partial `Int -> Option Nat` (or
+;; a `Nat`-returning one on the absolute value) in `conversions.prologos`,
+;; which is a numeric-tower decision rather than something to bolt on here.
+
+;; --- Bool: alternates on consecutive seeds, so a caller stepping the seed
+;;     by one gets both values rather than a run of one ---
+impl Gen Bool
+  defn gen [s : Int] <Bool>
+    int-eq 0 [int-mod [int-abs s] 2]
+
+;; --- ⚠ THE BARE `gen` WRAPPER DOES NOT EXIST, AND CANNOT YET ---------------
+;;
+;; `[gen 5]` is `Unbound variable` — inside this module as well as outside.
+;; That is not a wiring mistake; it is the derive rule working correctly.
+;;
+;; `derivable-method?` (macros.rkt) derives a bare wrapper only when EVERY trait
+;; parameter appears in a DOMAIN position, because the instance is chosen by
+;; unifying the type var against the arguments. `gen : Int -> A` has `A` in the
+;; RESULT position only, so there is nothing to unify — the exact shape
+;; DEFERRED.md § "Numerics N6d-i follow-ups" item 3 describes as
+;; "output-position-only methods (`from-integer : Int -> A`)".
+;;
+;; So `Gen` is gated on that item: choosing the instance from the EXPECTED type
+;; (`def a : Int := [gen 5]`) needs the checking-mode constraint resolution item
+;; 3 calls UNPROVEN at HEAD. Worth stating loudly because it means Spec Phase
+;; 2's property checking — which needs `Gen` — inherits that blocker, and
+;; nothing had connected the two.
+;;
+;; What DOES work today, and what the law checker can use in the meantime, is
+;; the dictionary method: `[Int--Gen--gen 5]`, `[Bool--Gen--gen 4]`. The
+;; instances below are real and tested through that route; only the bare-name
+;; ergonomics are blocked.

@@ -2454,8 +2454,41 @@ checker, not the syntax.
   generation, property checking for `:properties` / `:laws`, `:pre`/`:post`
   contract wrapping with blame, and the variance / `:compose` / `:identity` /
   `:exists` work below.
-- `Gen` trait for type-directed random generation
-- Property checking for `:properties` and `:laws`
+- 🔶 **`Gen` trait — LANDED 2026-08-03, and it surfaced the blocker.**
+  `prologos::core::gen` defines `trait Gen {A}` with `gen : Int -> A` and
+  instances for Int and Bool. SEEDED rather than random, deliberately: `gen` is
+  a pure function of its seed, so a law failure is reproducible from the seed
+  alone — no captured random state, and no test that fails once a week.
+
+  ⚠ **`[gen 5]` is `Unbound variable`, inside the defining module as well as
+  outside, and that is the derive rule working correctly.** `gen : Int -> A`
+  puts the trait parameter in the RESULT position only, so `derivable-method?`
+  cannot derive a bare wrapper — there is nothing to unify the type var
+  against. That is exactly **item 3 of § "Numerics N6d-i follow-ups"**
+  ("output-position-only methods (`from-integer : Int -> A`)"), whose fix is
+  the expected-type-directed constraint resolution that entry calls UNPROVEN at
+  HEAD.
+
+  **So Spec Phase 2's property checking inherits N6d-i item 3's blocker**, and
+  nothing had connected the two before. Any generator trait has this shape by
+  nature: a generator's whole job is to PRODUCE an A.
+
+  What works today, and what a law checker can use meanwhile, is the dictionary
+  method: `[Int--Gen--gen 5]`. Pinned in `tests/test-gen-trait.rkt`, including
+  the absent bare wrapper — when item 3 lands, that assertion flips.
+
+  **A second finding from building it**: there is NO `Int -> Nat` conversion
+  anywhere in the tower. `from-nat` goes the other way, `conversions.prologos`
+  has `impl ToInt Nat` and no inverse, and no `to-nat` exists. So a `Gen Nat`
+  instance has nothing to build on short of counting `suc` from `zero`. Nat is
+  the type trait laws mention most, so this is the first thing a law checker
+  will want.
+
+- Property checking for `:properties` and `:laws` — **now gated on `Gen`'s bare
+  wrapper above, i.e. on N6d-i item 3.** The laws themselves are already stored
+  fully structured (`(- :name "reflexive" (:forall ($brace-params x : A))
+  (:holds (eq? x x)))`), so the checker's inputs are ready; what it cannot yet
+  do is produce the `x` at a type chosen by the law's context.
 - ✅ **DONE 2026-08-03 — contract wrapping: `:pre`/`:post` now RUN.**
 
   Lowered in `wrap-contract-checks` (macros.rkt), applied to the raw defn
