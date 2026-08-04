@@ -1131,15 +1131,40 @@
                          ;;
                          ;; The old advice sent the reader to a parse error, and
                          ;; then to a cascading "Unbound variable" for the name
-                         ;; they were trying to define. `spec` comes first
-                         ;; because it is the answer that always works —
-                         ;; the fused form takes single-token types only.
+                         ;; they were trying to define.
+                         ;;
+                         ;; ⚠ 2026-08-04: this used to lead with "Add a `spec`",
+                         ;; on the stated grounds that it "is the answer that
+                         ;; always works". Measured — there is one shape where
+                         ;; it does not, and it is a shape a reader of THIS
+                         ;; message is likely to be looking at:
+                         ;;
+                         ;;   spec h Point -> Int / defn h [p] p.x        → FAILS
+                         ;;   spec h Point -> Int / defn h [p] [map-get p :x] → works
+                         ;;   spec h Point -> Int / defn h [p] [int+ p.x 0]   → works
+                         ;;   spec h Point -> Int / defn h [p] 5              → works
+                         ;;   defn h [p:Point] p.x                            → works
+                         ;;
+                         ;; So spec propagation is fine, dot-access is fine, and
+                         ;; the two compose fine when the projection is NESTED.
+                         ;; The failure is exactly "the defn body IS a bare
+                         ;; `.field` projection" — WS only, order-independent,
+                         ;; and pre-existing (verified against a build of the
+                         ;; preceding commit). Filed in DEFERRED § "inference on
+                         ;; unannotated params".
+                         ;;
+                         ;; The annotation is the remedy with no such corner, so
+                         ;; it leads. This is the Q_T2 rule applied here: a
+                         ;; remedy list names only remedies that work (owner,
+                         ;; 2026-07-30 — "annotate comes back when it's real").
                          (string-append
                           "cannot infer the type of an unannotated parameter — "
                           "it is used here in a way that requires a known type "
                           "(e.g. field projection `.field` or arithmetic). "
-                          "Add a `spec`, or annotate the parameter with the "
-                          "fused form (`[x:T]`, single-token types only)."))]
+                          "Annotate the parameter with the fused form "
+                          "(`[x:T]`, single-token types only) — that always "
+                          "works. A `spec` usually works too, but not when the "
+                          "body is exactly a `.field` projection."))]
                    ;; CIU T6 D4.P2 item 9 (2026-08-03): the projection hints on
                    ;; the CHECK door.
                    ;;

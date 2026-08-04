@@ -12,6 +12,7 @@
          racket/string
          racket/list
          racket/path
+         racket/file
          "test-support.rkt"
          "../prelude.rkt"
          "../syntax.rkt"
@@ -54,6 +55,20 @@
 
 (define (run-ns-last s)
   (last (run-ns s)))
+
+;; Level 3 (WS FILE) runner — required for the unannotated-param remedy table
+;; below. That corner is WS-only: the identical program in sexp SUCCEEDS, so a
+;; `process-string` test would assert the opposite of the real behaviour. (The
+;; three-level rule, earning its keep: sexp-green is not WS-correct.)
+(define (run-ws-file-results src)
+  (define tmp (make-temporary-file "prologos-errmsg-~a.prologos"))
+  (call-with-output-file tmp #:exists 'replace (lambda (o) (display src o)))
+  (define rs (parameterize ([current-lib-paths (list prelude-lib-dir)]
+                            [current-module-registry prelude-module-registry])
+               (install-module-loader!)
+               (process-file (path->string tmp))))
+  (delete-file tmp)
+  (map (lambda (r) (format "~a" r)) rs))
 
 ;; ========================================
 ;; Unit tests: meta-source-info struct
@@ -768,3 +783,91 @@
   (define msg (format "~a" (last rs)))
   (check-false (string-contains? msg "row type has no writable spelling")
                (format "the row arm swallowed a non-row input: ~a" msg)))
+
+;; ========================================
+;; The remedy TABLE behind that hint (measured 2026-08-04)
+;; ========================================
+;;
+;; The hint used to lead with "Add a `spec`", on the recorded grounds that it
+;; "is the answer that always works". There is one shape where it does not, and
+;; it is one a reader of this message is likely to be looking at. Measured:
+;;
+;;   spec + `defn h [p] p.x`             → FAILS   ← the corner
+;;   spec + `defn h [p] [map-get p :x]`  → works
+;;   spec + `defn h [p] [int+ p.x 0]`    → works   (nested projection)
+;;   spec + `defn h [p] 5`               → works   (propagation itself is fine)
+;;   `defn h [p:Point] p.x`              → works   (annotation has no corner)
+;;
+;; WS only, order-independent, pre-existing (verified against a build of the
+;; preceding commit — this is not fallout from the item 17 fold change).
+;; These pin the table so message and behaviour cannot drift apart again: if
+;; the corner is ever closed, the first test fails and the message should be
+;; relaxed in the same commit.
+;;
+;; WARNING: each case uses its OWN defn name. `process-file` restores the
+;; module / trait / impl registries but NOT the spec store, so a shared `h`
+;; leaks across these runs and the later ones get checked against an earlier
+;; spec — surfacing as the unrelated "type has 1 type parameters but defn has 2
+;; params". Same trap documented in tests/test-capability-spec-forms.rkt.
+
+(test-case "unannotated-param remedy: `spec` does NOT fix a BARE .field body (the corner)"
+  (define rs (run-ws-file-results
+              (string-append "ns t1d\n"
+                             "schema Point\n  :x Int\n  :y Int\n"
+                             "spec hd Point -> Int\n"
+                             "defn hd [p] p.x\n")))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"unannotated parameter" r)) rs)
+              (format "the corner closed — relax the hint in the same commit: ~v" rs)))
+
+(test-case "unannotated-param remedy: `spec` DOES fix the same projection written out"
+  (define rs (run-ws-file-results
+              (string-append "ns t1g\n"
+                             "schema Point\n  :x Int\n  :y Int\n"
+                             "spec hg Point -> Int\n"
+                             "defn hg [p] [map-get p :x]\n")))
+  (check-false (ormap (lambda (r) (regexp-match? #rx"unannotated parameter" r)) rs)
+               (format "~v" rs)))
+
+(test-case "unannotated-param remedy: a NESTED .field projection is fine under a spec"
+  (define rs (run-ws-file-results
+              (string-append "ns t1h\n"
+                             "schema Point\n  :x Int\n  :y Int\n"
+                             "spec hh Point -> Int\n"
+                             "defn hh [p] [int+ p.x 0]\n")))
+  (check-false (ormap (lambda (r) (regexp-match? #rx"unannotated parameter" r)) rs)
+               (format "~v" rs)))
+
+(test-case "unannotated-param: spec propagation itself is FINE (isolating control)"
+  ;; Same spec, body that does not project → the param type lands. This is what
+  ;; makes the case above a narrow corner rather than missing propagation.
+  (define rs (run-ws-file-results
+              (string-append "ns t1e\n"
+                             "schema Point\n  :x Int\n  :y Int\n"
+                             "spec he Point -> Int\n"
+                             "defn he [p] 5\n")))
+  (check-false (ormap (lambda (r) (regexp-match? #rx"unannotated parameter" r)) rs)
+               (format "~v" rs))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"Point -> Int" r)) rs)
+              (format "the spec's param type did not land: ~v" rs)))
+
+(test-case "unannotated-param remedy: the fused annotation has NO corner"
+  (define rs (run-ws-file-results
+              (string-append "ns t1i\n"
+                             "schema Point\n  :x Int\n  :y Int\n"
+                             "defn hi [p:Point] p.x\n")))
+  (check-false (ormap (lambda (r) (regexp-match? #rx"unannotated parameter" r)) rs)
+               (format "~v" rs)))
+
+(test-case "unannotated-param remedy: `spec` DOES fix the arithmetic case"
+  (define r (run-ns-last "(ns t1a)\n(spec k Int -> Int)\n(defn k [x] (+ x 1))"))
+  (check-false (prologos-error? r) (format "spec should fix arithmetic: ~v" r)))
+
+(test-case "unannotated-param hint names the remedy that always works FIRST"
+  ;; Q_T2's rule (owner, 2026-07-30: "annotate comes back when it's real")
+  ;; applied here: the message must not present `spec` as unconditional.
+  (define r (run-ns-last "(ns t1f)\n(defn g [p] (map-get p :x))"))
+  (define m (prologos-error-message r))
+  (check-true (regexp-match? #rx"fused form" m) (format "got: ~v" m))
+  (check-true (regexp-match? #rx"always works" m) (format "got: ~v" m))
+  (check-true (regexp-match? #rx"not when the body is exactly" m)
+              (format "the spec caveat is missing: ~v" m)))

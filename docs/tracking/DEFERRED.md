@@ -1353,7 +1353,52 @@ annotate `[x : T]` or add a `spec`").
    Seed note `2026-07-02_GENERIC_NUM_TYPE_NOTE.md`. Entry gate: Num Track 2 opens.
 
 Neither blocks records-correct-in-principle (annotate or spec is the workaround);
-the mitigation makes the workaround discoverable. Do NOT attempt the deep fixes
+the mitigation makes the workaround discoverable.
+
+### 🐛 Re-probed 2026-08-04 — both claims hold, and the MITIGATION was advertising a remedy that has a corner
+
+Both soft spots still reproduce, and the mitigation message is live. But the
+message led with "Add a `spec`" on the recorded grounds that it "is the answer
+that always works", and that is not true of the shape a reader of this message
+is most likely to be staring at. Measured, all at Level 3 (WS file):
+
+| program | result |
+|---|---|
+| `spec h Point -> Int` + `defn h [p] p.x` | ❌ **fails** |
+| `spec h Point -> Int` + `defn h [p] [map-get p :x]` | ✅ works |
+| `spec h Point -> Int` + `defn h [p] [int+ p.x 0]` | ✅ works (nested projection) |
+| `spec h Point -> Int` + `defn h [p] 5` | ✅ works — `h : Point -> Int` |
+| `defn h [p:Point] p.x` | ✅ works |
+| sexp `(spec h Point -> Int)` + `(defn h [p] (map-get p :x))` | ✅ works |
+
+So spec propagation is fine, dot-access is fine, and they compose fine when the
+projection is NESTED. The failure is exactly **"the defn body IS a bare `.field`
+projection"** — and it is **WS-only**: the identical program in sexp succeeds,
+which is why a `process-string` test would have asserted the opposite of the
+real behaviour. (The three-level rule earning its keep; the pins are Level 3.)
+
+**Not fallout from the item 17 fold change** — verified against a build of the
+preceding commit (`6ea34b86`), which behaves identically.
+
+**Suspected mechanism, NOT confirmed**: `parse-defn` branches on
+`(length rest-args)` — one element means "body only, infer the return type",
+more means "return type + body" (parser.rkt ~:5627). A body that is exactly
+`p.x` arrives as the two siblings `p` + `($dot-access …)`, which is the same
+sibling-count confusion item 17 fixed at head-macro dispatch. `(expand …)`
+shows both spellings folding to the identical datum, so whatever differs is not
+visible at the sexp preparse level — it is in the WS defn path. Left filed
+rather than guessed at.
+
+**Done here**: the message no longer advertises `spec` as unconditional —
+
+> Annotate the parameter with the fused form (`[x:T]`, single-token types only)
+> — that always works. A `spec` usually works too, but not when the body is
+> exactly a `.field` projection.
+
+Seven pins in `tests/test-error-messages.rkt` fix the whole table, including the
+controls that make this a narrow corner rather than missing propagation. If the
+corner is ever closed the first pin fails, and the message must be relaxed in
+the same commit. Do NOT attempt the deep fixes
 in a records slice — they are their own tracks.
 
 ## CIU T6: schema EXTENSION / inclusion — un-named future design track (owner brewing, hand-testing 2026-07-18)
