@@ -5568,7 +5568,27 @@ SIGNIFICANT defects in the uncommitted diff — all FIXED pre-commit (see D4
 is PRE-EXISTING (verified select-free / dot-identical / baseline-pinned), with
 P3a only widening the walked-into surface.
 
-### 15. Block-form `|>` on a `def` RHS is broken — pre-existing, baseline-pinned
+### 15. ✅ STALE — block-form `|>` on a `def` RHS WORKS (re-probed 2026-08-03)
+
+Both shapes the entry names now evaluate cleanly, 0 errors:
+
+```
+def cfg := {:server {:a 1 :b 2}}
+
+def r3 := |> cfg.server map-keys      ⇒ '[:a :b]
+def r4 :=
+  |> cfg.server
+     map-keys                          ⇒ '[:a :b]
+```
+
+The entry recorded 2 "Unbound variable" errors at clean HEAD `6d919142`, and
+noted the P3a pipe pre-fold had changed the text to "Expression is not a valid
+type" while leaving 2 loud errors. Neither reproduces. Something between
+2026-07-30 and today closed it — plausibly the LET/POL layout work or this
+session's preparse-containment changes; not attributed, because the entry's own
+lesson is that attribution without a bisect is a guess.
+
+**Original filing:**
 
 `def r3 := |> cfg.server map-keys` → 2 errors at CLEAN HEAD (`6d919142`,
 worktree-pinned A/B; "Unbound variable" ×2) while the same pipe at TOP LEVEL
@@ -5639,7 +5659,20 @@ value belongs). Same family: `def cfg{a} := 5` (def-LHS select) aborts at the
 def parser — dot baseline identical. P3a makes `x{…}` a shipped surface that
 now walks into both.
 
-### 17. Registered head-macros (`if` / `cond` / `let`) see RAW access sentinels — lying per-command diagnostics, pre-existing family
+### 17. Registered head-macros (`if` / `cond` / `let`) see RAW access sentinels — CONFIRMED still true (re-probed 2026-08-03)
+
+Still exactly as filed. `(if true cfg{a} 5)` gives *"boolrec expects 4
+arguments, got 3"* plus a cascading "Unbound variable" — per-command, file
+survives, and the message blames arity for what is a fold-ordering problem.
+
+⚠ **Note what changed AROUND it**: item 16's `do` expander now reports
+per-command and renders its argument as source (`cfg{a}`, via
+`render-access-sentinels`). That is the display-side mitigation for ONE
+expander. The general fix this entry names — running the access-sentinel fold
+before head-macro dispatch — is untouched, and `if` / `cond` / `let` still see
+raw sentinels. Do not read item 16's fix as covering this.
+
+**Original filing:**
 
 Head-macro dispatch runs BEFORE the access-sentinel fold, so `if true cfg{a} 5`
 → "boolrec expects 4 arguments, got 3"; `let s := cfg{a}` in a defn dumps
