@@ -800,3 +800,48 @@
   (define chain (run-file-ws "ns u1c2\ndef w :=\n  let a := 1\n  let b := 2\n    [+ a b]\nw\n"))
   (check-false (prologos-error? (last chain)) (format "~v" chain))
   (check-true (regexp-match? #rx"3" (format "~a" (last chain))) (format "~v" chain)))
+
+;; ============================================================================
+;; `do` joins the marker-seat family (D4.P3a item 16, fixed 2026-08-03).
+;;
+;; `expand-do` raised plain `(error 'do …)`, so a malformed statement took the
+;; WHOLE FILE with it — a `defn` body containing `do` / `cfg{a}` printed ZERO
+;; commands, not even the `def` above it, and leaked the internal
+;; `($select-brace a)` sentinel into a raw Racket dump with exit 1.
+;;
+;; Same fix as `$let-error` and `$mixfix-error` above: a distinguished
+;; `exn:do-syntax` struct, caught by `expand-do` itself, collapsing to one
+;; `($do-error msg)` marker that `parser.rkt` turns into a per-command
+;; `parse-error` VALUE. A distinguished struct rather than `exn:fail?` so a
+;; genuine Racket-level bug inside the expansion is not reported to the user as
+;; a `do` syntax error.
+;; ============================================================================
+
+(test-case "do/a malformed statement is PER-COMMAND, not a whole-file abort"
+  ;; The load-bearing assertion is that the commands on BOTH sides survive —
+  ;; that is what "whole-file abort" cost, and a test that only checked for an
+  ;; error message would pass against the old raise too (it errored; it just
+  ;; took everything with it).
+  (define rs (run-file-ws
+              (string-append "ns do-marker-a\n\n"
+                             "def before := 1\n\n"
+                             "spec f Nat -> Nat\n"
+                             "defn f [n]\n  do\n    cfg{a}\n    n\n\n"
+                             "def after := 2\n")))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"^before : " (format "~a" r))) rs)
+              (format "the command BEFORE must survive: ~v" rs))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"^after : " (format "~a" r))) rs)
+              (format "the command AFTER must survive: ~v" rs))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"do:" (format "~a" r))) rs)
+              (format "and the failure must be reported: ~v" rs)))
+
+(test-case "do/the other failure mode (empty do) is also per-command"
+  (define rs (run-file-ws
+              (string-append "ns do-marker-b\n\n"
+                             "def before := 1\n"
+                             "def bad := (do)\n"
+                             "def after := 2\n")))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"^before : " (format "~a" r))) rs))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"^after : " (format "~a" r))) rs))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"requires at least a body" (format "~a" r))) rs)
+              (format "~v" rs)))

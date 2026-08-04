@@ -1188,6 +1188,7 @@
        (not (eq? x '$retired-selection)) ; D4.P1a retirement marker (parser converts to guided error)
        (not (eq? x '$let-error))        ; LET P1 syntax-failure marker (parser converts to per-command parse error)
        (not (eq? x '$mixfix-error))     ; mixfix syntax-failure marker (same channel as $let-error)
+       (not (eq? x '$do-error))         ; do syntax-failure marker (same channel)
        (not (eq? x '$reader-error))     ; reader-level rejection marker (same channel; today: removed ~N literals)
        (not (eq? x '$preparse-error))   ; preparse FORM-processing failure (same channel; contains a whole-file abort)
        (not (eq? x '$let-block))        ; LET P3 aligned-block sentinel (reader-validated; expand-let consumes)
@@ -5305,6 +5306,26 @@
   (raise (exn:mixfix (apply format fmt args)
                      (current-continuation-marks))))
 
+;; The same shape a THIRD time, for `do` (2026-08-03). `expand-do` raised plain
+;; `(error 'do …)`, so a malformed statement took the WHOLE FILE with it —
+;; verified: a file whose `defn` body contained `do` / `cfg{a}` printed ZERO
+;; commands, not even the `def before := 1` that preceded it, and leaked the
+;; internal `($select-brace a)` sentinel into a raw Racket dump.
+;;
+;; Filed as DEFERRED CIU T6 D4.P3a item 16, which named the seat correctly —
+;; "the Q_L4 marker-seat class: a raise where a per-command error value
+;; belongs". The pre-existing family it belongs to is the one `$let-error` and
+;; `$mixfix-error` already closed; this is the same fix, third instance.
+;;
+;; A distinguished struct rather than `exn:fail?` for the reason recorded above:
+;; catching broadly would also swallow a genuine Racket-level bug from inside
+;; the expansion and report it to the user as a `do` syntax error.
+(struct exn:do-syntax exn:fail () #:transparent)
+
+(define (do-syntax-error fmt . args)
+  (raise (exn:do-syntax (apply format fmt args)
+                        (current-continuation-marks))))
+
 (define (expand-let datum)
   (with-handlers ([exn:let-syntax?
                    (lambda (e) `($let-error ,(exn-message e)))])
@@ -5699,9 +5720,18 @@
 ;; NEW: (do [x ($angle-type T) e1] [y ($angle-type T2) e2] body) → 3-element bindings
 ;; OLD: (do [x : T = e1] [y : T2 = e2] body) → 5-element bindings with =
 ;; Both expand to nested let
+;; Wraps the real expander so a `do` syntax failure collapses to ONE
+;; `($do-error msg)` marker form instead of escaping. `parser.rkt` converts the
+;; marker to a per-command `parse-error` VALUE on the same channel as
+;; `$let-error` / `$mixfix-error`, so the commands before AND after the bad one
+;; still run.
 (define (expand-do datum)
+  (with-handlers ([exn:do-syntax? (lambda (e) `($do-error ,(exn-message e)))])
+    (expand-do-inner datum)))
+
+(define (expand-do-inner datum)
   (unless (and (list? datum) (>= (length datum) 2))
-    (error 'do "do requires at least a body"))
+    (do-syntax-error "do: requires at least a body"))
   (define parts (cdr datum))  ; everything after 'do
   (define body (last parts))
   (define bindings (drop-right parts 1))
@@ -5724,7 +5754,7 @@
                  [(and (list? b) (= (length b) 5))
                   (list (car b) (cadr b) (caddr b) (list-ref b 4))]
                  [else
-                  (error 'do "do: each binding must be [name <type> value] or [name : type = value], got ~a" b)]))])
+                  (do-syntax-error "do: each binding must be [name <type> value] or [name : type = value], got ~a" b)]))])
         `(let ,let-bindings ,body))))
 
 ;; cond: multi-way conditional dispatch

@@ -1247,6 +1247,18 @@
                       (stx->datum (car args))
                       "mixfix: malformed .( ) expression")
                   #f)]
+    ;; …and the same channel for `do` (2026-08-03). `expand-do` raised plain
+    ;; `(error 'do …)`, so a malformed statement took the whole file: a `defn`
+    ;; body containing `do` / `cfg{a}` printed ZERO commands — not even the
+    ;; `def` above it — and leaked the internal `($select-brace a)` sentinel
+    ;; into a raw Racket dump. Filed as D4.P3a item 16, which named this exact
+    ;; seat. Same (pair? args) guard, LOAD-BEARING for the same reason.
+    [(and (symbol? head) (eq? head '$do-error))
+     (parse-error loc
+                  (if (and (pair? args) (string? (stx->datum (car args))))
+                      (stx->datum (car args))
+                      "do: malformed do expression")
+                  #f)]
     ;; …and the same channel for READER-level rejections (today: the removed
     ;; `~N` approximate literal). These used to raise during TOKENIZATION,
     ;; which is strictly worse than a parse-time raise: tokenization finishes

@@ -5578,7 +5578,40 @@ it. Adjacent to the infix-pipe def-RHS grouping corruption the fold skeptic
 also reproduced dot-identically (`(idf (def r3 := …))` — the def swallowed
 into the application). A pipe/def layout-seam fix, not selection's.
 
-### 16. The `do` expander whole-file-aborts on ANY access-sentinel statement — pre-existing family
+### 16. ✅ FIXED 2026-08-03 — the `do` expander whole-file-aborted on ANY access-sentinel statement
+
+The entry named the seat exactly right — "the Q_L4 marker-seat class: a raise
+where a per-command error value belongs" — and that is the fix, third instance
+of the family after `$let-error` and `$mixfix-error`.
+
+`expand-do`'s two raise sites now go through a distinguished `exn:do-syntax`
+struct, caught by `expand-do` itself, collapsing to one `($do-error msg)` marker
+that `parser.rkt` converts to a per-command `parse-error` VALUE on the same
+channel. Verified before/after on the entry's own repro:
+
+```
+before:  ZERO commands printed, raw Racket dump, exit 1
+after:   0: before : Int defined.
+         1: ERROR: do: each binding must be [name <type> value] …
+         2: after : Int defined.
+         --- 1 errors ---
+```
+
+A distinguished struct rather than `exn:fail?`, for the reason recorded at
+`exn:let-syntax`: catching broadly would swallow a genuine Racket-level bug
+from inside the expansion and report it as a `do` syntax error.
+
+Pinned in `tests/test-let-blocks.rkt` beside its two siblings. The load-bearing
+assertion is that the commands on BOTH sides survive — a test that only checked
+for an error message would pass against the old raise too, since it errored; it
+just took everything with it.
+
+⚠ **Residue, not fixed**: the message still renders the internal
+`($select-brace a)` sentinel rather than the user's `cfg{a}`. Cosmetic and
+per-command now, but it is the same "raw internal form in a user-facing message"
+shape that the `let` hint's `strip-syntax-deep` closed on its own path.
+
+**Original filing:**
 
 A defn body `do` / `cfg{a}` raises raw out of preparse (macros.rkt `do` arm,
 "each binding must be [name <type> value]…") → ZERO commands output, internal
