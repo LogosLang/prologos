@@ -3988,9 +3988,94 @@ control.
 
 ## Coding Standards
 
-### Nat-in-Computations Audit
-- Replace `Nat` with `PosInt`/`Int` in computation examples and APIs
-- `Nat` only for inductive/proof contexts
+### 🔶 Nat-in-Computations — AUDITED 2026-08-04 (the audit IS what this entry asked for; the refactor is a separate call)
+
+**Measured**: 387 `spec` lines mention `Nat` across the stdlib. The distribution
+is the finding — it is not evenly spread, and most of it is one subsystem:
+
+| module | Nat specs | verdict |
+|---|---|---|
+| `ocapn/captp-core` | 156 | ids/counters — computation, should be `Int` |
+| `ocapn/interop-driver` | 39 | same |
+| `ocapn/vat` · `captp-wire` · `behavior` · … | ~60 | same |
+| `data/nat` · `book/natural-numbers` | 32 | **correct** — the inductive module and its chapter |
+| `data/list` · `book/lists` | 30 | indices/length — arguably computation |
+
+So ~250 of 387 are the OCapN stack using `Nat` for session ids, promise ids,
+positions, and refcounts. `PosInt` exists (Numerics N5de nominal-erased refined
+types), so the target spelling is available.
+
+**The sharp finding, which is not what the entry expected.** `captp-core` uses
+`Nat` as an **enum tag in Peano encoding**:
+
+```
+;; Kind tags. Encoded as Nat for issue #60 avoidance (no enum sum).
+def refr-kind-local-export          : Nat := zero
+def refr-kind-remote-import-promise : Nat := [suc [suc [suc [suc [suc zero]]]]]
+```
+
+Six kinds, spelled as unary numerals, miscountable by eye, 18 use sites. That is
+neither computation nor induction — it is a sum type wearing a numeral, and the
+comment says why: a documented workaround for
+[issue #60](https://github.com/LogosLang/prologos/issues/60) (multi-constructor
+data types unusable cross-module).
+
+**Issue #60's shape no longer reproduces.** Probed at HEAD with its exact
+description — a 2-constructor type whose constructors carry fields, defined in
+one module, constructed / called / matched from another:
+
+```
+data BridgeStep
+  bridge-step     : Nat -> String
+  bridge-step-out : Nat -> String -> [List String]
+```
+
+Cross-module construction, a cross-module call of the defining module's `match`
+function, and a local `match` over the imported type all run clean at 0 errors,
+under `:refer` and under one-hop `:refer-all`. The nullary 3-constructor form
+works too. So the Peano enum is removable — and it is module-LOCAL (all 18 uses
+are inside `captp-core`), which is the easy case.
+
+**Recommendation, NOT done here**: replace the Peano kind tags with a 6-way
+nullary `data RefrKind`, and separately move the OCapN id/counter `Nat`s to
+`Int`. Both are refactors of working, interop-gated code — `tools/interop/`'s
+24/24 conformance run is the gate, and this entry asked for an audit, not a
+rewrite. Sizing it: the enum swap is ~20 lines in one module; the `Nat`→`Int`
+sweep is ~250 signatures across the OCapN stack and wants its own track.
+
+**Spun out — a sharper diagnosis of pitfall #33** (`refer-all` chains and type
+identity), isolated while probing #60. The pitfall log frames it as a
+`:refer-all`-chain problem. It is not:
+
+- direct `:refer` — works, type resolves to the FQN
+- one-hop `:refer-all` — works, FQN
+- a chain through ANY middle module — fails, **including when the middle module
+  uses explicit `:refer`**
+
+So the mechanism is not `refer-all` at all: **a module does not re-export what it
+imports**, and `resolve-in-refer-all` (namespace.rkt:636) only consults each
+refer-all'd module's OWN exports before falling through to "return the symbol
+as-is". The bare symbol then survives as an opaque type name distinct from the
+FQN — hence the pitfall's "Type mismatch: `T` vs `M1::T`, same type, different
+name".
+
+And the reason it is silent rather than loud is worth recording: `known-type-name?`
+is **namespace-blind**. Probed side by side — `spec f TotallyMadeUpName -> String`
+auto-generalizes into `[Pi [x :0 <[Type 0]>] x -> String]` (a type variable,
+correctly), while `spec f BridgeStep -> String` does NOT, because `BridgeStep`
+IS a known type globally. Resolution then yields the bare symbol. The same
+namespace-blindness that caused the capability-in-spec defect fixed earlier this
+session, in the opposite direction: there a real type became a variable, here a
+real type becomes an opaque name.
+
+A guided error is available and bounded — a spec type name that survives
+resolution as a BARE symbol while being a known type in some loaded module could
+say "`BridgeStep` is defined in `prologos::i60::step`, which this module does not
+import". Same-file forward references are safe from it (probed: they resolve to
+the file's own FQN). Not attempted: it touches spec-wide type-name resolution and
+wants a call on whether that case should error or resolve.
+
+- `Nat` only for inductive/proof contexts (the rule, unchanged; also in CLAUDE.md)
 - Source: Session type design review (2026-03-03)
 
 ---
