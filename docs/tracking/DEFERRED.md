@@ -2983,6 +2983,43 @@ measured, held back for two reasons:
    variable into an `m0` position should be legal QTT. Whatever rejects it is
    not the arity or the multiplicity annotation as written.
 
+   ⚠ **AND IT IS NOT A QTT PROBLEM AT ALL — narrowed 2026-08-03. `.pnet` CACHE
+   CONTENT IS CONTEXT-DEPENDENT.** csv's own source, run DIRECTLY as a file
+   (`ns csvdirect :no-prelude`, byte-identical body), elaborates with **0
+   errors**. The same source loaded via `imports` fails. So the content is fine
+   and the module-LOAD path is what differs.
+
+   Narrowed further, and this is the part that matters. Deterministic across
+   trials, from a wiped `data/cache/pnet`:
+
+   | scenario | result |
+   |---|---|
+   | cold → `imports csv` | **FAIL** (multiplicity violation) |
+   | cold → run csv's source DIRECTLY → `imports csv` | **pass** |
+
+   The failing import writes **39** `.pnet` files (it drags in the full prelude
+   via the importer's `ns`); the direct run writes **13** (csv is
+   `:no-prelude`). After the 13-file state exists, the import succeeds — and
+   keeps succeeding. After the 39-file state, it fails and keeps failing.
+
+   **So the same module can be cached in two different states, and which one
+   you get depends on what loaded it first.** A `.pnet` is supposed to be a
+   function of the module's source (plus the compiler and its lib sources —
+   that is what `pnet-stale?` checks). It is evidently also a function of the
+   loading CONTEXT, which nothing checks and nothing records.
+
+   That single fact explains all three false successes this module produced in
+   one session — the withdrawn load-ordering "workaround", the apparent
+   cold-cache import, and the "fixture artifact" reading of this very
+   violation. Each time the cache was answering, in a state some earlier run
+   had put it in.
+
+   **This is the thing to fix, and it is bigger than csv**: any module whose
+   cached form depends on its first loader is a correctness hazard, not a
+   performance one. Related to — but distinct from — the transitive-dependency
+   staleness closed earlier in this file: that was *when* a hit is legitimate;
+   this is *what* the hit contains.
+
 Re-open with the multiplicity question answered.
 
 ⚠ **A LOAD-ORDERING WORKAROUND WAS FILED HERE AND IS WITHDRAWN — it was a STALE
