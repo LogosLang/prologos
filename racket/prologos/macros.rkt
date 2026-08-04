@@ -5326,6 +5326,41 @@
   (raise (exn:do-syntax (apply format fmt args)
                         (current-continuation-marks))))
 
+;; Render a datum for a USER-FACING message, folding the reader's access
+;; sentinels back to something the user could have typed.
+;;
+;; The `do` message used to print `(cfg ($select-brace a))` for source that read
+;; `cfg{a}` — an internal marker in a diagnostic, which tells the reader nothing
+;; and looks like a compiler bug. Head-macro dispatch runs BEFORE the
+;; access-sentinel fold, so any expander reporting on its own arguments sees the
+;; raw form; this is the display-side answer for the one that now reports
+;; per-command.
+;;
+;; Deliberately a POSITIVE table with an identity default: an unrecognised form
+;; is passed through unchanged rather than guessed at. Same polarity discipline
+;; as `definitely-not-map?` — a display helper that invents structure for a
+;; shape it does not know would be worse than showing the raw form.
+(define (render-access-sentinels d)
+  (define (sentinel d)
+    (and (pair? d) (= (length d) 2)
+         (case (car d)
+           [($select-brace $dot-brace) (format "{~a}" (render-access-sentinels (cadr d)))]
+           [($dot-access)              (format ".~a" (render-access-sentinels (cadr d)))]
+           [($postfix-index)           (format "[~a]" (render-access-sentinels (cadr d)))]
+           [else #f])))
+  (cond
+    [(sentinel d) => values]
+    [(and (pair? d) (list? d))
+     ;; `(cfg ($select-brace a))` — a head followed by access forms — reads back
+     ;; as JUXTAPOSITION, which is how the user wrote it: `cfg{a}`. Only when
+     ;; every tail element rendered to a string, i.e. every one was an access
+     ;; form; otherwise this is an ordinary application and is left alone.
+     (define parts (map render-access-sentinels d))
+     (if (and (pair? (cdr parts)) (andmap string? (cdr parts)))
+         (apply string-append (format "~a" (car parts)) (cdr parts))
+         parts)]
+    [else d]))
+
 (define (expand-let datum)
   (with-handlers ([exn:let-syntax?
                    (lambda (e) `($let-error ,(exn-message e)))])
@@ -5754,7 +5789,8 @@
                  [(and (list? b) (= (length b) 5))
                   (list (car b) (cadr b) (caddr b) (list-ref b 4))]
                  [else
-                  (do-syntax-error "do: each binding must be [name <type> value] or [name : type = value], got ~a" b)]))])
+                  (do-syntax-error "do: each binding must be [name <type> value] or [name : type = value], got ~a"
+                                   (render-access-sentinels b))]))])
         `(let ,let-bindings ,body))))
 
 ;; cond: multi-way conditional dispatch

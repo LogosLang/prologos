@@ -833,7 +833,16 @@
   (check-true (ormap (lambda (r) (regexp-match? #rx"^after : " (format "~a" r))) rs)
               (format "the command AFTER must survive: ~v" rs))
   (check-true (ormap (lambda (r) (regexp-match? #rx"do:" (format "~a" r))) rs)
-              (format "and the failure must be reported: ~v" rs)))
+              (format "and the failure must be reported: ~v" rs))
+  ;; …naming what the USER wrote, not the reader's internal marker. This used
+  ;; to print `(cfg ($select-brace a))`, which tells the reader nothing and
+  ;; reads like a compiler bug. Head-macro dispatch runs BEFORE the
+  ;; access-sentinel fold, so any expander reporting on its own arguments sees
+  ;; the raw form — `render-access-sentinels` is the display-side answer.
+  (check-true (ormap (lambda (r) (regexp-match? #rx"cfg\\{a\\}" (format "~a" r))) rs)
+              (format "the message must show source, not sentinels: ~v" rs))
+  (check-false (ormap (lambda (r) (regexp-match? #rx"select-brace" (format "~a" r))) rs)
+               (format "internal sentinel leaked into a user-facing message: ~v" rs)))
 
 (test-case "do/the other failure mode (empty do) is also per-command"
   (define rs (run-file-ws

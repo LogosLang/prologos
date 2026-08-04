@@ -5606,10 +5606,28 @@ assertion is that the commands on BOTH sides survive — a test that only checke
 for an error message would pass against the old raise too, since it errored; it
 just took everything with it.
 
-⚠ **Residue, not fixed**: the message still renders the internal
-`($select-brace a)` sentinel rather than the user's `cfg{a}`. Cosmetic and
-per-command now, but it is the same "raw internal form in a user-facing message"
-shape that the `let` hint's `strip-syntax-deep` closed on its own path.
+✅ **The display residue is closed too (same day).** The message rendered the
+internal `($select-brace a)` rather than the user's `cfg{a}` — the same "raw
+internal form in a user-facing message" shape the `let` hint's
+`strip-syntax-deep` closed on its own path. `render-access-sentinels`
+(macros.rkt) folds the reader's access sentinels back to source, so the message
+now reads:
+
+```
+ERROR: do: each binding must be [name <type> value] …, got cfg{a}
+```
+
+A POSITIVE table with an identity default — an unrecognised form passes through
+unchanged rather than being guessed at, the same polarity discipline as
+`definitely-not-map?`. A display helper that invents structure for a shape it
+does not know would be worse than showing the raw form.
+
+⚠ **Note the general shape this exposes**: head-macro dispatch runs BEFORE the
+access-sentinel fold, so ANY expander that reports on its own arguments sees raw
+sentinels. That is item 17 below, whose general fix is running the fold before
+head-macro dispatch. `render-access-sentinels` is the display-side mitigation
+for the one expander that now reports per-command; item 17's ordering change is
+still the real answer.
 
 **Original filing:**
 
