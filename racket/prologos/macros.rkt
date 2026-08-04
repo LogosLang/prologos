@@ -8900,10 +8900,37 @@
          (or (memq mname (unbox derived-wrapper-names))
              (not (global-env-lookup-type mname)))
          (not (null? params))
-         (let ([doms (method-domain-datums (trait-method-type-datum method))])
+         (let ([doms (method-domain-datums (trait-method-type-datum method))]
+               [whole (trait-method-type-datum method)])
            (for/and ([p (in-list params)])
-             (for/or ([d (in-list doms)])
-               (datum-mentions? d (car p)))))))
+             (or (for/or ([d (in-list doms)])
+                   (datum-mentions? d (car p)))
+                 ;; ⚠ RESULT-POSITION parameters, added 2026-08-03. A method
+                 ;; like `gen : Int -> A` or `convert : A -> B` has a parameter
+                 ;; the ARGUMENTS cannot solve — and the derive rule used to
+                 ;; stop there, which is DEFERRED § "Numerics N6d-i follow-ups"
+                 ;; item 3 ("output-position-only methods").
+                 ;;
+                 ;; That entry blamed the RESOLUTION machinery, calling
+                 ;; expected-type-directed constraint resolution "UNPROVEN at
+                 ;; HEAD". Measured: it works. A hand-written
+                 ;; `spec mk {A} Int -> A where (Gen A)` resolves fine from
+                 ;; `def a : Int := [mk 5]`. What blocked the METHODS was this
+                 ;; rule refusing to emit their wrapper, nothing deeper.
+                 ;;
+                 ;; `(pair? doms)` is the boundary and it is load-bearing: a
+                 ;; method that takes arguments has an APPLICATION for the
+                 ;; checker to hang an expected type on. A bare constant
+                 ;; (`zero : A`, `one`, `bot`, `empty-coll`) has none, so it
+                 ;; still derives nothing and `def o : Int := one` is still
+                 ;; Unbound — the other half of item 3, still open and now
+                 ;; separately pinned.
+                 ;;
+                 ;; Verified end-to-end rather than by def-count: with
+                 ;; `impl Convertible Int Bool`, `def y : Bool := [convert 0]`
+                 ;; gives `true` and `[convert 5]` gives `false` — the expected
+                 ;; type choosing the instance from an identical call shape.
+                 (and (pair? doms) (datum-mentions? whole (car p))))))))
 
   (define derived-wrapper-defs
     (for/list ([method (in-list methods)]

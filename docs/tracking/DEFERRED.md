@@ -1753,7 +1753,54 @@ hand-inlined strip-then-lookup loops in `elaborator.rkt` collapsed into the one
 `lookup-spec/qualified` helper on the way — otherwise the FQN probe would have
 had to be added three times.
 
-### 3. Zero-arg / output-position-only trait methods as context-resolved values
+### 3. 🔶 Zero-arg / output-position-only trait methods as context-resolved values — the OUTPUT-POSITION half DONE 2026-08-03; the ZERO-ARG half open
+
+**The entry's diagnosis was wrong about where the blocker was, and measuring is
+what showed it.** It says expected-type-directed constraint resolution "is
+UNPROVEN at HEAD — no machinery confirmed for solving an output-position
+constraint meta from the checking direction". It works. A hand-written
+
+```
+spec mk {A} Int -> A where (Gen A)
+defn mk [s] [gen s]
+def a : Int := [mk 5]        ;; => -95 : Int
+```
+
+resolves the constraint from the annotation, today, with no changes. So the
+machinery was never the problem — what blocked trait METHODS was
+`derivable-method?` refusing to emit their bare wrapper, because it required
+every trait parameter to occur in a DOMAIN position.
+
+**Relaxed**: a parameter may occur in the RESULT position too, provided the
+method TAKES arguments. `gen : Int -> A` and `convert : A -> B` now derive;
+`def a : Int := [gen 5]` and `def b : Bool := [gen 4]` pick different instances
+from the identical call shape. Verified end-to-end rather than by counting
+generated defs — with `impl Convertible Int Bool`, `[convert 0]` gives `true`
+and `[convert 5]` gives `false`.
+
+**`(pair? doms)` is the boundary, and it is the honest half of the split.** A
+method that takes arguments gives the checker an APPLICATION to hang an
+expected type on. A bare constant — `zero : A`, `one`, `bot`, `empty-coll` —
+has none, so it still derives nothing and **`def o : Int := one` is still
+`Unbound variable`**. That is the ZERO-ARG half of this item, still open, and
+now separately pinned in `tests/test-gen-trait.rkt` so the two are not confused
+for one another.
+
+**Unblocks, immediately**: `Gen`'s bare `gen` (§ Spec System Phase 2), which is
+what led here — building `Gen` is what exposed that the entry blamed the wrong
+component. The N6f `sum`/`product` dependency below is NOT unblocked: those
+call the nullary identity accessors, which are the zero-arg half.
+
+**Verified with the corpus, not just the suite**, because this ADDS bare
+wrappers and that is precisely the shadowing shape `join` had (a green
+542-file suite said `join` was safe to derive when it was not). All 50
+`examples/*.prologos` through `run-file.rkt`, before vs after: **diff of FOUR
+LINES, and the only difference is a gensym counter**. Also probed directly the
+names this newly derives — `from`, `try-from`, `into`, `from-integer`,
+`from-rational`, `alpha`, `gamma` — and A/B'd `into`, the one that collides
+with a collections function: identical.
+
+**Original entry:**
 
 - **What**: the derive's argument-position rule excludes constants (`zero`,
   `one`, `bot`, `top`, `empty-coll`) and output-only methods (`from-integer :
@@ -2271,9 +2318,14 @@ settle BEFORE the migration, not after.
 - **Not blocked**, but separate from Layer 1 (fold+build doesn't need this)
 - Source: `docs/tracking/2026-02-28_2200_CLAUSE_STYLE_CONSTRAINT_MATCHING.md`
 
-### Sorted Collections (SortedMap, SortedSet)
+### Sorted Collections (SortedMap, SortedSet) — ACCURATE (re-probed 2026-08-03)
 - B+ tree or red-black tree backends
 - **Blocked on**: backend infrastructure not yet built
+- Probe: `sorted-map-empty` is `Unbound variable`; nothing sorted-keyed exists.
+  Worth noting what DOES exist next door, since it is the nearest thing anyone
+  will reach for: `sort` is bound (it fails on a bare `[sort '[3 1 2]]` with
+  "Could not infer type", i.e. it wants an expected type or an Ord dict, not
+  that it is missing). A sorted CONTAINER is the gap, not sorting.
 
 ### Parallel Collection Operations
 - Parallel `map`/`filter`/`reduce` via Racket's places/futures
@@ -2460,22 +2512,22 @@ checker, not the syntax.
   a pure function of its seed, so a law failure is reproducible from the seed
   alone — no captured random state, and no test that fails once a week.
 
-  ⚠ **`[gen 5]` is `Unbound variable`, inside the defining module as well as
-  outside, and that is the derive rule working correctly.** `gen : Int -> A`
-  puts the trait parameter in the RESULT position only, so `derivable-method?`
-  cannot derive a bare wrapper — there is nothing to unify the type var
-  against. That is exactly **item 3 of § "Numerics N6d-i follow-ups"**
-  ("output-position-only methods (`from-integer : Int -> A`)"), whose fix is
-  the expected-type-directed constraint resolution that entry calls UNPROVEN at
-  HEAD.
+  ✅ **`[gen 5]` WORKS** — `def a : Int := [gen 5]` and
+  `def b : Bool := [gen 4]` select different instances from the identical call
+  shape, the expected type doing the choosing.
 
-  **So Spec Phase 2's property checking inherits N6d-i item 3's blocker**, and
-  nothing had connected the two before. Any generator trait has this shape by
-  nature: a generator's whole job is to PRODUCE an A.
+  ⚠ **It did not, for about an hour, and the hour is the interesting part.**
+  `gen : Int -> A` puts the trait parameter in the RESULT position only, so
+  `derivable-method?` refused to derive a bare wrapper — which is exactly
+  **item 3 of § "Numerics N6d-i follow-ups"**, and connecting the two was the
+  first finding (nothing had). The second finding was that **item 3's own
+  diagnosis was wrong**: it blamed the resolution machinery as "UNPROVEN at
+  HEAD", and a hand-written `spec mk {A} Int -> A where (Gen A)` resolves fine
+  from an annotated `def`. The blocker was the derive rule, not the resolver.
+  Relaxed there, and both entries move.
 
-  What works today, and what a law checker can use meanwhile, is the dictionary
-  method: `[Int--Gen--gen 5]`. Pinned in `tests/test-gen-trait.rkt`, including
-  the absent bare wrapper — when item 3 lands, that assertion flips.
+  A law checker can also use the dictionary method (`[Int--Gen--gen 5]`), which
+  is what the tests exercised before the wrapper existed.
 
   **A second finding from building it**: there is NO `Int -> Nat` conversion
   anywhere in the tower. `from-nat` goes the other way, `conversions.prologos`
@@ -2484,11 +2536,20 @@ checker, not the syntax.
   the type trait laws mention most, so this is the first thing a law checker
   will want.
 
-- Property checking for `:properties` and `:laws` — **now gated on `Gen`'s bare
-  wrapper above, i.e. on N6d-i item 3.** The laws themselves are already stored
-  fully structured (`(- :name "reflexive" (:forall ($brace-params x : A))
-  (:holds (eq? x x)))`), so the checker's inputs are ready; what it cannot yet
-  do is produce the `x` at a type chosen by the law's context.
+- Property checking for `:properties` and `:laws` — **no longer blocked.** The
+  laws are stored fully structured (`(- :name "reflexive" (:forall
+  ($brace-params x : A)) (:holds (eq? x x)))`) and `Gen` can now produce a
+  value at a type the context chooses, which was the missing half. What remains
+  is the checker itself: walk a trait's laws, generate for the `:forall` binders
+  at the instance's type, evaluate `:holds`, and report. Plus an invocation
+  surface — automatic at `impl` is the valuable version and the risky one (every
+  prelude impl would check at load), so that is a real decision rather than a
+  detail.
+
+  ⚠ **A `Gen Nat` instance is the first thing it will want, and cannot be
+  written**: there is no `Int -> Nat` conversion anywhere in the tower.
+  `from-nat` goes the other way, `conversions.prologos` has `impl ToInt Nat`
+  and no inverse, no `to-nat` exists. Nat is the type trait laws mention most.
 - ✅ **DONE 2026-08-03 — contract wrapping: `:pre`/`:post` now RUN.**
 
   Lowered in `wrap-contract-checks` (macros.rkt), applied to the raw defn
@@ -2610,12 +2671,20 @@ checker, not the syntax.
 - **Blocked on**: session type design (Phase 9), dependent capabilities (Phase 7e-7g)
 - Source: `docs/tracking/2026-03-01_1500_CAPABILITIES_AS_TYPES_DESIGN.md` §Phase 8d
 
-### Galois Connections — Remaining Deferred — CONFIRMED (probed 2026-08-02)
+### Galois Connections — Remaining Deferred — CONFIRMED (probed 2026-08-02, substrate re-exercised 2026-08-03)
 
 `connect-domains` does not exist anywhere in the tree, so that half stands. The
 substrate it would wrap does: `GaloisConnection` with `-alpha`/`-gamma`
 accessors and an `Interval` domain are in `prologos::core::lattice`, with 14
 passing tests in `test-galois-connection.rkt`.
+
+Re-exercised end-to-end 2026-08-03, since "the substrate exists" is worth more
+when someone has actually run it: `[Interval-Sign--GaloisConnection--alpha
+[mk-interval 1 5]]` gives `sign-pos`, and `gamma` of that gives back an
+interval. Both adjoints work through the dictionary. What `connect-domains`
+should DO with them, though, is not specified anywhere the entry points at —
+package the pair as a value? install a propagator bridging two domain cells? —
+so it is an API design question, not just missing code.
 - `connect-domains` Prologos-level wrapper (needs AST keyword or FFI)
 - Additional abstract domains (Congruence, Pointer, etc.)
 - Source: `docs/tracking/2026-02-27_1026_GALOIS_CONNECTIONS_ABSTRACT_INTERPRETATION.md`
@@ -2705,9 +2774,22 @@ differing arity.
 
 ## Homoiconicity
 
-### Phase IV: Runtime Eval & Read
+### Phase IV: Runtime Eval & Read — ACCURATE, and the blocker is a RULING (re-probed 2026-08-03)
 - Runtime `eval`, `read`, `unquote-splicing` (`,@`), quasiquote `,x` in paren forms
 - Source: `docs/tracking/2026-02-19_HOMOICONICITY_ROADMAP.md`
+- Probe: `quote`, `eval-datum`, `read-datum` are all `Unbound variable`. The
+  DATA half is done and working — `prologos::data::datum` defines `Datum` with
+  constructors and predicates, and `[nat? [datum-nat 5N]]` gives `true`. What is
+  missing is the evaluator, not the representation.
+- ⚠ **And it is cheap in the wrong way, which is why it should NOT just be
+  built.** Racket already implements the evaluator — a `foreign racket` bridge
+  to the driver's own `process-string` is the Phase 4a/4b shape and would take
+  minutes. But this is a CAPABILITIES language, and a plain-function `eval` is
+  ambient authority to execute arbitrary code: the one primitive whose whole
+  point is that it should be gated. Whether `eval` is a capability, and what
+  that capability looks like, is an owner ruling on the capability model — not
+  an implementation detail. Recorded so the next person sees the cheapness and
+  the reason to resist it in the same place.
 
 ---
 

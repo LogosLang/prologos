@@ -79,10 +79,26 @@
   (check-regexp-match #rx"^true"  (first rs)  (format "~a" (first rs)))
   (check-regexp-match #rx"^false" (second rs) (format "~a" (second rs))))
 
-(test-case "gen/the BARE wrapper is absent — pinned as the known blocker"
-  ;; `gen : Int -> A` is output-position-only, so no bare wrapper is derived.
-  ;; When N6d-i item 3 lands (expected-type-directed constraint resolution),
-  ;; THIS is the assertion that flips.
-  (define rs (run-gen "def a : Int := [gen 5]\n"))
+(test-case "gen/the BARE wrapper RESOLVES from the expected type"
+  ;; This assertion is the one that flipped. It was written the same day as
+  ;; `#rx"Unbound variable"` — "when N6d-i item 3 lands, THIS is what changes" —
+  ;; and item 3's practical half landed within the hour, because building `Gen`
+  ;; is what showed the blocker was `derivable-method?`'s domain-position rule
+  ;; and not the resolution machinery the entry blamed.
+  ;;
+  ;; The expected type picks the instance: `Int` gives the Int generator,
+  ;; `Bool` the Bool one, from the identical call shape.
+  (define rs (run-gen "def a : Int := [gen 5]\ndef b : Bool := [gen 4]\na\nb\n"))
+  (check-false (ormap (lambda (r) (regexp-match? #rx"Unbound variable" r)) rs)
+               (format "~v" rs))
+  (check-regexp-match #rx": Int"  (third rs)  (format "~a" (third rs)))
+  (check-regexp-match #rx"^true"  (fourth rs) (format "~a" (fourth rs))))
+
+(test-case "gen/a CONSTANT method still derives no wrapper"
+  ;; The boundary the relaxed rule keeps. `zero : A` takes no arguments at all,
+  ;; so there is no application for the checker to hang an expected type on —
+  ;; that half of N6d-i item 3 is still open, and `def o : Int := one` is still
+  ;; Unbound. Pinned so the two halves are not confused for each other.
+  (define rs (run-gen "def o : Int := one\n"))
   (check-true (ormap (lambda (r) (regexp-match? #rx"Unbound variable" r)) rs)
-              (format "if `gen` resolves now, item 3 landed: ~v" rs)))
+              (format "~v" rs)))
