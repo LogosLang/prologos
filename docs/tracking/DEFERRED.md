@@ -1664,6 +1664,13 @@ outright with it derived. All four calls are now pinned in
 hand-list baseline, so "the guard replaced the list without changing anything"
 is a fact rather than a claim.
 
+**And the corpus was run for the same reason** — the suite had already been
+shown insufficient here once. All 50 `examples/*.prologos` through
+`run-file.rkt`, hand-list baseline vs computed guard: **total diff FOUR LINES,
+and the only difference is a gensym counter**. The instrument that would have
+caught a `join`-shaped regression was used before shipping this time, not
+after.
+
 **So the honest state is**: `add`/`sub` are hard-blocked (measured, loudly).
 `join` is blocked, now with a test that says so.
 
