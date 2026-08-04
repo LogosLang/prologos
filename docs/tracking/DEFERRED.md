@@ -2148,12 +2148,26 @@ directly" — true for `Path`/`Keyword`, false for everything else. Same
 catch-all-does-the-wrong-thing pattern as `pipeline.md` § Exhaustive Walkers.
 Two arms fixed it and made ~30 lines of existing marshalling live.
 
-**Still open from the residual**: `if-nan` (a combinator, not a primitive — it
-wants the `p32-if-nar` treatment as a lib function) and Float↔Posit in the
-FFI-marshalled direction. `conversions.prologos` already has
-`From Float64 Posit*` impls built on `float-finite?` + `float-to-rat`, so the
-Prologos-level conversion exists; what is absent is a direct foreign one, which
-may not be wanted at all.
+**The last two residual items, both closed the same day:**
+
+- **`if-nan` — DONE**, in the float lib, and deliberately NOT a compiler
+  primitive unlike its posit sibling. `p32-if-nar` has to be one because there
+  is no other way to test nar-ness; `nan?` now gives the test, so this is an
+  ordinary `match` — and a match arm is only evaluated when selected, which is
+  the laziness the guard exists for. Polymorphic in the result type, so it
+  covers the `conversions.prologos` usage shape (a value-case only meaningful
+  when the input is not NaN).
+
+- **Float↔Posit — WAS NEVER MISSING.** Listed as unverified; it works both
+  directions via the trait route (`to-float` / `to-posit`). My first probe used
+  a `[from Float64 Posit32 …]` spelling that does not exist and read the
+  `Unbound variable` as a missing feature — the same mistake this file has
+  recorded several times, in the same session. The interesting half checks out
+  too: **both NaN and infinity map to `NaR`**, the posit tower's single
+  non-value, so nothing silently becomes a number, and a finite value round-trips
+  exactly. Pinned rather than deleted, since nothing was pinning it.
+
+**Phase 4's residual list is now empty.**
 
 **Found while probing** — `[from-int Float64 3]` died on a raw
 `surf-from-int: arity mismatch` at parse time, taking the whole file.

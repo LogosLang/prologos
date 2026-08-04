@@ -42,3 +42,19 @@ foreign racket "racket/base" [floor :as floor : Float64 -> Float64]
 foreign racket "racket/base" [ceiling :as ceiling : Float64 -> Float64]
 foreign racket "racket/base" [truncate :as truncate : Float64 -> Float64]
 foreign racket "racket/base" [round :as round : Float64 -> Float64]
+
+;; --- NaN guard ---
+;; The float twin of `p32-if-nar` (conversions.prologos), and the last named
+;; item on Phase 4's residual list.
+;;
+;; NOT a compiler primitive, unlike its posit sibling. `p32-if-nar` has to be
+;; one because there is no other way to test nar-ness; `nan?` above already
+;; gives the test, so this is an ordinary `match` — and a `match` arm is only
+;; evaluated when selected, which is the laziness the guard exists for. The
+;; usage that needs it is conversions.prologos's shape: a value-case that is
+;; only MEANINGFUL when the input is not NaN.
+spec if-nan {A} A A Float64 -> A
+defn if-nan [nan-case val-case x]
+  match [nan? x]
+    | true  -> nan-case
+    | false -> val-case

@@ -72,3 +72,34 @@
   ;; struct were handed through and happened not to crash.
   (define rs (run-float "[flt::sqrt 9.0f64]\n"))
   (check-regexp-match #rx"^3[.]0f : Float64" (first rs) (format "~v" rs)))
+
+
+(test-case "float-lib/if-nan guards the value case"
+  ;; The last named item on the Phase 4 residual list, and NOT a compiler
+  ;; primitive unlike its posit sibling `p32-if-nar`. That one has to be one
+  ;; because there is no other way to test nar-ness; `nan?` gives the test, so
+  ;; this is an ordinary `match` — and a match arm is only evaluated when
+  ;; selected, which is the laziness the guard exists for.
+  (define rs (run-float (string-append
+                         "def nn : Float64 := [/ 0.0f64 0.0f64]\n"
+                         "[flt::if-nan 0.0f64 [flt::sqrt 4.0f64] nn]\n"
+                         "[flt::if-nan 0.0f64 [flt::sqrt 4.0f64] 9.0f64]\n"
+                         "[flt::if-nan -1 42 nn]\n")))
+  (check-regexp-match #rx"^0[.]0f" (second rs) "NaN takes the nan-case")
+  (check-regexp-match #rx"^2[.]0f" (third rs)  "a real value takes the val-case")
+  ;; polymorphic in the result type, not Float64-only
+  (check-regexp-match #rx"^-1 : Int" (fourth rs)))
+
+(test-case "float-lib/Float<->Posit already round-trips (the residual was stale)"
+  ;; The Phase 4 residual listed "Float↔Posit" as unverified. It works, via the
+  ;; trait route — `to-float` / `to-posit`, not a `from`-shaped spelling. The
+  ;; interesting half is the non-finite one: BOTH NaN and infinity map to NaR,
+  ;; which is the posit tower's single non-value, so nothing silently becomes a
+  ;; number.
+  (define rs (run-float (string-append
+                         "def nn : Float64 := [/ 0.0f64 0.0f64]\n"
+                         "def ii : Float64 := [/ 1.0f64 0.0f64]\n"
+                         "[to-posit nn]\n[to-posit ii]\n[to-float [to-posit 1.5f64]]\n")))
+  (check-regexp-match #rx"NaR" (third rs)  "NaN → NaR")
+  (check-regexp-match #rx"NaR" (fourth rs) "infinity → NaR")
+  (check-regexp-match #rx"^1[.]5f" (fifth rs) "a finite value round-trips exactly"))
