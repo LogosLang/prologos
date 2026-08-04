@@ -3965,9 +3965,35 @@ level, `x{…}` selects and `x.k` accesses". The entry predates that work.
 
 ## LSP / Editor Support
 
-### Token-level srcloc precision for diagnostics
-- Errors point to enclosing `defn` instead of exact token
-- **Blocked on**: full propagator integration (cell-per-node architecture)
+### 🔶 Token-level srcloc precision — the symptom is REAL but far NARROWER than filed, and the blocker is wrong (re-probed 2026-08-04)
+
+"Errors point to enclosing `defn` instead of exact token" is true of exactly one
+shape. Measured, one file, four forms:
+
+| form | reported | verdict |
+|---|---|---|
+| `defn g [x] [int+ x undef_one_line]` (single line) | col 19, span 14 | ✅ the exact token |
+| `defn h [x]` + **layout-indented** body | line 6, col 0, span 35 | ❌ the enclosing `defn` |
+| `def k := [fn [x : Int] [int+ x undef_in_fn]]` | col 31, span 11 | ✅ the exact token |
+| `def a := undefined_top_level` | col 9, span 19 | ✅ the exact token |
+| sexp `(def b (int+ 1 undefined_in_sexp))` | col 15, span 17 | ✅ the exact token |
+
+So token-level precision already works everywhere except a **WS layout-continued
+body**, where the whole block inherits the header line's srcloc (note the
+reported line is the `defn` line, not the token's).
+
+**The stated blocker is wrong.** This has nothing to do with "full propagator
+integration (cell-per-node architecture)": `surf-var` carries its own srcloc
+(`surface-syntax.rkt:440`), the elaborator destructures it
+(`elaborator.rkt:1055`) and threads it straight into `unbound-variable-error`
+(`:824`). The plumbing is complete and demonstrably exact in four of five
+shapes. What is missing is that the WS tree-parser gives a layout-continued
+sub-form the enclosing block's location instead of its own — a reader/parser
+srcloc question, and one that can be worked on today.
+
+Not fixed here: it is in the WS layout srcloc plumbing, which wants its own
+slice rather than a triage pass.
+
 - Source: LSP Tier 2, commit `712c45a`
 
 ### ✅ Cross-module go-to-definition — IMPLEMENTED 2026-08-04; the stated blocker was already gone
@@ -4011,10 +4037,7 @@ resolving to nothing. Verified they fail with the new branch disabled.
 
 - Source: LSP Tier 2, commit `12ea616`
 
-### Token-level srcloc precision — still open, blocker NOT re-probed
-The sibling item above it in this section is untouched; its "blocked on full
-propagator integration" claim has not been re-probed and should not be assumed
-accurate given this one's was stale.
+
 
 ---
 
