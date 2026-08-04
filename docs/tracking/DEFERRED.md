@@ -3599,7 +3599,47 @@ this file, and it would send anyone picking up the track to rebuild what exists.
 
 ---
 
-## 🔶 Session Types — PROCESS recursion is unimplemented (filed 2026-08-04; the discard is now LOUD)
+## 🔶 Session Types — recursion is unusable in BOTH halves, and they are ONE gap (filed 2026-08-04; the process-side discard is now LOUD)
+
+> **Probed further the same day, and the finding is bigger than the process
+> half.** Recursive session TYPES are declarable but **unimplementable**:
+>
+> ```
+> (session Loop (Mu X (Send Int (SVar X))))   ⇒ session Loop defined.
+> (defproc sender : Loop (proc-send self 1 (proc-stop)))
+>     ⇒ ERROR: Process sender does not implement session protocol
+>              [mu [!Int . svar[0]]]
+> (session Once (Send Int End))               ⇒ defined
+> (defproc sender2 : Once (proc-send self 1 (proc-stop)))
+>     ⇒ type-checked.          ← the identical send, non-recursive
+> ```
+>
+> **Cause**: `typing-sessions.rkt` never calls `unfold-session` — **zero uses**.
+> A channel sitting at `sess-mu B` therefore matches none of `type-proc`'s
+> arms (`sess-send`, `sess-recv`, …), so every operation on a recursive session
+> is refused. The unfolding machinery is NOT missing: `unfold-session` /
+> `unfoldS` are implemented in `sessions.rkt:102`, and `effect-position.rkt:112`
+> already uses them. Typing simply never adopted them.
+>
+> **But unfolding alone buys no working program, and that is the real finding.**
+> Under `μX.!Int.X` the continuation after a send is `X`, which unfolds back to
+> `Loop` — a protocol that never ends. Terminating it requires `proc-stop`,
+> whose rule demands every channel be ended, so no non-recursive process can
+> implement it. Adding an escape branch does not help: `μX. offer {done: End,
+> put: Recv Int X}` still obliges the `put` branch to return to `X`.
+>
+> **So the type half and the process half are ONE gap.** S4 must land both:
+> `unfold-session` wired into `type-proc`'s channel lookups, AND a process
+> recursion form with the standard rule (the jump checks that the channel
+> context has returned to the state it was in at the binder). Doing either
+> alone produces no implementable recursive protocol — only a differently
+> worded refusal.
+>
+> Not attempted here. The process half's rule is where soundness lives, and a
+> subtly wrong one would ACCEPT programs that do not implement their protocol —
+> strictly worse than today's refusal.
+
+## (the process half, filed earlier the same day) PROCESS recursion is unimplemented — the discard is now LOUD
 
 **Never previously filed** — it lived as a `TODO` in `elaborator.rkt` and
 nowhere else. Found by sweeping for defects recorded only in code comments.
