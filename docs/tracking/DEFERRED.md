@@ -3467,6 +3467,40 @@ this file, and it would send anyone picking up the track to rebuild what exists.
 | Per-domain factory callbacks (3) | 4C addendum S2.d-followup audit (2026-04-25) | ⬜ flagged | `current-prop-fresh-mult-cell` (driver.rkt:2600), `current-prop-fresh-level-cell` (similar), `current-prop-fresh-sess-cell` (similar). Each is a Racket parameter holding a fresh-cell allocation closure. Used in fresh-X-meta legacy fallback path for pre-init test contexts. | Set at module-load with default `#f`; populated by driver.rkt during init. Read in fresh-X-meta legacy path (when universe is not initialized — bare-metavar-store tests not loading elaborator-network.rkt). | **PM Track 12 retires**: when test fixture infrastructure goes on-network, the pre-init fallback paths can collapse entirely — tests would call `init-meta-universes!` at setup. S2.e reviews whether these fallbacks remain needed; if not, retires before PM 12. Per D.3 §7.5.14.1 + §7.5.14.3. |
 | `current-prop-mult-cell-write` write callback (1) | 4C addendum S2.c-iv adversarial VAG (2026-04-24) | ⬜ flagged | Racket parameter holding mult-cell write closure (driver.rkt:2605 → `elab-mult-cell-write`). Used in solve-mult-meta! legacy path. Note: level/session don't have analogous write callbacks — they use direct `elab-cell-write` in their legacy paths. Asymmetry is mult-specific (legacy artifact). | Set at module-load; read in solve-mult-meta! legacy fallback path only. Post-S2.c-iv mult universe-active, legacy path dead → callback becomes unread. | **PM Track 12 retires** with mult store/champ-box. S2.e could retire earlier (no PM 12 dependency for the callback itself; only the data store it writes to). Per D.3 §7.5.14.3. |
 
+### 🐛 the parameter-lint guard is STILL UNWIRED, and has rusted again (2026-08-03)
+
+The 2026-06-01 note below says the guard "rusted — it isn't wired into
+pre-commit/CI, so nothing ran it". **It still is not**, and the predictable
+thing happened: running `racket tools/lint-parameters.rkt --strict` today exits
+**1** with 8 unbaselined exported parameters.
+
+**Six of the eight were introduced by this session's own work** —
+`current-duplicate-binding-warnings` / `-cell-id`,
+`current-inexhaustive-match-warnings` / `-cell-id`, `current-own-import-specs`,
+`current-suppress-duplicate-binding-warnings?`. I added parameters across
+several commits without running the lint, because nothing runs it. That is the
+same failure the note describes, one cycle later, and it is the argument for
+wiring it rather than refreshing the baseline again.
+
+Those six are now baselined (they are the same class as the existing
+`current-coercion-warnings` / `-cell-id` entries, which sit in the baseline too).
+
+**Two remain flagged, deliberately not baselined** — they are pre-existing drift
+from other work and nobody has reviewed them:
+
+```
+current-check-fire-invariants?  (propagator.rkt:2231)
+current-residuation-enabled?    (global-env.rkt:68)
+```
+
+Baselining someone else's parameters unreviewed is exactly the rot this guard
+exists to catch, so `--strict` still exits 1 — honestly.
+
+**The fix is to wire it**, not to refresh again: `tools/install-git-hooks.sh`
+already installs a pre-commit hook that runs `check-parens.sh`, so there is an
+obvious seat. A guard nobody runs is not a guard, and the 2026-06-01 entry
+proves the baseline-refresh response does not hold.
+
 ### parameter-lint baseline refresh (2026-06-01, during PPN 4C 4A.c-iii-c)
 
 The 4A.c-iii-c -c gate surfaced that `racket tools/lint-parameters.rkt --strict` had been **silently failing** on **16 NEW unbaselined exported params** that accumulated across recent tracks without a baseline refresh (the guard rusted — it isn't wired into pre-commit/CI, so nothing ran it). Confirmed -c is lint-NEUTRAL (introduced zero new flags); the 16 are pre-existing drift, NOT -c's doing. Handled (separate from 4A.c, as orthogonal infra hygiene):
