@@ -6,6 +6,24 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Racket
+        uses: Bogdanp/setup-racket@v1.11
+        with:
+          version: '9.0'
+
+      - name: Install review linter
+        run: raco pkg install --auto --skip-installed review
+
+      - name: Hygiene lints (custom lints blocking, raco review report-only)
+        run: tools/lint-hygiene.sh --all
+
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30

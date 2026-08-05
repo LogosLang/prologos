@@ -2,9 +2,12 @@
 #
 # pre-commit — fast lint gates on staged .rkt files
 #
-# Two gates, both fast (each ~1s for typical staged set):
+# Three gates, all fast (~1-2s each for typical staged set):
 #   1. tools/check-parens.sh        — delimiter balance via Racket's reader
 #   2. tools/check-stdout-clean.rkt — module-load stdout pollution
+#   3. tools/lint-hygiene.sh        — correctness lints (pnet registration,
+#      fire-fn capture, memo-hash, parameters), baseline-gated: only NEW
+#      findings block. raco review output is report-only.
 #
 # Bypass: git commit --no-verify  (emergencies only).
 #
@@ -25,7 +28,20 @@
 
 set -e
 
-RACKET="/Applications/Racket v9.0/bin/racket"
+# Racket resolution: $RACKET env var, else the project-standard macOS
+# path, else `racket` on PATH (Linux/CI/web sessions).
+if [ -z "${RACKET:-}" ]; then
+  if [ -x "/Applications/Racket v9.0/bin/racket" ]; then
+    RACKET="/Applications/Racket v9.0/bin/racket"
+  else
+    RACKET="$(command -v racket || true)"
+  fi
+fi
+if [ -z "$RACKET" ]; then
+  echo "pre-commit: no racket found (set \$RACKET)" >&2
+  exit 1
+fi
+export RACKET
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 if [ -z "$REPO_ROOT" ]; then
@@ -51,3 +67,7 @@ prod_files=$(echo "$files" | grep -v -E '/(tests|benchmarks|examples|tools|lib)/
 if [ -n "$prod_files" ]; then
   "$RACKET" "$REPO_ROOT/tools/check-stdout-clean.rkt" $prod_files
 fi
+
+# Gate 3: hygiene lints on the staged files (custom lints blocking on NEW
+# findings only; raco review report-only)
+"$REPO_ROOT/tools/lint-hygiene.sh" --staged
