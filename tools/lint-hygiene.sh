@@ -91,17 +91,22 @@ if [ -n "$files" ]; then
   if "$RACKET" -l raco -- review --help >/dev/null 2>&1; then
     echo ""
     echo "== raco review (report-only; require-ordering noise filtered) =="
-    review_out=""
+    # collect existing files (repo-relative or absolute) into one invocation
+    targets=()
     while IFS= read -r f; do
       [ -z "$f" ] && continue
-      [ -f "$REPO_ROOT/$f" ] || [ -f "$f" ] && true || continue
-      target="$f"; [ -f "$REPO_ROOT/$f" ] && target="$REPO_ROOT/$f"
-      out=$("$RACKET" -l raco -- review "$target" 2>&1 \
-              | grep -v 'should come before' || true)
-      [ -n "$out" ] && review_out="$review_out$out"$'\n'
+      if [ -f "$REPO_ROOT/$f" ]; then targets+=("$REPO_ROOT/$f")
+      elif [ -f "$f" ]; then targets+=("$f")
+      fi
     done <<< "$files"
+    if [ ${#targets[@]} -gt 0 ]; then
+      review_out=$("$RACKET" -l raco -- review "${targets[@]}" 2>&1 \
+                     | grep -v 'should come before' || true)
+    else
+      review_out=""
+    fi
     if [ -n "$review_out" ]; then
-      printf '%s' "$review_out"
+      printf '%s\n' "$review_out"
       echo "(report-only — fix what is real, ignore what is not)"
     else
       echo "clean."
