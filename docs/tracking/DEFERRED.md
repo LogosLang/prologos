@@ -3541,3 +3541,82 @@ pinned by `tests/test-dual-spine-merge-key.rkt`. These are the residuals.
    printing. Unreachable while the gate is shut. `pos->line-col` already exists
    and is exported for the recovery; do not write a new one.
 
+
+## CIU T6 D4.P4c-4c spin-offs (filed 2026-08-04 from the pre-commit adversarial verify `wf_6eb75d73-799`, 4 skeptics + adjudicator)
+
+### 43. ⭐ THE STRICTNESS TIER DOES NOT FOLLOW THE ω UNWRAP — **a named PRECONDITION on G2, not a cleanup item**
+
+One root cause, two OPPOSITE symptoms, and the slice's own `pvec-map` oracle
+disagrees with it in both directions. `infer-select` solves the tier from the
+**subject** type (`typing-core.rkt`, the `[(path) (when (expr-Map? tm) …)]` arm);
+under ω the subject is always a PVec, and `select-elem-of` unwraps to the element
+*after* that decision. Meanwhile `champ-of` (`reduction.rkt`) has no tier fork at
+all, unlike its top-level sibling.
+
+**Direction A — a Map miss goes SILENT where the language is loud:**
+```
+def xs : [PVec [Map Keyword Int]] := @[{:a 1} {:zzz 9}]
+xs:a                        →  <error> : [PVec Int]        ZERO errors
+[pvec-map [fn [m] m.a] xs]  →  @[1 (panic "key :a not found; available: :zzz")]
+```
+**Direction B — a union non-map PANICS where the language degrades:**
+```
+def ws : [PVec <[Map Keyword Int] | Int>] := @[w1 w2]   ;; w2 = 7
+ws:a                        →  panic: "…is not a map at runtime"
+[pvec-map [fn [x] x.a] ws]  →  q : [PVec Int] defined.   (no error)
+```
+Rider: `champ-of`'s message asserts **"typing admitted the BLOCK"** at a `'path`
+site — the exact falsehood `rrb-of`'s own comment says it avoided by not copying
+`champ-of`'s wording, then reached anyway by delegating to it. It also names the
+STEP, not the value.
+
+**Why it is deferred**: the grant is `'()`, so nothing here is reachable in
+production; and the fix is a DESIGN decision about whether Q_U10's Map posture
+survives a functorial lift — Q_U18/G2 territory, not a code slip.
+**⚠ Why it MUST NOT slip past G2**: the moment a grant lands, a Map-carrier
+broadcast silently swallows a miss that the dot spelling reports loudly. Sites:
+`typing-core.rkt`'s tier solve (thread the tier through the unwrap) and
+`reduction.rkt`'s `champ-of` (tier-fork it, as its top-level sibling already does).
+
+### 44. An ω inside a vector or list literal SPLITS silently, at zero errors
+
+```
+def xs := @[{:name "a"} {:name "b"}]
+def r := @[xs:name]   →  r : ⟨[PVec {:name String}] Keyword⟩
+                         @[@[{:name "a"} {:name "b"}] :name]
+```
+Same for `'[xs:name]`. The ω token is not fused onto its base inside a literal, so
+it becomes TWO elements. This is the silent-wrong-answer class the track exists to
+fight, it lives in the READER (which P4c-4c does not touch, so it is not caused
+here) — and it is a landmine directly under G2, because G2 is what makes literals
+reachable with a live mint.
+
+### 45. Latent label divergence: `select-step-output-name` vs `select-branch-top-keys`
+
+```
+branch ((@bcast 0) name)  →  top-keys = (name)   output-name(head) = #f
+branch ((@bcast a) b)     →  top-keys = (a)      output-name(head) = a   ← agrees
+```
+`select-step-output-name` delegates to the inner step, which answers `#f` for an
+ordinal; `select-branch-top-keys` recurses with `rest` and reaches the deeper key.
+⚠ The NON-ω twin is consistent — the bare-number arm descends transparently,
+mirroring top-keys — but the new ω arms do not. **Unobservable today** (the label
+is discarded under `'path`, and block-position ω is parse-refused), so this is a
+note, not a defect. Goes live with P4d or P5's factoring, and the failure mode is
+the silent mis-sort P4a exists to prevent.
+
+### 46. `(@bcast (@sub …))` is unhandled on both sides — currently UNREACHABLE
+
+`branch-entries` would treat the whole `@sub` list as a field name. Unreachable
+because the mint never fires: `xs:{name age}` → "Unbound variable `:`" (DEFERRED
+42, the `:{` reader mint). ⚠ So DEFERRED 42 and this entry must land TOGETHER —
+minting `:{` without handling the sub-inner ω turns an "unbound variable" into a
+silent wrong answer. Scope note for P4d.
+
+### 47. The empty-PVec ω diagnostic is generically worded
+
+`@[]` infers `[PVec _]`, so the inner step meets an unsolved meta and reports
+"the subject … is not a record, so it has no fields to access". Per-command, file
+continues, no fabrication — correct behaviour, imprecise message (the subject is
+an unsolved element meta, not a non-record). Pre-existing wording from
+`select-project-field`, surfaced by ω rather than caused by it.

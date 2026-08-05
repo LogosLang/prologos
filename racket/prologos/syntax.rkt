@@ -174,7 +174,7 @@
  select-sorts select-sort? select-sort-unhandled
  ;; D4.P4a: the step-kind totality dispatcher + the consumer-side else
  select-step-kind select-step-kind-unhandled select-step-kind/display
- select-bcast-step? select-bcast-inner make-select-bcast select-bcast-not-yet
+ select-bcast-step? select-bcast-inner make-select-bcast
  select-step-cont select-cont-collapse? select-cont-rename
  select-branch-collapse select-branch-keyless?
  select-step-output-name select-synth-name select-branch-top-keys
@@ -900,14 +900,15 @@
 ;; the value level it would project the field off the CONTAINER instead of
 ;; broadcasting over it: a silent wrong answer, which is the one outcome this
 ;; track's totality dispatcher exists to prevent. Loud beats plausible.
-(define (select-bcast-not-yet who s)
-  (error who
-         (string-append
-          "broadcast step ~s: the ω value semantics land at CIU T6 D4.P4c-4"
-          " (PVec broadcast + the L1/extent law pins).\n"
-          "  P4c-3 landed the step KIND and its walks; until P4c-4 spell it"
-          " `[map [fn [m] m.k] xs]`")
-         s))
+;; ⚠ RETIRED AT D4.P4c-4c — the ω value semantics LANDED, so this helper
+;; named its own discharge point and then reached ZERO callers. It raised a raw
+;; `error`, which `process-command/solve-guard` does not catch, so leaving it in
+;; the tree would have left a WHOLE-FILE-ABORT primitive lying next to the
+;; walks that used to call it — the exact shape this track has shipped four
+;; times. Retired rather than kept "in case P5 needs it": ban-dual-paths.
+;; What replaced it: typing refuses through the failure slot the walks already
+;; thread (`bcast-carrier` in typing-errors.rkt), and reduction reports through
+;; `(return (expr-panic …))` via the single `let/ec`. Two channels, neither a raise.
 
 ;; The wrapped step. Total on `select-bcast-step?` values by construction: the
 ;; smart constructor is the only producer and it always supplies one.

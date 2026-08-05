@@ -928,6 +928,63 @@
            (values #f (select-fail 'ordinal-oob (append path (list n)) n tm))))]
     [else (values #f (select-fail 'not-indexable (append path (list n)) n tm))]))
 
+;; D4.P4c-4c — THE CONTAINER UNWRAP for ω. ⭐ THE MINI-AUDIT'S FOURTH TYPING
+;; SITE, which the 3+3+1 partition never named: `select-row-of` has NO PVec arm
+;; (a PVec subject falls to its `subject-other` catch-all, and `expr-PVec`
+;; occurs in this whole select region exactly ONCE, at the nat twin below), so
+;; the three ω arms had nothing to delegate to. This is that missing delegate.
+;;
+;; SCOPE IS PVec ONLY. Map / keyword-row / het-tuple carriers are P4d, and the
+;; audit's finding 7 is that they ARRIVE here regardless — the leakage is
+;; forced, not avoidable by discipline. So the else arm is a REFUSAL that names
+;; the carrier, not a fallthrough: a wrong carrier must be loud, and P4d turns
+;; this arm into a dispatch (errors may become meanings, never the reverse —
+;; spec §3.6's monotonicity).
+;;
+;; Sort-total for the same reason its siblings are (Q_U12 names the next two
+;; sorts): a binary test would hand every FUTURE sort PVec semantics silently.
+(define (select-elem-of ctx tm path sort name)
+  (case sort
+    [(path block)
+     (if (expr-PVec? tm)
+         (values (expr-PVec-elem-type tm) #f)
+         (values #f (select-fail 'bcast-carrier (append path (list name)) name tm)))]
+    [else (select-sort-unhandled 'select-elem-of sort)]))
+
+;; D4.P4c-4c — ONE ω step applied to a subject type: the FUNCTORIAL LIFT.
+;; `unwrap one container layer → apply the wrapped step to the ELEMENT →
+;; re-wrap one layer`. That is Q_U7's rule verbatim, and it is why **L1 fusion
+;; is free rather than maintained**: each step consumes one layer and re-wraps
+;; one, so `fmap ∘ fmap = fmap` arithmetically and nothing counts layers.
+;;
+;; ⚠ The caller CONTINUES THE WALK ITSELF. This lifts exactly one step and
+;; returns its result type; it deliberately does not consume `(cdr steps)`.
+;; Consuming the rest here would nest the second ω step INSIDE the first's
+;; element (`nested:0:userName` would try to broadcast over `{:userName String}`
+;; and refuse), which is the opposite of fusion. Sequential ω steps operate on
+;; each other's re-wrapped RESULT — same level, not nested.
+;;
+;; The inner step is applied through `select-project` rather than through a
+;; hand-rolled dispatch: it is exactly "apply this one-step branch to this
+;; subject", it already handles BOTH sorts correctly ('path extracts the leaf,
+;; 'block assembles), and reusing it means a seventh step kind cannot drift
+;; between the ω path and the ordinary path.
+;; ⚠ `path` is passed to the inner walk UNCHANGED, deliberately. The obvious
+;; version pre-appends this step's own name — and that DOUBLES the label,
+;; because `select-step-name` on `(@bcast k)` already delegates to the inner
+;; step and the inner walk appends `k` itself. Caught by the adversarial verify:
+;; `d:0` reported "ordinal `0` (branch `0.0`)". `select-elem-of` does its own
+;; append for the CARRIER failure, where naming the ω step IS correct.
+(define (select-bcast-lift ctx tm s path seen sort)
+  (let ([inner (select-bcast-inner s)]
+        [name (select-step-name s)])
+    (let-values ([(elem ef) (select-elem-of ctx tm path sort name)])
+      (if ef
+          (values #f ef)
+          (let-values ([(bt bf) (select-project ctx (whnf elem) (list (list inner))
+                                                sort path)])
+            (if bf (values #f bf) (values (expr-PVec bt) #f)))))))
+
 ;; select-project — the node's typing walk (Q_T1's one walk, two consumers).
 ;; D4.P3c: a LEVEL now assembles either sort: all-keyed components → a
 ;; closed keyword row; all-keyless (#f keys) → the nat-row tuple mint
@@ -1033,15 +1090,11 @@
                         ;; ⚠ Lands ATOMICALLY with reduction.rkt's twin (the
                         ;; Exhaustive-Walkers twin-drift class this file already
                         ;; records at the `@ord` arm above).
-                        ;; ⚠ D4.P4c-4b: REFUSE through the failure slot, do not
-                        ;; RAISE. A raise here escapes `process-command/solve-guard`
-                        ;; (which catches only `exn:prologos-solve`, deliberately)
-                        ;; and aborts the WHOLE FILE the moment the producer bridge
-                        ;; makes `(@bcast …)` constructible. See
-                        ;; `format-select-fail`'s `bcast-not-yet` arm.
-                        [(bcast)
-                         (values #f (select-fail 'bcast-not-yet path
-                                                 (select-step-name s) tm))]
+                        ;; ✅ D4.P4c-4c: the value semantics LANDED. The lift
+                        ;; returns this step's result TYPE and the enclosing
+                        ;; `walk` continues exactly as it does for every other
+                        ;; kind — which is what makes sequential ω steps fuse.
+                        [(bcast) (select-bcast-lift ctx tm s path seen sort)]
                         [else (select-step-kind-unhandled 'select-walk-to-leaf s)])])
           (cond
             [ff (values #f ff)]
@@ -1131,16 +1184,35 @@
       ;; It is written, not omitted: the refusal is a SURFACE rule and a surface
       ;; rule is not a representation invariant — P5's factoring rewrites
       ;; branches. Loud not-yet rather than a guess at semantics P4c-4 owns.
-      ;; ⚠ D4.P4c-4b: refuse through the failure slot, not a raise — see
-      ;; `format-select-fail`'s `bcast-not-yet` arm. ⚠ And the "unreachable at
-      ;; head" claim above is FALSE from P4c-4b on: Q_U7's own
-      ;; `users:name → [(@bcast name)]` plus the parser's exactly-one-branch gate
-      ;; makes the wrapper the branch HEAD for the headline spelling. The arm was
-      ;; written anyway, for the reason the comment gives — that reasoning was
-      ;; right and its premise was wrong.
+      ;; ✅ D4.P4c-4c: the value semantics LANDED. ⚠ THIS IS THE ARM THE HEADLINE
+      ;; SPELLING ACTUALLY REACHES — measured, not assumed (mini-audit
+      ;; wf_a24f3e0f-d84 routed `users:name` here, not to `walk-to-leaf`). And
+      ;; its protocol is NOT its siblings': this function returns a COMPONENT
+      ;; LIST (see the contract above), while sites 1 and 3 return TYPES.
+      ;; Returning `(values pvec-type #f)` here by analogy with them was named by
+      ;; the audit as the single most likely way to get this slice wrong.
+      ;;
+      ;; The label is `select-step-output-name`, which is ω-transparent by its
+      ;; own arm — `users:name` keys `:name` exactly as `users.name` does.
       [(eq? (select-step-kind (car b)) 'bcast)
-       (values #f (select-fail 'bcast-not-yet path
-                               (select-step-name (car b)) tm))]
+       (let* ([s (car b)]
+              [rest (cdr b)]
+              [label (select-step-output-name s)])
+         (let-values ([(bt bf) (select-bcast-lift ctx tm s path seen sort)])
+           (cond
+             [bf (values #f bf)]
+             [(null? rest)
+              (values (list (cons label (record-field bt 'present))) #f)]
+             [else
+              ;; more steps in this branch — continue against the RE-WRAPPED
+              ;; result, which is what makes `x:s:t` fuse to one layer.
+              (let-values ([(ct cf) (select-below-field
+                                     ctx (whnf bt) rest
+                                     (append path (list (select-step-name s)))
+                                     seen sort)])
+                (if cf
+                    (values #f cf)
+                    (values (list (cons label (record-field ct 'present))) #f)))])))]
       [else (select-step-kind-unhandled 'select-branch-entries (car b))])))
 
 ;; The COMPONENTS a dissolved head splices to its level: a terminal
@@ -1180,16 +1252,19 @@
      ;; a keyed chain: its components assemble into the nested row
      (let-values ([(comps cf) (select-branch-entries ctx ft steps path seen sort)])
        (if cf (values #f cf) (values (select-assemble-row comps) #f)))]
-    ;; D4.P4c-3 (Q_U7): `bcast` is NOT added to the memq above — that arm
-    ;; delegates to the branch walk, and the ω value semantics land at P4c-4.
-    ;; Kept explicit so the guard names the kind rather than reporting it as
-    ;; unknown, which would be false: it IS known, it is just not yet meaningful
-    ;; at the value level.
-    ;; ⚠ D4.P4c-4b: refuse through the failure slot, not a raise — see
-    ;; `format-select-fail`'s `bcast-not-yet` arm.
+    ;; ✅ D4.P4c-4c: the value semantics LANDED. `bcast` still does NOT join the
+    ;; memq above, and now for a second reason: that arm delegates to the branch
+    ;; walk and ASSEMBLES A ROW, which would wrap the broadcast result in a
+    ;; spurious level. ω descends transparently, like the ordinal arm.
     [(eq? (select-step-kind (car steps)) 'bcast)
-     (values #f (select-fail 'bcast-not-yet path
-                             (select-step-name (car steps)) ft))]
+     (let ([s (car steps)])
+       (let-values ([(bt bf) (select-bcast-lift ctx ft s path seen sort)])
+         (cond
+           [bf (values #f bf)]
+           [(null? (cdr steps)) (values bt #f)]
+           [else (select-below-field ctx (whnf bt) (cdr steps)
+                                     (append path (list (select-step-name s)))
+                                     seen sort)])))]
     [else (select-step-kind-unhandled 'select-below-field (car steps))]))
 
 (define (record-value-bound ctx rec [src (dyn-row-source 'dyn-row-values)])

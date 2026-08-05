@@ -4128,8 +4128,15 @@
 (test-case "P4c-4b: a broadcast goes END TO END, and the file CONTINUES"
   (define out (bcast-e2e "def q := users:name\ndef after := 42"))
   ;; the broadcast reports as a per-command error…
-  (check-true (ormap (lambda (s) (regexp-match? #rx"ω value semantics land" s)) out)
-              (format "expected the guided not-yet; got ~a" out))
+  ;; ⚠ RE-EXPRESSED AT P4c-4c, not deleted. This pin's proposition is "a
+  ;; broadcast refusal is PER-COMMAND and the file continues" — still true and
+  ;; still the point. What changed is WHICH refusal: `bcast-e2e`'s subject is a
+  ;; MAP, and P4c-4c lands PVec only, so the generic not-yet has been replaced by
+  ;; the sharper `bcast-carrier` message naming the carrier and P4d. Matching the
+  ;; live message keeps the pin DISCRIMINATING; matching the dead one would have
+  ;; made it vacuous.
+  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec subject" s)) out)
+              (format "expected the guided carrier refusal; got ~a" out))
   ;; …and — THE POINT — the command AFTER it still runs. Before the channel fix
   ;; this line was lost with the whole file.
   (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)
@@ -4162,8 +4169,17 @@
   (define out (map (lambda (r) (format "~a" r))
                    (process-string-ws
                     "ns bcast-off\ndef users := {:name \"alice\"}\ndef q := users:name\ndef after := 42")))
-  (check-false (ormap (lambda (s) (regexp-match? #rx"ω value semantics land" s)) out)
-               "the not-yet must be unreachable without a grant")
+  ;; ⚠ STRENGTHENED AT P4c-4c. The mini-audit flagged this exact assertion as
+  ;; one that "would keep passing against a changed message" — a check-false
+  ;; keyed on ONE string goes VACUOUS the moment that string stops being emitted
+  ;; anywhere, which is precisely what P4c-4c did to the not-yet. It now asserts
+  ;; the absence of ANY broadcast diagnostic, so it discriminates again.
+  (check-false (ormap (lambda (s)
+                        (or (regexp-match? #rx"ω value semantics land" s)
+                            (regexp-match? #rx"needs a PVec subject" s)
+                            (regexp-match? #rx"broadcast `:" s)))
+                      out)
+               (format "no broadcast diagnostic may be reachable without a grant: ~a" out))
   (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
 
 (test-case "P4c-4b: `$bcast-step` is an access-sentinel, so it inherits the fold"
@@ -4205,5 +4221,108 @@
     (define out (map (lambda (r) (format "~a" r))
                      (process-string-ws
                       "ns seam-l2\ndef users := {:name \"alice\"}\ndef q := users:name")))
-    (check-true (ormap (lambda (s) (regexp-match? #rx"ω value semantics land" s)) out)
-                (format "expected the guided not-yet, got: ~a" out))))
+    ;; ⚠ RE-EXPRESSED AT P4c-4c for the same reason as the pin above: the
+    ;; proposition ("the parameter is in force through the REAL pipeline") is
+    ;; unchanged and is proved by a guided broadcast diagnostic ARRIVING; only
+    ;; which diagnostic changed, because this fixture's subject is a Map.
+    (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec subject" s)) out)
+                (format "expected the guided carrier refusal, got: ~a" out))))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4c-4c — the ω VALUE semantics (PVec), the LAWS, and the carrier guards.
+;; Failing-test-first. The subject is a PVec deliberately: `bcast-e2e` above is
+;; a MAP, and the Map/keyword-row carrier is P4d — reusing it here would pass
+;; for the wrong reason and prove nothing (mini-audit wf_a24f3e0f-d84).
+;; ---------------------------------------------------------------------------
+
+;; Grant covers `def` (def-position) AND the bare subjects used at top level.
+;; ⚠ Bare top-level DOES mint since the Q_U18 PRESERVE flip — D4's "a bare
+;; top-level ω is STRIPPED under every grant" was true at 17086a09 and died at
+;; e71ef6b8. Pinned here so the corrected fact has a standing test.
+(define (pvec-bcast src)
+  (parameterize ([broadcast-enabled-contexts '(def xs users nested)])
+    (map (lambda (r) (format "~a" r))
+         (process-string-ws
+          (string-append "ns pvec-bcast\ndef xs := @[{:name \"a\"} {:name \"b\"}]\n" src)))))
+
+(test-case "P4c-4c: THE HEADLINE — `xs:name` broadcasts to a PVec of the field"
+  (define out (pvec-bcast "def ys := xs:name\nys\ndef after := 42"))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"ys : \\[PVec String\\] defined" s)) out)
+              (format "expected [PVec String]; got ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"@\\[\"a\" \"b\"\\]" s)) out)
+              (format "expected the broadcast VALUE @[\"a\" \"b\"]; got ~a" out))
+  ;; the not-yet must be GONE — this is the discharge point its own message names
+  (check-false (ormap (lambda (s) (regexp-match? #rx"ω value semantics land" s)) out)
+               (format "the not-yet is still firing: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4c-4c: the ORACLE — broadcast agrees with the explicit `pvec-map` spelling"
+  ;; The target semantics already exist under the explicit spelling, so this
+  ;; slice has an oracle rather than a spec to interpret.
+  ;; ⚠ SCOPE OF THE CLAIM, NARROWED after the adversarial verify. The first
+  ;; comment here said "Same type, same value" flatly. That is TRUE for a CLOSED
+  ;; ROW where every element hits — which is this fixture — and NOT true in
+  ;; general: the strictness tier is solved from the PRE-unwrap subject, so on
+  ;; Map / dyn-tail / union carriers the ω path and `pvec-map` disagree about
+  ;; whether a miss is loud (DEFERRED — a named precondition on G2, not a
+  ;; cleanup item). Pinning the honest scope so this pin is not read as
+  ;; asserting a general law it does not test.
+  (define out (pvec-bcast "def viaMap := [pvec-map [fn [m] m.name] xs]\ndef viaBcast := xs:name\nviaMap\nviaBcast"))
+  (check-equal? (length (filter (lambda (s) (regexp-match? #rx"@\\[\"a\" \"b\"\\] : \\[PVec String\\]" s)) out))
+                2
+                (format "broadcast and pvec-map must agree in BOTH type and value; got ~a" out)))
+
+(test-case "P4c-4c: BARE TOP-LEVEL ω mints and evaluates (D4's blocking fact #1 is dead)"
+  ;; D4 §5.P4c-4c recorded "a bare top-level ω is STRIPPED under EVERY grant" and
+  ;; re-scoped the slice around it. TRUE at 17086a09; the Q_U18 PRESERVE flip
+  ;; (e71ef6b8) rewrote the [else] arm one commit later and a top-level command's
+  ;; head IS the subject symbol. Pinned so it cannot silently revert.
+  (define out (pvec-bcast "xs:name"))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"@\\[\"a\" \"b\"\\] : \\[PVec String\\]" s)) out)
+              (format "bare top-level ω did not evaluate: ~a" out)))
+
+(test-case "P4c-4c: L1 FUSION is a THEOREM — `nested:0:userName` collapses to ONE layer"
+  ;; Q_U7: each ω step consumes ONE container layer and re-wraps ONE, so
+  ;; fmap∘fmap = fmap arithmetically. ⚠ The discriminator is the TYPE, not the
+  ;; value — the non-fusing composition produces a visibly different type, so a
+  ;; pin asserting only the value list does not discriminate (mini-audit).
+  (define out
+    (parameterize ([broadcast-enabled-contexts '(def nested)])
+      (map (lambda (r) (format "~a" r))
+           (process-string-ws
+            (string-append
+             "ns l1-fusion\n"
+             "def nested := @[@[{:userName \"Lisa\"}] @[{:userName \"John\"}]]\n"
+             "def flat := nested:0:userName\nflat")))))
+  ;; ONE layer — NOT [PVec [PVec String]], which is what naive nesting yields
+  (check-true (ormap (lambda (s) (regexp-match? #rx"flat : \\[PVec String\\] defined" s)) out)
+              (format "L1 fusion failed — expected ONE layer [PVec String]; got ~a" out))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"\\[PVec \\[PVec String\\]\\]" s)) out)
+               (format "the composition did NOT fuse — two layers survived: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"@\\[\"Lisa\" \"John\"\\]" s)) out)
+              (format "expected the fused VALUE; got ~a" out)))
+
+(test-case "P4c-4c: the ORDINAL band broadcasts (Q_U16b — `:0` is an ω step, not a key named 0)"
+  (define out
+    (parameterize ([broadcast-enabled-contexts '(def nested)])
+      (map (lambda (r) (format "~a" r))
+           (process-string-ws
+            (string-append
+             "ns ord-bcast\n"
+             "def nested := @[@[\"x\" \"y\"] @[\"p\" \"q\"]]\n"
+             "def heads := nested:0\nheads")))))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"heads : \\[PVec String\\] defined" s)) out)
+              (format "expected [PVec String]; got ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"@\\[\"x\" \"p\"\\]" s)) out)
+              (format "expected the per-element index-0; got ~a" out)))
+
+(test-case "P4c-4c: a NON-PVec carrier under ω refuses PER-COMMAND — never a whole-file abort"
+  ;; SCOPE IS PVec ONLY. Map / keyword-row / het-tuple are P4d and ARRIVE anyway
+  ;; (mini-audit finding 7: the leakage is forced, not avoidable). The refusal
+  ;; must go through the failure slot — a raise here re-creates exactly the
+  ;; whole-file abort P4c-4b removed.
+  (define out (bcast-e2e "def q := users:name\ndef after := 42"))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)
+              (format "THE FILE DID NOT CONTINUE — a raise escaped: ~a" out))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"@\\[" s)) out)
+               (format "a Map subject must NOT broadcast at P4c-4c: ~a" out)))
