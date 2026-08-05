@@ -967,7 +967,25 @@
                                 (if (prologos-error? net-ty)
                                     (infer/err ctx-empty expr)
                                     net-ty)))])
-                     (if (prologos-error? ty) ty
+                     (if (prologos-error? ty)
+                         ;; DEFERRED 52 (clause-body half, 2026-08-05): NAME THE RELATION.
+                         ;; The clause-body arms of `infer` now propagate, so this branch is
+                         ;; reachable for an ill-typed goal inside a `defr` body — and a bare
+                         ;; "Could not infer type" hands the user a whole-relation deletion
+                         ;; with no pointer to WHICH defr, while the later query says only
+                         ;; "Unknown relation: badclause", which is actively misleading
+                         ;; (they DID define it).
+                         ;; ⚠ Deliberately re-messages rather than env-adding the name to
+                         ;; reach relations.rkt's enriched "its defr failed to register"
+                         ;; branch: that branch keys on an `expr-defr` being env-bound, and
+                         ;; the env write would have to carry a body that FAILED to type —
+                         ;; which `zonk` may not even survive (DEFERRED 54: `zonk` has no arm
+                         ;; for the global-constraint goal forms, and reaching it is exactly
+                         ;; the whole-file abort this work removed). Routing the QUERY-side
+                         ;; message through that branch is left to 51(b).
+                         (prologos-error (prologos-error-srcloc ty)
+                           (format "defr ~a: ~a — the relation was NOT registered"
+                                   name (prologos-error-message ty)))
                          (begin
                            ;; Track 2: trait + hasmethod resolution handled reactively by propagator callbacks
                            (let ([te (check-unresolved-trait-constraints)])

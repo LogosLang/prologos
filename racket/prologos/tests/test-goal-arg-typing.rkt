@@ -304,3 +304,35 @@
   (check-false (prologos-error? r)
                (format "the file must continue past the bad defr; got: ~a" (result-msg r)))
   (check-true (string-contains? r "marker") r))
+
+(test-case "clause body: the rejection NAMES the relation and says it was not registered"
+  ;; Found by the adversarial verify. The bare "Could not infer type" handed the
+  ;; user a whole-relation deletion with no pointer to WHICH defr, and the later
+  ;; query said only "Unknown relation: badclause" — actively misleading, since
+  ;; they DID define it. The floundering gate already produces the good shape
+  ;; ("its defr failed to register (see the earlier error)") because its env write
+  ;; precedes the gate; the type-error path returns before that write, so it is
+  ;; re-messaged at the source instead. See the driver comment for why NOT to
+  ;; env-add here (the body that failed to type may not survive `zonk`).
+  (define r (crun "defr namedbad [?x]\n  &> (fc x [+ \"str\" 1])\n"))
+  (check-true (prologos-error? r) (result-msg r))
+  (define m (result-msg r))
+  (check-true (string-contains? m "namedbad") m)
+  (check-true (string-contains? m "NOT registered") m))
+
+(test-case "control: `[vnil Int]` in a goal arg is CONSISTENT with def position, not over-rejection"
+  ;; An adversarial verify called this a blocking regression, claiming the value is
+  ;; legitimate. Measurement refuted it: `[vnil Int]` and `[fzero 3N]` fail to
+  ;; infer in DEF position too, so rejecting them in goal position makes the two
+  ;; agree. Contrast `[pair 1 2]`, which DOES type in def position and is
+  ;; therefore exempted (see infer-unsynthesizable?). This test pins the
+  ;; DISCRIMINATOR — def-position behaviour is the oracle for whether a goal-arg
+  ;; rejection is correct.
+  (define dv (run "def dv := [vnil Int]"))
+  (check-true (prologos-error? dv) "vnil must fail in def position too (the oracle)")
+  (define gv (run "(q1 [vnil Int])"))
+  (check-true (prologos-error? gv) "so goal position agreeing is correct, not over-rejection")
+  (define dp (run "def dp := [pair 1 2]"))
+  (check-false (prologos-error? dp) "pair DOES type in def position …")
+  (define gp (run "(q1 [pair 1 2])"))
+  (check-false (prologos-error? gp) "… so goal position must not reject it"))

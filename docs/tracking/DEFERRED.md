@@ -3872,6 +3872,14 @@ so it cannot miss a NODE kind, but a sub-expression reachable only through some
 other container type would be missed. None exists today.
 
 **Named residuals** (real, out of the ruled scope):
+- **The gate's WHOLE-ARGUMENT granularity is now BIMODAL, which reads as
+  nondeterminism.** Two clauses with the SAME type error diverge on whether a
+  logic var happens to sit beside it:
+  `&> (fc x [+ "str" 1])` → the defr is DELETED;
+  `&> (fc x [+ "str" y])` → registers, query returns a silent `@[]`.
+  Pre-change both were silent — the residual existed but its consequences were
+  UNIFORM. Sharpened by the adversarial verify, and it is the strongest argument
+  for the subterm-granularity fix below.
 - An argument containing a logic var AND a genuine type error stays silent
   (`(q1 [+ "str" ?x])`) — the gate is deliberately conservative, and since a goal
   argument that mentions a variable is the NORMAL relational shape, the fix is
@@ -3894,6 +3902,15 @@ other container type would be missed. None exists today.
   ⚠ `expr-fact-row`'s propagation is **inert for compound terms** — they are
   splayed at parse time before typing sees them (DEFERRED 53).
   ⚠ Still swallowing, same shape, no repro constructed: `expr-narrow`.
+  ⚠ **The rejection now NAMES the relation** — `defr badclause: Could not infer
+  type — the relation was NOT registered` — because the bare form gave a
+  whole-relation deletion with no pointer to which `defr`. The QUERY-side message
+  is still the bare `Unknown relation: badclause` (misleading — they DID define
+  it) rather than the enriched *"its defr failed to register (see the earlier
+  error)"* that the schema/floundering gates get. Reaching that branch needs the
+  name env-bound to an `expr-defr`, i.e. an env write carrying a body that FAILED
+  to type — which `zonk` may not survive (DEFERRED 54). That reconciliation is
+  51(b)'s job.
 - `(= x [+ 1 1])` rendering the binding as `unknown` is its own pre-existing
   display defect; pinned as status quo.
 - `expr-guard`'s CONDITION is checked with `check`, whose boolean result is
@@ -3984,6 +4001,18 @@ which is honest but does not say the form is unimplemented.
 ⚠ An adversarial verify reported this as a BLOCKING regression of the
 clause-body fix, on the belief that these forms "registered" before. Measurement
 refuted that — they aborted the file. Recorded so the claim is not re-inherited.
+
+⚠ A SECOND adversarial verify made a broader version of the same claim: that the
+excuse set is derived from the wrong universe (it is `{register-typing-rule!} \
+{infer arms}`, where the clause-body call sites arguably want `{all expr kinds} \
+{infer arms}` — 19 kinds, not 4), and that 11 surface-reachable constructs
+therefore now delete their relation. The DERIVATION critique is fair and worth
+keeping in view. The REGRESSION claim was refuted by measurement: the headline
+examples (`[vnil Int]`, `[fzero 3N]`) **fail to infer in `def` position too**, so
+rejecting them in goal position makes the two AGREE. Def-position behaviour is
+the oracle for whether a goal-arg rejection is correct, and it is now
+test-pinned. `[pair 1 2]` — which DOES type in def position — is exempted, which
+is exactly the distinction the derivation was built to make.
 
 **Adjacent, unfixed**: `expr-narrow` (typing-core.rkt) still infers its
 `func`/`args`/`target` for effect and returns `expr-hole` — the same swallow
