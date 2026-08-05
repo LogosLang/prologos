@@ -3791,3 +3791,42 @@ than a fabricated answer. **⚠ But it is the silent half of the class this trac
 exists to eliminate**, and an empty bag is indistinguishable from "no solutions",
 which is a legitimate answer. That makes it strictly worse than a loud error and
 it should be fixed before the relational surface is exercised much further.
+
+### 53. 🔀 SPUN OUT (chip `task_e1c15ee6`, 2026-08-05) — PARAMETERIZED `data` binds the TYPE PARAMETER as a constructor
+
+```
+data Tree A
+  | leaf A
+  | branch [Tree A] [Tree A]
+[leaf 42]
+```
+=> `Tree : [Type 0] defined.` · **`A : ns::Tree defined.`** · `Unbound variable`
+(leaf) ×3. `A` is the TYPE PARAMETER, bound as a nullary constructor; the real
+constructors are never registered.
+
+Non-parameterized `data` **works today**:
+`data Direction | north | south` + `defn opposite | north -> south | …` +
+`[opposite north]` => `south`, 0 errors.
+
+**Surfaced by** ARROW T1 P3, while trying to un-comment the `int->str` block in
+`examples/2026-03-18-track7-acceptance.prologos` (§ K2). That block had THREE
+blockers; ARROW fixed one (the reader/arrow one), `int->str` never existed
+(the real name is `str::from-int`), and this is the third.
+
+⭐ **It also corrects a stale annotation that FIVE sites in that file point at.**
+The E2 note claimed NO file-level `data` registers constructors. That is half
+wrong — and the live half is a MIS-PARSE (a wrong binding is created), not a
+missing registration, which is a sharper diagnosis than the original. The note
+was corrected in place at ARROW T1 P3 (`004c025d`); the file's NULLARY blocks
+(Direction, Color, …) are now re-triable and should be un-commented once
+confirmed, while the `Tree`-based ones stay blocked on this item.
+
+**Why deferring is safe**: loud `Unbound variable` per command, no silent wrong
+answer, and prelude data types (Nat/Bool/List/Option) are unaffected because
+they load via module import, not file-level `data`.
+**Why it should not sit long**: it silently *invents a binding* (`A`), and it
+has already caused four months of a wrong annotation blocking unrelated work.
+
+⚠ Do not gate on `examples/2026-03-18-track7-acceptance.prologos`: >15 minutes
+to run and ZERO `;;N=>` markers (it predates the marker system, 2026-07-06).
+Use a small probe plus the marker-bearing acceptance files.

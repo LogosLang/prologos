@@ -19,7 +19,7 @@ works. Today it does not, and the failure is a reader-layer mis-lex.
 | P2 | Same rule for `recognize-keyword` (owner ruling R1) | ✅ | Landed **with** P1: splitting them would have shipped the F1b.7g drift for one commit. [§5](#p2) |
 | P1b | Guided error for half-glued `a-> b` / `foo->` (owner ruling R2) | ✅ | Shared helper in `errors.rkt`; 2 of 4 manifestations covered, the other 2 **pinned as uncovered**. [§5](#p1b) |
 | P3 | L3 acceptance coverage | ✅ | **RE-SCOPED**: the target block cannot be un-commented (two other blockers). New marker-bearing file instead, 14/14. [§5](#p3) |
-| X.close | Bench/doc-truth sweep, DEFERRED triage | ⬜ | **NO PIR** — owner ruling 2026-08-05, explicit exception to the objective PIR gate. |
+| X.close | Bench, doc-truth sweep, DEFERRED triage, rules tier | ✅ | Tokenizer A/B **no measurable delta**; 2 rules-tier entries; DEFERRED 53. **NO PIR** — owner ruling 2026-08-05, explicit exception to the objective PIR gate. [§10](#close) |
 
 ---
 
@@ -70,7 +70,7 @@ At `d8485097` (2026-06-01), measured:
 So the pre-`2a7cbe45` behaviour was a **silent wrong answer**: a clean bill of
 health for a file whose function does not exist. The current error is strictly
 better. The underlying limitation is unchanged and is documented in-tree since
-2026-03-18 (`examples/2026-03-18-track7-acceptance.prologos:887-891`, the
+2026-03-18 (`examples/2026-03-18-track7-acceptance.prologos`, its § K2 — the
 `int->str` block, commented out with a "rename to an arrow-free helper"
 workaround).
 
@@ -298,3 +298,78 @@ naming style (`char->integer`, `centigrade->fahrenheit`) that Scheme/Lisp
 users expect and that the `.rkt` side of this very tree uses 3,626 times across
 291 distinct lexemes — plus removing a silent truncation. Small, low-risk,
 ergonomic.
+
+<a id="close"></a>
+## 10. X.close
+
+**NO PIR** — owner ruling 2026-08-05. This is an explicit exception to the
+objective PIR gate (`workflow.md`: "a tracked design is not DONE until its PIR
+lands"), recorded here so the missing PIR reads as a decision, not an oversight.
+
+### Bench — the obligation, and the answer
+
+P1 put a new `cond` arm **before** the `ident-continue?` arm, so every scanned
+character now pays one extra `char=? nc #\-`. On a per-character tokenizer path
+that owes a measurement.
+
+Interleaved A/B, two worktrees on one machine (base `b429d038` vs this branch),
+`tokenize-string` over `lib/prologos/core/conversions.prologos` (26,546 chars),
+200 reps per round, 3 rounds each:
+
+| | run 1 | run 2 | run 3 |
+|---|---|---|---|
+| base | 114.07 ms | 114.44 ms | 111.46 ms |
+| arrow | 128.38 ms | 111.39 ms | 111.39 ms |
+
+**No measurable regression.** Best-of-3 is 111.46 (base) vs 111.39 (arrow) —
+indistinguishable — and base's own spread (111.5–114.4) exceeds the difference.
+The 128.4 is arrow's *first* round, a cold effect that does not recur. Reported
+as "no delta", not as a win: the honest reading is that the extra comparison is
+below this harness's noise floor.
+
+### Doc-truth sweep
+
+- Re-derived every coordinate at close. `recognize-symbol` `:264` still correct;
+  `ident-start?` `:229`, `ident-continue?` `:242` unchanged. **`recognize-keyword`
+  moved `:534` → `:559` and `recognize-arrow` `:931` → `:969`** — displaced by
+  P1's own edit. The doc no longer cites either (they were removed when §5 was
+  rewritten), so nothing was left stale.
+- Priorities re-verified in `register-default-token-patterns!`: `arrow` **98**,
+  `narrow-var-annot` **96**, `symbol` **50**, `rangle` **25**. As documented.
+- `examples/…track7-acceptance.prologos:887-891` → the block moved to `:906`
+  when P3 rewrote its annotation. Replaced with a **§-relative** reference
+  ("its § K2") rather than re-pinning a number that will drift again.
+- The dailies' LOG copy of that coordinate is left as written: the LOG is
+  append-only history and it was accurate at the time.
+
+### Rules tier (the two-form discipline)
+
+Both are *ambient* files, so the one-liner goes where it is read:
+
+- **`prologos-syntax.md` § Naming** — `->` may appear inside a name; the rule is
+  ident-chars on BOTH sides (NOT "no surrounding whitespace"); half-glued is an
+  error, with the two manifestations that do *not* yet carry the hint named
+  explicitly.
+- **`testing.md`** — three harness behaviours this track paid for: a SIGTERM'd
+  runner still prints "all pass" (check `[N/N]` and the COUNT); `--all` uses a
+  **120s** per-file cap while `--tests` reports 600s; the "DEAD WORKERS" banner
+  is a 30s heuristic whose stale-`.zo` advice is a guess. Plus the settling
+  move: **re-run the same file on the untouched base worktree**.
+
+### DEFERRED triage
+
+- Swept for arrow / identifier-tokenization items: **none**. Nothing this track
+  unblocks or makes stale. The single `ident-continue?` mention (ordinal access
+  `x.0^`) is unaffected — P1 added an arm to `recognize-symbol` and did **not**
+  change that predicate's charset.
+- **Added 53** — parameterized `data` binds the type parameter as a constructor,
+  with both probes, the corrected E2 provenance, and the warning not to gate on
+  the 15-minute marker-less acceptance file.
+
+### Known-uncovered, carried forward deliberately
+
+- Half-glued hints reach 2 of 4 manifestations (`[foo-> 1]` and `spec e->` do
+  not). Pinned as uncovered in `tests/test-arrow-identifiers.rkt`.
+- `->foo` remains a WS/sexp divergence (sexp reads one symbol; WS reads two
+  tokens). The both-sides rule does not close it, by design.
+- `a-->b` is absorbed whole. Zero code-region instances corpus-wide; pinned.
