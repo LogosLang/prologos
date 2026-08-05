@@ -1843,10 +1843,49 @@ Its SRE domain is `'hash-of-lists-accumulator`; the name says accumulator, and a
 accumulator is not a join. If any FUTURE cell wants this merge, that is the
 moment to decide whether it should be a merge-based cell at all.
 
-**Scope of the retirement**: 3 reader functions, 3 cell allocations, their
-`current-*-cell-id` parameters, and the writers at `:626 / :775 / :1037`. Not
-attempted here — it crosses the constraint-resolution path, and the pre-existing
-comment scoped it out of S2.b-iv for a reason worth reading first.
+**Scope of the retirement — ATTEMPTED 2026-08-05, REVERTED, and the attempt
+corrected the scope.** I did the deletion (3 readers, 3 cell allocations, the
+`current-*-cell-id` parameters, the three writers at `:626 / :775 / :1037`,
+`scoped-cell-ids`, the reset/parameterize lists) and the tree built. The BATCH
+SUITE then died with every worker crashing before output:
+
+```
+instantiate-linklet: mismatch; reference to a variable that is not exported
+  name: current-hasmethod-wakeup-cell-id
+  importing instance: .../tools/batch-worker.rkt
+```
+
+**My "zero callers in the tree" claim was true of the READER FUNCTIONS and false
+of the CELLS.** A tree-wide grep for the cell-ids (which I had not run — I had
+grepped the reader names) finds three more consumers:
+
+| file | what it does |
+|---|---|
+| `tools/batch-worker.rkt:263-265` | the parameterize save/restore list — `pipeline.md`'s new-parameter checklist, item 3 |
+| `tests/test-infra-cell-constraint-01.rkt` | 8 references asserting the cells EXIST and are empty |
+| `tests/test-retraction-stratum.rkt:289` | uses the wakeup cell as the VEHICLE for testing hasheq-list retraction |
+
+The third is the one that matters. `retract-hasheq-list-entries` exists for
+exactly these cells; retiring them leaves it with no users and no test. So the
+retirement is not "delete dead code" — it is a decision about whether to retire
+the hasheq-list retraction path along with them, or keep it tested against some
+other cell. That is a judgement about coverage, and it is what the original
+`metavar-store.rkt:1108` comment meant by "NOT in S2.b-iv scope".
+
+**Corrected scope**, for whoever takes it:
+
+1. 3 readers + `get-wakeup-constraints` + the 3 `read-*` helpers + provides
+2. 3 cell allocations, 3 parameters, `scoped-cell-ids`, reset + parameterize lists
+3. **`tools/batch-worker.rkt`** parameterize list — missed on the first pass
+4. **`tests/test-infra-cell-constraint-01.rkt`** — 8 assertions to delete
+5. **`tests/test-retraction-stratum.rkt`** — decide: re-point at another
+   hasheq-list cell, or retire `retract-hasheq-list-entries` too
+6. `merge-hasheq-list-append` then has no cell users; retire it and its SRE
+   registration, or leave it as an unused helper with a note
+
+Reverted rather than pushed through, because (5) removes test coverage and that
+should be a decision someone makes on purpose. Suite green at revert
+(560 files / 10916).
 
 ## The merge-law table cannot be gated on the registry, and that is a registry problem (2026-08-05)
 
