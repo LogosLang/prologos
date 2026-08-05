@@ -943,3 +943,47 @@
                                              "  [int+ x undef_nospec]\n")))
   (check-equal? got (list 4 10 12)
                 (format "expected the token at 4:10 span 12, got ~v" got)))
+
+;; ============================================================================
+;; Union narrowing — `match` and `the` on a union value (2026-08-05)
+;; ============================================================================
+;;
+;; Both were the bare "Could not infer type", which names inference for what is
+;; really a missing language feature and sends the reader looking for an
+;; annotation that would not have helped. DEFERRED had this filed as
+;; "convenience forms for matching on union values", which undersold it: there
+;; are no forms at all.
+
+(test-case "a `match` on a union value names the union and says why"
+  (define r (string-join (run-ws-file-results
+             (string-append "ns umt\n"
+                            "def x : <Int | String> := 42\n"
+                            "match x\n"
+                            "  | 0 -> \"zero\"\n"
+                            "  | _ -> \"other\"\n")) " | "))
+  (check-true (string-contains? r "union")
+              (format "expected the union to be named; got: ~a" r))
+  (check-true (string-contains? r "Int | String")
+              (format "expected the member list; got: ~a" r))
+  (check-true (string-contains? r "data")
+              (format "expected the `data` workaround; got: ~a" r)))
+
+(test-case "`the` narrowing a union to a member says there is no down-cast"
+  (define r (string-join (run-ws-file-results
+             (string-append "ns umt2\n"
+                            "def x : <Int | String> := 42\n"
+                            "[the Int x]\n")) " | "))
+  (check-true (string-contains? r "down-cast")
+              (format "expected the down-cast wording; got: ~a" r))
+  (check-true (string-contains? r "Int | String")
+              (format "expected the member list; got: ~a" r)))
+
+(test-case "annotating with the WHOLE union still works (the hint must not over-fire)"
+  ;; The control. If this ever starts erroring, the hint is describing a
+  ;; limitation that has grown past what it claims.
+  (define r (string-join (run-ws-file-results
+             (string-append "ns umt3\n"
+                            "def x : <Int | String> := 42\n"
+                            "[the <Int | String> x]\n")) " | "))
+  (check-false (string-contains? r "ERROR")
+               (format "annotating with the union itself must be accepted; got: ~a" r)))

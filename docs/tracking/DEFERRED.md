@@ -2788,9 +2788,46 @@ answering.
 *(Type Narrowing for `map-get` — RESOLVED by CIU T6 F1a structural records; moved to
 DEFERRED_COMPLETE.md at the 2026-07-16 F1b-opening triage.)*
 
-### Pattern Matching for Union Values
-- Convenience forms for matching on union values
-- Source: `docs/tracking/2026-02-22_MIXED_TYPE_MAPS.md`
+### Pattern Matching for Union Values — PROBED 2026-08-05; the entry undersold it
+
+The filing said "convenience forms for matching on union values". There are no
+forms at all, convenient or otherwise, and both failure paths were the bare
+"Could not infer type" — a message that names inference for what is actually a
+missing language feature, sending the reader to look for an annotation that would
+not have helped.
+
+Probed, 1 error each:
+
+```
+def x : <Int | String> := 42
+match x | 0 -> "zero" | _ -> "other"    ⇒ Could not infer type
+[the Int x]                             ⇒ Could not infer type
+[the <Int | String> x]                  ⇒ WORKS
+```
+
+The third line is the shape of the gap: a union is perfectly usable as long as
+you never look inside it.
+
+**Done 2026-08-05 — the diagnostics, not the feature.** Both paths now name the
+union, say what is missing, and give the two workarounds (keep it at the union
+type, or use a `data` type with one constructor per case, which `match` does
+narrow). Three tests in `test-error-messages.rkt`, including a control that
+annotating with the whole union still succeeds — so the hint cannot outlive the
+limitation it describes.
+
+One implementation note worth keeping: **a `match` on a literal pattern does not
+survive as an `expr-reduce`.** The pattern compiler emits a lambda applied to the
+scrutinee with a HOLE parameter type —
+`[[fn [x <_>] [boolrec … [int= x 0]]] umatch2::x]` — so a hint keyed on the node
+kind fires on nothing. Mine did, until a probe printed the failing expression.
+The hint now matches the compiled SHAPE (app-of-hole-typed-lambda) and keeps the
+`expr-reduce` arm for scrutinees that do survive as one.
+
+**Still open — the feature.** Case analysis on unions needs either a typed
+down-cast (`the` returning an Option, or a checked narrowing form) or
+flow-sensitive narrowing on a discriminating test. That is a design question, not
+a gap: it interacts with QTT (does a narrowing consume the value?) and with the
+union-typed row work. Source: `docs/tracking/2026-02-22_MIXED_TYPE_MAPS.md`
 
 ---
 

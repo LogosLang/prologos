@@ -1005,6 +1005,95 @@
                 (format-branch-result-mismatch distinct names)))]))))
 
 ;; ========================================
+;; Union-scrutinee / union-downcast hint (2026-08-05)
+;; ========================================
+;;
+;; A value whose type is a union cannot be MATCHED on, and cannot be narrowed to
+;; one of its members with `the`. Both fail with the bare "Could not infer type",
+;; which names inference for what is really a missing language feature — the
+;; message sends the reader to look for a type annotation that would not have
+;; helped.
+;;
+;; DEFERRED filed this as "Pattern Matching for Union Values — convenience forms
+;; for matching on union values", which undersells it: there are no forms at all,
+;; convenient or otherwise. Probed 2026-08-05, all at 1 error each:
+;;
+;;   def x : <Int | String> := 42
+;;   match x | 0 -> "zero" | _ -> "other"     ⇒ Could not infer type
+;;   [the Int x]                              ⇒ Could not infer type
+;;
+;; (`[the <Int | String> x]` — annotating with the union ITSELF — works, so the
+;; union is perfectly usable as long as you never look inside it.)
+;;
+;; Same contract as the hints above: post-hoc, best-effort, runs ONLY on the
+;; already-failing path, purely additive text, every exception swallowed to the
+;; plain message. It cannot introduce a failure; at worst it declines to fire.
+
+(define (union-type? t) (expr-union? t))
+
+;; Render a union as its member list for the message: "Int | String".
+(define (pp-union-members t names)
+  (string-join (map (lambda (b) (pp-expr b names)) (flatten-union-local t)) " | "))
+
+(define (union-narrowing-hint ctx e names)
+  (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+    (let search ([x e])
+      (and (expr? x)
+           (or (match x
+                 ;; A `match` on a LITERAL pattern does not survive as an
+                 ;; expr-reduce — the pattern compiler emits a lambda applied to
+                 ;; the scrutinee, with a HOLE parameter type:
+                 ;;
+                 ;;   [[fn [x <_>] [boolrec … [int= x 0]]] umatch2::x]
+                 ;;
+                 ;; so matching on the node kind would have missed the case that
+                 ;; motivated this hint. Match the compiled SHAPE instead.
+                 [(expr-app (expr-lam _m (? expr-hole?) _b) arg)
+                  (let ([ts (whnf (infer ctx arg))])
+                    (and (not (expr-error? ts))
+                         (union-type? ts)
+                         (string-append
+                          "Could not infer type — cannot `match` on a union value:"
+                          " the scrutinee has type " (pp-union-members ts names)
+                          ", and pattern matching cannot narrow a union to one of"
+                          " its members (no case analysis on unions yet)."
+                          " Workarounds: keep the value at its union type and"
+                          " annotate with the whole union (`[the <"
+                          (pp-union-members ts names)
+                          "> v]`), or use a `data` type with one constructor per"
+                          " case, which `match` does narrow.")))]
+                 ;; The uncompiled form, for scrutinees that DO survive as a reduce.
+                 [(expr-reduce scrutinee _arms _structural?)
+                  (let ([ts (whnf (infer ctx scrutinee))])
+                    (and (not (expr-error? ts))
+                         (union-type? ts)
+                         (string-append
+                          "Could not infer type — cannot `match` on a union value:"
+                          " the scrutinee has type " (pp-union-members ts names)
+                          ", and pattern matching cannot narrow a union to one of"
+                          " its members (no case analysis on unions yet)."
+                          " Workarounds: keep the value at its union type and"
+                          " annotate with the whole union (`[the <"
+                          (pp-union-members ts names)
+                          "> v]`), or use a `data` type with one constructor per"
+                          " case, which `match` does narrow.")))]
+                 ;; `the T v` / an annotation narrowing a union to a member.
+                 [(expr-ann term type)
+                  (let ([tt (whnf (infer ctx term))])
+                    (and (not (expr-error? tt))
+                         (union-type? tt)
+                         (not (union-type? type))
+                         (string-append
+                          "Could not infer type — cannot narrow a union with `the`:"
+                          " the value has type " (pp-union-members tt names)
+                          " and the annotation asks for " (pp-expr type names)
+                          ", but there is no down-cast from a union to one of its"
+                          " members. Annotating with the whole union (`<"
+                          (pp-union-members tt names) ">`) is accepted.")))]
+                 [_ #f])
+               (ormap search (expr-subfields x)))))))
+
+;; ========================================
 ;; Infer with error reporting
 ;; ========================================
 ;; Returns (or/c Expr? prologos-error?)
@@ -1020,6 +1109,7 @@
                                     (app-domain-schema-hint ctx e names);; F1b.7f (b) schema arg vs param
                                     (select-block-hint ctx e names)     ;; D4.P3a (before S7: branch-aware)
                                     (closed-row-miss-hint ctx e names)  ;; S7
+                                    (union-narrowing-hint ctx e names)  ;; unions (2026-08-05)
                                     (if (hole-lambda-over-generic-op? e)
                                         i70-inference-hint
                                         "Could not infer type"))
