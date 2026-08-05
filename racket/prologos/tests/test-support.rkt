@@ -44,7 +44,9 @@
          ;; class.
          (only-in "../relations.rkt" current-relation-store))
 
-(provide ;; Pre-loaded prelude registries
+(provide ;; G2/B — preparse failures are VALUES now, not raises
+         yields-prologos-error?
+         ;; Pre-loaded prelude registries
          prelude-module-registry
          prelude-trait-registry
          prelude-impl-registry
@@ -440,3 +442,37 @@
             (list (make-check-info 'expected-formatted (format-error expected)))
             '()))
       (lambda () (fail-check "prologos result mismatch")))))
+
+
+;; ---------------------------------------------------------------------------
+;; CIU T6 D4.P4c-4c / G2 (option B, owner ruling 2026-08-05) — THE ASSERTION FOR
+;; A PREPARSE SYNTAX FAILURE.
+;;
+;; Preparse used to RAISE on a malformed declaration, which escaped `process-file`
+;; and took the whole file with it — `pipeline.md` § "A Raise on the Parse/
+;; Expansion Path Is a WHOLE-FILE Abort", five instances in the CIU T6 track. The
+;; seam is now guarded: a raise becomes a `($preparse-error msg)` marker and the
+;; parser converts it to a per-command error VALUE, so the file continues.
+;;
+;; Consequence for tests: every `(check-exn exn:fail? (lambda () (run …)))` that
+;; pinned one of those raises now sees a RESULT, not an exception. The proposition
+;; those pins assert — "this malformed declaration is REFUSED, not silently
+;; accepted" — is unchanged, so they are re-expressed through this helper rather
+;; than deleted. 20 assertions across 9 files at the conversion.
+;;
+;; Accepts whatever the caller's own runner returns — a list of results, a single
+;; result, or a thunk producing either — because the test files disagree about
+;; that and a helper that only handles one shape would just move the problem.
+;; ⚠ A raise still counts as a refusal: some malformed shapes fail BEFORE the
+;; guarded seam (in the reader), and this helper must not turn "still aborts" into
+;; a green pin by accident — it reports the truth for both channels.
+(define (yields-prologos-error? v)
+  (define (scan x)
+    (cond [(prologos-error? x) #t]
+          [(list? x) (ormap scan x)]
+          [else #f]))
+  (cond
+    [(procedure? v)
+     (with-handlers ([exn:fail? (lambda (_) #t)])   ; a surviving raise IS a refusal
+       (scan (v)))]
+    [else (scan v)]))

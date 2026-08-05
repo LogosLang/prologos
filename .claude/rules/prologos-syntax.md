@@ -179,11 +179,26 @@ it) and `=` never binds.
 - Trait methods: short names (`eq?`, `from`, `add`)
 - Module paths use `::` not `.` -- `str::length`, `prologos::data::nat`
 - Dot access is for map keys -- `user.name` -> `[map-get user :name]`
-- **NEVER use `->` in identifiers** (silently fails to compile per pitfall #35). Use `-to-` for converters: `refr-to-syrup`, `op-to-syrup`, `syrup-to-op`. The Common Lisp / Scheme convention `refr->syrup` is incompatible with Prologos's WS-mode reader, which parses `->` as the function-arrow type operator inside any identifier.
+- **`->` may appear INSIDE a name** (ARROW T1, 2026-08-05) -- `int->str`,
+  `centigrade->fahrenheit`, `a->b->c`, `str::len->int`, and the keyword form
+  `:a->b`. The rule is **identifier characters on BOTH sides**; it is NOT "no
+  surrounding whitespace" (the prefix arrow-type form `[-> A B]` glues `->` to
+  an opening bracket at 275 corpus sites and stays the arrow). A spaced ` -> `
+  is always the arrow separator, unchanged.
+  ⚠ **HALF-GLUED IS AN ERROR, and the message says so**: `a-> b` and a trailing
+  `foo->` are neither a name nor an arrow (`-` is an ident-continue char, so
+  the name truncates at the dash and a bare `>` arrives alone). `defn` and the
+  `def :=` path report "half-glued arrow"; two other manifestations do NOT yet
+  carry that hint -- `[foo-> 1]` gives a plain `Unbound variable`, and
+  `spec e-> Int -> Int` is accepted SILENTLY. Before 2026-08-05 the whole class
+  was a silent truncation, and before `2a7cbe45` (2026-07-02) even the parse
+  error was discarded, so a file could report **0 errors while defining
+  nothing**.
 
 ## Data type definitions
 
 - **Constructor signatures have IMPLICIT return type** (per pitfall #34). Write `data X { ctor : T1 -> T2 }` to mean "ctor takes 2 args of types T1 and T2 and returns X." Do NOT write `ctor : T1 -> T2 -> X` — that means "takes 3 args (T1, T2, X) and returns X." Existing examples: `data Listener { listener : Nat -> Nat }`, `data QEntry { q-entry : Nat -> Nat }`. Symptom of getting it wrong: smart constructors fail with `Type mismatch [Pi T -> Result -> Result]`.
+
 
 ## Relational syntax (`defr` / `rel` / goals)
 

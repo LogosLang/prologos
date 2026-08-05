@@ -155,6 +155,11 @@
                       (cont->string (caddr s)))]
       [(sub)
        (string-append ".{" (string-join (map pp-select-branch (cdr s)) " ") "}")]
+      ;; D4.P4c-3 (Q_U7): the ω step renders with its own glyph and its WRAPPED
+      ;; step's rendering — `users:name`, `users:{a b}`. `first?` passes to the
+      ;; inner step as #t so the inner never emits a leading dot: `:` is already
+      ;; the separator, and `users:.name` would be wrong.
+      [(bcast) (string-append ":" (step->string (select-bcast-inner s) #t))]
       [else (format "«unrendered-step-kind:~a:~s»" (select-step-kind/display s) s)]))
   (apply string-append
          (for/list ([s (in-list b)] [i (in-naturals)])
@@ -573,11 +578,37 @@
      (format "[validate ~a ~a]"
              (expr-validate-schema-name v)
              (pp-expr (expr-validate-subject v) names))]
-    ;; CIU T6 D4.P3a: select — render the SURFACE spelling (subject{branches})
-    [(expr-select subject (expr-path branches))
-     (format "~a{~a}"
-             (pp-expr subject names)
-             (string-join (map pp-select-branch branches) " "))]
+    ;; CIU T6 D4.P3a: select — render the SURFACE spelling. D4.P4b-ii-1: the
+    ;; spelling now DEPENDS ON THE SORT. Hard-coding `subject{…}` was correct
+    ;; while `'block` was the only sort that could reach here; once b-ii-2
+    ;; migrates the fold, `x.a` would render as `x{a}` in every error message
+    ;; and every `def` echo — silent wrong output on the DIAGNOSTIC path, which
+    ;; is the worst place for it. Found by the P4b-ii-1 adversarial verify;
+    ;; third consecutive slice whose census missed a pretty-print.rkt site.
+    [(expr-select subject (expr-path branches sort) _)
+     (case sort
+       [(block) (format "~a{~a}"
+                        (pp-expr subject names)
+                        (string-join (map pp-select-branch branches) " "))]
+       ;; the path sort is the DOT spelling. Grade-1 selectors are
+       ;; single-branch by construction (a comma/space branch list is block
+       ;; syntax), so a multi-branch carrier here would be malformed — render
+       ;; it visibly rather than silently picking the first, per the
+       ;; no-silent-catch-all discipline this phase exists to enforce.
+       [(path)  (if (= (length branches) 1)
+                    (format "~a.~a" (pp-expr subject names)
+                            (string-join (map pp-select-branch (list (car branches))) ""))
+                    (format "~a.<malformed multi-branch path selector: ~a>"
+                            (pp-expr subject names)
+                            (string-join (map pp-select-branch branches) " | ")))]
+       ;; NON-raising, deliberately: pp-expr is on the error-message path
+       ;; (driver.rkt's diagnostics + the typing hints), so a raise here would
+       ;; convert a real diagnostic into an internal crash — and
+       ;; typing-errors' catch-all could swallow it, achieving strictly LESS
+       ;; than a visible marker. Same ruling as P4a's site 13.
+       [else    (format "~a<?~a?>{~a}"
+                        (pp-expr subject names) sort
+                        (string-join (map pp-select-branch branches) " "))])]
     [(expr-get c k _) (format "[get ~a ~a]" (pp-expr c names) (pp-expr k names))]
     [(expr-nil-safe-get m k) (format "[nil-safe-get ~a ~a]" (pp-expr m names) (pp-expr k names))]
     [(expr-nil-check a) (format "[nil? ~a]" (pp-expr a names))]
@@ -629,7 +660,7 @@
     [(expr-map-filter-entries pred map) (format "[map-filter-entries ~a ~a]" (pp-expr pred names) (pp-expr map names))]
     [(expr-map-map-vals f map) (format "[map-map-vals ~a ~a]" (pp-expr f names) (pp-expr map names))]
     ;; Path values
-    [(expr-path branches)
+    [(expr-path branches _)
      (define (pp-branch segs)
        (string-join (for/list ([s (in-list segs)])
                       ;; D4.P4b-i: segments are bare SYMBOLS (the step
@@ -1265,7 +1296,15 @@
     ;; D4.P4b-i slice 3: the branches slot holds an expr — recurse into it.
     ;; Inert at P4 (selectors hold symbols) but correct by construction; the
     ;; old subject-only arm is the Exhaustive-Walkers signature.
-    [(expr-select subject sel) (or (uses-bvar0? subject) (uses-bvar0? sel))]
+    ;; D4.P4b-ii-2b (the verify, M2): the tier is an EXPR slot now, and both
+    ;; twins guard theirs (`expr-map-get`, `expr-get` use `(and (expr? a) …)`).
+    ;; Unreachable today — `strictness-slot` mints under `ctx-empty`, so the
+    ;; slot is closed — but "unreachable today" is exactly how the silent-walker
+    ;; class starts, and the comment above claiming the subject is the only
+    ;; expr slot has been false since this slice.
+    [(expr-select subject sel tier)
+     (or (uses-bvar0? subject) (uses-bvar0? sel)
+         (and (expr? tier) (uses-bvar0? tier)))]
     [(expr-get c k a) (or (uses-bvar0? c) (uses-bvar0? k)
                           (and (expr? a) (uses-bvar0? a)))]
     [(expr-nil-safe-get m k) (or (uses-bvar0? m) (uses-bvar0? k))]
@@ -1305,7 +1344,7 @@
     [(expr-map-filter-entries pred map) (or (uses-bvar0? pred) (uses-bvar0? map))]
     [(expr-map-map-vals f map) (or (uses-bvar0? f) (uses-bvar0? map))]
     ;; Path values — no bound variables
-    [(expr-path _) #f]
+    [(expr-path _ _) #f]
     [(expr-Path) #f]
     [(expr-get-in target paths) (or (uses-bvar0? target) (uses-bvar0? paths))]
     [(expr-update-in target paths fn) (or (uses-bvar0? target) (uses-bvar0? paths) (uses-bvar0? fn))]
@@ -1731,6 +1770,21 @@
          ;; therefore the one a binder-position diagnostic actually meets.
          [(and (eq? h '$select) (pair? (cdr d)))
           (format "~a{~a}" (pp-datum (cadr d)) (pp-datum-list (cddr d)))]
+
+         ;; ⭐ D4.P4b-ii-2b — ($select-path subj field) → subj.field.
+         ;; THE FOURTH CONSECUTIVE MISSED pretty-print.rkt SITE, found by the
+         ;; verify. `pp-expr`'s select arm was fixed at b-ii-1 and that census
+         ;; STOPPED THERE — `pp-datum` is the datum-layer twin, 1000 lines
+         ;; down the same file, and the fold migration is a datum-layer change.
+         ;; Without this arm `expand r.a` emitted the raw sentinel
+         ;; `($select-path r a)` where HEAD emitted readable `(map-get r :a)`:
+         ;; a REGRESSION on the most common access surface in the language,
+         ;; silent, on the introspection path (driver's expand/expand-1/
+         ;; expand-full). Nesting composes: `r.a.b` renders `r.a.b`.
+         [(and (eq? h '$select-path) (pair? (cdr d)) (pair? (cddr d))
+               (null? (cdddr d)))
+          (format "~a.~a" (pp-datum (cadr d)) (pp-datum (caddr d)))]
+
 
          ;; ($rest-param name) → ...name
          [(and (eq? h '$rest-param) (pair? (cdr d)) (null? (cddr d)))

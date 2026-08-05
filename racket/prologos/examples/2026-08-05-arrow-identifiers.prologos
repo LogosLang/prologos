@@ -1,0 +1,93 @@
+ns arrow-identifiers
+
+;; ========================================================================
+;; ARROW T1 — `->` inside identifiers, at Level 3 (a real .prologos file)
+;; ========================================================================
+;;
+;; THE RULE: `->` continues an identifier iff it is flanked by identifier
+;; characters on BOTH sides. `a->b` is one name; ` -> ` is still the arrow.
+;;
+;; This is deliberately NOT "no surrounding whitespace" — the prefix
+;; arrow-type form `[-> A B]` glues `->` to an opening bracket at 275 sites in
+;; lib/ + examples/, and those must keep lexing as the standalone arrow.
+;;
+;; Before ARROW T1 P1 (`5616e3c7`), `c->f` lexed as symbol `c-` · rangle `>` ·
+;; symbol `f`: the name silently truncated at the dash, and the stray rangle
+;; POPPED A BRACKET FRAME, so errors surfaced far from the cause. Level 1/2
+;; tests pin the token stream; this file pins that it works for someone
+;; writing an actual file.
+;;
+;; The `defined.` lines are marked as well as the values, deliberately: they
+;; pin that an arrow name survives into the SIGNATURE DISPLAY, not just into
+;; the binder.
+
+;; --- A1: an arrow-named function, spec + defn + application ---
+
+spec int->str Int -> String
+defn int->str [n] [str::from-int n]
+;;0=> int->str : Int -> String defined.
+
+int->str 42
+;;1=> "42" : String
+
+;; --- A2: the reported case, verbatim ---
+
+spec centigrade->fahrenheit Posit32 -> Posit32
+defn centigrade->fahrenheit [c]
+  .((c * 9.0 / 5.0) + 32.0)
+;;2=> centigrade->fahrenheit : Posit32 -> Posit32 defined.
+
+centigrade->fahrenheit 100.0
+;;3=> 212.0 : Posit32
+
+centigrade->fahrenheit 0.0
+;;4=> 32.0 : Posit32
+
+;; --- A3: arrow names compose (one feeding another) ---
+
+spec label->prefix String -> String
+defn label->prefix [s] [str::append "leaf:" s]
+;;5=> label->prefix : String -> String defined.
+
+label->prefix [int->str 7]
+;;6=> "leaf:7" : String
+
+;; --- A4: chained arrows in a single name ---
+
+spec a->b->c Int -> Int
+defn a->b->c [n] [int+ n 1]
+;;7=> a->b->c : Int -> Int defined.
+
+a->b->c 41
+;;8=> 42 : Int
+
+;; --- A5: REGRESSION ANCHOR — the spaced arrow is untouched ---
+;; Every arrow consumer reads this token: spec signatures (above), defn/match
+;; arms, angle-group Pi types, and the binder-region terminators.
+
+spec plain-add Int -> Int -> Int
+defn plain-add [a b] [int+ a b]
+;;9=> plain-add : Int Int -> Int defined.
+
+plain-add 20 22
+;;10=> 42 : Int
+
+;; --- A6: REGRESSION ANCHOR — angle groups still close ---
+;; `>` is deliberately NOT in ident-continue?: 1,416 of the 1,444 ident-glued
+;; `>` chars in the corpus close an angle group. The rule's `-`-before-`>`
+;; requirement is what keeps `String>` intact — if `>` were admitted to
+;; identifier continuation, this declaration would not parse at all.
+
+def union-val : <Int | String> := 42
+;;11=> union-val : Int | String defined.
+
+;; --- A7: an arrow name alongside a module-path `::` name ---
+;; Both are multi-char continuations inside one identifier, and the arrow arm
+;; sits directly beside the `::` arm it was modelled on.
+
+spec str::len->int String -> Int
+defn str::len->int [s] [int+ 0 [str::length s]]
+;;12=> str::len->int : String -> Int defined.
+
+str::len->int "abcd"
+;;13=> 4 : Int

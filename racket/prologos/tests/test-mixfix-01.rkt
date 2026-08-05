@@ -371,12 +371,12 @@
 ;; `.(p.x + 1)` reaches pratt-parse as the raw ($dot-access x) sentinel unless
 ;; expand-mixfix-form folds it first. These pin the fold.
 
-(test-case "mixfix: dot-access operand folds to map-get before pratt-parse"
+(test-case "mixfix: dot-access operand folds to the selector carrier before pratt-parse"
   (check-equal?
    (preparse-expand-form '($mixfix pt ($dot-access x) + ($decimal-literal 1.0)))
-   '(+ (map-get pt :x) ($decimal-literal 1.0))))
+   '(+ ($select-path pt x) ($decimal-literal 1.0))))
 
 (test-case "mixfix: two dot-access operands both fold"
   (check-equal?
    (preparse-expand-form '($mixfix p ($dot-access x) + q ($dot-access x)))
-   '(+ (map-get p :x) (map-get q :x))))
+   '(+ ($select-path p x) ($select-path q x))))

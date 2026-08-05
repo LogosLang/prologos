@@ -348,6 +348,148 @@ Add to DEFERRED.md as a tracked architectural debt item.
 
 ---
 
+## §12 THE READER LAYER — a seed for 4D, added 2026-08-02 from the CIU T6 D4.P4c grounding audit
+
+**Why this belongs here.** 4D's core proposition already names parsing —
+*"Parsing, elaboration, typing, QTT, reduction, and zonking become COMPONENT
+ATTRIBUTES of the same unified substrate"* — but **no phase in the A–G structure
+covers the reader.** Phases A–G run from grammar-rule representation through
+reduction-as-`:whnf`; the parse layer is assumed rather than scoped. This
+section is the seed for that gap. It is findings, not a design.
+
+### §12.1 The measured state — the parse layer has ZERO propagators
+
+Measured at HEAD (`19ab78a9`) across all seven parse-layer files —
+`parse-reader.rkt`, `parse-lattice.rkt`, `tree-parser.rkt`, `surface-rewrite.rkt`,
+`form-cells.rkt`, `parser.rkt`, `macros.rkt`: **zero** installs of
+`net-add-propagator` / `-fire-once` / `-broadcast` / `elab-add-propagator` /
+`-cross-domain` / `register-stratum-handler`.
+
+`parse-reader.rkt`'s complete network surface is **1 `make-prop-network`, 5
+`net-new-cell`, 5 `net-cell-write`, 1 `net-cell-read`** — a **cell LEDGER**
+written by a straight-line `net1→net6` sequence. `build-tree-from-domains` is
+documented as "the fire function for the tree-builder propagator" and is then
+**called directly**, never installed.
+
+⚠ **PPN Master rows 1 and 3 were marked ✅ as propagator work.** Both have been
+annotated (2026-08-02) rather than un-ticked: the cells, the switchover and the
+tests are real; the ON-NETWORK claim is not. This is the project's own mandatory
+Network Reality Check failing on a ✅ row, and it is worth reading as a lesson
+about the check's placement rather than about those tracks.
+
+### §12.2 The five cells, and the honest lattice picture
+
+`parse-cells` = char · indent · token · bracket · tree.
+
+- The **tree cell's** merge is a genuine join — set-union over derivation sets,
+  monotone and idempotent (`parse-lattice.rkt`).
+- The **four RRB cells' merge is NOT a lattice operation**: it is a size
+  heuristic ("keep larger") with a constant-`#f` contradicts?. Any 4D design
+  that leans on "the reader's cells are already lattices" must exclude these
+  four, or fix them.
+
+### §12.3 The population fact that reframes cell granularity
+
+PPN Track 1 deferred per-node cells to **Track 8** with the argument *"One cell
+is simpler and 300× fewer allocations than per-node cells."* That argument was
+costed against **all nodes**. For an attribute that is *sparse*, the relevant N
+is the attribute's own population, not the tree's.
+
+Worked example (the CIU T6 `:` disposition attribute): mint sites are **tens**,
+not thousands — an independent source-level cross-check found **86 across 163
+tracked files, max 31 in any one file**; the audit's instrumented count was
+267/max 58. Either way the population is ~0.3% of tokens. And where the
+attribute's bottom element means "do nothing", **absence of an entry already IS
+bottom**, so no storage is needed for the ~99.7% that never mint.
+
+**Seed for 4D**: attribute-record granularity should be decided **per attribute
+population**, not once for the whole tree. The Track 8 deferral answers a
+different question than a sparse attribute asks.
+
+### §12.4 There is no node identity, and one collision is by construction
+
+Any per-node attribute keyed on identity must first MINT one:
+
+- **`eq?` does not survive the pass** — syntax objects are rebuilt via
+  `(datum->syntax #f kids* stx stx)` whenever anything below them changes.
+- **srcloc `(pos,span)` is not unique** — collisions measured in 6/6 sampled
+  files (e.g. `data/list.prologos`: 3033 nodes, 3003 distinct).
+- **Worse, the collision is structural on exactly the interesting nodes**: a
+  sentinel WRAPPER and its own PAYLOAD are minted with identical `(pos,span)`
+  by construction. Sentinel-vs-payload is precisely what an attribute over
+  wrapped nodes needs to tell apart.
+
+### §12.5 "Per-node" is ambiguous by ~8× — and the tree cell is the wrong target
+
+The binder post-pass operates on **syntax objects**, one level DOWNSTREAM of the
+`parse-tree-node`s the tree cell holds, produced by tree→stx conversion. For one
+file: **383 parse-tree-nodes vs 3,033 syntax nodes.** The tree cell's contents
+are never consulted by the post-pass at all. A design aimed at the tree cell
+addresses the wrong population.
+
+### §12.6 The preferred realization already exists in NTT — do not reinvent it
+
+`2026-03-22_NTT_SYNTAX_DESIGN.md` supplies both the storage and the precision
+mechanism: an **`:embedded` Pocket-Universe cell** plus **`:diff`** so dependents
+fire only for changed entries — *"~1.4 μs/cell × 4000 = 5.6 ms"* for individual
+cells versus *"~0.01 ms"* embedded.
+
+⚠ **And the obvious alternative is measured-bad at this scale**: a compound cell
+with `:component-paths` goes **quadratic**, because once any dependent declares
+component-paths, `net-cell-write` takes the slow path and `pu-value-diff`
+rescans the whole merged hasheq on every component write. There is no in-tree
+precedent for a compound cell with thousands of components — every production
+use is per-domain meta universes at meta scale. This creates a real tension with
+`propagator-design.md`'s MANDATORY `:component-paths` rule, which is the very
+thing that triggers the quadratic here; no design doc in tree records it.
+
+### §12.7 Three substrate blockers for any defaulting-on-absence stratum
+
+An attribute whose bottom means "do nothing" needs a stratum to act on absence
+after quiescence. Three blockers, all verified, none of which appears in
+`stratification.md`:
+
+1. **The BSP Tier-1 fast path runs NO strata**, and its eligibility guard reads
+   ONLY `naf-pending-cell-id` despite a comment claiming it checks stratum
+   requests. A qualifying network fires, clears the worklist and returns —
+   `process-tier` is never reached. **It fails silently.** Generalizing that
+   guard to consult every registered handler's request cell is a hard
+   prerequisite.
+2. **Stratum request cells must be pre-allocated by `make-prop-network`** —
+   `register-stratum-handler!` errors at module load otherwise. All five parse
+   cells are dynamically allocated via `net-new-cell` and would fail the guard.
+3. **Stratum handlers are BSP-only.** The Gauss-Seidel path has no stratum
+   processing, so a design whose *correctness* depends on a handler is
+   scheduler-coupled — a layering violation by `propagator-design.md`'s own
+   Cell/Propagator/Scheduler Orthogonality section.
+
+Also load-bearing: **the request cell must hold the INVENTORY of undecided
+nodes, not the grants.** `process-tier` SKIPS a handler whose request cell is
+empty, so an accumulator holding grants makes the zero-grant case — the default
+state — a silent no-op.
+
+### §12.8 What is genuinely new here, stated narrowly
+
+The mechanism (inherited attribute), the stratum shape (defaulting on absence
+after quiescence), the cell-granularity question (→ Track 8), the realization
+(→ NTT embedded PU + `:diff`), the ambiguity framing (→ **PPN Track 5**,
+type-directed disambiguation: *the parser produces multiple parses; downstream
+information constrains which survive; the ATMS retracts the rest*) and the
+umbrella (→ **4D** itself) all pre-exist.
+
+**Genuinely new: applying that stack to the READER/tree layer**, where zero
+propagators exist today and where 4D's own prerequisites (4C complete + T-3 +
+PM Track 12) are not met. This section exists so that when 4D opens, the reader
+layer is a scoped phase rather than a rediscovery.
+
+⚠ **Prior-art discipline note.** This section was written only after an audit
+established the above; the same arc had already logged *"the third prior-art
+miss of the D4.P4 arc"*, and a proposal to open a NEW track for this work would
+have been the fourth. Search by CONCEPT before claiming novelty in this area —
+it has four chartered homes.
+
+---
+
 ## §11 Closing note
 
 The 1D/1E exploration was technically extensive (Stage 2 audit + bench harness + research + spike + multiple architecture iterations + diagnostic reductions) but produced a clearer understanding than a finished implementation: this work belongs in PPN 4D's substrate-unification charter, not the Phase 9+ addendum's substrate+orchestration scope. The deferred sub-phases represent honest architectural humility — recognizing the wrong scope and capturing forward — rather than abandonment.

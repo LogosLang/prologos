@@ -831,8 +831,17 @@
 ;; angle-bracket-conflicted comparison spellings. The hint rides the error's
 ;; message field (rendered by errors.rkt when non-default). NOTE: bare `lt`
 ;; and `eq` never reach here — they resolve to String foreign fns (the
-;; silent-shadow class, filed separately); bare `<` never reaches elaboration
-;; (issue #69(a) reader tokenization).
+;; silent-shadow class, filed separately).
+;;
+;; ⚠ CORRECTED 2026-08-02. This comment used to end "bare `<` never reaches
+;; elaboration (issue #69(a) reader tokenization)", and `'<` was omitted from
+;; the table on that basis. It was true when written and is FALSE now: #69(a)'s
+;; own fix — bare `<` no longer opens an angle group unless a matching `rangle`
+;; exists — is exactly what lets `<` flow through to elaboration. So the token
+;; the issue is NAMED AFTER was the only comparison operator with no guidance
+;; (`<=`, `>=`, `>` all had it), which is the worst possible one to miss.
+;; A fix invalidating the assumption that justified an omission elsewhere:
+;; verified by probe, not by reading.
 (define unbound-op-hint-table
   (let ([cmp-hint
          (string-append
@@ -848,7 +857,7 @@
     (hasheq
      'mod "hint: mod is a keyword; for a first-class value use the section [mod _ _]"
      'le cmp-hint 'gt cmp-hint 'ge cmp-hint
-     '<= angle-hint '>= angle-hint '> angle-hint
+     '< angle-hint '<= angle-hint '>= angle-hint '> angle-hint
      'q8-fma quire-hint 'q16-fma quire-hint 'q32-fma quire-hint 'q64-fma quire-hint
      'q8-to quire-hint 'q16-to quire-hint 'q32-to quire-hint 'q64-to quire-hint
      'p8-if-nar if-nar-hint 'p16-if-nar if-nar-hint
@@ -2362,10 +2371,13 @@
         ;; representation of the selector. Consumers that used a segment
         ;; directly as an `expr-map-get` KEY now wrap it, and the FFI shims
         ;; marshal at the boundary — which is where marshalling belongs.
+        ;; D4.P4b-ii-1: sort `'path` — `#p(…)` is the path spelling. (The
+        ;; block spelling `x{…}` mints `'block` at the surf-select arm.)
         (expr-path
          (for/list ([branch (in-list branches)])
            (for/list ([seg (in-list branch)])
-             (string->symbol (keyword->string seg)))))])]
+             (string->symbol (keyword->string seg))))
+         'path)])]
 
     ;; get-in: desugar to chained map-get calls
     ;; Single path:   (get-in m :a.b.c) → (map-get (map-get (map-get m :a) :b) :c)
@@ -3173,11 +3185,39 @@
     ;; elaborated expr-lam (a Racket closure would serialize to an error stub).
     ;; CIU T6 D4.P3a: select block — branches are static data (segmented +
     ;; checked at the parser); only the subject elaborates.
-    [(surf-select subject branches loc)
+    [(surf-select subject branches sort loc)
      (let ([subj (elaborate subject env depth)])
        (if (prologos-error? subj)
            subj
-           (expr-select subj (expr-path branches))))]
+           ;; D4.P4b-ii-2b: the sort ARRIVES from the parser rather than being
+           ;; hard-coded — `x{…}` carries 'block, `x.a` carries 'path.
+           ;;
+           ;; THE TIER, mirroring `surf-map-get`: a fresh strictness meta for
+           ;; the PATH sort only. Typing solves it to `(expr-true)` exactly
+           ;; when it PROVED an assertive subject (the `(Map K V)` arms call
+           ;; `solve-strict-assert!`); it stays UNSOLVED for a dyn row, a
+           ;; selection view or a union, and reduction reads that as the
+           ;; PERMISSIVE tier. Without it every one of those misses would
+           ;; regress from a quiet `<error>` to a panic — the before-the-fold
+           ;; tripwire that exists to catch precisely this.
+           ;; A BLOCK gets `#f`: a block ASSERTS its result (Horn D sourced
+           ;; every field as present), so a miss there really is an invariant
+           ;; violation and the loud panic is correct.
+           (expr-select subj (expr-path branches sort)
+                        ;; ⚠ TOTAL, not binary. The verify caught this as an
+                        ;; `(if (eq? sort 'path) …)` — the exact anti-pattern
+                        ;; `select-sort-unhandled` was built one slice earlier
+                        ;; to forbid, and whose rationale I wrote. Concretely:
+                        ;; a future `'nil-safe` sort would get tier `#f`, and
+                        ;; `#f` is NOT "no claim" at reduction — it is read as
+                        ;; the BLOCK tier and panics "invariant violation". A
+                        ;; nil-safe miss, whose whole contract is to return
+                        ;; `none`, would abort. Silent now, loud-and-wrong the
+                        ;; day the next sort lands.
+                        (case sort
+                          [(path)  (strictness-slot loc env)]
+                          [(block) #f]
+                          [else (select-sort-unhandled 'elaborate-select sort)]))))]
 
     [(surf-validate sname subject loc)
      (let* ([schema-entry (lookup-schema-by-name sname)]

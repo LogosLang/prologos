@@ -128,6 +128,33 @@
   (cond
     [(expr-map-get? x) (cons (expr-map-get-m x) (expr-map-get-k x))]
     [(expr-get? x) (cons (expr-get-coll x) (expr-get-key x))]
+    ;; ⚠ MERGE 2026-08-05 — the THIRD shape, and without it this whole hint went
+    ;; dark. D4.P4b-ii migrated `.field` off `$dot-access`→`map-get` and onto
+    ;; `$select-path`→`expr-select`, so `n.name` stopped matching either arm
+    ;; above and the guided "…has type Int, which has no fields" silently
+    ;; degraded to the generic "the subject is not a record".
+    ;;
+    ;; This is the family-sibling class `pipeline.md` § "Exhaustive Walkers"
+    ;; names: a fix (or here, a consumer) written for one member of a family
+    ;; while a later change moves the family. Nothing failed loudly — the hint
+    ;; is an `or` arm, so losing it just falls through to a worse message.
+    ;;
+    ;; Only the SINGLE plain key is a projection in this sense: one branch, one
+    ;; step, and that step a bare symbol (a `.field`). A caret/sub/ordinal step,
+    ;; or several branches, is a select BLOCK — a different construct with its
+    ;; own diagnostics, and mis-claiming it here would be worse than declining.
+    ;; NB the branches ride inside an `expr-path` carrier (syntax.rkt), not as a
+    ;; bare list — reading them as a list is how the first attempt at this arm
+    ;; silently matched nothing.
+    [(and (expr-select? x)
+          (expr-path? (expr-select-branches x))
+          (let ([bs (expr-path-branches (expr-select-branches x))])
+            (and (list? bs) (= (length bs) 1)
+                 (let ([steps (car bs)])
+                   (and (list? steps) (= (length steps) 1)
+                        (symbol? (car steps)))))))
+     (cons (expr-select-subject x)
+           (expr-keyword (car (car (expr-path-branches (expr-select-branches x))))))]
     [else #f]))
 
 (define (format-closed-row-miss rec kw names)
@@ -349,7 +376,22 @@
 ;; — the arm and its diagnostic cannot drift) and formats the failure with
 ;; BRANCH context. The three Q_T2 refusal kinds all name the 4d remedy list:
 ;; seal / validate / annotate.
-(define (format-select-fail fail names)
+(define (format-select-fail fail names [sort 'block])
+  ;; D4.P4b-ii-2c: the wording DEPENDS ON THE SORT. Every arm below was
+  ;; written when only `x{…}` could reach here, so they say "a select block"
+  ;; and append block-specific advice. After b-ii-2b the DOT spelling reaches
+  ;; them too — and the block advice becomes actively MISLEADING: `r.zzz`
+  ;; produced "…bare field access is spelled `.zzz`", which is what the user
+  ;; just wrote. Worse, `select-block-hint` runs BEFORE `closed-row-miss-hint`
+  ;; in infer/err's `or`, so the bad message WINS. Found by the b-ii-2
+  ;; mini-audit's critic; probe-confirmed live before this fix.
+  ;; TOTAL over the sort axis (the verify: this was a binary `(eq? sort
+  ;; 'block)`, which would silently hand every FUTURE sort the PATH wording).
+  (define block?
+    (case sort
+      [(block) #t]
+      [(path)  #f]
+      [else (select-sort-unhandled 'format-select-fail sort)]))
   (define path (select-fail-path fail))
   ;; D4.P3c: ordinal steps put NUMBERS in the path — ~a, not symbol->string
   (define branch-str (string-join (map (lambda (p) (format "~a" p)) path) "."))
@@ -365,23 +407,88 @@
   (define remedies
     "seal the subject against a schema (`the Schema subj`) or validate it against one")
   (case (select-fail-kind fail)
+    ;; ⚠ THE `bcast-not-yet` ARM IS RETIRED AT D4.P4c-4c — it named THIS SLICE as
+    ;; its own discharge point ("the ω value semantics land at … P4c-4c"), and
+    ;; the slice landed, so it had ZERO producers. Kept, it would have been a
+    ;; dead arm advertising an unbuilt feature that is now built. The `select-fail`
+    ;; kinds are producer-driven, so removing the last producer's arm is the
+    ;; complete retirement — this is the ban-dual-paths rule, not tidying.
+    ;; The channel SPLIT it documented survives and is now carried by
+    ;; `bcast-carrier` below: typing refuses through the failure slot so the file
+    ;; continues, and reduction reports through `(return (expr-panic …))` rather
+    ;; than a raise. `select-bcast-not-yet` (syntax.rkt) is retired with it.
+    ;;
+    ;; D4.P4c-4c — THE CARRIER REFUSAL, the arm that replaces it. P4c-4c scopes ω
+    ;; to PVec; Map / keyword-row / het-tuple are P4d, and it must NAME the
+    ;; carrier rather than report a generic subject miss. Monotone: P4d turns
+    ;; each of these into a meaning.
+    ;; ⚠ TWO OVER-CLAIMS CORRECTED by the P4c-4c adversarial verify, both in the
+    ;; first draft of this arm. (1) It advised `m.~a` with the LABEL interpolated,
+    ;; so an ordinal ω produced the nonsense `[pvec-map [fn [m] m.0] xs]`.
+    ;; (2) It told EVERY non-PVec subject that its carrier "lands at P4d" —
+    ;; including `String` and `Int`, which will never be broadcast carriers. The
+    ;; P4d sentence is now a statement about the PHASE, not a promise about this
+    ;; subject.
+    [(bcast-carrier)
+     (format
+      (string-append
+       "broadcast `:~a` needs a PVec subject — this one is ~a. Broadcast is "
+       "PVec-only at this phase; the map, keyword-row and heterogeneous-tuple "
+       "carriers land at CIU T6 D4.P4d. For a list, convert first with "
+       "`[pvec-from-list xs]` (the row type is preserved)~a~a")
+      (or label "…")
+      (if row (format "`~a`" (pp-expr row)) "not one")
+      ;; the explicit spelling is only ADVICE when the step is a nominal key —
+      ;; `m.0` is not a thing a user can write
+      (if (and label (symbol? label))
+          (format "; otherwise spell it `[pvec-map [fn [m] m.~a] xs]`" label)
+          "")
+      (if (null? path) "" (format " — in branch `~a`" branch-str)))]
     [(miss-closed)
      (string-append
       (format-closed-row-miss row label names)
-      (format "; in the select branch `~a` — bare field access (no construction) is spelled `.~a`"
-              branch-str label))]
+      ;; the block tail TEACHES the dot spelling — useless when the user
+      ;; already wrote it. Under 'path the closed-row miss message stands on
+      ;; its own (it already names the field and the available ones).
+      (if block?
+          (format "; in the select branch `~a` — bare field access (no construction) is spelled `.~a`"
+                  branch-str label)
+          ""))]
     [(miss-dyn)
      (format
+      (if block?
       "Could not infer type — select: field :~a (branch `~a`) is not listed on the open row ~a; a select block asserts its result, so unlisted fields refuse — ~a"
+      "Could not infer type — select: field :~a (branch `~a`) is not listed on the open row ~a — ~a")
       label branch-str (pp-expr row names) remedies)]
     [(unknown-presence)
      (format
+      (if block?
       "Could not infer type — select: field :~a's presence (branch `~a`) is 'unknown on ~a; a select block asserts its result — ~a"
+      "Could not infer type — select: field :~a's presence (branch `~a`) is 'unknown on ~a, and the row is CLOSED so it cannot live in a remainder — ~a")
       label branch-str (pp-expr row names) remedies)]
     [(subject-map)
      (format
+      (if block?
       "Could not infer type — select: the subject~a is a (Map K V), which has no per-field row; a select block needs a record subject — ~a"
+      "Could not infer type — select: the subject~a is a (Map K V) whose KEY TYPE does not admit this field — ~a")
       (if (null? path) "" (format " (branch `~a`)" branch-str)) remedies)]
+    ;; D4.P4b-ii-1 — ASYMMETRY #3's diagnostics. Both replace messages the
+    ;; b-ii mini-audit found defective: the block case was reaching
+    ;; 'subject-other, whose text ("the subject is not a record") is FALSE of a
+    ;; selection — it IS a record, restricted — and named no remedy; the
+    ;; out-of-view case was a bare "Could not infer type" with no explanation
+    ;; at all. The refusal itself is deliberate in both (DEFERRED 20 / the
+    ;; :requires read-capability); only the diagnostics were wrong.
+    [(subject-selection)
+     (format
+      "Could not infer type — select: the subject~a is a SELECTION (a capability-restricted view over its parent schema); a select block over a view is not yet supported, because projecting a whole block through one would bypass the per-field `:requires` check — select fields individually (`v.field`), or block over the underlying record"
+      (if (null? path) "" (format " (branch `~a`)" branch-str)))]
+    [(selection-not-in-view)
+     (format
+      "Could not infer type — select: field :~a~a is not in this selection's view — a selection restricts READS to its `:requires` fields; add :~a to the selection, or read it from the underlying record"
+      label
+      (if (null? path) "" (format " (branch `~a`)" branch-str))
+      label)]
     [(subject-tuple)
      ;; D4.P3c: ordinal selection is LIVE — the recommendation works now.
      (format
@@ -404,6 +511,10 @@
          ;; read-capability check would bypass the restriction. Saying "is not a
          ;; record" of a thing that is precisely a restricted record view sends
          ;; the reader to check their subject's shape, which is fine.
+         ;;
+         ;; MERGE 2026-08-05: the selection case is the SPECIFIC one and stays
+         ;; first; main's `block?` split is kept as the general fallback, so a
+         ;; dot access and a select block still word the refusal differently.
          (if (and (expr-fvar? row) (lookup-selection-by-name (expr-fvar-name row)))
              (format
               (string-append
@@ -416,7 +527,9 @@
               (if (null? path) "" (format " (branch `~a`)" branch-str))
               (expr-fvar-name row))
              (format
-              "Could not infer type — select: the subject~a is not a record; a select block projects fields of a keyword row"
+              (if block?
+                  "Could not infer type — select: the subject~a is not a record; a select block projects fields of a keyword row"
+                  "Could not infer type — select: the subject~a is not a record, so it has no fields to access")
               (if (null? path) "" (format " (branch `~a`)" branch-str)))))]
     ;; ---- D4.P3c: the ordinal fail kinds ----
     [(ordinal-oob)
@@ -439,11 +552,11 @@
     (let search ([x e])
       (and (expr? x)
            (or (match x
-                 [(expr-select subject (expr-path branches))
+                 [(expr-select subject (expr-path branches sort) _)
                   (let ([tm (whnf (infer ctx subject))])
                     (and (not (expr-error? tm))
-                         (let-values ([(row fail) (select-project ctx tm branches)])
-                           (and fail (format-select-fail fail names)))))]
+                         (let-values ([(row fail) (select-project ctx tm branches sort)])
+                           (and fail (format-select-fail fail names sort)))))]
                  [_ #f])
                (ormap search (expr-subfields x)))))))
 

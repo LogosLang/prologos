@@ -230,7 +230,6 @@
    ;; NOTE `run-last` keeps only the LAST result — which is the `defn` line
    ;; succeeding. The spec's error is an earlier one, so the whole list is
    ;; formatted.
-   (format "~a"
-      (run
+   (format "~a" (run
         "(spec bad-len {C : (-> Type Type)} {A : Type} (C A) -> Nat where (Seqable C))
          (defn bad-len [xs] zero)"))))

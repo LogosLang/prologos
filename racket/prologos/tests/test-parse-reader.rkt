@@ -490,15 +490,41 @@
 ;; discriminated by position, not by lexeme.
 ;; ============================================================
 
+;; ⚠ D4.P4c-4c / G2 — THE EIGHT FLIPS HAVE NOW FLIPPED FORWARD, AS THIS COMMENT
+;; PREDICTED. Its last line used to read "P4c-3 enables contexts one at a time;
+;; these flip AGAIN, forward, then." That is this commit: G2 retires the
+;; enable-set, preservation is unconditional, and the `$bcast-step` sentinel
+;; survives the reader post-pass on every shape that MINTS.
+;;
+;; ⭐ THE ROUND TRIP WAS THE POINT AND IT IS NOW COMPLETE — pre-mint → mint →
+;; unwrapped-back-to-identical (P4c-2's inverted default) → preserved (here).
+;; The middle leg is what made "regression-free" checkable rather than promised:
+;; a pin that flipped away and flipped back to the identical value mechanically
+;; demonstrated that mint + unwrap compose to the identity. This leg is the
+;; feature actually arriving.
+;;
+;; ⚠ These pins are about TOKENIZATION (Q_M8: `:10` is ONE token), not about
+;; broadcast. Their proposition is unchanged — the lexeme is still one token; it
+;; is now WRAPPED. Read `($bcast-step :10)` as "one token, preserved", not as a
+;; different tokenization.
+;; ⚠ THE NON-MINTING NEIGHBOURS BELOW MUST STILL NOT MOVE, and that is what makes
+;; this set discriminating rather than a bulk rename: `x:0abc`/`x:10abc` shatter
+;; (the annotation arm declines, leaving a bare `colon` OUTSIDE the trigger) and
+;; `{:10 v}`/`{:0 v}` are branch-initial (EMPTY local result). If a future change
+;; makes those mint too, these assertions are what will catch it.
+;; ⚠ Two neighbours must NOT move and are load-bearing: `x:0abc`/`x:10abc`
+;; (the annotation arm declines, the colon shatters to a bare `colon`, which is
+;; OUTSIDE the trigger) and `{:10 v}`/`{:0 v}` (branch-initial ⇒ EMPTY local
+;; result). Admitting bare `colon` to the trigger would break both.
 (test-case "Q_M8: :10 is ONE token, like :0…:9 (was: `:` + `10`)"
-  (check-equal? (read-all-forms-string "users:10") '((users :10)))
-  (check-equal? (read-all-forms-string "users:127") '((users :127))))
+  (check-equal? (read-all-forms-string "users:10") '((users ($bcast-step :10))))
+  (check-equal? (read-all-forms-string "users:127") '((users ($bcast-step :127)))))
 
 (test-case "Q_M8: single-digit and w/m forms are UNCHANGED (must-not-break)"
-  (check-equal? (read-all-forms-string "users:0") '((users :0)))
-  (check-equal? (read-all-forms-string "users:9") '((users :9)))
-  (check-equal? (read-all-forms-string "users:w") '((users :w)))
-  (check-equal? (read-all-forms-string "users:m") '((users :m))))
+  (check-equal? (read-all-forms-string "users:0") '((users ($bcast-step :0))))
+  (check-equal? (read-all-forms-string "users:9") '((users ($bcast-step :9))))
+  (check-equal? (read-all-forms-string "users:w") '((users ($bcast-step :w))))
+  (check-equal? (read-all-forms-string "users:m") '((users ($bcast-step :m)))))
 
 (test-case "Q_M8: the trailing ident-continue GUARD still declines after the LAST digit"
   ;; The widened digit run must test `not ident-continue?` AFTER the last digit,
@@ -512,8 +538,8 @@
   (check-equal? (read-all-forms-string "x:0abc") '((x : 0 abc)))
   (check-equal? (read-all-forms-string "x:10abc") '((x : 10 abc)))
   ;; …while the LETTER arm still yields keywords, which is why the guard exists:
-  (check-equal? (read-all-forms-string "x:where") '((x :where)))
-  (check-equal? (read-all-forms-string "x:wm") '((x :wm))))
+  (check-equal? (read-all-forms-string "x:where") '((x ($bcast-step :where))))
+  (check-equal? (read-all-forms-string "x:wm") '((x ($bcast-step :wm)))))
 
 (test-case "Q_M8: {:10 v} is a legal map key — the LATENT DEFECT this repairs"
   ;; `{:0 v}`, `{:1 v}`, `{:9 v}` were legal today while `{:10 v}` SHATTERED
@@ -1736,3 +1762,48 @@
   (define src "ns a\n\ndef x := 1\n\n\ndefn f [n]\n  [int+ n 1]\n")
   (check-equal? (map syntax->datum (read-all-forms-from-tree (read-to-tree src) src "t"))
                 '((ns a) (def x := 1) (defn f (n) (int+ n 1)))))
+
+;; ============================================================
+;; D4.P4c-1 (Q_U16b) — `colon-annotation` becomes a REAL token type
+;; ============================================================
+;;
+;; Q_U16b rules `users:0` a legal ω step, so P4c-2's `:` gate must dispatch on
+;; the ordinal band at GROUPING. It cannot today: `recognize-colon-annotation`'s
+;; registered classifier is `(lambda (s p l) 'symbol)`, so `:0`/`:w`/`:m` are
+;; type-indistinguishable from any ordinary identifier.
+;;
+;; The rival mechanism (carry a pattern-provenance field on `token-entry`) was
+;; measured at 25 constructor sites across 7 files — and sre-rewrite.rkt holds 4
+;; of them, borrowing `token-entry` as a general-purpose term carrier
+;; ('binding/'sample/'constant), which makes it a struct-OWNERSHIP question.
+;; Classifier promotion wins on cost by an order of magnitude. It is filed
+;; separately on its OWN merits ($exp-literal + $rat-literal, both
+;; self-documented as identity-erased), NOT as a scheduled revert of this.
+;;
+;; These pins live HERE, beside their siblings and the eight datum pins that
+;; flip at P4c-2, because this file calls `register-default-token-patterns!` at
+;; :23 — a direct `tokenize-char-rrb` without it matches NOTHING and returns a
+;; FALSE ZERO (the footgun `tools/reader-corpus-ab.rkt:74` carries a tripwire
+;; for; it bit the author of these pins once before they were written).
+
+(test-case "P4c-1: `:0` carries the colon-annotation TOKEN TYPE, not 'symbol"
+  (define toks (token-types-from-rrb (tokenize-char-rrb (make-char-rrb-from-string "users:0"))))
+  (check-equal? (cdr (list-ref toks 1)) ":0" "fixture sanity: the lexeme is the one we mean")
+  (check-equal? (car (list-ref toks 1)) 'colon-annotation
+                "the ordinal band must be type-dispatchable at grouping (Q_U16b)"))
+
+(test-case "P4c-1: the `:w`/`:m` letter arm carries it too"
+  (for ([s '("users:w" "users:m")] [lex '(":w" ":m")])
+    (define toks (token-types-from-rrb (tokenize-char-rrb (make-char-rrb-from-string s))))
+    (check-equal? (cdr (list-ref toks 1)) lex)
+    (check-equal? (car (list-ref toks 1)) 'colon-annotation s)))
+
+(test-case "P4c-1: the promotion does NOT disturb the `keyword` band"
+  ;; `:name` already carries its own type. Note `x:Int` and `users:userName` are
+  ;; BOTH 'keyword — type-identical — which is precisely why Q_U16's position
+  ;; dispatch is needed and why no token-type test can separate binder from
+  ;; expression in this band.
+  (for ([s '("users:userName" "x:Int")] [lex '(":userName" ":Int")])
+    (define toks (token-types-from-rrb (tokenize-char-rrb (make-char-rrb-from-string s))))
+    (check-equal? (car (list-ref toks 1)) 'keyword s)
+    (check-equal? (cdr (list-ref toks 1)) lex)))

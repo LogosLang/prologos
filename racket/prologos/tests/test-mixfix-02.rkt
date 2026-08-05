@@ -411,8 +411,19 @@
   (check-equal? (length results) 3 (format "commands swallowed: ~a" results))
   ;; The first result is an error VALUE (unbound-variable-error struct),
   ;; not a success string — the loud failure.
-  (check-true (string-contains? (format "~a" (car results)) "Unbound")
+  ;;
+  ;; ⚠ ASSERT THE TYPE, NOT THE MESSAGE TEXT (changed 2026-08-02). This used to
+  ;; be `(string-contains? (format "~a" …) "Unbound")`, i.e. the default message
+  ;; string used as a PROXY for the error type. That proxy broke the moment `<`
+  ;; gained an op-spelling hint, because a hint REPLACES the message field
+  ;; (elaborator.rkt's `(or (hash-ref unbound-op-hint-table name #f) "Unbound
+  ;; variable")` — the same is already true of `le`, `>`, `mod`, …). The
+  ;; user-facing diagnostic is unaffected: errors.rkt still renders "Unbound
+  ;; variable: <" and appends the hint. What this case actually cares about is
+  ;; "a loud unbound error, on its own line, tail intact" — so test that.
+  (check-true (unbound-variable-error? (car results))
               (format "expected loud unbound-variable error for [< ...]: ~a" (car results)))
+  (check-equal? (unbound-variable-error-name (car results)) '<)
   (check-equal? (last results) "9 : Int"))
 
 (test-case "e2e/ws: angle Pi type after a mixfix comparison still parses"

@@ -84,4 +84,131 @@ relational-facts + validation (a-priori static typing of relational data), and
 ~?logic-var:Type~ domain constraints as a further typing source. Per the entry
 gate: grounding audit over the logic engine first, then co-design.
 
+
+
+
+
+
+* Polish points for REL
+** Multiplicity errors with def on a solve:
+#+begin_src prologos
+def needs-rewind := solve (movies false title year)
+;;> def needs-rewind := solve (movies false title year)
+;;ERROR: Multiplicity violation
+#+end_src
+** N-ary predicate called with less than N args should error
+Today it returns a `nil`
+#+begin_src prologos
+defr truths [?b1 ?b2 ?b3 ?b4]
+  &> (bool b1) (bool b2) (bool b3) (bool b4)
+
+
+solve (truths ?b)
+
+;; a N-ary predicate defined not called with N args should through error
+;; it's producing `nil` today
+
+;; In Prolog, for instance:
+;; ?- light_vehicle(A,B).
+;; ERROR: Unknown procedure: user:light_vehicle/2
+;; ERROR:     However, there are definitions for:
+;; ERROR:         light_vehicle/1
+#+end_src
+
+** N-ary predicate called with more than N args also erroneous behavior:
+Sometimes with the `:var var`, sometimes with `nil : _`
+#+begin_src prologos
+> solve (light-vehicle v1 v2)
+'[{:v1 "golf-cart", :v2 v2} {:v1 "bicycle", :v2 v2}] : _
+
+> solve (truths b1 b2 b3 b4 b5)
+nil : _
+#+end_src
+
+** anonymous variables showing up in solution sets. Vars with `_` should not be considered in the solution set.
+#+begin_src prologos
+> solve (truths b1 b2 b3 _)
+'[{:b3 1, :_anon241999 1, :b2 1, :b1 1} {:b3 1, :_anon241999 0, :b2 1, :b1 1}
+...
+{:b3 0, :_anon241999 0, :b2 0, :b1 0}] : _
+
+;; should be:
+'[{:b3 1, :b2 1, :b1 1} {:b3 1, :b2 1, :b1 1}
+...
+{:b3 0, :b2 0, :b1 0}] : _
+
+#+end_src
+
+** single line facts with `|`
+Today we need to separate facts by newlines. For small, short facts it may be desirable to keep them on the same row. For example:
+#+begin_src prologos
+defr digits [?d]
+  || 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+#+end_src
+
+** Implicit rule-clause groups in defr rules
+We should be able to remove the delimiting parentheses around rule clauses, much as we do in the functional language. So for example:
+#+begin_src prologos
+defr blue-or-yellow [?fruit]
+  &> (fruit-color fruit "blue")
+  &> (fruit-color fruit "yellow")
+
+defr fruit-not-of-color [?fruit ?not-color]
+  &> (fruit-color fruit color)
+     (not (= color not-color))
+
+;; could be written, instead/also, without loss or clarity:
+defr blue-or-yellow [?fruit]
+  &> fruit-color fruit "blue"
+  &> fruit-color fruit "yellow"
+
+defr fruit-not-of-color [?fruit ?not-color]
+  &> fruit-color fruit color
+     not (= color not-color)
+
+;; or with nesting using separate lines:
+defr fruit-not-of-color [?fruit ?not-color]
+  &> fruit-color fruit color
+     not
+       = color not-color
+
+#+end_src
+
+** Implicit Solve
+Just as in the functional world, a function carries an implicit `eval`, so too a relational clause (outside of a `defr`!) could carry an implicit `solve` on it:
+#+begin_src prologos
+;; today:
+solve (fruit-not-of-color f "red")
+solve (rel [fruit]
+       &> (fruit-color fruit _)
+          (not (red-or-green-fruits fruit))
+          (not (blue-or-yellow fruit)))
+
+;; could be (also with implicit grouping on the clauses):
+fruit-not-of-color f "red"
+rel [fruit]
+  &> fruit-color fruit _
+     not (red-or-green-fruits fruit)
+     not (blue-or-yellow fruit)
+
+#+end_src
+
+** `var:Type` in `defn`s not working as expected
+This is a bit outside of the Rel language, but still something we worked on through this arc, so I'd like to make sure it's wired in through the last mile.
+#+begin_src prologos
+defn my-square [x:Int] : Int
+  * x x
+
+;;=> ERROR: cannot infer the type of an unannotated parameter — it is used here in a way that requires a known type (e.g. field projection `.field` or arithmetic). Annotate the parameter (`[x : T]`) or add a `spec`.
+#+end_src
+
+
+
 * Conversations
+
+
+
+
+
+
+

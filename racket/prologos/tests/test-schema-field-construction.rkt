@@ -131,6 +131,5 @@ def wf : WithFn := {:name \"a\" :cb idi}\n
     ;; (macros.rkt § per-FORM failure containment), not an escaping raise.
     ;; Converting also TIGHTENS this: bare `exn:fail?` was satisfied by any
     ;; failure at all; it now has to be this one.
-   (format "~a"
-     (run-file-string "ns fc7\n
+   (format "~a" (run-file-string "ns fc7\n
 schema BadShape\n  :p <Int * String>\n"))))

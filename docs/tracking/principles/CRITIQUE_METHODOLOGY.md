@@ -1,0 +1,349 @@
+- [Purpose](#org3e93bce)
+- [The Three Lenses (P/R/M)](#org85083d3)
+  - [P: Principles Challenged](#org4368e08)
+  - [R: Reality-Check (Code Audit)](#orgf8a1151)
+  - [M: Propagator-Mindspace](#orgcd5ce94)
+- [Orientation for External Critics](#org8d9ff69)
+- [Receiving External Critique: Grounded Pushback](#orgeb87c61)
+  - [How to Evaluate External Critique](#org942bea8)
+  - [The Response Format](#org2cf189d)
+- [Anti-Patterns in Critique](#orga4a6b78)
+  - [Cataloguing Instead of Challenging](#org98d66db)
+    - [This anti-pattern extends BEYOND critique rounds](#org6d3ea8f)
+  - [Floating Above the Codebase](#orgfdf1667)
+  - [Step-Think Disguised as Propagator-Think](#org578513d)
+  - [Steering Toward Algorithms](#org2e1399d)
+- [SRE Lattice Lens (Mandatory for All Lattice Design Decisions)](#org2515767)
+  - [What the SRE Lattice Lens Asks](#orgec2c6e2)
+  - [Origin](#org2f50be1)
+  - [When to Apply](#orgdd38224)
+- [Integration with Design Methodology](#orgccd3b51)
+  - [When to Apply](#org8d454bd)
+  - [Finding Format](#org9e4675c)
+- [Cross-References](#org0ce9d6a)
+
+
+
+<a id="org3e93bce"></a>
+
+# Purpose
+
+This document codifies the methodology for design critiques in the Prologos project. It is referenced by [DESIGN<sub>METHODOLOGY.org</sub>](DESIGN_METHODOLOGY.md) at Stage 3 (critique rounds). It serves three roles:
+
+1.  **Checklist for self-critique**: Apply all three lenses before advancing a design to external critique.
+2.  **Briefing for external critics**: Hand this document to anyone reviewing a Prologos design. It orients them to evaluate from the right mindspace.
+3.  **Anti-pattern reference**: Names the specific failure modes that critique exists to catch.
+
+
+<a id="org85083d3"></a>
+
+# The Three Lenses (P/R/M)
+
+Every design critique applies three lenses. Findings are tagged with their lens code (e.g., P1, R3, M2) for traceability.
+
+
+<a id="org4368e08"></a>
+
+## P: Principles Challenged
+
+Take each major design decision and actively *challenge* it against the ten load-bearing principles (see [DESIGN<sub>PRINCIPLES.org</sub>](../principles/DESIGN_PRINCIPLES.md) and MEMORY.md § "Principles-First Design Gate").
+
+*Challenging* is NOT *cataloguing*. "Propagator-First: ✓ we use cells" is cataloguing. Challenging is: "Could this be MORE propagator-first? Is there a way to put this information on-network that we haven't considered? Is this off-network code truly necessary, or is it a convenience that could be structural?"
+
+For each decision, ask:
+
+-   Which principle does this serve?
+-   Could it be *more* aligned with that principle?
+-   Does it conflict with any other principle? If so, is the conflict named and justified?
+
+The red-flag phrases from the workflow rules apply here with full force: "temporary bridge", "belt-and-suspenders", "partial retirement", "keeping the old path as fallback", "adding a parameter/callback to inject X", "scanning/polling for readiness", "defaults to #f for safety", "pragmatic approach", "opt-in for now", "validated but not deployed".
+
+
+<a id="orgf8a1151"></a>
+
+## R: Reality-Check (Code Audit)
+
+Do a *concrete code audit* of the codebase surfaces the design touches. Gather precise counts and signatures:
+
+-   How many files does this design touch?
+-   What are the specific functions/structs being modified?
+-   How many call sites exist for each?
+-   What are the exact line numbers and current signatures?
+-   What parameter/global state does the current code depend on?
+-   What tests cover this code path?
+
+The reality-check grounds the design in what EXISTS. Designs that float above the codebase produce implementation surprises. Designs that name specific files, functions, and line counts produce implementations that match.
+
+**Process**: For each phase in the design, the reality-check produces a mini-audit (see DESIGN<sub>METHODOLOGY.org</sub> § Implementation Protocol, Step 1). The critique-time reality-check does the same audit at design scope — across all phases, not just one.
+
+**What to look for**:
+
+-   Is the scope accurate? (Does the design claim to touch 3 files when the code audit shows 8?)
+-   Are there hidden consumers? (Code that uses the infrastructure being changed, but isn't mentioned in the design.)
+-   Are the migration paths realistic? (Can you see the actual `parameterize` calls that need to change?)
+
+
+<a id="orgcd5ce94"></a>
+
+## M: Propagator-Mindspace
+
+Challenge each design point for imperative "step-think" process smells. The propagator model is *information flow on a network*, not *algorithmic steps in sequence*. The question for every component:
+
+> Is this information flowing through cells to a fixpoint, or is this a sequential algorithm described with propagator vocabulary?
+
+**Specific challenges**:
+
+1.  **Information vs. instruction**: Does the design describe what information flows where (declarative), or what steps happen in what order (imperative)? Propagator designs should read as "when cell X has value V, propagator P writes value W to cell Y." If they read as "first do A, then do B, then check C," the mindspace is wrong.
+
+2.  **All-at-once vs. sequential**: Could the described operations happen simultaneously? If independent goals, independent branches, or independent checks are described as sequential, ask why they can't be parallel. "For each clause, try unification" is step-think. "Install unification propagators for all clauses; they fire when inputs are available" is propagator-think.
+
+3.  **Emergent vs. imposed ordering**: Does the execution order emerge from dataflow dependencies, or is it imposed by the design? If "goal A must fire before goal B," ask: is that because A writes to a cell B reads (dataflow — correct) or because the design says so (imposed — suspect)?
+
+4.  **Scanning and walking**: The words "scan", "walk", "iterate", "traverse", "loop", "for each" are process smells. Each one deserves scrutiny: is there a propagator-native way to express this? Sometimes scanning is genuinely necessary (e.g., reading all nogoods to check consistency). But often it reveals an imperative algorithm disguised as on-network computation.
+
+5.  **Network Reality Check**: For any component claimed to be on-network, verify three concrete questions:
+    
+    -   Which `net-add-propagator` calls are added?
+    -   Which `net-cell-write` calls produce the result?
+    -   Can you trace: cell creation → propagator installation → cell write → cell read = result?
+    
+    If all three answers are "none/no," the component is imperative regardless of what data structures it uses.
+
+
+<a id="org8d9ff69"></a>
+
+# Orientation for External Critics
+
+When handing a Prologos design to an external critic, include this briefing:
+
+> **Prologos designs are evaluated from a propagator-mindspace.**
+> 
+> The system's computational model is monotone information flow on a propagator network — not sequential algorithmic steps. When reviewing:
+> 
+> -   Do NOT suggest solutions that involve "first do X, then do Y." Instead, suggest what information flows where, through which cells.
+> -   Do NOT suggest scanning/iterating data structures. Instead, suggest which propagators watch which cells and fire when information arrives.
+> -   Sequential ordering should EMERGE from dataflow dependencies, not be imposed by design.
+> -   Every component should be traceable as: cell creation → propagator installation → cell writes → cell reads = result.
+> -   If a component can't be traced this way, it should be explicitly labeled as scaffolding with a retirement plan.
+> -   The ten design principles (especially Propagator-First, Data Orientation, and Correct-by-Construction) are the evaluation criteria, not algorithmic efficiency or implementation convenience.
+
+This orientation prevents a common failure mode: external critics who are experts in their domain (type theory, logic programming, constraint solving) but think in sequential algorithms. Their domain knowledge is invaluable; their instinct to express solutions as algorithms must be redirected toward information-flow descriptions.
+
+
+<a id="orgeb87c61"></a>
+
+# Receiving External Critique: Grounded Pushback
+
+External critique is valuable precisely because it comes from outside our context. But that same distance means the critic may not understand: our codebase realities, our principled commitments, or the specific architectural decisions that led to the current design.
+
+**We must ARGUE BACK — grounded in our codebase AND our principles.**
+
+This is not defensiveness. This is intellectual rigor applied in both directions: we challenge our own designs (self-critique), and we challenge the critique's claims (response). A critique that goes unexamined is as dangerous as a design that goes unchallenged.
+
+
+<a id="org942bea8"></a>
+
+## How to Evaluate External Critique
+
+For each finding from an external critic:
+
+1.  **Is it grounded in our codebase?** Does the critique reference actual code, actual files, actual function signatures? Or is it arguing from abstract principles without checking whether they apply to our specific infrastructure? If the latter, do the reality-check (R lens) ourselves: is the critique's premise true in our code?
+
+2.  **Does it align with our principles?** A critique may be technically sound but architecturally wrong for Prologos. "You should use a hash table for O(1) lookup instead of a propagator cell" is algorithmically correct and principally wrong. Evaluate every suggestion against the ten principles — especially Propagator-First, the Hyperlattice Conjecture, and Correct-by-Construction.
+
+3.  **Is it step-think?** Apply the M lens to the critique itself. If the critic suggests sequential algorithms, scanning, iterating, or imposed ordering, challenge it: is there a propagator-native expression? Often the domain expert's insight is correct (the PROBLEM they identify is real) but their SOLUTION is algorithmic where a lattice solution exists.
+
+4.  **Does it reveal something we missed?** The most valuable critiques identify problems we didn't see, not solutions we should adopt. When a critique identifies a real gap, we should find OUR solution — grounded in our architecture — not adopt the critic's solution uncritically.
+
+
+<a id="org2cf189d"></a>
+
+## The Response Format
+
+For each external critique finding, respond with:
+
+-   **Accept**: The finding is correct AND the suggested resolution aligns with our principles. Incorporate as-is.
+-   **Accept problem, reject solution**: The finding identifies a real gap, but the suggested resolution is algorithmic/off-network/principle- violating. State why, propose our own resolution.
+-   **Reject with justification**: The finding is based on a premise that doesn't hold in our codebase, or conflicts with a load-bearing principle. State the specific principle and the specific code that refutes the premise.
+-   **Defer with tracking**: The finding is valid but out of scope for this track. Add to DEFERRED.md with a tracking reference.
+
+Never accept a critique finding without evaluation. Never reject without stating which principle or code reality justifies the rejection.
+
+
+<a id="orga4a6b78"></a>
+
+# Anti-Patterns in Critique
+
+
+<a id="org98d66db"></a>
+
+## Cataloguing Instead of Challenging
+
+A principles section that says "Propagator-First: ✓ we use cells" is cataloguing — listing which principles are superficially present. It catches nothing. The challenge is: "Does this specific decision move us TOWARD or AWAY from the principle? Could it be MORE aligned?"
+
+Cataloguing is the default mode for both self-critique and LLM-based critique. It must be actively resisted.
+
+
+<a id="org6d3ea8f"></a>
+
+### This anti-pattern extends BEYOND critique rounds
+
+The same drift happens at:
+
+-   Vision Alignment Gates (per-phase, post-implementation)
+-   Mantra audits (Stage 0 / mid-implementation)
+-   Principles-First Design Gates (every decision point)
+-   P/R/M/S lens applications
+
+The catalogue→challenge transition is NEVER natural. At every application, the implementer must ACTIVELY force the adversarial framing. "✓ we use cells" / "✓ all reads on-network" / "✓ dispatch converted" are checkbox satisfactions. "could this be MORE on-network?" / "what scaffolding did we preserve that could be retired?" / "did we capture the BENEFIT or only the SHAPE?" are challenges.
+
+**Process discipline**: at every VAG, mantra audit, principles gate, write answers in TWO COLUMNS:
+
+-   Column 1 (catalogue): the check passes / doesn't
+-   Column 2 (challenge): could this be MORE aligned?
+
+Column 1 alone is rationalization. Column 2 is where drift surfaces. If Column 2 has no entries, the gate WAS NOT applied adversarially.
+
+**Red-flag patterns the adversarial framing catches**:
+
+-   "preserved for backward-compat" (was preservation challenged against new architecture's needs?)
+-   "for symmetry" / "for safety" / "for testing" (speculative scaffolding, or genuinely required?)
+-   "with-handlers" / defensive guards (is the guarded condition STRUCTURALLY POSSIBLE under the new architecture?)
+-   "constraint imposed by X" where X is itself off-network (the constraint exists BECAUSE of scaffolding; honest framing names X as scaffolding with retirement plan)
+
+If the gate passes without challenging at least one inherited pattern, it likely DID NOT challenge — it catalogued.
+
+Origin (extended scope, 2026-04-24): PPN 4C addendum S2.c-iii VAG drift. VAG passed ("all dispatch functions converted" ✓, "single sources of truth" ✓) but didn't challenge whether the with-handlers wrapper preserved from PM 8F era was preventing the design's option 4 perf claim (302 ns/call) from landing. User caught the gap by asking "did we do anything about the cache fields?" — the gate as applied didn't surface the drift. Only external challenge did. Codified across DESIGN<sub>METHODOLOGY.org</sub> § Vision Alignment Gate, workflow.md, MEMORY.md.
+
+
+<a id="orgfdf1667"></a>
+
+## Floating Above the Codebase
+
+A critique that discusses design decisions in the abstract, without referencing specific files, functions, or line numbers. This misses hidden consumers, incorrect scope estimates, and migration path infeasibility. The R lens exists to prevent this.
+
+
+<a id="org578513d"></a>
+
+## Step-Think Disguised as Propagator-Think
+
+A design that uses propagator vocabulary ("fire", "propagate", "quiescence") but describes sequential algorithms. The M lens exists to catch this. PPN Track 4 demonstrated the failure mode: three critique rounds validated a "propagator-native" design that was actually function-call wrappers.
+
+The signature: if you can re-describe the component as a `for` loop or a recursive function without changing its semantics, it's not a propagator — it's an algorithm using propagator data structures.
+
+
+<a id="org2e1399d"></a>
+
+## Steering Toward Algorithms
+
+An external critic suggests: "You could optimize this by sorting the nogoods and doing binary search." This is algorithmically sound but mindspace-wrong. The propagator-native solution is: "Each branch has a watcher propagator that fires when a relevant nogood arrives." The binary search is an implementation optimization WITHIN the propagator's fire function — not a replacement for the propagator architecture.
+
+Domain expertise + algorithmic instinct = the most common source of well-intentioned but architecturally harmful critique. The briefing (§ Orientation for External Critics) exists to redirect this.
+
+
+<a id="org2515767"></a>
+
+# SRE Lattice Lens (Mandatory for All Lattice Design Decisions)
+
+Every lattice that appears in a design — whether newly introduced or referenced from existing infrastructure — must be analyzed through the SRE lens. This analysis is not optional; it is the mechanism by which we ensure lattices compose correctly with the rest of the architecture.
+
+
+<a id="orgec2c6e2"></a>
+
+## What the SRE Lattice Lens Asks
+
+For each lattice:
+
+1.  **Classification**: Is this a VALUE lattice (pure join) or a STRUCTURAL lattice (SRE-derived decomposition with constructor tags)? If structural, register it in the SRE form registry.
+
+2.  **Algebraic properties**: What properties does it have? Boolean? Distributive? Heyting? Quantale (tensor)? Complemented? Each property gates what operations and optimizations are available. Declare properties via the Track 2G property infrastructure.
+
+3.  **Bridges to other domains**: How does this lattice connect to every other lattice in the design? Each connection is a Galois bridge (α/γ adjunction). If two lattices interact but no bridge is declared, information is flowing off-network.
+
+4.  **Composition**: Draw the full bridge diagram — all lattices and all connections. Does the diagram have gaps? Does information flow from A to C without passing through a declared bridge? Gaps are architectural impurities.
+
+5.  **Primary vs derived**: Is this lattice a primary source of information, or is it derived (computed from other lattice cells)? Derived lattices should be labeled as such. Their cells are read-only aggregates, not independent sources of truth.
+
+6.  **Hasse diagram and compute topology**: What is the Hasse diagram of this lattice? Does our information flow topology (which propagators communicate with which cells) follow the Hasse diagram's adjacency structure? If not, we are paying communication overhead that the lattice structure says is unnecessary.
+    
+    The Hasse diagram of ANY lattice is the optimal communication graph for parallel computation on that lattice. For Boolean lattices (powerset), the Hasse diagram IS the hypercube Q<sub>n</sub> — and optimal communication follows hypercube algorithms (log<sub>2</sub> diameter, recursive decomposition, Gray code traversal).
+    
+    For each lattice, ask:
+    
+    -   What is the adjacency structure? (Which elements are "one step apart"?)
+    -   Does our propagator topology follow this adjacency?
+    -   Can we exploit the Hasse structure for optimal traversal order? (Gray code for Boolean lattices, dimension-ordered operations)
+    -   Can we exploit it for O(1) structural operations? (Bitmask for subcube membership, Hamming distance for sharing estimation)
+    
+    Origin: BSP-LE Track 2 hypercube research (2026-04-08). The ATMS worldview space IS hypercube Q<sub>n</sub>. Hypercube algorithms on this structure give optimal parallel synchronization, nogood broadcast, and worldview traversal. The insight generalizes: every lattice's Hasse diagram reveals its optimal parallel compute structure.
+
+
+<a id="org2f50be1"></a>
+
+## Origin
+
+BSP-LE Track 2 D.1 self-critique discovered that the worldview lattice was treated as primary, but the SRE analysis revealed that DECISION cells are primary and the worldview is derived (the union of all decision singletons). This reframing changed the architecture: nogoods narrow decisions (not worldviews), branches are created per-decision (not per-worldview), and the ATMS struct's `believed` field is unnecessary.
+
+This finding would have been invisible without the SRE lattice lens. The worldview lattice's algebraic properties were correct; its RELATIONSHIP to other lattices was wrong. The lens catches compositional errors that per-lattice analysis misses.
+
+
+<a id="orgdd38224"></a>
+
+## When to Apply
+
+-   **Every Stage 3 design** that introduces or references a lattice
+-   **Every critique round** (P/R/M) — as a sub-lens of M (Propagator-Mindspace)
+-   **Every NTT model** — the lattice declarations should include `:kind :value` or `:kind :structural`, `:derived-from` if applicable
+-   **Any implementation phase** that creates new cells with merge functions
+
+
+<a id="orgccd3b51"></a>
+
+# Integration with Design Methodology
+
+
+<a id="org8d454bd"></a>
+
+## When to Apply
+
+The three lenses apply at every critique round:
+
+-   **D.2 (self-critique)**: Apply P/R/M before circulating for external review. Tag findings. Write findings to a SEPARATE FILE (not inline in the design doc): `YYYY-MM-DD_TRACK_SELF_CRITIQUE.md`. Link from the design doc. This creates a persistent paper trail, keeps detail reviewable as-is, and doesn't bloat the design document.
+-   **D.3+ (external critique)**: Include the external briefing (§4). Write the critique and our response to a SEPARATE FILE: `YYYY-MM-DD_TRACK_EXTERNAL_CRITIQUE.md`. Apply "Receiving External Critique: Grounded Pushback" (§5) to every finding.
+-   **Implementation pivots**: When a mid-implementation finding changes the design, apply P/R/M to the changed component before proceeding.
+
+
+<a id="org9e4675c"></a>
+
+## Finding Format
+
+Each finding is tagged with its lens and a sequential number:
+
+```
+P1: The nogood accumulation design uses set-union merge, but does not
+    challenge whether the merge could be a lattice operation with
+    richer algebraic properties (e.g., BDD-compressed representation).
+    → Resolution: set-union is correct; BDD is a future optimization.
+
+R3: The design claims 5 speculation users to migrate, but the code
+    audit finds 7 (including 2 in test-support.rkt that parameterize
+    current-speculation-stack).
+    → Resolution: add test-support.rkt to migration scope.
+
+M2: Phase 7 describes goal conjunction as "install goal propagators
+    in sequence, chaining output→input." This is step-think — goals
+    should be installed simultaneously with ordering emerging from
+    dataflow. Revised.
+```
+
+The M2 example above is a real finding from BSP-LE Track 2 D.1 critique — the original Phase 7 description was step-think that was caught and corrected during review.
+
+
+<a id="org0ce9d6a"></a>
+
+# Cross-References
+
+-   [DESIGN<sub>METHODOLOGY.org</sub>](DESIGN_METHODOLOGY.md) § Stage 3: where critique rounds live in the process
+-   [DESIGN<sub>PRINCIPLES.org</sub>](DESIGN_PRINCIPLES.md): the 10 load-bearing principles for the P lens
+-   MEMORY.md § "Principles-First Design Gate": the operational rule for principles application
+-   `.claude/rules/workflow.md` § "Network Reality Check": the 3 binary questions for the M lens

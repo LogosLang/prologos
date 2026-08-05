@@ -54,11 +54,48 @@
          digit-headed-colon-symbol?
          fused-type-annot?
          fused-annot->type-symbol
-         split-glued-name-datum)
+         split-glued-name-datum
+         ;; CIU T6 D4.P4c-2 condition (c): MOVED HERE from macros.rkt for the
+         ;; same reason as the fused primitives above. The reader post-pass
+         ;; binder unwrap must recognize `defn-` as a `defn`, and it runs at
+         ;; READER time — strictly before preparse, where macros.rkt did the
+         ;; normalization. parse-reader.rkt cannot require macros.rkt, so a
+         ;; second copy was the only alternative, and a second copy of a
+         ;; recognizer is precisely the drift this module exists to forbid.
+         private-form-base)
 
 ;; The complete set. One entry today; the point is that it is ONE entry in ONE
 ;; place rather than an unfindable literal.
 (define reader-form-heads '(racket))
+
+;; ============================================================
+;; Private-suffix forms — the ONE normalization
+;; ============================================================
+;; `defn-` / `def-` / … are the private (non-auto-exported) spellings of the
+;; ordinary binding heads. Returns the BASE head symbol, or #f if `head` is not
+;; a suffixed form.
+;;
+;; ⚠ TWO CONSUMERS AT DIFFERENT LAYERS, which is why this is here and not in
+;; macros.rkt where it was born: macros.rkt normalizes at PREPARSE (auto-export
+;; + head dispatch), and parse-reader.rkt's binder unwrap needs the same answer
+;; at READER time — strictly earlier. When the unwrap could not see through the
+;; suffix, `defn- f [x:Int] x` LEAKED its fused annotation into the param group
+;; and became a 2-arity function; measured as a live regression against a
+;; pinned pre-mint baseline (CIU T6 D4.P4c-2).
+(define (private-form-base head)
+  (case head
+    [(defn-)     'defn]
+    [(def-)      'def]
+    [(data-)     'data]
+    [(deftype-)  'deftype]
+    [(defmacro-) 'defmacro]
+    [(spec-)     'spec]
+    [(trait-)    'trait]
+    [(impl-)     'impl]
+    [(bundle-)   'bundle]
+    [(property-) 'property]
+    [(functor-)  'functor]
+    [else #f]))
 
 ;; Is `x` a reader-form head? Accepts the raw symbol; callers holding syntax
 ;; should unwrap first (grouping works on token lexemes, preparse on datums).

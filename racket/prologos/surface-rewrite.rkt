@@ -561,13 +561,12 @@
              ;; The logic mirrors parse-reader's `adjacent-to-base?` /
              ;; `prev-token-reader-form-head?`, including the `(pair? result)`
              ;; conjunct that keeps `'[{…}` / `@[{…}` out of the select reading.
+             ;; D4.P4c-1: was a hand-inlined copy of parse-reader's four
+             ;; conjuncts — a live F1b.7g drift instance, and P4c-2's `:` gate
+             ;; would have made it a THIRD. Now consumes THE definition.
              (define adjacent?
                (and (eq? type 'lbrace)
-                    (pair? result)
-                    (> i 0)
-                    (let ([prev (vector-ref vec (- i 1))])
-                      (and (token-entry? prev)
-                           (= (token-entry-end-pos prev) (token-entry-start-pos item))))))
+                    (adjacent-to-base? vec i result item)))
              (define head-form?
                (and adjacent?
                     (let ([prev (vector-ref vec (- i 1))])
@@ -598,6 +597,15 @@
             ;; Comma → skip (cosmetic separator)
             [(eq? type 'comma)
              (loop (+ i 1) result)]
+            ;; D4.P4c-2: the `:` gate — the Q_N7 TWIN of parse-reader's arm,
+            ;; consuming THE SAME trigger predicate rather than a second copy.
+            ;; The tree layer carries the token through unchanged (it mints TAGS
+            ;; only for delimited regions, and `$bcast-step` is a non-opener —
+            ;; §Q8.5 sentinel site 2 is N/A here, proved in-tree by
+            ;; `tag-dot-access` having zero producers). What this arm must do is
+            ;; AGREE about adjacency so the two groupers do not diverge.
+            [(bcast-step-trigger? vec i result item type)
+             (loop (+ i 1) (cons item result))]
             ;; Regular token → add to result
             [else
              (loop (+ i 1) (cons item result))])]

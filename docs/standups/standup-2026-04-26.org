@@ -279,3 +279,94 @@ landings. This addendum IS OE Track 0/1/2's first production landing.
 Decision deferred per handoff §5.4: do we formally update OE Series
 Master tracking after this addendum lands? Or wait until PReduce +
 cost-guided search are also tropically-instrumented?
+* Discussions
+
+** On distributivity and semidistributivity — what each gets us
+
+🤖
+**On distributivity and semidistributivity — what each gets us:**
+
+**Distributivity** is the strongest of the three (distributive ⇒ SD; reverse doesn't hold). The law:
+
+```
+a ∧ (b ∨ c) = (a ∧ b) ∨ (a ∧ c)        (and dually for ∨ over ∧)
+```
+
+What it concretely buys you:
+
+1. **Birkhoff representation (finite case)**: every finite distributive lattice is isomorphic to the lattice of order-ideals of its poset of join-irreducibles. Translation: distributive lattices are essentially "set lattices" — they have a concrete representation as subsets-of-something. For us, this means our type lattice can be reasoned about *as if it were a set algebra*, even when it doesn't look like one syntactically.
+
+2. **DNF/CNF canonical form**: every element has a canonical disjunctive (or conjunctive) normal form. Equality is decidable via structural equality on canonical forms. We have a partial form of this already (`build-union-type`'s ACI normalization). Distributivity validates the canonical form algorithm's correctness.
+
+3. **Heyting algebra** (with pseudo-complement): bounded distributive + relative pseudo-complement = Heyting. Pseudo-complement `a → b = max{x | x ∧ a ≤ b}` gives you precise incompatibility — useful for error reporting ("you wrote T₂ where T₁ was expected; the precise mismatch is T₂ - T₁"). Track 2H scaffolded this for the subtype lattice; if equality is also distributive, the Heyting structure becomes available for equality-merge contexts (unification-failure diagnostics).
+
+4. **Boolean algebra** (with complement): Heyting + complement = Boolean. Unlocks SAT/CDCL with watched literals, conflict-driven learning. UCS Master flags this as the dispatch target for Boolean domains. Type lattice is unlikely to be Boolean (no negation), but having distributivity is the precondition for asking the question.
+
+5. **Quantale composition**: distributive lattice + tensor = the multiplicative structure UCS targets for resource constraints (QTT multiplicities, session linearity, effect ordering). Distributivity is the unspoken precondition for these compositions to behave well.
+
+6. **Galois bridges compose cleanly**: cross-domain bridges (type ↔ session, type ↔ multiplicity) are well-behaved when both sides are distributive. Mixed distributive/non-distributive bridges have subtle composition pathologies.
+
+**Semidistributivity** is the conditional weakening:
+
+```
+SD∨: a ∨ b = a ∨ c  ⇒  a ∨ b = a ∨ (b ∧ c)
+SD∧: dual
+```
+
+Strictly weaker. **Free lattices satisfy SD but NOT distributivity** (Freese-Nation Theorem 1.21). Reading-Speyer-Thomas 2019 gives constructive canonical form for finite SD lattices.
+
+What SD buys you that distributivity doesn't strictly require:
+
+1. **Coverage of "wider" algebraic structures**: subgroup lattices, congruence lattices, free lattices — all SD but not distributive. SD is the "tightest distributivity-like property that holds in these natural settings."
+2. **Robinson-style unification**: most-general unifier exists in SD lattices via the SD law applied to unification problems. This is part of why structural unification on tree lattices works — they're SD even when not fully distributive.
+3. **Convex geometries** (Adaricheva-Gorbunov-Tumanov 2003): SD lattices are the algebraic counterpart of convex geometries (matroid duals), useful for combinatorial reasoning.
+4. **Free-lattice algorithmic results** (Freese-Nation Ch XI): Whitman's algorithm, breadth-4 theorem, canonical form — all available in SD settings.
+
+**The hierarchy in one line:**
+- Free lattice (most expressive, no equations beyond axioms)
+- ⊃ SD (some structure)
+- ⊃ Modular (a ≤ c ⇒ a ∨ (b ∧ c) = (a ∨ b) ∧ c)
+- ⊃ Distributive (full law, sets-as-lattices)
+- ⊃ Heyting (distributive + pseudo-complement)
+- ⊃ Boolean (Heyting + complement)
+
+Each step **gives you more algorithms** (canonical-form algorithms get cheaper, decision procedures get more efficient) but **constrains what lattices live there** (more equations, fewer models).
+
+**On the distributivity flip — what it means for us:**
+
+The bonus discovery is more substantial than I initially indicated. Tracing the lineage:
+
+- **Track 2G (2026-03-30)**: found "type lattice NOT distributive under equality merge." Correct *at the time*: equality merge produced `type-top` for distinct atoms → flat M3-shaped lattice → not distributive.
+- **Track 2H (2026-04-02)**: redesigned subtype merge to produce unions; meet became Heyting-distributive *by construction* (the union-distribute branch in `type-lattice-meet`). The equality merge was deliberately left flat per Track 2H's stated scope.
+- **PPN 4C T-3 Commit B (2026-04-22)**: changed equality merge ALSO to produce unions for structurally-incompatible concrete types. Per the code comment: "type-top is reserved for REAL contradictions, not the absence of structural unification." This wasn't framed as a distributivity-changing move at the time, but it was — it changed the lattice structure from flat to union-aware.
+- **Phase 3c (would-be)**: retiring the callback surfaces that the equality lattice (post-T-3, with flat meet) IS distributive on the test samples. The callback's always-installed subtype-meet was hiding this fact.
+
+The architectural implication: **two changes accumulated to make the equality lattice distributive, but the always-installed callback meant nobody ever saw that algebraic posture cleanly.** We have a more well-behaved lattice than our declarations recognize.
+
+What this would unlock:
+
+1. **Equality-merge contexts inherit Heyting capabilities** (with pseudo-complement scaffolding from Track 2H). Pseudo-complement-based error reporting becomes available for unification failures, not just subtype-checking failures.
+2. **The implication chain `distributive ⇒ sd-vee ∧ sd-wedge`** (Phase 1's rules) automatically fires for equality merge if we declare it. SD properties become inherited rather than empirically-needed.
+3. **Variety identification clarifies**: equality and subtype both live in the distributive (or Heyting) variety post-T-3, not separate algebraic islands. The canonical-form research note's variety-restricted optimality claims apply uniformly.
+4. **UCS dispatch becomes simpler**: the type domain is uniformly Heyting across both relations, so `#=` can dispatch to Heyting-aware solving regardless of which relation the constraint targets.
+
+But — important calibration: my probe was on 6 hand-picked samples. The Phase 2a generator with realistic base-values produces 30+ samples covering compounds (Pi, Sigma, app, Eq, Vec, etc.). Distributivity needs to hold on the wider sample space too before we declare it confidently. **That validation is exactly what Phase 3 (the empirical sweep) is for.**
+
+This actually clarifies the right framing:
+- Phase 3c: architectural cleanup (retire callback, principled per-relation meet)
+- Phase 3: empirical sweep with the principled meet, REPORT distributivity status across full sample space
+- Discussion: decide whether to update declared properties at the equality registration site
+
+The flip is a *finding* enabled by Phase 3c, *recorded* by Phase 3, *acted on* in Discussion. The discipline stays clean.
+
+**On most principled option — A, with one refinement:**
+
+**Option A**: re-apply Phase 3c + fix the 4 cascading tests in `test-sre-track2h.rkt`. The cascading tests are doing exactly what the principled refactor asks them to do — be explicit about which relation's meet they're testing. Updating those calls from `(type-lattice-meet a b)` (implicit subtype-aware via callback) to `(type-lattice-meet a b #:subtype-fn subtype?)` (explicit) or `((sre-domain-meet td 'subtype) a b)` (registry) honors the principled architecture. The blast radius is real but proportional and architecturally instructive.
+
+The refinement: **don't update equality-registration declarations in Phase 3c**. Leave that as a Phase 3 finding + Discussion decision, per the methodology you laid out earlier. Phase 3c stays scoped to "principled refactor"; Phase 3 reports the distributivity status; Discussion decides.
+
+**Option B (sub-phasing)** adds ceremony for a small enough atomic unit that one commit is fine.
+
+**Option C (pause)** — we've already done the discussion work in this exchange. The architectural finding is clear; the test cascade is mechanical. I don't think we need to pause.
+
+So: re-apply from `stash@{0}`, fix the 4 test-sre-track2h tests via principled-meet-call updates, full suite as regression gate, commit. Want me to proceed?

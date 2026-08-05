@@ -199,3 +199,5 @@ current-worker-pool
 current-worldview-bitmask
 current-worldview-hasse-registry-handle
 current-zonk-call-counts
+
+# --- CIU T6 D4.P4c-4a (2026-08-02) ---

@@ -171,8 +171,10 @@
  ;; Path Selection block node (CIU T6 D4.P3a; step vocabulary D4.P3b)
  (struct-out expr-select) select-map-exprs
  select-key-step? select-sub-step? select-ord-step? select-step-name
+ select-sorts select-sort? select-sort-unhandled
  ;; D4.P4a: the step-kind totality dispatcher + the consumer-side else
  select-step-kind select-step-kind-unhandled select-step-kind/display
+ select-bcast-step? select-bcast-inner make-select-bcast
  select-step-cont select-cont-collapse? select-cont-rename
  select-branch-collapse select-branch-keyless?
  select-step-output-name select-synth-name select-branch-top-keys
@@ -782,7 +784,33 @@
 ;; (typing-core `select-project`); reduction evaluates the subject ONCE
 ;; (reduction.rkt). Walkers: subject is the only expr slot — branches pass
 ;; through untouched (P1b/P2 walker discipline; no binder ⇒ no depth routing).
-(struct expr-select (subject branches) #:transparent)
+;; D4.P4b-ii-2a — `tier` is the TWO-TIER MISS DECISION, materialized from
+;; typing into reduction. It is the carrier's analogue of `expr-map-get`'s
+;; third field (P2.b slice 4): a fresh strictness meta that typing solves to
+;; `(expr-true)` when it PROVED an assertive subject, and which reduction
+;; reads to choose between a LOUD panic naming the key and the PERMISSIVE
+;; `(expr-error)` degradation. `#f` = no claim (the block sort, and every
+;; internal reconstruction).
+;;
+;; WHY IT IS ON `expr-select` AND NOT ON THE SELECTOR: the tier is a property
+;; of the APPLICATION (subject × selector), not of the selector — a bare
+;; `#p(…)` has no subject and so has no tier. It also keeps the selector's
+;; declared "STATIC data — no exprs inside" invariant intact, and rides
+;; `select-map-exprs`, the ONE reconstruction point for six walkers, instead
+;; of six independent identity arms that would never zonk a meta.
+;;
+;; WHY A SCALAR SUFFICES [Q_U13, owner]: the tier is decided PER DESCENT
+;; LEVEL, and under the NEST encoding each level is its own `expr-select`
+;; node — exactly as each `.field` is its own `expr-map-get` today. Under the
+;; rejected GATHER encoding one node would span a whole chain and this would
+;; have to be a list parallel to the steps.
+;;
+;; INERT AT 2a: every construction passes `#f` and nothing reads it. b-ii-2b
+;; mints the meta at the fold and teaches `select-reduce` to read it. The
+;; field lands in its own slice deliberately — an arity change on a shipped
+;; struct is the §8 R6 hazard, and it is cheaper when it does not share a diff
+;; with a behavioural flip.
+(struct expr-select (subject branches tier) #:transparent)
 
 ;; Map proc over the single EXPR slot (the record-map-field-types pattern:
 ;; ONE reconstruction point for shift/subst/zonk/nf).
@@ -794,8 +822,19 @@
 ;; when BOUND selectors land (F-row), and mapping it now is what makes that
 ;; landing safe rather than a silent under-walk.
 (define (select-map-exprs proc v)
-  (expr-select (proc (expr-select-subject v))
-               (proc (expr-select-branches v))))
+  ;; D4.P4b-ii-2a: the tier is MAPPED, not merely preserved. It becomes a
+  ;; strictness META at b-ii-2b, and this is the ONE reconstruction point for
+  ;; all six walkers (shift, subst, zonk ×3, nf) — so a tier that is carried
+  ;; but not mapped would never ZONK, `expr-true?` would never hold, and every
+  ;; Map miss would silently go PERMISSIVE. That is a reverse regression with
+  ;; no signal, and it is exactly the hidden cost the b-ii-2 mini-audit
+  ;; identified in the rejected put-it-on-the-selector option, whose six
+  ;; identity arms had the same defect.
+  ;; `#f` (no claim) is not an expr, so it passes through untouched.
+  (let ([tier (expr-select-tier v)])
+    (expr-select (proc (expr-select-subject v))
+                 (proc (expr-select-branches v))
+                 (if (expr? tier) (proc tier) tier))))
 
 ;; ============================================================
 ;; D4.P3b — the `^` step vocabulary + the ONE shared branch walk
@@ -829,6 +868,63 @@
 ;; (output key :name), while `{0.name}` is a keyless component.
 (define (select-ord-step? s) (and (pair? s) (eq? (car s) '@ord)))
 
+;; D4.P4c-3 (Q_U7): `(@bcast step)` — THE ω/BROADCAST STEP, a ONE-STEP WRAPPER.
+;;   users:name    → [(@bcast name)]
+;;   users:{a b}   → [(@bcast (@sub …))]
+;;   x:s:t         → [(@bcast s) (@bcast t)]
+;;
+;; ⚠ EXTENT IS STRUCTURAL, not a count. The wrapper holds exactly ONE step, so
+;; "broadcasts the next step" IS the representation 1:1 and a broadcast-of-
+;; nothing is UNCONSTRUCTIBLE. L1 fusion (`users:0:userName` → ONE layer) is a
+;; THEOREM the battery pins, not a property this representation maintains —
+;; each ω step consumes one container layer and re-wraps one, so fmap∘fmap =
+;; fmap arithmetically and nothing here computes a layer count. The rejected
+;; alternatives are recorded in D4 §3 Q_U7: the flat nullary marker (extent by
+;; ADJACENCY ⇒ representable malformed states + a backward scan), the
+;; run-carrying wrapper (the surface never writes runs, so the parser would have
+;; to MERGE adjacent wrappers — the normalization pass 4b exists to forbid), and
+;; the per-step grade field (taxes the whole landed vocabulary for one grade).
+;;
+;; ⚠ CORRECTED AT D4.P4c-4b — "A WRAPPER NEVER HEADS A BRANCH" IS FALSE, and it
+;; was asserted at FOUR sites, three of which justified an arm by it.
+;; The claim conflated two different things. W2 / spec §7.3 refuses branch-initial
+;; `:` in a BLOCK (`x{:name}`) — a SURFACE rule. It says nothing about a one-step
+;; `'path` branch, and Q_U7's own `users:name → [(@bcast name)]` makes the wrapper
+;; the branch HEAD for the headline spelling: `$select-path` consumes the SUBJECT
+;; itself and hands `segment-select-items` only the steps, so the ω step arrives
+;; first with no preceding step. Measured — the first cut of the parser arm
+;; refused exactly that and reported "needs a preceding subject" for `users:name`.
+;; So `'bcast` IS reachable at head, the arms that were "written rather than
+;; omitted" are live, and the reasoning that wrote them (a surface rule is not a
+;; representation invariant) was right for a reason its own premise got wrong.
+(define (select-bcast-step? s) (and (pair? s) (eq? (car s) '@bcast)))
+
+;; The ω step's VALUE-level semantics (map the wrapped step over the container)
+;; land at P4c-4 together with the PVec dispatcher and the L1/extent law pins.
+;; P4c-3 lands the KIND and its arms; the value walks therefore carry a guided
+;; not-yet rather than a wrong answer.
+;;
+;; ⚠ WHY NOT DELEGATE TO THE INNER STEP HERE. Delegation is exactly right for
+;; the NAME/KEY walks — ω changes container arity, not key behaviour — but at
+;; the value level it would project the field off the CONTAINER instead of
+;; broadcasting over it: a silent wrong answer, which is the one outcome this
+;; track's totality dispatcher exists to prevent. Loud beats plausible.
+;; ⚠ RETIRED AT D4.P4c-4c — the ω value semantics LANDED, so this helper
+;; named its own discharge point and then reached ZERO callers. It raised a raw
+;; `error`, which `process-command/solve-guard` does not catch, so leaving it in
+;; the tree would have left a WHOLE-FILE-ABORT primitive lying next to the
+;; walks that used to call it — the exact shape this track has shipped four
+;; times. Retired rather than kept "in case P5 needs it": ban-dual-paths.
+;; What replaced it: typing refuses through the failure slot the walks already
+;; thread (`bcast-carrier` in typing-errors.rkt), and reduction reports through
+;; `(return (expr-panic …))` via the single `let/ec`. Two channels, neither a raise.
+
+;; The wrapped step. Total on `select-bcast-step?` values by construction: the
+;; smart constructor is the only producer and it always supplies one.
+(define (select-bcast-inner s) (cadr s))
+
+(define (make-select-bcast step) (list '@bcast step))
+
 ;; D4.P4a — THE STEP-KIND TOTALITY DISPATCHER (owner ruling 2026-07-31:
 ;; route ALL EIGHT dispatch sites through this one classifier).
 ;;
@@ -847,7 +943,10 @@
 ;; pipeline.md does not apply and a named classifier is the available
 ;; structural form.
 ;;
-;; ADDING A KIND — the COMPLETE site list (13 sites, FIVE files). ⚠ The first
+;; ADDING A KIND — the COMPLETE site list (13 sites, FIVE files).
+;; ⚠ P4c-3 ADDED THE SIXTH KIND, `(@bcast step)`, THROUGH THIS RECIPE. It met
+;; all thirteen; the recipe held with no correction needed, which is the first
+;; time an enumeration in this track has survived a new member intact. ⚠ The first
 ;; cut of this recipe said "every `case (select-step-kind …)` in syntax.rkt,
 ;; typing-core.rkt and reduction.rkt", which was written from the eight sites
 ;; a name-grep found. That census was SYNTAX-directed and structurally could
@@ -880,12 +979,13 @@
     [(select-key-step? s) 'caret]       ;; (@key name cont)
     [(select-sub-step? s) 'sub]         ;; (@sub . branches) — terminal sub-block
     [(select-ord-step? s) 'ord-branch]  ;; (@ord N) — ordinal BRANCH head
+    [(select-bcast-step? s) 'bcast]     ;; (@bcast step) — the ω/broadcast step
     [else
      (error 'select-step-kind
             (string-append
              "unknown select step kind: ~s\n"
              "  the step vocabulary is a CLOSED union: symbol | number"
-             " | (@key name cont) | (@sub . branches) | (@ord N)\n"
+             " | (@key name cont) | (@sub . branches) | (@ord N) | (@bcast step)\n"
              "  a new kind must be added to select-step-kind AND given an arm"
              " in every `case` over it (D4.P4a)")
             s)]))
@@ -912,8 +1012,88 @@
           " for it — add one (D4.P4a totality)")
          (select-step-kind s) s))
 
-(define (select-step-name s) (if (select-key-step? s) (cadr s) s))
-(define (select-step-cont s) (and (select-key-step? s) (caddr s)))
+;; D4.P4b-ii-1 — the SORT axis gets the same totality treatment as the step
+;; axis, for the same reason and BEFORE it grows. `sort` is 'path | 'block
+;; today, but Q_U12 already NAMES the next members: `#.field` (nil-safe) and
+;; `[k]` (ordinal/dynamic) are "genuinely DIFFERENT SORTS" whose migration is
+;; a deferred follow-up. An `(if (eq? sort 'path) … …)` would hand each of
+;; them BLOCK semantics silently — the exact catch-all class P4a spent a
+;; phase eliminating, re-introduced on a fresh axis one slice later.
+;; Every sort dispatch ends here instead.
+(define select-sorts '(path block))
+(define (select-sort? s) (and (memq s select-sorts) #t))
+(define (select-sort-unhandled who sort)
+  (error who
+         (string-append
+          "no arm for selector sort '~a\n"
+          "  known sorts: ~a — add an arm (D4.P4b-ii-1 sort totality)")
+         sort select-sorts))
+
+;; ⚠ D4.P4c-3a — THE TWO ACCESSORS ARE ω-TRANSPARENT. Both were ω-BLIND, both
+;; sit OUTSIDE the `ADDING A KIND` recipe, and both were missed for the same
+;; structural reason: the recipe enumerates `case (select-step-kind …)`
+;; dispatchers, and these are an `if`/`and` over ONE predicate. D4's P4c-3
+;; partition names them as "the two shape-test helpers OUTSIDE the recipe".
+;;
+;; ⚠ NO LINE NUMBERS BELOW, DELIBERATELY. The first cut of this block cited its
+;; own file's coordinates and the block's own length invalidated every one of
+;; them — the exact class `19ab78a9` had fixed one commit earlier. Anchor on
+;; NAMES; `grep` is the index.
+;;
+;; ω is KEY-TRANSPARENT: it changes container ARITY, not key behaviour, so
+;; `users:k` names and re-keys exactly as `users.k` does. Delegation is
+;; RECURSIVE, matching `select-step-output-name`'s `[(bcast)]` arm — the surface
+;; cannot write a nested wrapper (extent is one-step, Q_U7) but the
+;; representation permits one and P5's factoring rewrites branches, and a
+;; surface rule is not a representation invariant.
+;;
+;; ── WHAT WAS BROKEN, MEASURED ──
+;; `select-step-name`: an ASYMMETRY, which is why the P4c-3 pins missed it. The
+;; branch CLASSIFIER `select-branch-collapse` already saw through the wrapper, so
+;; a `users:k^-` branch sorted correctly as collapsing — and then its LABEL came
+;; from the RAW leaf, so `select-branch-top-keys` yielded `((@bcast (@key k
+;; collapse)))`, a LIST, against a contract of "a key SYMBOL … or #f". Three
+;; sites share `[else (select-step-name (car (reverse b)))]`: this file's
+;; `select-branch-top-keys`, `reduction.rkt`'s `branch-entries`, and
+;; `typing-core.rkt`'s `select-branch-entries`. The latter two are MASKED — but
+;; for DIFFERENT reasons, and only one of them is evaluation order: reduction
+;; computes the label first and discards it when `walk-to-leaf` raises, while
+;; typing-core computes it INSIDE the continuation, which the raise precedes.
+;; Both go live when P4c-4 removes the raise. THIS file's is live NOW —
+;; `select-branch-top-keys` is a pure STATIC key computation feeding the parser's
+;; OUTPUT-key duplicate check and its L4 sort-homogeneity check, with nothing to
+;; raise first; a non-symbol can never match under the duplicate check's `eq?`,
+;; so duplicates go UNDETECTED. Silent, the one outcome P4a exists to prevent.
+;;
+;; `select-step-cont`: `parser.rkt`'s `^`-in-path-access refusal asked it "does
+;; this branch carry a `^`?" without unwrapping, so it silently answered no for a
+;; step that had one. Measured on that site's own predicate:
+;; `(@key k dissolve)` ⇒ `dissolve` (refusal fires);
+;; `(@bcast (@key k dissolve))` ⇒ `#f` (refusal does NOT). D4 §4310 had already
+;; booked this hazard for the `:name^alias` spelling.
+;;
+;; ── WHY TRANSPARENCY RATHER THAN UNWRAP-AT-THE-SITE ──
+;; The first cut kept `select-step-cont` blind and hand-copied the unwrap into
+;; the parser, on the theory that its callers "ask several questions (kind AND
+;; cont)" so the unwrap belongs with the classification. **That theory is false
+;; at the one site that needed it**: the refusal asks ONE question, and with a
+;; transparent accessor its whole lambda collapses back to a bare
+;; `(ormap select-step-cont …)`. Measured: transparency is a NO-OP at the other
+;; eight call sites — each has already unwrapped and is looking at a `caret`
+;; step, or is behind a `memq` guard that excludes `bcast` — so it fixes the
+;; ninth and changes nothing else. A standing obligation on nine call sites that
+;; has already been sprung once is not a property to pin; it is a trap to remove.
+(define (select-step-name s)
+  (cond
+    [(select-bcast-step? s) (select-step-name (select-bcast-inner s))]
+    [(select-key-step? s) (cadr s)]
+    [else s]))
+
+(define (select-step-cont s)
+  (cond
+    [(select-bcast-step? s) (select-step-cont (select-bcast-inner s))]
+    [(select-key-step? s) (caddr s)]
+    [else #f]))
 
 (define (select-cont-collapse? c)
   (or (eq? c 'collapse) (eq? c 'collapse-synth)
@@ -926,7 +1106,14 @@
 ;; the branch's LEAF collapse continuation, or #f (the `^-` family flattens
 ;; the WHOLE branch, so its walk is a pre-classified special case)
 (define (select-branch-collapse b)
-  (let ([s (car (reverse b))])
+  (let* ([s0 (car (reverse b))]
+         ;; D4.P4c-3 (Q_U7): a LEAF classifier sees through the ω wrapper —
+         ;; `users:k^-` collapses exactly as `users.k^-` does. ⚠ This is one of
+         ;; the FOUR [leaf] sites the recipe flags as mattering most: they run
+         ;; BEFORE the branch walks and answer a silent #f on a kind they do
+         ;; not know, so a missed arm MIS-SORTS the branch (keyed vs keyless)
+         ;; with no raise anywhere downstream.
+         [s (if (eq? (select-step-kind s0) 'bcast) (select-bcast-inner s0) s0)])
     ;; D4.P4a: CLASSIFY the leaf rather than testing `select-key-step?`
     ;; directly. This runs UPSTREAM of every guarded walk (syntax :932,
     ;; typing-core :787, reduction :1689), so an unknown leaf kind answering
@@ -957,6 +1144,11 @@
          [(eq? c 'dissolve) #f]
          [(select-cont-rename c) => values]
          [else (cadr s)]))]
+    ;; D4.P4c-3 (Q_U7): ω is KEY-TRANSPARENT — it changes container ARITY, not
+    ;; key behaviour, so the output name is the WRAPPED step's. `users:name`
+    ;; keys `:name` exactly as `users.name` does. NOT `#f` like `ord-step`:
+    ;; transparent here means DELEGATE, not "contributes nothing".
+    [(bcast) (select-step-output-name (select-bcast-inner s))]
     [else (select-step-kind-unhandled 'select-step-output-name s)]))
 
 ;; D4.P3c: the `^`-terminated (keyless) branch pre-classifier — a branch
@@ -964,7 +1156,11 @@
 ;; keyless component (Q_T4b: no keys ⇒ no ancestry question; the whole
 ;; branch flattens like the collapse family, minus the label).
 (define (select-branch-keyless? b)
-  (let ([s (car (reverse b))])
+  (let* ([s0 (car (reverse b))]
+         ;; D4.P4c-3 (Q_U7): see through the ω wrapper — same [leaf] argument as
+         ;; select-branch-collapse; a silent #f here mis-sorts the branch as
+         ;; KEYED, which then feeds the parser's L4 sort and duplicate checks.
+         [s (if (eq? (select-step-kind s0) 'bcast) (select-bcast-inner s0) s0)])
     ;; D4.P4a: classify the leaf — same upstream-of-the-guards argument as
     ;; select-branch-collapse. A silent #f here mis-sorts the branch as KEYED,
     ;; which then feeds the parser's L4 sort check and duplicate-key check.
@@ -1010,6 +1206,15 @@
            [(ord-step)
             (if (null? rest) (list #f) (select-branch-top-keys rest))]
            [(sub) (append-map select-branch-top-keys (cdr s))]
+           ;; D4.P4c-3 (Q_U7): ω is key-transparent — the component set is the
+           ;; WRAPPED step's, with the same rest. ⚠ POLARITY CORRECTED at
+           ;; P4c-4b: this arm is NOT "unreachable-at-head today" — it is REACHED
+           ;; by the headline spelling `users:name`, because `$select-path`
+           ;; consumes the subject and the ω step arrives first. See
+           ;; `select-bcast-step?`'s header. The arm was written on the reasoning
+           ;; that a surface rule is not a representation invariant; that
+           ;; reasoning was right and its premise was wrong.
+           [(bcast) (select-branch-top-keys (cons (select-bcast-inner s) rest))]
            [(caret)
             (let ([c (select-step-cont s)])
               (cond
@@ -1114,8 +1319,40 @@
 ;; permissive (fabricated <error>/none rows at 0 errors) and its surface
 ;; `.*name` is superseded by `:field` broadcast (Path Selection P4).
 
-;; First-class path values
-(struct expr-path (branches) #:transparent)                   ; path literal: branches = list of (listof expr-keyword|expr-symbol)
+;; ============================================================
+;; THE ONE SELECTOR CARRIER  (Q_U5; encoding `389f6802`, nesting `2e3fc14e`)
+;; ============================================================
+;; `expr-path` IS the reified selector — `#p(…)` is a bare carrier, `x{…}` is
+;; a carrier applied to a subject (it sits in `expr-select`'s branches slot),
+;; and after D4.P4b-ii-2 path position mints the same carrier. The NAME is
+;; legacy (the rename is ~30 arms of pure churn — a named cosmetic follow-up,
+;; NOT an alias: there is exactly one struct).
+;;
+;; branches : (listof branch), branch = (listof step), step per the vocabulary
+;;   at §"the `^` step vocabulary" above — BARE SYMBOLS and the tagged sexps,
+;;   NOT `expr-keyword`/`expr-symbol` structs (the b-i encoding convergence
+;;   `389f6802` unified them; this comment said otherwise until D4.P4b-ii-1).
+;;
+;; sort : 'path | 'block  — WHICH SPELLING minted this selector.
+;;   'block  — `x{…}`: PROJECTS (spec §1.2); refuses a (Map K V) subject,
+;;             refuses an 'unknown-presence field (Horn D, Q_T2).
+;;   'path   — `#p(…)`, and after b-ii-2 `x.a`: DESCENDS; keeps `map-get`
+;;             semantics on a (Map K V) subject (the MAP POSTURE, Q_U10) and
+;;             is D19-permissive on a dyn row.
+;;
+;; WHY A FIELD and not a step kind or a second struct [owner, D4.P4b-ii-1]:
+;; the sort is a property of the WHOLE carrier, not of any one step, and it
+;; cannot be DERIVED once b-ii-2 lands — today a bare carrier is `#p(…)` and
+;; a nested one is a block, but after the fold migrates `x.a` and `x{a}` are
+;; the same node shape. A second struct would reopen "ends single-carrier"
+;; one slice after b-i closed it.
+;;
+;; ⚠ ARITY: this struct is registered with `regN!` (pnet-serialize.rkt), NOT
+;; `auto-cache!` — auto-cache!'s body swallows exceptions, so a stale-arity
+;; call there voids the registration SILENTLY and the node comes back from a
+;; `.pnet` as a raw-vector impostor (pipeline.md § New AST Node item 6). The
+;; same move `expr-map-get` made at P2.b slice 4, for the same reason.
+(struct expr-path (branches sort) #:transparent)              ; THE selector carrier
 (struct expr-Path () #:transparent)                           ; Path type (ground, unparameterized)
 
 ;; ========================================

@@ -193,15 +193,6 @@
 (define do-pnet-cache? (make-parameter #t))
 (define show-failures? (make-parameter #f))
 (define bail-timeout-threshold (make-parameter 3))
-;; Per-FILE timeout handed to batch-worker.rkt. The worker has always supported
-;; `--file-timeout`; this runner simply never passed it through, so the 120s
-;; default was unreachable from CI. That default was set when "slowest normal
-;; tests ~17s" — the OCapN bridge tests legitimately cost far more because each
-;; one elaborates the whole OCapN module chain, and on a GitHub runner the file
-;; exceeds 120s. Splitting the file made it WORSE (the cost is per-FILE, so
-;; splitting paid it twice), which is what established that this knob, not the
-;; file layout, is the right lever.
-(define file-timeout-secs (make-parameter #f))
 (define force-rerun? (make-parameter #f))
 (define force-stale-zo? (make-parameter #f))
 ;; PPN 4C Phase 3c process improvement (2026-04-20): --tests FILE...
@@ -244,8 +235,6 @@
     (do-pnet-cache? #f)]
    ["--failures" "Show failure logs from last run (no tests executed)"
     (show-failures? #t)]
-   ["--file-timeout" secs "Per-FILE timeout in seconds, passed to the batch worker (default: 120)"
-    (file-timeout-secs (string->number secs))]
    ["--bail-timeouts" n "Abort after N per-file timeouts (default: 3, 0=disable)"
     (bail-timeout-threshold (string->number n))]
    ["--no-bail" "Disable early-bail on timeouts"
@@ -502,43 +491,6 @@
              (run-tests test-paths project-root))])])]))
 
 ;; ============================================================
-;; Prelude drift check
-;; ============================================================
-;;
-;; Runs `gen-prelude.rkt --validate` to ensure the PRELUDE manifest
-;; matches namespace.rkt. Prints a warning if they're out of sync.
-
-(define (check-prelude-drift! project-root)
-  (define gen-prelude-path
-    (path->string (build-path project-root "tools" "gen-prelude.rkt")))
-  (define manifest-path
-    (build-path project-root "lib" "prologos" "book" "PRELUDE"))
-  ;; Only check if the PRELUDE manifest exists (graceful skip otherwise)
-  (when (file-exists? manifest-path)
-    (define-values (proc out in err)
-      (subprocess #f #f #f racket-path gen-prelude-path "--validate"))
-    (close-output-port in)
-    (subprocess-wait proc)
-    (define stdout-text (port->string out))
-    (define stderr-text (port->string err))
-    (close-input-port out)
-    (close-input-port err)
-    (cond
-      [(zero? (subprocess-status proc))
-       (void)]  ;; all good, silent
-      [else
-       (printf "\n⚠  PRELUDE DRIFT DETECTED\n")
-       (printf "   PRELUDE manifest and namespace.rkt are out of sync.\n")
-       (printf "   Run: racket tools/gen-prelude.rkt --validate   to see WHICH WAY.\n\n")
-       (printf "   ⚠ Do NOT reach straight for --write. Drift goes both ways: the\n")
-       (printf "     manifest is nominally source-of-truth, but edits land in\n")
-       (printf "     namespace.rkt, so --write can DELETE working prelude bindings.\n")
-       (printf "     (2026-08-04: this warning had been firing while namespace.rkt\n")
-       (printf "     was AHEAD in 6 of 8 hunks — println, first/second/rest and the\n")
-       (printf "     datum imports all worked and were absent from the manifest.\n")
-       (printf "     Following the old advice would have removed them.)\n\n")])))
-
-;; ============================================================
 ;; Batch test execution with shared prelude
 ;; ============================================================
 ;;
@@ -703,9 +655,6 @@
     [else
      (putenv "PROLOGOS_PNET_CACHE" "0")])
 
-  ;; Check PRELUDE manifest against namespace.rkt (catch drift early)
-  (check-prelude-drift! project-root)
-
   ;; PM Track 10C: Work-stealing dispatch with LPT scheduling.
   ;; Sort files by historical wall time (heaviest first) for optimal
   ;; load balance. Workers pull files from a shared queue via stdin.
@@ -797,10 +746,7 @@
 
   (for ([i (in-range jobs)])
     (define-values (proc stdout stdin stderr)
-      (if (file-timeout-secs)
-          (subprocess #f #f #f racket-path batch-worker-path "--stdin"
-                      "--file-timeout" (number->string (file-timeout-secs)))
-          (subprocess #f #f #f racket-path batch-worker-path "--stdin")))
+      (subprocess #f #f #f racket-path batch-worker-path "--stdin"))
     (set! all-procs (cons proc all-procs))
     (set! all-stdins (cons stdin all-stdins))
     ;; Send first file to each worker to get them started

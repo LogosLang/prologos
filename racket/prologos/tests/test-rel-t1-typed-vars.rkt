@@ -152,6 +152,40 @@
                  "solve (s1 q)\n")))
   (check-true (regexp-match? #rx"\\{:q 1\\}" (last results))))
 
+(test-case "C.b.1: a MULTIPLICITY-shaped annotation is not a type (Q_N4, defr leg)"
+  ;; ⚠ THIS WAS A LIVE SILENT WRONG ANSWER until 2026-08-01, and it is the Q_N4
+  ;; defect verbatim — "the four-lexeme list silently ate `:7` as a type name" —
+  ;; surviving in the one place a census keyed on `fused-type-annot?` could not
+  ;; see. `parse-rel-params` recognized annotations with the BROAD
+  ;; `colon-symbol?` and then re-implemented BOTH accessors inline (a
+  ;; `string-split` cascade for the glued spelling, a `substring` for the WS
+  ;; one), so it never consulted the narrower predicate that excludes
+  ;; multiplicities. Result: `?x:0` stored `type-pred (expr-fvar |0|)` — a FREE
+  ;; VARIABLE named `0`, used as a TYPE PREDICATE — with zero errors, while
+  ;; `def`, `defn` and `let` had all been repaired to refuse exactly this.
+  ;;
+  ;; The recognizer is still `colon-symbol?` (that is what keeps the guiding
+  ;; messages reachable); `fused-type-annot?` is now the AUTHORITY on whether
+  ;; the token names a type. Both spellings route through one local helper.
+  (for ([bad (in-list '("(defr b0 [?x:0] || 5)"
+                        "(defr b7 [?x:7] || 5)"
+                        "(defr bw [?x:w] || 5)"
+                        "(defr bm [?x:m] || 5)"))])
+    (define surf (parse-string bad))
+    (check-true (prologos-error? surf)
+                (format "~a must be refused, got: ~v" bad surf))
+    (check-true (regexp-match? #rx"is not a type" (prologos-error-message surf))
+                (format "~a: message must name the cause, got: ~v"
+                        bad (prologos-error-message surf)))
+    ;; the remedy must name the PARAM, not the offending glued symbol
+    (check-true (regexp-match? #rx"`x:Int`" (prologos-error-message surf))
+                (format "~a: remedy must show `x:Int`, got: ~v"
+                        bad (prologos-error-message surf))))
+  ;; …and the legal spellings are untouched: plain, mode-prefixed, multi-param.
+  (check-true (expr-Int? (car (type-pred-preds (car (cb1-defr-param-types "(defr ok [?x:Int] || 5)"))))))
+  (check-true (expr-Int? (car (type-pred-preds (car (cb1-defr-param-types "(defr mo [+k:Int] || 1)"))))))
+  (check-equal? (length (cb1-defr-param-types "(defr mp [?f:String ?w:Int ?u] || \"a\" 3 9)")) 3))
+
 (test-case "C.b.1 WS: chained `?x:Int:Even` is rejected at registration"
   ;; process-file reports the registration error to stdout/stderr (and/or as a
   ;; result struct); capture all channels so the error text does not pollute the

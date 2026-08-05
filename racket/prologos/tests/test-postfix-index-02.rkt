@@ -52,17 +52,17 @@
 (test-case "rewrite: postfix-index then dot-access"
   (check-equal?
    (rewrite-dot-access '(xs ($postfix-index 0) ($dot-access field)))
-   '(map-get (get xs 0) :field)))
+   '($select-path (get xs 0) field)))
 
 (test-case "rewrite: dot-access then postfix-index"
   (check-equal?
    (rewrite-dot-access '(m ($dot-access items) ($postfix-index 0)))
-   '(get (map-get m :items) 0)))
+   '(get ($select-path m items) 0)))
 
 (test-case "rewrite: full path algebra chain"
   (check-equal?
    (rewrite-dot-access '(data ($postfix-index 0) ($dot-access users) ($postfix-index 1) ($dot-access name)))
-   '(map-get (get (map-get (get data 0) :users) 1) :name)))
+   '($select-path (get ($select-path (get data 0) users) 1) name)))
 
 ;; ========================================
 ;; D. Mixed with nil-dot-access

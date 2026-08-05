@@ -18,11 +18,48 @@ Anti-pattern: installing a fire-once propagator with plain `net-add-propagator`.
 
 **Question**: Does this code process N independent items?
 
-Any `for/fold` or `for/list` that processes independent items is a candidate for broadcast. If item i's result doesn't depend on item j's result, the items are embarrassingly parallel. Use `net-add-broadcast-propagator`: ONE propagator, ONE fire, ONE merge. The broadcast-profile metadata enables the scheduler to decompose across OS threads.
+Any `for/fold` or `for/list` that processes independent items is a candidate for broadcast. If item i's result doesn't depend on item j's result, the items are embarrassingly parallel. Use `net-add-broadcast-propagator`: ONE propagator, ONE fire, ONE merge.
 
 Red flags: `for/fold` that threads state through independent iterations. `for/list` that maps a function over items but could be a broadcast.
 
-Broadcast is the polynomial functor made operational. A/B data: 2.3x faster at N=3, 75.6x at N=100 vs N-propagator model.
+Broadcast is the polynomial functor made operational — at the INSTALL layer.
+
+### ⚠ BROADCAST IS NOT PARALLELISM TODAY — corrected 2026-08-02, MEASURED
+
+This section previously said "the broadcast-profile metadata enables the
+scheduler to decompose across OS threads" and cited "2.3x faster at N=3, 75.6x
+at N=100". **Both were misleading, and because this file is AMBIENT the error
+was in front of every session.** What is true at HEAD:
+
+- **`broadcast-profile` is INERT metadata.** It has ZERO production readers —
+  `grep -rn 'propagator-broadcast-profile\|broadcast-profile-items\|broadcast-profile-item-fn\|broadcast-profile-merge-fn'` returns exactly 3 hits, ALL
+  assertions in `tests/test-decision-cell.rkt`. Nothing decomposes it.
+- **The fire-fn is a sequential `for/fold`**, and says so at its own site
+  ("Today: sequential loop", `propagator.rkt`).
+- **Adopting broadcast is currently ANTI-parallel** where the item count is the
+  parallelism you wanted. The executors chunk the worklist of PROPAGATOR IDS
+  (`(quotient (length pids) ncores)`), so folding N propagators into 1 removes
+  exactly the units the runtime decomposes — and then runs the N items
+  sequentially on one thread.
+- **The real 2.3×/75.6× effect is INSTALL-OVERHEAD amortization**, not parallel
+  speedup: one CHAMP install + one worklist entry + one dependency filter
+  instead of N. That is a genuine and often decisive win — just not the one the
+  old sentence claimed. `docs/research/2026-07-23_FACT_REPRESENTATION_QUERY_OPTIMIZATION.md` §6 had already established this; the correction never
+  reached this tier, which is why it kept being repeated.
+
+**So: reach for broadcast to amortize INSTALL and scheduling cost, and when the
+polynomial-functor shape is the honest description of the computation. Do NOT
+reach for it expecting threads.** If you need actual parallelism across items,
+that is unbuilt work — the profile is the hook it would use, and wiring it is a
+named, unclaimed piece of substrate.
+
+⚠ Four further contract facts, each verified, that a caller must know:
+`items` is a plain eager list FIXED AT INSTALL (never read from a cell, so an
+extent known only after evaluation cannot be expressed) · exactly ONE output
+cell · `flags` is literal `0`, so it is **not** fire-once and recomputes all N
+items on every input change · the accumulation is a LEFT fold from `'()`, so the
+`append`/`set-union` merge the docstring itself recommends is **O(N²)** in the
+item count.
 
 ## Set-Latch for Fan-In Readiness
 

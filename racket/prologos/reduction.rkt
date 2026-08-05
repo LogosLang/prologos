@@ -1643,25 +1643,127 @@
 ;; output keys BEFORE this code can mint — so a miss or a non-map mid-descent
 ;; here is an INVARIANT VIOLATION: panic loudly, never fabricate (the P2.b
 ;; two-tier discipline; fabricating `none` was exactly divergence site 7).
-(define (select-reduce subj-expr branches)
+;; D4.P4b-ii-2b: the ASSERTIVE-tier miss message, ONE definition and two
+;; consumers (`expr-map-get`'s champ arm and `select-reduce`'s), so the dot
+;; spelling cannot drift from the quality bar P2.b slice 4 set. Extracting it
+;; also fixes a shadowing bug this slice introduced: `select-reduce` binds a
+;; parameter named `sort`, which SHADOWS Racket's `sort` — so calling it inside
+;; that scope applied the symbol `'path` as a procedure. Same class as the
+;; propagator rule's "never let a parameter shadow the thing you call".
+(define (assertive-miss-message who label c)
+  (format "~a: key ~a not found; available keys: ~a"
+          who (fmt-map-key label)
+          (if (champ-empty? c)
+              "(none — the map is empty)"
+              (string-join (sort (map fmt-map-key (champ-keys c)) string<?) " "))))
+
+(define (select-reduce subj-expr branches sort tier)
+  ;; D4.P4b-ii-2b (the verify, M3): NO DEFAULTS. `#f` is not a neutral tier —
+  ;; reduction reads it as the BLOCK tier and PANICS, so a caller that omitted
+  ;; it would silently get "invariant violation" rather than "no claim". One
+  ;; production caller, which passes both; requiring them keeps it that way.
   (let/ec return
     (define (kw-of label) (expr-keyword label))
+    ;; ⭐ D4.P4c-4c (DEFERRED 43) — CHAMP-OF NOW TIER-FORKS, mirroring `project`
+    ;; below and the top-level `expr-get` sibling. It used to panic
+    ;; UNCONDITIONALLY on a non-map, which is the mirror of the tier bug on the
+    ;; typing side: a PERMISSIVE carrier (a union, a dyn row, a selection view)
+    ;; degrades quietly everywhere else in the language, and under ω it panicked.
+    ;; One root cause with the typing half, two opposite symptoms.
+    ;;
+    ;; ⚠ AND THE OLD MESSAGE WAS FALSE AT A `'path` SITE. It asserted "typing
+    ;; admitted the BLOCK" unconditionally. The block claim now appears only on
+    ;; the block tier, where it is true.
+    ;; ⚠ MY OWN EARLIER VERSION OF THIS COMMENT SAID `rrb-of` "reached the false
+    ;; wording anyway by delegating here" — THAT IS FALSE. `rrb-of` is
+    ;; self-contained and does not call `champ-of`; the ω path reaches `champ-of`
+    ;; through `bcast-apply` → `branch-entries`. Corrected rather than deleted
+    ;; because the same wrong clause was propagated into DEFERRED.md §43.
+    ;; ⚠ RESIDUAL, not fixed here (DEFERRED): this helper is called as
+    ;; `(champ-of v name)` with `name` = the STEP name, so the message reads
+    ;; "`a` is not a map" — naming the step, not the value. `rrb-of` gets it
+    ;; right ("this one is not a vector"). Cosmetic; filed rather than widened
+    ;; into a shared-helper signature change inside a slice that already moved
+    ;; production behaviour once.
     (define (champ-of v what)
       (let ([v* (whnf v)])
-        (if (expr-champ? v*)
-            (expr-champ-racket-champ v*)
-            (return (expr-panic
-                     (expr-string
-                      (format "select: ~a is not a map at runtime (invariant violation — typing admitted the block)"
-                              what)))))))
+        (cond
+          [(expr-champ? v*) (expr-champ-racket-champ v*)]
+          ;; tier = #f — the BLOCK sort. Typing sourced every field 'present
+          ;; (Horn D), so a non-map here really IS an invariant violation.
+          [(not tier)
+           (return (expr-panic
+                    (expr-string
+                     (format "select: ~a is not a map at runtime (invariant violation — typing admitted the block)"
+                             what))))]
+          ;; tier = (expr-true) — the assertive PATH tier. Loud, but do not claim
+          ;; anything about a "block": there isn't one.
+          [(expr-true? tier)
+           (return (expr-panic
+                    (expr-string
+                     (format "select: ~a is not a map at runtime" what))))]
+          ;; unsolved — the PERMISSIVE tier (dyn row, selection view, union).
+          ;; ⚠ THE VALUE IS `none`, NOT `<error>`, AND THAT IS A RULING THIS FILE
+          ;; ALREADY MADE 1500 LINES DOWN — `[(definitely-not-map? subj*) (if tier
+          ;; (expr-fvar 'none) …)]`, whose own comment says "Match `map-get`:
+          ;; degrade to `none`". My first cut returned `(expr-error)` and the
+          ;; adversarial verify caught that it gave a THIRD answer to a question
+          ;; with two: three adjacent union-non-map cases one line apart
+          ;; (`<Map|Int>`, `<Map|PVec>`, `<Map|Set>`) answered `none`, `<error>`,
+          ;; `none` — and the odd one out was the one this change moved.
+          ;;
+          ;; ⚠⚠ AND THAT PATH IS PRODUCTION-REACHABLE WITH NO GRANT, which
+          ;; falsified DEFERRED 43's own deferral rationale ("the grant is '(), so
+          ;; nothing here is reachable in production"). The route: the
+          ;; `expr-select` entry admits **rrb** subjects into `select-reduce`
+          ;; BEFORE the `definitely-not-map?` fork, and `expr-rrb?` is not a member
+          ;; of `definitely-not-map?` (only `expr-hset?` is). So `ub.a` where
+          ;; `ub : <[Map Keyword Int] | [PVec Int]> := @[1 2 3]` reaches here on
+          ;; the ordinary dot path. It used to PANIC "invariant violation", which
+          ;; was itself wrong — the union's Map branch is exactly why typing
+          ;; admitted `.a`, so there is no invariant violated. Degrading is right;
+          ;; degrading to the same value as its siblings is what makes it correct.
+          [else (return (expr-fvar 'none))])))
     (define (project c label)
       (let* ([kw (kw-of label)]
              [hit (champ-lookup c (equal-hash-code kw) kw)])
         (if (eq? hit 'none)
-            (return (expr-panic
-                     (expr-string
-                      (format "select: field :~a not found at runtime (invariant violation — typing sourced it as present)"
-                              label))))
+            ;; D4.P4b-ii-2b — THE TWO-TIER MISS, the carrier's analogue of
+            ;; `expr-map-get`'s strictness fork (P2.b slice 4). The tier is
+            ;; SOLVED to (expr-true) only when typing PROVED an assertive
+            ;; subject; a dyn row / selection view / union leaves it unsolved,
+            ;; and those misses must stay PERMISSIVE — they were `<error>` at
+            ;; zero errors before the fold, and the b-ii-2a tripwire pins it.
+            ;; ⚠ The old message asserted "typing sourced it as present". That
+            ;; is FALSE for a Map under Q_U10's posture (the Map arm admits
+            ;; uniformly and DEFERS the miss to runtime), so the assertive
+            ;; message now names the key and the available keys instead —
+            ;; matching the quality bar `map-get` set, which the dot spelling
+            ;; would otherwise have lost.
+            ;; THREE outcomes, not two — the first cut collapsed the first two
+            ;; because they share "panic loudly", but they are different facts
+            ;; and the P4a pin caught it:
+            ;;   tier = #f          — the BLOCK sort. Typing sourced every
+            ;;                        field 'present (Horn D), so a miss here
+            ;;                        really IS an invariant violation.
+            ;;   tier = (expr-true) — the PATH sort over a proved Map. Typing
+            ;;                        admitted every label and DEFERRED the
+            ;;                        miss (Q_U10), so "typing sourced it as
+            ;;                        present" would be FALSE; name the key and
+            ;;                        the available keys, the bar map-get set.
+            ;;   otherwise          — unsolved: the PERMISSIVE tier (dyn row,
+            ;;                        selection view, union). Quiet <error>,
+            ;;                        exactly as before the fold.
+            (cond
+              [(not tier)
+               (return (expr-panic
+                        (expr-string
+                         (format "select: field :~a not found at runtime (invariant violation — typing sourced it as present)"
+                                 label))))]
+              [(expr-true? tier)
+               (return (expr-panic
+                        (expr-string (assertive-miss-message "select" kw c))))]
+              [else (return (expr-error))])
             (whnf hit))))
     ;; D4.P3c: a level assembles either sort — all-keyed components → champ;
     ;; all-keyless ((#f . v)) → the rrb tuple mint in written order (ruling
@@ -1694,6 +1796,80 @@
                     (expr-string
                      (format "select: ~a is not a vector at runtime (invariant violation — typing admitted the ordinal)"
                              what))))])))
+    ;; D4.P4c-4c — ⭐ THE FOURTH SITE THE PARTITION NEVER NAMED: the rrb
+    ;; container guard. `champ-of` and `index-into` are the precedent, and the
+    ;; mini-audit's warning is that they are NOT twins — one unwraps, one
+    ;; accesses. This one unwraps, so it is shaped on `champ-of`.
+    ;;
+    ;; ⚠ IT MUST `return` A PANIC, NEVER `error`. These walks carry NO failure
+    ;; slot, so a non-container has exactly two exits: the escape (a per-command
+    ;; error, file continues) or a raise (a WHOLE-FILE abort). P4c-4b split that
+    ;; channel deliberately; an `error` here re-creates precisely the abort it
+    ;; removed.
+    ;;
+    ;; ⚠ REACHABILITY, CORRECTED — my first comment here claimed "Map and
+    ;; het-tuple subjects are GUARANTEED to arrive, so this arm is the reachable
+    ;; one, not a defensive one." THE ADVERSARIAL VERIFY COULD NOT REACH IT: every
+    ;; non-PVec carrier is stopped by `select-elem-of` at TYPING, so reduction
+    ;; never runs. The honest statement is that this guard is currently
+    ;; UNREACHABLE THROUGH TYPING and exists because reduction must not depend on
+    ;; typing having run — `select-reduce` is called from whnf, and a future
+    ;; carrier widening at P4d changes the typing gate, not this one. That is a
+    ;; real reason to keep it; the reason I first wrote was not, and stating a
+    ;; false reachability invites a future reader to delete the guard.
+    ;;
+    ;; ⚠ WORDING COPIED FROM `index-into`, NOT `champ-of`. `champ-of`'s message
+    ;; asserts "typing admitted the block" unconditionally, which is FALSE under
+    ;; sort='path — and ω is a 'path construct, so inheriting that sentence would
+    ;; state something untrue at exactly the site that fires.
+    (define (rrb-of v what)
+      (let ([v* (whnf v)])
+        (if (expr-rrb? v*)
+            (expr-rrb-racket-rrb v*)
+            (return (expr-panic
+                     (expr-string
+                      (format "select: broadcast `:~a` needs a vector subject at runtime — this one is not a vector"
+                              what)))))))
+    ;; D4.P4c-4c — ONE ω step applied to a runtime value: the FUNCTORIAL LIFT,
+    ;; the ATOMIC TWIN of typing-core's `select-bcast-lift`. Unwrap one container
+    ;; layer, apply the wrapped step to EVERY element, re-wrap one layer.
+    ;;
+    ;; The caller continues the walk itself (same contract as the typing twin) —
+    ;; consuming the rest here would nest the next ω step inside this one's
+    ;; ELEMENT, which is the opposite of L1 fusion.
+    ;;
+    ;; ⚠ WHOLE-NODE ABORT (ratified, Q_U7 rider): a miss inside ANY element
+    ;; aborts the WHOLE selection. That is automatic here rather than coded —
+    ;; `project` / `index-into` / `rrb-of` all `return` through the single
+    ;; `let/ec`, so no partial vector can escape and no `expr-panic` can be
+    ;; buried in an output slot. Stated because a "map semantics" intuition
+    ;; would expect per-element recovery, and that is exactly the drift the
+    ;; ruling forbids.
+    (define (bcast-lift v s)
+      (let* ([inner (select-bcast-inner s)]
+             [name (select-step-name s)]
+             [r (rrb-of v name)])
+        (expr-rrb
+         (rrb-from-list
+          (for/list ([i (in-range (rrb-size r))])
+            (bcast-apply (whnf (rrb-get r i)) inner))))))
+    ;; Apply ONE step to ONE element, yielding the leaf value — the reduction
+    ;; analogue of typing's `select-project ctx elem (list (list inner)) sort`.
+    ;; It mirrors the top-level sort dispatch at the tail of this function
+    ;; rather than re-deciding it, so a third sort cannot inherit path
+    ;; semantics here silently.
+    (define (bcast-apply v inner)
+      (let ([entries (branch-entries v (list inner) '())])
+        (case sort
+          [(block) (entries->value entries)]
+          [(path)
+           (if (and (pair? entries) (null? (cdr entries)))
+               (cdr (car entries))
+               (return (expr-panic
+                        (expr-string
+                         (format "select: a broadcast step must yield exactly ONE component per element, got ~a (malformed carrier)"
+                                 (length entries))))))]
+          [else (select-sort-unhandled 'select-bcast-apply sort)])))
     ;; D4.P3b — one branch's entries at the CURRENT level, mirroring
     ;; typing-core's select-branch-entries over champs (the same shared
     ;; syntax.rkt walk classifies steps, so meaning cannot drift from the
@@ -1723,6 +1899,14 @@
                         [(ord-step) (index-into v s name)]
                         [(ord-branch) (index-into v (cadr s) (cadr s))]
                         [(key caret sub) (project (champ-of v name) name)]
+                        ;; ✅ D4.P4c-4c: the value semantics LANDED, atomically
+                        ;; with typing-core's twin. Landing either alone is not a
+                        ;; half-measure but a REGRESSION — typing-first lets a
+                        ;; successfully-typed broadcast reach this layer and
+                        ;; raise, which `process-command/solve-guard` does not
+                        ;; catch (whole-file abort); reduction-first types a
+                        ;; refusal over a value that would have worked.
+                        [(bcast) (bcast-lift v s)]
                         [else (select-step-kind-unhandled 'select-walk-to-leaf s)])])
             (if (null? (cdr steps))
                 hit
@@ -1773,6 +1957,30 @@
                [else
                 (list (cons (or (and cont (select-cont-rename cont)) name)
                             (below-value hit rest (append seen (list s)))))]))]
+          ;; ⚠ POLARITY CORRECTED at D4.P4c-4b: NOT unreachable-at-head — `users:name`
+          ;; reaches the branch head ($select-path consumes the subject). Reduction
+          ;; KEEPS its raise here deliberately: typing now refuses through its
+          ;; failure slot, so arriving at the VALUE layer with an ω step is a
+          ;; compiler-invariant violation, not a user error. Two arms, two
+          ;; questions — not belt-and-suspenders.
+          ;; It is written, not omitted: the refusal is a SURFACE rule and a surface
+          ;; rule is not a representation invariant — P5's factoring rewrites
+          ;; branches. Loud not-yet rather than a guess at semantics P4c-4 owns.
+          ;; ✅ D4.P4c-4c: the value semantics LANDED. THE ARM THE HEADLINE
+          ;; SPELLING REACHES (measured — `users:name` routes here, not to
+          ;; walk-to-leaf), and like its typing twin it returns a COMPONENT
+          ;; LIST, not a value. The label is `select-step-output-name`, which is
+          ;; ω-transparent by its own arm.
+          [(eq? (select-step-kind (car b)) 'bcast)
+           (let* ([s (car b)]
+                  [rest (cdr b)]
+                  [label (select-step-output-name s)]
+                  [hit (bcast-lift v s)])
+             (if (null? rest)
+                 (list (cons label hit))
+                 ;; continue against the RE-WRAPPED result — this is what makes
+                 ;; `x:s:t` fuse to one layer rather than nest
+                 (list (cons label (below-value hit rest seen)))))]
           [else (select-step-kind-unhandled 'select-branch-entries (car b))])))
     ;; the COMPONENTS a dissolved head splices (terminal sub-block = that
     ;; block's level, fresh branches; else the steps continue as one branch).
@@ -1818,6 +2026,15 @@
         ;; what is actually load-bearing here, is `ord-branch`.
         [(memq (select-step-kind (car steps)) '(key caret sub ord-branch))
          (entries->value (branch-entries v steps seen))]
+        ;; ✅ D4.P4c-4c: the value semantics LANDED. `bcast` still does NOT join
+        ;; the memq above, and now for a second reason: that arm runs
+        ;; `entries->value`, which would wrap the broadcast result in a spurious
+        ;; level. ω descends transparently, like the ordinal arm above it.
+        [(eq? (select-step-kind (car steps)) 'bcast)
+         (let ([hit (bcast-lift v (car steps))])
+           (if (null? (cdr steps))
+               hit
+               (below-value hit (cdr steps) seen)))]
         [else (select-step-kind-unhandled 'select-below-value (car steps))]))
     ;; D4.P4a: HOIST the subject's whnf out of the per-branch lambda. The
     ;; header comment above has claimed since P3a that the subject is
@@ -1825,10 +2042,28 @@
     ;; subj-expr)` sat INSIDE the append-map lambda, so an N-branch block
     ;; whnf'd the subject N times. Pure win (whnf is a pure function of the
     ;; expr); this makes the code match its own documented contract.
-    (let ([subj* (whnf subj-expr)])
-      (entries->value
-       (append-map (lambda (b) (branch-entries subj* b '()))
-                   branches)))))
+    (let* ([subj* (whnf subj-expr)]
+           [entries (append-map (lambda (b) (branch-entries subj* b '())) branches)])
+      ;; D4.P4b-ii-2a — THE `'path` ASSEMBLY. A block PROJECTS (assemble the
+      ;; components into a row/tuple); a path EXTRACTS (yield the leaf value).
+      ;; Both sorts assembled a ROW before this slice, which is why the fold
+      ;; could not be flipped: `x.a` would have produced `{:a …}` instead of
+      ;; the value. Under Q_U13's NEST encoding a `'path` carrier is exactly
+      ;; one branch of one step per level, so extraction is unambiguous.
+      (case sort
+        [(block) (entries->value entries)]
+        [(path)
+         (if (and (pair? entries) (null? (cdr entries)))
+             (cdr (car entries))
+             ;; not constructible from the surface under NEST — a path
+             ;; selector with 0 or >1 components is a malformed carrier, and
+             ;; silently taking the first is how the P2.b fabrication class
+             ;; starts. Loud, per this phase's whole discipline.
+             (return (expr-panic
+                      (expr-string
+                       (format "select: a path selector must yield exactly ONE component, got ~a (malformed carrier — the path sort EXTRACTS, it does not project)"
+                               (length entries))))))]
+        [else (select-sort-unhandled 'select-reduce sort)]))))
 
 (define (validate-tabulate sname closed? plan subj-champ names)
   (define c (expr-champ-racket-champ subj-champ))
@@ -2148,7 +2383,7 @@
       ;; champ/rrb/hset, one line away and missed by that census too.
       ;; VERIFIED at `f072c115`: `whnf-impl/match` has NO arm for `expr-path`
       ;; at any indent, so it already fell to `[_ e]` (:3957) — identity — and
-      ;; `nf`'s arm is likewise `[(expr-path _) e]`. A path literal is a
+      ;; `nf`'s arm is likewise `[(expr-path _ _) e]`. A path literal is a
       ;; canonical form with no head reduction rule, which is this predicate's
       ;; own stated criterion for membership.
       ;; ⚠ This is a DECISION, not an inheritance (the P4b audit named it as
@@ -3059,15 +3294,12 @@
          (cond
            [(not (eq? result 'none)) (whnf result)]
            [(expr-true? a)
-            (expr-panic
-             (expr-string
-              (format "map-get: key ~a not found; available keys: ~a"
-                      (fmt-map-key k*)
-                      (if (champ-empty? c)
-                          "(none — the map is empty)"
-                          (string-join (sort (map fmt-map-key (champ-keys c))
-                                             string<?)
-                                       " ")))))]
+            ;; D4.P4b-ii-2b (the verify, M1): this now CALLS the shared helper
+            ;; instead of inlining a second copy. The extraction's comment
+            ;; claimed "ONE definition and two consumers" while map-get still
+            ;; had its own — so the anti-drift property was asserted, not
+            ;; established. Now it is established.
+            (expr-panic (expr-string (assertive-miss-message "map-get" k* c)))]
            [else (expr-error)])))]
 
     ;; CIU T6 P2.b (SITE 7): a PVec/tuple subject PROJECTS by position.
@@ -3089,22 +3321,47 @@
     ;; so a runtime miss here is an INVARIANT VIOLATION and panics loudly
     ;; (never fabricate), and champ-insert is never asked to last-win.
     ;; Stuck subject → the node stays stuck (the map-get/validate precedent).
-    [(expr-select subject (expr-path branches))
+    [(expr-select subject (expr-path branches sort) tier)
      (let ([subj* (whnf subject)])
        (cond
          ;; D4.P3c: rrb subjects admitted — ordinal branches select over
          ;; vectors/tuples (`het{2 0}`); per-branch dispatch inside.
-         [(or (expr-champ? subj*) (expr-rrb? subj*)) (select-reduce subj* branches)]
+         [(or (expr-champ? subj*) (expr-rrb? subj*)) (select-reduce subj* branches sort tier)]
          ;; D4.P3a verify hardening: a GROUND non-map subject can never
          ;; become a champ — panic per the node's own tier discipline
          ;; (the nested descent one level down is already loud; only the
          ;; top level silently stuck). Stuck NEUTRALS still fall through.
+         ;; ⭐ D4.P4b-ii-2b, THE VERIFY'S BLOCKING FIND (two skeptics, independently,
+         ;; by A/B against a baseline tree). This arm is the SUBJECT-kind
+         ;; sibling of the keyed-miss fork below, and the first cut tier-gated
+         ;; only the miss — so a `.field` on a union whose runtime value is a
+         ;; non-map component PANICKED where `[map-get u :a]` degrades to
+         ;; `none` at ZERO errors (reduction's own comment on that arm names
+         ;; this exact scenario: "map-get on an Int from a mixed-type union").
+         ;; That is the permissive→panic conversion this whole slice exists to
+         ;; prevent, one arm above where I looked.
+         ;;
+         ;; The tier decides it, exactly as it decides the miss:
+         ;;   tier = #f  — the BLOCK sort. P3a's hardening stands: typing
+         ;;                admitted the block, so a non-map subject IS an
+         ;;                invariant violation and the panic is honest.
+         ;;   otherwise  — the PATH sort. Match `map-get`: degrade to `none`.
+         ;;                An ASSERTIVE path tier cannot reach here (typing
+         ;;                proved a Map, so the value cannot be a non-map), so
+         ;;                no arm is owed for it — and inventing one would be
+         ;;                the speculative-scaffolding shape.
          [(definitely-not-map? subj*)
-          (expr-panic
-           (expr-string
-            "select: the subject is not a map at runtime (invariant violation — typing admitted the block)"))]
+          (if tier
+              (expr-fvar 'none)
+              (expr-panic
+               (expr-string
+                "select: the subject is not a map at runtime (invariant violation — typing admitted the block)")))]
          [(equal? subj* subject) e]
-         [else (whnf (expr-select subj* (expr-path branches)))]))]
+         ;; D4.P4b-ii-1: the re-construction must PRESERVE the sort — dropping
+         ;; it here would silently re-sort a `'path` selector as a `'block`
+         ;; one on any subject that takes a whnf step (the R6 constructor
+         ;; hazard's runtime half: this call compiles clean either way).
+         [else (whnf (expr-select subj* (expr-path branches sort) tier))]))]
 
     ;; CIU T6 F1b.5-s2 (D27): validate — the runtime tabulation redex.
     ;; Subject whnf's to exactly two classes (spines/map-empty collapse to
@@ -4574,7 +4831,7 @@
 
     ;; Path normalization
     [(expr-Path) e]
-    [(expr-path _) e]
+    [(expr-path _ _) e]
     ;; Dynamic path operations — reduce target/path, then navigate
     [(expr-get-in target paths)
      (define nt (nf target))

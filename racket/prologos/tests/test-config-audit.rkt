@@ -7,6 +7,8 @@
 ;;;
 
 (require rackunit
+         ;; G2/B: `yields-prologos-error?` — preparse failures are VALUES now
+         "test-support.rkt"
          racket/list
          racket/string
          "../macros.rkt"
@@ -238,8 +240,7 @@
   (check-regexp-match
    #rx"functor `Result` conflicts with existing data type"
    (format "~a"
-    (let ()
-     (parameterize ([current-spec-store (hasheq)]
+    (let ()     (parameterize ([current-spec-store (hasheq)]
                     [current-property-store (hasheq)]
                     [current-functor-store (hasheq)]
                     [current-preparse-registry (current-preparse-registry)]
@@ -257,8 +258,7 @@
   (check-regexp-match
    #rx"functor `MyData` conflicts with existing data type"
    (format "~a"
-    (let ()
-     (parameterize ([current-spec-store (hasheq)]
+    (let ()     (parameterize ([current-spec-store (hasheq)]
                     [current-property-store (hasheq)]
                     [current-functor-store (hasheq)]
                     [current-preparse-registry (current-preparse-registry)]

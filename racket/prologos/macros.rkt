@@ -334,6 +334,7 @@
          rewrite-implicit-map
          rewrite-dot-access
          access-sentinel?   ;; D4.P3a: exported so the fold-fixpoint obligation is test-pinnable
+         bcast-step?        ;; D4.P4c-4b: same reason — the ω sentinel's membership is pinned
          map-literal-brace-params?
          rewrite-nil-dot-access
          rewrite-infix-operators
@@ -1190,7 +1191,7 @@
        (not (eq? x '$mixfix-error))     ; mixfix syntax-failure marker (same channel as $let-error)
        (not (eq? x '$do-error))         ; do syntax-failure marker (same channel)
        (not (eq? x '$reader-error))     ; reader-level rejection marker (same channel; today: removed ~N literals)
-       (not (eq? x '$preparse-error))   ; preparse FORM-processing failure (same channel; contains a whole-file abort)
+       (not (eq? x '$def-error))        ; DEF SEAM: the $let-error sibling — same LOUD-if-missed class as $dot-brace below
        (not (eq? x '$let-block))        ; LET P3 aligned-block sentinel (reader-validated; expand-let consumes)
        (not (eq? x '$goal-rhs))         ; SolveCarrier P2: let binding-RHS paren marker (parser consumes)
        (not (eq? x '$let-noop-body))    ; top-level let: bodyless placeholder (let-bindings->nested-fn consumes)
@@ -1207,6 +1208,10 @@
        ;; is a whole-file abort, which is why every other sentinel is here.
        (not (eq? x '$set-literal))      ; reader sentinel for `#{…}` set literals
        (not (eq? x '$mixfix))           ; reader sentinel for `.( … )` mixfix groups
+       (not (eq? x '$select-path))      ; D4.P4b-ii-2b the DOT select head — same LOUD-if-missed class
+       (not (eq? x '$preparse-error))   ; D4.P4c-4c/G2 the preparse seam marker — LOUD-if-missed: a
+                                        ; template occurrence would raise "Unbound pattern variable"
+                                        ; out of preparse, i.e. the very abort this marker prevents
        ;; ⚠ WHY $dot-brace IS HERE (caught by adversarial verify, pre-commit):
        ;; omitting it made `.{ }` inside a defmacro TEMPLATE read as a macro
        ;; pattern variable, so datum-subst raised "Unbound pattern variable" —
@@ -1300,6 +1305,46 @@
 ;; ========================================
 ;; Replaces pattern variables with their bound values.
 ;; Handles $name ... for splicing lists.
+;; ============================================================
+;; A TEMPLATE'S PATTERN VARIABLES ARE THE ONES THE PATTERN BOUND (2026-08-01).
+;; ============================================================
+;; This used to `error` on any `$`-headed symbol the bindings did not contain —
+;; a raise, at PREPARSE, i.e. a WHOLE-FILE ABORT with zero results. And the set
+;; it aborted on was not typos: it was READER SENTINELS. `pattern-var?` decides
+;; by NAME (`$`-prefixed, minus a hand-maintained denylist), but the reader mints
+;; `$`-headed sentinels for ordinary surface syntax, and `datum-subst` recurses
+;; into every element INCLUDING list heads. So a defmacro template containing a
+;; Nat literal was an abort:
+;;
+;;   defmacro mk [$u]        ;; template holds ($nat-literal 5)
+;;     [pair $u 5N]          ;; → "Unbound pattern variable in template: $nat-literal"
+;;
+;; MEASURED at 969bfd6c: `5N`, `1/2` and `|>` in a template each abort the whole
+;; file. The denylist was missing TWENTY-FOUR reader-minted sentinels, among them
+;; `$nat-literal`, `$rat-literal`, `$list-tail`, `$pipe-gt`, `$mixfix`,
+;; `$quasiquote`, `$unquote`, `$rest`, `$typed-hole` — and `$bcast-step`, minted
+;; by the `:` mint one commit earlier (b1399016). That last one is the THIRD
+;; recorded instance of this exact regression: the file already carries the
+;; `$dot-brace` note ("caught by adversarial verify") and `$select`'s
+;; "LOUD-if-missed: whole-file abort in a defmacro template".
+;;
+;; A denylist cannot be the answer — it has to re-enumerate every sentinel the
+;; reader will ever mint, forever, and it has now failed three times. The
+;; STRUCTURAL answer is already in hand: `bindings` IS the authority. A pattern
+;; variable is, by definition, one the PATTERN bound. Anything else is a literal
+;; and passes through. Reader sentinels then work BY CONSTRUCTION, and a new
+;; sentinel can never reintroduce this class.
+;;
+;; NAMED COST, eyes open: a genuine typo (`$usr` for `$u`) no longer raises here;
+;; it passes through and fails downstream as an ordinary unbound variable — a
+;; PER-COMMAND error naming the symbol, instead of a whole-file abort. Strictly
+;; better reporting for the typo, and correct for the sentinel. The `$var ...`
+;; SPLICE branch below keeps its error: a sentinel is a list HEAD followed by its
+;; payload, never a bare symbol followed by `...`, so that arm cannot be tripped
+;; by one and its signal stays clean.
+;;
+;; `pattern-var?`'s denylist still governs the PATTERN side (datum-match), which
+;; is a separate question and out of scope here.
 (define (datum-subst template bindings)
   (cond
     ;; Pattern variable: substitute.
@@ -1330,8 +1375,13 @@
     ;; surfaces at the USE SITE as an ordinary unbound-variable error naming
     ;; `$boddy` — per-command, with a srcloc, and the file survives. That is a
     ;; better failure mode than the abort, not merely a cheaper one.
+    ;;
+    ;; MERGE 2026-08-05: both branches reached this same inversion
+    ;; independently. The THUNK default is main's and is kept over the bare
+    ;; value: `hash-ref` CALLS a procedural default, so a bare `template` would
+    ;; be invoked if a template datum were ever itself a procedure.
     [(pattern-var? template)
-     (hash-ref bindings template template)]
+     (hash-ref bindings template (lambda () template))]
     ;; List template: handle splicing
     [(list? template)
      (datum-subst-list template bindings)]
@@ -2083,12 +2133,18 @@
     ;; lying downstream errors), while the PAYLOAD stays raw — descending into
     ;; it would fuse `($dot-access k)` items against their neighbours into
     ;; `map-get`, silently destroying the branch structure.
-    [(and (pair? datum) (eq? (car datum) '$select))
+    ;; D4.P4b-ii-2b: `$select-path` (the DOT spelling's head) is opaque the
+    ;; SAME way and for the same reason — hence one arm over both heads rather
+    ;; than a copy. The b-ii-2 audit refuted the claim that this opacity costs
+    ;; the dot surface its sibling passes: every pass the arm bypasses is keyed
+    ;; on a HEAD a folded access node never has (def/defn/spec/…; $pipe;
+    ;; let/racket), probe-verified across five shapes.
+    [(and (pair? datum) (memq (car datum) '($select $select-path)))
      (if (pair? (cdr datum))
          (let ([subj* (preparse-expand-form (cadr datum) reg depth)])
            (if (equal? subj* (cadr datum))
                datum
-               (list* '$select subj* (cddr datum))))
+               (list* (car datum) subj* (cddr datum))))
          datum)]
     ;; D4.P3a item 17: fold access sentinels BEFORE head-macro dispatch.
     ;;
@@ -2272,19 +2328,36 @@
     [(and (pair? datum) (symbol? (car datum)))
      (define head (car datum))
      (cond
-       ;; def with := — expand assignment syntax, then spec injection
-       [(and (eq? head 'def) (memq ':= datum))
+       ;; def — head normalization (glued name, fused annotation) and, when a
+       ;; `:=` is present, assignment expansion; then spec injection. The two
+       ;; arms this replaces were split on `(memq ':= datum)`, which meant the
+       ;; no-`:=` spelling never reached the normalizer — so `def x:Int 5` was
+       ;; refused while `def x : Int 5` worked. `expand-def-assign` is a no-op
+       ;; for a def that needs neither.
+       [(eq? head 'def)
         (define pre (expand-def-assign datum))
         (define injected (maybe-inject-spec-def pre))
-        (preparse-expand-form injected)]
-       ;; def without := — try spec injection
-       [(eq? head 'def)
-        (define injected (maybe-inject-spec-def datum))
         (preparse-expand-form injected)]
        ;; defn — spec injection
        [(eq? head 'defn)
         (define injected (maybe-inject-spec datum))
-        (preparse-expand-form injected)]
+        ;; ⚠ MIRRORS preparse-expand-all's where-injection pass (:3225-3232).
+        ;; Without it, `spec f … where (Add A)` + `defn f` came out of -single
+        ;; with the `where` clause STILL ATTACHED and no implicit dict parameter,
+        ;; while -all produced `$Add-A`. The two expanders feed DIFFERENT spines
+        ;; (-all the preparse spine, -single the tree spine + form-cells), and
+        ;; driver.rkt's merge compares their outputs — so a pass present in one
+        ;; and absent in the other reads as a PARSER divergence that is nothing
+        ;; of the kind. MEASURED: this single omission was 12 of the 26 remaining
+        ;; tree/preparse divergences across the 163-file corpus (98% -> 99%).
+        ;; Invisible until now only because the tree spine's output is not
+        ;; admitted (`tree-spine-admitted?`, driver.rkt).
+        ;; Pinned by tests/test-preparse-expand-parity.rkt.
+        (define where-injected
+          (if (and (pair? injected) (eq? (car injected) 'defn) (memq 'where injected))
+              (maybe-inject-where injected)
+              injected))
+        (preparse-expand-form where-injected)]
        ;; Everything else — standard preparse
        [else (preparse-expand-form datum)])]
     [else (preparse-expand-form datum)]))
@@ -2301,10 +2374,12 @@
 
   (record! "input" datum)
 
-  ;; Step 1: def := expansion
+  ;; Step 1: def head normalization + := expansion (no `memq ':=` gate — the
+  ;; normalizer must also see the no-`:=` spellings; it is a no-op otherwise,
+  ;; and `record!` still fires only when something actually changed)
   (define after-assign
     (if (and (pair? datum) (symbol? (car datum))
-             (eq? (car datum) 'def) (memq ':= datum))
+             (eq? (car datum) 'def))
         (let ([r (expand-def-assign datum)])
           (unless (equal? r datum) (record! "def-assign" r)) r)
         datum))
@@ -2794,6 +2869,8 @@
                       ;; D4.P1b-iii: selection sentinels are opaque here too.
                       ;; D4.P3a: `$select` is NOT skipped — recursion reaches
                       ;; its arm above, which expands the SUBJECT only.
+                      ;; D4.P4b-ii-2b: `$select-path` likewise — it shares that
+                      ;; arm, so it must NOT join this skip list either.
                       (and (pair? sub) (memq (car sub) '($select-brace $dot-brace))))
                   sub
                   (preparse-expand-form sub reg depth)))
@@ -2839,20 +2916,11 @@
 
 ;; Helper: detect private suffix forms (defn-, def-, data-, deftype-, defmacro-).
 ;; Returns the base keyword symbol (e.g., 'defn for 'defn-) or #f.
-(define (private-form-base head)
-  (case head
-    [(defn-)    'defn]
-    [(def-)     'def]
-    [(data-)    'data]
-    [(deftype-) 'deftype]
-    [(defmacro-) 'defmacro]
-    [(spec-)    'spec]
-    [(trait-)   'trait]
-    [(impl-)    'impl]
-    [(bundle-)  'bundle]
-    [(property-) 'property]
-    [(functor-)  'functor]
-    [else #f]))
+;;
+;; MOVED to reader-forms.rkt (CIU T6 D4.P4c-2 condition (c)) and imported from
+;; there. The reader post-pass binder unwrap needs the identical answer at
+;; READER time — earlier than this file runs — and parse-reader.rkt cannot
+;; require macros.rkt. ONE definition, two layers; see the note at the new site.
 
 ;; Helper: extract the defined name(s) from a top-level form datum.
 ;; Returns a list of symbols for auto-export.
@@ -3213,6 +3281,52 @@
       (when (and (list? d) (>= (length d) 2) (symbol? (cadr d)))
         (hash-set! generated-decl-names (cadr d) #t))))
 
+  ;; ⭐ CIU T6 D4.P4c-4c / G2 — THE PREPARSE SEAM GUARD (owner ruling 2026-08-05).
+  ;; ONE handler, at the per-FORM boundary, converting a raise into a marker datum
+  ;; that flows to the parser as a per-command error VALUE. This is the POL.4
+  ;; conversion discipline applied to the seam itself, and it closes a class
+  ;; rather than an instance.
+  ;;
+  ;; ⚠ THE CLASS: `pipeline.md` § "A Raise on the Parse/Expansion Path Is a
+  ;; WHOLE-FILE Abort" — the reader tokenizes the whole file before any command
+  ;; runs, so a raise HERE escapes `process-file` entirely and the file yields
+  ;; NOTHING, not even the forms above it. That had shipped FOUR times in this
+  ;; track before G2 made it five: G2 lets `$bcast-step` survive into forms
+  ;; preparse CONSUMES (`require`/`ns`/`schema`/`foreign`), whose recognizers
+  ;; raise on a shape they do not know. Measured regression:
+  ;; `require [prologos::data::nat:refer [add]]` went 0 errors → abort.
+  ;;
+  ;; ⚠ WHY THE GUARD IS HERE AND NOT AT THE DIRECTIVE HEADS. The owner ruled
+  ;; option B over option A (deep-strip an enumerated set of directive heads):
+  ;; an enumeration leaves the NEXT sentinel to rediscover this, which is exactly
+  ;; how the first four happened. This seat is head-agnostic by construction.
+  ;;
+  ;; ⚠ IT MUST NOT BECOME `void`. Three earlier passes above use
+  ;; `(with-handlers ([exn:fail? void]) …)` and SWALLOW. This seat REPORTS — it
+  ;; emits `($preparse-error msg)`, which the parser converts to a per-command
+  ;; error. A guard that silences is a worse outcome than the abort it replaced,
+  ;; and the battery pins that it still reports.
+  ;; ⚠ `exn:fail?`, not `(lambda (e) #t)` — a break (Ctrl-C, a timeout signal)
+  ;; must still propagate, or the file becomes uninterruptible.
+  ;;
+  ;; ⚠ MERGE 2026-08-05 — this branch had built its own containment for the
+  ;; SAME class (below), and the two disagree on ONE axis. Both are kept: the
+  ;; G2 seam guard above is the outer, head-agnostic seat (owner ruling), and
+  ;; `contain-form-error` below is the inner, message-prefix-narrow one.
+  ;;
+  ;; THE DISAGREEMENT, recorded rather than silently resolved: this branch
+  ;; EXCLUDED context-establishing heads (ns/imports/exports/foreign) from
+  ;; containment, because containing them lets the file proceed and produce a
+  ;; CASCADE that buries the real diagnostic — a failed `imports` reported
+  ;; "Unbound variable: module" instead of "no namespace is in scope"
+  ;; (`tests/test-import-no-ns.rkt` was written to catch exactly that). G2's
+  ;; guard, by contrast, exists BECAUSE `require`/`ns` need containment when a
+  ;; `$bcast-step` leaks into them.
+  ;;
+  ;; Resolved toward G2 (newer, owner-ruled, with its own measured
+  ;; regression). If `test-import-no-ns.rkt` fails, that is the real conflict
+  ;; surfacing and it wants an owner call, not a quiet edit to the test.
+
   ;; ---- per-FORM failure containment (2026-08-03) --------------------------
   ;;
   ;; Every `(error 'functor …)` / `(error 'trait …)` / `(error 'spec …)` in the
@@ -3252,6 +3366,42 @@
   ;; an improvement and containing these is not.
   (define uncontained-heads '(ns imports require exports provide foreign))
 
+  ;; ⚠ MERGE 2026-08-05 — the one place the two branches genuinely disagreed,
+  ;; and the discriminator is the FAILURE SOURCE, not the head.
+  ;;
+  ;; Both branches have a test at the SAME head (`imports`/`require`) wanting
+  ;; opposite outcomes, and both are right about their own case:
+  ;;
+  ;;   G2/B  — the require FORM is malformed (`…nat:refer [add]`, a fused
+  ;;           directive keyword the recognizer cannot read). Containing it is
+  ;;           the whole point: the forms before AND after must still run.
+  ;;           (`test-path-selection.rkt` § "G2/B: a fused directive keyword…")
+  ;;
+  ;;   this  — the require form is FINE; the MODULE it names fails to load.
+  ;;           Containing that lets the file proceed and REPLACES the root
+  ;;           diagnostic with a downstream symptom: measured, "no namespace is
+  ;;           in scope (IMPORTING file …)" became "Unbound variable: module"
+  ;;           from 28 lines inside the imported file.
+  ;;           (`tests/test-import-no-ns.rkt`)
+  ;;
+  ;; So containment is refused ONLY for a module-load failure, which driver.rkt
+  ;; raises with its own already-rendered diagnostic inside. Everything else at
+  ;; every head — including a malformed `require` — is contained, per G2's
+  ;; head-agnostic ruling.
+  ;;
+  ;; Message-shape matching is the same technique `contain-form-error` below
+  ;; already uses, not a new one. It is narrow ON PURPOSE: widening it back to
+  ;; "any failure at a context-establishing head" re-breaks G2/B, and dropping
+  ;; it re-breaks the import diagnostic. Both directions are pinned.
+  ;; Both shapes are "the import itself failed": the module could not be
+  ;; RESOLVED, or it resolved and failed to LOAD. Containing either lets the
+  ;; file carry on without it and reports a downstream symptom instead.
+  ;; (The first version matched only the load case, and the resolution case —
+  ;; `imports prologos::nonexistent::module` — went on being contained.)
+  (define (contain-at-seam? e)
+    (not (regexp-match? #rx"Error loading module|Cannot find module"
+                        (exn-message e))))
+
   (define (contain-form-error eff-head thunk on-error)
     (with-handlers ([(lambda (e)
                        (and (exn:fail? e)
@@ -3269,6 +3419,10 @@
       (define head (and (pair? datum) (car datum)))
       (define eff-head-for-containment
         (or (and head (private-form-base head)) head))
+      (with-handlers
+          ([(lambda (e) (and (exn:fail? e) (contain-at-seam? e)))
+            (lambda (e)
+              (cons (list '$preparse-error (exn-message e)) acc))])
       (contain-form-error
        eff-head-for-containment
        (lambda ()
@@ -3365,9 +3519,11 @@
                  (define grouped-d
                    (let ([d (syntax->datum new-stx)])
                      (if (eq? base 'defn) (group-defn-pipes d) d)))
-                 ;; Expand := syntax for def- (before spec injection)
+                 ;; Normalize the def- head (glued name, fused annotation) and
+                 ;; expand := if present, before spec injection. No `memq ':=`
+                 ;; gate — the no-`:=` spellings need the normalizer too.
                  (define pre-datum
-                   (if (and (eq? base 'def) (memq ':= grouped-d))
+                   (if (eq? base 'def)
                        (expand-def-assign grouped-d)
                        grouped-d))
                  ;; Inject spec type into bare-param defn- if matching spec exists
@@ -3606,9 +3762,12 @@
          ;; Step 0: group flat $pipe tokens in defn (WS reader produces flat form)
          (define grouped-datum
            (if (eq? head 'defn) (group-defn-pipes datum) datum))
-         ;; Step 1: expand := syntax for def (before spec injection)
+         ;; Step 1: normalize the def head (glued name, fused annotation) and
+         ;; expand := if present, before spec injection. No `memq ':=` gate —
+         ;; the no-`:=` spellings need the normalizer too; expand-def-assign is
+         ;; a no-op for a def that needs neither.
          (define pre-datum
-           (if (and (eq? (car grouped-datum) 'def) (memq ':= grouped-datum))
+           (if (eq? (car grouped-datum) 'def)
                (expand-def-assign grouped-datum)
                grouped-datum))
          ;; Step 2: inject spec type (defn or def)
@@ -3746,7 +3905,7 @@
        ;; the containment handler: replace the failing form with the marker the
        ;; parser already knows how to turn into a per-command error
        (lambda (msg)
-         (cons (datum->syntax #f (list '$preparse-error msg) stx) acc)))))
+         (cons (datum->syntax #f (list '$preparse-error msg) stx) acc))))))
   ;; ============================================================
   ;; Phase 5b: Hoist data/trait-generated defs before user forms
   ;; ============================================================
@@ -5284,51 +5443,257 @@
 ;; Expand def := assignment syntax into standard def form.
 ;; (def name := value) → (def name value)
 ;; (def name : T1 T2 ... := value) → (def name ($angle-type T1 T2 ...) value)
-(define (expand-def-assign datum)
-  (define name (cadr datum))
-  (define rest (cddr datum))  ; tokens after name
-  (define assign-pos (index-of-symbol ':= rest))
+;; (def name :T := value)          → same as the spaced form (FUSED spelling)
+;;
+;; ============================================================
+;; DEF SEAM (2026-08-01): the fused spelling, and the error CHANNEL.
+;; ============================================================
+;; TWO defects lived in this function's `cond`, and they are separable.
+;;
+;; (1) THE FUSED SPELLING WAS UNREACHABLE. After the reader's binder unwrap,
+;;     `def x:Int := 5` arrives as the datum `(def x :Int := 5)` — ONE
+;;     colon-symbol where the spaced form has two (`:` then `Int`). So `before`
+;;     was `(:Int)`: length 1, and its car is `:Int`, not `:`. Both accepting
+;;     arms declined and it fell to `[else]`.
+;;
+;; (2) `[else]` WAS A RAW RAISE, i.e. a WHOLE-FILE ABORT. Preparse runs
+;;     OUTSIDE driver.rkt's per-command loop with no handler, so the raise took
+;;     down every command in the file — `def a := 1` written ABOVE the bad line
+;;     never ran either. Zero results, one Racket stack trace. Same silence
+;;     class as the `let` family's 20 raise sites (LET P1) and DEFERRED's `ns`
+;;     name-guard entry.
+;;
+;; Both were LIVE and PRE-EXISTING (reproduced at 182f1678, before the CIU T6
+;; path-selection work). They hid behind a GREEN pin: test-path-selection.rkt
+;; asserts `read-all-forms-string "def x:Int := 5"` → `(def x :Int := 5)` and
+;; passes, because the READER is correct — the defect was one layer down, here.
+;; Every pin on this input was reader-level. See tests/test-def-seam.rkt, which
+;; pins it at Level 3 (a real file through process-file, with sibling commands
+;; on both sides) — the only level at which a whole-file abort is observable.
+;;
+;; WHY NORMALIZE RATHER THAN ADD A THIRD ARM: the fused spelling is REWRITTEN to
+;; the spaced token shape, so there stays exactly ONE annotation arm and ONE
+;; emission site below. The two spellings then cannot drift apart — they are the
+;; same code path, not two paths asserted equal by a test. That is the anti-
+;; second-copy discipline reader-forms.rkt states in its own header (the F1b.7g
+;; rule), applied here: this function does not re-test the fused shape, it calls
+;; `fused-type-annot?` / `fused-annot->type-symbol` — the ONE recognizer pair.
+;;
+;; Reusing that predicate is also what keeps NON-types out. `:0`/`:7` are
+;; MULTIPLICITIES (no type name starts with a digit — the Q_N4 ruling, whose
+;; original defect was a hand-rolled list silently eating `:7` as a type name),
+;; and `:w`/`:m` are multiplicities by name. `fused-type-annot?` already draws
+;; exactly that line, so they fall through to the channel below rather than
+;; being invented into types. `def` has no multiplicity surface at all —
+;; parse-def takes name / optional type / body (parser.rkt § parse-def).
+;; ONE normalization point for a def's ANNOTATION REGION — the tokens between
+;; the name and the value. `(:Int …)` → `(: Int …)`, i.e. the fused spelling is
+;; rewritten to the spaced one and every downstream arm sees a single shape.
+;;
+;; It normalizes the LEADING token of the tail, which is annotation position in
+;; both the `:=` and the no-`:=` spelling (`def x :Int := 5` and `def x :Int 5`).
+;; That is what lets ONE call serve both and keeps the fused recognition from
+;; acquiring a second copy — the F1b.7g anti-drift rule. `:=` and bare `:` are
+;; excluded by `fused-type-annot?` itself, so a no-annotation def passes through.
+;;
+;; ⚠ IT FIRES ONLY WHEN THE FUSED TOKEN IS UNAMBIGUOUSLY THE *WHOLE* ANNOTATION
+;; — followed by `:=`, or followed by exactly one token (the value). Normalizing
+;; unconditionally is WRONG and was caught by the C1/C6 pins: `x:A:B` reaches
+;; here as `(:A :B …)` and `x:List Nat` as `(:List Nat …)`, and rewriting just
+;; the head token turns each into a plausible-looking `(: A :B …)` / `(: List
+;; Nat …)` that the SPACED arm then happily accepts — silently inventing a type
+;; out of a chain the UCS reservation refuses, and out of a multi-token spelling
+;; the single-token rule refuses. Both must stay un-normalized so the error arm
+;; can still SEE the shape it needs to name. The eager version made the fix
+;; regress two of its own refusals; that is why the guard is a conjunction and
+;; not a bare `fused-type-annot?` test.
+(define (normalize-def-annot-tokens tail)
   (cond
-    [(not assign-pos) datum]
+    [(and (pair? tail)
+          (fused-type-annot? (car tail))
+          (pair? (cdr tail))
+          (or (eq? (cadr tail) ':=)     ; `def x:Int := value`
+              (null? (cddr tail))))     ; `def x:Int value`
+     (list* ': (fused-annot->type-symbol (car tail)) (cdr tail))]
+    [else tail]))
+
+(define (expand-def-assign datum)
+  (cond
+    ;; Arity guard. This function is now called for EVERY `def` (not only those
+    ;; containing `:=`), so a stub like `(def)` or `(def x)` reaches it and
+    ;; `(cadr datum)` would raise — which at preparse is a whole-file abort, the
+    ;; very thing this seam exists to prevent. Hand short forms straight to
+    ;; parse-def, whose arity arms already report them as per-command errors.
+    [(or (not (list? datum)) (< (length datum) 3)) datum]
     [else
-     (define before (take rest assign-pos))
-     (define after (drop rest (+ assign-pos 1)))
-     (when (null? after)
-       (error 'def "def: expected at least one value after :="))
-     ;; Auto-wrap multi-token RHS as application: `some 42N` → `(some 42N)`
-     ;; In WS mode, juxtaposed tokens after := form an application.
-     ;;
-     ;; EXCEPT when every token is a keyword- or dash-headed group. That is a
-     ;; MAP BODY written in layout:
-     ;;
-     ;;     def r :=
-     ;;       :eu {:host "eu.example.com" :port 443}
-     ;;       :us {:host "us.example.com" :port 443}
-     ;;
-     ;; Wrapping it as an application built `((:eu …) (:us …))` and the def
-     ;; failed with "Could not infer type" — a message naming typing for what is
-     ;; a layout seam. The byte-identical body WITHOUT `:=` worked, because it
-     ;; reaches `rewrite-implicit-map` with its keyword tail intact. So these are
-     ;; SPLICED and the same rewrite handles both spellings, rather than a second
-     ;; map-building path being added here.
-     ;;
-     ;; Multi-token only: a single keyword group already spliced correctly
-     ;; (`(def r ((:eu 1)))` → the tail rewrite fires), and narrowing the change
-     ;; keeps the application default untouched.
-     (define map-body? (and (> (length after) 1) (all-keyword-or-dash-headed? after)))
-     (define value (if (= (length after) 1) (car after) after))
+     ;; ── Head normalization, in one place, before any branch ──
+     ;; (a) sexp GLUED name. The WS reader splits `x:Int` for us; the sexp
+     ;;     reader glues it into ONE symbol, so `(def x:Int := 5)` used to bind a
+     ;;     variable literally NAMED `x:Int`, untyped, with zero errors — a
+     ;;     silent WS/sexp divergence, and a strictly worse class than a loud
+     ;;     error. `let` closed exactly this at LET P4 (ruling 3) with
+     ;;     `split-glued-name-datum`; this is the same call, on the same
+     ;;     primitive. Module paths (`str::length`) never split — empty segments
+     ;;     — and a chained `x:A:B` is refused for UCS, both by that one helper.
+     (define raw-name (cadr datum))
+     (define-values (split-name glued-ty glued-err)
+       (if (symbol? raw-name)
+           (split-glued-name-datum raw-name)
+           (values raw-name #f #f)))
+     ;; (b) FUSED annotation token → spaced, for both the `:=` and no-`:=` forms.
+     (define tail (normalize-def-annot-tokens (cddr datum)))
+     ;; A glued name has ALREADY supplied the type, so the only legal tails are
+     ;; `(:= value …)` and a bare `(value)`. Anything else is a second
+     ;; annotation — `(def x:Int : Foo := 5)` — or a stray multi-token type —
+     ;; `(def x:List Nat := 5)`. Refuse both rather than silently preferring
+     ;; one; and refusing keeps sexp in step with WS, which rejects the same
+     ;; two shapes via the chained / single-token arms below.
+     (define glued-tail-ok?
+       (and (pair? tail) (or (eq? (car tail) ':=) (null? (cdr tail)))))
      (cond
-       ;; No type annotation: (def name := value) → (def name value)
-       [(null? before)
-        (if map-body? `(def ,name ,@after) `(def ,name ,value))]
-       ;; Type annotation with colon: (def name : T1 T2 ... := value)
-       [(and (>= (length before) 2) (eq? (car before) ':))
-        (define type-tokens (cdr before))
-        (if map-body?
-            `(def ,name ($angle-type ,@type-tokens) ,@after)
-            `(def ,name ($angle-type ,@type-tokens) ,value))]
+       [glued-err `($def-error ,(format "def ~a: ~a" raw-name glued-err))]
+       [(and glued-ty (not glued-tail-ok?))
+        `($def-error ,(format "def ~a: the name already carries a fused type annotation, so ~a cannot follow — write just one type"
+                              raw-name
+                              (let ([extra (if (index-of-symbol ':= tail)
+                                               (take tail (index-of-symbol ':= tail))
+                                               tail)])
+                                (string-join (map (lambda (t) (format "~a" t)) extra) " "))))]
+
        [else
-        (error 'def "def: unexpected tokens before :=: ~a" before)])]))
+        (define name split-name)
+        ;; A glued name's type re-enters as the SPACED tokens, so it lands on the
+        ;; same arm as every other annotation. One emission site, still.
+        (define rest (if glued-ty (list* ': glued-ty tail) tail))
+        (define assign-pos (index-of-symbol ':= rest))
+        (cond
+          ;; No `:=`. Not an assignment form, so there is nothing to expand —
+          ;; but the normalization above still applies, which is exactly how
+          ;; `def x:Int 5` becomes `(def x : Int 5)` and reaches parse-def's
+          ;; name/:/type/body arm. That arm already worked for `def x : Int 5`;
+          ;; the fused spelling simply never reached it before.
+          [(not assign-pos) `(def ,name ,@rest)]
+          [else
+           (define before (take rest assign-pos))
+           (define after (drop rest (+ assign-pos 1)))
+           ;; Auto-wrap multi-token RHS as application: `some 42N` → `(some 42N)`
+           ;; In WS mode, juxtaposed tokens after := form an application.
+           ;;
+           ;; EXCEPT when every token is a keyword- or dash-headed group. That is
+           ;; a MAP BODY written in layout:
+           ;;
+           ;;     def r :=
+           ;;       :eu {:host "eu.example.com" :port 443}
+           ;;       :us {:host "us.example.com" :port 443}
+           ;;
+           ;; Wrapping it as an application built `((:eu …) (:us …))` and the def
+           ;; failed with "Could not infer type" — a message naming typing for
+           ;; what is a layout seam. The byte-identical body WITHOUT `:=` worked,
+           ;; because it reaches `rewrite-implicit-map` with its keyword tail
+           ;; intact. So these are SPLICED and the same rewrite handles both
+           ;; spellings, rather than a second map-building path being added here.
+           ;;
+           ;; Multi-token only: a single keyword group already spliced correctly,
+           ;; and narrowing the change keeps the application default untouched.
+           ;;
+           ;; MERGE 2026-08-05: re-applied into main's restructured head — that
+           ;; rewrite (glued-name splitting + fused-annotation normalization)
+           ;; rebuilt the branches this rode on, so it had to be carried across
+           ;; rather than auto-merged.
+           (define map-body? (and (> (length after) 1) (all-keyword-or-dash-headed? after)))
+           (define value (if (= (length after) 1) (car after) after))
+           (cond
+             ;; A `:=` with nothing after it. Was a raise; now the channel.
+             [(null? after)
+              `($def-error ,(format "def ~a: expected a value after `:=`" name))]
+             ;; No type annotation: (def name := value) → (def name value)
+             [(null? before)
+              (if map-body? `(def ,name ,@after) `(def ,name ,value))]
+             ;; Type annotation with colon: (def name : T1 T2 ... := value)
+             ;; — reached by the spaced spelling, the normalized fused one, AND
+             ;; the split glued one. Three surfaces, one arm.
+             [(and (>= (length before) 2) (eq? (car before) ':))
+              (define type-tokens (cdr before))
+              (if map-body?
+                  `(def ,name ($angle-type ,@type-tokens) ,@after)
+                  `(def ,name ($angle-type ,@type-tokens) ,value))]
+             ;; ── THE CHANNEL ─────────────────────────────────────────────────
+             ;; Everything the expander cannot read is a PER-COMMAND error
+             ;; VALUE, via the `$def-error` marker datum — the `$let-error`
+             ;; seat's sibling, and the same conversion arm in parser.rkt (which
+             ;; supplies the loc the datum layer cannot carry). The marker
+             ;; REPLACES the form, exactly as `expand-let` returns
+             ;; `($let-error msg)` in place of the let.
+             ;;
+             ;; No `with-handlers` boundary is needed here, unlike the let
+             ;; family: that family raises from ~20 sites buried in recursive
+             ;; helpers whose returns are consumed as DATA, so it needed
+             ;; handlers at its entries. Every failure in THIS function is a
+             ;; return, so there is nothing to catch. Returning beats catching.
+             [else
+              `($def-error ,(def-assign-error-message name before))])])])]))
+
+;; The `[else]` message. Guiding, not generic: each shape gets told what it
+;; actually wrote and what to write instead. These are reachable user inputs —
+;; the fused/spaced confusion, the UCS-reserved chained annotation, and the
+;; multiplicity-in-type-position slip — not defensive filler.
+;; A chain's SECOND colon is not a plain colon-symbol. Since the `:` mint
+;; (CIU T6 D4.P4c-2) the reader hands `x:A:B` to us as `(:A ($bcast-step :B))`
+;; — the first colon fuses onto the binder, the rest become broadcast steps.
+;; Both helpers below exist so the message layer never has to know that:
+;; `chained-annot-token?` classifies either spelling, and `annot-token->display`
+;; renders what the USER TYPED. Leaking `($bcast-step :B)` into a diagnostic is
+;; the same defect P4c-2 condition (c) fixed one seam over — an internal
+;; sentinel shown to someone who wrote ordinary syntax.
+(define (bcast-step-annot t)
+  (and (pair? t) (eq? (car t) '$bcast-step) (pair? (cdr t))
+       (fused-type-annot? (cadr t))
+       (cadr t)))
+
+(define (chained-annot-token? t)
+  (or (fused-type-annot? t) (and (bcast-step-annot t) #t)))
+
+(define (annot-token->display t)
+  (format "~a" (or (bcast-step-annot t) t)))
+
+(define (def-assign-error-message name before)
+  (define (spellings)
+    (format "write `def ~a : T := value` (or the fused `def ~a:T := value`)" name name))
+  (cond
+    ;; `def x:A:B := 5` — a chain. Reserved for UCS; split-glued-name-datum
+    ;; refuses the sexp spelling with the same reason, so keep the wording
+    ;; aligned.
+    [(and (>= (length before) 2) (andmap chained-annot-token? before))
+     (format "def ~a: chained type annotation ~a is not supported (reserve for UCS) — ~a"
+             name
+             (apply string-append (map annot-token->display before))
+             (spellings))]
+    ;; `def x:List Nat := 5` — the fused spelling is SINGLE-TOKEN by rule
+    ;; (reader-forms.rkt § fused annotations; `defn` params and `let` bindings
+    ;; carry the same restriction). Refusing is correct; saying "unexpected
+    ;; tokens" would not tell the user the rule they tripped.
+    [(and (>= (length before) 2) (fused-type-annot? (car before)))
+     (format "def ~a: a fused type annotation is single-token — write the spaced form `def ~a : ~a := value`"
+             name name (string-join (cons (symbol->string
+                                           (fused-annot->type-symbol (car before)))
+                                          (map annot-token->display (cdr before)))
+                                    " "))]
+    ;; `def x:0 := 5` / `def x:w := 5` — a multiplicity where a type belongs.
+    [(and (= (length before) 1)
+          (colon-symbol? (car before))
+          (not (eq? (car before) ':)))
+     (format "def ~a: `~a` is a multiplicity, not a type — `def` takes a type annotation; ~a"
+             name (car before) (spellings))]
+    ;; ARROW T1 P1b (R2): `def c-> := 5` reads as name `c-` + a bare `>`.
+    ;; Without this arm the [else] below fires and advises a TYPE ANNOTATION
+    ;; (`def c- : T := value`), which is confidently wrong advice for a
+    ;; mistyped arrow. Must precede [else].
+    [(and (= (length before) 1)
+          (half-glued-arrow-hint name (car before)))
+     => values]
+    [else
+     (format "def ~a: unexpected tokens before `:=`: ~a — ~a"
+             name before (spellings))]))
 
 ;; ========================================
 ;; Built-in pre-parse macros
@@ -5570,6 +5935,22 @@
      (define body (last rest))
      (define bindings-tokens (drop-right rest 1))
      (expand-let-bracket-bindings bindings-tokens body)]
+
+    ;; CIU T6 D4.P4c-2 condition (c) — `let`'s share. Unlike the parser-layer
+    ;; consumers this one is at PREPARSE and cannot return a `parse-error` value,
+    ;; but it does not need to: `let-syntax-error` is already routed through
+    ;; expand-let's handler into a `($let-error msg)` datum, which the parser
+    ;; turns into a per-command error. So the CHANNEL is right and only the
+    ;; MESSAGE needed the upgrade — generic "unrecognized format" printed the
+    ;; internal sentinel at a user who wrote a legal fused annotation.
+    ;; MUTATION-verified (empty the binder tables; this is the arm that fires).
+    [(ormap (lambda (x) (and (pair? x) (eq? (car x) '$bcast-step))) rest)
+     (let-syntax-error
+      (string-append
+       "let: a fused type annotation here was read as a broadcast step — write it "
+       "spaced (`let name : T value`) to work around it. (`let` is missing from "
+       "the reader post-pass binder table in parse-reader.rkt; the fused spelling "
+       "should work here.)"))]
 
     [else
      (let-syntax-error "let: unrecognized format: ~a" datum)]))
@@ -6333,6 +6714,16 @@
 (define (nil-dot-key? x)
   (and (list? x) (= (length x) 2) (eq? (car x) '$nil-dot-key)))
 
+;; D4.P4c-4b: the ω/broadcast reader sentinel, `($bcast-step |:name|)`.
+;; ⚠ ITS PAYLOAD IS COLON-LEADING, unlike `$dot-access`'s BARE symbol — the mint
+;; wraps the keyword/colon-annotation token verbatim precisely so the lexeme is
+;; never re-derived. The fold below therefore passes the payload through WHOLE
+;; and the parser does the one interpretation; splitting that across both layers
+;; would be a second recognizer, which is the F1b.7g drift class this file has
+;; already paid for repeatedly.
+(define (bcast-step? x)
+  (and (list? x) (= (length x) 2) (eq? (car x) '$bcast-step)))
+
 ;; Check if a datum element is a ($postfix-index key) sentinel
 (define (postfix-index? x)
   (and (list? x) (= (length x) 2) (eq? (car x) '$postfix-index)))
@@ -6364,11 +6755,23 @@
 ;; only MARK (`xs[0]` yields two siblings), and this fold is what joins them.
 ;; So a new selection sentinel owes THREE things, not one: a predicate, an entry
 ;; here, and a fold arm in `rewrite-dot-access` below.
+;; ⚠ D4.P4c-4b — `$bcast-step` JOINS HERE, and this membership is what Q_U16's
+;; ruling item 2 buys: the fold gate below is `access-sentinel?`'s ONLY
+;; production consumer, so joining it inherits all FOUR `rewrite-dot-access`
+;; seats at once (the main preparse, map-literal contents, the `|>` expander,
+;; the `$mixfix` expander) — which is exactly what the rejected parser-side
+;; fusion escape could not do.
+;; ⚠ It was listed as a P4c-2 deliverable and DID NOT LAND, while P4c-2 closed ✅
+;; (DEFERRED 37). It read as closed because `broadcast-access?` in this list is
+;; the RETIRED `$broadcast-access` — a DIFFERENT head. Not a live defect until
+;; now: with the enable-set empty no sentinel survived the reader post-pass, so
+;; the fold never met one.
 (define (access-sentinel? x)
   (or (dot-access? x) (dot-key? x)
       (nil-dot-access? x) (nil-dot-key? x)
       (postfix-index? x) (broadcast-access? x)
-      (dot-brace? x) (select-brace? x)))
+      (dot-brace? x) (select-brace? x)
+      (bcast-step? x)))
 
 ;; Unified rewrite for ALL access sentinels in a flat datum list.
 ;; Handles: $dot-access, $nil-dot-access, $postfix-index (live) and the
@@ -6445,13 +6848,54 @@
        (let loop ([elems datum] [acc '()])
          (cond
            [(null? elems) (reverse acc)]
+           ;; ⭐ D4.P4b-ii-2b — THE FLIP. `x.a` mints the SELECTOR CARRIER
+           ;; (`$select-path`) instead of `map-get`, so the dot spelling joins
+           ;; the unified representation Q_U5 ruled.
+           ;;
+           ;; NESTING, per Q_U13 [owner]: the fold already nests
+           ;; (`x.a.b` was `(map-get (map-get x :a) :b)`), so `($select-path
+           ;; ($select-path x a) b)` is the minimal diff AND gives one carrier
+           ;; PER LEVEL — which is what makes a SCALAR tier slot sufficient.
+           ;; Under the rejected GATHER encoding one node would span a whole
+           ;; chain and the tier would have to be a list parallel to the steps.
+           ;;
+           ;; The FIELD rides as a bare SYMBOL, not a `:keyword` — the payload
+           ;; is the step vocabulary (`389f6802`'s encoding convergence), and
+           ;; the parser's `$select-path` arm segments it.
            [(dot-access? (car elems))
             (if (null? acc)
                 (loop (cdr elems) (cons (car elems) acc))
                 (let* ([field (cadr (car elems))]
                        [target (car acc)]
-                       [wrapped `(map-get ,target ,(string->symbol
-                                                     (string-append ":" (symbol->string field))))])
+                       [wrapped `($select-path ,target ,field)])
+                  (loop (cdr elems) (cons wrapped (cdr acc)))))]
+           ;; ⭐ D4.P4c-4b — THE ω ARM. Deliberately the `$dot-access` arm above
+           ;; VERBATIM, except the payload item rides WHOLE (`,(car elems)`)
+           ;; instead of unwrapped (`,field`). Four obligations, all met by that
+           ;; one difference:
+           ;;  · FIXPOINT — the emitted head is `$select-path`, which is NOT an
+           ;;    `access-sentinel?` member, so the result cannot re-trigger this
+           ;;    fold. That is the whole of the fixpoint obligation: a
+           ;;    sentinel-headed result would make `preparse-expand-subforms`
+           ;;    re-enter and swallow one LEFT sibling per pass — the P1b-iii bug
+           ;;    that SILENTLY DROPPED a `defn` clause at zero errors.
+           ;;  · BROADCAST-NESS SURVIVES to segmentation, because the sentinel is
+           ;;    still there to be seen.
+           ;;  · COMPOSES with any base, including a `$select-path` base — the
+           ;;    fold already nests, so `a.b:name` becomes
+           ;;    `($select-path ($select-path a b) ($bcast-step |:name|))`, one
+           ;;    carrier per LEVEL. `users:0:userName` is two sibling sentinels
+           ;;    and therefore two levels (the L1 fusion case).
+           ;;  · The payload is NOT re-derived here — see `bcast-step?`.
+           ;; ⚠ `(null? acc)` = branch-initial `:`, which Q_U7 REFUSES in v1.
+           ;; Left in place (not folded) so the parser's own arm reports it with
+           ;; a guided per-command message, exactly as the bare-sentinel siblings
+           ;; do; a fold-time refusal here would have no srcloc to point at.
+           [(bcast-step? (car elems))
+            (if (null? acc)
+                (loop (cdr elems) (cons (car elems) acc))
+                (let* ([target (car acc)]
+                       [wrapped `($select-path ,target ,(car elems))])
                   (loop (cdr elems) (cons wrapped (cdr acc)))))]
            [(nil-dot-access? (car elems))
             (if (null? acc)

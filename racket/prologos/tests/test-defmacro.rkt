@@ -6,7 +6,50 @@
 ;;;
 
 (require rackunit
-         "../macros.rkt")
+         racket/file
+         racket/list
+         "../macros.rkt"
+         "../errors.rkt"
+         "../driver.rkt"
+         "../global-env.rkt"
+         "../namespace.rkt"
+         "test-support.rkt")
+
+;; ---- Level 3 fixture (used only by the containment block at the end) --------
+;; A raise during preparse is a WHOLE-FILE abort, and that is observable ONLY
+;; through a real file with sibling commands on both sides of the offending one.
+;; The datum-level pins above cannot see it: they call `datum-subst` directly.
+(define-values (pre-global-env pre-ns-context pre-module-reg
+                pre-trait-reg pre-impl-reg pre-param-impl-reg)
+  (parameterize ([current-file-module-network-ref (make-module-network)]
+                 [current-ns-context #f]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry]
+                 [current-param-impl-registry prelude-param-impl-registry])
+    (install-module-loader!)
+    (process-string "(ns defmacro-pre)")
+    (values (global-env-snapshot) (current-ns-context) (current-module-registry)
+            (current-trait-registry) (current-impl-registry)
+            (current-param-impl-registry))))
+
+(define (run-file-ws s)
+  (define tmp (make-temporary-file "prologos-defmacro-~a.prologos"))
+  (call-with-output-file tmp #:exists 'replace (lambda (out) (display s out)))
+  (define result
+    (parameterize ([current-file-module-network-ref
+                    (module-network-add-import (make-module-network)
+                                               (module-network-from-snapshot pre-global-env))]
+                   [current-ns-context pre-ns-context]
+                   [current-module-registry pre-module-reg]
+                   [current-trait-registry pre-trait-reg]
+                   [current-impl-registry pre-impl-reg]
+                   [current-param-impl-registry pre-param-impl-reg])
+      (process-file (path->string tmp))))
+  (delete-file tmp)
+  result)
 
 ;; ========================================
 ;; datum-match tests
@@ -139,7 +182,6 @@
   ;; wrong, it now fails at the USE site as an ordinary unbound-variable error
   ;; naming the symbol, per-command and with a srcloc.
   (check-equal? (datum-subst '$unbound (hasheq)) '$unbound))
-
 ;; ========================================
 ;; preparse-expand-form tests
 ;; ========================================

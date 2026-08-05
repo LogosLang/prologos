@@ -42,6 +42,25 @@
  tokenize-char-rrb
  register-token-pattern!
  register-default-token-patterns!
+ ;; D4.P4c-1: THE adjacency predicate, exported so the SECOND grouper
+ ;; (surface-rewrite.rkt's `group-items-to-tree`) consumes this definition
+ ;; instead of hand-inlining the four conjuncts. It had drifted into a live
+ ;; second copy — the F1b.7g class — and P4c-2 would have written a third.
+ ;; ⚠ NOT hoisted to reader-forms.rkt (the P4c options panel's recommendation):
+ ;; this predicate is over the `token-entry` STRUCT, defined here at :183, so
+ ;; moving it there would drag the struct along and break that module's
+ ;; deliberate "requires nothing project-local" invariant — the very property
+ ;; that made it the suggested home. surface-rewrite.rkt already requires THIS
+ ;; module (:26), so the edge exists and exporting is cycle-free by construction.
+ adjacent-to-base?
+ ;; D4.P4c-2: THE `:` gate trigger — both groupers consume this one predicate.
+ bcast-step-trigger?
+ ;; D4.P4c-4a: THE ENABLE-SET, exported so a TEST can grant a context. It was an
+ ;; unexported `define`, so the only way to exercise ANY of the preservation
+ ;; machinery was source mutation on a scratch build (DEFERRED 38) — and
+ ;; mutation-only validation is what let three enumeration gaps through this arc.
+ ;; Production NEVER sets it; the default is empty and every grant is a test's
+ ;; `parameterize`, until a context is granted for real alongside its consumer.
 
  ;; Cell constructors for propagator network
  create-parse-cells
@@ -272,6 +291,31 @@
       (let loop ([i (+ pos 1)])
         (define nc (rrb-char-at rrb i))
         (cond
+          ;; ARROW T1 P1: `->` FLANKED BY IDENTIFIER CHARS continues the name,
+          ;; so `centigrade->fahrenheit` is one symbol.
+          ;;
+          ;; MUST precede the ident-continue? arm below: `-` is itself an
+          ;; ident-continue char, so that arm would eat the dash and leave `>`
+          ;; to terminate the token — that is exactly the `c->f` -> `c-`
+          ;; truncation this fixes (the `>` then became a stray `rangle`, which
+          ;; also POPS a bracket frame, so damage surfaced far from the cause).
+          ;;
+          ;; Shape deliberately mirrors the `::` arm below: fixed lookahead, no
+          ;; backtracking, inside the existing scan. Whitespace cannot occur
+          ;; here BY CONSTRUCTION — the scanner is mid-token, and a space would
+          ;; already have ended it — so this is glued-only without needing any
+          ;; token-adjacency substrate.
+          ;;
+          ;; Only BOTH-SIDES-glued arrows are absorbed. A spaced ` -> ` never
+          ;; reaches here and still lexes as the standalone arrow symbol, which
+          ;; is what every arrow consumer (spec signatures, match/defn arms,
+          ;; angle-group Pi types, and `binder-region-terminators`) reads.
+          [(and nc (char=? nc #\-)
+                (let ([nc2 (rrb-char-at rrb (+ i 1))])
+                  (and nc2 (char=? nc2 #\>)
+                       (let ([nc3 (rrb-char-at rrb (+ i 2))])
+                         (and nc3 (ident-continue? nc3))))))
+           (loop (+ i 3))]  ;; skip -> and the first char after it
           [(and nc (ident-continue? nc))
            (loop (+ i 1))]
           ;; :: followed by ident-start → module path continuation
@@ -552,9 +596,22 @@
         ;; than ident-start? so :=/:-foo do not collide with colon-assign. (CIU T6
         ;; F1b.7g: was an inline charset that had drifted from ident-continue? for
         ;; 8 chars; CIU T6 F3 added ^ inline without noticing the base divergence.)
-        (if (and nc (ident-continue? nc))
-            (loop (+ i 1))
-            (- i pos)))
+        ;; ARROW T1 P1 (owner ruling R1): keywords take the glued-`->` rule too,
+        ;; so `:a->b` is one keyword. Leaving this arm behind while
+        ;; recognize-symbol advanced would BE the F1b.7g drift the comment above
+        ;; records. Same shape and same both-sides-glued condition as
+        ;; recognize-symbol; must precede the ident-continue? test for the same
+        ;; reason (`-` is an ident-continue char).
+        (cond
+          [(and nc (char=? nc #\-)
+                (let ([nc2 (rrb-char-at rrb (+ i 1))])
+                  (and nc2 (char=? nc2 #\>)
+                       (let ([nc3 (rrb-char-at rrb (+ i 2))])
+                         (and nc3 (ident-continue? nc3))))))
+           (loop (+ i 3))]
+          [(and nc (ident-continue? nc))
+           (loop (+ i 1))]
+          [else (- i pos)]))
       #f))
 
 (define (recognize-single-char rrb pos expected type)
@@ -1186,8 +1243,14 @@
    (token-pattern 'arrow (lambda (rrb pos) (recognize-arrow rrb pos))
                   (lambda (s p l) 'symbol) 98))
   (register-token-pattern!
+   ;; D4.P4c-1 (Q_U16b): classifies to its OWN type, not 'symbol. `users:0` is a
+   ;; legal ω step, so P4c-2's `:` gate must dispatch this band at GROUPING —
+   ;; and while it classified to 'symbol it was type-indistinguishable from any
+   ;; ordinary identifier. Type refinement AT THE CLASSIFIER is that layer's
+   ;; designed purpose (`negative-number` returns three types from one
+   ;; recognizer), not an asymmetry carved out for one sibling.
    (token-pattern 'colon-annotation (lambda (rrb pos) (recognize-colon-annotation rrb pos))
-                  (lambda (s p l) 'symbol) 97))  ;; :0, :w before bare colon
+                  (lambda (s p l) 'colon-annotation) 97))  ;; :0, :w before bare colon
   ;; D4.P1b-i: `?x:Nat` as ONE token — before `symbol` (50), which would stop
   ;; at the colon. Contiguity is the discriminator: `?m :name` (spaced) is
   ;; untouched, so keyword arguments after a logic variable still work.
@@ -1686,7 +1749,11 @@
          parse-string-to-cells)
 
 ;; Build the parse tree from indent RRB + token RRB + bracket-depth RRB.
-;; This is the fire function for the tree-builder propagator.
+;; ⚠ Described as "the fire function for the tree-builder propagator", but no
+;; such propagator exists — this is CALLED DIRECTLY from the straight-line
+;; net1→net6 sequence below. Kept as written because the SHAPE is right and it
+;; is what an eventual install would use; corrected 2026-08-02 so the comment
+;; states an intention rather than a fact.
 ;;
 ;; Algorithm (expressed as fixpoint, implemented sequentially):
 ;; 1. Map each token to its source line (from start-pos)
@@ -1884,8 +1951,23 @@
 ;; (if changed) re-tokenize affected spans.
 ;;
 ;; For Track 1: disambiguation is applied as a post-pass on the
-;; token RRB (not a separate propagator yet — the propagator wiring
-;; comes when we install these on the network in Phase 1f).
+;; token RRB (not a separate propagator yet).
+;;
+;; ⚠ THE "Phase 1f" IOU THIS COMMENT USED TO CARRY WAS STALE SINCE 2026-03-26,
+;; and it promised something that phase never delivered. PPN Track 1's Phase 1f
+;; as SHIPPED was an integration gate — a golden topology comparison across 110
+;; `.prologos` files (`6df01a9`) — not propagator wiring. Anyone following the
+;; pointer arrived at a completed phase and reasonably concluded the wiring had
+;; happened.
+;;
+;; The measured state, 2026-08-02: the parse layer installs **ZERO** propagators
+;; — all seven files (parse-reader, parse-lattice, tree-parser, surface-rewrite,
+;; form-cells, parser, macros). This file's complete network surface is 1
+;; `make-prop-network`, 5 `net-new-cell`, 5 `net-cell-write`, 1 `net-cell-read`:
+;; a cell LEDGER written by a straight-line net1→net6 sequence. The real home
+;; for the wiring is the reader-layer section of the PPN 4D Implementation Draft
+;; Note (`docs/tracking/2026-05-19_PPN_4D_IMPLEMENTATION_DRAFT_NOTE.md`), and it
+;; is genuinely unbuilt rather than deferred-to-a-shipped-phase.
 
 ;; Disambiguate tokens based on bracket context.
 ;; Returns a new token RRB with narrowed type sets.
@@ -2200,6 +2282,8 @@
            (substring lexeme 1 (- (string-length lexeme) 1))
            lexeme)]
       [(keyword) (string->symbol lexeme)]
+      ;; D4.P4c-1: the compat twin — kept IDENTICAL to its sibling above.
+      [(colon-annotation) (string->symbol lexeme)]
       [(char) (if (= (string-length lexeme) 3)
                   (string-ref lexeme 1)  ;; 'X' → X
                   lexeme)]
@@ -2429,6 +2513,14 @@
                      (substring lexeme 1 (- (string-length lexeme) 1)))
                     lexeme)]
       [(keyword) (string->symbol lexeme)]
+      ;; D4.P4c-1: EXPLICIT, never the [else]. Its safety as a fallthrough would
+      ;; be a coincidence of two identity-returning else-arms at the exact site
+      ;; this file documents as its silent-miss hazard (the `dot-ordinal`
+      ;; incident: "no raise, no diagnostic, wrong datum"). Coincidental safety
+      ;; expires silently. The VALUE is unchanged from the 'symbol era — that
+      ;; invariance is what keeps the promotion datum-invisible and the P4c-2
+      ;; A/B baseline clean.
+      [(colon-annotation) (string->symbol lexeme)]
       [(char) (cond
                 ;; 'X' char literal → the char
                 [(and (= (string-length lexeme) 3)
@@ -2834,6 +2926,557 @@
         orig
         k)))
 
+;; ============================================================
+;; D4.P4c-2 (Q_U16) — THE BINDER UNWRAP, at the READER POST-PASS
+;; ============================================================
+;;
+;; WHY HERE AND NOWHERE ELSE. `$bcast-step` must join `access-sentinel?` to
+;; inherit all FOUR `rewrite-dot-access` seats — two of which run inside
+;; PREPARSE, so a parser-side unwrap
+;; is unreachable. ⚠ COORDINATES RE-MEASURED 2026-08-02: the seats are
+;; macros.rkt **:2004** (map-literal contents) · **:2714** (main preparse) ·
+;; **:6564** (the `|>` expander) · **:6950** (the `$mixfix` expander), with the
+;; definition at :6189 and a caller-less alias `rewrite-nil-dot-access` at
+;; :6358. The previously-cited :1965 · :2672 · :6316 · :6702 were ALL FOUR
+;; wrong, and the identical stale quadruple had been copied into the track test
+;; file and D4 — so anchor on the NAMES, not the numbers, when re-checking.
+;; But the fold RUNS OVER BINDER POSITIONS (`defn f [x.a] x` →
+;; a 3-arity function at ZERO errors). This walk runs at READER time and
+;; therefore provably precedes all four seats. That is the whole of Q_U16.
+;;
+;; THE TABLE IS MEASURED, not enumerated from memory (D4 §5.P4c-2). Members:
+;;   def · defn · fn · spec · let · property · functor · trait (method params)
+;;   · rel · defr · and `$pipe` ARMS in defn AND match.
+;; Immune by construction: `?x:T` (glued to ONE token by narrow-var-annot),
+;; branch-initial `:k`, and every SPACED spelling — none of them ever mints.
+;;
+;; ⚠ BOOKED COST, stated plainly (Q_U16 condition): this table is a PERMANENT
+;; hand-maintained enumeration with NO retirement plan. Its failure mode is a
+;; missed form silently reading a binder annotation as a broadcast step — the
+;; 3-arity class. The consumer hardening is what makes that LOUD; this walk
+;; alone does not.
+;;
+;; ⚠ EQ?-PRESERVING BY CONSTRUCTION — see the note on `transform-let-blocks-stx`
+;; below. An untouched form MUST keep its original syntax object, properties
+;; included: the first draft of that walk dropped POL.9's
+;; `prologos-paren-origin` and silently degraded an implicit-solve paren goal to
+;; an APPLICATION.
+
+;; Heads whose PARAM GROUP (the first bracket group after the head/name) binds.
+;; `defmacro` is a member: its `[$cond $body]` group binds macro pattern vars
+;; (lib/prologos/core.prologos:45) and it appeared in NO list until condition (c).
+(define binder-param-heads
+  '(defn fn spec property functor rel defr defmacro))
+
+;; ⚠ THE HEAD TESTS NORMALIZE THE PRIVATE SUFFIX. `private-form-base` lives in
+;; reader-forms.rkt (this module already requires it) precisely so the reader
+;; and preparse cannot disagree about what `defn-` is. Without this, every one
+;; of the ELEVEN suffixed heads missed its table entry and leaked — a measured,
+;; end-to-end regression, invisible to a 161-file corpus A/B because no tracked
+;; file happens to pair a private form with a fused annotation.
+(define (binder-head-base hd)
+  (and (symbol? hd) (or (private-form-base hd) hd)))
+
+(define (binder-param-head? hd)
+  (let ([b (binder-head-base hd)]) (and b (memq b binder-param-heads) #t)))
+
+;; `trait` is DEEP, not param-scan: its method params live inside nested lists
+;; headed by the METHOD NAME (an arbitrary symbol), so there is no head to key
+;; on. Deep unwrap is safe here because a trait body is SIGNATURES ONLY — no
+;; expression bodies for a broadcast to live in. If trait ever gains default
+;; method bodies, this entry must narrow.
+(define binder-deep-heads '(trait))
+
+;; Heads whose binder region runs from the head to a TERMINATOR.
+(define binder-region-heads '(def let))
+(define binder-region-terminators '(:= ->))
+
+;; ⚠ THE ENABLE-SET'S 68-LINE RATIONALE BLOCK LIVED HERE AND IS DELETED (G2,
+;; 2026-08-05). It is recorded rather than silently dropped because leaving it
+;; was itself a defect the G2 adversarial verify caught: the block sat DIRECTLY
+;; ABOVE its own obituary and asserted the INVERSE of shipped behaviour —
+;; "It is EMPTY BY DEFAULT, by ruling", "the whole mint is equivalent to not
+;; minting at all", "⚠ THIS IS OFF-NETWORK SCAFFOLDING … chartered retirement is
+;; PPN Track 4D", and a measured CHAIN table whose rows
+;; (`[wrap [def q := users:name]]` ⇒ STRIPPED) are now false. It also repeated
+;; the `[add ?x:Nat ?y:Nat]` counter-example that THIS SAME COMMIT corrects two
+;; hundred lines below. A file carrying a refuted claim and its refutation, with
+;; nothing marking which is dead, is worse than a file carrying neither.
+;;
+;; What survives from it, because the retirement does not make it false: the walk
+;; is strictly POST-ORDER and neither walker takes an inherited-context argument,
+;; so every node is judged by its OWN head — there is no such thing as being
+;; "inside" a region. That is still how the three surviving deep-strippers
+;; (the `trait` arm, the `$pipe` pattern region, `take-param-region`) behave, and
+;; it is pinned in the battery.
+;;
+;; ⭐ D4.P4c-4c / G2 — `broadcast-enabled-contexts` and
+;; `broadcast-preservation-active?` ARE RETIRED, and their whole rationale block
+;; with them. They were a TEST SEAM: a guarded parameter defaulting to `'()` with
+;; ZERO production setters, so head-keyed broadcast preservation ran nowhere
+;; outside the battery. That is the *Validated ≠ Deployed* shape, and Q_U18 named
+;; it as such and scheduled this retirement (grant ruling G4, then G2).
+;;
+;; Both of the seam's justifications had expired: the sentinel gained a consumer
+;; at P4c-3, and the head-keyed policy question was settled by Q_U18's PRESERVE
+;; ruling. Keeping a switch beside a settled decision is this project's
+;; belt-and-suspenders red flag, not defence in depth — so it is DELETED, not
+;; defaulted-on. Preservation is now unconditional; see the retired first arm of
+;; the head-keyed walk below for the full argument.
+;;
+;; ⚠ WHAT THE SEAM PROVED, kept because the retirement does not make it false:
+;; per-node dispatch means there is no such thing as being *inside* a granted
+;; region — every node is judged by its OWN head. Under G2 that is no longer
+;; observable as a grant question, but it is still how the walk works, and the
+;; three surviving deep-strippers (the `trait` arm, the `$pipe` pattern region,
+;; and `take-param-region`'s implicit/param groups) are where it still shows.
+;;
+;; ⚠ THE GUARD THAT DIED WITH IT was load-bearing while it lived: this parameter
+;; was set BY HAND from tests, so the natural typo was dropping the list, and
+;; unguarded that raised `memq: not a proper list` at READ time, outside any
+;; per-command handler — a WHOLE-FILE ABORT, the fourth of that shape in this
+;; track. Retiring the parameter removes the hazard at the root rather than
+;; guarding it; recorded so the lesson is not lost with the code.
+
+(define (bcast-step-stx? x)
+  (and (syntax? x)
+       (let ([d (syntax-e x)])
+         (and (pair? d) (syntax? (car d)) (eq? (syntax-e (car d)) '$bcast-step)))))
+
+;; `($bcast-step |:Int|)` → `|:Int|`, VERBATIM. A plain cadr: the mint wrapped
+;; the colon-symbol untouched precisely so this never re-derives the lexeme
+;; (that would be a second copy of the recognizer — the F1b.7g class).
+;; ⚠ THE GUARD IS LOAD-BEARING, and its absence was a WHOLE-FILE ABORT. A user
+;; can write the internal head with no payload — `defn f [$bcast-step] 1` — and
+;; an unguarded `cadr` then raises a raw Racket contract violation at READER
+;; time, outside any per-command handler, losing every command in the file. That
+;; is the exact failure the P1a marker seat exists to eliminate, and it is the
+;; THIRD time in this track an unguarded `car`/`cadr` on a sentinel payload has
+;; produced it (P1a's `$retired-selection`, P4c-2's `apply-binder-unwrap`, here).
+;; Found by the P4c-2 adversarial verify. A malformed sentinel is returned
+;; UNTOUCHED so the parser's own arms give it a per-command diagnostic.
+(define (unwrap-bcast-step x)
+  (let ([d (syntax-e x)])
+    (if (and (pair? d) (pair? (cdr d))) (cadr d) x)))
+
+;; Unwrap every `$bcast-step` in a subtree, recursing through sub-groups.
+;; Required because arm patterns NEST: `defn g | [cons h:Int t] -> h` puts the
+;; annotation inside a constructor pattern, so scanning an arm's top-level
+;; items is not enough.
+(define (unwrap-binders-deep stx)
+  (cond
+    [(bcast-step-stx? stx) (unwrap-bcast-step stx)]
+    [(and (syntax? stx) (list? (syntax-e stx)))
+     (let* ([kids (syntax-e stx)]
+            [kids* (map unwrap-binders-deep kids)])
+       (if (andmap eq? kids kids*) stx (datum->syntax #f kids* stx stx)))]
+    [else stx]))
+
+;; A `$pipe` ARM's pattern region: everything up to the ARROW. Patterns NEST
+;; (`| [cons h:Int t] -> h`), so sub-groups are unwrapped DEEP here — unlike a
+;; `def`/`let` prefix, where a group is a value and must be left alone.
+(define (unwrap-binders-until-terminator kids)
+  (let loop ([ks kids] [acc '()] [done? #f])
+    (cond
+      [(null? ks) (reverse acc)]
+      [done? (append (reverse acc) ks)]
+      [else
+       (let* ([k (car ks)]
+              [d (and (syntax? k) (syntax-e k))]
+              [term? (and (symbol? d) (memq d binder-region-terminators))])
+         (loop (cdr ks)
+               (cons (if term? k (unwrap-binders-deep k)) acc)
+               term?))])))
+
+(define (group-stx? k) (and (syntax? k) (list? (syntax-e k))))
+
+(define (group-headed-by? k sym)
+  (and (group-stx? k)
+       (let ([d (syntax-e k)])
+         (and (pair? d) (syntax? (car d)) (eq? (syntax-e (car d)) sym)))))
+
+;; `def` / `let`: the binder region is the NAME plus an OPTIONAL fused
+;; annotation. Nothing more.
+;;
+;; ⚠ THIS REPLACED A TERMINATOR *SEARCH*, and the difference is a silent wrong
+;; answer. `:=` is OPTIONAL in WS `let`, so when the search found no terminator
+;; it ran to the END of the list and unwrapped the BODY — measured:
+;; `let x 5` + a body `users:name` came back as `(let x 5 (users :name))`, the
+;; broadcast silently stripped. Condition (c) structurally CANNOT catch that
+;; direction, because no sentinel survives for a refusal arm to see; only a
+;; correct bound can. Inert today (the sentinel has no consumer until P4c-3),
+;; which is exactly why it needed pinning rather than waiting.
+(define (unwrap-binder-prefix kids)
+  (if (or (null? kids) (not (pair? kids)))
+      kids
+      (let* ([nm (car kids)]
+             [d (and (syntax? nm) (syntax-e nm))]
+             [rest (cdr kids)])
+        (cond
+          ;; ⚠ THE BRACKET SPELLING. `let [x:Int := 5 y:Nat := 6] body` puts the
+          ;; bindings in a GROUP, so the first kid is not a symbol. This arm used
+          ;; to bail here, which regressed a DOCUMENTED `let` spelling to a hard
+          ;; error dumping the raw sentinel (prologos-syntax.md § let lists the
+          ;; bracket form, and says all spellings MIX freely). Each binding
+          ;; inside is itself a name-plus-optional-annotation prefix, but they
+          ;; run together in ONE flat group, so unwrap an annotation wherever it
+          ;; FOLLOWS a symbol — values keep their broadcasts because a value is
+          ;; never in that slot.
+          [(and (syntax? nm) (list? d))
+           (cons (unwrap-bracket-bindings nm) rest)]
+          [(not (symbol? d)) kids]
+          [(and (pair? rest) (bcast-step-stx? (car rest)))
+           (cons nm (cons (unwrap-bcast-step (car rest)) (cdr rest)))]
+          [else kids]))))
+
+;; A flat `let [x:Int := 5 y:Nat := 6]` bindings group: unwrap a `$bcast-step`
+;; only where it directly follows a SYMBOL (the annotation slot).
+(define (unwrap-bracket-bindings grp)
+  (let* ([ks (syntax-e grp)]
+         [ks* (let loop ([ks ks] [prev-sym? #f] [acc '()])
+                (cond
+                  [(null? ks) (reverse acc)]
+                  [else
+                   (let* ([k (car ks)]
+                          [d (and (syntax? k) (syntax-e k))])
+                     (cond
+                       [(and prev-sym? (bcast-step-stx? k))
+                        (loop (cdr ks) #f (cons (unwrap-bcast-step k) acc))]
+                       [else (loop (cdr ks) (symbol? d) (cons k acc))]))]))])
+    (if (andmap eq? ks ks*) grp (datum->syntax #f ks* grp grp))))
+
+;; A SPLICED `def`/`let`: the same bounded prefix, but starting after the head
+;; symbol wherever it sits in a sibling list. Returns (values region rest).
+(define (take-region-prefix ks)
+  (let ([pre (unwrap-binder-prefix ks)])
+    (let loop ([n 0] [xs pre])
+      (cond
+        [(null? xs) (values pre '())]
+        [(let ([d (and (syntax? (car xs)) (syntax-e (car xs)))])
+           (and (symbol? d) (memq d binder-region-terminators)))
+         (values (take-prefix pre (+ n 1)) (list-tail pre (+ n 1)))]
+        [(>= n 2) (values (take-prefix pre n) (list-tail pre n))]
+        [else (loop (+ n 1) (cdr xs))]))))
+
+(define (take-prefix xs n)
+  (if (or (zero? n) (null? xs)) '() (cons (car xs) (take-prefix (cdr xs) (- n 1)))))
+
+;; An aligned `let` block's entries are built by `classify-let-block` DURING this
+;; same pass — after the recursive descent — so they never get their own
+;; `apply-binder-unwrap` call and must be handled here. Each entry is
+;; `(name annot? value…)`, i.e. exactly a binder prefix.
+(define (unwrap-let-block k)
+  (let* ([kids (syntax-e k)]
+         [kids* (cons (car kids)
+                      (map (lambda (e)
+                             (if (group-stx? e)
+                                 (let* ([ek (syntax-e e)]
+                                        [ek* (unwrap-binder-prefix ek)])
+                                   (if (eq? ek* ek) e (datum->syntax #f ek* e e)))
+                                 e))
+                           (cdr kids)))])
+    (if (andmap eq? kids kids*) k (datum->syntax #f kids* k k))))
+
+;; The per-form rule. Returns the kids list, unwrapped where this form binds.
+(define (apply-binder-unwrap kids)
+  ;; ⚠ kids is NOT always a list. `classify-let-block`'s FAIL path returns
+  ;; `let-block-error`'s value — a SYNTAX OBJECT wrapping `($let-error "…")` —
+  ;; and this file's own CONTRACT REPAIR note (on transform-let-blocks-elems)
+  ;; documents that hazard verbatim. The first cut of this function did
+  ;; `(car kids)` unguarded and turned a contained let-LAYOUT error into a
+  ;; `car: contract violation`, i.e. a whole-file abort: the precise defect that
+  ;; note exists to prevent, reintroduced one screen below it. Caught by
+  ;; test-let-blocks' "a top-level let-block LAYOUT error is CONTAINED, not a
+  ;; file abort" pin — which is exactly what that pin is for.
+  (if (or (not (pair? kids)) (null? kids))
+      kids
+      (let* ([h (car kids)]
+             [hd (and (syntax? h) (syntax-e h))])
+        (cond
+          ;; ⭐ D4.P4c-4c / G2 — THE ENABLE-SET IS RETIRED; PRESERVATION IS
+          ;; UNCONDITIONAL. The arm that stood here tested a grant list and, when
+          ;; the node's own head was not in it, deep-unwrapped everything below:
+          ;;
+          ;;   [(not (broadcast-preservation-active? hd)) (map unwrap-binders-deep kids)]
+          ;;
+          ;; It defaulted to `'()` and had ZERO production setters, so broadcast
+          ;; was reachable only from tests — the *Validated ≠ Deployed* shape,
+          ;; named as such at Q_U18. Its two stated justifications had both
+          ;; expired (the sentinel gained a consumer at P4c-3; the head-keyed
+          ;; policy question was settled by Q_U18's PRESERVE ruling), and keeping
+          ;; a mechanism beside a settled decision is this project's
+          ;; belt-and-suspenders red flag rather than defence in depth.
+          ;;
+          ;; ⚠ IT WAS ALSO THE OPERATIVE HALF, not cleanup: the Q_U18 PRESERVE
+          ;; flip was INERT while this arm stood, because it stripped any node
+          ;; whose OWN head was ungranted — and granting every function name is
+          ;; absurd. Retiring it is what delivers the feature.
+          ;;
+          ;; ⚠ AND IT DISSOLVES THE CHAIN RULE — but only partly, so do not
+          ;; over-claim: three deep-strippers SURVIVE (the `trait` arm below, the
+          ;; `$pipe` pattern region, and `take-param-region`'s implicit/param
+          ;; groups). "After G2 nothing strips ancestrally" is FALSE for those.
+          ;; `$pipe` ARMS (defn AND match): the ARROW splits pattern from body.
+          ;; Owner-caught; named by neither the audit nor the options panel.
+          [(eq? hd '$pipe)
+           (cons h (unwrap-binders-until-terminator (cdr kids)))]
+          ;; `def` / `let`: the NAME + an optional fused annotation — then SCAN
+          ;; the remainder, because a nested binder form (`def q := rel [a:Int] …`)
+          ;; lives past the terminator and owns its own param group.
+          [(memq (binder-head-base hd) binder-region-heads)
+           (cons h (scan-for-param-heads (unwrap-binder-prefix (cdr kids))))]
+          ;; `trait`: deep — see binder-deep-heads.
+          [(memq (binder-head-base hd) binder-deep-heads)
+           (cons h (map unwrap-binders-deep (cdr kids)))]
+          ;; ⭐ THE INVERTED DEFAULT (owner ruling, 2026-08-01). An UNRECOGNIZED
+          ;; head unwraps EVERYTHING.
+          ;;
+          ;; This walk used to leave an unknown form untouched, so a missed head
+          ;; meant the sentinel SURVIVED into that form's binder position and
+          ;; broke working code. Measured cost of that direction: `capability`,
+          ;; `Pi`, `Sigma`, `DSend` and `DRecv` each went from defining cleanly
+          ;; to a hard error — five more rows on top of the four this phase had
+          ;; already found, in a table that had by then failed nine times.
+          ;;
+          ;; Inverted, a miss can only mean "broadcast does not fire in this
+          ;; position YET": the fused annotation still works, and the broadcast
+          ;; reports LOUDLY (measured: `Could not infer type`, per-command, file
+          ;; continues) rather than silently. Errors may become meanings, never
+          ;; the reverse — the same monotonicity §9's strict-first waypoint is
+          ;; ratified on.
+          ;;
+          ;; ⚠ THE ENUMERATION DOES NOT VANISH, IT MOVES — do not read this as
+          ;; retiring the table. The table is now "where broadcast SURVIVES"
+          ;; instead of "where annotations survive". What changed is only the
+          ;; direction a miss fails in, and that is the whole of the ruling.
+          ;; P4c-3 enables each expression context deliberately as it wires the
+          ;; consumer.
+          ;;
+          ;; ⭐ P4c-3a — THE `[else]` SPLIT. This arm has TWO populations and the
+          ;; inversion conflated them, which made the enable-set a switch that
+          ;; would have switched on a BROKEN path:
+          ;;   · heads the SCANNER recognizes but this cond does not — the whole
+          ;;     param-head family (`defn fn spec property functor rel defr
+          ;;     defmacro`), plus sibling `$pipe` arms, sibling `def`/`let`, and
+          ;;     `$let-block` groups. `scan-for-param-heads` handles their binder
+          ;;     regions CORRECTLY and leaves their bodies alone.
+          ;;   · heads nobody recognizes — the genuine unknowns (`capability`,
+          ;;     `Pi`, `Sigma`, `DSend`, `DRecv` …), which must fail SAFE.
+          ;; The inversion wrote `(scan-for-param-heads (map unwrap-binders-deep
+          ;; kids))`, which strips deeply FIRST and so hands the scanner kids it
+          ;; can no longer do anything with — the scan was DEAD WORK there, and
+          ;; the eight most important binder forms would have been blanket-
+          ;; stripped at the first grant. Verified against `68cdaae7^`, where the
+          ;; arm was the non-destructive `(scan-for-param-heads kids)`.
+          ;;
+          ;; The split asks the SCANNER whether it recognized anything, rather
+          ;; than re-testing its arms here (a second copy of a recognizer is the
+          ;; F1b.7g class). Recognized ⇒ the scanner's answer stands.
+          ;;
+          ;; ⭐⭐ Q_U18 (owner, 2026-08-02 — "worth the trade"): NOTHING RECOGNIZED
+          ;; ⇒ **PRESERVE**, not blanket-strip. This is the flip, and it is what
+          ;; makes broadcast reachable in APPLICATION position — `[one users:name]`
+          ;; — which is most of the feature and was permanently dead under the
+          ;; strip.
+          ;;
+          ;; WHY IT IS SAFE, and the reason is STRUCTURAL rather than a table:
+          ;; the binder population that shares this shape is the TYPED LOGIC VAR,
+          ;; and `recognize-narrow-var-annot` GLUES `?x:Nat` into ONE TOKEN at the
+          ;; tokenizer — so THAT spelling can never mint a `$bcast-step` and never
+          ;; reaches this arm as a sentinel. The discriminator was already in the
+          ;; tree, one layer below this walk. Measured: `[add ?x:Nat ?y:Nat] = 5N`
+          ;; reads as `((= (add ?x:Nat ?y:Nat) …))`, identical under any grant.
+          ;;
+          ;; ⚠⚠ THE SCOPE OF THAT GLUE IS NARROWER THAN THIS COMMENT FIRST SAID,
+          ;; and the over-claim was load-bearing so it is corrected rather than
+          ;; softened. "`?x:…` can never mint" is FALSE. The recognizer requires
+          ;; `?` at position 0 AND an IDENT-START segment after the colon, so:
+          ;;     ?x:Nat  ?x:w   → glue (one token, cannot mint)
+          ;;     ?x:0  ?x:9  ?x:10       → MINT (digits are not ident-start)
+          ;;     +?k:Int  -?k:Int  ??x:Int → MINT (`?` is not at position 0)
+          ;; Practical safety still holds and was probed END TO END — e.g.
+          ;; `defr rr [+?k:Int ?v]` is byte-identical on both legs with 0 errors,
+          ;; because the PARAM SCANNER catches what the tokenizer does not. So the
+          ;; conclusion survives; the stated mechanism did not, and a safety
+          ;; argument that names the wrong mechanism is how the next reader
+          ;; reaches a wrong conclusion from a right premise.
+          ;;
+          ;; ⚠ THE RECORD THIS CORRECTS. D4 and DEFERRED both said PRESERVE was
+          ;; "refuted from the corpus" by exactly that line. It was not: the claim
+          ;; was INFERRED from "it runs 0 errors today" without checking whether
+          ;; it MINTS, and this file's own comment already said "Immune by
+          ;; construction". A 795-file census then found **ZERO** live sites of
+          ;; the shape "plain-identifier fused annotation · binder position ·
+          ;; unknown head", and the five heads the inversion cited as casualties
+          ;; (`capability`, `Pi`, `Sigma`, `DSend`, `DRecv`) have ZERO
+          ;; fused-annotation sites anywhere — they were SYNTHETIC probes.
+          ;;
+          ;; ⚠ THE ACCEPTED RESIDUAL, named not smoothed over: `pattern-var?`
+          ;; requires no sigil, so a macro binding a plain identifier —
+          ;; `[myform x:Int]` — is a genuine binder under a genuinely unknown
+          ;; head. ZERO instances in tree; constructible in one line.
+          ;; ⚠⚠ CORRECTED — THIS JUSTIFICATION IS FALSE AT ITS OWN EXAMPLE. It
+          ;; used to say the residual "takes the EXISTING `bcast-step-binder` arm,
+          ;; a per-command guided error … Loud and recoverable." Probed with
+          ;; `myform` both unbound and BOUND: the actual diagnostic is
+          ;; `ERROR: Unbound variable` — identical on both legs. The guided arm
+          ;; lives in binder-GROUP parsing, and an unknown head has no binder-group
+          ;; parser to reach it. RECOVERABLE: true (per-command, file continues).
+          ;; LOUD AND GUIDED: false. The residual is still accepted, but on the
+          ;; honest ground — it is recoverable and breaks only code that does not
+          ;; exist — not on a guided message it never produces. A KNOWING, NARROW
+          ;; exception to the inverted default's "never break working code",
+          ;; ruled on the grounds that it breaks only code that does not exist
+          ;; while the alternative kills application-position broadcast outright.
+          [else
+           (let-values ([(scanned recognized?) (scan-for-param-heads/recognized kids)])
+             (if recognized? scanned kids))]))))
+
+;; A param-group head is not always the form HEAD. `def q := rel [a:Int] &> …`
+;; puts `rel` and its group as SIBLINGS inside the `def` element list, so a
+;; head-test cannot see it. Scan the list: after any param-head symbol, the next
+;; GROUP-shaped element is a binder region. Body elements are untouched, so a
+;; broadcast in a body still survives.
+;; ⚠ THIS CONSUMES BINDER REGIONS EXPLICITLY. It used to carry a STICKY `armed?`
+;; flag that survived every intervening SYMBOL and was discharged by the next
+;; LIST of any kind. Three measured defects followed from that one shortcut, and
+;; they pull in opposite directions — which is why a flag cannot express the
+;; grammar and a region walk can:
+;;
+;;   · a leading implicit-binder group ate the arming, so the REAL param group
+;;     leaked (`spec f {A} [x:Int]` — an idiomatic spelling);
+;;   · with no bracket group to discharge it the flag ran on into the BODY and
+;;     stripped a legitimate broadcast (`defn f | a -> users:name`, arms-only
+;;     being the PRIMARY multi-arity form);
+;;   · and a `$pipe` sub-group was mistaken for the param group, so the first
+;;     arm's annotation unwrapped BY ACCIDENT — which is why the multi-line arm
+;;     pins were green while the flat spelling leaked.
+;;
+;; The grammar is: HEAD · optional NAME · zero or more implicit `{…}` groups ·
+;; ONE param group · then BODY, which is never touched. `$pipe` arms are their
+;; own regions, running to the ARROW.
+(define (scan-for-param-heads kids)
+  (let-values ([(kids* _seen?) (scan-for-param-heads/recognized kids)]) kids*))
+
+;; ⚠ THE RECOGNITION TEST LIVES HERE AND NOWHERE ELSE. `apply-binder-unwrap`'s
+;; `[else]` needs to know whether this scanner recognized ANYTHING, and the one
+;; thing it must not do is re-test the arms itself — a second copy of a
+;; recognizer is the F1b.7g drift class this file has paid for repeatedly. So
+;; the scanner reports it, as a second value.
+;;
+;; The flag is a WHOLE-LIST property, deliberately, not per-element: inside a
+;; recognized form the `[else]` arm below is what leaves BODY elements alone,
+;; and applying a fail-safe strip per-element would strip exactly those bodies.
+(define (scan-for-param-heads/recognized kids)
+  (let loop ([ks kids] [acc '()] [seen? #f])
+    (cond
+      [(null? ks) (values (reverse acc) seen?)]
+      [else
+       (let* ([k (car ks)]
+              [d (and (syntax? k) (syntax-e k))])
+         (cond
+           ;; a FLAT `$pipe` arm (the single-line spelling): the pattern region
+           ;; runs to the arrow. The multi-line spelling arrives as a sub-group
+           ;; and is handled by `apply-binder-unwrap`'s own `$pipe` arm.
+           [(eq? d '$pipe)
+            (let-values ([(region rest) (take-arm-region (cdr ks))])
+              (loop rest (append (reverse region) (cons k acc)) #t))]
+           ;; an aligned `let` block, built during this pass — see unwrap-let-block.
+           [(group-headed-by? k '$let-block)
+            (loop (cdr ks) (cons (unwrap-let-block k) acc) #t)]
+           ;; a param head (private suffix normalized): take its binder region.
+           [(binder-param-head? d)
+            (let-values ([(region rest) (take-param-region (cdr ks) d)])
+              (loop rest (append (reverse region) (cons k acc)) #t))]
+           ;; ⚠ A REGION HEAD IS NOT ALWAYS THE FORM HEAD EITHER — the same
+           ;; blindness this function already fixes for PARAM heads, which was
+           ;; applied to those and not to these. `binder-region-heads` was
+           ;; consulted ONLY by `apply-binder-unwrap`'s head test, so a `let`
+           ;; appearing as a SIBLING was invisible: `def q := let x:Int 5` and
+           ;; `defn f | a -> let z:Int := 5 …` both leaked, and both dumped the
+           ;; internal sentinel at the user. Two of `let`'s five documented
+           ;; spellings, regressed from working. Found by the P4c-2 adversarial
+           ;; verify; corpus-invisible (zero tracked fused spliced lets).
+           [(memq (binder-head-base d) binder-region-heads)
+            (let-values ([(region rest) (take-region-prefix (cdr ks))])
+              (loop rest (append (reverse region) (cons k acc)) #t))]
+           [else (loop (cdr ks) (cons k acc) seen?)]))])))
+
+;; The pattern side of a `$pipe` arm, up to (not including) the arrow.
+;; ⚠ BOUNDED. This used to fall off the end of the list when no `->` was found
+;; and unwrap everything it had walked — the same unbounded-SEARCH shape that
+;; `unwrap-binder-prefix` was bounded to fix for def/let, left in place here.
+;; A well-formed arm always HAS its arrow, so "no terminator" means the shape is
+;; not an arm and nothing in it is a binder: unwrap NOTHING rather than guess.
+;; (DEFERRED 32, from the P4c-2 adversarial verify.)
+(define (take-arm-region ks)
+  (let loop ([xs ks] [acc '()])
+    (cond
+      [(null? xs) (values ks '())]   ;; no arrow ⇒ not an arm ⇒ touch nothing
+      [else
+       (let* ([k (car xs)]
+              [d (and (syntax? k) (syntax-e k))])
+         (if (and (symbol? d) (memq d binder-region-terminators))
+             (values (reverse acc) xs)
+             (loop (cdr xs) (cons (unwrap-binders-deep k) acc))))])))
+
+;; After a param head: an optional NAME symbol, then any implicit `{…}` binder
+;; groups, then exactly ONE param group. Stops there — the next group is the
+;; BODY (`defn f [a:Int] [g users:name]` must keep its broadcast), and a
+;; `$pipe` group is an ARM, not params.
+;; Heads that take NO name — their first element is already a PARAM.
+;; `[fn m body]` is the bare-param lambda: `m` IS the parameter, not a name. The
+;; name-skip therefore consumed it and handed the BODY to the param-group arm,
+;; which unwrapped it: `[fn m [one users:name]]` stripped its body's broadcast
+;; while `[fn [m] [one users:name]]` preserved it — two spellings of one form
+;; disagreeing. (DEFERRED 32.)
+(define binder-nameless-heads '(fn))
+
+;; A group that can be a PARAM LIST. POSITIVE test, replacing "is it a group?".
+;;
+;; ⚠ THE OLD TEST MATCHED THE WALK'S OWN MINT. `group-stx?` is true of
+;; `($bcast-step :Int)`, so the walk could mistake its own sentinel for a user's
+;; bracket group. It also matched every `$`-sentinel group and every CLAUSE
+;; group, which is what made `property` POSITION-DEPENDENT: with no bracket
+;; params present, the first dash-clause was consumed as "the param group" and
+;; deep-unwrapped, so the same broadcast read differently in clause 1 than in
+;; clause 2 of one form.
+(define (param-group-candidate? k)
+  (and (group-stx? k)
+       (let ([d (syntax-e k)])
+         (and (pair? d)
+              (let ([h (syntax-e (car d))])
+                (and
+                 ;; never a sentinel group ($pipe, $brace-params, $angle-type,
+                 ;; $bcast-step, $let-block, …) — checked by SHAPE, not by list
+                 (not (and (symbol? h)
+                           (let ([s (symbol->string h)])
+                             (and (> (string-length s) 0)
+                                  (char=? (string-ref s 0) #\$)))))
+                 ;; never a CLAUSE group: dash-items and keyword-led rows are
+                 ;; content, not binders
+                 (not (eq? h '-))
+                 (not (keyword? h))))))))
+
+(define (take-param-region ks [head #f])
+  (define-values (name-part rest0)
+    (if (and (pair? ks)
+             (not (memq (binder-head-base head) binder-nameless-heads))
+             (let ([d (and (syntax? (car ks)) (syntax-e (car ks)))])
+               (and (symbol? d) (not (memq d binder-region-terminators)))))
+        (values (list (car ks)) (cdr ks))
+        (values '() ks)))
+  (let loop ([ks rest0] [acc '()])
+    (cond
+      ;; implicit binder groups may precede the param group, any number of them
+      [(and (pair? ks) (group-headed-by? (car ks) '$brace-params))
+       (loop (cdr ks) (cons (unwrap-binders-deep (car ks)) acc))]
+      ;; the param group itself — exactly one
+      [(and (pair? ks) (param-group-candidate? (car ks)))
+       (values (append name-part (reverse (cons (unwrap-binders-deep (car ks)) acc)))
+               (cdr ks))]
+      [else (values (append name-part (reverse acc)) ks)])))
+
 (define (transform-let-blocks-stx stx)
   (define lst (syntax->list stx))
   (if (not lst)
@@ -2841,7 +3484,9 @@
       (let* ([kids0 (skip-reader-form-body (map transform-let-blocks-stx lst) lst)]
              [kids (absorb-let-siblings kids0)]
              [kids1 (if (let-headed? kids) (classify-let-block kids) kids)]
-             [kids* (mark-let-goal-rhs kids1)])   ;; total — see its own note
+             [kids* (mark-let-goal-rhs kids1)]
+             ;; D4.P4c-2: the binder unwrap, LAST so it sees the classified form.
+             [kids* (apply-binder-unwrap kids*)])
         (if (and (eq? kids* kids1) (eq? kids1 kids) (eq? kids kids0) (andmap eq? kids0 lst))
             stx
             (datum->syntax #f kids* stx stx)))))
@@ -2850,7 +3495,13 @@
 (define (transform-let-blocks-elems elems)
   (define elems*
     (absorb-let-siblings (skip-reader-form-body (map transform-let-blocks-stx elems) elems)))
-  (let ([r (mark-let-goal-rhs (if (let-headed? elems*) (classify-let-block elems*) elems*))])
+  ;; D4.P4c-2: the binder unwrap must run at BOTH post-pass entries. This one
+  ;; handles a TOP-LEVEL form's element list (`def x:Int := 5`); its sibling in
+  ;; `transform-let-blocks-stx` handles NESTED forms (a `defn` inside an `impl`
+  ;; body). Wiring only the latter left every top-level binder unwrapped —
+  ;; caught by the binder-row pins, which is what they are for.
+  (let ([r (apply-binder-unwrap
+            (mark-let-goal-rhs (if (let-headed? elems*) (classify-let-block elems*) elems*)))])
     ;; ⚠ CONTRACT REPAIR (pre-existing LET-track defect, verified by neutralising
     ;; the P2 additions and reproducing at base shape). This entry point is
     ;; documented to return an ELEMENT LIST, and `tree-node->stx-elements` hands
@@ -3335,6 +3986,55 @@
 
 ;; Is the physically preceding token a READER-FORM HEAD (`racket{…}`)? Consults
 ;; the ONE registry (reader-forms.rkt) — never an inline literal.
+;; D4.P4c-2 (Q_U16 / Q_U8) — THE `:` GATE TRIGGER, shared by both groupers.
+;;
+;; Fires when a `keyword` (`:name`) or `colon-annotation` (`:0`/`:w`/`:m`) token
+;; is BYTE-ADJACENT to a non-empty local result. Positional, NOT an enumerated
+;; context list — `.N`, brackets, braces, parens and closers all join the focus
+;; set FREE because `adjacent-to-base?` consults no token type.
+;;
+;; ⚠ The QUOTE DECLINE is load-bearing, not tidiness. `'` lexes as a loose token
+;; that `group-items` has no arm for, so it is pushed as a SIBLING and the
+;; keyword after it IS byte-adjacent — `':hello` would mint in EXPRESSION
+;; position, where the binder unwrap cannot rescue it. One live corpus site
+;; (examples/homoiconicity.prologos:96). Modelled on `prev-token-reader-form-head?`.
+;;
+;; ⚠ `colon-annotation` classifies to its OWN type since P4c-1 (Q_U16b); before
+;; that promotion it was `'symbol` and this predicate could not have seen it.
+(define (bcast-step-trigger? vec i result item type)
+  (and (memq type '(keyword colon-annotation))
+       (adjacent-to-base? vec i result item)
+       (not (prev-token-not-emitted? vec i))))
+
+;; ⚠ THE DECLINE IS A CLASS, NOT A LIST OF SPECIAL CASES — and it was shipped as
+;; a list of one, which cost a BLOCKING regression.
+;;
+;; `adjacent-to-base?` asks whether the PHYSICALLY preceding token abuts this
+;; one. But the base it means is the last thing in `result` — the accumulated
+;; group — and those two disagree for every token that `group-items` consumes
+;; WITHOUT EMITTING. For such a token the "base" is invisible to the adjacency
+;; test, so a purely cosmetic character reads as something to broadcast off.
+;;
+;; The quote decline was written for exactly this reason, and its own comment
+;; names the general shape: "a loose token that `group-items` has no arm for".
+;; The COMMA is the same shape and was missed — `{:a 1,:b 2}` minted a broadcast
+;; in EXPRESSION position (where the binder unwrap structurally cannot rescue
+;; it), firing in 7 of 7 collection contexts and regressing ordinary map, list,
+;; vector, set and argument syntax. Invisible to the 161-file corpus A/B: no
+;; tracked `.prologos` writes `,:` (the pretty-printer emits `", "`, with the
+;; space). Found by the P4c-2 adversarial verify.
+;;
+;; So this predicate is keyed on the PROPERTY — "grouping skips this token" —
+;; and any future skipped token joins by adding it HERE, next to the reason.
+(define non-emitting-token-lexemes '("'" ","))
+
+(define (prev-token-not-emitted? vec i)
+  (and (> i 0)
+       (let ([prev (vector-ref vec (- i 1))])
+         (and (token-entry? prev)
+              (member (token-entry-lexeme prev) non-emitting-token-lexemes)
+              #t))))
+
 (define (prev-token-reader-form-head? vec i)
   (and (> i 0)
        (let ([prev (vector-ref vec (- i 1))])
@@ -3698,6 +4398,20 @@
             ;; handled by the tokenizer's qq-depth channel. The datum
             ;; extraction (group-items) sees comma tokens that the tokenizer
             ;; decided NOT to skip.
+            ;; D4.P4c-2: the `:` gate — mint the ω step sentinel. Count-preserving
+            ;; (`(users :name)` → `(users ($bcast-step name))`, 2 items either
+            ;; way), which is why the Q_N3 agreement guard cannot see it and a
+            ;; third guard shape is owed.
+            [(bcast-step-trigger? vec i result item type)
+             (let-values ([(ln cl) (pos->line-col source-str (token-entry-start-pos item))])
+               (loop (+ i 1)
+                     (cons (make-stx (list (make-stx '$bcast-step source ln cl
+                                                     (+ (token-entry-start-pos item) 1) 0)
+                                           (token-entry->stx item source source-str))
+                                     source ln cl
+                                     (+ (token-entry-start-pos item) 1)
+                                     (- (token-entry-end-pos item) (token-entry-start-pos item)))
+                           result)))]
             ;; Regular token
             [else
              (loop (+ i 1) (cons (token-entry->stx item source source-str) result))])]

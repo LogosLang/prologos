@@ -254,8 +254,7 @@
    ;; NOTE `run-ns-with-spec-store` returns TWO values; the error is in the
    ;; first (the results list).
    (format "~a"
-      (let-values ([(rs _store)
-      (run-ns-with-spec-store
+      (let-values ([(rs _store)      (run-ns-with-spec-store
         (string-append
           "(ns test-d2-conflict :no-prelude)\n"
           "(imports [prologos::core::collection-traits :refer [Seqable]])\n"
@@ -264,7 +263,6 @@
           "  ($brace-params A)"
           "  (C A) -> (LSeq A) where (Seqable C))\n"))])
         rs))))
-
 ;; ========================================
 ;; 5. Metadata :where syntax
 ;; ========================================

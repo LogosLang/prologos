@@ -34,7 +34,10 @@
          "../champ.rkt"
          (only-in "../rrb.rkt" rrb-from-list)   ;; D4.P4a: twin-regression fixture
          "test-support.rkt"
-         "../parse-reader.rkt")
+         "../parse-reader.rkt"
+         ;; D4.P4b-ii-2b: the surf-* layer, for the $select-path sentinel pins
+         (only-in "../surface-syntax.rkt"
+                  surf-select? surf-select-sort surf-select-branches))
 
 (define-runtime-path lib-dir "../lib")
 
@@ -1069,8 +1072,16 @@
      "schema Cfg\n  :server String\n"
      "def cfg : Cfg := {:server \"h\"}\n"
      "cfg{server^:x}\n")))
-  (check-regexp-match #rx"rename target" r "must name the RENAME TARGET")
-  (check-regexp-match #rx"server\\^x" r "must show the working spelling")
+  ;; ⚠ MERGE 2026-08-05 — the SPELLING was repurposed upstream, so this test's
+  ;; premise moved. D4.P4c mints `:x` after a caret as a BROADCAST step, so
+  ;; `server^:x` is no longer a malformed rename target; it is a broadcast over
+  ;; a String subject, and the message says so.
+  ;;
+  ;; What this case is actually FOR survives and is what is asserted: the
+  ;; spelling gets a GUIDED message naming the construct the user wrote, not the
+  ;; generic bare-keys one that named the wrong construct. That was the item 21
+  ;; complaint and it still holds — only the construct changed.
+  (check-regexp-match #rx"broadcast" r "must name the construct the user wrote")
   (check-false (regexp-match? #rx"block keys are written bare" r)
                "the generic message named the wrong construct"))
 
@@ -1139,9 +1150,14 @@
 
 (test-case "P2 item 9: a KEYWORD on a tuple names the mirror mistake"
   (define r (run-ws-last "def het := @[1 \"x\"]\nhet.name\n"))
-  (check-regexp-match #rx"names a field" r)
+  ;; ⚠ MERGE 2026-08-05: upstream rewrote this message. It still names the
+  ;; mirror mistake and still says "tuple"; it now gives the two SPELLINGS
+  ;; (`x{N M}` / `x.N`) where it used to give the index range. The range
+  ;; assertion is dropped rather than re-derived — the spellings are strictly
+  ;; more actionable, and asserting both would pin wording twice.
+  (check-regexp-match #rx"NAMED fields" r "must name the mirror mistake")
   (check-regexp-match #rx"tuple" r)
-  (check-regexp-match #rx"0.1" r "must name the valid index range"))
+  (check-regexp-match #rx"x[{]N M[}]" r "must show the ordinal-selection spelling"))
 
 (test-case "P2 item 9: the FOUR neighbouring messages are unchanged (the A/B)"
   ;; The filing's warning is the reason this test exists: "the branch order in
@@ -1182,8 +1198,18 @@
   (define s (run-ws-last "def s := \"hi\"\ns.0\n"))
   (check-regexp-match #rx"type String, which has no positions" s)
   (define f (run-ws-last "def n := 5\nn.name\n"))
-  (check-regexp-match #rx"field access" f)
-  (check-regexp-match #rx"type Int, which has no fields" f)
+  ;; ⚠ MERGE 2026-08-05 — SPECIFICITY LOST UPSTREAM, recorded not papered over.
+  ;; This branch's hint named the carrier AND its type ("`.name` is field
+  ;; access, but n has type Int, which has no fields"). D4.P4b-ii migrated
+  ;; `.field` onto `expr-select`, so the select-fail message now answers first
+  ;; with the generic "the subject is not a record, so it has no fields to
+  ;; access". `projection-parts` was taught the new node shape (typing-errors)
+  ;; and the hint is reachable again — it just loses the `or` race to the more
+  ;; general message. Re-ordering that `or` is a diagnostics-precedence
+  ;; decision, not a merge one. Filed in DEFERRED.
+  ;;
+  ;; What still holds is asserted: the refusal says there are no fields.
+  (check-regexp-match #rx"no fields" f)
   ;; A Pi is unprojectable too — there is no UFCS in Prologos.
   (check-regexp-match #rx"has no positions"
                       (run-ws-last "spec p2bg Int -> Int\ndefn p2bg [x] x\np2bg.0\n")))
@@ -1256,10 +1282,16 @@
   (define r (run-ws-raw-last "def v := @[10 20 30]\nv.0\n"))
   (check-false (prologos-error? r)))
 
-(test-case "P2: `.N` folds in ALL THREE rewrite-dot-access callers"
-  ;; rewrite-dot-access has THREE production callers, so a `.N` arm inside it
-  ;; inherits them free: preparse-expand-subforms (the re-entry),
-  ;; preparse-map-literal-contents (map-literal VALUES), and expand-mixfix-form
+(test-case "P2: `.N` folds in ALL FOUR rewrite-dot-access callers"
+  ;; ⚠ CORRECTED at D4.P4b-ii-2b: this said THREE and named three. There are
+  ;; FOUR — `expand-pipe-block` (macros.rkt:6294) landed at P3a, AFTER this
+  ;; test was written, and it is the DANGEROUS one: `apply-pipe-step` appends
+  ;; the accumulator into any hole-free step, which is how a surplus arg gets
+  ;; into a fold's output. The title over-claimed coverage it never had, and
+  ;; the b-ii-2 mini-audit's critic caught it. The `$select-path` arity gate
+  ;; now refuses that shape loudly (see the b-ii-2b pins).
+  ;; The four: preparse-expand-subforms (the re-entry),
+  ;; preparse-map-literal-contents (map-literal VALUES), expand-mixfix-form
   ;; (the `.( … )` token stream, folded BEFORE pratt-parse).
   ;; ⚠ The first draft of this pin used `.( v.0 )` — a SINGLE-operand mixfix,
   ;; which errors identically on the baseline with a plain `.name`
@@ -1275,15 +1307,15 @@
   ;; namespace.rkt's guard raised only for $dot-access. With `.N` minting
   ;; $postfix-index, `ns foo.2` would reintroduce exactly the silent-drop bug
   ;; that b0db8f3e fixed.
-  ;; ⚠ The guard RAISES (`(error 'ns …)`) rather than returning a per-command
-  ;; error value, so this is a whole-file abort — PRE-EXISTING behaviour, shared
-  ;; with `ns foo.bar`, and the same class Q_L4's marker seat exists for. Left
-  ;; as-is deliberately: `ns` is the first command in a file, so aborting there
-  ;; is near-indistinguishable from a per-command error. Pinned with check-exn
-  ;; so the SHAPE is deliberate and a future change to the seat is visible.
-  (check-exn #rx"namespace name cannot contain"
-             (lambda () (run-ws-raw "ns foo.2\n"))
-             "a numeric ns segment must be REJECTED, not silently dropped"))
+  ;; ✅ THE NAMED FOLLOW-UP LANDED AT G2/B (2026-08-05). This comment used to
+  ;; record that the guard RAISES — "a whole-file abort … Left as-is
+  ;; deliberately … a future change to the seat is visible". The preparse seam
+  ;; guard is that change: the refusal is still LOUD, but it is now a
+  ;; per-command error VALUE, so the pin reads the RESULT LIST, not an exn.
+  (check-true (ormap (lambda (r) (regexp-match? #rx"namespace name cannot contain"
+                                                (format "~a" r)))
+                     (run-ws-raw "ns foo.2\n"))
+              "a numeric ns segment must be REJECTED, not silently dropped"))
 
 (test-case "P2 MUST-NOT-BREAK: `.k` nominal access and the `v[…]` surface are untouched"
   (define r (run-ws
@@ -1864,12 +1896,16 @@
   (check-regexp-match #rx":server" r)
   (check-false (regexp-match #rx":name" r) "the pipe selected off the wrong subject"))
 
+;; ⚠ UPDATED at b-ii-2b (the RED set): the subject's inner `m.x` now folds to
+;; `($select-path m x)` instead of `(map-get m :x)`. The CLAIM is unchanged —
+;; the subject IS expanded while the payload stays raw — only the folded shape
+;; moved, which is the migration itself.
 (test-case "P3a verify: compound select SUBJECTS are preparse-expanded (partial opacity)"
   ;; The fold runs BEFORE subform recursion, so the subject arrives raw; the
   ;; $select arm now expands the SUBJECT while the payload stays protected.
   ;; F2a shape — bracket-group subject with an inner dot-access:
   (check-equal? (preparse-expand-form '((f m ($dot-access x)) ($select-brace a)))
-                '($select (f (map-get m :x)) a))
+                '($select (f ($select-path m x)) a))
   ;; F2b shape — subject containing its OWN select:
   (check-equal? (preparse-expand-form '((g cfg ($select-brace server)) ($select-brace server)))
                 '($select (g ($select cfg server)) server))
@@ -1906,16 +1942,16 @@
 (test-case "P3a verify: ground non-map subjects PANIC at the top level too (tier symmetry)"
   ;; Was: `(whnf (expr-select (expr-int 5) …))` returned the node unchanged —
   ;; silent stick where the nested descent one level down panics loudly.
-  (define r (whnf (expr-select (expr-int 5) (expr-path '((a))))))
+  (define r (whnf (expr-select (expr-int 5) (expr-path '((a)) 'block) #f)))
   (check-true (expr-panic? r) "a ground non-map subject must panic, not stick")
   ;; and a stuck NEUTRAL still sticks (fvar subject — no panic, no loop):
-  (define stuck (whnf (expr-select (expr-fvar 'nosuch) (expr-path '((a))))))
+  (define stuck (whnf (expr-select (expr-fvar 'nosuch) (expr-path '((a)) 'block) #f)))
   (check-true (expr-select? stuck)))
 
 (test-case "P3a verify: trailing steps after a terminal sub-block panic (constructed IR)"
   ;; The parser grammar forbids the shape; the reducer now enforces it rather
   ;; than silently discarding the trailing steps.
-  (define subj (whnf (expr-select (expr-fvar 'x) (expr-path '((a))))))
+  (define subj (whnf (expr-select (expr-fvar 'x) (expr-path '((a)) 'block) #f)))
   (check-true (expr-select? subj)) ;; sanity: stuck neutral stays stuck
   (define bad-branches '((a (@sub (b)) c)))
   ;; construct the champ directly — no fixture dependency
@@ -1924,7 +1960,7 @@
   (define champ-subj
     (expr-champ (champ-insert champ-empty (equal-hash-code (expr-keyword 'a)) (expr-keyword 'a)
                               (expr-champ inner))))
-  (define r (whnf (expr-select champ-subj (expr-path bad-branches))))
+  (define r (whnf (expr-select champ-subj (expr-path bad-branches 'block) #f)))
   (check-true (expr-panic? r) "trailing steps after @sub must panic, not vanish"))
 
 (test-case "P3a verify: the sub-block empty message does not claim `{}` is a map literal"
@@ -2623,20 +2659,20 @@
 (test-case "P4a totality site 4: select-project's branch walk RAISES on an unknown step kind"
   ;; the branch head is the bogus step -> select-branch-entries' guard
   (check-exn totality-exn?
-             (lambda () (tc:select-project '() BOGUS-TYPING-SUBJ (list (list BOGUS-STEP))))
+             (lambda () (tc:select-project '() BOGUS-TYPING-SUBJ (list (list BOGUS-STEP)) 'block))
              "an unknown step kind must not be silently projected as a nominal key"))
 
 (test-case "P4a totality site 5: select-below-field RAISES on an unknown step kind below a kept head"
   ;; `a` descends, then the bogus step is BELOW it -> select-below-field's guard
   (check-exn totality-exn?
-             (lambda () (tc:select-project '() BOGUS-TYPING-SUBJ (list (list 'a BOGUS-STEP))))
+             (lambda () (tc:select-project '() BOGUS-TYPING-SUBJ (list (list 'a BOGUS-STEP)) 'block))
              "an unknown step kind below a kept head must not be silently projected"))
 
 (test-case "P4a totality site 3: walk-to-leaf RAISES on an unknown step kind (collapse branch)"
   ;; a `^-` collapse leaf pre-classifies into walk-to-leaf -> its guard
   (check-exn totality-exn?
              (lambda () (tc:select-project '() BOGUS-TYPING-SUBJ
-                                           (list (list BOGUS-STEP '(@key a collapse)))))
+                                           (list (list BOGUS-STEP '(@key a collapse))) 'block))
              "walk-to-leaf must not silently treat an unknown step kind as a nominal key"))
 
 ;; ---- sites 6-8: the reduction walk, via the newly-exported `select-reduce` ----
@@ -2650,18 +2686,19 @@
 
 (test-case "P4a totality site 7: select-reduce's branch-entries RAISES on an unknown step kind"
   (check-exn totality-exn?
-             (lambda () (nf (select-reduce BOGUS-RUNTIME-SUBJ (list (list BOGUS-STEP)))))
+             (lambda () (nf (select-reduce BOGUS-RUNTIME-SUBJ (list (list BOGUS-STEP)) 'block #f)))
              "an unknown step kind must not be silently projected at runtime"))
 
 (test-case "P4a totality site 8: select-reduce's below-value RAISES on an unknown step kind"
   (check-exn totality-exn?
-             (lambda () (nf (select-reduce BOGUS-RUNTIME-SUBJ (list (list 'a BOGUS-STEP)))))
+             (lambda () (nf (select-reduce BOGUS-RUNTIME-SUBJ (list (list 'a BOGUS-STEP)) 'block #f)))
              "an unknown step kind below a kept head must not be silently projected at runtime"))
 
 (test-case "P4a totality site 6: select-reduce's walk-to-leaf RAISES on an unknown step kind"
   (check-exn totality-exn?
              (lambda () (nf (select-reduce BOGUS-RUNTIME-SUBJ
-                                           (list (list BOGUS-STEP '(@key a collapse))))))
+                                           (list (list BOGUS-STEP '(@key a collapse)))
+                                           'block #f)))
              "walk-to-leaf must not silently treat an unknown step kind as a nominal key"))
 
 ;; ============================================================
@@ -2691,7 +2728,8 @@
   (define result
     (nf (select-reduce (bogus-runtime-subject)
                        (list (list 'a)        ;; succeeds — :a is present
-                             (list 'nope))))) ;; misses at runtime
+                             (list 'nope))    ;; misses at runtime
+                       'block #f))) ;; misses at runtime
   (check-true (expr-panic? result)
               "the WHOLE selection must be the panic (single let/ec), not a record with a panic inside")
   (check-false (expr-champ? result)
@@ -2706,7 +2744,7 @@
   ;; discriminator.
   (define result
     (nf (select-reduce (bogus-runtime-subject)
-                       (list (list 'a) (list 'nope)))))
+                       (list (list 'a) (list 'nope)) 'block #f)))
   (check-true (expr-panic? result)
               "the discriminating assertion — a buried panic would be an expr-champ")
   (check-regexp-match #rx"nope" (format "~a" result))
@@ -2715,7 +2753,7 @@
 (test-case "P4a whole-node abort: a non-map mid-descent aborts the NODE too"
   ;; :a holds an Int, so descending `a.b` hits champ-of's non-map path
   (define result
-    (nf (select-reduce (bogus-runtime-subject) (list (list 'a 'b)))))
+    (nf (select-reduce (bogus-runtime-subject) (list (list 'a 'b)) 'block #f)))
   (check-true (expr-panic? result))
   (check-regexp-match #rx"not a map at runtime" (format "~a" result)))
 
@@ -2742,7 +2780,7 @@
 
 (test-case "P4a site 8 twin: an (@ord N) below a kept head still DELEGATES, never 'no arm'"
   (define result (nf (select-reduce (vector-under-key-subject)
-                                    (list (list 'a '(@ord 0))))))
+                                    (list (list 'a '(@ord 0))) 'block #f)))
   (check-false (regexp-match? #rx"no arm for select step kind" (format "~a" result))
                "reduction's below-value must keep handling ord-branch — its old else did"))
 
@@ -2758,7 +2796,7 @@
                                                        (exn-message e))
                                     (raise e))
                                   (void))])
-       (tc:select-project '() tm (list (list 'a '(@ord 0))))))
+       (tc:select-project '() tm (list (list 'a '(@ord 0))) 'block)))
    "typing's select-below-field must keep handling ord-branch — its old else did"))
 
 ;; ============================================================
@@ -2807,7 +2845,7 @@
   ;; catch-all handler could swallow it). It must still never leak the raw
   ;; datum, which is what `[else (format "~a" s)]` used to do.
   (define rendered
-    (pp-expr (expr-select (expr-fvar 'x) (expr-path (list (list 'a BOGUS-STEP)))) '()))
+    (pp-expr (expr-select (expr-fvar 'x) (expr-path (list (list 'a BOGUS-STEP)) 'block) #f) '()))
   ;; The marker NAMES the datum on purpose — that is the debugging value.
   ;; The property is that it is WRAPPED, not passed through as if it were
   ;; valid surface syntax, which is exactly what `[else (format "~a" s)]`
@@ -2988,7 +3026,7 @@
 (test-case "P4b-i: whnf of a bare selector carrier is identity (the P4a argument, applied)"
   ;; the SELECTOR is a literal — no head reduction rule, so the fast path must
   ;; return the SAME object. `expr-select` (the APPLICATION) stays reducible.
-  (define sel (expr-path '((a b))))
+  (define sel (expr-path '((a b)) 'block))
   (check-eq? (whnf sel) sel))
 
 ;; ============================================================
@@ -3011,13 +3049,13 @@
 ;; class starts.
 
 (test-case "P4b-i slice 3: expr-select's branches slot holds the SELECTOR CARRIER"
-  (define sel (expr-path '((a))))
-  (define node (expr-select (expr-fvar 'x) sel))
+  (define sel (expr-path '((a)) 'block))
+  (define node (expr-select (expr-fvar 'x) sel #f))
   (check-true (expr-path? (expr-select-branches node))
               "one representation: the slot holds an expr-path, not a raw list"))
 
 (test-case "P4b-i slice 3: select-map-exprs maps into BOTH slots and preserves the carrier"
-  (define node (expr-select (expr-fvar 'x) (expr-path '((a)))))
+  (define node (expr-select (expr-fvar 'x) (expr-path '((a)) 'block) #f))
   (define mapped (select-map-exprs (lambda (e) e) node))
   (check-true (expr-select? mapped))
   (check-true (expr-path? (expr-select-branches mapped))
@@ -3026,9 +3064,9 @@
 (test-case "P4b-i slice 3: uses-bvar0? recurses into the selector slot"
   ;; inert at P4 (selectors hold symbols) but correct by construction — the
   ;; subject-only recursion is the pipeline.md Exhaustive-Walkers signature
-  (check-false (uses-bvar0? (expr-select (expr-fvar 'x) (expr-path '((a)))))
+  (check-false (uses-bvar0? (expr-select (expr-fvar 'x) (expr-path '((a)) 'block) #f))
                "no bvar anywhere → #f")
-  (check-true (uses-bvar0? (expr-select (expr-bvar 0) (expr-path '((a)))))
+  (check-true (uses-bvar0? (expr-select (expr-bvar 0) (expr-path '((a)) 'block) #f))
               "a bvar in the SUBJECT is still found"))
 
 (test-case "P4b-i slice 3: the surface is unchanged end-to-end"
@@ -3302,3 +3340,1780 @@
       (run-ws-pre-raw "imports prologos::nonexistent::module\ndef q := 1\n")
       #f))
   (check-true raised? "an imports failure must still stop the file"))
+
+;; ============================================================
+;; D4.P4b-ii-1 — the (subject kind × sort) SEMANTIC TABLE
+;; ============================================================
+;; Q_U10 ruled the `'path` sort gains a MAP POSTURE; Q_U12 scoped b-ii to the
+;; `$dot-access` leg. The table is TWO-DIMENSIONAL and there are THREE
+;; asymmetries (dyn row · Map · selection-typed), so the posture is pinned
+;; CELL BY CELL here, typing-side only, BEFORE the fold migrates (b-ii-2).
+;;
+;; These are DIRECT-CALL pins by necessity. `select-project` is reached from
+;; exactly ONE place — the `expr-select` typing arm (typing-core.rkt) — and
+;; `expr-select` is minted at exactly ONE elaborator site (`surf-select`,
+;; i.e. `x{…}`). `#p(…)` never reaches the walk (its typing arm is the
+;; vacuous `[(expr-path _) (expr-Path)]`). So with no fold change EVERY
+;; carrier reaching the walk is `'block`, and the `'path` column is
+;; unreachable from surface syntax until b-ii-2 flips the fold.
+;;
+;; The `'block` column below is CHARACTERIZATION: it must be green before the
+;; sort field lands and stay green after — those pins ARE the claim that
+;; threading the sort changed nothing.
+
+;; ---- subject fixtures, hoisted OUT of every guarded lambda ----
+(define TBL-RECORD-CLOSED       ;; {:a Int} — the happy path
+  (make-record 'keyword (list (cons 'a (record-field (expr-Int) 'present))) 'closed))
+
+(define TBL-RECORD-DYN-UNKNOWN  ;; {:a? Int | _} — presence not sourced
+  (make-record 'keyword (list (cons 'a (record-field (expr-Int) 'unknown))) 'dyn))
+
+(define TBL-RECORD-DYN-EMPTY    ;; {| _} — `a` unlisted on a dyn row
+  (make-record 'keyword '() 'dyn))
+
+(define TBL-MAP (expr-Map (expr-Keyword) (expr-Int)))          ;; (Map Keyword Int)
+(define TBL-TUPLE                                              ;; ⟨Int⟩ — nat key-domain
+  (make-record 'nat (list (cons 0 (record-field (expr-Int) 'present))) 'closed))
+(define TBL-NON-RECORD (expr-Int))                             ;; not a record at all
+
+(define BRANCHES-A (list (list 'a)))   ;; the single branch `a`
+
+;; helper: run the walk and report (kind-or-'row)
+(define (tbl-outcome tm [branches BRANCHES-A] [sort 'block])
+  (let-values ([(row fail) (tc:select-project '() tm branches sort)])
+    (cond [fail (tc:select-fail-kind fail)]
+          [row 'row]
+          [else 'neither])))
+
+(test-case "P4b-ii-1 table (block × record/closed/present): projects to a row"
+  (check-equal? (tbl-outcome TBL-RECORD-CLOSED) 'row))
+
+(test-case "P4b-ii-1 table (block × Map): refuses 'subject-map — ASYMMETRY 2, the block half"
+  ;; `.field` on this same subject WORKS (probe: `m.a` -> 1 : Int, via
+  ;; expr-map-get). That divergence IS Q_U10's Map posture; this pin holds
+  ;; the BLOCK half fixed so b-ii-2 cannot move it by accident.
+  (check-equal? (tbl-outcome TBL-MAP) 'subject-map))
+
+(test-case "P4b-ii-1 table (block × nat-row): refuses 'subject-tuple"
+  (check-equal? (tbl-outcome TBL-TUPLE) 'subject-tuple))
+
+(test-case "P4b-ii-1 table (block × non-record): refuses 'subject-other"
+  (check-equal? (tbl-outcome TBL-NON-RECORD) 'subject-other))
+
+(test-case "P4b-ii-1 table (block × dyn row, presence 'unknown): refuses 'unknown-presence"
+  ;; ASYMMETRY 1 (Q_T2), the block half: `.field` on a dyn row is
+  ;; D19-PERMISSIVE (probe: `d1.host` -> "h" : ?meta), the block is loud.
+  (check-equal? (tbl-outcome TBL-RECORD-DYN-UNKNOWN) 'unknown-presence))
+
+(test-case "P4b-ii-1 table (block × dyn row, field unlisted): refuses 'miss-dyn"
+  (check-equal? (tbl-outcome TBL-RECORD-DYN-EMPTY) 'miss-dyn))
+
+(test-case "P4b-ii-1 table (block × closed row, field missing): refuses 'miss-closed"
+  (check-equal? (tbl-outcome TBL-RECORD-CLOSED (list (list 'zzz))) 'miss-closed))
+
+(test-case "P4b-ii-1 table: the Map refusal applies at EVERY DESCENT LEVEL, not just the leaf"
+  ;; `outer.inner.a` through an intermediate Map is a pinned SURFACE (it works
+  ;; via map-get). Under the block sort the intermediate Map must refuse the
+  ;; same way the leaf does — the level-invariance the Map posture has to
+  ;; preserve when b-ii-2 gives it the path sort.
+  (define outer
+    (make-record 'keyword
+                 (list (cons 'inner (record-field TBL-MAP 'present)))
+                 'closed))
+  (check-equal? (tbl-outcome outer (list (list 'inner 'a))) 'subject-map))
+
+;; ---- the PATH column: the MAP POSTURE (Q_U10) ----
+;; Pinned at `select-row-of` — the subject-kind × sort DISPATCH — not through
+;; `select-project`. The table IS that dispatch; `select-project`'s assembly
+;; is block-shaped (it builds a row from components) and what the `'path`
+;; sort ASSEMBLES is b-ii-2's question, because `'path` EXTRACTS where
+;; `'block` projects. Pinning the admit-cell through the assembly would
+;; therefore pin a shape this slice has not ruled.
+
+(test-case "P4b-ii-1 table (PATH × Map): the MAP POSTURE admits, at the Map's value type"
+  ;; Q_U10: `.field` on a (Map K V) subject keeps `map-get` semantics under
+  ;; the unified carrier. There is NO per-field row — every key is admissible
+  ;; at V, and a MISS is a RUNTIME panic (probed at HEAD: `m.zzz` →
+  ;; "panic: map-get: key :zzz not found"), never a static refusal. So the
+  ;; dispatch must hand back a UNIFORM value type, not a row and not a fail.
+  (let-values ([(row fail) (tc:select-row-of '() TBL-MAP '() 'path)])
+    (check-false fail
+                 "the path sort must not refuse a Map subject — 'subject-map is the BLOCK posture")
+    (check-true (tc:select-uniform? row)
+                "a Map has no per-field row; the path sort admits any label uniformly")
+    (check-equal? (tc:select-uniform-value-type row) (expr-Int)
+                  "the uniform type is the Map's VALUE type")))
+
+(test-case "P4b-ii-1 table (PATH × Map): the block sort is UNCHANGED by the posture"
+  ;; the asymmetry is the point — same subject, other sort, still refuses
+  (let-values ([(row fail) (tc:select-row-of '() TBL-MAP '() 'block)])
+    (check-false row)
+    (check-equal? (tc:select-fail-kind fail) 'subject-map)))
+
+(test-case "P4b-ii-1 table: a uniform subject admits ANY label, including one no row lists"
+  ;; the miss-deferral half: `m.zzz` must NOT fail statically under 'path
+  (let-values ([(ft fail) (tc:select-project-field '() (tc:select-uniform (expr-Keyword) (expr-Int))
+                                                   'zzz '() 'path)])
+    (check-false fail "a Map key miss is a RUNTIME panic, not a static refusal")
+    (check-equal? ft (expr-Int))))
+
+(test-case "P4b-ii-1 table (PATH × record): the record posture is unchanged"
+  ;; the Map posture must not leak into record subjects — they still project
+  (let-values ([(row fail) (tc:select-row-of '() TBL-RECORD-CLOSED '() 'path)])
+    (check-false fail)
+    (check-false (tc:select-uniform? row) "a record still yields its ROW, not a uniform")))
+
+(test-case "P4b-ii-1 sort totality: an unknown sort raises AT EVERY DIVERGENT CELL"
+  ;; P4a's lesson applied to the new axis BEFORE it grows. Q_U12 already names
+  ;; the next sorts (`#.field` nil-safe, `[k]` ordinal) as deferred follow-ups.
+  ;; ⚠ SCOPE, stated honestly after the adversarial verify corrected an
+  ;; overstatement in this pin's own name: the guard fires at the cells where
+  ;; the sorts DIVERGE (the Map arm, the selection arm, and the two dyn-row
+  ;; arms). A non-divergent cell — a plain closed-row hit, a closed miss —
+  ;; still answers under an unknown sort, because it has no `case sort` to
+  ;; reach. Totality here is over the DISPATCH POINTS, not over the walk.
+  ;; The predicate is narrow on purpose — `exn:fail?` alone would pass on an
+  ;; arity error or a malformed fixture.
+  (define (sort-exn? e)
+    (and (exn:fail? e)
+         (regexp-match? #rx"no arm for selector sort" (exn-message e))))
+  ;; all FOUR divergent cells, not just the one the first cut pinned
+  (check-exn sort-exn? (lambda () (tc:select-row-of '() TBL-MAP '() 'nil-safe))
+             "the Map cell must raise on an unknown sort")
+  ;; ⚠ the SELECTION cell's sort dispatch is NOT pinned here, and the reason is
+  ;; a real coverage limit rather than an oversight: its arm only fires for a
+  ;; REGISTERED selection, and the registries are parameterized only for the
+  ;; duration of `process-file` (see run-ws-raw), so a direct call cannot
+  ;; reach it. An unregistered fvar falls to 'subject-other without consulting
+  ;; the sort. Stated rather than papered over; it closes when b-ii-2 makes
+  ;; the path sort reachable end-to-end.
+  (check-exn sort-exn?
+             (lambda () (tc:select-project-field '() TBL-RECORD-DYN-UNKNOWN 'a '() 'nil-safe))
+             "the 'unknown-presence cell must raise on an unknown sort")
+  (check-exn sort-exn?
+             (lambda () (tc:select-project-field '() TBL-RECORD-DYN-EMPTY 'zzz '() 'nil-safe))
+             "the miss-dyn cell must raise on an unknown sort")
+  ;; and the guard is not vacuous: the two REAL sorts still answer
+  (check-not-exn (lambda () (tc:select-row-of '() TBL-MAP '() 'path)))
+  (check-not-exn (lambda () (tc:select-row-of '() TBL-MAP '() 'block))))
+
+;; ---- the PATH column: ASYMMETRY #1, the dyn row (Q_T2) ----
+
+(test-case "P4b-ii-1 table (PATH × dyn row, presence 'unknown): admits as a fresh META"
+  ;; D19/D24: an 'unknown-marked HIT projects exactly like a tail miss — the
+  ;; meta IS the observation, never the retained type (that courtesy upgrade
+  ;; would assert a presence the compiler does not have). Mirrors
+  ;; `record-project`, which is what `.field` reaches at HEAD (probed:
+  ;; `d1.host` → "h" : ?meta, NOT : String).
+  (let-values ([(ft fail) (tc:select-project-field
+                           '() TBL-RECORD-DYN-UNKNOWN 'a '() 'path)])
+    (check-false fail "the path sort is D19-PERMISSIVE on an 'unknown presence")
+    (check-true (expr-meta? ft) "the observation is a fresh meta")
+    (check-false (equal? ft (expr-Int))
+                 "NOT the retained type — that would assert presence")))
+
+(test-case "P4b-ii-1 table (PATH × dyn row, field unlisted): admits as a fresh META"
+  (let-values ([(ft fail) (tc:select-project-field
+                           '() TBL-RECORD-DYN-EMPTY 'zzz '() 'path)])
+    (check-false fail "an unlisted field may live in the dyn remainder")
+    (check-true (expr-meta? ft))))
+
+(test-case "P4b-ii-1 table (× closed row, field missing): BOTH sorts refuse — no divergence"
+  ;; the cell where the sorts deliberately AGREE; record-project returns
+  ;; expr-error for a 'closed miss too. Pinned so a future edit cannot invent
+  ;; a permissive path arm here on symmetry grounds.
+  (for ([srt (in-list '(path block))])
+    (let-values ([(ft fail) (tc:select-project-field
+                             '() TBL-RECORD-CLOSED 'zzz '() srt)])
+      (check-false ft)
+      (check-equal? (tc:select-fail-kind fail) 'miss-closed
+                    (format "closed-row miss must refuse under ~a too" srt)))))
+
+;; ---- the PATH column: ASYMMETRY #3, selection-typed subjects ----
+
+(define TBL-VIEW
+  ;; a hand-built view allowing :name only. ⚠ `requires-paths` is a list of
+  ;; PATHS (list of lists) — the first cut passed a FLAT '(#:name), which made
+  ;; `selection-allows-field?` refuse EVERY label, so both pins below passed
+  ;; because the gate refused everything and the admit branch had ZERO
+  ;; coverage. Caught at the adversarial verify; the fixture-makes-the-pin-
+  ;; vacuous class, on the very slice that quoted it.
+  ;; MERGE 2026-08-05: `selection-entry` gained a 7th field (`stub?`) on this
+  ;; branch, so this direct constructor — added upstream against the 6-field
+  ;; version — needs the extra argument. `#f` = not a stub, which is what an
+  ;; ordinary fixture selection is. Exactly the `pipeline.md` § "New Struct
+  ;; Field" step that says to grep for DIRECT CONSTRUCTOR CALLS across the whole
+  ;; tree, not just `struct-copy`: this one arrived from the other side of a
+  ;; merge, so no grep at field-addition time could have found it.
+  (tc:select-view (selection-entry 'NameOnly 'Person '((#:name)) '() '() #f #f)
+                  (expr-fvar 'NameOnly)))
+
+(test-case "P4b-ii-1 table (PATH × selection, out of view): refuses NAMING THE CAPABILITY"
+  ;; today `u.age` is a bare "Could not infer type" with no explanation
+  ;; (expr-map-get's selection arm returns a raw expr-error). Under the
+  ;; carrier it carries the gate's reason. Reachable E2E at b-ii-2.
+  (let-values ([(ft fail) (tc:select-project-field '() TBL-VIEW 'age '() 'path)])
+    (check-false ft)
+    (check-equal? (tc:select-fail-kind fail) 'selection-not-in-view)))
+
+(test-case "P4b-ii-1 table (PATH × selection): the capability gate does NOT depend on the parent resolving"
+  ;; 'Person is not registered in this fixture, so the parent lookup would
+  ;; fail — an out-of-view field must still report the CAPABILITY, not the
+  ;; missing parent. This is the ordering pinned.
+  (let-values ([(_ft fail) (tc:select-project-field '() TBL-VIEW 'nope '() 'path)])
+    (check-equal? (tc:select-fail-kind fail) 'selection-not-in-view
+                  "an out-of-view field must not be reported as a parent-schema problem")))
+
+(test-case "P4b-ii-1 ASYMMETRY #3 diagnostic: the block refusal no longer LIES — E2E"
+  ;; the live half. Before this slice: "the subject is not a record" — false
+  ;; of a selection view, and naming no remedy. The refusal itself stays
+  ;; (DEFERRED 20); only the message was wrong.
+  (define rs (run-ws-raw (string-append
+                          "schema Person\n  :name String\n  :age Int\n"
+                          "selection NameOnly from Person :requires [:name]\n"
+                          "def u : NameOnly := {:name \"hana\" :age 9}\n"
+                          "u{name}\n")))
+  (define r (format "~a" (last rs)))
+  (check-true (prologos-error? (last rs)) "a block over a view still refuses")
+  (check-regexp-match #rx"SELECTION" r "the message must name what the subject IS")
+  (check-regexp-match #rx"capability-restricted" r)
+  (check-false (regexp-match #rx"is not a record" r)
+               "the LIE must be gone — a selection view IS a record, restricted"))
+
+(test-case "P4b-ii-1 ASYMMETRY #3: `.field` through a view still WORKS end-to-end"
+  ;; the other half of the asymmetry — unchanged by this slice, pinned so
+  ;; b-ii-2's fold migration cannot silently delete it (Q_U10's whole lesson)
+  (define rs (run-ws-raw (string-append
+                          "schema Person\n  :name String\n  :age Int\n"
+                          "selection NameOnly from Person :requires [:name]\n"
+                          "def u : NameOnly := {:name \"hana\" :age 9}\n"
+                          "u.name\n")))
+  (check-false (prologos-error? (last rs)))
+  (check-regexp-match #rx"hana" (format "~a" (last rs))))
+
+;; ---- gaps the P4b-ii-1 adversarial verify found in this slice's OWN pins ----
+
+(test-case "P4b-ii-1 verify gap: the sort THREADS through the recursive walk"
+  ;; Every 'path pin above enters at a LEAF (select-row-of / select-project-field),
+  ;; so the ~15 recursive call sites that carry `sort` down through
+  ;; select-project → select-level-components → select-branch-entries →
+  ;; select-below-field were completely unexercised: replacing `sort` with the
+  ;; literal 'block at ANY of them still passed all 260. This pin enters at
+  ;; the TOP so the threading is load-bearing. It asserts a NEGATIVE (not the
+  ;; assembled shape, which this slice has not ruled) so it rules nothing.
+  (check-not-equal? (tbl-outcome TBL-MAP BRANCHES-A 'path) 'subject-map
+                    "the path sort must survive the walk down to the subject dispatch")
+  ;; and at DEPTH — the intermediate-Map case, which is where a dropped sort
+  ;; in select-below-field/select-branch-entries would show
+  (define outer
+    (make-record 'keyword (list (cons 'inner (record-field TBL-MAP 'present))) 'closed))
+  (check-not-equal? (tbl-outcome outer (list (list 'inner 'a)) 'path) 'subject-map
+                    "the sort must survive a DESCENT, not just the top level"))
+
+(test-case "P4b-ii-1 verify gap: whnf's re-construction PRESERVES the sort"
+  ;; reduction.rkt's expr-select arm rebuilds the carrier after a subject whnf
+  ;; step. Its own comment warns that dropping the sort there would silently
+  ;; re-sort a 'path selector as 'block — the warning was written, the pin was
+  ;; not. A beta-redex subject forces the reconstruction branch.
+  (define node (expr-select (expr-app (expr-lam 'mw (expr-Int) (expr-bvar 0))
+                                      (expr-fvar 'nosuch))
+                            (expr-path '((a)) 'path) #f))
+  (define r (whnf node))
+  (check-true (expr-select? r) "the node stays stuck on an unbound subject")
+  (check-eq? (expr-path-sort (expr-select-branches r)) 'path
+             "the sort must survive reconstruction — 'block here is the silent re-sort"))
+
+(test-case "P4b-ii-1 verify gap: the selection ADMIT branch, not just the refusal"
+  ;; The first cut's fixture was malformed, so the capability gate refused
+  ;; EVERY label and `selection-field-type` — the admit half of asymmetry #3 —
+  ;; had zero coverage. With a well-formed view the gate must now DISTINGUISH.
+  (check-true (tc:selection-allows-field? (tc:select-view-sel TBL-VIEW) 'name)
+              "the fixture must ALLOW its :requires field — a gate that refuses everything makes both refusal pins vacuous")
+  (check-false (tc:selection-allows-field? (tc:select-view-sel TBL-VIEW) 'age)
+               "and must still refuse an out-of-view field"))
+
+;; ---- ASYMMETRY #4 (union) + the two twin-dispatch folds, all from the verify ----
+
+(define TBL-UNION
+  (expr-union (expr-Map (expr-Keyword) (expr-Int))
+              (expr-Map (expr-Keyword) (expr-String))))
+
+(test-case "P4b-ii-1 table (PATH × union): ASYMMETRY #4 — projects per component"
+  ;; probe at HEAD: `u.a` → 1 : Int | String at 0 errors, while `u{a}`
+  ;; refuses. A fourth asymmetry, missed by the mini-audit's enumeration of
+  ;; three and found by the adversarial verify. Without this arm b-ii-2's
+  ;; wholesale minting silently deletes a working surface.
+  ;; ⚠ UPDATED at b-ii-2a: this asserted a ROW because `'path` still assembled
+  ;; block-shaped when it was written. 2a gave `'path` its own assembly — it
+  ;; EXTRACTS the leaf type — so the union join now arrives DIRECTLY. The pin
+  ;; caught its own slice's change, which is what it is for.
+  (let-values ([(ty fail) (tc:select-project '() TBL-UNION (list (list 'a)) 'path)])
+    (check-false fail "the path sort must project a union subject, not refuse it")
+    (check-false (expr-Record? ty) "the path sort EXTRACTS — a row here would be the block assembly")
+    (check-true (expr-union? ty) "the per-component value types join into a union")))
+
+(test-case "P4b-ii-1 table (BLOCK × union): unchanged — still refuses"
+  (let-values ([(row fail) (tc:select-project '() TBL-UNION (list (list 'a)) 'block)])
+    (check-false row)
+    (check-equal? (tc:select-fail-kind fail) 'subject-other)))
+
+(test-case "P4b-ii-1 verify gap: the Map posture honours the KEY TYPE"
+  ;; the reference is `(if (check ctx k kt) vt (expr-error))` — TWO
+  ;; obligations. The first cut implemented only the miss half, so a
+  ;; (Map Int String) subject would have admitted a keyword label and
+  ;; degraded to a runtime panic at b-ii-2. Probe: `mi.a` REFUSES at HEAD.
+  (let-values ([(row fail) (tc:select-project
+                            '() (expr-Map (expr-Int) (expr-String))
+                            (list (list 'a)) 'path)])
+    (check-false row "a keyword label is not a legal key of a (Map Int String)")
+    (check-equal? (tc:select-fail-kind fail) 'subject-map))
+  ;; and the gate is not vacuous — a matching key type still admits
+  (let-values ([(ty fail) (tc:select-project
+                           '() (expr-Map (expr-Keyword) (expr-String))
+                           (list (list 'a)) 'path)])
+    (check-false fail)
+    ;; UPDATED at b-ii-2a with the 'path assembly: the Map's VALUE type
+    ;; arrives directly, not wrapped in a one-field row.
+    (check-equal? ty (expr-String) "the path sort extracts the Map's value type")))
+
+(test-case "P4b-ii-1 verify gap: select-index-of — the NAT TWIN — is total over sort"
+  ;; the file's own comment calls it "the nat twin of select-row-of"; when its
+  ;; twin became 2-D this stayed 1-D, so the ORDINAL column silently carried
+  ;; block semantics and could never raise the guard. The two sorts agree here
+  ;; today BY SCOPING (Q_U12: `.N` reuses $postfix-index, so 'path × ordinal is
+  ;; unreachable at b-ii) — totality is what stops a THIRD sort inheriting it.
+  (define (sort-exn? e)
+    (and (exn:fail? e) (regexp-match? #rx"no arm for selector sort" (exn-message e))))
+  (check-exn sort-exn?
+             (lambda () (tc:select-project '() (expr-PVec (expr-Int))
+                                           (list (list '(@ord 0))) 'nil-safe))
+             "the ordinal dispatch must raise on an unknown sort, not default to block")
+  ;; both real sorts still answer
+  (check-not-exn (lambda () (tc:select-project '() (expr-PVec (expr-Int))
+                                               (list (list '(@ord 0))) 'block))))
+
+(test-case "P4b-ii-1 verify gap: pp-expr renders the selector BY SORT"
+  ;; hard-coding `subject{…}` was correct while 'block was the only reachable
+  ;; sort; after b-ii-2 every `x.a` would have printed as `x{a}` in error
+  ;; messages and def echoes — silent wrong output on the diagnostic path.
+  (check-equal? (pp-expr (expr-select (expr-fvar 'x) (expr-path '((a)) 'block) #f) '())
+                "x{a}")
+  (check-equal? (pp-expr (expr-select (expr-fvar 'x) (expr-path '((a)) 'path) #f) '())
+                "x.a"
+                "the path sort is the DOT spelling, not the brace one")
+  ;; and it must not RAISE on an unknown sort — pp-expr is on the error path,
+  ;; so it renders a visible marker instead (the P4a site-13 ruling)
+  (check-true (string? (pp-expr (expr-select (expr-fvar 'x) (expr-path '((a)) 'nil-safe) #f) '()))
+              "an unknown sort must degrade to a marker, never crash a diagnostic"))
+
+;; ---- b-ii-1 DEFECT, found by the b-ii-2 mini-audit's completeness critic ----
+
+(define TBL-RECORD-CLOSED-UNKNOWN
+  ;; a CLOSED row carrying an 'unknown-presence field. Not constructible from
+  ;; the surface today — `record-mark-all-unknown` (syntax.rkt) is the SOLE
+  ;; 'unknown producer and it forces tail='dyn in the same constructor — so
+  ;; this cell is latent BY LUCK, not by design. That is exactly the
+  ;; pipeline.md "invariant asserted with no enforcement" shape, so it gets a
+  ;; direct-call pin rather than an assurance.
+  (make-record 'keyword (list (cons 'a (record-field (expr-Int) 'unknown))) 'closed))
+
+(test-case "P4b-ii-1 defect: the 'unknown arm must be TAIL-SENSITIVE, like record-project"
+  ;; `record-project`'s 'unknown HIT routes to `miss()`, which tests the ROW
+  ;; TAIL: dyn -> fresh meta, closed -> expr-error. The b-ii-1 'path arm was
+  ;; TAIL-BLIND — it minted a meta unconditionally — while its own comment
+  ;; asserted both "mirror record-project's D19/D24 posture EXACTLY". On a
+  ;; closed row that made `map-get` REFUSE where the carrier ADMITS: a
+  ;; silent-accept divergence, the direction no red-set census can see.
+  (let-values ([(ft fail) (tc:select-project-field
+                           '() TBL-RECORD-CLOSED-UNKNOWN 'a '() 'path)])
+    (check-false ft "a closed row cannot host the field in a remainder — there is none")
+    (check-equal? (tc:select-fail-kind fail) 'unknown-presence))
+  ;; and the DYN twin still admits — the tail test must discriminate, not just refuse
+  (let-values ([(ft fail) (tc:select-project-field
+                           '() TBL-RECORD-DYN-UNKNOWN 'a '() 'path)])
+    (check-false fail "a DYN row's unknown field may live in the remainder")
+    (check-true (expr-meta? ft))))
+
+;; ============================================================
+;; D4.P4b-ii-2a — BEFORE-THE-FOLD TRIPWIRES
+;; ============================================================
+;; These pin behaviour that the b-ii-2b fold migration WILL CHANGE. They are
+;; TRIPWIRES, not invariants: their job is to make each change VISIBLE (a RED
+;; test at 2b, updated deliberately with the delta recorded) instead of silent.
+;;
+;; They exist because the b-ii-2 mini-audit found a class no red-set census can
+;; see — ACCEPT-DIRECTION flips. A migration that makes something start working,
+;; or stop erroring, produces NO failing test. If it is not captured here, it
+;; lands unrecorded. The other two capture a permissive→panic conversion and a
+;; silent deletion, neither of which any existing test covers.
+
+(test-case "b-ii-2b: the union LYING diagnostic is FIXED by the fold — delta recorded"
+  ;; ⭐ THE TRIPWIRE FIRED, and this is the record it demanded. Before the fold
+  ;; `def y := u.a` on a union subject reported "Multiplicity violation" —
+  ;; qtt.rkt's `expr-map-get` arm is SUBJECT-TYPE-GATED with no `expr-union`
+  ;; case, although typing-core's `infer` arm has one, so QTT fell to its
+  ;; catch-all and reported a multiplicity error for a TYPING gap (the
+  ;; infer/inferQ-twins signature from pipeline.md, live in the tree).
+  ;;
+  ;; Migrating fixes it because `expr-select`'s `inferQ` delegates
+  ;; unconditionally. This is an ACCEPT-DIRECTION flip — it produces no failing
+  ;; test, which is exactly why 2a pinned the BEFORE. Without that pin this
+  ;; would have landed unrecorded.
+  (define rs (run-ws-raw (string-append
+                          "def u : <[Map Keyword Int] | [Map Keyword String]> := {:a 1}\n"
+                          "def y := u.a\n")))
+  (check-false (ormap prologos-error? rs)
+               "the union subject now types cleanly through the carrier")
+  (check-regexp-match #rx"Int \\| String" (format "~a" (last rs))
+                      "and the per-component join is the ANSWER, not a lie about multiplicity"))
+
+(test-case "b-ii-2a TRIPWIRE: the DOT spelling's miss on a dyn row is PERMISSIVE"
+  ;; THE GAP THE AUDIT FOUND: all three D19 pins use the BRACKET spelling
+  ;; (`[map-get d :zzz]`), which parses through the map-get PARSER KEYWORD, not
+  ;; the `$dot-access` sentinel b-ii-2 migrates. So they stay green through the
+  ;; regression and NOTHING pinned the dot spelling. This is that pin.
+  ;; Mechanism: expr-map-get's strictness slot is only solved to (expr-true) by
+  ;; the (Map K V) infer arm; a dyn-row subject never solves it, so reduction
+  ;; takes the permissive `(expr-error)` branch instead of the loud panic.
+  ;; AT 2b THIS REGRESSES TO A PANIC unless the tier rides the carrier.
+  (define rs (run-ws-raw (string-append
+                          "def base := {:host \"h\" :port 1}\n"
+                          "def kk := :port\n"
+                          "def d1 := [map-dissoc base kk]\n"
+                          "d1.zzz\n")))
+  (check-false (ormap prologos-error? rs)
+               "a dyn-row miss via the DOT spelling is permissive — zero errors")
+  (check-regexp-match #rx"error" (format "~a" (last rs))
+                      "it degrades to the <error> VALUE, not a panic"))
+
+(test-case "b-ii-2a TRIPWIRE: `_.field` sections work — THREE shapes, zero prior tests"
+  ;; `_.a` sections because the $dot-access fold arm has NO `_` guard (its
+  ;; $postfix-index sibling DOES — which is why `_[k]` is a guided refusal) and
+  ;; `map-get` is in sectionable-op-keywords. `$select` is neither in that list
+  ;; nor reachable by it: its parse-list clause PRECEDES the section clause in
+  ;; the same cond, so "add $select to sectionable-op-keywords" is INERT.
+  ;; AT 2b THIS SURFACE DISAPPEARS unless b-ii-3's rescue lands with it.
+  ;; ⚠ PRELUDE fixture, deliberately: `map` does not exist under :no-prelude,
+  ;; and a prologos-error? assertion cannot tell an Unbound-variable cascade
+  ;; from the deletion this pin exists to catch (the Watching-4 false-green
+  ;; class — it caught this pin on its first run).
+  (define rs (run-ws-pre-raw (string-append
+                              "def r := {:a 7}\n"
+                              "[_.a r]\n"
+                              "def recs := @[{:a 1} {:a 2}]\n"
+                              "map _.a recs\n")))
+  (check-false (ormap prologos-error? rs) "all three shapes must stay live")
+  (check-regexp-match #rx"7 : Int" (format "~a" (list-ref rs 1))
+                      "direct application of the section")
+  (check-regexp-match #rx"@\\[1 2\\]" (format "~a" (last rs))
+                      "the section as a HOF argument — the ergonomic case"))
+
+(test-case "b-ii-2a: the `'path` ASSEMBLY extracts; the `'block` assembly projects"
+  ;; the prerequisite the b-ii-2 mini-audit found nobody had named: BOTH walks
+  ;; assembled a ROW unconditionally, under both sorts, so the fold could not
+  ;; be flipped — `x.a` would have typed as `{:a T}` instead of `T`.
+  (let-values ([(ty fail) (tc:select-project '() TBL-RECORD-CLOSED BRANCHES-A 'path)])
+    (check-false fail)
+    (check-equal? ty (expr-Int) "path EXTRACTS the leaf type"))
+  (let-values ([(row fail) (tc:select-project '() TBL-RECORD-CLOSED BRANCHES-A 'block)])
+    (check-false fail)
+    (check-true (expr-Record? row) "block PROJECTS into a row")
+    (check-equal? (record-field-type (cdr (car (expr-Record-fields row)))) (expr-Int))))
+
+(test-case "b-ii-2a: a malformed multi-component `'path` carrier REFUSES, it does not take the first"
+  ;; unconstructible from the surface under Q_U13's NEST encoding (one branch,
+  ;; one step per level) — pinned anyway, because silently taking the first
+  ;; component is how the P2.b fabrication class starts.
+  (let-values ([(ty fail) (tc:select-project '() TBL-RECORD-CLOSED
+                                             (list (list 'a) (list 'a)) 'path)])
+    (check-false ty)
+    (check-true (tc:select-fail? fail) "a 2-component path carrier must refuse")))
+
+(test-case "b-ii-2a: select-reduce RECEIVES the sort (step zero for any tier work)"
+  ;; its signature was `(subj-expr branches)` and the whnf call site discarded
+  ;; the sort it had just bound — so every runtime outcome for a migrated
+  ;; `.field` would have been decided by a sort-blind function.
+  (define subj (expr-champ (let ([kw (expr-keyword 'a)])
+                             (champ-insert champ-empty (equal-hash-code kw) kw (expr-int 7)))))
+  ;; block: assembles a champ
+  (check-true (expr-champ? (select-reduce subj '((a)) 'block #f)))
+  ;; path: extracts the leaf VALUE
+  (check-equal? (select-reduce subj '((a)) 'path (expr-true)) (expr-int 7)
+                "the path sort must yield the value, not a one-key map")
+  ;; and the sort axis is total here too
+  (check-exn (lambda (e) (and (exn:fail? e)
+                              (regexp-match? #rx"no arm for selector sort" (exn-message e))))
+             (lambda () (select-reduce subj '((a)) 'nil-safe #f))))
+
+(test-case "b-ii-2a: the tier field is carried, and MAPPED — not merely preserved"
+  ;; INERT at 2a (every construction passes #f, nothing reads it), but the
+  ;; walker contract has to be right BEFORE b-ii-2b puts a meta in it.
+  (define node (expr-select (expr-fvar 'x) (expr-path '((a)) 'path) #f))
+  (check-eq? (expr-select-tier node) #f "no claim is the 2a default")
+  (check-eq? (expr-select-tier (select-map-exprs (lambda (e) e) node)) #f
+             "#f is not an expr — it must pass through the mapper untouched")
+  ;; the load-bearing half: a tier that is CARRIED but not MAPPED would never
+  ;; zonk at 2b, `expr-true?` would never hold, and every Map miss would go
+  ;; silently PERMISSIVE — a reverse regression with no signal.
+  (define with-meta (expr-select (expr-fvar 'x) (expr-path '((a)) 'path) (expr-fvar 'TIER)))
+  (define mapped (select-map-exprs (lambda (e) (if (equal? e (expr-fvar 'TIER))
+                                                   (expr-true)
+                                                   e))
+                                   with-meta))
+  (check-equal? (expr-select-tier mapped) (expr-true)
+                "the mapper must DESCEND into the tier, or a meta there can never be solved"))
+
+;; ============================================================
+;; D4.P4b-ii-2b — the `$select-path` sentinel (machinery; the fold not yet flipped)
+;; ============================================================
+
+(test-case "b-ii-2b: `$select-path` parses to a 'path surf-select"
+  ;; a DISTINCT sentinel from `$select` [owner ruling]: the sort cannot be
+  ;; recovered downstream, because the fold mints in preparse and by the time a
+  ;; surf-select exists the origin is gone — which is why the elaborator had to
+  ;; hard-code 'block before this slice.
+  (define r (parse-datum '($select-path foo bar)))
+  (check-true (surf-select? r))
+  (check-eq? (surf-select-sort r) 'path "the DOT spelling carries 'path")
+  (check-equal? (surf-select-branches r) '((bar)) "exactly one branch, per Q_U13's NEST encoding"))
+
+(test-case "b-ii-2b: the ARITY GATE restores the loud behaviour the pipe caller relies on"
+  ;; THE POINT of the distinct sentinel. `map-get`'s parser arm imposes EXACT
+  ;; arity 2; `$select`'s has NO upper bound, so every surplus arg becomes
+  ;; another BRANCH. `apply-pipe-step` appends the accumulator into any
+  ;; hole-free step, so a bare `$select` mint would turn `|> m foo.bar` from a
+  ;; LOUD arity-error into a SILENT two-branch select — the piped value quietly
+  ;; becoming a selection branch, at zero errors. The same append lives in the
+  ;; `>>` compose twin, so a blacklist fix would have had to find BOTH; the
+  ;; gate fixes every caller at once, structurally.
+  (define r (parse-datum '($select-path foo bar m)))
+  (check-true (prologos-error? r) "a surplus payload arg must REFUSE, not become a branch")
+  (check-regexp-match #rx"exactly one field" (format "~a" r))
+  (check-regexp-match #rx"\\|>" (format "~a" r)
+                      "the message must name the pipe, since that is how the surplus arrives"))
+
+(test-case "b-ii-2b: the BLOCK sentinel is untouched — multi-branch stays legal"
+  ;; the gate must be scoped to the path sort; `x{a b}` is a legitimate
+  ;; two-branch block and must not be caught by it
+  (define r (parse-datum '($select foo bar m)))
+  (check-true (surf-select? r))
+  (check-eq? (surf-select-sort r) 'block)
+  (check-equal? (surf-select-branches r) '((bar) (m))))
+
+(test-case "b-ii-2b: the surf-select sort THREADS to the carrier through elaboration"
+  ;; the elaborator no longer hard-codes 'block; before this the sort had no
+  ;; channel at all from parser to carrier
+  (define rs (run-ws-raw "def cfg := {:server {:host \"h\"}}\ncfg{server}\n"))
+  (check-false (ormap prologos-error? rs))
+  ;; the block spelling still round-trips as a block (pp renders by sort)
+  (check-regexp-match #rx"server" (format "~a" (last rs))))
+
+;; ============================================================
+;; D4.P4b-ii-2c — the diagnostics are SORT-AWARE
+;; ============================================================
+
+(test-case "b-ii-2c: the DOT spelling's miss no longer tells the user to write what they wrote"
+  ;; every `format-select-fail` arm was written when only `x{…}` could reach
+  ;; it, so they say "a select block" and append block-specific advice. After
+  ;; the b-ii-2b flip the dot spelling reaches them too, and the tail became
+  ;; ACTIVELY MISLEADING — probe-confirmed before the fix:
+  ;;   `r.zzz` → "…; in the select branch `zzz` — bare field access (no
+  ;;              construction) is spelled `.zzz`"
+  ;; which is exactly what the user wrote. Worse, `select-block-hint` runs
+  ;; BEFORE `closed-row-miss-hint` in infer/err's `or`, so the bad message WON.
+  (define rs (run-ws-raw "def r := {:a 1 :b 2}\nr.zzz\n"))
+  (define msg (format "~a" (last rs)))
+  (check-true (prologos-error? (last rs)))
+  (check-regexp-match #rx"not present in the record" msg "the useful half stays")
+  (check-regexp-match #rx"available fields" msg)
+  (check-false (regexp-match #rx"is spelled" msg)
+               "the block tail TEACHES the dot spelling — useless when they used it")
+  (check-false (regexp-match #rx"select branch" msg)
+               "there is no branch: a path access is not a block"))
+
+(test-case "b-ii-2c: the BLOCK spelling KEEPS its wording — the fix is scoped, not a blanket strip"
+  (define rs (run-ws-raw "def r := {:a 1 :b 2}\nr{zzz}\n"))
+  (define msg (format "~a" (last rs)))
+  (check-true (prologos-error? (last rs)))
+  (check-regexp-match #rx"select branch" msg "a block miss IS in a branch")
+  (check-regexp-match #rx"is spelled" msg
+                      "and the dot spelling is genuinely the remedy there"))
+
+(test-case "b-ii-2c: the Map BLOCK refusal is unchanged by the sort-awareness"
+  (define rs (run-ws-raw "def m : [Map Keyword Int] := {:a 1}\nm{a}\n"))
+  (define msg (format "~a" (last rs)))
+  (check-regexp-match #rx"a select block needs a record subject" msg)
+  (check-regexp-match #rx"seal|validate" msg "the remedies survive"))
+
+;; ============================================================
+;; D4.P4b-ii-2b — THE ADVERSARIAL VERIFY'S FINDINGS, pinned
+;; ============================================================
+;; Mutation testing proved the ASSERTIVE half of the two-tier fork was
+;; COMPLETELY unpinned: disabling reduction's `expr-true?` arm, and separately
+;; disabling typing's `solve-strict-assert!`, each left the whole battery
+;; green. The permissive half was pinned (the 2a tripwire); the loud half —
+;; the half whose failure STORES a wrong answer — was not. These are the three
+;; direct analogues of the map-get pins the migration claims parity with.
+
+(test-case "verify B1: an assertive (Map K V) miss via the DOT spelling is a COUNTED error"
+  ;; the analogue of P2.b A1. Mutation M1 (reduction ignores the tier) and M2
+  ;; (typing never solves it) both made this degrade to `<error>` at ZERO
+  ;; errors with 283/283 still green.
+  (define rs (run-ws-raw (string-append
+                          "def d : [Map Keyword Int] := [map-assoc [map-assoc [map-empty Keyword Int] :a 1] :b 2]\n"
+                          "d.zzz\n")))
+  (check-true (prologos-error? (last rs))
+              "a proved-Map miss must be LOUD — degrading here stores a wrong answer"))
+
+(test-case "verify B1: the assertive miss names the key AND the available keys"
+  ;; the analogue of P2.b A1b — the quality bar map-get set, which the dot
+  ;; spelling must not lose. Also the ONLY test that executes
+  ;; `assertive-miss-message`, whose extraction fixed a live shadowing crash.
+  (define rs (run-ws-raw (string-append
+                          "def d : [Map Keyword Int] := [map-assoc [map-assoc [map-empty Keyword Int] :alpha 1] :beta 2]\n"
+                          "d.zzz\n")))
+  (define msg (format "~a" (last rs)))
+  (check-regexp-match #rx"zzz" msg "the missing key")
+  (check-regexp-match #rx"available keys" msg)
+  (check-regexp-match #rx"alpha" msg "the keys that ARE there")
+  (check-regexp-match #rx"beta" msg))
+
+(test-case "verify B1: an assertive miss must NOT silently COMMIT to a def"
+  ;; the analogue of P2.b A2 — the stored-silent-wrong-answer class. Under the
+  ;; mutations this bound `bad : Int` at zero errors.
+  (define rs (run-ws-raw (string-append
+                          "def d : [Map Keyword Int] := [map-assoc [map-empty Keyword Int] :a 1]\n"
+                          "def bad := d.zzz\n")))
+  (check-true (ormap prologos-error? rs)
+              "binding a proved-Map miss must fail, not commit"))
+
+(test-case "verify BLOCKING: a non-map union component DEGRADES like map-get, it does not panic"
+  ;; TWO skeptics found this independently by A/B against a baseline tree. The
+  ;; first cut tier-gated only the keyed MISS; the SUBJECT-kind arm one level
+  ;; up stayed unconditional, so `.field` on a union whose runtime value is a
+  ;; non-map PANICKED where `[map-get u :a]` degrades to `none` at 0 errors.
+  ;; A permissive->panic conversion — the class this slice exists to prevent.
+  (define rs (run-ws-raw (string-append
+                          "def u : <[Map Keyword Int] | Int> := 42\n"
+                          "u.a\n"
+                          "[map-get u :a]\n")))
+  (check-false (ormap prologos-error? rs) "neither spelling may error here")
+  (check-equal? (format "~a" (list-ref rs 1)) (format "~a" (last rs))
+                "the two spellings of ONE operation must agree — that is the whole point of the carrier"))
+
+(test-case "verify S2: `^` in a DOT access REFUSES — it is not silently dropped"
+  ;; the field rides as a bare SYMBOL now, so `segment-select-items` splits a
+  ;; `^` out of it into a re-key continuation and the 'path assembly DROPPED
+  ;; it: five spellings returned the plain field at ZERO errors where HEAD
+  ;; refused, while pp-expr still rendered the `^` faithfully — honest display
+  ;; over dishonest semantics. `^` sets an OUTPUT KEY; a path access has none.
+  (for ([src (in-list '("m.foo^z" "m.foo^" "m.foo^_" "m.foo^-"))])
+    (define rs (run-ws-raw (string-append "def m := {:foo 7 :bar 8}\n" src "\n")))
+    (check-true (prologos-error? (last rs)) (format "~a must refuse" src))
+    (check-regexp-match #rx"re-keys the OUTPUT" (format "~a" (last rs))))
+  ;; and the plain access is untouched
+  (check-regexp-match #rx"7 : Int"
+                      (format "~a" (last (run-ws-raw "def m := {:foo 7}\nm.foo\n"))))
+  ;; and the BLOCK spelling keeps `^` in full
+  (define b (run-ws-raw "def c := {:server {:host \"h\"}}\nc{server.host^alias}\n"))
+  (check-false (ormap prologos-error? b) "blocks still re-key")
+  (check-regexp-match #rx"alias" (format "~a" (last b))))
+
+(test-case "verify S1: pp-datum renders the carrier, not a raw sentinel"
+  ;; the FOURTH consecutive missed pretty-print.rkt site. `expand r.a` emitted
+  ;; `($select-path r a)` where HEAD emitted `(map-get r :a)` — a silent
+  ;; regression on the introspection path, for the most common access surface
+  ;; in the language. pp-expr was fixed at b-ii-1; that census stopped there.
+  (define rs (run-ws-raw "def r := {:a {:b 1}}\nexpand r.a\nexpand r.a.b\n"))
+  (check-regexp-match #rx"^r\\.a$" (format "~a" (list-ref rs 1)))
+  (check-regexp-match #rx"^r\\.a\\.b$" (format "~a" (last rs))
+                      "nesting must compose, not render as r.a{b} or a raw sentinel"))
+
+;; ============================================================
+;; D4.P4c-1 — the two PREREQUISITES + the classifier promotion
+;; ============================================================
+;;
+;; P4c-1 carries NO new surface. It lands three things the P4c grounding audit
+;; (wf_d7c035da-cee) found are owed under EVERY option, two of which are LIVE
+;; DEFECTS at HEAD rather than prospective ones:
+;;
+;;   1. `adjacent-to-base?` hoisted to reader-forms.rkt — surface-rewrite.rkt
+;;      hand-inlines the same four conjuncts today (a live F1b.7g drift
+;;      instance), and P4c-2 would otherwise write them a THIRD time.
+;;   2. The `ns` name guard made TOTAL — `ns foo:bar` SILENTLY DROPS `:bar` at
+;;      ZERO errors today (probe-verified). The guard's `memq` catches only
+;;      `$dot-access`/`$postfix-index`, and `:bar` is a bare symbol.
+;;   3. `colon-annotation` promoted to a real token type (Q_U16b) — its
+;;      classifier returns `'symbol` today, so `:0`/`:w`/`:m` are
+;;      type-indistinguishable from any identifier and the P4c-2 gate could not
+;;      dispatch on them.
+
+;; ---- (2) the `ns` guard: a LIVE silent drop, and the fix is a POLARITY
+;;         INVERSION, not another memq entry ----
+;;
+;; `ns` accepts exactly ONE option (`:no-prelude`, namespace.rkt:904-906). So
+;; the total guard is a positive ALLOW-LIST of that option with everything else
+;; refused — the same inversion `definitely-not-map?` took at P2.b slice 1 —
+;; rather than a negative list of known-bad heads that must be extended every
+;; time a new sentinel is minted. D4 records THREE unclosed instances of this
+;; class; the inversion closes them all instead of opening a fourth.
+
+(test-case "P4c-1: `ns foo:bar` REFUSES — the segment is not silently dropped"
+  ;; RED at HEAD: defines ns `foo`, drops `:bar`, reports ZERO errors.
+  ;; ⚠ CHANNEL CHANGED AT G2/B: refusal by VALUE, not by raise. The proposition
+  ;; ("not silently dropped") is unchanged and is what this still asserts.
+  (define rs (run-ws-raw "ns foo:bar\ndef x := 1\n"))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"namespace name" (format "~a" r))) rs)
+              "a colon segment in an ns name must be REFUSED, not silently dropped")
+  ;; …and the file CONTINUES, which is the whole point of the seam guard
+  (check-true (ormap (lambda (r) (regexp-match? #rx"x : Int defined" (format "~a" r))) rs)
+              "the command after a refused ns must still run"))
+
+(test-case "P4c-1: the ns refusal names the segment and offers `::`"
+  ;; Same CHANNEL as pin 1 — the guard raises, so the message is read off the
+  ;; exn, not off a result list. (The first draft read `(car rs)`, which is
+  ;; incoherent with a raising guard and contract-violated on '().)
+  ;; ⚠ Same CHANNEL note as the pin above — read off the result list at G2/B.
+  (define msgs (map (lambda (r) (format "~a" r)) (run-ws-raw "ns foo:bar\ndef x := 1\n")))
+  (check-true (ormap (lambda (m) (and (regexp-match? #rx"namespace name" m)
+                                      (regexp-match? #rx"::" m)))
+                     msgs)
+              "the refusal must name the namespace name and offer `::` as the remedy"))
+
+(test-case "P4c-1: the ns guard stays TOTAL for the shapes it already caught"
+  ;; ⚠ RECORDED, not endorsed: this guard RAISES (a raw Racket `error`), it does
+  ;; not return a per-command `parse-error` VALUE — so it is a WHOLE-FILE ABORT,
+  ;; the Q_L4 class P1a built the marker-form seat to prevent. Pinning the true
+  ;; behaviour rather than the behaviour I assumed; the raise→value conversion
+  ;; is a NAMED follow-up, deliberately out of P4c-1's scope because the
+  ;; prerequisite is totality, not the error CHANNEL.
+  ;; ✅ AND THE "NAMED FOLLOW-UP" THIS COMMENT DEFERRED HAS LANDED — see G2/B.
+  ;; The guard is still TOTAL over these shapes; only the channel moved from a
+  ;; raw raise to a per-command error value.
+  (for ([src (in-list (list "ns foo.bar\ndef x := 1\n" "ns foo[2]\ndef x := 1\n"))])
+    (define rs (map (lambda (r) (format "~a" r)) (run-ws-raw src)))
+    (check-true (ormap (lambda (m) (regexp-match? #rx"namespace name" m)) rs)
+                (format "must stay caught: ~a → ~a" src rs))))
+
+(test-case "P4c-1: the ns guard does NOT refuse its one legitimate option"
+  ;; The inversion's whole risk is over-refusing. `:no-prelude` is the ONLY
+  ;; option `ns` accepts (namespace.rkt:904-906) and must survive.
+  (check-false (ormap prologos-error? (run-ws-raw "ns foo :no-prelude\n"))
+               ":no-prelude is a legitimate ns option and must NOT be refused")
+  (check-false (ormap prologos-error? (run-ws-raw "ns foo::bar\n"))
+               "`::` is the hierarchical separator, glued into ONE symbol — never a segment"))
+
+(test-case "P4c-1: the promotion is DATUM-INVISIBLE — zero corpus A/B diffs owed"
+  ;; The whole point of landing this in P4c-1 rather than P4c-2: a token-TYPE
+  ;; change must not move a single datum, so the A/B baseline stays clean and
+  ;; P4c-2's seven predicted diffs are attributable to the MINT alone.
+  ;; ⚠ DELIBERATE FLIP at P4c-2 — `users:0` now MINTS (Q_U16b makes it a legal
+  ;; ω step). Listed as a flip rather than silenced: this is the P4c hazard that
+  ;; says the prior rung's flagship pin flips, for the third consecutive phase.
+  (check-equal? (read-all-forms-string "users:0") '((users ($bcast-step :0))))
+  (check-equal? (read-all-forms-string "[fn [x :0 Int] x]") '((fn (x :0 Int) x)))
+  (check-equal? (read-all-forms-string "users:w") '((users ($bcast-step :w))))
+  ;; baseline MEASURED, not guessed — the first draft of this pin asserted
+  ;; `(((:0 v)))` from memory and failed for the wrong reason.
+  (check-equal? (read-all-forms-string "{:0 v}") '(($brace-params :0 v))))
+
+;; ============================================================
+;; D4.P4c-2 — the `:` MINT + the reader-post-pass BINDER UNWRAP (Q_U16)
+;; ============================================================
+;;
+;; Q_U8 as ruled could not be built: §Q8.5 site 8 (join `access-sentinel?` +
+;; take a fold arm) and parser position-dispatch are MUTUALLY EXCLUSIVE,
+;; because the preparse fold RUNS OVER BINDER POSITIONS (`defn f [x.a] x` →
+;; a 3-arity function at ZERO errors). Q_U16 keeps BOTH surfaces by moving the
+;; unwrap to the READER POST-PASS, which provably precedes all FOUR
+;; `rewrite-dot-access` seats (macros.rkt :2004 · :2714 · :6564 · :6950 —
+;; re-measured 2026-08-02; the previously-cited quadruple was all four wrong).
+;;
+;; So the contract is TWO-SIDED and both sides need pins:
+;;   EXPRESSION position → the mint SURVIVES as `($bcast-step k)`
+;;   BINDER position     → the post-pass UNWRAPS it back to the bare `:k`
+;;
+;; The binder table is MEASURED (D4 §5.P4c-2), not enumerated from memory.
+
+;; ---- side 1: the mint fires in EXPRESSION position ----
+
+(test-case "P4c-2: `users:name` mints the broadcast step, payload VERBATIM"
+  ;; ⚠ The payload is the COLON-SYMBOL `:name`, not a stripped `name`. This pin
+  ;; first asserted the stripped form — which would have forced the unwrap to
+  ;; re-add `:`, i.e. a SECOND copy of the recognizer's accept-set: the exact
+  ;; F1b.7g drift class reader-forms.rkt exists to forbid. `token-entry->stx`'s
+  ;; keyword arm already yields `|:name|`; the mint WRAPS it untouched so the
+  ;; unwrap is a plain `cadr`.
+  (check-equal? (read-all-forms-string "users:name") '((users ($bcast-step :name)))))
+
+(test-case "P4c-2: the ordinal band mints too (Q_U16b — `users:0` is a legal ω step)"
+  (check-equal? (read-all-forms-string "users:0") '((users ($bcast-step :0))))
+  (check-equal? (read-all-forms-string "users:w") '((users ($bcast-step :w)))))
+
+(test-case "P4c-2: the mint is POSITIONAL — closers and `.N` join the focus set FREE"
+  ;; `adjacent-to-base?` consults NO token type, so these come free under the
+  ;; positional rule and would each have needed a hand entry under an
+  ;; enumerated one.
+  (check-equal? (read-all-forms-string "xs[0]:n") '((xs ($postfix-index 0) ($bcast-step :n))))
+  (check-equal? (read-all-forms-string "(f x):name") '(((f x) ($bcast-step :name)))))
+
+;; ---- side 2: BINDER positions unwrap — one row per MEASURED table entry ----
+;;
+;; ⚠ THESE ARE INVARIANCE PINS, GREEN BEFORE AND AFTER. Before the mint they
+;; pass trivially (there is nothing to unwrap); their job is to go RED the
+;; moment the mint LEAKS into a binder position. So "green" here is only
+;; evidence once side 1 is green too — read the two sides together.
+;;
+;; A missing row is the 3-arity class: the binder consumer meets
+;; `($bcast-step Int)` where it expects `:Int` and falls to a generic arm. The
+;; consumer hardening makes that LOUD; these pins make it VISIBLE.
+
+(test-case "P4c-2 binder row: def"
+  (check-equal? (read-all-forms-string "def x:Int := 5") '((def x :Int := 5))))
+
+(test-case "P4c-2 binder row: defn param group"
+  (check-equal? (read-all-forms-string "defn f [a:Int b:Int] a")
+                '((defn f (a :Int b :Int) a))))
+
+(test-case "P4c-2 binder row: fn param group"
+  (check-equal? (read-all-forms-string "[fn [x:Int] x]") '((fn (x :Int) x))))
+
+(test-case "P4c-2 binder row: spec param group"
+  (check-equal? (read-all-forms-string "spec g [a:Int] -> Int") '((spec g (a :Int) -> Int))))
+
+(test-case "P4c-2 binder row: let binding"
+  (check-equal? (read-all-forms-string "let x:Int 5\n  x") '((let x :Int 5 x))))
+
+(test-case "P4c-2 binder row: property + functor param groups"
+  (check-equal? (read-all-forms-string "property p [x:Int] x") '((property p (x :Int) x)))
+  (check-equal? (read-all-forms-string "functor F [x:Int] x") '((functor F (x :Int) x))))
+
+(test-case "P4c-2 binder row: trait METHOD params"
+  (check-equal? (read-all-forms-string "trait T {A}\n  m [x:Int] : A")
+                '((trait T ($brace-params A) (m (x :Int) : A)))))
+
+(test-case "P4c-2 binder row: rel / defr param groups (the BARE-NAME spelling)"
+  ;; The `?`-prefixed spelling is immune (glued by narrow-var-annot); the
+  ;; bare-name one is NOT. An earlier draft of the table declared defr OUT on
+  ;; the `?a:Nat` probe alone — the under-count this row exists to pin.
+  (check-equal? (read-all-forms-string "defr r [a:Int]") '((defr r (a :Int))))
+  (check-equal? (read-all-forms-string "def q := rel [a:Int] &> foo a")
+                '((def q := rel (a :Int) $clause-sep foo a))))
+
+(test-case "P4c-2 binder row: `$pipe` ARMS — defn AND match"
+  ;; Owner-caught; named by neither the audit nor the options panel.
+  (check-equal? (read-all-forms-string "defn f\n  | a:Int -> a") '((defn f ($pipe a :Int -> a))))
+  (check-equal? (read-all-forms-string "match v\n  | c a:Int -> a")
+                '((match v ($pipe c a :Int -> a)))))
+
+(test-case "P4c-2 binder row: `$pipe` arm patterns NEST"
+  ;; The unwrap cannot scan an arm's top-level items — the annotation is inside
+  ;; a constructor pattern sub-group.
+  (check-equal? (read-all-forms-string "defn g\n  | [cons h:Int t] -> h")
+                '((defn g ($pipe (cons h :Int t) -> h)))))
+
+(test-case "P4c-2 binder row: a header param group AND arms in ONE form"
+  (check-equal? (read-all-forms-string "defn k [x:Int]\n  | 0 -> x")
+                '((defn k (x :Int) ($pipe 0 -> x)))))
+
+;; ---- the IMMUNE set: these must not move, and two of them are load-bearing ----
+
+(test-case "P4c-2: the `?`-prefixed spelling is immune — ONE glued token"
+  ;; narrow-var-annot (pri 96) glues it, so the mint structurally cannot fire.
+  ;; This is the tree's own lexical solution to the collision, for one vocabulary.
+  (check-equal? (read-all-forms-string "defr r [?a:Nat]") '((defr r (?a:Nat))))
+  (check-equal? (read-all-forms-string "def q := rel [?x:Nat] &> foo x")
+                '((def q := rel (?x:Nat) $clause-sep foo x))))
+
+(test-case "P4c-2: SPACED never mints — contiguity is the discriminator (§Q8.3)"
+  (check-equal? (read-all-forms-string "def x : Int := 5") '((def x : Int := 5)))
+  (check-equal? (read-all-forms-string "f x :name") '((f x :name)))
+  (check-equal? (read-all-forms-string "[fn [x :0 Int] x]") '((fn (x :0 Int) x))))
+
+(test-case "P4c-2: BRANCH-INITIAL never mints — the local result is empty"
+  ;; These two are declared safe-by-construction in the P4c hazard list and
+  ;; must NOT be touched: admitting bare `colon` to the trigger would break them.
+  (check-equal? (read-all-forms-string "{:a 1}") '(($brace-params :a 1)))
+  (check-equal? (read-all-forms-string "schema S\n  :f Int") '((schema S (:f Int)))))
+
+;; ============================================================
+;; D4.P4c-2 condition (c) prerequisites — THE TABLE'S MEASURED MISSES
+;; ============================================================
+;;
+;; The rows above pin the table as DESIGNED. These pin what MEASURING it found,
+;; and they are the reason the owner scoped P4c-2's close as full unwrap-coverage
+;; repair rather than consumer-hardening alone: the enumeration missed FOUR
+;; distinct shapes inside a single session, which is the record that disqualifies
+;; it as the safety property.
+;;
+;; ⚠ EVERY expectation below was MEASURED at HEAD before being written, never
+;; recalled — the two guessed baselines earlier in this phase both produced pins
+;; that failed for the wrong reason.
+;;
+;; The misses come in TWO DIRECTIONS, and only one of them is a leak:
+;;   UNDER-REACH — the table misses a form, `($bcast-step …)` survives into its
+;;                 binder position, and the consumer reads it as an extra
+;;                 positional parameter. This is the 3-arity class.
+;;   OVER-REACH  — the walk unwraps PAST the binder region and silently strips a
+;;                 legitimate broadcast out of a BODY. Condition (c) structurally
+;;                 CANNOT catch this one: no sentinel survives for a refusal arm
+;;                 to see. It is inert only until P4c-3 gives `$bcast-step` a
+;;                 consumer, at which point it becomes a silent wrong answer.
+
+;; ---- UNDER-REACH 1: the private-suffix family (a LIVE end-to-end regression) ----
+
+(test-case "P4c-2 (c): private-suffix heads bind too — `defn-` / `def-` / `spec-`"
+  ;; `private-form-base` (macros.rkt) normalizes the `-` suffix at PREPARSE,
+  ;; strictly AFTER this post-pass — so at unwrap time the head is literally
+  ;; `defn-` and the table's `memq` misses. Eleven suffixed heads exist.
+  (check-equal? (read-all-forms-string "defn- f [x:Int] x") '((defn- f (x :Int) x)))
+  (check-equal? (read-all-forms-string "spec- f [x:Int] -> Int") '((spec- f (x :Int) -> Int)))
+  (check-equal? (read-all-forms-string "def- x:Int := 5") '((def- x :Int := 5))))
+
+(test-case "P4c-2 (c): the private-suffix leak is a LIVE REGRESSION — end to end"
+  ;; ⚠ THE ONLY END-TO-END REGRESSION P4c-2 INTRODUCED, isolated by an A/B against
+  ;; a worktree pinned at 182f1678 (the pre-mint baseline): there it prints
+  ;; "priv : Int -> Int defined." and "7 : Int" at ZERO errors; at the mint commit
+  ;; it is 2 errors. The corpus A/B could not see it — 161 files, and not one
+  ;; combines a private form with a fused annotation.
+  ;;
+  ;; This pin is END-TO-END on purpose. Every one of the 18 reader-level pins in
+  ;; the block above stayed green through this regression, which is the same
+  ;; blindness that lets `def x:Int := 5` hold a green datum pin while aborting
+  ;; the whole file in production.
+  (check-equal? (run-ws "defn- priv [x:Int] x\n[priv 7]\n")
+                '("priv : Int -> Int defined." "7 : Int")))
+
+;; ---- UNDER-REACH 2: a form with TWO binder groups ----
+
+(test-case "P4c-2 (c): an implicit-binder group does not consume the param group"
+  ;; `scan-for-param-heads` disarms after the FIRST group it meets, so a leading
+  ;; `{A}` eats the arming and the real param group leaks. `{A B : Type}` before
+  ;; `[x:A]` is idiomatic per prologos-syntax.md § Type annotations, so this is a
+  ;; first-class spelling, not a corner.
+  (check-equal? (read-all-forms-string "spec f {A} [x:Int] -> Int")
+                '((spec f ($brace-params A) (x :Int) -> Int)))
+  (check-equal? (read-all-forms-string "defn f {A} [x:Int] x")
+                '((defn f ($brace-params A) (x :Int) x))))
+
+;; ---- UNDER-REACH 3: `defmacro` ----
+
+(test-case "P4c-2 (c): `defmacro`'s param group binds — it is in no table"
+  ;; A live binding param group (lib/prologos/core.prologos: `defmacro when
+  ;; [$cond $body] …`) that appears in none of the three head lists.
+  (check-equal? (read-all-forms-string "defmacro when [$c:Int $b] $c")
+                ;; ⚠ G2: the sentinel now SURVIVES here. That is NOT a G2 defect —
+                ;; measured, `($c :Int $b)` and `($c ($bcast-step :Int) $b)` are BOTH
+                ;; three params, so the macro is unmatchable either way and the user
+                ;; sees the same "Unbound variable" at the call site. Pre-existing;
+                ;; spun out as DEFERRED 50 / chip task_204859b9.
+                '((defmacro when ($c ($bcast-step :Int) $b) $c))))
+
+;; ---- UNDER-REACH 4: single-line `$pipe` arms ----
+
+(test-case "P4c-2 (c): a SINGLE-LINE arm group unwraps like the multi-line one"
+  ;; ⚠ SPELLING-SPECIFIC, and the existing arm pins above only cover the
+  ;; multi-line form — where `$pipe` becomes a SUB-GROUP whose head is `$pipe`,
+  ;; so `apply-binder-unwrap`'s explicit arm fires. Written on ONE line the
+  ;; `$pipe` stays a flat sibling under `match`, which is not a param head, and
+  ;; the arm is never reached. Measured: the multi-line spelling is CORRECT today
+  ;; and must stay so; only the flat one leaks.
+  (check-equal? (read-all-forms-string "match v | c a:Int -> a")
+                '((match v $pipe c a :Int -> a)))
+  ;; the idiomatic spelling — already green, pinned here so a fix cannot trade
+  ;; one spelling for the other
+  (check-equal? (read-all-forms-string "match v\n  | c a:Int -> a")
+                '((match v ($pipe c a :Int -> a)))))
+
+;; ---- OVER-REACH: a BODY broadcast must survive ----
+
+(test-case "P4c-2 (c): `let` without `:=` must not strip a body broadcast"
+  ;; `unwrap-binders-until-terminator` runs to the END of the list when no
+  ;; terminator is found, and `:=` is OPTIONAL in WS `let` — so the body's
+  ;; broadcast is silently unwrapped. Measured today: `(let x 5 (users :name))`.
+  ;; The binder region here is the name plus an optional fused annotation; the
+  ;; value and body are not binders.
+  (check-equal? (read-all-forms-string "def z := 0\nlet x 5\n  users:name")
+                '((def z := 0) (let x 5 (users ($bcast-step :name)))))
+  ;; the `:=` spelling already behaves — pinned so the bound cannot regress it
+  (check-equal? (read-all-forms-string "def z := 0\nlet x := 5\n  users:name")
+                '((def z := 0) (let x := 5 (users ($bcast-step :name))))))
+
+(test-case "P4c-2 (c): an arms-only `defn` must not strip its arm BODY's broadcast"
+  ;; `scan-for-param-heads` stays armed through every SYMBOL, so with no bracket
+  ;; group to consume the arming it runs on until it meets ANY list — which for
+  ;; an arms-only clause is the body's own `($bcast-step …)`. Arms-only `defn` is
+  ;; the PRIMARY multi-arity form per CLAUDE.md, so this is the common shape.
+  ;; Measured today: `(defn f ($pipe a -> users :name))` — stripped.
+  (check-equal? (read-all-forms-string "defn f\n  | a -> users:name")
+                '((defn f ($pipe a -> users ($bcast-step :name)))))
+  ;; two arms already behave (arm 1's group consumes the arming) — pinned so the
+  ;; fix does not trade the one-arm case for the two-arm case
+  (check-equal? (read-all-forms-string "defn f\n  | 0 -> 1\n  | a -> users:name")
+                '((defn f ($pipe 0 -> 1) ($pipe a -> users ($bcast-step :name)))))
+  ;; and a header param group must still leave the body alone
+  (check-equal? (read-all-forms-string "defn f [a]\n  users:name")
+                '((defn f (a) (users ($bcast-step :name))))))
+
+;; ============================================================
+;; D4.P4c-2 condition (c) — the loud-refusal hardening
+;; ============================================================
+;;
+;; ⚠ THE BINDER GUARDS CANNOT BE PINNED BY A STANDING TEST, and that is the
+;; DESIRED end state rather than a gap in the battery. A guard fires only when
+;; the reader post-pass binder table MISSES a form; with the table correct, no
+;; `$bcast-step` reaches any binder consumer, so there is no input that reaches
+;; them. Feeding the leaked shape by hand does not work either — a sexp-mode
+;; `(defn f (x ($bcast-step :Int)) x)` goes through the SAME post-pass and is
+;; unwrapped before it arrives (probe-verified: it defines `f : Int -> Int` at
+;; zero errors).
+;;
+;; THE VERIFIER IS MUTATION, and it is reproducible in two minutes:
+;;   1. in parse-reader.rkt set `binder-param-heads` and `binder-region-heads`
+;;      to '()  (or drop a single head to test one row)
+;;   2. PLT_CS_COMPILE_LIMIT=1000000 raco make driver.rkt
+;;   3. run a file containing `defn a [x:Int] x`, `defr b [x:Int]`,
+;;      `def g := [fn [x:Int] x]`, and a `let w:Int 5` block
+;;   4. EXPECT: every one reports the guided "…read as a broadcast step, but
+;;      this is a BINDER position…" message, per-command, file continuing.
+;;      Before the hardening these were four DIFFERENT generic messages, two of
+;;      which dumped raw syntax objects at the user.
+;;   5. restore parse-reader.rkt and rebuild.
+;;
+;; That procedure is how the guards were validated, and it is also how the first
+;; cut of `bcast-step-datum?` was caught as DEAD CODE (it compared a still-wrapped
+;; syntax object to a symbol, so it never returned #t at any site while the suite
+;; stayed green). A green suite is not evidence for a tripwire; only mutation is.
+;;
+;; What IS reachable, and therefore pinned below, is the EXPRESSION-position
+;; half — which until now reported a LYING "Unbound variable".
+
+(test-case "G2: an expression broadcast is LIVE at the default — the pin that was INERT"
+  ;; ⚠⚠ THIS PIN HAS NOW FLIPPED TWICE, and both flips were the point.
+  ;; At P4c-2 it asserted the mint was provably equivalent to NOT minting, because
+  ;; `broadcast-enabled-contexts` was `'()` and the post-pass unwrapped uniformly.
+  ;; Its own comment said the guided messages were "live code with an empty
+  ;; enable-set in front of them", reachable "the moment the first context is
+  ;; enabled". G2 removes the enable-set entirely, so that moment is now.
+  ;;
+  ;; What a user sees is no longer the PRE-MINT "Could not infer type" — it is the
+  ;; feature. This is the single clearest before/after in the slice.
+  (define r (run-ws "def users := @[{:name \"a\"}]\ndef bad := users:name\n"))
+  (check-regexp-match #rx"\\[PVec String\\]" (last r))
+  ;; and it must NOT be the sentinel leaking into a user-facing message
+  (check-false (regexp-match? #rx"bcast-step" (last r))))
+
+(test-case "P4c-2 (c): the inert path is still PER-COMMAND — the file is not aborted"
+  ;; The whole-file-abort guard matters independently of the enable-set: a raise
+  ;; at the reader seam loses every command in the file (Q_L4; DEFERRED 31
+  ;; records a live instance).
+  (define r (run-ws "def users := @[{:name \"a\"}]\ndef bad := users:name\ndef after := 99\nafter\n"))
+  (check-equal? (last r) "99 : Int")
+  (check-equal? (length r) 4))
+
+(test-case "P4c-2 (c): a zero-payload `($bcast-step)` must not abort the file"
+  ;; `unwrap-bcast-step`'s `cadr` was unguarded — a user writing the internal
+  ;; head with no payload raised a raw Racket contract violation at READER time,
+  ;; outside any per-command handler. THIRD instance of that shape in this track
+  ;; (P1a's `$retired-selection`, P4c-2's `apply-binder-unwrap`, and this).
+  ;; Found by the P4c-2 adversarial verify.
+  (define r (run-ws "def before := 1\ndefn f [$bcast-step] 1\ndef after := 2\nafter\n"))
+  (check-equal? (last r) "2 : Int"))
+
+(test-case "P4c-2: the QUOTE bucket declines — it is neither expression nor binder"
+  ;; `'` lexes as a loose token with no grouper arm, so it is pushed as a
+  ;; SIBLING and the keyword IS byte-adjacent — the mint would fire in
+  ;; expression position where no binder unwrap can rescue it. One live corpus
+  ;; site (examples/homoiconicity.prologos:96). Declined via the
+  ;; `prev-token-reader-form-head?` shape.
+  ;; ⚠ baseline MEASURED. My first draft asserted `(quote :hello)` from memory;
+  ;; the quote is a LOOSE `|'|` symbol with no grouper arm — which is exactly
+  ;; WHY the bucket exists. Second guessed-baseline in this slice; the earlier
+  ;; one was `{:0 v}` at P4c-1. Measure the baseline, always.
+  (check-equal? (read-all-forms-string "':hello") '((|'| :hello))))
+
+;; ============================================================
+;; D4.P4c-3 — the SIXTH step kind, `(@bcast step)` (Q_U7)
+;; ============================================================
+;; The `ADDING A KIND` recipe in syntax.rkt is the AUTHORITY for this phase, not
+;; D4. Its own header records that the FIRST cut of that recipe was
+;; SYNTAX-directed and structurally could not see two whole classes (open-coded
+;; shape tests; `and`/`if`-shaped dispatchers), leaving five sites wrong — two
+;; of them UPSTREAM of the guards. The sixth kind was added THROUGH the recipe
+;; and met all thirteen sites with no correction needed.
+;;
+;; The split these pins encode:
+;;   NAME / KEY walks  → ω is TRANSPARENT: delegate to the wrapped step, because
+;;                       ω changes container ARITY, not key behaviour.
+;;   VALUE walks       → guided NOT-YET: the broadcast semantics land at P4c-4
+;;                       with the PVec dispatcher. Delegating there would
+;;                       project off the CONTAINER instead of broadcasting over
+;;                       it — a silent wrong answer, which is the outcome the
+;;                       totality dispatcher exists to prevent.
+
+(test-case "P4c-3: the wrapper classifies, and its payload is recoverable"
+  (define b (make-select-bcast 'name))
+  (check-equal? b '(@bcast name))
+  (check-equal? (select-step-kind b) 'bcast)
+  (check-equal? (select-bcast-inner b) 'name)
+  ;; extent is STRUCTURAL: the wrapper holds exactly ONE step, so a
+  ;; broadcast-of-nothing is unconstructible (Q_U7 ruling 4b restated)
+  (check-true (select-bcast-step? b)))
+
+(test-case "P4c-3: ω is KEY-TRANSPARENT in the name walks"
+  ;; `users:name` keys `:name` exactly as `users.name` does — NOT #f like an
+  ;; ordinal step. Transparent here means DELEGATE, not "contributes nothing".
+  (check-equal? (select-step-output-name (make-select-bcast 'name)) 'name)
+  (check-equal? (select-branch-top-keys (list (make-select-bcast 'name))) '(name))
+  ;; Q_U7's own examples: x:s:t is TWO one-step wrappers, not one two-step
+  (check-equal? (map select-step-output-name
+                     (list (make-select-bcast 's) (make-select-bcast 't)))
+                '(s t))
+  ;; users:{a b} — the wrapped step is a terminal sub-block, which contributes
+  ;; no single name, exactly as a bare `sub` does
+  (check-equal? (select-step-output-name
+                 (make-select-bcast (cons '@sub (list (list 'a) (list 'b)))))
+                #f))
+
+(test-case "P4c-3: the FOUR [leaf] classifiers see THROUGH the wrapper"
+  ;; The recipe flags these as mattering most: they run BEFORE the branch walks
+  ;; and answer a silent #f on an unrecognized kind, so a missed arm mis-SORTS
+  ;; the branch (keyed vs keyless) with no raise anywhere downstream.
+  (check-equal? (select-branch-collapse
+                 (list (make-select-bcast (list '@key 'k 'collapse))))
+                'collapse)
+  (check-true (select-branch-keyless?
+               (list (make-select-bcast (list '@key 'k 'dissolve)))))
+  ;; and the un-wrapped forms must still behave identically
+  (check-equal? (select-branch-collapse (list (list '@key 'k 'collapse))) 'collapse)
+  (check-true (select-branch-keyless? (list (list '@key 'k 'dissolve)))))
+
+;; ⚠ THE FOURTEENTH SITE — `select-step-name`, which is OUTSIDE the `ADDING A
+;; KIND` recipe's thirteen and was missed because of it. D4's P4c-3 partition
+;; names "the two shape-test helpers OUTSIDE the recipe"; only
+;; `select-step-cont` was covered, and it was covered by unwrapping at each of
+;; its FIVE call sites rather than in the helper.
+;;
+;; The defect is an ASYMMETRY, which is why no existing pin caught it: the
+;; branch CLASSIFIER (`select-branch-collapse`) sees through the wrapper, so the
+;; branch is correctly sorted as collapsing — and then the LABEL is extracted
+;; from the RAW leaf by `select-step-name`, which is ω-blind and returns the
+;; whole `(@bcast …)` list. Measured before the fix:
+;;   (select-branch-top-keys (list (make-select-bcast '(@key k collapse))))
+;;     ⇒ ((@bcast (@key k collapse)))   -- a LIST where the contract at
+;;                                         syntax.rkt:1099 says "a key SYMBOL
+;;                                         (keyed sort) or #f"
+;;
+;; Three call sites share the shape `[else (select-step-name (car (reverse b)))]`
+;; inside a `col`-guarded branch: syntax.rkt:1111, reduction.rkt:1773,
+;; typing-core.rkt:1051. The latter two are MASKED today — their value walks hit
+;; `select-bcast-not-yet` and raise before the label can escape — so they become
+;; live exactly when P4c-4 lands the value semantics and removes the raise.
+;; syntax.rkt's is live NOW: `select-branch-top-keys` is a pure STATIC key
+;; computation feeding the parser's OUTPUT-key duplicate check and its L4
+;; sort-homogeneity check, with no value walk to raise first. A non-symbol
+;; component is compared by `eq?` in the duplicate check, so it can never match
+;; and duplicates go undetected — silent, which is the outcome the totality
+;; dispatcher exists to prevent.
+;;
+;; Fixed in the HELPER, not at the three call sites: a third copy of the unwrap
+;; is the F1b.7g drift class this vocabulary has already paid for.
+
+(test-case "P4c-3: `select-step-name` is ω-transparent (the fourteenth site)"
+  ;; the helper itself — delegate to the wrapped step, per Q_U7's NAME/KEY rule
+  (check-equal? (select-step-name (make-select-bcast 'name)) 'name)
+  (check-equal? (select-step-name (make-select-bcast '(@key k collapse))) 'k)
+  ;; the un-wrapped forms are unchanged
+  (check-equal? (select-step-name 'name) 'name)
+  (check-equal? (select-step-name '(@key k collapse)) 'k)
+  ;; nested wrappers delegate all the way down. The SURFACE cannot write one
+  ;; (extent is one-step, Q_U7), but the REPRESENTATION permits it and P5's
+  ;; factoring rewrites branches — the same argument the `[(bcast)]` arm in
+  ;; `select-branch-top-keys` is written on.
+  (check-equal? (select-step-name (make-select-bcast (make-select-bcast 'name))) 'name))
+
+(test-case "P4c-3: a collapse-terminated ω branch yields a SYMBOL component"
+  ;; THE LIVE ONE. Wrapped and plain must agree — the classifier already did.
+  (check-equal? (select-branch-top-keys
+                 (list (make-select-bcast (list '@key 'k 'collapse))))
+                '(k))
+  (check-equal? (select-branch-top-keys (list (list '@key 'k 'collapse)))
+                '(k))
+  ;; and the component is a SYMBOL, not a list — the contract the parser's
+  ;; duplicate check and L4 sort check both consume
+  (check-true (symbol? (car (select-branch-top-keys
+                             (list (make-select-bcast (list '@key 'k 'collapse)))))))
+  ;; the rename and synth conts are computed from `col`, not from the raw leaf,
+  ;; so they were already ω-safe — pinned so the fix cannot regress them
+  (check-equal? (select-branch-top-keys
+                 (list (make-select-bcast (list '@key 'k (cons 'collapse-rename 'k2)))))
+                '(k2)))
+
+(test-case "P4c-3a: `select-step-cont` is ω-transparent (the fifteenth site)"
+  ;; ⚠ THE FIRST CUT OF THIS PIN COULD NOT FAIL. It defined a LOCAL copy of
+  ;; parser.rkt's predicate and asserted against the copy, so reverting the
+  ;; production fix left it green — a dead tripwire, which this track has already
+  ;; recorded as reading like coverage while providing none. It now exercises the
+  ;; SHIPPED helper, so reverting the fix turns it red.
+  (check-equal? (select-step-cont (make-select-bcast '(@key k dissolve))) 'dissolve)
+  (check-equal? (select-step-cont '(@key k dissolve)) 'dissolve)
+  (check-equal? (select-step-cont (make-select-bcast '(@key k (collapse-rename . k2))))
+                '(collapse-rename . k2))
+  ;; a wrapper with no `^` inside still answers #f — transparency must not turn
+  ;; parser.rkt's `^`-in-path-access refusal into a blanket one
+  (check-equal? (select-step-cont (make-select-bcast 'name)) #f)
+  (check-equal? (select-step-cont 'name) #f)
+  (check-equal? (select-step-cont '(@sub (a) (b))) #f)
+  ;; nested, for the same reason `select-step-name`'s delegation is recursive
+  (check-equal? (select-step-cont (make-select-bcast (make-select-bcast '(@key k dissolve))))
+                'dissolve)
+  ;; and the predicate parser.rkt now actually ships — a bare `ormap` over the
+  ;; helper. THE POINT of transparency: no unwrap, no copy, no standing
+  ;; obligation on the nine call sites.
+  (check-equal? (ormap select-step-cont (list 'a 'b (make-select-bcast '(@key k dissolve))))
+                'dissolve)
+  (check-equal? (ormap select-step-cont (list 'a 'b (make-select-bcast 'name))) #f)
+  (check-equal? (ormap select-step-cont (list 'a 'b '(@key k dissolve))) 'dissolve))
+
+;; ============================================================
+;; D4.P4c-4c / G2 — THE ENABLE-SET IS RETIRED; PRESERVATION IS UNCONDITIONAL
+;; ============================================================
+;; This block WAS the P4c-4a test seam: seven cases exercising a guarded
+;; `broadcast-enabled-contexts` parameter. G2 deletes the parameter, so every
+;; grant-shaped pin here had to be re-expressed or retired.
+;;
+;; ⚠ THE TWO THAT MUST NOT BE DELETED, per the P4c-4c mini-audit: the
+;; private-suffix normalization pin (its VEHICLE was a grant, but
+;; `binder-head-base`'s normalization stays LIVE at three other arms, and this was
+;; its ONLY standing coverage — its absence was a measured end-to-end regression
+;; at P4c-2), and the ancestor-chain pin (G2 dissolves the grant chain but THREE
+;; deep-strippers survive). Both are re-expressed below as binder-BEHAVIOUR pins.
+;; Deleting them would have been the silently-vacuous outcome the audit named as
+;; worse than a red one.
+;;
+;; RETIRED outright, because their propositions are now false BY DESIGN:
+;;   · "the default is EMPTY and behaviour is unchanged" — behaviour changed, on
+;;     purpose; the replacement is the unconditional pin below.
+;;   · "the enable-set is GUARDED — a malformed grant cannot abort the file" —
+;;     there is no parameter to malform. The hazard is removed at the root rather
+;;     than guarded, which is strictly better than the pin it cost.
+
+(test-case "G2: preservation is UNCONDITIONAL — no grant, no parameter"
+  ;; The headline. Every one of these was STRIPPED at the production default
+  ;; before G2, which is why the feature was reachable only from tests.
+  (check-equal? (read-all-forms-string "def q := users:name")
+                '((def q := users ($bcast-step :name))))
+  (check-equal? (read-all-forms-string "users:name")
+                '((users ($bcast-step :name))))
+  (check-equal? (read-all-forms-string "defn f [x] [g users:name]")
+                '((defn f (x) (g users ($bcast-step :name))))))
+
+(test-case "G2: a FUSED BINDER ANNOTATION still unwraps — the population that must not mint"
+  ;; The other half of Q_U18's safety argument. Binder positions are recognized by
+  ;; the scanner and unwrap; only the annotation shape survives.
+  (check-equal? (read-all-forms-string "defn f [x:Int] x") '((defn f (x :Int) x)))
+  (check-equal? (read-all-forms-string "def x:Int := 5") '((def x :Int := 5)))
+  ;; and the typed logic var glues to ONE token at the tokenizer, so it cannot
+  ;; mint under ANY policy — the structural fact Q_U18 turned on
+  (check-equal? (read-all-forms-string "[add ?x:Nat ?y:Nat] = 5N")
+                '((= (add ?x:Nat ?y:Nat) ($nat-literal 5)))))
+
+(test-case "G2: `binder-head-base`'s ELEVEN private-suffix spellings still normalize"
+  ;; ⚠ RE-EXPRESSED, NOT DELETED. The old pin's vehicle was a grant of `def`
+  ;; covering `def-`; G2 removes grants, but the normalizer stays live at the
+  ;; `binder-region-heads`, `binder-deep-heads` and `take-param-region` arms.
+  ;; Its absence was a MEASURED end-to-end regression at P4c-2 (`defn- f [x:Int] x`
+  ;; leaked its annotation into the param group and became 2-arity), and the audit
+  ;; flagged this as the most dangerous case to drop. Now pinned on BEHAVIOUR.
+  (check-equal? (read-all-forms-string "defn- f [x:Int] x") '((defn- f (x :Int) x)))
+  (check-equal? (read-all-forms-string "def- q := users:name")
+                '((def- q := users ($bcast-step :name))))
+  (check-equal? (read-all-forms-string "spec- f Int -> Int") '((spec- f Int -> Int))))
+
+(test-case "G2: THREE deep-strippers SURVIVE — the chain is not fully dissolved"
+  ;; ⚠ RE-EXPRESSED. The old pin asserted that a grant needed the whole ancestor
+  ;; chain. G2 removes the grant chain — but "after G2 nothing strips ancestrally"
+  ;; is FALSE, and the audit said so explicitly. These three arms still deep-unwrap
+  ;; their regions, so a broadcast inside them is still stripped.
+  ;;
+  ;; ⚠⚠ MY FIRST DRAFT OF THIS PIN WAS VACUOUS: two of its three assertions
+  ;; compared `(read-all-forms-string X)` to `(read-all-forms-string X)` — the same
+  ;; call on both sides, a TAUTOLOGY that can never fail. Caught before commit,
+  ;; and recorded because it is the third vacuity of mine this slice and the
+  ;; pattern is identical each time: asserting a shape I had not MEASURED.
+  ;; Each assertion below now carries the measured datum, and each is a BROADCAST
+  ;; (not a bare annotation) so it fails if the region stops stripping.
+  ;;
+  ;; (1) the `trait` arm — binder-deep-heads
+  (check-equal? (read-all-forms-string "trait T A\n  m [x users:name] : A")
+                '((trait T A (m (x users :name) : A))))
+  ;; (2) `take-param-region` — a `defn` param region
+  (check-equal? (read-all-forms-string "defn f [x:Int] x") '((defn f (x :Int) x)))
+  ;; (3) `$pipe` arms — the PATTERN side is a binder region
+  (check-equal? (read-all-forms-string "defn g\n  | [c users:name] -> c")
+                '((defn g ($pipe (c users :name) -> c))))
+  ;; ⭐ THE CONTRAST THAT MAKES THIS DISCRIMINATING: the SAME broadcast in an
+  ;; expression position DOES survive. Without this the three above could pass
+  ;; under a build where nothing preserves anywhere.
+  (check-equal? (read-all-forms-string "defn g\n  | c -> users:name")
+                '((defn g ($pipe c -> users ($bcast-step :name))))))
+
+(test-case "G2: a GROUP-HEADED node is still handled, not errored"
+  ;; ⚠ RE-EXPRESSED from "the membership test is TOTAL on any head shape". There is
+  ;; no membership test any more, but the walk must still be total on a node whose
+  ;; head is not a symbol — that was what the totality argument protected.
+  (check-equal? (read-all-forms-string "[[a b] users:name]")
+                '(((a b) users ($bcast-step :name))))
+  (check-equal? (read-all-forms-string "[[a b] c]") '(((a b) c))))
+
+;; ============================================================
+;; Q_U18 — the unknown-head default flips to PRESERVE
+;; ============================================================
+;; Owner ruling 2026-08-02 ("worth the trade"). What makes it safe is STRUCTURAL,
+;; not a table: the binder population sharing this shape is the TYPED LOGIC VAR,
+;; and `recognize-narrow-var-annot` GLUES `?x:Nat` into ONE TOKEN at the
+;; tokenizer, so it can never mint and never reaches the arm as a sentinel.
+;;
+;; ⚠ THE RECORD THIS CORRECTS: D4 and DEFERRED both said PRESERVE was "refuted
+;; from the corpus" by `[add ?x:Nat ?y:Nat] = 5N`. It was not — that line mints
+;; NOTHING. The claim was inferred from "it runs 0 errors today" without checking
+;; whether it MINTS, and parse-reader.rkt's own comment already said "Immune by
+;; construction".
+
+(test-case "Q_U18: the typed logic var is IMMUNE BY CONSTRUCTION — it never mints"
+  ;; the load-bearing fact. If this ever fails, the PRESERVE flip is unsafe and
+  ;; the whole ruling must be revisited — so it is pinned first and alone.
+  (check-equal? (read-all-forms-string "[add ?x:Nat ?y:Nat] = 5N")
+                '((= (add ?x:Nat ?y:Nat) ($nat-literal 5))))
+  ;; …and identically under a grant of the enclosing head
+  (let ()
+    (check-equal? (read-all-forms-string "[add ?x:Nat ?y:Nat] = 5N")
+                  '((= (add ?x:Nat ?y:Nat) ($nat-literal 5)))))
+  ;; the glue survives chaining and the `:w` spelling
+  (check-equal? (read-all-forms-string "defr r [?x:Int:Even]") '((defr r (?x:Int:Even))))
+  (check-equal? (read-all-forms-string "defr r [?x:w]") '((defr r (?x:w)))))
+
+(test-case "Q_U18: an UNKNOWN head now PRESERVES — application position works"
+  ;; the flip itself. Pre-flip this was `(one users :name)` — the sentinel
+  ;; blanket-stripped, leaving `one` with TWO arguments.
+  (let ()
+    (check-equal? (read-all-forms-string "def q := [one users:name]")
+                  '((def q := (one users ($bcast-step :name))))))
+  ;; and it nests
+  (let ()
+    (check-equal? (read-all-forms-string "def q := [f [g users:name]]")
+                  '((def q := (f (g users ($bcast-step :name))))))))
+
+(test-case "Q_U18: RECOGNIZED heads are untouched by the flip"
+  ;; the flip changes only the `[else]` arm, which the scanner's `recognized?`
+  ;; guards — so every binder form the walk knows behaves exactly as before.
+  (let ()
+    (check-equal? (read-all-forms-string "defn f [x:Int] x") '((defn f (x :Int) x)))
+    (check-equal? (read-all-forms-string "defr r [?x:Nat]") '((defr r (?x:Nat))))
+    (check-equal? (read-all-forms-string "def q:Int := 5") '((def q :Int := 5)))
+    (check-equal? (read-all-forms-string "let w:Int 5") '((let w :Int 5)))))
+
+(test-case "Q_U18: the flip is INERT AT DEFAULT — production is unchanged"
+  ;; ⚠ AND IT IS INERT IN PRACTICE UNTIL G2. The enable-set's FIRST arm strips
+  ;; any node whose own head is not granted, and granting every function name is
+  ;; absurd — so the flip alone does NOT unlock application position. G2
+  ;; (retiring the enable-set) is the operative half, and the owner ruled G4
+  ;; (hold test-only until P4c-4c) with G2 as the recorded lean. Measured:
+  (check-equal? (read-all-forms-string "def q := [one users:name]")
+                ;; ⚠ G2 LANDED: application position now WORKS unconditionally.
+                ;; This line was the pin that proved the flip was INERT; it is now
+                ;; the pin that proves it is LIVE.
+                '((def q := (one users ($bcast-step :name)))))
+  ;; even granting the OUTER head only — the inner node's head is still ungranted
+  (let ()
+    (check-equal? (read-all-forms-string "def q := [one users:name]")
+                  '((def q := (one users ($bcast-step :name)))))))
+
+;; ============================================================
+;; D4.P4c-4b — the fold arm + the producer bridge + the not-yet CHANNEL
+;; ============================================================
+;; The chain, end to end: reader PRESERVES the sentinel (needs a grant) → the
+;; fold FUSES it onto its base → the parser CONSTRUCTS `(@bcast step)` → typing
+;; REFUSES through the failure slot the walks already thread. The last link is
+;; the one that makes this landable: `select-bcast-not-yet` RAISES, and
+;; `process-command/solve-guard` catches only `exn:prologos-solve` (deliberately
+;; — "any other raise still crashes loudly"), so before this slice the producer
+;; bridge would have turned a not-yet into a WHOLE-FILE ABORT.
+
+(define (bcast-e2e src)
+  (let ()
+    (map (lambda (r) (format "~a" r))
+         (process-string-ws (string-append "ns bcast-e2e\ndef users := {:name \"alice\"}\n" src)))))
+
+(test-case "P4c-4b: a broadcast goes END TO END, and the file CONTINUES"
+  (define out (bcast-e2e "def q := users:name\ndef after := 42"))
+  ;; the broadcast reports as a per-command error…
+  ;; ⚠ RE-EXPRESSED AT P4c-4c, not deleted. This pin's proposition is "a
+  ;; broadcast refusal is PER-COMMAND and the file continues" — still true and
+  ;; still the point. What changed is WHICH refusal: `bcast-e2e`'s subject is a
+  ;; MAP, and P4c-4c lands PVec only, so the generic not-yet has been replaced by
+  ;; the sharper `bcast-carrier` message naming the carrier and P4d. Matching the
+  ;; live message keeps the pin DISCRIMINATING; matching the dead one would have
+  ;; made it vacuous.
+  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec subject" s)) out)
+              (format "expected the guided carrier refusal; got ~a" out))
+  ;; …and — THE POINT — the command AFTER it still runs. Before the channel fix
+  ;; this line was lost with the whole file.
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)
+              (format "the file did not continue past the broadcast: ~a" out)))
+
+(test-case "P4c-4b: the payload's THREE sub-cases, two of which would be silent"
+  ;; `$bcast-step` carries the token VERBATIM, so the payload is COLON-LEADING
+  ;; (`|:name|`) where `$dot-access` carries a bare symbol. Merely stripping the
+  ;; colon and handing it to `plain-key?` is silently wrong twice over.
+  ;;
+  ;; (a) ORDINAL — Q_U16b rules `users:0` a legal ω step. Stripped-and-handed-on
+  ;; it would be a NOMINAL key named `0`.
+  (check-true (ormap (lambda (s) (regexp-match? #rx"broadcast `:0`" s))
+                     (bcast-e2e "def a := users:0")))
+  ;; (b) FLATTEN — `ident-continue?` admits `*`, so `tags*` arrives as ONE token
+  ;; and no scheme keyed on token TYPE can see the operator. Stripped, it passes
+  ;; `plain-key?` as a field LITERALLY NAMED `tags*`. Now loud.
+  (check-true (ormap (lambda (s) (regexp-match? #rx"\\(flatten\\) is not implemented yet" s))
+                     (bcast-e2e "def b := users:tags*")))
+  ;; (c) RE-KEY — the safe one: `^` routes to the ONE splitter exactly as the
+  ;; `$dot-access` twin does, so it lands on the pre-existing path-access
+  ;; refusal rather than becoming part of a field name.
+  (check-true (ormap (lambda (s) (regexp-match? #rx"re-keys the OUTPUT" s))
+                     (bcast-e2e "def c := users:name^alias"))))
+
+(test-case "G2: the DEFAULT now BROADCASTS — the inverse of the pin it replaces"
+  ;; ⚠ INVERTED AT G2. This asserted "no grant, no change": the sentinel was
+  ;; unwrapped at the reader and nothing downstream ever saw it. There is no grant
+  ;; any more, and the chain runs unconditionally — so the proposition is now the
+  ;; opposite, and pinning the old one would have been asserting the feature is off.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns bcast-on\ndef users := {:name \"alice\"}\ndef q := users:name\ndef after := 42")))
+  ;; the subject is a MAP, so P4c-4c's carrier refusal is what fires — and the
+  ;; point is that it fires AT ALL without a grant, where nothing did before.
+  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec subject" s)) out)
+              (format "the broadcast chain must be live at the default: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4c-4b: `$bcast-step` is an access-sentinel, so it inherits the fold"
+  ;; Q_U16 ruling item 2 — membership is what buys all FOUR `rewrite-dot-access`
+  ;; seats, because the fold's gate is this predicate's only production consumer.
+  ;; It was a P4c-2 deliverable that did not land under a ✅ (DEFERRED 37); it
+  ;; read as closed because `broadcast-access?` in that list is the RETIRED
+  ;; `$broadcast-access`, a different head.
+  (check-true (access-sentinel? '($bcast-step |:name|)))
+  (check-true (bcast-step? '($bcast-step |:name|)))
+  (check-false (bcast-step? '($dot-access name)))
+  ;; the fold fuses onto the base, and the emitted head is NOT a sentinel —
+  ;; that is the whole fixpoint obligation (a sentinel-headed result makes
+  ;; preparse re-enter and swallow a LEFT sibling per pass)
+  (define folded (rewrite-dot-access '(users ($bcast-step |:name|))))
+  (check-equal? folded '($select-path users ($bcast-step |:name|)))
+  (check-false (access-sentinel? folded))
+  ;; and it NESTS one carrier per level, so `a.b:name` composes
+  (check-equal? (rewrite-dot-access '(a ($dot-access b) ($bcast-step |:name|)))
+                '($select-path ($select-path a b) ($bcast-step |:name|))))
+
+(test-case "P4c-4a: the seam reaches the REAL pipeline, not just the reader harness"
+  ;; Level 2. The reader-harness pins above prove the walk; this proves the
+  ;; parameter is actually in force through `process-string-ws`, which is the
+  ;; door users come through. A surviving sentinel reaches the parser's
+  ;; `bcast-step` arm and reports the guided NOT-YET — the first time in this
+  ;; track that message has been reachable from a test rather than from a
+  ;; mutated build.
+  ;; ⚠ RETARGETED AT P4c-4b, and the reason is the slice's whole point. This pin
+  ;; originally asserted the PARSER's not-yet on a bare `def q := users:name`.
+  ;; Once the fold fuses the sentinel onto its base, the parser takes the
+  ;; `$select-path` arm and parses the SUBJECT — so the old spelling now reports
+  ;; `Unbound variable users`, because that fixture never defined it. The
+  ;; message did not disappear; it MOVED A LAYER, from parse to typing, which is
+  ;; exactly what the producer bridge was for. Pinned against a bound subject so
+  ;; it proves what it claims: the parameter is in force through the REAL
+  ;; pipeline, not just the reader harness.
+  (let ()
+    (define out (map (lambda (r) (format "~a" r))
+                     (process-string-ws
+                      "ns seam-l2\ndef users := {:name \"alice\"}\ndef q := users:name")))
+    ;; ⚠ RE-EXPRESSED AT P4c-4c for the same reason as the pin above: the
+    ;; proposition ("the parameter is in force through the REAL pipeline") is
+    ;; unchanged and is proved by a guided broadcast diagnostic ARRIVING; only
+    ;; which diagnostic changed, because this fixture's subject is a Map.
+    (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec subject" s)) out)
+                (format "expected the guided carrier refusal, got: ~a" out))))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4c-4c — the ω VALUE semantics (PVec), the LAWS, and the carrier guards.
+;; Failing-test-first. The subject is a PVec deliberately: `bcast-e2e` above is
+;; a MAP, and the Map/keyword-row carrier is P4d — reusing it here would pass
+;; for the wrong reason and prove nothing (mini-audit wf_a24f3e0f-d84).
+;; ---------------------------------------------------------------------------
+
+;; Grant covers `def` (def-position) AND the bare subjects used at top level.
+;; ⚠ Bare top-level DOES mint since the Q_U18 PRESERVE flip — D4's "a bare
+;; top-level ω is STRIPPED under every grant" was true at 17086a09 and died at
+;; e71ef6b8. Pinned here so the corrected fact has a standing test.
+(define (pvec-bcast src)
+  (let ()
+    (map (lambda (r) (format "~a" r))
+         (process-string-ws
+          (string-append "ns pvec-bcast\ndef xs := @[{:name \"a\"} {:name \"b\"}]\n" src)))))
+
+(test-case "P4c-4c: THE HEADLINE — `xs:name` broadcasts to a PVec of the field"
+  (define out (pvec-bcast "def ys := xs:name\nys\ndef after := 42"))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"ys : \\[PVec String\\] defined" s)) out)
+              (format "expected [PVec String]; got ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"@\\[\"a\" \"b\"\\]" s)) out)
+              (format "expected the broadcast VALUE @[\"a\" \"b\"]; got ~a" out))
+  ;; the not-yet must be GONE — this is the discharge point its own message names
+  (check-false (ormap (lambda (s) (regexp-match? #rx"ω value semantics land" s)) out)
+               (format "the not-yet is still firing: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4c-4c: the ORACLE — broadcast agrees with the explicit `pvec-map` spelling"
+  ;; The target semantics already exist under the explicit spelling, so this
+  ;; slice has an oracle rather than a spec to interpret.
+  ;; ⚠ SCOPE OF THE CLAIM, and it has been narrowed TWICE. The first comment said
+  ;; "Same type, same value" flatly. The second blamed the tier and named Map,
+  ;; dyn-tail and union carriers — the MAP clause is now FALSE (DEFERRED 43
+  ;; landed; a Map miss under ω is loud, and that is pinned as direction A).
+  ;; What survives is narrower and is a VALUE disagreement, not a loudness one:
+  ;; on a PERMISSIVE carrier the ratified WHOLE-NODE ABORT (Q_U7) makes ω yield a
+  ;; single `none` for the entire vector, where `pvec-map` preserves the elements
+  ;; that hit — `@[1 none]` vs `none`. That is ruled semantics, not a defect, but
+  ;; it means this pin asserts agreement only for a CLOSED ROW WHERE EVERY
+  ;; ELEMENT HITS, which is exactly this fixture. See DEFERRED for the residual.
+  (define out (pvec-bcast "def viaMap := [pvec-map [fn [m] m.name] xs]\ndef viaBcast := xs:name\nviaMap\nviaBcast"))
+  (check-equal? (length (filter (lambda (s) (regexp-match? #rx"@\\[\"a\" \"b\"\\] : \\[PVec String\\]" s)) out))
+                2
+                (format "broadcast and pvec-map must agree in BOTH type and value; got ~a" out)))
+
+(test-case "P4c-4c: BARE TOP-LEVEL ω mints and evaluates (D4's blocking fact #1 is dead)"
+  ;; D4 §5.P4c-4c recorded "a bare top-level ω is STRIPPED under EVERY grant" and
+  ;; re-scoped the slice around it. TRUE at 17086a09; the Q_U18 PRESERVE flip
+  ;; (e71ef6b8) rewrote the [else] arm one commit later and a top-level command's
+  ;; head IS the subject symbol. Pinned so it cannot silently revert.
+  (define out (pvec-bcast "xs:name"))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"@\\[\"a\" \"b\"\\] : \\[PVec String\\]" s)) out)
+              (format "bare top-level ω did not evaluate: ~a" out)))
+
+(test-case "P4c-4c: L1 FUSION is a THEOREM — `nested:0:userName` collapses to ONE layer"
+  ;; Q_U7: each ω step consumes ONE container layer and re-wraps ONE, so
+  ;; fmap∘fmap = fmap arithmetically. ⚠ The discriminator is the TYPE, not the
+  ;; value — the non-fusing composition produces a visibly different type, so a
+  ;; pin asserting only the value list does not discriminate (mini-audit).
+  (define out
+    (let ()
+      (map (lambda (r) (format "~a" r))
+           (process-string-ws
+            (string-append
+             "ns l1-fusion\n"
+             "def nested := @[@[{:userName \"Lisa\"}] @[{:userName \"John\"}]]\n"
+             "def flat := nested:0:userName\nflat")))))
+  ;; ONE layer — NOT [PVec [PVec String]], which is what naive nesting yields
+  (check-true (ormap (lambda (s) (regexp-match? #rx"flat : \\[PVec String\\] defined" s)) out)
+              (format "L1 fusion failed — expected ONE layer [PVec String]; got ~a" out))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"\\[PVec \\[PVec String\\]\\]" s)) out)
+               (format "the composition did NOT fuse — two layers survived: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"@\\[\"Lisa\" \"John\"\\]" s)) out)
+              (format "expected the fused VALUE; got ~a" out)))
+
+(test-case "P4c-4c: the ORDINAL band broadcasts (Q_U16b — `:0` is an ω step, not a key named 0)"
+  (define out
+    (let ()
+      (map (lambda (r) (format "~a" r))
+           (process-string-ws
+            (string-append
+             "ns ord-bcast\n"
+             "def nested := @[@[\"x\" \"y\"] @[\"p\" \"q\"]]\n"
+             "def heads := nested:0\nheads")))))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"heads : \\[PVec String\\] defined" s)) out)
+              (format "expected [PVec String]; got ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"@\\[\"x\" \"p\"\\]" s)) out)
+              (format "expected the per-element index-0; got ~a" out)))
+
+(test-case "P4c-4c: a NON-PVec carrier under ω refuses PER-COMMAND — never a whole-file abort"
+  ;; SCOPE IS PVec ONLY. Map / keyword-row / het-tuple are P4d and ARRIVE anyway
+  ;; (mini-audit finding 7: the leakage is forced, not avoidable). The refusal
+  ;; must go through the failure slot — a raise here re-creates exactly the
+  ;; whole-file abort P4c-4b removed.
+  (define out (bcast-e2e "def q := users:name\ndef after := 42"))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)
+              (format "THE FILE DID NOT CONTINUE — a raise escaped: ~a" out))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"@\\[" s)) out)
+               (format "a Map subject must NOT broadcast at P4c-4c: ~a" out)))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4c-4c (DEFERRED 43, folded into the slice by owner ruling 2026-08-04) —
+;; THE STRICTNESS TIER MUST FOLLOW THE ω UNWRAP.
+;;
+;; The tier is solved from the SUBJECT of an `expr-select` node. Non-ω nesting
+;; is safe because Q_U13's NEST encoding gives every level its OWN node with its
+;; own tier (verified: `x.inner.a` over a Map is LOUD). ω is different — it
+;; unwraps INSIDE one node, below the tier decision — so the tier saw
+;; `[PVec [Map K V]]`, which is not `expr-Map?`, and the miss went silent.
+;;
+;; ONE root cause, TWO OPPOSITE symptoms, and the slice's own `pvec-map` oracle
+;; disagreed with it in BOTH directions. Both are pinned.
+;; ---------------------------------------------------------------------------
+
+(define (tier-probe src)
+  (let ()
+    (map (lambda (r) (format "~a" r)) (process-string-ws src))))
+
+(test-case "P4c-4c/D43 direction A: a Map miss under ω is LOUD, as it is through `.` and `pvec-map`"
+  (define out (tier-probe (string-append
+                           "ns d43a\n"
+                           "def ms : [PVec [Map Keyword Int]] := @[{:a 1} {:zzz 9}]\n"
+                           "def viaB := ms:a\nviaB\n"
+                           "def after := 42")))
+  ;; BEFORE the fix this was `<error> : [PVec Int]` at ZERO errors, while both
+  ;; `mm.a` and `[pvec-map [fn [m] m.a] ms]` panicked on the same data.
+  (check-true (ormap (lambda (s) (regexp-match? #rx"key :a not found" s)) out)
+              (format "the Map miss under ω must be LOUD; got ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"available keys" s)) out)
+              (format "the loud miss must name the available keys; got ~a" out))
+  ;; and it stays PER-COMMAND — the file continues
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4c-4c/D43 direction A: ω agrees with the `pvec-map` ORACLE on a Map carrier"
+  ;; This is the general form of the claim the ORACLE pin above deliberately
+  ;; does NOT make (its fixture is a closed row where every element hits).
+  (define out (tier-probe (string-append
+                           "ns d43a2\n"
+                           "def ms : [PVec [Map Keyword Int]] := @[{:a 1} {:zzz 9}]\n"
+                           "def viaM := [pvec-map [fn [m] m.a] ms]\nviaM\n"
+                           "def viaB := ms:a\nviaB\n"
+                           "def after := 42")))
+  ;; both spellings must report the SAME miss — neither silently swallowing it
+  (check-true (>= (length (filter (lambda (s) (regexp-match? #rx"key :a not found" s)) out)) 2)
+              (format "ω and pvec-map must agree that this miss is loud; got ~a" out)))
+
+(test-case "P4c-4c/D43 direction B: a permissive (union) carrier under ω DEGRADES, it does not panic"
+  ;; The mirror failure: `champ-of` panicked unconditionally on a non-map,
+  ;; where the language's permissive tier degrades quietly. Its top-level
+  ;; sibling already tier-forks; `champ-of` did not.
+  ;; ⚠ THIS PIN WAS VACUOUS IN ITS FIRST DRAFT and I caught it before committing —
+  ;; the obvious spelling `@[w1 w2]` with mixed element types infers a HET TUPLE
+  ;; `⟨[Map Keyword Int] Int⟩`, not a PVec, so it refuses at the P4c-4c carrier
+  ;; gate and NEVER REACHES `champ-of`. The check-false then passed trivially.
+  ;; The EXPLICIT union annotation is what actually drives a non-map element into
+  ;; the ω walk. Same vacuity class the mini-audit flagged one slice ago; pinned
+  ;; with the spelling that exercises the code, plus a positive assertion so it
+  ;; cannot go quiet again.
+  (define out (tier-probe (string-append
+                           "ns d43b\n"
+                           "def u1 : <[Map Keyword Int] | Int> := 7\n"
+                           "def ws : [PVec <[Map Keyword Int] | Int>] := @[u1]\n"
+                           "def r := ws:a\nr\n"
+                           "def after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"invariant violation|is not a map at runtime" s)) out)
+               (format "a permissive carrier must DEGRADE, not panic; got ~a" out))
+  ;; ⚠ ANTI-VACUITY, AND MY FIRST GUARD DID NOT DISCRIMINATE. I claimed a
+  ;; "positive assertion so it cannot go quiet again" while asserting
+  ;; `<error> : [PVec Int]` — which the P4c-4c CARRIER-REFUSAL path also prints,
+  ;; so both vacuous fixtures (het tuple, bare Map) satisfied it. The real
+  ;; discriminator is that the live fixture BINDS its def and emits NO error
+  ;; struct, where every refusal path leaves it UNBOUND. Verified against both
+  ;; vacuous spellings.
+  (check-true (ormap (lambda (s) (regexp-match? #rx"r : \\[PVec Int\\] defined" s)) out)
+              (format "the def must BIND — if it is unbound the ω walk was never reached: ~a" out))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"Unbound variable|inference-failed" s)) out)
+               (format "no refusal may fire here — that would make this pin vacuous: ~a" out))
+  ;; the permissive VALUE is `none`, agreeing with `definitely-not-map?`'s
+  ;; sibling arm ("Match `map-get`: degrade to `none`") — NOT `<error>`
+  (check-true (ormap (lambda (s) (regexp-match? #rx"none : \\[PVec Int\\]" s)) out)
+              (format "expected the permissive `none` from the ω walk; got ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)
+              (format "the file must continue; got ~a" out)))
+
+(test-case "P4c-4c/D43: the PERMISSIVE degradation agrees across carriers — and reaches PRODUCTION"
+  ;; ⭐ THE REGRESSION THE ADVERSARIAL VERIFY CAUGHT, pinned so it cannot return.
+  ;; NO GRANT — this is the ordinary dot path at the production default, which is
+  ;; why DEFERRED 43's "not reachable in production" rationale was FALSE.
+  ;; The `expr-select` entry admits **rrb** subjects into `select-reduce` before
+  ;; the `definitely-not-map?` fork, and `expr-rrb?` is not a member of that
+  ;; predicate (only `expr-hset?` is) — so a union whose runtime value is a PVec
+  ;; reaches `champ-of` on a key step. It used to PANIC "invariant violation",
+  ;; which was itself wrong (the union's Map branch is why typing admitted `.a`).
+  ;; My first fix degraded it to `<error>`, giving a THIRD answer to a two-answer
+  ;; question. All three siblings must agree.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    (string-append
+                     "ns d43prod\n"
+                     "def ua : <[Map Keyword Int] | Int> := 7\n"
+                     "def ub : <[Map Keyword Int] | [PVec Int]> := @[1 2 3]\n"
+                     "def us : <[Map Keyword Int] | [Set Int]> := #{1 2}\n"
+                     "ua.a\nub.a\nus.a\n"
+                     "def after := 42"))))
+  (check-equal? (length (filter (lambda (s) (regexp-match? #rx"^none : Int$" s)) out))
+                3
+                (format "all three union-non-map carriers must degrade to `none`; got ~a" out))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"invariant violation" s)) out)
+               (format "no invariant-violation panic on a permissive union; got ~a" out)))
+
+(test-case "P4c-4c/D43: the tier peel does NOT over-fire — a closed row keeps its STATIC miss"
+  ;; Guard against the fix over-reaching: a closed record's miss is caught
+  ;; statically and must NOT become a runtime tier assertion.
+  (define out (tier-probe (string-append
+                           "ns d43c\n"
+                           "def ms := @[{:name \"a\"}]\n"
+                           "def bad := ms:nope\n"
+                           "def after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"not found at runtime|invariant violation" s)) out)
+               (format "a closed-row miss must stay STATIC; got ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4c-4c / G2 — THE PREPARSE SEAM IS GUARDED (owner ruling 2026-08-05,
+;; "go with B"). A raise anywhere in preparse's per-form pass is now converted
+;; to a per-command error VALUE instead of aborting the whole file.
+;;
+;; ⚠ WHY THIS EXISTS. G2 makes the `$bcast-step` sentinel survive into forms that
+;; preparse CONSUMES — `require`, `ns`, `schema`, `foreign` — whose recognizers
+;; raise on a shape they do not know. Measured as a REGRESSION against a pre-G2
+;; build: `require [prologos::data::nat:refer [add]]` went from 0 errors to an
+;; abort that took every command in the file with it, `before` included.
+;;
+;; That is the FIFTH instance of `pipeline.md` § "A Raise on the Parse/Expansion
+;; Path Is a WHOLE-FILE Abort" in this track, and the owner ruled the STRUCTURAL
+;; fix (option B) over enumerating directive heads (option A): an enumeration
+;; leaves the next sentinel to rediscover the same class, which is exactly how
+;; the first four happened.
+;;
+;; ⚠ ZERO corpus sites use a fused directive keyword — which is precisely why the
+;; full suite, all five acceptance files AND the corpus A/B were blind to it. The
+;; adjacent population is ~2400 spaced occurrences, each one deleted space away.
+;; ---------------------------------------------------------------------------
+
+(define (abort-probe src)
+  (map (lambda (r) (format "~a" r))
+       (process-string-ws (string-append "ns abrt\ndef before := 1\n" src "\ndef after := 42"))))
+
+(test-case "G2/B: a fused directive keyword is a PER-COMMAND error, not a whole-file abort"
+  ;; The signature of the bug this closes is EMPTY output — not even `before`.
+  ;; So the load-bearing assertion is that BOTH neighbours survive.
+  (for ([src (in-list (list "require [prologos::data::nat:refer [add]]"
+                            "schema Person:name String"))])
+    (define out (abort-probe src))
+    (check-true (ormap (lambda (s) (regexp-match? #rx"before : Int defined" s)) out)
+                (format "WHOLE-FILE ABORT — the form BEFORE it was lost: ~a → ~a" src out))
+    (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)
+                (format "the file did not continue past ~a: ~a" src out))))
+
+(test-case "G2/B: the guarded seam still REPORTS — it degrades, it does not swallow"
+  ;; ⚠ The failure mode of a guard is silence. `with-handlers … void` at three
+  ;; earlier preparse passes already swallows; this seat must NOT join them, or
+  ;; the fix trades a loud abort for a silent wrong answer, which is worse.
+  (define out (abort-probe "schema Person:name String"))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"keyword field name|preparse" s)) out)
+              (format "the error must still be REPORTED, not swallowed: ~a" out)))
+
+(test-case "G2/B: the SPACED spellings are untouched"
+  ;; The control. If these move, the guard is doing something it should not.
+  (define out (abort-probe "require [prologos::data::nat :refer [add]]"))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"before : Int defined" s)) out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"preparse|Unknown imports" s)) out)
+               (format "the spaced spelling must produce NO diagnostic: ~a" out)))

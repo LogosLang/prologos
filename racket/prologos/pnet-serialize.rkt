@@ -439,7 +439,20 @@
   ;; vector-impostor rule). Payload = subject expr + branches (nested lists of
   ;; symbols — plain sexp data). NO PNET bump: the tag table is symbol-keyed,
   ;; so a new struct is purely additive (§8 R6 as corrected 2026-07-29).
-  (regN! expr-select (expr-unit) '())
+  (regN! expr-select (expr-unit) '() #f)
+  ;; CIU T6 D4.P4b-ii-1: THE SELECTOR CARRIER gained its `sort` field, so it
+  ;; MOVES here from auto-cache! (ruling C4). auto-cache! wraps its body in an
+  ;; exception-swallowing handler — a stale-arity call there voids the
+  ;; registration with ZERO signal and the node returns from a `.pnet` as a
+  ;; raw vector (pipeline.md § New AST Node item 6, the "misleading failure"
+  ;; class). regN! errors LOUDLY on arity drift instead. Payload = branches
+  ;; (nested lists of bare symbols + tagged sexps) + a sort SYMBOL — plain
+  ;; sexp data. NO PNET bump needed: `infrastructure-stale?` invalidates every
+  ;; `.pnet` on any syntax.rkt edit (the rebuilt driver `.zo`'s mtime), which
+  ;; is what actually makes "no bump" true here — §8 R6's symbol-keyed/additive
+  ;; argument covers struct ADDITION only, and this is an ARITY CHANGE.
+  (regN! expr-path '() 'path)
+  (reg0! expr-Path)
   (reg1! expr-Set (expr-Nat))
   (reg2! expr-union (expr-Nat) (expr-Int))
   ;; CIU T6 P2.b slice 4: both projection nodes gained the strictness field
@@ -689,7 +702,11 @@
   ;; Path algebra + first-class path values (pipeline.md item 6 — were UNREGISTERED →
   ;; raw-vector impostor crash when a cached library body carries them; CIU Track 6 F2)
   (auto-cache! expr-get-in d d) (auto-cache! expr-update-in d d d)
-  (auto-cache! expr-path d) (auto-cache! expr-Path)
+  ;; expr-path / expr-Path: MOVED to the explicit regN!/reg0! route above
+  ;; (D4.P4b-ii-1, ruling C4) — auto-cache!'s body swallows exceptions, so the
+  ;; arity change this slice makes would have VOIDED the registration silently
+  ;; and returned a raw-vector impostor from any cached body carrying a
+  ;; selector. Same move, same reason, as expr-map-get at P2.b slice 4.
   ;; Other
   (auto-cache! expr-from-int d d) (auto-cache! expr-from-nat d d)
   (auto-cache! expr-Symbol)

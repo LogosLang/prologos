@@ -14,7 +14,7 @@
 ;;; are excluded structurally. Skip-set {add sub join reduce} protects
 ;;; existing bindings (DEFERRED.md § "Numerics N6d-i follow-ups").
 ;;; Cross-module exposure: spec propagation is refer-gated, so the derived
-;;; names were added to the curated prelude refers (namespace.rkt + PRELUDE).
+;;; names were added to the curated prelude refers (namespace.rkt).
 ;;;
 
 (require rackunit

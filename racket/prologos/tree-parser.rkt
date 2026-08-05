@@ -49,7 +49,49 @@
       (rrb-to-list (parse-tree-node-children node))
       '()))
 
-;; Get source location from a node or token
+;; Get source location from a node or token.
+;;
+;; ⚠ THIS IS THE SEAM BETWEEN THE TWO SPINES' LINE NUMBERING. It used to leak
+;; the tree's INTERNAL representation straight into surf nodes, and that leak
+;; is what defused driver.rkt's dual-spine merge:
+;;
+;;   - a node's `srcloc` field is `(list line col start-pos end-pos)` whose line
+;;     is **0-BASED** (`make-indent-rrb-from-char-rrb` starts its `source-line`
+;;     counter at 0, parse-reader.rkt) and whose col/start/end are hardcoded 0
+;;     ("simplified srcloc", parse-reader.rkt);
+;;   - the PREPARSE spine produces srcloc **STRUCTS** whose line is **1-BASED**
+;;     (`pos->line-col` starts at 1 → `datum-srcloc`, parser.rkt).
+;;
+;; driver.rkt's `merge-preparse-and-tree-parser` keys BOTH spines by line, so
+;; the conventions must agree or the lookup silently MISPAIRS form N with form
+;; N+1. Worse, three downstream consumers require the STRUCT specifically and
+;; degrade or RAISE on a bare list: `format-srcloc` (source-location.rkt —
+;; struct accessors; a list raises `srcloc-file: contract violation`), the LSP's
+;; `srcloc->range` (lsp/diagnostics.rkt — a non-struct falls back to 0:0), and
+;; `register-definition-location!` (driver.rkt), whose values are .pnet-
+;; serialized where only the struct shape is registered (pnet-serialize.rkt).
+;;
+;; So the node branch emits a real, 1-based srcloc STRUCT — ONE srcloc language
+;; across both spines, rather than a normalisation hack at the merge key.
+;;
+;; The TOKEN branch is a separate, still-open defect: `token-entry`
+;; (parse-reader.rkt) carries no line/col, only positions, so its line is
+;; FABRICATED as 0. Recovering it needs the source text, which is not in scope
+;; here (`current-source-str` is "" on the process-file path). It keeps its list
+;; shape and its real positions; it does not reach the merge key, because
+;; top-level forms are always NODES. See docs/tracking/2026-08-02_LOC_TO_LINE_MERGE_DEFECT.md.
+;; ⚠ MEASURED, 2026-08-02: converting the node branch to a real 1-based srcloc
+;; STRUCT here is the change that makes driver.rkt's merge key work — and doing
+;; so makes the tree spine start WINNING ~694 of 5,171 corpus forms, which
+;; **REGRESSES BADLY**: corpus errors 359 → 724 across 35 files (not one file
+;; improved) and 32 test files fail. The legacy `parse-*-tree` family below has
+;; never been exercised in production (the tree spine won 0 forms, ever) and its
+;; arms have gone stale — keyword literals, mixfix, dot-access, let-blocks,
+;; records and path-selection all mis-parse. So the conversion is NOT applied;
+;; the defusal is instead made deliberate and explicit at the key itself
+;; (`loc->line`, driver.rkt). Restoring the tree spine means: apply the struct
+;; conversion here, then repair those arms. See
+;; docs/tracking/2026-08-02_LOC_TO_LINE_MERGE_DEFECT.md.
 (define (item-srcloc item)
   (cond
     [(parse-tree-node? item) (parse-tree-node-srcloc item)]
@@ -130,17 +172,27 @@
        [(brace-group) (parse-brace-group-tree children loc)]
        ;; CIU T6 D4.P1b-ii — `.{ }` mid-path sub-block. P1b-ii makes it LEX and
        ;; GROUP; its SEMANTICS land at P3 (blocks). An explicit error arm is
-       ;; MANDATORY, not cosmetic: the `else` fallthrough at the bottom of this
-       ;; dispatch calls parse-expr-tree SILENTLY for any node with children
-       ;; (always true for a group), and driver.rkt admits tree output whenever
-       ;; it is non-error ∧ same-form-type ∧ same-line — so a missing arm would
-       ;; let a garbage surf-app BEAT preparse's version. ("Unhandled form"
-       ;; below is unreachable from here; it lives in the top-level-form case.)
+       ;; still wanted: the `else` fallthrough at the bottom of this dispatch
+       ;; calls parse-expr-tree SILENTLY for any node with children (always true
+       ;; for a group), so without an arm the tag yields a garbage surf-app.
+       ;; ("Unhandled form" below is unreachable from here; it lives in the
+       ;; top-level-form case.)
+       ;;
+       ;; ⚠ RATIONALE CORRECTED 2026-08-03 (`2d7813ef`). This comment used to end
+       ;; "…and driver.rkt admits tree output whenever it is non-error ∧
+       ;; same-form-type ∧ same-line — so a missing arm would let a garbage
+       ;; surf-app BEAT preparse's version." **There is no longer any tree leg for
+       ;; it to beat**: PPN Track 3 Phase 7's second half deleted `tree-surfs` /
+       ;; `tree-by-line` / `merge-form` from driver.rkt, so nothing in production
+       ;; consumes this dispatch's output at all. The arm still matters — but for
+       ;; the FUTURE consumer (`extract-surfs-from-form-cells`, Phase 7's intended
+       ;; surf source, currently caller-less), not for a merge that no longer
+       ;; exists. Keep the arm; do not carry the old reason forward as if live.
        [(dot-brace-group select-brace-group)
-        ;; D4.P1b-ii/iii. An explicit arm is MANDATORY: the `else` fallthrough
-        ;; calls parse-expr-tree SILENTLY for any node with children, and
-        ;; driver.rkt admits tree output when non-error ∧ same-form-type ∧
-        ;; same-line — so a missing arm lets a garbage surf BEAT preparse's.
+        ;; D4.P1b-ii/iii. An explicit arm is wanted for the same reason as above
+        ;; (the `else` fallthrough calls parse-expr-tree SILENTLY for any node
+        ;; with children) — and see the ⚠ note above: the merge-admission
+        ;; rationale this used to cite was deleted at `2d7813ef`.
         ;; For `select-brace-group` the stakes are higher than for its sibling:
         ;; `brace-group` has a NON-ERROR handler right above, so without this
         ;; arm an adjacent `x{…}` would silently become a MAP LITERAL.
@@ -183,9 +235,23 @@
 
        ;; --- Preparse-consumed forms (remaining stubs) ---
        ;; These are handled by preparse: registration, generation, or specialized
-       ;; desugaring. The tree parser returns explicit errors so the merge's
-       ;; error filter catches them. Without these stubs, the `else` fallthrough
-       ;; would call parse-expr-tree and produce garbage surf-app nodes.
+       ;; desugaring. The stubs return explicit errors so a consumer's error
+       ;; filter catches them; without them the `else` fallthrough would call
+       ;; parse-expr-tree and produce garbage surf-app nodes.
+       ;;
+       ;; ⚠ TWO CORRECTIONS (2026-08-03):
+       ;;  · "so the MERGE's error filter catches them" — the merge's tree leg was
+       ;;    deleted at `2d7813ef`; there is no merge consumer. The intended future
+       ;;    consumer is `extract-surfs-from-form-cells` (form-cells.rkt).
+       ;;  · **NINE of the arms in this dispatch are already SHADOWED-DEAD** and
+       ;;    can never fire, because Racket `case` is FIRST-MATCH and these tags
+       ;;    also appear in the top-level-form arm above (`:147-148`):
+       ;;    session, defproc, defr, solver, subtype, selection, capability,
+       ;;    foreign, strategy. So `capability` / `foreign` / `strategy` below do
+       ;;    NOT error — they take the top arm. Do not "fix" this by reordering:
+       ;;    that is a behavioural change to the parser and belongs to the
+       ;;    reader/parser unification work (LHC / PPN 4D), not here. Recorded in
+       ;;    DEFERRED § "Dual-spine parser merge".
        [(bundle) (parse-error-result loc "bundle: consumed by preparse")]
        [(capability) (parse-error-result loc "capability: consumed by preparse")]
        [(defmacro) (parse-error-result loc "defmacro: consumed by preparse")]
@@ -712,7 +778,19 @@
         (with-handlers ([exn:fail? (lambda (e)
                                      (parse-error-result loc (format "eval: ~a" (exn-message e))))])
           ;; Apply ALL WS normalizations (same as extract-surfs datum path)
-          (define flat (flatten-ws-datum datum))
+          ;;
+          ;; ⚠ `rewrite-implicit-map` MUST PRECEDE `flatten-ws-datum`, and running
+          ;; it later does not substitute. It keys on the reader's keyword
+          ;; GROUPING — the `(:name "a")` sub-lists — which flattening destroys.
+          ;; `preparse-expand-subforms` (macros.rkt) does call it, but by then the
+          ;; datum is already flat, so it matches nothing and silently no-ops.
+          ;; MEASURED: this accounted for 3 of the 7 confirmed tree/preparse
+          ;; divergences (`surf-map-literal` collapsing to `surf-keyword` in
+          ;; map-tutorial-demo). form-cells.rkt's datum path already gets this
+          ;; right and says why at its own site — this arm had drifted from it.
+          ;; Double application is harmless and is the established pattern there:
+          ;; once rewritten, the second call matches nothing.
+          (define flat (flatten-ws-datum (rewrite-implicit-map datum)))
           (define session-desugared
             (cond
               [(and (pair? flat) (eq? (car flat) 'session))

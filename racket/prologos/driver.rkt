@@ -908,9 +908,26 @@
                                  (begin
                                    (pp-expr (time-phase! zonk (freeze ty)))))))))]
 
-                  ;; (expand datum) — show preparse expansion
+                  ;; (expand datum) — show preparse expansion.
+                  ;;
+                  ;; ⚠ GUARDED because `preparse-expand-single` can RAISE, and
+                  ;; that is NEW as of the where-injection fix (macros.rkt): it
+                  ;; now mirrors `preparse-expand-all`'s `maybe-inject-where`
+                  ;; pass, which errors on a `where` clause whose constraint
+                  ;; heads are not resolvable traits/bundles. Before that fix
+                  ;; `-single` could not reach the raise at all, so this call
+                  ;; site was safe unwrapped and no longer is.
+                  ;;
+                  ;; The handler belongs HERE, not in `-single`: making `-single`
+                  ;; swallow the failure would put it back out of step with
+                  ;; `-all` — which is the exact divergence class the fix closed.
+                  ;; An INSPECTION command should report a bad expansion; it
+                  ;; should not be the reason the expander lies.
                   [(list 'expand datum)
-                   (pp-datum (preparse-expand-single datum))]
+                   (with-handlers ([exn:fail?
+                                    (lambda (e)
+                                      (format "expand: ~a" (exn-message e)))])
+                     (pp-datum (preparse-expand-single datum)))]
 
                   ;; (expand-1 datum) — show single-step preparse expansion
                   [(list 'expand-1 datum)
@@ -2569,28 +2586,67 @@
     (reset-meta-store!)
     (process-string-ws-inner s)))
 
-;; PPN Track 2B Phase 1: Shared merge function
-;; Merges preparse output with tree parser output for WS-mode processing.
+;; ═══════════════════════════════════════════════════════════════════════════
+;; PPN Track 3 Phase 7, second half — THE MERGE'S TREE LEG IS GONE (2026-08-03)
+;; ═══════════════════════════════════════════════════════════════════════════
+;;
 ;; preparse-surfs: result of (map parse-datum (preparse-expand-all stxs))
 ;; source-str: the original source string (for read-to-tree)
-;; Returns: merged surf list (preparse generated defs + tree parser user forms)
+;; Returns: the surf list `process-surfs` consumes.
 ;;
-;; NOTE: This merge is a throwaway bridge. In the propagator-only architecture
-;; (PPN Track 3-4), each form gets a cell, both pipelines write, the lattice
-;; join resolves. The merge disappears entirely. See D.3 F10 discussion.
+;; WHAT THIS USED TO BE. A two-spine merge: the tree spine parsed the same
+;; source independently, `tree-by-line` keyed both spines by source line, and
+;; `merge-form` ended `[else tree-surf]` — "tree parser wins for user forms".
+;;
+;; WHY IT IS GONE, MEASURED (163-file corpus, 5,171 forms):
+;;   · the tree spine won **0 forms**, and never had — the key was broken three
+;;     ways at once since the code was written;
+;;   · correcting the key is not the fix — the spine then wins ~694 forms and the
+;;     corpus REGRESSES (errors 359 → 724 across 35 files with not one
+;;     improvement, two clean files lost to whole-file aborts, 32 test files
+;;     fail). 14 distinct defects across 4 layers, two of them input-contract
+;;     defects unreachable from inside tree-parser.rkt;
+;;   · and the census settled what the merge even WAS: the tree spine's datum
+;;     path feeds `parse-datum` — the SAME parser preparse uses. So this never
+;;     adjudicated between two parsers. It compared one parser against itself
+;;     across two READERS, where there is nothing to adjudicate: any residual
+;;     difference is a reader bug and belongs in a test, not in a runtime merge.
+;;
+;; THIS IS NOT A NEW DECISION — it is this phase's own designed deliverable,
+;; shipped half-done. PPN Track 3's design says verbatim: *"Delete:
+;; `merge-preparse-and-tree-parser`, `merge-form`, source-line-keyed identity
+;; matching, `tree-by-line` hash building. Total ~80 lines from driver.rkt."*
+;; `40d07caa` landed only the first half (form cells wired IN); the deletion
+;; never happened, and the comment "Phase 7 will switch process-command to read
+;; from these cells" was written in that same commit — its own unfinished half.
+;;
+;; ⚠ THE FUNCTION IS LOAD-BEARING; "retire" meant REDUCE, not delete. It still
+;; runs the reader and the form-cell pipeline, and it still returns the surf list.
+;; Three layers are routinely conflated here — only the third was removed:
+;;   (1) the reader's 5 parse cells (parse-reader.rkt)  — PPN Track 1  — KEEP
+;;   (2) the per-form cells (form-cells.rkt)            — PPN Track 3  — KEEP
+;;   (3) the merge's tree leg                           — this         — GONE
+;;
+;; What remains before Phase 7 is fully closed: wire (2) into `process-command`
+;; so the form cells are READ, then the preparse pass-through here goes too.
+;; See docs/tracking/2026-08-02_LOC_TO_LINE_MERGE_DEFECT.md and
+;; DEFERRED.md § "Dual-spine parser merge".
 (define (merge-preparse-and-tree-parser source-str preparse-surfs)
   (register-default-token-patterns!)
-  ;; Tree pipeline: read-to-tree → G(0) → T(0) → rewrite → parse
+  ;; Reader pipeline. `pt` is still needed: the FORM-CELL block below derives its
+  ;; own `tree-top-level-forms` from it. The G(0)/T(0)/rewrite/parse chain that
+  ;; used to follow fed ONLY the merge's tree leg and went with it — see the
+  ;; header. Those functions are untouched and still have live callers
+  ;; (surface-rewrite.rkt internally, tools/spine-census.rkt, the Track 3
+  ;; micro-benchmark, tests/test-parse-reader.rkt).
   (define pt (read-to-tree source-str))
-  (define grouped-root (group-tree-node (parse-tree-root pt)))
-  (define refined-root (refine-tag grouped-root))
-  (define rewritten-root (rewrite-tree refined-root))
-  (define tree-surfs (parse-top-level-forms-from-tree rewritten-root))
 
   ;; PPN Track 3 Phase 6+3a: create per-form cells on the elab-network.
-  ;; This runs alongside the merge — the form cells hold the tree-parser
-  ;; pipeline output in Pocket Universe cells with dependency-set transforms.
-  ;; Phase 7 will switch process-command to read from these cells.
+  ;; ⚠ KEEP. These are Track 3's DELIVERABLE and the merge's intended
+  ;; replacement. They are write-only today (`current-form-cell-map` /
+  ;; `current-spec-cell-map` are set here and read nowhere) — that is the
+  ;; "cells landed, propagator wiring unbuilt" state PPN Master row 3 documents,
+  ;; NOT abandonment. Deleting them would delete Phase 7's other half.
   (define net-box (current-prop-net-box))
   (when net-box
     (define enet (unbox net-box))
@@ -2603,108 +2659,22 @@
     ;; Store cell maps for downstream consumption
     (current-form-cell-map cell-map)
     (current-spec-cell-map spec-map))
-  ;; Track 2B: Source-line-keyed merge.
-  ;; Each source form is identified by its source line. Both pipelines process
-  ;; the same source, so surfs for the same source line correspond.
+  ;; The surf list. Preparse ordering preserved (Pass 5b hoisting for generated
+  ;; defs). One filter remains; both former tree-spine lookups are gone with the
+  ;; leg — they could only ever miss (the gate emptied `tree-by-line`), so their
+  ;; removal is behaviour-neutral.
   ;;
-  ;; Tree parser output used when: (a) non-error, (b) same form type as preparse,
-  ;; (c) same source line. Preparse used for: generated defs (synthetic positions),
-  ;; forms where tree parser errored, and forms where tree parser is absent.
-  ;;
-  ;; This avoids the queue alignment problem: no positional counting,
-  ;; identity-based matching via source line.
-  ;;
-  ;; Generated defs from data/trait/impl have source lines that DON'T appear
-  ;; in tree parser output → always from preparse (correct).
-
-  ;; Helper: extract source line from a srcloc (handles both srcloc struct and raw tuple)
-  (define (loc->line loc)
-    (cond
-      [(srcloc? loc) (srcloc-line loc)]
-      [(and (list? loc) (>= (length loc) 2)) (cadr loc)]  ;; (file line col span) or (line col pos span)
-      [(and (pair? loc) (number? (car loc))) (car loc)]    ;; (line col pos span) as first element
-      [else #f]))
-
-  ;; Helper: extract source line from a surf
-  (define (surf-source-line s)
-    (cond
-      [(surf-def? s) (loc->line (surf-def-srcloc s))]
-      [(surf-defn? s) (loc->line (surf-defn-srcloc s))]
-      [(surf-defn-multi? s) (loc->line (surf-defn-multi-srcloc s))]
-      [(surf-eval? s) (loc->line (surf-eval-srcloc s))]
-      [(surf-check? s) (loc->line (surf-check-srcloc s))]
-      [(surf-infer? s) (loc->line (surf-infer-srcloc s))]
-      [else #f]))
-
-  ;; Helper: same form type?
-  (define (same-form-type? a b)
-    (or (and (surf-eval? a) (surf-eval? b))
-        (and (surf-check? a) (surf-check? b))
-        (and (surf-infer? a) (surf-infer? b))
-        (and (surf-def? a) (surf-def? b))
-        (and (surf-defn? a) (surf-defn? b))
-        (and (surf-defn-multi? a) (surf-defn-multi? b))))
-
-  ;; A line number is a MATCH KEY only if it is a real source line. `#f` was
-  ;; already excluded; 0 was not, and 0 is the project's unknown-location
-  ;; sentinel — `stx->loc` folds a missing `syntax-line` to 0, and
-  ;; `srcloc-unknown` is `(srcloc … 0 0 0)`. So every located-nowhere surf on
-  ;; one spine matched every located-nowhere surf on the other.
-  ;;
-  ;; That is not hypothetical: a bare top-level `[]` produces a preparse
-  ;; parse-error at line 0, the tree spine routinely carries one line-0 surf,
-  ;; and the two silently merged — the `[]` command adopted a LATER command's
-  ;; result, that command's result appeared twice, and the "Unexpected datum:
-  ;; ()" error that fires when `[]` stands alone never fired. Zero errors
-  ;; reported, wrong answers returned.
-  (define (real-line? l) (and (exact-integer? l) (> l 0)))
-  ;; Build source-line → tree-surf map (non-errors only)
-  (define tree-by-line
-    (for/hasheq ([s (in-list tree-surfs)]
-                 #:when (not (prologos-error? s)))
-      (define line (surf-source-line s))
-      (if (real-line? line) (values line s) (values (gensym) s))))  ;; gensym for non-matchable
-
-  ;; Per-form merge function: given preparse's surf and tree parser's surf (or #f),
-  ;; resolve which to use. This IS the cell merge function — both pipelines write,
-  ;; the merge resolves. Executed here as a map operation, not a scan.
-  (define spec-store (current-spec-store))
-
-  (define (merge-form preparse-surf tree-surf)
-    (cond
-      ;; No tree parser output for this form → preparse
-      [(not tree-surf) preparse-surf]
-      ;; Form type mismatch → preparse (safety)
-      [(not (same-form-type? preparse-surf tree-surf)) preparse-surf]
-      ;; Rel T1 POL.9b: the preparse spine is the ONLY pipeline that can see
-      ;; the reader's 'prologos-paren-origin mark (the tree spine's legacy
-      ;; def path has no source text for srcloc/property recovery). When the
-      ;; two spines DISAGREE in category — preparse parsed the def body as a
-      ;; solve (the paren-goal dispatch fired) while the tree parsed it as an
-      ;; application — preparse is authoritative. Explicit `def := solve (…)`
-      ;; parses as solve on BOTH spines, so its merge is unchanged.
-      [(and (surf-def? preparse-surf) (surf-def? tree-surf)
-            (surf-solve? (surf-def-body preparse-surf))
-            (not (surf-solve? (surf-def-body tree-surf))))
-       preparse-surf]
-      ;; Spec-annotated → preparse (has spec type injected)
-      [(and (surf-def? preparse-surf) (hash-ref spec-store (surf-def-name preparse-surf) #f)) preparse-surf]
-      [(and (surf-defn? preparse-surf) (hash-ref spec-store (surf-defn-name preparse-surf) #f)) preparse-surf]
-      [(and (surf-defn-multi? preparse-surf) (hash-ref spec-store (surf-defn-multi-name preparse-surf) #f)) preparse-surf]
-      ;; Both pipelines produced valid output → tree parser wins for user forms
-      [else tree-surf]))
-
-  ;; Apply merge-form to each preparse surf, using tree-by-line for lookup.
-  ;; Preparse ordering preserved (Pass 5b hoisting for generated defs).
-  ;;
-  ;; (N6e-E5.2, issue #69(b)) Preparse ERROR surfs are NO LONGER silently
-  ;; dropped. Previously the #:when filter vanished any preparse-mangled form
-  ;; (and often the file tail) with zero diagnostics — and ALSO discarded the
-  ;; tree parser's successful recovery of that form, because tree surfs only
-  ;; surface via the preparse spine. Now: recovery-first — if the tree parser
-  ;; parsed the errored form's source line, use the tree surf; otherwise KEEP
-  ;; the error surf, which downstream already reports (results passthrough +
-  ;; emit-error-diagnostic).
+  ;; (N6e-E5.2, issue #69(b)) Preparse ERROR surfs are NOT silently dropped —
+  ;; that half stands and is what this `for/list` still delivers by returning `s`.
+  ;; The other half of #69(b), "recovery-first" (substitute the tree parser's
+  ;; version of a form preparse mangled), is REMOVED rather than disabled: it was
+  ;; the merge's most defensible future role, but it read `tree-by-line` with NO
+  ;; guards at all — no `same-form-type?`, no spec-store, unlike the four on the
+  ;; `[else]` path — and it is where a QTT bypass rode in (substituting a tree
+  ;; surf whose binders are all `#f` turns a declared-LINEAR `spec {:1 …}`
+  ;; parameter into `mw`). If recovery is ever wanted back it must be built ON
+  ;; the form cells with a `same-form-type?` guard, not restored as it was.
+  ;; Filed as DEFERRED § "Dual-spine parser merge" item 4.
   ;;
   ;; EXCEPTION — consumed-form residue: ns/require/provide are PREPARSE-
   ;; processed (side effects); the parser's "X should have been processed
@@ -2717,17 +2687,10 @@
          (let ([m (prologos-error-message s)])
            (and (string? m)
                 (string-suffix? m "should have been processed before parsing")))))
+
   (for/list ([s (in-list preparse-surfs)]
              #:unless (consumed-form-residue? s))
-    (cond
-      [(prologos-error? s)
-       (define line (loc->line (prologos-error-srcloc s)))
-       (define tree-match (and (real-line? line) (hash-ref tree-by-line line #f)))
-       (or tree-match s)]
-      [else
-       (define line (surf-source-line s))
-       (define tree-match (and (real-line? line) (hash-ref tree-by-line line #f)))
-       (merge-form s tree-match)])))
+    s))
 
 ;; PPN Track 3 Phase 4: Cell pipeline runs alongside merge.
 ;; Merge remains the surf source (proven, handles all forms).
@@ -3419,19 +3382,44 @@
        (close-input-port port)
        (define expanded-stxs (preparse-expand-all raw-stxs))
        (define surfs (map parse-toplevel-datum expanded-stxs))
+       ;; ⚠ THE `else` IS LOAD-BEARING (2026-08-01). This loop used to be an
+       ;; `unless` with no else: a surf that was ALREADY a parse error got
+       ;; SKIPPED, silently, and the module finished loading incomplete — while
+       ;; a command that FAILED at process time was reported loudly two lines
+       ;; below. Same severity, opposite treatment, for no stated reason.
+       ;;
+       ;; That asymmetry was harmless only while every preparse syntax failure
+       ;; RAISED (escaping at `preparse-expand-all` above, before this loop).
+       ;; The POL.4 conversions turn those raises into per-command error VALUES
+       ;; — `$let-error` did it first, `$def-error` follows — and each such
+       ;; conversion silently moved the MODULE path from loud-abort to
+       ;; silent-drop, i.e. into the exact class P4c-1 closed at `b0db8f3e`.
+       ;; A conversion should not be able to make a diagnostic disappear.
+       ;;
+       ;; This is also the blocker that made DEFERRED item 31 (the `ns` guard)
+       ;; a bad trade as written: converting it while this loop swallowed error
+       ;; surfs would have regressed `ns` in a library module from a loud abort
+       ;; into a module that loads with no namespace and no prelude, silently.
+       ;; With the else in place that objection is gone.
        (for ([surf (in-list surfs)])
-         (unless (prologos-error? surf)
-           (define result (process-command/solve-guard surf))
-           (when (prologos-error? result)
-             ;; OCapN review U3: this passed only `prologos-error-message`, so a
-             ;; library module's error arrived as bare "Unbound variable" — no
-             ;; NAME and no SRCLOC, leaving the reader to find the offending
-             ;; line by hand in a module they may not have written. Both were
-             ;; on the struct the whole time. `format-error` is the renderer
-             ;; the per-command path already uses, so a module-load failure now
-             ;; reads exactly like the same failure in a top-level file.
-             (error 'imports "Error loading module ~a:\n~a"
-                    ns-sym (format-error result)))))
+         ;; MERGE 2026-08-05: main's SHAPE (an error surf is REPORTED, not
+         ;; skipped — this branch's `unless` dropped it silently) with this
+         ;; branch's RENDERER. OCapN review U3: passing only
+         ;; `prologos-error-message` made a library module's failure arrive as a
+         ;; bare "Unbound variable" — no NAME, no SRCLOC — leaving the reader to
+         ;; find the line by hand in a module they may not have written. Both
+         ;; were on the struct the whole time, and `format-error` is what the
+         ;; per-command path already uses, so a module-load failure now reads
+         ;; exactly like the same failure in a top-level file.
+         (cond
+           [(prologos-error? surf)
+            (error 'imports "Error loading module ~a:\n~a"
+                   ns-sym (format-error surf))]
+           [else
+            (define result (process-command/solve-guard surf))
+            (when (prologos-error? result)
+              (error 'imports "Error loading module ~a:\n~a"
+                     ns-sym (format-error result)))]))
 
        ;; IO-H: Run capability inference after module definitions are processed
        (run-post-compilation-inference!)

@@ -21,13 +21,19 @@
          (only-in "syntax.rkt"
                   select-key-step? select-sub-step? select-step-cont
                   select-cont-collapse? select-branch-top-keys
-                  select-step-kind)   ;; D4.P4a: the totality dispatcher
+                  select-step-kind    ;; D4.P4a: the totality dispatcher
+                  select-bcast-inner  ;; D4.P4c-3 (Q_U7): unwrap the ω step
+                  ;; D4.P4c-4b: THE PRODUCER BRIDGE. Until this import the smart
+                  ;; constructor had ZERO production callers — the step kind and
+                  ;; all thirteen of its arms existed with nothing building one.
+                  make-select-bcast)
          ;; LET P4: the fused primitives moved here (the one definition —
          ;; macros.rkt consumes them at the datum level, and this module
          ;; requires macros.rkt, so they cannot live in this file).
          (only-in "reader-forms.rkt"
                   colon-symbol? digit-headed-colon-symbol?
-                  fused-type-annot? fused-annot->type-symbol))
+                  fused-type-annot? fused-annot->type-symbol
+                  split-glued-name-datum))
 
 ;; pp-datum only — for the binder-position access-sentinel message. No cycle:
 ;; pretty-print.rkt does not require parser.rkt.
@@ -866,6 +872,47 @@
     ;; message text directly for the in-block shapes.
     [(ordinal-rekey)
      (parse-error loc ordinal-rekey-message #f)]
+    ;; CIU T6 D4.P4c-2 condition (c) — the TWO faces of a surviving `$bcast-step`,
+    ;; NOT-YET family. Both are reachable today and they mean different things,
+    ;; so they are separate kinds rather than one blunt message.
+    ;;
+    ;; `bcast-step` — EXPRESSION position. The mint fires; the step vocabulary
+    ;; (`(@bcast step)`) lands at P4c-3. Until then this reported the LYING
+    ;; diagnostic "Unbound variable", which names the wrong subsystem for an
+    ;; unbuilt surface (measured end-to-end before this arm existed).
+    [(bcast-step)
+     (parse-error loc
+                  (format (string-append
+                           "broadcast `:~a` is not implemented yet — its step vocabulary "
+                           "arrives with Path Selection P4c-3; until then spell it "
+                           "`[map [fn [m] m.~a] xs]`")
+                          f f)
+                  #f)]
+    ;; `bcast-step-binder` — BINDER position. THIS IS CONDITION (c) ITSELF. A
+    ;; broadcast step reaching a binder consumer means the reader post-pass's
+    ;; binder-head table MISSED this form, so the fused annotation `x:T` was read
+    ;; as a broadcast. Left to fall through, the consumer takes it as an extra
+    ;; POSITIONAL PARAMETER and defines a wrong-arity function at zero errors —
+    ;; the 3-arity class this hardening exists to remove.
+    ;;
+    ;; ⚠ The message names the REMEDY a user can act on (the spaced spelling).
+    ;; ⚠⚠ ITS SECOND HALF WAS DELETED AT G2 BECAUSE IT STATED A FALSEHOOD. It
+    ;; read: "(This form's head is missing from the reader post-pass binder table
+    ;; in parse-reader.rkt; the fused spelling should work here.)" — but the G2
+    ;; verify probed `let x:A:B 4` reaching this arm, and `let` IS in that table
+    ;; (`binder-region-heads` is `'(def let)`). The head was not missing; the
+    ;; CHAINED annotation `x:A:B` is reserved for UCS and is refused on purpose.
+    ;; So the sentence told a user their working spelling "should work" and told
+    ;; a maintainer to go add a row that is already there. A diagnostic that
+    ;; asserts a fact about the codebase can be WRONG about the codebase, and
+    ;; this one was; the remedy half is true and is what remains.
+    [(bcast-step-binder)
+     (parse-error loc
+                  (format (string-append
+                           "`:~a` was read as a broadcast step, but this is a BINDER "
+                           "position — write the annotation spaced (`name : ~a`).")
+                          f f)
+                  #f)]
     [(postfix-kw)
      (parse-error loc (format "keyword index `[:~a]` was retired — spell the field `m.~a` or use `[get m :~a]`" f f f) #f)]
     [(postfix-empty)
@@ -879,6 +926,48 @@
      (parse-error loc "`_` cannot be the subject of an index — name the subject or wrap it in a lambda (e.g. `[fn [m] m[k]]`, `[fn [v] v.0]`)" #f)]
     [else
      (parse-error loc "this selection form was retired (CIU T6 Path Selection) — see the migration note for its replacement spelling" #f)]))
+
+;; ============================================================
+;; CIU T6 D4.P4c-2 condition (c) — the binder-position tripwire
+;; ============================================================
+;; Q_U16 booked the reader post-pass binder table as "a PERMANENT hand-maintained
+;; enumeration with a SILENT failure mode and no retirement plan", and rode three
+;; conditions on it. This is (c): make a missed row LOUD.
+;;
+;; ⚠ WHY THE CONSUMERS AND NOT THE TABLE. Measuring the table produced FOUR
+;; distinct misses inside a single session (private-suffix heads, a leading
+;; implicit-binder group, `defmacro`, and the flat `$pipe` spelling). An
+;; enumeration with that record cannot be the safety property; the consumers are
+;; a CLOSED set and can be. So these guards are the mechanism and the table is
+;; the optimization over it — the inverse of how the design framed them.
+;;
+;; ⚠ NEITHER `fused-type-annot?` NOR `colon-symbol?` CAN DO THIS JOB: both gate
+;; on `(symbol? x)` and a `$bcast-step` is a LIST, so both return #f and the site
+;; DECLINES silently. Widening either predicate is the wrong repair — it would
+;; make a broadcast step look like an annotation. The guard must be a separate
+;; sibling arm, which is why there is one per consumer rather than one shared
+;; predicate edit.
+;; ⚠ THE HEAD MAY STILL BE A SYNTAX OBJECT. `stx->datum` at these seats is not a
+;; deep `syntax->datum` — it peels ONE layer, so a group's elements arrive still
+;; wrapped. The first cut of this predicate compared `(car d)` to the symbol
+;; directly and was therefore DEAD CODE at every site: it never returned #t, the
+;; guards never fired, and the suite stayed green because the dispatchers happen
+;; to fail loudly on their own. Found by MUTATION (emptying the binder tables),
+;; which is the only thing that could have found it — the same lesson the
+;; b-ii-2b verify recorded as "a tripwire on one side of a fork is not coverage".
+(define (unwrap-stx-datum x) (if (syntax? x) (syntax-e x) x))
+
+(define (bcast-step-datum? d)
+  (and (pair? d) (eq? (unwrap-stx-datum (car d)) '$bcast-step)))
+
+;; The payload (`:Int`) of the first surviving broadcast step in `xs`, or #f.
+;; Accepts syntax objects or bare datums, at either wrapping depth.
+(define (first-bcast-step-payload xs)
+  (for/or ([x (in-list xs)])
+    (let ([d (unwrap-stx-datum x)])
+      (and (bcast-step-datum? d)
+           (pair? (cdr d))
+           (unwrap-stx-datum (cadr d))))))
 
 ;; ============================================================
 ;; CIU T6 D4.P3a/P3b — select-payload segmentation (the parser seat)
@@ -975,8 +1064,14 @@
   ;; unrecognized leaf kind raises here instead of silently answering #f and
   ;; mis-gating the `^..` desugar at :1001.
   (define (dissolve-step? s)
-    (and (eq? (select-step-kind s) 'caret)
-         (eq? (select-step-cont s) 'dissolve)))
+    ;; D4.P4c-3 (Q_U7): see THROUGH the ω wrapper. This is one of the four
+    ;; [leaf] classifiers the ADDING A KIND recipe flags as mattering most —
+    ;; it answers a silent #f on a kind it does not recognize, so a missed arm
+    ;; mis-sorts with no raise anywhere downstream. `users:k^` dissolves exactly
+    ;; as `users.k^` does: ω changes container arity, not `^` behaviour.
+    (let ([s (if (eq? (select-step-kind s) 'bcast) (select-bcast-inner s) s)])
+      (and (eq? (select-step-kind s) 'caret)
+           (eq? (select-step-cont s) 'dissolve))))
   ;; ---- P3b branch-close validation: positional legality of `^` conts ----
   ;; br in ORDER (head first). #f = ok, else the error message.
   (define (branch-problem br)
@@ -988,7 +1083,13 @@
           ;; it did not recognize — a `^`-bearing wrapper in an illegal
           ;; position would slip through a check written to reject it.
           ;; Classifying first makes an unrecognized kind loud here.
-          (let* ([s (car steps)] [last? (null? (cdr steps))]
+          (let* ([s0 (car steps)] [last? (null? (cdr steps))]
+                 ;; D4.P4c-3 (Q_U7): unwrap ω before the positional-legality
+                 ;; check. `select-step-cont` answers #f for every non-`caret`
+                 ;; kind, so a `^`-bearing step INSIDE a wrapper would slip
+                 ;; through a check written to reject it — the identical hole
+                 ;; the P4a comment below describes for unrecognized kinds.
+                 [s (if (eq? (select-step-kind s0) 'bcast) (select-bcast-inner s0) s0)]
                  [_kind (select-step-kind s)]
                  [c (select-step-cont s)])
             (cond
@@ -1125,6 +1226,67 @@
                               (loop (cdr items) (list step) #f (closed-acc))))]
             [(plain-key? it)
              (loop (cdr items) (list it) #f (closed-acc))]
+            ;; ⭐ D4.P4c-4b — THE ω ARMS. Mirror the `$dot-access` arms below,
+            ;; with ONE extra duty: `$dot-access` carries a BARE symbol, while
+            ;; `$bcast-step` carries the token VERBATIM and so is COLON-LEADING
+            ;; (`|:name|`, `|:0|`, `|:tags*|`). Interpreting that payload is this
+            ;; site's job alone — the fold passes it through whole precisely so
+            ;; there is ONE recognizer, not two.
+            ;;
+            ;; ⚠ TWO OF THE THREE SUB-CASES WOULD BE SILENT if the colon were
+            ;; merely stripped and handed to `plain-key?` (measured by the
+            ;; P4c-4b mini-audit's critic):
+            ;;   · `users:0`  — `|0|` passes `plain-key?` and classifies as
+            ;;     `'key`: a NOMINAL key named `0` where an ORDINAL step was
+            ;;     written. Q_U16b rules `users:0` a legal ω step, so it must
+            ;;     become the NUMBER 0, not the symbol `|0|`.
+            ;;   · `users:tags*` — `|tags*|` passes `plain-key?` as a field
+            ;;     LITERALLY NAMED `tags*`, silently swallowing the `*` flatten
+            ;;     operator. `ident-continue?` admits `*`, so the reader hands it
+            ;;     over as one token and no scheme keyed on token TYPE can see
+            ;;     it. Refused here, guided — `*` is P4d's surface.
+            ;;   · `users:name^alias` — the `^` re-key family, which IS safe:
+            ;;     it routes to `split-step` exactly as the `$dot-access` twin
+            ;;     does, so the caret keeps its meaning.
+            ;; ⚠ `cur` MAY LEGITIMATELY BE #f HERE, and the first cut of this arm
+            ;; got that wrong. The `$select-path` caller consumes the SUBJECT
+            ;; itself (`(car args)`) and passes only `(cdr args)`, so for
+            ;; `users:name` the ω step is the FIRST item with no `cur` — the
+            ;; normal case, not a branch-initial error. Measured: the first cut
+            ;; reported "a broadcast step needs a preceding subject" for the
+            ;; headline spelling. So `cur = #f` STARTS a branch, exactly as the
+            ;; `plain-key?` arm above does. (Q_U7's W2 branch-initial refusal is
+            ;; a BLOCK rule — `x{:name}` — and the mint cannot produce one there
+            ;; anyway, since it requires byte-adjacency to a base.)
+            [(and (eq? (head-of it) '$bcast-step) cur cur-subbed?)
+             (fail "a broadcast step cannot follow a `.{…}` sub-block — the sub-block is a branch's terminal step")]
+            [(eq? (head-of it) '$bcast-step)
+             (let* ([payload (cadr it)]
+                    [s (symbol->string payload)]
+                    ;; the mint guarantees a colon-leading token; strip exactly one
+                    [bare (if (and (> (string-length s) 0) (char=? (string-ref s 0) #\:))
+                              (substring s 1)
+                              s)])
+               ;; push the ω step: EXTEND the branch when one is open, otherwise
+               ;; START one (closing the previous), mirroring `plain-key?`.
+               (define (push step)
+                 (if cur
+                     (loop (cdr items) (cons (make-select-bcast step) cur) #f acc)
+                     (loop (cdr items) (list (make-select-bcast step)) #f (closed-acc))))
+               (cond
+                 [(string=? bare "")
+                  (fail "a bare `:` is not a broadcast step — write the step it broadcasts, e.g. `users:name`")]
+                 ;; `*` FLATTEN rides inside the token (see above) — refuse it
+                 ;; here rather than letting it become a field name.
+                 [(regexp-match? #rx"[*]" bare)
+                  (fail (format "`*` (flatten) is not implemented yet on a broadcast step — `:~a` would read as a field literally named `~a`. Until Path Selection P4d, spell the flatten separately" bare bare))]
+                 ;; `^` RE-KEY — route to the ONE splitter, as `$dot-access` does
+                 [(regexp-match? #rx"\\^" bare)
+                  (split-step (string->symbol bare) push)]
+                 ;; Q_U16b: `users:0` IS a legal ω step — an ORDINAL, not a
+                 ;; nominal key named "0".
+                 [(regexp-match? #rx"^[0-9]+$" bare) (push (string->number bare))]
+                 [else (push (string->symbol bare))]))]
             [(and (eq? (head-of it) '$dot-access) cur cur-subbed?)
              (fail "a segment cannot follow a `.{…}` sub-block — the sub-block is a branch's terminal step")]
             ;; ---- `^`-bearing descent payload → the splitter
@@ -1214,6 +1376,22 @@
     [(and (symbol? head) (eq? head '$angle-type))
      (unwrap-angle-type stx loc)]
 
+    ;; ⭐ CIU T6 D4.P4c-4c / G2 — the PREPARSE SEAM marker (owner ruling 2026-08-05,
+    ;; option B). `preparse-expand-all`'s per-form pass converts ANY `exn:fail?`
+    ;; into `($preparse-error msg)`; this arm turns it into a per-command error
+    ;; VALUE so the file continues. It is head-agnostic ON PURPOSE — the whole
+    ;; point of ruling B over enumerating directive heads is that a FUTURE
+    ;; sentinel reaching a preparse-consumed form lands here instead of taking
+    ;; the file down.
+    ;; ⚠ Same `(pair? args)` guard as its siblings, for the same reason: an
+    ;; unguarded `(car args)` at THIS seam is itself a whole-file abort — the
+    ;; exact failure the seat exists to eliminate. The P1a verify caught that
+    ;; once already, one arm below.
+    [(and (symbol? head) (eq? head '$preparse-error))
+     (prologos-error loc
+                     (format "preparse: ~a"
+                             (if (pair? args) (stx->datum (car args)) "(no detail)")))]
+
     ;; D4.P1a retired-selection marker (preparse-normalized) → guided error.
     ;; ⚠ The (pair? args) guard is LOAD-BEARING, not defensive: a user may
     ;; write the head with no arguments, and an unguarded (car args) raises —
@@ -1225,17 +1403,26 @@
                               (and (pair? args) (pair? (cdr args)) (stx->datum (cadr args)))
                               loc)]
 
-    ;; LET P1 — the let syntax-failure marker. expand-let (macros.rkt) converts
-    ;; its family's 13 raise sites into ($let-error "msg") datums so a bad let
-    ;; is a PER-COMMAND parse error instead of a whole-file abort; this arm
+    ;; LET P1 — the let syntax-failure marker, and (DEF SEAM, 2026-08-01) its
+    ;; def sibling. expand-let (macros.rkt) converts its family's raise sites
+    ;; into ($let-error "msg") datums, and expand-def-assign returns
+    ;; ($def-error "msg") for a def head it cannot read, so a bad let or def is
+    ;; a PER-COMMAND parse error instead of a whole-file abort; this arm
     ;; supplies the loc the datum layer cannot carry. The (pair? args) guard is
     ;; LOAD-BEARING per the $retired-selection precedent above — an unguarded
     ;; (car args) here would reintroduce the exact abort this seat eliminates.
-    [(and (symbol? head) (eq? head '$let-error))
+    ;;
+    ;; ONE arm, two heads — deliberately not a second copy. The conversion is
+    ;; identical (marker → parse-error at this loc); only the fallback wording
+    ;; differs, and that is the sole thing the heads are distinguished for.
+    ;; A third marker joins the memq; it does not fork the seat.
+    [(and (symbol? head) (memq head '($let-error $def-error)))
      (parse-error loc
                   (if (and (pair? args) (string? (stx->datum (car args))))
                       (stx->datum (car args))
-                      "let: malformed let expression")
+                      (if (eq? head '$def-error)
+                          "def: malformed def form"
+                          "let: malformed let expression"))
                   #f)]
     ;; …and the same channel for `.( )` mixfix. Its three failure modes
     ;; (incomparable precedence groups, an empty `.( )`, a trailing token) used
@@ -1293,6 +1480,11 @@
      (retired-selection-error 'nil-dot-key (and (pair? args) (stx->datum (car args))) loc)]
     [(and (symbol? head) (eq? head '$broadcast-access))
      (retired-selection-error 'broadcast (and (pair? args) (stx->datum (car args))) loc)]
+    ;; CIU T6 D4.P4c-2 condition (c) — a `$bcast-step` in EXPRESSION position.
+    ;; The (pair? args) guard is LOAD-BEARING for the same reason as its three
+    ;; siblings above: a user-written zero-arg head must not raise here.
+    [(and (symbol? head) (eq? head '$bcast-step))
+     (retired-selection-error 'bcast-step (and (pair? args) (stx->datum (car args))) loc)]
 
     ;; CIU T6 D4.P1b-ii — `.{ }` NOT-YET (as distinct from the RETIRED sentinels
     ;; above). P1b-ii makes the mid-path sub-block LEX and GROUP; its semantics
@@ -1331,7 +1523,99 @@
                               (map (lambda (a) (if (syntax? a) (syntax->datum a) a))
                                    (cdr args))
                               loc)])
-                 (or err (surf-select subj branches loc))))))]
+                 (or err (surf-select subj branches 'block loc))))))]
+
+    ;; CIU T6 D4.P4b-ii-2b — `$select-path`: the DOT spelling's head, minted by
+    ;; `rewrite-dot-access`. A DISTINCT sentinel from `$select` [owner ruling],
+    ;; because the sort cannot be recovered downstream — the fold mints in
+    ;; preparse, and by the time a surf-select exists the origin is gone, which
+    ;; is why the elaborator had to hard-code 'block before this.
+    ;;
+    ;; ⭐ THE ARITY GATE IS THE POINT, not bookkeeping. `map-get`'s arm imposes
+    ;; EXACT arity 2; `$select`'s has only an emptiness check and NO upper
+    ;; bound, so every surplus arg becomes another BRANCH. `apply-pipe-step`
+    ;; appends the accumulator into any hole-free step, so under a bare
+    ;; `$select` mint `|> m foo.bar` would go from a LOUD arity-error to a
+    ;; SILENT two-branch select — the piped value quietly becoming a selection
+    ;; branch. (The same append lives in the `>>` compose twin, so a blacklist
+    ;; fix would have had to find both.) A path selector is exactly ONE branch
+    ;; under Q_U13's NEST encoding, so enforcing that HERE restores the loud
+    ;; behaviour structurally, for every caller at once.
+    [(and (symbol? head) (eq? head '$select-path))
+     (cond
+       [(null? args)
+        (parse-error loc "a field access needs a subject — write `x.field`" #f)]
+       ;; ⭐ D4.P4b-ii-2b — THE `_.field` SECTION RESCUE. `_.a` is a live,
+       ;; ergonomic surface (`map _.a recs`) that the fold migration would
+       ;; otherwise DELETE SILENTLY: it worked because `map-get` is in
+       ;; `sectionable-op-keywords`, and the carrier is not — nor can it be.
+       ;; Adding `$select-path` to that table is INERT, because this clause is
+       ;; dispatched EARLIER in the same `cond` than the section clause and so
+       ;; the section path is unreachable. So the eta-expansion happens HERE,
+       ;; modelled on `parse-keyword-section`'s hole-domain lambda.
+       ;; (`_[k]` stays a guided REFUSAL — the postfix leg has a `_` guard the
+       ;; dot leg deliberately lacks. That asymmetry is intentional; deleting
+       ;; the dot section would not have been.)
+       [(eq? (stx->datum (car args)) '_)
+        (define nm '$_0)
+        (define inner
+          (parse-list (cons (datum->syntax #f '$select-path)
+                            (cons (datum->syntax #f nm) (cdr args)))
+                      loc #f))
+        (if (prologos-error? inner)
+            inner
+            (surf-lam (binder-info nm #f (surf-hole loc)) inner loc))]
+       [else
+        (define subj (parse-datum (car args)))
+        (cond
+          [(prologos-error? subj) subj]
+          [else
+           (define-values (branches err)
+             (segment-select-items
+              (map (lambda (a) (if (syntax? a) (syntax->datum a) a)) (cdr args))
+              loc))
+           (cond
+             [err err]
+             ;; ⭐ THE VERIFY'S SILENT ACCEPT-FLIP. The field now rides as a
+             ;; bare SYMBOL, so `segment-select-items` splits a `^` out of it
+             ;; into a re-key / dissolve / collapse CONTINUATION — and the
+             ;; `'path` assembly then extracts the leaf and DROPS it. Probed:
+             ;; `m.foo^z`, `m.foo^`, `m.foo^_`, `m.foo^-`, `m.foo^-q` all
+             ;; returned the plain field at ZERO errors, where HEAD refused.
+             ;; Five spellings silently ignoring the user's instruction, with
+             ;; `pp-expr` still rendering the `^` faithfully — honest display
+             ;; over dishonest semantics.
+             ;; `^` is a BLOCK operator: it sets the OUTPUT KEY, and a path
+             ;; access has no output key, it has a value. So refuse, guided.
+             ;; ⚠ D4.P4c-3a — THIS LINE WAS ω-BLIND. It used to read
+             ;; `(and (select-key-step? st) (select-step-cont st))`, and
+             ;; `select-key-step?` is FALSE for a wrapper, so the `ormap` silently
+             ;; missed a `^` INSIDE one and the refusal above did not fire —
+             ;; re-opening the "SILENT ACCEPT-FLIP" this arm exists to prevent,
+             ;; for the `:` spelling. D4 §4310 had already booked it
+             ;; (`:name^alias` "slips past" the refusal). Measured on the old
+             ;; predicate: `(@key k dissolve)` ⇒ `dissolve` (fires),
+             ;; `(@bcast (@key k dissolve))` ⇒ `#f` (does not).
+             ;; The fix is that `select-step-cont` is now ω-TRANSPARENT, so the
+             ;; guard is unnecessary and the question is asked directly — the
+             ;; `select-key-step?` conjunct was only ever a shape check the
+             ;; accessor already performs. Latent until P4c-4 wires the producer
+             ;; bridge (`make-select-bcast` has ZERO production callers at HEAD).
+             [(ormap select-step-cont (car branches))
+              (parse-error
+               loc
+               "`^` re-keys the OUTPUT of a selection, and a field access has no output key — it yields the value. Use a select block if you want to rename: `x{field^alias}`"
+               #f)]
+             [(not (= (length branches) 1))
+              ;; NOT reachable from well-formed source: the fold mints one
+              ;; branch per level. It IS reachable when something appends into
+              ;; the payload — which is exactly the pipe/compose hazard.
+              (parse-error
+               loc
+               (format "field access takes exactly one field, got ~a — if this came from a `|>` or `>>` step, the piped value was appended into the access; write the step with an explicit hole (`_`)"
+                       (length branches))
+               #f)]
+             [else (surf-select subj branches 'path loc)])])])]
 
     ;; $nat-literal sentinel: 42N → surf-nat-lit (Nat suc-chain)
     [(and (symbol? head) (eq? head '$nat-literal))
@@ -4448,6 +4732,14 @@
           (if (prologos-error? ty) ty
               (binder-info name #f ty)))]
 
+       ;; CIU T6 D4.P4c-2 condition (c) — a broadcast step survived into this
+       ;; binder group. Without this arm it falls to the generic `[else]` below,
+       ;; which dumps the internal sentinel at the user; with it the message names
+       ;; the fused annotation and the spaced workaround.
+       [(first-bcast-step-payload parts)
+        => (lambda (payload)
+             (retired-selection-error 'bcast-step-binder payload loc))]
+
        ;; NEW: [x :m <T>] — 3 elements where second is mult, third is ($angle-type ...)
        [(and (= (length parts) 3)
              (mult-annot? (stx->datum (cadr parts)))
@@ -5307,7 +5599,12 @@
          [(not (symbol? name))
           (parse-error loc (format "defn: expected name, got ~a" name) name)]
          [(not (eq? colon ':))
-          (parse-error loc (format "defn: expected ':', got ~a" colon) colon)]
+          ;; ARROW T1 P1b (R2): `defn a-> b …` reads as name `a-` + a bare `>`,
+          ;; so it lands here. Say so, instead of "expected ':', got >".
+          (parse-error loc
+                       (or (half-glued-arrow-hint name colon)
+                           (format "defn: expected ':', got ~a" colon))
+                       colon)]
          [else
           (let ([ty (parse-datum type-stx)]
                 [params (parse-param-names params-stx loc)]
@@ -5317,6 +5614,20 @@
               [(prologos-error? params) params]
               [(prologos-error? bd) bd]
               [else (surf-defn name ty params bd loc)]))]))]
+
+    ;; CIU T6 D4.P4c-2 condition (c) — the DISPATCHER is itself a binder consumer,
+    ;; and it is invisible to a census keyed on `fused-type-annot?` /
+    ;; `colon-symbol?` (the `parse-rel-params` blindness class, 5th instance).
+    ;; Its bare-params arm above requires EVERY element to be `symbol?`, so a
+    ;; leaked `($bcast-step …)` — a LIST — declines every arm and lands on the
+    ;; generic `[else]`. Loud, but it names the wrong thing: the user wrote a
+    ;; legal fused annotation, not a malformed `defn`. MUTATION-verified (empty
+    ;; the binder tables and this is the arm that fires).
+    [(and (>= (length args) 2)
+          (let ([elems (let ([s (cadr args)])
+                         (and (syntax? s) (syntax->list s)))])
+            (and elems (first-bcast-step-payload elems))))
+     => (lambda (payload) (retired-selection-error 'bcast-step-binder payload loc))]
 
     [else
      ;; The commonest way to land here is a SPACED parameter annotation —
@@ -5620,6 +5931,16 @@
              [ty (loop (cdr es) (cons (binder-info name #f ty) acc))]
              [else (loop (cdr es)
                          (cons (binder-info name #f (surf-hole loc)) acc))]))]
+        ;; ⚠ NO `$bcast-step` GUARD HERE, DELIBERATELY. An earlier cut of
+        ;; condition (c) put one at this `[else]` on the audit's reading that it
+        ;; was the worst fall-through in the set. It is DEAD BY CONSTRUCTION:
+        ;; this function's sole caller gates on
+        ;; `(andmap (lambda (e) (symbol? (syntax-e e))) elems)`, and a
+        ;; `($bcast-step …)` element's `syntax-e` is a LIST, so the andmap fails
+        ;; and this function is never entered with one. The real catcher is
+        ;; `parse-defn`'s DISPATCHER `[else]`, which is where the guard lives.
+        ;; Removed after the P4c-2 adversarial verify proved the arm unreachable
+        ;; — a dead tripwire reads as coverage, which is worse than no tripwire.
         [else
          (loop (cdr es)
                (cons (binder-info (syntax-e (car es)) #f (surf-hole loc)) acc))])))
@@ -6296,16 +6617,44 @@
                 (define nm (extract-mode-annotation sym))
                 (define base (car nm))
                 (define mode (cdr nm))
-                (define segs (string-split (symbol->string base) ":"))
-                (define all-nonempty? (andmap (lambda (s) (> (string-length s) 0)) segs))
+                ;; ── The ONE legality question, asked ONE way ────────────────
+                ;; Both spellings below (sexp-glued `?x:Int`, WS-split `?x` +
+                ;; `:Int`) end up holding a candidate type NAME. Route that
+                ;; question through the canonical `fused-type-annot?` by
+                ;; re-attaching the colon, instead of re-testing the shape here.
+                ;;
+                ;; This site is the one a census keyed on `fused-type-annot?`
+                ;; cannot see — its own P4c-2 comment says so — and it had
+                ;; drifted exactly as the anti-second-copy rule predicts: it
+                ;; recognized with the BROAD `colon-symbol?` and then accepted
+                ;; whatever followed, so `?x:0` / `?x:7` / `?x:w` were silently
+                ;; stored as `type-pred (expr-fvar |0|)` — a free variable used
+                ;; as a TYPE PREDICATE, from a token that is a MULTIPLICITY. The
+                ;; Q_N4 defect verbatim ("the four-lexeme list silently ate `:7`
+                ;; as a type name"), still live here after being fixed for
+                ;; `defn`, `let` and `def`. `colon-symbol?` stays the RECOGNIZER
+                ;; (it answers "is there a colon-ish token here", which is what
+                ;; keeps the guiding messages reachable); `fused-type-annot?` is
+                ;; the AUTHORITY on whether it names a type.
+                (define (names-a-type? ty)
+                  (fused-type-annot?
+                   (string->symbol (string-append ":" (symbol->string ty)))))
+                ;; `nm` is the PARAM NAME to show in the remedy — for the glued
+                ;; spelling that is the split name, not `base` (which still has
+                ;; the offending annotation attached and would suggest the
+                ;; nonsense `x:0:Int`).
+                (define (not-a-type-error nm ty)
+                  (prologos-error
+                   loc
+                   (format "defr: `:~a` is not a type — a fused parameter annotation must name one, as in `~a:Int` (digit-headed `:0`/`:7` and `:w`/`:m` are multiplicities)"
+                           ty nm)))
+                (define-values (g-name g-ty g-err) (split-glued-name-datum base))
                 (cond
-                  ;; sexp-glued chained: name:T1:T2... (all segments non-empty) → reject
-                  [(and all-nonempty? (> (length segs) 2))
-                   (prologos-error loc (format "defr: chained type annotation in ~a not supported (reserve for UCS)" base))]
+                  ;; sexp-glued chained: name:T1:T2... → reject (reserve for UCS)
+                  [g-err (prologos-error loc (format "defr: ~a" g-err))]
                   ;; sexp-glued single: name:Type
-                  [(and all-nonempty? (= (length segs) 2))
-                   (loop (cdr ps)
-                         (cons (list (string->symbol (car segs)) mode (string->symbol (cadr segs))) acc))]
+                  [(and g-ty (not (names-a-type? g-ty))) (not-a-type-error g-name g-ty)]
+                  [g-ty (loop (cdr ps) (cons (list g-name mode g-ty) acc))]
                   ;; base has no simple type (plain name, or a `::` module path):
                   ;; WS may carry the type as the NEXT element (a colon-symbol).
                   [else
@@ -6313,24 +6662,38 @@
                                     (let ([n (car (cdr ps))]) (if (syntax? n) (syntax-e n) n))))
                    (cond
                      [(colon-symbol? nxt)
-                      (define tn (substring (symbol->string nxt) 1))
                       (define after (cddr ps))
                       (define nxt2 (and (pair? after)
                                         (let ([n (car after)]) (if (syntax? n) (syntax-e n) n))))
                       (cond
-                        [(= (string-length tn) 0)
+                        [(eq? nxt ':)
                          ;; A bare `:` (e.g. spaced `[?x : Int]`). C.b.1 is fused-only.
                          (prologos-error loc (format "defr: use a fused type annotation `~a:Type` (a spaced/bare `:` in the param list is not supported)" base))]
                         [(colon-symbol? nxt2)
                          (prologos-error loc (format "defr: chained type annotation on ~a not supported (reserve for UCS)" base))]
+                        [(not (fused-type-annot? nxt))
+                         (not-a-type-error base (substring (symbol->string nxt) 1))]
                         [else
-                         (loop after (cons (list base mode (string->symbol tn)) acc))])]
+                         (loop after (cons (list base mode (fused-annot->type-symbol nxt)) acc))])]
                      [else
                       (loop (cdr ps) (cons (list base mode #f) acc))])])])]
             ;; Literal patterns: numbers, strings, booleans
             [(exact-integer? sym) (loop (cdr ps) (cons (cons '#:literal sym) acc))]
             [(string? sym) (loop (cdr ps) (cons (cons '#:literal sym) acc))]
             [(boolean? sym) (loop (cdr ps) (cons (cons '#:literal sym) acc))]
+            ;; CIU T6 D4.P4c-2 condition (c) — `parse-rel-params` is the site a
+            ;; census keyed on `fused-type-annot?` structurally cannot see: it
+            ;; consumes `colon-symbol?` DIRECTLY and never calls the narrower
+            ;; predicate. Its `[else]` below is already LOUD (a prologos-error
+            ;; value, file continues), so this arm is a MESSAGE upgrade rather
+            ;; than a silence fix — but "expected symbol or literal in params, got
+            ;; ($bcast-step :Int)" dumps an internal sentinel at a user who wrote
+            ;; a legal fused annotation, and names neither the cause nor a remedy.
+            [(bcast-step-datum? sym)
+             (retired-selection-error
+              (quote bcast-step-binder)
+              (first-bcast-step-payload (list p))
+              loc)]
             [else
              (prologos-error loc (format "defr: expected symbol or literal in params, got ~a" sym))])]))]))
 

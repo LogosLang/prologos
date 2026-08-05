@@ -11,6 +11,8 @@
 ;;;
 
 (require rackunit
+         ;; G2/B: `yields-prologos-error?` — preparse failures are VALUES now
+         "test-support.rkt"
          racket/string
          racket/list
          racket/hash
@@ -272,7 +274,6 @@
                    [current-trait-laws (hasheq)])
       (process-string
        "(functor Bad ($brace-params A : (Type 0)) ($brace-params :doc \"oops\"))")))))
-
 ;; ========================================
 ;; 5. ?? Typed holes — reader and parser
 ;; ========================================

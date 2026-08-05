@@ -387,7 +387,7 @@
     [(expr-map-map-vals f map) (expr-map-map-vals (zonk f) (zonk map))]
 
     ;; Path values (ground — no metas)
-    [(expr-path _) e]
+    [(expr-path _ _) e]
     [(expr-Path) e]
     [(expr-get-in target paths)
      (expr-get-in (zonk target) (zonk paths))]
@@ -881,7 +881,7 @@
     [(expr-map-map-vals f map) (expr-map-map-vals (zonk-at-depth depth f) (zonk-at-depth depth map))]
 
     ;; Path values (ground)
-    [(expr-path _) e]
+    [(expr-path _ _) e]
     [(expr-Path) e]
     [(expr-get-in target paths)
      (expr-get-in (zonk-at-depth depth target) (zonk-at-depth depth paths))]
@@ -1375,7 +1375,7 @@
     [(expr-map-map-vals f map) (expr-map-map-vals (default-metas f) (default-metas map))]
 
     ;; Path values (ground)
-    [(expr-path _) e]
+    [(expr-path _ _) e]
     [(expr-Path) e]
     [(expr-get-in target paths)
      (expr-get-in (default-metas target) (default-metas paths))]
