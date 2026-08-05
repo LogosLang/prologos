@@ -5021,10 +5021,46 @@ accident**, and the day that is corrected every latent tree surf goes live at
 once. Filed OUT OF BAND with the blast radius deliberately unmeasured:
 `docs/tracking/2026-08-02_LOC_TO_LINE_MERGE_DEFECT.md` (`388af899`).
 
-**Recorded assumption of the producer bridge, not an inheritance**: if that fix
-lands, the broadcast needs its own tree-spine protection in the same change —
-a tag + error arm matching the siblings, or a `merge-form` exception arm on the
-POL.9b template (`driver.rkt:2487-2497`).
+~~**Recorded assumption of the producer bridge**: if that fix lands, the broadcast
+needs its own tree-spine protection in the same change.~~
+
+✅ **DISCHARGED 2026-08-02, and in the favourable direction — the assumption is
+moot because THE TREE LEG IS GONE.** The out-of-band investigation this note
+spawned (`388af899` → the arc merged at `1d23600e`) did not fix the key: it
+measured that fixing the key makes things **worse**, and removed the leg instead
+(`2d7813ef`). `merge-form`, `tree-by-line` and `loc->line` no longer exist in
+`driver.rkt`. Verified at `0ca22343`: the only remaining mention is a historical
+comment recording the removal.
+
+**Three findings from that arc that this design should absorb**, because two of
+them correct things recorded above:
+
+1. **There was a THIRD defect, and it inverts the fix I proposed.** The two spines
+   number lines on **different bases** — tree 0-based, preparse 1-based. So the
+   arm-swap "minimal fix" in the spawned note's §3 would have paired form N's
+   preparse surf with form N+1's tree surf: **176 of 242 hits mispaired (73%)**,
+   and end-to-end `def a := 1` became `ERROR: Unbound variable`. My suggested fix
+   would have shipped a silent wrong-answer bug. It was in nobody's enumeration —
+   not the note's, not the P4c-4 mini-audit's, not five grounding facets'.
+2. **The tree spine had won ZERO forms, ever.** `[else tree-surf]` never once
+   fired in the life of that code. And correcting the key made the corpus
+   REGRESS — errors 359 → 724 across 35 files with **not one improvement**, two
+   clean files lost to whole-file aborts, 32 test files failing, from **14
+   distinct defects across 4 layers**.
+3. **The census settled what the merge even WAS**: the tree spine's datum path
+   feeds `parse-datum`, *the same parser preparse uses*. It never adjudicated
+   between two parsers — it compared one parser against itself across two
+   READERS. So there was never a second opinion for the broadcast to lose to.
+
+**Consequence for P4c-4b**: the producer bridge needs no tree-spine protection,
+no tag, and no `merge-form` exception arm. That whole branch of the slice is
+deleted rather than deferred.
+
+⚠ **Carry the METHOD lesson, not just the outcome**: an error-COUNT gate could
+not see the two whole-file aborts, and a full-output census found six value-level
+flips with the count unchanged (`"localhost" : String` → `<error> : String`).
+**Gate corpus work on FULL OUTPUT, never on error counts** — which is what
+`pipeline.md` already says about whole-file aborts, now with a second instance.
 
 **Mantra check, honestly**: this is reader/parser-layer work and the parse layer
 installs **ZERO** propagators. "On-network" is not satisfied and cannot be by this
