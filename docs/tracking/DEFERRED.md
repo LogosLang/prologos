@@ -3745,49 +3745,150 @@ reproduce**; recorded so the next session does not inherit an unverified claim.
 
 **Not blocking G2**: nothing here is caused by, or gates, the P4c-4c/G2 work.
 
-### 51. 🔀 SPUN OUT (chip `task_4c00d3f0`, 2026-08-05, with 52) — a parenless `&>` clause containing a broadcast LOSES THE RELATION (G2-surfaced)
+### 51. ✅ FIXED 2026-08-05 (commit `e0f03601`; message only, owner-ruled option (a)) — the parenless `&>` guard blamed dot-access for a condition that is not dot-access
 
-Measured A/B (pre-G2 vs G2), same input:
-
-```
-defr s [?a]
-  &> base users:name
-```
-| | pre-G2 | G2 |
-|---|---|---|
-| `defr` | `s : _ defined.` | `ERROR: rule clause: parenless goals cannot be used in a defr body that also contains a form rewritten before parsing (e.g. dot-access)` |
-| query | `@[]`, 0 errors | `ERROR: solve: Unknown relation: s` |
-
-The relation goes **defined → undefined**, and the diagnostic blames dot-access,
-which is not what happened — the rewritten form is a `$bcast-step`, not a
-`$dot-access`. Parenless `&>` is the POL.9 HEADLINE spelling (Rel T1), so this is
-the interaction of two flagship surfaces.
-
-**Why deferring is safe**: two LOUD per-command errors and the file continues —
-no silent wrong answer, and the relation's absence is reported at the query. It
-is a diagnostic-quality + feature-interaction defect, not a soundness one.
-**Why it should not sit long**: it is exactly the "two spellings of one form
-disagreeing" class this track keeps paying for, and the message actively
-misdirects. Fix is likely to widen the clause-body guard to name the real
-rewritten head rather than assuming dot-access.
-
-### 52. 🔀 SPUN OUT (chip `task_4c00d3f0`, 2026-08-05, with 51) — a goal-position arity error becomes a SILENT EMPTY BAG (G2-surfaced)
+**⚠ The filed diagnosis was WRONG in its load-bearing half, corrected by
+re-measurement.** As filed this read as a G2 regression ("the relation goes
+defined → undefined"). It is not. The **relation loss is PRE-EXISTING**: the
+same clause shape spelled with dot-access instead of broadcast behaves
+**identically** at pre-G2 (`0fd2098c`) and at `b429d038` —
 
 ```
-defr p2 [?a ?b]
-(p2 1:Int 2:Int)
+defr dotbare [?a]
+  &> base users.name 2
+(dotbare q)
 ```
-| | pre-G2 | G2 |
-|---|---|---|
-| result | `ERROR: solve: Unknown procedure: p2/4 — however, there are definitions for: p2/2` | `@[] : _`, **zero errors** |
+→ guard fires, relation never registers, `solve: Unknown relation: dotbare`,
+file continues — **byte-identical on both legs** (fresh-file A/B, 2026-08-05).
+G2 only added *broadcast* to a trigger set that already contained dot-access and
+postfix-index (`xs[0]`); all three verified at `b429d038`.
 
-Control `(p2 1 2 3)` stays loud on BOTH legs, so this is specific to the
-sentinel-bearing spelling. A loud, actionable, SWI-style diagnostic became
-silence.
+**Root cause (verified by instrumenting `parse-clause-content`)**: `macros.rkt`
+strips every top-level form to a bare datum before preparse
+(`(define datum (syntax->datum stx))`, :3168) and the `defr` arm rebuilds with a
+**3-arg** `datum->syntax` (:~3391), so every inner element inherits the `defr`'s
+own line/column. Measured: a healthy clause has sentinel col 2 and element cols
+`(5,5) (5,10) (5,13)`; a rewritten one has **every element at `(6,0)`**, and
+`parse-clause-content`'s `(zero? sent-col)` test routes to `parse-degraded`,
+which only accepts fully-parenthesized goals.
 
-**Why deferring is safe**: no wrong VALUE is produced — `(p2 1 2)` yields
-`@[{}]` on both legs — so this is a lost diagnostic on malformed input rather
-than a fabricated answer. **⚠ But it is the silent half of the class this track
-exists to eliminate**, and an empty bag is indistinguishable from "no solutions",
-which is a legitimate answer. That makes it strictly worse than a loud error and
-it should be fixed before the relational surface is exercised much further.
+This is a **NAMED, EYES-OPEN POL.8 LIMIT**, not an accident — the Rel T1 design
+doc says so verbatim ("degraded srclocs … are DETECTED via the impossible
+sentinel-column-0 marker: all-paren parses as before, parenless errors with
+guidance") and it is test-pinned at `test-rel-t1-pol.rkt` ("POL.8: degraded
+srclocs (preparse rewrite) + parenless goals → guidance").
+
+**Owner ruling 2026-08-05: option (a)** — keep the limit, fix only the message.
+The message now names the CONDITION (a preparse rewrite anywhere in the defr)
+and all three families, instead of "(e.g. dot-access)". Note "teach the guard
+about `$bcast-step`" would have been wrong by construction: `pol8-goal-pair?`
+requires a *pair*, so `&> base users:name` fails on the bare head `base` before
+any sentinel is consulted.
+
+**Still open, deliberately** (pinned as status quo so a change is conscious):
+- **(b)** the refusal takes the relation's registration with it. Prior art for a
+  better shape already exists — the floundering gate produces *"Unknown relation:
+  unsafe-r — its defr failed to register (see the earlier error)"*. Registering
+  the relation with only its GOOD clauses is refused: that would be a silent
+  wrong answer.
+- **(c)** lifting the limit (srcloc-preserving preparse). Expensive: because the
+  strip is at :3168, srclocs cannot be preserved *through* expansion — it needs
+  either a syntax-aware `preparse-expand-form` or a post-rebuild re-attachment
+  walk. ⚠ Blast radius is **narrower than feared**: probed 2026-08-05, the `let`
+  aligned-block classifier and `||` multi-row fact splitting both survive a
+  rewrite intact (`b` = 9 with and without dot-access in the form), because the
+  reader's indent grouping already built their structure. `parse-clause-content`
+  is the only consumer that re-derives layout AFTER preparse.
+
+### 52. ✅ FIXED 2026-08-05 (commit `e0f03601`; owner-ruled) — a type error in relational GOAL-ARGUMENT position was silently swallowed
+
+**⚠ The filed A/B was a MIS-DIAGNOSIS.** As filed: "a goal-position arity error
+becomes a silent empty bag". Re-measured against a pre-G2 baseline worktree:
+
+- Pre-G2, `a:b` was **spliced into two tokens**, so a 2-argument call was
+  reported as `p2/4`. That "loud arity error" was **itself a symptom of the
+  splicing bug** — the diagnostic was a lie. G2 made arity counting CORRECT
+  (`(p2 1:Int)` → `p2/1`; `(p2 1:Int 2:Int 3:Int)` → `p2/3`). Nothing to restore.
+- The silent empty bag is **not new and unrelated to broadcast**: pre-G2,
+  `(p2 1:Int)` already returned a silent `@[]`, and `[+ "str" 1]` /
+  `[undefined-fn 1]` in goal-arg position are silent on **both** legs.
+
+**The actual defect** (found by instrumenting `infer`): the "Goals → Goal" and
+solve/explain arms of `infer` (typing-core.rkt) called `infer` on goal arguments
+purely for effect and returned a fixed type, **discarding an `expr-error`
+result**. `infer` signals type failure by RETURNING `(expr-error)`, not by
+raising. So an ill-typed argument became an opaque term that unified with
+nothing → empty bag, zero errors. The same expression is LOUD in `def` position
+and as a bare expression command:
+
+```
+(q1 [+ "str" 1])     → @[]  zero errors        def z := [+ "str" 1] → ERROR
+(q1 1:Int)           → @[]  zero errors        1:Int (bare)         → ERROR
+(is x [+ "str" 1])   → @[{:x unknown}]         ← a bogus BINDING, worse than @[]
+```
+
+**The fix** propagates the error, gated on **logic-var freedom**. That gate is
+load-bearing and was learned the hard way: an ungated first version broke the
+pinned POL.9 test "a preparse rewrite inside a paren goal keeps goal-ness",
+because under the relational fallback a bare name is a LOGIC VARIABLE — so in
+`(fruit-color f mm.c)`, `mm` is a logic var and `mm.c` is genuinely
+un-inferrable **without being a user error** (the documented "computed goal args
+don't evaluate" semantics). Rule applied: **propagate only from EVALUATED,
+logic-var-free positions**.
+- `expr-goal-app` args — evaluated (`(q1 [+ 0 1])` → `@[{}]`) ⇒ propagate
+- `expr-is-goal` RHS — evaluated (`(is x [+ 1 1])` → `{:x 2}`) ⇒ propagate
+- `expr-unify-goal` — **NOT** tightened: `=` does not evaluate at all
+  (`(= x [+ 1 1])` and `(= x [+ "str" 1])` both render `{:x unknown}`), so its
+  operands are TERMS and rejecting one would be inconsistent.
+
+**⚠ THE GATE HAD TO BE WIDENED TWICE — an `expr-error` out of the IMPERATIVE
+`infer` has THREE meanings, not two.** The adversarial verify found three live
+over-rejections in the first version of this fix, all of which the full suite
+(9863 tests) passed straight through:
+
+| input | before the fix | first fix | why |
+|---|---|---|---|
+| `(q1 [pair 1 2])` | `@[]` | **ERROR** | `infer` has NO `expr-pair` arm — it types pairs only in `check`, against an expected Sigma. The ON-NETWORK inferencer has a rule, and the command boundary tries on-network FIRST, so `def z := [pair 1 2]` succeeds (`[Sigma Int Int]`) while goal args — which reach the imperative inferencer only — did not. |
+| `(is g2 [int* _ 2])` | binds a closure | **ERROR** | a partial-application section types only in CHECK position, and an `is` RHS is inferred with no expected type. It also escapes the logic-var gate BY CONSTRUCTION: the elaborator turns the relational fallback OFF for an `is` RHS, so `_` stays an `expr-hole` rather than becoming a logic var. This is the idiom `prologos-syntax.md` explicitly RECOMMENDS. |
+| `solve (guard [lt 0 1])` | stuck term | **ERROR** | the 1-arg form elaborates to `(expr-guard ec #f)`; the pre-fix arm called `(infer ctx #f)` and DISCARDED it. Every other walker over this struct carries `(and goal …)`; this arm now does too. |
+
+So the excuse predicate is `goal-arg-excused?`, not "contains a logic var": an
+argument is excused if it contains a logic variable **or** a node the imperative
+`infer` cannot synthesize (`infer-unsynthesizable?` — `expr-pair`, `expr-hole`,
+`expr-reduce`, `expr-refl`). That set is **DERIVED, not guessed**: it is exactly
+`{nodes with register-typing-rule!} \ {nodes with an imperative infer arm}`
+minus `expr-error`, computed mechanically — and `test-goal-arg-typing.rkt`
+**recomputes it from source and fails on drift**, so a future
+`register-typing-rule!` cannot silently widen the class and reintroduce the
+`expr-pair` shape under another node name.
+
+`goal-arg-excused?` is a **generic reflective walk**, not a hand-armed one
+(`.claude/rules/pipeline.md` § Exhaustive Walkers). reduction.rkt's
+`collect-deep-logic-vars` was unusable for this: it arms only 4 node kinds behind
+an `[else '()]` catch-all and has **no `expr-select` arm**, so it reports "no
+logic vars" for `mm.c` — the exact form the predicate exists to recognise.
+⚠ Its own honest limit: the walk covers struct / pair / vector / hash / set / box,
+so it cannot miss a NODE kind, but a sub-expression reachable only through some
+other container type would be missed. None exists today.
+
+**Named residuals** (real, out of the ruled scope):
+- An argument containing a logic var AND a genuine type error stays silent
+  (`(q1 [+ "str" ?x])`) — the gate is deliberately conservative, and since a goal
+  argument that mentions a variable is the NORMAL relational shape, the fix is
+  live mainly on fully-ground arguments. Worse sub-case found by the verify:
+  `(not (q1 [+ "str" ?y]))` returns `@[{}]` — the ill-typed inner goal silently
+  fails to match, so the NEGATION succeeds. A wrong positive, not just a lost
+  diagnostic. Pre-existing (all of these were silent before), but the right
+  long-term fix is to test logic-var-freedom at the FAILING SUBTERM rather than
+  at the argument root.
+- `expr-clause` / `expr-fact-block` / `expr-fact-row` still discard sub-errors,
+  so an ill-typed goal in a `defr` clause BODY remains silent at registration
+  time. Tightening those changes `defr` REGISTRATION behaviour, which is 51(b)
+  territory and was not ruled.
+- `(= x [+ 1 1])` rendering the binding as `unknown` is its own pre-existing
+  display defect; pinned as status quo.
+- `expr-guard`'s CONDITION is checked with `check`, whose boolean result is
+  discarded, so an ill-typed guard condition behaves exactly like `guard true`
+  (`(guard [+ "str" 1])` succeeds). Pre-existing; unreachable in practice today
+  because `expr-clause` swallows it first.
+
