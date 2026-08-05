@@ -32,7 +32,7 @@ rulings, censuses and test delta live in its own section.
 | **P3c** | **Keyless + L4 + honest nesting** — the nat-row mint at EVERY n (incl. 1 and homogeneous n) · ordinal branches `{N M}` · the L4 mixing error · `⟨String⟩` 1-tuple pins · the G11 one-space pair pinned side by side | ✅ | [§5.P3c](#p3c) · **`1b021d57`** — suite **9497/475/0**, acceptance **52/52**, battery 206; P3 (BLOCKS) COMPLETE; the verify's FIRST no-BLOCKING slice in eight (2 SIGNIFICANT fixed pre-commit: the @ord walk-to-leaf twin-drift, the decimal-fusion leak); G11 landed AS AMENDED; in-block `v[0]`≡`.0` ratified-by-pin |
 | **P4** | **Broadcast ω** — ⭐ **P4a ✅ · P4b ✅ COMPLETE** (b-i carrier + b-ii `$dot-access` migration; `x.a` now mints the unified selector carrier) · P4c–P4e ⬜ — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | [§5.P4](#p4) · co-design: audit `wf_8458c23b` + options panel · **RULED 2026-07-31**: [Q_U5](#q-u5) · [Q_U6](#q-u6) · [Q_U7](#q-u7) · [Q_U8](#q-u8) · [Q_U9](#q-u9) (the PAUSE cleared) · partition LOCKED P4a–P4e |
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
-| **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [[§5.P4c](#p4c)](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([the inverted default](#p4c-2-inverted)) · **P4c-3 ✅ `d477772c`** ([the enable-set moves to P4c-4](#p4c-3)) · **P4c-4a ✅ `f31237fd`** ([the test seam + per-context dispatch](#p4c-4a)) · **P4c-4b ✅ `6b22515d`** ([a broadcast goes END TO END; the not-yet stops being a whole-file abort](#p4c-4b)) · P4c-4c/5 ⬜ |
+| **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [[§5.P4c](#p4c)](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([the inverted default](#p4c-2-inverted)) · **P4c-3 ✅ `d477772c`** ([the enable-set moves to P4c-4](#p4c-3)) · **P4c-4a ✅ `f31237fd`** ([the test seam + per-context dispatch](#p4c-4a)) · **P4c-4b ✅ `6b22515d`** ([a broadcast goes END TO END; the not-yet stops being a whole-file abort](#p4c-4b)) · **P4c-4c ⬜ RE-SCOPED** to PVec value semantics ([why + the full sequencing](#p4c-sequencing)) · ⚠ **[Q_U18](#q-u18) GATES every corpus uncomment** · P4c-5 ⬜ |
 | **PF** | **Path first-classness** (substrate; **P5's prerequisite**) — ⭐ **Q_U17 RULED B2**: a Path segment is a first-class `Step` value. Reify the closed six-kind union as a `data Step` ADT on the `Datum` pattern; `Path` stays GROUND; `segments : Path -> [List Step]`. Repairs the dead `path-segments` in the SAME change | ⬜ | [§5.PF](#pf) · [Q_U17](#q-u17) · panel `wf_68178bd3-eea` |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery · ⚠ B3 needs [PF](#pf) |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | [§5.PX](#px) · position flexible |
@@ -1244,7 +1244,43 @@ items of the hold-point, ruled before P4a opened:
   repairs `path-segments` (the same change, per U17b) — **now slice `PF`**.
   Grounding: options panel `wf_68178bd3-eea` (7 agents / 1.24M tokens), every
   load-bearing claim R-lens-verified on the main thread.
-  **Next free Q-label after this: U18.**
+  **Next free Q-label after this: U20.**
+
+- <a id="q-u18"></a>**⬜ Q_U18 — THE UNKNOWN-HEAD POLICY *AND* THE FIRST
+  PRODUCTION GRANT ARE ONE DECISION. OPEN; GATES EVERY CORPUS UNCOMMENT.**
+  Opened 2026-08-02 at the P4c-4c mini-audit. They look like two questions and
+  are one: the policy is *why* there is no production grant, so until it is
+  ruled the entire broadcast surface is reachable only from tests. **That is the
+  "Validated ≠ Deployed" shape and it should be named as such**, not left in
+  DEFERRED.
+  **THE MEASUREMENT THAT FORCES IT** (re-verified on the main thread at
+  `17086a09`): a **bare top-level ω is STRIPPED under EVERY grant** —
+  `users:name` → `((users :name))` even when its own head `users` is granted,
+  even under a broad grant — because the head is unknown to both the cond and
+  the scanner, so `[else]` blanket-strips. **Every ω line in the acceptance file
+  is a bare top-level command**, so no acceptance marker can be exercised at
+  all. Compounding: `broadcast-enabled-contexts` has **ZERO production setters**,
+  so `process-file` runs at default `'()` regardless.
+  **WHY IT IS HARD, and it is not new**: P4c-3 measured that the head-keyed walk
+  **cannot decide it in EITHER direction** — strip kills application-position
+  broadcast, preserve regresses live binder positions under unknown heads
+  (`[add ?x:Nat ?y:Nat] = 5N`), and both spellings are `[SYMBOL item item]`,
+  structurally indistinguishable at the reader. So Q_U18 is not "pick an arm";
+  it is "find the discriminator, or rule that broadcast ships only where a
+  recognized head scopes it." DEFERRED 32's open half is this question.
+  **DUE**: before ANY corpus uncomment. Nothing in P4c-4c or P4d's carrier work
+  depends on it; every acceptance-marker deliverable does.
+
+- <a id="q-u19"></a>**⬜ Q_U19 — WHAT DOES `^` MEAN ON A BROADCAST? OPEN.**
+  Opened 2026-08-02 at the P4c-4c mini-audit. Under a grant the parser ALREADY
+  builds `(@bcast (@key name (rename alias)))` — it is constructible today — and
+  it lands on the pre-existing `^`-in-path-access refusal **only because
+  `select-step-cont` was made ω-transparent at P4c-3a**. Whether the intended
+  behaviour is *refused, guided* or *re-keys the broadcast output* is stated
+  nowhere. ⚠ **The pin at `tests/test-path-selection.rkt` ("P4c-4b: the payload's
+  THREE sub-cases") therefore freezes an ACCIDENT, not a ruling** — it asserts
+  today's routing, which is the honest thing to pin, but it must not be read as
+  having settled the question. **DUE**: at P4d, which re-fates the corpus lines.
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
@@ -5296,6 +5332,90 @@ Status: ✅ **P4c-4a COMPLETE**. Next: **P4c-4b** — `access-sentinel?` members
 the fold arm (with its FIXPOINT obligation: the emitted datum must not be
 sentinel-headed) + the producer bridge + the `segment-select-items` arm, carrying
 the [dual-spine merge assumption](#p4c-4-merge).
+
+<a id="p4c-4c"></a>
+
+##### §5.P4c-4c — the ω VALUE semantics  (RE-SCOPED 2026-08-02; owner-assented)
+
+**⭐ THE SLICE AS ORIGINALLY SCOPED CANNOT LAND ITS OWN DELIVERABLES.** Three
+independent READER facts each suffice to block it, all re-verified on the main
+thread at `17086a09` (the critic found them; I re-ran its probes rather than
+accept them):
+
+1. **A bare top-level ω is STRIPPED under EVERY grant.** `users:name` →
+   `((users :name))` even granting its own head, even under a broad grant — the
+   unknown-head policy (DEFERRED 32's open half). **Every ω line in the
+   acceptance file is a bare top-level command.**
+2. **`:{…}` DOES NOT MINT** — `users:{t r}` reads as `users : ($select-brace t r)`,
+   because `bcast-step-trigger?` gates on token TYPE and a lone `:` before an
+   opener is neither `keyword` nor `colon-annotation`. That kills `quests:{t r}`
+   **and both members of the §3.2.1 extent pair** — all named in the old scope.
+3. **`broadcast-enabled-contexts` has ZERO production setters**, so `process-file`
+   runs at default `'()` regardless of anything this slice does.
+
+Of the four originally-named deliverables, only the L1 fusion pin has a mintable
+line — and `users:0:userName` bare is stripped too, so even that needs `def`
+position plus a grant reaching `process-file`.
+
+**⚠ TWO CARRIER FACTS I ASSERTED WERE WRONG**, and each would have produced bad
+code: `expr-hset` has **no arm in any of the four dispatchers** — Set is not a
+selection carrier at all today, true of the struct and false of the machinery
+(I would have written an arm that can never fire); and `expr-Record` is
+**TYPE-only** — a het tuple's runtime value is an `expr-rrb` (I would have
+mis-keyed the value arm).
+
+**RE-SCOPED DELIVERABLE — PVec value semantics only**, which is what the scope
+line always said and what the not-yet message promises a user:
+- the THREE typing arms (`walk-to-leaf`, `select-branch-entries`,
+  `select-below-field`) — return a TYPE into the `(values x fail)` slot;
+- the THREE reduction arms (`walk-to-leaf`, `branch-entries`, `below-value`) —
+  return a VALUE; these have **no failure slot**, escaping via `let/ec return`;
+- ⚠ **a FOURTH site the partition did not name**: an `rrb-of`-style container
+  guard. `champ-of` and `index-into` are the precedent; there is **no `rrb`
+  twin**, and because reduction carries no failure slot a mid-descent
+  non-container has no other way to report;
+- the L1 fusion + §3.2.1 extent LAWS pinned in the battery in `def` position
+  (which mints); their CORPUS lines wait on Q_U18 + the `:{` mint.
+
+**Semantics, from the code**: `xs : [PVec {:name String}]` ⇒ `xs:name` is value
+`@["…" …]` (`expr-rrb`) at type `[PVec String]`. Mirror `pvec-map : (A → B) →
+PVec A → PVec B` and the `expr-pvec-map` whnf arm. The corpus pins the shape
+three lines above the commented target with the explicit `map` spelling.
+
+Status: ⬜ P4c-4c — re-scoped, not started.
+
+<a id="p4c-sequencing"></a>
+
+##### §5.P4c — THE SEQUENCING after the P4c-4c re-scope  (owner-assented 2026-08-02)
+
+**Nothing is dropped. The order changes**, because three reader-layer facts gate
+the corpus half. Most of the deferred work was ALREADY scheduled by this
+document — reading it rather than re-homing by instinct is what surfaced that,
+and it corrected a recommendation of mine (I proposed the Q_U9 List refusal for
+P4c-4c; Q_U9's own ruling says **"Implementation: P4d"**, twice).
+
+| Deferred piece | Home | Note |
+|---|---|---|
+| map-generic over Map/keyword-row (`regions:host`) | **P4d** | already scoped |
+| het-tuple per-position EXACT (`events:t`) | **P4d** | the 2b heterogeneity split |
+| PVec-of-union + `row-meet` | **P4d** | already scoped |
+| **Q_U9 List refusal + guided error** | **P4d** | ⚠ NOT P4c-4c — Q_U9 says so itself |
+| `quests:t` / `quests:{t r}` corpus lines | **P4d** | "re-fated HERE" |
+| `*` flatten (`:diags*`) | **P4e** | P4c-4b's guided refusal is the correct interim |
+| `.*` row-splat · disclose `<`/`:<` | **P4e** | already scoped |
+| **the `:{…}` reader mint** | **P4d PREREQUISITE** | unhomed until now; P4d owns the line it unblocks |
+| **unknown-head policy + first production grant** | **[Q_U18](#q-u18)** | ONE decision; gates every corpus uncomment |
+| **`^`-on-broadcast** | **[Q_U19](#q-u19)** | due at P4d |
+
+**THE CRITICAL PATH**: P4c-4c (PVec semantics, gateable today by `def`-position
+pins) → **Q_U18 must be RULED** → the `:{` mint → P4d (carriers + List refusal +
+the corpus re-fate, with Q_U19 ruled) → P4e → P4c-5 → PF → P5.
+
+⚠ **Q_U18 IS THE LOAD-BEARING ONE.** Until it is ruled the whole broadcast
+surface is reachable **only from tests** — which is precisely the
+"Validated ≠ Deployed" gate this project's own rules make blocking. It is not
+"pick an arm": P4c-3 MEASURED that the head-keyed walk cannot decide it in
+either direction.
 
 <a id="pf"></a>
 

@@ -2918,6 +2918,30 @@ unknown-tag fallback, detonating arbitrarily far away — becomes live.
 **Re-probe at the grant; do not inherit this ✅.** Note the item's own text
 already records that `$bcast-step` has no `pnet-serialize.rkt` registration.
 
+### 37b. ✅ DISCHARGED at P4c-4b (`6b22515d`) — `$bcast-step` joined `access-sentinel?`
+
+Item 37's gap is closed: the predicate, the membership, and the fold arm all
+landed, and the fold's emitted head is `$select-path` so the fixpoint obligation
+holds by construction.
+
+### 42. ⬜ The `:{…}` reader mint — a P4d PREREQUISITE, unhomed until now
+
+`users:{t r}` does NOT mint: it reads as `users : ($select-brace t r)`, because
+`bcast-step-trigger?` gates on token TYPE and a lone `:` before an opener is
+neither `keyword` nor `colon-annotation`. So **Q_U7's own second canonical
+example** (`users:{a b}` → `[(@bcast (@sub …))]`, which `syntax.rkt` states as
+producible) is unreachable.
+
+Blocks: `quests:{t r}` **and both members of the §3.2.1 extent pair**, all of
+which D4 names in P4c-4's scope. Also keeps DEFERRED 39's two ω-blind parser
+sites and DEFERRED 40 latent, since both need a BLOCK-position broadcast.
+
+⚠ Touches `bcast-step-trigger?`, the ONE predicate both groupers share — the
+surface P4c-2 spent four commits and seven measured regressions getting right.
+Land it on its own, not mixed with value-semantics work, or the A/B is
+un-attributable. Scheduled as a **P4d prerequisite** (P4d owns the line it
+unblocks). See D4 `#p4c-sequencing`.
+
 ## CIU T6 D4.P4c-3 spin-offs (filed 2026-08-02 at the P4c-3 close)
 
 ### 37. `$bcast-step` is NOT in `access-sentinel?` — a P4c-2 deliverable that did not land under a ✅
