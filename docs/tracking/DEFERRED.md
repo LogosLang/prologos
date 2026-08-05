@@ -1773,47 +1773,76 @@ needs registration-EVENT instrumentation — the same reason instrumenting
   Exactly one cell declares one today (fuel), so the blast radius is that cell.
   Suite green with it (559 files / 10888).
 
-  **But that alone does NOT bound this hang, and I could not make it.** With the
-  carrier fix reverted and the fuel fix in, the repro still ran past **400 s**.
-  `TYPING-FUEL-LIMIT` is only 200 and `infer-on-network/full` resets fuel to it
-  per run, so ~200 fires should end the round loop — yet the profile puts 66% of
-  the time inside a single `run-to-quiescence-bsp`, with `process-command/demand`
-  carrying 16.5% SELF, which smells like a retry loop one level UP rather than an
-  unbounded round loop. Not diagnosed. **So the honest state is: a hang is still
-  the failure mode for the next non-convergence**, and the remaining question is
-  narrower and better posed than when the entry was filed — *what re-enters after
-  a fuel-exhausted typing sub-run?* Split out below.
+  **But that alone does NOT bound this hang** — with the carrier fix reverted and
+  the fuel fix in, the repro still ran past 400 s. Diagnosed since (split out
+  below): fuel is a FIRE-COUNT budget and the process is stuck inside ONE fire,
+  so no fuel setting can help. **A hang is still the failure mode for the next
+  non-convergence**, and the reason is now known rather than guessed.
 
   **Also stale**: the entry's "workaround in place: foray's union forms commented
   out". `lib/examples/foray.prologos` has no union forms left to restore, and its
   6 current errors are all `Unbound variable`, unrelated to this.
 
-## What re-enters after a fuel-exhausted typing sub-run? (split out 2026-08-05)
+## Fuel bounds FIRE COUNT, not work per fire — so it cannot make non-convergence a bounded diagnostic (2026-08-05)
 
-Spun out of the union-hang entry above, where it was blocking the "bounded
-diagnostic, not a hang" ask. Narrow and well-posed:
+Split out of the union-hang entry above, where it was the remaining half of
+"a fuel bound so non-convergence becomes a bounded diagnostic instead of a hang".
 
-`TYPING-FUEL-LIMIT` is 200; `infer-on-network/full` resets `fuel-cell-id` to it,
-runs BSP, then RESTORES the saved fuel and clears the fuel contradiction (by
-design — the comment at `typing-propagators.rkt:3060+` explains at length why
-leaking it is catastrophic: `unify` downgrades every later unification to `#f`
-while the network carries a contradiction). So a fuel-exhausted typing sub-run is
-deliberately made unobservable from outside.
+**I filed a hypothesis here and then refuted it with a ten-minute probe.** The
+filed guess was a retry loop at the CALLER: `process-command/demand` carried
+16.5% SELF time in the 25 s profile, and `infer-on-network/full` restores the
+saved fuel and clears the fuel contradiction on exit by design, so re-entering it
+forever looked like the obvious candidate.
 
-The open question is what happens next. With a genuinely non-convergent network,
-does something re-enter `infer-on-network/full` and re-run the same 200 fires
-forever? A 25 s profile of the (pre-fix) hang is consistent with that:
-`process-command/demand` self-time 16.5%, and the whole 66% BSP cost sitting
-under ONE `infer-on-network/err` frame.
+**It is not that.** Counting entries to `infer-on-network/full` under a synthetic
+non-convergence (revert `union-entries` to a bare `append` to manufacture one)
+gives exactly **2** — one per command, as designed. No retry. Breaking the hung
+process gives the whole answer in one stack:
 
-Cheap next step: count `infer-on-network/full` entries during a synthetic
-non-convergence (revert `union-entries` to a bare `append` to manufacture one).
-If the count grows without bound, the missing bound is at the CALLER, not in BSP,
-and the fix is a per-command retry cap — not more fuel.
+```
+attribute-map-merge-fn        typing-propagators.rkt:447
+tagged-cell-read              decision-cell.rkt:409
+                              typing-propagators.rkt:1731
+fire-and-collect-writes       propagator.rkt:2878
+sequential-fire-all           propagator.rkt:3176
+run-to-quiescence-bsp         propagator.rkt:3282
+infer-on-network/full         typing-propagators.rkt:3010   ← entered twice, total
+```
 
-- **Was**: "Not blocked — needs a dedicated debugging session on the typing propagator network." It got one.
+The process is stuck inside **one propagator fire**, in a single BSP run, merging
+one colossal entry list.
 
----
+**So the finding is architectural, and it generalises past this bug.**
+`TYPING-FUEL-LIMIT` is 200 and the BSP round loop decrements fuel by the number
+of propagators fired per round — fuel is a **fire-count budget**. It cannot bound
+the COST OF ONE FIRE. A single fire whose input has grown without bound runs for
+minutes, and no fuel setting changes that, because fuel is never consulted until
+the fire returns.
+
+That is why the entry's original ask cannot be met by "add a fuel bound to the
+typing network": the bound is already there, it is already scoped per typing run,
+and it is the wrong shape for this failure mode.
+
+**What WOULD bound it**, roughly in order of how well each fits the
+cell/propagator/scheduler orthogonality in `.claude/rules/on-network.md`:
+
+1. **Bound the carrier** — a cell-layer property, and the one that actually
+   fixed the union hang: if no merge can grow a value without bound, no fire can
+   take unbounded time on it. Idempotent merges are already required; nothing
+   checks them. A merge-law property test over the registered merge functions
+   (idempotent / commutative / associative on sampled values) would be a
+   general-purpose guard, and would have caught `tagged-cell-merge` in 2026-06-29
+   from the lattice contract alone. This is the recommended direction.
+2. **A per-fire budget** at the propagator layer (allocation or time), so a fire
+   that overruns is a bounded diagnostic. Costs a check per fire, and "time" is
+   scheduler-observable, which the orthogonality rule warns against.
+3. **Nothing at the scheduler layer** — a wall-clock kill belongs to the harness,
+   not the network, and would report the wrong thing anyway ("slow" rather than
+   "this merge is not a lattice").
+
+**Not blocked; not started.** (1) is a real, self-contained piece of work with a
+clear payoff beyond this entry: it turns "every cell merge must be a lattice"
+from a documented obligation into a checked one.
 
 ## 🔶 Propagator/Cell Allocation Efficiency Track — the top-3 ALL SHIPPED; one is validated-not-deployed (re-probed 2026-08-04)
 
