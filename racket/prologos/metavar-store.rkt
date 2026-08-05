@@ -1464,8 +1464,15 @@
             acc  ;; skip retracted entry
             (hash-set acc k v)))))
 
-;; Remove entries tagged with retracted assumptions from a hasheq-list cell value.
-;; For merge-hasheq-list-append cells (wakeups): filter list elements per key.
+;; Remove entries tagged with retracted assumptions from a hasheq-list cell value:
+;; filter list elements per key.
+;;
+;; NO CELL currently holds list values — the three wakeup cells that did were
+;; retired 2026-08-05 as write-only. This stays reachable anyway, because
+;; `process-retraction`'s dispatch is STRUCTURAL: it samples a cell's value and
+;; asks whether it is a list, so any future list-valued scoped cell inherits it
+;; without touching this code. Unit-tested directly in test-retraction-stratum.rkt,
+;; plus a dispatch case that writes list values into a surviving scoped cell.
 (define (retract-hasheq-list-entries h retracted-set)
   (if (or (not (hash? h)) (zero? (hash-count h)))
       h
@@ -1613,9 +1620,8 @@
 (define current-hasmethod-constraint-cell-id (make-parameter #f))
 (define current-capability-constraint-cell-id (make-parameter #f))
 
-;; Phase 1c: Cell IDs for wakeup registries.
-;; These map meta-id → (listof value), using merge-hasheq-list-append.
-;; Phase 7a: Hasmethod wakeup cell (was missing — the only wakeup map without a cell).
+;; RETIRED 2026-08-05: the three wakeup-registry cell-ids (wakeup-registry,
+;; trait-wakeup, hasmethod-wakeup). Write-only — see the retired write sites.
 
 ;; Track 2 Phase 6: HasMethod cell-map cell (mirrors trait-cell-map).
 ;; Maps hasmethod-meta-id → (listof cell-id), using merge-hasheq-replace.

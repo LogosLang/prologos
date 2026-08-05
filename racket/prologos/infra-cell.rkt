@@ -151,6 +151,19 @@
 ;; Monotonic hash with per-key list append: for wakeup registries.
 ;; Each key maps to a list; on collision, lists are appended.
 ;; Both arguments must be hasheq.
+;; ⚠ NOT IDEMPOTENT, and therefore not a lattice join: `(merge {a:(1)} {a:(1)})`
+;; is `{a:(1 1)}`. As of 2026-08-05 NO CELL USES IT — the three wakeup cells that
+;; did were retired as write-only. Kept as a generic helper rather than deleted,
+;; because the domain registration below is a real (if currently unused)
+;; classification and deleting an SRE domain is a wider change than removing a
+;; helper.
+;;
+;; Before adopting it for a cell, read `tests/test-merge-laws.rkt`, where it is
+;; pinned as a KNOWN violation. A cell whose merge grows its own value on every
+;; write cannot reach a fixpoint: its representation keeps changing while its
+;; meaning does not, so the scheduler re-fires its dependents forever. That is
+;; not hypothetical — it is what `tagged-cell-merge` did, and it hung the
+;; type-checker for fourteen months (DEFERRED § "Union-type checking hangs").
 (define (merge-hasheq-list-append old new)
   (cond
     [(eq? old 'infra-bot) new]
