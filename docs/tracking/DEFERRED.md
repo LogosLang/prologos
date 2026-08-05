@@ -3036,14 +3036,25 @@ returns a symbol for symbol/`@key`/`@bcast` and a non-symbol otherwise, so
 `(let ([n (select-step-name head-step)]) (if (symbol? n) n "field"))` is the whole
 arm.
 
-**Sites verified BLIND-BUT-SAFE by the sweep** (no action): `syntax.rkt:1204`
+~~**Sites verified BLIND-BUT-SAFE by the sweep** (no action): `syntax.rkt:1204`
 (`select-sub-step?` in the dissolve arm — measured equivalent on both paths,
 structurally so, since the `[(bcast)]` arm re-enters with the same `rest`);
 `typing-core.rkt:1016`/`:1057`/`:1132`/`:1142` and `reduction.rkt:1778` (all fall
 through to a `memq` guard → the `bcast` arm → `select-bcast-not-yet`, i.e. blind
-but LOUD).
+but LOUD).~~
+⚠ **THE EXONERATION ABOVE WENT STALE 3 DAYS AFTER IT WAS WRITTEN** (caught by the
+`:{`-phase mini-audit): `select-bcast-not-yet` was RETIRED at P4c-4c — zero
+definitions, zero callers — so "blind but LOUD" no longer describes those five
+sites. They now route to the LIVE value-semantics arms, which is *better* than
+loud for a symbol inner — and *worse* for a sub inner, whose raw `(@sub …)` list
+reaches carrier diagnostics as a "name". Re-derive the verdict at the `:{` phase;
+do not inherit it.
+⚠ **Coordinates drifted**: the two parser sites are now `parser.rkt:1178` (was
+:1170) and `parser.rkt:1281` (was :1212) — re-find by SHAPE, not number.
+⚠ The prescribed :1281 fix (reuse `select-step-name`) is SAFE only while
+`select-step-name` returns values — see the adjudication note at 40.
 
-### 40. `select-step-name` is still not TOTAL — `(@ord N)` and `(@sub …)` return LISTS
+### 40. ⚠ CROSS-REF ADDED 2026-08-05: **this is the SAME DEFECT as 46**, seen from the other side — and the two entries prescribed CONFLICTING fixes with no cross-reference (caught by the `:{`-phase mini-audit `wf_e15a1ef6-dfb`). 46 says *handle* the sub-inner ω; this entry says *make the walk total by raising* (`select-step-kind-unhandled` is a bare `error`). ⚠⚠ And 39's prescribed reuse of `select-step-name` at its parser site COMPOSES with this entry's raise into a WHOLE-FILE ABORT on the parse path. **Adjudication (follows from the owner's two 2026-08-05 rulings — site-local guards; no new raises on the parse path)**: the `:{` phase fixes 46 by discriminating on the INNER KIND in the two lifts, which removes the ω route to this defect entirely; the residual here (the PRE-EXISTING, latent, non-ω `[else s]` contract violation) stays deferred, and when it lands its fix must be a VALUE-channel one — NOT the raise this entry originally prescribed. `select-step-name` is still not TOTAL — `(@ord N)` and `(@sub …)` return LISTS
 
 Raised by the P4c-3a adversarial verify and **confirmed by measurement** at the
 post-fix tree:
@@ -3633,7 +3644,7 @@ is discarded under `'path`, and block-position ω is parse-refused), so this is 
 note, not a defect. Goes live with P4d or P5's factoring, and the failure mode is
 the silent mis-sort P4a exists to prevent.
 
-### 46. `(@bcast (@sub …))` is unhandled on both sides — currently UNREACHABLE
+### 46. ⚠ CROSS-REF + CORRECTION 2026-08-05 (mini-audit `wf_e15a1ef6-dfb`): **same defect as 40**; and "unhandled" is MISLOCATED — both twins HAVE bcast arms (P4c-4c); the defect is that the LIFTS apply the inner step as a ONE-STEP BRANCH, putting `@sub` at branch-head where `select-step-name` hands the raw list to the `(key caret sub)` arm as a "field name". Outcome is CARRIER-DEPENDENT (closed row: loud-but-LYING; dyn row / Map at 'path: SILENT ACCEPT), not the blanket "silent wrong answer" recorded. One fix point per side (`select-bcast-lift` / `bcast-apply`), discriminating on the inner kind. `(@bcast (@sub …))` is unhandled on both sides — currently UNREACHABLE
 
 `branch-entries` would treat the whole `@sub` list as a field name. Unreachable
 because the mint never fires: `xs:{name age}` → "Unbound variable `:`" (DEFERRED
@@ -3830,3 +3841,37 @@ has already caused four months of a wrong annotation blocking unrelated work.
 ⚠ Do not gate on `examples/2026-03-18-track7-acceptance.prologos`: >15 minutes
 to run and ZERO `;;N=>` markers (it predates the marker system, 2026-07-06).
 Use a small probe plus the marker-bearing acceptance files.
+
+
+### 53. ⬜ GUARD THE PARSE PATH — the class-level completion of option B, its OWN slice (owner ruling 2026-08-05)
+
+`ae26f540` guarded PREPARSE (the per-form fold in `preparse-expand-all`), so a
+raise there degrades to a per-command `($preparse-error msg)`. **The PARSE step is
+the other half of `pipeline.md`'s own class name** — "A Raise on the
+**Parse/Expansion** Path" — and it is still unguarded: `process-file-inner` runs
+preparse then parse as separate steps, and a raise in the second escapes whole.
+
+**HEAD-reachable reproducers, measured (3 whole-file aborts, output EMPTY — not
+even the `def before := 1` above them):**
+
+```
+m{[$bcast-step [a b]]}   →  symbol->string: contract violation, given '(a b)
+m{[$bcast-step 5]}       →  symbol->string: contract violation, given 5
+m{[$bcast-step]}         →  cadr: contract violation, given '($bcast-step)
+```
+
+The specific site (`parser.rkt` `$bcast-step` fold arm, unguarded
+`(symbol->string (cadr it))`) gets a SITE-LOCAL shape guard in the `:{` phase
+(owner: "site-local"), because the real `:{` mint makes the payload a LIST and
+walks straight into it. **This entry is the CLASS**: a per-command guard at the
+parse seam, so the SIXTH sentinel does not rediscover what the first five did.
+
+**Why its own slice** (owner ruling): the preparse guard alone converted 20
+assertions across 9 files, and parse is the busier path — expect more. It also
+re-raises the channel-merging property flagged at the P4c-4c close (a
+compiler-internal invariant violation degrading to a per-command error), so the
+slice should consider a DISTINGUISHED internal-error marker that keeps raising —
+re-splitting the two propositions P4c-4b separated.
+⚠ Method note for whoever lands it: the preparse conversion surfaced that
+**result-discarding test helpers** (`run-last`, lookup-returning fixtures) can
+silently swallow a refusal once it becomes a value. Sweep for those FIRST.
