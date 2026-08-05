@@ -1757,14 +1757,59 @@ needs registration-EVENT instrumentation — the same reason instrumenting
   `actual: 4 / expected: 2` and four repro cases report "did not finish within
   25 s — the network is not quiescing".
 
-  **Two things NOT fixed here, deliberately.** (1) The entry's other ask — a fuel
-  bound so non-convergence becomes a bounded diagnostic rather than a hang —
-  still stands. Fuel exists (`fuel-cell-id`, default 1 000 000, exhaustion writes
-  a contradiction structurally) but did not trip here, and understanding why is
-  separate work. **A hang is still the failure mode for the next
-  non-convergence.** (2) The entry's "workaround in place: foray's union forms
-  commented out" is stale — `lib/examples/foray.prologos` has no union forms left
-  to restore, and its 6 current errors are all `Unbound variable`, unrelated.
+  **The fuel half — one real defect found and fixed, but the ask is NOT
+  discharged.** The entry also wanted "a fuel bound on the typing/elaborator
+  network so non-convergence becomes a bounded diagnostic instead of a hang".
+  Chasing why the existing bound never tripped found this:
+
+  `fuel-cell-id` declares `#:on-write-check (lambda (old new net) (<= new 0))`,
+  which writes a contradiction structurally on exhaustion. But `on-write-check`
+  was consulted **only on `net-cell-write`'s hot fast path**, and that path is
+  gated on `(not (prop-net-warm-under-speculation? …))`. The slow path — the one
+  every speculative write takes — checks `contradiction-fns` and **never looks at
+  `on-write-check` at all**. So the fuel bound was disabled precisely while
+  speculation was active, which is the one situation it exists for. Fixed:
+  the slow path now ORs the cell's `on-write-check` into its contradiction test.
+  Exactly one cell declares one today (fuel), so the blast radius is that cell.
+  Suite green with it (559 files / 10888).
+
+  **But that alone does NOT bound this hang, and I could not make it.** With the
+  carrier fix reverted and the fuel fix in, the repro still ran past **400 s**.
+  `TYPING-FUEL-LIMIT` is only 200 and `infer-on-network/full` resets fuel to it
+  per run, so ~200 fires should end the round loop — yet the profile puts 66% of
+  the time inside a single `run-to-quiescence-bsp`, with `process-command/demand`
+  carrying 16.5% SELF, which smells like a retry loop one level UP rather than an
+  unbounded round loop. Not diagnosed. **So the honest state is: a hang is still
+  the failure mode for the next non-convergence**, and the remaining question is
+  narrower and better posed than when the entry was filed — *what re-enters after
+  a fuel-exhausted typing sub-run?* Split out below.
+
+  **Also stale**: the entry's "workaround in place: foray's union forms commented
+  out". `lib/examples/foray.prologos` has no union forms left to restore, and its
+  6 current errors are all `Unbound variable`, unrelated to this.
+
+## What re-enters after a fuel-exhausted typing sub-run? (split out 2026-08-05)
+
+Spun out of the union-hang entry above, where it was blocking the "bounded
+diagnostic, not a hang" ask. Narrow and well-posed:
+
+`TYPING-FUEL-LIMIT` is 200; `infer-on-network/full` resets `fuel-cell-id` to it,
+runs BSP, then RESTORES the saved fuel and clears the fuel contradiction (by
+design — the comment at `typing-propagators.rkt:3060+` explains at length why
+leaking it is catastrophic: `unify` downgrades every later unification to `#f`
+while the network carries a contradiction). So a fuel-exhausted typing sub-run is
+deliberately made unobservable from outside.
+
+The open question is what happens next. With a genuinely non-convergent network,
+does something re-enter `infer-on-network/full` and re-run the same 200 fires
+forever? A 25 s profile of the (pre-fix) hang is consistent with that:
+`process-command/demand` self-time 16.5%, and the whole 66% BSP cost sitting
+under ONE `infer-on-network/err` frame.
+
+Cheap next step: count `infer-on-network/full` entries during a synthetic
+non-convergence (revert `union-entries` to a bare `append` to manufacture one).
+If the count grows without bound, the missing bound is at the CALLER, not in BSP,
+and the fix is a per-command retry cap — not more fuel.
 
 - **Was**: "Not blocked — needs a dedicated debugging session on the typing propagator network." It got one.
 
