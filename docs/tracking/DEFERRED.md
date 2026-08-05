@@ -2830,6 +2830,16 @@ option — it is a demonstration that the head-keyed walk cannot decide it at al
   (`examples/2026-03-09-fc-trait-rel-dom.prologos:141`, runs 0 errors today) — a
   live BINDER position under an unknown head.
 
+⚠ **REFUTED 2026-08-02 — THIS COUNTER-EXAMPLE DOES NOT EXIST.** `?x:Nat` is glued into ONE
+TOKEN by `recognize-narrow-var-annot`, so `bcast-step-trigger?` can never fire on it:
+`[add ?x:Nat ?y:Nat] = 5N` mints NOTHING, under any grant. The claim was INFERRED from
+"this line runs 0 errors today" without checking whether it MINTS — and `parse-reader.rkt`'s
+own comment already said "Immune by construction". **PRESERVE has ZERO measured corpus
+regressions** (census: 795 `.prologos` files + WS strings in `.rkt` tests). The one live hole
+is DIGIT-headed segments (`?x:0` DOES mint); the one principled counter-example is macro
+pattern vars, zero instances in tree. So this item's "cannot decide it in EITHER direction"
+framing is HALF WRONG and Q_U18 is reopened — see D4 `#q-u18`.
+
 Both spellings are `[SYMBOL item item]`. **Structurally indistinguishable at the
 reader.** Whatever resolves this is not a longer head table. See D4 §5.P4c-3;
 the on-network disposition attribute this points at is chartered under PPN 4D

@@ -157,9 +157,18 @@ convention) · `prologos-syntax.md`.
   production grant are **ONE decision**. Until ruled, the entire broadcast
   surface is reachable **only from tests** — the "Validated ≠ Deployed" gate.
   ⚠ **Not "pick an arm"**: P4c-3 MEASURED that the head-keyed walk cannot decide
-  it in EITHER direction (strip kills application position; preserve regresses
-  live binder positions under unknown heads, e.g. `[add ?x:Nat ?y:Nat] = 5N`;
-  both are `[SYMBOL item item]`). DEFERRED 32's open half IS this question.
+  it in EITHER direction. ⚠ **HALF OF THAT IS NOW REFUTED (2026-08-02)**: the
+  PRESERVE counter-example `[add ?x:Nat ?y:Nat] = 5N` **DOES NOT EXIST** —
+  `?x:Nat` is glued into ONE TOKEN by `recognize-narrow-var-annot` and mints
+  NOTHING under any grant, exactly as `parse-reader.rkt`'s own comment says
+  ("Immune by construction"). **PRESERVE has ZERO measured corpus regressions**
+  over a 795-file census. The live hole is DIGIT-headed segments (`?x:0` mints);
+  the principled counter-example is macro pattern vars, zero instances in tree.
+  ⭐ And `parser.rkt` ALREADY distinguishes binder from expression position
+  (`bcast-step-binder` vs `bcast-step`, three binder consumers) — so the honest
+  form of Q_U18 may be "**why is the READER deciding this at all?**"
+  Read D4 `#q-u18`'s correction block IN FULL. DEFERRED 32's open half is this
+  question.
 - **⬜ Q_U19 — `^` on a broadcast**: refuse, or re-key the broadcast output? It
   is ALREADY constructible. ⚠ The existing pin freezes an **accident**, not a
   ruling. Due at P4d.

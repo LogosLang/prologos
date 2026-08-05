@@ -55,15 +55,97 @@ in ~tests/test-defr-schema.rkt~. Scope = register + type-check facts.
 - ~test-parse-reader~ "unbalanced library files" was my Emacs lock files
   (~.#~ dangling symlinks); the lib scan now skips them like the examples scan.
 
-* Today
 
-- Hunt the foray.prologos type-checker hang (propagator quiescence loop; foray
-  is NOT bracket-imbalanced — it reads fine but hangs). Then a fully green
-  regression suite.
-- Then back to the demo plan: P1 (pure-Prologos JSON → maps/lists/Result) +
-  P2a (~Validation~ applicative).
 
-* Blockers
 
-None. (A flaky ~test-module-network-01~ — passes in isolation — is on the
-watching list.)
+
+
+* Conversations
+** Maps<->Schema as co-data, anonymous records and row polymorphism
+
+*** 🗣️
+I want to open up a research question around a language design issue I'm looking at in the Prologos Project.
+
+Specifically, I'm thinking about our `Map` type as an anonymous record type, with the intent of having it as "open world" and generally usable, as one would perhaps expect in a more dynamic typing setting (I'm thinking Clojure's ergonomics, as a design goal). 
+
+I'm thinking of Row Polymorphism vs structural subtyping approaches, with a lean into row polymorphism.
+
+But also I'm thinking of seeing a our record types as co-data or coinductive types — the observations of the types on the labeled keys as a co-inductions of the final typing information.
+
+I should mention as well, that we have `schema`, which is intended for the inductive, "closed" form of the anonymous record type, `Map`, for type validation more strictly; and something that takes a defined `schema` type, could just as well pass in a generic `Map` that meets it's spec validation; and a schema type could just as well be passed into a generic Map.
+*** 🤖
+This is a rich cluster, and I think the pieces you've named actually snap together more tightly than the usual "rows vs. subtyping" framing suggests. Let me try to lay out the design space and then the synthesis I'd argue Prologos is unusually well-positioned to make.
+
+## Rows vs. structural subtyping: the real distinction
+
+The classical argument for row polymorphism (Wand, Rémy, Ohori) over structural subtyping is inference: rows keep principal types inside an HM-style discipline, whereas subtyping forces you into constraint subsumption, losing principal types or requiring you to carry constraint sets everywhere. For a language with a Prolog surface and unification already at its heart, this cuts even harder in rows' favor — Rémy-style rows *unify*. Row variables are just logic variables over a specialized term algebra, so open-record inference is literally an instance of machinery you already have.
+
+Two things complicate the simple story, and both are worth having in the research question:
+
+First, Dolan's algebraic subtyping (MLsub) recovered principal types *for* structural subtyping by making the type language a distributive lattice and replacing unification with biunification. Given that Prologos's whole substrate is lattice-theoretic, MLsub is the one subtyping formulation you shouldn't dismiss reflexively — its types-form-a-lattice, inference-as-lattice-computation character is philosophically native to the hyperlattice. But —
+
+Second, Tang, Hillerström, Lindley, and Morris showed ("Structural Subtyping as Parametric Polymorphism," OOPSLA 2023) that row and presence polymorphism can *encode* structural subtyping via translation. So the lean toward rows doesn't cost you the subsumption ergonomics; subtyping becomes a derived mode of use rather than a primitive judgment. That's the position I'd take: rows as primitive, subsumption as elaboration.
+
+For the row calculus itself, look past Rémy to Morris & McKinna's Rω ("Abstracting Extensible Data Types"), which treats rows via qualified types with containment/combination predicates. The reason this matters for you: qualified-type constraints like `ρ₁ · ρ₂ ~ ρ₃` are exactly the shape of thing a propagator cell can solve by monotone refinement. Row constraints as cells, row information ordered by "knows more labels," meets as unification — type inference for `Map` becomes a fixpoint on your own substrate rather than a separate algorithm bolted on.
+
+## The codata reading is not a metaphor — it's the polarity story
+
+Records are the canonical *negative* type: defined by their eliminations (projections), consumed by observation, given meaning by copatterns (Abel–Pientka–Thibodeau–Setzer). Your intuition that "observations on labeled keys coinductively determine the type" has a precise semantics: an open record is an element of a final coalgebra, and the row variable is exactly the *unobserved remainder*. You never construct the whole thing; you refine your knowledge of it observation by observation. Which is, not coincidentally, how a propagator cell's content evolves.
+
+And this gives you the crisp account of the `Map`/`schema` duality you're circling. Since you've already been through Munch-Maccagnoni's duploids, put it in those terms:
+
+- `Map` is **negative/codata**: open, lazy, defined by projection, coinductively typed, row-polymorphic.
+- `schema` is **positive/data**: closed, inductive, defined by construction, pattern-matchable, validated.
+
+The passages between them are then not ad hoc coercions but the polarity **shifts**. Validating a generic `Map` against a `schema` is focusing (↓): you force finitely many observations, check them, and seal the result into a positive value — an inductive witness that the coinductive object met the spec. Passing a `schema` value where a `Map` is expected is the other shift (↑): forgetting the closed-world guarantee and re-exposing the value as an observation interface, which is always safe (it's width subsumption, and by the OOPSLA'23 result, expressible as row instantiation). The asymmetry you'd expect — Map→schema needs a check, schema→Map is free — falls directly out of the polarities.
+
+This also echoes a move you've already made elsewhere: sealing a `schema` from a `Map` is structurally the "keep the fixpoint values, drop the provenance" trade from `.pnet`. The closed inductive form is the fixpoint snapshot; the open coinductive form is the live, still-refining object.
+
+## The logic-programming ancestry you should mine
+
+Before Wand's rows, there was Aït-Kaci: ψ-terms and order-sorted feature structures (LOGIN, LIFE). OSF terms *are* open records with unification, and — this is the part that should make you sit up — they form a semilattice where **meet is unification**. Feature-structure constraint solving is monotone refinement over that lattice, i.e., it is propagation, avant la lettre. If you want `Map` to feel Clojure-open on the Prolog surface while remaining principled, ψ-terms are arguably the correct semantic object, with Rémy/Rω rows as the functional-surface type discipline over the same lattice. The unification-based and coalgebraic readings meet here: OSF unification computes the meet of two partial observations of the same coinductive object.
+
+For the Clojure-ergonomics target specifically, the closest prior art on the static side is Bonnaire-Sergeant's heterogeneous maps in Typed Clojure — mandatory/optional keys plus an open/closed completeness flag, which is a poor man's presence polymorphism. Malli and spec are your runtime comparables; your `schema` essentially proposes to be spec with a static positive-type reading, which none of the Clojure-world systems achieve cleanly.
+
+## Two consequences worth putting in the question
+
+One: the data/codata duality means that if you build rows for records, you get **open polymorphic variants** for free — the positive dual of `Map`. Extensible sums are enormously useful (extensible errors, open ASTs for PReduce), and in a polarized setting they're the same machinery reflected.
+
+Two: gradual typing enters not as a bolt-on but at the shift. If a `Map`'s row is only partially known statically, focusing it into a `schema` leaves a *residual* runtime check on exactly the unknown remainder — the gradual-rows literature (Garcia–Clark–Tanter's AGT applied to rows) gives you the metatheory, but the operational story is just "the propagator hasn't reached fixpoint on this row cell yet, so seal-time forces the remaining observations."
+
+So the research question, sharpened: *can row-typed open records be given final-coalgebra semantics over an OSF-style feature lattice, with type inference realized as propagator fixpoint, such that the Map/schema pair is exactly the negative/positive polarity pair related by shifts?* My strong suspicion is yes, and that the shift-with-residual-check is the theorem that makes the whole thing cohere. Where would you want to start — the row/OSF unification layer, or the polarity/shift formalization?
+
+
+
+
+** Numerics
+🗣️
+So, something has changed during this session. The issue that I was seeing has to due with Posit displays and `~` sigil. After using this now for the first time in practice, I'm realizing that `~` looks too much like `-`, and isn't a good design choice. So the display of Posit with the tilde sigil I think should be removed (the type information displayed therewith is enough signal).
+
+
+But now, instead of displaying `: Poist32` results, I'm seeing `: Rat`. This was not our intent of the design. It was to display Posit as the default approximate value.
+
+The other issue that I would like to ask about are the below warnings that show up in REPL sessions (Emacs and VSCode, alike). For one, it's not clear what implicit coercions are happening here to begin with; furthermore, the warning often shows up in duplicate (and seem to increase in duplications as the session runs on). The warnings are very noisy; likely should only show up once (if at all?); and are unclear why or how the coercions are occuring. So I'd like to ask about that.
+```prologos
+;; REPL
++ 3.13 1.0
+
+4.13 : Rat
+warning: implicit coercion from Rat to Float64 (loss of exactness)
+warning: implicit coercion from Rat to Float64 (loss of exactness)
+```
+
+
+Beyond removing the `~` from the display, I'm thinking, moreover, to deprecate the sigil entirely from the language. A bare decimal numeric `3.14` should be default Posit32 (the recent change showes it as `: Rat` which is new and unexpected behavior). If another Posit type were wanted, I'm thinking we introduce similar Posit literals to the Float families, but with a `pXX`... So, `3.14p64` => `3.14 : Posit64`
+
+
+On usability, I wanted to ask about how a user/I would easily convert between Posit/Float and the like, and whether we have a coercion function generic over the other numerics. For example, it would be ideal to have something like `to-float 3.16` => `3.16 : Float64`, `to-float32 3/4` => `0.75 : Float32`, etc. So having ergonomic coercion families of functions. Do we have them? How can I use them? If not, can we design something like this out?
+
+
+Those are the notes I've collected on the usability/ergonomics of the numerics work so far.
+
+
+--
+
+On the first-class generic `+`: Yes, I very much want to design for this. This is another usability/ergonomics gap, very much related to this numerics work. If there are other similar issues to this, that are phase-tractable (and not entire track design-worth of effort), then I'd like to consider closing those gaps as well.
+

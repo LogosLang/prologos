@@ -1264,12 +1264,54 @@ items of the hold-point, ruled before P4a opened:
   **WHY IT IS HARD, and it is not new**: P4c-3 measured that the head-keyed walk
   **cannot decide it in EITHER direction** — strip kills application-position
   broadcast, preserve regresses live binder positions under unknown heads
-  (`[add ?x:Nat ?y:Nat] = 5N`), and both spellings are `[SYMBOL item item]`,
+  (`[add ?x:Nat ?y:Nat] = 5N`) — ⚠ **THAT HALF IS REFUTED, see below**, and both spellings were claimed to be `[SYMBOL item item]`,
   structurally indistinguishable at the reader. So Q_U18 is not "pick an arm";
   it is "find the discriminator, or rule that broadcast ships only where a
   recognized head scopes it." DEFERRED 32's open half is this question.
   **DUE**: before ANY corpus uncomment. Nothing in P4c-4c or P4d's carrier work
   depends on it; every acceptance-marker deliverable does.
+
+  **⭐⭐ CORRECTION 2026-08-02 — THE COUNTER-EXAMPLE AGAINST *PRESERVE* DOES NOT
+  EXIST, AND THIS REOPENS THE QUESTION.** `?x:Nat` is glued into **ONE TOKEN** by
+  `recognize-narrow-var-annot`, so `bcast-step-trigger?` can NEVER fire on it.
+  Measured at `526d3de1`: `[add ?x:Nat ?y:Nat] = 5N` reads as
+  `((= (add ?x:Nat ?y:Nat) ($nat-literal 5)))` — byte-identical under a grant of
+  `add`; **no `$bcast-step` is minted**. So the two spellings are NOT both
+  `[SYMBOL item item]`: one is `[SYMBOL glued-token glued-token]`, the other
+  `[SYMBOL base ($bcast-step …)]`.
+  ⚠ **`parse-reader.rkt`'s OWN COMMENT already said this** — *"Immune by
+  construction: `?x:T` (glued to ONE token by narrow-var-annot)"* — in the very
+  file being edited. The false claim was INFERRED from "this corpus line runs 0
+  errors today" **without checking whether it MINTS**; that is the
+  assert-a-mechanism-instead-of-measuring-it failure this arc keeps recording,
+  and the tree contained the refutation in a comment.
+  **WHAT NOW HOLDS, MEASURED**:
+  · **PRESERVE has ZERO measured corpus regressions** — an exhaustive census over
+    **795 `.prologos` files plus WS strings embedded in `.rkt` tests** found NO
+    live site that is "plain-identifier fused annotation · binder position ·
+    unknown head". Every binder-shaped site is either under a head the walk
+    already recognizes (`defn` ×5, `let` ×4, `defr` ×1) or is `?`-glued and never
+    mints.
+  · The five "measured casualties" of the pre-inversion default (`capability`,
+    `Pi`, `Sigma`, `DSend`, `DRecv`) have **ZERO fused-annotation sites** in
+    `lib` or `examples` — they were **SYNTHETIC PROBES**, not corpus sites. Real,
+    but they price the risk very differently from "the corpus breaks".
+  · **The `?`-glue has ONE HOLE: digit-headed segments.** `?x:0` DOES mint
+    (`((def q := ?x ($bcast-step :0)))`); `?x:Nat`, `?x:w`, `?x:Int:Even` all
+    glue. Verified.
+  · **The one PRINCIPLED counter-example** is macro pattern variables:
+    `pattern-var?` accepts any symbol not in ~20 enumerated reader sentinels, so
+    `[myform x:Int]` is a genuine binder under a genuinely unknown head. **Zero
+    instances in tree; constructible in one line.**
+  **⭐ AND A THIRD SEAT THE FRAMING MISSED**: `parser.rkt` already ships a
+  `bcast-step-binder` diagnostic kind distinct from the expression-position
+  `bcast-step`, raised from **THREE binder consumers**, whose message reads
+  *"this is a BINDER position … the fused spelling should work here"*. **The
+  parser can already tell the two apart — because a binder consumer knows it is
+  one.** So the honest form of Q_U18 may not be "which arm does the READER pick"
+  but "**why is the reader deciding this at all?**"
+  Grounding: options panel `wf_46bd24b7-5ca` (7 agents / 1.32M tokens); both
+  refutations re-verified on the main thread before being recorded.
 
 - <a id="q-u19"></a>**⬜ Q_U19 — WHAT DOES `^` MEAN ON A BROADCAST? OPEN.**
   Opened 2026-08-02 at the P4c-4c mini-audit. Under a grant the parser ALREADY
@@ -4907,6 +4949,8 @@ not answerable as posed, and three MEASURED facts say why.**
    `[SYMBOL item item]`. **The head-keyed walk cannot separate the two
    populations in either direction, and the corpus contains live examples of
    both.**
+
+   ⚠ **REFUTED 2026-08-02 — this counter-example DOES NOT EXIST.** `?x:Nat` is glued into ONE TOKEN by `recognize-narrow-var-annot`, so the trigger can never fire on it; `[add ?x:Nat ?y:Nat] = 5N` mints NOTHING, under any grant. The claim was inferred from "this line runs 0 errors today" without checking whether it MINTS — and the tree's own comment said so. **PRESERVE has ZERO measured corpus regressions** (795-file census). See D4 `#q-u18`.
 
 **And there is nothing behind the switch yet.** `make-select-bcast` has ZERO
 production callers (syntax.rkt:177 provide + :907 definition only) — no producer
