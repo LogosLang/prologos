@@ -1166,6 +1166,9 @@
        (not (eq? x '$select-brace))     ; D4.P1b-iii adjacent-brace select block
        (not (eq? x '$select))           ; D4.P3a fused select head (LOUD-if-missed: whole-file abort in a defmacro template)
        (not (eq? x '$select-path))      ; D4.P4b-ii-2b the DOT select head — same LOUD-if-missed class
+       (not (eq? x '$preparse-error))   ; D4.P4c-4c/G2 the preparse seam marker — LOUD-if-missed: a
+                                        ; template occurrence would raise "Unbound pattern variable"
+                                        ; out of preparse, i.e. the very abort this marker prevents
        ;; ⚠ WHY $dot-brace IS HERE (caught by adversarial verify, pre-commit):
        ;; omitting it made `.{ }` inside a defmacro TEMPLATE read as a macro
        ;; pattern variable, so datum-subst raised "Unbound pattern variable" —
@@ -3128,9 +3131,40 @@
       (when (and (list? d) (>= (length d) 2) (symbol? (cadr d)))
         (hash-set! generated-decl-names (cadr d) #t))))
 
+  ;; ⭐ CIU T6 D4.P4c-4c / G2 — THE PREPARSE SEAM GUARD (owner ruling 2026-08-05).
+  ;; ONE handler, at the per-FORM boundary, converting a raise into a marker datum
+  ;; that flows to the parser as a per-command error VALUE. This is the POL.4
+  ;; conversion discipline applied to the seam itself, and it closes a class
+  ;; rather than an instance.
+  ;;
+  ;; ⚠ THE CLASS: `pipeline.md` § "A Raise on the Parse/Expansion Path Is a
+  ;; WHOLE-FILE Abort" — the reader tokenizes the whole file before any command
+  ;; runs, so a raise HERE escapes `process-file` entirely and the file yields
+  ;; NOTHING, not even the forms above it. That had shipped FOUR times in this
+  ;; track before G2 made it five: G2 lets `$bcast-step` survive into forms
+  ;; preparse CONSUMES (`require`/`ns`/`schema`/`foreign`), whose recognizers
+  ;; raise on a shape they do not know. Measured regression:
+  ;; `require [prologos::data::nat:refer [add]]` went 0 errors → abort.
+  ;;
+  ;; ⚠ WHY THE GUARD IS HERE AND NOT AT THE DIRECTIVE HEADS. The owner ruled
+  ;; option B over option A (deep-strip an enumerated set of directive heads):
+  ;; an enumeration leaves the NEXT sentinel to rediscover this, which is exactly
+  ;; how the first four happened. This seat is head-agnostic by construction.
+  ;;
+  ;; ⚠ IT MUST NOT BECOME `void`. Three earlier passes above use
+  ;; `(with-handlers ([exn:fail? void]) …)` and SWALLOW. This seat REPORTS — it
+  ;; emits `($preparse-error msg)`, which the parser converts to a per-command
+  ;; error. A guard that silences is a worse outcome than the abort it replaced,
+  ;; and the battery pins that it still reports.
+  ;; ⚠ `exn:fail?`, not `(lambda (e) #t)` — a break (Ctrl-C, a timeout signal)
+  ;; must still propagate, or the file becomes uninterruptible.
   (define result
     (for/fold ([acc '()])
               ([stx (in-list stxs)])
+      (with-handlers
+          ([exn:fail?
+            (lambda (e)
+              (cons (list '$preparse-error (exn-message e)) acc))])
       (define datum (syntax->datum stx))
       (define head (and (pair? datum) (car datum)))
       (cond
@@ -3561,7 +3595,7 @@
              ;; onto the rebuilt form, so a top-level paren group keeps its
              ;; 'prologos-paren-origin mark even when a preparse rewrite
              ;; (e.g. dot-access) fires inside it.
-             (cons (datum->syntax #f expanded stx stx) acc))])))
+             (cons (datum->syntax #f expanded stx stx) acc))]))))
   ;; ============================================================
   ;; Phase 5b: Hoist data/trait-generated defs before user forms
   ;; ============================================================

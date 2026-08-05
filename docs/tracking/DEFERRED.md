@@ -3649,7 +3649,37 @@ continues, no fabrication — correct behaviour, imprecise message (the subject 
 an unsolved element meta, not a non-record). Pre-existing wording from
 `select-project-field`, surfaced by ω rather than caused by it.
 
-### 48. Under ω a PERMISSIVE carrier annihilates the whole vector, where `pvec-map` preserves the hits
+### 48. ✅ RULED 2026-08-05 [owner] — KEEP THE WHOLE-NODE ABORT UNIFORM
+
+**The ruling: uniform.** A miss inside a broadcast aborts the whole selection on
+EVERY tier, including the permissive one. No change to the code; the ratified
+Q_U7 rider stands unamended.
+
+**The argument that lost, recorded because it is real** and will be re-raised
+otherwise: the rider is justified by *"no `expr-panic` buried in an output
+slot"*, and on the permissive tier there is no panic — the value is `none`,
+which the language produces deliberately everywhere else. So the rider's stated
+concern is structurally absent there, and the cost is measured: `ws:a` yields
+`none` where `[pvec-map [fn [m] m.a] ws]` yields `@[1 none]` — and `pvec-map` is
+the spelling broadcast's OWN diagnostic recommends.
+
+**The argument that won**: ⭐ **the tier is INFERRED, not written.** Per-tier abort
+semantics would make identical source text preserve surviving elements or not,
+based on something the reader of that source cannot see. Uniform abort is
+predictable; per-tier is not — and predictability of a surface construct beats
+recovering data in a case the user cannot identify from the text. The rider was
+also pinned specifically so a "map semantics" intuition could not drift it later,
+and the drift being proposed was exactly that.
+
+**Consequence to state honestly in docs**: on a permissive carrier, broadcast
+loses data that `pvec-map` would keep. That is a KNOWN and ACCEPTED cost, not an
+oversight, and the diagnostic that recommends `pvec-map` is therefore also
+recommending the more forgiving spelling — which is fine, but should not be
+described as "equivalent".
+
+*(original entry retained below)*
+
+### 48-original. Under ω a PERMISSIVE carrier annihilates the whole vector, where `pvec-map` preserves the hits
 
 ```
 def ws : [PVec <[Map Keyword Int] | Int>] := @[um u1]   ;; um = {:a 1}, u1 = 7
@@ -3714,3 +3744,50 @@ question (what IS a `$`-symbol?), so they should be solved once. ⚠ I hypothesi
 reproduce**; recorded so the next session does not inherit an unverified claim.
 
 **Not blocking G2**: nothing here is caused by, or gates, the P4c-4c/G2 work.
+
+### 51. A parenless `&>` clause containing a broadcast LOSES THE RELATION (G2-surfaced)
+
+Measured A/B (pre-G2 vs G2), same input:
+
+```
+defr s [?a]
+  &> base users:name
+```
+| | pre-G2 | G2 |
+|---|---|---|
+| `defr` | `s : _ defined.` | `ERROR: rule clause: parenless goals cannot be used in a defr body that also contains a form rewritten before parsing (e.g. dot-access)` |
+| query | `@[]`, 0 errors | `ERROR: solve: Unknown relation: s` |
+
+The relation goes **defined → undefined**, and the diagnostic blames dot-access,
+which is not what happened — the rewritten form is a `$bcast-step`, not a
+`$dot-access`. Parenless `&>` is the POL.9 HEADLINE spelling (Rel T1), so this is
+the interaction of two flagship surfaces.
+
+**Why deferring is safe**: two LOUD per-command errors and the file continues —
+no silent wrong answer, and the relation's absence is reported at the query. It
+is a diagnostic-quality + feature-interaction defect, not a soundness one.
+**Why it should not sit long**: it is exactly the "two spellings of one form
+disagreeing" class this track keeps paying for, and the message actively
+misdirects. Fix is likely to widen the clause-body guard to name the real
+rewritten head rather than assuming dot-access.
+
+### 52. A goal-position arity error becomes a SILENT EMPTY BAG (G2-surfaced)
+
+```
+defr p2 [?a ?b]
+(p2 1:Int 2:Int)
+```
+| | pre-G2 | G2 |
+|---|---|---|
+| result | `ERROR: solve: Unknown procedure: p2/4 — however, there are definitions for: p2/2` | `@[] : _`, **zero errors** |
+
+Control `(p2 1 2 3)` stays loud on BOTH legs, so this is specific to the
+sentinel-bearing spelling. A loud, actionable, SWI-style diagnostic became
+silence.
+
+**Why deferring is safe**: no wrong VALUE is produced — `(p2 1 2)` yields
+`@[{}]` on both legs — so this is a lost diagnostic on malformed input rather
+than a fabricated answer. **⚠ But it is the silent half of the class this track
+exists to eliminate**, and an empty bag is indistinguishable from "no solutions",
+which is a legitimate answer. That makes it strictly worse than a loud error and
+it should be fixed before the relational surface is exercised much further.

@@ -125,8 +125,12 @@ def wf : WithFn := {:name \"a\" :cb idi}\n
   ;; the pre-existing missing-type / bad-keyword raises in parse-schema-fields),
   ;; not a returned prologos-error — honest refusal; richer field types are
   ;; F-carrier / walker-era work.
-  (check-exn
-   #rx"field type shape"
+  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
+  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
+  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
+  ;; they still raise (they fail before the guarded seam), and converting them
+  ;; would have weakened a correct assertion.
+  (check-true (yields-prologos-error?
    (lambda ()
      (run-file-string "ns fc7\n
-schema BadShape\n  :p <Int * String>\n"))))
+schema BadShape\n  :p <Int * String>\n")))))

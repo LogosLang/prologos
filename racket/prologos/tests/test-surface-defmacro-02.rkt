@@ -144,16 +144,26 @@
 
 (test-case "defmacro/malformed-error"
   ;; Missing template
-  (check-exn exn:fail?
+  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
+  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
+  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
+  ;; they still raise (they fail before the guarded seam), and converting them
+  ;; would have weakened a correct assertion.
+  (check-true (yields-prologos-error?
     (lambda ()
-      (run-ns "(ns dm25)\n(defmacro (bad))"))))
+      (run-ns "(ns dm25)\n(defmacro (bad))")))))
 
 
 (test-case "defmacro/infinite-loop-error"
   ;; Macro that expands to itself → depth limit error
-  (check-exn exn:fail?
+  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
+  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
+  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
+  ;; they still raise (they fail before the guarded seam), and converting them
+  ;; would have weakened a correct assertion.
+  (check-true (yields-prologos-error?
     (lambda ()
-      (run-ns "(ns dm26)\n(defmacro loop ($x) (loop $x))\n(eval (loop zero))"))))
+      (run-ns "(ns dm26)\n(defmacro loop ($x) (loop $x))\n(eval (loop zero))")))))
 
 
 ;; ========================================

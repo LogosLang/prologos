@@ -111,21 +111,29 @@
 
 
 (test-case "auto-export: defn- is private (not exported)"
-  (check-exn
-   #rx"does not export"
+  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
+  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
+  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
+  ;; they still raise (they fail before the guarded seam), and converting them
+  ;; would have weakened a correct assertion.
+  (check-true (yields-prologos-error?
    (lambda ()
      (run-ns-pair
        "(ns test.priv.defn-a)\n(defn- helper : (-> Nat Nat) [n] (suc n))"
-       "(ns test.priv.defn-b)\n(imports [test.priv.defn-a :refer [helper]])\n(eval (helper zero))"))))
+       "(ns test.priv.defn-b)\n(imports [test.priv.defn-a :refer [helper]])\n(eval (helper zero))")))))
 
 
 (test-case "auto-export: def- is private (not exported)"
-  (check-exn
-   #rx"does not export"
+  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
+  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
+  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
+  ;; they still raise (they fail before the guarded seam), and converting them
+  ;; would have weakened a correct assertion.
+  (check-true (yields-prologos-error?
    (lambda ()
      (run-ns-pair
        "(ns test.priv.def-a)\n(def- secret : Nat (suc zero))"
-       "(ns test.priv.def-b)\n(imports [test.priv.def-a :refer [secret]])\n(eval secret)"))))
+       "(ns test.priv.def-b)\n(imports [test.priv.def-a :refer [secret]])\n(eval secret)")))))
 
 
 (test-case "auto-export: data auto-exports type and constructors"
@@ -138,22 +146,30 @@
 
 
 (test-case "auto-export: data- is private (type and constructors not exported)"
-  (check-exn
-   #rx"does not export"
+  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
+  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
+  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
+  ;; they still raise (they fail before the guarded seam), and converting them
+  ;; would have weakened a correct assertion.
+  (check-true (yields-prologos-error?
    (lambda ()
      (run-ns-pair
        "(ns test.priv.data-a)\n(data- InternalType foo bar)"
-       "(ns test.priv.data-b)\n(imports [test.priv.data-a :refer [InternalType]])\n(eval foo)"))))
+       "(ns test.priv.data-b)\n(imports [test.priv.data-a :refer [InternalType]])\n(eval foo)")))))
 
 
 (test-case "auto-export: explicit provide overrides auto-exports"
   ;; When provide is present, only provided names are accessible.
-  (check-exn
-   #rx"does not export"
+  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
+  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
+  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
+  ;; they still raise (they fail before the guarded seam), and converting them
+  ;; would have weakened a correct assertion.
+  (check-true (yields-prologos-error?
    (lambda ()
      (run-ns-pair
        "(ns test.override.mod-a)\n(exports pub-fn)\n(defn pub-fn : (-> Nat Nat) [n] (suc n))\n(defn hidden-fn : (-> Nat Nat) [n] (suc (suc n)))"
-       "(ns test.override.mod-b)\n(imports [test.override.mod-a :refer [hidden-fn]])\n(eval (hidden-fn zero))"))))
+       "(ns test.override.mod-b)\n(imports [test.override.mod-a :refer [hidden-fn]])\n(eval (hidden-fn zero))")))))
 
 
 (test-case "auto-export: defn- usable locally within the same module"

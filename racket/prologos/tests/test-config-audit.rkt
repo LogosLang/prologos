@@ -7,6 +7,8 @@
 ;;;
 
 (require rackunit
+         ;; G2/B: `yields-prologos-error?` — preparse failures are VALUES now
+         "test-support.rkt"
          racket/list
          racket/string
          "../macros.rkt"
@@ -231,8 +233,12 @@
   (check-equal? (functor-entry-name fe) 'MyAlias))
 
 (test-case "G4: functor conflicting with data type → error"
-  (check-exn
-   #rx"functor `Result` conflicts with existing data type"
+  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
+  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
+  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
+  ;; they still raise (they fail before the guarded seam), and converting them
+  ;; would have weakened a correct assertion.
+  (check-true (yields-prologos-error?
    (lambda ()
      (parameterize ([current-spec-store (hasheq)]
                     [current-property-store (hasheq)]
@@ -246,11 +252,15 @@
        ;; Register a data type constructor
        (register-ctor! 'Result (ctor-meta 'Result '() '() #f 0))
        ;; Now try to register functor with same name — should error
-       (process-string-ws "functor Result {A : Type}\n  :unfolds A\n")))))
+       (process-string-ws "functor Result {A : Type}\n  :unfolds A\n"))))))
 
 (test-case "G4: functor conflicting with type name → error"
-  (check-exn
-   #rx"functor `MyData` conflicts with existing data type"
+  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
+  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
+  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
+  ;; they still raise (they fail before the guarded seam), and converting them
+  ;; would have weakened a correct assertion.
+  (check-true (yields-prologos-error?
    (lambda ()
      (parameterize ([current-spec-store (hasheq)]
                     [current-property-store (hasheq)]
@@ -261,7 +271,7 @@
                     [current-ctor-registry (hasheq)]
                     [current-type-meta (hasheq 'MyData '())]
                     [current-bundle-registry (hasheq)])
-       (process-string-ws "functor MyData {A : Type}\n  :unfolds A\n")))))
+       (process-string-ws "functor MyData {A : Type}\n  :unfolds A\n"))))))
 
 ;; ========================================
 ;; Section 5: :pre/:post/:invariant parsing + mutual exclusion (G1 + O6)

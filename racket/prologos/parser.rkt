@@ -879,18 +879,22 @@
     ;; POSITIONAL PARAMETER and defines a wrong-arity function at zero errors —
     ;; the 3-arity class this hardening exists to remove.
     ;;
-    ;; ⚠ The message names the REMEDY a user can act on (the spaced spelling)
-    ;; AND the maintainer-facing cause, because the two audiences differ: a user
-    ;; hit this by writing a legal fused annotation, and a maintainer needs to
-    ;; know a table row is missing rather than that the surface is unsupported.
+    ;; ⚠ The message names the REMEDY a user can act on (the spaced spelling).
+    ;; ⚠⚠ ITS SECOND HALF WAS DELETED AT G2 BECAUSE IT STATED A FALSEHOOD. It
+    ;; read: "(This form's head is missing from the reader post-pass binder table
+    ;; in parse-reader.rkt; the fused spelling should work here.)" — but the G2
+    ;; verify probed `let x:A:B 4` reaching this arm, and `let` IS in that table
+    ;; (`binder-region-heads` is `'(def let)`). The head was not missing; the
+    ;; CHAINED annotation `x:A:B` is reserved for UCS and is refused on purpose.
+    ;; So the sentence told a user their working spelling "should work" and told
+    ;; a maintainer to go add a row that is already there. A diagnostic that
+    ;; asserts a fact about the codebase can be WRONG about the codebase, and
+    ;; this one was; the remedy half is true and is what remains.
     [(bcast-step-binder)
      (parse-error loc
                   (format (string-append
                            "`:~a` was read as a broadcast step, but this is a BINDER "
-                           "position — write the annotation spaced (`name : ~a`) to work "
-                           "around it. (This form's head is missing from the reader "
-                           "post-pass binder table in parse-reader.rkt; the fused "
-                           "spelling should work here.)")
+                           "position — write the annotation spaced (`name : ~a`).")
                           f f)
                   #f)]
     [(postfix-kw)
@@ -1338,6 +1342,22 @@
     ;; $angle-type sentinel: unwrap as type annotation
     [(and (symbol? head) (eq? head '$angle-type))
      (unwrap-angle-type stx loc)]
+
+    ;; ⭐ CIU T6 D4.P4c-4c / G2 — the PREPARSE SEAM marker (owner ruling 2026-08-05,
+    ;; option B). `preparse-expand-all`'s per-form pass converts ANY `exn:fail?`
+    ;; into `($preparse-error msg)`; this arm turns it into a per-command error
+    ;; VALUE so the file continues. It is head-agnostic ON PURPOSE — the whole
+    ;; point of ruling B over enumerating directive heads is that a FUTURE
+    ;; sentinel reaching a preparse-consumed form lands here instead of taking
+    ;; the file down.
+    ;; ⚠ Same `(pair? args)` guard as its siblings, for the same reason: an
+    ;; unguarded `(car args)` at THIS seam is itself a whole-file abort — the
+    ;; exact failure the seat exists to eliminate. The P1a verify caught that
+    ;; once already, one arm below.
+    [(and (symbol? head) (eq? head '$preparse-error))
+     (prologos-error loc
+                     (format "preparse: ~a"
+                             (if (pair? args) (stx->datum (car args)) "(no detail)")))]
 
     ;; D4.P1a retired-selection marker (preparse-normalized) → guided error.
     ;; ⚠ The (pair? args) guard is LOAD-BEARING, not defensive: a user may

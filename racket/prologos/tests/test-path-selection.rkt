@@ -1045,15 +1045,15 @@
   ;; namespace.rkt's guard raised only for $dot-access. With `.N` minting
   ;; $postfix-index, `ns foo.2` would reintroduce exactly the silent-drop bug
   ;; that b0db8f3e fixed.
-  ;; ⚠ The guard RAISES (`(error 'ns …)`) rather than returning a per-command
-  ;; error value, so this is a whole-file abort — PRE-EXISTING behaviour, shared
-  ;; with `ns foo.bar`, and the same class Q_L4's marker seat exists for. Left
-  ;; as-is deliberately: `ns` is the first command in a file, so aborting there
-  ;; is near-indistinguishable from a per-command error. Pinned with check-exn
-  ;; so the SHAPE is deliberate and a future change to the seat is visible.
-  (check-exn #rx"namespace name cannot contain"
-             (lambda () (run-ws-raw "ns foo.2\n"))
-             "a numeric ns segment must be REJECTED, not silently dropped"))
+  ;; ✅ THE NAMED FOLLOW-UP LANDED AT G2/B (2026-08-05). This comment used to
+  ;; record that the guard RAISES — "a whole-file abort … Left as-is
+  ;; deliberately … a future change to the seat is visible". The preparse seam
+  ;; guard is that change: the refusal is still LOUD, but it is now a
+  ;; per-command error VALUE, so the pin reads the RESULT LIST, not an exn.
+  (check-true (ormap (lambda (r) (regexp-match? #rx"namespace name cannot contain"
+                                                (format "~a" r)))
+                     (run-ws-raw "ns foo.2\n"))
+              "a numeric ns segment must be REJECTED, not silently dropped"))
 
 (test-case "P2 MUST-NOT-BREAK: `.k` nominal access and the `v[…]` surface are untouched"
   (define r (run-ws
@@ -3401,19 +3401,25 @@
 
 (test-case "P4c-1: `ns foo:bar` REFUSES — the segment is not silently dropped"
   ;; RED at HEAD: defines ns `foo`, drops `:bar`, reports ZERO errors.
-  (check-exn exn:fail? (lambda () (run-ws-raw "ns foo:bar\ndef x := 1\n"))
-             "a colon segment in an ns name must be REFUSED, not silently dropped"))
+  ;; ⚠ CHANNEL CHANGED AT G2/B: refusal by VALUE, not by raise. The proposition
+  ;; ("not silently dropped") is unchanged and is what this still asserts.
+  (define rs (run-ws-raw "ns foo:bar\ndef x := 1\n"))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"namespace name" (format "~a" r))) rs)
+              "a colon segment in an ns name must be REFUSED, not silently dropped")
+  ;; …and the file CONTINUES, which is the whole point of the seam guard
+  (check-true (ormap (lambda (r) (regexp-match? #rx"x : Int defined" (format "~a" r))) rs)
+              "the command after a refused ns must still run"))
 
 (test-case "P4c-1: the ns refusal names the segment and offers `::`"
   ;; Same CHANNEL as pin 1 — the guard raises, so the message is read off the
   ;; exn, not off a result list. (The first draft read `(car rs)`, which is
   ;; incoherent with a raising guard and contract-violated on '().)
-  (check-exn (lambda (e)
-               (and (exn:fail? e)
-                    (regexp-match? #rx"namespace name" (exn-message e))
-                    (regexp-match? #rx"::" (exn-message e))))
-             (lambda () (run-ws-raw "ns foo:bar\ndef x := 1\n"))
-             "the refusal must name the namespace name and offer `::` as the remedy"))
+  ;; ⚠ Same CHANNEL note as the pin above — read off the result list at G2/B.
+  (define msgs (map (lambda (r) (format "~a" r)) (run-ws-raw "ns foo:bar\ndef x := 1\n")))
+  (check-true (ormap (lambda (m) (and (regexp-match? #rx"namespace name" m)
+                                      (regexp-match? #rx"::" m)))
+                     msgs)
+              "the refusal must name the namespace name and offer `::` as the remedy"))
 
 (test-case "P4c-1: the ns guard stays TOTAL for the shapes it already caught"
   ;; ⚠ RECORDED, not endorsed: this guard RAISES (a raw Racket `error`), it does
@@ -3422,10 +3428,13 @@
   ;; behaviour rather than the behaviour I assumed; the raise→value conversion
   ;; is a NAMED follow-up, deliberately out of P4c-1's scope because the
   ;; prerequisite is totality, not the error CHANNEL.
-  (check-exn exn:fail? (lambda () (run-ws-raw "ns foo.bar\ndef x := 1\n"))
-             "dot segment — already caught, must stay caught")
-  (check-exn exn:fail? (lambda () (run-ws-raw "ns foo[2]\ndef x := 1\n"))
-             "index segment — already caught, must stay caught"))
+  ;; ✅ AND THE "NAMED FOLLOW-UP" THIS COMMENT DEFERRED HAS LANDED — see G2/B.
+  ;; The guard is still TOTAL over these shapes; only the channel moved from a
+  ;; raw raise to a per-command error value.
+  (for ([src (in-list (list "ns foo.bar\ndef x := 1\n" "ns foo[2]\ndef x := 1\n"))])
+    (define rs (map (lambda (r) (format "~a" r)) (run-ws-raw src)))
+    (check-true (ormap (lambda (m) (regexp-match? #rx"namespace name" m)) rs)
+                (format "must stay caught: ~a → ~a" src rs))))
 
 (test-case "P4c-1: the ns guard does NOT refuse its one legitimate option"
   ;; The inversion's whole risk is over-refusing. `:no-prelude` is the ONLY
@@ -3442,9 +3451,9 @@
   ;; ⚠ DELIBERATE FLIP at P4c-2 — `users:0` now MINTS (Q_U16b makes it a legal
   ;; ω step). Listed as a flip rather than silenced: this is the P4c hazard that
   ;; says the prior rung's flagship pin flips, for the third consecutive phase.
-  (check-equal? (read-all-forms-string "users:0") '((users :0)))
+  (check-equal? (read-all-forms-string "users:0") '((users ($bcast-step :0))))
   (check-equal? (read-all-forms-string "[fn [x :0 Int] x]") '((fn (x :0 Int) x)))
-  (check-equal? (read-all-forms-string "users:w") '((users :w)))
+  (check-equal? (read-all-forms-string "users:w") '((users ($bcast-step :w))))
   ;; baseline MEASURED, not guessed — the first draft of this pin asserted
   ;; `(((:0 v)))` from memory and failed for the wrong reason.
   (check-equal? (read-all-forms-string "{:0 v}") '(($brace-params :0 v))))
@@ -3476,18 +3485,18 @@
   ;; F1b.7g drift class reader-forms.rkt exists to forbid. `token-entry->stx`'s
   ;; keyword arm already yields `|:name|`; the mint WRAPS it untouched so the
   ;; unwrap is a plain `cadr`.
-  (check-equal? (read-all-forms-string "users:name") '((users :name))))
+  (check-equal? (read-all-forms-string "users:name") '((users ($bcast-step :name)))))
 
 (test-case "P4c-2: the ordinal band mints too (Q_U16b — `users:0` is a legal ω step)"
-  (check-equal? (read-all-forms-string "users:0") '((users :0)))
-  (check-equal? (read-all-forms-string "users:w") '((users :w))))
+  (check-equal? (read-all-forms-string "users:0") '((users ($bcast-step :0))))
+  (check-equal? (read-all-forms-string "users:w") '((users ($bcast-step :w)))))
 
 (test-case "P4c-2: the mint is POSITIONAL — closers and `.N` join the focus set FREE"
   ;; `adjacent-to-base?` consults NO token type, so these come free under the
   ;; positional rule and would each have needed a hand entry under an
   ;; enumerated one.
-  (check-equal? (read-all-forms-string "xs[0]:n") '((xs ($postfix-index 0) :n)))
-  (check-equal? (read-all-forms-string "(f x):name") '(((f x) :name))))
+  (check-equal? (read-all-forms-string "xs[0]:n") '((xs ($postfix-index 0) ($bcast-step :n))))
+  (check-equal? (read-all-forms-string "(f x):name") '(((f x) ($bcast-step :name)))))
 
 ;; ---- side 2: BINDER positions unwrap — one row per MEASURED table entry ----
 ;;
@@ -3634,7 +3643,12 @@
   ;; A live binding param group (lib/prologos/core.prologos: `defmacro when
   ;; [$cond $body] …`) that appears in none of the three head lists.
   (check-equal? (read-all-forms-string "defmacro when [$c:Int $b] $c")
-                '((defmacro when ($c :Int $b) $c))))
+                ;; ⚠ G2: the sentinel now SURVIVES here. That is NOT a G2 defect —
+                ;; measured, `($c :Int $b)` and `($c ($bcast-step :Int) $b)` are BOTH
+                ;; three params, so the macro is unmatchable either way and the user
+                ;; sees the same "Unbound variable" at the call site. Pre-existing;
+                ;; spun out as DEFERRED 50 / chip task_204859b9.
+                '((defmacro when ($c ($bcast-step :Int) $b) $c))))
 
 ;; ---- UNDER-REACH 4: single-line `$pipe` arms ----
 
@@ -3661,10 +3675,10 @@
   ;; The binder region here is the name plus an optional fused annotation; the
   ;; value and body are not binders.
   (check-equal? (read-all-forms-string "def z := 0\nlet x 5\n  users:name")
-                '((def z := 0) (let x 5 (users :name))))
+                '((def z := 0) (let x 5 (users ($bcast-step :name)))))
   ;; the `:=` spelling already behaves — pinned so the bound cannot regress it
   (check-equal? (read-all-forms-string "def z := 0\nlet x := 5\n  users:name")
-                '((def z := 0) (let x := 5 (users :name)))))
+                '((def z := 0) (let x := 5 (users ($bcast-step :name))))))
 
 (test-case "P4c-2 (c): an arms-only `defn` must not strip its arm BODY's broadcast"
   ;; `scan-for-param-heads` stays armed through every SYMBOL, so with no bracket
@@ -3673,14 +3687,14 @@
   ;; the PRIMARY multi-arity form per CLAUDE.md, so this is the common shape.
   ;; Measured today: `(defn f ($pipe a -> users :name))` — stripped.
   (check-equal? (read-all-forms-string "defn f\n  | a -> users:name")
-                '((defn f ($pipe a -> users :name))))
+                '((defn f ($pipe a -> users ($bcast-step :name)))))
   ;; two arms already behave (arm 1's group consumes the arming) — pinned so the
   ;; fix does not trade the one-arm case for the two-arm case
   (check-equal? (read-all-forms-string "defn f\n  | 0 -> 1\n  | a -> users:name")
-                '((defn f ($pipe 0 -> 1) ($pipe a -> users :name))))
+                '((defn f ($pipe 0 -> 1) ($pipe a -> users ($bcast-step :name)))))
   ;; and a header param group must still leave the body alone
   (check-equal? (read-all-forms-string "defn f [a]\n  users:name")
-                '((defn f (a) (users :name)))))
+                '((defn f (a) (users ($bcast-step :name))))))
 
 ;; ============================================================
 ;; D4.P4c-2 condition (c) — the loud-refusal hardening
@@ -3715,24 +3729,18 @@
 ;; What IS reachable, and therefore pinned below, is the EXPRESSION-position
 ;; half — which until now reported a LYING "Unbound variable".
 
-(test-case "P4c-2 (c): with the enable-set EMPTY, an expression broadcast is INERT"
-  ;; ⚠ THIS PIN FLIPPED when the default was inverted, and the flip is the
-  ;; POINT rather than a regression. `broadcast-enabled-contexts` is '() at
-  ;; P4c-2, so the post-pass unwraps uniformly and NO `$bcast-step` reaches the
-  ;; parser — which makes the whole mint provably equivalent to not minting,
-  ;; the property that makes "regression-free" checkable rather than promised.
+(test-case "G2: an expression broadcast is LIVE at the default — the pin that was INERT"
+  ;; ⚠⚠ THIS PIN HAS NOW FLIPPED TWICE, and both flips were the point.
+  ;; At P4c-2 it asserted the mint was provably equivalent to NOT minting, because
+  ;; `broadcast-enabled-contexts` was `'()` and the post-pass unwrapped uniformly.
+  ;; Its own comment said the guided messages were "live code with an empty
+  ;; enable-set in front of them", reachable "the moment the first context is
+  ;; enabled". G2 removes the enable-set entirely, so that moment is now.
   ;;
-  ;; The consequence, stated plainly: the guided "not implemented yet" message
-  ;; and the `bcast-step-binder` refusal are both UNREACHABLE today. They are
-  ;; live code with an empty enable-set in front of them, and they become
-  ;; reachable at P4c-3 the moment the first context is enabled. That is a
-  ;; deliberate staging, not dead code — and it is why the seat and both kinds
-  ;; were kept rather than reverted.
-  ;;
-  ;; What a user sees today is the PRE-MINT behaviour, which is honest: the
-  ;; error names the actual expression rather than claiming an unbound variable.
+  ;; What a user sees is no longer the PRE-MINT "Could not infer type" — it is the
+  ;; feature. This is the single clearest before/after in the slice.
   (define r (run-ws "def users := @[{:name \"a\"}]\ndef bad := users:name\n"))
-  (check-regexp-match #rx"Could not infer type" (last r))
+  (check-regexp-match #rx"\\[PVec String\\]" (last r))
   ;; and it must NOT be the sentinel leaking into a user-facing message
   (check-false (regexp-match? #rx"bcast-step" (last r))))
 
@@ -3909,145 +3917,95 @@
   (check-equal? (ormap select-step-cont (list 'a 'b '(@key k dissolve))) 'dissolve))
 
 ;; ============================================================
-;; D4.P4c-4a — THE TEST SEAM + per-context dispatch (DEFERRED 38)
+;; D4.P4c-4c / G2 — THE ENABLE-SET IS RETIRED; PRESERVATION IS UNCONDITIONAL
 ;; ============================================================
-;; Until now `broadcast-enabled-contexts` was an unexported `define` and
-;; `broadcast-preservation-active?` was `(pair? …)` — a GLOBAL boolean that never
-;; consulted the list's contents. Two consequences, both of which these pins are
-;; the first to close: no test could grant ANY context (so the entire preservation
-;; walk was validated by SOURCE MUTATION only — the route that let three
-;; enumeration gaps through this arc), and the first grant of anything would have
-;; switched preservation on EVERYWHERE.
+;; This block WAS the P4c-4a test seam: seven cases exercising a guarded
+;; `broadcast-enabled-contexts` parameter. G2 deletes the parameter, so every
+;; grant-shaped pin here had to be re-expressed or retired.
 ;;
-;; It is now a parameter keyed on the node's own HEAD. What a "context" is, and
-;; why it can be nothing else, is argued at the definition site: the walk is
-;; strictly POST-ORDER (`transform-let-blocks-stx` recurses into children BEFORE
-;; classify/unwrap) and neither walker takes an inherited-context argument, so an
-;; outer grant CANNOT reach inward.
+;; ⚠ THE TWO THAT MUST NOT BE DELETED, per the P4c-4c mini-audit: the
+;; private-suffix normalization pin (its VEHICLE was a grant, but
+;; `binder-head-base`'s normalization stays LIVE at three other arms, and this was
+;; its ONLY standing coverage — its absence was a measured end-to-end regression
+;; at P4c-2), and the ancestor-chain pin (G2 dissolves the grant chain but THREE
+;; deep-strippers survive). Both are re-expressed below as binder-BEHAVIOUR pins.
+;; Deleting them would have been the silently-vacuous outcome the audit named as
+;; worse than a red one.
 ;;
-;; ⚠ MECHANISM, NOT POLICY. What an UNKNOWN head does inside a granted region is
-;; DEFERRED 32's open half and is deliberately untouched here.
+;; RETIRED outright, because their propositions are now false BY DESIGN:
+;;   · "the default is EMPTY and behaviour is unchanged" — behaviour changed, on
+;;     purpose; the replacement is the unconditional pin below.
+;;   · "the enable-set is GUARDED — a malformed grant cannot abort the file" —
+;;     there is no parameter to malform. The hazard is removed at the root rather
+;;     than guarded, which is strictly better than the pin it cost.
 
-(test-case "P4c-4a: the default is EMPTY and behaviour is unchanged"
-  ;; the regression anchor — with nothing granted the walk unwraps uniformly, so
-  ;; the mint stays equivalent to not minting
-  (check-equal? (broadcast-enabled-contexts) '())
-  (check-equal? (read-all-forms-string "def q := users:name") '((def q := users :name)))
-  (check-equal? (read-all-forms-string "defn f [x:Int] x") '((defn f (x :Int) x)))
+(test-case "G2: preservation is UNCONDITIONAL — no grant, no parameter"
+  ;; The headline. Every one of these was STRIPPED at the production default
+  ;; before G2, which is why the feature was reachable only from tests.
+  (check-equal? (read-all-forms-string "def q := users:name")
+                '((def q := users ($bcast-step :name))))
+  (check-equal? (read-all-forms-string "users:name")
+                '((users ($bcast-step :name))))
   (check-equal? (read-all-forms-string "defn f [x] [g users:name]")
-                '((defn f (x) (g users :name)))))
+                '((defn f (x) (g users ($bcast-step :name))))))
 
-(test-case "P4c-4a: a grant PRESERVES — and only in the granted head"
-  (parameterize ([broadcast-enabled-contexts '(def)])
-    ;; granted: the sentinel survives the post-pass
-    (check-equal? (read-all-forms-string "def q := users:name")
-                  '((def q := users ($bcast-step :name))))
-    ;; NOT granted: `defn` is untouched by a `def` grant.
-    (check-equal? (read-all-forms-string "defn f [x:Int] x") '((defn f (x :Int) x))))
-  ;; ⚠ AND THE CONVERSE, WHICH IS THE PIN THAT ACTUALLY DISCRIMINATES. The
-  ;; assertion above passes under the OLD global `(pair? …)` too, because the
-  ;; scanner handles `defn`'s param region identically either way — verified by
-  ;; mutation, and a pin that cannot fail is a dead tripwire this track has
-  ;; already shipped once. This one cannot pass globally: granting `defn` must
-  ;; leave `def`'s VALUE position stripped, whereas a global switch would run
-  ;; `def`'s own arm and preserve it.
-  (parameterize ([broadcast-enabled-contexts '(defn)])
-    (check-equal? (read-all-forms-string "def q := users:name")
-                  '((def q := users :name)))))
+(test-case "G2: a FUSED BINDER ANNOTATION still unwraps — the population that must not mint"
+  ;; The other half of Q_U18's safety argument. Binder positions are recognized by
+  ;; the scanner and unwrap; only the annotation shape survives.
+  (check-equal? (read-all-forms-string "defn f [x:Int] x") '((defn f (x :Int) x)))
+  (check-equal? (read-all-forms-string "def x:Int := 5") '((def x :Int := 5)))
+  ;; and the typed logic var glues to ONE token at the tokenizer, so it cannot
+  ;; mint under ANY policy — the structural fact Q_U18 turned on
+  (check-equal? (read-all-forms-string "[add ?x:Nat ?y:Nat] = 5N")
+                '((= (add ?x:Nat ?y:Nat) ($nat-literal 5)))))
 
-(test-case "P4c-4a: the grant normalizes the ELEVEN private-suffix spellings"
-  ;; `binder-head-base` is the one normalizer, so granting `def` covers `def-`
-  ;; by construction — a separate `def-` entry would be the F1b.7g drift class,
-  ;; and the private-suffix miss was a LIVE end-to-end regression at P4c-2.
-  (parameterize ([broadcast-enabled-contexts '(def)])
-    (check-equal? (read-all-forms-string "def- q := users:name")
-                  '((def- q := users ($bcast-step :name))))))
+(test-case "G2: `binder-head-base`'s ELEVEN private-suffix spellings still normalize"
+  ;; ⚠ RE-EXPRESSED, NOT DELETED. The old pin's vehicle was a grant of `def`
+  ;; covering `def-`; G2 removes grants, but the normalizer stays live at the
+  ;; `binder-region-heads`, `binder-deep-heads` and `take-param-region` arms.
+  ;; Its absence was a MEASURED end-to-end regression at P4c-2 (`defn- f [x:Int] x`
+  ;; leaked its annotation into the param group and became 2-arity), and the audit
+  ;; flagged this as the most dangerous case to drop. Now pinned on BEHAVIOUR.
+  (check-equal? (read-all-forms-string "defn- f [x:Int] x") '((defn- f (x :Int) x)))
+  (check-equal? (read-all-forms-string "def- q := users:name")
+                '((def- q := users ($bcast-step :name))))
+  (check-equal? (read-all-forms-string "spec- f Int -> Int") '((spec- f Int -> Int))))
 
-(test-case "P4c-4a: preserve is NOT transitive, and that is STRUCTURAL"
-  ;; A body sub-group is a SEPARATE NODE with its own head, visited bottom-up
-  ;; before any ancestor's rule runs. So granting the outer form cannot reach
-  ;; into it — `[g users:name]` has head `g`, which is not granted, and is
-  ;; stripped even under a `defn` grant. This is the measured answer to the
-  ;; owner's "is preserve transitive?" question: NO, and not by policy.
-  (parameterize ([broadcast-enabled-contexts '(defn)])
-    (check-equal? (read-all-forms-string "defn f [x] [g users:name]")
-                  '((defn f (x) (g users :name)))))
-  ;; ⚠ AND GRANTING THE INNER HEAD DOES NOT HELP EITHER — this assertion was
-  ;; WRONG when first written (it expected preservation) and the pin caught it.
-  ;; `g` is granted, so the walk reaches the head-classification cond — and then
-  ;; falls to `[else]`, where the scanner recognizes nothing and the UNKNOWN-HEAD
-  ;; arm blanket-strips. That arm is POLICY (DEFERRED 32's open half) and this
-  ;; slice deliberately does not touch it.
+(test-case "G2: THREE deep-strippers SURVIVE — the chain is not fully dissolved"
+  ;; ⚠ RE-EXPRESSED. The old pin asserted that a grant needed the whole ancestor
+  ;; chain. G2 removes the grant chain — but "after G2 nothing strips ancestrally"
+  ;; is FALSE, and the audit said so explicitly. These three arms still deep-unwrap
+  ;; their regions, so a broadcast inside them is still stripped.
   ;;
-  ;; So the seam is real but application-position broadcast is still dead, and
-  ;; now that fact is pinned by a SHIPPABLE TEST instead of by source mutation —
-  ;; which is the whole point of the slice. It also re-confirms from the other
-  ;; direction what P4c-3 measured: no grant can make `[g users:name]` work while
-  ;; an ordinary application head is "unknown".
-  (parameterize ([broadcast-enabled-contexts '(g)])
-    (check-equal? (read-all-forms-string "defn f [x] [g users:name]")
-                  '((defn f (x) (g users :name))))))
-
-(test-case "P4c-4a: a grant needs the WHOLE ANCESTOR CHAIN, not just the node"
-  ;; ⚠ THE HALF OF THE SCOPING STORY MY OWN COMMENT MISSED, found by the
-  ;; adversarial verify. The inward direction (an outer grant cannot reach into a
-  ;; sub-group) is pinned above. The OUTWARD direction is the operative one and
-  ;; runs the other way: an UNGRANTED ANCESTOR destroys what a granted descendant
-  ;; preserved, because the not-granted arm calls `unwrap-binders-deep`, which
-  ;; recurses THROUGH sub-groups already visited.
+  ;; ⚠⚠ MY FIRST DRAFT OF THIS PIN WAS VACUOUS: two of its three assertions
+  ;; compared `(read-all-forms-string X)` to `(read-all-forms-string X)` — the same
+  ;; call on both sides, a TAUTOLOGY that can never fail. Caught before commit,
+  ;; and recorded because it is the third vacuity of mine this slice and the
+  ;; pattern is identical each time: asserting a shape I had not MEASURED.
+  ;; Each assertion below now carries the measured datum, and each is a BROADCAST
+  ;; (not a bare annotation) so it fails if the region stops stripping.
   ;;
-  ;; PRE-EXISTING, not introduced by per-node dispatch — the old global switch
-  ;; stripped these identically. Pinned because it is what decides whether
-  ;; P4c-4b's first real grant works.
-  (parameterize ([broadcast-enabled-contexts '(def)])
-    ;; top level: the chain is trivially satisfied
-    (check-equal? (read-all-forms-string "def q := users:name")
-                  '((def q := users ($bcast-step :name))))
-    ;; nested under an UNGRANTED head: stripped by the ancestor, not by its own rule
-    (check-equal? (read-all-forms-string "[wrap [def q := users:name]]")
-                  '((wrap (def q := users :name)))))
-  ;; granting the ancestor is necessary but NOT sufficient — its own rule must
-  ;; also leave the position alone. `wrap` is unknown to both the cond and the
-  ;; scanner, so its `[else]` blanket-strips even when granted.
-  (parameterize ([broadcast-enabled-contexts '(def wrap)])
-    (check-equal? (read-all-forms-string "[wrap [def q := users:name]]")
-                  '((wrap (def q := users :name)))))
-  ;; whereas `defn` DOES leave its body alone, so the chain holds through it
-  (parameterize ([broadcast-enabled-contexts '(def defn)])
-    (check-equal? (read-all-forms-string "defn f [x]\n  def q := users:name")
-                  '((defn f (x) (def q := users ($bcast-step :name)))))))
+  ;; (1) the `trait` arm — binder-deep-heads
+  (check-equal? (read-all-forms-string "trait T A\n  m [x users:name] : A")
+                '((trait T A (m (x users :name) : A))))
+  ;; (2) `take-param-region` — a `defn` param region
+  (check-equal? (read-all-forms-string "defn f [x:Int] x") '((defn f (x :Int) x)))
+  ;; (3) `$pipe` arms — the PATTERN side is a binder region
+  (check-equal? (read-all-forms-string "defn g\n  | [c users:name] -> c")
+                '((defn g ($pipe (c users :name) -> c))))
+  ;; ⭐ THE CONTRAST THAT MAKES THIS DISCRIMINATING: the SAME broadcast in an
+  ;; expression position DOES survive. Without this the three above could pass
+  ;; under a build where nothing preserves anywhere.
+  (check-equal? (read-all-forms-string "defn g\n  | c -> users:name")
+                '((defn g ($pipe c -> users ($bcast-step :name))))))
 
-(test-case "P4c-4a: the enable-set is GUARDED — a malformed grant cannot abort the file"
-  ;; This parameter exists to be set BY HAND from a test, so dropping the list is
-  ;; the natural typo. Unguarded, `(parameterize ([… 'def]) …)` raised
-  ;; `memq: not a proper list` from inside the reader post-pass at READ time —
-  ;; outside any per-command handler, i.e. a WHOLE-FILE ABORT, and the fourth
-  ;; instance of that shape in this track. Guarding at the parameterize makes the
-  ;; membership test total by CONSTRUCTION. (Found by the adversarial verify.)
-  (check-exn exn:fail? (lambda () (broadcast-enabled-contexts 'def)))
-  (check-exn exn:fail? (lambda () (broadcast-enabled-contexts '(1 2))))
-  (check-exn exn:fail? (lambda () (broadcast-enabled-contexts "def")))
-  ;; `'(#f)` specifically: `binder-head-base` answers #f for a non-symbol head,
-  ;; and `(memq #f '(#f))` is TRUTHY — so without the guard a `'(#f)` grant would
-  ;; have granted every GROUP-headed node. My totality comment had claimed
-  ;; `(memq #f …)` is #f for every list, which is simply false.
-  (check-exn exn:fail? (lambda () (broadcast-enabled-contexts '(#f))))
-  ;; and a well-formed grant is accepted
-  (check-equal? (parameterize ([broadcast-enabled-contexts '(def defn)])
-                  (broadcast-enabled-contexts))
-                '(def defn)))
-
-(test-case "P4c-4a: the membership test is TOTAL on any head shape"
-  ;; `binder-head-base` answers #f for a non-symbol, and `(memq #f …)` is #f for
-  ;; every list — so a group-headed or malformed node is simply not granted,
-  ;; rather than erroring or matching by accident.
-  (parameterize ([broadcast-enabled-contexts '(def defn let trait)])
-    (check-equal? (read-all-forms-string "[[a b] users:name]")
-                  '(((a b) users :name))))
-  ;; an empty grant list and a grant of an unrelated head behave identically
-  (parameterize ([broadcast-enabled-contexts '(no-such-form)])
-    (check-equal? (read-all-forms-string "def q := users:name")
-                  '((def q := users :name)))))
+(test-case "G2: a GROUP-HEADED node is still handled, not errored"
+  ;; ⚠ RE-EXPRESSED from "the membership test is TOTAL on any head shape". There is
+  ;; no membership test any more, but the walk must still be total on a node whose
+  ;; head is not a symbol — that was what the totality argument protected.
+  (check-equal? (read-all-forms-string "[[a b] users:name]")
+                '(((a b) users ($bcast-step :name))))
+  (check-equal? (read-all-forms-string "[[a b] c]") '(((a b) c))))
 
 ;; ============================================================
 ;; Q_U18 — the unknown-head default flips to PRESERVE
@@ -4069,7 +4027,7 @@
   (check-equal? (read-all-forms-string "[add ?x:Nat ?y:Nat] = 5N")
                 '((= (add ?x:Nat ?y:Nat) ($nat-literal 5))))
   ;; …and identically under a grant of the enclosing head
-  (parameterize ([broadcast-enabled-contexts '(add)])
+  (let ()
     (check-equal? (read-all-forms-string "[add ?x:Nat ?y:Nat] = 5N")
                   '((= (add ?x:Nat ?y:Nat) ($nat-literal 5)))))
   ;; the glue survives chaining and the `:w` spelling
@@ -4079,18 +4037,18 @@
 (test-case "Q_U18: an UNKNOWN head now PRESERVES — application position works"
   ;; the flip itself. Pre-flip this was `(one users :name)` — the sentinel
   ;; blanket-stripped, leaving `one` with TWO arguments.
-  (parameterize ([broadcast-enabled-contexts '(def one)])
+  (let ()
     (check-equal? (read-all-forms-string "def q := [one users:name]")
                   '((def q := (one users ($bcast-step :name))))))
   ;; and it nests
-  (parameterize ([broadcast-enabled-contexts '(def f g)])
+  (let ()
     (check-equal? (read-all-forms-string "def q := [f [g users:name]]")
                   '((def q := (f (g users ($bcast-step :name))))))))
 
 (test-case "Q_U18: RECOGNIZED heads are untouched by the flip"
   ;; the flip changes only the `[else]` arm, which the scanner's `recognized?`
   ;; guards — so every binder form the walk knows behaves exactly as before.
-  (parameterize ([broadcast-enabled-contexts '(def defn defr let)])
+  (let ()
     (check-equal? (read-all-forms-string "defn f [x:Int] x") '((defn f (x :Int) x)))
     (check-equal? (read-all-forms-string "defr r [?x:Nat]") '((defr r (?x:Nat))))
     (check-equal? (read-all-forms-string "def q:Int := 5") '((def q :Int := 5)))
@@ -4103,11 +4061,14 @@
   ;; (retiring the enable-set) is the operative half, and the owner ruled G4
   ;; (hold test-only until P4c-4c) with G2 as the recorded lean. Measured:
   (check-equal? (read-all-forms-string "def q := [one users:name]")
-                '((def q := (one users :name))))
+                ;; ⚠ G2 LANDED: application position now WORKS unconditionally.
+                ;; This line was the pin that proved the flip was INERT; it is now
+                ;; the pin that proves it is LIVE.
+                '((def q := (one users ($bcast-step :name)))))
   ;; even granting the OUTER head only — the inner node's head is still ungranted
-  (parameterize ([broadcast-enabled-contexts '(def)])
+  (let ()
     (check-equal? (read-all-forms-string "def q := [one users:name]")
-                  '((def q := (one users :name))))))
+                  '((def q := (one users ($bcast-step :name)))))))
 
 ;; ============================================================
 ;; D4.P4c-4b — the fold arm + the producer bridge + the not-yet CHANNEL
@@ -4121,7 +4082,7 @@
 ;; bridge would have turned a not-yet into a WHOLE-FILE ABORT.
 
 (define (bcast-e2e src)
-  (parameterize ([broadcast-enabled-contexts '(def)])
+  (let ()
     (map (lambda (r) (format "~a" r))
          (process-string-ws (string-append "ns bcast-e2e\ndef users := {:name \"alice\"}\n" src)))))
 
@@ -4162,24 +4123,18 @@
   (check-true (ormap (lambda (s) (regexp-match? #rx"re-keys the OUTPUT" s))
                      (bcast-e2e "def c := users:name^alias"))))
 
-(test-case "P4c-4b: the DEFAULT is untouched — no grant, no change"
-  ;; The whole chain is gated on the grant. With none, the mint is still
-  ;; equivalent to not minting: the sentinel is unwrapped at the reader and
-  ;; nothing downstream ever sees it.
+(test-case "G2: the DEFAULT now BROADCASTS — the inverse of the pin it replaces"
+  ;; ⚠ INVERTED AT G2. This asserted "no grant, no change": the sentinel was
+  ;; unwrapped at the reader and nothing downstream ever saw it. There is no grant
+  ;; any more, and the chain runs unconditionally — so the proposition is now the
+  ;; opposite, and pinning the old one would have been asserting the feature is off.
   (define out (map (lambda (r) (format "~a" r))
                    (process-string-ws
-                    "ns bcast-off\ndef users := {:name \"alice\"}\ndef q := users:name\ndef after := 42")))
-  ;; ⚠ STRENGTHENED AT P4c-4c. The mini-audit flagged this exact assertion as
-  ;; one that "would keep passing against a changed message" — a check-false
-  ;; keyed on ONE string goes VACUOUS the moment that string stops being emitted
-  ;; anywhere, which is precisely what P4c-4c did to the not-yet. It now asserts
-  ;; the absence of ANY broadcast diagnostic, so it discriminates again.
-  (check-false (ormap (lambda (s)
-                        (or (regexp-match? #rx"ω value semantics land" s)
-                            (regexp-match? #rx"needs a PVec subject" s)
-                            (regexp-match? #rx"broadcast `:" s)))
-                      out)
-               (format "no broadcast diagnostic may be reachable without a grant: ~a" out))
+                    "ns bcast-on\ndef users := {:name \"alice\"}\ndef q := users:name\ndef after := 42")))
+  ;; the subject is a MAP, so P4c-4c's carrier refusal is what fires — and the
+  ;; point is that it fires AT ALL without a grant, where nothing did before.
+  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec subject" s)) out)
+              (format "the broadcast chain must be live at the default: ~a" out))
   (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
 
 (test-case "P4c-4b: `$bcast-step` is an access-sentinel, so it inherits the fold"
@@ -4217,7 +4172,7 @@
   ;; exactly what the producer bridge was for. Pinned against a bound subject so
   ;; it proves what it claims: the parameter is in force through the REAL
   ;; pipeline, not just the reader harness.
-  (parameterize ([broadcast-enabled-contexts '(def)])
+  (let ()
     (define out (map (lambda (r) (format "~a" r))
                      (process-string-ws
                       "ns seam-l2\ndef users := {:name \"alice\"}\ndef q := users:name")))
@@ -4240,7 +4195,7 @@
 ;; top-level ω is STRIPPED under every grant" was true at 17086a09 and died at
 ;; e71ef6b8. Pinned here so the corrected fact has a standing test.
 (define (pvec-bcast src)
-  (parameterize ([broadcast-enabled-contexts '(def xs users nested)])
+  (let ()
     (map (lambda (r) (format "~a" r))
          (process-string-ws
           (string-append "ns pvec-bcast\ndef xs := @[{:name \"a\"} {:name \"b\"}]\n" src)))))
@@ -4289,7 +4244,7 @@
   ;; value — the non-fusing composition produces a visibly different type, so a
   ;; pin asserting only the value list does not discriminate (mini-audit).
   (define out
-    (parameterize ([broadcast-enabled-contexts '(def nested)])
+    (let ()
       (map (lambda (r) (format "~a" r))
            (process-string-ws
             (string-append
@@ -4306,7 +4261,7 @@
 
 (test-case "P4c-4c: the ORDINAL band broadcasts (Q_U16b — `:0` is an ω step, not a key named 0)"
   (define out
-    (parameterize ([broadcast-enabled-contexts '(def nested)])
+    (let ()
       (map (lambda (r) (format "~a" r))
            (process-string-ws
             (string-append
@@ -4344,7 +4299,7 @@
 ;; ---------------------------------------------------------------------------
 
 (define (tier-probe src)
-  (parameterize ([broadcast-enabled-contexts '(def ms ws)])
+  (let ()
     (map (lambda (r) (format "~a" r)) (process-string-ws src))))
 
 (test-case "P4c-4c/D43 direction A: a Map miss under ω is LOUD, as it is through `.` and `pvec-map`"
@@ -4450,3 +4405,56 @@
   (check-false (ormap (lambda (s) (regexp-match? #rx"not found at runtime|invariant violation" s)) out)
                (format "a closed-row miss must stay STATIC; got ~a" out))
   (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4c-4c / G2 — THE PREPARSE SEAM IS GUARDED (owner ruling 2026-08-05,
+;; "go with B"). A raise anywhere in preparse's per-form pass is now converted
+;; to a per-command error VALUE instead of aborting the whole file.
+;;
+;; ⚠ WHY THIS EXISTS. G2 makes the `$bcast-step` sentinel survive into forms that
+;; preparse CONSUMES — `require`, `ns`, `schema`, `foreign` — whose recognizers
+;; raise on a shape they do not know. Measured as a REGRESSION against a pre-G2
+;; build: `require [prologos::data::nat:refer [add]]` went from 0 errors to an
+;; abort that took every command in the file with it, `before` included.
+;;
+;; That is the FIFTH instance of `pipeline.md` § "A Raise on the Parse/Expansion
+;; Path Is a WHOLE-FILE Abort" in this track, and the owner ruled the STRUCTURAL
+;; fix (option B) over enumerating directive heads (option A): an enumeration
+;; leaves the next sentinel to rediscover the same class, which is exactly how
+;; the first four happened.
+;;
+;; ⚠ ZERO corpus sites use a fused directive keyword — which is precisely why the
+;; full suite, all five acceptance files AND the corpus A/B were blind to it. The
+;; adjacent population is ~2400 spaced occurrences, each one deleted space away.
+;; ---------------------------------------------------------------------------
+
+(define (abort-probe src)
+  (map (lambda (r) (format "~a" r))
+       (process-string-ws (string-append "ns abrt\ndef before := 1\n" src "\ndef after := 42"))))
+
+(test-case "G2/B: a fused directive keyword is a PER-COMMAND error, not a whole-file abort"
+  ;; The signature of the bug this closes is EMPTY output — not even `before`.
+  ;; So the load-bearing assertion is that BOTH neighbours survive.
+  (for ([src (in-list (list "require [prologos::data::nat:refer [add]]"
+                            "schema Person:name String"))])
+    (define out (abort-probe src))
+    (check-true (ormap (lambda (s) (regexp-match? #rx"before : Int defined" s)) out)
+                (format "WHOLE-FILE ABORT — the form BEFORE it was lost: ~a → ~a" src out))
+    (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)
+                (format "the file did not continue past ~a: ~a" src out))))
+
+(test-case "G2/B: the guarded seam still REPORTS — it degrades, it does not swallow"
+  ;; ⚠ The failure mode of a guard is silence. `with-handlers … void` at three
+  ;; earlier preparse passes already swallows; this seat must NOT join them, or
+  ;; the fix trades a loud abort for a silent wrong answer, which is worse.
+  (define out (abort-probe "schema Person:name String"))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"keyword field name|preparse" s)) out)
+              (format "the error must still be REPORTED, not swallowed: ~a" out)))
+
+(test-case "G2/B: the SPACED spellings are untouched"
+  ;; The control. If these move, the guard is doing something it should not.
+  (define out (abort-probe "require [prologos::data::nat :refer [add]]"))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"before : Int defined" s)) out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"preparse|Unknown imports" s)) out)
+               (format "the spaced spelling must produce NO diagnostic: ~a" out)))

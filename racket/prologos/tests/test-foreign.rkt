@@ -401,11 +401,15 @@
 
 (test-case "foreign/module-alias-no-decls"
   ;; Module alias with no declarations → error
-  (check-exn
-   exn:fail?
+  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
+  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
+  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
+  ;; they still raise (they fail before the guarded seam), and converting them
+  ;; would have weakened a correct assertion.
+  (check-true (yields-prologos-error?
    (lambda ()
      (run-ns
-      "(foreign racket \"racket/base\" :as rkt)"))))
+      "(foreign racket \"racket/base\" :as rkt)")))))
 
 ;; ========================================
 ;; Integration tests: Int, Posit, and List FFI types

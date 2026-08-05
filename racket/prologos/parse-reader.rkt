@@ -61,7 +61,6 @@
  ;; mutation-only validation is what let three enumeration gaps through this arc.
  ;; Production NEVER sets it; the default is empty and every grant is a test's
  ;; `parameterize`, until a context is granted for real alongside its consumer.
- broadcast-enabled-contexts
 
  ;; Cell constructors for propagator network
  create-parse-cells
@@ -2833,122 +2832,52 @@
 (define binder-region-heads '(def let))
 (define binder-region-terminators '(:= ->))
 
-;; ⭐ THE ENABLE-SET — the inverted default, made explicit, greppable, SCOPED,
-;; and (since D4.P4c-4a) settable from a test.
+;; ⚠ THE ENABLE-SET'S 68-LINE RATIONALE BLOCK LIVED HERE AND IS DELETED (G2,
+;; 2026-08-05). It is recorded rather than silently dropped because leaving it
+;; was itself a defect the G2 adversarial verify caught: the block sat DIRECTLY
+;; ABOVE its own obituary and asserted the INVERSE of shipped behaviour —
+;; "It is EMPTY BY DEFAULT, by ruling", "the whole mint is equivalent to not
+;; minting at all", "⚠ THIS IS OFF-NETWORK SCAFFOLDING … chartered retirement is
+;; PPN Track 4D", and a measured CHAIN table whose rows
+;; (`[wrap [def q := users:name]]` ⇒ STRIPPED) are now false. It also repeated
+;; the `[add ?x:Nat ?y:Nat]` counter-example that THIS SAME COMMIT corrects two
+;; hundred lines below. A file carrying a refuted claim and its refutation, with
+;; nothing marking which is dead, is worse than a file carrying neither.
 ;;
-;; These are the contexts in which a minted `$bcast-step` SURVIVES the post-pass.
-;; It is EMPTY BY DEFAULT, by ruling: with nothing granted the walk unwraps
-;; uniformly and the whole mint is equivalent to not minting at all, which is
-;; what makes "regression-free" a checkable property instead of a promise.
+;; What survives from it, because the retirement does not make it false: the walk
+;; is strictly POST-ORDER and neither walker takes an inherited-context argument,
+;; so every node is judged by its OWN head — there is no such thing as being
+;; "inside" a region. That is still how the three surviving deep-strippers
+;; (the `trait` arm, the `$pipe` pattern region, `take-param-region`) behave, and
+;; it is pinned in the battery.
 ;;
-;; ⚠ DO NOT read the empty default as "the machinery is unused". The
-;; binder-region walk below is fully built; what is switched off is only the
-;; PRESERVATION side. Contexts are granted one at a time as their consumer is
-;; wired — each a deliberate, testable act rather than an accident of which
-;; spelling happened to nest.
+;; ⭐ D4.P4c-4c / G2 — `broadcast-enabled-contexts` and
+;; `broadcast-preservation-active?` ARE RETIRED, and their whole rationale block
+;; with them. They were a TEST SEAM: a guarded parameter defaulting to `'()` with
+;; ZERO production setters, so head-keyed broadcast preservation ran nowhere
+;; outside the battery. That is the *Validated ≠ Deployed* shape, and Q_U18 named
+;; it as such and scheduled this retirement (grant ruling G4, then G2).
 ;;
-;; ── WHAT A "CONTEXT" IS, AND WHY IT CANNOT BE ANYTHING ELSE ──
-;; A context is the HEAD SYMBOL of the node whose kids are being unwrapped
-;; (`defn`, `def`, `let`, `trait`, …), normalized through `binder-head-base` so
-;; the eleven private-suffix spellings (`defn-` …) cannot drift from their bases.
+;; Both of the seam's justifications had expired: the sentinel gained a consumer
+;; at P4c-3, and the head-keyed policy question was settled by Q_U18's PRESERVE
+;; ruling. Keeping a switch beside a settled decision is this project's
+;; belt-and-suspenders red flag, not defence in depth — so it is DELETED, not
+;; defaulted-on. Preservation is now unconditional; see the retired first arm of
+;; the head-keyed walk below for the full argument.
 ;;
-;; That is the ONLY key this architecture admits, and the reason is structural,
-;; not a preference: `transform-let-blocks-stx` recurses into children BEFORE
-;; running `absorb-let-siblings` / `classify-let-block` / `apply-binder-unwrap`,
-;; so the walk is strictly POST-ORDER and there is NO inherited context channel —
-;; neither function takes an "am I inside a granted region" argument. Each node's
-;; fate is decided by its own head before any ancestor's rule ever runs, so an
-;; outer grant CANNOT reach inward. Anything richer (per-POSITION granting, a
-;; transitive preserve) would require a second pass over the classified tree,
-;; which is the shape the owner rejected architecturally — "parsing on
-;; propagators would not admit an ordering requirement or phase passes".
+;; ⚠ WHAT THE SEAM PROVED, kept because the retirement does not make it false:
+;; per-node dispatch means there is no such thing as being *inside* a granted
+;; region — every node is judged by its OWN head. Under G2 that is no longer
+;; observable as a grant question, but it is still how the walk works, and the
+;; three surviving deep-strippers (the `trait` arm, the `$pipe` pattern region,
+;; and `take-param-region`'s implicit/param groups) are where it still shows.
 ;;
-;; ⚠ CONSEQUENCE — AND THE FIRST VERSION OF THIS PARAGRAPH TOLD HALF OF IT. The
-;; inward direction is what it said: an outer grant cannot reach INTO a
-;; sub-group, because that sub-group is its own node with its own head. So
-;; "is preserve transitive?" is NO at this layer, structurally.
-;;
-;; But the OUTWARD direction is the operative one, and it is the opposite:
-;; an ungranted ANCESTOR destroys what a granted descendant preserved, because
-;; the not-granted arm calls `unwrap-binders-deep`, which recurses THROUGH
-;; sub-groups that have already been visited. Measured, granting `'(def)`:
-;;
-;;   def q := users:name                 ⇒ ($bcast-step :name)   PRESERVED
-;;   [wrap [def q := users:name]]        ⇒ :name                 STRIPPED
-;;   (grant '(def defn))  defn f [x]
-;;                          def q := …   ⇒ ($bcast-step :name)   PRESERVED
-;;
-;; So the real rule is a CHAIN, not a node property: **the node's head must be
-;; granted, AND every ancestor's head must be granted, AND each ancestor's own
-;; rule must leave that position alone** (`defn`'s scanner leaves bodies alone,
-;; so it passes; an unknown head like `wrap` deep-strips, so it does not — and
-;; granting `wrap` does not help, since its `[else]` arm strips anyway).
-;;
-;; This is PRE-EXISTING, not introduced by the per-node dispatch — the old global
-;; switch stripped the same inputs identically. But it is what will decide
-;; whether P4c-4b's first real grant works, so it is written here and pinned in
-;; the battery rather than rediscovered. (Found by the P4c-4a adversarial
-;; verify, which measured it; my own account had only the inward half.)
-;;
-;; ⚠ THIS IS OFF-NETWORK SCAFFOLDING. A hand-maintained enumeration consulted by
-;; imperative dispatch is not "structurally emergent information flow", and the
-;; parse layer installs ZERO propagators today. The chartered retirement is
-;; PPN Track 4D (attribute-grammar substrate unification), prerequisite-blocked
-;; on PPN 4C + PM Track 12. Named as scaffolding, not rationalized as a design.
-;;
-;; ⚠ WHAT IS *NOT* DECIDED HERE. The POLICY — what an UNKNOWN head does — is
-;; DEFERRED 32's open half and its ARM IS UNTOUCHED: measurement showed the
-;; head-keyed walk cannot decide it in either direction (strip kills
-;; application-position broadcast; preserve regresses live binder positions under
-;; unknown heads, e.g. `[add ?x:Nat ?y:Nat] = 5N`).
-;;
-;; ⚠ BUT "MECHANISM ONLY" IS TOO STRONG, and the first version of this comment
-;; asserted it. The `[else]` arm's CODE is untouched; its REACHABILITY is not.
-;; Under the old global switch every node reached the head-classification cond
-;; once anything was granted; now only granted heads do. Measured on
-;; `capability defn f [x:Int] users:name`: old-global-ON preserved the body (it
-;; reached `[else]`, whose scanner recognized `defn`), whereas granting `'(def)`
-;; today takes arm 1 and blanket-strips. Granting `'(capability)` restores it.
-;;
-;; PRODUCTION IS UNAFFECTED — the default is empty, so every input behaves
-;; exactly as before. But the claim to make at the close is "no production
-;; behaviour changes", NOT "policy is untouched": under per-node dispatch there
-;; is no longer any such thing as being *inside* a granted region, and that is a
-;; policy-visible difference the moment anything is granted. (The verify's
-;; finding; it refuted my own framing.)
-;; ⚠ THE GUARD IS LOAD-BEARING, and its absence admitted a WHOLE-FILE ABORT.
-;; This parameter exists to be set BY HAND from a test, so the natural typo is
-;; dropping the list — `(parameterize ([broadcast-enabled-contexts 'def]) …)`.
-;; Unguarded that raised `memq: not a proper list` from inside the post-pass at
-;; READ time, outside any per-command handler, losing every command in the file.
-;; That is the FOURTH instance of this shape in this track (P1a's
-;; `$retired-selection`, P4c-2's `apply-binder-unwrap`, `unwrap-bcast-step`
-;; below, here) — and the first three are documented one screen away, which is
-;; how it got written anyway. Found by the P4c-4a adversarial verify.
-;;
-;; Guarding at the PARAMETERIZE rather than at the read site is what makes the
-;; membership test total by CONSTRUCTION instead of by argument: only a proper
-;; list of symbols can ever be installed, so `memq` cannot fail and no non-symbol
-;; can ever match `binder-head-base`'s #f.
-(define broadcast-enabled-contexts
-  (make-parameter '()
-    (lambda (v)
-      (unless (and (list? v) (andmap symbol? v))
-        (raise-argument-error 'broadcast-enabled-contexts "(listof symbol?)" v))
-      v)))
-
-;; Is preservation granted for THIS node? Keyed on the node's own head, per the
-;; note above.
-;;
-;; Total on any `hd`: `binder-head-base` answers #f for a non-symbol (a group
-;; head, a number), and the guard above forbids `#f` from ever being IN the list,
-;; so a group-headed or malformed node can never be granted.
-;; ⚠ The first cut of this comment justified that with "`(memq #f …)` is #f for
-;; every list", which is FALSE — `(memq #f (list #f))` is `(#f)`. The conclusion
-;; held only because no sane caller writes `'(#f)`; it is now true by
-;; construction instead. (Also the verify's.)
-(define (broadcast-preservation-active? hd)
-  (and (memq (binder-head-base hd) (broadcast-enabled-contexts)) #t))
+;; ⚠ THE GUARD THAT DIED WITH IT was load-bearing while it lived: this parameter
+;; was set BY HAND from tests, so the natural typo was dropping the list, and
+;; unguarded that raised `memq: not a proper list` at READ time, outside any
+;; per-command handler — a WHOLE-FILE ABORT, the fourth of that shape in this
+;; track. Retiring the parameter removes the hazard at the root rather than
+;; guarding it; recorded so the lesson is not lost with the code.
 
 (define (bcast-step-stx? x)
   (and (syntax? x)
@@ -3105,17 +3034,29 @@
       (let* ([h (car kids)]
              [hd (and (syntax? h) (syntax-e h))])
         (cond
-          ;; NOT GRANTED for this node's head → unwrap uniformly. Placed as the
-          ;; FIRST arm so no head-specific rule can carve out a survivor and
-          ;; reintroduce the spelling-dependence this exists to prevent.
-          ;; ⚠ D4.P4c-4a: this was a GLOBAL test (`pair?` of the list), so the
-          ;; first grant of ANY context switched preservation on EVERYWHERE and
-          ;; the list's contents were never consulted — a boolean wearing a
-          ;; list's clothes. It is now keyed on THIS node's head, so a grant is
-          ;; scoped to the form it names. With nothing granted, behaviour is
-          ;; byte-identical to before.
-          [(not (broadcast-preservation-active? hd))
-           (map unwrap-binders-deep kids)]
+          ;; ⭐ D4.P4c-4c / G2 — THE ENABLE-SET IS RETIRED; PRESERVATION IS
+          ;; UNCONDITIONAL. The arm that stood here tested a grant list and, when
+          ;; the node's own head was not in it, deep-unwrapped everything below:
+          ;;
+          ;;   [(not (broadcast-preservation-active? hd)) (map unwrap-binders-deep kids)]
+          ;;
+          ;; It defaulted to `'()` and had ZERO production setters, so broadcast
+          ;; was reachable only from tests — the *Validated ≠ Deployed* shape,
+          ;; named as such at Q_U18. Its two stated justifications had both
+          ;; expired (the sentinel gained a consumer at P4c-3; the head-keyed
+          ;; policy question was settled by Q_U18's PRESERVE ruling), and keeping
+          ;; a mechanism beside a settled decision is this project's
+          ;; belt-and-suspenders red flag rather than defence in depth.
+          ;;
+          ;; ⚠ IT WAS ALSO THE OPERATIVE HALF, not cleanup: the Q_U18 PRESERVE
+          ;; flip was INERT while this arm stood, because it stripped any node
+          ;; whose OWN head was ungranted — and granting every function name is
+          ;; absurd. Retiring it is what delivers the feature.
+          ;;
+          ;; ⚠ AND IT DISSOLVES THE CHAIN RULE — but only partly, so do not
+          ;; over-claim: three deep-strippers SURVIVE (the `trait` arm below, the
+          ;; `$pipe` pattern region, and `take-param-region`'s implicit/param
+          ;; groups). "After G2 nothing strips ancestrally" is FALSE for those.
           ;; `$pipe` ARMS (defn AND match): the ARROW splits pattern from body.
           ;; Owner-caught; named by neither the audit nor the options panel.
           [(eq? hd '$pipe)
@@ -3182,10 +3123,24 @@
           ;; WHY IT IS SAFE, and the reason is STRUCTURAL rather than a table:
           ;; the binder population that shares this shape is the TYPED LOGIC VAR,
           ;; and `recognize-narrow-var-annot` GLUES `?x:Nat` into ONE TOKEN at the
-          ;; tokenizer — so it can never mint a `$bcast-step` and never reaches
-          ;; this arm as a sentinel. The discriminator was already in the tree,
-          ;; one layer below this walk. Measured: `[add ?x:Nat ?y:Nat] = 5N` reads
-          ;; as `((= (add ?x:Nat ?y:Nat) …))`, identical under any grant.
+          ;; tokenizer — so THAT spelling can never mint a `$bcast-step` and never
+          ;; reaches this arm as a sentinel. The discriminator was already in the
+          ;; tree, one layer below this walk. Measured: `[add ?x:Nat ?y:Nat] = 5N`
+          ;; reads as `((= (add ?x:Nat ?y:Nat) …))`, identical under any grant.
+          ;;
+          ;; ⚠⚠ THE SCOPE OF THAT GLUE IS NARROWER THAN THIS COMMENT FIRST SAID,
+          ;; and the over-claim was load-bearing so it is corrected rather than
+          ;; softened. "`?x:…` can never mint" is FALSE. The recognizer requires
+          ;; `?` at position 0 AND an IDENT-START segment after the colon, so:
+          ;;     ?x:Nat  ?x:w   → glue (one token, cannot mint)
+          ;;     ?x:0  ?x:9  ?x:10       → MINT (digits are not ident-start)
+          ;;     +?k:Int  -?k:Int  ??x:Int → MINT (`?` is not at position 0)
+          ;; Practical safety still holds and was probed END TO END — e.g.
+          ;; `defr rr [+?k:Int ?v]` is byte-identical on both legs with 0 errors,
+          ;; because the PARAM SCANNER catches what the tokenizer does not. So the
+          ;; conclusion survives; the stated mechanism did not, and a safety
+          ;; argument that names the wrong mechanism is how the next reader
+          ;; reaches a wrong conclusion from a right premise.
           ;;
           ;; ⚠ THE RECORD THIS CORRECTS. D4 and DEFERRED both said PRESERVE was
           ;; "refuted from the corpus" by exactly that line. It was not: the claim
@@ -3200,10 +3155,17 @@
           ;; ⚠ THE ACCEPTED RESIDUAL, named not smoothed over: `pattern-var?`
           ;; requires no sigil, so a macro binding a plain identifier —
           ;; `[myform x:Int]` — is a genuine binder under a genuinely unknown
-          ;; head. ZERO instances in tree; constructible in one line. It now
-          ;; takes the EXISTING `bcast-step-binder` arm, a per-command guided
-          ;; error already saying "this is a BINDER position … the fused spelling
-          ;; should work here". Loud and recoverable — a KNOWING, NARROW
+          ;; head. ZERO instances in tree; constructible in one line.
+          ;; ⚠⚠ CORRECTED — THIS JUSTIFICATION IS FALSE AT ITS OWN EXAMPLE. It
+          ;; used to say the residual "takes the EXISTING `bcast-step-binder` arm,
+          ;; a per-command guided error … Loud and recoverable." Probed with
+          ;; `myform` both unbound and BOUND: the actual diagnostic is
+          ;; `ERROR: Unbound variable` — identical on both legs. The guided arm
+          ;; lives in binder-GROUP parsing, and an unknown head has no binder-group
+          ;; parser to reach it. RECOVERABLE: true (per-command, file continues).
+          ;; LOUD AND GUIDED: false. The residual is still accepted, but on the
+          ;; honest ground — it is recoverable and breaks only code that does not
+          ;; exist — not on a guided message it never produces. A KNOWING, NARROW
           ;; exception to the inverted default's "never break working code",
           ;; ruled on the grounds that it breaks only code that does not exist
           ;; while the alternative kills application-position broadcast outright.
