@@ -1246,8 +1246,12 @@ items of the hold-point, ruled before P4a opened:
   load-bearing claim R-lens-verified on the main thread.
   **Next free Q-label after this: U20.**
 
-- <a id="q-u18"></a>**⬜ Q_U18 — THE UNKNOWN-HEAD POLICY *AND* THE FIRST
-  PRODUCTION GRANT ARE ONE DECISION. OPEN; GATES EVERY CORPUS UNCOMMENT.**
+- <a id="q-u18"></a>**⭐ Q_U18 — THE UNKNOWN-HEAD DEFAULT FLIPS TO *PRESERVE*.
+  RULED (policy half) [owner, 2026-08-02 — "worth the trade"].** The GRANT half
+  is still open — see the ruling block at the end of this entry.
+  *(Original framing, kept because the correction below is the point:)* the
+  unknown-head policy AND the first production grant are ONE decision, and it
+  GATES EVERY CORPUS UNCOMMENT.
   Opened 2026-08-02 at the P4c-4c mini-audit. They look like two questions and
   are one: the policy is *why* there is no production grant, so until it is
   ruled the entire broadcast surface is reachable only from tests. **That is the
@@ -1312,6 +1316,42 @@ items of the hold-point, ruled before P4a opened:
   but "**why is the reader deciding this at all?**"
   Grounding: options panel `wf_46bd24b7-5ca` (7 agents / 1.32M tokens); both
   refutations re-verified on the main thread before being recorded.
+
+  ---
+
+  **⭐ THE RULING (policy half) — owner, 2026-08-02: "worth the trade".**
+  **The unknown-head arm flips from STRIP to PRESERVE.** Adopted as option `O1`,
+  *"the sigil already IS the discriminator"* — and the word **already** is what
+  makes it a ruling rather than a gamble:
+  · `recognize-narrow-var-annot` GLUES `?x:Nat` into ONE TOKEN, so the
+    logic-variable binder population **cannot mint, by construction** — not by
+    enumeration, not by a maintained table. That is the discriminator the
+    question was hunting for, and it was already in the tree one layer below
+    the walk.
+  · **PRESERVE therefore has ZERO measured corpus regressions** (795-file
+    census). The evidence that had motivated STRIP was thinner than recorded:
+    the five "measured casualties" were **synthetic probes**, not corpus sites.
+  **OWED WITH IT — the one real defect the sigil analysis exposed**: close the
+  **DIGIT-HEADED HOLE**. `?x:0` does NOT glue and DOES mint
+  (`((def q := ?x ($bcast-step :0)))`), while `?x:Nat`, `?x:w`, `?x:Int:Even`
+  all glue. The recognizer's `ident-run` requires an ident-START after each `:`,
+  and a digit is not one. Fix at the TOKENIZER seat, where the rest of the
+  population is already handled.
+  **THE ACCEPTED RESIDUAL, named rather than smoothed over**: `pattern-var?`
+  accepts any symbol not in ~20 enumerated reader sentinels, so macro pattern
+  variables need no sigil — `[myform x:Int]` is a genuine binder under a
+  genuinely unknown head. **Zero instances in tree; constructible in one line.**
+  Under PRESERVE it takes the EXISTING `bcast-step-binder` arm, a per-command
+  guided error already saying *"this is a BINDER position … the fused spelling
+  should work here"*. So the failure is LOUD and RECOVERABLE.
+  ⚠ **This is a knowing, narrow exception to the INVERTED DEFAULT's criterion**
+  ("a miss must never mean *your working code now errors*"), and it is recorded
+  as such: it errors only for code that **does not exist in the tree**, the
+  diagnostic already exists, and the alternative — STRIP — makes broadcast in
+  application position permanently unreachable, which the acceptance-marker
+  evidence shows is most of the feature. **Trade accepted by the owner on that
+  framing.**
+  **NOT ruled here**: the GRANT mechanism (`G1`–`G4`) — see below.
 
 - <a id="q-u19"></a>**⬜ Q_U19 — WHAT DOES `^` MEAN ON A BROADCAST? OPEN.**
   Opened 2026-08-02 at the P4c-4c mini-audit. Under a grant the parser ALREADY
