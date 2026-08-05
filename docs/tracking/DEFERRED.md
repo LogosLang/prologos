@@ -3676,3 +3676,41 @@ DEFERRED 43's rider; the other half (the false "typing admitted the block" claus
 at a `'path` site) WAS discharged. Cosmetic, and deliberately not fixed inside a
 slice that had already moved production behaviour once — it needs a shared-helper
 signature change.
+
+### 50. 🔀 SPUN OUT (chip `task_204859b9`, 2026-08-04) — fused annotations in `defmacro` param lists, and `pattern-var?`'s sentinel gap
+
+**⚠ THE FRAMING THAT REACHED THE OWNER WAS WRONG, and the correction is the entry.**
+The P4c-4c mini-audit reported that G2 "newly leaks a `$bcast-step` into a
+`defmacro` pattern, SILENTLY", and I relayed that as a G2 regression; the owner
+ruled it into the slice on that basis. **It is not a G2 regression.** Measured at
+the production default, no grant:
+
+```
+defmacro twice [$c:Int $b] …   →  ((defmacro twice ($c :Int $b) …))          THREE params
+  (under the leaking grant)    →  ((defmacro twice ($c ($bcast-step :Int) $b) …))  also THREE
+```
+
+The fused annotation becomes a SEPARATE param item either way, inflating arity
+2→3, so the macro can never match. G2 changes the third item's SHAPE and nothing
+observable: `[twice 5 9]` reports `Unbound variable twice` on BOTH legs, and the
+spaced spelling `[$c $b]` works on both. **The datum differs; the meaning does
+not** — the arc's recurring failure, 4th instance, this time the audit's claim
+with my endorsement on top of it.
+
+**So the defect is PRE-EXISTING and independent of ω**: a fused annotation in a
+`defmacro` param list silently registers an unmatchable macro, and the user's only
+signal is a misleading "unbound variable" at the CALL site.
+
+**Root cause**: `param-group-candidate?` (parse-reader.rkt) rejects any `$`-headed
+group by SHAPE, and macro pattern variables are `$`-prefixed — so the macro's param
+region is never taken and never unwrapped. `defn [x:Int]` is unaffected and
+unwraps correctly even with the inner head granted, which isolates it.
+
+**Rides with it**: `pattern-var?` (macros.rkt) hand-excludes ~19 sentinels and its
+own comment records the residual at **23 of 33**, `$list-literal` included — a live
+whole-file abort for `'[1 2]` in a defmacro TEMPLATE today. Same underlying
+question (what IS a `$`-symbol?), so they should be solved once. ⚠ I hypothesised
+`$bcast-step` would abort in a template too and **probed it — it did NOT
+reproduce**; recorded so the next session does not inherit an unverified claim.
+
+**Not blocking G2**: nothing here is caused by, or gates, the P4c-4c/G2 work.
