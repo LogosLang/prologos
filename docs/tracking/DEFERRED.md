@@ -10,9 +10,9 @@ See `docs/tracking/principles/DEVELOPMENT_LESSONS.org` § "Completeness Over
 Deferral".
 
 **Completed items**: Moved to `DEFERRED_COMPLETE.md` during staleness sweeps.
-Last sweep 2026-08-05 (36 entries; the previous one was 2026-03-20, and in the
+Last sweep 2026-08-05 (37 entries; the previous one was 2026-03-20, and in the
 interval a third of this file had become closed entries). **Read the body, not
-the header** — three `✅`-headed entries were kept here because they carry
+the header** — two `✅`-headed entries were kept here because they carry
 residue the header does not advertise, and the sweep only found them by
 reading. A `✅` header means "the thing named in the title is done", not
 "nothing in this entry is open".
@@ -580,32 +580,6 @@ tower, not a local patch. The candidates each have a cost:
 Still Num Track 1 territory, as originally filed. What has changed is that it
 is now a three-line repro with a named mechanism and a demonstrated runtime
 violation, instead of a suspicion.
-
-## ✅ CLOSED `c38f175a` — `def X :=` + multi-key layout body fails (filed 2026-07-28, fixed 2026-08-02)
-
-`expand-def-assign` (macros.rkt) auto-wraps a multi-token RHS as an
-APPLICATION — which is right for `def x := some 42N` and wrong for a layout map
-body, where it built `((:eu …) (:us …))`. Hence "Could not infer type": the
-diagnostic named typing for what the entry correctly called a parse/layout
-seam.
-
-The no-`:=` spelling worked because it reaches `rewrite-implicit-map` with its
-keyword tail intact. So the fix SPLICES an all-keyword/dash-headed RHS instead
-of wrapping it, and both spellings go through the one rewrite — rather than a
-second map-building path being added on the `:=` side.
-
-Narrow by construction: multi-token AND every token keyword- or dash-headed. A
-single keyword group already spliced correctly, and anything else keeps the
-application default.
-
-The test is an A/B — the two spellings must agree — because asserting on either
-one alone would have passed throughout the divergence.
-
-**Found while testing, NOT this defect and still open**: `def r : {:a Int :b Int}`
-fails with "Expression is not a valid type" in ALL THREE spellings (`:=`
-layout, no-`:=` layout, and single-line `:= {:a 1 :b 2}`). A map literal as a
-TYPE annotation, independent of the layout seam; it behaved identically before
-this fix.
 
 ## CIU T6 F-carrier: the Q_E(b) carrier unification — consolidated retirement home (D26 stub charter, 2026-07-17)
 

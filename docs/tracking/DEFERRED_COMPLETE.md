@@ -4,11 +4,11 @@ Items moved from `DEFERRED.md` during staleness sweeps. These are deferred
 items that have been fully implemented. Kept for historical reference and
 traceability.
 
-**Sweeps**: 2026-03-20 (initial) · 2026-08-05 (36 entries — the file had gone
+**Sweeps**: 2026-03-20 (initial) · 2026-08-05 (37 entries — the file had gone
 four months without one, so `DEFERRED.md` had accumulated 37 `✅`-headed
-entries, a third of its 107, and had grown to 7937 lines. Three `✅` entries
-were deliberately LEFT in `DEFERRED.md` because they carry live residue their
-header does not advertise; see the note below.)
+entries, a third of its 107, and had grown to 7937 lines. Two `✅` entries were
+deliberately LEFT in `DEFERRED.md` because they carry live residue their header
+does not advertise; see the note below.)
 
 Two entries moved as pairs with their `(original)` filing, so the historical
 framing sits beside the resolution that corrected it.
@@ -18,8 +18,13 @@ framing sits beside the resolution that corrected it.
 | entry | what is still open |
 |---|---|
 | `✅ CLOSED ccf7adb0` — `(when C (parse-error …))` discards a diagnostic | the structural half: `parse-error` returning rather than raising |
-| `✅ CLOSED c38f175a` — `def X :=` + multi-key layout body | a second defect found while testing it, unrelated and unfixed |
 | `✅ RESOLVED bb45d2a0` — the acceptance file is gated | its own header says PARTIAL: `test-rel-t1-pol.rkt` is Level-2 throughout |
+
+(A third — `✅ CLOSED c38f175a`, `def X :=` + multi-key layout body — was also
+held back, then re-probed the same day and archived after all: its residue's
+premise was stale AND its subject turned out to be owner ruling Q2, already
+tracked in three other places. Re-probing a residue before trusting it is worth
+the ten minutes.)
 
 That a `✅` header can hide open work is the reason this sweep read every
 entry's body rather than filtering on the header.
@@ -1729,3 +1734,60 @@ point of change. Named in design §8 prose; not filed, not test-pinned.
 `process-string-ws` (the L2 path) would fail loudly if the merge winner flipped.
 
 ---
+
+---
+
+## ✅ CLOSED `c38f175a` — `def X :=` + multi-key layout body fails (filed 2026-07-28, fixed 2026-08-02)
+
+`expand-def-assign` (macros.rkt) auto-wraps a multi-token RHS as an
+APPLICATION — which is right for `def x := some 42N` and wrong for a layout map
+body, where it built `((:eu …) (:us …))`. Hence "Could not infer type": the
+diagnostic named typing for what the entry correctly called a parse/layout
+seam.
+
+The no-`:=` spelling worked because it reaches `rewrite-implicit-map` with its
+keyword tail intact. So the fix SPLICES an all-keyword/dash-headed RHS instead
+of wrapping it, and both spellings go through the one rewrite — rather than a
+second map-building path being added on the `:=` side.
+
+Narrow by construction: multi-token AND every token keyword- or dash-headed. A
+single keyword group already spliced correctly, and anything else keeps the
+application default.
+
+The test is an A/B — the two spellings must agree — because asserting on either
+one alone would have passed throughout the divergence.
+
+**The residue this entry carried is RESOLVED as a duplicate (re-probed 2026-08-05).**
+It read: "`def r : {:a Int :b Int}` fails with *Expression is not a valid type*
+in ALL THREE spellings — a map literal as a TYPE annotation, independent of the
+layout seam."
+
+Both halves of that are now wrong. The message is no longer
+"Expression is not a valid type" (`38ab4bbd` replaced it with a guided one that
+names the `{…}` collision and shows the inference route), and the underlying gap
+is not independent — it is **owner ruling Q2**, "can `{…}` mean a row type", and
+is already tracked in three places:
+
+- `2026-08-05_1751_FOUR_OPEN_OWNER_RULINGS.md` § Q2 — the ruling itself
+- `## Rel T1 POL.9b` (this file) item 2 — the `def`-seam manifestation
+- the row-annotation-message entry (this file) — what the messages become once
+  a spelling exists
+
+Current behaviour, verified on all four shapes via `tools/run-file.rkt`:
+
+```
+def bad       : {:a Int :b Int} := {:a 1 :b "two"}   ← guided row-spelling error
+def missing   : {:a Int :b Int} := {:a 1}            ← guided row-spelling error
+def extra     : {:a Int}        := {:a 1 :b 2}       ← guided row-spelling error
+def wrongkind : Int             := {:a 1}            ← Type mismatch (correct)
+```
+
+So the annotation is REFUSED, not silently accepted — the first three fail at
+the spelling, before any field check, which is why they all report the same
+thing. Nothing here needs its own entry.
+
+⚠ Method note, because it nearly produced a wrong filing: `racket driver.rkt
+FILE` prints the counter banners and **no errors at all** — its `main` calls
+`process-file` and discards the returned results. Four probes came back "clean"
+including `def bad : Int := "hello"`, which is how the sanity check caught it.
+Use `racket racket/prologos/tools/run-file.rkt FILE`.
