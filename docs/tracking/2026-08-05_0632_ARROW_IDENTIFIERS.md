@@ -18,8 +18,8 @@ works. Today it does not, and the failure is a reader-layer mis-lex.
 | P1 | `->`-bearing identifier recognizer + tokenizer battery | ✅ | Two loop arms, not a new recognizer — see [§5](#p1). Corpus A/B **0 diffs / 161 files**. `tests/test-arrow-identifiers.rkt` (10). |
 | P2 | Same rule for `recognize-keyword` (owner ruling R1) | ✅ | Landed **with** P1: splitting them would have shipped the F1b.7g drift for one commit. [§5](#p2) |
 | P1b | Guided error for half-glued `a-> b` / `foo->` (owner ruling R2) | ✅ | Shared helper in `errors.rkt`; 2 of 4 manifestations covered, the other 2 **pinned as uncovered**. [§5](#p1b) |
-| P3 | Un-comment the 2026-03-18 acceptance block | ⬜ | Corpus A/B already done in P1. [§5](#p3) |
-| X.close | Bench/doc-truth sweep, DEFERRED triage, PIR | ⬜ | Per the objective PIR gate |
+| P3 | L3 acceptance coverage | ✅ | **RE-SCOPED**: the target block cannot be un-commented (two other blockers). New marker-bearing file instead, 14/14. [§5](#p3) |
+| X.close | Bench/doc-truth sweep, DEFERRED triage | ⬜ | **NO PIR** — owner ruling 2026-08-05, explicit exception to the objective PIR gate. |
 
 ---
 
@@ -194,12 +194,42 @@ trailing dash, a trailing dash not followed by `>`, a bare `-`, and a
 non-symbol all return `#f`; and a correctly-glued `ok->name` is unaffected.
 
 <a id="p3"></a>
-### P3 — acceptance ⬜
+### P3 — L3 acceptance coverage ✅ (RE-SCOPED)
 
-Corpus A/B is **done** (in P1): `tools/reader-corpus-ab.rkt`, both legs on one
-pinned 161-file snapshot, **zero diffs**, 0 read-errors per leg. Remaining: un-
-comment the `int->str` block in
-`examples/2026-03-18-track7-acceptance.prologos`, waiting since 2026-03-18.
+**The planned deliverable was not achievable, and the probing said so before
+any edit.** P3 was "un-comment the `int->str` block in
+`examples/2026-03-18-track7-acceptance.prologos`". That block has **three**
+blockers; ARROW fixed one:
+
+1. ✅ the reader/arrow blocker — fixed by P1;
+2. ❌ **`int->str` never existed.** It is an aspirational name; the real
+   Int → String is `str::from-int` — itself declared
+   `foreign racket ["number->string" :as from-int …]`, i.e. the arrow-free
+   alias that *was* the in-tree workaround for this very defect;
+3. ❌ **`Tree A` is parameterized `data`**, which mis-parses: the TYPE
+   PARAMETER is consumed as a nullary constructor and `leaf`/`branch` are
+   never bound. Measured — `data Tree A | leaf A | …` then `[leaf 42]` gives
+   `A : ns::Tree defined.` plus `Unbound variable`. Filed separately.
+
+That file is also a poor gate: **>15 minutes** to run, and **zero `;;N=>`
+markers** (it predates the marker system, CIU T6 F1 Pre-0 2026-07-06 — which
+is why every marker count the dailies cite belongs to a *newer* file).
+
+**Delivered instead**, serving the same intent (prove the feature at L3):
+
+- **`examples/2026-08-05-arrow-identifiers.prologos`** — new, marker-bearing,
+  `--check`-gateable: **14 expectations, 14 passed**. Covers an arrow-named
+  `spec`+`defn`+application, the reported `centigrade->fahrenheit` case
+  verbatim, composition of two arrow names, a chained `a->b->c`, an arrow name
+  carrying a `::` module path, and two regression anchors (the spaced arrow,
+  and an angle group that must still close). The `defined.` lines are marked
+  as well as the values, so the signature DISPLAY is pinned too.
+- **Comment-only corrections** to the 2026-03-18 file: the arrow annotation now
+  records the fix and the two remaining blockers, and the **E2 annotation —
+  which five sites point at — was found HALF STALE** and corrected.
+  Non-parameterized `data` works today (`Direction` probe: 0 errors), so those
+  blocks are re-triable; only the parameterized ones are still blocked.
+  Verified comment-only, so the 15-minute file needs no re-run.
 
 <a id="p0"></a>
 ## 6. P0 — subsumed, do not implement

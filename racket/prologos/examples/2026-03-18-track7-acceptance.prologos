@@ -350,14 +350,33 @@ c1-id 42
 
 ;; --- E2: Data declaration with multiple constructors ---
 
-;; BUG (L3): User-defined `data` declarations at file level don't register
-;; their constructors in the global environment. All nullary constructors
-;; (north, south, leaf, red, monday, etc.) are "Unbound variable" at usage
-;; sites. Prelude-defined data types (Nat, Bool, List, Option, Result) work
-;; because they're loaded via module import, not file-level `data`.
-;; Hypothesis: file-level preparse handles `data` differently than module
-;; loading — constructor registration may happen in a scope that doesn't
-;; persist to subsequent commands in the same file.
+;; BUG (L3) — ⚠ HALF STALE, corrected 2026-08-05 (measured while closing
+;; ARROW T1; five sites in this file point at this annotation).
+;;
+;; The original claim was that NO file-level `data` registers its
+;; constructors. That is no longer true, and the split is sharper than
+;; "file-level vs module import":
+;;
+;;   ✅ NON-PARAMETERIZED `data` WORKS TODAY. Probe:
+;;        data Direction | north | south
+;;        spec opposite Direction -> Direction
+;;        defn opposite | north -> south | south -> north
+;;        [opposite north]
+;;      => north/south/opposite all defined, result `south`, 0 errors.
+;;      So the E2 `Direction` block below can be un-commented.
+;;
+;;   ❌ PARAMETERIZED `data` IS STILL BROKEN, and mis-parses rather than
+;;      merely failing to register: the TYPE PARAMETER is consumed as a
+;;      nullary constructor and the real constructors are never bound. Probe:
+;;        data Tree A | leaf A | branch [Tree A] [Tree A]
+;;        [leaf 42]
+;;      => `Tree : [Type 0] defined.` then `A : ns::Tree defined.` (!) and
+;;         `Unbound variable` for leaf. `A` is the type parameter, not a
+;;         constructor.
+;;
+;; So every "constructors unbound" note below is accurate ONLY where the type
+;; is parameterized (Tree, and any `data X A`). The nullary ones (Direction,
+;; Color, …) are stale and their blocks should be re-tried.
 
 data Direction
   | north
@@ -884,11 +903,24 @@ def j5c : <Int | Bool> := true
 
 ;; --- K2: Multi-constructor dispatch with functional result ---
 
-;; BUG (L3, reader): `int->str` name parsed as arrow `->` inside angle bracket.
-;; The `>` in `int->str` confuses the reader's angle bracket parser when
-;; it appears in a multi-arity pattern arm with `->` as separator.
-;; Hypothesis: reader's tokenizer doesn't distinguish `->` as identifier
-;; character vs. arrow syntax in this context.
+;; ✅ ARROW BLOCKER FIXED 2026-08-05 (ARROW T1 P1, `5616e3c7`). The original
+;; hypothesis below was CORRECT: the reader's tokenizer did not distinguish
+;; `->` as an identifier character from the arrow separator. `-` is an
+;; ident-continue char, so `int->str` lexed as `int-` · rangle `>` · `str` —
+;; the name truncated at the dash. `->` flanked by identifier chars on both
+;; sides is now part of the name. Live L3 proof:
+;; `examples/2026-08-05-arrow-identifiers.prologos` (14/14 --check).
+;;
+;; ⚠ THIS BLOCK IS STILL COMMENTED OUT, for two OTHER reasons:
+;;   (1) `int->str` was never a stdlib function — an aspirational name. The
+;;       real Int -> String is `str::from-int` (data/string.prologos, itself
+;;       declared `foreign racket ["number->string" :as from-int …]`, i.e. the
+;;       arrow-free alias that WAS the workaround for this very defect).
+;;   (2) PARAMETERIZED `data` does not bind its constructors — see the
+;;       corrected E2 annotation above. `Tree A` is parameterized, so
+;;       `leaf`/`branch` are unbound regardless of the arrow fix.
+;; Un-comment once (2) is fixed, substituting `str::from-int` — or keep an
+;; arrow-named local helper, which is the more faithful test of this section.
 
 ;; spec tree-summarize [Tree Int] -> String
 ;; defn tree-summarize
@@ -896,7 +928,7 @@ def j5c : <Int | Bool> := true
 ;;   | branch _ _   -> "branch"
 
 ;; Workaround: use a local helper that doesn't have `->` in its name
-;; BUG (L3): leaf/branch constructors unbound at file level (see E2 bug annotation)
+;; BUG (L3): `Tree A` is PARAMETERIZED data — constructors unbound (see E2)
 ;; spec tree-tag [Tree Int] -> String
 ;; defn tree-tag
 ;;   | leaf _       -> "leaf"
