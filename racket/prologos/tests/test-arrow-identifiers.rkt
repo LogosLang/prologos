@@ -21,7 +21,10 @@
 
 (require rackunit
          racket/list
-         "../parse-reader.rkt")
+         racket/string
+         "../parse-reader.rkt"
+         "../errors.rkt"
+         "test-support.rkt")
 
 ;; (type . value) for the real tokens — drops the leading newline and the eof
 ;; sentinel the tokenizer brackets every string with.
@@ -97,10 +100,66 @@
   ;; is latent rather than load-bearing — pinned so it is not a surprise later.
   (check-equal? (toks "a-->b") '((symbol . a-->b))))
 
-(test-case "HALF-GLUED still truncates — P1b (owner ruling R2) target"
-  ;; `a-> b` and `foo->` are NOT identifiers under the both-sides rule, and are
-  ;; not yet a guided error either: they still lex as `a-` + rangle, exactly as
-  ;; before this change. Pinned as the CURRENT state so P1b's guided error has
-  ;; a failing baseline to move.
+(test-case "HALF-GLUED lexes as name-ending-in-dash plus a bare >"
+  ;; Unchanged by P1b — the fix is message shaping, NOT a lex change. Nothing
+  ;; is raised from the tokenizer: a raise on the parse path is a whole-file
+  ;; abort (lesson `7d8520a0b`).
   (check-equal? (toks "a-> b") '((symbol . a-) (rangle . >) (symbol . b)))
   (check-equal? (toks "foo->") '((symbol . foo-) (rangle . >))))
+
+;; ========================================
+;; P1b — the guided error (owner ruling R2)
+;; ========================================
+
+(test-case "half-glued-arrow-hint fires only on <name ending in -> followed by >"
+  ;; Unit-level, so the CONDITION is pinned independently of any call site.
+  (check-true  (string? (half-glued-arrow-hint 'a- '>)))
+  (check-true  (string-contains? (half-glued-arrow-hint 'a- '>) "half-glued"))
+  ;; suggests the glued spelling built from the stem
+  (check-true  (string-contains? (half-glued-arrow-hint 'centigrade- '>) "centigrade->"))
+  ;; NEGATIVES — must not over-fire
+  (check-false (half-glued-arrow-hint 'a '>))    ; no trailing dash
+  (check-false (half-glued-arrow-hint 'a- ':))   ; not followed by >
+  (check-false (half-glued-arrow-hint 'a- 'b))
+  (check-false (half-glued-arrow-hint '- '>))    ; bare dash: no stem to suggest
+  (check-false (half-glued-arrow-hint "a-" '>))) ; not a symbol
+
+(define p1b-results
+  (run-ns-ws-all (string-join
+                  (list "ns arrowp1b"
+                        "defn a-> b [x] x"          ; the reported shape
+                        "def c-> := 5"              ; the `def :=` path
+                        "defn ok->name [x:Int] : Int"
+                        "  x")
+                  "\n")))
+
+(test-case "defn header: the half-glued report replaces \"expected ':', got >\""
+  (define s (format "~a" (list-ref p1b-results 0)))
+  (check-true (string-contains? s "half-glued")
+              (format "expected the guided message, got: ~a" s))
+  (check-false (string-contains? s "expected ':', got")))
+
+(test-case "def := path: no longer advises a type annotation"
+  ;; Before P1b this said "write `def c- : T := value`" — confident, and wrong
+  ;; advice for a mistyped arrow.
+  (define s (format "~a" (list-ref p1b-results 1)))
+  (check-true (string-contains? s "half-glued")
+              (format "expected the guided message, got: ~a" s))
+  (check-false (string-contains? s "unexpected tokens before")))
+
+(test-case "a correctly-glued arrow name is unaffected by the diagnostic"
+  (define s (format "~a" (list-ref p1b-results 2)))
+  (check-false (string-contains? s "half-glued"))
+  (check-true  (string-contains? s "ok->name")))
+
+(test-case "PINNED AS UNCOVERED: manifestations that do NOT yet carry the hint"
+  ;; Honest scope. Two more sites show the same mistake with no guidance:
+  ;;   `[foo-> 1]`         -> plain "Unbound variable" (name truncated to foo-)
+  ;;   `spec e-> Int -> Int` -> accepted SILENTLY
+  ;; The condition lives in one shared helper precisely so adding these later
+  ;; cannot let the message drift. Pinned so the gap is visible, not forgotten.
+  (define r (run-ns-ws-all (string-join
+                            (list "ns arrowgap" "def d := [foo-> 1]") "\n")))
+  (define s (format "~a" (last r)))
+  (check-true  (string-contains? s "Unbound variable"))
+  (check-false (string-contains? s "half-glued")))

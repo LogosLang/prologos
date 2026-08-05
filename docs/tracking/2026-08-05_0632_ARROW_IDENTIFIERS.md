@@ -17,7 +17,7 @@ works. Today it does not, and the failure is a reader-layer mis-lex.
 | P0 | Guard the `inject-spec-into-defn` whole-file abort | ✅ **SUBSUMED** | Already fixed on main by `ae26f5403` (general preparse-seam guard). Not our work. [§6](#p0) |
 | P1 | `->`-bearing identifier recognizer + tokenizer battery | ✅ | Two loop arms, not a new recognizer — see [§5](#p1). Corpus A/B **0 diffs / 161 files**. `tests/test-arrow-identifiers.rkt` (10). |
 | P2 | Same rule for `recognize-keyword` (owner ruling R1) | ✅ | Landed **with** P1: splitting them would have shipped the F1b.7g drift for one commit. [§5](#p2) |
-| P1b | Guided error for half-glued `a-> b` / `foo->` (owner ruling R2) | ⬜ | Deferred out of P1: must not raise in the tokenizer (whole-file-abort class). [§5](#p1b) |
+| P1b | Guided error for half-glued `a-> b` / `foo->` (owner ruling R2) | ✅ | Shared helper in `errors.rkt`; 2 of 4 manifestations covered, the other 2 **pinned as uncovered**. [§5](#p1b) |
 | P3 | Un-comment the 2026-03-18 acceptance block | ⬜ | Corpus A/B already done in P1. [§5](#p3) |
 | X.close | Bench/doc-truth sweep, DEFERRED triage, PIR | ⬜ | Per the objective PIR gate |
 
@@ -161,21 +161,37 @@ while `recognize-keyword` lagged would have *been* the F1b.7g drift the
 function's own comment records — a one-commit window is still the bug.
 
 <a id="p1b"></a>
-### P1b — guided error for half-glued (R2) ⬜
+### P1b — guided error for half-glued (R2) ✅
 
-`a-> b` and trailing `foo->` still truncate to `a-` + `rangle`, exactly as
-before this change; pinned as the current state so P1b has a failing baseline.
+Nothing raises from the tokenizer: the obvious implementation is the
+**whole-file-abort class** `7d8520a0b` promoted a lesson about on 2026-08-03.
+P1b is message shaping on paths that were *already* going to error, so the lex
+is unchanged (`a-> b` still tokenizes `a-` · `rangle` · `b`, pinned).
 
-Deferred out of P1 for a reason worth recording: the obvious implementation —
-raise from the tokenizer — is the **whole-file-abort class** that `7d8520a0b`
-promoted a lesson about on 2026-08-03 (*"a raise on the parse path is a
-WHOLE-FILE abort"*). The guided error must therefore come from an error path,
-not the scan. Candidate: extend `elaborator.rkt`'s `unbound-op-hint-table`
-(which already maps `>` → the angle hint, and is the source of the misleading
-"comparison keywords are spelled lt/le/gt/ge" the user saw) to recognise an
-unbound name ending in `-` followed by a stray `>` and say *"`->` must be glued
-on both sides to be part of a name"*. Error-path only, zero soundness effect —
-the same shape as the #70-C hint.
+**The condition and message live in ONE shared helper** —
+`half-glued-arrow-hint` in `errors.rkt`, chosen over per-site formatting
+because the symptom surfaces at several unrelated sites and this codebase has
+repeatedly been bitten by head-keyed enumerations that under-count their own
+site list. A shared predicate cannot drift between sites even when the list is
+incomplete.
+
+**Measured manifestations — 4, of which 2 now carry the hint:**
+
+| input | before P1b | after |
+|---|---|---|
+| `defn a-> b …` | `defn: expected ':', got >` | ✅ guided |
+| `def c-> := 5` | *"write `def c- : T := value`"* — confidently **wrong** advice | ✅ guided |
+| `def d := [foo-> 1]` | `Unbound variable` | ⬜ uncovered, pinned |
+| `spec e-> Int -> Int` | **accepted silently** | ⬜ uncovered, pinned |
+
+The two uncovered cases are asserted as uncovered in
+`tests/test-arrow-identifiers.rkt`, so the gap is visible rather than
+forgotten. The `spec` one is the same silent-acceptance shape as glued
+`spec f A->B`, which is a pre-existing issue independent of arrows.
+
+Unit-level negatives pin that the hint cannot over-fire: a name with no
+trailing dash, a trailing dash not followed by `>`, a bare `-`, and a
+non-symbol all return `#f`; and a correctly-glued `ok->name` is unaffected.
 
 <a id="p3"></a>
 ### P3 — acceptance ⬜

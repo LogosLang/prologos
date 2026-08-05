@@ -5375,7 +5375,12 @@
          [(not (symbol? name))
           (parse-error loc (format "defn: expected name, got ~a" name) name)]
          [(not (eq? colon ':))
-          (parse-error loc (format "defn: expected ':', got ~a" colon) colon)]
+          ;; ARROW T1 P1b (R2): `defn a-> b …` reads as name `a-` + a bare `>`,
+          ;; so it lands here. Say so, instead of "expected ':', got >".
+          (parse-error loc
+                       (or (half-glued-arrow-hint name colon)
+                           (format "defn: expected ':', got ~a" colon))
+                       colon)]
          [else
           (let ([ty (parse-datum type-stx)]
                 [params (parse-param-names params-stx loc)]
