@@ -32,7 +32,7 @@ rulings, censuses and test delta live in its own section.
 | **P3c** | **Keyless + L4 + honest nesting** — the nat-row mint at EVERY n (incl. 1 and homogeneous n) · ordinal branches `{N M}` · the L4 mixing error · `⟨String⟩` 1-tuple pins · the G11 one-space pair pinned side by side | ✅ | [§5.P3c](#p3c) · **`1b021d57`** — suite **9497/475/0**, acceptance **52/52**, battery 206; P3 (BLOCKS) COMPLETE; the verify's FIRST no-BLOCKING slice in eight (2 SIGNIFICANT fixed pre-commit: the @ord walk-to-leaf twin-drift, the decimal-fusion leak); G11 landed AS AMENDED; in-block `v[0]`≡`.0` ratified-by-pin |
 | **P4** | **Broadcast ω** — ⭐ **P4a ✅ · P4b ✅ COMPLETE** (b-i carrier + b-ii `$dot-access` migration; `x.a` now mints the unified selector carrier) · P4c–P4e ⬜ — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | [§5.P4](#p4) · co-design: audit `wf_8458c23b` + options panel · **RULED 2026-07-31**: [Q_U5](#q-u5) · [Q_U6](#q-u6) · [Q_U7](#q-u7) · [Q_U8](#q-u8) · [Q_U9](#q-u9) (the PAUSE cleared) · partition LOCKED P4a–P4e |
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
-| **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [§5.P4c](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([inverted default](#p4c-2-inverted)) · [P4c-3](#p4c-3) ✅ `d477772c` · [P4c-4a](#p4c-4a) ✅ `f31237fd` · [P4c-4b](#p4c-4b) ✅ `6b22515d` (end to end) · **[P4c-4c](#p4c-4c) ⬜ ← HERE** — PVec value semantics **+ G2, ruled ALONGSIDE 2026-08-04**; the first slice where production behaviour MOVES ([sequencing](#p4c-sequencing)) · [Q_U18](#q-u18) ✅ PRESERVE + G4; flip landed `e71ef6b8` · P4c-5 ⬜ |
+| **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [§5.P4c](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([inverted default](#p4c-2-inverted)) · [P4c-3](#p4c-3) ✅ `d477772c` · [P4c-4a](#p4c-4a) ✅ `f31237fd` · [P4c-4b](#p4c-4b) ✅ `6b22515d` (end to end) · **[P4c-4c](#p4c-4c-close) ✅ `ae26f540`** — broadcast is REACHABLE: PVec ω value semantics + **G2** + the preparse seam guard. ⭐ The verify caught a BLOCKING whole-file abort every gate was blind to; owner ruled the structural fix ([close](#p4c-4c-close)) · [Q_U18](#q-u18) ✅ · DEFERRED 43 ✅ · 48 RULED uniform · P4c-5 ⬜ |
 | **PF** | **Path first-classness** (substrate; **P5's prerequisite**) — ⭐ **Q_U17 RULED B2**: a Path segment is a first-class `Step` value. Reify the closed six-kind union as a `data Step` ADT on the `Datum` pattern; `Path` stays GROUND; `segments : Path -> [List Step]`. Repairs the dead `path-segments` in the SAME change | ⬜ | [§5.PF](#pf) · [Q_U17](#q-u17) · panel `wf_68178bd3-eea` |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery · ⚠ B3 needs [PF](#pf) |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | [§5.PX](#px) · position flexible |
@@ -5726,11 +5726,78 @@ SURVIVE G2 — it must be **re-expressed as a binder-behaviour pin, not deleted*
 for the wrong reason · the battery is at **344 cases / 58 s**, approaching
 `testing.md`'s 60 s absolute guidance.
 
-**Status: ⬜ P4c-4c — re-scoped, G2 folded in, `defmacro` leak folded in
-2026-08-04. Not started.** Implementation order: **(A)** value semantics →
-**(C)** the `defmacro` guard → **(B)** the G2 flip + corpus A/B. C precedes B
-because B is what makes the leak live; A precedes B because G2 without value
-semantics ships reachability with nothing behind it.
+<a id="p4c-4c-close"></a>
+
+##### §5.P4c-4c CLOSE — ✅ COMPLETE 2026-08-05
+
+**Four commits.** `51e260ab` the PVec ω value semantics · `bcdb4083` DEFERRED 43
+(the strictness tier follows the unwrap) · `0fd2098c` DEFERRED 50 spun out ·
+`ae26f540` **G2 + the preparse seam guard**.
+
+**THE FEATURE ARRIVES**: `xs:name` → `@["a" "b"] : [PVec String]` at the
+production default — no grant, no parameter. L1 fusion holds as a THEOREM at
+depths 2/3/4 (each ω step consumes one layer and re-wraps one; nothing counts
+layers), and the converse holds — `xs:tags` correctly REFUSES to fuse when the
+user asked for two layers.
+
+**⭐ THE DEFINING EVENT: the adversarial verify caught a BLOCKING regression that
+EVERY gate was blind to.** G2 let `$bcast-step` survive into preparse-CONSUMED
+forms (`require`/`ns`/`schema`/`foreign`) whose recognizers raise —
+`require [prologos::data::nat:refer [add]]` went from 0 errors to a WHOLE-FILE
+ABORT. Fifth instance of `pipeline.md`'s abort class in this track, with the
+first four documented one screen away. **Zero corpus sites use a fused directive
+keyword**, which is precisely why the suite, all five acceptance files AND the
+corpus A/B passed over it; the adjacent population is ~2400 spaced occurrences,
+each one deleted space away.
+
+**Owner ruled option B** (guard the seam) over A (enumerate directive heads),
+because an enumeration leaves the NEXT sentinel to rediscover the class.
+
+**⚠ B'S REAL COST — the finding worth carrying forward**: converting raises to
+VALUES makes previously-inert TEST-HELPER DESIGN load-bearing. 20 assertions
+across 9 files changed channel, and two failed for a reason that *could not exist
+under a raise*: `functor-for` returns a registry lookup and discards results;
+`run-last` returns `(last (run s))` while the refusal lands on the FIRST form.
+**Any helper that narrows the result set can now silently swallow a refusal and
+go green.** Both fixed; a sweep for other result-discarding helpers is unclaimed,
+deliberately not widened into this slice.
+⚠ Only the 20 FAILING sites were converted, not all 31 `check-exn` sites in those
+files — the other 11 still raise (they fail before the guarded seam), and
+converting them would have weakened correct assertions.
+
+**Rulings landed**: [Q_U18](#q-u18)'s G2 half · **DEFERRED 43** (the tier follows
+the unwrap — and its own "not reachable in production" rationale was FALSE, which
+the verify proved) · **DEFERRED 48 RULED UNIFORM** (the tier is INFERRED, not
+written, so per-tier abort would make identical source behave differently on
+something invisible in it).
+
+**Gate**: suite **9847 / 482 / 0** · battery **356** · acceptance 52/52 + 89/89 +
+6/6 + 29/29 + 28/28 · corpus A/B **5 of 6 identical incl. the control**; `foray`
+(owner WIP, the only file with real mint sites) **29 → 21 errors, no value became
+an error**.
+
+**⚠ KNOWN PROPERTY OF B, recorded not hidden**: the guard is head-agnostic, so a
+compiler-INTERNAL invariant violation during preparse also degrades to a
+per-command error. Still fully reported, never silent — but it merges two
+propositions into one channel, which this track deliberately SPLIT at P4c-4b.
+Re-splitting needs a distinguished internal-error marker that keeps raising.
+
+**⚠ METHOD, for the PIR**: this slice produced **five false claims in comments**
+and **three vacuous pins**, every one from writing what I believed the code did
+instead of probing first. Most were caught by the adversarial verify; three I
+caught myself, only after distrusting the habit. The same error appeared in a
+live diagnosis (naming an Emacs lock file as the memory-runaway cause before
+testing it — it was not). ONE finding about method, not eight incidents.
+
+**Spun out**: DEFERRED **50** (defmacro fused annotations — chip
+`task_204859b9`; PRE-EXISTING, not a G2 leak) · **51** (parenless `&>` loses the
+relation) · **52** (goal arity error → silent empty bag).
+**Tooling**: `tools/corpus-ab.rkt` — one subprocess per file with wall + memory
+caps, encoding the corrected A/B method.
+
+**Status: ✅ P4c-4c COMPLETE.** Next: the `:{` mint (**alone** — it touches
+`bcast-step-trigger?`, the ONE predicate both groupers share, so mixing it makes
+the A/B un-attributable), then **P4d**.
 
 <a id="p4c-sequencing"></a>
 
@@ -5764,9 +5831,10 @@ at/after P4c-4c, and **G2 is re-evaluated there** → the `:{` mint → **P4d**~
 flip ✅ landed (`e71ef6b8`); the digit-hole fix is **struck** (it was never a
 defect). What remains:
 
-**P4c-4c + G2 as ONE slice** (value semantics + unconditional preservation ⇒ the
-first end-to-end user-visible broadcast; G4 is discharged BY this slice rather
-than fired after it) → the `:{` mint (**alone** — it touches
+~~**P4c-4c + G2 as ONE slice**~~ ✅ **LANDED 2026-08-05** (`ae26f540`) — value
+semantics + unconditional preservation + the preparse seam guard; G4 discharged
+BY the slice. See [§5.P4c-4c CLOSE](#p4c-4c-close). Remaining:
+the `:{` mint (**alone** — it touches
 `bcast-step-trigger?`, the one predicate both groupers share, so mixing it makes
 the A/B un-attributable) → **P4d** (carriers + the Q_U9 List refusal + the corpus
 re-fate, with [Q_U19](#q-u19) ruled) → **P4e** (`*` flatten · `.*` row-splat ·
