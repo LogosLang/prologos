@@ -15,9 +15,10 @@ works. Today it does not, and the failure is a reader-layer mis-lex.
 | Phase | Description | Status | Notes |
 |---|---|---|---|
 | P0 | Guard the `inject-spec-into-defn` whole-file abort | ✅ **SUBSUMED** | Already fixed on main by `ae26f5403` (general preparse-seam guard). Not our work. [§6](#p0) |
-| P1 | `->`-bearing identifier recognizer + tokenizer battery | ⬜ | The core change. [§5](#p1) |
-| P2 | Same rule for `recognize-keyword` (owner ruling 1 = yes) | ⬜ | [§5](#p2) |
-| P3 | Corpus A/B + un-comment the 2026-03-18 acceptance block | ⬜ | [§5](#p3) |
+| P1 | `->`-bearing identifier recognizer + tokenizer battery | ✅ | Two loop arms, not a new recognizer — see [§5](#p1). Corpus A/B **0 diffs / 161 files**. `tests/test-arrow-identifiers.rkt` (10). |
+| P2 | Same rule for `recognize-keyword` (owner ruling R1) | ✅ | Landed **with** P1: splitting them would have shipped the F1b.7g drift for one commit. [§5](#p2) |
+| P1b | Guided error for half-glued `a-> b` / `foo->` (owner ruling R2) | ⬜ | Deferred out of P1: must not raise in the tokenizer (whole-file-abort class). [§5](#p1b) |
+| P3 | Un-comment the 2026-03-18 acceptance block | ⬜ | Corpus A/B already done in P1. [§5](#p3) |
 | X.close | Bench/doc-truth sweep, DEFERRED triage, PIR | ⬜ | Per the objective PIR gate |
 
 ---
@@ -130,38 +131,59 @@ Same conclusion, sound reason. Registration priorities at base:
 ## 5. Phases
 
 <a id="p1"></a>
-### P1 — the recognizer
+### P1 — the recognizer ✅
 
-A new recognizer anchored at identifier start that consumes `ident-start
-ident-continue* (-> ident-continue+)*`, registered **above `symbol` (50)**,
-following the `narrow-var-annot` shape. Implementation choice to settle at
-mini-audit: new recognizer vs. an extra arm inside `recognize-symbol` (the
-latter is smaller and sits beside the existing two-char-lookahead `::` arm at
-`:274-280`; the former matches the established precedent).
+**Settled: two loop arms, NOT a new recognizer.** The design left this open
+between a new high-priority recognizer (the `narrow-var-annot` shape) and an
+arm inside `recognize-symbol`. The arm won, because the closer precedent is in
+the *same function*: the `::` module-path continuation is already a fixed
+two-char lookahead inside `recognize-symbol`'s scan loop, and `a->b` is exactly
+that shape — a multi-char continuation *within* an identifier, not a new token
+kind. `narrow-var-annot` needed its own recognizer because `?x:Nat` is a
+different token shape; this is not.
 
-Per R2, half-glued (`A-> B`, trailing `foo->`) must produce a **guided error**.
-Note `a-> b` and `a->b` are *indistinguishable at the anchor position* — the
-error must be raised where the missing right-hand ident char is detected.
+Placement is load-bearing: the arm **must precede** the `ident-continue?` arm,
+because `-` is itself an ident-continue char and would otherwise be eaten,
+leaving `>` to end the token — that *is* the `c->f` → `c-` truncation.
 
-Tests: a tokenizer battery asserting the token stream directly (not just
-end-to-end), covering `c->f`, `a->b->c`, `a-->b`, `->foo`, `foo->`, `a-> b`,
-`a ->b`, `<Int -> Bool>`, `<Int->Bool>`, `[-> A B]`, and the `foreign` string
-case.
+Glued-ness needs no substrate: the scanner is mid-token, so whitespace cannot
+occur there by construction.
+
+Tests: `racket/prologos/tests/test-arrow-identifiers.rkt` (10 cases) asserting
+the **token stream directly**. Half are labelled regression ANCHORS rather than
+discriminators — spaced arrows, `[-> A B]`, angle-group closing, bare `a>b`.
 
 <a id="p2"></a>
-### P2 — `recognize-keyword` (R1)
+### P2 — `recognize-keyword` (R1) ✅
 
-Same rule for `:a->b`. `recognize-keyword` (`:534`) already delegates to
-`ident-continue?`; the arrow logic must be applied consistently or it becomes a
-fresh F1b.7g drift instance.
+Landed **in the same commit as P1**, deliberately. Shipping the symbol arm
+while `recognize-keyword` lagged would have *been* the F1b.7g drift the
+function's own comment records — a one-commit window is still the bug.
+
+<a id="p1b"></a>
+### P1b — guided error for half-glued (R2) ⬜
+
+`a-> b` and trailing `foo->` still truncate to `a-` + `rangle`, exactly as
+before this change; pinned as the current state so P1b has a failing baseline.
+
+Deferred out of P1 for a reason worth recording: the obvious implementation —
+raise from the tokenizer — is the **whole-file-abort class** that `7d8520a0b`
+promoted a lesson about on 2026-08-03 (*"a raise on the parse path is a
+WHOLE-FILE abort"*). The guided error must therefore come from an error path,
+not the scan. Candidate: extend `elaborator.rkt`'s `unbound-op-hint-table`
+(which already maps `>` → the angle hint, and is the source of the misleading
+"comparison keywords are spelled lt/le/gt/ge" the user saw) to recognise an
+unbound name ending in `-` followed by a stray `>` and say *"`->` must be glued
+on both sides to be part of a name"*. Error-path only, zero soundness effect —
+the same shape as the #70-C hint.
 
 <a id="p3"></a>
-### P3 — corpus A/B + acceptance
+### P3 — acceptance ⬜
 
-`tools/reader-corpus-ab.rkt` over the full corpus; expect **zero** diffs (see
-[§4](#rule)). Then un-comment the `int->str` block in
-`examples/2026-03-18-track7-acceptance.prologos` — it has been waiting on
-exactly this since 2026-03-18.
+Corpus A/B is **done** (in P1): `tools/reader-corpus-ab.rkt`, both legs on one
+pinned 161-file snapshot, **zero diffs**, 0 read-errors per leg. Remaining: un-
+comment the `int->str` block in
+`examples/2026-03-18-track7-acceptance.prologos`, waiting since 2026-03-18.
 
 <a id="p0"></a>
 ## 6. P0 — subsumed, do not implement
