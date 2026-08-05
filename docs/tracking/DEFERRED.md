@@ -3745,7 +3745,7 @@ reproduce**; recorded so the next session does not inherit an unverified claim.
 
 **Not blocking G2**: nothing here is caused by, or gates, the P4c-4c/G2 work.
 
-### 51. A parenless `&>` clause containing a broadcast LOSES THE RELATION (G2-surfaced)
+### 51. 🔀 SPUN OUT (chip `task_4c00d3f0`, 2026-08-05, with 52) — a parenless `&>` clause containing a broadcast LOSES THE RELATION (G2-surfaced)
 
 Measured A/B (pre-G2 vs G2), same input:
 
@@ -3771,7 +3771,7 @@ disagreeing" class this track keeps paying for, and the message actively
 misdirects. Fix is likely to widen the clause-body guard to name the real
 rewritten head rather than assuming dot-access.
 
-### 52. A goal-position arity error becomes a SILENT EMPTY BAG (G2-surfaced)
+### 52. 🔀 SPUN OUT (chip `task_4c00d3f0`, 2026-08-05, with 51) — a goal-position arity error becomes a SILENT EMPTY BAG (G2-surfaced)
 
 ```
 defr p2 [?a ?b]
