@@ -32,7 +32,7 @@ rulings, censuses and test delta live in its own section.
 | **P3c** | **Keyless + L4 + honest nesting** — the nat-row mint at EVERY n (incl. 1 and homogeneous n) · ordinal branches `{N M}` · the L4 mixing error · `⟨String⟩` 1-tuple pins · the G11 one-space pair pinned side by side | ✅ | [§5.P3c](#p3c) · **`1b021d57`** — suite **9497/475/0**, acceptance **52/52**, battery 206; P3 (BLOCKS) COMPLETE; the verify's FIRST no-BLOCKING slice in eight (2 SIGNIFICANT fixed pre-commit: the @ord walk-to-leaf twin-drift, the decimal-fusion leak); G11 landed AS AMENDED; in-block `v[0]`≡`.0` ratified-by-pin |
 | **P4** | **Broadcast ω** — ⭐ **P4a ✅ · P4b ✅ COMPLETE** (b-i carrier + b-ii `$dot-access` migration; `x.a` now mints the unified selector carrier) · P4c–P4e ⬜ — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | [§5.P4](#p4) · co-design: audit `wf_8458c23b` + options panel · **RULED 2026-07-31**: [Q_U5](#q-u5) · [Q_U6](#q-u6) · [Q_U7](#q-u7) · [Q_U8](#q-u8) · [Q_U9](#q-u9) (the PAUSE cleared) · partition LOCKED P4a–P4e |
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
-| **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [[§5.P4c](#p4c)](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([the inverted default](#p4c-2-inverted)) · **P4c-3 ✅ `d477772c`** ([the enable-set moves to P4c-4](#p4c-3)) · **P4c-4a ✅ `f31237fd`** ([the test seam + per-context dispatch](#p4c-4a)) · P4c-4b/5 ⬜ |
+| **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [[§5.P4c](#p4c)](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([the inverted default](#p4c-2-inverted)) · **P4c-3 ✅ `d477772c`** ([the enable-set moves to P4c-4](#p4c-3)) · **P4c-4a ✅ `f31237fd`** ([the test seam + per-context dispatch](#p4c-4a)) · **P4c-4b ✅ `6b22515d`** ([a broadcast goes END TO END; the not-yet stops being a whole-file abort](#p4c-4b)) · P4c-4c/5 ⬜ |
 | **PF** | **Path first-classness** (substrate; **P5's prerequisite**) — ⭐ **Q_U17 RULED B2**: a Path segment is a first-class `Step` value. Reify the closed six-kind union as a `data Step` ADT on the `Datum` pattern; `Path` stays GROUND; `segments : Path -> [List Step]`. Repairs the dead `path-segments` in the SAME change | ⬜ | [§5.PF](#pf) · [Q_U17](#q-u17) · panel `wf_68178bd3-eea` |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery · ⚠ B3 needs [PF](#pf) |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | [§5.PX](#px) · position flexible |
@@ -5141,6 +5141,91 @@ code is read — it held, but only at the predicate layer); `$bcast-step` has no
 enable-set, so caching goes live with the first grant; scope creep from the
 enable-set's MECHANISM into its POLICY (the unknown-head ruling); the `*`/`^`
 swallow hazard, still unowned.
+
+<a id="p4c-4b"></a>
+
+###### §5.P4c-4b — the fold arm + the producer bridge + the not-yet CHANNEL  ✅ `6b22515d`
+
+**The chain closes.** Reader PRESERVES (P4c-4a's grant) → the fold FUSES onto the
+base → the parser CONSTRUCTS `(@bcast step)` → typing REFUSES through the failure
+slot. Measured with a `def` grant:
+
+```
+def q := users:name   ⇒ broadcast `:name` — the ω value semantics land at P4c-4c…
+def after := 42       ⇒ after : Int defined.       ← THE POINT
+```
+
+**⭐ THE CHANNEL FIX, WITHOUT WHICH THIS SLICE SHIPS A WHOLE-FILE ABORT.**
+`select-bcast-not-yet` raises a raw `error`; `process-command/solve-guard` catches
+ONLY `exn:prologos-solve`, deliberately. Unreachable before now — **the producer
+bridge is exactly what reaches it.** Root cause: TWO PROPOSITIONS SHARING ONE
+CHANNEL — *the compiler is broken* (`select-step-kind-unhandled`, raise is RIGHT)
+and *the user wrote something unbuilt* (raise is WRONG). Split: typing returns
+`(values #f (select-fail 'bcast-not-yet …))` through the slot these walks ALREADY
+thread; reduction KEEPS its raise, because arriving at the value layer after
+typing refused IS an invariant violation. Two arms, two questions.
+⚠ **This corrects a claim I made to the owner** — that an error value would be
+"invasive and need threading". It was not; the threading was already there. The
+principled fix and the cheap fix were the same fix.
+
+**The six parts.** `bcast-step?` + `$bcast-step` into `access-sentinel?` (the
+P4c-2 deliverable that never landed under a ✅ — DEFERRED 37; it read as closed
+because `broadcast-access?` there is the RETIRED `$broadcast-access`) · the fold
+arm, the `$dot-access` arm VERBATIM except the payload rides WHOLE, so the emitted
+head is `$select-path` and the **fixpoint obligation holds by construction** · the
+`segment-select-items` arm + the PRODUCER BRIDGE (`make-select-bcast` had ZERO
+production callers until this import).
+
+⚠ **My first cut of the parser arm was WRONG and a probe caught it.**
+`$select-path` consumes the SUBJECT itself and passes only `(cdr args)`, so for
+`users:name` the ω step arrives FIRST with no `cur`. I treated that as
+branch-initial and it refused the headline spelling with "needs a preceding
+subject". `cur = #f` now STARTS a branch, as `plain-key?` does. W2's
+branch-initial refusal is a BLOCK rule, and the mint cannot produce one there
+anyway (it requires byte-adjacency to a base).
+
+**The payload asymmetry — three sub-cases, two of them silent.** `$bcast-step`
+carries the token VERBATIM so its payload is COLON-LEADING, where `$dot-access`
+carries a bare symbol. Stripping and handing it to `plain-key?` is silently wrong
+twice: `users:0` would be a NOMINAL key named `0` (Q_U16b rules it an ORDINAL —
+now the number), and `users:tags*` would be a field LITERALLY NAMED `tags*`
+(`ident-continue?` admits `*`, so it arrives as ONE token — now a guided
+refusal). `users:name^alias` is the safe one: it routes to the ONE splitter.
+
+**Riders.** The four "a wrapper never heads a branch" comments CORRECTED, polarity
+inverted — the claim conflated a BLOCK surface rule (`x{:name}`) with a
+representation invariant about a one-step `'path` branch, and three of the four
+justified an arm by it. The `.pnet` gate item DROPPED (`expr-path` IS registered).
+
+Gate: suite **9831 / 482 / 0** · battery 336 → **340** · acceptance 52/52 + 89/89
++ 6/6 + 29/29 + 28/28 · **corpus A/B: ZERO semantic diffs.**
+
+**The A/B, and how it was scoped** — recorded because the scoping is the
+interesting part. A full 139-file run was started and ABANDONED (≈40 s/file × 2
+legs ⇒ hours). It was re-scoped to the **12 files that can possibly MINT** — an
+`ident`/`)`/`]`/`}` byte-adjacent to `:` — because those are the only files where
+`access-sentinel?`'s new member or the fold arm can fire. That is targeting, not
+narrowing: for every other file the new predicate changes an `or`-chain's cost
+and not its result. Both legs read ONE `git archive` snapshot (so the owner's
+dirty tree cannot masquerade as a code delta) and the baseline was
+**worktree-pinned** at `6b22515d^`; diffed on **FULL OUTPUT**, never error counts.
+
+Raw: 4 of 12 differed. All four were internal-counter drift (`?meta2472` vs
+`?meta2086`) — and the offset was a CONSTANT 386, which is the tell for a
+startup/tree-state difference rather than a per-file one. **Discriminated rather
+than assumed**: a control file that CANNOT mint shows the same drift, so it is
+not the fold. Normalizing counters leaves **ZERO** semantic diffs across all 12,
+the control **IDENTICAL**, and one residual that is the `run-file.rkt`
+FILESYSTEM PATH inside a stack trace — worktree vs main checkout, an artifact of
+the method itself.
+
+⚠ **Two false greens of mine, both from grepping a keyword instead of counting
+the outcome**: a module-load `unbound identifier` is not a `FAILURE`, and rackunit
+reports an arity mismatch as `ERROR`. The batch runner's count caught both. Grep
+the outcome, not a word.
+
+Status: ✅ **P4c-4b COMPLETE**. Next: **P4c-4c** — the ω VALUE semantics (PVec
+broadcast + the L1/extent law pins), which is what the not-yet now names.
 
 <a id="p4c-4a"></a>
 
