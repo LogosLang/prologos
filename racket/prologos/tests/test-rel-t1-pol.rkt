@@ -440,6 +440,181 @@
                             "solve (m x)")))
   (check-equal? (length (regexp-match* #rx"[{]" (car (regexp-split #rx" : " r)))) 4))
 
+
+;; ── DEFERRED 53: a COMPOUND TERM on the `||` line is a TERM, not a nested row ──
+;;
+;; The WS reader turns deeper-indented continuation rows into nested sublists
+;; inside the `$facts-sep`, so the facts arm partitioned "pair => nested row",
+;; whitelisting only the numeric-literal sentinels ($nat-literal, ...). Any OTHER
+;; compound term — a constructor application, a list literal, a map — is also a
+;; pair, so it was misclassified as a continuation row and SPLAYED into its
+;; constituent tokens, fabricating rows the user never wrote, with ZERO errors:
+;;     || [some 1]   ->  @[{:q unknown} {:q 1}]           TWO rows from one
+;;     || '[1 2]     ->  @[{:q unknown} {:q 1} {:q 2}]    THREE rows from one
+;;
+;; Measured byte-identical at b429d038, so this is pre-existing, not G2/52 fallout.
+;;
+;; The discriminator is the SENTINEL'S LINE. A continuation row is BY DEFINITION
+;; on a later line than the `||`; anything on the `||` line itself belongs to the
+;; first row. Verified by instrumenting the reader: for `|| 1 2 / 3 4` the
+;; sentinel is line 3 and the nested `(3 4)` is line 4, while for `|| [some 1]`
+;; the sentinel and the compound are BOTH line 6.
+;;
+;; ⚠ Why not a positive bracket-origin marker (the cleaner inversion): parser.rkt
+;; already records that a bracket group and a bare multi-token line are
+;; "indistinguishable post-reader — same wrap-stx-list, no origin". Adding that
+;; origin is a reader-wide change that also governs POL.8 clause grammar. Hence
+;; the line rule, plus the RESIDUAL pinned below.
+
+(test-case "DEFERRED 53: a constructor application on the `||` line is ONE term"
+  (define r (run-ns-ws-last
+             (string-append "ns d53\n"
+                            "defr r2 [?a]\n  || [some 1]\n"
+                            "solve (r2 q)")))
+  (check-true (string? r) (result-msg r))
+  ;; THE GUARANTEE IS THE ROW COUNT. Pre-fix this splayed into TWO rows
+  ;; (`unknown`, `1`). Whether the compound VALUE then round-trips is a separate,
+  ;; pre-existing gap — see the residual pin below — so do NOT assert on the
+  ;; rendered value here or this test starts failing for an unrelated reason.
+  (check-equal? (length (regexp-match* #rx"[{]" (car (regexp-split #rx" : " r)))) 1
+                (format "exactly ONE row, not the splayed two; got: ~a" r)))
+
+(test-case "DEFERRED 53: a list literal on the `||` line is ONE term"
+  (define r (run-ns-ws-last
+             (string-append "ns d53\n"
+                            "defr r3 [?a]\n  || '[1 2]\n"
+                            "solve (r3 q)")))
+  (check-true (string? r) (result-msg r))
+  ;; Pre-fix: THREE rows (`unknown`, `1`, `2`). Row count is the guarantee.
+  (check-equal? (length (regexp-match* #rx"[{]" (car (regexp-split #rx" : " r)))) 1
+                (format "exactly ONE row, not the splayed three; got: ~a" r)))
+
+(test-case "DEFERRED 53: a map term beside a scalar fills a 2-arity row"
+  ;; Pre-fix `{:k 1}` splayed into 2 terms, making 3 for arity 2 — the ONLY
+  ;; shape that got caught, and only by accident.
+  (define r (run-ns-ws-last
+             (string-append "ns d53\n"
+                            "defr r4 [?a ?b]\n  || {:k 1} 2\n"
+                            "solve (r4 p q)")))
+  (check-true (string? r) (result-msg r))
+  (check-equal? (length (regexp-match* #rx"[{][:]p" (car (regexp-split #rx" : " r)))) 1
+                (format "exactly ONE row; got: ~a" r)))
+
+(test-case "control: multi-line continuation rows still split into rows"
+  ;; The rule must not swallow the feature it is distinguishing against.
+  (define r (run-ns-ws-last
+             (string-append "ns d53\n"
+                            "defr mr [?a ?b]\n  || 1 2\n     3 4\n"
+                            "solve (mr p q)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "{:p 1, :q 2}") r)
+  (check-true (string-contains? r "{:p 3, :q 4}") r))
+
+(test-case "control: a nat-literal term on the `||` line is still one term"
+  (define r (run-ns-ws-last
+             (string-append "ns d53\n"
+                            "defr nr [?a]\n  || 1N | 2N\n"
+                            "solve (nr q)")))
+  (check-true (string? r) (result-msg r))
+  (check-equal? (length (regexp-match* #rx"[{]" (car (regexp-split #rx" : " r)))) 2 r))
+
+(test-case "DEFERRED 53: a STRUCTURAL sentinel heading a continuation line is a ROW, not a term"
+  ;; ⚠ REGRESSION GUARD for the first version of the `$`-headed inversion, which
+  ;; asserted "inside fact CONTENT a `$`-headed pair is always ONE VALUE". FALSE:
+  ;; the reader wraps a continuation LINE by its FIRST TOKEN, so a line starting
+  ;; with a structural sentinel arrives as `($pipe 3 4)` / `($clause-sep …)` /
+  ;; `($facts-sep …)`. Treating those as terms turned this ordinary leading-pipe
+  ;; table from a LOUD "empty row beside `|`" into TWO FABRICATED rows carrying
+  ;; the raw sentinel — `@[{:d 0} {:d [?$pipe 1]} {:d [?$pipe 2]}]`, zero errors —
+  ;; i.e. it moved a new shape INTO the very bug class being fixed. Caught by the
+  ;; adversarial verify. If this test ever goes silent, the inversion has lost its
+  ;; structural-sentinel exclusion again.
+  (define m (result-msg (run-ns-ws-last
+                         ;; NB: the `defr` must be the LAST command — run-ns-ws-last
+                         ;; returns only the last result, and a trailing query would
+                         ;; report the downstream "Unknown relation" instead of the
+                         ;; row error this test is about.
+                         (string-append "ns d53s\n"
+                                        "defr digit [?d]\n  || 0\n   | 1\n   | 2\n"))))
+  (check-true (string-contains? m "empty row beside")
+              (format "must stay LOUD; got: ~a" m))
+  (check-false (string-contains? m "$pipe")
+               (format "and must never leak the raw sentinel; got: ~a" m)))
+
+(test-case "DEFERRED 53 RESIDUAL: a preparse rewrite ANYWHERE in the defr disables the line rule"
+  ;; ⚠ THE BIGGEST LIMIT OF THIS FIX, and it acts AT A DISTANCE. Change (B) needs
+  ;; trustworthy srclocs, and macros.rkt rebuilds the whole defr whenever preparse
+  ;; changes ANYTHING in it (DEFERRED 51), collapsing every element onto the
+  ;; defr's own line at column 0. The guard then correctly declines — and
+  ;; "declines" means the ORIGINAL FABRICATION comes back.
+  ;; Confirmed triggers, both documented as IDIOMATIC in prologos-syntax.md:
+  ;; `|>` and dot-access. Found by the adversarial verify, which fairly objected
+  ;; that the code comment advertised the guard's SAFETY without its COST.
+  ;; Change (A) is srcloc-independent, so $-headed compounds survive degradation.
+  ;; Closing this needs DEFERRED 51(c) (srcloc-preserving preparse), not more work
+  ;; here. Pinned so it is a known limit rather than a surprise.
+  (define r (run-ns-ws-last
+             (string-append "ns d53d\n"
+                            "defr degr [?a ?b]\n"
+                            "  || [some 1] 2\n"
+                            "  &> (= a [|> 1 inc])\n"
+                            "solve (degr p q)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "unknown")
+              (format "known limit: degraded srclocs restore the splay; got: ~a" r)))
+
+(test-case "DEFERRED 53: a $-headed compound on a CONTINUATION line IS fixed (and keeps row ORDER)"
+  ;; Change (A) is not limited to the `||` line: it is srcloc-independent, so a
+  ;; `$`-headed compound anywhere in the content is a term. This also fixes the
+  ;; REORDERING the splay caused — nested rows are appended AFTER all flat rows
+  ;; (`(append flat-rows other-rows)`), so pre-fix this produced 1, 4, then the
+  ;; splayed 2, 3. The narrower residual pinned below is specifically about
+  ;; NON-$-headed compounds on a continuation line.
+  (define r (run-ns-ws-last
+             (string-append "ns d53c\n"
+                            "defr cont [?a]\n  || 1\n     '[2 3]\n     4\n"
+                            "solve (cont q)")))
+  (check-true (string? r) (result-msg r))
+  (define vals (car (regexp-split #rx" : " r)))
+  (check-equal? (length (regexp-match* #rx"[{]" vals)) 3
+                (format "three rows, not four; got: ~a" r))
+  (check-true (regexp-match? #rx"1.*unknown.*4" vals)
+              (format "and in SOURCE order; got: ~a" r)))
+
+(test-case "DEFERRED 53 RESIDUAL: a compound fact VALUE does not round-trip (pre-existing)"
+  ;; Removing the splay makes compound terms REACH the solver, where a
+  ;; pre-existing representation gap shows: they render as `unknown`. This is NOT
+  ;; caused by the splay fix and is not specific to fact rows — the same values in
+  ;; plain relational term position do it with no `||` involved:
+  ;;     (= y '[1 2])  → @[{:y unknown}]     (= z {:k 1}) → @[{:z unknown}]
+  ;; (`(= x [some 1])` DOES render, so the gap is per-shape, not universal.)
+  ;; Pinned so the row-count fix above is not misread as making compound facts
+  ;; WORK, and so that closing the representation gap flags here.
+  (define r (run-ns-ws-last
+             (string-append "ns d53\n"
+                            "defr rl [?a]\n  || '[1 2]\n"
+                            "solve (rl q)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "unknown")
+              (format "known limit: the compound value does not round-trip; got: ~a" r)))
+
+(test-case "DEFERRED 53 RESIDUAL: a NON-$-headed compound on a CONTINUATION line is still splayed"
+  ;; Pinned as a KNOWN LIMIT, not as desired behaviour. Narrow by design: only
+  ;; NON-$-headed compounds (a bracket group like `[some 2]`); the $-headed case
+  ;; is fixed by change (A) — see the test above. On a continuation line the
+  ;; reader has already spliced the bracket group away, so `[some 2]` and a bare
+  ;; two-token row `some 2` are the same datum — genuinely undecidable here.
+  ;; Closing it needs the reader-side origin marker described above. If this test
+  ;; ever FAILS because the row count dropped to 2, that is the fix landing, and
+  ;; this pin should be inverted rather than deleted.
+  (define r (run-ns-ws-last
+             (string-append "ns d53\n"
+                            "defr mx [?a]\n  || 1\n     [some 2]\n"
+                            "solve (mx q)")))
+  (check-true (string? r) (result-msg r))
+  (check-equal? (length (regexp-match* #rx"[{]" (car (regexp-split #rx" : " r)))) 3
+                (format "known limit: 1 + splayed(some,2) = 3 rows; got: ~a" r)))
+
 (test-case "POL.7: wrong-length pipe segment is a loud error"
   (define m (result-msg (run-ns-ws-last
                          (string-append "ns p7\n"

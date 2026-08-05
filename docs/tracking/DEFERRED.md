@@ -3919,7 +3919,7 @@ other container type would be missed. None exists today.
   because `expr-clause` swallows it first.
 
 
-### 53. ⚠ A COMPOUND TERM IN A `||` FACT ROW IS SPLAYED INTO FABRICATED ROWS — pre-existing, silent WRONG ANSWER (found 2026-08-05)
+### 53. ✅ FIXED 2026-08-05 — a compound term in a `||` fact row was SPLAYED into fabricated rows (pre-existing silent WRONG ANSWER)
 
 Measured, **byte-identical at `b429d038` and after the DEFERRED 51/52 work**, so
 this is neither caused by nor fixed by that arc:
@@ -3963,6 +3963,99 @@ as coverage.
 row renders as `unknown` in a solution row — pre-existing, unrelated to the
 splay, and probably the same display gap as `(= x [+ 1 1])` → `{:x unknown}` in
 DEFERRED 52's residuals.
+
+---
+
+#### THE FIX (2026-08-05) — two changes, and what each one buys
+
+**(A) `term-sentinel?` INVERTED.** It was a five-member numeric whitelist
+(`$nat-literal`, `$decimal-literal`, `$float-literal`, `$exp-literal`,
+`$posit-literal`), so every OTHER reader sentinel fell through to the
+`pair? ⇒ nested row` reading — the exact "new sentinel, old recognizer" polarity
+failure `.claude/rules/pipeline.md` warns about. It now tests **`$`-headedness
+AND NOT structural**, so a future VALUE sentinel is a term BY CONSTRUCTION. This
+is what fixes `'[1 2]` (which reads as `($list-literal-parse 1 2)`), and — being
+srcloc-independent — it fixes `$`-headed compounds on CONTINUATION lines too,
+including the row REORDERING the splay caused (nested rows are appended after all
+flat rows, so `|| 1 / '[2 3] / 4` used to come back 1, 4, 2, 3).
+
+⚠ **The "AND NOT structural" half was learned the hard way.** The first version
+asserted that inside fact CONTENT a `$`-headed pair is always ONE VALUE. **False**:
+the reader wraps a continuation LINE by its FIRST TOKEN, so a line beginning with
+a structural sentinel arrives as `($pipe 3 4)` / `($clause-sep foo a)` /
+`($facts-sep 2)`. Classifying those as terms turned an ordinary leading-pipe
+table
+
+```
+defr digit [?d]
+  || 0
+   | 1
+   | 2
+```
+
+from a LOUD `empty row beside \`|\`` into **two fabricated rows leaking the raw
+sentinel** — `@[{:d 0} {:d [?$pipe 1]} {:d [?$pipe 2]}]`, zero errors — i.e. it
+moved a NEW shape into the very class this entry is about. Caught by the
+adversarial verify; regression-pinned. The exclusion reads the structural set off
+the predicates that already define it (`sentinel-kind-of`, `$pipe`) so it cannot
+drift from them.
+
+**(B) A LINE RULE.** An element on the same source line as the `$facts-sep`
+sentinel is a first-row TERM, never a nested row — a continuation row is BY
+DEFINITION on a later line. This is what fixes `[some 1]` and `{:k 1}`, which are
+plain groups, not `$`-headed. Verified by instrumenting the reader: `|| 1 2` /
+`3 4` gives sentinel line 3 with the nested `(3 4)` at line 4, while
+`|| [some 1]` puts sentinel and compound BOTH on line 6.
+
+⚠ **Guarded on trustworthy srclocs** via DEFERRED 51's impossible-column-0
+marker: a preparse rewrite anywhere in the defr collapses every element onto the
+defr's own line, which would make "same line" vacuously TRUE and MERGE real
+continuation rows into the first row. Degraded ⇒ exact old behaviour, A/B'd
+byte-identical.
+
+**Measured** (`b429d038` vs fixed): `|| [some 1]` 2 rows → **1**; `|| '[1 2]`
+3 rows → **1**; `|| {:k 1} 2` arity error → **1 row**. Controls byte-identical:
+multi-line continuation rows, arity chunking (`|| 1 2 3 4` at arity 2 → 2 rows),
+pipes mixed with continuation lines, leading-pipe tables, and the degraded-srcloc
+fallback. An independent element-by-element A/B of the OLD vs NEW predicate over
+**all 20 corpus files containing a `||` line (86 fact groups) reclassified ZERO
+elements**.
+
+#### Residuals — all test-pinned
+
+1. **A preparse rewrite ANYWHERE in the defr disables rule (B) — the biggest
+   limit, and it acts AT A DISTANCE.** `macros.rkt` rebuilds the whole defr
+   whenever preparse changes anything in it (DEFERRED 51), collapsing every
+   element to column 0; the guard then declines, and "declines" means the
+   FABRICATION RETURNS. Confirmed triggers include `|>` and dot-access — both
+   documented as IDIOMATIC in `prologos-syntax.md`. Note the list literal that
+   (A) fixes is itself a (B)-killer for its siblings: `|| '[1 2]` beside
+   `|| [some 3]` splays the latter. Rule (A) is srcloc-independent and survives.
+   Closing this needs **DEFERRED 51(c)**, not more work here.
+2. **A NON-`$`-headed compound alone on a CONTINUATION line is still splayed**
+   (e.g. `[some 2]`). Narrow by design — the `$`-headed case is fixed by (A).
+   The reader has already SPLICED the bracket group away there, so `[some 2]`
+   and a bare two-token row `some 2` are literally the same datum.
+   ⚠ **Closing it is cheaper than first assessed**: `parse-reader.rkt` already
+   attaches `'prologos-paren-origin` to PAREN groups at the group-construction
+   site and returns bracket groups bare — so a bracket marker is a one-line,
+   precedented change at that same site. It would NOT close residual 1, because
+   the degraded rebuild destroys syntax PROPERTIES exactly as it destroys
+   srclocs.
+3. **Compound fact VALUES do not work — the row is SEMANTICALLY DEAD, not merely
+   mis-rendered.** `|| [some 1]` then `(m1 [some 1])` → `@[]`: the row cannot be
+   matched by the very term that wrote it. Removing the splay is what makes
+   compounds REACH the solver, where this shows. Corrections to the first draft
+   of this note, all from the adversarial verify:
+   · `[some 1]` does not render `unknown` — it renders **`[?some 1]`**: the
+     CONSTRUCTOR HEAD became a logic variable, i.e. a fact row containing a free
+     variable, and the column type is **`<error>`** emitted under `--- 0 errors ---`.
+   · that mangling is **fact-row-specific, NOT pre-existing** — `(= x [some 1])`
+     renders correctly. Only the `'[1 2]` / `{:k 1}` shapes reproduce outside a
+     fact row (`(= y '[1 2])` → `unknown`).
+   So the fix trades "N fabricated rows" for "1 unmatchable row". Strictly better
+   (the count is right and nothing is invented) but still not WORKING — do not
+   read the row-count fix as making compound facts usable.
 
 ### 54. The four global-constraint goal forms are parser-reachable but UNPLUMBED (`zonk` has no arm) — found 2026-08-05
 

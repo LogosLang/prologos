@@ -6739,16 +6739,83 @@
                ;; Note: $nat-literal, $decimal-literal, ... wrapped terms
                ;; are pairs but are single terms, not nested rows.
                (define content (cdr d))  ;; list of syntax objects
+               ;; DEFERRED 53: INVERTED. This used to be a WHITELIST of five numeric
+               ;; literal sentinels, so every OTHER reader sentinel fell through to
+               ;; the `pair? ⇒ nested row` reading and was splayed — the polarity
+               ;; failure `.claude/rules/pipeline.md` warns about ("a new sentinel,
+               ;; an old recognizer"). `'[1 2]` reads as `($list-literal-parse 1 2)`
+               ;; and produced THREE fabricated rows. So test `$`-headedness itself:
+               ;; a future VALUE sentinel is then a term BY CONSTRUCTION rather than
+               ;; by remembering to extend a list.
+               ;;
+               ;; ⚠ BUT NOT EVERY `$`-HEADED PAIR IS A TERM, and the first version
+               ;; of this inversion got that wrong. The reader wraps a continuation
+               ;; LINE by its FIRST TOKEN, so a line that BEGINS with a structural
+               ;; sentinel arrives as `($pipe 3 4)` / `($clause-sep foo a)` /
+               ;; `($facts-sep 2)`. Those are rows and row-separators, not values.
+               ;; Classifying them as terms turned the ordinary leading-pipe layout
+               ;;     || 0
+               ;;      | 1
+               ;; from a LOUD "empty row beside `|`" into TWO FABRICATED rows
+               ;; carrying the raw sentinel (`{:d [?$pipe 1]}`) with ZERO errors —
+               ;; precisely the bug class this change exists to remove. Caught by
+               ;; the adversarial verify; test-pinned below.
+               ;;
+               ;; So: `$`-headed AND NOT structural. The structural set is the
+               ;; reader's own row/body separators, read off the predicates that
+               ;; already define them (`sentinel-kind-of`, `facts-pipe?`) rather
+               ;; than re-listed here, so it cannot drift from them.
+               (define (structural-sentinel-head? h)
+                 (or (eq? h '$pipe) (and (sentinel-kind-of h) #t)))
                (define (term-sentinel? s)
                  (define sd (stx->datum s))
-                 (and (pair? sd)
-                      (let ([h (if (syntax? (car sd)) (syntax-e (car sd)) (car sd))])
-                        (memq h '($nat-literal $decimal-literal $float-literal
-                                  $exp-literal $posit-literal)))))  ;; N6b (+N6c: $approx-literal removed)
+                 (and (pol8-sentinel-headed? sd)
+                      (let ([h (let ([c (car sd)]) (if (syntax? c) (syntax-e c) c))])
+                        (not (structural-sentinel-head? h)))))
+               ;; DEFERRED 53 (2026-08-05): the `pair? ⇒ nested row` reading is
+               ;; WRONG for a compound TERM. `[some 1]`, `'[1 2]`, `{:k 1}` are all
+               ;; pairs too, so they were misclassified as continuation rows and
+               ;; SPLAYED into their constituent tokens — fabricating rows the user
+               ;; never wrote, with ZERO errors:
+               ;;     || [some 1]  →  @[{:q unknown} {:q 1}]
+               ;;     || '[1 2]    →  @[{:q unknown} {:q 1} {:q 2}]
+               ;; The numeric whitelist above only ever covered the literal
+               ;; sentinels, so every other compound value fell through.
+               ;;
+               ;; THE DISCRIMINATOR IS THE SENTINEL'S LINE. A continuation row is
+               ;; BY DEFINITION on a line after the `||`; anything ON the `||` line
+               ;; belongs to the first row, whatever its shape. Verified by
+               ;; instrumenting the reader: `|| 1 2` / `3 4` gives sentinel line 3
+               ;; and nested `(3 4)` at line 4, while `|| [some 1]` puts the
+               ;; sentinel AND the compound both at line 6.
+               ;;
+               ;; ⚠ Why not the cleaner positive bracket-origin test: a bracket
+               ;; group and a bare multi-token line are "indistinguishable
+               ;; post-reader — same wrap-stx-list, no origin" (see the POL.8 note
+               ;; at the top of this section). Supplying that origin is a
+               ;; reader-wide change that also governs clause grammar. Hence the
+               ;; line rule, and hence the residual: a compound alone on a
+               ;; CONTINUATION line is still splayed (test-pinned as a known limit).
+               ;;
+               ;; Guarded on TRUSTWORTHY srclocs using the same impossible-column-0
+               ;; marker `parse-clause-content` uses: when a preparse rewrite has
+               ;; degraded the form, every element collapses onto the defr's own
+               ;; line, which would make "same line" vacuously true and merge real
+               ;; continuation rows into the first row. Degraded ⇒ old behaviour.
+               (define facts-sent (car d))
+               (define sent-line (and (syntax? facts-sent) (syntax-line facts-sent)))
+               (define sent-col  (and (syntax? facts-sent) (syntax-column facts-sent)))
+               (define locs-trustworthy?
+                 (and sent-line sent-col (not (zero? sent-col))))
+               (define (on-sentinel-line? s)
+                 (and locs-trustworthy?
+                      (syntax? s)
+                      (eqv? (syntax-line s) sent-line)))
                (define-values (flat-terms nested-rows)
                  (partition (lambda (s)
                               (or (not (pair? (stx->datum s)))
-                                  (term-sentinel? s)))
+                                  (term-sentinel? s)
+                                  (on-sentinel-line? s)))
                             content))
                ;; Rel T1 POL.7: one shared row-splitter for a fact line's terms.
                (define flat-rows (facts-terms->rows flat-terms arity loc))
