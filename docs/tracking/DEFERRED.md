@@ -80,7 +80,7 @@ dropped for a bare `prologos-error-message`) but not the root cause. Finding
 why the guard is bypassed is upstream work on the import path.
 `tests/test-import-no-ns.rkt` pins what survives and carries the table.
 
-### 2. `.field` on a non-projectable carrier lost its type-naming hint
+### 2. ✅ FIXED 2026-08-05 — `.field` on a non-projectable carrier lost its type-naming hint
 
 This branch's hint named the carrier AND its type — *"`.name` is field access,
 but `n` has type `Int`, which has no fields. `.field` needs a record {…} or a
@@ -88,10 +88,24 @@ map."* D4.P4b-ii migrated `.field` from `$dot-access`→`map-get` onto
 `$select-path`→`expr-select`, so the select-fail message answers first with the
 generic *"the subject is not a record, so it has no fields to access"*.
 
-`projection-parts` (`typing-errors.rkt`) has been taught the new node shape, so
-the hint is REACHABLE again — it simply loses the `or` race to the more general
-message. Re-ordering that `or` is a diagnostics-precedence decision, not a merge
-one, so it is left to the owner. The test asserts what still holds.
+**Fixed, and it turned out NOT to need a ruling.** I filed this as "a
+diagnostics-precedence decision for the owner". It is not: `infer/err` in this
+same file already states the rule — *"most specific first"* — and
+`test-path-selection.rkt` asserts it ("the check door yields to every
+more-specific message"). Naming the type IS more specific than "is not a
+record", so the existing convention decides it.
+
+`projection-parts` was taught the new node shape, and the `subject-other` arm
+now names the type when `unprojectable-type?` (a POSITIVE list, so it fires only
+where the claim is provably true and an unrecognized carrier declines by
+default):
+
+> select: `name` is field access, but the subject has type Int, which has no
+> fields. `.field` needs a record {…} or a map.
+
+Gated to DOT ACCESS. A first cut fired for select BLOCKS too, where "field
+access" names the wrong construct — caught by the existing block pin, which is
+why that pin was worth keeping when the wording moved.
 
 **The transferable bit**: a consumer keyed on a node shape goes silently dark
 when the shape migrates — the `pipeline.md` § "Exhaustive Walkers" family-sibling

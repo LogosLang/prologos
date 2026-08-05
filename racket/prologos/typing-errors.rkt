@@ -526,11 +526,34 @@
                "Select from the underlying record instead.")
               (if (null? path) "" (format " (branch `~a`)" branch-str))
               (expr-fvar-name row))
-             (format
-              (if block?
-                  "Could not infer type — select: the subject~a is not a record; a select block projects fields of a keyword row"
-                  "Could not infer type — select: the subject~a is not a record, so it has no fields to access")
-              (if (null? path) "" (format " (branch `~a`)" branch-str)))))]
+             ;; NAME THE TYPE when we provably can. Restored 2026-08-05 after
+             ;; the `main` merge: this branch's hint said "`.name` is field
+             ;; access, but `n` has type `Int`, which has no fields", and
+             ;; D4.P4b-ii's move of `.field` onto `expr-select` routed the case
+             ;; here, where the generic "is not a record" answered first.
+             ;;
+             ;; Not a new precedence decision — this file already states the
+             ;; rule at `infer/err`: "most specific first". `unprojectable-type?`
+             ;; is a POSITIVE list, so it fires only where the claim is provably
+             ;; true and an unrecognized carrier declines to the generic text
+             ;; below by default.
+             ;; DOT ACCESS only. For a select BLOCK (`n{a}`) the phrase "field
+             ;; access" is the wrong construct — a block is not a dot access —
+             ;; and the block wording below is already the specific one for it.
+             (if (and (not block?) (unprojectable-type? row))
+                 (format
+                  (string-append
+                   "Could not infer type — select: `~a`~a is field access, but the "
+                   "subject has type ~a, which has no fields. `.field` needs a "
+                   "record {…} or a map.")
+                  (or label "the step")
+                  (if (null? path) "" (format " (branch `~a`)" branch-str))
+                  (pp-expr row '()))
+                 (format
+                  (if block?
+                      "Could not infer type — select: the subject~a is not a record; a select block projects fields of a keyword row"
+                      "Could not infer type — select: the subject~a is not a record, so it has no fields to access")
+                  (if (null? path) "" (format " (branch `~a`)" branch-str))))))]
     ;; ---- D4.P3c: the ordinal fail kinds ----
     [(ordinal-oob)
      (string-append

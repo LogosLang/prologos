@@ -1198,7 +1198,10 @@
   (define s (run-ws-last "def s := \"hi\"\ns.0\n"))
   (check-regexp-match #rx"type String, which has no positions" s)
   (define f (run-ws-last "def n := 5\nn.name\n"))
-  ;; ⚠ MERGE 2026-08-05 — SPECIFICITY LOST UPSTREAM, recorded not papered over.
+  ;; ✅ RESTORED 2026-08-05 (see below for what it cost). The type is named again.
+  (check-regexp-match #rx"field access" f)
+  (check-regexp-match #rx"type Int, which has no fields" f)
+  ;; ⚠ The history, kept because the failure mode was silent.
   ;; This branch's hint named the carrier AND its type ("`.name` is field
   ;; access, but n has type Int, which has no fields"). D4.P4b-ii migrated
   ;; `.field` onto `expr-select`, so the select-fail message now answers first
@@ -1208,8 +1211,9 @@
   ;; general message. Re-ordering that `or` is a diagnostics-precedence
   ;; decision, not a merge one. Filed in DEFERRED.
   ;;
-  ;; What still holds is asserted: the refusal says there are no fields.
-  (check-regexp-match #rx"no fields" f)
+  ;; The hint is gated to DOT ACCESS: for a select block (`n{a}`) "field
+  ;; access" names the wrong construct, and the block wording is already the
+  ;; specific one there. That case is pinned separately above.
   ;; A Pi is unprojectable too — there is no UFCS in Prologos.
   (check-regexp-match #rx"has no positions"
                       (run-ws-last "spec p2bg Int -> Int\ndefn p2bg [x] x\np2bg.0\n")))
