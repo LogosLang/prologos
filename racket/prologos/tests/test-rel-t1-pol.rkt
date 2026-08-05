@@ -626,6 +626,76 @@
   (check-true (string? r) (result-msg r))
   (check-true (string-contains? r "blueberry") "the file continues; d registered"))
 
+;; ── DEFERRED 51 (chip `task_4c00d3f0`, filed 2026-08-05) ───────────────────────
+;; The guard above is triggered by DEGRADED SRCLOCS, and the degradation comes
+;; from `macros.rkt`'s per-form `(syntax->datum stx)` strip + the defr arm's
+;; 3-arg `datum->syntax` rebuild — i.e. from a preparse rewrite ANYWHERE in the
+;; defr, NOT from dot-access specifically. Its message said "(e.g. dot-access)",
+;; which CIU T6 D4.P4c-4c/G2 made misleading by turning broadcast into a live
+;; second trigger (postfix-index was always a third).
+;;
+;; Owner ruling 2026-08-05: keep the POL.8 limit; make the MESSAGE name the real
+;; condition. The relation-loss half is PRE-EXISTING — measured byte-identical
+;; pre/post-G2 on the dot-access spelling against a baseline worktree at
+;; `ae26f540~1` — and is pinned below as the RULED behaviour so that changing it
+;; later is a deliberate decision rather than drift.
+
+;; ⚠ Relation names here are UNIQUE ON PURPOSE. `run-ns-ws-last` does NOT reset
+;; `current-relation-store` (it is absent from test-support.rkt's parameterize
+;; block), so relations REGISTERED BY EARLIER TESTS IN THIS FILE remain visible.
+;; A pin that reuses the popular name `d` silently queries the LEAKED relation
+;; from the all-paren test at :619 and passes on an empty bag — which is exactly
+;; the failure mode these pins exist to catch. Caught the first time round.
+(define (p8-guard-msg body)
+  (result-msg (run-ns-ws-last (string-append P8FIX "def mm := {:k \"blue\"}\n" body))))
+
+(test-case "DEFERRED 51: every rewrite family triggers the parenless guard"
+  ;; Verified by probe: dot-access, broadcast, postfix-index AND a list literal
+  ;; all reach `parse-degraded`. The guard is about srcloc loss, not about which
+  ;; sentinel was minted — `pol8-goal-pair?` fails on the bare head `fruit-color`
+  ;; before any sentinel is even consulted. The list-literal case was found by the
+  ;; adversarial verify, which correctly objected that a CLOSED-looking family
+  ;; list in the message is less honest than the vague "(e.g. dot-access)" it
+  ;; replaced. The message now says "ANY form ... — e.g. ...". (`|>` does NOT
+  ;; trigger it — probed; not every rewrite degrades the srcloc.)
+  (for ([spelling (in-list '("mm.k" "mm:k" "mm[0]" "\'[1 2]"))]
+        [what     (in-list '("dot-access" "broadcast" "postfix-index" "list-literal"))])
+    (define m (p8-guard-msg (string-append "defr d51fam [?f]\n  &> fruit-color f " spelling "\n")))
+    (check-true (string-contains? m "parenthesize")
+                (format "~a should trigger the guard; got: ~a" what m))))
+
+(test-case "DEFERRED 51: the guard message names the real condition, not just dot-access"
+  (define m (p8-guard-msg "defr d51msg [?f]\n  &> fruit-color f mm:k\n"))
+  ;; It must still be actionable …
+  (check-true (string-contains? m "parenthesize") m)
+  ;; … and it must name the families that actually trigger it, so a user who hit
+  ;; it via broadcast is not sent looking for a dot-access they never wrote.
+  (check-true (string-contains? m "dot-access") m)
+  (check-true (string-contains? m "broadcast") m))
+
+(test-case "DEFERRED 51 (RULED (a)): the refusal takes the relation with it — pinned"
+  ;; Not the behaviour we would design fresh, but it is the SAFE half: registering
+  ;; a relation whose clause failed to parse would risk silent wrong answers on
+  ;; query. Pinned so option (b)/(c) is a conscious future change.
+  (define r (run-ns-ws-last (string-append P8FIX
+                                           "def mm := {:k \"blue\"}\n"
+                                           "defr d51ruled [?f]\n  &> fruit-color f mm:k\n"
+                                           "solve (d51ruled q)")))
+  (check-true (prologos-error? r) (format "expected an error; got: ~a" (result-msg r)))
+  (check-true (string-contains? (result-msg r) "Unknown relation") (result-msg r)))
+
+(test-case "DEFERRED 51: the all-paren spelling handles broadcast correctly (and loudly)"
+  ;; The counterpart to the guard: with parens the clause parses, the relation
+  ;; registers, and the arity error is REPORTED. G2 improved this path — pre-G2
+  ;; the same input returned a silent `@[]` because `x:y` was spliced into two
+  ;; tokens, inflating the goal's arity to a value that happened to match.
+  (define r (run-ns-ws-last (string-append P8FIX
+                                           "def mm := {:k \"blue\"}\n"
+                                           "defr d51paren [?f]\n  &> (fruit-color mm:k)\n"
+                                           "solve (d51paren q)")))
+  (check-true (prologos-error? r) (format "expected an arity error; got: ~a" (result-msg r)))
+  (check-true (string-contains? (result-msg r) "fruit-color/1") (result-msg r)))
+
 (test-case "POL.8: a literal cannot head a goal line (LOUD)"
   (define m (result-msg (run-ns-ws-last
                          (string-append P8FIX

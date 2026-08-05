@@ -17,6 +17,7 @@
 
 (require racket/match
          racket/string
+         (only-in racket/set set? in-set)  ;; DEFERRED 52: goal-arg-excused?'s container arms
          racket/list        ;; Rel T1 B3.2: remove-duplicates in the display-refiner
 
          "prelude.rkt"
@@ -1597,6 +1598,85 @@
                          (loop (subst 0 arg cod) (cdr as) deferred)
                          (expr-error))))
                (expr-error)))]))))
+
+;; DEFERRED 52 (2026-08-05) — node kinds the IMPERATIVE `infer` cannot synthesize
+;; a type for. It has no arm for them and falls to its catch-all `(expr-error)`,
+;; so an `expr-error` here does NOT mean "the user wrote a type error".
+;;
+;; These are typed by the ON-NETWORK inferencer instead
+;; (`register-typing-rule!`, typing-propagators.rkt), and the command boundary
+;; tries on-network FIRST (driver.rkt) — which is why `def z := [pair 1 2]`
+;; succeeds (`z : [Sigma Int Int]`) while imperative `infer` on the very same
+;; term returns `(expr-error)`. Caught by the adversarial verify: without this
+;; exemption `(q1 [pair 1 2])` became a hard error while the identical `def`
+;; stayed fine — a live over-rejection, since goal arguments reach the weaker
+;; inferencer only.
+;;
+;; The fix is to EXEMPT them, not to invent an arm: inferring a dependent Sigma
+;; with no expected type is a genuine gap (typing-core types `expr-pair` only in
+;; `check`, against an expectation), deliberately delegated to on-network.
+;;
+;; ⚠ DERIVED, NOT GUESSED. This set is exactly
+;;     {nodes with `register-typing-rule!`} \ {nodes with an imperative `infer` arm}
+;; computed mechanically from the two sources, minus `expr-error` (an error IS an
+;; error and must never be excused). `tests/test-goal-arg-typing.rkt` recomputes
+;; it from source and FAILS on drift, so a future `register-typing-rule!` cannot
+;; silently widen the class behind this predicate's back.
+(define (infer-unsynthesizable? x)
+  (or (expr-pair? x) (expr-hole? x) (expr-reduce? x) (expr-refl? x)))
+
+;; DEFERRED 52 (2026-08-05) — does this expression mention a logic variable
+;; ANYWHERE? Used to tell a real type error in goal-argument position from a
+;; relational term whose type is legitimately unknown (see the "Goals → Goal"
+;; arms of `infer`).
+;;
+;; Written as a GENERIC reflective walk, not a hand-armed one, per
+;; `.claude/rules/pipeline.md` § "Exhaustive Walkers": every `expr-*` struct is
+;; `#:transparent`, so a `struct->vector` walk cannot silently miss a node kind.
+;; The armed alternative in reduction.rkt (`collect-deep-logic-vars`) covers only
+;; `expr-app` / `expr-goal-app` / `expr-unify-goal` behind an `[else '()]`
+;; catch-all — it has NO `expr-select` arm, so it reports "no logic vars" for the
+;; exact form (`mm.c`) this predicate exists to recognise. Reusing it here would
+;; have reintroduced the bug it is meant to prevent.
+;;
+;; Cost is confined to the error path: callers evaluate this ONLY after `infer`
+;; has already returned `(expr-error)`.
+;; ⚠ The "generic walk cannot silently miss a node kind" claim above is true for
+;; STRUCT node kinds only. The cond has arms for struct/pair/vector, so a field
+;; holding a hash, set, or box would be skipped (`(struct? (hasheq))` is #f). No
+;; `expr-*` node stores sub-expressions that way today — checked — so this is
+;; latent, not live; recorded because it is the same failure shape the paragraph
+;; above claims immunity from.
+(define (goal-arg-excused? e)
+  (let loop ([x e])
+    (cond
+      ;; A logic variable: relational term, type legitimately unknown.
+      [(expr-logic-var? x) #t]
+      ;; A node the imperative `infer` has no arm for: its `expr-error` is an
+      ;; inferencer gap, not a user error.
+      [(infer-unsynthesizable? x) #t]
+      [(struct? x)
+       (let ([v (struct->vector x)])
+         (for/or ([i (in-range 1 (vector-length v))]) (loop (vector-ref v i))))]
+      [(pair? x) (or (loop (car x)) (loop (cdr x)))]
+      [(vector? x) (for/or ([y (in-vector x)]) (loop y))]
+      ;; Container arms: `expr-champ` / `expr-hset` carry RAW Racket collections,
+      ;; and `(struct? (hasheq))` is #f — so without these a logic var inside a
+      ;; map or set literal would be missed and the argument wrongly un-excused.
+      ;; Maps happen to work through the struct arm today (champ nodes are
+      ;; structs), but that is an implementation detail, not a guarantee.
+      [(hash? x) (for/or ([(k v) (in-hash x)]) (or (loop k) (loop v)))]
+      [(set? x) (for/or ([y (in-set x)]) (loop y))]
+      [(box? x) (loop (unbox x))]
+      [else #f])))
+
+;; An inferred `expr-error` on a goal argument counts as a USER TYPE ERROR only
+;; when nothing in the argument excuses it. Conservative BY DESIGN: it can miss a
+;; real error (an ill-typed subterm sitting beside a logic var stays silent — a
+;; named residual), but it must never invent one, because inventing one breaks
+;; working relational programs.
+(define (goal-arg-type-error? arg ty)
+  (and (expr-error? ty) (not (goal-arg-excused? arg))))
 
 ;; ========================================
 ;; Type inference (synthesis mode)
@@ -3669,21 +3749,70 @@
     [(expr-fact-row ts) (for-each (lambda (t) (infer ctx t)) ts) (expr-hole)]
 
     ;; Goals → Goal
+    ;;
+    ;; ⚠ `expr-error` from `infer` is AMBIGUOUS in goal position, and getting this
+    ;; wrong is the trap this fix fell into once (caught by POL.9's pinned
+    ;; "a preparse rewrite inside a paren goal keeps goal-ness" test). Under the
+    ;; relational fallback a bare name is a LOGIC VARIABLE, so `(fruit-color f mm.c)`
+    ;; elaborates `mm` to a logic var and `mm.c` is a selection on an unbound var —
+    ;; genuinely un-inferrable, but NOT a user error; it is the documented
+    ;; "computed goal args don't evaluate" semantics. Propagating there turned a
+    ;; working relational form into "Could not infer type".
+    ;;
+    ;; The discriminator is LOGIC-VAR FREEDOM: an argument containing no logic
+    ;; variables is a FUNCTIONAL expression and must type-check; an argument
+    ;; containing one is a relational term whose type may legitimately be unknown.
+    ;; See `goal-arg-type-error?` below.
+    ;;
+    ;; DEFERRED 52 (2026-08-05): these arms used to `for-each` / sequence `infer`
+    ;; for effect and then unconditionally return `(expr-goal-type)` — DISCARDING
+    ;; the inferred type even when it was an `expr-error`. `infer` reports a type
+    ;; failure by RETURNING `(expr-error)`, not by raising, so every type error in
+    ;; a goal argument was swallowed: the ill-typed argument became an opaque term
+    ;; that unified with nothing, and the user got an empty bag (indistinguishable
+    ;; from "no solutions") with ZERO errors. The same expression is loud in `def`
+    ;; position and as a bare expression command.
+    ;;
+    ;; The rule applied here: propagate from positions that are EVALUATED.
+    ;;   goal-app args ARE evaluated  — (q1 [+ 0 1]) → @[{}]        ⇒ propagate
+    ;;   `is` evaluates its RHS       — (is x [+ 1 1]) → {:x 2}     ⇒ propagate (RHS only)
+    ;;   `=` does NOT evaluate        — (= x [+ 1 1]) → {:x unknown} ⇒ LEAVE ALONE
+    ;; `=` renders any compound operand as `unknown` whether well-typed or not, so
+    ;; rejecting the ill-typed one would be inconsistent with accepting `[+ 1 1]`.
+    ;; Its operands are TERMS. Test-pinned as status quo in test-goal-arg-typing.rkt.
     [(expr-goal-app nm as)
      (infer ctx nm)
-     (for-each (lambda (a) (infer ctx a)) as)
-     (expr-goal-type)]
+     ;; Infer EVERY argument first (the pre-fix behaviour inferred all of them for
+     ;; effect — constraint generation included); only then decide. A short-circuit
+     ;; `for/or` over `(infer ctx a)` would silently skip the later arguments.
+     (define arg-tys (map (lambda (a) (infer ctx a)) as))
+     (define bad?
+       (for/or ([a (in-list as)] [t (in-list arg-tys)]) (goal-arg-type-error? a t)))
+     (if bad? (expr-error) (expr-goal-type))]
     [(expr-unify-goal l r)
+     ;; Deliberately NOT propagating — see the note above: `=` operands are terms.
      (infer ctx l) (infer ctx r)
      (expr-goal-type)]
     [(expr-is-goal v ex)
-     (infer ctx v) (infer ctx ex)
-     (expr-goal-type)]
-    [(expr-not-goal g) (infer ctx g) (expr-goal-type)]
+     ;; `v` is the (term) binding position; only `ex` is evaluated, so only `ex`
+     ;; can carry a genuine evaluation type-error.
+     (infer ctx v)
+     (define te (infer ctx ex))
+     (if (goal-arg-type-error? ex te) (expr-error) (expr-goal-type))]
+    [(expr-not-goal g)
+     (define tg (infer ctx g))
+     (if (expr-error? tg) (expr-error) (expr-goal-type))]
     [(expr-guard cond goal)
      (check ctx cond (expr-Bool))
-     (infer ctx goal)
-     (expr-goal-type)]
+     ;; `goal` is #f for the 1-arg form `(guard [cond])` — elaborator.rkt builds
+     ;; `(expr-guard ec #f)` there. The pre-fix code called `(infer ctx goal)`
+     ;; unguarded and DISCARDED the result, so #f was harmless; now the result is
+     ;; consulted, so guard it the way every other walker over this struct does
+     ;; (`(and goal …)` in substitution.rkt, zonk.rkt, reduction.rkt,
+     ;; pretty-print.rkt). Probed: the 1-arg form behaves identically with and
+     ;; without this, so it is defence against a latent hazard, not a live bug.
+     (define tg (and goal (infer ctx goal)))
+     (if (and tg (expr-error? tg)) (expr-error) (expr-goal-type))]
 
     ;; Schema → schema-type
 
@@ -3692,19 +3821,28 @@
     ;; (else a loose hole — B2 refines the un-schema'd facts case). solve-one is the
     ;; D25.4-unwrapped BARE row; explain rows carry a 'dyn tail for the conditional
     ;; reserved metadata keys (:certainty/:cycle/:provenance).
-    [(expr-solve g) (infer ctx g) (solve-row-type g 'pvec)]
+    ;; DEFERRED 52: "Infer the goal for effect (errors)" only reports if the goal's
+    ;; type is actually CONSULTED. These arms discarded it, so a goal-arm error
+    ;; (above) would die here one level short of the command boundary. Propagate.
+    [(expr-solve g)
+     (define tg (infer ctx g))
+     (if (expr-error? tg) (expr-error) (solve-row-type g 'pvec))]
     [(expr-solve-with sv ov g)
      (when sv (infer ctx sv))
      (when ov (infer ctx ov))
-     (infer ctx g)
-     (solve-row-type g 'pvec)]
-    [(expr-solve-one g) (infer ctx g) (solve-row-type g 'bare)]
-    [(expr-explain g) (infer ctx g) (solve-row-type g 'pvec 'dyn)]
+     (define tg (infer ctx g))
+     (if (expr-error? tg) (expr-error) (solve-row-type g 'pvec))]
+    [(expr-solve-one g)
+     (define tg (infer ctx g))
+     (if (expr-error? tg) (expr-error) (solve-row-type g 'bare))]
+    [(expr-explain g)
+     (define tg (infer ctx g))
+     (if (expr-error? tg) (expr-error) (solve-row-type g 'pvec 'dyn))]
     [(expr-explain-with sv ov g)
      (when sv (infer ctx sv))
      (when ov (infer ctx ov))
-     (infer ctx g)
-     (solve-row-type g 'pvec 'dyn)]
+     (define tg (infer ctx g))
+     (if (expr-error? tg) (expr-error) (solve-row-type g 'pvec 'dyn))]
 
     ;; Narrow — functional-logic narrowing: type-unsafe (hole) like solve
     [(expr-narrow func args target vars)

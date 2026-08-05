@@ -6601,8 +6601,22 @@
         (let* ([goals (map parse-relational-goal content)]
                [err (findf prologos-error? goals)])
           (or err (surf-clause goals loc)))
+        ;; DEFERRED 51 (2026-08-05): the message used to say "(e.g. dot-access)",
+        ;; which named the ONE trigger that existed when POL.8 shipped. It is not
+        ;; the condition. The condition is a preparse rewrite ANYWHERE in this
+        ;; defr — macros.rkt strips every form to a bare datum before expanding
+        ;; (`(syntax->datum stx)`) and the defr arm rebuilds with a 3-arg
+        ;; `datum->syntax`, so every inner element inherits the defr's own
+        ;; line/column and the layout grouping this form needs is gone. All three
+        ;; rewrite families were verified to trigger it at b429d038; broadcast
+        ;; became live at CIU T6 D4.P4c-4c/G2, which is what made the old wording
+        ;; actively misdirecting. Name the condition and its families instead.
         (prologos-error loc
-          "rule clause: parenless goals cannot be used in a defr body that also contains a form rewritten before parsing (e.g. dot-access) — parenthesize each goal in this clause.")))
+          (string-append
+           "rule clause: parenless goals cannot be used in a defr that also contains ANY form "
+           "rewritten before parsing — e.g. dot-access `x.f`, broadcast `x:f`, postfix index "
+           "`x[i]`, a `'[…]` list literal — the rewrite strips the source columns that "
+           "layout-based clause grouping needs. Fix: parenthesize each goal in this clause."))))
   (define sent-line (elem-line sentinel))
   (define sent-col (elem-col sentinel))
   (cond
