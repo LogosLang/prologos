@@ -33,7 +33,8 @@ rulings, censuses and test delta live in its own section.
 | **P4** | **Broadcast ω** — ⭐ **P4a ✅ · P4b ✅ COMPLETE** (b-i carrier + b-ii `$dot-access` migration; `x.a` now mints the unified selector carrier) · P4c–P4e ⬜ — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | [§5.P4](#p4) · co-design: audit `wf_8458c23b` + options panel · **RULED 2026-07-31**: [Q_U5](#q-u5) · [Q_U6](#q-u6) · [Q_U7](#q-u7) · [Q_U8](#q-u8) · [Q_U9](#q-u9) (the PAUSE cleared) · partition LOCKED P4a–P4e |
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
 | **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [[§5.P4c](#p4c)](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([the inverted default](#p4c-2-inverted)) · **P4c-3 ✅ `d477772c`** ([the enable-set moves to P4c-4](#p4c-3)) · **P4c-4a ✅ `f31237fd`** ([the test seam + per-context dispatch](#p4c-4a)) · P4c-4b/5 ⬜ |
-| **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery |
+| **PF** | **Path first-classness** (substrate; **P5's prerequisite**) — ⭐ **Q_U17 RULED B2**: a Path segment is a first-class `Step` value. Reify the closed six-kind union as a `data Step` ADT on the `Datum` pattern; `Path` stays GROUND; `segments : Path -> [List Step]`. Repairs the dead `path-segments` in the SAME change | ⬜ | [§5.PF](#pf) · [Q_U17](#q-u17) · panel `wf_68178bd3-eea` |
+| **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery · ⚠ B3 needs [PF](#pf) |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | [§5.PX](#px) · position flexible |
 | **P6** | **Demand semantics** — RULED STAGED (4a); **decision ✅ Q_U3 (owner, 2026-07-30): option (c)** — deferred to a named post-v1 phase, charter stub in §5.P6 | ⬜ (residue = the X.close gate row only) | [§5.P6](#p6) |
 | **X.close** | **MANDATORY** — bench matrix · DEFERRED triage · doc-truth sweep · memory fold · **Stage-5 PIR** | ⬜ | [§5.X](#x-close) · the track does not flip ✅ without the PIR |
@@ -1179,11 +1180,12 @@ items of the hold-point, ruled before P4a opened:
   classifier change — they are RIVALS carrying the same information, and "ship
   one with a revert clause" is the dual-path shape the rules block.
 
-- <a id="q-u17"></a>**Q_U17 — WHAT IS A PATH SEGMENT, AS A TYPE?** ⬜ **OPEN —
-  analysis complete, AWAITING OWNER RULING** (opened 2026-08-02 at the owner's
-  request, whose stated concern is "bring Path Selection closest to
-  FIRST-CLASSNESS"). Recorded here so the work survives a compact; **nothing is
-  ruled and nothing is landed.**
+- <a id="q-u17"></a>**⭐ Q_U17 — A PATH SEGMENT IS A FIRST-CLASS `Step` VALUE.
+  RULED B2** [owner, 2026-08-02 — "Assent to B2; place it as its own slice"].
+  Opened at the owner's request, their stated concern being "bring Path
+  Selection closest to FIRST-CLASSNESS". **Placement: its own slice — `PF`**
+  (not inside P4c), because the `Step` reification and the `path-segments`
+  repair are one change (U17b) and **P5's B3 same-spine merge depends on it**.
   **The defect.** The step vocabulary is a CLOSED UNION of SIX kinds, but the
   first-class API declares `segments : Path -> [List Keyword]` — true of exactly
   ONE kind. And `path-segments` **already whole-file aborts** (pre-existing,
@@ -1239,9 +1241,9 @@ items of the hold-point, ruled before P4a opened:
   inference bug, not a design property — but real today.
   **INCOMPLETE BECAUSE** the eleven consumer sites migrate through one
   marshaller, which is not P4c-4b's work; deferred to the slice that also
-  repairs `path-segments` (the same change, per U17b). **Placement is part of
-  the open ruling.** Grounding: options panel `wf_68178bd3-eea` (7 agents /
-  1.24M tokens), every load-bearing claim R-lens-verified on the main thread.
+  repairs `path-segments` (the same change, per U17b) — **now slice `PF`**.
+  Grounding: options panel `wf_68178bd3-eea` (7 agents / 1.24M tokens), every
+  load-bearing claim R-lens-verified on the main thread.
   **Next free Q-label after this: U18.**
 
 **Open, GATING (spec §8):**
@@ -5209,6 +5211,60 @@ Status: ✅ **P4c-4a COMPLETE**. Next: **P4c-4b** — `access-sentinel?` members
 the fold arm (with its FIXPOINT obligation: the emitted datum must not be
 sentinel-headed) + the producer bridge + the `segment-select-items` arm, carrying
 the [dual-spine merge assumption](#p4c-4-merge).
+
+<a id="pf"></a>
+
+### §5.PF — Path first-classness  (Q_U17 RULED B2, owner 2026-08-02)
+
+**Why it exists.** Path first-classness today is **DECLARED, NOT DELIVERED**.
+`segments : Path -> [List Keyword]` is true of exactly ONE of six step kinds, and
+`path-segments` has **never marshalled** — it hand-builds a Prologos cons-chain
+where the foreign marshaller wants a RACKET list (pre-existing, `f072c115`), so
+`from-segments` and `path-append` are dead with it. Eleven production sites read
+segments as bare symbols via `(expr-keyword seg)`, a silent type lie for four
+kinds. ω did not create this; it made it unignorable. The full argument and the
+disqualification of every alternative is [Q_U17](#q-u17).
+
+**Deliverables**
+
+1. **`data Step`** in the lib, six constructors mirroring `select-step-kind`. The
+   Racket-side classifier stays the single source of kind truth; the lib type is
+   its reflection, so a seventh kind is added in ONE place and the marshaller's
+   totality rides the existing `select-step-kind-unhandled` seat.
+   ⚠ `step-sub` recurses through **`List`**, not `Path` — exactly as
+   `datum-cons` recurses through `Datum`. **No parameterization, no mutual
+   recursion**; `Path` stays ground. (This is why seed option B3 was unnecessary
+   rather than merely costly.)
+2. **`data Cont`** — the second ADT, and the cost the headline hides:
+   `dissolve | synth | collapse | collapse-synth | (rename . k) |
+   (collapse-rename . k)`.
+3. **The `path-segments` repair, in the SAME change** (U17b). The fix is "return
+   a Racket list" — `racket-list->prologos-list` already exists — but the repair
+   must decide WHAT it returns. Returning keywords re-enshrines the lie;
+   returning `Step` makes the spec true. Marshalling template already in-tree:
+   `datum->datum-expr`. Same question for `head : Path -> Keyword`.
+4. **Migrate the eleven bare-symbol consumer sites** through ONE marshaller.
+5. **Revive `from-segments` / `path-append`**, dead since the abort.
+
+**Cost, stated plainly.** TWO ADTs, not one. And it inherits the tax the `Datum`
+module documents in its own comment: wildcard `_` in a match over a user data
+type "triggers a type-inference limitation that causes module loading to fail",
+so every `Step` consumer written in Prologos enumerates all six arms. A known
+inference bug, not a design property — but real today, and it scales with the
+vocabulary.
+
+**What it enables.** P5's **B3 same-spine merge** needs structural comparison of
+two paths, which is exactly what a first-class `Step` value permits and an
+eliminator does not — that asymmetry is what disqualified the emergent B6.
+Q_U12's deferred sorts (`#.field` nil-safe, `[k]` ordinal/dynamic) land as new
+constructors rather than as new lies.
+
+**Does NOT block P4c.** `(@bcast step)` is a unary constructor of a closed union
+with ONE producer and ONE classifier, so converting it later is cheap *because
+that is already the ADT shape*. The encoding is not where first-classness is won
+or lost.
+
+Status: ⬜ PF — **not started**; prerequisite of P5's B3.
 
 <a id="p5"></a>
 
