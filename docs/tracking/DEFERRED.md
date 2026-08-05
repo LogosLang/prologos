@@ -2840,6 +2840,14 @@ is DIGIT-headed segments (`?x:0` DOES mint); the one principled counter-example 
 pattern vars, zero instances in tree. So this item's "cannot decide it in EITHER direction"
 framing is HALF WRONG and Q_U18 is reopened — see D4 `#q-u18`.
 
+✅ **RESOLVED 2026-08-02 by [Q_U18](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u18).**
+The unknown-head arm flips to **PRESERVE** (owner: "worth the trade"), because the
+sigil discriminator is ALREADY in the tokenizer — `?x:Nat` glues to ONE TOKEN and
+cannot mint. Owed with it: close the **digit-headed hole** (`?x:0` mints). Accepted
+residual: macro pattern vars, zero instances in tree, caught by the EXISTING
+`bcast-step-binder` per-command error. The grant is **G4** — test-only until
+P4c-4c. This item's remaining half is therefore CLOSED.
+
 Both spellings are `[SYMBOL item item]`. **Structurally indistinguishable at the
 reader.** Whatever resolves this is not a longer head table. See D4 §5.P4c-3;
 the on-network disposition attribute this points at is chartered under PPN 4D

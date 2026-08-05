@@ -32,7 +32,7 @@ rulings, censuses and test delta live in its own section.
 | **P3c** | **Keyless + L4 + honest nesting** — the nat-row mint at EVERY n (incl. 1 and homogeneous n) · ordinal branches `{N M}` · the L4 mixing error · `⟨String⟩` 1-tuple pins · the G11 one-space pair pinned side by side | ✅ | [§5.P3c](#p3c) · **`1b021d57`** — suite **9497/475/0**, acceptance **52/52**, battery 206; P3 (BLOCKS) COMPLETE; the verify's FIRST no-BLOCKING slice in eight (2 SIGNIFICANT fixed pre-commit: the @ord walk-to-leaf twin-drift, the decimal-fusion leak); G11 landed AS AMENDED; in-block `v[0]`≡`.0` ratified-by-pin |
 | **P4** | **Broadcast ω** — ⭐ **P4a ✅ · P4b ✅ COMPLETE** (b-i carrier + b-ii `$dot-access` migration; `x.a` now mints the unified selector carrier) · P4c–P4e ⬜ — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | [§5.P4](#p4) · co-design: audit `wf_8458c23b` + options panel · **RULED 2026-07-31**: [Q_U5](#q-u5) · [Q_U6](#q-u6) · [Q_U7](#q-u7) · [Q_U8](#q-u8) · [Q_U9](#q-u9) (the PAUSE cleared) · partition LOCKED P4a–P4e |
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
-| **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [[§5.P4c](#p4c)](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([the inverted default](#p4c-2-inverted)) · **P4c-3 ✅ `d477772c`** ([the enable-set moves to P4c-4](#p4c-3)) · **P4c-4a ✅ `f31237fd`** ([the test seam + per-context dispatch](#p4c-4a)) · **P4c-4b ✅ `6b22515d`** ([a broadcast goes END TO END; the not-yet stops being a whole-file abort](#p4c-4b)) · **P4c-4c ⬜ RE-SCOPED** to PVec value semantics ([why + the full sequencing](#p4c-sequencing)) · ⚠ **[Q_U18](#q-u18) GATES every corpus uncomment** · P4c-5 ⬜ |
+| **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [[§5.P4c](#p4c)](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([the inverted default](#p4c-2-inverted)) · **P4c-3 ✅ `d477772c`** ([the enable-set moves to P4c-4](#p4c-3)) · **P4c-4a ✅ `f31237fd`** ([the test seam + per-context dispatch](#p4c-4a)) · **P4c-4b ✅ `6b22515d`** ([a broadcast goes END TO END; the not-yet stops being a whole-file abort](#p4c-4b)) · **P4c-4c ⬜ RE-SCOPED** to PVec value semantics ([why + the full sequencing](#p4c-sequencing)) · **[Q_U18](#q-u18) ✅ RULED** — unknown-head → PRESERVE; grant = **G4** (test-only until P4c-4c); *G2 = lean, re-evaluate then* · P4c-5 ⬜ |
 | **PF** | **Path first-classness** (substrate; **P5's prerequisite**) — ⭐ **Q_U17 RULED B2**: a Path segment is a first-class `Step` value. Reify the closed six-kind union as a `data Step` ADT on the `Datum` pattern; `Path` stays GROUND; `segments : Path -> [List Step]`. Repairs the dead `path-segments` in the SAME change | ⬜ | [§5.PF](#pf) · [Q_U17](#q-u17) · panel `wf_68178bd3-eea` |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery · ⚠ B3 needs [PF](#pf) |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | [§5.PX](#px) · position flexible |
@@ -1246,9 +1246,11 @@ items of the hold-point, ruled before P4a opened:
   load-bearing claim R-lens-verified on the main thread.
   **Next free Q-label after this: U20.**
 
-- <a id="q-u18"></a>**⭐ Q_U18 — THE UNKNOWN-HEAD DEFAULT FLIPS TO *PRESERVE*.
-  RULED (policy half) [owner, 2026-08-02 — "worth the trade"].** The GRANT half
-  is still open — see the ruling block at the end of this entry.
+- <a id="q-u18"></a>**⭐ Q_U18 — RULED IN FULL [owner, 2026-08-02].**
+  **(i) The unknown-head default flips to PRESERVE** ("worth the trade").
+  **(ii) The grant is G4** — hold TEST-ONLY until P4c-4c's value semantics land,
+  then grant. **G2 (retire the enable-set) is the recorded LEAN, NOT a ruling** —
+  to land with or after P4c-4c, and **RE-EVALUATED at that point**.
   *(Original framing, kept because the correction below is the point:)* the
   unknown-head policy AND the first production grant are ONE decision, and it
   GATES EVERY CORPUS UNCOMMENT.
@@ -1351,7 +1353,34 @@ items of the hold-point, ruled before P4a opened:
   application position permanently unreachable, which the acceptance-marker
   evidence shows is most of the feature. **Trade accepted by the owner on that
   framing.**
-  **NOT ruled here**: the GRANT mechanism (`G1`–`G4`) — see below.
+  **⭐ THE GRANT — RULED G4** [owner, 2026-08-02]: **hold TEST-ONLY until
+  P4c-4c's value semantics land, then grant.** The enable-set STAYS, production
+  stays at default `'()`, and broadcast remains reachable only from tests until
+  there is something for it to evaluate to. Sequencing, not mechanism — and the
+  honest reading of "Validated ≠ Deployed": the gap is now **scheduled and
+  named**, with P4c-4c as its discharge, rather than left open-ended.
+
+  **⚠ G2 IS THE RECORDED LEAN, NOT A RULING** [owner: *"Capture G2 as the current
+  lean, to land with or after P4c-4c. Perhaps we can re-evaluate this again
+  then."*]. G2 = retire the enable-set entirely; head-specific dispatch becomes
+  unconditional. **Do NOT treat this as decided.** The argument FOR it, recorded
+  so the re-evaluation starts from it rather than re-deriving:
+  · its stated justification has expired TWICE — "the sentinel has no consumer
+    until P4c-3" (the consumer exists) and gating the head-keyed decision (now
+    settled by (i));
+  · keeping a mechanism alongside a settled decision is this project's
+    **belt-and-suspenders red flag**, not defence-in-depth;
+  · the **CHAIN rule** — an ungranted ancestor strips a granted descendant,
+    granting `wrap` does not help while granting `defn` does — exists ONLY
+    because there is an "ungranted" state to inherit. G2 dissolves it.
+  **RE-EVALUATION TRIGGER**: at P4c-4c's close, with the value semantics landed
+  and the working set observable end-to-end for the first time.
+
+  **⚠ SEQUENCING NOTE — (i) IS INERT AT DEFAULT AND CAN LAND EARLY.** The
+  unknown-head arm only runs when preservation is ACTIVE; at `'()` the first arm
+  blanket-strips and that arm never executes. So the PRESERVE flip **and the
+  digit-hole fix** are testable through the P4c-4a grant seam and safe to land
+  before the grant itself — they change nothing a user can see until G4 fires.
 
 - <a id="q-u19"></a>**⬜ Q_U19 — WHAT DOES `^` MEAN ON A BROADCAST? OPEN.**
   Opened 2026-08-02 at the P4c-4c mini-audit. Under a grant the parser ALREADY
@@ -5488,18 +5517,21 @@ P4c-4c; Q_U9's own ruling says **"Implementation: P4d"**, twice).
 | `*` flatten (`:diags*`) | **P4e** | P4c-4b's guided refusal is the correct interim |
 | `.*` row-splat · disclose `<`/`:<` | **P4e** | already scoped |
 | **the `:{…}` reader mint** | **P4d PREREQUISITE** | unhomed until now; P4d owns the line it unblocks |
-| **unknown-head policy + first production grant** | **[Q_U18](#q-u18)** | ONE decision; gates every corpus uncomment |
+| **unknown-head policy + first production grant** | **[Q_U18](#q-u18) ✅ RULED** | PRESERVE + **G4** (test-only until P4c-4c). Owed with it: the **digit-hole** fix (`?x:0` mints). *G2 = LEAN, re-evaluate at P4c-4c's close* |
 | **`^`-on-broadcast** | **[Q_U19](#q-u19)** | due at P4d |
 
-**THE CRITICAL PATH**: P4c-4c (PVec semantics, gateable today by `def`-position
-pins) → **Q_U18 must be RULED** → the `:{` mint → P4d (carriers + List refusal +
-the corpus re-fate, with Q_U19 ruled) → P4e → P4c-5 → PF → P5.
+**THE CRITICAL PATH** (revised after Q_U18's ruling): the **PRESERVE flip + the
+digit-hole fix** (inert at default, testable through the P4c-4a grant seam, so
+safe to land early) → **P4c-4c** (PVec value semantics) → **the G4 grant fires**
+at/after P4c-4c, and **G2 is re-evaluated there** → the `:{` mint → **P4d**
+(carriers + List refusal + the corpus re-fate, with Q_U19 ruled) → P4e → P4c-5 →
+PF → P5.
 
-⚠ **Q_U18 IS THE LOAD-BEARING ONE.** Until it is ruled the whole broadcast
-surface is reachable **only from tests** — which is precisely the
-"Validated ≠ Deployed" gate this project's own rules make blocking. It is not
-"pick an arm": P4c-3 MEASURED that the head-keyed walk cannot decide it in
-either direction.
+✅ **Q_U18 IS RULED** — and the "Validated ≠ Deployed" gap it named is now
+**SCHEDULED rather than open-ended**: G4 makes P4c-4c its discharge point. ⚠ The
+half of P4c-3's reasoning that said "cannot decide it in either direction" was
+**refuted** — see Q_U18's correction block; the PRESERVE counter-example does
+not exist, because `?x:Nat` is one glued token.
 
 <a id="pf"></a>
 
