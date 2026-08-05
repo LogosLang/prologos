@@ -4050,6 +4050,66 @@
                   '((def q := users :name)))))
 
 ;; ============================================================
+;; Q_U18 — the unknown-head default flips to PRESERVE
+;; ============================================================
+;; Owner ruling 2026-08-02 ("worth the trade"). What makes it safe is STRUCTURAL,
+;; not a table: the binder population sharing this shape is the TYPED LOGIC VAR,
+;; and `recognize-narrow-var-annot` GLUES `?x:Nat` into ONE TOKEN at the
+;; tokenizer, so it can never mint and never reaches the arm as a sentinel.
+;;
+;; ⚠ THE RECORD THIS CORRECTS: D4 and DEFERRED both said PRESERVE was "refuted
+;; from the corpus" by `[add ?x:Nat ?y:Nat] = 5N`. It was not — that line mints
+;; NOTHING. The claim was inferred from "it runs 0 errors today" without checking
+;; whether it MINTS, and parse-reader.rkt's own comment already said "Immune by
+;; construction".
+
+(test-case "Q_U18: the typed logic var is IMMUNE BY CONSTRUCTION — it never mints"
+  ;; the load-bearing fact. If this ever fails, the PRESERVE flip is unsafe and
+  ;; the whole ruling must be revisited — so it is pinned first and alone.
+  (check-equal? (read-all-forms-string "[add ?x:Nat ?y:Nat] = 5N")
+                '((= (add ?x:Nat ?y:Nat) ($nat-literal 5))))
+  ;; …and identically under a grant of the enclosing head
+  (parameterize ([broadcast-enabled-contexts '(add)])
+    (check-equal? (read-all-forms-string "[add ?x:Nat ?y:Nat] = 5N")
+                  '((= (add ?x:Nat ?y:Nat) ($nat-literal 5)))))
+  ;; the glue survives chaining and the `:w` spelling
+  (check-equal? (read-all-forms-string "defr r [?x:Int:Even]") '((defr r (?x:Int:Even))))
+  (check-equal? (read-all-forms-string "defr r [?x:w]") '((defr r (?x:w)))))
+
+(test-case "Q_U18: an UNKNOWN head now PRESERVES — application position works"
+  ;; the flip itself. Pre-flip this was `(one users :name)` — the sentinel
+  ;; blanket-stripped, leaving `one` with TWO arguments.
+  (parameterize ([broadcast-enabled-contexts '(def one)])
+    (check-equal? (read-all-forms-string "def q := [one users:name]")
+                  '((def q := (one users ($bcast-step :name))))))
+  ;; and it nests
+  (parameterize ([broadcast-enabled-contexts '(def f g)])
+    (check-equal? (read-all-forms-string "def q := [f [g users:name]]")
+                  '((def q := (f (g users ($bcast-step :name))))))))
+
+(test-case "Q_U18: RECOGNIZED heads are untouched by the flip"
+  ;; the flip changes only the `[else]` arm, which the scanner's `recognized?`
+  ;; guards — so every binder form the walk knows behaves exactly as before.
+  (parameterize ([broadcast-enabled-contexts '(def defn defr let)])
+    (check-equal? (read-all-forms-string "defn f [x:Int] x") '((defn f (x :Int) x)))
+    (check-equal? (read-all-forms-string "defr r [?x:Nat]") '((defr r (?x:Nat))))
+    (check-equal? (read-all-forms-string "def q:Int := 5") '((def q :Int := 5)))
+    (check-equal? (read-all-forms-string "let w:Int 5") '((let w :Int 5)))))
+
+(test-case "Q_U18: the flip is INERT AT DEFAULT — production is unchanged"
+  ;; ⚠ AND IT IS INERT IN PRACTICE UNTIL G2. The enable-set's FIRST arm strips
+  ;; any node whose own head is not granted, and granting every function name is
+  ;; absurd — so the flip alone does NOT unlock application position. G2
+  ;; (retiring the enable-set) is the operative half, and the owner ruled G4
+  ;; (hold test-only until P4c-4c) with G2 as the recorded lean. Measured:
+  (check-equal? (read-all-forms-string "def q := [one users:name]")
+                '((def q := (one users :name))))
+  ;; even granting the OUTER head only — the inner node's head is still ungranted
+  (parameterize ([broadcast-enabled-contexts '(def)])
+    (check-equal? (read-all-forms-string "def q := [one users:name]")
+                  '((def q := (one users :name))))))
+
+;; ============================================================
 ;; D4.P4c-4b — the fold arm + the producer bridge + the not-yet CHANNEL
 ;; ============================================================
 ;; The chain, end to end: reader PRESERVES the sentinel (needs a grant) → the

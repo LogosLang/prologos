@@ -3171,12 +3171,45 @@
           ;;
           ;; The split asks the SCANNER whether it recognized anything, rather
           ;; than re-testing its arms here (a second copy of a recognizer is the
-          ;; F1b.7g class). Recognized ⇒ the scanner's answer stands. Nothing
-          ;; recognized ⇒ genuinely unknown ⇒ the blanket deep-unwrap, i.e. the
-          ;; fail-safe direction the inversion ruling exists to guarantee.
+          ;; F1b.7g class). Recognized ⇒ the scanner's answer stands.
+          ;;
+          ;; ⭐⭐ Q_U18 (owner, 2026-08-02 — "worth the trade"): NOTHING RECOGNIZED
+          ;; ⇒ **PRESERVE**, not blanket-strip. This is the flip, and it is what
+          ;; makes broadcast reachable in APPLICATION position — `[one users:name]`
+          ;; — which is most of the feature and was permanently dead under the
+          ;; strip.
+          ;;
+          ;; WHY IT IS SAFE, and the reason is STRUCTURAL rather than a table:
+          ;; the binder population that shares this shape is the TYPED LOGIC VAR,
+          ;; and `recognize-narrow-var-annot` GLUES `?x:Nat` into ONE TOKEN at the
+          ;; tokenizer — so it can never mint a `$bcast-step` and never reaches
+          ;; this arm as a sentinel. The discriminator was already in the tree,
+          ;; one layer below this walk. Measured: `[add ?x:Nat ?y:Nat] = 5N` reads
+          ;; as `((= (add ?x:Nat ?y:Nat) …))`, identical under any grant.
+          ;;
+          ;; ⚠ THE RECORD THIS CORRECTS. D4 and DEFERRED both said PRESERVE was
+          ;; "refuted from the corpus" by exactly that line. It was not: the claim
+          ;; was INFERRED from "it runs 0 errors today" without checking whether
+          ;; it MINTS, and this file's own comment already said "Immune by
+          ;; construction". A 795-file census then found **ZERO** live sites of
+          ;; the shape "plain-identifier fused annotation · binder position ·
+          ;; unknown head", and the five heads the inversion cited as casualties
+          ;; (`capability`, `Pi`, `Sigma`, `DSend`, `DRecv`) have ZERO
+          ;; fused-annotation sites anywhere — they were SYNTHETIC probes.
+          ;;
+          ;; ⚠ THE ACCEPTED RESIDUAL, named not smoothed over: `pattern-var?`
+          ;; requires no sigil, so a macro binding a plain identifier —
+          ;; `[myform x:Int]` — is a genuine binder under a genuinely unknown
+          ;; head. ZERO instances in tree; constructible in one line. It now
+          ;; takes the EXISTING `bcast-step-binder` arm, a per-command guided
+          ;; error already saying "this is a BINDER position … the fused spelling
+          ;; should work here". Loud and recoverable — a KNOWING, NARROW
+          ;; exception to the inverted default's "never break working code",
+          ;; ruled on the grounds that it breaks only code that does not exist
+          ;; while the alternative kills application-position broadcast outright.
           [else
            (let-values ([(scanned recognized?) (scan-for-param-heads/recognized kids)])
-             (if recognized? scanned (map unwrap-binders-deep kids)))]))))
+             (if recognized? scanned kids))]))))
 
 ;; A param-group head is not always the form HEAD. `def q := rel [a:Int] &> …`
 ;; puts `rel` and its group as SIBLINGS inside the `def` element list, so a

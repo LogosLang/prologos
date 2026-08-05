@@ -1333,12 +1333,28 @@ items of the hold-point, ruled before P4a opened:
   · **PRESERVE therefore has ZERO measured corpus regressions** (795-file
     census). The evidence that had motivated STRIP was thinner than recorded:
     the five "measured casualties" were **synthetic probes**, not corpus sites.
-  **OWED WITH IT — the one real defect the sigil analysis exposed**: close the
-  **DIGIT-HEADED HOLE**. `?x:0` does NOT glue and DOES mint
-  (`((def q := ?x ($bcast-step :0)))`), while `?x:Nat`, `?x:w`, `?x:Int:Even`
-  all glue. The recognizer's `ident-run` requires an ident-START after each `:`,
-  and a digit is not one. Fix at the TOKENIZER seat, where the rest of the
-  population is already handled.
+  ~~**OWED WITH IT — the one real defect the sigil analysis exposed**: close the
+  DIGIT-HEADED HOLE.~~
+  ⚠ **CORRECTED 2026-08-02, BEFORE ANY CODE — "the one real defect" IS NOT ONE.**
+  I recorded the digit hole from the READER DATUM alone (`?x:0` does not glue and
+  does mint) without probing what the spelling MEANS end to end. Measured:
+  **`?x:0` and `?x:w` are BOTH ALREADY REFUSED**, by an existing guided
+  diagnostic that names them explicitly — *"`:0` is not a type — a fused
+  parameter annotation must name one, as in `x:Int` (digit-headed `:0`/`:7` and
+  `:w`/`:m` are multiplicities)"*. Only `?x:Nat` is legal (`r : _ defined.`).
+  **So there is NO legal spelling at risk**, and the gluing asymmetry between
+  `?x:0` and `?x:w` is invisible: both reach the same refusal by different routes.
+  Narrower still: the PRESERVE flip only changes the **unknown-head** arm, and
+  `defr`/`defn`/`spec`/… are all RECOGNIZED, so the scanner answers for them and
+  the flip never runs there. The residual is `?x:0` **under an unknown head** —
+  an already-illegal spelling under a head the walk does not know. The
+  consequence is a **diagnostic-quality change** (the `bcast-step-binder` message
+  instead of the sharper multiplicity one), not a break.
+  **NOTHING IS OWED AS A PREREQUISITE.** If the sharper diagnostic is worth
+  protecting that is a diagnostic-quality item, booked rather than landed here.
+  ⚠ Third time this session a recorded mechanism claim fell to an end-to-end
+  probe, and the pattern each time was **reading the datum and inferring the
+  meaning**.
   **THE ACCEPTED RESIDUAL, named rather than smoothed over**: `pattern-var?`
   accepts any symbol not in ~20 enumerated reader sentinels, so macro pattern
   variables need no sigil — `[myform x:Int]` is a genuine binder under a
