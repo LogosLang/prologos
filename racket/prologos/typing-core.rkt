@@ -3736,17 +3736,53 @@
     [(expr-logic-var _ _) (expr-hole)]  ;; inferred from context
 
     ;; defr / rel → relation type (type-unsafe: returns hole)
+    ;;
+    ;; DEFERRED 52, owner-requested follow-up (2026-08-05): these five arms are
+    ;; the CLAUSE-BODY half of the same swallow the "Goals → Goal" arms below fix.
+    ;; They inferred each child for effect and returned a fixed type, discarding an
+    ;; `expr-error` — so an ill-typed goal inside a `defr` BODY (where nearly all
+    ;; real goal code lives) was silent at registration and then quietly matched
+    ;; nothing at query time. The chain must be complete to be observable:
+    ;;   goal-app → clause → defr-variant → defr → driver's `(if (prologos-error? ty) ty …)`
+    ;; Breaking it anywhere leaves the error one level short of the boundary.
+    ;;
+    ;; BEHAVIOUR CHANGE, stated plainly: an ill-typed clause body now makes the
+    ;; `defr` FAIL TO REGISTER, so a later query reports the relation as unknown.
+    ;; That matches a parse-level clause error (DEFERRED 51's ruled status quo)
+    ;; and matches `def`. Registering the relation with only its GOOD clauses was
+    ;; refused — that is a silent wrong answer, the class this work exists to kill.
+    ;;
+    ;; Every leaf keeps the `goal-arg-type-error?` excuse gate, so a clause body
+    ;; made of logic variables — the shape of virtually every real rule — is
+    ;; untouched.
     [(expr-defr nm sc vs)
-     (when sc (infer ctx sc))
-     (for-each (lambda (v) (infer ctx v)) vs)
-     (expr-hole)]
-    [(expr-defr-variant ps bd) (for-each (lambda (b) (infer ctx b)) bd) (expr-hole)]
-    [(expr-rel ps cls) (for-each (lambda (c) (infer ctx c)) cls) (expr-hole)]
+     (define st (and sc (infer ctx sc)))
+     (define vts (map (lambda (v) (infer ctx v)) vs))
+     (if (or (and st (expr-error? st)) (ormap expr-error? vts))
+         (expr-error)
+         (expr-hole))]
+    [(expr-defr-variant ps bd)
+     (define bts (map (lambda (b) (infer ctx b)) bd))
+     (if (ormap expr-error? bts) (expr-error) (expr-hole))]
+    [(expr-rel ps cls)
+     (define cts (map (lambda (c) (infer ctx c)) cls))
+     (if (ormap expr-error? cts) (expr-error) (expr-hole))]
 
     ;; Clause/fact bodies → Goal
-    [(expr-clause gs) (for-each (lambda (g) (infer ctx g)) gs) (expr-goal-type)]
-    [(expr-fact-block rs) (for-each (lambda (r) (infer ctx r)) rs) (expr-goal-type)]
-    [(expr-fact-row ts) (for-each (lambda (t) (infer ctx t)) ts) (expr-hole)]
+    [(expr-clause gs)
+     (define gts (map (lambda (g) (infer ctx g)) gs))
+     (if (ormap expr-error? gts) (expr-error) (expr-goal-type))]
+    [(expr-fact-block rs)
+     (define rts (map (lambda (r) (infer ctx r)) rs))
+     (if (ormap expr-error? rts) (expr-error) (expr-goal-type))]
+    [(expr-fact-row ts)
+     ;; Fact-row TERMS are leaves, so they take the excuse gate directly (a fact
+     ;; row can carry a logic var, and an unsynthesizable node here is an
+     ;; inferencer gap, not a user error) — same rule as a goal argument.
+     (define tts (map (lambda (t) (infer ctx t)) ts))
+     (define bad?
+       (for/or ([t (in-list ts)] [ty (in-list tts)]) (goal-arg-type-error? t ty)))
+     (if bad? (expr-error) (expr-hole))]
 
     ;; Goals → Goal
     ;;

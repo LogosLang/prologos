@@ -224,3 +224,83 @@
   (check-equal? derived (set "expr-pair" "expr-hole" "expr-reduce" "expr-refl")
                 (format "derived exempt set moved — update infer-unsynthesizable? and read its comment; derived: ~a"
                         (sort (set->list derived) string<?))))
+
+;; ── Clause bodies (owner-requested follow-up, 2026-08-05) ───────────────────
+;;
+;; The first DEFERRED 52 fix reached only TOP-LEVEL goals. `expr-clause` (and its
+;; parents `expr-defr-variant` / `expr-rel` / `expr-defr`, and `expr-fact-block`)
+;; still called `infer` for effect and discarded the result — so an ill-typed goal
+;; inside a `defr` BODY, which is where nearly all real goal code lives, stayed
+;; silent at registration and then quietly matched nothing at query time.
+;;
+;; Consequence of fixing it, stated plainly: an ill-typed clause body now makes
+;; the `defr` FAIL TO REGISTER, so a later query reports the relation as unknown.
+;; That matches how a parse-level clause error already behaves (DEFERRED 51's
+;; ruled status quo) and how `def` behaves. It is a real behaviour change, not
+;; just a new diagnostic.
+
+(define CFIX
+  (string-append
+   "ns clausebody\n"
+   "defr fc [?f ?c]\n"
+   "  || \"blueberry\" \"blue\"\n"))
+
+(define (crun body) (run-ns-ws-last (string-append CFIX body)))
+
+(test-case "clause body: an ill-typed goal argument is LOUD at defr registration"
+  (define r (crun "defr badclause [?x]\n  &> (fc x [+ \"str\" 1])\n"))
+  (check-true (prologos-error? r)
+              (format "expected the defr to fail; got: ~a" (result-msg r))))
+
+(test-case "clause body: the relation is then reported unknown, not silently empty"
+  ;; The failure mode being closed: pre-fix this returned `@[] : [PVec {:z String}]`
+  ;; with ZERO errors — indistinguishable from "no solutions".
+  (define r (crun (string-append "defr badclause2 [?x]\n  &> (fc x [+ \"str\" 1])\n"
+                                 "solve (badclause2 z)")))
+  (check-true (prologos-error? r)
+              (format "expected an error at the query; got: ~a" (result-msg r))))
+
+(test-case "control: a well-typed clause body still registers and answers"
+  (define r (crun (string-append "defr okclause [?x]\n  &> (fc x \"blue\")\n"
+                                 "solve (okclause z)")))
+  (check-false (prologos-error? r) (result-msg r))
+  (check-true (string-contains? r "blueberry") r))
+
+(test-case "control: a clause body full of LOGIC VARS is not an error"
+  ;; The excuse gate must still apply inside clause bodies — this is the shape
+  ;; virtually every real rule has, and it must not become an error.
+  (define r (crun (string-append "defr passthru [?f ?c]\n  &> (fc f c)\n"
+                                 "solve (passthru a b)")))
+  (check-false (prologos-error? r) (result-msg r))
+  (check-true (string-contains? r "blueberry") r))
+
+(test-case "control: a multi-goal clause with `not` and a guard still registers"
+  (define r (crun (string-append "defr multi [?f]\n"
+                                 "  &> (fc f c) (guard [lt 0 1])\n"
+                                 "solve (multi q)")))
+  (check-false (prologos-error? r) (result-msg r))
+  (check-true (string-contains? r "blueberry") r))
+
+(test-case "clause body: an UNPLUMBED goal form is now a per-command error, not a whole-file abort"
+  ;; `all-different` / `element` / `cumulative` / `minimize` are parser-reachable
+  ;; ONLY inside clause bodies (parser.rkt gates them on
+  ;; `current-parsing-relational-goal?`), but they are not plumbed through the
+  ;; pipeline — `zonk` has no arm, so at b429d038 this input died with
+  ;;     match: no matching clause for (expr-all-different '(a b))   [zonk.rkt:75]
+  ;; producing NO output at all: a WHOLE-FILE ABORT, the class
+  ;; .claude/rules/pipeline.md tells us to hunt ("output is EMPTY, not partial").
+  ;;
+  ;; The clause-body propagation makes `infer` reject the clause BEFORE zonk runs,
+  ;; so the defr fails as a per-command error and the file continues. Deliberately
+  ;; NOT excused: excusing it would let the term reach zonk and restore the crash.
+  ;; An adversarial verify called this a blocking regression on the belief that it
+  ;; "registered" pre-change; measurement showed it aborted the file instead.
+  (define r (run-ns-ws-last
+             (string-append "ns gcpin\n"
+                            "defr digits [?d]\n  || 1 | 2 | 3\n"
+                            "defr c1 [?a ?b]\n  &> (digits a) (digits b) (all-different a b)\n"
+                            "def marker := 99")))
+  ;; The LAST command must have RUN — that is what proves the file continued.
+  (check-false (prologos-error? r)
+               (format "the file must continue past the bad defr; got: ~a" (result-msg r)))
+  (check-true (string-contains? r "marker") r))

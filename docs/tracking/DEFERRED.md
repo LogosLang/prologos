@@ -3881,10 +3881,19 @@ other container type would be missed. None exists today.
   diagnostic. Pre-existing (all of these were silent before), but the right
   long-term fix is to test logic-var-freedom at the FAILING SUBTERM rather than
   at the argument root.
-- `expr-clause` / `expr-fact-block` / `expr-fact-row` still discard sub-errors,
-  so an ill-typed goal in a `defr` clause BODY remains silent at registration
-  time. Tightening those changes `defr` REGISTRATION behaviour, which is 51(b)
-  territory and was not ruled.
+- ~~`expr-clause` / `expr-fact-block` / `expr-fact-row` still discard sub-errors~~
+  **✅ FIXED same day, owner-requested** (see below). Those three plus
+  `expr-defr`, `expr-defr-variant` and `expr-rel` now propagate, so an ill-typed
+  goal in a `defr` clause BODY is loud at registration. ⚠ The consequence, stated
+  eyes-open: this **widens the class of `defr`s that fail to register**, which is
+  51(b) territory pointing the opposite way — 51(b) frames registration-loss as
+  the problem and names a better shape (the enriched *"its defr failed to
+  register (see the earlier error)"* message) as prior art. Owner-directed, so
+  not illegitimate, but the two entries pull against each other until 51(b) is
+  taken. Adopting that enriched message would reconcile them.
+  ⚠ `expr-fact-row`'s propagation is **inert for compound terms** — they are
+  splayed at parse time before typing sees them (DEFERRED 53).
+  ⚠ Still swallowing, same shape, no repro constructed: `expr-narrow`.
 - `(= x [+ 1 1])` rendering the binding as `unknown` is its own pre-existing
   display defect; pinned as status quo.
 - `expr-guard`'s CONDITION is checked with `check`, whose boolean result is
@@ -3892,3 +3901,91 @@ other container type would be missed. None exists today.
   (`(guard [+ "str" 1])` succeeds). Pre-existing; unreachable in practice today
   because `expr-clause` swallows it first.
 
+
+### 53. ⚠ A COMPOUND TERM IN A `||` FACT ROW IS SPLAYED INTO FABRICATED ROWS — pre-existing, silent WRONG ANSWER (found 2026-08-05)
+
+Measured, **byte-identical at `b429d038` and after the DEFERRED 51/52 work**, so
+this is neither caused by nor fixed by that arc:
+
+```
+defr r2 [?a]
+  || [some 1]
+solve (r2 q)        →  @[{:q unknown} {:q 1}]        ← TWO rows, from ONE
+
+defr r3 [?a]
+  || '[1 2]
+solve (r3 q)        →  @[{:q unknown} {:q 1} {:q 2}] ← THREE rows, from ONE
+
+defr r4 [?a ?b]
+  || {:k 1} 2       →  ERROR: defr facts: 3 terms do not fill rows of arity 2
+```
+
+**This is the silent-wrong-answer class, not a lost diagnostic**: the query
+returns rows that were never written, with ZERO errors, and the fabricated
+values (`unknown`, then the constituent tokens) are indistinguishable from real
+data. `r4` is the only arity that gets caught, and only by accident — the splay
+happens to make the term count wrong.
+
+**Mechanism** (suspected, from the CIU T6 grounding critic's G5 — verify before
+fixing): `parser.rkt`'s fact-row splitter partitions on `term-sentinel?`, which
+is a **numeric-literal whitelist** (`$nat-literal`, `$decimal-literal`,
+`$float-literal`, `$exp-literal`, `$posit-literal`). Anything else that is a
+compound pair is treated as a NESTED ROW and splayed. The polarity is the same
+as `pattern-var?`'s — the fix is inversion (a conservative default), not adding
+another member.
+
+**Why it stayed hidden**: `grep -rn "^\s*||.*("` over `examples/` and `lib/`
+returns **zero** compound fact terms, so nothing in the corpus or the suite
+exercises it. The DEFERRED 52 fix added `expr-fact-row` propagation, which is
+therefore **inert for compound terms** — they are splayed into individually
+well-typed atoms before typing ever sees them. That propagation is not wrong,
+just currently unreachable by this shape; it is recorded here so nobody reads it
+as coverage.
+
+**Also noted from the same probe** (separate, smaller): a `3.14` or `nil` fact
+row renders as `unknown` in a solution row — pre-existing, unrelated to the
+splay, and probably the same display gap as `(= x [+ 1 1])` → `{:x unknown}` in
+DEFERRED 52's residuals.
+
+### 54. The four global-constraint goal forms are parser-reachable but UNPLUMBED (`zonk` has no arm) — found 2026-08-05
+
+`all-different`, `element`, `cumulative`, `minimize` are gated on
+`current-parsing-relational-goal?` (parser.rkt), so a clause body is the ONLY
+place they can be written. They are not carried through the pipeline: `grep -n
+"expr-all-different\|expr-cumulative\|expr-minimize" typing-core.rkt` → zero
+hits, and `zonk` has no arm either. At `b429d038` this input
+
+```
+defr digits [?d]
+  || 1 | 2 | 3
+defr c1 [?a ?b]
+  &> (digits a) (digits b) (all-different a b)
+def marker := 99
+```
+
+died with `match: no matching clause for (expr-all-different '(a b))`
+(`zonk.rkt:75`) and produced **NO output at all** — a WHOLE-FILE ABORT, the class
+`.claude/rules/pipeline.md` § "A Raise on the Parse/Expansion Path" tells us to
+hunt ("the tell: output is EMPTY, not partial"). `digits` never printed.
+
+**The DEFERRED 52 clause-body propagation incidentally FIXED the abort**: `infer`
+now rejects the clause before `zonk` runs, so it is a per-command error and the
+file continues. Test-pinned. ⚠ Do NOT "fix" this by excusing these node kinds in
+`infer` — that would let the term reach `zonk` and restore the crash.
+
+**What remains**: the forms are still unusable. Making them work means plumbing
+them through the AST pipeline (`.claude/rules/pipeline.md` checklist —
+`zonk` ×3, `substitution`, `pretty-print`, `typing-core`, `qtt`,
+`pnet-serialize`, …) and giving `reduction.rkt` a real consumer; today
+`reduction.rkt`'s only arm is a stuck/identity case and `relations.rkt` never
+consumes them. Until then a user who writes one gets "Could not infer type",
+which is honest but does not say the form is unimplemented.
+
+⚠ An adversarial verify reported this as a BLOCKING regression of the
+clause-body fix, on the belief that these forms "registered" before. Measurement
+refuted that — they aborted the file. Recorded so the claim is not re-inherited.
+
+**Adjacent, unfixed**: `expr-narrow` (typing-core.rkt) still infers its
+`func`/`args`/`target` for effect and returns `expr-hole` — the same swallow
+shape as the arms fixed in DEFERRED 52, left in place because no repro was
+constructed for it.
