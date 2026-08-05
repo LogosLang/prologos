@@ -1227,6 +1227,20 @@
             ;; anyway, since it requires byte-adjacency to a base.)
             [(and (eq? (head-of it) '$bcast-step) cur cur-subbed?)
              (fail "a broadcast step cannot follow a `.{…}` sub-block — the sub-block is a branch's terminal step")]
+            ;; ⭐ D4.P4d-0 slice 2 — THE PAYLOAD SHAPE GUARD (owner: site-local;
+            ;; the class-level parse-path guard is DEFERRED 53). The arm below
+            ;; does `(symbol->string (cadr it))`; without this guard a list,
+            ;; number or MISSING payload raised out of `process-file-inner` — a
+            ;; WHOLE-FILE ABORT, reachable at HEAD by hand-written sentinels and
+            ;; sitting directly on the `:{` mint's path (the mint's payload IS a
+            ;; list). 6th instance of pipeline.md's abort class in this track;
+            ;; found by the P4d-0 mini-audit. ⚠ Slice 3's `$select-brace` arm
+            ;; lands ABOVE this guard — the guard is the residual for shapes no
+            ;; producer mints, not a substitute for handling the minted one.
+            [(and (eq? (head-of it) '$bcast-step)
+                  (not (and (pair? (cdr it)) (symbol? (cadr it)))))
+             (fail (format "a broadcast step carries a single `:name` payload — got ~a (a hand-written sentinel, or a reader/parser drift)"
+                           (if (pair? (cdr it)) (cadr it) "nothing")))]
             [(eq? (head-of it) '$bcast-step)
              (let* ([payload (cadr it)]
                     [s (symbol->string payload)]

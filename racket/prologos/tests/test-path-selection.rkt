@@ -4458,3 +4458,34 @@
   (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out))
   (check-false (ormap (lambda (s) (regexp-match? #rx"preparse|Unknown imports" s)) out)
                (format "the spaced spelling must produce NO diagnostic: ~a" out)))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4d-0 slice 2 — THE SITE-LOCAL PARSER GUARD (owner ruling 2026-08-05).
+;; parser.rkt's `$bcast-step` fold arm does `(symbol->string (cadr it))` with no
+;; shape guard — a WHOLE-FILE ABORT reachable at HEAD by hand-written sentinels,
+;; and sitting directly on the path the `:{` mint (slice 3) must traverse: the
+;; real mint makes the payload a LIST. Found by the P4d-0 mini-audit
+;; (wf_e15a1ef6-dfb), whose critic named it "the actual first blocker, named in
+;; neither DEFERRED 42 nor 46". The CLASS-level parse-path guard is DEFERRED 53,
+;; its own slice; this is the arm the phase cannot proceed without.
+;; ---------------------------------------------------------------------------
+
+(define (bcast-payload-probe form)
+  (map (lambda (r) (format "~a" r))
+       (process-string-ws
+        (string-append "ns bpp\ndef before := 1\ndef m := {:a 1}\n" form "\ndef after := 42"))))
+
+(test-case "P4d-0: a malformed $bcast-step payload is PER-COMMAND, not a whole-file abort"
+  ;; The abort signature is EMPTY output — `before` lost too. So the load-bearing
+  ;; assertion on every shape is that BOTH neighbours survive.
+  (for ([form (in-list (list "m{[$bcast-step [a b]]}"    ;; list payload — the shape the mint will mint
+                             "m{[$bcast-step 5]}"        ;; number payload
+                             "m{[$bcast-step]}"))])      ;; NO payload — the (cadr it) abort
+    (define out (bcast-payload-probe form))
+    (check-true (ormap (lambda (s) (regexp-match? #rx"before : Int defined" s)) out)
+                (format "WHOLE-FILE ABORT — `before` was lost: ~a → ~a" form out))
+    (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)
+                (format "the file did not continue past ~a: ~a" form out))
+    ;; and it must REPORT, not swallow — the guard-that-silences is worse
+    (check-true (ormap (lambda (s) (regexp-match? #rx"broadcast step" s)) out)
+                (format "the refusal must be reported: ~a → ~a" form out))))
