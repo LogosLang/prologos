@@ -50,14 +50,54 @@ SUITE_TIMEOUT="${OCAPN_SUITE_TIMEOUT:-900}"
 REPO_ROOT="$(cd "$(dirname "$0")"/../.. && pwd)"
 SERVER_SCRIPT="$REPO_ROOT/tools/interop/run-ocapn-test-server.rkt"
 
-# Clone the test suite if missing.
+# The upstream conformance suite, PINNED.
+#
+# ⚠ PINNED 2026-08-05, after an unpinned `--depth 1` clone of HEAD broke CI on a
+# commit that touched no OCapN code at all. Upstream
+# ocapn-test-suite#41 ("message-framing") wrapped every CapTP message in a
+# NETSTRING:
+#
+#     -  message.to_syrup()              /  syrup.syrup_read(socketio)
+#     +  Netstring(message.to_syrup())   /  Netstring.read(socketio)
+#
+# This server speaks RAW Syrup, so neither side could parse the other: we logged
+# "inbound start-session REJECTED (40 bytes)" and the Python side died with
+# "Expected ASCII digit when reading netstring length prefix". All 24 tests
+# errored in 0.179s.
+#
+# The npm half of this gate is already pinned for exactly this reason — the
+# install step uses `npm ci` against a committed lockfile so that "the drift
+# gate means what its diagnostic says it means". This is the same argument: an
+# unpinned clone tests UPSTREAM'S HEAD, not our code, so the gate turns red for
+# reasons no commit here caused and green again without anyone fixing anything.
+#
+# Adopting the new framing is REAL WORK on the wire format and is filed
+# separately — see DEFERRED.md § "OCapN: upstream moved to netstring framing".
+# When it lands, bump this SHA in the same commit.
+#
+# Verified green at this SHA (24 passed / 0 failed / 0 errored, 2026-08-05).
+OCAPN_SUITE_SHA="${OCAPN_SUITE_SHA:-74db78f}"
+
 if [ ! -d "$SUITE_DIR" ]; then
-  echo "[run-ocapn-test-suite] cloning ocapn-test-suite to $SUITE_DIR"
-  git clone --depth 1 https://github.com/ocapn/ocapn-test-suite "$SUITE_DIR" || {
+  echo "[run-ocapn-test-suite] cloning ocapn-test-suite to $SUITE_DIR (pinned $OCAPN_SUITE_SHA)"
+  git clone https://github.com/ocapn/ocapn-test-suite "$SUITE_DIR" || {
     echo "[run-ocapn-test-suite] FAILED to clone test suite" >&2
     exit 1
   }
 fi
+
+# Check out the pin. Done on EVERY run, not only after a fresh clone, so a
+# pre-existing checkout (a dev box, a warm CI cache) cannot silently run a
+# different revision than CI does — which is precisely how this drift stayed
+# invisible locally while CI was red.
+if ! ( cd "$SUITE_DIR" && git checkout -q "$OCAPN_SUITE_SHA" 2>/dev/null ); then
+  echo "[run-ocapn-test-suite] pin $OCAPN_SUITE_SHA not present; fetching" >&2
+  ( cd "$SUITE_DIR" && git fetch -q origin && git checkout -q "$OCAPN_SUITE_SHA" ) || {
+    echo "[run-ocapn-test-suite] FAILED to check out pinned SHA $OCAPN_SUITE_SHA" >&2
+    exit 1
+  }
+fi
+echo "[run-ocapn-test-suite] suite at $(cd "$SUITE_DIR" && git rev-parse --short HEAD)"
 
 if [ ! -f "$SUITE_DIR/test_runner.py" ]; then
   echo "[run-ocapn-test-suite] test_runner.py missing in $SUITE_DIR" >&2

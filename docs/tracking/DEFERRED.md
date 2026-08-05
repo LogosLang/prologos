@@ -11,6 +11,49 @@ Deferral".
 
 **Completed items**: Moved to `DEFERRED_COMPLETE.md` during staleness sweeps.
 
+## 🐛 OCapN: upstream moved to NETSTRING framing — our wire is raw Syrup (filed 2026-08-05)
+
+`ocapn-test-suite` **#41 ("message-framing")** wraps every CapTP message in a
+netstring. Ours does not, so as of upstream `31f0b806` the two cannot talk:
+
+```python
+-  message = message.to_syrup()              -  syrup.syrup_read(socketio)
++  message = Netstring(message.to_syrup())   +  Netstring.read(socketio)
+```
+```
+ocapn-test-server: inbound start-session REJECTED (40 bytes); sending op:abort
+Exception: Expected ASCII digit when reading netstring length prefix.   ← their side, reading ours
+Ran 24 tests in 0.179s — FAILED (errors=24)
+```
+
+Neither side can parse the other, so **every** test errors during
+`setup_session`, in under a fifth of a second.
+
+**How it surfaced, and why that part matters as much as the change.** The gate
+cloned the suite `--depth 1` at **HEAD, unpinned**, and only when the directory
+was absent. So CI tested upstream's newest commit while a dev box reused a
+months-old clone and passed — the failure landed on a merge commit that touched
+**no OCapN code at all**. Verified by reproducing it against the pre-merge tree
+with a fresh clone.
+
+**Done now (this is the containment, not the fix)**: the clone is PINNED to
+`74db78f`, verified 24/24 from a clean clone, and the checkout runs on EVERY
+invocation so a warm directory cannot diverge from CI. That is the same
+discipline the npm half already had — `npm ci` against a committed lockfile, so
+"the drift gate means what its diagnostic says it means". The Python half simply
+never got it.
+
+**The actual work, NOT done**: adopt netstring framing on the wire. It is a
+protocol change — read and write paths, the Racket test server, the byte-equality
+fixtures, and the `.mjs` peers — and it wants a deliberate slice rather than
+being bolted onto a merge repair. Two things to settle when it opens:
+
+1. Is netstring framing now REQUIRED by the OCapN spec, or is it the test
+   suite's transport convention? The commit is titled "message-framing" and the
+   answer decides whether this is a conformance fix or a compatibility shim.
+2. The pin moves in the SAME commit as the adoption. Leaving it pinned after the
+   wire changes would hide the next drift exactly as this one was hidden.
+
 ## 🐛 Two diagnostics degraded upstream — found by the 2026-08-05 `main` merge
 
 Both were caught because this branch had TESTS pinning the messages; both were

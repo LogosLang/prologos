@@ -193,6 +193,22 @@
 (define do-pnet-cache? (make-parameter #t))
 (define show-failures? (make-parameter #f))
 (define bail-timeout-threshold (make-parameter 3))
+;; Per-FILE timeout handed to batch-worker.rkt. The worker has always supported
+;; `--file-timeout`; this runner simply never passed it through, so the 120s
+;; default was unreachable from CI. That default was set when "slowest normal
+;; tests ~17s" — the OCapN bridge tests legitimately cost far more because each
+;; one elaborates the whole OCapN module chain, and on a GitHub runner the file
+;; exceeds 120s. Splitting the file made it WORSE (the cost is per-FILE, so
+;; splitting paid it twice), which is what established that this knob, not the
+;; file layout, is the right lever.
+;;
+;; ⚠ RESTORED 2026-08-05 after the `main` merge dropped it. The prelude-drift
+;; check also lived in this file and main RETIRED it, so the conflict was
+;; resolved by taking main's copy WHOLESALE — which discarded this unrelated
+;; flag along with it, while `.github/workflows/test.yml` still passes
+;; `--file-timeout 300`. CI failed instantly with "unknown switch". Taking a
+;; whole file to resolve one hunk drops every OTHER thing that side had.
+(define file-timeout-secs (make-parameter #f))
 (define force-rerun? (make-parameter #f))
 (define force-stale-zo? (make-parameter #f))
 ;; PPN 4C Phase 3c process improvement (2026-04-20): --tests FILE...
@@ -229,6 +245,8 @@
     (record-timings? #f)]
    ["--timeout" secs "Per-test timeout in seconds (default: 600)"
     (timeout-secs (string->number secs))]
+   ["--file-timeout" secs "Per-FILE timeout in seconds, passed to the batch worker (default: 120)"
+    (file-timeout-secs (string->number secs))]
    ["--no-precompile" "Skip bytecode pre-compilation step"
     (do-precompile? #f)]
    ["--no-pnet-cache" "Disable .pnet module network caching (default: enabled)"
@@ -746,7 +764,10 @@
 
   (for ([i (in-range jobs)])
     (define-values (proc stdout stdin stderr)
-      (subprocess #f #f #f racket-path batch-worker-path "--stdin"))
+      (if (file-timeout-secs)
+          (subprocess #f #f #f racket-path batch-worker-path "--stdin"
+                      "--file-timeout" (number->string (file-timeout-secs)))
+          (subprocess #f #f #f racket-path batch-worker-path "--stdin")))
     (set! all-procs (cons proc all-procs))
     (set! all-stdins (cons stdin all-stdins))
     ;; Send first file to each worker to get them started
