@@ -1179,6 +1179,71 @@ items of the hold-point, ruled before P4a opened:
   classifier change — they are RIVALS carrying the same information, and "ship
   one with a revert clause" is the dual-path shape the rules block.
 
+- <a id="q-u17"></a>**Q_U17 — WHAT IS A PATH SEGMENT, AS A TYPE?** ⬜ **OPEN —
+  analysis complete, AWAITING OWNER RULING** (opened 2026-08-02 at the owner's
+  request, whose stated concern is "bring Path Selection closest to
+  FIRST-CLASSNESS"). Recorded here so the work survives a compact; **nothing is
+  ruled and nothing is landed.**
+  **The defect.** The step vocabulary is a CLOSED UNION of SIX kinds, but the
+  first-class API declares `segments : Path -> [List Keyword]` — true of exactly
+  ONE kind. And `path-segments` **already whole-file aborts** (pre-existing,
+  `f072c115`): it hand-builds a Prologos cons-chain where the marshaller wants a
+  RACKET list, so that type has NEVER marshalled and `from-segments` /
+  `path-append` are dead with it. **Path first-classness today is DECLARED, NOT
+  DELIVERED.** Eleven production sites (path-ops ×5, reduction ×4, elaborator ×2)
+  read segments as bare symbols via `(expr-keyword seg)` — a silent type lie for
+  four of the six kinds. ω is the sixth member of an already-false contract; it
+  does not create the gap, it makes it unignorable.
+  **Proposed ruling — B2, REIFY a `Step` ADT**: `data Step` mirroring
+  `select-step-kind`'s six kinds, `Path` stays GROUND and unparameterized,
+  `segments : Path -> [List Step]`. Modelled on the `Datum` reification (8
+  constructors, `prologos::data::datum`) — the pattern, NOT Datum-as-carrier,
+  which Q_U5 already rejected.
+  **Every alternative disqualified, each on a named ground**: **B1 defer** — by
+  *Spec as Living Interface* (a live lie about a function that also aborts), NOT
+  by First-Class-by-Default, whose foreclosure clause does not bite because Q_U5
+  already made the first-class decision and the pending composition is NAMED;
+  and there is **no zero-cost B1**, since the honest minimum deletes three dead
+  declarations. **B3 parameterize** — UNNECESSARY: `step-sub` recurses through
+  `List`, not `Path` (exactly as `datum-cons` recurses through `Datum`), so no
+  parameterization and no mutual recursion is needed. **B4 un-unify** — reverses
+  Q_U5's central ruling, reached through a four-step walk including an owner
+  rejection. **B5 narrow** — First-Class by Default names this case almost
+  verbatim (premature opacity). **B6 eliminator-first** (emergent, and the
+  sharpest) — expressively EQUAL to B2, differing only in whether the
+  intermediate is a first-class VALUE; under the Hyperlattice reading **a `data
+  Step` is a lattice element** (mergeable, cell-storable, unifiable) and **a
+  continuation is not** — the same argument Q_U5 used against selector-as-
+  function. Disqualified because **P5's scope includes "B3 same-spine merge"**
+  (verified from the tracker), which requires structural path comparison.
+  **U17b — the repair and the typing are ONE change.** `racket-list->prologos-list`
+  already exists in the marshaller, so the abort is fixed by returning a Racket
+  list — but the repair must decide WHAT it returns. Fix it to keywords and the
+  lie is re-enshrined; fix it to `Step` and the spec becomes true. Marshalling
+  template already in-tree: `datum->datum-expr`.
+  **U17c — P4c-4b PROCEEDS UNCHANGED** (all three panel clusters agree). The
+  encoding is not where first-classness is won or lost: `(@bcast step)` is a
+  unary constructor of a closed union with ONE producer and ONE classifier, so
+  converting it later is cheap *because that is already the ADT shape*. Two
+  riders, both main-thread verified: the `.pnet` gate item **drops** (`expr-path`
+  IS registered — `regN! expr-path`), and the four "a wrapper never heads a
+  branch" comments should be corrected in the same commit, polarity inverted
+  (the index must PERMIT ω-at-head) — three of them justify an arm by a claim
+  the same file refutes.
+  **COST, honestly**: TWO ADTs, not one — the `cont` vocabulary
+  (`dissolve | synth | collapse | collapse-synth | (rename . k) |
+  (collapse-rename . k)`) reifies alongside `Step`. And it inherits the tax the
+  `Datum` module documents in its own comment: wildcard `_` in a match over a
+  user data type "triggers a type-inference limitation that causes module
+  loading to fail", so every `Step` consumer enumerates all six arms. A known
+  inference bug, not a design property — but real today.
+  **INCOMPLETE BECAUSE** the eleven consumer sites migrate through one
+  marshaller, which is not P4c-4b's work; deferred to the slice that also
+  repairs `path-segments` (the same change, per U17b). **Placement is part of
+  the open ruling.** Grounding: options panel `wf_68178bd3-eea` (7 agents /
+  1.24M tokens), every load-bearing claim R-lens-verified on the main thread.
+  **Next free Q-label after this: U18.**
+
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
   P1b-i, **owner-reviewed**, and ruled (Q_M8 the sole amendment). §Q8 is now
