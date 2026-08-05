@@ -5893,8 +5893,9 @@ parser guard is SITE-LOCAL; the class-level parse-path guard is its own slice
 **Slices**:
 1. ⬜ uncomment the EIGHT corpus lines that already work at HEAD (own commit —
    never bundled, or the A/B is un-attributable; ⚠ marker renumbering).
-2. ⬜ the SITE-LOCAL parser guard (payload shape → `fail`), closing the three
-   HEAD-reachable aborts before the mint walks into the fourth.
+2. ✅ `0c0ef6dc` the SITE-LOCAL parser guard — the three HEAD aborts are
+   per-command now; pin failed as the abort itself (an ERROR escaping the test
+   body), green after. Battery 356 → 357.
 3. ⬜ the WRAPPING mint (colon-glued-to-opener) + the parser's list-payload arm.
 4. ⬜ the LIFT DISCRIMINATION (Q_U20): symbol inner keeps path-extract; sub
    inner assembles per element at 'block. One fix point per side.
@@ -5909,7 +5910,7 @@ colon-then-lbrace, a live data constructor) · control = a zero-colon zero-brace
 file · file list by `find`, not `git ls-files` (a deleted-in-worktree file
 would silently drop from both legs).
 
-Status: 🔄 P4d-0 — opened; slice 2 first (failing-test-first).
+Status: 🔄 P4d-0 — slice 2 ✅; next slice 1 (corpus uncomment) then 3 (the mint).
 
 <a id="pf"></a>
 
