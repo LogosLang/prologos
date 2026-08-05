@@ -3875,3 +3875,25 @@ re-splitting the two propositions P4c-4b separated.
 ⚠ Method note for whoever lands it: the preparse conversion surfaced that
 **result-discarding test helpers** (`run-last`, lookup-returning fixtures) can
 silently swallow a refusal once it becomes a value. Sweep for those FIRST.
+
+## CIU T6 D4.P4d-0 spin-offs (filed 2026-08-05 from the pre-commit adversarial verify `wf_7d93efe5-b68`)
+
+### 54. Goal-position `:{` (and its dot SIBLING) yields a silent `unknown` row
+
+`(= ?y xs:{a})` flips the baseline's loud `= expects 2 arguments, got 3` into a
+silent `@[{:y unknown}] : _` at 0 errors. ⚠ The CLASS is PRE-EXISTING — the dot
+sibling `(= ?y xs.a)` yields the identical unknown row at the same baseline — so
+this is the DEFERRED 51/52 neighbourhood (selection sentinels reaching relational
+paths), not a mint defect. Zero corpus sites. Silent-wrong-answer shaped, so it
+must not sit past the 51/52 chip (`task_4c00d3f0`); whoever lands that fix should
+take this reproducer with them.
+
+### 55. In-block `:{` is newly ADMITTED but refused with a MISLEADING diagnostic
+
+`rows{a:{p q}}` (narrowing a map FIELD inside a select block) now parses — the
+baseline refused at parse — and typing refuses per-command with a message that
+pretty-prints the nonexistent spelling `rows{a:.{p q}}` (the spurious-dot display
+defect, P4d-0 slice 5's item) and describes vector-ordinal semantics where the
+user narrowed a map field. A refusal, not an acceptance, and per-command — but it
+is the FIRST adjacent spelling users will try, and it is unpinned. Home: the
+P4d-0 slice-5 display fix plus a message that names the map-field case.

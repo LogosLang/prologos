@@ -5896,9 +5896,14 @@ parser guard is SITE-LOCAL; the class-level parse-path guard is its own slice
 2. ✅ `0c0ef6dc` the SITE-LOCAL parser guard — the three HEAD aborts are
    per-command now; pin failed as the abort itself (an ERROR escaping the test
    body), green after. Battery 356 → 357.
-3. ⬜ the WRAPPING mint (colon-glued-to-opener) + the parser's list-payload arm.
-4. ⬜ the LIFT DISCRIMINATION (Q_U20): symbol inner keeps path-extract; sub
-   inner assembles per element at 'block. One fix point per side.
+3. ✅ `667684ad` the WRAPPING mint — ONE shared trigger, both groupers, the tree
+   twin fuses ('bcast-brace-group), the Q_N3 v2 guard gains its first colon row.
+4. ✅ `667684ad` the LIFT DISCRIMINATION (Q_U20) — and the verify found TWO
+   BLOCKING defects invisible to every gate (no test or corpus spells `^:{` or a
+   binder `:{`): top-keys SPLICING a sub inner's keys (three grades, worst a
+   symbol<? whole-file abort) and `unwrap-bcast-step` unwrapping ANY pair (a
+   binder `:{` silently DEFINED a garbled Pi at 0 errors). Both fixed + pinned;
+   spin-offs DEFERRED 54–55. **Both §3.2.1 extent members work end to end.**
 5. ⬜ the §3.2.1 extent-pair LAW PINS (`users:{0.userName^}.0` → `["Lisa"]` ·
    `…:0` → `@["Lisa" "John" "Mike"]`) + the L4/top-keys coherence + the display
    fix (`users{:.{a b}}` spurious dot).
@@ -5910,7 +5915,7 @@ colon-then-lbrace, a live data constructor) · control = a zero-colon zero-brace
 file · file list by `find`, not `git ls-files` (a deleted-in-worktree file
 would silently drop from both legs).
 
-Status: 🔄 P4d-0 — slice 2 ✅; next slice 1 (corpus uncomment) then 3 (the mint).
+Status: 🔄 P4d-0 — slices 1–4 ✅ (`33d83989` · `0c0ef6dc` · `667684ad`); slice 5 remains (corpus `:{` uncomments · the spurious-dot display fix · DEFERRED 55's message).
 
 <a id="pf"></a>
 
