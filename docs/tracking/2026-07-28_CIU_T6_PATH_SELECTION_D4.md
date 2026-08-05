@@ -5607,8 +5607,130 @@ prior P4c slices carried:
    production for the first time — verify the ERROR CHANNEL, not just the
    message. Four whole-file aborts have shipped in this track by that exact gap.
 
-Status: ⬜ P4c-4c — re-scoped, **G2 folded in 2026-08-04**, not started.
-Mini-audit: `wf_a24f3e0f-d84` (7 facets + completeness critic @ `327e278c`).
+<a id="p4c-4c-audit"></a>
+
+**⭐ THE MINI-AUDIT — `wf_a24f3e0f-d84`** (7 facets + completeness critic,
+HEAD-pinned; 8 agents / 1.66M tokens / 0 errors). It refuted FOUR recorded
+facts, one of them written the same hour. **Every load-bearing item below was
+re-verified on the main thread**, not adopted from the report.
+
+**⚠⚠ 1. BLOCKING FACT #1 IS DEAD — a bare top-level ω is NOT stripped under
+every grant.** Measured on the main thread:
+
+```
+default        : ((users :name))
+grant '(users) : ((users ($bcast-step :name)))   ← PRESERVES
+grant '(def)   : ((users :name))
+```
+
+It WAS true at `17086a09`, where the re-scope verified it. **The PRESERVE flip
+(`e71ef6b8`) rewrote the `[else]` arm** (`:3210-3212`), and a bare top-level
+command's head IS the subject symbol — so granting the subject preserves. The
+re-scope generalised from the `'(def)` sub-case, which still strips.
+⇒ **Acceptance markers ARE exercisable, and the L1 fusion pin does NOT need
+`def` position.** The re-scope was right when written and went stale under the
+very flip it was waiting on — *a fact has a timestamp, and this one outlived it
+by one commit.*
+
+**⚠⚠ 2. THE PARTITION IS INCOMPLETE — 3+3+1 is not the shape.** Verified:
+`expr-PVec` occurs in the ENTIRE select region (700–1200) exactly ONCE, at
+`typing-core.rkt:923`. **`select-row-of` has NO PVec arm**, so a PVec subject
+falls to the `:758` catch-all `[(not (expr-Record? tm)) … 'subject-other]` —
+**the three typing arms have nothing to delegate to.** That is a FOURTH typing
+site, which D4 books elsewhere as *"a THIRD dispatcher (subject → elem-type)"*.
+Three more the partition never named:
+- **`select-below-components`** (`:1149-1152`) reaches site 2 by FALLTHROUGH and
+  is the only caller carrying non-empty `seen` from a dissolve splice — so
+  changing site 2's return for a bcast head silently changes dissolve splices;
+- **the `expr-get-in` / `expr-update-in` family** (reduction `:3579-3581`,
+  `:3588-3596`, `:4594-4595`, `:4603-4604`) walks path segments with **ZERO
+  step-kind dispatch**. Probed: it returns `expr-error` at **zero errors** — the
+  silent-wrong-answer class, not a raise;
+- **a THIRD `bcast-step-binder` guard** at `parser.rkt:6382` (`parse-rel-params`)
+  that the guard census resting under the residual argument had missed.
+
+**⚠ 3. THE HEADLINE SPELLING REACHES SITE 2, WHOSE PROTOCOL IS DIFFERENT.**
+Measured: `users:name` routes to `select-branch-entries` (`:1141`), which returns
+a **COMPONENT LIST** (`:984`), not a type — sites 1 and 3 return types. Writing
+`(values pvec-type #f)` at `:1141` by analogy with its siblings is the most
+likely single way to get this slice wrong.
+
+**⚠⚠ 4. THE PRESERVE RESIDUAL IS SEVEN SHAPES, NOT ONE — AND ONE IS SILENT.**
+Measured against a REAL arm-deleted build (not a grant simulation). Leaks:
+`[myform x:Int]` (the one the ruling named) · **`defmacro when [$c:Int $b]`** ·
+`data Box := mk [x:Int]` · `capability C [x:Int] x` · `def g := [fn m:Int m]` ·
+`def x:A:B := 5` · (`deftype` — but see below). Does NOT leak: `defn` · `defn-` ·
+`spec` · `def` · `let` · trait methods · match arms · `?x:Nat`.
+⭐ **Five are loud. `defmacro when [$c:Int $b] $c` is SILENT** — no diagnostic at
+all; the macro registers with `($bcast-step :Int)` INSIDE its pattern.
+**Q_U18 accepted the residual explicitly on the grounds that it is "LOUD and
+RECOVERABLE" — that argument does not cover this member.** And the design named
+the WRONG MECHANISM: it is not `pattern-var?`/unknown-head, it is
+`param-group-candidate?` (`:3323-3334`) rejecting any `$`-headed group, and
+**`defmacro` is a RECOGNISED head** — so this shape was never in the population
+the ruling reasoned about.
+✅ **OWNER RULED 2026-08-04: close the `defmacro` leak as part of this slice.**
+G2 lands alongside as ruled; the acceptance argument is repaired rather than
+re-opened.
+
+**⚠ 5. THE GRANT SEAM CANNOT EXPRESS THE POST-G2 STATE.** `binder-head-base`
+answers `#f` for a non-symbol and the parameter guard forbids `#f` in the list,
+so **a group-headed node can never be granted** — and a bracketed top-level
+command has exactly that shape. Three facets' grant-probes therefore contradicted
+each other. ⇒ **Obligation #2 (RED vs VACUOUS pins) CANNOT be discharged through
+the seam; it needs a real arm-deletion build.** The P4c-4a chain/totality pins
+that read "[same]" under a grant do so as a SEAM ARTIFACT, not as evidence.
+
+**⚠ 6. G2 DOES NOT FULLY DISSOLVE THE CHAIN.** Three deep-strippers survive arm
+1's deletion: the `trait` arm (`:3129-3130`), the `$pipe` pattern region
+(`:3121-3122`), and `take-param-region`'s implicit/param groups. Any reasoning of
+the form *"after G2 nothing strips ancestrally"* is false for those three.
+
+**⚠ 7. SCOPE LEAKAGE IS FORCED, not avoidable by discipline** — named so it can
+be pushed back deliberately: `select-row-of`'s missing PVec arm needs a
+subject→elem-type dispatcher (a P4d-booked item), and the `rrb-of` guard's ELSE
+branch must decide what a NON-PVec container does — and Map (`regions:host`) and
+het-tuple (`events:t`) subjects ARRIVE whether or not they are in scope.
+
+**⚠ 8. THE `rrb-of` GUARD MUST REPORT VIA `(return (expr-panic …))`, NEVER
+`error`.** With no failure slot the only two exits are the escape (per-command,
+file continues) and a raise (whole-file abort). Writing `[else (error …)]`
+re-creates exactly the abort P4c-4b removed. Note also `champ-of` and
+`index-into` are **NOT twins** (unwrapper vs accessor) and `champ-of`'s message
+asserts *"typing admitted the block"* unconditionally, which is FALSE under
+`sort='path` — **copy `index-into`'s wording, not `champ-of`'s.**
+
+**✅ CONFIRMED, and it gives the slice an ORACLE rather than a spec to
+interpret**: the target semantics already work under the explicit spelling —
+`pvec-map [fn [m] m.name] xs` → `@["a" "b"] : [PVec String]`. Mirror arm
+`reduction.rkt:3306-3314`. And **the L1 fusion discriminator is the TYPE, not the
+value**: naive nesting yields `[PVec [PVec String]]`; fusion must yield
+`[PVec String]`, so a pin asserting only the value list does not discriminate.
+
+**STALE COORDINATES CORRECTED** (all re-verified): the sole `let/ec` is
+`reduction.rkt:1647`, **not `:1600`** — D4 cited `:1600` TWICE and that line is a
+comment · `pvec-from-list` is `parser.rkt:3285-3290`, **not `:2966`** (which is
+`surf-get`) · `DEFERRED.md:2986`'s three claims about the parameter are ALL now
+false (it is at `:2933`, it IS a `make-parameter`, it IS provided at `:64`).
+⚠ **"The four dispatchers"** (used above in the `expr-hset` note) is the number
+**this track already refuted once** — D4's own §P4a record says THIRTEEN sites in
+FIVE files. The `expr-hset` claim is true; the denominator is not.
+
+**TEST-SURFACE FINDINGS**: `tests/test-parse-reader.rkt` has ~8 assertions that
+go RED under G2 with **ZERO code reference to the parameter** — a grep-driven
+retirement finds nothing there · the most dangerous VACUOUS case is
+`test-path-selection.rkt:3958-3964`, the only standing coverage of
+`binder-head-base`'s private-suffix normalization, whose live consumers all
+SURVIVE G2 — it must be **re-expressed as a binder-behaviour pin, not deleted** ·
+`bcast-e2e`'s subject is a **MAP**, so reusing it for a PVec law pin would pass
+for the wrong reason · the battery is at **344 cases / 58 s**, approaching
+`testing.md`'s 60 s absolute guidance.
+
+**Status: ⬜ P4c-4c — re-scoped, G2 folded in, `defmacro` leak folded in
+2026-08-04. Not started.** Implementation order: **(A)** value semantics →
+**(C)** the `defmacro` guard → **(B)** the G2 flip + corpus A/B. C precedes B
+because B is what makes the leak live; A precedes B because G2 without value
+semantics ships reachability with nothing behind it.
 
 <a id="p4c-sequencing"></a>
 
