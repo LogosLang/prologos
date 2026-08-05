@@ -1453,6 +1453,21 @@ items of the hold-point, ruled before P4a opened:
   today's routing, which is the honest thing to pin, but it must not be read as
   having settled the question. **DUE**: at P4d, which re-fates the corpus lines.
 
+- <a id="q-u20"></a>**⭐ Q_U20 — A SUB-INNER ω ASSEMBLES AT 'block, ALWAYS
+  [owner, 2026-08-05 — "Assent — sub-inner assembles at 'block, always"].**
+  The lift threads exactly ONE sort, and the two inner kinds need OPPOSITE ones:
+  a SYMBOL inner extracts ('path — 'block would wrap `xs:a` as `[PVec {:a T}]`),
+  a SUB inner assembles ('block — 'path fails its one-component constraint). So
+  the lift takes a PER-INNER-KIND sort decision: `users:{a b}` over
+  `[PVec {:a A :b B}]` is a PVec of NARROWED ROWS, `[PVec {:a A :b B}]`, by
+  applying the sub-block's OWN branches to each element at 'block and
+  re-wrapping. The spec (§3.2.1) and the corpus's own expected values both state
+  this reading; the extent pair only makes sense under it. Hard-coded as a
+  semantics RULE of the lift rather than inherited from context — that is the
+  ruling, not an implementation accident. Grounding: mini-audit
+  `wf_e15a1ef6-dfb` (its sub-inner facet measured the sort collision at both
+  layers). **Next free Q-label: U21.**
+
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
   P1b-i, **owner-reviewed**, and ruled (Q_M8 the sole amendment). §Q8 is now
@@ -5818,7 +5833,7 @@ P4c-4c; Q_U9's own ruling says **"Implementation: P4d"**, twice).
 | `quests:t` / `quests:{t r}` corpus lines | **P4d** | "re-fated HERE" |
 | `*` flatten (`:diags*`) | **P4e** | P4c-4b's guided refusal is the correct interim |
 | `.*` row-splat · disclose `<`/`:<` | **P4e** | already scoped |
-| **the `:{…}` reader mint** | **P4d PREREQUISITE** | unhomed until now; P4d owns the line it unblocks |
+| **the `:{…}` reader mint** | **[P4d-0](#p4d-0)** 🔄 opened 2026-08-05 | + DEFERRED 46 (Q_U20 ruled); site-local parser guard; class guard → DEFERRED 53 |
 | **unknown-head policy + first production grant** | **[Q_U18](#q-u18) ✅ RULED** | PRESERVE + **G4** (test-only until P4c-4c). ~~Owed with it: the digit-hole fix~~ — **not a defect**, both spellings already refused. **G2 ✅ RULED 2026-08-04: ALONGSIDE P4c-4c**, not after |
 | **`^`-on-broadcast** | **[Q_U19](#q-u19)** | due at P4d |
 
@@ -5850,6 +5865,51 @@ the G2 retirement now happen INSIDE P4c-4c instead of bracketing it.
 half of P4c-3's reasoning that said "cannot decide it in either direction" was
 **refuted** — see Q_U18's correction block; the PRESERVE counter-example does
 not exist, because `?x:Nat` is one glued token.
+
+<a id="p4d-0"></a>
+
+### §5.P4d-0 — the `:{…}` mint + the sub-inner lift  (DEFERRED 42 + 46; opened 2026-08-05)
+
+**The P4d prerequisite, landed ALONE** per the sequencing — it touches
+`bcast-step-trigger?`, the one predicate both groupers share. Mini-audit
+`wf_e15a1ef6-dfb` (4 facets + critic, ~1.1M tokens); every load-bearing claim
+below re-verified on the main thread.
+
+**⭐ WHAT THE AUDIT CORRECTED BEFORE IT COULD MISLEAD** (now folded into
+DEFERRED at `2692a958`): the "minimal" memq widening produces a DEGENERATE datum
+(`($bcast-step :)` + a separate brace) — the real mint WRAPS:
+`($bcast-step ($select-brace …))`, keyed on the colon glued to the FOLLOWING
+opener (base-adjacency alone breaks `def b: [List Nat]`, which works today) ·
+46 was MISLOCATED (the arms exist; the LIFTS put `@sub` at branch-head) ·
+40 = 46, filed twice with conflicting fixes; adjudicated · 39's five-site
+exoneration was stale three days after it was written · ⚠ the parser's
+`$bcast-step` fold arm has an unguarded `(symbol->string (cadr it))` that is a
+WHOLE-FILE ABORT at HEAD (3 reproducers) and sits directly on the mint's path.
+
+**Rulings**: [Q_U20](#q-u20) (sub-inner assembles at 'block, always) · the
+parser guard is SITE-LOCAL; the class-level parse-path guard is its own slice
+(DEFERRED 53) [owner, 2026-08-05].
+
+**Slices**:
+1. ⬜ uncomment the EIGHT corpus lines that already work at HEAD (own commit —
+   never bundled, or the A/B is un-attributable; ⚠ marker renumbering).
+2. ⬜ the SITE-LOCAL parser guard (payload shape → `fail`), closing the three
+   HEAD-reachable aborts before the mint walks into the fourth.
+3. ⬜ the WRAPPING mint (colon-glued-to-opener) + the parser's list-payload arm.
+4. ⬜ the LIFT DISCRIMINATION (Q_U20): symbol inner keeps path-extract; sub
+   inner assembles per element at 'block. One fix point per side.
+5. ⬜ the §3.2.1 extent-pair LAW PINS (`users:{0.userName^}.0` → `["Lisa"]` ·
+   `…:0` → `@["Lisa" "John" "Mike"]`) + the L4/top-keys coherence + the display
+   fix (`users{:.{a b}}` spurious dot).
+
+**A/B**: `tools/corpus-ab.rkt` as-is · Tier 1 = `foray.prologos` (the ONLY
+minting file; owner WIP ⇒ working-tree inputs) · Tier 2 must-NOT-move =
+`benchmarks/comparative/dependent-types.prologos` (the corpus's only spaced
+colon-then-lbrace, a live data constructor) · control = a zero-colon zero-brace
+file · file list by `find`, not `git ls-files` (a deleted-in-worktree file
+would silently drop from both legs).
+
+Status: 🔄 P4d-0 — opened; slice 2 first (failing-test-first).
 
 <a id="pf"></a>
 
