@@ -1783,6 +1783,64 @@ needs registration-EVENT instrumentation — the same reason instrumenting
   out". `lib/examples/foray.prologos` has no union forms left to restore, and its
   6 current errors are all `Unbound variable`, unrelated to this.
 
+## Two more non-idempotent cell merges, found by the merge-law test on its first run (2026-08-05)
+
+`tests/test-merge-laws.rkt` was written as the recommended answer to the entry
+below — check the lattice contract instead of bounding the symptom. It found two
+further instances of the same defect **on its first run**, which is the argument
+for it existing.
+
+**1. `nogood-merge` — FIXED.** Its own comment read "Merge: append (functionally
+equivalent to set-union for unique nogoods)", two lines under a docstring
+declaring "the lattice is P(P(AssumptionId)) under set-union. Monotone: nogoods
+only accumulate." The parenthetical was doing all the work and nothing checked
+it: `(nogood-merge x x)` returned the list twice. A live cell merge
+(`atms.rkt:231`), so it carried the same non-quiescence hazard that hung the
+type-checker for fourteen months. Now dedups; commutative and associative up to
+set equality (the list representation has an order that set-union does not).
+
+**2. `merge-hasheq-list-append` — NOT fixed, filed here.** Also not idempotent:
+`(merge {a: (1)} {a: (1)})` → `{a: (1 1)}`. It IS a cell merge — the wakeup
+registry cells at `metavar-store.rkt:2891 / :2893 / :2896` — so it carries the
+hazard too.
+
+Not fixed because deduping the per-key lists changes wakeup semantics in a hot
+registry, and "a duplicate wakeup is harmless" is precisely the kind of unchecked
+parenthetical that produced both bugs above. It wants its own slice with its own
+evidence: what writes those cells, whether any writer is non-idempotent, and
+whether a duplicate wakeup is observable. Pinned as a KNOWN violation in the test
+so it cannot quietly stop being covered.
+
+Its SRE domain is `'hash-of-lists-accumulator` — the name says accumulator, and
+an accumulator is not a join. If that is the intent, the answer may be that these
+cells should not be using a merge-based cell at all, rather than that the merge
+should be fixed. That is the question to answer first.
+
+## The merge-law table cannot be gated on the registry, and that is a registry problem (2026-08-05)
+
+Spun out of writing `tests/test-merge-laws.rkt`. The table of merges under test
+is hand-written, so it needs a drift guard: adding a merge without adding a law
+entry should fail.
+
+The obvious guard — assert `(<= (merge-fn-registry-size) N)` — **does not work**,
+and the way it fails is worth keeping. It passed standalone under `raco test` and
+FAILED in the batch runner at 46 registrations against a 40 floor. Nothing was
+wrong with the code. `merge-fn-registry.rkt` is a process-global `make-hasheq`
+populated by MODULE SIDE-EFFECTS, so its size is a function of what the enclosing
+process happened to load; a batch worker that has already run other test files
+has loaded more of the compiler. **Registry size is a property of the run, not of
+the tree.**
+
+So the test keeps only the weak guard (the table must not shrink) and reports the
+registry size without asserting on it. Adding a merge without adding it to the
+table is still uncaught.
+
+To close it properly the registry needs (a) an enumeration API — it currently
+exposes only `lookup-merge-fn-domain` and `merge-fn-registry-size`, no way to
+list what is in it — and (b) deterministic population, which is really the
+PM Track 12 "registries become cells" work (§ "Off-Network Registry
+Scaffolding"). Until then the table's coverage is maintained by hand.
+
 ## Fuel bounds FIRE COUNT, not work per fire — so it cannot make non-convergence a bounded diagnostic (2026-08-05)
 
 Split out of the union-hang entry above, where it was the remaining half of

@@ -663,13 +663,32 @@
 ;; Empty nogood set
 (define nogood-empty '())
 
-;; Merge: append (functionally equivalent to set-union for unique nogoods)
-;; Uses list representation for simplicity — nogoods are typically small (< 100).
+;; Merge: set-union over the list representation. Nogoods are typically small
+;; (< 100), so a linear scan is the right cost.
+;;
+;; ⚠ This was a bare `(append old new)` under the comment "functionally
+;; equivalent to set-union for unique nogoods" — and that parenthetical was
+;; doing all the work, unchecked. `(nogood-merge x x)` returned x's list TWICE,
+;; so the merge was not idempotent and the declared lattice ("P(P(AssumptionId))
+;; under set-union", two lines up) was not one.
+;;
+;; That is the same defect that made `tagged-cell-merge` hang the type-checker
+;; for fourteen months: a cell whose lattice VALUE is stable but whose
+;; REPRESENTATION grows on every merge reads as changed to the scheduler, so its
+;; dependents re-fire forever. This one is a live cell merge —
+;; `atms.rkt:231` — so it carried the same hazard.
+;;
+;; Found by `tests/test-merge-laws.rkt` on its FIRST run, which is the argument
+;; for that file existing.
 (define (nogood-merge old new)
   (cond
     [(null? old) new]
     [(null? new) old]
-    [else (append old new)]))
+    [else
+     (for/fold ([acc (reverse old)]
+                #:result (reverse acc))
+               ([ng (in-list new)])
+       (if (member ng acc) acc (cons ng acc)))]))
 
 ;; Add a single nogood
 (define (nogood-add ngs nogood-set)
