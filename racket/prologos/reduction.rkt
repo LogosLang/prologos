@@ -1646,14 +1646,66 @@
   ;; production caller, which passes both; requiring them keeps it that way.
   (let/ec return
     (define (kw-of label) (expr-keyword label))
+    ;; ⭐ D4.P4c-4c (DEFERRED 43) — CHAMP-OF NOW TIER-FORKS, mirroring `project`
+    ;; below and the top-level `expr-get` sibling. It used to panic
+    ;; UNCONDITIONALLY on a non-map, which is the mirror of the tier bug on the
+    ;; typing side: a PERMISSIVE carrier (a union, a dyn row, a selection view)
+    ;; degrades quietly everywhere else in the language, and under ω it panicked.
+    ;; One root cause with the typing half, two opposite symptoms.
+    ;;
+    ;; ⚠ AND THE OLD MESSAGE WAS FALSE AT A `'path` SITE. It asserted "typing
+    ;; admitted the BLOCK" unconditionally. The block claim now appears only on
+    ;; the block tier, where it is true.
+    ;; ⚠ MY OWN EARLIER VERSION OF THIS COMMENT SAID `rrb-of` "reached the false
+    ;; wording anyway by delegating here" — THAT IS FALSE. `rrb-of` is
+    ;; self-contained and does not call `champ-of`; the ω path reaches `champ-of`
+    ;; through `bcast-apply` → `branch-entries`. Corrected rather than deleted
+    ;; because the same wrong clause was propagated into DEFERRED.md §43.
+    ;; ⚠ RESIDUAL, not fixed here (DEFERRED): this helper is called as
+    ;; `(champ-of v name)` with `name` = the STEP name, so the message reads
+    ;; "`a` is not a map" — naming the step, not the value. `rrb-of` gets it
+    ;; right ("this one is not a vector"). Cosmetic; filed rather than widened
+    ;; into a shared-helper signature change inside a slice that already moved
+    ;; production behaviour once.
     (define (champ-of v what)
       (let ([v* (whnf v)])
-        (if (expr-champ? v*)
-            (expr-champ-racket-champ v*)
-            (return (expr-panic
-                     (expr-string
-                      (format "select: ~a is not a map at runtime (invariant violation — typing admitted the block)"
-                              what)))))))
+        (cond
+          [(expr-champ? v*) (expr-champ-racket-champ v*)]
+          ;; tier = #f — the BLOCK sort. Typing sourced every field 'present
+          ;; (Horn D), so a non-map here really IS an invariant violation.
+          [(not tier)
+           (return (expr-panic
+                    (expr-string
+                     (format "select: ~a is not a map at runtime (invariant violation — typing admitted the block)"
+                             what))))]
+          ;; tier = (expr-true) — the assertive PATH tier. Loud, but do not claim
+          ;; anything about a "block": there isn't one.
+          [(expr-true? tier)
+           (return (expr-panic
+                    (expr-string
+                     (format "select: ~a is not a map at runtime" what))))]
+          ;; unsolved — the PERMISSIVE tier (dyn row, selection view, union).
+          ;; ⚠ THE VALUE IS `none`, NOT `<error>`, AND THAT IS A RULING THIS FILE
+          ;; ALREADY MADE 1500 LINES DOWN — `[(definitely-not-map? subj*) (if tier
+          ;; (expr-fvar 'none) …)]`, whose own comment says "Match `map-get`:
+          ;; degrade to `none`". My first cut returned `(expr-error)` and the
+          ;; adversarial verify caught that it gave a THIRD answer to a question
+          ;; with two: three adjacent union-non-map cases one line apart
+          ;; (`<Map|Int>`, `<Map|PVec>`, `<Map|Set>`) answered `none`, `<error>`,
+          ;; `none` — and the odd one out was the one this change moved.
+          ;;
+          ;; ⚠⚠ AND THAT PATH IS PRODUCTION-REACHABLE WITH NO GRANT, which
+          ;; falsified DEFERRED 43's own deferral rationale ("the grant is '(), so
+          ;; nothing here is reachable in production"). The route: the
+          ;; `expr-select` entry admits **rrb** subjects into `select-reduce`
+          ;; BEFORE the `definitely-not-map?` fork, and `expr-rrb?` is not a member
+          ;; of `definitely-not-map?` (only `expr-hset?` is). So `ub.a` where
+          ;; `ub : <[Map Keyword Int] | [PVec Int]> := @[1 2 3]` reaches here on
+          ;; the ordinary dot path. It used to PANIC "invariant violation", which
+          ;; was itself wrong — the union's Map branch is exactly why typing
+          ;; admitted `.a`, so there is no invariant violated. Degrading is right;
+          ;; degrading to the same value as its siblings is what makes it correct.
+          [else (return (expr-fvar 'none))])))
     (define (project c label)
       (let* ([kw (kw-of label)]
              [hit (champ-lookup c (equal-hash-code kw) kw)])

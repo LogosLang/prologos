@@ -3544,7 +3544,35 @@ pinned by `tests/test-dual-spine-merge-key.rkt`. These are the residuals.
 
 ## CIU T6 D4.P4c-4c spin-offs (filed 2026-08-04 from the pre-commit adversarial verify `wf_6eb75d73-799`, 4 skeptics + adjudicator)
 
-### 43. ⭐ THE STRICTNESS TIER DOES NOT FOLLOW THE ω UNWRAP — **a named PRECONDITION on G2, not a cleanup item**
+### 43. ✅ RESOLVED 2026-08-04 — folded into P4c-4c by owner ruling. THE STRICTNESS TIER NOW FOLLOWS THE ω UNWRAP
+
+**Fixed in two halves.** Typing: `select-tier-subject` peels one container layer
+per LEADING ω step, so the tier sees the type the ω step unwraps to. (Non-ω
+nesting never had the bug — Q_U13's NEST encoding gives every level its own
+`expr-select` node with its own tier; verified, `x.inner.a` over a Map is loud.)
+Reduction: `champ-of` now TIER-FORKS three ways instead of panicking
+unconditionally, mirroring `project` beside it.
+
+⚠⚠ **THIS ENTRY'S OWN DEFERRAL RATIONALE WAS FALSE, and the adversarial verify
+caught it.** The text below said *"the grant is `'()`, so nothing here is
+reachable in production."* The `champ-of` half was **always** production-reachable
+with no grant: the `expr-select` entry admits **rrb** subjects into `select-reduce`
+BEFORE the `definitely-not-map?` fork, and `expr-rrb?` is not a member of that
+predicate (only `expr-hset?` is). So `ub.a` where
+`ub : <[Map Keyword Int] | [PVec Int]> := @[1 2 3]` reaches `champ-of` on the
+ordinary dot path — where it used to PANIC "invariant violation", itself wrong,
+since the union's Map branch is exactly why typing admitted `.a`.
+⚠ And my FIRST fix degraded it to `<error>`, giving a **third answer to a
+two-answer question**: three adjacent union-non-map cases answered `none`,
+`<error>`, `none`. Corrected to `none`, agreeing with `definitely-not-map?`'s
+sibling ("Match `map-get`: degrade to `none`"). Pinned, no-grant.
+
+**Residuals, filed rather than fixed** (see 48, 49). Original text retained below
+because the false rationale is the lesson.
+
+---
+
+### 43 (original text, 2026-08-04) — THE STRICTNESS TIER DOES NOT FOLLOW THE ω UNWRAP
 
 One root cause, two OPPOSITE symptoms, and the slice's own `pvec-map` oracle
 disagrees with it in both directions. `infer-select` solves the tier from the
@@ -3620,3 +3648,31 @@ silent wrong answer. Scope note for P4d.
 continues, no fabrication — correct behaviour, imprecise message (the subject is
 an unsolved element meta, not a non-record). Pre-existing wording from
 `select-project-field`, surfaced by ω rather than caused by it.
+
+### 48. Under ω a PERMISSIVE carrier annihilates the whole vector, where `pvec-map` preserves the hits
+
+```
+def ws : [PVec <[Map Keyword Int] | Int>] := @[um u1]   ;; um = {:a 1}, u1 = 7
+[pvec-map [fn [m] m.a] ws]  →  @[1 none] : [PVec Int]    ← the good element survives
+ws:a                        →  none      : [PVec Int]    ← total loss
+```
+
+This is the ratified **WHOLE-NODE ABORT** (Q_U7 rider): a miss inside any element
+aborts the whole selection through the single `let/ec`, no partial vectors. So it
+is *ruled semantics, not a defect* — filed because the slice ships a pin asserting
+"ω agrees with the `pvec-map` ORACLE" for direction A, and that agreement does NOT
+extend to permissive carriers. The pin's comment now says so; this entry is the
+open question behind it: **is whole-node abort the right rule for the PERMISSIVE
+tier specifically**, where nothing is actually wrong and `pvec-map` degrades
+per-element? Zero production reach today (ω is grant-only). ⚠ **Re-decide at G2**,
+which is when it becomes reachable.
+
+### 49. `champ-of`'s message names the STEP, not the value
+
+`(champ-of v name)` is called with `name` = the step name, so a miss reads
+"`select: a is not a map at runtime`" — which parses as "the field `a` is not a
+map". Its `rrb-of` sibling gets it right ("this one is not a vector"). Half of
+DEFERRED 43's rider; the other half (the false "typing admitted the block" clause
+at a `'path` site) WAS discharged. Cosmetic, and deliberately not fixed inside a
+slice that had already moved production behaviour once — it needs a shared-helper
+signature change.

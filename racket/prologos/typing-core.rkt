@@ -951,6 +951,40 @@
          (values #f (select-fail 'bcast-carrier (append path (list name)) name tm)))]
     [else (select-sort-unhandled 'select-elem-of sort)]))
 
+;; D4.P4c-4c (DEFERRED 43) — THE TYPE THE TIER DECISION SHOULD SEE.
+;; `infer-select` solves the strictness tier from its node's subject. ω unwraps
+;; INSIDE the node, so the subject is the container while the projection that can
+;; MISS happens on the element. This peels one container layer per LEADING ω
+;; step — the same "consume one layer, apply one step" arithmetic as
+;; `select-bcast-lift` — so the tier sees the type the inner step projects from.
+;;
+;; ⚠ SCOPE, stated so it is not mistaken for a general fix: this peels only the
+;; LEADING ω run of a single branch, which is exactly the population that exists
+;; (a `'path` carrier is one branch of one step per level under NEST, and every
+;; non-ω level is its own node with its own tier). It deliberately does NOT walk
+;; the whole chain — that would duplicate the type walk to answer a question the
+;; walk itself could answer, which is the shape to reach for if a later phase
+;; makes a Map reachable deeper inside ONE node.
+;; ⚠ It is also strictly CONSERVATIVE in the direction that matters: it can only
+;; turn a permissive tier into an assertive one, never the reverse, and a closed
+;; record still short-circuits to a STATIC miss (pinned).
+;; ⚠ It is NOT as precise as "where a Map is genuinely projected", which is what
+;; this comment first claimed — `xs:0` over `[PVec [Map K V]]` peels to the Map
+;; and solves assertive even though an ORDINAL step can never project a key.
+;; Harmless (typing then refuses the ordinal statically, and the old/new results
+;; are byte-identical there), but the honest statement is "the tier sees the type
+;; the ω step unwraps to", not "the type a key is projected from".
+(define (select-tier-subject tm branches)
+  (if (and (pair? branches) (null? (cdr branches)))
+      (let loop ([tm tm] [steps (car branches)])
+        (if (and (pair? steps)
+                 (eq? (select-step-kind (car steps)) 'bcast)
+                 (expr-PVec? tm))
+            (loop (whnf (expr-PVec-elem-type tm))
+                  (cons (select-bcast-inner (car steps)) (cdr steps)))
+            tm))
+      tm))
+
 ;; D4.P4c-4c — ONE ω step applied to a subject type: the FUNCTORIAL LIFT.
 ;; `unwrap one container layer → apply the wrapped step to the ELEMENT →
 ;; re-wrap one layer`. That is Q_U7's rule verbatim, and it is why **L1 fusion
@@ -2565,8 +2599,20 @@
              ;; so the runtime tier is unreachable there.
              ;; TOTAL over the sort axis (the verify: this was a binary
              ;; `(eq? sort 'path)` test — see the elaborator's twin).
+             ;; ⭐ D4.P4c-4c (DEFERRED 43, folded in by owner ruling 2026-08-04)
+             ;; — THE TIER MUST FOLLOW THE ω UNWRAP, and testing `tm` alone did
+             ;; not. The tier is a claim about WHERE THE PROJECTION HAPPENS.
+             ;; Non-ω nesting is safe for free: Q_U13's NEST encoding gives every
+             ;; level its OWN `expr-select` node with its OWN tier (verified —
+             ;; `x.inner.a` over a Map is loud). ω is the exception, because it
+             ;; unwraps INSIDE one node, below this decision. So `[PVec [Map K V]]`
+             ;; failed `expr-Map?`, the meta stayed unsolved, reduction read that
+             ;; as PERMISSIVE, and a Map miss inside a broadcast went SILENT while
+             ;; the SAME miss through `.` or `pvec-map` panicked. Found by the
+             ;; P4c-4c adversarial verify; the slice's own oracle disagreed with it.
              (case sort
-               [(path)  (when (expr-Map? tm) (solve-strict-assert! ctx tier))]
+               [(path)  (when (expr-Map? (select-tier-subject tm branches))
+                          (solve-strict-assert! ctx tier))]
                [(block) (void)]
                [else (select-sort-unhandled 'infer-select sort)])
              (let-values ([(row fail) (select-project ctx tm branches sort)])

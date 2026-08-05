@@ -4259,14 +4259,16 @@
 (test-case "P4c-4c: the ORACLE — broadcast agrees with the explicit `pvec-map` spelling"
   ;; The target semantics already exist under the explicit spelling, so this
   ;; slice has an oracle rather than a spec to interpret.
-  ;; ⚠ SCOPE OF THE CLAIM, NARROWED after the adversarial verify. The first
-  ;; comment here said "Same type, same value" flatly. That is TRUE for a CLOSED
-  ;; ROW where every element hits — which is this fixture — and NOT true in
-  ;; general: the strictness tier is solved from the PRE-unwrap subject, so on
-  ;; Map / dyn-tail / union carriers the ω path and `pvec-map` disagree about
-  ;; whether a miss is loud (DEFERRED — a named precondition on G2, not a
-  ;; cleanup item). Pinning the honest scope so this pin is not read as
-  ;; asserting a general law it does not test.
+  ;; ⚠ SCOPE OF THE CLAIM, and it has been narrowed TWICE. The first comment said
+  ;; "Same type, same value" flatly. The second blamed the tier and named Map,
+  ;; dyn-tail and union carriers — the MAP clause is now FALSE (DEFERRED 43
+  ;; landed; a Map miss under ω is loud, and that is pinned as direction A).
+  ;; What survives is narrower and is a VALUE disagreement, not a loudness one:
+  ;; on a PERMISSIVE carrier the ratified WHOLE-NODE ABORT (Q_U7) makes ω yield a
+  ;; single `none` for the entire vector, where `pvec-map` preserves the elements
+  ;; that hit — `@[1 none]` vs `none`. That is ruled semantics, not a defect, but
+  ;; it means this pin asserts agreement only for a CLOSED ROW WHERE EVERY
+  ;; ELEMENT HITS, which is exactly this fixture. See DEFERRED for the residual.
   (define out (pvec-bcast "def viaMap := [pvec-map [fn [m] m.name] xs]\ndef viaBcast := xs:name\nviaMap\nviaBcast"))
   (check-equal? (length (filter (lambda (s) (regexp-match? #rx"@\\[\"a\" \"b\"\\] : \\[PVec String\\]" s)) out))
                 2
@@ -4326,3 +4328,125 @@
               (format "THE FILE DID NOT CONTINUE — a raise escaped: ~a" out))
   (check-false (ormap (lambda (s) (regexp-match? #rx"@\\[" s)) out)
                (format "a Map subject must NOT broadcast at P4c-4c: ~a" out)))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4c-4c (DEFERRED 43, folded into the slice by owner ruling 2026-08-04) —
+;; THE STRICTNESS TIER MUST FOLLOW THE ω UNWRAP.
+;;
+;; The tier is solved from the SUBJECT of an `expr-select` node. Non-ω nesting
+;; is safe because Q_U13's NEST encoding gives every level its OWN node with its
+;; own tier (verified: `x.inner.a` over a Map is LOUD). ω is different — it
+;; unwraps INSIDE one node, below the tier decision — so the tier saw
+;; `[PVec [Map K V]]`, which is not `expr-Map?`, and the miss went silent.
+;;
+;; ONE root cause, TWO OPPOSITE symptoms, and the slice's own `pvec-map` oracle
+;; disagreed with it in BOTH directions. Both are pinned.
+;; ---------------------------------------------------------------------------
+
+(define (tier-probe src)
+  (parameterize ([broadcast-enabled-contexts '(def ms ws)])
+    (map (lambda (r) (format "~a" r)) (process-string-ws src))))
+
+(test-case "P4c-4c/D43 direction A: a Map miss under ω is LOUD, as it is through `.` and `pvec-map`"
+  (define out (tier-probe (string-append
+                           "ns d43a\n"
+                           "def ms : [PVec [Map Keyword Int]] := @[{:a 1} {:zzz 9}]\n"
+                           "def viaB := ms:a\nviaB\n"
+                           "def after := 42")))
+  ;; BEFORE the fix this was `<error> : [PVec Int]` at ZERO errors, while both
+  ;; `mm.a` and `[pvec-map [fn [m] m.a] ms]` panicked on the same data.
+  (check-true (ormap (lambda (s) (regexp-match? #rx"key :a not found" s)) out)
+              (format "the Map miss under ω must be LOUD; got ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"available keys" s)) out)
+              (format "the loud miss must name the available keys; got ~a" out))
+  ;; and it stays PER-COMMAND — the file continues
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4c-4c/D43 direction A: ω agrees with the `pvec-map` ORACLE on a Map carrier"
+  ;; This is the general form of the claim the ORACLE pin above deliberately
+  ;; does NOT make (its fixture is a closed row where every element hits).
+  (define out (tier-probe (string-append
+                           "ns d43a2\n"
+                           "def ms : [PVec [Map Keyword Int]] := @[{:a 1} {:zzz 9}]\n"
+                           "def viaM := [pvec-map [fn [m] m.a] ms]\nviaM\n"
+                           "def viaB := ms:a\nviaB\n"
+                           "def after := 42")))
+  ;; both spellings must report the SAME miss — neither silently swallowing it
+  (check-true (>= (length (filter (lambda (s) (regexp-match? #rx"key :a not found" s)) out)) 2)
+              (format "ω and pvec-map must agree that this miss is loud; got ~a" out)))
+
+(test-case "P4c-4c/D43 direction B: a permissive (union) carrier under ω DEGRADES, it does not panic"
+  ;; The mirror failure: `champ-of` panicked unconditionally on a non-map,
+  ;; where the language's permissive tier degrades quietly. Its top-level
+  ;; sibling already tier-forks; `champ-of` did not.
+  ;; ⚠ THIS PIN WAS VACUOUS IN ITS FIRST DRAFT and I caught it before committing —
+  ;; the obvious spelling `@[w1 w2]` with mixed element types infers a HET TUPLE
+  ;; `⟨[Map Keyword Int] Int⟩`, not a PVec, so it refuses at the P4c-4c carrier
+  ;; gate and NEVER REACHES `champ-of`. The check-false then passed trivially.
+  ;; The EXPLICIT union annotation is what actually drives a non-map element into
+  ;; the ω walk. Same vacuity class the mini-audit flagged one slice ago; pinned
+  ;; with the spelling that exercises the code, plus a positive assertion so it
+  ;; cannot go quiet again.
+  (define out (tier-probe (string-append
+                           "ns d43b\n"
+                           "def u1 : <[Map Keyword Int] | Int> := 7\n"
+                           "def ws : [PVec <[Map Keyword Int] | Int>] := @[u1]\n"
+                           "def r := ws:a\nr\n"
+                           "def after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"invariant violation|is not a map at runtime" s)) out)
+               (format "a permissive carrier must DEGRADE, not panic; got ~a" out))
+  ;; ⚠ ANTI-VACUITY, AND MY FIRST GUARD DID NOT DISCRIMINATE. I claimed a
+  ;; "positive assertion so it cannot go quiet again" while asserting
+  ;; `<error> : [PVec Int]` — which the P4c-4c CARRIER-REFUSAL path also prints,
+  ;; so both vacuous fixtures (het tuple, bare Map) satisfied it. The real
+  ;; discriminator is that the live fixture BINDS its def and emits NO error
+  ;; struct, where every refusal path leaves it UNBOUND. Verified against both
+  ;; vacuous spellings.
+  (check-true (ormap (lambda (s) (regexp-match? #rx"r : \\[PVec Int\\] defined" s)) out)
+              (format "the def must BIND — if it is unbound the ω walk was never reached: ~a" out))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"Unbound variable|inference-failed" s)) out)
+               (format "no refusal may fire here — that would make this pin vacuous: ~a" out))
+  ;; the permissive VALUE is `none`, agreeing with `definitely-not-map?`'s
+  ;; sibling arm ("Match `map-get`: degrade to `none`") — NOT `<error>`
+  (check-true (ormap (lambda (s) (regexp-match? #rx"none : \\[PVec Int\\]" s)) out)
+              (format "expected the permissive `none` from the ω walk; got ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)
+              (format "the file must continue; got ~a" out)))
+
+(test-case "P4c-4c/D43: the PERMISSIVE degradation agrees across carriers — and reaches PRODUCTION"
+  ;; ⭐ THE REGRESSION THE ADVERSARIAL VERIFY CAUGHT, pinned so it cannot return.
+  ;; NO GRANT — this is the ordinary dot path at the production default, which is
+  ;; why DEFERRED 43's "not reachable in production" rationale was FALSE.
+  ;; The `expr-select` entry admits **rrb** subjects into `select-reduce` before
+  ;; the `definitely-not-map?` fork, and `expr-rrb?` is not a member of that
+  ;; predicate (only `expr-hset?` is) — so a union whose runtime value is a PVec
+  ;; reaches `champ-of` on a key step. It used to PANIC "invariant violation",
+  ;; which was itself wrong (the union's Map branch is why typing admitted `.a`).
+  ;; My first fix degraded it to `<error>`, giving a THIRD answer to a two-answer
+  ;; question. All three siblings must agree.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    (string-append
+                     "ns d43prod\n"
+                     "def ua : <[Map Keyword Int] | Int> := 7\n"
+                     "def ub : <[Map Keyword Int] | [PVec Int]> := @[1 2 3]\n"
+                     "def us : <[Map Keyword Int] | [Set Int]> := #{1 2}\n"
+                     "ua.a\nub.a\nus.a\n"
+                     "def after := 42"))))
+  (check-equal? (length (filter (lambda (s) (regexp-match? #rx"^none : Int$" s)) out))
+                3
+                (format "all three union-non-map carriers must degrade to `none`; got ~a" out))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"invariant violation" s)) out)
+               (format "no invariant-violation panic on a permissive union; got ~a" out)))
+
+(test-case "P4c-4c/D43: the tier peel does NOT over-fire — a closed row keeps its STATIC miss"
+  ;; Guard against the fix over-reaching: a closed record's miss is caught
+  ;; statically and must NOT become a runtime tier assertion.
+  (define out (tier-probe (string-append
+                           "ns d43c\n"
+                           "def ms := @[{:name \"a\"}]\n"
+                           "def bad := ms:nope\n"
+                           "def after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"not found at runtime|invariant violation" s)) out)
+               (format "a closed-row miss must stay STATIC; got ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
