@@ -32,7 +32,7 @@ rulings, censuses and test delta live in its own section.
 | **P3c** | **Keyless + L4 + honest nesting** — the nat-row mint at EVERY n (incl. 1 and homogeneous n) · ordinal branches `{N M}` · the L4 mixing error · `⟨String⟩` 1-tuple pins · the G11 one-space pair pinned side by side | ✅ | [§5.P3c](#p3c) · **`1b021d57`** — suite **9497/475/0**, acceptance **52/52**, battery 206; P3 (BLOCKS) COMPLETE; the verify's FIRST no-BLOCKING slice in eight (2 SIGNIFICANT fixed pre-commit: the @ord walk-to-leaf twin-drift, the decimal-fusion leak); G11 landed AS AMENDED; in-block `v[0]`≡`.0` ratified-by-pin |
 | **P4** | **Broadcast ω** — ⭐ **P4a ✅ · P4b ✅ COMPLETE** (b-i carrier + b-ii `$dot-access` migration; `x.a` now mints the unified selector carrier) · P4c–P4e ⬜ — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | [§5.P4](#p4) · co-design: audit `wf_8458c23b` + options panel · **RULED 2026-07-31**: [Q_U5](#q-u5) · [Q_U6](#q-u6) · [Q_U7](#q-u7) · [Q_U8](#q-u8) · [Q_U9](#q-u9) (the PAUSE cleared) · partition LOCKED P4a–P4e |
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
-| **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [[§5.P4c](#p4c)](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([the inverted default](#p4c-2-inverted)) · **P4c-3 ✅ `d477772c`** ([the enable-set moves to P4c-4](#p4c-3)) · **P4c-4a ✅ `f31237fd`** ([the test seam + per-context dispatch](#p4c-4a)) · **P4c-4b ✅ `6b22515d`** ([a broadcast goes END TO END; the not-yet stops being a whole-file abort](#p4c-4b)) · **P4c-4c ⬜ RE-SCOPED** to PVec value semantics ([why + the full sequencing](#p4c-sequencing)) · **[Q_U18](#q-u18) ✅ RULED + FLIP LANDED `e71ef6b8`** — unknown-head → PRESERVE; grant = **G4**; ⚠ *the flip is INERT until **G2**, which is therefore the OPERATIVE half, not cleanup* · P4c-5 ⬜ |
+| **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [§5.P4c](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([inverted default](#p4c-2-inverted)) · [P4c-3](#p4c-3) ✅ `d477772c` · [P4c-4a](#p4c-4a) ✅ `f31237fd` · [P4c-4b](#p4c-4b) ✅ `6b22515d` (end to end) · **[P4c-4c](#p4c-4c) ⬜ ← HERE** — PVec value semantics **+ G2, ruled ALONGSIDE 2026-08-04**; the first slice where production behaviour MOVES ([sequencing](#p4c-sequencing)) · [Q_U18](#q-u18) ✅ PRESERVE + G4; flip landed `e71ef6b8` · P4c-5 ⬜ |
 | **PF** | **Path first-classness** (substrate; **P5's prerequisite**) — ⭐ **Q_U17 RULED B2**: a Path segment is a first-class `Step` value. Reify the closed six-kind union as a `data Step` ADT on the `Datum` pattern; `Path` stays GROUND; `segments : Path -> [List Step]`. Repairs the dead `path-segments` in the SAME change | ⬜ | [§5.PF](#pf) · [Q_U17](#q-u17) · panel `wf_68178bd3-eea` |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery · ⚠ B3 needs [PF](#pf) |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | [§5.PX](#px) · position flexible |
@@ -1376,11 +1376,28 @@ items of the hold-point, ruled before P4a opened:
   honest reading of "Validated ≠ Deployed": the gap is now **scheduled and
   named**, with P4c-4c as its discharge, rather than left open-ended.
 
-  **⚠ G2 IS THE RECORDED LEAN, NOT A RULING** [owner: *"Capture G2 as the current
-  lean, to land with or after P4c-4c. Perhaps we can re-evaluate this again
-  then."*]. G2 = retire the enable-set entirely; head-specific dispatch becomes
-  unconditional. **Do NOT treat this as decided.** The argument FOR it, recorded
-  so the re-evaluation starts from it rather than re-deriving:
+  **⭐ G2 IS NOW RULED — IT LANDS *ALONGSIDE* P4c-4c** [owner, 2026-08-04:
+  *"G2 alongside P4c-4c"*]. G2 = retire the enable-set entirely; head-specific
+  dispatch becomes unconditional. The re-evaluation the ruling below scheduled
+  was **held at the P4c-4c opening and resolved there**, on the §4.1 framing:
+  the flip is inert until G2, so G2 is not cleanup but *the thing that delivers
+  the feature*, and P4c-4c's value semantics are what make the working set
+  observable — which is the input to the G2 decision. Landing them together is
+  what makes that input available at the moment it is needed, instead of
+  shipping value semantics for a surface nothing can reach.
+  ⚠ **CONSEQUENCE, and it is the operative one for the slice**: G2 is the FIRST
+  change in this arc where **production behaviour actually moves.** Every prior
+  P4c slice was byte-identical at the default `'()` and could lean on that; from
+  here the **corpus A/B is load-bearing, not a formality**, and the P4c-4b
+  targeting (12 mintable files) must be RE-DERIVED rather than inherited.
+  ⚠ **And the test surface inverts**: P4c-4a's pins were mutation-verified
+  AGAINST the grant seam, and one is named for *"the flip is INERT AT DEFAULT"*.
+  Retiring the seam turns some of those pins RED and — the worse case — makes
+  others **VACUOUS**. Both classes must be enumerated separately before the edit;
+  a pin that silently stops discriminating is the failure this track keeps
+  paying for.
+  The argument FOR G2, recorded at the time it was still a lean and unchanged by
+  the ruling:
   · its stated justification has expired TWICE — "the sentinel has no consumer
     until P4c-3" (the consumer exists) and gating the head-keyed decision (now
     settled by (i));
@@ -1389,8 +1406,11 @@ items of the hold-point, ruled before P4a opened:
   · the **CHAIN rule** — an ungranted ancestor strips a granted descendant,
     granting `wrap` does not help while granting `defn` does — exists ONLY
     because there is an "ungranted" state to inherit. G2 dissolves it.
-  **RE-EVALUATION TRIGGER**: at P4c-4c's close, with the value semantics landed
-  and the working set observable end-to-end for the first time.
+  ~~**RE-EVALUATION TRIGGER**: at P4c-4c's close~~ — **HELD AND RESOLVED at the
+  P4c-4c OPENING instead** (owner, 2026-08-04): G2 lands **alongside** P4c-4c,
+  not after it. The trigger is struck rather than deleted because the reason it
+  moved is the substance: waiting for the close would have meant shipping value
+  semantics for a surface that nothing outside the battery can reach.
 
   **✅ THE FLIP LANDED — `e71ef6b8`** (suite 9835/482/0 · battery 340 → 344 ·
   acceptance unchanged · default behaviour pinned unchanged). Two findings from
@@ -1412,6 +1432,9 @@ items of the hold-point, ruled before P4a opened:
      ALONGSIDE P4c-4c rather than strictly after, since P4c-4c's value semantics
      are what make the working set observable, and that observation is the input
      to the G2 decision.
+     ✅ **THAT IS WHAT THE OWNER RULED, 2026-08-04 — ALONGSIDE.** See the G2
+     block above; the re-evaluation trigger moved from P4c-4c's close to its
+     opening.
 
   **⚠ SEQUENCING NOTE — (i) IS INERT AT DEFAULT AND CAN LAND EARLY.** The
   unknown-head arm only runs when preservation is ACTIVE; at `'()` the first arm
@@ -5532,7 +5555,41 @@ line always said and what the not-yet message promises a user:
 PVec A → PVec B` and the `expr-pvec-map` whnf arm. The corpus pins the shape
 three lines above the commented target with the explicit `map` spelling.
 
-Status: ⬜ P4c-4c — re-scoped, not started.
+**⭐ SCOPE WIDENED 2026-08-04 [owner: *"G2 alongside P4c-4c"*] — G2 LANDS HERE.**
+The slice is now TWO pieces, and the second is what makes the first observable:
+
+- **(A) the PVec ω value semantics** — the six arms + the `rrb-of` guard above;
+- **(B) G2 — retire the enable-set** (`broadcast-enabled-contexts` /
+  `broadcast-preservation-active?`), making head-keyed preservation
+  UNCONDITIONAL. Rationale + the full argument: [Q_U18](#q-u18)'s G2 block.
+
+**Why together, stated so it is not re-litigated**: the PRESERVE flip is INERT
+at the default, because parse-reader's FIRST arm deep-strips any node whose own
+head is ungranted. So (A) alone ships value semantics for a surface reachable
+only from the battery — the *Validated ≠ Deployed* shape the arc has already
+named once. (B) alone ships reachability with nothing to evaluate to. Together
+they are the first end-to-end user-visible broadcast.
+
+**⚠ THREE OBLIGATIONS THAT ONLY EXIST BECAUSE (B) IS IN SCOPE**, none of which
+prior P4c slices carried:
+1. **The corpus A/B becomes load-bearing.** Every earlier slice could lean on
+   "default `'()` ⇒ byte-identical"; that argument is gone. Re-derive the
+   mintable-file set at HEAD rather than inheriting P4c-4b's 12, pin BOTH legs
+   to ONE `git archive` snapshot (the owner's tree is dirty), diff FULL OUTPUT,
+   and carry a CONTROL file that cannot mint to discriminate counter drift.
+2. **The battery inverts.** P4c-4a's pins were mutation-verified AGAINST the
+   grant seam and one is named *"the flip is INERT AT DEFAULT"*. Enumerate the
+   pins that go RED **and, separately, the pins that go VACUOUS** — the second
+   class is the dangerous one — before touching the parameter.
+3. **The accepted PRESERVE residual goes live.** Macro pattern variables
+   (`pattern-var?` needs no sigil) were ruled an acceptable residual on the
+   grounds of zero in-tree instances *and* an existing per-command
+   `bcast-step-binder` guided error. Under G2 that arm is reachable in
+   production for the first time — verify the ERROR CHANNEL, not just the
+   message. Four whole-file aborts have shipped in this track by that exact gap.
+
+Status: ⬜ P4c-4c — re-scoped, **G2 folded in 2026-08-04**, not started.
+Mini-audit: `wf_a24f3e0f-d84` (7 facets + completeness critic @ `327e278c`).
 
 <a id="p4c-sequencing"></a>
 
@@ -5554,15 +5611,30 @@ P4c-4c; Q_U9's own ruling says **"Implementation: P4d"**, twice).
 | `*` flatten (`:diags*`) | **P4e** | P4c-4b's guided refusal is the correct interim |
 | `.*` row-splat · disclose `<`/`:<` | **P4e** | already scoped |
 | **the `:{…}` reader mint** | **P4d PREREQUISITE** | unhomed until now; P4d owns the line it unblocks |
-| **unknown-head policy + first production grant** | **[Q_U18](#q-u18) ✅ RULED** | PRESERVE + **G4** (test-only until P4c-4c). Owed with it: the **digit-hole** fix (`?x:0` mints). *G2 = LEAN, re-evaluate at P4c-4c's close* |
+| **unknown-head policy + first production grant** | **[Q_U18](#q-u18) ✅ RULED** | PRESERVE + **G4** (test-only until P4c-4c). ~~Owed with it: the digit-hole fix~~ — **not a defect**, both spellings already refused. **G2 ✅ RULED 2026-08-04: ALONGSIDE P4c-4c**, not after |
 | **`^`-on-broadcast** | **[Q_U19](#q-u19)** | due at P4d |
 
-**THE CRITICAL PATH** (revised after Q_U18's ruling): the **PRESERVE flip + the
+~~**THE CRITICAL PATH** (revised after Q_U18's ruling): the **PRESERVE flip + the
 digit-hole fix** (inert at default, testable through the P4c-4a grant seam, so
 safe to land early) → **P4c-4c** (PVec value semantics) → **the G4 grant fires**
-at/after P4c-4c, and **G2 is re-evaluated there** → the `:{` mint → **P4d**
-(carriers + List refusal + the corpus re-fate, with Q_U19 ruled) → P4e → P4c-5 →
-PF → P5.
+at/after P4c-4c, and **G2 is re-evaluated there** → the `:{` mint → **P4d**~~
+
+**THE CRITICAL PATH — REVISED 2026-08-04 after the G2 ruling.** The PRESERVE
+flip ✅ landed (`e71ef6b8`); the digit-hole fix is **struck** (it was never a
+defect). What remains:
+
+**P4c-4c + G2 as ONE slice** (value semantics + unconditional preservation ⇒ the
+first end-to-end user-visible broadcast; G4 is discharged BY this slice rather
+than fired after it) → the `:{` mint (**alone** — it touches
+`bcast-step-trigger?`, the one predicate both groupers share, so mixing it makes
+the A/B un-attributable) → **P4d** (carriers + the Q_U9 List refusal + the corpus
+re-fate, with [Q_U19](#q-u19) ruled) → **P4e** (`*` flatten · `.*` row-splat ·
+disclose) → **P4c-5** → **PF** (Q_U17's `Step`/`Cont` ADTs + the `path-segments`
+repair) → **P5**.
+
+⚠ The merge of P4c-4c and G2 does NOT re-home anything else. Everything in the
+table above keeps its stated home; the one change is that the G4 discharge and
+the G2 retirement now happen INSIDE P4c-4c instead of bracketing it.
 
 ✅ **Q_U18 IS RULED** — and the "Validated ≠ Deployed" gap it named is now
 **SCHEDULED rather than open-ended**: G4 makes P4c-4c its discharge point. ⚠ The
