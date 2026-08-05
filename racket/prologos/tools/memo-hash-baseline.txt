@@ -1,0 +1,10 @@
+# memo-hash-baseline.txt
+# Accepted equal-based-hash-near-memo findings as of last baseline save
+# (key: file::enclosing-define). Each entry should have been audited:
+# fine when keys are not expr trees; an O(N^3) hazard when they are
+# (pipeline.md § New Memo / Cache Keyed on an AST Node; GitHub #58).
+# Regenerate with: racket tools/lint-memo-hash.rkt --save-baseline
+
+lsp/server.rkt::make-initial-state
+macros.rkt::coercion-fn-cache
+pnet-serialize.rkt::dynamic-ctor-cache
