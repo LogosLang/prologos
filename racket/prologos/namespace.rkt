@@ -84,6 +84,11 @@
  process-ns-declaration
  process-imports
  process-exports
+ ;; The declared prelude auto-import list. Exported so a test can assert that
+ ;; everything DECLARED here actually LOADED — see tests/test-prelude-integrity.rkt.
+ ;; process-ns-declaration swallows per-entry import failures (deliberately, so
+ ;; one bad entry can't sink the rest), which makes a partial prelude silent.
+ prelude-imports
  ;; Backward-compat aliases
  (rename-out [process-imports process-require]
              [process-exports process-provide])
