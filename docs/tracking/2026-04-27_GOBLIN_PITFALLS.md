@@ -1667,6 +1667,39 @@ should either: (a) accept `->` in identifiers (treat `refr->syrup`
 as one symbol); or (b) raise a syntax error pointing at the
 offending identifier.
 
+## ✅ RESOLVED 2026-08-05 (ARROW T1) — and it went BOTH ways
+
+⚠ **The advice below this line is STALE. `->` inside a name is now
+legal.** Upstream took remedy **(a)** *and* **(b)** from the verdict
+above — the two options this entry itself proposed:
+
+- **(a)** `->` between identifier characters is part of the NAME:
+  `int->str`, `centigrade->fahrenheit`, `a->b->c`, `str::len->int`,
+  and the keyword form `:a->b`. The rule is **ident-chars on BOTH
+  sides** — NOT "no surrounding whitespace", because the prefix
+  arrow-type form `[-> A B]` glues `->` to a bracket at 275 corpus
+  sites and must stay the arrow. A spaced ` -> ` is always the
+  separator.
+- **(b)** the HALF-glued shapes (`a-> b`, a trailing `foo->`) are
+  neither a name nor an arrow, and `defn` / the `def :=` path now
+  say "half-glued arrow". Two manifestations still lack the hint:
+  `[foo-> 1]` gives a plain `Unbound variable`, and
+  `spec e-> Int -> Int` is accepted SILENTLY.
+
+So the silent-drop this entry is *about* is fixed for the glued case
+and survives in two half-glued spots. See
+`.claude/rules/prologos-syntax.md` for the current rule.
+
+**The `-to-` names in the OCapN port are not wrong** — they read
+fine and there is no reason to churn them. They are simply no longer
+*required*.
+
+**Kept rather than deleted** because the diagnosis story is still
+the useful part: a name that silently fails to bind, found only by
+renaming it. That shape recurs; this entry is how it was first seen.
+
+### (superseded) the original advice
+
 For now: codebase convention is to never use `->` in identifiers.
 Use `-to-` or similar. The Common Lisp / Scheme convention of
 `x->y` for converters is incompatible with Prologos's reader.
