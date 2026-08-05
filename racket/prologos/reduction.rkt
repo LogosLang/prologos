@@ -1829,7 +1829,11 @@
     ;; ruling forbids.
     (define (bcast-lift v s)
       (let* ([inner (select-bcast-inner s)]
-             [name (select-step-name s)]
+             ;; same diagnostic-label guard as the typing twin: a sub inner's
+             ;; `select-step-name` is the RAW LIST — never interpolate it.
+             ;; only a LIST takes the stand-in — numbers are real labels
+             ;; (see the typing twin's correction note)
+             [name (let ([n (select-step-name s)]) (if (pair? n) '|{…}| n))]
              [r (rrb-of v name)])
         (expr-rrb
          (rrb-from-list
@@ -1841,6 +1845,12 @@
     ;; rather than re-deciding it, so a third sort cannot inherit path
     ;; semantics here silently.
     (define (bcast-apply v inner)
+      ;; ⭐ Q_U20 [owner, 2026-08-05] — the ATOMIC TWIN of typing's rule: a SUB
+      ;; inner ASSEMBLES, always, regardless of the outer selector's sort. The
+      ;; symbol path below mirrors the top-level sort dispatch unchanged.
+      (if (select-sub-step? inner)
+          (entries->value
+           (append-map (lambda (b) (branch-entries v b '())) (cdr inner)))
       (let ([entries (branch-entries v (list inner) '())])
         (case sort
           [(block) (entries->value entries)]
@@ -1851,7 +1861,7 @@
                         (expr-string
                          (format "select: a broadcast step must yield exactly ONE component per element, got ~a (malformed carrier)"
                                  (length entries))))))]
-          [else (select-sort-unhandled 'select-bcast-apply sort)])))
+          [else (select-sort-unhandled 'select-bcast-apply sort)]))))
     ;; D4.P3b — one branch's entries at the CURRENT level, mirroring
     ;; typing-core's select-branch-entries over champs (the same shared
     ;; syntax.rkt walk classifies steps, so meaning cannot drift from the

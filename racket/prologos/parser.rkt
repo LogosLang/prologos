@@ -891,12 +891,15 @@
     ;; asserts a fact about the codebase can be WRONG about the codebase, and
     ;; this one was; the remedy half is true and is what remains.
     [(bcast-step-binder)
-     (parse-error loc
-                  (format (string-append
-                           "`:~a` was read as a broadcast step, but this is a BINDER "
-                           "position — write the annotation spaced (`name : ~a`).")
-                          f f)
-                  #f)]
+     ;; ⚠ the payload may be the `:{` mint's LIST (B2's fix keeps it wrapped so
+     ;; it reaches this arm) — render `{…}`, never the raw stx-bearing datum.
+     (let ([f* (if (pair? f) '|{…}| f)])
+       (parse-error loc
+                    (format (string-append
+                             "`:~a` was read as a broadcast step, but this is a BINDER "
+                             "position — write the annotation spaced (`name : ~a`).")
+                            f* f*)
+                    #f))]
     [(postfix-kw)
      (parse-error loc (format "keyword index `[:~a]` was retired — spell the field `m.~a` or use `[get m :~a]`" f f f) #f)]
     [(postfix-empty)
@@ -1227,6 +1230,28 @@
             ;; anyway, since it requires byte-adjacency to a base.)
             [(and (eq? (head-of it) '$bcast-step) cur cur-subbed?)
              (fail "a broadcast step cannot follow a `.{…}` sub-block — the sub-block is a branch's terminal step")]
+            ;; ⭐ D4.P4d-0 slices 3+4 (DEFERRED 42+46): the SUB-INNER ω — the
+            ;; mint's payload is the WHOLE brace group. Parse its contents into
+            ;; branches exactly as the terminal `.{…}` sub-block does, and wrap:
+            ;; `(@bcast (@sub . branches))`. Pushed with cur-subbed?=#f
+            ;; DELIBERATELY: the sub rides INSIDE the wrapper (Q_U7, one step),
+            ;; so a trailing step may follow — that is the §3.2.1 extent pair's
+            ;; first member, `users:{0.userName^}.0`.
+            [(and (eq? (head-of it) '$bcast-step)
+                  (pair? (cdr it))
+                  (pair? (cadr it))
+                  (eq? (head-of (cadr it)) '$select-brace))
+             ;; ⚠ NO empty-payload arm here, deliberately: `segment-select-items`
+             ;; already refuses an empty block with its own guided per-command
+             ;; error ("empty sub-block — selects nothing"), measured on `xs:{}`.
+             ;; A second check would be the belt-and-suspenders shape.
+             (let-values ([(subs suberr) (segment-select-items (cdr (cadr it)) loc #t)])
+               (if suberr
+                   (values #f suberr)
+                   (let ([step (cons '@sub subs)])
+                     (if cur
+                         (loop (cdr items) (cons (make-select-bcast step) cur) #f acc)
+                         (loop (cdr items) (list (make-select-bcast step)) #f (closed-acc))))))]
             ;; ⭐ D4.P4d-0 slice 2 — THE PAYLOAD SHAPE GUARD (owner: site-local;
             ;; the class-level parse-path guard is DEFERRED 53). The arm below
             ;; does `(symbol->string (cadr it))`; without this guard a list,

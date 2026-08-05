@@ -4489,3 +4489,110 @@
     ;; and it must REPORT, not swallow — the guard-that-silences is worse
     (check-true (ormap (lambda (s) (regexp-match? #rx"broadcast step" s)) out)
                 (format "the refusal must be reported: ~a → ~a" form out))))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4d-0 slices 3+4 — THE `:{…}` MINT (DEFERRED 42) + THE SUB-INNER LIFT
+;; (DEFERRED 46, Q_U20). Landed TOGETHER: minting without the lift would turn
+;; an honest "Unbound variable" into carrier-dependent silent accepts.
+;; ---------------------------------------------------------------------------
+
+(test-case "P4d-0: `users:{t r}` MINTS the wrapping datum — Q_U7's second canonical example"
+  (check-equal? (read-all-forms-string "users:{t r}")
+                '((users ($bcast-step ($select-brace t r)))))
+  ;; nests after an ordinal ω — the mixed-mint shape from the corpus
+  (check-equal? (read-all-forms-string "users:0:{userName}")
+                '((users ($bcast-step :0) ($bcast-step ($select-brace userName))))))
+
+(test-case "P4d-0: the mint keys on the colon GLUED TO THE OPENER — the near-misses must not move"
+  ;; ⚠ THE DISCRIMINATOR THE AUDIT NAMED AS REQUIRED: `def b: [List Nat]` (colon
+  ;; glued to the NAME, space before the opener) works today; base-adjacency
+  ;; alone would break it. Each expectation below is the MEASURED HEAD datum.
+  (check-equal? (read-all-forms-string "users :{t r}")
+                '((users : ($select-brace t r))))          ;; spaced colon: unchanged
+  ;; ⚠ my first draft of this assertion compared the call TO ITSELF — the same
+  ;; tautology class caught twice already this arc. MEASURED datum below.
+  (check-equal? (read-all-forms-string "def b: [List Nat] := '[3N 4N]")
+                '((def b : (List Nat) := ($list-literal ($nat-literal 3) ($nat-literal 4)))))
+  (check-equal? (read-all-forms-string "defn f [x: Int] : Int x")
+                '((defn f (x : Int) : Int x)))
+  (check-equal? (read-all-forms-string "x{a b}")
+                '((x ($select-brace a b))))                ;; plain select block: unchanged
+  (check-equal? (read-all-forms-string "{A : Type}")
+                '(($brace-params A : Type))))              ;; spaced implicit binder: unchanged
+
+(test-case "P4d-0/Q_U20: `xs:{a b}` NARROWS per element — a PVec of assembled rows"
+  (define out
+    (map (lambda (r) (format "~a" r))
+         (process-string-ws
+          (string-append "ns su1\n"
+                         "def xs := @[{:a 1 :b \"x\" :c true} {:a 2 :b \"y\" :c false}]\n"
+                         "def ys := xs:{a b}\nys\ndef after := 42"))))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"ys : \\[PVec \\{:a Int :b String\\}\\] defined" s)) out)
+              (format "expected the NARROWED row type; got ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx":a 1" s)) out)
+              (format "expected the narrowed VALUES; got ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-0/Q_U20: the CONVERSE holds — a symbol inner still EXTRACTS"
+  ;; The audit's warning: re-pointing the lift at the assemble machinery
+  ;; wholesale would turn `xs:a` into `[PVec {:a Int}]`. Pin the extract.
+  (define out
+    (map (lambda (r) (format "~a" r))
+         (process-string-ws
+          "ns su2\ndef xs := @[{:a 1 :b \"x\"}]\ndef ys := xs:a\nys")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"ys : \\[PVec Int\\] defined" s)) out)
+              (format "a symbol inner must EXTRACT, not assemble: ~a" out)))
+
+(test-case "P4d-0: an EMPTY `:{}` refuses PER-COMMAND, and the file continues"
+  (define out
+    (map (lambda (r) (format "~a" r))
+         (process-string-ws
+          "ns su3\ndef before := 1\ndef xs := @[{:a 1}]\ndef q := xs:{}\ndef after := 42")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"before : Int defined" s)) out)
+              (format "whole-file abort on empty :{}: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4d-0 — THE TWO BLOCKING FIXES from the adversarial verify (wf_7d93efe5).
+;; Both were invisible to the full suite, the acceptance files AND the corpus
+;; A/B, because no test or corpus file spells `^:{` or a binder `:{`.
+;; ---------------------------------------------------------------------------
+
+(test-case "P4d-0/B1: dissolve + ω-sub in mixed keyed company is PER-COMMAND, not an abort"
+  ;; `select-branch-top-keys`'s bcast arm spliced the sub's inner keys where the
+  ;; branch walks contribute ONE KEYLESS component; the drift leaked past L4 and
+  ;; `select-assemble-row` sorted a #f label — symbol<?: contract violation,
+  ;; whole file lost. Now: top-keys says (#f), L4 refuses honestly.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns b1p\ndef before := 1\ndef x := {:k 5 :users @[{:a 1 :b 2}]}\nx{k users^:{a b}}\ndef after := 42")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"before : Int defined" s)) out)
+              (format "WHOLE-FILE ABORT: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"mixed keyed/keyless" s)) out)
+              (format "expected the honest L4 refusal: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-0/B1: the ORDER-SWAPPED sibling no longer silently DROPS the kept key"
+  ;; `x{users^:{a b} k}` typed ⟨…⟩ and silently discarded `:k` at 0 errors —
+  ;; the same top-keys root, grade 2. Now the honest mixed-sorts refusal.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns b1q\ndef x := {:k 5 :users @[{:a 1 :b 2}]}\ndef r := x{users^:{a b} k}\ndef after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"r : ⟨" s)) out)
+               (format "the kept key must not be silently demoted to a tuple: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"mixed keyed/keyless|after : Int defined" s)) out)))
+
+(test-case "P4d-0/B2: a `:{` in BINDER position refuses LOUDLY — it must never define"
+  ;; `unwrap-bcast-step` unwrapped ANY pair payload, injecting a naked
+  ;; $select-brace past every refusal arm: `defn f [x:{:a Int}] x` silently
+  ;; DEFINED a garbled Pi at zero errors. Symbol-only unwrap restores the loud
+  ;; per-command refusal, for defn AND defr.
+  (for ([src (in-list (list "defn f [x:{:a Int}] x" "defn f2 [x:{Int}] x" "defr foo2 [?x:{a}]"))])
+    (define out (map (lambda (r) (format "~a" r))
+                     (process-string-ws (string-append "ns b2p\ndef before := 1\n" src "\ndef after := 42"))))
+    (check-false (ormap (lambda (s) (regexp-match? #rx"defined\\." s))
+                        (filter (lambda (s) (not (regexp-match? #rx"before|after" s))) out))
+                 (format "~a must NOT define anything: ~a" src out))
+    (check-true (ormap (lambda (s) (regexp-match? #rx"BINDER position|expected symbol" s)) out)
+                (format "~a must refuse with a guided message: ~a" src out))
+    (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out))))

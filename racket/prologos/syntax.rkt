@@ -1205,7 +1205,19 @@
            ;; `select-bcast-step?`'s header. The arm was written on the reasoning
            ;; that a surface rule is not a representation invariant; that
            ;; reasoning was right and its premise was wrong.
-           [(bcast) (select-branch-top-keys (cons (select-bcast-inner s) rest))]
+           ;; ⚠ D4.P4d-0 (B1, adversarial verify): delegation is right for a
+           ;; SYMBOL inner and WRONG for a SUB inner — recursing into the sub
+           ;; arm SPLICES the inner keys `(a b)`, while the branch walks
+           ;; contribute ONE KEYLESS component (`select-step-output-name` says
+           ;; #f). That drift leaked past the L4 gates in three grades, the
+           ;; worst a `symbol<?` WHOLE-FILE ABORT on `x{k users^:{a b}}` —
+           ;; `select-assemble-row` sorting a #f label. One keyless component,
+           ;; matching what typing and reduction actually produce.
+           [(bcast)
+            (let ([inner (select-bcast-inner s)])
+              (if (select-sub-step? inner)
+                  (list #f)
+                  (select-branch-top-keys (cons inner rest))))]
            [(caret)
             (let ([c (select-step-cont s)])
               (cond

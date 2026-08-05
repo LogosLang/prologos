@@ -1010,14 +1010,36 @@
 ;; `d:0` reported "ordinal `0` (branch `0.0`)". `select-elem-of` does its own
 ;; append for the CARRIER failure, where naming the ω step IS correct.
 (define (select-bcast-lift ctx tm s path seen sort)
-  (let ([inner (select-bcast-inner s)]
-        [name (select-step-name s)])
+  (let* ([inner (select-bcast-inner s)]
+         ;; ⚠ the DIAGNOSTIC label: `select-step-name` on a sub inner returns the
+         ;; RAW LIST (DEFERRED 40/46's shared root), and interpolating that into
+         ;; a carrier message is DEFERRED 49's shape widened. A readable stand-in
+         ;; for the sub; the symbol path is unchanged.
+         ;; ⚠ my first cut mapped every NON-SYMBOL to the stand-in — which
+         ;; broke ORDINAL diagnostics (`users:0` reported `:{…}`; a NUMBER is a
+         ;; legitimate label, the formatter prints `:0`). Only a LIST (the raw
+         ;; sub) takes the stand-in. Caught by the P4c-4b three-sub-cases pin.
+         [name (let ([n (select-step-name s)]) (if (pair? n) '|{…}| n))])
     (let-values ([(elem ef) (select-elem-of ctx tm path sort name)])
       (if ef
           (values #f ef)
-          (let-values ([(bt bf) (select-project ctx (whnf elem) (list (list inner))
-                                                sort path)])
-            (if bf (values #f bf) (values (expr-PVec bt) #f)))))))
+          ;; ⭐ Q_U20 [owner, 2026-08-05]: A SUB INNER ASSEMBLES AT 'block,
+          ;; ALWAYS. The lift threads ONE sort and the two inner kinds need
+          ;; OPPOSITE ones — a symbol inner EXTRACTS ('path; 'block would wrap
+          ;; `xs:a` as `[PVec {:a T}]`), a sub inner ASSEMBLES ('block; 'path
+          ;; fails its one-component constraint). So the sort here is a
+          ;; PER-INNER-KIND semantics RULE, not inherited from the outer
+          ;; selector. `users:{a b}` over `[PVec {:a A :b B :c C}]` is a PVec of
+          ;; NARROWED rows — the terminal-`@sub` machinery of the below walks,
+          ;; applied per element.
+          (if (select-sub-step? inner)
+              (let-values ([(comps cf) (select-level-components ctx (whnf elem)
+                                                                (cdr inner) path 'block)])
+                (if cf (values #f cf)
+                    (values (expr-PVec (select-assemble-row comps)) #f)))
+              (let-values ([(bt bf) (select-project ctx (whnf elem) (list (list inner))
+                                                    sort path)])
+                (if bf (values #f bf) (values (expr-PVec bt) #f))))))))
 
 ;; select-project — the node's typing walk (Q_T1's one walk, two consumers).
 ;; D4.P3c: a LEVEL now assembles either sort: all-keyed components → a
