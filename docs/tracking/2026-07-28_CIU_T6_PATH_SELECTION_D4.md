@@ -5574,9 +5574,28 @@ they are the first end-to-end user-visible broadcast.
 prior P4c slices carried:
 1. **The corpus A/B becomes load-bearing.** Every earlier slice could lean on
    "default `'()` ⇒ byte-identical"; that argument is gone. Re-derive the
-   mintable-file set at HEAD rather than inheriting P4c-4b's 12, pin BOTH legs
-   to ONE `git archive` snapshot (the owner's tree is dirty), diff FULL OUTPUT,
-   and carry a CONTROL file that cannot mint to discriminate counter drift.
+   mintable-file set at HEAD rather than inheriting P4c-4b's 12, diff FULL
+   OUTPUT, and carry a CONTROL file that cannot mint to discriminate counter
+   drift.
+   ⚠⚠ **CORRECTED 2026-08-04, WITHIN THE HOUR, BY MEASUREMENT — this obligation
+   as first written produced a FALSE ALL-CLEAR.** It said *"pin BOTH legs to ONE
+   `git archive` snapshot (the owner's tree is dirty)"*, inheriting P4c-4b's
+   method wholesale. **Snapshot the CODE; run the INPUTS from the WORKING TREE.**
+   The reason is specific and fatal: `lib/examples/foray.prologos` is the ONLY
+   file G2 changes, and it is **owner WIP — 114 lines committed vs 946 in the
+   working tree** (measured). A snapshot-INPUT A/B therefore compares a corpus
+   that **does not contain the feature** and reports **ZERO diffs across all 304
+   files** — a total false all-clear on the one slice where production behaviour
+   actually moves. Measured against a real arm-deleted build, working-tree inputs
+   give `304 compared · 1 CHANGED · foray.prologos, 13 of 201 forms`.
+   ⚠ The dirty tree is still a hazard — it just moves: report **which side of the
+   committed line each diff falls on**, so owner WIP cannot be read as a G2
+   effect. Do NOT `git stash`.
+   ⚠ And the **"12 mintable files" figure is NOT REPRODUCIBLE from its stated
+   criterion** — the recorded rule ("an `ident`/`)`/`]`/`}` byte-adjacent to
+   `:`") selects **161 of 163** files literally, **143** with comments stripped,
+   and the true token-level predicate selects **3**. Whatever produced 12 was
+   neither. Re-derive; do not inherit the number OR the rule.
 2. **The battery inverts.** P4c-4a's pins were mutation-verified AGAINST the
    grant seam and one is named *"the flip is INERT AT DEFAULT"*. Enumerate the
    pins that go RED **and, separately, the pins that go VACUOUS** — the second
