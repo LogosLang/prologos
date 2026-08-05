@@ -876,9 +876,18 @@
 ;; to MERGE adjacent wrappers — the normalization pass 4b exists to forbid), and
 ;; the per-step grade field (taxes the whole landed vocabulary for one grade).
 ;;
-;; ⚠ A WRAPPER NEVER HEADS A BRANCH — branch-initial `:` stays refused in v1
-;; (W2 / spec §7.3). Every branch-shaped walk may therefore treat `'bcast` as
-;; unreachable-at-head, and the ones that do say so at their arm.
+;; ⚠ CORRECTED AT D4.P4c-4b — "A WRAPPER NEVER HEADS A BRANCH" IS FALSE, and it
+;; was asserted at FOUR sites, three of which justified an arm by it.
+;; The claim conflated two different things. W2 / spec §7.3 refuses branch-initial
+;; `:` in a BLOCK (`x{:name}`) — a SURFACE rule. It says nothing about a one-step
+;; `'path` branch, and Q_U7's own `users:name → [(@bcast name)]` makes the wrapper
+;; the branch HEAD for the headline spelling: `$select-path` consumes the SUBJECT
+;; itself and hands `segment-select-items` only the steps, so the ω step arrives
+;; first with no preceding step. Measured — the first cut of the parser arm
+;; refused exactly that and reported "needs a preceding subject" for `users:name`.
+;; So `'bcast` IS reachable at head, the arms that were "written rather than
+;; omitted" are live, and the reasoning that wrote them (a surface rule is not a
+;; representation invariant) was right for a reason its own premise got wrong.
 (define (select-bcast-step? s) (and (pair? s) (eq? (car s) '@bcast)))
 
 ;; The ω step's VALUE-level semantics (map the wrapped step over the container)
@@ -1188,12 +1197,13 @@
             (if (null? rest) (list #f) (select-branch-top-keys rest))]
            [(sub) (append-map select-branch-top-keys (cdr s))]
            ;; D4.P4c-3 (Q_U7): ω is key-transparent — the component set is the
-           ;; WRAPPED step's, with the same rest. ⚠ A wrapper never HEADS a
-           ;; branch in v1 (branch-initial `:` is refused, W2/spec §7.3), so
-           ;; this arm is unreachable-at-head today; it is written rather than
-           ;; omitted because the refusal is a SURFACE rule, and a surface rule
-           ;; is not a representation invariant — P5's factoring rewrites
-           ;; branches and could produce one.
+           ;; WRAPPED step's, with the same rest. ⚠ POLARITY CORRECTED at
+           ;; P4c-4b: this arm is NOT "unreachable-at-head today" — it is REACHED
+           ;; by the headline spelling `users:name`, because `$select-path`
+           ;; consumes the subject and the ω step arrives first. See
+           ;; `select-bcast-step?`'s header. The arm was written on the reasoning
+           ;; that a surface rule is not a representation invariant; that
+           ;; reasoning was right and its premise was wrong.
            [(bcast) (select-branch-top-keys (cons (select-bcast-inner s) rest))]
            [(caret)
             (let ([c (select-step-cont s)])

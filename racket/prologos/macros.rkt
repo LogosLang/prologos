@@ -330,6 +330,7 @@
          rewrite-implicit-map
          rewrite-dot-access
          access-sentinel?   ;; D4.P3a: exported so the fold-fixpoint obligation is test-pinnable
+         bcast-step?        ;; D4.P4c-4b: same reason — the ω sentinel's membership is pinned
          map-literal-brace-params?
          rewrite-nil-dot-access
          rewrite-infix-operators
@@ -6110,6 +6111,16 @@
 (define (nil-dot-key? x)
   (and (list? x) (= (length x) 2) (eq? (car x) '$nil-dot-key)))
 
+;; D4.P4c-4b: the ω/broadcast reader sentinel, `($bcast-step |:name|)`.
+;; ⚠ ITS PAYLOAD IS COLON-LEADING, unlike `$dot-access`'s BARE symbol — the mint
+;; wraps the keyword/colon-annotation token verbatim precisely so the lexeme is
+;; never re-derived. The fold below therefore passes the payload through WHOLE
+;; and the parser does the one interpretation; splitting that across both layers
+;; would be a second recognizer, which is the F1b.7g drift class this file has
+;; already paid for repeatedly.
+(define (bcast-step? x)
+  (and (list? x) (= (length x) 2) (eq? (car x) '$bcast-step)))
+
 ;; Check if a datum element is a ($postfix-index key) sentinel
 (define (postfix-index? x)
   (and (list? x) (= (length x) 2) (eq? (car x) '$postfix-index)))
@@ -6141,11 +6152,23 @@
 ;; only MARK (`xs[0]` yields two siblings), and this fold is what joins them.
 ;; So a new selection sentinel owes THREE things, not one: a predicate, an entry
 ;; here, and a fold arm in `rewrite-dot-access` below.
+;; ⚠ D4.P4c-4b — `$bcast-step` JOINS HERE, and this membership is what Q_U16's
+;; ruling item 2 buys: the fold gate below is `access-sentinel?`'s ONLY
+;; production consumer, so joining it inherits all FOUR `rewrite-dot-access`
+;; seats at once (the main preparse, map-literal contents, the `|>` expander,
+;; the `$mixfix` expander) — which is exactly what the rejected parser-side
+;; fusion escape could not do.
+;; ⚠ It was listed as a P4c-2 deliverable and DID NOT LAND, while P4c-2 closed ✅
+;; (DEFERRED 37). It read as closed because `broadcast-access?` in this list is
+;; the RETIRED `$broadcast-access` — a DIFFERENT head. Not a live defect until
+;; now: with the enable-set empty no sentinel survived the reader post-pass, so
+;; the fold never met one.
 (define (access-sentinel? x)
   (or (dot-access? x) (dot-key? x)
       (nil-dot-access? x) (nil-dot-key? x)
       (postfix-index? x) (broadcast-access? x)
-      (dot-brace? x) (select-brace? x)))
+      (dot-brace? x) (select-brace? x)
+      (bcast-step? x)))
 
 ;; Unified rewrite for ALL access sentinels in a flat datum list.
 ;; Handles: $dot-access, $nil-dot-access, $postfix-index (live) and the
@@ -6242,6 +6265,34 @@
                 (let* ([field (cadr (car elems))]
                        [target (car acc)]
                        [wrapped `($select-path ,target ,field)])
+                  (loop (cdr elems) (cons wrapped (cdr acc)))))]
+           ;; ⭐ D4.P4c-4b — THE ω ARM. Deliberately the `$dot-access` arm above
+           ;; VERBATIM, except the payload item rides WHOLE (`,(car elems)`)
+           ;; instead of unwrapped (`,field`). Four obligations, all met by that
+           ;; one difference:
+           ;;  · FIXPOINT — the emitted head is `$select-path`, which is NOT an
+           ;;    `access-sentinel?` member, so the result cannot re-trigger this
+           ;;    fold. That is the whole of the fixpoint obligation: a
+           ;;    sentinel-headed result would make `preparse-expand-subforms`
+           ;;    re-enter and swallow one LEFT sibling per pass — the P1b-iii bug
+           ;;    that SILENTLY DROPPED a `defn` clause at zero errors.
+           ;;  · BROADCAST-NESS SURVIVES to segmentation, because the sentinel is
+           ;;    still there to be seen.
+           ;;  · COMPOSES with any base, including a `$select-path` base — the
+           ;;    fold already nests, so `a.b:name` becomes
+           ;;    `($select-path ($select-path a b) ($bcast-step |:name|))`, one
+           ;;    carrier per LEVEL. `users:0:userName` is two sibling sentinels
+           ;;    and therefore two levels (the L1 fusion case).
+           ;;  · The payload is NOT re-derived here — see `bcast-step?`.
+           ;; ⚠ `(null? acc)` = branch-initial `:`, which Q_U7 REFUSES in v1.
+           ;; Left in place (not folded) so the parser's own arm reports it with
+           ;; a guided per-command message, exactly as the bare-sentinel siblings
+           ;; do; a fold-time refusal here would have no srcloc to point at.
+           [(bcast-step? (car elems))
+            (if (null? acc)
+                (loop (cdr elems) (cons (car elems) acc))
+                (let* ([target (car acc)]
+                       [wrapped `($select-path ,target ,(car elems))])
                   (loop (cdr elems) (cons wrapped (cdr acc)))))]
            [(nil-dot-access? (car elems))
             (if (null? acc)

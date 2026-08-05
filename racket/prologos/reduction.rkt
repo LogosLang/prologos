@@ -1810,8 +1810,12 @@
                [else
                 (list (cons (or (and cont (select-cont-rename cont)) name)
                             (below-value hit rest (append seen (list s)))))]))]
-          ;; D4.P4c-3 (Q_U7): a wrapper never HEADS a branch in v1 (branch-initial
-          ;; `:` is refused, W2/spec §7.3), so this is unreachable-at-head today.
+          ;; ⚠ POLARITY CORRECTED at D4.P4c-4b: NOT unreachable-at-head — `users:name`
+          ;; reaches the branch head ($select-path consumes the subject). Reduction
+          ;; KEEPS its raise here deliberately: typing now refuses through its
+          ;; failure slot, so arriving at the VALUE layer with an ω step is a
+          ;; compiler-invariant violation, not a user error. Two arms, two
+          ;; questions — not belt-and-suspenders.
           ;; It is written, not omitted: the refusal is a SURFACE rule and a surface
           ;; rule is not a representation invariant — P5's factoring rewrites
           ;; branches. Loud not-yet rather than a guess at semantics P4c-4 owns.

@@ -264,6 +264,31 @@
   (define remedies
     "seal the subject against a schema (`the Schema subj`) or validate it against one")
   (case (select-fail-kind fail)
+    ;; ⚠ D4.P4c-4b — THE NOT-YET IS A USER ERROR, NOT A COMPILER DEFECT, AND IT
+    ;; NEEDED ITS OWN CHANNEL. `select-bcast-not-yet` raises a raw `error`, and
+    ;; `process-command/solve-guard` catches ONLY `exn:prologos-solve` — it says
+    ;; so deliberately ("any other raise still crashes loudly"). So the moment
+    ;; P4c-4b's producer bridge makes `(@bcast …)` constructible, that raise
+    ;; escapes to the file loop and takes EVERY command in the file with it.
+    ;; Unreachable before the bridge; the bridge is exactly what reaches it.
+    ;;
+    ;; The root cause is two propositions sharing one channel: "the compiler is
+    ;; broken" (`select-step-kind-unhandled` — a raise is RIGHT) and "the user
+    ;; wrote something we have not built yet" (a raise is WRONG). Split them:
+    ;; typing REFUSES through the failure slot these walks already thread
+    ;; (`(values #f cf)`), so the file continues; reduction KEEPS its raise,
+    ;; because reaching the value layer after typing refused IS a compiler
+    ;; invariant violation. That is not belt-and-suspenders — the two arms now
+    ;; answer different questions.
+    [(bcast-not-yet)
+     (format
+      (string-append
+       "broadcast `:~a` — the ω value semantics land at CIU T6 D4.P4c-4c "
+       "(PVec broadcast + the L1/extent law pins). The step is parsed and typed "
+       "as a broadcast; only its evaluation is unbuilt. Until then spell it "
+       "`[map [fn [m] m.~a] xs]`~a")
+      (or label "…") (or label "k")
+      (if (null? path) "" (format " — in branch `~a`" branch-str)))]
     [(miss-closed)
      (string-append
       (format-closed-row-miss row label names)

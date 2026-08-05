@@ -1033,7 +1033,15 @@
                         ;; ⚠ Lands ATOMICALLY with reduction.rkt's twin (the
                         ;; Exhaustive-Walkers twin-drift class this file already
                         ;; records at the `@ord` arm above).
-                        [(bcast) (select-bcast-not-yet 'select-walk-to-leaf s)]
+                        ;; ⚠ D4.P4c-4b: REFUSE through the failure slot, do not
+                        ;; RAISE. A raise here escapes `process-command/solve-guard`
+                        ;; (which catches only `exn:prologos-solve`, deliberately)
+                        ;; and aborts the WHOLE FILE the moment the producer bridge
+                        ;; makes `(@bcast …)` constructible. See
+                        ;; `format-select-fail`'s `bcast-not-yet` arm.
+                        [(bcast)
+                         (values #f (select-fail 'bcast-not-yet path
+                                                 (select-step-name s) tm))]
                         [else (select-step-kind-unhandled 'select-walk-to-leaf s)])])
           (cond
             [ff (values #f ff)]
@@ -1116,13 +1124,23 @@
                     (let ([label (or (and cont (select-cont-rename cont)) name)])
                       (values (list (cons label (record-field bt 'present)))
                               #f))))])))]
-      ;; D4.P4c-3 (Q_U7): a wrapper never HEADS a branch in v1 (branch-initial
-      ;; `:` is refused, W2/spec §7.3), so this is unreachable-at-head today.
+      ;; ⚠ POLARITY CORRECTED at D4.P4c-4b: this is NOT unreachable-at-head.
+      ;; `users:name` REACHES it — `$select-path` consumes the subject, so the ω
+      ;; step arrives first. W2/spec §7.3 refuses branch-initial `:` in a BLOCK,
+      ;; which is a surface rule about `x{:name}` and not about a `'path` branch.
       ;; It is written, not omitted: the refusal is a SURFACE rule and a surface
       ;; rule is not a representation invariant — P5's factoring rewrites
       ;; branches. Loud not-yet rather than a guess at semantics P4c-4 owns.
+      ;; ⚠ D4.P4c-4b: refuse through the failure slot, not a raise — see
+      ;; `format-select-fail`'s `bcast-not-yet` arm. ⚠ And the "unreachable at
+      ;; head" claim above is FALSE from P4c-4b on: Q_U7's own
+      ;; `users:name → [(@bcast name)]` plus the parser's exactly-one-branch gate
+      ;; makes the wrapper the branch HEAD for the headline spelling. The arm was
+      ;; written anyway, for the reason the comment gives — that reasoning was
+      ;; right and its premise was wrong.
       [(eq? (select-step-kind (car b)) 'bcast)
-       (select-bcast-not-yet 'select-branch-entries (car b))]
+       (values #f (select-fail 'bcast-not-yet path
+                               (select-step-name (car b)) tm))]
       [else (select-step-kind-unhandled 'select-branch-entries (car b))])))
 
 ;; The COMPONENTS a dissolved head splices to its level: a terminal
@@ -1167,8 +1185,11 @@
     ;; Kept explicit so the guard names the kind rather than reporting it as
     ;; unknown, which would be false: it IS known, it is just not yet meaningful
     ;; at the value level.
+    ;; ⚠ D4.P4c-4b: refuse through the failure slot, not a raise — see
+    ;; `format-select-fail`'s `bcast-not-yet` arm.
     [(eq? (select-step-kind (car steps)) 'bcast)
-     (select-bcast-not-yet 'select-below-field (car steps))]
+     (values #f (select-fail 'bcast-not-yet path
+                             (select-step-name (car steps)) ft))]
     [else (select-step-kind-unhandled 'select-below-field (car steps))]))
 
 (define (record-value-bound ctx rec [src (dyn-row-source 'dyn-row-values)])

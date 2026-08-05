@@ -4049,6 +4049,82 @@
     (check-equal? (read-all-forms-string "def q := users:name")
                   '((def q := users :name)))))
 
+;; ============================================================
+;; D4.P4c-4b — the fold arm + the producer bridge + the not-yet CHANNEL
+;; ============================================================
+;; The chain, end to end: reader PRESERVES the sentinel (needs a grant) → the
+;; fold FUSES it onto its base → the parser CONSTRUCTS `(@bcast step)` → typing
+;; REFUSES through the failure slot the walks already thread. The last link is
+;; the one that makes this landable: `select-bcast-not-yet` RAISES, and
+;; `process-command/solve-guard` catches only `exn:prologos-solve` (deliberately
+;; — "any other raise still crashes loudly"), so before this slice the producer
+;; bridge would have turned a not-yet into a WHOLE-FILE ABORT.
+
+(define (bcast-e2e src)
+  (parameterize ([broadcast-enabled-contexts '(def)])
+    (map (lambda (r) (format "~a" r))
+         (process-string-ws (string-append "ns bcast-e2e\ndef users := {:name \"alice\"}\n" src)))))
+
+(test-case "P4c-4b: a broadcast goes END TO END, and the file CONTINUES"
+  (define out (bcast-e2e "def q := users:name\ndef after := 42"))
+  ;; the broadcast reports as a per-command error…
+  (check-true (ormap (lambda (s) (regexp-match? #rx"ω value semantics land" s)) out)
+              (format "expected the guided not-yet; got ~a" out))
+  ;; …and — THE POINT — the command AFTER it still runs. Before the channel fix
+  ;; this line was lost with the whole file.
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)
+              (format "the file did not continue past the broadcast: ~a" out)))
+
+(test-case "P4c-4b: the payload's THREE sub-cases, two of which would be silent"
+  ;; `$bcast-step` carries the token VERBATIM, so the payload is COLON-LEADING
+  ;; (`|:name|`) where `$dot-access` carries a bare symbol. Merely stripping the
+  ;; colon and handing it to `plain-key?` is silently wrong twice over.
+  ;;
+  ;; (a) ORDINAL — Q_U16b rules `users:0` a legal ω step. Stripped-and-handed-on
+  ;; it would be a NOMINAL key named `0`.
+  (check-true (ormap (lambda (s) (regexp-match? #rx"broadcast `:0`" s))
+                     (bcast-e2e "def a := users:0")))
+  ;; (b) FLATTEN — `ident-continue?` admits `*`, so `tags*` arrives as ONE token
+  ;; and no scheme keyed on token TYPE can see the operator. Stripped, it passes
+  ;; `plain-key?` as a field LITERALLY NAMED `tags*`. Now loud.
+  (check-true (ormap (lambda (s) (regexp-match? #rx"\\(flatten\\) is not implemented yet" s))
+                     (bcast-e2e "def b := users:tags*")))
+  ;; (c) RE-KEY — the safe one: `^` routes to the ONE splitter exactly as the
+  ;; `$dot-access` twin does, so it lands on the pre-existing path-access
+  ;; refusal rather than becoming part of a field name.
+  (check-true (ormap (lambda (s) (regexp-match? #rx"re-keys the OUTPUT" s))
+                     (bcast-e2e "def c := users:name^alias"))))
+
+(test-case "P4c-4b: the DEFAULT is untouched — no grant, no change"
+  ;; The whole chain is gated on the grant. With none, the mint is still
+  ;; equivalent to not minting: the sentinel is unwrapped at the reader and
+  ;; nothing downstream ever sees it.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns bcast-off\ndef users := {:name \"alice\"}\ndef q := users:name\ndef after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"ω value semantics land" s)) out)
+               "the not-yet must be unreachable without a grant")
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4c-4b: `$bcast-step` is an access-sentinel, so it inherits the fold"
+  ;; Q_U16 ruling item 2 — membership is what buys all FOUR `rewrite-dot-access`
+  ;; seats, because the fold's gate is this predicate's only production consumer.
+  ;; It was a P4c-2 deliverable that did not land under a ✅ (DEFERRED 37); it
+  ;; read as closed because `broadcast-access?` in that list is the RETIRED
+  ;; `$broadcast-access`, a different head.
+  (check-true (access-sentinel? '($bcast-step |:name|)))
+  (check-true (bcast-step? '($bcast-step |:name|)))
+  (check-false (bcast-step? '($dot-access name)))
+  ;; the fold fuses onto the base, and the emitted head is NOT a sentinel —
+  ;; that is the whole fixpoint obligation (a sentinel-headed result makes
+  ;; preparse re-enter and swallow a LEFT sibling per pass)
+  (define folded (rewrite-dot-access '(users ($bcast-step |:name|))))
+  (check-equal? folded '($select-path users ($bcast-step |:name|)))
+  (check-false (access-sentinel? folded))
+  ;; and it NESTS one carrier per level, so `a.b:name` composes
+  (check-equal? (rewrite-dot-access '(a ($dot-access b) ($bcast-step |:name|)))
+                '($select-path ($select-path a b) ($bcast-step |:name|))))
+
 (test-case "P4c-4a: the seam reaches the REAL pipeline, not just the reader harness"
   ;; Level 2. The reader-harness pins above prove the walk; this proves the
   ;; parameter is actually in force through `process-string-ws`, which is the
@@ -4056,8 +4132,18 @@
   ;; `bcast-step` arm and reports the guided NOT-YET — the first time in this
   ;; track that message has been reachable from a test rather than from a
   ;; mutated build.
+  ;; ⚠ RETARGETED AT P4c-4b, and the reason is the slice's whole point. This pin
+  ;; originally asserted the PARSER's not-yet on a bare `def q := users:name`.
+  ;; Once the fold fuses the sentinel onto its base, the parser takes the
+  ;; `$select-path` arm and parses the SUBJECT — so the old spelling now reports
+  ;; `Unbound variable users`, because that fixture never defined it. The
+  ;; message did not disappear; it MOVED A LAYER, from parse to typing, which is
+  ;; exactly what the producer bridge was for. Pinned against a bound subject so
+  ;; it proves what it claims: the parameter is in force through the REAL
+  ;; pipeline, not just the reader harness.
   (parameterize ([broadcast-enabled-contexts '(def)])
-    (define out (with-handlers ([(lambda (_) #t) (lambda (e) (format "~a" e))])
-                  (format "~a" (run-ws-raw-last "def q := users:name"))))
-    (check-true (regexp-match? #rx"not implemented yet" out)
-                (format "expected the guided not-yet message, got: ~a" out))))
+    (define out (map (lambda (r) (format "~a" r))
+                     (process-string-ws
+                      "ns seam-l2\ndef users := {:name \"alice\"}\ndef q := users:name")))
+    (check-true (ormap (lambda (s) (regexp-match? #rx"ω value semantics land" s)) out)
+                (format "expected the guided not-yet, got: ~a" out))))

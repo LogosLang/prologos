@@ -22,7 +22,11 @@
                   select-key-step? select-sub-step? select-step-cont
                   select-cont-collapse? select-branch-top-keys
                   select-step-kind    ;; D4.P4a: the totality dispatcher
-                  select-bcast-inner) ;; D4.P4c-3 (Q_U7): unwrap the ω step
+                  select-bcast-inner  ;; D4.P4c-3 (Q_U7): unwrap the ω step
+                  ;; D4.P4c-4b: THE PRODUCER BRIDGE. Until this import the smart
+                  ;; constructor had ZERO production callers — the step kind and
+                  ;; all thirteen of its arms existed with nothing building one.
+                  make-select-bcast)
          ;; LET P4: the fused primitives moved here (the one definition —
          ;; macros.rkt consumes them at the datum level, and this module
          ;; requires macros.rkt, so they cannot live in this file).
@@ -1185,6 +1189,67 @@
                               (loop (cdr items) (list step) #f (closed-acc))))]
             [(plain-key? it)
              (loop (cdr items) (list it) #f (closed-acc))]
+            ;; ⭐ D4.P4c-4b — THE ω ARMS. Mirror the `$dot-access` arms below,
+            ;; with ONE extra duty: `$dot-access` carries a BARE symbol, while
+            ;; `$bcast-step` carries the token VERBATIM and so is COLON-LEADING
+            ;; (`|:name|`, `|:0|`, `|:tags*|`). Interpreting that payload is this
+            ;; site's job alone — the fold passes it through whole precisely so
+            ;; there is ONE recognizer, not two.
+            ;;
+            ;; ⚠ TWO OF THE THREE SUB-CASES WOULD BE SILENT if the colon were
+            ;; merely stripped and handed to `plain-key?` (measured by the
+            ;; P4c-4b mini-audit's critic):
+            ;;   · `users:0`  — `|0|` passes `plain-key?` and classifies as
+            ;;     `'key`: a NOMINAL key named `0` where an ORDINAL step was
+            ;;     written. Q_U16b rules `users:0` a legal ω step, so it must
+            ;;     become the NUMBER 0, not the symbol `|0|`.
+            ;;   · `users:tags*` — `|tags*|` passes `plain-key?` as a field
+            ;;     LITERALLY NAMED `tags*`, silently swallowing the `*` flatten
+            ;;     operator. `ident-continue?` admits `*`, so the reader hands it
+            ;;     over as one token and no scheme keyed on token TYPE can see
+            ;;     it. Refused here, guided — `*` is P4d's surface.
+            ;;   · `users:name^alias` — the `^` re-key family, which IS safe:
+            ;;     it routes to `split-step` exactly as the `$dot-access` twin
+            ;;     does, so the caret keeps its meaning.
+            ;; ⚠ `cur` MAY LEGITIMATELY BE #f HERE, and the first cut of this arm
+            ;; got that wrong. The `$select-path` caller consumes the SUBJECT
+            ;; itself (`(car args)`) and passes only `(cdr args)`, so for
+            ;; `users:name` the ω step is the FIRST item with no `cur` — the
+            ;; normal case, not a branch-initial error. Measured: the first cut
+            ;; reported "a broadcast step needs a preceding subject" for the
+            ;; headline spelling. So `cur = #f` STARTS a branch, exactly as the
+            ;; `plain-key?` arm above does. (Q_U7's W2 branch-initial refusal is
+            ;; a BLOCK rule — `x{:name}` — and the mint cannot produce one there
+            ;; anyway, since it requires byte-adjacency to a base.)
+            [(and (eq? (head-of it) '$bcast-step) cur cur-subbed?)
+             (fail "a broadcast step cannot follow a `.{…}` sub-block — the sub-block is a branch's terminal step")]
+            [(eq? (head-of it) '$bcast-step)
+             (let* ([payload (cadr it)]
+                    [s (symbol->string payload)]
+                    ;; the mint guarantees a colon-leading token; strip exactly one
+                    [bare (if (and (> (string-length s) 0) (char=? (string-ref s 0) #\:))
+                              (substring s 1)
+                              s)])
+               ;; push the ω step: EXTEND the branch when one is open, otherwise
+               ;; START one (closing the previous), mirroring `plain-key?`.
+               (define (push step)
+                 (if cur
+                     (loop (cdr items) (cons (make-select-bcast step) cur) #f acc)
+                     (loop (cdr items) (list (make-select-bcast step)) #f (closed-acc))))
+               (cond
+                 [(string=? bare "")
+                  (fail "a bare `:` is not a broadcast step — write the step it broadcasts, e.g. `users:name`")]
+                 ;; `*` FLATTEN rides inside the token (see above) — refuse it
+                 ;; here rather than letting it become a field name.
+                 [(regexp-match? #rx"[*]" bare)
+                  (fail (format "`*` (flatten) is not implemented yet on a broadcast step — `:~a` would read as a field literally named `~a`. Until Path Selection P4d, spell the flatten separately" bare bare))]
+                 ;; `^` RE-KEY — route to the ONE splitter, as `$dot-access` does
+                 [(regexp-match? #rx"\\^" bare)
+                  (split-step (string->symbol bare) push)]
+                 ;; Q_U16b: `users:0` IS a legal ω step — an ORDINAL, not a
+                 ;; nominal key named "0".
+                 [(regexp-match? #rx"^[0-9]+$" bare) (push (string->number bare))]
+                 [else (push (string->symbol bare))]))]
             [(and (eq? (head-of it) '$dot-access) cur cur-subbed?)
              (fail "a segment cannot follow a `.{…}` sub-block — the sub-block is a branch's terminal step")]
             ;; ---- `^`-bearing descent payload → the splitter
