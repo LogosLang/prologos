@@ -105,7 +105,6 @@
  ;; Track 7 Phase 7a: current-retry-unify removed (resolution.rkt direct call)
  add-constraint!
  collect-meta-ids
- get-wakeup-constraints
  ;; PPN 4C S2.b-iv (2026-04-24): retry-constraints-via-cells! retired —
  ;; vestigial polling mechanism with zero production callers (only test
  ;; invocations); architecturally replaced by event-driven set-latch
@@ -233,9 +232,6 @@
  read-trait-constraints
  read-hasmethod-constraints
  read-capability-constraints
- read-wakeup-registry
- read-trait-wakeup-map
- read-hasmethod-wakeup-map
  read-trait-cell-map
  read-hasmethod-cell-map
  ;; Phase 1b: Trait/HasMethod/Capability constraint cell IDs
@@ -245,9 +241,6 @@
  current-hasmethod-cell-map-cell-id
  current-capability-constraint-cell-id
  ;; Phase 1c: Wakeup registry cell IDs
- current-wakeup-registry-cell-id
- current-trait-wakeup-cell-id
- current-hasmethod-wakeup-cell-id
  ;; Track 2 Phase 2: Constraint status cell
  current-constraint-status-cell-id
  read-constraint-status-map
@@ -267,9 +260,6 @@
  ;; PPN 4C S2.b-iv (2026-04-24): collect-ready-{constraints,traits,
  ;; hasmethods}-via-cells retired — see comment block at body site.
  ;; Per-meta variants (collect-ready-*-for-meta) preserved.
- collect-ready-constraints-for-meta
- collect-ready-traits-for-meta
- collect-ready-hasmethods-for-meta
  ;; P5b: Multiplicity cell callbacks
  ;; PPN 4C S2.e-ii (2026-04-25): current-prop-mult-cell-write RETIRED.
  ;; PPN 4C S2.e-iii (2026-04-25): current-prop-fresh-{mult,level,sess}-cell
@@ -616,14 +606,11 @@
   ;; future solve-meta! calls. If all type-args are already solved, immediate resolution
   ;; fires below (same pattern as hasmethod wakeup).
   (define unsolved-ta-metas (filter (lambda (id) (not (meta-solved? id))) type-arg-metas))
-  ;; Track 1 Phase 6c: Cell-only wakeup write (network-everywhere).
-  (define tw-cid (current-trait-wakeup-cell-id))
-  (when (pair? unsolved-ta-metas)
-    (let ([tw-delta
-           (for/fold ([acc (hasheq)]) ([ta-id (in-list unsolved-ta-metas)])
-             (hash-set acc ta-id (list (tagged-entry meta-id aid))))])
-      ;; Track 8 B2d: direct elab-cell-write.
-      (set-box! tc-net-box (elab-cell-write (unbox tc-net-box) tw-cid tw-delta))))
+  ;; RETIRED 2026-08-05: the wakeup-registry write. The collect-ready-*-for-meta
+  ;; readers it fed had zero callers — confirmed by grep AND by instrumenting the
+  ;; examples corpus (6-11 writes per file, 0 reads, all 51 files). Their
+  ;; *-via-cells siblings were retired in PPN 4C S2.b-iv for the same reason;
+  ;; these were left only because they were out of that phase's scope.
   ;; P3a: Record cell-ids for type-arg metas for cell-state-driven resolution.
   ;; PPN 4C 2A.a (2026-05-20): migrated to worldview-aware lookup via
   ;; elab-id-map-read-worldview (per D.3 §8.7.a.3 deliverable 4). Stale tagged
@@ -765,14 +752,11 @@
   ;; Already-solved metas won't trigger future solve-meta! calls, so they
   ;; can't fire wakeup. If all deps are solved, immediate resolution fires below.
   (define unsolved-dep-metas (filter (lambda (id) (not (meta-solved? id))) all-dep-metas))
-  ;; Phase 7a: Cell-only wakeup write (mirrors trait-wakeup pattern).
-  (define hw-cid (current-hasmethod-wakeup-cell-id))
-  (when (pair? unsolved-dep-metas)
-    (let ([hw-delta
-           (for/fold ([acc (hasheq)]) ([dep-id (in-list unsolved-dep-metas)])
-             (hash-set acc dep-id (list (tagged-entry meta-id aid))))])
-      ;; Track 8 B2d: direct elab-cell-write.
-      (set-box! hm-net-box (elab-cell-write (unbox hm-net-box) hw-cid hw-delta))))
+  ;; RETIRED 2026-08-05: the wakeup-registry write. The collect-ready-*-for-meta
+  ;; readers it fed had zero callers — confirmed by grep AND by instrumenting the
+  ;; examples corpus (6-11 writes per file, 0 reads, all 51 files). Their
+  ;; *-via-cells siblings were retired in PPN 4C S2.b-iv for the same reason;
+  ;; these were left only because they were out of that phase's scope.
   ;; Track 2 Phase 6: Record cell-ids for dependency metas (cell-state-driven resolution).
   ;; Mirrors trait-cell-map pattern: enables collect-ready-hasmethods-via-cells.
   ;; PPN 4C 2A.a (2026-05-20): migrated to worldview-aware lookup via
@@ -1027,14 +1011,11 @@
                                               (hasheq (constraint-cid c) (tagged-entry c aid)))))
   ;; Track 2 Phase 2: Write initial 'pending status to cell.
   (write-constraint-status-cell! (constraint-cid c) 'pending)
-  ;; Register for wakeup on all mentioned metas.
-  (define wr-cid (current-wakeup-registry-cell-id))
-  (when (pair? meta-ids)
-    (let ([wr-delta
-           (for/fold ([acc (hasheq)]) ([id (in-list meta-ids)])
-             (hash-set acc id (list (tagged-entry c aid))))])
-      ;; Track 8 B2d: direct elab-cell-write.
-      (set-box! cstore-net-box (elab-cell-write (unbox cstore-net-box) wr-cid wr-delta))))
+  ;; RETIRED 2026-08-05: the wakeup-registry write. The collect-ready-*-for-meta
+  ;; readers it fed had zero callers — confirmed by grep AND by instrumenting the
+  ;; examples corpus (6-11 writes per file, 0 reads, all 51 files). Their
+  ;; *-via-cells siblings were retired in PPN 4C S2.b-iv for the same reason;
+  ;; these were left only because they were out of that phase's scope.
   ;; PPN 4C S2.b-iv (2026-04-24): Set-latch readiness pattern.
   ;; Replaces the prior 3-stage fan-in (threshold-cell + fan-in propagator
   ;; + readiness propagator, ~32 LoC) with a single helper call. Helper
@@ -1065,11 +1046,6 @@
           (retry-bridge-fn pnet c dep-cids-retry))))
     (set-box! cstore-net-box enet-retry-bridge))
   c)
-
-;; Get constraints associated with a metavariable for wakeup.
-;; Track 1 Phase 3a: read from cell.
-(define (get-wakeup-constraints meta-id)
-  (hash-ref (read-wakeup-registry) meta-id '()))
 
 ;; PPN 4C 2B (2026-05-20): `retry-constraints-for-meta!` RETIRED. Dead code
 ;; surfaced by Phase 2B audit (D.3 §8.8.2) — zero production callers across
@@ -1108,34 +1084,6 @@
 ;; The collect-ready-*-for-meta variants (3 sibling functions) also have
 ;; zero production callers but are NOT in S2.b-iv scope; left in place
 ;; for now and may be retired in a follow-up cleanup if confirmed dead.
-
-;; Scan postponed constraints for a specific meta (targeted wakeup —
-;; sibling of the retired *-via-cells; preserved for now per scope).
-(define (collect-ready-constraints-for-meta meta-id)
-  (define constraints (get-wakeup-constraints meta-id))
-  (for/list ([c (in-list constraints)]
-             #:when (eq? (constraint-status c) 'postponed))
-    (action-retry-constraint c)))
-
-;; Scan trait constraints for a specific meta (targeted wakeup).
-(define (collect-ready-traits-for-meta meta-id)
-  (define wakeup (read-trait-wakeup-map))
-  (define dict-metas (hash-ref wakeup meta-id '()))
-  (for*/list ([dict-id (in-list dict-metas)]
-              #:when (not (meta-solved? dict-id))
-              [tc-info (in-value (hash-ref (read-trait-constraints) dict-id #f))]
-              #:when tc-info)
-    (action-resolve-trait dict-id tc-info)))
-
-;; Scan hasmethod constraints for a specific meta (targeted wakeup).
-(define (collect-ready-hasmethods-for-meta meta-id)
-  (define wakeup (read-hasmethod-wakeup-map))
-  (define hm-metas (hash-ref wakeup meta-id '()))
-  (for*/list ([hm-id (in-list hm-metas)]
-              #:when (not (meta-solved? hm-id))
-              [hm-info (in-value (hash-ref (read-hasmethod-constraints) hm-id #f))]
-              #:when hm-info)
-    (action-resolve-hasmethod hm-id hm-info)))
 
 ;; ========================================
 ;; Track 2 Phase 4: Action Interpreter (Stratum 2)
@@ -1246,37 +1194,6 @@
       (unwrap-tagged-hasheq (elab-cell-read (unbox net-box) cid))
       (hasheq)))
 
-;; Read wakeup registry from cell.
-;; Returns hasheq: meta-id → (listof constraint).
-;; Track 7 Phase 4: unwrap tagged entries in wakeup lists.
-;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
-(define (read-wakeup-registry)
-  (define cid (current-wakeup-registry-cell-id))
-  (define net-box (current-prop-net-box))
-  (if (and cid net-box)
-      (unwrap-tagged-hasheq-list (elab-cell-read (unbox net-box) cid))
-      (hasheq)))
-
-;; Read trait wakeup map from cell.
-;; Returns hasheq: meta-id → (listof dict-meta-id).
-;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
-(define (read-trait-wakeup-map)
-  (define cid (current-trait-wakeup-cell-id))
-  (define net-box (current-prop-net-box))
-  (if (and cid net-box)
-      (unwrap-tagged-hasheq-list (elab-cell-read (unbox net-box) cid))
-      (hasheq)))
-
-;; Phase 7a: Read hasmethod wakeup map from cell.
-;; Returns hasheq: meta-id → (listof hasmethod-meta-id).
-;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
-(define (read-hasmethod-wakeup-map)
-  (define cid (current-hasmethod-wakeup-cell-id))
-  (define net-box (current-prop-net-box))
-  (if (and cid net-box)
-      (unwrap-tagged-hasheq-list (elab-cell-read (unbox net-box) cid))
-      (hasheq)))
-
 ;; Phase 7b: Read trait cell-map from cell.
 ;; Returns hasheq: dict-meta-id → (listof cell-id).
 ;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
@@ -1362,10 +1279,7 @@
   (current-hasmethod-constraint-cell-id #f)
   (current-capability-constraint-cell-id #f)
   ;; Phase 1c: Clear wakeup cell IDs.
-  (current-wakeup-registry-cell-id #f)
-  (current-trait-wakeup-cell-id #f)
   ;; Phase 7a: Clear hasmethod wakeup cell ID (was hash-clear! on parameter).
-  (current-hasmethod-wakeup-cell-id #f)
   ;; Track 2 Phase 6: Clear hasmethod cell-map cell ID.
   (current-hasmethod-cell-map-cell-id #f)
   ;; Track 2 Phase 2: Clear constraint status cell ID.
@@ -1532,9 +1446,6 @@
           (current-capability-constraint-cell-id)
           (current-constraint-status-cell-id)
           (current-error-descriptor-cell-id)
-          (current-wakeup-registry-cell-id)
-          (current-trait-wakeup-cell-id)
-          (current-hasmethod-wakeup-cell-id)
           ;; Warning cells are in the persistent network, not the elab-network.
           ;; They use a different retraction path (Phase 5 note: warnings are
           ;; per-command parameter-based accumulation, not cell-based retraction).
@@ -1704,10 +1615,7 @@
 
 ;; Phase 1c: Cell IDs for wakeup registries.
 ;; These map meta-id → (listof value), using merge-hasheq-list-append.
-(define current-wakeup-registry-cell-id (make-parameter #f))
-(define current-trait-wakeup-cell-id (make-parameter #f))
 ;; Phase 7a: Hasmethod wakeup cell (was missing — the only wakeup map without a cell).
-(define current-hasmethod-wakeup-cell-id (make-parameter #f))
 
 ;; Track 2 Phase 6: HasMethod cell-map cell (mirrors trait-cell-map).
 ;; Maps hasmethod-meta-id → (listof cell-id), using merge-hasheq-replace.
@@ -1826,9 +1734,6 @@
                  [current-trait-cell-map-cell-id #f]
                  [current-hasmethod-constraint-cell-id #f]
                  [current-capability-constraint-cell-id #f]
-                 [current-wakeup-registry-cell-id #f]
-                 [current-trait-wakeup-cell-id #f]
-                 [current-hasmethod-wakeup-cell-id #f]
                  [current-hasmethod-cell-map-cell-id #f]
                  [current-constraint-status-cell-id #f]
                  [current-error-descriptor-cell-id #f]
@@ -2887,16 +2792,13 @@
       (current-hasmethod-constraint-cell-id hm-cid)
       (define-values (enet5 cap-cid) (new-cell-fn enet4 (hasheq) merge-hasheq-replace))
       (current-capability-constraint-cell-id cap-cid)
-      ;; Phase 1c: Create wakeup registry cells (merge-hasheq-list-append).
-      (define-values (enet6 wr-cid) (new-cell-fn enet5 (hasheq) merge-hasheq-list-append))
-      (current-wakeup-registry-cell-id wr-cid)
-      (define-values (enet7 tw-cid) (new-cell-fn enet6 (hasheq) merge-hasheq-list-append))
-      (current-trait-wakeup-cell-id tw-cid)
-      ;; Phase 7a: Hasmethod wakeup cell (was missing — now parallel to trait wakeup).
-      (define-values (enet8 hw-cid) (new-cell-fn enet7 (hasheq) merge-hasheq-list-append))
-      (current-hasmethod-wakeup-cell-id hw-cid)
+      ;; RETIRED 2026-08-05: three write-only wakeup cells (wr/tw/hw).
+      ;; `retract-hasheq-list-entries` survives and stays reachable — its dispatch
+      ;; in process-retraction is STRUCTURAL (it samples a value and asks "is it a
+      ;; list?"), not keyed to these cells, so any future list-valued scoped cell
+      ;; still gets it. Unit-tested directly in test-retraction-stratum.rkt.
       ;; Track 2 Phase 2: Constraint status cell (constraint-id → 'pending | 'resolved).
-      (define-values (enet9 cs-cid) (new-cell-fn enet8 (hasheq) merge-constraint-status-map))
+      (define-values (enet9 cs-cid) (new-cell-fn enet5 (hasheq) merge-constraint-status-map))
       (current-constraint-status-cell-id cs-cid)
       ;; Track 2 Phase 6: HasMethod cell-map (meta-id → (listof cell-id)).
       (define-values (enet10 hcm-cid) (new-cell-fn enet9 (hasheq) merge-hasheq-replace))

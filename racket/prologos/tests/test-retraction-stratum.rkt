@@ -240,12 +240,15 @@
     (define pnet (elab-network-prop-net enet2))
     (check-equal? (set-count (net-cell-read pnet retraction-stratum-request-cell-id)) 1)))
 
-(test-case "scoped-cell-ids: returns 11 non-#f cell IDs after reset-meta-store!"
+(test-case "scoped-cell-ids: returns 8 non-#f cell IDs after reset-meta-store!"
   (with-fresh-meta-env
     ;; reset-meta-store! creates all scoped cells
     (define ids (scoped-cell-ids))
-    ;; 8 constraint + 3 wakeup = 11 scoped cells (warnings excluded)
-    (check-equal? (length ids) 11)
+    ;; 8 constraint cells (warnings excluded). Was 11: the three wakeup cells
+    ;; were retired 2026-08-05 as write-only — nothing read them. This assertion
+    ;; is the one that noticed, which is exactly what it is for; a count pinned
+    ;; against a list is cheap and catches both additions and removals.
+    (check-equal? (length ids) 8)
     (check-false (memq #f ids))))
 
 ;; ========================================
@@ -283,26 +286,32 @@
     (check-false (hash-has-key? result 'c1))
     (check-true (hash-has-key? result 'c2))))
 
-(test-case "process-retraction: retracts tagged entries from wakeup cell"
+(test-case "process-retraction DISPATCHES to the list arm on a list-valued cell"
+  ;; REPLACES "process-retraction: retracts tagged entries from wakeup cell",
+  ;; which routed through `current-wakeup-registry-cell-id`. Those three wakeup
+  ;; cells were retired 2026-08-05 (write-only — nothing read them).
+  ;;
+  ;; Nothing was lost: `retract-hasheq-list-entries` already had five direct unit
+  ;; tests above (:161-:190), so the old case was only ever pinning the DISPATCH —
+  ;; that process-retraction picks the list arm rather than the hasheq-entries
+  ;; arm. This pins exactly that, and does it better, because the dispatch is
+  ;; STRUCTURAL: it samples a value and asks "is it a list?", so it is not keyed
+  ;; to any particular cell. Writing list values into a surviving scoped cell
+  ;; exercises the same arm and will keep working as cells come and go.
   (with-fresh-meta-env
     (define net-box (current-prop-net-box))
-    (define wakeup-cid (current-wakeup-registry-cell-id))
+    (define cid (current-constraint-cell-id))
     (define aid1 (gensym 'assumption))
-
-    (define enet0 (unbox net-box))
-    (define enet1
-      (elab-cell-write enet0 wakeup-cid
-                       (hasheq 'meta-A (list (tagged-entry 'cid-1 aid1)
-                                             (tagged-entry 'cid-2 #f)))))
-    (set-box! net-box enet1)
-
-    (define pnet (elab-network-prop-net (unbox net-box)))
-    (define pnet* (process-retraction pnet (seteq aid1)))
-
-    (define result (net-cell-read pnet* wakeup-cid))
-    (define entries (hash-ref result 'meta-A '()))
-    (check-equal? (length entries) 1)
-    (check-equal? (tagged-entry-value (car entries)) 'cid-2)))
+    (set-box! net-box
+              (elab-cell-write (unbox net-box) cid
+                               (hasheq 'k (list (tagged-entry 'v1 aid1)
+                                                (tagged-entry 'v2 #f)))))
+    (define pnet* (process-retraction (elab-network-prop-net (unbox net-box))
+                                      (seteq aid1)))
+    (define entries (hash-ref (net-cell-read pnet* cid) 'k '()))
+    (check-equal? (length entries) 1
+                  "the list arm must have run — a hasheq-entries arm would have kept both")
+    (check-equal? (tagged-entry-value (car entries)) 'v2)))
 
 (test-case "process-retraction: multi-assumption retraction"
   (with-fresh-meta-env

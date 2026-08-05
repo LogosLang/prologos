@@ -1799,93 +1799,52 @@ it: `(nogood-merge x x)` returned the list twice. A live cell merge
 type-checker for fourteen months. Now dedups; commutative and associative up to
 set equality (the list representation has an order that set-union does not).
 
-**2. `merge-hasheq-list-append` — MEASURED 2026-08-05; the question dissolved.**
-Also not idempotent: `(merge {a: (1)} {a: (1)})` → `{a: (1 1)}`, and it IS a cell
-merge — the three wakeup cells at `metavar-store.rkt:2891 / :2893 / :2896`.
+**2. `merge-hasheq-list-append` — the cells it served are RETIRED 2026-08-05.**
 
-I filed three questions here: what writes those cells, is any writer
-non-idempotent, and is a duplicate wakeup observable. The third one answers the
-other two, because **the cells are write-only**.
-
-Instrumented both sides and swept the whole examples corpus (51 files):
+Not idempotent (`(merge {a:(1)} {a:(1)})` → `{a:(1 1)}`), and it was a cell merge:
+the three wakeup cells at `metavar-store.rkt`. I filed three questions — what
+writes them, is any writer non-idempotent, is a duplicate observable — and the
+third answered the other two. **Nothing read them.**
 
 | | |
 |---|---|
-| writes to the trait-wakeup cell | **6–11 per file** |
-| reads of the trait-wakeup cell | **0 — on every file** |
-| duplicate entries observed | 0, trivially (nothing was ever read) |
+| writes to the trait-wakeup cell | 6–11 per file |
+| reads | **0, on all 51 example files** |
 
-Static confirmation: `collect-ready-traits-for-meta`,
-`collect-ready-hasmethods-for-meta` and `collect-ready-constraints-for-meta` have
-**zero callers** in the tree — the only greps outside their own definitions are
-the `provide` list and a comment. `read-trait-wakeup-map` and
-`read-wakeup-registry` are reached only from inside those dead functions.
+The three `collect-ready-*-for-meta` readers had no callers in the tree; their
+`*-via-cells` siblings were retired in PPN 4C S2.b-iv for exactly this reason and
+these were left only because they were out of that phase's scope
+(`metavar-store.rkt:1108` says so).
 
-And the tree already says so, at `metavar-store.rkt:1108`:
+**Retired**: 3 readers, `get-wakeup-constraints`, 3 `read-*` helpers, 3 cell
+allocations, 3 parameters, their entries in `scoped-cell-ids` / the reset and
+parameterize lists, `tools/batch-worker.rkt`'s save/restore lines, and 3 write
+sites that ran on every command. Suite 560 files / 10914 green.
 
-> "The collect-ready-\*-for-meta variants (3 sibling functions) also have zero
-> production callers but are NOT in S2.b-iv scope; left in place for now and may
-> be retired in a follow-up cleanup if confirmed dead."
+**The merge itself survives, unfixed and now unused by any cell.** Deduping it
+would have been the wrong move: it would have tidied dead machinery. It stays in
+`infra-cell.rkt` as a generic helper, still pinned in `tests/test-merge-laws.rkt`
+as a KNOWN non-idempotent merge, so if a future cell adopts it the test says what
+it is buying. `retract-hasheq-list-entries` also survives and stays reachable —
+`process-retraction`'s dispatch is STRUCTURAL (it samples a value and asks "is it
+a list?"), not keyed to those cells.
 
-So: **confirmed dead**, empirically as well as by grep. What the comment does not
-say — and what makes this more than a tidy-up — is that **the three cells those
-dead readers serve are still being WRITTEN on every command**, through a merge
-that grows without bound, for no consumer.
+**The first attempt failed, and how is worth keeping.** I scoped it from a grep
+of the READER names and missed the CELL-ID consumers: `batch-worker.rkt`'s
+parameterize list, 8 assertions in `test-infra-cell-constraint-01.rkt`, and
+`test-retraction-stratum.rkt` using a wakeup cell as the vehicle for its
+hasheq-list retraction test. The build was clean — a linklet mismatch only
+surfaces at instantiation — and targeted tests passed. Only the batch suite
+caught it, via a "DEAD WORKERS" banner whose suggested cause (stale `.zo`) was
+wrong while its verdict was right.
 
-**Consequence for the merge**: its non-idempotence is not a live correctness
-hazard, because nothing reads the result. It is dead weight, and modest dead
-weight at that (6–11 writes per file, not a leak of consequence). So do NOT
-"fix" the merge in isolation — that would preserve the machinery by making it
-tidier. **Retire the readers and the writers together**, and the merge's only
-remaining users go with them.
-
-Its SRE domain is `'hash-of-lists-accumulator`; the name says accumulator, and an
-accumulator is not a join. If any FUTURE cell wants this merge, that is the
-moment to decide whether it should be a merge-based cell at all.
-
-**Scope of the retirement — ATTEMPTED 2026-08-05, REVERTED, and the attempt
-corrected the scope.** I did the deletion (3 readers, 3 cell allocations, the
-`current-*-cell-id` parameters, the three writers at `:626 / :775 / :1037`,
-`scoped-cell-ids`, the reset/parameterize lists) and the tree built. The BATCH
-SUITE then died with every worker crashing before output:
-
-```
-instantiate-linklet: mismatch; reference to a variable that is not exported
-  name: current-hasmethod-wakeup-cell-id
-  importing instance: .../tools/batch-worker.rkt
-```
-
-**My "zero callers in the tree" claim was true of the READER FUNCTIONS and false
-of the CELLS.** A tree-wide grep for the cell-ids (which I had not run — I had
-grepped the reader names) finds three more consumers:
-
-| file | what it does |
-|---|---|
-| `tools/batch-worker.rkt:263-265` | the parameterize save/restore list — `pipeline.md`'s new-parameter checklist, item 3 |
-| `tests/test-infra-cell-constraint-01.rkt` | 8 references asserting the cells EXIST and are empty |
-| `tests/test-retraction-stratum.rkt:289` | uses the wakeup cell as the VEHICLE for testing hasheq-list retraction |
-
-The third is the one that matters. `retract-hasheq-list-entries` exists for
-exactly these cells; retiring them leaves it with no users and no test. So the
-retirement is not "delete dead code" — it is a decision about whether to retire
-the hasheq-list retraction path along with them, or keep it tested against some
-other cell. That is a judgement about coverage, and it is what the original
-`metavar-store.rkt:1108` comment meant by "NOT in S2.b-iv scope".
-
-**Corrected scope**, for whoever takes it:
-
-1. 3 readers + `get-wakeup-constraints` + the 3 `read-*` helpers + provides
-2. 3 cell allocations, 3 parameters, `scoped-cell-ids`, reset + parameterize lists
-3. **`tools/batch-worker.rkt`** parameterize list — missed on the first pass
-4. **`tests/test-infra-cell-constraint-01.rkt`** — 8 assertions to delete
-5. **`tests/test-retraction-stratum.rkt`** — decide: re-point at another
-   hasheq-list cell, or retire `retract-hasheq-list-entries` too
-6. `merge-hasheq-list-append` then has no cell users; retire it and its SRE
-   registration, or leave it as an unused helper with a note
-
-Reverted rather than pushed through, because (5) removes test coverage and that
-should be a decision someone makes on purpose. Suite green at revert
-(560 files / 10916).
+Three tests changed rather than deleted: the retraction case now pins the
+STRUCTURAL DISPATCH through a surviving cell (better — `retract-hasheq-list-entries`
+already had five direct unit tests, so the old case was only ever testing the
+dispatch); `test-infra-cell-constraint-01`'s three hollow wakeup cases went, and
+the "all cells empty after reset" case got its five real assertions back; and the
+`scoped-cell-ids` count moved 11 → 8. That last one is the assertion that noticed
+the removal, which is what a count pinned against a list is for.
 
 ## The merge-law table cannot be gated on the registry, and that is a registry problem (2026-08-05)
 

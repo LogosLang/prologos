@@ -200,47 +200,43 @@
     (check-equal? (hash-count (elab-cell-read enet (current-capability-constraint-cell-id))) 0)))
 
 ;; ========================================
-;; Phase 1c: Wakeup registry cells
+;; Phase 1c: Wakeup registry cells — RETIRED 2026-08-05
 ;; ========================================
+;;
+;; Three test cases lived here, asserting that the wakeup-registry, trait-wakeup
+;; and hasmethod-wakeup cells existed, were distinct, and stayed empty. The cells
+;; were retired 2026-08-05 as write-only: instrumenting the examples corpus found
+;; 6-11 writes per file and ZERO reads on all 51, and the three
+;; collect-ready-*-for-meta readers they fed had no callers in the tree.
+;;
+;; The cases went with them rather than being weakened, because two of the three
+;; asserted only that the cells were empty — which was true precisely BECAUSE
+;; nothing used them, and would have gone on passing forever.
+;;
+;; The surviving distinctness check below covers the five real constraint cells.
 
-(test-case "Phase 1c: wakeup registry cells created"
-  (with-fresh-meta-env
-    (check-not-false (current-wakeup-registry-cell-id))
-    (check-not-false (current-trait-wakeup-cell-id))
-    ;; Both are empty hasheqs initially
-    (define enet (unbox (current-prop-net-box)))
-    (check-equal? (hash-count (elab-cell-read enet (current-wakeup-registry-cell-id))) 0)
-    (check-equal? (hash-count (elab-cell-read enet (current-trait-wakeup-cell-id))) 0)))
-
-(test-case "Phase 1c: wakeup registry cell distinct from others"
+(test-case "the five constraint cells are distinct"
   (with-fresh-meta-env
     (define ids (list (current-constraint-cell-id)
                       (current-trait-constraint-cell-id)
                       (current-trait-cell-map-cell-id)
                       (current-hasmethod-constraint-cell-id)
-                      (current-capability-constraint-cell-id)
-                      (current-wakeup-registry-cell-id)
-                      (current-trait-wakeup-cell-id)))
-    (check-equal? (length (remove-duplicates ids equal?)) 7)))
+                      (current-capability-constraint-cell-id)))
+    (check-equal? (length (remove-duplicates ids equal?)) 5
+                  "each constraint cell must have its own id")))
 
-(test-case "Phase 1c: add-constraint! dual-writes to wakeup cell"
-  (with-fresh-meta-env
-    ;; add-constraint! with expr containing metas would populate wakeup registry
-    ;; but without actual metas, meta-ids will be empty. Use direct meta construction.
-    ;; For this test we just verify the cell is writable and accumulates.
-    ;; Note: add-constraint! only writes to wakeup cell when meta-ids is non-empty,
-    ;; which requires actual expr-meta nodes. Test the empty case:
-    (add-constraint! (expr-Nat) (expr-Bool) '() "no-metas")
-    ;; No metas in Nat/Bool, so wakeup registry cell should still be empty
-    (define enet (unbox (current-prop-net-box)))
-    (check-equal? (hash-count (elab-cell-read enet (current-wakeup-registry-cell-id))) 0)))
-
-(test-case "Phase 1c: all 7 cells empty after reset"
+(test-case "all constraint cells empty after reset"
   (with-fresh-meta-env
     (register-trait-constraint! 'm1 (trait-constraint-info 'Eq (list (expr-Nat))))
     (register-hasmethod-constraint! 'hm1 (hasmethod-constraint-info (expr-fvar 'P) 'eq? '() #f #f))
     (register-capability-constraint! 'cap1 (capability-constraint-info 'R (expr-fvar 'R)))
     (reset-meta-store!)
     (define enet (unbox (current-prop-net-box)))
-    (check-equal? (hash-count (elab-cell-read enet (current-wakeup-registry-cell-id))) 0)
-    (check-equal? (hash-count (elab-cell-read enet (current-trait-wakeup-cell-id))) 0)))
+    ;; The two wakeup-cell assertions that used to live here went with the cells
+    ;; (retired 2026-08-05). The five real constraint cells still have to come
+    ;; back empty, which is what this case was actually for.
+    (check-equal? (hash-count (elab-cell-read enet (current-constraint-cell-id))) 0)
+    (check-equal? (hash-count (elab-cell-read enet (current-trait-constraint-cell-id))) 0)
+    (check-equal? (hash-count (elab-cell-read enet (current-trait-cell-map-cell-id))) 0)
+    (check-equal? (hash-count (elab-cell-read enet (current-hasmethod-constraint-cell-id))) 0)
+    (check-equal? (hash-count (elab-cell-read enet (current-capability-constraint-cell-id))) 0)))
