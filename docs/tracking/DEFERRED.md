@@ -61,24 +61,41 @@ verified against a **pure `origin/main` worktree build**, so neither is merge
 fallout. Recorded rather than silently accommodated, because in both cases the
 weaker message is now what a user sees.
 
-### 1. `imports`: the no-namespace guard stopped firing
+### 1. ✅ CLOSED 2026-08-05 — and the entry's PREMISE was wrong: the guard never stopped firing
 
-`require-ns-context` (`namespace.rkt:515`) raises a written-for-purpose
-diagnostic — *"cannot import …: no namespace is in scope. The IMPORTING file has
-no `ns` declaration…"* — and it no longer fires. Main's import path now gets
-further into the imported file and reports the downstream symptom instead.
-Measured on the same input:
+Filed as a merge regression. It was not one, and chasing it found the better fix.
 
-| | message |
+`book/collection-functions.prologos` has **two** problems, and which one surfaces
+depends on error-surf handling:
+
+| line | problem |
 |---|---|
-| pure `main` | `imports: Error loading module …: Unbound variable` — contained, **bare**: no name, no srcloc, no cause |
-| this branch, pre-merge | `cannot import …: no namespace is in scope. The IMPORTING file has…` |
-| post-merge | raises, with `…prologos:28:0` + `Unbound variable: module` |
+| 28 | `module prologos::core::collections` — **not a Prologos form at all**; `module` is the literate-BOOK directive `tools/tangle-stdlib.rkt` reads |
+| 30 | `(imports …)` with no `ns` in scope — the `require-ns-context` guard's case |
 
-The merge restores the NAME and the LOCATION (`format-error`, which main had
-dropped for a bare `prologos-error-message`) but not the root cause. Finding
-why the guard is bypassed is upstream work on the import path.
-`tests/test-import-no-ns.rkt` pins what survives and carries the table.
+This branch's old code **skipped** error surfs (`unless (prologos-error? surf)`),
+so it passed over line 28 and surfaced line 30's guard message. Main's shape
+REPORTS the first error surf. That is the better shape — the old path was
+silently skipping a real error — it just arrived bare (`Unbound variable:
+module`), which is what made it look like a lost diagnostic.
+
+So the guard is intact and still fires wherever it is reached. The fix was to
+make the EARLIER error carry the explanation, via the existing
+`unbound-op-hint-table` (elaborator.rkt):
+
+> hint: `module` is a book-chapter directive, not a Prologos form. The `book/`
+> files are literate prose that `tangle-stdlib` reads — they are not importable
+> modules. Import the tangled library instead (e.g. `prologos::core::collections`),
+> or write `ns` if this file is meant to BE a module.
+
+Better than what was "lost": it names the actual first problem, at the line that
+has it, and explains what a chapter file is. `tests/test-import-no-ns.rkt` pins
+the name, the file:line, and both halves of the explanation.
+
+**The lesson is about my own filing.** "A message changed, therefore a
+regression" skipped the step of asking which error each version was reporting.
+They were reporting *different errors* — and the one the old code showed was the
+second one, reached by silently discarding the first.
 
 ### 2. ✅ FIXED 2026-08-05 — `.field` on a non-projectable carrier lost its type-naming hint
 

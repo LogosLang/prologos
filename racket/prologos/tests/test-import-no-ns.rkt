@@ -45,33 +45,36 @@
           "NO ERROR")))
     (lambda () (with-handlers ([void void]) (delete-file f)))))
 
-(test-case "imports/a file with no `ns` gives a named, LOCATED error, not a contract violation"
-  ;; ⚠ WEAKENED AT THE 2026-08-05 MERGE, and the loss is upstream's, not this
-  ;; branch's. Measured on pure `origin/main` (worktree build, same input):
+(test-case "imports/importing a book CHAPTER explains what a chapter is"
+  ;; ⚠ THE ENTRY THIS TEST WAS FILED UNDER WAS WRONG, and the correction is the
+  ;; point. It was filed as "the no-namespace guard stopped firing" — a
+  ;; regression from the 2026-08-05 merge. The guard did not stop firing.
   ;;
-  ;;   main:        "imports: Error loading module …: Unbound variable"
-  ;;                 — contained as a per-command value, and BARE: no name,
-  ;;                   no srcloc, no root cause.
-  ;;   pre-merge:   "cannot import …: no namespace is in scope. The IMPORTING
-  ;;                 file has no `ns` declaration…"
-  ;;   post-merge:  raises, with file:line and "Unbound variable: module"
-  ;;                 (this branch's `format-error` rendering, kept in the merge)
+  ;; `book/collection-functions.prologos` has TWO problems, and which one you
+  ;; see depends on error-surf handling:
   ;;
-  ;; So `require-ns-context`'s guard (namespace.rkt) no longer FIRES — main's
-  ;; import path now gets further into the book file before failing, and reports
-  ;; the downstream symptom instead. The merge did not cause that and does not
-  ;; fix it; it does restore the NAME and the LOCATION main had dropped.
+  ;;   line 28  `module prologos::core::collections`  ← not a Prologos form at
+  ;;            all; `module` is the literate-BOOK directive tangle-stdlib reads
+  ;;   line 30  `(imports …)` with no `ns` in scope   ← the guard's case
   ;;
-  ;; What is still asserted is the defect this test was written for — a raw
-  ;; struct-accessor contract violation — plus the two properties the merge
-  ;; genuinely preserves. The lost root diagnostic is filed in DEFERRED
-  ;; § "imports: the no-namespace guard stopped firing".
+  ;; This branch's old code SKIPPED error surfs, so it passed over line 28 and
+  ;; surfaced line 30's guard message. Main's shape REPORTS the first error
+  ;; surf. Reporting the earlier error is the better shape — the old path was
+  ;; skipping a real one — it just arrived bare.
+  ;;
+  ;; So the fix was not to restore the guard: it was to make line 28 say what
+  ;; line 30 used to say, via the existing `unbound-op-hint-table`.
   (define msg (import-book))
   (check-false (string-contains? msg "ns-context-refer-map")
                (format "still the raw struct-accessor crash: ~a" msg))
+  ;; named, and LOCATED — main reported this bare, with no file:line at all
   (check-true (string-contains? msg "Error loading module")
-              (format "the failure is not named at all: ~a" msg))
-  ;; a LOCATION — main reported this bare. `format-error` is what puts the
-  ;; file:line back, and dropping it is how a library failure becomes unfindable.
+              (format "the failure is not named: ~a" msg))
   (check-true (regexp-match? #rx"[.]prologos:[0-9]+" msg)
-              (format "no file:line — the reader cannot find it: ~a" msg)))
+              (format "no file:line — the reader cannot find it: ~a" msg))
+  ;; …and it explains WHAT a book chapter is, which is the thing a reader who
+  ;; imported one actually needs to know.
+  (check-true (string-contains? msg "book-chapter directive")
+              (format "the message does not explain the real problem: ~a" msg))
+  (check-true (string-contains? msg "not importable modules")
+              (format "the message does not say chapters are not modules: ~a" msg)))

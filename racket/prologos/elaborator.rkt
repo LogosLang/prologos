@@ -855,6 +855,23 @@
         [quire-hint "hint: quire ops are keyword-only (no first-class value form)"]
         [if-nar-hint "hint: p*-if-nar is keyword-only (no first-class value form)"])
     (hasheq
+     ;; `module` is not a language form at all — it is the literate-BOOK
+     ;; directive that `tools/tangle-stdlib.rkt` consumes, and it heads the
+     ;; `lib/prologos/book/*.prologos` chapter files. Importing a chapter
+     ;; therefore fails on THIS line, before anything else in the file.
+     ;;
+     ;; Added 2026-08-05 after a merge changed which of a chapter's two errors
+     ;; is reported. The old path SKIPPED error surfs and surfaced a later one —
+     ;; the `imports` guard's "no namespace is in scope … the book/ chapter
+     ;; files are prose, not importable modules" — which was helpful but came
+     ;; from two lines further down. Reporting the FIRST error is the better
+     ;; shape; it just needed to carry the same explanation.
+     'module (string-append
+              "hint: `module` is a book-chapter directive, not a Prologos form. "
+              "The `book/` files are literate prose that `tangle-stdlib` reads — "
+              "they are not importable modules. Import the tangled library "
+              "instead (e.g. `prologos::core::collections`), or write `ns` if "
+              "this file is meant to BE a module.")
      'mod "hint: mod is a keyword; for a first-class value use the section [mod _ _]"
      'le cmp-hint 'gt cmp-hint 'ge cmp-hint
      '< angle-hint '<= angle-hint '>= angle-hint '> angle-hint
