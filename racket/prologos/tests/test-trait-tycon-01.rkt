@@ -221,8 +221,19 @@
   ;; Known issue: explicit kind annotation uses (-> Type Type) datum,
   ;; but trait registry stores (-> (Type 0) (Type 0)). These differ under equal?.
   ;; This should error with a kind mismatch (documenting the known limitation).
-  (check-exn exn:fail?
+  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
+  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
+  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
+  ;; they still raise (they fail before the guarded seam), and converting them
+  ;; would have weakened a correct assertion.
+  ;; ⚠ `run-last` is WRONG for this assertion under G2/B and that is the second
+  ;; instance of the shape: the refusal is now a per-command error on the FIRST
+  ;; form (`spec`), and `run-last` returns only the LAST result — the `defn`'s —
+  ;; so the error is discarded before the assertion ever sees it. Scan the whole
+  ;; result list. (Under the old raise this could not happen: the raise escaped
+  ;; before any result existed.)
+  (check-true (yields-prologos-error?
     (lambda ()
-      (run-last
+      (run
         "(spec bad-len {C : (-> Type Type)} {A : Type} (C A) -> Nat where (Seqable C))
-         (defn bad-len [xs] zero)"))))
+         (defn bad-len [xs] zero)")))))

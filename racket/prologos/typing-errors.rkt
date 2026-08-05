@@ -264,6 +264,43 @@
   (define remedies
     "seal the subject against a schema (`the Schema subj`) or validate it against one")
   (case (select-fail-kind fail)
+    ;; ⚠ THE `bcast-not-yet` ARM IS RETIRED AT D4.P4c-4c — it named THIS SLICE as
+    ;; its own discharge point ("the ω value semantics land at … P4c-4c"), and
+    ;; the slice landed, so it had ZERO producers. Kept, it would have been a
+    ;; dead arm advertising an unbuilt feature that is now built. The `select-fail`
+    ;; kinds are producer-driven, so removing the last producer's arm is the
+    ;; complete retirement — this is the ban-dual-paths rule, not tidying.
+    ;; The channel SPLIT it documented survives and is now carried by
+    ;; `bcast-carrier` below: typing refuses through the failure slot so the file
+    ;; continues, and reduction reports through `(return (expr-panic …))` rather
+    ;; than a raise. `select-bcast-not-yet` (syntax.rkt) is retired with it.
+    ;;
+    ;; D4.P4c-4c — THE CARRIER REFUSAL, the arm that replaces it. P4c-4c scopes ω
+    ;; to PVec; Map / keyword-row / het-tuple are P4d, and it must NAME the
+    ;; carrier rather than report a generic subject miss. Monotone: P4d turns
+    ;; each of these into a meaning.
+    ;; ⚠ TWO OVER-CLAIMS CORRECTED by the P4c-4c adversarial verify, both in the
+    ;; first draft of this arm. (1) It advised `m.~a` with the LABEL interpolated,
+    ;; so an ordinal ω produced the nonsense `[pvec-map [fn [m] m.0] xs]`.
+    ;; (2) It told EVERY non-PVec subject that its carrier "lands at P4d" —
+    ;; including `String` and `Int`, which will never be broadcast carriers. The
+    ;; P4d sentence is now a statement about the PHASE, not a promise about this
+    ;; subject.
+    [(bcast-carrier)
+     (format
+      (string-append
+       "broadcast `:~a` needs a PVec subject — this one is ~a. Broadcast is "
+       "PVec-only at this phase; the map, keyword-row and heterogeneous-tuple "
+       "carriers land at CIU T6 D4.P4d. For a list, convert first with "
+       "`[pvec-from-list xs]` (the row type is preserved)~a~a")
+      (or label "…")
+      (if row (format "`~a`" (pp-expr row)) "not one")
+      ;; the explicit spelling is only ADVICE when the step is a nominal key —
+      ;; `m.0` is not a thing a user can write
+      (if (and label (symbol? label))
+          (format "; otherwise spell it `[pvec-map [fn [m] m.~a] xs]`" label)
+          "")
+      (if (null? path) "" (format " — in branch `~a`" branch-str)))]
     [(miss-closed)
      (string-append
       (format-closed-row-miss row label names)

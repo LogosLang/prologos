@@ -1,0 +1,195 @@
+#+TITLE: Standup — 2026-04-10
+#+DATE: 2026-04-10
+
+* Yesterday (since 2026-04-09 standup)
+
+** BSP-LE Track 2: Phases 4-10 COMPLETE (50+ commits)
+
+*** Phase 4: Bitmask-tagged cell values
+- tagged-cell-value struct (base + entries) replaces TMS tree
+- Worldview cache cell (cell-id 1) pre-allocated on every network
+- net-cell-read/write handle tagged-cell-value transparently
+- 35 architecture tests
+
+*** Phase 5: ATMS dissolution + compound cells
+- compound decisions cell (merge-maintained bitmask — merge IS the fan-in)
+- compound commitments cell (per-nogood tracking)
+- solver-context replaces atms struct (phone book of cell-ids)
+- Worldview projection propagator (compound decisions -> cell-id 1)
+- 8 consumer files migrated to solver-state
+- Deployed tagged-cell-value path: eager worldview cache, elab-speculation dual-write
+- 25 architecture tests
+
+*** Phase 6+7: Propagator-native solver (merged)
+- install-goal-propagator: 5 goal types (unify, is, app, not, guard)
+- install-conjunction: order-irrelevant goal installation
+- install-clause-propagators: facts, single-clause, concurrent multi-clause
+- Per-propagator worldview bitmask (current-worldview-bitmask) for concurrent clause execution
+- Gray code ordering for branch PU creation (CHAMP sharing)
+- typing-propagators union branching migration (dual-write)
+- BSP fire-and-collect-writes fix: use net-cell-read-raw for diffing
+- 17 tests
+
+*** Phase 8: On-network tabling
+- Compound scope cells: one cell per scope (not per variable)
+- Table registry cell on solver network (self-hosting path)
+- Producer/consumer propagators (same network)
+- One-true-tabling: all relations tabled by default
+- Completion emergent from BSP fixpoint
+- 17 tests
+
+*** Phase 9: Strategy dispatch + parameter migration
+- :strategy :atms routes to propagator-native solver
+- metavar-store + cell-ops read worldview bitmask first
+- typing-propagators TMS removal REVERTED: union type regression
+- current-speculation-stack retained (dual-write)
+
+*** Phase 10: Solver config wiring
+- :execution (BSP/Gauss-Seidel), :tabling (:off), :timeout (fuel)
+- All knobs operational
+
+*** Process improvements
+- tools/check-parens.sh: delimiter balance checker
+- precompile-modules! compiles test files (eliminates stale .zo)
+- New rules documents: propagator-design, on-network, structural-thinking
+- Handoff protocol updated with architectural rules
+
+** Final state: 397/397 files, 7750 tests, ~130s
+
+* Today
+
+** BSP-LE Track 2 Phase 11
+
+
+I'm not satisfied with the design options, and I think we can do better. (What I call "The N+1 Principle: Of all choices, what's the option not-yet considered")
+
+I think there's a demand-driven option (eager-ish), that is information-flow native.
+
+Let's consider it through the lens of SRE and structural unification (PUnify), lattice design and composition (merge).
+
+If we need we can also consider structural cells (PUs), component-indexed propagators, broadcast propagators, and efficient fan-in propagator compositions. Let's open up our thinking around this more.
+
+
+** BSP-LE 2B
+
+Q1.
+Is it that much more to design and implement for an efficient asynchronous, parallel-ready NAF sub-network?
+
+Q2
+Agreed on the A/B testing data. I think this should be part of our Pre-0 investigation. Very interested in analyzing the data with you to determine the most optimal path forward on this.
+
+Q3
+I think it should be set-semantics. Requiring order-parity is too strict and I don't think is the right semantic to go for, for nondet multiple solutions.
+
+Q4
+I don't believe our "fuel" is true time-based... But propagator-firing based. It's still not clear to me the best way to guarantee termination.
+
+Q5
+I think it would be good to get measurements on this point as well, to be a bit more scientific about where the threshold should sit at. I believe in earlier designs, we had put it at N=4 -- but that was arbitrary and not data-driven.
+
+
+So, I think we need to 1) Collect what the parity baseline is to understand the future scope of this track; 2) design a comprehensive microbenchmarking and adversarialy A/B testing to get more information to answer some of the open design questions.
+
+
+---
+
+The question I'm rolling around in my head is, Is this an "integration" with LF-Narrowing, or something separate that is inspired by it? My concern with strait integration, is that the LF-Narrowing was built some time back, before we had a lot of the design patterns and architecture that we have now; and so, I'd want to consider this from pure grounds based on our "all-at-once, all-parallel, structurally emergent information flow on network design thinking" frame, with all the mechanisms and infrastructure we have now.
+
+It's unclear if that's re-working an older system, or composing a new one with pieces we already have?
+
+
+
+---
+
+That 24.5x cost is certainly concerning. I wonder if we can identify the precise costs and components involved, and any way we might win back some efficiencies or improvements.
+
+
+
+---
+
+I agree we should capture this data in the document.
+
+I wonder if there's something in the Threads approach that can be optimized, to bring that speed-up point to a lower N?
+
+
+*** [[../tracking/2026-04-10_BSP_LE_TRACK2B_SELF_CRITIQUE.md][Self Critique]]
+
+P2/R2 - Expand scope to fire-once (self-cleaning) propagator, keeping single clause queries on the fast path.
+
+
+R4 - let's verify
+
+
+The critique points: M1, P1, P5, P6, M4 -- all raise issues with state that is not on-network, that are dismissed. How does this affect our Self-Hosting Compiler, if these values are not on-network? I think I share the critique concerns more than the dismissal.
+
+*** [[../tracking/2026-04-10_BSP_LE_TRACK2B_EXTERNAL_CRITIQUE.md][External Critique]]
+
+P1/R1
+The point of this is to develop BSP solver--and to make it as efficient as possible. We want to explore the potential of parallel search and resolution of logic programming. This is what we're here for, and making it as optimal and competitive as we can.
+
+P2
+Was this not adequately captured in the design document?
+
+P3
+Emergent is good.
+
+P4
+In what phase does this fit.
+
+P5
+There was another insight from the hypercube research conversation, regarding optimal ordering with chains. Does this apply here, while still being structurally emergent (not a sequential mapping)?
+
+P6
+We don't need/want to retire DFS necessarily. BSP isn't a replacement, it's an alternative solver that we're developing (we're hoping to have multiple different solver backends, potentially).
+
+R2
+ok
+
+R3
+ok
+
+R4
+let's update appropriately
+
+R5
+I'm not concerned. We have mechanisms to talk to parent networks, across networks, component-indexd or otherwise. We can get to the specifics when we go into deeper design for that phase.
+
+R6
+ok
+
+M1
+NAF needs to be brought on network
+
+M2
+We will need to make this cell, structurally emergent information flow
+
+M3
+imperative vocabulary, but information flow... let's update the language in the design document. This was the same critique point from the self-critique. Did we not update the design document carefully? There are a lot of repeat points, and missed updates it seems... concerning.
+
+M4
+How should we address this?
+
+M5
+Let's add the wiring in the NTT model
+
+M6
+Agreed
+
+
+
+
+
+
+
+
+- [ ] TMS merge gap investigation (union type <Nat | Bool> regression)
+- [ ] DFS <-> propagator parity testing
+- [ ] Inert-dependent data review
+- [ ] :auto -> propagator switch (if parity gaps addressed)
+- [ ] Test consolidation (Phase T)
+- [ ] PIR
+
+* Blockers
+
+- TMS merge gap gates full current-speculation-stack retirement
+- DFS parity gaps may require propagator solver extensions

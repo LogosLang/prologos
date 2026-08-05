@@ -1,0 +1,144 @@
+#+TITLE: Standup — 2026-05-17
+#+DATE: 2026-05-17
+
+* Yesterday (since 2026-05-13 standup)
+
+A 4-day interval; the principal thread was **closing PPN 4C Tropical Quantale
+Addendum Phase 1 entirely** with PIR. 13 commits across that arc, completing
+the §11.X.4 → §11.X.7 sub-phases (Commits 4-8 of the Phase 1V atomic-close
+plan), plus the PIR write-up.
+
+** PPN 4C Tropical Quantale Addendum — Phase 1 ATOMIC CLOSE ✓
+
+The Phase 1V multi-commit atomic close arc landed cleanly per the ε-multi
+sub-phase plan (revised to 8 commits during execution per Option (d) gate
+deferral discipline + new optimization items surfacing during execution).
+
+*** Commits since 2026-05-13
+
+| Commit    | Description |
+|-----------+-------------|
+| ~90c271fa~ | 1V Commit 4 — Option C gate re-calibration (§13.7.A) + 3 codifications graduated |
+| ~48b3993d~ | 1V Commit 5 mini-design + mini-audit (§11.X.4) — Item #1-quater worldview-cache caching |
+| ~a69638ae~ | 1V-5 — Item #1-quater worldview-cache direct-ref caching (FORWARD-INVESTMENT; pattern reuse validated) |
+| ~252f8c87~ | 1V Commit 6 mini-design + mini-audit (§11.X.5) — F14 retirement |
+| ~b1b5b9ce~ | 1V-6 — F14 retirement (tropical-fuel-merge-for-cell inlined-duplicate) |
+| ~48f52ed2~ | session arc state snapshot + continuation considerations (post-Commit-6b) |
+| ~278be33d~ | 1V Commit 7 mini-design + mini-audit (§11.X.6) — Item #3 SRE property-sweep |
+| ~a4e9f417~ | 1V-7 — Item #3 SRE property-sweep verification for tropical-fuel domain (F11 GATE PASSED) |
+| ~b8405dfb~ | Phase 1V Commit 8 — ATOMIC VAG + PHASE 1 CLOSE (ALL GATES PASS) |
+| ~e0d553bd~ | PPN 4C Tropical Quantale Addendum Post-Implementation Review |
+
+Phase 1 commit total (sub-phases 1A-iii-b + 1A-iii-c + 1B four sub-phases +
+1C six sub-phases + 1V eight sub-phases + atomic close + PIR) = **16
+sub-phase commits**.
+
+*** Architectural deliverables
+
+The PIR ([[file:../tracking/2026-05-17_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_PIR.md][PIR]]) frames TWO deliveries:
+
+- **Delivery 1 (FORESEEN)**: Tropical quantale as first production
+  optimization-quantale instantiation in our architecture
+- **Delivery 2 (UNFORESEEN)**: Specialized cell type framework +
+  Cell/Propagator/Scheduler Orthogonality principle codified
+
+Delivery 2 reaches further architecturally — it establishes a template
+that PReduce + OE + PM 12 + SH Series consume.
+
+*** Cumulative Phase 1 metrics
+
+- ~2649 LoC removed across Phase 1A (deprecated ATMS API + surface AST
+  14-file pipeline)
+- Cell-write fast path: 3.94-4.52 ns/cycle production (-47.9% vs
+  pre-Item-#1 baseline 7.56 ns/cycle)
+- Cell-read: 10.9 ns/call (-85% vs pre-Item-#1-bis 74.3 ns)
+- GC profile: zero major-GC at 100k decrements (R3 baseline preserved
+  structurally throughout Phase 1)
+- 5700× memory improvement at 100k decrements vs Pre-0 A7.3 baseline
+- 3 codifications graduated:
+  - DEVELOPMENT_LESSONS.org ×2 (Cache Projection Read/Write Independence
+    + Cache Write-Through with Persistent CHAMP)
+  - DESIGN_PRINCIPLES.org ×1 (Specialized Cell Type Framework as
+    Cross-Track Template)
+- 3 well-known direct-ref cache instances template established:
+  ~under-speculation?~ (1B-ii) + ~fuel-cell-cache~ (1V-3) +
+  ~worldview-cache-cache~ (1V-5) — empirically grounded for future
+  consumers
+- Multi-quantale composition NTT model shipped with quantaloid
+  forward-compatibility (§4.2)
+- Cell/Propagator/Scheduler Orthogonality principle codified
+  prophylactically (DESIGN_PRINCIPLES.org)
+- Track 2I property-sweep wired for first atomic numeric domain
+  (precedent for OE MemoryCostQ/MessageCountQ + PReduce e-class cost
+  dimensions)
+- Form C cross-reference closure at parent design doc §9.5.A
+
+*** Architectural state at Phase 1 close
+
+| Layer | Pre-Phase-1 | Post-Phase-1 |
+|---|---|---|
+| ATMS substrate | atms struct + 14-file surface AST + 13 deprecated functions | RETIRED; modern solver-context sole substrate |
+| Fuel state | imperative counter; struct field; macro accessor | Cell IS live state; specialized cell-meta dispatch; on-write-check predicate at cell layer; 3 well-known caches |
+| Tropical algebra | non-existent | tropical-fuel-primitives.rkt + tropical-fuel.rkt (cycle-safe two-layer split); 11 declared properties validated |
+| ~specialized-cell-meta~ | non-existent | 6 fields (tier + storage + fires-on + on-write-check + on-read-check + merge-fn) |
+| ~prop-net-warm~ struct | 2 fields | 5 fields (added 3 well-known cache fields) |
+| Codified principles | (existing) | + Orthogonality + Specialized Cell Type Framework + Cache Projection patterns ×2 |
+
+** Architectural conversations explored
+
+In the Phase 1V continuation sessions, several deep architectural
+threads opened up — captured in the session-arc state snapshot
+(~48f52ed2~) and the PIR §6 Lessons:
+
+- **Specialized cells AS IR vocabulary** — the §4.6 framework
+  declarations aren't just runtime hints; they're vocabulary for any
+  runtime that interprets cells (Racket BSP, Zig-LLVM, future). Item
+  #1-bis cache-on-prop-net-warm becomes IR design, not Racket
+  optimization.
+- **Compiler-IS-network at weeks-to-months timescale** — the Zip PoC
+  has demonstrated ~.pnet~ → LLVM lowering is feasible; the architecture
+  has produced a compiler that wasn't explicitly designed for, vindicating
+  the Hyperlattice Conjecture. SH Series Track 4 is closer than originally
+  thought.
+- **PM 12 (parameters → cells)** — anticipated to consume the §4.6
+  framework as the migration vocabulary. PM Master should carry a
+  forward-pointer (small, no-design-commitment addition).
+- **PReduce + multi-dim tropical quantale + persistent e-class cells**
+  — the §4.2 multi-quantale composition NTT model finds its first
+  consumer; framework extensions (~:storage 'e-class~,
+  ~:fires-on 'min-cost-decrease~, ~:durability 'persistent~) become
+  IR vocabulary additions.
+
+** Suite + runtime state at session close
+
+- HEAD: ~e0d553bd~ (PIR)
+- Tests: 8224 / ~93s / 0 failures
+
+
+* Today
+
+Continuing the work on PPN 4C, fresh. The natural next-track candidates
+per the design doc + PIR §What's Next:
+
+- **Phase 1E** (~that-*~ storage unification per D.3 §7.6.16) — 5
+  carry-forward Q1-Q5; conversational Stage 4 mini-design
+- **Phase 2** (orchestration unification per D.3 §8) — separate
+  addendum after Phase 1 closes
+- **Phase 3A/B/C** (union types via ATMS + hypercube + residuation
+  error explanation per D.3 §9) — Phase 3C is the FIRST DOWNSTREAM
+  CONSUMER of Form C cross-reference at parent design doc §9.5.A
+- **Phase 4** (CHAMP retirement, parent track) — coordinates with PM
+  Track 12
+
+Cross-series candidates that just unblocked:
+
+- **PReduce Series Track 1** (e-class cell substrate) — gated on PPN
+  4C Phase 1B which is now landed; inherits §4.6 specialized cell
+  framework
+- **PM Track 12** (parameters → cells) — anticipated to consume §4.6
+  framework
+- **OE Series Track 0** — first production landing IS this addendum;
+  OE Master tracking decision deferred to user
+
+
+

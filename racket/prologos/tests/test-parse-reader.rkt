@@ -490,33 +490,41 @@
 ;; discriminated by position, not by lexeme.
 ;; ============================================================
 
-;; ⚠ D4.P4c-2 — THE EIGHT FLIPS, AND THEY HAVE NOW FLIPPED BACK.
-;; They first changed because the `:` gate mints `$bcast-step` for a
-;; keyword/colon-annotation token byte-adjacent to a non-empty local result.
-;; They have since RETURNED to their pre-mint datums, because P4c-2's inverted
-;; default (owner ruling) makes `broadcast-enabled-contexts` EMPTY: the reader
-;; post-pass unwraps uniformly, so no sentinel survives and the mint is provably
-;; equivalent to not minting at all.
+;; ⚠ D4.P4c-4c / G2 — THE EIGHT FLIPS HAVE NOW FLIPPED FORWARD, AS THIS COMMENT
+;; PREDICTED. Its last line used to read "P4c-3 enables contexts one at a time;
+;; these flip AGAIN, forward, then." That is this commit: G2 retires the
+;; enable-set, preservation is unconditional, and the `$bcast-step` sentinel
+;; survives the reader post-pass on every shape that MINTS.
 ;;
-;; ⭐ That round trip is the POINT, and it is the strongest evidence the arc
-;; produced: a pin that flipped away and flipped back to the identical value is
-;; a mechanical demonstration that the mint + unwrap compose to the identity on
-;; every one of these shapes. It is also why the corpus A/B against the pre-mint
-;; baseline is ZERO across 163 files rather than merely "no diffs we noticed".
-;; P4c-3 enables contexts one at a time; these flip AGAIN, forward, then.
+;; ⭐ THE ROUND TRIP WAS THE POINT AND IT IS NOW COMPLETE — pre-mint → mint →
+;; unwrapped-back-to-identical (P4c-2's inverted default) → preserved (here).
+;; The middle leg is what made "regression-free" checkable rather than promised:
+;; a pin that flipped away and flipped back to the identical value mechanically
+;; demonstrated that mint + unwrap compose to the identity. This leg is the
+;; feature actually arriving.
+;;
+;; ⚠ These pins are about TOKENIZATION (Q_M8: `:10` is ONE token), not about
+;; broadcast. Their proposition is unchanged — the lexeme is still one token; it
+;; is now WRAPPED. Read `($bcast-step :10)` as "one token, preserved", not as a
+;; different tokenization.
+;; ⚠ THE NON-MINTING NEIGHBOURS BELOW MUST STILL NOT MOVE, and that is what makes
+;; this set discriminating rather than a bulk rename: `x:0abc`/`x:10abc` shatter
+;; (the annotation arm declines, leaving a bare `colon` OUTSIDE the trigger) and
+;; `{:10 v}`/`{:0 v}` are branch-initial (EMPTY local result). If a future change
+;; makes those mint too, these assertions are what will catch it.
 ;; ⚠ Two neighbours must NOT move and are load-bearing: `x:0abc`/`x:10abc`
 ;; (the annotation arm declines, the colon shatters to a bare `colon`, which is
 ;; OUTSIDE the trigger) and `{:10 v}`/`{:0 v}` (branch-initial ⇒ EMPTY local
 ;; result). Admitting bare `colon` to the trigger would break both.
 (test-case "Q_M8: :10 is ONE token, like :0…:9 (was: `:` + `10`)"
-  (check-equal? (read-all-forms-string "users:10") '((users :10)))
-  (check-equal? (read-all-forms-string "users:127") '((users :127))))
+  (check-equal? (read-all-forms-string "users:10") '((users ($bcast-step :10))))
+  (check-equal? (read-all-forms-string "users:127") '((users ($bcast-step :127)))))
 
 (test-case "Q_M8: single-digit and w/m forms are UNCHANGED (must-not-break)"
-  (check-equal? (read-all-forms-string "users:0") '((users :0)))
-  (check-equal? (read-all-forms-string "users:9") '((users :9)))
-  (check-equal? (read-all-forms-string "users:w") '((users :w)))
-  (check-equal? (read-all-forms-string "users:m") '((users :m))))
+  (check-equal? (read-all-forms-string "users:0") '((users ($bcast-step :0))))
+  (check-equal? (read-all-forms-string "users:9") '((users ($bcast-step :9))))
+  (check-equal? (read-all-forms-string "users:w") '((users ($bcast-step :w))))
+  (check-equal? (read-all-forms-string "users:m") '((users ($bcast-step :m)))))
 
 (test-case "Q_M8: the trailing ident-continue GUARD still declines after the LAST digit"
   ;; The widened digit run must test `not ident-continue?` AFTER the last digit,
@@ -530,8 +538,8 @@
   (check-equal? (read-all-forms-string "x:0abc") '((x : 0 abc)))
   (check-equal? (read-all-forms-string "x:10abc") '((x : 10 abc)))
   ;; …while the LETTER arm still yields keywords, which is why the guard exists:
-  (check-equal? (read-all-forms-string "x:where") '((x :where)))
-  (check-equal? (read-all-forms-string "x:wm") '((x :wm))))
+  (check-equal? (read-all-forms-string "x:where") '((x ($bcast-step :where))))
+  (check-equal? (read-all-forms-string "x:wm") '((x ($bcast-step :wm)))))
 
 (test-case "Q_M8: {:10 v} is a legal map key — the LATENT DEFECT this repairs"
   ;; `{:0 v}`, `{:1 v}`, `{:9 v}` were legal today while `{:10 v}` SHATTERED

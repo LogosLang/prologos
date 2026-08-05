@@ -330,6 +330,7 @@
          rewrite-implicit-map
          rewrite-dot-access
          access-sentinel?   ;; D4.P3a: exported so the fold-fixpoint obligation is test-pinnable
+         bcast-step?        ;; D4.P4c-4b: same reason — the ω sentinel's membership is pinned
          map-literal-brace-params?
          rewrite-nil-dot-access
          rewrite-infix-operators
@@ -1165,6 +1166,9 @@
        (not (eq? x '$select-brace))     ; D4.P1b-iii adjacent-brace select block
        (not (eq? x '$select))           ; D4.P3a fused select head (LOUD-if-missed: whole-file abort in a defmacro template)
        (not (eq? x '$select-path))      ; D4.P4b-ii-2b the DOT select head — same LOUD-if-missed class
+       (not (eq? x '$preparse-error))   ; D4.P4c-4c/G2 the preparse seam marker — LOUD-if-missed: a
+                                        ; template occurrence would raise "Unbound pattern variable"
+                                        ; out of preparse, i.e. the very abort this marker prevents
        ;; ⚠ WHY $dot-brace IS HERE (caught by adversarial verify, pre-commit):
        ;; omitting it made `.{ }` inside a defmacro TEMPLATE read as a macro
        ;; pattern variable, so datum-subst raised "Unbound pattern variable" —
@@ -2235,7 +2239,23 @@
        ;; defn — spec injection
        [(eq? head 'defn)
         (define injected (maybe-inject-spec datum))
-        (preparse-expand-form injected)]
+        ;; ⚠ MIRRORS preparse-expand-all's where-injection pass (:3225-3232).
+        ;; Without it, `spec f … where (Add A)` + `defn f` came out of -single
+        ;; with the `where` clause STILL ATTACHED and no implicit dict parameter,
+        ;; while -all produced `$Add-A`. The two expanders feed DIFFERENT spines
+        ;; (-all the preparse spine, -single the tree spine + form-cells), and
+        ;; driver.rkt's merge compares their outputs — so a pass present in one
+        ;; and absent in the other reads as a PARSER divergence that is nothing
+        ;; of the kind. MEASURED: this single omission was 12 of the 26 remaining
+        ;; tree/preparse divergences across the 163-file corpus (98% -> 99%).
+        ;; Invisible until now only because the tree spine's output is not
+        ;; admitted (`tree-spine-admitted?`, driver.rkt).
+        ;; Pinned by tests/test-preparse-expand-parity.rkt.
+        (define where-injected
+          (if (and (pair? injected) (eq? (car injected) 'defn) (memq 'where injected))
+              (maybe-inject-where injected)
+              injected))
+        (preparse-expand-form where-injected)]
        ;; Everything else — standard preparse
        [else (preparse-expand-form datum)])]
     [else (preparse-expand-form datum)]))
@@ -3111,9 +3131,40 @@
       (when (and (list? d) (>= (length d) 2) (symbol? (cadr d)))
         (hash-set! generated-decl-names (cadr d) #t))))
 
+  ;; ⭐ CIU T6 D4.P4c-4c / G2 — THE PREPARSE SEAM GUARD (owner ruling 2026-08-05).
+  ;; ONE handler, at the per-FORM boundary, converting a raise into a marker datum
+  ;; that flows to the parser as a per-command error VALUE. This is the POL.4
+  ;; conversion discipline applied to the seam itself, and it closes a class
+  ;; rather than an instance.
+  ;;
+  ;; ⚠ THE CLASS: `pipeline.md` § "A Raise on the Parse/Expansion Path Is a
+  ;; WHOLE-FILE Abort" — the reader tokenizes the whole file before any command
+  ;; runs, so a raise HERE escapes `process-file` entirely and the file yields
+  ;; NOTHING, not even the forms above it. That had shipped FOUR times in this
+  ;; track before G2 made it five: G2 lets `$bcast-step` survive into forms
+  ;; preparse CONSUMES (`require`/`ns`/`schema`/`foreign`), whose recognizers
+  ;; raise on a shape they do not know. Measured regression:
+  ;; `require [prologos::data::nat:refer [add]]` went 0 errors → abort.
+  ;;
+  ;; ⚠ WHY THE GUARD IS HERE AND NOT AT THE DIRECTIVE HEADS. The owner ruled
+  ;; option B over option A (deep-strip an enumerated set of directive heads):
+  ;; an enumeration leaves the NEXT sentinel to rediscover this, which is exactly
+  ;; how the first four happened. This seat is head-agnostic by construction.
+  ;;
+  ;; ⚠ IT MUST NOT BECOME `void`. Three earlier passes above use
+  ;; `(with-handlers ([exn:fail? void]) …)` and SWALLOW. This seat REPORTS — it
+  ;; emits `($preparse-error msg)`, which the parser converts to a per-command
+  ;; error. A guard that silences is a worse outcome than the abort it replaced,
+  ;; and the battery pins that it still reports.
+  ;; ⚠ `exn:fail?`, not `(lambda (e) #t)` — a break (Ctrl-C, a timeout signal)
+  ;; must still propagate, or the file becomes uninterruptible.
   (define result
     (for/fold ([acc '()])
               ([stx (in-list stxs)])
+      (with-handlers
+          ([exn:fail?
+            (lambda (e)
+              (cons (list '$preparse-error (exn-message e)) acc))])
       (define datum (syntax->datum stx))
       (define head (and (pair? datum) (car datum)))
       (cond
@@ -3544,7 +3595,7 @@
              ;; onto the rebuilt form, so a top-level paren group keeps its
              ;; 'prologos-paren-origin mark even when a preparse rewrite
              ;; (e.g. dot-access) fires inside it.
-             (cons (datum->syntax #f expanded stx stx) acc))])))
+             (cons (datum->syntax #f expanded stx stx) acc))]))))
   ;; ============================================================
   ;; Phase 5b: Hoist data/trait-generated defs before user forms
   ;; ============================================================
@@ -6094,6 +6145,16 @@
 (define (nil-dot-key? x)
   (and (list? x) (= (length x) 2) (eq? (car x) '$nil-dot-key)))
 
+;; D4.P4c-4b: the ω/broadcast reader sentinel, `($bcast-step |:name|)`.
+;; ⚠ ITS PAYLOAD IS COLON-LEADING, unlike `$dot-access`'s BARE symbol — the mint
+;; wraps the keyword/colon-annotation token verbatim precisely so the lexeme is
+;; never re-derived. The fold below therefore passes the payload through WHOLE
+;; and the parser does the one interpretation; splitting that across both layers
+;; would be a second recognizer, which is the F1b.7g drift class this file has
+;; already paid for repeatedly.
+(define (bcast-step? x)
+  (and (list? x) (= (length x) 2) (eq? (car x) '$bcast-step)))
+
 ;; Check if a datum element is a ($postfix-index key) sentinel
 (define (postfix-index? x)
   (and (list? x) (= (length x) 2) (eq? (car x) '$postfix-index)))
@@ -6125,11 +6186,23 @@
 ;; only MARK (`xs[0]` yields two siblings), and this fold is what joins them.
 ;; So a new selection sentinel owes THREE things, not one: a predicate, an entry
 ;; here, and a fold arm in `rewrite-dot-access` below.
+;; ⚠ D4.P4c-4b — `$bcast-step` JOINS HERE, and this membership is what Q_U16's
+;; ruling item 2 buys: the fold gate below is `access-sentinel?`'s ONLY
+;; production consumer, so joining it inherits all FOUR `rewrite-dot-access`
+;; seats at once (the main preparse, map-literal contents, the `|>` expander,
+;; the `$mixfix` expander) — which is exactly what the rejected parser-side
+;; fusion escape could not do.
+;; ⚠ It was listed as a P4c-2 deliverable and DID NOT LAND, while P4c-2 closed ✅
+;; (DEFERRED 37). It read as closed because `broadcast-access?` in this list is
+;; the RETIRED `$broadcast-access` — a DIFFERENT head. Not a live defect until
+;; now: with the enable-set empty no sentinel survived the reader post-pass, so
+;; the fold never met one.
 (define (access-sentinel? x)
   (or (dot-access? x) (dot-key? x)
       (nil-dot-access? x) (nil-dot-key? x)
       (postfix-index? x) (broadcast-access? x)
-      (dot-brace? x) (select-brace? x)))
+      (dot-brace? x) (select-brace? x)
+      (bcast-step? x)))
 
 ;; Unified rewrite for ALL access sentinels in a flat datum list.
 ;; Handles: $dot-access, $nil-dot-access, $postfix-index (live) and the
@@ -6226,6 +6299,34 @@
                 (let* ([field (cadr (car elems))]
                        [target (car acc)]
                        [wrapped `($select-path ,target ,field)])
+                  (loop (cdr elems) (cons wrapped (cdr acc)))))]
+           ;; ⭐ D4.P4c-4b — THE ω ARM. Deliberately the `$dot-access` arm above
+           ;; VERBATIM, except the payload item rides WHOLE (`,(car elems)`)
+           ;; instead of unwrapped (`,field`). Four obligations, all met by that
+           ;; one difference:
+           ;;  · FIXPOINT — the emitted head is `$select-path`, which is NOT an
+           ;;    `access-sentinel?` member, so the result cannot re-trigger this
+           ;;    fold. That is the whole of the fixpoint obligation: a
+           ;;    sentinel-headed result would make `preparse-expand-subforms`
+           ;;    re-enter and swallow one LEFT sibling per pass — the P1b-iii bug
+           ;;    that SILENTLY DROPPED a `defn` clause at zero errors.
+           ;;  · BROADCAST-NESS SURVIVES to segmentation, because the sentinel is
+           ;;    still there to be seen.
+           ;;  · COMPOSES with any base, including a `$select-path` base — the
+           ;;    fold already nests, so `a.b:name` becomes
+           ;;    `($select-path ($select-path a b) ($bcast-step |:name|))`, one
+           ;;    carrier per LEVEL. `users:0:userName` is two sibling sentinels
+           ;;    and therefore two levels (the L1 fusion case).
+           ;;  · The payload is NOT re-derived here — see `bcast-step?`.
+           ;; ⚠ `(null? acc)` = branch-initial `:`, which Q_U7 REFUSES in v1.
+           ;; Left in place (not folded) so the parser's own arm reports it with
+           ;; a guided per-command message, exactly as the bare-sentinel siblings
+           ;; do; a fold-time refusal here would have no srcloc to point at.
+           [(bcast-step? (car elems))
+            (if (null? acc)
+                (loop (cdr elems) (cons (car elems) acc))
+                (let* ([target (car acc)]
+                       [wrapped `($select-path ,target ,(car elems))])
                   (loop (cdr elems) (cons wrapped (cdr acc)))))]
            [(nil-dot-access? (car elems))
             (if (null? acc)

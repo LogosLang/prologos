@@ -5,6 +5,8 @@
 ;;;
 
 (require rackunit
+         ;; G2/B: `yields-prologos-error?` — preparse failures are VALUES now
+         "test-support.rkt"
          racket/string
          racket/list
          racket/set
@@ -152,21 +154,29 @@
 ;; ========================================
 
 (test-case "spec: error when defn has inline types AND spec"
-  (check-exn
-   exn:fail?
+  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
+  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
+  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
+  ;; they still raise (they fail before the guarded seam), and converting them
+  ;; would have weakened a correct assertion.
+  (check-true (yields-prologos-error?
    (lambda ()
      (run (string-append
            "(spec add Nat Nat -> Nat)\n"
            "(defn add [x : Nat y : Nat] : Nat\n"
-           "  (natrec Nat x (fn (k : Nat) (fn (r : Nat) (suc r))) y))")))))
+           "  (natrec Nat x (fn (k : Nat) (fn (r : Nat) (suc r))) y))"))))))
 
 (test-case "spec: error when defn has angle-bracket return type AND spec"
-  (check-exn
-   exn:fail?
+  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
+  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
+  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
+  ;; they still raise (they fail before the guarded seam), and converting them
+  ;; would have weakened a correct assertion.
+  (check-true (yields-prologos-error?
    (lambda ()
      (run (string-append
            "(spec inc2 Nat -> Nat)\n"
-           "(defn inc2 [x] <Nat> (suc (suc x)))")))))
+           "(defn inc2 [x] <Nat> (suc (suc x)))"))))))
 
 ;; ========================================
 ;; 7. No-spec cases (existing behavior unchanged)
@@ -225,20 +235,28 @@
   (check-equal? (last results) "3N : Nat"))
 
 (test-case "spec: multi-arity branch count mismatch → error"
-  (check-exn
-   exn:fail?
+  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
+  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
+  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
+  ;; they still raise (they fail before the guarded seam), and converting them
+  ;; would have weakened a correct assertion.
+  (check-true (yields-prologos-error?
    (lambda ()
      (run (string-append
            "(spec greet ($pipe Nat -> Nat) ($pipe Nat Nat -> Nat))\n"
-           "(defn greet ($pipe [x] (suc x)))")))))
+           "(defn greet ($pipe [x] (suc x)))"))))))
 
 (test-case "spec: single spec with multi-body defn → error"
-  (check-exn
-   exn:fail?
+  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
+  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
+  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
+  ;; they still raise (they fail before the guarded seam), and converting them
+  ;; would have weakened a correct assertion.
+  (check-true (yields-prologos-error?
    (lambda ()
      (run (string-append
            "(spec greet Nat -> Nat)\n"
-           "(defn greet ($pipe [x] (suc x)) ($pipe [x y] x))")))))
+           "(defn greet ($pipe [x] (suc x)) ($pipe [x y] x))"))))))
 
 ;; ========================================
 ;; 10. Dependent parameter syntax
@@ -335,12 +353,16 @@
   ;; The spec should still be looked up by name and inject remaining params
   ;; Actually, {A} is detected as $brace-params — need to test this case
   ;; For now, verify that defn with {A} and typed params + spec → conflict error
-  (check-exn
-   exn:fail?
+  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
+  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
+  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
+  ;; they still raise (they fail before the guarded seam), and converting them
+  ;; would have weakened a correct assertion.
+  (check-true (yields-prologos-error?
    (lambda ()
      (run (string-append
            "(spec id A -> A)\n"
-           "(defn id {A} [x : A] : A x)")))))
+           "(defn id {A} [x : A] : A x)"))))))
 
 ;; ========================================
 ;; spec + def
@@ -366,13 +388,21 @@
   (check-equal? (last results) "2N : Nat"))
 
 (test-case "spec: def with spec AND inline type errors"
-  (check-exn
-   exn:fail?
+  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
+  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
+  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
+  ;; they still raise (they fail before the guarded seam), and converting them
+  ;; would have weakened a correct assertion.
+  (check-true (yields-prologos-error?
    (lambda ()
-     (run "(spec foo Nat)\n(def foo <Nat> zero)"))))
+     (run "(spec foo Nat)\n(def foo <Nat> zero)")))))
 
 (test-case "spec: multi-arity spec with def errors"
-  (check-exn
-   exn:fail?
+  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
+  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
+  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
+  ;; they still raise (they fail before the guarded seam), and converting them
+  ;; would have weakened a correct assertion.
+  (check-true (yields-prologos-error?
    (lambda ()
-     (run "(spec foo ($pipe Nat -> Nat) ($pipe Bool -> Bool))\n(def foo zero)"))))
+     (run "(spec foo ($pipe Nat -> Nat) ($pipe Bool -> Bool))\n(def foo zero)")))))

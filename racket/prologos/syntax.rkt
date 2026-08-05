@@ -174,7 +174,7 @@
  select-sorts select-sort? select-sort-unhandled
  ;; D4.P4a: the step-kind totality dispatcher + the consumer-side else
  select-step-kind select-step-kind-unhandled select-step-kind/display
- select-bcast-step? select-bcast-inner make-select-bcast select-bcast-not-yet
+ select-bcast-step? select-bcast-inner make-select-bcast
  select-step-cont select-cont-collapse? select-cont-rename
  select-branch-collapse select-branch-keyless?
  select-step-output-name select-synth-name select-branch-top-keys
@@ -876,9 +876,18 @@
 ;; to MERGE adjacent wrappers — the normalization pass 4b exists to forbid), and
 ;; the per-step grade field (taxes the whole landed vocabulary for one grade).
 ;;
-;; ⚠ A WRAPPER NEVER HEADS A BRANCH — branch-initial `:` stays refused in v1
-;; (W2 / spec §7.3). Every branch-shaped walk may therefore treat `'bcast` as
-;; unreachable-at-head, and the ones that do say so at their arm.
+;; ⚠ CORRECTED AT D4.P4c-4b — "A WRAPPER NEVER HEADS A BRANCH" IS FALSE, and it
+;; was asserted at FOUR sites, three of which justified an arm by it.
+;; The claim conflated two different things. W2 / spec §7.3 refuses branch-initial
+;; `:` in a BLOCK (`x{:name}`) — a SURFACE rule. It says nothing about a one-step
+;; `'path` branch, and Q_U7's own `users:name → [(@bcast name)]` makes the wrapper
+;; the branch HEAD for the headline spelling: `$select-path` consumes the SUBJECT
+;; itself and hands `segment-select-items` only the steps, so the ω step arrives
+;; first with no preceding step. Measured — the first cut of the parser arm
+;; refused exactly that and reported "needs a preceding subject" for `users:name`.
+;; So `'bcast` IS reachable at head, the arms that were "written rather than
+;; omitted" are live, and the reasoning that wrote them (a surface rule is not a
+;; representation invariant) was right for a reason its own premise got wrong.
 (define (select-bcast-step? s) (and (pair? s) (eq? (car s) '@bcast)))
 
 ;; The ω step's VALUE-level semantics (map the wrapped step over the container)
@@ -891,14 +900,15 @@
 ;; the value level it would project the field off the CONTAINER instead of
 ;; broadcasting over it: a silent wrong answer, which is the one outcome this
 ;; track's totality dispatcher exists to prevent. Loud beats plausible.
-(define (select-bcast-not-yet who s)
-  (error who
-         (string-append
-          "broadcast step ~s: the ω value semantics land at CIU T6 D4.P4c-4"
-          " (PVec broadcast + the L1/extent law pins).\n"
-          "  P4c-3 landed the step KIND and its walks; until P4c-4 spell it"
-          " `[map [fn [m] m.k] xs]`")
-         s))
+;; ⚠ RETIRED AT D4.P4c-4c — the ω value semantics LANDED, so this helper
+;; named its own discharge point and then reached ZERO callers. It raised a raw
+;; `error`, which `process-command/solve-guard` does not catch, so leaving it in
+;; the tree would have left a WHOLE-FILE-ABORT primitive lying next to the
+;; walks that used to call it — the exact shape this track has shipped four
+;; times. Retired rather than kept "in case P5 needs it": ban-dual-paths.
+;; What replaced it: typing refuses through the failure slot the walks already
+;; thread (`bcast-carrier` in typing-errors.rkt), and reduction reports through
+;; `(return (expr-panic …))` via the single `let/ec`. Two channels, neither a raise.
 
 ;; The wrapped step. Total on `select-bcast-step?` values by construction: the
 ;; smart constructor is the only producer and it always supplies one.
@@ -1188,12 +1198,13 @@
             (if (null? rest) (list #f) (select-branch-top-keys rest))]
            [(sub) (append-map select-branch-top-keys (cdr s))]
            ;; D4.P4c-3 (Q_U7): ω is key-transparent — the component set is the
-           ;; WRAPPED step's, with the same rest. ⚠ A wrapper never HEADS a
-           ;; branch in v1 (branch-initial `:` is refused, W2/spec §7.3), so
-           ;; this arm is unreachable-at-head today; it is written rather than
-           ;; omitted because the refusal is a SURFACE rule, and a surface rule
-           ;; is not a representation invariant — P5's factoring rewrites
-           ;; branches and could produce one.
+           ;; WRAPPED step's, with the same rest. ⚠ POLARITY CORRECTED at
+           ;; P4c-4b: this arm is NOT "unreachable-at-head today" — it is REACHED
+           ;; by the headline spelling `users:name`, because `$select-path`
+           ;; consumes the subject and the ω step arrives first. See
+           ;; `select-bcast-step?`'s header. The arm was written on the reasoning
+           ;; that a surface rule is not a representation invariant; that
+           ;; reasoning was right and its premise was wrong.
            [(bcast) (select-branch-top-keys (cons (select-bcast-inner s) rest))]
            [(caret)
             (let ([c (select-step-cont s)])

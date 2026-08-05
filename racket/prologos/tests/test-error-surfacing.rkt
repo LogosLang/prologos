@@ -77,6 +77,33 @@
   (check-true (string-contains? (format "~a" (list-ref results-hints 0)) "[mod _ _]"))
   (check-true (string-contains? (format "~a" (list-ref results-hints 1)) "ord-le")))
 
+;; (issue #69, 2026-08-02) ALL FOUR angle-conflicted comparison spellings must be
+;; guided — `<` most of all, since it is the token #69 is named after.
+;;
+;; ⚠ WHY `<` WAS MISSING, and why this is pinned: the hint table carried `<=`,
+;; `>=` and `>` but not `<`, on the strength of a comment asserting "bare `<`
+;; never reaches elaboration (issue #69(a) reader tokenization)". That was true
+;; when written. #69(a)'s OWN FIX — bare `<` no longer opens an angle group
+;; without a matching `rangle` — is precisely what made it false, so the token
+;; the issue is about became the only comparison operator answering with a bare
+;; "Unbound variable". A fix elsewhere invalidated the assumption that justified
+;; an omission here; nothing failed, because nothing was watching.
+(define results-cmp-hints
+  (run-ns-ws-all (string-join
+                  (list "ns e53cmp"
+                        "eval [filter [< _ 3] '[1]]"
+                        "eval [filter [> _ 3] '[1]]"
+                        "eval [filter [<= _ 3] '[1]]"
+                        "eval [filter [>= _ 3] '[1]]")
+                  "\n")))
+
+(test-case "e53/all-angle-conflicted-comparisons-are-guided"
+  (for ([i (in-range 4)]
+        [spelling (in-list '("<" ">" "<=" ">="))])
+    (define s (format "~a" (list-ref results-cmp-hints i)))
+    (check-true (string-contains? s "ord-lt/ord-le/ord-gt/ord-ge")
+                (format "`~a` produced no op-spelling hint: ~a" spelling s))))
+
 (test-case "e53/no-hint-on-ordinary-unbound"
   (define s (format "~a" (list-ref results-hints 2)))
   (check-true (string-contains? s "Unbound variable"))

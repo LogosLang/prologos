@@ -193,21 +193,3 @@ current-worldview-hasse-registry-handle
 current-zonk-call-counts
 
 # --- CIU T6 D4.P4c-4a (2026-08-02) ---
-# `broadcast-enabled-contexts` is EXPORTED ON PURPOSE, as a test seam
-# (DEFERRED 38): before it, the entire broadcast-preservation walk could only be
-# exercised by SOURCE MUTATION on a scratch build, and mutation-only validation
-# is what let three enumeration gaps through that arc.
-#
-# NOT added to test-support.rkt's parameterize blocks, deliberately. Five of
-# those six blocks are PER-RUN helpers, so resetting this parameter there would
-# clear the grant inside the very helpers a test uses to exercise it — it would
-# defeat the seam rather than protect it.
-#
-# It cannot leak: `grep -rn broadcast-enabled-contexts racket/ | grep -v tests/`
-# is exactly three hits — the provide, the definition, and the read in
-# `broadcast-preservation-active?`. NO production code ever sets it, so every
-# set is a test's own dynamically-scoped `parameterize`, which unwinds.
-#
-# Retirement: PPN Track 4D (attribute-grammar substrate unification) — the
-# chartered home for the on-network reader. Not PM Track 12.
-broadcast-enabled-contexts

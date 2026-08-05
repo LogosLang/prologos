@@ -118,6 +118,42 @@ walker; a fix applied to one member of a container family (champ/hset/rrb +
 transients) but not its siblings; "the suite is green" offered as evidence that a
 walker is complete.
 
+## A Raise on the Parse/Expansion Path Is a WHOLE-FILE Abort
+
+**Prologos reports per-COMMAND errors — but only for values that FLOW.** A Racket
+exception RAISED on the reader / preparse / parse path escapes `process-file`
+entirely, so the file produces **nothing at all** — not even the forms that
+already succeeded above it. Same-looking change, categorically different blast
+radius.
+
+**The tell**: output is **EMPTY, not partial**. `def before := 1` / bad form /
+`def after := 2` printing nothing — *not even `before`* — is a raise, not an
+error. The moment output stops being partial, stop looking at the form that
+failed and look for a raise.
+
+**Two generators, both recurring:**
+1. **A new sentinel, an old recognizer.** Adding a reader sentinel (`$dot-key`,
+   `$dot-brace`, `$list-literal`, `$postfix-index`, …) obliges EVERY recognizer
+   that switches on sentinel identity — `pattern-var?`, `access-sentinel?`, the
+   fold arms. Miss one and it reaches a partial helper (`symbol->string` on a
+   number, `datum-subst` on an unknown tag). ⚠ `pattern-var?`'s residual was
+   measured at **23 of 33**, `$list-literal` included — so `'[1 2]` inside a
+   `defmacro` **template** is a whole-file abort **today**. Test the TEMPLATE
+   path; that is the one that raises.
+2. **An unguarded parameter whose default is the impossible input.**
+   `current-source-str` defaults to `""`, and `pos->line-col` (`parse-reader.rkt`)
+   does `(string-ref str i)` with only an `i >= pos` check and no length check.
+   Verify the guard actually **encloses** the call — `parse-eval-tree-for-cell`
+   had a `with-handlers` that did not.
+
+**A GREEN SUITE IS NO DEFENCE**, and neither is an error-count gate: a whole-file
+abort makes a file produce no results, which a count-based gate reads as "no
+errors". Gate corpus changes on **FULL OUTPUT**. Several instances of this class
+were BLOCKING and were caught only by an adversarial verify, under green suites.
+
+See `DEVELOPMENT_LESSONS.org` § "A Raise on the Parse/Expansion Path Is a
+WHOLE-FILE Abort, Not an Error".
+
 ## New Memo / Cache Keyed on an AST Node
 
 **Use `hasheq`, never `hash`, when the key is an expr tree.** Racket's

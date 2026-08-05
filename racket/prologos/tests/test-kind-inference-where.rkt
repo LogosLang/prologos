@@ -245,7 +245,12 @@
 (test-case "D2 conflict: explicit wrong kind + where constraint — error"
   ;; If user explicitly writes {C : Type -> Type -> Type} but where (Seqable C)
   ;; expects Type -> Type, should error
-  (check-exn exn:fail?
+  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
+  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
+  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
+  ;; they still raise (they fail before the guarded seam), and converting them
+  ;; would have weakened a correct assertion.
+  (check-true (yields-prologos-error?
     (lambda ()
       (run-ns-with-spec-store
         (string-append
@@ -254,7 +259,7 @@
           "(imports [prologos::data::lseq :refer [LSeq]])\n"
           "(spec my-conflict ($brace-params C : Type -> Type -> Type)"
           "  ($brace-params A)"
-          "  (C A) -> (LSeq A) where (Seqable C))\n")))))
+          "  (C A) -> (LSeq A) where (Seqable C))\n"))))))
 
 ;; ========================================
 ;; 5. Metadata :where syntax

@@ -11,6 +11,8 @@
 ;;;
 
 (require rackunit
+         ;; G2/B: `yields-prologos-error?` — preparse failures are VALUES now
+         "test-support.rkt"
          racket/string
          racket/list
          racket/hash
@@ -254,11 +256,21 @@
   (check-equal? (hash-ref md ':compose #f) 'xf-compose))
 
 (test-case "process-functor: error when :unfolds missing"
-  (check-exn
-    exn:fail?
-    (lambda ()
-      (functor-for 'Bad
-        "(functor Bad ($brace-params A : (Type 0)) ($brace-params :doc \"oops\"))"))))
+  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
+  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
+  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
+  ;; they still raise (they fail before the guarded seam), and converting them
+  ;; would have weakened a correct assertion.
+  ;; ⚠ `functor-for` DISCARDS the result list and returns the registry lookup, so
+  ;; the generic `yields-prologos-error?` conversion does not fit here — it would
+  ;; be scanning a lookup, not a result. The proposition is unchanged and is
+  ;; asserted directly: the malformed functor MUST NOT REGISTER.
+  ;; (The preparse error itself is reported per-command — visible in the run
+  ;; output as `preparse: functor: functor Bad: requires :unfolds type expression`
+  ;; — and the file continuing past it is exactly what G2/B bought.)
+  (check-false (functor-for 'Bad
+                 "(functor Bad ($brace-params A : (Type 0)) ($brace-params :doc \"oops\"))")
+               "a functor missing :unfolds must not be registered"))
 
 ;; ========================================
 ;; 5. ?? Typed holes — reader and parser

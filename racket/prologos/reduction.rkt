@@ -1646,14 +1646,66 @@
   ;; production caller, which passes both; requiring them keeps it that way.
   (let/ec return
     (define (kw-of label) (expr-keyword label))
+    ;; ⭐ D4.P4c-4c (DEFERRED 43) — CHAMP-OF NOW TIER-FORKS, mirroring `project`
+    ;; below and the top-level `expr-get` sibling. It used to panic
+    ;; UNCONDITIONALLY on a non-map, which is the mirror of the tier bug on the
+    ;; typing side: a PERMISSIVE carrier (a union, a dyn row, a selection view)
+    ;; degrades quietly everywhere else in the language, and under ω it panicked.
+    ;; One root cause with the typing half, two opposite symptoms.
+    ;;
+    ;; ⚠ AND THE OLD MESSAGE WAS FALSE AT A `'path` SITE. It asserted "typing
+    ;; admitted the BLOCK" unconditionally. The block claim now appears only on
+    ;; the block tier, where it is true.
+    ;; ⚠ MY OWN EARLIER VERSION OF THIS COMMENT SAID `rrb-of` "reached the false
+    ;; wording anyway by delegating here" — THAT IS FALSE. `rrb-of` is
+    ;; self-contained and does not call `champ-of`; the ω path reaches `champ-of`
+    ;; through `bcast-apply` → `branch-entries`. Corrected rather than deleted
+    ;; because the same wrong clause was propagated into DEFERRED.md §43.
+    ;; ⚠ RESIDUAL, not fixed here (DEFERRED): this helper is called as
+    ;; `(champ-of v name)` with `name` = the STEP name, so the message reads
+    ;; "`a` is not a map" — naming the step, not the value. `rrb-of` gets it
+    ;; right ("this one is not a vector"). Cosmetic; filed rather than widened
+    ;; into a shared-helper signature change inside a slice that already moved
+    ;; production behaviour once.
     (define (champ-of v what)
       (let ([v* (whnf v)])
-        (if (expr-champ? v*)
-            (expr-champ-racket-champ v*)
-            (return (expr-panic
-                     (expr-string
-                      (format "select: ~a is not a map at runtime (invariant violation — typing admitted the block)"
-                              what)))))))
+        (cond
+          [(expr-champ? v*) (expr-champ-racket-champ v*)]
+          ;; tier = #f — the BLOCK sort. Typing sourced every field 'present
+          ;; (Horn D), so a non-map here really IS an invariant violation.
+          [(not tier)
+           (return (expr-panic
+                    (expr-string
+                     (format "select: ~a is not a map at runtime (invariant violation — typing admitted the block)"
+                             what))))]
+          ;; tier = (expr-true) — the assertive PATH tier. Loud, but do not claim
+          ;; anything about a "block": there isn't one.
+          [(expr-true? tier)
+           (return (expr-panic
+                    (expr-string
+                     (format "select: ~a is not a map at runtime" what))))]
+          ;; unsolved — the PERMISSIVE tier (dyn row, selection view, union).
+          ;; ⚠ THE VALUE IS `none`, NOT `<error>`, AND THAT IS A RULING THIS FILE
+          ;; ALREADY MADE 1500 LINES DOWN — `[(definitely-not-map? subj*) (if tier
+          ;; (expr-fvar 'none) …)]`, whose own comment says "Match `map-get`:
+          ;; degrade to `none`". My first cut returned `(expr-error)` and the
+          ;; adversarial verify caught that it gave a THIRD answer to a question
+          ;; with two: three adjacent union-non-map cases one line apart
+          ;; (`<Map|Int>`, `<Map|PVec>`, `<Map|Set>`) answered `none`, `<error>`,
+          ;; `none` — and the odd one out was the one this change moved.
+          ;;
+          ;; ⚠⚠ AND THAT PATH IS PRODUCTION-REACHABLE WITH NO GRANT, which
+          ;; falsified DEFERRED 43's own deferral rationale ("the grant is '(), so
+          ;; nothing here is reachable in production"). The route: the
+          ;; `expr-select` entry admits **rrb** subjects into `select-reduce`
+          ;; BEFORE the `definitely-not-map?` fork, and `expr-rrb?` is not a member
+          ;; of `definitely-not-map?` (only `expr-hset?` is). So `ub.a` where
+          ;; `ub : <[Map Keyword Int] | [PVec Int]> := @[1 2 3]` reaches here on
+          ;; the ordinary dot path. It used to PANIC "invariant violation", which
+          ;; was itself wrong — the union's Map branch is exactly why typing
+          ;; admitted `.a`, so there is no invariant violated. Degrading is right;
+          ;; degrading to the same value as its siblings is what makes it correct.
+          [else (return (expr-fvar 'none))])))
     (define (project c label)
       (let* ([kw (kw-of label)]
              [hit (champ-lookup c (equal-hash-code kw) kw)])
@@ -1726,6 +1778,80 @@
                     (expr-string
                      (format "select: ~a is not a vector at runtime (invariant violation — typing admitted the ordinal)"
                              what))))])))
+    ;; D4.P4c-4c — ⭐ THE FOURTH SITE THE PARTITION NEVER NAMED: the rrb
+    ;; container guard. `champ-of` and `index-into` are the precedent, and the
+    ;; mini-audit's warning is that they are NOT twins — one unwraps, one
+    ;; accesses. This one unwraps, so it is shaped on `champ-of`.
+    ;;
+    ;; ⚠ IT MUST `return` A PANIC, NEVER `error`. These walks carry NO failure
+    ;; slot, so a non-container has exactly two exits: the escape (a per-command
+    ;; error, file continues) or a raise (a WHOLE-FILE abort). P4c-4b split that
+    ;; channel deliberately; an `error` here re-creates precisely the abort it
+    ;; removed.
+    ;;
+    ;; ⚠ REACHABILITY, CORRECTED — my first comment here claimed "Map and
+    ;; het-tuple subjects are GUARANTEED to arrive, so this arm is the reachable
+    ;; one, not a defensive one." THE ADVERSARIAL VERIFY COULD NOT REACH IT: every
+    ;; non-PVec carrier is stopped by `select-elem-of` at TYPING, so reduction
+    ;; never runs. The honest statement is that this guard is currently
+    ;; UNREACHABLE THROUGH TYPING and exists because reduction must not depend on
+    ;; typing having run — `select-reduce` is called from whnf, and a future
+    ;; carrier widening at P4d changes the typing gate, not this one. That is a
+    ;; real reason to keep it; the reason I first wrote was not, and stating a
+    ;; false reachability invites a future reader to delete the guard.
+    ;;
+    ;; ⚠ WORDING COPIED FROM `index-into`, NOT `champ-of`. `champ-of`'s message
+    ;; asserts "typing admitted the block" unconditionally, which is FALSE under
+    ;; sort='path — and ω is a 'path construct, so inheriting that sentence would
+    ;; state something untrue at exactly the site that fires.
+    (define (rrb-of v what)
+      (let ([v* (whnf v)])
+        (if (expr-rrb? v*)
+            (expr-rrb-racket-rrb v*)
+            (return (expr-panic
+                     (expr-string
+                      (format "select: broadcast `:~a` needs a vector subject at runtime — this one is not a vector"
+                              what)))))))
+    ;; D4.P4c-4c — ONE ω step applied to a runtime value: the FUNCTORIAL LIFT,
+    ;; the ATOMIC TWIN of typing-core's `select-bcast-lift`. Unwrap one container
+    ;; layer, apply the wrapped step to EVERY element, re-wrap one layer.
+    ;;
+    ;; The caller continues the walk itself (same contract as the typing twin) —
+    ;; consuming the rest here would nest the next ω step inside this one's
+    ;; ELEMENT, which is the opposite of L1 fusion.
+    ;;
+    ;; ⚠ WHOLE-NODE ABORT (ratified, Q_U7 rider): a miss inside ANY element
+    ;; aborts the WHOLE selection. That is automatic here rather than coded —
+    ;; `project` / `index-into` / `rrb-of` all `return` through the single
+    ;; `let/ec`, so no partial vector can escape and no `expr-panic` can be
+    ;; buried in an output slot. Stated because a "map semantics" intuition
+    ;; would expect per-element recovery, and that is exactly the drift the
+    ;; ruling forbids.
+    (define (bcast-lift v s)
+      (let* ([inner (select-bcast-inner s)]
+             [name (select-step-name s)]
+             [r (rrb-of v name)])
+        (expr-rrb
+         (rrb-from-list
+          (for/list ([i (in-range (rrb-size r))])
+            (bcast-apply (whnf (rrb-get r i)) inner))))))
+    ;; Apply ONE step to ONE element, yielding the leaf value — the reduction
+    ;; analogue of typing's `select-project ctx elem (list (list inner)) sort`.
+    ;; It mirrors the top-level sort dispatch at the tail of this function
+    ;; rather than re-deciding it, so a third sort cannot inherit path
+    ;; semantics here silently.
+    (define (bcast-apply v inner)
+      (let ([entries (branch-entries v (list inner) '())])
+        (case sort
+          [(block) (entries->value entries)]
+          [(path)
+           (if (and (pair? entries) (null? (cdr entries)))
+               (cdr (car entries))
+               (return (expr-panic
+                        (expr-string
+                         (format "select: a broadcast step must yield exactly ONE component per element, got ~a (malformed carrier)"
+                                 (length entries))))))]
+          [else (select-sort-unhandled 'select-bcast-apply sort)])))
     ;; D4.P3b — one branch's entries at the CURRENT level, mirroring
     ;; typing-core's select-branch-entries over champs (the same shared
     ;; syntax.rkt walk classifies steps, so meaning cannot drift from the
@@ -1755,11 +1881,14 @@
                         [(ord-step) (index-into v s name)]
                         [(ord-branch) (index-into v (cadr s) (cadr s))]
                         [(key caret sub) (project (champ-of v name) name)]
-                        ;; D4.P4c-3 (Q_U7): the TWIN of typing-core's arm, landed
-                        ;; atomically with it. Same reason: delegation here would
-                        ;; be a champ-of over the container, i.e. a panic naming
-                        ;; the wrong thing, or worse a plausible wrong value.
-                        [(bcast) (select-bcast-not-yet 'select-walk-to-leaf s)]
+                        ;; ✅ D4.P4c-4c: the value semantics LANDED, atomically
+                        ;; with typing-core's twin. Landing either alone is not a
+                        ;; half-measure but a REGRESSION — typing-first lets a
+                        ;; successfully-typed broadcast reach this layer and
+                        ;; raise, which `process-command/solve-guard` does not
+                        ;; catch (whole-file abort); reduction-first types a
+                        ;; refusal over a value that would have worked.
+                        [(bcast) (bcast-lift v s)]
                         [else (select-step-kind-unhandled 'select-walk-to-leaf s)])])
             (if (null? (cdr steps))
                 hit
@@ -1810,13 +1939,30 @@
                [else
                 (list (cons (or (and cont (select-cont-rename cont)) name)
                             (below-value hit rest (append seen (list s)))))]))]
-          ;; D4.P4c-3 (Q_U7): a wrapper never HEADS a branch in v1 (branch-initial
-          ;; `:` is refused, W2/spec §7.3), so this is unreachable-at-head today.
+          ;; ⚠ POLARITY CORRECTED at D4.P4c-4b: NOT unreachable-at-head — `users:name`
+          ;; reaches the branch head ($select-path consumes the subject). Reduction
+          ;; KEEPS its raise here deliberately: typing now refuses through its
+          ;; failure slot, so arriving at the VALUE layer with an ω step is a
+          ;; compiler-invariant violation, not a user error. Two arms, two
+          ;; questions — not belt-and-suspenders.
           ;; It is written, not omitted: the refusal is a SURFACE rule and a surface
           ;; rule is not a representation invariant — P5's factoring rewrites
           ;; branches. Loud not-yet rather than a guess at semantics P4c-4 owns.
+          ;; ✅ D4.P4c-4c: the value semantics LANDED. THE ARM THE HEADLINE
+          ;; SPELLING REACHES (measured — `users:name` routes here, not to
+          ;; walk-to-leaf), and like its typing twin it returns a COMPONENT
+          ;; LIST, not a value. The label is `select-step-output-name`, which is
+          ;; ω-transparent by its own arm.
           [(eq? (select-step-kind (car b)) 'bcast)
-           (select-bcast-not-yet 'select-branch-entries (car b))]
+           (let* ([s (car b)]
+                  [rest (cdr b)]
+                  [label (select-step-output-name s)]
+                  [hit (bcast-lift v s)])
+             (if (null? rest)
+                 (list (cons label hit))
+                 ;; continue against the RE-WRAPPED result — this is what makes
+                 ;; `x:s:t` fuse to one layer rather than nest
+                 (list (cons label (below-value hit rest seen)))))]
           [else (select-step-kind-unhandled 'select-branch-entries (car b))])))
     ;; the COMPONENTS a dissolved head splices (terminal sub-block = that
     ;; block's level, fresh branches; else the steps continue as one branch).
@@ -1862,13 +2008,15 @@
         ;; what is actually load-bearing here, is `ord-branch`.
         [(memq (select-step-kind (car steps)) '(key caret sub ord-branch))
          (entries->value (branch-entries v steps seen))]
-        ;; D4.P4c-3 (Q_U7): `bcast` is NOT added to the memq above — that arm
-        ;; delegates to the branch walk, and the ω value semantics land at P4c-4.
-        ;; Kept explicit so the guard names the kind rather than reporting it as
-        ;; unknown, which would be false: it IS known, it is just not yet meaningful
-        ;; at the value level.
+        ;; ✅ D4.P4c-4c: the value semantics LANDED. `bcast` still does NOT join
+        ;; the memq above, and now for a second reason: that arm runs
+        ;; `entries->value`, which would wrap the broadcast result in a spurious
+        ;; level. ω descends transparently, like the ordinal arm above it.
         [(eq? (select-step-kind (car steps)) 'bcast)
-         (select-bcast-not-yet 'select-below-value (car steps))]
+         (let ([hit (bcast-lift v (car steps))])
+           (if (null? (cdr steps))
+               hit
+               (below-value hit (cdr steps) seen)))]
         [else (select-step-kind-unhandled 'select-below-value (car steps))]))
     ;; D4.P4a: HOIST the subject's whnf out of the per-branch lambda. The
     ;; header comment above has claimed since P3a that the subject is
