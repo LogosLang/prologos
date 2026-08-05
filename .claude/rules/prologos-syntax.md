@@ -115,6 +115,21 @@ it) and `=` never binds.
 - Trait methods: short names (`eq?`, `from`, `add`)
 - Module paths use `::` not `.` -- `str::length`, `prologos::data::nat`
 - Dot access is for map keys -- `user.name` -> `[map-get user :name]`
+- **`->` may appear INSIDE a name** (ARROW T1, 2026-08-05) -- `int->str`,
+  `centigrade->fahrenheit`, `a->b->c`, `str::len->int`, and the keyword form
+  `:a->b`. The rule is **identifier characters on BOTH sides**; it is NOT "no
+  surrounding whitespace" (the prefix arrow-type form `[-> A B]` glues `->` to
+  an opening bracket at 275 corpus sites and stays the arrow). A spaced ` -> `
+  is always the arrow separator, unchanged.
+  ⚠ **HALF-GLUED IS AN ERROR, and the message says so**: `a-> b` and a trailing
+  `foo->` are neither a name nor an arrow (`-` is an ident-continue char, so
+  the name truncates at the dash and a bare `>` arrives alone). `defn` and the
+  `def :=` path report "half-glued arrow"; two other manifestations do NOT yet
+  carry that hint -- `[foo-> 1]` gives a plain `Unbound variable`, and
+  `spec e-> Int -> Int` is accepted SILENTLY. Before 2026-08-05 the whole class
+  was a silent truncation, and before `2a7cbe45` (2026-07-02) even the parse
+  error was discarded, so a file could report **0 errors while defining
+  nothing**.
 
 ## Relational syntax (`defr` / `rel` / goals)
 

@@ -268,6 +268,31 @@
       (let loop ([i (+ pos 1)])
         (define nc (rrb-char-at rrb i))
         (cond
+          ;; ARROW T1 P1: `->` FLANKED BY IDENTIFIER CHARS continues the name,
+          ;; so `centigrade->fahrenheit` is one symbol.
+          ;;
+          ;; MUST precede the ident-continue? arm below: `-` is itself an
+          ;; ident-continue char, so that arm would eat the dash and leave `>`
+          ;; to terminate the token — that is exactly the `c->f` -> `c-`
+          ;; truncation this fixes (the `>` then became a stray `rangle`, which
+          ;; also POPS a bracket frame, so damage surfaced far from the cause).
+          ;;
+          ;; Shape deliberately mirrors the `::` arm below: fixed lookahead, no
+          ;; backtracking, inside the existing scan. Whitespace cannot occur
+          ;; here BY CONSTRUCTION — the scanner is mid-token, and a space would
+          ;; already have ended it — so this is glued-only without needing any
+          ;; token-adjacency substrate.
+          ;;
+          ;; Only BOTH-SIDES-glued arrows are absorbed. A spaced ` -> ` never
+          ;; reaches here and still lexes as the standalone arrow symbol, which
+          ;; is what every arrow consumer (spec signatures, match/defn arms,
+          ;; angle-group Pi types, and `binder-region-terminators`) reads.
+          [(and nc (char=? nc #\-)
+                (let ([nc2 (rrb-char-at rrb (+ i 1))])
+                  (and nc2 (char=? nc2 #\>)
+                       (let ([nc3 (rrb-char-at rrb (+ i 2))])
+                         (and nc3 (ident-continue? nc3))))))
+           (loop (+ i 3))]  ;; skip -> and the first char after it
           [(and nc (ident-continue? nc))
            (loop (+ i 1))]
           ;; :: followed by ident-start → module path continuation
@@ -548,9 +573,22 @@
         ;; than ident-start? so :=/:-foo do not collide with colon-assign. (CIU T6
         ;; F1b.7g: was an inline charset that had drifted from ident-continue? for
         ;; 8 chars; CIU T6 F3 added ^ inline without noticing the base divergence.)
-        (if (and nc (ident-continue? nc))
-            (loop (+ i 1))
-            (- i pos)))
+        ;; ARROW T1 P1 (owner ruling R1): keywords take the glued-`->` rule too,
+        ;; so `:a->b` is one keyword. Leaving this arm behind while
+        ;; recognize-symbol advanced would BE the F1b.7g drift the comment above
+        ;; records. Same shape and same both-sides-glued condition as
+        ;; recognize-symbol; must precede the ident-continue? test for the same
+        ;; reason (`-` is an ident-continue char).
+        (cond
+          [(and nc (char=? nc #\-)
+                (let ([nc2 (rrb-char-at rrb (+ i 1))])
+                  (and nc2 (char=? nc2 #\>)
+                       (let ([nc3 (rrb-char-at rrb (+ i 2))])
+                         (and nc3 (ident-continue? nc3))))))
+           (loop (+ i 3))]
+          [(and nc (ident-continue? nc))
+           (loop (+ i 1))]
+          [else (- i pos)]))
       #f))
 
 (define (recognize-single-char rrb pos expected type)
