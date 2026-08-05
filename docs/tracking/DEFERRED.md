@@ -246,7 +246,7 @@ layout ruling rather than a message fix.
    (established 2026-08-03): both are "`infer` has no `expr-reduce` case", met
    from two different directions. One owner ruling closes both.
 
-## ✅ CLOSED `ccf7adb0` — `(when C (parse-error …))` computes a diagnostic and throws it away (censused + swept 2026-08-02)
+## ✅ CLOSED `ccf7adb0` — `(when C (parse-error …))` computes a diagnostic and throws it away (censused + swept 2026-08-02; the structural residue gated 2026-08-05)
 
 `parse-error` RETURNS a value; it does not raise. So `(unless C (parse-error
 …))` evaluates the diagnosis, discards it, and falls through into the code the
@@ -283,11 +283,45 @@ immediately below the match-arm parser — carries a comment describing this
 exact defect being fixed there in July: "It was a value-discarding `when` that
 fell through to the loop below and hard-crashed."
 
-**Still open (structural, not a defect):** `parse-error` returning rather than
-raising is what makes this shape writable at all. Making it raise, or giving
-the parser an error monad, would make the class unrepresentable — a bigger call
-than a sweep should make. Until then the shape can be reintroduced by the next
-guard someone writes.
+**The structural residue is ANSWERED 2026-08-05 — with a gate, not a redesign.**
+
+The residue read: "`parse-error` returning rather than raising is what makes
+this shape writable at all. Making it raise, or giving the parser an error
+monad, would make the class unrepresentable — a bigger call than a sweep should
+make. Until then the shape can be reintroduced by the next guard someone writes."
+
+Re-reading that with the rest of this arc in hand, **making it raise would be
+the wrong fix**, not merely a big one. It trades this class for the
+whole-file-abort class — and the whole-file-abort class is strictly worse (an
+empty file, not one bad command) and is exactly what the marker-seat work spent
+this arc removing. An error monad remains a real option and a large one.
+
+So the achievable property is not *unrepresentable* but *cannot survive*:
+`racket/prologos/tools/lint-discarded-errors.rkt`, wired into pre-commit as
+gate 4. It reads with `read-syntax` (locations preserved), flags a `when`/
+`unless` whose body ENDS in an error constructor and which sits in a non-final
+position of a real body sequence, and is BASELINED at today's 18 sites — the
+same device `lint-parameters.rkt` uses, for the same reason: those 18 were
+probed and consciously left (some fall through to a BETTER message), so failing
+on them would block every commit and teach people `--no-verify`.
+
+**Two bugs in the lint itself, both worth recording because both are the
+failure mode this entry is about:**
+
+1. The first version used "not the last element of the enclosing list" as a
+   stand-in for "value discarded". An `if` then-branch is element 2 of 4, so
+   every correct `(if C (parse-error-result …) (continue …))` was reported.
+   16 hits, all false. Fixed with an explicit body-position table.
+2. `syntax-e` on an improper list — `(lambda (fmt . args) …)` — returns a raw
+   pair, and recurring on it handed a non-syntax value back in. The contract
+   violation aborted that file. **Seven files were being skipped**,
+   `tree-parser.rkt` among them, while the run still printed a total and looked
+   complete. A linter that silently drops its hardest inputs is precisely the
+   defect class it was written to find.
+
+Perturbation-checked: a fresh `(unless C (parse-error …))` is caught with exit
+1; the `if`-arm and `cond`-arm spellings in the same fixture are spared —
+exactly one hit, not three.
 
 ## 🔶 PARTIAL `db65045a` — `[x : T]` works for `fn` but is a PARSE ERROR for a `defn` parameter list (found 2026-08-02; message fixed same day, the syntax question is the owner's)
 

@@ -1,0 +1,26 @@
+# discarded-errors-baseline.txt
+# Accepted `(when C (parse-error …))` sites as of the last save.
+# These COMPUTE a diagnostic and discard it. They are accepted
+# because each was probed: they recover downstream, or are
+# unreachable from the surface, or fall through to a BETTER
+# message. They are not endorsements — they are a floor.
+#
+# Regenerate: racket tools/lint-discarded-errors.rkt --save-baseline
+parser.rkt:314:7
+parser.rkt:1367:2
+parser.rkt:5187:7
+parser.rkt:5279:11
+parser.rkt:5505:14
+parser.rkt:5654:2
+parser.rkt:5734:11
+parser.rkt:5774:2
+parser.rkt:5821:11
+parser.rkt:5862:2
+parser.rkt:5996:11
+parser.rkt:6185:7
+parser.rkt:6199:7
+parser.rkt:6209:7
+parser.rkt:7269:5
+parser.rkt:7517:5
+parser.rkt:8152:2
+parser.rkt:8442:2

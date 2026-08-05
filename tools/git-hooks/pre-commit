@@ -101,3 +101,22 @@ fi
 if [ -n "$prod_files" ]; then
   "$RACKET" "$REPO_ROOT/racket/prologos/tools/lint-parameters.rkt" --strict
 fi
+
+# Gate 4: no NEW value-discarding diagnostics.
+#
+# `parse-error` RETURNS a value; it does not raise. That is deliberate — a raise
+# on the parse path escapes process-file and costs the WHOLE FILE — but it makes
+# `(unless C (parse-error …))` writable, and that shape computes a diagnosis,
+# discards it, and falls through into the code the guard was written to reject.
+# The user gets a raw Racket contract violation and an empty file.
+#
+# A probe-driven sweep (ccf7adb0, 2026-08-02) found SIX live instances, every one
+# a whole-file abort. Its DEFERRED entry closed with the honest admission that
+# nothing stopped the seventh: "the shape can be reintroduced by the next guard
+# someone writes." This is what stops it.
+#
+# Baselined like the parameter lint (18 accepted sites, each probed and left
+# deliberately — some fall through to a BETTER message). Fails on ADDITIONS only.
+if [ -n "$prod_files" ]; then
+  "$RACKET" "$REPO_ROOT/racket/prologos/tools/lint-discarded-errors.rkt" --strict
+fi
