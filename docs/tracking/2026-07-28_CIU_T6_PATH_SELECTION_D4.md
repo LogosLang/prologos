@@ -32,7 +32,7 @@ rulings, censuses and test delta live in its own section.
 | **P3c** | **Keyless + L4 + honest nesting** — the nat-row mint at EVERY n (incl. 1 and homogeneous n) · ordinal branches `{N M}` · the L4 mixing error · `⟨String⟩` 1-tuple pins · the G11 one-space pair pinned side by side | ✅ | [§5.P3c](#p3c) · **`1b021d57`** — suite **9497/475/0**, acceptance **52/52**, battery 206; P3 (BLOCKS) COMPLETE; the verify's FIRST no-BLOCKING slice in eight (2 SIGNIFICANT fixed pre-commit: the @ord walk-to-leaf twin-drift, the decimal-fusion leak); G11 landed AS AMENDED; in-block `v[0]`≡`.0` ratified-by-pin |
 | **P4** | **Broadcast ω** — ⭐ **P4a ✅ · P4b ✅ COMPLETE** (b-i carrier + b-ii `$dot-access` migration; `x.a` now mints the unified selector carrier) · P4c–P4e ⬜ — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | [§5.P4](#p4) · co-design: audit `wf_8458c23b` + options panel · **RULED 2026-07-31**: [Q_U5](#q-u5) · [Q_U6](#q-u6) · [Q_U7](#q-u7) · [Q_U8](#q-u8) · [Q_U9](#q-u9) (the PAUSE cleared) · partition LOCKED P4a–P4e |
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
-| **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [[§5.P4c](#p4c)](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([the inverted default](#p4c-2-inverted)) · **P4c-3 ✅ `d477772c`** ([the enable-set moves to P4c-4](#p4c-3)) · **P4c-4a ✅ `f31237fd`** ([the test seam + per-context dispatch](#p4c-4a)) · **P4c-4b ✅ `6b22515d`** ([a broadcast goes END TO END; the not-yet stops being a whole-file abort](#p4c-4b)) · **P4c-4c ⬜ RE-SCOPED** to PVec value semantics ([why + the full sequencing](#p4c-sequencing)) · **[Q_U18](#q-u18) ✅ RULED** — unknown-head → PRESERVE; grant = **G4** (test-only until P4c-4c); *G2 = lean, re-evaluate then* · P4c-5 ⬜ |
+| **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [[§5.P4c](#p4c)](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([the inverted default](#p4c-2-inverted)) · **P4c-3 ✅ `d477772c`** ([the enable-set moves to P4c-4](#p4c-3)) · **P4c-4a ✅ `f31237fd`** ([the test seam + per-context dispatch](#p4c-4a)) · **P4c-4b ✅ `6b22515d`** ([a broadcast goes END TO END; the not-yet stops being a whole-file abort](#p4c-4b)) · **P4c-4c ⬜ RE-SCOPED** to PVec value semantics ([why + the full sequencing](#p4c-sequencing)) · **[Q_U18](#q-u18) ✅ RULED + FLIP LANDED `e71ef6b8`** — unknown-head → PRESERVE; grant = **G4**; ⚠ *the flip is INERT until **G2**, which is therefore the OPERATIVE half, not cleanup* · P4c-5 ⬜ |
 | **PF** | **Path first-classness** (substrate; **P5's prerequisite**) — ⭐ **Q_U17 RULED B2**: a Path segment is a first-class `Step` value. Reify the closed six-kind union as a `data Step` ADT on the `Datum` pattern; `Path` stays GROUND; `segments : Path -> [List Step]`. Repairs the dead `path-segments` in the SAME change | ⬜ | [§5.PF](#pf) · [Q_U17](#q-u17) · panel `wf_68178bd3-eea` |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery · ⚠ B3 needs [PF](#pf) |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | [§5.PX](#px) · position flexible |
@@ -1391,6 +1391,27 @@ items of the hold-point, ruled before P4a opened:
     because there is an "ungranted" state to inherit. G2 dissolves it.
   **RE-EVALUATION TRIGGER**: at P4c-4c's close, with the value semantics landed
   and the working set observable end-to-end for the first time.
+
+  **✅ THE FLIP LANDED — `e71ef6b8`** (suite 9835/482/0 · battery 340 → 344 ·
+  acceptance unchanged · default behaviour pinned unchanged). Two findings from
+  landing it, both recorded because they correct this very entry:
+
+  1. ⚠ **THE "ONE REAL DEFECT" — the digit-headed hole — IS NOT A DEFECT.** See
+     the struck text above: `?x:0` AND `?x:w` are BOTH already refused by an
+     existing guided diagnostic. No legal spelling was at risk. Nothing owed.
+  2. ⚠⚠ **THE FLIP IS INERT IN PRACTICE UNTIL G2, WHICH REFRAMES G2 ENTIRELY.**
+     It works — with the inner head granted, `[one users:name]` becomes
+     `(one users ($bcast-step :name))`, and it nests. But the enable-set's FIRST
+     arm strips any node whose OWN head is not granted, and granting every
+     function name is absurd. **So the flip alone does NOT unlock
+     application position.** G2 is not "retire expired scaffolding" — it is
+     **the thing that delivers the feature**. Pinned in the battery
+     ("Q_U18: the flip is INERT AT DEFAULT") so it cannot be forgotten.
+     ⇒ **When G2 is re-evaluated at P4c-4c's close, weigh it as a FEATURE
+     decision, not a cleanup.** Consider whether the re-evaluation belongs
+     ALONGSIDE P4c-4c rather than strictly after, since P4c-4c's value semantics
+     are what make the working set observable, and that observation is the input
+     to the G2 decision.
 
   **⚠ SEQUENCING NOTE — (i) IS INERT AT DEFAULT AND CAN LAND EARLY.** The
   unknown-head arm only runs when preservation is ACTIVE; at `'()` the first arm
