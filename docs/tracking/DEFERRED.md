@@ -1653,7 +1653,7 @@ needs registration-EVENT instrumentation — the same reason instrumenting
 
 ---
 
-## BUG: Union-type checking hangs the type-checker (BSP non-quiescence)
+## ✅ FIXED 2026-08-05 — Union-type checking hangs the type-checker (BSP non-quiescence). The carrier was not idempotent; the join was innocent
 
 - **Found**: 2026-06-29 hunting a `foray.prologos` type-check hang (DEMO Series session).
 - **Symptom**: the typing propagator network NEVER quiesces — infinite BSP firing in `attribute-map-merge-fn` (`typing-propagators.rkt:440`), the `:type`-facet union join not reaching a fixpoint. `run-to-quiescence-bsp` loops forever (no fuel bound on the elaborator/typing network → a HANG, not a bounded error).
@@ -1710,7 +1710,63 @@ needs registration-EVENT instrumentation — the same reason instrumenting
   `attribute-map-merge-fn` finding, and a much smaller thing to instrument
   than an 86-command acceptance file.
 
-- **Not blocked** — needs a dedicated debugging session on the typing propagator network.
+- **✅ FIXED 2026-08-05 — and the 14-month-old hypothesis was pointing at the wrong layer.**
+
+  Profiled the three-command repro (25 s sample, 6437 samples): `tagged-cell-read`
+  (`decision-cell.rkt`) is **49% of total**, and `attribute-map-merge-fn` under it
+  is **30% SELF**. That matches the original `attribute-map-merge-fn` sighting —
+  but the call is coming from the READ side, not from a write-side join, and that
+  changes the diagnosis entirely.
+
+  **Root cause**: `tagged-cell-merge` and `make-tagged-merge` both unioned their
+  entry lists with a bare `(append (entries new) (entries old))`. So
+  `(merge x x)` returned **twice** x's entries — the merge is **NOT IDEMPOTENT**,
+  which is the one property `structural-thinking.md` requires of every cell merge
+  in this system, and which nothing asserted for this one.
+
+  A cell whose lattice VALUE is stable but whose REPRESENTATION grows every round
+  reads as *changed* to the scheduler. Dependents re-fire, re-write the same
+  entries, and round N+1 is round N plus one more copy. `tagged-cell-read` merges
+  every matching entry on every read, so per-read cost grows with the list too —
+  which is why it presented as an accelerating hang with unbounded memory
+  (measured: 99.8% CPU, RSS 643 MB and climbing at 15 s).
+
+  **So the `:type`-facet union join was never the problem.** The join may be
+  perfectly convergent; the CARRIER underneath it was not a lattice. The entry's
+  "type-lattice-convergence investigation" framing sent this at SRE Track 2H's
+  quantale work for over a year; the fix is 8 lines in `decision-cell.rkt`.
+
+  **Fix**: `union-entries` dedups by `equal?` on the whole `(bitmask . value)`
+  pair, keeping the FIRST occurrence — exactly what the ordering contract already
+  required ("NEW entries first — later writes win at same specificity"; the read
+  takes the first match when no domain-merge is supplied). Deliberately a linear
+  `member` scan, not a hash: `pipeline.md` records that `equal-hash-code` is
+  depth-bounded at ~17 levels, so hashing expr-bearing values degrades to a
+  linear scan running full structural `equal?` anyway. The scan keeps n from
+  growing, so n stays small.
+
+  **Verified**: all five filed repro shapes complete in ~4 s at 0 errors and with
+  CORRECT answers — the 3-command `[int+ 1 2]` form, the original order-dependent
+  `the <Int | String>` form, the `[+ 1 2]` trait form, the String-initialised
+  form, and the F1b.3 polymorphic-spec form (recorded 2026-07-17 as an apparently
+  separate hang; same defect). The three controls that always completed still
+  complete. Full suite **559 files / 10888 green**.
+
+  Pinned in `tests/test-union-type-quiescence.rkt`. Perturbation-checked: with
+  the dedup reverted, the two lattice-contract cases fail instantly with
+  `actual: 4 / expected: 2` and four repro cases report "did not finish within
+  25 s — the network is not quiescing".
+
+  **Two things NOT fixed here, deliberately.** (1) The entry's other ask — a fuel
+  bound so non-convergence becomes a bounded diagnostic rather than a hang —
+  still stands. Fuel exists (`fuel-cell-id`, default 1 000 000, exhaustion writes
+  a contradiction structurally) but did not trip here, and understanding why is
+  separate work. **A hang is still the failure mode for the next
+  non-convergence.** (2) The entry's "workaround in place: foray's union forms
+  commented out" is stale — `lib/examples/foray.prologos` has no union forms left
+  to restore, and its 6 current errors are all `Unbound variable`, unrelated.
+
+- **Was**: "Not blocked — needs a dedicated debugging session on the typing propagator network." It got one.
 
 ---
 
