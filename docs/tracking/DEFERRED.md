@@ -4256,11 +4256,28 @@ tool the environment may not have.
 > RANGE-CHECKS marker indices. All markers rewritten against actual output —
 > **30/30 pass, was 5/28**. Running `--check` also exposed that the POL.8/POL.9
 > markers were MISNUMBERED (off by one and two), which the range check now
-> catches. **Still open**: `test-rel-t1-pol.rkt` remains Level-2 throughout
-> (0 `process-file`), so the POL cluster's L3 coverage runs through the
-> acceptance gate rather than through cases of its own; and the POL parser
-> internals (`regroup-flat-lines-by-layout`, `parse-clause-content`,
-> `paren-goal-stx?`, `check-crosskind-collision`) still have ZERO unit tests.
+> catches.
+>
+> **Gap (3) CLOSED 2026-08-05**: `test-rel-t1-pol.rkt` now has a Level-3
+> section — 12 cases through `process-file` covering POL.7 (`||` blocks, `|`
+> explicit rows, the arity-mismatch error), POL.8 (bare-head-is-one-goal,
+> sibling-at-goal-column, deeper-continuation-is-an-argument) and POL.9
+> (implicit solve at top level and on a `def` RHS, `foo x` / `[foo x]` staying
+> application, and the three guiding diagnostics). 121 tests, green; the file
+> was 106.
+>
+> Two of them are worth more than the rest. The POL.8 pair asserts that the
+> flat spelling and the deeper-continuation spelling produce the **same
+> answer** — which is the layout rule itself, stated as an equality rather than
+> as a snapshot. Perturbation-checked: moving that continuation line from
+> "deeper" to the goal column turns it into a sibling goal and the equality
+> fails, as it must.
+>
+> **Still open**: the POL parser internals (`regroup-flat-lines-by-layout`,
+> `parse-clause-content`, `paren-goal-stx?`, `check-crosskind-collision`) have
+> ZERO unit tests. The L3 cases exercise them end-to-end, so a break is now
+> caught — but it is caught as a wrong answer, not as a named function's
+> contract.
 
 ### Original entry
 
