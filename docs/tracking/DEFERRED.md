@@ -1799,22 +1799,54 @@ it: `(nogood-merge x x)` returned the list twice. A live cell merge
 type-checker for fourteen months. Now dedups; commutative and associative up to
 set equality (the list representation has an order that set-union does not).
 
-**2. `merge-hasheq-list-append` — NOT fixed, filed here.** Also not idempotent:
-`(merge {a: (1)} {a: (1)})` → `{a: (1 1)}`. It IS a cell merge — the wakeup
-registry cells at `metavar-store.rkt:2891 / :2893 / :2896` — so it carries the
-hazard too.
+**2. `merge-hasheq-list-append` — MEASURED 2026-08-05; the question dissolved.**
+Also not idempotent: `(merge {a: (1)} {a: (1)})` → `{a: (1 1)}`, and it IS a cell
+merge — the three wakeup cells at `metavar-store.rkt:2891 / :2893 / :2896`.
 
-Not fixed because deduping the per-key lists changes wakeup semantics in a hot
-registry, and "a duplicate wakeup is harmless" is precisely the kind of unchecked
-parenthetical that produced both bugs above. It wants its own slice with its own
-evidence: what writes those cells, whether any writer is non-idempotent, and
-whether a duplicate wakeup is observable. Pinned as a KNOWN violation in the test
-so it cannot quietly stop being covered.
+I filed three questions here: what writes those cells, is any writer
+non-idempotent, and is a duplicate wakeup observable. The third one answers the
+other two, because **the cells are write-only**.
 
-Its SRE domain is `'hash-of-lists-accumulator` — the name says accumulator, and
-an accumulator is not a join. If that is the intent, the answer may be that these
-cells should not be using a merge-based cell at all, rather than that the merge
-should be fixed. That is the question to answer first.
+Instrumented both sides and swept the whole examples corpus (51 files):
+
+| | |
+|---|---|
+| writes to the trait-wakeup cell | **6–11 per file** |
+| reads of the trait-wakeup cell | **0 — on every file** |
+| duplicate entries observed | 0, trivially (nothing was ever read) |
+
+Static confirmation: `collect-ready-traits-for-meta`,
+`collect-ready-hasmethods-for-meta` and `collect-ready-constraints-for-meta` have
+**zero callers** in the tree — the only greps outside their own definitions are
+the `provide` list and a comment. `read-trait-wakeup-map` and
+`read-wakeup-registry` are reached only from inside those dead functions.
+
+And the tree already says so, at `metavar-store.rkt:1108`:
+
+> "The collect-ready-\*-for-meta variants (3 sibling functions) also have zero
+> production callers but are NOT in S2.b-iv scope; left in place for now and may
+> be retired in a follow-up cleanup if confirmed dead."
+
+So: **confirmed dead**, empirically as well as by grep. What the comment does not
+say — and what makes this more than a tidy-up — is that **the three cells those
+dead readers serve are still being WRITTEN on every command**, through a merge
+that grows without bound, for no consumer.
+
+**Consequence for the merge**: its non-idempotence is not a live correctness
+hazard, because nothing reads the result. It is dead weight, and modest dead
+weight at that (6–11 writes per file, not a leak of consequence). So do NOT
+"fix" the merge in isolation — that would preserve the machinery by making it
+tidier. **Retire the readers and the writers together**, and the merge's only
+remaining users go with them.
+
+Its SRE domain is `'hash-of-lists-accumulator`; the name says accumulator, and an
+accumulator is not a join. If any FUTURE cell wants this merge, that is the
+moment to decide whether it should be a merge-based cell at all.
+
+**Scope of the retirement**: 3 reader functions, 3 cell allocations, their
+`current-*-cell-id` parameters, and the writers at `:626 / :775 / :1037`. Not
+attempted here — it crosses the constraint-resolution path, and the pre-existing
+comment scoped it out of S2.b-iv for a reason worth reading first.
 
 ## The merge-law table cannot be gated on the registry, and that is a registry problem (2026-08-05)
 

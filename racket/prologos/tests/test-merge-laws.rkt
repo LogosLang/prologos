@@ -238,10 +238,13 @@
   ;; metavar-store.rkt:2891/2893/2896, the wakeup registry cells — so it carries
   ;; the same non-quiescence hazard that tagged-cell-merge did.
   ;;
-  ;; NOT fixed here, deliberately: deduping the per-key lists changes wakeup
-  ;; semantics in a hot registry, and "a duplicate wakeup is harmless" is exactly
-  ;; the kind of unchecked parenthetical that produced the two bugs above. It
-  ;; deserves its own slice with its own evidence. Filed in DEFERRED.
+  ;; NOT fixed, and measurement says it should not be: the three cells using this
+  ;; merge are WRITE-ONLY. Instrumented across the 51-file examples corpus —
+  ;; 6-11 writes per file, ZERO reads, every file — and the three
+  ;; collect-ready-*-for-meta readers have no callers in the tree at all (a
+  ;; comment at metavar-store.rkt:1108 already suspected as much). So the
+  ;; non-idempotence is dead weight rather than a live hazard, and deduping the
+  ;; merge would only make dead machinery tidier. The retirement is filed.
   ;;
   ;; Pinned as a KNOWN violation rather than omitted, so the table cannot quietly
   ;; stop covering it.
