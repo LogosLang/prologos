@@ -11,6 +11,14 @@ Deferral".
 
 **Completed items**: Moved to `DEFERRED_COMPLETE.md` during staleness sweeps.
 
+> **The four open OWNER RULINGS that gate this queue are collected in**
+> [`2026-08-05_1751_FOUR_OPEN_OWNER_RULINGS.md`](2026-08-05_1751_FOUR_OPEN_OWNER_RULINGS.md)
+> — is `eval` a capability · can `{…}` mean a row type in type position · how
+> `Ord`/`Seq` thread through SortedMap · should `redex` be a dependency. Each is
+> answerable in a sentence, and each unblocks entries below. They were scattered
+> across four sections and a dailies file, which is why they kept being
+> re-derived.
+
 **Last consolidated sweep**: 2026-03-20 (PUnify Parts 1-2 complete, 7308 tests, 377 files).
 
 ---
