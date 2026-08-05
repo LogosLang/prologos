@@ -46,13 +46,48 @@ never got it.
 **The actual work, NOT done**: adopt netstring framing on the wire. It is a
 protocol change — read and write paths, the Racket test server, the byte-equality
 fixtures, and the `.mjs` peers — and it wants a deliberate slice rather than
-being bolted onto a merge repair. Two things to settle when it opens:
+being bolted onto a merge repair.
 
-1. Is netstring framing now REQUIRED by the OCapN spec, or is it the test
-   suite's transport convention? The commit is titled "message-framing" and the
-   answer decides whether this is a conformance fix or a compatibility shim.
-2. The pin moves in the SAME commit as the adoption. Leaving it pinned after the
+**Question 1 is ANSWERED (2026-08-05) — adopt it.** I had filed "is this the spec
+or the suite's convention?" as the blocker. It is neither, and it needed research
+rather than a ruling. The JS reference implementation
+(`@endo/ocapn/src/netlayers/tcp-test-only.js:17-38`) documents both modes and
+picks a side in the doc comment itself:
+
+> `'syrup'` **(default)**: each message is wrapped in the `<length>:<payload>`
+> framing … **the spec is moving toward this framing** for the TCP-for-testing
+> netlayer.
+> `'none'`: … **Retained only for compatibility** with the existing Python
+> `testing_only_tcp` netlayer … That suite **is known to be inadequate against
+> the possibility of a TCP chunk getting split across packets**; the `'none'`
+> option **goes away once the Python suite either adopts syrup framing or is
+> retired.**
+
+The Python suite adopted it (that IS #41). So `'none'` is a shim on a stated
+retirement path, length-prefixed framing is already the reference default, and
+the direction is one-way. Adopt.
+
+**One thing that answer does NOT imply, and I had it backwards.** The chunk-split
+inadequacy the comment names is the JS `'none'` peer's — it dispatches each
+`socket.on('data')` chunk as a whole message. Ours is not built that way:
+`read-syrup-frame` (`tools/interop/ocapn-framing.rkt:131`) is a byte-at-a-time
+streaming state machine over the port, so a message split across packets, or two
+messages in one packet, both parse correctly today. We are adopting for
+conformance and to follow the reference, not to fix a live bug in our reader.
+
+**What the adoption actually costs is smaller than the entry implied**:
+`ocapn-framing.rkt` already parameterises the strategy (`current-framing-strategy`,
+`'newline` | `'raw-syrup`, with an `[else (error …)]` arm), and both `read-frame`
+and `write-frame` take it as an optional argument. Adding a third strategy is a
+new arm on each, not a rewrite; the work is in the peers and fixtures.
+
+Still to settle when it opens:
+
+1. The pin moves in the SAME commit as the adoption. Leaving it pinned after the
    wire changes would hide the next drift exactly as this one was hidden.
+2. Whether the third strategy replaces `'raw-syrup` or joins it. Joining it keeps
+   a mode the reference is retiring; replacing it means the byte-equality fixtures
+   regenerate in the same commit.
 
 ## 🐛 Two diagnostics degraded upstream — found by the 2026-08-05 `main` merge
 
