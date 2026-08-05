@@ -20,6 +20,7 @@ current-capability-warnings
 current-capability-warnings-cell-id
 current-cell-id-namespace
 current-cfa-result
+current-check-fire-invariants?
 current-clock-cell-id
 current-coercion-registry
 current-coercion-registry-cell-id
@@ -40,7 +41,6 @@ current-deprecation-warnings
 current-deprecation-warnings-cell-id
 current-domain-classification-lookup
 current-effect-executor
-current-elaborating-name
 current-emit-error-diagnostics
 current-error-descriptor-cell-id
 current-foreign-handler
@@ -96,7 +96,6 @@ current-phase-timings
 current-pnet-write-enabled?
 current-preparse-registry-cell-id
 current-process-id
-current-process-registry
 current-process-registry-cell-id
 current-prop-add-propagator
 current-prop-add-unify-constraint
@@ -128,14 +127,12 @@ current-relation-store
 current-relation-store-version
 current-relational-env
 current-repl-mode
+current-residuation-enabled?
 current-resolution-executor-pure
 current-retry-unify
-current-schema-registry
 current-schema-registry-cell-id
-current-selection-registry
 current-selection-registry-cell-id
 current-session-meta-universe-cell-id
-current-session-registry
 current-session-registry-cell-id
 current-session-universe-merge
 current-solver-strategy-override
@@ -150,7 +147,6 @@ current-speculation-failures
 current-sre-classify-enabled?
 current-sre-debug?
 current-strata-cache
-current-strategy-registry
 current-strategy-registry-cell-id
 current-structural-meta-lookup
 current-structural-mult-bridge
@@ -191,5 +187,3 @@ current-worker-pool
 current-worldview-bitmask
 current-worldview-hasse-registry-handle
 current-zonk-call-counts
-
-# --- CIU T6 D4.P4c-4a (2026-08-02) ---
