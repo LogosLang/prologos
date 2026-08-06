@@ -5835,7 +5835,7 @@ P4c-4c; Q_U9's own ruling says **"Implementation: P4d"**, twice).
 | `.*` row-splat · disclose `<`/`:<` | **P4e** | already scoped |
 | **the `:{…}` reader mint** | **[P4d-0](#p4d-0)** ✅ `77259635` | + 46 (Q_U20) + 55; both extent members in the corpus; **P4d unblocked** |
 | **unknown-head policy + first production grant** | **[Q_U18](#q-u18) ✅ RULED** | PRESERVE + **G4** (test-only until P4c-4c). ~~Owed with it: the digit-hole fix~~ — **not a defect**, both spellings already refused. **G2 ✅ RULED 2026-08-04: ALONGSIDE P4c-4c**, not after |
-| **`^`-on-broadcast** | **[Q_U19](#q-u19)** | due at P4d |
+| **`^`-on-broadcast** | **[Q_U19](#q-u19)** | ⬜ **RULING OWED — DUE AT P4d.** Its pin freezes an ACCIDENT, not a decision |
 
 ~~**THE CRITICAL PATH** (revised after Q_U18's ruling): the **PRESERVE flip + the
 digit-hole fix** (inert at default, testable through the P4c-4a grant seam, so
