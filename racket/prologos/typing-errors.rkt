@@ -358,9 +358,10 @@
      ;; invisible, byte-identical to `.foo`).
      (if (expr-PVec? row)
          (format
-          "Could not infer type — select: `~a`~a is not a field of a vector element position — a vector subject takes ordinal steps (`.N`) or ordinal branches (`x{N M}`)"
+          "Could not infer type — select: `~a`~a is not a field of a vector element position — a vector subject takes ordinal steps (`.N`) or ordinal branches (`x{N M}`). To reach fields of EACH element, broadcast instead: `xs:~a` or `xs:{…}`"
           (or label "the step")
-          (if (null? path) "" (format " (branch `~a`)" branch-str)))
+          (if (null? path) "" (format " (branch `~a`)" branch-str))
+          (or label "name"))
          (format
           (if block?
           "Could not infer type — select: the subject~a is not a record; a select block projects fields of a keyword row"
