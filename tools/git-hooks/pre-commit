@@ -2,12 +2,15 @@
 #
 # pre-commit — fast lint gates on staged .rkt files
 #
-# Three gates, all fast (~1-2s each for typical staged set):
-#   1. tools/check-parens.sh        — delimiter balance via Racket's reader
-#   2. tools/check-stdout-clean.rkt — module-load stdout pollution
+# Three gates:
+#   1. tools/check-parens.sh        — delimiter balance via Racket's reader (~1s)
+#   2. tools/check-stdout-clean.rkt — module-load stdout pollution (~1s)
 #   3. tools/lint-hygiene.sh        — correctness lints (pnet registration,
 #      fire-fn capture, memo-hash, parameters), baseline-gated: only NEW
-#      findings block. raco review output is report-only.
+#      findings block (~2s). raco review output is report-only and costs
+#      ~10-15s PER staged file — capped at 60s here so commits stay fast
+#      (a truncated report says so; run tools/lint-hygiene.sh manually for
+#      the full sweep).
 #
 # Bypass: git commit --no-verify  (emergencies only).
 #
@@ -69,5 +72,5 @@ if [ -n "$prod_files" ]; then
 fi
 
 # Gate 3: hygiene lints on the staged files (custom lints blocking on NEW
-# findings only; raco review report-only)
-"$REPO_ROOT/tools/lint-hygiene.sh" --staged
+# findings only; raco review report-only, capped at 60s so commits stay fast)
+LINT_REVIEW_TIMEOUT="${LINT_REVIEW_TIMEOUT:-60}" "$REPO_ROOT/tools/lint-hygiene.sh" --staged
