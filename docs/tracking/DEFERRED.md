@@ -2942,7 +2942,9 @@ Item 37's gap is closed: the predicate, the membership, and the fold arm all
 landed, and the fold's emitted head is `$select-path` so the fixpoint obligation
 holds by construction.
 
-### 42. ⬜ The `:{…}` reader mint — a P4d PREREQUISITE, unhomed until now
+### 42. ✅ RESOLVED at D4.P4d-0 (`667684ad`, 2026-08-05) — the WRAPPING mint landed (one shared trigger, both groupers, Q_N3 v2 row); Q_U7's second canonical example is producible. *(original text below)*
+
+### 42-original. The `:{…}` reader mint — a P4d PREREQUISITE, unhomed until now
 
 `users:{t r}` does NOT mint: it reads as `users : ($select-brace t r)`, because
 `bcast-step-trigger?` gates on token TYPE and a lone `:` before an opener is
@@ -3644,7 +3646,9 @@ is discarded under `'path`, and block-position ω is parse-refused), so this is 
 note, not a defect. Goes live with P4d or P5's factoring, and the failure mode is
 the silent mis-sort P4a exists to prevent.
 
-### 46. ⚠ CROSS-REF + CORRECTION 2026-08-05 (mini-audit `wf_e15a1ef6-dfb`): **same defect as 40**; and "unhandled" is MISLOCATED — both twins HAVE bcast arms (P4c-4c); the defect is that the LIFTS apply the inner step as a ONE-STEP BRANCH, putting `@sub` at branch-head where `select-step-name` hands the raw list to the `(key caret sub)` arm as a "field name". Outcome is CARRIER-DEPENDENT (closed row: loud-but-LYING; dyn row / Map at 'path: SILENT ACCEPT), not the blanket "silent wrong answer" recorded. One fix point per side (`select-bcast-lift` / `bcast-apply`), discriminating on the inner kind. `(@bcast (@sub …))` is unhandled on both sides — currently UNREACHABLE
+### 46. ✅ RESOLVED at D4.P4d-0 (`667684ad`) — Q_U20 in both lifts (sub-inner assembles at 'block, always); the top-keys splice (B1) and the binder unwrap defeat (B2) fixed + pinned in all grades. *(original + cross-ref below)*
+
+### 46-original. ⚠ CROSS-REF + CORRECTION 2026-08-05 (mini-audit `wf_e15a1ef6-dfb`): **same defect as 40**; and "unhandled" is MISLOCATED — both twins HAVE bcast arms (P4c-4c); the defect is that the LIFTS apply the inner step as a ONE-STEP BRANCH, putting `@sub` at branch-head where `select-step-name` hands the raw list to the `(key caret sub)` arm as a "field name". Outcome is CARRIER-DEPENDENT (closed row: loud-but-LYING; dyn row / Map at 'path: SILENT ACCEPT), not the blanket "silent wrong answer" recorded. One fix point per side (`select-bcast-lift` / `bcast-apply`), discriminating on the inner kind. `(@bcast (@sub …))` is unhandled on both sides — currently UNREACHABLE
 
 `branch-entries` would treat the whole `@sub` list as a field name. Unreachable
 because the mint never fires: `xs:{name age}` → "Unbound variable `:`" (DEFERRED
@@ -3888,7 +3892,9 @@ paths), not a mint defect. Zero corpus sites. Silent-wrong-answer shaped, so it
 must not sit past the 51/52 chip (`task_4c00d3f0`); whoever lands that fix should
 take this reproducer with them.
 
-### 55. In-block `:{` is newly ADMITTED but refused with a MISLEADING diagnostic
+### 55. ✅ DISCHARGED at D4.P4d-0 slice 5 (`77259635`) — the spurious-dot display fixed (one pp arm honouring `first?`) and the vector-element refusal now names the broadcast alternative. *(original below)*
+
+### 55-original. In-block `:{` is newly ADMITTED but refused with a MISLEADING diagnostic
 
 `rows{a:{p q}}` (narrowing a map FIELD inside a select block) now parses — the
 baseline refused at parse — and typing refuses per-command with a message that

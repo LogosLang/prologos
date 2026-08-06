@@ -5833,7 +5833,7 @@ P4c-4c; Q_U9's own ruling says **"Implementation: P4d"**, twice).
 | `quests:t` / `quests:{t r}` corpus lines | **P4d** | "re-fated HERE" |
 | `*` flatten (`:diags*`) | **P4e** | P4c-4b's guided refusal is the correct interim |
 | `.*` row-splat · disclose `<`/`:<` | **P4e** | already scoped |
-| **the `:{…}` reader mint** | **[P4d-0](#p4d-0)** 🔄 opened 2026-08-05 | + DEFERRED 46 (Q_U20 ruled); site-local parser guard; class guard → DEFERRED 53 |
+| **the `:{…}` reader mint** | **[P4d-0](#p4d-0)** ✅ `77259635` | + 46 (Q_U20) + 55; both extent members in the corpus; **P4d unblocked** |
 | **unknown-head policy + first production grant** | **[Q_U18](#q-u18) ✅ RULED** | PRESERVE + **G4** (test-only until P4c-4c). ~~Owed with it: the digit-hole fix~~ — **not a defect**, both spellings already refused. **G2 ✅ RULED 2026-08-04: ALONGSIDE P4c-4c**, not after |
 | **`^`-on-broadcast** | **[Q_U19](#q-u19)** | due at P4d |
 
@@ -5904,9 +5904,10 @@ parser guard is SITE-LOCAL; the class-level parse-path guard is its own slice
    symbol<? whole-file abort) and `unwrap-bcast-step` unwrapping ANY pair (a
    binder `:{` silently DEFINED a garbled Pi at 0 errors). Both fixed + pinned;
    spin-offs DEFERRED 54–55. **Both §3.2.1 extent members work end to end.**
-5. ⬜ the §3.2.1 extent-pair LAW PINS (`users:{0.userName^}.0` → `["Lisa"]` ·
-   `…:0` → `@["Lisa" "John" "Mike"]`) + the L4/top-keys coherence + the display
-   fix (`users{:.{a b}}` spurious dot).
+5. ✅ `77259635` — EIGHT more corpus lines live incl. **both extent members**
+   (acceptance 61/61 → **69/69**); the spurious-dot display fixed; the
+   vector-element refusal names the broadcast alternative (DEFERRED 55 ✅).
+   The L4/top-keys coherence landed earlier IN slice 4 as the B1 fix.
 
 **A/B**: `tools/corpus-ab.rkt` as-is · Tier 1 = `foray.prologos` (the ONLY
 minting file; owner WIP ⇒ working-tree inputs) · Tier 2 must-NOT-move =
@@ -5915,7 +5916,15 @@ colon-then-lbrace, a live data constructor) · control = a zero-colon zero-brace
 file · file list by `find`, not `git ls-files` (a deleted-in-worktree file
 would silently drop from both legs).
 
-Status: 🔄 P4d-0 — slices 1–4 ✅ (`33d83989` · `0c0ef6dc` · `667684ad`); slice 5 remains (corpus `:{` uncomments · the spurious-dot display fix · DEFERRED 55's message).
+**Status: ✅ P4d-0 COMPLETE 2026-08-05** — `33d83989` · `0c0ef6dc` · `667684ad`
+· `77259635`. DEFERRED 42 ✅ · 46 ✅ · 55 ✅; spin-offs 53 (parse-path guard
+slice), 54 (goal-position row, → the 51/52 chip). Close-note in lieu of PIR
+(sub-slice; the track PIR owns the full retro): the phase's finding is that
+**both blocking defects were invisible to every gate** — no test or corpus
+spelled `^:{` or a binder `:{` — and both were exactly the two static-drift
+hazards the mini-audit had measured BEFORE implementation (top-keys vs
+output-name; the any-pair unwrap). The audit → verify pipeline did its job
+twice over. **P4d is UNBLOCKED.**
 
 <a id="pf"></a>
 
