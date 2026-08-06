@@ -15,9 +15,12 @@
 ;;;   (a) any lambda appearing inside the arguments of a propagator
 ;;;       installer call (net-add-propagator, net-add-fire-once-propagator,
 ;;;       net-add-broadcast-propagator, net-add-threshold,
-;;;       elab-add-propagator), or
+;;;       elab-add-propagator),
 ;;;   (b) any define / let-family binding whose NAME matches #px"fire"
-;;;       (fire-fn, fire, make-*-fire-fn, ...).
+;;;       (fire-fn, fire, make-*-fire-fn, ...), or
+;;;   (c) any define / let-family binding whose name appears as an argument
+;;;       (after the network arg) of an installer call — a fire fn passed
+;;;       by reference under a name without "fire" in it.
 ;;; Within a fire scope, every cell-op call (net-cell-read, net-cell-write,
 ;;; elab-cell-read, elab-cell-write, ...) whose network argument is an
 ;;; identifier NOT bound anywhere inside that scope is flagged: the
@@ -171,33 +174,56 @@
 ;; Fire-scope discovery
 ;; ============================================================
 
-;; Returns a list of (cons stx datum) fire scopes found in the module.
+;; Returns a list of fire-scope syntax objects found in the module.
+;;
+;; Two passes: pass 1 finds installer calls, collecting (a) inline lambdas
+;; in their arguments and (rule c) SYMBOLS in argument positions after the
+;; network arg — a fire fn passed BY REFERENCE (the Track 2B "discrimination
+;; propagator" shape written as a named helper) would otherwise be invisible
+;; when its name doesn't happen to match #px"fire". Pass 2 then treats any
+;; define / let-binding as a fire scope when its name matches #px"fire" (rule
+;; b) OR was referenced from an installer call (rule c). Value defines swept
+;; in by rule c (cell-id lists etc.) are harmless: they contain no net-ops,
+;; so they can only add coverage, never noise.
 (define (find-fire-scopes stx)
   (define scopes '())
+  (define ref-candidates (make-hasheq))
+  (define (scope-name? name)
+    (and name
+         (or (regexp-match? fire-name-rx (symbol->string name))
+             (hash-ref ref-candidates name #f))))
+  ;; pass 1: installer calls
+  (walk-stx
+   (lambda (s datum)
+     (define head (and (pair? datum) (car datum)))
+     (when (and (symbol? head) (memq head installer-heads))
+       ;; every lambda within the arguments is a fire scope
+       (walk-stx
+        (lambda (inner-s inner-d)
+          (when (and (pair? inner-d) (memq (car inner-d) '(lambda λ case-lambda)))
+            (set! scopes (cons inner-s scopes))))
+        s)
+       ;; rule c candidates: symbol args after the network argument
+       (when (and (pair? (cdr datum)) (list? (cddr datum)))
+         (for ([arg (in-list (cddr datum))] #:when (symbol? arg))
+           (hash-set! ref-candidates arg #t)))))
+   stx)
+  ;; pass 2: named scopes (rule b by name, rule c by installer reference)
   (walk-stx
    (lambda (s datum)
      (define head (and (pair? datum) (car datum)))
      (cond
-       ;; installer call → every lambda within its arguments is a fire scope
-       [(and (symbol? head) (memq head installer-heads))
-        (walk-stx
-         (lambda (inner-s inner-d)
-           (when (and (pair? inner-d) (memq (car inner-d) '(lambda λ case-lambda)))
-             (set! scopes (cons inner-s scopes))))
-         s)]
-       ;; (define fire-ish ...) / (define (fire-ish ...) ...) / let-binding
        [(and (memq head '(define define-values)) (pair? (cdr datum)))
         (define target (cadr datum))
         (define name (cond [(symbol? target) target]
                            [(and (pair? target) (symbol? (car target))) (car target)]
                            [else #f]))
-        (when (and name (regexp-match? fire-name-rx (symbol->string name)))
+        (when (scope-name? name)
           (set! scopes (cons s scopes)))]
        [(and (memq head '(let let* letrec)) (pair? (cdr datum))
              (list? (cadr datum)))
         (for ([b (in-list (cadr datum))])
-          (when (and (pair? b) (symbol? (car b))
-                     (regexp-match? fire-name-rx (symbol->string (car b))))
+          (when (and (pair? b) (symbol? (car b)) (scope-name? (car b)))
             (set! scopes (cons s scopes))))]
        [else (void)]))
    stx)
@@ -227,7 +253,10 @@
 (define (scan-file path)
   (define rel (path->string (find-relative-path project-root (simplify-path path))))
   (with-handlers ([exn:fail? (lambda (e)
-                               (eprintf "SKIP ~a (read error: ~a)\n" rel (exn-message e))
+                               ;; read OR analysis error — either way the file
+                               ;; goes unscanned; say so rather than blaming read
+                               (eprintf "SKIP ~a (unscanned, read/analysis error: ~a)\n"
+                                        rel (exn-message e))
                                '())])
     (define stx (read-module-stx path))
     (for*/list ([scope (in-list (remove-duplicates (find-fire-scopes stx) eq?))]

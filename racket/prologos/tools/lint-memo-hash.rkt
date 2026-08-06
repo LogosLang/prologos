@@ -15,7 +15,7 @@
 ;;;
 ;;; Detection: line-scan (comments intentionally count — "memoization"
 ;;; usually lives in a comment) for make-hash / make-weak-hash sites
-;;; whose surrounding +-2-line window mentions memo/cache/seen. Each finding is keyed by file + nearest enclosing
+;;; whose surrounding +-4-line window mentions memo/cache/seen. Each finding is keyed by file + nearest enclosing
 ;;; define name (line numbers drift). Baselined findings should each have
 ;;; been audited: fine when keys are NOT expr trees (symbols, strings,
 ;;; small fixed-shape keys); a real hazard when they are.
@@ -41,9 +41,14 @@
 (define project-root (simplify-path (build-path tools-dir 'up)))
 (define baseline-path (build-path tools-dir "memo-hash-baseline.txt"))
 
-(define hash-site-rx #px"\\(make-(weak-)?hash[\\s)]")
+;; `$` alternative: `(make-hash` with its argument on the NEXT line ends the
+;; line right after "hash" — without it that layout evades the scan entirely.
+(define hash-site-rx #px"\\(make-(weak-)?hash([\\s)]|$)")
 (define context-rx #px"(?i:memo|cache|seen)")
-(define context-window 2)
+;; ±4 lines: a typical comment block + blank line + define spans 3-4 lines;
+;; ±2 missed that shape. Measured tree-wide cost of 2→4: exactly one extra
+;; finding, already covered by an existing baseline key.
+(define context-window 4)
 (define define-name-rx #px"\\(define(?:-values)?\\s+\\(?\\s*([a-zA-Z][a-zA-Z0-9!?*/<>+=:._-]*)")
 
 ;; ============================================================

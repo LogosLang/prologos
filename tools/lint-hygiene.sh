@@ -127,13 +127,24 @@ if [ -n "$files" ]; then
       # Bound the report-only step: review costs ~10-15s/file here, and an
       # unbounded sweep once ate CI's whole 10-min lint budget (PR #81).
       budget="${LINT_REVIEW_TIMEOUT:-240}"
+      # coreutils timeout on Linux/CI; perl-alarm fallback on macOS (stock
+      # macOS ships no `timeout`, and an uncapped run would make the
+      # pre-commit 60s cap a fiction on the primary dev machine). perl's
+      # alarm survives exec, so the review process dies on SIGALRM (rc 142).
       if command -v timeout >/dev/null 2>&1; then
         raw_out=$(timeout "$budget" "$RACKET" -l raco -- review "${targets[@]}" 2>&1)
         [ $? -eq 124 ] && review_timed_out=1
+      elif command -v perl >/dev/null 2>&1; then
+        raw_out=$(perl -e 'alarm shift @ARGV; exec @ARGV' "$budget" \
+                    "$RACKET" -l raco -- review "${targets[@]}" 2>&1)
+        [ $? -eq 142 ] && review_timed_out=1
       else
         raw_out=$("$RACKET" -l raco -- review "${targets[@]}" 2>&1)
       fi
-      review_out=$(printf '%s\n' "$raw_out" | grep -v 'should come before' || true)
+      # require-ordering noise comes in BOTH spellings ("should come before"
+      # / "should come after") — filter both.
+      review_out=$(printf '%s\n' "$raw_out" \
+                     | grep -vE 'should come (before|after)' || true)
     else
       review_out=""
     fi
