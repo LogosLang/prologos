@@ -1057,24 +1057,38 @@
                                    "             fruit-size f \"small\""))
 (define D57-2GOAL-P "          &> (fruit-color f \"blue\") (fruit-size f \"small\")")
 
-(test-case "DEFERRED 57 KNOWN LIMIT: aligned-block / bracket let MIS-GROUP at two or more goals"
-  ;; PRE-EXISTING and unchanged by the peel work — byte-identical at `fb788bfc`.
-  ;; Recorded because it CORRECTS the DEFERRED 51(c) census, which lists these two
-  ;; members as "still degrading, all LOUD": they do not degrade loudly, they
-  ;; MIS-GROUP (here into `fruit-color/5`), and a mis-group is only loud while the
-  ;; collapsed arity happens to be undefined — on a multi-arity relation the same
-  ;; shape is a silent wrong answer. Root cause is DEPTH, not the peel: relocation
-  ;; scans only the middle's top-level elements, and the moved rel RHS sits one
-  ;; level below for the bracket form and two below for `$let-block`.
-  ;; If either of these starts matching its control, that fix landed: invert the
-  ;; assertion, do not delete it.
-  (check-true (string-contains? (result-msg (d57-aligned D57-2GOAL)) "fruit-color/5")
-              (format "known limit (aligned block, 2 goals); got: ~a"
-                      (result-msg (d57-aligned D57-2GOAL))))
-  (check-true (string-contains? (result-msg (d57-bracket D57-2GOAL)) "fruit-color/5")
-              (format "known limit (bracket, 2 goals); got: ~a"
-                      (result-msg (d57-bracket D57-2GOAL))))
-  ;; both paren controls are correct, which is what makes the above a defect
+;; ── DEFERRED 58: the DEPTH WALL — the origin index ────────────────────────────
+;;
+;; ⚠ INVERTED (this was the DEFERRED 57 KNOWN LIMIT, and it said to invert rather
+;; than delete when the fix landed). Both spellings used to MIS-GROUP into
+;; `fruit-color/5` at two or more goals, because the moved rel RHS sits BELOW the
+;; middle's top-level elements — one level down for the bracket form, two for
+;; `$let-block` — where neither `peel-steals-a-move?` nor the relocation search
+;; could see it.
+;;
+;; The fix is not a deeper search. `syntax->datum` allocates FRESH pairs and the
+;; desugars splice sub-datums BY REFERENCE, so cons-cell identity is already an
+;; exact origin marker for the thing this whole family is about — a subtree that
+;; MOVED through a desugar unchanged. The strip now records it.
+(test-case "DEFERRED 58: ALIGNED-BLOCK let at two or more goals — must match its control"
+  (check-equal? (d57-aligned D57-2GOAL) (d57-aligned D57-2GOAL-P)
+                "aligned-block let must group like its paren control at 2 goals"))
+
+(test-case "DEFERRED 58: BRACKET let at two or more goals — must match its control"
+  (check-equal? (d57-bracket D57-2GOAL) (d57-bracket D57-2GOAL-P)
+                "bracket let must group like its paren control at 2 goals"))
+
+(test-case "DEFERRED 58: the collapse is gone, not merely relabelled"
+  ;; Belt-and-braces on the two above: control-equality would also pass if BOTH
+  ;; sides broke identically, which is exactly how the `def := rel` member (a
+  ;; separate slice) hides from its own pin. Name the old symptom explicitly.
+  (check-false (string-contains? (result-msg (d57-aligned D57-2GOAL)) "fruit-color/5")
+               (format "aligned block must not collapse; got: ~a"
+                       (result-msg (d57-aligned D57-2GOAL))))
+  (check-false (string-contains? (result-msg (d57-bracket D57-2GOAL)) "fruit-color/5")
+               (format "bracket must not collapse; got: ~a"
+                       (result-msg (d57-bracket D57-2GOAL))))
+  ;; and the controls really do answer, so the equality above is not vacuous
   (check-true (string? (d57-aligned D57-2GOAL-P)) (result-msg (d57-aligned D57-2GOAL-P)))
   (check-true (string? (d57-bracket D57-2GOAL-P)) (result-msg (d57-bracket D57-2GOAL-P))))
 
