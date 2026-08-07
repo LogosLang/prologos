@@ -4293,3 +4293,74 @@ not headed by a `$` sentinel", which is the same polarity trap DEFERRED 53 hit �
 a rewrite whose output happens not to be `$`-headed silently changes meaning. The
 durable answer is the reader-side origin marker (see 53 residual 2), not another
 member.
+
+### 57. ✅ FIXED 2026-08-07 (commit `066e2c45`) — the right-peel over-reached: a COMPOUND `let` body stole the rel RHS's srclocs, and the let leg's pins all used the one body shape that worked
+
+**The landed let leg (`134ddb79`) was BODY-SHAPE-DEPENDENT.** With a compound
+body — `[some vr]`, the idiomatic spelling — two parenless sibling goals under a
+`let`-bound `rel` COLLAPSED into one over-arity goal:
+
+```
+let vr := (rel [f]
+  &> fruit-color f "blue"
+     fruit-size f "small")
+  [some vr]
+```
+→ `solve: Unknown procedure: fruit-color/5 — however, there are definitions for:
+fruit-color/2`. The paren-goal control returns `@[{:f "blueberry"}]`. Swap the
+body for the ATOM `vr` and the same clause parses correctly.
+
+⚠ **It is not reliably loud.** When the collapsed arity happens to be LEGAL (a
+multi-arity relation), the collapse solves and returns a result with **0 errors**
+while the correct reading errors — measured. So this was a reachable
+silent-wrong-answer, not merely a bad message.
+
+⚠ **And it was a REGRESSION, not a residual**: before the let leg landed, this
+same input got the LOUD POL.8 guard. The fix converted a correct refusal into a
+mis-grouping — precisely the trade `rebuild-preserving-locs`'s own commentary
+forbids ("a partial fix that converts a LOUD refusal into a SILENT mis-grouping
+is strictly worse than the status quo").
+
+**Root cause**: `peelable?` accepts ANY two lists ("a group pairs with a group"),
+so it cannot tell a list that was EDITED from one RESHAPED WHOLESALE. The let
+desugar `(let r := V BODY)` → `((fn (r : _) BODY) V)` leaves BODY and V last on
+their respective sides, both compound — so the peel paired them and V (the rel
+RHS, carrying the clause layout) was rebuilt against BODY's tree. Nonzero column
+⇒ POL.8's column-0 marker goes blind. With an ATOM body `peelable?` refused and
+the relocation step found V correctly, which is exactly why every pin passed.
+
+**Fix**: the peel now requires a **shared left anchor** (`pre > 0`).
+Right-alignment presumes the two lists are THE SAME LIST with a changed middle,
+and `peelable?` only ever sees the single pair it is about to take. The
+discriminator is structural, not lucky: the lists this walk protects are CLAUSE
+REGIONS, anchored on the left by the `&>` sentinel, which no rewrite touches — so
+`pre >= 1` there even when a rewrite lands on the goal head itself. A total
+reshape changes element 0's very KIND (the keyword `let` becomes an application),
+so `pre = 0`. The reshape case falls through to RELOCATION, which matches V by
+datum equality and does not care that it moved.
+
+**Test-pinned** (3 cases, each by CONTROL EQUALITY against the paren spelling —
+"no error" was the pin shape that missed this in the first place): the compound
+body (the regression); the atom body (guards the relocation path the fix must not
+cost); and the single-goal case, which **isolates the trigger — the collapse
+needs TWO OR MORE sibling goals AND a compound body** (one goal has no
+continuation line for the peel to mis-pair).
+
+**How it was found, and the lesson**: not by any gate. The suite was green over
+it throughout (9890/483/0) because no pin used a compound body. It surfaced by
+PROBING an *inferred* claim from a grounding audit — the audit reasoned the peel
+was body-shape-dependent from the code, and the probe confirmed it. This is the
+4th instance this arc of "every automated gate went green over a live defect",
+and the 2nd of "the pinned FIXED row is narrower than the pin's name suggests".
+⭐ **The generalizable form: when a fix is pinned by a fixture you chose, ask
+which axis of that fixture you never varied.** Here it was the let BODY — an
+element that is not part of the feature under test at all, which is why nobody
+varied it.
+
+**Adjacent, still open**: the SIBLING-LET chain (DEFERRED 51(c), the known limit)
+is unaffected by this fix — it degrades LOUDLY, upstream, at the fusion in
+`merge-toplevel-sibling-lets`, and is the next slice. A grounding audit
+additionally named, all unfiled and all LOUD, the private `def-`/`defn-` arms and
+the `trait`/`impl`/`specialize` arms, which still do the bare whole-form stamp;
+and noted that error POSITIONS for siblings 2..N of a merged let run are all
+reported at sibling 1's line.
