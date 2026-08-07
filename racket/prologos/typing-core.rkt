@@ -2910,7 +2910,14 @@
          [(with-speculative-rollback
             (lambda ()
               (for/and ([ti (in-list (cdr tys))])
-                (unify-ok? (unify ctx (car tys) ti))))
+                (and (unify-ok? (unify ctx (car tys) ti))
+                     ;; D4.P4d slice 0: same conjunct as the pvec twin below —
+                     ;; unify admits the check-mode coercion arms, so
+                     ;; '[{:b 2} map-value] classified homogeneous with the
+                     ;; FIRST element's type (order-dependent; the slice-0
+                     ;; adversarial verify's B2 reproducer). conv asks the
+                     ;; sameness this probe means.
+                     (conv (car tys) ti))))
             values
             "list-literal-homogeneity")
           (infer ctx chain)]
@@ -2931,8 +2938,22 @@
        (cond
          [(ormap expr-error? kts) (expr-error)]
          [(ormap expr-error? vts) (expr-error)]
-         [(for/and ([kt (in-list (cdr kts))])
-            (unify-ok? (unify ctx (car kts) kt)))
+         [(with-speculative-rollback
+            (lambda ()
+              (for/and ([kt (in-list (cdr kts))])
+                (and (unify-ok? (unify ctx (car kts) kt))
+                     ;; D4.P4d slice 0: same conjunct as the list/pvec twins —
+                     ;; computed keys (`{[expr] val}`) make arbitrary key types
+                     ;; source-reachable, so a record-typed and a Map-typed key
+                     ;; coerced into "uniform" with the FIRST key's type (the
+                     ;; slice-0 adversarial verify's B1 reproducer,
+                     ;; order-dependent at 0 errors). conv asks sameness.
+                     (conv (car kts) kt))))
+            values
+            ;; The rollback wrapper is NEW here (the two sibling probes already
+            ;; had it): without it, a mid-probe unify's meta solves survive
+            ;; into the (expr-error) arm and leak into later commands.
+            "map-literal-key-homogeneity")
           (expr-Map (whnf (car kts)) (build-union-type vts))]
          [else (expr-error)]))]
     ;; CIU T6 F1a-col (D15): literal-extent typing, ALL-AT-ONCE. Homogeneous
@@ -2946,7 +2967,23 @@
          [(with-speculative-rollback
             (lambda ()
               (for/and ([ti (in-list (cdr tys))])
-                (unify-ok? (unify ctx (car tys) ti))))
+                (and (unify-ok? (unify ctx (car tys) ti))
+                     ;; D4.P4d slice 0: unify admits the check-mode COERCION
+                     ;; arms (Record↔Map, Record↔PVec — unify.rkt's F1
+                     ;; subsumption pairs, symmetric by design), but this
+                     ;; probe asks SAMENESS. Without this conjunct a mixed
+                     ;; `@[record map]` classified homogeneous with the FIRST
+                     ;; element's type — order-dependent, and a broadcast over
+                     ;; it buried `<error> : [PVec T]` at zero errors (the
+                     ;; P4d opening audit's soundness hole). `conv` is
+                     ;; definitional equality on normal forms: solved metas
+                     ;; resolve through nf, so meta-homogeneous literals still
+                     ;; collapse; coercible-but-DIFFERENT pairs return #f and
+                     ;; the probe ROLLS BACK to the honest 'nat row. Both
+                     ;; sides are nf'd per pair, NOT hoisted — an earlier
+                     ;; iteration may solve a meta INSIDE the first element's
+                     ;; type, and a hoisted nf would compare stale.
+                     (conv (car tys) ti))))
             values
             "pvec-literal-homogeneity")
           (expr-PVec (whnf (car tys)))]

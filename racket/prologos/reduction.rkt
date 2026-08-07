@@ -11,6 +11,7 @@
 ;;;
 
 (require racket/match
+         (only-in "union-types.rkt" flatten-union)  ;; D4.P4d slice 0: conv-nf's union arm
          racket/list
          racket/string
          racket/flonum
@@ -4975,6 +4976,24 @@
     [(expr-meta? a)
      (and (expr-meta? b) (eq? (expr-meta-id a) (expr-meta-id b)))]
     [(expr-meta? b) #f]
+    ;; D4.P4d slice 0: unions are SET-LIKE in this system's definitional
+    ;; equality — unify's own union path (`classify-whnf-problem` routes
+    ;; union×union to `unify-union-components`, which SORTS and DEDUPS), so
+    ;; `<Int|String>` ≡ `<String|Int>` and `<Int|Int|String>` ≡ `<Int|String>`.
+    ;; The generic struct arm below compared union spines POSITIONALLY,
+    ;; disagreeing with the engine's own equality (caught by the slice-0
+    ;; adversarial verify: the pvec-literal probe's conv leg reclassified
+    ;; spelled-differently union pairs as heterogeneous). Mutual containment
+    ;; under conv-nf itself — no sort key needed, unions are tiny. Union vs
+    ;; NON-union deliberately stays with the struct arm (#f): unify's classify
+    ;; sends that pair to its conv fallback too (the flavor-B widen case is
+    ;; deferred there), so the two equalities agree in BOTH directions.
+    [(and (expr-union? a) (expr-union? b))
+     (let ([as (flatten-union a)] [bs (flatten-union b)])
+       (and (for/and ([x (in-list as)])
+              (for/or ([y (in-list bs)]) (conv-nf x y)))
+            (for/and ([y (in-list bs)])
+              (for/or ([x (in-list as)]) (conv-nf x y)))))]
     [(and (struct? a) (struct? b))
      (let ([va (struct->vector a)]
            [vb (struct->vector b)])

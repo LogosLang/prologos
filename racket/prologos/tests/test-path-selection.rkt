@@ -4596,3 +4596,132 @@
     (check-true (ormap (lambda (s) (regexp-match? #rx"BINDER position|expected symbol" s)) out)
                 (format "~a must refuse with a guided message: ~a" src out))
     (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out))))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4d slice 0 — the pvec-literal homogeneity probe must not read
+;; COERCIBILITY as SAMENESS. unify's Record↔Map arms (unify.rkt, the F1 s2
+;; check-mode subsumption pair) fire in EITHER argument order, and the probe
+;; consumed unify as an EQUALITY test — so `@[record map]` classified
+;; homogeneous with the FIRST element's type (order-dependent), and a
+;; broadcast over it produced `<error> : [PVec Int]` at ZERO errors (the
+;; buried-error-in-an-output-slot class). Found by the P4d opening audit
+;; (wf_4bc76d94-a2d), re-verified on the main thread. Design: D4 §5.P4d
+;; slice 0. The fix: the probe requires unify-ok AND conv (definitional
+;; equality on normal forms) — coercible-but-different pairs roll back to the
+;; honest 'nat row.
+;; ---------------------------------------------------------------------------
+
+(test-case "P4d-s0: a het literal with a Map element forms the TUPLE — record-first"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s0a\ndef r1 := {:a 2 :b 3}\ndef m1 : [Map Keyword Int] := {:a 1}\ndef mixed := @[r1 m1]")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"mixed : \\[PVec" s)) out)
+               (format "the FIRST element's type must not win — coercibility is not sameness: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"mixed : ⟨\\{:a Int :b Int\\} \\[Map Keyword Int\\]⟩ defined" s)) out)
+              (format "expected the honest het tuple: ~a" out)))
+
+(test-case "P4d-s0: map-first gives the SAME classification — order-independence"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s0b\ndef r1 := {:a 2 :b 3}\ndef m1 : [Map Keyword Int] := {:a 1}\ndef rev := @[m1 r1]")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"rev : \\[PVec" s)) out)
+               (format "map-first must not collapse either — the literal's class cannot depend on element order: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"rev : ⟨\\[Map Keyword Int\\] \\{:a Int :b Int\\}⟩ defined" s)) out)
+              (format "expected the honest het tuple, reversed row: ~a" out)))
+
+(test-case "P4d-s0: broadcasting the mixed literal is the honest carrier refusal, never a buried <error>"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s0c\ndef r1 := {:a 2 :b 3}\ndef m1 : [Map Keyword Int] := {:a 1}\ndef mixed := @[r1 m1]\nmixed:b\ndef after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"<error>" s)) out)
+               (format "an <error> value escaped into an output slot at zero errors: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec subject" s)) out)
+              (format "expected the guided bcast-carrier refusal: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)
+              (format "the refusal must be per-command: ~a" out)))
+
+(test-case "P4d-s0 guard: homogeneous literals still collapse — concrete and meta-solved"
+  ;; The conv conjunct must not break meta-homogeneity: unify SOLVES the metas,
+  ;; nf resolves them, conv compares the resolved forms (re-nf'd per pair —
+  ;; earlier iterations may solve metas INSIDE the first element's type).
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s0d\ndef homog := @[1 2 3]\ndef nn := @[none none]")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"homog : \\[PVec Int\\] defined" s)) out)
+              (format "concrete homogeneous collapse must survive: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"nn : \\[PVec \\[prologos::data::option::Option _\\]\\] defined" s)) out)
+              (format "meta-solved homogeneous collapse must survive: ~a" out)))
+
+(test-case "P4d-s0 guard: check-mode subsumption is UNTOUCHED — records still flow into a Map annotation"
+  ;; The F1 s2 coercion itself (record-subtypes-map?) serves CHECK mode and
+  ;; stays; only the probe's equality question changed. Distinct keys on
+  ;; purpose — the subsumption is per-element against the annotation.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s0e\ndef ms : [PVec [Map Keyword Int]] := @[{:a 1} {:b 2}]")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"ms : \\[PVec \\[Map Keyword Int\\]\\] defined" s)) out)
+              (format "annotation-driven subsumption must survive the probe fix: ~a" out)))
+
+(test-case "P4d-s0 guard: the record↔PVec sibling pair stays honest (already het at HEAD)"
+  ;; The record-subtypes-pvec? coercion pair did NOT reproduce the bug from
+  ;; source (probed at the audit); pinned so the probe-level fix keeps it that
+  ;; way rather than trusting the accident.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s0f\ndef ms : [PVec <Int | String>] := @[1 \"a\"]\ndef mixed2 := @[ms @[1 \"a\"]]")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"mixed2 : ⟨\\[PVec Int \\| String\\] ⟨Int String⟩⟩ defined" s)) out)
+              (format "the tuple/PVec mix must stay a het tuple: ~a" out)))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4d slice 0, round 2 — the adversarial verify's findings (wf_9d8f105c).
+;; (1) BLOCKING: conv was spelling-sensitive on UNIONS while the engine's own
+;;     equality is set-like (unify-union-components sorts + dedups) — the conv
+;;     conjunct reclassified `@[[the <Int|String> 1] [the <String|Int> "x"]]`
+;;     as a het tuple. conv-nf gained a union arm (mutual containment).
+;; (2) The CLASS had three members in ONE function: the list-literal and
+;;     map-literal-KEYS probes carried the same unify-as-equality defect,
+;;     both reproduced from source (computed keys `{[expr] val}` make key
+;;     types arbitrary). Same conjunct landed at both; the map-keys arm also
+;;     gained the rollback wrapper its siblings already had.
+;; ---------------------------------------------------------------------------
+
+(test-case "P4d-s0/U: spelled-differently unions still collapse — conv agrees with the engine's set-like equality"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s0u\ndef a := [the <Int | String> 1]\ndef b := [the <String | Int> \"x\"]\ndef v := @[a b]\ndef d1 := [the <Int | Int | String> 1]\ndef v2 := @[d1 b]")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"v : \\[PVec Int \\| String\\] defined" s)) out)
+              (format "component ORDER must not make a union pair het: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"v2 : \\[PVec Int \\| Int \\| String\\] defined" s)) out)
+              (format "component DUPLICATION must not make a union pair het: ~a" out)))
+
+(test-case "P4d-s0/B1: computed map KEYS of coercible-but-different types refuse, order-independently"
+  (define src-common "ns s0k~a\ndef m : [Map Keyword Int] := {:a 1}\nspec idm [Map Keyword Int] -> [Map Keyword Int]\ndefn idm [x] x\n")
+  (for ([tag (in-list '(1 2))]
+        [lit (in-list (list "def x1 := {{:b 2} \"rec\" [idm m] \"map\"}"
+                            "def x2 := {[idm m] \"map\" {:b 2} \"rec\"}"))])
+    (define out (map (lambda (r) (format "~a" r))
+                     (process-string-ws (string-append (format src-common tag) lit "\ndef after := 42"))))
+    (check-false (ormap (lambda (s) (regexp-match? #rx"x[12] : \\[Map" s)) out)
+                 (format "the FIRST key's type must not win (~a): ~a" lit out))
+    (check-true (ormap (lambda (s) (regexp-match? #rx"Could not infer type" s)) out)
+                (format "expected the key-conflict refusal (~a): ~a" lit out))
+    (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out))))
+
+(test-case "P4d-s0/B2: a list literal with a Map element forms the honest 'nat row, both orders"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s0l\ndef m : [Map Keyword Int] := {:a 1}\ndef xs := '[{:b 2} m]\ndef ys := '[m {:b 2}]")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"xs : ⟨\\{:b Int\\} \\[Map Keyword Int\\]⟩ defined" s)) out)
+              (format "record-first must not claim a List of the first element's type: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"ys : ⟨\\[Map Keyword Int\\] \\{:b Int\\}⟩ defined" s)) out)
+              (format "map-first must not collapse either: ~a" out)))
+
+(test-case "P4d-s0 guard: three-element meta chain still collapses (per-pair nf, not hoisted)"
+  ;; The comment's stated hazard made testable: pair 1 solves the metas
+  ;; ([Option ?A] vs [Option Int]); pair 2 compares t0 AGAINST A LATER element
+  ;; and must see the SOLVED form — a hoisted nf of t0 would compare stale.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s0t\ndef trio := @[none [some 1] none]")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"trio : \\[PVec \\[prologos::data::option::Option Int\\]\\] defined" s)) out)
+              (format "the meta-solving chain must survive the conv conjunct: ~a" out)))
