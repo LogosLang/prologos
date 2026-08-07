@@ -973,6 +973,27 @@
   (check-equal? parenless paren
                 "two parenless sibling goals must conjoin exactly like the paren control"))
 
+(test-case "DEFERRED 51(c) KNOWN LIMIT: a SIBLING-LET chain still degrades (the 5th member)"
+  ;; Found by self-probe minutes after the let-leg landing — the family-closure
+  ;; lesson (Watching 4) applied: hunt the next member yourself, immediately.
+  ;; `merge-toplevel-sibling-lets` FUSES the sibling lets' stxs into one datum
+  ;; (`(map syntax->datum unit)` → merged nested let), so its rebuild has TWO
+  ;; source trees — single-source alignment and the one-level relocation step
+  ;; structurally cannot recover the second sibling's subtrees. Closing it needs
+  ;; NEW machinery (an stx-carrying merge, or deep multi-source pool
+  ;; relocation), not another application of the helper — deliberately NOT
+  ;; improvised mid-arc; see DEFERRED 51(c). If this test starts failing because
+  ;; the chain PARSES, that fix landed: invert it, do not delete it.
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "let d51sx := 5\n"
+                            "let d51sr := (rel [f]\n"
+                            "  &> fruit-color f \"blue\")\n"
+                            "  [+ d51sx 1]\n")))
+  (check-true (string-contains? (result-msg r) "parenless goals cannot")
+              (format "known limit: the sibling-let merge still degrades; got: ~a"
+                      (result-msg r))))
+
 (test-case "DEFERRED 51(c) def arm: unparenthesized `def r := rel …` takes parenless clauses"
   ;; The last spelling still degrading after the defr + [else] extensions. The
   ;; DEF arm's `rebuild-def-preserving-rhs` handles only a SINGLE element after

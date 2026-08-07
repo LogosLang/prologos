@@ -3854,6 +3854,19 @@ any sentinel is consulted.
   spelling), single-goal and two-sibling-goal shapes. Genuine moves that are
   ALSO rewritten, or ambiguous duplicates, still stamp — DEFERRED 55's real
   diff remains the durable answer for those.
+  ⚠ **A 5th member exists and is pinned as a KNOWN LIMIT (not fixed):
+  SIBLING-LET chains** (`let x := 5` / `let r := (rel …)` / body) — found by
+  self-probe minutes after the let-leg landing, per the Watching-4 discipline.
+  `merge-toplevel-sibling-lets` FUSES the siblings' stxs into one datum
+  (`(map syntax->datum unit)` → a merged nested let), so its rebuild has TWO
+  source trees; single-source alignment and the one-level relocation step
+  structurally cannot recover the second sibling's subtrees. Closing it needs
+  NEW machinery — either an stx-carrying `merge-sibling-lets` (the merge
+  helpers currently test datum shapes throughout) or deep multi-source pool
+  relocation in the helper — a design step, deliberately not improvised
+  mid-arc given that every clever alignment extension this arc introduced a
+  silent mis-parse caught only by adversarial verification. The guard's honest
+  message covers it meanwhile.
   ⚠ Also from the same verify: branch (b)'s "a mis-grouping would surface as an
   arity error, not a row" pin-strength argument is TOO STRONG — in DEFERRED 55's
   peel-residual zone (rewrites in BOTH goal lines) with a relation of the merged
