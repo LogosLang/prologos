@@ -33,7 +33,7 @@ rulings, censuses and test delta live in its own section.
 | **P4** | **Broadcast ω** — ⭐ **P4a ✅ · P4b ✅ COMPLETE** (b-i carrier + b-ii `$dot-access` migration; `x.a` now mints the unified selector carrier) · P4c–P4e ⬜ — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | [§5.P4](#p4) · co-design: audit `wf_8458c23b` + options panel · **RULED 2026-07-31**: [Q_U5](#q-u5) · [Q_U6](#q-u6) · [Q_U7](#q-u7) · [Q_U8](#q-u8) · [Q_U9](#q-u9) (the PAUSE cleared) · partition LOCKED P4a–P4e |
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
 | **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [§5.P4c](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([inverted default](#p4c-2-inverted)) · [P4c-3](#p4c-3) ✅ `d477772c` · [P4c-4a](#p4c-4a) ✅ `f31237fd` · [P4c-4b](#p4c-4b) ✅ `6b22515d` (end to end) · **[P4c-4c](#p4c-4c-close) ✅ `ae26f540`** — broadcast is REACHABLE: PVec ω value semantics + **G2** + the preparse seam guard. ⭐ The verify caught a BLOCKING whole-file abort every gate was blind to; owner ruled the structural fix ([close](#p4c-4c-close)) · [Q_U18](#q-u18) ✅ · DEFERRED 43 ✅ · 48 RULED uniform · P4c-5 ⬜ |
-| **P4d** | **The carriers** — Map/keyword-row (TWO typing arms: keyword-row `expr-Record` + genuine `expr-Map`; ONE new champ reduction arm, atomic with typing) · het tuple (TYPING-ONLY — same `expr-rrb` runtime as PVec) · PVec-of-union + `row-meet` (NEW machinery + an AUTHORED fixture) · the Q_U9 refusal's message split · corpus re-fate · **Q_U19 ✅ RULED (A)** at the opening | 🔄 | [§5.P4d](#p4d) · opened 2026-08-07: audit `wf_4bc76d94-a2d` · **slice 0 ✅ `00e52c42`** (the soundness fix, 3 probes + conv-nf's union arm) · **slice 1 ✅ `14ef5e83`** — the map carriers LIVE (`regions:host` keyed; lean 1 dissolved; suite **9928/485/0**, battery **385**, acceptance **71/71**) · slices 2–4 ⬜ |
+| **P4d** | **The carriers** — Map/keyword-row (TWO typing arms: keyword-row `expr-Record` + genuine `expr-Map`; ONE new champ reduction arm, atomic with typing) · het tuple (TYPING-ONLY — same `expr-rrb` runtime as PVec) · PVec-of-union + `row-meet` (NEW machinery + an AUTHORED fixture) · the Q_U9 refusal's message split · corpus re-fate · **Q_U19 ✅ RULED (A)** at the opening | 🔄 | [§5.P4d](#p4d) · opened 2026-08-07: audit `wf_4bc76d94-a2d` · **slice 0 ✅ `00e52c42`** (the soundness fix) · **slice 1 ✅ `14ef5e83`** (the map carriers) · **slice 2 ✅ `ba1c055d`** — the het tuple: per-position EXACT, **C9 RULED (a)**, misses NAME position/field, DEFERRED 40/45 riders fixed (suite **9940/485/0**, battery **395**, acceptance **73/73**) · slices 3–4 ⬜ |
 | **PF** | **Path first-classness** (substrate; **P5's prerequisite**) — ⭐ **Q_U17 RULED B2**: a Path segment is a first-class `Step` value. Reify the closed six-kind union as a `data Step` ADT on the `Datum` pattern; `Path` stays GROUND; `segments : Path -> [List Step]`. Repairs the dead `path-segments` in the SAME change | ⬜ | [§5.PF](#pf) · [Q_U17](#q-u17) · panel `wf_68178bd3-eea` |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery · ⚠ B3 needs [PF](#pf) |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | [§5.PX](#px) · position flexible |
@@ -6130,10 +6130,50 @@ first as slice 0"]:**
   89/89 + 6/6 + 29/29 + 28/28 · corpus A/B vs `044a77d7` (19 files):
   EXACTLY the predicted diff set — the two corpus lines + foray's
   `regions:host`, each error→meaning (13→12) · **full suite 9928/485/0**.
-- **⬜ Slice 2 — het tuple**: TYPING-ONLY (`expr-rrb` already served by
-  `bcast-lift`); per-position EXACT; the position-naming error; the **C9
-  scalar-tier mini-ruling at its mini-design**; DEFERRED 40-residual/45
-  riders (value-channel only).
+- **✅ Slice 2 — het tuple — COMPLETE `ba1c055d` (2026-08-07).**
+  `events:t` → `@[:click :key :click] : ⟨Keyword Keyword Keyword⟩` —
+  per-position EXACT, output = the honest nat-row (P3c 2a; the Tuple→PVec α
+  keeps PVec expectations satisfied). Mini-audit `wf_80ee26f2-7dd` · verify
+  `wf_c92f4edd`. **Rulings landed [owner]**: **C9 = (a)** the conservative OR
+  over positions (the ONE scalar tier; sibling-coupling accepted, scope is
+  'path-only — the block arm is `(void)`) · output shape = nat-row · misses
+  NAME the position/field · riders fixed value-channel · `events:x`
+  battery-pinned (would be the corpus's first ERROR result; no convention).
+  **The audit's refutation**: "one gate, zero new code" was FALSE — the tier
+  peel was a SECOND independently-'keyword-gated site; both widened
+  (`memq '(keyword nat)`), and the re-expressed s0c pin discriminates the
+  half-shipped variant. **The `'bcast-at` wrapping fail**: label-aware walk
+  (`record-map-field-types/labeled`, the adjacent sibling of the ONE
+  reconstruction helper) + a recursive formatter arm — nested wraps compose
+  ("fails at field :r1 — fails at position 1 — …"), and the slice-1 keyword
+  twin (carrier fields unnamed) closed in the same stroke.
+  `format-closed-row-miss` labels TOTALIZED (integer labels raised —
+  unconstructible today, guarded by walker-totality).
+  **DEFERRED 45 fixed structurally**: `select-branch-top-keys`' bcast arm
+  answers `(list (select-step-output-name s))` — check ≡ meaning by shared
+  computation; B1's sub special-case DISSOLVED; the verify's full
+  OLD-vs-NEW-vs-consumers table found ZERO divergent shapes and a SECOND
+  silently-repaired grade (dissolve inners `k^:w^:r` — now advertised +
+  pinned). **DEFERRED 40**: the two path-append sites pair-guarded (the
+  verify caught my first pin fixture VACUOUS — single-step, never reached
+  the sites; re-pointed at the block-sort mid-branch shape); the ordinal leg
+  recorded UNCONSTRUCTIBLE (`(@bcast (@ord N))` has no producer — the mint
+  emits bare numbers, legitimate labels).
+  **Carried out of the slice, recorded**: the Q_U20 block cell CONCRETE —
+  in block position `hx{evs:t}` ≡ `hx{evs:{t}}` (a symbol inner threads the
+  outer 'block and degenerates into its sub twin; the extract/assemble
+  distinction Q_U20 ruled for 'path COLLAPSES) — material for the ruling ·
+  the `@[]`-broadcast refusal misattributes "the subject" (a meta elem) ·
+  `not-indexable`'s `x{k}` remedy is off-key inside a broadcast (both
+  slice-4 fodder) · the peel's early stop IF two `@bcast` steps ever share
+  ONE branch (unmintable today — flag, not defect).
+  **Gates**: battery **395/395** (+11, 4 re-expressed; the verify's
+  pin-vs-revert matrix shows every production half-revert caught) ·
+  acceptance **73/73** ×2 (+2: `events:t` · `tree.entries:name` — the audit
+  REFUTED its "PVec-of-rows" reading, `:entries` IS a het tuple, settling
+  the three-way §10.8 contradiction; the recursive line stays W4-DEFERRED)
+  + 89/89 + 6/6 + 29/29 + 28/28 · corpus A/B vs `5ef1cfac`: EXACTLY the two
+  flips · **full suite 9940/485/0**.
 - **⬜ Slice 3 — PVec-of-union + `row-meet`**: the new machinery + the
   AUTHORED discriminating fixture + the CALM restatement on
   `has-unsolved-meta?` grounds.
