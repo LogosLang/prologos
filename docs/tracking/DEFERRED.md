@@ -4535,3 +4535,122 @@ defect, P4d-0 slice 5's item) and describes vector-ordinal semantics where the
 user narrowed a map field. A refusal, not an acceptance, and per-command — but it
 is the FIRST adjacent spelling users will try, and it is unpinned. Home: the
 P4d-0 slice-5 display fix plus a message that names the map-field case.
+
+### 58. ✅ FIXED 2026-08-07 (commits `b3e03913` slice 1, `1ad9411f` slice 2) — THE DEPTH WALL: cons-cell identity was already an exact provenance marker, and the strip was throwing it away
+
+Closes the last three members of the 51(c) family in one mechanism: **bracket
+`let [vr (rel …)] body`**, **aligned-block `let` (`$let-block`)**, and the
+**top-level SIBLING-LET chain**. All three now group and solve exactly like their
+paren controls; three KNOWN LIMIT pins are INVERTED (they said to).
+
+**THE WALL.** Everything in `rebuild-preserving-locs` aligns two ELEMENT VECTORS
+at ONE level — common prefix, common suffix, the right peel, the relocation step.
+A desugar that moves a subtree DEEPER is invisible to all of it. Measured depths
+of the moved rel RHS, ORIGINAL side: inline `:=` **1** (works today), bracket
+**2**, `$let-block` **3**. On the EXPANDED side it is **2k−1** for the k-th
+binding (`let-bindings->nested-fn`'s `foldr` builds a right-nested chain), and
+each level of `let` nesting adds +3 original / +2 expanded — i.e. **unbounded
+along two axes**, so a fixed-depth-K search was never a fix.
+
+⚠ **AND "SEARCH DEEPER" WAS THE WRONG ANSWER ANYWAY** — the prior audit's
+"extend the pool by one level" would have been unsound. Deepening keeps DATUM
+EQUALITY as the oracle, and datum equality cannot tell a user subtree from one
+the desugar MINTS. That is not theoretical: **at the shallow depth we already
+shipped**, `let q := [fn [q : _] [some q]]` has the minted `(fn (q : _) …)`
+wrapper taking the USER lambda's srclocs while the user's own lambda is
+flat-stamped — a **SWAP**, not a loss. An adversarial 2-line reproducer exists
+that is safe at depth 1 and unsound at depth ≥ 2. Deepening strictly enlarges
+that class, and it adds a route far wider than the recorded one (which needed the
+peel to have consumed the true twin first).
+
+**THE OBSERVATION.** `syntax->datum` allocates **fresh pairs**, and the movers
+splice sub-datums **BY REFERENCE** — `let-bindings->nested-fn`'s `foldr` inserts
+`value` unchanged, `datum-subst` is a bare `hash-ref`, `preparse-expand-subforms`
+returns the SAME object when nothing changed. So **cons-cell identity is already
+an exact, zero-cost provenance marker** for precisely the class this family is
+about: a subtree that moved through a desugar UNCHANGED. `strip-with-origin!`
+records it (`hasheq`: freshly-allocated pair → the syntax object it came from)
+while producing the same datum `syntax->datum` produces.
+
+Better than the search on every axis: **no depth parameter** to re-derive when a
+sentinel adds a level; **no false-pair exposure by construction**, because a
+minted node is a fresh cell and is `eq?` to nothing; and it resolves cases that
+datum-ambiguity stamps today.
+
+**THREE THINGS THAT HAD TO BE TRUE**, each measured to matter:
+1. **ADDITION, never replacement.** The index holds only COMPOUND nodes and
+   POL.8's own sentinel (`$clause-sep`) is an ATOM — replacing the alignment with
+   an index walk regressed the `defr` control by handing that symbol the
+   whole-form anchor.
+2. **Consult at EVERY recursive entry**, not just the outer call.
+3. **The STAMP must RECURSE.** It was terminal, which is what made the depth look
+   *unbounded* rather than merely *nested*: a moved subtree inside a stamped
+   element was never visited at all.
+
+**SLICE 2 — and the earlier diagnosis was wrong in its load-bearing half.**
+DEFERRED 51(c) recorded the sibling chain as needing "an stx-carrying merge
+(~62 datum-shape sites over 12 functions) or deep multi-source pool relocation",
+because the fusion "has TWO source trees". **Neither.** It was never a
+depth-of-search problem: `merge-toplevel-sibling-lets` did `(map syntax->datum
+unit)` and rebuilt against sibling 1, and `datum->syntax` stamps **RECURSIVELY**
+over a bare datum, so every node already carried sibling 1's line and column
+before `rebuild-preserving-locs` was ever called. No search, at any depth, can
+recover information that is no longer in the tree. The fix is to stop discarding
+it: strip the siblings through a **shared** index (~10 lines, all machinery
+shared with slice 1). `merge-sibling-lets` still receives plain datums, still
+decides on datum shapes, and its error-containment invariant is untouched.
+
+⭐ **The old loudness was INCIDENTAL.** The chain failed LOUDLY only because
+sibling 1 sits at column 0 — exactly POL.8's degradation marker. The identical
+defect written indented (inside a `defn`) would have been SILENT. "It fails
+loudly" was a property of the fixture, not of the code. The same correction
+applies to the census's "still degrading, all LOUD" language generally.
+
+**RULED (owner, 2026-08-07)**: a duplicated node takes the **same** loc.
+`datum-subst` splices by reference, so a `defmacro` template using `?e` twice
+yields two `eq?`-identical copies; both resolve through the index to the one
+original. Relocation refuses that case via an expanded-side uniqueness guard; the
+index deliberately does not.
+
+**Tests**: the three inverted pins by control-equality, plus an explicit "the
+collapse is gone, not merely relabelled" check (control-equality alone would pass
+if BOTH sides broke identically — which is exactly how the `def := rel` member
+hides from its own pin), plus a "still merges" pin for the fusion (a grouping
+test cannot see whether the fusion stopped fusing, which would drop earlier
+siblings out of scope). New `tests/test-origin-index.rkt` pins the two properties
+a green suite would NOT demonstrate: (A) `strip-with-origin!` is datum-identical
+to `syntax->datum` over shapes chosen to break a naive walker (improper lists,
+vectors, nested empties) — it is on the hot path for every form now; (B) the
+recorded key is `eq?` to the pair the expander receives, **and a SECOND strip
+shares no keys** — the trap that would silently reduce the index to a no-op while
+every behavioural test still passed.
+
+**Gates**: suite 10017 / 487 / 0; both acceptance files 0 errors; the D57 corpus
+A/B (161 files, `fb788bfc` → `f9d68338`) came back with **zero semantic diffs**
+(4 DIFFERS = 2 gensym drifts + 2 absolute-path echoes; 20 caps all SYMMETRIC with
+identical sizes and path-only content deltas).
+
+**Explicitly NOT in scope** (owner-ruled a separate slice): the FOURTH member,
+`def name := rel …` spliced/unparenthesized, which collapses the same way at a
+nonzero column with a blind guard. It is **not** a relocation miss — the expanded
+`(rel (?q) ($facts-sep …))` is a NEWLY CONSTRUCTED grouping of three previously
+sibling elements, so no datum-equal twin exists at any depth and the index cannot
+see it. It needs expanded-side DESCENT, a different generalization. ⚠ And
+repairing it will silently flip that arm's `||` fact-row count (measured 3 rows
+vs `defr`'s 4 on the same block, both with 0 errors), so it needs its own pin
+BEFORE the fix lands.
+
+**Still open, unfiled, and now cheaper**: the private `def-`/`defn-` arms and the
+`trait`/`impl`/`specialize` arms (+ private twins) still do a bare whole-form
+stamp and never reach `rebuild-preserving-locs`. Because those are STAMP sites,
+an index-aware stamp would close them with no per-arm work (inferred, not
+measured). Same mechanism discharges the "error POSITIONS for siblings 2..N are
+reported at sibling 1's line" item.
+
+⚠ **A fail-safe correction for whoever touches this next**: the "stamp at a
+column-0 anchor" constraint recorded earlier is a design GOAL that HEAD already
+violated in 2 of 3 members, not a property to preserve — and no column-0 anchor
+is even available from a syntax object in scope, since a paren-wrapped top-level
+form sits at column **1**. The reliable fail-safe is a `#f` loc
+(`(datum->syntax #f d #f)`), which BOTH layout guards already test for alongside
+`(zero? sent-col)`.

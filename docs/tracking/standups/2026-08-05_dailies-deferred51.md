@@ -19,8 +19,8 @@ the STATE head in the file before last. Only environment invariants carry over.
   `-deferred51` qualifier. The convention gap is real — "roll a new file" does
   NOT prevent the collision when two out-of-band arcs roll on the same DATE;
   only a same-day arc qualifier does.
-- **HEAD**: re-derive with `git rev-parse HEAD` — expect `75401b89` (the merge)
-  or later. Worktree `.claude/worktrees/wizardly-mendel-2fd502`, branch
+- **HEAD**: re-derive with `git rev-parse HEAD` — expect `1ad9411f` or a later
+  docs commit. Worktree `.claude/worktrees/wizardly-mendel-2fd502`, branch
   `wizardly-mendel-2fd502`. **⚠ `main` (65cb5bce) IS NOW MERGED IN** (merge
   `75401b89`, parents `f9d68338` + `65cb5bce`), in prep for merging this branch
   BACK to main. Base was `b429d038`; ours 24 commits, main's 32. NOT pushed.
@@ -35,8 +35,9 @@ the STATE head in the file before last. Only environment invariants carry over.
   `typing-errors.rkt`, `test-path-selection.rkt`, several `.prologos` examples,
   2 deletions). NOT on the branch, NOT merged, NOT touched — but it has to
   coexist at merge-back time, so check it again then.
-- **Suite**: **9995 / 486 files / 0 failures** (`all_pass: true`, `[486/486]`) at
-  the merge `75401b89` — and it reconciles exactly: main's 9940/485 plus this
+- **Suite**: **10017 / 487 files / 0 failures** (`all_pass: true`, `[487/487]`) at
+  `1ad9411f` (DEFERRED 58 slice 2). Prior: 10015 at `b3e03913`, 9995 at the merge
+  `75401b89` — and it reconciles exactly: main's 9940/485 plus this
   branch's +55 tests / +1 file. Both acceptance files 0 errors post-merge (CIU T6
   path-selection, Rel T1). Pre-merge on this branch: 9902/483 at `83d06156`,
   9899 at `066e2c45`, 9890 at `134ddb79`; branch point 9847 / 482 / 0. Read `all_pass` **and `file_count`** from
@@ -73,7 +74,20 @@ the STATE head in the file before last. Only environment invariants carry over.
   `corpus-d57/`. READ IT before trusting the slice closed; a semantic diff there
   outranks everything below. (An earlier attempt run against the live worktree
   was killed by the merge — decoupling is the fix, not a re-run.)
-- **NEXT: the SIBLING-LET MERGE (owner-chosen; unchanged by 57 — it degrades
+- **✅ THE 51(c) FAMILY IS CLOSED except member 4.** DEFERRED 58 shut the DEPTH
+  WALL for all three remaining members (bracket, aligned-block, sibling chain)
+  with ONE mechanism — the ORIGIN INDEX, `strip-with-origin!` + `stamp-with-origin`
+  in macros.rkt. Read DEFERRED § 58 before touching `rebuild-preserving-locs`:
+  it records why "search deeper" was UNSOUND (not merely insufficient) and why
+  the sibling chain was never a depth problem at all.
+- **NEXT: MEMBER 4 — `def name := rel …` (spliced, unparenthesized), owner-ruled
+  as its OWN slice.** ⚠ The index CANNOT fix it: the expanded
+  `(rel (?q) ($facts-sep …))` is a NEWLY CONSTRUCTED grouping of three previously
+  sibling elements, so no datum-equal twin exists at any depth. It needs
+  EXPANDED-SIDE DESCENT. ⚠⚠ And repairing it SILENTLY flips that arm's `||`
+  fact-row count (measured: 3 rows where `defr` gives 4, on the identical block,
+  0 errors both) — that pin must land BEFORE the fix.
+- **(historical) the SIBLING-LET MERGE (unchanged by 57 — it degrades
   LOUDLY, upstream, at the fusion in `merge-toplevel-sibling-lets`).** Pinned as
   a KNOWN LIMIT in `test-rel-t1-pol.rkt` — invert that pin on fix, never delete.
   ⚠ Nomenclature: the pin says "the 5th member", the relay note said 6th.
@@ -704,3 +718,65 @@ sibling-let merge hits, so the two probably want one answer.
 
 **Gate**: suite 9902/483/0 (`[483/483]`); corpus A/B vs `fb788bfc` IN FLIGHT at
 session-scratchpad `corpus-d57.txt`.
+
+### DEFERRED 58 — the depth wall closes, and the answer was to stop throwing information away — `b3e03913` + `1ad9411f`
+
+**Why.** Owner: "fix the depth wall once for both, next." The grounding audit
+then refuted my framing twice, and both refutations changed the design.
+
+**Refutation 1 — the sibling chain was never a depth problem.** Its srclocs die
+UPSTREAM, at the fusion: `(map syntax->datum unit)` then a 4-arg rebuild against
+sibling 1, and `datum->syntax` stamps RECURSIVELY over a bare datum. Every node
+carried sibling 1's L:C0 before `rebuild-preserving-locs` was ever called. **No
+search, at any depth, can recover information that is no longer in the tree.**
+
+**Refutation 2 — "search deeper" was unsound, not merely insufficient.** It keeps
+DATUM EQUALITY as the oracle, and datum equality cannot tell a user subtree from
+one the desugar MINTS. The audit demonstrated the collision is LIVE at the depth
+we already shipped: `let q := [fn [q : _] [some q]]` has the minted wrapper
+taking the USER lambda's srclocs while the user's lambda is flat-stamped — a
+SWAP. Deepening strictly enlarges that class and opens a wider route than the
+recorded one.
+
+**The answer.** `syntax->datum` allocates FRESH pairs and the movers splice
+sub-datums BY REFERENCE, so **cons-cell identity is already an exact provenance
+marker** for exactly this class — a subtree that moved through a desugar
+unchanged. The strip was discarding it. Record it in a `hasheq` and consult it.
+No depth parameter, no false-pair exposure (a minted node is a fresh cell, `eq?`
+to nothing), and it resolves cases datum-ambiguity stamps today.
+
+**⭐ The shape of this lesson is worth keeping.** Three sessions in a row reached
+for a better MATCHER — deeper pools, multi-source relocation, a real tree diff —
+when the information they were trying to reconstruct had been *destroyed on the
+way in* and was free to keep. **When you find yourself designing a smarter search
+for provenance, first ask what discarded it.** Both slices are ~10 lines each;
+the estimate they replaced was "~62 datum-shape sites across 12 functions".
+
+**⭐ And the loudness was a property of the FIXTURE, not the code.** The sibling
+chain failed loudly only because sibling 1 sits at column 0, which is POL.8's
+degradation marker. Written indented inside a `defn`, the identical defect is
+SILENT. That retroactively weakens every "still degrading, all LOUD" claim in the
+51(c) census — loudness there was never established, only observed at column 0.
+
+**Tests, and the axis I varied this time.** Watching 6 caught me twice already, so
+the new pins vary body shape × goal count × let spelling explicitly, and add a
+`test-origin-index.rkt` for the two properties a green suite cannot show: that
+`strip-with-origin!` is datum-identical to `syntax->datum` (it is on the hot path
+for EVERY form now, and the shapes most likely to diverge — improper lists,
+vectors, nested empties — appear in no `.prologos` fixture), and that a SECOND
+strip shares no keys. That second one is the sharp pin: without it, an accidental
+re-strip anywhere would silently reduce the index to a no-op that still passes
+every behavioural test.
+
+**Gates.** Suite 10017/487/0 (`[487/487]`); both acceptance files 0 errors. ⭐ The
+**D57 corpus A/B came back CLEAN** — 161 files, base `fb788bfc` → head
+`f9d68338`, **zero semantic diffs** (4 DIFFERS = 2 gensym drifts + 2
+absolute-path echoes inside a pre-existing error; 20 caps all SYMMETRIC, identical
+sizes, path-only content deltas — i.e. pre-existing slowness plus my own
+concurrent suite runs, NOT a one-sided slowdown from the new hot-path walk). The
+D58 A/B (`f9d68338` → `1ad9411f`) and the D58 adversarial verify were in flight.
+
+**Next.** Member 4 (`def := rel …`) as its own slice, owner-ruled — it is NOT a
+relocation miss (the expanded form is a newly-constructed grouping with no
+datum-equal twin at any depth) and needs expanded-side descent; and it will
+silently flip that arm's `||` fact-row count, so it needs its pin FIRST.
