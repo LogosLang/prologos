@@ -928,6 +928,41 @@
                (format "continuation-only rewrite must not collapse either; got: ~a"
                        (result-msg tail))))
 
+(test-case "DEFERRED 51(c) [else] arm: a bare top-level `rel` with a rewrite takes parenless goals"
+  ;; The scope gap named at 51(c)'s landing: a bare top-level `rel` does NOT go
+  ;; through the `defr` preparse arm — it is a "regular form" handled by the
+  ;; fold's `[else]` arm, which still rebuilt with the whole-form stamp. So after
+  ;; 51(c), `rel` and `defr` DISAGREED on the same POL.8 grammar: the identical
+  ;; parenless clause registered under `defr` and refused under `rel`. This pins
+  ;; the [else] extension that closes the disagreement.
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "def mm := {:k \"blue\"}\n"
+                            "rel [q]\n"
+                            "  &> fruit-color q mm.k\n")))
+  (check-true (string? r)
+              (format "a bare rel with a rewrite must not be refused; got: ~a" (result-msg r)))
+  (check-false (string-contains? (result-msg r) "parenless goals cannot")
+               (result-msg r)))
+
+(test-case "DEFERRED 51(c) [else] arm: a two-goal bare `rel` with a rewrite GROUPS like the control"
+  ;; Same discipline as the defr ⭐ test: registering is not the bar — grouping
+  ;; identically to a shape-identical rewrite-free control is. Control literal is
+  ;; NON-matching so the comparison is about grouping, not matching.
+  (define (brel arg)
+    (run-ns-ws-last (string-append P8FIX
+                                   "def mm := {:k \"blue\"}\n"
+                                   "rel [q]\n"
+                                   "  &> fruit-color q " arg "\n"
+                                   "     fruit-color q \"nope\"\n")))
+  (define rewritten (brel "mm.k"))
+  (define control   (brel "\"nada\""))
+  (check-true (string? rewritten) (result-msg rewritten))
+  (check-false (string-contains? (result-msg rewritten) "fruit-color/3")
+               (format "must not collapse into one 3-arg goal; got: ~a" (result-msg rewritten)))
+  (check-equal? rewritten control
+                "a rewrite must not change how a bare rel's clause GROUPS"))
+
 (test-case "DEFERRED 51(c): the relation now registers AND answers"
   ;; Inverted from "the refusal takes the relation with it — pinned". That pin
   ;; recorded owner ruling (a) (keep the limit); 51(c) supersedes it.

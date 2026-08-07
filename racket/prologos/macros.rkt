@@ -3048,7 +3048,16 @@
 (define (rebuild-preserving-locs orig-stx expanded-datum)
   (define orig-datum (if (syntax? orig-stx) (syntax->datum orig-stx) orig-stx))
   (define (fallback)
-    (datum->syntax #f expanded-datum (and (syntax? orig-stx) orig-stx)))
+    ;; 4-arg when we have the original: copy its syntax PROPERTIES as well as its
+    ;; srcloc. Required for [else]-arm parity — POL.9's `prologos-paren-origin`
+    ;; rode that arm's 4-arg rebuild, and losing it would silently turn a
+    ;; rewritten top-level paren GOAL back into an application. For the defr arm
+    ;; this newly preserves properties the old 3-arg rebuild dropped; the 51(c)
+    ;; adversarial verify examined exactly that (its F7) and found no reader of
+    ;; those properties inside a defr body, so it is safe there.
+    (if (syntax? orig-stx)
+        (datum->syntax #f expanded-datum orig-stx orig-stx)
+        (datum->syntax #f expanded-datum #f)))
   (cond
     ;; Untouched subtree — hand back the ORIGINAL syntax object wholesale.
     [(equal? orig-datum expanded-datum)
@@ -3747,11 +3756,16 @@
          ;; If datum didn't change, preserve original syntax (keeps properties like paren-shape)
          (if (equal? expanded datum)
              (cons stx acc)
-             ;; Rel T1 POL.9: 4-arg form — copy the original stx's properties
-             ;; onto the rebuilt form, so a top-level paren group keeps its
-             ;; 'prologos-paren-origin mark even when a preparse rewrite
-             ;; (e.g. dot-access) fires inside it.
-             (cons (datum->syntax #f expanded stx stx) acc))]))))
+             ;; DEFERRED 51(c), [else] extension: rebuild PRESERVING per-element
+             ;; srclocs, not just the whole-form stamp. This is the arm a bare
+             ;; top-level `rel` goes through, so before this, `rel` and `defr`
+             ;; DISAGREED on the same POL.8 grammar — the identical parenless
+             ;; clause registered under `defr` (51c) and refused under `rel`.
+             ;; POL.9's property requirement is carried by the helper: its list
+             ;; rebuild and its fallback are both 4-arg against the original stx,
+             ;; so a rewritten top-level paren group keeps 'prologos-paren-origin
+             ;; exactly as the old direct 4-arg rebuild kept it.
+             (cons (rebuild-preserving-locs stx expanded) acc))]))))
   ;; ============================================================
   ;; Phase 5b: Hoist data/trait-generated defs before user forms
   ;; ============================================================

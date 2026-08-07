@@ -3801,11 +3801,20 @@ any sentinel is consulted.
   grouping reads element columns; the `||` splitter reads the sentinel's line).
   All four rewrite families now parse in a parenless clause, and DEFERRED 53's
   dominant residual closes with it.
-  ⚠ **Still limited**: a bare top-level `rel` with parenless clauses does NOT go
-  through the `defr` arm, so it still degrades and still refuses — measured. The
-  guard is therefore NOT dead code; it is simply no longer reachable via `defr`.
-  Extending the helper to the `[else]` arm would close that, at a much wider
-  blast radius (that arm handles every non-special form).
+  ⚠ ~~Still limited: a bare top-level `rel` … still degrades~~ **✅ CLOSED same
+  day (owner-requested): the `[else]` arm now uses the helper too**, so a bare
+  top-level `rel` takes parenless goals with a rewrite, grouped identically to a
+  rewrite-free control (test-pinned). POL.9's property contract is carried by the
+  helper — its list rebuild and fallback are both 4-arg against the original stx,
+  so `prologos-paren-origin` survives exactly as the old direct rebuild kept it
+  (probed: `(p2 1:Int 2:Int)` still errors as a goal; `(fruit-color f mm.k)`
+  still implicit-solves).
+  ⚠ **The one spelling still degrading is UNPARENTHESIZED `def r := rel …` with
+  parenless clauses** — the DEF arm's `rebuild-def-preserving-rhs` requires
+  exactly ONE element after `:=` (`def-rhs-stx` is #f for a spliced multi-line
+  `rel`), so it falls to the whole-form stamp. Measured, not assumed. The
+  parenthesized RHS spelling works. The guard's message names this spelling
+  explicitly, so the diagnostic is honest while it remains.
   ⚠ Blast radius of what landed is **narrow**: the `let` aligned-block classifier
   and `||` multi-row splitting already survived a rewrite (the reader's indent
   grouping builds them pre-preparse), so `parse-clause-content` and the fact-row
