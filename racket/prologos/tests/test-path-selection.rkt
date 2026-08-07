@@ -4366,14 +4366,20 @@
   ;; discriminator is that the live fixture BINDS its def and emits NO error
   ;; struct, where every refusal path leaves it UNBOUND. Verified against both
   ;; vacuous spellings.
-  (check-true (ormap (lambda (s) (regexp-match? #rx"r : \\[PVec Int\\] defined" s)) out)
-              (format "the def must BIND — if it is unbound the ω walk was never reached: ~a" out))
-  (check-false (ormap (lambda (s) (regexp-match? #rx"Unbound variable|inference-failed" s)) out)
-               (format "no refusal may fire here — that would make this pin vacuous: ~a" out))
-  ;; the permissive VALUE is `none`, agreeing with `definitely-not-map?`'s
-  ;; sibling arm ("Match `map-get`: degrade to `none`") — NOT `<error>`
-  (check-true (ormap (lambda (s) (regexp-match? #rx"none : \\[PVec Int\\]" s)) out)
-              (format "expected the permissive `none` from the ω walk; got ~a" out))
+  ;; ⚠⚠ INVERTED AT D4.P4d slice 3, DELIBERATELY. This fixture's union has a
+  ;; NON-OFFERING, NON-Nil component (`Int`), which the keys-⋂ gate now REFUSES
+  ;; at typing — so the ω walk never reaches `champ-of` and the permissive
+  ;; degradation this pin was written to prove is UNREACHABLE THROUGH A UNION
+  ;; CARRIER. The proposition did not become false; its subject disappeared.
+  ;; What remains true and worth pinning is the OTHER half of the same ruling:
+  ;; the refusal is a per-command VALUE, not a panic and not a whole-file abort.
+  ;; The permissive-degradation proposition survives on the SINGLE-GET polarity,
+  ;; pinned by the cross-carrier sibling test-case below (`ua.a`/`ub.a`/`us.a`),
+  ;; which slice 3 deliberately left untouched.
+  (check-true (ormap (lambda (s) (regexp-match? #rx"EVERY union component" s)) out)
+              (format "expected the keys-⋂ refusal naming the component; got ~a" out))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"panic" s)) out)
+               (format "a refusal must not panic: ~a" out))
   (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)
               (format "the file must continue; got ~a" out)))
 
@@ -4970,3 +4976,109 @@
                     "ns s2i\ndef x2 := {:k2 {:z 1} :k @[@[{:nm 5}]]}\nx2{k2^ k^:0}")))
   (check-true (ormap (lambda (s) (regexp-match? #rx"⟨\\{:z Int\\} \\[PVec ⟨\\{:nm Int\\}⟩\\]⟩" s)) out)
               (format "the keyless het assembly must survive the top-keys fix: ~a" out)))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4d slice 3 — PVec-of-UNION: keys-⋂ / types-⋃ (design: D4 §5.P4d; owner
+;; assent 2026-08-07, Nil ruling (a)). TWO halves over DISJOINT populations:
+;;   · the ⋂ GATE catches ROW components that do not offer the key (today a
+;;     SILENT WRONG ANSWER — the type lies and the value is a buried <error>);
+;;   · the TIER (C9 (a)'s OR extended through components) catches MAP-bearing
+;;     unions, where the gate is a structural NO-OP (an open Map statically
+;;     offers every keyword).
+;; ⭐ RULED (a): `Nil` is SKIPPED — it is the absence marker of the option
+;; type, not a carrier alternative, so `<T | Nil>` broadcasts as T and the
+;; `nil-safe-get` idiom keeps composing.
+;; The types-⋃ half ALREADY SHIPPED (build-union-type); the new work is the
+;; gate, the refusal, and the tier.
+;; ---------------------------------------------------------------------------
+
+(test-case "P4d-s3: every component offers — types-⋃, unchanged"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s3a\ndef k := 0N\ndef rows := @[{:a 1 :b \"x\"} {:a 2 :c true}]\ndef sl := [pvec-slice rows k 2N]\nsl:a")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"@\\[1 2\\] : \\[PVec Int\\]" s)) out)
+              (format "the all-offer case must keep working: ~a" out)))
+
+(test-case "P4d-s3: a component that does NOT offer the key REFUSES, naming it — no buried <error>"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s3b\ndef k := 0N\ndef rows := @[{:a 1 :b \"x\"} {:a 2 :c true}]\ndef sl := [pvec-slice rows k 2N]\nsl:b\ndef after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"<error>" s)) out)
+               (format "a buried <error> escaped at zero errors: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"EVERY union component" s)) out)
+              (format "the refusal must state the all-must-offer rule: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx":a Int :c Bool" s)) out)
+              (format "the refusal must NAME the offending component: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s3 ⭐ Nil is SKIPPED (ruling a): `<Nil | Map>` broadcasts as the Map"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s3c\ndef mz : [Map Keyword Int] := {:z 9}\ndef zs : [PVec <Nil | [Map Keyword Int]>] := @[mz]\nzs:z")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"@\\[9\\] : \\[PVec Int\\]" s)) out)
+              (format "Nil is the absence marker, not a non-offering component: ~a" out)))
+
+(test-case "P4d-s3 ⭐ Nil skipped: the nil-safe-get idiom still composes with broadcast"
+  ;; ⚠ THE FIXTURE IS NIL-BEARING ON PURPOSE. My first cut used a ONE-ELEMENT
+  ;; never-nil vector, so `nil-safe-get` never actually returned nil and the pin
+  ;; was VACUOUS for the proposition it names — the slice-3 verify caught it,
+  ;; and with the nil element present the first implementation PANICKED
+  ;; (`q is not a map at runtime`), defeating ruling (a) outright. The gate
+  ;; skipped Nil while the TIER witness did not; both now agree.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s3d\ndef ms : [PVec [Map Keyword [Map Keyword Int]]] := @[{:a {:q 1}} {}]\ndef ys := [pvec-map [fn [m] [nil-safe-get m :a]] ms]\nys:q\ndef after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"EVERY union component" s)) out)
+               (format "the Nil remainder must not refuse the broadcast: ~a" out))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"panic" s)) out)
+               (format "an ACTUALLY-ABSENT element must not panic — (a) says the idiom composes: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s3: a per-component failure carries the TRUE inner reason, not a false key-miss"
+  ;; The first cut DISCARDED the inner fail and asserted a keys-intersection
+  ;; failure for every per-component failure — so an ORDINAL inner over a Map
+  ;; component read "`[Map Keyword Int]` does not offer `:0`", replacing a true,
+  ;; actionable message with a false one (the slice-3 verify's HIGH finding).
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s3g\ndef mm : [Map Keyword Int] := {:a 1}\ndef bb : [PVec <[Map Keyword Int] | [Map Keyword String]>] := @[mm]\nbb:0\ndef after := 42")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"has no positions" s)) out)
+              (format "the inner reason must survive the wrapper: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"requires EVERY union component to succeed" s)) out)
+              (format "the wrapper must state the rule: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s3: a union-typed row FIELD is gated too (the witness and the gate cover one population)"
+  ;; The gate started at the PVec/Map call site only, while the tier witness
+  ;; reached row fields and tuple positions — so a Map-bearing union FIELD went
+  ;; assertive but UNGATED and panicked with a carrier-kind message. The gate
+  ;; now lives in the per-element applier, which every carrier routes through.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s3h\ndef k := 0N\ndef rows := @[{:a 1 :b \"x\"} {:a 2 :c true}]\ndef wide := [pvec-slice rows k 2N]\ndef holder := {:xs wide}\nholder:b\ndef after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"panic" s)) out)
+               (format "a union-typed field must be GATED at typing, not panic at runtime: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s3: a MAP-bearing union's runtime miss is LOUD (the tier OR through components)"
+  ;; The gate is a structural NO-OP here — an open Map offers every keyword
+  ;; statically — so only the tier can catch this. Pre-slice it was
+  ;; `<error> : [PVec Int | String]` at ZERO errors.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s3e\ndef m1 : [Map Keyword Int] := {:a 1}\ndef both : [PVec <[Map Keyword Int] | [Map Keyword String]>] := @[m1]\nboth:zzz\ndef after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"<error>" s)) out)
+               (format "a quiet <error> escaped — the tier stayed permissive: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"panic" s)) out)
+              (format "the runtime miss must be LOUD: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s3: the SUB-inner cell over a union no longer lies (it refused 'not a record' for a union of rows)"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s3f\ndef k := 0N\ndef rows := @[{:a 1 :b \"x\"} {:a 2 :c true}]\ndef sl := [pvec-slice rows k 2N]\nsl:{a}\ndef after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"not a record" s)) out)
+               (format "the lying message must be gone — the subject IS a union of records: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"\\{:a Int\\}" s)) out)
+              (format "the sub-block must assemble per component: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))

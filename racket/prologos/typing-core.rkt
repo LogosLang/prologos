@@ -980,20 +980,53 @@
 ;; Harmless (typing then refuses the ordinal statically, and the old/new results
 ;; are byte-identical there), but the honest statement is "the tier sees the type
 ;; the ω step unwraps to", not "the type a key is projected from".
+;; D4.P4d slice 3 — the peel's landing type may be a UNION, and `expr-Map?` of
+;; a union is #f, so a Map COMPONENT would never assert. That matters more here
+;; than anywhere else in the phase: the keys-⋂ gate is a structural NO-OP for
+;; Map components (an open `[Map K V]` statically offers EVERY keyword — the
+;; union arm tests only the key TYPE), so for the whole Map-bearing union family
+;; the TIER is the only mechanism that can make a runtime miss loud. Same
+;; conservative witness-returning shape as C9 (a)'s row OR.
+(define (tier-union-witness t)
+  (if (expr-union? t)
+      (let ([comps (map whnf (flatten-union t))])
+        ;; ⚠ A Nil-BEARING union stays PERMISSIVE — no witness. Ruling (a) says
+        ;; `<T | Nil>` is the OPTION type and the `nil-safe-get` idiom must keep
+        ;; COMPOSING; an assertive tier makes an actually-absent element PANIC,
+        ;; which is that idiom not composing (the slice-3 verify's reproducer:
+        ;; my first cut skipped Nil when SEARCHING but still returned the Map,
+        ;; so the union asserted anyway and the fix did nothing).
+        ;; ⚠⚠ ACCEPTED CONSEQUENCE, NAMED: inside a Nil-bearing union a genuine
+        ;; Map miss is therefore QUIET. That is the price of (a) at the value
+        ;; layer, and it is an OWNER question the ruling did not reach — carried
+        ;; to the slice close, not decided here.
+        (if (ormap expr-Nil? comps)
+            t
+            (or (for/or ([c* (in-list comps)]) (and (expr-Map? c*) c*))
+                t)))
+      t))
+
 (define (select-tier-subject tm branches)
   (if (and (pair? branches) (null? (cdr branches)))
-      (let loop ([tm tm] [steps (car branches)])
+      ;; ⚠ `peeled?` CONFINES the union witness to the BROADCAST path. Without
+      ;; it the witness also fires for a plain single-get (`u.a` over a union),
+      ;; flipping that node's tier from permissive to assertive and turning the
+      ;; ruled `none` degradation into a panic — a regression the slice-3 RED
+      ;; run caught in the D43 cross-carrier pin. Broadcast is the all-must-offer
+      ;; polarity; single-get is the optimistic one, and the tier must not leak
+      ;; across that seam.
+      (let loop ([tm tm] [steps (car branches)] [peeled? #f])
         (if (and (pair? steps)
                  (eq? (select-step-kind (car steps)) 'bcast))
             (let ([next (cons (select-bcast-inner (car steps)) (cdr steps))])
               (cond
-                [(expr-PVec? tm) (loop (whnf (expr-PVec-elem-type tm)) next)]
+                [(expr-PVec? tm) (loop (whnf (expr-PVec-elem-type tm)) next #t)]
                 ;; D4.P4d slice 1 — the peel follows EVERY ω-capable carrier;
                 ;; leaving a new carrier un-peeled re-creates DEFERRED 43's
                 ;; silent-miss class one carrier over (the Map-carrier case
                 ;; additionally over-asserted from the CARRIER type before the
                 ;; refusal even fired — the P4d slice-1 audit's trace).
-                [(expr-Map? tm) (loop (whnf (expr-Map-v-type tm)) next)]
+                [(expr-Map? tm) (loop (whnf (expr-Map-v-type tm)) next #t)]
                 [(and (expr-Record? tm)
                       ;; D4.P4d slice 2 — 'nat joins (C9 RULED (a), owner
                       ;; 2026-08-07): positions are fields; the OR extends
@@ -1009,11 +1042,11 @@
                  ;; reaches a Map, return that witness so the consumer's
                  ;; `expr-Map?` test asserts; else the row itself (no assert).
                  (or (for/or ([fld (in-list (expr-Record-fields tm))])
-                       (let ([p (loop (whnf (record-field-type (cdr fld))) next)])
+                       (let ([p (loop (whnf (record-field-type (cdr fld))) next #t)])
                          (and (expr-Map? p) p)))
                      tm)]
-                [else tm]))
-            tm))
+                [else (if peeled? (tier-union-witness tm) tm)]))
+            (if peeled? (tier-union-witness tm) tm)))
       tm))
 
 ;; D4.P4c-4c — ONE ω step applied to a subject type: the FUNCTORIAL LIFT.
@@ -1099,24 +1132,99 @@
              ;; (`[Map K V]` under ω re-wraps `[Map K proj(V)]`, keys by type).
              (let ([re-wrap (if (expr-Map? tm)
                                 (lambda (t) (expr-Map (expr-Map-k-type tm) t))
-                                expr-PVec)])
-               ;; ⭐ Q_U20 [owner, 2026-08-05]: A SUB INNER ASSEMBLES AT 'block,
-               ;; ALWAYS. The lift threads ONE sort and the two inner kinds need
-               ;; OPPOSITE ones — a symbol inner EXTRACTS ('path; 'block would wrap
-               ;; `xs:a` as `[PVec {:a T}]`), a sub inner ASSEMBLES ('block; 'path
-               ;; fails its one-component constraint). So the sort here is a
-               ;; PER-INNER-KIND semantics RULE, not inherited from the outer
-               ;; selector. `users:{a b}` over `[PVec {:a A :b B :c C}]` is a PVec of
-               ;; NARROWED rows — the terminal-`@sub` machinery of the below walks,
-               ;; applied per element.
-               (if (select-sub-step? inner)
-                   (let-values ([(comps cf) (select-level-components ctx (whnf elem)
-                                                                     (cdr inner) path 'block)])
-                     (if cf (values #f cf)
-                         (values (re-wrap (select-assemble-row comps)) #f)))
-                   (let-values ([(bt bf) (select-project ctx (whnf elem) (list (list inner))
-                                                          sort path)])
-                     (if bf (values #f bf) (values (re-wrap bt) #f)))))))])))
+                                expr-PVec)]
+                   [elem* (whnf elem)])
+               (cond
+                 ;; ⭐ D4.P4d slice 3 — THE UNION ELEMENT: keys-⋂ / types-⋃
+                 ;; (the 2b split's second arm). This lives HERE, not in
+                 ;; `select-project-field`'s union arm, because that arm is the
+                 ;; SINGLE-GET polarity (optimistic filter-on-miss) and its own
+                 ;; comment forbids broadcast reuse — and no polarity parameter
+                 ;; is threaded down the five-signature walk, so the caller that
+                 ;; KNOWS it is a broadcast is the only place the other polarity
+                 ;; can be expressed.
+                 [else
+                  (select-bcast-inner-apply ctx elem* inner re-wrap name path sort)]))))])))
+
+;; D4.P4d slice 3 — the ω inner applied to ONE element type, factored out of
+;; `select-bcast-lift` so the union arm can reuse it per COMPONENT.
+;; ⭐ Q_U20 [owner, 2026-08-05]: A SUB INNER ASSEMBLES AT 'block, ALWAYS. The
+;; lift threads ONE sort and the two inner kinds need OPPOSITE ones — a symbol
+;; inner EXTRACTS ('path; 'block would wrap `xs:a` as `[PVec {:a T}]`), a sub
+;; inner ASSEMBLES ('block; 'path fails its one-component constraint). So the
+;; sort here is a PER-INNER-KIND semantics RULE, not inherited from the outer
+;; selector. `users:{a b}` over `[PVec {:a A :b B :c C}]` is a PVec of NARROWED
+;; rows — the terminal-`@sub` machinery of the below walks, applied per element.
+(define (select-bcast-inner-apply ctx elem* inner re-wrap name path sort)
+  (cond
+    ;; ⭐ D4.P4d slice 3 — THE UNION GATE lives HERE, not at the PVec/Map call
+    ;; site, so it covers EXACTLY the population the tier witness does: a union
+    ;; ELEMENT, a union-typed row FIELD, a union-typed tuple POSITION. The
+    ;; slice-3 verify caught the asymmetry — with the gate at the call site
+    ;; only, a row field whose type was a Map-bearing union went ASSERTIVE
+    ;; (witness) while staying UNGATED, so it panicked with a carrier-kind
+    ;; message instead of the honest keys-⋂ refusal.
+    ;; The mutual recursion with `select-union-lift` also handles a component
+    ;; that only whnfs INTO a union (a `def N : Type := <…>` alias) — the
+    ;; structural `flatten-union` cannot see through that.
+    [(expr-union? elem*)
+     (let-values ([(ut uf) (select-union-lift ctx elem* inner name path sort)])
+       (if uf (values #f uf) (values (re-wrap ut) #f)))]
+    [(select-sub-step? inner)
+     (let-values ([(comps cf) (select-level-components ctx elem* (cdr inner) path 'block)])
+       (if cf (values #f cf)
+           (values (re-wrap (select-assemble-row comps)) #f)))]
+    [else
+     (let-values ([(bt bf) (select-project ctx elem* (list (list inner)) sort path)])
+       (if bf (values #f bf) (values (re-wrap bt) #f)))]))
+
+;; D4.P4d slice 3 — THE UNION MEET: keys-⋂ / types-⋃, the broadcast polarity.
+;; Every component must offer the step; the result is the ⋃ of the per-component
+;; projections. The ⋃ half already shipped (`build-union-type`); what is new is
+;; the GATE — the single-get arm FILTERS a non-offering component (`[else acc]`)
+;; and that filter is exactly the silent-wrong-answer defect here: the type then
+;; asserts every element yields the survivors' type while the value is a buried
+;; `<error>` at zero errors.
+(define (select-union-lift ctx u inner name path sort)
+  (let* ([comps (map whnf (flatten-union u))]
+         ;; ⭐ RULED (a) [owner, 2026-08-07]: **Nil is SKIPPED.** `<T | Nil>` is
+         ;; the OPTION type — Nil is the absence marker, not a carrier
+         ;; alternative that happens to offer no keys — so dropping it is what
+         ;; makes today's answer for `<Nil | Map>` CORRECT, and it keeps the
+         ;; `nil-safe-get` idiom composing with broadcast. A genuine
+         ;; non-offerer (a row lacking the key, an `Int`) is NOT an absence
+         ;; marker and still refuses.
+         [offering (filter (lambda (c) (not (expr-Nil? c))) comps)])
+    (cond
+      ;; An unsolved meta component means the component SET is not yet
+      ;; decidable. The ⋂ is ANTI-MONOTONE in that set, so gating on incomplete
+      ;; information could refuse what later becomes fine — the forbidden
+      ;; direction. Fall through to the pre-slice optimistic path instead: no
+      ;; NEW refusal is minted from information we do not have.
+      [(ormap expr-meta? offering)
+       (select-bcast-inner-apply ctx u inner values name path sort)]
+      [(null? offering)
+       ;; every component was skipped — row slot #f distinguishes this from the
+       ;; nested case below
+       (values #f (select-fail 'bcast-union (append path (list name)) name #f))]
+      [else
+       (let/ec bail
+         (values
+          (build-union-type
+           (for/list ([c (in-list offering)])
+             (let-values ([(bt bf) (select-bcast-inner-apply ctx c inner values name path sort)])
+               (if bf
+                   ;; ⚠ NEST the INNER fail (slice 2's `bcast-at` pattern). The
+                   ;; first cut DISCARDED it and asserted a keys-intersection
+                   ;; failure for EVERY per-component failure — false whenever
+                   ;; the component failed for another reason (an ordinal inner
+                   ;; over a Map component read "`[Map Keyword Int]` does not
+                   ;; offer `:0`", replacing a TRUE, actionable message with a
+                   ;; false one). The component identity is already carried by
+                   ;; the inner message, which names the row/type it failed on.
+                   (bail #f (select-fail 'bcast-union (append path (list name)) name bf))
+                   bt))))
+          #f))])))
 
 ;; select-project — the node's typing walk (Q_T1's one walk, two consumers).
 ;; D4.P3c: a LEVEL now assembles either sort: all-keyed components → a

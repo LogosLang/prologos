@@ -303,6 +303,35 @@
           (format "broadcast fails at position ~a — " label)
           (format "broadcast fails at field :~a — " label))
       (format-select-fail row names sort))]
+    ;; D4.P4d slice 3 — the keys-⋂ refusal. The `row` slot holds the OFFENDING
+    ;; COMPONENT (a TYPE, not a number or symbol — hence its own kind rather
+    ;; than a third `bcast-at` label shape). ⚠ It deliberately does NOT nest
+    ;; through `miss-closed`: that arm calls `format-closed-row-miss`, whose
+    ;; first act is `expr-Record-fields` — a contract violation on a union that
+    ;; `select-block-hint`'s blanket handler SWALLOWS, which is exactly why the
+    ;; pre-slice all-miss refusal printed a bare "Could not infer type" with no
+    ;; guidance at all.
+    [(bcast-union)
+     (if (select-fail? row)
+         ;; the NESTED case: the wrapper states the RULE (true in every firing)
+         ;; and the inner fail says what actually went wrong — it already names
+         ;; the component it failed on. ⚠ The first cut discarded the inner fail
+         ;; and asserted a key-miss for EVERY per-component failure, which made
+         ;; the message FALSE for ordinal inners and block-sort projections —
+         ;; strictly worse than the pre-slice diagnostic there.
+         (string-append
+          (format "broadcast `:~a` requires EVERY union component to succeed (the keys-intersection rule); one does not — "
+                  (or label "…"))
+          (format-select-fail row names sort))
+         ;; every component was SKIPPED (a Nil-only union): there is no inner
+         ;; fail to nest, and the keys-⋂ wording would name Nil as the offender
+         ;; in the same breath as saying Nil is skipped.
+         (format
+          (string-append
+           "broadcast `:~a` has no component to project — every component of "
+           "this union is `Nil` (the absence marker, which broadcast skips). "
+           "Narrow the element type first.")
+          (or label "…")))]
     [(bcast-carrier)
      ;; D4.P4d slice 2: the supported set now includes the het TUPLE — every
      ;; broadcast carrier is live; the remaining refusals are List/Set/
