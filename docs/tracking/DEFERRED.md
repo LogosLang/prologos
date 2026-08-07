@@ -4647,6 +4647,45 @@ an index-aware stamp would close them with no per-arm work (inferred, not
 measured). Same mechanism discharges the "error POSITIONS for siblings 2..N are
 reported at sibling 1's line" item.
 
+⚠ **A SEMANTIC SIDE EFFECT RODE IN ON SLICE 1 AND WAS CORRECTED** (`c77fbeb4`),
+found by adversarial verify, measured, **with a silent mode**. The index hands
+back the ORIGINAL syntax object — which also carries its syntax PROPERTIES — and
+`prologos-paren-origin` is **position-sensitive**: the reader attaches it to every
+paren group and `paren-goal-stx?` reads it to decide that a paren group AT COMMAND
+POSITION is a relational goal (POL.9). So a `defmacro` lifting its argument to top
+level turned an application into a goal:
+
+```
+defmacro dbg [$e]
+  $e
+dbg (inc 10)    before: `11 : Int`, 0 errors  →  after: ERROR, 1 error
+dbg (= 1 1)     before: `true : Bool`, 0 err  →  after: `@[{}] : _`, 0 ERRORS
+```
+
+The second is the sharp one — zero errors on both legs, only the value and type
+differ. `dbg [inc 10]` is identical throughout, isolating the trigger to
+macro-spliced PARENS at command position.
+
+**THE RULE THAT FIXED IT**: a hit whose original is the node we were ALREADY
+aligned with has not moved and keeps its properties (as the `equal?` branch always
+did); any other hit MOVED and takes **srclocs only** (`syntax-locs-only`). That is
+byte-equivalent to pre-index behaviour for properties — the old code stamped,
+which dropped them — while keeping every srcloc the index exists for.
+
+⚠ Which reading is *correct* is genuinely arguable: POL.9 does say a paren group
+at command position is a goal, so the accident arguably made macro-spliced code
+behave like hand-written code. **That is exactly why it could not stay** — a
+language-semantics change arriving unreviewed, undocumented and untested inside a
+srcloc fix. If the goal reading is wanted, it should be its own ruling.
+
+⭐ **The generalizable lesson**: "hand back the original node" is NOT neutral. A
+syntax object carries a POSITION *and* CLAIMS ABOUT ITS POSITION, and moving it
+re-asserts the second where it was never true. Slice 1 argued its own safety as
+"the helper never mints properties, only copies originals" — reasoning about
+MINTING, and missing that COPYING a property to a different position is itself a
+semantic act. The class was entirely unguarded (zero `syntax-property` references
+in any test); now pinned three ways, including the silent case.
+
 ⚠ **A fail-safe correction for whoever touches this next**: the "stamp at a
 column-0 anchor" constraint recorded earlier is a design GOAL that HEAD already
 violated in 2 of 3 members, not a property to preserve — and no column-0 anchor

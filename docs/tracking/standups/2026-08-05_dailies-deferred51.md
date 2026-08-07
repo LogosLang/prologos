@@ -19,7 +19,7 @@ the STATE head in the file before last. Only environment invariants carry over.
   `-deferred51` qualifier. The convention gap is real — "roll a new file" does
   NOT prevent the collision when two out-of-band arcs roll on the same DATE;
   only a same-day arc qualifier does.
-- **HEAD**: re-derive with `git rev-parse HEAD` — expect `1ad9411f` or a later
+- **HEAD**: re-derive with `git rev-parse HEAD` — expect `c77fbeb4` or a later
   docs commit. Worktree `.claude/worktrees/wizardly-mendel-2fd502`, branch
   `wizardly-mendel-2fd502`. **⚠ `main` (65cb5bce) IS NOW MERGED IN** (merge
   `75401b89`, parents `f9d68338` + `65cb5bce`), in prep for merging this branch
@@ -35,8 +35,8 @@ the STATE head in the file before last. Only environment invariants carry over.
   `typing-errors.rkt`, `test-path-selection.rkt`, several `.prologos` examples,
   2 deletions). NOT on the branch, NOT merged, NOT touched — but it has to
   coexist at merge-back time, so check it again then.
-- **Suite**: **10017 / 487 files / 0 failures** (`all_pass: true`, `[487/487]`) at
-  `1ad9411f` (DEFERRED 58 slice 2). Prior: 10015 at `b3e03913`, 9995 at the merge
+- **Suite**: **10020 / 487 files / 0 failures** (`all_pass: true`, `[487/487]`) at
+  `c77fbeb4` (DEFERRED 58's property correction). Prior: 10017 at `1ad9411f`. Prior: 10015 at `b3e03913`, 9995 at the merge
   `75401b89` — and it reconciles exactly: main's 9940/485 plus this
   branch's +55 tests / +1 file. Both acceptance files 0 errors post-merge (CIU T6
   path-selection, Rel T1). Pre-merge on this branch: 9902/483 at `83d06156`,
@@ -780,3 +780,51 @@ D58 A/B (`f9d68338` → `1ad9411f`) and the D58 adversarial verify were in fligh
 relocation miss (the expanded form is a newly-constructed grouping with no
 datum-equal twin at any depth) and needs expanded-side descent; and it will
 silently flip that arm's `||` fact-row count, so it needs its pin FIRST.
+
+### The D58 verify: a language-semantics change rode in on a srcloc fix, silently — `c77fbeb4`
+
+**What it found.** The origin index hands back the ORIGINAL syntax object, and
+that object carries its syntax PROPERTIES. `prologos-paren-origin` is
+POSITION-SENSITIVE — the reader puts it on every paren group, and
+`paren-goal-stx?` reads it to decide that a paren group AT COMMAND POSITION is a
+relational goal (POL.9). A `defmacro` lifting its argument to top level therefore
+turned an application into a goal. `dbg (inc 10)`: `11 : Int` → hard error.
+`dbg (= 1 1)`: `true : Bool` → `@[{}] : _`, **zero errors on both legs**.
+
+**Verified the verifier**, on my own frozen worktrees rather than trusting the
+agent's rebuild: head-d57 (`f9d68338`) vs head-d58 (`1ad9411f`) is single-variable,
+and both cases reproduced exactly, with the bracket spelling identical on both as
+the control.
+
+**⭐ THE LESSON, and it outlives this fix: "hand back the original node" is not a
+neutral act.** A syntax object carries a POSITION and it carries CLAIMS ABOUT ITS
+POSITION; moving it re-asserts the second somewhere it was never true. My slice-1
+commit argued its own safety as "the helper never mints properties, only copies
+originals" — which reasons about MINTING and misses that COPYING a property to a
+different position is itself semantic. Restoring srclocs and restoring properties
+look like the same operation and are not.
+
+**⭐ And the honest part: the accidental semantics may be the BETTER ones.** POL.9
+does say a paren group at command position is a goal, so the bug arguably made
+macro-spliced code behave like hand-written code. It still had to go — a
+language-semantics change arriving unreviewed, undocumented and untested inside a
+srcloc-preservation fix, with a silent mode. **"It might be an improvement" is not
+a reason to keep an unintended change; it is a reason to raise it as its own
+ruling.**
+
+**Watching 3 gets its 5th data point, and the sharpest yet**: suite, targeted
+tests, acceptance files and a 161-file corpus A/B were ALL green over this, and
+they were green for a *structural* reason rather than by luck — every prelude
+macro wraps its arguments in brackets, so the corpus is immune by construction.
+No amount of running existing inputs would ever have found it. Only an agent
+writing an input nobody had written before did.
+
+**Watching 6 (which axis did you never vary?) also applies**: my new tests varied
+let spelling, goal count and body shape — and never varied *what kind of form the
+index hit was reached from*. Every fixture reached it through a `let`. The
+defect needed a `defmacro`.
+
+**Gate**: suite 10020/487/0; both acceptance files 0 errors; all three D58
+deliverables re-checked. `homoiconicity.prologos`'s 56 errors are PRE-EXISTING
+(identical on all three legs, and the D57 A/B marked that file IDENTICAL) — I had
+picked it arbitrarily; it is not a designated acceptance file.
