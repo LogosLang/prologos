@@ -5251,6 +5251,31 @@
                 (format "the broadcast and its fused spelling must agree: ~a" out))
   (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
 
+(test-case "P4d-s4a': the binder refusal must never print raw SYNTAX OBJECTS (its guard was dead)"
+  ;; `retired-selection-error`'s `bcast-step-binder` arm carries
+  ;;   (let ([f* (if (pair? f) '|{…}| f)]) …)
+  ;; under a comment that says "render `{…}`, never the raw stx-bearing datum".
+  ;; The guard could never fire: `f` is `(base-name detail)`, and `base-name`
+  ;; returns a STRING on every branch (symbol->string / keyword->string /
+  ;; (format "~a" d)), so `(pair? f)` is structurally impossible. The `:{` mint's
+  ;; payload therefore reached `(format "~a" …)` and printed syntax objects —
+  ;; complete with ABSOLUTE FILESYSTEM PATHS — into the user's message TWICE,
+  ;; the second time inside the advice the user is told to type.
+  ;;
+  ;; ⚠ The pre-existing pin for this arm accepts `BINDER position|expected
+  ;; symbol` and asserts NO message content, which is why a green suite never
+  ;; saw it. This one asserts the content.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s4ap\ndefn f1 [x:{a b}] 1\ndef after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"#<syntax" s)) out)
+               (format "a raw syntax object leaked into a user-facing message: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"BINDER position" s)) out)
+              (format "the guided refusal must still fire: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"\\{…\\}" s)) out)
+              (format "the payload must render as the stand-in: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
 (test-case "P4d-s4a: `dot-writable-field-name?` — the exported oracle's own contract"
   ;; The predicate is exported as a general "can I write `m.NAME`?" question for
   ;; any diagnostic that advises a spelling, so its contract needs pinning
