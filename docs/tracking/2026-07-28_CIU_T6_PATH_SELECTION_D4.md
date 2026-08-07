@@ -33,7 +33,7 @@ rulings, censuses and test delta live in its own section.
 | **P4** | **Broadcast ω** — ⭐ **P4a ✅ · P4b ✅ COMPLETE** (b-i carrier + b-ii `$dot-access` migration; `x.a` now mints the unified selector carrier) · P4c–P4e ⬜ — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | [§5.P4](#p4) · co-design: audit `wf_8458c23b` + options panel · **RULED 2026-07-31**: [Q_U5](#q-u5) · [Q_U6](#q-u6) · [Q_U7](#q-u7) · [Q_U8](#q-u8) · [Q_U9](#q-u9) (the PAUSE cleared) · partition LOCKED P4a–P4e |
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
 | **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [§5.P4c](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([inverted default](#p4c-2-inverted)) · [P4c-3](#p4c-3) ✅ `d477772c` · [P4c-4a](#p4c-4a) ✅ `f31237fd` · [P4c-4b](#p4c-4b) ✅ `6b22515d` (end to end) · **[P4c-4c](#p4c-4c-close) ✅ `ae26f540`** — broadcast is REACHABLE: PVec ω value semantics + **G2** + the preparse seam guard. ⭐ The verify caught a BLOCKING whole-file abort every gate was blind to; owner ruled the structural fix ([close](#p4c-4c-close)) · [Q_U18](#q-u18) ✅ · DEFERRED 43 ✅ · 48 RULED uniform · P4c-5 ⬜ |
-| **P4d** | **The carriers** — Map/keyword-row (TWO typing arms: keyword-row `expr-Record` + genuine `expr-Map`; ONE new champ reduction arm, atomic with typing) · het tuple (TYPING-ONLY — same `expr-rrb` runtime as PVec) · PVec-of-union + `row-meet` (NEW machinery + an AUTHORED fixture) · the Q_U9 refusal's message split · corpus re-fate · **Q_U19 ✅ RULED (A)** at the opening | 🔄 | [§5.P4d](#p4d) · opened 2026-08-07: audit `wf_4bc76d94-a2d` · **slice 0 ✅ `00e52c42`** — the soundness fix, WIDENED by the verify (3 probes not 1 + conv-nf's union arm); suite **9916/485/0**, battery **375** · slices 1–4 ⬜ |
+| **P4d** | **The carriers** — Map/keyword-row (TWO typing arms: keyword-row `expr-Record` + genuine `expr-Map`; ONE new champ reduction arm, atomic with typing) · het tuple (TYPING-ONLY — same `expr-rrb` runtime as PVec) · PVec-of-union + `row-meet` (NEW machinery + an AUTHORED fixture) · the Q_U9 refusal's message split · corpus re-fate · **Q_U19 ✅ RULED (A)** at the opening | 🔄 | [§5.P4d](#p4d) · opened 2026-08-07: audit `wf_4bc76d94-a2d` · **slice 0 ✅ `00e52c42`** (the soundness fix, 3 probes + conv-nf's union arm) · **slice 1 ✅ `14ef5e83`** — the map carriers LIVE (`regions:host` keyed; lean 1 dissolved; suite **9928/485/0**, battery **385**, acceptance **71/71**) · slices 2–4 ⬜ |
 | **PF** | **Path first-classness** (substrate; **P5's prerequisite**) — ⭐ **Q_U17 RULED B2**: a Path segment is a first-class `Step` value. Reify the closed six-kind union as a `data Step` ADT on the `Datum` pattern; `Path` stays GROUND; `segments : Path -> [List Step]`. Repairs the dead `path-segments` in the SAME change | ⬜ | [§5.PF](#pf) · [Q_U17](#q-u17) · panel `wf_68178bd3-eea` |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery · ⚠ B3 needs [PF](#pf) |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | [§5.PX](#px) · position flexible |
@@ -6089,9 +6089,47 @@ first as slice 0"]:**
   reproducer found) · the legacy no-net-box rollback path does not restore
   (unreachable in production) · `unify`'s refl arm runs `unify` where its
   own comment says `conv` (unreachable today — upstream infer fails first).
-- **⬜ Slice 1 — keyword-row + Map carrier**: TWO typing arms in
-  `select-elem-of` + ONE champ reduction arm, ATOMIC (the recorded P4c-4c
-  discipline); uncomments `regions:host` / `strings:home`.
+- **✅ Slice 1 — keyword-row + Map carrier — COMPLETE `14ef5e83`
+  (2026-08-07).** `regions:host` → `{:ap "ap.…", :eu …, :us …} :
+  {:ap String :eu String :us String}` at the production default; the genuine
+  Map re-wraps uniform (`[Map K proj(V)]`). Mini-audit `wf_1ff4945e-810`
+  (4 facets + critic; found the peel as a THIRD hardcoded-PVec site and the
+  Map-carrier tier already solving assertive on a refusing node); adversarial
+  verify `wf_89d6c7b7` (3 skeptics — ONE BLOCKING pin defect caught: the
+  genuine-Map pin was VACUOUS, its regex matching the def echo's inner type).
+  **Records the citations the slice's code comments carry:**
+  · **Lean 1 DISSOLVED at implementation** — the co-design's
+    "ordinal-over-nominal refuses" rested on ordinals indexing CARRIER keys;
+    `bcast-apply` shows the inner step applies to VALUES only, so there is
+    nothing to refuse: `users:0` is per-value ordinal projection, uniform
+    with the live `m:0` over PVec, failing naturally with the guided ordinal
+    message when values do not index. Pinned as the uniform semantics.
+  · **The §10.6 carve-out** — `strings:home` was the ONE map-generic-tagged
+    line inside a block D4 §5.P0 declared PERMANENTLY commented; carved out
+    at this slice (the pivots stay v2-commented). The corpus note points here.
+  · **Row-type ANNOTATIONS do not parse** (`def x : {:a Int}` →
+    not-a-type-error) — a pre-existing surface gap, discovered scoping the
+    genuine-Map pins. ⚠ Row-valued Maps are nonetheless CONSTRUCTIBLE by
+    INFERENCE (`[map-map-vals [fn [s] {:host s}] mm]` → `[Map Keyword
+    {:host String}]` — the verify refuted the first-cut "unconstructible"
+    claim before it landed anywhere); the sub-inner over a row-valued Map
+    SUCCEEDS (pinned), while a Map-VALUED value takes the standing Q_U10
+    block-over-Map refusal (pinned).
+  · **The mini-C9 scalar-tier consequence, measured**: a dyn-row FIELD's
+    runtime miss is LOUD when a sibling field is a Map and QUIET when not —
+    the ONE scalar tier couples siblings. Ruled-direction only
+    (permissive→assertive), accepted eyes-open; the het slice's C9 ruling
+    should subsume it.
+  · The `bcast-carrier` message now names the truthful set ("PVec, Map, or
+    **closed** keyword-row" — the verify caught it refusing a DYN keyword-row
+    while naming "keyword-row" bare); dyn-tail's seal/validate-shaped remedy
+    and the per-carrier split stay slice 4.
+  **Gates**: battery **385/385** (+10 new, 8 re-pointed — all six family-A
+  re-points verified to discriminate BOTH the revert and the atomicity
+  break) · acceptance **71/71** (+2, markers regenerated via `--check`) +
+  89/89 + 6/6 + 29/29 + 28/28 · corpus A/B vs `044a77d7` (19 files):
+  EXACTLY the predicted diff set — the two corpus lines + foray's
+  `regions:host`, each error→meaning (13→12) · **full suite 9928/485/0**.
 - **⬜ Slice 2 — het tuple**: TYPING-ONLY (`expr-rrb` already served by
   `bcast-lift`); per-position EXACT; the position-naming error; the **C9
   scalar-tier mini-ruling at its mini-design**; DEFERRED 40-residual/45
