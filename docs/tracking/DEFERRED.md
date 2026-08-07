@@ -4357,6 +4357,43 @@ which axis of that fixture you never varied.** Here it was the let BODY — an
 element that is not part of the feature under test at all, which is why nobody
 varied it.
 
+⚠ **THE FIRST CUT OF THIS FIX WAS WRONG AND WAS CORRECTED SAME DAY**
+(`066e2c45` → `83d06156`), by an adversarial verify that measured both halves.
+It gated the peel on `pre > 0`, arguing that clause regions are anchored by the
+`&>` sentinel (so `pre >= 1`) while a total reshape changes element 0's KIND.
+Both halves fail:
+- **It REGRESSED working code.** `pre = 0` is necessary for a reshape but far
+  from sufficient — ANY rewrite landing on element 0 zeroes it. The
+  **aligned-block** (`let vr (rel …)` with an aligned second binding) and
+  **bracket** (`let [vr (rel …)]`) spellings, with a compound body and EXACTLY
+  ONE parenless goal, answered CORRECTLY at `fb788bfc` and hit the guard after
+  the gate. There relocation cannot reach the moved rel RHS at all (DEPTH: one
+  level below the middle for the bracket form, two for `$let-block`), so the peel
+  was the only thing carrying the srclocs.
+- **It was unsound the other way.** A head-position `mm.k` / `xs[0]` is an
+  ORDER-PRESERVING fold where right-alignment is correct; the gate withdrew the
+  peel there and stamped a whole clause subtree — two goals became one 5-arg goal
+  at a NONZERO column, i.e. the silent mis-group this code exists to prevent.
+  (Confirmed at the srcloc + parser level; end-to-end currently unreachable, so
+  mechanism-confirmed / severity-refuted.)
+
+**The rule that shipped** is about the PAIR, not the list: refuse the peel only
+when the expanded element **moved through unchanged** — datum-equal to exactly
+one original in the pre-peel middle, unique on the expanded side too — because
+then RELOCATION pairs it with its true original, which is strictly stronger
+evidence than positional adjacency. A genuinely rewritten element has no exact
+match and still gets the peel, which is the continuation-line case the peel
+exists for.
+
+⚠ **CENSUS CORRECTION.** DEFERRED 51(c) lists the bracket form and aligned-block
+bindings as "STILL DEGRADING, all LOUD". Measured: at TWO OR MORE parenless goals
+they **MIS-GROUP** (`fruit-color/5`), they do not hit the guard — and a mis-group
+is loud only while the collapsed arity happens to be undefined; on a multi-arity
+relation the same shape is a silent wrong answer. Pre-existing and byte-identical
+at `fb788bfc`; now test-pinned as a KNOWN LIMIT so it is visible. Root cause is
+DEPTH (relocation scans only the middle's top-level elements), which is the same
+wall the SIBLING-LET merge hits.
+
 **Adjacent, still open**: the SIBLING-LET chain (DEFERRED 51(c), the known limit)
 is unaffected by this fix — it degrades LOUDLY, upstream, at the fusion in
 `merge-toplevel-sibling-lets`, and is the next slice. A grounding audit
