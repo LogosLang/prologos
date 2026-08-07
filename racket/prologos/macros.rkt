@@ -3158,14 +3158,64 @@
      (cons (strip-with-origin! (car stx) idx) (strip-with-origin! (cdr stx) idx))]
     [else stx]))
 
+;; ⚠ REQUIREMENT (4), found by adversarial verify and MEASURED — THE INDEX
+;; RESTORES POSITIONS, NOT PROPERTIES.
+;;
+;; Handing back the original syntax object WHOLESALE also hands back its syntax
+;; PROPERTIES, and `prologos-paren-origin` is POSITION-SENSITIVE: the reader
+;; attaches it to every paren group, and `paren-goal-stx?` reads it to decide
+;; that a paren group AT COMMAND POSITION is a relational goal (POL.9). So when a
+;; `defmacro` lifts one of its arguments to top level — `defmacro dbg [$e] $e`
+;; then `dbg (inc 10)` — the restored property turned an application into a goal:
+;;
+;;     dbg (inc 10)   before: `11 : Int`, 0 errors
+;;                    after:  `ERROR: inc is a function …`, 1 error
+;;     dbg (= 1 1)    before: `true : Bool`, 0 errors
+;;                    after:  `@[{}] : _`,   0 errors   ← SILENT, value AND type
+;;
+;; (`dbg [inc 10]`, the bracket spelling, is identical on both — the divergence is
+;; specifically macro-spliced PARENS reaching command position.)
+;;
+;; Which reading is *correct* is arguable — POL.9 does say a paren group at
+;; command position is a goal, so this arguably makes macro-spliced code behave
+;; like hand-written code. That is exactly why it must not ride in HERE: it is a
+;; language-semantics change, and this is a srcloc-preservation fix. Restoring
+;; positions is the whole mandate; a property that MEANS something about where a
+;; node sits must not be carried to a place the node did not come from.
+;;
+;; So: a hit whose original is the node we were ALREADY aligned with has not
+;; moved — return it wholesale, exactly as the `equal?` branch always has. Any
+;; other hit MOVED, and takes srclocs only. That is byte-equivalent to the old
+;; behaviour for properties (the old code stamped, which dropped them) while
+;; still gaining every srcloc the index exists for.
+(define (syntax-locs-only stx)
+  ;; deep copy: every node keeps its own srcloc, no node keeps its properties
+  (cond
+    [(syntax? stx)
+     (define e (syntax-e stx))
+     (datum->syntax
+      #f
+      (cond
+        [(pair? e)
+         (let loop ([x e])
+           (cond
+             [(pair? x) (cons (syntax-locs-only (car x)) (loop (cdr x)))]
+             [(null? x) '()]
+             [else (syntax-locs-only x)]))]
+        [else e])
+      stx)]
+    [else stx]))
+
 ;; Stamp `d` at `anchor`, but hand back the ORIGINAL syntax object for any
 ;; sub-node the origin index recognises. This is requirement (3) above: the old
 ;; version was `(datum->syntax #f d anchor)` and stopped dead, so a moved subtree
 ;; nested inside a region we could not align lost its srclocs wholesale.
+;; Every hit reached from HERE is by definition inside a region we could not
+;; align, i.e. a move — so all of them take srclocs only, per requirement (4).
 (define (stamp-with-origin d anchor idx)
   (define hit (and idx (pair? d) (hash-ref idx d #f)))
   (cond
-    [hit hit]
+    [hit (syntax-locs-only hit)]
     [(pair? d)
      (datum->syntax #f
                     (let loop ([x d])
@@ -3183,9 +3233,13 @@
   ;; past the one-level element vectors.
   (define origin-hit
     (and idx (pair? expanded-datum) (hash-ref idx expanded-datum #f)))
-  (if origin-hit
-      origin-hit
-      (rebuild-preserving-locs/aligned orig-stx expanded-datum idx)))
+  (cond
+    ;; Same node, same position — nothing moved, so properties are still true of
+    ;; where it sits. Wholesale, exactly as the `equal?` branch has always done.
+    [(and origin-hit (eq? origin-hit orig-stx)) origin-hit]
+    ;; It MOVED. Positions only — see requirement (4) above.
+    [origin-hit (syntax-locs-only origin-hit)]
+    [else (rebuild-preserving-locs/aligned orig-stx expanded-datum idx)]))
 
 (define (rebuild-preserving-locs/aligned orig-stx expanded-datum idx)
   (define orig-datum (if (syntax? orig-stx) (syntax->datum orig-stx) orig-stx))

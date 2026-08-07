@@ -1092,6 +1092,57 @@
   (check-true (string? (d57-aligned D57-2GOAL-P)) (result-msg (d57-aligned D57-2GOAL-P)))
   (check-true (string? (d57-bracket D57-2GOAL-P)) (result-msg (d57-bracket D57-2GOAL-P))))
 
+;; ── DEFERRED 58: the index restores POSITIONS, not PROPERTIES ─────────────────
+;;
+;; Found by adversarial verify, MEASURED, and it had a SILENT mode. The origin
+;; index hands back the ORIGINAL syntax object, which also carries its syntax
+;; PROPERTIES — and `prologos-paren-origin` is POSITION-SENSITIVE: the reader
+;; attaches it to every paren group and `paren-goal-stx?` reads it to decide that
+;; a paren group AT COMMAND POSITION is a relational goal (POL.9). A `defmacro`
+;; that lifts its argument to top level therefore turned an application into a
+;; goal. `dbg (inc 10)` went `11 : Int` → a hard error; `dbg (= 1 1)` went
+;; `true : Bool` → `@[{}] : _` with **zero errors on both legs**.
+;;
+;; The rule that fixed it: a hit whose original is the node we were ALREADY
+;; aligned with has not moved and keeps its properties; any other hit MOVED and
+;; takes srclocs ONLY. Nothing in the suite covered syntax properties before
+;; this, which is why every gate was green over it.
+(test-case "DEFERRED 58: a macro-spliced PAREN group at command position stays an application"
+  (check-equal? (run-ns-ws-last (string-append
+                                 "ns p8pp\n"
+                                 "spec ppinc Int -> Int\n"
+                                 "defn ppinc [n] [int+ n 1]\n"
+                                 "defmacro ppdbg [$e]\n"
+                                 "  $e\n"
+                                 "ppdbg (ppinc 10)\n"))
+                "11 : Int"
+                "a macro must not turn its paren argument into a relational goal"))
+
+(test-case "DEFERRED 58: …and the SILENT direction — a goal KEYWORD head keeps its bracket reading"
+  ;; The sharp one: both legs report 0 errors, so only the VALUE and TYPE differ.
+  ;; `(= 1 1)` at command position IS a unify goal when written by hand; spliced
+  ;; out of a macro it must keep the reading it had before the index existed.
+  (check-equal? (run-ns-ws-last (string-append
+                                 "ns p8pq\n"
+                                 "defmacro pqdbg [$e]\n"
+                                 "  $e\n"
+                                 "pqdbg (= 1 1)\n"))
+                "true : Bool"
+                "a macro-spliced goal-keyword group must not silently become a goal"))
+
+(test-case "DEFERRED 58: the BRACKET spelling is the control — identical throughout"
+  ;; Isolates the trigger to macro-spliced PARENS: this spelling never carried
+  ;; `prologos-paren-origin` and was unaffected in either direction.
+  (check-equal? (run-ns-ws-last (string-append
+                                 "ns p8pr\n"
+                                 "spec princ Int -> Int\n"
+                                 "defn princ [n] [int+ n 1]\n"
+                                 "defmacro prdbg [$e]\n"
+                                 "  $e\n"
+                                 "prdbg [princ 10]\n"))
+                "11 : Int"
+                "the bracket spelling must be unaffected"))
+
 ;; ── DEFERRED 58 slice 2: the SIBLING-LET chain ───────────────────────────────
 ;;
 ;; ⚠ INVERTED (the KNOWN LIMIT below said to invert rather than delete). This one
