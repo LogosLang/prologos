@@ -376,14 +376,23 @@ strings:home       ;; map-generic over the language keys
 ;;70=> {:de "Start", :en "Home"} : {:de String :en String}
 ;; strings{:home^home :about^about}  ;; v2: nominal pivot
 
-;; §10.7 heterogeneity — events (the 2b SPLIT: tuple ⇒ per-position exact)
-;; events:t           ;; @[:click :key :click] — every POSITION offers :t      [D4.P4]
-;; events:x           ;; TYPE ERROR — position 1 offers no :x (NAMES the position)
+;; §10.7 heterogeneity — events (the 2b SPLIT; LIVE at D4.P4d slice 2)
+events:t           ;; every POSITION offers :t — per-position EXACT
+;;71=> @[:click :key :click] : ⟨Keyword Keyword Keyword⟩
+;; events:x           ;; TYPE ERROR — "fails at position 1" (NAMES the position).
+;;   Stays COMMENTED: it would be this file's first ERROR result and no
+;;   error-marker convention exists — the contract is PINNED in the track
+;;   battery ("P4d-s2: a static per-position miss NAMES THE POSITION (the
+;;   events:x contract — corpus-pinned here)").
 ;; (PVec-of-union fixture for the keys-⋂/types-⋃ rule lands with D4.P4 —
 ;;  needs an annotation to build; the meet is NEW machinery.)
 
-;; §10.8 recursion — tree (W4: DEFERRED; the exits are §7.4/§7.5)
-;; tree.entries:name  ;; @["lib.pl" "core"]                           [D4.P4]
+;; §10.8 recursion — tree. `entries:name` was CARVED OUT at D4.P4d slice 2:
+;;   :entries is itself a HET TUPLE (the slice-2 audit refuted the old
+;;   "PVec-of-rows" reading), so the line is plain het-broadcast work; the
+;;   RECURSIVE aggregation below stays W4-DEFERRED (the exits are §7.4/§7.5).
+tree.entries:name  ;; het broadcast under a dot descent
+;;72=> @["lib.pl" "core"] : ⟨String String⟩
 ;; tree{name entries:{name entries:name}}  ;; TYPE ERROR — file rows offer no :entries (W3∘W4)
 
 ;; ───────────────────────────────────────────────────────────────────────────
@@ -394,26 +403,26 @@ strings:home       ;; map-generic over the language keys
 ;; is permanently-commented v2 territory (Q_R4).
 
 m.0
-;;71=> @[1 2 3] : [PVec Int]
+;;73=> @[1 2 3] : [PVec Int]
 
 ;; nat→nat chains. These USED to mis-lex: `m.1.2` read as the rational 6/5,
 ;; because `decimal-literal` anchors at the DIGIT. A dot-anchored recognizer
 ;; consumes `.1` first, so the interior dot is never available as an anchor.
 ;; (⚠ the mis-lex was LOUD, not silent — the stranded bare `.` was unbound.)
 m.1.2
-;;72=> 6 : Int
+;;74=> 6 : Int
 
 ;; multi-digit — the ordinal Q_M8 exists for
 def scores := @[10 11 12 13 14 15 16 17 18 19 20 21 22]
-;;73=> scores : [PVec Int] defined.
+;;75=> scores : [PVec Int] defined.
 
 scores.12
-;;74=> 22 : Int
+;;76=> 22 : Int
 
 ;; per-position EXACT types survive on a het tuple (D15 + record-project)
 mixed.1
-;;75=> "seven" : String
+;;77=> "seven" : String
 
 ;; and `.N` reaches into nested rows the same way `.name` does
 app-config.admins.0.name
-;;76=> "Alice" : String
+;;78=> "Alice" : String

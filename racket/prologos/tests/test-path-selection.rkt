@@ -4281,15 +4281,16 @@
               (format "expected the per-element index-0; got ~a" out)))
 
 (test-case "P4c-4c: a still-unsupported carrier under ω refuses PER-COMMAND — never a whole-file abort"
-  ;; ⚠ RE-EXPRESSED AT P4d slice 1: the Map/keyword-row carriers now ADMIT, so
-  ;; the still-refusing carrier is the HET TUPLE (slice 2). Same proposition:
-  ;; the refusal goes through the failure slot, and the file continues.
+  ;; ⚠ RE-EXPRESSED AT P4d slice 1 (Map admitted) and AGAIN at slice 2 (the
+  ;; het tuple admitted): the still-refusing carrier is now the LIST. Same
+  ;; proposition throughout: the refusal goes through the failure slot, and
+  ;; the file continues.
   (define out (map (lambda (r) (format "~a" r))
                    (process-string-ws
-                    "ns carrier-refusal\ndef evs := @[{:t 1} {:t 2 :x 3}]\ndef q := evs:t\ndef after := 42")))
+                    "ns carrier-refusal\ndef xs := '[{:t 1} {:t 2}]\ndef q := xs:t\ndef after := 42")))
   (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)
               (format "THE FILE DID NOT CONTINUE — a raise escaped: ~a" out))
-  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec, Map, or closed keyword-row subject" s)) out)
+  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec, Map, tuple, or closed keyword-row subject" s)) out)
               (format "expected the carrier-accurate refusal: ~a" out)))
 
 ;; ---------------------------------------------------------------------------
@@ -4643,9 +4644,13 @@
                     "ns s0c\ndef r1 := {:a 2 :b 3}\ndef m1 : [Map Keyword Int] := {:a 1}\ndef mixed := @[r1 m1]\nmixed:b\ndef after := 42")))
   (check-false (ormap (lambda (s) (regexp-match? #rx"<error>" s)) out)
                (format "an <error> value escaped into an output slot at zero errors: ~a" out))
-  ;; (fragment re-pointed at P4d slice 1: the supported set widened)
-  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec, Map, or closed keyword-row subject" s)) out)
-              (format "expected the guided bcast-carrier refusal: ~a" out))
+  ;; ⚠ RE-EXPRESSED AT P4d slice 2: the mixed tuple now ADMITS (het carrier
+  ;; live); position 1 is a Map, so the tier OR asserts and the runtime miss
+  ;; (m1 lacks :b) aborts LOUDLY — the C9 (a) discriminator. If the SECOND
+  ;; gate (the tier peel) were ever un-widened, this pin catches the silent
+  ;; permissive variant.
+  (check-true (ormap (lambda (s) (regexp-match? #rx"error|panic" s)) out)
+              (format "expected the LOUD runtime abort: ~a" out))
   (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)
               (format "the refusal must be per-command: ~a" out)))
 
@@ -4823,12 +4828,15 @@
   (check-true (ormap (lambda (s) (regexp-match? #rx"\\{:host \"x\"\\}.* : \\[Map Keyword \\{:host String\\}\\]" s)) out)
               (format "a row-valued Map sub-selects per value: ~a" out)))
 
-(test-case "P4d-s1 boundary: the het tuple still refuses, with the carrier-accurate message"
+(test-case "P4d-s1 boundary — INVERTED at slice 2: the het tuple now BROADCASTS"
+  ;; ⚠ RE-EXPRESSED AT P4d slice 2 (the s1 boundary carrier landed): the same
+  ;; fixture that pinned the refusal now pins the per-position result. The
+  ;; boundary-refusal proposition lives on in the s2f List pin.
   (define out (map (lambda (r) (format "~a" r))
                    (process-string-ws
                     "ns s1h\ndef evs := @[{:t 1} {:t 2 :x 3}]\nevs:t\ndef after := 42")))
-  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec, Map, or closed keyword-row subject" s)) out)
-              (format "the refusal must name the SUPPORTED set truthfully: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"@\\[1 2\\] : ⟨Int Int⟩" s)) out)
+              (format "expected the per-position values at the nat-row type: ~a" out))
   (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
 
 (test-case "P4d-s1: an ordinal inner applies to VALUES uniformly — failing naturally, not by carrier fiat"
@@ -4839,3 +4847,126 @@
                (format "the carrier admits; the VALUE projection is what fails: ~a" out))
   (check-true (ormap (lambda (s) (regexp-match? #rx"error" s)) out))
   (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4d slice 2 — the HET TUPLE carrier (design: D4 §5.P4d; owner assent
+;; 2026-08-07). Per-position EXACT over 'nat closed rows: the slice-1 row
+;; machinery widens at BOTH 'keyword gates (the lift AND the tier peel — the
+;; audit refuted "one gate"; missing the peel recreates DEFERRED 43's silent
+;; miss one carrier over). Output = the honest nat-row (P3c ruling 2a — no
+;; collapse; the Tuple→PVec α keeps downstream PVec expectations satisfied).
+;; C9 RULED (a): the conservative OR extends to positions. Misses NAME the
+;; position/field via the label-aware walk + the 'bcast-at wrapping fail.
+;; ---------------------------------------------------------------------------
+
+(test-case "P4d-s2: per-position broadcast over the het tuple — nat-row out"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s2a\ndef events := @[{:t :click :x 10} {:t :key :code \"KeyA\"} {:t :click :x 3}]\nevents:t")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"@\\[:click :key :click\\] : ⟨Keyword Keyword Keyword⟩" s)) out)
+              (format "expected the per-position values at the honest nat-row type: ~a" out)))
+
+(test-case "P4d-s2: a static per-position miss NAMES THE POSITION (the events:x contract — corpus-pinned here)"
+  ;; The corpus line `events:x` stays COMMENTED (it would be the acceptance
+  ;; file's first error result, and no error-marker convention exists); its
+  ;; '(NAMES the position)' contract is pinned HERE at Level 2.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s2b\ndef events := @[{:t :click :x 10} {:t :key :code \"KeyA\"} {:t :click :x 3}]\nevents:x\ndef after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"needs a PVec" s)) out)
+               (format "the carrier must ADMIT; the per-position projection is what fails: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"fails at position 1" s)) out)
+              (format "the miss must NAME the offending position: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s2: the KEYWORD twin names the carrier FIELD (the slice-1 sibling gap, closed in the same stroke)"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s2c\ndef kv := {:a {:t 1} :b {:u 2}}\nkv:t\ndef after := 42")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"fails at field :b" s)) out)
+              (format "the row miss must NAME the carrier field: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s2: a sub-inner assembles PER-POSITION over the tuple"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s2d\ndef events := @[{:t :click :x 10} {:t :key :code \"KeyA\"}]\nevents:{t}")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"⟨\\{:t Keyword\\} \\{:t Keyword\\}⟩" s)) out)
+              (format "expected per-position narrowed rows at nat keys: ~a" out)))
+
+(test-case "P4d-s2: C9 (a) — a Map POSITION makes the runtime miss LOUD (the tier OR over positions)"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s2e\ndef m1 : [Map Keyword Int] := {:x 1}\ndef mixed2 := @[m1 {:b 2}]\nmixed2:b\ndef after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"needs a PVec" s)) out)
+               (format "the tuple must ADMIT: ~a" out))
+  ;; a silent-permissive variant would emit a VALUE line (tuple values print
+  ;; `@[…]`); post-abort no result line exists at all — the def echo prints
+  ;; only the TYPE. (First cut over-matched the echo line itself.)
+  (check-false (ormap (lambda (s) (regexp-match? #rx"@\\[" s)) out)
+               (format "no silent partial result: ~a" out))
+  ;; `panic` specifically — `#rx"error|panic"` matches the SUBSTRING of a
+  ;; quiet `<error>` value, so it could not distinguish loud from silent
+  ;; (the slice-2 verify's F2).
+  (check-true (ormap (lambda (s) (regexp-match? #rx"panic" s)) out)
+              (format "the Map position's runtime miss must abort LOUDLY: ~a" out))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"<error>" s)) out)
+               (format "no quiet <error> value may escape: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s2 boundary: the still-unsupported carriers refuse with the tuple-inclusive message"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s2f\ndef xs := '[{:a 1} {:a 2}]\nxs:a\ndef after := 42")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec, Map, tuple, or closed keyword-row subject" s)) out)
+              (format "the supported set must name the tuple truthfully: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"pvec-from-list" s)) out)
+              (format "the List guidance must survive: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s2 rider: a SUB inner in a fail path prints the stand-in, never the raw list"
+  ;; DEFERRED 40-residual's live half: the two path-append sites interpolated
+  ;; `select-step-name` of a sub inner — the RAW LIST — into branch strings.
+  ;; ⚠ The first fixture (a single-step `kv:{zzz}`) was VACUOUS — the guarded
+  ;; sites run only when steps FOLLOW the ω step, and only the BLOCK sort
+  ;; surfaces the accumulated path (the slice-2 verify's F1). This fixture
+  ;; reaches both: block sort, mid-branch sub-inner ω, trailing step.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s2g\ndef kv := {:v {:a {:t 1}}}\nkv{v:{t}:u}\ndef after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"@sub" s)) out)
+               (format "a raw (@sub …) leaked into a user-facing message: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"select branch `v\\.\\{…\\}\\.u`" s)) out)
+              (format "the stand-in must print in the branch string: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s2 rider (DEFERRED 45's DISSOLVE grade): a keyed step after a dissolve inner no longer mis-keys the branch"
+  ;; The verify found the top-keys fix silently repaired a SECOND grade: the
+  ;; old dissolve arm walked rest and computed `k^:w^:r` as keyed `r` while
+  ;; the consumers label it keyless — same wrong-L4 class as the ordinal
+  ;; grade, pinned here so the repair is advertised and held.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s2j\ndef x9 := {:q {:z 1} :k @[@[{:r 5}]]}\nx9{q^ k^:w^:r}\ndef after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"mixed keyed/keyless" s)) out)
+               (format "the dissolve-grade branch is KEYLESS — the L4 refusal was wrong: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s2 rider (DEFERRED 45): an ordinal-ω branch is KEYLESS to the L4 check — no wrong mixed-sorts refusal"
+  ;; top-keys' bcast arm recursed PAST an ordinal inner to the next keyed step
+  ;; (`k^:0:nm` computed as keyed `nm`) while both consumers label by
+  ;; select-step-output-name — a live WRONG L4 refusal. Post-fix the branch
+  ;; flows to typing's own honest per-branch refusal.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s2h\ndef x := {:k2 {:z 1} :k @[@[{:nm 5}]]}\nx{k2^ k^:0:nm}\ndef after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"mixed keyed/keyless" s)) out)
+               (format "the L4 refusal was WRONG (both branches are keyless): ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s2 rider control: the rest-null ordinal-ω sibling still succeeds keyless"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s2i\ndef x2 := {:k2 {:z 1} :k @[@[{:nm 5}]]}\nx2{k2^ k^:0}")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"⟨\\{:z Int\\} \\[PVec ⟨\\{:nm Int\\}⟩\\]⟩" s)) out)
+              (format "the keyless het assembly must survive the top-keys fix: ~a" out)))

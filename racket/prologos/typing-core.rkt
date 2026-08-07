@@ -995,7 +995,13 @@
                 ;; refusal even fired — the P4d slice-1 audit's trace).
                 [(expr-Map? tm) (loop (whnf (expr-Map-v-type tm)) next)]
                 [(and (expr-Record? tm)
-                      (eq? (expr-Record-key-domain tm) 'keyword)
+                      ;; D4.P4d slice 2 — 'nat joins (C9 RULED (a), owner
+                      ;; 2026-08-07): positions are fields; the OR extends
+                      ;; verbatim. ⚠ This is the SECOND of the two gates —
+                      ;; the slice-2 audit refuted "one gate": widening only
+                      ;; the lift leaves this peel 'keyword-gated and a Map
+                      ;; POSITION's runtime miss silent (DEFERRED 43's class).
+                      (memq (expr-Record-key-domain tm) '(keyword nat))
                       (eq? (expr-Record-tail tm) 'closed))
                  ;; N field types, ONE scalar tier (the mini-C9 — D4 §5.P4d):
                  ;; a conservative OR in the only direction the contract
@@ -1055,25 +1061,33 @@
       ;; proc via let/ec: the FIRST failing field aborts the WHOLE row — no
       ;; partial row escapes (the typing mirror of the whole-node abort).
       ;; Dyn-tail rows fall through to the carrier refusal below (the 4d
-      ;; refusal); 'nat rows likewise (the het tuple is slice 2).
+      ;; refusal). D4.P4d slice 2: 'nat rows JOIN (the het tuple —
+      ;; per-position EXACT is per-FIELD over nat keys; the walk is
+      ;; domain-agnostic), and the walk is LABEL-AWARE so a failing
+      ;; field/position is NAMED (the 'bcast-at wrapping fail; the slice-2
+      ;; audit: the label-blind walk structurally lost the position, and the
+      ;; keyword carrier had the same gap).
       [(and (expr-Record? tm)
-            (eq? (expr-Record-key-domain tm) 'keyword)
+            (memq (expr-Record-key-domain tm) '(keyword nat))
             (eq? (expr-Record-tail tm) 'closed))
        (let/ec bail
          (values
-          (record-map-field-types
-           (lambda (ft)
-             (let ([ft* (whnf ft)])
+          (record-map-field-types/labeled
+           (lambda (label ft)
+             (let ([ft* (whnf ft)]
+                   [wrap (lambda (f) (bail #f (select-fail 'bcast-at
+                                                           (append path (list label))
+                                                           label f)))])
                (if (select-sub-step? inner)
                    ;; Q_U20's per-inner-kind rule EXTENDED to this carrier
                    ;; (recorded in D4 §5.P4d): a sub inner ASSEMBLES at
-                   ;; 'block, per FIELD.
+                   ;; 'block, per FIELD/POSITION.
                    (let-values ([(comps cf) (select-level-components ctx ft* (cdr inner)
                                                                      path 'block)])
-                     (if cf (bail #f cf) (select-assemble-row comps)))
+                     (if cf (wrap cf) (select-assemble-row comps)))
                    (let-values ([(bt bf) (select-project ctx ft* (list (list inner))
                                                           sort path)])
-                     (if bf (bail #f bf) bt)))))
+                     (if bf (wrap bf) bt)))))
            tm)
           #f))]
       [else
@@ -1327,7 +1341,11 @@
               ;; result, which is what makes `x:s:t` fuse to one layer.
               (let-values ([(ct cf) (select-below-field
                                      ctx (whnf bt) rest
-                                     (append path (list (select-step-name s)))
+                                     ;; D4.P4d slice 2 (DEFERRED 40's live half):
+                                     ;; a SUB inner's step-name is the RAW LIST —
+                                     ;; the standing '|{…}| stand-in, never the list.
+                                     (append path (list (let ([n (select-step-name s)])
+                                                          (if (pair? n) '|{…}| n))))
                                      seen sort)])
                 (if cf
                     (values #f cf)
@@ -1382,7 +1400,9 @@
            [bf (values #f bf)]
            [(null? (cdr steps)) (values bt #f)]
            [else (select-below-field ctx (whnf bt) (cdr steps)
-                                     (append path (list (select-step-name s)))
+                                     ;; same DEFERRED-40 guard as the sibling above
+                                     (append path (list (let ([n (select-step-name s)])
+                                                          (if (pair? n) '|{…}| n))))
                                      seen sort)])))]
     [else (select-step-kind-unhandled 'select-below-field (car steps))]))
 
