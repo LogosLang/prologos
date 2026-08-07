@@ -3975,3 +3975,50 @@ P4d slice 4's diagnostics batch.
    the appended advice is *"select named fields instead (`x{k}`)"* — the spelling
    for the NON-broadcast case. Inside a broadcast the fix the user wants is
    `evs:t`.
+
+### 60. ⬜ The carrier-refusal advice has SINGLE-GET polarity, but describes a BROADCAST (D4.P4d slice 4a verify)
+
+The advised spelling is a `pvec-map` of DOT accesses, and `.` over a union is
+the OPTIMISTIC single-get polarity (filter-on-miss) while `:` is all-must-offer
+(keys-⋂) — `select-project-field`'s union arm says so in its own comment and
+forbids broadcast reuse. So over a union-typed link the advice is QUIETER than
+the thing it describes. Measured at slice 4a:
+
+```
+def u : <[Map Keyword Int] | Int> := 7
+def L := '[{:a u} {:a u}]
+L:a:b                            ;; advises `[pvec-map [fn [m] m.a.b] xs]`
+def P := [pvec-from-list L]
+[pvec-map [fn [m] m.a.b] P]      ;; @[none none] : [PVec Int]   — silent
+P:a:b                            ;; ERROR: keys-intersection rule — loud
+```
+
+**Pre-existing at ONE step** (base advised `m.a`, with the same polarity), so
+slice 4a did not create it — but fusion EXTENDS it across the chain, where
+before the truncated advice left a second, loud refusal standing.
+
+Closing it means walking the element type along the chain to detect a union
+link and poisoning the advice there — typing analysis inside a diagnostic, and
+its own slice. Recorded in the code at `format-select-fail`'s `bcast-carrier`
+arm.
+
+### 61. ⬜ Advice withdrawn where it was correct, and BLOCK sort could advise `m{…}` (D4.P4d slice 4a verify)
+
+Two conservative-direction losses from slice 4a's poisoning rule, both
+suppression-only (never a wrong spelling), neither pinned:
+
+1. **A non-ω following link poisons the whole chain.** `L:a.b`, `M:a:0` and
+   `R{items:a.b}` advised `m.a` at base and advise nothing now. The poisoning
+   rule targets ω chains, where a partial path answers a different question; a
+   following `.b` or `:0` applies to the ω's RESULT, so `m.a` remained a correct
+   spelling of the step that actually failed.
+2. **BLOCK sort now advises nothing at all.** Correct as far as it goes — the
+   dot-path is not the block spelling, because block ω ASSEMBLES (measured:
+   `RP{items:aa}` ≡ `[pvec-map [fn [m] m{aa}] P]`, while `m.aa` projects and
+   differs). But the honest advice EXISTS: it is the BRACE spelling `m{aa}`.
+   Advising it would restore the guidance the suppression removed, and is the
+   same "different delimiter" move already owed for sub and caret inners.
+
+Both are monotone (advice can be added back at zero cost); neither can produce a
+wrong spelling today. Worth taking together, since (2) and the sub/caret cases
+share one mechanism: a brace-spelling advice template.

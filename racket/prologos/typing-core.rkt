@@ -34,6 +34,12 @@
          "pretty-print.rkt"
          "subtype-predicate.rkt"  ;; SRE Track 1: extracted flat subtype predicate
          "sign-refinement.rkt"    ;; Numerics N5c: Sign transfer + name<->Sign/base tables
+         ;; D4.P4d slice 4a: ONE predicate — "can `m.NAME` be read back?" — so a
+         ;; diagnostic that advises an explicit spelling asks the reader's own
+         ;; charset instead of re-inlining it (the F1b.7g drift class).
+         ;; Cycle-free: parse-reader's project-local requires are rrb /
+         ;; propagator / parse-lattice / reader-forms, none of which reach typing.
+         (only-in "parse-reader.rkt" dot-writable-field-name?)
          (only-in "champ.rkt" champ-entries)  ;; Rel T1 B3.2: display-time row observation (leaf data module, cycle-free)
          (only-in "rrb.rkt" rrb-to-list)      ;; SolveCarrier: same, for the PVec-carried solve result (leaf data module)
          "relations.rkt"          ;; Rel T1 Aspect B (B1): relation store → schema-name for typed solution rows (cycle-free — relations has no typing/reduction back-edge)
@@ -654,7 +660,27 @@
 ;; failure kinds: 'subject-map · 'subject-tuple · 'subject-other ·
 ;; 'miss-closed · 'miss-dyn (unlisted on dyn) · 'unknown-presence.
 ;; `path` = the label trail to the failure (for branch-aware messages).
-(struct select-fail (kind path label row) #:transparent)
+;;
+;; D4.P4d slice 4a — THE FIFTH FIELD, `advice`: the field name a diagnostic may
+;; safely spell as `m.NAME`, or #f meaning "do not advise an explicit spelling".
+;;
+;; It exists because the message site CANNOT answer that question. It sees only
+;; the LABEL, and three live populations reached it with a label that looked
+;; fine and advice that was not (all measured at HEAD before this slice):
+;;   · a SUB inner   — label is the readable `{…}` stand-in, a symbol, so the
+;;                     `(symbol? label)` guard passed and advised `m.{…}`;
+;;   · a GLUED-ARROW key — `m.a->b` strands the `>`;
+;;   · a CARET inner — label is the bare name, so the advice silently DROPPED
+;;                     the rename: [PVec String] where the user asked for
+;;                     [PVec {:alias String}]. Writable, and wrong.
+;; Only the STEP distinguishes these, and the step is known HERE, not there.
+;;
+;; EVERY site passes it EXPLICITLY, and all but one pass #f. That is deliberate:
+;; a wrapper defaulting the field would have let a new failure kind acquire
+;; advice by accident, and the whole defect being fixed here is advice that
+;; nobody decided to emit. Spelling `#f` is the site saying "I cannot vouch for
+;; a spelling" — which is the truth at every site but the carrier refusal.
+(struct select-fail (kind path label row advice) #:transparent)
 
 ;; D4.P4b-ii-1 — THE MAP POSTURE's carrier (Q_U10).
 ;; `select-row-of` normally answers "here is the subject's per-field row".
@@ -727,7 +753,7 @@
      => (lambda (sel)
           (case sort
             [(path)  (values (select-view sel tm) #f)]
-            [(block) (values #f (select-fail 'subject-selection path #f tm))]
+            [(block) (values #f (select-fail 'subject-selection path #f tm #f))]
             [else    (select-sort-unhandled 'select-row-of sort)]))]
     [(and (expr-fvar? tm) (lookup-schema-by-name (expr-fvar-name tm)))
      => (lambda (entry) (values (schema->row entry) #f))]
@@ -743,19 +769,19 @@
     [(expr-Map? tm)
      (case sort
        [(path)  (values (select-uniform (expr-Map-k-type tm) (expr-Map-v-type tm)) #f)]
-       [(block) (values #f (select-fail 'subject-map path #f tm))]
+       [(block) (values #f (select-fail 'subject-map path #f tm #f))]
        [else    (select-sort-unhandled 'select-row-of sort)])]
     [(and (expr-Record? tm) (eq? (expr-Record-key-domain tm) 'nat))
-     (values #f (select-fail 'subject-tuple path #f tm))]
+     (values #f (select-fail 'subject-tuple path #f tm #f))]
     ;; D4.P4b-ii-1 — ASYMMETRY #4. Above the generic refusal for the same
     ;; reason the selection arm is: a union is not an expr-Record, so it fell
     ;; to 'subject-other.
     [(expr-union? tm)
      (case sort
        [(path)  (values (select-union (flatten-union tm) tm) #f)]
-       [(block) (values #f (select-fail 'subject-other path #f tm))]
+       [(block) (values #f (select-fail 'subject-other path #f tm #f))]
        [else    (select-sort-unhandled 'select-row-of sort)])]
-    [(not (expr-Record? tm)) (values #f (select-fail 'subject-other path #f tm))]
+    [(not (expr-Record? tm)) (values #f (select-fail 'subject-other path #f tm #f))]
     [else (values tm #f)]))
 
 ;; Horn D per level: the field's presence must be SOURCED 'present.
@@ -777,7 +803,7 @@
          (values (select-uniform-value-type row) #f)
          (values #f (select-fail 'subject-map (append path (list label))
                                  label (expr-Map (select-uniform-key-type row)
-                                                 (select-uniform-value-type row)))))]
+                                                 (select-uniform-value-type row)) #f)))]
     ;; D4.P4b-ii-1 — ASYMMETRY #3, the path half: project THROUGH the view,
     ;; capability-gated. `selection-field-type` carries the sub-selection
     ;; gating, which is why the view is resolved per-field here rather than
@@ -794,7 +820,7 @@
          ;; cell exists to repair.
          [(not (selection-allows-field? sel label))
           (values #f (select-fail 'selection-not-in-view (append path (list label))
-                                  label (select-view-subject row)))]
+                                  label (select-view-subject row) #f))]
          [else
           (let ([schema (lookup-schema-by-name (selection-entry-schema-name sel))])
             (if schema
@@ -804,7 +830,7 @@
                 ;; user error; fall back to the generic subject refusal rather
                 ;; than inventing a kind with no reachable path.
                 (values #f (select-fail 'subject-other (append path (list label))
-                                        label (select-view-subject row)))))]))]
+                                        label (select-view-subject row) #f))))]))]
     ;; D4.P4b-ii-1 — ASYMMETRY #4's arm. Mirrors the reference
     ;; (`expr-map-get`'s union arm): Map components whose KEY TYPE admits the
     ;; label contribute their value type; Record components go through
@@ -832,7 +858,7 @@
                        [else acc])))])
        (if (null? vts)
            (values #f (select-fail 'miss-closed (append path (list label))
-                                   label (select-union-subject row)))
+                                   label (select-union-subject row) #f))
            (values (build-union-type (reverse vts)) #f)))]
     [else (select-project-field/row ctx row label path sort)]))
 
@@ -869,21 +895,21 @@
           (if (eq? (expr-Record-tail row) 'dyn)
               (values (fresh-meta ctx (expr-Type (lzero))
                                   (dyn-row-source 'dyn-row-projection)) #f)
-              (values #f (select-fail 'unknown-presence (append path (list label)) label row)))]
-         [(block) (values #f (select-fail 'unknown-presence (append path (list label)) label row))]
+              (values #f (select-fail 'unknown-presence (append path (list label)) label row #f)))]
+         [(block) (values #f (select-fail 'unknown-presence (append path (list label)) label row #f))]
          [else    (select-sort-unhandled 'select-project-field sort)])]
       [(eq? (expr-Record-tail row) 'dyn)
        (case sort
          [(path)  (values (fresh-meta ctx (expr-Type (lzero))
                                       (dyn-row-source 'dyn-row-projection)) #f)]
-         [(block) (values #f (select-fail 'miss-dyn (append path (list label)) label row))]
+         [(block) (values #f (select-fail 'miss-dyn (append path (list label)) label row #f))]
          [else    (select-sort-unhandled 'select-project-field sort)])]
       ;; a CLOSED-row miss is an error under BOTH sorts — `record-project`'s
       ;; `miss` returns expr-error for 'closed too. The sorts do not diverge
       ;; here, and writing a case arm that pretends they might would be the
       ;; speculative-scaffolding shape.
       [else
-       (values #f (select-fail 'miss-closed (append path (list label)) label row))])))
+       (values #f (select-fail 'miss-closed (append path (list label)) label row #f))])))
 
 ;; D4.P3c: the ordinal-subject dispatch — the nat twin of select-row-of.
 ;; An ordinal step/branch needs an INDEXABLE subject: PVec (uniform elem)
@@ -891,11 +917,14 @@
 ;; error — the P2 assertive tier). Everything else refuses.
 ;; fill a subject-kind fail's label with the step that was about to
 ;; project (rank 3: `.-1` was invisible in the message)
+;; ⚠ D4.P4d slice 4a: rebuilds the fail, so it must CARRY the advice through —
+;; the 4-arity constructor would reset it to #f. Filling a label is not a
+;; decision about whether the spelling is advisable.
 (define (select-fail-fill-label f name)
   (if (select-fail-label f)
       f
       (select-fail (select-fail-kind f) (select-fail-path f) name
-                   (select-fail-row f))))
+                   (select-fail-row f) (select-fail-advice f))))
 
 (define (select-index-of ctx tm n path sort)
   ;; D4.P4b-ii-1: the SORT axis reaches the nat twin too. The file's own
@@ -925,8 +954,8 @@
      (let ([fld (record-lookup-field tm n)])
        (if fld
            (values (record-field-type fld) #f)
-           (values #f (select-fail 'ordinal-oob (append path (list n)) n tm))))]
-    [else (values #f (select-fail 'not-indexable (append path (list n)) n tm))]))
+           (values #f (select-fail 'ordinal-oob (append path (list n)) n tm #f))))]
+    [else (values #f (select-fail 'not-indexable (append path (list n)) n tm #f))]))
 
 ;; D4.P4c-4c — THE CONTAINER UNWRAP for ω. ⭐ THE MINI-AUDIT'S FOURTH TYPING
 ;; SITE, which the 3+3+1 partition never named: `select-row-of` has NO PVec arm
@@ -943,7 +972,12 @@
 ;;
 ;; Sort-total for the same reason its siblings are (Q_U12 names the next two
 ;; sorts): a binary test would hand every FUTURE sort PVec semantics silently.
-(define (select-elem-of ctx tm path sort name)
+;; D4.P4d slice 4a: `advice` is the caller's VOUCH that `m.NAME` is a correct
+;; explicit spelling of this ω step (or #f). It is a parameter rather than
+;; something derived here because only the caller holds the STEP; see the
+;; `select-fail` struct comment for the three populations that proved a
+;; label-level test cannot answer it.
+(define (select-elem-of ctx tm path sort name [advice #f])
   (case sort
     [(path block)
      (cond
@@ -954,7 +988,8 @@
        ;; it has no single elem (per-field types) and routes around this
        ;; protocol in `select-bcast-lift`.
        [(expr-Map? tm) (values (expr-Map-v-type tm) #f)]
-       [else (values #f (select-fail 'bcast-carrier (append path (list name)) name tm))])]
+       [else (values #f (select-fail 'bcast-carrier (append path (list name))
+                                     name tm advice))])]
     [else (select-sort-unhandled 'select-elem-of sort)]))
 
 ;; D4.P4c-4c (DEFERRED 43) — THE TYPE THE TIER DECISION SHOULD SEE.
@@ -1073,7 +1108,56 @@
 ;; step and the inner walk appends `k` itself. Caught by the adversarial verify:
 ;; `d:0` reported "ordinal `0` (branch `0.0`)". `select-elem-of` does its own
 ;; append for the CARRIER failure, where naming the ω step IS correct.
-(define (select-bcast-lift ctx tm s path seen sort)
+;; D4.P4d slice 4a — the fused dot-path a `[pvec-map …]` would need, as a LIST
+;; of field names, or #f when the chain cannot be written as one.
+;;
+;; POSITIVE and total: every link must be a PLAIN key that the reader can read
+;; back after a dot. One unspellable link poisons the whole chain, because a
+;; partial path is precisely the "writable, and wrong" failure this slice
+;; exists to stop — advising `m.a` to someone who wrote `:a:{b c}` would compile
+;; and answer a different question.
+;;
+;; ⚠ The link shapes are MEASURED, not inferred (the first cut tested
+;; `select-key-step?` and suppressed everything): a plain key inner is a BARE
+;; SYMBOL — `:t` → `t`, `:a->b` → `a->b` — while `:name^alias` → `(@key name
+;; (rename . alias))`, `:{name}` → `(@sub (name))`, `:0` → `0`. That is Q_U7's
+;; one-step wrapper as built, so `symbol?` admits exactly the plain keys and
+;; every compound inner, present or future, is excluded by construction.
+(define (bcast-advice-chain inner rest)
+  (and (symbol? inner)
+       (dot-writable-field-name? inner)
+       (let loop ([ss rest] [acc (list inner)])
+         (cond
+           [(null? ss) (reverse acc)]
+           ;; only a further ω step FUSES; anything else (a plain dot step, an
+           ;; ordinal branch) applies to the broadcast's RESULT rather than to
+           ;; each element, so the dot-path would misdescribe it
+           [(eq? (select-step-kind (car ss)) 'bcast)
+            (let ([i (select-bcast-inner (car ss))])
+              (and (symbol? i)
+                   (dot-writable-field-name? i)
+                   (loop (cdr ss) (cons i acc))))]
+           [else #f]))))
+
+;; D4.P4d slice 4a — THE ADVISED SPELLING FUSES ALONG THE CHAIN.
+;;
+;; `[pvec-map [fn [m] m.a] xs]` is the explicit form of ONE ω step. A user who
+;; wrote `xs:a:b` needs the composition, and the composition is not "advise the
+;; first step" — it is the FUSED map, by the functor law the semantics already
+;; leans on:
+;;     fmap g ∘ fmap f = fmap (g ∘ f)
+;;     pvec-map (λm. m.b) ∘ pvec-map (λm. m.a)  =  pvec-map (λm. m.a.b)
+;; Q_U7 records the same identity as the L1-fusion theorem ("each ω step
+;; consumes one container layer and re-wraps one; fmap∘fmap = fmap
+;; arithmetically"). So the advice is a dot-PATH, not a name, and this function
+;; contributes the part of it that lives in ITS OWN branch — `rest` is the steps
+;; that follow `s` there. Enclosing `expr-select` NODES contribute the rest; see
+;; `select-block-hint`.
+;;
+;; Defaults to `'()`, i.e. "I am the last step", which is what a caller that
+;; never thought about the chain inherits — and is correct for the single-step
+;; case that is by far the most common.
+(define (select-bcast-lift ctx tm s path seen sort [rest '()])
   (let* ([inner (select-bcast-inner s)]
          ;; ⚠ the DIAGNOSTIC label: `select-step-name` on a sub inner returns the
          ;; RAW LIST (DEFERRED 40/46's shared root), and interpolating that into
@@ -1083,7 +1167,56 @@
          ;; broke ORDINAL diagnostics (`users:0` reported `:{…}`; a NUMBER is a
          ;; legitimate label, the formatter prints `:0`). Only a LIST (the raw
          ;; sub) takes the stand-in. Caught by the P4c-4b three-sub-cases pin.
-         [name (let ([n (select-step-name s)]) (if (pair? n) '|{…}| n))])
+         [name (let ([n (select-step-name s)]) (if (pair? n) '|{…}| n))]
+         ;; D4.P4d slice 4a — THE VOUCH for the carrier refusal's explicit
+         ;; spelling. POSITIVE and total: advise `m.NAME` only for a BARE key
+         ;; inner (no continuation) whose name the reader can read back after a
+         ;; dot. Every other inner kind — sub, ordinal, and any kind added
+         ;; later — yields #f and the advice is simply omitted.
+         ;;
+         ;; ⚠ The discriminator is the inner's SHAPE, and the shapes are MEASURED
+         ;; at HEAD, not inferred — the first cut tested `select-key-step?` and
+         ;; suppressed everything, because a plain key does NOT wear `(@key …)`:
+         ;;   `:t`          → inner `t`                        — a BARE SYMBOL
+         ;;   `:a->b`       → inner `a->b`                     — a BARE SYMBOL
+         ;;   `:name^alias` → inner `(@key name (rename . alias))`
+         ;;   `:{name}`     → inner `(@sub (name))`
+         ;;   `:0`          → inner `0`
+         ;; That is Q_U7's one-step wrapper as built: the bare symbol IS the
+         ;; plain-key form. So `symbol?` admits exactly the plain keys, and every
+         ;; compound inner — caret, sub, and any kind added later — is excluded
+         ;; BY CONSTRUCTION rather than by enumeration, as is the ordinal (a
+         ;; number), which keeps its current no-advice behaviour unchanged.
+         ;;
+         ;; Then `dot-writable-field-name?` decides the remaining question, which
+         ;; is about the NAME rather than the shape: `:a->b` is a legal key since
+         ;; ARROW T1, but the dot path has no arrow arm, so `m.a->b` strands the
+         ;; `>`. A caret inner needs excluding for a different reason again — it
+         ;; projects the same field under a NEW key, so `m.name` compiles and
+         ;; silently returns [PVec String] where the user asked for
+         ;; [PVec {:alias String}].
+         ;;
+         ;; Correct BRACE spellings exist for the two suppressed shapes
+         ;; (`m{a b}` for a sub, `m{name^alias}` for a caret — both verified
+         ;; equivalent to their `:`-forms), but they need a different delimiter,
+         ;; so they are not reachable by extending a dot-path. Left suppressed:
+         ;; suppression is monotone, so they can be added later without ever
+         ;; having shipped a wrong spelling.
+         ;;
+         ;; ⚠ `'path` ONLY, and this is the SAME "different delimiter" rule
+         ;; applied to the SORT axis, where it had never been applied. Under
+         ;; 'block an ω step ASSEMBLES rather than projects, so the dot-path is
+         ;; simply not the spelling. Measured over `P : [PVec {:aa {:bb Int}}]`:
+         ;;   RP{items:aa}                → {:items [PVec {:aa {:bb Int}}]}
+         ;;   [pvec-map [fn [m] m{aa}] P] → [PVec {:aa {:bb Int}}]   ← agrees
+         ;;   [pvec-map [fn [m] m.aa}] P] → [PVec {:bb Int}]         ← differs
+         ;; and at two steps it is worse than differing: `RP{items:aa:bb}` is a
+         ;; hard ERROR while `[pvec-map [fn [m] m.aa.bb] P]` returns `@[1 2]`,
+         ;; so the message's own two remedies would contradict each other.
+         ;; (The single-step block advice was wrong at base too; suppressing is
+         ;; monotone, and `m{…}` can be advised later.)
+         [advice (and (eq? sort 'path)
+                      (bcast-advice-chain inner rest))])
     (cond
       ;; D4.P4d slice 1 — THE KEYWORD-ROW CARRIER routes AROUND the one-elem
       ;; protocol: a closed 'keyword row has no single elem (per-field types),
@@ -1110,7 +1243,7 @@
              (let ([ft* (whnf ft)]
                    [wrap (lambda (f) (bail #f (select-fail 'bcast-at
                                                            (append path (list label))
-                                                           label f)))])
+                                                           label f #f)))])
                (if (select-sub-step? inner)
                    ;; Q_U20's per-inner-kind rule EXTENDED to this carrier
                    ;; (recorded in D4 §5.P4d): a sub inner ASSEMBLES at
@@ -1124,7 +1257,7 @@
            tm)
           #f))]
       [else
-       (let-values ([(elem ef) (select-elem-of ctx tm path sort name)])
+       (let-values ([(elem ef) (select-elem-of ctx tm path sort name advice)])
          (if ef
              (values #f ef)
              ;; D4.P4d slice 1: the RE-WRAP follows the CARRIER — `tm` is in
@@ -1206,7 +1339,7 @@
       [(null? offering)
        ;; every component was skipped — row slot #f distinguishes this from the
        ;; nested case below
-       (values #f (select-fail 'bcast-union (append path (list name)) name #f))]
+       (values #f (select-fail 'bcast-union (append path (list name)) name #f #f))]
       [else
        (let/ec bail
          (values
@@ -1222,7 +1355,7 @@
                    ;; offer `:0`", replacing a TRUE, actionable message with a
                    ;; false one). The component identity is already carried by
                    ;; the inner message, which names the row/type it failed on.
-                   (bail #f (select-fail 'bcast-union (append path (list name)) name bf))
+                   (bail #f (select-fail 'bcast-union (append path (list name)) name bf #f))
                    bt))))
           #f))])))
 
@@ -1252,7 +1385,7 @@
            (values (record-field-type (cdr (car comps))) #f)
            ;; unconstructible from the surface under NEST; taking the first
            ;; silently is the fabrication class this phase exists to prevent
-           (values #f (select-fail 'subject-other path #f tm)))]
+           (values #f (select-fail 'subject-other path #f tm #f)))]
       [(eq? sort 'block) (values (select-assemble-row comps) #f)]
       [else (select-sort-unhandled 'select-project sort)])))
 
@@ -1335,7 +1468,11 @@
                         ;; returns this step's result TYPE and the enclosing
                         ;; `walk` continues exactly as it does for every other
                         ;; kind — which is what makes sequential ω steps fuse.
-                        [(bcast) (select-bcast-lift ctx tm s path seen sort)]
+                        ;; the steps that FOLLOW this one in the branch — the
+                        ;; same `(cdr steps)` `walk` recurs on four lines below,
+                        ;; handed down so the advice can fuse across them.
+                        [(bcast) (select-bcast-lift ctx tm s path seen sort
+                                                    (cdr steps))]
                         [else (select-step-kind-unhandled 'select-walk-to-leaf s)])])
           (cond
             [ff (values #f ff)]
@@ -1439,7 +1576,9 @@
        (let* ([s (car b)]
               [rest (cdr b)]
               [label (select-step-output-name s)])
-         (let-values ([(bt bf) (select-bcast-lift ctx tm s path seen sort)])
+         ;; `rest` is exactly the branch remainder used three lines below —
+         ;; handed down so the advice can fuse across it.
+         (let-values ([(bt bf) (select-bcast-lift ctx tm s path seen sort rest)])
            (cond
              [bf (values #f bf)]
              [(null? rest)
@@ -1503,7 +1642,10 @@
     ;; spurious level. ω descends transparently, like the ordinal arm.
     [(eq? (select-step-kind (car steps)) 'bcast)
      (let ([s (car steps)])
-       (let-values ([(bt bf) (select-bcast-lift ctx ft s path seen sort)])
+       ;; the branch remainder, as at the sibling site above — handed down so
+       ;; the advice can fuse across it.
+       (let-values ([(bt bf) (select-bcast-lift ctx ft s path seen sort
+                                                (cdr steps))])
          (cond
            [bf (values #f bf)]
            [(null? (cdr steps)) (values bt #f)]

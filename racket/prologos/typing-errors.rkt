@@ -17,6 +17,9 @@
          "syntax.rkt"
          "reduction.rkt"
          "typing-core.rkt"
+         ;; D4.P4d slice 4a: the advice oracle, for fusing a path-position chain
+         ;; (same predicate `select-bcast-lift` uses — one definition, no drift)
+         (only-in "parse-reader.rkt" dot-writable-field-name?)
          "qtt.rkt"
          "source-location.rkt"
          "errors.rkt"
@@ -239,7 +242,13 @@
 ;; — the arm and its diagnostic cannot drift) and formats the failure with
 ;; BRANCH context. The three Q_T2 refusal kinds all name the 4d remedy list:
 ;; seal / validate / annotate.
-(define (format-select-fail fail names [sort 'block])
+;; D4.P4d slice 4a: `chain` = the ω step names of ENCLOSING `expr-select` nodes,
+;; outermost-last, for fusing the advised spelling across a path-position chain
+;; (`'()` = none; `#f` = the chain contains a link that cannot be spelled, so
+;; suppress the advice entirely). Only the `bcast-carrier` arm reads it, and the
+;; recursive calls below deliberately do NOT pass it on — the chain belongs to
+;; the outermost advice, not to a nested inner message.
+(define (format-select-fail fail names [sort 'block] [chain '()])
   ;; D4.P4b-ii-2c: the wording DEPENDS ON THE SORT. Every arm below was
   ;; written when only `x{…}` could reach here, so they say "a select block"
   ;; and append block-specific advice. After b-ii-2b the DOT spelling reaches
@@ -346,11 +355,53 @@
        "`[pvec-from-list xs]` (the row type is preserved)~a~a")
       (or label "…")
       (if row (format "`~a`" (pp-expr row)) "not one")
-      ;; the explicit spelling is only ADVICE when the step is a nominal key —
-      ;; `m.0` is not a thing a user can write
-      (if (and label (symbol? label))
-          (format "; otherwise spell it `[pvec-map [fn [m] m.~a] xs]`" label)
-          "")
+      ;; D4.P4d slice 4a — THE PRODUCER VOUCHES; this site does not guess.
+      ;;
+      ;; This was `(and label (symbol? label))`, with a comment claiming the
+      ;; spelling is safe for a nominal key because "`m.0` is not a thing a user
+      ;; can write". BOTH halves were wrong, and measured so:
+      ;;   · `symbol?` ADMITTED unwritable-or-wrong spellings, because the LABEL
+      ;;     cannot answer the question — the sub stand-in `{…}` is a symbol, a
+      ;;     glued-arrow key is a symbol, and a `^rename` inner has a perfectly
+      ;;     ordinary symbol label while meaning something else. THAT is what
+      ;;     this change fixes.
+      ;;   · `m.0` IS writable — `[pvec-map [fn [m] m.0] xs]` returns
+      ;;     `@[1 3] : [PVec Int]` — so the guard ALSO suppressed correct advice
+      ;;     for ordinals. ⚠ NOT fixed here, deliberately: an ordinal inner is a
+      ;;     number, fails the vouch's `symbol?`, and keeps its existing
+      ;;     no-advice behaviour. Recorded because the old comment's reason was
+      ;;     false, not because the behaviour changed. Widening it would be a
+      ;;     new advice population, which is slice-4b's call, not a fix.
+      ;;
+      ;; The step KIND decides, and only `select-bcast-lift` holds the step, so
+      ;; the decision moved there and arrives as `select-fail-advice`: the fused
+      ;; dot-PATH it is safe to spell, or #f. #f is every other producer's
+      ;; default, so a failure kind that never thought about advice cannot emit
+      ;; any.
+      ;;
+      ;; `chain` carries the ω steps of ENCLOSING select nodes (a path-position
+      ;; chain is one node per level, so they are not in `fail` at all) — see
+      ;; `select-block-hint`. Concatenating them is the functor law:
+      ;; `pvec-map (λm. m.b) ∘ pvec-map (λm. m.a)` = `pvec-map (λm. m.a.b)`,
+      ;; the same fusion Q_U7 pins as a theorem. `#f` means some link was
+      ;; unspellable, so no path can be advised.
+      ;;
+      ;; ⚠ KNOWN RESIDUAL, recorded not hidden (DEFERRED 60): the advised form
+      ;; is a `pvec-map` of DOT accesses, and `.` over a union is the OPTIMISTIC
+      ;; single-get polarity while `:` is all-must-offer (keys-⋂) —
+      ;; `select-project-field`'s union arm says so itself. So over a
+      ;; union-typed link the advice is QUIETER than the broadcast: measured,
+      ;; `[pvec-map [fn [m] m.a.b] P]` → `@[none none] : [PVec Int]` where
+      ;; `P:a:b` refuses loudly. The divergence is pre-existing at ONE step
+      ;; (base advised `m.a`, with the same polarity); fusing extends it across
+      ;; the chain instead of leaving a second refusal standing. Closing it
+      ;; means walking the element type along the chain — typing work inside a
+      ;; diagnostic, and its own slice.
+      (let ([advice (select-fail-advice fail)])
+        (if (and advice chain)
+            (format "; otherwise spell it `[pvec-map [fn [m] m.~a] xs]`"
+                    (string-join (map symbol->string (append advice chain)) "."))
+            ""))
       (if (null? path) "" (format " — in branch `~a`" branch-str)))]
     [(miss-closed)
      (string-append
@@ -434,18 +485,74 @@
         [else (format "~a has no positions" (pp-expr row names))]))]
     [else #f]))
 
+;; D4.P4d slice 4a — THIS WALKER IS WHERE A PATH-POSITION CHAIN IS VISIBLE.
+;;
+;; `xs:a:b` is not one node with two steps: Q_U13's NEST encoding gives every
+;; level its OWN `expr-select` (the infer arm's own comment says so), so the
+;; node that REFUSES is the innermost and the steps that follow it live in its
+;; PARENTS. Nothing inside `select-project` can see them — measured: the walk
+;; receives `b = ((@bcast a))` with an empty path.
+;;
+;; But this search descends OUTERMOST-FIRST, so it holds the whole chain and was
+;; simply discarding it. Carrying the enclosing ω steps down turns the advice
+;; into the FUSED spelling — `m.a.b` for `xs:a:b` — which is what the functor
+;; law says the composition is, and what makes following the advice reproduce
+;; what the user wrote instead of stopping one step short.
+;;
+;; The chain is collected on the way DOWN (outermost first) and therefore
+;; applied in REVERSE: the innermost step runs first. A link that cannot be
+;; spelled poisons it to #f, and the advice is suppressed rather than truncated.
 (define (select-block-hint ctx e names)
   (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
-    (let search ([x e])
+    ;; ⚠ EXACTLY ONE descent per subfield, as before this slice. The chain is
+    ;; attached by choosing WHICH chain the subject's single visit gets — never
+    ;; by visiting it a second time. An earlier cut descended into `subject`
+    ;; explicitly and then fell through to the generic `ormap`, which visits
+    ;; `subject` again (it is `expr-select`'s first field), making the walk
+    ;; O(2^depth): measured 5.3s / 14.9s / 46.3s at chain depths 14 / 18 / 20
+    ;; against a flat ~4.3s base, on PLAIN DOT chains with no broadcast in them
+    ;; at all — `select-block-hint` runs on every infer failure. The output was
+    ;; byte-identical, so it was pure waste; and it is provably dead work, since
+    ;; `chain` only reaches the advice STRING while this function's truthiness
+    ;; depends solely on `fail`.
+    (let search ([x e] [chain '()])
       (and (expr? x)
-           (or (match x
-                 [(expr-select subject (expr-path branches sort) _)
-                  (let ([tm (whnf (infer ctx subject))])
-                    (and (not (expr-error? tm))
-                         (let-values ([(row fail) (select-project ctx tm branches sort)])
-                           (and fail (format-select-fail fail names sort)))))]
-                 [_ #f])
-               (ormap search (expr-subfields x)))))))
+           (match x
+             [(expr-select subject (expr-path branches sort) _)
+              (let* ([tm (whnf (infer ctx subject))]
+                     [own (and (not (expr-error? tm))
+                               (let-values ([(row fail) (select-project ctx tm branches sort)])
+                                 (and fail (format-select-fail fail names sort chain))))]
+                     ;; the chain extends only when OUR subject failed — that is
+                     ;; the only case where the refusal is below us and our own
+                     ;; step is part of the chain the user wrote
+                     [sub-chain (if (expr-error? tm)
+                                    (extend-advice-chain chain branches)
+                                    '())])
+                (or own
+                    (ormap (lambda (k)
+                             ;; siblings never inherit the chain
+                             (search k (if (eq? k subject) sub-chain '())))
+                           (expr-subfields x))))]
+             [_ (ormap (lambda (k) (search k '())) (expr-subfields x))])))))
+
+;; Prepend an enclosing node's ω step to the fused advice chain, or poison it.
+;; The node must be exactly one branch of exactly one ω step whose inner is a
+;; plain dot-writable key; anything else (a sub, a caret, an ordinal, a
+;; multi-branch block, a non-ω step) cannot be expressed by extending a
+;; dot-path, so the whole advice is withdrawn rather than truncated.
+;; Since the search visits outer nodes first and outer steps apply LAST,
+;; consing here builds the chain in application order.
+(define (extend-advice-chain chain branches)
+  (and chain
+       (pair? branches) (null? (cdr branches))
+       (let ([b (car branches)])
+         (and (pair? b) (null? (cdr b))
+              (eq? (select-step-kind (car b)) 'bcast)
+              (let ([i (select-bcast-inner (car b))])
+                (and (symbol? i)
+                     (dot-writable-field-name? i)
+                     (cons i chain)))))))
 
 ;; ========================================
 ;; CIU T6 F1b.4e (D22): seal missing-required hint (the S7 pattern)
