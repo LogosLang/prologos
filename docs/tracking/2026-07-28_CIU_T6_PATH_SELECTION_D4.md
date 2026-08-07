@@ -6051,7 +6051,40 @@ rider) · the CALM restatement for `row-meet` (the "annotation-only at HEAD"
 premise is FALSE — a PVec-of-union is INFERABLE via `nil-safe-get`'s Nil
 append; the argument moves to the `has-unsolved-meta?`→⊥ ground).
 
-**Slicing: ⬜ under co-design.**
+**SLICING — ruled at the opening co-design [owner, 2026-08-07 — "(a) fix it
+first as slice 0"]:**
+
+- **⬜ Slice 0 — the homogeneity-probe soundness fix (FIRST, own commit).**
+  Failing-test-first: pin the `@[record map]` mistype (`<error> : [PVec Int]`
+  at 0 errors) and its order-dependence, then make the pvec-literal
+  homogeneity probe stop reading COERCIBILITY as SAMENESS — a het literal
+  with a Map element forms the tuple honestly, in EITHER element order. The
+  check-mode coercion itself (F1 s2 `record-subtypes-map?`; annotation-driven
+  subsumption) is NOT touched — only the probe's equality question changes,
+  so the blast radius is literal CLASSIFICATION, not subsumption. The
+  `record-subtypes-pvec?` sibling pair (`unify.rkt:591-592`) is probed for
+  the same class and covered by the same probe-level fix. Corpus A/B is
+  LOAD-BEARING here (literal inference changes are what it watches);
+  predicted diff set: empty (nothing in the corpus spells a mixed-head
+  literal — which is why the hole was invisible).
+- **⬜ Slice 1 — keyword-row + Map carrier**: TWO typing arms in
+  `select-elem-of` + ONE champ reduction arm, ATOMIC (the recorded P4c-4c
+  discipline); uncomments `regions:host` / `strings:home`.
+- **⬜ Slice 2 — het tuple**: TYPING-ONLY (`expr-rrb` already served by
+  `bcast-lift`); per-position EXACT; the position-naming error; the **C9
+  scalar-tier mini-ruling at its mini-design**; DEFERRED 40-residual/45
+  riders (value-channel only).
+- **⬜ Slice 3 — PVec-of-union + `row-meet`**: the new machinery + the
+  AUTHORED discriminating fixture + the CALM restatement on
+  `has-unsolved-meta?` grounds.
+- **⬜ Slice 4 — the diagnostics batch (LAST, so messages describe the final
+  surface)**: the `bcast-carrier` split (Set/List sentences; the Functor
+  clause drops) · Q_U19's unified refusal + the two `Unbound variable`
+  fall-through routes · DEFERRED 47's wording.
+- Corpus re-fate rides each slice. **Gates**: failing-test-first batteries +
+  authored fixtures; the corpus A/B is REGRESSION-ONLY for slices 1–4 (the
+  carriers have ~no corpus coverage — the vacuous-green hazard, named) but
+  LOAD-BEARING for slice 0.
 
 <a id="pf"></a>
 
