@@ -3164,8 +3164,24 @@
                  ;;     donate one loc to the other's position;
                  ;;   · unique on the EXPANDED side — a duplicated output must
                  ;;     not receive one original's loc twice.
-                 ;; Ambiguity ⇒ stamp, exactly as before: monotone by
-                 ;; construction, like the rest of the helper.
+                 ;; Ambiguity ⇒ stamp, exactly as before.
+                 ;; ⚠ NOT fully "monotone by construction" — qualified after the
+                 ;; relocation verify (2026-08-07): relocation is monotone in
+                 ;; srcloc QUANTITY, not DETECTABILITY. If a user-written subtree
+                 ;; happens to be datum-identical to a shape a desugar MINTS
+                 ;; (measured: `let q := [fn [q : _] …]` colliding with the let
+                 ;; funnel's own `(fn (q : _) body)` wrapper, where the peel has
+                 ;; already consumed the true twin), the minted node relocates to
+                 ;; the USER node's plausible nonzero-column locs — where the old
+                 ;; stamp produced guard-DETECTABLE column-0 locs. Today that
+                 ;; demotes a precise guard message to a generic type error (a
+                 ;; rel in a lambda body does not type, so no wrong answer is
+                 ;; expressible); it becomes a live silent-misgroup hole the day
+                 ;; lambda-body queries type (Rel T2 purity ruling). See
+                 ;; DEFERRED 51(c)'s relocation notes; datum equality is this
+                 ;; algorithm's only oracle, so minted-equals-user collisions
+                 ;; are undecidable HERE — the durable answer is DEFERRED 55's
+                 ;; reader origin marker.
                  (let* ([o-mid (for/list ([i (in-range pre (- n-o suf*))])
                                  (vector-ref o-v i))]
                         [o-mid-datums (map syntax->datum o-mid)]

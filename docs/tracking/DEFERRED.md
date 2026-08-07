@@ -3867,6 +3867,31 @@ any sentinel is consulted.
   mid-arc given that every clever alignment extension this arc introduced a
   silent mis-parse caught only by adversarial verification. The guard's honest
   message covers it meanwhile.
+  ⚠ **The relocation verify's census (2026-08-07) — the full member list, so no
+  future "family is closed" claim is needed**: FIXED = single-binding direct
+  `let` spellings (`:=`, bare, multi-line value, two sibling goals), `defr`,
+  `[else]` (bare `rel`, goal keywords), `def`/`defn`. STILL DEGRADING, all LOUD,
+  all pre-existing: sibling-let chains (above), bracket-form
+  `let [r := (rel …)]`, aligned-block bindings (relocation never reaches
+  `$let-block` innards), defmacro-EXPANDED rel RHS (rewritten ⇒ relocation
+  correctly refuses), moved-AND-rewritten subtrees. Perf: Δ≈0 on 200 lets.
+  ⚠ **One CONFIRMED latent false-pair** (re-measured): a user lambda
+  datum-identical to the let funnel's minted `(fn (name : _) body)` wrapper —
+  with the peel having consumed the true twin — relocates the MINTED node to the
+  user node's plausible locs, defeating both uniqueness guards. Today this
+  demotes the precise guard message to a generic "Could not infer type" (a rel
+  in a lambda body does not type, so no wrong answer is expressible); **it goes
+  live as a silent-misgroup hole the day lambda-body queries type — Rel T2's
+  purity ruling MUST revisit this** (the code comment at the relocation site
+  says so too). "Monotone by construction" is qualified in place: monotone in
+  srcloc quantity, not detectability.
+  ⚠ **Bodyless goal-RHS let** (`let r := (rel …)` with NO body): the paren
+  spelling yields a STUCK `(rel [1] ...) : _` with 0 errors on both legs
+  (pre-existing control defect — POL.10's snapshot semantics never fire); the
+  parenless spelling now MATCHES that control, converting its old loud guard
+  error into the same silent stuck value. Equal-to-control per the pin
+  criterion, but the control looks broken — owner look wanted on the bodyless
+  semantics.
   ⚠ Also from the same verify: branch (b)'s "a mis-grouping would surface as an
   arity error, not a row" pin-strength argument is TOO STRONG — in DEFERRED 55's
   peel-residual zone (rewrites in BOTH goal lines) with a relation of the merged
