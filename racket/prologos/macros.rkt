@@ -3143,8 +3143,47 @@
              (if (= mid-o mid-e)
                  (for/list ([i (in-range pre (- n-e suf*))])
                    (rebuild-preserving-locs (vector-ref o-v i) (vector-ref e-v i)))
-                 (for/list ([i (in-range pre (- n-e suf*))])
-                   (datum->syntax #f (vector-ref e-v i) anchor)))
+                 ;; DEFERRED 51(c), let leg — RELOCATION: alignment sees only
+                 ;; in-place change, but a desugar can MOVE a subtree unchanged.
+                 ;; The let funnel is the measured case:
+                 ;;   (let r := V body)  →  ((fn (r : _) body) V)
+                 ;; — V survives DATUM-IDENTICAL but at a different index, so the
+                 ;; whole form was stamped @let-position and a rel RHS lost the
+                 ;; clause layout its parenless goals need (the guard fired with
+                 ;; ZERO rewrites in the source). So: before stamping a changed
+                 ;; middle, pair each COMPOUND expanded element with a
+                 ;; datum-equal original middle element when the match is unique
+                 ;; IN BOTH DIRECTIONS, and recurse (datum-equal ⇒ the original
+                 ;; stx comes back wholesale, srclocs intact).
+                 ;; Guards, each load-bearing:
+                 ;;   · compound elements only — identical ATOMS are everywhere,
+                 ;;     and a false pair would attach the WRONG line, the exact
+                 ;;     mis-grouping class this arc keeps paying for;
+                 ;;   · unique on the ORIGINAL side — two identical originals
+                 ;;     (e.g. two identical goals on different lines) must not
+                 ;;     donate one loc to the other's position;
+                 ;;   · unique on the EXPANDED side — a duplicated output must
+                 ;;     not receive one original's loc twice.
+                 ;; Ambiguity ⇒ stamp, exactly as before: monotone by
+                 ;; construction, like the rest of the helper.
+                 (let* ([o-mid (for/list ([i (in-range pre (- n-o suf*))])
+                                 (vector-ref o-v i))]
+                        [o-mid-datums (map syntax->datum o-mid)]
+                        [edat (lambda (x) (if (syntax? x) (syntax->datum x) x))])
+                   (for/list ([i (in-range pre (- n-e suf*))])
+                     (define ed (edat (vector-ref e-v i)))
+                     (define (stamp) (datum->syntax #f (vector-ref e-v i) anchor))
+                     (if (pair? ed)
+                         (let ([matches (for/list ([o (in-list o-mid)]
+                                                   [od (in-list o-mid-datums)]
+                                                   #:when (equal? od ed))
+                                          o)]
+                               [e-dups (for/sum ([j (in-range pre (- n-e suf*))])
+                                         (if (equal? (edat (vector-ref e-v j)) ed) 1 0))])
+                           (if (and (= (length matches) 1) (= e-dups 1))
+                               (rebuild-preserving-locs (car matches) ed)
+                               (stamp)))
+                         (stamp)))))
              ;; trailing region (strict suffix + peeled pairs), aligned right
              (for/list ([i (in-range (- n-e suf*) n-e)])
                (rebuild-preserving-locs

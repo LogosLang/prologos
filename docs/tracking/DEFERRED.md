@@ -3836,11 +3836,24 @@ any sentinel is consulted.
   goes through the CONVERTED [else] arm, but its desugar is a TOTAL RESHAPE
   (`let` → nested `fn` application through the one funnel), so no prefix/suffix
   alignment at any list level can recover the `rel` subtree — it moved both
-  position and depth. That is precisely the case DEFERRED 55's real-diff /
-  reader-origin-marker is for; a cheaper alternative is a
-  `rebuild-def-preserving-rhs`-style analogue inside the let funnel carrying the
-  binding-RHS stx through (reasoned, not yet instrumented). The `let` leg is the
-  4th spelling of this family — file under 51(c) continuation when picked up.
+  position and depth. ~~That is precisely the case DEFERRED 55's real-diff … is for~~
+  **✅ CLOSED same day (owner-requested), and the instrumentation REFINED the
+  diagnosis**: the desugar `(let r := V body) → ((fn (r : _) body) V)` is a
+  reshape, but V survives DATUM-IDENTICAL — it only MOVES (element 3 → element
+  1). So the fix is not a real diff: `rebuild-preserving-locs` gained a
+  RELOCATION step — before stamping a changed middle, pair each COMPOUND
+  expanded element with a datum-equal original middle element when the match is
+  unique IN BOTH DIRECTIONS, and recurse (datum-equal ⇒ the original stx comes
+  back wholesale). Guards, each load-bearing: compound elements only (identical
+  atoms are everywhere — a false pair attaches the WRONG LINE, the mis-grouping
+  class this arc keeps paying for); uniqueness on the original side (two
+  identical goals on different lines must not swap locs); uniqueness on the
+  expanded side (a duplicated output must not take one loc twice). Ambiguity ⇒
+  stamp, exactly as before — monotone by construction.
+  Pinned equality-with-the-PAREN-control (same semantics, parenless vs paren
+  spelling), single-goal and two-sibling-goal shapes. Genuine moves that are
+  ALSO rewritten, or ambiguous duplicates, still stamp — DEFERRED 55's real
+  diff remains the durable answer for those.
   ⚠ Also from the same verify: branch (b)'s "a mis-grouping would surface as an
   arity error, not a row" pin-strength argument is TOO STRONG — in DEFERRED 55's
   peel-residual zone (rewrites in BOTH goal lines) with a relation of the merged

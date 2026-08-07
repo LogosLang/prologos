@@ -928,6 +928,51 @@
                (format "continuation-only rewrite must not collapse either; got: ~a"
                        (result-msg tail))))
 
+(test-case "DEFERRED 51(c) let leg: a top-level `let` rel RHS takes parenless goals"
+  ;; The 4th family member, found by the def-arm verify (a 6-line reproducer with
+  ;; ZERO rewrites). Mechanism, instrumented: the let desugar is
+  ;;   (let r := V body) → ((fn (r : _) body) V)
+  ;; — the `($goal-rhs (rel …))` subtree survives DATUM-IDENTICAL but MOVES from
+  ;; element 3 to element 1, and prefix/suffix alignment cannot see moves, so the
+  ;; whole form was stamped @let-position and the rel's clause layout died. The
+  ;; helper's relocation step (unique datum-equal match, compound subtrees only)
+  ;; pairs the moved subtree with its original, srclocs intact.
+  ;; PIN SHAPE: equality with the PAREN-goal control — same semantics, parenless
+  ;; vs paren spelling — so grouping AND solving are pinned at once.
+  (define parenless (run-ns-ws-last
+                     (string-append P8FIX
+                                    "let d51lr := (rel [f]\n"
+                                    "  &> fruit-color f \"blue\")\n"
+                                    "  d51lr\n")))
+  (define paren     (run-ns-ws-last
+                     (string-append P8FIX
+                                    "let d51lc := (rel [f]\n"
+                                    "  &> (fruit-color f \"blue\"))\n"
+                                    "  d51lc\n")))
+  (check-true (string? paren) (result-msg paren))
+  (check-false (string-contains? (result-msg parenless) "parenless goals cannot")
+               (format "the guard must not fire; got: ~a" (result-msg parenless)))
+  (check-equal? parenless paren
+                "the parenless spelling must group and solve exactly like the paren control"))
+
+(test-case "DEFERRED 51(c) let leg: two sibling parenless goals under a let GROUP correctly"
+  (define parenless (run-ns-ws-last
+                     (string-append P8FIX
+                                    "let d51l2 := (rel [f]\n"
+                                    "  &> fruit-color f \"blue\"\n"
+                                    "     fruit-color f \"nope\")\n"
+                                    "  d51l2\n")))
+  (define paren     (run-ns-ws-last
+                     (string-append P8FIX
+                                    "let d51l3 := (rel [f]\n"
+                                    "  &> (fruit-color f \"blue\") (fruit-color f \"nope\"))\n"
+                                    "  d51l3\n")))
+  (check-true (string? paren) (result-msg paren))
+  (check-false (string-contains? (result-msg parenless) "fruit-color/3")
+               (format "must not merge the sibling goals; got: ~a" (result-msg parenless)))
+  (check-equal? parenless paren
+                "two parenless sibling goals must conjoin exactly like the paren control"))
+
 (test-case "DEFERRED 51(c) def arm: unparenthesized `def r := rel …` takes parenless clauses"
   ;; The last spelling still degrading after the defr + [else] extensions. The
   ;; DEF arm's `rebuild-def-preserving-rhs` handles only a SINGLE element after
