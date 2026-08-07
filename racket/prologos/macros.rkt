@@ -2995,6 +2995,131 @@
                   (append (reverse unit) out))])))
        (loop tail (append emitted acc))])))
 
+;; ── DEFERRED 51(c): srcloc-preserving rebuild after preparse ──────────────────
+;;
+;; THE PROBLEM. The per-form fold below strips every top-level form to a bare
+;; datum (`(syntax->datum stx)`) before any arm runs, so `preparse-expand-form`
+;; sees no syntax objects at all. When an arm's `(equal? expanded datum)` guard
+;; fails it rebuilds with `(datum->syntax #f expanded stx)`, and that stamps ONE
+;; srcloc — the whole form's — onto EVERY node it creates. So a preparse rewrite
+;; ANYWHERE in a form destroys the line/column of everything in it.
+;;
+;; Downstream, two layout-driven readers then degrade:
+;;   · `parse-clause-content` (POL.8) needs per-element columns to tell a sibling
+;;     goal from a continuation; it detects the loss via an impossible column 0
+;;     and refuses parenless clauses outright (DEFERRED 51);
+;;   · the `||` fact-row splitter needs the sentinel's line to tell a compound
+;;     TERM from a continuation ROW, and silently falls back to splaying
+;;     (DEFERRED 53 residual 1 — an idiomatic `|>` or dot-access anywhere in the
+;;     defr was enough to restore fabricated rows, at a distance).
+;;
+;; THE FIX. Preparse cannot preserve srclocs THROUGH expansion — the datum it
+;; receives has none. But the original syntax tree is still in hand, so the
+;; srclocs can be RE-ATTACHED afterwards by walking the original and the expanded
+;; datum in parallel: wherever a subtree came through UNCHANGED, reuse the
+;; ORIGINAL syntax object (srclocs, properties and all); only genuinely rewritten
+;; subtrees fall back to the whole-form srcloc, exactly as today.
+;;
+;; This is the generalization of `rebuild-def-preserving-rhs` (further down),
+;; which does the same thing for one hard-coded position.
+;;
+;; MONOTONE BY CONSTRUCTION: the `[else]` arm is byte-for-byte today's behaviour,
+;; so this can only ADD srcloc fidelity, never remove it. It is nonetheless a
+;; REAL behaviour change downstream, because the degradation it removes is what
+;; several guards key on — that is the point of 51(c), not a side effect.
+;;
+;; ⚠ EQUAL LENGTHS ARE NOT ENOUGH, and assuming so silently breaks the very
+;; thing this exists to fix. Several preparse rewrites CHANGE THE ELEMENT COUNT
+;; of the list they sit in — dot-access is the sharp case: `mm.k` reaches preparse
+;; as the TWO sibling slots `mm` `($dot-access k)` and folds to the ONE element
+;; `($select-path mm k)`. A naive equal-length-only walk bails to `[else]` for the
+;; whole clause, stamping the CLAUSE's position on every element. That is worse
+;; than doing nothing: the old degradation put column 0 on everything, which
+;; POL.8's guard detects, whereas a clause-position stamp has a NONZERO column,
+;; so the guard passes and the layout path silently MIS-GROUPS. (Measured: a
+;; two-goal parenless clause with a `mm.k` in it parsed as one 3-arg goal.)
+;;
+;; So align by COMMON PREFIX and COMMON SUFFIX: elements that match from the left
+;; and from the right keep their own syntax objects, and the changed middle takes
+;; the srcloc of the FIRST original element it replaced — which is where the
+;; rewritten form actually started in the source. For the `mm.k` clause that
+;; yields sentinel/goal/arg locs intact and the `$select-path` sitting exactly
+;; where `mm` did, so layout grouping works on the real columns.
+(define (rebuild-preserving-locs orig-stx expanded-datum)
+  (define orig-datum (if (syntax? orig-stx) (syntax->datum orig-stx) orig-stx))
+  (define (fallback)
+    (datum->syntax #f expanded-datum (and (syntax? orig-stx) orig-stx)))
+  (cond
+    ;; Untouched subtree — hand back the ORIGINAL syntax object wholesale.
+    [(equal? orig-datum expanded-datum)
+     (if (syntax? orig-stx) orig-stx (datum->syntax #f expanded-datum #f))]
+    [(and (syntax? orig-stx) (list? orig-datum) (list? expanded-datum)
+          (syntax->list orig-stx))
+     => (lambda (orig-elems)
+          (define n-o (length orig-elems))
+          (define n-e (length expanded-datum))
+          (define o-v (list->vector orig-elems))
+          (define e-v (list->vector expanded-datum))
+          ;; longest common prefix / suffix, by datum equality
+          (define pre
+            (let loop ([i 0])
+              (if (and (< i n-o) (< i n-e)
+                       (equal? (syntax->datum (vector-ref o-v i)) (vector-ref e-v i)))
+                  (loop (add1 i)) i)))
+          (define suf
+            (let loop ([j 0])
+              (if (and (< j (- n-o pre)) (< j (- n-e pre))
+                       (equal? (syntax->datum (vector-ref o-v (- n-o 1 j)))
+                               (vector-ref e-v (- n-e 1 j))))
+                  (loop (add1 j)) j)))
+          ;; The changed middle inherits the srcloc of the first original element
+          ;; it replaced (or the enclosing form's, if the middle is an insertion).
+          (define anchor (if (< pre n-o) (vector-ref o-v pre) orig-stx))
+          ;; The strict prefix/suffix leave a MIDDLE. Two more steps, and the
+          ;; second one is load-bearing:
+          ;;
+          ;; (i) PEEL THE MIDDLE FROM THE RIGHT while BOTH sides still have more
+          ;;     than one element left, recursing on each pair. The strict suffix
+          ;;     is computed by datum equality, so a trailing element that ALSO
+          ;;     changed is not in it and would otherwise be swept into the
+          ;;     stamped region and given the anchor's position. Measured: a
+          ;;     parenless clause with a rewrite in BOTH goals put the whole
+          ;;     continuation line on the first goal's line and parsed the two
+          ;;     goals as ONE 3-argument goal — a silent mis-grouping, the exact
+          ;;     failure POL.8's guard was refusing to risk. Peeling pairs the
+          ;;     continuation with the continuation and recursion fixes it from
+          ;;     the inside.
+          ;;
+          ;; (ii) Whatever is left: same length ⇒ recurse pairwise (the ordinary
+          ;;     "one sub-form changed in place" case, and how the walk descends
+          ;;     into a nested rewrite at all — stamping here instead stopped the
+          ;;     walk one level short in an earlier version). Different length ⇒
+          ;;     a genuine fold/splice, so stamp with the anchor.
+          (define peel
+            (let loop ([k 0])
+              (if (and (> (- (- n-o suf pre) k) 1) (> (- (- n-e suf pre) k) 1))
+                  (loop (add1 k))
+                  k)))
+          (define suf* (+ suf peel))
+          (define mid-o (- n-o suf* pre))
+          (define mid-e (- n-e suf* pre))
+          (define rebuilt
+            (append
+             (for/list ([i (in-range pre)])
+               (rebuild-preserving-locs (vector-ref o-v i) (vector-ref e-v i)))
+             (if (= mid-o mid-e)
+                 (for/list ([i (in-range pre (- n-e suf*))])
+                   (rebuild-preserving-locs (vector-ref o-v i) (vector-ref e-v i)))
+                 (for/list ([i (in-range pre (- n-e suf*))])
+                   (datum->syntax #f (vector-ref e-v i) anchor)))
+             ;; trailing region (strict suffix + peeled pairs), aligned right
+             (for/list ([i (in-range (- n-e suf*) n-e)])
+               (rebuild-preserving-locs
+                (vector-ref o-v (- n-o (- n-e i))) (vector-ref e-v i)))))
+          (datum->syntax #f rebuilt orig-stx orig-stx))]
+    ;; Genuinely reshaped (improper list, non-list, vector, …) — status quo ante.
+    [else (fallback)]))
+
 (define (preparse-expand-all stxs0)
   (define stxs (merge-toplevel-sibling-lets stxs0))
   ;; ============================================================
@@ -3388,7 +3513,14 @@
          (define expanded (preparse-expand-form datum))
          (if (equal? expanded datum)
              (cons stx acc)
-             (cons (datum->syntax #f expanded stx) acc))]
+             ;; DEFERRED 51(c): rebuild PRESERVING per-element srclocs. `defr` is
+             ;; the arm that matters most because its body is the tree's only
+             ;; LAYOUT-DRIVEN grammar — POL.8 clause grouping reads element
+             ;; columns, and the `||` fact-row splitter reads the sentinel's line.
+             ;; A 3-arg `datum->syntax` here stamped the whole form's srcloc over
+             ;; both, so ANY rewrite in the defr (`|>`, dot-access, a list
+             ;; literal, broadcast, postfix index) silently degraded them.
+             (cons (rebuild-preserving-locs stx expanded) acc))]
         ;; ---- Public solver — expand to (def name ($solver-config ...)), auto-export ----
         [(and (pair? datum) (eq? head 'solver))
          ;; (solver name :key val ...) → (def name ($solver-config :key val ...))

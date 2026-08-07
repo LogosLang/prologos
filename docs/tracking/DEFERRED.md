@@ -3791,14 +3791,28 @@ any sentinel is consulted.
   unsafe-r — its defr failed to register (see the earlier error)"*. Registering
   the relation with only its GOOD clauses is refused: that would be a silent
   wrong answer.
-- **(c)** lifting the limit (srcloc-preserving preparse). Expensive: because the
-  strip is at :3168, srclocs cannot be preserved *through* expansion — it needs
-  either a syntax-aware `preparse-expand-form` or a post-rebuild re-attachment
-  walk. ⚠ Blast radius is **narrower than feared**: probed 2026-08-05, the `let`
-  aligned-block classifier and `||` multi-row fact splitting both survive a
-  rewrite intact (`b` = 9 with and without dot-access in the form), because the
-  reader's indent grouping already built their structure. `parse-clause-content`
-  is the only consumer that re-derives layout AFTER preparse.
+- **(c)** ✅ **DONE 2026-08-05 — the limit is LIFTED for `defr`.**
+  `rebuild-preserving-locs` (macros.rkt, above `preparse-expand-all`) re-attaches
+  srclocs AFTER expansion by walking the original syntax tree against the
+  expanded datum: unchanged subtree ⇒ reuse the original syntax object; same-shape
+  lists ⇒ align by common prefix/suffix and recurse; changed middle ⇒ anchored on
+  the first original element it replaced. Applied at the **`defr` arm only** —
+  that is where the tree's only LAYOUT-DRIVEN grammars live (POL.8 clause
+  grouping reads element columns; the `||` splitter reads the sentinel's line).
+  All four rewrite families now parse in a parenless clause, and DEFERRED 53's
+  dominant residual closes with it.
+  ⚠ **Still limited**: a bare top-level `rel` with parenless clauses does NOT go
+  through the `defr` arm, so it still degrades and still refuses — measured. The
+  guard is therefore NOT dead code; it is simply no longer reachable via `defr`.
+  Extending the helper to the `[else]` arm would close that, at a much wider
+  blast radius (that arm handles every non-special form).
+  ⚠ Blast radius of what landed is **narrow**: the `let` aligned-block classifier
+  and `||` multi-row splitting already survived a rewrite (the reader's indent
+  grouping builds them pre-preparse), so `parse-clause-content` and the fact-row
+  splitter were the only consumers re-deriving layout AFTER preparse.
+  **Two silent MIS-PARSES were introduced and fixed during development**, both
+  found by measurement, both now regression-pinned — see the 51(c) note under
+  DEFERRED 53's residual 1 and the tests in `test-rel-t1-pol.rkt`.
 
 ### 52. ✅ FIXED 2026-08-05 (commit `e0f03601`; owner-ruled) — a type error in relational GOAL-ARGUMENT position was silently swallowed
 

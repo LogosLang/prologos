@@ -541,18 +541,12 @@
   (check-false (string-contains? m "$pipe")
                (format "and must never leak the raw sentinel; got: ~a" m)))
 
-(test-case "DEFERRED 53 RESIDUAL: a preparse rewrite ANYWHERE in the defr disables the line rule"
-  ;; ⚠ THE BIGGEST LIMIT OF THIS FIX, and it acts AT A DISTANCE. Change (B) needs
-  ;; trustworthy srclocs, and macros.rkt rebuilds the whole defr whenever preparse
-  ;; changes ANYTHING in it (DEFERRED 51), collapsing every element onto the
-  ;; defr's own line at column 0. The guard then correctly declines — and
-  ;; "declines" means the ORIGINAL FABRICATION comes back.
-  ;; Confirmed triggers, both documented as IDIOMATIC in prologos-syntax.md:
-  ;; `|>` and dot-access. Found by the adversarial verify, which fairly objected
-  ;; that the code comment advertised the guard's SAFETY without its COST.
-  ;; Change (A) is srcloc-independent, so $-headed compounds survive degradation.
-  ;; Closing this needs DEFERRED 51(c) (srcloc-preserving preparse), not more work
-  ;; here. Pinned so it is a known limit rather than a surprise.
+(test-case "DEFERRED 53 (residual CLOSED by 51c): a preparse rewrite no longer disables the line rule"
+  ;; ⚠ INVERTED. This was DEFERRED 53's dominant residual: rule (B) needed
+  ;; trustworthy srclocs, and any preparse rewrite in the defr destroyed them, so
+  ;; an idiomatic `|>` or dot-access ANYWHERE silently restored the fabricated
+  ;; rows — action at a distance. 51(c) preserves the srclocs, so the line rule
+  ;; now applies and the compound stays ONE row.
   (define r (run-ns-ws-last
              (string-append "ns d53d\n"
                             "defr degr [?a ?b]\n"
@@ -560,8 +554,9 @@
                             "  &> (= a [|> 1 inc])\n"
                             "solve (degr p q)")))
   (check-true (string? r) (result-msg r))
-  (check-true (string-contains? r "unknown")
-              (format "known limit: degraded srclocs restore the splay; got: ~a" r)))
+  (define row1 (car (regexp-split #rx"[}]" (car (regexp-split #rx" : " r)))))
+  (check-true (string-contains? row1 ":q 2")
+              (format "the fact row must survive intact as ONE row; got: ~a" r)))
 
 (test-case "DEFERRED 53: a $-headed compound on a CONTINUATION line IS fixed (and keeps row ORDER)"
   ;; Change (A) is not limited to the `||` line: it is srcloc-independent, so a
@@ -783,13 +778,22 @@
                                         "       q\n"))))
   (check-true (string-contains? m "cannot extend a parenthesized goal") m))
 
-(test-case "POL.8: degraded srclocs (preparse rewrite) + parenless goals → guidance"
-  (define m (result-msg (run-ns-ws-last
-                         (string-append P8FIX
-                                        "def mm := {:k \"blue\"}\n"
-                                        "defr d [?f]\n"
-                                        "  &> fruit-color f mm.k\n"))))
-  (check-true (string-contains? m "parenthesize") m))
+(test-case "POL.8 (limit LIFTED by 51c): a preparse rewrite no longer refuses parenless goals"
+  ;; ⚠ THIS TEST IS INVERTED FROM ITS ORIGINAL FORM, deliberately. It used to pin
+  ;; POL.8's named limit: a preparse rewrite anywhere in the defr stripped the
+  ;; inner srclocs, so `parse-clause-content` detected the loss (impossible
+  ;; column 0) and refused parenless goals "with guidance rather than risking a
+  ;; silent mis-grouping". DEFERRED 51(c) removed the stripping —
+  ;; `rebuild-preserving-locs` (macros.rkt) re-attaches per-element srclocs after
+  ;; preparse — so the guidance has nothing left to detect here and the clause
+  ;; simply parses. The guard itself is KEPT as a safety net for shapes the
+  ;; alignment cannot recover; it is just no longer reachable this way.
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "def mm := {:k \"blue\"}\n"
+                            "defr d [?f]\n  &> fruit-color f mm.k\n")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "d :") (format "the defr must now register; got: ~a" r)))
 
 (test-case "POL.8: degraded srclocs with all-paren goals still parse (old path)"
   (define r (run-ns-ws-last
@@ -824,40 +828,81 @@
 (define (p8-guard-msg body)
   (result-msg (run-ns-ws-last (string-append P8FIX "def mm := {:k \"blue\"}\n" body))))
 
-(test-case "DEFERRED 51: every rewrite family triggers the parenless guard"
-  ;; Verified by probe: dot-access, broadcast, postfix-index AND a list literal
-  ;; all reach `parse-degraded`. The guard is about srcloc loss, not about which
-  ;; sentinel was minted — `pol8-goal-pair?` fails on the bare head `fruit-color`
-  ;; before any sentinel is even consulted. The list-literal case was found by the
-  ;; adversarial verify, which correctly objected that a CLOSED-looking family
-  ;; list in the message is less honest than the vague "(e.g. dot-access)" it
-  ;; replaced. The message now says "ANY form ... — e.g. ...". (`|>` does NOT
-  ;; trigger it — probed; not every rewrite degrades the srcloc.)
+(test-case "DEFERRED 51(c): NO rewrite family refuses a parenless clause any more"
+  ;; Inverted from "every rewrite family triggers the guard". All four families
+  ;; degraded the srclocs before 51(c); none does now.
   (for ([spelling (in-list '("mm.k" "mm:k" "mm[0]" "\'[1 2]"))]
         [what     (in-list '("dot-access" "broadcast" "postfix-index" "list-literal"))])
-    (define m (p8-guard-msg (string-append "defr d51fam [?f]\n  &> fruit-color f " spelling "\n")))
-    (check-true (string-contains? m "parenthesize")
-                (format "~a should trigger the guard; got: ~a" what m))))
+    (define r (run-ns-ws-last (string-append P8FIX "def mm := {:k \"blue\"}\n"
+                                             "defr d51fam [?f]\n  &> fruit-color f " spelling "\n")))
+    (check-true (string? r) (format "~a must no longer be refused; got: ~a" what (result-msg r)))
+    (check-true (string-contains? r "d51fam :")
+                (format "~a: the defr must register; got: ~a" what r))))
 
-(test-case "DEFERRED 51: the guard message names the real condition, not just dot-access"
-  (define m (p8-guard-msg "defr d51msg [?f]\n  &> fruit-color f mm:k\n"))
-  ;; It must still be actionable …
-  (check-true (string-contains? m "parenthesize") m)
-  ;; … and it must name the families that actually trigger it, so a user who hit
-  ;; it via broadcast is not sent looking for a dot-access they never wrote.
-  (check-true (string-contains? m "dot-access") m)
-  (check-true (string-contains? m "broadcast") m))
+(test-case "DEFERRED 51(c) ⭐ THE POINT: a rewritten clause GROUPS CORRECTLY, not merely without error"
+  ;; The load-bearing test of 51(c), and the one the old guard existed to make
+  ;; unnecessary. POL.8 refused rather than "risk a silent mis-grouping" — so
+  ;; lifting the refusal is only safe if the grouping is actually RIGHT.
+  ;; Two sibling goals, one containing a dot-access, must parse as TWO arity-2
+  ;; goals — identical to the rewrite-free control. An intermediate version of
+  ;; `rebuild-preserving-locs` failed exactly here: it registered the defr but
+  ;; parsed the two goals as ONE 3-argument goal (`fruit-color/3`), i.e. it turned
+  ;; a loud refusal into the silent mis-grouping POL.8 warned about.
+  (define (run2 arg)
+    (run-ns-ws-last (string-append P8FIX "def mm := {:k \"blue\"}\n"
+                                   "defr d51two [?f]\n"
+                                   "  &> fruit-color f " arg "\n"
+                                   "     fruit-color f \"blue\"\n"
+                                   "solve (d51two z)")))
+  (define rewritten (run2 "mm.k"))
+  (define control   (run2 "\"yellow\""))
+  (check-true (string? rewritten) (format "rewritten clause must parse; got: ~a" (result-msg rewritten)))
+  (check-true (string? control) (result-msg control))
+  (check-false (string-contains? (result-msg rewritten) "fruit-color/3")
+               (format "must NOT collapse into one 3-arg goal; got: ~a" (result-msg rewritten)))
+  (check-equal? rewritten control
+                "a rewrite must not change how the clause GROUPS"))
 
-(test-case "DEFERRED 51 (RULED (a)): the refusal takes the relation with it — pinned"
-  ;; Not the behaviour we would design fresh, but it is the SAFE half: registering
-  ;; a relation whose clause failed to parse would risk silent wrong answers on
-  ;; query. Pinned so option (b)/(c) is a conscious future change.
+(test-case "DEFERRED 51(c): a rewrite in EVERY goal still groups correctly (right-peel guard)"
+  ;; The second mis-parse found while building 51(c), and the reason
+  ;; `rebuild-preserving-locs` peels its middle FROM THE RIGHT. The strict suffix
+  ;; is computed by datum equality, so when the CONTINUATION line also contains a
+  ;; rewrite it is not in the suffix — it fell into the stamped middle, took the
+  ;; first goal's position, and the two goals parsed as ONE 3-argument goal.
+  ;; Silent, zero errors. Both goals here carry a dot-access on purpose.
+  (define (run2 arg1 arg2)
+    (run-ns-ws-last (string-append P8FIX "def mm := {:k \"blue\"}\n"
+                                   "defr d51both [?f]\n"
+                                   "  &> fruit-color f " arg1 "\n"
+                                   "     fruit-color f " arg2 "\n"
+                                   "solve (d51both z)")))
+  (define both (run2 "mm.k" "mm.k"))
+  (check-true (string? both) (format "must parse; got: ~a" (result-msg both)))
+  (check-false (string-contains? (result-msg both) "fruit-color/3")
+               (format "must NOT collapse into one 3-arg goal; got: ~a" (result-msg both)))
+  ;; …and agree with a shape-identical rewrite-free control. The control literal
+  ;; must be NON-MATCHING ("nope"), because `mm.k` does not evaluate in goal
+  ;; position (pre-existing semantics) and so yields no rows; comparing against a
+  ;; MATCHING literal would compare matching, not GROUPING, which is what this
+  ;; test is about.
+  (check-equal? both (run2 "\"nope\"" "\"nope\"")
+                "two rewritten goals must group exactly like two plain ones")
+  ;; a rewrite ONLY on the continuation line is the mirror case
+  (define tail (run2 "\"blue\"" "mm.k"))
+  (check-false (string-contains? (result-msg tail) "fruit-color/3")
+               (format "continuation-only rewrite must not collapse either; got: ~a"
+                       (result-msg tail))))
+
+(test-case "DEFERRED 51(c): the relation now registers AND answers"
+  ;; Inverted from "the refusal takes the relation with it — pinned". That pin
+  ;; recorded owner ruling (a) (keep the limit); 51(c) supersedes it.
   (define r (run-ns-ws-last (string-append P8FIX
                                            "def mm := {:k \"blue\"}\n"
                                            "defr d51ruled [?f]\n  &> fruit-color f mm:k\n"
                                            "solve (d51ruled q)")))
-  (check-true (prologos-error? r) (format "expected an error; got: ~a" (result-msg r)))
-  (check-true (string-contains? (result-msg r) "Unknown relation") (result-msg r)))
+  (check-false (prologos-error? r)
+               (format "no longer an error; got: ~a" (result-msg r)))
+  (check-false (string-contains? (result-msg r) "Unknown relation") (result-msg r)))
 
 (test-case "DEFERRED 51: the all-paren spelling handles broadcast correctly (and loudly)"
   ;; The counterpart to the guard: with parens the clause parses, the relation
