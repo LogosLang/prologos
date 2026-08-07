@@ -3827,10 +3827,28 @@ any sentinel is consulted.
   with the sibling spellings; the misdirecting "parenthesize each GOAL" refusal
   (when the actual fix is parenthesizing the REL) is gone. The seam gap itself
   remains its own pinned item ("Pinned so a future diagnostic fix shows").
-  **With all three arms converted, the POL.8 guard now has NO known reachable
-  trigger** — probed across every rewrite family and spelling. It is kept as a
-  safety net for shapes the alignment cannot recover (DEFERRED 55's flat
-  spelling reaches degradation but that spelling routes differently).
+  ⚠ ~~With all three arms converted, the POL.8 guard now has NO known reachable
+  trigger~~ **REFUTED by the def-arm adversarial verify within hours, and the
+  claim itself was the error** (3rd "family is closed" claim to fall this arc —
+  see the dailies Watching entry). The guard fires on a bare top-level
+  **`let r := (rel …)`** with parenless clauses and ZERO rewrites in the source
+  (measured, 6-line reproducer). Mechanism, from the helper's own algebra: `let`
+  goes through the CONVERTED [else] arm, but its desugar is a TOTAL RESHAPE
+  (`let` → nested `fn` application through the one funnel), so no prefix/suffix
+  alignment at any list level can recover the `rel` subtree — it moved both
+  position and depth. That is precisely the case DEFERRED 55's real-diff /
+  reader-origin-marker is for; a cheaper alternative is a
+  `rebuild-def-preserving-rhs`-style analogue inside the let funnel carrying the
+  binding-RHS stx through (reasoned, not yet instrumented). The `let` leg is the
+  4th spelling of this family — file under 51(c) continuation when picked up.
+  ⚠ Also from the same verify: branch (b)'s "a mis-grouping would surface as an
+  arity error, not a row" pin-strength argument is TOO STRONG — in DEFERRED 55's
+  peel-residual zone (rewrites in BOTH goal lines) with a relation of the merged
+  arity registered, the def paren-RHS spelling solves SILENTLY (@[] under a
+  mis-grouped 5-ary reading; control errors pairr/2). Pre-existing — byte-identical
+  at the pre-51(c) base — but the def spelling belongs on DEFERRED 55's list of
+  reachable-through spellings, and the rows-based pin covers the single-rewrite
+  case only.
   ⚠ Blast radius of what landed is **narrow**: the `let` aligned-block classifier
   and `||` multi-row splitting already survived a rewrite (the reader's indent
   grouping builds them pre-preparse), so `parse-clause-content` and the fact-row
@@ -4188,6 +4206,13 @@ the unsound surface without making the spelling correct.
 **Real fix**: a proper diff (or an origin marker from the reader) instead of
 prefix/suffix + right-alignment. Related to DEFERRED 53's residual 2, which wants
 the same reader-side marker.
+
+**Reachable-through spellings (grows as found)**: the flat/paren-wrapped clause
+spelling (original finding); the **def paren-RHS spelling** (`def x := (rel …)`
+with rewrites in BOTH goal lines — solves SILENTLY when a relation of the merged
+arity exists; def-arm verify, 2026-08-05, byte-identical pre-51(c)); and the
+**`let` binding-RHS leg** degrades by a stronger mechanism (total-reshape
+desugar — no alignment can recover it; see the 51(c) entry).
 
 ### 56. `x[i]` on a deeper CONTINUATION line becomes a bogus goal — pre-existing, and 51(c) made its diagnostic worse (found 2026-08-05)
 
