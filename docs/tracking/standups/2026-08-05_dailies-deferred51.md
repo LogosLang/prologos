@@ -13,12 +13,33 @@ the STATE head in the file before last. Only environment invariants carry over.
 
 ## 📍 STATE  (overwrite in place — always current)
 
-- **HEAD**: re-derive with `git rev-parse HEAD` — expect `83d06156` or a later
-  docs commit. Worktree `.claude/worktrees/wizardly-mendel-2fd502`, branch
-  `wizardly-mendel-2fd502`, based on `b429d038`. **25 commits, NOT pushed.**
-- **Suite**: **9902 / 483 files / 0 failures** (`all_pass: true`, `[483/483]`) at
-  `83d06156`. Prior: 9899 at `066e2c45`, 9890 at `134ddb79`; baseline at branch
-  point 9847 / 482 / 0. Read `all_pass` **and `file_count`** from
+- ⚠ **THIS FILE WAS RENAMED AT THE MERGE** (was `2026-08-05_dailies.md`). `main`
+  had independently rolled a file of that name for the ARROW track, so both
+  survive: main's keeps the canonical name, this arc's carries the
+  `-deferred51` qualifier. The convention gap is real — "roll a new file" does
+  NOT prevent the collision when two out-of-band arcs roll on the same DATE;
+  only a same-day arc qualifier does.
+- **HEAD**: re-derive with `git rev-parse HEAD` — expect `75401b89` (the merge)
+  or later. Worktree `.claude/worktrees/wizardly-mendel-2fd502`, branch
+  `wizardly-mendel-2fd502`. **⚠ `main` (65cb5bce) IS NOW MERGED IN** (merge
+  `75401b89`, parents `f9d68338` + `65cb5bce`), in prep for merging this branch
+  BACK to main. Base was `b429d038`; ours 24 commits, main's 32. NOT pushed.
+- **⬜ RULING OWED — DEFERRED NUMBERING COLLISION.** The merge preserved BOTH
+  arcs' entries and marked the collision with a banner in `DEFERRED.md` rather
+  than renumbering: 53/54/55 denote DIFFERENT items on the two arcs. Nothing was
+  renumbered because cross-references to both sets live in commit messages
+  (immutable), `macros.rkt` comments and test-case names — a coordinated edit,
+  not a mechanical one. (51/52 are NOT a collision: same items, ours supersede
+  main's SPUN OUT stubs. `main` already carried a duplicate 53 of its own.)
+- **⚠ main's checkout carries 19 uncommitted WIP entries** (`typing-core.rkt`,
+  `typing-errors.rkt`, `test-path-selection.rkt`, several `.prologos` examples,
+  2 deletions). NOT on the branch, NOT merged, NOT touched — but it has to
+  coexist at merge-back time, so check it again then.
+- **Suite**: **9995 / 486 files / 0 failures** (`all_pass: true`, `[486/486]`) at
+  the merge `75401b89` — and it reconciles exactly: main's 9940/485 plus this
+  branch's +55 tests / +1 file. Both acceptance files 0 errors post-merge (CIU T6
+  path-selection, Rel T1). Pre-merge on this branch: 9902/483 at `83d06156`,
+  9899 at `066e2c45`, 9890 at `134ddb79`; branch point 9847 / 482 / 0. Read `all_pass` **and `file_count`** from
   `timings.jsonl`, never the console tail (Watching 5) — and note the runner's
   re-run GUARD exits **rc=0 printing no test line at all** when it blocks, and
   its heuristic is fooled by a targeted run made after your edit; use
@@ -45,9 +66,13 @@ the STATE head in the file before last. Only environment invariants carry over.
   `find`; and it compares PHASE-TIMINGS/MEMORY-STATS/absolute paths, so DIFFERS
   is noisy by construction and every one must be read. A built pre-D57 baseline
   worktree at `fb788bfc` is at session-scratchpad `base-d57/` for isolating 57.
-  ⚠ **The D57 A/B (161 files, base `base-d57`) was IN FLIGHT at session end** —
-  output `corpus-d57.txt`, out-dir `corpus-d57/`. READ IT before trusting the
-  slice closed; if it shows a semantic diff that outranks everything below.
+  ⚠ **The D57 A/B is RUNNING, and is now DECOUPLED from the working tree** —
+  base `base-d57` (`fb788bfc`, pre-D57) vs head `head-d57` (`f9d68338`, post-D57
+  / PRE-merge), both frozen scratch worktrees, so it isolates the peel slice and
+  cannot be disturbed by further work. Output `corpus-d57.txt`, out-dir
+  `corpus-d57/`. READ IT before trusting the slice closed; a semantic diff there
+  outranks everything below. (An earlier attempt run against the live worktree
+  was killed by the merge — decoupling is the fix, not a re-run.)
 - **NEXT: the SIBLING-LET MERGE (owner-chosen; unchanged by 57 — it degrades
   LOUDLY, upstream, at the fusion in `merge-toplevel-sibling-lets`).** Pinned as
   a KNOWN LIMIT in `test-rel-t1-pol.rkt` — invert that pin on fix, never delete.
