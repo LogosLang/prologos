@@ -3126,13 +3126,41 @@
             (define od (syntax->datum (vector-ref o-v oi)))
             (define ed (vector-ref e-v ei))
             (or (equal? od ed) (and (list? od) (list? ed))))
+          ;; DEFERRED 57 — THE PEEL REQUIRES A SHARED LEFT ANCHOR (`pre > 0`).
+          ;; Right-alignment presumes the two lists are THE SAME LIST with a
+          ;; changed middle. `peelable?` only checks the pair it is about to
+          ;; take, so it cannot tell an edited list from a list that was
+          ;; RESHAPED WHOLESALE — and for a reshape there is no correspondence
+          ;; to align, in either direction.
+          ;;
+          ;; The measured case is the let desugar, and it defeated `peelable?`
+          ;; squarely: `(let r := V BODY)` → `((fn (r : _) BODY) V)` puts BODY
+          ;; and V last on their respective sides, both compound, so "a group
+          ;; pairs with a group" fired and V — the rel RHS, carrying the clause
+          ;; layout — was rebuilt against BODY's tree. Nonzero column, so POL.8's
+          ;; column-0 marker went blind and the sibling goals collapsed into one
+          ;; over-arity goal. With an ATOM body `peelable?` refused and the
+          ;; relocation step below found V correctly, which is why every pin
+          ;; written for the let leg passed: they all used an atom body.
+          ;;
+          ;; `pre > 0` separates the two cleanly, and not by luck. The lists this
+          ;; walk exists to protect are CLAUSE REGIONS, which are anchored on the
+          ;; left by the `&>` sentinel — unchanged by any rewrite, so `pre >= 1`
+          ;; there even when a rewrite lands on the goal head itself. A total
+          ;; reshape instead changes element 0's very KIND (the keyword `let`
+          ;; becomes an application), so `pre = 0`. The guard therefore keeps the
+          ;; peel exactly where it was justified and withdraws it exactly where
+          ;; it never was; the reshape case falls through to relocation, which
+          ;; matches V by datum equality and does not care that it moved.
           (define peel
-            (let loop ([k 0])
-              (if (and (> (- (- n-o suf pre) k) 1)
-                       (> (- (- n-e suf pre) k) 1)
-                       (peelable? (- n-o 1 suf k) (- n-e 1 suf k)))
-                  (loop (add1 k))
-                  k)))
+            (if (zero? pre)
+                0
+                (let loop ([k 0])
+                  (if (and (> (- (- n-o suf pre) k) 1)
+                           (> (- (- n-e suf pre) k) 1)
+                           (peelable? (- n-o 1 suf k) (- n-e 1 suf k)))
+                      (loop (add1 k))
+                      k))))
           (define suf* (+ suf peel))
           (define mid-o (- n-o suf* pre))
           (define mid-e (- n-e suf* pre))

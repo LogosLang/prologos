@@ -973,6 +973,59 @@
   (check-equal? parenless paren
                 "two parenless sibling goals must conjoin exactly like the paren control"))
 
+;; ── DEFERRED 57: the right-peel over-reach (the let leg was BODY-SHAPE-DEPENDENT) ──
+;;
+;; Every pin above uses an ATOM let-body (`d51lr`, `d51l2`). That is not a
+;; neutral choice — it is the only body shape the let leg ever worked for.
+;; `peelable?` accepts ANY two lists, so a COMPOUND body (`[some vr]`, the
+;; idiomatic shape) pairs with the moved rel RHS and the RHS is rebuilt against
+;; the BODY's syntax tree: nonzero column, so POL.8's column-0 marker goes blind
+;; and the sibling goals collapse onto one line. Before the let leg landed this
+;; same input got the LOUD guard — so the fix converted a correct refusal into a
+;; mis-grouping, which is exactly the trade the arc's own commentary forbids.
+;;
+;; Found by probing the audit's inferred claim rather than by any gate: the suite
+;; was green over this the whole time, because no pin used a compound body.
+(define P8FIX2
+  (string-append P8FIX
+                 "defr fruit-size [?fruit ?size]\n"
+                 "  || \"blueberry\" \"small\"\n"
+                 "  || \"banana\" \"long\"\n"))
+
+;; body shape × goal spelling, pinned by CONTROL EQUALITY in both directions.
+(define (d57-run body goals)
+  (run-ns-ws-last (string-append P8FIX2 "let d57r := (rel [f]\n" goals ")\n  " body "\n")))
+(define D57-PARENLESS "  &> fruit-color f \"blue\"\n     fruit-size f \"small\"")
+(define D57-PAREN     "  &> (fruit-color f \"blue\") (fruit-size f \"small\")")
+
+(test-case "DEFERRED 57: a COMPOUND let-body must not steal the rel RHS's srclocs"
+  ;; The regression proper. `[some d57r]` forces the rel, so a collapse is
+  ;; observable; with the atom body the same clause parses correctly, which is
+  ;; what makes this body-shape-dependent rather than a plain let-leg failure.
+  (define parenless (d57-run "[some d57r]" D57-PARENLESS))
+  (define paren     (d57-run "[some d57r]" D57-PAREN))
+  (check-true (string? paren) (result-msg paren))
+  (check-false (string-contains? (result-msg parenless) "fruit-color/5")
+               (format "the compound body must not collapse the goals; got: ~a"
+                       (result-msg parenless)))
+  (check-equal? parenless paren
+                "a compound let-body must group exactly like the paren control"))
+
+(test-case "DEFERRED 57: the ATOM-body case keeps working (the shape the old pins used)"
+  ;; Guards the fix from the other side — tightening the peel must not cost the
+  ;; relocation path that already worked.
+  (check-equal? (d57-run "d57r" D57-PARENLESS) (d57-run "d57r" D57-PAREN)
+                "atom-body parenless goals must still match their paren control"))
+
+(test-case "DEFERRED 57: a SINGLE goal under a compound body was never affected"
+  ;; Pinned because it isolates the trigger: the collapse needs TWO OR MORE
+  ;; sibling goals AND a compound body. A one-goal clause has no continuation
+  ;; line for the peel to mis-pair, and passed before the fix as well.
+  (define one "  &> fruit-color f \"blue\"")
+  (define one-p "  &> (fruit-color f \"blue\")")
+  (check-equal? (d57-run "[some d57r]" one) (d57-run "[some d57r]" one-p)
+                "a single parenless goal under a compound body must match its control"))
+
 (test-case "DEFERRED 51(c) KNOWN LIMIT: a SIBLING-LET chain still degrades (the 5th member)"
   ;; Found by self-probe minutes after the let-leg landing — the family-closure
   ;; lesson (Watching 4) applied: hunt the next member yourself, immediately.
