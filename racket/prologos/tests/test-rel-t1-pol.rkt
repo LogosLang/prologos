@@ -1021,10 +1021,62 @@
   ;; Pinned because it isolates the trigger: the collapse needs TWO OR MORE
   ;; sibling goals AND a compound body. A one-goal clause has no continuation
   ;; line for the peel to mis-pair, and passed before the fix as well.
+  ;; ⚠ THIS PIN IS NARROWER THAN ITS NAME: it fixes the `let :=` SPELLING, and
+  ;; the first cut of the fix regressed the ALIGNED-BLOCK and BRACKET spellings
+  ;; of exactly this shape while this test stayed green. See the two below —
+  ;; they exist because this one was not enough.
   (define one "  &> fruit-color f \"blue\"")
   (define one-p "  &> (fruit-color f \"blue\")")
   (check-equal? (d57-run "[some d57r]" one) (d57-run "[some d57r]" one-p)
                 "a single parenless goal under a compound body must match its control"))
+
+;; The two spellings the FIRST cut of the peel fix regressed. It gated the peel
+;; on `pre > 0`; here relocation cannot reach the moved rel RHS at all (it sits
+;; one level below the middle for the bracket form, two for `$let-block`), so the
+;; peel was the ONLY thing carrying the srclocs and withdrawing it turned a
+;; correct answer into a guard refusal. Both worked before that cut and must keep
+;; working: they are the regression pins, not new capability.
+(define (d57-aligned goals)
+  (run-ns-ws-last (string-append P8FIX2 "let d57a (rel [f]\n" goals ")\n"
+                                 "    d57n  5\n  [some d57a]\n")))
+(define (d57-bracket goals)
+  (run-ns-ws-last (string-append P8FIX2 "let [d57b (rel [f]\n" goals ")]\n"
+                                 "  [some d57b]\n")))
+(define D57-1GOAL   "          &> fruit-color f \"blue\"")
+(define D57-1GOAL-P "          &> (fruit-color f \"blue\")")
+
+(test-case "DEFERRED 57: ALIGNED-BLOCK let, one goal, compound body — must match its control"
+  (check-equal? (d57-aligned D57-1GOAL) (d57-aligned D57-1GOAL-P)
+                "aligned-block let must not lose the rel RHS's srclocs"))
+
+(test-case "DEFERRED 57: BRACKET let, one goal, compound body — must match its control"
+  (check-equal? (d57-bracket D57-1GOAL) (d57-bracket D57-1GOAL-P)
+                "bracket let must not lose the rel RHS's srclocs"))
+
+(define D57-2GOAL   (string-append "          &> fruit-color f \"blue\"\n"
+                                   "             fruit-size f \"small\""))
+(define D57-2GOAL-P "          &> (fruit-color f \"blue\") (fruit-size f \"small\")")
+
+(test-case "DEFERRED 57 KNOWN LIMIT: aligned-block / bracket let MIS-GROUP at two or more goals"
+  ;; PRE-EXISTING and unchanged by the peel work — byte-identical at `fb788bfc`.
+  ;; Recorded because it CORRECTS the DEFERRED 51(c) census, which lists these two
+  ;; members as "still degrading, all LOUD": they do not degrade loudly, they
+  ;; MIS-GROUP (here into `fruit-color/5`), and a mis-group is only loud while the
+  ;; collapsed arity happens to be undefined — on a multi-arity relation the same
+  ;; shape is a silent wrong answer. Root cause is DEPTH, not the peel: relocation
+  ;; scans only the middle's top-level elements, and the moved rel RHS sits one
+  ;; level below for the bracket form and two below for `$let-block`.
+  ;; If either of these starts matching its control, that fix landed: invert the
+  ;; assertion, do not delete it.
+  (check-true (string-contains? (result-msg (d57-aligned D57-2GOAL)) "fruit-color/5")
+              (format "known limit (aligned block, 2 goals); got: ~a"
+                      (result-msg (d57-aligned D57-2GOAL))))
+  (check-true (string-contains? (result-msg (d57-bracket D57-2GOAL)) "fruit-color/5")
+              (format "known limit (bracket, 2 goals); got: ~a"
+                      (result-msg (d57-bracket D57-2GOAL))))
+  ;; both paren controls are correct, which is what makes the above a defect
+  (check-true (string? (d57-aligned D57-2GOAL-P)) (result-msg (d57-aligned D57-2GOAL-P)))
+  (check-true (string? (d57-bracket D57-2GOAL-P)) (result-msg (d57-bracket D57-2GOAL-P))))
 
 (test-case "DEFERRED 51(c) KNOWN LIMIT: a SIBLING-LET chain still degrades (the 5th member)"
   ;; Found by self-probe minutes after the let-leg landing — the family-closure

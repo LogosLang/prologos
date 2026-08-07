@@ -3122,45 +3122,75 @@
           ;; continuation-line case the peel exists for, and lets recursion sort
           ;; out the inside). An atom paired with a DIFFERENT atom is exactly the
           ;; mis-alignment above, and stops the peel.
+          ;; DEFERRED 57 — THE PEEL MUST NOT STEAL A MOVE.
+          ;; `peelable?`'s "a group pairs with a group" cannot tell a rewritten
+          ;; element from an unrelated one, so where a subtree MOVED THROUGH A
+          ;; DESUGAR UNCHANGED the peel would right-align it onto whatever
+          ;; happens to sit at that index. The measured case is the let funnel:
+          ;; `(let r := V BODY)` → `((fn (r : _) BODY) V)` leaves BODY and V last
+          ;; on their respective sides, both compound, so V — a rel RHS carrying
+          ;; clause layout — was rebuilt against BODY's tree. Nonzero column ⇒
+          ;; POL.8's column-0 marker goes blind ⇒ the sibling goals collapse into
+          ;; one over-arity goal, silently whenever that arity is legal.
+          ;;
+          ;; The discriminator is DATUM EQUALITY, which is strictly stronger
+          ;; evidence of correspondence than positional adjacency: if the
+          ;; expanded element still exists verbatim among the original middle,
+          ;; UNIQUELY IN BOTH DIRECTIONS, then it moved rather than changed, and
+          ;; the relocation step below pairs it with its true original. Refusing
+          ;; the peel there hands it to relocation; refusing anywhere else would
+          ;; be a regression, because a genuinely REWRITTEN element has no exact
+          ;; match and still needs the peel (that is the continuation-line case
+          ;; the peel exists for).
+          ;;
+          ;; ⚠ Bounds are the PRE-peel middle (`suf`, not `suf*`) — the peel is
+          ;; what we are deciding, so using `suf*` here would be circular. This
+          ;; is conservative in the right direction: refusing at k leaves the
+          ;; element inside the middle relocation actually scans.
+          (define (peel-steals-a-move? oi ei)
+            (define od (syntax->datum (vector-ref o-v oi)))
+            (define ed (vector-ref e-v ei))
+            (and (not (equal? od ed))
+                 (pair? ed)
+                 (= 1 (for/sum ([i (in-range pre (- n-o suf))])
+                        (if (equal? (syntax->datum (vector-ref o-v i)) ed) 1 0)))
+                 (= 1 (for/sum ([j (in-range pre (- n-e suf))])
+                        (if (equal? (vector-ref e-v j) ed) 1 0)))))
           (define (peelable? oi ei)
             (define od (syntax->datum (vector-ref o-v oi)))
             (define ed (vector-ref e-v ei))
-            (or (equal? od ed) (and (list? od) (list? ed))))
-          ;; DEFERRED 57 — THE PEEL REQUIRES A SHARED LEFT ANCHOR (`pre > 0`).
-          ;; Right-alignment presumes the two lists are THE SAME LIST with a
-          ;; changed middle. `peelable?` only checks the pair it is about to
-          ;; take, so it cannot tell an edited list from a list that was
-          ;; RESHAPED WHOLESALE — and for a reshape there is no correspondence
-          ;; to align, in either direction.
-          ;;
-          ;; The measured case is the let desugar, and it defeated `peelable?`
-          ;; squarely: `(let r := V BODY)` → `((fn (r : _) BODY) V)` puts BODY
-          ;; and V last on their respective sides, both compound, so "a group
-          ;; pairs with a group" fired and V — the rel RHS, carrying the clause
-          ;; layout — was rebuilt against BODY's tree. Nonzero column, so POL.8's
-          ;; column-0 marker went blind and the sibling goals collapsed into one
-          ;; over-arity goal. With an ATOM body `peelable?` refused and the
-          ;; relocation step below found V correctly, which is why every pin
-          ;; written for the let leg passed: they all used an atom body.
-          ;;
-          ;; `pre > 0` separates the two cleanly, and not by luck. The lists this
-          ;; walk exists to protect are CLAUSE REGIONS, which are anchored on the
-          ;; left by the `&>` sentinel — unchanged by any rewrite, so `pre >= 1`
-          ;; there even when a rewrite lands on the goal head itself. A total
-          ;; reshape instead changes element 0's very KIND (the keyword `let`
-          ;; becomes an application), so `pre = 0`. The guard therefore keeps the
-          ;; peel exactly where it was justified and withdraws it exactly where
-          ;; it never was; the reshape case falls through to relocation, which
-          ;; matches V by datum equality and does not care that it moved.
+            (and (not (peel-steals-a-move? oi ei))
+                 (or (equal? od ed) (and (list? od) (list? ed)))))
+          ;; ⚠ HISTORY, because the obvious stronger guard is WRONG and was
+          ;; briefly shipped (066e2c45, corrected same day). The first cut gated
+          ;; the peel on `pre > 0`, reasoning that right-alignment presumes "the
+          ;; same list with a changed middle" and that a shared left anchor is
+          ;; the evidence — clause regions being anchored by the `&>` sentinel,
+          ;; while a total reshape changes element 0's KIND. That argument is
+          ;; FALSE, and an adversarial verify measured both halves of why:
+          ;;   · `pre = 0` is necessary for a reshape but nowhere near
+          ;;     sufficient — ANY rewrite landing on element 0 zeroes it, and a
+          ;;     head-position `mm.k` / `xs[0]` is an ORDER-PRESERVING fold where
+          ;;     right-alignment is perfectly correct. Gating there stamped a
+          ;;     whole clause subtree and produced the silent mis-group this code
+          ;;     exists to prevent (measured: two goals became one 5-arg goal).
+          ;;   · it also REGRESSED working code, which the narrower rule does
+          ;;     not: aligned-block (`let vr (rel …)` / aligned second binding)
+          ;;     and bracket (`let [vr (rel …)]`) spellings with a compound body
+          ;;     and EXACTLY ONE parenless goal answered correctly before it and
+          ;;     hit the guard after. There relocation cannot reach the moved
+          ;;     subtree at all (it sits one level below the middle for the
+          ;;     bracket form, two for `$let-block`), so the peel was the only
+          ;;     thing carrying the srclocs, and withdrawing it left nothing.
+          ;; Hence the rule above is about the PAIR, not about the list: refuse
+          ;; only when something demonstrably better will take over.
           (define peel
-            (if (zero? pre)
-                0
-                (let loop ([k 0])
-                  (if (and (> (- (- n-o suf pre) k) 1)
-                           (> (- (- n-e suf pre) k) 1)
-                           (peelable? (- n-o 1 suf k) (- n-e 1 suf k)))
-                      (loop (add1 k))
-                      k))))
+            (let loop ([k 0])
+              (if (and (> (- (- n-o suf pre) k) 1)
+                       (> (- (- n-e suf pre) k) 1)
+                       (peelable? (- n-o 1 suf k) (- n-e 1 suf k)))
+                  (loop (add1 k))
+                  k)))
           (define suf* (+ suf peel))
           (define mid-o (- n-o suf* pre))
           (define mid-e (- n-e suf* pre))
