@@ -3847,7 +3847,7 @@ to run and ZERO `;;N=>` markers (it predates the marker system, 2026-07-06).
 Use a small probe plus the marker-bearing acceptance files.
 
 
-### 53. ⬜ GUARD THE PARSE PATH — the class-level completion of option B, its OWN slice (owner ruling 2026-08-05)
+### 56. ⬜ GUARD THE PARSE PATH — the class-level completion of option B, its OWN slice (owner ruling 2026-08-05)
 
 `ae26f540` guarded PREPARSE (the per-form fold in `preparse-expand-all`), so a
 raise there degrades to a per-command `($preparse-error msg)`. **The PARSE step is
@@ -3903,3 +3903,75 @@ defect, P4d-0 slice 5's item) and describes vector-ordinal semantics where the
 user narrowed a map field. A refusal, not an acceptance, and per-command — but it
 is the FIRST adjacent spelling users will try, and it is unpinned. Home: the
 P4d-0 slice-5 display fix plus a message that names the map-field case.
+
+
+### 57. ⬜ `tier-union-witness` flattens STRUCTURALLY — a Map behind a type-alias union is not witnessed (D4.P4d slice 3 verify)
+
+`select-union-lift` and `tier-union-witness` both call `flatten-union`, which
+matches `expr-union` STRUCTURALLY without `whnf`. A component that only *whnfs
+into* a union — `def N : Type := <[Map Keyword Int] | Nil>` — therefore survives
+in the component list unflattened.
+
+**The GATE half is already handled**: `select-bcast-inner-apply` tests
+`expr-union?` on each (whnf'd) component and recurses into `select-union-lift`,
+so an alias-nested union is gated correctly.
+
+**The TIER half is NOT**: `tier-union-witness` does `(map whnf (flatten-union t))`
+and scans one level only, so a Map buried one union-level down is not found, the
+tier stays permissive, and a runtime miss is QUIET — the DEFERRED-43 signature,
+one indirection over. Measured by the slice-3 verify:
+
+```
+def MM : Type := <[Map Keyword Int] | Nil>
+def both : [PVec <MM | Nil>] := @[m1]
+both:zzz     →  <error> : [PVec Int]        ;; ZERO errors
+;; the same union written FLAT panics correctly
+```
+
+NOT a slice-3 regression (pre-slice there was no witness at all). Corpus count of
+`: Type :=` in `lib/` + `examples/` is **0**, so nothing shipped is affected.
+**Fix shape**: a whnf-first recursive flatten, used at both sites.
+⚠ `build-union-type` (`union-types.rkt`) has the same non-recursive
+`append-map flatten-union` — wider and pre-existing; scope that separately.
+
+### 58. ⬜ A DYN-TAILED row component is a THIRD admission channel through the union gate (D4.P4d slice 3 verify)
+
+The slice-3 gate's carve-outs are enumerated as two (the Nil skip, the
+unsolved-meta fallback). There is a third, unenumerated: a dyn-tail row component
+contributes a FRESH META from `select-project-field/row`'s `'path`+`'dyn` arm, so
+it silently passes the all-must-offer gate. Three lines of ordinary source, using
+the acceptance file's own `pvec-slice` widening idiom:
+
+```
+def rows := @[{} {:a 1}]          ;; {} infers as an EMPTY DYN keyword row
+def sl := [pvec-slice rows k 2N]  ;; [PVec { | _} | {:a Int}]
+sl:a     →  <error> : [PVec Int | ?meta]    ;; buried <error>, ZERO errors
+sl:{a}   →  refuses (the sub inner forces 'block, where dyn is miss-dyn)
+```
+
+Two consequences: (i) the slice-3 pin's `check-false #rx"<error>"` holds for its
+own fixture but NOT for the class, so that pin's comment over-claims; (ii) "every
+component must offer the step" is **sort-dependent** for dyn components — `:a`
+accepts where `:{a}` refuses, for the same union and the same key.
+
+NOT a regression — the non-union control behaves identically, so this is the
+pre-existing ruled dyn permissiveness (D19/P2.b) leaking through the new gate,
+and it is COHERENT with the single-get sibling (`union-record-component-vt` also
+returns a fresh meta). What is owed is a ruling on whether "may be present in the
+remainder" discharges "every component must offer", and the sort-consistency.
+
+### 59. ⬜ Two broadcast diagnostics name the wrong subject (D4.P4d slice 1/2 verifies)
+
+Both pre-existing, both surfaced while pinning the carriers; natural riders on
+P4d slice 4's diagnostics batch.
+
+1. **The `@[]` / meta-element broadcast refusal misattributes the subject.**
+   `def emp := @[]` types `[PVec _]`; `emp:t` refuses with *"select: the subject
+   is not a record, so it has no fields to access"* — which describes the (meta)
+   ELEMENT as "the subject", names neither the broadcast nor the key, and carries
+   no branch. Refusal is the monotone-safe direction; the wording is the defect.
+2. **`not-indexable`'s remedy is off-key inside a broadcast.** An ordinal inner
+   over a row carrier (`evs:0`) correctly names the position and the failure, but
+   the appended advice is *"select named fields instead (`x{k}`)"* — the spelling
+   for the NON-broadcast case. Inside a broadcast the fix the user wants is
+   `evs:t`.
