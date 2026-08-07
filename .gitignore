@@ -59,3 +59,8 @@ entities.json
 
 # Generated propagator-network module caches (.pnet embeds machine-specific abs paths + mtimes; regenerable, like .zo)
 racket/prologos/data/cache/pnet/
+# ...and by extension, wherever they land. The path-scoped rule above only
+# covers the default cache dir; a .pnet written anywhere else (a relocated
+# cache, .tangled/, a scratch run) would otherwise be offered for commit.
+# These are build artifacts — never track them.
+*.pnet

@@ -11,6 +11,7 @@
 ;;;
 
 (require racket/match
+         (only-in "union-types.rkt" flatten-union)  ;; D4.P4d slice 0: conv-nf's union arm
          racket/list
          racket/string
          racket/flonum
@@ -1810,7 +1811,7 @@
             (expr-rrb-racket-rrb v*)
             (return (expr-panic
                      (expr-string
-                      (format "select: broadcast `:~a` needs a vector subject at runtime — this one is not a vector"
+                      (format "select: broadcast `:~a` needs a vector or map subject at runtime — this one is neither"
                               what)))))))
     ;; D4.P4c-4c — ONE ω step applied to a runtime value: the FUNCTORIAL LIFT,
     ;; the ATOMIC TWIN of typing-core's `select-bcast-lift`. Unwrap one container
@@ -1829,18 +1830,49 @@
     ;; ruling forbids.
     (define (bcast-lift v s)
       (let* ([inner (select-bcast-inner s)]
-             [name (select-step-name s)]
-             [r (rrb-of v name)])
-        (expr-rrb
-         (rrb-from-list
-          (for/list ([i (in-range (rrb-size r))])
-            (bcast-apply (whnf (rrb-get r i)) inner))))))
+             ;; same diagnostic-label guard as the typing twin: a sub inner's
+             ;; `select-step-name` is the RAW LIST — never interpolate it.
+             ;; only a LIST takes the stand-in — numbers are real labels
+             ;; (see the typing twin's correction note)
+             [name (let ([n (select-step-name s)]) (if (pair? n) '|{…}| n))]
+             [v* (whnf v)])
+        (cond
+          ;; D4.P4d slice 1 — THE CHAMP CARRIER (both map carriers run on
+          ;; expr-champ; the typing twins are select-bcast-lift's row walk +
+          ;; select-elem-of's Map arm — landed ATOMICALLY with this arm).
+          ;; Keys preserved BY CONSTRUCTION: the `expr-map-map-vals` idiom —
+          ;; fold + transient insert with the ORIGINAL key and its hash. A
+          ;; miss inside `bcast-apply` `return`s through the single let/ec,
+          ;; abandoning the un-frozen transient — the whole-node abort
+          ;; (DEFERRED 48) rides the existing seam with no partial map able
+          ;; to escape.
+          [(expr-champ? v*)
+           (let ([c (expr-champ-racket-champ v*)]
+                 [t (champ-transient champ-empty)])
+             (champ-fold c
+                         (lambda (k val _acc)
+                           (tchamp-insert! t (equal-hash-code k) k
+                                           (bcast-apply (whnf val) inner)))
+                         (void))
+             (expr-champ (tchamp-freeze t)))]
+          [else
+           (let ([r (rrb-of v* name)])
+             (expr-rrb
+              (rrb-from-list
+               (for/list ([i (in-range (rrb-size r))])
+                 (bcast-apply (whnf (rrb-get r i)) inner)))))])))
     ;; Apply ONE step to ONE element, yielding the leaf value — the reduction
     ;; analogue of typing's `select-project ctx elem (list (list inner)) sort`.
     ;; It mirrors the top-level sort dispatch at the tail of this function
     ;; rather than re-deciding it, so a third sort cannot inherit path
     ;; semantics here silently.
     (define (bcast-apply v inner)
+      ;; ⭐ Q_U20 [owner, 2026-08-05] — the ATOMIC TWIN of typing's rule: a SUB
+      ;; inner ASSEMBLES, always, regardless of the outer selector's sort. The
+      ;; symbol path below mirrors the top-level sort dispatch unchanged.
+      (if (select-sub-step? inner)
+          (entries->value
+           (append-map (lambda (b) (branch-entries v b '())) (cdr inner)))
       (let ([entries (branch-entries v (list inner) '())])
         (case sort
           [(block) (entries->value entries)]
@@ -1851,7 +1883,7 @@
                         (expr-string
                          (format "select: a broadcast step must yield exactly ONE component per element, got ~a (malformed carrier)"
                                  (length entries))))))]
-          [else (select-sort-unhandled 'select-bcast-apply sort)])))
+          [else (select-sort-unhandled 'select-bcast-apply sort)]))))
     ;; D4.P3b — one branch's entries at the CURRENT level, mirroring
     ;; typing-core's select-branch-entries over champs (the same shared
     ;; syntax.rkt walk classifies steps, so meaning cannot drift from the
@@ -4965,6 +4997,24 @@
     [(expr-meta? a)
      (and (expr-meta? b) (eq? (expr-meta-id a) (expr-meta-id b)))]
     [(expr-meta? b) #f]
+    ;; D4.P4d slice 0: unions are SET-LIKE in this system's definitional
+    ;; equality — unify's own union path (`classify-whnf-problem` routes
+    ;; union×union to `unify-union-components`, which SORTS and DEDUPS), so
+    ;; `<Int|String>` ≡ `<String|Int>` and `<Int|Int|String>` ≡ `<Int|String>`.
+    ;; The generic struct arm below compared union spines POSITIONALLY,
+    ;; disagreeing with the engine's own equality (caught by the slice-0
+    ;; adversarial verify: the pvec-literal probe's conv leg reclassified
+    ;; spelled-differently union pairs as heterogeneous). Mutual containment
+    ;; under conv-nf itself — no sort key needed, unions are tiny. Union vs
+    ;; NON-union deliberately stays with the struct arm (#f): unify's classify
+    ;; sends that pair to its conv fallback too (the flavor-B widen case is
+    ;; deferred there), so the two equalities agree in BOTH directions.
+    [(and (expr-union? a) (expr-union? b))
+     (let ([as (flatten-union a)] [bs (flatten-union b)])
+       (and (for/and ([x (in-list as)])
+              (for/or ([y (in-list bs)]) (conv-nf x y)))
+            (for/and ([y (in-list bs)])
+              (for/or ([x (in-list as)]) (conv-nf x y)))))]
     [(and (struct? a) (struct? b))
      (let ([va (struct->vector a)]
            [vb (struct->vector b)])

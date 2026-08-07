@@ -590,6 +590,17 @@
             ;; §Q8.5 sentinel site 2 is N/A here, proved in-tree by
             ;; `tag-dot-access` having zero producers). What this arm must do is
             ;; AGREE about adjacency so the two groupers do not diverge.
+            ;; D4.P4d-0: the `:{` mint's TREE TWIN — same shared trigger, ONE
+            ;; fused node, so the two layers agree in COUNT (2) and MEANING for
+            ;; this spelling (the Q_N3 v2 guard's new row pins it). Unlike the
+            ;; sibling arm below, this one is NOT a no-op: the datum mint is
+            ;; count-changing, so carrying the tokens through would diverge.
+            [(bcast-brace-trigger? vec i end result item type)
+             (let-values ([(inner next-i)
+                           (group-items-to-tree vec (+ i 2) end 'rbrace srcloc indent)])
+               (loop next-i
+                     (cons (parse-tree-node 'bcast-brace-group (list->rrb inner) srcloc indent)
+                           result)))]
             [(bcast-step-trigger? vec i result item type)
              (loop (+ i 1) (cons item result))]
             ;; Regular token → add to result

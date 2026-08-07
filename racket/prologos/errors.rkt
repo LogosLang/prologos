@@ -24,6 +24,8 @@
          "derivation-chain-types.rkt")
 
 (provide
+ ;; ARROW T1 P1b: shared half-glued-arrow diagnostic (see below)
+ half-glued-arrow-hint
  ;; Error structs
  (struct-out prologos-error)
  (struct-out type-mismatch-error)
@@ -52,6 +54,48 @@
  ;; Diagnostic emission (for test runner integration)
  current-emit-error-diagnostics
  emit-error-diagnostic)
+
+;; ========================================
+;; ARROW T1 P1b — the half-glued arrow (owner ruling R2)
+;; ========================================
+;;
+;; `->` is part of an identifier only when glued on BOTH sides (`a->b`). Glued
+;; on the left only (`a-> b`, or a trailing `foo->`) is neither a name nor an
+;; arrow: `-` is an ident-continue char so it is absorbed, the name truncates
+;; at the dash, and a bare `>` arrives on its own.
+;;
+;; That produced the confusing report this diagnostic exists for — `defn c->f`
+;; failing with "expected ':', got >", plus a hint about comparison operators
+;; that had nothing to do with the code.
+;;
+;; The CONDITION AND MESSAGE LIVE HERE, in one place, deliberately. The
+;; symptom surfaces at several unrelated sites (the defn header, the `def :=`
+;; path, an unbound-variable report), and this codebase has repeatedly been
+;; bitten by head-keyed enumerations that under-count their own site list. A
+;; shared predicate cannot drift between sites even when the site list is
+;; incomplete — and it is: see tests/test-arrow-identifiers.rkt for the
+;; manifestations that are pinned as NOT yet carrying the hint.
+;;
+;; Deliberately NOT raised from the tokenizer. A raise on the parse path is a
+;; whole-file abort (lesson promoted 2026-08-03, `7d8520a0b`); this is a
+;; message-shaping helper on paths that were already going to error.
+;;
+;; name      — the datum that was read as the identifier (e.g. 'a-)
+;; offending — the datum that followed it (hint applies only when it is '>)
+;; Returns a string, or #f when this is not a half-glued arrow.
+(define (half-glued-arrow-hint name offending)
+  (and (symbol? name)
+       (eq? offending '>)
+       (let* ([s (symbol->string name)]
+              [n (string-length s)])
+         (and (> n 1)
+              (char=? (string-ref s (sub1 n)) #\-)
+              (let ([stem (substring s 0 (sub1 n))])
+                (format (string-append
+                         "`~a >` is a half-glued arrow: `->` is part of a name only when "
+                         "glued on BOTH sides — write `~a->…` with no spaces, "
+                         "or space it on both sides (` -> `) to mean the arrow")
+                        name stem))))))
 
 ;; ========================================
 ;; Error Hierarchy

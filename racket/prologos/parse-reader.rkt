@@ -54,7 +54,7 @@
  ;; module (:26), so the edge exists and exporting is cycle-free by construction.
  adjacent-to-base?
  ;; D4.P4c-2: THE `:` gate trigger — both groupers consume this one predicate.
- bcast-step-trigger?
+ bcast-step-trigger? bcast-brace-trigger?
  ;; D4.P4c-4a: THE ENABLE-SET, exported so a TEST can grant a context. It was an
  ;; unexported `define`, so the only way to exercise ANY of the preservation
  ;; machinery was source mutation on a scratch build (DEFERRED 38) — and
@@ -268,6 +268,31 @@
       (let loop ([i (+ pos 1)])
         (define nc (rrb-char-at rrb i))
         (cond
+          ;; ARROW T1 P1: `->` FLANKED BY IDENTIFIER CHARS continues the name,
+          ;; so `centigrade->fahrenheit` is one symbol.
+          ;;
+          ;; MUST precede the ident-continue? arm below: `-` is itself an
+          ;; ident-continue char, so that arm would eat the dash and leave `>`
+          ;; to terminate the token — that is exactly the `c->f` -> `c-`
+          ;; truncation this fixes (the `>` then became a stray `rangle`, which
+          ;; also POPS a bracket frame, so damage surfaced far from the cause).
+          ;;
+          ;; Shape deliberately mirrors the `::` arm below: fixed lookahead, no
+          ;; backtracking, inside the existing scan. Whitespace cannot occur
+          ;; here BY CONSTRUCTION — the scanner is mid-token, and a space would
+          ;; already have ended it — so this is glued-only without needing any
+          ;; token-adjacency substrate.
+          ;;
+          ;; Only BOTH-SIDES-glued arrows are absorbed. A spaced ` -> ` never
+          ;; reaches here and still lexes as the standalone arrow symbol, which
+          ;; is what every arrow consumer (spec signatures, match/defn arms,
+          ;; angle-group Pi types, and `binder-region-terminators`) reads.
+          [(and nc (char=? nc #\-)
+                (let ([nc2 (rrb-char-at rrb (+ i 1))])
+                  (and nc2 (char=? nc2 #\>)
+                       (let ([nc3 (rrb-char-at rrb (+ i 2))])
+                         (and nc3 (ident-continue? nc3))))))
+           (loop (+ i 3))]  ;; skip -> and the first char after it
           [(and nc (ident-continue? nc))
            (loop (+ i 1))]
           ;; :: followed by ident-start → module path continuation
@@ -548,9 +573,22 @@
         ;; than ident-start? so :=/:-foo do not collide with colon-assign. (CIU T6
         ;; F1b.7g: was an inline charset that had drifted from ident-continue? for
         ;; 8 chars; CIU T6 F3 added ^ inline without noticing the base divergence.)
-        (if (and nc (ident-continue? nc))
-            (loop (+ i 1))
-            (- i pos)))
+        ;; ARROW T1 P1 (owner ruling R1): keywords take the glued-`->` rule too,
+        ;; so `:a->b` is one keyword. Leaving this arm behind while
+        ;; recognize-symbol advanced would BE the F1b.7g drift the comment above
+        ;; records. Same shape and same both-sides-glued condition as
+        ;; recognize-symbol; must precede the ident-continue? test for the same
+        ;; reason (`-` is an ident-continue char).
+        (cond
+          [(and nc (char=? nc #\-)
+                (let ([nc2 (rrb-char-at rrb (+ i 1))])
+                  (and nc2 (char=? nc2 #\>)
+                       (let ([nc3 (rrb-char-at rrb (+ i 2))])
+                         (and nc3 (ident-continue? nc3))))))
+           (loop (+ i 3))]
+          [(and nc (ident-continue? nc))
+           (loop (+ i 1))]
+          [else (- i pos)]))
       #f))
 
 (define (recognize-single-char rrb pos expected type)
@@ -2896,9 +2934,19 @@
 ;; produced it (P1a's `$retired-selection`, P4c-2's `apply-binder-unwrap`, here).
 ;; Found by the P4c-2 adversarial verify. A malformed sentinel is returned
 ;; UNTOUCHED so the parser's own arms give it a per-command diagnostic.
+;; ⚠ D4.P4d-0 (B2, adversarial verify): SYMBOL payloads ONLY. The any-pair guard
+;; was written when every payload WAS a symbol; the `:{` mint's payload is a
+;; LIST (`($select-brace …)`), and unwrapping it injected a NAKED $select-brace
+;; past every downstream refusal arm — `defn f [x:{:a Int}] x` silently DEFINED
+;; a garbled Pi at zero errors where the baseline refused loudly. A list-payload
+;; sentinel stays WRAPPED so the binder consumers' `bcast-step-datum?` guards
+;; give it the guided per-command error.
 (define (unwrap-bcast-step x)
   (let ([d (syntax-e x)])
-    (if (and (pair? d) (pair? (cdr d))) (cadr d) x)))
+    (if (and (pair? d) (pair? (cdr d))
+             (let ([p (cadr d)]) (symbol? (if (syntax? p) (syntax-e p) p))))
+        (cadr d)
+        x)))
 
 ;; Unwrap every `$bcast-step` in a subtree, recursing through sub-groups.
 ;; Required because arm patterns NEST: `defn g | [cons h:Int t] -> h` puts the
@@ -3822,6 +3870,23 @@
 ;;
 ;; ⚠ `colon-annotation` classifies to its OWN type since P4c-1 (Q_U16b); before
 ;; that promotion it was `'symbol` and this predicate could not have seen it.
+;; D4.P4d-0 (DEFERRED 42): the `:{` trigger — a bare `colon` token GLUED ON BOTH
+;; SIDES: to the preceding base (`adjacent-to-base?`, which carries the
+;; `(pair? result)` conjunct) AND to the FOLLOWING lbrace. The both-sides key is
+;; the audit's required discriminator: `def b: [List Nat]` (glued to the name,
+;; SPACED from the opener) works today and a base-adjacency-only trigger would
+;; break it — as would `defn f [x: Int]`. ONE definition consumed by BOTH
+;; groupers, like its sibling below; a second copy is the F1b.7g drift class.
+(define (bcast-brace-trigger? vec i end result item type)
+  (and (eq? type 'colon)
+       (< (+ i 1) end)
+       (let ([nxt (vector-ref vec (+ i 1))])
+         (and (token-entry? nxt)
+              (eq? (set-first (token-entry-types nxt)) 'lbrace)
+              (= (token-entry-start-pos nxt) (token-entry-end-pos item))))
+       (adjacent-to-base? vec i result item)
+       (not (prev-token-not-emitted? vec i))))
+
 (define (bcast-step-trigger? vec i result item type)
   (and (memq type '(keyword colon-annotation))
        (adjacent-to-base? vec i result item)
@@ -4222,6 +4287,29 @@
             ;; (`(users :name)` → `(users ($bcast-step name))`, 2 items either
             ;; way), which is why the Q_N3 agreement guard cannot see it and a
             ;; third guard shape is owed.
+            ;; D4.P4d-0 (DEFERRED 42): the `:{` mint — WRAPPING, not widening.
+            ;; The naive memq widening yields the DEGENERATE
+            ;; `(users ($bcast-step :) ($select-brace …))` (measured at the
+            ;; audit); the intended datum wraps the WHOLE brace group:
+            ;; `users:{t r}` → `($bcast-step ($select-brace t r))` — Q_U7's
+            ;; second canonical example, producible at last. COUNT-CHANGING
+            ;; (3 items → 2), unlike its sibling below — which is why the tree
+            ;; twin fuses too and the Q_N3 v2 guard gains this row.
+            [(bcast-brace-trigger? vec i end result item type)
+             (let-values ([(inner next-i) (group-items vec (+ i 2) end 'rbrace source source-str qq-depth)])
+               (let-values ([(ln cl) (pos->line-col source-str (token-entry-start-pos item))])
+                 (define sb
+                   (make-stx (cons (make-stx '$select-brace source ln cl
+                                             (+ (token-entry-start-pos item) 2) 1)
+                                   inner)
+                             source ln cl (+ (token-entry-start-pos item) 2) 1))
+                 (loop next-i
+                       (cons (make-stx (list (make-stx '$bcast-step source ln cl
+                                                       (+ (token-entry-start-pos item) 1) 0)
+                                             sb)
+                                       source ln cl
+                                       (+ (token-entry-start-pos item) 1) 1)
+                             result))))]
             [(bcast-step-trigger? vec i result item type)
              (let-values ([(ln cl) (pos->line-col source-str (token-entry-start-pos item))])
                (loop (+ i 1)

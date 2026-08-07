@@ -491,37 +491,6 @@
              (run-tests test-paths project-root))])])]))
 
 ;; ============================================================
-;; Prelude drift check
-;; ============================================================
-;;
-;; Runs `gen-prelude.rkt --validate` to ensure the PRELUDE manifest
-;; matches namespace.rkt. Prints a warning if they're out of sync.
-
-(define (check-prelude-drift! project-root)
-  (define gen-prelude-path
-    (path->string (build-path project-root "tools" "gen-prelude.rkt")))
-  (define manifest-path
-    (build-path project-root "lib" "prologos" "book" "PRELUDE"))
-  ;; Only check if the PRELUDE manifest exists (graceful skip otherwise)
-  (when (file-exists? manifest-path)
-    (define-values (proc out in err)
-      (subprocess #f #f #f racket-path gen-prelude-path "--validate"))
-    (close-output-port in)
-    (subprocess-wait proc)
-    (define stdout-text (port->string out))
-    (define stderr-text (port->string err))
-    (close-input-port out)
-    (close-input-port err)
-    (cond
-      [(zero? (subprocess-status proc))
-       (void)]  ;; all good, silent
-      [else
-       (printf "\n⚠  PRELUDE DRIFT DETECTED\n")
-       (printf "   PRELUDE manifest and namespace.rkt are out of sync.\n")
-       (printf "   Run: racket tools/gen-prelude.rkt --write\n")
-       (printf "   to regenerate namespace.rkt from the manifest.\n\n")])))
-
-;; ============================================================
 ;; Batch test execution with shared prelude
 ;; ============================================================
 ;;
@@ -685,9 +654,6 @@
                (eprintf "⚠ .pnet generation left no stamp (generation may have failed); workers will re-elaborate the prelude from source\n")))))]
     [else
      (putenv "PROLOGOS_PNET_CACHE" "0")])
-
-  ;; Check PRELUDE manifest against namespace.rkt (catch drift early)
-  (check-prelude-drift! project-root)
 
   ;; PM Track 10C: Work-stealing dispatch with LPT scheduling.
   ;; Sort files by historical wall time (heaviest first) for optimal

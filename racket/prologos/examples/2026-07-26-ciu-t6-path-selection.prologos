@@ -123,7 +123,8 @@ sub.server.host
 ;; ───────────────────────────────────────────────────────────────────────────
 ;; app-config{database^.*}                    ;; {:url … :pool-size 10} — dissolve + row-splat        [D4.P4]
 ;; app-config{database.*}                     ;; {:database {…}} — splat under projection             [D4.P4]
-;; app-config{admins:name}                    ;; {:admins @[{:name "Alice"} {:name "Bob"}]}          [D4.P4]
+app-config{admins:name}                    ;; {:admins @[{:name "Alice"} {:name "Bob"}]}          [D4.P4]
+;;19=> {:admins @[{:name "Alice"} {:name "Bob"}]} : {:admins [PVec {:name String}]}
 ;;   ^ CORRECTED 2026-07-29 (handoff verification): this line previously showed
 ;;     the BARE vector @["Alice" "Bob"], which is the EXTRACTIVE result of the
 ;;     bare path `app-config.admins:name` — not the in-block one. Inside `{…}` a
@@ -133,7 +134,8 @@ sub.server.host
 ;;     per-element rows, which two bare vectors could never produce. Same
 ;;     transcription class as the §B `^_` line corrected earlier today.
 ;; app-config{admins:name admins:role}        ;; SAME-SPINE MERGE (Ruling B case 3)                   [D4.P5]
-;; app-config{admins:{name role}}             ;;   ⟵ the L2 normal form; both give
+app-config{admins:{name role}}             ;;   ⟵ the L2 normal form; both give
+;;20=> {:admins @[{:name "Alice", :role :super} {:name "Bob", :role :regular}]} : {:admins [PVec {:name String :role Keyword}]}
 ;;   ;; {:admins @[{:name "Alice" :role :super} {:name "Bob" :role :regular}]}
 ;; app-config{admins^names:name^ admins^roles:role^}  ;; SoA — distinct keys, no merge (B1)           [D4.P5]
 ;;   ;; {:names @["Alice" "Bob"] :roles @[:super :regular]}
@@ -146,13 +148,17 @@ def party := @[{:name "Frodo"   :class :burglar :hp 38 :level 9}
                {:name "Gandalf" :class :wizard  :hp 92 :level 20}
                {:name "Gimli"   :class :fighter :hp 77 :level 12}]
 
-;;19=> party : [PVec {:class Keyword :hp Int :level Int :name String}] defined.
+;;21=> party : [PVec {:class Keyword :hp Int :level Int :name String}] defined.
 
-;; party:name                               ;; @["Frodo" "Gandalf" "Gimli"] — broadcast one step  [D4.P4]
-;; party:{name hp}                          ;; @[{:name "Frodo" :hp 38} …] — per-element block    [D4.P4]
-;; party:{name^ level^}                     ;; @[⟨"Frodo" 9⟩ ⟨"Gandalf" 20⟩ ⟨"Gimli" 12⟩]         [D4.P4]
+party:name                               ;; @["Frodo" "Gandalf" "Gimli"] — broadcast one step  [D4.P4]
+;;22=> @["Frodo" "Gandalf" "Gimli"] : [PVec String]
+party:{name hp}                          ;; @[{:name "Frodo" :hp 38} …] — per-element block    [D4.P4]
+;;23=> @[{:hp 38, :name "Frodo"} {:hp 92, :name "Gandalf"} {:hp 77, :name "Gimli"}] : [PVec {:hp Int :name String}]
+party:{name^ level^}                     ;; @[⟨"Frodo" 9⟩ ⟨"Gandalf" 20⟩ ⟨"Gimli" 12⟩]         [D4.P4]
+;;24=> @[@["Frodo" 9] @["Gandalf" 20] @["Gimli" 12]] : [PVec ⟨String Int⟩]
 ;; party:name:0 / fusion:                   ;; consecutive `:` share ONE spine (L1)               [D4.P4]
-;; app-config.admins:name                   ;; @["Alice" "Bob"] — extraction position, bare       [D4.P4]
+app-config.admins:name                   ;; @["Alice" "Bob"] — extraction position, bare       [D4.P4]
+;;25=> @["Alice" "Bob"] : [PVec String]
 ;; regions:host  (see §H fixtures)          ;; map-generic `:` — keys preserved (Q1 ✅)            [D4.P4]
 
 ;; the extraction seam on positions — `.N` ordinal descent LANDED at D4.P2.
@@ -160,12 +166,12 @@ def party := @[{:name "Frodo"   :class :burglar :hp 38 :level 9}
 ;; mechanism (owner ruling Q_R1 — they are byte-identical datums), and this is
 ;; the corpus demonstrating that rather than the design asserting it.
 party.0.name
-;;20=> "Frodo" : String
+;;26=> "Frodo" : String
 ;; NOTE [owner 2026-07-28]: `party[0]` KEEPS its current extraction semantics
 ;; (the PS2 re-target is CANCELED); `.N` arrives ALONGSIDE, not instead.
 ;; The bracket pin below is a MUST-NOT-BREAK regression, not a flip warning:
 party[0].name
-;;21=> "Frodo" : String
+;;27=> "Frodo" : String
 
 ;; ───────────────────────────────────────────────────────────────────────────
 ;; §E  FUNCTIONS OVER ROWS — first-class projection                 [P5 + PX]
@@ -173,17 +179,19 @@ party[0].name
 
 ;; the HOF forms that ALREADY work — bidirectional checking supplies the row:
 map [fn [m] m.name] party
-;;22=> @["Frodo" "Gandalf" "Gimli"] : [PVec String]
+;;28=> @["Frodo" "Gandalf" "Gimli"] : [PVec String]
 
 map [fn [m] {:who m.name :ready [gt m.hp 50]}] party
-;;23=> @[{:who "Frodo", :ready false} {:who "Gandalf", :ready true} {:who "Gimli", :ready true}] : [PVec {:ready Bool :who String}]
+;;29=> @[{:who "Frodo", :ready false} {:who "Gandalf", :ready true} {:who "Gimli", :ready true}] : [PVec {:ready Bool :who String}]
 
 map [+ 5 _] '[1 2 3]
-;;24=> '[6 7 8] : [prologos::data::list::List Int]
+;;30=> '[6 7 8] : [prologos::data::list::List Int]
 
 ;; keyword-as-projection is LIKELY SUBSUMED by broadcast (D4 §3 open item):
-;; party:name                               ;; @["Frodo" "Gandalf" "Gimli"]   [D4.P4]
-;; party:hp                                 ;; @[38 92 77]                    [D4.P4]
+party:name                               ;; @["Frodo" "Gandalf" "Gimli"]   [D4.P4]
+;;31=> @["Frodo" "Gandalf" "Gimli"] : [PVec String]
+party:hp                                 ;; @[38 92 77]                    [D4.P4]
+;;32=> @[38 92 77] : [PVec Int]
 
 ;; the STANDALONE-DEF SEAM (the add5 family, owner data point)       [PX]
 ;; def add5 := [+ 5 _]                      ;; trait section       — fails today
@@ -192,7 +200,7 @@ map [+ 5 _] '[1 2 3]
 ;; …the ANNOTATED hatch works NOW, and stays the honest spelling meanwhile:
 def add5 : <Int -> Int> := [+ 5 _]
 [add5 37]
-;;26=> 42 : Int
+;;34=> 42 : Int
 
 ;; named-schema abstraction — v1's function-over-rows path (WORKING):
 schema Member
@@ -207,10 +215,10 @@ defn veteran? [m]
 
 def members : (List Member) := '[{:name "Sam" :class :gardener :hp 44 :level 8}
                                  {:name "Legolas" :class :archer :hp 60 :level 15}]
-;;29=> members : [prologos::data::list::List path-selection-acceptance::Member] defined.
+;;37=> members : [prologos::data::list::List path-selection-acceptance::Member] defined.
 
 map veteran? members
-;;30=> '[false true] : [prologos::data::list::List Bool]
+;;38=> '[false true] : [prologos::data::list::List Bool]
 
 ;; ───────────────────────────────────────────────────────────────────────────
 ;; §F  QUEST BOARD — relational facts; solve rows ARE records       [P4/P5]
@@ -222,52 +230,54 @@ defr quest [?title ?giver ?reward]
      "Debug the compiler"  "Alice" 9000
 
 def quests := solve (quest t g r)
-;;32=> quests : [PVec {:g String :r Int :t String}] defined.
+;;40=> quests : [PVec {:g String :r Int :t String}] defined.
 quests
-;;33=> @[{:g "Alice", :t "Rescue the cat", :r 50} {:g "Bob", :t "Map the catacombs", :r 200} {:g "Alice", :t "Debug the compiler", :r 9000}] : [PVec {:g String :r Int :t String}]
+;;41=> @[{:g "Alice", :t "Rescue the cat", :r 50} {:g "Bob", :t "Map the catacombs", :r 200} {:g "Alice", :t "Debug the compiler", :r 9000}] : [PVec {:g String :r Int :t String}]
 ;; typed solve rows compose with HOFs TODAY:
 map [fn [q] q.r] quests
-;;34=> @[50 200 9000] : [PVec Int]
+;;42=> @[50 200 9000] : [PVec Int]
 ;; …and with selection, once it lands:
-;; quests:t                                 ;; '["Rescue the cat" …] — broadcast over solve rows   [D4.P4]
-;; quests:{t r}                             ;; each quest, narrowed to title + reward              [D4.P4]
+quests:t                                 ;; '["Rescue the cat" …] — broadcast over solve rows   [D4.P4]
+;;43=> @["Rescue the cat" "Map the catacombs" "Debug the compiler"] : [PVec String]
+quests:{t r}                             ;; each quest, narrowed to title + reward              [D4.P4]
+;;44=> @[{:t "Rescue the cat", :r 50} {:t "Map the catacombs", :r 200} {:t "Debug the compiler", :r 9000}] : [PVec {:r Int :t String}]
 ;; ⟨SoA over solve rows⟩ {quests^titles:t^ quests^rewards:r^}  ;; the named UNZIP                  [D4.P5]
 
 ;; a paren-goal query (implicit solve) feeding the same machinery:
 def alice-quests := (quest t "Alice" r)
-;;35=> alice-quests : [PVec {:r Int :t String}] defined.
+;;45=> alice-quests : [PVec {:r Int :t String}] defined.
 map [fn [q] q.t] alice-quests
-;;36=> @["Rescue the cat" "Debug the compiler"] : [PVec String]
+;;46=> @["Rescue the cat" "Debug the compiler"] : [PVec String]
 ;; ───────────────────────────────────────────────────────────────────────────
 ;; §G  TYPING SEAMS — the pins that keep us honest
 ;; ───────────────────────────────────────────────────────────────────────────
 
 ;; selection sources stay precisely typed through def:
 def ssl-config := app-config.server.ssl
-;;37=> ssl-config : {:cert-path String :enabled Bool} defined.
+;;47=> ssl-config : {:cert-path String :enabled Bool} defined.
 
 ssl-config.enabled
-;;38=> true : Bool
+;;48=> true : Bool
 
 ;; heterogeneous tuple: per-position types survive (D15), extraction is exact:
 def mixed := @[7 "seven" :seven]
-;;39=> mixed : ⟨Int String Keyword⟩ defined.
+;;49=> mixed : ⟨Int String Keyword⟩ defined.
 
 mixed[1]
-;;40=> "seven" : String
+;;50=> "seven" : String
 
 ;; a selection result seals + validates (LANDED at D4.P3b — Q_U1 assigned
 ;; this `^`-bearing pair here):
 schema ServerCfg
   :host String
   :port Int
-;;41=> ServerCfg : [Type 0] defined.
+;;51=> ServerCfg : [Type 0] defined.
 
 def sc := [ServerCfg app-config{server^.{host port}}]
-;;42=> sc : path-selection-acceptance::ServerCfg defined.
+;;52=> sc : path-selection-acceptance::ServerCfg defined.
 
 [validate ServerCfg app-config{server^.{host port}}]
-;;43=> [prologos::data::result::ok {:host "localhost", :port 8080}] : [prologos::data::result::Result path-selection-acceptance::ServerCfg [Map Keyword prologos::data::reason::Reason]]
+;;53=> [prologos::data::result::ok {:host "localhost", :port 8080}] : [prologos::data::result::Result path-selection-acceptance::ServerCfg [Map Keyword prologos::data::reason::Reason]]
 
 ;; ───────────────────────────────────────────────────────────────────────────
 ;; §H  THE SPEC FIXTURES (Appendix, adapted per D4 §5.P0)
@@ -278,7 +288,7 @@ def users :=
   @[@[{:userName "Lisa" :age 30}]
     @[{:userName "John" :age 25}]
     @[{:userName "Mike" :age 35}]]
-;;44=> users : [PVec [PVec {:age Int :userName String}]] defined.
+;;54=> users : [PVec [PVec {:age Int :userName String}]] defined.
 ;;   ^ the LITERAL arm collapses the 1-tuple elements to PVec (§2.3); the
 ;;     spec reads them as 1-tuples — selection MINTS rows directly (ruling 2a)
 
@@ -289,27 +299,27 @@ def build
                {:sev :error :msg "import cycle"  :line 88}]
     - :name "cli"
       :diags @[{:sev :warn :msg "shadowed var" :line 7}]
-;;45=> build : {:modules [PVec {:diags [PVec {:line Int :msg String :sev Keyword}] :name String}]} defined.
+;;55=> build : {:modules [PVec {:diags [PVec {:line Int :msg String :sev Keyword}] :name String}]} defined.
 
 def regions
   :eu {:host "eu.example.com" :port 443}
   :us {:host "us.example.com" :port 443}
   :ap {:host "ap.example.com" :port 8443}
-;;46=> regions : {:ap {:host String :port Int} :eu {:host String :port Int} :us {:host String :port Int}} defined.
+;;56=> regions : {:ap {:host String :port Int} :eu {:host String :port Int} :us {:host String :port Int}} defined.
 
 def strings
   :en {:home "Home"  :about "About"}
   :de {:home "Start" :about "Über"}
-;;47=> strings : {:de {:about String :home String} :en {:about String :home String}} defined.
+;;57=> strings : {:de {:about String :home String} :en {:about String :home String}} defined.
 
 def m := @[@[1 2 3]
            @[4 5 6]]
-;;48=> m : [PVec [PVec Int]] defined.
+;;58=> m : [PVec [PVec Int]] defined.
 
 def events := @[{:t :click :x 10 :y 20}
                 {:t :key   :code "KeyA"}
                 {:t :click :x 3  :y 9}]
-;;49=> events : ⟨{:t Keyword :x Int :y Int} {:code String :t Keyword} {:t Keyword :x Int :y Int}⟩ defined.
+;;59=> events : ⟨{:t Keyword :x Int :y Int} {:code String :t Keyword} {:t Keyword :x Int :y Int}⟩ defined.
 ;;   ^ HET TUPLE, per-position rows — the 2b split's first carrier
 
 def tree
@@ -319,19 +329,25 @@ def tree
     - :name "core"
       :entries
         - :name "eval.pl" :size 12010
-;;50=> tree : {:entries ⟨{:name String :size Int} {:entries [PVec {:name String :size Int}] :name String}⟩ :name String} defined.
+;;60=> tree : {:entries ⟨{:name String :size Int} {:entries [PVec {:name String :size Int}] :name String}⟩ :name String} defined.
 
 ;; ───────────────────────────────────────────────────────────────────────────
 ;; §I  THE SPEC CORPUS (§10.2–§10.8, commented per phase; HEAD notation)
 ;; ───────────────────────────────────────────────────────────────────────────
 
 ;; §10.2 broadcast, fusion, honest nesting — users                   [D4.P4]
-;; users:0            ;; @[{:userName "Lisa" :age 30} …] : [PVec {:age Int :userName String}]
-;; users:0:userName   ;; @["Lisa" "John" "Mike"] : [PVec String]   — fusion (L1): ONE layer
-;; users:0:{userName} ;; @[{:userName "Lisa"} …]                   — per-element keyed block
-;; users:{0.userName^} ;; @[@["Lisa"] @["John"] @["Mike"]] : [PVec ⟨String⟩] — honest nesting
-;; users:{0.userName^}:0 ;; @["Lisa" "John" "Mike"]                — per-element unwrap
-;; users:{0.userName^}.0 ;; @["Lisa"]                              — OUTER .0 (extent, §3.2.1)
+users:0            ;; @[{:userName "Lisa" :age 30} …] : [PVec {:age Int :userName String}]
+;;61=> @[{:userName "Lisa", :age 30} {:userName "John", :age 25} {:userName "Mike", :age 35}] : [PVec {:age Int :userName String}]
+users:0:userName   ;; @["Lisa" "John" "Mike"] : [PVec String]   — fusion (L1): ONE layer
+;;62=> @["Lisa" "John" "Mike"] : [PVec String]
+users:0:{userName} ;; @[{:userName "Lisa"} …]                   — per-element keyed block
+;;63=> @[{:userName "Lisa"} {:userName "John"} {:userName "Mike"}] : [PVec {:userName String}]
+users:{0.userName^} ;; @[@["Lisa"] @["John"] @["Mike"]] : [PVec ⟨String⟩] — honest nesting
+;;64=> @[@["Lisa"] @["John"] @["Mike"]] : [PVec ⟨String⟩]
+users:{0.userName^}:0 ;; @["Lisa" "John" "Mike"]                — per-element unwrap
+;;65=> @["Lisa" "John" "Mike"] : [PVec String]
+users:{0.userName^}.0 ;; @["Lisa"]                              — OUTER .0 (extent, §3.2.1)
+;;66=> @["Lisa"] : ⟨String⟩
 ;; users:<{0.userName^}  ;; @["Lisa" "John" "Mike"]                — disclose in-step (Q5 ✅)  [D4.P4]
 
 ;; §10.4 flatten + the W1 border — build                             [D4.P4]
@@ -340,28 +356,43 @@ def tree
 ;; W1 (PERMANENT border, spec §6): the flat join @[{:module "core" :sev :warn} …]
 ;;   repeats a parent field into child rows — host comprehensions own it.
 
-;; §10.5 map-generic broadcast — regions (Q1 ✅)                     [D4.P4]
-;; regions:host       ;; {:ap "ap.example.com" :eu "eu.example.com" :us "us.example.com"}
+;; §10.5 map-generic broadcast — regions (Q1 ✅; LIVE at D4.P4d slice 1)
+regions:host       ;; keys preserved as a ROW — the map-generic rule
+;;67=> {:ap "ap.example.com", :eu "eu.example.com", :us "us.example.com"} : {:ap String :eu String :us String}
 regions{eu us}     ;; nominal n-ary selection (LANDED at D4.P3a, Q_U1)
-;;51=> {:eu {:host "eu.example.com", :port 443}, :us {:host "us.example.com", :port 443}} : {:eu {:host String :port Int} :us {:host String :port Int}}
+;;68=> {:eu {:host "eu.example.com", :port 443}, :us {:host "us.example.com", :port 443}} : {:eu {:host String :port Int} :us {:host String :port Int}}
 
 ;; §10.6 pure transposes — m, strings — v2, PERMANENTLY commented (spec §7.3)
 ;; (`m.0` USED TO SIT HERE and self-contradicted the block header — it was
 ;;  annotated "works at D4.P2" inside a block declared permanently commented.
 ;;  Owner ruling Q_R4: it MOVES OUT. It is now live in §J below.)
-;; m:0                ;; @[1 4] — a column                            [D4.P4]
+m:0                ;; @[1 4] — a column                            [D4.P4]
+;;69=> @[1 4] : [PVec Int]
 ;; m{:0^ :1^ :2^}     ;; v2: branch-initial ω (W2 exit)
-;; strings:home       ;; {:de "Start" :en "Home"} — map-generic       [D4.P4]
+;; ⚠ the next line was CARVED OUT of this v2 block at D4.P4d slice 1 — it was
+;;   the one "(map-generic)"-tagged line inside a PERMANENTLY-commented section
+;;   (the collision is recorded in D4 §5.P4d); the pivots above/below stay v2.
+strings:home       ;; map-generic over the language keys
+;;70=> {:de "Start", :en "Home"} : {:de String :en String}
 ;; strings{:home^home :about^about}  ;; v2: nominal pivot
 
-;; §10.7 heterogeneity — events (the 2b SPLIT: tuple ⇒ per-position exact)
-;; events:t           ;; @[:click :key :click] — every POSITION offers :t      [D4.P4]
-;; events:x           ;; TYPE ERROR — position 1 offers no :x (NAMES the position)
+;; §10.7 heterogeneity — events (the 2b SPLIT; LIVE at D4.P4d slice 2)
+events:t           ;; every POSITION offers :t — per-position EXACT
+;;71=> @[:click :key :click] : ⟨Keyword Keyword Keyword⟩
+;; events:x           ;; TYPE ERROR — "fails at position 1" (NAMES the position).
+;;   Stays COMMENTED: it would be this file's first ERROR result and no
+;;   error-marker convention exists — the contract is PINNED in the track
+;;   battery ("P4d-s2: a static per-position miss NAMES THE POSITION (the
+;;   events:x contract — corpus-pinned here)").
 ;; (PVec-of-union fixture for the keys-⋂/types-⋃ rule lands with D4.P4 —
 ;;  needs an annotation to build; the meet is NEW machinery.)
 
-;; §10.8 recursion — tree (W4: DEFERRED; the exits are §7.4/§7.5)
-;; tree.entries:name  ;; @["lib.pl" "core"]                           [D4.P4]
+;; §10.8 recursion — tree. `entries:name` was CARVED OUT at D4.P4d slice 2:
+;;   :entries is itself a HET TUPLE (the slice-2 audit refuted the old
+;;   "PVec-of-rows" reading), so the line is plain het-broadcast work; the
+;;   RECURSIVE aggregation below stays W4-DEFERRED (the exits are §7.4/§7.5).
+tree.entries:name  ;; het broadcast under a dot descent
+;;72=> @["lib.pl" "core"] : ⟨String String⟩
 ;; tree{name entries:{name entries:name}}  ;; TYPE ERROR — file rows offer no :entries (W3∘W4)
 
 ;; ───────────────────────────────────────────────────────────────────────────
@@ -372,26 +403,26 @@ regions{eu us}     ;; nominal n-ary selection (LANDED at D4.P3a, Q_U1)
 ;; is permanently-commented v2 territory (Q_R4).
 
 m.0
-;;52=> @[1 2 3] : [PVec Int]
+;;73=> @[1 2 3] : [PVec Int]
 
 ;; nat→nat chains. These USED to mis-lex: `m.1.2` read as the rational 6/5,
 ;; because `decimal-literal` anchors at the DIGIT. A dot-anchored recognizer
 ;; consumes `.1` first, so the interior dot is never available as an anchor.
 ;; (⚠ the mis-lex was LOUD, not silent — the stranded bare `.` was unbound.)
 m.1.2
-;;53=> 6 : Int
+;;74=> 6 : Int
 
 ;; multi-digit — the ordinal Q_M8 exists for
 def scores := @[10 11 12 13 14 15 16 17 18 19 20 21 22]
-;;54=> scores : [PVec Int] defined.
+;;75=> scores : [PVec Int] defined.
 
 scores.12
-;;55=> 22 : Int
+;;76=> 22 : Int
 
 ;; per-position EXACT types survive on a het tuple (D15 + record-project)
 mixed.1
-;;56=> "seven" : String
+;;77=> "seven" : String
 
 ;; and `.N` reaches into nested rows the same way `.name` does
 app-config.admins.0.name
-;;57=> "Alice" : String
+;;78=> "Alice" : String

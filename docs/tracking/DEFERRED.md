@@ -2942,7 +2942,9 @@ Item 37's gap is closed: the predicate, the membership, and the fold arm all
 landed, and the fold's emitted head is `$select-path` so the fixpoint obligation
 holds by construction.
 
-### 42. ⬜ The `:{…}` reader mint — a P4d PREREQUISITE, unhomed until now
+### 42. ✅ RESOLVED at D4.P4d-0 (`667684ad`, 2026-08-05) — the WRAPPING mint landed (one shared trigger, both groupers, Q_N3 v2 row); Q_U7's second canonical example is producible. *(original text below)*
+
+### 42-original. The `:{…}` reader mint — a P4d PREREQUISITE, unhomed until now
 
 `users:{t r}` does NOT mint: it reads as `users : ($select-brace t r)`, because
 `bcast-step-trigger?` gates on token TYPE and a lone `:` before an opener is
@@ -3036,14 +3038,25 @@ returns a symbol for symbol/`@key`/`@bcast` and a non-symbol otherwise, so
 `(let ([n (select-step-name head-step)]) (if (symbol? n) n "field"))` is the whole
 arm.
 
-**Sites verified BLIND-BUT-SAFE by the sweep** (no action): `syntax.rkt:1204`
+~~**Sites verified BLIND-BUT-SAFE by the sweep** (no action): `syntax.rkt:1204`
 (`select-sub-step?` in the dissolve arm — measured equivalent on both paths,
 structurally so, since the `[(bcast)]` arm re-enters with the same `rest`);
 `typing-core.rkt:1016`/`:1057`/`:1132`/`:1142` and `reduction.rkt:1778` (all fall
 through to a `memq` guard → the `bcast` arm → `select-bcast-not-yet`, i.e. blind
-but LOUD).
+but LOUD).~~
+⚠ **THE EXONERATION ABOVE WENT STALE 3 DAYS AFTER IT WAS WRITTEN** (caught by the
+`:{`-phase mini-audit): `select-bcast-not-yet` was RETIRED at P4c-4c — zero
+definitions, zero callers — so "blind but LOUD" no longer describes those five
+sites. They now route to the LIVE value-semantics arms, which is *better* than
+loud for a symbol inner — and *worse* for a sub inner, whose raw `(@sub …)` list
+reaches carrier diagnostics as a "name". Re-derive the verdict at the `:{` phase;
+do not inherit it.
+⚠ **Coordinates drifted**: the two parser sites are now `parser.rkt:1178` (was
+:1170) and `parser.rkt:1281` (was :1212) — re-find by SHAPE, not number.
+⚠ The prescribed :1281 fix (reuse `select-step-name`) is SAFE only while
+`select-step-name` returns values — see the adjudication note at 40.
 
-### 40. `select-step-name` is still not TOTAL — `(@ord N)` and `(@sub …)` return LISTS
+### 40. ⚠ CROSS-REF ADDED 2026-08-05: **this is the SAME DEFECT as 46**, seen from the other side — and the two entries prescribed CONFLICTING fixes with no cross-reference (caught by the `:{`-phase mini-audit `wf_e15a1ef6-dfb`). 46 says *handle* the sub-inner ω; this entry says *make the walk total by raising* (`select-step-kind-unhandled` is a bare `error`). ⚠⚠ And 39's prescribed reuse of `select-step-name` at its parser site COMPOSES with this entry's raise into a WHOLE-FILE ABORT on the parse path. **Adjudication (follows from the owner's two 2026-08-05 rulings — site-local guards; no new raises on the parse path)**: the `:{` phase fixes 46 by discriminating on the INNER KIND in the two lifts, which removes the ω route to this defect entirely; the residual here (the PRE-EXISTING, latent, non-ω `[else s]` contract violation) stays deferred, and when it lands its fix must be a VALUE-channel one — NOT the raise this entry originally prescribed. `select-step-name` is still not TOTAL — `(@ord N)` and `(@sub …)` return LISTS
 
 Raised by the P4c-3a adversarial verify and **confirmed by measurement** at the
 post-fix tree:
@@ -3633,7 +3646,9 @@ is discarded under `'path`, and block-position ω is parse-refused), so this is 
 note, not a defect. Goes live with P4d or P5's factoring, and the failure mode is
 the silent mis-sort P4a exists to prevent.
 
-### 46. `(@bcast (@sub …))` is unhandled on both sides — currently UNREACHABLE
+### 46. ✅ RESOLVED at D4.P4d-0 (`667684ad`) — Q_U20 in both lifts (sub-inner assembles at 'block, always); the top-keys splice (B1) and the binder unwrap defeat (B2) fixed + pinned in all grades. *(original + cross-ref below)*
+
+### 46-original. ⚠ CROSS-REF + CORRECTION 2026-08-05 (mini-audit `wf_e15a1ef6-dfb`): **same defect as 40**; and "unhandled" is MISLOCATED — both twins HAVE bcast arms (P4c-4c); the defect is that the LIFTS apply the inner step as a ONE-STEP BRANCH, putting `@sub` at branch-head where `select-step-name` hands the raw list to the `(key caret sub)` arm as a "field name". Outcome is CARRIER-DEPENDENT (closed row: loud-but-LYING; dyn row / Map at 'path: SILENT ACCEPT), not the blanket "silent wrong answer" recorded. One fix point per side (`select-bcast-lift` / `bcast-apply`), discriminating on the inner kind. `(@bcast (@sub …))` is unhandled on both sides — currently UNREACHABLE
 
 `branch-entries` would treat the whole `@sub` list as a field name. Unreachable
 because the mint never fires: `xs:{name age}` → "Unbound variable `:`" (DEFERRED
@@ -4401,3 +4416,122 @@ additionally named, all unfiled and all LOUD, the private `def-`/`defn-` arms an
 the `trait`/`impl`/`specialize` arms, which still do the bare whole-form stamp;
 and noted that error POSITIONS for siblings 2..N of a merged let run are all
 reported at sibling 1's line.
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     ⚠ NUMBERING COLLISION — RULING OWED.  Merge of `main` (65cb5bce) into
+     `wizardly-mendel-2fd502`, 2026-08-07.
+
+     The entries ABOVE numbered 53–57 were filed on the DEFERRED 51/52 branch
+     arc.  The entries BELOW numbered 53, 53, 54, 55, 55-original were filed
+     independently on `main` for the CIU T6 D4.P4d arc.  So 53 / 54 / 55 denote
+     DIFFERENT items depending on which arc a reference came from.  (Entries
+     51 and 52 are NOT a collision: they are the same two items, and this
+     branch's ✅ FIXED versions supersede main's 🔀 SPUN OUT stubs.)
+
+     NOTHING WAS RENUMBERED AT MERGE TIME, deliberately.  Cross-references to
+     both sets already exist in commit messages (immutable), in `macros.rkt`
+     comments, and in test-case names — so a renumber is a coordinated edit, not
+     a mechanical one, and it should be a conscious ruling rather than a
+     side-effect of a merge.  Note also that `main` already carried a duplicate
+     53 of its own before this merge, so duplicates are not new here.
+
+     WHEN RULING: whichever side moves, record the old→new mapping inside each
+     moved entry, so the existing commit references stay traceable.
+     ═══════════════════════════════════════════════════════════════════════ -->
+
+### 53. 🔀 SPUN OUT (chip `task_e1c15ee6`, 2026-08-05) — PARAMETERIZED `data` binds the TYPE PARAMETER as a constructor
+
+```
+data Tree A
+  | leaf A
+  | branch [Tree A] [Tree A]
+[leaf 42]
+```
+=> `Tree : [Type 0] defined.` · **`A : ns::Tree defined.`** · `Unbound variable`
+(leaf) ×3. `A` is the TYPE PARAMETER, bound as a nullary constructor; the real
+constructors are never registered.
+
+Non-parameterized `data` **works today**:
+`data Direction | north | south` + `defn opposite | north -> south | …` +
+`[opposite north]` => `south`, 0 errors.
+
+**Surfaced by** ARROW T1 P3, while trying to un-comment the `int->str` block in
+`examples/2026-03-18-track7-acceptance.prologos` (§ K2). That block had THREE
+blockers; ARROW fixed one (the reader/arrow one), `int->str` never existed
+(the real name is `str::from-int`), and this is the third.
+
+⭐ **It also corrects a stale annotation that FIVE sites in that file point at.**
+The E2 note claimed NO file-level `data` registers constructors. That is half
+wrong — and the live half is a MIS-PARSE (a wrong binding is created), not a
+missing registration, which is a sharper diagnosis than the original. The note
+was corrected in place at ARROW T1 P3 (`004c025d`); the file's NULLARY blocks
+(Direction, Color, …) are now re-triable and should be un-commented once
+confirmed, while the `Tree`-based ones stay blocked on this item.
+
+**Why deferring is safe**: loud `Unbound variable` per command, no silent wrong
+answer, and prelude data types (Nat/Bool/List/Option) are unaffected because
+they load via module import, not file-level `data`.
+**Why it should not sit long**: it silently *invents a binding* (`A`), and it
+has already caused four months of a wrong annotation blocking unrelated work.
+
+⚠ Do not gate on `examples/2026-03-18-track7-acceptance.prologos`: >15 minutes
+to run and ZERO `;;N=>` markers (it predates the marker system, 2026-07-06).
+Use a small probe plus the marker-bearing acceptance files.
+
+
+### 53. ⬜ GUARD THE PARSE PATH — the class-level completion of option B, its OWN slice (owner ruling 2026-08-05)
+
+`ae26f540` guarded PREPARSE (the per-form fold in `preparse-expand-all`), so a
+raise there degrades to a per-command `($preparse-error msg)`. **The PARSE step is
+the other half of `pipeline.md`'s own class name** — "A Raise on the
+**Parse/Expansion** Path" — and it is still unguarded: `process-file-inner` runs
+preparse then parse as separate steps, and a raise in the second escapes whole.
+
+**HEAD-reachable reproducers, measured (3 whole-file aborts, output EMPTY — not
+even the `def before := 1` above them):**
+
+```
+m{[$bcast-step [a b]]}   →  symbol->string: contract violation, given '(a b)
+m{[$bcast-step 5]}       →  symbol->string: contract violation, given 5
+m{[$bcast-step]}         →  cadr: contract violation, given '($bcast-step)
+```
+
+The specific site (`parser.rkt` `$bcast-step` fold arm, unguarded
+`(symbol->string (cadr it))`) gets a SITE-LOCAL shape guard in the `:{` phase
+(owner: "site-local"), because the real `:{` mint makes the payload a LIST and
+walks straight into it. **This entry is the CLASS**: a per-command guard at the
+parse seam, so the SIXTH sentinel does not rediscover what the first five did.
+
+**Why its own slice** (owner ruling): the preparse guard alone converted 20
+assertions across 9 files, and parse is the busier path — expect more. It also
+re-raises the channel-merging property flagged at the P4c-4c close (a
+compiler-internal invariant violation degrading to a per-command error), so the
+slice should consider a DISTINGUISHED internal-error marker that keeps raising —
+re-splitting the two propositions P4c-4b separated.
+⚠ Method note for whoever lands it: the preparse conversion surfaced that
+**result-discarding test helpers** (`run-last`, lookup-returning fixtures) can
+silently swallow a refusal once it becomes a value. Sweep for those FIRST.
+
+## CIU T6 D4.P4d-0 spin-offs (filed 2026-08-05 from the pre-commit adversarial verify `wf_7d93efe5-b68`)
+
+### 54. Goal-position `:{` (and its dot SIBLING) yields a silent `unknown` row
+
+`(= ?y xs:{a})` flips the baseline's loud `= expects 2 arguments, got 3` into a
+silent `@[{:y unknown}] : _` at 0 errors. ⚠ The CLASS is PRE-EXISTING — the dot
+sibling `(= ?y xs.a)` yields the identical unknown row at the same baseline — so
+this is the DEFERRED 51/52 neighbourhood (selection sentinels reaching relational
+paths), not a mint defect. Zero corpus sites. Silent-wrong-answer shaped, so it
+must not sit past the 51/52 chip (`task_4c00d3f0`); whoever lands that fix should
+take this reproducer with them.
+
+### 55. ✅ DISCHARGED at D4.P4d-0 slice 5 (`77259635`) — the spurious-dot display fixed (one pp arm honouring `first?`) and the vector-element refusal now names the broadcast alternative. *(original below)*
+
+### 55-original. In-block `:{` is newly ADMITTED but refused with a MISLEADING diagnostic
+
+`rows{a:{p q}}` (narrowing a map FIELD inside a select block) now parses — the
+baseline refused at parse — and typing refuses per-command with a message that
+pretty-prints the nonexistent spelling `rows{a:.{p q}}` (the spurious-dot display
+defect, P4d-0 slice 5's item) and describes vector-ordinal semantics where the
+user narrowed a map field. A refusal, not an acceptance, and per-command — but it
+is the FIRST adjacent spelling users will try, and it is unpinned. Home: the
+P4d-0 slice-5 display fix plus a message that names the map-field case.

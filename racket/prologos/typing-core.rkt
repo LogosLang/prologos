@@ -947,9 +947,15 @@
 (define (select-elem-of ctx tm path sort name)
   (case sort
     [(path block)
-     (if (expr-PVec? tm)
-         (values (expr-PVec-elem-type tm) #f)
-         (values #f (select-fail 'bcast-carrier (append path (list name)) name tm)))]
+     (cond
+       [(expr-PVec? tm) (values (expr-PVec-elem-type tm) #f)]
+       ;; D4.P4d slice 1 — the genuine-Map carrier: ONE uniform elem (the
+       ;; value type); the caller's re-wrap follows the carrier (`tm` is in
+       ;; scope there). The keyword-row carrier does NOT come through here —
+       ;; it has no single elem (per-field types) and routes around this
+       ;; protocol in `select-bcast-lift`.
+       [(expr-Map? tm) (values (expr-Map-v-type tm) #f)]
+       [else (values #f (select-fail 'bcast-carrier (append path (list name)) name tm))])]
     [else (select-sort-unhandled 'select-elem-of sort)]))
 
 ;; D4.P4c-4c (DEFERRED 43) — THE TYPE THE TIER DECISION SHOULD SEE.
@@ -979,10 +985,35 @@
   (if (and (pair? branches) (null? (cdr branches)))
       (let loop ([tm tm] [steps (car branches)])
         (if (and (pair? steps)
-                 (eq? (select-step-kind (car steps)) 'bcast)
-                 (expr-PVec? tm))
-            (loop (whnf (expr-PVec-elem-type tm))
-                  (cons (select-bcast-inner (car steps)) (cdr steps)))
+                 (eq? (select-step-kind (car steps)) 'bcast))
+            (let ([next (cons (select-bcast-inner (car steps)) (cdr steps))])
+              (cond
+                [(expr-PVec? tm) (loop (whnf (expr-PVec-elem-type tm)) next)]
+                ;; D4.P4d slice 1 — the peel follows EVERY ω-capable carrier;
+                ;; leaving a new carrier un-peeled re-creates DEFERRED 43's
+                ;; silent-miss class one carrier over (the Map-carrier case
+                ;; additionally over-asserted from the CARRIER type before the
+                ;; refusal even fired — the P4d slice-1 audit's trace).
+                [(expr-Map? tm) (loop (whnf (expr-Map-v-type tm)) next)]
+                [(and (expr-Record? tm)
+                      ;; D4.P4d slice 2 — 'nat joins (C9 RULED (a), owner
+                      ;; 2026-08-07): positions are fields; the OR extends
+                      ;; verbatim. ⚠ This is the SECOND of the two gates —
+                      ;; the slice-2 audit refuted "one gate": widening only
+                      ;; the lift leaves this peel 'keyword-gated and a Map
+                      ;; POSITION's runtime miss silent (DEFERRED 43's class).
+                      (memq (expr-Record-key-domain tm) '(keyword nat))
+                      (eq? (expr-Record-tail tm) 'closed))
+                 ;; N field types, ONE scalar tier (the mini-C9 — D4 §5.P4d):
+                 ;; a conservative OR in the only direction the contract
+                 ;; permits (permissive → assertive). If ANY field's peel
+                 ;; reaches a Map, return that witness so the consumer's
+                 ;; `expr-Map?` test asserts; else the row itself (no assert).
+                 (or (for/or ([fld (in-list (expr-Record-fields tm))])
+                       (let ([p (loop (whnf (record-field-type (cdr fld))) next)])
+                         (and (expr-Map? p) p)))
+                     tm)]
+                [else tm]))
             tm))
       tm))
 
@@ -1011,14 +1042,82 @@
 ;; `d:0` reported "ordinal `0` (branch `0.0`)". `select-elem-of` does its own
 ;; append for the CARRIER failure, where naming the ω step IS correct.
 (define (select-bcast-lift ctx tm s path seen sort)
-  (let ([inner (select-bcast-inner s)]
-        [name (select-step-name s)])
-    (let-values ([(elem ef) (select-elem-of ctx tm path sort name)])
-      (if ef
-          (values #f ef)
-          (let-values ([(bt bf) (select-project ctx (whnf elem) (list (list inner))
-                                                sort path)])
-            (if bf (values #f bf) (values (expr-PVec bt) #f)))))))
+  (let* ([inner (select-bcast-inner s)]
+         ;; ⚠ the DIAGNOSTIC label: `select-step-name` on a sub inner returns the
+         ;; RAW LIST (DEFERRED 40/46's shared root), and interpolating that into
+         ;; a carrier message is DEFERRED 49's shape widened. A readable stand-in
+         ;; for the sub; the symbol path is unchanged.
+         ;; ⚠ my first cut mapped every NON-SYMBOL to the stand-in — which
+         ;; broke ORDINAL diagnostics (`users:0` reported `:{…}`; a NUMBER is a
+         ;; legitimate label, the formatter prints `:0`). Only a LIST (the raw
+         ;; sub) takes the stand-in. Caught by the P4c-4b three-sub-cases pin.
+         [name (let ([n (select-step-name s)]) (if (pair? n) '|{…}| n))])
+    (cond
+      ;; D4.P4d slice 1 — THE KEYWORD-ROW CARRIER routes AROUND the one-elem
+      ;; protocol: a closed 'keyword row has no single elem (per-field types),
+      ;; so the lift is PER-FIELD, reconstructed in `record-map-field-types`'
+      ;; shape (the ONE reconstruction helper — labels/presence/tail/canonical
+      ;; order PRESERVED; `select-assemble-row` would re-mint closed/'present).
+      ;; The walk's 2-valued fail channel threads through the single-valued
+      ;; proc via let/ec: the FIRST failing field aborts the WHOLE row — no
+      ;; partial row escapes (the typing mirror of the whole-node abort).
+      ;; Dyn-tail rows fall through to the carrier refusal below (the 4d
+      ;; refusal). D4.P4d slice 2: 'nat rows JOIN (the het tuple —
+      ;; per-position EXACT is per-FIELD over nat keys; the walk is
+      ;; domain-agnostic), and the walk is LABEL-AWARE so a failing
+      ;; field/position is NAMED (the 'bcast-at wrapping fail; the slice-2
+      ;; audit: the label-blind walk structurally lost the position, and the
+      ;; keyword carrier had the same gap).
+      [(and (expr-Record? tm)
+            (memq (expr-Record-key-domain tm) '(keyword nat))
+            (eq? (expr-Record-tail tm) 'closed))
+       (let/ec bail
+         (values
+          (record-map-field-types/labeled
+           (lambda (label ft)
+             (let ([ft* (whnf ft)]
+                   [wrap (lambda (f) (bail #f (select-fail 'bcast-at
+                                                           (append path (list label))
+                                                           label f)))])
+               (if (select-sub-step? inner)
+                   ;; Q_U20's per-inner-kind rule EXTENDED to this carrier
+                   ;; (recorded in D4 §5.P4d): a sub inner ASSEMBLES at
+                   ;; 'block, per FIELD/POSITION.
+                   (let-values ([(comps cf) (select-level-components ctx ft* (cdr inner)
+                                                                     path 'block)])
+                     (if cf (wrap cf) (select-assemble-row comps)))
+                   (let-values ([(bt bf) (select-project ctx ft* (list (list inner))
+                                                          sort path)])
+                     (if bf (wrap bf) bt)))))
+           tm)
+          #f))]
+      [else
+       (let-values ([(elem ef) (select-elem-of ctx tm path sort name)])
+         (if ef
+             (values #f ef)
+             ;; D4.P4d slice 1: the RE-WRAP follows the CARRIER — `tm` is in
+             ;; scope, so the genuine-Map arm needs no protocol change
+             ;; (`[Map K V]` under ω re-wraps `[Map K proj(V)]`, keys by type).
+             (let ([re-wrap (if (expr-Map? tm)
+                                (lambda (t) (expr-Map (expr-Map-k-type tm) t))
+                                expr-PVec)])
+               ;; ⭐ Q_U20 [owner, 2026-08-05]: A SUB INNER ASSEMBLES AT 'block,
+               ;; ALWAYS. The lift threads ONE sort and the two inner kinds need
+               ;; OPPOSITE ones — a symbol inner EXTRACTS ('path; 'block would wrap
+               ;; `xs:a` as `[PVec {:a T}]`), a sub inner ASSEMBLES ('block; 'path
+               ;; fails its one-component constraint). So the sort here is a
+               ;; PER-INNER-KIND semantics RULE, not inherited from the outer
+               ;; selector. `users:{a b}` over `[PVec {:a A :b B :c C}]` is a PVec of
+               ;; NARROWED rows — the terminal-`@sub` machinery of the below walks,
+               ;; applied per element.
+               (if (select-sub-step? inner)
+                   (let-values ([(comps cf) (select-level-components ctx (whnf elem)
+                                                                     (cdr inner) path 'block)])
+                     (if cf (values #f cf)
+                         (values (re-wrap (select-assemble-row comps)) #f)))
+                   (let-values ([(bt bf) (select-project ctx (whnf elem) (list (list inner))
+                                                          sort path)])
+                     (if bf (values #f bf) (values (re-wrap bt) #f)))))))])))
 
 ;; select-project — the node's typing walk (Q_T1's one walk, two consumers).
 ;; D4.P3c: a LEVEL now assembles either sort: all-keyed components → a
@@ -1243,7 +1342,11 @@
               ;; result, which is what makes `x:s:t` fuse to one layer.
               (let-values ([(ct cf) (select-below-field
                                      ctx (whnf bt) rest
-                                     (append path (list (select-step-name s)))
+                                     ;; D4.P4d slice 2 (DEFERRED 40's live half):
+                                     ;; a SUB inner's step-name is the RAW LIST —
+                                     ;; the standing '|{…}| stand-in, never the list.
+                                     (append path (list (let ([n (select-step-name s)])
+                                                          (if (pair? n) '|{…}| n))))
                                      seen sort)])
                 (if cf
                     (values #f cf)
@@ -1298,7 +1401,9 @@
            [bf (values #f bf)]
            [(null? (cdr steps)) (values bt #f)]
            [else (select-below-field ctx (whnf bt) (cdr steps)
-                                     (append path (list (select-step-name s)))
+                                     ;; same DEFERRED-40 guard as the sibling above
+                                     (append path (list (let ([n (select-step-name s)])
+                                                          (if (pair? n) '|{…}| n))))
                                      seen sort)])))]
     [else (select-step-kind-unhandled 'select-below-field (car steps))]))
 
@@ -2968,7 +3073,14 @@
          [(with-speculative-rollback
             (lambda ()
               (for/and ([ti (in-list (cdr tys))])
-                (unify-ok? (unify ctx (car tys) ti))))
+                (and (unify-ok? (unify ctx (car tys) ti))
+                     ;; D4.P4d slice 0: same conjunct as the pvec twin below —
+                     ;; unify admits the check-mode coercion arms, so
+                     ;; '[{:b 2} map-value] classified homogeneous with the
+                     ;; FIRST element's type (order-dependent; the slice-0
+                     ;; adversarial verify's B2 reproducer). conv asks the
+                     ;; sameness this probe means.
+                     (conv (car tys) ti))))
             values
             "list-literal-homogeneity")
           (infer ctx chain)]
@@ -2989,8 +3101,22 @@
        (cond
          [(ormap expr-error? kts) (expr-error)]
          [(ormap expr-error? vts) (expr-error)]
-         [(for/and ([kt (in-list (cdr kts))])
-            (unify-ok? (unify ctx (car kts) kt)))
+         [(with-speculative-rollback
+            (lambda ()
+              (for/and ([kt (in-list (cdr kts))])
+                (and (unify-ok? (unify ctx (car kts) kt))
+                     ;; D4.P4d slice 0: same conjunct as the list/pvec twins —
+                     ;; computed keys (`{[expr] val}`) make arbitrary key types
+                     ;; source-reachable, so a record-typed and a Map-typed key
+                     ;; coerced into "uniform" with the FIRST key's type (the
+                     ;; slice-0 adversarial verify's B1 reproducer,
+                     ;; order-dependent at 0 errors). conv asks sameness.
+                     (conv (car kts) kt))))
+            values
+            ;; The rollback wrapper is NEW here (the two sibling probes already
+            ;; had it): without it, a mid-probe unify's meta solves survive
+            ;; into the (expr-error) arm and leak into later commands.
+            "map-literal-key-homogeneity")
           (expr-Map (whnf (car kts)) (build-union-type vts))]
          [else (expr-error)]))]
     ;; CIU T6 F1a-col (D15): literal-extent typing, ALL-AT-ONCE. Homogeneous
@@ -3004,7 +3130,23 @@
          [(with-speculative-rollback
             (lambda ()
               (for/and ([ti (in-list (cdr tys))])
-                (unify-ok? (unify ctx (car tys) ti))))
+                (and (unify-ok? (unify ctx (car tys) ti))
+                     ;; D4.P4d slice 0: unify admits the check-mode COERCION
+                     ;; arms (Record↔Map, Record↔PVec — unify.rkt's F1
+                     ;; subsumption pairs, symmetric by design), but this
+                     ;; probe asks SAMENESS. Without this conjunct a mixed
+                     ;; `@[record map]` classified homogeneous with the FIRST
+                     ;; element's type — order-dependent, and a broadcast over
+                     ;; it buried `<error> : [PVec T]` at zero errors (the
+                     ;; P4d opening audit's soundness hole). `conv` is
+                     ;; definitional equality on normal forms: solved metas
+                     ;; resolve through nf, so meta-homogeneous literals still
+                     ;; collapse; coercible-but-DIFFERENT pairs return #f and
+                     ;; the probe ROLLS BACK to the honest 'nat row. Both
+                     ;; sides are nf'd per pair, NOT hoisted — an earlier
+                     ;; iteration may solve a meta INSIDE the first element's
+                     ;; type, and a hoisted nf would compare stale.
+                     (conv (car tys) ti))))
             values
             "pvec-literal-homogeneity")
           (expr-PVec (whnf (car tys)))]

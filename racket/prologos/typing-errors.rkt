@@ -129,14 +129,20 @@
   (define labels (map car (expr-Record-fields rec)))
   (define shown (if (> (length labels) 6) (take labels 6) labels))
   (define more (- (length labels) (length shown)))
+  ;; D4.P4d slice 2: labels are TOTAL — a 'nat row's labels are INTEGERS, and
+  ;; `symbol->string` on one is a RAISE on the diagnostic path (the whole-file
+  ;; abort class, pipeline.md). Unconstructible today ('nat rows route to
+  ;; 'subject-tuple before any miss-closed) — guarded by the walker-totality
+  ;; discipline, not by a reachable reproducer.
+  (define (label->string l) (if (symbol? l) (symbol->string l) (format "~a" l)))
   (string-append
-   "Could not infer type — field :" (symbol->string kw)
+   "Could not infer type — field :" (label->string kw)
    " is not present in the record " (pp-expr rec names)
    (if (null? labels)
        " (the record has no fields)"
        (string-append
         "; available fields: "
-        (string-join (map (lambda (l) (string-append ":" (symbol->string l))) shown) " ")
+        (string-join (map (lambda (l) (string-append ":" (label->string l))) shown) " ")
         (if (> more 0) (format " (+~a more)" more) "")))))
 
 ;; CIU T6 D4.P2 (owner ruling Q_R5) — the ORDINAL counterpart of
@@ -286,12 +292,28 @@
     ;; including `String` and `Int`, which will never be broadcast carriers. The
     ;; P4d sentence is now a statement about the PHASE, not a promise about this
     ;; subject.
+    ;; D4.P4d slice 2 — the WRAPPING fail: a per-field/per-position broadcast
+    ;; miss carries WHERE it failed (the label; a number = a tuple position, a
+    ;; symbol = a row field) and the INNER fail in the `row` slot — formatted
+    ;; recursively, so the wrapped message keeps its own guidance. The
+    ;; formatter template is format-closed-tuple-oob's index-naming (Q_R5).
+    [(bcast-at)
+     (string-append
+      (if (number? label)
+          (format "broadcast fails at position ~a — " label)
+          (format "broadcast fails at field :~a — " label))
+      (format-select-fail row names sort))]
     [(bcast-carrier)
+     ;; D4.P4d slice 2: the supported set now includes the het TUPLE — every
+     ;; broadcast carrier is live; the remaining refusals are List/Set/
+     ;; scalars/dyn rows. The full per-carrier message SPLIT (List's
+     ;; Functor-free wording, Set's own sentence) is slice 4's.
      (format
       (string-append
-       "broadcast `:~a` needs a PVec subject — this one is ~a. Broadcast is "
-       "PVec-only at this phase; the map, keyword-row and heterogeneous-tuple "
-       "carriers land at CIU T6 D4.P4d. For a list, convert first with "
+       "broadcast `:~a` needs a PVec, Map, tuple, or closed keyword-row "
+       "subject — this "
+       "one is ~a. For a "
+       "list, convert first with "
        "`[pvec-from-list xs]` (the row type is preserved)~a~a")
       (or label "…")
       (if row (format "`~a`" (pp-expr row)) "not one")
@@ -358,9 +380,10 @@
      ;; invisible, byte-identical to `.foo`).
      (if (expr-PVec? row)
          (format
-          "Could not infer type — select: `~a`~a is not a field of a vector element position — a vector subject takes ordinal steps (`.N`) or ordinal branches (`x{N M}`)"
+          "Could not infer type — select: `~a`~a is not a field of a vector element position — a vector subject takes ordinal steps (`.N`) or ordinal branches (`x{N M}`). To reach fields of EACH element, broadcast instead: `xs:~a` or `xs:{…}`"
           (or label "the step")
-          (if (null? path) "" (format " (branch `~a`)" branch-str)))
+          (if (null? path) "" (format " (branch `~a`)" branch-str))
+          (or label "name"))
          (format
           (if block?
           "Could not infer type — select: the subject~a is not a record; a select block projects fields of a keyword row"

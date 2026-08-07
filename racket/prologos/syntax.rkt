@@ -178,7 +178,7 @@
  select-step-cont select-cont-collapse? select-cont-rename
  select-branch-collapse select-branch-keyless?
  select-step-output-name select-synth-name select-branch-top-keys
- record-map-field-types make-record record-extend record-lookup-field record-remove
+ record-map-field-types record-map-field-types/labeled make-record record-extend record-lookup-field record-remove
  closed-nat-row? closed-keyword-row? record-mark-all-unknown
  ;; Map (persistent hash map)
  (struct-out expr-Map) (struct-out expr-champ)
@@ -710,6 +710,20 @@
                                      (record-field-presence (cdr fld)))))
                (expr-Record-tail rec)))
 
+;; D4.P4d slice 2 — the LABEL-AWARE sibling of the walker above (kept adjacent
+;; so the reconstruction cannot drift): identical preservation contract
+;; (key-domain / labels / presence / tail / order), but the proc receives the
+;; LABEL too — the broadcast per-field walk needs it to NAME a failing
+;; field/position in its diagnostic (the label-blind walk structurally lost
+;; the position; slice-2 audit).
+(define (record-map-field-types/labeled proc rec)
+  (expr-Record (expr-Record-key-domain rec)
+               (for/list ([fld (in-list (expr-Record-fields rec))])
+                 (cons (car fld)
+                       (record-field (proc (car fld) (record-field-type (cdr fld)))
+                                     (record-field-presence (cdr fld)))))
+               (expr-Record-tail rec)))
+
 ;; ============================================================
 ;; expr-validate — the runtime schema-tabulation node (CIU T6 F1b.5-s2, D27)
 ;; ============================================================
@@ -1205,7 +1219,23 @@
            ;; `select-bcast-step?`'s header. The arm was written on the reasoning
            ;; that a surface rule is not a representation invariant; that
            ;; reasoning was right and its premise was wrong.
-           [(bcast) (select-branch-top-keys (cons (select-bcast-inner s) rest))]
+           ;; ⚠ D4.P4d-0 (B1, adversarial verify): delegation is right for a
+           ;; SYMBOL inner and WRONG for a SUB inner — recursing into the sub
+           ;; arm SPLICES the inner keys `(a b)`, while the branch walks
+           ;; contribute ONE KEYLESS component (`select-step-output-name` says
+           ;; #f). That drift leaked past the L4 gates in three grades, the
+           ;; worst a `symbol<?` WHOLE-FILE ABORT on `x{k users^:{a b}}` —
+           ;; `select-assemble-row` sorting a #f label.
+           ;; ⚠ D4.P4d slice 2 (DEFERRED 45): the SAME drift had an ORDINAL
+           ;; grade — recursing `(cons inner rest)` walked PAST an ordinal
+           ;; inner to whatever keyed step followed (`k^:0:nm` computed as
+           ;; keyed `nm`), while both consumers label the component by
+           ;; `select-step-output-name` (typing entries + reduction entries) —
+           ;; a live WRONG L4 mixed-sorts refusal. The fix makes check ≡
+           ;; meaning BY CONSTRUCTION: ONE component labeled by the ω step's
+           ;; output name. B1's sub special-case DISSOLVES into it
+           ;; (output-name on a sub inner is #f).
+           [(bcast) (list (select-step-output-name s))]
            [(caret)
             (let ([c (select-step-cont s)])
               (cond

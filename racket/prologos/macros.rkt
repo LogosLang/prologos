@@ -5509,6 +5509,13 @@
           (not (eq? (car before) ':)))
      (format "def ~a: `~a` is a multiplicity, not a type — `def` takes a type annotation; ~a"
              name (car before) (spellings))]
+    ;; ARROW T1 P1b (R2): `def c-> := 5` reads as name `c-` + a bare `>`.
+    ;; Without this arm the [else] below fires and advises a TYPE ANNOTATION
+    ;; (`def c- : T := value`), which is confidently wrong advice for a
+    ;; mistyped arrow. Must precede [else].
+    [(and (= (length before) 1)
+          (half-glued-arrow-hint name (car before)))
+     => values]
     [else
      (format "def ~a: unexpected tokens before `:=`: ~a — ~a"
              name before (spellings))]))
