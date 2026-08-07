@@ -3809,12 +3809,28 @@ any sentinel is consulted.
   so `prologos-paren-origin` survives exactly as the old direct rebuild kept it
   (probed: `(p2 1:Int 2:Int)` still errors as a goal; `(fruit-color f mm.k)`
   still implicit-solves).
-  ⚠ **The one spelling still degrading is UNPARENTHESIZED `def r := rel …` with
-  parenless clauses** — the DEF arm's `rebuild-def-preserving-rhs` requires
-  exactly ONE element after `:=` (`def-rhs-stx` is #f for a spliced multi-line
-  `rel`), so it falls to the whole-form stamp. Measured, not assumed. The
-  parenthesized RHS spelling works. The guard's message names this spelling
-  explicitly, so the diagnostic is honest while it remains.
+  ⚠ ~~The one spelling still degrading is UNPARENTHESIZED `def r := rel …`~~
+  **✅ CLOSED same day (owner-requested): the DEF arm too.** Both of that arm's
+  degrading paths now route through the helper: the `def-rhs-stx = #f` fallback
+  (multi-element RHS — the measured target; also serves `defn`) and branch (b)
+  (single-element rewritten RHS — so a paren `(rel …)` RHS containing a rewrite
+  keeps its clause layout, pinned rows-based). The Q_C contract is untouched by
+  construction — no `prologos-defrhs-command` is stamped on the multi-element
+  path today, the helper never mints properties, and the [else] verify's
+  exhaustive property inventory (2 properties, 3 readers, all
+  position-restricted) covers the def arm too.
+  **Measured post-fix semantics of the unparen spelling, eyes open**: the clause
+  PARSES, and the spelling then routes into the PRE-EXISTING POL.9b def-seam gap
+  ("Expression is not a valid type" — a bare multi-token RHS is
+  application/value by Q_C, and a def-bound rel VALUE infers a hole type), i.e.
+  exactly what `def bad := (dbl 3)` is already pinned to produce. Consistency
+  with the sibling spellings; the misdirecting "parenthesize each GOAL" refusal
+  (when the actual fix is parenthesizing the REL) is gone. The seam gap itself
+  remains its own pinned item ("Pinned so a future diagnostic fix shows").
+  **With all three arms converted, the POL.8 guard now has NO known reachable
+  trigger** — probed across every rewrite family and spelling. It is kept as a
+  safety net for shapes the alignment cannot recover (DEFERRED 55's flat
+  spelling reaches degradation but that spelling routes differently).
   ⚠ Blast radius of what landed is **narrow**: the `let` aligned-block classifier
   and `||` multi-row splitting already survived a rewrite (the reader's indent
   grouping builds them pre-preparse), so `parse-clause-content` and the fact-row

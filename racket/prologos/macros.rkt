@@ -3722,7 +3722,14 @@
                          [(equal? value orig) def-rhs-stx]
                          [(and (pair? value) (pair? orig)
                                (eq? (head-of value) (head-of orig)))
-                          (datum->syntax #f value def-rhs-stx def-rhs-stx)]
+                          ;; DEFERRED 51(c), def-arm extension: the old 4-arg
+                          ;; rebuild kept the RHS node's loc + mark but stamped
+                          ;; that ONE srcloc over every inner node — so a paren
+                          ;; `(rel …)` RHS containing a rewrite lost the clause
+                          ;; layout its parenless goals need. The helper keeps
+                          ;; unchanged inner subtrees' srclocs; the Q_C mark is
+                          ;; applied on top exactly as before (value-stx below).
+                          (rebuild-preserving-locs def-rhs-stx value)]
                          [else #f])]
                       ;; The := SURFACE is what makes the RHS command
                       ;; position (Q_C). A sexp-style paren-def form
@@ -3735,11 +3742,30 @@
                             (syntax-property value-stx0
                                              'prologos-defrhs-command #t))])
                  (if value-stx
+                     ;; The := RHS path: value-stx (a syntax object, Q_C-marked)
+                     ;; is EMBEDDED in the datum list; `datum->syntax` preserves
+                     ;; embedded syntax objects as-is, so the RHS's inner srclocs
+                     ;; ride through the outer 3-arg rebuild untouched. The def
+                     ;; HEAD atoms (def/name/type) keep the whole-form loc as
+                     ;; before — no layout grammar reads them.
                      (datum->syntax #f (append (drop-right final-datum 1)
                                                (list value-stx))
                                     stx)
-                     (datum->syntax #f final-datum stx)))
-               (datum->syntax #f final-datum stx)))
+                     (rebuild-preserving-locs stx final-datum)))
+               ;; DEFERRED 51(c), def-arm extension — THE MEASURED TARGET: this
+               ;; is the path an UNPARENTHESIZED `def r := rel …` takes, because
+               ;; `def-rhs-stx` requires exactly ONE element after `:=` and a
+               ;; spliced multi-line `rel` RHS is several. The old whole-form
+               ;; stamp destroyed the clause layout, and the `:=` desugar itself
+               ;; changes the datum, so the POL.8 guard fired with NO rewrite
+               ;; anywhere in the source. The helper preserves the layout; the
+               ;; Q_C contract is untouched BY CONSTRUCTION — no
+               ;; `prologos-defrhs-command` is stamped on this path today, and
+               ;; the helper never mints properties, only copies originals,
+               ;; which `parse-defrhs-datum` reads at the stamped RHS element
+               ;; only (verified exhaustively by the [else] verify's property
+               ;; inventory). Also serves `defn` (this arm handles both).
+               (rebuild-preserving-locs stx final-datum)))
          (if (equal? expanded maybe-where-injected)
              (if (equal? maybe-where-injected datum)
                  (cons stx acc)

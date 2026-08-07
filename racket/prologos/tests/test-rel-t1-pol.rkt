@@ -928,6 +928,88 @@
                (format "continuation-only rewrite must not collapse either; got: ~a"
                        (result-msg tail))))
 
+(test-case "DEFERRED 51(c) def arm: unparenthesized `def r := rel …` takes parenless clauses"
+  ;; The last spelling still degrading after the defr + [else] extensions. The
+  ;; DEF arm's `rebuild-def-preserving-rhs` handles only a SINGLE element after
+  ;; `:=` (`def-rhs-stx` is #f for a spliced multi-line `rel` RHS), so it fell to
+  ;; the whole-form stamp — and the `:=` desugar itself changes the datum, so
+  ;; this fired with NO rewrite anywhere in the source. Both fallback paths now
+  ;; route through `rebuild-preserving-locs`.
+  ;; MEASURED semantics after the fix: the clause parses (no guard), and the
+  ;; spelling routes into the PRE-EXISTING POL.9b def-seam gap — a bare
+  ;; multi-token RHS is application/value by Q_C, and a def-bound rel VALUE
+  ;; infers a hole type, giving the same "Expression is not a valid type" that
+  ;; `def bad := (dbl 3)` is already pinned to produce below ("Pinned so a
+  ;; future diagnostic fix shows"). Consistency with the sibling spellings, not
+  ;; a new failure: the misdirecting parse-layer refusal ("parenthesize each
+  ;; GOAL" — when the actual fix is parenthesizing the REL) is gone.
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "def d51r1 := rel [?f]\n"
+                            "  &> fruit-color f \"blue\"\n"
+                            "     fruit-color f \"nope\"\n")))
+  (check-false (string-contains? (result-msg r) "parenless goals cannot")
+               (format "the guard must not fire; got: ~a" (result-msg r)))
+  (check-true (string-contains? (result-msg r) "not a valid type")
+              (format "routes into the pinned def-seam gap; got: ~a" (result-msg r))))
+
+(test-case "DEFERRED 51(c) def arm: a rewrite inside the rel GROUPS like the control"
+  (define (drel arg)
+    (run-ns-ws-last (string-append P8FIX
+                                   "def mm := {:k \"blue\"}\n"
+                                   "def d51r2 := rel [?f]\n"
+                                   "  &> fruit-color f " arg "\n"
+                                   "     fruit-color f \"nope\"\n")))
+  (define rewritten (drel "mm.k"))
+  (define control   (drel "\"nada\""))
+  (check-false (string-contains? (result-msg rewritten) "fruit-color/3")
+               (format "must not collapse into one 3-arg goal; got: ~a" (result-msg rewritten)))
+  (check-equal? (result-msg rewritten) (result-msg control)
+                "a rewrite must not change how the def-RHS rel's clause GROUPS"))
+
+(test-case "DEFERRED 51(c) def arm branch (b): a PAREN rel RHS with a rewrite keeps its clause layout"
+  ;; The other changed path: a SINGLE-element `:=` RHS whose datum was rewritten
+  ;; (heads match) used to be 4-arg re-stamped, flattening every inner srcloc —
+  ;; so a paren `(rel …)` RHS containing a rewrite lost the layout its parenless
+  ;; multi-goal clause needs. Now `rebuild-preserving-locs` keeps it, and the
+  ;; Q_C mark is applied on top exactly as before: this spelling still SOLVES
+  ;; (POL.9b/POL.10), so the pin is rows-based and strong — a mis-grouping would
+  ;; surface as an arity error, not a row.
+  (define (prel arg)
+    (run-ns-ws-last (string-append P8FIX
+                                   "def mm := {:k \"blue\"}\n"
+                                   "def d51pr := (rel [f]\n"
+                                   "  &> fruit-color f " arg "\n"
+                                   "     fruit-color f \"blue\")\n"
+                                   "d51pr")))
+  (define rewritten (prel "mm.k"))
+  (define control   (prel "\"nada\""))
+  (check-true (string? rewritten) (result-msg rewritten))
+  (check-false (string-contains? (result-msg rewritten) "fruit-color/3")
+               (result-msg rewritten))
+  ;; Neither arg matches (mm.k is an unevaluated term; "nada" matches nothing),
+  ;; so both conjunctions yield the same empty row set — comparable outputs whose
+  ;; equality pins the GROUPING while the solve pins the Q_C property survival.
+  (check-equal? rewritten control
+                "the rewritten paren-RHS rel must group and solve like the control"))
+
+(test-case "def arm Q_C parity: the := contracts are UNCHANGED by the srcloc extension"
+  ;; The def arm is where `prologos-defrhs-command` (Q_C) is stamped — a SINGLE
+  ;; element after `:=` gets command-position goal-ness; a bare multi-token RHS
+  ;; stays application/value BY CONSTRUCTION. Pin both sides so the helper swap
+  ;; cannot silently shift the boundary.
+  (define solves (run-ns-ws-last
+                  (string-append P8FIX "def blues := (fruit-color f \"blue\")\n")))
+  (check-true (string? solves) (result-msg solves))
+  (check-true (string-contains? solves "PVec")
+              (format "paren RHS keeps its implicit solve; got: ~a" solves))
+  (define app (run-ns-ws-last "ns qcp\ndef app1 := [+ 1 2]\n"))
+  (check-true (string-contains? app "app1 : Int") (result-msg app))
+  (define appr (run-ns-ws-last "ns qcp\ndef mmn := {:n 1}\ndef app2 := [+ mmn.n 2]\n"))
+  (check-true (string-contains? appr "app2 : Int")
+              (format "a rewritten application RHS stays an application; got: ~a"
+                      (result-msg appr))))
+
 (test-case "DEFERRED 51(c) [else] arm: a bare top-level `rel` with a rewrite takes parenless goals"
   ;; The scope gap named at 51(c)'s landing: a bare top-level `rel` does NOT go
   ;; through the `defr` preparse arm — it is a "regular form" handled by the
