@@ -4625,10 +4625,29 @@ recorded key is `eq?` to the pair the expander receives, **and a SECOND strip
 shares no keys** — the trap that would silently reduce the index to a no-op while
 every behavioural test still passed.
 
-**Gates**: suite 10017 / 487 / 0; both acceptance files 0 errors; the D57 corpus
-A/B (161 files, `fb788bfc` → `f9d68338`) came back with **zero semantic diffs**
-(4 DIFFERS = 2 gensym drifts + 2 absolute-path echoes; 20 caps all SYMMETRIC with
-identical sizes and path-only content deltas).
+**Gates**: suite **10020 / 487 / 0** (at `c77fbeb4`); both acceptance files 0
+errors. **Both corpus A/Bs came back with ZERO SEMANTIC DIFFS**, each isolated to
+its own change:
+- D57 (161 files, `fb788bfc` → `f9d68338`): 4 DIFFERS = 2 gensym drifts + 2
+  absolute-path echoes; 20 caps all SYMMETRIC with identical sizes.
+- D58 (161 files, **`75401b89` → `c77fbeb4`**): 5 DIFFERS = 2 gensym drifts + 3
+  path-only (they collapse to IDENTICAL lines once the two worktree paths are
+  normalised); 20 caps all SYMMETRIC.
+
+⚠ **A BASELINE-SELECTION TRAP, recorded because it nearly produced a false
+alarm.** The D58 A/B was FIRST run against `f9d68338` — the last baseline that
+happened to be frozen — which is **PRE-MERGE**. That comparison spans main's
+entire 30-commit delta as well as the three D58 commits, and it reported 13
+differing lines in `examples/2026-07-26-ciu-t6-path-selection.prologos` with the
+BASE leg showing **12 errors** against head's 0. That is main's own broadcast work
+landing, measured backwards — not a defect. **The base of a corpus A/B must be the
+commit the change actually sits on, not the newest baseline lying around.**
+⭐ The tell that caught it: the diff pointed the WRONG WAY. Base worse than head,
+in a file already known to run at 0 errors on the current tree, is structurally
+impossible for a change of ours — so it is a statement about the HARNESS, not the
+code. (Note the asymmetry: had it pointed the other way, that reasoning would not
+have been available and the two explanations would have needed separating by
+measurement.)
 
 **Explicitly NOT in scope** (owner-ruled a separate slice): the FOURTH member,
 `def name := rel …` spliced/unparenthesized, which collapses the same way at a

@@ -67,7 +67,17 @@ the STATE head in the file before last. Only environment invariants carry over.
   `find`; and it compares PHASE-TIMINGS/MEMORY-STATS/absolute paths, so DIFFERS
   is noisy by construction and every one must be read. A built pre-D57 baseline
   worktree at `fb788bfc` is at session-scratchpad `base-d57/` for isolating 57.
-  ⚠ **The D57 A/B is RUNNING, and is now DECOUPLED from the working tree** —
+  ✅ **BOTH A/Bs ARE DONE AND CLEAN — zero semantic diffs each.** D57
+  (`fb788bfc` → `f9d68338`) and D58 (**`75401b89` → `c77fbeb4`**), 161 files
+  apiece, all caps SYMMETRIC. Diffs were gensym drift and absolute-path echoes
+  only. ⚠ The D58 run had to be REDONE: the first attempt used `f9d68338` (the
+  last frozen baseline) which is PRE-MERGE, so it measured main's 30-commit delta
+  too and reported a 13-line "regression" in the CIU T6 acceptance file that was
+  actually main's own work seen backwards. **Base a corpus A/B on the commit the
+  change sits on.** The tell was that the diff pointed the WRONG WAY — base worse
+  than head, in a file known to run clean on the current tree, is a statement
+  about the harness, not the code.
+  (historical) ⚠ **The D57 A/B is RUNNING, and is now DECOUPLED from the working tree** —
   base `base-d57` (`fb788bfc`, pre-D57) vs head `head-d57` (`f9d68338`, post-D57
   / PRE-merge), both frozen scratch worktrees, so it isolates the peel slice and
   cannot be disturbed by further work. Output `corpus-d57.txt`, out-dir
@@ -828,3 +838,29 @@ defect needed a `defmacro`.
 deliverables re-checked. `homoiconicity.prologos`'s 56 errors are PRE-EXISTING
 (identical on all three legs, and the D57 A/B marked that file IDENTICAL) — I had
 picked it arbitrarily; it is not a designated acceptance file.
+
+### Both corpus gates clean — and a baseline-selection trap that nearly cried wolf
+
+**Result.** D57 (`fb788bfc` → `f9d68338`) and D58 (`75401b89` → `c77fbeb4`), 161
+files each: **zero semantic diffs**, all caps symmetric. Every DIFFERS resolved to
+gensym drift or an absolute-path echo — three of D58's five collapse to IDENTICAL
+lines once the two worktree paths are normalised, which is worth doing routinely
+because `corpus-ab` compares raw stdout including embedded source paths.
+
+**⭐ The trap.** I first ran the D58 A/B against `f9d68338` — simply the last
+baseline I had frozen — which is PRE-MERGE. That comparison spans main's entire
+30-commit delta plus my three commits, and it duly reported 13 differing lines in
+the CIU T6 acceptance file with the BASE leg showing 12 errors. Alarming, and
+entirely an artefact: main's broadcast work, measured backwards. **A corpus A/B's
+base must be the commit the change sits on, not the newest baseline lying
+around** — and when a session has just merged, those are not the same thing.
+
+**⭐ The tell, which generalises.** The diff pointed the WRONG WAY: base worse than
+head, in a file I had already run at 0 errors on the current tree. That is
+structurally impossible for a change of mine, so it is a statement about the
+HARNESS rather than the code. Note the asymmetry, because it is the useful part —
+had the diff pointed the other way (head worse), that reasoning would NOT have
+been available, and "my regression" versus "wrong baseline" would have had to be
+separated by measurement. **A wrong-way diff is nearly free to diagnose; a
+right-way diff is not. Check the baseline BEFORE reading the diffs, not after
+one surprises you.**
