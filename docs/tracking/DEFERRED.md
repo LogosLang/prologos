@@ -4125,3 +4125,70 @@ is exactly the distinction the derivation was built to make.
 `func`/`args`/`target` for effect and returns `expr-hole` — the same swallow
 shape as the arms fixed in DEFERRED 52, left in place because no repro was
 constructed for it.
+
+### 55. The FLAT / paren-wrapped clause spelling mis-parses under multiple rewrites — pre-existing, silent (found 2026-08-05 by adversarial verify)
+
+```
+(defr q [?a ?b ?c ?zz]
+  &> g a.p zz
+     h b zz.p)
+```
+→ parses as `(goal g 1) (goal zz 3)` — a goal named after a LOGIC VARIABLE — with
+**zero errors**. A randomized 70-case sweep of that spelling diverged from the
+rewrite-free control in **27 cases**, most silently.
+
+**Not a 51(c) regression** — measured: the same spelling mis-parsed BEFORE 51(c)
+too. Its safety premise never held there: `parse-clause-content`'s degradation
+marker is an impossible **column 0**, but a top-level `(defr …)` sits at **column
+1**, so the old whole-form stamp produced a non-zero column, the guard passed,
+and it silently mis-parsed. A 160-case A/B found **zero** cases where the old
+behaviour was correct and the new one wrong.
+
+**Why it is nonetheless 51(c)'s to name**: 51(c)'s `rebuild-preserving-locs`
+aligns a changed middle by positional RIGHT-alignment, which is only valid after
+the LAST length-changing rewrite. With two such rewrites separated by other
+elements, everything between pairs with an original `delta` positions to its
+right — and in this spelling a list's elements SPAN LINES, so the mispaired zone
+crosses a line boundary and elements get the wrong LINE, which is what the layout
+grammar reads. In the ordinary indent-grouped WS spelling this is unreachable
+(70/70, 90-case and 65-case batteries all clean): there, line-0 elements are flat
+and every later line is exactly ONE grouped element, so a group can never change
+the enclosing list's length and the mispaired zone stays inside line 0, where only
+columns are corrupted and `goal-col` comes from the prefix.
+
+**Mitigated, not fixed**: the peel now only pairs elements that are datum-equal
+or BOTH lists, so an atom can no longer pair with a different atom. That shrinks
+the unsound surface without making the spelling correct.
+
+**Real fix**: a proper diff (or an origin marker from the reader) instead of
+prefix/suffix + right-alignment. Related to DEFERRED 53's residual 2, which wants
+the same reader-side marker.
+
+### 56. `x[i]` on a deeper CONTINUATION line becomes a bogus goal — pre-existing, and 51(c) made its diagnostic worse (found 2026-08-05)
+
+```
+defr q [?f]
+  &> fruit-color f
+       cols[0]        ;; control: "red"  → registers fine
+```
+→ `ERROR: defr q: Could not infer type — the relation was NOT registered`.
+
+**Cause**: `x[i]` folds to `(get x i)` — the ONLY one of the four rewrite
+families whose output is **not `$`-headed** (`.`/`:` → `$select-path`, `'[…]` →
+`$list-literal-parse`). `pol8-goal-pair?` therefore classifies it as a GOAL
+GROUP, and `parse-clause-content` tests that branch before any column
+classification, so the continuation becomes a bogus sibling goal instead of
+extending the previous goal. Test-pinned as a known limit alongside the three
+families that DO work there.
+
+**Pre-existing** — an ordinary `[inc z]` on a continuation line behaves
+identically before and after 51(c). What 51(c) changed is the DIAGNOSTIC: the old
+path returned the actionable *"parenthesize each goal in this clause"*; the new
+one returns an unrelated type error. That regression in guidance is real even
+though the parse behaviour is not.
+
+**Fix direction**: `pol8-goal-pair?` decides "is this a goal group?" by "a pair
+not headed by a `$` sentinel", which is the same polarity trap DEFERRED 53 hit —
+a rewrite whose output happens not to be `$`-headed silently changes meaning. The
+durable answer is the reader-side origin marker (see 53 residual 2), not another
+member.

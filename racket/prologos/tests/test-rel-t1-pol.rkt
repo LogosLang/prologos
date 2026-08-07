@@ -839,6 +839,41 @@
     (check-true (string-contains? r "d51fam :")
                 (format "~a: the defr must register; got: ~a" what r))))
 
+(test-case "DEFERRED 51(c): rewrite families on a CONTINUATION line — 3 of 4 work, `x[i]` does not"
+  ;; The adversarial verify fairly objected that the family loop above only checks
+  ;; that the defr REGISTERS, and only with the rewrite on the `&>` line — so it
+  ;; passes over a family that parses into garbage on a CONTINUATION line. This
+  ;; test closes that gap by comparing against a plain-literal control.
+  ;;
+  ;; `x.f`, `x:f` and `'[…]` all fold to `$`-HEADED forms, which `pol8-goal-pair?`
+  ;; correctly declines to treat as a goal group. `x[i]` folds to `(get x i)` —
+  ;; the ONE family whose output is not `$`-headed — so it is mistaken for a goal
+  ;; group and a deeper continuation becomes a bogus sibling goal instead of
+  ;; extending the previous goal. Root cause PRE-DATES 51(c) (an ordinary
+  ;; `[inc z]` there behaves identically before and after); what 51(c) changed is
+  ;; that the old actionable "parenthesize each goal" was replaced by an unrelated
+  ;; type error. Filed as DEFERRED 56.
+  (define (cont arg)
+    (run-ns-ws-last (string-append P8FIX
+                                   "def mm := {:k \"blue\"}\n"
+                                   "def cols := '[\"red\" \"blue\"]\n"
+                                   "defr d51cont [?f]\n"
+                                   "  &> fruit-color f\n"
+                                   "       " arg "\n")))
+  (define control (cont "\"red\""))
+  (check-true (string? control) (result-msg control))
+  (for ([arg (in-list '("mm.k" "mm:k" "\'[1 2]"))]
+        [what (in-list '("dot-access" "broadcast" "list-literal"))])
+    (define r (cont arg))
+    (check-true (string? r)
+                (format "~a on a continuation line must parse; got: ~a" what (result-msg r))))
+  ;; KNOWN LIMIT, pinned so it is visible rather than surprising. If this starts
+  ;; passing, DEFERRED 56 is fixed — invert it rather than deleting it.
+  (define idx (cont "cols[0]"))
+  (check-true (prologos-error? idx)
+              (format "known limit: postfix-index on a continuation line; got: ~a"
+                      (result-msg idx))))
+
 (test-case "DEFERRED 51(c) ⭐ THE POINT: a rewritten clause GROUPS CORRECTLY, not merely without error"
   ;; The load-bearing test of 51(c), and the one the old guard existed to make
   ;; unnecessary. POL.8 refused rather than "risk a silent mis-grouping" — so

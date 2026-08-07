@@ -3095,9 +3095,33 @@
           ;;     into a nested rewrite at all — stamping here instead stopped the
           ;;     walk one level short in an earlier version). Different length ⇒
           ;;     a genuine fold/splice, so stamp with the anchor.
+          ;; ⚠ The peel is a HEURISTIC standing in for a real diff, so it is
+          ;; restricted to pairs it can justify. Positional right-alignment is
+          ;; only valid AFTER the last length-changing rewrite: with TWO such
+          ;; rewrites separated by other elements, everything between them pairs
+          ;; with an original `delta` positions to its right, and if a LINE
+          ;; BOUNDARY sits in that zone the elements get the wrong LINE — exactly
+          ;; what the layout grammar reads. (Found by adversarial verify on the
+          ;; flat/paren-wrapped clause spelling, where a list's elements can span
+          ;; lines; 27 of 70 randomized cases diverged. That spelling was ALREADY
+          ;; mis-parsing before 51(c) — its `(defr …)` sits at column 1, so the
+          ;; old guard's column-0 marker never protected it — so this is a
+          ;; residual, not a regression. See DEFERRED 55.)
+          ;;
+          ;; So peel only pairs that are self-evidently the same logical element:
+          ;; datum-equal, or BOTH lists (a group pairs with a group — which is the
+          ;; continuation-line case the peel exists for, and lets recursion sort
+          ;; out the inside). An atom paired with a DIFFERENT atom is exactly the
+          ;; mis-alignment above, and stops the peel.
+          (define (peelable? oi ei)
+            (define od (syntax->datum (vector-ref o-v oi)))
+            (define ed (vector-ref e-v ei))
+            (or (equal? od ed) (and (list? od) (list? ed))))
           (define peel
             (let loop ([k 0])
-              (if (and (> (- (- n-o suf pre) k) 1) (> (- (- n-e suf pre) k) 1))
+              (if (and (> (- (- n-o suf pre) k) 1)
+                       (> (- (- n-e suf pre) k) 1)
+                       (peelable? (- n-o 1 suf k) (- n-e 1 suf k)))
                   (loop (add1 k))
                   k)))
           (define suf* (+ suf peel))

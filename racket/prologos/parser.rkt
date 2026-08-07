@@ -6613,10 +6613,12 @@
         ;; actively misdirecting. Name the condition and its families instead.
         (prologos-error loc
           (string-append
-           "rule clause: parenless goals cannot be used in a defr that also contains ANY form "
-           "rewritten before parsing — e.g. dot-access `x.f`, broadcast `x:f`, postfix index "
-           "`x[i]`, a `'[…]` list literal — the rewrite strips the source columns that "
-           "layout-based clause grouping needs. Fix: parenthesize each goal in this clause."))))
+           "rule clause: the source columns that layout-based clause grouping needs are not "
+           "available for this clause, so parenless goals cannot be read here — parenthesize "
+           "each goal in this clause. (This happens when the enclosing form was rewritten "
+           "before parsing. That is USUALLY something in the form itself — dot-access `x.f`, "
+           "broadcast `x:f`, postfix index `x[i]`, a `'[…]` list literal — but a `def name := "
+           "rel …` is rewritten too, so it can fire with none of those present.)"))))
   (define sent-line (elem-line sentinel))
   (define sent-col (elem-col sentinel))
   (cond
