@@ -33,7 +33,7 @@ rulings, censuses and test delta live in its own section.
 | **P4** | **Broadcast ω** — ⭐ **P4a ✅ · P4b ✅ COMPLETE** (b-i carrier + b-ii `$dot-access` migration; `x.a` now mints the unified selector carrier) · P4c–P4e ⬜ — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | [§5.P4](#p4) · co-design: audit `wf_8458c23b` + options panel · **RULED 2026-07-31**: [Q_U5](#q-u5) · [Q_U6](#q-u6) · [Q_U7](#q-u7) · [Q_U8](#q-u8) · [Q_U9](#q-u9) (the PAUSE cleared) · partition LOCKED P4a–P4e |
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
 | **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [§5.P4c](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([inverted default](#p4c-2-inverted)) · [P4c-3](#p4c-3) ✅ `d477772c` · [P4c-4a](#p4c-4a) ✅ `f31237fd` · [P4c-4b](#p4c-4b) ✅ `6b22515d` (end to end) · **[P4c-4c](#p4c-4c-close) ✅ `ae26f540`** — broadcast is REACHABLE: PVec ω value semantics + **G2** + the preparse seam guard. ⭐ The verify caught a BLOCKING whole-file abort every gate was blind to; owner ruled the structural fix ([close](#p4c-4c-close)) · [Q_U18](#q-u18) ✅ · DEFERRED 43 ✅ · 48 RULED uniform · P4c-5 ⬜ |
-| **P4d** | **The carriers** — Map/keyword-row (TWO typing arms: keyword-row `expr-Record` + genuine `expr-Map`; ONE new champ reduction arm, atomic with typing) · het tuple (TYPING-ONLY — same `expr-rrb` runtime as PVec) · PVec-of-union + `row-meet` (NEW machinery + an AUTHORED fixture) · the Q_U9 refusal's message split · corpus re-fate · **Q_U19 ✅ RULED (A)** at the opening | 🔄 | [§5.P4d](#p4d) · opened 2026-08-07: audit `wf_4bc76d94-a2d` · **slice 0 ✅ `00e52c42`** (the soundness fix) · **slice 1 ✅ `14ef5e83`** (the map carriers) · **slice 2 ✅ `ba1c055d`** — the het tuple: per-position EXACT, **C9 RULED (a)**, misses NAME position/field, DEFERRED 40/45 riders fixed (suite **9940/485/0**, battery **395**, acceptance **73/73**) · slices 3–4 ⬜ |
+| **P4d** | **The carriers** — Map/keyword-row (TWO typing arms: keyword-row `expr-Record` + genuine `expr-Map`; ONE new champ reduction arm, atomic with typing) · het tuple (TYPING-ONLY — same `expr-rrb` runtime as PVec) · PVec-of-union + `row-meet` (NEW machinery + an AUTHORED fixture) · the Q_U9 refusal's message split · corpus re-fate · **Q_U19 ✅ RULED (A)** at the opening | 🔄 | [§5.P4d](#p4d) · opened 2026-08-07: audit `wf_4bc76d94-a2d` · **slice 0 ✅ `00e52c42`** (the soundness fix) · **slice 1 ✅ `14ef5e83`** (the map carriers) · **slice 2 ✅ `ba1c055d`** (het tuple; **C9 (a)**) · **slice 3 ✅ `1e8d0795`** — PVec-of-union keys-⋂, **Q_U21 RULED (a)** Nil is skipped (suite **9952/485/0**, battery **403**, acceptance **77/77**) · slice 4 ⬜ |
 | **PF** | **Path first-classness** (substrate; **P5's prerequisite**) — ⭐ **Q_U17 RULED B2**: a Path segment is a first-class `Step` value. Reify the closed six-kind union as a `data Step` ADT on the `Datum` pattern; `Path` stays GROUND; `segments : Path -> [List Step]`. Repairs the dead `path-segments` in the SAME change | ⬜ | [§5.PF](#pf) · [Q_U17](#q-u17) · panel `wf_68178bd3-eea` |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery · ⚠ B3 needs [PF](#pf) |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | [§5.PX](#px) · position flexible |
@@ -1520,7 +1520,7 @@ items of the hold-point, ruled before P4a opened:
   semantics RULE of the lift rather than inherited from context — that is the
   ruling, not an implementation accident. Grounding: mini-audit
   `wf_e15a1ef6-dfb` (its sub-inner facet measured the sort collision at both
-  layers). **Next free Q-label: U21.**
+  layers). **Next free Q-label: U22.**
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
@@ -6174,9 +6174,60 @@ first as slice 0"]:**
   the three-way §10.8 contradiction; the recursive line stays W4-DEFERRED)
   + 89/89 + 6/6 + 29/29 + 28/28 · corpus A/B vs `5ef1cfac`: EXACTLY the two
   flips · **full suite 9940/485/0**.
-- **⬜ Slice 3 — PVec-of-union + `row-meet`**: the new machinery + the
-  AUTHORED discriminating fixture + the CALM restatement on
-  `has-unsolved-meta?` grounds.
+- **✅ Slice 3 — PVec-of-union (keys-⋂ / types-⋃) — COMPLETE `1e8d0795`
+  (2026-08-07).** Audit `wf_2759e5b0-220` · verify `wf_f24e650c`.
+  **⭐ THE AUDIT RE-SCOPED THE SLICE**: the types-⋃ half **already shipped**
+  (`build-union-type`), so `row-meet` was never wholly new; and keys-⋂ is a
+  structural **NO-OP for Map components** (an open `[Map K V]` statically
+  offers every keyword). The slice is therefore TWO halves over **disjoint**
+  populations — the **GATE** for row components, the **TIER** for Map-bearing
+  unions. It also found **TWO populations with opposite moral status**: a
+  genuine non-offerer is a silent wrong answer the flip FIXES; a `Nil`
+  remainder is a **correct answer** a naive flip would BREAK — which is the
+  question ruling (a) settles.
+  **⭐ Q_U21 RULED (a) [owner, 2026-08-07] — `Nil` IS SKIPPED.** `<T | Nil>`
+  is the OPTION type; Nil is the absence marker, not a carrier alternative
+  that happens to offer no keys. Preserves the `nil-safe-get` idiom;
+  a genuine non-offerer (`Int`, a row lacking the key) still refuses.
+  **Placement**: the gate lives in `select-bcast-inner-apply` (the per-element
+  applier) so it covers exactly the population the tier witness does — union
+  ELEMENT, union-typed row FIELD, union-typed tuple POSITION — and its mutual
+  recursion with `select-union-lift` handles a component that only *whnfs
+  into* a union (a type alias; the structural `flatten-union` cannot see
+  through one). It deliberately does NOT reuse `select-project-field`'s union
+  arm: that is the single-get OPTIMISTIC polarity, its own comment forbids
+  broadcast reuse, and no polarity parameter is threaded down the
+  five-signature walk.
+  **⚠⚠ THE ACCEPTED CONSEQUENCE, NAMED — an OWNER QUESTION carried to the
+  close**: because gate and tier must agree on what a component IS, a
+  **Nil-bearing union stays PERMISSIVE**, so a genuine Map miss *inside* one
+  is QUIET. That is (a)'s price at the VALUE layer, which the ruling (about
+  the TYPE layer) did not reach. Recorded in the code at `tier-union-witness`.
+  **The verify found FOUR defects, three of them mine**: (i) BLOCKING — my
+  Nil pin was VACUOUS (one-element never-nil fixture) and a genuinely-absent
+  element PANICKED, because the gate skipped Nil and the tier did not;
+  (ii) BLOCKING — the witness fired on carriers the gate did not cover;
+  (iii) HIGH — the bail DISCARDED the inner fail, so every per-component
+  failure read as a key miss (false for ordinal inners and block-sort
+  projections, and strictly worse than pre-slice in 6 spellings) — it now
+  NESTS the inner reason on slice 2's `bcast-at` pattern; (iv) a regression I
+  caught in my own RED/GREEN cycle — the witness applied on the NON-broadcast
+  path, flipping single-get over a union from the ruled permissive `none` to
+  a panic (a `peeled?` flag confines it; the verify proved the confinement
+  complete by mutant). ⚠ Plus a **1-directive format string with 2 args**,
+  which RAISED and was swallowed by `select-block-hint`'s blanket handler —
+  the same class this arc has recorded before.
+  **The fixture**: §10.7's "needs an ANNOTATION to build" was WRONG and
+  unbuildable — a closed row is not writable in TYPE position. A
+  **dynamic-bound `pvec-slice`** widens a het tuple to a PVec of the union of
+  its position types (verified not an accident of the bound). The all-offer
+  line is live; the refusing line stays commented (first-ERROR-result rule,
+  as `events:x`) and is battery-pinned. ⚠ The fixture def initially SHADOWED
+  an existing `mixed` in the file — caught by `--check`, renamed `widened`.
+  **Gates**: battery **403/403** (+9, 1 re-fixtured, 1 re-expressed) ·
+  neighborhood 291/291 · acceptance **77/77** (+4) + 89/89 + 6/6 + 29/29 +
+  28/28 · corpus A/B vs `65cb5bce`: only the two known pre-existing artifacts
+  · **full suite 9952/485/0**.
 - **⬜ Slice 4 — the diagnostics batch (LAST, so messages describe the final
   surface)**: the `bcast-carrier` split (Set/List sentences; the Functor
   clause drops) · Q_U19's unified refusal + the two `Unbound variable`
