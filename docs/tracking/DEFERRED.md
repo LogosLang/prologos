@@ -4676,7 +4676,13 @@ which dropped them — while keeping every srcloc the index exists for.
 at command position is a goal, so the accident arguably made macro-spliced code
 behave like hand-written code. **That is exactly why it could not stay** — a
 language-semantics change arriving unreviewed, undocumented and untested inside a
-srcloc fix. If the goal reading is wanted, it should be its own ruling.
+srcloc fix.
+
+✅ **RULED 2026-08-07 [owner]: KEEP THE GOAL READING OUT.** A macro-spliced paren
+group at command position stays an APPLICATION. This is now a decision, not
+merely a reverted side effect — do not "fix" it later by adopting POL.9's
+command-position reading for macro output on the grounds of consistency. It is
+test-pinned three ways, including the silent goal-keyword case.
 
 ⭐ **The generalizable lesson**: "hand back the original node" is NOT neutral. A
 syntax object carries a POSITION *and* CLAIMS ABOUT ITS POSITION, and moving it
@@ -4693,3 +4699,78 @@ is even available from a syntax object in scope, since a paren-wrapped top-level
 form sits at column **1**. The reliable fail-safe is a `#f` loc
 (`(datum->syntax #f d #f)`), which BOTH layout guards already test for alongside
 `(zero? sent-col)`.
+
+
+### 59. ⬜ MEMBER 4 — `def name := rel …` (spliced, unparenthesized) mis-groups, but is UNOBSERVABLE today (measured 2026-08-07)
+
+The fourth member of the 51(c) family, owner-ruled into its own slice. Its clause
+elements are collapsed onto one line at a NONZERO column, so POL.8's column-0
+marker is blind and a parenless clause silently mis-groups.
+
+⚠ **BUT NOTHING ABOUT IT REACHES OUTPUT, which changes how it can be worked.**
+Measured at `c77fbeb4` — the mis-grouped spelling and its shape-identical paren
+control produce **byte-identical output**:
+
+```
+def k := rel [?f]                    def k := rel [?f]
+  &> fruit-color f "blue"              &> (fruit-color f "blue") (fruit-size f "small")
+     fruit-size f "small"            k
+k
+```
+→ both: `ERROR: Expression is not a valid type` + `ERROR: Unbound variable`,
+2 errors. The **POL.9b def-seam gap** (a bare multi-token RHS is application/value
+by Q_C, and a def-bound rel VALUE infers a hole type) masks the whole thing.
+
+**The PARENTHESIZED spelling is CORRECT and is not affected**: `def k := (rel [?f]
+&> fruit-color f "blue" / fruit-size f "small")` returns `@[{:f "blueberry"}]`,
+0 errors, byte-identical to its paren-goal control.
+
+**CONSEQUENCES FOR SEQUENCING** (this is the entry's point):
+- there is **no behavioural failing-test-first** available — the fix would change
+  no observable behaviour, so it is pinnable only at the PARSER level (parse the
+  form, inspect the `surf-*` tree);
+- the `||` fact-row pin a prior audit demanded "BEFORE the fix" **cannot be
+  written behaviourally for this arm either**, because the arm errors out. The
+  audit's 3-rows-vs-4 observation was made at surf level, not end to end;
+- so the honest options are (a) fix it with PARSER-LEVEL pins as insurance,
+  labelled latent; (b) close the def-seam gap FIRST — that is what makes
+  `def name := rel …` usable at all — after which member 4 is observable and
+  testable normally; or (c) leave it filed and take observable work instead.
+
+**Why it is not free to ignore**: the day the def-seam gap closes, this becomes a
+LIVE SILENT mis-group, and whoever closes that gap will have no reason to look
+here.
+
+**And it is NOT a relocation miss** — the origin index of DEFERRED 58 cannot see
+it. The expanded `(rel (?q) ($facts-sep …))` is a NEWLY CONSTRUCTED grouping of
+three previously-SIBLING original elements, so no datum-equal twin exists at any
+depth and no cons-cell identity survives. It needs **expanded-side DESCENT**
+(recurse into the folded expanded element against the folded original run, whose
+tail is datum-equal to the originals) — a different generalization from anything
+DEFERRED 58 built.
+
+### 60. ⬜ An anonymous `rel` carrying `||` FACT ROWS returns `@[]` and types its column `Goal` (found 2026-08-07, silent)
+
+Separate from member 4 and from the `def` seam — measured on the bare top-level
+spelling, which has neither:
+
+```
+(rel [?q]
+  || [some 1]
+     [some 2]
+     "z")
+```
+→ `@[] : [PVec {:q Goal}]`, **0 errors**. The `defr` equivalent (`defr rr [?q]`
+with the same block, then `(rr x)`) returns **four** rows:
+`@[{:x [?some 1]} {:x "z"} {:x unknown} {:x 2}]`.
+
+So `||` fact rows appear not to be consumed as facts inside an anonymous `rel`
+value: the column types as `Goal` rather than as the row values' type, and the
+solution set is empty. Silent in both directions — no error on either side.
+
+⚠ Note the `defr` side is not a clean oracle either: its 4 rows include the known
+DEFERRED 53 splay residual (`[some 2]` on a continuation line becomes a fabricated
+row, and `{:x unknown}` appears). So "make them agree" is not obviously the right
+target — what each SHOULD produce wants a ruling before either is changed.
+
+Found while scoping member 4; not investigated further.
