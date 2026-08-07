@@ -1092,7 +1092,55 @@
   (check-true (string? (d57-aligned D57-2GOAL-P)) (result-msg (d57-aligned D57-2GOAL-P)))
   (check-true (string? (d57-bracket D57-2GOAL-P)) (result-msg (d57-bracket D57-2GOAL-P))))
 
-(test-case "DEFERRED 51(c) KNOWN LIMIT: a SIBLING-LET chain still degrades (the 5th member)"
+;; ── DEFERRED 58 slice 2: the SIBLING-LET chain ───────────────────────────────
+;;
+;; ⚠ INVERTED (the KNOWN LIMIT below said to invert rather than delete). This one
+;; was NOT a depth problem at all — a distinction the earlier framing got wrong.
+;; `merge-toplevel-sibling-lets` fused the run from a PURE DATUM and rebuilt with
+;; a 4-arg `datum->syntax` against sibling 1, and `datum->syntax` stamps
+;; RECURSIVELY, so every node of the merged form carried sibling 1's line and
+;; column BEFORE `rebuild-preserving-locs` ever saw it. No search, at any depth,
+;; can recover information that is no longer in the tree. The fix is that the
+;; fusion now strips through the SAME origin index, so each sibling's own subtrees
+;; stay recoverable by identity across the fusion.
+;;
+;; Its loudness was incidental: sibling 1 sits at column 0, which is exactly
+;; POL.8's degradation marker. Had the chain been written indented (inside a
+;; `defn`), the same defect would have been SILENT.
+(test-case "DEFERRED 58 slice 2: a SIBLING-LET chain groups like its paren control"
+  (define parenless (run-ns-ws-last
+                     (string-append P8FIX2
+                                    "let d58sx := 5\n"
+                                    "let d58sr := (rel [f]\n"
+                                    "  &> fruit-color f \"blue\"\n"
+                                    "     fruit-size f \"small\")\n"
+                                    "  [pair d58sx 1]\n")))
+  (define paren     (run-ns-ws-last
+                     (string-append P8FIX2
+                                    "let d58tx := 5\n"
+                                    "let d58tr := (rel [f]\n"
+                                    "  &> (fruit-color f \"blue\") (fruit-size f \"small\"))\n"
+                                    "  [pair d58tx 1]\n")))
+  (check-false (string-contains? (result-msg parenless) "parenless goals cannot")
+               (format "the guard must no longer fire; got: ~a" (result-msg parenless)))
+  (check-equal? parenless paren
+                "a sibling-let chain must group exactly like its paren control"))
+
+(test-case "DEFERRED 58 slice 2: the chain still SOLVES, and the earlier siblings stay in scope"
+  ;; Guards the half a grouping test cannot: the merge must still MERGE. If the
+  ;; fusion stopped fusing, `d58ax` would fall out of scope and this errors.
+  (define r (run-ns-ws-last
+             (string-append P8FIX2
+                            "let d58ax := 5\n"
+                            "let d58ar := (rel [f]\n"
+                            "  &> fruit-color f \"blue\"\n"
+                            "     fruit-size f \"small\")\n"
+                            "  [+ d58ax 1]\n")))
+  (check-equal? r "6 : Int"
+                (format "the merged chain must still evaluate its body; got: ~a"
+                        (result-msg r))))
+
+(test-case "SUPERSEDED by DEFERRED 58 slice 2 — was: a SIBLING-LET chain still degrades"
   ;; Found by self-probe minutes after the let-leg landing — the family-closure
   ;; lesson (Watching 4) applied: hunt the next member yourself, immediately.
   ;; `merge-toplevel-sibling-lets` FUSES the sibling lets' stxs into one datum
@@ -1103,15 +1151,24 @@
   ;; relocation), not another application of the helper — deliberately NOT
   ;; improvised mid-arc; see DEFERRED 51(c). If this test starts failing because
   ;; the chain PARSES, that fix landed: invert it, do not delete it.
+  ;;
+  ;; ⚠ INVERTED at DEFERRED 58 slice 2, and the diagnosis above is now known to
+  ;; be WRONG in its load-bearing half: this was never recoverable by a smarter
+  ;; multi-source ALIGNMENT, because the fusion destroyed the srclocs before any
+  ;; alignment ran. Kept verbatim, with its ORIGINAL fixture, as the historical
+  ;; single-goal member — the two tests above carry the two-goal grouping and the
+  ;; still-merges property.
   (define r (run-ns-ws-last
              (string-append P8FIX
                             "let d51sx := 5\n"
                             "let d51sr := (rel [f]\n"
                             "  &> fruit-color f \"blue\")\n"
                             "  [+ d51sx 1]\n")))
-  (check-true (string-contains? (result-msg r) "parenless goals cannot")
-              (format "known limit: the sibling-let merge still degrades; got: ~a"
-                      (result-msg r))))
+  (check-false (string-contains? (result-msg r) "parenless goals cannot")
+               (format "the sibling-let guard must no longer fire; got: ~a"
+                       (result-msg r)))
+  (check-equal? r "6 : Int"
+                (format "and the merged chain must evaluate; got: ~a" (result-msg r))))
 
 (test-case "DEFERRED 51(c) def arm: unparenthesized `def r := rel …` takes parenless clauses"
   ;; The last spelling still degrading after the defr + [else] extensions. The

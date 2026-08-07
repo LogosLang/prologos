@@ -2994,9 +2994,40 @@
              ;; 'prologos-defrhs-command) are never round-tripped
              [(null? (cdr unit)) (cons (car unit) out)]
              [else
-              (define merged (merge-sibling-lets (map syntax->datum unit)))
+              ;; ── DEFERRED 58 slice 2: THE FUSION IS THE SECOND STRIP ────────
+              ;; This was NOT a depth problem, which is what the earlier framing
+              ;; got wrong. `(map syntax->datum unit)` threw away N syntax trees
+              ;; and the rebuild below stamped the result against sibling 1 — and
+              ;; `datum->syntax` stamps RECURSIVELY over a bare datum, so EVERY
+              ;; node of the merged form inherited sibling 1's line and column
+              ;; before `rebuild-preserving-locs` ever saw it. No search, at any
+              ;; depth, can recover information that is no longer in the tree.
+              ;;
+              ;; Stripping through a SHARED index over all siblings fixes it
+              ;; without touching the merge itself: `merge-sibling-lets` still
+              ;; receives plain datums and still decides everything on datum
+              ;; shapes (its ~62 datum-shape sites are untouched, and so is its
+              ;; error-containment invariant), but every sub-list it splices
+              ;; through by reference — which, on this path, is every binding
+              ;; token group and the body — stays recoverable by identity, from
+              ;; WHICHEVER sibling it came from.
+              ;;
+              ;; ⚠ This code runs OUTSIDE the per-form `with-handlers`, so a
+              ;; raise here is a WHOLE-FILE abort. `strip-with-origin!` is a
+              ;; total walk over syntax and does not raise; keep it that way.
+              (define fuse-idx (make-hasheq))
+              (define merged
+                (merge-sibling-lets
+                 (for/list ([s (in-list unit)]) (strip-with-origin! s fuse-idx))))
               (if (= (length merged) 1)
-                  (cons (datum->syntax #f (car merged) (car unit) (car unit)) out)
+                  ;; The outer `let` node is MINTED by the merge, so it takes
+                  ;; sibling 1's srcloc AND properties exactly as before (4-arg);
+                  ;; `stamp-with-origin` restores the originals underneath it.
+                  (cons (datum->syntax
+                         #f
+                         (syntax-e (stamp-with-origin (car merged) (car unit) fuse-idx))
+                         (car unit) (car unit))
+                        out)
                   (append (reverse unit) out))])))
        (loop tail (append emitted acc))])))
 
