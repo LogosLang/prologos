@@ -356,19 +356,24 @@ users:{0.userName^}.0 ;; @["Lisa"]                              — OUTER .0 (ex
 ;; W1 (PERMANENT border, spec §6): the flat join @[{:module "core" :sev :warn} …]
 ;;   repeats a parent field into child rows — host comprehensions own it.
 
-;; §10.5 map-generic broadcast — regions (Q1 ✅)                     [D4.P4]
-;; regions:host       ;; {:ap "ap.example.com" :eu "eu.example.com" :us "us.example.com"}
+;; §10.5 map-generic broadcast — regions (Q1 ✅; LIVE at D4.P4d slice 1)
+regions:host       ;; keys preserved as a ROW — the map-generic rule
+;;67=> {:ap "ap.example.com", :eu "eu.example.com", :us "us.example.com"} : {:ap String :eu String :us String}
 regions{eu us}     ;; nominal n-ary selection (LANDED at D4.P3a, Q_U1)
-;;67=> {:eu {:host "eu.example.com", :port 443}, :us {:host "us.example.com", :port 443}} : {:eu {:host String :port Int} :us {:host String :port Int}}
+;;68=> {:eu {:host "eu.example.com", :port 443}, :us {:host "us.example.com", :port 443}} : {:eu {:host String :port Int} :us {:host String :port Int}}
 
 ;; §10.6 pure transposes — m, strings — v2, PERMANENTLY commented (spec §7.3)
 ;; (`m.0` USED TO SIT HERE and self-contradicted the block header — it was
 ;;  annotated "works at D4.P2" inside a block declared permanently commented.
 ;;  Owner ruling Q_R4: it MOVES OUT. It is now live in §J below.)
 m:0                ;; @[1 4] — a column                            [D4.P4]
-;;68=> @[1 4] : [PVec Int]
+;;69=> @[1 4] : [PVec Int]
 ;; m{:0^ :1^ :2^}     ;; v2: branch-initial ω (W2 exit)
-;; strings:home       ;; {:de "Start" :en "Home"} — map-generic       [D4.P4]
+;; ⚠ the next line was CARVED OUT of this v2 block at D4.P4d slice 1 — it was
+;;   the one "(map-generic)"-tagged line inside a PERMANENTLY-commented section
+;;   (the collision is recorded in D4 §5.P4d); the pivots above/below stay v2.
+strings:home       ;; map-generic over the language keys
+;;70=> {:de "Start", :en "Home"} : {:de String :en String}
 ;; strings{:home^home :about^about}  ;; v2: nominal pivot
 
 ;; §10.7 heterogeneity — events (the 2b SPLIT: tuple ⇒ per-position exact)
@@ -389,26 +394,26 @@ m:0                ;; @[1 4] — a column                            [D4.P4]
 ;; is permanently-commented v2 territory (Q_R4).
 
 m.0
-;;69=> @[1 2 3] : [PVec Int]
+;;71=> @[1 2 3] : [PVec Int]
 
 ;; nat→nat chains. These USED to mis-lex: `m.1.2` read as the rational 6/5,
 ;; because `decimal-literal` anchors at the DIGIT. A dot-anchored recognizer
 ;; consumes `.1` first, so the interior dot is never available as an anchor.
 ;; (⚠ the mis-lex was LOUD, not silent — the stranded bare `.` was unbound.)
 m.1.2
-;;70=> 6 : Int
+;;72=> 6 : Int
 
 ;; multi-digit — the ordinal Q_M8 exists for
 def scores := @[10 11 12 13 14 15 16 17 18 19 20 21 22]
-;;71=> scores : [PVec Int] defined.
+;;73=> scores : [PVec Int] defined.
 
 scores.12
-;;72=> 22 : Int
+;;74=> 22 : Int
 
 ;; per-position EXACT types survive on a het tuple (D15 + record-project)
 mixed.1
-;;73=> "seven" : String
+;;75=> "seven" : String
 
 ;; and `.N` reaches into nested rows the same way `.name` does
 app-config.admins.0.name
-;;74=> "Alice" : String
+;;76=> "Alice" : String

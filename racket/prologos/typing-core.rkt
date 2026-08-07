@@ -946,9 +946,15 @@
 (define (select-elem-of ctx tm path sort name)
   (case sort
     [(path block)
-     (if (expr-PVec? tm)
-         (values (expr-PVec-elem-type tm) #f)
-         (values #f (select-fail 'bcast-carrier (append path (list name)) name tm)))]
+     (cond
+       [(expr-PVec? tm) (values (expr-PVec-elem-type tm) #f)]
+       ;; D4.P4d slice 1 — the genuine-Map carrier: ONE uniform elem (the
+       ;; value type); the caller's re-wrap follows the carrier (`tm` is in
+       ;; scope there). The keyword-row carrier does NOT come through here —
+       ;; it has no single elem (per-field types) and routes around this
+       ;; protocol in `select-bcast-lift`.
+       [(expr-Map? tm) (values (expr-Map-v-type tm) #f)]
+       [else (values #f (select-fail 'bcast-carrier (append path (list name)) name tm))])]
     [else (select-sort-unhandled 'select-elem-of sort)]))
 
 ;; D4.P4c-4c (DEFERRED 43) — THE TYPE THE TIER DECISION SHOULD SEE.
@@ -978,10 +984,29 @@
   (if (and (pair? branches) (null? (cdr branches)))
       (let loop ([tm tm] [steps (car branches)])
         (if (and (pair? steps)
-                 (eq? (select-step-kind (car steps)) 'bcast)
-                 (expr-PVec? tm))
-            (loop (whnf (expr-PVec-elem-type tm))
-                  (cons (select-bcast-inner (car steps)) (cdr steps)))
+                 (eq? (select-step-kind (car steps)) 'bcast))
+            (let ([next (cons (select-bcast-inner (car steps)) (cdr steps))])
+              (cond
+                [(expr-PVec? tm) (loop (whnf (expr-PVec-elem-type tm)) next)]
+                ;; D4.P4d slice 1 — the peel follows EVERY ω-capable carrier;
+                ;; leaving a new carrier un-peeled re-creates DEFERRED 43's
+                ;; silent-miss class one carrier over (the Map-carrier case
+                ;; additionally over-asserted from the CARRIER type before the
+                ;; refusal even fired — the P4d slice-1 audit's trace).
+                [(expr-Map? tm) (loop (whnf (expr-Map-v-type tm)) next)]
+                [(and (expr-Record? tm)
+                      (eq? (expr-Record-key-domain tm) 'keyword)
+                      (eq? (expr-Record-tail tm) 'closed))
+                 ;; N field types, ONE scalar tier (the mini-C9 — D4 §5.P4d):
+                 ;; a conservative OR in the only direction the contract
+                 ;; permits (permissive → assertive). If ANY field's peel
+                 ;; reaches a Map, return that witness so the consumer's
+                 ;; `expr-Map?` test asserts; else the row itself (no assert).
+                 (or (for/or ([fld (in-list (expr-Record-fields tm))])
+                       (let ([p (loop (whnf (record-field-type (cdr fld))) next)])
+                         (and (expr-Map? p) p)))
+                     tm)]
+                [else tm]))
             tm))
       tm))
 
@@ -1020,26 +1045,64 @@
          ;; legitimate label, the formatter prints `:0`). Only a LIST (the raw
          ;; sub) takes the stand-in. Caught by the P4c-4b three-sub-cases pin.
          [name (let ([n (select-step-name s)]) (if (pair? n) '|{…}| n))])
-    (let-values ([(elem ef) (select-elem-of ctx tm path sort name)])
-      (if ef
-          (values #f ef)
-          ;; ⭐ Q_U20 [owner, 2026-08-05]: A SUB INNER ASSEMBLES AT 'block,
-          ;; ALWAYS. The lift threads ONE sort and the two inner kinds need
-          ;; OPPOSITE ones — a symbol inner EXTRACTS ('path; 'block would wrap
-          ;; `xs:a` as `[PVec {:a T}]`), a sub inner ASSEMBLES ('block; 'path
-          ;; fails its one-component constraint). So the sort here is a
-          ;; PER-INNER-KIND semantics RULE, not inherited from the outer
-          ;; selector. `users:{a b}` over `[PVec {:a A :b B :c C}]` is a PVec of
-          ;; NARROWED rows — the terminal-`@sub` machinery of the below walks,
-          ;; applied per element.
-          (if (select-sub-step? inner)
-              (let-values ([(comps cf) (select-level-components ctx (whnf elem)
-                                                                (cdr inner) path 'block)])
-                (if cf (values #f cf)
-                    (values (expr-PVec (select-assemble-row comps)) #f)))
-              (let-values ([(bt bf) (select-project ctx (whnf elem) (list (list inner))
-                                                    sort path)])
-                (if bf (values #f bf) (values (expr-PVec bt) #f))))))))
+    (cond
+      ;; D4.P4d slice 1 — THE KEYWORD-ROW CARRIER routes AROUND the one-elem
+      ;; protocol: a closed 'keyword row has no single elem (per-field types),
+      ;; so the lift is PER-FIELD, reconstructed in `record-map-field-types`'
+      ;; shape (the ONE reconstruction helper — labels/presence/tail/canonical
+      ;; order PRESERVED; `select-assemble-row` would re-mint closed/'present).
+      ;; The walk's 2-valued fail channel threads through the single-valued
+      ;; proc via let/ec: the FIRST failing field aborts the WHOLE row — no
+      ;; partial row escapes (the typing mirror of the whole-node abort).
+      ;; Dyn-tail rows fall through to the carrier refusal below (the 4d
+      ;; refusal); 'nat rows likewise (the het tuple is slice 2).
+      [(and (expr-Record? tm)
+            (eq? (expr-Record-key-domain tm) 'keyword)
+            (eq? (expr-Record-tail tm) 'closed))
+       (let/ec bail
+         (values
+          (record-map-field-types
+           (lambda (ft)
+             (let ([ft* (whnf ft)])
+               (if (select-sub-step? inner)
+                   ;; Q_U20's per-inner-kind rule EXTENDED to this carrier
+                   ;; (recorded in D4 §5.P4d): a sub inner ASSEMBLES at
+                   ;; 'block, per FIELD.
+                   (let-values ([(comps cf) (select-level-components ctx ft* (cdr inner)
+                                                                     path 'block)])
+                     (if cf (bail #f cf) (select-assemble-row comps)))
+                   (let-values ([(bt bf) (select-project ctx ft* (list (list inner))
+                                                          sort path)])
+                     (if bf (bail #f bf) bt)))))
+           tm)
+          #f))]
+      [else
+       (let-values ([(elem ef) (select-elem-of ctx tm path sort name)])
+         (if ef
+             (values #f ef)
+             ;; D4.P4d slice 1: the RE-WRAP follows the CARRIER — `tm` is in
+             ;; scope, so the genuine-Map arm needs no protocol change
+             ;; (`[Map K V]` under ω re-wraps `[Map K proj(V)]`, keys by type).
+             (let ([re-wrap (if (expr-Map? tm)
+                                (lambda (t) (expr-Map (expr-Map-k-type tm) t))
+                                expr-PVec)])
+               ;; ⭐ Q_U20 [owner, 2026-08-05]: A SUB INNER ASSEMBLES AT 'block,
+               ;; ALWAYS. The lift threads ONE sort and the two inner kinds need
+               ;; OPPOSITE ones — a symbol inner EXTRACTS ('path; 'block would wrap
+               ;; `xs:a` as `[PVec {:a T}]`), a sub inner ASSEMBLES ('block; 'path
+               ;; fails its one-component constraint). So the sort here is a
+               ;; PER-INNER-KIND semantics RULE, not inherited from the outer
+               ;; selector. `users:{a b}` over `[PVec {:a A :b B :c C}]` is a PVec of
+               ;; NARROWED rows — the terminal-`@sub` machinery of the below walks,
+               ;; applied per element.
+               (if (select-sub-step? inner)
+                   (let-values ([(comps cf) (select-level-components ctx (whnf elem)
+                                                                     (cdr inner) path 'block)])
+                     (if cf (values #f cf)
+                         (values (re-wrap (select-assemble-row comps)) #f)))
+                   (let-values ([(bt bf) (select-project ctx (whnf elem) (list (list inner))
+                                                          sort path)])
+                     (if bf (values #f bf) (values (re-wrap bt) #f)))))))])))
 
 ;; select-project — the node's typing walk (Q_T1's one walk, two consumers).
 ;; D4.P3c: a LEVEL now assembles either sort: all-keyed components → a

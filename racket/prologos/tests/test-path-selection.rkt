@@ -4096,8 +4096,11 @@
   ;; the sharper `bcast-carrier` message naming the carrier and P4d. Matching the
   ;; live message keeps the pin DISCRIMINATING; matching the dead one would have
   ;; made it vacuous.
-  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec subject" s)) out)
-              (format "expected the guided carrier refusal; got ~a" out))
+  ;; ⚠ RE-EXPRESSED AT P4d slice 1: the Map carrier now ADMITS, so the refusal
+  ;; moved one layer down — the per-FIELD projection over the String value is
+  ;; what fails. Same proposition (per-command, file continues), third message.
+  (check-true (ormap (lambda (s) (regexp-match? #rx"not a record, so it has no fields" s)) out)
+              (format "expected the per-field projection failure; got ~a" out))
   ;; …and — THE POINT — the command AFTER it still runs. Before the channel fix
   ;; this line was lost with the whole file.
   (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)
@@ -4109,8 +4112,10 @@
   ;; colon and handing it to `plain-key?` is silently wrong twice over.
   ;;
   ;; (a) ORDINAL — Q_U16b rules `users:0` a legal ω step. Stripped-and-handed-on
-  ;; it would be a NOMINAL key named `0`.
-  (check-true (ormap (lambda (s) (regexp-match? #rx"broadcast `:0`" s))
+  ;; it would be a NOMINAL key named `0`. ⚠ RE-EXPRESSED AT P4d slice 1: the
+  ;; carrier admits and the ordinal reaches the VALUE (a String) — the guided
+  ;; ordinal message still proves the step stayed ORDINAL, which is the point.
+  (check-true (ormap (lambda (s) (regexp-match? #rx"ordinal `0`" s))
                      (bcast-e2e "def a := users:0")))
   ;; (b) FLATTEN — `ident-continue?` admits `*`, so `tags*` arrives as ONE token
   ;; and no scheme keyed on token TYPE can see the operator. Stripped, it passes
@@ -4131,9 +4136,11 @@
   (define out (map (lambda (r) (format "~a" r))
                    (process-string-ws
                     "ns bcast-on\ndef users := {:name \"alice\"}\ndef q := users:name\ndef after := 42")))
-  ;; the subject is a MAP, so P4c-4c's carrier refusal is what fires — and the
-  ;; point is that it fires AT ALL without a grant, where nothing did before.
-  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec subject" s)) out)
+  ;; the subject is a MAP, so P4c-4c's carrier refusal fired here — and at P4d
+  ;; slice 1 the carrier ADMITS, so the chain now runs even deeper: the
+  ;; per-field projection failure is today's proof the chain is live at the
+  ;; default. (⚠ RE-EXPRESSED at P4c-4c and again at P4d slice 1.)
+  (check-true (ormap (lambda (s) (regexp-match? #rx"not a record, so it has no fields" s)) out)
               (format "the broadcast chain must be live at the default: ~a" out))
   (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
 
@@ -4176,12 +4183,12 @@
     (define out (map (lambda (r) (format "~a" r))
                      (process-string-ws
                       "ns seam-l2\ndef users := {:name \"alice\"}\ndef q := users:name")))
-    ;; ⚠ RE-EXPRESSED AT P4c-4c for the same reason as the pin above: the
-    ;; proposition ("the parameter is in force through the REAL pipeline") is
-    ;; unchanged and is proved by a guided broadcast diagnostic ARRIVING; only
-    ;; which diagnostic changed, because this fixture's subject is a Map.
-    (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec subject" s)) out)
-                (format "expected the guided carrier refusal, got: ~a" out))))
+    ;; ⚠ RE-EXPRESSED AT P4c-4c and AGAIN at P4d slice 1: the proposition
+    ;; ("the parameter is in force through the REAL pipeline") is unchanged and
+    ;; is proved by a guided broadcast diagnostic ARRIVING; the diagnostic is
+    ;; now the per-field projection failure (the Map carrier admits).
+    (check-true (ormap (lambda (s) (regexp-match? #rx"not a record, so it has no fields" s)) out)
+                (format "expected the guided per-field failure, got: ~a" out))))
 
 ;; ---------------------------------------------------------------------------
 ;; D4.P4c-4c — the ω VALUE semantics (PVec), the LAWS, and the carrier guards.
@@ -4273,16 +4280,17 @@
   (check-true (ormap (lambda (s) (regexp-match? #rx"@\\[\"x\" \"p\"\\]" s)) out)
               (format "expected the per-element index-0; got ~a" out)))
 
-(test-case "P4c-4c: a NON-PVec carrier under ω refuses PER-COMMAND — never a whole-file abort"
-  ;; SCOPE IS PVec ONLY. Map / keyword-row / het-tuple are P4d and ARRIVE anyway
-  ;; (mini-audit finding 7: the leakage is forced, not avoidable). The refusal
-  ;; must go through the failure slot — a raise here re-creates exactly the
-  ;; whole-file abort P4c-4b removed.
-  (define out (bcast-e2e "def q := users:name\ndef after := 42"))
+(test-case "P4c-4c: a still-unsupported carrier under ω refuses PER-COMMAND — never a whole-file abort"
+  ;; ⚠ RE-EXPRESSED AT P4d slice 1: the Map/keyword-row carriers now ADMIT, so
+  ;; the still-refusing carrier is the HET TUPLE (slice 2). Same proposition:
+  ;; the refusal goes through the failure slot, and the file continues.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns carrier-refusal\ndef evs := @[{:t 1} {:t 2 :x 3}]\ndef q := evs:t\ndef after := 42")))
   (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)
               (format "THE FILE DID NOT CONTINUE — a raise escaped: ~a" out))
-  (check-false (ormap (lambda (s) (regexp-match? #rx"@\\[" s)) out)
-               (format "a Map subject must NOT broadcast at P4c-4c: ~a" out)))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec, Map, or closed keyword-row subject" s)) out)
+              (format "expected the carrier-accurate refusal: ~a" out)))
 
 ;; ---------------------------------------------------------------------------
 ;; D4.P4c-4c (DEFERRED 43, folded into the slice by owner ruling 2026-08-04) —
@@ -4635,7 +4643,8 @@
                     "ns s0c\ndef r1 := {:a 2 :b 3}\ndef m1 : [Map Keyword Int] := {:a 1}\ndef mixed := @[r1 m1]\nmixed:b\ndef after := 42")))
   (check-false (ormap (lambda (s) (regexp-match? #rx"<error>" s)) out)
                (format "an <error> value escaped into an output slot at zero errors: ~a" out))
-  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec subject" s)) out)
+  ;; (fragment re-pointed at P4d slice 1: the supported set widened)
+  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec, Map, or closed keyword-row subject" s)) out)
               (format "expected the guided bcast-carrier refusal: ~a" out))
   (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)
               (format "the refusal must be per-command: ~a" out)))
@@ -4725,3 +4734,108 @@
                     "ns s0t\ndef trio := @[none [some 1] none]")))
   (check-true (ormap (lambda (s) (regexp-match? #rx"trio : \\[PVec \\[prologos::data::option::Option Int\\]\\] defined" s)) out)
               (format "the meta-solving chain must survive the conv conjunct: ~a" out)))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4d slice 1 — the keyword-row + Map CARRIERS (design: D4 §5.P4d).
+;; Keys preserved: a keyword-row broadcasts per-field (row out, presence/tail/
+;; order carried); a genuine Map re-wraps uniform ([Map K proj(V)]). The tier
+;; peel extends per-carrier (row = any-field-reaches-Map ⇒ assert — the
+;; mini-C9, conservative direction only). Ordinal inners apply to VALUES
+;; uniformly (no carrier-key indexing exists to refuse — the lean-1 premise
+;; dissolved at implementation; recorded in D4).
+;; ---------------------------------------------------------------------------
+
+(test-case "P4d-s1: keyword-row broadcast — keys preserved as a ROW"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s1a\ndef regions := {:eu {:host \"eu.example.com\" :port 443} :us {:host \"us.example.com\" :port 443} :ap {:host \"ap.example.com\" :port 8443}}\nregions:host")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"\\{:ap String :eu String :us String\\}" s)) out)
+              (format "expected the projected ROW type with the subject's keys: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx":eu \"eu\\.example\\.com\"" s)) out)
+              (format "expected the keyed VALUE: ~a" out)))
+
+(test-case "P4d-s1: genuine-Map broadcast — uniform re-wrap"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s1b\ndef mm : [Map Keyword [Map Keyword String]] := {:a {:host \"x\"} :b {:host \"y\"}}\nmm:host")))
+  ;; ⚠ anchored on the RESULT line (the verify found the first cut VACUOUS —
+  ;; the def echo `[Map Keyword [Map Keyword String]]` CONTAINS the fragment).
+  (check-true (ormap (lambda (s) (regexp-match? #rx"\"x\".* : \\[Map Keyword String\\]" s)) out)
+              (format "expected the keyed VALUES at the uniform type: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx":a \"x\"" s)) out)
+              (format "keys must be preserved: ~a" out)))
+
+(test-case "P4d-s1: a per-field STATIC miss refuses per-command (closed rows)"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s1c\ndef r := {:eu {:host \"e\"} :us {:port 1}}\nr:host\ndef after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"needs a PVec subject" s)) out)
+               (format "must be the per-field miss, not the carrier refusal: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"error" s)) out)
+              (format "the miss must be LOUD: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s1: a RUNTIME miss inside a row-of-Maps broadcast is LOUD (assertive tier — the mini-C9)"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s1d\ndef m1 : [Map Keyword Int] := {:x 1}\ndef m2 : [Map Keyword Int] := {:y 2}\ndef rm := {:a m1 :b m2}\nrm:x\ndef after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"needs a PVec subject" s)) out)
+               (format "must reach the runtime, not the carrier refusal: ~a" out))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"\\{:a 1" s)) out)
+               (format "a partial/silent result must not escape: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"error|panic" s)) out)
+              (format "the runtime miss must abort LOUDLY: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s1: L1 fusion holds across row layers (two ω steps, two rows)"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s1e\ndef deep := {:x {:inner {:v 1}} :y {:inner {:v 2}}}\ndeep:inner:v")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"\\{:x Int :y Int\\}" s)) out)
+              (format "each ω step consumes one row layer: ~a" out)))
+
+(test-case "P4d-s1: a sub-inner assembles PER-FIELD over the row (Q_U20 extended to the carrier)"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s1f\ndef regions := {:eu {:host \"e\" :port 1} :us {:host \"u\" :port 2}}\nregions:{host}")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"\\{:eu \\{:host String\\} :us \\{:host String\\}\\}" s)) out)
+              (format "expected per-field narrowed rows under the subject's keys: ~a" out)))
+
+(test-case "P4d-s1: a sub-inner over a genuine Map takes the standing Q_U10 block refusal"
+  ;; MEASURED, not predicted: the sub-inner assembles at 'block (Q_U20), and a
+  ;; 'block over a Map VALUE refuses statically per Q_U10 (seal/validate is the
+  ;; guided exit). The refusal is specifically about Map-VALUED values — a
+  ;; row-valued Map ([Map Keyword {row}]; constructible from source via
+  ;; `map-map-vals` inference even though row-type ANNOTATIONS do not parse)
+  ;; sub-selects fine, pinned below. (The verify refuted this comment's first
+  ;; cut, which claimed row-valued Maps unconstructible.)
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s1g\ndef mm : [Map Keyword [Map Keyword String]] := {:a {:host \"x\"}}\nmm:{host}\ndef after := 42")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"KEY TYPE does not admit" s)) out)
+              (format "expected the guided Q_U10 block-over-Map refusal: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s1: a sub-inner over a ROW-VALUED Map succeeds (map-map-vals-inferred value rows)"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s1j\ndef mm : [Map Keyword String] := {:a \"x\"}\ndef m2 := [map-map-vals [fn [s] {:host s}] mm]\nm2:{host}")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"\\{:host \"x\"\\}.* : \\[Map Keyword \\{:host String\\}\\]" s)) out)
+              (format "a row-valued Map sub-selects per value: ~a" out)))
+
+(test-case "P4d-s1 boundary: the het tuple still refuses, with the carrier-accurate message"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s1h\ndef evs := @[{:t 1} {:t 2 :x 3}]\nevs:t\ndef after := 42")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec, Map, or closed keyword-row subject" s)) out)
+              (format "the refusal must name the SUPPORTED set truthfully: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s1: an ordinal inner applies to VALUES uniformly — failing naturally, not by carrier fiat"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s1i\ndef users := {:name \"alice\"}\nusers:0\ndef after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"needs a PVec" s)) out)
+               (format "the carrier admits; the VALUE projection is what fails: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"error" s)) out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))

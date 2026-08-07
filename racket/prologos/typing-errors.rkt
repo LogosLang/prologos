@@ -287,11 +287,15 @@
     ;; P4d sentence is now a statement about the PHASE, not a promise about this
     ;; subject.
     [(bcast-carrier)
+     ;; D4.P4d slice 1: the supported set is now PVec + Map + keyword-row —
+     ;; the sentence names it truthfully; the heterogeneous tuple is the one
+     ;; carrier still landing at P4d (slice 2). The full per-carrier message
+     ;; SPLIT (List's Functor-free wording, Set's own sentence) is slice 4's.
      (format
       (string-append
-       "broadcast `:~a` needs a PVec subject — this one is ~a. Broadcast is "
-       "PVec-only at this phase; the map, keyword-row and heterogeneous-tuple "
-       "carriers land at CIU T6 D4.P4d. For a list, convert first with "
+       "broadcast `:~a` needs a PVec, Map, or closed keyword-row subject — this "
+       "one is ~a. The heterogeneous-tuple carrier lands at CIU T6 D4.P4d. For a "
+       "list, convert first with "
        "`[pvec-from-list xs]` (the row type is preserved)~a~a")
       (or label "…")
       (if row (format "`~a`" (pp-expr row)) "not one")

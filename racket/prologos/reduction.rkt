@@ -1811,7 +1811,7 @@
             (expr-rrb-racket-rrb v*)
             (return (expr-panic
                      (expr-string
-                      (format "select: broadcast `:~a` needs a vector subject at runtime — this one is not a vector"
+                      (format "select: broadcast `:~a` needs a vector or map subject at runtime — this one is neither"
                               what)))))))
     ;; D4.P4c-4c — ONE ω step applied to a runtime value: the FUNCTORIAL LIFT,
     ;; the ATOMIC TWIN of typing-core's `select-bcast-lift`. Unwrap one container
@@ -1835,11 +1835,32 @@
              ;; only a LIST takes the stand-in — numbers are real labels
              ;; (see the typing twin's correction note)
              [name (let ([n (select-step-name s)]) (if (pair? n) '|{…}| n))]
-             [r (rrb-of v name)])
-        (expr-rrb
-         (rrb-from-list
-          (for/list ([i (in-range (rrb-size r))])
-            (bcast-apply (whnf (rrb-get r i)) inner))))))
+             [v* (whnf v)])
+        (cond
+          ;; D4.P4d slice 1 — THE CHAMP CARRIER (both map carriers run on
+          ;; expr-champ; the typing twins are select-bcast-lift's row walk +
+          ;; select-elem-of's Map arm — landed ATOMICALLY with this arm).
+          ;; Keys preserved BY CONSTRUCTION: the `expr-map-map-vals` idiom —
+          ;; fold + transient insert with the ORIGINAL key and its hash. A
+          ;; miss inside `bcast-apply` `return`s through the single let/ec,
+          ;; abandoning the un-frozen transient — the whole-node abort
+          ;; (DEFERRED 48) rides the existing seam with no partial map able
+          ;; to escape.
+          [(expr-champ? v*)
+           (let ([c (expr-champ-racket-champ v*)]
+                 [t (champ-transient champ-empty)])
+             (champ-fold c
+                         (lambda (k val _acc)
+                           (tchamp-insert! t (equal-hash-code k) k
+                                           (bcast-apply (whnf val) inner)))
+                         (void))
+             (expr-champ (tchamp-freeze t)))]
+          [else
+           (let ([r (rrb-of v* name)])
+             (expr-rrb
+              (rrb-from-list
+               (for/list ([i (in-range (rrb-size r))])
+                 (bcast-apply (whnf (rrb-get r i)) inner)))))])))
     ;; Apply ONE step to ONE element, yielding the leaf value — the reduction
     ;; analogue of typing's `select-project ctx elem (list (list inner)) sort`.
     ;; It mirrors the top-level sort dispatch at the tail of this function
