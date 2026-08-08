@@ -15,6 +15,53 @@ Deferral".
 
 ---
 
+<a id="numbering"></a>
+
+## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
+
+> ### **NEXT FREE: 77**
+> Allocate from THIS REGISTER and bump it in the same commit. **It is the only
+> allocation source.**
+
+**Four rules. The first is the one that was being broken.**
+
+1. **NEVER derive the next number from `max(heading) + 1`.** That was the de-facto
+   practice and it is what made a number REUSABLE: after any renumber, deletion,
+   or move to `DEFERRED_COMPLETE.md`, the max drops and the next writer silently
+   re-issues a number that is already cited in an immutable commit message.
+   The register above only ever goes UP.
+2. **A number is PERMANENT once allocated.** It is never reassigned to a different
+   entry — not when the entry is fixed, dissolved, superseded, or moved to
+   `DEFERRED_COMPLETE.md`. Retiring an entry retires its number with it. Gaps are
+   expected and are not a defect to tidy up.
+3. **NEVER renumber a LIVE entry.** Commit messages, code comments and test names
+   are immutable references; renumbering silently invalidates all of them.
+4. **A branch that will file entries CLAIMS A BLOCK FIRST.** Bump the trunk's
+   register by the size of the block in a one-line commit on `main`, then allocate
+   only inside the claimed block. This is the actual collision prevention — rules
+   1–3 make a collision *detectable and honest*, but only a claimed block makes it
+   *impossible*. Two branches that both allocate "the next few numbers" from the
+   same register value will collide however careful each is on its own.
+
+**Why this exists — the incident it is named for.** At the merge `2fd6b68e`
+(2026-08-08) branch `wizardly-mendel-2fd502` and `main` had each independently
+allocated **53–61**. Nine entries collided. Because both sides had already cited
+those numbers in commit messages, one side had to be renumbered — the branch's
+53–61 became **66–74** — and every affected commit message is now permanently
+wrong, mitigated only by the mapping table below and a `was N → now M` note on
+each entry. It also left `### 53` meaning **three** different things depending on
+which side and which era you read it from, so any reference to it must be resolved
+by ancestry (`git merge-base --is-ancestor <sha> 2b52af8b`; success = main-side).
+That is the cost this section exists to never pay twice.
+
+**When a collision has already happened** (i.e. rule 4 was missed): the side that
+has NOT yet merged renumbers into fresh numbers above the register, every moved
+entry carries a `was N → now M` note, a mapping table is added, and code comments
+and test names are swept in the SAME commit. Commit messages cannot be fixed —
+say so explicitly rather than letting a reader assume they are current.
+
+---
+
 ## LET track residuals (X.close sweep, 2026-07-31 — track COMPLETE, `feb79740`)
 
 Three small items survive the track, none blocking, all verified at HEAD:
