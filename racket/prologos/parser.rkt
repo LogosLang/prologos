@@ -893,7 +893,18 @@
     [(bcast-step-binder)
      ;; ⚠ the payload may be the `:{` mint's LIST (B2's fix keeps it wrapped so
      ;; it reaches this arm) — render `{…}`, never the raw stx-bearing datum.
-     (let ([f* (if (pair? f) '|{…}| f)])
+     ;;
+     ;; ⚠⚠ D4.P4d slice 4a′: this tested `f`, and COULD NOT EVER FIRE. `f` is
+     ;; `(base-name detail)`, and `base-name` returns a STRING on every branch
+     ;; (symbol->string / keyword->string / `(format "~a" d)`), so `(pair? f)`
+     ;; is structurally impossible. The list therefore went through that
+     ;; `format` and printed SYNTAX OBJECTS — carrying absolute filesystem
+     ;; paths — into the user's message twice, the second time inside the
+     ;; advice they are told to type. The test that covers this arm accepts
+     ;; `BINDER position|expected symbol` and pins no content, so every gate
+     ;; stayed green over it. The guard has to run on the datum BEFORE
+     ;; `base-name` stringifies it; `detail` is that datum.
+     (let ([f* (if (pair? detail) '|{…}| f)])
        (parse-error loc
                     (format (string-append
                              "`:~a` was read as a broadcast step, but this is a BINDER "
@@ -1253,7 +1264,7 @@
                          (loop (cdr items) (cons (make-select-bcast step) cur) #f acc)
                          (loop (cdr items) (list (make-select-bcast step)) #f (closed-acc))))))]
             ;; ⭐ D4.P4d-0 slice 2 — THE PAYLOAD SHAPE GUARD (owner: site-local;
-            ;; the class-level parse-path guard is DEFERRED 53). The arm below
+            ;; the class-level parse-path guard is DEFERRED 56). The arm below
             ;; does `(symbol->string (cadr it))`; without this guard a list,
             ;; number or MISSING payload raised out of `process-file-inner` — a
             ;; WHOLE-FILE ABORT, reachable at HEAD by hand-written sentinels and
@@ -6785,7 +6796,7 @@
                ;; Note: $nat-literal, $decimal-literal, ... wrapped terms
                ;; are pairs but are single terms, not nested rows.
                (define content (cdr d))  ;; list of syntax objects
-               ;; DEFERRED 53: INVERTED. This used to be a WHITELIST of five numeric
+               ;; DEFERRED 66: INVERTED. This used to be a WHITELIST of five numeric
                ;; literal sentinels, so every OTHER reader sentinel fell through to
                ;; the `pair? ⇒ nested row` reading and was splayed — the polarity
                ;; failure `.claude/rules/pipeline.md` warns about ("a new sentinel,
@@ -6818,7 +6829,7 @@
                  (and (pol8-sentinel-headed? sd)
                       (let ([h (let ([c (car sd)]) (if (syntax? c) (syntax-e c) c))])
                         (not (structural-sentinel-head? h)))))
-               ;; DEFERRED 53 (2026-08-05): the `pair? ⇒ nested row` reading is
+               ;; DEFERRED 66 (2026-08-05): the `pair? ⇒ nested row` reading is
                ;; WRONG for a compound TERM. `[some 1]`, `'[1 2]`, `{:k 1}` are all
                ;; pairs too, so they were misclassified as continuation rows and
                ;; SPLAYED into their constituent tokens — fabricating rows the user

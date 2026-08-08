@@ -1,5 +1,5 @@
 #lang racket/base
-;; DEFERRED 59 (member 4) — the `def name := rel …` clause-srcloc collapse.
+;; DEFERRED 72 (member 4) — the `def name := rel …` clause-srcloc collapse.
 ;;
 ;; WHY THIS TEST IS AT THE SRCLOC LEVEL AND NOT END-TO-END. The defect is a
 ;; SILENT clause mis-grouping, and it is unobservable from output: `pp-expr`'s
@@ -19,7 +19,7 @@
 ;; therefore one goal.
 ;;
 ;; ⚠ It only fires when a preparse REWRITE sits inside the rel. Without one the
-;; `$clause-sep` group is datum-unchanged, so DEFERRED 58's origin index returns
+;; `$clause-sep` group is datum-unchanged, so DEFERRED 71's origin index returns
 ;; the original wholesale and the srclocs are right. That is why the no-rewrite
 ;; control below is the correct oracle: it is the SAME spelling, differing only
 ;; in whether a rewrite is present.
@@ -71,15 +71,15 @@
                  "  &> fruit-color f mm.k\n"
                  "     fruit-color f \"yellow\")\n"))
 
-(test-case "DEFERRED 59: the no-rewrite control keeps the sentinel's real position"
+(test-case "DEFERRED 72: the no-rewrite control keeps the sentinel's real position"
   ;; Establishes the oracle: this spelling is capable of correct srclocs.
   (check-equal? (clause-sep-loc SRC-CONTROL) (cons 3 2)))
 
-(test-case "DEFERRED 59: the PAREN spelling keeps it too, even with a rewrite"
+(test-case "DEFERRED 72: the PAREN spelling keeps it too, even with a rewrite"
   ;; The known-correct sibling — isolates the defect to the UNPARENTHESIZED form.
   (check-equal? (clause-sep-loc SRC-PAREN) (cons 3 2)))
 
-(test-case "DEFERRED 59 ⭐ member 4: an unparen `def := rel` with a REWRITE keeps it as well"
+(test-case "DEFERRED 72 ⭐ member 4: an unparen `def := rel` with a REWRITE keeps it as well"
   ;; The defect proper. Before the fix this was (2 . 7) — line 2, the column of
   ;; the `:=` token — nonzero, so the POL.8 guard stayed blind and the two goals
   ;; collapsed into one 3-argument goal.

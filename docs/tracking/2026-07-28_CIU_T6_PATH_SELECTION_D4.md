@@ -33,7 +33,7 @@ rulings, censuses and test delta live in its own section.
 | **P4** | **Broadcast ω** — ⭐ **P4a ✅ · P4b ✅ COMPLETE** (b-i carrier + b-ii `$dot-access` migration; `x.a` now mints the unified selector carrier) · P4c–P4e ⬜ — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | [§5.P4](#p4) · co-design: audit `wf_8458c23b` + options panel · **RULED 2026-07-31**: [Q_U5](#q-u5) · [Q_U6](#q-u6) · [Q_U7](#q-u7) · [Q_U8](#q-u8) · [Q_U9](#q-u9) (the PAUSE cleared) · partition LOCKED P4a–P4e |
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
 | **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [§5.P4c](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([inverted default](#p4c-2-inverted)) · [P4c-3](#p4c-3) ✅ `d477772c` · [P4c-4a](#p4c-4a) ✅ `f31237fd` · [P4c-4b](#p4c-4b) ✅ `6b22515d` (end to end) · **[P4c-4c](#p4c-4c-close) ✅ `ae26f540`** — broadcast is REACHABLE: PVec ω value semantics + **G2** + the preparse seam guard. ⭐ The verify caught a BLOCKING whole-file abort every gate was blind to; owner ruled the structural fix ([close](#p4c-4c-close)) · [Q_U18](#q-u18) ✅ · DEFERRED 43 ✅ · 48 RULED uniform · P4c-5 ⬜ |
-| **P4d** | **The carriers** — Map/keyword-row (TWO typing arms: keyword-row `expr-Record` + genuine `expr-Map`; ONE new champ reduction arm, atomic with typing) · het tuple (TYPING-ONLY — same `expr-rrb` runtime as PVec) · PVec-of-union + `row-meet` (NEW machinery + an AUTHORED fixture) · the Q_U9 refusal's message split · corpus re-fate · **Q_U19 ✅ RULED (A)** at the opening | 🔄 | [§5.P4d](#p4d) · opened 2026-08-07: audit `wf_4bc76d94-a2d` · **slice 0 ✅ `00e52c42`** (the soundness fix) · **slice 1 ✅ `14ef5e83`** (the map carriers) · **slice 2 ✅ `ba1c055d`** — the het tuple: per-position EXACT, **C9 RULED (a)**, misses NAME position/field, DEFERRED 40/45 riders fixed (suite **9940/485/0**, battery **395**, acceptance **73/73**) · slices 3–4 ⬜ |
+| **P4d** | **The carriers** — Map/keyword-row · het tuple · PVec-of-union · closed-schema subjects · the Q_U9 refusal's message split · corpus re-fate · **Q_U19 ✅ RULED (A)** | 🔄 | [§5.P4d](#p4d) · slices **0 ✅** `00e52c42` · **1 ✅** `14ef5e83` · **2 ✅** `ba1c055d` (C9 (a)) · **3 ✅** `1e8d0795` (Q_U21 (a)) · **4a ✅** `61d64708`+`d3947594` (advice — ⚠ RETIRED at 4c) · **4b ✅** `19ce05aa` (closed schema = its row) · **4c ✅** `a31b7475` (per-carrier split; 4a's machinery deleted) · **4d ⬜** LAST. Suite **9969/485/0** · battery **420** |
 | **PF** | **Path first-classness** (substrate; **P5's prerequisite**) — ⭐ **Q_U17 RULED B2**: a Path segment is a first-class `Step` value. Reify the closed six-kind union as a `data Step` ADT on the `Datum` pattern; `Path` stays GROUND; `segments : Path -> [List Step]`. Repairs the dead `path-segments` in the SAME change | ⬜ | [§5.PF](#pf) · [Q_U17](#q-u17) · panel `wf_68178bd3-eea` |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery · ⚠ B3 needs [PF](#pf) |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | [§5.PX](#px) · position flexible |
@@ -1520,7 +1520,7 @@ items of the hold-point, ruled before P4a opened:
   semantics RULE of the lift rather than inherited from context — that is the
   ruling, not an implementation accident. Grounding: mini-audit
   `wf_e15a1ef6-dfb` (its sub-inner facet measured the sort collision at both
-  layers). **Next free Q-label: U21.**
+  layers). **Next free Q-label: U22.**
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
@@ -6174,13 +6174,232 @@ first as slice 0"]:**
   the three-way §10.8 contradiction; the recursive line stays W4-DEFERRED)
   + 89/89 + 6/6 + 29/29 + 28/28 · corpus A/B vs `5ef1cfac`: EXACTLY the two
   flips · **full suite 9940/485/0**.
-- **⬜ Slice 3 — PVec-of-union + `row-meet`**: the new machinery + the
-  AUTHORED discriminating fixture + the CALM restatement on
-  `has-unsolved-meta?` grounds.
-- **⬜ Slice 4 — the diagnostics batch (LAST, so messages describe the final
-  surface)**: the `bcast-carrier` split (Set/List sentences; the Functor
-  clause drops) · Q_U19's unified refusal + the two `Unbound variable`
-  fall-through routes · DEFERRED 47's wording.
+- **✅ Slice 3 — PVec-of-union (keys-⋂ / types-⋃) — COMPLETE `1e8d0795`
+  (2026-08-07).** Audit `wf_2759e5b0-220` · verify `wf_f24e650c`.
+  **⭐ THE AUDIT RE-SCOPED THE SLICE**: the types-⋃ half **already shipped**
+  (`build-union-type`), so `row-meet` was never wholly new; and keys-⋂ is a
+  structural **NO-OP for Map components** (an open `[Map K V]` statically
+  offers every keyword). The slice is therefore TWO halves over **disjoint**
+  populations — the **GATE** for row components, the **TIER** for Map-bearing
+  unions. It also found **TWO populations with opposite moral status**: a
+  genuine non-offerer is a silent wrong answer the flip FIXES; a `Nil`
+  remainder is a **correct answer** a naive flip would BREAK — which is the
+  question ruling (a) settles.
+  **⭐ Q_U21 RULED (a) [owner, 2026-08-07] — `Nil` IS SKIPPED.** `<T | Nil>`
+  is the OPTION type; Nil is the absence marker, not a carrier alternative
+  that happens to offer no keys. Preserves the `nil-safe-get` idiom;
+  a genuine non-offerer (`Int`, a row lacking the key) still refuses.
+  **Placement**: the gate lives in `select-bcast-inner-apply` (the per-element
+  applier) so it covers exactly the population the tier witness does — union
+  ELEMENT, union-typed row FIELD, union-typed tuple POSITION — and its mutual
+  recursion with `select-union-lift` handles a component that only *whnfs
+  into* a union (a type alias; the structural `flatten-union` cannot see
+  through one). It deliberately does NOT reuse `select-project-field`'s union
+  arm: that is the single-get OPTIMISTIC polarity, its own comment forbids
+  broadcast reuse, and no polarity parameter is threaded down the
+  five-signature walk.
+  **⚠⚠ THE ACCEPTED CONSEQUENCE, NAMED — an OWNER QUESTION carried to the
+  close**: because gate and tier must agree on what a component IS, a
+  **Nil-bearing union stays PERMISSIVE**, so a genuine Map miss *inside* one
+  is QUIET. That is (a)'s price at the VALUE layer, which the ruling (about
+  the TYPE layer) did not reach. Recorded in the code at `tier-union-witness`.
+  **The verify found FOUR defects, three of them mine**: (i) BLOCKING — my
+  Nil pin was VACUOUS (one-element never-nil fixture) and a genuinely-absent
+  element PANICKED, because the gate skipped Nil and the tier did not;
+  (ii) BLOCKING — the witness fired on carriers the gate did not cover;
+  (iii) HIGH — the bail DISCARDED the inner fail, so every per-component
+  failure read as a key miss (false for ordinal inners and block-sort
+  projections, and strictly worse than pre-slice in 6 spellings) — it now
+  NESTS the inner reason on slice 2's `bcast-at` pattern; (iv) a regression I
+  caught in my own RED/GREEN cycle — the witness applied on the NON-broadcast
+  path, flipping single-get over a union from the ruled permissive `none` to
+  a panic (a `peeled?` flag confines it; the verify proved the confinement
+  complete by mutant). ⚠ Plus a **1-directive format string with 2 args**,
+  which RAISED and was swallowed by `select-block-hint`'s blanket handler —
+  the same class this arc has recorded before.
+  **The fixture**: §10.7's "needs an ANNOTATION to build" was WRONG and
+  unbuildable — a closed row is not writable in TYPE position. A
+  **dynamic-bound `pvec-slice`** widens a het tuple to a PVec of the union of
+  its position types (verified not an accident of the bound). The all-offer
+  line is live; the refusing line stays commented (first-ERROR-result rule,
+  as `events:x`) and is battery-pinned. ⚠ The fixture def initially SHADOWED
+  an existing `mixed` in the file — caught by `--check`, renamed `widened`.
+  **Gates**: battery **403/403** (+9, 1 re-fixtured, 1 re-expressed) ·
+  neighborhood 291/291 · acceptance **77/77** (+4) + 89/89 + 6/6 + 29/29 +
+  28/28 · corpus A/B vs `65cb5bce`: only the two known pre-existing artifacts
+  · **full suite 9952/485/0**.
+- **✅ Slice 4a — the advice stops lying, and starts FUSING — COMPLETE
+  2026-08-07. ⚠⚠ ITS MACHINERY WAS RETIRED AT 4c — read this record as
+  HISTORY, not as a description of HEAD.** (`61d64708` typing side · `d3947594` parser side; owner ruled
+  fix-first, TWO commits). Opened because the slice-4 grounding found a LIVE
+  defect inside slice 4's own target; audit `wf_37d324fe-045`, verifies
+  `wf_a11a4ef7-900` + `wf_b73e7d14-3cc`.
+  **The defect**: the `bcast-carrier` advice (`; otherwise spell it
+  `[pvec-map [fn [m] m.NAME] xs]``) was gated on `(and label (symbol? label))`,
+  and the LABEL cannot answer the question. FIVE populations walked through,
+  each measured before implementation: a SUB inner (`m.{…}`, a parse error) · a
+  GLUED ARROW (`m.a->b`, strands the `>`) · a CARET inner (`m.name` — writable,
+  and WRONG: drops the rename) · a CHAIN (`m.a` for `:a:b` — writable, and
+  wrong) · a NON-ASCII DIGIT key, whose advice was a **whole-file abort**
+  (`pipeline.md` severity-1, unclaimed, closed as a side effect).
+  ⚠ The old guard's own comment (\"`m.0` is not a thing a user can write\") was
+  FALSE — `[pvec-map [fn [m] m.0] xs]` → `@[1 3] : [PVec Int]`; it suppressed
+  correct advice while admitting broken advice.
+  **The fix**: the step KIND decides, so the decision moved to where the step
+  is. `select-fail` gains an `advice` field (all 21 constructors pass it
+  explicitly — no defaulting wrapper, since the defect IS advice nobody decided
+  to emit); `dot-writable-field-name?` lands in `parse-reader` beside the
+  charset it delegates to (the F1b.7g drift class), deliberately conservative
+  and pinned on its own contract.
+  **⭐ The chain case made the advice COMPOSITIONAL, and that is the phase's
+  idea.** `xs:a:b` is not one branch with two steps — Q_U13's NEST encoding
+  gives every level its own `expr-select`, so the refusing node is the
+  INNERMOST and `:b` lives in its PARENT; a step-local vouch structurally
+  cannot see it. But `select-block-hint` descends outermost-first, so it HAS
+  the chain and was discarding it. Carrying it down yields the FUSED spelling
+  — the functor law, `fmap g ∘ fmap f = fmap (g ∘ f)`, the same identity
+  [Q_U7](#q-u7) pins as the L1-fusion theorem. `xs:a:b` → `m.a.b`, depth 3 →
+  `m.a.b.c`, **pinned as an EQUIVALENCE rather than as message text**.
+  **⚠⚠ THE VERIFY CAUGHT TWO BLOCKING DEFECTS, BOTH MINE, BOTH NEW, BOTH
+  INVISIBLE TO EVERY GATE** (battery, five acceptance files and the full suite
+  were green over both): **(i)** the restructured walker searched each subject
+  TWICE — explicitly, then again via the generic `expr-subfields` fallback
+  where `subject` is field 1 — making it **O(2^depth)**: 5.3s / 14.9s / 46.3s
+  at depths 14/18/20 against a flat ~4.3s base, on PLAIN DOT chains with no
+  broadcast in them, since the hint runs on every infer failure. Output
+  byte-identical: pure waste, and provably dead (the chain reaches only the
+  advice STRING, never the walker's truthiness). **(ii)** fusion applied in
+  BLOCK sort, where ω **assembles** rather than projects — `RP{items:aa}` ≡
+  `[pvec-map [fn [m] m{aa}] P]` while `m.aa` differs, and at two steps the
+  user's own expression is a hard ERROR while the advised path SUCCEEDS, so the
+  message's two remedies contradicted. **My own new pin FROZE it**; it is
+  inverted now. Block sort advises nothing: the \"needs a different delimiter\"
+  rule the slice already applied to subs and carets, finally applied to the
+  SORT axis.
+  **The parser half** (`d3947594`): the sibling guard in
+  `retired-selection-error`'s `bcast-step-binder` arm was **DEAD CODE** —
+  `(pair? f)` where `f` is `(base-name detail)`, which returns a string on
+  every branch — so a binder `:{` printed SYNTAX OBJECTS carrying absolute
+  filesystem paths into the message, twice, the second time inside the advice.
+  Its covering test accepted an alternative and pinned no content, which is why
+  a green suite never saw it.
+  **Gates**: battery **403 → 415** · acceptance **77/77** + four more, 0
+  mismatched markers · full suite **9964 / 485 / 0**, `[485/485]` verified.
+  **Filed**: DEFERRED **60** and **61** — ⚠ BOTH DISSOLVED/REWRITTEN at 4c,
+  because their subject (the advice machinery) no longer exists.
+  **⚠⚠ SUPERSESSION, 2026-08-08 (`a31b7475`)**: every mechanism this record
+  describes is GONE — the `advice` field (struct back to 4 fields),
+  `bcast-advice-chain`, `extend-advice-chain`, the `chain`/`rest` params, and
+  `dot-writable-field-name?` + its export and contract pin. The fusion idea
+  survives only as the RE-POINTED L1-fusion equivalence pin. 4c's remedy points
+  back at the user's own spelling instead of teaching one, which left all of
+  this without a consumer. The two BLOCKING defects and the whole-file-abort
+  population remain accurate as history and are why the arc is worth reading.
+- **✅ Slice 4b — the schema CARRIER gap — COMPLETE 2026-08-08** (`19ce05aa`;
+  owner ruled it INTO slice 4 rather than papering over it with a message).
+  Opened by the slice-4 mini-audit (`wf_3e586347-b98`), which found that
+  `select-row-of` resolves a schema fvar to its closed row — so `p{name}` and
+  `p.name` work — while `select-bcast-lift` tested `expr-Record?` on the RAW
+  type and told the same value it "needs a … closed keyword-row subject". A
+  message could only have papered over that.
+  **⚠ The obvious framing was wrong, and measuring caught it before design**:
+  this does NOT make `p:name` succeed on a FLAT schema. `:` projects from each
+  field VALUE, so `{:name String}` + `:name` fails on a plain row too. What it
+  buys is that a schema SUCCEEDS wherever its row succeeds (`rg:host` over a
+  row of records → `{:eu "e", :us "u"} : {:eu String :us String}`, identical to
+  the plain row) and FAILS the same way where its row fails (byte-identical).
+  **⚠⚠ THE VERIFY REJECTED TWO SUCCESSIVE CUTS — three BLOCKING defects, all
+  mine, all green on battery + five acceptance files + the full suite:**
+  **(1) a CAPABILITY BYPASS** — `select-row-of` tests SELECTION first then
+  schema and calls the order load-bearing (both registries accept one name); my
+  first cut copied only the schema arm, so with a `schema P` + `selection P
+  from P` collision `u.age`/`u{name}` were refused by the view while `u:h`
+  returned the restricted field's contents at ZERO errors · **(2) a WIDTH LIE
+  (extras)** — `schema` is OPEN by default and `schema->row` mints `'closed`;
+  broadcast is the FIRST consumer that ENUMERATES the row, so a 3-key `Region`
+  (the slice's own flagship example) gave `{:ap "a", :eu "e", :us "u"} :
+  {:eu String :us String}`, and an extra key that cannot offer the field
+  produced a silent `<error>` propagating into a `def` · **(3) a WIDTH LIE
+  (absence)**, found by the RE-verify after 1 and 2 closed — every field is
+  minted `'present` while the fill "happens at the seal boundary", and a
+  `spec f -> S` RETURN has no fill, so a `:default`-ed field can be `'present`
+  and ABSENT: `c:h` → `{:a "q"} : {:a String :b String}`, `broad.b` → a silent
+  `<error>`.
+  Plus a fourth I caught myself first: the lift resolved and
+  `select-tier-subject` did not, so a Map miss inside a schema-typed row went
+  QUIET where its row PANICS — slice 1's "one gate was two", one carrier over.
+  **The shape**: ONE `bcast-resolve-subject`, called from BOTH sites, admitting
+  only a non-selection, `:closed`, default-free schema. Each conjunct is a
+  measured defect, named at the site; all three refusals are monotone.
+  **Gates**: battery **415 → 421** · acceptance 0 mismatched across all five ·
+  full suite **9970 / 485 / 0**, `[485/485]`.
+  **Filed**: DEFERRED **62** (the precise presence gate — a broadcast-specific
+  `schema->row` restores both refused populations) · **63** (inline nested
+  schemas are always OPEN, so this lands only for top-level NAMED closed
+  schemas, and the refusal leaks a generated `Region__us`) · **64** (both new
+  gates are SILENT — "add `:closed`" is never said, and a collided selection
+  gets a message `select-row-of` itself calls a lie; slice-4c work) · **65**
+  (pre-existing: `lookup-schema-by-name` matches the SHORT name, so a `data`
+  type can resolve to a same-named schema).
+- **✅ Slice 4c — the per-carrier split, and 4a's advice machinery RETIRED —
+  COMPLETE 2026-08-08** (`a31b7475`). Audit `wf_3e586347-b98` · verify
+  `wf_d4e1de98-ff5`.
+  **The finding that reshaped it**: the advice slice 4a vouched fires ONLY on
+  subjects that already failed, and `pvec-map` needs a PVec — which never
+  reaches this arm. The spelling could not work on its own audience.
+  **⭐ The owner's call was not to fix the spelling but to stop teaching one**:
+  converting fixes the CARRIER, and the user's own spelling then works
+  (`[pvec-from-list L]` then `:name`, `:a:b`, `:{a b}` — all verified). Each arm
+  names its own conversion and stops: List `pvec-from-list` · LSeq `into-vec` ·
+  Set `[pvec-from-list [set-to-list xs]]` + the unordered caveat · open/dyn row
+  `[validate Schema subj]` · unadmitted schema ('open / 'defaulted, each
+  explained) · collided selection named as a VIEW · scalars and functions get
+  nothing, because there is nothing true to say.
+  **And that retired 4a's machinery** — no consumer left, and unused-but-correct
+  is the dual-path shape the rules forbid. Deleted: the `advice` field (struct
+  back to 4 fields), `bcast-advice-chain`, `extend-advice-chain`, the `chain`
+  param, the `rest` param, `dot-writable-field-name?`. `select-block-hint`
+  reverts to the pre-4a single-descent shape; the O(2^depth) walk did NOT return
+  (depths 14/18/20 → 4.25/4.27/4.27s, flat). Nine advice pins deleted, TWO
+  re-pointed because they incidentally pinned real semantics (block-ASSEMBLES-
+  vs-path-PROJECTS; L1 fusion, which Q_U7 records and nothing else pins).
+  **⚠⚠ The verify caught FOUR more false promises, all mine, all in the NEW
+  text** — the same class the slice exists to remove, committed inside the fix
+  for it: `bare-name` matched a user's own `data List` and offered it
+  `pvec-from-list` (measured: "Could not infer type") · "and the same spelling
+  works" is false whenever the STEP does not fit the converted elements (an
+  ordinal inner; non-row elements) · the dyn arm's inherited `the Schema subj`
+  is REFUSED for its whole audience, and **my pin asserted only the substring
+  under a title claiming a verification never performed — its own fixture
+  falsified it** · "mark it `:closed` and the broadcast works" was unconditional
+  and false when reached from the dyn arm. Plus LSeq, the last convertible
+  carrier, had no arm. All corrected; the dyn and LSeq pins now EXECUTE their
+  remedies.
+  **Gates**: battery **421 → 420** (a net −1: nine advice pins retired, eight
+  carrier pins added) · acceptance 0 mismatched × 5 · full suite
+  **9969 / 485 / 0**, `[485/485]`.
+- **⬜ Slice 4d — the remaining diagnostics** (what 4c did not reach):
+  **Q_U19's unified refusal**, whose siting is answered by PRECEDENT rather than
+  open design — `ordinal-rekey-message` is ONE string emitted from FOUR sites,
+  written at P3b for **Q_T4a**, the identical "`^` has no key" question one
+  construct over, with `retired-selection-marker` as the macros-side per-command
+  channel; plus re-pointing the "P4c-4b: the payload's THREE sub-cases" pin to
+  the DECISION · **DEFERRED 47 ≡ 59.1** (ONE string, one site — the
+  `subject-other` non-PVec branch; probe-verified identical) · **59.2**
+  (`not-indexable`'s `x{k}` remedy is off-key inside a broadcast; the existing
+  `cond` already discriminates the right three cases) · the stale phase
+  references in `parser.rkt` (two reachable; the `*` flatten refusal says "Until
+  Path Selection P4d" while D4 assigns `*` to **P4e**, so P4d's close makes it
+  retroactively false) · the orphaned slice-4a test header at
+  `tests/test-path-selection.rkt` (it still describes the deleted
+  `; otherwise spell it …` append and its `symbol?` gate) and the two
+  re-pointed pins' section labels., and the plan was wrong in
+  three places: the **Functor clause was NEVER in the code** (only in Q_U9's
+  rationale) · **DEFERRED 47 ≡ 59.1**, one string at one site, probe-verified ·
+  **Q_U19 is NOT an open siting problem** — `ordinal-rekey-message` is ONE
+  string emitted from FOUR sites, written at P3b for **Q_T4a**, the identical
+  "`^` has no key" question one construct over; that is the precedent, and the
+  preparse fold carries a per-command error channel plus two arms of the shape.
 - Corpus re-fate rides each slice. **Gates**: failing-test-first batteries +
   authored fixtures; the corpus A/B is REGRESSION-ONLY for slices 1–4 (the
   carriers have ~no corpus coverage — the vacuous-green hazard, named) but

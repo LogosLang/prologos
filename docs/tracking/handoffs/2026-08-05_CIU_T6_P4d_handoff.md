@@ -1,3 +1,19 @@
+> # ⚠⚠ SUPERSEDED — DO NOT RESUME FROM THIS FILE
+>
+> Written 2026-08-05, when P4d had not started. **P4d slices 0, 1, 2, 3, 4a, 4a′,
+> 4b and 4c have all landed since** (2026-08-06…08, latest `a31b7475`). Every
+> load-bearing line below is now false: "P4d ⬜ not started" · "HEAD `7edefc1a`,
+> 9 unpushed" · "suite 9906/485/0 · battery 365 · acceptance 69/69" ·
+> "Q_U19 ⬜ RULING OWED" (RULED (A) 2026-08-07) · "broadcast works for PVec only"
+> (it now works over PVec · Map · keyword-row · het tuple · union · closed
+> schema) · and its scope list, of which four items shipped and one
+> (`row-meet`) never existed as a symbol.
+>
+> **Current state**: the STATE head of
+> `docs/tracking/standups/2026-08-07_dailies.md`, and D4 `§5.P4d`
+> (`docs/tracking/2026-07-28_CIU_T6_PATH_SELECTION_D4.md`, anchor `#p4d`).
+> Kept for provenance — §3's rulings and §4's surprises remain accurate history.
+
 # Handoff — CIU T6 Path Selection: **BROADCAST IS LIVE**; P4d proper is next
 
 **Date** 2026-08-05 · **For** a fresh session opening **D4.P4d** (the carriers).

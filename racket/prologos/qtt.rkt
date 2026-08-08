@@ -2494,7 +2494,7 @@
        (match rg
          [(tu _ ug) (tu (solve-row-type g 'pvec 'dyn) (add-usage su (add-usage ou ug)))]
          [_ (tu-error)]))]
-    ;; ── DEFERRED 61 rider: the infer/inferQ TWIN for `expr-narrow` ────────────
+    ;; ── DEFERRED 74 rider: the infer/inferQ TWIN for `expr-narrow` ────────────
     ;; `infer` has had an arm for this since it was added; `inferQ` never did, so
     ;; it fell to the `[_ (tu-error)]` catch-all below and `checkQ-top` reported
     ;; **"Multiplicity violation"** — a diagnostic naming a subsystem that is

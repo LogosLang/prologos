@@ -164,7 +164,7 @@
          extract-pi-binders
          ;; Sibling let merging (for testing)
          merge-sibling-lets
-         ;; DEFERRED 58 origin index (for testing) — `strip-with-origin!` now
+         ;; DEFERRED 71 origin index (for testing) — `strip-with-origin!` now
          ;; replaces `syntax->datum` on the per-form preparse path, so its
          ;; datum-equivalence is a load-bearing property and is pinned directly
          ;; rather than inferred from a green suite.
@@ -2994,7 +2994,7 @@
              ;; 'prologos-defrhs-command) are never round-tripped
              [(null? (cdr unit)) (cons (car unit) out)]
              [else
-              ;; ── DEFERRED 58 slice 2: THE FUSION IS THE SECOND STRIP ────────
+              ;; ── DEFERRED 71 slice 2: THE FUSION IS THE SECOND STRIP ────────
               ;; This was NOT a depth problem, which is what the earlier framing
               ;; got wrong. `(map syntax->datum unit)` threw away N syntax trees
               ;; and the rebuild below stamped the result against sibling 1 — and
@@ -3046,7 +3046,7 @@
 ;;     and refuses parenless clauses outright (DEFERRED 51);
 ;;   · the `||` fact-row splitter needs the sentinel's line to tell a compound
 ;;     TERM from a continuation ROW, and silently falls back to splaying
-;;     (DEFERRED 53 residual 1 — an idiomatic `|>` or dot-access anywhere in the
+;;     (DEFERRED 66 residual 1 — an idiomatic `|>` or dot-access anywhere in the
 ;;     defr was enough to restore fabricated rows, at a distance).
 ;;
 ;; THE FIX. Preparse cannot preserve srclocs THROUGH expansion — the datum it
@@ -3081,7 +3081,7 @@
 ;; rewritten form actually started in the source. For the `mm.k` clause that
 ;; yields sentinel/goal/arg locs intact and the `$select-path` sitting exactly
 ;; where `mm` did, so layout grouping works on the real columns.
-;; ── DEFERRED 58: THE ORIGIN INDEX — cons-cell identity as a provenance marker ──
+;; ── DEFERRED 71: THE ORIGIN INDEX — cons-cell identity as a provenance marker ──
 ;;
 ;; THE WALL. Everything below aligns two ELEMENT VECTORS at one level. A desugar
 ;; that moves a subtree DEEPER than that is invisible to all of it: the bracket
@@ -3252,7 +3252,7 @@
     ;; adversarial verify examined exactly that (its F7) and found no reader of
     ;; those properties inside a defr body, so it is safe there.
     (if (syntax? orig-stx)
-        ;; DEFERRED 58: `stamp-with-origin` rather than a bare stamp — a
+        ;; DEFERRED 71: `stamp-with-origin` rather than a bare stamp — a
         ;; genuinely reshaped node can still CONTAIN subtrees that moved through
         ;; unchanged, and those keep their own srclocs. Properties still come
         ;; from `orig-stx` via the 4-arg call on the outer node.
@@ -3316,14 +3316,14 @@
           ;; lines; 27 of 70 randomized cases diverged. That spelling was ALREADY
           ;; mis-parsing before 51(c) — its `(defr …)` sits at column 1, so the
           ;; old guard's column-0 marker never protected it — so this is a
-          ;; residual, not a regression. See DEFERRED 55.)
+          ;; residual, not a regression. See DEFERRED 68.)
           ;;
           ;; So peel only pairs that are self-evidently the same logical element:
           ;; datum-equal, or BOTH lists (a group pairs with a group — which is the
           ;; continuation-line case the peel exists for, and lets recursion sort
           ;; out the inside). An atom paired with a DIFFERENT atom is exactly the
           ;; mis-alignment above, and stops the peel.
-          ;; DEFERRED 57 — THE PEEL MUST NOT STEAL A MOVE.
+          ;; DEFERRED 70 — THE PEEL MUST NOT STEAL A MOVE.
           ;; `peelable?`'s "a group pairs with a group" cannot tell a rewritten
           ;; element from an unrelated one, so where a subtree MOVED THROUGH A
           ;; DESUGAR UNCHANGED the peel would right-align it onto whatever
@@ -3439,7 +3439,7 @@
                  ;; lambda-body queries type (Rel T2 purity ruling). See
                  ;; DEFERRED 51(c)'s relocation notes; datum equality is this
                  ;; algorithm's only oracle, so minted-equals-user collisions
-                 ;; are undecidable HERE — the durable answer is DEFERRED 55's
+                 ;; are undecidable HERE — the durable answer is DEFERRED 68's
                  ;; reader origin marker.
                  (let* ([o-mid (for/list ([i (in-range pre (- n-o suf*))])
                                  (vector-ref o-v i))]
@@ -3448,7 +3448,7 @@
                    (for/list ([i (in-range pre (- n-e suf*))])
                      (define ed (edat (vector-ref e-v i)))
                      (define (stamp) (stamp-with-origin (vector-ref e-v i) anchor idx))
-                     ;; ── DEFERRED 59 (member 4): EXPANDED-SIDE DESCENT ────────
+                     ;; ── DEFERRED 72 (member 4): EXPANDED-SIDE DESCENT ────────
                      ;; A desugar can FOLD a RUN of original middle elements into
                      ;; ONE compound expanded element. `expand-def-assign` does
                      ;; exactly this for a spliced multi-token RHS: the original
@@ -3682,7 +3682,7 @@
           ([exn:fail?
             (lambda (e)
               (cons (list '$preparse-error (exn-message e)) acc))])
-      ;; DEFERRED 58: strip AND index in one pass. `origin-idx` maps each
+      ;; DEFERRED 71: strip AND index in one pass. `origin-idx` maps each
       ;; freshly-allocated datum pair to the syntax object it came from, so any
       ;; subtree an expander splices through BY REFERENCE stays recoverable by
       ;; cons-cell identity — at any depth. Per-form, because a second strip of

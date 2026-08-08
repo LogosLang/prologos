@@ -3814,7 +3814,7 @@ any sentinel is consulted.
   the first original element it replaced. Applied at the **`defr` arm only** —
   that is where the tree's only LAYOUT-DRIVEN grammars live (POL.8 clause
   grouping reads element columns; the `||` splitter reads the sentinel's line).
-  All four rewrite families now parse in a parenless clause, and DEFERRED 53's
+  All four rewrite families now parse in a parenless clause, and DEFERRED 66's
   dominant residual closes with it.
   ⚠ ~~Still limited: a bare top-level `rel` … still degrades~~ **✅ CLOSED same
   day (owner-requested): the `[else]` arm now uses the helper too**, so a bare
@@ -3851,7 +3851,7 @@ any sentinel is consulted.
   goes through the CONVERTED [else] arm, but its desugar is a TOTAL RESHAPE
   (`let` → nested `fn` application through the one funnel), so no prefix/suffix
   alignment at any list level can recover the `rel` subtree — it moved both
-  position and depth. ~~That is precisely the case DEFERRED 55's real-diff … is for~~
+  position and depth. ~~That is precisely the case DEFERRED 68's real-diff … is for~~
   **✅ CLOSED same day (owner-requested), and the instrumentation REFINED the
   diagnosis**: the desugar `(let r := V body) → ((fn (r : _) body) V)` is a
   reshape, but V survives DATUM-IDENTICAL — it only MOVES (element 3 → element
@@ -3867,7 +3867,7 @@ any sentinel is consulted.
   stamp, exactly as before — monotone by construction.
   Pinned equality-with-the-PAREN-control (same semantics, parenless vs paren
   spelling), single-goal and two-sibling-goal shapes. Genuine moves that are
-  ALSO rewritten, or ambiguous duplicates, still stamp — DEFERRED 55's real
+  ALSO rewritten, or ambiguous duplicates, still stamp — DEFERRED 68's real
   diff remains the durable answer for those.
   ⚠ **A 5th member exists and is pinned as a KNOWN LIMIT (not fixed):
   SIBLING-LET chains** (`let x := 5` / `let r := (rel …)` / body) — found by
@@ -3908,11 +3908,11 @@ any sentinel is consulted.
   criterion, but the control looks broken — owner look wanted on the bodyless
   semantics.
   ⚠ Also from the same verify: branch (b)'s "a mis-grouping would surface as an
-  arity error, not a row" pin-strength argument is TOO STRONG — in DEFERRED 55's
+  arity error, not a row" pin-strength argument is TOO STRONG — in DEFERRED 68's
   peel-residual zone (rewrites in BOTH goal lines) with a relation of the merged
   arity registered, the def paren-RHS spelling solves SILENTLY (@[] under a
   mis-grouped 5-ary reading; control errors pairr/2). Pre-existing — byte-identical
-  at the pre-51(c) base — but the def spelling belongs on DEFERRED 55's list of
+  at the pre-51(c) base — but the def spelling belongs on DEFERRED 68's list of
   reachable-through spellings, and the rows-based pin covers the single-rewrite
   case only.
   ⚠ Blast radius of what landed is **narrow**: the `let` aligned-block classifier
@@ -3921,7 +3921,7 @@ any sentinel is consulted.
   splitter were the only consumers re-deriving layout AFTER preparse.
   **Two silent MIS-PARSES were introduced and fixed during development**, both
   found by measurement, both now regression-pinned — see the 51(c) note under
-  DEFERRED 53's residual 1 and the tests in `test-rel-t1-pol.rkt`.
+  DEFERRED 66's residual 1 and the tests in `test-rel-t1-pol.rkt`.
 
 ### 52. ✅ FIXED 2026-08-05 (commit `e0f03601`; owner-ruled) — a type error in relational GOAL-ARGUMENT position was silently swallowed
 
@@ -4023,7 +4023,7 @@ other container type would be missed. None exists today.
   not illegitimate, but the two entries pull against each other until 51(b) is
   taken. Adopting that enriched message would reconcile them.
   ⚠ `expr-fact-row`'s propagation is **inert for compound terms** — they are
-  splayed at parse time before typing sees them (DEFERRED 53).
+  splayed at parse time before typing sees them (DEFERRED 66).
   ⚠ Still swallowing, same shape, no repro constructed: `expr-narrow`.
   ⚠ **The rejection now NAMES the relation** — `defr badclause: Could not infer
   type — the relation was NOT registered` — because the bare form gave a
@@ -4032,7 +4032,7 @@ other container type would be missed. None exists today.
   it) rather than the enriched *"its defr failed to register (see the earlier
   error)"* that the schema/floundering gates get. Reaching that branch needs the
   name env-bound to an `expr-defr`, i.e. an env write carrying a body that FAILED
-  to type — which `zonk` may not survive (DEFERRED 54). That reconciliation is
+  to type — which `zonk` may not survive (DEFERRED 67). That reconciliation is
   51(b)'s job.
 - `(= x [+ 1 1])` rendering the binding as `unknown` is its own pre-existing
   display defect; pinned as status quo.
@@ -4041,8 +4041,366 @@ other container type would be missed. None exists today.
   (`(guard [+ "str" 1])` succeeds). Pre-existing; unreachable in practice today
   because `expr-clause` swallows it first.
 
+### 53. 🔀 SPUN OUT (chip `task_e1c15ee6`, 2026-08-05) — PARAMETERIZED `data` binds the TYPE PARAMETER as a constructor
 
-### 53. ✅ FIXED 2026-08-05 — a compound term in a `||` fact row was SPLAYED into fabricated rows (pre-existing silent WRONG ANSWER)
+```
+data Tree A
+  | leaf A
+  | branch [Tree A] [Tree A]
+[leaf 42]
+```
+=> `Tree : [Type 0] defined.` · **`A : ns::Tree defined.`** · `Unbound variable`
+(leaf) ×3. `A` is the TYPE PARAMETER, bound as a nullary constructor; the real
+constructors are never registered.
+
+Non-parameterized `data` **works today**:
+`data Direction | north | south` + `defn opposite | north -> south | …` +
+`[opposite north]` => `south`, 0 errors.
+
+**Surfaced by** ARROW T1 P3, while trying to un-comment the `int->str` block in
+`examples/2026-03-18-track7-acceptance.prologos` (§ K2). That block had THREE
+blockers; ARROW fixed one (the reader/arrow one), `int->str` never existed
+(the real name is `str::from-int`), and this is the third.
+
+⭐ **It also corrects a stale annotation that FIVE sites in that file point at.**
+The E2 note claimed NO file-level `data` registers constructors. That is half
+wrong — and the live half is a MIS-PARSE (a wrong binding is created), not a
+missing registration, which is a sharper diagnosis than the original. The note
+was corrected in place at ARROW T1 P3 (`004c025d`); the file's NULLARY blocks
+(Direction, Color, …) are now re-triable and should be un-commented once
+confirmed, while the `Tree`-based ones stay blocked on this item.
+
+**Why deferring is safe**: loud `Unbound variable` per command, no silent wrong
+answer, and prelude data types (Nat/Bool/List/Option) are unaffected because
+they load via module import, not file-level `data`.
+**Why it should not sit long**: it silently *invents a binding* (`A`), and it
+has already caused four months of a wrong annotation blocking unrelated work.
+
+⚠ Do not gate on `examples/2026-03-18-track7-acceptance.prologos`: >15 minutes
+to run and ZERO `;;N=>` markers (it predates the marker system, 2026-07-06).
+Use a small probe plus the marker-bearing acceptance files.
+
+
+### 56. ⬜ GUARD THE PARSE PATH — the class-level completion of option B, its OWN slice (owner ruling 2026-08-05)
+
+`ae26f540` guarded PREPARSE (the per-form fold in `preparse-expand-all`), so a
+raise there degrades to a per-command `($preparse-error msg)`. **The PARSE step is
+the other half of `pipeline.md`'s own class name** — "A Raise on the
+**Parse/Expansion** Path" — and it is still unguarded: `process-file-inner` runs
+preparse then parse as separate steps, and a raise in the second escapes whole.
+
+**HEAD-reachable reproducers, measured (3 whole-file aborts, output EMPTY — not
+even the `def before := 1` above them):**
+
+```
+m{[$bcast-step [a b]]}   →  symbol->string: contract violation, given '(a b)
+m{[$bcast-step 5]}       →  symbol->string: contract violation, given 5
+m{[$bcast-step]}         →  cadr: contract violation, given '($bcast-step)
+```
+
+The specific site (`parser.rkt` `$bcast-step` fold arm, unguarded
+`(symbol->string (cadr it))`) gets a SITE-LOCAL shape guard in the `:{` phase
+(owner: "site-local"), because the real `:{` mint makes the payload a LIST and
+walks straight into it. **This entry is the CLASS**: a per-command guard at the
+parse seam, so the SIXTH sentinel does not rediscover what the first five did.
+
+**Why its own slice** (owner ruling): the preparse guard alone converted 20
+assertions across 9 files, and parse is the busier path — expect more. It also
+re-raises the channel-merging property flagged at the P4c-4c close (a
+compiler-internal invariant violation degrading to a per-command error), so the
+slice should consider a DISTINGUISHED internal-error marker that keeps raising —
+re-splitting the two propositions P4c-4b separated.
+⚠ Method note for whoever lands it: the preparse conversion surfaced that
+**result-discarding test helpers** (`run-last`, lookup-returning fixtures) can
+silently swallow a refusal once it becomes a value. Sweep for those FIRST.
+
+## CIU T6 D4.P4d-0 spin-offs (filed 2026-08-05 from the pre-commit adversarial verify `wf_7d93efe5-b68`)
+
+### 54. Goal-position `:{` (and its dot SIBLING) yields a silent `unknown` row
+
+`(= ?y xs:{a})` flips the baseline's loud `= expects 2 arguments, got 3` into a
+silent `@[{:y unknown}] : _` at 0 errors. ⚠ The CLASS is PRE-EXISTING — the dot
+sibling `(= ?y xs.a)` yields the identical unknown row at the same baseline — so
+this is the DEFERRED 51/52 neighbourhood (selection sentinels reaching relational
+paths), not a mint defect. Zero corpus sites. Silent-wrong-answer shaped, so it
+must not sit past the 51/52 chip (`task_4c00d3f0`); whoever lands that fix should
+take this reproducer with them.
+
+### 55. ✅ DISCHARGED at D4.P4d-0 slice 5 (`77259635`) — the spurious-dot display fixed (one pp arm honouring `first?`) and the vector-element refusal now names the broadcast alternative. *(original below)*
+
+### 55-original. In-block `:{` is newly ADMITTED but refused with a MISLEADING diagnostic
+
+`rows{a:{p q}}` (narrowing a map FIELD inside a select block) now parses — the
+baseline refused at parse — and typing refuses per-command with a message that
+pretty-prints the nonexistent spelling `rows{a:.{p q}}` (the spurious-dot display
+defect, P4d-0 slice 5's item) and describes vector-ordinal semantics where the
+user narrowed a map field. A refusal, not an acceptance, and per-command — but it
+is the FIRST adjacent spelling users will try, and it is unpinned. Home: the
+P4d-0 slice-5 display fix plus a message that names the map-field case.
+
+
+### 57. ⬜ `tier-union-witness` flattens STRUCTURALLY — a Map behind a type-alias union is not witnessed (D4.P4d slice 3 verify)
+
+`select-union-lift` and `tier-union-witness` both call `flatten-union`, which
+matches `expr-union` STRUCTURALLY without `whnf`. A component that only *whnfs
+into* a union — `def N : Type := <[Map Keyword Int] | Nil>` — therefore survives
+in the component list unflattened.
+
+**The GATE half is already handled**: `select-bcast-inner-apply` tests
+`expr-union?` on each (whnf'd) component and recurses into `select-union-lift`,
+so an alias-nested union is gated correctly.
+
+**The TIER half is NOT**: `tier-union-witness` does `(map whnf (flatten-union t))`
+and scans one level only, so a Map buried one union-level down is not found, the
+tier stays permissive, and a runtime miss is QUIET — the DEFERRED-43 signature,
+one indirection over. Measured by the slice-3 verify:
+
+```
+def MM : Type := <[Map Keyword Int] | Nil>
+def both : [PVec <MM | Nil>] := @[m1]
+both:zzz     →  <error> : [PVec Int]        ;; ZERO errors
+;; the same union written FLAT panics correctly
+```
+
+NOT a slice-3 regression (pre-slice there was no witness at all). Corpus count of
+`: Type :=` in `lib/` + `examples/` is **0**, so nothing shipped is affected.
+**Fix shape**: a whnf-first recursive flatten, used at both sites.
+⚠ `build-union-type` (`union-types.rkt`) has the same non-recursive
+`append-map flatten-union` — wider and pre-existing; scope that separately.
+
+### 58. ⬜ A DYN-TAILED row component is a THIRD admission channel through the union gate (D4.P4d slice 3 verify)
+
+The slice-3 gate's carve-outs are enumerated as two (the Nil skip, the
+unsolved-meta fallback). There is a third, unenumerated: a dyn-tail row component
+contributes a FRESH META from `select-project-field/row`'s `'path`+`'dyn` arm, so
+it silently passes the all-must-offer gate. Three lines of ordinary source, using
+the acceptance file's own `pvec-slice` widening idiom:
+
+```
+def rows := @[{} {:a 1}]          ;; {} infers as an EMPTY DYN keyword row
+def sl := [pvec-slice rows k 2N]  ;; [PVec { | _} | {:a Int}]
+sl:a     →  <error> : [PVec Int | ?meta]    ;; buried <error>, ZERO errors
+sl:{a}   →  refuses (the sub inner forces 'block, where dyn is miss-dyn)
+```
+
+Two consequences: (i) the slice-3 pin's `check-false #rx"<error>"` holds for its
+own fixture but NOT for the class, so that pin's comment over-claims; (ii) "every
+component must offer the step" is **sort-dependent** for dyn components — `:a`
+accepts where `:{a}` refuses, for the same union and the same key.
+
+NOT a regression — the non-union control behaves identically, so this is the
+pre-existing ruled dyn permissiveness (D19/P2.b) leaking through the new gate,
+and it is COHERENT with the single-get sibling (`union-record-component-vt` also
+returns a fresh meta). What is owed is a ruling on whether "may be present in the
+remainder" discharges "every component must offer", and the sort-consistency.
+
+### 59. ⬜ Two broadcast diagnostics name the wrong subject (D4.P4d slice 1/2 verifies)
+
+Both pre-existing, both surfaced while pinning the carriers; natural riders on
+P4d slice 4's diagnostics batch.
+
+1. **The `@[]` / meta-element broadcast refusal misattributes the subject.**
+   `def emp := @[]` types `[PVec _]`; `emp:t` refuses with *"select: the subject
+   is not a record, so it has no fields to access"* — which describes the (meta)
+   ELEMENT as "the subject", names neither the broadcast nor the key, and carries
+   no branch. Refusal is the monotone-safe direction; the wording is the defect.
+2. **`not-indexable`'s remedy is off-key inside a broadcast.** An ordinal inner
+   over a row carrier (`evs:0`) correctly names the position and the failure, but
+   the appended advice is *"select named fields instead (`x{k}`)"* — the spelling
+   for the NON-broadcast case. Inside a broadcast the fix the user wants is
+   `evs:t`.
+
+### 60. ⊘ DISSOLVED at D4.P4d slice 4c (`a31b7475`) — the subject no longer exists
+
+The `pvec-map`-of-dots advice was DELETED, so the polarity mismatch has no
+vehicle: no carrier message spells a dot-access remedy any more. ⚠ Re-open only
+if a future slice reintroduces a taught spelling — DEFERRED 61's brace-template
+idea would. The in-code marker this entry cited is gone with the arm.
+*(original below)*
+
+The advised spelling is a `pvec-map` of DOT accesses, and `.` over a union is
+the OPTIMISTIC single-get polarity (filter-on-miss) while `:` is all-must-offer
+(keys-⋂) — `select-project-field`'s union arm says so in its own comment and
+forbids broadcast reuse. So over a union-typed link the advice is QUIETER than
+the thing it describes. Measured at slice 4a:
+
+```
+def u : <[Map Keyword Int] | Int> := 7
+def L := '[{:a u} {:a u}]
+L:a:b                            ;; advises `[pvec-map [fn [m] m.a.b] xs]`
+def P := [pvec-from-list L]
+[pvec-map [fn [m] m.a.b] P]      ;; @[none none] : [PVec Int]   — silent
+P:a:b                            ;; ERROR: keys-intersection rule — loud
+```
+
+**Pre-existing at ONE step** (base advised `m.a`, with the same polarity), so
+slice 4a did not create it — but fusion EXTENDS it across the chain, where
+before the truncated advice left a second, loud refusal standing.
+
+Closing it means walking the element type along the chain to detect a union
+link and poisoning the advice there — typing analysis inside a diagnostic, and
+its own slice. Recorded in the code at `format-select-fail`'s `bcast-carrier`
+arm.
+
+### 61. ⬜ REWRITTEN at slice 4c — a BRACE-spelling remedy for sub / caret inners
+
+⚠ The original text below is OBE: it described slice 4a's "poisoning rule",
+which was deleted at 4c along with the rest of the advice machinery. Two
+corrections to it, both MEASURED at HEAD:
+
+- **Item 1 is moot.** No sort advises a dot spelling now, so nothing is
+  "withdrawn by poisoning".
+- **⚠ Item 2's premise is FALSE at HEAD, and two independent auditors got this
+  wrong.** Block sort is NOT silent: `R{items:aa}` over a List field emits the
+  full conversion remedy ("convert it with `[pvec-from-list xs]`"). Both audits
+  reasoned from "the advice machinery is deleted" to "no message advises
+  anything", conflating 4a's *taught-spelling* advice with 4c's *conversion*
+  remedy. Probe before repeating either claim.
+
+**What actually remains**: sub and caret inners have honest BRACE spellings
+(`m{a b}`, `m{name^alias}`, both verified equivalent to their `:`-forms) that
+nothing offers. ⚠ Taking this requires reconciling with 4c's owner ruling —
+*"the fix is not a better second spelling; it is not teaching one"* — so it is a
+FEATURE question (should any remedy teach a spelling?), not a gap to close.
+*(original below)*
+
+Two conservative-direction losses from slice 4a's poisoning rule, both
+suppression-only (never a wrong spelling), neither pinned:
+
+1. **A non-ω following link poisons the whole chain.** `L:a.b`, `M:a:0` and
+   `R{items:a.b}` advised `m.a` at base and advise nothing now. The poisoning
+   rule targets ω chains, where a partial path answers a different question; a
+   following `.b` or `:0` applies to the ω's RESULT, so `m.a` remained a correct
+   spelling of the step that actually failed.
+2. **BLOCK sort now advises nothing at all.** Correct as far as it goes — the
+   dot-path is not the block spelling, because block ω ASSEMBLES (measured:
+   `RP{items:aa}` ≡ `[pvec-map [fn [m] m{aa}] P]`, while `m.aa` projects and
+   differs). But the honest advice EXISTS: it is the BRACE spelling `m{aa}`.
+   Advising it would restore the guidance the suppression removed, and is the
+   same "different delimiter" move already owed for sub and caret inners.
+
+Both are monotone (advice can be added back at zero cost); neither can produce a
+wrong spelling today. Worth taking together, since (2) and the sub/caret cases
+share one mechanism: a brace-spelling advice template.
+
+### 62. ⬜ The ω subject resolver refuses more than it must — the precise gate is a presence question (D4.P4d slice 4b)
+
+`bcast-resolve-subject` admits a schema only when it is `:closed` AND carries no
+`:default`. Both conjuncts are sound but blunt; each was a measured width lie in
+an earlier cut of the slice, in OPPOSITE directions:
+
+- **extras** (the `:closed` conjunct) — an open schema's runtime value can carry
+  keys the declared row does not, and broadcast is the first consumer that
+  ENUMERATES the row. Measured: a 3-key open `Region` gave
+  `{:ap "a", :eu "e", :us "u"} : {:eu String :us String}`.
+- **absence** (the `:default` conjunct) — `schema->row` marks every field
+  `'present` while its own docstring says the fill "happens at the seal
+  boundary"; a `spec f -> S` RETURN has no fill, so a defaulted field can be
+  `'present` in the row and absent at runtime. Measured: `c:h` gave
+  `{:a "q"} : {:a String :b String}` and `broad.b` a silent `<error>`.
+
+The precise gate for BOTH is a presence-faithful row: mint an open schema's row
+with a dyn TAIL, and a defaulted field with the presence the seal actually
+guarantees rather than an unconditional `'present`. That means a
+broadcast-specific `schema->row` variant (the shared one is load-bearing for
+`.` and `{}`, which read named fields and never notice), so it was filed rather
+than improvised inside a diagnostics slice. Monotone: both refusals can become
+meanings with no user-visible break.
+
+### 63. ⬜ INLINE nested schemas are always OPEN, so the slice-4b deliverable misses the idiomatic spelling (D4.P4d slice 4b re-verify)
+
+Auto-generated sub-schemas are registered open — `macros.rkt`'s sub-schema
+construction passes the closed flag as `#f` unconditionally, so a parent's
+`:closed` never propagates. Consequence, measured:
+
+```
+schema Region :closed
+  :us
+    :a
+      :h String
+```
+`plain.us:h` → `{:a "x", :b "y"} : {:a String :b String}`, while the
+byte-identical `rg.us:h` refuses. Two problems: the refusal is CORRECT (the
+inline sub genuinely accepts an undeclared key — admitting it would reproduce
+62's extras direction exactly), but it names a compiler-generated identifier
+(`Region__us`) the user never wrote, and its advice is nonsense for that
+subject. So slice 4b's headline — "a schema-typed subject is the row it
+denotes" — holds only for top-level NAMED closed schemas. Fixing the
+propagation is the real answer; the leaked generated name is slice-4c material.
+
+### 64. ✅ RESOLVED at D4.P4d slice 4c (`a31b7475`) — both gates now name their remedy
+
+The open-schema arm says the admitted form is `:closed`; the collided-selection
+arm says "This is a SELECTION — a capability-restricted view" and offers no
+list conversion. Both are battery-pinned ("an OPEN schema is told the one thing
+that fixes it", "a collided SELECTION is told it is a view"). *(original below)*
+
+The resolver refuses an open schema and a name-collided selection, and both fall
+through to the generic `bcast-carrier` message. Neither says the thing the user
+needs:
+
+1. **open schema** — the remedy is literally "add `:closed`", and no message
+   says so.
+2. **collided selection** — it gets the generic carrier refusal, which
+   `select-row-of`'s own comment calls "a LIE — a view is a record, restricted",
+   and which offers `pvec-from-list` / `pvec-map`, both wrong for a view.
+   `select-row-of` already has the honest bespoke message; the broadcast path
+   does not reach it. The resolver argues the selection case at length in a
+   comment and emits none of it.
+
+⚠ The collision pin asserts only the ABSENCE of the leaked value, so neither
+gap can be caught by the battery today. Both are `bcast-carrier` per-carrier
+split work — slice 4c.
+
+### 65. ⬜ `lookup-schema-by-name` matches on the SHORT name, so an unrelated type can resolve to a schema (pre-existing; surfaced at D4.P4d slice 4b)
+
+`register-schema!` keys on the short name and `lookup-schema-by-name` falls back
+to it, so any type whose short name matches any schema resolves to that schema.
+With `schema Bar :closed` + `data Bar := mk1 | mk2`, `v := mk1` then `v:h` yields
+`{:a String :b String}` at 0 errors — a row fabricated for a nullary constructor
+with no fields.
+
+**NOT a regression**: the dot-only, broadcast-free version reaches the same end
+state at base, including a WHOLE-FILE ABORT (`foreign: Cannot marshal to
+string … #(struct:expr-select …)`, empty output — `pipeline.md`'s raise class).
+But broadcast widens the fabrication from one field to the whole row, which is
+62's extras argument verbatim, and it is a third instance of the class the two
+slice-4b gates were written for. The fix is name resolution, not selection.
+
+
+
+---
+
+## Renumbered on merge-back — `wizardly-mendel-2fd502` → `main` (2026-08-08)
+
+The DEFERRED 51/52 arc ran out-of-band on its own branch and numbered its entries
+independently, so **nine** numbers denoted different items on the two sides.
+`main`'s numbering is the trunk's and had already been made self-consistent
+(its own 53 collision was resolved 53 → 56), so the BRANCH's entries moved.
+
+| was (branch) | now | entry |
+|---|---|---|
+| 53 | **66** | a compound term in a `\|\|` fact row was SPLAYED into fabricated rows |
+| 54 | **67** | the four global-constraint goal forms are UNPLUMBED |
+| 55 | **68** | the FLAT / paren-wrapped clause spelling mis-parses under multiple rewrites |
+| 56 | **69** | `x[i]` on a deeper CONTINUATION line becomes a bogus goal |
+| 57 | **70** | the right-peel over-reached (a compound `let` body stole the rel RHS's srclocs) |
+| 58 | **71** | THE DEPTH WALL — the origin index |
+| 59 | **72** | MEMBER 4 — `def name := rel …` mis-grouped a clause containing a rewrite |
+| 60 | **73** | an anonymous `rel` carrying `\|\|` fact rows returns `@[]` typed `Goal` |
+| 61 | **74** | the POL.9b def-seam gap |
+
+⚠ **Commit messages are immutable and still say the OLD numbers.** Every moved
+entry carries its own `was N → now M` note so those references stay traceable;
+the code comments and test names were updated in the merge-back commit.
+⚠ **51 and 52 are NOT renumbered** — they are the SAME items on both sides, and
+this branch's ✅ FIXED versions supersede `main`'s 🔀 SPUN OUT stubs (spliced in
+above, not appended).
+
+
+### 66. ✅ FIXED 2026-08-05 — a compound term in a `||` fact row was SPLAYED into fabricated rows (pre-existing silent WRONG ANSWER)
+
+> ⚠ **Renumbered 53 → 66 at the merge-back** (2026-08-08). It was **53** on branch `wizardly-mendel-2fd502`, where it collided with a DIFFERENT `main` entry of the same number. Commit messages and any code comment saying "DEFERRED 53" from that branch mean THIS entry.
 
 Measured, **byte-identical at `b429d038` and after the DEFERRED 51/52 work**, so
 this is neither caused by nor fixed by that arc:
@@ -4180,7 +4538,9 @@ elements**.
    (the count is right and nothing is invented) but still not WORKING — do not
    read the row-count fix as making compound facts usable.
 
-### 54. The four global-constraint goal forms are parser-reachable but UNPLUMBED (`zonk` has no arm) — found 2026-08-05
+### 67. The four global-constraint goal forms are parser-reachable but UNPLUMBED (`zonk` has no arm) — found 2026-08-05
+
+> ⚠ **Renumbered 54 → 67 at the merge-back** (2026-08-08). It was **54** on branch `wizardly-mendel-2fd502`, where it collided with a DIFFERENT `main` entry of the same number. Commit messages and any code comment saying "DEFERRED 54" from that branch mean THIS entry.
 
 `all-different`, `element`, `cumulative`, `minimize` are gated on
 `current-parsing-relational-goal?` (parser.rkt), so a clause body is the ONLY
@@ -4235,7 +4595,9 @@ is exactly the distinction the derivation was built to make.
 shape as the arms fixed in DEFERRED 52, left in place because no repro was
 constructed for it.
 
-### 55. The FLAT / paren-wrapped clause spelling mis-parses under multiple rewrites — pre-existing, silent (found 2026-08-05 by adversarial verify)
+### 68. The FLAT / paren-wrapped clause spelling mis-parses under multiple rewrites — pre-existing, silent (found 2026-08-05 by adversarial verify)
+
+> ⚠ **Renumbered 55 → 68 at the merge-back** (2026-08-08). It was **55** on branch `wizardly-mendel-2fd502`, where it collided with a DIFFERENT `main` entry of the same number. Commit messages and any code comment saying "DEFERRED 55" from that branch mean THIS entry.
 
 ```
 (defr q [?a ?b ?c ?zz]
@@ -4270,7 +4632,7 @@ or BOTH lists, so an atom can no longer pair with a different atom. That shrinks
 the unsound surface without making the spelling correct.
 
 **Real fix**: a proper diff (or an origin marker from the reader) instead of
-prefix/suffix + right-alignment. Related to DEFERRED 53's residual 2, which wants
+prefix/suffix + right-alignment. Related to DEFERRED 66's residual 2, which wants
 the same reader-side marker.
 
 **Reachable-through spellings (grows as found)**: the flat/paren-wrapped clause
@@ -4280,7 +4642,9 @@ arity exists; def-arm verify, 2026-08-05, byte-identical pre-51(c)); and the
 **`let` binding-RHS leg** degrades by a stronger mechanism (total-reshape
 desugar — no alignment can recover it; see the 51(c) entry).
 
-### 56. `x[i]` on a deeper CONTINUATION line becomes a bogus goal — pre-existing, and 51(c) made its diagnostic worse (found 2026-08-05)
+### 69. `x[i]` on a deeper CONTINUATION line becomes a bogus goal — pre-existing, and 51(c) made its diagnostic worse (found 2026-08-05)
+
+> ⚠ **Renumbered 56 → 69 at the merge-back** (2026-08-08). It was **56** on branch `wizardly-mendel-2fd502`, where it collided with a DIFFERENT `main` entry of the same number. Commit messages and any code comment saying "DEFERRED 56" from that branch mean THIS entry.
 
 ```
 defr q [?f]
@@ -4304,12 +4668,14 @@ one returns an unrelated type error. That regression in guidance is real even
 though the parse behaviour is not.
 
 **Fix direction**: `pol8-goal-pair?` decides "is this a goal group?" by "a pair
-not headed by a `$` sentinel", which is the same polarity trap DEFERRED 53 hit —
+not headed by a `$` sentinel", which is the same polarity trap DEFERRED 66 hit —
 a rewrite whose output happens not to be `$`-headed silently changes meaning. The
 durable answer is the reader-side origin marker (see 53 residual 2), not another
 member.
 
-### 57. ✅ FIXED 2026-08-07 (commit `066e2c45`) — the right-peel over-reached: a COMPOUND `let` body stole the rel RHS's srclocs, and the let leg's pins all used the one body shape that worked
+### 70. ✅ FIXED 2026-08-07 (commit `066e2c45`) — the right-peel over-reached: a COMPOUND `let` body stole the rel RHS's srclocs, and the let leg's pins all used the one body shape that worked
+
+> ⚠ **Renumbered 57 → 70 at the merge-back** (2026-08-08). It was **57** on branch `wizardly-mendel-2fd502`, where it collided with a DIFFERENT `main` entry of the same number. Commit messages and any code comment saying "DEFERRED 57" from that branch mean THIS entry.
 
 **The landed let leg (`134ddb79`) was BODY-SHAPE-DEPENDENT.** With a compound
 body — `[some vr]`, the idiomatic spelling — two parenless sibling goals under a
@@ -4417,126 +4783,9 @@ the `trait`/`impl`/`specialize` arms, which still do the bare whole-form stamp;
 and noted that error POSITIONS for siblings 2..N of a merged let run are all
 reported at sibling 1's line.
 
-<!-- ═══════════════════════════════════════════════════════════════════════════
-     ⚠ NUMBERING COLLISION — RULING OWED.  Merge of `main` (65cb5bce) into
-     `wizardly-mendel-2fd502`, 2026-08-07.
+### 71. ✅ FIXED 2026-08-07 (commits `b3e03913` slice 1, `1ad9411f` slice 2) — THE DEPTH WALL: cons-cell identity was already an exact provenance marker, and the strip was throwing it away
 
-     The entries ABOVE numbered 53–57 were filed on the DEFERRED 51/52 branch
-     arc.  The entries BELOW numbered 53, 53, 54, 55, 55-original were filed
-     independently on `main` for the CIU T6 D4.P4d arc.  So 53 / 54 / 55 denote
-     DIFFERENT items depending on which arc a reference came from.  (Entries
-     51 and 52 are NOT a collision: they are the same two items, and this
-     branch's ✅ FIXED versions supersede main's 🔀 SPUN OUT stubs.)
-
-     NOTHING WAS RENUMBERED AT MERGE TIME, deliberately.  Cross-references to
-     both sets already exist in commit messages (immutable), in `macros.rkt`
-     comments, and in test-case names — so a renumber is a coordinated edit, not
-     a mechanical one, and it should be a conscious ruling rather than a
-     side-effect of a merge.  Note also that `main` already carried a duplicate
-     53 of its own before this merge, so duplicates are not new here.
-
-     WHEN RULING: whichever side moves, record the old→new mapping inside each
-     moved entry, so the existing commit references stay traceable.
-     ═══════════════════════════════════════════════════════════════════════ -->
-
-### 53. 🔀 SPUN OUT (chip `task_e1c15ee6`, 2026-08-05) — PARAMETERIZED `data` binds the TYPE PARAMETER as a constructor
-
-```
-data Tree A
-  | leaf A
-  | branch [Tree A] [Tree A]
-[leaf 42]
-```
-=> `Tree : [Type 0] defined.` · **`A : ns::Tree defined.`** · `Unbound variable`
-(leaf) ×3. `A` is the TYPE PARAMETER, bound as a nullary constructor; the real
-constructors are never registered.
-
-Non-parameterized `data` **works today**:
-`data Direction | north | south` + `defn opposite | north -> south | …` +
-`[opposite north]` => `south`, 0 errors.
-
-**Surfaced by** ARROW T1 P3, while trying to un-comment the `int->str` block in
-`examples/2026-03-18-track7-acceptance.prologos` (§ K2). That block had THREE
-blockers; ARROW fixed one (the reader/arrow one), `int->str` never existed
-(the real name is `str::from-int`), and this is the third.
-
-⭐ **It also corrects a stale annotation that FIVE sites in that file point at.**
-The E2 note claimed NO file-level `data` registers constructors. That is half
-wrong — and the live half is a MIS-PARSE (a wrong binding is created), not a
-missing registration, which is a sharper diagnosis than the original. The note
-was corrected in place at ARROW T1 P3 (`004c025d`); the file's NULLARY blocks
-(Direction, Color, …) are now re-triable and should be un-commented once
-confirmed, while the `Tree`-based ones stay blocked on this item.
-
-**Why deferring is safe**: loud `Unbound variable` per command, no silent wrong
-answer, and prelude data types (Nat/Bool/List/Option) are unaffected because
-they load via module import, not file-level `data`.
-**Why it should not sit long**: it silently *invents a binding* (`A`), and it
-has already caused four months of a wrong annotation blocking unrelated work.
-
-⚠ Do not gate on `examples/2026-03-18-track7-acceptance.prologos`: >15 minutes
-to run and ZERO `;;N=>` markers (it predates the marker system, 2026-07-06).
-Use a small probe plus the marker-bearing acceptance files.
-
-
-### 53. ⬜ GUARD THE PARSE PATH — the class-level completion of option B, its OWN slice (owner ruling 2026-08-05)
-
-`ae26f540` guarded PREPARSE (the per-form fold in `preparse-expand-all`), so a
-raise there degrades to a per-command `($preparse-error msg)`. **The PARSE step is
-the other half of `pipeline.md`'s own class name** — "A Raise on the
-**Parse/Expansion** Path" — and it is still unguarded: `process-file-inner` runs
-preparse then parse as separate steps, and a raise in the second escapes whole.
-
-**HEAD-reachable reproducers, measured (3 whole-file aborts, output EMPTY — not
-even the `def before := 1` above them):**
-
-```
-m{[$bcast-step [a b]]}   →  symbol->string: contract violation, given '(a b)
-m{[$bcast-step 5]}       →  symbol->string: contract violation, given 5
-m{[$bcast-step]}         →  cadr: contract violation, given '($bcast-step)
-```
-
-The specific site (`parser.rkt` `$bcast-step` fold arm, unguarded
-`(symbol->string (cadr it))`) gets a SITE-LOCAL shape guard in the `:{` phase
-(owner: "site-local"), because the real `:{` mint makes the payload a LIST and
-walks straight into it. **This entry is the CLASS**: a per-command guard at the
-parse seam, so the SIXTH sentinel does not rediscover what the first five did.
-
-**Why its own slice** (owner ruling): the preparse guard alone converted 20
-assertions across 9 files, and parse is the busier path — expect more. It also
-re-raises the channel-merging property flagged at the P4c-4c close (a
-compiler-internal invariant violation degrading to a per-command error), so the
-slice should consider a DISTINGUISHED internal-error marker that keeps raising —
-re-splitting the two propositions P4c-4b separated.
-⚠ Method note for whoever lands it: the preparse conversion surfaced that
-**result-discarding test helpers** (`run-last`, lookup-returning fixtures) can
-silently swallow a refusal once it becomes a value. Sweep for those FIRST.
-
-## CIU T6 D4.P4d-0 spin-offs (filed 2026-08-05 from the pre-commit adversarial verify `wf_7d93efe5-b68`)
-
-### 54. Goal-position `:{` (and its dot SIBLING) yields a silent `unknown` row
-
-`(= ?y xs:{a})` flips the baseline's loud `= expects 2 arguments, got 3` into a
-silent `@[{:y unknown}] : _` at 0 errors. ⚠ The CLASS is PRE-EXISTING — the dot
-sibling `(= ?y xs.a)` yields the identical unknown row at the same baseline — so
-this is the DEFERRED 51/52 neighbourhood (selection sentinels reaching relational
-paths), not a mint defect. Zero corpus sites. Silent-wrong-answer shaped, so it
-must not sit past the 51/52 chip (`task_4c00d3f0`); whoever lands that fix should
-take this reproducer with them.
-
-### 55. ✅ DISCHARGED at D4.P4d-0 slice 5 (`77259635`) — the spurious-dot display fixed (one pp arm honouring `first?`) and the vector-element refusal now names the broadcast alternative. *(original below)*
-
-### 55-original. In-block `:{` is newly ADMITTED but refused with a MISLEADING diagnostic
-
-`rows{a:{p q}}` (narrowing a map FIELD inside a select block) now parses — the
-baseline refused at parse — and typing refuses per-command with a message that
-pretty-prints the nonexistent spelling `rows{a:.{p q}}` (the spurious-dot display
-defect, P4d-0 slice 5's item) and describes vector-ordinal semantics where the
-user narrowed a map field. A refusal, not an acceptance, and per-command — but it
-is the FIRST adjacent spelling users will try, and it is unpinned. Home: the
-P4d-0 slice-5 display fix plus a message that names the map-field case.
-
-### 58. ✅ FIXED 2026-08-07 (commits `b3e03913` slice 1, `1ad9411f` slice 2) — THE DEPTH WALL: cons-cell identity was already an exact provenance marker, and the strip was throwing it away
+> ⚠ **Renumbered 58 → 71 at the merge-back** (2026-08-08). It was **58** on branch `wizardly-mendel-2fd502`, where it collided with a DIFFERENT `main` entry of the same number. Commit messages and any code comment saying "DEFERRED 58" from that branch mean THIS entry.
 
 Closes the last three members of the 51(c) family in one mechanism: **bracket
 `let [vr (rel …)] body`**, **aligned-block `let` (`$let-block`)**, and the
@@ -4719,8 +4968,9 @@ form sits at column **1**. The reliable fail-safe is a `#f` loc
 (`(datum->syntax #f d #f)`), which BOTH layout guards already test for alongside
 `(zero? sent-col)`.
 
+### 72. ✅ FIXED 2026-08-08 (commit `e05729a5`) — MEMBER 4: `def name := rel …` mis-grouped a clause containing a REWRITE; expanded-side descent closes it
 
-### 59. ✅ FIXED 2026-08-08 (commit `e05729a5`) — MEMBER 4: `def name := rel …` mis-grouped a clause containing a REWRITE; expanded-side descent closes it
+> ⚠ **Renumbered 59 → 72 at the merge-back** (2026-08-08). It was **59** on branch `wizardly-mendel-2fd502`, where it collided with a DIFFERENT `main` entry of the same number. Commit messages and any code comment saying "DEFERRED 59" from that branch mean THIS entry.
 
 The fourth member of the 51(c) family, owner-ruled into its own slice. Its clause
 elements are collapsed onto one line at a NONZERO column, so POL.8's column-0
@@ -4762,7 +5012,7 @@ here.
 
 ✅ **FIXED — and the filed description above was STALE in a way that changed the
 fix.** It says the clause elements are "collapsed onto one line". Measured at
-`c77fbeb4`: DEFERRED 58's origin index ALREADY recovered the UNCHANGED goal
+`c77fbeb4`: DEFERRED 71's origin index ALREADY recovered the UNCHANGED goal
 (L4:C5, correct). What actually collapsed was the **CHANGED** subtree and its
 enclosing `$clause-sep` group, both landing on the `:=` token (L2:C7). So the
 defect is smaller and sharper than filed, and it fires ONLY when a preparse
@@ -4804,18 +5054,20 @@ evidence.
 ⚠ **STILL OPEN, and it was the reason this member was scheduled after the seam**:
 the `||` fact-row divergence on this arm. A prior audit measured THREE rows here
 where `defr` gives FOUR on an identical block, at surf level. That remains
-unpinned and unresolved — and see DEFERRED 60, which found the `defr` side is not
+unpinned and unresolved — and see DEFERRED 73, which found the `defr` side is not
 a clean oracle either.
 
-**And it is NOT a relocation miss** — the origin index of DEFERRED 58 cannot see
+**And it is NOT a relocation miss** — the origin index of DEFERRED 71 cannot see
 it. The expanded `(rel (?q) ($facts-sep …))` is a NEWLY CONSTRUCTED grouping of
 three previously-SIBLING original elements, so no datum-equal twin exists at any
 depth and no cons-cell identity survives. It needs **expanded-side DESCENT**
 (recurse into the folded expanded element against the folded original run, whose
 tail is datum-equal to the originals) — a different generalization from anything
-DEFERRED 58 built.
+DEFERRED 71 built.
 
-### 60. ⬜ An anonymous `rel` carrying `||` FACT ROWS returns `@[]` and types its column `Goal` (found 2026-08-07, silent)
+### 73. ⬜ An anonymous `rel` carrying `||` FACT ROWS returns `@[]` and types its column `Goal` (found 2026-08-07, silent)
+
+> ⚠ **Renumbered 60 → 73 at the merge-back** (2026-08-08). It was **60** on branch `wizardly-mendel-2fd502`, where it collided with a DIFFERENT `main` entry of the same number. Commit messages and any code comment saying "DEFERRED 60" from that branch mean THIS entry.
 
 Separate from member 4 and from the `def` seam — measured on the bare top-level
 spelling, which has neither:
@@ -4835,8 +5087,66 @@ value: the column types as `Goal` rather than as the row values' type, and the
 solution set is empty. Silent in both directions — no error on either side.
 
 ⚠ Note the `defr` side is not a clean oracle either: its 4 rows include the known
-DEFERRED 53 splay residual (`[some 2]` on a continuation line becomes a fabricated
+DEFERRED 66 splay residual (`[some 2]` on a continuation line becomes a fabricated
 row, and `{:x unknown}` appears). So "make them agree" is not obviously the right
 target — what each SHOULD produce wants a ruling before either is changed.
 
 Found while scoping member 4; not investigated further.
+
+### 74. ✅ FIXED 2026-08-08 (commit `59b4174e`) — THE POL.9b DEF-SEAM: one shared gate, and the honest message when a type never existed
+
+> ⚠ **Filed at the merge-back.** This entry was referenced as "DEFERRED 61" by
+> commit `59b4174e` and by code comments in `driver.rkt`, `qtt.rkt`,
+> `typing-errors.rkt` and `tests/test-rel-t1-pol.rkt`, but an entry was never
+> actually written — the number was in use before the section existed. It is
+> filed here at its post-merge number; the code comments now say 74.
+
+**THE SEAM WAS ONE LINE, AND THE DEFECT WAS A DIVERGENCE.** The ANNOTATED `def`
+path guarded `is-type/err` against non-ground types; the INFERRED path called it
+bare. Both were written by the same commit — the guard was simply not mirrored.
+The fix is ONE predicate (`def-type-not-ground?`) behind ONE gate
+(`def-body-type-ok`) used by BOTH paths, rather than a second copy that could
+drift a second time.
+
+**WHAT IT COST WAS MORE THAN A BAD MESSAGE.** The def path type-checks BEFORE it
+evaluates, so rejecting a non-ground body preempted every diagnostic raised at
+EVALUATION time. Three already-written guiding messages were unreachable:
+`def bad := (dbl 3)` → *"dbl is a function — application is written `[dbl …]`"*;
+`def bad := solve (nosuchrel a b)` → *"Unknown relation: nosuchrel"*;
+`def bad := explain (dbl 3)` → the same guiding message. And `def k := rel …`
+(an unparenthesized rel VALUE) could not bind at all.
+
+✅ **RULED (owner, 2026-08-08)**: `def k := rel …` yields a **rel VALUE**. Note
+this is NOT the same output as the parenthesized `def k := (rel …)`, which is a
+GOAL with implicit solve (POL.9) and yields the SOLVED row set — making them
+identical would mean an unparenthesized RHS solves, contradicting Q_C.
+
+⚠ **AN ASYMMETRY THE "just mirror the guard" FRAMING HIDES**: the annotated
+path's hole comes from the USER's bare-param annotation — a legitimate wildcard
+by construction — while the inferred path's can mean inference FAILED. That is
+why mirroring alone was not enough:
+
+**THE HONEST MESSAGE WHEN THE TYPE NEVER EXISTED.** Letting non-ground bodies
+through to QTT means QTT is asked to check a body's usage AGAINST a type that is
+not there, and its generic `tu-error` reads **"Multiplicity violation"** — naming
+a subsystem that is working perfectly. Measured on the corpus: FIVE forms in
+three files moved from "Expression is not a valid type" to that, i.e.
+vague-but-neutral → specific-but-wrong. So when the type is NOT GROUND and QTT
+fails, the report is the inference failure.
+⚠ **The trigger is NOT "contains a hole"**: `def d := flip const false 2` infers
+a type carrying an unsolved META, and a hole-only test misses it — the first cut
+did exactly that and the lying message survived. The condition is the GATE's own
+predicate, which is also the principled one.
+⭐ **Bonus, unlooked-for**: this also fixed a PRE-EXISTING lying diagnostic —
+`examples/2026-04-17-ppn-track4c-adversarial.prologos` command 0 read
+"Multiplicity violation" BEFORE any of this work and now reads "Could not infer
+type".
+
+**RIDE-ALONG — the `expr-narrow` infer/inferQ TWIN.** `infer` has had an arm
+since the node was added; `inferQ` never did, so it fell to `[_ (tu-error)]`.
+It was MASKED by the seam, so it is not optional alongside this fix.
+See `.claude/rules/pipeline.md` § "infer / inferQ Are Twins".
+
+**Gates**: suite 10019/487/0 at the time; corpus blast radius BOUNDED BY
+SIGNATURE to 4 of 161 files and compared exhaustively — zero semantic diffs, no
+"Multiplicity violation" left in the affected set.

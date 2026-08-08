@@ -1,5 +1,5 @@
 #lang racket/base
-;; DEFERRED 58 — the ORIGIN INDEX's two load-bearing properties.
+;; DEFERRED 71 — the ORIGIN INDEX's two load-bearing properties.
 ;;
 ;; `strip-with-origin!` replaces `syntax->datum` on the per-form preparse path.
 ;; That makes two things load-bearing, and neither is something a green suite
@@ -38,12 +38,12 @@
         #'(defr q (?a) ($clause-sep) (foo a "x"))))
 
 (for ([s (in-list SHAPES)] [i (in-naturals)])
-  (test-case (format "DEFERRED 58 (A): strip-with-origin! = syntax->datum, shape ~a" i)
+  (test-case (format "DEFERRED 71 (A): strip-with-origin! = syntax->datum, shape ~a" i)
     (check-equal? (strip s) (dat s)
                   (format "datum divergence on ~s" (dat s)))))
 
 ;; ── (B) identity: the key IS the pair the expander receives ──────────────────
-(test-case "DEFERRED 58 (B): every recorded key is eq? to a node of the produced datum"
+(test-case "DEFERRED 71 (B): every recorded key is eq? to a node of the produced datum"
   (define idx (make-hasheq))
   (define stx #'(let (v ($goal-rhs (rel (f) (fc f "blue")))) (some v)))
   (define d (strip-with-origin! stx idx))
@@ -59,7 +59,7 @@
                 (format "recorded key is not a node of the produced datum: ~s" k)))
   (check-true (> (hash-count idx) 3) "index should record the nested compounds"))
 
-(test-case "DEFERRED 58 (B): a nested subtree is recoverable by IDENTITY at depth"
+(test-case "DEFERRED 71 (B): a nested subtree is recoverable by IDENTITY at depth"
   ;; The property the whole fix rests on: pull a deeply-nested node out of the
   ;; produced datum and look it up by eq? — the index must hand back the syntax
   ;; object it came from, with that node's OWN srcloc, not the form's.
@@ -73,7 +73,7 @@
   (check-true (syntax? hit) "the nested subtree must be recoverable by identity")
   (check-equal? (syntax->datum hit) nested "and it must be the SAME subtree"))
 
-(test-case "DEFERRED 58 (B): a SECOND strip shares no keys — why each strip needs its own index"
+(test-case "DEFERRED 71 (B): a SECOND strip shares no keys — why each strip needs its own index"
   ;; Pins the trap the audit measured: `syntax->datum` allocates fresh pairs, so
   ;; an index built over one strip is useless against another. If this ever
   ;; starts passing, cons-cell identity is no longer the marker and the fix's

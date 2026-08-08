@@ -979,7 +979,7 @@
                          ;; reach relations.rkt's enriched "its defr failed to register"
                          ;; branch: that branch keys on an `expr-defr` being env-bound, and
                          ;; the env write would have to carry a body that FAILED to type —
-                         ;; which `zonk` may not even survive (DEFERRED 54: `zonk` has no arm
+                         ;; which `zonk` may not even survive (DEFERRED 67: `zonk` has no arm
                          ;; for the global-constraint goal forms, and reaching it is exactly
                          ;; the whole-file abort this work removed). Routing the QUERY-side
                          ;; message through that branch is left to 51(b).
@@ -1797,7 +1797,7 @@
   (define qb-err (check-crosskind-collision (surf-def-name expanded) 'value))
   (if qb-err qb-err (process-def/qb-checked expanded)))
 
-;; ── DEFERRED 61: ONE well-formedness gate, shared by BOTH `def` paths ─────────
+;; ── DEFERRED 74: ONE well-formedness gate, shared by BOTH `def` paths ─────────
 ;;
 ;; THE DEFECT WAS THE DIVERGENCE, so the fix is to make divergence impossible
 ;; rather than to copy the guard a second time. The ANNOTATED def path guarded
@@ -1827,7 +1827,7 @@
 ;; `[int+ z 1]` on a hole-typed `z` types as Int with 0 errors. That class is
 ;; PRE-EXISTING and reachable today via any `defr`-bound name (`fc : _ defined.`
 ;; behaves identically); this widens its population without creating it. Named
-;; in DEFERRED 61 rather than silently inherited.
+;; in DEFERRED 74 rather than silently inherited.
 ;; "Not ground" = the type still contains a hole or an unsolved meta, so it is
 ;; not a thing `is-type` can meaningfully judge. ONE predicate, used both to skip
 ;; the check and to explain a downstream QTT failure — see the driver's use.
@@ -1953,7 +1953,7 @@
                    (time-phase! qtt (checkQ-top/err ctx-empty zonked-body zonked-type)))
                  (cond
                    [proj-err proj-err]  ;; D23 escape error takes precedence
-                   ;; DEFERRED 61: a QTT failure on a body whose type never
+                   ;; DEFERRED 74: a QTT failure on a body whose type never
                    ;; INFERRED is an inference failure, not a multiplicity one —
                    ;; report it as such instead of letting `tu-error`'s generic
                    ;; "Multiplicity violation" name an innocent subsystem.

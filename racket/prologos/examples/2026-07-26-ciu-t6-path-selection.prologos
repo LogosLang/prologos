@@ -384,15 +384,33 @@ events:t           ;; every POSITION offers :t — per-position EXACT
 ;;   error-marker convention exists — the contract is PINNED in the track
 ;;   battery ("P4d-s2: a static per-position miss NAMES THE POSITION (the
 ;;   events:x contract — corpus-pinned here)").
-;; (PVec-of-union fixture for the keys-⋂/types-⋃ rule lands with D4.P4 —
-;;  needs an annotation to build; the meet is NEW machinery.)
+;; —— the 2b split's SECOND arm: PVec-of-UNION, keys-⋂ / types-⋃  [D4.P4d s3]
+;; ⚠ the note here used to say this "needs an ANNOTATION to build". It does
+;;   not — a closed row is not writable in TYPE position, so the annotation
+;;   route cannot express it at all. A dynamic-bound `pvec-slice` is the route:
+;;   it widens the het tuple to a PVec of the UNION of its position types.
+def shipments := @[{:id 1 :weight 20 :fragile true} {:id 2 :weight 5 :bulk 3}]
+;;72=> shipments : ⟨{:fragile Bool :id Int :weight Int} {:bulk Int :id Int :weight Int}⟩ defined.
+def lo := 0N
+;;73=> lo : Nat defined.
+def widened := [pvec-slice shipments lo 2N]
+;;74=> widened : [PVec {:bulk Int :id Int :weight Int} | {:fragile Bool :id Int :weight Int}] defined.
+widened:id         ;; EVERY component offers :id — types-⋃ (both Int)
+;;75=> @[1 2] : [PVec Int]
+;; widened:fragile    ;; TYPE ERROR — only ONE component offers it; the refusal
+;;   NAMES the component that does not. Stays COMMENTED for the same reason as
+;;   `events:x` above (first ERROR result; no convention); the contract is
+;;   PINNED in the track battery ("P4d-s3: a component that does NOT offer the
+;;   key REFUSES, naming it — no buried <error>").
+;; ⭐ `Nil` components are SKIPPED (owner ruling (a), 2026-08-07): `<T | Nil>`
+;;   is the OPTION type, so it broadcasts as T and `nil-safe-get` composes.
 
 ;; §10.8 recursion — tree. `entries:name` was CARVED OUT at D4.P4d slice 2:
 ;;   :entries is itself a HET TUPLE (the slice-2 audit refuted the old
 ;;   "PVec-of-rows" reading), so the line is plain het-broadcast work; the
 ;;   RECURSIVE aggregation below stays W4-DEFERRED (the exits are §7.4/§7.5).
 tree.entries:name  ;; het broadcast under a dot descent
-;;72=> @["lib.pl" "core"] : ⟨String String⟩
+;;76=> @["lib.pl" "core"] : ⟨String String⟩
 ;; tree{name entries:{name entries:name}}  ;; TYPE ERROR — file rows offer no :entries (W3∘W4)
 
 ;; ───────────────────────────────────────────────────────────────────────────
@@ -403,26 +421,26 @@ tree.entries:name  ;; het broadcast under a dot descent
 ;; is permanently-commented v2 territory (Q_R4).
 
 m.0
-;;73=> @[1 2 3] : [PVec Int]
+;;77=> @[1 2 3] : [PVec Int]
 
 ;; nat→nat chains. These USED to mis-lex: `m.1.2` read as the rational 6/5,
 ;; because `decimal-literal` anchors at the DIGIT. A dot-anchored recognizer
 ;; consumes `.1` first, so the interior dot is never available as an anchor.
 ;; (⚠ the mis-lex was LOUD, not silent — the stranded bare `.` was unbound.)
 m.1.2
-;;74=> 6 : Int
+;;78=> 6 : Int
 
 ;; multi-digit — the ordinal Q_M8 exists for
 def scores := @[10 11 12 13 14 15 16 17 18 19 20 21 22]
-;;75=> scores : [PVec Int] defined.
+;;79=> scores : [PVec Int] defined.
 
 scores.12
-;;76=> 22 : Int
+;;80=> 22 : Int
 
 ;; per-position EXACT types survive on a het tuple (D15 + record-project)
 mixed.1
-;;77=> "seven" : String
+;;81=> "seven" : String
 
 ;; and `.N` reaches into nested rows the same way `.name` does
 app-config.admins.0.name
-;;78=> "Alice" : String
+;;82=> "Alice" : String
