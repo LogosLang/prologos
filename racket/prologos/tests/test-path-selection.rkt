@@ -27,8 +27,6 @@
          "../reduction.rkt"
          "../namespace.rkt"
          (prefix-in tc: "../typing-core.rkt")   ;; D4.P4a: select-project, for the totality pins
-         ;; D4.P4d slice 4a: the exported advice oracle, pinned on its own contract
-         (prefix-in pr: (only-in "../parse-reader.rkt" dot-writable-field-name?))
          (prefix-in tr: "../trait-resolution.rkt")
          (prefix-in u: "../unify.rkt")
          (prefix-in gc: "../global-constraints.rkt")
@@ -5114,86 +5112,11 @@
 ;; List-subject fixture uses a keyed inner. The class was unspelled.
 ;; ---------------------------------------------------------------------------
 
-(test-case "P4d-s4a (i): a SUB inner over a refusing carrier must not advise the unwritable `m.{…}`"
-  (define out (map (lambda (r) (format "~a" r))
-                   (process-string-ws
-                    "ns s4a1\ndef L := '[{:name \"a\"}]\nL:{name}\ndef after := 42")))
-  (check-false (ormap (lambda (s) (regexp-match? #rx"m\\.\\{" s)) out)
-               (format "the advice interpolated the sub stand-in into a dot access — `m.{…}` does not parse: ~a" out))
-  ;; the refusal itself must SURVIVE — a fix that guts the message over-reaches
-  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec, Map, tuple, or closed keyword-row subject" s)) out)
-              (format "the carrier refusal must still fire: ~a" out))
-  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
-
-(test-case "P4d-s4a (ii): a glued-arrow key over a refusing carrier must not advise the unwritable `m.a->b`"
-  ;; ARROW T1 put `->` inside identifiers, so `:a->b` is a legitimate ω step —
-  ;; but the DOT-access recognizer has no arrow arm, so `m.a->b` truncates at
-  ;; `a-` and the stranded `>` errors. Measured at HEAD.
-  (define out (map (lambda (r) (format "~a" r))
-                   (process-string-ws
-                    "ns s4a2\ndef LA := '[{:a->b 7}]\nLA:a->b\ndef after := 42")))
-  (check-false (ormap (lambda (s) (regexp-match? #rx"m\\.a->b" s)) out)
-               (format "the advice spelled `m.a->b`, which does not parse: ~a" out))
-  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec, Map, tuple, or closed keyword-row subject" s)) out)
-              (format "the carrier refusal must still fire: ~a" out))
-  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
-
-(test-case "P4d-s4a (iii): a CARET inner over a refusing carrier must not advise a spelling that DROPS the rename"
-  ;; The block spelling is the reachable one — the PATH spelling `L:name^alias`
-  ;; is intercepted by Q_U19's ratified refusal before typing sees it.
-  (define out (map (lambda (r) (format "~a" r))
-                   (process-string-ws
-                    "ns s4a3\ndef R := {:items '[{:name \"a\"}]}\nR{items:name^alias}\ndef after := 42")))
-  (check-false (ormap (lambda (s) (regexp-match? #rx"pvec-map \\[fn \\[m\\] m\\.name\\]" s)) out)
-               (format "the advice dropped `^alias` — following it yields [PVec String], not [PVec {:alias String}]: ~a" out))
-  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec, Map, tuple, or closed keyword-row subject" s)) out)
-              (format "the carrier refusal must still fire: ~a" out))
-  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
-
-(test-case "P4d-s4a (iv): a chain's advice FUSES — `:a:b` is advised as `m.a.b`, not `m.a`"
-  ;; The fourth population, and the one that made the advice compositional.
-  ;; A step-local vouch cannot answer this: `L:a:b` is TWO NESTED expr-select
-  ;; nodes (Q_U13's NEST encoding — one per level), so the refusing node is the
-  ;; INNERMOST and `:b` lives in its PARENT. Measured before the fix:
-  ;;   P:a:b                      -> @[1 2]           : [PVec Int]
-  ;;   [pvec-map [fn [m] m.a] P]  -> @[{:b 1} {:b 2}] : [PVec {:b Int}]
-  ;; The fix is the FUNCTOR LAW: fmap g ∘ fmap f = fmap (g ∘ f), so the honest
-  ;; advice is the fused `m.a.b` — pinned as an equivalence below.
-  (define out (map (lambda (r) (format "~a" r))
-                   (process-string-ws
-                    "ns s4a5\ndef L := '[{:a {:b 1}} {:a {:b 2}}]\nL:a:b\ndef after := 42")))
-  (check-false (ormap (lambda (s) (regexp-match? #rx"pvec-map \\[fn \\[m\\] m\\.a\\]" s)) out)
-               (format "the advice stopped at the first step of a chain: ~a" out))
-  (check-true (ormap (lambda (s) (regexp-match? #rx"pvec-map \\[fn \\[m\\] m\\.a\\.b\\]" s)) out)
-              (format "the advice must FUSE the chain: ~a" out))
-  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec, Map, tuple, or closed keyword-row subject" s)) out)
-              (format "the carrier refusal must still fire: ~a" out))
-  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
-
-(test-case "P4d-s4a (iv, block): BLOCK sort advises NOTHING — a dot-path is not the block spelling"
-  ;; ⚠ THIS PIN ONCE ASSERTED THE OPPOSITE, and was wrong: an earlier cut fused
-  ;; here too and pinned `m.a.b`. Under 'block an ω step ASSEMBLES rather than
-  ;; projects, so the dot spelling describes a different program. Measured over
-  ;; `P : [PVec {:aa {:bb Int}}]`:
-  ;;   RP{items:aa}                 -> {:items [PVec {:aa {:bb Int}}]}
-  ;;   [pvec-map [fn [m] m{aa}] P]  -> [PVec {:aa {:bb Int}}]   <- agrees
-  ;;   [pvec-map [fn [m] m.aa]  P]  -> [PVec {:bb Int}]         <- differs
-  ;; and at two steps the user's own expression is a hard ERROR while the fused
-  ;; dot-path SUCCEEDS — so the message's two remedies would contradict.
-  ;; This is the "needs a different delimiter" rule the slice already applies to
-  ;; subs and carets, finally applied to the SORT axis too.
-  (define out (map (lambda (r) (format "~a" r))
-                   (process-string-ws
-                    "ns s4a6\ndef R := {:items '[{:a {:b 1}}]}\nR{items:a:b}\ndef after := 42")))
-  (check-false (ormap (lambda (s) (regexp-match? #rx"otherwise spell it" s)) out)
-               (format "block sort must advise no dot-path at all: ~a" out))
-  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec, Map, tuple, or closed keyword-row subject" s)) out)
-              (format "the carrier refusal must still fire: ~a" out))
-  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
-
-(test-case "P4d-s4a (iv, block): the ASSEMBLE-vs-PROJECT fact the suppression rests on"
-  ;; If block ω ever started projecting, the suppression above would become
-  ;; over-cautious silently. This pins the semantic fact itself, not the message.
+(test-case "P4d-s4b: block ω ASSEMBLES, path ω PROJECTS — the semantic fact itself"
+  ;; Originally pinned to justify slice 4a's block-sort advice suppression;
+  ;; that advice is retired, but the FACT is load-bearing on its own — it is
+  ;; why a dot-path is not the block spelling, and it is not pinned anywhere
+  ;; else. Kept, re-pointed at the semantics rather than at a message.
   (define out (map (lambda (r) (format "~a" r))
                    (process-string-ws
                     (string-append
@@ -5207,38 +5130,11 @@
               (format "the dot spelling must PROJECT — that is the divergence: ~a" out))
   (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
 
-(test-case "P4d-s4a (iv, depth 3): fusion composes, and in the RIGHT order"
-  ;; Order is the thing a 2-link chain cannot discriminate: the search collects
-  ;; enclosing steps outermost-first while the innermost step APPLIES first.
-  (define out (map (lambda (r) (format "~a" r))
-                   (process-string-ws
-                    "ns s4a7\ndef L3 := '[{:a {:b {:c 1}}}]\nL3:a:b:c\ndef after := 42")))
-  (check-true (ormap (lambda (s) (regexp-match? #rx"m\\.a\\.b\\.c" s)) out)
-              (format "three links must fuse in application order: ~a" out))
-  (check-false (ormap (lambda (s) (regexp-match? #rx"m\\.c\\.b\\.a" s)) out)
-               (format "the chain was reversed: ~a" out))
-  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
-
-(test-case "P4d-s4a (iv, poison): an UNSPELLABLE link withdraws the whole advice"
-  ;; A sub inner cannot be reached by extending a dot-path (`m.{b}` is a parse
-  ;; error; the honest form needs braces), so a chain containing one must advise
-  ;; NOTHING rather than a truncated prefix — the same rule as the caret case.
-  (define out (map (lambda (r) (format "~a" r))
-                   (process-string-ws
-                    "ns s4a8\ndef LS := '[{:a {:b 1}}]\nLS:a:{b}\ndef after := 42")))
-  (check-false (ormap (lambda (s) (regexp-match? #rx"otherwise spell it" s)) out)
-               (format "a chain with an unspellable link must withdraw the advice: ~a" out))
-  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec, Map, tuple, or closed keyword-row subject" s)) out)
-              (format "the carrier refusal must still fire: ~a" out))
-  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
-
-(test-case "P4d-s4a: THE FUSION LAW the advice rests on — fmap g ∘ fmap f = fmap (g ∘ f)"
-  ;; The advice is only honest if the fused spelling really does reproduce the
-  ;; broadcast. This pins that equivalence directly, on a carrier that SUCCEEDS
-  ;; (the advice itself only ever appears on a refusal, so nothing else in this
-  ;; file can catch the law breaking). Q_U7 records the same identity as the
-  ;; L1-fusion theorem; if it ever stops holding, the advice becomes a lie and
-  ;; this pin — not a diagnostics pin — is what says so.
+(test-case "P4d-s4b: L1 FUSION as a theorem — fmap g ∘ fmap f = fmap (g ∘ f)"
+  ;; Q_U7 records this identity as the L1-fusion theorem and the battery is
+  ;; where it lives. It was written to justify slice 4a's fused advice; that
+  ;; advice is retired, but the THEOREM is not, and nothing else pins it as an
+  ;; equivalence against a real carrier.
   (define out (map (lambda (r) (format "~a" r))
                    (process-string-ws
                     (string-append
@@ -5384,6 +5280,151 @@
               (format "BOTH the row and the schema must be LOUD: ~a" out))
   (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
 
+;; ---------------------------------------------------------------------------
+;; D4.P4d slice 4c — THE PER-CARRIER SPLIT. One arm used to tell List, Set,
+;; Int, String, Bool, a dyn row AND a function alike to "convert first with
+;; `[pvec-from-list xs]`", then teach `[pvec-map [fn [m] m.NAME] xs]` — a
+;; spelling that cannot work on this arm's audience, since `pvec-map` needs a
+;; PVec and a PVec never reaches here.
+;;
+;; ⭐ The remedy now names the CONVERSION for the actual carrier and points back
+;; at the spelling the USER WROTE, which works unchanged once converted
+;; (verified for the plain, chained and Set cases). That is why slice 4a's
+;; advice machinery is gone rather than fixed.
+;; ---------------------------------------------------------------------------
+
+(test-case "P4d-s4c: a LIST names its own conversion and stops teaching pvec-map"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s4c1\ndef L := '[{:t 1} {:t 2}]\nL:t\ndef after := 42")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"pvec-from-list xs" s)) out)
+              (format "a List must name its conversion: ~a" out))
+  ;; ⚠ and must NOT promise the whole expression then works — false for an
+  ;; ordinal inner and for non-row elements, both measured after converting
+  (check-false (ormap (lambda (s) (regexp-match? #rx"the same spelling works" s)) out)
+               (format "the conversion fixes the carrier, not the expression: ~a" out))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"pvec-map" s)) out)
+               (format "the unusable second spelling must be gone: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s4c: a USER-DEFINED `List` must NOT be offered `pvec-from-list`"
+  ;; ⚠ This slice's own first cut reintroduced the very class it exists to
+  ;; remove. `select-list-type?` used `bare-name`, which strips the module
+  ;; prefix — so a user's `data List` in their own namespace (`u::List`) matched
+  ;; the stdlib recognizer and was handed `[pvec-from-list xs]`. Measured:
+  ;; that conversion over it → "Could not infer type".
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s4c7 :no-prelude\ndata List := empty | full\ndef v := empty\nv:t\ndef after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"pvec-from-list" s)) out)
+               (format "a user's own List type was offered the stdlib conversion: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec, Map, tuple, or closed keyword-row" s)) out)
+              (format "it must still get the carrier refusal: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s4c: a SET gets its OWN conversion, which is not the List one"
+  ;; `[pvec-from-list [set-to-list xs]]` — verified end to end, and the order
+  ;; caveat is real (a set is unordered; the probe returned @[2 1] from a
+  ;; literal written {1,2}).
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s4c2\ndef S := #{ {:t 1} }\nS:t\ndef after := 42")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"set-to-list" s)) out)
+              (format "a Set must get the set conversion, not the list one: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"unordered" s)) out)
+              (format "the order caveat must be stated: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s4c: an LSEQ gets its own ONE-STEP conversion"
+  ;; The last convertible carrier, and it reached the no-remedy arm. The
+  ;; stdlib inventory of conversions INTO PVec is closed and small —
+  ;; `pvec-from-list` (List), `into-vec` (LSeq), `set-to-list`+`pvec-from-list`
+  ;; (Set) — so this completes it.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    (string-append
+                     "ns s4c8\ndef LS := [list-to-seq '[{:t 1} {:t 2}]]\nLS:t\n"
+                     "def P := [into-vec LS]\ndef viaConv := P:t\nviaConv\ndef after := 42"))))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"into-vec xs" s)) out)
+              (format "an LSeq must name its own conversion: ~a" out))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"pvec-from-list" s)) out)
+               (format "an LSeq must not be given the List conversion: ~a" out))
+  ;; the advised conversion must actually work
+  (check-true (ormap (lambda (s) (regexp-match? #rx"@\\[1 2\\] : \\[PVec Int\\]" s)) out)
+              (format "the advised `into-vec` must unblock the broadcast: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s4c: a SCALAR gets NO remedy — there is no conversion to name"
+  ;; The old message told an Int to convert a list. `pvec-map` is meaningless
+  ;; here too; naming the carriers and stopping is the honest answer.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    "ns s4c3\ndef n := 5\nn:t\ndef s := \"hi\"\ns:t\ndef f := [fn [x : Int] x]\nf:t\ndef after := 42")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"pvec-from-list|pvec-map|set-to-list" s)) out)
+               (format "a scalar/function must be offered no conversion at all: ~a" out))
+  (check-true (>= (length (filter (lambda (s) (regexp-match? #rx"needs a PVec, Map, tuple, or closed keyword-row" s)) out)) 3)
+              (format "all three must still name the supported carriers: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s4c: a DYN-TAIL row is told to VALIDATE — the half that actually runs"
+  ;; ⚠ THIS PIN ONCE CLAIMED A VERIFICATION IT NEVER PERFORMED. Its title said
+  ;; "a remedy slice 4b made TRUE" and it asserted only that the substring
+  ;; "seal the subject against a schema" appeared — while its own fixture
+  ;; falsifies it: `[the W dyn]` → "Could not infer type", because a `:closed`
+  ;; schema refuses an open actual and an OPEN schema is not an ω carrier.
+  ;; `[validate W dyn]` DOES run (returns a Result). The message and this pin
+  ;; now name that half, and the pin executes it.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    (string-append
+                     "ns s4c4\nschema Inner :closed\n  :h String\n"
+                     "def base := {:a [the Inner {:h \"x\"}]}\ndef kk := :zz\n"
+                     "schema W :closed\n  :a Inner\n\n"
+                     "def dyn := [map-assoc base kk [the Inner {:h \"y\"}]]\ndyn:h\n"
+                     "def validated := [validate W dyn]\ndef after := 42"))))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"validate Schema subj" s)) out)
+              (format "an open row must be pointed at validate, the remedy that runs: ~a" out))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"pvec-from-list" s)) out)
+               (format "an open row must not be told to convert a list: ~a" out))
+  ;; and the advised call must actually typecheck on this very subject
+  (check-true (ormap (lambda (s) (regexp-match? #rx"validated : .*Result" s)) out)
+              (format "the advised `validate` must run on the fixture: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s4c: an OPEN schema is told the one thing that fixes it — `:closed`"
+  ;; Slice 4b refuses it correctly but SILENTLY (DEFERRED 64). The remedy is one
+  ;; keyword and the message now says so.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    (string-append
+                     "ns s4c5\nschema Host :closed\n  :host String\n\nschema Region\n  :us Host\n\n"
+                     "def rg := [the Region {:us [the Host {:host \"u\"}]}]\nrg:host\ndef after := 42"))))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"OPEN" s)) out)
+              (format "the message must say the schema is open: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx":closed" s)) out)
+              (format "the admitted form `:closed` must be named: ~a" out))
+  ;; ⚠ but NOT as an unconditional promise — reached from the dyn arm's own
+  ;; advice, sealing into a closed schema does not typecheck, so "and the
+  ;; broadcast works" was false. Measured; the wording no longer claims it.
+  (check-false (ormap (lambda (s) (regexp-match? #rx"and the broadcast works" s)) out)
+               (format "the message must not promise the broadcast then works: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s4c: a collided SELECTION is told it is a view, not that it is not a row"
+  ;; `select-row-of`'s own comment calls the generic carrier wording a LIE for a
+  ;; view — "a view IS a record, restricted". The broadcast path said it anyway.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    (string-append
+                     "ns s4c6\nschema Inner :closed\n  :h String\n\nschema Person :closed\n  :name Inner\n\n"
+                     "selection Person from Person\n  :requires [:name]\n\n"
+                     "def u : Person := {:name [the Inner {:h \"a\"}]}\nu:h\ndef after := 42"))))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"SELECTION" s)) out)
+              (format "a view must be named as one: ~a" out))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"pvec-from-list" s)) out)
+               (format "a view must not be offered a list conversion: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
 (test-case "P4d-s4a': the binder refusal must never print raw SYNTAX OBJECTS (its guard was dead)"
   ;; `retired-selection-error`'s `bcast-step-binder` arm carries
   ;;   (let ([f* (if (pair? f) '|{…}| f)]) …)
@@ -5409,30 +5450,3 @@
               (format "the payload must render as the stand-in: ~a" out))
   (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
 
-(test-case "P4d-s4a: `dot-writable-field-name?` — the exported oracle's own contract"
-  ;; The predicate is exported as a general "can I write `m.NAME`?" question for
-  ;; any diagnostic that advises a spelling, so its contract needs pinning
-  ;; independently of today's one caller. Three of these five are UNREACHABLE
-  ;; from that caller (a caret arrives as a pair; `*`/`$` cannot lead a minted
-  ;; key) — which is exactly why they need a pin here rather than a fixture:
-  ;; at the advice level they would be vacuous.
-  (check-true  (pr:dot-writable-field-name? 't)      "a plain key is writable")
-  (check-true  (pr:dot-writable-field-name? 'a-b)    "ident-continue chars are fine")
-  (check-false (pr:dot-writable-field-name? '|a->b|) "`>` is not an ident char — `m.a->b` strands it")
-  (check-false (pr:dot-writable-field-name? '|a^b|)  "`^` re-keys on the dot path")
-  ;; both fail at DIFFERENT stages: `.*` is the retired broadcast (excluded by
-  ;; recognize-dot-access itself), `.$x` lexes and is rejected downstream as a
-  ;; sentinel — so neither is covered by mirroring the dot recognizer
-  (check-false (pr:dot-writable-field-name? '*x)     "`*` leading reads as the retired `.*`")
-  (check-false (pr:dot-writable-field-name? '$x)     "`$` leading is the reader's sentinel namespace"))
-
-(test-case "P4d-s4a (over-reach guard): a PLAIN key inner over a refusing carrier KEEPS its advice"
-  ;; The three pins above must not be satisfied by deleting the clause. A bare
-  ;; nominal key is exactly the case the advice was written for, and `m.t` is
-  ;; writable — this pin fails if the fix suppresses too much.
-  (define out (map (lambda (r) (format "~a" r))
-                   (process-string-ws
-                    "ns s4a4\ndef LK := '[{:t 1} {:t 2}]\nLK:t\ndef after := 42")))
-  (check-true (ormap (lambda (s) (regexp-match? #rx"pvec-map \\[fn \\[m\\] m\\.t\\]" s)) out)
-              (format "the writable advice must SURVIVE for a plain key: ~a" out))
-  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))

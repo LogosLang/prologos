@@ -42,10 +42,6 @@
  tokenize-char-rrb
  register-token-pattern!
  register-default-token-patterns!
- ;; D4.P4d slice 4a: "is `m.NAME` readable?" — exported so a diagnostic that
- ;; ADVISES an explicit spelling asks the reader's own charset instead of
- ;; re-inlining it. See the definition for the two measured exclusions.
- dot-writable-field-name?
  ;; D4.P4c-1: THE adjacency predicate, exported so the SECOND grouper
  ;; (surface-rewrite.rkt's `group-items-to-tree`) consumes this definition
  ;; instead of hand-inlining the four conjuncts. It had drifted into a live
@@ -258,58 +254,6 @@
            (char=? c #\=)
            (char=? c #\$)
            (char=? c #\^))))
-
-;; D4.P4d slice 4a — CAN THIS FIELD NAME BE WRITTEN AFTER A DOT?
-;;
-;; Diagnostics that advise an explicit spelling (`m.NAME`) must not advise one
-;; the reader cannot read back. This is the question they need answered, and it
-;; lives HERE because it is entirely a property of the identifier charset above
-;; — asking it anywhere else would re-inline that charset, which is the F1b.7g
-;; drift (`recognize-keyword` silently diverged from `ident-continue?` for 8
-;; chars). Delegates; never enumerates.
-;;
-;; ⚠ DELIBERATELY CONSERVATIVE, and the asymmetry is the whole point: a false
-;; NEGATIVE costs a caller one line of advice, a false POSITIVE ships advice
-;; that does not work. So this answers "certainly readable", not "readable".
-;;
-;; Two rules, both MEASURED at HEAD rather than reasoned about:
-;;
-;; 1. The FIRST character must be ALPHABETIC — deliberately narrower than
-;;    `ident-start?`. This mirrors `recognize-keyword`, which gates the char
-;;    after `:` on `char-alphabetic?`, so it loses no name that can actually be
-;;    minted as a key; and it is what makes the predicate safe rather than
-;;    merely charset-shaped. `ident-start?` alone admits `*x` and `$x`, and
-;;    NEITHER is dot-writable — `m.*x` is read as the retired `.*` broadcast
-;;    (`recognize-dot-access` excludes `*` explicitly at its second char), and
-;;    `m.$x` LEXES FINE and is rejected downstream ("`$x` is not a valid
-;;    selection branch") because `$` is the reader's sentinel namespace. Note
-;;    those two fail at DIFFERENT stages, so mirroring `recognize-dot-access`
-;;    would have closed only the first.
-;;
-;; 2. Every character must be `ident-continue?` AND not `^`.
-;;    · `>` is simply not an ident char, so a glued-arrow key (`:a->b`, legal
-;;      since ARROW T1) is excluded BY THE CHARSET — `m.a->b` truncates at `a-`
-;;      and the stranded `>` errors. The arrow arm lives in `recognize-keyword`,
-;;      not on the dot-access path.
-;;    · `^` IS an ident char and so must be excluded by hand: a key may
-;;      genuinely contain one (`{:a^b 1}` types as `{:a^b Int}`), but in dot
-;;      position `^` reads as the re-key continuation, so `k.a^b` is a parse
-;;      error.
-;;    ⚠ The `^` clause is about THIS PREDICATE'S contract, not about its one
-;;    current caller: at the carrier-refusal site a caret is already excluded by
-;;    SHAPE (the inner is `(@key … (rename . …))`, not a bare symbol), and the
-;;    reader splits on `^`, so a caret cannot reach here in a bare symbol today.
-;;    Stated rather than left to read as load-bearing.
-(define (dot-writable-field-name? name)
-  (and (symbol? name)
-       (let ([s (symbol->string name)])
-         (and (> (string-length s) 0)
-              ;; narrower than ident-start? on purpose — see rule 1
-              (char-alphabetic? (string-ref s 0))
-              (for/and ([c (in-string s)])
-                (and (ident-continue? c)
-                     ;; `^` re-keys on the dot path — never part of the field
-                     (not (char=? c #\^))))))))
 
 ;; ---- Pattern recognizers ----
 
