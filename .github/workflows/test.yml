@@ -6,6 +6,40 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Racket
+        uses: Bogdanp/setup-racket@v1.11
+        with:
+          version: '9.0'
+
+      - name: Install review linter
+        run: raco pkg install --auto --skip-installed review
+
+      # raco review costs ~10-15s PER FILE on this tree's large modules — a
+      # full-tree sweep is ~25 min and blew this job's 10-min timeout (PR #81).
+      # The blocking custom lints always scan the whole tree (~2s); only the
+      # report-only review step is diff-scoped to what the PR touched.
+      - name: Fetch PR base (for diff-scoped review)
+        if: github.event_name == 'pull_request'
+        run: git fetch --no-tags --depth=1 origin ${{ github.event.pull_request.base.sha }}
+
+      - name: Hygiene lints (custom lints blocking, raco review report-only)
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            tools/lint-hygiene.sh --diff ${{ github.event.pull_request.base.sha }}
+          else
+            # push to main: blocking lints over the whole tree; review skipped
+            # (clean checkout has no modified files — the per-PR report already
+            # covered these changes on the way in).
+            tools/lint-hygiene.sh
+          fi
+
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30

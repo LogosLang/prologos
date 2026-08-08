@@ -1,0 +1,7 @@
+# fire-fn-capture-baseline.txt
+# Accepted fire-scope captured-network findings as of last baseline
+# save (key: file::op::variable). Each entry should be audited: a
+# genuine capture is the silent stale-network bug of
+# propagator-design.md § Fire Function Network Parameter.
+# Regenerate with: racket tools/lint-fire-fn-capture.rkt --save-baseline
+

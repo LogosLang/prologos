@@ -8,7 +8,19 @@
 #
 # Exit 0 = all balanced. Exit 1 = error (with location).
 
-RACKET="/Applications/Racket v9.0/bin/racket"
+# Racket resolution: $RACKET env var, else the project-standard macOS
+# path, else `racket` on PATH (Linux/CI/web sessions).
+if [ -z "${RACKET:-}" ]; then
+  if [ -x "/Applications/Racket v9.0/bin/racket" ]; then
+    RACKET="/Applications/Racket v9.0/bin/racket"
+  else
+    RACKET="$(command -v racket || true)"
+  fi
+fi
+if [ -z "$RACKET" ]; then
+  echo "check-parens: no racket found (set \$RACKET)" >&2
+  exit 1
+fi
 
 check_file() {
     local f="$1"
