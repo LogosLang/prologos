@@ -1797,6 +1797,48 @@
   (define qb-err (check-crosskind-collision (surf-def-name expanded) 'value))
   (if qb-err qb-err (process-def/qb-checked expanded)))
 
+;; ── DEFERRED 61: ONE well-formedness gate, shared by BOTH `def` paths ─────────
+;;
+;; THE DEFECT WAS THE DIVERGENCE, so the fix is to make divergence impossible
+;; rather than to copy the guard a second time. The ANNOTATED def path guarded
+;; `is-type/err` against hole- and meta-typed bodies; the INFERRED path called it
+;; bare. Both were written by the SAME commit — the guard simply was not
+;; mirrored. That asymmetry IS the POL.9b def-seam gap, and it is one line.
+;;
+;; WHAT IT COST, which is more than a bad message: the def path type-checks
+;; BEFORE it evaluates, so rejecting a hole-typed body preempted every diagnostic
+;; that is raised at EVALUATION time. Three already-written guiding messages were
+;; unreachable on a def RHS and reported "Expression is not a valid type"
+;; instead:
+;;   def bad := (dbl 3)              → "dbl is a function — application is
+;;                                      written [dbl …]; parens make a
+;;                                      relational goal"
+;;   def bad := solve (nosuchrel a b)→ "Unknown relation: nosuchrel"
+;;   def bad := explain (dbl 3)      → the same guiding function message
+;; and `def k := rel …` (an unparenthesized rel VALUE) could not bind at all.
+;;
+;; ⚠ ONLY THE HOLE DISJUNCT IS LOAD-BEARING TODAY — measured. `is-type` accepts
+;; an unsolved meta (`infer-level` gives it `just-level (lzero)`) and rejects a
+;; hole (`infer-level` falls to its `[_]` arm → `no-level`). The meta disjunct is
+;; kept because this predicate's whole job is that the two paths ask the SAME
+;; question; dropping it here would re-open the divergence in miniature.
+;;
+;; ⚠ NOT closed by this: a name stored with type `_` is a check WILDCARD, so
+;; `[int+ z 1]` on a hole-typed `z` types as Int with 0 errors. That class is
+;; PRE-EXISTING and reachable today via any `defr`-bound name (`fc : _ defined.`
+;; behaves identically); this widens its population without creating it. Named
+;; in DEFERRED 61 rather than silently inherited.
+;; "Not ground" = the type still contains a hole or an unsolved meta, so it is
+;; not a thing `is-type` can meaningfully judge. ONE predicate, used both to skip
+;; the check and to explain a downstream QTT failure — see the driver's use.
+(define (def-type-not-ground? ty)
+  (or (type-contains-hole? ty) (type-contains-meta? ty)))
+
+(define (def-body-type-ok ctx ty)
+  (if (def-type-not-ground? ty)
+      #t
+      (is-type/err ctx ty)))
+
 (define (process-def/qb-checked expanded)
   (define name (surf-def-name expanded))
   (define type-surf (surf-def-type expanded))
@@ -1858,7 +1900,7 @@
         (cond
           [(prologos-error? inferred-type) inferred-type]
           [else
-           (define ty-ok (is-type/err ctx-empty inferred-type))
+           (define ty-ok (def-body-type-ok ctx-empty inferred-type))
            (cond
              [(prologos-error? ty-ok) ty-ok]
              [else
@@ -1911,6 +1953,22 @@
                    (time-phase! qtt (checkQ-top/err ctx-empty zonked-body zonked-type)))
                  (cond
                    [proj-err proj-err]  ;; D23 escape error takes precedence
+                   ;; DEFERRED 61: a QTT failure on a body whose type never
+                   ;; INFERRED is an inference failure, not a multiplicity one —
+                   ;; report it as such instead of letting `tu-error`'s generic
+                   ;; "Multiplicity violation" name an innocent subsystem.
+                   ;; PRE-ZONK type on purpose: see the helper's comment.
+                   ;; ⚠ THE CONDITION IS THE GATE'S OWN, not just "has a hole".
+                   ;; Measured: `def d := flip const false 2` infers a type
+                   ;; containing an unsolved META rather than a hole, so a
+                   ;; hole-only test misses it and the lying message survives.
+                   ;; The principled reading is that when the type is NOT GROUND
+                   ;; QTT cannot do its job at all — it checks a body's usage
+                   ;; AGAINST a type — so any failure there is downstream of the
+                   ;; inference failure, and the root cause is what to report.
+                   [(and (prologos-error? qtt-ok)
+                         (def-type-not-ground? inferred-type))
+                    (cannot-infer-def-type-error def-srcloc zonked-body)]
                    [(prologos-error? qtt-ok) qtt-ok]
                    ;; CIU T6 F1b.4c (D22/M3): seal-scoped def-forcing —
                    ;; tabulation FORCES; a failing :check errors at commit.
@@ -1969,9 +2027,7 @@
         ;; Holes act as wildcards in check and are retained in the stored type.
         ;; Also skip for types with unsolved metas (implicit param inference).
         (define has-holes? (type-contains-hole? type))
-        (define ty-ok (if (or has-holes? (type-contains-meta? type))
-                          #t
-                          (is-type/err ctx-empty type)))
+        (define ty-ok (def-body-type-ok ctx-empty type))
         (cond
           [(prologos-error? ty-ok) ty-ok]
           [else

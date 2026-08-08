@@ -1243,8 +1243,19 @@
                             "     fruit-color f \"nope\"\n")))
   (check-false (string-contains? (result-msg r) "parenless goals cannot")
                (format "the guard must not fire; got: ~a" (result-msg r)))
-  (check-true (string-contains? (result-msg r) "not a valid type")
-              (format "routes into the pinned def-seam gap; got: ~a" (result-msg r))))
+  ;; ⚠ INVERTED by DEFERRED 61 (the def-seam close). This used to route into the
+  ;; POL.9b def-seam gap and report "Expression is not a valid type"; the
+  ;; unannotated `def` path now skips `is-type` for hole-typed bodies exactly as
+  ;; the ANNOTATED path always did, so a `rel` VALUE binds.
+  ;; ⚠⚠ AND NOTE WHAT THIS TEST STILL DOES NOT SEE: member 4 (the clause
+  ;; MIS-GROUPING in this spelling) remains latent underneath. `pp-expr`'s
+  ;; expr-rel arm elides the clauses and a def-bound rel value cannot be queried,
+  ;; so grouping is invisible from here. Do NOT read this passing as evidence
+  ;; that the clause parsed correctly — see DEFERRED 59.
+  (check-true (string-contains? (result-msg r) "d51r1")
+              (format "the rel value must now bind; got: ~a" (result-msg r)))
+  (check-false (string-contains? (result-msg r) "not a valid type")
+               (format "the def-seam gap must be closed; got: ~a" (result-msg r))))
 
 (test-case "DEFERRED 51(c) def arm: a rewrite inside the rel GROUPS like the control"
   (define (drel arg)
@@ -1547,16 +1558,68 @@
                  (string-append P9FIX "def r := solve (fruit-color f \"blue\")\nr")))
   (check-equal? paren expl))
 
-(test-case "POL.9b: def-seam PARITY on bad heads (pre-existing diagnostic, pinned)"
-  ;; Both spellings hit the same pre-existing def-seam type error — the
-  ;; guiding function diagnostic does not reach the def seam yet (typing
-  ;; precedes evaluation there). Pinned so a future diagnostic fix shows.
+(test-case "POL.9b: def-seam PARITY on bad heads — now the GUIDING diagnostic"
+  ;; ⚠ INVERTED by DEFERRED 61, exactly as this test's own comment asked ("Pinned
+  ;; so a future diagnostic fix shows"). Both spellings used to hit the def-seam
+  ;; type error because typing PRECEDES evaluation on the def path, so the
+  ;; guiding message — which is raised at EVALUATION time — could never be
+  ;; reached. Closing the seam lets it through.
   (define paren (result-msg (run-ns-ws-last
                              (string-append P9FIX "def bad := (dbl 3)"))))
   (define expl  (result-msg (run-ns-ws-last
                              (string-append P9FIX "def bad := solve (dbl 3)"))))
   (check-equal? paren expl "paren spelling ≡ explicit solve spelling")
-  (check-true (string-contains? paren "not a valid type") paren))
+  (check-true (string-contains? paren "is a function") paren)
+  (check-false (string-contains? paren "not a valid type") paren))
+
+(test-case "DEFERRED 61: closing the seam un-preempts the OTHER guiding diagnostics too"
+  ;; The seam was not hiding one message, it was hiding a class: any diagnostic
+  ;; raised at EVALUATION time on a def RHS was preempted by the type check.
+  (define unknown (result-msg (run-ns-ws-last
+                               (string-append P9FIX "def bad := solve (nosuchrel a b)"))))
+  (check-true (string-contains? unknown "nosuchrel")
+              (format "an unknown relation must name itself; got: ~a" unknown))
+  (check-false (string-contains? unknown "not a valid type") unknown))
+
+(test-case "DEFERRED 61 rider: `expr-narrow` on a def RHS no longer LIES about multiplicity"
+  ;; `inferQ` had no `expr-narrow` arm, so it fell to its catch-all and reported
+  ;; "Multiplicity violation" — naming QTT, which was working perfectly. The
+  ;; def-seam gap had MASKED it (narrow infers to a hole, so `is-type` rejected
+  ;; the body first), which is why closing the seam had to bring the twin arm
+  ;; with it: otherwise one honest error is traded for one misleading one.
+  ;; See `.claude/rules/pipeline.md` § "infer / inferQ Are Twins".
+  (define r (run-ns-ws-last (string-append
+                             "ns dn\n"
+                             "spec add2 Int Int -> Int\n"
+                             "defn add2 [a b] [int+ a b]\n"
+                             "def n1 := [#= [add2 ?x 3] 5]\n")))
+  (check-false (string-contains? (result-msg r) "Multiplicity violation")
+               (format "the lying diagnostic must be gone; got: ~a" (result-msg r)))
+  (check-false (string-contains? (result-msg r) "not a valid type")
+               (format "and it must not fall back to the seam error; got: ~a" (result-msg r))))
+
+(test-case "DEFERRED 61: a NON-GROUND def type reports the inference failure, not multiplicity"
+  ;; The seam close let hole-typed bodies through to QTT — correct, since holes
+  ;; are legitimate for rel/defr/narrow/solve. But a non-ground type ALSO arises
+  ;; when inference simply failed, and QTT then has nothing to check against and
+  ;; reports its generic `tu-error` as "Multiplicity violation" — naming a
+  ;; subsystem that is working perfectly.
+  ;; ⚠ The trigger is NOT "has a hole": `flip const false 2` infers a type
+  ;; carrying an unsolved META, and a hole-only test misses it. The condition is
+  ;; the GATE's own (`def-type-not-ground?`), because if the type is not ground
+  ;; QTT cannot do its job at all and its failure is downstream of inference.
+  (define r (run-ns-ws-last "ns t6x\ndef d6x := flip const false 2\n"))
+  (check-false (string-contains? (result-msg r) "Multiplicity violation")
+               (format "must not blame multiplicity; got: ~a" (result-msg r)))
+  (check-true (string-contains? (result-msg r) "Could not infer type")
+              (format "must report the inference failure; got: ~a" (result-msg r))))
+
+(test-case "DEFERRED 61: the ANNOTATED def path is unchanged (it always had the guard)"
+  ;; The whole defect was that the two def paths disagreed. Pin the one that was
+  ;; already right, so a future edit cannot fix them apart again.
+  (check-equal? (run-ns-ws-last (string-append P9FIX "def okk : Int := [dbl 3]"))
+                "okk : Int defined."
+                "an annotated def must be unaffected"))
 
 (test-case "POL.9b: bare/bracket def RHS stays application-value"
   (define r (run-ns-ws-last

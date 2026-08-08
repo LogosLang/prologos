@@ -2494,6 +2494,31 @@
        (match rg
          [(tu _ ug) (tu (solve-row-type g 'pvec 'dyn) (add-usage su (add-usage ou ug)))]
          [_ (tu-error)]))]
+    ;; ── DEFERRED 61 rider: the infer/inferQ TWIN for `expr-narrow` ────────────
+    ;; `infer` has had an arm for this since it was added; `inferQ` never did, so
+    ;; it fell to the `[_ (tu-error)]` catch-all below and `checkQ-top` reported
+    ;; **"Multiplicity violation"** — a diagnostic naming a subsystem that is
+    ;; working perfectly. This is the exact class `.claude/rules/pipeline.md`
+    ;; § "infer / inferQ Are Twins" describes, and its stated debug rule ("a
+    ;; Multiplicity violation on a `def` whose body is not a lambda is an
+    ;; un-arm'd node until proven otherwise") identifies it precisely.
+    ;;
+    ;; ⚠ WHY IT SURFACED NOW: it was MASKED by the def-seam gap. `expr-narrow`
+    ;; infers to a HOLE, so the unannotated `def` path rejected it at
+    ;; `is-type` before QTT ever ran, and `def n1 := [#= [add2 ?x 3] 5]` reported
+    ;; "Expression is not a valid type". Closing the seam let the real path run
+    ;; and the lying message through — so this arm is not optional alongside that
+    ;; fix, it is the difference between one honest error and one misleading one.
+    ;;
+    ;; Shape per the "no drift twin" rule: the TYPE mirrors `infer`'s arm exactly
+    ;; (it yields a hole), and USAGE sums the same sub-expressions `infer` walks
+    ;; (func, args, target). `vars` carries no term to charge, as in `infer`.
+    [(expr-narrow func args target vars)
+     (define uf (match (inferQ ctx func) [(tu _ u) u] [_ (zero-usage n)]))
+     (define ua (for/fold ([acc (zero-usage n)]) ([a (in-list args)])
+                  (add-usage acc (match (inferQ ctx a) [(tu _ u) u] [_ (zero-usage n)]))))
+     (define ut (match (inferQ ctx target) [(tu _ u) u] [_ (zero-usage n)]))
+     (tu (expr-hole) (add-usage uf (add-usage ua ut)))]
 
     ;; ---- J eliminator ----
     ;; Usage from proof, base, motive arguments

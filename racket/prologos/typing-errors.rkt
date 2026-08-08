@@ -41,7 +41,8 @@
 (provide infer/err
          check/err
          is-type/err
-         checkQ-top/err)
+         checkQ-top/err
+         cannot-infer-def-type-error)
 
 ;; ========================================
 ;; Issue #70 diagnostic (N6e-C stopgap).
@@ -809,6 +810,25 @@
                                         "Could not infer type"))
                                 (pp-expr e names))
         result)))
+
+;; ── DEFERRED 61: the honest message when a def body's type never existed ─────
+;;
+;; The `def` path type-checks BEFORE it evaluates, and it now (correctly) lets a
+;; HOLE-typed body through to QTT rather than rejecting it — holes are legitimate
+;; for `rel` values, `defr`, narrow, solve and friends. But a hole ALSO arises
+;; when `infer` simply could not determine a type (`def d := flip const false 2`),
+;; and QTT then has nothing meaningful to check against and reports its generic
+;; `tu-error` as **"Multiplicity violation"** — naming a subsystem that is working
+;; perfectly, the exact harm `.claude/rules/pipeline.md` § "infer / inferQ Are
+;; Twins" describes.
+;;
+;; So when the body's PRE-ZONK inferred type contains a hole AND QTT failed, the
+;; truthful report is that the type could not be inferred. ⚠ It must be the
+;; PRE-ZONK type: `unsolved-metas-to-holes` turns ordinary unsolved metas into
+;; holes, so testing the zonked type would swallow real multiplicity errors on
+;; perfectly ordinary defs.
+(define (cannot-infer-def-type-error loc e [names '()])
+  (inference-failed-error loc "Could not infer type" (pp-expr e names)))
 
 ;; ========================================
 ;; Check with error reporting
