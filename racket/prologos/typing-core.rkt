@@ -1293,6 +1293,45 @@
     [(expr-union? elem*)
      (let-values ([(ut uf) (select-union-lift ctx elem* inner name path sort)])
        (if uf (values #f uf) (values (re-wrap ut) #f)))]
+    [else (select-bcast-inner-apply/non-union
+           ctx elem* inner re-wrap name path sort)]))
+
+;; ⭐ D4.P4d slice 5 — THE NON-UNION TAIL, factored out so the union lift's
+;; unsolved-meta fallback can reach the optimistic path WITHOUT re-entering the
+;; union dispatch above it.
+;;
+;; ⚠⚠ THAT RE-ENTRY WAS A NON-TERMINATING LOOP, and it aborted the WHOLE FILE.
+;; `select-union-lift`'s meta arm called `select-bcast-inner-apply` with the SAME
+;; union `u`; this function's first arm dispatched straight back to
+;; `select-union-lift` with that same union; and `comps`/`offering` derive purely
+;; from `u` (`flatten-union` + a filter), so nothing changed between iterations.
+;; Not a slow path — an unconditional infinite mutual recursion. Measured at
+;; `730e017f` on `sl:a:b` (DEFERRED 58's own fixture plus ONE chain step): `fuel
+;; exhausted`, exit 1, output EMPTY — not even a `def` ABOVE it printed. A single
+;; step could not reach it because it takes a union whose component set holds an
+;; unsolved META, and only a chain produces one (`sl:a` ⇒ `[PVec Int | ?meta]`).
+;;
+;; The split removes the loop because the ONE call that passed an UNCHANGED value
+;; (`u`, from the meta arm) now bypasses the union dispatch, while every call that
+;; passes a strictly SMALLER value — the per-component call in `select-union-lift`
+;; — still gets the full dispatcher, so the alias / component-whnfs-into-a-union
+;; recursion the original comment exists for is untouched and well-founded by
+;; structural descent. (Verified: a `def B : Type := <Map … | Map …>` component
+;; still joins three ways through that call.)
+;;
+;; ⚠ THE TERMINATION ARGUMENT IS ABOUT DESCENT, NOT ABOUT THIS FUNCTION'S TEXT.
+;; An earlier version of this comment said "structurally it can no longer recurse:
+;; this function does not mention `select-union-lift`" — that is a grep asserted as
+;; a proof, and the verify was right to call it. A transitive path DOES exist
+;; (`/non-union` → `select-project` → `select-level-components` →
+;; `select-branch-entries` → `select-bcast-lift` → `select-bcast-inner-apply` →
+;; `select-union-lift`); it is unreachable today only because `select-elem-of` and
+;; `select-row-of` refuse a union subject — and `select-elem-of` is precisely the
+;; arm P4d has been widening (slice 1 added its Map arm). So the real invariant is:
+;; NO PATH FROM THIS TAIL RE-ENTERS THE UNION LIFT WITH AN UNCHANGED SUBJECT.
+;; If a future slice teaches a carrier resolver to admit a union, re-check it.
+(define (select-bcast-inner-apply/non-union ctx elem* inner re-wrap name path sort)
+  (cond
     [(select-sub-step? inner)
      (let-values ([(comps cf) (select-level-components ctx elem* (cdr inner) path 'block)])
        (if cf (values #f cf)
@@ -1324,8 +1363,37 @@
       ;; information could refuse what later becomes fine — the forbidden
       ;; direction. Fall through to the pre-slice optimistic path instead: no
       ;; NEW refusal is minted from information we do not have.
+      ;; ⚠ D4.P4d slice 5: this called `select-bcast-inner-apply`, whose FIRST arm
+      ;; dispatches on `expr-union?` — with `u` still a union, that was an
+      ;; unconditional infinite loop and a WHOLE-FILE ABORT (see the helper's
+      ;; header).
+      ;;
+      ;; ⚠⚠ AND THE OBVIOUS LANDING IS FORBIDDEN TWELVE LINES ABOVE THIS FILE'S
+      ;; `select-project-field` union arm: "Broadcast is the OTHER polarity
+      ;; (all-must-offer …) and must NOT reuse this arm — never 'unify' them."
+      ;; The `/non-union` tail with a UNION subject reaches exactly that arm
+      ;; (via `select-project` → `select-row-of`'s union arm), whose fold DROPS a
+      ;; meta component (`[else acc]`). The first cut did that, and the verify
+      ;; measured the price: the dropped meta left a CLEAN type, so
+      ;; `check-escaping-projection-metas` — the D23 escape guard — never fired,
+      ;; and `def q := sl:a:b` was ACCEPTED where the SHORTER `def q := sl:a` is
+      ;; hard-refused. More projection, less knowledge, past the guard. Worse,
+      ;; adding an empty `{}` component (strictly LESS information) flipped a
+      ;; CORRECT keys-⋂ refusal into acceptance.
+      ;;
+      ;; So the metas are carried INTO the result. The arm still mints no new
+      ;; refusal from information it does not have — its stated intent — but the
+      ;; uncertainty stays VISIBLE in the type, so the escape guard fires exactly
+      ;; as it does one step earlier. ⚠ The ORIGINAL metas, not a fresh one: the
+      ;; guard keys on `meta-source-info-kind`, so a fresh meta would not restore
+      ;; it. (The fuller question — whether a DECIDED non-offerer may be dropped
+      ;; at all, which is the polarity lie — is DEFERRED 82, not slice 5's job.)
       [(ormap expr-meta? offering)
-       (select-bcast-inner-apply ctx u inner values name path sort)]
+       (let-values ([(bt bf) (select-bcast-inner-apply/non-union
+                              ctx u inner values name path sort)])
+         (if bf
+             (values #f bf)
+             (values (build-union-type (cons bt (filter expr-meta? offering))) #f)))]
       [(null? offering)
        ;; every component was skipped — row slot #f distinguishes this from the
        ;; nested case below

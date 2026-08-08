@@ -5665,3 +5665,76 @@
   (check-false (ormap prologos-error? fixed)
                (format "the advised ordinal must actually WORK: ~a"
                        (map (lambda (r) (format "~a" r)) fixed))))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4d slice 5 — THE UNION META-FALLBACK IS A NON-TERMINATING LOOP.
+;;
+;; `select-union-lift`'s unsolved-meta arm calls `select-bcast-inner-apply` with
+;; the SAME union `u`, and that function's FIRST arm dispatches straight back to
+;; `select-union-lift` with the same union. `comps`/`offering` derive purely from
+;; `u` (`flatten-union` + a filter), so NOTHING changes between iterations — it is
+;; an unconditional infinite mutual recursion, not a slow path.
+;;
+;; It needs a union whose component set contains an unsolved META, which a single
+;; broadcast does not produce — it takes a CHAIN: `sl:a` yields
+;; `[PVec Int | ?meta]`, and the second step's union then hits the meta arm.
+;; Measured at `730e017f`: `fuel exhausted`, exit 1, and the output is EMPTY —
+;; `before` never prints. That is `pipeline.md`'s whole-file-abort signature, the
+;; 7th instance in this track, in P4d's own slice-3 code, and it violates the
+;; constraint the phase itself states (per-command error VALUES, never a raise).
+;; ---------------------------------------------------------------------------
+
+(test-case "P4d-s5: a CHAINED broadcast over a meta-bearing union must not abort the file"
+  ;; RED before the fix: the fuel raise escapes `process-string-ws` and this test
+  ;; ERRORS rather than failing — which is exactly how the P4d-0 slice-2 abort
+  ;; pin behaved, and is the honest shape for an abort.
+  (define out (u19 (string-append
+                    "def before := 1\n"
+                    "def rows := @[{} {:a 1}]\n"
+                    "def k := 0N\n"
+                    "def sl := [pvec-slice rows k 2N]\n"
+                    "sl:a:b")))
+  ;; the proposition is PARTIAL OUTPUT — an abort produces none at all
+  (check-true (u19-has? out #rx"before : Int defined")
+              (format "the file must survive the chained broadcast: ~a" out))
+  (check-true (u19-has? out #rx"after : Int defined")
+              (format "and must continue past it: ~a" out)))
+
+(test-case "P4d-s5: the meta fallback must not LAUNDER the escape-projection guard"
+  ;; ⚠ ADDED after the adversarial verify, which found the first cut traded the
+  ;; abort for something quieter and worse. Landing the meta arm in the
+  ;; `/non-union` tail sends a UNION subject into `select-project-field`'s union
+  ;; arm — the SINGLE-GET optimistic filter, which that arm's own comment forbids
+  ;; broadcast from reusing ("never 'unify' them"). Its fold DROPS a meta
+  ;; component, so the stored type came out CLEAN, `check-escaping-projection-metas`
+  ;; never fired, and `def q := sl:a:b` was ACCEPTED where the SHORTER
+  ;; `def q := sl:a` is hard-refused — more projection and less knowledge walking
+  ;; past the guard, at zero errors.
+  ;;
+  ;; The survival pin above is green over all of that; it asserts nothing about
+  ;; the ANSWER. This one does.
+  (define src (string-append "def k := 0N\n"
+                             "def rows := @[{} {:a {:b 1}}]\n"
+                             "def sl := [pvec-slice rows k 2N]\n"))
+  ;; the ONE-step form is refused by the D23 escape guard — the oracle
+  (define one (u19 (string-append src "def one := sl:a")))
+  (check-true (u19-has? one #rx"undischarged open-row projection")
+              (format "baseline: the one-step def must trip the escape guard: ~a" one))
+  ;; the TWO-step form must be refused the SAME way — never silently bound
+  (define two (u19 (string-append src "def two := sl:a:b")))
+  (check-true (u19-has? two #rx"undischarged open-row projection")
+              (format "the chained def must trip the SAME guard, not launder it: ~a" two))
+  (check-false (u19-has? two #rx"two : \\[PVec Int\\] defined")
+               (format "it must not bind a confident type over a buried error: ~a" two))
+  ;; ⚠ THE DISCRIMINATOR: adding an empty `{}` contributes strictly LESS
+  ;; information, and must NOT convert a correct refusal into acceptance.
+  (define decided (u19 (string-append
+                        "def k := 0N\ndef rowsA := @[{:a {:b 1}} {:a 5}]\n"
+                        "def slA := [pvec-slice rowsA k 2N]\ndef qA := slA:a:b")))
+  (check-true (u19-has? decided #rx"EVERY union component")
+              (format "a fully-decided union must still refuse: ~a" decided))
+  (define uncertain (u19 (string-append
+                          "def k := 0N\ndef rowsB := @[{} {:a {:b 1}} {:a 5}]\n"
+                          "def slB := [pvec-slice rowsB k 3N]\ndef qB := slB:a:b")))
+  (check-false (u19-has? uncertain #rx"qB : \\[PVec Int\\] defined")
+               (format "adding UNCERTAINTY must not buy ACCEPTANCE: ~a" uncertain)))

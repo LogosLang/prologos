@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 82**
+> ### **NEXT FREE: 84**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -5397,3 +5397,66 @@ the battery delta.
 **Practical rule until fixed**: when the suite total moves in a direction the
 battery delta does not explain, diff per-file counts from `timings.jsonl`
 (`results[].tests`) before believing either figure.
+
+---
+
+### 82. ⬜ The union meta arm still DROPS a DECIDED non-offerer — the polarity lie, narrowed but not closed (D4.P4d slice 5)
+
+Slice 5 stopped the meta arm LAUNDERING the D23 escape guard (it now carries the
+unsolved metas into the result, so `def q := sl:a:b` is refused exactly as
+`def q := sl:a` is). **What it did not fix is the polarity.**
+
+When `offering` contains an unsolved meta, the arm lands in
+`select-bcast-inner-apply/non-union`, which with a UNION subject reaches
+`select-project-field`'s union arm — the SINGLE-GET optimistic filter. That arm's
+own comment forbids this reuse in terms:
+
+> ⚠ Broadcast is the OTHER polarity (all-must-offer, the 2b split's Galois
+> adjoint) and must NOT reuse this arm — see D4 §3's 2b polarity ruling: never
+> "unify" them.
+
+Its fold drops any component that is neither Map nor Record (`[else acc]`). That
+is correct for the *unsolved meta* (we genuinely do not know), and WRONG for a
+component already DECIDED not to offer the key: such a component can never become
+an offerer, so dropping it is not licensed by the arm's anti-monotonicity
+rationale. Gating on the DECIDED components is monotone-safe.
+
+**What is owed**: a landing that refuses on the decided non-offerers while
+deferring only on the metas — i.e. run the keys-⋂ gate over
+`(filter (not expr-meta?) offering)` and merge the metas into the result. That is
+a design decision about the 2b polarity, not a mechanical fix, which is why slice
+5 narrowed rather than closed it. Ties to **58** (the dyn channel) — same arm,
+same question of what "may be present" discharges.
+
+### 83. ⬜ `format-closed-row-miss` raises on a UNION row, and a blanket handler eats it — the bare "Could not infer type" (D4.P4d slice 5)
+
+`select-project-field`'s union arm mints `'miss-closed` with a **union** in the
+`row` slot. `format-select-fail`'s `miss-closed` arm calls
+`format-closed-row-miss`, whose first act is `(expr-Record-fields rec)` — a
+contract violation on a union. `select-block-hint` wraps the whole hint search in
+`(with-handlers ([(lambda (_) #t) (lambda (_) #f)]) …)`, so the raise is
+SWALLOWED, the hint returns `#f`, and the user gets a bare
+`Could not infer type` with no guidance.
+
+⚠ **The codebase already knows this trap and documented it** — it is the stated
+reason `bcast-union` deliberately does NOT nest through `miss-closed`
+(`typing-errors.rkt`, the `bcast-union` arm: *"a contract violation on a union
+that `select-block-hint`'s blanket handler SWALLOWS, which is exactly why the
+pre-slice all-miss refusal printed a bare 'Could not infer type' with no guidance
+at all"*). Slice 3 routed AROUND the hole; slice 5's meta landing routes the new
+population straight into it.
+
+Measured contrast in one file:
+```
+xs:zzz   → broadcast `:zzz` fails on every element — … available fields: :a   ✅ Record row
+sl:a:0   → … `Int | ?meta` has no positions                                   ✅ ordinal sibling
+sl:a:b   → Could not infer type                                               ❌ union row
+```
+Only the SYMBOL inner falls in the hole; the ordinal sibling one character away
+is fine, because it mints a different kind.
+
+**Fix**, both local: guard `format-closed-row-miss` on `expr-Record?` with a
+union-aware fallback, **or** have `select-project-field`'s union arm mint a
+union-aware kind instead of `miss-closed`. ⚠ Also worth fixing the blanket
+handler itself — a `with-handlers` that swallows every exception is why a
+contract violation reads as a missing diagnostic.

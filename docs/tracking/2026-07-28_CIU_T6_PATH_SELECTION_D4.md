@@ -6492,8 +6492,46 @@ first as slice 0"]:**
   under-counting, in a census I had just widened) · **79** (pre-existing: the
   `let` fused-annotation message states two falsehoods) · **80** (the
   `bcast-step` arm may be dead) · **81**.
-  **⬜ REMAINING in 4d**: nothing — 4d-1 and 4d-2 close it. Next is the **P4d
-  close** (three owed owner questions).
+  **⬜ REMAINING in 4d**: nothing — 4d-1 and 4d-2 close it.
+
+- **✅ Slice 5 — THE UNION META-FALLBACK NON-TERMINATION — COMPLETE 2026-08-08**
+  (owner: *"fix this first … ship code we can be proud of"*). Verify
+  `wf_d29c48fd-aed` (2 skeptics + adjudicator).
+  **⚠⚠ FOUND AT THE CLOSE, FILED NOWHERE, IN P4d's OWN SLICE-3 CODE.**
+  `select-union-lift`'s unsolved-meta arm called `select-bcast-inner-apply` with
+  the SAME union `u`; that function's first arm dispatched straight back with the
+  same union; `comps`/`offering` derive purely from `u`, so nothing changed
+  between iterations — an unconditional infinite mutual recursion. On `sl:a:b`
+  (DEFERRED 58's fixture plus ONE chain step): **`fuel exhausted`, exit 1, output
+  EMPTY** — a def ABOVE it did not print. The **7th** whole-file abort in this
+  track, violating the constraint the phase itself states. A single step could
+  not reach it: it needs a union whose component set holds an unsolved META, and
+  only a chain produces one.
+  **The fix**: factor the non-union tail (`select-bcast-inner-apply/non-union`);
+  the one call that passed an UNCHANGED value bypasses the union dispatch, while
+  every call that passes a strictly SMALLER value keeps the full dispatcher — so
+  the alias / component-whnfs-into-a-union recursion is untouched and
+  well-founded by descent (verified: a three-way alias join is byte-identical).
+  **⚠⚠ AND THE FIRST CUT TRADED THE ABORT FOR SOMETHING QUIETER AND WORSE.** With
+  a union subject the tail reaches `select-project-field`'s union arm — the
+  single-get optimistic filter, which **that arm's own comment forbids broadcast
+  from reusing, twelve lines above the edit** ("never 'unify' them"). Its fold
+  DROPS a meta, so the stored type came out CLEAN and
+  `check-escaping-projection-metas` never fired: `def q := sl:a:b` was **ACCEPTED**
+  where the SHORTER `def q := sl:a` is hard-refused — more projection, less
+  knowledge, past the guard, at zero errors. And adding an empty `{}` component
+  (strictly LESS information) flipped a CORRECT keys-⋂ refusal into acceptance.
+  Neither skeptic connected it to the D23 guard; **the adjudicator did**.
+  Closed by carrying the ORIGINAL metas into the result (a fresh one would not
+  restore the guard — it keys on `meta-source-info-kind`). The remaining polarity
+  question is **DEFERRED 82**, the swallowed `miss-closed` formatter **83**.
+  ⚠ Also corrected: the fix's own termination comment claimed "this function does
+  not mention `select-union-lift`" — a grep asserted as a proof. The honest
+  invariant is about DESCENT, and it is now written that way.
+  **Gates**: battery **431 → 432** · acceptance 0 mismatched × 5 · full suite
+  **10068 / 488 / 0**, `[488/488]`.
+
+  Next is the **P4d close** (three owed owner questions).
 
 - **⬜ Slice 4d — the remaining diagnostics** (what 4c did not reach). ⚠ The
   scope below is RE-DERIVED by the slice-4d mini-audit (`wf_a154667e-42f`,
