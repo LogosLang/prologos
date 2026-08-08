@@ -3679,7 +3679,14 @@ fight, it lives in the READER (which P4c-4c does not touch, so it is not caused
 here) — and it is a landmine directly under G2, because G2 is what makes literals
 reachable with a live mint.
 
-### 45. Latent label divergence: `select-step-output-name` vs `select-branch-top-keys`
+### 45. ✅ RESOLVED at D4.P4d slice 2 (`ba1c055d`) — fixed STRUCTURALLY, not patched
+
+> ⚠ **Re-homed at the P4d close (2026-08-08).** This carried no status glyph while
+> D4 §5.P4d's slice-2 record already said *"DEFERRED 45 fixed structurally:
+> `select-branch-top-keys`' bcast arm answers `(list (select-step-output-name s))`
+> — check ≡ meaning by shared computation"*, with the verify's OLD-vs-NEW-vs-consumers
+> table finding zero divergent shapes. The divergence cannot recur because the two
+> sides are now ONE computation. *(original below)*
 
 ```
 branch ((@bcast 0) name)  →  top-keys = (name)   output-name(head) = #f
@@ -3703,7 +3710,15 @@ because the mint never fires: `xs:{name age}` → "Unbound variable `:`" (DEFERR
 minting `:{` without handling the sub-inner ω turns an "unbound variable" into a
 silent wrong answer. Scope note for P4d.
 
-### 47. The empty-PVec ω diagnostic is generically worded
+### 47. ✅ RESOLVED at D4.P4d slice 4d-2 (`25f3f22d`) — the broadcast axis landed; ≡ 59.1
+
+> ⚠ **Re-homed at the P4d close (2026-08-08).** This carried no status glyph. It is
+> the SAME defect as **59.1** (the equivalence was probe-verified, and neither entry
+> cross-referenced the other — the 40≡46 shape). Both shipped together: a
+> `'bcast-elem` wrapper for the PVec/Map carrier plus a broadcast AXIS on
+> `format-select-fail`, so the message now names the broadcast and says *"each
+> element"* rather than misattributing to *"the subject"*. Cited at four sites in
+> `typing-errors.rkt`. *(original below)*
 
 `@[]` infers `[PVec _]`, so the inner step meets an unsolved meta and reports
 "the subject … is not a record, so it has no fields to access". Per-command, file
@@ -4261,7 +4276,17 @@ single-get control proving IT did not move.
 (`def port : Int := cfg.port` accepted, `<error>` wearing `Int`, into arithmetic)
 is **DEFERRED 89**, and it is not a Path Selection question.
 
-### 59. ⬜ Two broadcast diagnostics name the wrong subject (D4.P4d slice 1/2 verifies)
+### 59. ✅ RESOLVED at D4.P4d slice 4d-2 (`25f3f22d`) — BOTH members; 59.1 ≡ 47
+
+> ⚠ **Re-homed at the P4d close (2026-08-08).** It was homed on *"P4d slice 4's
+> diagnostics batch"*, which has since completed. **59.1** (the misattributed
+> subject) is the SAME defect as **47** and shipped with it. **59.2**
+> (`not-indexable`'s `x{k}` remedy off-key inside a broadcast) also shipped — the
+> remedy moved INTO the `cond` that knows the carrier, is broadcast-aware, and is
+> suppressed entirely where nothing true can be said. ⚠ Note the plan's claim that
+> *"the existing cond already discriminates the right three cases"* was FALSE: the
+> cond discriminated carrier kind and the remedy sat in the unconditional tail.
+> *(original below)*
 
 Both pre-existing, both surfaced while pinning the carriers; natural riders on
 P4d slice 4's diagnostics batch.
@@ -4309,7 +4334,20 @@ link and poisoning the advice there — typing analysis inside a diagnostic, and
 its own slice. Recorded in the code at `format-select-fail`'s `bcast-carrier`
 arm.
 
-### 61. ⬜ REWRITTEN at slice 4c — a BRACE-spelling remedy for sub / caret inners
+### 61. ⬜ NOT SCHEDULED — a FEATURE question, re-homed at the P4d close to X.close triage
+
+> ⚠ **Re-homed 2026-08-08.** It was left UNHOMED when slice 4c rewrote it, and it is
+> not a gap: what remains is *"sub and caret inners have honest BRACE spellings that
+> nothing offers"*, which is a **feature proposal**, and taking it requires
+> reconciling with 4c's owner ruling — *"the fix is not a better second spelling; it
+> is not teaching one."* So it is not P4d work and should not sit in a phase queue
+> pretending to be. Decide it at **X.close DEFERRED triage**, as a yes/no on whether
+> the brace spellings are worth advertising at all.
+>
+> ⚠ Its own body carries a warning worth keeping: **two independent auditors got its
+> item 2 wrong**, both reasoning from "the advice machinery is deleted" to "no
+> message advises anything" — conflating 4a's *taught-spelling* advice with 4c's
+> *conversion* remedy. Probe before repeating either claim.
 
 ⚠ The original text below is OBE: it described slice 4a's "poisoning rule",
 which was deleted at 4c along with the rest of the advice machinery. Two
@@ -4394,6 +4432,12 @@ inline sub genuinely accepts an undeclared key — admitting it would reproduce
 subject. So slice 4b's headline — "a schema-typed subject is the row it
 denotes" — holds only for top-level NAMED closed schemas. Fixing the
 propagation is the real answer; the leaked generated name is slice-4c material.
+
+> ⚠ **RE-HOMED at the P4d close (2026-08-08).** Slice 4c has LANDED and did not take
+> the leaked-generated-name half, so that half was orphaned — homed on a slice that
+> no longer exists to receive it. Both halves now belong to **P4e** (the next phase
+> that touches this surface) or to X.close triage if P4e does not reach it. The
+> substance is unchanged; only the home moved.
 
 ### 64. ✅ RESOLVED at D4.P4d slice 4c (`a31b7475`) — both gates now name their remedy
 

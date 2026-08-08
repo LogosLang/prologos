@@ -33,7 +33,9 @@ rulings, censuses and test delta live in its own section.
 | **P4** | **Broadcast ω** — ⭐ **P4a ✅ · P4b ✅ COMPLETE** (b-i carrier + b-ii `$dot-access` migration; `x.a` now mints the unified selector carrier) · P4c–P4e ⬜ — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | [§5.P4](#p4) · co-design: audit `wf_8458c23b` + options panel · **RULED 2026-07-31**: [Q_U5](#q-u5) · [Q_U6](#q-u6) · [Q_U7](#q-u7) · [Q_U8](#q-u8) · [Q_U9](#q-u9) (the PAUSE cleared) · partition LOCKED P4a–P4e |
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
 | **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [§5.P4c](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([inverted default](#p4c-2-inverted)) · [P4c-3](#p4c-3) ✅ `d477772c` · [P4c-4a](#p4c-4a) ✅ `f31237fd` · [P4c-4b](#p4c-4b) ✅ `6b22515d` (end to end) · **[P4c-4c](#p4c-4c-close) ✅ `ae26f540`** — broadcast is REACHABLE: PVec ω value semantics + **G2** + the preparse seam guard. ⭐ The verify caught a BLOCKING whole-file abort every gate was blind to; owner ruled the structural fix ([close](#p4c-4c-close)) · [Q_U18](#q-u18) ✅ · DEFERRED 43 ✅ · 48 RULED uniform · P4c-5 ⬜ |
-| **P4d** | **The carriers** — Map/keyword-row · het tuple · PVec-of-union · closed-schema subjects · the Q_U9 refusal's message split · corpus re-fate · **Q_U19 ✅ RULED (A)** | 🔄 | [§5.P4d](#p4d) · slices **0 ✅** `00e52c42` · **1 ✅** `14ef5e83` · **2 ✅** `ba1c055d` (C9 (a)) · **3 ✅** `1e8d0795` (Q_U21 (a)) · **4a ✅** `61d64708`+`d3947594` (advice — ⚠ RETIRED at 4c) · **4b ✅** `19ce05aa` (closed schema = its row) · **4c ✅** `a31b7475` (per-carrier split; 4a's machinery deleted) · **4d ⬜** LAST. Suite **9969/485/0** · battery **420** |
+| **P4d** | **The carriers** — Map/keyword-row · het tuple · PVec-of-union · closed-schema subjects · the Q_U9 refusal's message split · corpus re-fate · **Q_U19 ✅ RULED (A)** | ✅ | [§5.P4d](#p4d) · slices **0 ✅ 1 ✅ 2 ✅ 3 ✅ 4a ✅ 4a' ✅ 4b ✅ 4c ✅ 4d-1 ✅ 4d-2 ✅ 5 ✅ 6 ✅** — broadcast is LIVE over PVec · Map · keyword-row · het tuple · union · closed schema. ⭐ The CLOSE's own audit found a whole-file abort in slice 3's code (slice 5) and Q1 re-opened as a live defect (slice 6). All THREE owner questions discharged: Q1 ruled+implemented · [Q2](#q-u22) answered (fix → DEFERRED 88) · Q3 answered (broadcast → 58 re-scoped; contract → 89) |
+| **P4e** | **Flatten `*` · splat `.*` · disclose `<`/`:<`** — the keyword-trailing-`*` consumer split (`:diags*`) · `.*` row-splat in block position · disclose, which has NO implementation at HEAD (one comment) | ⬜ | [§5.P4e](#p4e) · ⚠ **row ADDED at the P4d close 2026-08-08** — this phase sat in the critical path with NO tracker row, so "point at the next phase" had nowhere to land. Carries **DEFERRED 63** (re-homed off the landed slice 4c) |
+| **P4c-5** | **The `.*name` retirement + FULL residue disposal** — the last P4c residue, sequenced AFTER P4e | ⬜ | [§5.P4c-5](#p4c-5) · ⚠ **row ADDED at the P4d close 2026-08-08** — previously visible only as a `P4c-5 ⬜` fragment inside P4c's Notes cell |
 | **PF** | **Path first-classness** (substrate; **P5's prerequisite**) — ⭐ **Q_U17 RULED B2**: a Path segment is a first-class `Step` value. Reify the closed six-kind union as a `data Step` ADT on the `Datum` pattern; `Path` stays GROUND; `segments : Path -> [List Step]`. Repairs the dead `path-segments` in the SAME change | ⬜ | [§5.PF](#pf) · [Q_U17](#q-u17) · panel `wf_68178bd3-eea` |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery · ⚠ B3 needs [PF](#pf) |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | [§5.PX](#px) · position flexible |
@@ -3635,7 +3637,7 @@ rulings; this records what the audit established and the staged shape.
   markers 43/44 since P4d-0, and the Functor census was false when written —
   the error drops the "no instance" clause) · dyn-tail
   4d refusals.
-- **P4e — flatten `*` · splat `.*` · disclose `<`/`:<` + closures**: the
+- <a id="p4e"></a>**P4e — flatten `*` · splat `.*` · disclose `<`/`:<` + closures**: the
   keyword-trailing-`*` consumer split (`:diags*` — split-caret-lexeme
   prior art; §10.4 `build.modules:diags*:msg`) · `.*` row-splat in block
   position (§C lines; the splat/duplicate-check interaction below) ·
@@ -4768,7 +4770,7 @@ HEAD**, not hypotheticals:
   `define`, not a parameter, so no context can be enabled from a test) · the
   per-context DISPATCH MECHANISM (only `(pair? …)` is consulted today) · and the
   unknown-head ruling that DEFERRED 32's open half names.
-- **P4c-5 — the `.*name` retirement + FULL residue disposal**, in the commit
+- <a id="p4c-5"></a>**P4c-5 — the `.*name` retirement + FULL residue disposal**, in the commit
   that discharges the parser's `:name` promise.
 
 ##### THE NAMED PREDICTED DIFF SET (A/B is MANDATORY; any diff outside is a bug)
@@ -6690,6 +6692,98 @@ first as slice 0"]:**
   authored fixtures; the corpus A/B is REGRESSION-ONLY for slices 1–4 (the
   carriers have ~no corpus coverage — the vacuous-green hazard, named) but
   LOAD-BEARING for slice 0.
+
+<a id="p4d-close"></a>
+
+##### §5.P4d CLOSE — ✅ COMPLETE 2026-08-08  (close note; the Stage-5 PIR belongs to X.close)
+
+**THE FEATURE.** Broadcast (`:`) is LIVE at the production default over **PVec ·
+Map · keyword-row · het tuple · union · closed schema**. The refusals left —
+List · LSeq · Set · scalars · open-or-dyn rows · open-or-defaulted schemas ·
+collided selections — each name their OWN conversion, and scalars correctly get
+none, because there is nothing true to say.
+
+**TWELVE SLICES**: 0 (`00e52c42`) · 1 (`14ef5e83`) · 2 (`ba1c055d`) ·
+3 (`1e8d0795`) · 4a (`61d64708`) · 4a′ (`d3947594`) · 4b (`19ce05aa`) ·
+4c (`a31b7475`) · 4d-1 (`bd8b8bcf`) · 4d-2 (`25f3f22d`) · 5 (`a945f390`) ·
+6 (`003f150b`).
+
+**RULINGS**: [Q_U19](#q-u19) (A) path-position `^`-on-broadcast REFUSED, and the
+dot string stays byte-identical · **C9** (a) one scalar tier, conservative OR,
+`'path`-scoped · [Q_U21](#q-u21) (a) `Nil` is SKIPPED · **C9 GOVERNS** where it
+meets Q_U21 (a), which is scoped to "no armed sibling" ·
+[Q_U22](#q-u22) `^` at a leaf is ARITY-UNIFORM · the carrier gap belongs in
+slice 4 · **the remedy points back at the user's own spelling, not at a taught
+spelling** — the ruling that retired 4a's entire advice machinery at 4c.
+
+**THE THREE OWED OWNER QUESTIONS — ALL DISCHARGED**, and **two of the three were
+MIS-POSED as filed**, which is the close's most transferable finding:
+- **Q1** (the Nil-bearing union's quiet miss) — RULED and IMPLEMENTED as slice 6.
+  ⭐ The close's audit found ruling (a) was ALREADY not holding at HEAD: C9's OR
+  armed the tier from a Map SIBLING, so an absent element PANICKED — the precise
+  failure (a) exists to prevent — while a genuine miss in the same population was
+  already loud, by the same accident. Both inverted at once.
+- **Q2** (the Q_U20 block cell) — ANSWERED. The recorded premise ("the
+  extract/assemble distinction COLLAPSES") is TRUE only for plain and rename
+  inners and FALSE for the caret family. The real content is the SPEC's own rule,
+  which the owner's intuitions independently encoded: **a caret applies EXACTLY
+  ONCE, at the level where it is written, and dropped means dropped** (§3.4). Fix
+  → **DEFERRED 88**.
+- **Q3** (DEFERRED 58, the dyn channel) — ANSWERED by DECOMPOSITION. Filed
+  against the union gate; the controls show the same silence with NO union and NO
+  broadcast. The broadcast half needed **no new ruling** — the 2b polarity
+  already decides it ("may be present" does not discharge "must offer") → 58
+  re-scoped in place. The annotation-lie half is NOT a Path Selection question →
+  **DEFERRED 89**.
+
+**GATE**: full suite **10072 / 488 / 0** (`[488/488]`, forced re-run) · battery
+**420 → 436** · acceptance **77/77** + 89/89 + 6/6 + 29/29 + 28/28 · corpus A/B
+REGRESSION-ONLY for this phase by construction (the carriers have ~no corpus
+coverage — the vacuous-green hazard, named at the opening and still true).
+
+**⭐⭐ THE METHOD FINDING, and it is the phase's real product.** **Every slice
+shipped a defect of mine that a green suite, five green acceptance files and the
+battery were ALL blind to** — and at 4d-1 a passing **two-direction mutation
+test** was green over one too. The adversarial verify caught every one; twice the
+ADJUDICATOR caught what all three skeptics missed or actively cleared. Named
+sub-findings, each with a live instance:
+- **A boolean over a 3-valued domain is a catch-all in disguise** (4d-2's axis).
+- **A TYPE-level argument cannot bound a VALUE-level site** (slice 6's width claim
+  — my comment called the bound "MEASURED" when the only measurement was a typing
+  refusal that did not bear on the question).
+- **A pin's NAME can be the lie** (4d-2's GUARD asserted three arms while testing
+  the one that did not change; a real regression stayed green beneath it).
+- **A skeptic's CLEARANCE is not evidence** — twice, skeptics agreed and were
+  wrong (testing `defn ^` instead of `def ^ :=`; reading a stale snapshot).
+- **A control probe is the cheapest way to find a mis-posed question** — Q2's
+  pure-dot-path control and Q3's no-union/no-broadcast control each exposed, in
+  one probe, that the filed framing named the wrong level.
+- **When a design question resolves to "current behaviour is correct", check the
+  RULING first.** I argued Q2's divergence was correct structure and offered a
+  lean to rule it so, without checking Q_T7 — which rules `^-` as collapsing the
+  whole branch FLAT. Rationalising the implementation.
+- **Worked examples are a DEBUGGING instrument.** The owner asked for them
+  because rule-labels were unparseable; they exposed a defect three audits had
+  walked past, and twice corrected MY proposal rather than their understanding.
+
+**CARRIED OUT, filed not hidden**: DEFERRED **75/76** (Q_U19 routes 2 and 3 —
+implemented, verified, REVERTED for a monotonicity break; they need a
+grouper-side adjacency mint and land TOGETHER) · **77** (three sibling arms still
+misattribute; the tuple one advises a spelling that SUCCEEDS WITH THE WRONG
+MEANING) · **78** (the census grep cannot see bare-token phase refs) · **79** ·
+**80** · **81** (the suite can UNDER-REPORT `total_tests` while `all_pass` stays
+true — cross-check against a delta you can predict) · **82** · **83** · **84**
+(one absent element still answers for the whole node; loudness by champ hash
+order) · **88** · **89**. Re-homed at this close: **45 ✅ · 47 ✅ · 59 ✅**
+(all three were shipped but unmarked) · **61** (not scheduled — a feature
+question, → X.close triage) · **63** (orphaned on the landed slice 4c → P4e).
+
+**⚠ STRUCTURAL REPAIR made here**: **P4e** and **P4c-5** had NO Progress-Tracker
+row despite sitting in the critical path, so "point at the next phase" had
+nowhere to land. Rows added, with explicit anchors at the bullets that describe
+them.
+
+**Status: ✅ P4d COMPLETE.** Next: **[P4e](#p4e)**.
 
 <a id="pf"></a>
 
