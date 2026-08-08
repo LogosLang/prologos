@@ -5150,3 +5150,98 @@ See `.claude/rules/pipeline.md` § "infer / inferQ Are Twins".
 **Gates**: suite 10019/487/0 at the time; corpus blast radius BOUNDED BY
 SIGNATURE to 4 of 161 files and compared exhaustively — zero semantic diffs, no
 "Multiplicity violation" left in the affected set.
+
+---
+
+### 75. ⬜ Q_U19 route 2 — `xs:{name}^alias` is UNGUIDED, and it needs a GROUPER-SIDE adjacency mint (D4.P4d slice 4d; attempted and REVERTED)
+
+`xs:{name}^alias` and `xs:{name}^` report a bare `Unbound variable` — the caret
+is not part of the selection, it is a stray token. Measured at `2fd6b68e`:
+`xs:{name}^alias` lexes as `xs` `:` `{` `name` `}` `^` `alias`, i.e. the caret and
+its alias are BARE SIBLINGS AFTER the `}`, so the form falls through to
+application and the caret is a free variable.
+
+**Attempted at slice 4d as a datum-level fold arm in `macros.rkt`
+(`bcast-rekey-sibling?` = a `$bcast-step` followed by `'^`), and REVERTED [owner
+2026-08-08: "ship route 1"]. The revert is the finding:**
+
+⚠⚠ **IT BROKE MONOTONICITY, and the adversarial verify caught it over a GREEN
+battery, five green acceptance files and a passing two-direction mutation test.**
+`^` is a **bindable name** — `def ^ := 7` → `^ : Int defined.`, and
+`def use := [+ ^ 1]` works. So a `$bcast-step` followed by `^` is not necessarily
+a re-key mistake; it can be an ordinary variable reference:
+
+```
+def xs := @[{:name "a"} {:name "b"}]
+def ^ := 7
+defn snd2 [a b] b
+def a4 := [snd2 xs:name   ^]     ;; HEAD: `a4 : _ defined.`  → arm made it an ERROR
+def a5 := [snd2 xs:{name} ^]     ;; HEAD: `a5 : _ defined.`  → arm made it an ERROR
+```
+
+⚠ **There is NO PRECEDENT for this**, contrary to the first mitigation offered:
+`xs.0 ^` and `xs[0] ^` do already refuse at HEAD, but those are ORDINAL shapes
+hitting a different arm. The NAMED analogue `[snd2 m.name ^]` works on both
+trees. ⚠ Also note **two of three skeptics wrongly concluded "no monotonicity
+break"** — both tested `defn ^` (head position, which genuinely fails) and never
+`def ^ :=`. The adjudicator and the main thread each reproduced it independently.
+
+**WHY A FOLD ARM CANNOT WORK, and what would**: adjacency is destroyed below
+grouping (the documented Q8.5 invariant 2), and `xs:{name}^` — a spelling the
+ruling covers — is DATUM-IDENTICAL to `[f xs:{name} ^]`. The discriminator exists
+only at the grouper: `adjacent-to-base?` (`parse-reader.rkt`), which is exactly
+what `bcast-brace-trigger?` uses for the `:{` mint. So this is a
+**reader-adjacency mint, structurally the same shape as P4d-0's `:{` work** — and
+P4d-0 landed that ALONE, on the argument that mixing it makes the A/B
+un-attributable. Same argument applies here.
+
+Blast radius of the unguided state is small: bare `^` appears in the corpus in
+**7 lines, all comments**, zero live code.
+
+**Fix shape**: a `^`-adjacency trigger at the grouping seat minting a sentinel
+the parser keys on, then route it to `bcast-rekey-message` (already defined,
+`parser.rkt`, shipped for route 1). Lands with **76**, which shares the root cause.
+
+### 76. ⬜ Q_U19 route 3 — `xs:0^alias` is UNGUIDED, and the colon-band gate cannot tell the PATH colon from the ANNOTATION colon (D4.P4d slice 4d; attempted and REVERTED)
+
+`xs:0^alias` reports `Unbound variable`, blaming the COLON. Cause, measured: the
+lexeme falls BETWEEN two recognizers — `recognize-keyword` requires
+`char-alphabetic?` after the colon (so a digit is not a keyword), and
+`recognize-colon-annotation`'s digit arm returns `#f` when the digit run is
+followed by an ident-continue char, and `^` IS one (`ident-continue?` admits it).
+So `:0^alias` mints NO sentinel and shatters to `xs |:| 0 ^ alias`.
+
+**Owner ruling stands and is NOT re-opened [2026-08-08]: it takes Q_T4a's
+`ordinal-rekey-message`, not the Q_U19 broadcast sibling** — `users:0` is itself a
+legal ω step (Q_U16b), so the mistake is `^` after an ORDINAL, which has no key,
+and the dot band already answers that exact mistake with that exact string.
+
+**Attempted at slice 4d by widening `ordinal-rekey-shatter?` and its fold arm from
+`(eq? (car xs) '|.|)` to `(memq (car xs) '(|.| |:|))`, and REVERTED. Two defects,
+both found by the adversarial verify:**
+
+1. ⚠ **`|.|` has ONE role; `|:|` has TWO** — path colon *and* type-annotation
+   colon — so the widened arm EATS BINDER NAMES:
+   `def z1 : 3 ^` → `def requires: (def name <type> body)` (the name `z1` was
+   consumed); `[fn [x : 3 ^] x]` → payload `($retired-selection ordinal-rekey #f)`
+   (the param `x` was consumed). Error→error today, so not yet a break — but the
+   base-drop `(if (null? acc) acc (cdr acc))` is consuming the wrong element.
+   ⚠ The main thread initially cleared this by A/B — the DOT band over-fires the
+   same way at baseline (`[f 1 . 0 ^ 2]` → the ordinal message) — and that
+   clearance was **too generous**: the dot band's over-fire is benign precisely
+   because `.` has no second role.
+2. ⚠ **It did not achieve the ruling's own goal.** The dot band is
+   spacing-invariant; the colon band was not, because route 2's arm consumed
+   `($bcast-step |:0|)` before the shatter could see it:
+   | | HEAD | attempt |
+   |---|---|---|
+   | `xs:0^alias` | Unbound variable | ordinal ✅ |
+   | `xs:0 ^ alias` | Unbound variable | **broadcast ❌** |
+   | `xs.0^alias` · `xs.0 ^ alias` | ordinal | ordinal ✅ |
+   And the pin used only the GLUED form, so it stayed green over the exact
+   spelling "the two bands must agree" is about — a vacuous pin covering a real gap.
+
+**Fix shape**: a gate that distinguishes the path colon from the annotation colon
+(the grouper knows; the datum layer does not), plus an ordinal-payload deferral so
+75's arm cannot shadow it. **Lands WITH 75** — one root cause: the datum layer
+cannot see what both routes need. Pin BOTH bands and BOTH spacings.

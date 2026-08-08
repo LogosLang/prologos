@@ -6424,6 +6424,38 @@ first as slice 0"]:**
   **Gates**: battery **421 → 420** (a net −1: nine advice pins retired, eight
   carrier pins added) · acceptance 0 mismatched × 5 · full suite
   **9969 / 485 / 0**, `[485/485]`.
+- **🔄 Slice 4d — the remaining diagnostics. Sub-slice 4d-1 ✅ COMPLETE
+  2026-08-08 (Q_U19 route 1).** Audit `wf_a154667e-42f` · verify
+  `wf_f178a813-a4c` (3 skeptics + adjudicator).
+  **SHIPPED**: the ω audience gets its own `bcast-rekey-message`; the dot string
+  at `parser.rkt`'s caret arm is BYTE-IDENTICAL; the arm dispatches on the step
+  carrying the caret via `select-step-kind` (already imported, already answers
+  `'bcast`). The `parse-error` is a per-command VALUE, never a raise. The
+  "P4c-4b: the payload's THREE sub-cases" pin is RE-POINTED to the DECISION —
+  it asserted `re-keys the OUTPUT`, which BOTH messages contain, so it could not
+  discriminate and stayed green straight through the split.
+  **⚠⚠ ROUTES 2 AND 3 WERE IMPLEMENTED AND REVERTED [owner: "ship route 1"]** —
+  see **DEFERRED 75 / 76**. Route 2's datum-level arm **BROKE MONOTONICITY**
+  (`^` is a bindable name, so `[snd2 xs:name ^]` is a program HEAD accepts and
+  the arm made it an error) and route 3's gate widening **ate binder names**
+  (`|.|` has one role; `|:|` has two). Both need a grouper-side adjacency mint —
+  the same shape as P4d-0's `:{`, which landed alone for the same reason.
+  **⭐ THE VERIFY EARNED ITS KEEP FOR THE FOURTH SLICE RUNNING**: the break was
+  invisible to a GREEN battery, five green acceptance files, AND a two-direction
+  mutation test that passed. ⚠ **Two of three skeptics wrongly cleared it** (they
+  tested `defn ^`, which fails, never `def ^ :=`, which works) — the adjudicator
+  and the main thread each reproduced it independently. And **mutation-testing
+  refuted a pin title of mine**: "the split is PER-STEP, not per-branch" is not
+  observable — Q_U13's NEST gives ONE carrier per level, so a per-branch `ormap`
+  passes the whole battery. `findf` is honesty, not a fix; the pin and the
+  comment now say so. Also corrected: `parser.rkt`'s claim that
+  `make-select-bcast` has "ZERO production callers" (it has FOUR, same file).
+  **Gates**: battery **420 → 425** · acceptance **77/77** + 89/89 + 6/6 + 29/29 +
+  28/28 · full suite **10061 / 488 / 0**, `[488/488]` verified · the reverted
+  surfaces A/B **byte-identical to baseline**.
+  **⬜ REMAINING in 4d**: DEFERRED 47 ≡ 59.1 · 59.2 · the stale-phase census ·
+  the two pin section labels.
+
 - **⬜ Slice 4d — the remaining diagnostics** (what 4c did not reach). ⚠ The
   scope below is RE-DERIVED by the slice-4d mini-audit (`wf_a154667e-42f`,
   5 facets + critic @ `2fd6b68e`); every correction is measured, and the

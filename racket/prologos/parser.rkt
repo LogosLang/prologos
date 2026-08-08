@@ -986,6 +986,38 @@
 (define ordinal-rekey-message
   "an ordinal has no key — `^` re-keys a NAMED segment; rename the nominal segment instead and then descend (e.g. `admins^first.0`)")
 
+;; ⭐ D4.P4d slice 4d (Q_U19) — THE BROADCAST SIBLING of the `^`-in-path-access
+;; refusal [owner 2026-08-08: "leave the dot string alone, add a broadcast
+;; sibling"]. The dot string below (`parse-list`'s `$select-path` caret arm) is
+;; ONE production site that has served TWO audiences ever since P4c-3a made
+;; `select-step-cont` ω-transparent: dot, where "a field access has no output
+;; key" is the CORRECT noun, and broadcast, where it is not. Q_U19 ratified the
+;; refusal for BOTH — what was wrong was the wording, not the verdict.
+;;
+;; ⚠ Both strings share the "re-keys the OUTPUT" opening, so a test matching
+;; only that substring CANNOT tell them apart — which is precisely how the
+;; P4c-4b sub-case (c) pin froze today's routing instead of a decision. The
+;; discriminating tokens are "field access" vs "broadcast step".
+;;
+;; The remedy is probe-verified, not asserted: `xs:{name^alias}` and
+;; `cfg{admins:name^alias}` both SUCCEED at 0 errors and re-key — a sub-inner
+;; `^` answers #f to `select-step-cont` (no `@sub` arm), so it never reaches
+;; this refusal and is handled by the sub-block's own segmentation.
+;; ⚠ SCOPE, stated so nobody infers more than shipped: this covers the GLUED
+;; spellings only — the ones whose caret rides INSIDE a single token
+;; (`:name^alias` · `^` · `^_` · the `^-` collapse family), which are the ones
+;; that reach segmentation. The other two path-position routes are NOT guided
+;; and still report `Unbound variable`: `xs:{name}^alias` (the caret lexes as a
+;; bare sibling AFTER the `}`) and `xs:0^alias` (which mints no sentinel at all).
+;; Both were attempted at this slice and REVERTED — a datum-level fold arm
+;; cannot see the ADJACENCY that separates `xs:{name}^alias` from a legitimate
+;; `[f xs:{name} ^]`, and the attempt broke monotonicity (`^` is a bindable
+;; name: `def ^ := 7` works, so `[snd2 xs:name ^]` is a program that HEAD
+;; accepts). They need a grouper-side adjacency mint, like the `:{` mint itself.
+;; DEFERRED 75 (route 2) · DEFERRED 76 (route 3). [owner 2026-08-08: ship route 1]
+(define bcast-rekey-message
+  "`^` re-keys the OUTPUT of a selection, and a broadcast step has no output key — it yields the projected values. Use a sub-block if you want to rename inside the broadcast: `xs:{field^alias}`")
+
 (define caret-needs-segment-message
   "a `^` operates on the segment to its LEFT — write `k^label` (rename), `k^_` (synth), or mid-path `k^` (dissolve), with no space before the `^`")
 
@@ -1567,13 +1599,42 @@
              ;; The fix is that `select-step-cont` is now ω-TRANSPARENT, so the
              ;; guard is unnecessary and the question is asked directly — the
              ;; `select-key-step?` conjunct was only ever a shape check the
-             ;; accessor already performs. Latent until P4c-4 wires the producer
-             ;; bridge (`make-select-bcast` has ZERO production callers at HEAD).
-             [(ormap select-step-cont (car branches))
-              (parse-error
-               loc
-               "`^` re-keys the OUTPUT of a selection, and a field access has no output key — it yields the value. Use a select block if you want to rename: `x{field^alias}`"
-               #f)]
+             ;; accessor already performs.
+             ;; ⚠ This comment used to end "Latent until P4c-4 wires the producer
+             ;; bridge (`make-select-bcast` has ZERO production callers at HEAD)"
+             ;; — FALSE at HEAD and corrected here at D4.P4d slice 4d: the bridge
+             ;; landed at P4c-4b and there are FOUR callers, all in this file.
+             ;; It was a reachability claim asserted rather than measured, four
+             ;; lines above the string it describes.
+             ;;
+             ;; ⭐ D4.P4d slice 4d (Q_U19 route 1) — THE SPLIT. ω-transparency is
+             ;; what routes a broadcast step into an arm written for dot, so this
+             ;; ONE site serves TWO audiences. `findf` names the step that carries
+             ;; the caret and asks the totality dispatcher, which already answers
+             ;; 'bcast and is already imported. The dot string stays BYTE-
+             ;; IDENTICAL by owner ruling; only the ω audience moves.
+             ;;
+             ;; ⚠ `findf` over `ormap` is HONESTY, NOT AN OBSERVABLE FIX, and the
+             ;; distinction was mutation-tested rather than assumed: a per-BRANCH
+             ;; `ormap` passes the entire battery, because Q_U13's NEST gives ONE
+             ;; carrier PER LEVEL — the branch here holds exactly one step, so the
+             ;; two formulations cannot differ today. `findf` says what the code
+             ;; means and stays correct if a multi-step branch ever reaches here.
+             ;; Do not cite it as a bug fix.
+             ;;
+             ;; ⚠ POSITION IS LOAD-BEARING: this arm sits BELOW
+             ;; `segment-select-items`, so `xs:name^^a` still takes
+             ;; `split-caret-lexeme`'s well-formedness error ("one `^` per
+             ;; segment") — a TRUE, specific message that must not be pre-empted
+             ;; by a generic refusal. Pinned.
+             [(findf select-step-cont (car branches))
+              => (lambda (st)
+                   (parse-error
+                    loc
+                    (if (eq? (select-step-kind st) 'bcast)
+                        bcast-rekey-message
+                        "`^` re-keys the OUTPUT of a selection, and a field access has no output key — it yields the value. Use a select block if you want to rename: `x{field^alias}`")
+                    #f))]
              [(not (= (length branches) 1))
               ;; NOT reachable from well-formed source: the fold mints one
               ;; branch per level. It IS reachable when something appends into

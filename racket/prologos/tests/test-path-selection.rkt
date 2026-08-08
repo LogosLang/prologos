@@ -4122,11 +4122,23 @@
   ;; `plain-key?` as a field LITERALLY NAMED `tags*`. Now loud.
   (check-true (ormap (lambda (s) (regexp-match? #rx"\\(flatten\\) is not implemented yet" s))
                      (bcast-e2e "def b := users:tags*")))
-  ;; (c) RE-KEY — the safe one: `^` routes to the ONE splitter exactly as the
-  ;; `$dot-access` twin does, so it lands on the pre-existing path-access
-  ;; refusal rather than becoming part of a field name.
-  (check-true (ormap (lambda (s) (regexp-match? #rx"re-keys the OUTPUT" s))
-                     (bcast-e2e "def c := users:name^alias"))))
+  ;; (c) RE-KEY — `^` routes to the ONE splitter exactly as the `$dot-access`
+  ;; twin does, rather than becoming part of a field name.
+  ;;
+  ;; ⚠⚠ RE-POINTED AT D4.P4d slice 4d. This asserted `#rx"re-keys the OUTPUT"`,
+  ;; which FROZE AN ACCIDENT: the ω step landed on the pre-existing DOT refusal
+  ;; only because P4c-3a made `select-step-cont` ω-transparent, and this pin's
+  ;; own comment used to say so ("it lands on the pre-existing path-access
+  ;; refusal") — i.e. it pinned ROUTING, not a decision. Worse, BOTH messages
+  ;; open with "re-keys the OUTPUT", so the old assertion could not tell the two
+  ;; apart and stayed green straight through the split.
+  ;; Q_U19 is now RULED (A) and the wording is the owner's 2026-08-08 split, so
+  ;; this pins the DECISION: the ω audience takes the BROADCAST noun, and must
+  ;; not borrow the dot one.
+  (check-true (ormap (lambda (s) (regexp-match? #rx"broadcast step has no output key" s))
+                     (bcast-e2e "def c := users:name^alias")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"field access has no output key" s))
+                      (bcast-e2e "def c := users:name^alias"))))
 
 (test-case "G2: the DEFAULT now BROADCASTS — the inverse of the pin it replaces"
   ;; ⚠ INVERTED AT G2. This asserted "no grant, no change": the sentinel was
@@ -5436,3 +5448,120 @@
               (format "the payload must render as the stand-in: ~a" out))
   (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
 
+
+;; ---------------------------------------------------------------------------
+;; D4.P4d slice 4d — Q_U19: `^` ON A BROADCAST TAKES ITS OWN MESSAGE.
+;; [owner 2026-08-08: "leave the dot string alone, add a broadcast sibling";
+;; then "all three" routes; then route 3 takes "Q_T4a's message".]
+;;
+;; The REFUSAL was ratified at the P4d opening (Q_U19 (A)): in BLOCK position the
+;; ω output HAS a key for `^` to rename, in PATH position `xs:name` is a bare
+;; [PVec String] and there is none. What 4d fixes is that the path-position
+;; spellings said three DIFFERENT wrong things — route 1 borrowed the DOT message
+;; ("a field access has no output key", the wrong noun for an ω step), and routes
+;; 2 and 3 were unguided `Unbound variable` fall-throughs blaming a stray token.
+;;
+;; ⚠⚠ BOTH messages contain "re-keys the OUTPUT", so a pin on that substring
+;; CANNOT DISCRIMINATE — that is exactly how the old sub-case (c) froze an
+;; accident. Every pin below asserts the NOUN **and the absence of its twin**.
+;; ---------------------------------------------------------------------------
+
+(define (u19-raw src)
+  (process-string-ws (string-append "ns u19\n" src "\ndef after := 42")))
+
+(define (u19 src) (map (lambda (r) (format "~a" r)) (u19-raw src)))
+
+(define (u19-has? out rx) (ormap (lambda (s) (regexp-match? rx s)) out))
+
+(define U19-PVEC "def xs := @[{:name \"a\"} {:name \"b\"}]\n")
+
+(test-case "P4d-s4d Q_U19 route 1: `xs:name^…` takes the BROADCAST noun, not the dot one"
+  ;; RED before the split: all four land on the shared dot string.
+  ;; ⚠ `^-` (the COLLAPSE family) is in the set — the design's three-spelling
+  ;; enumeration under-counted it, measured at 2fd6b68e.
+  (for ([src (in-list '("xs:name^alias" "xs:name^" "xs:name^_" "xs:name^-"))])
+    (define out (u19 (string-append U19-PVEC src)))
+    (check-true (u19-has? out #rx"broadcast step has no output key")
+                (format "~a must take the BROADCAST noun: ~a" src out))
+    (check-false (u19-has? out #rx"field access has no output key")
+                 (format "~a must NOT borrow the dot noun: ~a" src out))
+    (check-true (u19-has? out #rx"after : Int defined")
+                (format "~a must stay PER-COMMAND: ~a" src out))))
+
+;; ⚠ ROUTES 2 AND 3 ARE DELIBERATELY UNPINNED HERE — they are NOT shipped.
+;; `xs:{name}^alias` and `xs:0^alias` still report `Unbound variable`. Both were
+;; implemented at this slice and REVERTED [owner 2026-08-08: "ship route 1"]:
+;; the datum layer cannot see the ADJACENCY that separates `xs:{name}^alias`
+;; from a legitimate `[f xs:{name} ^]`, and the attempt BROKE MONOTONICITY —
+;; `^` is a bindable name (`def ^ := 7` → `^ : Int defined.`), so
+;; `[snd2 xs:name ^]` is a program HEAD accepts and the arm turned it into an
+;; error. They need a grouper-side adjacency mint (DEFERRED 75 / 76).
+;; No pin asserts their CURRENT output on purpose: pinning `Unbound variable`
+;; would freeze an accident, which is the defect the re-pointed sub-case (c)
+;; below exists to undo.
+
+(test-case "P4d-s4d Q_U19: a MIXED chain is decided by the caret's own step"
+  ;; ⚠ NAMED HONESTLY, after mutation-testing refuted the name I first gave it
+  ;; ("the split is PER-STEP, not per-branch"). A per-BRANCH implementation
+  ;; (`ormap` over the branch instead of `findf` + the step's kind) passes this
+  ;; test and the whole battery — because Q_U13's NEST gives ONE carrier PER
+  ;; LEVEL, so the branch at this arm holds exactly ONE step and the two
+  ;; formulations are observationally identical. `findf` is the honest shape, not
+  ;; an observable fix; do not claim otherwise.
+  ;;
+  ;; What this DOES pin, and nothing else did: a chain the user opened with `:`
+  ;; gets the message belonging to the step the caret actually rides.
+  ;;   `ys.a:b^c` — caret on the ω step  ⇒ BROADCAST noun
+  ;;   `xs:a.b^c` — caret on a DOT step  ⇒ DOT noun, even though `:` is in the chain
+  (define omega (u19 (string-append U19-PVEC "def ys := {:a xs}\nys.a:b^c")))
+  (check-true (u19-has? omega #rx"broadcast step has no output key")
+              (format "caret on the ω step must take the BROADCAST noun: ~a" omega))
+  (define dotted (u19 (string-append U19-PVEC "xs:a.b^c")))
+  (check-true (u19-has? dotted #rx"field access has no output key")
+              (format "caret on a DOT step must take the DOT noun even in a `:` chain: ~a" dotted))
+  (check-false (u19-has? dotted #rx"broadcast step has no output key")
+               (format "a `:` somewhere in the chain must not decide it: ~a" dotted)))
+
+(test-case "P4d-s4d Q_U19 PRECEDENCE: `^^` keeps split-caret-lexeme's specific error"
+  ;; GUARD (green before AND after). `xs:name^^a` takes the well-formedness error
+  ;; FIRST. Installing the sibling above it would replace a TRUE, specific message
+  ;; with a generic refusal — the class the slice-3 verify already caught once.
+  (define out (u19 (string-append U19-PVEC "xs:name^^a")))
+  (check-true (u19-has? out #rx"one `\\^` per segment")
+              (format "the well-formedness error must still win: ~a" out))
+  (check-false (u19-has? out #rx"has no output key")
+               (format "the Q_U19 sibling must NOT pre-empt it: ~a" out)))
+
+(test-case "P4d-s4d Q_U19: the DOT audience is BYTE-IDENTICAL — the ruling's whole point"
+  ;; GUARD (green before AND after). The shared string served two audiences; only
+  ;; the broadcast one moves. If this ever takes the broadcast noun, the split
+  ;; leaked into the dot route.
+  (for ([src (in-list '("m.foo^z" "m.foo^" "m.foo^_" "m.foo^-"))])
+    (define out (u19 (string-append "def m := {:foo 7 :bar 8}\n" src)))
+    (check-true (u19-has? out #rx"field access has no output key")
+                (format "~a must keep the DOT noun: ~a" src out))
+    (check-false (u19-has? out #rx"broadcast step")
+                 (format "~a must not acquire broadcast wording: ~a" src out))))
+
+(test-case "P4d-s4d Q_U19 MONOTONICITY: block-position ω-caret still SUCCEEDS"
+  ;; GUARD. The refusal is 'path-scoped. Block-position ω-caret is live at 0
+  ;; errors and the acceptance file carries commented [D4.P5] targets — a wider
+  ;; refusal would refuse a spelling the track has committed to meaning.
+  ;; These are also the remedies the new message POINTS AT, so a false remedy
+  ;; here would repeat slice 4c's own defect class.
+  ;;
+  ;; ⚠ STRENGTHENED after the adversarial verify: asserting only the ABSENCE of
+  ;; the refusal text is satisfiable by a DIFFERENT error, so it would pass over a
+  ;; broken remedy. These assert NO prologos-error at all, on the RAW results.
+  (define a-raw (u19-raw (string-append U19-PVEC "xs:{name^alias}")))
+  (check-false (ormap prologos-error? a-raw)
+               (format "the sub-block remedy must WORK, not merely fail differently: ~a"
+                       (map (lambda (r) (format "~a" r)) a-raw)))
+  (check-true (u19-has? (map (lambda (r) (format "~a" r)) a-raw) #rx":alias")
+              "the sub-block remedy must actually RE-KEY")
+  (define b-raw (u19-raw "def cfg := {:admins @[{:name \"a\"}]}\ncfg{admins:name^alias}"))
+  (check-false (ormap prologos-error? b-raw)
+               (format "the block remedy must WORK, not merely fail differently: ~a"
+                       (map (lambda (r) (format "~a" r)) b-raw)))
+  (check-true (u19-has? (map (lambda (r) (format "~a" r)) b-raw) #rx":alias")
+              "the block remedy must actually RE-KEY"))
