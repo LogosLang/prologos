@@ -3448,6 +3448,49 @@
                    (for/list ([i (in-range pre (- n-e suf*))])
                      (define ed (edat (vector-ref e-v i)))
                      (define (stamp) (stamp-with-origin (vector-ref e-v i) anchor idx))
+                     ;; ── DEFERRED 59 (member 4): EXPANDED-SIDE DESCENT ────────
+                     ;; A desugar can FOLD a RUN of original middle elements into
+                     ;; ONE compound expanded element. `expand-def-assign` does
+                     ;; exactly this for a spliced multi-token RHS: the original
+                     ;; run `rel` `[?f]` `($clause-sep …)` becomes the single
+                     ;; minted list `(rel [?f] ($clause-sep …))`.
+                     ;;
+                     ;; Relocation cannot see that — the minted list is
+                     ;; datum-equal to nothing and eq? to nothing, so it fell to
+                     ;; the stamp and every descendant that had itself CHANGED
+                     ;; (i.e. anything containing a rewrite) inherited the
+                     ;; anchor's position, which is the `:=` token. A NONZERO
+                     ;; column means POL.8's `(zero? sent-col)` marker never
+                     ;; fires and the clause silently mis-groups.
+                     ;;
+                     ;; But the correspondence is right there in the shapes: the
+                     ;; folded element has the SAME LENGTH as the run it folded,
+                     ;; and its head is that run's head. So wrap the run and
+                     ;; recurse — the ordinary alignment then pairs each element
+                     ;; with its original and descends into the changed one.
+                     ;;
+                     ;; ⚠ GUARDS, deliberately narrow: exactly one expanded
+                     ;; middle element, a proper list, the same length as the
+                     ;; original run, and a datum-equal HEAD. Anything looser is
+                     ;; positional guesswork of the kind this file has already
+                     ;; paid for twice; anything that fails these falls through
+                     ;; to the stamp, i.e. today's behaviour.
+                     (define (fold-descent)
+                       (and (= mid-e 1) (> mid-o 1) (list? ed)
+                            (<= (length ed) mid-o) (pair? ed)
+                            ;; The fold may also DROP separator tokens: measured,
+                            ;; `expand-def-assign` consumes the `:=` as well as
+                            ;; wrapping, so an original run of 4 (`:=` `rel`
+                            ;; `(?f)` `($clause-sep …)`) becomes a 3-element list.
+                            ;; So correspond against the run's TRAILING slice of
+                            ;; the folded element's own length, and require the
+                            ;; HEADS to agree — that is what says "this is that
+                            ;; run", rather than a coincidence of arity.
+                            (let* ([k (length ed)]
+                                   [run (list-tail o-mid (- mid-o k))])
+                              (and (equal? (car ed) (syntax->datum (car run)))
+                                   (rebuild-preserving-locs
+                                    (datum->syntax #f run anchor) ed idx)))))
                      (if (pair? ed)
                          (let ([matches (for/list ([o (in-list o-mid)]
                                                    [od (in-list o-mid-datums)]
@@ -3455,9 +3498,11 @@
                                           o)]
                                [e-dups (for/sum ([j (in-range pre (- n-e suf*))])
                                          (if (equal? (edat (vector-ref e-v j)) ed) 1 0))])
-                           (if (and (= (length matches) 1) (= e-dups 1))
-                               (rebuild-preserving-locs (car matches) ed idx)
-                               (stamp)))
+                           (cond
+                             [(and (= (length matches) 1) (= e-dups 1))
+                              (rebuild-preserving-locs (car matches) ed idx)]
+                             [(fold-descent) => values]
+                             [else (stamp)]))
                          (stamp)))))
              ;; trailing region (strict suffix + peeled pairs), aligned right
              (for/list ([i (in-range (- n-e suf*) n-e)])
