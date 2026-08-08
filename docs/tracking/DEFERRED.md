@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 89**
+> ### **NEXT FREE: 90**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -4215,31 +4215,51 @@ NOT a slice-3 regression (pre-slice there was no witness at all). Corpus count o
 ⚠ `build-union-type` (`union-types.rkt`) has the same non-recursive
 `append-map flatten-union` — wider and pre-existing; scope that separately.
 
-### 58. ⬜ A DYN-TAILED row component is a THIRD admission channel through the union gate (D4.P4d slice 3 verify)
+### 58. ⬜ RULED, implementation owed — an OPEN ROW does not discharge broadcast's "every component must offer" (D4.P4d; re-filed 2026-08-08 after co-design)
 
-The slice-3 gate's carve-outs are enumerated as two (the Nil skip, the
-unsolved-meta fallback). There is a third, unenumerated: a dyn-tail row component
-contributes a FRESH META from `select-project-field/row`'s `'path`+`'dyn` arm, so
-it silently passes the all-must-offer gate. Three lines of ordinary source, using
-the acceptance file's own `pvec-slice` widening idiom:
+**⚠ RE-SCOPED IN PLACE. This was filed as "a THIRD admission channel through the
+UNION GATE" — that aimed at the wrong level, and the controls prove it.** The
+union gate admits nothing special; it faithfully propagates what an open-row
+projection does everywhere. Measured at `da555602`:
 
 ```
-def rows := @[{} {:a 1}]          ;; {} infers as an EMPTY DYN keyword row
-def sl := [pvec-slice rows k 2N]  ;; [PVec { | _} | {:a Int}]
-sl:a     →  <error> : [PVec Int | ?meta]    ;; buried <error>, ZERO errors
-sl:{a}   →  refuses (the sub inner forces 'block, where dyn is miss-dyn)
+def d := {}                          ;; { | _}
+d.a          → <error> : ?meta       ;; NO union, NO broadcast
+def dyns := @[{} {}]
+dyns:a       → <error> : [PVec ?meta] ;; NO union
 ```
 
-Two consequences: (i) the slice-3 pin's `check-false #rx"<error>"` holds for its
-own fixture but NOT for the class, so that pin's comment over-claims; (ii) "every
-component must offer the step" is **sort-dependent** for dyn components — `:a`
-accepts where `:{a}` refuses, for the same union and the same key.
+**THE QUESTION IS ANSWERED — by a polarity ruling we already hold, not by a new
+decision.** `typing-core`'s own comment, twelve lines above the arm:
 
-NOT a regression — the non-union control behaves identically, so this is the
-pre-existing ruled dyn permissiveness (D19/P2.b) leaking through the new gate,
-and it is COHERENT with the single-get sibling (`union-record-component-vt` also
-returns a fresh meta). What is owed is a ruling on whether "may be present in the
-remainder" discharges "every component must offer", and the sort-consistency.
+> ⚠ Broadcast is the OTHER polarity (all-must-offer, the 2b split's Galois
+> adjoint) and must NOT reuse this arm — see D4 §3's 2b polarity ruling: never
+> "unify" them.
+
+An open row **may** offer the key. That satisfies single-get's OPTIMISTIC
+polarity and **fails** broadcast's ALL-MUST-OFFER polarity. So "may be present in
+the remainder" does **NOT** discharge "every component must offer", and the
+sort-dependence is a symptom rather than the defect:
+
+```
+sl:a     → <error> : [PVec Int | ?meta]   0 errors        ← must REFUSE
+sl:{a}   → refuses, already, with a good message          ← the model to match
+```
+
+`sl:{a}`'s existing text is the deliverable's model: *"field :a (branch `a`) is
+not listed on the open row { | _} — seal the subject against a schema
+(`the Schema subj`) or validate it against one."*
+
+**Deliverable**: make the PATH sort agree with the BRACE sort for an open-row
+component under a broadcast. ⚠ **Scoped to BROADCAST only** — single-get keeps
+its D19/Q_T2 leniency by being the other polarity, so this does NOT reopen D19.
+⚠ Monotone in the forbidden direction (a value becomes an error), so it needs
+naming as a deliberate narrowing of a silent wrong answer, and a pin on the
+single-get control proving IT did not move.
+
+**The other half is NOT this entry** — the annotation lie
+(`def port : Int := cfg.port` accepted, `<error>` wearing `Int`, into arithmetic)
+is **DEFERRED 89**, and it is not a Path Selection question.
 
 ### 59. ⬜ Two broadcast diagnostics name the wrong subject (D4.P4d slice 1/2 verifies)
 
@@ -5704,3 +5724,54 @@ likely independent of (2)/(3) and may be separable.
 
 **Pin obligation**: all four ruled dot-path lines above (they are the oracle and
 nothing pins them), plus one pin per member, plus the arity pin from Q_U22.
+
+---
+
+### 89. ⬜ AN OPEN-ROW PROJECTION CAN BE ANNOTATED INTO A LIE, and the stuck value then enters arithmetic at ZERO errors (found 2026-08-08 co-designing CIU T6 Q3; NOT a Path Selection question)
+
+Projecting an unknown key off an open row yields a **fresh meta** at the type
+layer — "the meta IS the observation", which is D19/Q_T2's deliberate leniency
+and is right. The problem is what happens when the user annotates it. Measured at
+`da555602`:
+
+```
+def cfg := {}                    ;; { | _}
+def s1  := cfg.port              ;; ERROR: undischarged open-row projection …
+                                 ;; ← the D23 guard, working
+def port : Int := cfg.port       ;; ACCEPTED
+port                             ;; <error> : Int          ← type says Int
+def doubled := [int+ port port]  ;; ACCEPTED
+doubled                          ;; [int+ <error> <error>] : Int    0 errors
+```
+
+The D23 guard correctly refuses UNANNOTATED storage. But its documented discharge
+— *"Annotate to discharge it"* — accepts an annotation the checker has no
+evidence for: it held a meta meaning "could be anything", the user asserted
+`Int`, and it took the assertion. The `<error>` is a symptom; **the accepted lie
+is the defect**, and it is what lets a stuck term wear a clean `Int` into `int+`.
+
+**The language already has the honest shape, and it is one function away.**
+`nil-safe-get` puts the absence IN THE TYPE:
+
+```
+[nil-safe-get mm :port]          → nil  : Int | Nil     ;; absent
+[nil-safe-get {:port 8080} :port] → 8080 : Int | Nil     ;; present
+```
+
+You cannot do arithmetic on that without acknowledging the `Nil`. So the
+candidate fix is that an open-row projection types as an **option** (`T | Nil`)
+rather than as a bare meta the user can annotate away — which makes
+`def port : Int := cfg.port` refuse and pushes the user to `Int | Nil` or the
+nil-safe idiom.
+
+⚠ Also inconsistent with its own neighbours: the permissive degradation VALUE
+elsewhere in this system is ruled to be `none`, not `<error>` — `reduction.rkt`
+says *"Match `map-get`: degrade to `none`"*, and an adversarial verify already
+caught `expr-error` there as *"a THIRD answer to a question with two"*. The
+open-row arm is giving that rejected third answer.
+
+⚠ **Scope**: this is the OPEN-ROW PROJECTION CONTRACT (D19 / Q_T2 / D23), not
+Path Selection. CIU T6 only surfaced it. Sizing unknown — the D23 discharge is
+load-bearing for existing code, so the census of annotated open-row projections
+comes first. The broadcast half is **DEFERRED 58**, which is separable and does
+not depend on this.

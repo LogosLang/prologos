@@ -6610,9 +6610,39 @@ first as slice 0"]:**
   arity-uniform, so the fix does NOT make `xs:{name^}` a second spelling of
   `xs:name`.
 
-  Next is the **P4d close** — Q1 ✅ ruled and implemented, Q2 ✅ answered
-  (fix deferred as 88). **Q3 remains, and is mis-posed as written**: its dyn
-  channel is wider than the union gate it is filed against.
+- **✅ Q3 (DEFERRED 58, the dyn channel) — ANSWERED 2026-08-08 by DECOMPOSITION,
+  and it was mis-posed like Q2.** Filed as *"a THIRD admission channel through the
+  UNION GATE"*. The controls refute that level: `d.a` on a bare open row gives
+  `<error> : ?meta` at 0 errors with **no union and no broadcast**, and
+  `dyns:a` does it with **no union**. The gate admits nothing special; it
+  propagates what an open-row projection does everywhere.
+  **⭐ The broadcast half needs NO new ruling — the 2b POLARITY already decides
+  it.** `typing-core` states it twelve lines above the arm: *"Broadcast is the
+  OTHER polarity (all-must-offer …) and must NOT reuse this arm."* An open row
+  **MAY** offer the key: that satisfies single-get's OPTIMISTIC polarity and
+  FAILS broadcast's ALL-MUST-OFFER one. So "may be present in the remainder"
+  does **not** discharge "every component must offer" — `sl:a` must refuse
+  exactly as `sl:{a}` already does, and the sort-dependence is a SYMPTOM, not
+  the defect. Scoped to broadcast, so **D19 is not reopened**: single-get keeps
+  its leniency by being the other polarity. **DEFERRED 58 re-scoped in place.**
+  **The other half is NOT ours.** `def port : Int := cfg.port` is ACCEPTED and
+  `[int+ port port]` yields `[int+ <error> <error>] : Int` at 0 errors — the D23
+  guard refuses UNANNOTATED storage but its documented "annotate to discharge"
+  takes an assertion the checker has no evidence for. That is the OPEN-ROW
+  PROJECTION CONTRACT (D19/Q_T2/D23), which CIU T6 only surfaced — filed as
+  **DEFERRED 89**. The honest shape already exists one function away:
+  `nil-safe-get` types absence as `T | Nil`, so arithmetic cannot silently
+  swallow it.
+  ⚠ Method note, second time this session: the option I first offered the owner
+  ("the value becomes `none`") was UNDER-SPECIFIED — measuring `nil-safe-get`
+  showed the difference is not `none` vs `<error>` but whether the absence is in
+  the TYPE. The worked demonstration corrected my own proposal.
+
+  **The P4d close's three owner questions are now ALL discharged** — Q1 ✅ ruled
+  and implemented (slice 6), Q2 ✅ answered (fix → DEFERRED 88), Q3 ✅ answered
+  (broadcast half → 58 re-scoped; contract half → 89). What remains for the
+  close is mechanical: five DEFERRED to re-home · P4e and P4c-5 have no tracker
+  row to point at · the tracker flip · the close note.
 
 - **⬜ Slice 4d — the remaining diagnostics** (what 4c did not reach). ⚠ The
   scope below is RE-DERIVED by the slice-4d mini-audit (`wf_a154667e-42f`,
