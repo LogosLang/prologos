@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 84**
+> ### **NEXT FREE: 85**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -5460,3 +5460,42 @@ union-aware fallback, **or** have `select-project-field`'s union arm mint a
 union-aware kind instead of `miss-closed`. ⚠ Also worth fixing the blanket
 handler itself — a `with-handlers` that swallows every exception is why a
 contract violation reads as a missing diagnostic.
+
+---
+
+### 84. ⬜ ONE absent element still answers for the WHOLE node — the split's named residual (D4.P4d slice 6)
+
+Slice 6 split absence from key-miss at the TIER layer: `champ-of` now consults only
+the BLOCK tier, so an absent element stays quiet while a genuine key miss goes
+LOUD. **What it does not touch is the whole-node abort.**
+
+`select-reduce` has a single `let/ec return`, and both permissive exits escape
+through it — `champ-of`'s `[else] → none` and `project`'s `[else] → <error>`. So
+one element's absence abandons the entire selection, and the answer is decided by
+whichever element folds FIRST:
+
+```
+def A : [PVec <Nil | MKI>] := @[m2 nn]   A:a  →  LOUD (the miss folds first)
+def B : [PVec <Nil | MKI>] := @[nn m2]   B:a  →  none, 0 errors   ;; SAME multiset
+```
+
+Row carriers are worse, because the order is CHAMP HASH ORDER, not source order —
+three structurally identical records differing only in FIELD NAMES gave `none`,
+loud, loud. And the collapse discards data: `{:f nn :g m3}` with `m3 = {:y 7}`
+returns `none`, throwing away the real `7`.
+
+⚠ Two further consequences, both measured: the result is a **scalar at a container
+type** (`none : {:f Int :g Int}`, `none : [PVec Int]`) — a type lie the printed
+type does not admit; and `nil-safe-get` "composing with broadcast" holds only in
+the all-hit case (a single absent element collapses the whole vector rather than
+yielding `@[1 none 3]`). Both PRE-DATE slice 6 and are unchanged by it.
+
+**What is owed is a ruling**: is absence a PER-ELEMENT answer (yielding a
+container with a marker in the absent slot) or a NODE answer (today)? The Q_U7
+whole-node-abort rider ratified an **error** aborting the node so no panic is
+buried — it never covered delivering a **VALUE** through that channel, which is
+what makes the type lie possible. Note DEFERRED 48's ruling constrains per-TIER
+abort granularity and does NOT block a per-element absence answer.
+
+⚠ **Pin obligation either way**: nothing anywhere pins that two orderings of the
+same node agree. Whichever way this is ruled, that pin is the deliverable.

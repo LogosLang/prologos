@@ -994,20 +994,32 @@
 (define (tier-union-witness t)
   (if (expr-union? t)
       (let ([comps (map whnf (flatten-union t))])
-        ;; ⚠ A Nil-BEARING union stays PERMISSIVE — no witness. Ruling (a) says
-        ;; `<T | Nil>` is the OPTION type and the `nil-safe-get` idiom must keep
-        ;; COMPOSING; an assertive tier makes an actually-absent element PANIC,
-        ;; which is that idiom not composing (the slice-3 verify's reproducer:
-        ;; my first cut skipped Nil when SEARCHING but still returned the Map,
-        ;; so the union asserted anyway and the fix did nothing).
-        ;; ⚠⚠ ACCEPTED CONSEQUENCE, NAMED: inside a Nil-bearing union a genuine
-        ;; Map miss is therefore QUIET. That is the price of (a) at the value
-        ;; layer, and it is an OWNER question the ruling did not reach — carried
-        ;; to the slice close, not decided here.
-        (if (ormap expr-Nil? comps)
-            t
-            (or (for/or ([c* (in-list comps)]) (and (expr-Map? c*) c*))
-                t)))
+        ;; ⭐⭐ D4.P4d slice 6 — THE Nil SHORT-CIRCUIT IS GONE, and that is the
+        ;; other half of the split [owner 2026-08-08].
+        ;;
+        ;; It used to read `(if (ormap expr-Nil? comps) t …)`: ONE Nil abandoned
+        ;; the witness search for the WHOLE union, including the Map components
+        ;; the search exists to find, so the tier stayed unsolved = permissive.
+        ;; Its stated reason was that an assertive tier makes an actually-absent
+        ;; element PANIC — true at the time, because `champ-of` consulted the tier
+        ;; to decide absence. It no longer does: absence is now decided
+        ;; STRUCTURALLY there, by `expr-nil?` on the VALUE. So the reason is
+        ;; discharged, and with it the "ACCEPTED CONSEQUENCE" this comment used to
+        ;; name — that a genuine Map miss inside a Nil-bearing union was QUIET, a
+        ;; buried `<error>` at zero errors. It is LOUD now, and identical to the
+        ;; Nil-free control, which is the oracle the battery pins it against.
+        ;;
+        ;; ⚠ Deleting the test is behaviour-preserving for Nil-FREE unions: the
+        ;; search body `(and (expr-Map? c*) c*)` can never select a Nil component,
+        ;; so the short-circuit only ever suppressed a witness that the search
+        ;; would have found among the OTHER components.
+        ;;
+        ;; ⚠ Both callers are `peeled?`-guarded, so this arms the BROADCAST path
+        ;; only; a plain single-get over a union keeps its ruled `none`
+        ;; degradation. That confinement is why the width of the `champ-of` arm
+        ;; can stay `expr-nil?` — see its header.
+        (or (for/or ([c* (in-list comps)]) (and (expr-Map? c*) c*))
+            t))
       t))
 
 ;; D4.P4d slice 4b — THE ONE ω SUBJECT RESOLVER. Returns the row a subject
