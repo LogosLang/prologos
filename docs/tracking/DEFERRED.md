@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 87**
+> ### **NEXT FREE: 88**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -5554,3 +5554,85 @@ checking. 74 fixed one caller; this shows callers are the wrong granularity.
 
 **Found while** answering how to implement `sqrt` (2026-08-08). Both 85 and 86
 were surfaced by probing the existing primitives, not by any gate.
+
+
+### 87. ⬜ TASK — there is no generic `sqrt` in the stdlib; add a `Sqrt` trait over the primitives that already exist (2026-08-08)
+
+**Not a defect — an absent feature, and the one users hit first.** `sqrt 32.0`
+reports `Unbound variable`, and there is no library to require: nothing defines
+`sqrt` in any `.prologos` library and it is not in the prelude's auto-import list
+(`namespace.rkt`). Verified by grep and by running it. The working spellings are
+the WIDTH-SPECIFIC parser keywords — `p8/p16/p32/p64-sqrt` and `f32/f64-sqrt` —
+which a user has no way to guess.
+
+**Everything underneath already works.** The primitives are fully plumbed
+(parser keyword → `surf-*` → `expr-*` → `reduction.rkt`) and backed by real
+implementations: `float64-sqrt` = `flsqrt` (`float-impl.rkt:40`), `posit32-sqrt`
+= `posit-sqrt 32` (`posit-impl.rkt:508`). So this task adds a NAME and a
+dispatch, not an algorithm.
+
+**The shape, verified end-to-end at `a2d6e13e` (0 errors, all four dispatching):**
+
+```
+trait Sqrt {A}
+  sqrt : A -> A
+
+impl Sqrt Posit32   defn sqrt [x : Posit32] <Posit32>  p32-sqrt x
+impl Sqrt Posit64   defn sqrt [x : Posit64] <Posit64>  p64-sqrt x
+impl Sqrt Float64   defn sqrt [x : Float64] <Float64>  f64-sqrt x
+impl Sqrt Int       defn sqrt [x : Int]     <Int>      isqrt x
+```
+
+measured: `[sqrt 2.0]` → `1.41421356 : Posit32` · `[sqrt (the Float64 2.0)]` →
+`1.4142135623730951f` · `[sqrt [p64-from-int 2]]` → `1.4142135623730952p` ·
+`[sqrt -1.0]` → `NaR` (total, no crash).
+
+**`Int` needs an implementation — there is no integer sqrt primitive.** Newton /
+Heron, pure Prologos, verified exact `floor(√n)` for 0, 1, 2, 15, 16, 17, 999999,
+1000000:
+
+```
+spec isqrt-go Int Int -> Int
+defn isqrt-go [x g]
+  let g2 := [int/ [int+ g [int/ x g]] 2]
+    match [int-lt g2 g]
+      | true  -> [isqrt-go x g2]
+      | false -> g
+
+spec isqrt Int -> Int
+defn isqrt [n]
+  match [int-le n 0]
+    | true  -> 0
+    | false -> [isqrt-go n n]
+```
+⚠ The `n <= 0` guard is load-bearing — it is what stops `int/ x g` dividing by
+zero on the first step.
+
+**⭐ THE OPEN DESIGN QUESTION, and it should be ruled before this is written:
+what does `sqrt` MEAN over `Int`?** The trait signature `A -> A` forces `Int →
+Int`, i.e. FLOOR, so `[sqrt 2]` = `1`. That is a real semantic commitment and
+there are at least three alternatives: (a) floor, as above — cheap, total, and
+silently lossy; (b) NO `Int` instance, forcing an explicit conversion
+(`[sqrt [p32-from-int 2]]`) so the precision loss is visible at the call site;
+(c) a different signature (`Int -> Posit32`, or `Int -> Option Int` exact-only),
+which the current `A -> A` trait shape cannot express. Note `Abs` and `Neg` are
+`A -> A` and lossless, so `sqrt` would be the first `A -> A` arithmetic trait
+method that is NOT — worth deciding deliberately rather than inheriting from the
+trait template.
+
+**Home**: `lib/prologos/core/arithmetic.prologos`, beside `Add`/`Sub`/`Mul`/
+`Div`/`Neg`/`Abs`. ⚠ To make the obvious spelling work with no require, `Sqrt`
+and `sqrt` must ALSO be added to that module's `:refer` list in the prelude
+imports (`namespace.rkt:763`) — the module is already prelude-auto-imported, so
+the entry there is the whole difference between `sqrt 32.0` working and reporting
+`Unbound variable`.
+
+**Does NOT fix DEFERRED 85 or 86**, and would inherit both: a generic `sqrt` over
+a `Posit32` argument still sticks on an exponent literal (85), and a wrong-typed
+argument still reports "Multiplicity violation" (86) — arguably more confusingly,
+since the user would no longer have written a width-specific name.
+
+**Test obligation**: per `.claude/rules/testing.md`, three-level WS validation —
+the trait dispatch is library surface, so Level 3 (`process-file` on a real
+`.prologos` file) is the one that matters, plus the `floor(√n)` cases above as
+the `Int` instance's own pins.
