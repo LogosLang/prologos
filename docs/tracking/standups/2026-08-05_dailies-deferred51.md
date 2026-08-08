@@ -19,8 +19,9 @@ the STATE head in the file before last. Only environment invariants carry over.
   `-deferred51` qualifier. The convention gap is real — "roll a new file" does
   NOT prevent the collision when two out-of-band arcs roll on the same DATE;
   only a same-day arc qualifier does.
-- **HEAD**: re-derive with `git rev-parse HEAD` — expect `c77fbeb4` or a later
-  docs commit. Worktree `.claude/worktrees/wizardly-mendel-2fd502`, branch
+- **HEAD**: re-derive with `git rev-parse HEAD` — expect `e05729a5` or a later
+  docs commit. **37+ commits, NOT pushed** — the merge-back to main is the
+  outstanding structural task. Worktree `.claude/worktrees/wizardly-mendel-2fd502`, branch
   `wizardly-mendel-2fd502`. **⚠ `main` (65cb5bce) IS NOW MERGED IN** (merge
   `75401b89`, parents `f9d68338` + `65cb5bce`), in prep for merging this branch
   BACK to main. Base was `b429d038`; ours 24 commits, main's 32. NOT pushed.
@@ -35,8 +36,8 @@ the STATE head in the file before last. Only environment invariants carry over.
   `typing-errors.rkt`, `test-path-selection.rkt`, several `.prologos` examples,
   2 deletions). NOT on the branch, NOT merged, NOT touched — but it has to
   coexist at merge-back time, so check it again then.
-- **Suite**: **10020 / 487 files / 0 failures** (`all_pass: true`, `[487/487]`) at
-  `c77fbeb4` (DEFERRED 58's property correction). Prior: 10017 at `1ad9411f`. Prior: 10015 at `b3e03913`, 9995 at the merge
+- **Suite**: **10027 / 488 files / 0 failures** (`all_pass: true`, `[488/488]`) at
+  `e05729a5` (member 4). Prior: 10019 at `59b4174e`, 10020 at `c77fbeb4`. Prior: 10015 at `b3e03913`, 9995 at the merge
   `75401b89` — and it reconciles exactly: main's 9940/485 plus this
   branch's +55 tests / +1 file. Both acceptance files 0 errors post-merge (CIU T6
   path-selection, Rel T1). Pre-merge on this branch: 9902/483 at `83d06156`,
@@ -90,8 +91,15 @@ the STATE head in the file before last. Only environment invariants carry over.
   in macros.rkt. Read DEFERRED § 58 before touching `rebuild-preserving-locs`:
   it records why "search deeper" was UNSOUND (not merely insufficient) and why
   the sibling chain was never a depth problem at all.
-- **NEXT: MEMBER 4 — `def name := rel …` (spliced, unparenthesized), owner-ruled
-  as its OWN slice.** ⚠ The index CANNOT fix it: the expanded
+- **✅ THE 51(c) FAMILY IS CLOSED IN FULL** — members 1–4 plus the sibling chain.
+  DEFERRED 57 (peel), 58 (origin index + fusion), 61 (def seam), 59 (member 4,
+  expanded-side descent).
+- **NEXT (owner's call)**: the merge-back to main · the DEFERRED numbering
+  ruling · DEFERRED 60 (anonymous `rel` with `||` rows → `@[]` typed `Goal`;
+  ⚠ `defr`'s 4-row answer is NOT a clean oracle, it carries the DEFERRED 53 splay
+  residual, so what each SHOULD produce wants a ruling before either moves) ·
+  the `||` fact-row divergence on the `def := rel` arm (surf-level, unpinned).
+- **(closed) MEMBER 4 — `def name := rel …` (spliced, unparenthesized)** ⚠ The index CANNOT fix it: the expanded
   `(rel (?q) ($facts-sep …))` is a NEWLY CONSTRUCTED grouping of three previously
   sibling elements, so no datum-equal twin exists at any depth. It needs
   EXPANDED-SIDE DESCENT. ⚠⚠ And repairing it SILENTLY flips that arm's `||`
@@ -864,3 +872,74 @@ been available, and "my regression" versus "wrong baseline" would have had to be
 separated by measurement. **A wrong-way diff is nearly free to diagnose; a
 right-way diff is not. Check the baseline BEFORE reading the diffs, not after
 one surprises you.**
+
+### The def-seam close, and member 4 — the 51(c) family is closed — `59b4174e` + `e05729a5`
+
+**The seam (DEFERRED 61) was ONE LINE, and the defect was a DIVERGENCE.** The
+annotated `def` path guarded `is-type/err` against non-ground types; the inferred
+path called it bare. Same commit wrote both; the guard was not mirrored. So the
+fix is one predicate behind one gate used by BOTH paths — a second copy could
+drift a second time, which is the whole bug.
+
+**What it cost was bigger than a bad message.** The def path type-checks BEFORE it
+evaluates, so rejecting a non-ground body preempted every diagnostic raised at
+EVALUATION time. Three already-written guiding messages were unreachable on a def
+RHS, and `def k := rel …` could not bind at all.
+
+**⭐ The half a green suite could never have caught.** Letting non-ground bodies
+through to QTT means QTT is asked to check usage against a type that isn't there,
+and its generic failure reads "Multiplicity violation". A CORPUS check — not the
+suite, not the acceptance files — showed FIVE forms in three files moving from
+"Expression is not a valid type" to that: vague-but-neutral → specific-but-wrong.
+The honest message ("Could not infer type") already existed.
+⚠ And the obvious condition was WRONG: `flip const false 2` infers a type
+carrying an unsolved META, not a hole, so a hole-only test missed it entirely and
+the lying message survived my first cut. The right condition is the GATE's own —
+if the type is not ground, a QTT failure is downstream of inference. **Bonus: this
+also fixed a PRE-EXISTING lying diagnostic in ppn-track4c-adversarial.**
+
+**Member 4 (DEFERRED 59) was smaller than filed, and measuring first changed the
+fix.** The entry said "every content element collapses"; measured, DEFERRED 58's
+index already recovered the UNCHANGED goal, and only the CHANGED subtree plus its
+`$clause-sep` group took the `:=` position. Fix = EXPANDED-SIDE DESCENT: when a
+run folds into one compound element, wrap the run and recurse.
+⚠ **The fold DROPS TOKENS** (`:=`), so a 4-element run becomes a 3-element list
+and an equal-length guard never fires — the trailing slice plus a matching HEAD
+is the correspondence. My first cut had the equal-length guard and silently did
+nothing; only instrumenting the predicate showed `mid-o=4 len=3`.
+
+**⭐ THE LESSON OF THIS WHOLE STRETCH, which is now 5 for 5: EVERY inherited
+description I acted on was stale or wrong in a load-bearing way.** DEFERRED
+51(c)'s "needs an stx-carrying merge (~62 sites)" → it was 10 lines at the strip.
+The audit's "closing the seam unmasks member 4" → it does not. "a3 and a7 share a
+mechanism" → they do not. "every content element collapses" → only the changed
+one. "the guard was simply not mirrored" → true mechanically, but the two paths'
+holes MEAN different things, which is what made the naive mirror ship a lying
+diagnostic. **The rule earned here: re-measure the defect before designing the
+fix, even when the description is recent, detailed, and written by someone
+careful — including when it was written by me.**
+
+**⭐ And a testing lesson, in the ORACLE this time.** My own paren-spelling control
+failed, and the test was wrong, not the code: inside explicit parens the reader
+suspends indent grouping, so `$clause-sep` arrives as a BARE SYMBOL rather than a
+group head, and a helper knowing one shape returns `#f` for the other. Watching 6
+("which axis did you never vary?") applies to the oracle as well as the fixture.
+
+**Gates.** Suite **10027/488/0** (`[488/488]`); both acceptance files 0 errors.
+Corpus A/Bs, each based on the commit its change sits on: DEFERRED 61 bounded BY
+SIGNATURE to 4 of 161 files and compared exhaustively (zero semantic diffs, no
+"Multiplicity violation" left); member 4 full 161-file A/B (`59b4174e` →
+`e05729a5`) zero semantic diffs, all caps symmetric.
+⚠ The member-4 corpus is WEAK evidence and is recorded as such — no corpus file
+contains a `def := rel …` form, so it shows no collateral damage, not that the
+fix works. The srcloc pins carry that.
+
+**⚠ A suite timeout during this work was AMBIENT, and I checked rather than
+assumed**: interleaved A/B timings were identical (4.17/4.00 vs 4.21/4.26 s); a
+SECOND Claude session was running with ultracode and held load near 13. The
+re-run came back at 111 s.
+
+**Still open**: the `||` fact-row divergence on the `def := rel` arm (3 rows vs
+`defr`'s 4, surf-level, unpinned) — and DEFERRED 60 shows the `defr` side is not
+a clean oracle either, so what each SHOULD produce wants a ruling. Plus the
+DEFERRED numbering collision from the merge, and the merge-back itself.

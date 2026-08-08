@@ -4720,7 +4720,7 @@ form sits at column **1**. The reliable fail-safe is a `#f` loc
 `(zero? sent-col)`.
 
 
-### 59. ⬜ MEMBER 4 — `def name := rel …` (spliced, unparenthesized) mis-groups, but is UNOBSERVABLE today (measured 2026-08-07)
+### 59. ✅ FIXED 2026-08-08 (commit `e05729a5`) — MEMBER 4: `def name := rel …` mis-grouped a clause containing a REWRITE; expanded-side descent closes it
 
 The fourth member of the 51(c) family, owner-ruled into its own slice. Its clause
 elements are collapsed onto one line at a NONZERO column, so POL.8's column-0
@@ -4759,6 +4759,53 @@ by Q_C, and a def-bound rel VALUE infers a hole type) masks the whole thing.
 **Why it is not free to ignore**: the day the def-seam gap closes, this becomes a
 LIVE SILENT mis-group, and whoever closes that gap will have no reason to look
 here.
+
+✅ **FIXED — and the filed description above was STALE in a way that changed the
+fix.** It says the clause elements are "collapsed onto one line". Measured at
+`c77fbeb4`: DEFERRED 58's origin index ALREADY recovered the UNCHANGED goal
+(L4:C5, correct). What actually collapsed was the **CHANGED** subtree and its
+enclosing `$clause-sep` group, both landing on the `:=` token (L2:C7). So the
+defect is smaller and sharper than filed, and it fires ONLY when a preparse
+rewrite sits inside the rel — without one the group is datum-unchanged and the
+index returns the original wholesale.
+
+**THE FIX — EXPANDED-SIDE DESCENT** (`rebuild-preserving-locs`, the relocation
+branch). When a RUN of original middle elements folds into ONE compound expanded
+element, wrap the run and recurse; ordinary alignment then pairs each element
+with its original and descends into the changed one. Guards: exactly one expanded
+middle element, a proper list, no longer than the run, and a datum-equal HEAD.
+Failing any of them falls through to the stamp, i.e. prior behaviour.
+
+⚠ **THE FOLD ALSO DROPS TOKENS** — this is what the first cut got wrong.
+`expand-def-assign` consumes the `:=` as well as wrapping, so an original run of
+FOUR (`:=` `rel` `(?f)` `($clause-sep …)`) becomes a THREE-element list; an
+equal-length guard never fires. The correspondence is the run's TRAILING slice of
+the folded element's own length, and the matching HEAD is what makes it a claim
+rather than a coincidence of arity.
+
+Measured: `$clause-sep` L2:C7 → **L3:C2**, `($select-path mm k)` L2:C7 →
+**L3:C19** — byte-identical to the known-correct PARENTHESIZED control.
+
+**Test-pinned at the SRCLOC level** (`tests/test-def-rel-srcloc.rkt`), because the
+defect is invisible from output and the pre-existing end-to-end guard is VACUOUS
+for it (both sides collapse identically, so `check-equal?` passes over a live
+bug). ⚠ The helper must handle BOTH sentinel shapes: indent-grouped sources give
+a GROUP headed by `$clause-sep`, while inside explicit parens the reader suspends
+indent grouping and it arrives as a BARE SYMBOL — a helper knowing one shape
+silently returns `#f` for the other.
+
+**Gates**: suite 10027/488/0; both acceptance files 0 errors; corpus A/B
+(`59b4174e` → `e05729a5`, 161 files) ZERO semantic diffs, all caps symmetric.
+⚠ **The corpus is WEAK evidence here and should not be cited as strong**: no
+corpus file contains a `def := rel …` form at all, so it demonstrates
+"no collateral damage", not "the fix works". The srcloc pins are the real
+evidence.
+
+⚠ **STILL OPEN, and it was the reason this member was scheduled after the seam**:
+the `||` fact-row divergence on this arm. A prior audit measured THREE rows here
+where `defr` gives FOUR on an identical block, at surf level. That remains
+unpinned and unresolved — and see DEFERRED 60, which found the `defr` side is not
+a clean oracle either.
 
 **And it is NOT a relocation miss** — the origin index of DEFERRED 58 cannot see
 it. The expanded `(rel (?q) ($facts-sep …))` is a NEWLY CONSTRUCTED grouping of
