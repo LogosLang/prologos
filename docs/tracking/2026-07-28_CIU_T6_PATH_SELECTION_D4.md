@@ -6453,8 +6453,47 @@ first as slice 0"]:**
   **Gates**: battery **420 → 425** · acceptance **77/77** + 89/89 + 6/6 + 29/29 +
   28/28 · full suite **10061 / 488 / 0**, `[488/488]` verified · the reverted
   surfaces A/B **byte-identical to baseline**.
-  **⬜ REMAINING in 4d**: DEFERRED 47 ≡ 59.1 · 59.2 · the stale-phase census ·
-  the two pin section labels.
+
+- **✅ Sub-slice 4d-2 — THE BROADCAST AXIS + the stale-phase sweep — COMPLETE
+  2026-08-08.** Verify `wf_6893b003-6ae` (3 skeptics + adjudicator).
+  **SHIPPED**: a `'bcast-elem` wrapper for the PVec/Map carrier (whose `else` arm
+  returned its inner fail RAW while the keyword-row arm wrapped), plus a
+  broadcast AXIS on `format-select-fail` — **`#f` / `'elem` / `'at` / `'union`**.
+  `subject-other` now names what actually failed, and `not-indexable`'s remedy
+  moved INTO the cond that knows the truth. Three user-facing phase promises in
+  `parser.rkt` reworded PHASE-FREE (the `.*name` one was promising a feature that
+  had already shipped), three stale comments fixed, two slice-4a-origin test
+  labels corrected `s4b` → `s4a`.
+  **⚠⚠ THE VERDICT WAS FIX-FIRST, and every defect was in code I had just
+  written.** The axis was **2-valued when the concept is 3-valued**: `bcast-at`
+  (heterogeneous — ONE field/position) and `bcast-union` (ONE component) were
+  handed `'elem`'s universal, so `r2:z` printed *"broadcast fails at field :b —
+  … **each element** is not a record"* while `:a`'s value IS one — false, and
+  self-contradictory with its own prefix four words earlier. Also: `xs:key` was
+  emitted for **non-keyword-keyed Maps**, where no `:` spelling exists (a two-hop
+  dead end); a remedy derived from ONE field's type was asserted over a whole
+  heterogeneous broadcast; the `[else]` arm dropped a **working** `x{k}` for
+  schema-typed subjects (right for scalars, wrong for an fvar — and a
+  schema-typed subject is exactly what the sibling arms' own "seal it" remedy
+  produces); and the call-site wrap re-wrapped a `bcast-union` fail, producing
+  the mirror of the double-wrap its own comment claimed to avoid. All fixed and
+  each reproducer re-run.
+  **⭐ Two skeptic findings were REFUTED as stale** — they read a snapshot taken
+  before the `subject-other` PVec-branch fix, which the adjudicator confirmed
+  executes. Second arc running where skeptics agreed and were wrong.
+  **Gates**: battery **425 → 430** · acceptance 0 mismatched × 5 · full suite
+  **10066 / 488 / 0**, `[488/488]`. ⚠ An intervening run read **10061** with
+  `all_pass: true` — a batch worker under-reported `test-properties.rkt` as 8
+  when it is a deterministic 13. **DEFERRED 81**; the tell was that the total
+  moved in a direction the battery delta could not explain.
+  **Filed**: DEFERRED **77** (three sibling arms still misattribute; the tuple
+  one advises a spelling that SUCCEEDS WITH THE WRONG MEANING) · **78** (the
+  census grep structurally cannot see bare-token phase refs — the 10th arc of
+  under-counting, in a census I had just widened) · **79** (pre-existing: the
+  `let` fused-annotation message states two falsehoods) · **80** (the
+  `bcast-step` arm may be dead) · **81**.
+  **⬜ REMAINING in 4d**: nothing — 4d-1 and 4d-2 close it. Next is the **P4d
+  close** (three owed owner questions).
 
 - **⬜ Slice 4d — the remaining diagnostics** (what 4c did not reach). ⚠ The
   scope below is RE-DERIVED by the slice-4d mini-audit (`wf_a154667e-42f`,
@@ -6473,7 +6512,7 @@ first as slice 0"]:**
     the precedence constraint and the monotonicity bound: [Q_U19](#q-u19).
   · Re-point the **"P4c-4b: the payload's THREE sub-cases"** pin to the DECISION
     (it froze an ACCIDENT — it asserts today's routing), and the two re-pointed
-    pins' section labels (the two kept slice-4a tests carry a `P4d-s4b` prefix).
+    pins' section labels (the two kept slice-4a tests carried a `P4d-s4b` prefix — CORRECTED at 4d-2 to `P4d-s4a`).
     ✗ The "orphaned slice-4a test header" is **ALREADY FIXED** at `2b52af8b` —
     it now reads "Neither the append nor the guard exists at HEAD." DROPPED.
   · **DEFERRED 47 ≡ 59.1** — the `subject-other` non-PVec branch. ✗ Not "one

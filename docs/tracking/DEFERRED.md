@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 77**
+> ### **NEXT FREE: 82**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -5292,3 +5292,108 @@ both found by the adversarial verify:**
 (the grouper knows; the datum layer does not), plus an ordinal-payload deferral so
 75's arm cannot shadow it. **Lands WITH 75** — one root cause: the datum layer
 cannot see what both routes need. Pin BOTH bands and BOTH spacings.
+
+---
+
+### 77. ⬜ The broadcast axis is threaded but NOT CONSUMED in three sibling arms — and the tuple one advises a spelling that SUCCEEDS WITH THE WRONG MEANING (D4.P4d slice 4d-2)
+
+Slice 4d-2 gave `format-select-fail` a broadcast axis (`#f` / `'elem` / `'at` /
+`'union`) and consumed it in `subject-other` and `not-indexable`. **Three arms
+reachable beneath the same wrappers still say "the subject" — which names the
+CARRIER — and still give block/dot advice inside a `:` broadcast**:
+`subject-map`, `subject-tuple`, `subject-selection`.
+
+⚠ **The tuple case is the worst, because the advice is not an error — it is a
+DIFFERENT ANSWER** (verified):
+
+```
+def ts := @[@[1 "x"] @[2 "y"]]        ;; [PVec ⟨Int String⟩]
+ts:{a b}  → "… the subject is a tuple … ordinal selection is `x{N M}`,
+             single-element extraction `x.N`"
+ts{0 1}   → @[@[1 "x"] @[2 "y"]] : ⟨⟨Int String⟩ ⟨Int String⟩⟩   ;; the CARRIER
+ts.0      → @[1 "x"] : ⟨Int String⟩                              ;; the first ELEMENT
+ts:{0 1}  → what the user actually wanted, 0 errors
+```
+
+Selection: `us:{name}` advises `v.field`; the true fix is `us:name`.
+
+The wording is PRE-EXISTING; what 4d-2 changed is that the broadcast prefix now
+sits immediately before it, making the contradiction adjacent in one sentence.
+The fix is mechanical — the axis is already in scope at each arm.
+
+**Ride-along, same function (LOW, latent)**: the three wrapper arms
+`string-append` the result of `format-select-fail`, which ends `[else #f]`. All
+14 produced kinds are handled today so it cannot fire; when a 15th lands it
+raises, and `select-block-hint`'s blanket `with-handlers` swallows the ENTIRE
+hint search where a `#f` would have let the `ormap` continue to sibling
+subfields. 4d-2 widened that trap from `bcast-at`/`bcast-union` to the whole
+PVec/Map population. Give the wrappers a `(or … "")` or make the formatter total.
+
+### 78. ⬜ The stale-phase census pattern STRUCTURALLY cannot find bare-token phase references (D4.P4d slice 4d-2)
+
+Slice 4d-2 swept user-facing phase promises using
+`grep -rn 'Path Selection P' racket/prologos/*.rkt` (seven sites, four files).
+**That pattern cannot match a phase token that is not immediately preceded by the
+words "Path Selection"**, and the verify found survivors of exactly that shape:
+
+- `tree-parser.rkt` — `"select blocks are not supported yet (CIU T6 Path Selection lands them at P3)"`. P3 LANDED; `cfg{name}` and `cfg{server.{host}}` work today. The words are "Path Selection **lands**", so the grep misses it.
+- `tree-parser.rkt` — `"let: tree spine defers to preparse (LET P2)"` — the LET track is COMPLETE.
+- `tree-parser.rkt` ×3 — `"deferred to Phase 3e"`.
+
+None was reachable from surface syntax in ~12 probed shapes, and each site's own
+comment says the arm exists for a future consumer — so they are **latent, not
+live**. Fix with a broader census (`P[0-9]`, `P4[a-e]`, "lands", "arrives",
+"until then", "not supported yet", "deferred to") over the WHOLE tree including
+`lib/`, `tools/`, `tests/`.
+
+⚠ This is the design's own-enumeration-under-counts pattern at its 10th arc, and
+this time it under-counted a census I had just widened after being told it was
+under-counted. **Grep patterns are enumerations too.**
+
+### 79. ⬜ PRE-EXISTING — the `let` fused-annotation message states TWO falsehoods and its remedy omits `:=`
+
+Found by the slice-4d-2 verify; **not caused by that slice** (the text is in HEAD).
+`macros.rkt`'s fused-annotation arm emits:
+
+> `let: a fused type annotation here was read as a broadcast step — write it spaced (`let name : T value`) to work around it. (`let` is missing from the reader post-pass binder table in parse-reader.rkt; the fused spelling should work here.)`
+
+Both parenthetical claims are false, and so is the remedy as printed:
+1. `parse-reader.rkt`'s `binder-region-heads` is `'(def let)` — **`let` IS in the table.**
+2. The printed remedy fails verbatim: `let z : Int 5` → `let: unrecognized format`. Only `let z : Int := 5` works — **`:=` is REQUIRED and the message omits it.**
+3. For the only input that REACHES this arm (a chained annotation, `let y:Int:Bool 4`), the spaced counterpart `let q : Int : Bool := 6` yields `Unbound variable` — **no working remedy exists at all.**
+
+⚠ A `parser.rkt` comment asserts this sentence "WAS DELETED AT G2 BECAUSE IT
+STATED A FALSEHOOD". It was not — it is live, verbatim. Fix the message, or
+delete the claim that it is gone.
+
+### 80. ⬜ The `bcast-step` EXPRESSION-position arm may be dead, and now advertises an unbuilt feature that shipped (D4.P4d slice 4d-2)
+
+`retired-selection-error`'s `[(bcast-step)]` arm. Its header says "Both are
+reachable today" — written PRE-P4c-3 and never re-verified. Neither the slice-4d
+mini-audit, nor three skeptics, nor the adjudicator, nor the main thread could
+reach it from surface syntax (`:name` bare, `def a := :name`, `[map xs :name]`,
+`[xs :name]`, `def f := xs:` all route elsewhere); one facet reached it only via a
+hand-written `[$bcast-step]` sentinel. Its message was reworded phase-free at
+4d-2, but if the arm is dead the right move is deletion — it is the same shape as
+the retired `bcast-not-yet`. **Needs a constructed-datum probe, not a grep.**
+(The binder twin below it IS reachable and is unaffected.)
+
+### 81. ⬜ The suite's `total_tests` can silently UNDER-REPORT while `all_pass` stays true
+
+Measured at D4.P4d slice 4d-2. Two consecutive `--all` runs on the SAME code gave
+**10061** and **10066**; the delta was entirely `test-properties.rkt`, recorded as
+**8** in one run and **13** in the other. Standalone it is **13, deterministic,
+three runs**, and the file contains no randomness (`grep -cE 'random|quickcheck|sample|shrink'` → 0). Both suite runs reported `all_pass: true` with zero
+`FAILED:` lines.
+
+So a batch worker can under-report a file's test count without failing anything —
+which means **`total_tests` is not a reliable regression signal on its own**, and
+a real loss of tests would look exactly like this. It is a cousin of the
+documented "a killed runner still prints all pass" hazard in
+`.claude/rules/testing.md`, but with no `user break` and no truncated progress
+marker to give it away — the only tell was that the per-file delta did not match
+the battery delta.
+
+**Practical rule until fixed**: when the suite total moves in a direction the
+battery delta does not explain, diff per-file counts from `timings.jsonl`
+(`results[].tests`) before believing either figure.

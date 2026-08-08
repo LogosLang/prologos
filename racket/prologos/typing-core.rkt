@@ -1240,7 +1240,34 @@
                  ;; KNOWS it is a broadcast is the only place the other polarity
                  ;; can be expressed.
                  [else
-                  (select-bcast-inner-apply ctx elem* inner re-wrap name path sort)]))))])))
+                  ;; ⭐ D4.P4d slice 4d-2 (DEFERRED 47 ≡ 59.1) — WRAP THE ELEMENT
+                  ;; FAILURE. The closed keyword/nat-row arm above wraps every
+                  ;; inner fail as `bcast-at`; this arm did NOT, so a PVec/Map
+                  ;; carrier's inner failure reached the formatter RAW and
+                  ;; `emp:t` printed "the subject is not a record" — no broadcast
+                  ;; context, and "the subject" naming the wrong thing (the
+                  ;; subject is the PVec; what failed is the ELEMENT).
+                  ;;
+                  ;; ⚠ THE WRAP BELONGS HERE, NOT INSIDE `select-bcast-inner-apply`
+                  ;; — the applier is SHARED with `select-union-lift`, which calls
+                  ;; it per component and wraps the result itself as `bcast-union`.
+                  ;; Wrapping inside would double-wrap every union component as
+                  ;; `bcast-union(bcast-elem(…))`.
+                  ;; ⚠ AND IT MUST NOT RE-WRAP A FAIL THAT IS ALREADY BROADCAST-
+                  ;; AWARE. The applier's union arm returns a `bcast-union` fail
+                  ;; that already states the step name; wrapping it unconditionally
+                  ;; produced `bcast-elem(bcast-union(…))` — the mirror image of
+                  ;; the double-wrap the comment above claims to avoid, announcing
+                  ;; the same label twice. Measured by the verify; the comment had
+                  ;; asserted the mechanism instead of checking its own output.
+                  (let-values ([(bt bf) (select-bcast-inner-apply
+                                         ctx elem* inner re-wrap name path sort)])
+                    (cond
+                      [(not bf) (values bt #f)]
+                      [(and (select-fail? bf)
+                            (memq (select-fail-kind bf) '(bcast-at bcast-elem bcast-union)))
+                       (values #f bf)]
+                      [else (values #f (select-fail 'bcast-elem path name bf))]))]))))])))
 
 ;; D4.P4d slice 3 — the ω inner applied to ONE element type, factored out of
 ;; `select-bcast-lift` so the union arm can reuse it per COMPONENT.

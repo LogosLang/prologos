@@ -5110,7 +5110,11 @@
 ;; theorem). They are re-pointed at the semantics, not the message.
 ;; ---------------------------------------------------------------------------
 
-(test-case "P4d-s4b: block ω ASSEMBLES, path ω PROJECTS — the semantic fact itself"
+;; ⚠ D4.P4d slice 4d-2: the next two were labelled `P4d-s4b` while sitting under
+;; the slice-4a header — they ORIGINATE in 4a (written to justify its advice) and
+;; were re-pointed at semantics when 4c retired that advice. Relabelled `s4a` so
+;; the prefix matches the section; the six genuine `s4b` cases below are untouched.
+(test-case "P4d-s4a: block ω ASSEMBLES, path ω PROJECTS — the semantic fact itself"
   ;; Originally pinned to justify slice 4a's block-sort advice suppression;
   ;; that advice is retired, but the FACT is load-bearing on its own — it is
   ;; why a dot-path is not the block spelling, and it is not pinned anywhere
@@ -5128,7 +5132,7 @@
               (format "the dot spelling must PROJECT — that is the divergence: ~a" out))
   (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
 
-(test-case "P4d-s4b: L1 FUSION as a theorem — fmap g ∘ fmap f = fmap (g ∘ f)"
+(test-case "P4d-s4a: L1 FUSION as a theorem — fmap g ∘ fmap f = fmap (g ∘ f)"
   ;; Q_U7 records this identity as the L1-fusion theorem and the battery is
   ;; where it lives. It was written to justify slice 4a's fused advice; that
   ;; advice is retired, but the THEOREM is not, and nothing else pins it as an
@@ -5565,3 +5569,99 @@
                        (map (lambda (r) (format "~a" r)) b-raw)))
   (check-true (u19-has? (map (lambda (r) (format "~a" r)) b-raw) #rx":alias")
               "the block remedy must actually RE-KEY"))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4d slice 4d-2 — THE BROADCAST AXIS IN `format-select-fail`
+;; (DEFERRED 47 ≡ 59.1 · DEFERRED 59.2).
+;;
+;; Two independent defects, measured at `bd8b8bcf`:
+;;
+;; (1) The PVec/Map carrier's inner failure reaches the formatter RAW. The closed
+;;     keyword/nat-row arm of `select-bcast-lift` wraps every inner fail as
+;;     `bcast-at`; the `else` arm does not, so `emp:t` printed "the subject is not
+;;     a record" — no broadcast context at all, and "the subject" naming the WRONG
+;;     thing (the subject is the PVec; what failed is the ELEMENT).
+;; (2) `not-indexable`'s remedy `select named fields instead (\`x{k}\`)` sat in the
+;;     UNCONDITIONAL template tail while the 3-way `cond` above it discriminated
+;;     only the carrier kind. So a broadcast got block advice — and worse, a
+;;     `[PVec Int]` got a field-spelling remedy that CANNOT work, which is the
+;;     false-promise class slice 4c removed everywhere else.
+;;
+;; ⚠ Remedies are EXECUTED here, not asserted (the 4c discipline).
+;; ---------------------------------------------------------------------------
+
+(test-case "P4d-s4d2 (47 ≡ 59.1): a PVec-carrier ω miss names the BROADCAST and the ELEMENT"
+  (define out (u19 "def emp := @[]\nemp:t"))
+  (check-true (u19-has? out #rx"broadcast")
+              (format "the failure must say it happened in a broadcast: ~a" out))
+  (check-true (u19-has? out #rx"element")
+              (format "it must name the ELEMENT as what failed: ~a" out))
+  (check-false (u19-has? out #rx"the subject is not a record")
+               (format "\"the subject\" misattributes — the subject is the PVec: ~a" out))
+  (check-true (u19-has? out #rx"after : Int defined") "must stay per-command"))
+
+(test-case "P4d-s4d2 (59.2): inside a broadcast the ordinal remedy names the BROADCAST spelling — and it WORKS"
+  (define out (u19 "def evs := @[{:t 1} {:t 2}]\nevs:0"))
+  (check-false (u19-has? out #rx"x\\{k\\}")
+               (format "`x{k}` is block advice, off-key inside a broadcast: ~a" out))
+  (check-true (u19-has? out #rx"evs:t|xs:field|:field")
+              (format "it must point at the broadcast field spelling: ~a" out))
+  ;; EXECUTE the remedy rather than trusting the text.
+  (define fixed (u19-raw "def evs := @[{:t 1} {:t 2}]\nevs:t"))
+  (check-false (ormap prologos-error? fixed)
+               (format "the advised spelling must actually WORK: ~a"
+                       (map (lambda (r) (format "~a" r)) fixed))))
+
+(test-case "P4d-s4d2 (59.2): a non-row element gets NO field remedy — there is nothing true to say"
+  ;; `[PVec Int]`: an ordinal fails, and so would a field. HEAD advised `x{k}`
+  ;; anyway. Slice 4c's rule — scalars get no remedy, because none is true.
+  (define out (u19 "def nums := @[1 2]\nnums:0"))
+  (check-true (u19-has? out #rx"no positions")
+              (format "the explanation must survive: ~a" out))
+  (check-false (u19-has? out #rx"x\\{k\\}|named fields")
+               (format "a field remedy is FALSE for a scalar element: ~a" out)))
+
+(test-case "P4d-s4d2 GUARD: the non-broadcast audience keeps a TRUE remedy in all three arms"
+  ;; ⚠ WIDENED after the adversarial verify. The first version tested only
+  ;; `m{0}` — the keyword-row arm, the ONE arm the change did not touch — while
+  ;; its name asserted a proposition three arms wide. Underneath it, the `else`
+  ;; arm had silently dropped a WORKING remedy for schema-typed subjects. A pin
+  ;; whose name is wider than its body is how that stayed green.
+  ;; keyword row — unchanged, and `x{k}` is TRUE here
+  (define kw (u19 "def m := {:a 1 :b 2}\nm{0}"))
+  (check-true (u19-has? kw #rx"select named fields instead \\(`x\\{k\\}`\\)")
+              (format "the keyword-row remedy must stay verbatim: ~a" kw))
+  (check-false (u19-has? kw #rx"broadcast") (format "a plain block is not a broadcast: ~a" kw))
+  ;; scalar — NO remedy, because none is true (`x{k}` cannot work on an Int)
+  (define sc (u19 "def s := 5\ns{0}"))
+  (check-false (u19-has? sc #rx"x\\{k\\}|named fields")
+               (format "a scalar has no fields either — say nothing: ~a" sc))
+  ;; Map — `x{k}` was FALSE here even before this slice; dot is the true one
+  (define mp (u19-raw "def d : [Map Keyword Int] := {:a 1}\nd{0}"))
+  (define mp-s (map (lambda (r) (format "~a" r)) mp))
+  (check-false (u19-has? mp-s #rx"select named fields instead")
+               (format "`x{k}` never worked on a Map: ~a" mp-s))
+  ;; …and the remedy it now names must EXECUTE
+  (define mp-fix (u19-raw "def d : [Map Keyword Int] := {:a 1}\nd.a"))
+  (check-false (ormap prologos-error? mp-fix)
+               (format "the Map remedy must actually work: ~a"
+                       (map (lambda (r) (format "~a" r)) mp-fix))))
+
+(test-case "P4d-s4d2 (47 ≡ 59.1): a VECTOR element must not be told to `broadcast instead` — it already did"
+  ;; The axis was INCOMPLETE at the first cut: `subject-other` has TWO branches and
+  ;; only the non-PVec one was made broadcast-aware. Under a broadcast whose
+  ;; ELEMENT is itself a vector (`[PVec [PVec Int]]`), the PVec branch advised
+  ;; "To reach fields of EACH element, broadcast instead: `xs:t`" — which is the
+  ;; spelling the user had just written. That is the advise-what-they-wrote class
+  ;; the function's OWN header documents (`r.zzz` → "spelled `.zzz`"), and slice
+  ;; 4c removed it everywhere else.
+  (define out (u19 "def nest := @[@[1] @[2]]\nnest:t"))
+  (check-false (u19-has? out #rx"broadcast instead")
+               (format "must not advise the spelling the user already wrote: ~a" out))
+  (check-true (u19-has? out #rx"ordinal|`:0`")
+              (format "a vector element takes an ORDINAL, and that is what to say: ~a" out))
+  ;; EXECUTE the remedy.
+  (define fixed (u19-raw "def nest := @[@[1] @[2]]\nnest:0"))
+  (check-false (ormap prologos-error? fixed)
+               (format "the advised ordinal must actually WORK: ~a"
+                       (map (lambda (r) (format "~a" r)) fixed))))

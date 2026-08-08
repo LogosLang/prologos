@@ -893,7 +893,8 @@
 (struct surf-get-in (target paths srcloc) #:transparent)   ; (get-in target path-spec) — paths is list of parsed paths
 (struct surf-update-in (target paths fn-expr srcloc) #:transparent) ; (update-in target path-spec fn)
 ;; surf-broadcast-get: RETIRED at CIU T6 D4.P1a (ruling Q_L3) — broadcast
-;; returns as `:field` at Path Selection P4.
+;; is the `:field` spelling — SHIPPED at the production default (D4.P4c-4c);
+;; was written as a future promise ("returns as `:field` at Path Selection P4").
 
 ;; First-class path literal
 (struct surf-path (branches srcloc) #:transparent)         ; #p(a.b.c) — branches = list of (listof keyword|symbol)

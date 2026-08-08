@@ -1338,7 +1338,8 @@
 (struct expr-update-in (target paths fn) #:transparent)       ; update-in : M → paths → (V → V) → M
 ;; expr-broadcast-get: RETIRED at CIU T6 D4.P1a (ruling Q_L3) — it was
 ;; permissive (fabricated <error>/none rows at 0 errors) and its surface
-;; `.*name` is superseded by `:field` broadcast (Path Selection P4).
+;; `.*name` is superseded by `:field` broadcast — SHIPPED (D4.P4c-4c);
+;; was written as a future promise ("Path Selection P4").
 
 ;; ============================================================
 ;; THE ONE SELECTOR CARRIER  (Q_U5; encoding `389f6802`, nesting `2e3fc14e`)

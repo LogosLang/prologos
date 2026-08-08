@@ -846,8 +846,27 @@
      (parse-error loc (format "dot-key `.:~a` was retired — spell field access with `.~a` (e.g. `m.~a`); as a function value use `[fn [m] m.~a]`" f f f f) #f)]
     [(nil-dot-key)
      (parse-error loc (format "`#:~a` / `#.:~a` was retired — nil-safe field access is spelled `#.~a`" f f f) #f)]
+    ;; ⚠ D4.P4d slice 4d-2 — THE PROMISE CAME TRUE AND THE MESSAGE DID NOT NOTICE.
+    ;; This said the replacement "arrives with Path Selection P4" and offered a
+    ;; `[map [fn [m] m.NAME] xs]` stopgap. Broadcast has SHIPPED at the production
+    ;; default since P4c-4c, so the message was promising a future for a feature
+    ;; the user could already use, and steering them to a workaround instead.
+    ;; The phase name is deliberately GONE from the user-facing text: a phase
+    ;; pointer is a promise with an expiry date, and this is the second time one
+    ;; here has outlived its truth. Phase names belong in comments like this one.
+    ;;
+    ;; ⚠ THE ACCEPTED COST, MEASURED — do not rediscover it as a defect. Dropping
+    ;; the `[map …]` stopgap costs a LIST subject one extra hop: `L.*name` now
+    ;; says "use `:name`", and `L:name` is then REFUSED by Q_U9 with its own
+    ;; guided message naming `[pvec-from-list xs]`. Two guided hops where the old
+    ;; text gave a working spelling in one. Taken deliberately, on slice 4c's
+    ;; owner ruling — "stop teaching a second spelling; converting fixes the
+    ;; CARRIER and the user's own spelling then works" — and the chain is guided
+    ;; at every step with no dead end. This arm is at PARSE time and has no type
+    ;; information, so it CANNOT be carrier-aware; the carrier refusal downstream
+    ;; is the right place for that, and it already does the job.
     [(broadcast)
-     (parse-error loc (format "broadcast `.*~a` was retired — its replacement `:~a` arrives with Path Selection P4; until then spell it `[map [fn [m] m.~a] xs]`" f f f) #f)]
+     (parse-error loc (format "broadcast `.*~a` was retired — its replacement is `:~a` (e.g. `xs:~a`)" f f f) #f)]
     ;; D4.P3b (Q_T4a): `^` after an ordinal, ALL spellings (`x.0^`, `x[0]^`,
     ;; and the in-block shatter) — ONE guided message. An ordinal returns the
     ;; value at an index, not a key-value; non-local attachment breaks
@@ -864,13 +883,18 @@
     ;; (`(@bcast step)`) lands at P4c-3. Until then this reported the LYING
     ;; diagnostic "Unbound variable", which names the wrong subsystem for an
     ;; unbuilt surface (measured end-to-end before this arm existed).
+    ;; ⚠ D4.P4d slice 4d-2 — TWO CORRECTIONS. (1) The message's phase promise was
+    ;; FALSE: P4c-3 landed, and broadcast ships at the production default, so this
+    ;; told the user an available feature was unbuilt and steered them to a
+    ;; `[map …]` workaround. Reworded phase-free. (2) The header above says "Both
+    ;; are reachable today" — written PRE-P4c-3 and NOT re-verified since; neither
+    ;; the slice-4d audit nor the main thread could reach THIS arm from surface
+    ;; syntax (the binder twin below is reachable). Recorded as UNVERIFIED rather
+    ;; than quietly deleted: if it is dead it should be removed, and that needs a
+    ;; constructed-datum probe, not a grep.
     [(bcast-step)
      (parse-error loc
-                  (format (string-append
-                           "broadcast `:~a` is not implemented yet — its step vocabulary "
-                           "arrives with Path Selection P4c-3; until then spell it "
-                           "`[map [fn [m] m.~a] xs]`")
-                          f f)
+                  (format "broadcast `:~a` is not implemented yet in this position" f)
                   #f)]
     ;; `bcast-step-binder` — BINDER position. THIS IS CONDITION (c) ITSELF. A
     ;; broadcast step reaching a binder consumer means the reader post-pass's
@@ -1328,7 +1352,13 @@
                  ;; `*` FLATTEN rides inside the token (see above) — refuse it
                  ;; here rather than letting it become a field name.
                  [(regexp-match? #rx"[*]" bare)
-                  (fail (format "`*` (flatten) is not implemented yet on a broadcast step — `:~a` would read as a field literally named `~a`. Until Path Selection P4d, spell the flatten separately" bare bare))]
+                  ;; ⚠ D4.P4d slice 4d-2 — the phase pointer said "Until Path
+                  ;; Selection P4d", and D4 assigns `*` flatten to **P4e**, so
+                  ;; P4d's close would have made this retroactively FALSE. Phase
+                  ;; name removed from the user-facing text for the same reason as
+                  ;; the two siblings above; it lives here instead. (This arm fires
+                  ;; on a TRAILING star — `xs:tags*` — not a leading one.)
+                  (fail (format "`*` (flatten) is not implemented yet on a broadcast step — `:~a` would read as a field literally named `~a`. Spell the flatten separately for now" bare bare))]
                  ;; `^` RE-KEY — route to the ONE splitter, as `$dot-access` does
                  [(regexp-match? #rx"\\^" bare)
                   (split-step (string->symbol bare) push)]
@@ -3219,7 +3249,8 @@
        ;; The `.*field` reader surface now yields a guided $retired-selection
        ;; error; the keyword form had ZERO live users (census) and is gone —
        ;; `(broadcast-get …)` is an unknown relation / unbound variable now.
-       ;; Broadcast returns as `:field` at Path Selection P4.
+       ;; Broadcast IS the `:field` spelling — shipped at the production
+       ;; default since D4.P4c-4c (was: "returns as `:field` at Path Selection P4").
 
        ;; update-in: (update-in target path-spec fn-expr)
        ;; path-spec is parsed as selection paths, fn-expr is the update function
