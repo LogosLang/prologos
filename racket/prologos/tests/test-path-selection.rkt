@@ -5084,32 +5084,18 @@
   (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
 
 ;; ---------------------------------------------------------------------------
-;; D4.P4d slice 4a — THE CARRIER REFUSAL MUST NEVER ADVISE A SPELLING THAT IS
-;; UNWRITABLE OR THAT MEANS SOMETHING ELSE.
+;; D4.P4d slice 4a — HISTORY. The `bcast-carrier` arm once appended a taught
+;; spelling (`; otherwise spell it `[pvec-map [fn [m] m.LABEL] xs]``) gated on
+;; `(and label (symbol? label))`. Slice 4a vouched that gate producer-side after
+;; five populations were measured getting unwritable-or-wrong spellings; slice
+;; 4c then RETIRED the whole mechanism, because the remedy now points back at
+;; the spelling the user already wrote (see `format-select-fail`'s bcast-carrier
+;; arm). Neither the append nor the guard exists at HEAD.
 ;;
-;; `format-select-fail`'s `bcast-carrier` arm appends
-;;   "; otherwise spell it `[pvec-map [fn [m] m.LABEL] xs]`"
-;; gated on `(and label (symbol? label))`. That guard was added by the P4c-4c
-;; verify to stop advice-that-cannot-be-typed — but it tests the LABEL, and the
-;; label cannot answer the question. THREE populations walk through it, each
-;; measured at HEAD before this slice:
-;;
-;;   (i)   a SUB inner   — label is the interned `{…}` stand-in (a symbol!),
-;;                         so the advice reads `m.{…}` — a parse error.
-;;   (ii)  a GLUED-ARROW key — `m.a->b` truncates at `a-` and strands `>`.
-;;   (iii) a CARET inner — label is the bare name, so the advice reads `m.name`
-;;                         and SILENTLY DROPS the rename: following it yields
-;;                         [PVec String] where the user asked for
-;;                         [PVec {:alias String}]. Writable, and wrong.
-;;
-;; (iii) is the worst: it compiles. The correct spellings all need a DIFFERENT
-;; DELIMITER (`m{name}`, `m{name^alias}` — both verified equivalent to their
-;; `:`-forms), so no amount of better LABEL RENDERING fixes this; the decision
-;; belongs where the step KIND is known.
-;;
-;; ⚠ Why no gate caught it: no pin in this file exercises a sub inner over a
-;; NON-carrier subject. Every sub fixture has an admitting subject; every
-;; List-subject fixture uses a keyed inner. The class was unspelled.
+;; The two test-cases below were written to justify that advice and are KEPT
+;; because they incidentally pin real semantics nothing else does — block ω
+;; ASSEMBLES while path ω PROJECTS, and L1 fusion as an equivalence (Q_U7's
+;; theorem). They are re-pointed at the semantics, not the message.
 ;; ---------------------------------------------------------------------------
 
 (test-case "P4d-s4b: block ω ASSEMBLES, path ω PROJECTS — the semantic fact itself"

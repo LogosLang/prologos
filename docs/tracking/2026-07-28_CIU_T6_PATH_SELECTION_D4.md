@@ -33,7 +33,7 @@ rulings, censuses and test delta live in its own section.
 | **P4** | **Broadcast ω** — ⭐ **P4a ✅ · P4b ✅ COMPLETE** (b-i carrier + b-ii `$dot-access` migration; `x.a` now mints the unified selector carrier) · P4c–P4e ⬜ — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | [§5.P4](#p4) · co-design: audit `wf_8458c23b` + options panel · **RULED 2026-07-31**: [Q_U5](#q-u5) · [Q_U6](#q-u6) · [Q_U7](#q-u7) · [Q_U8](#q-u8) · [Q_U9](#q-u9) (the PAUSE cleared) · partition LOCKED P4a–P4e |
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
 | **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [§5.P4c](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([inverted default](#p4c-2-inverted)) · [P4c-3](#p4c-3) ✅ `d477772c` · [P4c-4a](#p4c-4a) ✅ `f31237fd` · [P4c-4b](#p4c-4b) ✅ `6b22515d` (end to end) · **[P4c-4c](#p4c-4c-close) ✅ `ae26f540`** — broadcast is REACHABLE: PVec ω value semantics + **G2** + the preparse seam guard. ⭐ The verify caught a BLOCKING whole-file abort every gate was blind to; owner ruled the structural fix ([close](#p4c-4c-close)) · [Q_U18](#q-u18) ✅ · DEFERRED 43 ✅ · 48 RULED uniform · P4c-5 ⬜ |
-| **P4d** | **The carriers** — Map/keyword-row (TWO typing arms: keyword-row `expr-Record` + genuine `expr-Map`; ONE new champ reduction arm, atomic with typing) · het tuple (TYPING-ONLY — same `expr-rrb` runtime as PVec) · PVec-of-union + `row-meet` (NEW machinery + an AUTHORED fixture) · the Q_U9 refusal's message split · corpus re-fate · **Q_U19 ✅ RULED (A)** at the opening | 🔄 | [§5.P4d](#p4d) · opened 2026-08-07: audit `wf_4bc76d94-a2d` · **slice 0 ✅ `00e52c42`** (the soundness fix) · **slice 1 ✅ `14ef5e83`** (the map carriers) · **slice 2 ✅ `ba1c055d`** (het tuple; **C9 (a)**) · **slice 3 ✅ `1e8d0795`** (PVec-of-union keys-⋂; **Q_U21 (a)** Nil is skipped) · **slice 4a ✅ `61d64708` + `d3947594`** — the carrier advice stops lying and starts FUSING (`:a:b` → `m.a.b`, the functor law) · **slice 4b ✅ `19ce05aa`** — a CLOSED schema is the row it denotes; the verify rejected TWO cuts over a capability bypass and two width lies, all mine (suite **9970/485/0**, battery **421**, acceptance **77/77**) · **slice 4c ✅ `a31b7475`** — the per-carrier split, and 4a's advice machinery RETIRED (the remedy points back at the user's own spelling); the verify caught FOUR more false promises in the new text (suite **9969/485/0**, battery **420**) · slice 4d ⬜ (Q_U19 by Q_T4a's precedent · 47≡59.1 · 59.2 · stale phase refs) |
+| **P4d** | **The carriers** — Map/keyword-row · het tuple · PVec-of-union · closed-schema subjects · the Q_U9 refusal's message split · corpus re-fate · **Q_U19 ✅ RULED (A)** | 🔄 | [§5.P4d](#p4d) · slices **0 ✅** `00e52c42` · **1 ✅** `14ef5e83` · **2 ✅** `ba1c055d` (C9 (a)) · **3 ✅** `1e8d0795` (Q_U21 (a)) · **4a ✅** `61d64708`+`d3947594` (advice — ⚠ RETIRED at 4c) · **4b ✅** `19ce05aa` (closed schema = its row) · **4c ✅** `a31b7475` (per-carrier split; 4a's machinery deleted) · **4d ⬜** LAST. Suite **9969/485/0** · battery **420** |
 | **PF** | **Path first-classness** (substrate; **P5's prerequisite**) — ⭐ **Q_U17 RULED B2**: a Path segment is a first-class `Step` value. Reify the closed six-kind union as a `data Step` ADT on the `Datum` pattern; `Path` stays GROUND; `segments : Path -> [List Step]`. Repairs the dead `path-segments` in the SAME change | ⬜ | [§5.PF](#pf) · [Q_U17](#q-u17) · panel `wf_68178bd3-eea` |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery · ⚠ B3 needs [PF](#pf) |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | [§5.PX](#px) · position flexible |
@@ -6229,7 +6229,8 @@ first as slice 0"]:**
   28/28 · corpus A/B vs `65cb5bce`: only the two known pre-existing artifacts
   · **full suite 9952/485/0**.
 - **✅ Slice 4a — the advice stops lying, and starts FUSING — COMPLETE
-  2026-08-07** (`61d64708` typing side · `d3947594` parser side; owner ruled
+  2026-08-07. ⚠⚠ ITS MACHINERY WAS RETIRED AT 4c — read this record as
+  HISTORY, not as a description of HEAD.** (`61d64708` typing side · `d3947594` parser side; owner ruled
   fix-first, TWO commits). Opened because the slice-4 grounding found a LIVE
   defect inside slice 4's own target; audit `wf_37d324fe-045`, verifies
   `wf_a11a4ef7-900` + `wf_b73e7d14-3cc`.
@@ -6284,10 +6285,16 @@ first as slice 0"]:**
   a green suite never saw it.
   **Gates**: battery **403 → 415** · acceptance **77/77** + four more, 0
   mismatched markers · full suite **9964 / 485 / 0**, `[485/485]` verified.
-  **Filed**: DEFERRED **60** (the advice carries single-get polarity while
-  describing a broadcast — pre-existing at one step, extended by fusion) ·
-  **61** (advice withdrawn where it was correct; block sort could advise the
-  brace spelling `m{…}`).
+  **Filed**: DEFERRED **60** and **61** — ⚠ BOTH DISSOLVED/REWRITTEN at 4c,
+  because their subject (the advice machinery) no longer exists.
+  **⚠⚠ SUPERSESSION, 2026-08-08 (`a31b7475`)**: every mechanism this record
+  describes is GONE — the `advice` field (struct back to 4 fields),
+  `bcast-advice-chain`, `extend-advice-chain`, the `chain`/`rest` params, and
+  `dot-writable-field-name?` + its export and contract pin. The fusion idea
+  survives only as the RE-POINTED L1-fusion equivalence pin. 4c's remedy points
+  back at the user's own spelling instead of teaching one, which left all of
+  this without a consumer. The two BLOCKING defects and the whole-file-abort
+  population remain accurate as history and are why the arc is worth reading.
 - **✅ Slice 4b — the schema CARRIER gap — COMPLETE 2026-08-08** (`19ce05aa`;
   owner ruled it INTO slice 4 rather than papering over it with a message).
   Opened by the slice-4 mini-audit (`wf_3e586347-b98`), which found that
@@ -6368,7 +6375,8 @@ first as slice 0"]:**
   and false when reached from the dyn arm. Plus LSeq, the last convertible
   carrier, had no arm. All corrected; the dyn and LSeq pins now EXECUTE their
   remedies.
-  **Gates**: battery **415 → 420** · acceptance 0 mismatched × 5 · full suite
+  **Gates**: battery **421 → 420** (a net −1: nine advice pins retired, eight
+  carrier pins added) · acceptance 0 mismatched × 5 · full suite
   **9969 / 485 / 0**, `[485/485]`.
 - **⬜ Slice 4d — the remaining diagnostics** (what 4c did not reach):
   **Q_U19's unified refusal**, whose siting is answered by PRECEDENT rather than
@@ -6382,34 +6390,16 @@ first as slice 0"]:**
   `cond` already discriminates the right three cases) · the stale phase
   references in `parser.rkt` (two reachable; the `*` flatten refusal says "Until
   Path Selection P4d" while D4 assigns `*` to **P4e**, so P4d's close makes it
-  retroactively false) · the orphaned slice-4a test header and the two
-  re-pointed pins' section labels.
-  ⚠ RE-DERIVED by the slice-4 mini-audit, and the plan was wrong in
+  retroactively false) · the orphaned slice-4a test header at
+  `tests/test-path-selection.rkt` (it still describes the deleted
+  `; otherwise spell it …` append and its `symbol?` gate) and the two
+  re-pointed pins' section labels., and the plan was wrong in
   three places: the **Functor clause was NEVER in the code** (only in Q_U9's
   rationale) · **DEFERRED 47 ≡ 59.1**, one string at one site, probe-verified ·
   **Q_U19 is NOT an open siting problem** — `ordinal-rekey-message` is ONE
   string emitted from FOUR sites, written at P3b for **Q_T4a**, the identical
   "`^` has no key" question one construct over; that is the precedent, and the
   preparse fold carries a per-command error channel plus two arms of the shape.
-  ⚠⚠ **And the advice slice 4a shipped is STILL WRONG**: it fires only on
-  subjects that already failed, and `pvec-map` needs a PVec, so
-  `[pvec-map [fn [m] m.name] L]` does not typecheck. 4a vouched the FIELD-NAME
-  half and left the CARRIER half unvouched; the composed
-  `[pvec-map … [pvec-from-list xs]]` works, and `[pvec-from-list [set-to-list
-  xs]]` for a Set (both verified). Since the advice is a `~a` slot INSIDE the
-  carrier format string, the split and the advice are ONE edit — which also
-  forces DEFERRED 60, 61 and 64.
-  Remaining: the `bcast-carrier` **per-carrier split** (Set's own sentence;
-  dyn-tail's seal/validate remedy; ⚠ the List wording needs no Functor-clause
-  DELETION — the clause was never in the code, only in Q_U9's rationale) ·
-  Q_U19's unified refusal + the two `Unbound variable` fall-through routes +
-  re-pinning \"P4c-4b: the payload's THREE sub-cases\" to the DECISION ·
-  DEFERRED 47 ≡ **59.1** (ONE string, one site — filed twice, verified
-  identical) · DEFERRED 59.2 (`not-indexable`'s `x{k}` remedy is off-key
-  inside a broadcast).
-  ⚠ The split is a **≥4-way dispatch**, not two sentences: ONE arm today tells
-  List, Set, scalars AND dyn-rows to \"convert first with `[pvec-from-list
-  xs]`\" (probed: `Int` and `{ | _}` both get it).
 - Corpus re-fate rides each slice. **Gates**: failing-test-first batteries +
   authored fixtures; the corpus A/B is REGRESSION-ONLY for slices 1–4 (the
   carriers have ~no corpus coverage — the vacuous-green hazard, named) but

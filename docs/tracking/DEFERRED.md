@@ -3976,7 +3976,13 @@ P4d slice 4's diagnostics batch.
    for the NON-broadcast case. Inside a broadcast the fix the user wants is
    `evs:t`.
 
-### 60. ⬜ The carrier-refusal advice has SINGLE-GET polarity, but describes a BROADCAST (D4.P4d slice 4a verify)
+### 60. ⊘ DISSOLVED at D4.P4d slice 4c (`a31b7475`) — the subject no longer exists
+
+The `pvec-map`-of-dots advice was DELETED, so the polarity mismatch has no
+vehicle: no carrier message spells a dot-access remedy any more. ⚠ Re-open only
+if a future slice reintroduces a taught spelling — DEFERRED 61's brace-template
+idea would. The in-code marker this entry cited is gone with the arm.
+*(original below)*
 
 The advised spelling is a `pvec-map` of DOT accesses, and `.` over a union is
 the OPTIMISTIC single-get polarity (filter-on-miss) while `:` is all-must-offer
@@ -4002,7 +4008,27 @@ link and poisoning the advice there — typing analysis inside a diagnostic, and
 its own slice. Recorded in the code at `format-select-fail`'s `bcast-carrier`
 arm.
 
-### 61. ⬜ Advice withdrawn where it was correct, and BLOCK sort could advise `m{…}` (D4.P4d slice 4a verify)
+### 61. ⬜ REWRITTEN at slice 4c — a BRACE-spelling remedy for sub / caret inners
+
+⚠ The original text below is OBE: it described slice 4a's "poisoning rule",
+which was deleted at 4c along with the rest of the advice machinery. Two
+corrections to it, both MEASURED at HEAD:
+
+- **Item 1 is moot.** No sort advises a dot spelling now, so nothing is
+  "withdrawn by poisoning".
+- **⚠ Item 2's premise is FALSE at HEAD, and two independent auditors got this
+  wrong.** Block sort is NOT silent: `R{items:aa}` over a List field emits the
+  full conversion remedy ("convert it with `[pvec-from-list xs]`"). Both audits
+  reasoned from "the advice machinery is deleted" to "no message advises
+  anything", conflating 4a's *taught-spelling* advice with 4c's *conversion*
+  remedy. Probe before repeating either claim.
+
+**What actually remains**: sub and caret inners have honest BRACE spellings
+(`m{a b}`, `m{name^alias}`, both verified equivalent to their `:`-forms) that
+nothing offers. ⚠ Taking this requires reconciling with 4c's owner ruling —
+*"the fix is not a better second spelling; it is not teaching one"* — so it is a
+FEATURE question (should any remedy teach a spelling?), not a gap to close.
+*(original below)*
 
 Two conservative-direction losses from slice 4a's poisoning rule, both
 suppression-only (never a wrong spelling), neither pinned:
@@ -4068,7 +4094,12 @@ subject. So slice 4b's headline — "a schema-typed subject is the row it
 denotes" — holds only for top-level NAMED closed schemas. Fixing the
 propagation is the real answer; the leaked generated name is slice-4c material.
 
-### 64. ⬜ Both slice-4b gates are SILENT — the one actionable remedy is never named (D4.P4d slice 4b re-verify)
+### 64. ✅ RESOLVED at D4.P4d slice 4c (`a31b7475`) — both gates now name their remedy
+
+The open-schema arm says the admitted form is `:closed`; the collided-selection
+arm says "This is a SELECTION — a capability-restricted view" and offers no
+list conversion. Both are battery-pinned ("an OPEN schema is told the one thing
+that fixes it", "a collided SELECTION is told it is a view"). *(original below)*
 
 The resolver refuses an open schema and a name-collided selection, and both fall
 through to the generic `bcast-carrier` message. Neither says the thing the user
