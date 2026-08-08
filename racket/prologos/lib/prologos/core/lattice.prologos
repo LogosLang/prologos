@@ -119,12 +119,16 @@ defn rat-min [a b]
 
 ;; --- Set helpers ---
 
-spec set-subset? {A : Type} [Set A] [Set A] -> Bool
+spec set-subset? [Set A] [Set A] -> Bool
 defn set-subset? [a b]
   set-fold [fn acc x [and acc [set-member? b x]]] true a
 
 ;; --- Map helpers ---
 
+;; Note: explicit `{K V : Type}` retained because the body of `Map-K-V--Lattice`
+;; calls this function with explicit `K V` type args.  Without an explicit binder
+;; declaration, auto-introduction would order vars by source-walk (V before K),
+;; which silently flips the call-site type args.
 spec map-merge-with {K V : Type} [V V -> V] [Map K V] [Map K V] -> [Map K V]
 defn map-merge-with [join-fn m1 m2]
   map-fold-entries
@@ -135,6 +139,7 @@ defn map-merge-with [join-fn m1 m2]
     m1
     m2
 
+;; Note: explicit `{K V : Type}` retained for the same reason as map-merge-with.
 spec map-lattice-leq {K V : Type} [V V -> Bool] [Map K V] [Map K V] -> Bool
 defn map-lattice-leq [leq-fn m1 m2]
   map-fold-entries
