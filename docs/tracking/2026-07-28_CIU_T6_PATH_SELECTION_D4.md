@@ -1498,6 +1498,52 @@ items of the hold-point, ruled before P4a opened:
   its name claims). ⚠ The original entry's "under a grant" clause is OBE — G2
   retired the grant, so the surface is reachable UNCONDITIONALLY at the
   production default.
+
+  **⭐⭐ AMENDED 2026-08-08 [owner — "leave the dot string alone, add a broadcast
+  sibling"; then "all three"]. READ THIS BEFORE TOUCHING ANY CODE — the text
+  ABOVE, written before the slice-4d mini-audit, would authorise the one edit
+  this ruling FORBIDS.** "Unify" means ONE NEW message that the three routes
+  funnel into — it does **NOT** mean editing the existing string.
+  · **The dot string stays BYTE-IDENTICAL.** `re-keys the OUTPUT` is ONE
+    production site (`parser.rkt`, the `[(ormap select-step-cont (car branches))]`
+    arm) serving TWO audiences — dot, where "a **field access** has no output
+    key" is the CORRECT noun, and broadcast, where it is wrong, ever since
+    P4c-3a made `select-step-cont` ω-transparent (`syntax.rkt`'s
+    `select-step-cont` recurses through `select-bcast-inner` — that recursion IS
+    the routing). The complaint at the bullet above is about the BROADCAST
+    audience only. Its DOT pin (`"verify S2: \`^\` in a DOT access REFUSES"`)
+    must keep passing untouched; only the ω pin moves.
+  · **The discriminator is PER-STEP, not per-branch.** `ormap` returns the CONT
+    and DISCARDS which step carried it. Measured at `2fd6b68e`: `ys.a:b^c` (caret
+    on a genuine ω step) and `xs:a.b^c` (caret on a DOT step, in a chain the user
+    opened with `:`) BOTH take the message today. Find the step (`findf`), then
+    ask `select-step-kind` — it already returns `'bcast` (`syntax.rkt`) and is
+    ALREADY imported by `parser.rkt` (`select-bcast-step?` is provided but NOT in
+    the `only-in` list; the in-file idiom is the kind dispatcher). Zero new
+    plumbing.
+  · **The three routes fail at THREE LAYERS — this is three seats of work, not
+    one funnel** (owner ruled "all three" 2026-08-08): route 1 fails INSIDE
+    `segment-select-items`, post-mint (small, clean); `xs:{name}^alias` never
+    ENTERS segmentation (`^` is ident-CONTINUE but not ident-START, so the caret
+    survives as a bare sibling OUTSIDE the brace group and the form becomes an
+    APPLICATION) — a FOLD arm, on the `ordinal-rekey` element-wise precedent;
+    `xs:0^alias` mints NO sentinel at all — it fails in the TOKENIZER and the
+    fold's entry gate never opens.
+  · **The route-1 spelling set UNDER-COUNTS: the COLLAPSE family also reaches
+    it.** `xs:name^-` takes the message (measured), matching the dot pin's own
+    four spellings.
+  · **⚠ PRECEDENCE CONSTRAINT**: `xs:name^^a` takes `split-caret-lexeme`'s
+    WELL-FORMEDNESS error first ("one `^` per segment…"). The sibling must NOT be
+    installed above it, or a true specific message is replaced by a generic one —
+    the class the slice-3 verify already caught once in this track.
+  · **⚠ MONOTONICITY**: the refusal stays `'path`-SCOPED. Block-position ω-caret
+    is LIVE at 0 errors today (`cfg{admins:name^alias}`, `xs:{name^alias}`) and
+    the acceptance file carries commented `[D4.P5]` block-position targets — a
+    wider refusal would refuse a spelling the track has committed to meaning.
+  · ⚠ A FALSE PREMISE SITS IN THE EDITED LINES: `parser.rkt`'s comment four lines
+    above the string claims `make-select-bcast` "has ZERO production callers at
+    HEAD". It has FOUR, all in that file. Correct it in the same diff.
+
   *(Original entry, kept for the record:)* Opened 2026-08-02 at the P4c-4c
   mini-audit. Under a grant the parser ALREADY builds
   `(@bcast (@key name (rename alias)))` — it is constructible today — and it
@@ -6378,28 +6424,48 @@ first as slice 0"]:**
   **Gates**: battery **421 → 420** (a net −1: nine advice pins retired, eight
   carrier pins added) · acceptance 0 mismatched × 5 · full suite
   **9969 / 485 / 0**, `[485/485]`.
-- **⬜ Slice 4d — the remaining diagnostics** (what 4c did not reach):
-  **Q_U19's unified refusal**, whose siting is answered by PRECEDENT rather than
-  open design — `ordinal-rekey-message` is ONE string emitted from FOUR sites,
-  written at P3b for **Q_T4a**, the identical "`^` has no key" question one
-  construct over, with `retired-selection-marker` as the macros-side per-command
-  channel; plus re-pointing the "P4c-4b: the payload's THREE sub-cases" pin to
-  the DECISION · **DEFERRED 47 ≡ 59.1** (ONE string, one site — the
-  `subject-other` non-PVec branch; probe-verified identical) · **59.2**
-  (`not-indexable`'s `x{k}` remedy is off-key inside a broadcast; the existing
-  `cond` already discriminates the right three cases) · the stale phase
-  references in `parser.rkt` (two reachable; the `*` flatten refusal says "Until
-  Path Selection P4d" while D4 assigns `*` to **P4e**, so P4d's close makes it
-  retroactively false) · the orphaned slice-4a test header at
-  `tests/test-path-selection.rkt` (it still describes the deleted
-  `; otherwise spell it …` append and its `symbol?` gate) and the two
-  re-pointed pins' section labels., and the plan was wrong in
-  three places: the **Functor clause was NEVER in the code** (only in Q_U9's
-  rationale) · **DEFERRED 47 ≡ 59.1**, one string at one site, probe-verified ·
-  **Q_U19 is NOT an open siting problem** — `ordinal-rekey-message` is ONE
-  string emitted from FOUR sites, written at P3b for **Q_T4a**, the identical
-  "`^` has no key" question one construct over; that is the precedent, and the
-  preparse fold carries a per-command error channel plus two arms of the shape.
+- **⬜ Slice 4d — the remaining diagnostics** (what 4c did not reach). ⚠ The
+  scope below is RE-DERIVED by the slice-4d mini-audit (`wf_a154667e-42f`,
+  5 facets + critic @ `2fd6b68e`); every correction is measured, and the
+  pre-audit plan was wrong in four places, marked ✗ inline.
+  · **Q_U19's unified refusal** — the SITING is answered by precedent
+    (`ordinal-rekey-message` is ONE string emitted from FOUR sites, written at
+    P3b for **Q_T4a**, the identical "`^` has no key" question one construct
+    over, with `retired-selection-marker` as the macros-side per-command
+    channel). ✗ **But the precedent's SHAPE does not transfer**: that message is
+    one string / four sites / ONE audience, whereas the string here is ONE site
+    serving TWO audiences, so the work is a **SPLIT**. Owner ruled 2026-08-08:
+    **dot string byte-identical, add a broadcast sibling**, and **all three
+    routes** — which are three SEATS (segmentation · a fold arm · the
+    tokenizer/gate), not one funnel. Full ruling + the per-step discriminator,
+    the precedence constraint and the monotonicity bound: [Q_U19](#q-u19).
+  · Re-point the **"P4c-4b: the payload's THREE sub-cases"** pin to the DECISION
+    (it froze an ACCIDENT — it asserts today's routing), and the two re-pointed
+    pins' section labels (the two kept slice-4a tests carry a `P4d-s4b` prefix).
+    ✗ The "orphaned slice-4a test header" is **ALREADY FIXED** at `2b52af8b` —
+    it now reads "Neither the append nor the guard exists at HEAD." DROPPED.
+  · **DEFERRED 47 ≡ 59.1** — the `subject-other` non-PVec branch. ✗ Not "one
+    string, one site": the missing-`bcast-at` prefix is CARRIER-specific (the
+    `else` arm of `select-bcast-lift` returns the inner fail RAW while the
+    keyword-row arm wraps), so *no prefix* and *"the subject" misattributes* are
+    TWO independent defects, over a population of four shapes.
+  · **59.2** — `not-indexable`'s `x{k}` remedy is off-key inside a broadcast.
+    ✗ The existing `cond` does **not** discriminate the right cases: it
+    discriminates CARRIER KIND and computes only the middle interpolation; the
+    remedy sits in the UNCONDITIONAL template tail, and `format-select-fail`
+    threads no broadcast axis at all.
+  · **The stale phase references.** ✗ Not "two reachable in `parser.rkt`":
+    `grep -rn 'Path Selection P' racket/prologos/*.rkt` returns **seven sites
+    across four files** — three user-facing strings in `parser.rkt` (`P4`,
+    `P4c-3`, and the `*` flatten "Until Path Selection P4d") plus comments in
+    `parser.rkt`, `parse-reader.rkt`, `syntax.rkt` and `surface-syntax.rkt`.
+    D4 assigns `*` flatten to **P4e**, so P4d's close makes that promise
+    retroactively false. ⚠ The `*` refusal fires on a TRAILING star
+    (`us:tags*`), not a leading one, and it is battery-pinned — text and pin
+    move in lockstep.
+  · Correct the false premise in the edited lines: `parser.rkt`'s comment
+    claiming `make-select-bcast` has "ZERO production callers at HEAD" — it has
+    **four**, in that file.
 - Corpus re-fate rides each slice. **Gates**: failing-test-first batteries +
   authored fixtures; the corpus A/B is REGRESSION-ONLY for slices 1–4 (the
   carriers have ~no corpus coverage — the vacuous-green hazard, named) but
