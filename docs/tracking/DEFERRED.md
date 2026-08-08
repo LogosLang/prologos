@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 85**
+> ### **NEXT FREE: 87**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -5499,3 +5499,58 @@ abort granularity and does NOT block a per-element absence answer.
 
 ⚠ **Pin obligation either way**: nothing anywhere pins that two orderings of the
 same node agree. Whichever way this is ruled, that pin is the deliverable.
+
+
+### 85. ⬜ `[p32-sqrt 1e10]` is a STUCK TERM with ZERO errors — an exponent literal is `Int`, but passes a `Posit32` argument check (found 2026-08-08)
+
+```
+ns q
+[p32-sqrt 1e10]
+```
+→ `[p32-sqrt 10000000000] : Posit32`, **0 errors**. The term is echoed back
+UNREDUCED and typed `Posit32`; nothing anywhere says it did not compute.
+
+**Mechanism (inferred, one step verified)**: per Numerics N6b the literal's
+default type is keyed on NOTATION ORIGIN — decimal → `Posit32`, fraction → `Rat`,
+**exponent → `Int`/`Posit32`**. `1e10` arrives as an `Int`, `p32-sqrt`'s argument
+check nonetheless admits it and reports the result type as `Posit32`, and then
+`reduction.rkt`'s arm `[(expr-p32-sqrt (expr-posit32 a)) …]` does not match an
+`expr-int` payload, so the node is stuck. Verified: the decimal spellings all
+reduce (`[p32-sqrt 16.0]` → `4.0`, `[p32-sqrt 0.0001]` → `0.01`), and
+`[p32-sqrt [p32-from-int 9]]` → `3.0`, so the defect is specific to the
+EXPONENT-notation literal reaching a posit primitive.
+
+⚠ **Silent in both directions** — no error on either side, and a stuck term
+pretty-prints as a plausible value. This is the class the arc has been paying for
+all week: the gate that would catch it (an arity/type error) never fires.
+
+**Not investigated**: whether the same shape hits the other widths
+(`p8`/`p16`/`p64`, `f32`/`f64`) or other posit primitives (`p32*`, `p32-abs`, …).
+The argument check is presumably shared, so a census is the first move.
+
+### 86. ⬜ A TYPE MISMATCH in a float/posit primitive's argument reports "Multiplicity violation" (found 2026-08-08)
+
+```
+ns q
+[f64-sqrt 2.0]
+```
+→ `ERROR: Multiplicity violation`. The actual fault is a plain type mismatch:
+`2.0` is a `Posit32` (decimal literals default there) and `f64-sqrt` wants a
+`Float64`. The correct spelling `[f64-sqrt (the Float64 2.0)]` →
+`1.4142135623730951f`, 0 errors.
+
+**The same LYING-DIAGNOSTIC class as DEFERRED 74, at a DIFFERENT site.** 74 fixed
+the `def` SEAM — an unannotated `def` whose body type was not ground reached QTT,
+which had nothing to check against and reported its generic `tu-error`. This one
+is `checkQ` failing on an ARGUMENT, so 74's gate does not cover it and it is
+still live. Per `.claude/rules/pipeline.md` § "infer / inferQ Are Twins", a
+"Multiplicity violation" naming a subsystem that is working perfectly is the
+signature to chase; here QTT is again innocent.
+
+**Worth deciding as one question with 74's residual**: whether `tu-error`'s
+generic reporter should ever be allowed to surface as "Multiplicity violation"
+at all, or whether every path into it should have to say what it was actually
+checking. 74 fixed one caller; this shows callers are the wrong granularity.
+
+**Found while** answering how to implement `sqrt` (2026-08-08). Both 85 and 86
+were surfaced by probing the existing primitives, not by any gate.
