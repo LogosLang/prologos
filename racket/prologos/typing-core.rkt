@@ -1041,6 +1041,68 @@
                 t)))
       t))
 
+;; D4.P4d slice 4b — THE ONE ω SUBJECT RESOLVER. Returns the row a subject
+;; DENOTES when broadcast may safely treat it as that row, else #f.
+;;
+;; Why it exists: `select-row-of` resolves a schema fvar to its row, so
+;; `p{name}` and `p.name` work on a schema-typed value while `p:name` was told
+;; it "needs a … closed keyword-row subject" — about a subject that is exactly
+;; that under the other two spellings. Uniformity, not a new carrier.
+;;
+;; ⚠ ONE function, called from BOTH sites that see the subject (`select-bcast-
+;; lift` and `select-tier-subject`). The first cut inlined it at the lift only,
+;; and the tier then disagreed with the lift — DEFERRED 43's class. Two
+;; hand-maintained copies is how that happened; do not re-split it.
+;;
+;; ⚠⚠ TWO CONDITIONS, each of which was a LIVE soundness hole in the first cut:
+;;
+;; 1. SELECTION IS TESTED FIRST, and returns #f. This mirrors `select-row-of`'s
+;;    arm order, which its own comment marks LOAD-BEARING: both registries
+;;    accept the same name, so `schema P` + `selection P from P` is
+;;    constructible, and a schema-first test hands the selection's row over
+;;    with the per-field `:requires` READ CAPABILITY bypassed. Measured on the
+;;    first cut: `u.age` and `u{name}` were both refused by the view while
+;;    `u:h` returned `{:name "a", :age "SECRET"}` at ZERO errors. A view keeps
+;;    its own posture (DEFERRED 20); refusing is the monotone direction.
+;;
+;; 2. ONLY A `:closed` SCHEMA RESOLVES. `schema` is OPEN by default and
+;;    `schema->row` mints `'closed` unconditionally — harmless for every prior
+;;    consumer, because `.` reads ONE field and `{}` assembles NAMED fields.
+;;    Broadcast is the first consumer that ENUMERATES the row, so on an open
+;;    schema the runtime walks the real value while the type comes from the
+;;    declared fields only. Measured on the first cut, with the very example
+;;    this slice was written for: a 3-key `Region` gave
+;;    `{:ap "a", :eu "e", :us "u"} : {:eu String :us String}` — three fields in
+;;    the value, two in the type, at zero errors; and an extra key that cannot
+;;    offer the field produced a silent `<error>` that propagated into a `def`.
+;;    An open schema genuinely is NOT a closed keyword row, so the existing
+;;    carrier refusal is the honest answer for it and stays.
+;;
+;; 3. NO FIELD MAY CARRY A `:default`. The width lie has a SECOND direction,
+;;    and the closedness gate above closes only the first. `schema->row` marks
+;;    every field `'present`, and its own docstring says the fill "happens at
+;;    the seal boundary, not here" — but that boundary does not always fill:
+;;    a `spec f -> S` RETURN has no fill at all. So a defaulted field can be
+;;    `'present` in the row and ABSENT at runtime. Measured on the second cut:
+;;      spec build Inner -> Cfg   (Cfg :closed, :b defaulted)
+;;      c := [build …]  →  {:a {:h "q"}} : Cfg      ← :b never filled
+;;      c:h             →  {:a "q"} : {:a String :b String}   ← 1 field, type says 2
+;;      broad.b         →  <error> : String          ← silent, 0 errors
+;;    Broadcast is what makes this reachable: it is the only consumer that
+;;    reads EVERY field, so it is the only one that touches the unfilled slot.
+;;    Refusing is monotone and narrow — the precise gate would mint defaulted
+;;    fields with a presence the seal actually guarantees, which means a
+;;    broadcast-specific `schema->row` variant, filed rather than improvised
+;;    here (DEFERRED 62).
+(define (bcast-resolve-subject tm)
+  (and (expr-fvar? tm)
+       (not (lookup-selection-by-name (expr-fvar-name tm)))
+       (let ([entry (lookup-schema-by-name (expr-fvar-name tm))])
+         (and entry
+              (schema-entry-closed? entry)
+              (not (ormap schema-field-default-val (schema-entry-fields entry)))
+              (schema->row entry)))))
+
 (define (select-tier-subject tm branches)
   (if (and (pair? branches) (null? (cdr branches)))
       ;; ⚠ `peeled?` CONFINES the union witness to the BROADCAST path. Without
@@ -1080,6 +1142,18 @@
                        (let ([p (loop (whnf (record-field-type (cdr fld))) next #t)])
                          (and (expr-Map? p) p)))
                      tm)]
+                ;; D4.P4d slice 4b — THE SECOND GATE. The lift resolves a closed
+                ;; schema to its row, and this peel is the OTHER site that must
+                ;; agree. Slice 1's audit found exactly this pair ("one gate"
+                ;; was two); leaving the peel un-widened is DEFERRED 43's
+                ;; silent-miss class one carrier over — the lift would admit
+                ;; while the tier stayed PERMISSIVE, so a runtime Map miss
+                ;; inside a schema-typed row goes QUIET where the identical
+                ;; plain row is LOUD. MEASURED live via the type-alias route
+                ;; (`def MKI : Type := [Map Keyword Int]`), which is how a
+                ;; Map-typed schema field actually constructs.
+                [(bcast-resolve-subject tm)
+                 => (lambda (row) (loop (whnf row) steps peeled?))]
                 [else (if peeled? (tier-union-witness tm) tm)]))
             (if peeled? (tier-union-witness tm) tm)))
       tm))
@@ -1158,7 +1232,8 @@
 ;; never thought about the chain inherits — and is correct for the single-step
 ;; case that is by far the most common.
 (define (select-bcast-lift ctx tm s path seen sort [rest '()])
-  (let* ([inner (select-bcast-inner s)]
+  (let* ([tm (or (bcast-resolve-subject tm) tm)]
+         [inner (select-bcast-inner s)]
          ;; ⚠ the DIAGNOSTIC label: `select-step-name` on a sub inner returns the
          ;; RAW LIST (DEFERRED 40/46's shared root), and interpolating that into
          ;; a carrier message is DEFERRED 49's shape widened. A readable stand-in

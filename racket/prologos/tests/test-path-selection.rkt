@@ -5251,6 +5251,139 @@
                 (format "the broadcast and its fused spelling must agree: ~a" out))
   (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
 
+;; ---------------------------------------------------------------------------
+;; D4.P4d slice 4b — A SCHEMA-TYPED SUBJECT IS THE ROW IT DENOTES.
+;;
+;; `select-row-of` resolves a schema fvar to its closed row, so `p{name}` and
+;; `p.name` both work on a schema-typed value. `select-bcast-lift` tested
+;; `expr-Record?` on the RAW type and had no such step, so the same value was
+;; told it "needs a … closed keyword-row subject" — about a subject that is
+;; exactly that, two spellings over. Uniformity, not a new carrier.
+;;
+;; ⚠ Measured before implementing, because the obvious framing was wrong: this
+;; does NOT make `p:name` succeed on a FLAT schema. `:` projects from each
+;; field VALUE, so `{:name String}` + `:name` fails on a plain row too (the
+;; value is a String). The fix makes the schema behave as its row — which
+;; SUCCEEDS exactly where the row succeeds, i.e. when the field values are
+;; themselves records.
+;; ---------------------------------------------------------------------------
+
+(test-case "P4d-s4b: a CLOSED schema broadcasts exactly as the row it denotes"
+  ;; ⚠ `:closed` is LOAD-BEARING here and the first cut of this pin omitted it —
+  ;; see the open-schema pin below for what that cost.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    (string-append
+                     "ns s4b1\nschema Host :closed\n  :host String\n\nschema Region :closed\n  :us Host\n  :eu Host\n\n"
+                     "def rg := [the Region {:us [the Host {:host \"u\"}] :eu [the Host {:host \"e\"}]}]\n"
+                     "def plain := {:us {:host \"u\"} :eu {:host \"e\"}}\n"
+                     "plain:host\nrg:host\ndef after := 42"))))
+  ;; the PLAIN row is the oracle — whatever it does, the schema must do
+  (check-true (>= (length (filter (lambda (s) (regexp-match? #rx"\\{:eu \"e\", :us \"u\"\\}" s)) out)) 2)
+              (format "the schema-typed subject must broadcast like its row (both lines): ~a" out))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"needs a PVec, Map, tuple, or closed keyword-row subject" s)) out)
+               (format "a closed schema row must not be told it is not a keyword row: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s4b: the FLAT closed schema fails like its row, not differently"
+  ;; The uniformity claim cuts both ways: where the plain row refuses, the
+  ;; schema must refuse the SAME way. `:name` over `{:name String}` projects
+  ;; `.name` from the String value and fails — it is not a carrier refusal.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    (string-append
+                     "ns s4b2\nschema Person :closed\n  :name String\n\n"
+                     "def p := [the Person {:name \"a\"}]\np:name\ndef after := 42"))))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"needs a PVec, Map, tuple, or closed keyword-row subject" s)) out)
+               (format "the flat schema must reach the carrier, not be refused by it: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"broadcast fails at field :name" s)) out)
+              (format "it must fail per-field, exactly as the plain row does: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s4b: an OPEN schema is NOT admitted — its row would be a WIDTH LIE"
+  ;; `schema` is OPEN by default and `schema->row` mints `'closed` regardless —
+  ;; harmless for `.` (one field) and `{}` (named fields), but broadcast is the
+  ;; first consumer that ENUMERATES the row. The first cut admitted open
+  ;; schemas and produced, on this very fixture, a THREE-field value typed as
+  ;; TWO fields at zero errors:
+  ;;   {:ap "a", :eu "e", :us "u"} : {:eu String :us String}
+  ;; An open schema genuinely is not a closed keyword row, so the carrier
+  ;; refusal is the honest answer and stays. Monotone: it can become a meaning
+  ;; later if the row ever carries a faithful dyn tail.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    (string-append
+                     "ns s4b3\nschema Host :closed\n  :host String\n\nschema Region\n  :us Host\n  :eu Host\n\n"
+                     "def rg : Region := {:us [the Host {:host \"u\"}] :eu [the Host {:host \"e\"}] :ap [the Host {:host \"a\"}]}\n"
+                     "rg:host\ndef after := 42"))))
+  (check-false (ormap (lambda (s) (regexp-match? #rx":ap" s)) out)
+               (format "an undeclared key escaped through an open schema's row: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec, Map, tuple, or closed keyword-row subject" s)) out)
+              (format "an open schema must keep the carrier refusal: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s4b: a DEFAULTED field is not admitted — the width lie's OTHER direction"
+  ;; The closedness gate closes the EXTRAS direction (a runtime key the type
+  ;; does not declare). This is the ABSENCE direction, and the second cut had
+  ;; it live: `schema->row` marks every field `'present` while the fill "happens
+  ;; at the seal boundary" — and a `spec f -> S` RETURN has no fill at all.
+  ;; Measured before this gate:
+  ;;   c := [build …]  →  {:a {:h "q"}} : Cfg          (:b never filled)
+  ;;   c:h             →  {:a "q"} : {:a String :b String}   1 field, type says 2
+  ;;   broad.b         →  <error> : String              silent, 0 errors
+  ;; Broadcast is the only consumer that reads EVERY field, so it is the only
+  ;; one that touches the unfilled slot.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    (string-append
+                     "ns s4b6\nschema Inner :closed\n  :h String\n\n"
+                     "schema Cfg :closed\n  :a Inner\n  :b Inner :default [the Inner {:h \"zz\"}]\n\n"
+                     "spec build Inner -> Cfg\ndefn build [x]\n  {:a x}\n\n"
+                     "def c := [build [the Inner {:h \"q\"}]]\nc:h\ndef after := 42"))))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"\\{:a String :b String\\}" s)) out)
+               (format "a row wider than its value escaped through a defaulted field: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"needs a PVec, Map, tuple, or closed keyword-row subject" s)) out)
+              (format "a defaulted-field schema must keep the carrier refusal: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s4b: a schema/selection NAME COLLISION must not bypass `:requires`"
+  ;; ⚠ THE FIRST CUT WAS A CAPABILITY BYPASS. Both registries accept the same
+  ;; name, so `schema Person` + `selection Person from Person` is constructible.
+  ;; Testing the schema registry FIRST handed the row over with the per-field
+  ;; read capability stripped — measured: `u.age` and `u{name}` were both
+  ;; refused by the view while `u:h` returned `{:name "a", :age "SECRET"}` at
+  ;; ZERO errors. `select-row-of` puts the selection arm first and its comment
+  ;; calls the order load-bearing; the resolver now mirrors it.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    (string-append
+                     "ns s4b4\nschema Inner :closed\n  :h String\n\nschema Person :closed\n  :name Inner\n  :age Inner\n\n"
+                     "selection Person from Person\n  :requires [:name]\n\n"
+                     "def u : Person := {:name [the Inner {:h \"a\"}] :age [the Inner {:h \"SECRET\"}]}\n"
+                     "u:h\ndef after := 42"))))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"SECRET" s)) out)
+               (format "a restricted field's CONTENTS escaped through the broadcast: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
+(test-case "P4d-s4b: the TIER agrees between a closed schema and its row (DEFERRED 43's class)"
+  ;; The lift and `select-tier-subject` BOTH see the subject; the first cut
+  ;; resolved only the lift, so the tier stayed permissive and a runtime Map
+  ;; miss went QUIET where the identical plain row PANICS. Map-typed schema
+  ;; fields construct via the type-alias route, which is how this is reachable.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws
+                    (string-append
+                     "ns s4b5\ndef MKI : Type := [Map Keyword Int]\n"
+                     "schema One :closed\n  :a MKI\n  :b MKI\n\n"
+                     "def m1 : MKI := {:x 1}\ndef m2 : MKI := {:y 2}\n"
+                     "def rowv := {:a m1 :b m2}\ndef s : One := {:a m1 :b m2}\n"
+                     "rowv:x\ndef mid := 1\ns:x\ndef after := 42"))))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"<error>" s)) out)
+               (format "the schema's runtime miss went QUIET while its row panics: ~a" out))
+  (check-true (>= (length (filter (lambda (s) (regexp-match? #rx"panic" s)) out)) 2)
+              (format "BOTH the row and the schema must be LOUD: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after : Int defined" s)) out)))
+
 (test-case "P4d-s4a': the binder refusal must never print raw SYNTAX OBJECTS (its guard was dead)"
   ;; `retired-selection-error`'s `bcast-step-binder` arm carries
   ;;   (let ([f* (if (pair? f) '|{…}| f)]) …)

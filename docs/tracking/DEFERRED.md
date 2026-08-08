@@ -4022,3 +4022,82 @@ suppression-only (never a wrong spelling), neither pinned:
 Both are monotone (advice can be added back at zero cost); neither can produce a
 wrong spelling today. Worth taking together, since (2) and the sub/caret cases
 share one mechanism: a brace-spelling advice template.
+
+### 62. ⬜ The ω subject resolver refuses more than it must — the precise gate is a presence question (D4.P4d slice 4b)
+
+`bcast-resolve-subject` admits a schema only when it is `:closed` AND carries no
+`:default`. Both conjuncts are sound but blunt; each was a measured width lie in
+an earlier cut of the slice, in OPPOSITE directions:
+
+- **extras** (the `:closed` conjunct) — an open schema's runtime value can carry
+  keys the declared row does not, and broadcast is the first consumer that
+  ENUMERATES the row. Measured: a 3-key open `Region` gave
+  `{:ap "a", :eu "e", :us "u"} : {:eu String :us String}`.
+- **absence** (the `:default` conjunct) — `schema->row` marks every field
+  `'present` while its own docstring says the fill "happens at the seal
+  boundary"; a `spec f -> S` RETURN has no fill, so a defaulted field can be
+  `'present` in the row and absent at runtime. Measured: `c:h` gave
+  `{:a "q"} : {:a String :b String}` and `broad.b` a silent `<error>`.
+
+The precise gate for BOTH is a presence-faithful row: mint an open schema's row
+with a dyn TAIL, and a defaulted field with the presence the seal actually
+guarantees rather than an unconditional `'present`. That means a
+broadcast-specific `schema->row` variant (the shared one is load-bearing for
+`.` and `{}`, which read named fields and never notice), so it was filed rather
+than improvised inside a diagnostics slice. Monotone: both refusals can become
+meanings with no user-visible break.
+
+### 63. ⬜ INLINE nested schemas are always OPEN, so the slice-4b deliverable misses the idiomatic spelling (D4.P4d slice 4b re-verify)
+
+Auto-generated sub-schemas are registered open — `macros.rkt`'s sub-schema
+construction passes the closed flag as `#f` unconditionally, so a parent's
+`:closed` never propagates. Consequence, measured:
+
+```
+schema Region :closed
+  :us
+    :a
+      :h String
+```
+`plain.us:h` → `{:a "x", :b "y"} : {:a String :b String}`, while the
+byte-identical `rg.us:h` refuses. Two problems: the refusal is CORRECT (the
+inline sub genuinely accepts an undeclared key — admitting it would reproduce
+62's extras direction exactly), but it names a compiler-generated identifier
+(`Region__us`) the user never wrote, and its advice is nonsense for that
+subject. So slice 4b's headline — "a schema-typed subject is the row it
+denotes" — holds only for top-level NAMED closed schemas. Fixing the
+propagation is the real answer; the leaked generated name is slice-4c material.
+
+### 64. ⬜ Both slice-4b gates are SILENT — the one actionable remedy is never named (D4.P4d slice 4b re-verify)
+
+The resolver refuses an open schema and a name-collided selection, and both fall
+through to the generic `bcast-carrier` message. Neither says the thing the user
+needs:
+
+1. **open schema** — the remedy is literally "add `:closed`", and no message
+   says so.
+2. **collided selection** — it gets the generic carrier refusal, which
+   `select-row-of`'s own comment calls "a LIE — a view is a record, restricted",
+   and which offers `pvec-from-list` / `pvec-map`, both wrong for a view.
+   `select-row-of` already has the honest bespoke message; the broadcast path
+   does not reach it. The resolver argues the selection case at length in a
+   comment and emits none of it.
+
+⚠ The collision pin asserts only the ABSENCE of the leaked value, so neither
+gap can be caught by the battery today. Both are `bcast-carrier` per-carrier
+split work — slice 4c.
+
+### 65. ⬜ `lookup-schema-by-name` matches on the SHORT name, so an unrelated type can resolve to a schema (pre-existing; surfaced at D4.P4d slice 4b)
+
+`register-schema!` keys on the short name and `lookup-schema-by-name` falls back
+to it, so any type whose short name matches any schema resolves to that schema.
+With `schema Bar :closed` + `data Bar := mk1 | mk2`, `v := mk1` then `v:h` yields
+`{:a String :b String}` at 0 errors — a row fabricated for a nullary constructor
+with no fields.
+
+**NOT a regression**: the dot-only, broadcast-free version reaches the same end
+state at base, including a WHOLE-FILE ABORT (`foreign: Cannot marshal to
+string … #(struct:expr-select …)`, empty output — `pipeline.md`'s raise class).
+But broadcast widens the fabrication from one field to the whole row, which is
+62's extras argument verbatim, and it is a third instance of the class the two
+slice-4b gates were written for. The fix is name resolution, not selection.
