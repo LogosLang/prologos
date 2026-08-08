@@ -6531,7 +6531,39 @@ first as slice 0"]:**
   **Gates**: battery **431 → 432** · acceptance 0 mismatched × 5 · full suite
   **10068 / 488 / 0**, `[488/488]`.
 
-  Next is the **P4d close** (three owed owner questions).
+- **✅ Slice 6 — SPLIT ABSENCE FROM KEY-MISS (Q1 / Q_U21's value layer) — COMPLETE
+  2026-08-08** (`003f150b`). Audit `wf_22427256-c66` · verify `wf_aec25ca2-276`.
+  **⭐ THE AUDIT REFRAMED THE QUESTION**: ruling (a) was ALREADY not holding at
+  HEAD. C9's conservative OR arms the one scalar tier from a Map **sibling**, so
+  an actually-absent element in `{:f <Nil|Map> :g Map}` PANICKED — the precise
+  failure (a) exists to prevent — while in the same population a genuine miss was
+  already LOUD by the same accident. **Owner ruled C9 GOVERNS**; Q_U21 (a) is
+  scoped to "no armed sibling" and satisfied at the VALUE layer instead.
+  **The split is a DELETION, not an arm**: the Nil short-circuit leaves
+  `tier-union-witness` (so the tier arms and the miss is loud), and `champ-of`'s
+  assertive-PATH arm is deleted (so it consults only the BLOCK tier). ⭐ The
+  assertive tier's guarantee is about the **KEY** — `project`'s question, which
+  keeps its arm. It was never about the element's SHAPE, and this file mints
+  non-champ values AT MAP TYPE by ruling. Net **−2 arms**.
+  **⚠⚠ MY FIRST CUT ADDED AN `expr-nil?` ARM INSTEAD, and the verify refuted it
+  twice** — all three skeptics AND the adjudicator converged, and the adjudicator
+  built and measured the better fix. (i) My width argument was a **TYPE-level
+  claim defending a VALUE-level site**: the gate bounds component TYPES, not
+  whether a value at `[Map K V]` is a champ — `ub.a` (the route my own comment
+  called safe) yields `none : [Map …]`, and broadcasting it went `none` → PANIC, a
+  value→error break, under a comment calling the bound "MEASURED". (ii) Sitting
+  above the block arm it **silently weakened Horn D** on the reachable
+  `map-assoc` dyn-key route; my own probe missed it by testing a typing-refused
+  shape.
+  **Gates**: battery **432 → 436** · acceptance 0 mismatched × 5 · full suite
+  **10072 / 488 / 0**, `[488/488]`. **Filed**: DEFERRED **84** — the whole-node
+  `return` still lets ONE absent element answer for the node (loudness by champ
+  hash order; data discarded; a scalar at a container type). Needs a per-element
+  vs node ruling plus an ordering-agreement pin.
+
+  Next is the **P4d close** — Q1 is now RULED and implemented; **Q2 and Q3 remain,
+  and BOTH are mis-posed as written** (Q2's equivalence is false for the caret
+  family; Q3's dyn channel is wider than the union gate).
 
 - **⬜ Slice 4d — the remaining diagnostics** (what 4c did not reach). ⚠ The
   scope below is RE-DERIVED by the slice-4d mini-audit (`wf_a154667e-42f`,
