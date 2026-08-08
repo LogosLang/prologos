@@ -33,7 +33,7 @@ rulings, censuses and test delta live in its own section.
 | **P4** | **Broadcast ω** — ⭐ **P4a ✅ · P4b ✅ COMPLETE** (b-i carrier + b-ii `$dot-access` migration; `x.a` now mints the unified selector carrier) · P4c–P4e ⬜ — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | [§5.P4](#p4) · co-design: audit `wf_8458c23b` + options panel · **RULED 2026-07-31**: [Q_U5](#q-u5) · [Q_U6](#q-u6) · [Q_U7](#q-u7) · [Q_U8](#q-u8) · [Q_U9](#q-u9) (the PAUSE cleared) · partition LOCKED P4a–P4e |
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
 | **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [§5.P4c](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([inverted default](#p4c-2-inverted)) · [P4c-3](#p4c-3) ✅ `d477772c` · [P4c-4a](#p4c-4a) ✅ `f31237fd` · [P4c-4b](#p4c-4b) ✅ `6b22515d` (end to end) · **[P4c-4c](#p4c-4c-close) ✅ `ae26f540`** — broadcast is REACHABLE: PVec ω value semantics + **G2** + the preparse seam guard. ⭐ The verify caught a BLOCKING whole-file abort every gate was blind to; owner ruled the structural fix ([close](#p4c-4c-close)) · [Q_U18](#q-u18) ✅ · DEFERRED 43 ✅ · 48 RULED uniform · P4c-5 ⬜ |
-| **P4d** | **The carriers** — Map/keyword-row (TWO typing arms: keyword-row `expr-Record` + genuine `expr-Map`; ONE new champ reduction arm, atomic with typing) · het tuple (TYPING-ONLY — same `expr-rrb` runtime as PVec) · PVec-of-union + `row-meet` (NEW machinery + an AUTHORED fixture) · the Q_U9 refusal's message split · corpus re-fate · **Q_U19 ✅ RULED (A)** at the opening | 🔄 | [§5.P4d](#p4d) · opened 2026-08-07: audit `wf_4bc76d94-a2d` · **slice 0 ✅ `00e52c42`** (the soundness fix) · **slice 1 ✅ `14ef5e83`** (the map carriers) · **slice 2 ✅ `ba1c055d`** (het tuple; **C9 (a)**) · **slice 3 ✅ `1e8d0795`** (PVec-of-union keys-⋂; **Q_U21 (a)** Nil is skipped) · **slice 4a ✅ `61d64708` + `d3947594`** — the carrier advice stops lying and starts FUSING (`:a:b` → `m.a.b`, the functor law); the verify caught TWO blocking defects of mine, one of them an O(2^depth) walk (suite **9964/485/0**, battery **415**, acceptance **77/77**) · slice 4 ⬜ |
+| **P4d** | **The carriers** — Map/keyword-row (TWO typing arms: keyword-row `expr-Record` + genuine `expr-Map`; ONE new champ reduction arm, atomic with typing) · het tuple (TYPING-ONLY — same `expr-rrb` runtime as PVec) · PVec-of-union + `row-meet` (NEW machinery + an AUTHORED fixture) · the Q_U9 refusal's message split · corpus re-fate · **Q_U19 ✅ RULED (A)** at the opening | 🔄 | [§5.P4d](#p4d) · opened 2026-08-07: audit `wf_4bc76d94-a2d` · **slice 0 ✅ `00e52c42`** (the soundness fix) · **slice 1 ✅ `14ef5e83`** (the map carriers) · **slice 2 ✅ `ba1c055d`** (het tuple; **C9 (a)**) · **slice 3 ✅ `1e8d0795`** (PVec-of-union keys-⋂; **Q_U21 (a)** Nil is skipped) · **slice 4a ✅ `61d64708` + `d3947594`** — the carrier advice stops lying and starts FUSING (`:a:b` → `m.a.b`, the functor law) · **slice 4b ✅ `19ce05aa`** — a CLOSED schema is the row it denotes; the verify rejected TWO cuts over a capability bypass and two width lies, all mine (suite **9970/485/0**, battery **421**, acceptance **77/77**) · slice 4 ⬜ (scope re-derived: the 4a advice is still carrier-unvouched, and Q_U19 is answered by Q_T4a's precedent) |
 | **PF** | **Path first-classness** (substrate; **P5's prerequisite**) — ⭐ **Q_U17 RULED B2**: a Path segment is a first-class `Step` value. Reify the closed six-kind union as a `data Step` ADT on the `Datum` pattern; `Path` stays GROUND; `segments : Path -> [List Step]`. Repairs the dead `path-segments` in the SAME change | ⬜ | [§5.PF](#pf) · [Q_U17](#q-u17) · panel `wf_68178bd3-eea` |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery · ⚠ B3 needs [PF](#pf) |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | [§5.PX](#px) · position flexible |
@@ -6288,8 +6288,69 @@ first as slice 0"]:**
   describing a broadcast — pre-existing at one step, extended by fusion) ·
   **61** (advice withdrawn where it was correct; block sort could advise the
   brace spelling `m{…}`).
+- **✅ Slice 4b — the schema CARRIER gap — COMPLETE 2026-08-08** (`19ce05aa`;
+  owner ruled it INTO slice 4 rather than papering over it with a message).
+  Opened by the slice-4 mini-audit (`wf_3e586347-b98`), which found that
+  `select-row-of` resolves a schema fvar to its closed row — so `p{name}` and
+  `p.name` work — while `select-bcast-lift` tested `expr-Record?` on the RAW
+  type and told the same value it "needs a … closed keyword-row subject". A
+  message could only have papered over that.
+  **⚠ The obvious framing was wrong, and measuring caught it before design**:
+  this does NOT make `p:name` succeed on a FLAT schema. `:` projects from each
+  field VALUE, so `{:name String}` + `:name` fails on a plain row too. What it
+  buys is that a schema SUCCEEDS wherever its row succeeds (`rg:host` over a
+  row of records → `{:eu "e", :us "u"} : {:eu String :us String}`, identical to
+  the plain row) and FAILS the same way where its row fails (byte-identical).
+  **⚠⚠ THE VERIFY REJECTED TWO SUCCESSIVE CUTS — three BLOCKING defects, all
+  mine, all green on battery + five acceptance files + the full suite:**
+  **(1) a CAPABILITY BYPASS** — `select-row-of` tests SELECTION first then
+  schema and calls the order load-bearing (both registries accept one name); my
+  first cut copied only the schema arm, so with a `schema P` + `selection P
+  from P` collision `u.age`/`u{name}` were refused by the view while `u:h`
+  returned the restricted field's contents at ZERO errors · **(2) a WIDTH LIE
+  (extras)** — `schema` is OPEN by default and `schema->row` mints `'closed`;
+  broadcast is the FIRST consumer that ENUMERATES the row, so a 3-key `Region`
+  (the slice's own flagship example) gave `{:ap "a", :eu "e", :us "u"} :
+  {:eu String :us String}`, and an extra key that cannot offer the field
+  produced a silent `<error>` propagating into a `def` · **(3) a WIDTH LIE
+  (absence)**, found by the RE-verify after 1 and 2 closed — every field is
+  minted `'present` while the fill "happens at the seal boundary", and a
+  `spec f -> S` RETURN has no fill, so a `:default`-ed field can be `'present`
+  and ABSENT: `c:h` → `{:a "q"} : {:a String :b String}`, `broad.b` → a silent
+  `<error>`.
+  Plus a fourth I caught myself first: the lift resolved and
+  `select-tier-subject` did not, so a Map miss inside a schema-typed row went
+  QUIET where its row PANICS — slice 1's "one gate was two", one carrier over.
+  **The shape**: ONE `bcast-resolve-subject`, called from BOTH sites, admitting
+  only a non-selection, `:closed`, default-free schema. Each conjunct is a
+  measured defect, named at the site; all three refusals are monotone.
+  **Gates**: battery **415 → 421** · acceptance 0 mismatched across all five ·
+  full suite **9970 / 485 / 0**, `[485/485]`.
+  **Filed**: DEFERRED **62** (the precise presence gate — a broadcast-specific
+  `schema->row` restores both refused populations) · **63** (inline nested
+  schemas are always OPEN, so this lands only for top-level NAMED closed
+  schemas, and the refusal leaks a generated `Region__us`) · **64** (both new
+  gates are SILENT — "add `:closed`" is never said, and a collided selection
+  gets a message `select-row-of` itself calls a lie; slice-4c work) · **65**
+  (pre-existing: `lookup-schema-by-name` matches the SHORT name, so a `data`
+  type can resolve to a same-named schema).
 - **⬜ Slice 4 — the diagnostics batch (LAST, so messages describe the final
-  surface)**: the `bcast-carrier` **per-carrier split** (Set's own sentence;
+  surface)**. ⚠ RE-DERIVED by the slice-4 mini-audit, and the plan was wrong in
+  three places: the **Functor clause was NEVER in the code** (only in Q_U9's
+  rationale) · **DEFERRED 47 ≡ 59.1**, one string at one site, probe-verified ·
+  **Q_U19 is NOT an open siting problem** — `ordinal-rekey-message` is ONE
+  string emitted from FOUR sites, written at P3b for **Q_T4a**, the identical
+  "`^` has no key" question one construct over; that is the precedent, and the
+  preparse fold carries a per-command error channel plus two arms of the shape.
+  ⚠⚠ **And the advice slice 4a shipped is STILL WRONG**: it fires only on
+  subjects that already failed, and `pvec-map` needs a PVec, so
+  `[pvec-map [fn [m] m.name] L]` does not typecheck. 4a vouched the FIELD-NAME
+  half and left the CARRIER half unvouched; the composed
+  `[pvec-map … [pvec-from-list xs]]` works, and `[pvec-from-list [set-to-list
+  xs]]` for a Set (both verified). Since the advice is a `~a` slot INSIDE the
+  carrier format string, the split and the advice are ONE edit — which also
+  forces DEFERRED 60, 61 and 64.
+  Remaining: the `bcast-carrier` **per-carrier split** (Set's own sentence;
   dyn-tail's seal/validate remedy; ⚠ the List wording needs no Functor-clause
   DELETION — the clause was never in the code, only in Q_U9's rationale) ·
   Q_U19's unified refusal + the two `Unbound variable` fall-through routes +
