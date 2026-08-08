@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 88**
+> ### **NEXT FREE: 89**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -5636,3 +5636,71 @@ since the user would no longer have written a width-specific name.
 the trait dispatch is library surface, so Level 3 (`process-file` on a real
 `.prologos` file) is the one that matters, plus the `floor(√n)` cases above as
 the `Int` instance's own pins.
+
+---
+
+### 88. ⬜ A CARET DOES NOT APPLY EXACTLY ONCE — twice through a broadcast, ZERO times through a sub-block (CIU T6 D4.P4d, Q2's real content)
+
+The spec's rule (§3.4) and Q_T7/Q_T8 together say: **a caret applies exactly
+once, at the level where it is written, and "dropped means dropped."** On a plain
+dot path HEAD satisfies this exactly — all four ruled operators are correct:
+
+```
+app{server.ssl.enabled^-}     → {:enabled true}               ;; Q_T7: whole branch FLAT
+app{server.ssl.enabled^-ssl}  → {:ssl true}                    ;; Q_T7: flat, renamed
+app{server.ssl.enabled^..}    → {:server {:ssl true}}          ;; Q_T8: ONE level, ancestors kept
+app{server.ssl.enabled^ssl}   → {:server {:ssl {:ssl true}}}   ;; rename in place
+```
+
+**Three measured members where it does not.** Subject:
+`def cfg := {:servers @[{:host "localhost" :port 8080} {:host "example.com" :port 443}]}`
+
+**(1) ZERO applications — `^-` is INERT inside a sub-block, silently degrading to
+`^`.** Both spellings produce identical output at 0 errors:
+```
+app{server.ssl.{enabled^-ssl cert-path^-cert}}  → {:server {:ssl {:cert …, :ssl true}}}
+app{server.ssl.{enabled^-ssl cert-path^cert}}   → {:server {:ssl {:cert …, :ssl true}}}
+```
+Per Q_T7 the first should hoist both entries flat → `{:ssl true :cert "…"}`. The
+`-` is discarded: the user asks to COLLAPSE and silently gets a RENAME. This is
+the sharpest member — two spellings with ruled-different meanings are
+indistinguishable.
+
+**(2) TWO applications — the caret reaches OUT through a broadcast.**
+```
+cfg{servers:host^}       → @[@[@["localhost"] @["example.com"]]] : ⟨[PVec ⟨String⟩]⟩
+cfg{servers:host^-name}  → {:name @[{:name "localhost"} …]}
+```
+In the first the dissolve fires at the inner (each element → `⟨String⟩`) AND
+again on the outer branch (the block itself goes keyless) — hence three levels of
+wrapping. In the second the rename lands on the inner AND the outer key. Expected
+under the caret-once rule: `{:servers @[⟨"localhost"⟩ ⟨"example.com"⟩]}` and a
+single flat hoist respectively.
+
+**(3) A dropped key BORROWS a name instead of staying dropped.**
+```
+cfg{servers^:host}  → {:host @[{:host "localhost"} …]}
+```
+`servers^` dissolves the `servers` level, so nothing should name the block entry
+— "dropped means dropped". Instead the output name is taken from the INNER step.
+
+**Root cause, verified in three places**: the leaf/label classifiers are
+ω-TRANSPARENT but SUB-OPAQUE. `select-branch-collapse` and `select-branch-keyless`
+both do `(if (eq? (select-step-kind s0) 'bcast) (select-bcast-inner s0) s0)` —
+seeing THROUGH the ω wrapper to find a caret and re-classifying the whole outer
+branch — while `select-step-output-name` has `[(sub) #f]` and never unwraps a sub.
+So a caret written bare after `:` is counted at two levels, and one written inside
+`:{…}` is confined and cannot reach the level `^-` is defined to collapse.
+
+⚠ **The fix is constrained by [Q_U22](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u22)**:
+`^` at a leaf stays ARITY-UNIFORM, so `cfg{servers:host^}` corrects to
+`{:servers @[⟨"localhost"⟩ …]}` (1-tuples), NOT to bare values. Fixing toward the
+bare-value reading would make `xs:{name^}` a second spelling of `xs:name`, which
+slice 4c retired.
+
+⚠ **Not a P4d regression** — the asymmetry predates the phase (P4c-3's Q_U7 ω
+transparency); P4d made it reachable and visible. Sizing note: member (1) is
+likely independent of (2)/(3) and may be separable.
+
+**Pin obligation**: all four ruled dot-path lines above (they are the oracle and
+nothing pins them), plus one pin per member, plus the arity pin from Q_U22.

@@ -1566,7 +1566,30 @@ items of the hold-point, ruled before P4a opened:
   semantics RULE of the lift rather than inherited from context — that is the
   ruling, not an implementation accident. Grounding: mini-audit
   `wf_e15a1ef6-dfb` (its sub-inner facet measured the sort collision at both
-  layers). **Next free Q-label: U22.**
+  layers).
+
+- <a id="q-u22"></a>**⭐ Q_U22 — `^` AT A LEAF IS ARITY-UNIFORM: n=1 YIELDS
+  `⟨T⟩`, NOT THE BARE VALUE [owner, 2026-08-08].** Raised co-designing Q2: the
+  owner's reading of *"dropped means dropped"* (spec §3.4) predicts that
+  `xs:host^` should give `@["a" "b"]` — the values, unwrapped — where HEAD gives
+  a vector of 1-tuples. **Ruled the other way, and NOT on implementation cost.**
+  Two dropped keys at one level are FORCED to be positional (you cannot put two
+  unnamed things in a record), so keyless→tuple is settled at n=2 by the live
+  unzip `party:{name^ level^}` → `[PVec ⟨String Int⟩]`. Collapsing n=1 to the
+  scalar would make the operator ARITY-DEPENDENT — one dropped key unwraps, two
+  tuple up — which breaks the algebra's uniformity for a cosmetic gain. Owner:
+  the coherence of the algebra is the deciding reason, and **`<` (disclose/pick)
+  plus `join` recover the ergonomics** that the bare-value reading was reaching
+  for, so nothing is lost expressively.
+  ⚠ Second, independent ground, recorded because it survives even if the
+  algebra argument is later revisited: n=1 unwrapping would make `xs:{name^}`
+  a SECOND SPELLING of `xs:name`, which is exactly what slice 4c's owner ruling
+  retired ("stop teaching a second spelling"). The bare-value spelling already
+  exists and is `xs:name`.
+  **Consequence for Q2, accepted eyes-open**: `cfg{servers:host^}` reads as
+  `{:servers @[⟨"localhost"⟩ …]}` under the caret-once fix — honest, uniform,
+  and less pretty than the owner's intuition. That is the trade, named.
+  **Next free Q-label: U23.**
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
@@ -6561,9 +6584,35 @@ first as slice 0"]:**
   hash order; data discarded; a scalar at a container type). Needs a per-element
   vs node ruling plus an ordering-agreement pin.
 
-  Next is the **P4d close** — Q1 is now RULED and implemented; **Q2 and Q3 remain,
-  and BOTH are mis-posed as written** (Q2's equivalence is false for the caret
-  family; Q3's dyn channel is wider than the union gate).
+- **✅ Q2 (the Q_U20 block cell) — ANSWERED 2026-08-08, and the question was
+  MIS-POSED.** D4 recorded it as *"in block position `hx{evs:t}` ≡ `hx{evs:{t}}`
+  … the extract/assemble distinction COLLAPSES"*. Measured: that holds for PLAIN
+  and RENAME inners and FAILS for the caret family, both spellings succeeding at
+  0 errors with different output keys, shapes and arities. So the "collapse" was
+  never the content.
+  **⭐ The content is a RULE the owner's own intuitions turned out to encode, and
+  it is the SPEC's**: *a caret applies EXACTLY ONCE, at the level where it is
+  written — and dropped means dropped* (§3.4). HEAD applies it **twice** through
+  a broadcast and **zero** times through a sub-block, and correctly once on a
+  plain dot path. Verified against the rulings, which the dot path satisfies
+  exactly: `app{server.ssl.enabled^-}` → `{:enabled true}` (Q_T7, whole branch
+  flat) · `^-ssl` → `{:ssl true}` · `^..` → `{:server {:ssl true}}` (Q_T8, one
+  level, ancestors kept) · `^ssl` → `{:server {:ssl {:ssl true}}}` (rename in
+  place). Four operators, four ruled meanings, all correct on one branch.
+  **So the divergence is a DEFECT, not semantics — filed as DEFERRED 88** with
+  its three measured members. ⚠ Correcting my own earlier framing to the owner:
+  I first argued the divergence was correct structure ("two genuinely different
+  nestings") and that making the spellings agree was disqualified from both
+  sides. That was rationalising the implementation — I had not checked it
+  against Q_T7, which rules `^-` as "collapses the whole branch FLAT". The
+  owner's intuition was the ruling; my reading was not.
+  **Arity settled separately by [Q_U22](#q-u22)** — `^` at a leaf stays
+  arity-uniform, so the fix does NOT make `xs:{name^}` a second spelling of
+  `xs:name`.
+
+  Next is the **P4d close** — Q1 ✅ ruled and implemented, Q2 ✅ answered
+  (fix deferred as 88). **Q3 remains, and is mis-posed as written**: its dyn
+  channel is wider than the union gate it is filed against.
 
 - **⬜ Slice 4d — the remaining diagnostics** (what 4c did not reach). ⚠ The
   scope below is RE-DERIVED by the slice-4d mini-audit (`wf_a154667e-42f`,
