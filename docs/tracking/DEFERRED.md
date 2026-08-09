@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 93**
+> ### **NEXT FREE: 94**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -5926,3 +5926,64 @@ found two more, both at `4317c88d`:
    whether this vocabulary is the same operator, a different one, or retiring.
 
 Grep `wildcard-seg?` and `string=? seg "*"`; neither is in P4e's bullet.
+
+
+### 93. ⬜ Integral floats/posits display INCONSISTENTLY across the six widths — 2 keep the `.0`, 4 drop it (found 2026-08-08)
+
+Measured at `1ba731eb`, same value in each format:
+
+| format | integral | non-integral |
+|---|---|---|
+| Posit32 | `1.0` ✅ | `0.5` |
+| Float64 | `1.0f` ✅ | `0.5f` |
+| Float32 | `1f32` ⚠ | `0.5f32` |
+| Posit64 | `1p` ⚠ | `0.5p` |
+| Posit8 | `1p8` ⚠ | — |
+| Posit16 | `1p16` ⚠ | — |
+
+Only INTEGRAL values are affected — every format prints non-integral values with
+digits. It is not a literal-vs-computed distinction either: `[p64/ 2.0p 2.0p]`
+prints `1p` exactly as the literal `1.0p` does.
+
+**Cosmetic, NOT a correctness bug — verified.** Every printed form re-reads as
+its own type: `1p` → `Posit64`, `1f32` → `Float32`, `1p8` → `Posit8`. So this is
+a legibility/consistency item, not a round-trip failure.
+
+**CAUSE — three different mechanisms, only one of them deliberate**
+(`pretty-print.rkt`):
+- **Posit32** forces it ON PURPOSE — `posit->display`'s `n = 32` arm appends
+  `".0"` when the shortest decimal contains neither `.` nor `e`, and the
+  function's own header says *"Posit32 bare (integral → forced `.0`)"*.
+- **Float64** gets it BY ACCIDENT — `float64->display` is
+  `(string-append (number->string v) "f")`, and Racket's `number->string` on a
+  flonum already yields `1.0`. Nothing in our code asked for it.
+- **Float32, Posit64, Posit8/16** get no forcing at all: `float32->display` runs
+  `shortest-decimal` (which yields `1`) then appends `f32`; the `n = 64` and
+  `else` arms of `posit->display` append `"p"` / `"pNN"` to the bare shortest
+  decimal.
+
+⚠ **The code's own stated intent is not achieved.** `posit->display`'s `n = 64`
+arm carries the comment *"Posit64 → bare `p` (symmetry with Float64's `f`)"* —
+but for integral values Float64 prints `1.0f` and Posit64 prints `1p`, so the
+symmetry the comment claims is exactly what does not hold. Whoever fixes this
+should treat that comment as the specification and make it true, or change it.
+
+**Why it matters beyond tidiness**: an integral posit/float reads as an INTEGER
+at a glance. This was filed because a user read `* 3 [/ 1.0 3.0]` and its three
+siblings as having returned `Int`, and asked how the rounding was collapsing to
+one — the values were correct (`1.0`/`1f32`/`1p`/`1.0f`, all exactly one), the
+display just made three of the four look like integers.
+
+**⭐ OPEN — which way to unify?** Not obvious, and it should be ruled before the
+code moves:
+(a) force `.0` everywhere → matches Posit32 and Float64, makes "this is not an
+    Int" visible at a glance, and is the reading the `n = 64` comment implies;
+(b) drop it everywhere → matches the majority (4 of 6) and the shortest-decimal
+    principle, but makes every integral float print like an Int.
+⚠ Note (a) has a snag the entry should not hide: `posit->display`'s header
+documents the Posit8/16 bare-integer form as INTENTIONAL — *"integral mantissa
+re-reads via the pNN integer shape, e.g. `2p8`"* — so unifying toward `.0` needs
+that claim re-checked, not overridden.
+
+**Adjacent, same investigation**: DEFERRED 85 (a posit primitive sticks on an
+exponent literal) and 86 (a mistyped argument reports "Multiplicity violation").
