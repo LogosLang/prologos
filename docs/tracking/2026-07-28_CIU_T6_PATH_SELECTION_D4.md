@@ -1816,7 +1816,49 @@ items of the hold-point, ruled before P4a opened:
   Q_U23's move to `database*` had deleted. Accepted eyes-open: one grouping fix
   now buys a genuinely new operator instead of a spelling that was an identity
   half the time.
-  **Next free Q-label: U27.**
+- <a id="q-u27"></a>**⭐ Q_U27 — `*` IS SORT-GENERIC IN THE SURFACE TOO, NOT ONLY
+  IN THE SEMANTICS. THE READER WORK IS TAKEN ON [owner, 2026-08-08 — "Let's take
+  on the sort-generic and make it available in a way that makes us proud of
+  accomplishing a work brought to completeness"].** Closes the hole the P4e
+  mini-audit opened under [Q_U23](#q-u23): the rule generalizes over layers but
+  the LEXING did not, leaving `m{0*}` byte-identical to `m{0 *}` — an
+  **unspellable case in a ruled operator**, which this track's own record says
+  comes back.
+  **THE ARCHITECTURE IS A HYBRID, AND IT IS FORCED — one sentinel, two sources.**
+  Grounded on the landed mechanism, re-verified on the main thread:
+  · **Non-identifier heads** (ordinal, `}`/`]`/`)` closers, sub-blocks) — the
+    star is ALREADY its own token, byte-adjacent to the base. So this is the
+    **`adjacent-to-base?` mint**, the [Q_U8](#q-u8) shape: a star token adjacent
+    to a non-empty local result mints the sentinel. Every one of these carriers
+    joins **FREE**, because `adjacent-to-base?` *"consults no token type"* — its
+    own comment names `.N`, brackets, braces, parens and closers as joining the
+    focus set at no cost. This is the same predicate `bcast-step-trigger?` and
+    `bcast-brace-trigger?` are built from.
+  · **Identifier heads** — the star is ALREADY FUSED (`database*` is ONE token,
+    because `ident-continue?` admits `*`), so adjacency cannot see it. This is
+    the **post-tokenization splitter**, the `split-caret-lexeme` shape, at
+    `segment-select-items`' call sites.
+  · The two sources MUST converge on ONE sentinel so the consumer is one arm.
+  **Why the hybrid is forced rather than chosen**: removing `*` from
+  `ident-continue?` would break `int*` (148 HEAD-pinned uses) and its family, so
+  the fusion cannot be prevented; and the adjacency mint cannot see a fused
+  token. Neither mechanism alone covers both. ⚠ *Architecture PROPOSED here from
+  verified mechanism; the slice's own mini-round confirms before it lands.*
+  **NON-NEGOTIABLE CARRY-OVERS from the landed twins** — each already cost a
+  BLOCKING regression once: (i) **ONE definition consumed by BOTH groupers**
+  (the F1b.7g drift class; `surface-rewrite.rkt` hand-inlines a non-exported
+  sibling today). (ii) **The decline is a CLASS, not a list** — copy
+  `(not (prev-token-not-emitted? vec i))`; its comment records that shipping it
+  "as a list of one" cost a blocking regression. (iii) **Corpus A/B MANDATORY
+  with a NAMED predicted diff set** — grouping changes datums (Q_U8's precedent).
+  (iv) The mint slice lands **ALONE** (the P4d-0 precedent: a shared grouper
+  predicate makes a bundled A/B un-attributable).
+  **Ravel's recognizer is separate and its discrimination is clean**: bare `.*`
+  fails today because `recognize-dot-access` explicitly declines `.*` and the
+  `.*name` retirement recognizer requires an identifier AFTER the star. So
+  **presence-of-trailing-identifier IS the discriminator**, and it already lives
+  in the recognizer — `.*name` keeps the retirement error, bare `.*` mints ravel.
+  **Next free Q-label: U28.**
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
