@@ -1888,7 +1888,41 @@ items of the hold-point, ruled before P4a opened:
   exist in the tree** (HEAD-pinned; the only `.prologos` hit is `:diags*`, the
   operator itself in a commented corpus line, and the `.rkt` hits are the
   battery pin plus English prose), so the trade is currently free of victims.
-  **Next free Q-label: U29.**
+- <a id="q-u29"></a>**⭐ Q_U29 — A MID-LEXEME `*` IS A GUIDED ERROR IN ALL THREE
+  BANDS (option 2) [owner, 2026-08-08 — "Option 2"].** A star in a lexeme is the
+  OPERATOR or it is nothing; there is no field-name fallback. `r{c*d}` and
+  `r.c*d` become guided errors; `xs:c*d` is unchanged (already refused).
+  **THE MEASURED STATE THIS REPLACES** — the three bands disagreed, and had for
+  the whole track:
+  | lexeme | `r{…}` block | `r.…` dot | `xs:…` ω |
+  |---|---|---|---|
+  | `ab*` (trailing) | `{:ab* 1}` field | `1` field | REFUSED |
+  | `c*d` (mid) | `{:c*d 2}` field | `2` field | REFUSED |
+  The ω guard is `#rx"[*]"` — **ANY-star, not trailing-star**, and its own
+  comment misdescribes itself as trailing-only. So option 2 does not invent a
+  refusal; it PROPAGATES the one the ω band already had, and retires a live
+  three-way divergence.
+  **Rejected-with-reason**: **option 1** (mid-star stays a field name
+  everywhere) — uniform, but it DROPS the ω band's live refusal, acquiring
+  permissive drift as a side effect of adding an operator, which is the
+  direction this project does not drift by accident · **option 3** (keep today's
+  per-band divergence) — smallest diff, but it institutionalizes `r{c*d}`
+  working while `xs:c*d` refuses, the "two spellings of one form disagreeing"
+  class DEFERRED 32 was filed for.
+  **Why the breaking half is payable**: census at the ruling found **ZERO
+  star-bearing field names in the tree** (HEAD-pinned over tracked sources; the
+  only `.prologos` hit is `:diags*`, the operator itself in a commented corpus
+  line, and the `.rkt` hits are the flatten battery pin plus English prose in a
+  Racket comment). The break costs nothing that exists. And the ESCAPE HATCH is
+  measured: `[map-get r :c*d]` → `2`.
+  **Precedent it follows**: `split-caret-lexeme` REFUSES >1 caret and a leading
+  caret rather than falling back to a field name — malformed operator position →
+  guided refusal is already the house pattern for this family.
+  **The error must name the escape**, per the "remedy points at a reachable
+  spelling" rule: *"`*` is the layer-delete operator and attaches at the END of a
+  segment; `c*d` is neither a field nor an operator. A field literally named
+  `c*d` is reached with `[map-get r :c*d]`."*
+  **Next free Q-label: U30.**
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
