@@ -7139,6 +7139,89 @@ them.
 
 **Status: ✅ P4d COMPLETE.** Next: **[P4e](#p4e)**.
 
+<a id="p4e-0"></a>
+
+### §5.P4e-0 — the star MINT substrate  (opened 2026-08-08; Stage-4 Per-Phase Protocol)
+
+**Scope: the MINT ONLY.** One sentinel, two sources, consumed by a guided
+not-yet. **No `*` semantics land here** — that is P4e-1. The slice lands
+**ALONE** ([Q_U27](#q-u27)): it touches a predicate both groupers share, and
+P4d-0's precedent is that bundling makes the corpus A/B un-attributable.
+
+#### Mini-design (protocol step 1)
+
+- **Design reference**: [Q_U23](#q-u23) (the `*` unification + its CORRECTED
+  lexical-dividend block) · [Q_U27](#q-u27) (the forced hybrid) ·
+  [Q_U28](#q-u28) (shadowing matches `^`) · [Q_U29](#q-u29) (mid-star is a
+  guided error in all three bands) · [§5.P4e](#p4e).
+- **Obligations carried**: **DEFERRED 90**'s fix rides here (the continuation
+  classifier must REJECT an unknown continuation instead of renaming to it; its
+  precedence half is already discharged — Q_U29 plus the no-output-key
+  principle) · the battery pin for the `*` refusal moves WITH its text ·
+  DEFERRED 91's wrong advice sits on this path but is P4e-1's fix.
+- **Principles in play**: **Correct-by-Construction** — the decline must be a
+  positive test by SHAPE, so a future sentinel is excluded by construction; the
+  `param-group-candidate?` repair is the in-tree precedent. **Decomplection** —
+  two sources, ONE downstream meaning, so the consumer stays one arm.
+  **Completeness** — the whole point of Q_U27 is that a ruled operator may not
+  have an unspellable case.
+- **Mantra check, honestly**: this is READER/PARSER work, so "on-network",
+  "all-at-once" and "in parallel" do **not** bite, and claiming otherwise would
+  be cataloguing. **One word does bite: STRUCTURALLY EMERGENT.** The mint must
+  fall out of *adjacency* — a structural property `adjacent-to-base?` already
+  computes and which "consults no token type" — and NOT out of an enumerated
+  list of contexts. Q_U8 recorded that "six enumeration under-counts this arc";
+  the enumeration is the drift, adjacency is the emergence.
+- **Drift risks, named BEFORE code**: (i) enumerating carriers instead of
+  leaning on type-blind adjacency · (ii) shipping the decline "as a list of
+  one" — its own comment records that this already cost a BLOCKING regression ·
+  (iii) letting the two groupers diverge (the F1b.7g class; `surface-rewrite`
+  already hand-inlines a non-exported sibling) · (iv) making the splitter
+  trailing-only *in effect* and silently admitting mid-star, violating Q_U29 ·
+  (v) scope creep into semantics — the consumer here is a REFUSAL.
+
+<a id="p4e-0-audit"></a>
+
+#### Mini-audit (protocol step 2) — read at `da47cf2d`
+
+**⭐ THE SLICE'S DEFINING FINDING: the star mint is COUNT-CHANGING, so it is the
+`bcast-brace-trigger?` shape, NOT the `bcast-step-trigger?` shape.** `*` is
+POSTFIX — it modifies the item BEFORE it — so the mint consumes the preceding
+result item and wraps it (`0` + `*` → `($star-step 0)`, 2 items → 1). Its two
+siblings differ exactly here, and the difference decides the tree twin:
+- `bcast-step-trigger?` wraps the FOLLOWING token and is count-preserving, so
+  **its tree arm is a behavioural NO-OP** — verified by reading:
+  `surface-rewrite.rkt`'s arm is `(loop (+ i 1) (cons item result))`,
+  **byte-identical to its own `[else]` two lines below**.
+- `bcast-brace-trigger?` IS count-changing (3 items → 2), so its tree twin
+  genuinely FUSES to one `'bcast-brace-group` node.
+**The star follows the BRACE precedent**: the tree twin must fuse, and the
+**Q_N3 v2 agreement guard gains a row** — proposed
+`("x{a}*" '$star-step 'star-step-group "the postfix star mint, closer-adjacent")`,
+using a closer-adjacent spelling so the starred item is the LAST item of the
+line, which is what that guard inspects.
+
+**The two sources and where each lives**:
+| Head kind | Star's token state | Mechanism | Layer |
+|---|---|---|---|
+| ordinal, `}`/`]`/`)` closers, sub-blocks | ALREADY its own token, byte-adjacent | `adjacent-to-base?` mint (Q_U8 shape) | BOTH groupers |
+| identifier (`database*`) | ALREADY FUSED into the symbol | `split-star-lexeme` (the `split-caret-lexeme` shape) | parser, in `segment-select-items` |
+Both converge in `segment-select-items`, which has **4 call sites** — the ω
+sub-inner, the block sub, the block, and `$select-path` (the bare dot path) —
+so one splitter serves every identifier-headed surface, mirroring `split-step`'s
+three sites.
+
+**DEFERRED 90's fix site, read**: `split-caret-lexeme`'s continuation classifier
+is a chain of exact-string compares with a **rename catch-all** at the bottom,
+which is why `^_*` / `^a*` / `^*` all become labels. The fix is to reject a
+continuation bearing an operator character before reaching that catch-all.
+
+**The refusal being replaced**: the `#rx"[*]"` arm on the `$bcast-step` payload
+is **ANY-star, not trailing-star**, and its own comment misdescribes it — so
+Q_U29 is already this arm's behaviour, and the slice PROPAGATES it rather than
+inventing it. Its battery pin matches `#rx"\\(flatten\\) is not implemented yet"`
+and is the ONLY `*`-in-selection assertion in the battery.
+
 <a id="pf"></a>
 
 ### §5.PF — Path first-classness  (Q_U17 RULED B2, owner 2026-08-02)
