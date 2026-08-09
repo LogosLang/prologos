@@ -1858,7 +1858,37 @@ items of the hold-point, ruled before P4a opened:
   `.*name` retirement recognizer requires an identifier AFTER the star. So
   **presence-of-trailing-identifier IS the discriminator**, and it already lives
   in the recognizer — `.*name` keeps the retirement error, bare `.*` mints ravel.
-  **Next free Q-label: U28.**
+- <a id="q-u28"></a>**⭐ Q_U28 — A TRAILING `*` SHADOWS A LITERAL FIELD NAME
+  SILENTLY, EXACTLY AS `^` DOES [owner, 2026-08-08 — "Match the `^` reading for
+  now"].** No type-time disambiguation check: the operator always wins, its
+  reading does not depend on what the subject happens to contain, and a
+  genuinely star-bearing key is reached the same way a caret-bearing one is.
+  **THE PRECEDENT, MEASURED at HEAD** (not asserted — this was the worked
+  demonstration the owner asked for):
+  · `q := {:a^b 5 :a {:b 9}}` · `q{a^b}` → **`{:b {:b 9}}`** — the RENAME wins;
+    the literal `:a^b` (value `5`) is unreachable through the block band.
+  · `q.a^b` → a GUIDED error (*"`^` re-keys the OUTPUT of a selection… Use a
+    select block if you want to rename"*) — the band that cannot express the
+    operator refuses with guidance rather than falling back to the literal name.
+  · **`[map-get q :a^b]` → `5`** — the ESCAPE HATCH works. **Shadowing is
+    confined to the SELECTION SURFACE**, which is what makes the trade payable.
+  ⚠ **"Matching `^`" is about SHADOWING, not about band availability.** `^` is
+  refused in the dot band because a field access has no output key to re-key;
+  `*` has no such problem — `r.ab*` descends and then deletes a layer, which is
+  meaningful. Do NOT inherit `^`'s dot-band refusal along with its shadowing.
+  **The exposure is narrower than it looks, and the slice must PIN this**: the
+  genuinely SILENT case needs the subject to carry BOTH `:ab` (row-valued) and
+  `:ab*`. With only `:ab*` present, the splat of `ab` is a field-MISS and errors
+  anyway. *(Predicted, not measured — the surface does not exist yet; pin it.)*
+  ⚠ **"FOR NOW" IS DOING REAL WORK, and the revisit is NOT free.** Adding the
+  disambiguation error later turns a MEANING into an ERROR — the direction
+  §3.6's monotonicity principle **forbids**. So if we ever want it, it must be
+  decided before this surface has users. Recorded as a named cost, not a
+  reversible default. Census at the ruling: **ZERO star-bearing field names
+  exist in the tree** (HEAD-pinned; the only `.prologos` hit is `:diags*`, the
+  operator itself in a commented corpus line, and the `.rkt` hits are the
+  battery pin plus English prose), so the trade is currently free of victims.
+  **Next free Q-label: U29.**
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
