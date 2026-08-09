@@ -49,3 +49,53 @@
 - **Pre-push gate**: A git pre-push hook (`.git/hooks/pre-push`) runs the full suite if no `timings.jsonl` entry exists for HEAD. If a run already exists for the current commit, the hook skips (no redundant re-run). Bypass with `git push --no-verify` in emergencies.
 - **Pre-commit gate**: A git pre-commit hook (`tools/git-hooks/pre-commit`, installed via `tools/install-git-hooks.sh`) runs `tools/check-parens.sh` on staged `.rkt` files. ~100ms per file (read-syntax via Racket); blocks the commit on delimiter mismatch with exact line:column. Closes the bug class where mechanical edits (sed surgery, batch refactors) introduce unbalanced parens that break `raco pkg install` downstream — a pattern that hit `main` once already (commit `d7bd97a4`, fixed in PR #29). Bypass with `git commit --no-verify` for genuine emergencies; failures otherwise are real bugs to fix before committing.
 - **Parameter-leakage lint** (A3-static-lint, BSP-LE Track 2B addendum) -- `racket tools/lint-parameters.rkt` classifies each `make-parameter` call as private / test-registered / unclassified. Uses a baseline file (`tools/parameter-lint-baseline.txt`) to track currently-accepted unclassified parameters; only flags NEW additions. Run: `racket tools/lint-parameters.rkt` (report), `--strict` (exit non-zero if new unclassified found — for CI / manual audit), `--save-baseline` (accept current state as new baseline). Architectural answer is PM Track 12 (parameters → cells for module loading) which obsoletes this lint. Longitudinal pattern 7 (two-context boundary bugs, 6+ PIRs) — tactical near-term protection against silent regressions.
+
+## ⭐ Running the compiler OUTSIDE the suite — use `tools/scratch-run.sh`, never a hand-rolled harness
+
+**The incident (2026-08-08).** Three adversarial-verify subagents each hand-rolled
+an A/B harness, and the harnesses outlived the workflow that spawned them by
+45–75 minutes at **PPID 1** — orphaned, unreapable, ~14 GB between them, one at
+**12.6 GB**, two pinned at 76–80% CPU. Not a leak: RSS sawtoothed by gigabytes
+(9.1 GB → 1.7 GB observed), so GC was reclaiming. The shape was the problem —
+**49 `process-file` calls in ONE Racket process**, each accumulating module
+networks, registries and `.pnet` caches in the same heap, so peak memory scaled
+with corpus size.
+
+**Use the wrapper:**
+```bash
+tools/scratch-run.sh [-t SECONDS] [-c] ONE-FILE.prologos
+for f in corpus/*.prologos; do tools/scratch-run.sh -t 60 "$f"; done   # sweeps
+```
+It enforces three things structurally, so none of them depends on remembering:
+one file per process (it **refuses** a second argument), `timeout -k` with a
+SIGKILL follow-up, and its own process group with an EXIT trap.
+
+**Three facts behind those, each measured — do not re-learn them:**
+
+1. **`timeout N` WITHOUT `-k` IS NOT A LIMIT.** The orphan carried `timeout 550`
+   and was alive at 1h18m. A manual `kill -TERM` on all three did *nothing*;
+   SIGKILL was required. Racket CS in a tight allocation/GC loop does not
+   service SIGTERM. Re-confirmed in the wrapper's own smoke test: a `-t 1` run
+   exits 124 after **7s**, i.e. the SIGKILL is what ends it. Any bare
+   `timeout N racket …` in a command or an agent prompt is a latent orphan.
+2. **`setsid` DOES NOT EXIST ON macOS.** A wrapper that branches on it and falls
+   through leaves the child in the CALLER's process group — so a group-kill in
+   cleanup kills the caller. Use `set -m` (job control gives a background job
+   its own process group, non-interactively too), and never group-kill a pgid
+   equal to your own.
+3. **`racket/prologos/tools/run-file.rkt` ACCEPTS N FILES** (`#:args files files`
+   → `(for ([f (in-list files)]) (run-print f))`). The dangerous shape is
+   reachable, and looks idiomatic, straight from the repo's own runner — which
+   is why the arity bound lives in `scratch-run.sh` and not there (the
+   acceptance harness legitimately passes it a list).
+
+**Safety net:** `tools/reap-scratch-racket.sh` lists (default) or `--kill`s
+Racket processes whose **cwd is under a temp dir** — the discriminator that
+catches any harness, however named, while never touching the LSP server,
+racket-mode, or a `prologos/repl`, which all run from the project tree or `$HOME`.
+Run it after any workflow that ran the compiler.
+
+**In agent/workflow prompts**, say this explicitly: use `tools/scratch-run.sh`;
+do not loop a corpus inside one process; do not leave background processes; and
+the orchestrator should reap afterwards. Agents copy whatever runner they are
+handed — these three copied a single-file scratch runner and *added* the loop.
