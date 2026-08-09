@@ -1720,8 +1720,40 @@ items of the hold-point, ruled before P4a opened:
   collapse** and is therefore real design work, not a spelling change.
   ⚠ **Q_U25 (ii) is consequently CONTINGENT**: its keyless/no-`^` half stands on
   its own (verified — ordinal and ω-over-ordinal branch heads are already
-  keyless), but *admitting the SPELLING does not produce the TRANSPOSE*. Whether
-  branch-initial `:` still belongs in P4e is **RE-OPENED for the owner**.
+  keyless), but *admitting the SPELLING does not produce the TRANSPOSE*.
+  **✅ OWNER RULED 2026-08-08 — branch-initial `:` STAYS IN P4e SCOPE** ("if it
+  is just a `cond` arm, then I see little reason not to include it"). The arm is
+  indeed one `cond` arm — the `kw-sym?` refusal in `segment-select-items`, which
+  fires on precisely this spelling today.
+
+  **⭐ WHAT THE ARM ACTUALLY DELIVERS, and why it is COHERENT rather than
+  broken** (settled 2026-08-08; a hypothesis that it was a live Q_U20 violation
+  was FORMED AND TESTED TO DESTRUCTION — recorded because the negative result is
+  the load-bearing part). The extra `⟨⟩` layer is **two landed rulings applied**,
+  not a defect:
+  · A broadcast step's sort is inherited at `select-bcast-inner-apply/non-union`,
+    where the SUB inner is hard-coded `'block` (Q_U20) and the non-sub inner
+    threads the inherited sort. Measured, the SAME step differs by context:
+    `cfg.servers:host` → `@["a" "b"] : [PVec String]` ('path, extracts) vs
+    `cfg{servers:host}` → `{:servers @[{:host "a"} …]} : {:servers [PVec {:host
+    String}]}` ('block, assembles a keyed row).
+  · **That wrap is CORPUS-PINNED as CORRECT** — acceptance marker **19**,
+    `app-config{admins:name}` → `{:admins @[{:name "Alice"} {:name "Bob"}]}`,
+    live and passing, and carrying its own "CORRECTED 2026-07-29 (handoff
+    verification)" note. So block-context assembly is intended.
+  · For an ORDINAL inner there is no key (`select-step-output-name` → `#f`), so
+    the block assembles ONE KEYLESS component — which by **[Q_U22](#q-u22)**'s
+    arity-uniform rule is `⟨T⟩`, not the bare value. Hence
+    `⟨[PVec ⟨Int⟩] × 3⟩`.
+  **So bare columns would require OVERTURNING Q_U22**, which was ruled on
+  algebra coherence and explicitly rejected the bare-value reading. The arm is
+  therefore correct as-is, and what it ships is **honest-nested columns**.
+  ⚠ Q_U22's own text names the recovery: *"`<` (disclose/pick) plus `join`
+  recover the ergonomics."* BOTH are P4e operators — so whether the bare-column
+  transpose is spellable END TO END inside P4e depends on whether the recovery
+  can attach at a branch head. ⚠ The obvious spelling `{:0*}` is **BLOCKED by
+  the ordinal-star shatter** recorded under [Q_U23](#q-u23) (`m{0*}` ≡ `m{0 *}`),
+  so this is NOT free. **OPEN — carried into P4e's slicing.**
   **⚠ THE COST, named**: `{:0}` is not free — measured, it is claimed by the
   landed diagnostic *"block keys are written bare — `x{0}`, not `x{:0}`"*, which
   assumes a leading colon in a block is a TYPO. Admitting branch-initial `:`
