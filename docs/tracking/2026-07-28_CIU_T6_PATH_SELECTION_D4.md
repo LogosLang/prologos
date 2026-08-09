@@ -6871,7 +6871,7 @@ subject to carry a goal; `subject-preserving-access-heads` excludes them by name
 **Owner rulings (2026-08-08), all landed.**
 1. *"The `let`s shouldn't disagree whether they use a `:=` or not."* — the
    aligned/bare arm mints too. The other two spellings refuse an access on ANY
-   value (DEFERRED 84), so they are out of reach from here.
+   value (DEFERRED 97), so they are out of reach from here.
 2. *"The multi-line `def` shouldn't lose it's solve."* — a continuation-line
    value nests one level deeper, inside a LAYOUT group.
 3. *"Wrapping other values in [parens] does seem like it should be a

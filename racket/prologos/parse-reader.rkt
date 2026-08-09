@@ -2895,7 +2895,7 @@
     ;; `def- x := (g …)` still refused — the private spelling disagreeing with
     ;; ITSELF, with an access making a refusing form work. Matching the def
     ;; leg's own predicate keeps the two spellings consistent; whether `def-`
-    ;; should carry Q_C at all is a pre-existing question (DEFERRED 84).
+    ;; should carry Q_C at all is a pre-existing question (DEFERRED 97).
     [(and (syntax? (car elems))
           (eq? (syntax-e (car elems)) 'def)
           (assign-index elems))

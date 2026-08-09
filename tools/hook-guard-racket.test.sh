@@ -56,6 +56,11 @@ check "echo mentions racket"  'echo "racket is slow"' ALLOW
 check "ps | grep"             'ps -axo pid,command | grep racket' ALLOW
 check "Racket dir listing"    'ls "/Applications/Racket v9.0/bin/"' ALLOW
 check "unrelated"             'git status --short' ALLOW
+check "racket --version"      '"/Applications/Racket v9.0/bin/racket" --version' ALLOW
+check "bare racket --version" 'racket --version' ALLOW
+check "racket --help"         'racket --help' ALLOW
+check "racket -h"             'racket -h' ALLOW
+check "version then a RUN"    'racket --version && racket foo.rkt' DENY
 
 echo
 if [ "$fails" -eq 0 ]; then echo "all rows pass"; else echo "FAILURES: $fails"; fi

@@ -19,9 +19,22 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 88**
+> ### **NEXT FREE: 101**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
+
+**MAPPING — branch `wizardly-mendel-2fd502`, renumbered 2026-08-08 at merge prep.**
+The branch allocated 84–87 from a register reading 84; main independently filed
+84–96. Main's entries did NOT move. Resolve any citation of 84–87 by ancestry.
+
+| was | now | branch entry |
+|---|---|---|
+| 84 | 97  | three `let` spellings + `def-` refuse a postfix access |
+| 85 | 98  | an empty group at command position aborts the file |
+| 86 | 99  | `'(…)` the quoted goal |
+| 87 | 100 | a goal keyword under an access gets the wrong message |
+
+⚠ Commit messages `44da4627` and `2fe6c8a4` cite the OLD numbers and are immutable.
 
 **Four rules. The first is the one that was being broken.**
 
@@ -5461,7 +5474,13 @@ union-aware kind instead of `miss-closed`. ⚠ Also worth fixing the blanket
 handler itself — a `with-handlers` that swallows every exception is why a
 contract violation reads as a missing diagnostic.
 
-### 84. ⬜ Three `let` spellings — and `def-` — refuse a postfix ACCESS on any value (pre-existing; surfaced by D4.P4d slice 7)
+### 97. ⬜ Three `let` spellings — and `def-` — refuse a postfix ACCESS on any value (pre-existing; surfaced by D4.P4d slice 7)  *(was 84 → now 97)*
+
+> ⚠ **Renumbered 84 → 97** at merge prep, 2026-08-08. This branch
+> allocated 84 from a register that read 84; main independently filed 84–96
+> in the meantime, so `### 84` means something different there. Commit messages
+> `44da4627` and `2fe6c8a4` cite the OLD number and cannot be fixed — resolve by
+> ancestry. See § NUMBERING and the mapping table below.
 
 Slice 7 gave `let x := (goal …):c` its implicit solve, and the owner ruled the
 `let` spellings must not disagree. Extending the aligned/bare arm made two of
@@ -5502,7 +5521,13 @@ where base echoed the user's own datum. Cosmetic, and only reachable on the
 already-broken spelling above — but it should be stripped when that error is
 formatted.
 
-### 85. ⬜ An EMPTY group at command position raises a contract violation — a whole-file abort (pre-existing)
+### 98. ⬜ An EMPTY group at command position raises a contract violation — a whole-file abort (pre-existing)  *(was 85 → now 98)*
+
+> ⚠ **Renumbered 85 → 98** at merge prep, 2026-08-08. This branch
+> allocated 85 from a register that read 84; main independently filed 84–96
+> in the meantime, so `### 85` means something different there. Commit messages
+> `44da4627` and `2fe6c8a4` cite the OLD number and cannot be fixed — resolve by
+> ancestry. See § NUMBERING and the mapping table below.
 
 `()`, `().0`, `():c` and `[]:c` at top level raise
 `>: contract violation expected: real? given: #f` and take the WHOLE FILE down —
@@ -5515,7 +5540,13 @@ Worth fixing because the empty group is exactly what a user leaves behind while
 editing, and the file then reports nothing at all rather than pointing at the
 line.
 
-### 86. ⬜ `'(…)` — a QUOTED GOAL that returns the goal instead of solving it [owner request 2026-08-08]
+### 99. ⬜ `'(…)` — a QUOTED GOAL that returns the goal instead of solving it [owner request 2026-08-08]  *(was 86 → now 99)*
+
+> ⚠ **Renumbered 86 → 99** at merge prep, 2026-08-08. This branch
+> allocated 86 from a register that read 84; main independently filed 84–96
+> in the meantime, so `### 86` means something different there. Commit messages
+> `44da4627` and `2fe6c8a4` cite the OLD number and cannot be fixed — resolve by
+> ancestry. See § NUMBERING and the mapping table below.
 
 > "We do, sometimes, want to return the Goal and not a solution to the goal, so
 > for those cases, `'(...)` a quoted goal should return the goal and not be an
@@ -5539,7 +5570,13 @@ Natural home: a slice of its own, with the Q_C scope question already settled by
 slice 7 (the quote SUPPRESSES the implicit solve wherever that solve would
 otherwise fire — top level, `def` RHS, `let` RHS, and now an access subject).
 
-### 87. ⬜ A GOAL KEYWORD under a postfix access gets the broadcast-carrier message, not its own (D4.P4d slice 7)
+### 100. ⬜ A GOAL KEYWORD under a postfix access gets the broadcast-carrier message, not its own (D4.P4d slice 7)  *(was 87 → now 100)*
+
+> ⚠ **Renumbered 87 → 100** at merge prep, 2026-08-08. This branch
+> allocated 87 from a register that read 84; main independently filed 84–96
+> in the meantime, so `### 87` means something different there. Commit messages
+> `44da4627` and `2fe6c8a4` cite the OLD number and cannot be fixed — resolve by
+> ancestry. See § NUMBERING and the mapping table below.
 
 `(not (blocked "c")):c` now reports *"broadcast `:c` needs a PVec, Map, tuple, or
 closed keyword-row subject — this one is `_`"*. True but unhelpful: a NAF goal

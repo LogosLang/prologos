@@ -428,7 +428,7 @@
   ;;   let p3 xs:name          → the guided fused-annotation/broadcast-step error
   ;; Those are PRE-EXISTING and independent of slice 7 — a goal cannot be made
   ;; to work there without first fixing the ordinary-value case. Filed as
-  ;; DEFERRED 84 rather than silently pinned here, because a pin over someone
+  ;; DEFERRED 97 rather than silently pinned here, because a pin over someone
   ;; else's defect is how a slice acquires unrelated failures.
   ;; [owner ruling 2026-08-08] "the `let`s shouldn't disagree on their behavior
   ;; whether they use a `:=` or not" — so the `:=` and ALIGNED-BLOCK spellings
@@ -709,7 +709,7 @@
   ;; pre-existing Q_C def leg (macros.rkt `def-rhs-stx`) matches `def`
   ;; literally — so adding an access to a REFUSING `def-` made it succeed. The
   ;; private spelling must not disagree with itself; whether `def-` should carry
-  ;; Q_C at all is pre-existing (DEFERRED 84).
+  ;; Q_C at all is pre-existing (DEFERRED 97).
   (define rs (s7-file "def- pv := (fc f \"red\")\ndef- pa := (fc f \"red\"):f"))
   (check-true (s7-survived? rs) (format "~a" rs))
   (check-equal? (length (filter relation-diagnostic? rs)) 2

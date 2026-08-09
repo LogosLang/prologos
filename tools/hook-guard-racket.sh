@@ -56,10 +56,19 @@ deny() {
 #       orphan's own shape, minus the absolute path — reads as neither a
 #       /racket path nor a command-position bare word, and sails through. Caught
 #       by the decision table, which is why that table exists.
+#
+# ⚠ STRIP-THEN-DECIDE, not allowlist-then-decide. `racket --version|--help|-h`
+# prints and exits, so it cannot hang and needs no bound. But expressing that as
+# "allow if the command contains --version" is a BYPASS: `racket --version &&
+# racket foo.rkt` would sail through on the harmless half. Caught by the decision
+# table the moment the row was added. So remove the harmless invocations from a
+# WORKING COPY and decide on whatever invocation remains.
+scan="$(sed -E 's/racket["'\'']?[[:space:]]+(--version|--help|-h)([[:space:]]|$)/ /g' <<<"$cmd")"
+
 invokes_racket=0
-grep -Eq '/racket("|'\''|[[:space:]]|$)' <<<"$cmd" && invokes_racket=1
-grep -Eq '(^|[;&|(]|&&|\|\|)[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*racket([[:space:]]|$)' <<<"$cmd" && invokes_racket=1
-grep -Eq '\b(g?timeout|env|nice|nohup|time|setsid|sudo|xargs|exec)\b[^;&|]*\bracket\b' <<<"$cmd" && invokes_racket=1
+grep -Eq '/racket("|'\''|[[:space:]]|$)' <<<"$scan" && invokes_racket=1
+grep -Eq '(^|[;&|(]|&&|\|\|)[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*racket([[:space:]]|$)' <<<"$scan" && invokes_racket=1
+grep -Eq '\b(g?timeout|env|nice|nohup|time|setsid|sudo|xargs|exec)\b[^;&|]*\bracket\b' <<<"$scan" && invokes_racket=1
 [ "$invokes_racket" -eq 0 ] && exit 0
 
 # ── Allowlist: runners that own their own bounds.
