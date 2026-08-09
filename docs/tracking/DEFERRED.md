@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 84**
+> ### **NEXT FREE: 88**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -5460,3 +5460,99 @@ union-aware fallback, **or** have `select-project-field`'s union arm mint a
 union-aware kind instead of `miss-closed`. ⚠ Also worth fixing the blanket
 handler itself — a `with-handlers` that swallows every exception is why a
 contract violation reads as a missing diagnostic.
+
+### 84. ⬜ Three `let` spellings — and `def-` — refuse a postfix ACCESS on any value (pre-existing; surfaced by D4.P4d slice 7)
+
+Slice 7 gave `let x := (goal …):c` its implicit solve, and the owner ruled the
+`let` spellings must not disagree. Extending the aligned/bare arm made two of
+them agree — but the other two cannot be reached from here, because they refuse a
+postfix access on an **ordinary value** too. Measured at `b6f773a8` with
+`def xs := @[{:name "a"}]`, no goal anywhere:
+
+```
+let p4 := xs:name          ✅ works
+let [p1 xs:name] p1        ❌ "let: each binding must be (name value) or (name : type value), got p1"
+let [p2 := xs:name] p2     ❌ "Could not infer type"
+let p3 xs:name             ❌ "a fused type annotation here was read as a broadcast step …
+                              (`let` is missing from the reader post-pass binder table)"
+```
+
+Three distinct diagnostics, three distinct causes. The flat-pairs arm assumes
+odd/even index parity that a sibling sentinel breaks; the nested-shorthand form
+collides with the FUSED-ANNOTATION reading (`name:T`), which its own error
+message already diagnoses and names the fix for. None is caused by slice 7 —
+each reproduces identically on both sides of it — so slice 7 pinned only the two
+spellings that are capable of carrying an access, rather than pinning someone
+else's defect.
+
+⚠ Related in-tree comment that is FALSE at HEAD: `parse-reader.rkt`'s
+`mark-binding-values` says its bare arm covers "incl. the fused `name:T VALUE`".
+It does not — `let fz:Int (fc …)` refuses with a BARE goal and no postfix at all.
+
+⚠ **`def-` (the private spelling) is in the same class.** The Q_C def leg
+(`macros.rkt` `def-rhs-stx`) matches the head `def` LITERALLY, so
+`def- x := (goal …)` never carried the implicit solve. Slice 7 briefly made
+`def- x := (goal …):c` succeed — an access making a refusing form work, i.e. the
+private spelling disagreeing with itself — and was corrected to match the def
+leg's own predicate. Whether `def-` should carry Q_C at all is the open question.
+
+⚠ **The internal `$goal-rhs` sentinel leaks into one user-facing message** on the
+nested-shorthand path: `let: unrecognized format: (let x ($goal-rhs (fc f red)) …)`
+where base echoed the user's own datum. Cosmetic, and only reachable on the
+already-broken spelling above — but it should be stripped when that error is
+formatted.
+
+### 85. ⬜ An EMPTY group at command position raises a contract violation — a whole-file abort (pre-existing)
+
+`()`, `().0`, `():c` and `[]:c` at top level raise
+`>: contract violation expected: real? given: #f` and take the WHOLE FILE down —
+`pipeline.md`'s whole-file-abort class (output EMPTY, not partial), not a
+per-command error. Reproduces identically at `b6f773a8` and with slice 7 applied,
+so it is pre-existing; found by slice 7's adversarial verify while sweeping
+malformed shapes, and cleared of blame by A/B against a clean-rebuilt base tree.
+
+Worth fixing because the empty group is exactly what a user leaves behind while
+editing, and the file then reports nothing at all rather than pointing at the
+line.
+
+### 86. ⬜ `'(…)` — a QUOTED GOAL that returns the goal instead of solving it [owner request 2026-08-08]
+
+> "We do, sometimes, want to return the Goal and not a solution to the goal, so
+> for those cases, `'(...)` a quoted goal should return the goal and not be an
+> implicit solve."
+
+Not implemented in any form: `'(fc f "red")` today is `Unbound variable '` — the
+reader has a `quote-lbracket` token for `'[` (the list literal) and a bare
+`quote` token, but nothing for `'` immediately followed by `(`, so the quote
+lexes as a standalone symbol.
+
+This is a LANGUAGE FEATURE, not a parse tweak, and it is why slice 7 did not
+attempt it. It needs, at minimum: a reader token + datum form mirroring
+`quote-lbracket`; a decision on what a first-class goal VALUE is (there is no
+`Goal` type in the tree today — `expr-goal-app` exists only as an internal node
+consumed by `solve`); a type for it, so `def g := '(fc f "red")` can be
+announced and `solve g` can consume it; a `pp-expr` rendering; and a
+`pnet-serialize` registration (per `pipeline.md`, an unregistered node in a
+cached module body fails far away, as a deserialized vector impostor).
+
+Natural home: a slice of its own, with the Q_C scope question already settled by
+slice 7 (the quote SUPPRESSES the implicit solve wherever that solve would
+otherwise fire — top level, `def` RHS, `let` RHS, and now an access subject).
+
+### 87. ⬜ A GOAL KEYWORD under a postfix access gets the broadcast-carrier message, not its own (D4.P4d slice 7)
+
+`(not (blocked "c")):c` now reports *"broadcast `:c` needs a PVec, Map, tuple, or
+closed keyword-row subject — this one is `_`"*. True but unhelpful: a NAF goal
+does not produce rows at all, so there is nothing to broadcast over, and the
+message never says so. Base reported the relation-in-application diagnostic
+instead — different, and also not right.
+
+Same shape for `(= 1 1).0`, which yields a bare `Could not infer type` on both
+sides.
+
+The goal keywords `{rel, not, =, is}` are derived from `run-solve-goal`'s
+dispatch, and only `rel` / a relation goal-app yields a row carrier. So the
+honest message is per-keyword: "a `not` goal answers yes/no — there are no rows
+to select from". Non-blocking (no wrong answer, no abort); found by slice 7's
+second adversarial verify.
+

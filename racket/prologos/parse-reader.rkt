@@ -2695,6 +2695,103 @@
       (datum->syntax #f (list (datum->syntax #f '$goal-rhs e) e) e)
       e))
 
+;; ── CIU T6 D4.P4d slice 7: the paren goal that is the SUBJECT of an access ──
+;; `(g …)` carried its implicit solve; `(g …):c` did not. The reader mints a
+;; postfix access as a SIBLING of its subject — `(g …):c` reads as
+;; `((g …) ($bcast-step :c))` — so the goal is demoted from "the whole command
+;; datum" to "element 0 of it", and every command-position test upstream looks
+;; at the wrong node.
+;;
+;; ⚠ WHY THIS IS THE READER'S JOB AND CANNOT BE THE PARSER'S. The tempting fix
+;; is to descend to the subject downstream and re-test the paren-origin
+;; property there. MEASURED AT b6f773a8, that is unsound: `(g …).0` and the
+;; bracket APPLICATION `[get (g …) 0]` produce a BYTE-IDENTICAL datum with
+;; IDENTICAL syntax properties (top paren-origin=#f, subject paren-origin=#t).
+;; Downstream there is nothing left to tell them apart — the bracket/paren
+;; distinction exists ONLY here. Reading the property downstream would give
+;; `[get (goal …) 0]` an implicit solve and widen Q_C into argument position,
+;; which is the standing purity concern the scope guard names.
+;;
+;; The property is also anti-correlated with the answer: it is attached to
+;; EVERY lparen group with no position test, so it SURVIVES where we must
+;; refuse (a `defn` body, a nested bracket) and is STRIPPED where we must solve
+;; (def RHS, aligned let RHS, every chain — `syntax-locs-only` drops properties
+;; from moved nodes). So the carrier is the DATUM sentinel, exactly as argued
+;; for `$goal-rhs` above: the reader knows POSITION and PARENS, the parser owns
+;; the KEYWORD TABLE and decides goal-ness. Neither needs the other's table.
+;;
+;; This composes with the fold for free: the fold nests one carrier per step
+;; (`x.a.b` → `($select-path ($select-path x a) b)`) with the subject always at
+;; index 1, so wrapping the INNERMOST subject before the fold runs puts the
+;; sentinel exactly where `parse-datum`'s existing `$goal-rhs` arm consumes it,
+;; at any chain depth, with no walker and no new parser arm.
+
+;; Is this element a postfix access sentinel that KEEPS its base as subject?
+;; Head set from reader-forms.rkt — the one list macros.rkt's fusion gate reads.
+;;
+;; ⚠ THE ARITY TEST IS LOAD-BEARING, and leaving it out was a live defect caught
+;; by the adversarial verify. `access-sentinel?` (the preparse FUSION gate) tests
+;; head AND arity — exactly 2 for the arity-2 family, any length for the brace
+;; family. A head-only test here is LOOSER than the fold's, so a mis-arity
+;; sentinel like `($dot-access a b c)` got MARKED here and then never FOLDED
+;; there, and the sentinel leaked to elaboration as `Unbound variable
+;; $dot-access` where HEAD reported the relation diagnostic. Re-homing the head
+;; sets into one module does not make two predicates agree — matching the
+;; ARITY DISCIPLINE is what does.
+(define (access-sentinel-elem? e)
+  (and (syntax? e)
+       (let ([d (syntax-e e)])
+         (and (pair? d) (list? d)
+              (let ([h (let ([h0 (car d)]) (if (syntax? h0) (syntax-e h0) h0))])
+                (and (subject-preserving-access-head? h)
+                     (if (memq h brace-access-sentinel-heads)
+                         #t                    ;; arbitrary-length body
+                         (= (length d) 2))))))))
+
+;; A VALUE RUN that is a paren group followed by ONLY access sentinels:
+;; `(g …):c`, `(g …).0:c`, `(g …):{c}`, … Returns the run with its head wrapped
+;; in `$goal-rhs`, or #f when the run is not that shape — including when the
+;; head is not a paren group at all (`$goal-rhs-wrap` is identity on brackets,
+;; and the `eq?` test below is what turns that into "no match").
+;;
+;; The `(pair? (cdr ts))` requirement is deliberate: a run with NO sentinel is
+;; the plain single-element case the existing gates already handle, and routing
+;; it here too would mint the sentinel twice.
+(define (mark-access-subject-run ts)
+  (and (pair? ts) (pair? (cdr ts))
+       (andmap access-sentinel-elem? (cdr ts))
+       (let ([w ($goal-rhs-wrap (car ts))])
+         (and (not (eq? w (car ts)))
+              (cons w (cdr ts))))))
+
+;; A binding/command VALUE REGION, which is either the flat run above or — when
+;; the value sits on a CONTINUATION LINE — a single element that is a pure
+;; LAYOUT group wrapping that run. `def D :=` ⏎ `  (g …):c` reads as
+;; `(def D := ((g …) ($bcast-step :c)))`, one element deeper than the one-line
+;; spelling, which is why the one-line form worked and the multi-line one did
+;; not [owner: "the multi-line `def` shouldn't lose it's solve"].
+;;
+;; ⚠ THE DESCENT IS GATED ON "UNMARKED", and that gate is the whole safety
+;; argument. A user bracket `def B := [(g …):c]` produces a BYTE-IDENTICAL
+;; element — same datum, same span, no properties — so before the bracket mark
+;; existed there was no way to tell them apart, and descending would have minted
+;; a goal inside an ARGUMENT. Now: paren-origin ⇒ the user wrote parens;
+;; bracket-origin ⇒ the user wrote brackets; NEITHER ⇒ the reader's own line
+;; grouping put it there, which is the only case we may see through.
+;; We descend exactly ONE level: a value nested deeper is nested for a reason.
+(define (mark-access-subject-region ts)
+  (or (mark-access-subject-run ts)
+      (and (pair? ts) (null? (cdr ts))
+           (let ([g (car ts)])
+             (and (stx-group? g)
+                  (not (syntax-property g 'prologos-paren-origin))
+                  (not (syntax-property g 'prologos-bracket-origin))
+                  (let* ([inner (syntax->list g)]
+                         [m (and inner (mark-access-subject-run inner))])
+                    ;; rebuild eq?-preservingly: `g` is both srcloc and property
+                    ;; template, per the discipline recorded at $goal-rhs-wrap.
+                    (and m (list (datum->syntax #f m g g)))))))))
+
 (define (stx-sym=? e s) (and (syntax? e) (eq? (syntax-e e) s)))
 (define (stx-group? e) (and (syntax? e) (let ([d (syntax-e e)]) (and (pair? d) (list? d)))))
 
@@ -2717,12 +2814,31 @@
     ;; ── one binding, `name [: T] := VALUE` ──
     [(and single-binding? has-assign?)
      (define idx (for/last ([e (in-list ts)] [i (in-naturals)] #:when (stx-sym=? e ':=)) i))
-     (if (= n (+ idx 2))                        ;; exactly one element after :=
-         (append (take ts (add1 idx)) (list ($goal-rhs-wrap (last ts))))
-         ts)]
+     (define head-part (take ts (add1 idx)))
+     (cond
+       [(= n (+ idx 2))                         ;; exactly one element after :=
+        (append head-part (list ($goal-rhs-wrap (last ts))))]
+       ;; D4.P4d slice 7: …or a paren value carrying a postfix ACCESS, which is
+       ;; structurally MORE than one element (`(g …)` + `($bcast-step :c)`) and
+       ;; so could never satisfy the gate above. That element count — not the
+       ;; shape of the value — is the whole reason `let x := (g …):c` lost its
+       ;; implicit solve while `let x := (g …)` kept it.
+       [(mark-access-subject-region (drop ts (add1 idx)))
+        => (lambda (m) (append head-part m))]
+       [else ts])]
     ;; ── one binding, bare `name VALUE` (incl. the fused `name:T VALUE`) ──
+    ;; D4.P4d slice 7: the access run applies here too [owner ruling
+    ;; 2026-08-08: "the `let`s shouldn't disagree on their behavior whether they
+    ;; use a `:=` or not"]. Extending only the `:=` arm above made
+    ;; `let y := (g …):c` solve while bare `let y (g …):c` refused — a
+    ;; divergence prologos-syntax.md § let explicitly forbids ("All spellings
+    ;; are equivalent and MIX freely"), and one this change would have
+    ;; INTRODUCED: base refused both.
     [single-binding?
-     (if (= n 2) (list (car ts) ($goal-rhs-wrap (cadr ts))) ts)]
+     (cond
+       [(= n 2) (list (car ts) ($goal-rhs-wrap (cadr ts)))]
+       [(mark-access-subject-region (cdr ts)) => (lambda (m) (cons (car ts) m))]
+       [else ts])]
     ;; ── the bracket form's flat run: `x := V y := V2` ──
     [has-assign?
      (for/list ([e (in-list ts)] [i (in-naturals)])
@@ -2731,6 +2847,62 @@
     [else
      (for/list ([e (in-list ts)] [i (in-naturals)])
        (if (odd? i) ($goal-rhs-wrap e) e))]))
+
+;; ── D4.P4d slice 7: the COMMAND-position goal subject ───────────────────────
+;; `transform-let-blocks-elems` receives a TOP-LEVEL form's element list — i.e.
+;; exactly a command — so this is where the Q_C positions other than `let` are
+;; reachable at reader time. TWO of them, each argued from the GRAMMAR rather
+;; than by re-deriving a parser here (that re-derivation is the F1b.7g class):
+;;
+;;  (a) THE COMMAND IS THE ACCESS. `elems = [<paren group> <sentinel>…]`. A
+;;      top-level form whose FIRST element is a paren group and ALL of whose
+;;      remaining elements are access sentinels can only be a postfix access on
+;;      that group — nothing else produces that shape.
+;;
+;;  (b) A `def` RHS. `elems = [def name … := <paren group> <sentinel>…]`, the
+;;      same run test applied after `:=`. This is POL.9b's def leg; it could
+;;      not reach the existing mechanism because `def-rhs-stx` requires exactly
+;;      ONE element after `:=` and an access is structurally two.
+;;
+;; ⚠ WHAT THIS DELIBERATELY DOES NOT DO — and why the scope guard is now
+;; STRUCTURAL rather than accidental. It never DESCENDS. It inspects one
+;; top-level form's own element list and nothing inside any child group, so a
+;; goal in a `defn` body, a match arm, a `fn` body, a nested bracket or an
+;; argument is untouched BY CONSTRUCTION, not by whether a syntax property
+;; happened to survive to it. Two shapes make the point:
+;;   `defn f [x] (g …):c`  → elems[0] is the SYMBOL `defn`, so (a) cannot match
+;;   `[get (g …) 0]`       → elems[0] is the SYMBOL `get`, so (a) cannot match
+;; The second is the load-bearing one: its DATUM is byte-identical to
+;; `(g …).0`'s, so nothing downstream could have distinguished them.
+;;
+;; TOTAL BY CONSTRUCTION, deliberately — `mark-let-goal-rhs` right below carries
+;; the scar that says why: it once met `classify-let-block`'s syntax-object fail
+;; value and took the whole file down. Anything that is not a pair passes
+;; straight through.
+(define (mark-command-goal-subject elems)
+  (define (assign-index es)
+    (for/last ([e (in-list es)] [i (in-naturals)] #:when (stx-sym=? e ':=)) i))
+  (cond
+    [(not (pair? elems)) elems]
+    ;; (a) the command IS the access
+    [(mark-access-subject-run elems) => values]
+    ;; (b) a `def` RHS.
+    ;; ⚠ `def-` (the PRIVATE spelling) is deliberately NOT normalized here, and
+    ;; the asymmetry is the point. The pre-existing Q_C def leg
+    ;; (macros.rkt `def-rhs-stx`) matches the head `def` literally, so
+    ;; `def- x := (g …)` does NOT get the implicit solve at base. Normalizing
+    ;; here would make `def- x := (g …):c` SUCCEED while the barer
+    ;; `def- x := (g …)` still refused — the private spelling disagreeing with
+    ;; ITSELF, with an access making a refusing form work. Matching the def
+    ;; leg's own predicate keeps the two spellings consistent; whether `def-`
+    ;; should carry Q_C at all is a pre-existing question (DEFERRED 84).
+    [(and (syntax? (car elems))
+          (eq? (syntax-e (car elems)) 'def)
+          (assign-index elems))
+     => (lambda (idx)
+          (define m (mark-access-subject-region (drop elems (add1 idx))))
+          (if m (append (take elems (add1 idx)) m) elems))]
+    [else elems]))
 
 (define (mark-let-goal-rhs elems)
   ;; TOTAL BY CONSTRUCTION: accepts whatever `classify-let-block` returned and
@@ -3389,8 +3561,9 @@
   ;; `transform-let-blocks-stx` handles NESTED forms (a `defn` inside an `impl`
   ;; body). Wiring only the latter left every top-level binder unwrapped —
   ;; caught by the binder-row pins, which is what they are for.
-  (let ([r (apply-binder-unwrap
-            (mark-let-goal-rhs (if (let-headed? elems*) (classify-let-block elems*) elems*)))])
+  (let ([r (mark-command-goal-subject
+            (apply-binder-unwrap
+             (mark-let-goal-rhs (if (let-headed? elems*) (classify-let-block elems*) elems*))))])
     ;; ⚠ CONTRACT REPAIR (pre-existing LET-track defect, verified by neutralising
     ;; the P2 additions and reproducing at base shape). This entry point is
     ;; documented to return an ELEMENT LIST, and `tree-node->stx-elements` hands
@@ -3996,11 +4169,30 @@
                    ;; invisible to every existing match arm; the sexp reader
                    ;; (native (…) reading) never attaches it, so sexp
                    ;; application is untouched by construction.
+                   ;;
+                   ;; D4.P4d slice 7 — BRACKET groups now carry the MIRROR mark.
+                   ;; Not for goal-ness (a bracket is never a goal) but so the
+                   ;; reader can tell a user-written group from a pure LAYOUT
+                   ;; group. A multi-line binding value wraps its run in an
+                   ;; extra, unmarked group:
+                   ;;   `def D :=` ⏎ `  (g …):c`  →  `(def D := ((g …) ($bcast-step :c)))`
+                   ;; which is BYTE-IDENTICAL — datum, properties and span — to
+                   ;; the user bracket `def B := [(g …):c]`. Measured. Without a
+                   ;; mark, descending one level to reach the multi-line value
+                   ;; would also descend into the bracket, minting a goal in
+                   ;; ARGUMENT position and breaking the Q_C guard. With it,
+                   ;; "unmarked group" IS "layout", structurally.
+                   ;; Property-only, exactly like its paren twin: datum shape
+                   ;; unchanged, invisible to every existing match arm, and the
+                   ;; sexp reader attaches neither.
                    (let ([grp (wrap-stx-list inner source)])
                      (loop next-i
-                           (cons (if (eq? type 'lparen)
-                                     (syntax-property grp 'prologos-paren-origin #t)
-                                     grp)
+                           (cons (cond
+                                   [(eq? type 'lparen)
+                                    (syntax-property grp 'prologos-paren-origin #t)]
+                                   [(eq? type 'lbracket)
+                                    (syntax-property grp 'prologos-bracket-origin #t)]
+                                   [else grp])
                                  result)))))]
             ;; Angle brackets → $angle-type sentinel IF matching rangle exists
             ;; AND we're not inside a mixfix group (where < > are operators)

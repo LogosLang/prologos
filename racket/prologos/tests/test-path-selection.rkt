@@ -3496,7 +3496,21 @@
   ;; positional rule and would each have needed a hand entry under an
   ;; enumerated one.
   (check-equal? (read-all-forms-string "xs[0]:n") '((xs ($postfix-index 0) ($bcast-step :n))))
-  (check-equal? (read-all-forms-string "(f x):name") '(((f x) ($bcast-step :name)))))
+  ;; ⚠ UPDATED at D4.P4d slice 7 [owner ruling 2026-08-08]. The PROPOSITION of
+  ;; this pin is unchanged and still holds: the `:name` sentinel mints adjacent
+  ;; to a paren-group base, positionally, consulting no token type. What changed
+  ;; is the BASE — a paren group that is the subject of an access at COMMAND
+  ;; position now carries the `$goal-rhs` marker, so `(f x):name` gets the same
+  ;; implicit solve that bare `(f x)` already had. `()` is the relational
+  ;; delimiter (prologos-syntax.md § Delimiters: `[]` is the functional one), so
+  ;; a paren subject is a goal subject; before slice 7 the access spelling
+  ;; silently treated it as grouping while the bare spelling refused.
+  ;; This assertion is the ONLY place in the tree that observes the reader
+  ;; output for this input — it is the tripwire for that mint, and it fired.
+  (check-equal? (read-all-forms-string "(f x):name")
+                '((($goal-rhs (f x)) ($bcast-step :name))))
+  ;; the BRACKET twin must NOT be marked — that asymmetry is the scope guard
+  (check-equal? (read-all-forms-string "[f x]:name") '(((f x) ($bcast-step :name)))))
 
 ;; ---- side 2: BINDER positions unwrap — one row per MEASURED table entry ----
 ;;

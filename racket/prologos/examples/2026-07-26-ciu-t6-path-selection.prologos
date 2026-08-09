@@ -444,3 +444,49 @@ mixed.1
 ;; and `.N` reaches into nested rows the same way `.name` does
 app-config.admins.0.name
 ;;82=> "Alice" : String
+
+;; ── §K — a paren GOAL as the SUBJECT of a postfix access (D4.P4d slice 7) ───
+;; `()` is the relational delimiter and carries an implicit `solve` at command
+;; position (Rel T1 POL.9). Slice 7 makes that survive a postfix access: the
+;; selection applies to the SOLVED rows, exactly as if the goal had been bound
+;; to a name first. Appended after §J deliberately — markers key to RESULT
+;; INDEX, so a new section at the END renumbers nothing.
+;;
+;; The SCOPE GUARD is not shown here because it is a refusal and gate 1 requires
+;; zero errors: `[pvec-length-int (goal …)]` and a goal in a `defn` body still
+;; refuse, pinned in tests/test-solve-carrier.rkt § "P4d-s7 GUARD".
+;;
+;; ⚠ AND NOTE THE OTHER HALF, which is not relational at all: because `()` IS
+;; the goal delimiter, a NON-relation in parens under an access is refused too —
+;; `(mm).a` on a Map value, `(id rec).a` on a function. Base treated those
+;; parens as grouping and returned the field, which disagreed with the bare
+;; `(mm)` it already refused. The refusal is GUIDED ("… is bound as a value /
+;; is a function — application is written [… …]"), and for the function case it
+;; is strictly better than base's bare "Could not infer type".
+
+defr pantry [?fruit ?color]
+  || "apple" "red" | "apple" "green" | "kiwi" "green"
+;;83=> pantry : _ defined.
+
+(pantry "apple" c)
+;;84=> @[{:c "red"} {:c "green"}] : [PVec {:c String}]
+
+;; the same value with a broadcast applied — the slice-7 surface
+(pantry "apple" c):c
+;;85=> @["red" "green"] : [PVec String]
+
+;; …byte-equivalent to the explicit spelling
+[solve (pantry "apple" c)]:c
+;;86=> @["red" "green"] : [PVec String]
+
+;; an ordinal step reaches the first row
+(pantry "apple" c).0
+;;87=> {:c "red"} : {:c String}
+
+;; a `def` RHS carries it, including on a CONTINUATION line
+def apple-colors :=
+  (pantry "apple" c):c
+;;88=> apple-colors : [PVec String] defined.
+
+apple-colors
+;;89=> @["red" "green"] : [PVec String]
