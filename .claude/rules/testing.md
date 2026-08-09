@@ -99,3 +99,38 @@ Run it after any workflow that ran the compiler.
 do not loop a corpus inside one process; do not leave background processes; and
 the orchestrator should reap afterwards. Agents copy whatever runner they are
 handed — these three copied a single-file scratch runner and *added* the loop.
+
+### The hook — harness-enforced, because a subagent will not read a rule
+
+`tools/hook-guard-racket.sh` is a **PreToolUse/Bash hook** that DENIES any Bash
+command invoking the Racket binary without a `timeout -k` bound. It is enforced
+by the harness, not by the model, so it binds SUBAGENT Bash calls too — which is
+the point: subagents caused the incident, and a subagent cannot be relied on to
+have read this file.
+
+Allowed through: `raco`; `tools/scratch-run.sh`; `run-affected-tests.rkt` and
+`bench-ab.rkt` (they own their own workers and timeouts); anything already
+carrying `timeout -k` / `--kill-after`. A bare `timeout N` is DENIED on purpose —
+see the SIGTERM fact above.
+
+**It is not committed by default.** `.claude/settings.json` is untracked in this
+repo (`.claude/settings.local.json` is the tracked one), so the hook must be
+installed per clone. To install:
+
+    jq '. + {hooks: {PreToolUse: [{matcher: "Bash", hooks: [{type: "command",
+        command: "<REPO>/tools/hook-guard-racket.sh", timeout: 10}]}]}}' \
+      .claude/settings.json > /tmp/s && mv /tmp/s .claude/settings.json
+
+Then verify it FIRES — a hook that is silently inert is the failure mode:
+attempt an unbounded run and confirm it is refused.
+
+⚠ **Two things to know before editing the guard.**
+1. Run `tools/hook-guard-racket.test.sh` after ANY change. Its ALLOW rows are
+   what keep `raco`, the suite runner and `grep racket` working; over-denying is
+   not harmless. The table has already caught a missed shape (racket invoked
+   THROUGH a wrapper) and a run that was green only because the guard was not
+   executable.
+2. **Self-reference hazard**: the guard inspects the RAW command string, so a
+   shell command that merely CONTAINS an example invocation — a heredoc
+   documenting the pattern — is itself blocked. Write such files with an editor,
+   not a heredoc.
