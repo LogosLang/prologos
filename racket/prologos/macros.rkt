@@ -6784,8 +6784,12 @@
 ;;
 ;; Fusion is NOT a grouping-layer operation: `is-postfix?`/`adjacent-to-base?`
 ;; only MARK (`xs[0]` yields two siblings), and this fold is what joins them.
-;; So a new selection sentinel owes THREE things, not one: a predicate, an entry
-;; here, and a fold arm in `rewrite-dot-access` below.
+;; So a new selection sentinel owes FOUR things, not one: a predicate, an entry
+;; in reader-forms.rkt's `arity2-access-sentinel-heads` / `brace-access-sentinel-heads`
+;; (which is what `access-sentinel?` below now reads), a fold arm in
+;; `rewrite-dot-access` below, and — if its fold arm NESTS the base rather than
+;; discarding it — an entry in `subject-preserving-access-heads` too, so a paren
+;; GOAL subject keeps its implicit solve under the new spelling (D4.P4d slice 7).
 ;; ⚠ D4.P4c-4b — `$bcast-step` JOINS HERE, and this membership is what Q_U16's
 ;; ruling item 2 buys: the fold gate below is `access-sentinel?`'s ONLY
 ;; production consumer, so joining it inherits all FOUR `rewrite-dot-access`
@@ -6797,12 +6801,39 @@
 ;; the RETIRED `$broadcast-access` — a DIFFERENT head. Not a live defect until
 ;; now: with the enable-set empty no sentinel survived the reader post-pass, so
 ;; the fold never met one.
+;; ⚠ D4.P4d slice 7 — the HEAD SETS moved to reader-forms.rkt; this is now a
+;; faithful re-expression of the same disjunction over them, NOT a redefinition.
+;; The arity split below reproduces exactly what the nine predicates above
+;; encode: the brace family takes an arbitrary-length body (`pair?`), every
+;; other sentinel is exactly arity 2. Equivalence is test-pinned in
+;; tests/test-solve-carrier.rkt ("the fusion gate agrees with the shared head
+;; sets"), which enumerates every head in both lists.
+;;
+;; WHY IT MOVED: parse-reader.rkt needs the same answer at READER time (slice 7's
+;; command-position goal-subject mint) and cannot require this module. A second
+;; copy of the list there would be the F1b.7g drift class — and per the note
+;; below, a new selection sentinel already owes several coordinated edits; a
+;; hidden second list would have made it one more, in a file the author of the
+;; new sentinel has no reason to open.
 (define (access-sentinel? x)
-  (or (dot-access? x) (dot-key? x)
-      (nil-dot-access? x) (nil-dot-key? x)
-      (postfix-index? x) (broadcast-access? x)
-      (dot-brace? x) (select-brace? x)
-      (bcast-step? x) (star-step-with-base? x)))
+  ;; ⚠ MERGE RESOLUTION (slice 7 x P4e-0, 2026-08-09) — BOTH sides, because
+  ;; they are not alternatives. P4e-0 added `star-step-with-base?`; slice 7
+  ;; replaced the flat disjunction with a lookup over reader-forms.rkt's head
+  ;; sets so parse-reader.rkt can consume the SAME list at reader time.
+  ;;
+  ;; `$star-step` CANNOT become a head-set entry, and that is the subtle part:
+  ;; its membership is CONDITIONAL and recursive — a star is base-needing only
+  ;; when its PAYLOAD is (`m:0*` yes, `[f 1]*` no). A flat head list cannot say
+  ;; "member iff its payload is a member", and adding `$star-step` to one
+  ;; unconditionally would re-introduce the measured P4e-0 bug it exists to
+  ;; prevent: `def q := [f 1]*` folding the star onto the BINDING MARKER.
+  ;; So the head-set lookup covers the flat families and the conditional clause
+  ;; rides alongside it, verbatim.
+  (or (and (list? x) (pair? x)
+           (let ([h (car x)])
+             (or (and (= (length x) 2) (memq h arity2-access-sentinel-heads) #t)
+                 (and (memq h brace-access-sentinel-heads) #t))))
+      (star-step-with-base? x)))
 
 ;; Unified rewrite for ALL access sentinels in a flat datum list.
 ;; Handles: $dot-access, $nil-dot-access, $postfix-index (live) and the

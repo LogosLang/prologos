@@ -354,17 +354,22 @@
              (printf "Pre-compiling driver + ~a test file(s)...\n"
                      (length normalized-files))
              (define t0 (current-inexact-monotonic-milliseconds))
-             (define-values (proc out in err)
-               (apply subprocess #f #f #f (find-raco-path) "make" compile-paths))
-             (close-output-port in)
-             (subprocess-wait proc)
-             (close-input-port out)
-             (close-input-port err)
+             ;; STAGED + parallel via bench-lib's `raco-make-staged!`: production
+             ;; paths to completion FIRST, then the test paths. The split is what
+             ;; keeps the stale-.zo heuristic below honest under -j (a test that
+             ;; does not require driver.rkt can otherwise finish before
+             ;; driver_rkt.zo and look stale forever after). It also drains
+             ;; raco's pipes, which the previous code did not — see raco-make!.
+             (define-values (prod-paths tst-paths)
+               (partition (lambda (p) (not (regexp-match? #rx"/tests/" p))) compile-paths))
+             (define-values (ok output) (raco-make-staged! prod-paths tst-paths))
              (define ms (- (current-inexact-monotonic-milliseconds) t0))
              (printf "Pre-compiled in ~as\n"
                      (real->decimal-string (/ ms 1000.0) 1))
-             (unless (zero? (subprocess-status proc))
+             (unless ok
                (eprintf "Error: raco make failed for targeted precompile.\n")
+               ;; the old code discarded this, so a failure named no module
+               (eprintf "~a" output)
                (exit 1))
              ;; run-tests still invokes precompile-modules! via its own
              ;; do-precompile? path — temporarily disable to avoid re-running
@@ -578,15 +583,16 @@
         [else
          (printf "Detected ~a stale .zo file(s); auto-recompiling...\n" (length stale-files))
          (define repair-t0 (current-inexact-monotonic-milliseconds))
-         (define raco-path (find-raco-path))
-         (define-values (proc out in err)
-           (apply subprocess #f #f #f raco-path "make" (reverse stale-files)))
-         (close-output-port in)
-         (subprocess-wait proc)
-         (close-input-port out)
-         (close-input-port err)
-         (unless (zero? (subprocess-status proc))
+         ;; Staged for the same reason as the precompile above: if driver.rkt is
+         ;; among the stale set it must finish before any test .zo is written,
+         ;; or the next run's scan re-flags the tests we just repaired.
+         (define-values (stale-prod stale-tests)
+           (partition (lambda (p) (not (regexp-match? #rx"/tests/" p)))
+                      (reverse stale-files)))
+         (define-values (ok output) (raco-make-staged! stale-prod stale-tests))
+         (unless ok
            (eprintf "✗ Auto-recompile failed. Run `raco make` manually.\n")
+           (eprintf "~a" output)
            (exit 2))
          (define repair-ms (- (current-inexact-monotonic-milliseconds) repair-t0))
          (printf "Repaired in ~as\n" (real->decimal-string (/ repair-ms 1000.0) 1))])))

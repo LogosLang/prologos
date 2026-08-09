@@ -6833,6 +6833,14 @@ first as slice 0"]:**
   28/28 · full suite **10061 / 488 / 0**, `[488/488]` verified · the reverted
   surfaces A/B **byte-identical to baseline**.
 
+- **✅ Slice 7 — A PAREN GOAL AS THE SUBJECT OF A POSTFIX ACCESS — COMPLETE
+  2026-08-08** (`f54dfc6c`). Owner-requested. `(G):c` now solves, as do `.name`,
+  `[0]` and chains; the `def`/`let` seams too. The witness had to be a DATUM
+  sentinel, not a syntax property — `(G).0` and `[get (G) 0]` are byte-identical.
+  Three owner rulings landed (let spellings agree · multi-line def · a value in
+  parens is a *guided* error). Verify `wf_0511966a-d51` (4 skeptics + judge)
+  found 3 defects of mine. Suite 10087/488/0. → [§5.P4d-s7](#p4d-s7)
+
 - **✅ Sub-slice 4d-2 — THE BROADCAST AXIS + the stale-phase sweep — COMPLETE
   2026-08-08.** Verify `wf_6893b003-6ae` (3 skeptics + adjudicator).
   **SHIPPED**: a `'bcast-elem` wrapper for the PVec/Map carrier (whose `else` arm
@@ -7449,6 +7457,146 @@ F-row, whichever first, with its NTT model mandatory.
 <a id="s10"></a>
 
 ## §10 References
+
+
+<a id="p4d-s7"></a>
+
+### §5.P4d-s7 — A PAREN GOAL AS THE SUBJECT OF A POSTFIX ACCESS  ✅ 2026-08-08 (`f54dfc6c`)
+
+Owner-requested. `(fruit-color "apple" c)` carried its implicit solve;
+`(fruit-color "apple" c):c` did not, answering *"fc is a relation, not a
+function"*. By referential transparency it must — the same value, the same
+selection.
+
+**Root cause.** The reader mints a postfix access as a **sibling** of its
+subject: `(G):c` reads as `((G) ($bcast-step :c))`. So `parse-command-datum`
+applied its goal test to the OUTER list and the goal was demoted from "the whole
+command datum" to "element 0 of it".
+
+**⭐ WHY THE FIX IS IN THE READER — the measurement that decides it.** The
+tempting repair is to descend to the subject downstream and re-test
+`prologos-paren-origin` there. Measured at `b6f773a8`, that is **unsound**:
+
+| source | post-preparse datum | top `paren-origin` | subject `paren-origin` |
+|---|---|---|---|
+| `(G).0` | `(get (G) 0)` | `#f` | `#t` |
+| `[get (G) 0]` | `(get (G) 0)` | `#f` | `#t` |
+
+Byte-identical on both axes. `[get (G) 0]` is an application in ARGUMENT
+position that must keep refusing (pinned at `test-solve-carrier.rkt`
+"SCOPE BOUND"). Downstream there is nothing left to tell them apart — the
+paren/bracket distinction exists ONLY in the reader.
+
+The property is also **anti-correlated with the answer**: it SURVIVES in two
+positions that must refuse (a `defn` body; a nested bracket `[[(G):c]]`) and is
+STRIPPED in three that must solve (def RHS, aligned let RHS, every chain —
+`syntax-locs-only` drops properties from moved nodes, and for chains the mark
+migrates onto the bare `$select-path` head atom). So the carrier is the DATUM
+sentinel `$goal-rhs`, on the argument `parse-reader.rkt` already records for the
+`let` leg one level in: *preserve that bit in the DATUM, where stripping cannot
+reach it.*
+
+**⭐ THE MECHANISM ALREADY EXISTED.** `let [zb := (G):c] zb` WORKED at HEAD — the
+bracket-`let` arm of `mark-binding-values` is the one arm with no element-count
+gate, so it minted `$goal-rhs`, which landed in SUBJECT position and was consumed
+there by `parse-datum`'s existing sentinel arm. This slice REACHES that
+mechanism from the other command positions; it invents none. It is also why
+CHAINS came free: the mint precedes the fold, which nests one carrier per level
+with the subject always at index 1.
+
+**The enumeration under-counted by three.** Beyond the reported `:c` `.0` `{c}`
+`:{c}`: the PLAIN DOT `.name` (the commonest selection surface), `[0]`
+(byte-identical to `.0`), and every CHAIN. `.{…}` and `.:name` are NOT members —
+their fold arms DESTROY the base (`($retired-selection …)`), so there is no
+subject to carry a goal; `subject-preserving-access-heads` excludes them by name.
+
+**Owner rulings (2026-08-08), all landed.**
+1. *"The `let`s shouldn't disagree whether they use a `:=` or not."* — the
+   aligned/bare arm mints too. The other two spellings refuse an access on ANY
+   value (DEFERRED 97), so they are out of reach from here.
+2. *"The multi-line `def` shouldn't lose it's solve."* — a continuation-line
+   value nests one level deeper, inside a LAYOUT group.
+3. *"Wrapping other values in [parens] does seem like it should be a
+   properly-guided error."* — the widening is INTENDED; base was the
+   inconsistent side (bare `(mm)` already refused while `(mm).a` silently treated
+   parens as grouping). The guided diagnostic moved to ELABORATION
+   (`non-relation-goal-head-error`), where it survives the selection seat and
+   gains a real srcloc — previously `<unknown>`.
+
+**⚠ BRACKET GROUPS NOW CARRY A MIRROR MARK, and it is load-bearing.** A
+multi-line value's layout group is byte-identical to a user bracket — same datum,
+same span, no properties (measured) — so descending one level to reach the
+multi-line value would ALSO descend into `def B := [(G):c]` and mint a goal in
+argument position. `prologos-bracket-origin` makes *"unmarked ⇒ layout"*
+structural. The descent is exactly one level.
+
+**⚠ THE VERIFY FOUND THREE DEFECTS OF MINE — five slices running.** Sharpest: the
+reader predicate tested only the sentinel HEAD while the preparse fold tests head
+AND arity, so `($dot-access a b c)` was marked and never folded, leaking as
+`Unbound variable $dot-access` where HEAD gave the relation diagnostic. **That is
+the exact drift the head-set re-homing claimed to prevent, committed in the same
+change** — sharing a list does not make two predicates agree; matching the arity
+discipline does. Also: the `let` divergence and the multi-line `def` gap.
+Separately, one of my own pins PASSED AT RED for the wrong reason (the oracle
+compared a trailing `def after := 42` on both sides); rewritten to compare
+against the explicit `[solve (G)]…` spelling.
+
+**Evidence.** Suite **10087 / 488 / 0** (`[488/488]` verified). Battery 432, green.
+A reader-level oracle over all 164 `.prologos` files: the mint fires in exactly
+three places, all inside Q_C. Verified byte-identical to base: `defn`/`fn`
+bodies, match arms, nested brackets, `[get (G) 0]`, sexp mode. No double solve,
+no new whole-file abort, and **no silent wrong answer** — every affected case is
+working-value → error, never a different value.
+
+**⚠ THE CLOSE-OUT, and why it was needed.** The first landing met the acceptance
+criteria but MISSED THE CHIP'S OWN GATE — *"adversarially verify before the
+behavioural commit, and AGAIN if the change widens"*. It widened: the bracket
+mark, the one-level descent, and the elaboration-time refusal were all added
+AFTER the verify ran. The omission cost immediately —
+
+- **The solve family had split in two.** The diagnostic was hoisted for
+  `surf-solve` only, leaving `solve-one` / `explain` / the two `-with` arms
+  refusing at RUNTIME with an `<unknown>` srcloc while `solve` refused at
+  elaboration with a real one. Same message, two production sites: the drift
+  class, self-inflicted, in the change whose commit message complains about
+  drift. All five arms now share `non-relation-goal-head-error`, which takes a
+  `who` so the text stays byte-identical to the runtime site's.
+
+- **Acceptance §K added** (markers 83–89, appended after §J so nothing
+  renumbers). It shows the working surface only — gate 1 requires ZERO errors,
+  so the scope-guard refusals stay in `test-solve-carrier.rkt`.
+
+- **The reader delta was benchmarked**, having been shipped unmeasured. Reader
+  only, same corpus in both legs (main's `lib/examples` carries owner WIP, so
+  each tree's own copy would vary the INPUT too), 6 interleaved rounds:
+  base **4246.9 ms** mean vs changed **4284.3 ms** — **+0.88%**, against a
+  within-leg spread of **3.35%**, with the first changed round FASTER than base.
+  Below this setup's measurement floor. Deterministic size of the added work:
+  **5160** bracket groups in the corpus ⇒ 5160 property writes per full read.
+
+**Second verify verdict: SHIP** (`wf_6d3e6d28-359`). It judged the POST-fix state
+(it noticed the tree had moved under its own lenses and pinned the files by
+sha256 before trusting anything), re-ran the full suite `[488/488]` 10099, the
+acceptance file (90 results, 0 errors), and confirmed the D1/D2 safety argument
+EMPIRICALLY: `def m :=` ⏎ `(fc …):c` solves while `def m :=` ⏎ `[(fc …):c]`
+refuses — the descent sees through a layout group but not through a user
+bracket.
+
+⚠ **It also corrected MY verify setup.** All three lenses were told to A/B
+against the main checkout, on the strength of the four slice-7 files matching
+`b6f773a8` — but main carries extra `reduction.rkt` (+41) and `typing-core.rkt`
+(+40) commits, so it is NOT a pristine base for a comparison of TYPE ERRORS and
+SRCLOCS, which is exactly what the lenses were comparing. The judge discarded it
+and built a `git archive b6f773a8` export instead. No verdict changed here, but
+it is the stale-base class `workflow.md` already warns about, arriving through
+the instruction rather than through the agents.
+
+**Deferred.** 84 (three `let` spellings + `def-` refuse an access on any value) ·
+87 (a goal KEYWORD under an access gets the broadcast-carrier message) · 85 (an
+empty group at command position aborts the file — pre-existing) · 86 (`'(…)` the
+QUOTED GOAL, the owner's fourth request — a language feature needing a
+first-class `Goal` type, which does not exist in the tree).
+
 
 - **The spec** (normative surface): `docs/research/2026-07-28_path-selection-spec.md`
 - Predecessor design (record of rounds 1–8b): `2026-07-26_CIU_T6_PATH_SELECTION_DESIGN.md`

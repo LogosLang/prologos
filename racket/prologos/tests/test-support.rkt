@@ -17,6 +17,7 @@
          racket/path
          racket/port
          racket/string
+         racket/file          ;; make-temporary-file, for the Level-3 helper
          rackunit
          "../macros.rkt"
          "../prelude.rkt"
@@ -52,6 +53,7 @@
          ;; WS-mode helpers (primary design target)
          run-ns-ws-last
          run-ns-ws-all
+         run-ns-ws-file-all   ;; Level 3: the same, through process-file
          ;; GDE-4: Structured error testing helpers
          check-error-has-provenance
          check-error-diagnosis-count
@@ -211,6 +213,35 @@
     (with-forked-network current-prop-net-box
       (install-module-loader!)
       (process-string-ws s))))
+
+;; Level 3 (`process-file`) twin of `run-ns-ws-all`: writes the source to a
+;; temp .prologos file and runs the REAL file path. Same parameterize, so the
+;; only variable between the two is string-mode vs file-mode — which is the
+;; whole point (testing.md § "Three-level WS validation": Level 3 is the gap
+;; that most commonly produces "works in tests, broken for users").
+;; Returns ALL results, so a whole-file abort shows up as MISSING output
+;; rather than as a changed error value.
+(define (run-ns-ws-file-all s)
+  (define tmp (make-temporary-file "prologos-ws-~a.prologos"))
+  (call-with-output-file tmp #:exists 'replace (lambda (out) (display s out)))
+  (define rs
+    (parameterize ([current-file-module-network-ref (make-module-network)]
+                   [current-ns-context #f]
+                   [current-module-registry prelude-module-registry]
+                   [current-lib-paths (list prelude-lib-dir)]
+                   [current-preparse-registry prelude-preparse-registry]
+                   [current-trait-registry prelude-trait-registry]
+                   [current-impl-registry prelude-impl-registry]
+                   [current-param-impl-registry prelude-param-impl-registry]
+                   [current-persistent-registry-net-box prelude-persistent-registry-net-box]
+                   [current-module-registry-cell-id   #f]
+                   [current-ns-context-cell-id        #f]
+                   )
+      (with-forked-network current-prop-net-box
+        (install-module-loader!)
+        (process-file (path->string tmp)))))
+  (delete-file tmp)
+  rs)
 
 ;; ========================================
 ;; GDE-4: Structured error testing helpers

@@ -706,6 +706,85 @@
        (let ([payload (cdr status)])
          (and (pair? payload) (expr-defr? (cdr payload))))))
 
+;; ── CIU T6 D4.P4d slice 7: the guided diagnostic, hoisted to ELABORATION ────
+;; `(mm)` where `mm` is a VALUE already reported the right thing — "mm is bound
+;; as a value, not a relation — application is written [mm …]; parens make a
+;; relational goal" — but only at RUNTIME, from `solve-app-goal`. That is fine
+;; while the solve is the whole command; it is NOT fine once the solve is the
+;; SUBJECT of a selection, because TYPE CHECKING runs first and fails earlier:
+;; a non-relation goal has no row, `solve-row-type` yields a hole, and the
+;; selection then reports "the subject is not a record" — naming the wrong
+;; problem and never mentioning parens, `solve`, or the bracket fix. Measured
+;; on `(mm).a`.
+;;
+;; Deciding it HERE fixes both spellings at once and is strictly better for the
+;; bare one too: the error arrives with a real srcloc instead of `<unknown>`.
+;;
+;; ⚠ ONLY a head that is env-bound-but-not-a-relation is refused. An UNKNOWN
+;; name is deliberately left alone — it stays the runtime "Unknown relation"
+;; path, because a relation may be registered by a later command in the same
+;; file and pre-judging it here would break forward references. And an
+;; un-schema'd relation is untouched: this tests relation-hood via
+;; `defr-bound-name?`, never the presence of a row (`solve-row-type`'s hole is
+;; the LEGITIMATE un-schema'd-facts case, per its own comment).
+;; `who` mirrors the runtime site's own label so the message is byte-identical
+;; to the one `raise-unknown-relation-error` produces — `solve:` for the solve
+;; family, `explain:` for the explain family. ⚠ ALL FIVE arms of the family must
+;; call this. Guarding only `surf-solve` (as the first cut did) leaves
+;; `solve-one` / `explain` / the `-with` pair refusing at RUNTIME with an
+;; `<unknown>` srcloc while `solve` refuses at elaboration with a real one —
+;; the same message from two sites, which is the drift class this file has paid
+;; for repeatedly. Caught post-verify by A/B, not by any test.
+(define (non-relation-goal-head-error goal loc env depth [who 'solve])
+  (and (surf-goal-app? goal)
+       ;; ⚠ DEPTH 0 ONLY — the check is CONSERVATIVE BY CONSTRUCTION, and this
+       ;; is the conjunct that makes it so. Relation-hood is resolved at SOLVE
+       ;; time, not elaboration time, so a solve that will not run until later
+       ;; must not be pre-judged: `defn hops [x]` ⏎ `solve (link a b)` elaborates
+       ;; NOW but runs when `hops` is CALLED, by which point `link` may be a
+       ;; relation that did not exist yet (or `hops` may never be called at all).
+       ;; Without this, that program — which base compiles and runs — is refused
+       ;; and the function never defines. Under any binder we therefore say
+       ;; nothing and leave it to the existing runtime diagnostic.
+       ;; Depth 0 is exactly the case the guided message was hoisted FOR: a
+       ;; command, or a `def`/`let` binding RHS, which is evaluated right here.
+       (= depth 0)
+       (let ([name (surf-goal-app-name goal)])
+         (and (symbol? name)
+              (not (env-lookup env name depth))   ;; not shadowed by a local
+              (not (defr-bound-name? name))       ;; …and not a relation
+              (let* ([status (global-env-lookup-status name)]
+                     [ground? (eq? (car status) 'ground)]
+                     [payload (and ground? (cdr status))]
+                     [ty (and (pair? payload) (car payload))])
+                ;; Same classification as relations.rkt's runtime
+                ;; `raise-unknown-relation-error`: Pi-typed ⇒ FUNCTION, other
+                ;; ground binding ⇒ VALUE, no binding at all ⇒ unknown relation.
+                ;;
+                ;; ⚠ THE UNKNOWN ARM IS NOT OPTIONAL once the access spelling
+                ;; solves. A MISSPELLED relation used to be caught by name —
+                ;; `(fcc f "red")` gave `Unbound variable fcc` pointing at the
+                ;; token. With the implicit solve it becomes `solve (fcc …)`,
+                ;; whose row is a hole, and the SELECTION then reported
+                ;; "broadcast `:f` needs a PVec … this one is `_`" at
+                ;; `<unknown>` — naming the wrong thing, at no location. Saying
+                ;; it here restores the bare form's own message ("Unknown
+                ;; relation: fcc") for the access spelling too.
+                ;; Safe at depth 0 only, which the guard above already
+                ;; enforces: a top-level command runs NOW, so a relation
+                ;; registered by a LATER command could not have served it
+                ;; anyway. Under a binder we still say nothing.
+                (prologos-error
+                 loc
+                 (cond
+                   [(and ground? (expr-Pi? ty))
+                    (format "~a: ~a is a function — application is written [~a …]; parens make a relational goal"
+                            who name name)]
+                   [ground?
+                    (format "~a: ~a is bound as a value, not a relation — application is written [~a …]; parens make a relational goal (define a relation with defr)"
+                            who name name)]
+                   [else (format "~a: Unknown relation: ~a" who name)])))))))
+
 (define (elaborate-var name loc env depth auto-apply?)
   (let ([idx (env-lookup env name depth)])
     (cond
@@ -3346,17 +3425,20 @@
                                    required-names))])])]))]
 
     [(surf-solve goal loc)
-     (let ([eg (parameterize ([current-relational-fallback? #t])
-                 (elaborate goal env depth))])
-       (if (prologos-error? eg) eg
-           (expr-solve eg)))]
+     (let ([bad (non-relation-goal-head-error goal loc env depth 'solve)])
+       (or bad
+           (let ([eg (parameterize ([current-relational-fallback? #t])
+                       (elaborate goal env depth))])
+             (if (prologos-error? eg) eg
+                 (expr-solve eg)))))]
 
     ;; solve-one — returns first answer or none
     [(surf-solve-one goal loc)
-     (let ([eg (parameterize ([current-relational-fallback? #t])
-                 (elaborate goal env depth))])
-       (if (prologos-error? eg) eg
-           (expr-solve-one eg)))]
+     (or (non-relation-goal-head-error goal loc env depth 'solve)
+         (let ([eg (parameterize ([current-relational-fallback? #t])
+                     (elaborate goal env depth))])
+           (if (prologos-error? eg) eg
+               (expr-solve-one eg))))]
 
     ;; solve-with — parameterized solve
     [(surf-solve-with solver overrides goal loc)
@@ -3366,15 +3448,24 @@
                  (elaborate goal env depth))])
        (cond [(and es (prologos-error? es)) es]
              [(and eo (prologos-error? eo)) eo]
+             ;; ⚠ AFTER the solver/overrides checks, deliberately. Putting the
+             ;; goal-head check first re-ordered the diagnostics: for
+             ;; `solve-with nosuchcfg (mm 1)` — where BOTH are wrong — base
+             ;; pointed at the `nosuchcfg` TOKEN, and the goal-first order
+             ;; replaced that with a whole-form srcloc. Same information, worse
+             ;; aim. The solve/explain arms have no such competitor, so only the
+             ;; two `-with` arms need the ordering.
+             [(non-relation-goal-head-error goal loc env depth 'solve) => values]
              [(prologos-error? eg) eg]
              [else (expr-solve-with (or es #f) (or eo #f) eg)]))]
 
     ;; explain — bare explain
     [(surf-explain goal loc)
-     (let ([eg (parameterize ([current-relational-fallback? #t])
-                 (elaborate goal env depth))])
-       (if (prologos-error? eg) eg
-           (expr-explain eg)))]
+     (or (non-relation-goal-head-error goal loc env depth 'explain)
+         (let ([eg (parameterize ([current-relational-fallback? #t])
+                     (elaborate goal env depth))])
+           (if (prologos-error? eg) eg
+               (expr-explain eg))))]
 
     ;; explain-with — parameterized explain
     [(surf-explain-with solver overrides goal loc)
@@ -3384,6 +3475,7 @@
                  (elaborate goal env depth))])
        (cond [(prologos-error? es) es]
              [(and eo (prologos-error? eo)) eo]
+             [(non-relation-goal-head-error goal loc env depth 'explain) => values]
              [(prologos-error? eg) eg]
              [else (expr-explain-with es (or eo #f) eg)]))]
 

@@ -49,3 +49,140 @@
 - **Pre-push gate**: A git pre-push hook (`.git/hooks/pre-push`) runs the full suite if no `timings.jsonl` entry exists for HEAD. If a run already exists for the current commit, the hook skips (no redundant re-run). Bypass with `git push --no-verify` in emergencies.
 - **Pre-commit gate**: A git pre-commit hook (`tools/git-hooks/pre-commit`, installed via `tools/install-git-hooks.sh`) runs `tools/check-parens.sh` on staged `.rkt` files. ~100ms per file (read-syntax via Racket); blocks the commit on delimiter mismatch with exact line:column. Closes the bug class where mechanical edits (sed surgery, batch refactors) introduce unbalanced parens that break `raco pkg install` downstream — a pattern that hit `main` once already (commit `d7bd97a4`, fixed in PR #29). Bypass with `git commit --no-verify` for genuine emergencies; failures otherwise are real bugs to fix before committing.
 - **Parameter-leakage lint** (A3-static-lint, BSP-LE Track 2B addendum) -- `racket tools/lint-parameters.rkt` classifies each `make-parameter` call as private / test-registered / unclassified. Uses a baseline file (`tools/parameter-lint-baseline.txt`) to track currently-accepted unclassified parameters; only flags NEW additions. Run: `racket tools/lint-parameters.rkt` (report), `--strict` (exit non-zero if new unclassified found — for CI / manual audit), `--save-baseline` (accept current state as new baseline). Architectural answer is PM Track 12 (parameters → cells for module loading) which obsoletes this lint. Longitudinal pattern 7 (two-context boundary bugs, 6+ PIRs) — tactical near-term protection against silent regressions.
+
+## ⭐ Running the compiler OUTSIDE the suite — use `tools/scratch-run.sh`, never a hand-rolled harness
+
+**The incident (2026-08-08).** Three adversarial-verify subagents each hand-rolled
+an A/B harness, and the harnesses outlived the workflow that spawned them by
+45–75 minutes at **PPID 1** — orphaned, unreapable, ~14 GB between them, one at
+**12.6 GB**, two pinned at 76–80% CPU. Not a leak: RSS sawtoothed by gigabytes
+(9.1 GB → 1.7 GB observed), so GC was reclaiming. The shape was the problem —
+**49 `process-file` calls in ONE Racket process**, each accumulating module
+networks, registries and `.pnet` caches in the same heap, so peak memory scaled
+with corpus size.
+
+**Use the wrapper:**
+```bash
+tools/scratch-run.sh [-t SECONDS] [-c] ONE-FILE.prologos
+for f in corpus/*.prologos; do tools/scratch-run.sh -t 60 "$f"; done   # sweeps
+```
+It enforces three things structurally, so none of them depends on remembering:
+one file per process (it **refuses** a second argument), `timeout -k` with a
+SIGKILL follow-up, and its own process group with an EXIT trap.
+
+**Three facts behind those, each measured — do not re-learn them:**
+
+1. **`timeout N` WITHOUT `-k` IS NOT A LIMIT.** The orphan carried `timeout 550`
+   and was alive at 1h18m. A manual `kill -TERM` on all three did *nothing*;
+   SIGKILL was required. Racket CS in a tight allocation/GC loop does not
+   service SIGTERM. Re-confirmed in the wrapper's own smoke test: a `-t 1` run
+   exits 124 after **7s**, i.e. the SIGKILL is what ends it. Any bare
+   `timeout N racket …` in a command or an agent prompt is a latent orphan.
+2. **`setsid` DOES NOT EXIST ON macOS.** A wrapper that branches on it and falls
+   through leaves the child in the CALLER's process group — so a group-kill in
+   cleanup kills the caller. Use `set -m` (job control gives a background job
+   its own process group, non-interactively too), and never group-kill a pgid
+   equal to your own.
+3. **`racket/prologos/tools/run-file.rkt` ACCEPTS N FILES** (`#:args files files`
+   → `(for ([f (in-list files)]) (run-print f))`). The dangerous shape is
+   reachable, and looks idiomatic, straight from the repo's own runner — which
+   is why the arity bound lives in `scratch-run.sh` and not there (the
+   acceptance harness legitimately passes it a list).
+
+**Safety net:** `tools/reap-scratch-racket.sh` lists (default) or `--kill`s
+Racket processes whose **cwd is under a temp dir** — the discriminator that
+catches any harness, however named, while never touching the LSP server,
+racket-mode, or a `prologos/repl`, which all run from the project tree or `$HOME`.
+Run it after any workflow that ran the compiler.
+
+**In agent/workflow prompts**, say this explicitly: use `tools/scratch-run.sh`;
+do not loop a corpus inside one process; do not leave background processes; and
+the orchestrator should reap afterwards. Agents copy whatever runner they are
+handed — these three copied a single-file scratch runner and *added* the loop.
+
+### The hook — harness-enforced, because a subagent will not read a rule
+
+`tools/hook-guard-racket.sh` is a **PreToolUse/Bash hook** that DENIES any Bash
+command invoking the Racket binary without a `timeout -k` bound. It is enforced
+by the harness, not by the model, so it binds SUBAGENT Bash calls too — which is
+the point: subagents caused the incident, and a subagent cannot be relied on to
+have read this file.
+
+Allowed through: `raco`; `tools/scratch-run.sh`; `run-affected-tests.rkt` and
+`bench-ab.rkt` (they own their own workers and timeouts); anything already
+carrying `timeout -k` / `--kill-after`. A bare `timeout N` is DENIED on purpose —
+see the SIGTERM fact above.
+
+**It is not committed by default.** `.claude/settings.json` is untracked in this
+repo (`.claude/settings.local.json` is the tracked one), so the hook must be
+installed per clone. To install:
+
+    jq '. + {hooks: {PreToolUse: [{matcher: "Bash", hooks: [{type: "command",
+        command: "<REPO>/tools/hook-guard-racket.sh", timeout: 10}]}]}}' \
+      .claude/settings.json > /tmp/s && mv /tmp/s .claude/settings.json
+
+Then verify it FIRES — a hook that is silently inert is the failure mode:
+attempt an unbounded run and confirm it is refused.
+
+⚠ **Two things to know before editing the guard.**
+1. Run `tools/hook-guard-racket.test.sh` after ANY change. Its ALLOW rows are
+   what keep `raco`, the suite runner and `grep racket` working; over-denying is
+   not harmless. The table has already caught a missed shape (racket invoked
+   THROUGH a wrapper) and a run that was green only because the guard was not
+   executable.
+2. **Self-reference hazard**: the guard inspects the RAW command string, so a
+   shell command that merely CONTAINS an example invocation — a heredoc
+   documenting the pattern — is itself blocked. Write such files with an editor,
+   not a heredoc.
+
+### The compile step is PARALLEL and STAGED — `raco-make-staged!` (2026-08-08)
+
+All three `raco make` call sites now go through `bench-lib.rkt`'s
+`raco-make-staged!`, which compiles PRODUCTION paths to completion first, then
+TEST paths, each with `-j 4`. Measured effect on the runner:
+
+    warm `--all`   precompile 34.7s -> 1.2s      (wall 156.0s -> 117.3s)
+    cold driver+491 tests        147.3s -> 62.7s
+    incremental (381 dependents) 100.9s -> 36.1s
+
+⭐ **THE BIG WIN IS NOT PARALLELISM.** The warm no-op precompile — the one that
+runs on EVERY suite invocation — is 34s of pure waste today, and `-j` removes it
+as an ALGORITHMIC side effect: Racket's parallel path builds one CACHING compile
+manager per worker (`collects/setup/parallel-build.rkt`), whereas `make.rkt`'s
+serial branch calls non-caching `managed-compile-zo` per file and re-walks
+driver's ~102-module dependency chain for all 492 roots. `-j n` is simply the
+only way to reach the cached path from the CLI. Cold-build parallelism itself is
+modest (1.4x driver-only — the production graph is a deep spine).
+Corollary: if the runner ever compiles IN-PROCESS, it could capture nearly all of
+this with `make-caching-managed-compile-zo` and no parallelism at all.
+
+**`-j 4`, and do NOT "improve" it to `(processor-count)`** — that reports 10 here,
+only 8 are performance cores, and 10 measured worse than 8 on both heavy
+workloads and worst of all on the warm no-op. Override for experiments with
+`PROLOGOS_RACO_JOBS=n`.
+
+⚠ **THREE THINGS THAT LOOK OPTIONAL AND ARE NOT.**
+
+1. **The pipe drain.** `subprocess #f #f #f` creates pipes; the old code called
+   `subprocess-wait` without reading them. That is a DEADLOCK once the child
+   fills the ~64 KB buffer, and it was dormant only because serial `raco` stops
+   at the first failure (~1.5 KB). Under `-j`, raco reports ALL failures on
+   STDOUT — measured **92,916 bytes for 90 broken files**. A/B'd directly: the
+   old pattern DID NOT RETURN in 60s; the drained helper returned and captured
+   94,176 bytes. `-j` did not create that bug, it made it reachable.
+2. **The production/test split.** The stale-`.zo` heuristic flags a test `.zo`
+   that is OLDER than `driver_rkt.zo`. Under a SINGLE `-j` call that inverts:
+   170 of 491 test files do not require `driver.rkt`, so they can finish while
+   driver is still on its spine. Measured on a cold `-j 4` build: driver landed
+   103rd of 610 and one test preceded it by 10.3s. Staging makes the order
+   structural — measured 0 of 491 inverted. It is also FASTER (62.7s vs 67.8s).
+3. **`PLT_CS_COMPILE_LIMIT` must still reach the workers.** Verified by a 2x2:
+   with-limit j1 vs j10 gave 610/610 `.zo` AND `.dep` byte-identical; with-limit
+   vs no-limit differ on the same 17 of 102 modules at BOTH j1 and j10 (so the
+   probe has power). If that ever regressed, giant-match modules would silently
+   compile to the INTERPRETER — no error, ~18% slower suite. Re-check if the
+   runner's env handling changes.
+
+⚠ `--force-rerun` is needed to re-time the suite: the re-run guard blocks a
+repeat within 5 minutes when no `.rkt` changed, and its output contains no
+`FAILED`/`FAILURES` lines — so a grep-based check reads a BLOCKED run as a pass.
