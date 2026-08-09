@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 96**
+> ### **NEXT FREE: 97**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6101,3 +6101,110 @@ is worth recording as evidence the check is worth doing: a float-conversion gap
 was already **94**, a display inconsistency already **93**, and a
 "keywords aren't first-class" claim of mine was simply WRONG (measured — see the
 struck-through legacy entry above).
+
+
+### 96. ⬜ ⭐ A `map`/`reduce` PIPELINE CANNOT BE PUT IN A `defn` — it works at top level, and fails as a Multiplicity violation OR a SILENT stuck term (found 2026-08-08, THREE independent times in one session)
+
+**The user-facing shape.** This computes at top level:
+
+```
+.(1.0 - [reduce * 1.0 [map one-minus @[0.2 0.2 0.2 0.2 0.2]]])   →  0.672319997 : Posit32
+```
+
+and the SAME body cannot be wrapped in a function:
+
+```
+spec independent-occurence [PVec Posit32] -> Posit32
+defn independent-occurence [xs]
+  .(1.0 - [reduce * 1.0 [map one-minus xs]])
+→ ERROR: Multiplicity violation
+```
+
+**⚠ THREE MANIFESTATIONS, and the second is SILENT.** Measured on the same body:
+1. **with a spec** → `ERROR: Multiplicity violation` — naming QTT, which is
+   innocent (see cross-refs);
+2. **with NO spec** → it DEFINES, as `ioB : [_ Posit32] -> Posit32` — note the
+   HOLE where the container should be — and then every call returns a STUCK TERM
+   with **0 errors**: `[- 1.0 [?meta1642 Posit32 Posit32 [fn [x <Posit32>] …
+   [p32* x y]] 1.0 [[fst ?meta1659 …`. A user sees a plausible-looking expression
+   echoed back instead of a number.
+3. **with the `<T>` angle param/return form** → Multiplicity violation again.
+
+**ANNOTATION DOES NOT FIX IT.** `[PVec Posit32]`, `[List Posit32]`, and the
+`<[PVec Posit32]>` form all fail identically. So the container type being named is
+NOT what the resolution needs.
+
+**WHAT IS MEASURED (and what is not).** In the stuck term the multiplication
+resolved fine — `*` became `p32*` — and the UNRESOLVED metas are the ones sitting
+where `reduce` and `map` themselves should be (`?meta1642`, `?meta1659`), with
+`prologos::data::lseq::lseq-nil` appearing in the residue. So it is the
+COMBINATOR's own dispatch that fails to resolve, not the element operation.
+⚠ **The obvious explanation is WRONG and was checked**: `map`/`reduce` in scope
+are NOT higher-kinded trait methods. They are `prologos::data::list`'s
+List-specific functions (`spec map [A -> B] [List A] -> List B`,
+`spec reduce [B -> A -> B] B [List A] -> B`), both in the prelude's `data::list`
+`:refer` list; `Functor`'s method is `fmap`, and `collection-traits` refers only
+the trait NAMES (`Reducible`, `Collection`), not methods. **So why a List-typed
+`map` accepts a `PVec` literal at top level at all, and why it then leaves an
+unresolved meta under a `defn`, is NOT established.** That is the first thing to
+find out.
+
+**MINIMAL REPRODUCER** (no posits, no user functions):
+```
+defn t2 [n] [map [fn [k : Nat] [from-nat k]] [range n]]     → Multiplicity violation
+defn t4 [xs] [filter [fn [k : Int] [int-lt 2 k]] xs]        → defines as [_ Int] -> [_ Int]
+[t4 '[1 2 3 4]]                                             → stuck reduce/lseq term, 0 errors
+```
+`defn t1 [n] [range n]` defines correctly, so it is the COMBINATOR, not the
+parameter.
+
+**WORKAROUND — structural recursion, which is what the prelude itself does.**
+`map`, `reduce`, `foldr` and `filter` are each written in `data::list` as a plain
+`match xs | nil -> … | cons a as -> …`. Doing the same in user code works:
+```
+spec prod-one-minus [List Posit32] -> Posit32
+defn prod-one-minus [xs]
+  match xs
+    | nil       -> 1.0
+    | cons a as -> [p32* [p32- 1.0 a] [prod-one-minus as]]
+
+spec independent-occurence [PVec Posit32] -> Posit32
+defn independent-occurence [xs]
+  [p32- 1.0 [prod-one-minus [pvec-to-list-fn xs]]]
+```
+verified: `@[0.2 ×5]` → `0.672319997` (identical to the top-level form),
+`@[0.5 0.5]` → `0.75`, `@[0.1 0.9]` → `0.91`, `@[]` → `0.0`.
+
+**⚠ WHY THIS IS A BIGGIE.** It makes the HOF vocabulary unusable for ABSTRACTION —
+the one thing it is for. A pipeline can be written at a call site but never
+factored into a named, reusable, testable function, so every user hits it the
+moment they try to name a computation they already got working. It was found
+THREE independent times in a single session by two different people pursuing
+unrelated goals (a probability combinator; a Float64 reciprocal-round-trip
+collector; a range/map/filter counterexample search), which is the strongest
+available evidence that it is on the main path and not an exotic corner.
+
+**CROSS-REFERENCES**
+- **86** — a type mismatch reported as "Multiplicity violation". Manifestation 1
+  here is the same lying-diagnostic surface: QTT named for someone else's fault.
+  86's entry already argues that fixing this caller-by-caller is the wrong
+  granularity; this entry is a third caller and strengthens that.
+- **74** (✅ FIXED) — the `def` seam, where a non-ground body type reaching QTT
+  produced exactly this message; the fix routes it to "Could not infer type"
+  instead. That fix covers the `def` SEAM only. Manifestation 1 is a `defn` body,
+  so it is NOT covered, and the same "report the root cause, not QTT's generic
+  failure" reasoning applies.
+- **85** — the other silent stuck-term filed the same day (`[p32-sqrt 1e10]`).
+  Manifestation 2 is the SAME output pathology from a different cause: a term
+  that pretty-prints plausibly and reduces to nothing, with zero errors. Worth
+  asking once, for both, whether a residual unreduced application in a printed
+  RESULT should be loud by default.
+- **87** — the generic `sqrt` task. Related usability finding recorded there:
+  parser keywords (`from-nat`, `p32-sqrt`, …) are NOT first-class and cannot be
+  passed to `map`, needing eta-expansion into a lambda; only `+ - * / negate abs`
+  are first-class (N6e-E2). Anyone hitting 96 will hit that immediately after.
+
+**Adjacent usability trap, noted not filed**: list patterns are UNBRACKETED —
+`| cons a as ->`, not `| [cons a as] ->`. The bracketed form reads as an arity-3
+application (`cons` carries an implicit type parameter), defines cleanly as
+`(arities: 1, 3)`, and then silently `??__match-fail`s at every call.
