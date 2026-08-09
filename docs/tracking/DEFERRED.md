@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 94**
+> ### **NEXT FREE: 95**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -5987,3 +5987,64 @@ that claim re-checked, not overridden.
 
 **Adjacent, same investigation**: DEFERRED 85 (a posit primitive sticks on an
 exponent literal) and 86 (a mistyped argument reports "Multiplicity violation").
+
+
+### 94. ⬜ TASK — a `Float32`/`Float64` value can ONLY come from a LITERAL: there is no `Int`/`Nat`/`Rat` → Float conversion at all (found 2026-08-08)
+
+**The conversion surface is asymmetric between the two real formats**, and the
+float half is one-way OUT. From the parser keyword table:
+
+| | from-int | from-nat | from-rat | to-rat | cross-width |
+|---|---|---|---|---|---|
+| `Posit8/16/32/64` | ✅ | ✅ | ✅ | ✅ | — |
+| `Float32/Float64` | ❌ | ❌ | ❌ | `float-to-rat` | `float-to-float32` (NARROWING only) |
+
+Floats have exactly three conversions and all three point AWAY from Float:
+`float-to-int`, `float-to-rat`, `float-to-float32`.
+
+**Measured consequences** (all at `541a6b07`):
+```
+def k := 3
+(the Float64 k)                      → ERROR: Could not infer type
+(the Float64 [from-int k])           → ERROR: Type mismatch      (from-int is Rat's)
+def r : Rat := [from-int 3]
+(the Float64 r)                      → ERROR: Could not infer type
+(the Float32 (the Float64 3.0))      → ERROR: Could not infer type
+[float-to-float32 (the Float64 3.0)] → 3f32 : Float32            (the ONE route, narrowing)
+```
+So a Float value can enter a program ONLY as a literal — `(the Float64 2.0)` —
+and there is no widening `Float32 → Float64` either.
+
+**⭐ WHY THIS MATTERS BEYOND ERGONOMICS: it makes Float UNTESTABLE OVER A RANGE.**
+Any property you want to check across many values needs to turn a loop variable
+into the value, and for Float that is impossible — every case must be a
+hand-written literal. Discovered writing a reciprocal round-trip checker
+(`k * (1/k) == 1`), which is ~15 lines and works for all four posit widths:
+
+```
+spec p64-ok? Int -> Bool
+defn p64-ok? [k]
+  let x := [p64-from-int k]
+    [p64-eq [p64* x [p64/ 1.0p x]] 1.0p]
+```
+and CANNOT be written for Float at all, because `[f64-from-int k]` does not
+exist. The posit results came out as lists over 1..30; the float column simply
+could not be produced. That asymmetry will bite every future numerics property
+test, and it is the kind of gap that stays invisible precisely because the
+workaround (write literals) looks like a style choice rather than a forced move.
+
+**Suggested shape** — mirror the posit set, which is already the in-tree
+precedent: `f32-from-int` / `f64-from-int`, `-from-nat`, `-from-rat`, plus the
+missing widening `float32-to-float` to pair with `float-to-float32`. A
+posit↔float bridge (`p64-to-float` / `float-to-posit`) may fall out of the same
+work but is NOT required to close this.
+
+**Not investigated**: whether the elaborator's numeric-literal defaulting could
+supply the widening implicitly (a decimal literal already becomes `Posit32` by
+notation origin per N6b, and `(the Float64 2.0)` retypes it — so the machinery to
+turn a NUMBER into a Float exists; what is missing is a way to reach it from a
+runtime value). That may make this much cheaper than four new primitives.
+
+**Related**: DEFERRED 87 (the generic `sqrt` task) — its `Float64` instance is
+usable only on literals for the same reason, which weakens the trait's claim to
+be generic over the numeric types.
