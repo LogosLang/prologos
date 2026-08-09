@@ -13,7 +13,10 @@
          json
          racket/date)
 
-(provide benchmark-one-test
+(provide raco-make!            ;; THE one raco invocation (drains pipes, -j)
+         raco-make-staged!     ;; production first, then tests — keeps the mtime invariant
+         raco-jobs             ;; measured default 4; PROLOGOS_RACO_JOBS overrides
+         benchmark-one-test
          extract-test-count
          extract-perf-counters
          extract-phase-timings
@@ -269,6 +272,92 @@
 ;; Bytecode pre-compilation
 ;; ============================================================
 
+;; ⭐ THE ONE `raco make` INVOCATION. Every caller goes through here.
+;;
+;; PARALLEL JOB COUNT. `raco make -j n` compiles up to n modules at once.
+;; 4 is the measured sweet spot on a 10-core / 8-performance-core machine — it
+;; never wins any single workload outright but is within a few percent of the
+;; winner on all of them, while 8 and 10 each regress badly somewhere:
+;;
+;;   workload                | j=1     | j=2    | j=4    | j=8    | j=10
+;;   warm no-op (every run)  | 33.98s  | 0.58s  | 0.69s  | 1.18s  | 1.50s
+;;   incremental (381 files) | 100.86s | 46.25s | 36.06s | 33.26s | 36.87s
+;;   cold driver+491 tests   | 147.28s | 83.01s | 67.86s | 63.91s | 65.58s
+;;
+;; ⚠ DO NOT "improve" this to `(processor-count)`. It reports 10 here, only 8
+;; are performance cores, and 10 measured WORSE than 8 on both heavy workloads
+;; and worst of all on the warm no-op — the case that runs most often.
+;;
+;; ⭐ THE BIG WIN IS NOT PARALLELISM, which matters if you ever revisit this.
+;; The warm no-op precompile — the one that runs on EVERY suite invocation —
+;; drops 34s to under 1s, and that is an ALGORITHMIC side effect: Racket's
+;; parallel path builds one CACHING compile manager per worker
+;; (collects/setup/parallel-build.rkt), while make.rkt's serial branch calls
+;; non-caching `managed-compile-zo` once per file and so re-walks driver's
+;; ~102-module dependency chain for all 492 roots. `-j n` is simply the only
+;; way to reach the cached path from the CLI. Cold-build parallelism itself is
+;; modest (1.4x driver-only) because the production graph is a deep spine.
+(define raco-jobs
+  (let ([env (getenv "PROLOGOS_RACO_JOBS")])
+    (or (and env (string->number env) (inexact->exact (string->number env))) 4)))
+
+;; Run `raco make -j N` over `paths`. Returns (values ok? output-string).
+;;
+;; ⚠ THE PIPE DRAIN IS LOAD-BEARING, NOT TIDINESS. `subprocess #f #f #f` creates
+;; pipes for stdout/stderr; the previous code called `subprocess-wait` WITHOUT
+;; reading them. That is a deadlock: once the child fills the OS pipe buffer
+;; (~64 KB) it blocks on write, and the wait never returns. It was dormant only
+;; because serial `raco make` stops at the FIRST failure and emits ~1.5 KB.
+;; Under `-j` raco reports ALL failures and routes diagnostics to STDOUT —
+;; measured ~7 KB for five broken files — so a run with enough broken files
+;; would hang the runner forever. `-j` does not create the bug; it makes it
+;; reachable. Drain both ports on their own threads BEFORE waiting.
+;;
+;; Draining also fixes a real usability gap: the old code discarded raco's
+;; output entirely, so a failed precompile printed "raco make failed" and
+;; nothing about WHICH module failed. Callers can now show it.
+(define (raco-make! paths #:jobs [jobs raco-jobs])
+  (cond
+    [(null? paths) (values #t "")]
+    [else
+     (define-values (proc out in err)
+       (apply subprocess #f #f #f raco-path "make" "-j" (number->string jobs) paths))
+     (close-output-port in)
+     (define out-str "")
+     (define err-str "")
+     (define t-out (thread (lambda () (set! out-str (port->string out)))))
+     (define t-err (thread (lambda () (set! err-str (port->string err)))))
+     (subprocess-wait proc)
+     (thread-wait t-out)
+     (thread-wait t-err)
+     (close-input-port out)
+     (close-input-port err)
+     (values (zero? (subprocess-status proc))
+             (string-append out-str err-str))]))
+
+;; Compile production paths and test paths as TWO invocations, production first.
+;;
+;; ⚠ THE SPLIT IS WHAT PRESERVES THE STALE-.zo HEURISTIC. run-affected-tests.rkt
+;; flags a test .zo as stale when it is OLDER than driver_rkt.zo. Under a SINGLE
+;; `-j` call that invariant breaks: 170 of 491 test files do not require
+;; driver.rkt, so they can finish while driver is still working through its deep
+;; spine. Measured on one cold `-j 4` build: driver_rkt.zo landed 103rd of 610
+;; and exactly one test .zo (test-architecture-d-02) preceded it by 10.3s —
+;; enough to make the heuristic recompile it spuriously on the next
+;; --no-precompile run. Compiling production to completion FIRST makes the
+;; ordering structural rather than lucky: measured 0 of 491 inverted.
+;;
+;; It is also FASTER than the single call, not a trade: 62.7s vs 67.8s cold
+;; (both phases parallel), because the two phases contend less. The only cost is
+;; the warm no-op, 1.25s vs 0.72s — both irrelevant against the 34s baseline.
+(define (raco-make-staged! production-paths test-paths #:jobs [jobs raco-jobs])
+  (define-values (ok1 out1) (raco-make! production-paths #:jobs jobs))
+  (cond
+    [(not ok1) (values #f out1)]
+    [else
+     (define-values (ok2 out2) (raco-make! test-paths #:jobs jobs))
+     (values ok2 (string-append out1 out2))]))
+
 ;; Pre-compile all Prologos modules to .zo bytecode via `raco make`.
 ;; This reduces per-subprocess preamble overhead from ~22s to ~1s.
 ;; Returns #t on success.
@@ -291,12 +380,11 @@
                    #:when (regexp-match? #rx"\\.rkt$" (path->string f)))
           (path->string (simplify-path f)))
         '()))
-  (define all-paths (cons driver-path test-files))
-  (define-values (proc out in err)
-    (apply subprocess #f #f #f raco-path "make" all-paths))
-  (close-output-port in)
-  (subprocess-wait proc)
-  (close-input-port out)
-  (close-input-port err)
-  (zero? (subprocess-status proc)))
+  ;; STAGED, production first — see raco-make-staged! for why the split is not
+  ;; cosmetic (it is what keeps the stale-.zo heuristic honest under -j).
+  (define-values (ok output) (raco-make-staged! (list driver-path) test-files))
+  (unless ok
+    ;; The old code discarded raco's output, so a failure said only "failed".
+    (eprintf "~a" output))
+  ok)
 

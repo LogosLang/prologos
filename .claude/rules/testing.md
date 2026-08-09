@@ -134,3 +134,55 @@ attempt an unbounded run and confirm it is refused.
    shell command that merely CONTAINS an example invocation — a heredoc
    documenting the pattern — is itself blocked. Write such files with an editor,
    not a heredoc.
+
+### The compile step is PARALLEL and STAGED — `raco-make-staged!` (2026-08-08)
+
+All three `raco make` call sites now go through `bench-lib.rkt`'s
+`raco-make-staged!`, which compiles PRODUCTION paths to completion first, then
+TEST paths, each with `-j 4`. Measured effect on the runner:
+
+    warm `--all`   precompile 34.7s -> 1.2s      (wall 156.0s -> 117.3s)
+    cold driver+491 tests        147.3s -> 62.7s
+    incremental (381 dependents) 100.9s -> 36.1s
+
+⭐ **THE BIG WIN IS NOT PARALLELISM.** The warm no-op precompile — the one that
+runs on EVERY suite invocation — is 34s of pure waste today, and `-j` removes it
+as an ALGORITHMIC side effect: Racket's parallel path builds one CACHING compile
+manager per worker (`collects/setup/parallel-build.rkt`), whereas `make.rkt`'s
+serial branch calls non-caching `managed-compile-zo` per file and re-walks
+driver's ~102-module dependency chain for all 492 roots. `-j n` is simply the
+only way to reach the cached path from the CLI. Cold-build parallelism itself is
+modest (1.4x driver-only — the production graph is a deep spine).
+Corollary: if the runner ever compiles IN-PROCESS, it could capture nearly all of
+this with `make-caching-managed-compile-zo` and no parallelism at all.
+
+**`-j 4`, and do NOT "improve" it to `(processor-count)`** — that reports 10 here,
+only 8 are performance cores, and 10 measured worse than 8 on both heavy
+workloads and worst of all on the warm no-op. Override for experiments with
+`PROLOGOS_RACO_JOBS=n`.
+
+⚠ **THREE THINGS THAT LOOK OPTIONAL AND ARE NOT.**
+
+1. **The pipe drain.** `subprocess #f #f #f` creates pipes; the old code called
+   `subprocess-wait` without reading them. That is a DEADLOCK once the child
+   fills the ~64 KB buffer, and it was dormant only because serial `raco` stops
+   at the first failure (~1.5 KB). Under `-j`, raco reports ALL failures on
+   STDOUT — measured **92,916 bytes for 90 broken files**. A/B'd directly: the
+   old pattern DID NOT RETURN in 60s; the drained helper returned and captured
+   94,176 bytes. `-j` did not create that bug, it made it reachable.
+2. **The production/test split.** The stale-`.zo` heuristic flags a test `.zo`
+   that is OLDER than `driver_rkt.zo`. Under a SINGLE `-j` call that inverts:
+   170 of 491 test files do not require `driver.rkt`, so they can finish while
+   driver is still on its spine. Measured on a cold `-j 4` build: driver landed
+   103rd of 610 and one test preceded it by 10.3s. Staging makes the order
+   structural — measured 0 of 491 inverted. It is also FASTER (62.7s vs 67.8s).
+3. **`PLT_CS_COMPILE_LIMIT` must still reach the workers.** Verified by a 2x2:
+   with-limit j1 vs j10 gave 610/610 `.zo` AND `.dep` byte-identical; with-limit
+   vs no-limit differ on the same 17 of 102 modules at BOTH j1 and j10 (so the
+   probe has power). If that ever regressed, giant-match modules would silently
+   compile to the INTERPRETER — no error, ~18% slower suite. Re-check if the
+   runner's env handling changes.
+
+⚠ `--force-rerun` is needed to re-time the suite: the re-run guard blocks a
+repeat within 5 minutes when no `.rkt` changed, and its output contains no
+`FAILED`/`FAILURES` lines — so a grep-based check reads a BLOCKED run as a pass.
