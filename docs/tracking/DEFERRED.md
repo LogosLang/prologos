@@ -1610,15 +1610,26 @@ Existing pre-4C off-network registries (`register-domain!`, `register-typing-rul
 
 ## Arithmetic / Operator Dispatch
 
-### `+` `-` `*` `/` should work as higher-order generic functions
-- Currently parser keywords, can't be passed to `map`/`reduce` or use `_` placeholders
-- First-class wrappers (`plus`, `minus`, `times`, `divide`) exist as workarounds
+### ~~`+` `-` `*` `/` should work as higher-order generic functions~~ ✅ STALE — FIXED by Numerics N6e-E2
+- ~~Currently parser keywords, can't be passed to `map`/`reduce` or use `_` placeholders~~
+- ~~First-class wrappers (`plus`, `minus`, `times`, `divide`) exist as workarounds~~
 - Source: LSP Tier 4 testing
+- ⚠ **MEASURED FALSE 2026-08-08.** `[map negate '[1 2 3]]` → `'[-1 -2 -3]`,
+  `[reduce + 0 '[1 2 3 4 5]]` → `15`. And it is not only the operators — the
+  PRIMITIVE and CONVERSION keywords pass too: `[map from-nat [range 3N]]` →
+  `'[0 1 2]`, `[map p32-sqrt '[4.0 9.0 16.0]]` → `'[2.0 3.0 4.0]`,
+  `[map p32-from-int '[1 2 3]]` → `'[1.0 2.0 3.0]`. `.claude/rules/prologos-syntax.md`
+  records the N6e-E2 change; this entry was never updated. Struck through rather
+  than deleted so the claim's history stays visible.
 
 ### Trait-constrained functions can't be passed bare to higher-order functions
 - `reduce plus 0 '[1 2 3 4 5]` fails — elaborator can't auto-insert dict args in HO position
 - **Blocked on**: elaborator enhancement for automatic eta-expansion + dictionary insertion
 - Source: LSP Tier 4 testing
+- ⚠ **PARTIALLY STALE 2026-08-08** — the sibling entry above is now false, and
+  the named repro's shape works: `[reduce + 0 '[1 2 3 4 5]]` → `15`. Whether the
+  *bare trait-method* case (`plus`) still fails was NOT re-measured; re-check
+  before acting on this entry.
 
 ---
 
@@ -3692,7 +3703,14 @@ fight, it lives in the READER (which P4c-4c does not touch, so it is not caused
 here) — and it is a landmine directly under G2, because G2 is what makes literals
 reachable with a live mint.
 
-### 45. Latent label divergence: `select-step-output-name` vs `select-branch-top-keys`
+### 45. ✅ RESOLVED at D4.P4d slice 2 (`ba1c055d`) — fixed STRUCTURALLY, not patched
+
+> ⚠ **Re-homed at the P4d close (2026-08-08).** This carried no status glyph while
+> D4 §5.P4d's slice-2 record already said *"DEFERRED 45 fixed structurally:
+> `select-branch-top-keys`' bcast arm answers `(list (select-step-output-name s))`
+> — check ≡ meaning by shared computation"*, with the verify's OLD-vs-NEW-vs-consumers
+> table finding zero divergent shapes. The divergence cannot recur because the two
+> sides are now ONE computation. *(original below)*
 
 ```
 branch ((@bcast 0) name)  →  top-keys = (name)   output-name(head) = #f
@@ -3716,7 +3734,15 @@ because the mint never fires: `xs:{name age}` → "Unbound variable `:`" (DEFERR
 minting `:{` without handling the sub-inner ω turns an "unbound variable" into a
 silent wrong answer. Scope note for P4d.
 
-### 47. The empty-PVec ω diagnostic is generically worded
+### 47. ✅ RESOLVED at D4.P4d slice 4d-2 (`25f3f22d`) — the broadcast axis landed; ≡ 59.1
+
+> ⚠ **Re-homed at the P4d close (2026-08-08).** This carried no status glyph. It is
+> the SAME defect as **59.1** (the equivalence was probe-verified, and neither entry
+> cross-referenced the other — the 40≡46 shape). Both shipped together: a
+> `'bcast-elem` wrapper for the PVec/Map carrier plus a broadcast AXIS on
+> `format-select-fail`, so the message now names the broadcast and says *"each
+> element"* rather than misattributing to *"the subject"*. Cited at four sites in
+> `typing-errors.rkt`. *(original below)*
 
 `@[]` infers `[PVec _]`, so the inner step meets an unsolved meta and reports
 "the subject … is not a record, so it has no fields to access". Per-command, file
@@ -4228,33 +4254,63 @@ NOT a slice-3 regression (pre-slice there was no witness at all). Corpus count o
 ⚠ `build-union-type` (`union-types.rkt`) has the same non-recursive
 `append-map flatten-union` — wider and pre-existing; scope that separately.
 
-### 58. ⬜ A DYN-TAILED row component is a THIRD admission channel through the union gate (D4.P4d slice 3 verify)
+### 58. ⬜ RULED, implementation owed — an OPEN ROW does not discharge broadcast's "every component must offer" (D4.P4d; re-filed 2026-08-08 after co-design)
 
-The slice-3 gate's carve-outs are enumerated as two (the Nil skip, the
-unsolved-meta fallback). There is a third, unenumerated: a dyn-tail row component
-contributes a FRESH META from `select-project-field/row`'s `'path`+`'dyn` arm, so
-it silently passes the all-must-offer gate. Three lines of ordinary source, using
-the acceptance file's own `pvec-slice` widening idiom:
+**⚠ RE-SCOPED IN PLACE. This was filed as "a THIRD admission channel through the
+UNION GATE" — that aimed at the wrong level, and the controls prove it.** The
+union gate admits nothing special; it faithfully propagates what an open-row
+projection does everywhere. Measured at `da555602`:
 
 ```
-def rows := @[{} {:a 1}]          ;; {} infers as an EMPTY DYN keyword row
-def sl := [pvec-slice rows k 2N]  ;; [PVec { | _} | {:a Int}]
-sl:a     →  <error> : [PVec Int | ?meta]    ;; buried <error>, ZERO errors
-sl:{a}   →  refuses (the sub inner forces 'block, where dyn is miss-dyn)
+def d := {}                          ;; { | _}
+d.a          → <error> : ?meta       ;; NO union, NO broadcast
+def dyns := @[{} {}]
+dyns:a       → <error> : [PVec ?meta] ;; NO union
 ```
 
-Two consequences: (i) the slice-3 pin's `check-false #rx"<error>"` holds for its
-own fixture but NOT for the class, so that pin's comment over-claims; (ii) "every
-component must offer the step" is **sort-dependent** for dyn components — `:a`
-accepts where `:{a}` refuses, for the same union and the same key.
+**THE QUESTION IS ANSWERED — by a polarity ruling we already hold, not by a new
+decision.** `typing-core`'s own comment, twelve lines above the arm:
 
-NOT a regression — the non-union control behaves identically, so this is the
-pre-existing ruled dyn permissiveness (D19/P2.b) leaking through the new gate,
-and it is COHERENT with the single-get sibling (`union-record-component-vt` also
-returns a fresh meta). What is owed is a ruling on whether "may be present in the
-remainder" discharges "every component must offer", and the sort-consistency.
+> ⚠ Broadcast is the OTHER polarity (all-must-offer, the 2b split's Galois
+> adjoint) and must NOT reuse this arm — see D4 §3's 2b polarity ruling: never
+> "unify" them.
 
-### 59. ⬜ Two broadcast diagnostics name the wrong subject (D4.P4d slice 1/2 verifies)
+An open row **may** offer the key. That satisfies single-get's OPTIMISTIC
+polarity and **fails** broadcast's ALL-MUST-OFFER polarity. So "may be present in
+the remainder" does **NOT** discharge "every component must offer", and the
+sort-dependence is a symptom rather than the defect:
+
+```
+sl:a     → <error> : [PVec Int | ?meta]   0 errors        ← must REFUSE
+sl:{a}   → refuses, already, with a good message          ← the model to match
+```
+
+`sl:{a}`'s existing text is the deliverable's model: *"field :a (branch `a`) is
+not listed on the open row { | _} — seal the subject against a schema
+(`the Schema subj`) or validate it against one."*
+
+**Deliverable**: make the PATH sort agree with the BRACE sort for an open-row
+component under a broadcast. ⚠ **Scoped to BROADCAST only** — single-get keeps
+its D19/Q_T2 leniency by being the other polarity, so this does NOT reopen D19.
+⚠ Monotone in the forbidden direction (a value becomes an error), so it needs
+naming as a deliberate narrowing of a silent wrong answer, and a pin on the
+single-get control proving IT did not move.
+
+**The other half is NOT this entry** — the annotation lie
+(`def port : Int := cfg.port` accepted, `<error>` wearing `Int`, into arithmetic)
+is **DEFERRED 89**, and it is not a Path Selection question.
+
+### 59. ✅ RESOLVED at D4.P4d slice 4d-2 (`25f3f22d`) — BOTH members; 59.1 ≡ 47
+
+> ⚠ **Re-homed at the P4d close (2026-08-08).** It was homed on *"P4d slice 4's
+> diagnostics batch"*, which has since completed. **59.1** (the misattributed
+> subject) is the SAME defect as **47** and shipped with it. **59.2**
+> (`not-indexable`'s `x{k}` remedy off-key inside a broadcast) also shipped — the
+> remedy moved INTO the `cond` that knows the carrier, is broadcast-aware, and is
+> suppressed entirely where nothing true can be said. ⚠ Note the plan's claim that
+> *"the existing cond already discriminates the right three cases"* was FALSE: the
+> cond discriminated carrier kind and the remedy sat in the unconditional tail.
+> *(original below)*
 
 Both pre-existing, both surfaced while pinning the carriers; natural riders on
 P4d slice 4's diagnostics batch.
@@ -4302,7 +4358,20 @@ link and poisoning the advice there — typing analysis inside a diagnostic, and
 its own slice. Recorded in the code at `format-select-fail`'s `bcast-carrier`
 arm.
 
-### 61. ⬜ REWRITTEN at slice 4c — a BRACE-spelling remedy for sub / caret inners
+### 61. ⬜ NOT SCHEDULED — a FEATURE question, re-homed at the P4d close to X.close triage
+
+> ⚠ **Re-homed 2026-08-08.** It was left UNHOMED when slice 4c rewrote it, and it is
+> not a gap: what remains is *"sub and caret inners have honest BRACE spellings that
+> nothing offers"*, which is a **feature proposal**, and taking it requires
+> reconciling with 4c's owner ruling — *"the fix is not a better second spelling; it
+> is not teaching one."* So it is not P4d work and should not sit in a phase queue
+> pretending to be. Decide it at **X.close DEFERRED triage**, as a yes/no on whether
+> the brace spellings are worth advertising at all.
+>
+> ⚠ Its own body carries a warning worth keeping: **two independent auditors got its
+> item 2 wrong**, both reasoning from "the advice machinery is deleted" to "no
+> message advises anything" — conflating 4a's *taught-spelling* advice with 4c's
+> *conversion* remedy. Probe before repeating either claim.
 
 ⚠ The original text below is OBE: it described slice 4a's "poisoning rule",
 which was deleted at 4c along with the rest of the advice machinery. Two
@@ -4387,6 +4456,12 @@ inline sub genuinely accepts an undeclared key — admitting it would reproduce
 subject. So slice 4b's headline — "a schema-typed subject is the row it
 denotes" — holds only for top-level NAMED closed schemas. Fixing the
 propagation is the real answer; the leaked generated name is slice-4c material.
+
+> ⚠ **RE-HOMED at the P4d close (2026-08-08).** Slice 4c has LANDED and did not take
+> the leaked-generated-name half, so that half was orphaned — homed on a slice that
+> no longer exists to receive it. Both halves now belong to **P4e** (the next phase
+> that touches this surface) or to X.close triage if P4e does not reach it. The
+> substance is unchanged; only the home moved.
 
 ### 64. ✅ RESOLVED at D4.P4d slice 4c (`a31b7475`) — both gates now name their remedy
 
@@ -5473,6 +5548,679 @@ union-aware fallback, **or** have `select-project-field`'s union arm mint a
 union-aware kind instead of `miss-closed`. ⚠ Also worth fixing the blanket
 handler itself — a `with-handlers` that swallows every exception is why a
 contract violation reads as a missing diagnostic.
+
+---
+
+### 84. ⬜ ONE absent element still answers for the WHOLE node — the split's named residual (D4.P4d slice 6)
+
+Slice 6 split absence from key-miss at the TIER layer: `champ-of` now consults only
+the BLOCK tier, so an absent element stays quiet while a genuine key miss goes
+LOUD. **What it does not touch is the whole-node abort.**
+
+`select-reduce` has a single `let/ec return`, and both permissive exits escape
+through it — `champ-of`'s `[else] → none` and `project`'s `[else] → <error>`. So
+one element's absence abandons the entire selection, and the answer is decided by
+whichever element folds FIRST:
+
+```
+def A : [PVec <Nil | MKI>] := @[m2 nn]   A:a  →  LOUD (the miss folds first)
+def B : [PVec <Nil | MKI>] := @[nn m2]   B:a  →  none, 0 errors   ;; SAME multiset
+```
+
+Row carriers are worse, because the order is CHAMP HASH ORDER, not source order —
+three structurally identical records differing only in FIELD NAMES gave `none`,
+loud, loud. And the collapse discards data: `{:f nn :g m3}` with `m3 = {:y 7}`
+returns `none`, throwing away the real `7`.
+
+⚠ Two further consequences, both measured: the result is a **scalar at a container
+type** (`none : {:f Int :g Int}`, `none : [PVec Int]`) — a type lie the printed
+type does not admit; and `nil-safe-get` "composing with broadcast" holds only in
+the all-hit case (a single absent element collapses the whole vector rather than
+yielding `@[1 none 3]`). Both PRE-DATE slice 6 and are unchanged by it.
+
+**What is owed is a ruling**: is absence a PER-ELEMENT answer (yielding a
+container with a marker in the absent slot) or a NODE answer (today)? The Q_U7
+whole-node-abort rider ratified an **error** aborting the node so no panic is
+buried — it never covered delivering a **VALUE** through that channel, which is
+what makes the type lie possible. Note DEFERRED 48's ruling constrains per-TIER
+abort granularity and does NOT block a per-element absence answer.
+
+⚠ **Pin obligation either way**: nothing anywhere pins that two orderings of the
+same node agree. Whichever way this is ruled, that pin is the deliverable.
+
+
+### 85. ⬜ `[p32-sqrt 1e10]` is a STUCK TERM with ZERO errors — an exponent literal is `Int`, but passes a `Posit32` argument check (found 2026-08-08)
+
+```
+ns q
+[p32-sqrt 1e10]
+```
+→ `[p32-sqrt 10000000000] : Posit32`, **0 errors**. The term is echoed back
+UNREDUCED and typed `Posit32`; nothing anywhere says it did not compute.
+
+**Mechanism (inferred, one step verified)**: per Numerics N6b the literal's
+default type is keyed on NOTATION ORIGIN — decimal → `Posit32`, fraction → `Rat`,
+**exponent → `Int`/`Posit32`**. `1e10` arrives as an `Int`, `p32-sqrt`'s argument
+check nonetheless admits it and reports the result type as `Posit32`, and then
+`reduction.rkt`'s arm `[(expr-p32-sqrt (expr-posit32 a)) …]` does not match an
+`expr-int` payload, so the node is stuck. Verified: the decimal spellings all
+reduce (`[p32-sqrt 16.0]` → `4.0`, `[p32-sqrt 0.0001]` → `0.01`), and
+`[p32-sqrt [p32-from-int 9]]` → `3.0`, so the defect is specific to the
+EXPONENT-notation literal reaching a posit primitive.
+
+⚠ **Silent in both directions** — no error on either side, and a stuck term
+pretty-prints as a plausible value. This is the class the arc has been paying for
+all week: the gate that would catch it (an arity/type error) never fires.
+
+**Not investigated**: whether the same shape hits the other widths
+(`p8`/`p16`/`p64`, `f32`/`f64`) or other posit primitives (`p32*`, `p32-abs`, …).
+The argument check is presumably shared, so a census is the first move.
+
+### 86. ⬜ A TYPE MISMATCH in a float/posit primitive's argument reports "Multiplicity violation" (found 2026-08-08)
+
+```
+ns q
+[f64-sqrt 2.0]
+```
+→ `ERROR: Multiplicity violation`. The actual fault is a plain type mismatch:
+`2.0` is a `Posit32` (decimal literals default there) and `f64-sqrt` wants a
+`Float64`. The correct spelling `[f64-sqrt (the Float64 2.0)]` →
+`1.4142135623730951f`, 0 errors.
+
+**The same LYING-DIAGNOSTIC class as DEFERRED 74, at a DIFFERENT site.** 74 fixed
+the `def` SEAM — an unannotated `def` whose body type was not ground reached QTT,
+which had nothing to check against and reported its generic `tu-error`. This one
+is `checkQ` failing on an ARGUMENT, so 74's gate does not cover it and it is
+still live. Per `.claude/rules/pipeline.md` § "infer / inferQ Are Twins", a
+"Multiplicity violation" naming a subsystem that is working perfectly is the
+signature to chase; here QTT is again innocent.
+
+**Worth deciding as one question with 74's residual**: whether `tu-error`'s
+generic reporter should ever be allowed to surface as "Multiplicity violation"
+at all, or whether every path into it should have to say what it was actually
+checking. 74 fixed one caller; this shows callers are the wrong granularity.
+
+**Found while** answering how to implement `sqrt` (2026-08-08). Both 85 and 86
+were surfaced by probing the existing primitives, not by any gate.
+
+
+### 87. ⬜ TASK — there is no generic `sqrt` in the stdlib; add a `Sqrt` trait over the primitives that already exist (2026-08-08)
+
+**Not a defect — an absent feature, and the one users hit first.** `sqrt 32.0`
+reports `Unbound variable`, and there is no library to require: nothing defines
+`sqrt` in any `.prologos` library and it is not in the prelude's auto-import list
+(`namespace.rkt`). Verified by grep and by running it. The working spellings are
+the WIDTH-SPECIFIC parser keywords — `p8/p16/p32/p64-sqrt` and `f32/f64-sqrt` —
+which a user has no way to guess.
+
+**Everything underneath already works.** The primitives are fully plumbed
+(parser keyword → `surf-*` → `expr-*` → `reduction.rkt`) and backed by real
+implementations: `float64-sqrt` = `flsqrt` (`float-impl.rkt:40`), `posit32-sqrt`
+= `posit-sqrt 32` (`posit-impl.rkt:508`). So this task adds a NAME and a
+dispatch, not an algorithm.
+
+**The shape, verified end-to-end at `a2d6e13e` (0 errors, all four dispatching):**
+
+```
+trait Sqrt {A}
+  sqrt : A -> A
+
+impl Sqrt Posit32   defn sqrt [x : Posit32] <Posit32>  p32-sqrt x
+impl Sqrt Posit64   defn sqrt [x : Posit64] <Posit64>  p64-sqrt x
+impl Sqrt Float64   defn sqrt [x : Float64] <Float64>  f64-sqrt x
+impl Sqrt Int       defn sqrt [x : Int]     <Int>      isqrt x
+```
+
+measured: `[sqrt 2.0]` → `1.41421356 : Posit32` · `[sqrt (the Float64 2.0)]` →
+`1.4142135623730951f` · `[sqrt [p64-from-int 2]]` → `1.4142135623730952p` ·
+`[sqrt -1.0]` → `NaR` (total, no crash).
+
+**`Int` needs an implementation — there is no integer sqrt primitive.** Newton /
+Heron, pure Prologos, verified exact `floor(√n)` for 0, 1, 2, 15, 16, 17, 999999,
+1000000:
+
+```
+spec isqrt-go Int Int -> Int
+defn isqrt-go [x g]
+  let g2 := [int/ [int+ g [int/ x g]] 2]
+    match [int-lt g2 g]
+      | true  -> [isqrt-go x g2]
+      | false -> g
+
+spec isqrt Int -> Int
+defn isqrt [n]
+  match [int-le n 0]
+    | true  -> 0
+    | false -> [isqrt-go n n]
+```
+⚠ The `n <= 0` guard is load-bearing — it is what stops `int/ x g` dividing by
+zero on the first step.
+
+**⭐ THE OPEN DESIGN QUESTION, and it should be ruled before this is written:
+what does `sqrt` MEAN over `Int`?** The trait signature `A -> A` forces `Int →
+Int`, i.e. FLOOR, so `[sqrt 2]` = `1`. That is a real semantic commitment and
+there are at least three alternatives: (a) floor, as above — cheap, total, and
+silently lossy; (b) NO `Int` instance, forcing an explicit conversion
+(`[sqrt [p32-from-int 2]]`) so the precision loss is visible at the call site;
+(c) a different signature (`Int -> Posit32`, or `Int -> Option Int` exact-only),
+which the current `A -> A` trait shape cannot express. Note `Abs` and `Neg` are
+`A -> A` and lossless, so `sqrt` would be the first `A -> A` arithmetic trait
+method that is NOT — worth deciding deliberately rather than inheriting from the
+trait template.
+
+**Home**: `lib/prologos/core/arithmetic.prologos`, beside `Add`/`Sub`/`Mul`/
+`Div`/`Neg`/`Abs`. ⚠ To make the obvious spelling work with no require, `Sqrt`
+and `sqrt` must ALSO be added to that module's `:refer` list in the prelude
+imports (`namespace.rkt:763`) — the module is already prelude-auto-imported, so
+the entry there is the whole difference between `sqrt 32.0` working and reporting
+`Unbound variable`.
+
+**Does NOT fix DEFERRED 85 or 86**, and would inherit both: a generic `sqrt` over
+a `Posit32` argument still sticks on an exponent literal (85), and a wrong-typed
+argument still reports "Multiplicity violation" (86) — arguably more confusingly,
+since the user would no longer have written a width-specific name.
+
+**Test obligation**: per `.claude/rules/testing.md`, three-level WS validation —
+the trait dispatch is library surface, so Level 3 (`process-file` on a real
+`.prologos` file) is the one that matters, plus the `floor(√n)` cases above as
+the `Int` instance's own pins.
+
+---
+
+### 88. ⬜ A CARET DOES NOT APPLY EXACTLY ONCE — twice through a broadcast, ZERO times through a sub-block (CIU T6 D4.P4d, Q2's real content)
+
+The spec's rule (§3.4) and Q_T7/Q_T8 together say: **a caret applies exactly
+once, at the level where it is written, and "dropped means dropped."** On a plain
+dot path HEAD satisfies this exactly — all four ruled operators are correct:
+
+```
+app{server.ssl.enabled^-}     → {:enabled true}               ;; Q_T7: whole branch FLAT
+app{server.ssl.enabled^-ssl}  → {:ssl true}                    ;; Q_T7: flat, renamed
+app{server.ssl.enabled^..}    → {:server {:ssl true}}          ;; Q_T8: ONE level, ancestors kept
+app{server.ssl.enabled^ssl}   → {:server {:ssl {:ssl true}}}   ;; rename in place
+```
+
+**Three measured members where it does not.** Subject:
+`def cfg := {:servers @[{:host "localhost" :port 8080} {:host "example.com" :port 443}]}`
+
+**(1) ZERO applications — `^-` is INERT inside a sub-block, silently degrading to
+`^`.** Both spellings produce identical output at 0 errors:
+```
+app{server.ssl.{enabled^-ssl cert-path^-cert}}  → {:server {:ssl {:cert …, :ssl true}}}
+app{server.ssl.{enabled^-ssl cert-path^cert}}   → {:server {:ssl {:cert …, :ssl true}}}
+```
+Per Q_T7 the first should hoist both entries flat → `{:ssl true :cert "…"}`. The
+`-` is discarded: the user asks to COLLAPSE and silently gets a RENAME. This is
+the sharpest member — two spellings with ruled-different meanings are
+indistinguishable.
+
+**(2) TWO applications — the caret reaches OUT through a broadcast.**
+```
+cfg{servers:host^}       → @[@[@["localhost"] @["example.com"]]] : ⟨[PVec ⟨String⟩]⟩
+cfg{servers:host^-name}  → {:name @[{:name "localhost"} …]}
+```
+In the first the dissolve fires at the inner (each element → `⟨String⟩`) AND
+again on the outer branch (the block itself goes keyless) — hence three levels of
+wrapping. In the second the rename lands on the inner AND the outer key. Expected
+under the caret-once rule: `{:servers @[⟨"localhost"⟩ ⟨"example.com"⟩]}` and a
+single flat hoist respectively.
+
+**(3) A dropped key BORROWS a name instead of staying dropped.**
+```
+cfg{servers^:host}  → {:host @[{:host "localhost"} …]}
+```
+`servers^` dissolves the `servers` level, so nothing should name the block entry
+— "dropped means dropped". Instead the output name is taken from the INNER step.
+
+**Root cause, verified in three places**: the leaf/label classifiers are
+ω-TRANSPARENT but SUB-OPAQUE. `select-branch-collapse` and `select-branch-keyless`
+both do `(if (eq? (select-step-kind s0) 'bcast) (select-bcast-inner s0) s0)` —
+seeing THROUGH the ω wrapper to find a caret and re-classifying the whole outer
+branch — while `select-step-output-name` has `[(sub) #f]` and never unwraps a sub.
+So a caret written bare after `:` is counted at two levels, and one written inside
+`:{…}` is confined and cannot reach the level `^-` is defined to collapse.
+
+⚠ **The fix is constrained by [Q_U22](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u22)**:
+`^` at a leaf stays ARITY-UNIFORM, so `cfg{servers:host^}` corrects to
+`{:servers @[⟨"localhost"⟩ …]}` (1-tuples), NOT to bare values. Fixing toward the
+bare-value reading would make `xs:{name^}` a second spelling of `xs:name`, which
+slice 4c retired.
+
+⚠ **Not a P4d regression** — the asymmetry predates the phase (P4c-3's Q_U7 ω
+transparency); P4d made it reachable and visible. Sizing note: member (1) is
+likely independent of (2)/(3) and may be separable.
+
+**Pin obligation**: all four ruled dot-path lines above (they are the oracle and
+nothing pins them), plus one pin per member, plus the arity pin from Q_U22.
+
+---
+
+### 89. ⬜ AN OPEN-ROW PROJECTION CAN BE ANNOTATED INTO A LIE, and the stuck value then enters arithmetic at ZERO errors (found 2026-08-08 co-designing CIU T6 Q3; NOT a Path Selection question)
+
+Projecting an unknown key off an open row yields a **fresh meta** at the type
+layer — "the meta IS the observation", which is D19/Q_T2's deliberate leniency
+and is right. The problem is what happens when the user annotates it. Measured at
+`da555602`:
+
+```
+def cfg := {}                    ;; { | _}
+def s1  := cfg.port              ;; ERROR: undischarged open-row projection …
+                                 ;; ← the D23 guard, working
+def port : Int := cfg.port       ;; ACCEPTED
+port                             ;; <error> : Int          ← type says Int
+def doubled := [int+ port port]  ;; ACCEPTED
+doubled                          ;; [int+ <error> <error>] : Int    0 errors
+```
+
+The D23 guard correctly refuses UNANNOTATED storage. But its documented discharge
+— *"Annotate to discharge it"* — accepts an annotation the checker has no
+evidence for: it held a meta meaning "could be anything", the user asserted
+`Int`, and it took the assertion. The `<error>` is a symptom; **the accepted lie
+is the defect**, and it is what lets a stuck term wear a clean `Int` into `int+`.
+
+**The language already has the honest shape, and it is one function away.**
+`nil-safe-get` puts the absence IN THE TYPE:
+
+```
+[nil-safe-get mm :port]          → nil  : Int | Nil     ;; absent
+[nil-safe-get {:port 8080} :port] → 8080 : Int | Nil     ;; present
+```
+
+You cannot do arithmetic on that without acknowledging the `Nil`. So the
+candidate fix is that an open-row projection types as an **option** (`T | Nil`)
+rather than as a bare meta the user can annotate away — which makes
+`def port : Int := cfg.port` refuse and pushes the user to `Int | Nil` or the
+nil-safe idiom.
+
+⚠ Also inconsistent with its own neighbours: the permissive degradation VALUE
+elsewhere in this system is ruled to be `none`, not `<error>` — `reduction.rkt`
+says *"Match `map-get`: degrade to `none`"*, and an adversarial verify already
+caught `expr-error` there as *"a THIRD answer to a question with two"*. The
+open-row arm is giving that rejected third answer.
+
+⚠ **Scope**: this is the OPEN-ROW PROJECTION CONTRACT (D19 / Q_T2 / D23), not
+Path Selection. CIU T6 only surfaced it. Sizing unknown — the D23 discharge is
+load-bearing for existing code, so the census of annotated open-row projections
+comes first. The broadcast half is **DEFERRED 58**, which is separable and does
+not depend on this.
+
+---
+
+### 90. ⬜ `x{k^_*}` DEFINES A FIELD LITERALLY NAMED `_*`, AT ZERO ERRORS — and it blocks Q_U24's `*_`
+
+Found by the D4.P4e mini-audit (`wf_5fb7131d-63a`), reproduced on the main
+thread at `4317c88d`:
+
+```
+def cfg := {:database {:url "u" :port 1} :version "v"}
+cfg{database^_*}
+;; → {:_* {:url "u", :port 1}} : {:_* {:port Int :url String}}   ← 0 errors
+```
+
+**Cause**: `split-caret-lexeme` (`parser.rkt`) classifies the caret continuation
+by **exact string compare** — `""`→dissolve, `"_"`→synth, `"-"`→collapse,
+`"-_"`→collapse-synth — with a **rename catch-all below**. `_*` matches none of
+the four, so it falls through and becomes a *rename target* named `_*`. Nothing
+rejects a star in a continuation, because `ident-continue?` admits `*`.
+
+**Why it is P4e-blocking, not merely cosmetic**: [Q_U24](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u24)
+spells the provenance splat **`*_`** — one glued continuation in the *same
+lexeme space*. The converse order is also live and also wrong: `cfg{database*^a}`
+splits the caret FIRST, leaving a name `database*`. **So `^`/`*` precedence must
+be RULED before either `*_` or bare `*` lands**, and the continuation classifier
+must reject unknown continuations rather than renaming to them.
+
+⚠ Belongs to the "a catch-all is a silent-wrong-answer generator" family — the
+same shape as the boolean-over-3-valued-domain finding at P4d slice 4d-2.
+
+**⭐ WIDER THAN FILED — FOUR MEMBERS, NOT ONE (measured 2026-08-08 at
+`2b9407db`, opening P4e-0).** The rename catch-all accepts *any* continuation,
+so every operator character passes through as label text:
+
+```
+cfg{database^_*}  → {:_*     {…}}   : {:_*     {…}}   ← 0 errors
+cfg{database^a*}  → {:a*     {…}}   : {:a*     {…}}   ← 0 errors
+cfg{database^*}   → {:*      {…}}   : {:*      {…}}   ← 0 errors
+cfg{database*^a}  → error naming field `:database*`, advising `.database*`  (= 91)
+```
+
+**✅ THE PRECEDENCE REQUIREMENT IS DISCHARGED — no new owner ruling needed.**
+This entry demanded that `^`/`*` precedence be ruled before `*` or `*_` lands.
+[Q_U29](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u29) already answers it, and a
+second independent principle covers the other direction:
+
+- **Star inside a caret continuation** (`^_*`, `^a*`, `^*`) — Q_U29: *a star in
+  a lexeme is the OPERATOR or it is nothing.* A label bearing a star is not a
+  label, so these are guided errors.
+- **Star before the caret** (`database*^a`) — the splat has **no single output
+  key to re-key**, exactly the reason the landed dot-band refusal gives for
+  `q.a^b` (*"`^` re-keys the OUTPUT of a selection, and a field access has no
+  output key"*). Also a guided error.
+
+So **a segment lexeme carries AT MOST ONE operator suffix**, which falls out of
+two existing principles rather than needing a third, and matches
+`split-caret-lexeme`'s own ">1 caret" refusal shape. **Nothing meaningful is
+lost**: `name^alias*` would rename and then delete the layer the alias names
+(moot), and `name*^alias` would rename N lifted keys to one name (incoherent).
+`*_` is the STAR's own continuation ([Q_U24](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u24)),
+not a caret interaction.
+
+**Fix, at P4e-0**: the continuation classifier REJECTS an unknown continuation
+instead of renaming to it. Monotone — each refusal may become a meaning later.
+
+---
+
+### 91. ⬜ THE CLOSED-ROW MISS HINT ADVISES A SPELLING THAT DOES NOT WORK — and it names Q_U26's ravel
+
+`typing-errors.rkt`'s closed-row miss hint appends
+`"; in the select branch \`~a\` — bare field access (no construction) is spelled \`.~a\`"`.
+When the branch IS `*`, it advises `` `.*` ``. Measured at `4317c88d`:
+
+- `cfg{*}` → *"in the select branch `*` — … is spelled `.*`"*, and `cfg.*`
+  **shatters** to `Unbound variable .`
+- `cfg{database*^a}` → *"spelled `.database*`"*, also wrong (path position
+  absorbs the star identically)
+- also reachable via `cfg{database *}` and `cfg{database.{url}*}`
+
+**Two defects, one site**: (i) the advised spelling is not parseable TODAY;
+(ii) after [Q_U26](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u26) bare `.*` is
+**RAVEL**, a different operator — so the hint would advise a spelling that
+parses and means something else. This is the *"the remedy points back at the
+user's own spelling"* rule (P4d slice 4c) violated in the one place P4e is about
+to make load-bearing.
+
+---
+
+### 92. ⬜ TWO `*` SURFACES OUTSIDE P4e's NAMED SCOPE — one asserts a surface fact P4e falsifies, one is a LIVE wildcard
+
+The P4e scope names the select surface and the `.*name` coexistence. The audit
+found two more, both at `4317c88d`:
+
+1. **`elaborator.rkt`'s retired path-literal wildcard message** states *"In the
+   current surface `*` is postfix FLATTEN and a sub-selection is a select block
+   `x{…}`"*. [Q_U23](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u23) makes `*` a
+   **sort-generic layer-delete** (not "flatten"), and
+   [Q_U26](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u26) makes bare `.*`
+   **ravel** — so the sentence goes stale **twice** at P4e. A diagnostic that
+   asserts a surface FACT is a maintenance liability; this is the class the
+   track has already been burned by.
+2. **`validate-selection-paths` keeps a LIVE `'*` / `'**` wildcard** (the
+   `(string=? seg "*")` / `"**"` arms) reachable from
+   `selection … :requires [:address.*]`. Whatever P4e rules about `*` must say
+   whether this vocabulary is the same operator, a different one, or retiring.
+
+Grep `wildcard-seg?` and `string=? seg "*"`; neither is in P4e's bullet.
+
+
+### 93. ⬜ Integral floats/posits display INCONSISTENTLY across the six widths — 2 keep the `.0`, 4 drop it (found 2026-08-08)
+
+Measured at `1ba731eb`, same value in each format:
+
+| format | integral | non-integral |
+|---|---|---|
+| Posit32 | `1.0` ✅ | `0.5` |
+| Float64 | `1.0f` ✅ | `0.5f` |
+| Float32 | `1f32` ⚠ | `0.5f32` |
+| Posit64 | `1p` ⚠ | `0.5p` |
+| Posit8 | `1p8` ⚠ | — |
+| Posit16 | `1p16` ⚠ | — |
+
+Only INTEGRAL values are affected — every format prints non-integral values with
+digits. It is not a literal-vs-computed distinction either: `[p64/ 2.0p 2.0p]`
+prints `1p` exactly as the literal `1.0p` does.
+
+**Cosmetic, NOT a correctness bug — verified.** Every printed form re-reads as
+its own type: `1p` → `Posit64`, `1f32` → `Float32`, `1p8` → `Posit8`. So this is
+a legibility/consistency item, not a round-trip failure.
+
+**CAUSE — three different mechanisms, only one of them deliberate**
+(`pretty-print.rkt`):
+- **Posit32** forces it ON PURPOSE — `posit->display`'s `n = 32` arm appends
+  `".0"` when the shortest decimal contains neither `.` nor `e`, and the
+  function's own header says *"Posit32 bare (integral → forced `.0`)"*.
+- **Float64** gets it BY ACCIDENT — `float64->display` is
+  `(string-append (number->string v) "f")`, and Racket's `number->string` on a
+  flonum already yields `1.0`. Nothing in our code asked for it.
+- **Float32, Posit64, Posit8/16** get no forcing at all: `float32->display` runs
+  `shortest-decimal` (which yields `1`) then appends `f32`; the `n = 64` and
+  `else` arms of `posit->display` append `"p"` / `"pNN"` to the bare shortest
+  decimal.
+
+⚠ **The code's own stated intent is not achieved.** `posit->display`'s `n = 64`
+arm carries the comment *"Posit64 → bare `p` (symmetry with Float64's `f`)"* —
+but for integral values Float64 prints `1.0f` and Posit64 prints `1p`, so the
+symmetry the comment claims is exactly what does not hold. Whoever fixes this
+should treat that comment as the specification and make it true, or change it.
+
+**Why it matters beyond tidiness**: an integral posit/float reads as an INTEGER
+at a glance. This was filed because a user read `* 3 [/ 1.0 3.0]` and its three
+siblings as having returned `Int`, and asked how the rounding was collapsing to
+one — the values were correct (`1.0`/`1f32`/`1p`/`1.0f`, all exactly one), the
+display just made three of the four look like integers.
+
+**⭐ OPEN — which way to unify?** Not obvious, and it should be ruled before the
+code moves:
+(a) force `.0` everywhere → matches Posit32 and Float64, makes "this is not an
+    Int" visible at a glance, and is the reading the `n = 64` comment implies;
+(b) drop it everywhere → matches the majority (4 of 6) and the shortest-decimal
+    principle, but makes every integral float print like an Int.
+⚠ Note (a) has a snag the entry should not hide: `posit->display`'s header
+documents the Posit8/16 bare-integer form as INTENTIONAL — *"integral mantissa
+re-reads via the pNN integer shape, e.g. `2p8`"* — so unifying toward `.0` needs
+that claim re-checked, not overridden.
+
+**Adjacent, same investigation**: DEFERRED 85 (a posit primitive sticks on an
+exponent literal) and 86 (a mistyped argument reports "Multiplicity violation").
+
+
+### 94. ⬜ TASK — a `Float32`/`Float64` value can ONLY come from a LITERAL: there is no `Int`/`Nat`/`Rat` → Float conversion at all (found 2026-08-08)
+
+**The conversion surface is asymmetric between the two real formats**, and the
+float half is one-way OUT. From the parser keyword table:
+
+| | from-int | from-nat | from-rat | to-rat | cross-width |
+|---|---|---|---|---|---|
+| `Posit8/16/32/64` | ✅ | ✅ | ✅ | ✅ | — |
+| `Float32/Float64` | ❌ | ❌ | ❌ | `float-to-rat` | `float-to-float32` (NARROWING only) |
+
+Floats have exactly three conversions and all three point AWAY from Float:
+`float-to-int`, `float-to-rat`, `float-to-float32`.
+
+**Measured consequences** (all at `541a6b07`):
+```
+def k := 3
+(the Float64 k)                      → ERROR: Could not infer type
+(the Float64 [from-int k])           → ERROR: Type mismatch      (from-int is Rat's)
+def r : Rat := [from-int 3]
+(the Float64 r)                      → ERROR: Could not infer type
+(the Float32 (the Float64 3.0))      → ERROR: Could not infer type
+[float-to-float32 (the Float64 3.0)] → 3f32 : Float32            (the ONE route, narrowing)
+```
+So a Float value can enter a program ONLY as a literal — `(the Float64 2.0)` —
+and there is no widening `Float32 → Float64` either.
+
+**⭐ WHY THIS MATTERS BEYOND ERGONOMICS: it makes Float UNTESTABLE OVER A RANGE.**
+Any property you want to check across many values needs to turn a loop variable
+into the value, and for Float that is impossible — every case must be a
+hand-written literal. Discovered writing a reciprocal round-trip checker
+(`k * (1/k) == 1`), which is ~15 lines and works for all four posit widths:
+
+```
+spec p64-ok? Int -> Bool
+defn p64-ok? [k]
+  let x := [p64-from-int k]
+    [p64-eq [p64* x [p64/ 1.0p x]] 1.0p]
+```
+and CANNOT be written for Float at all, because `[f64-from-int k]` does not
+exist. The posit results came out as lists over 1..30; the float column simply
+could not be produced. That asymmetry will bite every future numerics property
+test, and it is the kind of gap that stays invisible precisely because the
+workaround (write literals) looks like a style choice rather than a forced move.
+
+**Suggested shape** — mirror the posit set, which is already the in-tree
+precedent: `f32-from-int` / `f64-from-int`, `-from-nat`, `-from-rat`, plus the
+missing widening `float32-to-float` to pair with `float-to-float32`. A
+posit↔float bridge (`p64-to-float` / `float-to-posit`) may fall out of the same
+work but is NOT required to close this.
+
+**Not investigated**: whether the elaborator's numeric-literal defaulting could
+supply the widening implicitly (a decimal literal already becomes `Posit32` by
+notation origin per N6b, and `(the Float64 2.0)` retypes it — so the machinery to
+turn a NUMBER into a Float exists; what is missing is a way to reach it from a
+runtime value). That may make this much cheaper than four new primitives.
+
+**Related**: DEFERRED 87 (the generic `sqrt` task) — its `Float64` instance is
+usable only on literals for the same reason, which weakens the trait's claim to
+be generic over the numeric types.
+
+
+### 95. ⬜ A `defn`-wrapped `map`/`filter` SILENTLY produces a STUCK TERM — the container type never resolves (found 2026-08-08)
+
+**The LOUD half of this is already recorded** in the legacy entry *"QTT
+multiplicity violation with generic trait-constrained functions in defn bodies"*
+(§ Type System / QTT), whose workaround — *"keep expressions standalone"* — is
+correct and remains the practical answer. **This entry is the SILENT half, which
+that entry does not mention and which is the more dangerous of the two.**
+
+```
+defn t2 [n]  [map [fn [k : Nat] [from-nat k]] [range n]]      ;; LOUD
+defn t4 [xs] [filter [fn [k : Int] [not [f64-ok? k]]] xs]     ;; SILENT
+```
+· `t2` → `ERROR: Multiplicity violation` — the known, loud case.
+· `t4` → **`t4 : [_ Int] -> [_ Int] defined.`** — it DEFINES, with the container
+  position a HOLE. Applying it then yields an unreduced term:
+  `[t4 '[3 41 49]]` → `[[fst ?meta…] Int [reduce [?meta… Int '[3 41 49]] |
+  lseq-nil -> … ]]` with **0 errors**, where the same expression written at the
+  CALL SITE gives `'[49] : List Int`.
+
+So the two directions differ by which combinator is applied to what: the failure
+is not uniformly loud, and in the silent direction a user gets a definition that
+type-checks, a call that "succeeds", and a value that is not a list.
+
+**Cross-references**:
+- the legacy QTT entry above — same root cause (erased trait dict params /
+  container polymorphism), and it owns the fix;
+- **85** — same OUTCOME class (a stuck term wearing a plausible type, 0 errors);
+- **86** — the loud direction's message is that same misattributed
+  "Multiplicity violation", i.e. this shares 86's diagnostic problem too.
+
+**Not investigated**: which of `map`/`filter`/`reduce`/`foldr` fall on which side
+of the loud/silent split, and whether an explicit container annotation on the
+parameter (`[xs : [List Int]]`) resolves it — that would make the workaround
+better than "keep it standalone".
+
+⚠ **Filed after a duplicate check that killed three of four candidates**, which
+is worth recording as evidence the check is worth doing: a float-conversion gap
+was already **94**, a display inconsistency already **93**, and a
+"keywords aren't first-class" claim of mine was simply WRONG (measured — see the
+struck-through legacy entry above).
+
+
+### 96. ⬜ ⭐ A `map`/`reduce` PIPELINE CANNOT BE PUT IN A `defn` — it works at top level, and fails as a Multiplicity violation OR a SILENT stuck term (found 2026-08-08, THREE independent times in one session)
+
+**The user-facing shape.** This computes at top level:
+
+```
+.(1.0 - [reduce * 1.0 [map one-minus @[0.2 0.2 0.2 0.2 0.2]]])   →  0.672319997 : Posit32
+```
+
+and the SAME body cannot be wrapped in a function:
+
+```
+spec independent-occurence [PVec Posit32] -> Posit32
+defn independent-occurence [xs]
+  .(1.0 - [reduce * 1.0 [map one-minus xs]])
+→ ERROR: Multiplicity violation
+```
+
+**⚠ THREE MANIFESTATIONS, and the second is SILENT.** Measured on the same body:
+1. **with a spec** → `ERROR: Multiplicity violation` — naming QTT, which is
+   innocent (see cross-refs);
+2. **with NO spec** → it DEFINES, as `ioB : [_ Posit32] -> Posit32` — note the
+   HOLE where the container should be — and then every call returns a STUCK TERM
+   with **0 errors**: `[- 1.0 [?meta1642 Posit32 Posit32 [fn [x <Posit32>] …
+   [p32* x y]] 1.0 [[fst ?meta1659 …`. A user sees a plausible-looking expression
+   echoed back instead of a number.
+3. **with the `<T>` angle param/return form** → Multiplicity violation again.
+
+**ANNOTATION DOES NOT FIX IT.** `[PVec Posit32]`, `[List Posit32]`, and the
+`<[PVec Posit32]>` form all fail identically. So the container type being named is
+NOT what the resolution needs.
+
+**WHAT IS MEASURED (and what is not).** In the stuck term the multiplication
+resolved fine — `*` became `p32*` — and the UNRESOLVED metas are the ones sitting
+where `reduce` and `map` themselves should be (`?meta1642`, `?meta1659`), with
+`prologos::data::lseq::lseq-nil` appearing in the residue. So it is the
+COMBINATOR's own dispatch that fails to resolve, not the element operation.
+⚠ **The obvious explanation is WRONG and was checked**: `map`/`reduce` in scope
+are NOT higher-kinded trait methods. They are `prologos::data::list`'s
+List-specific functions (`spec map [A -> B] [List A] -> List B`,
+`spec reduce [B -> A -> B] B [List A] -> B`), both in the prelude's `data::list`
+`:refer` list; `Functor`'s method is `fmap`, and `collection-traits` refers only
+the trait NAMES (`Reducible`, `Collection`), not methods. **So why a List-typed
+`map` accepts a `PVec` literal at top level at all, and why it then leaves an
+unresolved meta under a `defn`, is NOT established.** That is the first thing to
+find out.
+
+**MINIMAL REPRODUCER** (no posits, no user functions):
+```
+defn t2 [n] [map [fn [k : Nat] [from-nat k]] [range n]]     → Multiplicity violation
+defn t4 [xs] [filter [fn [k : Int] [int-lt 2 k]] xs]        → defines as [_ Int] -> [_ Int]
+[t4 '[1 2 3 4]]                                             → stuck reduce/lseq term, 0 errors
+```
+`defn t1 [n] [range n]` defines correctly, so it is the COMBINATOR, not the
+parameter.
+
+**WORKAROUND — structural recursion, which is what the prelude itself does.**
+`map`, `reduce`, `foldr` and `filter` are each written in `data::list` as a plain
+`match xs | nil -> … | cons a as -> …`. Doing the same in user code works:
+```
+spec prod-one-minus [List Posit32] -> Posit32
+defn prod-one-minus [xs]
+  match xs
+    | nil       -> 1.0
+    | cons a as -> [p32* [p32- 1.0 a] [prod-one-minus as]]
+
+spec independent-occurence [PVec Posit32] -> Posit32
+defn independent-occurence [xs]
+  [p32- 1.0 [prod-one-minus [pvec-to-list-fn xs]]]
+```
+verified: `@[0.2 ×5]` → `0.672319997` (identical to the top-level form),
+`@[0.5 0.5]` → `0.75`, `@[0.1 0.9]` → `0.91`, `@[]` → `0.0`.
+
+**⚠ WHY THIS IS A BIGGIE.** It makes the HOF vocabulary unusable for ABSTRACTION —
+the one thing it is for. A pipeline can be written at a call site but never
+factored into a named, reusable, testable function, so every user hits it the
+moment they try to name a computation they already got working. It was found
+THREE independent times in a single session by two different people pursuing
+unrelated goals (a probability combinator; a Float64 reciprocal-round-trip
+collector; a range/map/filter counterexample search), which is the strongest
+available evidence that it is on the main path and not an exotic corner.
+
+**CROSS-REFERENCES**
+- **86** — a type mismatch reported as "Multiplicity violation". Manifestation 1
+  here is the same lying-diagnostic surface: QTT named for someone else's fault.
+  86's entry already argues that fixing this caller-by-caller is the wrong
+  granularity; this entry is a third caller and strengthens that.
+- **74** (✅ FIXED) — the `def` seam, where a non-ground body type reaching QTT
+  produced exactly this message; the fix routes it to "Could not infer type"
+  instead. That fix covers the `def` SEAM only. Manifestation 1 is a `defn` body,
+  so it is NOT covered, and the same "report the root cause, not QTT's generic
+  failure" reasoning applies.
+- **85** — the other silent stuck-term filed the same day (`[p32-sqrt 1e10]`).
+  Manifestation 2 is the SAME output pathology from a different cause: a term
+  that pretty-prints plausibly and reduces to nothing, with zero errors. Worth
+  asking once, for both, whether a residual unreduced application in a printed
+  RESULT should be loud by default.
+- **87** — the generic `sqrt` task. Related usability finding recorded there:
+  parser keywords (`from-nat`, `p32-sqrt`, …) are NOT first-class and cannot be
+  passed to `map`, needing eta-expansion into a lambda; only `+ - * / negate abs`
+  are first-class (N6e-E2). Anyone hitting 96 will hit that immediately after.
+
+**Adjacent usability trap, noted not filed**: list patterns are UNBRACKETED —
+`| cons a as ->`, not `| [cons a as] ->`. The bracketed form reads as an arity-3
+application (`cons` carries an implicit type parameter), defines cleanly as
+`(arities: 1, 3)`, and then silently `??__match-fail`s at every call.
 
 ### 97. ⬜ Three `let` spellings — and `def-` — refuse a postfix ACCESS on any value (pre-existing; surfaced by D4.P4d slice 7)  *(was 84 → now 97)*
 

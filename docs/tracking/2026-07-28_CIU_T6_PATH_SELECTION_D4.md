@@ -33,7 +33,9 @@ rulings, censuses and test delta live in its own section.
 | **P4** | **Broadcast ω** — ⭐ **P4a ✅ · P4b ✅ COMPLETE** (b-i carrier + b-ii `$dot-access` migration; `x.a` now mints the unified selector carrier) · P4c–P4e ⬜ — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | [§5.P4](#p4) · co-design: audit `wf_8458c23b` + options panel · **RULED 2026-07-31**: [Q_U5](#q-u5) · [Q_U6](#q-u6) · [Q_U7](#q-u7) · [Q_U8](#q-u8) · [Q_U9](#q-u9) (the PAUSE cleared) · partition LOCKED P4a–P4e |
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
 | **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [§5.P4c](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([inverted default](#p4c-2-inverted)) · [P4c-3](#p4c-3) ✅ `d477772c` · [P4c-4a](#p4c-4a) ✅ `f31237fd` · [P4c-4b](#p4c-4b) ✅ `6b22515d` (end to end) · **[P4c-4c](#p4c-4c-close) ✅ `ae26f540`** — broadcast is REACHABLE: PVec ω value semantics + **G2** + the preparse seam guard. ⭐ The verify caught a BLOCKING whole-file abort every gate was blind to; owner ruled the structural fix ([close](#p4c-4c-close)) · [Q_U18](#q-u18) ✅ · DEFERRED 43 ✅ · 48 RULED uniform · P4c-5 ⬜ |
-| **P4d** | **The carriers** — Map/keyword-row · het tuple · PVec-of-union · closed-schema subjects · the Q_U9 refusal's message split · corpus re-fate · **Q_U19 ✅ RULED (A)** | 🔄 | [§5.P4d](#p4d) · slices **0 ✅** `00e52c42` · **1 ✅** `14ef5e83` · **2 ✅** `ba1c055d` (C9 (a)) · **3 ✅** `1e8d0795` (Q_U21 (a)) · **4a ✅** `61d64708`+`d3947594` (advice — ⚠ RETIRED at 4c) · **4b ✅** `19ce05aa` (closed schema = its row) · **4c ✅** `a31b7475` (per-carrier split; 4a's machinery deleted) · **4d ⬜** LAST. Suite **9969/485/0** · battery **420** |
+| **P4d** | **The carriers** — Map/keyword-row · het tuple · PVec-of-union · closed-schema subjects · the Q_U9 refusal's message split · corpus re-fate · **Q_U19 ✅ RULED (A)** | ✅ | [§5.P4d](#p4d) · slices **0 ✅ 1 ✅ 2 ✅ 3 ✅ 4a ✅ 4a' ✅ 4b ✅ 4c ✅ 4d-1 ✅ 4d-2 ✅ 5 ✅ 6 ✅** — broadcast is LIVE over PVec · Map · keyword-row · het tuple · union · closed schema. ⭐ The CLOSE's own audit found a whole-file abort in slice 3's code (slice 5) and Q1 re-opened as a live defect (slice 6). All THREE owner questions discharged: Q1 ruled+implemented · [Q2](#q-u22) answered (fix → DEFERRED 88) · Q3 answered (broadcast → 58 re-scoped; contract → 89) |
+| **P4e** | **The `*` family · disclose `<`/`:<` · branch-initial `:`** — ⭐ **`*` is SORT-GENERIC**: it deletes the layer the preceding step created, so `:diags*` is mapcat and `database*` is splat. Row-splat `.*` RETIRES as a separate operator; `.*` rebinds to **ravel**. `*_` adds provenance keys. Branch-initial `:` admits the **ordinal² transpose** | ⬜ | [§5.P4e](#p4e) · ⚠ **RE-SCOPED 2026-08-08** by the P4e design round — [Q_U23](#q-u23) (the `*` unification, closes spec §8 Q4) · [Q_U24](#q-u24) (`*_`, lands WITH `*`) · [Q_U25](#q-u25) (branch-initial `:`; **corrects spec §10.6 against Q_T4a**; shrinks W2's ordinal exit) · [Q_U26](#q-u26) (ravel). ⚠ Two hazards: it LIFTS a Q_U7 v1 refusal, and `{:0}`'s guided error must be REPLACED not deleted. Carries **DEFERRED 63** |
+| **P4c-5** | **The `.*name` retirement + FULL residue disposal** — the last P4c residue, sequenced AFTER P4e | ⬜ | [§5.P4c-5](#p4c-5) · ⚠ **row ADDED at the P4d close 2026-08-08** — previously visible only as a `P4c-5 ⬜` fragment inside P4c's Notes cell |
 | **PF** | **Path first-classness** (substrate; **P5's prerequisite**) — ⭐ **Q_U17 RULED B2**: a Path segment is a first-class `Step` value. Reify the closed six-kind union as a `data Step` ADT on the `Datum` pattern; `Path` stays GROUND; `segments : Path -> [List Step]`. Repairs the dead `path-segments` in the SAME change | ⬜ | [§5.PF](#pf) · [Q_U17](#q-u17) · panel `wf_68178bd3-eea` |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery · ⚠ B3 needs [PF](#pf) |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | [§5.PX](#px) · position flexible |
@@ -1566,7 +1568,361 @@ items of the hold-point, ruled before P4a opened:
   semantics RULE of the lift rather than inherited from context — that is the
   ruling, not an implementation accident. Grounding: mini-audit
   `wf_e15a1ef6-dfb` (its sub-inner facet measured the sort collision at both
-  layers). **Next free Q-label: U22.**
+  layers).
+
+- <a id="q-u22"></a>**⭐ Q_U22 — `^` AT A LEAF IS ARITY-UNIFORM: n=1 YIELDS
+  `⟨T⟩`, NOT THE BARE VALUE [owner, 2026-08-08].** Raised co-designing Q2: the
+  owner's reading of *"dropped means dropped"* (spec §3.4) predicts that
+  `xs:host^` should give `@["a" "b"]` — the values, unwrapped — where HEAD gives
+  a vector of 1-tuples. **Ruled the other way, and NOT on implementation cost.**
+  Two dropped keys at one level are FORCED to be positional (you cannot put two
+  unnamed things in a record), so keyless→tuple is settled at n=2 by the live
+  unzip `party:{name^ level^}` → `[PVec ⟨String Int⟩]`. Collapsing n=1 to the
+  scalar would make the operator ARITY-DEPENDENT — one dropped key unwraps, two
+  tuple up — which breaks the algebra's uniformity for a cosmetic gain. Owner:
+  the coherence of the algebra is the deciding reason, and **`<` (disclose/pick)
+  plus `join` recover the ergonomics** that the bare-value reading was reaching
+  for, so nothing is lost expressively.
+  ⚠ Second, independent ground, recorded because it survives even if the
+  algebra argument is later revisited: n=1 unwrapping would make `xs:{name^}`
+  a SECOND SPELLING of `xs:name`, which is exactly what slice 4c's owner ruling
+  retired ("stop teaching a second spelling"). The bare-value spelling already
+  exists and is `xs:name`.
+  **Consequence for Q2, accepted eyes-open**: `cfg{servers:host^}` reads as
+  `{:servers @[⟨"localhost"⟩ …]}` under the caret-once fix — honest, uniform,
+  and less pretty than the owner's intuition. That is the trade, named.
+
+- <a id="q-u23"></a>**⭐ Q_U23 — `*` IS SORT-GENERIC: IT DELETES THE LAYER THE
+  PRECEDING STEP CREATED. `.*` row-splat RETIRES as a separate operator
+  [owner, 2026-08-08 — "Good on the stronger form of `*` with no `^`"].**
+  Opened by the owner at the P4e design round with the question *"is `m{k}` not
+  the same as `m{k.*}`?"* — and it is. Measured at HEAD: `cfg{database}` →
+  `{:database {…}}`, which is exactly the corpus's own recorded expected value
+  for `app-config{database.*}`. **`.*` is an IDENTITY wherever the head key
+  survives**, because projection-with-ancestry re-nests whatever the splat
+  lifted under the surviving key. It does work only after `^` has dissolved that
+  key — and even then only alongside SIBLINGS, since `cfg{database^.*}` alone is
+  byte-identical to `cfg.database`.
+  **The ruling**: one rule, one operator — *`*` deletes the layer the preceding
+  step created; the SORT follows the layer.* So `:diags*` deletes the vector
+  layer `:diags` made (mapcat), and `database*` deletes the nominal layer the
+  `database` branch made (splat). `cfg{database* version}` →
+  `{:url …, :pool-size 10, :version "1.0.0"}`, all-keyed, no `^`.
+  **This CLOSES spec §8 Q4** ("`*` on Map layers — is there a nominal join?")
+  in the affirmative, by the same argument §3.2.3 used to adopt map-generic `:`:
+  a vector-only `*` leaves the key-sort thesis decorative exactly where it
+  matters. `.*` was the residue of a unification that stopped one step short —
+  path-position `.*` was already subsumed by map-generic `:`.
+  **Rejected-with-reason**: `database^.*` and `database^*` (the owner's first
+  spelling) — both over-spell, because `^` dissolves a key `*` was going to
+  delete anyway, and renaming before a delete is inert. ⚠ Neither could be read
+  as a SEQUENTIAL composition in any case: **measured**, `cfg{database^ version}`
+  is an **L4 mixed keyed/keyless** error, so `^` alone makes the branch keyless
+  and any repair-by-`*`-afterwards has an ill-sorted intermediate. A `^*`
+  spelling would have had to be ONE glued continuation, like Q_T7's `^-`.
+  **The one honest asymmetry, recorded**: vector join is TOTAL (concatenation
+  cannot collide); nominal join CAN collide. Collisions route to §3.6 Ruling B —
+  and P4e needs no P5 machinery for it, because P3a already landed strict merge
+  for plain keys before `make-record` can last-win (PS7's shippable waypoint).
+  GROQ's last-wins is the precedent the spec explicitly rejects.
+  **Lexical dividend — ⚠⚠ MATERIALLY UNDER-SCOPED AS FIRST WRITTEN; CORRECTED
+  2026-08-08 BY THE P4e MINI-AUDIT (`wf_5fb7131d-63a`), re-measured on the main
+  thread.** The original claim read: *"Spelled `database* there is no `.` to
+  shatter — both bands go through ONE trailing-star splitter."* **That is true
+  ONLY for IDENTIFIER-headed layers.** The reader's star-fusion is
+  IDENTIFIER-SPECIFIC, not sort-generic: `ident-continue?` admits `*`, so the
+  star joins an identifier token — but a NUMBER token and a CLOSER token END
+  before it. Measured at HEAD:
+  · `cfg{database*}` **FUSES** → `field :database*` (one nominal key) ✅
+  · `m{0*}` **SHATTERS** → L4 mixed keyed/keyless ❌
+  · `m{0 *}` → the **BYTE-IDENTICAL** L4 error, so glued and spaced carry NO
+    distinction — **the ordinal splat is UNSPELLABLE**, the information is
+    destroyed at the reader exactly as it is for `.*` ❌
+  · `m:0*` → **`Unbound variable :`** — adding ONE character DESTROYS an
+    existing `$bcast-step` mint, so the landed ω `*` guard (the `#rx"[*]"` arm,
+    which keys on the `$bcast-step` PAYLOAD) structurally CANNOT fire on it ❌
+  · `m:0 *` → `Could not infer type [m.:0 [arithmetic::* …]]` — the star became
+    ARITHMETIC MULTIPLY applied to the selection ❌
+  So the grouping fix this ruling claimed the `database*` spelling had DELETED
+  is **still owed for every non-identifier layer head** (ordinal, sub-block,
+  bracket/paren closers). The dividend is real but its scope is the nominal and
+  keyword layers ONLY — which are the layers this ruling's EXAMPLES use, and not
+  the layers its RULE generalizes over. **The sort-generic rule stands as
+  SEMANTICS; its lexical realization does not follow for free.**
+  What DOES survive: the routing half. `$select-path` (the bare dot path,
+  outside any block) calls the same `segment-select-items` fold as the block and
+  ω bands, so ONE splitter can serve every identifier-headed surface — at ≥3
+  call sites, mirroring `split-step`'s three, because the ω payload arrives
+  colon-leading and string-stripped while the others arrive as bare symbols.
+
+- <a id="q-u24"></a>**⭐ Q_U24 — `*_` IS THE PROVENANCE VARIANT, AND IT LANDS
+  WITH BARE `*` [owner, 2026-08-08 — "Yes to land `*_` with bare `*`"].**
+  Proposed by the owner as a shorthand for the collision case. `*_` splats and
+  synthesizes each lifted key from the deleted layer:
+  `cfg{database*_ version}` → `{:database-url …, :database-pool-size …,
+  :version …}`. **It is the answer to Q_U23's one asymmetry**: it removes
+  nominal-join collisions BY CONSTRUCTION rather than erroring, and it rescues
+  the per-level case — `regions*_` → `{:ap-host …, :eu-host …, :us-host …}` —
+  which under bare `*` collides on every key of a homogeneous Map-of-Map and is
+  therefore almost always an error. **They land together** because shipping bare
+  `*` alone would deliver an operator whose headline nominal use fails on every
+  realistic input, teaching a refusal whose remedy we already have.
+  **Precedent**: Q_T7's `^-_`, which D4 already describes as "the flat
+  *provenance* recovery… **which is where a structural effect belongs**."
+  ⚠ **REQUIRED RULING, do not inherit the wrong parent**: `^_`'s stated rule is
+  *"Dropped means dropped — `^`-dissolved segments do not contribute"* (spec
+  §3.4), whereas `*_` wants the DELETED key as the prefix. `*_` follows `^-_`'s
+  rule, NOT `^_`'s. Inheriting `^_`'s silently degrades `*_` to bare `*`.
+  **Spelling**: `*_` is ONE glued continuation, matching `^-_`'s shape. `*^_`
+  does not type — `^_` synthesizes ONE key while a splat lifts many.
+
+- <a id="q-u25"></a>**⭐ Q_U25 — BRANCH-INITIAL `:` IS SCOPED INTO P4e FOR THE
+  ORDINAL² TRANSPOSE; ORDINALS NEED NO `^` [owner, 2026-08-08 — "the inner
+  broadcast should be scoped in now… ordinals don't need `^`, since they already
+  return their value-at-index"].** The owner reached this exploring a matrix
+  rotate, from an explicitly APL-inspired reading.
+  **The owner's refinement CORRECTS THE SPEC against a landed ruling.** Spec
+  §10.6 writes the v2 transpose `m{:0^ :1^ :2^}`, but **Q_T4a rules that `^`
+  NEVER attaches to an ordinal** — measured at HEAD, `values:{0^}` is the
+  guided error *"an ordinal has no key."* The two cannot both stand; the spec
+  sketch predates the ruling. §3.3 already makes ordinal branches keyless BY
+  BEING ORDINAL ("keyless branches: `^`-terminated, **or ordinal `{N M}`**"), so
+  the `^` was never introducing a key — it was marking keyless, which ordinals
+  already are. **The correct spelling is `values{:0 :1 :2}`.**
+  **⭐ CONSEQUENCE — W2's EXIT IS SMALLER THAN IT WAS WRITTEN.** Spec §7's W2
+  ("Pure transposes — ordinal² and nominal²") states its exit as *"generalize
+  `^` to set (§7.3) **+** admit branch-initial `:`."* The first conjunct is
+  needed only for the **nominal²** pivot (`strings{:home^home …}`, where `^home`
+  is a genuine rename). For the **ordinal²** matrix, keylessness is free — so
+  the ordinal half is reachable with branch-initial `:` ALONE, no v2 `^`-as-set.
+  **⚠⚠ "AND NO NEW TYPING MACHINERY" — REFUTED 2026-08-08 by the P4e mini-audit
+  (`wf_5fb7131d-63a`), reproduced on the main thread. The claim is struck.**
+  ~~measured, `values{0 1 2}` → `⟨[PVec Int] [PVec Int] [PVec Int]⟩` — the
+  transpose's target type ALREADY types and prints. Same type, different value;
+  only the branch head changes from indexing to broadcasting.~~
+  **THE SUPPORTING MEASUREMENT WAS STRUCTURALLY INCAPABLE OF DETECTING THE
+  DIVERGENCE IT WAS CITED TO RULE OUT** — it used a **SQUARE** (3×3) matrix,
+  where `{0 1 2}` is the IDENTITY and where the identity and the transpose share
+  a type. Re-run NON-SQUARE (2×3), it collapses: `nm{0 1}` →
+  `⟨[PVec Int] [PVec Int]⟩` — **TWO** components, the ROWS, while the transpose
+  of a 2×3 has **THREE**. The probe only ever proved the target type is
+  EXPRESSIBLE, which was never in doubt.
+  **And the branch head alone does not get there**, because a branch inherits
+  the BLOCK sort, which WRAPS: measured, `nm:0` → `@[1 4] : [PVec Int]` (the
+  column, at `'path`) but `nm:{0}` → `@[@[1] @[4]] : [PVec ⟨Int⟩]`. So
+  `{:0 :1 :2}` yields `⟨[PVec ⟨Int⟩] × 3⟩`, a transpose wearing an extra
+  1-tuple layer — not the transpose.
+  **What the refutation LEAVES INTACT, and it is the useful half**: the correct
+  COLUMN already exists at `'path` (`nm:0` → `@[1 4]`). So the missing piece is
+  **per-position SORT CONTROL at a branch head** — the transpose is three
+  `'path` columns assembled — NOT new extraction machinery. That is a narrower
+  job than "build a transpose", but it **collides with the landed `'block`
+  collapse** and is therefore real design work, not a spelling change.
+  ⚠ **Q_U25 (ii) is consequently CONTINGENT**: its keyless/no-`^` half stands on
+  its own (verified — ordinal and ω-over-ordinal branch heads are already
+  keyless), but *admitting the SPELLING does not produce the TRANSPOSE*.
+  **✅ OWNER RULED 2026-08-08 — branch-initial `:` STAYS IN P4e SCOPE** ("if it
+  is just a `cond` arm, then I see little reason not to include it"). The arm is
+  indeed one `cond` arm — the `kw-sym?` refusal in `segment-select-items`, which
+  fires on precisely this spelling today.
+
+  **⭐ WHAT THE ARM ACTUALLY DELIVERS, and why it is COHERENT rather than
+  broken** (settled 2026-08-08; a hypothesis that it was a live Q_U20 violation
+  was FORMED AND TESTED TO DESTRUCTION — recorded because the negative result is
+  the load-bearing part). The extra `⟨⟩` layer is **two landed rulings applied**,
+  not a defect:
+  · A broadcast step's sort is inherited at `select-bcast-inner-apply/non-union`,
+    where the SUB inner is hard-coded `'block` (Q_U20) and the non-sub inner
+    threads the inherited sort. Measured, the SAME step differs by context:
+    `cfg.servers:host` → `@["a" "b"] : [PVec String]` ('path, extracts) vs
+    `cfg{servers:host}` → `{:servers @[{:host "a"} …]} : {:servers [PVec {:host
+    String}]}` ('block, assembles a keyed row).
+  · **That wrap is CORPUS-PINNED as CORRECT** — acceptance marker **19**,
+    `app-config{admins:name}` → `{:admins @[{:name "Alice"} {:name "Bob"}]}`,
+    live and passing, and carrying its own "CORRECTED 2026-07-29 (handoff
+    verification)" note. So block-context assembly is intended.
+  · For an ORDINAL inner there is no key (`select-step-output-name` → `#f`), so
+    the block assembles ONE KEYLESS component — which by **[Q_U22](#q-u22)**'s
+    arity-uniform rule is `⟨T⟩`, not the bare value. Hence
+    `⟨[PVec ⟨Int⟩] × 3⟩`.
+  **So bare columns would require OVERTURNING Q_U22**, which was ruled on
+  algebra coherence and explicitly rejected the bare-value reading. The arm is
+  therefore correct as-is, and what it ships is **honest-nested columns**.
+  ⚠ Q_U22's own text names the recovery: *"`<` (disclose/pick) plus `join`
+  recover the ergonomics."* BOTH are P4e operators — so whether the bare-column
+  transpose is spellable END TO END inside P4e depends on whether the recovery
+  can attach at a branch head. ⚠ The obvious spelling `{:0*}` is **BLOCKED by
+  the ordinal-star shatter** recorded under [Q_U23](#q-u23) (`m{0*}` ≡ `m{0 *}`),
+  so this is NOT free. **OPEN — carried into P4e's slicing.**
+  **⚠ THE COST, named**: `{:0}` is not free — measured, it is claimed by the
+  landed diagnostic *"block keys are written bare — `x{0}`, not `x{:0}`"*, which
+  assumes a leading colon in a block is a TYPO. Admitting branch-initial `:`
+  makes `{:name}` legal and that guided error loses its case, so a user who
+  writes `x{:name}` meaning `x{name}` gets a well-typed WRONG ANSWER instead of
+  a correction. §3.6's monotonicity permits it (errors may become meanings), but
+  **the diagnostic must be REPLACED, not deleted**: `x{:name}` over a subject
+  whose elements do not offer `name` must fail in the broadcast reading's terms.
+  This is the arc's recurring shape — a guided error becoming a silent
+  divergence — and it is the single largest hazard in P4e's new scope.
+  ⚠ This LIFTS a v1 refusal ([Q_U7](#q-u7): "branch-initial `:` stays refused in
+  v1… so a wrapper never heads a branch"). The mini-audit must re-derive what
+  depends on that invariant — P4a's totality dispatcher and the components walk
+  are the named suspects.
+  **`:*` DEFERRED, with the boundary stated.** The owner asked whether
+  `values{:*}` could be a shorthand. It is not silly, but it needs `*` to mean
+  *"every index at this level"* — a BRANCH-GENERATOR, which neither is nor
+  derives from Q_U23's layer-delete (join collapses `m (m a) → m a`; a generator
+  expands one written branch into n). They coincide in the splat case by
+  accident, which is what made the unification look total. It is also
+  well-typed EXACTLY where the axis length is in the type: `⟨T₁ T₂ T₃⟩` is a
+  closed nat-keyed row and expands; `[PVec _]` does not, so `values{:*}` over
+  `[PVec [PVec Int]]` cannot be typed at all. `{:0 :1 :2}` is v1 because the
+  count is WRITTEN. This is W2's own alternative exit ("free once rows/lengths
+  are statically known") and §5's L6 pairing of AoS↔SoA with length-indexed
+  vectors — the array-programming reading is gated on the types learning to
+  carry length, not rejected.
+
+- <a id="q-u26"></a>**Q_U26 — RAVEL IS BARE `.*` [owner, 2026-08-08 — "Perhaps
+  we can reclaim the `.*` spelling as ravel, then?"].** `values.*` →
+  `@[1 2 3 4 5 6 7 8 9]`; APL's `,`. Whole-container join, the sibling of
+  Q_U23's per-step `*`.
+  **Why NOT `xs*`** (the owner's first spelling, withdrawn on the measurement):
+  `*`-suffixed identifiers are an established convention here — ⚠ **`int*` alone
+  appears 148 times** (HEAD-pinned `git grep -o 'int\*' HEAD -- '*.prologos'`;
+  **130** comment-stripped. The figure first written here was **121**, measured
+  against a DIRTY working tree with `.claude/worktrees/` copies inflating a
+  root-level recursive grep — corrected 2026-08-08; the direction is unanimous,
+  so the withdrawal is STRENGTHENED, only the arithmetic was off), and it is the
+  worked example in our own ambient syntax rules (`[int* _ 2]`), alongside
+  `rat*`, `p32*`, `trait*`, `p8*`, `p*`, `ordering*`. So `values*` in SUBJECT
+  position is indistinguishable from a name, and resolving it by "split the star
+  if the whole token is unbound" would make meaning depend on the binding
+  environment — the silent-swallow hazard `parser.rkt` already names for
+  `:tags*`. It also does not fit Q_U23's rule: `*` deletes the layer *the
+  preceding step* made, and a bare subject is not a step.
+  ⚠⚠ **THE CENSUS MEASURED THE WRONG HAZARD CLASS ALONGSIDE THE RIGHT ONE**
+  (audit `wf_5fb7131d-63a`, reproduced): bare `*` is not merely a legal
+  identifier CHARACTER — it is a **BOUND FIRST-CLASS BINARY FUNCTION**. Measured,
+  `def s := *` → `s : _ _ -> _ defined.` That is why a star after a CLOSER
+  becomes an APPLICATION rather than a shatter: `m:0 *` →
+  `Could not infer type [m.:0 [prologos::core::arithmetic::* …]]`. Any
+  star-bearing selection surface must contend with `*` being a live VALUE in
+  expression position, not only with names that end in it.
+  **`.*` is AVAILABLE**: the P4c-5 `.*name` retirement always carries a TRAILING
+  NAME (it is the old `broadcast-get`, migration target `:name`), so bare `.*`
+  does not collide with it. ⚠ **Measured cost**: `values.*` does NOT survive the
+  reader at HEAD — it shatters to `values | . | *` and reports
+  `Unbound variable .`. So reclaiming `.*` puts BACK the grouping fix that
+  Q_U23's move to `database*` had deleted. Accepted eyes-open: one grouping fix
+  now buys a genuinely new operator instead of a spelling that was an identity
+  half the time.
+- <a id="q-u27"></a>**⭐ Q_U27 — `*` IS SORT-GENERIC IN THE SURFACE TOO, NOT ONLY
+  IN THE SEMANTICS. THE READER WORK IS TAKEN ON [owner, 2026-08-08 — "Let's take
+  on the sort-generic and make it available in a way that makes us proud of
+  accomplishing a work brought to completeness"].** Closes the hole the P4e
+  mini-audit opened under [Q_U23](#q-u23): the rule generalizes over layers but
+  the LEXING did not, leaving `m{0*}` byte-identical to `m{0 *}` — an
+  **unspellable case in a ruled operator**, which this track's own record says
+  comes back.
+  **THE ARCHITECTURE IS A HYBRID, AND IT IS FORCED — one sentinel, two sources.**
+  Grounded on the landed mechanism, re-verified on the main thread:
+  · **Non-identifier heads** (ordinal, `}`/`]`/`)` closers, sub-blocks) — the
+    star is ALREADY its own token, byte-adjacent to the base. So this is the
+    **`adjacent-to-base?` mint**, the [Q_U8](#q-u8) shape: a star token adjacent
+    to a non-empty local result mints the sentinel. Every one of these carriers
+    joins **FREE**, because `adjacent-to-base?` *"consults no token type"* — its
+    own comment names `.N`, brackets, braces, parens and closers as joining the
+    focus set at no cost. This is the same predicate `bcast-step-trigger?` and
+    `bcast-brace-trigger?` are built from.
+  · **Identifier heads** — the star is ALREADY FUSED (`database*` is ONE token,
+    because `ident-continue?` admits `*`), so adjacency cannot see it. This is
+    the **post-tokenization splitter**, the `split-caret-lexeme` shape, at
+    `segment-select-items`' call sites.
+  · The two sources MUST converge on ONE sentinel so the consumer is one arm.
+  **Why the hybrid is forced rather than chosen**: removing `*` from
+  `ident-continue?` would break `int*` (148 HEAD-pinned uses) and its family, so
+  the fusion cannot be prevented; and the adjacency mint cannot see a fused
+  token. Neither mechanism alone covers both. ⚠ *Architecture PROPOSED here from
+  verified mechanism; the slice's own mini-round confirms before it lands.*
+  **NON-NEGOTIABLE CARRY-OVERS from the landed twins** — each already cost a
+  BLOCKING regression once: (i) **ONE definition consumed by BOTH groupers**
+  (the F1b.7g drift class; `surface-rewrite.rkt` hand-inlines a non-exported
+  sibling today). (ii) **The decline is a CLASS, not a list** — copy
+  `(not (prev-token-not-emitted? vec i))`; its comment records that shipping it
+  "as a list of one" cost a blocking regression. (iii) **Corpus A/B MANDATORY
+  with a NAMED predicted diff set** — grouping changes datums (Q_U8's precedent).
+  (iv) The mint slice lands **ALONE** (the P4d-0 precedent: a shared grouper
+  predicate makes a bundled A/B un-attributable).
+  **Ravel's recognizer is separate and its discrimination is clean**: bare `.*`
+  fails today because `recognize-dot-access` explicitly declines `.*` and the
+  `.*name` retirement recognizer requires an identifier AFTER the star. So
+  **presence-of-trailing-identifier IS the discriminator**, and it already lives
+  in the recognizer — `.*name` keeps the retirement error, bare `.*` mints ravel.
+- <a id="q-u28"></a>**⭐ Q_U28 — A TRAILING `*` SHADOWS A LITERAL FIELD NAME
+  SILENTLY, EXACTLY AS `^` DOES [owner, 2026-08-08 — "Match the `^` reading for
+  now"].** No type-time disambiguation check: the operator always wins, its
+  reading does not depend on what the subject happens to contain, and a
+  genuinely star-bearing key is reached the same way a caret-bearing one is.
+  **THE PRECEDENT, MEASURED at HEAD** (not asserted — this was the worked
+  demonstration the owner asked for):
+  · `q := {:a^b 5 :a {:b 9}}` · `q{a^b}` → **`{:b {:b 9}}`** — the RENAME wins;
+    the literal `:a^b` (value `5`) is unreachable through the block band.
+  · `q.a^b` → a GUIDED error (*"`^` re-keys the OUTPUT of a selection… Use a
+    select block if you want to rename"*) — the band that cannot express the
+    operator refuses with guidance rather than falling back to the literal name.
+  · **`[map-get q :a^b]` → `5`** — the ESCAPE HATCH works. **Shadowing is
+    confined to the SELECTION SURFACE**, which is what makes the trade payable.
+  ⚠ **"Matching `^`" is about SHADOWING, not about band availability.** `^` is
+  refused in the dot band because a field access has no output key to re-key;
+  `*` has no such problem — `r.ab*` descends and then deletes a layer, which is
+  meaningful. Do NOT inherit `^`'s dot-band refusal along with its shadowing.
+  **The exposure is narrower than it looks, and the slice must PIN this**: the
+  genuinely SILENT case needs the subject to carry BOTH `:ab` (row-valued) and
+  `:ab*`. With only `:ab*` present, the splat of `ab` is a field-MISS and errors
+  anyway. *(Predicted, not measured — the surface does not exist yet; pin it.)*
+  ⚠ **"FOR NOW" IS DOING REAL WORK, and the revisit is NOT free.** Adding the
+  disambiguation error later turns a MEANING into an ERROR — the direction
+  §3.6's monotonicity principle **forbids**. So if we ever want it, it must be
+  decided before this surface has users. Recorded as a named cost, not a
+  reversible default. Census at the ruling: **ZERO star-bearing field names
+  exist in the tree** (HEAD-pinned; the only `.prologos` hit is `:diags*`, the
+  operator itself in a commented corpus line, and the `.rkt` hits are the
+  battery pin plus English prose), so the trade is currently free of victims.
+- <a id="q-u29"></a>**⭐ Q_U29 — A MID-LEXEME `*` IS A GUIDED ERROR IN ALL THREE
+  BANDS (option 2) [owner, 2026-08-08 — "Option 2"].** A star in a lexeme is the
+  OPERATOR or it is nothing; there is no field-name fallback. `r{c*d}` and
+  `r.c*d` become guided errors; `xs:c*d` is unchanged (already refused).
+  **THE MEASURED STATE THIS REPLACES** — the three bands disagreed, and had for
+  the whole track:
+  | lexeme | `r{…}` block | `r.…` dot | `xs:…` ω |
+  |---|---|---|---|
+  | `ab*` (trailing) | `{:ab* 1}` field | `1` field | REFUSED |
+  | `c*d` (mid) | `{:c*d 2}` field | `2` field | REFUSED |
+  The ω guard is `#rx"[*]"` — **ANY-star, not trailing-star**, and its own
+  comment misdescribes itself as trailing-only. So option 2 does not invent a
+  refusal; it PROPAGATES the one the ω band already had, and retires a live
+  three-way divergence.
+  **Rejected-with-reason**: **option 1** (mid-star stays a field name
+  everywhere) — uniform, but it DROPS the ω band's live refusal, acquiring
+  permissive drift as a side effect of adding an operator, which is the
+  direction this project does not drift by accident · **option 3** (keep today's
+  per-band divergence) — smallest diff, but it institutionalizes `r{c*d}`
+  working while `xs:c*d` refuses, the "two spellings of one form disagreeing"
+  class DEFERRED 32 was filed for.
+  **Why the breaking half is payable**: census at the ruling found **ZERO
+  star-bearing field names in the tree** (HEAD-pinned over tracked sources; the
+  only `.prologos` hit is `:diags*`, the operator itself in a commented corpus
+  line, and the `.rkt` hits are the flatten battery pin plus English prose in a
+  Racket comment). The break costs nothing that exists. And the ESCAPE HATCH is
+  measured: `[map-get r :c*d]` → `2`.
+  **Precedent it follows**: `split-caret-lexeme` REFUSES >1 caret and a leading
+  caret rather than falling back to a field name — malformed operator position →
+  guided refusal is already the house pattern for this family.
+  **The error must name the escape**, per the "remedy points at a reachable
+  spelling" rule: *"`*` is the layer-delete operator and attaches at the END of a
+  segment; `c*d` is neither a field nor an operator. A field literally named
+  `c*d` is reached with `[map-get r :c*d]`."*
+  **Next free Q-label: U30.**
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
@@ -3612,13 +3968,36 @@ rulings; this records what the audit established and the staged shape.
   markers 43/44 since P4d-0, and the Functor census was false when written —
   the error drops the "no instance" clause) · dyn-tail
   4d refusals.
-- **P4e — flatten `*` · splat `.*` · disclose `<`/`:<` + closures**: the
-  keyword-trailing-`*` consumer split (`:diags*` — split-caret-lexeme
-  prior art; §10.4 `build.modules:diags*:msg`) · `.*` row-splat in block
-  position (§C lines; the splat/duplicate-check interaction below) ·
-  disclose (`users:<{0.userName^}` §10.2) + **DEFERRED 5's HEAD
-  re-census** of `<`-adjacent sites · the keyword-projection disposition
-  (§2.4, due at this close).
+- <a id="p4e"></a>**P4e — the `*` family · disclose `<`/`:<` · branch-initial `:`
+  + closures**: ⚠ **RE-SCOPED 2026-08-08 by the P4e design round** —
+  [Q_U23](#q-u23) · [Q_U24](#q-u24) · [Q_U25](#q-u25) · [Q_U26](#q-u26).
+  The old line read "flatten `*` · splat `.*` · disclose"; **`.*` row-splat is
+  RETIRED as a separate operator** (Q_U23) and `.*` is REBOUND to ravel (Q_U26),
+  so the sub-items below are not the ones this bullet used to name.
+  - the keyword-trailing-`*` consumer split (`:diags*` — split-caret-lexeme
+    prior art; §10.4 `build.modules:diags*:msg`) — now ONE splitter serving
+    both bands, per Q_U23's lexical dividend
+  - **`*` sort-generic** (Q_U23): `database*` splices in block position; the
+    nominal-join collision routes to the landed strict-merge waypoint
+  - **`*_`** (Q_U24), landing WITH bare `*` — ⚠ its provenance rule is `^-_`'s,
+    NOT `^_`'s
+  - **bare `.*` = ravel** (Q_U26) — needs the grouping fix; `values.*` shatters
+    at HEAD
+  - **branch-initial `:`** for the ordinal² transpose (Q_U25) — `values{:0 :1 :2}`;
+    ⚠ lifts a [Q_U7](#q-u7) v1 refusal, and ⚠ **must REPLACE, not delete, the
+    `"block keys are written bare"` diagnostic**
+  - disclose (`users:<{0.userName^}` §10.2) + **DEFERRED 5's HEAD
+    re-census** of `<`-adjacent sites — ⚠ NO implementation at HEAD (3 mentions,
+    all comments)
+  - carries **DEFERRED 63** (re-homed off the landed slice 4c)
+  - the keyword-projection disposition (§2.4, due at this close)
+
+  **Spec divergences this round created** (D4's adaptation wins, per the
+  standing rule): spec **§8 Q4** ("`*` on Map layers — nominal join?") is
+  **CLOSED affirmative** by Q_U23 · spec **§2.1**'s `.*` row-splat row is
+  **superseded** (`.*` is now ravel) · spec **§10.6**'s `m{:0^ :1^ :2^}` is
+  **corrected** to `m{:0 :1 :2}` by Q_U25, since Q_T4a forbids ordinal-`^` ·
+  spec **§7 W2**'s exit shrinks for the ORDINAL half (branch-initial `:` alone).
 
 #### Pre-implementation pause items — ✅ ALL THREE RULED 2026-07-31 (the owner's hold-point, CLEARED)
 
@@ -4745,7 +5124,7 @@ HEAD**, not hypotheticals:
   `define`, not a parameter, so no context can be enabled from a test) · the
   per-context DISPATCH MECHANISM (only `(pair? …)` is consulted today) · and the
   unknown-head ruling that DEFERRED 32's open half names.
-- **P4c-5 — the `.*name` retirement + FULL residue disposal**, in the commit
+- <a id="p4c-5"></a>**P4c-5 — the `.*name` retirement + FULL residue disposal**, in the commit
   that discharges the parser's `:name` promise.
 
 ##### THE NAMED PREDICTED DIFF SET (A/B is MANDATORY; any diff outside is a bug)
@@ -6539,7 +6918,95 @@ first as slice 0"]:**
   **Gates**: battery **431 → 432** · acceptance 0 mismatched × 5 · full suite
   **10068 / 488 / 0**, `[488/488]`.
 
-  Next is the **P4d close** (three owed owner questions).
+- **✅ Slice 6 — SPLIT ABSENCE FROM KEY-MISS (Q1 / Q_U21's value layer) — COMPLETE
+  2026-08-08** (`003f150b`). Audit `wf_22427256-c66` · verify `wf_aec25ca2-276`.
+  **⭐ THE AUDIT REFRAMED THE QUESTION**: ruling (a) was ALREADY not holding at
+  HEAD. C9's conservative OR arms the one scalar tier from a Map **sibling**, so
+  an actually-absent element in `{:f <Nil|Map> :g Map}` PANICKED — the precise
+  failure (a) exists to prevent — while in the same population a genuine miss was
+  already LOUD by the same accident. **Owner ruled C9 GOVERNS**; Q_U21 (a) is
+  scoped to "no armed sibling" and satisfied at the VALUE layer instead.
+  **The split is a DELETION, not an arm**: the Nil short-circuit leaves
+  `tier-union-witness` (so the tier arms and the miss is loud), and `champ-of`'s
+  assertive-PATH arm is deleted (so it consults only the BLOCK tier). ⭐ The
+  assertive tier's guarantee is about the **KEY** — `project`'s question, which
+  keeps its arm. It was never about the element's SHAPE, and this file mints
+  non-champ values AT MAP TYPE by ruling. Net **−2 arms**.
+  **⚠⚠ MY FIRST CUT ADDED AN `expr-nil?` ARM INSTEAD, and the verify refuted it
+  twice** — all three skeptics AND the adjudicator converged, and the adjudicator
+  built and measured the better fix. (i) My width argument was a **TYPE-level
+  claim defending a VALUE-level site**: the gate bounds component TYPES, not
+  whether a value at `[Map K V]` is a champ — `ub.a` (the route my own comment
+  called safe) yields `none : [Map …]`, and broadcasting it went `none` → PANIC, a
+  value→error break, under a comment calling the bound "MEASURED". (ii) Sitting
+  above the block arm it **silently weakened Horn D** on the reachable
+  `map-assoc` dyn-key route; my own probe missed it by testing a typing-refused
+  shape.
+  **Gates**: battery **432 → 436** · acceptance 0 mismatched × 5 · full suite
+  **10072 / 488 / 0**, `[488/488]`. **Filed**: DEFERRED **84** — the whole-node
+  `return` still lets ONE absent element answer for the node (loudness by champ
+  hash order; data discarded; a scalar at a container type). Needs a per-element
+  vs node ruling plus an ordering-agreement pin.
+
+- **✅ Q2 (the Q_U20 block cell) — ANSWERED 2026-08-08, and the question was
+  MIS-POSED.** D4 recorded it as *"in block position `hx{evs:t}` ≡ `hx{evs:{t}}`
+  … the extract/assemble distinction COLLAPSES"*. Measured: that holds for PLAIN
+  and RENAME inners and FAILS for the caret family, both spellings succeeding at
+  0 errors with different output keys, shapes and arities. So the "collapse" was
+  never the content.
+  **⭐ The content is a RULE the owner's own intuitions turned out to encode, and
+  it is the SPEC's**: *a caret applies EXACTLY ONCE, at the level where it is
+  written — and dropped means dropped* (§3.4). HEAD applies it **twice** through
+  a broadcast and **zero** times through a sub-block, and correctly once on a
+  plain dot path. Verified against the rulings, which the dot path satisfies
+  exactly: `app{server.ssl.enabled^-}` → `{:enabled true}` (Q_T7, whole branch
+  flat) · `^-ssl` → `{:ssl true}` · `^..` → `{:server {:ssl true}}` (Q_T8, one
+  level, ancestors kept) · `^ssl` → `{:server {:ssl {:ssl true}}}` (rename in
+  place). Four operators, four ruled meanings, all correct on one branch.
+  **So the divergence is a DEFECT, not semantics — filed as DEFERRED 88** with
+  its three measured members. ⚠ Correcting my own earlier framing to the owner:
+  I first argued the divergence was correct structure ("two genuinely different
+  nestings") and that making the spellings agree was disqualified from both
+  sides. That was rationalising the implementation — I had not checked it
+  against Q_T7, which rules `^-` as "collapses the whole branch FLAT". The
+  owner's intuition was the ruling; my reading was not.
+  **Arity settled separately by [Q_U22](#q-u22)** — `^` at a leaf stays
+  arity-uniform, so the fix does NOT make `xs:{name^}` a second spelling of
+  `xs:name`.
+
+- **✅ Q3 (DEFERRED 58, the dyn channel) — ANSWERED 2026-08-08 by DECOMPOSITION,
+  and it was mis-posed like Q2.** Filed as *"a THIRD admission channel through the
+  UNION GATE"*. The controls refute that level: `d.a` on a bare open row gives
+  `<error> : ?meta` at 0 errors with **no union and no broadcast**, and
+  `dyns:a` does it with **no union**. The gate admits nothing special; it
+  propagates what an open-row projection does everywhere.
+  **⭐ The broadcast half needs NO new ruling — the 2b POLARITY already decides
+  it.** `typing-core` states it twelve lines above the arm: *"Broadcast is the
+  OTHER polarity (all-must-offer …) and must NOT reuse this arm."* An open row
+  **MAY** offer the key: that satisfies single-get's OPTIMISTIC polarity and
+  FAILS broadcast's ALL-MUST-OFFER one. So "may be present in the remainder"
+  does **not** discharge "every component must offer" — `sl:a` must refuse
+  exactly as `sl:{a}` already does, and the sort-dependence is a SYMPTOM, not
+  the defect. Scoped to broadcast, so **D19 is not reopened**: single-get keeps
+  its leniency by being the other polarity. **DEFERRED 58 re-scoped in place.**
+  **The other half is NOT ours.** `def port : Int := cfg.port` is ACCEPTED and
+  `[int+ port port]` yields `[int+ <error> <error>] : Int` at 0 errors — the D23
+  guard refuses UNANNOTATED storage but its documented "annotate to discharge"
+  takes an assertion the checker has no evidence for. That is the OPEN-ROW
+  PROJECTION CONTRACT (D19/Q_T2/D23), which CIU T6 only surfaced — filed as
+  **DEFERRED 89**. The honest shape already exists one function away:
+  `nil-safe-get` types absence as `T | Nil`, so arithmetic cannot silently
+  swallow it.
+  ⚠ Method note, second time this session: the option I first offered the owner
+  ("the value becomes `none`") was UNDER-SPECIFIED — measuring `nil-safe-get`
+  showed the difference is not `none` vs `<error>` but whether the absence is in
+  the TYPE. The worked demonstration corrected my own proposal.
+
+  **The P4d close's three owner questions are now ALL discharged** — Q1 ✅ ruled
+  and implemented (slice 6), Q2 ✅ answered (fix → DEFERRED 88), Q3 ✅ answered
+  (broadcast half → 58 re-scoped; contract half → 89). What remains for the
+  close is mechanical: five DEFERRED to re-home · P4e and P4c-5 have no tracker
+  row to point at · the tracker flip · the close note.
 
 - **⬜ Slice 4d — the remaining diagnostics** (what 4c did not reach). ⚠ The
   scope below is RE-DERIVED by the slice-4d mini-audit (`wf_a154667e-42f`,
@@ -6587,6 +7054,181 @@ first as slice 0"]:**
   authored fixtures; the corpus A/B is REGRESSION-ONLY for slices 1–4 (the
   carriers have ~no corpus coverage — the vacuous-green hazard, named) but
   LOAD-BEARING for slice 0.
+
+<a id="p4d-close"></a>
+
+##### §5.P4d CLOSE — ✅ COMPLETE 2026-08-08  (close note; the Stage-5 PIR belongs to X.close)
+
+**THE FEATURE.** Broadcast (`:`) is LIVE at the production default over **PVec ·
+Map · keyword-row · het tuple · union · closed schema**. The refusals left —
+List · LSeq · Set · scalars · open-or-dyn rows · open-or-defaulted schemas ·
+collided selections — each name their OWN conversion, and scalars correctly get
+none, because there is nothing true to say.
+
+**TWELVE SLICES**: 0 (`00e52c42`) · 1 (`14ef5e83`) · 2 (`ba1c055d`) ·
+3 (`1e8d0795`) · 4a (`61d64708`) · 4a′ (`d3947594`) · 4b (`19ce05aa`) ·
+4c (`a31b7475`) · 4d-1 (`bd8b8bcf`) · 4d-2 (`25f3f22d`) · 5 (`a945f390`) ·
+6 (`003f150b`).
+
+**RULINGS**: [Q_U19](#q-u19) (A) path-position `^`-on-broadcast REFUSED, and the
+dot string stays byte-identical · **C9** (a) one scalar tier, conservative OR,
+`'path`-scoped · [Q_U21](#q-u21) (a) `Nil` is SKIPPED · **C9 GOVERNS** where it
+meets Q_U21 (a), which is scoped to "no armed sibling" ·
+[Q_U22](#q-u22) `^` at a leaf is ARITY-UNIFORM · the carrier gap belongs in
+slice 4 · **the remedy points back at the user's own spelling, not at a taught
+spelling** — the ruling that retired 4a's entire advice machinery at 4c.
+
+**THE THREE OWED OWNER QUESTIONS — ALL DISCHARGED**, and **two of the three were
+MIS-POSED as filed**, which is the close's most transferable finding:
+- **Q1** (the Nil-bearing union's quiet miss) — RULED and IMPLEMENTED as slice 6.
+  ⭐ The close's audit found ruling (a) was ALREADY not holding at HEAD: C9's OR
+  armed the tier from a Map SIBLING, so an absent element PANICKED — the precise
+  failure (a) exists to prevent — while a genuine miss in the same population was
+  already loud, by the same accident. Both inverted at once.
+- **Q2** (the Q_U20 block cell) — ANSWERED. The recorded premise ("the
+  extract/assemble distinction COLLAPSES") is TRUE only for plain and rename
+  inners and FALSE for the caret family. The real content is the SPEC's own rule,
+  which the owner's intuitions independently encoded: **a caret applies EXACTLY
+  ONCE, at the level where it is written, and dropped means dropped** (§3.4). Fix
+  → **DEFERRED 88**.
+- **Q3** (DEFERRED 58, the dyn channel) — ANSWERED by DECOMPOSITION. Filed
+  against the union gate; the controls show the same silence with NO union and NO
+  broadcast. The broadcast half needed **no new ruling** — the 2b polarity
+  already decides it ("may be present" does not discharge "must offer") → 58
+  re-scoped in place. The annotation-lie half is NOT a Path Selection question →
+  **DEFERRED 89**.
+
+**GATE**: full suite **10072 / 488 / 0** (`[488/488]`, forced re-run) · battery
+**420 → 436** · acceptance **77/77** + 89/89 + 6/6 + 29/29 + 28/28 · corpus A/B
+REGRESSION-ONLY for this phase by construction (the carriers have ~no corpus
+coverage — the vacuous-green hazard, named at the opening and still true).
+
+**⭐⭐ THE METHOD FINDING, and it is the phase's real product.** **Every slice
+shipped a defect of mine that a green suite, five green acceptance files and the
+battery were ALL blind to** — and at 4d-1 a passing **two-direction mutation
+test** was green over one too. The adversarial verify caught every one; twice the
+ADJUDICATOR caught what all three skeptics missed or actively cleared. Named
+sub-findings, each with a live instance:
+- **A boolean over a 3-valued domain is a catch-all in disguise** (4d-2's axis).
+- **A TYPE-level argument cannot bound a VALUE-level site** (slice 6's width claim
+  — my comment called the bound "MEASURED" when the only measurement was a typing
+  refusal that did not bear on the question).
+- **A pin's NAME can be the lie** (4d-2's GUARD asserted three arms while testing
+  the one that did not change; a real regression stayed green beneath it).
+- **A skeptic's CLEARANCE is not evidence** — twice, skeptics agreed and were
+  wrong (testing `defn ^` instead of `def ^ :=`; reading a stale snapshot).
+- **A control probe is the cheapest way to find a mis-posed question** — Q2's
+  pure-dot-path control and Q3's no-union/no-broadcast control each exposed, in
+  one probe, that the filed framing named the wrong level.
+- **When a design question resolves to "current behaviour is correct", check the
+  RULING first.** I argued Q2's divergence was correct structure and offered a
+  lean to rule it so, without checking Q_T7 — which rules `^-` as collapsing the
+  whole branch FLAT. Rationalising the implementation.
+- **Worked examples are a DEBUGGING instrument.** The owner asked for them
+  because rule-labels were unparseable; they exposed a defect three audits had
+  walked past, and twice corrected MY proposal rather than their understanding.
+
+**CARRIED OUT, filed not hidden**: DEFERRED **75/76** (Q_U19 routes 2 and 3 —
+implemented, verified, REVERTED for a monotonicity break; they need a
+grouper-side adjacency mint and land TOGETHER) · **77** (three sibling arms still
+misattribute; the tuple one advises a spelling that SUCCEEDS WITH THE WRONG
+MEANING) · **78** (the census grep cannot see bare-token phase refs) · **79** ·
+**80** · **81** (the suite can UNDER-REPORT `total_tests` while `all_pass` stays
+true — cross-check against a delta you can predict) · **82** · **83** · **84**
+(one absent element still answers for the whole node; loudness by champ hash
+order) · **88** · **89**. Re-homed at this close: **45 ✅ · 47 ✅ · 59 ✅**
+(all three were shipped but unmarked) · **61** (not scheduled — a feature
+question, → X.close triage) · **63** (orphaned on the landed slice 4c → P4e).
+
+**⚠ STRUCTURAL REPAIR made here**: **P4e** and **P4c-5** had NO Progress-Tracker
+row despite sitting in the critical path, so "point at the next phase" had
+nowhere to land. Rows added, with explicit anchors at the bullets that describe
+them.
+
+**Status: ✅ P4d COMPLETE.** Next: **[P4e](#p4e)**.
+
+<a id="p4e-0"></a>
+
+### §5.P4e-0 — the star MINT substrate  (opened 2026-08-08; Stage-4 Per-Phase Protocol)
+
+**Scope: the MINT ONLY.** One sentinel, two sources, consumed by a guided
+not-yet. **No `*` semantics land here** — that is P4e-1. The slice lands
+**ALONE** ([Q_U27](#q-u27)): it touches a predicate both groupers share, and
+P4d-0's precedent is that bundling makes the corpus A/B un-attributable.
+
+#### Mini-design (protocol step 1)
+
+- **Design reference**: [Q_U23](#q-u23) (the `*` unification + its CORRECTED
+  lexical-dividend block) · [Q_U27](#q-u27) (the forced hybrid) ·
+  [Q_U28](#q-u28) (shadowing matches `^`) · [Q_U29](#q-u29) (mid-star is a
+  guided error in all three bands) · [§5.P4e](#p4e).
+- **Obligations carried**: **DEFERRED 90**'s fix rides here (the continuation
+  classifier must REJECT an unknown continuation instead of renaming to it; its
+  precedence half is already discharged — Q_U29 plus the no-output-key
+  principle) · the battery pin for the `*` refusal moves WITH its text ·
+  DEFERRED 91's wrong advice sits on this path but is P4e-1's fix.
+- **Principles in play**: **Correct-by-Construction** — the decline must be a
+  positive test by SHAPE, so a future sentinel is excluded by construction; the
+  `param-group-candidate?` repair is the in-tree precedent. **Decomplection** —
+  two sources, ONE downstream meaning, so the consumer stays one arm.
+  **Completeness** — the whole point of Q_U27 is that a ruled operator may not
+  have an unspellable case.
+- **Mantra check, honestly**: this is READER/PARSER work, so "on-network",
+  "all-at-once" and "in parallel" do **not** bite, and claiming otherwise would
+  be cataloguing. **One word does bite: STRUCTURALLY EMERGENT.** The mint must
+  fall out of *adjacency* — a structural property `adjacent-to-base?` already
+  computes and which "consults no token type" — and NOT out of an enumerated
+  list of contexts. Q_U8 recorded that "six enumeration under-counts this arc";
+  the enumeration is the drift, adjacency is the emergence.
+- **Drift risks, named BEFORE code**: (i) enumerating carriers instead of
+  leaning on type-blind adjacency · (ii) shipping the decline "as a list of
+  one" — its own comment records that this already cost a BLOCKING regression ·
+  (iii) letting the two groupers diverge (the F1b.7g class; `surface-rewrite`
+  already hand-inlines a non-exported sibling) · (iv) making the splitter
+  trailing-only *in effect* and silently admitting mid-star, violating Q_U29 ·
+  (v) scope creep into semantics — the consumer here is a REFUSAL.
+
+<a id="p4e-0-audit"></a>
+
+#### Mini-audit (protocol step 2) — read at `da47cf2d`
+
+**⭐ THE SLICE'S DEFINING FINDING: the star mint is COUNT-CHANGING, so it is the
+`bcast-brace-trigger?` shape, NOT the `bcast-step-trigger?` shape.** `*` is
+POSTFIX — it modifies the item BEFORE it — so the mint consumes the preceding
+result item and wraps it (`0` + `*` → `($star-step 0)`, 2 items → 1). Its two
+siblings differ exactly here, and the difference decides the tree twin:
+- `bcast-step-trigger?` wraps the FOLLOWING token and is count-preserving, so
+  **its tree arm is a behavioural NO-OP** — verified by reading:
+  `surface-rewrite.rkt`'s arm is `(loop (+ i 1) (cons item result))`,
+  **byte-identical to its own `[else]` two lines below**.
+- `bcast-brace-trigger?` IS count-changing (3 items → 2), so its tree twin
+  genuinely FUSES to one `'bcast-brace-group` node.
+**The star follows the BRACE precedent**: the tree twin must fuse, and the
+**Q_N3 v2 agreement guard gains a row** — proposed
+`("x{a}*" '$star-step 'star-step-group "the postfix star mint, closer-adjacent")`,
+using a closer-adjacent spelling so the starred item is the LAST item of the
+line, which is what that guard inspects.
+
+**The two sources and where each lives**:
+| Head kind | Star's token state | Mechanism | Layer |
+|---|---|---|---|
+| ordinal, `}`/`]`/`)` closers, sub-blocks | ALREADY its own token, byte-adjacent | `adjacent-to-base?` mint (Q_U8 shape) | BOTH groupers |
+| identifier (`database*`) | ALREADY FUSED into the symbol | `split-star-lexeme` (the `split-caret-lexeme` shape) | parser, in `segment-select-items` |
+Both converge in `segment-select-items`, which has **4 call sites** — the ω
+sub-inner, the block sub, the block, and `$select-path` (the bare dot path) —
+so one splitter serves every identifier-headed surface, mirroring `split-step`'s
+three sites.
+
+**DEFERRED 90's fix site, read**: `split-caret-lexeme`'s continuation classifier
+is a chain of exact-string compares with a **rename catch-all** at the bottom,
+which is why `^_*` / `^a*` / `^*` all become labels. The fix is to reject a
+continuation bearing an operator character before reaching that catch-all.
+
+**The refusal being replaced**: the `#rx"[*]"` arm on the `$bcast-step` payload
+is **ANY-star, not trailing-star**, and its own comment misdescribes it — so
+Q_U29 is already this arm's behaviour, and the slice PROPAGATES it rather than
+inventing it. Its battery pin matches `#rx"\\(flatten\\) is not implemented yet"`
+and is the ONLY `*`-in-selection assertion in the battery.
 
 <a id="pf"></a>
 

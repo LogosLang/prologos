@@ -5752,3 +5752,78 @@
                           "def slB := [pvec-slice rowsB k 3N]\ndef qB := slB:a:b")))
   (check-false (u19-has? uncertain #rx"qB : \\[PVec Int\\] defined")
                (format "adding UNCERTAINTY must not buy ACCEPTANCE: ~a" uncertain)))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4d slice 6 — SPLIT ABSENCE FROM KEY-MISS  [owner 2026-08-08: "split the
+;; flag — don't trade one against the other"; then "C9 governs"].
+;;
+;; Q_U21 (a) ruled Nil SKIPPED at the TYPE layer. Its VALUE-layer price was that
+;; ONE scalar tier answers TWO different questions: `champ-of` fires when an
+;; element is NOT a champ (a nil element = ABSENCE) and `project` fires when the
+;; element IS a champ but the key is missing (a genuine MISS). Arming the flag to
+;; make a miss loud also made an absent element PANIC, so `tier-union-witness`
+;; short-circuited on Nil and disarmed the whole union — which made a genuine miss
+;; QUIET, the silent-wrong-answer class.
+;;
+;; THE SPLIT: absence is decided by the VALUE (structurally, at `champ-of`), the
+;; tier decides only the key-miss. Both can then be true at once.
+;;
+;; ⚠ THE ARM IS `expr-nil?` ONLY, and that is measured, not assumed: a non-nil
+;; non-champ component cannot survive the keys-⋂ gate (a `[PVec Int]` component is
+;; refused at TYPING — "one does not"), so at runtime an element under an armed
+;; broadcast is either nil or a champ. The `expr-rrb?` value that reaches
+;; `champ-of` in production arrives on the SINGLE-GET path, which `peeled?` keeps
+;; permissive and this slice does not touch.
+;;
+;; ⚠ C9 GOVERNS where it meets Q_U21 (a) [owner]. A Map SIBLING arms the node via
+;; C9's conservative OR even when another field is Nil-bearing — that coupling is
+;; accepted and is what makes the miss loud there. Q_U21 (a) is scoped to "no
+;; armed sibling". The absence panic that coupling used to cause is fixed here by
+;; the structural arm, so both rulings hold without weakening either.
+;; ---------------------------------------------------------------------------
+
+(define S6 "def MKI : Type := [Map Keyword Int]\ndef m1 : MKI := {:a 1}\ndef m2 : MKI := {:b 2}\ndef nn : <Nil | MKI> := [nil-safe-get {:zz {:q 1}} :a]\n")
+
+(test-case "P4d-s6: a genuine key MISS inside a Nil-bearing union is LOUD"
+  ;; RED: today the Nil short-circuit disarms the tier and this is a buried
+  ;; `<error>` at ZERO errors — the exact silent-wrong-answer class.
+  (define out (u19 (string-append S6 "def ms : [PVec <Nil | MKI>] := @[m1 m2]\nms:a")))
+  (check-false (u19-has? out #rx"<error>")
+               (format "a genuine miss must not bury an <error>: ~a" out))
+  (check-true (u19-has? out #rx"key :a not found")
+              (format "it must name the miss: ~a" out))
+  ;; and it must match the Nil-FREE control byte for byte in kind
+  (define ctl (u19 (string-append S6 "def plain : [PVec MKI] := @[m1 m2]\nplain:a")))
+  (check-true (u19-has? ctl #rx"key :a not found")
+              (format "the Nil-free control is the oracle: ~a" ctl)))
+
+(test-case "P4d-s6: an ABSENT element stays QUIET — ruling (a) preserved"
+  ;; GUARD: green before AND after. This is what Q_U21 (a) protects, and the
+  ;; whole point of splitting rather than arming.
+  (define out (u19 (string-append S6 "def ab : [PVec <Nil | MKI>] := @[m1 nn]\nab:a")))
+  (check-false (u19-has? out #rx"panic")
+               (format "an absent element must never panic: ~a" out))
+  (check-true (u19-has? out #rx"none")
+              (format "it degrades to none: ~a" out)))
+
+(test-case "P4d-s6: an absent element beside an ARMED SIBLING stays quiet too"
+  ;; RED: C9's OR arms the node from the Map sibling, and at HEAD that makes an
+  ;; ACTUALLY-ABSENT element PANIC — the precise failure ruling (a) exists to
+  ;; prevent, live and unpinned. The structural arm fixes it for free, because it
+  ;; fires on the VALUE regardless of tier.
+  (define out (u19 (string-append S6 "def rB := {:f nn :g m2}\nrB:y")))
+  (check-false (u19-has? out #rx"is not a map at runtime")
+               (format "an armed sibling must not make ABSENCE panic: ~a" out))
+  ;; the union field ALONE is the oracle — quiet at HEAD and after
+  (define solo (u19 (string-append S6 "def rA := {:f nn}\nrA:y")))
+  (check-false (u19-has? solo #rx"is not a map at runtime")
+               (format "the solo control must stay quiet: ~a" solo)))
+
+(test-case "P4d-s6 GUARD: a non-champ NON-nil component is still refused at TYPING"
+  ;; The arm is `expr-nil?` only because the gate never lets anything else reach
+  ;; `champ-of` under a broadcast. If this ever stops refusing, the arm's width
+  ;; assumption is void and must be revisited.
+  (define out (u19 (string-append S6
+                    "def mixed : [PVec <Nil | MKI | [PVec Int]>] := @[m1 m1]\nmixed:a")))
+  (check-true (u19-has? out #rx"EVERY union component")
+              (format "a non-offering component must be gate-refused: ~a" out)))

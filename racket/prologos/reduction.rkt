@@ -1672,6 +1672,36 @@
       (let ([v* (whnf v)])
         (cond
           [(expr-champ? v*) (expr-champ-racket-champ v*)]
+          ;; ⭐⭐ D4.P4d slice 6 — `champ-of` CONSULTS ONLY THE BLOCK TIER
+          ;; [owner 2026-08-08: "split the flag — don't trade one against the
+          ;; other"; then "C9 governs"]. THE SPLIT IS A DELETION, not an arm.
+          ;;
+          ;; ONE scalar tier was answering TWO questions: here ("is this element a
+          ;; map at all?" — absence) and at `project` ("it is a map; does it have
+          ;; the key?" — a genuine MISS). Arming it to make a miss LOUD also armed
+          ;; this site and made an ACTUALLY-ABSENT element panic, so
+          ;; `tier-union-witness` short-circuited on Nil and disarmed the union —
+          ;; making the miss a buried `<error>` at ZERO errors. Each protection was
+          ;; bought by surrendering the other.
+          ;;
+          ;; ⭐ THE ASSERTIVE TIER'S GUARANTEE IS ABOUT THE **KEY**, AND THAT IS
+          ;; `project`'S QUESTION — which keeps its assertive arm. It was NEVER a
+          ;; guarantee about the element's SHAPE, and this file proves that itself:
+          ;; it MINTS non-champ values AT MAP TYPE by ruling — `champ-of`'s own
+          ;; `[else] → none` (the `ub.a` route documented below) and `project`'s
+          ;; `[else] → <error>`. So the assertive arm here was always answering a
+          ;; question it had no warrant for. Deleting it is the split.
+          ;;
+          ;; ⚠⚠ A PREVIOUS CUT ADDED `[(expr-nil? v*) (return (expr-fvar 'none))]`
+          ;; ABOVE the block arm instead, and the adversarial verify refuted it two
+          ;; ways. (1) The width argument was a TYPE-level claim defending a
+          ;; VALUE-level site: the keys-⋂ gate proves no component TYPE fails to
+          ;; offer the step, and says nothing about whether a value inhabiting
+          ;; `[Map K V]` is a champ — so `@[m1 (ub.a)]` broadcast went `none` → PANIC,
+          ;; a value→error break. (2) Sitting above `[(not tier)]` it pre-empted the
+          ;; BLOCK arm, silently weakening Horn D on the reachable `map-assoc`
+          ;; dyn-key route. Both are gone: no nil arm, and the permissive `[else]`
+          ;; already returns `none` for a nil under a non-block tier.
           ;; tier = #f — the BLOCK sort. Typing sourced every field 'present
           ;; (Horn D), so a non-map here really IS an invariant violation.
           [(not tier)
@@ -1679,12 +1709,11 @@
                     (expr-string
                      (format "select: ~a is not a map at runtime (invariant violation — typing admitted the block)"
                              what))))]
-          ;; tier = (expr-true) — the assertive PATH tier. Loud, but do not claim
-          ;; anything about a "block": there isn't one.
-          [(expr-true? tier)
-           (return (expr-panic
-                    (expr-string
-                     (format "select: ~a is not a map at runtime" what))))]
+          ;; ⚠ D4.P4d slice 6: the assertive-PATH arm that stood here is DELETED —
+          ;; see the header. `project` keeps its assertive arm, which is where the
+          ;; key guarantee actually lives; a non-champ at Map type is a shape this
+          ;; file's own ruled degradations produce, so panicking on it was never
+          ;; warranted. A non-block tier now falls to the permissive `[else]`.
           ;; unsolved — the PERMISSIVE tier (dyn row, selection view, union).
           ;; ⚠ THE VALUE IS `none`, NOT `<error>`, AND THAT IS A RULING THIS FILE
           ;; ALREADY MADE 1500 LINES DOWN — `[(definitely-not-map? subj*) (if tier
