@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 95**
+> ### **NEXT FREE: 96**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -1597,15 +1597,26 @@ Existing pre-4C off-network registries (`register-domain!`, `register-typing-rul
 
 ## Arithmetic / Operator Dispatch
 
-### `+` `-` `*` `/` should work as higher-order generic functions
-- Currently parser keywords, can't be passed to `map`/`reduce` or use `_` placeholders
-- First-class wrappers (`plus`, `minus`, `times`, `divide`) exist as workarounds
+### ~~`+` `-` `*` `/` should work as higher-order generic functions~~ ✅ STALE — FIXED by Numerics N6e-E2
+- ~~Currently parser keywords, can't be passed to `map`/`reduce` or use `_` placeholders~~
+- ~~First-class wrappers (`plus`, `minus`, `times`, `divide`) exist as workarounds~~
 - Source: LSP Tier 4 testing
+- ⚠ **MEASURED FALSE 2026-08-08.** `[map negate '[1 2 3]]` → `'[-1 -2 -3]`,
+  `[reduce + 0 '[1 2 3 4 5]]` → `15`. And it is not only the operators — the
+  PRIMITIVE and CONVERSION keywords pass too: `[map from-nat [range 3N]]` →
+  `'[0 1 2]`, `[map p32-sqrt '[4.0 9.0 16.0]]` → `'[2.0 3.0 4.0]`,
+  `[map p32-from-int '[1 2 3]]` → `'[1.0 2.0 3.0]`. `.claude/rules/prologos-syntax.md`
+  records the N6e-E2 change; this entry was never updated. Struck through rather
+  than deleted so the claim's history stays visible.
 
 ### Trait-constrained functions can't be passed bare to higher-order functions
 - `reduce plus 0 '[1 2 3 4 5]` fails — elaborator can't auto-insert dict args in HO position
 - **Blocked on**: elaborator enhancement for automatic eta-expansion + dictionary insertion
 - Source: LSP Tier 4 testing
+- ⚠ **PARTIALLY STALE 2026-08-08** — the sibling entry above is now false, and
+  the named repro's shape works: `[reduce + 0 '[1 2 3 4 5]]` → `15`. Whether the
+  *bare trait-method* case (`plus`) still fails was NOT re-measured; re-check
+  before acting on this entry.
 
 ---
 
@@ -6048,3 +6059,45 @@ runtime value). That may make this much cheaper than four new primitives.
 **Related**: DEFERRED 87 (the generic `sqrt` task) — its `Float64` instance is
 usable only on literals for the same reason, which weakens the trait's claim to
 be generic over the numeric types.
+
+
+### 95. ⬜ A `defn`-wrapped `map`/`filter` SILENTLY produces a STUCK TERM — the container type never resolves (found 2026-08-08)
+
+**The LOUD half of this is already recorded** in the legacy entry *"QTT
+multiplicity violation with generic trait-constrained functions in defn bodies"*
+(§ Type System / QTT), whose workaround — *"keep expressions standalone"* — is
+correct and remains the practical answer. **This entry is the SILENT half, which
+that entry does not mention and which is the more dangerous of the two.**
+
+```
+defn t2 [n]  [map [fn [k : Nat] [from-nat k]] [range n]]      ;; LOUD
+defn t4 [xs] [filter [fn [k : Int] [not [f64-ok? k]]] xs]     ;; SILENT
+```
+· `t2` → `ERROR: Multiplicity violation` — the known, loud case.
+· `t4` → **`t4 : [_ Int] -> [_ Int] defined.`** — it DEFINES, with the container
+  position a HOLE. Applying it then yields an unreduced term:
+  `[t4 '[3 41 49]]` → `[[fst ?meta…] Int [reduce [?meta… Int '[3 41 49]] |
+  lseq-nil -> … ]]` with **0 errors**, where the same expression written at the
+  CALL SITE gives `'[49] : List Int`.
+
+So the two directions differ by which combinator is applied to what: the failure
+is not uniformly loud, and in the silent direction a user gets a definition that
+type-checks, a call that "succeeds", and a value that is not a list.
+
+**Cross-references**:
+- the legacy QTT entry above — same root cause (erased trait dict params /
+  container polymorphism), and it owns the fix;
+- **85** — same OUTCOME class (a stuck term wearing a plausible type, 0 errors);
+- **86** — the loud direction's message is that same misattributed
+  "Multiplicity violation", i.e. this shares 86's diagnostic problem too.
+
+**Not investigated**: which of `map`/`filter`/`reduce`/`foldr` fall on which side
+of the loud/silent split, and whether an explicit container annotation on the
+parameter (`[xs : [List Int]]`) resolves it — that would make the workaround
+better than "keep it standalone".
+
+⚠ **Filed after a duplicate check that killed three of four candidates**, which
+is worth recording as evidence the check is worth doing: a float-conversion gap
+was already **94**, a display inconsistency already **93**, and a
+"keywords aren't first-class" claim of mine was simply WRONG (measured — see the
+struck-through legacy entry above).
