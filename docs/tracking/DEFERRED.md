@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 90**
+> ### **NEXT FREE: 93**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -5819,3 +5819,75 @@ Path Selection. CIU T6 only surfaced it. Sizing unknown — the D23 discharge is
 load-bearing for existing code, so the census of annotated open-row projections
 comes first. The broadcast half is **DEFERRED 58**, which is separable and does
 not depend on this.
+
+---
+
+### 90. ⬜ `x{k^_*}` DEFINES A FIELD LITERALLY NAMED `_*`, AT ZERO ERRORS — and it blocks Q_U24's `*_`
+
+Found by the D4.P4e mini-audit (`wf_5fb7131d-63a`), reproduced on the main
+thread at `4317c88d`:
+
+```
+def cfg := {:database {:url "u" :port 1} :version "v"}
+cfg{database^_*}
+;; → {:_* {:url "u", :port 1}} : {:_* {:port Int :url String}}   ← 0 errors
+```
+
+**Cause**: `split-caret-lexeme` (`parser.rkt`) classifies the caret continuation
+by **exact string compare** — `""`→dissolve, `"_"`→synth, `"-"`→collapse,
+`"-_"`→collapse-synth — with a **rename catch-all below**. `_*` matches none of
+the four, so it falls through and becomes a *rename target* named `_*`. Nothing
+rejects a star in a continuation, because `ident-continue?` admits `*`.
+
+**Why it is P4e-blocking, not merely cosmetic**: [Q_U24](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u24)
+spells the provenance splat **`*_`** — one glued continuation in the *same
+lexeme space*. The converse order is also live and also wrong: `cfg{database*^a}`
+splits the caret FIRST, leaving a name `database*`. **So `^`/`*` precedence must
+be RULED before either `*_` or bare `*` lands**, and the continuation classifier
+must reject unknown continuations rather than renaming to them.
+
+⚠ Belongs to the "a catch-all is a silent-wrong-answer generator" family — the
+same shape as the boolean-over-3-valued-domain finding at P4d slice 4d-2.
+
+---
+
+### 91. ⬜ THE CLOSED-ROW MISS HINT ADVISES A SPELLING THAT DOES NOT WORK — and it names Q_U26's ravel
+
+`typing-errors.rkt`'s closed-row miss hint appends
+`"; in the select branch \`~a\` — bare field access (no construction) is spelled \`.~a\`"`.
+When the branch IS `*`, it advises `` `.*` ``. Measured at `4317c88d`:
+
+- `cfg{*}` → *"in the select branch `*` — … is spelled `.*`"*, and `cfg.*`
+  **shatters** to `Unbound variable .`
+- `cfg{database*^a}` → *"spelled `.database*`"*, also wrong (path position
+  absorbs the star identically)
+- also reachable via `cfg{database *}` and `cfg{database.{url}*}`
+
+**Two defects, one site**: (i) the advised spelling is not parseable TODAY;
+(ii) after [Q_U26](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u26) bare `.*` is
+**RAVEL**, a different operator — so the hint would advise a spelling that
+parses and means something else. This is the *"the remedy points back at the
+user's own spelling"* rule (P4d slice 4c) violated in the one place P4e is about
+to make load-bearing.
+
+---
+
+### 92. ⬜ TWO `*` SURFACES OUTSIDE P4e's NAMED SCOPE — one asserts a surface fact P4e falsifies, one is a LIVE wildcard
+
+The P4e scope names the select surface and the `.*name` coexistence. The audit
+found two more, both at `4317c88d`:
+
+1. **`elaborator.rkt`'s retired path-literal wildcard message** states *"In the
+   current surface `*` is postfix FLATTEN and a sub-selection is a select block
+   `x{…}`"*. [Q_U23](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u23) makes `*` a
+   **sort-generic layer-delete** (not "flatten"), and
+   [Q_U26](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u26) makes bare `.*`
+   **ravel** — so the sentence goes stale **twice** at P4e. A diagnostic that
+   asserts a surface FACT is a maintenance liability; this is the class the
+   track has already been burned by.
+2. **`validate-selection-paths` keeps a LIVE `'*` / `'**` wildcard** (the
+   `(string=? seg "*")` / `"**"` arms) reachable from
+   `selection … :requires [:address.*]`. Whatever P4e rules about `*` must say
+   whether this vocabulary is the same operator, a different one, or retiring.
+
+Grep `wildcard-seg?` and `string=? seg "*"`; neither is in P4e's bullet.

@@ -1625,11 +1625,35 @@ items of the hold-point, ruled before P4a opened:
   and P4e needs no P5 machinery for it, because P3a already landed strict merge
   for plain keys before `make-record` can last-win (PS7's shippable waypoint).
   GROQ's last-wins is the precedent the spec explicitly rejects.
-  **Lexical dividend**: the reader-facts table records `app-config{database.*}`
-  as SHATTERING (`… database |.| *`) and books "its own grouping handling" plus a
-  lexical coexistence with the P4c-5 `.*name` retirement. Spelled `database*`
-  there is no `.` to shatter — both bands go through ONE trailing-star splitter.
-  ⚠ Derived, not measured; the P4e mini-audit must confirm the grouping claim.
+  **Lexical dividend — ⚠⚠ MATERIALLY UNDER-SCOPED AS FIRST WRITTEN; CORRECTED
+  2026-08-08 BY THE P4e MINI-AUDIT (`wf_5fb7131d-63a`), re-measured on the main
+  thread.** The original claim read: *"Spelled `database* there is no `.` to
+  shatter — both bands go through ONE trailing-star splitter."* **That is true
+  ONLY for IDENTIFIER-headed layers.** The reader's star-fusion is
+  IDENTIFIER-SPECIFIC, not sort-generic: `ident-continue?` admits `*`, so the
+  star joins an identifier token — but a NUMBER token and a CLOSER token END
+  before it. Measured at HEAD:
+  · `cfg{database*}` **FUSES** → `field :database*` (one nominal key) ✅
+  · `m{0*}` **SHATTERS** → L4 mixed keyed/keyless ❌
+  · `m{0 *}` → the **BYTE-IDENTICAL** L4 error, so glued and spaced carry NO
+    distinction — **the ordinal splat is UNSPELLABLE**, the information is
+    destroyed at the reader exactly as it is for `.*` ❌
+  · `m:0*` → **`Unbound variable :`** — adding ONE character DESTROYS an
+    existing `$bcast-step` mint, so the landed ω `*` guard (the `#rx"[*]"` arm,
+    which keys on the `$bcast-step` PAYLOAD) structurally CANNOT fire on it ❌
+  · `m:0 *` → `Could not infer type [m.:0 [arithmetic::* …]]` — the star became
+    ARITHMETIC MULTIPLY applied to the selection ❌
+  So the grouping fix this ruling claimed the `database*` spelling had DELETED
+  is **still owed for every non-identifier layer head** (ordinal, sub-block,
+  bracket/paren closers). The dividend is real but its scope is the nominal and
+  keyword layers ONLY — which are the layers this ruling's EXAMPLES use, and not
+  the layers its RULE generalizes over. **The sort-generic rule stands as
+  SEMANTICS; its lexical realization does not follow for free.**
+  What DOES survive: the routing half. `$select-path` (the bare dot path,
+  outside any block) calls the same `segment-select-items` fold as the block and
+  ω bands, so ONE splitter can serve every identifier-headed surface — at ≥3
+  call sites, mirroring `split-step`'s three, because the ω payload arrives
+  colon-leading and string-stripped while the others arrive as bare symbols.
 
 - <a id="q-u24"></a>**⭐ Q_U24 — `*_` IS THE PROVENANCE VARIANT, AND IT LANDS
   WITH BARE `*` [owner, 2026-08-08 — "Yes to land `*_` with bare `*`"].**
@@ -1671,10 +1695,33 @@ items of the hold-point, ruled before P4a opened:
   needed only for the **nominal²** pivot (`strings{:home^home …}`, where `^home`
   is a genuine rename). For the **ordinal²** matrix, keylessness is free — so
   the ordinal half is reachable with branch-initial `:` ALONE, no v2 `^`-as-set.
-  **And no new typing machinery**: measured, `values{0 1 2}` →
-  `⟨[PVec Int] [PVec Int] [PVec Int]⟩` — the transpose's target type ALREADY
-  types and prints. Same type, different value; only the branch head changes
-  from indexing to broadcasting.
+  **⚠⚠ "AND NO NEW TYPING MACHINERY" — REFUTED 2026-08-08 by the P4e mini-audit
+  (`wf_5fb7131d-63a`), reproduced on the main thread. The claim is struck.**
+  ~~measured, `values{0 1 2}` → `⟨[PVec Int] [PVec Int] [PVec Int]⟩` — the
+  transpose's target type ALREADY types and prints. Same type, different value;
+  only the branch head changes from indexing to broadcasting.~~
+  **THE SUPPORTING MEASUREMENT WAS STRUCTURALLY INCAPABLE OF DETECTING THE
+  DIVERGENCE IT WAS CITED TO RULE OUT** — it used a **SQUARE** (3×3) matrix,
+  where `{0 1 2}` is the IDENTITY and where the identity and the transpose share
+  a type. Re-run NON-SQUARE (2×3), it collapses: `nm{0 1}` →
+  `⟨[PVec Int] [PVec Int]⟩` — **TWO** components, the ROWS, while the transpose
+  of a 2×3 has **THREE**. The probe only ever proved the target type is
+  EXPRESSIBLE, which was never in doubt.
+  **And the branch head alone does not get there**, because a branch inherits
+  the BLOCK sort, which WRAPS: measured, `nm:0` → `@[1 4] : [PVec Int]` (the
+  column, at `'path`) but `nm:{0}` → `@[@[1] @[4]] : [PVec ⟨Int⟩]`. So
+  `{:0 :1 :2}` yields `⟨[PVec ⟨Int⟩] × 3⟩`, a transpose wearing an extra
+  1-tuple layer — not the transpose.
+  **What the refutation LEAVES INTACT, and it is the useful half**: the correct
+  COLUMN already exists at `'path` (`nm:0` → `@[1 4]`). So the missing piece is
+  **per-position SORT CONTROL at a branch head** — the transpose is three
+  `'path` columns assembled — NOT new extraction machinery. That is a narrower
+  job than "build a transpose", but it **collides with the landed `'block`
+  collapse** and is therefore real design work, not a spelling change.
+  ⚠ **Q_U25 (ii) is consequently CONTINGENT**: its keyless/no-`^` half stands on
+  its own (verified — ordinal and ω-over-ordinal branch heads are already
+  keyless), but *admitting the SPELLING does not produce the TRANSPOSE*. Whether
+  branch-initial `:` still belongs in P4e is **RE-OPENED for the owner**.
   **⚠ THE COST, named**: `{:0}` is not free — measured, it is claimed by the
   landed diagnostic *"block keys are written bare — `x{0}`, not `x{:0}`"*, which
   assumes a leading colon in a block is a TYPO. Admitting branch-initial `:`
@@ -1708,15 +1755,27 @@ items of the hold-point, ruled before P4a opened:
   `@[1 2 3 4 5 6 7 8 9]`; APL's `,`. Whole-container join, the sibling of
   Q_U23's per-step `*`.
   **Why NOT `xs*`** (the owner's first spelling, withdrawn on the measurement):
-  `*`-suffixed identifiers are an established convention here — **`int*` alone
-  appears 121 times** and is the worked example in our own ambient syntax rules
-  (`[int* _ 2]`), alongside `rat*` 11, `p32*` 4, `trait*` 3, `p8*`/`p*`/
-  `ordering*` 3 each. So `values*` in SUBJECT position is indistinguishable from
-  a name, and resolving it by "split the star if the whole token is unbound"
-  would make meaning depend on the binding environment — the silent-swallow
-  hazard `parser.rkt` already names for `:tags*`. It also does not fit Q_U23's
-  rule: `*` deletes the layer *the preceding step* made, and a bare subject is
-  not a step.
+  `*`-suffixed identifiers are an established convention here — ⚠ **`int*` alone
+  appears 148 times** (HEAD-pinned `git grep -o 'int\*' HEAD -- '*.prologos'`;
+  **130** comment-stripped. The figure first written here was **121**, measured
+  against a DIRTY working tree with `.claude/worktrees/` copies inflating a
+  root-level recursive grep — corrected 2026-08-08; the direction is unanimous,
+  so the withdrawal is STRENGTHENED, only the arithmetic was off), and it is the
+  worked example in our own ambient syntax rules (`[int* _ 2]`), alongside
+  `rat*`, `p32*`, `trait*`, `p8*`, `p*`, `ordering*`. So `values*` in SUBJECT
+  position is indistinguishable from a name, and resolving it by "split the star
+  if the whole token is unbound" would make meaning depend on the binding
+  environment — the silent-swallow hazard `parser.rkt` already names for
+  `:tags*`. It also does not fit Q_U23's rule: `*` deletes the layer *the
+  preceding step* made, and a bare subject is not a step.
+  ⚠⚠ **THE CENSUS MEASURED THE WRONG HAZARD CLASS ALONGSIDE THE RIGHT ONE**
+  (audit `wf_5fb7131d-63a`, reproduced): bare `*` is not merely a legal
+  identifier CHARACTER — it is a **BOUND FIRST-CLASS BINARY FUNCTION**. Measured,
+  `def s := *` → `s : _ _ -> _ defined.` That is why a star after a CLOSER
+  becomes an APPLICATION rather than a shatter: `m:0 *` →
+  `Could not infer type [m.:0 [prologos::core::arithmetic::* …]]`. Any
+  star-bearing selection surface must contend with `*` being a live VALUE in
+  expression position, not only with names that end in it.
   **`.*` is AVAILABLE**: the P4c-5 `.*name` retirement always carries a TRAILING
   NAME (it is the old `broadcast-get`, migration target `:name`), so bare `.*`
   does not collide with it. ⚠ **Measured cost**: `values.*` does NOT survive the
