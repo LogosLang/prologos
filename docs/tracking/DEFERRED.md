@@ -5849,6 +5849,41 @@ must reject unknown continuations rather than renaming to them.
 ⚠ Belongs to the "a catch-all is a silent-wrong-answer generator" family — the
 same shape as the boolean-over-3-valued-domain finding at P4d slice 4d-2.
 
+**⭐ WIDER THAN FILED — FOUR MEMBERS, NOT ONE (measured 2026-08-08 at
+`2b9407db`, opening P4e-0).** The rename catch-all accepts *any* continuation,
+so every operator character passes through as label text:
+
+```
+cfg{database^_*}  → {:_*     {…}}   : {:_*     {…}}   ← 0 errors
+cfg{database^a*}  → {:a*     {…}}   : {:a*     {…}}   ← 0 errors
+cfg{database^*}   → {:*      {…}}   : {:*      {…}}   ← 0 errors
+cfg{database*^a}  → error naming field `:database*`, advising `.database*`  (= 91)
+```
+
+**✅ THE PRECEDENCE REQUIREMENT IS DISCHARGED — no new owner ruling needed.**
+This entry demanded that `^`/`*` precedence be ruled before `*` or `*_` lands.
+[Q_U29](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u29) already answers it, and a
+second independent principle covers the other direction:
+
+- **Star inside a caret continuation** (`^_*`, `^a*`, `^*`) — Q_U29: *a star in
+  a lexeme is the OPERATOR or it is nothing.* A label bearing a star is not a
+  label, so these are guided errors.
+- **Star before the caret** (`database*^a`) — the splat has **no single output
+  key to re-key**, exactly the reason the landed dot-band refusal gives for
+  `q.a^b` (*"`^` re-keys the OUTPUT of a selection, and a field access has no
+  output key"*). Also a guided error.
+
+So **a segment lexeme carries AT MOST ONE operator suffix**, which falls out of
+two existing principles rather than needing a third, and matches
+`split-caret-lexeme`'s own ">1 caret" refusal shape. **Nothing meaningful is
+lost**: `name^alias*` would rename and then delete the layer the alias names
+(moot), and `name*^alias` would rename N lifted keys to one name (incoherent).
+`*_` is the STAR's own continuation ([Q_U24](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u24)),
+not a caret interaction.
+
+**Fix, at P4e-0**: the continuation classifier REJECTS an unknown continuation
+instead of renaming to it. Monotone — each refusal may become a meaning later.
+
 ---
 
 ### 91. ⬜ THE CLOSED-ROW MISS HINT ADVISES A SPELLING THAT DOES NOT WORK — and it names Q_U26's ravel
