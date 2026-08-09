@@ -1086,7 +1086,73 @@
           (values #f (format "`~a` — a rename target is a bare label, not a keyword (write `^~a`)" str (substring k 1)))]
          [(char<=? #\0 (string-ref k 0) #\9)
           (values #f (format "`~a` — a rename target may not begin with a digit (`.N` is ordinal access; the renamed field would be unreachable)" str))]
+         ;; ⚠ D4.P4e-0 — DEFERRED 90. The rename CATCH-ALL below accepts any
+         ;; continuation, so every operator character rode through as label
+         ;; text: measured at HEAD, `x{k^_*}` defined a field named `_*`,
+         ;; `x{k^a*}` one named `a*`, and bare `x{k^*}` one named `*` — all at
+         ;; ZERO errors. Filed as one member; it is three.
+         ;;
+         ;; Q_U29 decides it: a star in a lexeme is the OPERATOR or it is
+         ;; nothing, and a label bearing a star is not a label. Refusing here
+         ;; also discharges this entry's PRECEDENCE requirement in the other
+         ;; direction — `k*^a` is caught by `split-step`'s plain-name check,
+         ;; because a splat has no single output key to re-key (the same reason
+         ;; the landed dot-band `^` refusal gives). So a segment lexeme carries
+         ;; AT MOST ONE operator suffix, which falls out of existing rulings
+         ;; rather than needing a third. Monotone: each refusal may become a
+         ;; meaning later, never the reverse.
+         [(regexp-match? #rx"[*]" k)
+          (values #f (format "`~a` — a rename target may not contain `*`; `*` is the layer-delete operator, and a segment carries at most one operator suffix" str))]
          [else (values name (cons 'rename (string->symbol k)))]))]))
+
+;; D4.P4e-0 (Q_U27 / Q_U29) — THE STAR SPLITTER: the IDENTIFIER half of the
+;; forced hybrid. Mirrors `split-caret-lexeme` — symbol in, `(values name cont)`
+;; out, or `(values #f message)`.
+;;
+;; The GROUPER's `star-step-trigger?` handles every NON-identifier head
+;; (`m{0*}`, `x{a}*`, `xs:0*`, `[f x]*`), because there the star is already its
+;; own token and `adjacent-to-base?` can see it. It structurally CANNOT handle
+;; this band: `ident-continue?` admits `*`, so `database*` fuses into ONE token.
+;; Two sources, one downstream meaning — that is Q_U27's hybrid, and it is
+;; forced rather than chosen (dropping `*` from `ident-continue?` would break
+;; `int*`, 148 HEAD-pinned uses).
+;;
+;; Q_U29: a MID-lexeme star is a guided error in ALL THREE bands. The star is
+;; the operator or it is nothing; there is no field-name fallback. This does not
+;; INVENT a refusal — the ω band's `#rx"[*]"` guard was already ANY-star (its own
+;; comment misdescribed it as trailing-only), so this PROPAGATES it and retires a
+;; live three-way divergence.
+;;
+;; ⚠ The message names the escape hatch, which is MEASURED to work:
+;; `[map-get r :c*d]` → 2. Shadowing is confined to the selection surface, which
+;; is what makes Q_U28's trade payable.
+(define (star-mid-lexeme-message str)
+  (format (string-append
+           "`~a` — `*` is the layer-delete operator and attaches at the END of a"
+           " segment, so `~a` is neither a field nor an operator."
+           " A field literally named `~a` is reached with `[map-get x :~a]`")
+          str str str str))
+
+(define (split-star-lexeme s)
+  (define str (symbol->string s))
+  (define first-star
+    (for/first ([c (in-string str)] [j (in-naturals)] #:when (char=? c #\*)) j))
+  (cond
+    [(not first-star) (values #f "internal: split-star-lexeme on a star-free lexeme")]
+    [(zero? first-star)
+     ;; `*name` — the star is not postfix here. Distinct from the mid case
+     ;; because there is no segment at all to attach to.
+     (values #f (format "`~a` — `*` is postfix; it attaches to the END of a segment" str))]
+    [else
+     (let ([name (string->symbol (substring str 0 first-star))]
+           [k (substring str (add1 first-star))])
+       (cond
+         [(string=? k "")  (values name 'flatten)]
+         ;; Q_U24's provenance form. Its rule is `^-_`'s (synthesize over the
+         ;; deleted layer), NOT `^_`'s — recorded so the semantics slice cannot
+         ;; inherit the wrong parent and silently degrade `*_` to bare `*`.
+         [(string=? k "_") (values name 'flatten-synth)]
+         [else (values #f (star-mid-lexeme-message str))]))]))
 
 (define (segment-select-items items loc [sub? #f])
   (define (kw-sym? s)
@@ -1098,11 +1164,34 @@
   ;; splitter is its demolition, per the phase plan).
   (define (re-key-sym? s)
     (and (symbol? s) (regexp-match? #rx"\\^" (symbol->string s))))
+  ;; D4.P4e-0 (Q_U27): star-bearing lexemes are the layer-delete family —
+  ;; routed to `split-star-lexeme`, exactly as `re-key-sym?` routes the caret
+  ;; family to `split-caret-lexeme`.
+  (define (star-sym? s)
+    (and (symbol? s) (regexp-match? #rx"[*]" (symbol->string s))))
+  ;; ⚠ D4.P4e-0 — THE HIGHEST-RISK LINE IN THIS SLICE. `plain-key?` is one of
+  ;; the [leaf] classifiers the ADDING A KIND recipe flags: it answers a silent
+  ;; #f on a kind it does not recognize, so a miss mis-sorts with NO raise
+  ;; downstream. Excluding `star-sym?` here is what routes `database*` to the
+  ;; splitter instead of letting it read as a field literally named `database*`
+  ;; (Q_U28: the operator wins, matching `^`, which this predicate already
+  ;; excludes on the very line above). Both directions are pinned.
   (define (plain-key? s)
     (and (symbol? s) (not (kw-sym? s)) (not (eq? s '|.|)) (not (re-key-sym? s))
+         (not (star-sym? s))
          (let ([str (symbol->string s)])
            (and (> (string-length str) 0)
                 (not (char=? (string-ref str 0) #\$))))))
+  ;; D4.P4e-0's CONSUMER. The slice is the MINT ONLY — semantics are P4e-1 — so
+  ;; every star that now reaches the parser takes a guided not-yet. The
+  ;; "(flatten) is not implemented yet" substring is load-bearing: the battery
+  ;; pin matches it, and text and pin move together.
+  (define (star-not-yet-message shown)
+    (format (string-append
+             "`*` (flatten) is not implemented yet — `~a` would delete one layer"
+             " of what the preceding step produces. Spell the flatten separately"
+             " for now")
+            shown))
   (define (fail msg) (values #f (parse-error loc msg #f)))
   (define (head-of tagged) (and (pair? tagged) (symbol? (car tagged)) (car tagged)))
   ;; `^`-ish item: the bare `^` symbol or a `^`-leading lexeme (the ordinal
@@ -1175,6 +1264,13 @@
     (let-values ([(name cont) (split-caret-lexeme lexeme)])
       (cond
         [(not name) (fail cont)]
+        ;; D4.P4e-0 (DEFERRED 90, the other direction): a star BEFORE the caret.
+        ;; `plain-key?` now excludes star-bearing names, so this arm catches it —
+        ;; but the generic message would not say WHY, and the honest reason is
+        ;; specific: a splat lifts N keys, so there is no single output key for
+        ;; `^` to re-key. Same reason the landed dot-band `^` refusal gives.
+        [(and (not (plain-key? name)) (regexp-match? #rx"[*]" (symbol->string name)))
+         (fail (format "`~a` — `^` re-keys ONE output, and `~a` deletes a layer that yields many; a segment carries at most one operator suffix" lexeme name))]
         [(not (plain-key? name))
          (fail (format "`~a` — the segment before `^` must be a plain field name" lexeme))]
         [else (k (list '@key name cont))])))
@@ -1261,6 +1357,20 @@
             [(re-key-sym? it)
              (split-step it (lambda (step)
                               (loop (cdr items) (list step) #f (closed-acc))))]
+            ;; ---- D4.P4e-0: the star family, BOTH sources ----
+            ;; (a) the grouper's sentinel — every NON-identifier head. The mint
+            ;;     is count-changing, so the starred item is WRAPPED, not a
+            ;;     sibling: `m{0*}` → `($select-brace ($star-step 0))`.
+            [(eq? (head-of it) '$star-step)
+             (fail (star-not-yet-message "*"))]
+            ;; (b) the fused identifier band — `database*`, `database*_`, and
+            ;;     the Q_U29 mid-star error. `split-star-lexeme` distinguishes.
+            [(star-sym? it)
+             (let-values ([(name cont) (split-star-lexeme it)])
+               (cond
+                 [(not name) (fail cont)]
+                 [else (fail (star-not-yet-message
+                              (format "~a*~a" name (if (eq? cont 'flatten-synth) "_" ""))))]))]
             [(plain-key? it)
              (loop (cdr items) (list it) #f (closed-acc))]
             ;; ⭐ D4.P4c-4b — THE ω ARMS. Mirror the `$dot-access` arms below,
@@ -1349,16 +1459,28 @@
                (cond
                  [(string=? bare "")
                   (fail "a bare `:` is not a broadcast step — write the step it broadcasts, e.g. `users:name`")]
-                 ;; `*` FLATTEN rides inside the token (see above) — refuse it
-                 ;; here rather than letting it become a field name.
+                 ;; `*` FLATTEN rides inside the token (see above) — routed to
+                 ;; the ONE splitter now, so this band gives the SAME two
+                 ;; messages as the block and dot bands.
+                 ;;
+                 ;; ⚠ D4.P4e-0 (Q_U29) CORRECTS THIS ARM'S OWN COMMENT. It used
+                 ;; to claim it "fires on a TRAILING star — not a leading one",
+                 ;; but the regexp is ANY-star: it refused `:c*d` too, which is
+                 ;; why this band already diverged from block and dot (both of
+                 ;; which read `c*d` as a FIELD). Q_U29 propagates the refusal
+                 ;; rather than inventing one — and the split below is what makes
+                 ;; the trailing and mid cases say DIFFERENT, accurate things.
+                 ;;
+                 ;; ⚠ Only the KEYWORD carrier reaches here now. `xs:0*` lexes as
+                 ;; `:0` + `*` since P4e-0's annotation-guard fix, so the ORDINAL
+                 ;; carrier arrives as a `$star-step` wrapping this whole step.
                  [(regexp-match? #rx"[*]" bare)
-                  ;; ⚠ D4.P4d slice 4d-2 — the phase pointer said "Until Path
-                  ;; Selection P4d", and D4 assigns `*` flatten to **P4e**, so
-                  ;; P4d's close would have made this retroactively FALSE. Phase
-                  ;; name removed from the user-facing text for the same reason as
-                  ;; the two siblings above; it lives here instead. (This arm fires
-                  ;; on a TRAILING star — `xs:tags*` — not a leading one.)
-                  (fail (format "`*` (flatten) is not implemented yet on a broadcast step — `:~a` would read as a field literally named `~a`. Spell the flatten separately for now" bare bare))]
+                  (let-values ([(name cont) (split-star-lexeme (string->symbol bare))])
+                    (cond
+                      [(not name) (fail cont)]
+                      [else (fail (star-not-yet-message
+                                   (format ":~a*~a" name
+                                           (if (eq? cont 'flatten-synth) "_" ""))))]))]
                  ;; `^` RE-KEY — route to the ONE splitter, as `$dot-access` does
                  [(regexp-match? #rx"\\^" bare)
                   (split-step (string->symbol bare) push)]
@@ -1368,6 +1490,19 @@
                  [else (push (string->symbol bare))]))]
             [(and (eq? (head-of it) '$dot-access) cur cur-subbed?)
              (fail "a segment cannot follow a `.{…}` sub-block — the sub-block is a branch's terminal step")]
+            ;; ---- D4.P4e-0: star-bearing DESCENT payload → the ONE splitter.
+            ;; ⚠ NO `cur` guard, deliberately: for `cfg.database*` the dot
+            ;; segment is the FIRST item (the `$select-path` caller has already
+            ;; consumed `cfg` as the subject), so a `cur`-guarded arm would miss
+            ;; the headline spelling entirely — the same mistake the `$bcast-step`
+            ;; arm's first cut made and recorded three screens above.
+            [(and (eq? (head-of it) '$dot-access) (star-sym? (cadr it)))
+             (let-values ([(name cont) (split-star-lexeme (cadr it))])
+               (cond
+                 [(not name) (fail cont)]
+                 [else (fail (star-not-yet-message
+                              (format ".~a*~a" name
+                                      (if (eq? cont 'flatten-synth) "_" ""))))]))]
             ;; ---- `^`-bearing descent payload → the splitter
             [(and (eq? (head-of it) '$dot-access) cur (re-key-sym? (cadr it)))
              (split-step (cadr it) (lambda (step)
@@ -1515,6 +1650,22 @@
     ;; siblings above: a user-written zero-arg head must not raise here.
     [(and (symbol? head) (eq? head '$bcast-step))
      (retired-selection-error 'bcast-step (and (pair? args) (stx->datum (car args))) loc)]
+
+    ;; D4.P4e-0 (Q_U27) — a `$star-step` in EXPRESSION position. Same duty as
+    ;; the `$bcast-step` arm above and the same `(pair? args)` guard, for the
+    ;; same reason: a user-written zero-arg head must not raise here.
+    ;; ⚠ This arm is the BACKSTOP, not the fix. The fix is `access-sentinel?`
+    ;; in macros.rkt, which folds the sentinel onto its subject so it never
+    ;; reaches expression position at all. Both, because a sentinel that CAN
+    ;; leak should report itself rather than surface as `Unbound variable
+    ;; $star-step` — which is what it did before either landed.
+    [(and (symbol? head) (eq? head '$star-step))
+     (parse-error loc
+                  (string-append
+                   "`*` (flatten) is not implemented yet — it appeared here"
+                   " without a selection to attach to. Spell the flatten"
+                   " separately for now")
+                  #f)]
 
     ;; CIU T6 D4.P1b-ii — `.{ }` NOT-YET (as distinct from the RETIRED sentinels
     ;; above). P1b-ii makes the mid-path sub-block LEX and GROUP; its semantics

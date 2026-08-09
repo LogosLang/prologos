@@ -1,7 +1,7 @@
 ns examples.foreign
 
 
-require [prologos::core::abs-trait :refer [Abs Abs-abs]]
+;; require [prologos::core::abs-trait :refer [Abs Abs-abs]]
 
 
 ;; ========================================
@@ -116,8 +116,8 @@ rkt/zero? 0N
 foreign racket "racket/base" :as math
   [add1 :as inc1 : Nat -> Nat]
   [sub1 :as dec1 : Nat -> Nat]
-  [modulo :as mod : Nat -> Nat -> Nat]
-  [quotient :as div : Nat -> Nat -> Nat]
+  [modulo :as mod : Nat Nat -> Nat]
+  [quotient :as div : Nat Nat -> Nat]
 
 math/inc1 4N
 ;; => 5 : Nat
@@ -177,6 +177,11 @@ def repeated-len : Nat racket{
 
 repeated-len
 ;; => 12 : Nat
+
+
+
+
+
 
 
 ;; ========================================
@@ -270,6 +275,15 @@ list::reduce  base/* 1N '[1N 2N 3N 4N]
 
 
 
+
+
+
+
+
+
+
+
+
 ;; spec factorial Nat -> Nat
 ;; defn factorial [n]
 ;;   match n
@@ -281,6 +295,8 @@ list::reduce  base/* 1N '[1N 2N 3N 4N]
 
 
 ;; factorial 4N
+
+
 
 
 

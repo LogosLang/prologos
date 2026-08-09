@@ -1291,7 +1291,18 @@
           ;; `bcast-brace-trigger?` (colon glued BOTH sides), so the spaced
           ;; near-miss row above (`x :{a}` would be `: + $select-brace`) cannot
           ;; drift between the layers without this row going red.
-          (list "x:{a}"       '$bcast-step    'bcast-brace-group  "the :{ mint (glued both sides)")))
+          (list "x:{a}"       '$bcast-step    'bcast-brace-group  "the :{ mint (glued both sides)")
+          ;; D4.P4e-0 (Q_U27): the STAR mint — the family's SECOND count-changing
+          ;; member (2 items → 1). `*` is POSTFIX, so it consumes the item BEFORE
+          ;; it, which is why the tree twin must FUSE rather than carry the token
+          ;; through. ⚠ Its nearer-looking sibling `bcast-step-trigger?` has a
+          ;; tree arm that is byte-identical to its own `[else]` — a behavioural
+          ;; no-op, safe only because THAT mint is count-preserving. Copying it
+          ;; would have shipped a datum mint with no tree twin, which is exactly
+          ;; the silent divergence this guard exists to catch.
+          ;; Spelled closer-adjacent so the starred item is the LAST item of the
+          ;; line, which is what this guard inspects.
+          (list "x{a}*"       '$star-step     'star-step-group    "the postfix star mint (closer-adjacent)")))
   (for ([c (in-list cases)])
     (define src (car c))
     ;; datum layer: find the sentinel head of the last item in the form

@@ -149,7 +149,14 @@
       "Bash(\"/Applications/Racket v9.0/bin/raco\" make racket/prologos/tools/run-affected-tests.rkt)",
       "Bash(git rm:*)",
       "Bash(\"/Applications/Racket v9.0/bin/raco\" make racket/prologos/propagator.rkt racket/prologos/driver.rkt)",
-      "Bash(\"/Applications/Racket v9.0/bin/raco\" make racket/prologos/benchmarks/micro/bench-bsp-overhead.rkt)"
+      "Bash(\"/Applications/Racket v9.0/bin/raco\" make racket/prologos/benchmarks/micro/bench-bsp-overhead.rkt)",
+      "mcp__mempalace__mempalace_search",
+      "WebSearch",
+      "Bash(awk '/^## CIU T6/,0' docs/tracking/DEFERRED.md)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "mempalace"
+  ]
 }

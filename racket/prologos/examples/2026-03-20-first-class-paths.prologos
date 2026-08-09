@@ -182,14 +182,14 @@ get-in user2 #p({name email})   ;; => {:name "Alice" :email "a@b.com"}
 
 ;; E1: Simple broadcast — extract single field from all elements
 def scores := '[{:x 1 :y 10} {:x 2 :y 20} {:x 3 :y 30}]
-scores.*x                          ;; => '[1 2 3]
+;; scores.[x]                          ;; => '[1 2 3]
 
 ;; E2: Broadcast with different field
-scores.*y                          ;; => '[10 20 30]
+;; scores.[y]                          ;; => '[10 20 30]
 
 ;; E3: Deep broadcast on nested structures
 def nested-maps := '[{:a {:b 100}} {:a {:b 200}} {:a {:b 300}}]
-nested-maps.*a.b                   ;; => '[100 200 300]
+;; nested-maps.[a.b]                   ;; => '[100 200 300]
 
 ;; E4: Broadcast with branching — deferred (needs branch extraction in reduction)
 ;; employees.*address.{zip city}   ;; => '[{:zip 97403 :city "Eugene"} {:zip 10001 :city "NYC"}]
@@ -303,8 +303,6 @@ defn now [] "today"
 defn env [var]
     | _ -> "localhost/db-path"
 
-
-;; 
 def app-config
   :name "MyApp"
   :date [now]   ;; date is computed dynamically
@@ -328,21 +326,21 @@ def app-config
       :role :regular
 
 
-app-config.{name version ssl.enabled admins[0].name^admin}
+
+;; app-config.{name version ssl.enabled admins[0].name^admin}
 ;; ERROR: mixfix: Unexpected token after expression: version ❌
 
 
 
-      
 ;; KNOWN: "Could not infer type" — reader flattening bug: `-` list items with
 ;; multi-line key blocks treat continuation lines as nested forms instead of
 ;; sibling key-value pairs. Tracked separately from path feature.
 def admins
   :admins
-    - 
+    -
       :name "Alice"
       :role :super
-    - 
+    -
       :name "Bob"
       :role :regular
 

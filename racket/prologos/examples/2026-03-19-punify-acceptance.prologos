@@ -869,3 +869,17 @@ solve (rel [?x ?y]
 ;;
 ;; After each phase: run via process-file, verify 0 new failures.
 ;; Pre-existing BUG/BLOCKED items do not count as regressions.
+
+
+spec my-add Nat Nat -> Nat
+defn my-add [a b] [+ a b]
+
+my-add 3N 4N
+
+
+[my-add 3N ?b] #= 8N
+
+
+
+
+

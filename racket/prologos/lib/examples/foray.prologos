@@ -1,4 +1,4 @@
-ns examples.foray
+ns examples::foray
 
 require [prologos::data::nat    :as nat  :refer [add mult zero?]]
         [prologos::data::bool   :as bool :refer [not]]
@@ -26,15 +26,43 @@ defn evens [xs : List Nat] : List Nat
 ;; --- Pattern matching ---
 
 ;; Factorial via match
-spec factorial Nat -> Nat
+;; spec factorial Nat -> Nat
 ;; defn factorial [n]
 ;;   match n
 ;;     | zero  -> suc zero
 ;;     | suc k -> mult n [factorial k]
 
 
-defn factorial [n]
-  list::reduce mult 1 [list::range n]
+
+;; defn factorial [n]
+;;   |> [list::range n]
+;;      map inc
+;;      list::reduce mult 1N
+
+;; factorial 2N
+
+
+;; def m {:a 1N :b 2N :c {:c1 11N}}
+
+;; def m1
+;;   :a 1
+;;   :b 2
+;;   :c
+;;     :c1 11
+
+
+;; m1.c.c1
+
+;; m1[c*]
+
+
+
+
+
+;; map first [list::range 10N]
+
+
+;; map [get {:a 1N :b 2N} _] '[:a :b]
 
 
 
@@ -42,13 +70,102 @@ defn factorial [n]
 
 
 
-;; Square: n * n
-spec square Nat -> Nat
-defn square [n]
-  mult n n
 
 
 
+;; def xs : [List Nat] [list::range 10N]
+
+;; map inc xs
+
+
+;; defn inc [n : Nat] : Nat
+;;   + 1N n
+
+
+;; map inc '[0N 1N]
+
+;; list::reduce mult 1N [list::range 3N]
+
+
+
+
+;; factorial 4N
+
+
+
+
+
+spec fib Int -> Int
+defn fib [n]
+  match n
+    | 1 -> 0
+    | 2 -> 1
+    | _ -> fib-rec 0 1 n
+
+spec fib-rec Int Int Int -> Int
+defn fib-rec [a b n]
+  match n
+    | 3 -> [+ a b]
+    | _ ->
+      fib-rec b .(a + b) .(n - 1)
+
+fib 5
+map [fib _] '[1 2 3 4 5 6 7 8 9 10]
+
+
+defn square [x:Int] : Int
+  * x x
+
+square 18
+
+spec sum-squares Int Int -> Int
+defn sum-squares [x y]
+  .([square x] + [square y])
+
+sum-squares 3 4
+
+
+
+spec my-add Int Int -> Int
+defn my-add [x y]
+  + x y
+
+my-add 4 5
+
+double 3N
+
+defn twice-double [x : Int] : Int
+  let y := [+ x x]
+  * y y
+
+twice-double 2
+
+
+
+;; should support same col, no `\n` as same scope
+;; let y := + 2 2
+;; let z := + y y
+;; * z z
+
+let y := + 2 2
+  let z := + y y
+    * z z
+
+
+defn my-cons {A : Type} [x  : A,
+                         xs : [List A]] : [List A]
+  list::cons x xs
+
+def my-string-list : [List String]
+  my-cons "a" ["b" "c"]
+
+my-cons "a" ["b" "c"]
+
+my-string-list
+
+my-cons [1] [2 3]
+
+infer [my-cons 1 [2 3]]
 
 
 
@@ -112,3 +229,1122 @@ defn square [n]
 ;; ;;--------\/-----
 ;; map [clamp _ 5N 15N] [list::range [suc 20N]]
 ;; ;; => '[5 5 5 5 5 5 6 7 8 9 10 11 12 13 14 15 15 15 15 15 15]
+
+
+
+defn t [x : Int] -> Bool
+  | 0  -> false
+  | 1  -> true
+  | 2  -> true
+  | _  -> false
+
+
+spec one-two Int Int -> String
+defn one-two
+  | _   -> "one"
+  | _ _ -> "two"
+
+
+
+t 0
+t 2
+t 4
+
+
+
+;; ⚠ TYPE-CHECKER BUG (hunted + filed 2026-06-29): these union-type forms HANG
+;; the type-checker — the typing propagator network never quiesces (infinite BSP
+;; firing in attribute-map-merge-fn, the :type-facet union join not reaching a
+;; fixpoint; ORDER-DEPENDENT). Minimal repro: `def x : <Int|String> := 42` then
+;; `x` then `the <Int|String> "0"` in THAT order (reordering avoids it; the same
+;; shape with plain types is fine). Commented out so foray loads. Needs a
+;; dedicated type-lattice-convergence fix (see DEFERRED.md / 2026-06-29 dailies).
+;; def x : <Int | String> := 42
+;; x
+;; the <Int | String> "0"
+
+
+;; spec truthy {A : Type, B : Type} <A | B> -> Bool
+;; defn truthy [x]
+;;   | 0     -> false
+;;   | false -> false
+;;   | _     -> true
+
+;; truthy 0
+;; truthy 1
+;; truthy "anything"
+
+
+;; spec my-even? Int -> Bool
+;; spec my-odd?  Int -> Bool
+
+;; defn my-even? [n]
+;;     | 0 -> true
+;;     | _ -> [my-odd? [- n 1]]
+
+;; defn my-odd? [n]
+;;     | 0 -> false
+;;     | _ -> [my-even? [- n 1]]
+
+;; my-even? 4
+
+
+
+.(3.134 + 1.0)
+
+
+
+
+
+/ [* 3.14 10.1] 3.0
+
+
+
+
+
+
+to-int [- [* 10 [+ 3.13f 1.0f]] 41.3f]
+
+
+to-float 3
+
+
+
+
+defr xor [?x ?y ?xor]
+  || 0 0 0
+     1 0 1
+     0 1 1
+     1 1 0
+
+
+get {:a 1} :a
+
+map [get _ :a]
+  solve (xor a b 1)
+
+
+
+@[1 "a" 3N 3.14 10.4f {:a 1}]
+
+
+;; Was this:
+
+
+
+;; Is now this
+.(((3.13 + 1.0) * 10) - 41.3)
+
+
+
+
+
+;; spec my-foo {A : Type} A -> A
+;; defn my-foo [x]
+;;   + x 42
+
+
+spec identity {A : Type} A -> A
+defn identity [x] x
+
+identity 3.3
+
+
+
+
+
+
+
+
+
+
+
+.(3/4 + 10/8)
+
+map [+ 2 _] '[1 2 3]
+
+
+spec pow Int Int -> Int
+defn pow [x n]
+  match n
+    | 1 -> x
+    | _ -> * x [pow x [- n 1]]
+
+pow 2 5
+
+;; map [pow 2 _] '[1 2 3 4 5 6 7 8]
+;; map [pow _ 2] '[1 2 3 4 5 6 7 8]
+
+
+defn my-sub [x : Int, y : Int] : Int
+  .(x - y)
+
+;; ERROR: Could not infer type
+;def minus-fify := [my-sub _ 50]
+
+
+to-float
+  - 1/10 1
+
+1/10
+3.14p
+
+
+{:a 3 :b "hi"}
+@[1 "hello" 3.13 {:a 10}]
+
+
+def m := {:a {:a1 1} :b {:b1 11 :b2 22}}
+
+
+
+@[{:a 1} {:b 2}][1.b]
+
+
+def m {:a 1}
++ m.a 11
+;; mixfix: Unexpected token after expression: ($dot-access a)
+;;.(m.a + 1)
+
+
+
+.( 1.4663f + 4890.94f - 4892.4063f)
+.( 1.4663p + 4890.94p - 4892.4063p)
+.( 1.4663 + 4890.94 - 4892.4063)
+.( 1.4663f32 + 4890.94f32 - 4892.4063f32)
+
+
+
+
+to-posit32 3217/1024
+;; 3.14160156 : Posit32
+
+
+
+;; .{1001.3f - 1001.0f}
+
+
+;; .{1001.3 - 1001.0 - 0.3}
+;; .{1001.3p64 - 1001.0p64 - 0.3p64}
+;; .{1001.3f - 1001.0f - 0.3f}
+
+
+
+
+;; 1001.3 - 1001.0 - 0.3
+
+;; Posit64
+;;  0.000000000000000710369263412503
+
+;; Float64
+;; -0.00000000000004546363285840016
+;; -0.00000000000004546363285840016
+
+
+
+
+
+;; vehicle light-vehicle automobile
+
+
+;; vehicle(bicycle).
+;; light_vehicle(bicycle).
+
+defr vehicle [?type]
+  || "bicycle"
+     "golf-cart"
+     "automobile"
+
+defr license [?v]
+  || "automobile"
+
+defr light-vehicle [?v]
+  &> (vehicle v) (not (license v))
+
+solve (light-vehicle lv)
+
+solve (light-vehicle "bicycle")
+solve (vehicle v)
+solve (not (license v))
+solve (license v)
+
+solve (rel [?v] (vehicle v) (not (license v)))
+solve (light-vehicle v)
+
+;; define a record type with `schema`
+schema VHS
+  :rewound Bool
+  :title String
+  :year  Int
+
+def movie : VHS := {:rewound true :title "Lord of the Rings" :year 2001}
+;; a Map without a declared type will have each keys value type inferred by its value-literal:
+def movie2 {:rewound true :title "The Chronicles of Narnia" :year 2005}
+;; We can also use "Implicit Map" syntax
+def movie3 : VHS
+  :rewound false
+  :title "Lost in Space"
+  :year 1998
+movie3
+;; `movie4` won't passa VHS schema check because it's missing the :year field
+def movie4 {:rewound true :title "Timeless"}
+
+defn rewound? [v : VHS] : Bool
+  v.rewound
+
+;; even though `movie2` is not defined with a VHS type
+;; it still passes the appropriate schema-check:
+rewound? movie2
+rewound? movie3
+;; `movie4` does not satisfy the schema type for VHS
+rewound? movie4
+
+defr movies : VHS
+  || true  "The Matrix"                     1999
+     true  "Inception"                      2010
+     false "Interstellar"                   2014
+     false "Pulp Fiction"                   1994
+     false "The Nightmare Before Christmas" 1993
+
+defr ready-to-watch [movie]
+  &> movies true movie _
+
+def ready := (ready-to-watch m)
+
+ready[0].m
+
+
+defr fruit-color [+fruit +color]
+  || "banana"     "yellow"
+     "apple"      "red"
+     "apple"      "green"
+     "pear"       "green"
+     "avocado"    "green"
+     "blueberry"  "blue"
+     "strawberry" "red"
+     "egg plant"  "purple"
+
+def fruits-colors := (fruit-color fruit color)
+
+
+def plus-ten <Int -> Int> 
+  + 10 _
+
+.({:a 1 :b 2 :c 3}.c + 10)
+{:a 1 :b 2 :c "hi"}
+
+@[1 "hi" 3.12 7.23p 74.1f]
+
+
+def phi := / [+ 1 [p32-sqrt 5.0]] 2
+
+
+def phi .((1 + [p64-sqrt 5.0p]) / 2)
+def phi-float := .((1 + [f64-sqrt 5.0f]) / 2)
+
+phi
+phi-float
+
+/ 1 phi  
+
+
+
+map [* phi _] @[1.0 2.0 3.0 4.0 5.0]
+
+
+
+
+(/ (* (+ 3.14 10.1) 3) (+ 1.3 94.1))
+
+/ [* 3 [+ 3.14 10.1]] [+ 1.3 94.1]
+.(3 * (3.14 + 10.1) / (1.3 + 94.1))
+
+
+
+
+
+(fruit-color "apple" c)
+
+def apple-color := (fruit-color "apple" c)
+
+apple-color:c  
+
+[solve (fruit-color "apple" c)]:c
+
+
+  
+(fruit-color "banana" c)
+
+(rel [🍎]
+  &> (fruit-color 🍎 🎨) 
+     (not (= 🎨 "green")))
+
+defr blue-or-yellow [?fruit]
+  &> fruit-color fruit "blue"
+  &> fruit-color fruit "yellow"
+
+defr fruit-not-of-color [?fruit ?not-color]
+  &> fruit-color fruit color
+     not (= color not-color)
+
+defr green-fruits [?f]
+  &> fruit-color f "green"
+
+defr red-fruits [?f]
+  &> fruit-color f "red"
+
+defr red-or-green-fruits [?f]
+  &> green-fruits f
+  &> red-fruits f
+
+defr neither-red-nor-green [?f]
+  &> fruit-not-of-color f "green"
+     fruit-not-of-color f "red"
+
+(fruit-not-of-color f "red")
+(neither-red-nor-green 🐠)
+(blue-or-yellow 🐦)
+(red-or-green-fruits 🤶)
+
+;; all the fruits that are not red-or-green and not blue-or-yellow:
+;; the `_` indicates we don't care about that particular logic-variable
+(rel [🍆]
+  &> fruit-color 🍆 _
+     not (red-or-green-fruits 🍆)
+     not (blue-or-yellow 🍆))
+
+(rel [🐒] 
+  &> blue-or-yellow 🐒
+     fruit-not-of-color 🐒 "blue")
+
+
+
+def red := (red-fruits f)
+
+
+;; session DancePartyProto
+;;   ? Dance
+;;   ! Bool
+
+
+;; defproc dance-party : DancePartyProto
+
+def today-ish "today"
+
+defn now []
+  "today"
+
+defn env [var]
+  | _ -> "localhost/db-path"
+
+;; simple implicit Map, does not parse
+def user
+  :name "Alice"
+  :age 32
+  :address
+    :street "Main Street"
+    :zip 12345
+  :aliases @["Ally Ali"]
+  :date today-ish
+
+
+user.aliases
+user.address.zip
+user.date
+
+
+
+
+;; Path Selection Algebra
+;; { } select  (postfix juxtaposition, no space)
+;; :  broadcast
+;; .  deeper level
+;; k^ drop key, keep value only
+;; k^k' dynamic key rename
+;; m{l.k^_} rewrite key to full path: {:l-k v}
+;; .*  splat operator - select all keys at this level
+;; .N  returns value at index N of a vector
+;; {N} returns a vector of values at indices N of a vector, N-ary
+;; {N M} returns values at indices N and M of a vector, N-ary
+
+def app-config
+  :name "MyApp"
+  :date [now]   ;; date is computed dynamically
+  :version "1.0.0"
+  :server
+    :host "localhost"
+    :port 8080
+    :ssl
+      :enabled true
+      :cert-path "/etc/ssl/cert.pem"
+  :database
+    :url [env "DATABASE_URL"]
+    :pool-size 10
+  :features @[:auth :logging :caching]
+  :admins
+    - :name "Alice"
+      :role :super
+    - :name "Bob"
+      :role :regular
+
+
+app-config{server.ssl.{enabled^-ssl cert-path^cert}}
+
+schema Server
+  :host String
+  :port Int
+
+schema Conf
+  :servers [PVec Server]
+  
+def cfg : Conf
+  :servers
+    - :host "localhost"
+      :port 8080
+    - :host "example.com"
+      :port 443
+
+
+def values :=
+  @[@[1 2 3]
+    @[4 5 6]
+    @[7 8 9]]
+
+values{:0}
+;; @[1 4 7]
+values:{0* 1* 2*}
+;; @[@[1 4 7] @[2 5 8] @[3 6 9]]
+
+
+  
+spec one-minus Posit64 -> Posit64
+defn one-minus [x]
+  .(1 - x)
+
+defn floatOneMinus [x:Float64] : Float64
+  .(1 - x)  
+
+
+;; this is my version, which *should work*
+spec independent-occurence [PVec Posit32] -> Posit32
+
+
+
+
+defn independent-occurence [xs]
+  #:spec [Seq Num] -> Num
+  #:doc "Compute the probability of at least one occurrence of independent events
+         with probabilities in `xs`."
+  .(1 - [reduce * [map [- 1 _] xs]])
+
+
+
+  
+;; and the work-around spelling(s):
+spec prod-one-minus [List Posit32] -> Posit32
+defn prod-one-minus [xs]
+  match xs
+    | nil       -> 1.0
+    | cons a as -> [p32* [p32- 1.0 a] [prod-one-minus as]]
+
+spec independent-occurence [PVec Posit32] -> Posit32
+defn independent-occurence [xs]
+   p32- 1.0 [prod-one-minus [pvec-to-list-fn xs]]
+
+
+
+
+trait Approx {A}
+  spacing : A -> A
+  :doc "An inexact scheme — arithmetic rounds to nearest.
+        `spacing x` is the distance from x to the next representable value.
+        (The numerics term of art is ULP, 'unit in the last place'.)"
+
+bundle Probability := (Num Div Approx)
+
+property unit {A}
+  :doc "Probability values are in the unit interval [0,1]."
+  :where (Ord A) (FromInt A)
+  :over  x : A
+  :holds [in-range 0 1 x]
+
+;; PROPERTY — propositional witness (m0). Indexed by a TYPE, not a value.
+;; ⚠ Not derivable: "Posit32 rounds to nearest" is an AXIOM about the
+;;    implementation, asserted per type, not proven.
+property Approx {A : Type}
+  :doc "A is an inexact scheme — its arithmetic rounds to nearest."
+axiom Approx Posit8, Approx Posit16, Approx Posit32, Approx Posit64
+axiom Approx Float32, Approx Float64
+
+;; PROPERTY — Σ form. Indexed by a VALUE. Decidable, so dischargeable.
+property proportion {A} :where (Ord A) (FromInt A)
+  :over  x : A
+  :holds [in-range [from-int 0] [from-int 1] x]
+
+;; TRAITS — computational witness (mw dictionaries). These already exist.
+;;   bundle Num := (Add Sub Mul Neg Eq Ord Abs FromInt)
+;;   trait Div {A} …
+;; And the Approx-gated operation, now correctly a trait rather than a marker:
+trait Spacing {A} :where (Approx A)
+  spacing : A -> A
+  :doc "Distance from x to the next representable value (numerics: ULP)."  
+
+
+
+defn independent-occurrence [xs]
+  :spec  Probability -> Probability
+  :doc   "Probability of at least one occurrence of independent events."
+  .(1 - [reduce * [map [- 1 _] xs]])
+
+
+  
+
+
+def dexterity 10
+
+def blocking-stats
+  @[{:item "shield" :block 0.22}
+    {:item "parry"  :block 0.12}
+    {:item "dodge"  :block [* dexterity 0.01]}]
+
+blocking-stats:block
+    
+independent-occurence blocking-stats:block
+  
+   
+
+
+
+
+independent-occurence @[0.3 0.3 0.3]
+independent-occurence @[0.2 0.2 0.2]
+independent-occurence @[0.25 0.25 0.25]
+
+
+* 3 [/ 1.0 3.0]
+* 3 [/ 1.0f32 3.0f32]
+* 3 [/ 1.0p 3.0p]
+* 3 [/ 1.0f 3.0f]
+
+
+* 41.0 [/ 1.0 41.0]
+* 41.0f32 [/ 1.0f32 41.0f32]
+* 41.0p [/ 1.0p 41.0p]
+* 41.0f [/ 1.0f 41.0f]
+
+
+defn p64-round-trip [x:Posit64] : Posit64
+  .([p64* x [p64/ 1.0p x]] = 1.0p)
+
+
+eq [* 3.0p [/ 1.0p 3.0p]] 1.0p
+
+
+
+p64* 3.0p [p64/ 1.0p 3.0p]
+
+
+
+.(1.0p - [reduce * 1.0p [map one-minus @[0.2p 0.2p 0.2p 0.2p 0.2p]]])
+.(1.0f - [reduce * 1.0f [map floatOneMinus @[0.2f 0.2f 0.2f 0.2f 0.2f]]])
+
+
+
+
+
+
+
+
+
+
+- 1
+  |> @[0.2p 0.2p 0.2p 0.2p 0.2p]
+     map one-minus
+     reduce * 1.0p
+
+
+
+
+;; 0.67232p : Posit64
+;; 0.6723199999999998f : Float64
+
+/ 9 25.0
+
+  
+
+
+
+cfg.servers
+      
+app-config{admins^:name^ features^.0}
+      
+cfg{servers:host^}
+
+cfg{servers:host^}
+
+cfg.servers:host
+
+cfg{servers:{host^}}
+
+cfg{servers:host}
+
+
+cfg{servers:host^-name}
+
+
+
+.((1 + [p64-sqrt 5.0]) / 2)
+
+def phi
+  / [+ 1 [p64-sqrt 5.0p]] 
+    2.0
+
+
+      
+app-config.features{2 0}
+;; @[:caching :auth] : 〈 Keyword Keyword 〉
+
+app-config{server^.{port ssl.enabled^..}}
+;; {:port 8080 :ssl true}
+
+;; This:
+app-config{server^.{ssl.enabled^.. port} version database^.pool-size}
+;; {:ssl true :port 8080 :version "1.0.0" :pool-size 10}
+
+;; Equivalent to this:
+let ssl  := app-config.server.ssl.enabled
+    port := app-config.server.port
+    ver  := app-config.version
+    pool := app-config.database.pool-size
+  {:ssl ssl :port port :version ver :pool-size pool}
+
+
+let x 4
+    a 5
+    y 6
+  .(x + a + y)
+
+.((12 * 30 + 4) * 24 * 60)
+
+
+  
+
+app-config{database}
+;; {:database {:url "localhost/db-path", :pool-size 10}}
+
+app-config{database^}
+;; {:url "localhost/db-path", :pool-size 10}
+app-config{ database^.{url} }
+;; {:url "localhost/db-path"}
+
+
+;; some examples using broadcast selection `:` operator
+def users :=
+  @[@[{:userName "Lisa" :age 30}]
+    @[{:userName "John" :age 25}]
+    @[{:userName "Mike" :age 35}]]
+
+
+{:name "John"}
+
+users:0:userName
+;; @["Lisa" "John" "Mike"] : 〈 String 〉
+users:{0.userName^}
+;; @[["Lisa"] ["John"] ["Mike"]]
+
+
+;; :< broadcast pick/unwrap (APL)
+users:<{0.userName^}
+;; @["Lisa" "John" "Mike"] : 〈〈 String 〉〉
+users:{0.userName^ 0.age^}
+;; @[@["Lisa" 30] @["John" 25] @["Mike" 35]] : 〈〈 String Int 〉〉
+
+
+users:0:{userName}
+;; @[{:userName "Lisa"} {:userName "John"} {:userName "Mike"}] : 〈 {:userName String} 〉
+users:0
+;; @[{:userName "Lisa" :age 30} {:userName "John" :age 25} {:userName "Mike" :age 35}] : 〈 {:userName String :age Int} 〉
+
+
+app-config.admins:name
+;; @["Alice" "Bob"] : 〈 String 〉
+app-config.admins:{name}
+;; @[{:name "Alice"} {:name "Bob"}] : 〈 {:name String} 〉
+
+app-config{admins:{name role}}
+;; @[{:name "Alice" :role :super} {:name "Bob" :role :regular}] : 〈 {:name String :role Keyword} 〉
+app-config{admins:name admins:role}
+;; @[{:name "Alice" :role :super} {:name "Bob" :role :regular}] : 〈 {:name String :role Keyword} 〉
+
+
+;; structural merge:
+;; {admins:name admins:role} ≅ {admins:{name role}}
+app-config{admins:name admins:role}
+;; {:admins @[{:name "Alice" :role :super} {:name "Bob" :role :regular}]}
+
+app-config{admins:{name role}}
+;; {:admins @[{:name "Alice" :role :super} {:name "Bob" :role :regular}]} : {:admins [PVec {:name String :role Keyword}]}
+app-config{admins^names:name^ admins^roles:role^}
+;; {:names @["Alice" "Bob"] :roles @[:super :regular]} : {:names [PVec String] :roles [PVec Keyword]}
+
+
+
+
+
+
+app-config{server database}
+;; {:server {:ssl {:cert-path "/etc/ssl/cert.pem", :enabled true}, 
+;;           :host "localhost", 
+;;           :port 8080}
+;;  :database {:url "localhost/db-path", :pool-size 10}}
+
+app-config{server.{ssl.enabled port} database.pool-size}
+;; {:server {:ssl {:enabled true}, :port 8080} :database {:pool-size 10}}
+
+app-config{server^.{ssl.enabled port} database^.pool-size}
+;; {:ssl {:enabled true} :port 8080 :pool-size 10}
+
+app-config{server^.{ssl^.enabled^ssl port} database^.pool-size}
+;; {:ssl true :port 8080 :pool-size 10}
+
+;; Is this the same as the above?  ???
+app-config{server^.{ssl.enabled^ port} database^.pool-size}
+;; {:ssl true :port 8080 :pool-size 10}
+
+
+
+
+
+
+app-config{admins^:name}
+;; @[{:name "Alice"}, {:name "Bob"}] : 〈 {:name String} 〉
+app-config{admins^:name^}
+;; @["Alice", "Bob"] : 〈 String 〉
+app-config{admins:name}
+;; {:admins @[{:name "Alice"}, {:name "Bob"}]} : 〈 {:admins [PVec {:name String}]} 〉
+
+
+
+def resp
+  :meta  {:page 2 :per 50 :total 1203}
+  :items
+    - :id 101 :kind :article
+      :author {:name "Ines" :handle "@ines"}
+      :tags @[:pl :types]
+    - :id 102 :kind :video
+      :author {:name "Kofi" :handle "@kofi"}
+      :tags @[:systems]
+  :links {:next "/v1/feed?page=3" :prev "/v1/feed?page=1"}
+
+
+
+
+resp{meta^.{page total} links.next^-nextLink}
+;; {:page 2 :total 1203 :links {:next "/v1/feed?page=3"}}
+resp{items:{id author^.name^author kind}}
+;; {:items @[{:id 101 :author "Ines" :kind :article}
+;;           {:id 102 :author "Kofi" :kind :video}]}
+resp{items:{id author.name^_}}
+;; {:items @[{:id 101 :author-name "Ines"} {:id 102 :author-name "Kofi"}]}
+resp.items:tags
+;; @[@[:pl :types] @[:systems]] : 〈〈Keyword〉〉
+;; * flatten, join (union)
+resp.items:tags*
+;; @[:pl :types :systems] : 〈Keyword〉
+
+
+
+def green-fruit := (fruit-color f "green")
+green-fruit:f
+;; @["apple", "pear", "avocado"] : [PVec String]
+
+
+def regions
+  :eu {:host "eu.example.com" :port 443}
+  :us {:host "us.example.com" :port 443}
+  :ap {:host "ap.example.com" :port 8443}
+
+regions:host
+;; {:eu "eu.example.com" :us "us.example.com" :ap "ap.example.com"}
+
+
+;;; END
+
+
+
+schema Name
+  :first String
+  :last  String
+
+schema Address
+  :street String
+  :city   String
+  :state  String
+  :zip    Int
+
+schema Date
+  :year  Int
+  :month Int
+  :day   Int
+
+def business
+  :business-info
+    :name "JMZI, L.L.C"
+    :id "L17898811"
+    :status :active
+    :type "Domestic Limited Liability Company"
+    :principle-office
+      :street "7358 W. Cholla St."
+      :city "Peoria"
+      :state "AZ"
+      :zip 85345
+  :agent-info
+    :type "individual"
+    :name
+      :first "Jerome"
+      :last "Larson"
+  :filing-history
+    - :filing-number "04166120"
+      :filing-date
+        :year 2013 
+        :month 1 
+        :day 31
+      :effective-date {:year 2013 :month 2 :day 12}
+      :filing-type "Affidavit of Publication"
+    - :filing-number "04166121"
+      :filing-date {:year 2013 :month 2 :day 1}
+      :effective-date {:year 2013 :month 2 :day 12}
+      :filing-type "Articles of Organization"
+
+schema FilingHistory
+  :filing-number  String
+  :filing-date    String
+  :effective-date String
+  :filing-type    String
+      
+defr filing-history : FilingHistory
+  || "04166120"  "2013-01-31" "2013-02-12" "Affidavit of Publication"
+     "04166121" "2013-02-01" "2013-02-12" "Articles of Organization"
+
+(filing-history filing-number _ _ "Articles of Organization")
+;; @[{:filing-number "04166121"}] : [PVec {filing-number String}]
+
+
+defn week-passed [hrs:Int] : Posit64
+  .(hrs / 168.0p)
+
+
+if [le 4 3]
+  true
+  false
+  
+
+
+to-float 1328/487
+
+
+
+(filing-history filing-number _ _ _)
+;; @[{:filing-number "04166120"} {:filing-number "04166121"}] : [PVec {:filing-number String}]
+business.filing-history:filing-number
+;; @["04166120" "04166121"] : [PVec String]
+  
+def biz-info := business.business-info
+
+business.filing-history
+
+
+
+business{business-info{type name} filing-history}
+
+let biz-type := business.business-info.type
+    biz-name := business.business-info.name
+  {:business-type biz-type :business-name biz-name}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def admins app-config.admins
+def i 1
+
+admins
+
+app-config.database
+
+app-config.server
+
+app-config.date
+app-config.database.url
+
+let x 4
+    y 6  
+  + x y
+
+
+def p1 {:x 3.14 :y 4.56}
+def p2 {:x 1.21 :y 3.21}
+def p3 {:x 7.39 :y 9.38 :z 38}
+def p4 {:x 7.39 :z 38}
+
+schema Point
+  :x Posit32
+  :y Posit32
+
+
+def p5 : Point := {:x 8.2 :y 9.3}
+
+p5
+
+spec point-add Point Point -> Point
+defn point-add [p1 p2]
+  {:x .(p1.x + p2.x)
+   :y .(p1.y + p2.y)}
+
+defn point-add2 [p1:Point p2:Point] : Point
+  {:x [+ p1.x p2.x]
+   :y [+ p1.y p2.y]}
+
+defn point-identity [p : Point] : Point
+  p
+
+point-identity p1
+point-identity p3
+point-identity p4
+
+point-add p1 p2
+point-add2 p1 p3
+
+
+
+defr bool [?p:Int]
+  || 1 | 0
+
+(bool p)
+
+defr truths [?b1 ?b2 ?b3 ?b4]
+  &> (bool b1) (bool b2) (bool b3) (bool b4)
+
+
+(light-vehicle v1)
+
+
+(truths b1 b2 _ _)
+
+
+
+def needs-rewind := solve (movies false title year)
+needs-rewind
+
+
+
+defn my-double [n:Nat] : Nat
+  add n n
+
+my-double 3N
+
+[my-double ?x] = 66N
+
+defn nat-add [x:Nat, y:Nat] : Nat
+  add x y
+
+[nat-add ?x ?y] = 3N
+
+[nat-add 12N ?y] = 16N
+
+
+defr edge [?a ?b]
+  || 1 2 | 1 3 | 2 4 | 3 4 | 4 5
+
+
+;; path_proof(Start, End, [Start, End]) :-
+;;     edge(Start, End).
+;; path_proof(Start, End, [Start | RestPath]) :-
+;;     edge(Start, Next),
+;;     path_proof(Next, End, RestPath).
+
+
+
+;; we don't have Prolog-like list syntax with `H | T` pattern matching
+;; also, being able to do pattern-matching on different heads would be nice to support
+defr path [?from ?to ?path-proof]
+  &> (edge from to)
+     (= path-proof from)
+
+(path 1 2 p)
+
+
+
+
+
+
+
+
+spec collect-bad [Int -> Bool] Int Int -> [List Int]
+defn collect-bad [ok? k n]
+  match [int-lt n k]
+    | true -> nil
+    | false ->
+      match [ok? k]
+        | true  -> [collect-bad ok? [int+ k 1] n]
+        | false -> [cons k [collect-bad ok? [int+ k 1] n]]
+
+spec p64-ok? Int -> Bool
+defn p64-ok? [k]
+  let x := [p64-from-int k]
+    [p64-eq [p64* x [p64/ 1.0p x]] 1.0p]
+
+spec bad-p64 Int -> [List Int]
+defn bad-p64 [n] [collect-bad p64-ok? 1 n]
+
+
+
+bad-p64 201
+
+
+
+
+
+
+spec i2f Int -> Float64
+  :doc "Convert an integer to a Float64 by repeated addition. This is a slow, 
+        inefficient, and naive implementation, but it is useful for testing
+        the correctness of the Float64 implementation."
+defn i2f [k]
+  match [int-le k 0]
+    | true  -> (the Float64 0.0)
+    | false -> [f64+ (the Float64 1.0) [i2f [int- k 1]]]
+
+spec f64-ok? Int -> Bool
+defn f64-ok? [k]
+  match [int-le k 0]
+    | true  -> true
+    | false ->
+      let x := [i2f k]
+        [f64-eq [f64* x [f64/ (the Float64 1.0) x]] (the Float64 1.0)]
+
+
+filter [fn [k:Int] [not [f64-ok? k]]]
+  map [fn [k:Nat] [from-nat k]] 
+    range 351N
+
+
+        
+
+
+
+
+
+
+

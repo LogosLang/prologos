@@ -5813,3 +5813,134 @@
                     "def mixed : [PVec <Nil | MKI | [PVec Int]>] := @[m1 m1]\nmixed:a")))
   (check-true (u19-has? out #rx"EVERY union component")
               (format "a non-offering component must be gate-refused: ~a" out)))
+
+;; ============================================================
+;; D4.P4e-0 — THE STAR MINT SUBSTRATE
+;; ============================================================
+;; Design: D4 §5.P4e-0 (#p4e-0) · rulings Q_U23 (corrected lexical-dividend
+;; block) · Q_U27 (the forced hybrid) · Q_U28 · Q_U29 · DEFERRED 90.
+;;
+;; SCOPE IS THE MINT ONLY. No `*` semantics land in this slice — every arm
+;; below asserts either a DATUM shape or a guided REFUSAL.
+;;
+;; ⚠ THE DEFECT THIS SECTION EXISTS FOR: at HEAD a trailing `*` fuses only
+;; after an IDENTIFIER. After a number or a closer it shatters, so `m{0*}` and
+;; `m{0 *}` are BYTE-IDENTICAL — the ordinal splat is UNSPELLABLE and no
+;; splitter, however written, can recover the distinction.
+
+(define (p4e0-star-e2e src)
+  (map (lambda (r) (format "~a" r))
+       (process-string-ws
+        (string-append "ns p4e0\n"
+                       "def cfg := {:database {:url \"u\" :port 1} :version \"v\"}\n"
+                       "def r := {:ab* 1 :c*d 2 :plain 3}\n"
+                       "def xs := @[{:tags @[1 2]} {:tags @[3]}]\n"
+                       src))))
+
+(define (p4e0-has? out rx)
+  (ormap (lambda (s) (regexp-match? rx s)) out))
+
+;; ---- A. the adjacency mint: NON-identifier heads (datum layer) ----
+
+(test-case "P4e-0 A1: a glued `*` after an ORDINAL mints; the SPACED twin does not"
+  ;; The discrimination that does not exist at HEAD. If these two ever produce
+  ;; the same datum again, the ordinal splat is unspellable and Q_U23's
+  ;; sort-generic rule has a hole in it.
+  (check-equal? (read-all-forms-string "m{0*}")
+                '((m ($select-brace ($star-step 0))))
+                "glued star after an ordinal must MINT (count-changing: 2 items -> 1)")
+  (check-equal? (read-all-forms-string "m{0 *}")
+                '((m ($select-brace 0 *)))
+                "SPACED star must stay two items — this is the must-not-change twin"))
+
+(test-case "P4e-0 A2: a glued `*` after a CLOSER mints (the brace/bracket/paren family)"
+  (check-equal? (read-all-forms-string "x{a}*")
+                '((x ($star-step ($select-brace a))))
+                "glued star after `}` must wrap the preceding group")
+  (check-equal? (read-all-forms-string "xs:{a}*")
+                '((xs ($star-step ($bcast-step ($select-brace a)))))
+                "glued star after an omega sub-block must wrap the whole bcast step"))
+
+(test-case "P4e-0 A3: the mint is TYPE-BLIND — it rides `adjacent-to-base?`, not an enumerated list"
+  ;; The named drift risk (D4 §5.P4e-0 mini-design): enumerating carriers.
+  ;; A bracket closer is not a brace closer and was never enumerated anywhere.
+  ;;
+  ;; ⚠ THE SHAPE HERE IS ONE LEVEL FLATTER THAN ITS SIBLINGS, and that is the
+  ;; mint being count-changing, not a bug. `x{a}*` leaves TWO items (`x` and the
+  ;; wrapped group) so the form is `(x ($star-step …))`; `[f x]*` leaves ONE, so
+  ;; the form IS the node. The first draft of this pin asserted the extra layer
+  ;; and failed — the CODE was right and the EXPECTATION was wrong.
+  (check-equal? (read-all-forms-string "[f x]*")
+                '(($star-step (f x)))
+                "a bracket closer must join the focus set FREE, with no arm of its own")
+  ;; …and because a single-item form is datum-indistinguishable from an
+  ;; application of `$star-step`, the fold cannot fire on it. That is precisely
+  ;; what the parser BACKSTOP arm is for: it must be a guided per-command error,
+  ;; never `Unbound variable $star-step`.
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws "ns p4e0a3\ndef f := [fn [x : Int] x]\ndef q := [f 1]*\ndef after := 42")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"not implemented yet" s)) out)
+              (format "the backstop must give a guided error: ~a" out))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"Unbound variable \\$star-step" s)) out)
+               (format "the sentinel must never leak to expression position: ~a" out)))
+
+;; ---- B. the splitter: IDENTIFIER heads ----
+
+(test-case "P4e-0 B1: an identifier-headed trailing star is SPLIT, not read as a field name"
+  ;; At HEAD `cfg{database*}` selects a field literally named `:database*`.
+  ;; Q_U28: the operator wins (matching `^`). The mint slice's consumer is a
+  ;; guided not-yet, so the observable is a REFUSAL naming the operator.
+  (define out (p4e0-star-e2e "def q := cfg{database*}\ndef after := 42"))
+  (check-true (p4e0-has? out #rx"not implemented yet")
+              (format "identifier-headed star must be split and refused, not read as a field: ~a" out))
+  (check-false (p4e0-has? out #rx"database\\*` is not present|field :database\\*")
+               (format "must NOT read `database*` as a field name: ~a" out)))
+
+;; ---- C. Q_U29: a mid-lexeme star is a guided error in ALL THREE bands ----
+
+(test-case "P4e-0 C1: mid-star refuses in the BLOCK band, and names the escape"
+  (define out (p4e0-star-e2e "def q := r{c*d}\ndef after := 42"))
+  (check-true (p4e0-has? out #rx"map-get")
+              (format "the mid-star refusal must name the reachable spelling: ~a" out)))
+
+(test-case "P4e-0 C2: mid-star refuses in the DOT band"
+  (define out (p4e0-star-e2e "def q := r.c*d\ndef after := 42"))
+  (check-true (p4e0-has? out #rx"map-get")
+              (format "dot band must refuse mid-star: ~a" out)))
+
+(test-case "P4e-0 C3: mid-star refuses in the OMEGA band (unchanged — it already did)"
+  (define out (p4e0-star-e2e "def q := xs:c*d\ndef after := 42"))
+  (check-true (p4e0-has? out #rx"map-get")
+              (format "omega band keeps refusing mid-star, with the unified message: ~a" out)))
+
+;; ---- D. DEFERRED 90: FOUR members, all silent at HEAD ----
+
+(test-case "P4e-0 D1: a caret continuation bearing a star is REFUSED, not renamed to"
+  ;; At HEAD all three define a record field at ZERO errors:
+  ;;   cfg{database^_*} -> {:_* …}   cfg{database^a*} -> {:a* …}   cfg{database^*} -> {:* …}
+  (for ([src (in-list '("cfg{database^_*}" "cfg{database^a*}" "cfg{database^*}"))])
+    (define out (p4e0-star-e2e (string-append "def q := " src "\ndef after := 42")))
+    (check-false (p4e0-has? out #rx"q : \\{:[_a]?\\*")
+                 (format "~a must NOT define a star-bearing field: ~a" src out))
+    (check-true (ormap prologos-error? (process-string-ws
+                  (string-append "ns p4e0d\ndef cfg := {:database {:url \"u\"} :version \"v\"}\ndef q := " src)))
+                (format "~a must be a guided error" src))))
+
+(test-case "P4e-0 D2: a star BEFORE a caret is refused — a splat has no single output key"
+  (define out (p4e0-star-e2e "def q := cfg{database*^a}\ndef after := 42"))
+  (check-false (p4e0-has? out #rx"\\.database\\*")
+               (format "must not advise the unparseable `.database*`: ~a" out)))
+
+;; ---- E. MUST STAY GREEN: the star is a live VALUE in expression position ----
+
+(test-case "P4e-0 E1: bare `*` stays a bound binary function"
+  ;; Q_U26's census correction: `*` is not merely a legal identifier char.
+  (define out (p4e0-star-e2e "def s := *\ndef t := [* 3 4]"))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"[Ee]rror" s)) out)
+               (format "bare `*` must keep working as multiply: ~a" out)))
+
+(test-case "P4e-0 E2: `*`-suffixed identifiers keep working (int* is 148 uses at HEAD)"
+  (define out (map (lambda (r) (format "~a" r))
+                   (process-string-ws "ns p4e0e\ndef v := [int* 3 4]")))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"[Ee]rror" s)) out)
+               (format "int* must keep working: ~a" out)))

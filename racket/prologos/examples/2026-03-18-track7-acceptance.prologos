@@ -82,7 +82,7 @@ defproc requester : ReqResp
 ;; --- A3: Multi-message protocol (interleaved sends and receives) ---
 
 session Handshake
-  ! String
+  ? Int
   ? String
   ! Int
   ? Bool
