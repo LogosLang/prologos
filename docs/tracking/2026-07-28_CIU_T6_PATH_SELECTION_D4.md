@@ -6932,7 +6932,25 @@ AFTER the verify ran. The omission cost immediately —
   Below this setup's measurement floor. Deterministic size of the added work:
   **5160** bracket groups in the corpus ⇒ 5160 property writes per full read.
 
-**Deferred.** 84 (three `let` spellings refuse an access on any value) · 85 (an
+**Second verify verdict: SHIP** (`wf_6d3e6d28-359`). It judged the POST-fix state
+(it noticed the tree had moved under its own lenses and pinned the files by
+sha256 before trusting anything), re-ran the full suite `[488/488]` 10099, the
+acceptance file (90 results, 0 errors), and confirmed the D1/D2 safety argument
+EMPIRICALLY: `def m :=` ⏎ `(fc …):c` solves while `def m :=` ⏎ `[(fc …):c]`
+refuses — the descent sees through a layout group but not through a user
+bracket.
+
+⚠ **It also corrected MY verify setup.** All three lenses were told to A/B
+against the main checkout, on the strength of the four slice-7 files matching
+`b6f773a8` — but main carries extra `reduction.rkt` (+41) and `typing-core.rkt`
+(+40) commits, so it is NOT a pristine base for a comparison of TYPE ERRORS and
+SRCLOCS, which is exactly what the lenses were comparing. The judge discarded it
+and built a `git archive b6f773a8` export instead. No verdict changed here, but
+it is the stale-base class `workflow.md` already warns about, arriving through
+the instruction rather than through the agents.
+
+**Deferred.** 84 (three `let` spellings + `def-` refuse an access on any value) ·
+87 (a goal KEYWORD under an access gets the broadcast-carrier message) · 85 (an
 empty group at command position aborts the file — pre-existing) · 86 (`'(…)` the
 QUOTED GOAL, the owner's fourth request — a language feature needing a
 first-class `Goal` type, which does not exist in the tree).
