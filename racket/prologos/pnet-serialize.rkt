@@ -25,6 +25,10 @@
          "syntax.rkt"
          "namespace.rkt"
          "source-location.rkt"
+         ;; Session type nodes. Added 2026-08-05 — the WHOLE family, not the
+         ;; one that detonated. `sessions.rkt` depends only on
+         ;; prelude/syntax/substitution, so there is no cycle.
+         "sessions.rkt"
          (only-in "propagator.rkt" cell-id
                   prop-network prop-network? make-prop-network
                   prop-net-hot prop-net-warm prop-net-cold
@@ -405,6 +409,35 @@
   (reg0! expr-zero) (reg0! expr-refl) (reg0! expr-Nat) (reg0! expr-Bool)
   (reg0! expr-true) (reg0! expr-false) (reg0! expr-Unit) (reg0! expr-unit)
   (reg0! expr-Nil) (reg0! expr-nil) (reg0! expr-hole) (reg0! expr-error)
+  ;; --- session types (2026-08-05) ---
+  ;; UNREGISTERED until now, and the failure was the one `pipeline.md` warns
+  ;; about: an unregistered node does NOT error at cache read — the unknown-tag
+  ;; fallback returns a raw VECTOR that PRINTS like the struct, and it fails the
+  ;; first predicate to touch it, arbitrarily far away. Here that was
+  ;; `sess-mu-body: contract violation; expected sess-mu?; given
+  ;; '#(struct:sess-mu …)` — a value that looks exactly like what it is being
+  ;; told it is not. The quote is the tell.
+  ;;
+  ;; `lib/prologos/core/io-protocols.prologos` declares FOUR recursive session
+  ;; protocols, so this broke the STANDARD LIBRARY for anyone with a warm
+  ;; `.pnet` cache, while passing for anyone whose cache was cold. Found by a
+  ;; cache-state change, not by a code change — which is why it had survived.
+  ;;
+  ;; The whole family is registered, not just `sess-mu`: registering only the
+  ;; node that detonated is the "registration-by-detonation" pattern this file
+  ;; has already been swept for once this session.
+  (reg0! sess-end)
+  (reg1! sess-mu (sess-end))
+  (reg1! sess-svar 0)
+  (reg1! sess-choice '())
+  (reg1! sess-offer '())
+  (reg2! sess-send (expr-Nat) (sess-end))
+  (reg2! sess-recv (expr-Nat) (sess-end))
+  (reg2! sess-dsend (expr-Nat) (sess-end))
+  (reg2! sess-drecv (expr-Nat) (sess-end))
+  (reg2! sess-async-send (expr-Nat) (sess-end))
+  (reg2! sess-async-recv (expr-Nat) (sess-end))
+  (reg0! sess-branch-error)
   (reg0! expr-Int) (reg0! expr-Rat) (reg0! expr-Char) (reg0! expr-String)
   (reg0! expr-Keyword) (reg0! lzero)
 

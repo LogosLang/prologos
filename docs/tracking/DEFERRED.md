@@ -21,6 +21,54 @@ reading. A `✅` header means "the thing named in the title is done", not
 [`2026-08-05_1751_FOUR_OPEN_OWNER_RULINGS.md`](2026-08-05_1751_FOUR_OPEN_OWNER_RULINGS.md)
 — each with what is already probed and true, the options, and what each unblocks.
 
+## ✅ FIXED 2026-08-05 — session type nodes were UNREGISTERED for `.pnet`, breaking the stdlib on a warm cache
+
+**Zero `sess-*` nodes were registered in `pnet-serialize.rkt`.** So any module
+declaring session types deserialized as raw VECTORS when served from cache —
+and `lib/prologos/core/io-protocols.prologos` declares **four** recursive
+protocols (`FileRead`, `FileWrite`, `FileAppend`, `FileRW`). The standard
+library was broken for anyone with a warm `.pnet` cache and fine for anyone
+cold.
+
+**The diagnostic is the one `pipeline.md` warns about**, and it is worth quoting
+because it reads as nonsense until you know:
+
+```
+sess-mu-body: contract violation
+  expected: sess-mu?
+  given: '#(struct:sess-mu #(struct:sess-choice ((:read-all . …))))
+```
+
+A value being told it is not the thing it visibly is. **The leading quote is the
+tell** — that is a vector, not a struct. The unknown-tag fallback returns a raw
+vector that PRINTS like the real struct and fails the first predicate to touch
+it, arbitrarily far from the cause.
+
+**Verified both directions before and after**: with the pre-existing cache
+present the test failed; deleting `io-protocols.pnet` made it pass; after
+registering, a cache written by the fixed code reads back clean
+(`test-io-session-01` 11/11 warm, `test-io-dep-session-02` 8/8).
+
+**The whole family is registered**, not just the node that detonated —
+`sess-end`, `sess-mu`, `sess-svar`, `sess-choice`, `sess-offer`, the six
+send/recv variants, `sess-branch-error`. Registering only the detonating node is
+the "registration-by-detonation" pattern this same file was swept for earlier in
+this session (31 nodes missing BY SIBLING).
+
+**How it survived, and why that matters more than the fix.** Nothing about this
+is triggered by a code change — only by CACHE STATE. It passed every CI run
+whose cache was cold and failed every run whose cache was warm, and neither
+looks like a regression. It surfaced only because a full-suite gate ran for an
+unrelated four-line test addition, immediately after a `raco make` had changed
+the cache state.
+
+⚠ **It also means an earlier probe in this same session was luckier than I
+knew.** I ran `test-io-session-01` while checking whether recursive session
+types work, got 11/11, and cited it as evidence that they "ship and are
+exercised". True — but the cache happened to be cold. A green result whose
+correctness depends on invisible cache state is not the evidence it appears to
+be.
+
 ## ✅ ADOPTED 2026-08-05 — netstring framing, and the "decision" was a false dilemma
 
 `ocapn-test-suite` **#41 ("message-framing")** wrapped every CapTP message in a

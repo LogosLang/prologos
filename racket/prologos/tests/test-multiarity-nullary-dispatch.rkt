@@ -125,3 +125,48 @@
   (check-regexp-match
    #rx"3N"
    (run-prog "(spec pick2 Nat Nat -> Nat) (defn pick2 | x y -> y) (eval (pick2 7N 3N))")))
+
+;; ---------------------------------------------------------------------------
+;; THE FAMILY. `pipeline.md` § Exhaustive Walkers names "a fix applied to one
+;; member of a container family but not its siblings" as a red flag, so the
+;; shapes adjacent to the one that broke were probed after the fix. All four
+;; were already correct — recorded here rather than discarded, because a
+;; negative result nobody wrote down gets re-derived by the next person, and
+;; because these are exactly the shapes a future change to `param-names` or
+;; `compile-match-tree` would break next.
+;; ---------------------------------------------------------------------------
+
+(test-case "three columns of bare nullary patterns all discriminate"
+  (define s (string-append
+             "(data K3c (ka) (kb)) "
+             "(spec f3 K3c K3c K3c -> Nat) "
+             "(defn f3 | ka ka ka -> 1N | ka ka kb -> 2N | ka kb ka -> 3N | _ _ _ -> 9N) "))
+  (check-regexp-match #rx"1N" (run-prog (string-append s "(eval (f3 ka ka ka))")))
+  (check-regexp-match #rx"2N" (run-prog (string-append s "(eval (f3 ka ka kb))")))
+  (check-regexp-match #rx"3N" (run-prog (string-append s "(eval (f3 ka kb ka))"))))
+
+(test-case "bare nullary MIXED with a field-carrying ctor in one clause"
+  (define s (string-append
+             "(data Km (ka) (kb)) (data Wm (wa : Nat) (wb : Nat)) "
+             "(spec fm Km Wm -> Nat) "
+             "(defn fm | ka [wa _] -> 1N | ka [wb _] -> 2N | _ _ -> 9N) "))
+  (check-regexp-match #rx"1N" (run-prog (string-append s "(eval (fm ka (wa 0N)))")))
+  (check-regexp-match #rx"2N" (run-prog (string-append s "(eval (fm ka (wb 0N)))"))))
+
+(test-case "field-carrying FIRST, bare nullary second"
+  ;; The reverse order matters: the first column is what `all-var?` used to be
+  ;; fooled by, so a bracketed first column could have masked the bug.
+  (define s (string-append
+             "(data Kr (ka) (kb)) (data Wr (wa : Nat)) "
+             "(spec fr Wr Kr -> Nat) "
+             "(defn fr | [wa _] ka -> 1N | [wa _] kb -> 2N | _ _ -> 9N) "))
+  (check-regexp-match #rx"1N" (run-prog (string-append s "(eval (fr (wa 0N) ka))")))
+  (check-regexp-match #rx"2N" (run-prog (string-append s "(eval (fr (wa 0N) kb))"))))
+
+(test-case "bare nullary NESTED inside a compound pattern"
+  (define s (string-append
+             "(data Kn (ka) (kb)) (data Box (box : Kn)) "
+             "(spec fb2 Box Box -> Nat) "
+             "(defn fb2 | [box ka] [box ka] -> 1N | [box ka] [box kb] -> 2N | _ _ -> 9N) "))
+  (check-regexp-match #rx"1N" (run-prog (string-append s "(eval (fb2 (box ka) (box ka)))")))
+  (check-regexp-match #rx"2N" (run-prog (string-append s "(eval (fb2 (box ka) (box kb)))"))))
