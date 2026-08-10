@@ -7969,14 +7969,27 @@ first and every verify round then found a defect in the previous round's FIX:
    while every caller passed the record — `format`'s `~a` hid it and every count
    and both mutation tests still agreed). Matrix now **11 × 19 = 209** cells +
    5 controls; DEFERRED 108 re-measured 19/280 → 21/320.
-2. ⬜ **1a-ii — the Tier-O arms, inert.** Every site switching on sentinel
-   identity gets `$postfix-star` handling BEFORE the symbol can exist, so the
-   arms are dead code and land green. `pattern-var?` FIRST (a 20-entry denylist;
-   a miss is a whole-file abort in a `defmacro` template). ⚠ Prefer the POLARITY
-   INVERSION the file itself asks for over exclusion #21 — `process-ns-declaration`
-   took exactly that inversion at P4c-1. ⚠ `datum-subst-list`'s splice arm ships
-   a comment claiming sentinel-immunity *because a sentinel is never a bare
-   symbol*; `$postfix-star` is the FIRST counterexample to that invariant.
+2. ✅ **1a-ii — the Tier-O arms, inert** (`dc458109`). Battery 466 → 469,
+   neighbourhood 287 green. **TWO lines of production code**, and that is the
+   finding: the generated inventory said *no arm needed* far more often than
+   *arm* — `access-sentinel?` + the head sets, `flatten-ws-datum`, and both
+   preparse lists all require a PAIR, so a bare atom can never reach them
+   (Q_U36's point, arriving as a coverage dividend).
+   ⚠ **The handoff's premise was stale**: a `pattern-var?` miss is NOT a
+   whole-file abort any more. DEFERRED 3 was discharged at `446070fc`, and
+   `pipeline.md` + `macros.rkt`'s own comment were both wrong about it —
+   corrected in this slice. The residual raise is `datum-subst-list`'s SPLICE arm
+   alone: unreachable from WS (`...` reads as `$rest`), and G2-degraded in sexp.
+   **⭐⭐ TWO REVERSALS OF MY OWN WORK.** (i) I fixed the splice arm structurally
+   — its stated invariant *is* falsified by `$postfix-star`, the first
+   bare-symbol sentinel — and the neighbourhood turned `test-defmacro`'s "the
+   SPLICE branch keeps its unbound error" RED. That raise is a **ruling**; only
+   its rationale was false. *A falsified rationale does not license reversing the
+   decision it was offered for.* (ii) I gave `pp-datum` an arm rendering the
+   sentinel as `*`; the verify showed every CONSUMED marker deliberately has no
+   arm and prints its internal name, because **appearing there is the defect** —
+   `*` would hide a leak inside `expand`. Both reversals are pinned with their
+   reasoning so the next bare-symbol sentinel does not re-derive them.
 3. ⬜ **1a-iii — the atomic change.** Rename `token-entry->stx`'s arm + the gate
    disjunct + the [Q_U36](#q-u36) positive-list fuse + [Q_U35](#q-u35)'s refusal
    + [Q_U31](#q-u31)'s refusal at BOTH families; uncomment the two parked tests.

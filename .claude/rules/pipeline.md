@@ -136,10 +136,28 @@ failed and look for a raise.
    `$dot-brace`, `$list-literal`, `$postfix-index`, …) obliges EVERY recognizer
    that switches on sentinel identity — `pattern-var?`, `access-sentinel?`, the
    fold arms. Miss one and it reaches a partial helper (`symbol->string` on a
-   number, `datum-subst` on an unknown tag). ⚠ `pattern-var?`'s residual was
-   measured at **23 of 33**, `$list-literal` included — so `'[1 2]` inside a
-   `defmacro` **template** is a whole-file abort **today**. Test the TEMPLATE
-   path; that is the one that raises.
+   number, `datum-subst` on an unknown tag).
+   ⚠⚠ **CORRECTED 2026-08-10 (CIU T6 P4e-1a): the `defmacro`-template abort this
+   entry named NO LONGER REPRODUCES, and the residual is now SILENT rather than
+   LOUD — which makes a miss HARDER to notice, not safer.** This read
+   "`pattern-var?`'s residual was measured at 23 of 33, `$list-literal` included —
+   so `'[1 2]` inside a `defmacro` template is a whole-file abort today". DEFERRED
+   3 was discharged at `446070fc`: `datum-subst` asks whether the symbol is a
+   DECLARED macro parameter instead of consulting the denylist, so an unbound one
+   passes through. Measured at `dc458109`: `defmacro lit [] '[1 2]` + `[lit]`
+   yields `v : [List Int]` at **0 errors**. ⚠ `macros.rkt`'s own comment above
+   `pattern-var?` still carries the stale claim.
+   **What still raises**: `datum-subst-list`'s `$var ...` SPLICE arm — and only
+   there. It is unreachable from WS (`...` reads as `$rest`; the arm tests `'...`)
+   and in sexp the G2 preparse-seam guard degrades it to a per-command error. Its
+   shipped justification — *"a sentinel is a list HEAD followed by its payload,
+   never a bare symbol followed by `...`"* — is **false**: `$postfix-star` is a
+   bare-symbol sentinel. The fix for that class is `pattern-var?`'s exclusion, NOT
+   relaxing the arm (relaxing it turns `test-defmacro.rkt`'s "the SPLICE branch
+   keeps its unbound error" red — that raise is a ruling, not a side effect).
+   Still test the TEMPLATE path, and **invoke** the macro: a `defmacro` that is
+   only defined never runs `datum-subst`, so a definition-only probe proves
+   nothing.
 2. **An unguarded parameter whose default is the impossible input.**
    `current-source-str` defaults to `""`, and `pos->line-col` (`parse-reader.rkt`)
    does `(string-ref str i)` with only an `i >= pos` check and no length check.
