@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 102**
+> ### **NEXT FREE: 104**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6396,3 +6396,91 @@ star can safely fire.
 untouched twin of `recognize-colon-annotation`'s; a band-dependent divergence
 makes `(G):f*` keep the implicit solve while `(G):0*` loses it on a purely
 lexical accident (latent now, a silent wrong answer once `*` has semantics).
+
+---
+
+### 102. ⬜ ⭐⭐ THE ABORT SEAM — a PREPARSE error in a file that also has a successful `data`/`trait`/`impl` is a WHOLE-FILE ABORT with a raw Racket stack trace (139/305 corpus files susceptible)
+
+Found by the star-surface census (`wf_19cd5077-15b`), reproduced on the main
+thread at `d0ac2a58`. **Not a star defect** — the star was merely the probe.
+
+```
+ns c1
+def before := 1
+data Col := Red | Green
+bundle Bx := (Add Sub) *
+def after := 2
+```
+```
+syntax->datum: contract violation
+  expected: syntax?
+  given: '($preparse-error "bundle: bundle Bx: invalid body syntax")
+  … macros.rkt:4175 · partition · preparse-expand-all · process-file-inner
+```
+**No output at all** — `before` never prints. Remove the `data` line and the same
+file reports a clean per-command `preparse: bundle …: invalid body syntax`.
+
+**Cause**: the `$preparse-error` seat conses a BARE list into `result`
+(`macros.rkt:3684` — the only emit site), and Phase-5b's hoist partition
+(`macros.rkt:4175`) calls `syntax->datum` on every element. The partition runs
+only when `generated-decl-names` is non-empty — i.e. only when a `data`/`trait`/
+`impl` succeeded in the same file. That is why it hides: a probe file without a
+declaration takes the fast path and looks clean.
+
+⚠ **THE IRONY, and the reason this is filed loud**: that seat was ruled into
+existence *to PREVENT* whole-file aborts — it is CIU T6's own option-B preparse
+seam guard (`ae26f540`), which converts a preparse RAISE into a per-command error
+VALUE. It does exactly that, and then the value it produces aborts the file by a
+different route whenever a declaration precedes it.
+
+**Blast radius**: **139 of 305** corpus files contain a `data`/`trait`/`impl`, so
+any preparse error in them is an abort. Reachable from ordinary typos, not just
+stars — measured with `bundle`, and the census found 5 of 8 star-carrier form
+refusals abort this way.
+
+**Fix**: make `:3684` emit a syntax object, or make `:4175`'s predicate tolerate
+a non-syntax element. Exactly one emit site and one consume site in non-test code.
+
+**Test obligation, earned by how this hid**: every preparse-error probe file MUST
+contain a successful `data`/`trait`/`impl`. Five parallel censuses each reported
+"zero aborts" because none of their probe files did.
+
+⭐ **Prerequisite for any design whose refusal lives in a preparse validator** —
+including the star work's own guided refusals.
+
+---
+
+### 103. ⬜ ⭐ A BARE `*` IS A LEGAL IRREFUTABLE PATTERN — it SILENTLY DELETES every later `match` arm, and loses the enclosing `defn`
+
+Found by the same census; reproduced at `d0ac2a58`. Pre-existing, 0 corpus sites.
+
+```
+def q := 5
+match q
+  | 2 * -> 99
+  | n -> n
+```
+→ elaborates to `[reduce x | 2 -> 99]` — **ONE arm**. The `| n -> n` arm is gone.
+The only symptom is a downstream `Could not infer type`, which names neither the
+star nor the missing arm.
+
+`| 2 * ->` is read as a two-element pattern whose second element is a fresh
+irrefutable binder, so the arm matches everything and the rest are unreachable
+and dropped. In `defn` clause position the sibling shape
+(`defn f | red* -> …`) loses **`f` itself** → `Unbound variable f`, with a
+diagnostic that blames spelling or imports.
+
+The census called this "the worst failure mode" it found: silent, zero errors,
+and invisible to a green suite because nothing in the corpus spells it.
+
+⚠ **Bears on the star design** ([DEFERRED 101](#)): if a bare `*` stays legal in
+pattern position, any star mint must be pattern-position-aware **at a stage that
+does not know it is in a pattern**. Refusing it there converts a silent wrong
+answer into a loud error *independently of any star work* — but it is a language
+ruling, not a repair (owner Q2 of the census).
+
+⚠ Sibling, same seat: `compile-match-tree` **aborts** on a multi-form LITERAL arm
+(`| 2 3 -> 99` → `list-ref: contract violation`, `macros.rkt:11313`), and it
+reproduces in **sexp** mode, so it is an IR defect. Consequence for method: a
+star-free CONTROL can be the leg that detonates, so an A/B assuming the control
+is safe will mis-attribute.
