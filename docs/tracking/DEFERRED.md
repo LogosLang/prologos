@@ -932,9 +932,26 @@ annotate `[x : T]` or add a `spec`").
    >
    > **Scoped 2026-08-04** so the size is known before anyone starts.
    > `expr-Record`'s tail is a SYMBOL (`'closed` / `'dyn`); a row variable needs
-   > it to admit a meta. Measured surface:
+   > it to admit a meta.
    >
-   > - **28** `expr-Record-tail` sites across 5 files (typing-core 17, syntax 5,
+   > **Re-checked 2026-08-05, and the missing piece is WHY that representation
+   > change is unavoidable rather than one option among several.**
+   > `metavar-store.rkt:1884`: *"Assign a solution to a metavariable. **Errors if
+   > already solved.**"* Monotonicity is enforced, by design. So extending a row
+   > that has already been solved cannot work by re-solving its meta — the only
+   > route is for the row to have been solved to something that CONTAINS a fresh
+   > tail meta, and extension then means solving THAT. Which is precisely a row
+   > variable. The 29 read sites are load-bearing because every one of them
+   > pattern-matches a symbol and would meet a meta.
+   >
+   > That is the difference between this entry and the three "needs a ruling"
+   > calls I got wrong this session: those dissolved when I looked at the code,
+   > and this one got HARDER. The obstacle is a checked invariant, not an
+   > unexamined assumption of mine.
+   >
+   > Measured surface (re-counted 2026-08-05; the earlier 28/83 had drifted):
+   >
+   > - **29** `expr-Record-tail` sites across 5 files (typing-core 17, syntax 5,
    >   unify 4, union-types 1, typing-errors 1)
    > - **83** literal `'closed`/`'dyn` occurrences — every `(eq? tail 'dyn)`
    >   becomes an `open-tail?` predicate, and missing one silently mis-classifies
