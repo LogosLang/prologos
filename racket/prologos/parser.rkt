@@ -1107,10 +1107,16 @@
 ;; forced hybrid. Mirrors `split-caret-lexeme` — symbol in, `(values name cont)`
 ;; out, or `(values #f message)`.
 ;;
-;; ⚠ CORRECTED 2026-08-10: this comment named a GROUPER predicate
-;; `star-step-trigger?` as handling every non-identifier head. **No such symbol
-;; has ever existed in the tree** — it was a planned name written as though
-;; shipped, the stale-comment class this arc keeps paying for. What actually
+;; ⚠ CORRECTED 2026-08-10, AND THE FIRST CORRECTION WAS ITSELF WRONG — twice in
+;; one file, so the second attempt states its evidence. This comment names a
+;; GROUPER predicate `star-step-trigger?`. My first correction claimed the symbol
+;; "has never existed in the tree". **It did**: `git show bfba68d5` has it
+;; defined, exported, and called in this file plus one call site in
+;; `surface-rewrite.rkt`. The revert `d0ac2a58` removed the DEFINITION and left
+;; this REFERENCE — a dangling pointer, not an aspirational name. (I diagnosed a
+;; stale comment by reading rather than by `git log`, inside a commit whose whole
+;; purpose was correcting stale comments. Check the history before declaring a
+;; symbol imaginary.) What actually
 ;; handles the non-identifier heads is the `postfix-star` TOKEN TYPE minted at
 ;; `disambiguate-tokens` (D4.P4e-0 slice A), and it covers FOUR heads —
 ;; `x{a}*`, `xs:{a}*`, `[f x]*`, `(f x)*` — not the five listed here.
