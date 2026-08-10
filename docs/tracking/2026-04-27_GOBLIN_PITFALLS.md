@@ -639,13 +639,22 @@ directly). True over-the-wire pipelining is deferred to Phase 1.
 > two forms that DO work is in `DEFERRED.md` § "A 2-arg multi-arity `defn` over
 > NULLARY constructors returns a WRONG ANSWER, silently".
 >
-> **ROOT CAUSE, same day**: not the pattern compiler. Two adjacent BARE names in
-> a clause are ambiguous — `| ka ka ->` is read as ONE application pattern
-> (ctor `ka` applied to `ka`), so the clause has arity 1. **Bracketing fixes it**:
-> `| [ka] [ka] -> true | [kb] [kb] -> true | _ _ -> false` gives the correct
-> `true / false / false / true`. That is the one-character fix and the preferred
-> form. The field-carrying twin always worked because `[wa _]` is already
-> bracketed — the real axis is unbracketed-vs-bracketed, not nullary-vs-not.
+> **✅ FIXED 2026-08-05, and the first two root causes published for it were
+> WRONG.** The real cause is one line in `expand-defn-pattern-group`:
+> `param-names` asked "are these all variables?" using `pattern-is-variable?` on
+> the **raw** patterns, before `normalize-pattern` consults `lookup-ctor`. A bare
+> nullary constructor is a `pat-atom var` at that moment, so `all-var?` was `#t`
+> and the parameters were named after the PATTERNS — `| ka ka ->` made two
+> parameters both named `ka`, and the second dispatch column re-read the first
+> argument. Regression test: `tests/test-multiarity-nullary-dispatch.rkt`.
+>
+> It was NOT "matches first arg only" (the original framing) and NOT "the parser
+> cannot split bare names" (my framing earlier the same day — instrumenting
+> showed the parse was correct). Bracketed patterns worked only because the
+> reader emits `pat-compound` directly and skips the lookup.
+>
+> **All spellings now work.** The entry stays as history of a silent
+> wrong-answer bug that survived from Phase 0 on one accidental witness.
 >
 > **Or** — outer `match`, one-level inner `match` per arm (two-deep is
 > fine; three-deep fails at import):

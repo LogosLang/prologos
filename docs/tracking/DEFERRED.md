@@ -4133,49 +4133,53 @@ Form A is what `captp-core` now uses. Note it is TWO-deep, which is fine;
 three-deep nested `match` fails at import time (already in
 `prologos-syntax.md`).
 
-### ✅ ROOT-CAUSED 2026-08-05 — it is the PARSER's clause splitting, and there is a one-character fix
+### ✅ FIXED 2026-08-05 — `param-names` asked "all variables?" BEFORE normalizing
 
-**`| [ka] [ka] -> true` works.** Bracketing the nullary patterns gives
-`true / false / false / true` — all correct.
+**One line, in `expand-defn-pattern-group` (`macros.rkt`).** `param-names`
+computed `all-var?` with `pattern-is-variable?` over the **raw** clause patterns.
+A bare nullary constructor is still a `pat-atom` of kind `'var` at that moment —
+`normalize-pattern` has not yet consulted `lookup-ctor` — so every bare
+constructor counted as a variable, `all-var?` came out `#t`, and the generated
+parameters were named after the **patterns**. `| ka ka -> …` produced TWO
+parameters BOTH NAMED `ka`. `compile-match-tree` then took
+`(list-ref param-names col)` per dispatch column, got the same name twice, and
+**the second dispatch re-read the first argument**.
 
-So the pattern compiler was never wrong. **The parser cannot split a bare
-`| ka ka -> …` into two patterns**: two adjacent bare symbols are ambiguous
-between "two nullary constructor patterns" and "constructor `ka` applied to
-argument `ka`", and it picks application. The clause then has **arity 1**, not 2,
-and everything downstream is consistent with that — including both wrong
-behaviours, which stop needing one story because they were never one bug in
-dispatch.
+Fix: normalize once, up front; decide `all-var?` on the normalized patterns and
+reuse them for the rows. Regression test `tests/test-multiarity-nullary-dispatch.rkt`
+(5 cases; **3 fail** with the fix reverted — exactly the three bare-pattern ones,
+while the bracketed and all-variable cases pass either way, which is correct
+because neither was ever broken).
 
-This also explains the field-carrying twin being correct for free: `[wa _]` is
-already bracketed, so its split is unambiguous. The measurement that looked like
-"nullary vs non-nullary" was really "unbracketed vs bracketed" — nullary
-constructors are just the only patterns anyone writes bare.
+Gates: full suite 560/10955/0, conformance 24/24, `test-ocapn-bridge` 166/166.
 
-**Three working forms now, in order of preference:**
+### ⚠ CORRECTION — the root cause published earlier THAT DAY was wrong, twice over
 
-```
-;; 1. BRACKET the patterns — smallest change, keeps the multi-arity shape
-defn keq | [ka] [ka] -> true | [kb] [kb] -> true | _ _ -> false
+This entry previously said the cause was **the parser failing to split
+`| ka ka ->` into two patterns**, and recommended either registry-aware splitting
+or *requiring brackets and erroring otherwise*. Both were wrong, and the second
+would have been actively harmful — a syntax restriction imposed on users to work
+around a one-line ordering bug in the compiler.
 
-;; 2. outer match + one-level inner match per arm (two-deep is fine)
-;; 3. ordinal + nat-eq?  — works, but reintroduces the numeral
-```
+Two mistakes produced it, and they are the reusable part:
 
-**The fix, and why it is a real decision rather than a bug to squash**: the
-ambiguity is genuine at the grammar level — `f a b` in pattern position could be
-a 3-pattern clause or a 1-pattern application, and the reader cannot know without
-consulting the constructor registry for arity. Options: (a) resolve bare
-constructor names against `lookup-ctor` at parse time and split on known arity —
-correct, but makes parsing registry-dependent; (b) require brackets for
-constructor patterns in multi-arity clause position and ERROR otherwise — loud,
-cheap, and turns a silent wrong answer into a message naming form 1;
-(c) leave it and rely on documentation, which is what has happened since Phase 0
-and cost a brand-check bug.
+1. **A mechanism inferred from a behavioural difference instead of looked at.**
+   Instrumenting `expand-defn-multi` showed the parse was correct all along: two
+   patterns per clause, normalizing to two nullary compounds. The rows entering
+   `compile-match-tree` were right. Nothing about the parser was involved.
+2. **A confounded experiment.** The "brackets fix it" probe used a **2**-constructor
+   type while the bare probe used **3** — two variables changed at once. The clean
+   2×2 (bracketing × constructor count, one file) is what settled it. That the
+   confounded run happened to reach the *right* discriminator is the danger:
+   **a confounded experiment that lands on the correct answer is worse than one
+   that lands on the wrong answer**, because nothing prompts you to re-run it.
 
-**Recommendation: (b), with (a) as the better long-term answer.** Either way the
-silent-wrong-answer property is what must go.
+This is the same error as the srcloc misattribution earlier in the same session
+("I varied layout AND spec presence, blamed layout") — repeated within the hour,
+after being written down. The instrument that broke both was the same: change one
+thing, in one file, and read the output rather than the theory.
 
-### Narrowing that got there (kept — it is the reasoning, and one step was wrong)
+### Narrowing that got there### Narrowing that got there (kept — the reasoning, including the wrong turns)
 
 Attempted the fix; did not land it. Recording the narrowing because it is most of
 the work and the next person should not redo it.

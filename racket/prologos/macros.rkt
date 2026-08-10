@@ -11808,11 +11808,33 @@
   ;; use variable names from the first clause to avoid redundant let-bindings.
   ;; This is critical for guards: fn __arg0 . (let n = __arg0 in ...) creates
   ;; an extra indirection that triggers QTT false positives.
+  ;; ⚠ NORMALIZE BEFORE ASKING "are these all variables?".
+  ;;
+  ;; A bare nullary constructor pattern (`| ka ka -> …`) is a `pat-atom` of kind
+  ;; 'var until `normalize-pattern` consults `lookup-ctor` and turns it into a
+  ;; `pat-compound`. Testing the RAW pattern therefore called every bare
+  ;; constructor a variable, `all-var?` came out #t, and the parameters were
+  ;; named after the PATTERNS — so `| ka ka ->` produced TWO parameters both
+  ;; named `ka`. `compile-match-tree` then took `(list-ref param-names col)` for
+  ;; each dispatch column and got the same name twice: the second dispatch
+  ;; re-read the FIRST argument. `[keq ka kb]` returned `true`.
+  ;;
+  ;; Silent — it compiles, type-checks, and reports 0 errors. It broke OCapN
+  ;; brand-check (found 2026-08-05 by `test-ocapn-bridge`'s "different kinds =>
+  ;; false even with same id", the only assertion in the tree that distinguishes
+  ;; them). Repro: `examples/2026-08-05-multiarity-nullary-repro.prologos`.
+  ;;
+  ;; Bracketed patterns (`| [ka] [ka] ->`) always worked, because the reader
+  ;; emits `pat-compound` for those and no lookup is needed — which is why this
+  ;; looked like a bracketing rule rather than a normalization-order bug.
+  (define normalized-clause-pats
+    (for/list ([clause (in-list clauses)])
+      (map normalize-pattern (defn-pattern-clause-patterns clause))))
   (define param-names
-    (let* ([all-var? (for/and ([clause (in-list clauses)])
-                       (for/and ([pat (in-list (defn-pattern-clause-patterns clause))])
+    (let* ([all-var? (for/and ([pats (in-list normalized-clause-pats)])
+                       (for/and ([pat (in-list pats)])
                          (pattern-is-variable? pat)))]
-           [first-pats (defn-pattern-clause-patterns (car clauses))])
+           [first-pats (car normalized-clause-pats)])
       (if all-var?
           (for/list ([pat (in-list first-pats)])
             (if (and (pat-atom? pat) (eq? (pat-atom-kind pat) 'var))
@@ -11823,8 +11845,9 @@
   ;; Normalize all patterns and build rows
   ;; Row format: (list patterns guard body)
   (define rows
-    (for/list ([clause (in-list clauses)])
-      (list (map normalize-pattern (defn-pattern-clause-patterns clause))
+    (for/list ([clause (in-list clauses)]
+               [pats (in-list normalized-clause-pats)])
+      (list pats
             (defn-pattern-clause-guard clause)
             (defn-pattern-clause-body clause))))
   ;; An arm after an irrefutable one is dead AND unchecked — see

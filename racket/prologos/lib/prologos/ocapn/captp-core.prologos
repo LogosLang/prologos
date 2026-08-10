@@ -458,22 +458,18 @@ defn refr-remote-import-promise?
 
 ;; Kind equality.
 ;;
-;; ⚠ NOT written as `| refr-k-local-export refr-k-local-export -> true | …`.
-;; Two adjacent BARE constructor names in a clause are ambiguous — the parser
-;; reads them as ONE application pattern, not two patterns — so that form
-;; compiles, type-checks, and RETURNS THE WRONG ANSWER. Caught here by
-;; `test-ocapn-bridge`'s "different kinds => false even with same id"; it had
-;; quietly broken brand-check. Root-caused the same day: it is the parser's
-;; clause splitting, not the pattern compiler. Pitfall #18; repro in
-;; `examples/2026-08-05-multiarity-nullary-repro.prologos`.
+;; Written as an outer `match` with a one-level inner `match` per arm. The
+;; shorter `| refr-k-local-export refr-k-local-export -> true | …` form is also
+;; CORRECT as of 2026-08-05 — it used to return the wrong answer silently and
+;; broke brand-check here, which is how the compiler bug was found
+;; (`test-ocapn-bridge`'s "different kinds => false even with same id", the only
+;; assertion in the tree that distinguishes them). Fixed in
+;; `expand-defn-pattern-group`; regression test
+;; `tests/test-multiarity-nullary-dispatch.rkt`.
 ;;
-;; BRACKETING the patterns (`| [refr-k-local-export] [refr-k-local-export] ->`)
-;; also works and is the smaller fix. This one stays as an outer `match` with a
-;; one-level inner `match` because it reads better at six kinds — but if you are
-;; fixing this shape elsewhere, brackets are the one-character answer.
+;; This spelling stays because it reads better at six kinds, not because the
+;; short one is unavailable.
 ;;
-;; No `RefrKind -> Nat` ordinal exists, on purpose — an ordinal would make the
-;; equality a `nat-eq?` again and reintroduce the numeral this change removed.
 spec refr-kind-eq? RefrKind RefrKind -> Bool
 defn refr-kind-eq? [a b]
   match a
