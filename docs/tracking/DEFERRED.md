@@ -1846,6 +1846,58 @@ the "all cells empty after reset" case got its five real assertions back; and th
 `scoped-cell-ids` count moved 11 → 8. That last one is the assertion that noticed
 the removal, which is what a count pinned against a list is for.
 
+## `merge-list-append` is a CELL merge at 8 sites, and the law test said it was "a helper" (2026-08-05)
+
+Third finding from the merge-law arc, and the first one where the **test's own
+comment** was the defect.
+
+`tests/test-merge-laws.rkt` pinned `merge-list-append` as a known non-lattice
+with the note: *"If a cell ever adopts this merge and its writers are not
+write-once, expect the union-hang shape."* The antecedent was **already true**
+when that was written. Censused:
+
+| site | cell |
+|---|---|
+| `warnings.rkt:108/110/112/114/116` | 5 warning cells |
+| `global-constraints.rkt:102` | narrow-constraints |
+| `relations.rkt:3136` | the query **answer accumulator** |
+| `infra-cell.rkt:309` | `net-new-list-cell`, the generic constructor |
+
+This is the exact failure mode the file exists to catch — a claim about a merge,
+asserted rather than checked — reproduced inside the guard written to catch it.
+Found by asking the registry what was registered rather than reading the
+comment: the static scan showed ~30 registration sites against 13 in the law
+table, and probing the four easiest uncovered ones turned this up on the first.
+
+**It is nonetheless NOT the `tagged-cell-merge` hazard, and the reason differs
+per consumer** — which is why "add dedup" would have been wrong:
+
+- The **5 warning cells** are written IMPERATIVELY (`warnings-cell-write!`
+  `set-box!`es the network from `emit-*-warning`), not by a propagator fire, and
+  `reset-warning-cells!` clears them per command. Nothing ever re-merges a cell
+  with its own value, so there is no fixpoint to fail to reach.
+- **`relations.rkt`'s answer accumulator IS propagator-written** (`:3013`, the
+  gating-success writers) — and there the non-idempotence is **REQUIRED**. Rel
+  T1 POL.1 is an owner ruling that solution sets are **BAGS**: one row per
+  derivation path, the multiplicity IS the derivation count (ℕ-semiring
+  provenance). A global dedup on this merge would silently violate that ruling
+  and break `solve`.
+
+**Fixed**: the comment, with the census and the per-consumer reasoning, so the
+next reader is not told the antecedent is hypothetical. Test green (28 cases).
+
+**NOT fixed, and deliberately**: the merge stays non-idempotent. The residual
+obligation is at the CELL, not the merge — if a new cell adopts
+`merge-list-append` and its writers are propagator re-fires whose duplicates are
+not meaningful, that cell needs a different merge. Nothing enforces that today;
+it is the same gap as the entry below (no drift guard on the law table), now
+with a worked example of what the guard would have caught.
+
+**Still uncovered**: ~17 registered merges are absent from the law table. Two of
+the four probed here (`merge-constraint-status-map`,
+`merge-error-descriptor-map`) are idempotent and should simply be added; the
+rest are unexamined.
+
 ## The merge-law table cannot be gated on the registry, and that is a registry problem (2026-08-05)
 
 Spun out of writing `tests/test-merge-laws.rkt`. The table of merges under test

@@ -252,14 +252,41 @@
                     (hasheq 'a '(1))
                     "if this becomes idempotent, move it into MERGES above"))
 
-(test-case "merge-list-append is an ACCUMULATOR, not a join — and that is the hazard"
-  ;; Recorded rather than hidden. `(append x x)` is not `x`, so a cell using this
-  ;; merge cannot reach a fixpoint by re-merging its own value — it relies on the
-  ;; caller never doing so. That is precisely the assumption `tagged-cell-merge`
-  ;; violated. If a cell ever adopts this merge and its writers are not
-  ;; write-once, expect the union-hang shape.
+(test-case "merge-list-append is an ACCUMULATOR, not a join — deliberately, in one consumer"
+  ;; ⚠ CORRECTED 2026-08-05. This case previously called merge-list-append "a
+  ;; helper" and warned "if a cell ever adopts this merge ... expect the
+  ;; union-hang shape". The antecedent was ALREADY TRUE when that was written:
+  ;; it is a live cell merge at EIGHT `net-new-cell` sites. Censused —
+  ;;
+  ;;   warnings.rkt:108/110/112/114/116  5 warning cells
+  ;;   global-constraints.rkt:102        narrow-constraints
+  ;;   relations.rkt:3136                the query ANSWER accumulator
+  ;;   infra-cell.rkt:309                net-new-list-cell (generic constructor)
+  ;;
+  ;; The comment is the exact failure mode this file exists to catch: a claim
+  ;; about a merge, asserted rather than checked, which stops the next reader
+  ;; from checking. Left in the history; corrected here.
+  ;;
+  ;; Why it is nonetheless NOT the tagged-cell-merge hazard, per consumer:
+  ;;
+  ;;  - The 5 warning cells are written IMPERATIVELY (`warnings-cell-write!`
+  ;;    set-box!es the network from `emit-*-warning`), not by a propagator fire,
+  ;;    and `reset-warning-cells!` clears them per command. Nothing re-merges a
+  ;;    cell with its own value, so there is no fixpoint to fail to reach.
+  ;;
+  ;;  - relations.rkt's answer accumulator IS written by a propagator
+  ;;    (relations.rkt:3013, the gating-success writers) — and there its
+  ;;    non-idempotence is REQUIRED, not tolerated. Rel T1 POL.1 is an owner
+  ;;    ruling that solution sets are BAGS: one row per derivation path, the
+  ;;    multiplicity IS the derivation count (ℕ-semiring provenance). Deduping
+  ;;    this merge would silently violate that ruling.
+  ;;
+  ;; So: do NOT "fix" this merge. A global dedup would break `solve`'s
+  ;; semantics. If a NEW cell adopts it and its writers are propagator re-fires
+  ;; whose duplicates are not meaningful, that cell needs a different merge —
+  ;; the fix belongs at the cell, not here.
   (check-not-equal? (merge-list-append '(1) '(1)) '(1)
-                    "if this ever becomes idempotent, move it into the table above"))
+                    "merge-list-append must stay an accumulator — solve's bag semantics depend on it"))
 
 ;; ============================================================================
 ;; Coverage floor
