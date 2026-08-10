@@ -7472,6 +7472,180 @@ Q_U29 is already this arm's behaviour, and the slice PROPAGATES it rather than
 inventing it. Its battery pin matches `#rx"\\(flatten\\) is not implemented yet"`
 and is the ONLY `*`-in-selection assertion in the battery.
 
+<a id="p4e-0-a3"></a>
+
+#### ATTEMPT 3, SLICE A — the `postfix-star` TOKEN TYPE  (opened 2026-08-10)
+
+**The shape, and why it is not attempt 1.** [Q_U33](#q-u33) rules a token-**TYPE**
+mint: a `*` byte-adjacent to a preceding CLOSER is re-typed from `'symbol` to
+`'postfix-star` at `disambiguate-tokens`. **Counts do not move at any layer**, so
+the ~416 count-gated validator arms never engage — that is the entire difference
+from attempt 1, which minted by FUSION at the grouper and was silently absorbed.
+The datum is unchanged (`token-entry->stx` gets an explicit arm returning the same
+`'*` the `[else]` produced), following the `colon-annotation` promotion's own
+precedent, so the corpus A/B baseline stays clean.
+
+**Grounding**: mini-audit `wf_c062f617-251` (4 facets + completeness critic).
+Its load-bearing correction is recorded at [Q_U33](#q-u33): **"at the tokenizer"
+was the one home that does not work**, because a recognizer sees only the previous
+CHARACTER and `>` is not a closer character.
+
+**Coverage, measured.** Slice A mints on **4 of the 7** named carriers — `x{a}*`,
+`xs:{a}*`, `[f x]*`, `(f x)*`. Not `m{0*}` (its `*` is an item INSIDE the brace,
+not closer-adjacent — the in-block band, which `segment-select-items` owns) and
+not `xs:0*` / `x.0*` (the tokenizer band — **slice B**, per Q_U30's R4). ⚠ The
+carrier count is **three** that do not mint, not two; earlier prose said two.
+
+<a id="p4e-0-a3-verifies"></a>
+
+##### THREE verify rounds — every one found a BLOCKING defect in my own code
+
+**⭐⭐ THREE ROUNDS, THREE BLOCKING DEFECTS, AND EVERY GREEN GATE WAS BLIND TO ALL
+OF THEM.** In each round the battery, all five acceptance files, the
+neighbourhood tests AND the corpus A/B were green over the defect. Rounds 2 and 3
+found defects **in the fix for the round before** — which is the "widening a slice
+mid-flight is where I introduce defects" pattern (Watching 9) playing out three
+times in one slice. **Budget for the second AND third verify.**
+
+**Round 1** (`wf_94041a76-dca`) — four defects, ranked:
+- ⛔ **The mint fired on LIVE INFIX MULTIPLICATION.** `.((1 + 2)*(3 + 4))` → `21`
+  at 0 errors with the `*` typed `postfix-star`. **A design problem, not a code
+  bug**: `)*(` is genuinely both readings and no lookback separates them. Ruled by
+  [Q_U34](#q-u34) — the mixfix gate.
+- ⛔ **`a >>* b` minted.** The lookback read `token-rrb[i-1]`, the pass's INPUT,
+  but `compose-merge?` folds two `>` into `>>` and skips an index — so the star
+  saw a *consumed* second `>` (typed `rangle`) that does not exist in the output.
+  The arm's own postcondition was false in its own output, and the mint was
+  **sticky** across the second round. Fixed by reading `result`, the stream being
+  built, which makes the postcondition true BY CONSTRUCTION.
+- ⛔ **`1 >* 2` and `[f a >* b]` minted** — a bare `>` is typed `rangle` whether
+  or not it closes anything. `rangle` was dropped from the closer set outright;
+  no target carrier uses a `>` closer.
+- ⚠ The glued Sigma mints. Pinned as an ACCIDENT with the sequencing constraint
+  it carries (below), not repaired.
+
+**Round 2** (`wf_2c0e6901-7c6`) — one blocking defect, in the fix itself:
+- ⛔ **The frame stack pushed 4 of the 9 opener types while popping all 3
+  closers.** `'[` `@[` `~[` `#{` `.{` were each a NET POP that ate the enclosing
+  `'mixfix` frame, so the Q_U34 gate leaked straight back onto infix
+  multiplication: `.('[1 2] + (1 + 2)*(3 + 4))` → `27` at 0 errors, minting.
+  **This is the file's own 31d27c83 wrong-frame-pop class, committed 280 lines
+  below the comment that names it.**
+- Also: `in-mixfix?` used `memq` over the whole stack where the authoritative
+  test is TOP-OF-STACK, over-reaching into brackets nested in mixfix (where `*`
+  is measurably NOT infix — `.([+ 1 (1 + 2)*(3 + 4)])` is a type error).
+
+**⭐ THE FIX WAS TO DELETE THE LIST, NOT TO EXTEND IT.** The opener enumeration is
+now defined ONCE (`bracket-family-openers` / `brace-family-openers` /
+`group-closer-types`) and consumed by BOTH frame stacks. `make-bracket-depth-rrb`'s
+three literals were replaced by byte-identical constants, so its behaviour is
+unchanged by construction. The stack also adopted the authoritative
+kind-sensitive `lparen` push and top-of-stack test rather than inventing its own.
+
+<a id="p4e-0-a3-method"></a>
+
+##### Method findings — these outlast the slice
+
+1. **⭐⭐ MY PROBE AND MY TEST SHARED THE IMPLEMENTATION'S BLIND SPOT.** I wrote a
+   17-row frame-stack probe *specifically* to hunt leaks, and it missed the
+   4-of-9 defect — because, like the code and like the test block, it only
+   exercised `(` `[` `{`. **An instrument written from the implementation
+   inherits the implementation's assumptions.** The guard rows must be derived
+   from the AUTHORITATIVE enumeration, not from what the code happens to handle.
+2. **⭐ A HAND-COPIED ENUMERATION IS THE DEFECT, AND THE FILE SAYS SO.** The tree
+   already carried two copies of this opener set and records their disagreement
+   by commit hash. The third copy diverged immediately. Prefer deleting the list
+   to auditing it.
+3. **⭐ A RESULT-NARROWING TEST HELPER FAILS RED FOR THE WRONG REASON.**
+   `p4e-star-type` returns the FIRST lone `*`; `def a := .(1 * 2)` has an
+   arithmetic star before the one under test, so a correct implementation
+   reported RED. Same class as the `run-last` incident (P4c-4c §4.2), opposite
+   sign — that one went falsely GREEN. Added `p4e-last-star-type`.
+4. **The corpus A/B is a NULL INSTRUMENT for this mint** — measured **0 mints
+   across all corpus files** (every `]*`-shaped grep hit is inside a comment).
+   "The A/B baseline stays clean" is true and vacuous; all real coverage is the
+   authored battery. Do not cite the A/B as evidence for this slice.
+5. **The adjudicator sharpened or found the worst defect in BOTH rounds** — the
+   infix-multiplication finding reached only one skeptic, and the 4-of-9 finding
+   was independently reproduced by the adjudicator with a wider blast radius
+   (60 false positives across nesting combinations). A skeptic's clearance is
+   still not evidence.
+
+<a id="p4e-0-a3-owed"></a>
+
+##### ⛔ THE SEQUENCING CONSTRAINT SLICE A HANDS TO ITS CONSUMER
+
+`<(x : Nat)* Nat>` is legal today, elaborates to `[Sigma Nat Nat]`, and **mints** —
+its `*` follows `)`, a genuine closer, outside mixfix. No closer-set or gate
+repair reaches it, and gating on angle frames was considered and REJECTED (a `<`
+is typed `langle` whether it opens a group or is the less-than operator, so an
+angle stack mis-nests on `a < b` and suppresses legitimate later mints).
+
+It is harmless in slice A for one exact reason: **`tree-parser.rkt` finds the
+Sigma `*` by LEXEME, not by type** (`grep -c token-entry-types tree-parser.rkt`
+→ 0), so a type-only mint is invisible to it.
+
+**[Q_U31](#q-u31)'s refusal of the glued Sigma MUST land before any consumer keys
+on `postfix-star`** — otherwise a live Sigma type silently becomes a star step.
+That is a Tier-A silent-wrong-answer deferred by exactly one slice, and it is
+pinned in the battery so the constraint cannot be lost.
+
+<a id="p4e-0-a3-round3"></a>
+
+##### Round 3 (`wf_573914d7-b8b`) — the mirror image, and a fourth list copy
+
+- ⛔ **A STRAY CLOSER inside mixfix over-popped the frame.**
+  `.( } (1 + 2)*(3 + 4) )` → `21` at **0 errors**, the stray `}` eating the
+  `'mixfix` frame so the star minted on live multiplication again. Exact mirror
+  of round 2's under-push.
+  **⭐ THE FINDING THAT MATTERS MORE THAN THE BUG: the authority for mixfix
+  extent is `group-items`, NOT `make-bracket-depth-rrb`.** `group-items` carries
+  a `close-type` and lets a NON-matching closer fall through as a plain item —
+  which is why that probe still prints 21. The bracket-depth stack pops
+  unconditionally and over-pops too, so **mirroring it faithfully reproduced its
+  bug**. "It mirrors the authoritative one" was true and insufficient. The gate
+  now pops only on the frame's own expected closer.
+  ⚠ A **matching** `)` does close the group, so `.( ) (1 + 2)*(3 + 4) )` mints —
+  correctly, and not silently: `.( )` is a LOUD per-command error ("Empty .( )
+  mixfix expression") with the rest of the file still produced.
+- ⚠ **`token-entry->compat` had no `postfix-star` arm** — the exported
+  `tokenize-string` type changed while its value did not. Armed to report
+  `'symbol`, the same remap that case already does for `pipe-right`/`clause-sep`.
+  This is the sibling-inconsistency the `dot-ordinal` arm documents as "how the
+  next reader gets misled".
+- ⚠ **I had created a FOURTH copy of the list I had just made a constant for** —
+  the star arm's own closer test was still the literal. Fixed, and the two
+  `31d27c83` twins (`langle-matched?` / `has-matching-rangle?`) now share
+  `all-group-openers` + `group-closer-types` as well. **Hand-copied opener lists
+  in this file: 0.**
+- ✅ The round confirmed the shared-enumeration substitution is **pure** — the
+  constants are member-identical to the literals they replaced, so
+  `make-bracket-depth-rrb` is unchanged by construction.
+
+<a id="p4e-0-a3-flake"></a>
+
+##### ⚠ THE SUITE IS INTERMITTENT, AND IT IS PRE-EXISTING — do not attribute it
+
+Chasing a suspected regression cost real time and produced a fact worth keeping.
+Two anomalies appeared during slice A's gating and **both are ambient**:
+
+- **The suite's test COUNT varies.** `test-properties.rkt` is a RANDOMIZED
+  property test (`gen:integer-in`); across **469 recorded full-suite runs** its
+  case count is **13 in 411 and 8 in 55**. So a ±5 swing in the total is normal
+  and says nothing about a change.
+- **Full-suite runs fail intermittently at ~16%** — **74 of 469** historical runs
+  recorded `all_pass=False`. Slice A saw 1 failure in 8 runs (12.5%), squarely on
+  that baseline; the two failures were in DIFFERENT files (`test-mixfix-01`,
+  `test-mixfix-02`), neither reproducible in isolation (5/5 and 4/4 clean).
+
+⚠ **A 5-run base sample MISSED BOTH**, which is exactly how a pre-existing
+intermittent gets attributed to whatever changed last. **Check
+`data/benchmarks/timings.jsonl` — it records 469 runs with per-file counts and
+`all_pass` — BEFORE running a base A/B.** One query answered in seconds what five
+worktree suite runs could not.
+⚠ Also re-learned: **do not compile while a suite is in flight.** One run was
+contaminated that way and its failure sent me down the wrong path first.
+
 <a id="pf"></a>
 
 ### §5.PF — Path first-classness  (Q_U17 RULED B2, owner 2026-08-02)

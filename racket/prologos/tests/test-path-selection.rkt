@@ -12,6 +12,7 @@
 
 (require rackunit
          racket/list
+         racket/set
          racket/string
          racket/file
          racket/runtime-path
@@ -32,7 +33,7 @@
          (prefix-in gc: "../global-constraints.rkt")
          "../errors.rkt"
          "../champ.rkt"
-         (only-in "../rrb.rkt" rrb-from-list)   ;; D4.P4a: twin-regression fixture
+         (only-in "../rrb.rkt" rrb-from-list rrb-to-list)   ;; D4.P4a: twin-regression fixture; to-list: P4e-0 token probes
          "test-support.rkt"
          "../parse-reader.rkt"
          ;; D4.P4b-ii-2b: the surf-* layer, for the $select-path sentinel pins
@@ -6037,3 +6038,213 @@
                                         "  | * -> 99\n")))
   (check-true (ormap (lambda (s) (regexp-match? #rx"99" s)) out)
               (format "TODAY a lone `| *` binds everything and yields 99: ~a" out)))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4e-0 attempt 3, SLICE A — the postfix-star TOKEN TYPE  [Q_U33]
+;;
+;; The mint is a TOKEN TYPE, assigned at `disambiguate-tokens`, and it is
+;; COUNT-PRESERVING (one `*` token in, one `*` token out, re-typed). That is the
+;; whole reason it is not attempt 1: no item count moves, so none of the ~416
+;; count-gated validator arms can absorb it.
+;;
+;; ⚠⚠ WHY THE TYPE AND NOT A CHARACTER LOOKBACK — the finding that decides the
+;; home. A tokenizer recognizer sees only the previous CHARACTER, and `>` IS NOT
+;; A CLOSER CHARACTER: it is the last char of `->` `->>` `&>` `|>` `+>`, all of
+;; which classify to 'symbol. A char lookback mints on all five. The previous
+;; token's TYPE separates them perfectly — `rangle` is a closer, `symbol` is not.
+;; The `>`-final cases below are that guard; they are not decoration.
+;; ---------------------------------------------------------------------------
+
+(define (p4e-token-types src)
+  ;; (lexeme . type) per token, through the SAME pass production uses
+  ;; (`parse-string-to-cells` and `compat-tokenize-string` both call it).
+  (register-default-token-patterns!)
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string src)))
+  (define bd-rrb (make-bracket-depth-rrb tok-rrb src))
+  (define-values (narrowed _changed?) (disambiguate-tokens tok-rrb bd-rrb))
+  (for/list ([t (in-list (rrb-to-list narrowed))])
+    (cons (token-entry-lexeme t) (set-first (token-entry-types t)))))
+
+(define (p4e-star-type src)
+  ;; the type of the FIRST lone `*` token, or #f if there is none
+  (cond [(assoc "*" (p4e-token-types src)) => cdr] [else #f]))
+
+(define (p4e-last-star-type src)
+  ;; ⚠ USE THIS WHEN THE SOURCE CONTAINS MORE THAN ONE `*`. `p4e-star-type` takes
+  ;; the FIRST, and a source like `def a := .(1 * 2)` / `def b := [f x]*` has an
+  ;; arithmetic `*` BEFORE the one under test — so the first-match helper reports
+  ;; `symbol` and the row fails for a reason unrelated to its name. That is the
+  ;; result-narrowing test-helper hazard this track has already paid for once
+  ;; (`run-last` swallowing a first-form refusal); it cost a false RED here.
+  (let loop ([ts (p4e-token-types src)] [found #f])
+    (cond [(null? ts) found]
+          [(string=? (car (car ts)) "*") (loop (cdr ts) (cdr (car ts)))]
+          [else (loop (cdr ts) found)])))
+
+(test-case "P4e-0 A: a `*` glued to a CLOSER gets the postfix-star type"
+  (check-equal? (p4e-star-type "[f x]* ") 'postfix-star "] closer")
+  (check-equal? (p4e-star-type "(f x)* ") 'postfix-star ") closer")
+  (check-equal? (p4e-star-type "cfg{a}* ") 'postfix-star "} closer"))
+
+(test-case "P4e-0 A: a SPACED `*` after a closer stays an ordinary symbol"
+  ;; Q_U33: the space is significant. This is the first-class operator surface
+  ;; the Q_U32 guard rail pins — it must not move.
+  (check-equal? (p4e-star-type "[f x] * ") 'symbol)
+  (check-equal? (p4e-star-type "cfg{a} * ") 'symbol))
+
+(test-case "P4e-0 A: the `>`-FINAL OPERATORS are not closers — a char lookback would mint here"
+  ;; ⚠ THE GUARD THAT DECIDED THE DESIGN. Each of these has the `*` byte-adjacent
+  ;; to a token whose LAST CHARACTER is `>`, so a character-level closer test
+  ;; mints on every one. They are `symbol`-typed, so the TYPE test does not.
+  (check-equal? (p4e-star-type "a &>* b")  'symbol "&> clause-sep")
+  (check-equal? (p4e-star-type "x |>* y")  'symbol "|> pipe-right")
+  (check-equal? (p4e-star-type "a ->* b")  'symbol "-> arrow")
+  (check-equal? (p4e-star-type "s ->>* t") 'symbol "->> double-arrow")
+  (check-equal? (p4e-star-type "p +>* q")  'symbol "+> choice-arrow"))
+
+(test-case "P4e-0 A: `>>` compose — the lookback must read the OUTPUT, not the input"
+  ;; ⚠⚠ THE ROW THE FIRST CUT OF THIS BLOCK DID NOT HAVE, AND THE DEFECT IT MISSED.
+  ;; `compose-merge?` folds two `>` into one `>>` and SKIPS an index, so
+  ;; `token-rrb[i-1]` is the CONSUMED second `>` — still typed `rangle`, and absent
+  ;; from the output. Reading the input minted off a ghost, and the mint was STICKY
+  ;; across the second disambiguation round. Reading `result` makes the arm's
+  ;; postcondition true by construction.
+  (check-equal? (p4e-star-type "a >>* b")  'symbol "compose-merge, glued")
+  (check-equal? (p4e-star-type "a > >* b") 'symbol "compose-merge, spaced source")
+  (check-equal? (p4e-star-type "a >>>* b") 'symbol "leftover third `>`")
+  (check-equal? (p4e-star-type "[f >>* g]") 'symbol "compose inside a bracket group"))
+
+(test-case "P4e-0 A: a bare `>` is `rangle` but is NOT a closer — comparison must not mint"
+  ;; `>` is typed `rangle` unconditionally; closer-hood is decided far later by
+  ;; `langle-matched?`. `.(3 > 2)` is live comparison. No target carrier uses a
+  ;; `>` closer, so `rangle` is excluded from the closer set outright.
+  (check-equal? (p4e-star-type "1 >* 2")     'symbol "comparison at depth 0")
+  (check-equal? (p4e-star-type "[f a >* b]") 'symbol "comparison at depth 1, no matching `<`")
+  (check-equal? (p4e-star-type "<a>* ")      'symbol "an angle group closer does not mint either"))
+
+(test-case "P4e-0 A [Q_U34]: `.( … )` is ARITHMETIC territory — no mint inside mixfix"
+  ;; ⚠⚠ THE DESIGN DEFECT, not a code bug. `)*(` is genuinely BOTH readings, and
+  ;; `.( )` is the language's live infix surface: `.((1 + 2)*(3 + 4))` → 21 at 0
+  ;; errors. What separates them is CONTEXT, and it is measured — infix `*` exists
+  ;; ONLY inside mixfix (`rec.n * 2` at command position errors; `.(rec.n * 2)`
+  ;; is 42). Accepted narrowing: a star STEP cannot appear inside `.( … )`.
+  (check-equal? (p4e-star-type ".((1 + 2)*(3 + 4))") 'symbol "closer-adjacent infix product")
+  (check-equal? (p4e-star-type ".((1 + 2)* 3)")      'symbol "closer-adjacent, spaced right")
+  (check-equal? (p4e-star-type ".((a + b)* c)")      'symbol "symbolic operands")
+  (check-equal? (p4e-star-type ".(xs[0]*(2 + 1))")   'symbol "postfix-index then product")
+  ;; …and the gate is scoped to mixfix: the SAME spelling outside it still mints.
+  (check-equal? (p4e-star-type "(1 + 2)* ") 'postfix-star "outside mixfix, unambiguous"))
+
+(test-case "P4e-0 A: the glued Sigma DOES mint — pinned as measured, and it is a SEQUENCING constraint"
+  ;; ⚠⚠ PINNED AS AN ACCIDENT, NOT A DECISION — the distinction this track has
+  ;; had to make before (Q_U19's pin froze one). `<(x : Nat)* Nat>` is legal today
+  ;; and elaborates to [Sigma Nat Nat]; its `*` follows `)`, a GENUINE closer, and
+  ;; is not inside mixfix — so it mints, and no closer-set or mixfix repair
+  ;; reaches it. Gating on angle frames was considered and REJECTED: `<` is typed
+  ;; `langle` whether it opens a group or is the less-than OPERATOR, so an angle
+  ;; frame stack would mis-nest on `a < b` and suppress legitimate later mints.
+  ;;
+  ;; HARMLESS IN THIS SLICE, and the reason is exact: `tree-parser.rkt` finds the
+  ;; Sigma `*` by LEXEME, not by type (`grep -c token-entry-types tree-parser.rkt`
+  ;; → 0), so a type-only mint is invisible to it. Verified: the form still
+  ;; elaborates to [Sigma Nat Nat] at 0 errors.
+  ;;
+  ;; ⛔ THE SEQUENCING CONSTRAINT THIS PIN EXISTS TO CARRY: [Q_U31] refuses the
+  ;; glued Sigma spelling, and that refusal MUST land before any consumer keys on
+  ;; `postfix-star` — otherwise a live Sigma type silently becomes a star step.
+  ;; That is a Tier-A silent-wrong-answer, deferred by exactly one slice.
+  (check-equal? (p4e-star-type "<(x : Nat)* Nat>") 'postfix-star)
+  ;; the SPACED spelling — the one Q_U31 keeps — is unaffected
+  (check-equal? (p4e-star-type "<(x : Nat) * Nat>") 'symbol))
+
+(test-case "P4e-0 A: the mint is COUNT-PRESERVING and DATUM-INVISIBLE"
+  ;; Count: one `*` token in, one out — this is what makes it not attempt 1.
+  (check-equal? (length (p4e-token-types "[f x]* ")) (length (p4e-token-types "[f x] * "))
+                "glued and spaced must produce the SAME token count")
+  ;; Datum: unchanged from the 'symbol era, exactly as the `colon-annotation`
+  ;; promotion (Q_U16b) kept its datum invariant so the corpus A/B stays clean.
+  (check-equal? (read-all-forms-string "[f x]*") '(((f x) *))
+                "the datum must not move — the A/B baseline depends on it")
+  (check-equal? (read-all-forms-string "[f x]*") (read-all-forms-string "[f x] *")
+                "glued and spaced still read identically at the DATUM layer"))
+
+(test-case "P4e-0 A: a `*` at position 0 does not abort (the rrb-char-at -1 class)"
+  ;; `rrb-char-at` guards only the UPPER bound and `rrb-get` RAISES on -1, and a
+  ;; raise in the reader is a WHOLE-FILE ABORT (pipeline.md). A lone `*` at file
+  ;; position 0 is legal today (`* 3 5` → 15). Pinned so no lookback loses its
+  ;; `(= pos 0)` / `(> i 0)` guard.
+  (check-equal? (p4e-star-type "*") 'symbol)
+  (check-equal? (p4e-star-type "* 3 5") 'symbol)
+  (check-equal? (read-all-forms-string "* 3 5") '((* 3 5))))
+
+(test-case "P4e-0 A: ALL NINE openers push a frame — the leak that the first cut shipped"
+  ;; ⚠⚠ THE ROWS THE FIRST TWO CUTS OF THIS BLOCK DID NOT HAVE. The frame stack
+  ;; was hand-written with a 4-opener PUSH set against a 3-closer POP set, so
+  ;; `'[` `@[` `~[` `#{` `.{` were each a NET POP that silently ate the enclosing
+  ;; `'mixfix` frame — and the Q_U34 gate then leaked on LIVE INFIX MULTIPLICATION
+  ;; at zero errors (`.('[1 2] + (1 + 2)*(3 + 4))` evaluates to 27 and minted).
+  ;; That is this file's own 31d27c83 wrong-frame-pop class, committed 280 lines
+  ;; below the comment that names it. The fix shares ONE enumeration; these rows
+  ;; are what make the sharing testable rather than merely intended.
+  ;; ⚠ Every row uses a DIFFERENT opener inside the mixfix. A block that only
+  ;; spells `(` `[` `{` passes green while five doors stand open — which is
+  ;; exactly what happened twice.
+  (check-equal? (p4e-star-type ".((1 + 2)*(3 + 4))")          'symbol "( control")
+  (check-equal? (p4e-star-type ".([1 2] + (1 + 2)*(3 + 4))")  'symbol "[ bracket")
+  (check-equal? (p4e-star-type ".({a 1} + (1 + 2)*(3 + 4))")  'symbol "{ brace")
+  (check-equal? (p4e-star-type ".('[1 2] + (1 + 2)*(3 + 4))") 'symbol "'[ quote-lbracket")
+  (check-equal? (p4e-star-type ".(@[1 2] + (1 + 2)*(3 + 4))") 'symbol "@[ at-lbracket")
+  (check-equal? (p4e-star-type ".(~[1 2] + (1 + 2)*(3 + 4))") 'symbol "~[ tilde-lbracket")
+  (check-equal? (p4e-star-type ".(#{1 2} + (1 + 2)*(3 + 4))") 'symbol "#{ hash-lbrace")
+  (check-equal? (p4e-star-type ".(.{a 1} + (1 + 2)*(3 + 4))") 'symbol ".{ dot-lbrace"))
+
+(test-case "P4e-0 A: `lparen` is KIND-SENSITIVE and `in-mixfix?` is TOP-OF-STACK"
+  ;; Two properties copied from the authoritative stack rather than invented.
+  ;; (a) a `(` inside mixfix STAYS mixfix — otherwise the inner group's closer
+  ;;     would re-enable the mint on the arithmetic it encloses.
+  (check-equal? (p4e-star-type ".( ( (1 + 2)*(3 + 4) ) )") 'symbol "nested parens stay mixfix")
+  ;; (b) the test is the TOP frame, not `memq` over the whole stack. A bracket
+  ;;     nested in mixfix re-enters application territory — measured: the star is
+  ;;     NOT infix there (`.([+ 1 (1 + 2)*(3 + 4)])` is a type error). A `memq`
+  ;;     test suppressed legitimate mints inside `.( [ … ] )`.
+  (check-equal? (p4e-star-type ".( [f [g x]* ] )") 'postfix-star
+                "inside a bracket nested in mixfix, the star step is live again"))
+
+(test-case "P4e-0 A: the frame stack does not leak across commands or literals"
+  ;; A leaked `'mixfix` frame would SILENTLY suppress every later mint in the
+  ;; file — the quiet twin of the leak above, and the reason these are pinned.
+  (check-equal? (p4e-star-type ".(1 + 2)\n[f x]* ")                'postfix-star "after a closed mixfix")
+  (check-equal? (p4e-star-type ".(@[1 2])\n[f x]* ")               'postfix-star "…containing a leak-prone opener")
+  ;; two stars in this one — the mixfix multiply, then the step. Assert the LAST.
+  (check-equal? (p4e-last-star-type "def a := .(1 * 2)\ndef b := [f x]* ") 'postfix-star "across commands")
+  (check-equal? (p4e-star-type      "def a := .(1 * 2)\ndef b := [f x]* ") 'symbol
+                "…and the mixfix multiply itself must stay a plain symbol")
+  ;; unbalanced closers must not underflow the stack
+  (check-equal? (p4e-star-type "a) b [f x]* ")  'postfix-star "stray closer")
+  (check-equal? (p4e-star-type "a]]] [f x]* ")  'postfix-star "stray closers")
+  ;; frame characters inside strings / chars / comments must never reach the stack
+  (check-equal? (p4e-star-type "def s := \"(\" \n[f x]* ") 'postfix-star "paren in a string")
+  (check-equal? (p4e-star-type ";; .( a comment\n[f x]* ")  'postfix-star "mixfix in a comment"))
+
+(test-case "P4e-0 A: a STRAY closer inside mixfix must not eat the frame (over-pop)"
+  ;; ⚠⚠ THE MIRROR IMAGE of the under-push leak above, and the third verify's find.
+  ;; Popping on ANY closer is an over-pop: `.( } (1 + 2)*(3 + 4) )` evaluates to
+  ;; 21 at ZERO errors, and the stray `}` ate the `'mixfix` frame so the star
+  ;; minted on live multiplication.
+  ;; ⭐ THE AUTHORITY FOR MIXFIX EXTENT IS `group-items`, NOT
+  ;; `make-bracket-depth-rrb`. `group-items` carries a `close-type` and lets a
+  ;; NON-matching closer fall through as a plain item — which is why that probe
+  ;; still prints 21. The bracket-depth stack pops unconditionally and over-pops
+  ;; too, so mirroring it FAITHFULLY reproduced its bug. The gate matches the
+  ;; grouper: pop only on the frame's own expected closer.
+  (check-equal? (p4e-star-type ".( (1 + 2)*(3 + 4) )")     'symbol "control")
+  (check-equal? (p4e-star-type ".( } (1 + 2)*(3 + 4) )")   'symbol "stray }")
+  (check-equal? (p4e-star-type ".( ] (1 + 2)*(3 + 4) )")   'symbol "stray ]")
+  (check-equal? (p4e-star-type ".( } } (1 + 2)*(3 + 4) )") 'symbol "two stray }")
+  (check-equal? (p4e-last-star-type ".( } (1 + 2)*(3 + 4) + (5 + 6)*(7 + 8) )")
+                'symbol "two products, neither mints")
+  ;; …but a MATCHING `)` genuinely CLOSES the group, so what follows is outside
+  ;; mixfix and minting there is correct. Not a silent hazard: the empty group is
+  ;; a LOUD per-command error, with the rest of the file still produced.
+  (check-equal? (p4e-star-type ".( ) (1 + 2)*(3 + 4) )") 'postfix-star
+                "a matching `)` closes the mixfix — `.( )` itself errors loudly"))

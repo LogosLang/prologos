@@ -1598,6 +1598,27 @@
   (and (token-first-on-line? src tok-pos)
        (<= (line-indent-at src tok-pos) (line-indent-at src langle-pos))))
 
+;; ⭐ THE GROUP-OPENER ENUMERATION — ONE DEFINITION, CONSUMED BY BOTH FRAME
+;; STACKS IN THIS FILE (`make-bracket-depth-rrb` below and `disambiguate-tokens`).
+;; It exists because a hand-copied fourth list is exactly how this file's own
+;; 31d27c83 defect happened: `make-bracket-depth-rrb`'s comment names it — "would
+;; leave bd un-incremented while the matching `}` still pops — the wrong-frame-pop
+;; half of the 31d27c83 class". D4.P4e-0 slice A committed that error verbatim by
+;; pushing 4 of these 9 while popping all 3 closers, so five openers were a NET POP
+;; that silently ate the enclosing `'mixfix` frame. Caught by the second
+;; adversarial verify, with a 0-error reproducer (`.('[1 2] + (1 + 2)*(3 + 4))`
+;; evaluating to 27 while minting a star on live infix multiplication).
+;; ⚠ ADD A NEW OPENER HERE, NEVER AT A CALL SITE.
+(define bracket-family-openers '(lbracket quote-lbracket at-lbracket tilde-lbracket))
+(define brace-family-openers   '(lbrace hash-lbrace dot-lbrace))
+(define group-closer-types     '(rbracket rparen rbrace))
+;; Every group opener, for DEPTH-BALANCING (a different question from "which
+;; family does this open?"). This is the list a tenth opener must reach, and it
+;; is the one `langle-matched?` / `has-matching-rangle?` carry as twins whose
+;; disagreement this file records BY COMMIT HASH as the 31d27c83 defect.
+(define all-group-openers
+  (append '(lparen dot-lparen) bracket-family-openers brace-family-openers))
+
 (define (make-bracket-depth-rrb token-rrb [src #f])
   (define n (rrb-size token-rrb))
   ;; Lookahead twin of has-matching-rangle? over the token RRB: is there a
@@ -1626,10 +1647,9 @@
            ;; OPENER DEPTH-BALANCING set (NOT angle suppression — that is keyed
            ;; on frame kind 'mixfix below). MUST stay identical to its twin in
            ;; has-matching-rangle?; their disagreement IS the 31d27c83 defect.
-           [(memq type '(lbracket lparen lbrace quote-lbracket at-lbracket
-                         tilde-lbracket hash-lbrace dot-lparen dot-lbrace))
+           [(memq type all-group-openers)
             (loop (+ i 1) angle-depth (+ other-depth 1))]
-           [(and (memq type '(rbracket rparen rbrace)) (> other-depth 0))
+           [(and (memq type group-closer-types) (> other-depth 0))
             (loop (+ i 1) angle-depth (- other-depth 1))]
            ;; Hit the enclosing group's closer at depth 0 → no match
            [(and close-type (eq? type close-type) (= other-depth 0)) #f]
@@ -1650,7 +1670,7 @@
               [(eq? type 'lparen)
                (values (+ bd 1)
                        (cons (cons (if in-mixfix? 'mixfix 'paren) 'rparen) frames))]
-              [(memq type '(lbracket quote-lbracket at-lbracket tilde-lbracket))
+              [(memq type bracket-family-openers)
                (values (+ bd 1) (cons (cons 'bracket 'rbracket) frames))]
               ;; D4.P1b-ii: dot-lbrace joins the BRACE family — kind 'brace,
               ;; closer 'rbrace (Q_M5). Kind 'brace (not 'mixfix) is what keeps
@@ -1658,7 +1678,7 @@
               ;; angle groups need. Omitting it here would leave bd
               ;; un-incremented while the matching `}` still pops — the
               ;; wrong-frame-pop half of the 31d27c83 class.
-              [(memq type '(lbrace hash-lbrace dot-lbrace))
+              [(memq type brace-family-openers)
                (values (+ bd 1) (cons (cons 'brace 'rbrace) frames))]
               [(eq? type 'langle)
                ;; Operator inside mixfix; opener only when a matching `>`
@@ -1675,7 +1695,7 @@
                    (if (> bd 0)
                        (values (- bd 1) (cdr frames))
                        (values 0 '())))]
-              [(memq type '(rbracket rparen rbrace))
+              [(memq type group-closer-types)
                (if (> bd 0)
                    (values (- bd 1) (cdr frames))
                    (values 0 '()))]
@@ -1909,12 +1929,62 @@
 ;; Returns a new token RRB with narrowed type sets.
 (define (disambiguate-tokens token-rrb bracket-rrb)
   (define n (rrb-size token-rrb))
-  (let loop ([i 0] [result rrb-empty] [changed? #f])
+  ;; D4.P4e-0 slice A: `frames` is a stack of enclosing group KINDS, carried so
+  ;; the star arm below can ask "am I inside a `.( … )` mixfix group?" — Q_U34.
+  ;;
+  ;; ⚠⚠ IT MIRRORS `make-bracket-depth-rrb`'s STACK DELIBERATELY, AND SHARES ITS
+  ;; OPENER ENUMERATION. The first cut of this hand-wrote a 4-opener push set
+  ;; against a 3-closer pop set, so `'[` `@[` `~[` `#{` `.{` were each a NET POP
+  ;; that silently ate the enclosing `'mixfix` frame — the gate then leaked and
+  ;; live infix multiplication minted a star (`.('[1 2] + (1 + 2)*(3 + 4))` → 27,
+  ;; 0 errors). That is the 31d27c83 wrong-frame-pop class, which this file names
+  ;; in its own comment 280 lines above. Take openers from the shared lists.
+  ;;
+  ;; ⚠ `lparen` is KIND-SENSITIVE, exactly as the authoritative stack has it: a
+  ;; `(` inside mixfix stays mixfix, so `.( ( (1+2)*(3+4) ) )` keeps arithmetic.
+  ;; ⚠ `in-mixfix?` is TOP-OF-STACK, not `memq` over the whole stack. A bracket
+  ;; nested in mixfix re-enters application territory (`group-items` threads
+  ;; `'mixfix-rparen` through parens but NOT brackets — measured:
+  ;; `.([+ 1 (1 + 2)*(3 + 4)])` is an error, so `*` is not infix there), and a
+  ;; `memq` test suppressed legitimate mints inside `.( [ … ] )`.
+  ;; ⚠ `langle`/`rangle` are DELIBERATELY IGNORED: a `<` is ambiguous between
+  ;; opener and less-than operator and is resolved much later by
+  ;; `langle-matched?`, so treating it as a frame here would mis-nest on `a < b`.
+  ;; Angles do not enclose mixfix, so ignoring them cannot lose a `'mixfix` frame.
+  (let loop ([i 0] [result rrb-empty] [changed? #f] [frames '()])
     (if (>= i n)
         (values result changed?)
         (let* ([entry (rrb-get token-rrb i)]
                [types (token-entry-types entry)]
                [lexeme (token-entry-lexeme entry)]
+               [tok-type (set-first types)]
+               ;; the enclosing context AS OF THIS TOKEN (frames updated after)
+               [in-mixfix? (and (pair? frames) (eq? (car (car frames)) 'mixfix))]
+               [new-frames
+                (cond
+                  [(eq? tok-type 'dot-lparen) (cons (cons 'mixfix 'rparen) frames)]
+                  [(eq? tok-type 'lparen)
+                   (cons (cons (if in-mixfix? 'mixfix 'other) 'rparen) frames)]
+                  [(memq tok-type bracket-family-openers)
+                   (cons (cons 'other 'rbracket) frames)]
+                  [(memq tok-type brace-family-openers)
+                   (cons (cons 'other 'rbrace) frames)]
+                  ;; ⚠⚠ POP ONLY ON THE **MATCHING** CLOSER. A bare `(cdr frames)`
+                  ;; on any closer is an OVER-POP, and it is the mirror image of
+                  ;; the under-push defect above: `.( } (1 + 2)*(3 + 4) )`
+                  ;; evaluates to 21 at ZERO errors, and the stray `}` ate the
+                  ;; `'mixfix` frame so the star minted on live multiplication.
+                  ;; ⭐ THE AUTHORITY FOR MIXFIX EXTENT IS `group-items`, NOT
+                  ;; `make-bracket-depth-rrb`. `group-items` carries a `close-type`
+                  ;; and lets a NON-matching closer fall through as a plain item —
+                  ;; which is exactly why that probe still prints 21. The
+                  ;; bracket-depth stack pops unconditionally and so over-pops too;
+                  ;; mirroring it faithfully reproduced its bug. Match the grouper.
+                  [(and (memq tok-type group-closer-types)
+                        (pair? frames)
+                        (eq? tok-type (cdr (car frames))))
+                   (cdr frames)]
+                  [else frames])]
                ;; For closing delimiters, check depth BEFORE this token
                ;; (bracket-depth RRB stores post-processing depth)
                [bd-before (if (> i 0) (bracket-depth-at bracket-rrb (- i 1)) 0)]
@@ -1950,6 +2020,68 @@
                    ;; After open bracket/colon → could be negative prefix
                    ;; For now: keep as symbol (full disambiguation in Track 2)
                    types]
+                  ;; D4.P4e-0 attempt 3, slice A [Q_U33]: a `*` BYTE-ADJACENT to a
+                  ;; preceding CLOSER token gets its own type. COUNT-PRESERVING —
+                  ;; one `*` token in, one re-typed `*` token out — which is the
+                  ;; whole reason this is not attempt 1 (a count change is absorbed
+                  ;; silently by the ~416 count-gated validator arms).
+                  ;;
+                  ;; ⚠⚠ THE TEST IS ON THE PREVIOUS TOKEN'S **TYPE**, NEVER ON THE
+                  ;; PREVIOUS CHARACTER, and that is the finding that decided the
+                  ;; design rather than a stylistic preference. `>` IS NOT A CLOSER
+                  ;; CHARACTER: it is the last char of `->` `->>` `&>` `|>` `+>`
+                  ;; `-N>`, every one of which classifies to 'symbol and outranks
+                  ;; `symbol`'s own priority. Measured — `a &>* b`, `x |>* y`,
+                  ;; `a ->* b`, `s ->>* t`, `p +>* q` all have the `*` byte-adjacent
+                  ;; to a `>`-final token, so a CHARACTER lookback mints on all five.
+                  ;; The type separates them: `rangle` is a closer, `symbol` is not.
+                  ;; Pinned in tests/test-path-selection.rkt ("the `>`-FINAL
+                  ;; OPERATORS are not closers"); do not "simplify" to a char test.
+                  ;;
+                  ;; ⚠ THE LOOKBACK IS OVER `result`, THE STREAM BEING BUILT —
+                  ;; never over `token-rrb`, the pass's INPUT. This pass MERGES
+                  ;; (`compose-merge?` above folds two `>` into one `>>` and skips
+                  ;; an index), so `token-rrb[i-1]` can be a token that DOES NOT
+                  ;; EXIST in the output: for `a >>* b` it is the consumed second
+                  ;; `>`, still typed `rangle`, and the star minted off a ghost.
+                  ;; Reading `result` makes this arm's postcondition — "every
+                  ;; postfix-star is byte-adjacently preceded by an emitted closer"
+                  ;; — true BY CONSTRUCTION rather than by assertion. Pinned:
+                  ;; `a >>* b`, `a > >* b`, `a >>>* b`.
+                  ;;
+                  ;; ⚠ `rangle` IS DELIBERATELY NOT A CLOSER HERE. A bare `>` is
+                  ;; typed `rangle` whether or not it closes anything — closer-hood
+                  ;; is decided later by `langle-matched?` — so `1 >* 2` and
+                  ;; `[f a >* b]` (live comparison) would mint. No target carrier
+                  ;; uses a `>` closer: the seven are `m{0*}` `x{a}*` `xs:{a}*`
+                  ;; `[f x]*` `(f x)*` `xs:0*` `x.0*`. Excluding it costs nothing
+                  ;; and is monotone — it can become a meaning later.
+                  ;;
+                  ;; ⚠ NOT INSIDE `.( … )` MIXFIX [Q_U34]. `.( )` is the language's
+                  ;; INFIX surface and `(a + b)*(c + d)` is ordinary multiplication:
+                  ;; `.((1 + 2)*(3 + 4))` → 21 at 0 errors, with a `)`-adjacent
+                  ;; lone star. That collision is REAL — the spelling is genuinely
+                  ;; both readings — and no lookback repair separates them. What
+                  ;; separates them is CONTEXT, and it is measurable: infix `*`
+                  ;; exists ONLY inside mixfix (`rec.n * 2` at command position is
+                  ;; an error; `.(rec.n * 2)` is 42). So outside mixfix a
+                  ;; closer-adjacent star is unambiguous, and inside it arithmetic
+                  ;; wins. Accepted narrowing, named: a star STEP cannot appear
+                  ;; inside `.( … )`.
+                  ;;
+                  ;; ⚠ The `(> (rrb-size result) 0)` guard is LOAD-BEARING, not
+                  ;; defensive: `rrb-get` RAISES on a negative index, and a raise
+                  ;; here is a WHOLE-FILE ABORT (pipeline.md). A lone `*` at file
+                  ;; position 0 is legal today (`* 3 5` → 15).
+                  [(and (string=? lexeme "*")
+                        (not in-mixfix?)
+                        (> (rrb-size result) 0)
+                        (let ([prev (rrb-get result (- (rrb-size result) 1))])
+                          (and (= (token-entry-end-pos prev)
+                                  (token-entry-start-pos entry))
+                               (memq (set-first (token-entry-types prev))
+                                     group-closer-types))))
+                   (seteq 'postfix-star)]
                   [else types])]
                [entry-changed? (or compose-merge? (not (equal? new-types types)))]
                [new-entry
@@ -1964,7 +2096,8 @@
                   [else entry])])
           (loop (if compose-merge? (+ i 2) (+ i 1))  ;; skip second > when merging
                 (rrb-push result new-entry)
-                (or changed? entry-changed?))))))
+                (or changed? entry-changed?)
+                new-frames)))))
 
 
 ;; ============================================================
@@ -2190,6 +2323,17 @@
       ;; rest-param: bare ... → symbol, ...name → rest-param
       [(rest-param)
        (if (equal? lexeme "...") 'symbol 'rest-param)]
+      ;; D4.P4e-0 slice A: the COMPAT TWIN of `token-entry->stx`'s postfix-star
+      ;; arm. `postfix-star` is a reader-INTERNAL discrimination; the exported
+      ;; `tokenize-string` API predates it and its consumers expect the old
+      ;; vocabulary, so it reports 'symbol here — the same remap this case already
+      ;; does for `pipe-right` / `clause-sep`. Without this arm the type silently
+      ;; leaked through `[else raw-type]` while the VALUE stayed `*`, which is the
+      ;; sibling-inconsistency the `dot-ordinal` arm below documents as "how the
+      ;; next reader gets misled" (reported there by FOUR adversarial lenses).
+      ;; Caught by the third verify; latent, not live — the sole non-test consumer
+      ;; (`tools/golden-capture.rkt`) reads types only to match openers/closers.
+      [(postfix-star) 'symbol]
       [else raw-type]))
   (define start (token-entry-start-pos entry))
   (define end (token-entry-end-pos entry))
@@ -2421,6 +2565,13 @@
       ;; invariance is what keeps the promotion datum-invisible and the P4c-2
       ;; A/B baseline clean.
       [(colon-annotation) (string->symbol lexeme)]
+      ;; D4.P4e-0 slice A [Q_U33]: EXPLICIT for the same reason its neighbour is —
+      ;; the `[else]` happens to produce the identical value TODAY, and this file
+      ;; documents that exact coincidence as its silent-miss hazard. The VALUE is
+      ;; deliberately unchanged from the 'symbol era: the mint is DATUM-INVISIBLE,
+      ;; so the corpus A/B baseline stays clean and the TYPE carries the
+      ;; information on its own. Its consumer lands with the `*` semantics.
+      [(postfix-star) (string->symbol lexeme)]
       [(char) (cond
                 ;; 'X' char literal → the char
                 [(and (= (string-length lexeme) 3)
@@ -3957,10 +4108,9 @@
             [(and (eq? type 'rangle) (> angle-depth 0)) (loop (+ i 1) (- angle-depth 1) other-depth)]
             ;; Other brackets — track depth to skip over them
             ;; Twin of langle-matched?'s opener set — keep IDENTICAL (31d27c83).
-            [(memq type '(lbracket lparen lbrace quote-lbracket at-lbracket
-                          tilde-lbracket hash-lbrace dot-lparen dot-lbrace))
+            [(memq type all-group-openers)
              (loop (+ i 1) angle-depth (+ other-depth 1))]
-            [(and (memq type '(rbracket rparen rbrace)) (> other-depth 0))
+            [(and (memq type group-closer-types) (> other-depth 0))
              (loop (+ i 1) angle-depth (- other-depth 1))]
             ;; Hit the current scope's closer at depth 0 → no match
             [(and close-type (not (eq? close-type 'indent-close))
