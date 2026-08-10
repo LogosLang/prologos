@@ -622,6 +622,35 @@ directly). True over-the-wire pipelining is deferred to Phase 1.
 
 ### #18 — Multi-arity `defn` with constructor patterns matches first arg only (2026-04-27)
 
+> ⚠ **SEVERITY RAISED 2026-08-05 — this is a SILENT WRONG ANSWER, not a matching
+> quirk.** Re-hit while replacing `captp-core`'s Peano kind tags with a real sum
+> type: `refr-kind-eq?` was written in this exact shape, compiled, type-checked,
+> reported 0 errors, and **broke OCapN brand-check** by returning `true` for two
+> different kinds at the same id.
+>
+> The near-miss is the reason for this banner. **165 of 166** `test-ocapn-bridge`
+> cases passed. The 24/24 conformance gate was unaffected — it never compares two
+> different kinds at the same id. Exactly ONE assertion in the whole tree
+> distinguishes them (*"refr-eq? different kinds => false even with same id"*).
+> Without it the change lands green and brand-check is broken in production.
+>
+> Minimal repro, 15 lines and no OCapN:
+> `examples/2026-08-05-multiarity-nullary-repro.prologos`. Full write-up with the
+> two forms that DO work is in `DEFERRED.md` § "A 2-arg multi-arity `defn` over
+> NULLARY constructors returns a WRONG ANSWER, silently".
+>
+> **Use instead** — outer `match`, one-level inner `match` per arm (two-deep is
+> fine; three-deep fails at import):
+> ```
+> defn keq [x y]
+>   match x
+>     | ka -> match y | ka -> true | _ -> false
+>     | kb -> match y | kb -> true | _ -> false
+> ```
+> An ordinal + `nat-eq?` also works but reintroduces the numeral you were
+> removing.
+
+
 **Symptom.** Wrote a 2-arg structural-equality function as
 
 ```

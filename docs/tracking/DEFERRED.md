@@ -4076,6 +4076,92 @@ resolving to nothing. Verified they fail with the new branch disabled.
 
 ---
 
+## 🐛 A 2-arg multi-arity `defn` over NULLARY constructors returns a WRONG ANSWER, silently (found 2026-08-05)
+
+Compiles, type-checks, 0 errors, wrong result. It discriminates on the FIRST
+argument only, so every call whose first argument matches an arm returns that
+arm's body regardless of the second.
+
+**Minimal repro — 15 lines, no OCapN** (`examples/2026-08-05-multiarity-nullary-repro.prologos`):
+
+```
+data K
+  ka
+  kb
+  kc
+
+spec keq K K -> Bool
+defn keq
+  | ka ka -> true
+  | kb kb -> true
+  | kc kc -> true
+  | _ _ -> false
+```
+
+`[keq ka ka]` → `true` ✓ · `[keq ka kb]` → **`true`** ✗ · `[keq kb ka]` → **`true`** ✗
+
+Both wrong answers are explained by first-argument-only matching: `ka kb` hits
+the `ka ka` arm, `kb ka` hits `kb kb`. The `| _ _ -> false` catch-all is
+unreachable.
+
+**How it was found**: making the `RefrKind` change below, `refr-kind-eq?` was
+written in exactly this shape and `test-ocapn-bridge`'s case *"refr-eq? different
+kinds => false even with same id"* failed. Without that test the refactor would
+have landed green — 165 of 166 bridge cases passed, the conformance gate would
+have been unaffected (it never compares two different kinds at the same id), and
+brand-check would have been quietly broken. **The one assertion that caught it is
+the only one in the tree that distinguishes the two.**
+
+**This is pitfall #18's shape** (*"multi-arity `defn` with leading 0-arity ctors
+only matches the first arg"*), which has been on file since Phase 0 — but the
+pitfall log frames it as a matching quirk. The severity is the story: it is a
+SILENT WRONG ANSWER in a function whose whole job is discrimination.
+
+**Two forms that DO work** (both probed):
+
+```
+;; A — outer match, one-level inner match per arm.  PREFERRED: no numerals.
+defn keq2 [x y]
+  match x
+    | ka -> match y | ka -> true | _ -> false
+    | kb -> match y | kb -> true | _ -> false
+
+;; B — ordinal, then nat-eq?.  Works, but reintroduces the numeral.
+```
+
+Form A is what `captp-core` now uses. Note it is TWO-deep, which is fine;
+three-deep nested `match` fails at import time (already in
+`prologos-syntax.md`).
+
+**Not fixed** — this is elaborator/pattern-compiler work, not a workaround
+question. The immediate protection is that the shape is now documented with a
+repro and a working alternative. A guided error would be better than a
+diagnosis: the pattern compiler could refuse a multi-arity `defn` whose arms have
+nullary-constructor patterns in a non-first position, since that arm can never be
+reached as written.
+
+## ✅ DONE 2026-08-05 — the Peano kind tags are gone from `captp-core`
+
+The Nat-audit entry below recommended this and I twice declined it — first as
+"the entry asked for an audit, not a rewrite", then because its gate's suite
+clone was absent. The second reason stopped being true when I verified the gate
+runs here (~30s), so the refactor happened.
+
+Six `Nat` numerals (`refr-kind-remote-import-promise := [suc [suc [suc [suc [suc
+zero]]]]]`) became a 6-way nullary `data RefrKind`; the predicates match the
+constructor directly instead of `nat-eq?`-ing a numeral; `refr-kind` now returns
+a kind rather than a number you had to count. The workaround's stated cause
+(issue #60) was verified not to reproduce at HEAD before touching anything.
+
+**Gates, all green**: conformance **24/24**, `test-ocapn-bridge` 166/166,
+`test-ocapn-captp` 7, `test-ocapn-pipelining` 4, `test-ocapn-e2e` 8, full suite.
+
+**It found a live language defect on the way** — see the entry directly above.
+Worth noting what that says about the two earlier refusals: holding the refactor
+was defensible both times, but it also kept a silent brand-check bug latent in
+the language one refactor away from being tripped. The audit could not have found
+it; only writing the code did.
+
 ## Coding Standards
 
 ### 🔶 Nat-in-Computations — AUDITED 2026-08-04 (the audit IS what this entry asked for; the refactor is a separate call)

@@ -360,55 +360,63 @@ data PipeMsg
 ;; a per-BridgeState intern table; deferred until a use case
 ;; demands it. For OCapN brand-check (the spec's notion), structural
 ;; equality is the operational equivalent.
-data Refr
-  refr : Nat -> Nat            ;; (kind-tag, id) — return type Refr is implicit
+;; Kind tags. These were six Peano numerals (`[suc [suc [suc zero]]]` …) with a
+;; comment citing issue #60 — multi-constructor `data` types unusable across
+;; modules — as the reason. That issue's shape no longer reproduces at HEAD
+;; (probed 2026-08-04: cross-module construction, cross-module `match`, and a
+;; local `match` over an imported 2-ctor type with fields all run at 0 errors,
+;; under `:refer` and one-hop `:refer-all`), so the workaround outlived its
+;; cause. Unary numerals are miscountable by eye and this is a sum type, not a
+;; number: `refr-kind` returning `4N` told you nothing about which kind it was.
+data RefrKind
+  refr-k-local-export
+  refr-k-remote-export
+  refr-k-local-answer
+  refr-k-remote-answer
+  ;; Phase 37: the OCapN three-vat handoff form. `<desc:import-object N>`
+  ;; introduces a capability via the connecting peer; the receiver treats it as
+  ;; a refr but resolution to the actual provider requires netlayer machinery
+  ;; deferred beyond Phase 0.
+  refr-k-remote-import-object
+  ;; `<desc:import-promise N>` — a PROMISE the peer exports. Upstream ships this
+  ;; descriptor and we emit one ourselves when answering a parked withdrawal, but
+  ;; nothing recognised one INBOUND: it was accepted by `unwrap-desc`,
+  ;; contributed no Refr, was never refcounted, so the peer's export was never
+  ;; released.
+  refr-k-remote-import-promise
 
-;; Kind tags. Encoded as Nat for issue #60 avoidance (no enum sum).
-def refr-kind-local-export         : Nat := zero
-def refr-kind-remote-export        : Nat := [suc zero]
-def refr-kind-local-answer         : Nat := [suc [suc zero]]
-def refr-kind-remote-answer        : Nat := [suc [suc [suc zero]]]
-;; Phase 37: a 5th kind for the OCapN three-vat handoff form.
-;; `<desc:import-object N>` introduces a capability via the connecting
-;; peer; the receiver treats it as a refr but resolution to the actual
-;; provider requires netlayer machinery deferred beyond Phase 0.
-def refr-kind-remote-import-object : Nat := [suc [suc [suc [suc zero]]]]
-;; A 6th kind for `<desc:import-promise N>` — a PROMISE the peer exports.
-;; Upstream ships this descriptor and we emit one ourselves when answering a
-;; parked withdrawal, but nothing recognised one INBOUND: it was accepted by
-;; `unwrap-desc`, contributed no Refr, was never refcounted, and so the peer's
-;; export was never released.
-def refr-kind-remote-import-promise : Nat := [suc [suc [suc [suc [suc zero]]]]]
+data Refr
+  refr : RefrKind -> Nat       ;; (kind, id) — return type Refr is implicit
 
 ;; Smart constructors. Use these — never construct `refr` directly.
 
 spec refr-local-export Nat -> Refr
 defn refr-local-export [n]
-  refr refr-kind-local-export n
+  refr refr-k-local-export n
 
 spec refr-remote-export Nat -> Refr
 defn refr-remote-export [n]
-  refr refr-kind-remote-export n
+  refr refr-k-remote-export n
 
 spec refr-local-answer Nat -> Refr
 defn refr-local-answer [n]
-  refr refr-kind-local-answer n
+  refr refr-k-local-answer n
 
 spec refr-remote-answer Nat -> Refr
 defn refr-remote-answer [n]
-  refr refr-kind-remote-answer n
+  refr refr-k-remote-answer n
 
 spec refr-remote-import-object Nat -> Refr
 defn refr-remote-import-object [n]
-  refr refr-kind-remote-import-object n
+  refr refr-k-remote-import-object n
 
 spec refr-remote-import-promise Nat -> Refr
 defn refr-remote-import-promise [n]
-  refr refr-kind-remote-import-promise n
+  refr refr-k-remote-import-promise n
 
 ;; Accessors.
 
-spec refr-kind Refr -> Nat
+spec refr-kind Refr -> RefrKind
 defn refr-kind
   | refr k _ -> k
 
@@ -420,34 +428,63 @@ defn refr-id
 
 spec refr-local-export? Refr -> Bool
 defn refr-local-export?
-  | refr k _ -> nat-eq? k refr-kind-local-export
+  | refr refr-k-local-export _ -> true
+  | _ -> false
 
 spec refr-remote-export? Refr -> Bool
 defn refr-remote-export?
-  | refr k _ -> nat-eq? k refr-kind-remote-export
+  | refr refr-k-remote-export _ -> true
+  | _ -> false
 
 spec refr-local-answer? Refr -> Bool
 defn refr-local-answer?
-  | refr k _ -> nat-eq? k refr-kind-local-answer
+  | refr refr-k-local-answer _ -> true
+  | _ -> false
 
 spec refr-remote-answer? Refr -> Bool
 defn refr-remote-answer?
-  | refr k _ -> nat-eq? k refr-kind-remote-answer
+  | refr refr-k-remote-answer _ -> true
+  | _ -> false
 
 spec refr-remote-import-object? Refr -> Bool
 defn refr-remote-import-object?
-  | refr k _ -> nat-eq? k refr-kind-remote-import-object
+  | refr refr-k-remote-import-object _ -> true
+  | _ -> false
 
 spec refr-remote-import-promise? Refr -> Bool
 defn refr-remote-import-promise?
-  | refr k _ -> nat-eq? k refr-kind-remote-import-promise
+  | refr refr-k-remote-import-promise _ -> true
+  | _ -> false
+
+;; Kind equality.
+;;
+;; ⚠ Written as an outer `match` with a one-level inner `match` per arm, NOT as
+;; a 2-argument multi-arity `defn` with `| ka ka -> true | _ _ -> false` arms.
+;; That shorter form COMPILES, TYPE-CHECKS, and RETURNS THE WRONG ANSWER: it
+;; discriminates on the first argument only, so `[eq ka kb]` is `true`. Found
+;; here by `test-ocapn-bridge`'s "different kinds => false even with same id"
+;; case while making this change; minimal repro (15 lines, no OCapN) is in
+;; DEFERRED under "a 2-arg multi-arity defn over nullary constructors".
+;; This is pitfall #18's shape, and it is a silent wrong answer, not an error.
+;;
+;; No `RefrKind -> Nat` ordinal exists, on purpose — an ordinal would make the
+;; equality a `nat-eq?` again and reintroduce the numeral this change removed.
+spec refr-kind-eq? RefrKind RefrKind -> Bool
+defn refr-kind-eq? [a b]
+  match a
+    | refr-k-local-export          -> match b | refr-k-local-export          -> true | _ -> false
+    | refr-k-remote-export         -> match b | refr-k-remote-export         -> true | _ -> false
+    | refr-k-local-answer          -> match b | refr-k-local-answer          -> true | _ -> false
+    | refr-k-remote-answer         -> match b | refr-k-remote-answer         -> true | _ -> false
+    | refr-k-remote-import-object  -> match b | refr-k-remote-import-object  -> true | _ -> false
+    | refr-k-remote-import-promise -> match b | refr-k-remote-import-promise -> true | _ -> false
 
 ;; Brand-check: two refrs are the same brand iff same (kind, id).
 ;; Implements OCapN brand-check semantics within a single connection.
 spec refr-eq? Refr Refr -> Bool
 defn refr-eq?
   | [refr k1 n1] [refr k2 n2] ->
-      match [nat-eq? k1 k2]
+      match [refr-kind-eq? k1 k2]
         | true  -> nat-eq? n1 n2
         | false -> false
 

@@ -241,10 +241,13 @@
    (run-last
     "(eval (refr-id (refr-remote-export (suc (suc (suc zero))))))")
    "3N")
+  ;; Was "1N" — the kind was a Peano numeral. It is now a nullary constructor,
+  ;; which is the point of the change: the answer names the kind instead of
+  ;; making you count `suc`s.
   (check-contains
    (run-last
     "(eval (refr-kind (refr-remote-export (suc (suc (suc zero))))))")
-   "1N"))
+   "refr-k-remote-export"))
 
 (test-case "refr/refr-remote-export? predicate"
   (check-contains
@@ -384,10 +387,13 @@
    (run-last
     "(eval (refr-id (refr-remote-import-object (suc (suc zero)))))")
    "2N")
+  ;; Was "4N". Same reason as above — and this assertion is the better argument
+  ;; for the change than any of them: nothing about "4N" told you it meant
+  ;; import-object, so the test passed while documenting nothing.
   (check-contains
    (run-last
     "(eval (refr-kind (refr-remote-import-object zero)))")
-   "4N"))
+   "refr-k-remote-import-object"))
 
 (test-case "refr/refr-to-syrup encodes refr-remote-import-object as desc:import-object tag"
   ;; Round-trip via the wire encoder: refr-remote-import-object 9

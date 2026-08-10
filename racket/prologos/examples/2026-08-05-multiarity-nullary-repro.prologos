@@ -1,0 +1,43 @@
+;; Minimal repro — a 2-argument multi-arity `defn` over NULLARY constructors
+;; discriminates on the FIRST argument only, and says nothing about it.
+;;
+;; Compiles. Type-checks. 0 errors. Wrong answers:
+;;   [keq ka ka] -> true   (correct)
+;;   [keq ka kb] -> true   (WRONG — hits the `ka ka` arm)
+;;   [keq kb ka] -> true   (WRONG — hits the `kb kb` arm)
+;; The `| _ _ -> false` catch-all is unreachable.
+;;
+;; Found 2026-08-05 while replacing captp-core's Peano kind tags with a real
+;; sum type: `refr-kind-eq?` was written in this shape and quietly broke OCapN
+;; brand-check. One assertion in the whole tree distinguishes the two cases.
+;;
+;; This is pitfall #18's shape; the severity is what was new. Filed in
+;; DEFERRED.md under "A 2-arg multi-arity `defn` over NULLARY constructors
+;; returns a WRONG ANSWER, silently", with the two forms that DO work.
+;;
+;; ⚠ This file documents a DEFECT. When it starts printing
+;; true/false/false/true it should move to a test and this note should go.
+
+ns multiarity-nullary-repro
+
+data K
+  ka
+  kb
+  kc
+
+spec keq K K -> Bool
+defn keq
+  | ka ka -> true
+  | kb kb -> true
+  | kc kc -> true
+  | _ _ -> false
+
+def r1 := [keq ka ka]
+def r2 := [keq ka kb]
+def r3 := [keq kb ka]
+def r4 := [keq kb kb]
+
+r1
+r2
+r3
+r4
