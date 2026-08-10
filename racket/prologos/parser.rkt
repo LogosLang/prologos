@@ -1107,10 +1107,19 @@
 ;; forced hybrid. Mirrors `split-caret-lexeme` — symbol in, `(values name cont)`
 ;; out, or `(values #f message)`.
 ;;
-;; The GROUPER's `star-step-trigger?` handles every NON-identifier head
-;; (`m{0*}`, `x{a}*`, `xs:0*`, `[f x]*`), because there the star is already its
-;; own token and `adjacent-to-base?` can see it. It structurally CANNOT handle
-;; this band: `ident-continue?` admits `*`, so `database*` fuses into ONE token.
+;; ⚠ CORRECTED 2026-08-10: this comment named a GROUPER predicate
+;; `star-step-trigger?` as handling every non-identifier head. **No such symbol
+;; has ever existed in the tree** — it was a planned name written as though
+;; shipped, the stale-comment class this arc keeps paying for. What actually
+;; handles the non-identifier heads is the `postfix-star` TOKEN TYPE minted at
+;; `disambiguate-tokens` (D4.P4e-0 slice A), and it covers FOUR heads —
+;; `x{a}*`, `xs:{a}*`, `[f x]*`, `(f x)*` — not the five listed here.
+;; `m{0*}` is the IN-BLOCK band (its star is an item inside `$select-brace`,
+;; reached through `segment-select-items`, never closer-adjacent), and `xs:0*` /
+;; `x.0*` are NOT handled at all: their repair is R4, built and REVERTED — see
+;; DEFERRED 105.
+;; The split below still structurally CANNOT handle this band: `ident-continue?`
+;; admits `*`, so `database*` fuses into ONE token.
 ;; Two sources, one downstream meaning — that is Q_U27's hybrid, and it is
 ;; forced rather than chosen (dropping `*` from `ident-continue?` would break
 ;; `int*`, 148 HEAD-pinned uses).
@@ -1180,10 +1189,17 @@
          (let ([str (symbol->string s)])
            (and (> (string-length str) 0)
                 (not (char=? (string-ref str 0) #\$))))))
-  ;; D4.P4e-0's CONSUMER. The slice is the MINT ONLY — semantics are P4e-1 — so
-  ;; every star that now reaches the parser takes a guided not-yet. The
+  ;; D4.P4e-0's CONSUMER, for the FUSED IDENTIFIER BAND ONLY. The
   ;; "(flatten) is not implemented yet" substring is load-bearing: the battery
   ;; pin matches it, and text and pin move together.
+  ;; ⚠ CORRECTED 2026-08-10: this said "every star that now reaches the parser
+  ;; takes a guided not-yet". **It does not.** Only the band whose star is
+  ;; FUSED INTO THE LEXEME reaches here — `database*`, `:tags*`, `.name*` — via
+  ;; `split-star-lexeme`. The four carriers slice A unlocked (`x{a}*`,
+  ;; `xs:{a}*`, `[f x]*`, `(f x)*`) carry the star as a SEPARATE token typed
+  ;; `postfix-star`, which is datum-invisible and has NO consumer, so they give
+  ;; `Could not infer type` instead. Giving them this same message is P4e-1's
+  ;; first deliverable; until it lands, do not read this comment as a contract.
   (define (star-not-yet-message shown)
     (format (string-append
              "`*` (flatten) is not implemented yet — `~a` would delete one layer"
@@ -1463,9 +1479,17 @@
                  ;; rather than inventing one — and the split below is what makes
                  ;; the trailing and mid cases say DIFFERENT, accurate things.
                  ;;
-                 ;; ⚠ Only the KEYWORD carrier reaches here now. `xs:0*` lexes as
-                 ;; `:0` + `*` since P4e-0's annotation-guard fix, so the ORDINAL
-                 ;; carrier arrives as a `$star-step` wrapping this whole step.
+                 ;; ⚠ CORRECTED 2026-08-10 — BOTH halves of the previous claim
+                 ;; were false. It said `xs:0*` lexes as `:0` + `*` "since
+                 ;; P4e-0's annotation-guard fix", and that the ordinal carrier
+                 ;; "arrives as a `$star-step` wrapping this whole step".
+                 ;; (1) The annotation-guard relaxation was REVERTED at
+                 ;; `d0ac2a58` and re-attempted and reverted again as slice B
+                 ;; (DEFERRED 105), so `xs:0*` still SHATTERS to `xs` `:` `0`
+                 ;; `*` and reaches nothing. (2) `$star-step` does not exist —
+                 ;; `reader-forms.rkt` records it as DELIBERATELY ABSENT, a
+                 ;; deferred ruling. Only the KEYWORD carrier reaches here, and
+                 ;; that part was and is true.
                  [(regexp-match? #rx"[*]" bare)
                   (let-values ([(name cont) (split-star-lexeme (string->symbol bare))])
                     (cond
