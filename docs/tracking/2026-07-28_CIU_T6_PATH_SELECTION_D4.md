@@ -34,7 +34,7 @@ rulings, censuses and test delta live in its own section.
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
 | **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [§5.P4c](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([inverted default](#p4c-2-inverted)) · [P4c-3](#p4c-3) ✅ `d477772c` · [P4c-4a](#p4c-4a) ✅ `f31237fd` · [P4c-4b](#p4c-4b) ✅ `6b22515d` (end to end) · **[P4c-4c](#p4c-4c-close) ✅ `ae26f540`** — broadcast is REACHABLE: PVec ω value semantics + **G2** + the preparse seam guard. ⭐ The verify caught a BLOCKING whole-file abort every gate was blind to; owner ruled the structural fix ([close](#p4c-4c-close)) · [Q_U18](#q-u18) ✅ · DEFERRED 43 ✅ · 48 RULED uniform · P4c-5 ⬜ |
 | **P4d** | **The carriers** — Map/keyword-row · het tuple · PVec-of-union · closed-schema subjects · the Q_U9 refusal's message split · corpus re-fate · **Q_U19 ✅ RULED (A)** | ✅ | [§5.P4d](#p4d) · slices **0 ✅ 1 ✅ 2 ✅ 3 ✅ 4a ✅ 4a' ✅ 4b ✅ 4c ✅ 4d-1 ✅ 4d-2 ✅ 5 ✅ 6 ✅** — broadcast is LIVE over PVec · Map · keyword-row · het tuple · union · closed schema. ⭐ The CLOSE's own audit found a whole-file abort in slice 3's code (slice 5) and Q1 re-opened as a live defect (slice 6). All THREE owner questions discharged: Q1 ruled+implemented · [Q2](#q-u22) answered (fix → DEFERRED 88) · Q3 answered (broadcast → 58 re-scoped; contract → 89) |
-| **P4e** | **The `*` family · disclose `<`/`:<` · branch-initial `:`** — ⭐ **`*` is SORT-GENERIC**: it deletes the layer the preceding step created, so `:diags*` is mapcat and `database*` is splat. Row-splat `.*` RETIRES as a separate operator; `.*` rebinds to **ravel**. `*_` adds provenance keys. Branch-initial `:` admits the **ordinal² transpose** | ⬜ | [§5.P4e](#p4e) · ⚠ **RE-SCOPED 2026-08-08** by the P4e design round — [Q_U23](#q-u23) (the `*` unification, closes spec §8 Q4) · [Q_U24](#q-u24) (`*_`, lands WITH `*`) · [Q_U25](#q-u25) (branch-initial `:`; **corrects spec §10.6 against Q_T4a**; shrinks W2's ordinal exit) · [Q_U26](#q-u26) (ravel). ⚠ Two hazards: it LIFTS a Q_U7 v1 refusal, and `{:0}`'s guided error must be REPLACED not deleted. Carries **DEFERRED 63** |
+| **P4e** | **The `*` family · disclose `<`/`:<` · branch-initial `:`** — ⭐ **`*` is SORT-GENERIC** (deletes the layer the preceding step created: `:diags*` mapcat, `database*` splat). `.*` retires as row-splat and rebinds to **ravel**; `*_` adds provenance keys; branch-initial `:` admits the **ordinal² transpose** | 🔄 | [§5.P4e](#p4e) · **RE-SCOPED 2026-08-08** ([Q_U23](#q-u23)–[Q_U29](#q-u29)) · ⛔ **P4e-0 attempt 1 REVERTED** `d0ac2a58` — the mint was count-changing at the READER; the identifier band stayed, the rest is [DEFERRED 101](DEFERRED.md). ⭐ Attempt 3 opens from [the census](#star-census), scoped by [Q_U30](#q-u30) (all 7 carriers + tokenizer repair) and [Q_U31](#q-u31) (glued Sigma refused). Prerequisite [DEFERRED 102](DEFERRED.md) ✅ FIXED `41458174` |
 | **P4c-5** | **The `.*name` retirement + FULL residue disposal** — the last P4c residue, sequenced AFTER P4e | ⬜ | [§5.P4c-5](#p4c-5) · ⚠ **row ADDED at the P4d close 2026-08-08** — previously visible only as a `P4c-5 ⬜` fragment inside P4c's Notes cell |
 | **PF** | **Path first-classness** (substrate; **P5's prerequisite**) — ⭐ **Q_U17 RULED B2**: a Path segment is a first-class `Step` value. Reify the closed six-kind union as a `data Step` ADT on the `Datum` pattern; `Path` stays GROUND; `segments : Path -> [List Step]`. Repairs the dead `path-segments` in the SAME change | ⬜ | [§5.PF](#pf) · [Q_U17](#q-u17) · panel `wf_68178bd3-eea` |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery · ⚠ B3 needs [PF](#pf) |
@@ -1922,7 +1922,67 @@ items of the hold-point, ruled before P4a opened:
   spelling" rule: *"`*` is the layer-delete operator and attaches at the END of a
   segment; `c*d` is neither a field nor an operator. A field literally named
   `c*d` is reached with `[map-get r :c*d]`."*
-  **Next free Q-label: U30.**
+- <a id="q-u30"></a>**⭐ Q_U30 — ALL SEVEN CARRIERS ARE IN SCOPE, TOKENIZER REPAIR
+  INCLUDED [owner, 2026-08-09 — "I'd like to be able to reach all seven, so
+  tokenizer repair included"].** This is the ruling that SIZES the design.
+  Measured by the star-surface census (`wf_19cd5077-15b`): of the seven target
+  carriers, **1 of 7** as-spelled (`m{0*}`) reaches the selection surface today ·
+  **5 of 7** do when rewritten in-block · **2** (`x.0*`, `xs:0*`) reach nothing
+  under ANY spelling without a tokenizer repair. So the in-block narrowing
+  (census option R8) is REJECTED and R4 is IN: the two declining recognizers —
+  `recognize-dot-ordinal` and `recognize-colon-annotation` — get a `*`-SPECIFIC
+  relaxation of their trailing guards.
+  ⚠ Those guards exist to protect `x.0N` / `x.1e3` / `:10abc` (Q_R2), so the
+  relaxation must be keyed on `*` alone and must not re-open the numeric-suffix
+  ambiguity. ⚠ They are TWINS — the P4e-0 attempt fixed the colon one and left
+  the dot one untouched, which is how `x.0*` kept destroying the
+  `$postfix-index`. Both move together or neither does.
+
+- <a id="q-u31"></a>**⭐ Q_U31 — THE GLUED SIGMA SPELLING IS REFUSED; `*` AT TYPE
+  LEVEL REQUIRES SPACES [owner, 2026-08-09 — "I'm fine with needing the spaces
+  between a sigma spelling (I think that's more preferred for convention
+  anyways)"].** `<(x : Nat)* Nat>` is legal today and elaborates correctly, with
+  **ZERO corpus sites** — every written Sigma is spaced. It was attempt 1's
+  headline casualty.
+  **What the ruling BUYS, and it is structural, not cosmetic**: with the glued
+  spelling refused, `*` is no longer genuinely ambiguous inside an angle group,
+  so the design does NOT have to thread a context test through the grouper to
+  protect Sigma. The census had this blocking the entire `'rangle` axis
+  (constraint G1, 7 `star-symbol?` call sites reachable from 17
+  `parse-infix-type` sites).
+  **Cost**: one guided error at a `star-symbol?` call site. Monotone — the
+  refusal may become a meaning later, never the reverse.
+  ⚠ The refusal must be a PARSER-layer `parse-error` VALUE, not a preparse
+  raise — see [DEFERRED 102](DEFERRED.md) for why that distinction is
+  load-bearing (the parser path is abort-safe under a `data`; the preparse path
+  was not, until this session).
+
+- <a id="star-census"></a>**⭐ THE STAR-SURFACE CENSUS IS THE DESIGN'S INPUT
+  [owner-commissioned, 2026-08-09].** After two failed attempts, the owner ruled
+  that attempt 3 opens from a MEASURED MAP rather than an intuition about where
+  a star can safely fire. Run: `wf_19cd5077-15b` (5 axes + completeness critic +
+  synthesis, ~1.39M tokens). It produced a ranked constraint set (Tiers A–D,
+  G, O), a pipeline surface map, a carrier table, a discriminator inventory and
+  **twelve** enumerated approaches. Load-bearing results, each re-measured on the
+  main thread before being recorded here:
+  · **The reader ERASES glued-vs-spaced for every non-identifier carrier.** So in
+    any probe triple the SPACED leg *is* the count-preserving simulation and the
+    CONTROL leg *is* the count-changing one — attempt 1's defect was measurable
+    before it was written.
+  · **24 form-level item-counting consumers**, not the 14 an earlier sweep found;
+    nine have no `process-*` function and are invisible to the obvious grep.
+  · **The two biggest finds are NOT star defects** — [DEFERRED 102](DEFERRED.md)
+    (the abort seam, now FIXED at `41458174`) and **103** (a bare `*` is a legal
+    irrefutable PATTERN that silently deletes later `match` arms).
+  · **A 1-element sentinel list is NOT unprecedented** — `($select-brace)`
+    head-only is already `#t` for both consumers; it is the brace/any-arity
+    class, at the cost of the arity check. (I had asserted the opposite.)
+  · **`group-items-to-tree`'s output is DISCARDED in production** (2 writes, 0
+    reads), and it already diverges from the datum grouper in six arm families —
+    so the twin obligation may be the Q_N3 guard rather than correctness.
+  · **`$star` is a live, undocumented, zero-producer Sigma spelling** reachable
+    from user source; `star-symbol?` was built to accept a sentinel.
+  **Next free Q-label: U32.**
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
@@ -7149,12 +7209,33 @@ them.
 
 <a id="p4e-0"></a>
 
-### §5.P4e-0 — the star MINT substrate  (opened 2026-08-08; Stage-4 Per-Phase Protocol)
+### §5.P4e-0 — the star MINT substrate  (opened 2026-08-08 · ⛔ **ATTEMPT 1 REVERTED 2026-08-09** · re-cut pending)
 
-**Scope: the MINT ONLY.** One sentinel, two sources, consumed by a guided
-not-yet. **No `*` semantics land here** — that is P4e-1. The slice lands
-**ALONE** ([Q_U27](#q-u27)): it touches a predicate both groupers share, and
-P4d-0's precedent is that bundling makes the corpus A/B un-attributable.
+⛔ **STATUS: the MINT is REVERTED** (`d0ac2a58`). What shipped and stayed is the
+IDENTIFIER band, which never needed a mint. The non-identifier carriers are
+[DEFERRED 101](DEFERRED.md); attempt 3 is scoped by [Q_U30](#q-u30) (all seven
+carriers, tokenizer repair included) and [Q_U31](#q-u31) (glued Sigma refused),
+and opens from [the star-surface census](#star-census).
+
+**WHY ATTEMPT 1 FAILED, in one line**: it modelled the mint's blast radius as
+*the selection surface*; it is **the whole reader**. Preparse form validators,
+the angle/type grammar, the tree grouper's `result` and slice 7's subject-marking
+all sit upstream or sideways of `segment-select-items`, and all four are where
+the defects were. Attempt 2 (a count-preserving bare marker, designed only) was
+refuted for the mirror reason — `segment-select-items` is reached ONLY from the
+args of a `$select`/`$select-path` node, and the fold CLOSES the selection as it
+folds left, so a non-sentinel marker never arrives.
+
+**The mini-design and mini-audit below are KEPT AS WRITTEN**, including the
+"count-changing" finding that turned out to be the root of the failure. They are
+the record of a correct process reaching a wrong answer, and the delta between
+what the mini-audit measured and what the census measured is the reusable part:
+the audit read the two groupers and their siblings; it never asked *who else
+counts items*.
+
+**The one thing the mini-audit got right and should be reused**: the star mint IS
+count-changing, and `bcast-step-trigger?`'s tree arm IS a behavioural no-op
+byte-identical to its own `[else]`. Both verified twice.
 
 #### Mini-design (protocol step 1)
 
