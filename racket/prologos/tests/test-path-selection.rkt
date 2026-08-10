@@ -36,6 +36,9 @@
          (only-in "../rrb.rkt" rrb-from-list rrb-to-list)   ;; D4.P4a: twin-regression fixture; to-list: P4e-0 token probes
          "test-support.rkt"
          "../parse-reader.rkt"
+         ;; D4.P4e-1a slice 1a-i: the star arrival matrix — the ONE enumeration
+         ;; the leak gate reads instead of copying (see the gate's own note).
+         "../tools/star-arrival-matrix.rkt"
          ;; D4.P4b-ii-2b: the surf-* layer, for the $select-path sentinel pins
          (only-in "../surface-syntax.rkt"
                   surf-select? surf-select-sort surf-select-branches))
@@ -132,20 +135,29 @@
   (define tmp (make-temporary-file "prologos-pathselpre-~a.prologos"))
   (call-with-output-file tmp #:exists 'replace
     (lambda (out) (display s out)))
+  ;; ⚠ `dynamic-wind`, not a trailing `delete-file`: `process-file` RAISES for any
+  ;; source that hits the parse/expansion abort path, and the plain form skipped
+  ;; the delete on exactly those calls. Measured while landing D4.P4e-1a slice
+  ;; 1a-i, whose gate deliberately exercises 21 raising cells per run
+  ;; (DEFERRED 108): **192 stale `prologos-pathselpre-*` files** had accumulated
+  ;; in $TMPDIR. Pre-existing, and every caller of this fixture paid it.
   (define result
-    (parameterize ([current-file-module-network-ref
-                    (module-network-add-import (make-module-network)
-                                               (module-network-from-snapshot pre-global-env))]
-                   [current-ns-context pre-ns-context]
-                   [current-module-registry pre-module-reg]
-                   [current-lib-paths (list prelude-lib-dir)]
-                   [current-preparse-registry prelude-preparse-registry]
-                   [current-trait-registry pre-trait-reg]
-                   [current-impl-registry pre-impl-reg]
-                   [current-param-impl-registry pre-param-impl-reg]
-                   [current-bundle-registry pre-bundle-reg])
-      (process-file (path->string tmp))))
-  (delete-file tmp)
+    (dynamic-wind
+      void
+      (lambda ()
+        (parameterize ([current-file-module-network-ref
+                        (module-network-add-import (make-module-network)
+                                                   (module-network-from-snapshot pre-global-env))]
+                       [current-ns-context pre-ns-context]
+                       [current-module-registry pre-module-reg]
+                       [current-lib-paths (list prelude-lib-dir)]
+                       [current-preparse-registry prelude-preparse-registry]
+                       [current-trait-registry pre-trait-reg]
+                       [current-impl-registry pre-impl-reg]
+                       [current-param-impl-registry pre-param-impl-reg]
+                       [current-bundle-registry pre-bundle-reg])
+          (process-file (path->string tmp))))
+      (lambda () (when (file-exists? tmp) (delete-file tmp)))))
   result)
 
 (define (run-ws-pre s) (map (lambda (r) (format "~a" r)) (run-ws-pre-raw s)))
@@ -6321,15 +6333,238 @@
   (check-false (p4e1-has? "ns q7\ndefn f [z] z\ndef b := [f 1] *" #rx"\\$postfix-star")
                "spaced application must not leak a sentinel"))
 
-(test-case "P4e-1a: no arrival position leaks the sentinel at the user"
-  ;; ⚠ THE INVENTORY AS A GATE. One row per context that mints, from the generated
-  ;; matrix — not from reading the code. A leak here is `d0ac2a58`'s class.
-  (for ([src (in-list
-              (list "ns r1\ndefn f [z] z\ndef q := f [f 1]* 2"
-                    "ns r2\ndefn f [z] z\ndef q := {:k [f 1]*}"
-                    "ns r3\ndefn f [z] z\ndef q := @[[f 1]*]"
-                    "ns r4\ndefn f [z] z\ndef q := '[[f 1]*]"
-                    "ns r5\ndefn f [z] z\ndefn g [z] [f 1]*"
-                    "ns r6\ndef c := {:a 1}\ndef q := c{c{a}* b}"))])
-    (check-false (p4e1-has? src #rx"\\$postfix-star")
-                 (format "sentinel leaked: ~s" src))))
+;; ---------------------------------------------------------------------------
+;; D4.P4e-1a slice 1a-i — THE INVENTORY AS A GATE, GENERATED NOT HAND-LISTED
+;;
+;; ⚠⚠ WHAT THIS REPLACED, and why the replacement is the point. The previous
+;; version of this gate hand-listed SIX sources and commented itself "One row per
+;; context that mints" — against D4's own TEN. It used 2 of the 10 minting
+;; carriers and covered 6 of 190 cells (3.2%). That is the BAD-ENUMERATION shape
+;; which produced the last three blocking defects in this arc, sitting inside the
+;; instrument meant to catch them. **An instrument written from the
+;; implementation inherits its blind spot.**
+;;
+;; The enumeration now lives in ONE place — `tools/star-arrival-matrix.rkt` —
+;; and is read, never copied. Adding a carrier or context there widens this gate
+;; automatically. Measured there: 10 minting carriers x 19 arrival contexts =
+;; **190 cells**, plus 4 controls that must never mint and a mixfix context where
+;; Q_U34's gate blocks everything.
+;;
+;; ⚠ COST NOTE, since it decides the shape: one `process-*` call per cell is
+;; ~324 ms (env setup dominates), i.e. ~123 s for 190 cells — the file's whole
+;; 120 s budget. Cells are therefore BATCHED: many forms per source, one call per
+;; batch. The property is preserved exactly, because every form's output is still
+;; inspected; only the env setup is shared.
+;;
+;; TWO assertions per batch, and the first one matters as much as the second:
+;;   (a) output is NON-EMPTY — an empty result is the WHOLE-FILE ABORT signature
+;;       (`pipeline.md`: output stops being partial, it does not become partial),
+;;   (b) no line contains `$postfix-star` — a leaked internal sentinel is
+;;       `d0ac2a58`'s class.
+;; Both pass VACUOUSLY today: the mint is datum-invisible, so no sentinel exists
+;; yet. They ARM on slice 1a-iii's rename. That is deliberate — the instrument
+;; lands BEFORE the change it guards, never after.
+;; ---------------------------------------------------------------------------
+
+;; ⚠⚠ NINETEEN CELLS WHOLE-FILE ABORT AT HEAD — PRE-EXISTING, and the star's
+;; MINT is NOT implicated. Measured (DEFERRED 108): a trailing `*` in PATTERN
+;; position or MATCH-SCRUTINEE position raises out of preparse. The decisive
+;; differential is glued-vs-spaced on the SAME shape:
+;;     `| '[1 2]* -> 1`   mint=Y  RAISE list-ref: contract violation
+;;     `| '[1 2] * -> 1`  mint=n  RAISE list-ref: contract violation   <- identical
+;;     `| '[1 2] -> 1`    (no star)         4 outputs, fine
+;; A SPACED `*` is ordinary first-class-operator surface (Q_U32's guard rail), so
+;; this predates the whole P4e mint. Three non-minting CONTROLS abort too, which
+;; is what rules slice A out.
+;;
+;; They are PINNED, not skipped. Skipping would silently narrow the gate — the
+;; failure mode a coverage instrument cannot self-report. The set is recorded as
+;; a MEASURED SNAPSHOT and compared as a whole, so a NEW abort turns this red and
+;; so does a FIX (which should then update the snapshot and file the win).
+(define p4e1-known-aborting-cells   ;; DEFERRED 108 — context . carrier, MEASURED
+  '(;; pattern position — 7, `list-ref` family (DEFERRED 103's sibling)
+    ("pattern-pos" . "bcast-brace")  ("pattern-pos" . "quote-list")
+    ("pattern-pos" . "pvec")         ("pattern-pos" . "hset")
+    ("pattern-pos" . "map-lit")      ("pattern-pos" . "mixfix-close")
+    ("pattern-pos" . "postfix-index")
+    ;; match scrutinee — 14, `car` family; note THREE CONTROLS are here, which is
+    ;; what rules slice A's mint out as the cause
+    ("match-scrut" . "bracket-app")  ("match-scrut" . "paren-app")
+    ("match-scrut" . "select-brace") ("match-scrut" . "bcast-brace")
+    ("match-scrut" . "quote-list")   ("match-scrut" . "pvec")
+    ("match-scrut" . "hset")         ("match-scrut" . "map-lit")
+    ("match-scrut" . "quasiquote")   ("match-scrut" . "mixfix-close")
+    ("match-scrut" . "postfix-index")
+    ("match-scrut" . "ord-bcast!")   ("match-scrut" . "ord-dot!")
+    ("match-scrut" . "path-literal!")))
+
+;; ⚠⚠ THE OBSERVABLE IS THE **DATUM**, NOT THE RENDERED MESSAGE. This is the
+;; slice's most expensive lesson and it was found by adversarial verify, after
+;; the message-grep version had gone green.
+;;
+;; The first cut grepped user-visible output for the string `$postfix-star`.
+;; Simulating slice 1a-iii — planting the sentinel in each cell and running this
+;; gate's own machinery — showed it could only ever go red in **72 of 190** cells.
+;; In the other 118 the clean and planted outputs are BYTE-IDENTICAL:
+;;
+;;   app-arg  clean  : arity-error … Too many arguments to 'f'
+;;   app-arg  planted: arity-error … Too many arguments to 'f'      <- identical
+;;
+;; The cause is structural, not cosmetic: an unconsumed sentinel is an EXTRA
+;; DATUM, so the form fails on SHAPE (arity, parse, map-literal parity) long
+;; before anything renders the symbol. `quasiquote-body` was worse — it renders
+;; only the TYPE (`q0 : Datum defined.`), so no message improvement could ever
+;; reach it, on the one surface where a renamed sentinel survives into user data.
+;;
+;; The real invariant is not "the sentinel never appears in text". It is:
+;;   ⭐ **NO UNCONSUMED `$postfix-star` SURVIVES PREPARSE INTO THE DATUM.**
+;; After preparse a star has either FUSED into a step or been REFUSED; a bare
+;; sentinel left in the tree is exactly the defect. It needs no elaboration, so
+;; it is nearly free.
+;;
+;; ⚠ AND IT IS NOT TOTAL EITHER — measured, by planting the sentinel in every
+;; cell and running both observables (11 minting carriers x 20 contexts = 220):
+;;
+;;      DATUM observable   187 / 220
+;;      MESSAGE observable  92 / 220
+;;      UNION              208 / 220   <- 12 cells can turn NEITHER red
+;;
+;; They are COMPLEMENTARY, not nested: `let-nested` is 0/10 the other way (the
+;; message sees it, the datum does not), which is why BOTH are kept. The 12
+;; residual blind cells cluster in `let-bracket` (8), `quasiquote-body` (3) and
+;; `let-nested` (1) — the same `let` seat DEFERRED 106 records as reached by none
+;; of the four `rewrite-dot-access` call sites, plus the `Datum` value that
+;; renders only its type.
+;;
+;; The number is stated rather than rounded up to "total" on purpose: the first
+;; cut of this gate claimed 190 cells and could fire in 72, and the claim is what
+;; the next session would have trusted.
+;;
+;; ⚠ COST: the message layer runs on the CACHED-PRELUDE fixture (`run-ws-pre`),
+;; not a fresh `process-string-ws`. Measured on this machine: cached ~76 ms/call,
+;; fresh-with-prelude ~103 ms/call. (An earlier comment here said 324 ms and
+;; derived "~123 s for 190 cells"; both were wrong — 0.324 x 190 is 61.6 s, not
+;; 123 s. The batching CONCLUSION survives the correction, the arithmetic did
+;; not. Recorded rather than quietly deleted: asserting a number instead of
+;; measuring it is this arc's recurring failure.)
+;; The file's own history is median 22 s, p90 79 s, **max 115 s** against the
+;; runner's 120 s `--all` cap, so the batch pass is MEMOIZED — it used to run
+;; twice, which was 2.2 s of pure duplication.
+(define (p4e1-batch-src k)
+  ;; one source per CONTEXT, carrying every carrier as a separate form
+  (string-append
+   star-prelude
+   (string-join (for/list ([c (in-list star-carriers)] [n (in-naturals)])
+                  (star-cell-source k c n))
+                "\n")
+   "\n"))
+
+(define (p4e1-cell-src k c) (string-append star-prelude (star-cell-source k c 0) "\n"))
+
+(define (p4e1-pre-msgs src)
+  (with-handlers ([(lambda (e) #t) (lambda (e) 'RAISED)]) (run-ws-pre src)))
+
+;; memoized: the batch pass used to run twice (abort scan + leak loop) = +2.2 s
+(define p4e1-batch-cache (make-hash))
+(define (p4e1-batch-msgs k)
+  (hash-ref! p4e1-batch-cache (car k) (lambda () (p4e1-pre-msgs (p4e1-batch-src k)))))
+
+(define (p4e1-raises? src) (eq? (p4e1-pre-msgs src) 'RAISED))
+
+;; ---- THE PRIMARY OBSERVABLE: the post-preparse datum ----
+;; `read-all-forms-string` then `preparse-expand-form`, exactly the two stages a
+;; star must survive to reach the parser. No elaboration, no typing — ~free.
+(define (p4e1-preparsed src)
+  (with-handlers ([(lambda (e) #t) (lambda (e) 'RAISED)])
+    (for/list ([d (in-list (read-all-forms-string src))]) (preparse-expand-form d))))
+
+(define (p4e1-datum-has-sym? d s)
+  (let scan ([d d])
+    (cond [(eq? d s) #t]
+          [(pair? d) (or (scan (car d)) (scan (cdr d)))]
+          [(vector? d) (for/or ([x (in-vector d)]) (scan x))]
+          [else #f])))
+
+(define (p4e1-sentinel-survives? src)
+  (define ds (p4e1-preparsed src))
+  (and (not (eq? ds 'RAISED)) (p4e1-datum-has-sym? ds '$postfix-star)))
+
+;; What the prelude ALONE emits — MEASURED, not assumed. The dead assertion this
+;; replaces was `(pair? msgs)`, which can never fail: the prelude always
+;; contributes lines, so a non-raising batch is never empty.
+(define star-prelude-results (p4e1-pre-msgs star-prelude))
+
+(test-case "P4e-1a slice 1a-i: no arrival position leaks the sentinel at the user"
+  ;; Batched for cost (env setup dominates); a batch that RAISES falls back to
+  ;; per-cell so the aborting cells can be named. The fallback is automatic — no
+  ;; hand-split of "which contexts are broken", which would be the same
+  ;; bad-enumeration shape this gate replaced.
+  (define observed-aborts
+    (for*/list ([k (in-list star-contexts)]
+                #:when (p4e1-raises? (p4e1-batch-src k))
+                [c (in-list star-carriers)]
+                #:when (p4e1-raises? (p4e1-cell-src k c)))
+      (cons (car k) (car c))))
+  (check-equal? (list->seteq (map (lambda (p) (string->symbol (format "~a/~a" (car p) (cdr p))))
+                                  observed-aborts))
+                (list->seteq (map (lambda (p) (string->symbol (format "~a/~a" (car p) (cdr p))))
+                                  p4e1-known-aborting-cells))
+                "the DEFERRED 108 abort set changed — a NEW abort, or one was fixed")
+  ;; ---- PRIMARY: no unconsumed sentinel survives preparse, in ANY of the cells.
+  ;; Per-cell and total — 280 of 280, including the 19 that abort E2E (preparse
+  ;; either raises, which is DEFERRED 108 and pinned above, or it yields a datum
+  ;; we can inspect). This is the assertion that actually arms at slice 1a-iii.
+  (for* ([k (in-list star-contexts)] [c (in-list star-carriers)])
+    (check-false (p4e1-sentinel-survives? (p4e1-cell-src k c))
+                 (format "$postfix-star survived preparse: ~a / ~a" (car k) (car c))))
+
+  ;; ---- SECONDARY: the user-facing message channel.
+  ;; Only ~38% of cells can ever show the sentinel in rendered text (see the note
+  ;; above), so this is a genuine but PARTIAL property — kept because those cells
+  ;; are real, not because the coverage is total.
+  ;; ⚠ Per-CELL inside a raising context, not skip-the-context: two batches raise
+  ;; while only 19 of their 28 cells do, and 4 of the 9 survivors are MINTING
+  ;; arrival cells. Skipping the context dropped them silently — the failure mode
+  ;; this gate exists to prevent, committed inside the gate itself.
+  (for ([k (in-list star-contexts)])
+    (define batch (p4e1-batch-msgs k))
+    (define per-cell? (eq? batch 'RAISED))
+    (define msg-lists
+      (if per-cell?
+          (for/list ([c (in-list star-carriers)])
+            (p4e1-pre-msgs (p4e1-cell-src k c)))
+          (list batch)))
+    ;; the live "did anything come out" check is the COUNT, not `pair?`:
+    ;; `star-prelude` alone yields 5 lines, so a non-raising batch is never '().
+    (unless per-cell?
+      (check-true (> (length batch) (length star-prelude-results))
+                  (format "context ~a produced only the prelude's lines — the carrier forms vanished"
+                          (car k))))
+    (for* ([ms (in-list msg-lists)] #:unless (eq? ms 'RAISED) [m (in-list ms)])
+      (check-false (regexp-match? #rx"\\$postfix-star" m)
+                   (format "sentinel leaked in context ~a: ~a" (car k) m)))))
+
+(test-case "P4e-1a slice 1a-i: the matrix's own mint expectations hold"
+  ;; The gate above is only meaningful if the matrix still describes reality.
+  ;; This pins the generator against the tokenizer, so a mint-rule change that
+  ;; silently shrinks the covered surface turns this RED instead of quietly
+  ;; narrowing the gate above. (A gate that stops covering things is the failure
+  ;; mode a coverage instrument cannot self-report.)
+  ;; ⚠ MEMBERSHIP, not cardinality. The first cut asserted `mints = 19`, which
+  ;; holds for ANY 19 of the 20 contexts — a carrier that started minting inside
+  ;; `mixfix!` while losing one arrival context passed green, and `mixfix!` is
+  ;; Q_U34's gate, i.e. exactly what P4e-1 is about to touch. Its stronger twin
+  ;; (the abort pin) was already using `list->seteq` twenty lines above.
+  (for ([c (in-list star-carriers)])
+    (define non-minting
+      (for/list ([k (in-list star-contexts)]
+                 #:unless (star-mints? (string-append star-prelude (star-cell-source k c 0))))
+        (car k)))
+    (if (star-minting-carrier? c)
+        (check-equal? (list->seteq (map string->symbol non-minting))
+                      (seteq 'mixfix!)
+                      (format "carrier ~a must mint in every arrival context and ONLY fail in mixfix"
+                              (car c)))
+        (check-equal? (list->seteq (map string->symbol non-minting))
+                      (list->seteq (map (lambda (k) (string->symbol (car k))) star-contexts))
+                      (format "control carrier ~a must never mint, anywhere" (car c))))))

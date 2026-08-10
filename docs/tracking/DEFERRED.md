@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 108**
+> ### **NEXT FREE: 109**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6663,7 +6663,14 @@ NESTED-SHORTHAND single-binding form leaks; the BRACKET form fails differently
 **Not fixed at P4e-1a**: pre-existing, differential-proven, and *Watching 9*
 (mid-flight widening is where this arc introduces defects). P4e-1a's obligation
 is bounded to not worsening it invisibly — 1a-i's widened gate carries all three
-`let` spellings so the `$postfix-star` rename cannot slip a NEW leak in unseen.
+`let` spellings.
+⚠ **STATED PRECISELY, because the gate is not total here and this entry's seat is
+where the residue lives**: planting the sentinel in all 220 minting cells, 208
+turn the gate red and **12 do not** — 8 of them `let-bracket`, 1 `let-nested`,
+3 `quasiquote-body`. So the rename cannot slip a new leak past the gate in the
+`let-aligned` and `let-nested` spellings, but `let-bracket` is largely blind, for
+the same reason this entry exists: no `rewrite-dot-access` seat reaches it, and
+its failure is a shape error that never echoes the offending datum.
 
 ### 107. ⬜ A CARRIER-PLUS-STAR in PATTERN position mints, is UNRULED, and silently drops an arm — Q_U32 ruled only BARE `*`, and its refusal never landed
 
@@ -6702,3 +6709,54 @@ pattern-position hole, which `c.a` demonstrates at zero errors and which is the
 larger defect; (b) ruling carrier-plus-star, which is a Q_U32 EXTENSION and wants
 an owner ruling. Neither is P4e-1a work — but 1a-i's generated gate covers
 pattern position, so the rename cannot make (a) worse unseen.
+
+### 108. ⬜ A TRAILING `*` in PATTERN position or MATCH-SCRUTINEE position is a WHOLE-FILE ABORT — 19 cells, PRE-EXISTING, and the star's MINT is NOT implicated
+
+Found at D4.P4e-1a slice 1a-i, by a generated sweep
+(`racket/prologos/tools/star-arrival-matrix.rkt`). **21 of 320 cells raise out of
+preparse**, i.e. the file produces NOTHING — `pipeline.md` § "A Raise on the
+Parse/Expansion Path Is a WHOLE-FILE Abort".
+
+| context | cells | signature |
+|---|---|---|
+| `pattern-pos` (`defn h \| CARRIER -> 1 \| z -> 2`) | 7 | `list-ref: contract violation` / `index too large for list` |
+| `match-scrut` (`defn h [z] match CARRIER \| w -> 1`) | 14 | `car: contract violation` |
+
+*(First measured at 19/280 over a 14-carrier matrix; re-measured at 21/320 after
+the slice's adversarial verify added the `xs[0]*` carrier — which aborts in both
+contexts — and a `c.a*` fuse-band control, which aborts in neither.)*
+
+**⭐ THE MINT IS RULED OUT, by a glued-vs-spaced differential on the SAME shape:**
+
+```
+| '[1 2]* -> 1     mint=Y   RAISE list-ref: contract violation
+| '[1 2] * -> 1    mint=n   RAISE list-ref: contract violation   <- IDENTICAL
+| '[1 2] -> 1      (no star)        4 outputs, fine
+match '[1 2]*      mint=Y   RAISE car: contract violation
+match '[1 2] *     mint=n   RAISE car: contract violation        <- IDENTICAL
+match '[1 2]       (no star)        4 outputs, fine
+```
+
+A **SPACED** `*` is ordinary first-class-operator surface (it is exactly what
+[Q_U32](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u32)'s guard rail protects), so
+this predates the whole P4e star work. Corroborating: three NON-MINTING controls
+(`xs:0*`, `x.0*`, `#p(a)*`) abort in `match-scrut` too. Slice A is not the cause,
+and neither is P4e-1a.
+
+**The `pattern-pos` signature is DEFERRED 103's SIBLING** — `list-ref` out of
+`compile-match-tree`, the same accessor and the same class as the recorded
+`| 2 3 ->` abort. Likely one fix; check before treating them as two.
+
+**Severity note.** `defn h | '[1 2] * -> 1 | z -> 2` is legal-looking surface a
+user can write today, and it silently produces **no output at all** — not an
+error, nothing. That is the "output stops being partial rather than becoming
+partial" tell.
+
+**Pinned, not skipped** — `tests/test-path-selection.rkt`, the slice-1a-i gate.
+The 19 cells are recorded as a MEASURED SNAPSHOT and compared as a whole set, so
+a NEW abort turns the battery red **and so does a fix** (which should then update
+the snapshot and claim the win here). Skipping them would have silently narrowed
+the gate — the one failure mode a coverage instrument cannot self-report.
+
+**Not fixed at P4e-1a**: pre-existing, differential-proven, and it is a
+`compile-match-tree` / match-scrutinee defect rather than star-surface work.
