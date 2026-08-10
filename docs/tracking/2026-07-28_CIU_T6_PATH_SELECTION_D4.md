@@ -7646,6 +7646,62 @@ worktree suite runs could not.
 ⚠ Also re-learned: **do not compile while a suite is in flight.** One run was
 contaminated that way and its failure sent me down the wrong path first.
 
+<a id="p4e-0-b"></a>
+
+#### SLICE B — the tokenizer repair (R4): BUILT, VERIFIED, ⛔ **REVERTED**  (2026-08-10)
+
+**Status: ⛔ REVERTED. R4 is NOT independently landable** — see
+[DEFERRED 105](DEFERRED.md). This is a SCOPING result, not a coding error, and it
+is the piece the census's "unreachable without a tokenizer repair" phrasing left
+open: the repair is necessary and **not sufficient**.
+
+**What it did, and it worked at the token layer.** Both digit arms of
+`recognize-dot-ordinal` / `recognize-colon-annotation` stopped before a trailing
+`*` instead of declining on it; the mint's predecessor set gained
+`colon-annotation` / `dot-ordinal`. `xs:0*` → `xs` `:0` `*` → `(xs ($bcast-step
+:0) *)`; `x.0*` → `(x ($postfix-index 0) *)`. Six of the seven carriers minted;
+battery 468 green, acceptance 84/84, every slice-A gate held.
+
+**⛔ AND IT WAS A SILENT-WRONG-ANSWER REGRESSION.** 4 tokens → 3 makes the star a
+separate DATUM ITEM, and item counts are load-bearing. `def w2 := [take2 p.0*]`
+went from a loud `Too many arguments` at HEAD to **`w2 : Int defined.` / `10` at
+zero errors**, the written flatten silently discarded and the `*` filling a
+parameter slot. A `defr` fact row registered 2 rows instead of 4; a `bundle` went
+from a guided refusal to inventing a type parameter. **Attempt 1's failure mode,
+one slice later, in a narrower aperture** — violating the very property slice A's
+shipped comment names as "the whole reason this is not attempt 1".
+
+**⚠⚠ THE METHOD FINDING, which outlasts the slice: CONTAINMENT IS NOT A SAFETY
+PROPERTY.** A verify axis measured **1,943/1,943 glued ≡ HEAD-spaced** and offered
+it as *"the argument that makes the count change payable"*. It is a category
+error: token-stream containment says HEAD *could* have produced this stream **from
+different source text**, never that the written source's MEANING is preserved.
+`xs:0 *` and `xs:0*` agreeing **is the defect**. An axis cleared the slice on it;
+the adjudicator overturned that clearance and found a fourth defect none of the
+three skeptics had. **A containment result must be restated as a meaning claim
+before it counts as evidence.**
+
+**WHY THE OBVIOUS FIX DOES NOT APPLY.** The identifier band is count-preserving
+because it FUSES — `x.name*` is ONE token, the star riding inside the symbol
+(`($dot-access name*)`) for `split-star-lexeme` to split later. The ordinal band
+cannot: `$postfix-index`'s payload is `(string->number (substring lexeme 1))` and
+must be NUMERIC, so a `.0*` lexeme yields **`#f`**. **The star has nowhere to live
+in an ordinal payload** — which is also why the twins use `ascii-digit?` vs
+`char-numeric?` and why "apply the same patch twice" was never the shape.
+
+**WHAT R4 IS BLOCKED ON**: the star's DATUM REPRESENTATION — a wrapper sentinel
+(`$star-step`, recorded in `reader-forms.rkt` as *"DELIBERATELY ABSENT … a
+deferred RULING"*) or a widened `$postfix-index` arity. Both are **P4e-1
+representation decisions**, not tokenizer work. ⚠ **Reopen R4 only after that
+ruling**; the tokenizer diff is small and re-derivable, and DEFERRED 105 carries
+it.
+
+**Kept from the slice**: the stale co-migration pointer in
+`recognize-colon-annotation` (it said `parser.rkt`; `fused-type-annot?` moved to
+`reader-forms.rkt` at LET P4), plus the measured note that the co-migration is
+narrower than it reads — that predicate already excludes digit-headed colon
+symbols, so `:0`-shaped tokens were never in its domain.
+
 <a id="pf"></a>
 
 ### §5.PF — Path first-classness  (Q_U17 RULED B2, owner 2026-08-02)

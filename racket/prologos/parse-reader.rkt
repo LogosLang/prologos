@@ -1017,7 +1017,12 @@
   ;; multiplicity tokens, 287 spaced + 2 opener-preceded, ZERO focus-adjacent).
   ;;
   ;; ⚠ The trailing guard must be tested after the LAST digit — see
-  ;; `fused-type-annot?` in parser.rkt for the co-migration this REQUIRES.
+  ;; `fused-type-annot?` in **reader-forms.rkt** for the co-migration this
+  ;; REQUIRES. (The pointer said `parser.rkt` for its whole life; the predicate
+  ;; moved at LET P4 and parser.rkt carries only its tombstone. Corrected
+  ;; 2026-08-10. ⚠ And the co-migration is NARROWER than it reads:
+  ;; `fused-type-annot?` already excludes digit-headed colon symbols, so
+  ;; `:0`-shaped tokens were never in its domain — measured, not argued.)
   (define c1 (rrb-char-at rrb pos))
   (define c2 (rrb-char-at rrb (+ pos 1)))
   (cond

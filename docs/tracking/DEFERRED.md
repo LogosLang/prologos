@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 105**
+> ### **NEXT FREE: 106**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6538,3 +6538,78 @@ believing it.
 a guided error naming the annotation (`def p : Int -> Int -> Int := +`). Refusing
 is monotone; silently stuck is not. **Not scoped to P4e** — filed so the sweep's
 find is not lost.
+
+---
+
+### 105. ⛔ R4 (the tokenizer repair) IS NOT INDEPENDENTLY LANDABLE — restoring the carrier TOKEN makes the star a separate datum ITEM, and that count change is attempt 1's failure mode
+
+Built, verified, and REVERTED 2026-08-10 at D4.P4e-0 attempt 3 slice B. Not a
+coding error — a **scoping** result, and it is the reason the census called
+`xs:0*` / `x.0*` "unreachable under ANY spelling without a tokenizer repair"
+without saying the repair alone suffices.
+
+**What was built** (per [Q_U30](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u30)'s
+R4): both digit arms of `recognize-dot-ordinal` / `recognize-colon-annotation`
+stop before a trailing `*` instead of declining on it, and the star mint accepts
+`colon-annotation` / `dot-ordinal` as predecessors. It WORKED at the token layer —
+`xs:0*` → `xs` `:0` `*` → `(xs ($bcast-step :0) *)`, carrier restored; six of the
+seven carriers minted; battery 468 green; acceptance 84/84; all of slice A's
+gates held.
+
+**⛔ AND IT WAS A SILENT-WRONG-ANSWER REGRESSION.** The repair takes the source
+from 4 tokens to 3, so the star becomes a **separate datum item** — and item
+counts are load-bearing. Measured, HEAD vs the built tree, both at 0 errors on
+the working tree:
+
+```
+def p := [pvec-from-list '[10 20 30]]
+spec take2 {B : Type} Int -> B -> Int
+defn take2 [a b] a
+def w2 := [take2 p.0*]
+```
+· HEAD: `ERROR: Too many arguments to 'take2'` (4 items) — **loud**
+· BUILT: `w2 : Int defined.` / `10 : Int` — **0 errors**, and the flatten the user
+  wrote was silently discarded, the `*` filling `take2`'s second parameter
+  (operators are first-class since Numerics N6e-E2).
+
+Also measured: a `defr` `||` fact row `|| a.0*` chunks by arity, so the relation
+silently registered **2 rows instead of 4**; and `bundle P3 := (Add:0* Sub)` went
+from a guided `invalid constraint` to silently **inventing a type parameter**
+that a later `where` clause then accepted.
+
+**⭐ THIS IS ATTEMPT 1'S FAILURE MODE, ONE SLICE LATER, IN A NARROWER APERTURE** —
+and slice A's own shipped comment names the property it violates: *"COUNT-
+PRESERVING … which is the whole reason this is not attempt 1 (a count change is
+absorbed silently by the ~416 count-gated validator arms)."*
+
+**⚠ AND THE ARGUMENT THAT CLEARED IT WAS A CATEGORY ERROR — worth more than the
+bug.** One verify axis measured 1,943/1,943 "NEW(glued) ≡ HEAD(same source with a
+space before each star)" and offered that containment as *"the argument that makes
+the count change payable"*. It is not. Token-stream containment says HEAD *could*
+have produced this stream **from different source text**; it says nothing about
+the meaning of the source the user wrote. `xs:0 *` and `xs:0*` agreeing IS the
+defect, because the glued spelling's meaning moved from a loud refusal to a
+silently-absorbed argument. **Containment is not a safety property; here it was a
+restatement of the defect.**
+
+**WHY THE OBVIOUS FIX DOES NOT APPLY.** The identifier band is count-PRESERVING
+because it FUSES: `x.name*` is ONE token and the star rides inside the symbol
+(`($dot-access name*)`), split later by `split-star-lexeme`. The ordinal band
+cannot do that: `$postfix-index`'s payload is `(string->number (substring lexeme
+1))` and MUST be numeric, so a `.0*` lexeme yields **`#f`** — a silent wrong
+ordinal. **The star has nowhere to live in an ordinal payload.**
+
+**THE REAL BLOCKER, therefore**: R4 cannot land until the star's DATUM
+REPRESENTATION is decided — a wrapper sentinel (`$star-step`, which
+`reader-forms.rkt` records as *"DELIBERATELY ABSENT … a deferred RULING"*), or a
+widened `$postfix-index` arity. Both are P4e-1-shaped representation decisions,
+not tokenizer work. **Reopen R4 only after that ruling.**
+
+**Doc-truth found alongside, all in `parser.rkt`, all still live**: a comment
+asserts `xs:0*` "lexes as `:0` + `*` since P4e-0's annotation-guard fix, so the
+ORDINAL carrier arrives as a `$star-step`" — **both halves false** (the revert
+`d0ac2a58` restored the guard; `$star-step` does not exist) · another references
+`star-step-trigger?`, which has **no definition anywhere in the tree** · a third
+states "every star that now reaches the parser takes a guided not-yet", which is
+false for slice A's carriers too (only the FUSED identifier band gets the guided
+message).
