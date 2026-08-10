@@ -7948,13 +7948,27 @@ widening is where this arc introduces defects):
 2026-08-10). It inverts slice A's failure mode, where the risky change went
 first and every verify round then found a defect in the previous round's FIX:
 
-1. ⬜ **1a-i — land the generator, widen the gate.** A durable matrix generator
-   (10 carriers × 19 contexts) plus the LIVE `"no arrival position leaks the
-   sentinel"` gate widened from its **6 rows** to the generated matrix. Its
-   comment claims "one row per context that mints" against D4's own ten; it uses
-   2 of 10 carriers and covers 6 of 190 cells. No behaviour change — the gate
-   stays green, but green starts meaning something. Must include all three `let`
-   spellings (DEFERRED 106).
+1. ✅ **1a-i — the generator + the widened gate** (`ff9b7d81`). Battery 465 → 466,
+   file 74 s → 79 s, neighbourhood 322 green.
+   **⭐⭐ THE FINDING: THE OBSERVABLE WAS WRONG, not merely narrow.** The gate
+   first grepped user-visible output for `$postfix-star`. The adversarial verify
+   simulated 1a-iii by planting the sentinel in each cell and running the gate's
+   own machinery: it could fire in **72 of 190** cells, and in the rest clean and
+   planted output is **byte-identical** — an unconsumed sentinel is an EXTRA
+   DATUM, so the form fails on SHAPE long before anything renders the symbol.
+   The invariant is **"no unconsumed `$postfix-star` survives PREPARSE into the
+   datum"**, now the primary assertion. Measured and stated, not rounded to
+   "total": **datum 187/220 · message 92/220 · UNION 208/220**, complementary
+   rather than nested, 12 residual blind cells clustering in `let-bracket` (8),
+   `quasiquote-body` (3), `let-nested` (1) — DEFERRED 106's own seat.
+   The verify found **four more defects in my code** (a `defmacro-tmpl` row that
+   never registered a macro so `datum-subst` never ran, while 33 output lines
+   made it look healthy; whole contexts skipped when a batch raised; an
+   unreachable `pair?` assertion; a mint pin asserting cardinality not
+   membership) and I found a fifth before it (`star-cell-source` took a string
+   while every caller passed the record — `format`'s `~a` hid it and every count
+   and both mutation tests still agreed). Matrix now **11 × 19 = 209** cells +
+   5 controls; DEFERRED 108 re-measured 19/280 → 21/320.
 2. ⬜ **1a-ii — the Tier-O arms, inert.** Every site switching on sentinel
    identity gets `$postfix-star` handling BEFORE the symbol can exist, so the
    arms are dead code and land green. `pattern-var?` FIRST (a 20-entry denylist;
