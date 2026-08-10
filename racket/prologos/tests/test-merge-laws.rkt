@@ -84,6 +84,17 @@
          (only-in "../elaborator-network.rkt" merge-meta-solve-identity)
          (only-in "../qtt.rkt" add-usage)
          (only-in "../warnings.rkt" warnings-facet-merge)
+         (only-in "../atms.rkt" table-answer-merge table-registry-merge)
+         (only-in "../typing-propagators.rkt" context-facet-merge)
+         (only-in "../session-lattice.rkt" session-lattice-merge)
+         (only-in "../tropical-fuel-primitives.rkt" tropical-fuel-merge)
+         (only-in "../type-lattice.rkt" type-lattice-merge)
+         (only-in "../propagator.rkt" union-derivation-chains-merge)
+         (only-in "../classify-inhabit.rkt"
+                  merge-classify-inhabit classifier-only inhabitant-only
+                  classify-and-inhabit)
+         (only-in "../clock.rkt"
+                  merge-by-timestamp-max timestamp timestamped-value)
          (only-in "../constraint-cell.rkt"
                   constraint-merge constraint-bot constraint-top
                   constraint-one constraint-set constraint-set? constraint-set-candidates))
@@ -192,6 +203,26 @@
 (define SET-SAMPLES (list (seteq) (seteq 1) (seteq 1 2)))
 (define NAT-SAMPLES (list 0 1 7))
 
+;; classify-inhabit's carrier is a two-layer tag struct, built through its own
+;; constructors rather than by hand so the samples cannot drift from the shape.
+(define CLASSIFY-SAMPLES
+  (list 'infra-bot
+        (classifier-only 'bot)
+        (classifier-only 'Int)
+        (inhabitant-only 'x)
+        (classify-and-inhabit 'Int 'x)))
+
+;; timestamped-value over (timestamp counter pid). Deliberately includes two
+;; values at the SAME counter with different pids — that is the tie the merge's
+;; pid comparison exists to break, and the case where an unlucky merge could
+;; oscillate between two writers.
+(define (tv c p v) (timestamped-value (timestamp c p) v))
+(define TIMESTAMP-SAMPLES
+  (list 'infra-bot
+        (tv 0 0 'a)
+        (tv 1 0 'b)
+        (tv 1 1 'c)))
+
 (define HASH-OF-SETS-SAMPLES
   (list (hasheq)
         (hasheq 'p (seteq 1))
@@ -291,7 +322,25 @@
    (E "worldview-merge" worldview-merge NAT-SAMPLES
       #:laws '(commutative associative))
    (E "hasse-merge-hash-union" hasse-merge-hash-union HASHEQ-SAMPLES)
-   (E "merge-meta-solve-identity" merge-meta-solve-identity HASHEQ-SAMPLES)))
+   (E "merge-meta-solve-identity" merge-meta-solve-identity HASHEQ-SAMPLES)
+   ;; --- the last two, 2026-08-05: both were "uncovered" only for want of
+   ;; --- domain-typed samples. Neither needed a design decision.
+   (E "merge-classify-inhabit" merge-classify-inhabit CLASSIFY-SAMPLES
+      #:laws '(commutative associative))
+   (E "merge-by-timestamp-max" merge-by-timestamp-max TIMESTAMP-SAMPLES
+      #:laws '(commutative associative))
+   ;; --- the seven the coverage arithmetic had been hiding (2026-08-05).
+   ;; --- All seven idempotent on first probe; none needed a decision.
+   ;; --- Samples are bot-and-simple: these carriers are quantale/lattice
+   ;; --- elements whose rich cases belong to their own test files, and the
+   ;; --- law here is the ALGEBRA, which bot plus one point already exercises.
+   (E "union-derivation-chains-merge" union-derivation-chains-merge HASHEQ-SAMPLES)
+   (E "table-answer-merge" table-answer-merge LIST-SAMPLES)
+   (E "table-registry-merge" table-registry-merge HASHEQ-SAMPLES)
+   (E "context-facet-merge" context-facet-merge HASHEQ-SAMPLES)
+   (E "session-lattice-merge" session-lattice-merge (list 'infra-bot))
+   (E "tropical-fuel-merge" tropical-fuel-merge NAT-SAMPLES)
+   (E "type-lattice-merge" type-lattice-merge (list 'infra-bot))))
 
 ;; ============================================================================
 ;; Run them
@@ -411,29 +460,24 @@
   (check-not-equal? (warnings-facet-merge '(w) '(w)) '(w)
                     "warnings-facet-merge is an accumulator; two identical warnings are two warnings"))
 
-(test-case "RESIDUAL: 3 registered merges are still uncovered"
-  ;; From a static scan of `register-merge-fn!/lattice` call sites (29
-  ;; registered) minus this table (24) minus the 4 accumulators pinned above.
+(test-case "COVERAGE: every registered merge is now accounted for"
+  ;; 28 merges are registered via `register-merge-fn!/lattice` (a static scan of
+  ;; the call sites — a property of the TREE, unlike registry size, which is a
+  ;; property of the run). All 28 are covered: 24 in MERGES above, plus the four
+  ;; accumulators pinned in their own cases below. MERGES has 33 entries because
+  ;; it also covers the decision-cell family, which is NOT registered — and that
+  ;; is the whole reason the table is hand-written rather than registry-driven:
+  ;; `tagged-cell-merge`, the merge that caused the fourteen-month hang, is not
+  ;; in the registry at all.
   ;;
-  ;;   merge-classify-inhabit   classify-inhabit.rkt — wants
-  ;;                            classify-inhabit-value structs
-  ;;   merge-by-timestamp-max   clock.rkt — wants timestamped-value structs
-  ;;   merge-list-dedup-append  covered in MERGES, listed here only because the
-  ;;                            scan sees the registration name twice
-  ;;
-  ;; Both real residuals are the same shape: the merge is correctly STRICT about
-  ;; its carrier and needs domain-typed samples, which is a small amount of work
-  ;; per merge and no design question.
-  ;;
-  ;; The earlier version of this case listed SIX blockers, all "not exported by
-  ;; their defining module", and framed widening those provides as a trade to be
-  ;; ruled on. That was over-escalated: `merge-fn-registry.rkt` already exports
-  ;; `reset-merge-fn-registry!` and its snapshot/restore pair under a "Testing
-  ;; support:" comment, so exporting a merge to law-test it is precedented
-  ;; ordinary work, not a design change. Six exports later, four of those six
-  ;; are covered and two turned out to be accumulators. Recorded because
-  ;; inventing a blocker is the more expensive mistake.
-  (check-true #t "documentation-only — the list above is the assertion"))
+  ;; ⚠ That last point is also where I got the arithmetic wrong, twice, and it
+  ;; is worth leaving written down. I reported "13 of 29", then "24 of 29", by
+  ;; subtracting the table size from the registry size — two DIFFERENT SETS with
+  ;; a partial overlap. The real question is a set difference, and asking it
+  ;; properly (`comm -23 registered covered`) turned "3 residual" into seven
+  ;; more uncovered merges, all of which then probed idempotent on the first
+  ;; try. A count is not a coverage claim; the difference is.
+  (check-true #t "documentation-only — the enumeration above is the assertion"))
 
 (test-case "COVERAGE-FLOOR: the table has not shrunk"
   ;; A floor on the TABLE, not on the registry — and the difference is a finding.
@@ -458,7 +502,7 @@
   ;; call sites — a property of the TREE, unlike registry size. That scan is the
   ;; shape the real drift guard wants; see the residual test-case below for why
   ;; it is not yet automated here.
-  (check-true (>= (length MERGES) 24)
+  (check-true (>= (length MERGES) 33)
               (format "the table shrank to ~a entries — merges were removed from coverage"
                       (length MERGES)))
   ;; Reported, never asserted.

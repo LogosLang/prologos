@@ -1952,10 +1952,28 @@ believed it was a join, and that is precisely the fourteen-month hang.
 lattice, never WHETHER it is one. That is the registry gap worth closing, and it
 is a better-specified version of the drift-guard entry below.
 
-**True residual: 2**, both the same benign shape — `merge-classify-inhabit` and
-`merge-by-timestamp-max` are correctly strict about their carriers and need
-domain-typed samples. Small work per merge, no design question. The list lives in
-the test file as a test-case so it cannot rot silently.
+**CLOSED 2026-08-05 — all 28 registered merges are covered.** 24 in the `MERGES`
+table plus the 4 accumulators pinned in their own cases. The table itself has 33
+entries because it also covers the decision-cell family, which is **not
+registered** — and that is precisely why it is hand-written rather than
+registry-driven: `tagged-cell-merge`, the merge behind the fourteen-month hang,
+is not in the registry at all.
+
+⚠ **I got the arithmetic wrong twice, and the shape of the error is the useful
+part.** I reported "13 of 29" and then "24 of 29" by subtracting the TABLE SIZE
+from the REGISTRY SIZE — two different sets with a partial overlap. Coverage is
+a **set difference**, not a subtraction. Asking it properly
+(`comm -23 registered covered`) turned a claimed residual of 3 into **seven**
+more uncovered merges (`context-facet-merge`, `session-lattice-merge`,
+`table-answer-merge`, `table-registry-merge`, `tropical-fuel-merge`,
+`type-lattice-merge`, `union-derivation-chains-merge`) — every one of which
+probed idempotent on the first try and went straight in. A count is not a
+coverage claim. The last two before that (`merge-classify-inhabit`,
+`merge-by-timestamp-max`) needed only domain-typed samples; neither needed a
+decision.
+
+The enumeration now lives in the test file as a test-case, so it cannot rot
+silently, and the floor is 33.
 
 ## The merge-law table cannot be gated on the registry, and that is a registry problem (2026-08-05)
 
