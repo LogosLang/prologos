@@ -2110,6 +2110,55 @@ items of the hold-point, ruled before P4a opened:
   same kind of edit, and the twins are twins in OBLIGATION but **not in code**
   (`ascii-digit?` vs `char-numeric?`).
 
+- <a id="q-u34"></a>**⭐ Q_U34 — `.( … )` IS ARITHMETIC TERRITORY: NO STAR MINT INSIDE
+  MIXFIX [owner, 2026-08-10].** A closer-adjacent `*` inside a `.( … )` group is
+  NOT minted. Accepted narrowing, named: **a star STEP cannot appear inside
+  `.( … )`.**
+  ⚠ **RECORDED LATE (2026-08-10) — the ruling was cited in code, tests and a
+  commit message before it had an entry here.** `Q_U34` appeared 6 times across
+  `parse-reader.rkt`, `test-path-selection.rkt` and D4 while the register still
+  read "next free U34", i.e. the label was never allocated. That is the
+  cited-but-unrecorded class this track fights, committed by me. Fixed with the
+  entry, not with a note.
+  **WHY**: `)*(`  is genuinely BOTH readings — postfix star on a closed group,
+  and infix multiply — and no lookback separates them. Measured:
+  `.((1 + 2)*(3 + 4))` → `21` at 0 errors with the star minted, before the gate.
+  **What separates them is CONTEXT, and it is measurable**: infix `*` exists ONLY
+  inside mixfix (`rec.n * 2` at command position is an error; `.(rec.n * 2)` is
+  42). So outside mixfix a closer-adjacent star is unambiguous; inside it,
+  arithmetic wins.
+  **Realisation**: a frame stack in `disambiguate-tokens` mirroring
+  `make-bracket-depth-rrb`'s — nine openers from the SHARED enumeration,
+  kind-sensitive `lparen`, top-of-stack test, and a MATCHED-closer pop. Each of
+  those four qualifiers was earned by a defect: the first cut pushed 4 of 9
+  openers, used `memq` over the whole stack, and popped on any closer. See
+  [§5.P4e-0 attempt 3 slice A](#p4e-0-a3).
+
+- <a id="q-u35"></a>**⭐ Q_U35 — `*` AFTER A NON-SELECTION EXPRESSION IS REFUSED
+  [owner, 2026-08-10 — "For now, yes, refuse. It's out of scope for this to be a
+  non-selection expression for now"].** `[f x]*` and `(f x)*` take a guided
+  refusal; `*` stays a PATH-SELECTION operator only.
+  **THE GAP IT CLOSES**: [Q_U23](#q-u23) defines `*` as deleting the layer **the
+  preceding STEP** created — and these two carriers have no preceding step. The
+  preceding thing is an arbitrary application, so the rule was simply undefined
+  for them. Either the star becomes a VALUE-LEVEL flatten (a different feature,
+  with its own typing and the `Functor`/`Foldable` trait question
+  [Q_U9](#q-u9) already named as the principled door) or it is refused.
+  **⭐ WHAT THE REFUSAL BUYS, and it is structural**: it keeps the star sentinel
+  INSIDE the selection surface. Measured before the ruling, `postfix-star` also
+  mints in ordinary application arguments (`f [g x]* y`), map-literal values
+  (`{:k [f x]*}`) and nested brackets — all legal today, since `*` is a
+  first-class operator (the [Q_U32](#q-u32) guard rail). Under a datum rename each
+  would have become `Unbound variable $postfix-star`, a leaked internal sentinel.
+  Refusing dissolves that whole blast radius instead of arming it site by site.
+  **COST, stated**: slice A delivers **TWO** usable carriers (`x{a}*`,
+  `xs:{a}*`), not four. `[f x]*` / `(f x)*` get a guided refusal naming the
+  separate-flatten spelling — the same shape Q_U9 uses for `List`.
+  **Monotone** (spec §3.6): the refusal may become a meaning later, never the
+  reverse. Zero corpus sites for either spelling.
+  ⚠ Does NOT change [Q_U30](#q-u30)'s seven-carrier scope; it rules on what two of
+  them MEAN. `xs:0*` / `x.0*` remain blocked on [DEFERRED 105](DEFERRED.md).
+
 - <a id="star-census"></a>**⭐ THE STAR-SURFACE CENSUS IS THE DESIGN'S INPUT
   [owner-commissioned, 2026-08-09].** After two failed attempts, the owner ruled
   that attempt 3 opens from a MEASURED MAP rather than an intuition about where
@@ -2143,7 +2192,7 @@ items of the hold-point, ruled before P4a opened:
   Until then they existed ONLY in a session transcript, which is not durable
   storage — and the owner's ruling is that attempt 3 opens from the MEASURED MAP,
   which cannot be honoured against an unreadable artifact.
-  **Next free Q-label: U34.**
+  **Next free Q-label: U36.**
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
