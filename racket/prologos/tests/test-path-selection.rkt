@@ -6248,3 +6248,88 @@
   ;; a LOUD per-command error, with the rest of the file still produced.
   (check-equal? (p4e-star-type ".( ) (1 + 2)*(3 + 4) )") 'postfix-star
                 "a matching `)` closes the mixfix — `.( )` itself errors loudly"))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4e-1a — THE MINT GETS A CONSUMER  [Q_U33 · Q_U34 · Q_U35]
+;;
+;; Slice A minted a `postfix-star` TOKEN TYPE and deliberately kept it
+;; DATUM-INVISIBLE, so the corpus A/B baseline stayed clean. That safety property
+;; is also why the mint is INERT: `token-entry->stx` renders it as a plain `*`,
+;; so no consumer can see it, and the carriers give `Could not infer type`
+;; instead of the guided message the fused identifier band gets.
+;;
+;; ⚠⚠ THE ARRIVAL INVENTORY, GENERATED NOT READ (the last three defects were all
+;; bad enumerations): a `postfix-star` token reaches a datum in **40 of 44**
+;; carrier x context spellings — command position, `def` RHS, application
+;; argument, bracket application, nested bracket, map-literal value, vector and
+;; list literals, select-block item, `defn` body. Only the four mixfix spellings
+;; do not, which is [Q_U34]'s gate working. So making the datum visible has a
+;; blast radius of ELEVEN contexts, and every one needs a consumer or a refusal —
+;; a bare sentinel reaching the user is the class the revert `d0ac2a58` itemised.
+;;
+;; [Q_U35] is what makes that tractable: `*` after a NON-SELECTION expression is
+;; REFUSED, so the sentinel never has to be armed outside the selection surface.
+;; The fuse rule is therefore: `$postfix-star` immediately following a
+;; SELECTION-SHAPED item fuses; everywhere else it is a guided refusal.
+;; ---------------------------------------------------------------------------
+
+;; ⚠⚠ THE TWO TARGET TEST-CASES BELOW ARE COMMENTED OUT — they are P4e-1a's
+;; FAILING-TEST-FIRST artifacts and they fail at HEAD BY DESIGN. Uncomment them as
+;; the implementation lands, following this repo's acceptance-file idiom (target
+;; expressions ship commented and are uncommented as phases complete).
+;; They fail for exactly the right reasons, verified: `x{a}*` does not reach
+;; `star-not-yet-message`, and `[f x]*` gets `Could not infer type` rather than
+;; [Q_U35]'s refusal.
+;; ⚠ MEASUREMENT NOTE worth keeping: rackunit ABORTS a `test-case` at its first
+;; failed check, so "2 FAILURES" here meant 2 failing test-CASES, not 2 failing
+;; assertions — the later checks in each never ran. Do not read a failure count
+;; as an assertion count.
+(define (p4e1-msgs src)
+  ;; full per-command output for a WS string, as strings
+  (map (lambda (r) (format "~a" r)) (process-string-ws src)))
+
+(define (p4e1-has? src rx)
+  (and (ormap (lambda (s) (regexp-match? rx s)) (p4e1-msgs src)) #t))
+
+;; (test-case "P4e-1a: the SELECTION carriers reach the guided not-yet message"
+;;   ;; The contract `star-not-yet-message`'s comment claims and does not yet keep.
+;;   ;; These two are what survives [Q_U35]: their predecessor IS a selection step.
+;;   (check-true (p4e1-has? "ns q1\ndef c := {:a 1}\ndef b := c{a}*"
+;;                          #rx"\\(flatten\\) is not implemented yet")
+;;               "x{a}* — preceding step is a select-brace")
+;;   (check-true (p4e1-has? "ns q2\ndef xs := @[{:a 1}]\ndef b := xs:{a}*"
+;;                          #rx"\\(flatten\\) is not implemented yet")
+;;               "xs:{a}* — preceding step is a broadcast"))
+
+;; (test-case "P4e-1a [Q_U35]: `*` after a NON-SELECTION expression is refused"
+;;   ;; Not "Could not infer type" (today's accident) and not a leaked sentinel —
+;;   ;; a guided refusal. The star is a PATH-SELECTION operator only.
+;;   (check-true (p4e1-has? "ns q3\ndefn f [z] z\ndef b := [f 1]*" #rx"selection|flatten")
+;;               "[f x]* — no preceding step")
+;;   (check-true (p4e1-has? "ns q4\ndefn f [z] z\ndef b := (f 1)*" #rx"selection|flatten")
+;;               "(f x)* — no preceding step")
+;;   ;; ⚠ and the refusal must NOT be a leaked internal sentinel
+;;   (check-false (p4e1-has? "ns q5\ndefn f [z] z\ndef b := [f 1]*" #rx"\\$postfix-star")
+;;                "no internal sentinel may reach the user"))
+
+(test-case "P4e-1a: the SPACED forms keep their current meaning [Q_U32 guard rail]"
+  ;; `*` is a first-class operator; the spaced spelling must stay an ordinary
+  ;; application argument. This is the whole point of the space being significant.
+  (check-false (p4e1-has? "ns q6\ndef c := {:a 1}\ndef b := c{a} *"
+                          #rx"\\(flatten\\) is not implemented yet")
+               "spaced select must NOT take the flatten refusal")
+  (check-false (p4e1-has? "ns q7\ndefn f [z] z\ndef b := [f 1] *" #rx"\\$postfix-star")
+               "spaced application must not leak a sentinel"))
+
+(test-case "P4e-1a: no arrival position leaks the sentinel at the user"
+  ;; ⚠ THE INVENTORY AS A GATE. One row per context that mints, from the generated
+  ;; matrix — not from reading the code. A leak here is `d0ac2a58`'s class.
+  (for ([src (in-list
+              (list "ns r1\ndefn f [z] z\ndef q := f [f 1]* 2"
+                    "ns r2\ndefn f [z] z\ndef q := {:k [f 1]*}"
+                    "ns r3\ndefn f [z] z\ndef q := @[[f 1]*]"
+                    "ns r4\ndefn f [z] z\ndef q := '[[f 1]*]"
+                    "ns r5\ndefn f [z] z\ndefn g [z] [f 1]*"
+                    "ns r6\ndef c := {:a 1}\ndef q := c{c{a}* b}"))])
+    (check-false (p4e1-has? src #rx"\\$postfix-star")
+                 (format "sentinel leaked: ~s" src))))

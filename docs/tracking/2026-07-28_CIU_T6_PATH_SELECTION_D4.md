@@ -7751,6 +7751,73 @@ it.
 narrower than it reads — that predicate already excludes digit-headed colon
 symbols, so `:0`-shaped tokens were never in its domain.
 
+<a id="p4e-1"></a>
+
+### §5.P4e-1 — the `*` SEMANTICS  (opened 2026-08-10 · ⬜ **1a designed, tests written, NOT implemented**)
+
+**Where it stands**: the design is settled, the arrival inventory is generated, and
+P4e-1a's failing tests are written and **parked COMMENTED** in the battery (the
+acceptance-file idiom). No implementation. Resume by uncommenting them.
+
+**⭐ WHY THE MINT NEEDS THIS PHASE AT ALL.** Slice A's `postfix-star` token type is
+**datum-invisible by design** — that is what kept the corpus A/B baseline clean,
+and it is also why the mint is **INERT**: `token-entry->stx` renders it as a plain
+`*`, so no consumer can see it. Measured: the carriers give `Could not infer type`,
+identical to their spaced controls, so there is currently **ZERO observable
+difference** between glued and spaced. A consumer therefore CANNOT be built without
+making the datum visible — the two out-of-band channels are both dead (syntax
+properties AND srcloc are destroyed by preparse for `cfg{a}*` / `xs:{a}*` on a
+`def … :=` RHS, while surviving at command position, so either would work for half
+the carriers and silently fail on the surface users actually write).
+
+**⭐⭐ THE CORRECTION TO [DEFERRED 105](DEFERRED.md), and it is what makes
+semantics-first viable.** 105 recorded "the datum representation must be decided" as
+ONE gate. It is TWO, and they separate:
+· For slice A's carriers the star **already occupies a datum item** — measured,
+  `def b := cfg{a}*` reads `(def b := cfg ($select-brace a) *)`. Renaming that
+  item's VALUE is **COUNT-PRESERVING** and never engages what killed slice B.
+· For `xs:0*` / `x.0*` the star has **no item at all** (they shatter), and restoring
+  the carrier is what changes the count. That blocker is untouched.
+**Four carriers clear, two blocked.** Not "avoids" and not "reaches from the other
+side" — a partition, and the slicing must say so.
+
+**THE DESIGN.** Emit `$postfix-star` at `token-entry->stx`; fuse at
+`rewrite-dot-access` — the seat this repo already uses for `$dot-access` /
+`$bcast-step`. Rule: a `$postfix-star` immediately following a **selection-shaped**
+item fuses into a star step; anywhere else it is [Q_U35](#q-u35)'s guided refusal.
+⚠ `access-sentinel?` tests HEADS of sub-lists, so a bare `$postfix-star` ATOM does
+not trip `rewrite-dot-access`'s gate — it needs its own gate clause, and
+`ordinal-rekey-shatter?` is the in-file precedent for exactly that (a sentinel-FREE
+shape with its own clause).
+
+**⚠⚠ THE ARRIVAL INVENTORY — GENERATED, NOT READ.** A `postfix-star` token reaches
+a datum in **40 of 44** carrier × context spellings, across **ELEVEN** contexts:
+command position · `def` RHS · application argument · bracket application · nested
+bracket · map-literal value · vector literal · list literal · select-block item ·
+`defn` body. Only the four mixfix spellings do not — [Q_U34](#q-u34)'s gate working.
+**So the rename puts a sentinel into eleven contexts at once**, and a bare sentinel
+reaching the user is the class the revert `d0ac2a58` itemised. [Q_U35](#q-u35) is
+what makes it tractable: everything outside selection is REFUSED, not armed.
+(The inventory was generated over a carrier × context matrix rather than read off
+the code — the last three blocking defects in this arc were all bad enumerations.)
+
+**OWED before implementing**:
+- The Tier-O sentinel obligations (`pipeline.md` § "A new sentinel, an old
+  recognizer"), **`pattern-var?` first** — a miss there is a whole-file abort in a
+  `defmacro` template.
+- ⚠ [Q_U23](#q-u23)'s claim that the nominal-join collision "needs no P5 machinery,
+  because P3a already landed strict merge" is **REFUTED by the grounding**:
+  `make-record`'s body is `;; last write wins`, and `dup-output-key` / `mixed-sorts?`
+  fold over **written** branches at parse time, so the landed gate structurally
+  cannot see SUBJECT-DERIVED keys. A star over a `Map` needs a ruling: refuse, or
+  defer to a runtime merge?
+- ⚠ [Q_U31](#q-u31)'s stated cost ("one guided error at a `star-symbol?` call site")
+  is **not implementable as written** — glued and spaced Sigma are datum-identical,
+  so `star-symbol?` (a datum test) cannot tell them apart. The refusal must key on
+  the `postfix-star` TOKEN TYPE or on srcloc adjacency. And `$star` escapes a
+  type-keyed refusal entirely (`<(x : Nat)$star Nat>` → `[Sigma Nat Nat]`, 0 errors).
+- `.*` retires per Q_U23 with **no inventory taken** of what currently consumes it.
+
 <a id="pf"></a>
 
 ### §5.PF — Path first-classness  (Q_U17 RULED B2, owner 2026-08-02)
