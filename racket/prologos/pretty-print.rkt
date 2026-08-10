@@ -1641,6 +1641,18 @@
     [(eq? d '$compose) ">>"]
     [(eq? d '$pipe) "|"]
     [(eq? d '$rest) "..."]
+    ;; ⚠ D4.P4e-1a slice 1a-ii — `$postfix-star` DELIBERATELY HAS NO ARM, and the
+    ;; reasoning is worth keeping because I added one and the verify took it out.
+    ;; Every arm in this cond is a form that LEGITIMATELY REACHES THE PARSER
+    ;; ($quote, $angle-type, $list-literal, $rest, $select-path…). Every CONSUMED
+    ;; marker — $dot-access, $bcast-step, $postfix-index, $select, $select-brace,
+    ;; $preparse-error — has none, and falls to the `symbol?` case below, printing
+    ;; its internal name. That asymmetry is load-bearing: for a consumed marker,
+    ;; APPEARING HERE IS THE DEFECT, so printing `$postfix-star` is the tell.
+    ;; Rendering it as `*` would make a leak indistinguishable from correct output
+    ;; in `expand` / `expand-1` / `expand-full` — the exact tool someone debugging
+    ;; the star would reach for. The `$select-path` precedent that seemed to argue
+    ;; for an arm does not transfer: that is a FOLD OUTPUT with a parser arm.
 
     ;; Regular symbol
     [(symbol? d) (symbol->string d)]

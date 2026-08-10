@@ -241,11 +241,21 @@
   (check-equal? (length msgs) 1 (format "expected exactly one error; got: ~v" rs)))
 
 (test-case "datum-subst: the SPLICE branch keeps its unbound error"
-  ;; Deliberately NOT relaxed. A sentinel is a list HEAD followed by its
-  ;; payload, never a bare symbol followed by `...`, so this arm cannot be
-  ;; tripped by one and its typo signal stays clean.
+  ;; Deliberately NOT relaxed, so a `$usr ...` typo still reports cleanly.
+  ;; ⚠ RATIONALE CORRECTED 2026-08-10 (D4.P4e-1a slice 1a-ii). This read: "A
+  ;; sentinel is a list HEAD followed by its payload, never a bare symbol
+  ;; followed by `...`, so this arm cannot be tripped by one." That is FALSE —
+  ;; `$postfix-star` is a bare-symbol sentinel and is the first counterexample.
+  ;; What actually keeps this arm sentinel-free is `pattern-var?`'s exclusion
+  ;; list, which the star was added to in the same slice. Relaxing the arm to
+  ;; require a binding turned THIS TEST red, which is how the ruling was found —
+  ;; recorded so the next bare-symbol sentinel fixes the exclusion, not the arm.
   (check-exn exn:fail?
-    (lambda () (datum-subst '(foo $args ...) (hasheq)))))
+    (lambda () (datum-subst '(foo $args ...) (hasheq))))
+  ;; and the sentinel does NOT trip it, because it is not a pattern var
+  (check-equal? (datum-subst '(foo $postfix-star ...) (hasheq))
+                '(foo $postfix-star ...)
+                "a bare-symbol SENTINEL passes through; only user vars raise"))
 
 ;; ========================================
 ;; preparse-expand-form tests

@@ -1171,6 +1171,14 @@
        (not (eq? x '$select-brace))     ; D4.P1b-iii adjacent-brace select block
        (not (eq? x '$select))           ; D4.P3a fused select head (LOUD-if-missed: whole-file abort in a defmacro template)
        (not (eq? x '$select-path))      ; D4.P4b-ii-2b the DOT select head — same LOUD-if-missed class
+       (not (eq? x '$postfix-star))     ; D4.P4e-1a slice 1a-ii — the star sentinel, landed INERT
+                                        ; (1a-iii emits it). ⚠ It is the FIRST BARE-SYMBOL sentinel,
+                                        ; which falsifies the invariant `datum-subst-list`'s splice
+                                        ; arm is justified by ("never a bare symbol followed by
+                                        ; `...`"). The exclusion is what keeps that arm's typo signal
+                                        ; clean — relaxing the arm instead turned test-defmacro's
+                                        ; "SPLICE branch keeps its unbound error" RED, because that
+                                        ; behaviour is a ruling (`446070fc`), not a side effect.
        (not (eq? x '$preparse-error))   ; D4.P4c-4c/G2 the preparse seam marker — LOUD-if-missed: a
                                         ; template occurrence would raise "Unbound pattern variable"
                                         ; out of preparse, i.e. the very abort this marker prevents
@@ -1323,6 +1331,21 @@
   (cond
     [(null? elems) '()]
     ;; Check for splice: $var ...
+    ;; ⚠ D4.P4e-1a slice 1a-ii — THIS ARM KEEPS ITS RAISE, DELIBERATELY.
+    ;; The invariant printed below and at `tests/test-defmacro.rkt`'s
+    ;; "the SPLICE branch keeps its unbound error" — *"a sentinel is a list HEAD
+    ;; followed by its payload, never a bare symbol followed by `...`"* — is
+    ;; FALSIFIED by `$postfix-star`, which is a bare symbol. I relaxed the arm to
+    ;; require the binding to exist, and the neighbourhood run turned that pin RED:
+    ;; keeping the typo signal is a RULING (`446070fc` states it in writing), not
+    ;; an accident of the invariant that justified it.
+    ;; The sentinel is handled where the sentinel/user-var distinction belongs —
+    ;; `pattern-var?`'s exclusion list — so this arm never sees one, and a genuine
+    ;; `$usr ...` typo still errors cleanly. Measured scope of what that protects:
+    ;; the WS surface cannot reach this arm at all (`...` reads as `$rest` while
+    ;; this tests `'...`), and in sexp the G2 preparse-seam guard already degrades
+    ;; the raise to a per-command error — so the exposure was a leaked INTERNAL
+    ;; NAME, never an abort.
     [(and (>= (length elems) 2)
           (pattern-var? (car elems))
           (eq? (cadr elems) '...))

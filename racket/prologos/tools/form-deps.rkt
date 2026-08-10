@@ -42,6 +42,9 @@
          '$pipe '$angle-type '$brace-params '$quote '$dot-access '$dot-key
          '$retired-selection
          '$mixfix '$pipe-gt '$compose
+         '$postfix-star   ;; D4.P4e-1a slice 1a-ii — inert until 1a-iii emits it;
+                          ;; without it the dependency graph gains a spurious
+                          ;; cross-form reference to a reader sentinel
          'where 'of 'refl 'J
          'Type 'Unit 'unit))
 

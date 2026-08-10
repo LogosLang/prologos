@@ -6568,3 +6568,105 @@
         (check-equal? (list->seteq (map string->symbol non-minting))
                       (list->seteq (map (lambda (k) (string->symbol (car k))) star-contexts))
                       (format "control carrier ~a must never mint, anywhere" (car c))))))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4e-1a slice 1a-ii — THE TIER-O ARMS, LANDED INERT
+;;
+;; `$postfix-star` does not exist as an emitted datum until slice 1a-iii. These
+;; arms go in FIRST so the rename cannot detonate a recognizer, and every pin
+;; below therefore exercises the arm by writing the symbol DIRECTLY.
+;;
+;; ⚠⚠ THE INVENTORY WAS GENERATED, AND MOST SITES TURNED OUT NOT TO NEED AN ARM.
+;; Recorded because "add it everywhere" would have been the expensive wrong move:
+;;   · `access-sentinel?` / the `reader-forms.rkt` head sets — NO. They open
+;;     `(and (list? x) (pair? x) …)`; a bare ATOM can never be a member. This is
+;;     [Q_U36](../docs)'s point: the star is not a head, so it is not a head-set
+;;     question at all.
+;;   · `flatten-ws-datum` (tree-parser) — NO. Both arms require `(pair? item)`
+;;     before the `memq`, so a bare atom never reaches the negative list.
+;;   · `preparse-expand-form`'s opacity list / `preparse-expand-subforms`' skip
+;;     list — NO. Both test `(car datum)`, i.e. list heads only.
+;;   · `parse-list`'s arms + `segment-select-items` — NOT HERE. Those are the
+;;     Q_U35 REFUSAL seats and belong to 1a-iii with the consumer.
+;;
+;; ⚠ `pattern-var?` DID get a 21st exclusion — after a first attempt to fix the
+;; class structurally instead was reverted (see the splice pin below). An earlier
+;; draft of this line said it did not; the sentence survived the reversal and had
+;; to be corrected, which is the same comment-asserts-a-false-mechanism failure
+;; this slice's own header is about. Two sites, one truth: `macros.rkt`'s
+;; exclusion list and this note.
+;;
+;; ⚠ NOT CLOSED HERE, recorded so the enumeration above is not read as complete:
+;; two message seats render a bare atom into user-facing TEXT and would print the
+;; sentinel's internal name — `pol8-bad-head-error` (parser.rkt) and
+;; `process-ns-declaration`'s segment message (namespace.rkt). Neither is
+;; reachable from any star CONTEXT in the matrix (no cell is a `defr` clause head
+;; or an `ns` name), so 1a-i's gate cannot see them and they are not this slice's
+;; obligation — but they are real, and they belong to whoever widens the surface.
+;; ---------------------------------------------------------------------------
+
+(test-case "P4e-1a 1a-ii: pp-datum prints the sentinel's INTERNAL NAME, by design"
+  ;; ⚠ THIS PIN IS THE REVERSE OF THE ONE I FIRST WROTE. I gave `pp-datum` an arm
+  ;; rendering `$postfix-star` as `*`; the adversarial verify showed that is
+  ;; actively harmful. Every arm in that cond is a form that legitimately reaches
+  ;; the parser; every CONSUMED marker has none and prints its internal name.
+  ;; `$postfix-star` is consumed — its appearance in a printed datum IS the
+  ;; defect — so `*` would make a leak indistinguishable from correct output in
+  ;; `expand`. The absence of an arm is the diagnostic.
+  (check-equal? (pp-datum '$postfix-star) "$postfix-star")
+  ;; it shares that treatment with its consumed siblings
+  (check-equal? (pp-datum '$bcast-step) "$bcast-step")
+  ;; while the SURVIVING forms keep their renderings
+  (check-equal? (pp-datum '$rest) "...")
+  (check-equal? (pp-datum '$pipe) "|"))
+
+(test-case "P4e-1a 1a-ii: the sentinel is not a pattern var, so the splice arm never sees it"
+  ;; ⚠⚠ THIS PIN REPLACED ONE THAT ASSERTED THE OPPOSITE, and the story is the
+  ;; slice's second lesson. `$postfix-star` is the FIRST BARE-SYMBOL sentinel, so
+  ;; it falsifies the invariant `datum-subst-list`'s splice arm is justified by
+  ;; ("a sentinel is … never a bare symbol followed by `...`"). I concluded the
+  ;; arm should therefore ask "is it DECLARED?", matching what `446070fc` did one
+  ;; function above — and the neighbourhood run turned
+  ;; `test-defmacro.rkt`'s "the SPLICE branch keeps its unbound error" RED.
+  ;; That behaviour is a RULING, stated in `446070fc`'s own discharge note; only
+  ;; its RATIONALE was wrong. **A falsified rationale does not license reversing
+  ;; the decision it was offered for** — check for an existing pin before
+  ;; "completing" someone's fix.
+  ;; The fix belongs where the sentinel/user-var distinction lives:
+  ;; `pattern-var?`'s exclusion list.
+  ;; `datum-subst-list` is internal; `datum-subst` delegates to it for any list
+  ;; template, which is the path a defmacro body actually takes.
+  (define (subst elems bindings) (datum-subst elems bindings))
+  ;; the SENTINEL passes through — it is not a pattern var at all
+  (check-equal? (subst '($postfix-star ...) (hasheq))
+                '($postfix-star ...)
+                "a bare-symbol sentinel is not a pattern var, so no raise")
+  ;; a genuine USER typo still raises — the signal 446070fc ruled to keep
+  (check-exn exn:fail? (lambda () (subst '($nope ...) (hasheq)))
+             "an unbound USER pattern var still raises")
+  ;; a DECLARED splice var still splices
+  (check-equal? (subst '($xs ...) (hasheq '$xs '(1 2 3)))
+                '(1 2 3)
+                "a declared splice var still splices"))
+
+(test-case "P4e-1a 1a-ii: the exclusion's PATTERN-SIDE cost, pinned rather than discovered"
+  ;; ⚠ THE COST OF THE EXCLUSION, NAMED. `pattern-var?` governs the PATTERN side
+  ;; too (`datum-match`), and `macros.rkt` says in as many words that that side is
+  ;; "a separate question and out of scope here" — so adding an exclusion crosses
+  ;; a boundary the file declares. Consequence: a macro whose PARAMETER is
+  ;; literally named `$postfix-star` now registers and then silently never
+  ;; matches, because the param is no longer a pattern variable.
+  ;;
+  ;; This is the pre-existing class shared by all 21 exclusions, not a new one —
+  ;; `process-defmacro` performs no param validation, so every excluded sentinel
+  ;; behaves this way. It is pinned here because the slice CREATED a new instance
+  ;; of it, and an unpinned known cost is indistinguishable from an unknown one.
+  ;; (The name is unwritable in practice: the WS reader mints `$postfix-star`, so
+  ;; a user typing it means it literally.)
+  (define msgs (run-ws-pre "defn fp [z] z\ndefmacro mp [$postfix-star] [fp $postfix-star]\ndef vp := [mp 1]"))
+  (check-true (ormap (lambda (m) (regexp-match? #rx"Unbound variable" m)) msgs)
+              (format "a sentinel-named macro param does not bind — known cost: ~s" msgs))
+  ;; the control: an ordinary param name works
+  (define ok (run-ws-pre "defn fp [z] z\ndefmacro mq [$q] [fp $q]\ndef vq := [mq 1]"))
+  (check-false (ormap (lambda (m) (regexp-match? #rx"Unbound variable" m)) ok)
+               (format "an ordinary macro param binds normally: ~s" ok)))
