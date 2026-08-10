@@ -8,6 +8,36 @@ The implementation lives in `lib/prologos/ocapn/`. Tests in
 `tests/test-ocapn-*.rkt`. Acceptance in
 `examples/2026-04-27-ocapn-acceptance.prologos`.
 
+## ⭐ Re-probe sweep, 2026-08-05 (after merging 101 upstream commits)
+
+Every entry below marked `✅ CLOSED — re-probed 2026-08-05` or `❌ STILL OPEN —
+re-probed 2026-08-05` was **executed**, not read. Probe files:
+`examples/2026-08-05-pitfall-reprobe.prologos` and `…-reprobe2.prologos`.
+
+| closed by upstream | still open |
+|---|---|
+| **#5** `some`/`none` need explicit type args | **#22** bare `Option Nat -> Int` still parses as a 3-arg Pi |
+| **#16** forward references in a module | **#23** unbracketed multi-token `defn` body — *now well-diagnosed* |
+| **#21** multi-line clause body → `??__match-fail` | **#42** a pattern variable silently shadows a constructor |
+| **#36** unbracketed multi-line application args | |
+| **#38** multi-line `let` value | |
+
+Two method notes, because the first pass got them wrong:
+
+1. **Probe the entry's OWN failing shape, not its workaround.** My first probe
+   wrote `[Option Nat]` for #22 and a bracketed call for #36 — both are the
+   documented WORKAROUNDS. They passed, which would have closed #22 falsely.
+   Re-probed bare: #36 is genuinely fixed, #22 is not.
+2. **A probe that fails proves nothing until the probe itself is checked.** My
+   first #21 probe used `nat+`, which does not exist, and my first #42 probe
+   declared a 2-arg constructor (pitfall #34) — both "failures" were mine, not
+   the compiler's.
+
+#42 is the one to look at: it reproduces **silently**. `| red -> [int+ red 1]`
+against `data Colour { red : Unit … }` binds `red` as a fresh variable shadowing
+the constructor, and `[p42f 7]` returns `8` at zero errors. Its "dangerous"
+marking stands.
+
 ## Scope
 
 OCapN's reference implementation (Goblins, in Racket) leans on three things
@@ -312,6 +342,10 @@ documented ceiling.
 
 ### #5 — `none` and `some` need explicit type args in some contexts (2026-04-27)
 
+> ✅ **CLOSED — re-probed 2026-08-05 against the post-merge tree.** `def p5 := [some 3]`
+> now elaborates to `[Option Int]` with no explicit type argument.
+> Probe: `examples/2026-08-05-pitfall-reprobe.prologos`.
+
 **Symptom.** Several tests need to compare against an `Option Nat`
 returned by `lookup-promise`, etc. Writing the literal `none` works
 in pattern position but in expression position with no surrounding
@@ -556,6 +590,10 @@ infer") doesn't point at the line.
 
 ### #16 — Forward references inside a `.prologos` module (2026-04-27)
 
+> ✅ **CLOSED — re-probed 2026-08-05 against the post-merge tree.** Mutually
+> recursive `p16-even` / `p16-odd` defined in either order both elaborate and
+> evaluate. Probe: `examples/2026-08-05-pitfall-reprobe.prologos`.
+
 **Symptom.** First version of `vat.prologos` had:
 ```
 spec apply-effect Effect Vat -> Vat
@@ -785,6 +823,10 @@ of a `foreign` form.
 
 ### #21 — Multi-line clause body silently produces `??__match-fail` holes (2026-04-29, real bug)
 
+> ✅ **CLOSED — re-probed 2026-08-05 against the post-merge tree.** A clause body
+> on the line below its `|`, indented further, now evaluates instead of yielding
+> a `??__match-fail` hole. Probe: `examples/2026-08-05-pitfall-reprobe2.prologos`.
+
 **Symptom.** A `defn` whose `match` clause body spans multiple
 indented lines compiles without error but evaluates to
 `??__match-fail : <return-type>`:
@@ -851,6 +893,12 @@ runtime sentinel reveals the bug.
 ---
 
 ### #22 — `Option Nat -> SyrupValue` parses as multi-arg Pi, not `(Option Nat) -> SyrupValue` (2026-04-29, real bug)
+
+> ❌ **STILL OPEN — re-probed 2026-08-05 in the BARE form.** `spec f Option Nat -> Int`
+> still parses as a multi-arg Pi (`[Option ?m] -> Nat -> Int`, three arguments).
+> The bracketed `[Option Nat]` workaround is what the first probe accidentally
+> tested and it works — which is exactly how this entry could look closed without
+> being closed. Probe: `examples/2026-08-05-pitfall-reprobe2.prologos`.
 
 **Symptom.** A spec like
 
@@ -1784,6 +1832,11 @@ the workaround still works:
 
 ### #36 — Multi-line constructor / function application: continuation args eaten as inner application (2026-05-08, real bug)
 
+> ✅ **CLOSED — re-probed 2026-08-05 against the post-merge tree**, and probed in
+> the entry's OWN failing shape (unbracketed continuation args), not the
+> bracketed workaround. `p36 1 / 2 / 3` split across three lines now returns 6.
+> Probe: `examples/2026-08-05-pitfall-reprobe2.prologos`.
+
 **Symptom.** Calling a constructor or function with N args, where
 the args are split across multiple lines, parses the *continuation*
 args as a single nested application instead of N separate args:
@@ -1959,6 +2012,11 @@ For 2+ args, the multi-arity form is fine (per #18 caveats).
 ---
 
 ### #38 — `let X := EXPR` body can't span multiple lines (2026-05-08, real bug)
+
+> ✅ **CLOSED — re-probed 2026-08-05 against the post-merge tree.** A `let` value
+> may span lines (deeper than the binding column, or inside brackets); the LET
+> track's grammar covers this and `.claude/rules/prologos-syntax.md` § `let`
+> documents it. Probe: `examples/2026-08-05-pitfall-reprobe.prologos`.
 
 **Symptom.** A `let` binding whose value expression spans multiple
 lines silently fails parsing. The error is specifically:
@@ -2332,6 +2390,12 @@ cache states which turn this bug from latent into active.
 ---
 
 ### #42 — Variable name in pattern silently shadows a data constructor (2026-05-18, real bug, **dangerous**)
+
+> ❌ **STILL OPEN — re-probed 2026-08-05, and it reproduces silently.** With
+> `data Colour { red : Unit … }`, a `match` arm `| red -> [int+ red 1]` binds
+> `red` as a fresh VARIABLE shadowing the constructor: `[p42f 7]` returns 8, at
+> zero errors. The entry's "dangerous" marking stands.
+> Probe: `examples/2026-08-05-pitfall-reprobe2.prologos`.
 
 **Symptom.** Wrote a match arm that takes a `SyrupValue` and binds
 it as `refr`:

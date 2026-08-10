@@ -17,6 +17,7 @@
 
 (require racket/match
          racket/string
+         (only-in racket/set set? in-set)  ;; DEFERRED 52: goal-arg-excused?'s container arms
          racket/list        ;; Rel T1 B3.2: remove-duplicates in the display-refiner
 
          "prelude.rkt"
@@ -43,6 +44,8 @@
          ;; CIU T6 D4.P3a: the select walk + failure struct (consumed by the
          ;; typing-errors select hint — one walk, two consumers, no drift)
          select-project (struct-out select-fail)
+         select-convertible-carrier  ;; D4.P4d slice 4c: 'list | 'lseq | #f — which conversion into PVec applies
+         bcast-schema-refusal   ;; D4.P4d slice 4c: 'open | 'defaulted | #f — ONE statement of the admission rule
          ;; D4.P4b-ii-1: the subject-kind × sort dispatch + the Map posture's
          ;; marker. Exported for the TABLE pins — the `'path` column is
          ;; unreachable from surface syntax until b-ii-2 flips the fold, so it
@@ -822,6 +825,7 @@
 ;; failure kinds: 'subject-map · 'subject-tuple · 'subject-other ·
 ;; 'miss-closed · 'miss-dyn (unlisted on dyn) · 'unknown-presence.
 ;; `path` = the label trail to the failure (for branch-aware messages).
+;;
 (struct select-fail (kind path label row) #:transparent)
 
 ;; D4.P4b-ii-1 — THE MAP POSTURE's carrier (Q_U10).
@@ -1114,9 +1118,15 @@
 (define (select-elem-of ctx tm path sort name)
   (case sort
     [(path block)
-     (if (expr-PVec? tm)
-         (values (expr-PVec-elem-type tm) #f)
-         (values #f (select-fail 'bcast-carrier (append path (list name)) name tm)))]
+     (cond
+       [(expr-PVec? tm) (values (expr-PVec-elem-type tm) #f)]
+       ;; D4.P4d slice 1 — the genuine-Map carrier: ONE uniform elem (the
+       ;; value type); the caller's re-wrap follows the carrier (`tm` is in
+       ;; scope there). The keyword-row carrier does NOT come through here —
+       ;; it has no single elem (per-field types) and routes around this
+       ;; protocol in `select-bcast-lift`.
+       [(expr-Map? tm) (values (expr-Map-v-type tm) #f)]
+       [else (values #f (select-fail 'bcast-carrier (append path (list name)) name tm))])]
     [else (select-sort-unhandled 'select-elem-of sort)]))
 
 ;; D4.P4c-4c (DEFERRED 43) — THE TYPE THE TIER DECISION SHOULD SEE.
@@ -1142,15 +1152,176 @@
 ;; Harmless (typing then refuses the ordinal statically, and the old/new results
 ;; are byte-identical there), but the honest statement is "the tier sees the type
 ;; the ω step unwraps to", not "the type a key is projected from".
+;; D4.P4d slice 3 — the peel's landing type may be a UNION, and `expr-Map?` of
+;; a union is #f, so a Map COMPONENT would never assert. That matters more here
+;; than anywhere else in the phase: the keys-⋂ gate is a structural NO-OP for
+;; Map components (an open `[Map K V]` statically offers EVERY keyword — the
+;; union arm tests only the key TYPE), so for the whole Map-bearing union family
+;; the TIER is the only mechanism that can make a runtime miss loud. Same
+;; conservative witness-returning shape as C9 (a)'s row OR.
+(define (tier-union-witness t)
+  (if (expr-union? t)
+      (let ([comps (map whnf (flatten-union t))])
+        ;; ⭐⭐ D4.P4d slice 6 — THE Nil SHORT-CIRCUIT IS GONE, and that is the
+        ;; other half of the split [owner 2026-08-08].
+        ;;
+        ;; It used to read `(if (ormap expr-Nil? comps) t …)`: ONE Nil abandoned
+        ;; the witness search for the WHOLE union, including the Map components
+        ;; the search exists to find, so the tier stayed unsolved = permissive.
+        ;; Its stated reason was that an assertive tier makes an actually-absent
+        ;; element PANIC — true at the time, because `champ-of` consulted the tier
+        ;; to decide absence. It no longer does: absence is now decided
+        ;; STRUCTURALLY there, by `expr-nil?` on the VALUE. So the reason is
+        ;; discharged, and with it the "ACCEPTED CONSEQUENCE" this comment used to
+        ;; name — that a genuine Map miss inside a Nil-bearing union was QUIET, a
+        ;; buried `<error>` at zero errors. It is LOUD now, and identical to the
+        ;; Nil-free control, which is the oracle the battery pins it against.
+        ;;
+        ;; ⚠ Deleting the test is behaviour-preserving for Nil-FREE unions: the
+        ;; search body `(and (expr-Map? c*) c*)` can never select a Nil component,
+        ;; so the short-circuit only ever suppressed a witness that the search
+        ;; would have found among the OTHER components.
+        ;;
+        ;; ⚠ Both callers are `peeled?`-guarded, so this arms the BROADCAST path
+        ;; only; a plain single-get over a union keeps its ruled `none`
+        ;; degradation. That confinement is why the width of the `champ-of` arm
+        ;; can stay `expr-nil?` — see its header.
+        (or (for/or ([c* (in-list comps)]) (and (expr-Map? c*) c*))
+            t))
+      t))
+
+;; D4.P4d slice 4b — THE ONE ω SUBJECT RESOLVER. Returns the row a subject
+;; DENOTES when broadcast may safely treat it as that row, else #f.
+;;
+;; Why it exists: `select-row-of` resolves a schema fvar to its row, so
+;; `p{name}` and `p.name` work on a schema-typed value while `p:name` was told
+;; it "needs a … closed keyword-row subject" — about a subject that is exactly
+;; that under the other two spellings. Uniformity, not a new carrier.
+;;
+;; ⚠ ONE function, called from BOTH sites that see the subject (`select-bcast-
+;; lift` and `select-tier-subject`). The first cut inlined it at the lift only,
+;; and the tier then disagreed with the lift — DEFERRED 43's class. Two
+;; hand-maintained copies is how that happened; do not re-split it.
+;;
+;; ⚠⚠ TWO CONDITIONS, each of which was a LIVE soundness hole in the first cut:
+;;
+;; 1. SELECTION IS TESTED FIRST, and returns #f. This mirrors `select-row-of`'s
+;;    arm order, which its own comment marks LOAD-BEARING: both registries
+;;    accept the same name, so `schema P` + `selection P from P` is
+;;    constructible, and a schema-first test hands the selection's row over
+;;    with the per-field `:requires` READ CAPABILITY bypassed. Measured on the
+;;    first cut: `u.age` and `u{name}` were both refused by the view while
+;;    `u:h` returned `{:name "a", :age "SECRET"}` at ZERO errors. A view keeps
+;;    its own posture (DEFERRED 20); refusing is the monotone direction.
+;;
+;; 2. ONLY A `:closed` SCHEMA RESOLVES. `schema` is OPEN by default and
+;;    `schema->row` mints `'closed` unconditionally — harmless for every prior
+;;    consumer, because `.` reads ONE field and `{}` assembles NAMED fields.
+;;    Broadcast is the first consumer that ENUMERATES the row, so on an open
+;;    schema the runtime walks the real value while the type comes from the
+;;    declared fields only. Measured on the first cut, with the very example
+;;    this slice was written for: a 3-key `Region` gave
+;;    `{:ap "a", :eu "e", :us "u"} : {:eu String :us String}` — three fields in
+;;    the value, two in the type, at zero errors; and an extra key that cannot
+;;    offer the field produced a silent `<error>` that propagated into a `def`.
+;;    An open schema genuinely is NOT a closed keyword row, so the existing
+;;    carrier refusal is the honest answer for it and stays.
+;;
+;; 3. NO FIELD MAY CARRY A `:default`. The width lie has a SECOND direction,
+;;    and the closedness gate above closes only the first. `schema->row` marks
+;;    every field `'present`, and its own docstring says the fill "happens at
+;;    the seal boundary, not here" — but that boundary does not always fill:
+;;    a `spec f -> S` RETURN has no fill at all. So a defaulted field can be
+;;    `'present` in the row and ABSENT at runtime. Measured on the second cut:
+;;      spec build Inner -> Cfg   (Cfg :closed, :b defaulted)
+;;      c := [build …]  →  {:a {:h "q"}} : Cfg      ← :b never filled
+;;      c:h             →  {:a "q"} : {:a String :b String}   ← 1 field, type says 2
+;;      broad.b         →  <error> : String          ← silent, 0 errors
+;;    Broadcast is what makes this reachable: it is the only consumer that
+;;    reads EVERY field, so it is the only one that touches the unfilled slot.
+;;    Refusing is monotone and narrow — the precise gate would mint defaulted
+;;    fields with a presence the seal actually guarantees, which means a
+;;    broadcast-specific `schema->row` variant, filed rather than improvised
+;;    here (DEFERRED 62).
+(define (bcast-resolve-subject tm)
+  (and (expr-fvar? tm)
+       (not (lookup-selection-by-name (expr-fvar-name tm)))
+       (let ([entry (lookup-schema-by-name (expr-fvar-name tm))])
+         (and entry
+              (schema-entry-closed? entry)
+              (not (ormap schema-field-default-val (schema-entry-fields entry)))
+              (schema->row entry)))))
+
+;; D4.P4d slice 4c — WHY was a schema subject not admitted? `'open` ·
+;; `'defaulted` · #f (not an unadmitted schema). The carrier diagnostic needs
+;; this to name the one keyword that fixes each case (DEFERRED 64), and it lives
+;; HERE, beside `bcast-resolve-subject`, so the admission rule has exactly ONE
+;; statement. Re-testing `schema-entry-closed?` at the formatter would be a
+;; second copy of the rule, free to drift from the resolver the moment either
+;; moves — the class this slice has already paid for twice.
+(define (bcast-schema-refusal tm)
+  (and (expr-fvar? tm)
+       (not (lookup-selection-by-name (expr-fvar-name tm)))
+       (let ([entry (lookup-schema-by-name (expr-fvar-name tm))])
+         (and entry
+              (cond
+                [(not (schema-entry-closed? entry)) 'open]
+                [(ormap schema-field-default-val (schema-entry-fields entry)) 'defaulted]
+                [else #f])))))
+
 (define (select-tier-subject tm branches)
   (if (and (pair? branches) (null? (cdr branches)))
-      (let loop ([tm tm] [steps (car branches)])
+      ;; ⚠ `peeled?` CONFINES the union witness to the BROADCAST path. Without
+      ;; it the witness also fires for a plain single-get (`u.a` over a union),
+      ;; flipping that node's tier from permissive to assertive and turning the
+      ;; ruled `none` degradation into a panic — a regression the slice-3 RED
+      ;; run caught in the D43 cross-carrier pin. Broadcast is the all-must-offer
+      ;; polarity; single-get is the optimistic one, and the tier must not leak
+      ;; across that seam.
+      (let loop ([tm tm] [steps (car branches)] [peeled? #f])
         (if (and (pair? steps)
-                 (eq? (select-step-kind (car steps)) 'bcast)
-                 (expr-PVec? tm))
-            (loop (whnf (expr-PVec-elem-type tm))
-                  (cons (select-bcast-inner (car steps)) (cdr steps)))
-            tm))
+                 (eq? (select-step-kind (car steps)) 'bcast))
+            (let ([next (cons (select-bcast-inner (car steps)) (cdr steps))])
+              (cond
+                [(expr-PVec? tm) (loop (whnf (expr-PVec-elem-type tm)) next #t)]
+                ;; D4.P4d slice 1 — the peel follows EVERY ω-capable carrier;
+                ;; leaving a new carrier un-peeled re-creates DEFERRED 43's
+                ;; silent-miss class one carrier over (the Map-carrier case
+                ;; additionally over-asserted from the CARRIER type before the
+                ;; refusal even fired — the P4d slice-1 audit's trace).
+                [(expr-Map? tm) (loop (whnf (expr-Map-v-type tm)) next #t)]
+                [(and (expr-Record? tm)
+                      ;; D4.P4d slice 2 — 'nat joins (C9 RULED (a), owner
+                      ;; 2026-08-07): positions are fields; the OR extends
+                      ;; verbatim. ⚠ This is the SECOND of the two gates —
+                      ;; the slice-2 audit refuted "one gate": widening only
+                      ;; the lift leaves this peel 'keyword-gated and a Map
+                      ;; POSITION's runtime miss silent (DEFERRED 43's class).
+                      (memq (expr-Record-key-domain tm) '(keyword nat))
+                      (eq? (expr-Record-tail tm) 'closed))
+                 ;; N field types, ONE scalar tier (the mini-C9 — D4 §5.P4d):
+                 ;; a conservative OR in the only direction the contract
+                 ;; permits (permissive → assertive). If ANY field's peel
+                 ;; reaches a Map, return that witness so the consumer's
+                 ;; `expr-Map?` test asserts; else the row itself (no assert).
+                 (or (for/or ([fld (in-list (expr-Record-fields tm))])
+                       (let ([p (loop (whnf (record-field-type (cdr fld))) next #t)])
+                         (and (expr-Map? p) p)))
+                     tm)]
+                ;; D4.P4d slice 4b — THE SECOND GATE. The lift resolves a closed
+                ;; schema to its row, and this peel is the OTHER site that must
+                ;; agree. Slice 1's audit found exactly this pair ("one gate"
+                ;; was two); leaving the peel un-widened is DEFERRED 43's
+                ;; silent-miss class one carrier over — the lift would admit
+                ;; while the tier stayed PERMISSIVE, so a runtime Map miss
+                ;; inside a schema-typed row goes QUIET where the identical
+                ;; plain row is LOUD. MEASURED live via the type-alias route
+                ;; (`def MKI : Type := [Map Keyword Int]`), which is how a
+                ;; Map-typed schema field actually constructs.
+                [(bcast-resolve-subject tm)
+                 => (lambda (row) (loop (whnf row) steps peeled?))]
+                [else (if peeled? (tier-union-witness tm) tm)]))
+            (if peeled? (tier-union-witness tm) tm)))
       tm))
 
 ;; D4.P4c-4c — ONE ω step applied to a subject type: the FUNCTORIAL LIFT.
@@ -1178,14 +1349,253 @@
 ;; `d:0` reported "ordinal `0` (branch `0.0`)". `select-elem-of` does its own
 ;; append for the CARRIER failure, where naming the ω step IS correct.
 (define (select-bcast-lift ctx tm s path seen sort)
-  (let ([inner (select-bcast-inner s)]
-        [name (select-step-name s)])
-    (let-values ([(elem ef) (select-elem-of ctx tm path sort name)])
-      (if ef
-          (values #f ef)
-          (let-values ([(bt bf) (select-project ctx (whnf elem) (list (list inner))
-                                                sort path)])
-            (if bf (values #f bf) (values (expr-PVec bt) #f)))))))
+  (let* ([tm (or (bcast-resolve-subject tm) tm)]
+         [inner (select-bcast-inner s)]
+         ;; ⚠ the DIAGNOSTIC label: `select-step-name` on a sub inner returns the
+         ;; RAW LIST (DEFERRED 40/46's shared root), and interpolating that into
+         ;; a carrier message is DEFERRED 49's shape widened. A readable stand-in
+         ;; for the sub; the symbol path is unchanged.
+         ;; ⚠ my first cut mapped every NON-SYMBOL to the stand-in — which
+         ;; broke ORDINAL diagnostics (`users:0` reported `:{…}`; a NUMBER is a
+         ;; legitimate label, the formatter prints `:0`). Only a LIST (the raw
+         ;; sub) takes the stand-in. Caught by the P4c-4b three-sub-cases pin.
+         [name (let ([n (select-step-name s)]) (if (pair? n) '|{…}| n))])
+    (cond
+      ;; D4.P4d slice 1 — THE KEYWORD-ROW CARRIER routes AROUND the one-elem
+      ;; protocol: a closed 'keyword row has no single elem (per-field types),
+      ;; so the lift is PER-FIELD, reconstructed in `record-map-field-types`'
+      ;; shape (the ONE reconstruction helper — labels/presence/tail/canonical
+      ;; order PRESERVED; `select-assemble-row` would re-mint closed/'present).
+      ;; The walk's 2-valued fail channel threads through the single-valued
+      ;; proc via let/ec: the FIRST failing field aborts the WHOLE row — no
+      ;; partial row escapes (the typing mirror of the whole-node abort).
+      ;; Dyn-tail rows fall through to the carrier refusal below (the 4d
+      ;; refusal). D4.P4d slice 2: 'nat rows JOIN (the het tuple —
+      ;; per-position EXACT is per-FIELD over nat keys; the walk is
+      ;; domain-agnostic), and the walk is LABEL-AWARE so a failing
+      ;; field/position is NAMED (the 'bcast-at wrapping fail; the slice-2
+      ;; audit: the label-blind walk structurally lost the position, and the
+      ;; keyword carrier had the same gap).
+      [(and (expr-Record? tm)
+            (memq (expr-Record-key-domain tm) '(keyword nat))
+            (eq? (expr-Record-tail tm) 'closed))
+       (let/ec bail
+         (values
+          (record-map-field-types/labeled
+           (lambda (label ft)
+             (let ([ft* (whnf ft)]
+                   [wrap (lambda (f) (bail #f (select-fail 'bcast-at
+                                                           (append path (list label))
+                                                           label f)))])
+               (if (select-sub-step? inner)
+                   ;; Q_U20's per-inner-kind rule EXTENDED to this carrier
+                   ;; (recorded in D4 §5.P4d): a sub inner ASSEMBLES at
+                   ;; 'block, per FIELD/POSITION.
+                   (let-values ([(comps cf) (select-level-components ctx ft* (cdr inner)
+                                                                     path 'block)])
+                     (if cf (wrap cf) (select-assemble-row comps)))
+                   (let-values ([(bt bf) (select-project ctx ft* (list (list inner))
+                                                          sort path)])
+                     (if bf (wrap bf) bt)))))
+           tm)
+          #f))]
+      [else
+       (let-values ([(elem ef) (select-elem-of ctx tm path sort name)])
+         (if ef
+             (values #f ef)
+             ;; D4.P4d slice 1: the RE-WRAP follows the CARRIER — `tm` is in
+             ;; scope, so the genuine-Map arm needs no protocol change
+             ;; (`[Map K V]` under ω re-wraps `[Map K proj(V)]`, keys by type).
+             (let ([re-wrap (if (expr-Map? tm)
+                                (lambda (t) (expr-Map (expr-Map-k-type tm) t))
+                                expr-PVec)]
+                   [elem* (whnf elem)])
+               (cond
+                 ;; ⭐ D4.P4d slice 3 — THE UNION ELEMENT: keys-⋂ / types-⋃
+                 ;; (the 2b split's second arm). This lives HERE, not in
+                 ;; `select-project-field`'s union arm, because that arm is the
+                 ;; SINGLE-GET polarity (optimistic filter-on-miss) and its own
+                 ;; comment forbids broadcast reuse — and no polarity parameter
+                 ;; is threaded down the five-signature walk, so the caller that
+                 ;; KNOWS it is a broadcast is the only place the other polarity
+                 ;; can be expressed.
+                 [else
+                  ;; ⭐ D4.P4d slice 4d-2 (DEFERRED 47 ≡ 59.1) — WRAP THE ELEMENT
+                  ;; FAILURE. The closed keyword/nat-row arm above wraps every
+                  ;; inner fail as `bcast-at`; this arm did NOT, so a PVec/Map
+                  ;; carrier's inner failure reached the formatter RAW and
+                  ;; `emp:t` printed "the subject is not a record" — no broadcast
+                  ;; context, and "the subject" naming the wrong thing (the
+                  ;; subject is the PVec; what failed is the ELEMENT).
+                  ;;
+                  ;; ⚠ THE WRAP BELONGS HERE, NOT INSIDE `select-bcast-inner-apply`
+                  ;; — the applier is SHARED with `select-union-lift`, which calls
+                  ;; it per component and wraps the result itself as `bcast-union`.
+                  ;; Wrapping inside would double-wrap every union component as
+                  ;; `bcast-union(bcast-elem(…))`.
+                  ;; ⚠ AND IT MUST NOT RE-WRAP A FAIL THAT IS ALREADY BROADCAST-
+                  ;; AWARE. The applier's union arm returns a `bcast-union` fail
+                  ;; that already states the step name; wrapping it unconditionally
+                  ;; produced `bcast-elem(bcast-union(…))` — the mirror image of
+                  ;; the double-wrap the comment above claims to avoid, announcing
+                  ;; the same label twice. Measured by the verify; the comment had
+                  ;; asserted the mechanism instead of checking its own output.
+                  (let-values ([(bt bf) (select-bcast-inner-apply
+                                         ctx elem* inner re-wrap name path sort)])
+                    (cond
+                      [(not bf) (values bt #f)]
+                      [(and (select-fail? bf)
+                            (memq (select-fail-kind bf) '(bcast-at bcast-elem bcast-union)))
+                       (values #f bf)]
+                      [else (values #f (select-fail 'bcast-elem path name bf))]))]))))])))
+
+;; D4.P4d slice 3 — the ω inner applied to ONE element type, factored out of
+;; `select-bcast-lift` so the union arm can reuse it per COMPONENT.
+;; ⭐ Q_U20 [owner, 2026-08-05]: A SUB INNER ASSEMBLES AT 'block, ALWAYS. The
+;; lift threads ONE sort and the two inner kinds need OPPOSITE ones — a symbol
+;; inner EXTRACTS ('path; 'block would wrap `xs:a` as `[PVec {:a T}]`), a sub
+;; inner ASSEMBLES ('block; 'path fails its one-component constraint). So the
+;; sort here is a PER-INNER-KIND semantics RULE, not inherited from the outer
+;; selector. `users:{a b}` over `[PVec {:a A :b B :c C}]` is a PVec of NARROWED
+;; rows — the terminal-`@sub` machinery of the below walks, applied per element.
+(define (select-bcast-inner-apply ctx elem* inner re-wrap name path sort)
+  (cond
+    ;; ⭐ D4.P4d slice 3 — THE UNION GATE lives HERE, not at the PVec/Map call
+    ;; site, so it covers EXACTLY the population the tier witness does: a union
+    ;; ELEMENT, a union-typed row FIELD, a union-typed tuple POSITION. The
+    ;; slice-3 verify caught the asymmetry — with the gate at the call site
+    ;; only, a row field whose type was a Map-bearing union went ASSERTIVE
+    ;; (witness) while staying UNGATED, so it panicked with a carrier-kind
+    ;; message instead of the honest keys-⋂ refusal.
+    ;; The mutual recursion with `select-union-lift` also handles a component
+    ;; that only whnfs INTO a union (a `def N : Type := <…>` alias) — the
+    ;; structural `flatten-union` cannot see through that.
+    [(expr-union? elem*)
+     (let-values ([(ut uf) (select-union-lift ctx elem* inner name path sort)])
+       (if uf (values #f uf) (values (re-wrap ut) #f)))]
+    [else (select-bcast-inner-apply/non-union
+           ctx elem* inner re-wrap name path sort)]))
+
+;; ⭐ D4.P4d slice 5 — THE NON-UNION TAIL, factored out so the union lift's
+;; unsolved-meta fallback can reach the optimistic path WITHOUT re-entering the
+;; union dispatch above it.
+;;
+;; ⚠⚠ THAT RE-ENTRY WAS A NON-TERMINATING LOOP, and it aborted the WHOLE FILE.
+;; `select-union-lift`'s meta arm called `select-bcast-inner-apply` with the SAME
+;; union `u`; this function's first arm dispatched straight back to
+;; `select-union-lift` with that same union; and `comps`/`offering` derive purely
+;; from `u` (`flatten-union` + a filter), so nothing changed between iterations.
+;; Not a slow path — an unconditional infinite mutual recursion. Measured at
+;; `730e017f` on `sl:a:b` (DEFERRED 58's own fixture plus ONE chain step): `fuel
+;; exhausted`, exit 1, output EMPTY — not even a `def` ABOVE it printed. A single
+;; step could not reach it because it takes a union whose component set holds an
+;; unsolved META, and only a chain produces one (`sl:a` ⇒ `[PVec Int | ?meta]`).
+;;
+;; The split removes the loop because the ONE call that passed an UNCHANGED value
+;; (`u`, from the meta arm) now bypasses the union dispatch, while every call that
+;; passes a strictly SMALLER value — the per-component call in `select-union-lift`
+;; — still gets the full dispatcher, so the alias / component-whnfs-into-a-union
+;; recursion the original comment exists for is untouched and well-founded by
+;; structural descent. (Verified: a `def B : Type := <Map … | Map …>` component
+;; still joins three ways through that call.)
+;;
+;; ⚠ THE TERMINATION ARGUMENT IS ABOUT DESCENT, NOT ABOUT THIS FUNCTION'S TEXT.
+;; An earlier version of this comment said "structurally it can no longer recurse:
+;; this function does not mention `select-union-lift`" — that is a grep asserted as
+;; a proof, and the verify was right to call it. A transitive path DOES exist
+;; (`/non-union` → `select-project` → `select-level-components` →
+;; `select-branch-entries` → `select-bcast-lift` → `select-bcast-inner-apply` →
+;; `select-union-lift`); it is unreachable today only because `select-elem-of` and
+;; `select-row-of` refuse a union subject — and `select-elem-of` is precisely the
+;; arm P4d has been widening (slice 1 added its Map arm). So the real invariant is:
+;; NO PATH FROM THIS TAIL RE-ENTERS THE UNION LIFT WITH AN UNCHANGED SUBJECT.
+;; If a future slice teaches a carrier resolver to admit a union, re-check it.
+(define (select-bcast-inner-apply/non-union ctx elem* inner re-wrap name path sort)
+  (cond
+    [(select-sub-step? inner)
+     (let-values ([(comps cf) (select-level-components ctx elem* (cdr inner) path 'block)])
+       (if cf (values #f cf)
+           (values (re-wrap (select-assemble-row comps)) #f)))]
+    [else
+     (let-values ([(bt bf) (select-project ctx elem* (list (list inner)) sort path)])
+       (if bf (values #f bf) (values (re-wrap bt) #f)))]))
+
+;; D4.P4d slice 3 — THE UNION MEET: keys-⋂ / types-⋃, the broadcast polarity.
+;; Every component must offer the step; the result is the ⋃ of the per-component
+;; projections. The ⋃ half already shipped (`build-union-type`); what is new is
+;; the GATE — the single-get arm FILTERS a non-offering component (`[else acc]`)
+;; and that filter is exactly the silent-wrong-answer defect here: the type then
+;; asserts every element yields the survivors' type while the value is a buried
+;; `<error>` at zero errors.
+(define (select-union-lift ctx u inner name path sort)
+  (let* ([comps (map whnf (flatten-union u))]
+         ;; ⭐ RULED (a) [owner, 2026-08-07]: **Nil is SKIPPED.** `<T | Nil>` is
+         ;; the OPTION type — Nil is the absence marker, not a carrier
+         ;; alternative that happens to offer no keys — so dropping it is what
+         ;; makes today's answer for `<Nil | Map>` CORRECT, and it keeps the
+         ;; `nil-safe-get` idiom composing with broadcast. A genuine
+         ;; non-offerer (a row lacking the key, an `Int`) is NOT an absence
+         ;; marker and still refuses.
+         [offering (filter (lambda (c) (not (expr-Nil? c))) comps)])
+    (cond
+      ;; An unsolved meta component means the component SET is not yet
+      ;; decidable. The ⋂ is ANTI-MONOTONE in that set, so gating on incomplete
+      ;; information could refuse what later becomes fine — the forbidden
+      ;; direction. Fall through to the pre-slice optimistic path instead: no
+      ;; NEW refusal is minted from information we do not have.
+      ;; ⚠ D4.P4d slice 5: this called `select-bcast-inner-apply`, whose FIRST arm
+      ;; dispatches on `expr-union?` — with `u` still a union, that was an
+      ;; unconditional infinite loop and a WHOLE-FILE ABORT (see the helper's
+      ;; header).
+      ;;
+      ;; ⚠⚠ AND THE OBVIOUS LANDING IS FORBIDDEN TWELVE LINES ABOVE THIS FILE'S
+      ;; `select-project-field` union arm: "Broadcast is the OTHER polarity
+      ;; (all-must-offer …) and must NOT reuse this arm — never 'unify' them."
+      ;; The `/non-union` tail with a UNION subject reaches exactly that arm
+      ;; (via `select-project` → `select-row-of`'s union arm), whose fold DROPS a
+      ;; meta component (`[else acc]`). The first cut did that, and the verify
+      ;; measured the price: the dropped meta left a CLEAN type, so
+      ;; `check-escaping-projection-metas` — the D23 escape guard — never fired,
+      ;; and `def q := sl:a:b` was ACCEPTED where the SHORTER `def q := sl:a` is
+      ;; hard-refused. More projection, less knowledge, past the guard. Worse,
+      ;; adding an empty `{}` component (strictly LESS information) flipped a
+      ;; CORRECT keys-⋂ refusal into acceptance.
+      ;;
+      ;; So the metas are carried INTO the result. The arm still mints no new
+      ;; refusal from information it does not have — its stated intent — but the
+      ;; uncertainty stays VISIBLE in the type, so the escape guard fires exactly
+      ;; as it does one step earlier. ⚠ The ORIGINAL metas, not a fresh one: the
+      ;; guard keys on `meta-source-info-kind`, so a fresh meta would not restore
+      ;; it. (The fuller question — whether a DECIDED non-offerer may be dropped
+      ;; at all, which is the polarity lie — is DEFERRED 82, not slice 5's job.)
+      [(ormap expr-meta? offering)
+       (let-values ([(bt bf) (select-bcast-inner-apply/non-union
+                              ctx u inner values name path sort)])
+         (if bf
+             (values #f bf)
+             (values (build-union-type (cons bt (filter expr-meta? offering))) #f)))]
+      [(null? offering)
+       ;; every component was skipped — row slot #f distinguishes this from the
+       ;; nested case below
+       (values #f (select-fail 'bcast-union (append path (list name)) name #f))]
+      [else
+       (let/ec bail
+         (values
+          (build-union-type
+           (for/list ([c (in-list offering)])
+             (let-values ([(bt bf) (select-bcast-inner-apply ctx c inner values name path sort)])
+               (if bf
+                   ;; ⚠ NEST the INNER fail (slice 2's `bcast-at` pattern). The
+                   ;; first cut DISCARDED it and asserted a keys-intersection
+                   ;; failure for EVERY per-component failure — false whenever
+                   ;; the component failed for another reason (an ordinal inner
+                   ;; over a Map component read "`[Map Keyword Int]` does not
+                   ;; offer `:0`", replacing a TRUE, actionable message with a
+                   ;; false one). The component identity is already carried by
+                   ;; the inner message, which names the row/type it failed on.
+                   (bail #f (select-fail 'bcast-union (append path (list name)) name bf))
+                   bt))))
+          #f))])))
 
 ;; select-project — the node's typing walk (Q_T1's one walk, two consumers).
 ;; D4.P3c: a LEVEL now assembles either sort: all-keyed components → a
@@ -1410,7 +1820,11 @@
               ;; result, which is what makes `x:s:t` fuse to one layer.
               (let-values ([(ct cf) (select-below-field
                                      ctx (whnf bt) rest
-                                     (append path (list (select-step-name s)))
+                                     ;; D4.P4d slice 2 (DEFERRED 40's live half):
+                                     ;; a SUB inner's step-name is the RAW LIST —
+                                     ;; the standing '|{…}| stand-in, never the list.
+                                     (append path (list (let ([n (select-step-name s)])
+                                                          (if (pair? n) '|{…}| n))))
                                      seen sort)])
                 (if cf
                     (values #f cf)
@@ -1465,7 +1879,9 @@
            [bf (values #f bf)]
            [(null? (cdr steps)) (values bt #f)]
            [else (select-below-field ctx (whnf bt) (cdr steps)
-                                     (append path (list (select-step-name s)))
+                                     ;; same DEFERRED-40 guard as the sibling above
+                                     (append path (list (let ([n (select-step-name s)])
+                                                          (if (pair? n) '|{…}| n))))
                                      seen sort)])))]
     [else (select-step-kind-unhandled 'select-below-field (car steps))]))
 
@@ -1797,6 +2213,85 @@
                          (loop (subst 0 arg cod) (cdr as) deferred)
                          (expr-error))))
                (expr-error)))]))))
+
+;; DEFERRED 52 (2026-08-05) — node kinds the IMPERATIVE `infer` cannot synthesize
+;; a type for. It has no arm for them and falls to its catch-all `(expr-error)`,
+;; so an `expr-error` here does NOT mean "the user wrote a type error".
+;;
+;; These are typed by the ON-NETWORK inferencer instead
+;; (`register-typing-rule!`, typing-propagators.rkt), and the command boundary
+;; tries on-network FIRST (driver.rkt) — which is why `def z := [pair 1 2]`
+;; succeeds (`z : [Sigma Int Int]`) while imperative `infer` on the very same
+;; term returns `(expr-error)`. Caught by the adversarial verify: without this
+;; exemption `(q1 [pair 1 2])` became a hard error while the identical `def`
+;; stayed fine — a live over-rejection, since goal arguments reach the weaker
+;; inferencer only.
+;;
+;; The fix is to EXEMPT them, not to invent an arm: inferring a dependent Sigma
+;; with no expected type is a genuine gap (typing-core types `expr-pair` only in
+;; `check`, against an expectation), deliberately delegated to on-network.
+;;
+;; ⚠ DERIVED, NOT GUESSED. This set is exactly
+;;     {nodes with `register-typing-rule!`} \ {nodes with an imperative `infer` arm}
+;; computed mechanically from the two sources, minus `expr-error` (an error IS an
+;; error and must never be excused). `tests/test-goal-arg-typing.rkt` recomputes
+;; it from source and FAILS on drift, so a future `register-typing-rule!` cannot
+;; silently widen the class behind this predicate's back.
+(define (infer-unsynthesizable? x)
+  (or (expr-pair? x) (expr-hole? x) (expr-reduce? x) (expr-refl? x)))
+
+;; DEFERRED 52 (2026-08-05) — does this expression mention a logic variable
+;; ANYWHERE? Used to tell a real type error in goal-argument position from a
+;; relational term whose type is legitimately unknown (see the "Goals → Goal"
+;; arms of `infer`).
+;;
+;; Written as a GENERIC reflective walk, not a hand-armed one, per
+;; `.claude/rules/pipeline.md` § "Exhaustive Walkers": every `expr-*` struct is
+;; `#:transparent`, so a `struct->vector` walk cannot silently miss a node kind.
+;; The armed alternative in reduction.rkt (`collect-deep-logic-vars`) covers only
+;; `expr-app` / `expr-goal-app` / `expr-unify-goal` behind an `[else '()]`
+;; catch-all — it has NO `expr-select` arm, so it reports "no logic vars" for the
+;; exact form (`mm.c`) this predicate exists to recognise. Reusing it here would
+;; have reintroduced the bug it is meant to prevent.
+;;
+;; Cost is confined to the error path: callers evaluate this ONLY after `infer`
+;; has already returned `(expr-error)`.
+;; ⚠ The "generic walk cannot silently miss a node kind" claim above is true for
+;; STRUCT node kinds only. The cond has arms for struct/pair/vector, so a field
+;; holding a hash, set, or box would be skipped (`(struct? (hasheq))` is #f). No
+;; `expr-*` node stores sub-expressions that way today — checked — so this is
+;; latent, not live; recorded because it is the same failure shape the paragraph
+;; above claims immunity from.
+(define (goal-arg-excused? e)
+  (let loop ([x e])
+    (cond
+      ;; A logic variable: relational term, type legitimately unknown.
+      [(expr-logic-var? x) #t]
+      ;; A node the imperative `infer` has no arm for: its `expr-error` is an
+      ;; inferencer gap, not a user error.
+      [(infer-unsynthesizable? x) #t]
+      [(struct? x)
+       (let ([v (struct->vector x)])
+         (for/or ([i (in-range 1 (vector-length v))]) (loop (vector-ref v i))))]
+      [(pair? x) (or (loop (car x)) (loop (cdr x)))]
+      [(vector? x) (for/or ([y (in-vector x)]) (loop y))]
+      ;; Container arms: `expr-champ` / `expr-hset` carry RAW Racket collections,
+      ;; and `(struct? (hasheq))` is #f — so without these a logic var inside a
+      ;; map or set literal would be missed and the argument wrongly un-excused.
+      ;; Maps happen to work through the struct arm today (champ nodes are
+      ;; structs), but that is an implementation detail, not a guarantee.
+      [(hash? x) (for/or ([(k v) (in-hash x)]) (or (loop k) (loop v)))]
+      [(set? x) (for/or ([y (in-set x)]) (loop y))]
+      [(box? x) (loop (unbox x))]
+      [else #f])))
+
+;; An inferred `expr-error` on a goal argument counts as a USER TYPE ERROR only
+;; when nothing in the argument excuses it. Conservative BY DESIGN: it can miss a
+;; real error (an ill-typed subterm sitting beside a logic var stays silent — a
+;; named residual), but it must never invent one, because inventing one breaks
+;; working relational programs.
+(define (goal-arg-type-error? arg ty)
+  (and (expr-error? ty) (not (goal-arg-excused? arg))))
 
 ;; ========================================
 ;; Type inference (synthesis mode)
@@ -3100,7 +3595,14 @@
          [(with-speculative-rollback
             (lambda ()
               (for/and ([ti (in-list (cdr tys))])
-                (unify-ok? (unify ctx (car tys) ti))))
+                (and (unify-ok? (unify ctx (car tys) ti))
+                     ;; D4.P4d slice 0: same conjunct as the pvec twin below —
+                     ;; unify admits the check-mode coercion arms, so
+                     ;; '[{:b 2} map-value] classified homogeneous with the
+                     ;; FIRST element's type (order-dependent; the slice-0
+                     ;; adversarial verify's B2 reproducer). conv asks the
+                     ;; sameness this probe means.
+                     (conv (car tys) ti))))
             values
             "list-literal-homogeneity")
           (infer ctx chain)]
@@ -3121,8 +3623,22 @@
        (cond
          [(ormap expr-error? kts) (expr-error)]
          [(ormap expr-error? vts) (expr-error)]
-         [(for/and ([kt (in-list (cdr kts))])
-            (unify-ok? (unify ctx (car kts) kt)))
+         [(with-speculative-rollback
+            (lambda ()
+              (for/and ([kt (in-list (cdr kts))])
+                (and (unify-ok? (unify ctx (car kts) kt))
+                     ;; D4.P4d slice 0: same conjunct as the list/pvec twins —
+                     ;; computed keys (`{[expr] val}`) make arbitrary key types
+                     ;; source-reachable, so a record-typed and a Map-typed key
+                     ;; coerced into "uniform" with the FIRST key's type (the
+                     ;; slice-0 adversarial verify's B1 reproducer,
+                     ;; order-dependent at 0 errors). conv asks sameness.
+                     (conv (car kts) kt))))
+            values
+            ;; The rollback wrapper is NEW here (the two sibling probes already
+            ;; had it): without it, a mid-probe unify's meta solves survive
+            ;; into the (expr-error) arm and leak into later commands.
+            "map-literal-key-homogeneity")
           (expr-Map (whnf (car kts)) (build-union-type vts))]
          [else (expr-error)]))]
     ;; CIU T6 F1a-col (D15): literal-extent typing, ALL-AT-ONCE. Homogeneous
@@ -3136,7 +3652,23 @@
          [(with-speculative-rollback
             (lambda ()
               (for/and ([ti (in-list (cdr tys))])
-                (unify-ok? (unify ctx (car tys) ti))))
+                (and (unify-ok? (unify ctx (car tys) ti))
+                     ;; D4.P4d slice 0: unify admits the check-mode COERCION
+                     ;; arms (Record↔Map, Record↔PVec — unify.rkt's F1
+                     ;; subsumption pairs, symmetric by design), but this
+                     ;; probe asks SAMENESS. Without this conjunct a mixed
+                     ;; `@[record map]` classified homogeneous with the FIRST
+                     ;; element's type — order-dependent, and a broadcast over
+                     ;; it buried `<error> : [PVec T]` at zero errors (the
+                     ;; P4d opening audit's soundness hole). `conv` is
+                     ;; definitional equality on normal forms: solved metas
+                     ;; resolve through nf, so meta-homogeneous literals still
+                     ;; collapse; coercible-but-DIFFERENT pairs return #f and
+                     ;; the probe ROLLS BACK to the honest 'nat row. Both
+                     ;; sides are nf'd per pair, NOT hoisted — an earlier
+                     ;; iteration may solve a meta INSIDE the first element's
+                     ;; type, and a hoisted nf would compare stale.
+                     (conv (car tys) ti))))
             values
             "pvec-literal-homogeneity")
           (expr-PVec (whnf (car tys)))]
@@ -3900,34 +4432,119 @@
     [(expr-logic-var _ _) (expr-hole)]  ;; inferred from context
 
     ;; defr / rel → relation type (type-unsafe: returns hole)
+    ;;
+    ;; DEFERRED 52, owner-requested follow-up (2026-08-05): these five arms are
+    ;; the CLAUSE-BODY half of the same swallow the "Goals → Goal" arms below fix.
+    ;; They inferred each child for effect and returned a fixed type, discarding an
+    ;; `expr-error` — so an ill-typed goal inside a `defr` BODY (where nearly all
+    ;; real goal code lives) was silent at registration and then quietly matched
+    ;; nothing at query time. The chain must be complete to be observable:
+    ;;   goal-app → clause → defr-variant → defr → driver's `(if (prologos-error? ty) ty …)`
+    ;; Breaking it anywhere leaves the error one level short of the boundary.
+    ;;
+    ;; BEHAVIOUR CHANGE, stated plainly: an ill-typed clause body now makes the
+    ;; `defr` FAIL TO REGISTER, so a later query reports the relation as unknown.
+    ;; That matches a parse-level clause error (DEFERRED 51's ruled status quo)
+    ;; and matches `def`. Registering the relation with only its GOOD clauses was
+    ;; refused — that is a silent wrong answer, the class this work exists to kill.
+    ;;
+    ;; Every leaf keeps the `goal-arg-type-error?` excuse gate, so a clause body
+    ;; made of logic variables — the shape of virtually every real rule — is
+    ;; untouched.
     [(expr-defr nm sc vs)
-     (when sc (infer ctx sc))
-     (for-each (lambda (v) (infer ctx v)) vs)
-     (expr-hole)]
-    [(expr-defr-variant ps bd) (for-each (lambda (b) (infer ctx b)) bd) (expr-hole)]
-    [(expr-rel ps cls) (for-each (lambda (c) (infer ctx c)) cls) (expr-hole)]
+     (define st (and sc (infer ctx sc)))
+     (define vts (map (lambda (v) (infer ctx v)) vs))
+     (if (or (and st (expr-error? st)) (ormap expr-error? vts))
+         (expr-error)
+         (expr-hole))]
+    [(expr-defr-variant ps bd)
+     (define bts (map (lambda (b) (infer ctx b)) bd))
+     (if (ormap expr-error? bts) (expr-error) (expr-hole))]
+    [(expr-rel ps cls)
+     (define cts (map (lambda (c) (infer ctx c)) cls))
+     (if (ormap expr-error? cts) (expr-error) (expr-hole))]
 
     ;; Clause/fact bodies → Goal
-    [(expr-clause gs) (for-each (lambda (g) (infer ctx g)) gs) (expr-goal-type)]
-    [(expr-fact-block rs) (for-each (lambda (r) (infer ctx r)) rs) (expr-goal-type)]
-    [(expr-fact-row ts) (for-each (lambda (t) (infer ctx t)) ts) (expr-hole)]
+    [(expr-clause gs)
+     (define gts (map (lambda (g) (infer ctx g)) gs))
+     (if (ormap expr-error? gts) (expr-error) (expr-goal-type))]
+    [(expr-fact-block rs)
+     (define rts (map (lambda (r) (infer ctx r)) rs))
+     (if (ormap expr-error? rts) (expr-error) (expr-goal-type))]
+    [(expr-fact-row ts)
+     ;; Fact-row TERMS are leaves, so they take the excuse gate directly (a fact
+     ;; row can carry a logic var, and an unsynthesizable node here is an
+     ;; inferencer gap, not a user error) — same rule as a goal argument.
+     (define tts (map (lambda (t) (infer ctx t)) ts))
+     (define bad?
+       (for/or ([t (in-list ts)] [ty (in-list tts)]) (goal-arg-type-error? t ty)))
+     (if bad? (expr-error) (expr-hole))]
 
     ;; Goals → Goal
+    ;;
+    ;; ⚠ `expr-error` from `infer` is AMBIGUOUS in goal position, and getting this
+    ;; wrong is the trap this fix fell into once (caught by POL.9's pinned
+    ;; "a preparse rewrite inside a paren goal keeps goal-ness" test). Under the
+    ;; relational fallback a bare name is a LOGIC VARIABLE, so `(fruit-color f mm.c)`
+    ;; elaborates `mm` to a logic var and `mm.c` is a selection on an unbound var —
+    ;; genuinely un-inferrable, but NOT a user error; it is the documented
+    ;; "computed goal args don't evaluate" semantics. Propagating there turned a
+    ;; working relational form into "Could not infer type".
+    ;;
+    ;; The discriminator is LOGIC-VAR FREEDOM: an argument containing no logic
+    ;; variables is a FUNCTIONAL expression and must type-check; an argument
+    ;; containing one is a relational term whose type may legitimately be unknown.
+    ;; See `goal-arg-type-error?` below.
+    ;;
+    ;; DEFERRED 52 (2026-08-05): these arms used to `for-each` / sequence `infer`
+    ;; for effect and then unconditionally return `(expr-goal-type)` — DISCARDING
+    ;; the inferred type even when it was an `expr-error`. `infer` reports a type
+    ;; failure by RETURNING `(expr-error)`, not by raising, so every type error in
+    ;; a goal argument was swallowed: the ill-typed argument became an opaque term
+    ;; that unified with nothing, and the user got an empty bag (indistinguishable
+    ;; from "no solutions") with ZERO errors. The same expression is loud in `def`
+    ;; position and as a bare expression command.
+    ;;
+    ;; The rule applied here: propagate from positions that are EVALUATED.
+    ;;   goal-app args ARE evaluated  — (q1 [+ 0 1]) → @[{}]        ⇒ propagate
+    ;;   `is` evaluates its RHS       — (is x [+ 1 1]) → {:x 2}     ⇒ propagate (RHS only)
+    ;;   `=` does NOT evaluate        — (= x [+ 1 1]) → {:x unknown} ⇒ LEAVE ALONE
+    ;; `=` renders any compound operand as `unknown` whether well-typed or not, so
+    ;; rejecting the ill-typed one would be inconsistent with accepting `[+ 1 1]`.
+    ;; Its operands are TERMS. Test-pinned as status quo in test-goal-arg-typing.rkt.
     [(expr-goal-app nm as)
      (infer ctx nm)
-     (for-each (lambda (a) (infer ctx a)) as)
-     (expr-goal-type)]
+     ;; Infer EVERY argument first (the pre-fix behaviour inferred all of them for
+     ;; effect — constraint generation included); only then decide. A short-circuit
+     ;; `for/or` over `(infer ctx a)` would silently skip the later arguments.
+     (define arg-tys (map (lambda (a) (infer ctx a)) as))
+     (define bad?
+       (for/or ([a (in-list as)] [t (in-list arg-tys)]) (goal-arg-type-error? a t)))
+     (if bad? (expr-error) (expr-goal-type))]
     [(expr-unify-goal l r)
+     ;; Deliberately NOT propagating — see the note above: `=` operands are terms.
      (infer ctx l) (infer ctx r)
      (expr-goal-type)]
     [(expr-is-goal v ex)
-     (infer ctx v) (infer ctx ex)
-     (expr-goal-type)]
-    [(expr-not-goal g) (infer ctx g) (expr-goal-type)]
+     ;; `v` is the (term) binding position; only `ex` is evaluated, so only `ex`
+     ;; can carry a genuine evaluation type-error.
+     (infer ctx v)
+     (define te (infer ctx ex))
+     (if (goal-arg-type-error? ex te) (expr-error) (expr-goal-type))]
+    [(expr-not-goal g)
+     (define tg (infer ctx g))
+     (if (expr-error? tg) (expr-error) (expr-goal-type))]
     [(expr-guard cond goal)
      (check ctx cond (expr-Bool))
-     (infer ctx goal)
-     (expr-goal-type)]
+     ;; `goal` is #f for the 1-arg form `(guard [cond])` — elaborator.rkt builds
+     ;; `(expr-guard ec #f)` there. The pre-fix code called `(infer ctx goal)`
+     ;; unguarded and DISCARDED the result, so #f was harmless; now the result is
+     ;; consulted, so guard it the way every other walker over this struct does
+     ;; (`(and goal …)` in substitution.rkt, zonk.rkt, reduction.rkt,
+     ;; pretty-print.rkt). Probed: the 1-arg form behaves identically with and
+     ;; without this, so it is defence against a latent hazard, not a live bug.
+     (define tg (and goal (infer ctx goal)))
+     (if (and tg (expr-error? tg)) (expr-error) (expr-goal-type))]
 
     ;; Schema → schema-type
 
@@ -3936,19 +4553,28 @@
     ;; (else a loose hole — B2 refines the un-schema'd facts case). solve-one is the
     ;; D25.4-unwrapped BARE row; explain rows carry a 'dyn tail for the conditional
     ;; reserved metadata keys (:certainty/:cycle/:provenance).
-    [(expr-solve g) (infer ctx g) (solve-row-type g 'pvec)]
+    ;; DEFERRED 52: "Infer the goal for effect (errors)" only reports if the goal's
+    ;; type is actually CONSULTED. These arms discarded it, so a goal-arm error
+    ;; (above) would die here one level short of the command boundary. Propagate.
+    [(expr-solve g)
+     (define tg (infer ctx g))
+     (if (expr-error? tg) (expr-error) (solve-row-type g 'pvec))]
     [(expr-solve-with sv ov g)
      (when sv (infer ctx sv))
      (when ov (infer ctx ov))
-     (infer ctx g)
-     (solve-row-type g 'pvec)]
-    [(expr-solve-one g) (infer ctx g) (solve-row-type g 'bare)]
-    [(expr-explain g) (infer ctx g) (solve-row-type g 'pvec 'dyn)]
+     (define tg (infer ctx g))
+     (if (expr-error? tg) (expr-error) (solve-row-type g 'pvec))]
+    [(expr-solve-one g)
+     (define tg (infer ctx g))
+     (if (expr-error? tg) (expr-error) (solve-row-type g 'bare))]
+    [(expr-explain g)
+     (define tg (infer ctx g))
+     (if (expr-error? tg) (expr-error) (solve-row-type g 'pvec 'dyn))]
     [(expr-explain-with sv ov g)
      (when sv (infer ctx sv))
      (when ov (infer ctx ov))
-     (infer ctx g)
-     (solve-row-type g 'pvec 'dyn)]
+     (define tg (infer ctx g))
+     (if (expr-error? tg) (expr-error) (solve-row-type g 'pvec 'dyn))]
 
     ;; Narrow — functional-logic narrowing: type-unsafe (hole) like solve
     [(expr-narrow func args target vars)
@@ -5283,6 +5909,42 @@
 (define (bare-name sym)
   (define-values (_prefix short) (split-qualified-name sym))
   (or short sym))
+
+;; D4.P4d slice 4c — "which stdlib conversion into PVec does this subject
+;; admit?", asked as ONE named question so the carrier diagnostic offers each
+;; remedy to exactly the population it works for. Exported instead of exporting `decompose-type-app`
+;; + `bare-name`, which would hand every caller the raw pair and invite a
+;; second, drifting copy (the F1b.7g class).
+;;
+;; ⚠ It matches the QUALIFIED name, deliberately NOT `bare-name`. The
+;; nil-overloading arm uses `bare-name` because it is asking a looser question;
+;; using it here was a live defect in this slice's own first cut — a user's own
+;; `data List` in their namespace is `userlist::List`, whose bare name is
+;; `List`, and it was handed the `pvec-from-list` remedy. Measured:
+;; `[pvec-from-list v]` over it → "Could not infer type". That is precisely the
+;; advice-that-does-not-work class this slice exists to remove, reintroduced by
+;; the fix for it.
+;;
+;; The two accepted spellings mirror `list-type-fvar`'s own pair: qualified in a
+;; module context, bare in a `:no-prelude` one.
+;; Returns 'list · 'lseq · #f — WHICH stdlib conversion into PVec applies, if
+;; any. One function rather than one predicate per carrier, because the
+;; diagnostic's question is "what do I tell them to call", and splitting it
+;; invites the next carrier to be forgotten. The inventory is closed and small:
+;; the only conversions INTO PVec are `pvec-from-list` (List), `into-vec`
+;; (LSeq), and `set-to-list` + `pvec-from-list` (Set, handled at the formatter
+;; since `expr-Set?` is a direct predicate).
+(define (select-convertible-carrier t)
+  (let-values ([(tname _targs) (decompose-type-app (whnf t))])
+    (and tname
+         (let ([qualified? (lambda (q bare)
+                             (or (eq? tname q)
+                                 (and (eq? tname bare)
+                                      (not (global-env-lookup-type q)))))])
+           (cond
+             [(qualified? 'prologos::data::list::List 'List) 'list]
+             [(qualified? 'prologos::data::lseq::LSeq 'LSeq) 'lseq]
+             [else #f])))))
 
 ;; Substitute type-args into leading m0 Pi binders of a constructor type.
 ;; Returns the remaining Pi chain with field types as domains.

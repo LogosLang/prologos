@@ -153,8 +153,14 @@
       [(caret)
        (string-append (if first? "" ".") (symbol->string (cadr s))
                       (cont->string (caddr s)))]
+      ;; ⚠ D4.P4d-0 slice 5: honour `first?` — this arm hardcoded `.{` and
+      ;; ignored the flag the bcast arm passes, so `users:{a b}` rendered as the
+      ;; NONEXISTENT spelling `users:.{a b}` in every diagnostic path (the bcast
+      ;; arm's own comment claimed otherwise). Non-first stays `.{…}` — the
+      ;; terminal sub-block's real spelling.
       [(sub)
-       (string-append ".{" (string-join (map pp-select-branch (cdr s)) " ") "}")]
+       (string-append (if first? "{" ".{")
+                      (string-join (map pp-select-branch (cdr s)) " ") "}")]
       ;; D4.P4c-3 (Q_U7): the ω step renders with its own glyph and its WRAPPED
       ;; step's rendering — `users:name`, `users:{a b}`. `first?` passes to the
       ;; inner step as #t so the inner never emits a leading dot: `:` is already

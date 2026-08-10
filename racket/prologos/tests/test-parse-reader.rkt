@@ -1282,7 +1282,16 @@
           (list "racket{a}"   '$brace-params  'brace-group        "head-adjacent → literal")
           (list "racket {a}"  '$brace-params  'brace-group        "head-spaced → literal")
           (list "x.{a}"       '$dot-brace     'dot-brace-group    "dot-brace")
-          (list "x#{a}"       '$set-literal   'set-group          "set literal")))
+          (list "x#{a}"       '$set-literal   'set-group          "set literal")
+          ;; D4.P4d-0 (DEFERRED 42): the `:{` mint — the FIRST count-changing
+          ;; member of this family (3 items → 2), i.e. the first change this
+          ;; guard could actually SEE, which is why the audit demanded the row.
+          ;; The datum wraps ($bcast-step ($select-brace …)); the tree twin
+          ;; fuses to ONE 'bcast-brace-group node. Both keyed on the SHARED
+          ;; `bcast-brace-trigger?` (colon glued BOTH sides), so the spaced
+          ;; near-miss row above (`x :{a}` would be `: + $select-brace`) cannot
+          ;; drift between the layers without this row going red.
+          (list "x:{a}"       '$bcast-step    'bcast-brace-group  "the :{ mint (glued both sides)")))
   (for ([c (in-list cases)])
     (define src (car c))
     ;; datum layer: find the sentinel head of the last item in the form

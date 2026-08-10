@@ -449,6 +449,195 @@
                             "solve (m x)")))
   (check-equal? (length (regexp-match* #rx"[{]" (car (regexp-split #rx" : " r)))) 4))
 
+
+;; ── DEFERRED 66: a COMPOUND TERM on the `||` line is a TERM, not a nested row ──
+;;
+;; The WS reader turns deeper-indented continuation rows into nested sublists
+;; inside the `$facts-sep`, so the facts arm partitioned "pair => nested row",
+;; whitelisting only the numeric-literal sentinels ($nat-literal, ...). Any OTHER
+;; compound term — a constructor application, a list literal, a map — is also a
+;; pair, so it was misclassified as a continuation row and SPLAYED into its
+;; constituent tokens, fabricating rows the user never wrote, with ZERO errors:
+;;     || [some 1]   ->  @[{:q unknown} {:q 1}]           TWO rows from one
+;;     || '[1 2]     ->  @[{:q unknown} {:q 1} {:q 2}]    THREE rows from one
+;;
+;; Measured byte-identical at b429d038, so this is pre-existing, not G2/52 fallout.
+;;
+;; The discriminator is the SENTINEL'S LINE. A continuation row is BY DEFINITION
+;; on a later line than the `||`; anything on the `||` line itself belongs to the
+;; first row. Verified by instrumenting the reader: for `|| 1 2 / 3 4` the
+;; sentinel is line 3 and the nested `(3 4)` is line 4, while for `|| [some 1]`
+;; the sentinel and the compound are BOTH line 6.
+;;
+;; ⚠ Why not a positive bracket-origin marker (the cleaner inversion): parser.rkt
+;; already records that a bracket group and a bare multi-token line are
+;; "indistinguishable post-reader — same wrap-stx-list, no origin". Adding that
+;; origin is a reader-wide change that also governs POL.8 clause grammar. Hence
+;; the line rule, plus the RESIDUAL pinned below.
+
+(test-case "DEFERRED 66: a constructor application on the `||` line is ONE term"
+  (define r (run-ns-ws-last
+             (string-append "ns d53\n"
+                            "defr r2 [?a]\n  || [some 1]\n"
+                            "solve (r2 q)")))
+  (check-true (string? r) (result-msg r))
+  ;; THE GUARANTEE IS THE ROW COUNT. Pre-fix this splayed into TWO rows
+  ;; (`unknown`, `1`). Whether the compound VALUE then round-trips is a separate,
+  ;; pre-existing gap — see the residual pin below — so do NOT assert on the
+  ;; rendered value here or this test starts failing for an unrelated reason.
+  (check-equal? (length (regexp-match* #rx"[{]" (car (regexp-split #rx" : " r)))) 1
+                (format "exactly ONE row, not the splayed two; got: ~a" r)))
+
+(test-case "DEFERRED 66: a list literal on the `||` line is ONE term"
+  (define r (run-ns-ws-last
+             (string-append "ns d53\n"
+                            "defr r3 [?a]\n  || '[1 2]\n"
+                            "solve (r3 q)")))
+  (check-true (string? r) (result-msg r))
+  ;; Pre-fix: THREE rows (`unknown`, `1`, `2`). Row count is the guarantee.
+  (check-equal? (length (regexp-match* #rx"[{]" (car (regexp-split #rx" : " r)))) 1
+                (format "exactly ONE row, not the splayed three; got: ~a" r)))
+
+(test-case "DEFERRED 66: a map term beside a scalar fills a 2-arity row"
+  ;; Pre-fix `{:k 1}` splayed into 2 terms, making 3 for arity 2 — the ONLY
+  ;; shape that got caught, and only by accident.
+  (define r (run-ns-ws-last
+             (string-append "ns d53\n"
+                            "defr r4 [?a ?b]\n  || {:k 1} 2\n"
+                            "solve (r4 p q)")))
+  (check-true (string? r) (result-msg r))
+  (check-equal? (length (regexp-match* #rx"[{][:]p" (car (regexp-split #rx" : " r)))) 1
+                (format "exactly ONE row; got: ~a" r)))
+
+(test-case "control: multi-line continuation rows still split into rows"
+  ;; The rule must not swallow the feature it is distinguishing against.
+  (define r (run-ns-ws-last
+             (string-append "ns d53\n"
+                            "defr mr [?a ?b]\n  || 1 2\n     3 4\n"
+                            "solve (mr p q)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "{:p 1, :q 2}") r)
+  (check-true (string-contains? r "{:p 3, :q 4}") r))
+
+(test-case "control: a nat-literal term on the `||` line is still one term"
+  (define r (run-ns-ws-last
+             (string-append "ns d53\n"
+                            "defr nr [?a]\n  || 1N | 2N\n"
+                            "solve (nr q)")))
+  (check-true (string? r) (result-msg r))
+  (check-equal? (length (regexp-match* #rx"[{]" (car (regexp-split #rx" : " r)))) 2 r))
+
+(test-case "DEFERRED 66: a STRUCTURAL sentinel heading a continuation line is a ROW, not a term"
+  ;; ⚠ REGRESSION GUARD for the first version of the `$`-headed inversion, which
+  ;; asserted "inside fact CONTENT a `$`-headed pair is always ONE VALUE". FALSE:
+  ;; the reader wraps a continuation LINE by its FIRST TOKEN, so a line starting
+  ;; with a structural sentinel arrives as `($pipe 3 4)` / `($clause-sep …)` /
+  ;; `($facts-sep …)`. Treating those as terms turned this ordinary leading-pipe
+  ;; table from a LOUD "empty row beside `|`" into TWO FABRICATED rows carrying
+  ;; the raw sentinel — `@[{:d 0} {:d [?$pipe 1]} {:d [?$pipe 2]}]`, zero errors —
+  ;; i.e. it moved a new shape INTO the very bug class being fixed. Caught by the
+  ;; adversarial verify. If this test ever goes silent, the inversion has lost its
+  ;; structural-sentinel exclusion again.
+  (define m (result-msg (run-ns-ws-last
+                         ;; NB: the `defr` must be the LAST command — run-ns-ws-last
+                         ;; returns only the last result, and a trailing query would
+                         ;; report the downstream "Unknown relation" instead of the
+                         ;; row error this test is about.
+                         (string-append "ns d53s\n"
+                                        "defr digit [?d]\n  || 0\n   | 1\n   | 2\n"))))
+  (check-true (string-contains? m "empty row beside")
+              (format "must stay LOUD; got: ~a" m))
+  (check-false (string-contains? m "$pipe")
+               (format "and must never leak the raw sentinel; got: ~a" m)))
+
+(test-case "DEFERRED 66 (residual CLOSED by 51c): a preparse rewrite no longer disables the line rule"
+  ;; ⚠ INVERTED. This was DEFERRED 66's dominant residual: rule (B) needed
+  ;; trustworthy srclocs, and any preparse rewrite in the defr destroyed them, so
+  ;; an idiomatic `|>` or dot-access ANYWHERE silently restored the fabricated
+  ;; rows — action at a distance. 51(c) preserves the srclocs, so the line rule
+  ;; now applies and the compound stays ONE row.
+  (define r (run-ns-ws-last
+             (string-append "ns d53d\n"
+                            "defr degr [?a ?b]\n"
+                            "  || [some 1] 2\n"
+                            "  &> (= a [|> 1 inc])\n"
+                            "solve (degr p q)")))
+  (check-true (string? r) (result-msg r))
+  (define row1 (car (regexp-split #rx"[}]" (car (regexp-split #rx" : " r)))))
+  (check-true (string-contains? row1 ":q 2")
+              (format "the fact row must survive intact as ONE row; got: ~a" r)))
+
+(test-case "DEFERRED 66: a $-headed compound on a CONTINUATION line IS fixed (and keeps row ORDER)"
+  ;; Change (A) is not limited to the `||` line: it is srcloc-independent, so a
+  ;; `$`-headed compound anywhere in the content is a term. This also fixes the
+  ;; REORDERING the splay caused — nested rows are appended AFTER all flat rows
+  ;; (`(append flat-rows other-rows)`), so pre-fix this produced 1, 4, then the
+  ;; splayed 2, 3. The narrower residual pinned below is specifically about
+  ;; NON-$-headed compounds on a continuation line.
+  (define r (run-ns-ws-last
+             (string-append "ns d53c\n"
+                            "defr cont [?a]\n  || 1\n     '[2 3]\n     4\n"
+                            "solve (cont q)")))
+  (check-true (string? r) (result-msg r))
+  (define vals (car (regexp-split #rx" : " r)))
+  (check-equal? (length (regexp-match* #rx"[{]" vals)) 3
+                (format "three rows, not four; got: ~a" r))
+  ;; ⚠ UPDATED at the 2026-08-05 merge — this asserted `1.*unknown.*4`, and the
+  ;; `unknown` was the representation gap the sibling test below pinned. This
+  ;; branch CLOSED that gap (`10f5a080`, "a collection literal survives the
+  ;; AST↔solver round trip"), so the middle row now renders its actual value.
+  ;; The property under test was always SOURCE ORDER, not the gap; it is now
+  ;; asserted against the real value instead of against a placeholder.
+  (check-true (regexp-match? #rx"1.*2 3.*4" vals)
+              (format "and in SOURCE order; got: ~a" r)))
+
+(test-case "DEFERRED 66 RESIDUAL: a compound fact VALUE round-trips; its TYPE does not"
+  ;; Removing the splay makes compound terms REACH the solver, where a
+  ;; pre-existing representation gap shows: they render as `unknown`. This is NOT
+  ;; caused by the splay fix and is not specific to fact rows — the same values in
+  ;; plain relational term position do it with no `||` involved:
+  ;;     (= y '[1 2])  → @[{:y unknown}]     (= z {:k 1}) → @[{:z unknown}]
+  ;; (`(= x [some 1])` DOES render, so the gap is per-shape, not universal.)
+  ;; Pinned so the row-count fix above is not misread as making compound facts
+  ;; WORK, and so that closing the representation gap flags here.
+  (define r (run-ns-ws-last
+             (string-append "ns d53\n"
+                            "defr rl [?a]\n  || '[1 2]\n"
+                            "solve (rl q)")))
+  (check-true (string? r) (result-msg r))
+  ;; ⚠ INVERTED at the 2026-08-05 merge, exactly as this test asked ("Pinned …
+  ;; so that closing the representation gap flags here"). It did flag. This
+  ;; branch closed the VALUE half in `10f5a080`: the row now renders `{:q '[1 2]}`
+  ;; where it rendered `{:q unknown}`.
+  ;;
+  ;; The TYPE half is still open — the result types as `[PVec {:q <error>}]`. So
+  ;; the assertion is split rather than deleted: the value must round-trip, and
+  ;; the type gap is pinned AS a gap, so closing it flags here too. Deleting the
+  ;; test would have discarded a live signal for a still-open defect.
+  (check-true (string-contains? r "'[1 2]")
+              (format "the compound VALUE must round-trip now; got: ~a" r))
+  (check-false (string-contains? r "{:q unknown}")
+               (format "no placeholder should remain; got: ~a" r))
+  (check-true (string-contains? r "<error>")
+              (format "TYPE half still open — if this fails the gap closed, update it; got: ~a" r)))
+
+(test-case "DEFERRED 66 RESIDUAL: a NON-$-headed compound on a CONTINUATION line is still splayed"
+  ;; Pinned as a KNOWN LIMIT, not as desired behaviour. Narrow by design: only
+  ;; NON-$-headed compounds (a bracket group like `[some 2]`); the $-headed case
+  ;; is fixed by change (A) — see the test above. On a continuation line the
+  ;; reader has already spliced the bracket group away, so `[some 2]` and a bare
+  ;; two-token row `some 2` are the same datum — genuinely undecidable here.
+  ;; Closing it needs the reader-side origin marker described above. If this test
+  ;; ever FAILS because the row count dropped to 2, that is the fix landing, and
+  ;; this pin should be inverted rather than deleted.
+  (define r (run-ns-ws-last
+             (string-append "ns d53\n"
+                            "defr mx [?a]\n  || 1\n     [some 2]\n"
+                            "solve (mx q)")))
+  (check-true (string? r) (result-msg r))
+  (check-equal? (length (regexp-match* #rx"[{]" (car (regexp-split #rx" : " r)))) 3
+                (format "known limit: 1 + splayed(some,2) = 3 rows; got: ~a" r)))
+
 (test-case "POL.7: wrong-length pipe segment is a loud error"
   (define m (result-msg (run-ns-ws-last
                          (string-append "ns p7\n"
@@ -617,13 +806,22 @@
                                         "       q\n"))))
   (check-true (string-contains? m "cannot extend a parenthesized goal") m))
 
-(test-case "POL.8: degraded srclocs (preparse rewrite) + parenless goals → guidance"
-  (define m (result-msg (run-ns-ws-last
-                         (string-append P8FIX
-                                        "def mm := {:k \"blue\"}\n"
-                                        "defr d [?f]\n"
-                                        "  &> fruit-color f mm.k\n"))))
-  (check-true (string-contains? m "parenthesize") m))
+(test-case "POL.8 (limit LIFTED by 51c): a preparse rewrite no longer refuses parenless goals"
+  ;; ⚠ THIS TEST IS INVERTED FROM ITS ORIGINAL FORM, deliberately. It used to pin
+  ;; POL.8's named limit: a preparse rewrite anywhere in the defr stripped the
+  ;; inner srclocs, so `parse-clause-content` detected the loss (impossible
+  ;; column 0) and refused parenless goals "with guidance rather than risking a
+  ;; silent mis-grouping". DEFERRED 51(c) removed the stripping —
+  ;; `rebuild-preserving-locs` (macros.rkt) re-attaches per-element srclocs after
+  ;; preparse — so the guidance has nothing left to detect here and the clause
+  ;; simply parses. The guard itself is KEPT as a safety net for shapes the
+  ;; alignment cannot recover; it is just no longer reachable this way.
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "def mm := {:k \"blue\"}\n"
+                            "defr d [?f]\n  &> fruit-color f mm.k\n")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "d :") (format "the defr must now register; got: ~a" r)))
 
 (test-case "POL.8: degraded srclocs with all-paren goals still parse (old path)"
   (define r (run-ns-ws-last
@@ -634,6 +832,573 @@
                             "solve (fruit-color f \"blue\")")))
   (check-true (string? r) (result-msg r))
   (check-true (string-contains? r "blueberry") "the file continues; d registered"))
+
+;; ── DEFERRED 51 (chip `task_4c00d3f0`, filed 2026-08-05) ───────────────────────
+;; The guard above is triggered by DEGRADED SRCLOCS, and the degradation comes
+;; from `macros.rkt`'s per-form `(syntax->datum stx)` strip + the defr arm's
+;; 3-arg `datum->syntax` rebuild — i.e. from a preparse rewrite ANYWHERE in the
+;; defr, NOT from dot-access specifically. Its message said "(e.g. dot-access)",
+;; which CIU T6 D4.P4c-4c/G2 made misleading by turning broadcast into a live
+;; second trigger (postfix-index was always a third).
+;;
+;; Owner ruling 2026-08-05: keep the POL.8 limit; make the MESSAGE name the real
+;; condition. The relation-loss half is PRE-EXISTING — measured byte-identical
+;; pre/post-G2 on the dot-access spelling against a baseline worktree at
+;; `ae26f540~1` — and is pinned below as the RULED behaviour so that changing it
+;; later is a deliberate decision rather than drift.
+
+;; ⚠ Relation names here are UNIQUE ON PURPOSE. `run-ns-ws-last` does NOT reset
+;; `current-relation-store` (it is absent from test-support.rkt's parameterize
+;; block), so relations REGISTERED BY EARLIER TESTS IN THIS FILE remain visible.
+;; A pin that reuses the popular name `d` silently queries the LEAKED relation
+;; from the all-paren test at :619 and passes on an empty bag — which is exactly
+;; the failure mode these pins exist to catch. Caught the first time round.
+(define (p8-guard-msg body)
+  (result-msg (run-ns-ws-last (string-append P8FIX "def mm := {:k \"blue\"}\n" body))))
+
+(test-case "DEFERRED 51(c): NO rewrite family refuses a parenless clause any more"
+  ;; Inverted from "every rewrite family triggers the guard". All four families
+  ;; degraded the srclocs before 51(c); none does now.
+  (for ([spelling (in-list '("mm.k" "mm:k" "mm[0]" "\'[1 2]"))]
+        [what     (in-list '("dot-access" "broadcast" "postfix-index" "list-literal"))])
+    (define r (run-ns-ws-last (string-append P8FIX "def mm := {:k \"blue\"}\n"
+                                             "defr d51fam [?f]\n  &> fruit-color f " spelling "\n")))
+    (check-true (string? r) (format "~a must no longer be refused; got: ~a" what (result-msg r)))
+    (check-true (string-contains? r "d51fam :")
+                (format "~a: the defr must register; got: ~a" what r))))
+
+(test-case "DEFERRED 51(c): rewrite families on a CONTINUATION line — 3 of 4 work, `x[i]` does not"
+  ;; The adversarial verify fairly objected that the family loop above only checks
+  ;; that the defr REGISTERS, and only with the rewrite on the `&>` line — so it
+  ;; passes over a family that parses into garbage on a CONTINUATION line. This
+  ;; test closes that gap by comparing against a plain-literal control.
+  ;;
+  ;; `x.f`, `x:f` and `'[…]` all fold to `$`-HEADED forms, which `pol8-goal-pair?`
+  ;; correctly declines to treat as a goal group. `x[i]` folds to `(get x i)` —
+  ;; the ONE family whose output is not `$`-headed — so it is mistaken for a goal
+  ;; group and a deeper continuation becomes a bogus sibling goal instead of
+  ;; extending the previous goal. Root cause PRE-DATES 51(c) (an ordinary
+  ;; `[inc z]` there behaves identically before and after); what 51(c) changed is
+  ;; that the old actionable "parenthesize each goal" was replaced by an unrelated
+  ;; type error. Filed as DEFERRED 69.
+  (define (cont arg)
+    (run-ns-ws-last (string-append P8FIX
+                                   "def mm := {:k \"blue\"}\n"
+                                   "def cols := '[\"red\" \"blue\"]\n"
+                                   "defr d51cont [?f]\n"
+                                   "  &> fruit-color f\n"
+                                   "       " arg "\n")))
+  (define control (cont "\"red\""))
+  (check-true (string? control) (result-msg control))
+  (for ([arg (in-list '("mm.k" "mm:k" "\'[1 2]"))]
+        [what (in-list '("dot-access" "broadcast" "list-literal"))])
+    (define r (cont arg))
+    (check-true (string? r)
+                (format "~a on a continuation line must parse; got: ~a" what (result-msg r))))
+  ;; KNOWN LIMIT, pinned so it is visible rather than surprising. If this starts
+  ;; passing, DEFERRED 69 is fixed — invert it rather than deleting it.
+  (define idx (cont "cols[0]"))
+  (check-true (prologos-error? idx)
+              (format "known limit: postfix-index on a continuation line; got: ~a"
+                      (result-msg idx))))
+
+(test-case "DEFERRED 51(c) ⭐ THE POINT: a rewritten clause GROUPS CORRECTLY, not merely without error"
+  ;; The load-bearing test of 51(c), and the one the old guard existed to make
+  ;; unnecessary. POL.8 refused rather than "risk a silent mis-grouping" — so
+  ;; lifting the refusal is only safe if the grouping is actually RIGHT.
+  ;; Two sibling goals, one containing a dot-access, must parse as TWO arity-2
+  ;; goals — identical to the rewrite-free control. An intermediate version of
+  ;; `rebuild-preserving-locs` failed exactly here: it registered the defr but
+  ;; parsed the two goals as ONE 3-argument goal (`fruit-color/3`), i.e. it turned
+  ;; a loud refusal into the silent mis-grouping POL.8 warned about.
+  (define (run2 arg)
+    (run-ns-ws-last (string-append P8FIX "def mm := {:k \"blue\"}\n"
+                                   "defr d51two [?f]\n"
+                                   "  &> fruit-color f " arg "\n"
+                                   "     fruit-color f \"blue\"\n"
+                                   "solve (d51two z)")))
+  (define rewritten (run2 "mm.k"))
+  (define control   (run2 "\"yellow\""))
+  (check-true (string? rewritten) (format "rewritten clause must parse; got: ~a" (result-msg rewritten)))
+  (check-true (string? control) (result-msg control))
+  (check-false (string-contains? (result-msg rewritten) "fruit-color/3")
+               (format "must NOT collapse into one 3-arg goal; got: ~a" (result-msg rewritten)))
+  (check-equal? rewritten control
+                "a rewrite must not change how the clause GROUPS"))
+
+(test-case "DEFERRED 51(c): a rewrite in EVERY goal still groups correctly (right-peel guard)"
+  ;; The second mis-parse found while building 51(c), and the reason
+  ;; `rebuild-preserving-locs` peels its middle FROM THE RIGHT. The strict suffix
+  ;; is computed by datum equality, so when the CONTINUATION line also contains a
+  ;; rewrite it is not in the suffix — it fell into the stamped middle, took the
+  ;; first goal's position, and the two goals parsed as ONE 3-argument goal.
+  ;; Silent, zero errors. Both goals here carry a dot-access on purpose.
+  (define (run2 arg1 arg2)
+    (run-ns-ws-last (string-append P8FIX "def mm := {:k \"blue\"}\n"
+                                   "defr d51both [?f]\n"
+                                   "  &> fruit-color f " arg1 "\n"
+                                   "     fruit-color f " arg2 "\n"
+                                   "solve (d51both z)")))
+  (define both (run2 "mm.k" "mm.k"))
+  (check-true (string? both) (format "must parse; got: ~a" (result-msg both)))
+  (check-false (string-contains? (result-msg both) "fruit-color/3")
+               (format "must NOT collapse into one 3-arg goal; got: ~a" (result-msg both)))
+  ;; …and agree with a shape-identical rewrite-free control. The control literal
+  ;; must be NON-MATCHING ("nope"), because `mm.k` does not evaluate in goal
+  ;; position (pre-existing semantics) and so yields no rows; comparing against a
+  ;; MATCHING literal would compare matching, not GROUPING, which is what this
+  ;; test is about.
+  (check-equal? both (run2 "\"nope\"" "\"nope\"")
+                "two rewritten goals must group exactly like two plain ones")
+  ;; a rewrite ONLY on the continuation line is the mirror case
+  (define tail (run2 "\"blue\"" "mm.k"))
+  (check-false (string-contains? (result-msg tail) "fruit-color/3")
+               (format "continuation-only rewrite must not collapse either; got: ~a"
+                       (result-msg tail))))
+
+(test-case "DEFERRED 51(c) let leg: a top-level `let` rel RHS takes parenless goals"
+  ;; The 4th family member, found by the def-arm verify (a 6-line reproducer with
+  ;; ZERO rewrites). Mechanism, instrumented: the let desugar is
+  ;;   (let r := V body) → ((fn (r : _) body) V)
+  ;; — the `($goal-rhs (rel …))` subtree survives DATUM-IDENTICAL but MOVES from
+  ;; element 3 to element 1, and prefix/suffix alignment cannot see moves, so the
+  ;; whole form was stamped @let-position and the rel's clause layout died. The
+  ;; helper's relocation step (unique datum-equal match, compound subtrees only)
+  ;; pairs the moved subtree with its original, srclocs intact.
+  ;; PIN SHAPE: equality with the PAREN-goal control — same semantics, parenless
+  ;; vs paren spelling — so grouping AND solving are pinned at once.
+  (define parenless (run-ns-ws-last
+                     (string-append P8FIX
+                                    "let d51lr := (rel [f]\n"
+                                    "  &> fruit-color f \"blue\")\n"
+                                    "  d51lr\n")))
+  (define paren     (run-ns-ws-last
+                     (string-append P8FIX
+                                    "let d51lc := (rel [f]\n"
+                                    "  &> (fruit-color f \"blue\"))\n"
+                                    "  d51lc\n")))
+  (check-true (string? paren) (result-msg paren))
+  (check-false (string-contains? (result-msg parenless) "parenless goals cannot")
+               (format "the guard must not fire; got: ~a" (result-msg parenless)))
+  (check-equal? parenless paren
+                "the parenless spelling must group and solve exactly like the paren control"))
+
+(test-case "DEFERRED 51(c) let leg: two sibling parenless goals under a let GROUP correctly"
+  (define parenless (run-ns-ws-last
+                     (string-append P8FIX
+                                    "let d51l2 := (rel [f]\n"
+                                    "  &> fruit-color f \"blue\"\n"
+                                    "     fruit-color f \"nope\")\n"
+                                    "  d51l2\n")))
+  (define paren     (run-ns-ws-last
+                     (string-append P8FIX
+                                    "let d51l3 := (rel [f]\n"
+                                    "  &> (fruit-color f \"blue\") (fruit-color f \"nope\"))\n"
+                                    "  d51l3\n")))
+  (check-true (string? paren) (result-msg paren))
+  (check-false (string-contains? (result-msg parenless) "fruit-color/3")
+               (format "must not merge the sibling goals; got: ~a" (result-msg parenless)))
+  (check-equal? parenless paren
+                "two parenless sibling goals must conjoin exactly like the paren control"))
+
+;; ── DEFERRED 70: the right-peel over-reach (the let leg was BODY-SHAPE-DEPENDENT) ──
+;;
+;; Every pin above uses an ATOM let-body (`d51lr`, `d51l2`). That is not a
+;; neutral choice — it is the only body shape the let leg ever worked for.
+;; `peelable?` accepts ANY two lists, so a COMPOUND body (`[some vr]`, the
+;; idiomatic shape) pairs with the moved rel RHS and the RHS is rebuilt against
+;; the BODY's syntax tree: nonzero column, so POL.8's column-0 marker goes blind
+;; and the sibling goals collapse onto one line. Before the let leg landed this
+;; same input got the LOUD guard — so the fix converted a correct refusal into a
+;; mis-grouping, which is exactly the trade the arc's own commentary forbids.
+;;
+;; Found by probing the audit's inferred claim rather than by any gate: the suite
+;; was green over this the whole time, because no pin used a compound body.
+(define P8FIX2
+  (string-append P8FIX
+                 "defr fruit-size [?fruit ?size]\n"
+                 "  || \"blueberry\" \"small\"\n"
+                 "  || \"banana\" \"long\"\n"))
+
+;; body shape × goal spelling, pinned by CONTROL EQUALITY in both directions.
+(define (d57-run body goals)
+  (run-ns-ws-last (string-append P8FIX2 "let d57r := (rel [f]\n" goals ")\n  " body "\n")))
+(define D57-PARENLESS "  &> fruit-color f \"blue\"\n     fruit-size f \"small\"")
+(define D57-PAREN     "  &> (fruit-color f \"blue\") (fruit-size f \"small\")")
+
+(test-case "DEFERRED 70: a COMPOUND let-body must not steal the rel RHS's srclocs"
+  ;; The regression proper. `[some d57r]` forces the rel, so a collapse is
+  ;; observable; with the atom body the same clause parses correctly, which is
+  ;; what makes this body-shape-dependent rather than a plain let-leg failure.
+  (define parenless (d57-run "[some d57r]" D57-PARENLESS))
+  (define paren     (d57-run "[some d57r]" D57-PAREN))
+  (check-true (string? paren) (result-msg paren))
+  (check-false (string-contains? (result-msg parenless) "fruit-color/5")
+               (format "the compound body must not collapse the goals; got: ~a"
+                       (result-msg parenless)))
+  (check-equal? parenless paren
+                "a compound let-body must group exactly like the paren control"))
+
+(test-case "DEFERRED 70: the ATOM-body case keeps working (the shape the old pins used)"
+  ;; Guards the fix from the other side — tightening the peel must not cost the
+  ;; relocation path that already worked.
+  (check-equal? (d57-run "d57r" D57-PARENLESS) (d57-run "d57r" D57-PAREN)
+                "atom-body parenless goals must still match their paren control"))
+
+(test-case "DEFERRED 70: a SINGLE goal under a compound body was never affected"
+  ;; Pinned because it isolates the trigger: the collapse needs TWO OR MORE
+  ;; sibling goals AND a compound body. A one-goal clause has no continuation
+  ;; line for the peel to mis-pair, and passed before the fix as well.
+  ;; ⚠ THIS PIN IS NARROWER THAN ITS NAME: it fixes the `let :=` SPELLING, and
+  ;; the first cut of the fix regressed the ALIGNED-BLOCK and BRACKET spellings
+  ;; of exactly this shape while this test stayed green. See the two below —
+  ;; they exist because this one was not enough.
+  (define one "  &> fruit-color f \"blue\"")
+  (define one-p "  &> (fruit-color f \"blue\")")
+  (check-equal? (d57-run "[some d57r]" one) (d57-run "[some d57r]" one-p)
+                "a single parenless goal under a compound body must match its control"))
+
+;; The two spellings the FIRST cut of the peel fix regressed. It gated the peel
+;; on `pre > 0`; here relocation cannot reach the moved rel RHS at all (it sits
+;; one level below the middle for the bracket form, two for `$let-block`), so the
+;; peel was the ONLY thing carrying the srclocs and withdrawing it turned a
+;; correct answer into a guard refusal. Both worked before that cut and must keep
+;; working: they are the regression pins, not new capability.
+(define (d57-aligned goals)
+  (run-ns-ws-last (string-append P8FIX2 "let d57a (rel [f]\n" goals ")\n"
+                                 "    d57n  5\n  [some d57a]\n")))
+(define (d57-bracket goals)
+  (run-ns-ws-last (string-append P8FIX2 "let [d57b (rel [f]\n" goals ")]\n"
+                                 "  [some d57b]\n")))
+(define D57-1GOAL   "          &> fruit-color f \"blue\"")
+(define D57-1GOAL-P "          &> (fruit-color f \"blue\")")
+
+(test-case "DEFERRED 70: ALIGNED-BLOCK let, one goal, compound body — must match its control"
+  (check-equal? (d57-aligned D57-1GOAL) (d57-aligned D57-1GOAL-P)
+                "aligned-block let must not lose the rel RHS's srclocs"))
+
+(test-case "DEFERRED 70: BRACKET let, one goal, compound body — must match its control"
+  (check-equal? (d57-bracket D57-1GOAL) (d57-bracket D57-1GOAL-P)
+                "bracket let must not lose the rel RHS's srclocs"))
+
+(define D57-2GOAL   (string-append "          &> fruit-color f \"blue\"\n"
+                                   "             fruit-size f \"small\""))
+(define D57-2GOAL-P "          &> (fruit-color f \"blue\") (fruit-size f \"small\")")
+
+;; ── DEFERRED 71: the DEPTH WALL — the origin index ────────────────────────────
+;;
+;; ⚠ INVERTED (this was the DEFERRED 70 KNOWN LIMIT, and it said to invert rather
+;; than delete when the fix landed). Both spellings used to MIS-GROUP into
+;; `fruit-color/5` at two or more goals, because the moved rel RHS sits BELOW the
+;; middle's top-level elements — one level down for the bracket form, two for
+;; `$let-block` — where neither `peel-steals-a-move?` nor the relocation search
+;; could see it.
+;;
+;; The fix is not a deeper search. `syntax->datum` allocates FRESH pairs and the
+;; desugars splice sub-datums BY REFERENCE, so cons-cell identity is already an
+;; exact origin marker for the thing this whole family is about — a subtree that
+;; MOVED through a desugar unchanged. The strip now records it.
+(test-case "DEFERRED 71: ALIGNED-BLOCK let at two or more goals — must match its control"
+  (check-equal? (d57-aligned D57-2GOAL) (d57-aligned D57-2GOAL-P)
+                "aligned-block let must group like its paren control at 2 goals"))
+
+(test-case "DEFERRED 71: BRACKET let at two or more goals — must match its control"
+  (check-equal? (d57-bracket D57-2GOAL) (d57-bracket D57-2GOAL-P)
+                "bracket let must group like its paren control at 2 goals"))
+
+(test-case "DEFERRED 71: the collapse is gone, not merely relabelled"
+  ;; Belt-and-braces on the two above: control-equality would also pass if BOTH
+  ;; sides broke identically, which is exactly how the `def := rel` member (a
+  ;; separate slice) hides from its own pin. Name the old symptom explicitly.
+  (check-false (string-contains? (result-msg (d57-aligned D57-2GOAL)) "fruit-color/5")
+               (format "aligned block must not collapse; got: ~a"
+                       (result-msg (d57-aligned D57-2GOAL))))
+  (check-false (string-contains? (result-msg (d57-bracket D57-2GOAL)) "fruit-color/5")
+               (format "bracket must not collapse; got: ~a"
+                       (result-msg (d57-bracket D57-2GOAL))))
+  ;; and the controls really do answer, so the equality above is not vacuous
+  (check-true (string? (d57-aligned D57-2GOAL-P)) (result-msg (d57-aligned D57-2GOAL-P)))
+  (check-true (string? (d57-bracket D57-2GOAL-P)) (result-msg (d57-bracket D57-2GOAL-P))))
+
+;; ── DEFERRED 71: the index restores POSITIONS, not PROPERTIES ─────────────────
+;;
+;; Found by adversarial verify, MEASURED, and it had a SILENT mode. The origin
+;; index hands back the ORIGINAL syntax object, which also carries its syntax
+;; PROPERTIES — and `prologos-paren-origin` is POSITION-SENSITIVE: the reader
+;; attaches it to every paren group and `paren-goal-stx?` reads it to decide that
+;; a paren group AT COMMAND POSITION is a relational goal (POL.9). A `defmacro`
+;; that lifts its argument to top level therefore turned an application into a
+;; goal. `dbg (inc 10)` went `11 : Int` → a hard error; `dbg (= 1 1)` went
+;; `true : Bool` → `@[{}] : _` with **zero errors on both legs**.
+;;
+;; The rule that fixed it: a hit whose original is the node we were ALREADY
+;; aligned with has not moved and keeps its properties; any other hit MOVED and
+;; takes srclocs ONLY. Nothing in the suite covered syntax properties before
+;; this, which is why every gate was green over it.
+(test-case "DEFERRED 71: a macro-spliced PAREN group at command position stays an application"
+  (check-equal? (run-ns-ws-last (string-append
+                                 "ns p8pp\n"
+                                 "spec ppinc Int -> Int\n"
+                                 "defn ppinc [n] [int+ n 1]\n"
+                                 "defmacro ppdbg [$e]\n"
+                                 "  $e\n"
+                                 "ppdbg (ppinc 10)\n"))
+                "11 : Int"
+                "a macro must not turn its paren argument into a relational goal"))
+
+(test-case "DEFERRED 71: …and the SILENT direction — a goal KEYWORD head keeps its bracket reading"
+  ;; The sharp one: both legs report 0 errors, so only the VALUE and TYPE differ.
+  ;; `(= 1 1)` at command position IS a unify goal when written by hand; spliced
+  ;; out of a macro it must keep the reading it had before the index existed.
+  (check-equal? (run-ns-ws-last (string-append
+                                 "ns p8pq\n"
+                                 "defmacro pqdbg [$e]\n"
+                                 "  $e\n"
+                                 "pqdbg (= 1 1)\n"))
+                "true : Bool"
+                "a macro-spliced goal-keyword group must not silently become a goal"))
+
+(test-case "DEFERRED 71: the BRACKET spelling is the control — identical throughout"
+  ;; Isolates the trigger to macro-spliced PARENS: this spelling never carried
+  ;; `prologos-paren-origin` and was unaffected in either direction.
+  (check-equal? (run-ns-ws-last (string-append
+                                 "ns p8pr\n"
+                                 "spec princ Int -> Int\n"
+                                 "defn princ [n] [int+ n 1]\n"
+                                 "defmacro prdbg [$e]\n"
+                                 "  $e\n"
+                                 "prdbg [princ 10]\n"))
+                "11 : Int"
+                "the bracket spelling must be unaffected"))
+
+;; ── DEFERRED 71 slice 2: the SIBLING-LET chain ───────────────────────────────
+;;
+;; ⚠ INVERTED (the KNOWN LIMIT below said to invert rather than delete). This one
+;; was NOT a depth problem at all — a distinction the earlier framing got wrong.
+;; `merge-toplevel-sibling-lets` fused the run from a PURE DATUM and rebuilt with
+;; a 4-arg `datum->syntax` against sibling 1, and `datum->syntax` stamps
+;; RECURSIVELY, so every node of the merged form carried sibling 1's line and
+;; column BEFORE `rebuild-preserving-locs` ever saw it. No search, at any depth,
+;; can recover information that is no longer in the tree. The fix is that the
+;; fusion now strips through the SAME origin index, so each sibling's own subtrees
+;; stay recoverable by identity across the fusion.
+;;
+;; Its loudness was incidental: sibling 1 sits at column 0, which is exactly
+;; POL.8's degradation marker. Had the chain been written indented (inside a
+;; `defn`), the same defect would have been SILENT.
+(test-case "DEFERRED 71 slice 2: a SIBLING-LET chain groups like its paren control"
+  (define parenless (run-ns-ws-last
+                     (string-append P8FIX2
+                                    "let d58sx := 5\n"
+                                    "let d58sr := (rel [f]\n"
+                                    "  &> fruit-color f \"blue\"\n"
+                                    "     fruit-size f \"small\")\n"
+                                    "  [pair d58sx 1]\n")))
+  (define paren     (run-ns-ws-last
+                     (string-append P8FIX2
+                                    "let d58tx := 5\n"
+                                    "let d58tr := (rel [f]\n"
+                                    "  &> (fruit-color f \"blue\") (fruit-size f \"small\"))\n"
+                                    "  [pair d58tx 1]\n")))
+  (check-false (string-contains? (result-msg parenless) "parenless goals cannot")
+               (format "the guard must no longer fire; got: ~a" (result-msg parenless)))
+  (check-equal? parenless paren
+                "a sibling-let chain must group exactly like its paren control"))
+
+(test-case "DEFERRED 71 slice 2: the chain still SOLVES, and the earlier siblings stay in scope"
+  ;; Guards the half a grouping test cannot: the merge must still MERGE. If the
+  ;; fusion stopped fusing, `d58ax` would fall out of scope and this errors.
+  (define r (run-ns-ws-last
+             (string-append P8FIX2
+                            "let d58ax := 5\n"
+                            "let d58ar := (rel [f]\n"
+                            "  &> fruit-color f \"blue\"\n"
+                            "     fruit-size f \"small\")\n"
+                            "  [+ d58ax 1]\n")))
+  (check-equal? r "6 : Int"
+                (format "the merged chain must still evaluate its body; got: ~a"
+                        (result-msg r))))
+
+(test-case "SUPERSEDED by DEFERRED 71 slice 2 — was: a SIBLING-LET chain still degrades"
+  ;; Found by self-probe minutes after the let-leg landing — the family-closure
+  ;; lesson (Watching 4) applied: hunt the next member yourself, immediately.
+  ;; `merge-toplevel-sibling-lets` FUSES the sibling lets' stxs into one datum
+  ;; (`(map syntax->datum unit)` → merged nested let), so its rebuild has TWO
+  ;; source trees — single-source alignment and the one-level relocation step
+  ;; structurally cannot recover the second sibling's subtrees. Closing it needs
+  ;; NEW machinery (an stx-carrying merge, or deep multi-source pool
+  ;; relocation), not another application of the helper — deliberately NOT
+  ;; improvised mid-arc; see DEFERRED 51(c). If this test starts failing because
+  ;; the chain PARSES, that fix landed: invert it, do not delete it.
+  ;;
+  ;; ⚠ INVERTED at DEFERRED 71 slice 2, and the diagnosis above is now known to
+  ;; be WRONG in its load-bearing half: this was never recoverable by a smarter
+  ;; multi-source ALIGNMENT, because the fusion destroyed the srclocs before any
+  ;; alignment ran. Kept verbatim, with its ORIGINAL fixture, as the historical
+  ;; single-goal member — the two tests above carry the two-goal grouping and the
+  ;; still-merges property.
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "let d51sx := 5\n"
+                            "let d51sr := (rel [f]\n"
+                            "  &> fruit-color f \"blue\")\n"
+                            "  [+ d51sx 1]\n")))
+  (check-false (string-contains? (result-msg r) "parenless goals cannot")
+               (format "the sibling-let guard must no longer fire; got: ~a"
+                       (result-msg r)))
+  (check-equal? r "6 : Int"
+                (format "and the merged chain must evaluate; got: ~a" (result-msg r))))
+
+(test-case "DEFERRED 51(c) def arm: unparenthesized `def r := rel …` takes parenless clauses"
+  ;; The last spelling still degrading after the defr + [else] extensions. The
+  ;; DEF arm's `rebuild-def-preserving-rhs` handles only a SINGLE element after
+  ;; `:=` (`def-rhs-stx` is #f for a spliced multi-line `rel` RHS), so it fell to
+  ;; the whole-form stamp — and the `:=` desugar itself changes the datum, so
+  ;; this fired with NO rewrite anywhere in the source. Both fallback paths now
+  ;; route through `rebuild-preserving-locs`.
+  ;; MEASURED semantics after the fix: the clause parses (no guard), and the
+  ;; spelling routes into the PRE-EXISTING POL.9b def-seam gap — a bare
+  ;; multi-token RHS is application/value by Q_C, and a def-bound rel VALUE
+  ;; infers a hole type, giving the same "Expression is not a valid type" that
+  ;; `def bad := (dbl 3)` is already pinned to produce below ("Pinned so a
+  ;; future diagnostic fix shows"). Consistency with the sibling spellings, not
+  ;; a new failure: the misdirecting parse-layer refusal ("parenthesize each
+  ;; GOAL" — when the actual fix is parenthesizing the REL) is gone.
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "def d51r1 := rel [?f]\n"
+                            "  &> fruit-color f \"blue\"\n"
+                            "     fruit-color f \"nope\"\n")))
+  (check-false (string-contains? (result-msg r) "parenless goals cannot")
+               (format "the guard must not fire; got: ~a" (result-msg r)))
+  ;; ⚠ INVERTED by DEFERRED 74 (the def-seam close). This used to route into the
+  ;; POL.9b def-seam gap and report "Expression is not a valid type"; the
+  ;; unannotated `def` path now skips `is-type` for hole-typed bodies exactly as
+  ;; the ANNOTATED path always did, so a `rel` VALUE binds.
+  ;; ⚠⚠ AND NOTE WHAT THIS TEST STILL DOES NOT SEE: member 4 (the clause
+  ;; MIS-GROUPING in this spelling) remains latent underneath. `pp-expr`'s
+  ;; expr-rel arm elides the clauses and a def-bound rel value cannot be queried,
+  ;; so grouping is invisible from here. Do NOT read this passing as evidence
+  ;; that the clause parsed correctly — see DEFERRED 72.
+  (check-true (string-contains? (result-msg r) "d51r1")
+              (format "the rel value must now bind; got: ~a" (result-msg r)))
+  (check-false (string-contains? (result-msg r) "not a valid type")
+               (format "the def-seam gap must be closed; got: ~a" (result-msg r))))
+
+(test-case "DEFERRED 51(c) def arm: a rewrite inside the rel GROUPS like the control"
+  (define (drel arg)
+    (run-ns-ws-last (string-append P8FIX
+                                   "def mm := {:k \"blue\"}\n"
+                                   "def d51r2 := rel [?f]\n"
+                                   "  &> fruit-color f " arg "\n"
+                                   "     fruit-color f \"nope\"\n")))
+  (define rewritten (drel "mm.k"))
+  (define control   (drel "\"nada\""))
+  (check-false (string-contains? (result-msg rewritten) "fruit-color/3")
+               (format "must not collapse into one 3-arg goal; got: ~a" (result-msg rewritten)))
+  (check-equal? (result-msg rewritten) (result-msg control)
+                "a rewrite must not change how the def-RHS rel's clause GROUPS"))
+
+(test-case "DEFERRED 51(c) def arm branch (b): a PAREN rel RHS with a rewrite keeps its clause layout"
+  ;; The other changed path: a SINGLE-element `:=` RHS whose datum was rewritten
+  ;; (heads match) used to be 4-arg re-stamped, flattening every inner srcloc —
+  ;; so a paren `(rel …)` RHS containing a rewrite lost the layout its parenless
+  ;; multi-goal clause needs. Now `rebuild-preserving-locs` keeps it, and the
+  ;; Q_C mark is applied on top exactly as before: this spelling still SOLVES
+  ;; (POL.9b/POL.10), so the pin is rows-based and strong — a mis-grouping would
+  ;; surface as an arity error, not a row.
+  (define (prel arg)
+    (run-ns-ws-last (string-append P8FIX
+                                   "def mm := {:k \"blue\"}\n"
+                                   "def d51pr := (rel [f]\n"
+                                   "  &> fruit-color f " arg "\n"
+                                   "     fruit-color f \"blue\")\n"
+                                   "d51pr")))
+  (define rewritten (prel "mm.k"))
+  (define control   (prel "\"nada\""))
+  (check-true (string? rewritten) (result-msg rewritten))
+  (check-false (string-contains? (result-msg rewritten) "fruit-color/3")
+               (result-msg rewritten))
+  ;; Neither arg matches (mm.k is an unevaluated term; "nada" matches nothing),
+  ;; so both conjunctions yield the same empty row set — comparable outputs whose
+  ;; equality pins the GROUPING while the solve pins the Q_C property survival.
+  (check-equal? rewritten control
+                "the rewritten paren-RHS rel must group and solve like the control"))
+
+(test-case "def arm Q_C parity: the := contracts are UNCHANGED by the srcloc extension"
+  ;; The def arm is where `prologos-defrhs-command` (Q_C) is stamped — a SINGLE
+  ;; element after `:=` gets command-position goal-ness; a bare multi-token RHS
+  ;; stays application/value BY CONSTRUCTION. Pin both sides so the helper swap
+  ;; cannot silently shift the boundary.
+  (define solves (run-ns-ws-last
+                  (string-append P8FIX "def blues := (fruit-color f \"blue\")\n")))
+  (check-true (string? solves) (result-msg solves))
+  (check-true (string-contains? solves "PVec")
+              (format "paren RHS keeps its implicit solve; got: ~a" solves))
+  (define app (run-ns-ws-last "ns qcp\ndef app1 := [+ 1 2]\n"))
+  (check-true (string-contains? app "app1 : Int") (result-msg app))
+  (define appr (run-ns-ws-last "ns qcp\ndef mmn := {:n 1}\ndef app2 := [+ mmn.n 2]\n"))
+  (check-true (string-contains? appr "app2 : Int")
+              (format "a rewritten application RHS stays an application; got: ~a"
+                      (result-msg appr))))
+
+(test-case "DEFERRED 51(c) [else] arm: a bare top-level `rel` with a rewrite takes parenless goals"
+  ;; The scope gap named at 51(c)'s landing: a bare top-level `rel` does NOT go
+  ;; through the `defr` preparse arm — it is a "regular form" handled by the
+  ;; fold's `[else]` arm, which still rebuilt with the whole-form stamp. So after
+  ;; 51(c), `rel` and `defr` DISAGREED on the same POL.8 grammar: the identical
+  ;; parenless clause registered under `defr` and refused under `rel`. This pins
+  ;; the [else] extension that closes the disagreement.
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "def mm := {:k \"blue\"}\n"
+                            "rel [q]\n"
+                            "  &> fruit-color q mm.k\n")))
+  (check-true (string? r)
+              (format "a bare rel with a rewrite must not be refused; got: ~a" (result-msg r)))
+  (check-false (string-contains? (result-msg r) "parenless goals cannot")
+               (result-msg r)))
+
+(test-case "DEFERRED 51(c) [else] arm: a two-goal bare `rel` with a rewrite GROUPS like the control"
+  ;; Same discipline as the defr ⭐ test: registering is not the bar — grouping
+  ;; identically to a shape-identical rewrite-free control is. Control literal is
+  ;; NON-matching so the comparison is about grouping, not matching.
+  (define (brel arg)
+    (run-ns-ws-last (string-append P8FIX
+                                   "def mm := {:k \"blue\"}\n"
+                                   "rel [q]\n"
+                                   "  &> fruit-color q " arg "\n"
+                                   "     fruit-color q \"nope\"\n")))
+  (define rewritten (brel "mm.k"))
+  (define control   (brel "\"nada\""))
+  (check-true (string? rewritten) (result-msg rewritten))
+  (check-false (string-contains? (result-msg rewritten) "fruit-color/3")
+               (format "must not collapse into one 3-arg goal; got: ~a" (result-msg rewritten)))
+  (check-equal? rewritten control
+                "a rewrite must not change how a bare rel's clause GROUPS"))
+
+(test-case "DEFERRED 51(c): the relation now registers AND answers"
+  ;; Inverted from "the refusal takes the relation with it — pinned". That pin
+  ;; recorded owner ruling (a) (keep the limit); 51(c) supersedes it.
+  (define r (run-ns-ws-last (string-append P8FIX
+                                           "def mm := {:k \"blue\"}\n"
+                                           "defr d51ruled [?f]\n  &> fruit-color f mm:k\n"
+                                           "solve (d51ruled q)")))
+  (check-false (prologos-error? r)
+               (format "no longer an error; got: ~a" (result-msg r)))
+  (check-false (string-contains? (result-msg r) "Unknown relation") (result-msg r)))
+
+(test-case "DEFERRED 51: the all-paren spelling handles broadcast correctly (and loudly)"
+  ;; The counterpart to the guard: with parens the clause parses, the relation
+  ;; registers, and the arity error is REPORTED. G2 improved this path — pre-G2
+  ;; the same input returned a silent `@[]` because `x:y` was spliced into two
+  ;; tokens, inflating the goal's arity to a value that happened to match.
+  (define r (run-ns-ws-last (string-append P8FIX
+                                           "def mm := {:k \"blue\"}\n"
+                                           "defr d51paren [?f]\n  &> (fruit-color mm:k)\n"
+                                           "solve (d51paren q)")))
+  (check-true (prologos-error? r) (format "expected an arity error; got: ~a" (result-msg r)))
+  (check-true (string-contains? (result-msg r) "fruit-color/1") (result-msg r)))
 
 (test-case "POL.8: a literal cannot head a goal line (LOUD)"
   (define m (result-msg (run-ns-ws-last
@@ -821,38 +1586,83 @@
                  (string-append P9FIX "def r := solve (fruit-color f \"blue\")\nr")))
   (check-equal? paren expl))
 
-(test-case "POL.9b: def-seam PARITY on bad heads — and the GUIDING message now reaches it"
-  ;; This test was written to pin a KNOWN GAP: both spellings hit the same
-  ;; generic "not a valid type" because the def arm types the body before
-  ;; evaluating, so `solve-app-goal`'s classifier never fired there. It said
-  ;; "pinned so a future diagnostic fix shows" — and on 2026-08-03 it showed.
-  ;;
-  ;; The def seam now runs `raise-unknown-relation-error` — the SAME classifier
-  ;; the runtime solver uses, exported rather than re-derived — before typing.
-  ;; PARITY is the invariant and still holds; what changed is the message both
-  ;; spellings get.
+(test-case "POL.9b: def-seam PARITY on bad heads — now the GUIDING diagnostic"
+  ;; ⚠ INVERTED by DEFERRED 74, exactly as this test's own comment asked ("Pinned
+  ;; so a future diagnostic fix shows"). Both spellings used to hit the def-seam
+  ;; type error because typing PRECEDES evaluation on the def path, so the
+  ;; guiding message — which is raised at EVALUATION time — could never be
+  ;; reached. Closing the seam lets it through.
   (define paren (result-msg (run-ns-ws-last
                              (string-append P9FIX "def bad := (dbl 3)"))))
   (define expl  (result-msg (run-ns-ws-last
                              (string-append P9FIX "def bad := solve (dbl 3)"))))
   (check-equal? paren expl "paren spelling ≡ explicit solve spelling")
   (check-true (string-contains? paren "is a function") paren)
-  (check-true (string-contains? paren "[dbl") paren)
   (check-false (string-contains? paren "not a valid type") paren))
 
+(test-case "DEFERRED 74: closing the seam un-preempts the OTHER guiding diagnostics too"
+  ;; The seam was not hiding one message, it was hiding a class: any diagnostic
+  ;; raised at EVALUATION time on a def RHS was preempted by the type check.
+  (define unknown (result-msg (run-ns-ws-last
+                               (string-append P9FIX "def bad := solve (nosuchrel a b)"))))
+  (check-true (string-contains? unknown "nosuchrel")
+              (format "an unknown relation must name itself; got: ~a" unknown))
+  (check-false (string-contains? unknown "not a valid type") unknown))
+
+(test-case "DEFERRED 74 rider: `expr-narrow` on a def RHS no longer LIES about multiplicity"
+  ;; `inferQ` had no `expr-narrow` arm, so it fell to its catch-all and reported
+  ;; "Multiplicity violation" — naming QTT, which was working perfectly. The
+  ;; def-seam gap had MASKED it (narrow infers to a hole, so `is-type` rejected
+  ;; the body first), which is why closing the seam had to bring the twin arm
+  ;; with it: otherwise one honest error is traded for one misleading one.
+  ;; See `.claude/rules/pipeline.md` § "infer / inferQ Are Twins".
+  (define r (run-ns-ws-last (string-append
+                             "ns dn\n"
+                             "spec add2 Int Int -> Int\n"
+                             "defn add2 [a b] [int+ a b]\n"
+                             "def n1 := [#= [add2 ?x 3] 5]\n")))
+  (check-false (string-contains? (result-msg r) "Multiplicity violation")
+               (format "the lying diagnostic must be gone; got: ~a" (result-msg r)))
+  (check-false (string-contains? (result-msg r) "not a valid type")
+               (format "and it must not fall back to the seam error; got: ~a" (result-msg r))))
+
+(test-case "DEFERRED 74: a NON-GROUND def type reports the inference failure, not multiplicity"
+  ;; The seam close let hole-typed bodies through to QTT — correct, since holes
+  ;; are legitimate for rel/defr/narrow/solve. But a non-ground type ALSO arises
+  ;; when inference simply failed, and QTT then has nothing to check against and
+  ;; reports its generic `tu-error` as "Multiplicity violation" — naming a
+  ;; subsystem that is working perfectly.
+  ;; ⚠ The trigger is NOT "has a hole": `flip const false 2` infers a type
+  ;; carrying an unsolved META, and a hole-only test misses it. The condition is
+  ;; the GATE's own (`def-type-not-ground?`), because if the type is not ground
+  ;; QTT cannot do its job at all and its failure is downstream of inference.
+  (define r (run-ns-ws-last "ns t6x\ndef d6x := flip const false 2\n"))
+  (check-false (string-contains? (result-msg r) "Multiplicity violation")
+               (format "must not blame multiplicity; got: ~a" (result-msg r)))
+  (check-true (string-contains? (result-msg r) "Could not infer type")
+              (format "must report the inference failure; got: ~a" (result-msg r))))
+
+(test-case "DEFERRED 74: the ANNOTATED def path is unchanged (it always had the guard)"
+  ;; The whole defect was that the two def paths disagreed. Pin the one that was
+  ;; already right, so a future edit cannot fix them apart again.
+  (check-equal? (run-ns-ws-last (string-append P9FIX "def okk : Int := [dbl 3]"))
+                "okk : Int defined."
+                "an annotated def must be unaffected"))
+
+;; MERGE 2026-08-05: kept from this branch alongside main's cases above. They
+;; assert PROPERTIES main's version does not: that the two seams agree, and that
+;; a working relation on a def RHS still works. The second is the one that
+;; matters — without it, "every def errors" would satisfy the parity assertion.
 (test-case "POL.9b: the def seam agrees with TOP LEVEL on a bad head"
-  ;; The point of the fix, stated as the property rather than the string: the
-  ;; same program at top level and on a `def` RHS must classify the same way.
-  ;; The top-level message was always right; the def seam is what moved.
+  ;; The property rather than the string: the same program at top level and on a
+  ;; `def` RHS must classify the same way. The top-level message was always
+  ;; right; the def seam is what moved.
   (define top (result-msg (run-ns-ws-last (string-append P9FIX "(dbl 3)"))))
   (define deffed (result-msg (run-ns-ws-last
                               (string-append P9FIX "def bad := (dbl 3)"))))
   (check-equal? top deffed "top level and def seam must classify a bad head alike"))
 
 (test-case "POL.9b: a REAL relation on a def RHS is untouched (control)"
-  ;; The guard returns #f for a head that IS registered, so every working
-  ;; solve-on-a-def keeps working. Without this the fix could be "all defs
-  ;; error" and the parity assertion above would still pass.
   (define r (run-ns-ws-last
              (string-append P9FIX "def good := (fruit-color f \"blue\")\ngood")))
   (check-true (string? r) (result-msg r)))

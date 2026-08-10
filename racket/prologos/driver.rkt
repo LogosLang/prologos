@@ -1029,7 +1029,25 @@
                                 (if (prologos-error? net-ty)
                                     (infer/err ctx-empty expr)
                                     net-ty)))])
-                     (if (prologos-error? ty) ty
+                     (if (prologos-error? ty)
+                         ;; DEFERRED 52 (clause-body half, 2026-08-05): NAME THE RELATION.
+                         ;; The clause-body arms of `infer` now propagate, so this branch is
+                         ;; reachable for an ill-typed goal inside a `defr` body — and a bare
+                         ;; "Could not infer type" hands the user a whole-relation deletion
+                         ;; with no pointer to WHICH defr, while the later query says only
+                         ;; "Unknown relation: badclause", which is actively misleading
+                         ;; (they DID define it).
+                         ;; ⚠ Deliberately re-messages rather than env-adding the name to
+                         ;; reach relations.rkt's enriched "its defr failed to register"
+                         ;; branch: that branch keys on an `expr-defr` being env-bound, and
+                         ;; the env write would have to carry a body that FAILED to type —
+                         ;; which `zonk` may not even survive (DEFERRED 67: `zonk` has no arm
+                         ;; for the global-constraint goal forms, and reaching it is exactly
+                         ;; the whole-file abort this work removed). Routing the QUERY-side
+                         ;; message through that branch is left to 51(b).
+                         (prologos-error (prologos-error-srcloc ty)
+                           (format "defr ~a: ~a — the relation was NOT registered"
+                                   name (prologos-error-message ty)))
                          (begin
                            ;; Track 2: trait + hasmethod resolution handled reactively by propagator callbacks
                            (let ([te (check-unresolved-trait-constraints)])
@@ -1849,6 +1867,48 @@
   (define qb-err (check-crosskind-collision (surf-def-name expanded) 'value))
   (if qb-err qb-err (process-def/qb-checked expanded)))
 
+;; ── DEFERRED 74: ONE well-formedness gate, shared by BOTH `def` paths ─────────
+;;
+;; THE DEFECT WAS THE DIVERGENCE, so the fix is to make divergence impossible
+;; rather than to copy the guard a second time. The ANNOTATED def path guarded
+;; `is-type/err` against hole- and meta-typed bodies; the INFERRED path called it
+;; bare. Both were written by the SAME commit — the guard simply was not
+;; mirrored. That asymmetry IS the POL.9b def-seam gap, and it is one line.
+;;
+;; WHAT IT COST, which is more than a bad message: the def path type-checks
+;; BEFORE it evaluates, so rejecting a hole-typed body preempted every diagnostic
+;; that is raised at EVALUATION time. Three already-written guiding messages were
+;; unreachable on a def RHS and reported "Expression is not a valid type"
+;; instead:
+;;   def bad := (dbl 3)              → "dbl is a function — application is
+;;                                      written [dbl …]; parens make a
+;;                                      relational goal"
+;;   def bad := solve (nosuchrel a b)→ "Unknown relation: nosuchrel"
+;;   def bad := explain (dbl 3)      → the same guiding function message
+;; and `def k := rel …` (an unparenthesized rel VALUE) could not bind at all.
+;;
+;; ⚠ ONLY THE HOLE DISJUNCT IS LOAD-BEARING TODAY — measured. `is-type` accepts
+;; an unsolved meta (`infer-level` gives it `just-level (lzero)`) and rejects a
+;; hole (`infer-level` falls to its `[_]` arm → `no-level`). The meta disjunct is
+;; kept because this predicate's whole job is that the two paths ask the SAME
+;; question; dropping it here would re-open the divergence in miniature.
+;;
+;; ⚠ NOT closed by this: a name stored with type `_` is a check WILDCARD, so
+;; `[int+ z 1]` on a hole-typed `z` types as Int with 0 errors. That class is
+;; PRE-EXISTING and reachable today via any `defr`-bound name (`fc : _ defined.`
+;; behaves identically); this widens its population without creating it. Named
+;; in DEFERRED 74 rather than silently inherited.
+;; "Not ground" = the type still contains a hole or an unsolved meta, so it is
+;; not a thing `is-type` can meaningfully judge. ONE predicate, used both to skip
+;; the check and to explain a downstream QTT failure — see the driver's use.
+(define (def-type-not-ground? ty)
+  (or (type-contains-hole? ty) (type-contains-meta? ty)))
+
+(define (def-body-type-ok ctx ty)
+  (if (def-type-not-ground? ty)
+      #t
+      (is-type/err ctx ty)))
+
 (define (process-def/qb-checked expanded)
   (define name (surf-def-name expanded))
   (define type-surf (surf-def-type expanded))
@@ -1916,23 +1976,29 @@
         (cond
           [(prologos-error? inferred-type) inferred-type]
           [else
-           ;; ZONK FIRST. `infer` returns a type whose metas may be solved in
-           ;; the store but not yet substituted into the term, and `is-type`
-           ;; reads the term. A meta-headed application — which is what an
-           ;; implicit higher-kinded argument leaves behind, e.g. `map`'s
-           ;; `{C : Type -> Type}` — is not a type by inspection, so the check
-           ;; failed on a perfectly good type.
+           ;; MERGE 2026-08-05: main's `def-body-type-ok`, unmodified.
            ;;
-           ;; The tell was in the error itself: `is-type/err` renders with
-           ;; `pp-expr`, which DOES follow solutions, so the message read
-           ;; "Expression is not a valid type: [List Int]" — naming a valid
-           ;; type. A diagnostic that pretty-prints through a resolution its
-           ;; own predicate did not perform will always look like nonsense.
+           ;; This branch carried its own fix for the same symptom — zonk before
+           ;; `is-type/err`, because `infer` can return a type whose metas are
+           ;; solved in the store but not yet substituted into the term, so a
+           ;; meta-headed application (an implicit higher-kinded argument, e.g.
+           ;; `map`'s `{C : Type -> Type}`) was rejected as "not a valid type"
+           ;; while `pp-expr` rendered it as `[List Int]`, naming a valid type.
            ;;
-           ;; Intermediate `zonk`, not `freeze`: unsolved metas must stay
-           ;; unsolved here (defaulting them is the commit path's job, further
-           ;; down), so a genuinely undetermined type still fails.
-           (define ty-ok (is-type/err ctx-empty (zonk inferred-type)))
+           ;; main fixes it upstream of that: `def-body-type-ok` SKIPS the check
+           ;; entirely when the type is not ground. Every case the zonk rescued
+           ;; contains an unsolved meta at this point, so main's guard already
+           ;; covers them — the zonk is redundant here, not complementary.
+           ;;
+           ;; I first merged them as `(def-body-type-ok ctx-empty (zonk …))`,
+           ;; reasoning that zonking first would let genuinely-ground types be
+           ;; CHECKED rather than skipped. That is strictly stricter than main,
+           ;; and it broke three of main's own tests (`test-rel-t1-pol` 585, 602,
+           ;; 1623) — the def seam started preempting the guiding diagnostics
+           ;; DEFERRED 74 exists to let through. Composing two fixes for one
+           ;; symptom is only right when neither subsumes the other; check that
+           ;; before assuming they compose.
+           (define ty-ok (def-body-type-ok ctx-empty inferred-type))
            (cond
              [(prologos-error? ty-ok) ty-ok]
              [else
@@ -1985,6 +2051,22 @@
                    (time-phase! qtt (checkQ-top/err ctx-empty zonked-body zonked-type)))
                  (cond
                    [proj-err proj-err]  ;; D23 escape error takes precedence
+                   ;; DEFERRED 74: a QTT failure on a body whose type never
+                   ;; INFERRED is an inference failure, not a multiplicity one —
+                   ;; report it as such instead of letting `tu-error`'s generic
+                   ;; "Multiplicity violation" name an innocent subsystem.
+                   ;; PRE-ZONK type on purpose: see the helper's comment.
+                   ;; ⚠ THE CONDITION IS THE GATE'S OWN, not just "has a hole".
+                   ;; Measured: `def d := flip const false 2` infers a type
+                   ;; containing an unsolved META rather than a hole, so a
+                   ;; hole-only test misses it and the lying message survives.
+                   ;; The principled reading is that when the type is NOT GROUND
+                   ;; QTT cannot do its job at all — it checks a body's usage
+                   ;; AGAINST a type — so any failure there is downstream of the
+                   ;; inference failure, and the root cause is what to report.
+                   [(and (prologos-error? qtt-ok)
+                         (def-type-not-ground? inferred-type))
+                    (cannot-infer-def-type-error def-srcloc zonked-body)]
                    [(prologos-error? qtt-ok) qtt-ok]
                    ;; CIU T6 F1b.4c (D22/M3): seal-scoped def-forcing —
                    ;; tabulation FORCES; a failing :check errors at commit.
@@ -2047,9 +2129,7 @@
         ;; Holes act as wildcards in check and are retained in the stored type.
         ;; Also skip for types with unsolved metas (implicit param inference).
         (define has-holes? (type-contains-hole? type))
-        (define ty-ok (if (or has-holes? (type-contains-meta? type))
-                          #t
-                          (is-type/err ctx-empty type)))
+        (define ty-ok (def-body-type-ok ctx-empty type))
         (cond
           [(prologos-error? ty-ok) ty-ok]
           [else

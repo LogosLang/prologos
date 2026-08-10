@@ -165,6 +165,11 @@
          extract-pi-binders
          ;; Sibling let merging (for testing)
          merge-sibling-lets
+         ;; DEFERRED 71 origin index (for testing) — `strip-with-origin!` now
+         ;; replaces `syntax->datum` on the per-form preparse path, so its
+         ;; datum-equivalence is a load-bearing property and is pinned directly
+         ;; rather than inferred from a green suite.
+         strip-with-origin!
          ;; Foreign escape block combining (for testing)
          combine-foreign-blocks
          ;; HKT brace-param parsing + kind propagation
@@ -3137,11 +3142,523 @@
              ;; 'prologos-defrhs-command) are never round-tripped
              [(null? (cdr unit)) (cons (car unit) out)]
              [else
-              (define merged (merge-sibling-lets (map syntax->datum unit)))
+              ;; ── DEFERRED 71 slice 2: THE FUSION IS THE SECOND STRIP ────────
+              ;; This was NOT a depth problem, which is what the earlier framing
+              ;; got wrong. `(map syntax->datum unit)` threw away N syntax trees
+              ;; and the rebuild below stamped the result against sibling 1 — and
+              ;; `datum->syntax` stamps RECURSIVELY over a bare datum, so EVERY
+              ;; node of the merged form inherited sibling 1's line and column
+              ;; before `rebuild-preserving-locs` ever saw it. No search, at any
+              ;; depth, can recover information that is no longer in the tree.
+              ;;
+              ;; Stripping through a SHARED index over all siblings fixes it
+              ;; without touching the merge itself: `merge-sibling-lets` still
+              ;; receives plain datums and still decides everything on datum
+              ;; shapes (its ~62 datum-shape sites are untouched, and so is its
+              ;; error-containment invariant), but every sub-list it splices
+              ;; through by reference — which, on this path, is every binding
+              ;; token group and the body — stays recoverable by identity, from
+              ;; WHICHEVER sibling it came from.
+              ;;
+              ;; ⚠ This code runs OUTSIDE the per-form `with-handlers`, so a
+              ;; raise here is a WHOLE-FILE abort. `strip-with-origin!` is a
+              ;; total walk over syntax and does not raise; keep it that way.
+              (define fuse-idx (make-hasheq))
+              (define merged
+                (merge-sibling-lets
+                 (for/list ([s (in-list unit)]) (strip-with-origin! s fuse-idx))))
               (if (= (length merged) 1)
-                  (cons (datum->syntax #f (car merged) (car unit) (car unit)) out)
+                  ;; The outer `let` node is MINTED by the merge, so it takes
+                  ;; sibling 1's srcloc AND properties exactly as before (4-arg);
+                  ;; `stamp-with-origin` restores the originals underneath it.
+                  (cons (datum->syntax
+                         #f
+                         (syntax-e (stamp-with-origin (car merged) (car unit) fuse-idx))
+                         (car unit) (car unit))
+                        out)
                   (append (reverse unit) out))])))
        (loop tail (append emitted acc))])))
+
+;; ── DEFERRED 51(c): srcloc-preserving rebuild after preparse ──────────────────
+;;
+;; THE PROBLEM. The per-form fold below strips every top-level form to a bare
+;; datum (`(syntax->datum stx)`) before any arm runs, so `preparse-expand-form`
+;; sees no syntax objects at all. When an arm's `(equal? expanded datum)` guard
+;; fails it rebuilds with `(datum->syntax #f expanded stx)`, and that stamps ONE
+;; srcloc — the whole form's — onto EVERY node it creates. So a preparse rewrite
+;; ANYWHERE in a form destroys the line/column of everything in it.
+;;
+;; Downstream, two layout-driven readers then degrade:
+;;   · `parse-clause-content` (POL.8) needs per-element columns to tell a sibling
+;;     goal from a continuation; it detects the loss via an impossible column 0
+;;     and refuses parenless clauses outright (DEFERRED 51);
+;;   · the `||` fact-row splitter needs the sentinel's line to tell a compound
+;;     TERM from a continuation ROW, and silently falls back to splaying
+;;     (DEFERRED 66 residual 1 — an idiomatic `|>` or dot-access anywhere in the
+;;     defr was enough to restore fabricated rows, at a distance).
+;;
+;; THE FIX. Preparse cannot preserve srclocs THROUGH expansion — the datum it
+;; receives has none. But the original syntax tree is still in hand, so the
+;; srclocs can be RE-ATTACHED afterwards by walking the original and the expanded
+;; datum in parallel: wherever a subtree came through UNCHANGED, reuse the
+;; ORIGINAL syntax object (srclocs, properties and all); only genuinely rewritten
+;; subtrees fall back to the whole-form srcloc, exactly as today.
+;;
+;; This is the generalization of `rebuild-def-preserving-rhs` (further down),
+;; which does the same thing for one hard-coded position.
+;;
+;; MONOTONE BY CONSTRUCTION: the `[else]` arm is byte-for-byte today's behaviour,
+;; so this can only ADD srcloc fidelity, never remove it. It is nonetheless a
+;; REAL behaviour change downstream, because the degradation it removes is what
+;; several guards key on — that is the point of 51(c), not a side effect.
+;;
+;; ⚠ EQUAL LENGTHS ARE NOT ENOUGH, and assuming so silently breaks the very
+;; thing this exists to fix. Several preparse rewrites CHANGE THE ELEMENT COUNT
+;; of the list they sit in — dot-access is the sharp case: `mm.k` reaches preparse
+;; as the TWO sibling slots `mm` `($dot-access k)` and folds to the ONE element
+;; `($select-path mm k)`. A naive equal-length-only walk bails to `[else]` for the
+;; whole clause, stamping the CLAUSE's position on every element. That is worse
+;; than doing nothing: the old degradation put column 0 on everything, which
+;; POL.8's guard detects, whereas a clause-position stamp has a NONZERO column,
+;; so the guard passes and the layout path silently MIS-GROUPS. (Measured: a
+;; two-goal parenless clause with a `mm.k` in it parsed as one 3-arg goal.)
+;;
+;; So align by COMMON PREFIX and COMMON SUFFIX: elements that match from the left
+;; and from the right keep their own syntax objects, and the changed middle takes
+;; the srcloc of the FIRST original element it replaced — which is where the
+;; rewritten form actually started in the source. For the `mm.k` clause that
+;; yields sentinel/goal/arg locs intact and the `$select-path` sitting exactly
+;; where `mm` did, so layout grouping works on the real columns.
+;; ── DEFERRED 71: THE ORIGIN INDEX — cons-cell identity as a provenance marker ──
+;;
+;; THE WALL. Everything below aligns two ELEMENT VECTORS at one level. A desugar
+;; that moves a subtree DEEPER than that is invisible to all of it: the bracket
+;; form puts the moved value one level below the middle, `$let-block` two levels
+;; below, and no amount of prefix/suffix/peel/relocate reaches either. The
+;; consequence was a silent mis-group — the rel RHS rebuilt against whatever
+;; happened to sit at its index, at a plausible nonzero column, so POL.8's
+;; column-0 marker never fired.
+;;
+;; WHY NOT "SEARCH DEEPER". Deepening the pool keeps datum equality as the
+;; oracle, and datum equality cannot tell a user subtree from one the desugar
+;; MINTS. That is not theoretical: at the shallow depth we already ship, the
+;; minted `(fn (q : _) …)` wrapper of `let q := [fn [q : _] [some q]]` takes the
+;; USER lambda's srclocs while the user's own lambda is flat-stamped — a SWAP,
+;; not a loss. A deeper pool strictly enlarges that class.
+;;
+;; THE OBSERVATION. `syntax->datum` allocates FRESH pairs, and the movers splice
+;; sub-datums BY REFERENCE — `let-bindings->nested-fn`'s `foldr` inserts `value`
+;; unchanged, `datum-subst` is a bare `hash-ref`, and `preparse-expand-subforms`
+;; hands back the SAME object when nothing changed. So cons-cell identity is
+;; already an exact, zero-cost provenance marker for precisely the class this
+;; family is about: a subtree that moved through a desugar UNCHANGED. The strip
+;; was simply throwing it away.
+;;
+;; So: record it. `strip-with-origin!` produces the same datum `syntax->datum`
+;; would, and on the way records every compound node in a `hasheq` keyed by the
+;; freshly-allocated pair. Anything the expander splices through by reference is
+;; then recoverable by identity — at ANY depth, with no depth parameter to
+;; re-derive when a sentinel adds a level, and with NO false-pair exposure,
+;; because a minted node is a fresh cell and is `eq?` to nothing.
+;;
+;; ⚠ THREE THINGS THAT MUST BE TRUE, each of which was measured to matter:
+;;  (1) it is an ADDITION, never a replacement. The index only ever holds
+;;      COMPOUND nodes, and POL.8's own sentinel (`$clause-sep`) is an ATOM —
+;;      replacing the alignment with an index walk regressed the `defr` control
+;;      by giving that symbol the whole-form anchor.
+;;  (2) the consult must happen at EVERY recursive entry, not just the outer
+;;      call, or a moved subtree nested inside an aligned region is missed.
+;;  (3) the STAMP must recurse. It used to be terminal, which is what made the
+;;      depth look unbounded rather than merely nested: a moved subtree sitting
+;;      inside a stamped element was never visited at all.
+;;
+;; ⚠ Each strip that feeds the expander needs its OWN index — a second
+;; `syntax->datum` over the same syntax object shares no pairs with the first.
+;; On this path there are exactly two (the per-form fold, and the sibling-let
+;; fusion).
+;;
+;; RULED (owner, 2026-08-07): a duplicated node takes the SAME loc. `datum-subst`
+;; splices a bound sub-datum BY REFERENCE, so a `defmacro` template using `?e`
+;; twice yields two `eq?`-identical copies; both resolve through the index to the
+;; one original and both take its srcloc. The relocation step below refuses that
+;; case via an expanded-side uniqueness guard; the index deliberately does not.
+(define (strip-with-origin! stx idx)
+  ;; ≡ `syntax->datum`, but records compound nodes in `idx` as they are built.
+  (cond
+    [(syntax? stx)
+     (define inner (syntax-e stx))
+     (define d
+       (cond
+         [(pair? inner)
+          (let loop ([x inner])
+            (cond
+              [(pair? x) (cons (strip-with-origin! (car x) idx) (loop (cdr x)))]
+              [(null? x) '()]
+              [else (strip-with-origin! x idx)]))]
+         [(null? inner) '()]
+         ;; vectors / boxes / hashes / prefab: defer to the real thing. Index
+         ;; coverage is lost for their insides, which costs recall, never
+         ;; soundness.
+         [else (syntax->datum stx)]))
+     (when (pair? d) (hash-set! idx d stx))
+     d]
+    [(pair? stx)
+     (cons (strip-with-origin! (car stx) idx) (strip-with-origin! (cdr stx) idx))]
+    [else stx]))
+
+;; ⚠ REQUIREMENT (4), found by adversarial verify and MEASURED — THE INDEX
+;; RESTORES POSITIONS, NOT PROPERTIES.
+;;
+;; Handing back the original syntax object WHOLESALE also hands back its syntax
+;; PROPERTIES, and `prologos-paren-origin` is POSITION-SENSITIVE: the reader
+;; attaches it to every paren group, and `paren-goal-stx?` reads it to decide
+;; that a paren group AT COMMAND POSITION is a relational goal (POL.9). So when a
+;; `defmacro` lifts one of its arguments to top level — `defmacro dbg [$e] $e`
+;; then `dbg (inc 10)` — the restored property turned an application into a goal:
+;;
+;;     dbg (inc 10)   before: `11 : Int`, 0 errors
+;;                    after:  `ERROR: inc is a function …`, 1 error
+;;     dbg (= 1 1)    before: `true : Bool`, 0 errors
+;;                    after:  `@[{}] : _`,   0 errors   ← SILENT, value AND type
+;;
+;; (`dbg [inc 10]`, the bracket spelling, is identical on both — the divergence is
+;; specifically macro-spliced PARENS reaching command position.)
+;;
+;; Which reading is *correct* is arguable — POL.9 does say a paren group at
+;; command position is a goal, so this arguably makes macro-spliced code behave
+;; like hand-written code. That is exactly why it must not ride in HERE: it is a
+;; language-semantics change, and this is a srcloc-preservation fix. Restoring
+;; positions is the whole mandate; a property that MEANS something about where a
+;; node sits must not be carried to a place the node did not come from.
+;;
+;; So: a hit whose original is the node we were ALREADY aligned with has not
+;; moved — return it wholesale, exactly as the `equal?` branch always has. Any
+;; other hit MOVED, and takes srclocs only. That is byte-equivalent to the old
+;; behaviour for properties (the old code stamped, which dropped them) while
+;; still gaining every srcloc the index exists for.
+(define (syntax-locs-only stx)
+  ;; deep copy: every node keeps its own srcloc, no node keeps its properties
+  (cond
+    [(syntax? stx)
+     (define e (syntax-e stx))
+     (datum->syntax
+      #f
+      (cond
+        [(pair? e)
+         (let loop ([x e])
+           (cond
+             [(pair? x) (cons (syntax-locs-only (car x)) (loop (cdr x)))]
+             [(null? x) '()]
+             [else (syntax-locs-only x)]))]
+        [else e])
+      stx)]
+    [else stx]))
+
+;; Stamp `d` at `anchor`, but hand back the ORIGINAL syntax object for any
+;; sub-node the origin index recognises. This is requirement (3) above: the old
+;; version was `(datum->syntax #f d anchor)` and stopped dead, so a moved subtree
+;; nested inside a region we could not align lost its srclocs wholesale.
+;; Every hit reached from HERE is by definition inside a region we could not
+;; align, i.e. a move — so all of them take srclocs only, per requirement (4).
+(define (stamp-with-origin d anchor idx)
+  (define hit (and idx (pair? d) (hash-ref idx d #f)))
+  (cond
+    [hit (syntax-locs-only hit)]
+    [(pair? d)
+     (datum->syntax #f
+                    (let loop ([x d])
+                      (cond
+                        [(pair? x) (cons (stamp-with-origin (car x) anchor idx) (loop (cdr x)))]
+                        [(null? x) '()]
+                        [else (stamp-with-origin x anchor idx)]))
+                    anchor)]
+    [else (datum->syntax #f d anchor)]))
+
+(define (rebuild-preserving-locs orig-stx expanded-datum [idx #f])
+  ;; Requirement (2): the index is consulted HERE, at every entry, before any
+  ;; alignment — an identity hit is stronger evidence than any positional or
+  ;; datum-equality reasoning below it, and it is the only thing that can see
+  ;; past the one-level element vectors.
+  (define origin-hit
+    (and idx (pair? expanded-datum) (hash-ref idx expanded-datum #f)))
+  (cond
+    ;; Same node, same position — nothing moved, so properties are still true of
+    ;; where it sits. Wholesale, exactly as the `equal?` branch has always done.
+    [(and origin-hit (eq? origin-hit orig-stx)) origin-hit]
+    ;; It MOVED. Positions only — see requirement (4) above.
+    [origin-hit (syntax-locs-only origin-hit)]
+    [else (rebuild-preserving-locs/aligned orig-stx expanded-datum idx)]))
+
+(define (rebuild-preserving-locs/aligned orig-stx expanded-datum idx)
+  (define orig-datum (if (syntax? orig-stx) (syntax->datum orig-stx) orig-stx))
+  (define (fallback)
+    ;; 4-arg when we have the original: copy its syntax PROPERTIES as well as its
+    ;; srcloc. Required for [else]-arm parity — POL.9's `prologos-paren-origin`
+    ;; rode that arm's 4-arg rebuild, and losing it would silently turn a
+    ;; rewritten top-level paren GOAL back into an application. For the defr arm
+    ;; this newly preserves properties the old 3-arg rebuild dropped; the 51(c)
+    ;; adversarial verify examined exactly that (its F7) and found no reader of
+    ;; those properties inside a defr body, so it is safe there.
+    (if (syntax? orig-stx)
+        ;; DEFERRED 71: `stamp-with-origin` rather than a bare stamp — a
+        ;; genuinely reshaped node can still CONTAIN subtrees that moved through
+        ;; unchanged, and those keep their own srclocs. Properties still come
+        ;; from `orig-stx` via the 4-arg call on the outer node.
+        (datum->syntax #f (syntax-e (stamp-with-origin expanded-datum orig-stx idx))
+                       orig-stx orig-stx)
+        (datum->syntax #f expanded-datum #f)))
+  (cond
+    ;; Untouched subtree — hand back the ORIGINAL syntax object wholesale.
+    [(equal? orig-datum expanded-datum)
+     (if (syntax? orig-stx) orig-stx (datum->syntax #f expanded-datum #f))]
+    [(and (syntax? orig-stx) (list? orig-datum) (list? expanded-datum)
+          (syntax->list orig-stx))
+     => (lambda (orig-elems)
+          (define n-o (length orig-elems))
+          (define n-e (length expanded-datum))
+          (define o-v (list->vector orig-elems))
+          (define e-v (list->vector expanded-datum))
+          ;; longest common prefix / suffix, by datum equality
+          (define pre
+            (let loop ([i 0])
+              (if (and (< i n-o) (< i n-e)
+                       (equal? (syntax->datum (vector-ref o-v i)) (vector-ref e-v i)))
+                  (loop (add1 i)) i)))
+          (define suf
+            (let loop ([j 0])
+              (if (and (< j (- n-o pre)) (< j (- n-e pre))
+                       (equal? (syntax->datum (vector-ref o-v (- n-o 1 j)))
+                               (vector-ref e-v (- n-e 1 j))))
+                  (loop (add1 j)) j)))
+          ;; The changed middle inherits the srcloc of the first original element
+          ;; it replaced (or the enclosing form's, if the middle is an insertion).
+          (define anchor (if (< pre n-o) (vector-ref o-v pre) orig-stx))
+          ;; The strict prefix/suffix leave a MIDDLE. Two more steps, and the
+          ;; second one is load-bearing:
+          ;;
+          ;; (i) PEEL THE MIDDLE FROM THE RIGHT while BOTH sides still have more
+          ;;     than one element left, recursing on each pair. The strict suffix
+          ;;     is computed by datum equality, so a trailing element that ALSO
+          ;;     changed is not in it and would otherwise be swept into the
+          ;;     stamped region and given the anchor's position. Measured: a
+          ;;     parenless clause with a rewrite in BOTH goals put the whole
+          ;;     continuation line on the first goal's line and parsed the two
+          ;;     goals as ONE 3-argument goal — a silent mis-grouping, the exact
+          ;;     failure POL.8's guard was refusing to risk. Peeling pairs the
+          ;;     continuation with the continuation and recursion fixes it from
+          ;;     the inside.
+          ;;
+          ;; (ii) Whatever is left: same length ⇒ recurse pairwise (the ordinary
+          ;;     "one sub-form changed in place" case, and how the walk descends
+          ;;     into a nested rewrite at all — stamping here instead stopped the
+          ;;     walk one level short in an earlier version). Different length ⇒
+          ;;     a genuine fold/splice, so stamp with the anchor.
+          ;; ⚠ The peel is a HEURISTIC standing in for a real diff, so it is
+          ;; restricted to pairs it can justify. Positional right-alignment is
+          ;; only valid AFTER the last length-changing rewrite: with TWO such
+          ;; rewrites separated by other elements, everything between them pairs
+          ;; with an original `delta` positions to its right, and if a LINE
+          ;; BOUNDARY sits in that zone the elements get the wrong LINE — exactly
+          ;; what the layout grammar reads. (Found by adversarial verify on the
+          ;; flat/paren-wrapped clause spelling, where a list's elements can span
+          ;; lines; 27 of 70 randomized cases diverged. That spelling was ALREADY
+          ;; mis-parsing before 51(c) — its `(defr …)` sits at column 1, so the
+          ;; old guard's column-0 marker never protected it — so this is a
+          ;; residual, not a regression. See DEFERRED 68.)
+          ;;
+          ;; So peel only pairs that are self-evidently the same logical element:
+          ;; datum-equal, or BOTH lists (a group pairs with a group — which is the
+          ;; continuation-line case the peel exists for, and lets recursion sort
+          ;; out the inside). An atom paired with a DIFFERENT atom is exactly the
+          ;; mis-alignment above, and stops the peel.
+          ;; DEFERRED 70 — THE PEEL MUST NOT STEAL A MOVE.
+          ;; `peelable?`'s "a group pairs with a group" cannot tell a rewritten
+          ;; element from an unrelated one, so where a subtree MOVED THROUGH A
+          ;; DESUGAR UNCHANGED the peel would right-align it onto whatever
+          ;; happens to sit at that index. The measured case is the let funnel:
+          ;; `(let r := V BODY)` → `((fn (r : _) BODY) V)` leaves BODY and V last
+          ;; on their respective sides, both compound, so V — a rel RHS carrying
+          ;; clause layout — was rebuilt against BODY's tree. Nonzero column ⇒
+          ;; POL.8's column-0 marker goes blind ⇒ the sibling goals collapse into
+          ;; one over-arity goal, silently whenever that arity is legal.
+          ;;
+          ;; The discriminator is DATUM EQUALITY, which is strictly stronger
+          ;; evidence of correspondence than positional adjacency: if the
+          ;; expanded element still exists verbatim among the original middle,
+          ;; UNIQUELY IN BOTH DIRECTIONS, then it moved rather than changed, and
+          ;; the relocation step below pairs it with its true original. Refusing
+          ;; the peel there hands it to relocation; refusing anywhere else would
+          ;; be a regression, because a genuinely REWRITTEN element has no exact
+          ;; match and still needs the peel (that is the continuation-line case
+          ;; the peel exists for).
+          ;;
+          ;; ⚠ Bounds are the PRE-peel middle (`suf`, not `suf*`) — the peel is
+          ;; what we are deciding, so using `suf*` here would be circular. This
+          ;; is conservative in the right direction: refusing at k leaves the
+          ;; element inside the middle relocation actually scans.
+          (define (peel-steals-a-move? oi ei)
+            (define od (syntax->datum (vector-ref o-v oi)))
+            (define ed (vector-ref e-v ei))
+            (and (not (equal? od ed))
+                 (pair? ed)
+                 (= 1 (for/sum ([i (in-range pre (- n-o suf))])
+                        (if (equal? (syntax->datum (vector-ref o-v i)) ed) 1 0)))
+                 (= 1 (for/sum ([j (in-range pre (- n-e suf))])
+                        (if (equal? (vector-ref e-v j) ed) 1 0)))))
+          (define (peelable? oi ei)
+            (define od (syntax->datum (vector-ref o-v oi)))
+            (define ed (vector-ref e-v ei))
+            (and (not (peel-steals-a-move? oi ei))
+                 (or (equal? od ed) (and (list? od) (list? ed)))))
+          ;; ⚠ HISTORY, because the obvious stronger guard is WRONG and was
+          ;; briefly shipped (066e2c45, corrected same day). The first cut gated
+          ;; the peel on `pre > 0`, reasoning that right-alignment presumes "the
+          ;; same list with a changed middle" and that a shared left anchor is
+          ;; the evidence — clause regions being anchored by the `&>` sentinel,
+          ;; while a total reshape changes element 0's KIND. That argument is
+          ;; FALSE, and an adversarial verify measured both halves of why:
+          ;;   · `pre = 0` is necessary for a reshape but nowhere near
+          ;;     sufficient — ANY rewrite landing on element 0 zeroes it, and a
+          ;;     head-position `mm.k` / `xs[0]` is an ORDER-PRESERVING fold where
+          ;;     right-alignment is perfectly correct. Gating there stamped a
+          ;;     whole clause subtree and produced the silent mis-group this code
+          ;;     exists to prevent (measured: two goals became one 5-arg goal).
+          ;;   · it also REGRESSED working code, which the narrower rule does
+          ;;     not: aligned-block (`let vr (rel …)` / aligned second binding)
+          ;;     and bracket (`let [vr (rel …)]`) spellings with a compound body
+          ;;     and EXACTLY ONE parenless goal answered correctly before it and
+          ;;     hit the guard after. There relocation cannot reach the moved
+          ;;     subtree at all (it sits one level below the middle for the
+          ;;     bracket form, two for `$let-block`), so the peel was the only
+          ;;     thing carrying the srclocs, and withdrawing it left nothing.
+          ;; Hence the rule above is about the PAIR, not about the list: refuse
+          ;; only when something demonstrably better will take over.
+          (define peel
+            (let loop ([k 0])
+              (if (and (> (- (- n-o suf pre) k) 1)
+                       (> (- (- n-e suf pre) k) 1)
+                       (peelable? (- n-o 1 suf k) (- n-e 1 suf k)))
+                  (loop (add1 k))
+                  k)))
+          (define suf* (+ suf peel))
+          (define mid-o (- n-o suf* pre))
+          (define mid-e (- n-e suf* pre))
+          (define rebuilt
+            (append
+             (for/list ([i (in-range pre)])
+               (rebuild-preserving-locs (vector-ref o-v i) (vector-ref e-v i) idx))
+             (if (= mid-o mid-e)
+                 (for/list ([i (in-range pre (- n-e suf*))])
+                   (rebuild-preserving-locs (vector-ref o-v i) (vector-ref e-v i) idx))
+                 ;; DEFERRED 51(c), let leg — RELOCATION: alignment sees only
+                 ;; in-place change, but a desugar can MOVE a subtree unchanged.
+                 ;; The let funnel is the measured case:
+                 ;;   (let r := V body)  →  ((fn (r : _) body) V)
+                 ;; — V survives DATUM-IDENTICAL but at a different index, so the
+                 ;; whole form was stamped @let-position and a rel RHS lost the
+                 ;; clause layout its parenless goals need (the guard fired with
+                 ;; ZERO rewrites in the source). So: before stamping a changed
+                 ;; middle, pair each COMPOUND expanded element with a
+                 ;; datum-equal original middle element when the match is unique
+                 ;; IN BOTH DIRECTIONS, and recurse (datum-equal ⇒ the original
+                 ;; stx comes back wholesale, srclocs intact).
+                 ;; Guards, each load-bearing:
+                 ;;   · compound elements only — identical ATOMS are everywhere,
+                 ;;     and a false pair would attach the WRONG line, the exact
+                 ;;     mis-grouping class this arc keeps paying for;
+                 ;;   · unique on the ORIGINAL side — two identical originals
+                 ;;     (e.g. two identical goals on different lines) must not
+                 ;;     donate one loc to the other's position;
+                 ;;   · unique on the EXPANDED side — a duplicated output must
+                 ;;     not receive one original's loc twice.
+                 ;; Ambiguity ⇒ stamp, exactly as before.
+                 ;; ⚠ NOT fully "monotone by construction" — qualified after the
+                 ;; relocation verify (2026-08-07): relocation is monotone in
+                 ;; srcloc QUANTITY, not DETECTABILITY. If a user-written subtree
+                 ;; happens to be datum-identical to a shape a desugar MINTS
+                 ;; (measured: `let q := [fn [q : _] …]` colliding with the let
+                 ;; funnel's own `(fn (q : _) body)` wrapper, where the peel has
+                 ;; already consumed the true twin), the minted node relocates to
+                 ;; the USER node's plausible nonzero-column locs — where the old
+                 ;; stamp produced guard-DETECTABLE column-0 locs. Today that
+                 ;; demotes a precise guard message to a generic type error (a
+                 ;; rel in a lambda body does not type, so no wrong answer is
+                 ;; expressible); it becomes a live silent-misgroup hole the day
+                 ;; lambda-body queries type (Rel T2 purity ruling). See
+                 ;; DEFERRED 51(c)'s relocation notes; datum equality is this
+                 ;; algorithm's only oracle, so minted-equals-user collisions
+                 ;; are undecidable HERE — the durable answer is DEFERRED 68's
+                 ;; reader origin marker.
+                 (let* ([o-mid (for/list ([i (in-range pre (- n-o suf*))])
+                                 (vector-ref o-v i))]
+                        [o-mid-datums (map syntax->datum o-mid)]
+                        [edat (lambda (x) (if (syntax? x) (syntax->datum x) x))])
+                   (for/list ([i (in-range pre (- n-e suf*))])
+                     (define ed (edat (vector-ref e-v i)))
+                     (define (stamp) (stamp-with-origin (vector-ref e-v i) anchor idx))
+                     ;; ── DEFERRED 72 (member 4): EXPANDED-SIDE DESCENT ────────
+                     ;; A desugar can FOLD a RUN of original middle elements into
+                     ;; ONE compound expanded element. `expand-def-assign` does
+                     ;; exactly this for a spliced multi-token RHS: the original
+                     ;; run `rel` `[?f]` `($clause-sep …)` becomes the single
+                     ;; minted list `(rel [?f] ($clause-sep …))`.
+                     ;;
+                     ;; Relocation cannot see that — the minted list is
+                     ;; datum-equal to nothing and eq? to nothing, so it fell to
+                     ;; the stamp and every descendant that had itself CHANGED
+                     ;; (i.e. anything containing a rewrite) inherited the
+                     ;; anchor's position, which is the `:=` token. A NONZERO
+                     ;; column means POL.8's `(zero? sent-col)` marker never
+                     ;; fires and the clause silently mis-groups.
+                     ;;
+                     ;; But the correspondence is right there in the shapes: the
+                     ;; folded element has the SAME LENGTH as the run it folded,
+                     ;; and its head is that run's head. So wrap the run and
+                     ;; recurse — the ordinary alignment then pairs each element
+                     ;; with its original and descends into the changed one.
+                     ;;
+                     ;; ⚠ GUARDS, deliberately narrow: exactly one expanded
+                     ;; middle element, a proper list, the same length as the
+                     ;; original run, and a datum-equal HEAD. Anything looser is
+                     ;; positional guesswork of the kind this file has already
+                     ;; paid for twice; anything that fails these falls through
+                     ;; to the stamp, i.e. today's behaviour.
+                     (define (fold-descent)
+                       (and (= mid-e 1) (> mid-o 1) (list? ed)
+                            (<= (length ed) mid-o) (pair? ed)
+                            ;; The fold may also DROP separator tokens: measured,
+                            ;; `expand-def-assign` consumes the `:=` as well as
+                            ;; wrapping, so an original run of 4 (`:=` `rel`
+                            ;; `(?f)` `($clause-sep …)`) becomes a 3-element list.
+                            ;; So correspond against the run's TRAILING slice of
+                            ;; the folded element's own length, and require the
+                            ;; HEADS to agree — that is what says "this is that
+                            ;; run", rather than a coincidence of arity.
+                            (let* ([k (length ed)]
+                                   [run (list-tail o-mid (- mid-o k))])
+                              (and (equal? (car ed) (syntax->datum (car run)))
+                                   (rebuild-preserving-locs
+                                    (datum->syntax #f run anchor) ed idx)))))
+                     (if (pair? ed)
+                         (let ([matches (for/list ([o (in-list o-mid)]
+                                                   [od (in-list o-mid-datums)]
+                                                   #:when (equal? od ed))
+                                          o)]
+                               [e-dups (for/sum ([j (in-range pre (- n-e suf*))])
+                                         (if (equal? (edat (vector-ref e-v j)) ed) 1 0))])
+                           (cond
+                             [(and (= (length matches) 1) (= e-dups 1))
+                              (rebuild-preserving-locs (car matches) ed idx)]
+                             [(fold-descent) => values]
+                             [else (stamp)]))
+                         (stamp)))))
+             ;; trailing region (strict suffix + peeled pairs), aligned right
+             (for/list ([i (in-range (- n-e suf*) n-e)])
+               (rebuild-preserving-locs
+                (vector-ref o-v (- n-o (- n-e i))) (vector-ref e-v i) idx))))
+          (datum->syntax #f rebuilt orig-stx orig-stx))]
+    ;; Genuinely reshaped (improper list, non-list, vector, …) — status quo ante.
+    [else (fallback)]))
 
 (define (preparse-expand-all stxs0)
   (define stxs (merge-toplevel-sibling-lets stxs0))
@@ -3415,7 +3932,23 @@
   (define result
     (for/fold ([acc '()])
               ([stx (in-list stxs)])
-      (define datum (syntax->datum stx))
+      ;; DEFERRED 71 (main): strip AND index in one pass. `origin-idx` maps each
+      ;; freshly-allocated datum pair to the syntax object it came from, so any
+      ;; subtree an expander splices through BY REFERENCE stays recoverable by
+      ;; cons-cell identity — at any depth. Per-form, because a second strip of
+      ;; the same syntax object shares no pairs with the first.
+      ;;
+      ;; MERGE NOTE (2026-08-05): main wrapped these two lines in a blanket
+      ;; `with-handlers ([exn:fail? …])`. Not taken — this branch's containment
+      ;; is two-layer and finer, and the layer immediately below discriminates
+      ;; via `contain-at-seam?` so that a MODULE-LOAD failure still escapes
+      ;; instead of being reported as a per-command preparse error. A blanket
+      ;; `exn:fail?` here would swallow "Error loading module" and turn a broken
+      ;; import into a confusing marker at the first form. The only exposure
+      ;; given up is a raise inside the strip itself, which is the same exposure
+      ;; the `syntax->datum` it replaces already had.
+      (define origin-idx (make-hasheq))
+      (define datum (strip-with-origin! stx origin-idx))
       (define head (and (pair? datum) (car datum)))
       (define eff-head-for-containment
         (or (and head (private-form-base head)) head))
@@ -3647,7 +4180,14 @@
          (define expanded (preparse-expand-form datum))
          (if (equal? expanded datum)
              (cons stx acc)
-             (cons (datum->syntax #f expanded stx) acc))]
+             ;; DEFERRED 51(c): rebuild PRESERVING per-element srclocs. `defr` is
+             ;; the arm that matters most because its body is the tree's only
+             ;; LAYOUT-DRIVEN grammar — POL.8 clause grouping reads element
+             ;; columns, and the `||` fact-row splitter reads the sentinel's line.
+             ;; A 3-arg `datum->syntax` here stamped the whole form's srcloc over
+             ;; both, so ANY rewrite in the defr (`|>`, dot-access, a list
+             ;; literal, broadcast, postfix index) silently degraded them.
+             (cons (rebuild-preserving-locs stx expanded origin-idx) acc))]
         ;; ---- Public solver — expand to (def name ($solver-config ...)), auto-export ----
         [(and (pair? datum) (eq? head 'solver))
          ;; (solver name :key val ...) → (def name ($solver-config :key val ...))
@@ -3863,7 +4403,14 @@
                          [(equal? value orig) def-rhs-stx]
                          [(and (pair? value) (pair? orig)
                                (eq? (head-of value) (head-of orig)))
-                          (datum->syntax #f value def-rhs-stx def-rhs-stx)]
+                          ;; DEFERRED 51(c), def-arm extension: the old 4-arg
+                          ;; rebuild kept the RHS node's loc + mark but stamped
+                          ;; that ONE srcloc over every inner node — so a paren
+                          ;; `(rel …)` RHS containing a rewrite lost the clause
+                          ;; layout its parenless goals need. The helper keeps
+                          ;; unchanged inner subtrees' srclocs; the Q_C mark is
+                          ;; applied on top exactly as before (value-stx below).
+                          (rebuild-preserving-locs def-rhs-stx value origin-idx)]
                          [else #f])]
                       ;; The := SURFACE is what makes the RHS command
                       ;; position (Q_C). A sexp-style paren-def form
@@ -3876,11 +4423,30 @@
                             (syntax-property value-stx0
                                              'prologos-defrhs-command #t))])
                  (if value-stx
+                     ;; The := RHS path: value-stx (a syntax object, Q_C-marked)
+                     ;; is EMBEDDED in the datum list; `datum->syntax` preserves
+                     ;; embedded syntax objects as-is, so the RHS's inner srclocs
+                     ;; ride through the outer 3-arg rebuild untouched. The def
+                     ;; HEAD atoms (def/name/type) keep the whole-form loc as
+                     ;; before — no layout grammar reads them.
                      (datum->syntax #f (append (drop-right final-datum 1)
                                                (list value-stx))
                                     stx)
-                     (datum->syntax #f final-datum stx)))
-               (datum->syntax #f final-datum stx)))
+                     (rebuild-preserving-locs stx final-datum origin-idx)))
+               ;; DEFERRED 51(c), def-arm extension — THE MEASURED TARGET: this
+               ;; is the path an UNPARENTHESIZED `def r := rel …` takes, because
+               ;; `def-rhs-stx` requires exactly ONE element after `:=` and a
+               ;; spliced multi-line `rel` RHS is several. The old whole-form
+               ;; stamp destroyed the clause layout, and the `:=` desugar itself
+               ;; changes the datum, so the POL.8 guard fired with NO rewrite
+               ;; anywhere in the source. The helper preserves the layout; the
+               ;; Q_C contract is untouched BY CONSTRUCTION — no
+               ;; `prologos-defrhs-command` is stamped on this path today, and
+               ;; the helper never mints properties, only copies originals,
+               ;; which `parse-defrhs-datum` reads at the stamped RHS element
+               ;; only (verified exhaustively by the [else] verify's property
+               ;; inventory). Also serves `defn` (this arm handles both).
+               (rebuild-preserving-locs stx final-datum origin-idx)))
          (if (equal? expanded maybe-where-injected)
              (if (equal? maybe-where-injected datum)
                  (cons stx acc)
@@ -3897,11 +4463,17 @@
          ;; If datum didn't change, preserve original syntax (keeps properties like paren-shape)
          (if (equal? expanded datum)
              (cons stx acc)
-             ;; Rel T1 POL.9: 4-arg form — copy the original stx's properties
-             ;; onto the rebuilt form, so a top-level paren group keeps its
-             ;; 'prologos-paren-origin mark even when a preparse rewrite
-             ;; (e.g. dot-access) fires inside it.
-             (cons (datum->syntax #f expanded stx stx) acc))]))
+             ;; DEFERRED 51(c), [else] extension (main): rebuild PRESERVING
+             ;; per-element srclocs, not just the whole-form stamp. This is the
+             ;; arm a bare top-level `rel` goes through, so before this, `rel`
+             ;; and `defr` DISAGREED on the same POL.8 grammar — the identical
+             ;; parenless clause registered under `defr` (51c) and refused under
+             ;; `rel`. POL.9's property requirement is carried by the helper: its
+             ;; list rebuild and its fallback are both 4-arg against the original
+             ;; stx, so a rewritten top-level paren group keeps
+             ;; 'prologos-paren-origin exactly as this branch's direct 4-arg
+             ;; rebuild kept it. Strictly better than what it replaces here.
+             (cons (rebuild-preserving-locs stx expanded origin-idx) acc))]))
        ;; the containment handler: replace the failing form with the marker the
        ;; parser already knows how to turn into a per-command error
        (lambda (msg)

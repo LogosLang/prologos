@@ -46,7 +46,8 @@
 (provide infer/err
          check/err
          is-type/err
-         checkQ-top/err)
+         checkQ-top/err
+         cannot-infer-def-type-error)
 
 ;; ========================================
 ;; Issue #70 diagnostic (N6e-C stopgap).
@@ -161,14 +162,20 @@
   (define labels (map car (expr-Record-fields rec)))
   (define shown (if (> (length labels) 6) (take labels 6) labels))
   (define more (- (length labels) (length shown)))
+  ;; D4.P4d slice 2: labels are TOTAL — a 'nat row's labels are INTEGERS, and
+  ;; `symbol->string` on one is a RAISE on the diagnostic path (the whole-file
+  ;; abort class, pipeline.md). Unconstructible today ('nat rows route to
+  ;; 'subject-tuple before any miss-closed) — guarded by the walker-totality
+  ;; discipline, not by a reachable reproducer.
+  (define (label->string l) (if (symbol? l) (symbol->string l) (format "~a" l)))
   (string-append
-   "Could not infer type — field :" (symbol->string kw)
+   "Could not infer type — field :" (label->string kw)
    " is not present in the record " (pp-expr rec names)
    (if (null? labels)
        " (the record has no fields)"
        (string-append
         "; available fields: "
-        (string-join (map (lambda (l) (string-append ":" (symbol->string l))) shown) " ")
+        (string-join (map (lambda (l) (string-append ":" (label->string l))) shown) " ")
         (if (> more 0) (format " (+~a more)" more) "")))))
 
 ;; CIU T6 D4.P2 (owner ruling Q_R5) — the ORDINAL counterpart of
@@ -376,7 +383,33 @@
 ;; — the arm and its diagnostic cannot drift) and formats the failure with
 ;; BRANCH context. The three Q_T2 refusal kinds all name the 4d remedy list:
 ;; seal / validate / annotate.
-(define (format-select-fail fail names [sort 'block])
+;; ⭐ D4.P4d slice 4d-2 — THE BROADCAST AXIS. `bcast` is #f, or the symbol naming
+;; WHICH broadcast wrapper this call is a recursion out of. It exists because the
+;; arms below were worded when only `x{…}` and `x.f` could reach them:
+;;   · `subject-other` said "the subject is not a record" — the subject is the
+;;     CARRIER; what failed is reached through `:` (DEFERRED 47 ≡ 59.1);
+;;   · `not-indexable` appended "select named fields instead (`x{k}`)" — block
+;;     advice, off-key inside a broadcast (DEFERRED 59.2).
+;;
+;; ⚠⚠ IT IS THREE-VALUED, AND THE FIRST CUT MADE IT A BOOLEAN — the adversarial
+;; verify's headline finding. The three wrappers do NOT describe the same thing:
+;;   'elem  — `bcast-elem`, a HOMOGENEOUS carrier (PVec/Map). Every element has
+;;            the same type, so a type-level miss really is uniform: "each
+;;            element" is TRUE, and a remedy derived from that type GENERALIZES.
+;;   'at    — `bcast-at`, a HETEROGENEOUS carrier (closed keyword row / tuple).
+;;            The prefix already names WHICH field or position failed, and its
+;;            siblings have DIFFERENT types. "each element" was FALSE here and
+;;            contradicted the prefix four words earlier ("fails at field :b …
+;;            each element is not a record" — while `:a`'s value IS a record).
+;;   'union — `bcast-union`, ONE offending component of a union.
+;; A remedy is only emitted under 'elem, because under 'at and 'union it would be
+;; derived from ONE field's/component's type and asserted over the whole
+;; broadcast — measured doing exactly that before this correction.
+;;
+;; A formatter-local argument rather than a 5th `select-fail` field: the struct
+;; has 20 producer sites (`pipeline.md` § New Struct Field) and none of them
+;; knows, whereas the three wrappers all do.
+(define (format-select-fail fail names [sort 'block] [bcast #f])
   ;; D4.P4b-ii-2c: the wording DEPENDS ON THE SORT. Every arm below was
   ;; written when only `x{…}` could reach here, so they say "a select block"
   ;; and append block-specific advice. After b-ii-2b the DOT spelling reaches
@@ -429,20 +462,128 @@
     ;; including `String` and `Int`, which will never be broadcast carriers. The
     ;; P4d sentence is now a statement about the PHASE, not a promise about this
     ;; subject.
+    ;; D4.P4d slice 2 — the WRAPPING fail: a per-field/per-position broadcast
+    ;; miss carries WHERE it failed (the label; a number = a tuple position, a
+    ;; symbol = a row field) and the INNER fail in the `row` slot — formatted
+    ;; recursively, so the wrapped message keeps its own guidance. The
+    ;; formatter template is format-closed-tuple-oob's index-naming (Q_R5).
+    [(bcast-at)
+     (string-append
+      (if (number? label)
+          (format "broadcast fails at position ~a — " label)
+          (format "broadcast fails at field :~a — " label))
+      (format-select-fail row names sort 'at))]
+    ;; D4.P4d slice 4d-2 (DEFERRED 47 ≡ 59.1) — the PVec/Map carrier's twin of
+    ;; `bcast-at`. There is no field or position to name: a homogeneous carrier
+    ;; gives every element the same type, so a type-level miss is uniform across
+    ;; all of them. The `row` slot holds the inner fail, formatted recursively
+    ;; with the broadcast axis set so it speaks of the ELEMENT.
+    [(bcast-elem)
+     (string-append
+      (format "broadcast `:~a` fails on every element — " (or label "…"))
+      (format-select-fail row names sort 'elem))]
+    ;; D4.P4d slice 3 — the keys-⋂ refusal. The `row` slot holds the OFFENDING
+    ;; COMPONENT (a TYPE, not a number or symbol — hence its own kind rather
+    ;; than a third `bcast-at` label shape). ⚠ It deliberately does NOT nest
+    ;; through `miss-closed`: that arm calls `format-closed-row-miss`, whose
+    ;; first act is `expr-Record-fields` — a contract violation on a union that
+    ;; `select-block-hint`'s blanket handler SWALLOWS, which is exactly why the
+    ;; pre-slice all-miss refusal printed a bare "Could not infer type" with no
+    ;; guidance at all.
+    [(bcast-union)
+     (if (select-fail? row)
+         ;; the NESTED case: the wrapper states the RULE (true in every firing)
+         ;; and the inner fail says what actually went wrong — it already names
+         ;; the component it failed on. ⚠ The first cut discarded the inner fail
+         ;; and asserted a key-miss for EVERY per-component failure, which made
+         ;; the message FALSE for ordinal inners and block-sort projections —
+         ;; strictly worse than the pre-slice diagnostic there.
+         (string-append
+          (format "broadcast `:~a` requires EVERY union component to succeed (the keys-intersection rule); one does not — "
+                  (or label "…"))
+          (format-select-fail row names sort 'union))
+         ;; every component was SKIPPED (a Nil-only union): there is no inner
+         ;; fail to nest, and the keys-⋂ wording would name Nil as the offender
+         ;; in the same breath as saying Nil is skipped.
+         (format
+          (string-append
+           "broadcast `:~a` has no component to project — every component of "
+           "this union is `Nil` (the absence marker, which broadcast skips). "
+           "Narrow the element type first.")
+          (or label "…")))]
     [(bcast-carrier)
-     (format
-      (string-append
-       "broadcast `:~a` needs a PVec subject — this one is ~a. Broadcast is "
-       "PVec-only at this phase; the map, keyword-row and heterogeneous-tuple "
-       "carriers land at CIU T6 D4.P4d. For a list, convert first with "
-       "`[pvec-from-list xs]` (the row type is preserved)~a~a")
-      (or label "…")
-      (if row (format "`~a`" (pp-expr row)) "not one")
-      ;; the explicit spelling is only ADVICE when the step is a nominal key —
-      ;; `m.0` is not a thing a user can write
-      (if (and label (symbol? label))
-          (format "; otherwise spell it `[pvec-map [fn [m] m.~a] xs]`" label)
-          "")
+     ;; D4.P4d slice 4c — THE PER-CARRIER SPLIT, and the remedy points back at
+     ;; the spelling the USER WROTE.
+     ;;
+     ;; One arm used to serve every refused subject and tell all of them "For a
+     ;; list, convert first with `[pvec-from-list xs]`" — probed on Int, String,
+     ;; Bool, a Set, a dyn row and a FUNCTION. It then taught a second spelling,
+     ;; `[pvec-map [fn [m] m.NAME] xs]`, which CANNOT WORK on this arm's
+     ;; audience: `pvec-map` needs a PVec and a PVec never reaches here (it is
+     ;; admitted upstream). Measured: `[pvec-map [fn [m] m.name] L]` over a List
+     ;; → "Could not infer type".
+     ;;
+     ;; ⭐ The fix is not a better second spelling — it is not teaching one.
+     ;; Once the subject is converted, the user's OWN spelling works unchanged,
+     ;; verified including the chained and Set cases:
+     ;;   [pvec-from-list L]              then `:name`   → @["a" "b"] : [PVec String]
+     ;;   [pvec-from-list L2]             then `:a:b`    → @[1] : [PVec Int]
+     ;;   [pvec-from-list [set-to-list S]] then `:t`     → @[1] : [PVec Int]
+     ;; So each arm names the CONVERSION for its own carrier and stops. That
+     ;; retired slice 4a's advice machinery (the vouch, the writability oracle
+     ;; and the chain fusion existed only to spell `m.NAME` correctly) — deleted
+     ;; rather than kept unused, per the no-dual-paths rule [owner, 2026-08-08].
+     ;;
+     ;; The prefix is shared; only the remedy varies, so this is one `cond`.
+     (string-append
+      (format "broadcast `:~a` needs a PVec, Map, tuple, or closed keyword-row subject — this one is ~a"
+              (or label "…")
+              (if row (format "`~a`" (pp-expr row)) "not one"))
+      (cond
+        ;; a SELECTION is a record, restricted — saying it "is not a keyword
+        ;; row" is the lie `select-row-of` already refuses to tell (DEFERRED 20,
+        ;; and slice 4b's resolver deliberately leaves views on this path).
+        [(and (expr-fvar? row) (lookup-selection-by-name (expr-fvar-name row)))
+         ". This is a SELECTION — a capability-restricted view. Broadcasting reads EVERY field, which is what its `:requires` gate governs; project the fields you need individually"]
+        ;; a schema the ω resolver would not admit — say WHICH condition failed,
+        ;; because both are one keyword away from working (slice 4b; DEFERRED 64)
+        [(bcast-schema-refusal row)
+         => (lambda (why)
+              (case why
+                [(open)
+                 ". This schema is OPEN, so its declared row is narrower than the value it admits and broadcast reads every field — a `:closed` schema is the admitted form"]
+                [(defaulted)
+                 ". This schema has a `:default`ed field, whose presence the seal boundary does not always fill — broadcast reads every field, so it refuses rather than project an absent one"]
+                [else ""]))]
+        ;; an open/dyn keyword row — the closed ones are consumed upstream, so a
+        ;; Record reaching here is open by construction. `remedies` is the same
+        ;; sentence four sibling arms use. Verified true as of slice 4b: sealing
+        ;; yields a schema-typed value the ω resolver now admits.
+        ;; ⚠ NOT the shared `remedies` sentence. Measured: its spelled remedy
+        ;; `the Schema subj` is REFUSED for this whole audience — a `:closed`
+        ;; schema rejects an open actual (`schema-seal-residual-ok?`), and an
+        ;; OPEN schema seals but is then not an ω carrier, so following it just
+        ;; moves the refusal. `validate` is the half that actually runs.
+        [(expr-Record? row)
+         ". This row is OPEN and broadcast reads every field, so its width is not known statically — `[validate Schema subj]` gives you a Result to branch on (a `the`-seal will not do it: a closed schema refuses an open value)"]
+        ;; ⚠ each names the CONVERSION and stops. An earlier cut appended "and
+        ;; the same spelling works", which is a promise about the whole
+        ;; expression rather than the carrier, and is false whenever the step
+        ;; itself does not fit the converted elements — measured: an ordinal
+        ;; inner (`[List {:t Int}]` then `:0`) and a non-row element type
+        ;; (`[List Int]` then `:t`) both still error after converting.
+        [(expr-Set? row)
+         ". For a set, convert it with `[pvec-from-list [set-to-list xs]]` (a set is unordered, so element order is not preserved)"]
+        [(select-convertible-carrier row)
+         => (lambda (kind)
+              (case kind
+                [(list) ". For a list, convert it with `[pvec-from-list xs]` (the row type is preserved)"]
+                [(lseq) ". For a lazy sequence, convert it with `[into-vec xs]`"]
+                [else ""]))]
+        ;; scalars, functions, type applications we do not recognise: there is
+        ;; no conversion, and `pvec-map` would be meaningless. Name the carriers
+        ;; and stop.
+        [else ""])
       (if (null? path) "" (format " — in branch `~a`" branch-str)))]
     [(miss-closed)
      (string-append
@@ -500,10 +641,35 @@
      ;; refuse here. Also surface the offending step label (`.-1` was
      ;; invisible, byte-identical to `.foo`).
      (if (expr-PVec? row)
-         (format
-          "Could not infer type — select: `~a`~a is not a field of a vector element position — a vector subject takes ordinal steps (`.N`) or ordinal branches (`x{N M}`)"
-          (or label "the step")
-          (if (null? path) "" (format " (branch `~a`)" branch-str)))
+         ;; ⚠ D4.P4d slice 4d-2: the `bcast?` arm exists because the remedy below
+         ;; ADVISES THE SPELLING THE USER ALREADY WROTE once we are inside a
+         ;; broadcast — `nest:t` over a `[PVec [PVec Int]]` was answered with
+         ;; "broadcast instead: `xs:t`". That is the class this function's own
+         ;; header documents (`r.zzz` → "spelled `.zzz`") and slice 4c removed
+         ;; everywhere else; the first cut of this slice fixed only the OTHER
+         ;; branch and left it live here. Inside a broadcast the element is itself
+         ;; a vector, so a NAMED step cannot apply at all — an ordinal can, and
+         ;; that is the only true thing to say.
+         (if bcast
+             (format
+              "Could not infer type — select: `~a`~a is not a field of a vector element position — the element is itself a vector, which has positions and no field names. Use an ordinal step (`xs:0`), or descend a further level first"
+              (or label "the step")
+              (if (null? path) "" (format " (branch `~a`)" branch-str)))
+             (format
+              "Could not infer type — select: `~a`~a is not a field of a vector element position — a vector subject takes ordinal steps (`.N`) or ordinal branches (`x{N M}`). To reach fields of EACH element, broadcast instead: `xs:~a` or `xs:{…}`"
+              (or label "the step")
+              (if (null? path) "" (format " (branch `~a`)" branch-str))
+              (or label "name")))
+         ;; D4.P4d slice 4d-2 (DEFERRED 47 ≡ 59.1): under a broadcast the thing
+         ;; that failed is the ELEMENT, not the subject the user wrote — the
+         ;; subject is the carrier and it was fine. Saying "the subject" there
+         ;; names the wrong value; `@[]` (a `[PVec _]`) was the shape that made
+         ;; it unmissable, but it is wrong for every PVec/Map carrier.
+         ;; ⚠ The NOUN follows the axis. "each element" is a universal and is TRUE
+         ;; only for a homogeneous carrier ('elem); under 'at the prefix already
+         ;; named one field/position whose siblings have other types, and under
+         ;; 'union it is one component. Saying "each element" there was false AND
+         ;; self-contradictory with the prefix — the verify's headline finding.
          ;; DEFERRED D4.P3a item 20's "cheap interim improvement". A
          ;; SELECTION-typed subject is refused DELIBERATELY, not because its
          ;; shape is wrong: a selection is a capability-restricted VIEW
@@ -540,7 +706,15 @@
              ;; DOT ACCESS only. For a select BLOCK (`n{a}`) the phrase "field
              ;; access" is the wrong construct — a block is not a dot access —
              ;; and the block wording below is already the specific one for it.
-             (if (and (not block?) (unprojectable-type? row))
+             ;; MERGE 2026-08-05: `(not bcast)` added alongside `(not block?)`.
+             ;; Under a broadcast this message names the WRONG value — it says
+             ;; "the subject has type String" when the subject is the carrier and
+             ;; the carrier is fine; one ELEMENT is the String. That is precisely
+             ;; the class main's `bcast` wording below exists to fix, and three
+             ;; of its `test-path-selection` cases caught this arm stealing them.
+             ;; So: name the type when we are talking about the subject, and defer
+             ;; to the axis-aware noun when we are not.
+             (if (and (not block?) (not bcast) (unprojectable-type? row))
                  (format
                   (string-append
                    "Could not infer type — select: `~a`~a is field access, but the "
@@ -549,25 +723,76 @@
                   (or label "the step")
                   (if (null? path) "" (format " (branch `~a`)" branch-str))
                   (pp-expr row '()))
-                 (format
-                  (if block?
-                      "Could not infer type — select: the subject~a is not a record; a select block projects fields of a keyword row"
-                      "Could not infer type — select: the subject~a is not a record, so it has no fields to access")
-                  (if (null? path) "" (format " (branch `~a`)" branch-str))))))]
+                  (format
+                   (string-append
+                    "Could not infer type — select: "
+                    (case bcast
+                      [(elem)  "each element"]
+                      [(at)    "the value there"]
+                      [(union) "that component"]
+                      [else    "the subject"])
+                    "~a is not a record"
+                    (if block?
+                        "; a select block projects fields of a keyword row"
+                        ", so it has no fields to access"))
+                   (if (null? path) "" (format " (branch `~a`)" branch-str))))))]
     ;; ---- D4.P3c: the ordinal fail kinds ----
     [(ordinal-oob)
      (string-append
       (format-closed-tuple-oob row label names)
       (format "; in the select branch `~a`" branch-str))]
     [(not-indexable)
+     ;; ⭐ D4.P4d slice 4d-2 (DEFERRED 59.2) — THE REMEDY JOINS THE COND.
+     ;; It used to sit in the UNCONDITIONAL tail (`— select named fields instead
+     ;; (\`x{k}\`)`) while the cond below discriminated only the EXPLANATION. Two
+     ;; consequences, both measured: inside a broadcast the user was handed BLOCK
+     ;; advice for a spelling they wrote with `:`; and for a scalar element
+     ;; (`@[1 2]` then `:0`) they were handed a FIELD remedy that cannot work,
+     ;; because an `Int` has no fields either. The cond already knows which of
+     ;; the three cases it is in — so the remedy is decided there, and the
+     ;; scalar case gets NONE, per slice 4c's rule that a carrier with nothing
+     ;; true to say is told nothing.
+     ;; ⚠ A remedy is emitted ONLY under 'elem. Under 'at / 'union the type in
+     ;; hand is ONE field's or component's, and the first cut asserted a remedy
+     ;; derived from it over the WHOLE broadcast — measured: `@[{:a 1} 7]` then
+     ;; `:0` advised the field spelling, and following it errored on position 1.
+     (define elem? (eq? bcast 'elem))
+     (define-values (why remedy)
+       (cond
+         [(and (expr-Record? row) (eq? (expr-Record-key-domain row) 'keyword))
+          (values (format "~a is keyword-keyed" (pp-expr row names))
+                  (cond [elem? " — name the field instead (`xs:field`)"]
+                        [bcast ""]
+                        [else " — select named fields instead (`x{k}`)"]))]
+         [(expr-Map? row)
+          ;; ⚠ KEY-TYPE GATED. There is no `:` spelling for a non-keyword key —
+          ;; `:N` lexes as an ordinal (the very failure being reported) and
+          ;; `:name` as a keyword the key type does not admit. Advising
+          ;; `xs:key` for a `[Map String V]` was a two-hop dead end; the
+          ;; keyword-keyed control worked, which is why the battery missed it.
+          (values "a (Map K V) has no positions"
+                  (cond [(and elem? (expr-Keyword? (whnf (expr-Map-k-type row))))
+                         " — name the key instead (`xs:key`)"]
+                        [bcast ""]
+                        ;; `x{k}` never worked on a Map either — `d{a}` refuses.
+                        ;; Dot access is the true one (`d.a`), and it is the
+                        ;; documented Map surface (Q_U10's Map posture).
+                        [else " — access a Map key with dot (`m.key`)"]))]
+         [else
+          ;; ⚠ RESTORED. The first cut dropped this remedy UNCONDITIONALLY, which
+          ;; was right for scalars (`String`/`Int` have no fields either) and
+          ;; WRONG for a schema/selection fvar, where `x{k}` is true and
+          ;; executable — and a schema-typed subject is exactly what the sibling
+          ;; arms' own "seal the subject against a schema" remedy produces. A
+          ;; POSITIVE test, per pipeline.md's positive-list-with-conservative-
+          ;; default rule: name the case that HAS a remedy, say nothing otherwise.
+          (values (format "~a has no positions" (pp-expr row names))
+                  (cond [(and (not bcast) (expr-fvar? row))
+                         " — select named fields instead (`x{k}`)"]
+                        [else ""]))]))
      (format
-      "Could not infer type — select: ordinal `~a` (branch `~a`) needs a tuple or vector subject; ~a — select named fields instead (`x{k}`)"
-      label branch-str
-      (cond
-        [(and (expr-Record? row) (eq? (expr-Record-key-domain row) 'keyword))
-         (format "~a is keyword-keyed" (pp-expr row names))]
-        [(expr-Map? row) "a (Map K V) has no positions"]
-        [else (format "~a has no positions" (pp-expr row names))]))]
+      "Could not infer type — select: ordinal `~a` (branch `~a`) needs a tuple or vector subject; ~a~a"
+      label branch-str why remedy)]
     [else #f]))
 
 (define (select-block-hint ctx e names)
@@ -581,6 +806,11 @@
                          (let-values ([(row fail) (select-project ctx tm branches sort)])
                            (and fail (format-select-fail fail names sort)))))]
                  [_ #f])
+               ;; ⚠ ONE descent per subfield. A slice-4a cut descended into
+               ;; `subject` explicitly AND fell through to this `ormap`, which
+               ;; visits it again (it is `expr-select`'s first field) — O(2^depth),
+               ;; measured 46s at depth 20 against a flat ~4.3s, on plain DOT
+               ;; chains, since this runs on every infer failure.
                (ormap search (expr-subfields x)))))))
 
 ;; ========================================
@@ -1115,6 +1345,25 @@
                                         "Could not infer type"))
                                 (pp-expr e names))
         result)))
+
+;; ── DEFERRED 74: the honest message when a def body's type never existed ─────
+;;
+;; The `def` path type-checks BEFORE it evaluates, and it now (correctly) lets a
+;; HOLE-typed body through to QTT rather than rejecting it — holes are legitimate
+;; for `rel` values, `defr`, narrow, solve and friends. But a hole ALSO arises
+;; when `infer` simply could not determine a type (`def d := flip const false 2`),
+;; and QTT then has nothing meaningful to check against and reports its generic
+;; `tu-error` as **"Multiplicity violation"** — naming a subsystem that is working
+;; perfectly, the exact harm `.claude/rules/pipeline.md` § "infer / inferQ Are
+;; Twins" describes.
+;;
+;; So when the body's PRE-ZONK inferred type contains a hole AND QTT failed, the
+;; truthful report is that the type could not be inferred. ⚠ It must be the
+;; PRE-ZONK type: `unsolved-metas-to-holes` turns ordinary unsolved metas into
+;; holes, so testing the zonked type would swallow real multiplicity errors on
+;; perfectly ordinary defs.
+(define (cannot-infer-def-type-error loc e [names '()])
+  (inference-failed-error loc "Could not infer type" (pp-expr e names)))
 
 ;; ========================================
 ;; Check with error reporting

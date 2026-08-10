@@ -862,8 +862,27 @@
      (parse-error loc (format "dot-key `.:~a` was retired — spell field access with `.~a` (e.g. `m.~a`); as a function value use `[fn [m] m.~a]`" f f f f) #f)]
     [(nil-dot-key)
      (parse-error loc (format "`#:~a` / `#.:~a` was retired — nil-safe field access is spelled `#.~a`" f f f) #f)]
+    ;; ⚠ D4.P4d slice 4d-2 — THE PROMISE CAME TRUE AND THE MESSAGE DID NOT NOTICE.
+    ;; This said the replacement "arrives with Path Selection P4" and offered a
+    ;; `[map [fn [m] m.NAME] xs]` stopgap. Broadcast has SHIPPED at the production
+    ;; default since P4c-4c, so the message was promising a future for a feature
+    ;; the user could already use, and steering them to a workaround instead.
+    ;; The phase name is deliberately GONE from the user-facing text: a phase
+    ;; pointer is a promise with an expiry date, and this is the second time one
+    ;; here has outlived its truth. Phase names belong in comments like this one.
+    ;;
+    ;; ⚠ THE ACCEPTED COST, MEASURED — do not rediscover it as a defect. Dropping
+    ;; the `[map …]` stopgap costs a LIST subject one extra hop: `L.*name` now
+    ;; says "use `:name`", and `L:name` is then REFUSED by Q_U9 with its own
+    ;; guided message naming `[pvec-from-list xs]`. Two guided hops where the old
+    ;; text gave a working spelling in one. Taken deliberately, on slice 4c's
+    ;; owner ruling — "stop teaching a second spelling; converting fixes the
+    ;; CARRIER and the user's own spelling then works" — and the chain is guided
+    ;; at every step with no dead end. This arm is at PARSE time and has no type
+    ;; information, so it CANNOT be carrier-aware; the carrier refusal downstream
+    ;; is the right place for that, and it already does the job.
     [(broadcast)
-     (parse-error loc (format "broadcast `.*~a` was retired — its replacement `:~a` arrives with Path Selection P4; until then spell it `[map [fn [m] m.~a] xs]`" f f f) #f)]
+     (parse-error loc (format "broadcast `.*~a` was retired — its replacement is `:~a` (e.g. `xs:~a`)" f f f) #f)]
     ;; D4.P3b (Q_T4a): `^` after an ordinal, ALL spellings (`x.0^`, `x[0]^`,
     ;; and the in-block shatter) — ONE guided message. An ordinal returns the
     ;; value at an index, not a key-value; non-local attachment breaks
@@ -880,13 +899,18 @@
     ;; (`(@bcast step)`) lands at P4c-3. Until then this reported the LYING
     ;; diagnostic "Unbound variable", which names the wrong subsystem for an
     ;; unbuilt surface (measured end-to-end before this arm existed).
+    ;; ⚠ D4.P4d slice 4d-2 — TWO CORRECTIONS. (1) The message's phase promise was
+    ;; FALSE: P4c-3 landed, and broadcast ships at the production default, so this
+    ;; told the user an available feature was unbuilt and steered them to a
+    ;; `[map …]` workaround. Reworded phase-free. (2) The header above says "Both
+    ;; are reachable today" — written PRE-P4c-3 and NOT re-verified since; neither
+    ;; the slice-4d audit nor the main thread could reach THIS arm from surface
+    ;; syntax (the binder twin below is reachable). Recorded as UNVERIFIED rather
+    ;; than quietly deleted: if it is dead it should be removed, and that needs a
+    ;; constructed-datum probe, not a grep.
     [(bcast-step)
      (parse-error loc
-                  (format (string-append
-                           "broadcast `:~a` is not implemented yet — its step vocabulary "
-                           "arrives with Path Selection P4c-3; until then spell it "
-                           "`[map [fn [m] m.~a] xs]`")
-                          f f)
+                  (format "broadcast `:~a` is not implemented yet in this position" f)
                   #f)]
     ;; `bcast-step-binder` — BINDER position. THIS IS CONDITION (c) ITSELF. A
     ;; broadcast step reaching a binder consumer means the reader post-pass's
@@ -907,12 +931,26 @@
     ;; asserts a fact about the codebase can be WRONG about the codebase, and
     ;; this one was; the remedy half is true and is what remains.
     [(bcast-step-binder)
-     (parse-error loc
-                  (format (string-append
-                           "`:~a` was read as a broadcast step, but this is a BINDER "
-                           "position — write the annotation spaced (`name : ~a`).")
-                          f f)
-                  #f)]
+     ;; ⚠ the payload may be the `:{` mint's LIST (B2's fix keeps it wrapped so
+     ;; it reaches this arm) — render `{…}`, never the raw stx-bearing datum.
+     ;;
+     ;; ⚠⚠ D4.P4d slice 4a′: this tested `f`, and COULD NOT EVER FIRE. `f` is
+     ;; `(base-name detail)`, and `base-name` returns a STRING on every branch
+     ;; (symbol->string / keyword->string / `(format "~a" d)`), so `(pair? f)`
+     ;; is structurally impossible. The list therefore went through that
+     ;; `format` and printed SYNTAX OBJECTS — carrying absolute filesystem
+     ;; paths — into the user's message twice, the second time inside the
+     ;; advice they are told to type. The test that covers this arm accepts
+     ;; `BINDER position|expected symbol` and pins no content, so every gate
+     ;; stayed green over it. The guard has to run on the datum BEFORE
+     ;; `base-name` stringifies it; `detail` is that datum.
+     (let ([f* (if (pair? detail) '|{…}| f)])
+       (parse-error loc
+                    (format (string-append
+                             "`:~a` was read as a broadcast step, but this is a BINDER "
+                             "position — write the annotation spaced (`name : ~a`).")
+                            f* f*)
+                    #f))]
     [(postfix-kw)
      (parse-error loc (format "keyword index `[:~a]` was retired — spell the field `m.~a` or use `[get m :~a]`" f f f) #f)]
     [(postfix-empty)
@@ -987,6 +1025,38 @@
 ;; top-level datum shapes (macros-side shape-scan).
 (define ordinal-rekey-message
   "an ordinal has no key — `^` re-keys a NAMED segment; rename the nominal segment instead and then descend (e.g. `admins^first.0`)")
+
+;; ⭐ D4.P4d slice 4d (Q_U19) — THE BROADCAST SIBLING of the `^`-in-path-access
+;; refusal [owner 2026-08-08: "leave the dot string alone, add a broadcast
+;; sibling"]. The dot string below (`parse-list`'s `$select-path` caret arm) is
+;; ONE production site that has served TWO audiences ever since P4c-3a made
+;; `select-step-cont` ω-transparent: dot, where "a field access has no output
+;; key" is the CORRECT noun, and broadcast, where it is not. Q_U19 ratified the
+;; refusal for BOTH — what was wrong was the wording, not the verdict.
+;;
+;; ⚠ Both strings share the "re-keys the OUTPUT" opening, so a test matching
+;; only that substring CANNOT tell them apart — which is precisely how the
+;; P4c-4b sub-case (c) pin froze today's routing instead of a decision. The
+;; discriminating tokens are "field access" vs "broadcast step".
+;;
+;; The remedy is probe-verified, not asserted: `xs:{name^alias}` and
+;; `cfg{admins:name^alias}` both SUCCEED at 0 errors and re-key — a sub-inner
+;; `^` answers #f to `select-step-cont` (no `@sub` arm), so it never reaches
+;; this refusal and is handled by the sub-block's own segmentation.
+;; ⚠ SCOPE, stated so nobody infers more than shipped: this covers the GLUED
+;; spellings only — the ones whose caret rides INSIDE a single token
+;; (`:name^alias` · `^` · `^_` · the `^-` collapse family), which are the ones
+;; that reach segmentation. The other two path-position routes are NOT guided
+;; and still report `Unbound variable`: `xs:{name}^alias` (the caret lexes as a
+;; bare sibling AFTER the `}`) and `xs:0^alias` (which mints no sentinel at all).
+;; Both were attempted at this slice and REVERTED — a datum-level fold arm
+;; cannot see the ADJACENCY that separates `xs:{name}^alias` from a legitimate
+;; `[f xs:{name} ^]`, and the attempt broke monotonicity (`^` is a bindable
+;; name: `def ^ := 7` works, so `[snd2 xs:name ^]` is a program that HEAD
+;; accepts). They need a grouper-side adjacency mint, like the `:{` mint itself.
+;; DEFERRED 75 (route 2) · DEFERRED 76 (route 3). [owner 2026-08-08: ship route 1]
+(define bcast-rekey-message
+  "`^` re-keys the OUTPUT of a selection, and a broadcast step has no output key — it yields the projected values. Use a sub-block if you want to rename inside the broadcast: `xs:{field^alias}`")
 
 (define caret-needs-segment-message
   "a `^` operates on the segment to its LEFT — write `k^label` (rename), `k^_` (synth), or mid-path `k^` (dissolve), with no space before the `^`")
@@ -1260,6 +1330,42 @@
             ;; anyway, since it requires byte-adjacency to a base.)
             [(and (eq? (head-of it) '$bcast-step) cur cur-subbed?)
              (fail "a broadcast step cannot follow a `.{…}` sub-block — the sub-block is a branch's terminal step")]
+            ;; ⭐ D4.P4d-0 slices 3+4 (DEFERRED 42+46): the SUB-INNER ω — the
+            ;; mint's payload is the WHOLE brace group. Parse its contents into
+            ;; branches exactly as the terminal `.{…}` sub-block does, and wrap:
+            ;; `(@bcast (@sub . branches))`. Pushed with cur-subbed?=#f
+            ;; DELIBERATELY: the sub rides INSIDE the wrapper (Q_U7, one step),
+            ;; so a trailing step may follow — that is the §3.2.1 extent pair's
+            ;; first member, `users:{0.userName^}.0`.
+            [(and (eq? (head-of it) '$bcast-step)
+                  (pair? (cdr it))
+                  (pair? (cadr it))
+                  (eq? (head-of (cadr it)) '$select-brace))
+             ;; ⚠ NO empty-payload arm here, deliberately: `segment-select-items`
+             ;; already refuses an empty block with its own guided per-command
+             ;; error ("empty sub-block — selects nothing"), measured on `xs:{}`.
+             ;; A second check would be the belt-and-suspenders shape.
+             (let-values ([(subs suberr) (segment-select-items (cdr (cadr it)) loc #t)])
+               (if suberr
+                   (values #f suberr)
+                   (let ([step (cons '@sub subs)])
+                     (if cur
+                         (loop (cdr items) (cons (make-select-bcast step) cur) #f acc)
+                         (loop (cdr items) (list (make-select-bcast step)) #f (closed-acc))))))]
+            ;; ⭐ D4.P4d-0 slice 2 — THE PAYLOAD SHAPE GUARD (owner: site-local;
+            ;; the class-level parse-path guard is DEFERRED 56). The arm below
+            ;; does `(symbol->string (cadr it))`; without this guard a list,
+            ;; number or MISSING payload raised out of `process-file-inner` — a
+            ;; WHOLE-FILE ABORT, reachable at HEAD by hand-written sentinels and
+            ;; sitting directly on the `:{` mint's path (the mint's payload IS a
+            ;; list). 6th instance of pipeline.md's abort class in this track;
+            ;; found by the P4d-0 mini-audit. ⚠ Slice 3's `$select-brace` arm
+            ;; lands ABOVE this guard — the guard is the residual for shapes no
+            ;; producer mints, not a substitute for handling the minted one.
+            [(and (eq? (head-of it) '$bcast-step)
+                  (not (and (pair? (cdr it)) (symbol? (cadr it)))))
+             (fail (format "a broadcast step carries a single `:name` payload — got ~a (a hand-written sentinel, or a reader/parser drift)"
+                           (if (pair? (cdr it)) (cadr it) "nothing")))]
             [(eq? (head-of it) '$bcast-step)
              (let* ([payload (cadr it)]
                     [s (symbol->string payload)]
@@ -1279,7 +1385,13 @@
                  ;; `*` FLATTEN rides inside the token (see above) — refuse it
                  ;; here rather than letting it become a field name.
                  [(regexp-match? #rx"[*]" bare)
-                  (fail (format "`*` (flatten) is not implemented yet on a broadcast step — `:~a` would read as a field literally named `~a`. Until Path Selection P4d, spell the flatten separately" bare bare))]
+                  ;; ⚠ D4.P4d slice 4d-2 — the phase pointer said "Until Path
+                  ;; Selection P4d", and D4 assigns `*` flatten to **P4e**, so
+                  ;; P4d's close would have made this retroactively FALSE. Phase
+                  ;; name removed from the user-facing text for the same reason as
+                  ;; the two siblings above; it lives here instead. (This arm fires
+                  ;; on a TRAILING star — `xs:tags*` — not a leading one.)
+                  (fail (format "`*` (flatten) is not implemented yet on a broadcast step — `:~a` would read as a field literally named `~a`. Spell the flatten separately for now" bare bare))]
                  ;; `^` RE-KEY — route to the ONE splitter, as `$dot-access` does
                  [(regexp-match? #rx"\\^" bare)
                   (split-step (string->symbol bare) push)]
@@ -1599,13 +1711,42 @@
              ;; The fix is that `select-step-cont` is now ω-TRANSPARENT, so the
              ;; guard is unnecessary and the question is asked directly — the
              ;; `select-key-step?` conjunct was only ever a shape check the
-             ;; accessor already performs. Latent until P4c-4 wires the producer
-             ;; bridge (`make-select-bcast` has ZERO production callers at HEAD).
-             [(ormap select-step-cont (car branches))
-              (parse-error
-               loc
-               "`^` re-keys the OUTPUT of a selection, and a field access has no output key — it yields the value. Use a select block if you want to rename: `x{field^alias}`"
-               #f)]
+             ;; accessor already performs.
+             ;; ⚠ This comment used to end "Latent until P4c-4 wires the producer
+             ;; bridge (`make-select-bcast` has ZERO production callers at HEAD)"
+             ;; — FALSE at HEAD and corrected here at D4.P4d slice 4d: the bridge
+             ;; landed at P4c-4b and there are FOUR callers, all in this file.
+             ;; It was a reachability claim asserted rather than measured, four
+             ;; lines above the string it describes.
+             ;;
+             ;; ⭐ D4.P4d slice 4d (Q_U19 route 1) — THE SPLIT. ω-transparency is
+             ;; what routes a broadcast step into an arm written for dot, so this
+             ;; ONE site serves TWO audiences. `findf` names the step that carries
+             ;; the caret and asks the totality dispatcher, which already answers
+             ;; 'bcast and is already imported. The dot string stays BYTE-
+             ;; IDENTICAL by owner ruling; only the ω audience moves.
+             ;;
+             ;; ⚠ `findf` over `ormap` is HONESTY, NOT AN OBSERVABLE FIX, and the
+             ;; distinction was mutation-tested rather than assumed: a per-BRANCH
+             ;; `ormap` passes the entire battery, because Q_U13's NEST gives ONE
+             ;; carrier PER LEVEL — the branch here holds exactly one step, so the
+             ;; two formulations cannot differ today. `findf` says what the code
+             ;; means and stays correct if a multi-step branch ever reaches here.
+             ;; Do not cite it as a bug fix.
+             ;;
+             ;; ⚠ POSITION IS LOAD-BEARING: this arm sits BELOW
+             ;; `segment-select-items`, so `xs:name^^a` still takes
+             ;; `split-caret-lexeme`'s well-formedness error ("one `^` per
+             ;; segment") — a TRUE, specific message that must not be pre-empted
+             ;; by a generic refusal. Pinned.
+             [(findf select-step-cont (car branches))
+              => (lambda (st)
+                   (parse-error
+                    loc
+                    (if (eq? (select-step-kind st) 'bcast)
+                        bcast-rekey-message
+                        "`^` re-keys the OUTPUT of a selection, and a field access has no output key — it yields the value. Use a select block if you want to rename: `x{field^alias}`")
+                    #f))]
              [(not (= (length branches) 1))
               ;; NOT reachable from well-formed source: the fold mints one
               ;; branch per level. It IS reachable when something appends into
@@ -3220,7 +3361,8 @@
        ;; The `.*field` reader surface now yields a guided $retired-selection
        ;; error; the keyword form had ZERO live users (census) and is gone —
        ;; `(broadcast-get …)` is an unknown relation / unbound variable now.
-       ;; Broadcast returns as `:field` at Path Selection P4.
+       ;; Broadcast IS the `:field` spelling — shipped at the production
+       ;; default since D4.P4c-4c (was: "returns as `:field` at Path Selection P4").
 
        ;; update-in: (update-in target path-spec fn-expr)
        ;; path-spec is parsed as selection paths, fn-expr is the update function
@@ -6892,8 +7034,24 @@
         (let* ([goals (map parse-relational-goal content)]
                [err (findf prologos-error? goals)])
           (or err (surf-clause goals loc)))
+        ;; DEFERRED 51 (2026-08-05): the message used to say "(e.g. dot-access)",
+        ;; which named the ONE trigger that existed when POL.8 shipped. It is not
+        ;; the condition. The condition is a preparse rewrite ANYWHERE in this
+        ;; defr — macros.rkt strips every form to a bare datum before expanding
+        ;; (`(syntax->datum stx)`) and the defr arm rebuilds with a 3-arg
+        ;; `datum->syntax`, so every inner element inherits the defr's own
+        ;; line/column and the layout grouping this form needs is gone. All three
+        ;; rewrite families were verified to trigger it at b429d038; broadcast
+        ;; became live at CIU T6 D4.P4c-4c/G2, which is what made the old wording
+        ;; actively misdirecting. Name the condition and its families instead.
         (prologos-error loc
-          "rule clause: parenless goals cannot be used in a defr body that also contains a form rewritten before parsing (e.g. dot-access) — parenthesize each goal in this clause.")))
+          (string-append
+           "rule clause: the source columns that layout-based clause grouping needs are not "
+           "available for this clause, so parenless goals cannot be read here — parenthesize "
+           "each goal in this clause. (This happens when the enclosing form was rewritten "
+           "before parsing. That is USUALLY something in the form itself — dot-access `x.f`, "
+           "broadcast `x:f`, postfix index `x[i]`, a `'[…]` list literal — but a `def name := "
+           "rel …` is rewritten too, so it can fire with none of those present.)"))))
   (define sent-line (elem-line sentinel))
   (define sent-col (elem-col sentinel))
   (cond
@@ -7016,16 +7174,83 @@
                ;; Note: $nat-literal, $decimal-literal, ... wrapped terms
                ;; are pairs but are single terms, not nested rows.
                (define content (cdr d))  ;; list of syntax objects
+               ;; DEFERRED 66: INVERTED. This used to be a WHITELIST of five numeric
+               ;; literal sentinels, so every OTHER reader sentinel fell through to
+               ;; the `pair? ⇒ nested row` reading and was splayed — the polarity
+               ;; failure `.claude/rules/pipeline.md` warns about ("a new sentinel,
+               ;; an old recognizer"). `'[1 2]` reads as `($list-literal-parse 1 2)`
+               ;; and produced THREE fabricated rows. So test `$`-headedness itself:
+               ;; a future VALUE sentinel is then a term BY CONSTRUCTION rather than
+               ;; by remembering to extend a list.
+               ;;
+               ;; ⚠ BUT NOT EVERY `$`-HEADED PAIR IS A TERM, and the first version
+               ;; of this inversion got that wrong. The reader wraps a continuation
+               ;; LINE by its FIRST TOKEN, so a line that BEGINS with a structural
+               ;; sentinel arrives as `($pipe 3 4)` / `($clause-sep foo a)` /
+               ;; `($facts-sep 2)`. Those are rows and row-separators, not values.
+               ;; Classifying them as terms turned the ordinary leading-pipe layout
+               ;;     || 0
+               ;;      | 1
+               ;; from a LOUD "empty row beside `|`" into TWO FABRICATED rows
+               ;; carrying the raw sentinel (`{:d [?$pipe 1]}`) with ZERO errors —
+               ;; precisely the bug class this change exists to remove. Caught by
+               ;; the adversarial verify; test-pinned below.
+               ;;
+               ;; So: `$`-headed AND NOT structural. The structural set is the
+               ;; reader's own row/body separators, read off the predicates that
+               ;; already define them (`sentinel-kind-of`, `facts-pipe?`) rather
+               ;; than re-listed here, so it cannot drift from them.
+               (define (structural-sentinel-head? h)
+                 (or (eq? h '$pipe) (and (sentinel-kind-of h) #t)))
                (define (term-sentinel? s)
                  (define sd (stx->datum s))
-                 (and (pair? sd)
-                      (let ([h (if (syntax? (car sd)) (syntax-e (car sd)) (car sd))])
-                        (memq h '($nat-literal $decimal-literal $float-literal
-                                  $exp-literal $posit-literal)))))  ;; N6b (+N6c: $approx-literal removed)
+                 (and (pol8-sentinel-headed? sd)
+                      (let ([h (let ([c (car sd)]) (if (syntax? c) (syntax-e c) c))])
+                        (not (structural-sentinel-head? h)))))
+               ;; DEFERRED 66 (2026-08-05): the `pair? ⇒ nested row` reading is
+               ;; WRONG for a compound TERM. `[some 1]`, `'[1 2]`, `{:k 1}` are all
+               ;; pairs too, so they were misclassified as continuation rows and
+               ;; SPLAYED into their constituent tokens — fabricating rows the user
+               ;; never wrote, with ZERO errors:
+               ;;     || [some 1]  →  @[{:q unknown} {:q 1}]
+               ;;     || '[1 2]    →  @[{:q unknown} {:q 1} {:q 2}]
+               ;; The numeric whitelist above only ever covered the literal
+               ;; sentinels, so every other compound value fell through.
+               ;;
+               ;; THE DISCRIMINATOR IS THE SENTINEL'S LINE. A continuation row is
+               ;; BY DEFINITION on a line after the `||`; anything ON the `||` line
+               ;; belongs to the first row, whatever its shape. Verified by
+               ;; instrumenting the reader: `|| 1 2` / `3 4` gives sentinel line 3
+               ;; and nested `(3 4)` at line 4, while `|| [some 1]` puts the
+               ;; sentinel AND the compound both at line 6.
+               ;;
+               ;; ⚠ Why not the cleaner positive bracket-origin test: a bracket
+               ;; group and a bare multi-token line are "indistinguishable
+               ;; post-reader — same wrap-stx-list, no origin" (see the POL.8 note
+               ;; at the top of this section). Supplying that origin is a
+               ;; reader-wide change that also governs clause grammar. Hence the
+               ;; line rule, and hence the residual: a compound alone on a
+               ;; CONTINUATION line is still splayed (test-pinned as a known limit).
+               ;;
+               ;; Guarded on TRUSTWORTHY srclocs using the same impossible-column-0
+               ;; marker `parse-clause-content` uses: when a preparse rewrite has
+               ;; degraded the form, every element collapses onto the defr's own
+               ;; line, which would make "same line" vacuously true and merge real
+               ;; continuation rows into the first row. Degraded ⇒ old behaviour.
+               (define facts-sent (car d))
+               (define sent-line (and (syntax? facts-sent) (syntax-line facts-sent)))
+               (define sent-col  (and (syntax? facts-sent) (syntax-column facts-sent)))
+               (define locs-trustworthy?
+                 (and sent-line sent-col (not (zero? sent-col))))
+               (define (on-sentinel-line? s)
+                 (and locs-trustworthy?
+                      (syntax? s)
+                      (eqv? (syntax-line s) sent-line)))
                (define-values (flat-terms nested-rows)
                  (partition (lambda (s)
                               (or (not (pair? (stx->datum s)))
-                                  (term-sentinel? s)))
+                                  (term-sentinel? s)
+                                  (on-sentinel-line? s)))
                             content))
                ;; Rel T1 POL.7: one shared row-splitter for a fact line's terms.
                (define flat-rows (facts-terms->rows flat-terms arity loc))

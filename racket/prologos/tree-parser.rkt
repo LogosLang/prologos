@@ -188,7 +188,7 @@
        ;; the FUTURE consumer (`extract-surfs-from-form-cells`, Phase 7's intended
        ;; surf source, currently caller-less), not for a merge that no longer
        ;; exists. Keep the arm; do not carry the old reason forward as if live.
-       [(dot-brace-group select-brace-group)
+       [(dot-brace-group select-brace-group bcast-brace-group)
         ;; D4.P1b-ii/iii. An explicit arm is wanted for the same reason as above
         ;; (the `else` fallthrough calls parse-expr-tree SILENTLY for any node
         ;; with children) — and see the ⚠ note above: the merge-admission
