@@ -5972,3 +5972,68 @@
   (check-true (ormap (lambda (s) (regexp-match? #rx"before" s)) out))
   (check-true (ormap (lambda (s) (regexp-match? #rx"after" s)) out))
   (check-true (ormap (lambda (s) (regexp-match? #rx"preparse" s)) out)))
+
+;; ---------------------------------------------------------------------------
+;; Q_U32 — a bare `*` is REFUSED in pattern position; every ARITHMETIC use is
+;; untouched  [owner, 2026-08-10]
+;;
+;; These pins are the RULING'S GUARD RAIL, landed BEFORE the refusal is designed
+;; so that "what must not move" is a measured datum rather than a memory. The
+;; track's own lesson applies (Q_U23's recorded symptoms went stale inside one
+;; arc): a measurement that is not pinned is a measurement that will drift.
+;;
+;; ⚠ The discriminator is POSITION, not spelling. Since Numerics N6e-E2 operators
+;; are FIRST-CLASS VALUES, a BARE `*` is live surface in argument and binding
+;; position (`reduce * 1 xs`, `let op *`). A refusal keyed on the bare token
+;; would break these; it must key on the position being a PATTERN.
+;; ---------------------------------------------------------------------------
+
+(define (q-u32-run src)
+  (map (lambda (r) (format "~a" r)) (process-string-ws src)))
+
+(test-case "Q_U32 guard rail: prefix, bracketed, and mixfix `*` are arithmetic"
+  (define out (q-u32-run (string-append "ns qu32a\n"
+                                        "* 3 5\n"
+                                        "[* 3 5]\n"
+                                        ".(4 * 5)\n")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"15" s)) out)
+              (format "`* 3 5` must stay 15: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"20" s)) out)
+              (format "mixfix `.(4 * 5)` must stay 20: ~a" out))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"[Ee]rror" s)) out)
+               (format "no arithmetic `*` spelling may error: ~a" out)))
+
+(test-case "Q_U32 guard rail: `*` sections keep working in both hole positions"
+  (define out (q-u32-run (string-append "ns qu32b\n"
+                                        "map [* _ 2] '[1 2 3]\n"
+                                        "map [* 3 _] '[1 2 3]\n")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"2 4 6" s)) out)
+              (format "`[* _ 2]` section must stay '[2 4 6]: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"3 6 9" s)) out)
+              (format "`[* 3 _]` section must stay '[3 6 9]: ~a" out)))
+
+(test-case "Q_U32 guard rail: a BARE `*` is live surface as a first-class operator"
+  ;; THE CASE THE RULING'S FOUR NAMED SPELLINGS DID NOT COVER. `reduce * 1 xs`
+  ;; and `let op *` put a bare, unglued `*` in argument and binding position.
+  ;; If a future refusal keys on "a bare `*` token" instead of on POSITION,
+  ;; THIS is the pin that catches it.
+  (define out (q-u32-run (string-append "ns qu32c\n"
+                                        "reduce * 1 '[2 3 4]\n"
+                                        "let op *\n"
+                                        "  [op 3 4]\n")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"24" s)) out)
+              (format "bare `*` as a HOF argument must stay 24: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"12" s)) out)
+              (format "bare `*` bound by `let` must stay 12: ~a" out)))
+
+(test-case "Q_U32 TRIPWIRE: pattern-position `*` behaves as a catch-all TODAY"
+  ;; ⚠ THIS PIN FREEZES THE PRE-RULING STATE ON PURPOSE. Q_U32 refuses a bare `*`
+  ;; in pattern position, so when that lands THIS TEST MUST FAIL and be rewritten
+  ;; to assert the guided error. It is a deliberate tripwire, not a decision —
+  ;; the same distinction Q_U19's pin is warned about. Measured at 19560a7c.
+  (define out (q-u32-run (string-append "ns qu32d\n"
+                                        "def q := 5\n"
+                                        "match q\n"
+                                        "  | * -> 99\n")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"99" s)) out)
+              (format "TODAY a lone `| *` binds everything and yields 99: ~a" out)))

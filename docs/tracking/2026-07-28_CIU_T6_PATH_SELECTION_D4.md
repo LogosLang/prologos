@@ -1643,6 +1643,30 @@ items of the hold-point, ruled before P4a opened:
     which keys on the `$bcast-step` PAYLOAD) structurally CANNOT fire on it ❌
   · `m:0 *` → `Could not infer type [m.:0 [arithmetic::* …]]` — the star became
     ARITHMETIC MULTIPLY applied to the selection ❌
+
+  > **⚠ THE ERROR TEXTS ABOVE ARE STALE — re-measured 2026-08-10 at `19560a7c`.
+  > THE STRUCTURAL CLAIMS ALL HOLD; THE SYMPTOMS MOVED, because the P4e-0 revert
+  > was PARTIAL.** `d0ac2a58` took out the count-changing MINT but left the
+  > guided-error surface `bfba68d5` had added (`parser.rkt` gained 169 lines in
+  > the WIP; 54 came out). So attempt 3 does **not** open on a clean
+  > pre-attempt-1 tree. At HEAD:
+  > · `cfg{database*}` → *"`*` (flatten) is not implemented yet — `database*`
+  >   would delete one layer of what the preceding step produces"* — still FUSES
+  >   (it reaches the consumer as one nominal key), then guides-refuses. Claim ✅
+  > · `m{0*}` and `m{0 *}` → **both** *"`*` — `*` is postfix; it attaches to the
+  >   END of a segment"*, not the L4 mixed keyed/keyless error recorded above.
+  >   **BYTE-IDENTICAL still holds**, which is the load-bearing half — the
+  >   ordinal splat remains UNSPELLABLE. Claim ✅, symptom changed.
+  > · `m:0*` → `Unbound variable`. Claim ✅ — one character still destroys the
+  >   `$bcast-step` mint.
+  > · `m:0 *` NOT re-confirmed: the 2026-08-10 probe used `m := @[10 20 30]`, a
+  >   different subject from the original, so it errored on the broadcast before
+  >   reaching the star. **Unverified at HEAD**, not refuted — re-probe with the
+  >   original subject before relying on it.
+  >
+  > **The lesson is the recorded one**: *a fact has a timestamp.* The symptom
+  > text is not the mechanism; pin the mechanism.
+
   So the grouping fix this ruling claimed the `database*` spelling had DELETED
   is **still owed for every non-identifier layer head** (ordinal, sub-block,
   bracket/paren closers). The dividend is real but its scope is the nominal and
@@ -1957,6 +1981,52 @@ items of the hold-point, ruled before P4a opened:
   load-bearing (the parser path is abort-safe under a `data`; the preparse path
   was not, until this session).
 
+- <a id="q-u32"></a>**⭐ Q_U32 — A BARE `*` IS REFUSED IN PATTERN POSITION; EVERY
+  ARITHMETIC USE IS UNTOUCHED [owner, 2026-08-10 — "The `*` is used as
+  multiplication… so as long as those aren't touched, I think it's fine to rule
+  against bare `*` showing up in pattern positions"].** This discharges
+  [DEFERRED 103](DEFERRED.md) as a LANGUAGE RULING and removes the constraint
+  that a star mint be pattern-position-aware at a stage that cannot know it is
+  in a pattern.
+  **THE GUARD RAIL, PINNED BY MEASUREMENT** (`19560a7c`, all 0 errors) — these
+  must not move, and a P4e pin must assert them:
+  `* 3 5` → `15` · `[* 3 5]` → `15` · `map [* _ 2] '[1 2 3]` → `'[2 4 6]` ·
+  `map [* 3 _] '[1 2 3]` → `'[3 6 9]` · `.(4 * 5)` → `20` (mixfix) ·
+  `|> 5 [* _ 2] [* _ 3]` → `30` · `reduce * 1 '[2 3 4]` → `24` ·
+  `let op *` / `[op 3 4]` → `12`.
+  ⚠⚠ **THE DISCRIMINATOR IS POSITION, NOT SPELLING — and this is the finding
+  that makes the ruling implementable rather than obvious.** The owner named
+  four arithmetic uses; the sweep found a fifth class they did not: since
+  Numerics N6e-E2 **operators are first-class values**, so `reduce * 1 xs` and
+  `let op *` put a **BARE** `*` in argument and binding position and both must
+  keep working. A refusal keyed on "a bare `*` token" therefore breaks live
+  surface. It must key on the POSITION being a pattern.
+  **THE DOMAIN, MEASURED** — what the refusal covers, all at `19560a7c`:
+  · `match q | * -> 99` → `99`, **0 errors** (a legal catch-all binder today)
+  · `match q | 2 * -> 99 | n -> n` → `Could not infer type`, **second arm
+    silently deleted** — the DEFERRED 103 defect
+  · `defn f | * -> 1` → `f : _ -> Int defined.`, `f 3` → `1`, **0 errors**
+  · `defn f | red* -> …` → loses `f` itself → `Unbound variable`
+  · `let [a *] pair` → *"pair expects 2 arguments, got 1"* — bracket
+    destructuring reads as APPLICATION, so it is **not** in the domain.
+  **CONSEQUENCE, ACCEPTED EYES-OPEN**: the ruling is BROADER than the defect. Two
+  of the four covered shapes (`| *` alone, `defn f | *`) are legal and *harmless*
+  today — they bind a variable named `*`. Refusing them too is the simpler rule
+  and is monotone (a refusal may become a meaning; the reverse is barred by spec
+  §3.6), and a rule that refused only the arm-deleting subset would have to
+  discriminate on sibling-arm count at the same seat.
+  **DESIGN DIVIDEND, and it is the point**: DEFERRED 103 framed this as needing
+  pattern-awareness "at a stage that does not know it is in a pattern" — but the
+  refusal does not have to live at the reader. The arm loss is observable at the
+  pattern compiler, which knows exactly that it is in a pattern. Siting it there
+  keeps the star mint's stage free of a context test, the same way
+  [Q_U31](#q-u31) kept one out of the grouper. ⚠ Stated as an OBSERVATION for the
+  mini-design to verify, **not** as a ruling on the site.
+  ⚠ Sibling NOT discharged: `compile-match-tree`'s abort on a multi-form LITERAL
+  arm (`| 2 3 ->`) is star-free and still live — see DEFERRED 103.
+  *(The Q-label register lives at the end of [§ the census](#star-census) — one
+  source, deliberately.)*
+
 - <a id="star-census"></a>**⭐ THE STAR-SURFACE CENSUS IS THE DESIGN'S INPUT
   [owner-commissioned, 2026-08-09].** After two failed attempts, the owner ruled
   that attempt 3 opens from a MEASURED MAP rather than an intuition about where
@@ -1982,7 +2052,15 @@ items of the hold-point, ruled before P4a opened:
     so the twin obligation may be the Q_N3 guard rather than correctness.
   · **`$star` is a live, undocumented, zero-producer Sigma spelling** reachable
     from user source; `star-symbol?` was built to accept a sentinel.
-  **Next free Q-label: U32.**
+  ⚠ **THE FULL ARTIFACT IS NOW IN THE TREE** — the six bullets above are the
+  summary; the ranked constraint set (Tiers A–D, G, O), the pipeline surface map,
+  the carrier table, the discriminator inventory and the **twelve** enumerated
+  approaches were extracted from the run transcript on 2026-08-10 to
+  [`docs/research/2026-08-09_STAR_SURFACE_CENSUS.md`](../research/2026-08-09_STAR_SURFACE_CENSUS.md).
+  Until then they existed ONLY in a session transcript, which is not durable
+  storage — and the owner's ruling is that attempt 3 opens from the MEASURED MAP,
+  which cannot be honoured against an unreadable artifact.
+  **Next free Q-label: U33.**
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at

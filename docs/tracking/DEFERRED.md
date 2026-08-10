@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 104**
+> ### **NEXT FREE: 105**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6399,7 +6399,15 @@ lexical accident (latent now, a silent wrong answer once `*` has semantics).
 
 ---
 
-### 102. ⬜ ⭐⭐ THE ABORT SEAM — a PREPARSE error in a file that also has a successful `data`/`trait`/`impl` is a WHOLE-FILE ABORT with a raw Racket stack trace (139/305 corpus files susceptible)
+### 102. ✅ FIXED (`41458174`) ⭐⭐ THE ABORT SEAM — a PREPARSE error in a file that also has a successful `data`/`trait`/`impl` was a WHOLE-FILE ABORT with a raw Racket stack trace (139/305 corpus files susceptible)
+
+> **✅ FIXED at `41458174`; glyph corrected 2026-08-10** — the fix commit did not
+> touch this file, so the entry read `⬜` while the code was already repaired, and
+> the D4 tracker, Q_U31 and the dailies all said FIXED. **Re-verified by running
+> the reproducer below at `19560a7c`**: it now yields PARTIAL output with ONE
+> per-command error — `Col`/`Red`/`Green`/`before` all defined, `preparse: bundle
+> Bx: invalid body syntax`, and `after` still defined. That is the intended
+> per-command channel, not an abort. *(Original report below.)*
 
 Found by the star-surface census (`wf_19cd5077-15b`), reproduced on the main
 thread at `d0ac2a58`. **Not a star defect** — the star was merely the probe.
@@ -6484,3 +6492,49 @@ ruling, not a repair (owner Q2 of the census).
 reproduces in **sexp** mode, so it is an IR defect. Consequence for method: a
 star-free CONTROL can be the leg that detonates, so an A/B assuming the control
 is safe will mis-attribute.
+
+⚠ **Coordinate drifted** (re-measured 2026-08-10 at `19560a7c`): the abort is at
+`compile-match-tree` in `macros.rkt`, reported at **`:11333`**, not `:11313`.
+Anchor on the symbol.
+
+---
+
+### 104. ⬜ A BARE OPERATOR BOUND BY `def` YIELDS A STUCK TERM AT ZERO ERRORS — `let` binds the same operator correctly
+
+Found 2026-08-10 by the Q_U32 bare-`*` position sweep (CIU T6 P4e prep). **Not a
+star defect and not a selection defect** — the star was the probe; it reproduces
+with `+`, so it is the whole first-class-operator surface (Numerics N6e-E2).
+
+Measured at `19560a7c`, one file, zero errors reported:
+
+```
+def p := +
+[p 6 7]        ;; => [?meta1631 6 7] : _     ← STUCK TERM, no error
+
+let q +
+  [q 6 7]      ;; => 13 : Int                ← correct
+```
+
+`def p := +` reports `p : _ _ -> _ defined.` and then the application does not
+reduce: the function position stays an unsolved meta and the whole term is
+returned stuck, **with the file reporting 0 errors**. The `let` spelling of the
+identical binding resolves and evaluates. Same divergence with `*`
+(`def times := *` → `[?meta1700 6 7] : _`).
+
+**Why it is filed loud**: this is the silent-wrong-answer shape — no error, a
+plausible-looking echo, and a value that is not a value. A user reading
+`p : _ _ -> _ defined.` has no signal that `p` is unusable.
+
+**Suspected mechanism (INFERRED, not probed)**: per `prologos-syntax.md`, in HEAD
+position at arity 2 `[+ a b]` is the parser keyword with auto-widening, while
+everywhere else the name denotes the lawful same-type trait function needing dict
+resolution from context. A bare `def` RHS has no context to resolve against, so
+the dict meta is never solved — but the def seam checks in CHECK mode and lets it
+through, whereas `let`'s binder path supplies the context. ⚠ If that is right, the
+adjacent hazard is `pipeline.md` § "infer / inferQ Are Twins" — verify before
+believing it.
+
+**Fix direction**: either resolve at the `def` seam as `let` does, or refuse with
+a guided error naming the annotation (`def p : Int -> Int -> Int := +`). Refusing
+is monotone; silently stuck is not. **Not scoped to P4e** — filed so the sweep's
+find is not lost.
