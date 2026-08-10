@@ -2027,6 +2027,72 @@ items of the hold-point, ruled before P4a opened:
   *(The Q-label register lives at the end of [§ the census](#star-census) — one
   source, deliberately.)*
 
+- <a id="q-u33"></a>**⭐⭐ Q_U33 — ADOPT R10, THE TOKEN-*TYPE* MINT: A SPACE IS
+  SIGNIFICANT FOR `*` [owner, 2026-08-10 — "Let's take it, yes"].** At the
+  TOKENIZER, where byte-adjacency is still visible, a `*` byte-adjacent to a
+  preceding CLOSER gets a DISTINCT TOKEN TYPE instead of `'symbol`. **Counts are
+  unchanged at every layer**, so A4 and the ≥15 item-counters never engage —
+  which is precisely what killed attempt 1. `x{a}*` is the star step; `x{a} *`
+  remains the first-class multiplication operator.
+  ⚠ **CORRECTION to this ruling as first written (2026-08-10, measured before it
+  shipped): there is NO "half-glued" error case for `*`, and the ARROW T1
+  analogy does NOT carry.** ARROW's `->` is infix, so it has two sides and a
+  broken middle; `*` here is postfix, and its right-hand side is already
+  resolved by G3 identifier fusion — `ident-start?` admits `*`, so `*foo` is an
+  ORDINARY IDENTIFIER. Measured: `[f x]*foo` → `(((f x) *foo))` and
+  `[f x] *foo` → the **byte-identical** datum; only `[f x]* foo` makes the star
+  a lone token. So the both-sides-glued shape never reaches R10 at all — it is
+  an identifier, exactly as `int*` is at its 170 sites. **R10 fires only when
+  the `*` is a LONE token byte-adjacent to a preceding closer.** No new
+  diagnostic is owed here. (Written from the ARROW precedent by analogy, then
+  probed — the assert-instead-of-measure failure this arc keeps recording,
+  caught this time inside my own ruling text.)
+  **⭐⭐ THE MEASUREMENT THAT FORCES IT — adjacency is the ONLY discriminator, and
+  it exists only ABOVE the datum layer.** I looked for a cheaper one and the
+  probes refuted it twice (2026-08-10, `4ea024f9`):
+  · The datum ERASES glued-vs-spaced: `[f x]*` and `[f x] *` are **both**
+    `(((f x) *))`, and `(f x)*` is byte-identical to both — which is also the
+    shape of `bundle Bx := (Add Sub)*`.
+  · **Hypothesis 1, REFUTED**: "the preceding item's sentinel head discriminates
+    six of the eight sibling carriers" (`$select-brace`, `$bcast-step`,
+    `$list-literal`, `$vec-literal`, `$brace-params`, `$mixfix` are all distinct
+    heads). It does not, because the star's meaning depends on GLUING, which the
+    datum has already lost.
+  · **Hypothesis 2, REFUTED**: "sibling position is uninhabited by working
+    arithmetic, so the erasure is harmless." It is inhabited —
+    `pick [xs] *` → `[fn [x] [fn [y] [?m x y]]]` at **0 errors**, and identically
+    for `pick cfg{database} *`, `pick '[1 2] *`, `pick @[1 2] *`,
+    `pick {:a 1} *`. A bare `*` after a group is LIVE SURFACE in argument
+    position (it is the first-class operator — the Q_U32 guard rail).
+  So a datum-layer rule is unavailable for **every** sibling carrier, not just
+  the two bare-group ones. This is the census's headline finding carried all the
+  way to semantics, and it explains BOTH prior failures structurally rather than
+  as mistakes: attempt 1 took adjacency from the grouper and paid with a count
+  change; attempt 2 went below the grouper and had no adjacency left to carry.
+  **WHAT IT COSTS, named**: a space becomes semantically load-bearing for `*`,
+  and unlike `:` and `->` the spaced form here has a LIVE COMPETING MEANING.
+  **Paid in theory, not in practice**: the census measured **ZERO** code sites
+  for `)*` `]*` `}*` `>*`, so no file in the tree changes meaning.
+  **PRECEDENT**: byte-adjacency already decides `:` ([Q_U8](#q-u8) mints
+  `$bcast-step` only when the colon is glued to a non-empty local result), and
+  ARROW T1 made `->` glued-vs-spaced significant with half-glued a guided error.
+  **Rejected-with-reason**: narrowing back to the in-block spelling (census R8) —
+  already rejected by [Q_U30](#q-u30), which put all seven carriers in scope ·
+  a datum-layer marker (census R2, attempt 2) — refuted above, twice · a
+  different spelling (census R9) — `$star` is already a live Sigma spelling with
+  zero producers, `**` is `pow` in the mixfix table, and a `:`-keyword spelling
+  collides with the `$bcast-step` mint.
+  ⚠ **NOT YET SETTLED, and it is R10's own recorded UNKNOWN**: whether the
+  tokenizer can see "preceding closer" cheaply — `adjacent-to-base?`'s
+  `(pair? result)` conjunct lives at the GROUPER, so the two notions of
+  adjacency are not the same predicate. Measurement is the attempt-3 mini-audit's
+  first obligation, and R10 is a COMPOSITE — it needs a second-stage filter, per
+  the census.
+  ⚠ Composes with [Q_U30](#q-u30)'s **R4** (relax the twin recognizers' trailing
+  guards so `x.0*` / `xs:0*` stop destroying their own carriers) — same file,
+  same kind of edit, and the twins are twins in OBLIGATION but **not in code**
+  (`ascii-digit?` vs `char-numeric?`).
+
 - <a id="star-census"></a>**⭐ THE STAR-SURFACE CENSUS IS THE DESIGN'S INPUT
   [owner-commissioned, 2026-08-09].** After two failed attempts, the owner ruled
   that attempt 3 opens from a MEASURED MAP rather than an intuition about where
@@ -2060,7 +2126,7 @@ items of the hold-point, ruled before P4a opened:
   Until then they existed ONLY in a session transcript, which is not durable
   storage — and the owner's ruling is that attempt 3 opens from the MEASURED MAP,
   which cannot be honoured against an unreadable artifact.
-  **Next free Q-label: U33.**
+  **Next free Q-label: U34.**
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
