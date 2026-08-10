@@ -3681,7 +3681,27 @@
       (with-handlers
           ([exn:fail?
             (lambda (e)
-              (cons (list '$preparse-error (exn-message e)) acc))])
+              ;; ⭐ DEFERRED 102 — THIS MUST BE A SYNTAX OBJECT, and shipping it
+              ;; as a bare list made the guard that PREVENTS whole-file aborts
+              ;; CAUSE one. Every other element of `result` is syntax, and
+              ;; Phase-5b's hoist partition below calls `syntax->datum` on all of
+              ;; them — so a bare list raised `syntax->datum: contract violation`
+              ;; and took the file down, output and all.
+              ;;
+              ;; ⚠ IT ONLY BIT WHEN A DECLARATION SUCCEEDED IN THE SAME FILE.
+              ;; The partition runs only when `generated-decl-names` is non-empty
+              ;; (a `data`/`trait`/`impl` registered something); otherwise the
+              ;; fast path returns `all-forms` untouched and the seam looks
+              ;; clean. 139 of 305 corpus files carry such a declaration. That
+              ;; conditionality is why five parallel censuses each reported zero
+              ;; aborts — none of their probe files had one — and it is why the
+              ;; pinning tests carry a `data` line on purpose.
+              ;;
+              ;; Wrapping against `stx` also gives the marker the SRCLOC it never
+              ;; had, so the per-command error points at the offending form
+              ;; instead of `<unknown>`.
+              (cons (datum->syntax #f (list '$preparse-error (exn-message e)) stx)
+                    acc))])
       ;; DEFERRED 71: strip AND index in one pass. `origin-idx` maps each
       ;; freshly-allocated datum pair to the syntax object it came from, so any
       ;; subtree an expander splices through BY REFERENCE stays recoverable by

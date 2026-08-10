@@ -5923,3 +5923,52 @@
                    (process-string-ws "ns p4e0e\ndef v := [int* 3 4]")))
   (check-false (ormap (lambda (s) (regexp-match? #rx"[Ee]rror" s)) out)
                (format "int* must keep working: ~a" out)))
+
+;; ============================================================
+;; DEFERRED 102 — THE ABORT SEAM
+;; ============================================================
+;; The option-B preparse seam (D4.P4c-4c / G2) converts a preparse RAISE into a
+;; `($preparse-error msg)` VALUE so the file continues. It emits that value as a
+;; BARE LIST, and Phase-5b's hoist partition calls `syntax->datum` on every
+;; element — so whenever a `data`/`trait`/`impl` succeeded in the same file, the
+;; guard that exists to prevent whole-file aborts CAUSES one.
+;;
+;; ⚠ THE TEST OBLIGATION THIS ENTRY EARNED, and it is why the defect survived
+;; five parallel censuses: the probe file MUST contain a SUCCESSFUL declaration.
+;; Without one, `generated-decl-names` is empty, the partition is skipped by the
+;; fast path, and the seam looks clean.
+
+(test-case "DEFERRED 102: a preparse error ALONGSIDE a successful `data` keeps the file alive"
+  ;; Measured before the fix: `syntax->datum: contract violation … given:
+  ;; '($preparse-error "bundle: …")` and ZERO output — not even `before`.
+  (define out
+    (map (lambda (r) (format "~a" r))
+         (process-string-ws
+          (string-append "ns d102a\n"
+                         "def before := 1\n"
+                         "data Col := Red | Green\n"
+                         "bundle Bx := (Add Sub) *\n"
+                         "def after := 2\n"))))
+  ;; the file CONTINUES — both guard forms survive
+  (check-true (ormap (lambda (s) (regexp-match? #rx"before" s)) out)
+              (format "the form BEFORE the preparse error must survive: ~a" out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after" s)) out)
+              (format "the form AFTER the preparse error must survive: ~a" out))
+  ;; …and the preparse error is reported as a per-command error, not swallowed
+  (check-true (ormap (lambda (s) (regexp-match? #rx"preparse" s)) out)
+              (format "the preparse error must still be REPORTED: ~a" out)))
+
+(test-case "DEFERRED 102: the CONTROL — no declaration, so the fast path hides it"
+  ;; The same file minus the `data` took the fast path and was ALREADY correct.
+  ;; Pinned so the fix is not credited with something that already worked, and
+  ;; so the pair documents why the defect was invisible.
+  (define out
+    (map (lambda (r) (format "~a" r))
+         (process-string-ws
+          (string-append "ns d102b\n"
+                         "def before := 1\n"
+                         "bundle Bx := (Add Sub) *\n"
+                         "def after := 2\n"))))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"before" s)) out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"after" s)) out))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"preparse" s)) out)))
