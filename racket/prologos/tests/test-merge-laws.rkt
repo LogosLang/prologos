@@ -56,6 +56,8 @@
 ;;;
 
 (require rackunit
+         racket/file
+         racket/runtime-path
          racket/list
          racket/set
          (only-in "../merge-fn-registry.rkt" merge-fn-registry-size)
@@ -111,6 +113,10 @@
 ;; representation that carries junk (the duplicate entries above) is exactly what
 ;; catches the bugs, so the DEFAULT stays `equal?` and a looser one is declared
 ;; per-merge, in view.
+;; The compiler source directory, resolved from this file's own location so the
+;; drift-guard scan does not depend on the working directory of whoever runs it.
+(define-runtime-path compiler-src-dir "..")
+
 (define (check-idempotent name merge samples equiv)
   (for ([x (in-list samples)])
     (check-true (equiv (merge x x) x)
@@ -425,6 +431,13 @@
 ;; Coverage floor
 ;; ============================================================================
 
+;; The registered merges that are deliberately NOT joins. Declared as DATA
+;; because the drift guard below needs to know they are covered-by-exception
+;; rather than missing. Adding a name here is a claim that needs its reason
+;; written in the test-case that follows.
+(define ACCUMULATOR-MERGES
+  '(add-usage merge-list-append warnings-facet-merge merge-hasheq-list-append))
+
 (test-case "ACCUMULATORS: four registered cell merges are NOT joins, and three are correct"
   ;; The finding this file was not looking for. `on-network.md` says "every cell
   ;; value must be a lattice element with a monotone merge" — and FOUR registered
@@ -460,24 +473,69 @@
   (check-not-equal? (warnings-facet-merge '(w) '(w)) '(w)
                     "warnings-facet-merge is an accumulator; two identical warnings are two warnings"))
 
-(test-case "COVERAGE: every registered merge is now accounted for"
-  ;; 28 merges are registered via `register-merge-fn!/lattice` (a static scan of
-  ;; the call sites — a property of the TREE, unlike registry size, which is a
-  ;; property of the run). All 28 are covered: 24 in MERGES above, plus the four
-  ;; accumulators pinned in their own cases below. MERGES has 33 entries because
-  ;; it also covers the decision-cell family, which is NOT registered — and that
-  ;; is the whole reason the table is hand-written rather than registry-driven:
-  ;; `tagged-cell-merge`, the merge that caused the fourteen-month hang, is not
-  ;; in the registry at all.
+(test-case "DRIFT GUARD: every registered merge is covered, checked against the SOURCE"
+  ;; The guard the DEFERRED entry asked for, and the third attempt at it.
   ;;
-  ;; ⚠ That last point is also where I got the arithmetic wrong, twice, and it
-  ;; is worth leaving written down. I reported "13 of 29", then "24 of 29", by
-  ;; subtracting the table size from the registry size — two DIFFERENT SETS with
-  ;; a partial overlap. The real question is a set difference, and asking it
-  ;; properly (`comm -23 registered covered`) turned "3 residual" into seven
-  ;; more uncovered merges, all of which then probed idempotent on the first
-  ;; try. A count is not a coverage claim; the difference is.
-  (check-true #t "documentation-only — the enumeration above is the assertion"))
+  ;; Attempt 1 asserted `(<= (merge-fn-registry-size) 40)`. It passed standalone
+  ;; and failed in the batch runner at 46, because `merge-fn-registry.rkt` is a
+  ;; process-global hash populated by MODULE SIDE-EFFECTS: its size is a property
+  ;; of whatever the enclosing process happened to load, not of the tree.
+  ;;
+  ;; Attempt 2 was me running `comm -23` by hand and writing the answer into a
+  ;; comment. That found seven uncovered merges the previous count had hidden —
+  ;; and would have gone stale the moment someone registered the next one.
+  ;;
+  ;; This is attempt 3: do the set difference IN THE TEST, against the source
+  ;; text. Registration sites are a property of the TREE, so this is
+  ;; deterministic under any loading order — which is exactly what attempt 1
+  ;; lacked. No enumeration API on the registry required, so it does not wait on
+  ;; PM Track 12.
+  ;;
+  ;; Deliberately a TEXT scan rather than a runtime enumeration: the registry
+  ;; keys on function OBJECTS, so a runtime view can only see merges whose
+  ;; modules this process loaded. The source is the whole tree, always.
+  ;; Relative to THIS FILE, never to `current-directory` — the first version
+  ;; used the latter and the scan found zero merges under the batch worker,
+  ;; which is the whole reason the sanity check below exists.
+  (define src-dir compiler-src-dir)
+  ;; The module that DEFINES the API is not a call site: its own `(define
+  ;; (register-merge-fn!/lattice merge-fn ...))` and its provide list both match
+  ;; the pattern. Excluded by name rather than by a cleverer regex, because a
+  ;; regex that tries to tell a definition from a call is the thing that breaks
+  ;; silently later.
+  (define (read-all pat dir)
+    (for*/list ([f (in-list (directory-list dir))]
+                #:when (and (regexp-match? #rx"[.]rkt$" (path->string f))
+                            (not (equal? (path->string f) "merge-fn-registry.rkt")))
+                [m (in-list (regexp-match* pat (file->string (build-path dir f))
+                                           #:match-select cadr))])
+      (string->symbol m)))
+  (define registered
+    (remove-duplicates
+     (remq* '(merge-fn)   ;; the generic parameter in phase1d-registrations.rkt's
+                          ;; pass-through helper — a variable, not a merge
+           (read-all #px"register-merge-fn!/lattice\\s+([a-zA-Z][a-zA-Z0-9!?*/<>+=:-]*)"
+                     src-dir))))
+  (define covered
+    (append (map (lambda (e) (string->symbol
+                              (regexp-replace #rx"/identity$" (merge-entry-name e) "")))
+                 MERGES)
+            ACCUMULATOR-MERGES))
+  (define missing (for/list ([r (in-list registered)]
+                             #:unless (memq r covered))
+                    r))
+  (check-equal? missing '()
+                (string-append
+                 "these merges are registered via register-merge-fn!/lattice but are "
+                 "neither in MERGES nor declared in ACCUMULATOR-MERGES. Add a row to "
+                 "MERGES (with domain-typed samples), or — if the merge is deliberately "
+                 "not a join — add it to ACCUMULATOR-MERGES and write the reason into "
+                 "the ACCUMULATORS test-case above. Do not simply widen this list."))
+  ;; Sanity: the scan must actually find something, or a regex typo would make
+  ;; this guard vacuously green — the failure mode of every scan-based check.
+  (check-true (>= (length registered) 25)
+              (format "the registration scan found only ~a merges — the regex or the path is wrong"
+                      (length registered))))
 
 (test-case "COVERAGE-FLOOR: the table has not shrunk"
   ;; A floor on the TABLE, not on the registry — and the difference is a finding.

@@ -1975,30 +1975,82 @@ decision.
 The enumeration now lives in the test file as a test-case, so it cannot rot
 silently, and the floor is 33.
 
-## The merge-law table cannot be gated on the registry, and that is a registry problem (2026-08-05)
+## ✅ CLOSED 2026-08-05 — the merge-law drift guard, on the third attempt
 
-Spun out of writing `tests/test-merge-laws.rkt`. The table of merges under test
-is hand-written, so it needs a drift guard: adding a merge without adding a law
-entry should fail.
+Filed the same day as "cannot be gated on the registry, and that is a registry
+problem". The premise was half right: it cannot be gated on the registry's
+**size**. It can be gated on the registry's **call sites**, which is a different
+thing and needs nothing built.
 
-The obvious guard — assert `(<= (merge-fn-registry-size) N)` — **does not work**,
-and the way it fails is worth keeping. It passed standalone under `raco test` and
-FAILED in the batch runner at 46 registrations against a 40 floor. Nothing was
-wrong with the code. `merge-fn-registry.rkt` is a process-global `make-hasheq`
-populated by MODULE SIDE-EFFECTS, so its size is a function of what the enclosing
-process happened to load; a batch worker that has already run other test files
-has loaded more of the compiler. **Registry size is a property of the run, not of
-the tree.**
+**Attempt 1** — `(<= (merge-fn-registry-size) 40)`. Passed standalone, failed in
+the batch runner at 46. `merge-fn-registry.rkt` is a process-global hash
+populated by MODULE SIDE-EFFECTS, so its size is a property of whatever the
+enclosing process loaded. Not a property of the tree; cannot gate anything.
 
-So the test keeps only the weak guard (the table must not shrink) and reports the
-registry size without asserting on it. Adding a merge without adding it to the
-table is still uncaught.
+**Attempt 2** — me running `comm -23 registered covered` by hand and writing the
+answer into a comment. That found seven uncovered merges the counting had
+hidden, and would have gone stale at the next registration.
 
-To close it properly the registry needs (a) an enumeration API — it currently
-exposes only `lookup-merge-fn-domain` and `merge-fn-registry-size`, no way to
-list what is in it — and (b) deterministic population, which is really the
-PM Track 12 "registries become cells" work (§ "Off-Network Registry
-Scaffolding"). Until then the table's coverage is maintained by hand.
+**Attempt 3 (shipped)** — do the set difference IN THE TEST, against the source
+text. Registration sites are a property of the TREE, so it is deterministic
+under any loading order — the thing attempt 1 lacked. **No enumeration API on
+the registry is required, so this does NOT wait on PM Track 12**, which is what
+the entry originally said it was blocked on.
+
+A text scan rather than a runtime enumeration, deliberately: the registry keys on
+function OBJECTS, so a runtime view can only see merges whose modules the current
+process happened to load. The source is the whole tree, always.
+
+**It failed twice on the way in, and both are recorded in the file**:
+
+1. `(build-path (current-directory) 'up)` resolved wrong under the batch worker
+   and the scan found **zero** merges. Caught by a `(>= (length registered) 25)`
+   sanity assertion written specifically so a scan-based check cannot go
+   vacuously green — the failure mode of every scan-based guard. Fixed with
+   `define-runtime-path`, resolved from the test file's own location.
+2. The scan matched `merge-fn-registry.rkt`'s own `(define
+   (register-merge-fn!/lattice merge-fn …))` and its provide list. Excluded the
+   defining module BY NAME rather than writing a regex clever enough to tell a
+   definition from a call — that regex is what breaks silently later.
+
+**Perturbation-verified**: deleting `tropical-fuel-merge` from the table makes the
+guard report exactly `'(tropical-fuel-merge)`. Restored, 66 cases green.
+
+The diagnostic names the two legitimate ways to satisfy it — add a row with
+domain-typed samples, or declare it in `ACCUMULATOR-MERGES` **and write the
+reason into the ACCUMULATORS case** — and says "do not simply widen this list",
+because the cheap way out of a coverage guard is to widen its allowlist.
+
+## 🐛 The suite re-run guard treats a ONE-FILE targeted run as "a suite run" (found 2026-08-05)
+
+`run-affected-tests.rkt:313-325`. The guard keys on `timings.jsonl`'s mtime and
+blocks a full-suite request when no `.rkt` has changed since it — the anti-pattern
+it exists to stop (re-running 150s of suite to "see which tests fail") is real
+and the guard is worth having.
+
+But **it does not record WHICH run wrote that timestamp**. A targeted
+`--tests tests/test-X.rkt` run writes `timings.jsonl` exactly like a full run
+does. So the normal, correct workflow —
+
+1. edit a file,
+2. `--tests` it to iterate (fast, writes timings),
+3. run `--all` as the regression gate
+
+— has step 3 **blocked by step 2**, inside the 5-minute window, with the message
+"No .rkt files changed since last suite run". Which is true and misleading: one
+file ran, 559 did not, and the change has never faced the gate. Hit it exactly
+that way while landing the merge-law drift guard; `--force-rerun` is the
+documented escape and works, but the escape being needed on the happy path means
+the guard is mis-scoped.
+
+**Fix shape** (small): record the run mode alongside the timing entry, and only
+let a FULL run be guarded by a previous FULL run. A targeted run should not
+suppress the gate; if anything it is evidence the gate is about to be wanted.
+The `elapsed < 300` window and the changed-file scan can stay as they are.
+
+**Why it matters more than the 150s**: the guard's failure direction is toward
+*not running the regression gate*, and its message actively reassures you that
+one already ran. Every other guard in this tree fails toward more checking.
 
 ## Fuel bounds FIRE COUNT, not work per fire — so it cannot make non-convergence a bounded diagnostic (2026-08-05)
 
