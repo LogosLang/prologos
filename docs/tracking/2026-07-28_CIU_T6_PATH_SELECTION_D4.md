@@ -34,7 +34,7 @@ rulings, censuses and test delta live in its own section.
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
 | **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [§5.P4c](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([inverted default](#p4c-2-inverted)) · [P4c-3](#p4c-3) ✅ `d477772c` · [P4c-4a](#p4c-4a) ✅ `f31237fd` · [P4c-4b](#p4c-4b) ✅ `6b22515d` (end to end) · **[P4c-4c](#p4c-4c-close) ✅ `ae26f540`** — broadcast is REACHABLE: PVec ω value semantics + **G2** + the preparse seam guard. ⭐ The verify caught a BLOCKING whole-file abort every gate was blind to; owner ruled the structural fix ([close](#p4c-4c-close)) · [Q_U18](#q-u18) ✅ · DEFERRED 43 ✅ · 48 RULED uniform · P4c-5 ⬜ |
 | **P4d** | **The carriers** — Map/keyword-row · het tuple · PVec-of-union · closed-schema subjects · the Q_U9 refusal's message split · corpus re-fate · **Q_U19 ✅ RULED (A)** | ✅ | [§5.P4d](#p4d) · slices **0 ✅ 1 ✅ 2 ✅ 3 ✅ 4a ✅ 4a' ✅ 4b ✅ 4c ✅ 4d-1 ✅ 4d-2 ✅ 5 ✅ 6 ✅** — broadcast is LIVE over PVec · Map · keyword-row · het tuple · union · closed schema. ⭐ The CLOSE's own audit found a whole-file abort in slice 3's code (slice 5) and Q1 re-opened as a live defect (slice 6). All THREE owner questions discharged: Q1 ruled+implemented · [Q2](#q-u22) answered (fix → DEFERRED 88) · Q3 answered (broadcast → 58 re-scoped; contract → 89) |
-| **P4e** | **The `*` family · disclose `<`/`:<` · branch-initial `:`** — ⭐ **`*` is SORT-GENERIC** (deletes the layer the preceding step created: `:diags*` mapcat, `database*` splat). `.*` retires as row-splat and rebinds to **ravel**; `*_` adds provenance keys; branch-initial `:` admits the **ordinal² transpose** | 🔄 | [§5.P4e](#p4e) · **RE-SCOPED 2026-08-08** ([Q_U23](#q-u23)–[Q_U29](#q-u29)) · ⛔ **P4e-0 attempt 1 REVERTED** `d0ac2a58` — the mint was count-changing at the READER; the identifier band stayed, the rest is [DEFERRED 101](DEFERRED.md). ⭐ Attempt 3 opens from [the census](#star-census), scoped by [Q_U30](#q-u30) (all 7 carriers + tokenizer repair) and [Q_U31](#q-u31) (glued Sigma refused). Prerequisite [DEFERRED 102](DEFERRED.md) ✅ FIXED `41458174`. **Attempt-3 PREP ✅ 2026-08-10** (`f63612e7` + `ae67419f`): [Q_U32](#q-u32) rules pattern-position `*` out, guard rail pinned (battery 446→450); the census artifact extracted to [the research doc](../research/2026-08-09_STAR_SURFACE_CENSUS.md) |
+| **P4e** | **The `*` family · disclose `<`/`:<` · branch-initial `:`** — ⭐ **`*` is SORT-GENERIC** (deletes the layer the preceding step created: `:diags*` mapcat, `database*` splat). `.*` retires as row-splat and rebinds to **ravel**; `*_` adds provenance keys; branch-initial `:` admits the **ordinal² transpose** | 🔄 | [§5.P4e](#p4e) · RE-SCOPED 2026-08-08 ([Q_U23](#q-u23)–[Q_U29](#q-u29)) · ⛔ attempt 1 REVERTED `d0ac2a58` ([DEFERRED 101](DEFERRED.md)); attempt 3 opens from [the census](#star-census) ([Q_U30](#q-u30)/[Q_U31](#q-u31), prereq [102](DEFERRED.md) ✅ `41458174`) · PREP ✅ `f63612e7`+`ae67419f` ([Q_U32](#q-u32)) · **slice A SHIPPED** `e7a49228`, **slice B REVERTED** `0e007864`: [§5.P4e-0-a3](#p4e-0-a3) · ⭐ **P4e-1a OPEN** — [Q_U36](#q-u36) positive-list fuse (discharges census Tier-O **O7**); inventory was a **21% sub-frame**; 3 slices, last atomic: [§5.P4e-1a](#p4e-1a) |
 | **P4c-5** | **The `.*name` retirement + FULL residue disposal** — the last P4c residue, sequenced AFTER P4e | ⬜ | [§5.P4c-5](#p4c-5) · ⚠ **row ADDED at the P4d close 2026-08-08** — previously visible only as a `P4c-5 ⬜` fragment inside P4c's Notes cell |
 | **PF** | **Path first-classness** (substrate; **P5's prerequisite**) — ⭐ **Q_U17 RULED B2**: a Path segment is a first-class `Step` value. Reify the closed six-kind union as a `data Step` ADT on the `Datum` pattern; `Path` stays GROUND; `segments : Path -> [List Step]`. Repairs the dead `path-segments` in the SAME change | ⬜ | [§5.PF](#pf) · [Q_U17](#q-u17) · panel `wf_68178bd3-eea` |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery · ⚠ B3 needs [PF](#pf) |
@@ -2159,6 +2159,42 @@ items of the hold-point, ruled before P4a opened:
   ⚠ Does NOT change [Q_U30](#q-u30)'s seven-carrier scope; it rules on what two of
   them MEAN. `xs:0*` / `x.0*` remain blocked on [DEFERRED 105](DEFERRED.md).
 
+- <a id="q-u36"></a>**⭐⭐ Q_U36 — THE FUSE ARM IS A POSITIVE LIST OVER THE
+  PREDECESSOR, AND THAT IS WHAT MAKES P4e-1a TRACTABLE [owner, 2026-08-10].**
+  The rule is: **fuse iff the head of the PRECEDING item is in the small closed
+  set of SELECTION heads**; [Q_U35](#q-u35)'s guided refusal is the genuine
+  `else` catch-all. Never an enumeration of the heads to REFUSE.
+  **WHY IT IS A RULING AND NOT A CODING PREFERENCE — it resolves the census's
+  own ⭐BLOCKING item.** Tier-O **O7** records that `$star-step`'s membership is
+  *"CONDITIONAL AND RECURSIVE — a flat head list cannot say member-iff-its-
+  payload-is-a-member"*, and that is precisely the shape that killed slice B;
+  `access-sentinel?`'s in-file comment reaches the same verdict independently
+  (*"a sentinel that cannot be expressed in the head-set vocabulary the rest of
+  the family shares is a design smell, and it was pointing at the real defect the
+  whole time"*). A positive PREDECESSOR test sidesteps O7 entirely: it never asks
+  whether the star is a member, only whether the thing before it is a selection
+  head — a flat closed-set test on a **different datum**. O7 was not carried into
+  P4e-1's OWED list; it is discharged here.
+  **WHAT IT BUYS, and it is the whole scope argument**: the P4e-1a mini-audit
+  (`wf_9bbe5f5a-9e0`) measured the arrival surface at **10 minting carriers × 19
+  arrival contexts**, not the 4 × 11 this document had enumerated (see
+  [§5.P4e-1a](#p4e-1a)). Under a NEGATIVE list that 4.3× under-count is a defect
+  generator — it is exactly the bad-enumeration class that produced the last
+  three blocking defects. Under a POSITIVE list the population stops bearing on
+  CORRECTNESS at all: every carrier in every context either fuses (selection
+  predecessor) or refuses (everything else), by construction. The inventory
+  remains load-bearing for **gate coverage**, which is a test obligation, not a
+  code one.
+  **In-tree precedent, named**: `pipeline.md`'s `definitely-not-map?` inversion
+  (CIU T6 P2.b slice 1) — a positive list with a conservative `#f` default, so a
+  new node is safe BY CONSTRUCTION. Same direction, same reason.
+  Rejected-with-reason: enumerate the non-selection heads (the six carriers this
+  document omitted are the standing proof that the non-selection side is not
+  knowable in advance); make `$postfix-star` a head-set member (O7 — its
+  membership is conditional, and `access-sentinel?` requires `(list? x)` so a
+  bare atom can never satisfy it anyway).
+  **Next free Q-label: U37.**
+
 - <a id="star-census"></a>**⭐ THE STAR-SURFACE CENSUS IS THE DESIGN'S INPUT
   [owner-commissioned, 2026-08-09].** After two failed attempts, the owner ruled
   that attempt 3 opens from a MEASURED MAP rather than an intuition about where
@@ -2192,7 +2228,7 @@ items of the hold-point, ruled before P4a opened:
   Until then they existed ONLY in a session transcript, which is not durable
   storage — and the owner's ruling is that attempt 3 opens from the MEASURED MAP,
   which cannot be honoured against an unreadable artifact.
-  **Next free Q-label: U36.**
+  (Q-label register: see [Q_U36](#q-u36), the latest ruling — **next free U37**.)
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
@@ -7817,6 +7853,127 @@ the code — the last three blocking defects in this arc were all bad enumeratio
   the `postfix-star` TOKEN TYPE or on srcloc adjacency. And `$star` escapes a
   type-keyed refusal entirely (`<(x : Nat)$star Nat>` → `[Sigma Nat Nat]`, 0 errors).
 - `.*` retires per Q_U23 with **no inventory taken** of what currently consumes it.
+
+<a id="p4e-1a"></a>
+
+#### §5.P4e-1a — the mint gets a consumer  (opened 2026-08-10 · ⬜ **3 slices, not started**)
+
+Mini-audit `wf_9bbe5f5a-9e0` (4 facets + completeness critic); every load-bearing
+claim below re-verified on the main thread. Rulings: **[Q_U36](#q-u36)** (the
+positive-list fuse) and the sequencing below.
+
+**⭐⭐ THE INVENTORY IN [§5.P4e-1](#p4e-1) IS A 21% SUB-FRAME. GENERATED, NOT READ.**
+"40 of 44 across ELEVEN contexts" is TRUE — the audit regenerated it and D4's
+4 × 11 frame reproduces **exactly**, all 40 non-mixfix cells arriving and all 4
+mixfix cells blocked. But the frame is not the blast radius:
+
+| | D4 §5.P4e-1 | MEASURED |
+|---|---|---|
+| minting carriers | 4 | **10** |
+| arrival contexts | 10 (prose says 11; the 11th is mixfix, where nothing arrives) | **19** |
+| cells | 44 (40 arrive) | **280 (190 arrive)** |
+
+The six carriers this document never counted — `.(1 + 2)*` · `'[1 2]*` ·
+`@[1 2]*` · `#{1 2}*` · `{:a 1}*` · `` `[a 1]* `` — each arrive in 19 of 20
+contexts, and they mint for a PRINCIPLED reason: `]` `}` `)` are all in
+`group-closer-types`. (`#p(a)*` does NOT mint in any context — `#p(a)` lexes as
+ONE `path-literal` token, so no `rparen` precedes the star. It is misread as
+arithmetic today, but it is outside slice A's mint domain.) The nine further
+arrival contexts: pattern position · spec/type position · set literal · `defr`
+fact row · goal argument · `let` binding value · `match` scrutinee · quasiquote
+body · `defmacro` template.
+⚠ **The census had already found this** (`2026-08-09_STAR_SURFACE_CENSUS.md`
+MISS 3: *"the population is 11, not 4"*), and this document cites that census as
+"the design's input" while its inventory does not carry MISS 3 forward. The
+census's completeness critic additionally PREDICTED the pattern-position miss —
+*"will still miss that `*` IS ALREADY A BINDING PATTERN"* — and that prediction
+is live below.
+⚠ **The generating matrix did not exist in the tree.** `1476734b` touched two
+files (this doc + the battery); there was no generator, table or data file, so
+the claim was **unfalsifiable at HEAD**. That is the bad-enumeration shape this
+arc keeps paying for. **Slice 1a-i lands a durable generator.**
+
+**WHY [Q_U36](#q-u36) DISSOLVES THAT.** Under a NEGATIVE list the 4.3× under-count
+is a defect generator. Under a POSITIVE predecessor test the population stops
+bearing on correctness — every cell fuses or refuses by construction — and the
+inventory becomes a GATE-COVERAGE obligation. That is the difference between
+this being a scoping crisis and a test-widening task.
+
+**⚠ TWO PRE-EXISTING SENTINEL HOLES, and the differential is what proves they are
+pre-existing** — filed [DEFERRED 106](DEFERRED.md) + [107](DEFERRED.md), NOT
+fixed here (they reproduce without the star; *Watching 9* says mid-flight
+widening is where this arc introduces defects):
+1. **The `let` nested-shorthand binding value is not reached by any of the four
+   `rewrite-dot-access` seats.** At HEAD `let k c{a}*` reports
+   `let: unrecognized format: (let k c ($select-brace a) * k)` — a raw sentinel
+   at the user. The differential settles authorship: `let k c.a` gives
+   `(let k c ($dot-access a) k)`, the same leak with no star. Spelling-sensitive
+   within `let` itself (the ALIGNED form folds correctly), so one gate row would
+   not find it. ⚠ This BOUNDS [Q_U35](#q-u35)'s "refusing dissolves that whole
+   blast radius" — true only WHERE THE FUSE SEAT RUNS.
+2. **Carrier-plus-star in PATTERN position mints, and is unruled.**
+   `defn h | [f 1]* -> 1 | z -> 2` silently drops arm 2 and changes arity, with a
+   diagnostic that never mentions the star. The `c.a` differential is worse —
+   `h defined (arities: 1, 3)` at **ZERO errors**. [Q_U32](#q-u32)'s measured
+   domain is BARE `*` only, and its refusal **has never landed**.
+
+**FOUR MORE VERIFIED FINDINGS** (each corrects something shipped):
+- ⭐ **The slice-A pin's harmlessness argument names a DEAD PATH.** It says the
+  glued Sigma is safe because *"`tree-parser.rkt` finds the Sigma `*` by LEXEME,
+  not by type"*. True of tree-parser, irrelevant to production:
+  `merge-preparse-and-tree-parser` (driver.rkt) now returns only filtered
+  `preparse-surfs` — the tree leg is gone. The live path is preparse →
+  `parse-datum` → `star-symbol?`. The pin's CONCLUSION (the sequencing
+  constraint) is right; its MECHANISM is false, and a right conclusion from a
+  wrong premise is how the next reader gets it wrong.
+- ⭐ **[Q_U31](#q-u31) has TWO identity families, not one call site.**
+  `star-symbol?` (`parser.rkt`, 7 call sites) **and** `param-type->angle-type`
+  (`macros.rkt`, `(memq '* ptype)`), whose own comment says it exists because
+  *"without this, `(A * B)` … gets delegated to parse-datum which treats `*` as a
+  variable name"* — exactly what the rename causes. Zero corpus instances, so it
+  would land silently. ⚠ A reader-seated refusal cannot reach family 2, because
+  its `$angle-type` is SYNTHESIZED AT PREPARSE — which is why the refusal rides
+  the rename rather than preceding it.
+- The rename is probe-verified to break Sigma: `parse-datum` on
+  `($angle-type (x : Nat) $postfix-star Nat)` returns a `surf-app` chain
+  containing `surf-var $postfix-star` where today it returns `surf-sigma`.
+- `access-sentinel?` opens `(and (list? x) (pair? x) …)`, so a bare atom can
+  never satisfy it (`(access-sentinel? '$postfix-star)` → `#f`); the gate needs
+  its own disjunct, `ordinal-rekey-shatter?` being the in-file precedent. The
+  fold's tail UNWRAPS a one-element result, and `preparse-expand-subforms`
+  RE-ENTERS whenever the fold changed the datum — so the emitted head must not be
+  an `access-sentinel?` member or the P1b-iii left-sibling-swallow returns.
+
+**THE SLICING — three, and the last is necessarily atomic** (owner-assented
+2026-08-10). It inverts slice A's failure mode, where the risky change went
+first and every verify round then found a defect in the previous round's FIX:
+
+1. ⬜ **1a-i — land the generator, widen the gate.** A durable matrix generator
+   (10 carriers × 19 contexts) plus the LIVE `"no arrival position leaks the
+   sentinel"` gate widened from its **6 rows** to the generated matrix. Its
+   comment claims "one row per context that mints" against D4's own ten; it uses
+   2 of 10 carriers and covers 6 of 190 cells. No behaviour change — the gate
+   stays green, but green starts meaning something. Must include all three `let`
+   spellings (DEFERRED 106).
+2. ⬜ **1a-ii — the Tier-O arms, inert.** Every site switching on sentinel
+   identity gets `$postfix-star` handling BEFORE the symbol can exist, so the
+   arms are dead code and land green. `pattern-var?` FIRST (a 20-entry denylist;
+   a miss is a whole-file abort in a `defmacro` template). ⚠ Prefer the POLARITY
+   INVERSION the file itself asks for over exclusion #21 — `process-ns-declaration`
+   took exactly that inversion at P4c-1. ⚠ `datum-subst-list`'s splice arm ships
+   a comment claiming sentinel-immunity *because a sentinel is never a bare
+   symbol*; `$postfix-star` is the FIRST counterexample to that invariant.
+3. ⬜ **1a-iii — the atomic change.** Rename `token-entry->stx`'s arm + the gate
+   disjunct + the [Q_U36](#q-u36) positive-list fuse + [Q_U35](#q-u35)'s refusal
+   + [Q_U31](#q-u31)'s refusal at BOTH families; uncomment the two parked tests.
+   **Cannot be split**: the live gate arms the instant the symbol is emitted and
+   stays red until all of it lands. Splitting means landing a knowingly-red
+   battery.
+
+**Scope OUT, with reasons** — [Q_U23](#q-u23)'s Map/strict-merge ruling (this
+slice ships the *not-yet message*, never the flatten, so the semantics are not
+reached) · the `.*` retirement inventory (Q_U23's own surface) · DEFERRED 106 +
+107 (pre-existing, differential-proven).
 
 <a id="pf"></a>
 

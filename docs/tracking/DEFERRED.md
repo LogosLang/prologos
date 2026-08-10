@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 106**
+> ### **NEXT FREE: 108**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6609,7 +6609,96 @@ not tokenizer work. **Reopen R4 only after that ruling.**
 asserts `xs:0*` "lexes as `:0` + `*` since P4e-0's annotation-guard fix, so the
 ORDINAL carrier arrives as a `$star-step`" — **both halves false** (the revert
 `d0ac2a58` restored the guard; `$star-step` does not exist) · another references
-`star-step-trigger?`, which has **no definition anywhere in the tree** · a third
+`star-step-trigger?` — ⚠ **THIS LINE'S OWN CLAIM WAS CORRECTED 2026-08-10
+(`0306ed72`) AND THE CORRECTION DID NOT REACH HERE UNTIL 2026-08-10.** It read
+"has **no definition anywhere in the tree**", which is FALSE as written:
+`git show bfba68d5:racket/prologos/parse-reader.rkt` has it exported, defined and
+called. It has no definition **at HEAD** because the revert `d0ac2a58` took it
+with the mint. The comment is stale about a symbol that DID exist — diagnosed by
+reading instead of by `git log`, which is the finding, not the symbol · a third
 states "every star that now reaches the parser takes a guided not-yet", which is
 false for slice A's carriers too (only the FUSED identifier band gets the guided
 message).
+
+---
+
+### 106. ⬜ The `let` NESTED-SHORTHAND binding value leaks a RAW SENTINEL to the user — pre-existing, and it BOUNDS Q_U35's blast-radius argument
+
+Found by the D4.P4e-1a mini-audit (`wf_9bbe5f5a-9e0`), **re-measured on the main
+thread before filing**. Not caused by the star; the star only joins it.
+
+**Measured at HEAD** (`process-string-ws`):
+
+```
+ns z1 / def c := {:a 7} / defn g [z] / ⇥ let k c{a}* / ⇥⇥ k
+  → let: unrecognized format: (let k c ($select-brace a) * k)
+```
+
+**The differential is what proves authorship** — the same seat with an EXISTING
+sentinel and no star at all:
+
+```
+ns z2 / def c := {:a 7} / defn g [z] / ⇥ let k c.a / ⇥⇥ k
+  → let: unrecognized format: (let k c ($dot-access a) k)
+```
+
+So `$dot-access` already leaks here today. Control (`let k 7`) is fine.
+
+**Cause**: there are exactly FOUR `rewrite-dot-access` call sites —
+`preparse-map-literal-contents`, `preparse-expand-subforms`, the `|>` expander
+and the `$mixfix` expander. The nested-shorthand `let` binding value is reached
+by none of them, so neither the fold nor any refusal seated in it ever fires.
+
+**⚠ WHY IT IS LOAD-BEARING BEYOND ITS OWN SIZE**: it BOUNDS
+[Q_U35](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u35)'s claim that refusing
+"dissolves that whole blast radius instead of arming it site by site". That
+holds only WHERE THE FUSE SEAT RUNS. Q_U35 is not wrong; its scope is narrower
+than stated, and this is the counter-example.
+
+**⚠ SPELLING-SENSITIVE WITHIN `let`** — one gate row would not find it. The
+ALIGNED multi-binding form folds correctly (`g : _ -> Int defined.`); the
+NESTED-SHORTHAND single-binding form leaks; the BRACKET form fails differently
+(`each binding must be (name value)…`). **Any gate row must spell all three.**
+
+**Not fixed at P4e-1a**: pre-existing, differential-proven, and *Watching 9*
+(mid-flight widening is where this arc introduces defects). P4e-1a's obligation
+is bounded to not worsening it invisibly — 1a-i's widened gate carries all three
+`let` spellings so the `$postfix-star` rename cannot slip a NEW leak in unseen.
+
+### 107. ⬜ A CARRIER-PLUS-STAR in PATTERN position mints, is UNRULED, and silently drops an arm — Q_U32 ruled only BARE `*`, and its refusal never landed
+
+Found by the same mini-audit; **the census's completeness critic PREDICTED it**
+(`2026-08-09_STAR_SURFACE_CENSUS.md`: a third design "will still miss that `*` IS
+ALREADY A BINDING PATTERN … a SILENTLY DELETED CLAUSE rather than an error").
+Re-measured on the main thread.
+
+**Measured at HEAD**:
+
+```
+ns p1 / defn f [z] z / defn h / ⇥ | [f 1]* -> 1 / ⇥ | z -> 2
+  → cannot infer the type of an unannotated parameter …
+    [fn [x <_>] [fn [y <_>] [reduce x | f -> …]]]
+```
+
+Arm 2 is GONE and the arity changed; the diagnostic never mentions the star.
+
+**The differential is worse, and again pre-existing** — an existing sentinel in
+the same seat, no star:
+
+```
+ns p2 / def c := {:a 7} / defn h / ⇥ | c.a -> 1 / ⇥ | z -> 2
+  → h defined (arities: 1, 3).       ← ZERO errors, a silently invented arity
+```
+
+**The gap in the rulings**:
+[Q_U32](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u32)'s measured domain is BARE
+`*` (`| * ->`, `| 2 * ->`, `defn f | * ->`, `defn f | red* ->`) — carrier-plus-
+star is not in it. And Q_U32 is a **RULING ONLY**: no pattern-position refusal
+exists in the tree (`star-not-yet-message` + its three call sites are the whole
+surface), so the guard rail it names is unbuilt.
+
+**Two obligations, deliberately separated**: (a) the PRE-EXISTING sentinel-in-
+pattern-position hole, which `c.a` demonstrates at zero errors and which is the
+larger defect; (b) ruling carrier-plus-star, which is a Q_U32 EXTENSION and wants
+an owner ruling. Neither is P4e-1a work — but 1a-i's generated gate covers
+pattern position, so the rename cannot make (a) worse unseen.
