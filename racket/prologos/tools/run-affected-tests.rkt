@@ -314,7 +314,25 @@
       (define last-mod (file-or-directory-modify-seconds timings-path))
       (define now (current-seconds))
       (define elapsed (- now last-mod))
-      (when (< elapsed 300)  ;; less than 5 minutes
+      ;; Only a previous FULL run may suppress a full run. A targeted --tests
+      ;; run writes this same file, so without this check the ordinary workflow
+      ;; (edit -> --tests to iterate -> --all as the gate) had the GATE blocked
+      ;; by the ITERATION, under a message saying a suite run had already
+      ;; happened. One file had run; 559 had not. Found 2026-08-05 while landing
+      ;; the merge-law drift guard.
+      ;;
+      ;; Unknown/absent `source` (schema < 3, or a hand-edited file) counts as
+      ;; NOT-full: this guard's failure direction must be toward running the
+      ;; suite, never toward skipping it.
+      (define last-run-was-full?
+        (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+          (define lines (filter (lambda (l) (> (string-length (string-trim l)) 0))
+                                (file->lines timings-path)))
+          (and (pair? lines)
+               (let ([last-rec (string->jsexpr (last lines))])
+                 (and (hash? last-rec)
+                      (equal? (hash-ref last-rec 'source #f) "all"))))))
+      (when (and (< elapsed 300) last-run-was-full?)  ;; less than 5 minutes
         (define src-dir (build-path project-root))
         (define any-changed?
           (for/or ([f (in-directory src-dir)]
@@ -322,7 +340,7 @@
             (> (file-or-directory-modify-seconds f) last-mod)))
         (unless any-changed?
           (printf "\n~a\n" (make-string 60 #\═))
-          (printf "GUARD: No .rkt files changed since last suite run (~as ago).\n" elapsed)
+          (printf "GUARD: No .rkt files changed since the last FULL suite run (~as ago).\n" elapsed)
           (printf "Read failure logs:  racket tools/run-affected-tests.rkt --failures\n")
           (printf "Run one test:       raco test tests/test-NAME.rkt\n")
           (printf "Force full re-run:  add --force-rerun flag\n")
@@ -988,7 +1006,13 @@
               'total_tests total-tests
               'file_count file-count
               'all_pass all-pass?
-              'source "affected"
+              ;; The run MODE, not a label. The re-run guard reads this to tell
+              ;; a one-file --tests run from a 560-file --all run; before this
+              ;; was recorded it was hardcoded "affected" and the guard could
+              ;; only see the file's mtime, so an iteration suppressed the gate.
+              'source (cond [(pair? (targeted-tests)) "targeted"]
+                            [(run-all?) "all"]
+                            [else "affected"])
               'results file-results))
     (append-run-record timings-file record)
     (printf "Timings recorded to ~a\n" (path->string timings-file)))

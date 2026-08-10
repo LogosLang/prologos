@@ -2021,7 +2021,7 @@ domain-typed samples, or declare it in `ACCUMULATOR-MERGES` **and write the
 reason into the ACCUMULATORS case** — and says "do not simply widen this list",
 because the cheap way out of a coverage guard is to widen its allowlist.
 
-## 🐛 The suite re-run guard treats a ONE-FILE targeted run as "a suite run" (found 2026-08-05)
+## ✅ CLOSED 2026-08-05 — the suite re-run guard treated a ONE-FILE targeted run as "a suite run"
 
 `run-affected-tests.rkt:313-325`. The guard keys on `timings.jsonl`'s mtime and
 blocks a full-suite request when no `.rkt` has changed since it — the anti-pattern
@@ -2043,14 +2043,45 @@ that way while landing the merge-law drift guard; `--force-rerun` is the
 documented escape and works, but the escape being needed on the happy path means
 the guard is mis-scoped.
 
-**Fix shape** (small): record the run mode alongside the timing entry, and only
-let a FULL run be guarded by a previous FULL run. A targeted run should not
-suppress the gate; if anything it is evidence the gate is about to be wanted.
-The `elapsed < 300` window and the changed-file scan can stay as they are.
-
-**Why it matters more than the 150s**: the guard's failure direction is toward
-*not running the regression gate*, and its message actively reassures you that
+**Why it matters more than the 150s**: the guard's failure direction was toward
+*not running the regression gate*, and its message actively reassured you that
 one already ran. Every other guard in this tree fails toward more checking.
+
+**FIXED** as described. The `'source` field in the timings record was hardcoded
+`"affected"` for every run; it now records the actual mode
+(`"all"` / `"targeted"` / `"affected"`), and the guard suppresses a full run only
+when the LAST record was `"all"`. The `elapsed < 300` window and the changed-file
+scan are unchanged. Unknown or absent `source` (schema < 3, hand-edited file)
+counts as NOT-full, so the guard's failure direction is now toward running the
+suite.
+
+**Verified both directions**, because half a guard is worse than none — and the
+real risk in a change like this is silently DISABLING the guard, which looks
+exactly like success. The predicate was exercised against every input shape it
+can meet:
+
+| last record | guard blocks a re-run? | |
+|---|---|---|
+| `source: "all"` | **yes** | the guard still does its job |
+| `source: "targeted"` | no | the bug, fixed |
+| schema 2, no `source` | no | legacy records fail toward running |
+| empty file | no | |
+| file absent | no | |
+
+Plus end-to-end: `--all` immediately after a targeted run now RUNS (previously it
+printed GUARD and exited in under a second).
+
+⚠ **The same trap was already documented in the same file, 380 lines below.**
+`run-affected-tests.rkt:700` carries a comment on the LPT-sort scheduler: *"every
+TARGETED run also appends a record, and 77% of all records are targeted
+(1162/1503)... precisely the sequence that leaves a 1-6 file record last."* That
+consumer was fixed 2026-07-27. The re-run guard reads the same file with the same
+assumption and was not. **Two consumers, one trap, one file** — when a shared
+artifact turns out to have a misleading shape, the fix has to sweep every reader
+of it, not just the one that hurt. Worth remembering that the earlier fix's own
+note recorded the measured impact as NIL and fixed it anyway "because a silently
+degenerating optimizer is a lie in the code" — this second consumer is where that
+judgement paid off.
 
 ## Fuel bounds FIRE COUNT, not work per fire — so it cannot make non-convergence a bounded diagnostic (2026-08-05)
 
