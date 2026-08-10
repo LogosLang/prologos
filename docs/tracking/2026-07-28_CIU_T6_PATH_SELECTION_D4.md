@@ -2082,12 +2082,29 @@ items of the hold-point, ruled before P4a opened:
   different spelling (census R9) — `$star` is already a live Sigma spelling with
   zero producers, `**` is `pow` in the mixfix table, and a `:`-keyword spelling
   collides with the `$bcast-step` mint.
-  ⚠ **NOT YET SETTLED, and it is R10's own recorded UNKNOWN**: whether the
-  tokenizer can see "preceding closer" cheaply — `adjacent-to-base?`'s
-  `(pair? result)` conjunct lives at the GROUPER, so the two notions of
-  adjacency are not the same predicate. Measurement is the attempt-3 mini-audit's
-  first obligation, and R10 is a COMPOSITE — it needs a second-stage filter, per
-  the census.
+  ⚠⚠ **THE HOME IS CORRECTED — "at the TOKENIZER" (as this ruling first said) is
+  the ONE home that does not work.** Settled by measurement at the attempt-3
+  mini-audit (`wf_c062f617-251` + a main-thread token probe), and the ruling's
+  SUBSTANCE is what saves it: a **TYPE** discriminates where a **CHARACTER**
+  cannot. A recognizer sees only the previous CHARACTER, and **`>` is not a
+  closer character** — it is the last char of `->` `->>` `&>` `|>` `+>` `-N>`,
+  all of which classify to `'symbol` and outrank `symbol`'s own priority.
+  Measured, all byte-adjacent, all five would MINT under a char lookback:
+  · `a &>* b` · `x |>* y` · `a ->* b` · `s ->>* t` · `p +>* q`
+    → char-lookback mints **#t (WRONG)** · type-lookback mints **#f** ✅
+  · `[f x]*` (`rbracket`) · `cfg{a}*` (`rbrace`) · `<a>*` (`rangle`)
+    → **both** mint #t ✅ — and note `<a>*`'s closer is a real `rangle` TYPE
+      while `&>` is `symbol`, so the type separates them perfectly.
+  **Therefore the type must be assigned at a TOKEN-LEVEL pass that can see the
+  previous token's TYPE — `disambiguate-tokens` is the only one that does** (it
+  already re-types by previous-token type and carries exact
+  `start-pos`/`end-pos`; it is where `>>` is merged). Cost: one extra round on
+  files that currently do zero.
+  ⚠ **And a grouper-level mint does not rescue it either**: `adjacent-to-base?`
+  gives byte-adjacency to the previous TOKEN, which is `#t` for `&>*` as well —
+  so the closer test is needed there too, AND the postfix mint at the grouper is
+  **count-CHANGING**, which is attempt 1 exactly. Count-preservation is why the
+  ruling is a TYPE mint and not a fusion.
   ⚠ Composes with [Q_U30](#q-u30)'s **R4** (relax the twin recognizers' trailing
   guards so `x.0*` / `xs:0*` stop destroying their own carriers) — same file,
   same kind of edit, and the twins are twins in OBLIGATION but **not in code**
