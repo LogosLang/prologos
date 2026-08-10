@@ -11,6 +11,18 @@
 ;;;                    can use line-oriented read/write. Convenient
 ;;;                    but non-canonical.
 ;;;
+;;;   'netstring     — Each frame is `<ascii-digits>:<payload>` — the
+;;;                    length in ASCII decimal, a colon, then exactly
+;;;                    that many bytes. NOTE: no trailing comma, so
+;;;                    this is NOT a classic netstring; it matches
+;;;                    `@endo/syrup-frame` and upstream's
+;;;                    `utils/netstrings.py`, which are the two
+;;;                    implementations we have to interoperate with.
+;;;                    Adopted 2026-08-05 after ocapn-test-suite #41
+;;;                    ("message-framing") made this the wire format;
+;;;                    the JS reference calls it the default and says
+;;;                    "the spec is moving toward this framing".
+;;;
 ;;;   'raw-syrup     — Each frame is one self-delimiting Syrup
 ;;;                    value. The framing relies on Syrup's
 ;;;                    structural delimiters (`[]`, `<>`, `{}`,
@@ -31,12 +43,12 @@
          current-framing-strategy)
 
 (define (framing-strategy? v)
-  (and (memq v '(newline raw-syrup)) #t))
+  (and (memq v '(newline raw-syrup netstring)) #t))
 
 (define (framing-strategy-guard v)
   (unless (framing-strategy? v)
     (raise-arguments-error 'current-framing-strategy
-                           "expected 'newline or 'raw-syrup"
+                           "expected 'newline, 'raw-syrup or 'netstring"
                            "got" v))
   v)
 
@@ -55,6 +67,10 @@
      (write-byte #x0a port)]
     [(raw-syrup)
      (write-bytes payload port)]
+    [(netstring)
+     (write-bytes (string->bytes/utf-8 (number->string (bytes-length payload))) port)
+     (write-byte #x3a port)   ;; ':'
+     (write-bytes payload port)]
     [else (error 'write-frame "unknown framing strategy: ~v" strategy)])
   (flush-output port))
 
@@ -68,7 +84,41 @@
   (case strategy
     [(newline) (read-newline-frame port)]
     [(raw-syrup) (read-syrup-frame port)]
+    [(netstring) (read-netstring-frame port)]
     [else (error 'read-frame "unknown framing strategy: ~v" strategy)]))
+
+;; Read `<ascii-digits>:<payload>`. Returns #f on a clean EOF before any byte,
+;; so a peer closing between frames is not an error.
+;;
+;; The length prefix is read byte-at-a-time and the payload with
+;; `read-bytes`, which blocks until it has all N — so a frame split across TCP
+;; packets is handled, which is the property this framing exists to provide.
+(define (read-netstring-frame port)
+  (let loop ([digits '()])
+    (define b (read-byte port))
+    (cond
+      [(eof-object? b)
+       (if (null? digits)
+           #f
+           (error 'read-frame
+                  "EOF inside netstring length prefix (read ~a so far)"
+                  (list->string (map integer->char (reverse digits)))))]
+      [(= b #x3a)   ;; ':'
+       (when (null? digits)
+         (error 'read-frame "netstring length prefix is empty"))
+       (define n (string->number (list->string (map integer->char (reverse digits)))))
+       (define payload (read-bytes n port))
+       (cond
+         [(eof-object? payload)
+          (error 'read-frame "EOF before netstring payload (~a bytes expected)" n)]
+         [(< (bytes-length payload) n)
+          (error 'read-frame "short netstring payload: got ~a of ~a bytes"
+                 (bytes-length payload) n)]
+         [else payload])]
+      [(and (>= b #x30) (<= b #x39)) (loop (cons b digits))]
+      [else
+       (error 'read-frame
+              "expected ASCII digit in netstring length prefix, got byte ~a" b)])))
 
 (define (read-newline-frame port)
   "Read bytes up to (but not including) the next 0x0a."

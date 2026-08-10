@@ -21,96 +21,49 @@ reading. A `✅` header means "the thing named in the title is done", not
 [`2026-08-05_1751_FOUR_OPEN_OWNER_RULINGS.md`](2026-08-05_1751_FOUR_OPEN_OWNER_RULINGS.md)
 — each with what is already probed and true, the options, and what each unblocks.
 
-## 🐛 OCapN: upstream moved to NETSTRING framing — our wire is raw Syrup (filed 2026-08-05)
+## ✅ ADOPTED 2026-08-05 — netstring framing, and the "decision" was a false dilemma
 
-`ocapn-test-suite` **#41 ("message-framing")** wraps every CapTP message in a
-netstring. Ours does not, so as of upstream `31f0b806` the two cannot talk:
+`ocapn-test-suite` **#41 ("message-framing")** wrapped every CapTP message in a
+netstring. Ours did not, so as of upstream `31f0b806` the two could not talk —
+every test errored during `setup_session`, in under a fifth of a second, on a
+merge commit that touched no OCapN code at all (the clone was unpinned).
 
-```python
--  message = message.to_syrup()              -  syrup.syrup_read(socketio)
-+  message = Netstring(message.to_syrup())   +  Netstring.read(socketio)
-```
-```
-ocapn-test-server: inbound start-session REJECTED (40 bytes); sending op:abort
-Exception: Expected ASCII digit when reading netstring length prefix.   ← their side, reading ours
-Ran 24 tests in 0.179s — FAILED (errors=24)
-```
+**Done, all in one commit** (the entry required the pin to move with the wire):
 
-Neither side can parse the other, so **every** test errors during
-`setup_session`, in under a fifth of a second.
+- **`'netstring` strategy** in `tools/interop/ocapn-framing.rkt` —
+  `<ascii-digits>:<payload>`, **no trailing comma**, so NOT a classic netstring.
+  Shape taken from upstream's `utils/netstrings.py` (`length.encode() + b":" +
+  self`) and `@endo/syrup-frame`, the two implementations we interoperate with —
+  read from the source, not from memory of the netstring convention.
+- **Server default flipped** `'raw-syrup` → `'netstring`.
+- **Pin moved** `74db78f` → `31f0b80`. Leaving it behind would hide the next
+  drift exactly as it hid this one.
+- **5 regression tests** in `test-ocapn-syrup-wire.rkt`, perturbation-verified:
+  emitting a classic-netstring trailing comma fails 2 of them. They cover the
+  property the framing exists for — two frames coalesced in one buffer, a payload
+  that itself looks like a length prefix (`12:notalength` → `13:12:notalength`),
+  clean EOF as `#f`, and malformed prefixes raising rather than silently
+  resyncing.
 
-**How it surfaced, and why that part matters as much as the change.** The gate
-cloned the suite `--depth 1` at **HEAD, unpinned**, and only when the directory
-was absent. So CI tested upstream's newest commit while a dev box reused a
-months-old clone and passed — the failure landed on a merge commit that touched
-**no OCapN code at all**. Verified by reproducing it against the pre-merge tree
-with a fresh clone.
+**Gate: 24/24 against the NEW suite.** Plus full suite 561/10965/0,
+`test-ocapn-syrup-wire` 45, `captp-wire` 18, `netlayer-tcp` 2.
 
-**Done now (this is the containment, not the fix)**: the clone is PINNED to
-`74db78f`, verified 24/24 from a clean clone, and the checkout runs on EVERY
-invocation so a warm directory cannot diverge from CI. That is the same
-discipline the npm half already had — `npm ci` against a committed lockfile, so
-"the drift gate means what its diagnostic says it means". The Python half simply
-never got it.
+### ⚠ The blocker I filed was a false dilemma
 
-**The actual work, NOT done**: adopt netstring framing on the wire. It is a
-protocol change — read and write paths, the Racket test server, the byte-equality
-fixtures, and the `.mjs` peers — and it wants a deliberate slice rather than
-being bolted onto a merge repair.
+This entry said the remaining work needed a decision: *"whether the new strategy
+replaces `'raw-syrup` or joins it"*. There was nothing to decide. Adding a
+strategy is **purely additive** — the parameter already existed, `'raw-syrup`
+stays for the byte-equality fixtures, `'newline` stays for the `.mjs` cross-impl
+peers, and nothing upstream reads either any more. I invented the choice by
+assuming adoption meant removal.
 
-**Question 1 is ANSWERED (2026-08-05) — adopt it.** I had filed "is this the spec
-or the suite's convention?" as the blocker. It is neither, and it needed research
-rather than a ruling. The JS reference implementation
-(`@endo/ocapn/src/netlayers/tcp-test-only.js:17-38`) documents both modes and
-picks a side in the doc comment itself:
-
-> `'syrup'` **(default)**: each message is wrapped in the `<length>:<payload>`
-> framing … **the spec is moving toward this framing** for the TCP-for-testing
-> netlayer.
-> `'none'`: … **Retained only for compatibility** with the existing Python
-> `testing_only_tcp` netlayer … That suite **is known to be inadequate against
-> the possibility of a TCP chunk getting split across packets**; the `'none'`
-> option **goes away once the Python suite either adopts syrup framing or is
-> retired.**
-
-The Python suite adopted it (that IS #41). So `'none'` is a shim on a stated
-retirement path, length-prefixed framing is already the reference default, and
-the direction is one-way. Adopt.
-
-**One thing that answer does NOT imply, and I had it backwards.** The chunk-split
-inadequacy the comment names is the JS `'none'` peer's — it dispatches each
-`socket.on('data')` chunk as a whole message. Ours is not built that way:
-`read-syrup-frame` (`tools/interop/ocapn-framing.rkt:131`) is a byte-at-a-time
-streaming state machine over the port, so a message split across packets, or two
-messages in one packet, both parse correctly today. We are adopting for
-conformance and to follow the reference, not to fix a live bug in our reader.
-
-**What the adoption actually costs is smaller than the entry implied**:
-`ocapn-framing.rkt` already parameterises the strategy (`current-framing-strategy`,
-`'newline` | `'raw-syrup`, with an `[else (error …)]` arm), and both `read-frame`
-and `write-frame` take it as an optional argument. Adding a third strategy is a
-new arm on each, not a rewrite; the work is in the peers and fixtures.
-
-**Environment check, done 2026-08-05 so whoever opens this does not have to.**
-The conformance gate is runnable in this container: `git clone --depth 1` of
-`ocapn-test-suite` succeeds (network is available), `python3` is present, and the
-Node deps under `tools/interop/node_modules/@endo/ocapn` are already installed.
-The only missing piece is the clone itself, which `run-ocapn-test-suite.sh`
-creates on first run. So the adoption can be developed and gated here — no
-environment work is part of its cost.
-
-Confirmed at the same time: upstream HEAD is **`31f0b80` — "Merge pull request
-#41 from ocapn/message-framing"**, i.e. the suite's newest commit IS the change
-that breaks us, and our pin `74db78f` sits just behind it. That is the whole
-delta. Nothing has landed upstream since to complicate the adoption.
-
-Still to settle when it opens:
-
-1. The pin moves in the SAME commit as the adoption. Leaving it pinned after the
-   wire changes would hide the next drift exactly as this one was hidden.
-2. Whether the third strategy replaces `'raw-syrup` or joins it. Joining it keeps
-   a mode the reference is retiring; replacing it means the byte-equality fixtures
-   regenerate in the same commit.
+**Third time this session a "needs a ruling" call was wrong** — after the
+provide-surface trade (answer was already in the module the entry named) and the
+multi-arity dispatch bug (looked like a syntax decision only because I had
+misdiagnosed it). The pattern is consistent and worth naming: **I escalate while
+the mechanism is still unclear, and the unclarity presents as a design question.**
+All three dissolved on contact with the code. Probe before filing something as
+the owner's.
 
 ## 🐛 Two diagnostics degraded upstream — found by the 2026-08-05 `main` merge
 

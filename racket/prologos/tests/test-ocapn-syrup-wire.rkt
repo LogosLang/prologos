@@ -15,7 +15,12 @@
 
 (require rackunit
          racket/list
+         racket/port
          racket/string
+         ;; Relative, never a collection path — per testing.md, a collection
+         ;; require resolves to the MAIN checkout and loads a second compiler
+         ;; instance in a worktree.
+         (only-in "../../../tools/interop/ocapn-framing.rkt" read-frame write-frame)
          "test-support.rkt"
          "../macros.rkt"
          "../prelude.rkt"
@@ -467,3 +472,50 @@
   (check-contains
    (run-last "(eval (re-encode (unwrap-or syrup-null (decode-value \"<1'f#1+2+$>\"))))")
    "<1'f#1+2+$>"))
+
+;; ============================================================================
+;; Netstring framing (adopted 2026-08-05, ocapn-test-suite#41 "message-framing")
+;; ============================================================================
+;;
+;; `<ascii-digits>:<payload>` — NO trailing comma, so not a classic netstring.
+;; The shape is fixed by the two implementations we interoperate with:
+;; `@endo/syrup-frame` and upstream's `utils/netstrings.py` (`length.encode() +
+;; b":" + self`). Pinned here byte-for-byte because a framing change is exactly
+;; the kind of drift that shows up as "every test errors during setup_session".
+
+(test-case "netstring: wire shape matches upstream's to_netstring byte for byte"
+  (define o (open-output-bytes))
+  (write-frame o #"abc" 'netstring)
+  (check-equal? (get-output-bytes o) #"3:abc")
+  (define o2 (open-output-bytes))
+  (write-frame o2 #"" 'netstring)
+  (check-equal? (get-output-bytes o2) #"0:"))
+
+(test-case "netstring: round-trips, including a payload that looks like a prefix"
+  (for ([p (in-list (list #"" #"a" #"12:notalength" #"<op:start-session>"
+                          (make-bytes 300 65)))])
+    (define o (open-output-bytes))
+    (write-frame o p 'netstring)
+    (check-equal? (read-frame (open-input-bytes (get-output-bytes o)) 'netstring) p
+                  (format "round-trip failed for ~s" p))))
+
+(test-case "netstring: two frames coalesced in one buffer both read back"
+  ;; The property the framing exists for — a reader must not assume one TCP
+  ;; chunk is one message.
+  (define o (open-output-bytes))
+  (write-frame o #"one" 'netstring)
+  (write-frame o #"two" 'netstring)
+  (define i (open-input-bytes (get-output-bytes o)))
+  (check-equal? (read-frame i 'netstring) #"one")
+  (check-equal? (read-frame i 'netstring) #"two"))
+
+(test-case "netstring: clean EOF between frames is #f, not an error"
+  (check-false (read-frame (open-input-bytes #"") 'netstring)))
+
+(test-case "netstring: malformed prefixes are LOUD"
+  ;; Upstream raises "Expected ASCII digit when reading netstring length prefix"
+  ;; on exactly this; ours must not silently resync.
+  (check-exn exn:fail? (lambda () (read-frame (open-input-bytes #"x:abc") 'netstring)))
+  (check-exn exn:fail? (lambda () (read-frame (open-input-bytes #":abc") 'netstring)))
+  ;; Truncated payload — the split-packet case, if the peer dies mid-frame.
+  (check-exn exn:fail? (lambda () (read-frame (open-input-bytes #"10:abc") 'netstring))))

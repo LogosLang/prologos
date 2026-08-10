@@ -53,30 +53,19 @@ SERVER_SCRIPT="$REPO_ROOT/tools/interop/run-ocapn-test-server.rkt"
 # The upstream conformance suite, PINNED.
 #
 # ⚠ PINNED 2026-08-05, after an unpinned `--depth 1` clone of HEAD broke CI on a
-# commit that touched no OCapN code at all. Upstream
-# ocapn-test-suite#41 ("message-framing") wrapped every CapTP message in a
-# NETSTRING:
+# commit that touched no OCapN code at all: ocapn-test-suite#41
+# ("message-framing") wrapped every CapTP message in a netstring, our wire did
+# not, and every test errored during setup_session in under a fifth of a second.
 #
-#     -  message.to_syrup()              /  syrup.syrup_read(socketio)
-#     +  Netstring(message.to_syrup())   /  Netstring.read(socketio)
+# PIN MOVED 2026-08-05, in the same commit as the wire change, because leaving it
+# behind would hide the next drift exactly as it hid that one. We now speak
+# netstring framing (`tools/interop/ocapn-framing.rkt`, strategy 'netstring,
+# which is also the server's default), so the pin moves forward to the
+# message-framing merge.
 #
-# This server speaks RAW Syrup, so neither side could parse the other: we logged
-# "inbound start-session REJECTED (40 bytes)" and the Python side died with
-# "Expected ASCII digit when reading netstring length prefix". All 24 tests
-# errored in 0.179s.
-#
-# The npm half of this gate is already pinned for exactly this reason — the
-# install step uses `npm ci` against a committed lockfile so that "the drift
-# gate means what its diagnostic says it means". This is the same argument: an
-# unpinned clone tests UPSTREAM'S HEAD, not our code, so the gate turns red for
-# reasons no commit here caused and green again without anyone fixing anything.
-#
-# Adopting the new framing is REAL WORK on the wire format and is filed
-# separately — see DEFERRED.md § "OCapN: upstream moved to netstring framing".
-# When it lands, bump this SHA in the same commit.
-#
-# Verified green at this SHA (24 passed / 0 failed / 0 errored, 2026-08-05).
-OCAPN_SUITE_SHA="${OCAPN_SUITE_SHA:-74db78f}"
+# The checkout runs on EVERY invocation, not just after a fresh clone, so a warm
+# dev directory cannot diverge from CI.
+OCAPN_SUITE_SHA="${OCAPN_SUITE_SHA:-31f0b80}"
 
 if [ ! -d "$SUITE_DIR" ]; then
   echo "[run-ocapn-test-suite] cloning ocapn-test-suite to $SUITE_DIR (pinned $OCAPN_SUITE_SHA)"

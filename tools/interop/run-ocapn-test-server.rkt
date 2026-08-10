@@ -66,7 +66,14 @@
 
 (define port-arg (make-parameter 22045))
 (define version-arg (make-parameter "1.0"))
-(define framing-arg (make-parameter 'raw-syrup))
+;; DEFAULT CHANGED 2026-08-05: 'raw-syrup -> 'netstring, adopting
+;; ocapn-test-suite#41 ("message-framing"). The JS reference makes length-prefixed
+;; framing its default and calls raw mode a compatibility shim that "goes away
+;; once the Python suite either adopts syrup framing or is retired" — #41 is that
+;; adoption. 'raw-syrup is kept (not deleted) because our own byte-equality
+;; fixtures and the newline-based cross-impl tests still use their own framings;
+;; nothing upstream reads it any more.
+(define framing-arg (make-parameter 'netstring))
 
 (command-line
  #:program "run-ocapn-test-server"
@@ -75,11 +82,12 @@
              (port-arg (string->number p))]
  [("--captp-version") v "CapTP version to advertise (default: 1.0)"
                       (version-arg v)]
- [("--framing") f "Wire framing: 'raw-syrup' (default; OCapN spec) or 'newline' (Prologos cross-impl tests)"
+ [("--framing") f "Wire framing: 'netstring' (default; ocapn-test-suite#41) | 'raw-syrup' | 'newline'"
                 (framing-arg (string->symbol f))])
 
 (unless (framing-strategy? (framing-arg))
-  (error 'run-ocapn-test-server "unknown framing: ~v (expected raw-syrup or newline)" (framing-arg)))
+  (error 'run-ocapn-test-server
+         "unknown framing: ~v (expected netstring, raw-syrup or newline)" (framing-arg)))
 (current-framing-strategy (framing-arg))
 
 (file-stream-buffer-mode (current-output-port) 'line)
