@@ -37,6 +37,12 @@
          "merge-fn-registry.rkt"
          (only-in "propagator.rkt" current-domain-classification-lookup))
 
+;; Testing support: the merge functions this module defines are exported so
+;; `tests/test-merge-laws.rkt` can check their lattice laws. The module is
+;; otherwise pure side-effect (it REGISTERS domains at load); nothing else
+;; requires these names.
+(provide worldview-merge)
+
 ;; PPN 4C Phase 1f (2026-04-20): wire the classification-lookup callback.
 ;; propagator.rkt's net-add-propagator consults this parameter to
 ;; enforce :component-paths on structural cells. infra-cell-sre-

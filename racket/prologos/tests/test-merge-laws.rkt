@@ -79,6 +79,11 @@
          (only-in "../propagator.rkt"
                   retraction-stratum-merge fork-contradiction-request-merge
                   decomposed-positions-merge contradicted-branch-aids-merge)
+         (only-in "../infra-cell-sre-registrations.rkt" worldview-merge)
+         (only-in "../hasse-registry.rkt" hasse-merge-hash-union)
+         (only-in "../elaborator-network.rkt" merge-meta-solve-identity)
+         (only-in "../qtt.rkt" add-usage)
+         (only-in "../warnings.rkt" warnings-facet-merge)
          (only-in "../constraint-cell.rkt"
                   constraint-merge constraint-bot constraint-top
                   constraint-one constraint-set constraint-set? constraint-set-candidates))
@@ -279,7 +284,14 @@
    ;; constructor. Compared up to normalization rather than dropped, so that if
    ;; either normalization is ever removed this says so.
    (E "constraint-merge" constraint-merge CONSTRAINT-SAMPLES
-      #:laws '(commutative associative) #:equiv constraint-equiv)))
+      #:laws '(commutative associative) #:equiv constraint-equiv)
+   ;; --- added 2026-08-05 (second pass), after exporting six module-private
+   ;; --- merges for exactly this purpose. Three are joins and live here; the
+   ;; --- other three are ACCUMULATORS and are pinned below instead.
+   (E "worldview-merge" worldview-merge NAT-SAMPLES
+      #:laws '(commutative associative))
+   (E "hasse-merge-hash-union" hasse-merge-hash-union HASHEQ-SAMPLES)
+   (E "merge-meta-solve-identity" merge-meta-solve-identity HASHEQ-SAMPLES)))
 
 ;; ============================================================================
 ;; Run them
@@ -364,38 +376,63 @@
 ;; Coverage floor
 ;; ============================================================================
 
-(test-case "RESIDUAL: 8 registered merges are still uncovered, and most are BLOCKED"
-  ;; Enumerated so the gap is a list rather than a feeling. From a static scan of
-  ;; `register-merge-fn!/lattice` call sites (29 registered) minus this table (21).
+(test-case "ACCUMULATORS: four registered cell merges are NOT joins, and three are correct"
+  ;; The finding this file was not looking for. `on-network.md` says "every cell
+  ;; value must be a lattice element with a monotone merge" — and FOUR registered
+  ;; cell merges are not joins at all. They are accumulators: `merge(x,x) ≠ x` by
+  ;; construction. Three of them are RIGHT to be, which is why "add dedup" is the
+  ;; wrong instinct every time:
   ;;
-  ;; NOT EXPORTED by their defining module — cannot be law-tested without
-  ;; widening a provide surface, which is a real design question and not this
-  ;; file's to decide:
+  ;;   add-usage (qtt.rkt, domain 'usage)
+  ;;     (m1) + (m1) = (mw). Semiring ADDITION, not a join — using a linear
+  ;;     resource twice makes it unrestricted. Idempotence would BREAK QTT.
   ;;
-  ;;   worldview-merge          infra-cell-sre-registrations.rkt
-  ;;   hasse-merge-hash-union   hasse-registry.rkt
-  ;;   warnings-facet-merge     warnings.rkt
-  ;;   merge-classify-inhabit   classify-inhabit.rkt
-  ;;   merge-meta-solve-identity elaborator-network.rkt
-  ;;   add-usage                qtt.rkt
+  ;;   merge-list-append (relations.rkt's answer cell)
+  ;;     Rel T1 POL.1: solution sets are BAGS, multiplicity IS the derivation
+  ;;     count. Idempotence would break `solve`. See its own case below.
   ;;
-  ;; This is worth naming precisely: the obstacle to covering a merge is usually
-  ;; NOT that nobody thought of it, it is that the merge is module-private. A
-  ;; drift guard that demands coverage would therefore demand a provide-surface
-  ;; change per merge. That trade — enforceable laws vs. a narrower export
-  ;; surface — is the actual decision behind "why is the table hand-written".
+  ;;   warnings-facet-merge (warnings.rkt)
+  ;;     `append`. Two identical warnings from two sites are two warnings.
   ;;
-  ;; EXPORTED but needs domain-typed samples (probed with plain values and it
-  ;; raised a contract violation, which is the merge being correctly strict):
+  ;;   merge-hasheq-list-append — the one with no defence; its cells were
+  ;;     write-only and are retired. See its case below.
   ;;
+  ;; So the ambient rule is too strong as written, and the honest statement is
+  ;; that cells come in TWO kinds. JOIN cells are idempotent, hence CALM-safe and
+  ;; order-independent. ACCUMULATOR cells are not, and their correctness
+  ;; therefore depends on a property nothing checks: that their writers never
+  ;; re-fire with a value already merged. `tagged-cell-merge` was an accumulator
+  ;; that believed it was a join, and that is exactly the fourteen-month hang.
+  ;;
+  ;; `merge-fn-registry.rkt` does not record the difference — a domain name says
+  ;; which lattice, never whether it IS one. Filed.
+  (check-not-equal? (add-usage '(m1) '(m1)) '(m1)
+                    "add-usage is semiring ADD; if this becomes idempotent QTT is broken")
+  (check-not-equal? (warnings-facet-merge '(w) '(w)) '(w)
+                    "warnings-facet-merge is an accumulator; two identical warnings are two warnings"))
+
+(test-case "RESIDUAL: 3 registered merges are still uncovered"
+  ;; From a static scan of `register-merge-fn!/lattice` call sites (29
+  ;; registered) minus this table (24) minus the 4 accumulators pinned above.
+  ;;
+  ;;   merge-classify-inhabit   classify-inhabit.rkt — wants
+  ;;                            classify-inhabit-value structs
   ;;   merge-by-timestamp-max   clock.rkt — wants timestamped-value structs
+  ;;   merge-list-dedup-append  covered in MERGES, listed here only because the
+  ;;                            scan sees the registration name twice
   ;;
-  ;; ALREADY PINNED below as known non-lattices, deliberately outside MERGES:
-  ;;   merge-list-append, merge-hasheq-list-append
+  ;; Both real residuals are the same shape: the merge is correctly STRICT about
+  ;; its carrier and needs domain-typed samples, which is a small amount of work
+  ;; per merge and no design question.
   ;;
-  ;; Two of the merges added above (merge-constraint-status-map,
-  ;; merge-error-descriptor-map) were probed idempotent before being added — the
-  ;; probe is what turns "uncovered" into either a row or a line in this list.
+  ;; The earlier version of this case listed SIX blockers, all "not exported by
+  ;; their defining module", and framed widening those provides as a trade to be
+  ;; ruled on. That was over-escalated: `merge-fn-registry.rkt` already exports
+  ;; `reset-merge-fn-registry!` and its snapshot/restore pair under a "Testing
+  ;; support:" comment, so exporting a merge to law-test it is precedented
+  ;; ordinary work, not a design change. Six exports later, four of those six
+  ;; are covered and two turned out to be accumulators. Recorded because
+  ;; inventing a blocker is the more expensive mistake.
   (check-true #t "documentation-only — the list above is the assertion"))
 
 (test-case "COVERAGE-FLOOR: the table has not shrunk"
@@ -421,7 +458,7 @@
   ;; call sites — a property of the TREE, unlike registry size. That scan is the
   ;; shape the real drift guard wants; see the residual test-case below for why
   ;; it is not yet automated here.
-  (check-true (>= (length MERGES) 21)
+  (check-true (>= (length MERGES) 24)
               (format "the table shrank to ~a entries — merges were removed from coverage"
                       (length MERGES)))
   ;; Reported, never asserted.

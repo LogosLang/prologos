@@ -7,6 +7,7 @@
 ;;;
 
 (provide current-coercion-warnings
+ warnings-facet-merge    ;; testing support: tests/test-merge-laws.rkt
          emit-coercion-warning!
          format-coercion-warning
          ;; Deprecation warnings

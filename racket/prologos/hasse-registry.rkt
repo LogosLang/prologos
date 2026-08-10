@@ -60,6 +60,7 @@
             (hash-set acc k v))]))
 
 (provide
+ hasse-merge-hash-union   ;; testing support: tests/test-merge-laws.rkt
  ;; Handle — the user-facing registry reference
  (struct-out hasse-registry-handle)
  ;; Factory

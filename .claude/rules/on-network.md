@@ -42,6 +42,8 @@ Every cell value must be a lattice element with a monotone merge. If you can't d
 
 ### ⚠ CHECK idempotence — do not document it (promoted 2026-08-05, 3 instances)
 
+> Read the *two kinds* subsection below with this one: idempotence is required of a JOIN cell, and four registered merges are deliberately not joins.
+
 `merge(x, x)` must equal `x`. This obligation was written in three ambient rule files and **enforced in none**, and the gap cost fourteen months.
 
 **The failure shape**: a merge that unions two collections with a bare `append`. `(merge x x)` returns twice x's elements, so the cell's lattice VALUE is stable while its REPRESENTATION grows on every write. Change-detection sees a change every round, dependents re-fire, and the network **never quiesces** — a HANG, not a wrong answer. Read cost grows with the representation too, so it accelerates.
@@ -54,9 +56,27 @@ Every cell value must be a lattice element with a monotone merge. If you can't d
 | `nogood-merge` | `tests/test-merge-laws.rkt`, **first run** | live cell merge (`atms.rkt`), same latent hazard |
 | `merge-hasheq-list-append` | same run | its 3 cells turned out write-only; retired instead |
 
-**Do this**: add every new cell merge to the `MERGES` table in `tests/test-merge-laws.rkt` (13 registered today). One `(E "name" fn samples)` row. Idempotence is checked unconditionally; `#:laws '(commutative associative)` is opt-IN, because several merges here are deliberately last-write-wins (`merge-hasheq-replace`). Pass an `equiv` when the carrier's representation is looser than its lattice value — a set carried as a list has an order set-union never claimed. A merge that is knowingly NOT a join (`merge-list-dedup-append`) is registered anyway and pinned as a known non-lattice, so the distinction stays visible instead of being omitted.
+**Do this**: add every new cell merge to the `MERGES` table in `tests/test-merge-laws.rkt` (24 covered of 29 registered). One `(E "name" fn samples)` row. Idempotence is checked unconditionally; `#:laws '(commutative associative)` is opt-IN, because several merges here are deliberately last-write-wins (`merge-hasheq-replace`). Pass an `equiv` when the carrier's representation is looser than its lattice value — a set carried as a list has an order set-union never claimed. A merge that is knowingly NOT a join (`merge-list-dedup-append`) is registered anyway and pinned as a known non-lattice, so the distinction stays visible instead of being omitted.
 
 **Debug rule**: a propagator network that will not quiesce is a merge that is not idempotent **until proven otherwise**. Check the carrier before the join. The union-type hang was filed as *"the `:type`-facet union join not reaching a fixpoint"* and the join was innocent — that framing sent it at the type-lattice/quantale work for over a year, and the fix was 8 lines in the cell.
+
+### The rule above is TOO STRONG: cells come in two kinds (2026-08-05)
+
+"Every cell value must be a lattice element with a monotone merge" is the ideal, and **four registered cell merges are not joins — three of them correctly**. Enumerated by `tests/test-merge-laws.rkt`:
+
+| merge | `merge(x,x)` | why non-idempotence is RIGHT |
+|---|---|---|
+| `add-usage` (`qtt.rkt`) | `(m1)+(m1) = (mw)` | semiring ADDITION. Using a linear resource twice makes it unrestricted — **idempotence would break QTT** |
+| `merge-list-append` (`relations.rkt` answer cell) | `(append x x)` | Rel T1 POL.1: solution sets are BAGS, multiplicity IS the derivation count — idempotence would break `solve` |
+| `warnings-facet-merge` | `(append x x)` | two identical warnings from two sites are two warnings |
+| `merge-hasheq-list-append` | grows | no defence; its cells were write-only, now retired |
+
+So the operative distinction is:
+
+- **JOIN cells** — idempotent. CALM-safe, order-independent, any scheduler.
+- **ACCUMULATOR cells** — not idempotent. Their correctness depends on a property **nothing checks**: that their writers never re-fire with a value already merged. That is a *scheduling* assumption smuggled into a *cell*, and it is exactly what `tagged-cell-merge` got wrong for fourteen months — an accumulator that believed it was a join.
+
+**When you write a non-idempotent merge, you owe the reason at the merge** (which semiring, which owner ruling), **and you owe a check that its writers are write-once**. `merge-fn-registry.rkt` cannot help: a domain name records WHICH lattice, never WHETHER it is one.
 
 **Fuel will not save you**: fuel is a FIRE-COUNT budget, decremented per propagator fired. It cannot bound the cost of ONE fire, so a single fire merging an unbounded value runs forever with fuel to spare. (Its `on-write-check` was also unreachable under speculation until 2026-08-05 — the hot fast path is gated on `(not under-speculation?)` and the slow path never consulted it.)
 

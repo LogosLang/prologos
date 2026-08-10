@@ -34,6 +34,7 @@
          "elab-network-types.rkt")  ;; Track 8 B2: struct defs extracted to break cycle
 
 (provide
+ merge-meta-solve-identity ;; testing support: tests/test-merge-laws.rkt
  ;; Core structs
  (struct-out elab-network)
  (struct-out elab-cell-info)

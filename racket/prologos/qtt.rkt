@@ -31,6 +31,7 @@
          (only-in "merge-fn-registry.rkt" register-merge-fn!/lattice))  ;; PPN 4C Phase 2
 
 (provide
+ add-usage               ;; testing support: tests/test-merge-laws.rkt
  ;; Usage context operations
  zero-usage single-usage add-usage join-usage scale-usage
  uhead utail ulen

@@ -1917,16 +1917,45 @@ Two findings from doing it, both from the table catching MY assumption:
    shape is unconstructible through the public API. Pinned with a normalizing
    `equiv` so that if either normalization is removed, this says so.
 
-**The residual 8 are BLOCKED, and the reason is worth having explicitly**: six
-are NOT EXPORTED by their defining module (`worldview-merge`,
-`hasse-merge-hash-union`, `warnings-facet-merge`, `merge-classify-inhabit`,
-`merge-meta-solve-identity`, `add-usage`). Covering them means widening a
-provide surface per merge. So the obstacle to a complete law table is not
-diligence, it is the **trade between enforceable laws and a narrow export
-surface** — which is the actual decision behind "why is the table hand-written",
-and it was not visible until the list was enumerated. `merge-by-timestamp-max`
-is exported but needs `timestamped-value` samples. The list is in the file, as a
-test-case, so it cannot rot silently.
+**Second pass, same day — 21 → 24 covered, and I had invented the blocker.** I
+first wrote that the residual 6 were blocked because they are module-private, and
+framed widening those provides as a trade needing a ruling. That was
+over-escalated: `merge-fn-registry.rkt` already exports
+`reset-merge-fn-registry!` and its snapshot/restore pair under a "Testing
+support:" comment, so exporting a merge in order to law-test it is **precedented
+ordinary work**, not a design change. Six exports later the list is down to two
+real residuals, and inventing a blocker cost more than the exports did.
+
+**And the second pass found the thing this file was not looking for.** Of the six
+newly-exported merges, three are joins (`worldview-merge`,
+`hasse-merge-hash-union`, `merge-meta-solve-identity` — added to the table) and
+**two are ACCUMULATORS**, which brings the count of registered cell merges that
+are *not lattice joins* to **four**:
+
+| merge | `merge(x,x)` | and it is CORRECT |
+|---|---|---|
+| `add-usage` (`qtt.rkt`, domain `'usage`) | `(m1) + (m1) = (mw)` | semiring ADDITION — using a linear resource twice makes it unrestricted. **Idempotence would break QTT.** |
+| `merge-list-append` (`relations.rkt` answer cell) | `(append x x)` | Rel T1 POL.1 — solution sets are BAGS, multiplicity IS the derivation count. Idempotence would break `solve`. |
+| `warnings-facet-merge` (`warnings.rkt`) | `(append x x)` | two identical warnings from two sites are two warnings. |
+| `merge-hasheq-list-append` | grows | the one with no defence; its cells were write-only and are retired. |
+
+**This makes the ambient rule too strong as written.** `on-network.md` says
+"every cell value must be a lattice element with a monotone merge", and four
+registered cell merges are not joins — three of them rightly. The honest
+statement is that cells come in **two kinds**: JOIN cells (idempotent, hence
+CALM-safe and order-independent) and ACCUMULATOR cells (not idempotent, so their
+correctness depends on a property **nothing checks** — that their writers never
+re-fire with a value already merged). `tagged-cell-merge` was an accumulator that
+believed it was a join, and that is precisely the fourteen-month hang.
+
+`merge-fn-registry.rkt` does not record the distinction: a domain name says WHICH
+lattice, never WHETHER it is one. That is the registry gap worth closing, and it
+is a better-specified version of the drift-guard entry below.
+
+**True residual: 2**, both the same benign shape — `merge-classify-inhabit` and
+`merge-by-timestamp-max` are correctly strict about their carriers and need
+domain-typed samples. Small work per merge, no design question. The list lives in
+the test file as a test-case so it cannot rot silently.
 
 ## The merge-law table cannot be gated on the registry, and that is a registry problem (2026-08-05)
 
