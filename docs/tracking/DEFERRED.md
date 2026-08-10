@@ -3471,6 +3471,26 @@ this file, and it would send anyone picking up the track to rebuild what exists.
 > Not attempted here. The process half's rule is where soundness lives, and a
 > subtly wrong one would ACCEPT programs that do not implement their protocol —
 > strictly worse than today's refusal.
+>
+> **⚠ SCOPE CORRECTION 2026-08-05 — "recursion is unusable" overstates it, and I
+> was the one overstating.** I summarised this entry in conversation as "a
+> recursive session type is declarable and unimplementable". That is false.
+> **Recursive session types are LIVE in the standard library and exercised**:
+> `lib/prologos/core/io-protocols.prologos` declares `FileRead`, `FileWrite`,
+> `FileAppend` and `FileRW` with `rec` and `-> rec` back-references, and
+> `test-io-session-01` (11 cases) + `test-io-dep-session-02` (8, one asserting
+> `sess-mu?` directly) pass.
+>
+> They work because the IO path unfolds: `session-runtime.rkt` (4 sites),
+> `io-bridge.rkt`, `effect-position.rkt`. What does NOT unfold is **`type-proc`'s
+> channel lookups** — the process typing judgement. So the gap is precisely
+> *process* recursion plus `type-proc`'s adoption of `unfold-session`, and NOT
+> the session-type layer, which ships and is used.
+>
+> The entry's own body already said this correctly ("Typing simply never adopted
+> them"). The overstatement was mine, in summary, and it is the kind that makes a
+> live, working feature look unbuilt — the same failure mode as the five "blocked"
+> entries this session that named an obstacle already built.
 
 ## (the process half, filed earlier the same day) PROCESS recursion is unimplemented — the discard is now LOUD
 
