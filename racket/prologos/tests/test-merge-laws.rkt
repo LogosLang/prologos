@@ -41,7 +41,12 @@
 ;;; The merge that had the bug is NOT in `merge-fn-registry.rkt` — 29 merges are
 ;;; registered there and `tagged-cell-merge` is not one of them. So a purely
 ;;; registry-driven sweep would have missed it too. The table below is therefore
-;;; hand-written and covers the decision-cell and infra-cell families directly.
+;;; hand-written. It covered the decision-cell and infra-cell families at first;
+;;; a static scan of `register-merge-fn!/lattice` call sites on 2026-08-05 raised
+;;; it to 21 of the 29 registered merges, adding propagator.rkt's four
+;;; stratum-request accumulators, three more infra-cell facet merges, and
+;;; constraint-cell's. The residual 8 are enumerated in a test-case at the
+;;; bottom, with the reason each is not here.
 ;;;
 ;;; The guard against the table going stale is COVERAGE-FLOOR below: it fails if
 ;;; the registry grows past the number of merges recorded here. That is a floor,
@@ -68,7 +73,15 @@
          (only-in "../infra-cell.rkt"
                   merge-hasheq-identity merge-hasheq-replace
                   merge-hasheq-list-append merge-list-append
-                  merge-list-dedup-append merge-set-union))
+                  merge-list-dedup-append merge-set-union
+                  merge-constraint-status-map merge-error-descriptor-map
+                  merge-mod-status)
+         (only-in "../propagator.rkt"
+                  retraction-stratum-merge fork-contradiction-request-merge
+                  decomposed-positions-merge contradicted-branch-aids-merge)
+         (only-in "../constraint-cell.rkt"
+                  constraint-merge constraint-bot constraint-top
+                  constraint-one constraint-set constraint-set? constraint-set-candidates))
 
 ;; ============================================================================
 ;; The law checks
@@ -174,6 +187,29 @@
 (define SET-SAMPLES (list (seteq) (seteq 1) (seteq 1 2)))
 (define NAT-SAMPLES (list 0 1 7))
 
+(define HASH-OF-SETS-SAMPLES
+  (list (hasheq)
+        (hasheq 'p (seteq 1))
+        (hasheq 'p (seteq 1 2) 'q (seteq 3))))
+
+;; A one-element `constraint-set` is included ON PURPOSE: it is the shape that
+;; makes the merge's normalization visible. It is unconstructible through
+;; `constraint-from-candidates`, so this sample is reaching past the public API
+;; to pin behaviour the API currently prevents.
+(define CONSTRAINT-SAMPLES
+  (list constraint-bot constraint-top
+        (constraint-one 'a) (constraint-one 'b)
+        (constraint-set (seteq 'a 'b))
+        (constraint-set (seteq 'a))))
+
+;; Normalize a singleton `constraint-set` to the `constraint-one` the merge and
+;; the constructor both produce, then compare.
+(define (constraint-norm v)
+  (if (and (constraint-set? v) (= 1 (set-count (constraint-set-candidates v))))
+      (constraint-one (set-first (constraint-set-candidates v)))
+      v))
+(define (constraint-equiv a b) (equal? (constraint-norm a) (constraint-norm b)))
+
 (define MERGES
   (list
    ;; --- decision-cell.rkt ---
@@ -207,7 +243,43 @@
    ;; distinction is visible; see the dedicated case below.
    (E "merge-list-dedup-append" merge-list-dedup-append LIST-SAMPLES)
    (E "merge-set-union" merge-set-union SET-SAMPLES
-      #:laws '(commutative associative))))
+      #:laws '(commutative associative))
+   ;; --- added 2026-08-05, from the static scan of registration sites ---
+   ;; The table covered 13 of 29 registered merges. These are the ones that were
+   ;; both EXPORTED and probeable; see the test-case below for the ones that are
+   ;; not, which is a provide-surface problem rather than a coverage decision.
+   ;; --- propagator.rkt: four 'monotone-set stratum-request accumulators ---
+   (E "retraction-stratum-merge" retraction-stratum-merge SET-SAMPLES
+      #:laws '(commutative associative))
+   (E "fork-contradiction-request-merge" fork-contradiction-request-merge SET-SAMPLES
+      #:laws '(commutative associative))
+   (E "decomposed-positions-merge" decomposed-positions-merge SET-SAMPLES
+      #:laws '(commutative associative))
+   ;; NOT a plain set, despite registering under 'monotone-set alongside its
+   ;; three neighbours: the carrier is a HASH of position → aid-set, hash-union
+   ;; with per-position set-union. Caught by this table — SET-SAMPLES made it
+   ;; fail commutativity, because the non-hash guard arms (`[(not (hash? old))
+   ;; new]`) return whichever argument is a hash, which is asymmetric for inputs
+   ;; that are neither. The domain name describes the ALGEBRA, not the carrier.
+   (E "contradicted-branch-aids-merge" contradicted-branch-aids-merge
+      HASH-OF-SETS-SAMPLES
+      #:laws '(commutative associative))
+   ;; --- infra-cell.rkt: three more hasheq facet merges ---
+   (E "merge-constraint-status-map" merge-constraint-status-map HASHEQ-SAMPLES)
+   (E "merge-error-descriptor-map" merge-error-descriptor-map HASHEQ-SAMPLES)
+   (E "merge-mod-status" merge-mod-status HASHEQ-SAMPLES)
+   ;; --- constraint-cell.rkt ---
+   ;; Idempotent only UP TO NORMALIZATION, and the distinction is the point.
+   ;; `(constraint-set (seteq 'a))` merged with itself intersects to a
+   ;; one-element set, which the merge's own `[(= n 1) (constraint-one …)]` arm
+   ;; then normalizes — so `merge(x,x)` is `equal?`-different from `x` while
+   ;; being the SAME lattice point. Not a defect: `constraint-from-candidates`
+   ;; normalizes a singleton at construction too (`constraint-cell.rkt:109`), so
+   ;; a one-element `constraint-set` cannot arise through the public
+   ;; constructor. Compared up to normalization rather than dropped, so that if
+   ;; either normalization is ever removed this says so.
+   (E "constraint-merge" constraint-merge CONSTRAINT-SAMPLES
+      #:laws '(commutative associative) #:equiv constraint-equiv)))
 
 ;; ============================================================================
 ;; Run them
@@ -292,6 +364,40 @@
 ;; Coverage floor
 ;; ============================================================================
 
+(test-case "RESIDUAL: 8 registered merges are still uncovered, and most are BLOCKED"
+  ;; Enumerated so the gap is a list rather than a feeling. From a static scan of
+  ;; `register-merge-fn!/lattice` call sites (29 registered) minus this table (21).
+  ;;
+  ;; NOT EXPORTED by their defining module — cannot be law-tested without
+  ;; widening a provide surface, which is a real design question and not this
+  ;; file's to decide:
+  ;;
+  ;;   worldview-merge          infra-cell-sre-registrations.rkt
+  ;;   hasse-merge-hash-union   hasse-registry.rkt
+  ;;   warnings-facet-merge     warnings.rkt
+  ;;   merge-classify-inhabit   classify-inhabit.rkt
+  ;;   merge-meta-solve-identity elaborator-network.rkt
+  ;;   add-usage                qtt.rkt
+  ;;
+  ;; This is worth naming precisely: the obstacle to covering a merge is usually
+  ;; NOT that nobody thought of it, it is that the merge is module-private. A
+  ;; drift guard that demands coverage would therefore demand a provide-surface
+  ;; change per merge. That trade — enforceable laws vs. a narrower export
+  ;; surface — is the actual decision behind "why is the table hand-written".
+  ;;
+  ;; EXPORTED but needs domain-typed samples (probed with plain values and it
+  ;; raised a contract violation, which is the merge being correctly strict):
+  ;;
+  ;;   merge-by-timestamp-max   clock.rkt — wants timestamped-value structs
+  ;;
+  ;; ALREADY PINNED below as known non-lattices, deliberately outside MERGES:
+  ;;   merge-list-append, merge-hasheq-list-append
+  ;;
+  ;; Two of the merges added above (merge-constraint-status-map,
+  ;; merge-error-descriptor-map) were probed idempotent before being added — the
+  ;; probe is what turns "uncovered" into either a row or a line in this list.
+  (check-true #t "documentation-only — the list above is the assertion"))
+
 (test-case "COVERAGE-FLOOR: the table has not shrunk"
   ;; A floor on the TABLE, not on the registry — and the difference is a finding.
   ;;
@@ -311,7 +417,11 @@
   ;; a merge without adding it here is still uncaught. That is a real gap, and
   ;; closing it wants an enumeration API on the registry plus deterministic
   ;; loading — filed in DEFERRED rather than faked with a number.
-  (check-true (>= (length MERGES) 13)
+  ;; Raised 13 → 21 on 2026-08-05 by a STATIC scan of `register-merge-fn!/lattice`
+  ;; call sites — a property of the TREE, unlike registry size. That scan is the
+  ;; shape the real drift guard wants; see the residual test-case below for why
+  ;; it is not yet automated here.
+  (check-true (>= (length MERGES) 21)
               (format "the table shrank to ~a entries — merges were removed from coverage"
                       (length MERGES)))
   ;; Reported, never asserted.

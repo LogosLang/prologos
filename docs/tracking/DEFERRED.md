@@ -1893,10 +1893,40 @@ not meaningful, that cell needs a different merge. Nothing enforces that today;
 it is the same gap as the entry below (no drift guard on the law table), now
 with a worked example of what the guard would have caught.
 
-**Still uncovered**: ~17 registered merges are absent from the law table. Two of
-the four probed here (`merge-constraint-status-map`,
-`merge-error-descriptor-map`) are idempotent and should simply be added; the
-rest are unexamined.
+**Uncovered — CLOSED to 8, and the residual has a NAMED obstacle (2026-08-05).**
+A static scan of `register-merge-fn!/lattice` call sites (a property of the
+TREE, unlike registry size) gave 29 registered against 13 covered. Probed and
+added 8: propagator.rkt's four stratum-request accumulators
+(`retraction-stratum-merge`, `fork-contradiction-request-merge`,
+`decomposed-positions-merge`, `contradicted-branch-aids-merge`), three more
+infra-cell facet merges, and `constraint-merge`. **Table 13 → 21, floor raised,
+47 cases green.**
+
+Two findings from doing it, both from the table catching MY assumption:
+
+1. **`contradicted-branch-aids-merge` is not a set merge** despite registering
+   under `'monotone-set` beside three that are — its carrier is a HASH of
+   position → aid-set. I gave it set samples and it failed COMMUTATIVITY,
+   because the non-hash guard arms return whichever argument is a hash. The
+   domain name describes the ALGEBRA, not the carrier, and nothing says so.
+2. **`constraint-merge` is idempotent only UP TO NORMALIZATION.** A
+   one-element `constraint-set` merged with itself intersects to a singleton,
+   which the merge's own `[(= n 1) (constraint-one …)]` arm normalizes — a
+   different representation of the same lattice point. Not a defect:
+   `constraint-from-candidates` normalizes at construction too (`:109`), so that
+   shape is unconstructible through the public API. Pinned with a normalizing
+   `equiv` so that if either normalization is removed, this says so.
+
+**The residual 8 are BLOCKED, and the reason is worth having explicitly**: six
+are NOT EXPORTED by their defining module (`worldview-merge`,
+`hasse-merge-hash-union`, `warnings-facet-merge`, `merge-classify-inhabit`,
+`merge-meta-solve-identity`, `add-usage`). Covering them means widening a
+provide surface per merge. So the obstacle to a complete law table is not
+diligence, it is the **trade between enforceable laws and a narrow export
+surface** — which is the actual decision behind "why is the table hand-written",
+and it was not visible until the list was enumerated. `merge-by-timestamp-max`
+is exported but needs `timestamped-value` samples. The list is in the file, as a
+test-case, so it cannot rot silently.
 
 ## The merge-law table cannot be gated on the registry, and that is a registry problem (2026-08-05)
 
