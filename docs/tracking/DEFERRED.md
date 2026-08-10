@@ -4133,12 +4133,54 @@ Form A is what `captp-core` now uses. Note it is TWO-deep, which is fine;
 three-deep nested `match` fails at import time (already in
 `prologos-syntax.md`).
 
-**Not fixed** — this is elaborator/pattern-compiler work, not a workaround
-question. The immediate protection is that the shape is now documented with a
-repro and a working alternative. A guided error would be better than a
-diagnosis: the pattern compiler could refuse a multi-arity `defn` whose arms have
-nullary-constructor patterns in a non-first position, since that arm can never be
-reached as written.
+### Narrowed 2026-08-05 — how far I got, and where I stopped
+
+Attempted the fix; did not land it. Recording the narrowing because it is most of
+the work and the next person should not redo it.
+
+**Established by probe:**
+
+1. **Nullary only.** The same shape with FIELD-CARRYING constructors is
+   **correct**. Probed side by side in one file:
+   ```
+   data W  wa : Nat   wb : Nat
+   defn fb | [wa _] [wa _] -> 1N | [wa _] [wb _] -> 2N | _ _ -> 9N
+   ```
+   → `1N`, `2N`. Both right. The nullary twin is wrong. So this is not general
+   multi-column dispatch — bracketed compound patterns take a different route
+   (they are already `pat-compound` syntactically and need no lookup).
+2. **Two DIFFERENT wrong behaviours**, which is why "matches first arg only" is
+   an incomplete description:
+   - `defn keq | ka ka -> true | kb kb -> true | _ _ -> false` → `[keq ka kb]`
+     is **`true`** (matched the wrong arm).
+   - `defn fa | ka ka -> 1N | ka kb -> 2N | _ _ -> 9N` → `[fa ka kb]` is
+     **`9N`** (fell to the catch-all instead of matching arm 2).
+   One story has to explain both.
+3. **NOT the unknown-constructor path.** `macros.rkt:11551` already documents
+   that an unknown bare name stays a VARIABLE and becomes an irrefutable
+   catch-all — and `unreachable-arm-error` guards it. That is not what is
+   happening here: `normalize-pattern` (`:11196`) does convert a known nullary
+   name to `pat-compound`, `unreachable-arm-error` does not fire, and behaviour
+   (2) rules out first-arm-eats-everything.
+
+**Where I stopped.** Reading `compile-match-tree` (`:11436`) and
+`specialize-rows` (`:11279`), the nullary path looks correct on paper — for a
+nullary ctor `n-fields = 0`, so `new-pats` drops the column, `new-params` drops
+the parameter, and the recursive call should dispatch on what was column 1. Hand-
+tracing `fa`'s `ka`/`kb` case predicts the RIGHT answer (`2N`), which the
+implementation does not produce. **So the divergence is somewhere between that
+reading and the actual behaviour, and I did not find it.** The next step is to
+instrument `compile-match-tree` and print the row sets at each level for the
+15-line repro — cheap, and it settles it.
+
+**Not fixed** — this is elaborator work with a live wrong-answer bug at the end
+of it, not a workaround question. The immediate protection is the repro, the
+severity banner on pitfall #18, and the two documented working forms.
+
+**A guided error is the fallback if the fix proves deep**: refuse a multi-arity
+`defn` with nullary-constructor patterns in a non-first column, since the
+compiler demonstrably cannot honour them. Loud-and-restrictive beats a silent
+wrong answer.
 
 ## ✅ DONE 2026-08-05 — the Peano kind tags are gone from `captp-core`
 
