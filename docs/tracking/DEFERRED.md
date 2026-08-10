@@ -4133,7 +4133,49 @@ Form A is what `captp-core` now uses. Note it is TWO-deep, which is fine;
 three-deep nested `match` fails at import time (already in
 `prologos-syntax.md`).
 
-### Narrowed 2026-08-05 — how far I got, and where I stopped
+### ✅ ROOT-CAUSED 2026-08-05 — it is the PARSER's clause splitting, and there is a one-character fix
+
+**`| [ka] [ka] -> true` works.** Bracketing the nullary patterns gives
+`true / false / false / true` — all correct.
+
+So the pattern compiler was never wrong. **The parser cannot split a bare
+`| ka ka -> …` into two patterns**: two adjacent bare symbols are ambiguous
+between "two nullary constructor patterns" and "constructor `ka` applied to
+argument `ka`", and it picks application. The clause then has **arity 1**, not 2,
+and everything downstream is consistent with that — including both wrong
+behaviours, which stop needing one story because they were never one bug in
+dispatch.
+
+This also explains the field-carrying twin being correct for free: `[wa _]` is
+already bracketed, so its split is unambiguous. The measurement that looked like
+"nullary vs non-nullary" was really "unbracketed vs bracketed" — nullary
+constructors are just the only patterns anyone writes bare.
+
+**Three working forms now, in order of preference:**
+
+```
+;; 1. BRACKET the patterns — smallest change, keeps the multi-arity shape
+defn keq | [ka] [ka] -> true | [kb] [kb] -> true | _ _ -> false
+
+;; 2. outer match + one-level inner match per arm (two-deep is fine)
+;; 3. ordinal + nat-eq?  — works, but reintroduces the numeral
+```
+
+**The fix, and why it is a real decision rather than a bug to squash**: the
+ambiguity is genuine at the grammar level — `f a b` in pattern position could be
+a 3-pattern clause or a 1-pattern application, and the reader cannot know without
+consulting the constructor registry for arity. Options: (a) resolve bare
+constructor names against `lookup-ctor` at parse time and split on known arity —
+correct, but makes parsing registry-dependent; (b) require brackets for
+constructor patterns in multi-arity clause position and ERROR otherwise — loud,
+cheap, and turns a silent wrong answer into a message naming form 1;
+(c) leave it and rely on documentation, which is what has happened since Phase 0
+and cost a brand-check bug.
+
+**Recommendation: (b), with (a) as the better long-term answer.** Either way the
+silent-wrong-answer property is what must go.
+
+### Narrowing that got there (kept — it is the reasoning, and one step was wrong)
 
 Attempted the fix; did not land it. Recording the narrowing because it is most of
 the work and the next person should not redo it.
@@ -4163,8 +4205,9 @@ the work and the next person should not redo it.
    name to `pat-compound`, `unreachable-arm-error` does not fire, and behaviour
    (2) rules out first-arm-eats-everything.
 
-**Where I stopped.** Reading `compile-match-tree` (`:11436`) and
-`specialize-rows` (`:11279`), the nullary path looks correct on paper — for a
+**Where I stopped — and this reading was RIGHT, which is why it mattered.**
+`compile-match-tree` (`:11436`) and `specialize-rows` (`:11279`) look correct on
+paper — for a
 nullary ctor `n-fields = 0`, so `new-pats` drops the column, `new-params` drops
 the parameter, and the recursive call should dispatch on what was column 1. Hand-
 tracing `fa`'s `ka`/`kb` case predicts the RIGHT answer (`2N`), which the

@@ -458,14 +458,19 @@ defn refr-remote-import-promise?
 
 ;; Kind equality.
 ;;
-;; ⚠ Written as an outer `match` with a one-level inner `match` per arm, NOT as
-;; a 2-argument multi-arity `defn` with `| ka ka -> true | _ _ -> false` arms.
-;; That shorter form COMPILES, TYPE-CHECKS, and RETURNS THE WRONG ANSWER: it
-;; discriminates on the first argument only, so `[eq ka kb]` is `true`. Found
-;; here by `test-ocapn-bridge`'s "different kinds => false even with same id"
-;; case while making this change; minimal repro (15 lines, no OCapN) is in
-;; DEFERRED under "a 2-arg multi-arity defn over nullary constructors".
-;; This is pitfall #18's shape, and it is a silent wrong answer, not an error.
+;; ⚠ NOT written as `| refr-k-local-export refr-k-local-export -> true | …`.
+;; Two adjacent BARE constructor names in a clause are ambiguous — the parser
+;; reads them as ONE application pattern, not two patterns — so that form
+;; compiles, type-checks, and RETURNS THE WRONG ANSWER. Caught here by
+;; `test-ocapn-bridge`'s "different kinds => false even with same id"; it had
+;; quietly broken brand-check. Root-caused the same day: it is the parser's
+;; clause splitting, not the pattern compiler. Pitfall #18; repro in
+;; `examples/2026-08-05-multiarity-nullary-repro.prologos`.
+;;
+;; BRACKETING the patterns (`| [refr-k-local-export] [refr-k-local-export] ->`)
+;; also works and is the smaller fix. This one stays as an outer `match` with a
+;; one-level inner `match` because it reads better at six kinds — but if you are
+;; fixing this shape elsewhere, brackets are the one-character answer.
 ;;
 ;; No `RefrKind -> Nat` ordinal exists, on purpose — an ordinal would make the
 ;; equality a `nat-eq?` again and reintroduce the numeral this change removed.

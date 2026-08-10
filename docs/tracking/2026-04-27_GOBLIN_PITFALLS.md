@@ -639,7 +639,15 @@ directly). True over-the-wire pipelining is deferred to Phase 1.
 > two forms that DO work is in `DEFERRED.md` § "A 2-arg multi-arity `defn` over
 > NULLARY constructors returns a WRONG ANSWER, silently".
 >
-> **Use instead** — outer `match`, one-level inner `match` per arm (two-deep is
+> **ROOT CAUSE, same day**: not the pattern compiler. Two adjacent BARE names in
+> a clause are ambiguous — `| ka ka ->` is read as ONE application pattern
+> (ctor `ka` applied to `ka`), so the clause has arity 1. **Bracketing fixes it**:
+> `| [ka] [ka] -> true | [kb] [kb] -> true | _ _ -> false` gives the correct
+> `true / false / false / true`. That is the one-character fix and the preferred
+> form. The field-carrying twin always worked because `[wa _]` is already
+> bracketed — the real axis is unbracketed-vs-bracketed, not nullary-vs-not.
+>
+> **Or** — outer `match`, one-level inner `match` per arm (two-deep is
 > fine; three-deep fails at import):
 > ```
 > defn keq [x y]
