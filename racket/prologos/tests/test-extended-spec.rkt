@@ -256,22 +256,24 @@
   (check-equal? (hash-ref md ':compose #f) 'xf-compose))
 
 (test-case "process-functor: error when :unfolds missing"
-  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
-  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
-  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
-  ;; they still raise (they fail before the guarded seam), and converting them
-  ;; would have weakened a correct assertion.
-  ;; ⚠ `functor-for` DISCARDS the result list and returns the registry lookup, so
-  ;; the generic `yields-prologos-error?` conversion does not fit here — it would
-  ;; be scanning a lookup, not a result. The proposition is unchanged and is
-  ;; asserted directly: the malformed functor MUST NOT REGISTER.
-  ;; (The preparse error itself is reported per-command — visible in the run
-  ;; output as `preparse: functor: functor Bad: requires :unfolds type expression`
-  ;; — and the file continuing past it is exactly what G2/B bought.)
-  (check-false (functor-for 'Bad
-                 "(functor Bad ($brace-params A : (Type 0)) ($brace-params :doc \"oops\"))")
-               "a functor missing :unfolds must not be registered"))
-
+  ;; 2026-08-03: a preparse FORM failure is now a per-command error VALUE
+  ;; rather than an escaping raise (macros.rkt § per-FORM failure
+  ;; containment). What this test asserts is unchanged; the channel moved.
+  ;; Tightened while converting: the old assertion was bare `exn:fail?`, which
+  ;; any failure would have satisfied. Now it names the message.
+  ;; NOTE `functor-for` discards the results and returns `(lookup-functor …)`,
+  ;; so the error has to be read off `process-string` directly.
+  (check-regexp-match
+   #rx"unfolds"
+   (format "~a"
+    (parameterize ([current-spec-store (hasheq)]
+                   [current-property-store (hasheq)]
+                   [current-functor-store (hasheq)]
+                   [current-preparse-registry (current-preparse-registry)]
+                   [current-trait-registry (hasheq)]
+                   [current-trait-laws (hasheq)])
+      (process-string
+       "(functor Bad ($brace-params A : (Type 0)) ($brace-params :doc \"oops\"))")))))
 ;; ========================================
 ;; 5. ?? Typed holes — reader and parser
 ;; ========================================
@@ -1080,3 +1082,75 @@
   (define w (deprecation-warning 'old-fn #f))
   (check-equal? (format-deprecation-warning w)
                 "warning: old-fn is deprecated"))
+
+;; ========================================
+;; :examples are CHECKED (Spec System Phase 2, first bullet)
+;; ========================================
+;;
+;; The metadata surface has stored `:examples` since it landed, and nothing ever
+;; read it: a deliberately wrong example was accepted in silence, 0 errors. An
+;; unchecked example is worse than no example, because it reads as a guarantee.
+;;
+;; The check is narrow ON PURPOSE. Only a genuine value mismatch between a call
+;; and an expected value that BOTH evaluated cleanly is reported; anything that
+;; fails to elaborate or evaluate is skipped, because an example may legitimately
+;; reference a helper defined later in the file. Two of the cases below exist to
+;; pin that boundary rather than the happy path.
+
+(define (spec-example-run src)
+  (parameterize ([current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    ;; `process-string` returns a LIST of per-command results; the definition
+    ;; under test is the last one.
+    (let ([rs (process-string src)])
+      (if (list? rs) (last rs) rs))))
+
+(test-case "spec-examples: a WRONG example is a per-command error"
+  (define r (spec-example-run
+    (string-append "(ns exchk1)\n"
+                   "(spec dbl Nat -> Nat ($brace-params :examples ((dbl 2N) => 999N)))\n"
+                   "(defn dbl (n) (add n n))")))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (define msg (prologos-error-message r))
+  ;; names the example, what it really evaluates to, and what was claimed —
+  ;; all three, because any one alone leaves the reader guessing
+  (check-true (regexp-match? #rx"does not hold" msg) (format "got: ~v" msg))
+  (check-true (regexp-match? #rx"dbl 2N" msg) (format "got: ~v" msg))
+  (check-true (regexp-match? #rx"4N" msg) (format "got: ~v" msg))
+  (check-true (regexp-match? #rx"999N" msg) (format "got: ~v" msg)))
+
+(test-case "spec-examples: a CORRECT example defines cleanly"
+  (define r (spec-example-run
+    (string-append "(ns exchk2)\n"
+                   "(spec d2 Nat -> Nat ($brace-params :examples ((d2 2N) => 4N)))\n"
+                   "(defn d2 (n) (add n n))")))
+  (check-false (prologos-error? r) (format "expected success, got: ~v" r)))
+
+(test-case "spec-examples: MULTIPLE examples, the wrong one is caught"
+  ;; A first-example-only check would pass this.
+  (define r (spec-example-run
+    (string-append "(ns exchk3)\n"
+                   "(spec d3 Nat -> Nat ($brace-params :examples ((d3 2N) => 4N) ((d3 3N) => 7N)))\n"
+                   "(defn d3 (n) (add n n))")))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (check-true (regexp-match? #rx"d3 3N" (prologos-error-message r))
+              (format "the SECOND example is the failing one: ~v" r)))
+
+(test-case "spec-examples: no examples at all is unaffected (control)"
+  (define r (spec-example-run
+    "(ns exchk4)\n(spec d4 Nat -> Nat)\n(defn d4 (n) (add n n))"))
+  (check-false (prologos-error? r) (format "expected success, got: ~v" r)))
+
+(test-case "spec-examples: an UNEVALUABLE example is SKIPPED, not reported"
+  ;; The boundary that makes this usable: an example naming something that does
+  ;; not resolve at definition time must not fail the definition. Reporting
+  ;; those would make `:examples` unusable in the files that most want it.
+  (define r (spec-example-run
+    (string-append "(ns exchk5)\n"
+                   "(spec d5 Nat -> Nat ($brace-params :examples ((d5 (nonexistent-helper 2N)) => 4N)))\n"
+                   "(defn d5 (n) (add n n))")))
+  (check-false (prologos-error? r) (format "an unevaluable example must be skipped, got: ~v" r)))

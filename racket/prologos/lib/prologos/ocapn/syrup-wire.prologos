@@ -1,0 +1,739 @@
+ns prologos::ocapn::syrup-wire
+
+;; ===========================================================
+;; Syrup wire codec — Phase 1 of OCapN interop
+;; ===========================================================
+;;
+;; Maps `SyrupValue` to/from the canonical OCapN Syrup byte
+;; encoding. See OCapN spec `Syrup.md` and Endo `@endo/syrup`
+;; for the reference. Design doc:
+;; `docs/tracking/2026-04-29_OCAPN_INTEROP_DESIGN.md`.
+;;
+;; Wire grammar (the forms we cover):
+;;
+;;   bool    := "t" | "f"
+;;   int     := digits "+" | digits "-"
+;;   string  := digits "\"" bytes
+;;   symbol  := digits "'" bytes
+;;   bytes   := digits ":" bytes
+;;   list    := "[" syrup-value* "]"
+;;   dict    := "{" (syrup-value syrup-value)* "}"
+;;   record  := "<" syrup-value+ ">"      ;; first element = label
+;;
+;; NOT covered: floats (`D`/`F`) and sets (`#`…`$`). The reference
+;; emits both (`contrib/syrup.py`), so a peer that sends one gets a
+;; decode failure from us. Tracked in the gaps document.
+;;
+;; There is NO null form. The reference has none — `grep -c "b'n'"`
+;; over `contrib/syrup.py` is 0. `syrup-null` is our INTERNAL
+;; "no value" sentinel (behaviours return it as unit) and it means
+;; ONE thing on this wire: the EMPTY ARGUMENT SEQUENCE of a record,
+;; i.e. `<tag>`. It is not a value, and encoding one standalone is a
+;; bug — see `unencodable` below.
+;;
+;; THE BYTE MODEL. Every String in this codec holds ONE BYTE PER
+;; CODE POINT (Latin-1). That is what the frame FFI hands us
+;; (`ocapn-frame-ffi.rkt` decodes Latin-1), what `hex-to-bytes`
+;; produces, and what the outbound path re-encodes with
+;; `string->bytes/latin-1`. So every length prefix — string, symbol
+;; AND bytes alike — is `str::length`, the code-point count, because
+;; here that IS the byte count.
+;;
+;; Do NOT reach for `str::bytes-length` (= `string-utf-8-length`).
+;; It re-measures those code points as if they were text, and the two
+;; agree on ASCII only. A real 32-byte Ed25519 key is 32 code points
+;; but 51 UTF-8 bytes, so it emitted `51:` in front of 32 bytes and no
+;; peer could parse the frame. That was fixed for `syrup-bytes` and
+;; left in place for string/symbol on the reasoning that "strings hold
+;; text, so the spec's byte length applies" — which is wrong, because
+;; nothing in this stack is UTF-8. A UTF-8 "é" arrives as the two
+;; code points 0xC3 0xA9 and must go back out as `2"` + those two.
+;;
+;; Limitations:
+;;   - `syrup-refr` / `syrup-promise` are NOT encodable on the
+;;     pure Syrup wire — descriptor translation is the CapTP
+;;     layer's job. `encode-safe` returns `none` for them; raw
+;;     `encode` emits a poison record (`unencodable`) that no peer
+;;     will accept, rather than the empty string it used to emit,
+;;     which silently deleted the value from its enclosing list.
+
+require [prologos::ocapn::syrup     :refer-all]
+        [prologos::data::string     :as str :refer []]
+        [prologos::data::char       :as char :refer []]
+        [prologos::data::list       :refer [List nil cons reverse]]
+        [prologos::data::option     :refer [Option some none]]
+        [prologos::data::bool       :refer []]
+
+;; ===========================================================
+;; Integer / Nat to decimal string
+;; ===========================================================
+
+;; Nat -> decimal digits (no sign suffix).
+spec nat-digits Nat -> String
+defn nat-digits [n]
+  str::from-int [from-nat n]
+
+;; abs i, returned as a non-negative Int, encoded as decimal
+;; without sign. For i = 0 this is "0".
+spec int-abs-digits Int -> String
+defn int-abs-digits [i]
+  if [int-lt i 0] [str::from-int [int-neg i]] [str::from-int i]
+
+;; Int -> sign character: "-" if negative, "+" otherwise.
+spec int-sign-char Int -> String
+defn int-sign-char [i]
+  if [int-lt i 0] "-" "+"
+
+;; ===========================================================
+;; Encoder
+;; ===========================================================
+;;
+;; `encode-many` uses higher-order injection of `encode` to
+;; sidestep mutual-recursion / forward-reference limitations:
+;; the list walker takes the per-element encoder as an argument,
+;; so the file orders helpers BEFORE the main entry.
+
+spec encode-many [SyrupValue -> String] [List SyrupValue] -> String
+  :doc "Concatenate (enc x) over xs."
+defn encode-many [enc xs]
+  match xs
+    | nil      -> ""
+    | cons h t -> str::append [enc h] [encode-many enc t]
+
+;; --- Canonical dict ordering ---
+;;
+;; Syrup canonicalises a dict by SORTED ENCODED KEY (`contrib/syrup.py`).
+;; We sort whole encoded key-value pairs instead, which gives the same order:
+;; every Syrup form is length-prefixed and therefore prefix-free, so no
+;; encoded key can be a proper prefix of another and the value bytes never
+;; decide the comparison.
+;;
+;; This matters beyond tidiness. A signature is over BYTES, so an
+;; unsorted dict inside a signed record is a signature we cannot reproduce.
+
+spec str-insert String [List String] -> [List String]
+defn str-insert [x xs]
+  match xs
+    | nil -> [cons x [nil String]]
+    | cons h t ->
+        match [str::lt x h]
+          | true  -> [cons x xs]
+          | false -> [cons h [str-insert x t]]
+
+spec str-sort [List String] -> [List String]
+defn str-sort [xs]
+  match xs
+    | nil      -> [nil String]
+    | cons h t -> str-insert h [str-sort t]
+
+spec concat-strings [List String] -> String
+defn concat-strings [xs]
+  match xs
+    | nil      -> ""
+    | cons h t -> str::append h [concat-strings t]
+
+;; Flat alternating [k1 v1 k2 v2 ...] -> one encoded string per PAIR.
+;; A trailing odd key is emitted alone rather than dropped; the decoder
+;; rejects odd dicts, so this can only arise from a value we built.
+spec encode-dict-pairs [SyrupValue -> String] [List SyrupValue] -> [List String]
+defn encode-dict-pairs [enc xs]
+  match xs
+    | nil -> [nil String]
+    | cons k rest ->
+        match rest
+          | nil         -> [cons [enc k] [nil String]]
+          | cons v more -> [cons [str::append [enc k] [enc v]] [encode-dict-pairs enc more]]
+
+spec encode-dict-body [SyrupValue -> String] [List SyrupValue] -> String
+defn encode-dict-body [enc xs]
+  concat-strings [str-sort [encode-dict-pairs enc xs]]
+
+spec encode-each [SyrupValue -> String] [List SyrupValue] -> [List String]
+defn encode-each [enc xs]
+  match xs
+    | nil      -> [nil String]
+    | cons h t -> [cons [enc h] [encode-each enc t]]
+
+;; A set has no key/value pairing: sort the encoded ITEMS.
+spec encode-set-body [SyrupValue -> String] [List SyrupValue] -> String
+defn encode-set-body [enc xs]
+  concat-strings [str-sort [encode-each enc xs]]
+
+;; --- The poison record for values that must never reach the wire ---
+;;
+;; `syrup-refr` / `syrup-promise` / a standalone `syrup-null` are CapTP-layer
+;; concepts; reaching the Syrup encoder with one is a bug upstream of here.
+;; This used to encode as "", which deleted the value from its enclosing list
+;; and handed the peer a well-formed record of the WRONG ARITY — a silent
+;; wrong answer. A record with an unknown label is loud instead: every peer
+;; rejects it, and the label says where to look.
+;;
+;; The label is spelled out rather than built with `encode` because `encode`
+;; calls THIS, and the module is single-pass. "prologos:unencodable" is 20
+;; characters; `test-ocapn-syrup-wire.rkt` pins the exact bytes.
+spec unencodable String -> String
+defn unencodable [what]
+  str::append "<20'prologos:unencodable" [str::append [str::from-int [str::length what]] [str::append "'" [str::append what ">"]]]
+
+;; Render a record's payload as its DIRECT CHILDREN.
+;;
+;;   syrup-null      the empty argument sequence      `<tag>`
+;;   syrup-list xs   xs IS the argument sequence      `<tag x1 x2 ...>`
+;;   anything else   exactly one argument             `<tag p>`
+;;
+;; There used to be two readings of a payload — this splicing one for
+;; `re-encode` and a wrapping one for `encode`, where a list payload became a
+;; single list argument. Every producer in the tree builds
+;; `syrup-tagged label (syrup-list args)` meaning SPLICE (see `op-to-syrup` in
+;; captp-wire), so the wrapping reading had no users and two live bugs: it
+;; emitted `<op:deliver [to args ap rm]>` for a record upstream reads as four
+;; fields, and it disagreed with `re-encode` on any echoed value. One reading.
+;;
+;; The cost is that a record whose single argument is genuinely a list is no
+;; longer expressible as a bare payload — `decode-record-with` wraps that case
+;; as `syrup-list [thelist]`, which round-trips exactly.
+;;
+;; Takes the encoder as a parameter for the same reason `encode-many` does:
+;; this file is single-pass and has no mutual recursion.
+spec encode-payload [SyrupValue -> String] SyrupValue -> String
+defn encode-payload [enc p]
+  match p
+    | syrup-null       -> ""
+    | syrup-list xs    -> encode-many enc xs
+    | syrup-bool _     -> enc p
+    | syrup-nat _      -> enc p
+    | syrup-int _      -> enc p
+    | syrup-string _   -> enc p
+    | syrup-symbol _   -> enc p
+    | syrup-bytes _    -> enc p
+    | syrup-dict _     -> enc p
+    | syrup-set _ -> enc p
+    | syrup-float _ -> enc p
+    | syrup-tagged _ _ -> enc p
+    | syrup-refr _     -> enc p
+    | syrup-promise _  -> enc p
+
+;; Encode a single SyrupValue. Total over the constructors we
+;; CAN serialise; refr/promise/bare-null produce a poison record
+;; — callers should pre-validate via `encode-safe`.
+;;
+;; Every length prefix is `str::length`: see THE BYTE MODEL in the
+;; file header. This is not a per-constructor judgement call.
+spec encode SyrupValue -> String
+defn encode [v]
+  match v
+    | syrup-null         -> unencodable "null"
+    | syrup-bool b       -> match b | true -> "t" | false -> "f"
+    | syrup-nat n        -> str::append [nat-digits n] "+"
+    | syrup-int i        -> str::append [int-abs-digits i] [int-sign-char i]
+    | syrup-string s     -> str::append [str::from-int [str::length s]] [str::append "\"" s]
+    | syrup-symbol s     -> str::append [str::from-int [str::length s]] [str::append "'" s]
+    | syrup-bytes b      -> str::append [str::from-int [str::length b]] [str::append ":" b]
+    | syrup-list xs      -> str::append "[" [str::append [encode-many encode xs] "]"]
+    | syrup-dict xs      -> str::append "{" [str::append [encode-dict-body encode xs] "}"]
+    ;; A set canonicalises by SORTED ENCODED ITEM, same rule as a dict's keys
+    ;; (`contrib/syrup.py` sorts `encoded_items`). `encode-set-body` sorts
+    ;; whole encoded items rather than pairs.
+    | syrup-set xs       -> str::append "#" [str::append [encode-set-body encode xs] "$"]
+    ;; The payload already carries its marker byte — see `syrup-float` in
+    ;; syrup.prologos for why a float is bytes here and not a number.
+    | syrup-float f      -> f
+    | syrup-tagged tag p -> str::append "<" [str::append [encode [syrup-symbol tag]] [str::append [encode-payload encode p] ">"]]
+    | syrup-refr _       -> unencodable "refr"
+    | syrup-promise _    -> unencodable "promise"
+
+;; ===========================================================
+;; Encodability check
+;; ===========================================================
+;;
+;; `encode-safe v` returns `some bytes` if v is wire-encodable,
+;; `none` if it transitively contains a syrup-refr or
+;; syrup-promise (which require descriptor translation at the
+;; CapTP layer first).
+
+spec all-encodable [SyrupValue -> Bool] [List SyrupValue] -> Bool
+  :doc "Conjunction of (enc-ok? x) over xs."
+defn all-encodable [pred xs]
+  match xs
+    | nil      -> true
+    | cons h t ->
+        match [pred h]
+          | false -> false
+          | true  -> all-encodable pred t
+
+spec encodable? SyrupValue -> Bool
+  :doc "True iff v's transitive contents contain no refr/promise."
+defn encodable?
+  | syrup-null        -> true
+  | syrup-bool _      -> true
+  | syrup-nat _       -> true
+  | syrup-int _       -> true
+  | syrup-string _    -> true
+  | syrup-symbol _    -> true
+  | syrup-bytes _     -> true
+  | syrup-list xs     -> all-encodable encodable? xs
+  | syrup-tagged _ p  -> encodable? p
+  | syrup-refr _      -> false
+  | syrup-promise _   -> false
+  ;; A dict IS encodable; whether it encodes depends on its CONTENTS, exactly
+  ;; as for a list. (The mechanical pass cloned `false` from the promise arm
+  ;; above, which would have made every location-bearing frame unencodable.)
+  | syrup-dict xs     -> all-encodable encodable? xs
+  | syrup-set xs      -> all-encodable encodable? xs
+  | syrup-float _     -> true
+
+spec encode-safe SyrupValue -> Option String
+  :doc "Encode if v contains no naked refr/promise; else `none`."
+defn encode-safe [v]
+  match [encodable? v]
+    | true  -> some [encode v]
+    | false -> none
+
+;; ===========================================================
+;; Multi-arity record encoder
+;; ===========================================================
+;;
+;; Our `syrup-tagged` carries exactly ONE payload, so a value
+;; like `(syrup-tagged "op:start-session" (syrup-list [ver loc]))`
+;; serialises to `<op:start-session [ver loc]>` — wrong: the
+;; canonical OCapN form is `<op:start-session ver loc>` (the
+;; args are direct children of the record, not wrapped in a
+;; list). The decoder already handles arity ≥ 2 records correctly
+;; (it returns `(syrup-tagged label (syrup-list rest))` so all
+;; downstream dispatch already round-trips); the encoder needs
+;; an explicit multi-arity helper.
+;;
+;; `encode-record label [args]` produces the canonical bytes:
+;;   "<" + encode(syrup-symbol label) + concat(encode each arg) + ">"
+
+spec encode-record String [List SyrupValue] -> String
+  :doc "Encode `<label arg1 arg2 ... argN>` directly."
+defn encode-record [label args]
+  str::append "<"
+    [str::append [encode [syrup-symbol label]]
+      [str::append [encode-many encode args] ">"]]
+
+;; ===========================================================
+;; Re-encoder (splicing) — reproduce the bytes we DECODED
+;; ===========================================================
+;;
+;; `encode` renders a value we BUILT. This renders a value we DECODED, back to
+;; the bytes it came from. They now share one payload reading (`encode-payload`)
+;; and differ in exactly one place: dict key ordering.
+;;
+;; That single difference is the whole point. Syrup canonicalises a dict by
+;; sorted encoded key, so `encode` sorts — we are the author of those bytes and
+;; owe the peer a canonical frame. But this path exists to REPRODUCE bytes for
+;; signature verification: the peer signs the BYTES of an inner
+;; `<desc:handoff-receive …>`, and if that peer sent a non-canonical dict we
+;; must reproduce it as sent or every signature fails. A failing signature
+;; looks exactly like correct rejection while rejecting everything, which is
+;; worse than having no verification at all.
+;;
+;; This used to be a much deeper split. The decoder collapsed a multi-arg
+;; record `<label a b c>` and a single-list-argument record `<label [a b c]>`
+;; into the same value, so no single encoder could restore both, and the two
+;; functions took opposite readings. `decode-record-with` now distinguishes
+;; them, so the readings merged; see `encode-payload`.
+
+spec re-encode SyrupValue -> String
+  :doc "Encode as-decoded, preserving the peer's dict order. Inverse of `decode-value`."
+defn re-encode [v]
+  match v
+    | syrup-tagged tag p -> str::append "<" [str::append [encode [syrup-symbol tag]] [str::append [encode-payload re-encode p] ">"]]
+    | syrup-list xs      -> str::append "[" [str::append [encode-many re-encode xs] "]"]
+    ;; NOT `encode-dict-body`: this path exists to reproduce the peer's bytes
+    ;; for signature verification, so it must preserve the order the peer
+    ;; sent — even a non-canonical one. Sorting belongs on the OUTBOUND path
+    ;; (`encode`), where we are the author of the bytes. Two readings, two
+    ;; functions, and this is the second place that distinction bites.
+    | syrup-dict xs      -> str::append "{" [str::append [encode-many re-encode xs] "}"]
+    ;; NOT `encode-set-body`, for the same reason as the dict arm above: this
+    ;; path reproduces the peer's bytes for signature verification.
+    | syrup-set xs       -> str::append "#" [str::append [encode-many re-encode xs] "$"]
+    | syrup-float _      -> encode v
+    | syrup-null         -> encode v
+    | syrup-bool _       -> encode v
+    | syrup-nat _        -> encode v
+    | syrup-int _        -> encode v
+    | syrup-string _     -> encode v
+    | syrup-symbol _     -> encode v
+    | syrup-bytes _      -> encode v
+    | syrup-refr _       -> encode v
+    | syrup-promise _    -> encode v
+
+;; ===========================================================
+;; Decoder
+;; ===========================================================
+;;
+;; Returns `(some [decoded-value bytes-consumed])` on success,
+;; `none` on parse failure. Bytes-consumed lets callers parse
+;; multiple back-to-back Syrup values (lists, records).
+;;
+;; Implementation strategy: dispatch on the leading byte (or
+;; on a digit prefix for length-prefixed atoms). To avoid
+;; mutual-recursion forward-reference issues, the recursive
+;; helpers (`decode-many-loop`, `decode-record-with`) take the
+;; per-element decoder as an argument; `decode-at` then passes
+;; itself.
+
+;; --- Result type ---
+
+data Decoded
+  decoded : SyrupValue -> Int
+
+spec d-value Decoded -> SyrupValue
+defn d-value
+  | decoded v _ -> v
+
+spec d-consumed Decoded -> Int
+defn d-consumed
+  | decoded _ n -> n
+
+;; --- Helpers: char predicates ---
+
+;; ASCII '0' = 48, '9' = 57.
+spec digit? Char -> Bool
+defn digit? [c]
+  match [int-lt [char::code c] 48]
+    | true  -> false
+    | false ->
+        match [int-lt 57 [char::code c]]
+          | true  -> false
+          | false -> true
+
+;; --- Reading a decimal prefix ---
+;;
+;; Read consecutive digits starting at offset `i` of `s`. Returns
+;; `(prefix-as-int, end-offset)`.
+
+data ReadInt
+  read-int : Int -> Int
+
+spec ri-value ReadInt -> Int
+defn ri-value
+  | read-int v _ -> v
+
+spec ri-end ReadInt -> Int
+defn ri-end
+  | read-int _ e -> e
+
+spec read-digits-loop String Int Int Int -> ReadInt
+defn read-digits-loop [s len acc i]
+  match [int-eq i len]
+    | true  -> read-int acc i
+    | false ->
+        match [digit? [str::ref s i]]
+          | false -> read-int acc i
+          | true  ->
+              let dv := [int- [char::code [str::ref s i]] 48]
+                let acc2 := [int+ [int* acc 10] dv]
+                  read-digits-loop s len acc2 [int+ i 1]
+
+;; `s[i..e)` is a canonical decimal prefix iff it is one digit long or does not
+;; start with `0`.
+spec canonical-digits? String Int Int -> Bool
+defn canonical-digits? [s i e]
+  match [int-lt [int+ i 1] e]
+    | false -> true
+    | true  ->
+        match [int-eq [char::code [str::ref s i]] 48]
+          | true  -> false
+          | false -> true
+
+;; A leading zero on a multi-digit prefix is non-canonical Syrup. Reject it by
+;; consuming NOTHING, which every caller already reads as "no digit prefix
+;; here" and turns into a parse failure. Canonicality is load-bearing on the
+;; signature path: `00000000005"hello` and `5"hello` must not both decode to
+;; the same value, or a peer can vary the bytes it signs without varying the
+;; value we check.
+spec read-digits String Int -> ReadInt
+defn read-digits [s i]
+  let r := [read-digits-loop s [str::length s] 0 i]
+    match [canonical-digits? s i [ri-end r]]
+      | true  -> r
+      | false -> read-int 0 i
+
+;; --- Length-prefixed string / symbol payload ---
+;;
+;; Already parsed the digit prefix; `pos` is the marker char
+;; (`"` / `'`) offset; `len` is the byte length of the payload.
+
+spec decode-string-tail String Int Int -> Option Decoded
+defn decode-string-tail [s pos len]
+  let payload-start := [int+ pos 1]
+    let payload-end := [int+ payload-start len]
+      match [int-lt [str::length s] payload-end]
+        | true  -> none
+        | false ->
+            let payload := [str::slice s payload-start payload-end]
+              some [decoded [syrup-string payload] payload-end]
+
+spec decode-symbol-tail String Int Int -> Option Decoded
+defn decode-symbol-tail [s pos len]
+  let payload-start := [int+ pos 1]
+    let payload-end := [int+ payload-start len]
+      match [int-lt [str::length s] payload-end]
+        | true  -> none
+        | false ->
+            let payload := [str::slice s payload-start payload-end]
+              some [decoded [syrup-symbol payload] payload-end]
+
+;; Phase 19: bytestring tail. Wire form `<len>:<bytes>`.
+;; pos is the offset of `:`; len is the byte length of payload.
+spec decode-bytes-tail String Int Int -> Option Decoded
+defn decode-bytes-tail [s pos len]
+  let payload-start := [int+ pos 1]
+    let payload-end := [int+ payload-start len]
+      match [int-lt [str::length s] payload-end]
+        | true  -> none
+        | false ->
+            let payload := [str::slice s payload-start payload-end]
+              some [decoded [syrup-bytes payload] payload-end]
+
+;; --- Numeric / string dispatcher (no recursion into decode-at) ---
+;;
+;; digits, then one of `+`, `-`, `"`, `'`.
+
+spec decode-numeric-or-string String Int -> Option Decoded
+defn decode-numeric-or-string [s i]
+  let ri := [read-digits s i]
+    let mag := [ri-value ri]
+      let end := [ri-end ri]
+        match [int-lt [str::length s] [int+ end 1]]
+          | true  -> none
+          | false ->
+              let mark := [str::ref s end]
+                let mc := [char::code mark]
+                  match [int-eq mc 43]
+                    | true  -> some [decoded [syrup-int mag] [int+ end 1]]
+                    | false ->
+                        match [int-eq mc 45]
+                          | true  -> some [decoded [syrup-int [int-neg mag]] [int+ end 1]]
+                          | false ->
+                              match [int-eq mc 34]
+                                | true  -> decode-string-tail s end mag
+                                | false ->
+                                    match [int-eq mc 39]
+                                      | true  -> decode-symbol-tail s end mag
+                                      | false ->
+                                          match [int-eq mc 58]   ;; ':'
+                                            | true  -> decode-bytes-tail s end mag
+                                            | false -> none
+
+;; --- Decode-many: parse 0+ values until terminator byte ---
+
+data DecodedMany
+  decoded-many : [List SyrupValue] -> Int
+
+spec dm-list DecodedMany -> List SyrupValue
+defn dm-list
+  | decoded-many xs _ -> xs
+
+spec dm-end DecodedMany -> Int
+defn dm-end
+  | decoded-many _ e -> e
+
+;; Tail-recursive accumulator helper. Walks the input collecting
+;; decoded values into `acc` (in reverse order) until either the
+;; terminator byte or input-exhausted. Returns the accumulator
+;; (reversed) plus the offset past the terminator.
+;;
+;; The previous implementation was non-tail-recursive — it built
+;; the result list head-first via `cons v (recurse ...)`, which
+;; combined with the recursive `let v := ...` / `let xs := ...`
+;; bindings forced the Prologos reducer to retain a deep
+;; substitution chain per element. Profiling (pitfall #27)
+;; showed ~52ms-354ms per reduction step on multi-arity records;
+;; this rewrite eliminates the chain.
+spec decode-many-acc [String -> Int -> Option Decoded] String Int Int [List SyrupValue] -> Option DecodedMany
+defn decode-many-acc [dec s i terminator acc]
+  match [int-lt [str::length s] [int+ i 1]]
+    | true  -> none
+    | false ->
+        match [int-eq [char::code [str::ref s i]] terminator]
+          | true  -> some [decoded-many [reverse acc] [int+ i 1]]
+          | false ->
+              match [dec s i]
+                | none -> none
+                | some [decoded v end] ->
+                    decode-many-acc dec s end terminator [cons v acc]
+
+spec decode-many-loop [String -> Int -> Option Decoded] String Int Int -> Option DecodedMany
+defn decode-many-loop [dec s i terminator]
+  decode-many-acc dec s i terminator nil
+
+;; --- Record decoder, parameterized on the element decoder ---
+
+;; A record with EXACTLY ONE argument. The payload is that argument — except
+;; when the argument is itself a list or a null, because both of those shapes
+;; already mean something else in payload position (`syrup-list` = the whole
+;; argument sequence, `syrup-null` = no arguments at all). Wrap those two in a
+;; one-element argument list so the reading is unambiguous.
+;;
+;; Without this, `<tag [1 2]>` and `<tag 1 2>` decoded to the SAME value and
+;; `re-encode` turned the first into the second — a 1-arg record silently
+;; becoming a 2-arg one, on the signature-verification path. `<tag n>` and
+;; `<tag>` collided the same way.
+spec single-arg-payload SyrupValue -> SyrupValue
+defn single-arg-payload [p]
+  match p
+    | syrup-list _     -> [syrup-list [cons p [nil SyrupValue]]]
+    | syrup-null       -> [syrup-list [cons p [nil SyrupValue]]]
+    | syrup-bool _     -> p
+    | syrup-nat _      -> p
+    | syrup-int _      -> p
+    | syrup-string _   -> p
+    | syrup-symbol _   -> p
+    | syrup-bytes _    -> p
+    | syrup-dict _     -> p
+    | syrup-set _ -> p
+    | syrup-float _ -> p
+    | syrup-tagged _ _ -> p
+    | syrup-refr _     -> p
+    | syrup-promise _  -> p
+
+spec decode-record-with [String -> Int -> Option Decoded] String Int -> Option Decoded
+defn decode-record-with [dec s i]
+  match [decode-many-loop dec s i 62]
+    | none -> none
+    | some [decoded-many xs e] ->
+        match xs
+          | nil -> none
+          | cons head tail ->
+              match head
+                | syrup-symbol tag ->
+                    match tail
+                      | nil          -> some [decoded [syrup-tagged tag syrup-null] e]
+                      | cons p1 rest ->
+                          match rest
+                            | nil       -> some [decoded [syrup-tagged tag [single-arg-payload p1]] e]
+                            | cons _ _  ->
+                                some [decoded [syrup-tagged tag [syrup-list tail]] e]
+                | syrup-null      -> none
+                | syrup-bool _    -> none
+                | syrup-nat _     -> none
+                | syrup-int _     -> none
+                | syrup-string _  -> none
+                | syrup-bytes _   -> none
+                | syrup-list _    -> none
+                | syrup-tagged _ _ -> none
+                | syrup-refr _    -> none
+                | syrup-promise _ -> none
+                | syrup-dict _   -> none
+                | syrup-set _ -> none
+                | syrup-float _ -> none
+
+;; --- Top-level decoder: parse one syrup-value at offset i ---
+;;
+;; ASCII codes used:
+;;   'n' = 110, 't' = 116, 'f' = 102
+;;   '+' = 43,  '-' = 45,  '"' = 34, '\'' = 39
+;;   '[' = 91,  ']' = 93
+;;   '<' = 60,  '>' = 62
+
+;; A Syrup dict is a flat alternating key/value sequence, so an odd count is
+;; malformed. It used to decode happily into a one-element `syrup-dict`.
+spec list-even-length? [List SyrupValue] -> Bool
+defn list-even-length? [xs]
+  match xs
+    | nil -> true
+    | cons _ rest ->
+        match rest
+          | nil       -> false
+          | cons _ r2 -> list-even-length? r2
+
+spec dict-decoded [List SyrupValue] Int -> Option Decoded
+defn dict-decoded [xs e]
+  match [list-even-length? xs]
+    | true  -> some [decoded [syrup-dict xs] e]
+    | false -> [none Decoded]
+
+;; A FLOAT is its marker byte plus a fixed-width payload: `D` + 8 (double) or
+;; `F` + 4 (single). Both are carried verbatim, marker included.
+spec decode-float-at String Int Int -> Option Decoded
+defn decode-float-at [s i width]
+  let e := [int+ i [int+ 1 width]]
+    match [int-lt [str::length s] e]
+      | true  -> [none Decoded]
+      | false -> some [decoded [syrup-float [str::slice s i e]] e]
+
+spec decode-at String Int -> Option Decoded
+defn decode-at [s i]
+  match [int-lt [str::length s] [int+ i 1]]
+    | true  -> none
+    | false ->
+        let c := [str::ref s i]
+          let cc := [char::code c]
+            ;; 110 = `n`. There is NO null in the Syrup dialect (the reference
+            ;; codec has no such form), and we no longer emit one, so accepting
+            ;; it here would decode a value we could never re-encode — the
+            ;; exact non-inverse that breaks signature verification. Our own
+            ;; frame reader (`tools/interop/ocapn-framing.rkt`) already rejects
+            ;; byte 110; this makes the two agree.
+            match [int-eq cc 110]
+              | true  -> [none Decoded]
+              | false ->
+                  match [int-eq cc 116]
+                    | true  -> some [decoded [syrup-bool true] [int+ i 1]]
+                    | false ->
+                        match [int-eq cc 102]
+                          | true  -> some [decoded [syrup-bool false] [int+ i 1]]
+                          | false ->
+                              match [int-eq cc 91]
+                                | true  ->
+                                    match [decode-many-loop decode-at s [int+ i 1] 93]
+                                      | none -> none
+                                      | some [decoded-many xs e] ->
+                                          some [decoded [syrup-list xs] e]
+                                | false ->
+                                 match [int-eq cc 123]
+                                  | true  ->
+                                      ;; `{` k1 v1 k2 v2 ... `}` — a DICTIONARY.
+                                      ;; Same element loop as a list, terminator
+                                      ;; `}` (125); the flat alternating result IS
+                                      ;; the representation (see syrup.prologos).
+                                      match [decode-many-loop decode-at s [int+ i 1] 125]
+                                        | none -> none
+                                        | some [decoded-many xs e] ->
+                                            dict-decoded xs e
+                                  | false ->
+                                    match [int-eq cc 60]
+                                      | true  -> decode-record-with decode-at s [int+ i 1]
+                                      | false ->
+                                        match [int-eq cc 35]
+                                          | true  ->
+                                              ;; `#` item* `$` — a SET. Same element loop
+                                              ;; as a list, terminator `$` (36).
+                                              match [decode-many-loop decode-at s [int+ i 1] 36]
+                                                | none -> none
+                                                | some [decoded-many xs e] ->
+                                                    some [decoded [syrup-set xs] e]
+                                          | false ->
+                                            match [int-eq cc 68]
+                                              | true  -> decode-float-at s i 8
+                                              | false ->
+                                                match [int-eq cc 70]
+                                                  | true  -> decode-float-at s i 4
+                                                  | false ->
+                                                      match [digit? c]
+                                                        | true  -> decode-numeric-or-string s i
+                                                        | false -> none
+
+;; --- Public top-level decode ---
+
+;; STRICT: the value must account for the WHOLE string. `decode-at` reports how
+;; far it got and this used to throw that away, so `"5+xyz"` decoded to 5 and
+;; `"nGARBAGE!!"` decoded to null — trailing residue on a frame was silently
+;; accepted at every layer, including the one that decides what a signature
+;; covers. Callers that genuinely want a prefix parse should use `decode-at`,
+;; which is exported and returns the offset.
+spec decode-value String -> Option SyrupValue
+  :doc "Parse ONE Syrup value that spans the whole of `s`; `none` on residue."
+defn decode-value [s]
+  match [decode-at s 0]
+    | none -> [none SyrupValue]
+    | some d ->
+        match [int-eq [d-consumed d] [str::length s]]
+          | true  -> some [d-value d]
+          | false -> [none SyrupValue]

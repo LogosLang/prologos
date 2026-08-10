@@ -3049,11 +3049,47 @@
     ;; if current < TYPING-FUEL-LIMIT, we'd inherit a smaller budget than intended.
     ;; net-cell-reset bypasses merge: the bounded run gets exactly TYPING-FUEL-LIMIT
     ;; budget regardless of current.
+    ;;
+    ;; The contradiction MARKER is saved/restored on the same boundary as the
+    ;; fuel VALUE, and for the same reason. When this bounded run exhausts its
+    ;; deliberately-small budget, the fuel cell's on-write-check records a
+    ;; contradiction (propagator.rkt § fast-path `contradicted?`) — the
+    ;; structural realization of "cost-bounded exploration" per
+    ;; `.claude/rules/stratification.md`. That marker means "this SUB-RUN hit
+    ;; its budget", NOT "the information on the network is inconsistent", and
+    ;; it is expected: the typed result is read from the type-map cell, and a
+    ;; ⊥ there is what makes driver.rkt fall back to imperative infer.
+    ;;
+    ;; Leaking it is catastrophic and silent: `unify` (unify.rkt, top-level
+    ;; wrapper) downgrades ANY successful unification to #f whenever the
+    ;; network carries a contradiction — so a single fuel-exhausted typing run
+    ;; made every LATER unification in the same command fail, including
+    ;; syntactically identical pairs (`unify Vat Vat` → #f). That surfaced as
+    ;; "Could not infer type" naming the whole expression, with no location and
+    ;; no mention of fuel. Restoring the marker keeps budget exhaustion
+    ;; unobservable outside the sub-run; a contradiction that was ALREADY set
+    ;; on entry is preserved, and any non-fuel contradiction raised BY the run
+    ;; still propagates.
+    ;;
+    ;; Known asymmetry: the marker is ONE field, so a genuine contradiction
+    ;; followed by budget exhaustion in the same run leaves only the fuel
+    ;; marker, and we then restore the entry value — dropping the genuine one.
+    ;; That errs LENIENT, which is the safe direction here: the typed result
+    ;; still reads ⊥ from the type-map cell, driver.rkt falls back to
+    ;; imperative infer, and THAT is what reports the error (with a location
+    ;; and an offending sub-term, which the marker never carried). The strict
+    ;; alternative — keeping the fuel marker — is what produced the bug this
+    ;; comment exists to explain.
     (define saved-fuel (net-cell-read net2w fuel-cell-id))
+    (define saved-contradiction (net-contradiction-cell net2w))
     (define net2-limited (net-cell-reset net2w fuel-cell-id TYPING-FUEL-LIMIT))
     (define net3 (run-to-quiescence-bsp net2-limited))
     ;; Restore fuel (cell-API; bypass merge to write saved-fuel directly).
-    (define net3-restored (net-cell-reset net3 fuel-cell-id saved-fuel))
+    (define net3-fuel (net-cell-reset net3 fuel-cell-id saved-fuel))
+    (define net3-restored
+      (if (eq? (net-contradiction-cell net3-fuel) fuel-cell-id)
+          (net-set-contradiction net3-fuel saved-contradiction)
+          net3-fuel))
     ;; 5. Read results
     (define root-type (type-map-read net3-restored tm-cid expr))
     (define meta-solutions (net-cell-read net3-restored output-cid))

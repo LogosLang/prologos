@@ -279,6 +279,60 @@
            (expr-lam? (expr-app-func body))
            (schema-ann? (expr-app-arg body)))))
 
+;; ---- NESTED seals (deep-walker charter item 1, 2026-08-03) -----------------
+;;
+;; The bound above was TOP-NODE-ONLY, so of these four only the first was
+;; caught and the other three committed silently:
+;;
+;;   def top    := [Pos {:n 0}]                 ;; ERROR at commit   ✓
+;;   def inlist := '[[Pos {:n 0}]]              ;; defined.          ✗
+;;   def inpair := {:a [Pos {:n 0}]}            ;; defined.          ✗
+;;   def infn   := [fn [x : Int] [Pos {:n 0}]]  ;; defined.          ✗
+;;
+;; `inlist` and `inpair` are now caught. `infn` deliberately is NOT, and that
+;; is the load-bearing exclusion rather than an omission: a seal under a BINDER
+;; may reference the bound variable, so forcing it means evaluating a body that
+;; has not been applied — which can panic on a value the program never
+;; constructs, or get stuck on an open term. The binder inventory is
+;; `substitution.rkt`'s `shift` (lam / Pi / Sigma / reduce), and this walk stops
+;; at all four. `expr-reduce` is skipped WHOLE rather than descended into its
+;; scrutinee: conservative, and the arms are where the binders are.
+;;
+;; The walk is generic `struct->vector` recursion, not `expr-subfields`, and
+;; that is required rather than stylistic: `expr-subfields` reads transparent
+;; expr FIELDS, so it finds the seal in a cons spine (`inlist`) but not inside a
+;; champ (`inpair`), whose payload is a Racket data structure. This is the same
+;; container-blindness that produced the `occurs?` / `conv-nf` defects. An
+;; opaque struct yields a 1-element vector and is simply not descended, so
+;; nothing here can error on a carrier it does not understand.
+;;
+;; ⚠ This deliberately does NOT extend to `def-panic-error`, whose top-node
+;; bound stays (pinned at tests/test-path-selection.rkt B8). The asymmetry is
+;; principled, not an oversight: a seal is a COMMIT-TIME CONTRACT — D22's
+;; ruling is that tabulation FORCES — so a failing one is an error whether or
+;; not anything reads it. A bare `panic` sitting inside a constructed value is
+;; an ordinary lazy value the program may never force, and erroring on it would
+;; make laziness unobservable.
+;;
+;; GATED ON THE SCHEMA REGISTRY BEING NON-EMPTY. Without a gate this walks every
+;; def body in every program at commit; with it, a program that declares no
+;; schemas pays one `hash-count`. Where schemas DO exist the walk is O(body),
+;; the same order as the zonk and nf already performed on that body.
+(define (nested-seal-panic-error zonked-body def-srcloc)
+  (and (positive? (hash-count (read-schema-registry)))
+       (let scan ([v zonked-body])
+         (cond
+           [(and (expr? v) (seal-application-body? v))
+            (seal-forcing-error v def-srcloc)]
+           [(or (expr-lam? v) (expr-Pi? v) (expr-Sigma? v) (expr-reduce? v)) #f]
+           [(struct? v)
+            (let ([vec (struct->vector v)])
+              (for/or ([i (in-range 1 (vector-length vec))])
+                (scan (vector-ref vec i))))]
+           [(pair? v) (or (scan (car v)) (scan (cdr v)))]
+           [(vector? v) (for/or ([x (in-vector v)]) (scan x))]
+           [else #f]))))
+
 ;; Returns a prologos-error when the forced seal body panics; #f otherwise
 ;; (usable directly as a cond => guard).
 (define (seal-forcing-error zonked-body def-srcloc)
@@ -561,7 +615,15 @@
 ;; PAR Track 2 R2: Enable parallel thread executor globally.
 ;; The BSP scheduler uses parallel threads for worklists > 8 propagators.
 ;; Below threshold, falls back to sequential (no thread overhead).
-(current-parallel-executor (make-parallel-thread-fire-all))
+;;
+;; Compat fence (2026-04-27): `thread #:pool 'own` requires Racket 9+.
+;; If this Racket is older, fall back to sequential firing (the executor
+;; defaults to #f, which BSP treats as sequential-fire-all).
+(when (with-handlers ([exn:fail? (lambda _ #f)])
+        (define t (thread #:pool 'own (lambda () (void))))
+        (thread-wait t)
+        #t)
+  (current-parallel-executor (make-parallel-thread-fire-all)))
 
 ;; PTF Track 1 Phase 0: If set to a box, after each process-command the
 ;; elab-network is stored there for analysis. Default #f (no capture).
@@ -1378,8 +1440,16 @@
   (define coercion-warns (remove-duplicates (reverse (read-coercion-warnings))))
   (define deprecation-warns (reverse (read-deprecation-warnings)))
   (define capability-warns (reverse (read-capability-warnings)))
+  ;; issue #67 duplicate-binding warnings are deliberately NOT in this list:
+  ;; they are a FILE-level fact raised during preparse, so per-command display
+  ;; would repeat all of them under every command in the file. They are appended
+  ;; once by `process-file-inner` instead.
+  ;; W3002: deduped like the coercion warnings — one line per distinct site,
+  ;; not one per compilation attempt of the same match.
+  (define inexhaustive-warns (remove-duplicates (reverse (read-inexhaustive-match-warnings))))
   (define all-warning-strs
-    (append (map format-coercion-warning coercion-warns)
+    (append (map format-inexhaustive-match-warning inexhaustive-warns)
+            (map format-coercion-warning coercion-warns)
             (map format-deprecation-warning deprecation-warns)
             (map (lambda (w)
                    (cond
@@ -1890,6 +1960,12 @@
        ;; status-quo-equivalent; the 4B.5.b SCC pass owns it).
        [(try-defer-general-body name def-srcloc body '()) => values]
        [else
+        ;; POL.9b: the goal-head classification runs BEFORE typing — after it,
+        ;; the failure is already a non-type and the head is unrecoverable.
+        (define head-err (solve-head-error body))
+        (cond
+         [head-err head-err]
+         [else
         ;; Track 4B Phase 9: on-network first, fallback for unhandled
         (define inferred-type
           (time-phase! type-check
@@ -1900,6 +1976,28 @@
         (cond
           [(prologos-error? inferred-type) inferred-type]
           [else
+           ;; MERGE 2026-08-05: main's `def-body-type-ok`, unmodified.
+           ;;
+           ;; This branch carried its own fix for the same symptom — zonk before
+           ;; `is-type/err`, because `infer` can return a type whose metas are
+           ;; solved in the store but not yet substituted into the term, so a
+           ;; meta-headed application (an implicit higher-kinded argument, e.g.
+           ;; `map`'s `{C : Type -> Type}`) was rejected as "not a valid type"
+           ;; while `pp-expr` rendered it as `[List Int]`, naming a valid type.
+           ;;
+           ;; main fixes it upstream of that: `def-body-type-ok` SKIPS the check
+           ;; entirely when the type is not ground. Every case the zonk rescued
+           ;; contains an unsolved meta at this point, so main's guard already
+           ;; covers them — the zonk is redundant here, not complementary.
+           ;;
+           ;; I first merged them as `(def-body-type-ok ctx-empty (zonk …))`,
+           ;; reasoning that zonking first would let genuinely-ground types be
+           ;; CHECKED rather than skipped. That is strictly stricter than main,
+           ;; and it broke three of main's own tests (`test-rel-t1-pol` 585, 602,
+           ;; 1623) — the def seam started preempting the guiding diagnostics
+           ;; DEFERRED 74 exists to let through. Composing two fixes for one
+           ;; symptom is only right when neither subsumes the other; check that
+           ;; before assuming they compose.
            (define ty-ok (def-body-type-ok ctx-empty inferred-type))
            (cond
              [(prologos-error? ty-ok) ty-ok]
@@ -1972,7 +2070,7 @@
                    [(prologos-error? qtt-ok) qtt-ok]
                    ;; CIU T6 F1b.4c (D22/M3): seal-scoped def-forcing —
                    ;; tabulation FORCES; a failing :check errors at commit.
-                   [(seal-forcing-error zonked-body def-srcloc) => values]
+                   [(nested-seal-panic-error zonked-body def-srcloc) => values]
                    [else
                     ;; POL.10 (owner-ruled 2026-07-24, SECOND pass): `def` binds
                     ;; the WHNF-REDUCED value — SNAPSHOT semantics. Evaluation
@@ -2006,7 +2104,11 @@
                                        (ns-context-current-ns (current-ns-context))))
                          (global-env-add fqn zonked-type bound-value)
                          (register-definition-location! fqn def-srcloc))
-                       (format "~a : ~a defined." name (pp-expr zonked-type))])])])])])])])]
+                       ;; Spec Phase 2 (first bullet): a stored `:examples` entry
+                       ;; is CHECKED here — the first point at which the
+                       ;; definition it describes actually exists.
+                       (or (spec-example-mismatch name def-srcloc)
+                           (format "~a : ~a defined." name (pp-expr zonked-type)))])])])])])])])])]
     ;; Existing annotated path (type annotation present)
     [else
      ;; 1. Elaborate type
@@ -2192,7 +2294,7 @@
                          ;; CIU T6 F1b.4c (D22/M3): seal-scoped def-forcing
                          ;; (see the inferred-path twin) — un-register like
                          ;; the QTT-failure arm above.
-                         [(seal-forcing-error zonked-body def-srcloc)
+                         [(nested-seal-panic-error zonked-body def-srcloc)
                           => (lambda (err) (remove-failed-definition! name) err)]
                          [else
                           ;; POL.10: bind the WHNF-reduced value (snapshot) —
@@ -2214,9 +2316,49 @@
                                              (ns-context-current-ns (current-ns-context))))
                                (global-env-add fqn zonked-type bound-value)
                                (register-definition-location! fqn def-srcloc))
-                             (format "~a : ~a defined."
-                                     name (pp-expr zonked-type))])])]
+                             ;; …and on the ANNOTATED path too. Both seams, or
+                             ;; an example silently stops being checked the
+                             ;; moment someone adds a type annotation.
+                             (or (spec-example-mismatch name def-srcloc)
+                                 (format "~a : ~a defined."
+                                         name (pp-expr zonked-type)))])])]
                       )])])])])])])]))
+
+;; ========================================
+;; Rel T1 POL.9b — goal-head validation at the DEF seam
+;; ========================================
+;;
+;; At top level `(dbl 3)` on a FUNCTION gives the guiding message
+;; "dbl is a function — application is written [dbl …]; parens make a
+;; relational goal". On a `def` the same program gave the generic "Expression
+;; is not a valid type", because the def arm TYPE-CHECKS the body before
+;; evaluating it, so the runtime classifier in `solve-app-goal` never fires.
+;;
+;; This runs that same classifier — `raise-unknown-relation-error`, now
+;; exported rather than re-derived — before typing, and converts its raise into
+;; an ordinary per-command error. Returns #f when the body is not a solve, or
+;; when the head IS a registered relation, so every other def is untouched.
+;;
+;; Both `def` spellings inherit it: the implicit `def r := (goal)` and the
+;; explicit `def r := solve (goal)` elaborate to the same `expr-solve`, which is
+;; why `test-rel-t1-pol.rkt`'s parity assertion keeps holding.
+(define (solve-head-error body)
+  (define goal
+    (cond
+      [(expr-solve? body) (expr-solve-goal body)]
+      [(expr-solve-one? body) (expr-solve-one-goal body)]
+      [(expr-solve-with? body) (expr-solve-with-goal body)]
+      [else #f]))
+  (and (expr-goal-app? goal)
+       (let ([nm (expr-goal-app-name goal)])
+         (and (not (relation-lookup (current-relation-store) nm))
+              (with-handlers ([(lambda (e) #t)
+                               (lambda (e)
+                                 (prologos-error
+                                  #f
+                                  (if (exn? e) (exn-message e) (format "~a" e))))])
+                (raise-unknown-relation-error 'solve nm)
+                #f)))))
 
 ;; ========================================
 ;; Process a multi-body defn group
@@ -2312,11 +2454,54 @@
 ;; be a hard error, never a warning. The whole point of capability-secure
 ;; design is that authority is explicit; silent leaks defeat the purpose.
 
+;; Memo for run-post-compilation-inference!, keyed on what the analysis actually
+;; depends on: WHICH env (the mnr identity) and WHETHER it has been written to
+;; (the monotone generation counter). Same pair => same call graph => same
+;; result, so the analysis can be skipped and its result re-applied.
+;;
+;; This matters because the analysis is whole-program and ran on EVERY command:
+;; run-capability-inference rebuilds the call graph, allocates a propagator cell
+;; per function and runs to fixpoint. Profiling the OCapN server — which does
+;; one process-string per wire frame — put it at 76% of a frame, against 19%
+;; for the actual protocol work. Most commands (any `(eval ...)`) define
+;; nothing, so they cannot change the call graph.
+;;
+;; The mnr is part of the key because restoring a module-network SNAPSHOT swaps
+;; the visible env without going through global-env-add, so the generation alone
+;; would not notice. Generation alone is monotone, so it can never cause a false
+;; SKIP; pairing it with mnr identity closes the snapshot case too.
+(define cap-inference-memo (box #f))   ;; #f | (vector mnr generation result cap-registry)
+
 (define (run-post-compilation-inference!)
   ;; Fast path: skip if no capability types exist
   ;; Track 6 Phase 8b: read from parameter (this runs outside elaboration context)
   (when (not (hash-empty? (current-capability-registry)))
+    (define mnr (current-file-module-network-ref))
+    (define gen (global-env-generation))
+    ;; The capability REGISTRY is a third input the analysis reads, and it can
+    ;; change without any global-env write (a `capability` declaration goes to
+    ;; its own registry). Keying only on (mnr, generation) would then skip and
+    ;; re-apply a stale result. The registry is an immutable hash held in a
+    ;; parameter, so eq? on the hash itself is an exact "has it changed" test.
+    (define reg (current-capability-registry))
+    (define memo (unbox cap-inference-memo))
+    (define hit?
+      (and (vector? memo)
+           (eq? (vector-ref memo 0) mnr)
+           (= (vector-ref memo 1) gen)
+           (eq? (vector-ref memo 3) reg)))
+    (cond
+      [hit?
+       ;; Nothing that the analysis reads has changed — re-apply the result the
+       ;; last run computed. (Re-applying matters: current-module-cap-result is
+       ;; a parameter downstream consumers read.)
+       (current-module-cap-result (vector-ref memo 2))]
+      [else (run-post-compilation-inference!/uncached mnr gen reg)])))
+
+(define (run-post-compilation-inference!/uncached mnr gen reg)
+  (let ()
     (define result (run-capability-inference))
+    (set-box! cap-inference-memo (vector mnr gen result reg))
     (current-module-cap-result result)
     ;; Check all entries in the global env for authority roots.
     ;; An authority root is a function whose type declares capability requirements
@@ -2717,10 +2902,32 @@
     (process-file-inner abs-path #:verbose verbose?)))
 
 (define (process-file-inner path #:verbose [verbose? #f])
+  ;; issue #67: clear the file-level duplicate-binding accumulator. It is not in
+  ;; `reset-warning-cells!` because that runs per COMMAND and these are raised
+  ;; during preparse, before any command — but without a per-FILE clear a
+  ;; long-lived process (the batch worker, a test file running several
+  ;; programs) reports every earlier file's collisions under the current one.
+  (reset-duplicate-binding-warnings!)
   (define path-str (if (string? path) path (path->string path)))
   (define ws? (regexp-match? #rx"\\.prologos$" path-str))
   ;; PPN Track 2B Phase 2: WS files use tree parser merge.
   ;; .rkt sexp files use original port-based reading (D.3 F3: minimum blast radius).
+  ;; A raise from the READER is a whole-file abort by construction: tokenizing
+  ;; and grouping finish before any command runs. Uncaught, it escaped as a raw
+  ;; Racket message plus a `context...:` dump, with exit 1, no result lines and
+  ;; no error COUNT — the loudest possible failure presented as the quietest.
+  ;;
+  ;; Caught here it becomes one ordinary Prologos error, reported through the
+  ;; same channel as everything else. The reader's own raises now carry line and
+  ;; column, so the message says where.
+  ;;
+  ;; This does NOT make the failure per-command — every command in the file is
+  ;; still lost, because there is no token stream to run them from. That needs
+  ;; the reader to emit a marker instead of raising, and is tracked separately.
+  (define (reader-failure-surf e)
+    (list (parse-error (srcloc path-str 0 0 0)
+                       (format "reader: ~a" (exn-message e))
+                       #f)))
   (define surfs
     (cond
       [ws?
@@ -2730,10 +2937,22 @@
        (define file-port (open-input-file path))
        (define str (port->string file-port))
        (close-input-port file-port)
-       (define raw-stxs (read-all-syntax-ws (open-input-string str) path-str))
-       (define expanded-stxs (preparse-expand-all raw-stxs))
-       (define preparse-surfs (map parse-toplevel-datum expanded-stxs))
-       (merge-preparse-and-tree-parser str preparse-surfs)]
+       ;; ONLY the read is guarded, and deliberately so. Wrapping the whole
+       ;; `surfs` computation also swallowed raises from `preparse-expand-all`
+       ;; that callers rely on escaping (a numeric `ns` segment, for one) —
+       ;; turning a REJECTION into a report is a different decision from
+       ;; turning an ABORT into one, and only the second is wanted here.
+       (define raw-stxs
+         (with-handlers ([exn:fail? (lambda (e) (cons 'reader-failed e))])
+           (read-all-syntax-ws (open-input-string str) path-str)))
+       (cond
+         ;; A list of syntax objects can never have this head.
+         [(and (pair? raw-stxs) (eq? (car raw-stxs) 'reader-failed))
+          (reader-failure-surf (cdr raw-stxs))]
+         [else
+          (define expanded-stxs (preparse-expand-all raw-stxs))
+          (define preparse-surfs (map parse-toplevel-datum expanded-stxs))
+          (merge-preparse-and-tree-parser str preparse-surfs)])]
       [else
        ;; .rkt sexp path: UNCHANGED
        (define port (open-input-file path))
@@ -2793,7 +3012,25 @@
   ;; finalized result (cell ground → "x : T defined."; still def-bot → unbound
   ;; error). BEFORE the diagnostics loop, so a never-grounded forward-ref's
   ;; file-end unbound error is emitted like an immediate typo.
-  (define final-results (finalize-residuations results))
+  (define final-results0 (finalize-residuations results))
+  ;; issue #67: duplicate-binding warnings are a FILE-level fact, not a
+  ;; per-command one — they are raised while the import set is resolved during
+  ;; PREPARSE, before any command runs, so they cannot ride the per-command
+  ;; warning channel (which `reset-warning-cells!` clears at the head of every
+  ;; command). Appending them once at the end is the shape that matches when
+  ;; they actually happen, and it reaches every consumer of `process-file`
+  ;; rather than just the CLI.
+  (define final-results
+    (let ([names (sort (remove-duplicates
+                        (map duplicate-binding-warning-name
+                             (read-duplicate-binding-warnings)))
+                       symbol<?)])
+      (if (null? names)
+          final-results0
+          ;; ONE line, not one per name. The realistic pair collides on 14
+          ;; names at once, and 14 near-identical paragraphs would bury the
+          ;; file's actual results — the list IS the information.
+          (append final-results0 (list (format-duplicate-binding-warning names))))))
   ;; Emit formatted error diagnostics to stderr when enabled (test runner integration)
   (when (current-emit-error-diagnostics)
     (for ([r (in-list final-results)])
@@ -2806,6 +3043,75 @@
   (print-cell-metrics-report! (collect-cell-metrics))
   (print-quiescence-stats! qs)
   final-results)
+
+;; ========================================
+;; Spec `:examples` checking (Spec System Phase 2, first bullet)
+;; ========================================
+;;
+;; `:examples ((f 3N) => 4N)` has parsed and been stored since the metadata
+;; surface landed, and NOTHING EVER READ IT: a deliberately wrong example was
+;; accepted in silence, 0 errors. An unchecked example is worse than no example,
+;; because it reads as a guarantee.
+;;
+;; Scope, deliberately narrow. Each example's CALL and its EXPECTED value go
+;; through the same elaborate -> infer -> nf path a top-level expression takes,
+;; and only a genuine VALUE MISMATCH between two sides that BOTH evaluated
+;; cleanly is reported.
+;;
+;; Everything else is SKIPPED, and that is the design rather than a shortcut. An
+;; example may legitimately not be checkable at definition time — it can name a
+;; helper defined later in the file, or mention a type whose instance arrives
+;; with a later `impl`. Reporting those as failures would make `:examples`
+;; unusable in exactly the files that most want it. A mismatch between two
+;; successfully-computed normal forms has no such excuse, and that is the check.
+;;
+;; The reentrancy is real and is why every step is guarded: this runs INSIDE a
+;; definition's commit, so an escaping raise would cost the command that just
+;; succeeded. On any exception the example is skipped, never reported.
+(define (spec-example-mismatch name loc)
+  ;; specs are stored under the BARE name (the clobber-prone keying censused in
+  ;; tests/test-spec-store-clobber.rkt), so a qualified def must strip first.
+  (define exs (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+                (define-values (_p short) (split-qualified-name name))
+                (spec-examples (or short name))))
+  (and (list? exs)
+       (for/or ([ex (in-list exs)])
+         (check-one-spec-example name ex loc))))
+
+;; Evaluate one datum the way a bare top-level expression is evaluated.
+;; Returns the normal form, or #f if it could not be computed for ANY reason.
+(define (eval-example-datum d)
+  (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+    (define surf (parse-datum (datum->syntax #f d)))
+    (and (not (prologos-error? surf))
+         (let ([e (elaborate surf)])
+           (and (not (prologos-error? e))
+                (not (expr-error? e))
+                (let ([ty (infer/err ctx-empty e)])
+                  (and (not (prologos-error? ty))
+                       (let ([v (nf (rewrite-specializations (freeze e)))])
+                         (and (not (expr-error? v))
+                              (not (expr-panic? v))
+                              v)))))))))
+
+(define (check-one-spec-example name ex loc)
+  ;; The stored shape is `(CALL => EXPECTED)` — three elements with the literal
+  ;; `=>` in the middle. Anything else is not an example this understands.
+  (and (list? ex) (= (length ex) 3) (eq? (cadr ex) '=>)
+       (let ([got (eval-example-datum (car ex))]
+             [want (eval-example-datum (caddr ex))])
+         (and got want
+              (not (equal? got want))
+              (type-mismatch-error
+               (or loc srcloc-unknown)
+               (format (string-append
+                        "example for `~a` does not hold: `~a` evaluates to ~a, "
+                        "but the spec's `:examples` says ~a")
+                       name (car ex) (pp-expr got) (pp-expr want))
+               (pp-expr want)
+               (pp-expr got)
+               (format "~a" (car ex))
+               '())))))
 
 ;; ========================================
 ;; Module Loading
@@ -2896,11 +3202,25 @@
       (define delta   (cadddr row))
       (define folded
         (for/fold ([reg (param)]) ([(k v) (in-hash delta)])
-          ;; The non-hash arm mirrors the pre-#78 behavior at the three
-          ;; equal?-keyed sites. Note it DISCARDS any prior non-hash content
-          ;; rather than preserving it — it is a fallback that never fires
-          ;; today, not a hardening measure.
-          (if (hash? reg) (hash-set reg k v) (hash k v))))
+          ;; The non-hash arm mirrored the pre-#78 behavior at the three
+          ;; equal?-keyed sites, and DISCARDED any prior non-hash content
+          ;; rather than preserving it — described in this comment as "a
+          ;; fallback that never fires today, not a hardening measure".
+          ;;
+          ;; 2026-08-04: made that an ASSERTION instead of a silent discard. A
+          ;; claim that a branch never fires, with nothing checking it, is the
+          ;; shape that turns into a silent wrong answer the day it does — and
+          ;; this particular branch throws away a whole registry. If it never
+          ;; fires, this changes nothing (suite + corpus confirm); if it ever
+          ;; does, the loss is loud at the site instead of invisible downstream.
+          (unless (hash? reg)
+            (error 'macros-registry-fold
+                   (string-append
+                    "registry ~a holds a non-hash value ~e — the pre-#78 fallback "
+                    "would have DISCARDED it. This branch was documented as "
+                    "never firing; it fired.")
+                   param reg))
+          (hash-set reg k v)))
       (list param cell-id delta folded)))
   ;; Phase 2 — commit.
   (for ([p (in-list pending)])
@@ -3162,15 +3482,24 @@
        ;; into a module that loads with no namespace and no prelude, silently.
        ;; With the else in place that objection is gone.
        (for ([surf (in-list surfs)])
+         ;; MERGE 2026-08-05: main's SHAPE (an error surf is REPORTED, not
+         ;; skipped — this branch's `unless` dropped it silently) with this
+         ;; branch's RENDERER. OCapN review U3: passing only
+         ;; `prologos-error-message` made a library module's failure arrive as a
+         ;; bare "Unbound variable" — no NAME, no SRCLOC — leaving the reader to
+         ;; find the line by hand in a module they may not have written. Both
+         ;; were on the struct the whole time, and `format-error` is what the
+         ;; per-command path already uses, so a module-load failure now reads
+         ;; exactly like the same failure in a top-level file.
          (cond
            [(prologos-error? surf)
-            (error 'imports "Error loading module ~a: ~a"
-                   ns-sym (prologos-error-message surf))]
+            (error 'imports "Error loading module ~a:\n~a"
+                   ns-sym (format-error surf))]
            [else
             (define result (process-command/solve-guard surf))
             (when (prologos-error? result)
-              (error 'imports "Error loading module ~a: ~a"
-                     ns-sym (prologos-error-message result)))]))
+              (error 'imports "Error loading module ~a:\n~a"
+                     ns-sym (format-error result)))]))
 
        ;; IO-H: Run capability inference after module definitions are processed
        (run-post-compilation-inference!)
@@ -3352,8 +3681,42 @@
                                 names))])
         (define spec-entry (hash-ref mod-specs name #f))
         (when spec-entry
+          ;; issue #67 (2026-08-03): the store keys by BARE symbol with silent
+          ;; last-write-wins, so this line is where two modules exporting the
+          ;; same spec name quietly pick a winner by import order — and the
+          ;; loser's call sites then get the wrong implicit-argument count.
+          ;;
+          ;; The gate is "the implicit-argument shape DIFFERS", not "the entries
+          ;; differ": a re-import of the same spec, or two entries that agree on
+          ;; where-constraints and implicit-binders, cannot change how any call
+          ;; elaborates and must stay silent. Measured on the realistic pair
+          ;; (`prologos::data::list` + `prologos::core::collections`) all 14
+          ;; collisions ARE observable by this gate, and a plain prelude load
+          ;; produces none — which is what makes the warning default-on rather
+          ;; than opt-in.
+          (unless (current-suppress-duplicate-binding-warnings?)
+            (let ([prev (hash-ref (current-own-import-specs) name #f)])
+              (when (and prev
+                         (not (and (equal? (spec-entry-where-constraints prev)
+                                           (spec-entry-where-constraints spec-entry))
+                                   (equal? (spec-entry-implicit-binders prev)
+                                           (spec-entry-implicit-binders spec-entry)))))
+                (emit-duplicate-binding-warning! name)))
+            ;; compared against the file's OWN imports, not the whole spec
+            ;; store — the store already holds the prelude, and shadowing the
+            ;; prelude is what an explicit import is for
+            (current-own-import-specs
+             (hash-set (current-own-import-specs) name spec-entry)))
+          ;; issue #66 (2026-08-03): file the spec under BOTH the bare name
+          ;; (unchanged — the race, and everything that depends on it, stays
+          ;; exactly as it was) and the QUALIFIED `module::name`. The qualified
+          ;; key is what makes `lookup-spec/qualified` exact: a call that
+          ;; resolved to a specific module now finds that module's spec instead
+          ;; of whichever import last won the bare-name write.
           (current-spec-store
-            (hash-set (current-spec-store) name spec-entry))
+            (hash-set (hash-set (current-spec-store) name spec-entry)
+                      (string->symbol (format "~a::~a" (module-info-namespace mod) name))
+                      spec-entry))
           ;; Phase 2c: dual-write spec-store to cell
           (macros-cell-write! (current-spec-store-cell-id) (hasheq name spec-entry))
           ;; Mark as propagated so own-module defs can override silently

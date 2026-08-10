@@ -685,3 +685,172 @@
   (check-equal? (length two) 2 (format "two chains → two forms, got: ~v" two))
   (check-true (regexp-match? #rx"3" (format "~a" (first two))) "the first chain evaluates")
   (check-true (last-is-18? two) "…and so does the second"))
+
+;; ---------------------------------------------------------------------------
+;; LET residual #1 (DEFERRED "LET track residuals"): the message named the
+;; wrong thing.
+;; ---------------------------------------------------------------------------
+;;
+;; `[fn [n : Int] let k := 4 [int+ n k]]` is a per-command error already — that
+;; part of the residual was fine. What was not fine was WHAT it said: "fn: all
+;; parameters except body must be bare symbols or a binder (x : T)", which
+;; sends the reader to stare at `n`, which is correct. The actual fault is that
+;; brackets suspend indent grouping, so the fn's bracket swallowed the whole
+;; `let` and its tokens arrived as PARAMETERS.
+;;
+;; The detection is not "is `let` among the params" — by the time the parser
+;; sees them, `expand-let` has already run over the argument list, found no
+;; body, and rewritten the let to a `($let-error msg)` marker. Two traps in one
+;; predicate: match the MARKER (not the symbol), and unwrap the marker's head
+;; with `stx->datum`, which is SHALLOW.
+
+(test-case "let-fn/a let swallowed by an fn bracket says so"
+  (define rs (run-file-ws
+    "ns letfn\ndef f := [fn [n : Int] let k := 4 [int+ n k]]\n"))
+  (define e (last rs))
+  (check-true (prologos-error? e) (format "expected an error, got: ~v" e))
+  (define msg (format "~a" e))
+  (check-true (regexp-match? #rx"read as a PARAMETER" msg)
+              (format "generic message survived: ~v" msg))
+  (check-true (regexp-match? #rx"suspend indent grouping" msg)
+              (format "no explanation of WHY: ~v" msg)))
+
+(test-case "let-fn/the suggested workaround actually works"
+  ;; A hint that names a fix nobody has run is worse than no hint. Pin it.
+  (define rs (run-file-ws
+    "ns letfn2\ndef f := [fn [n : Int] (let k := 4 [int+ n k])]\ndef r := [f 1]\n"))
+  (check-false (prologos-error? (last rs)) (format "got: ~v" (last rs)))
+  (check-true (regexp-match? #rx"r : Int" (format "~a" (last rs)))
+              (format "got: ~v" (last rs))))
+
+(test-case "let-fn/a genuine non-let bad parameter keeps the generic message"
+  ;; The hint must not become the only message the fn arm can emit.
+  (define rs (run-file-ws "ns letfn3\ndef g := [fn 5 [int+ 1 2]]\n"))
+  (define msg (format "~a" (last rs)))
+  (check-true (prologos-error? (last rs)) (format "expected an error, got: ~v" msg))
+  (check-true (regexp-match? #rx"bare symbols or a binder" msg)
+              (format "got: ~v" msg))
+  (check-false (regexp-match? #rx"read as a PARAMETER" msg)
+               (format "let hint fired on a non-let param: ~v" msg)))
+
+;; ---------------------------------------------------------------------------
+;; U1 (OCapN handoff review): a `let` whose VALUE is on a continuation line
+;; ---------------------------------------------------------------------------
+;;
+;; A head binding ending in `:=` has NO VALUE on its line, but
+;; `classify-let-block` accepted it as the aligned surface anyway — which
+;; assumes the head line IS a complete binding. The body line was then folded
+;; into the value's ARGUMENT LIST:
+;;
+;;     defn g [n]
+;;       let x :=
+;;           [f n 1]
+;;         [int+ x 10]
+;;
+;; became `[f n 1 [int+ x 10]]` → "Too many arguments to 'f'", expected 2 got
+;; 3, naming a function the user never mis-called. Two sites in the OCapN tree
+;; were worked around by re-indenting; the compiler defect was not fixed.
+;;
+;; ⚠ The filing was specific about the test: "a regression test MUST run
+;; through `imports`, not `process-string` — the failure is on the module-load
+;; path". Honoured — the module-load path is where U1 actually cost a day, and
+;; a `process-string` test would not have exercised it.
+
+(test-case "let-u1/a continuation-line VALUE binds correctly, through imports"
+  (define lib (make-temporary-file "prologos-u1-~a" 'directory))
+  (define dir (build-path lib "prologos" "u1t"))
+  (make-directory* dir)
+  (call-with-output-file (build-path dir "m.prologos") #:exists 'truncate
+    (lambda (o)
+      (display (string-append
+                "ns prologos::u1t::m\n\n"
+                "spec f Int Int -> Int\n"
+                "defn f [a b] [int+ a b]\n\n"
+                "spec g Int -> Int\n"
+                "defn g [n]\n"
+                "  let x :=\n"
+                "      [f n 1]\n"
+                "    [int+ x 10]\n")
+               o)))
+  (define user (build-path lib "user.prologos"))
+  (call-with-output-file user #:exists 'truncate
+    (lambda (o)
+      (display (string-append "ns u1tuser\n\n"
+                              "imports prologos::u1t::m\n\n"
+                              "def r := [g 5]\nr\n") o)))
+  (define out
+    (with-handlers ([exn:fail? (lambda (e) (format "RAISED: ~a" (exn-message e)))])
+      (parameterize ([current-lib-paths (list lib)])
+        (install-module-loader!)
+        (process-file user))))
+  (check-true (list? out) (format "the module failed to load: ~a" out))
+  ;; g 5 = f 5 1 = 6, then + 10 = 16. Assert the VALUE: a mis-grouped
+  ;; `[f n 1 [int+ x 10]]` is an arity error, so "no error" alone would also
+  ;; pass a fix that merely stopped erroring.
+  (check-true (regexp-match? #rx"16" (format "~a" (last out)))
+              (format "~v" out))
+  (delete-directory/files lib #:must-exist? #f))
+
+(test-case "let-u1/the ALIGNED block and SIBLING chain still work (controls)"
+  ;; The guard declines the aligned reading only when the head line ENDS at
+  ;; `:=`. These are the two shapes it must not touch.
+  (define aligned (run-file-ws "ns u1c1\ndef z :=\n  let x 4\n      y 5\n    [+ x y]\nz\n"))
+  (check-false (prologos-error? (last aligned)) (format "~v" aligned))
+  (check-true (regexp-match? #rx"9" (format "~a" (last aligned))) (format "~v" aligned))
+  (define chain (run-file-ws "ns u1c2\ndef w :=\n  let a := 1\n  let b := 2\n    [+ a b]\nw\n"))
+  (check-false (prologos-error? (last chain)) (format "~v" chain))
+  (check-true (regexp-match? #rx"3" (format "~a" (last chain))) (format "~v" chain)))
+
+;; ============================================================================
+;; `do` joins the marker-seat family (D4.P3a item 16, fixed 2026-08-03).
+;;
+;; `expand-do` raised plain `(error 'do …)`, so a malformed statement took the
+;; WHOLE FILE with it — a `defn` body containing `do` / `cfg{a}` printed ZERO
+;; commands, not even the `def` above it, and leaked the internal
+;; `($select-brace a)` sentinel into a raw Racket dump with exit 1.
+;;
+;; Same fix as `$let-error` and `$mixfix-error` above: a distinguished
+;; `exn:do-syntax` struct, caught by `expand-do` itself, collapsing to one
+;; `($do-error msg)` marker that `parser.rkt` turns into a per-command
+;; `parse-error` VALUE. A distinguished struct rather than `exn:fail?` so a
+;; genuine Racket-level bug inside the expansion is not reported to the user as
+;; a `do` syntax error.
+;; ============================================================================
+
+(test-case "do/a malformed statement is PER-COMMAND, not a whole-file abort"
+  ;; The load-bearing assertion is that the commands on BOTH sides survive —
+  ;; that is what "whole-file abort" cost, and a test that only checked for an
+  ;; error message would pass against the old raise too (it errored; it just
+  ;; took everything with it).
+  (define rs (run-file-ws
+              (string-append "ns do-marker-a\n\n"
+                             "def before := 1\n\n"
+                             "spec f Nat -> Nat\n"
+                             "defn f [n]\n  do\n    cfg{a}\n    n\n\n"
+                             "def after := 2\n")))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"^before : " (format "~a" r))) rs)
+              (format "the command BEFORE must survive: ~v" rs))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"^after : " (format "~a" r))) rs)
+              (format "the command AFTER must survive: ~v" rs))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"do:" (format "~a" r))) rs)
+              (format "and the failure must be reported: ~v" rs))
+  ;; …naming what the USER wrote, not the reader's internal marker. This used
+  ;; to print `(cfg ($select-brace a))`, which tells the reader nothing and
+  ;; reads like a compiler bug. Head-macro dispatch runs BEFORE the
+  ;; access-sentinel fold, so any expander reporting on its own arguments sees
+  ;; the raw form — `render-access-sentinels` is the display-side answer.
+  (check-true (ormap (lambda (r) (regexp-match? #rx"cfg\\{a\\}" (format "~a" r))) rs)
+              (format "the message must show source, not sentinels: ~v" rs))
+  (check-false (ormap (lambda (r) (regexp-match? #rx"select-brace" (format "~a" r))) rs)
+               (format "internal sentinel leaked into a user-facing message: ~v" rs)))
+
+(test-case "do/the other failure mode (empty do) is also per-command"
+  (define rs (run-file-ws
+              (string-append "ns do-marker-b\n\n"
+                             "def before := 1\n"
+                             "def bad := (do)\n"
+                             "def after := 2\n")))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"^before : " (format "~a" r))) rs))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"^after : " (format "~a" r))) rs))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"requires at least a body" (format "~a" r))) rs)
+              (format "~v" rs)))

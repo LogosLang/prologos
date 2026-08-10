@@ -457,12 +457,28 @@
 ;; cell-id (universe-cid for universe domain, per-cell otherwise); ADDED
 ;; dict-meta-id (component key under universe model). dep-cell-ids became
 ;; dep-pairs (each (cons cell-id meta-id)) for the same reason.
+;; The registry cell-ids are read AT FIRE TIME, not captured here.
+;;
+;; They used to be captured eagerly, outside the returned lambda — and this
+;; factory is invoked at MODULE LEVEL (driver.rkt), where those cell-ids are
+;; still #f and stay #f for the life of the process. `read-persistent-registry-cell`
+;; has no parameter fallback and answers `(hasheq)` on a #f cid, so the pure
+;; bridges read an EMPTY impl registry in every process. Silently.
+;;
+;; Deferring into the lambda would not have been enough either: the lambda is
+;; called at INSTALL time, which is also before the cells are identified for
+;; some paths. Reading at fire time is the only point at which the answer is
+;; guaranteed current, and it costs a parameter read on an already-ambient
+;; path — `read-persistent-registry-cell` reads
+;; `current-persistent-registry-net-box` ambiently in these same fire
+;; functions, so this adds no new assumption.
+;;
+;; Opposite polarity to GitHub #78 (write-to-param, read-from-cell); same
+;; half-migration root.
 (define (make-pure-trait-bridge-factory)
-  (define impl-reg-cid (current-impl-registry-cell-id))
-  (define param-impl-reg-cid (current-param-impl-registry-cell-id))
   (lambda (trait-name dict-cell-id dict-meta-id dep-pairs)
     (make-pure-trait-bridge-fire-fn trait-name dict-cell-id dict-meta-id
-                                     dep-pairs impl-reg-cid param-impl-reg-cid)))
+                                     dep-pairs)))
 
 ;; Pure trait resolution bridge fire function.
 ;; Closed over: trait-name, dict-cell-id, dict-meta-id, dep-pairs,
@@ -476,7 +492,7 @@
 ;; construction (caller's type-arg-metas order is authoritative; helper
 ;; preserves via list-of-pairs structure).
 (define (make-pure-trait-bridge-fire-fn trait-name dict-cell-id dict-meta-id
-                                         dep-pairs impl-reg-cid param-impl-reg-cid)
+                                         dep-pairs)
   (lambda (pnet)
     ;; Early exit: dict already solved
     (define dict-val (meta-component-read pnet dict-cell-id dict-meta-id))
@@ -498,7 +514,7 @@
           (define impl-key
             (string->symbol (string-append type-arg-str "--" (symbol->string trait-name))))
           ;; Read impl registry from persistent network cell
-          (define impl-reg (read-persistent-registry-cell impl-reg-cid))
+          (define impl-reg (read-persistent-registry-cell (current-impl-registry-cell-id)))
           (define entry (hash-ref impl-reg impl-key #f))
           (cond
             [entry
@@ -507,7 +523,7 @@
                                     (expr-fvar (impl-entry-dict-name entry)))]
             [else
              ;; Try parametric resolution
-             (define param-impl-reg (read-persistent-registry-cell param-impl-reg-cid))
+             (define param-impl-reg (read-persistent-registry-cell (current-param-impl-registry-cell-id)))
              (define param-entries (hash-ref param-impl-reg trait-name '()))
              (cond
                [(null? param-entries) pnet]  ;; no parametric impls — leave for S2
@@ -549,22 +565,18 @@
 ;;   (method-name meta-pair trait-var-pair-or-#f dict-meta-pair-or-#f dep-pairs
 ;;     → (pnet → pnet))
 ;; where each *-pair = (cons cell-id meta-id).
+;; Same deferral as `make-pure-trait-bridge-factory` above, for the same reason.
 (define (make-pure-hasmethod-bridge-factory)
-  (define trait-reg-cid (current-trait-registry-cell-id))
-  (define impl-reg-cid (current-impl-registry-cell-id))
-  (define param-impl-reg-cid (current-param-impl-registry-cell-id))
   (lambda (method-name meta-pair trait-var-pair dict-meta-pair dep-pairs)
     (make-pure-hasmethod-bridge-fire-fn method-name meta-pair trait-var-pair
-                                         dict-meta-pair dep-pairs
-                                         trait-reg-cid impl-reg-cid param-impl-reg-cid)))
+                                         dict-meta-pair dep-pairs)))
 
 ;; Pure hasmethod resolution bridge fire function.
 ;; PPN 4C S2.b-iv: reads/writes through meta-component-read/write to
 ;; dispatch on universe vs per-cell storage. Order of dep-pairs preserved
 ;; for impl-key-str construction.
 (define (make-pure-hasmethod-bridge-fire-fn method-name meta-pair trait-var-pair
-                                            dict-meta-pair dep-pairs
-                                            trait-reg-cid impl-reg-cid param-impl-reg-cid)
+                                            dict-meta-pair dep-pairs)
   (define meta-cell-id (car meta-pair))
   (define meta-id (cdr meta-pair))
   (define trait-var-cell-id (and trait-var-pair (car trait-var-pair)))
@@ -586,7 +598,7 @@
          [(not (andmap resolved-cell-value? type-arg-vals)) pnet]
          [else
           ;; Read trait registry to find which trait has this method
-          (define trait-reg (read-persistent-registry-cell trait-reg-cid))
+          (define trait-reg (read-persistent-registry-cell (current-trait-registry-cell-id)))
           (define resolved-trait-name
             ;; Check if trait variable is already ground (component read)
             (let ([tv (and trait-var-cell-id
@@ -611,8 +623,8 @@
                   [(not method-idx) pnet]
                   [else
                    ;; Resolve the dict via impl registry
-                   (define impl-reg (read-persistent-registry-cell impl-reg-cid))
-                   (define param-impl-reg (read-persistent-registry-cell param-impl-reg-cid))
+                   (define impl-reg (read-persistent-registry-cell (current-impl-registry-cell-id)))
+                   (define param-impl-reg (read-persistent-registry-cell (current-param-impl-registry-cell-id)))
                    (define type-arg-str
                      (string-join (map expr->impl-key-str type-arg-vals) "-"))
                    (define dict-key

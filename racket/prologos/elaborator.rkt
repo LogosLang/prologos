@@ -373,16 +373,12 @@
   ;; Look up spec where-constraints for position-based trait detection.
   ;; The function name may be namespace-qualified (e.g., 'ns::my-neq),
   ;; but specs are registered with bare names. Strip the NS prefix.
-  (define bare-fname
-    (let ([s (symbol->string fname)])
-      (define idx (let loop ([i (- (string-length s) 1)])
-                    (cond [(< i 1) #f]
-                          [(and (char=? (string-ref s i) #\:)
-                                (char=? (string-ref s (sub1 i)) #\:))
-                           i]
-                          [else (loop (sub1 i))])))
-      (if idx (string->symbol (substring s (add1 idx))) fname)))
-  (define spec-entry (lookup-spec bare-fname))
+  ;; issue #66 (2026-08-03): FQN FIRST, bare second. This was a
+  ;; hand-inlined strip-then-lookup-bare loop, one of three
+  ;; byte-identical copies; the shared helper adds the qualified
+  ;; probe so a call that resolved to a specific module gets that
+  ;; module's spec instead of whichever won the bare-name race.
+  (define spec-entry (lookup-spec/qualified fname))
   (define where-constraints
     (if (and spec-entry (spec-entry? spec-entry))
         (spec-entry-where-constraints spec-entry)
@@ -590,16 +586,12 @@
   (define mults (collect-pi-mults func-type))
   (define n-m0 (leading-m0-count mults))
   ;; Check if function has spec with where-constraints
-  (define bare-name
-    (let ([s (symbol->string fname)])
-      (define idx (let loop ([i (- (string-length s) 1)])
-                    (cond [(< i 1) #f]
-                          [(and (char=? (string-ref s i) #\:)
-                                (char=? (string-ref s (sub1 i)) #\:))
-                           i]
-                          [else (loop (sub1 i))])))
-      (if idx (string->symbol (substring s (add1 idx))) fname)))
-  (define spec (lookup-spec bare-name))
+  ;; issue #66 (2026-08-03): FQN FIRST, bare second. This was a
+  ;; hand-inlined strip-then-lookup-bare loop, one of three
+  ;; byte-identical copies; the shared helper adds the qualified
+  ;; probe so a call that resolved to a specific module gets that
+  ;; module's spec instead of whichever won the bare-name race.
+  (define spec (lookup-spec/qualified fname))
   (define n-constraints
     (if (and spec (spec-entry? spec))
         (length (spec-entry-where-constraints spec))
@@ -667,16 +659,12 @@
 ;; Check if a function name has a variadic spec (rest-type non-#f).
 ;; Strips namespace prefix to find the bare name for lookup.
 (define (varargs-spec-info fname)
-  (define bare-name
-    (let ([s (symbol->string fname)])
-      (define idx (let loop ([i (- (string-length s) 1)])
-                    (cond [(< i 1) #f]
-                          [(and (char=? (string-ref s i) #\:)
-                                (char=? (string-ref s (sub1 i)) #\:))
-                           i]
-                          [else (loop (sub1 i))])))
-      (if idx (string->symbol (substring s (add1 idx))) fname)))
-  (define spec (lookup-spec bare-name))
+  ;; issue #66 (2026-08-03): FQN FIRST, bare second. This was a
+  ;; hand-inlined strip-then-lookup-bare loop, one of three
+  ;; byte-identical copies; the shared helper adds the qualified
+  ;; probe so a call that resolved to a specific module gets that
+  ;; module's spec instead of whichever won the bare-name race.
+  (define spec (lookup-spec/qualified fname))
   (and spec (spec-entry? spec) (spec-entry-rest-type spec) spec))
 
 ;; ========================================
@@ -867,6 +855,23 @@
         [quire-hint "hint: quire ops are keyword-only (no first-class value form)"]
         [if-nar-hint "hint: p*-if-nar is keyword-only (no first-class value form)"])
     (hasheq
+     ;; `module` is not a language form at all — it is the literate-BOOK
+     ;; directive that `tools/tangle-stdlib.rkt` consumes, and it heads the
+     ;; `lib/prologos/book/*.prologos` chapter files. Importing a chapter
+     ;; therefore fails on THIS line, before anything else in the file.
+     ;;
+     ;; Added 2026-08-05 after a merge changed which of a chapter's two errors
+     ;; is reported. The old path SKIPPED error surfs and surfaced a later one —
+     ;; the `imports` guard's "no namespace is in scope … the book/ chapter
+     ;; files are prose, not importable modules" — which was helpful but came
+     ;; from two lines further down. Reporting the FIRST error is the better
+     ;; shape; it just needed to carry the same explanation.
+     'module (string-append
+              "hint: `module` is a book-chapter directive, not a Prologos form. "
+              "The `book/` files are literate prose that `tangle-stdlib` reads — "
+              "they are not importable modules. Import the tangled library "
+              "instead (e.g. `prologos::core::collections`), or write `ns` if "
+              "this file is meant to BE a module.")
      'mod "hint: mod is a keyword; for a first-class value use the section [mod _ _]"
      'le cmp-hint 'gt cmp-hint 'ge cmp-hint
      '< angle-hint '<= angle-hint '>= angle-hint '> angle-hint
@@ -3240,6 +3245,24 @@
           (prologos-error loc (format "validate: unknown schema ~a — declare it with `schema ~a …` first" sname sname))]
          [(and sel (not parent))
           (prologos-error loc (format "validate: selection ~a's parent schema ~a is not registered" sname (selection-entry-schema-name sel)))]
+         ;; 2026-08-03: the preparse STUB is not a usable selection.
+         ;;
+         ;; Every selection is pre-registered at preparse with empty
+         ;; requires/provides so `known-type-name?` recognizes the name during
+         ;; spec processing. If the declaration then fails — a malformed
+         ;; `:requires` path is the reachable case, since the WS reader splits
+         ;; `:m.*` into three tokens — nothing replaces the stub. `validate`
+         ;; found it, saw no required fields, and returned `ok` FOR ANY INPUT.
+         ;; The file reported one error and then carried a selection that
+         ;; validated everything, which is worse than the error.
+         [(and sel (selection-entry-stub? sel))
+          (prologos-error loc
+                          (format (string-append
+                                   "validate: selection ~a was never completed — its declaration "
+                                   "failed (see the error on that line). Until it is fixed this "
+                                   "name requires nothing, so validating against it would accept "
+                                   "any value.")
+                                  sname))]
          [else
           (define required-names
             (list 'prologos::data::result::Result 'prologos::data::reason::Reason
@@ -3271,13 +3294,42 @@
                 (define src-schema (or schema-entry parent))
                 (define fields (schema-entry-fields src-schema))
                 (define closed? (schema-entry-closed? src-schema))
+                ;; F1b.5-s4 required-of a SELECTION's :requires read-capability.
+                ;;
+                ;; 2026-08-03 (walker charter item 4): DEEP paths participate
+                ;; now. `:requires [:address.zip]` used to be dropped whole by
+                ;; the `(null? (cdr p))` filter, so it enforced NOTHING — not
+                ;; even its top hop, which is a plain single-segment
+                ;; requirement wearing a longer name. Two halves:
+                ;;   - the TOP HOP joins req-syms, so an absent `:address` is a
+                ;;     read-capability miss exactly as `:name` would be;
+                ;;   - the REMAINDER rides the plan entry (slot 7) and the
+                ;;     runtime descends it inside the present field's value.
+                ;; A WILDCARD segment (`:address.*`) still defers: "every key
+                ;; under here" is a quantifier, not a path, and needs its own
+                ;; semantics before it can be enforced.
+                (define (kw->sym k) (string->symbol (keyword->string k)))
+                (define (path-syms p)
+                  (and (pair? p) (andmap keyword? p) (map kw->sym p)))
+                (define sel-paths
+                  (if sel (selection-entry-requires-paths sel) '()))
+                ;; fully-keyword paths carry a descendable remainder
+                (define req-paths (filter values (map path-syms sel-paths)))
+                ;; …but the TOP HOP is required for EVERY path whose head is a
+                ;; keyword, wildcards included. `:address.*` cannot say what it
+                ;; wants under `:address` until the quantifier has semantics,
+                ;; but it unambiguously wants `:address` — so requiring the head
+                ;; is strictly right and independent of that ruling.
                 (define req-syms
-                  (if sel
-                      (for/list ([p (in-list (selection-entry-requires-paths sel))]
-                                 #:when (and (pair? p) (null? (cdr p)) (keyword? (car p))))
-                        (string->symbol (keyword->string (car p))))
-                      '()))
+                  (remove-duplicates
+                   (for/list ([p (in-list sel-paths)]
+                              #:when (and (pair? p) (keyword? (car p))))
+                     (kw->sym (car p)))))
                 (define (required-of kw) (or (not sel) (and (memq kw req-syms) #t)))
+                (define (req-subpaths-of kw)
+                  (for/list ([p (in-list req-paths)]
+                             #:when (and (eq? (car p) kw) (pair? (cdr p))))
+                    (cdr p)))
                 ;; the Result's S argument: resolve `sname` (the schema OR
                 ;; selection name) to its ns-QUALIFIED form (F1b.5-s3 — try
                 ;; qualified FIRST so S is the SAME fvar the `the`/annotation
@@ -3335,7 +3387,8 @@
                           (cons (list kw tag default-expr pred-expr type-str
                                       (and (schema-field-check-pred f)
                                            (format "~a" (schema-field-check-pred f)))
-                                      (required-of kw))  ; F1b.5-s4: required-on-miss?
+                                      (required-of kw)      ; F1b.5-s4: required-on-miss?
+                                      (req-subpaths-of kw)) ; 2026-08-03: deep :requires
                                 acc)])])))
                 (if (prologos-error? plan-or-err)
                     plan-or-err
@@ -4149,10 +4202,10 @@
            (define eff-prov (path-union (append prov incl-prov)))
            ;; Register the selection with effective (resolved) paths
            (register-selection! name-fqn
-                                (selection-entry name-fqn schema-fqn eff-req eff-prov incl loc))
+                                (selection-entry name-fqn schema-fqn eff-req eff-prov incl loc #f))
            (unless (eq? name-fqn name-short)
              (register-selection! name-short
-                                  (selection-entry name-short schema-fqn eff-req eff-prov incl loc)))
+                                  (selection-entry name-short schema-fqn eff-req eff-prov incl loc #f)))
            ;; Return result for driver to install as type in global-env
            (list 'selection name-fqn name-short schema-name)])])]))
 
@@ -4474,11 +4527,32 @@
     [(surf-proc-link chan1 chan2 _loc)
      (proc-link chan1 chan2)]
 
-    [(surf-proc-rec _label _loc)
-     ;; Tail recursion marker — at process level, this is a jump back
-     ;; In the core AST, we don't have a direct rec process form;
-     ;; for now emit as a sentinel that typing-sessions can handle
-     (proc-stop)]  ;; TODO: S4 will add proper process recursion propagator
+    [(surf-proc-rec label loc)
+     ;; Process-level recursion is NOT implemented. This used to elaborate to
+     ;; `(proc-stop)` with the note "emit as a sentinel that typing-sessions can
+     ;; handle" — and that note was wrong in the way that matters.
+     ;;
+     ;; `proc-stop` is not a sentinel typing-sessions can recognize; it is the
+     ;; genuine terminal process, and its typing arm (typing-sessions.rkt:129)
+     ;; both REQUIRES every channel to be ended and actively SOLVES any
+     ;; remaining session metas to `sess-end`. So `(proc-rec Loop)` under a
+     ;; recursive session type did not merely lose its label — it committed the
+     ;; channel to terminating, and the recursion vanished silently.
+     ;;
+     ;; The session TYPE side does have recursion (`sess-mu` / `sess-svar`,
+     ;; sessions.rkt:39-40); the process side is the missing half, and building
+     ;; it is S4 work. Until then this refuses, because a loud refusal is what
+     ;; the rest of this compiler does with an unimplementable construct — the
+     ;; alternative was a process that type-checks as terminating and isn't.
+     ;;
+     ;; No WS spelling reaches here; `(proc-rec …)` is sexp-only today.
+     (prologos-error loc
+                 (format (string-append
+                          "process recursion is not implemented — `(proc-rec ~a)` has no core "
+                          "form yet, and elaborating it as `stop` would type the process as "
+                          "TERMINATING (stop requires every channel ended). Session TYPES can "
+                          "recurse (`rec`/`sess-mu`); processes cannot yet.")
+                         label))]
 
     ;; S5b: Boundary operations
     [(surf-proc-open path-surf sess-type-surf cap-sym cont-surf _loc)

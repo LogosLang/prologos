@@ -159,6 +159,8 @@
  make-parallel-fire-all
  ;; Convenience queries
  net-contradiction?
+ net-contradiction-cell
+ net-set-contradiction
  net-quiescent?
  net-fuel-remaining
  ;; Descending cells (WFLE Phase 1)
@@ -2068,9 +2070,30 @@
              [new-wl (append deps (prop-network-worklist net))]
              ;; Check contradiction
              [cfn (champ-lookup (prop-network-contradiction-fns net) h cid)]
+             ;; ALSO honour the cell's on-write-check here, not only on the hot
+             ;; fast path above.
+             ;;
+             ;; Exactly one cell declares one today — fuel-cell-id, whose check
+             ;; is `(<= new 0)` — and the fast path is gated on
+             ;; `(not under-speculation?)`. So the fuel bound was DISABLED
+             ;; precisely while speculation was active, which is the one
+             ;; situation it exists for: a speculative fork that will not
+             ;; converge burns fuel to zero and nothing notices, so the network
+             ;; runs forever instead of raising a bounded diagnostic.
+             ;;
+             ;; That is the second half of the union-type hang (DEFERRED §
+             ;; "Union-type checking hangs the type-checker"): the entry asked
+             ;; for "a fuel bound on the typing/elaborator network so
+             ;; non-convergence becomes a bounded diagnostic instead of a hang",
+             ;; and the bound was already written — just unreachable from the
+             ;; path speculation takes. The carrier fix removed THAT hang; this
+             ;; makes the NEXT one terminate.
+             [meta* (prop-cell-meta cell)]
+             [owc (and meta* (specialized-cell-meta-on-write-check meta*))]
              [contradicted?
-              (and (not (eq? cfn 'none))   ;; cell has a contradicts? fn
-                   (cfn merged))]          ;; the merged value is contradictory
+              (or (and (not (eq? cfn 'none))   ;; cell has a contradicts? fn
+                       (cfn merged))           ;; the merged value is contradictory
+                  (and owc (owc old-val merged net)))]
              ;; D.4 1V-3 Item #1-bis (§11.X.3 WT-2 per §11.X.3.1 F14): cache update
              ;; on slow-path main struct-copy (contradicted branch inherits from net*).
              [net* (struct-copy prop-network net
@@ -3844,6 +3867,23 @@
 ;; Has the network encountered a contradiction?
 (define (net-contradiction? net)
   (and (prop-network-contradiction net) #t))
+
+;; Which cell recorded the contradiction (or #f)?
+(define (net-contradiction-cell net)
+  (prop-network-contradiction net))
+
+;; Set the contradiction marker to `v` (a cell-id, or #f to clear).
+;;
+;; This is the counterpart to the fuel cell-API: a caller that deliberately
+;; runs a FUEL-BOUNDED sub-computation saves the marker beforehand and restores
+;; it afterwards, so that its own budget exhaustion is not observable as a
+;; semantic contradiction by anything downstream. Exhausting a deliberately
+;; small budget is an expected control-flow outcome, not an inconsistency in
+;; the information the network carries — the two must not share a channel.
+(define (net-set-contradiction net v)
+  (struct-copy prop-network net
+    [warm (struct-copy prop-net-warm (prop-network-warm net)
+            [contradiction v])]))
 
 ;; Is the network quiescent (worklist empty)?
 (define (net-quiescent? net)

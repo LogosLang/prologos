@@ -338,3 +338,194 @@ defn chunks-dispatch [n s len]
 spec chunks Int -> String -> [List String]
 defn chunks [n s]
   chunks-dispatch n s [str::length s]
+
+;; ========================================
+;; Unicode normalization (UAX #15) -- the form selector
+;; ========================================
+;; The four normalizers themselves are FFI bindings in `prologos::data::string`
+;; (`str::normalize-nfc` and friends), which is where the Racket bridge belongs.
+;; The TYPE and the dispatcher live here because that module is a prelude-less
+;; leaf: a `match` over a user `data` needs machinery it does not have.
+
+data NormForm
+  nfc
+  nfd
+  nfkc
+  nfkd
+
+spec normalize NormForm String -> String
+defn normalize [form s]
+  match form
+    | nfc -> [str::normalize-nfc s]
+    | nfd -> [str::normalize-nfd s]
+    | nfkc -> [str::normalize-nfkc s]
+    | nfkd -> [str::normalize-nfkd s]
+
+;; ========================================
+;; Unicode normalization (UAX #15) -- the form selector
+;; ========================================
+;; The four normalizers are FFI bindings in `prologos::data::string`
+;; (`str::normalize-nfc` and friends), which is where the Racket bridge belongs.
+;; The TYPE and the dispatcher live here because that module is a prelude-less
+;; leaf: a `match` over a user `data` needs machinery it does not have.
+
+data NormForm
+  nfc
+  nfd
+  nfkc
+  nfkd
+
+spec normalize NormForm String -> String
+defn normalize [form s]
+  match form
+    | nfc -> [str::normalize-nfc s]
+    | nfd -> [str::normalize-nfd s]
+    | nfkc -> [str::normalize-nfkc s]
+    | nfkd -> [str::normalize-nfkd s]
+
+;; ========================================
+;; String similarity (String Library Phase 4c) -- PARTIAL
+;; ========================================
+;; The common-prefix half of the entry's ask. Edit distance is NOT here; see
+;; the DEFERRED entry for why (a row-wise DP cannot be written efficiently
+;; without a sharing construct in this position, and comes back as a stuck term).
+;;
+;; Style follows the rest of this file: `int-lt` / `int-eq` rather than `<` / `=`
+;; (`<` is a WS delimiter), and `if` on ONE line.
+
+;; `int-min` is not a primitive and there is no int module to hold it.
+spec imin Int Int -> Int
+defn imin [x y]
+  if [int-lt x y] x y
+
+spec common-prefix-loop String String Int Int -> Int
+defn common-prefix-loop [a b limit i]
+  if [int-lt i limit] [if [char::eq [str::ref a i] [str::ref b i]] [common-prefix-loop a b limit [int+ i 1]] i] i
+
+spec common-prefix-length String String -> Int
+  :doc "Length of the longest common prefix of two strings."
+defn common-prefix-length [a b]
+  [common-prefix-loop a b [imin [str::length a] [str::length b]] 0]
+
+spec common-prefix String String -> String
+  :doc "The longest common prefix of two strings."
+defn common-prefix [a b]
+  [str::slice a 0 [common-prefix-length a b]]
+
+spec common-suffix-loop String String Int Int Int -> Int
+defn common-suffix-loop [a b alen blen k]
+  if [int-lt k [imin alen blen]] [if [char::eq [str::ref a [int- alen [int+ k 1]]] [str::ref b [int- blen [int+ k 1]]]] [common-suffix-loop a b alen blen [int+ k 1]] k] k
+
+spec common-suffix-length String String -> Int
+  :doc "Length of the longest common suffix of two strings."
+defn common-suffix-length [a b]
+  [common-suffix-loop a b [str::length a] [str::length b] 0]
+
+spec common-suffix String String -> String
+  :doc "The longest common suffix of two strings."
+defn common-suffix [a b]
+  [str::slice a [int- [str::length a] [common-suffix-length a b]] [str::length a]]
+
+;; --- Levenshtein edit distance ---
+;;
+;; Row-at-a-time dynamic programming: the classic table kept one row deep.
+;; O(|a|*|b|) time, O(|a|) space.
+;;
+;; The `let` is load-bearing, not tidiness. Each cell's value is needed TWICE
+;; (as the row entry, and as the next cell's `left`) and so is the cell above
+;; it; computing them inline doubles the work per cell and makes the whole
+;; thing exponential — a 3x3 distance then exceeds the reduction budget and
+;; comes back as a stuck term rather than a number. Passing them down as
+;; parameters does not fix it either.
+;;
+;; It has to be the BRACKET `let` on one line: a multi-line `let` in this
+;; position is a parse error.
+
+spec lev-nth [List Int] Int -> Int
+defn lev-nth [xs n]
+  match xs
+    | nil -> 0
+    | cons h t -> if [int-eq n 0] h [lev-nth t [int- n 1]]
+
+spec lev-last-go Int [List Int] -> Int
+defn lev-last-go [h t]
+  match t
+    | nil -> h
+    | cons h2 t2 -> [lev-last-go h2 t2]
+
+spec lev-last [List Int] -> Int
+defn lev-last [xs]
+  match xs
+    | nil -> 0
+    | cons h t -> [lev-last-go h t]
+
+spec lev-step Char Char Int Int Int -> Int
+defn lev-step [ca cb up left diag]
+  if [char::eq ca cb] diag [imin [int+ diag 1] [imin [int+ up 1] [int+ left 1]]]
+
+spec lev-row-loop String Char [List Int] Int Int Int Int -> [List Int]
+defn lev-row-loop [a cb prev alen i left diag]
+  if [int-lt i alen] [let [up [lev-nth prev [int+ i 1]]] [let [cell [lev-step [str::ref a i] cb up left diag]] [cons cell [lev-row-loop a cb prev alen [int+ i 1] cell up]]]] nil
+
+spec lev-rows String String Int Int Int [List Int] -> [List Int]
+defn lev-rows [a b alen blen j prev]
+  if [int-lt j blen] [lev-rows a b alen blen [int+ j 1] [cons [int+ j 1] [lev-row-loop a [str::ref b j] prev alen 0 [int+ j 1] [lev-nth prev 0]]]] prev
+
+spec lev-init Int Int -> [List Int]
+defn lev-init [alen i]
+  if [int-lt i [int+ alen 1]] [cons i [lev-init alen [int+ i 1]]] nil
+
+spec levenshtein String String -> Int
+  :doc "Edit distance: the fewest single-character insertions, deletions or substitutions turning one string into the other."
+defn levenshtein [a b]
+  [lev-last [lev-rows a b [str::length a] [str::length b] 0 [lev-init [str::length a] 0]]]
+
+;; --- "Did you mean?" ---
+;;
+;; The threshold is the caller's, because the right one depends on what is being
+;; suggested over: a typo in a three-letter keyword and a typo in a thirty-letter
+;; identifier are not the same distance apart.
+
+spec closest-loop String [List String] Int String Int -> [Option String]
+defn closest-loop [target candidates best-d best limit]
+  match candidates
+    | nil -> if [int-lt limit best-d] [none String] [some String best]
+    | cons c rest -> [let [d [levenshtein target c]] [if [int-lt d best-d] [closest-loop target rest d c limit] [closest-loop target rest best-d best limit]]]
+
+spec closest String [List String] Int -> [Option String]
+  :doc "The candidate closest to `target` by edit distance, if one is within `limit`."
+defn closest [target candidates limit]
+  match candidates
+    | nil -> [none String]
+    | cons c rest -> [closest-loop target rest [levenshtein target c] c limit]
+
+;; ========================================
+;; Grapheme clusters (String Library Phase 4a)
+;; ========================================
+;; The primitives are FFI bridges in `prologos::data::string`
+;; (`str::grapheme-count`, `str::grapheme-span`); these build on them.
+;;
+;; The entry filed this as "Requires UAX #29 state machine (~30KB Unicode
+;; tables)" with a bridge listed only as a MITIGATION. The bridge is the whole
+;; answer: Racket already carries the tables, and a ZWJ family emoji comes back
+;; as one cluster from five code points.
+
+spec graphemes-loop String Int Int -> [List String]
+defn graphemes-loop [s len i]
+  if [int-lt i len] [let [n [str::grapheme-span s i]] [cons [str::slice s i [int+ i n]] [graphemes-loop s len [int+ i n]]]] nil
+
+spec graphemes String -> [List String]
+  :doc "Split a string into its grapheme clusters — user-perceived characters, not code points."
+defn graphemes [s]
+  [graphemes-loop s [str::length s] 0]
+
+spec cat-rev-loop [List String] String -> String
+defn cat-rev-loop [xs acc]
+  match xs
+    | nil -> acc
+    | cons h t -> [cat-rev-loop t [str::append h acc]]
+
+spec grapheme-reverse String -> String
+  :doc "Reverse a string by grapheme cluster, so combining marks and ZWJ sequences stay with their base."
+defn grapheme-reverse [s]
+  [cat-rev-loop [graphemes s] ""]

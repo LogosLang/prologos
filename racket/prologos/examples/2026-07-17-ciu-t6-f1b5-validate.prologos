@@ -150,3 +150,144 @@ selection NameOnly from Person :requires [:name]
 [validate NameOnly {:age 9}]
 ;;27=>~ :name prologos::data::reason::missing-required
 ;;   ← the :requires read-capability MISS is the selection's runtime residual
+
+;; --- 2026-08-03: SUB-SCHEMA DESCENT (the deep-walker charter, item 3) ---------
+;; Before this, a field typed by another schema got the 'any (unwitnessable)
+;; tag, so validate accepted data whose NESTED field held the wrong type — while
+;; the STATIC seal rejected the same mistake in a literal. For the headline flow
+;; (external data → validate → Result) the asymmetry ran the wrong way round.
+
+schema Endpoint
+  :host String
+  :port Int
+
+schema Deployment
+  :label String
+  :target Endpoint
+;;28=> Endpoint : [Type 0] defined.
+;;29=> Deployment : [Type 0] defined.
+
+[validate Deployment {:label "prod" :target {:host "h" :port 443}}]
+;;30=>~ prologos::data::result::ok
+;;   ← a well-formed nested value still passes
+
+[validate Deployment {:label "prod" :target {:host "h" :port "443"}}]
+;;31=>~ :target [prologos::data::reason::type-mismatch
+;;   ← THE FIX: the nested :port is a String in an Int slot. Was `ok`.
+
+[validate Deployment {:label "prod" :target {:host "h" :port "443"}}]
+;;32=>~ Map (:port is String)
+;;   ← and the `got` payload names the offending inner field. Reporting a bare
+;;     "Map" here would be true and useless — the value IS a map; WHICH field is
+;;     wrong is the entire question.
+
+[validate Deployment {:label "prod" :target {:host "h"}}]
+;;33=>~ prologos::data::result::ok
+;;   ← a MISSING nested key stays the PLAN's business (it owns `required?` and
+;;     reports against the right key); the witness must not relabel it as a
+;;     type-mismatch on the PARENT field.
+
+;; --- 2026-08-03: TIER-2 ELEMENT RECURSION (the deep-walker charter, item 2) ---
+;; `(ctor Name)` asserted only that a value's constructor belonged to the type
+;; and nothing about its ARGUMENTS, so a `(List String)` field accepted a list
+;; of Ints. The tag now carries each constructor's per-field tags.
+
+schema Manifest
+  :names (List String)
+;;34=> Manifest : [Type 0] defined.
+
+[validate Manifest {:names '["a" "b"]}]
+;;35=>~ prologos::data::result::ok
+;;   ← a homogeneous list of the right element type still passes
+
+[validate Manifest {:names [cons 7 nil]}]
+;;36=>~ :names [prologos::data::reason::type-mismatch
+;;   ← THE FIX: an Int element in a (List String) field. Was `ok`.
+
+[validate Manifest {:names [cons 7 nil]}]
+;;37=>~ List (cons field 0 is Int)
+;;   ← and the payload names the constructor and field position
+
+[validate Manifest {:names nil}]
+;;38=>~ prologos::data::result::ok
+;;   ← the empty list has no elements to disagree with anything
+
+;; --- 2026-08-03: the NON-CTOR CARRIERS (PVec / Set / Map) --------------------
+;; These never reach the ctor route — their values are an rrb, an hset and a
+;; champ rather than constructor applications — so they sat at the 'any skip.
+
+schema Ports
+  :nums (PVec Int)
+  :labels (Map Keyword String)
+;;39=> Ports : [Type 0] defined.
+
+[validate Ports {:nums @[80 443] :labels {:a "x"}}]
+;;40=>~ prologos::data::result::ok
+
+[validate Ports {:nums @[80 "443"] :labels {:a "x"}}]
+;;41=>~ PVec (element 1 is String)
+;;   ← THE FIX: a String element in a (PVec Int) field, at position 1 rather
+;;     than 0 so a head-only check would not catch it. Was `ok`.
+
+[validate Ports {:nums @[80] :labels {:a 1}}]
+;;42=>~ Map (the value at :a is Int)
+;;   ← and a Map checks BOTH its keys and its values
+
+;; --- 2026-08-03: DEEP :requires paths (the deep-walker charter, item 4) -------
+;; `:requires [:address.zip]` was dropped whole by a single-segment filter, so
+;; it enforced NOTHING — not even its top hop, which is a plain single-segment
+;; requirement wearing a longer name.
+
+schema Zip
+  :code String
+schema Contact
+  :email String
+  :zip Zip
+
+;;43=> Zip : [Type 0] defined.
+;;44=> Contact : [Type 0] defined.
+
+selection NeedsZipCode from Contact :requires [:zip.code]
+;;45=> selection NeedsZipCode from Contact registered.
+
+[validate NeedsZipCode {:email "e" :zip {:code "90210"}}]
+;;46=>~ prologos::data::result::ok
+;;   ← the full path is reachable
+
+[validate NeedsZipCode {:email "e" :zip {}}]
+;;47=>~ :zip.code prologos::data::reason::missing-required
+;;   ← THE FIX (deep half): the top hop is there, the leaf is not. Reported
+;;     under the FULL path — `{:zip missing-required}` would be a lie, since
+;;     `:zip` is right there.
+
+[validate NeedsZipCode {:email "e"}]
+;;48=>~ :zip prologos::data::reason::missing-required
+;;   ← THE FIX (top-hop half): an absent `:zip` is a read-capability miss
+;;     exactly as a single-segment `:requires` would be. This case returned
+;;     `ok` too, which is the more surprising half of the gap.
+
+;; --- 2026-08-03: NESTED SEAL FORCING (the deep-walker charter, item 1) --------
+;; The commit-time forcer was TOP-NODE-ONLY, so a failing seal one level inside
+;; a list or a map committed silently while the same seal at top level errored.
+
+schema Psn
+  :n Int :check (> _ 0)
+;;49=> Psn : [Type 0] defined.
+
+def seal-in-map := {:a [Psn {:n 0}]}
+;;50=>~ sealed definition forced at commit
+;;   ← THE FIX (map carrier): a champ's payload is a Racket structure, so the
+;;     expr-field walk cannot see this one — it needs the container-aware walk
+
+def seal-in-list := '[[Psn {:n 0}]]
+;;51=>~ sealed definition forced at commit
+;;   ← THE FIX (cons spine)
+
+def seal-under-binder := [fn [q : Int] [Psn {:n 0}]]
+;;52=>~ seal-under-binder : Int ->
+;;   ← DELIBERATELY NOT forced: a seal under a binder may reference the bound
+;;     variable, so forcing it evaluates a body that has not been applied
+
+def seals-ok := {:a '[[Psn {:n 5}] [Psn {:n 6}]]}
+;;53=>~ seals-ok : {:a [prologos::data::list::List
+;;   ← and correct nesting must still commit, at any depth

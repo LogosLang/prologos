@@ -5,14 +5,29 @@
 ;; Usage:
 ;;   racket tools/bench-ab.rkt benchmarks/comparative/ --runs 15
 ;;   racket tools/bench-ab.rkt benchmarks/comparative/simple-typed.prologos --runs 10
-;;   racket tools/bench-ab.rkt --ref HEAD~1 benchmarks/comparative/  # compare vs commit
+;;   racket tools/bench-ab.rkt --refs HEAD~1 benchmarks/comparative/       # vs one commit
+;;   racket tools/bench-ab.rkt --refs HEAD~1,HEAD~5 benchmarks/comparative/ # multi-way
 ;;   racket tools/bench-ab.rkt benchmarks/comparative/ --runs 15 --output results.json
+;;   racket tools/bench-ab.rkt --refs HEAD~1 --md report.md benchmarks/comparative/
 ;;
-;; Runs each program N times, collects wall-time and heartbeat distributions,
-;; computes Mann-Whitney U test for statistical significance.
-;; Default: compare current working tree against itself (stability test).
-;; With --ref: stash changes, checkout ref, run B samples, restore.
-;; With --output: persist JSON results (timestamp, commit, per-program distributions).
+;; Runs each program N times per variant, collects wall-time and heartbeat
+;; distributions, computes Mann-Whitney U against the working tree.
+;;
+;; Default (no --refs): compare the working tree against ITSELF — a stability
+;; test, and nothing more. That is worth saying plainly, because this tool's
+;; documented flag for comparing against another commit (`--ref`) NEVER EXISTED:
+;; the header advertised it, `workflow.md` instructed its use, and the B leg ran
+;; against the same tree. Anyone following the documentation measured identical
+;; code twice and read the difference as a result.
+;;
+;; `--refs` is that flag, built the only safe way. Each ref gets its OWN GIT
+;; WORKTREE, built there and run from there; the benchmark PROGRAMS always come
+;; from the working tree, so every variant is measured on identical input. No
+;; stash, no checkout: the working tree is never touched, which matters because
+;; it routinely holds uncommitted work (`workflow.md`: "NEVER `git stash`").
+;;
+;; With --output: persist JSON results (timestamp, commit, per-variant distributions).
+;; With --md: write a markdown comparison table.
 
 (require racket/cmdline
          racket/list
@@ -31,8 +46,18 @@
 ;; comparisons run under the production compile mode (interpreted-vs-compiled
 ;; rankings demonstrably invert). Full rationale + measurements: the twin
 ;; putenv in run-affected-tests.rkt + the defect doc §4.2.
-(unless (getenv "PLT_CS_COMPILE_LIMIT")
-  (putenv "PLT_CS_COMPILE_LIMIT" "1000000"))
+(void
+ (unless (getenv "PLT_CS_COMPILE_LIMIT")
+   (putenv "PLT_CS_COMPILE_LIMIT" "1000000")))
+
+;; Benchmarks want the PRECISE retained-bytes figure, which needs a major GC on
+;; each side of a command. That forced GC is off by default because it cost the
+;; test suite 2.3x wall time for numbers nothing read (see
+;; performance-counters.rkt § mem-stats-force-gc?) — but here it is the point,
+;; so turn it back on for everything this tool spawns.
+(void
+ (unless (getenv "PROLOGOS_MEM_STATS_GC")
+   (putenv "PROLOGOS_MEM_STATS_GC" "1")))
 
 ;; ============================================================
 ;; Path anchoring
@@ -122,8 +147,8 @@
 ;; ============================================================
 
 ;; Run a single .prologos program via driver subprocess, return wall_ms.
-(define (bench-program-once program-path)
-  (define driver-path (path->string (build-path project-root "driver.rkt")))
+(define (bench-program-once program-path [driver-root project-root])
+  (define driver-path (path->string (build-path driver-root "driver.rkt")))
   (define t0 (current-inexact-monotonic-milliseconds))
   (define-values (proc stdout-port stdin-port stderr-port)
     (subprocess #f #f #f racket-path driver-path program-path))
@@ -145,13 +170,71 @@
           'status (if (zero? (subprocess-status proc)) "ok" "fail")))
 
 ;; Run a program N times, return list of result hashes
-(define (bench-program program-path n)
+(define (bench-program program-path n [driver-root project-root])
   ;; Warmup run (not counted)
-  (bench-program-once program-path)
+  (bench-program-once program-path driver-root)
   ;; Measured runs
   (for/list ([_ (in-range n)])
     (collect-garbage 'major)
-    (bench-program-once program-path)))
+    (bench-program-once program-path driver-root)))
+
+
+;; ============================================================
+;; Variant worktrees (--refs)
+;; ============================================================
+;;
+;; One git worktree per ref, built in place, torn down at the end. Worktrees
+;; and not `git stash` + `git checkout`: the working tree routinely holds
+;; uncommitted work, and a benchmark run must not be able to disturb it — the
+;; standing rule in `workflow.md`. It also means a variant can be built ONCE and
+;; measured repeatedly without re-checking-out between samples.
+
+(define repo-root
+  (path->string (simplify-path (build-path project-root ".." ".."))))
+
+(define (git-ok? . args)
+  (define out (open-output-string))
+  (define ok?
+    (parameterize ([current-output-port out] [current-error-port out])
+      (apply system* (find-executable-path "git") args)))
+  (unless ok? (printf "~a" (get-output-string out)))
+  ok?)
+
+;; A ref may contain characters a directory name should not.
+(define (ref->dirname ref)
+  (regexp-replace* #rx"[^A-Za-z0-9._-]" ref "_"))
+
+;; (values label driver-root cleanup-thunk), or #f if the ref could not be
+;; prepared — a variant that will not BUILD must be reported and skipped, never
+;; silently measured against the working tree's driver (which is what a missing
+;; `--ref` did for the life of this tool).
+(define (prepare-variant ref base-dir)
+  (define wt (build-path base-dir (ref->dirname ref)))
+  (printf "  preparing ~a … " ref)
+  (flush-output)
+  (cond
+    [(not (git-ok? "-C" repo-root "worktree" "add" "--detach"
+                   (path->string wt) ref))
+     (printf "FAILED (worktree add)\n")
+     #f]
+    [else
+     (define driver-root (path->string (build-path wt "racket" "prologos")))
+     (define built?
+       (parameterize ([current-directory driver-root])
+         (define out (open-output-string))
+         (parameterize ([current-output-port out] [current-error-port out])
+           (system* (find-executable-path "raco") "make" "driver.rkt"))))
+     (cond
+       [built? (printf "ok\n") (list ref driver-root wt)]
+       [else
+        (printf "FAILED (raco make)\n")
+        (git-ok? "-C" repo-root "worktree" "remove" "--force" (path->string wt))
+        #f])]))
+
+(define (cleanup-variant v)
+  (when (and v (= (length v) 3))
+    (git-ok? "-C" repo-root "worktree" "remove" "--force"
+             (path->string (caddr v)))))
 
 ;; ============================================================
 ;; A/B comparison
@@ -159,6 +242,92 @@
 
 ;; Run A/B comparison, printing results and returning a list of per-program
 ;; result hashes for serialization.
+
+;; Multi-variant comparison: the working tree plus one built worktree per ref.
+;; Every variant runs the SAME programs — the .prologos files always come from
+;; the working tree — so what is being compared is the compiler, not the input.
+(define (run-multi-comparison programs num-runs refs md-file)
+  (printf "\n═══ Multi-Variant Benchmark Comparison ═══\n")
+  (printf "Runs per program per variant: ~a (+ 1 warmup)\n" num-runs)
+  (printf "Programs: ~a   Variants: ~a\n" (length programs) (add1 (length refs)))
+  (printf "\nBuilding variants:\n")
+  (define base-dir (make-temporary-directory))
+  (define prepared (filter values (for/list ([r (in-list refs)]) (prepare-variant r base-dir))))
+  (when (< (length prepared) (length refs))
+    (printf "\n⚠  ~a of ~a refs could not be prepared and are EXCLUDED.\n"
+            (- (length refs) (length prepared)) (length refs)))
+  (define variants (cons (list "WORKING" project-root #f) prepared))
+  (define rows
+    (for/list ([prog (in-list programs)])
+      (define name (path->string (file-name-from-path (string->path prog))))
+      (printf "\n── ~a ──\n" name)
+      (define per-variant
+        (for/list ([v (in-list variants)])
+          (printf "  ~a …" (car v))
+          (flush-output)
+          (define rs (bench-program prog num-runs (cadr v)))
+          (define times (map (λ (r) (hash-ref r 'wall_ms)) rs))
+          (printf " median ~a ms (CV ~a%)\n"
+                  (real->decimal-string (median times) 1)
+                  (real->decimal-string (* 100 (cv times)) 1))
+          (hasheq 'variant (car v)
+                  'median_ms (median times)
+                  'cv (cv times)
+                  'wall_ms times)))
+      ;; Ratio + significance against the working tree, which is variant 0.
+      (define base-times (hash-ref (car per-variant) 'wall_ms))
+      (define base-med (hash-ref (car per-variant) 'median_ms))
+      (define annotated
+        (for/list ([pv (in-list per-variant)] [i (in-naturals)])
+          (cond
+            [(zero? i) (hash-set* pv 'ratio 1.0 'p_value 1.0)]
+            [else
+             (define-values (_u1 _u2 _z p) (mann-whitney-u base-times (hash-ref pv 'wall_ms)))
+             (hash-set* pv
+                        'ratio (if (zero? base-med) 0.0 (/ (hash-ref pv 'median_ms) base-med))
+                        'p_value p)])))
+      (hasheq 'program name 'variants annotated)))
+  (for-each cleanup-variant prepared)
+  (with-handlers ([exn:fail? void]) (delete-directory base-dir))
+  (print-multi-table rows)
+  (when md-file (write-multi-markdown rows md-file num-runs))
+  rows)
+
+;; The table is the deliverable — a multi-way run is unreadable as a stream of
+;; per-variant lines.
+(define (print-multi-table rows)
+  (printf "\n═══ Summary (median ms, ratio vs WORKING) ═══\n")
+  (for ([row (in-list rows)])
+    (printf "\n~a\n" (hash-ref row 'program))
+    (for ([v (in-list (hash-ref row 'variants))])
+      (printf "  ~a~a  ~a ms   ×~a~a\n"
+              (hash-ref v 'variant)
+              (make-string (max 1 (- 18 (string-length (hash-ref v 'variant)))) #\space)
+              (real->decimal-string (hash-ref v 'median_ms) 1)
+              (real->decimal-string (hash-ref v 'ratio) 3)
+              (if (< (hash-ref v 'p_value) 0.05) "  (p<0.05)" "")))))
+
+(define (write-multi-markdown rows md-file num-runs)
+  (make-directory* (path-only (string->path md-file)))
+  (call-with-output-file md-file #:exists 'replace
+    (lambda (out)
+      (fprintf out "# Benchmark comparison\n\n")
+      (fprintf out "~a runs per program per variant. Ratio is median wall vs the working tree; " num-runs)
+      (fprintf out "`p` is Mann-Whitney against the working tree's samples.\n\n")
+      (for ([row (in-list rows)])
+        (fprintf out "## ~a\n\n" (hash-ref row 'program))
+        (fprintf out "| variant | median ms | CV | ratio | p |\n")
+        (fprintf out "|---|---:|---:|---:|---:|\n")
+        (for ([v (in-list (hash-ref row 'variants))])
+          (fprintf out "| ~a | ~a | ~a% | ×~a | ~a |\n"
+                   (hash-ref v 'variant)
+                   (real->decimal-string (hash-ref v 'median_ms) 1)
+                   (real->decimal-string (* 100 (hash-ref v 'cv)) 1)
+                   (real->decimal-string (hash-ref v 'ratio) 3)
+                   (real->decimal-string (hash-ref v 'p_value) 4)))
+        (fprintf out "\n"))))
+  (printf "\nMarkdown table written to ~a\n" md-file))
+
 (define (run-ab-comparison programs num-runs)
   (printf "\n═══ A/B Benchmark Comparison ═══\n")
   (printf "Runs per program: ~a (+ 1 warmup)\n" num-runs)
@@ -249,6 +418,9 @@
        (set! paths (cons (car rest) paths))
        (loop (cdr rest))])))
 
+(define ref-list (make-parameter '()))
+(define md-file (make-parameter #f))
+
 (current-command-line-arguments (reorder-args (current-command-line-arguments)))
 
 (define program-paths
@@ -259,6 +431,11 @@
     (num-runs (string->number n))]
    ["--output" file "Write JSON results to FILE"
     (output-file file)]
+   ["--refs" refs "Comma-separated git refs to compare against the working tree (each gets its own worktree)"
+    (ref-list (filter (lambda (r) (not (string=? r "")))
+                      (map string-trim (string-split refs ","))))]
+   ["--md" file "Write a markdown comparison table to FILE (with --refs)"
+    (md-file file)]
    #:args paths
    (apply append
           (for/list ([p (in-list paths)])
@@ -279,6 +456,20 @@
   [(null? program-paths)
    (printf "No programs to benchmark.\n")
    (printf "Usage: racket tools/bench-ab.rkt benchmarks/comparative/\n")]
+  [(pair? (ref-list))
+   (define results (run-multi-comparison program-paths (num-runs) (ref-list) (md-file)))
+   (when (output-file)
+     (define out-path (output-file))
+     (make-directory* (path-only (string->path out-path)))
+     (call-with-output-file out-path #:exists 'replace
+       (lambda (out)
+         (write-json (hasheq 'timestamp (current-iso-timestamp)
+                             'commit (current-commit)
+                             'runs_per_program (num-runs)
+                             'refs (ref-list)
+                             'programs results)
+                     out)))
+     (printf "\nJSON results written to ~a\n" out-path))]
   [else
    (define results (run-ab-comparison program-paths (num-runs)))
    ;; Persist results if --output was given

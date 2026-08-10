@@ -1,0 +1,367 @@
+#lang racket/base
+
+;;; test-reader-robustness.rkt — a reader failure must not cost the whole file.
+;;;
+;;; Everything the reader does happens BEFORE any command runs: `read-all-syntax-ws`
+;;; tokenizes and groups the entire file up front. So a raise anywhere in it is
+;;; a whole-file abort by construction — no results, no per-command error count,
+;;; and (when it is a raw Racket contract violation) no source location either.
+;;;
+;;; That is the silence class the loud-tier work exists to prevent, sitting in
+;;; the one place that runs first.
+
+(require rackunit
+         racket/list
+         racket/file
+         racket/string
+         "test-support.rkt"
+         "../driver.rkt"
+         "../namespace.rkt"
+         "../macros.rkt"
+         "../errors.rkt"
+         ;; the project's OWN srcloc (4 fields), not racket/base's
+         (only-in "../source-location.rkt" srcloc-line srcloc-col))
+
+(define (run-file-lines src)
+  (define f (make-prologos-temp-file))
+  (dynamic-wind
+    void
+    (lambda ()
+      (call-with-output-file f #:exists 'truncate (lambda (o) (display src o)))
+      (parameterize ([current-module-registry prelude-module-registry]
+                     [current-lib-paths (list prelude-lib-dir)]
+                     [current-preparse-registry prelude-preparse-registry]
+                     [current-trait-registry prelude-trait-registry]
+                     [current-impl-registry prelude-impl-registry]
+                     [current-param-impl-registry prelude-param-impl-registry])
+        (install-module-loader!)
+        (process-file (path->string f))))
+    (lambda () (with-handlers ([void void]) (delete-file f)))))
+
+(test-case "reader/a bare top-level [] does not take the file with it"
+  ;; It used to die inside the reader with
+  ;;   >: contract violation  expected: real?  given: #f
+  ;; and nothing else — every command in the file lost, including the ones
+  ;; before it. The chain: a `'()` element gets a syntax object with line 0,
+  ;; `make-stx` maps 0 to #f, and re-wrapping that element read the #f back and
+  ;; compared it with `>`.
+  ;;
+  ;; What this pins is the FILE surviving. `[]` alone is not meaningful and is
+  ;; entitled to be an error -- it just has to be one error, in one command.
+  (define results (run-file-lines "ns rr\ndef a := 1\na\n[]\ndef b := 2\nb\n"))
+  (check-true (list? results))
+  (define text (string-join (map (lambda (r) (format "~a" r)) results) "\n"))
+  (check-true (string-contains? text "a")
+              (format "commands BEFORE the bad form were lost: ~v" results))
+  (check-true (string-contains? text "b")
+              (format "commands AFTER the bad form were lost: ~v" results)))
+
+(test-case "reader/an empty bracket in a value position still means the empty list"
+  ;; The fix must not have made `[]` unreadable where it was already fine.
+  (define results (run-file-lines "ns rr2\ndef x := []\nx\n"))
+  (check-true (list? results))
+  (check-false (ormap prologos-error? results)
+               (format "expected no errors, got: ~v" results)))
+
+(test-case "reader/[] alone in a file is a per-command error, not an abort"
+  (define results (run-file-lines "ns rr3\n[]\n"))
+  (check-true (list? results))
+  (check-true (>= (length results) 1)
+              "an aborted file returns nothing at all"))
+
+(test-case "reader/a reader rejection is PER-COMMAND, and says where"
+  ;; `~3` (approximate literals, removed) used to escape as a raw Racket
+  ;; message plus a `context...:` dump: exit 1, zero result lines, no error
+  ;; COUNT, and no indication of WHERE. The loudest possible failure presented
+  ;; as the quietest.
+  ;;
+  ;; The first fix caught the raise and reported it, which left the whole file
+  ;; still lost — "tokenization finishes before any command runs, so the
+  ;; commands really are unrecoverable here" was true of a RAISE and only of a
+  ;; raise. The tokenizer now emits a `($reader-error msg)` MARKER instead, on
+  ;; the same channel as `$let-error`, so the rejection rides the token stream
+  ;; to the parser and costs exactly one command.
+  (define results (run-file-lines "ns rt\ndef a := 1\na\ndef b := ~3\nb\n"))
+  (check-true (list? results) "the file aborted instead of reporting")
+  (define text (string-join (map (lambda (r) (format "~a" r)) results) "\n"))
+  (check-true (string-contains? text "approximate literals were removed")
+              (format "got: ~v" results))
+  ;; WHERE: on the srcloc now, not spelled into the message text. Line 4 is
+  ;; the `~3`; column 9 is the tilde itself, not the start of the line.
+  (define err (findf prologos-error? results))
+  (check-true (and err #t) (format "no error reported: ~v" results))
+  (check-equal? (srcloc-line (prologos-error-srcloc err)) 4 (format "~v" err))
+  (check-equal? (srcloc-col (prologos-error-srcloc err)) 9 (format "~v" err))
+  ;; …and the commands on either side of it survive. This is the half the
+  ;; first fix could not deliver.
+  (check-true (string-contains? text "a : Int defined.")
+              (format "a command BEFORE the bad one was lost: ~v" results))
+  (check-true (string-contains? text "Unbound variable")
+              (format "the command AFTER the bad one was lost: ~v" results)))
+
+(test-case "reader/the tokenizer-validation raises are not the live path"
+  ;; The validation loop in `tokenize-string` raises on a negative Nat literal
+  ;; and on a stray `&`. Both now report line and column — but neither is
+  ;; REACHABLE for the obvious input, because a per-command check gets there
+  ;; first with a real srcloc.
+  ;;
+  ;; Pinned as a negative on purpose. Those raises read like they own these
+  ;; cases; they do not, and the next person to "fix" one should find that out
+  ;; here rather than by editing dead code. The tilde TOKEN PATTERN (above) was
+  ;; the one live whole-file raiser; it no longer raises at all, so `tokenize-
+  ;; string`'s loop is now the only raising code left in the reader — and it is
+  ;; test-only (`compat-tokenize-string` has no production caller).
+  (define bad-nat (run-file-lines "ns rt2\ndef a := 1\ndef b := -3N\n"))
+  (check-true (list? bad-nat))
+  (check-true (string-contains? (format "~a" bad-nat)
+                                "N suffix requires a non-negative integer")
+              (format "got: ~v" bad-nat))
+  (check-true (string-contains? (format "~a" bad-nat) "a : Int defined.")
+              (format "the earlier command was lost: ~v" bad-nat))
+
+  (define stray-amp (run-file-lines "ns rt3\ndef a := 1\n&\n"))
+  (check-true (list? stray-amp))
+  (check-true (string-contains? (format "~a" stray-amp) "Unbound variable")
+              (format "got: ~v" stray-amp))
+  (check-true (string-contains? (format "~a" stray-amp) "a : Int defined.")
+              (format "the earlier command was lost: ~v" stray-amp)))
+
+;; ----------------------------------------------------------------
+;; `.( )` mixfix failures are per-command
+;; ----------------------------------------------------------------
+;;
+;; These raised out of `preparse-expand-all` and cost the whole file: no
+;; results, no error count, a raw Racket `context...:` dump. Unlike the reader
+;; raises above, this one IS recoverable per-command — expansion is per-form, so
+;; the failing form can collapse to a marker datum and the rest of the file runs.
+;;
+;; Same channel as LET P1's `$let-error`, deliberately: one mechanism for
+;; "a preparse expander failed", not a second one alongside it.
+
+(test-case "reader/an incomparable-precedence mixfix errors, and only there"
+  (define results (run-file-lines "ns mx\ndef a := 1\n.( 1 :: '[2 3] ++ '[4] )\ndef b := 2\n"))
+  (check-true (list? results))
+  (define text (string-join (map (lambda (r) (format "~a" r)) results) "\n"))
+  (check-true (string-contains? text "no defined precedence relationship")
+              (format "got: ~v" results))
+  (check-true (string-contains? text "a :") (format "the command BEFORE was lost: ~v" results))
+  (check-true (string-contains? text "b :") (format "the command AFTER was lost: ~v" results)))
+
+(test-case "reader/an empty .( ) errors, and only there"
+  (define results (run-file-lines "ns mx2\ndef a := 1\n.( )\ndef b := 2\n"))
+  (check-true (list? results))
+  (define text (string-join (map (lambda (r) (format "~a" r)) results) "\n"))
+  (check-true (string-contains? text "Empty .( ) mixfix expression") (format "got: ~v" results))
+  (check-true (string-contains? text "a :") (format "the command BEFORE was lost: ~v" results))
+  (check-true (string-contains? text "b :") (format "the command AFTER was lost: ~v" results)))
+
+(test-case "reader/a WELL-FORMED mixfix still evaluates"
+  ;; The conversion must not have turned working mixfix into an error channel.
+  (define results (run-file-lines "ns mx3\ndef a := 1\n.( 1 + 2 )\ndef b := 2\n"))
+  (check-true (list? results))
+  (check-false (ormap prologos-error? results) (format "expected no errors: ~v" results))
+  (check-true (string-contains? (format "~a" results) "3") (format "got: ~v" results)))
+
+;; ----------------------------------------------------------------
+;; `def X :=` with a layout map body
+;; ----------------------------------------------------------------
+
+(test-case "layout/a multi-key layout body means the same with := as without"
+  ;; `def r :=` followed by keyword-headed lines used to build an APPLICATION
+  ;; -- `((:eu …) (:us …))` -- and fail with "Could not infer type", naming
+  ;; typing for what is a layout seam. The byte-identical body WITHOUT `:=`
+  ;; worked, because it reached `rewrite-implicit-map` with its keyword tail
+  ;; intact.
+  ;;
+  ;; The A/B is the test: the two spellings have to agree, and asserting on
+  ;; only one of them would have passed throughout the divergence.
+  (define with-assign
+    (run-file-lines "ns ly\ndef r1 :=\n  :eu {:host \"e\" :port 443}\n  :us {:host \"u\" :port 443}\n"))
+  (define without-assign
+    (run-file-lines "ns ly2\ndef r2\n  :eu {:host \"e\" :port 443}\n  :us {:host \"u\" :port 443}\n"))
+  (check-false (ormap prologos-error? with-assign)
+               (format "the := spelling failed: ~v" with-assign))
+  (check-false (ormap prologos-error? without-assign)
+               (format "the no-:= spelling failed: ~v" without-assign))
+  ;; Same inferred type, modulo the name.
+  (define (type-of results name)
+    (regexp-replace (regexp (string-append "^" name " : ")) (format "~a" (car results)) ""))
+  (check-equal? (type-of with-assign "r1") (type-of without-assign "r2")))
+
+(test-case "layout/a multi-token RHS is still an application"
+  ;; The narrow part. Only an all-keyword-headed RHS is a map body; anything
+  ;; else keeps the application default, which is what `def x := some 42N`
+  ;; depends on.
+  (define rs (run-file-lines "ns ly3\ndef x := some 42N\nx\n"))
+  (check-false (ormap prologos-error? rs) (format "expected success, got: ~v" rs))
+  (check-true (string-contains? (format "~a" rs) "Option") (format "got: ~v" rs)))
+
+(test-case "layout/a single-key layout body still works"
+  (define rs (run-file-lines "ns ly4\ndef r3 :=\n  :eu 1\nr3\n"))
+  (check-false (ormap prologos-error? rs) (format "expected success, got: ~v" rs))
+  (check-true (string-contains? (format "~a" rs) ":eu") (format "got: ~v" rs)))
+
+;; ----------------------------------------------------------------
+;; The `defn` parameter-list message
+;; ----------------------------------------------------------------
+
+(test-case "defn/a spaced parameter annotation is told what to write instead"
+  ;; `defn f [n : Nat]` is a parse error — the spaced form works for `fn`, and a
+  ;; `defn` parameter list takes the fused form, like `let`. The message used to
+  ;; print SEXP syntax at a WS-mode failure, so it named neither the actual
+  ;; problem nor a spelling that works here.
+  (define results (run-file-lines "ns dfn\ndef a := 1\ndefn f [n : Nat]\n  [+ n 2N]\ndef b := 2\n"))
+  (check-true (list? results))
+  (define text (string-join (map (lambda (r) (format "~a" r)) results) "\n"))
+  (check-true (string-contains? text "[n:Nat]")
+              (format "the message does not show a spelling that works: ~v" results))
+  (check-true (string-contains? text "spec")
+              (format "the message does not mention the other option: ~v" results))
+  ;; …and the commands around it still run.
+  (check-true (string-contains? text "a :") (format "command BEFORE lost: ~v" results))
+  (check-true (string-contains? text "b :") (format "command AFTER lost: ~v" results)))
+
+(test-case "defn/the fused form the message recommends actually parses"
+  ;; The pin that makes the message mean something: run its advice.
+  (define results (run-file-lines "ns dfn2\ndefn f [n:Nat]\n  [+ n 2N]\n[f 3N]\n"))
+  (check-false (ormap prologos-error? results) (format "the advice does not parse: ~v" results))
+  (check-true (string-contains? (format "~a" results) "5") (format "got: ~v" results)))
+
+;; ----------------------------------------------------------------
+;; Match arms: a diagnostic that was computed and thrown away
+;; ----------------------------------------------------------------
+;;
+;; `parse-match-pattern-arm` had EIGHT guards of the form
+;;
+;;     (unless arrow-idx (parse-error loc "match arm missing -> separator" #f))
+;;
+;; — which evaluates the error, DISCARDS the value, and falls through. So an
+;; arm without `->` reached `(take cleaned arrow-idx)` with `arrow-idx` = #f and
+;; died on a raw `take: contract violation`: whole-file abort, zero commands,
+;; and a message about `take` while the correct diagnosis sat one line above,
+;; computed and unused.
+;;
+;; Its immediate neighbour `parse-map-literal` carries a comment describing this
+;; exact defect being fixed there. Found in one function, left in its sibling.
+
+(test-case "match/an arm missing its -> is a per-command error naming the arrow"
+  (define results (run-file-lines "ns ma\ndef a := 1\nmatch 5\n  | 0 111\ndef b := 2\n"))
+  (check-true (list? results) "the file aborted instead of reporting")
+  (define text (string-join (map (lambda (r) (format "~a" r)) results) "\n"))
+  (check-true (string-contains? text "->")
+              (format "the message does not name the arrow: ~v" results))
+  (check-false (string-contains? text "take:")
+               (format "still the raw contract violation: ~v" results))
+  (check-true (string-contains? text "a :") (format "command BEFORE lost: ~v" results))
+  (check-true (string-contains? text "b :") (format "command AFTER lost: ~v" results)))
+
+(test-case "match/an arm missing its body is reported too"
+  ;; A sibling guard in the same function, discarded the same way.
+  (define results (run-file-lines "ns ma2\ndef a := 1\nmatch 5\n  | 0 ->\ndef b := 2\n"))
+  (check-true (list? results))
+  (check-true (string-contains? (format "~a" results) "a :")
+              (format "the file aborted: ~v" results)))
+
+(test-case "match/a well-formed match still evaluates"
+  (define results (run-file-lines "ns ma3\ndef r := match 5\n  | 0 -> 111\n  | n -> 222\nr\n"))
+  (check-false (ormap prologos-error? results) (format "expected success: ~v" results))
+  (check-true (string-contains? (format "~a" results) "222") (format "got: ~v" results)))
+
+(test-case "defn/a non-symbol name is a per-command error, not a contract violation"
+  ;; `defn 5 [x] x` reached `symbol->string` on the 5 and died with a raw
+  ;; contract violation — whole-file abort — while `parse-defn-multi`'s
+  ;; `(unless (symbol? name) (parse-error …))` sat above it, computing the right
+  ;; diagnosis and discarding it.
+  ;;
+  ;; Fixing that one guard only MOVED the crash, to `qualify-name` in the
+  ;; driver, because a different `defn` shape was taking the call. The name is
+  ;; checked once at the entry now, before any shape dispatch, so every shape is
+  ;; covered — including ones added later.
+  (define results (run-file-lines "ns dn\ndef a := 1\ndefn 5 [x]\n  x\ndef b := 2\n"))
+  (check-true (list? results) "the file aborted instead of reporting")
+  (define text (string-join (map (lambda (r) (format "~a" r)) results) "\n"))
+  (check-true (string-contains? text "expected a name") (format "got: ~v" results))
+  (check-false (string-contains? text "contract violation") (format "got: ~v" results))
+  (check-true (string-contains? text "a :") (format "command BEFORE lost: ~v" results))
+  (check-true (string-contains? text "b :") (format "command AFTER lost: ~v" results)))
+
+(test-case "defn/every shape still parses"
+  ;; The entry check runs before shape dispatch, so it must not have disturbed
+  ;; any of them. One of each.
+  (define results
+    (run-file-lines
+     (string-append
+      "ns dn2\n"
+      "defn bare [x]\n  x\n"                       ;; bare params
+      "spec typed Nat -> Nat\ndefn typed [n]\n  n\n" ;; spec-driven
+      "defn multi\n  | 0 -> 1\n  | n -> 2\n"        ;; multi-clause
+      "[bare 1]\n[typed 0N]\n[multi 0]\n")))
+  (check-false (ormap prologos-error? results) (format "a defn shape broke: ~v" results)))
+
+;; ----------------------------------------------------------------
+;; The value-discarding-guard sweep
+;; ----------------------------------------------------------------
+;;
+;; `parse-error` RETURNS a value. `(unless C (parse-error …))` therefore
+;; computes the diagnosis, discards it, and runs the code the guard rejected.
+;;
+;; A probe of every site of that shape in parser.rkt found five that detonated
+;; into raw Racket contract violations — whole-file aborts, with the correct
+;; diagnosis computed and unused. All five are below. Each asserts BOTH that
+;; the message is Prologos's own AND that the commands around it survive,
+;; because a per-command error and an abort are indistinguishable from the
+;; message alone.
+
+(define (check-per-command src what)
+  (define results (run-file-lines (string-append "ns g\ndef a := 1\n" src "def b := 2\n")))
+  (check-true (list? results) (format "~a: the file aborted" what))
+  (define text (string-join (map (lambda (r) (format "~a" r)) results) "\n"))
+  (check-false (string-contains? text "contract violation")
+               (format "~a: raw contract violation: ~v" what results))
+  (check-true (string-contains? text "a :") (format "~a: command BEFORE lost: ~v" what results))
+  (check-true (string-contains? text "b :") (format "~a: command AFTER lost: ~v" what results)))
+
+(test-case "guards/a defn with no parameters but | arms"
+  (check-per-command "defn h []\n  | -> 1\n" "arity 0"))
+
+(test-case "guards/a defn pattern arm with no ->"
+  (check-per-command "defn i [x]\n  | 0 1\n" "arm without arrow"))
+
+(test-case "guards/a defn pattern arm with nothing after ->"
+  (check-per-command "defn j [x]\n  | 0 ->\n" "arm without body"))
+
+(test-case "guards/a defn clause with nothing after ->"
+  (check-per-command "defn p\n  | 0 ->\n" "clause without body"))
+
+(test-case "guards/a strategy with a non-symbol name"
+  (check-per-command "strategy 5\n" "strategy name"))
+
+;; ----------------------------------------------------------------
+;; Nested constructor patterns (DEFERRED said these were broken)
+;; ----------------------------------------------------------------
+
+(test-case "match/a nested constructor pattern binds the CONSTRUCTOR, not a variable"
+  ;; DEFERRED (FL Narrowing, 2026-03-08) said `| suc zero -> body` treats `zero`
+  ;; as a variable name, so the arm would match ANY `suc m`. Re-probed
+  ;; 2026-08-02: it does not — and nothing was pinning that, precisely because
+  ;; the entry said it was broken.
+  ;;
+  ;; The discriminating case is `pred 3N`. If `zero` were a variable, `suc zero`
+  ;; would match it and the answer would be 99; it is 2, so the arm is a real
+  ;; constructor pattern and the later `suc m` arm took it.
+  (define results
+    (run-file-lines
+     (string-append
+      "ns np\n"
+      "spec pred Nat -> Nat\n"
+      "defn pred [n]\n"
+      "  match n\n"
+      "    | suc zero -> 99N\n"
+      "    | suc m -> m\n"
+      "    | zero -> 0N\n"
+      "pred 1N\npred 3N\npred 0N\n")))
+  (check-false (ormap prologos-error? results) (format "expected success: ~v" results))
+  (define text (format "~a" results))
+  (check-true (string-contains? text "99N") "the `suc zero` arm did not fire for 1N")
+  (check-true (string-contains? text "2N")
+              "`suc zero` swallowed `suc m` — `zero` is being read as a variable"))

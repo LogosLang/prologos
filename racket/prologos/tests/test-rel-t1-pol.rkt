@@ -12,8 +12,17 @@
 
 (require rackunit
          racket/string
+         racket/list
          "test-support.rkt"
+         "../driver.rkt"
+         "../namespace.rkt"
+         "../relations.rkt"
          (only-in "../errors.rkt" prologos-error? prologos-error-message)
+         (only-in "../macros.rkt" current-preparse-registry current-trait-registry
+                  current-impl-registry current-param-impl-registry)
+         (only-in "../metavar-store.rkt" current-persistent-registry-net-box
+                  current-prop-net-box)
+         (only-in "../propagator.rkt" with-forked-network)
          (only-in "../performance-counters.rkt"
                   with-perf-counters perf-counters-solver-row-scans)
          (only-in "../pnet-serialize.rkt"
@@ -573,10 +582,16 @@
   (define vals (car (regexp-split #rx" : " r)))
   (check-equal? (length (regexp-match* #rx"[{]" vals)) 3
                 (format "three rows, not four; got: ~a" r))
-  (check-true (regexp-match? #rx"1.*unknown.*4" vals)
+  ;; ⚠ UPDATED at the 2026-08-05 merge — this asserted `1.*unknown.*4`, and the
+  ;; `unknown` was the representation gap the sibling test below pinned. This
+  ;; branch CLOSED that gap (`10f5a080`, "a collection literal survives the
+  ;; AST↔solver round trip"), so the middle row now renders its actual value.
+  ;; The property under test was always SOURCE ORDER, not the gap; it is now
+  ;; asserted against the real value instead of against a placeholder.
+  (check-true (regexp-match? #rx"1.*2 3.*4" vals)
               (format "and in SOURCE order; got: ~a" r)))
 
-(test-case "DEFERRED 66 RESIDUAL: a compound fact VALUE does not round-trip (pre-existing)"
+(test-case "DEFERRED 66 RESIDUAL: a compound fact VALUE round-trips; its TYPE does not"
   ;; Removing the splay makes compound terms REACH the solver, where a
   ;; pre-existing representation gap shows: they render as `unknown`. This is NOT
   ;; caused by the splay fix and is not specific to fact rows — the same values in
@@ -590,8 +605,21 @@
                             "defr rl [?a]\n  || '[1 2]\n"
                             "solve (rl q)")))
   (check-true (string? r) (result-msg r))
-  (check-true (string-contains? r "unknown")
-              (format "known limit: the compound value does not round-trip; got: ~a" r)))
+  ;; ⚠ INVERTED at the 2026-08-05 merge, exactly as this test asked ("Pinned …
+  ;; so that closing the representation gap flags here"). It did flag. This
+  ;; branch closed the VALUE half in `10f5a080`: the row now renders `{:q '[1 2]}`
+  ;; where it rendered `{:q unknown}`.
+  ;;
+  ;; The TYPE half is still open — the result types as `[PVec {:q <error>}]`. So
+  ;; the assertion is split rather than deleted: the value must round-trip, and
+  ;; the type gap is pinned AS a gap, so closing it flags here too. Deleting the
+  ;; test would have discarded a live signal for a still-open defect.
+  (check-true (string-contains? r "'[1 2]")
+              (format "the compound VALUE must round-trip now; got: ~a" r))
+  (check-false (string-contains? r "{:q unknown}")
+               (format "no placeholder should remain; got: ~a" r))
+  (check-true (string-contains? r "<error>")
+              (format "TYPE half still open — if this fails the gap closed, update it; got: ~a" r)))
 
 (test-case "DEFERRED 66 RESIDUAL: a NON-$-headed compound on a CONTINUATION line is still splayed"
   ;; Pinned as a KNOWN LIMIT, not as desired behaviour. Narrow by design: only
@@ -1621,6 +1649,24 @@
                 "okk : Int defined."
                 "an annotated def must be unaffected"))
 
+;; MERGE 2026-08-05: kept from this branch alongside main's cases above. They
+;; assert PROPERTIES main's version does not: that the two seams agree, and that
+;; a working relation on a def RHS still works. The second is the one that
+;; matters — without it, "every def errors" would satisfy the parity assertion.
+(test-case "POL.9b: the def seam agrees with TOP LEVEL on a bad head"
+  ;; The property rather than the string: the same program at top level and on a
+  ;; `def` RHS must classify the same way. The top-level message was always
+  ;; right; the def seam is what moved.
+  (define top (result-msg (run-ns-ws-last (string-append P9FIX "(dbl 3)"))))
+  (define deffed (result-msg (run-ns-ws-last
+                              (string-append P9FIX "def bad := (dbl 3)"))))
+  (check-equal? top deffed "top level and def seam must classify a bad head alike"))
+
+(test-case "POL.9b: a REAL relation on a def RHS is untouched (control)"
+  (define r (run-ns-ws-last
+             (string-append P9FIX "def good := (fruit-color f \"blue\")\ngood")))
+  (check-true (string? r) (result-msg r)))
+
 (test-case "POL.9b: bare/bracket def RHS stays application-value"
   (define r (run-ns-ws-last
              (string-append P9FIX
@@ -1697,6 +1743,42 @@
                             "[+ 20 22]")))
   (check-true (string? r) (result-msg r))
   (check-true (string-contains? r "42")))
+
+(test-case "POL.9c/Q_B: the FOURTH direction — defr over a prior multi-arity defn — IS gated"
+  ;; DEFERRED.md said this direction was deliberately UNGATED and routed the
+  ;; fix to PM 12/12B, on the premise that "multi-arity base names live only in
+  ;; the ambient current-multi-defn-registry, which carries no module
+  ;; provenance". Probed 2026-08-04: false at HEAD. A multi-arity `defn` ALSO
+  ;; takes a local global-env binding, so `global-env-lookup-local` sees it and
+  ;; the existing Q_B gate covers this direction like the other three.
+  ;;
+  ;; Pinned in BOTH spellings, because the entry's premise was specifically
+  ;; about the registry rather than the spec: with a `spec` and without one.
+  (define with-spec
+    (result-msg (run-ns-ws-last
+                 (string-append "ns qb8\n"
+                                "spec zzz Nat -> Bool\n"
+                                "defn zzz\n  | zero -> true\n  | suc _ -> false\n"
+                                "defr zzz [?x]\n  || 1\n"))))
+  (check-true (string-contains? with-spec "already defined as a function/value") with-spec)
+  (define no-spec
+    (result-msg (run-ns-ws-last
+                 (string-append "ns qb9\n"
+                                "defn www\n  | zero -> true\n  | suc _ -> false\n"
+                                "defr www [?x]\n  || 1\n"))))
+  (check-true (string-contains? no-spec "already defined as a function/value") no-spec))
+
+(test-case "POL.9c/Q_B CANARY: defr over an IMPORTED multi-defn stays legal"
+  ;; The entry's stated reason for leaving the direction ungated was that
+  ;; gating "would fire on prelude multi-defns (`nth` and friends)". It does
+  ;; not — the gate is local-only, and `nth` arrives through the cascade. This
+  ;; is the canary for that specific fear, alongside the `xor` one above.
+  (define r (run-ns-ws-last
+             (string-append "ns qb10\n"
+                            "defr nth [?a ?b]\n  || 1 2 | 3 4\n"
+                            "solve (nth x y)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "{:x 1, :y 2}") r))
 
 (test-case "POL.9c/Q_B: multi-arity defn BASE name gated against a prior defr"
   (define m (result-msg (run-ns-ws-last
@@ -1955,3 +2037,238 @@
   (define barefn (run-ns-ws-last "ns bcn2\ndef f := [fn [y : Nat] {:a y}]\nf"))
   (check-false (prologos-error? scalar) (result-msg scalar))
   (check-false (prologos-error? barefn) (result-msg barefn)))
+
+;; ============================================================================
+;; LEVEL 3 — the POL cluster through `process-file`
+;; ============================================================================
+;;
+;; Everything above this line is Level 2 (`run-ns-ws-last`, a WS string in a
+;; preloaded env). `testing.md` mandates three-level validation for syntax
+;; features, and POL.7/8/9 ARE syntax features: `||` fact blocks, paren-dropped
+;; `&>` goal groups, and the implicit `solve` at command position.
+;;
+;; Until now the cluster's L3 coverage rode entirely on
+;; `examples/2026-07-19-rel-t1-acceptance.prologos` via
+;; `tests/test-rel-t1-acceptance.rkt` — one file, asserted only at the
+;; whole-file level (0 errors + marker positions). That is a gate, but it is not
+;; per-construct coverage: a POL.8 continuation rule could break and the
+;; acceptance file would still pass if its own shapes happened not to use it.
+;;
+;; What L3 actually adds over L2 here is real, not ceremonial. Top-level
+;; scoping, file-level preparse, and multi-form interaction differ from
+;; string-mode processing, and the implicit-solve rule is defined BY command
+;; position — so "is this a goal?" is precisely a question L2 cannot ask the
+;; same way.
+
+;; Run a .prologos string through the full pipeline (Level 3); return results.
+;; Seeded from the prelude snapshot (as the sibling -naf / -typed-rows files do)
+;; so each case costs milliseconds instead of a 39-module prelude reload; the
+;; relation store stays FRESH, which is the isolation that matters here.
+(define (run-prologos-string content)
+  (define tmp (make-prologos-temp-file))
+  (call-with-output-file tmp
+    (lambda (out) (display content out))
+    #:exists 'truncate)
+  (define results
+    (parameterize ([current-file-module-network-ref (make-module-network)]
+                   [current-ns-context #f]
+                   [current-module-registry prelude-module-registry]
+                   [current-lib-paths (list prelude-lib-dir)]
+                   [current-relation-store (make-relation-store)]
+                   [current-preparse-registry prelude-preparse-registry]
+                   [current-trait-registry prelude-trait-registry]
+                   [current-impl-registry prelude-impl-registry]
+                   [current-param-impl-registry prelude-param-impl-registry]
+                   [current-persistent-registry-net-box
+                    prelude-persistent-registry-net-box]
+                   [current-module-registry-cell-id #f]
+                   [current-ns-context-cell-id #f])
+      (with-forked-network current-prop-net-box
+        (install-module-loader!)
+        (process-file (path->string tmp)))))
+  (delete-file tmp)
+  results)
+
+(define (l3-errors results)
+  (filter prologos-error? results))
+
+(define (l3-msg r)
+  (if (prologos-error? r) (prologos-error-message r) (format "~a" r)))
+
+;; ----------------------------------------------------------------------------
+;; POL.7 — `||` fact blocks
+;; ----------------------------------------------------------------------------
+
+(test-case "L3/POL.7: a `||` block chunks by arity, one row per line"
+  (define rs (run-prologos-string
+              (string-append
+               "ns l3pol7 :no-prelude\n\n"
+               "defr fruit-color [?fruit ?color]\n"
+               "  || \"apple\" \"red\"\n"
+               "     \"banana\" \"yellow\"\n"
+               "     \"grape\" \"purple\"\n\n"
+               "(fruit-color f \"yellow\")\n")))
+  (check-equal? (map l3-msg (l3-errors rs)) '() "expected 0 errors")
+  (check-true (string-contains? (l3-msg (last rs)) "banana")
+              (l3-msg (last rs))))
+
+(test-case "L3/POL.7: `|` separates EXPLICIT rows on one line"
+  (define rs (run-prologos-string
+              (string-append
+               "ns l3pol7b :no-prelude\n\n"
+               "defr fruit-color [?fruit ?color]\n"
+               "  || \"apple\" \"red\" | \"banana\" \"yellow\" | \"grape\" \"purple\"\n\n"
+               "(fruit-color f \"purple\")\n")))
+  (check-equal? (map l3-msg (l3-errors rs)) '() "expected 0 errors")
+  (check-true (string-contains? (l3-msg (last rs)) "grape") (l3-msg (last rs))))
+
+(test-case "L3/POL.7: a `|` segment that does not match the arity is a LOUD error"
+  ;; It used to register a silent dead row that no query could ever match.
+  ;; The message must name both the segment's size and the relation's arity —
+  ;; without both numbers the author cannot tell which side is wrong.
+  (define rs (run-prologos-string
+              (string-append
+               "ns l3pol7c :no-prelude\n\n"
+               "defr fruit-color [?fruit ?color]\n"
+               "  || \"apple\" | \"red\"\n")))
+  (define errs (l3-errors rs))
+  (check-equal? (length errs) 1 "the malformed row must be reported, not skipped")
+  (define m (l3-msg (car errs)))
+  (check-true (string-contains? m "1 term") m)
+  (check-true (string-contains? m "arity is 2") m))
+
+;; ----------------------------------------------------------------------------
+;; POL.8 — `&>` groups may drop the goal parens; LAYOUT decides
+;; ----------------------------------------------------------------------------
+
+(define L3-FRUIT
+  (string-append
+   "defr fruit-color [?fruit ?color]\n"
+   "  || \"apple\" \"red\"\n"
+   "     \"banana\" \"yellow\"\n"
+   "     \"grape\" \"purple\"\n\n"))
+
+(test-case "L3/POL.8: a bare head is ONE goal; a line at the goal column is a SIBLING goal"
+  (define rs (run-prologos-string
+              (string-append
+               "ns l3pol8 :no-prelude\n\n" L3-FRUIT
+               "defr fruit-not-of-color [?fruit ?not-color]\n"
+               "  &> fruit-color fruit color\n"
+               "     not (= color not-color)\n\n"
+               "(fruit-not-of-color f \"red\")\n")))
+  (check-equal? (map l3-msg (l3-errors rs)) '() "expected 0 errors")
+  ;; parens inside a bare-head line are ARGUMENT terms, so `not (= c n)` is one
+  ;; goal with one argument — not two goals.
+  (define m (l3-msg (last rs)))
+  (check-true (string-contains? m "banana") m)
+  (check-true (string-contains? m "grape") m)
+  (check-false (string-contains? m "apple") "the red fruit must be excluded"))
+
+(test-case "L3/POL.8: a line indented DEEPER continues the previous goal as its argument"
+  ;; Same relation as above, written with `not` and its argument on separate
+  ;; lines. The two spellings must agree — that agreement IS the layout rule.
+  (define flat (run-prologos-string
+                (string-append
+                 "ns l3pol8a :no-prelude\n\n" L3-FRUIT
+                 "defr r [?fruit ?not-color]\n"
+                 "  &> fruit-color fruit color\n"
+                 "     not (= color not-color)\n\n"
+                 "(r f \"red\")\n")))
+  (define deep (run-prologos-string
+                (string-append
+                 "ns l3pol8b :no-prelude\n\n" L3-FRUIT
+                 "defr r [?fruit ?not-color]\n"
+                 "  &> fruit-color fruit color\n"
+                 "     not\n"
+                 "       = color not-color\n\n"
+                 "(r f \"red\")\n")))
+  (check-equal? (map l3-msg (l3-errors flat)) '() "flat spelling: expected 0 errors")
+  (check-equal? (map l3-msg (l3-errors deep)) '() "deep spelling: expected 0 errors")
+  (check-equal? (l3-msg (last deep)) (l3-msg (last flat))
+                "the deeper-continuation spelling must mean the same thing"))
+
+;; ----------------------------------------------------------------------------
+;; POL.9 — goals carry an implicit `solve` at COMMAND position
+;; ----------------------------------------------------------------------------
+
+(test-case "L3/POL.9: a paren group at top level IS a goal"
+  (define rs (run-prologos-string
+              (string-append
+               "ns l3pol9 :no-prelude\n\n" L3-FRUIT
+               "(fruit-color f \"red\")\n"
+               "solve (fruit-color f \"red\")\n")))
+  (check-equal? (map l3-msg (l3-errors rs)) '() "expected 0 errors")
+  (define n (length rs))
+  (check-equal? (l3-msg (list-ref rs (- n 2))) (l3-msg (list-ref rs (- n 1)))
+                "the implicit form must equal the explicit `solve`"))
+
+(test-case "L3/POL.9: a paren group on a `def` RHS is a goal (POL.10 snapshot)"
+  (define rs (run-prologos-string
+              (string-append
+               "ns l3pol9b :no-prelude\n\n" L3-FRUIT
+               "def yellows := (fruit-color f \"yellow\")\n"
+               "yellows\n")))
+  (check-equal? (map l3-msg (l3-errors rs)) '() "expected 0 errors")
+  (define m (l3-msg (last rs)))
+  (check-true (string-contains? m "banana") m)
+  ;; The snapshot is a real value, not a stuck goal term.
+  (check-false (string-contains? m "solve") m))
+
+(test-case "L3/POL.9: `foo x` and `[foo x]` stay APPLICATION — scope is parens only"
+  (define rs (run-prologos-string
+              (string-append
+               "ns l3pol9c :no-prelude\n\n"
+               "spec inc Int -> Int\n"
+               "defn inc [n] [int+ n 1]\n\n"
+               "inc 1\n"
+               "[inc 1]\n")))
+  (check-equal? (map l3-msg (l3-errors rs)) '() "expected 0 errors")
+  (define n (length rs))
+  (check-true (string-contains? (l3-msg (list-ref rs (- n 1))) "2")
+              "[inc 1] must apply, not query")
+  (check-equal? (l3-msg (list-ref rs (- n 2))) (l3-msg (list-ref rs (- n 1)))
+                "the bracket and bare spellings are the same application"))
+
+;; ----------------------------------------------------------------------------
+;; POL.9 diagnostics — the three that guide rather than merely reject
+;; ----------------------------------------------------------------------------
+
+(test-case "L3/POL.9: a paren goal over a FUNCTION says how application is written"
+  (define rs (run-prologos-string
+              (string-append
+               "ns l3pol9d :no-prelude\n\n"
+               "spec inc Int -> Int\n"
+               "defn inc [n] [int+ n 1]\n\n"
+               "(inc 1)\n")))
+  (define errs (l3-errors rs))
+  (check-equal? (length errs) 1)
+  (define m (l3-msg (car errs)))
+  (check-true (string-contains? m "is a function") m)
+  (check-true (string-contains? m "[inc")
+              (format "must show the working spelling; got: ~a" m)))
+
+(test-case "L3/POL.9: a wrong arity gets the SWI-style 'however, there are definitions for'"
+  (define rs (run-prologos-string
+              (string-append
+               "ns l3pol9e :no-prelude\n\n"
+               "defr edge [?a ?b]\n  || \"x\" \"y\"\n     \"y\" \"z\"\n\n"
+               "(edge a)\n")))
+  (define errs (l3-errors rs))
+  (check-equal? (length errs) 1)
+  (define m (l3-msg (car errs)))
+  (check-true (string-contains? m "edge/1") m)
+  (check-true (string-contains? m "edge/2")
+              (format "must name the arity that DOES exist; got: ~a" m)))
+
+(test-case "L3: `defn` and `defr` namespaces are DISJOINT within a module"
+  (define rs (run-prologos-string
+              (string-append
+               "ns l3xk :no-prelude\n\n"
+               "spec twice Int -> Int\n"
+               "defn twice [n] [int* n 2]\n\n"
+               "defr twice [?x]\n  || 1\n")))
+  (define errs (l3-errors rs))
+  (check-equal? (length errs) 1 "the second registration must be refused")
+  (define m (l3-msg (car errs)))
+  (check-true (string-contains? m "already defined") m)
+  (check-true (string-contains? m "cannot be both") m))

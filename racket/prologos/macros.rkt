@@ -26,6 +26,7 @@
          "surface-syntax.rkt"
          "source-location.rkt"
          "errors.rkt"
+         (only-in "warnings.rkt" emit-inexhaustive-match-warning!)
          "namespace.rkt"
          "global-env.rkt"
          "infra-cell.rkt"        ;; Phase 2a: merge functions for registry cells
@@ -216,6 +217,7 @@
          selection-entry-provides-paths
          selection-entry-includes-names
          selection-entry-srcloc
+         selection-entry-stub?
          register-selection!
          lookup-selection
          ;; Session WS desugaring (exported for testing)
@@ -276,6 +278,8 @@
          spec-entry-metadata
          register-spec!
          lookup-spec
+         lookup-spec/qualified
+         spec-bare-name
          process-spec
          extract-where-clause
          ;; Phase 1b: Auto-implicit detection
@@ -503,6 +507,23 @@
 
 (define (lookup-spec name)
   (hash-ref (read-spec-store) name #f))
+
+;; The bare (last) segment of a possibly-`::`-qualified name.
+(define (spec-bare-name fname)
+  (define s (symbol->string fname))
+  (define idx (let loop ([i (- (string-length s) 1)])
+                (cond [(< i 1) #f]
+                      [(and (char=? (string-ref s i) #\:)
+                            (char=? (string-ref s (sub1 i)) #\:))
+                       i]
+                      [else (loop (sub1 i))])))
+  (if idx (string->symbol (substring s (add1 idx))) fname))
+
+;; Look up a spec for a name that may be QUALIFIED — FQN first, bare second.
+(define (lookup-spec/qualified fname)
+  (or (lookup-spec fname)
+      (let ([bare (spec-bare-name fname)])
+        (and (not (eq? bare fname)) (lookup-spec bare)))))
 
 ;; Track 3 Phase 3: cell-primary reader for propagated specs
 (define (read-propagated-specs)
@@ -994,7 +1015,16 @@
 ;; provides-paths: list of Racket keywords
 ;; includes-names: list of symbols (other selection names)
 ;; srcloc: source location of the selection form
-(struct selection-entry (name schema-name requires-paths provides-paths includes-names srcloc) #:transparent)
+;; stub?: #t for the PREPARSE pre-registration only (2026-08-03).
+;;
+;; The stub exists so `known-type-name?` recognizes the name while specs are
+;; processed, long before the form elaborates. When the declaration then FAILS
+;; — a malformed `:requires` path, an unknown parent field — the stub is never
+;; replaced, and it has empty requires/provides, so a selection that reports an
+;; error also silently VALIDATES EVERYTHING. `'()` cannot mark it: a selection
+;; with no `:requires` is legitimate, and `srcloc = #f` is taken (typing-core
+;; mints synthetic sub-selections with no location). Hence an explicit flag.
+(struct selection-entry (name schema-name requires-paths provides-paths includes-names srcloc stub?) #:transparent)
 
 ;; Selection store: symbol → selection-entry
 (define current-selection-registry (make-parameter (hasheq)))
@@ -1163,6 +1193,9 @@
        (not (eq? x '$nil-dot-key))      ; RETIRED sentinel (D4.P1a) — still emitted by the reader
        (not (eq? x '$retired-selection)) ; D4.P1a retirement marker (parser converts to guided error)
        (not (eq? x '$let-error))        ; LET P1 syntax-failure marker (parser converts to per-command parse error)
+       (not (eq? x '$mixfix-error))     ; mixfix syntax-failure marker (same channel as $let-error)
+       (not (eq? x '$do-error))         ; do syntax-failure marker (same channel)
+       (not (eq? x '$reader-error))     ; reader-level rejection marker (same channel; today: removed ~N literals)
        (not (eq? x '$def-error))        ; DEF SEAM: the $let-error sibling — same LOUD-if-missed class as $dot-brace below
        (not (eq? x '$let-block))        ; LET P3 aligned-block sentinel (reader-validated; expand-let consumes)
        (not (eq? x '$goal-rhs))         ; SolveCarrier P2: let binding-RHS paren marker (parser consumes)
@@ -1170,6 +1203,16 @@
        (not (eq? x '$dot-brace))        ; D4.P1b-ii `.{ }` sub-block sentinel — see below
        (not (eq? x '$select-brace))     ; D4.P1b-iii adjacent-brace select block
        (not (eq? x '$select))           ; D4.P3a fused select head (LOUD-if-missed: whole-file abort in a defmacro template)
+       ;; D4.P1b-ii spin-off 3 (2026-08-03): the last two holdouts. Every
+       ;; sibling above was excluded; these two were not, and
+       ;; `(pattern-var? '$set-literal)` / `(pattern-var? '$mixfix)` answered
+       ;; #t while their ten siblings answered #f. Demonstrated at the unit
+       ;; level rather than argued: `(datum-subst (list '$set-literal 1)
+       ;; (hasheq))` RAISED "Unbound pattern variable in template" where
+       ;; `$dot-access` passed through unchanged. A raise on the preparse path
+       ;; is a whole-file abort, which is why every other sentinel is here.
+       (not (eq? x '$set-literal))      ; reader sentinel for `#{…}` set literals
+       (not (eq? x '$mixfix))           ; reader sentinel for `.( … )` mixfix groups
        (not (eq? x '$select-path))      ; D4.P4b-ii-2b the DOT select head — same LOUD-if-missed class
        (not (eq? x '$preparse-error))   ; D4.P4c-4c/G2 the preparse seam marker — LOUD-if-missed: a
                                         ; template occurrence would raise "Unbound pattern variable"
@@ -1309,7 +1352,39 @@
 ;; is a separate question and out of scope here.
 (define (datum-subst template bindings)
   (cond
-    ;; Pattern variable: substitute. Bound ⇒ a variable; unbound ⇒ a literal.
+    ;; Pattern variable: substitute.
+    ;;
+    ;; AN UNBOUND `$`-SYMBOL PASSES THROUGH — it is not an error here. This is
+    ;; the polarity inversion D4.P1b-iii spin-off 8 prescribes, and the reason
+    ;; is that the raise it replaces was a WHOLE-FILE ABORT with zero results.
+    ;;
+    ;; `pattern-var?` carries a hand-maintained exclusion list of reader
+    ;; sentinels, and a census put the residual at 23 of 33 — `$list-literal`,
+    ;; `$vec-literal`, `$pipe-gt`, `$quasiquote`, `$rest`, `$typed-hole` and
+    ;; the rest all still raised, so a plain quoted list inside a defmacro
+    ;; template took the file down. Every sentinel added to that list was one
+    ;; more instance of the same bug, which is exactly the shape `pipeline.md`
+    ;; § "Exhaustive Walkers" says to solve STRUCTURALLY rather than by
+    ;; enumeration: here the structural answer is that the ONLY thing that
+    ;; makes a symbol a pattern variable is being BOUND by the macro's pattern,
+    ;; and `bindings` already knows that exactly.
+    ;;
+    ;; `pattern-var?`'s exclusion list is NOT made redundant by this and must
+    ;; not be deleted as belt-and-suspenders: `datum-match` uses it on the
+    ;; PATTERN side, where a sentinel appearing in a macro's pattern must match
+    ;; LITERALLY rather than bind anything. Two different questions, one
+    ;; predicate; only the TEMPLATE side is inverted here.
+    ;;
+    ;; WHAT IS LOST, named rather than glossed: a typo'd template variable
+    ;; (`$boddy` for `$body`) no longer raises here. It passes through and
+    ;; surfaces at the USE SITE as an ordinary unbound-variable error naming
+    ;; `$boddy` — per-command, with a srcloc, and the file survives. That is a
+    ;; better failure mode than the abort, not merely a cheaper one.
+    ;;
+    ;; MERGE 2026-08-05: both branches reached this same inversion
+    ;; independently. The THUNK default is main's and is kept over the bare
+    ;; value: `hash-ref` CALLS a procedural default, so a bare `template` would
+    ;; be invoked if a template datum were ever itself a procedure.
     [(pattern-var? template)
      (hash-ref bindings template (lambda () template))]
     ;; List template: handle splicing
@@ -1323,12 +1398,14 @@
   (cond
     [(null? elems) '()]
     ;; Check for splice: $var ...
+    ;; A splice is `$var ...` where $var is BOUND. An unbound `$`-symbol
+    ;; followed by `...` is not a splice — it falls to the regular-element arm
+    ;; and passes through, for the same reason as the scalar case above.
     [(and (>= (length elems) 2)
           (pattern-var? (car elems))
-          (eq? (cadr elems) '...))
-     (let ([val (hash-ref bindings (car elems)
-                          (lambda ()
-                            (error 'defmacro "Unbound pattern variable: ~a" (car elems))))])
+          (eq? (cadr elems) '...)
+          (hash-has-key? bindings (car elems)))
+     (let ([val (hash-ref bindings (car elems))])
        (unless (list? val)
          (error 'defmacro "Splice variable ~a must be bound to a list, got: ~a"
                 (car elems) val))
@@ -2074,6 +2151,31 @@
                datum
                (list* (car datum) subj* (cddr datum))))
          datum)]
+    ;; D4.P3a item 17: fold access sentinels BEFORE head-macro dispatch.
+    ;;
+    ;; A registered head macro used to be handed the RAW datum, because the
+    ;; fold lives in `preparse-expand-subforms` — which this arm only reaches
+    ;; when there is NO macro. So `(if true cfg{a} 5)` arrived at `if` as
+    ;; `(if true cfg ($select-brace …) 5)`: an extra sibling, reported as
+    ;; "boolrec expects 4 arguments, got 3" — an arity complaint for an
+    ;; ordering problem, plus a cascading "Unbound variable".
+    ;;
+    ;; `expand-pipe-block` already carried this fold locally (the P3a verify's
+    ;; BLOCKING catch, where appending an accumulator into a raw sentinel
+    ;; payload corrupted the select SILENTLY at 0 errors). This hoists the same
+    ;; call to cover every head macro instead of the one that drew blood.
+    ;;
+    ;; Safe to run twice: the fold is a fixpoint, so the later pass in
+    ;; `preparse-expand-subforms` is a no-op. Safe to run HERE specifically:
+    ;; every form that must keep its sentinels raw — `$foreign-block`,
+    ;; `$brace-params`, `$select-brace`/`$dot-brace`, `$select` — is matched by
+    ;; an arm ABOVE this one and never arrives.
+    [(and (pair? datum) (symbol? (car datum))
+          (not (equal? (rewrite-dot-access datum) datum)))
+     (define folded (rewrite-dot-access datum))
+     (if (list? folded)
+         (preparse-expand-form folded reg depth)
+         folded)]
     ;; List form — check head symbol for macros
     [(and (pair? datum) (symbol? (car datum)))
      (define entry (hash-ref reg (car datum) #f))
@@ -2891,22 +2993,68 @@
 
 ;; Reconstitute a single vector arg list: each element may be
 ;; a keyword :name, or a sequence (:address ($dot-access zip)) → :address.zip
+;;
+;; 2026-08-03 — WILDCARD segments join the same reconstitution. `:address.*`
+;; does NOT arrive as a `$dot-access`: the reader's six-member dot band
+;; discriminates on the second character, and `*` belongs to
+;; `recognize-broadcast-access`, which requires an identifier AFTER the star
+;; (`.*field`). A star at the end of a path matches nothing in the band, so the
+;; dot falls through as a bare `|.|` symbol and the star follows as its own.
+;; The old collect loop saw neither and stopped, leaving `(:address |.| *)` —
+;; which the selection parser then reported as "expected keyword field path,
+;; got '|.|".
+;;
+;; The consequence was worse than an unusable spelling: preparse had already
+;; pre-registered the selection as a stub, so the file reported that error and
+;; then carried a selection requiring NOTHING (fixed separately the same day).
+;;
+;; Scope is exactly one shape — inside a selection vector arg, immediately
+;; after a keyword-like head, a bare `.` followed by `*` or `**`. Everywhere
+;; else a bare `.` is untouched and still errors as before.
+(define (dot-symbol? x) (and (symbol? x) (eq? x '|.|)))
+(define (wildcard-symbol? x) (and (symbol? x) (memq x '(* **)) #t))
+
 (define (reconstitute-path-list items)
   (let loop ([remaining items] [acc '()])
     (cond
       [(null? remaining) (reverse acc)]
-      ;; A keyword followed by ($dot-access field) chains — reconstitute
+      ;; A keyword followed by ($dot-access field) chains — or by a bare
+      ;; `. *` wildcard pair — reconstitute
       [(and (keyword-like-symbol? (car remaining))
             (pair? (cdr remaining))
             (let ([next (cadr remaining)])
-              (and (pair? next) (eq? (car next) '$dot-access))))
-       ;; Collect all consecutive $dot-access segments
+              (or (and (pair? next) (eq? (car next) '$dot-access))
+                  (and (pair? next) (eq? (car next) '$broadcast-access))
+                  (and (dot-symbol? next)
+                       (pair? (cddr remaining))
+                       (wildcard-symbol? (caddr remaining))))))
+       ;; Collect all consecutive segments, of either shape
        (define base-str (symbol->string (car remaining)))
        (define-values (path-str rest)
          (let collect ([r (cdr remaining)] [segs (list base-str)])
-           (if (and (pair? r) (pair? (car r)) (eq? (caar r) '$dot-access))
-               (collect (cdr r) (append segs (list (symbol->string (cadar r)))))
-               (values (string-join segs ".") r))))
+           (cond
+             [(and (pair? r) (pair? (car r)) (eq? (caar r) '$dot-access))
+              (collect (cdr r) (append segs (list (symbol->string (cadar r)))))]
+             [(and (pair? r) (dot-symbol? (car r))
+                   (pair? (cdr r)) (wildcard-symbol? (cadr r)))
+              ;; a wildcard is TERMINAL — nothing can follow `*` in a path, so
+              ;; this both appends and stops.
+              (values (string-join (append segs (list (symbol->string (cadr r)))) ".")
+                      (cddr r))]
+             ;; `.**` is NOT the bare-dot shape: `recognize-broadcast-access`
+             ;; matches `.` `*` and any ident-continue third char, and `*` is
+             ;; one — so `.**` arrives as `($broadcast-access *)`, the star
+             ;; consumed as the marker and the SECOND star as the "field". The
+             ;; segment is therefore the star plus that field: `**`. (A genuine
+             ;; `.*name` would reconstitute to `*name`, which is not a wildcard
+             ;; and gets the path parser's ordinary unknown-segment error —
+             ;; which is the right outcome for a spelling that means nothing.)
+             [(and (pair? r) (pair? (car r)) (eq? (caar r) '$broadcast-access))
+              (values (string-join
+                       (append segs (list (string-append "*" (symbol->string (cadar r)))))
+                       ".")
+                      (cdr r))]
+             [else (values (string-join segs ".") r)])))
        (loop rest (cons (string->symbol path-str) acc))]
       [else
        (loop (cdr remaining) (cons (car remaining) acc))])))
@@ -3581,7 +3729,9 @@
            (define sel-name (cadr eff-datum))
            (define schema-name (cadddr eff-datum))
            ;; Minimal pre-registration — full validation happens during elaboration
-           (register-selection! sel-name (selection-entry sel-name schema-name '() '() '() #f)))]
+           (register-selection! sel-name
+                                (selection-entry sel-name schema-name '() '() '() #f
+                                                 #t)))]  ;; stub? — see the struct comment
         [else (void)])))
 
   ;; ============================================================
@@ -3675,21 +3825,140 @@
   ;; and the battery pins that it still reports.
   ;; ⚠ `exn:fail?`, not `(lambda (e) #t)` — a break (Ctrl-C, a timeout signal)
   ;; must still propagate, or the file becomes uninterruptible.
+  ;;
+  ;; ⚠ MERGE 2026-08-05 — this branch had built its own containment for the
+  ;; SAME class (below), and the two disagree on ONE axis. Both are kept: the
+  ;; G2 seam guard above is the outer, head-agnostic seat (owner ruling), and
+  ;; `contain-form-error` below is the inner, message-prefix-narrow one.
+  ;;
+  ;; THE DISAGREEMENT, recorded rather than silently resolved: this branch
+  ;; EXCLUDED context-establishing heads (ns/imports/exports/foreign) from
+  ;; containment, because containing them lets the file proceed and produce a
+  ;; CASCADE that buries the real diagnostic — a failed `imports` reported
+  ;; "Unbound variable: module" instead of "no namespace is in scope"
+  ;; (`tests/test-import-no-ns.rkt` was written to catch exactly that). G2's
+  ;; guard, by contrast, exists BECAUSE `require`/`ns` need containment when a
+  ;; `$bcast-step` leaks into them.
+  ;;
+  ;; Resolved toward G2 (newer, owner-ruled, with its own measured
+  ;; regression). If `test-import-no-ns.rkt` fails, that is the real conflict
+  ;; surfacing and it wants an owner call, not a quiet edit to the test.
+
+  ;; ---- per-FORM failure containment (2026-08-03) --------------------------
+  ;;
+  ;; Every `(error 'functor …)` / `(error 'trait …)` / `(error 'spec …)` in the
+  ;; ~150 raise sites below used to take the WHOLE FILE down: preparse runs
+  ;; before any command, so an escaping raise left no expansion to run anything
+  ;; from. The user saw a raw Racket message plus a `context...:` dump, exit 1,
+  ;; and NO numbered results at all — not even for the commands that had
+  ;; already succeeded. The loudest possible failure presented as the quietest,
+  ;; which is the same class already fixed for the reader (`$reader-error`),
+  ;; `let` (`$let-error`) and `.( )` mixfix (`$mixfix-error`).
+  ;;
+  ;; This is the containment for the rest of them, and it reuses that channel
+  ;; rather than adding a fourth: the failing form is replaced by a
+  ;; `($preparse-error msg)` marker, which `parser.rkt` turns into an ordinary
+  ;; per-command `parse-error` VALUE. Commands before AND after the bad form
+  ;; still run.
+  ;;
+  ;; ⚠ THE GUARD IS THE WHOLE DESIGN. It converts ONLY an exception whose
+  ;; message begins `"<this form's head>: "` — which is exactly the shape
+  ;; Racket's `(error 'functor "…")` produces for the form currently being
+  ;; processed. Anything else RE-RAISES: a genuine internal bug inside
+  ;; `process-trait` must keep surfacing as itself rather than being reported
+  ;; to the user as their syntax error. Blanket `exn:fail?` catching here would
+  ;; be scaffolding that hides truth, and this file already carries a comment
+  ;; (§18.21.19 Q2) about a Pass-0 `with-handlers` doing precisely that.
+  ;; ⚠ CONTEXT-ESTABLISHING FORMS ARE EXCLUDED, and this is not caution — it was
+  ;; measured. `ns` / `imports` / `exports` / `foreign` set up the environment
+  ;; every later form depends on, so a failure there genuinely invalidates the
+  ;; rest of the file. Containing them lets it proceed and produce a CASCADE
+  ;; that buries the real diagnostic: with `imports` contained, a file whose
+  ;; import fails for "no namespace is in scope" carried on and reported
+  ;; "Unbound variable: module" instead — a named, deliberately-built message
+  ;; replaced by a downstream symptom (`tests/test-import-no-ns.rkt` caught it).
+  ;;
+  ;; A malformed `functor` or `trait` does not have that property: the forms
+  ;; around it are independent of it, which is exactly why containing THOSE is
+  ;; an improvement and containing these is not.
+  (define uncontained-heads '(ns imports require exports provide foreign))
+
+  ;; ⚠ MERGE 2026-08-05 — the one place the two branches genuinely disagreed,
+  ;; and the discriminator is the FAILURE SOURCE, not the head.
+  ;;
+  ;; Both branches have a test at the SAME head (`imports`/`require`) wanting
+  ;; opposite outcomes, and both are right about their own case:
+  ;;
+  ;;   G2/B  — the require FORM is malformed (`…nat:refer [add]`, a fused
+  ;;           directive keyword the recognizer cannot read). Containing it is
+  ;;           the whole point: the forms before AND after must still run.
+  ;;           (`test-path-selection.rkt` § "G2/B: a fused directive keyword…")
+  ;;
+  ;;   this  — the require form is FINE; the MODULE it names fails to load.
+  ;;           Containing that lets the file proceed and REPLACES the root
+  ;;           diagnostic with a downstream symptom: measured, "no namespace is
+  ;;           in scope (IMPORTING file …)" became "Unbound variable: module"
+  ;;           from 28 lines inside the imported file.
+  ;;           (`tests/test-import-no-ns.rkt`)
+  ;;
+  ;; So containment is refused ONLY for a module-load failure, which driver.rkt
+  ;; raises with its own already-rendered diagnostic inside. Everything else at
+  ;; every head — including a malformed `require` — is contained, per G2's
+  ;; head-agnostic ruling.
+  ;;
+  ;; Message-shape matching is the same technique `contain-form-error` below
+  ;; already uses, not a new one. It is narrow ON PURPOSE: widening it back to
+  ;; "any failure at a context-establishing head" re-breaks G2/B, and dropping
+  ;; it re-breaks the import diagnostic. Both directions are pinned.
+  ;; Both shapes are "the import itself failed": the module could not be
+  ;; RESOLVED, or it resolved and failed to LOAD. Containing either lets the
+  ;; file carry on without it and reports a downstream symptom instead.
+  ;; (The first version matched only the load case, and the resolution case —
+  ;; `imports prologos::nonexistent::module` — went on being contained.)
+  (define (contain-at-seam? e)
+    (not (regexp-match? #rx"Error loading module|Cannot find module"
+                        (exn-message e))))
+
+  (define (contain-form-error eff-head thunk on-error)
+    (with-handlers ([(lambda (e)
+                       (and (exn:fail? e)
+                            (symbol? eff-head)
+                            (not (memq eff-head uncontained-heads))
+                            (string-prefix? (exn-message e)
+                                            (string-append (symbol->string eff-head) ": "))))
+                     (lambda (e) (on-error (exn-message e)))])
+      (thunk)))
+
   (define result
     (for/fold ([acc '()])
               ([stx (in-list stxs)])
-      (with-handlers
-          ([exn:fail?
-            (lambda (e)
-              (cons (list '$preparse-error (exn-message e)) acc))])
-      ;; DEFERRED 71: strip AND index in one pass. `origin-idx` maps each
+      ;; DEFERRED 71 (main): strip AND index in one pass. `origin-idx` maps each
       ;; freshly-allocated datum pair to the syntax object it came from, so any
       ;; subtree an expander splices through BY REFERENCE stays recoverable by
       ;; cons-cell identity — at any depth. Per-form, because a second strip of
       ;; the same syntax object shares no pairs with the first.
+      ;;
+      ;; MERGE NOTE (2026-08-05): main wrapped these two lines in a blanket
+      ;; `with-handlers ([exn:fail? …])`. Not taken — this branch's containment
+      ;; is two-layer and finer, and the layer immediately below discriminates
+      ;; via `contain-at-seam?` so that a MODULE-LOAD failure still escapes
+      ;; instead of being reported as a per-command preparse error. A blanket
+      ;; `exn:fail?` here would swallow "Error loading module" and turn a broken
+      ;; import into a confusing marker at the first form. The only exposure
+      ;; given up is a raise inside the strip itself, which is the same exposure
+      ;; the `syntax->datum` it replaces already had.
       (define origin-idx (make-hasheq))
       (define datum (strip-with-origin! stx origin-idx))
       (define head (and (pair? datum) (car datum)))
+      (define eff-head-for-containment
+        (or (and head (private-form-base head)) head))
+      (with-handlers
+          ([(lambda (e) (and (exn:fail? e) (contain-at-seam? e)))
+            (lambda (e)
+              (cons (list '$preparse-error (exn-message e)) acc))])
+      (contain-form-error
+       eff-head-for-containment
+       (lambda ()
       (cond
         ;; ns — set namespace context and consume
         [(and (pair? datum) (eq? head 'ns))
@@ -4075,7 +4344,54 @@
                            [(eq? (let ([e (car es)]) (if (syntax? e) (syntax-e e) e)) ':=)
                             (and (pair? (cdr es)) (null? (cddr es)) (cadr es))]
                            [else (loop (cdr es))]))))))
-         (define (rebuild-def-preserving-rhs final-datum)
+         ;; Re-attach the ORIGINAL syntax objects to any trailing elements the
+         ;; rewrite left untouched, so their inner srclocs survive the rebuild.
+         ;;
+         ;; Why this is needed at all: `datum` is `(syntax->datum stx)` — a
+         ;; RECURSIVE strip — so a form that gets rewritten is re-wrapped by
+         ;; `(datum->syntax #f final-datum stx)`, which stamps the WHOLE FORM's
+         ;; location onto every freshly-created sub-object. A form that is NOT
+         ;; rewritten returns its original `stx` and keeps perfect locations.
+         ;;
+         ;; Measured consequence before this (2026-08-04): every `defn` carrying
+         ;; a `spec` reported errors at the defn's own line/col/span instead of
+         ;; at the offending token, because spec injection rebuilds the form.
+         ;; A defn WITHOUT a spec was exact. Most of the stdlib is spec'd, so
+         ;; the coarse case was the common one.
+         ;;
+         ;; Spec injection only replaces the parameter bracket and inserts a
+         ;; return type — the BODY forms come through untouched. So matching by
+         ;; suffix recovers exactly them. Substitution is by `equal?` on the
+         ;; datum, so it can only ever add location information: the datum that
+         ;; ends up in the tree is the one that was already going there.
+         ;; ⚠ `defn` ONLY, and that scoping is load-bearing rather than
+         ;; conservative. The `def` leg below decides the RHS's command position
+         ;; by comparing `(last final-datum)` against the RHS DATUM — hand it a
+         ;; syntax object there and the comparison fails, `value-stx` goes #f,
+         ;; the `'prologos-defrhs-command` stamp is never applied, and a paren
+         ;; GOAL silently reverts to an application. Measured: 15 failures
+         ;; across 5 files, all "X is a relation, not a function". The def leg
+         ;; already preserves its own RHS syntax; it needs no help here.
+         (define (splice-preserved-tail final-datum)
+           (define orig (and (syntax? stx) (syntax->list stx)))
+           (cond
+             [(not (eq? head 'defn)) final-datum]
+             [(or (not orig) (not (list? final-datum))) final-datum]
+             [else
+              ;; walk both from the right while the datums agree
+              (define n
+                (let loop ([o (reverse orig)] [f (reverse final-datum)] [n 0])
+                  (cond
+                    [(or (null? o) (null? f)) n]
+                    [(equal? (syntax->datum (car o)) (car f))
+                     (loop (cdr o) (cdr f) (add1 n))]
+                    [else n])))
+              (if (zero? n)
+                  final-datum
+                  (append (take final-datum (- (length final-datum) n))
+                          (take-right orig n)))]))
+         (define (rebuild-def-preserving-rhs final-datum0)
+           (define final-datum (splice-preserved-tail final-datum0))
            (define (head-of d) (and (pair? d)
                                     (let ([h (car d)])
                                       (if (syntax? h) (syntax-e h) h))))
@@ -4147,16 +4463,21 @@
          ;; If datum didn't change, preserve original syntax (keeps properties like paren-shape)
          (if (equal? expanded datum)
              (cons stx acc)
-             ;; DEFERRED 51(c), [else] extension: rebuild PRESERVING per-element
-             ;; srclocs, not just the whole-form stamp. This is the arm a bare
-             ;; top-level `rel` goes through, so before this, `rel` and `defr`
-             ;; DISAGREED on the same POL.8 grammar — the identical parenless
-             ;; clause registered under `defr` (51c) and refused under `rel`.
-             ;; POL.9's property requirement is carried by the helper: its list
-             ;; rebuild and its fallback are both 4-arg against the original stx,
-             ;; so a rewritten top-level paren group keeps 'prologos-paren-origin
-             ;; exactly as the old direct 4-arg rebuild kept it.
-             (cons (rebuild-preserving-locs stx expanded origin-idx) acc))]))))
+             ;; DEFERRED 51(c), [else] extension (main): rebuild PRESERVING
+             ;; per-element srclocs, not just the whole-form stamp. This is the
+             ;; arm a bare top-level `rel` goes through, so before this, `rel`
+             ;; and `defr` DISAGREED on the same POL.8 grammar — the identical
+             ;; parenless clause registered under `defr` (51c) and refused under
+             ;; `rel`. POL.9's property requirement is carried by the helper: its
+             ;; list rebuild and its fallback are both 4-arg against the original
+             ;; stx, so a rewritten top-level paren group keeps
+             ;; 'prologos-paren-origin exactly as this branch's direct 4-arg
+             ;; rebuild kept it. Strictly better than what it replaces here.
+             (cons (rebuild-preserving-locs stx expanded origin-idx) acc))]))
+       ;; the containment handler: replace the failing form with the marker the
+       ;; parser already knows how to turn into a per-command error
+       (lambda (msg)
+         (cons (datum->syntax #f (list '$preparse-error msg) stx) acc))))))
   ;; ============================================================
   ;; Phase 5b: Hoist data/trait-generated defs before user forms
   ;; ============================================================
@@ -4687,6 +5008,26 @@
          (define merged-val
            (cond
              [(and (= (length val) 1) (string? (car val))) (car val)]
+             ;; ⚠ A NESTED `$brace-params` VALUE MUST BE PARSED, not stored raw
+             ;; (2026-08-03). The sexp path does this (see the `:mixfix` arm in
+             ;; `parse-spec-metadata`); this WS path did not, so
+             ;; `spec f … :mixfix {:symbol xxor :group logical-and}` stored the
+             ;; raw `($brace-params :symbol xxor :group logical-and)` list where
+             ;; the consumer expects a hash.
+             ;;
+             ;; And the mismatch was SILENT: `maybe-register-mixfix-operator`
+             ;; guards on `(hash? mixfix-meta)`, so a non-hash simply did
+             ;; nothing — the spec defined cleanly, no error, and the operator
+             ;; was never registered. `.( true xxor false )` then failed with
+             ;; "Unexpected token after expression: xxor", pointing at the USE
+             ;; site while the declaration was the thing that silently didn't
+             ;; take. Sexp-green, WS-broken — the class `prologos-syntax.md`
+             ;; names, and mixfix declaration is a WS-only feature in practice.
+             [(and (= (length val) 1) (pair? (car val))
+                   (let ([h (caar val)])
+                     (or (eq? h '$brace-params)
+                         (and (syntax? h) (eq? (syntax-e h) '$brace-params)))))
+              (parse-spec-metadata (car val))]
              [(= (length val) 1) (car val)]
              [else val]))
          (loop (cdr remaining) kept (hash-set meta key merged-val))]
@@ -5136,6 +5477,78 @@
 ;; Returns: (defn name [x ($angle-type Nat) y ($angle-type Nat)] ($angle-type Nat) body)
 ;; When implicit-binders is non-empty, prepends ($brace-params ...) so the parser
 ;; handles implicit type parameters: (defn name ($brace-params A B) [typed-bracket] ret body)
+;; ============================================================
+;; Spec System Phase 2: `:pre` / `:post` runtime contracts
+;; ============================================================
+;;
+;; The surface has parsed and stored since the metadata work; nothing consumed
+;; it, so `spec sd Int Int -> Int :pre [fn [x][fn [y][not [eq? y 0]]]]` let
+;; `[sd 6 0]` through at zero errors. Declaring a contract and having it not
+;; run is worse than not offering the syntax.
+;;
+;; Surface per `2026-02-22_EXTENDED_SPEC_DESIGN.org` §Phase 2, unchanged:
+;; `:pre` is a function of the ARGS, `:post` a function of the args plus the
+;; RETURN. Both are ordinary Prologos expressions, so they are applied, not
+;; interpreted — nothing here knows what a predicate looks like.
+;;
+;; Lowering, on the RAW defn before `inject-spec-into-defn` adds types (so the
+;; parameter names are still bare and there is nothing to un-annotate):
+;;
+;;   :pre    (boolrec _ BODY (panic "…") (PRE p1 … pn))
+;;   :post   ((fn (r : _) (boolrec _ r (panic "…") (POST p1 … pn r))) BODY)
+;;
+;; `boolrec` rather than `match` because `if` already lowers to it three
+;; hundred lines down and it is a plain 4-element datum — no arm construction,
+;; no `$pipe` shapes, nothing that has to survive a later preparse pass. The
+;; `:post` form is a beta-redex rather than a `let` for the same reason: a
+;; `let` datum emitted HERE would still need `expand-let` to run over it, and
+;; this runs inside preparse.
+;;
+;; ⚠ SINGLE BODY FORM ONLY, and the guard is explicit rather than assumed. A
+;; multi-form body (a `let` chain, mainly) is a sequence, and folding a
+;; sequence into `boolrec`'s single `then` slot would need it re-associated
+;; correctly — which is `expand-let`'s job, not this function's. A
+;; multi-form body with a contract is left UNWRAPPED rather than
+;; mis-wrapped; `contract-unwrappable?` is what the caller reports on.
+(define (contract-metadata-parts metadata)
+  (if (and metadata (hash? metadata))
+      (values (hash-ref metadata ':pre #f) (hash-ref metadata ':post #f))
+      (values #f #f)))
+
+(define (contract-wrappable? datum)
+  ;; (defn name [params] body) with exactly one body form
+  (and (list? datum) (>= (length datum) 4)
+       (list? (caddr datum))
+       (= (length (cdddr datum)) 1)))
+
+(define (wrap-contract-checks datum metadata name)
+  (define-values (pre post) (contract-metadata-parts metadata))
+  (cond
+    [(and (not pre) (not post)) datum]
+    [(not (contract-wrappable? datum)) datum]
+    [else
+     (define params
+       (for/list ([x (in-list (caddr datum))])
+         (cond [(and (list? x) (= (length x) 2) (eq? (car x) '$rest-param)) (cadr x)]
+               [(and (list? x) (>= (length x) 1) (symbol? (car x))) (car x)]
+               [else x])))
+     (define body (cadddr datum))
+     (define body/post
+       (if post
+           `((fn (,'$contract-result : _)
+                 (boolrec _ ,'$contract-result
+                          (panic ,(format "~a: :post violated" name))
+                          (,post ,@params ,'$contract-result)))
+             ,body)
+           body))
+     (define body/pre
+       (if pre
+           `(boolrec _ ,body/post
+                     (panic ,(format "~a: :pre violated" name))
+                     (,pre ,@params))
+           body/post))
+     (append (take datum 3) (list body/pre))]))
+
 (define (inject-spec-into-defn datum spec-tokens [where-constraints '()] [implicit-binders '()])
   (define name (cadr datum))
   (define rest (cddr datum))  ;; ([x y] body ...)
@@ -5319,6 +5732,58 @@
   ;; If constraints were stripped, append `where` so maybe-inject-where adds them back.
   ;; Phase 3a: Only standard constraints go in the where clause; HasMethod params are already
   ;; in the typed bracket.
+  ;;
+  ;; Several body forms headed by a BARE SYMBOL means an application was written
+  ;; without brackets — `defn bump [x] int+ x 1` instead of `[int+ x 1]` — and
+  ;; splicing them produced
+  ;; `(defn bump [x <Int>] <Int> int+ x 1)`, which parses as a THREE-parameter
+  ;; typed defn and dies as "Type mismatch … [fn [x <Int>] [fn [y <Int>] [fn [z
+  ;; <Int>] [int+ y z]]]]": a message about a lambda the user never wrote.
+  ;;
+  ;; The good message already exists — WITHOUT a spec the same source gets
+  ;; "defn: expected <ReturnType> or : ReturnType, got int+" from the parser's
+  ;; bare-params guard. The spec path was simply bypassing it. So: decline to
+  ;; inject and hand the datum back unchanged, and that guard speaks.
+  ;;
+  ;; Declining rather than raising is deliberate — this runs inside
+  ;; `preparse-expand-all`, where a raise costs the WHOLE FILE. The parser's
+  ;; error is a per-command value.
+  ;;
+  ;; The BARE-SYMBOL head is load-bearing and was learned the hard way: "a
+  ;; well-formed defn under a spec has exactly one body form" is FALSE. A `let`
+  ;; CHAIN is legitimately several forms at this stage — `let x 4` / `let y 5` /
+  ;; body — because the sibling-chain merge runs later. Declining on mere
+  ;; multiplicity dropped the spec's types for every specced let-chain defn and
+  ;; broke two `test-let-blocks` cases. Those forms are LISTS; only the
+  ;; unbracketed-application mistake leads with a bare symbol.
+  ;;
+  ;; 2026-08-04: "leads with a bare symbol" was ALSO false in the other
+  ;; direction, and that half was a SOUNDNESS hole rather than a bad message.
+  ;; An access sentinel is still raw at this point, so a body that is exactly a
+  ;; projection arrives as `(gpt ($dot-access x))` — two forms, led by the bare
+  ;; symbol that is merely the projection's BASE. The guard fired, the spec was
+  ;; declined, and — unlike the unbracketed-application case — nothing spoke
+  ;; afterwards, because once folded the body is a perfectly well-formed single
+  ;; form. `spec e1 Point -> Int` + `defn e1 [p] gpt.x` defined `e1 : _ -> Int`
+  ;; at ZERO errors, and `[e1 "not a point"]` was then accepted.
+  ;;
+  ;; So the guard counts the forms the body will actually HAVE once folded.
+  ;; Each access sentinel consumes exactly one preceding element, so that count
+  ;; is `length - sentinels` — no need to fold here (and the fold UNWRAPS a
+  ;; single result, `(gpt ($dot-access x))` → `(map-get gpt :x)`, so its length
+  ;; could not be used for this test anyway).
+  ;;
+  ;; This keeps the original guard exactly where it was aimed:
+  ;;   (int+ x ($dot-access a) 1)  → 4-1 = 3 forms, bare head → DECLINE, and the
+  ;;                                 parser's good message speaks (unchanged)
+  ;;   (gpt ($dot-access x))       → 2-1 = 1 form            → inject
+  ;;   (int+ x 1)                  → 3-0 = 3, bare head      → DECLINE (unchanged)
+  ;;   ((let x 4) (let y 5) body)  → head is a LIST          → inject (unchanged)
+  (define effective-body-form-count
+    (- (length body-forms) (length (filter access-sentinel? body-forms))))
+  (cond
+    [(and (> effective-body-form-count 1) (symbol? (car body-forms))) datum]
+    [else
   (define base-defn
     (cond
       [(or (null? where-constraints) user-provides-dicts?)
@@ -5332,7 +5797,7 @@
   (if (null? brace-forms)
       base-defn
       (let ([after-name (cddr base-defn)])
-        `(defn ,name ,@brace-forms ,@after-name))))
+        `(defn ,name ,@brace-forms ,@after-name)))]))
 
 ;; Inject spec types into a multi-arity defn datum.
 ;; Each $pipe clause gets its corresponding spec branch type.
@@ -5401,9 +5866,13 @@
            (error 'spec "spec for ~a is multi-arity but defn ~a is single-body"
                   name name)]
           [else
-           (inject-spec-into-defn datum (car (spec-entry-type-datums spec))
-                                  (spec-entry-where-constraints spec)
-                                  (spec-entry-implicit-binders spec))])]
+           (inject-spec-into-defn
+            ;; Spec Phase 2: apply `:pre`/`:post` BEFORE type injection, while
+            ;; the parameter names are still bare.
+            (wrap-contract-checks datum (spec-entry-metadata spec) name)
+            (car (spec-entry-type-datums spec))
+            (spec-entry-where-constraints spec)
+            (spec-entry-implicit-binders spec))])]
        ;; Defn has inline types — if propagated spec, override silently;
        ;; if own-module spec, error (user mistake).
        [(defn-has-type-annotation? rest)
@@ -5662,6 +6131,7 @@
                                                (take tail (index-of-symbol ':= tail))
                                                tail)])
                                 (string-join (map (lambda (t) (format "~a" t)) extra) " "))))]
+
        [else
         (define name split-name)
         ;; A glued name's type re-enters as the SPACED tokens, so it lands on the
@@ -5680,6 +6150,29 @@
            (define after (drop rest (+ assign-pos 1)))
            ;; Auto-wrap multi-token RHS as application: `some 42N` → `(some 42N)`
            ;; In WS mode, juxtaposed tokens after := form an application.
+           ;;
+           ;; EXCEPT when every token is a keyword- or dash-headed group. That is
+           ;; a MAP BODY written in layout:
+           ;;
+           ;;     def r :=
+           ;;       :eu {:host "eu.example.com" :port 443}
+           ;;       :us {:host "us.example.com" :port 443}
+           ;;
+           ;; Wrapping it as an application built `((:eu …) (:us …))` and the def
+           ;; failed with "Could not infer type" — a message naming typing for
+           ;; what is a layout seam. The byte-identical body WITHOUT `:=` worked,
+           ;; because it reaches `rewrite-implicit-map` with its keyword tail
+           ;; intact. So these are SPLICED and the same rewrite handles both
+           ;; spellings, rather than a second map-building path being added here.
+           ;;
+           ;; Multi-token only: a single keyword group already spliced correctly,
+           ;; and narrowing the change keeps the application default untouched.
+           ;;
+           ;; MERGE 2026-08-05: re-applied into main's restructured head — that
+           ;; rewrite (glued-name splitting + fused-annotation normalization)
+           ;; rebuilt the branches this rode on, so it had to be carried across
+           ;; rather than auto-merged.
+           (define map-body? (and (> (length after) 1) (all-keyword-or-dash-headed? after)))
            (define value (if (= (length after) 1) (car after) after))
            (cond
              ;; A `:=` with nothing after it. Was a raise; now the channel.
@@ -5687,13 +6180,15 @@
               `($def-error ,(format "def ~a: expected a value after `:=`" name))]
              ;; No type annotation: (def name := value) → (def name value)
              [(null? before)
-              `(def ,name ,value)]
+              (if map-body? `(def ,name ,@after) `(def ,name ,value))]
              ;; Type annotation with colon: (def name : T1 T2 ... := value)
              ;; — reached by the spaced spelling, the normalized fused one, AND
              ;; the split glued one. Three surfaces, one arm.
              [(and (>= (length before) 2) (eq? (car before) ':))
               (define type-tokens (cdr before))
-              `(def ,name ($angle-type ,@type-tokens) ,value)]
+              (if map-body?
+                  `(def ,name ($angle-type ,@type-tokens) ,@after)
+                  `(def ,name ($angle-type ,@type-tokens) ,value))]
              ;; ── THE CHANNEL ─────────────────────────────────────────────────
              ;; Everything the expander cannot read is a PER-COMMAND error
              ;; VALUE, via the `$def-error` marker datum — the `$let-error`
@@ -5831,6 +6326,74 @@
 (define (let-syntax-error fmt . args)
   (raise (exn:let-syntax (apply format fmt args)
                          (current-continuation-marks))))
+
+;; The same shape for `.( )` mixfix, and for the same reason. `pratt-parse` and
+;; `expand-mixfix-form` raised plain `(error 'mixfix …)`, which escapes through
+;; `preparse-expand-all` and takes the WHOLE FILE with it: no results, no error
+;; count, a raw Racket `context...:` dump. A distinguished struct is what lets
+;; `expand-mixfix-form` catch its OWN failures without also swallowing a genuine
+;; Racket-level bug from somewhere inside the parse — the distinction
+;; `exn:let-syntax` was minted for, and the reason not to reach for `exn:fail?`.
+(struct exn:mixfix exn:fail () #:transparent)
+
+(define (mixfix-error fmt . args)
+  (raise (exn:mixfix (apply format fmt args)
+                     (current-continuation-marks))))
+
+;; The same shape a THIRD time, for `do` (2026-08-03). `expand-do` raised plain
+;; `(error 'do …)`, so a malformed statement took the WHOLE FILE with it —
+;; verified: a file whose `defn` body contained `do` / `cfg{a}` printed ZERO
+;; commands, not even the `def before := 1` that preceded it, and leaked the
+;; internal `($select-brace a)` sentinel into a raw Racket dump.
+;;
+;; Filed as DEFERRED CIU T6 D4.P3a item 16, which named the seat correctly —
+;; "the Q_L4 marker-seat class: a raise where a per-command error value
+;; belongs". The pre-existing family it belongs to is the one `$let-error` and
+;; `$mixfix-error` already closed; this is the same fix, third instance.
+;;
+;; A distinguished struct rather than `exn:fail?` for the reason recorded above:
+;; catching broadly would also swallow a genuine Racket-level bug from inside
+;; the expansion and report it to the user as a `do` syntax error.
+(struct exn:do-syntax exn:fail () #:transparent)
+
+(define (do-syntax-error fmt . args)
+  (raise (exn:do-syntax (apply format fmt args)
+                        (current-continuation-marks))))
+
+;; Render a datum for a USER-FACING message, folding the reader's access
+;; sentinels back to something the user could have typed.
+;;
+;; The `do` message used to print `(cfg ($select-brace a))` for source that read
+;; `cfg{a}` — an internal marker in a diagnostic, which tells the reader nothing
+;; and looks like a compiler bug. Head-macro dispatch runs BEFORE the
+;; access-sentinel fold, so any expander reporting on its own arguments sees the
+;; raw form; this is the display-side answer for the one that now reports
+;; per-command.
+;;
+;; Deliberately a POSITIVE table with an identity default: an unrecognised form
+;; is passed through unchanged rather than guessed at. Same polarity discipline
+;; as `definitely-not-map?` — a display helper that invents structure for a
+;; shape it does not know would be worse than showing the raw form.
+(define (render-access-sentinels d)
+  (define (sentinel d)
+    (and (pair? d) (= (length d) 2)
+         (case (car d)
+           [($select-brace $dot-brace) (format "{~a}" (render-access-sentinels (cadr d)))]
+           [($dot-access)              (format ".~a" (render-access-sentinels (cadr d)))]
+           [($postfix-index)           (format "[~a]" (render-access-sentinels (cadr d)))]
+           [else #f])))
+  (cond
+    [(sentinel d) => values]
+    [(and (pair? d) (list? d))
+     ;; `(cfg ($select-brace a))` — a head followed by access forms — reads back
+     ;; as JUXTAPOSITION, which is how the user wrote it: `cfg{a}`. Only when
+     ;; every tail element rendered to a string, i.e. every one was an access
+     ;; form; otherwise this is an ordinary application and is left alone.
+     (define parts (map render-access-sentinels d))
+     (if (and (pair? (cdr parts)) (andmap string? (cdr parts)))
+         (apply string-append (format "~a" (car parts)) (cdr parts))
+         parts)]
+    [else d]))
 
 (define (expand-let datum)
   (with-handlers ([exn:let-syntax?
@@ -6242,9 +6805,18 @@
 ;; NEW: (do [x ($angle-type T) e1] [y ($angle-type T2) e2] body) → 3-element bindings
 ;; OLD: (do [x : T = e1] [y : T2 = e2] body) → 5-element bindings with =
 ;; Both expand to nested let
+;; Wraps the real expander so a `do` syntax failure collapses to ONE
+;; `($do-error msg)` marker form instead of escaping. `parser.rkt` converts the
+;; marker to a per-command `parse-error` VALUE on the same channel as
+;; `$let-error` / `$mixfix-error`, so the commands before AND after the bad one
+;; still run.
 (define (expand-do datum)
+  (with-handlers ([exn:do-syntax? (lambda (e) `($do-error ,(exn-message e)))])
+    (expand-do-inner datum)))
+
+(define (expand-do-inner datum)
   (unless (and (list? datum) (>= (length datum) 2))
-    (error 'do "do requires at least a body"))
+    (do-syntax-error "do: requires at least a body"))
   (define parts (cdr datum))  ; everything after 'do
   (define body (last parts))
   (define bindings (drop-right parts 1))
@@ -6267,7 +6839,8 @@
                  [(and (list? b) (= (length b) 5))
                   (list (car b) (cadr b) (caddr b) (list-ref b 4))]
                  [else
-                  (error 'do "do: each binding must be [name <type> value] or [name : type = value], got ~a" b)]))])
+                  (do-syntax-error "do: each binding must be [name <type> value] or [name : type = value], got ~a"
+                                   (render-access-sentinels b))]))])
         `(let ,let-bindings ,body))))
 
 ;; cond: multi-way conditional dispatch
@@ -7454,7 +8027,10 @@
     (define tok (peek))
     (cond
       [(not tok)
-       (error 'mixfix "Unexpected end of expression in .{...}")]
+       ;; `mixfix-error`, not `error`: this is a user syntax error like the
+       ;; three below it, and it belongs on the same per-command channel rather
+       ;; than escaping `preparse-expand-all` and costing the file.
+       (mixfix-error "Unexpected end of expression in .{...}")]
       ;; Unary minus: - followed by non-operator
       [(and (symbol? tok) (eq? tok '-)
             (let ([next-pos (+ 1 (unbox pos))])
@@ -7473,7 +8049,7 @@
        (advance!)
        tok]
       [else
-       (error 'mixfix "Expected expression, got operator: ~a" tok)]))
+       (mixfix-error "Expected expression, got operator: ~a" tok)]))
 
   ;; Build operator result, respecting swap? flag for > and >=
   (define (make-op-result op lhs rhs)
@@ -7536,9 +8112,9 @@
             (when (and context-group (not (eq? context-group op-grp)))
               (define cmp (compare-groups op-grp context-group groups))
               (when (eq? cmp 'incomparable)
-                (error 'mixfix
-                       (format "Operators from groups '~a' and '~a' have no defined precedence relationship — use [] for explicit grouping"
-                               op-grp context-group))))
+                (mixfix-error
+                 "Operators from groups '~a' and '~a' have no defined precedence relationship — use [] for explicit grouping"
+                 op-grp context-group)))
             ;; Chained comparison detection: if we have a last-chain-rhs (from a previous
             ;; comparison) and the current op is also comparison, chain.
             (cond
@@ -7577,10 +8153,10 @@
                (loop result new-chain-rhs)])])])))
 
   (if (= len 0)
-      (error 'mixfix "Empty .( ) mixfix expression")
+      (mixfix-error "Empty .( ) mixfix expression")
       (let ([result (parse-expr 0)])
         (unless (at-end?)
-          (error 'mixfix "Unexpected token after expression: ~a" (peek)))
+          (mixfix-error "Unexpected token after expression: ~a" (peek)))
         result)))
 
 ;; --- Effective operator table (merges builtin + user-defined) ---
@@ -7616,10 +8192,20 @@
   ;; consume ("Unexpected token after expression"). Folding it to (map-get p :x)
   ;; first makes it an ordinary operand. Any residue in pratt-parse's result is
   ;; cleaned by the caller's re-expansion of this macro's output.
+  ;; A mixfix failure is a PER-COMMAND parse error, not a whole-file abort. The
+  ;; run collapses to a single `($mixfix-error msg)` datum carrying the real
+  ;; message; parser.rkt turns it into a `parse-error` VALUE with this form's
+  ;; loc. Same channel as `$let-error`, for the same reason and by the same
+  ;; precedent — an unhandled raise here escapes `preparse-expand-all` and costs
+  ;; every command in the file, including the ones already read.
+  ;;
+  ;; ONLY `exn:mixfix?`: a genuine Racket-level bug inside the parse must still
+  ;; surface as itself rather than be reported to the user as a syntax error.
   (define tokens (rewrite-dot-access (cdr datum)))
-  (if (null? tokens)
-      (error 'mixfix "Empty .( ) mixfix expression")
-      (pratt-parse tokens (effective-operator-table) (effective-precedence-groups))))
+  (with-handlers ([exn:mixfix? (lambda (e) `($mixfix-error ,(exn-message e)))])
+    (if (null? tokens)
+        (mixfix-error "Empty .( ) mixfix expression")
+        (pratt-parse tokens (effective-operator-table) (effective-precedence-groups)))))
 
 ;; Track 10 Phase 2c: register built-in expanders in the lookup table FIRST,
 ;; then register them in the preparse registry (which stores symbols, not closures).
@@ -8107,6 +8693,11 @@
 ;; Registry: trait-name (symbol) → trait-meta
 (define current-trait-registry (make-parameter (hasheq)))
 
+;; Names this derive mechanism has generated, so `derivable-method?` can tell
+;; "someone else binds this" from "we bound this on an earlier preparse pass".
+;; See its comment for why the distinction is load-bearing rather than tidy.
+(define derived-wrapper-names (box '()))
+
 (define (register-trait! name meta)
   (current-trait-registry (hash-set (current-trait-registry) name meta))
   ;; Phase 2b: dual-write to cell
@@ -8478,7 +9069,29 @@
       (lookup-trait sym)      ;; trait → known (not a variable)
       (lookup-bundle sym)     ;; bundle → known (not a variable)
       (lookup-schema sym)     ;; schema → known type (not a variable)
-      (lookup-selection sym)))  ;; selection → known type (not a variable)
+      (lookup-selection sym)   ;; selection → known type (not a variable)
+      ;; ⚠ CAPABILITIES (2026-08-03). Without this arm every capability name in
+      ;; a spec was AUTO-GENERALIZED into a fresh `{X : Type}` implicit binder,
+      ;; because the auto-detect at Phase 1b keeps any capitalized symbol that
+      ;; `known-type-name?` does not claim.
+      ;;
+      ;; The damage was silent and total for the positional spelling:
+      ;;
+      ;;   spec rd ReadCap -0> String -> String
+      ;;   defn rd [_cap path] path
+      ;;   ⇒ rd : [Pi [x :0 <[Type 0]>] [Pi [y :0 <x>] String -> String]]
+      ;;
+      ;; — `ReadCap` became a type VARIABLE and `_cap` got that variable's type,
+      ;; so the binder never registered as a capability, the capability scope
+      ;; stayed empty, and any call needing that capability failed with
+      ;; "E2001: Required capability ReadCap not available in scope" — an error
+      ;; that points at the call site while the damage was done in the spec.
+      ;;
+      ;; `prologos::core::csv` is the tree's only user of that spelling and has
+      ;; been UNIMPORTABLE as a result, with two green E2E test files over it.
+      ;; Referring the name explicitly does not help: the auto-detect asks
+      ;; `known-type-name?`, not the environment.
+      (capability-type? sym)))  ;; capability → known type (not a variable)
 
 ;; Phase 1b: Check if a symbol starts with an uppercase letter (type variable candidate)
 (define (capitalized-symbol? sym)
@@ -9436,15 +10049,33 @@
   ;; from-rational, alpha/gamma) are excluded structurally: their type var
   ;; cannot be solved from call arguments. See DEFERRED.md § "Numerics
   ;; N6d-i follow-ups" item 3 for the expected-type-resolution future.
-  ;; Skip-set: method names whose derivation would capture or clobber
-  ;; existing same-named bindings (own-module import capture; bare-name
-  ;; spec-store overwrite — issues #66/#67). Census-seeded 2026-07-02:
-  ;;   add/sub — arithmetic.prologos refers nat's add/sub and the Nat impl
-  ;;             bodies call them bare (capture → self-referential dicts);
-  ;;   join    — string-ops join (spec clobber; heavily used);
-  ;;   reduce  — data/list reduce (spec clobber).
-  ;; Lifting these = DEFERRED.md § "Numerics N6d-i follow-ups" item 1.
-  (define derive-skip-methods '(add sub join reduce))
+  ;; Skip-set: method names whose derivation would capture or clobber an
+  ;; existing same-named binding.
+  ;;
+  ;; ⚠ IT WAS `(add sub join reduce)` UNTIL 2026-08-03, hand-maintained. Three
+  ;; of the four are now handled by the COMPUTED guard in `derivable-method?`
+  ;; below ("something else already binds this name"), which is the structural
+  ;; answer to a hand-maintained enumeration this codebase prefers. Measured on
+  ;; the 24 files that break when the list is emptied: 24 failures with no
+  ;; guard, 4 with a naive guard, 1 with the re-derivation fix, 0 once `join`
+  ;; alone is listed.
+  ;;
+  ;; `join` CANNOT be computed away, and the reason is load ORDER, not the
+  ;; guard's shape: when the trait carrying it is processed, `string-ops`
+  ;; has not been loaded yet, so there is no binding for the guard to see. The
+  ;; derived wrapper then shadows string-ops' `join` at the VALUE level — and
+  ;; note this is a VALUE shadow, not the spec-store clobber the entry
+  ;; originally blamed, so no spec-store fix reaches it. Seeing it requires
+  ;; knowing the whole program's name universe up front, which is the
+  ;; module-provenance question DEFERRED.md § "Numerics N6d-i follow-ups" item
+  ;; 1 and issue #66 both wait on.
+  ;;
+  ;; ⚠ AND `join` IS THE ONE THE SUITE COULD NOT SEE. A per-method A/B reported
+  ;; it as safe to lift and the full 542-file suite agreed — because nothing in
+  ;; the suite called `join` at all. `[join "-" '["x" "y"]]` fails outright with
+  ;; it derived. `tests/test-trait-method-derive.rkt` now has that call, and it
+  ;; is the guard that would catch anyone shrinking this list to `'()`.
+  (define derive-skip-methods '(join))
 
   ;; Domain (argument-position) sub-datums of a method type: strip Pi
   ;; wrappers into the body, then collect nested prefix-arrow domains;
@@ -9475,16 +10106,62 @@
   (define (derivable-method? method)
     (define mname (trait-method-name method))
     (and (not (memq mname derive-skip-methods))
+         ;; Do not derive a bare wrapper over a name something ELSE already
+         ;; binds — the derived `def` would shadow it at the VALUE level. This
+         ;; replaces three of the four hand-listed skips.
+         ;;
+         ;; ⚠ THE `derived-wrapper-names` DISJUNCT IS LOAD-BEARING, and without
+         ;; it this guard is actively wrong. Preparse re-walks the forms, so on
+         ;; the second pass the name is bound BY OUR OWN WRAPPER from the first
+         ;; — a naive `(not (global-env-lookup-type mname))` then declines to
+         ;; regenerate the def, and the wrapper silently disappears. That is
+         ;; what the 4 residual failures were (`to-float`, `abs`, `neg`), and
+         ;; they looked like an unrelated ordering bug until the multi-pass was
+         ;; the suspect. Same shape as the trait registry registering three
+         ;; times for two declarations.
+         (or (memq mname (unbox derived-wrapper-names))
+             (not (global-env-lookup-type mname)))
          (not (null? params))
-         (let ([doms (method-domain-datums (trait-method-type-datum method))])
+         (let ([doms (method-domain-datums (trait-method-type-datum method))]
+               [whole (trait-method-type-datum method)])
            (for/and ([p (in-list params)])
-             (for/or ([d (in-list doms)])
-               (datum-mentions? d (car p)))))))
+             (or (for/or ([d (in-list doms)])
+                   (datum-mentions? d (car p)))
+                 ;; ⚠ RESULT-POSITION parameters, added 2026-08-03. A method
+                 ;; like `gen : Int -> A` or `convert : A -> B` has a parameter
+                 ;; the ARGUMENTS cannot solve — and the derive rule used to
+                 ;; stop there, which is DEFERRED § "Numerics N6d-i follow-ups"
+                 ;; item 3 ("output-position-only methods").
+                 ;;
+                 ;; That entry blamed the RESOLUTION machinery, calling
+                 ;; expected-type-directed constraint resolution "UNPROVEN at
+                 ;; HEAD". Measured: it works. A hand-written
+                 ;; `spec mk {A} Int -> A where (Gen A)` resolves fine from
+                 ;; `def a : Int := [mk 5]`. What blocked the METHODS was this
+                 ;; rule refusing to emit their wrapper, nothing deeper.
+                 ;;
+                 ;; `(pair? doms)` is the boundary and it is load-bearing: a
+                 ;; method that takes arguments has an APPLICATION for the
+                 ;; checker to hang an expected type on. A bare constant
+                 ;; (`zero : A`, `one`, `bot`, `empty-coll`) has none, so it
+                 ;; still derives nothing and `def o : Int := one` is still
+                 ;; Unbound — the other half of item 3, still open and now
+                 ;; separately pinned.
+                 ;;
+                 ;; Verified end-to-end rather than by def-count: with
+                 ;; `impl Convertible Int Bool`, `def y : Bool := [convert 0]`
+                 ;; gives `true` and `[convert 5]` gives `false` — the expected
+                 ;; type choosing the instance from an identical call shape.
+                 (and (pair? doms) (datum-mentions? whole (car p))))))))
 
   (define derived-wrapper-defs
     (for/list ([method (in-list methods)]
                [i (in-naturals)]
-               #:when (derivable-method? method))
+               #:when (and (derivable-method? method)
+                           (begin (set-box! derived-wrapper-names
+                                            (cons (trait-method-name method)
+                                                  (unbox derived-wrapper-names)))
+                                  #t)))
       (define method-name (trait-method-name method))
       (define method-type (trait-method-type-datum method))
       (define wrapper-type
@@ -10872,12 +11549,55 @@
 ;; ========================================
 ;; Expand expressions (walk sub-expressions for the-fn)
 ;; ========================================
+
+;; ========================================
+;; Error propagation through the expansion walk
+;; ========================================
+;;
+;; `expand-expression-inner` is a structural rebuild with ~30 arms, and an
+;; error VALUE produced anywhere inside it used to be WRAPPED into the
+;; surrounding node and carried to the elaborator, which reported it as
+;;
+;;     Cannot elaborate: #(struct:prologos-error …)
+;;
+;; — the struct, printed. Two arms had been armed by hand (`surf-def`'s body at
+;; the command boundary, and `surf-lam`), which covers the common case and
+;; leaves every deeper producer leaking that way.
+;;
+;; Arming the other twenty-eight is exactly the exhaustive-walker hazard
+;; `pipeline.md` warns about: the next arm added inherits the bug, silently, and
+;; a green suite says nothing. So propagation is by CONSTRUCTION instead —
+;; every recursive descent goes through `expand-child`, which escapes to the top
+;; of this expansion the moment a child expands to an error. No arm has to
+;; remember, and an arm added tomorrow cannot forget.
+;;
+;; An escape rather than a threaded Either because the arms are ordinary
+;; constructor applications; making them all monadic would be a rewrite, and a
+;; rewrite of a walker is how walkers acquire the bugs in the first place.
+(define current-expand-escape (make-parameter #f))
+
+(define (expand-child s)
+  (define r (expand-expression-inner s))
+  (cond
+    [(prologos-error? r)
+     (define esc (current-expand-escape))
+     (if esc (esc r) r)]
+    [else r]))
+
 (define (expand-expression surf)
+  ;; Reentrant: an inner call installs its own escape, so an error still stops
+  ;; at the nearest enclosing `expand-expression` rather than unwinding past it.
+  (let/ec return
+    (parameterize ([current-expand-escape return])
+      (expand-expression-inner surf))))
+
+
+(define (expand-expression-inner surf)
   (match surf
     ;; the-fn — desugar
     [(surf-the-fn _ _ _ _)
      (define result (desugar-the-fn surf))
-     (if (prologos-error? result) result (expand-expression result))]
+     (if (prologos-error? result) result (expand-child result))]
     ;; Walk sub-expressions
     ;; Placeholder desugaring: _ in app args → anonymous lambda
     ;; (add 1 _) → (fn [$_0] (add 1 $_0))
@@ -10907,7 +11627,7 @@
                [result (foldr (lambda (name inner)
                                 (surf-lam (binder-info name #f (surf-hole loc)) inner loc))
                               new-app names)])
-          (expand-expression result))]
+          (expand-child result))]
        ;; Numbered holes: positional placeholders with explicit ordering
        [has-numbered
         (let* (;; Collect all indices
@@ -10936,79 +11656,75 @@
                                                        #f (surf-hole loc))
                                           inner loc))
                               new-app sorted-indices)])
-          (expand-expression result))]
+          (expand-child result))]
        ;; No holes: just recurse on sub-expressions
        [else
-        (surf-app (expand-expression fn) (map expand-expression args) loc)])]
+        (surf-app (expand-child fn) (map expand-child args) loc)])]
     [(surf-lam binder body loc)
-     ;; Propagate an error VALUE out of the body rather than wrapping it in a
-     ;; lambda. `expand-expression` is otherwise a structural rebuild with no
-     ;; error propagation, so an error produced during expansion (today: an
-     ;; unreachable match arm) would be carried into the elaborator and surface
-     ;; as "Cannot elaborate: #(struct:prologos-error …)". This arm is where a
-     ;; `defn` body lands, which is the common case; deeper nestings still leak
-     ;; that way — tracked in DEFERRED rather than by arming every arm here,
-     ;; which is the exhaustive-walker hazard pipeline.md warns about.
-     (let ([b (expand-expression body)])
-       (if (prologos-error? b) b (surf-lam binder b loc)))]
+     ;; No hand-armed error check here any more. `expand-child` escapes on an
+     ;; error child, so this arm — and every other one — propagates by
+     ;; construction. Keeping the old check alongside it would be two
+     ;; mechanisms for one job, which is how the bug in the new one stays
+     ;; hidden until the old one is removed.
+     (surf-lam binder (expand-child body) loc)]
     [(surf-ann type term loc)
-     (surf-ann (expand-expression type) (expand-expression term) loc)]
+     (surf-ann (expand-child type) (expand-child term) loc)]
     [(surf-pair e1 e2 loc)
-     (surf-pair (expand-expression e1) (expand-expression e2) loc)]
+     (surf-pair (expand-child e1) (expand-child e2) loc)]
     [(surf-fst e loc)
-     (surf-fst (expand-expression e) loc)]
+     (surf-fst (expand-child e) loc)]
     [(surf-snd e loc)
-     (surf-snd (expand-expression e) loc)]
+     (surf-snd (expand-child e) loc)]
     [(surf-suc e loc)
-     (surf-suc (expand-expression e) loc)]
+     (surf-suc (expand-child e) loc)]
     [(surf-pi binder body loc)
-     (surf-pi binder (expand-expression body) loc)]
+     (surf-pi binder (expand-child body) loc)]
     [(surf-arrow m dom cod loc)
-     (surf-arrow m (expand-expression dom) (expand-expression cod) loc)]
+     (surf-arrow m (expand-child dom) (expand-child cod) loc)]
     [(surf-sigma binder body loc)
-     (surf-sigma binder (expand-expression body) loc)]
+     (surf-sigma binder (expand-child body) loc)]
     [(surf-eq type lhs rhs loc)
-     (surf-eq (expand-expression type) (expand-expression lhs) (expand-expression rhs) loc)]
+     (surf-eq (expand-child type) (expand-child lhs) (expand-child rhs) loc)]
     [(surf-natrec mot base step target loc)
-     (surf-natrec (expand-expression mot) (expand-expression base)
-                  (expand-expression step) (expand-expression target) loc)]
+     (surf-natrec (expand-child mot) (expand-child base)
+                  (expand-child step) (expand-child target) loc)]
     [(surf-boolrec mot tc fc target loc)
-     (surf-boolrec (expand-expression mot) (expand-expression tc)
-                   (expand-expression fc) (expand-expression target) loc)]
+     (surf-boolrec (expand-child mot) (expand-child tc)
+                   (expand-child fc) (expand-child target) loc)]
     [(surf-J mot base left right proof loc)
-     (surf-J (expand-expression mot) (expand-expression base)
-             (expand-expression left) (expand-expression right)
-             (expand-expression proof) loc)]
+     (surf-J (expand-child mot) (expand-child base)
+             (expand-child left) (expand-child right)
+             (expand-child proof) loc)]
     ;; Rich pattern match — compile via compile-match-tree, then re-expand
     [(surf-match-patterns scrutinee arms loc)
      (define compiled (compile-match-expression scrutinee arms loc))
      ;; compile-match-expression may return a prologos-error VALUE (an
      ;; unreachable arm) — propagate it rather than re-expanding it, which would
      ;; surface as "Cannot elaborate: #(struct:prologos-error …)".
-     (if (prologos-error? compiled) compiled (expand-expression compiled))]
+     (if (prologos-error? compiled) compiled (expand-child compiled))]
     ;; Reduce — walk scrutinee and arm bodies
     [(surf-reduce scrutinee arms loc)
-     (surf-reduce (expand-expression scrutinee)
+     (surf-reduce (expand-child scrutinee)
                   (map (lambda (arm)
                          (reduce-arm (reduce-arm-ctor-name arm)
                                      (reduce-arm-bindings arm)
-                                     (expand-expression (reduce-arm-body arm))
+                                     (expand-child (reduce-arm-body arm))
                                      (reduce-arm-srcloc arm)))
                        arms)
                   loc)]
     ;; Narrowing expression — expand sub-expressions (Phase 1e)
     [(surf-narrow lhs rhs vars loc constraint-map)
-     (surf-narrow (expand-expression lhs) (expand-expression rhs) vars loc constraint-map)]
+     (surf-narrow (expand-child lhs) (expand-child rhs) vars loc constraint-map)]
     ;; Constraint forms — expand sub-expressions (Phase 3c)
     [(surf-all-different vars loc)
-     (surf-all-different (map expand-expression vars) loc)]
+     (surf-all-different (map expand-child vars) loc)]
     [(surf-element index list-expr var loc)
-     (surf-element (expand-expression index) (expand-expression list-expr)
-                   (expand-expression var) loc)]
+     (surf-element (expand-child index) (expand-child list-expr)
+                   (expand-child var) loc)]
     [(surf-cumulative tasks capacity loc)
-     (surf-cumulative (expand-expression tasks) (expand-expression capacity) loc)]
+     (surf-cumulative (expand-child tasks) (expand-child capacity) loc)]
     [(surf-minimize cost-var loc)
-     (surf-minimize (expand-expression cost-var) loc)]
+     (surf-minimize (expand-child cost-var) loc)]
     ;; Leaf forms — pass through
     [_ surf]))
 
@@ -11193,7 +11909,14 @@
   ;; Build the default branch from variable/wildcard rows
   (define default-branch
     (if (null? default-rows)
-        (surf-typed-hole '__match-fail loc)
+        (begin
+       ;; W3002 (2026-08-03): a match with no covering row plants a typed hole,
+       ;; which types at anything — so the gap was silent. Warn where it is
+       ;; planted, which is the only place that knows the coverage failed.
+       ;; Measured before choosing default-on: a full prelude load plants ZERO
+       ;; of these, so the ordinary path stays quiet.
+       (emit-inexhaustive-match-warning! (format-srcloc loc))
+       (surf-typed-hole '__match-fail loc))
         ;; Remove the dispatch column from default rows (it matched as var/wildcard)
         ;; and compile the remaining columns
         (let* ([adjusted-rows
@@ -11286,7 +12009,14 @@
   (cond
     ;; No rows — unreachable branch (incomplete pattern match)
     [(null? rows)
-     (surf-typed-hole '__match-fail loc)]
+     (begin
+       ;; W3002 (2026-08-03): a match with no covering row plants a typed hole,
+       ;; which types at anything — so the gap was silent. Warn where it is
+       ;; planted, which is the only place that knows the coverage failed.
+       ;; Measured before choosing default-on: a full prelude load plants ZERO
+       ;; of these, so the ordinary path stays quiet.
+       (emit-inexhaustive-match-warning! (format-srcloc loc))
+       (surf-typed-hole '__match-fail loc))]
     ;; First row is all variables → base case: bind and return body
     [(for/and ([pat (in-list (caar rows))])
        (pattern-is-variable? pat))
@@ -11650,11 +12380,33 @@
   ;; use variable names from the first clause to avoid redundant let-bindings.
   ;; This is critical for guards: fn __arg0 . (let n = __arg0 in ...) creates
   ;; an extra indirection that triggers QTT false positives.
+  ;; ⚠ NORMALIZE BEFORE ASKING "are these all variables?".
+  ;;
+  ;; A bare nullary constructor pattern (`| ka ka -> …`) is a `pat-atom` of kind
+  ;; 'var until `normalize-pattern` consults `lookup-ctor` and turns it into a
+  ;; `pat-compound`. Testing the RAW pattern therefore called every bare
+  ;; constructor a variable, `all-var?` came out #t, and the parameters were
+  ;; named after the PATTERNS — so `| ka ka ->` produced TWO parameters both
+  ;; named `ka`. `compile-match-tree` then took `(list-ref param-names col)` for
+  ;; each dispatch column and got the same name twice: the second dispatch
+  ;; re-read the FIRST argument. `[keq ka kb]` returned `true`.
+  ;;
+  ;; Silent — it compiles, type-checks, and reports 0 errors. It broke OCapN
+  ;; brand-check (found 2026-08-05 by `test-ocapn-bridge`'s "different kinds =>
+  ;; false even with same id", the only assertion in the tree that distinguishes
+  ;; them). Repro: `examples/2026-08-05-multiarity-nullary-repro.prologos`.
+  ;;
+  ;; Bracketed patterns (`| [ka] [ka] ->`) always worked, because the reader
+  ;; emits `pat-compound` for those and no lookup is needed — which is why this
+  ;; looked like a bracketing rule rather than a normalization-order bug.
+  (define normalized-clause-pats
+    (for/list ([clause (in-list clauses)])
+      (map normalize-pattern (defn-pattern-clause-patterns clause))))
   (define param-names
-    (let* ([all-var? (for/and ([clause (in-list clauses)])
-                       (for/and ([pat (in-list (defn-pattern-clause-patterns clause))])
+    (let* ([all-var? (for/and ([pats (in-list normalized-clause-pats)])
+                       (for/and ([pat (in-list pats)])
                          (pattern-is-variable? pat)))]
-           [first-pats (defn-pattern-clause-patterns (car clauses))])
+           [first-pats (car normalized-clause-pats)])
       (if all-var?
           (for/list ([pat (in-list first-pats)])
             (if (and (pat-atom? pat) (eq? (pat-atom-kind pat) 'var))
@@ -11665,8 +12417,9 @@
   ;; Normalize all patterns and build rows
   ;; Row format: (list patterns guard body)
   (define rows
-    (for/list ([clause (in-list clauses)])
-      (list (map normalize-pattern (defn-pattern-clause-patterns clause))
+    (for/list ([clause (in-list clauses)]
+               [pats (in-list normalized-clause-pats)])
+      (list pats
             (defn-pattern-clause-guard clause)
             (defn-pattern-clause-body clause))))
   ;; An arm after an irrefutable one is dead AND unchecked — see

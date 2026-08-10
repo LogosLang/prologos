@@ -85,6 +85,38 @@ it) and `=` never binds.
   ```
   Body at the **same** indent as `|` is a layout violation (currently produces a hard parser error; tracked in issue #27 for diagnostic improvement). Body indent must be **strictly greater than** the `|` column.
 
+- **Never write three-deep nested `match` as a single function body.** Three-deep nested `match` inside a single function body fails to elaborate at *import time* with "Unbound variable" errors in Prologos's current elaborator. The fix is mechanical: factor into a chain of single-match helpers. Each helper does one `match`, returns to the caller, the caller does the next `match`. Same semantics for the user, no elaborator failure. OCapN Phases 15 and 21 both shipped this workaround; codified after the second occurrence. Until the underlying elaborator bug is fixed, this is the safe pattern.
+  ```
+  ;; WRONG — fails at import time
+  defn pipeline-deliver [target args v]
+    match [lookup-actor target v]
+      | some _ -> send-only target args v
+      | none ->
+          match [lookup-promise target v]
+            | none -> v
+            | some pst ->
+                match pst
+                  | pst-unresolved msgs -> ...
+                  | _ -> v
+
+  ;; RIGHT — helper chain
+  spec deliver-to-promise Nat SyrupValue PromiseState Vat -> Vat
+  defn deliver-to-promise [pid args pst v]
+    match pst | pst-unresolved msgs -> ... | _ -> v
+
+  spec deliver-to-promise-or-drop Nat SyrupValue Vat -> Vat
+  defn deliver-to-promise-or-drop [target args v]
+    match [lookup-promise target v]
+      | none -> v
+      | some pst -> deliver-to-promise target args pst v
+
+  spec pipeline-deliver Nat SyrupValue Vat -> Vat
+  defn pipeline-deliver [target args v]
+    match [lookup-actor target v]
+      | some _ -> send-only target args v
+      | none -> deliver-to-promise-or-drop target args v
+  ```
+
 ## Application style
 
 - **Uncurried** -- `defn foo [x y z] body`, `spec f A B -> C`. Multiple arguments in one bracket group.
@@ -93,6 +125,38 @@ it) and `=` never binds.
 - **Pipeline `|>` and `compose`** for chaining named functions -- `|> 5 inc dbl sqr` is idiomatic.
 - **Eval is implicit** -- write `[f x]` not `eval [f x]`. Top-level expressions just evaluate.
 - **Don't wrap outer tree** -- top-level forms are implicit.
+- **Keep multi-arg applications on a single line.** A continuation line whose first token is a bare identifier is parsed as a sibling form, not as more args to the previous head. Pitfalls #36 and #38 (goblin-pitfalls log) both stem from this:
+  ```
+  ;; WRONG — `es as qs p oqs ir er pm` is parsed as an application of `es` to 7 args
+  bridge-state [list-filter-listeners-by-notified ls notified]
+               es as qs p oqs ir er pm
+
+  ;; WRONG — `let X := EXPR` value can't span lines; reader sees no value for X
+  let step1 := [captp-incoming-with-state op1 [alloc-vat sa]
+                 [bridge-state-with-our-session ver loc]]
+
+  ;; RIGHT — all positional args on the function-head line; break BEFORE a bracketed sub-call (which becomes the last arg) if the line gets too long
+  bridge-state [list-filter-listeners-by-notified ls notified] es as qs p oqs ir er pm
+  ```
+  If a line is unavoidably long, factor a sub-expression to a separate `let` or top-level helper rather than splitting positional args.
+
+- **Single-arg `defn` over a `data` type uses `defn name [arg] match arg | ...`, NOT multi-arity `defn name | [pat1] -> ... | [pat2] -> ...`.** The latter shape can cause the elaborator to lift a phantom 2nd parameter (pitfall #37 in goblin-pitfalls). Multi-arity `defn` is fine for 2+ args; for one-arg over a data type, prefer `match`:
+  ```
+  ;; WRONG — inferred type becomes `PromiseState SyrupValue -> [Option SyrupValue]` (2 args)
+  spec resolution-syrup-of-pst PromiseState -> [Option SyrupValue]
+  defn resolution-syrup-of-pst
+    | [pst-unresolved _] -> none
+    | [pst-broken     r] -> some [wrap-error r]
+    | [pst-fulfilled  v] -> some v
+
+  ;; RIGHT — inferred type matches the spec
+  spec resolution-syrup-of-pst PromiseState -> [Option SyrupValue]
+  defn resolution-syrup-of-pst [pst]
+    match pst
+      | pst-unresolved _ -> none
+      | pst-broken     r -> some [wrap-error r]
+      | pst-fulfilled  v -> some v
+  ```
 
 ## Type annotations
 
@@ -130,6 +194,11 @@ it) and `=` never binds.
   was a silent truncation, and before `2a7cbe45` (2026-07-02) even the parse
   error was discarded, so a file could report **0 errors while defining
   nothing**.
+
+## Data type definitions
+
+- **Constructor signatures have IMPLICIT return type** (per pitfall #34). Write `data X { ctor : T1 -> T2 }` to mean "ctor takes 2 args of types T1 and T2 and returns X." Do NOT write `ctor : T1 -> T2 -> X` — that means "takes 3 args (T1, T2, X) and returns X." Existing examples: `data Listener { listener : Nat -> Nat }`, `data QEntry { q-entry : Nat -> Nat }`. Symptom of getting it wrong: smart constructors fail with `Type mismatch [Pi T -> Result -> Result]`.
+
 
 ## Relational syntax (`defr` / `rel` / goals)
 

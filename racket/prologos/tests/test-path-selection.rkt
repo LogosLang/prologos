@@ -1000,6 +1000,272 @@
   (check-false (regexp-match? #rx"Unbound variable" r)
                "the pre-P2 lie: the stranded bare `|.|` was reported instead"))
 
+(test-case "P2 item 10: the 0-tuple branch IS reachable — via an empty tuple SLICE"
+  ;; `format-closed-tuple-oob`'s `(if (zero? arity) " (the tuple has no
+  ;; positions)" …)` shipped with no test and was filed as possibly
+  ;; STRUCTURALLY UNREACHABLE — "either construct the reaching case and pin it,
+  ;; or delete the arm; do not leave it as decoration".
+  ;;
+  ;; It is reachable, and the filing was looking at the wrong producer. Its
+  ;; reasoning — `@[]` types as `[PVec _]`, not a 0-field nat row — is CORRECT
+  ;; and is pinned below. But `pvec-slice` on a closed tuple has its own
+  ;; row-building branch (typing-core.rkt, the col-3 slice arm) whose field list
+  ;; is literally `'()` when the range is empty:
+  ;;
+  ;;     (make-record 'nat (if (>= lo-n hi*) '() …) 'closed)
+  ;;
+  ;; So an empty slice of a tuple IS a closed 0-field nat row, and an ordinal on
+  ;; it takes the zero-arity branch. Keep the arm.
+  (define all (run-ws-raw
+    "def t := @[1 \"a\"]\ndef s := [pvec-slice t 1N 1N]\ns.0\n"))
+  (check-false (ormap prologos-error? (take all 2))
+               (format "the two defs must succeed first: ~v" all))
+  (define r (format "~a" (last all)))
+  (check-regexp-match #rx"0-tuple" r "must name the arity")
+  (check-regexp-match #rx"no positions" r
+                      "the zero-arity branch, not the valid-indices one")
+  (check-false (regexp-match? #rx"valid indices" r)
+               "0 positions has no valid-index range to offer"))
+
+(test-case "P2 item 10: an empty PVec literal is not a 0-tuple (the filing's premise, pinned)"
+  ;; The half of the filing that was right, and the reason the arm looked dead:
+  ;; `@[]` types as `[PVec _]`, so it never reaches the tuple path at all.
+  ;; Pinned so that a future change making `@[]` a 0-tuple shows up HERE, beside
+  ;; the branch that would then have a second producer.
+  (define r (run-ws-last "def e := @[]\ne\n"))
+  (check-regexp-match #rx"PVec" r)
+  (check-false (regexp-match? #rx"tuple" r)))
+
+(test-case "P3a item 20: a SELECTION-typed subject refuses with a selection-aware message"
+  ;; The refusal is DELIBERATE policy, not a shape mismatch: a selection is a
+  ;; capability-restricted view (`:requires`), and projecting through one
+  ;; without the read-capability check would bypass the restriction it exists
+  ;; to enforce. The old message said "the subject is not a record", which is
+  ;; true of a thing that is precisely a restricted record VIEW, and sends the
+  ;; reader to check their subject's shape instead of their intent.
+  (define r (run-ws-last
+    (string-append
+     "schema Person\n  :name String\n  :age Int\n"
+     "selection NameOnly from Person :requires [:name]\n"
+     "def u : NameOnly := {:name \"hana\" :age 9}\n"
+     "u{name}\n")))
+  (check-regexp-match #rx"selection" r "must name what the subject actually is")
+  (check-regexp-match #rx"capability-restricted" r "must say WHY it refuses")
+  (check-false (regexp-match? #rx"is not a record" r)
+               "the old message: true, and unhelpful about a restricted record view"))
+
+(test-case "P3a item 20: a genuinely non-record subject keeps the generic message"
+  ;; The selection arm must not become the only thing `subject-other` can say.
+  (define r (run-ws-last "def n := 5\nn{a}\n"))
+  (check-regexp-match #rx"is not a record" r)
+  (check-false (regexp-match? #rx"capability-restricted" r)))
+
+(test-case "P3b item 21: `k^:x` gets the RENAME-TARGET message, not the bare-keys one"
+  ;; In WS mode the lexeme does NOT glue through the colon, so `server^:x`
+  ;; arrives as TWO items — `server^` and the keyword `:x` — and
+  ;; `split-caret-lexeme`'s own `#\:` arm never fires: it is reachable from
+  ;; sexp-mode datums only (the F1b sexp-green ≠ WS-correct class). The input
+  ;; fell through to "block keys are written bare", whose ACTION happens to
+  ;; resolve it — degraded, not lying — but which names the wrong construct.
+  (define r (run-ws-last
+    (string-append
+     "schema Cfg\n  :server String\n"
+     "def cfg : Cfg := {:server \"h\"}\n"
+     "cfg{server^:x}\n")))
+  ;; ⚠ MERGE 2026-08-05 — the SPELLING was repurposed upstream, so this test's
+  ;; premise moved. D4.P4c mints `:x` after a caret as a BROADCAST step, so
+  ;; `server^:x` is no longer a malformed rename target; it is a broadcast over
+  ;; a String subject, and the message says so.
+  ;;
+  ;; What this case is actually FOR survives and is what is asserted: the
+  ;; spelling gets a GUIDED message naming the construct the user wrote, not the
+  ;; generic bare-keys one that named the wrong construct. That was the item 21
+  ;; complaint and it still holds — only the construct changed.
+  (check-regexp-match #rx"broadcast" r "must name the construct the user wrote")
+  (check-false (regexp-match? #rx"block keys are written bare" r)
+               "the generic message named the wrong construct"))
+
+(test-case "P3b item 21: a plain `:key` in a block KEEPS the bare-keys message"
+  ;; The new arm is gated on a CARET-BEARING item immediately before the
+  ;; keyword. Without that gate it would swallow the ordinary mistake, whose
+  ;; own message is the right one.
+  (define r (run-ws-last
+    (string-append
+     "schema Cfg\n  :server String\n"
+     "def cfg : Cfg := {:server \"h\"}\n"
+     "cfg{:server}\n")))
+  (check-regexp-match #rx"written bare" r)
+  (check-false (regexp-match? #rx"rename target" r)))
+
+(test-case "P3b item 21: the working rename still works (control)"
+  (define r (run-ws-last
+    (string-append
+     "schema Cfg\n  :server String\n"
+     "def cfg : Cfg := {:server \"h\"}\n"
+     "cfg{server^x}\n")))
+  (check-regexp-match #rx":x" r "the field is renamed")
+  (check-false (prologos-error? (run-ws-raw-last
+    (string-append
+     "schema Cfg\n  :server String\n"
+     "def cfg : Cfg := {:server \"h\"}\n"
+     "cfg{server^x}\n")))))
+
+(test-case "P1b-iii item 7: a select block in a BINDER position gets a guided error"
+  ;; The message came from the binder walker, never mentioned select blocks,
+  ;; and dumped raw syntax objects INCLUDING ABSOLUTE FILE PATHS into
+  ;; user-facing text. Both halves are fixed: the walker recognises an access
+  ;; sentinel anywhere in the binder datum, and the datum is deep-stripped
+  ;; before rendering.
+  ;; assert on the MESSAGE, which is what `emit-error-diagnostic` shows the
+  ;; user. The struct's payload field legitimately holds the datum (it feeds
+  ;; `Near:`), so asserting on the whole printed struct would be asserting
+  ;; more than the user ever sees.
+  (define e (run-ws-raw-last "def base := {:a 1}\ndef f := [fn [x base{a}] x]\n"))
+  (check-true (prologos-error? e) (format "~v" e))
+  (define r (prologos-error-message e))
+  (check-regexp-match #rx"binder cannot contain" r "must name the actual problem")
+  (check-regexp-match #rx"base\\{a\\}" r "must render the select at its surface spelling")
+  (check-false (regexp-match? #rx"#<syntax" r) "raw syntax objects leaked")
+  (check-false (regexp-match? #rx"[$]select" r) "the internal sentinel leaked"))
+
+(test-case "P1b-iii item 7: an ordinary malformed binder keeps its message, minus the syntax dump"
+  ;; The sentinel arm must not swallow every bad binder — and the GENERIC
+  ;; message was dumping raw syntax objects too, so it gets the same strip.
+  (define e (run-ws-raw-last "def bad := [fn [1 2] x]\n"))
+  (check-true (prologos-error? e) (format "~v" e))
+  (define r (prologos-error-message e))
+  (check-regexp-match #rx"Expected binder" r)
+  (check-false (regexp-match? #rx"binder cannot contain" r)
+               "the sentinel arm fired on a binder with no sentinel")
+  (check-false (regexp-match? #rx"#<syntax" r) "raw syntax objects leaked"))
+
+(test-case "P2 item 9: an ORDINAL on a keyword row names the mistake"
+  ;; The adjudicator singled this one out: an ordinal on a keyword row is the
+  ;; most plausible first-contact error on a new positional surface, and it
+  ;; fell through to a bare "Could not infer type".
+  (define r (run-ws-last "def cfg := {:a 1 :b 2}\ncfg.0\n"))
+  (check-regexp-match #rx"ORDINAL access" r)
+  (check-regexp-match #rx"keyword row" r)
+  (check-regexp-match #rx":a :b" r "must list the fields that DO exist"))
+
+(test-case "P2 item 9: a KEYWORD on a tuple names the mirror mistake"
+  (define r (run-ws-last "def het := @[1 \"x\"]\nhet.name\n"))
+  ;; ⚠ MERGE 2026-08-05: upstream rewrote this message. It still names the
+  ;; mirror mistake and still says "tuple"; it now gives the two SPELLINGS
+  ;; (`x{N M}` / `x.N`) where it used to give the index range. The range
+  ;; assertion is dropped rather than re-derived — the spellings are strictly
+  ;; more actionable, and asserting both would pin wording twice.
+  (check-regexp-match #rx"NAMED fields" r "must name the mirror mistake")
+  (check-regexp-match #rx"tuple" r)
+  (check-regexp-match #rx"x[{]N M[}]" r "must show the ordinal-selection spelling"))
+
+(test-case "P2 item 9: the FOUR neighbouring messages are unchanged (the A/B)"
+  ;; The filing's warning is the reason this test exists: "the branch order in
+  ;; `closed-row-miss-hint` is exactly where P2's own regression came from —
+  ;; adding arms there without an A/B against a pinned baseline is how a
+  ;; correct diagnostic gets suppressed."
+  ;;
+  ;; Each new arm is guarded on the OPPOSITE key domain to the branch beside
+  ;; it, so no input can match two. These four pin that.
+  (check-regexp-match #rx"is not present in the record"
+                      (run-ws-last "def cfg := {:a 1}\ncfg.missing\n")
+                      "keyword miss on a keyword row")
+  (check-regexp-match #rx"out of range for the 2-tuple"
+                      (run-ws-last "def het := @[1 \"x\"]\nhet.9\n")
+                      "ordinal OOB on a tuple")
+  (check-regexp-match #rx"^1 : Int"
+                      (run-ws-last "def het := @[1 \"x\"]\nhet.0\n")
+                      "a VALID ordinal still projects")
+  (check-regexp-match #rx"^1 : Int"
+                      (run-ws-last "def cfg := {:a 1}\ncfg.a\n")
+                      "a VALID field still projects"))
+
+;; ---- item 9, second half: the two shapes left open by the first pass ----
+;;
+;; ⚠ The spec'd names below are UNIQUE (`p2bf`, `p2bg`) on purpose. `run-ws`
+;; restores the module/trait/impl/bundle registries from the shared snapshot per
+;; run, but the SPEC STORE is not among them — a `spec f …` registered by one
+;; test is still live for the next, and a later `def f := …` then gets checked
+;; against it. Drafting these with `f` and `g` broke "lying diagnostic 2" fifty
+;; lines further down, which passed in isolation and failed only in file order.
+
+(test-case "P2 item 9b: a projection off a NON-projectable carrier names the type"
+  ;; All four Record branches decline when the carrier isn't a row, so these
+  ;; got a bare "Could not infer type" — neither carrier nor type named.
+  (define n (run-ws-last "def n := 5\nn.0\n"))
+  (check-regexp-match #rx"positional access" n)
+  (check-regexp-match #rx"type Int, which has no positions" n)
+  (define s (run-ws-last "def s := \"hi\"\ns.0\n"))
+  (check-regexp-match #rx"type String, which has no positions" s)
+  (define f (run-ws-last "def n := 5\nn.name\n"))
+  ;; ✅ RESTORED 2026-08-05 (see below for what it cost). The type is named again.
+  (check-regexp-match #rx"field access" f)
+  (check-regexp-match #rx"type Int, which has no fields" f)
+  ;; ⚠ The history, kept because the failure mode was silent.
+  ;; This branch's hint named the carrier AND its type ("`.name` is field
+  ;; access, but n has type Int, which has no fields"). D4.P4b-ii migrated
+  ;; `.field` onto `expr-select`, so the select-fail message now answers first
+  ;; with the generic "the subject is not a record, so it has no fields to
+  ;; access". `projection-parts` was taught the new node shape (typing-errors)
+  ;; and the hint is reachable again — it just loses the `or` race to the more
+  ;; general message. Re-ordering that `or` is a diagnostics-precedence
+  ;; decision, not a merge one. Filed in DEFERRED.
+  ;;
+  ;; The hint is gated to DOT ACCESS: for a select block (`n{a}`) "field
+  ;; access" names the wrong construct, and the block wording is already the
+  ;; specific one there. That case is pinned separately above.
+  ;; A Pi is unprojectable too — there is no UFCS in Prologos.
+  (check-regexp-match #rx"has no positions"
+                      (run-ws-last "spec p2bg Int -> Int\ndefn p2bg [x] x\np2bg.0\n")))
+
+(test-case "P2 item 9b: the POSITIVE list declines on a projectable carrier"
+  ;; The polarity is the whole point. `search` recurses into subterms, so a
+  ;; "not a Record" guard would fire on a PVec carrier whose projection is
+  ;; FINE and outrank the real message. A PVec must keep projecting, and a
+  ;; genuine OOB on one must keep its own (runtime) message.
+  (check-regexp-match #rx"^1 : Int" (run-ws-last "def v := @[1 2 3]\nv.0\n"))
+  (check-false (regexp-match? #rx"has no positions"
+                              (run-ws-last "def v := @[1 2 3]\nv.9\n"))
+               "a PVec must never be called unprojectable"))
+
+(test-case "P2 item 9b: ANNOTATING an expression no longer degrades its diagnostic"
+  ;; `def q : Int := het.9` reported a bare "Type mismatch Int <could not
+  ;; infer>" while the same expression unannotated got the full OOB message.
+  ;; Adding a type annotation made the error strictly worse.
+  (define annotated (run-ws-last "def het := @[1 \"x\"]\ndef q : Int := het.9\n"))
+  (check-regexp-match #rx"out of range for the 2-tuple" annotated)
+  (check-regexp-match #rx"valid indices 0.1" annotated))
+
+(test-case "P2 item 9b: the check door yields to every more-specific message"
+  ;; The hint is LAST in the check-side `or` — it may only replace the bare
+  ;; "Type mismatch" fallback. This shape has both a projection failure AND an
+  ;; unannotated parameter; the parameter hint is the specific one and wins.
+  ;;
+  ;; ⚠ The spec was REMOVED from this shape on 2026-08-04. It used to read
+  ;; `spec p2bf Int -> Int` + `defn p2bf [n] het.9`, which relied — without
+  ;; saying so — on that spec being silently DECLINED, because a body that is
+  ;; exactly a projection tripped `inject-spec-into-defn`'s bare-symbol guard.
+  ;; With that fixed the parameter is properly typed from the spec, so the
+  ;; shape no longer HAS an unannotated parameter and the more specific
+  ;; out-of-range message surfaces instead (asserted just below). Dropping the
+  ;; spec restores the two-failures-at-once shape this case is actually about.
+  (define r (run-ws-last "def het := @[1 \"x\"]\ndefn p2bf [n] het.9\n"))
+  (check-regexp-match #rx"unannotated parameter" r)
+  ;; And a REAL expected-vs-got mismatch (actual infers fine) is untouched.
+  (check-regexp-match #rx"Type mismatch"
+                      (run-ws-last "def bad : Int := \"str\"\n")))
+
+(test-case "P2 item 9b: WITH a spec, the parameter is typed and the real error shows"
+  ;; The other half of the note above, pinned: the spec now reaches the
+  ;; parameter even though the body is a bare projection, so what is left is
+  ;; the genuine defect — index 9 on a 2-tuple — instead of a complaint about
+  ;; the parameter. If the spec is ever silently declined again, this reverts
+  ;; to "unannotated parameter" and fails here.
+  (define r (run-ws-last "def het := @[1 \"x\"]\nspec p2bg Int -> Int\ndefn p2bg [n] het.9\n"))
+  (check-regexp-match #rx"out of range for the 2-tuple" r)
+  (check-false (regexp-match #rx"unannotated parameter" r)
+               (format "the spec was declined again: ~a" r)))
+
 ;; ---------- the LYING DIAGNOSTICS this phase actually repairs ----------
 ;; P2's real headline, unclaimed by §5.P2: because `x.0` was THREE datum items,
 ;; every arity-checking context blamed something else entirely.
@@ -1350,6 +1616,133 @@
   (check-regexp-match #rx"seal" r)
   (check-regexp-match #rx"validate" r)
   (check-false (regexp-match #rx"annotate" r) "an unimplementable remedy re-appeared"))
+
+;; ---- D4.P3a item 18: the dyn-assoc type/value DESYNC, and its laundering ----
+;;
+;; The entry's exact repro. At HEAD the D16 dynamic-key extension kept every
+;; known field's TYPE verbatim while flipping only the tail, so
+;; `map-assoc {:host String …} kh 42` typed `:host String` over a runtime 42 —
+;; and a select then laundered that into a CLOSED `{:host String}`, stripping
+;; even the `| _` that had at least advertised uncertainty.
+;;
+;; The fix widens each kept field to `<T | V>` (typing-core's
+;; record-widen-all-with): an unknown key hits at most one label, so each field
+;; is either unchanged or replaced by V.
+;;
+;; ⚠ These assert on the type a `def` RECORDS, not on an expression echo. An
+;; expression command display-narrows a union against the value it actually
+;; produced (the documented display-only refinement), which would show
+;; `{:host String}` here and hide the whole defect. The def's announced type is
+;; the type it STORES — that is the static one, and the only one that can
+;; launder.
+
+(test-case "P3a ⭐ item 18: dyn-key assoc widens colliding field types instead of lying"
+  (define rs (run-ws-raw (string-append
+                          "def base := {:host \"localhost\" :port 8080}\n"
+                          "def kh := :host\n"
+                          "def d3 := [map-assoc base kh 42]\n")))
+  (check-false (ormap prologos-error? rs))
+  (define r (format "~a" (last rs)))
+  ;; :host may now be the inserted Int OR the original String
+  (check-regexp-match #rx":host <Int [|] String>" r)
+  ;; :port is Int either way — build-union-type dedups <Int | Int> back to Int,
+  ;; so the widening costs nothing where the types already agree
+  (check-regexp-match #rx":port Int " r)
+  (check-regexp-match #rx"[|] _\\}" r "the dyn tail survives the widening"))
+
+(test-case "P3a item 18: the select no longer launders — the RECORDED row keeps the union"
+  (define rs (run-ws-raw (string-append
+                          "def base := {:host \"localhost\" :port 8080}\n"
+                          "def kh := :host\n"
+                          "def d3 := [map-assoc base kh 42]\n"
+                          "def sel := d3{host}\n")))
+  (check-false (ormap prologos-error? rs))
+  ;; was `{:host String}` — a CLOSED row claiming String over an Int
+  (check-regexp-match #rx"sel : \\{:host <Int [|] String>\\}" (format "~a" (last rs))))
+
+(test-case "P3a item 18: homogeneous dyn-key assoc is UNCHANGED (the no-cost pin)"
+  ;; The F1a.2 p1b acceptance line: `map-assoc {:a 1} kk 5` still types
+  ;; `{:a Int | _}`. If the widening ever starts showing up here it has stopped
+  ;; deduping, and every dynamic assoc in the tree just got noisier.
+  (define rs (run-ws-raw (string-append
+                          "def q := {:a 1}\n"
+                          "def kk := :a\n"
+                          "def q2 := [map-assoc q kk 5]\n")))
+  (check-false (ormap prologos-error? rs))
+  (check-regexp-match #rx"q2 : \\{:a Int [|] _\\}" (format "~a" (last rs))))
+
+(test-case "P3a item 18: a union field type prints with its `<…>` inside a row"
+  ;; Bare, `{:host Int | String :port Int | _}` reads as a row whose TAIL is
+  ;; `| String :port Int | _`. The brackets are not decoration: they are the
+  ;; only spelling a union has in source, and without them a row with a union
+  ;; field is ambiguous against both the next field and the dyn-tail marker.
+  (define rs (run-ws-raw (string-append
+                          "def base := {:host \"localhost\" :port 8080}\n"
+                          "def kh := :host\n"
+                          "def d3 := [map-assoc base kh 42]\n")))
+  (define r (format "~a" (last rs)))
+  (check-regexp-match #rx"<Int [|] String>" r)
+  (check-false (regexp-match #rx":host Int [|] String" r)
+               "the union lost its brackets — the row is ambiguous again"))
+
+;; ---- D4.P3a item 17: the fold runs BEFORE head-macro dispatch ----
+;;
+;; A registered head macro used to be handed the RAW datum: the access-sentinel
+;; fold lives in `preparse-expand-subforms`, which is only reached when the head
+;; is NOT a macro. So `if` / `cond` / `let` saw `($select-brace …)` and
+;; `($dot-access …)` as EXTRA SIBLINGS of their base, and complained about
+;; arity: `(if true cfg{a} 5)` gave "boolrec expects 4 arguments, got 3" plus a
+;; cascading "Unbound variable" — an arity message for an ordering problem.
+;;
+;; `expand-pipe-block` already carried this fold locally (it was the P3a
+;; verify's BLOCKING catch, where the pipe corrupted a select SILENTLY instead
+;; of erroring). The fix hoists that same call above head-macro dispatch.
+
+(test-case "P3a ⭐ item 17: a select block inside `if` folds before the macro sees it"
+  (define rs (run-ws-raw (string-append P3A-CFG "(if true cfg{name} cfg{name})\n")))
+  (check-false (ormap prologos-error? rs)
+               (format "the head macro still sees a raw sentinel: ~v" rs))
+  (check-regexp-match #rx"\\{:name \"GuildHall\"\\}" (format "~a" (last rs))))
+
+(test-case "P3a item 17: dot-access inside `if`"
+  (define rs (run-ws-raw (string-append P3A-CFG "(if true cfg.name \"other\")\n")))
+  (check-false (ormap prologos-error? rs))
+  (check-regexp-match #rx"GuildHall" (format "~a" (last rs))))
+
+(test-case "P3a item 17: postfix index inside `if`"
+  (define rs (run-ws-raw "def xs := @[10 20 30]\n(if true xs[0] 5)\n"))
+  (check-false (ormap prologos-error? rs))
+  (check-regexp-match #rx"^10 : Int" (format "~a" (last rs))))
+
+(test-case "P3a item 17: dot-access in a `cond` GUARD and body"
+  ;; the guard is a dot-access to a Bool field — this fixture is :no-prelude,
+  ;; so a guard like `[eq? cfg.name …]` would fail on `eq?`, not on the fold
+  (define rs (run-ws-raw (string-append
+                          P3A-CFG
+                          "def picked :=\n"
+                          "  cond\n"
+                          "    | cfg.server.ssl.enabled -> cfg.version\n"
+                          "    | true -> \"none\"\n"
+                          "picked\n")))
+  (check-false (ormap prologos-error? rs) (format "~v" rs))
+  (check-regexp-match #rx"1[.]0[.]0" (format "~a" (last rs))))
+
+(test-case "P3a item 17: `let` binding a dot-access inside a defn body"
+  ;; the entry's other named victim — it used to dump internal syntax
+  (define rs (run-ws-raw (string-append
+                          P3A-CFG
+                          "def f := [fn [x : Int] [let s := cfg.database.pool-size [+ s x]]]\n"
+                          "[f 10]\n")))
+  (check-false (ormap prologos-error? rs) (format "~v" rs))
+  (check-regexp-match #rx"^20 : Int" (format "~a" (last rs))))
+
+(test-case "P3a item 17: a select is still a ROW, so a genuine branch mismatch STILL errors"
+  ;; The fold must not paper over typing. `cfg{name}` is `{:name String}`, not
+  ;; String — joining it with a bare string is a real mismatch and must stay one.
+  ;; Without this, "item 17 is fixed" could mean "if stopped checking".
+  (define rs (run-ws-raw (string-append P3A-CFG "(if true cfg{name} \"plain\")\n")))
+  (check-true (ormap prologos-error? rs)
+              (format "a row-vs-String branch join must still refuse: ~v" rs)))
 
 (test-case "P3a: a keyed block on a TUPLE (nat row) is a loud refusal"
   (define rs (run-ws-raw (string-append
@@ -2689,6 +3082,269 @@
   (check-regexp-match #rx"h" (format "~a" (list-ref rs (- (length rs) 2))))
   (check-regexp-match #rx"80" (format "~a" (last rs))))
 
+
+;; ============================================================================
+;; DEEP :requires paths (the deep-walker charter's item 4, 2026-08-03).
+;;
+;; `:requires [:address.zip]` was dropped whole by the `(null? (cdr p))` filter
+;; in the validate bake, so it enforced NOTHING — not even its top hop, which
+;; is a plain single-segment requirement wearing a longer name.
+;; ============================================================================
+
+(define deep-sel-setup
+  (string-append
+   "schema Zp\n  :code String\n"
+   "schema Ct\n  :email String\n  :zp Zp\n"
+   "selection NeedsZp from Ct :requires [:zp.code]\n"))
+
+(test-case "item 4: a deep :requires is satisfied when the full path is there"
+  (check-regexp-match
+   #rx"result::ok"
+   (run-ws-pre-last (string-append deep-sel-setup
+                               "[validate NeedsZp {:email \"e\" :zp {:code \"90210\"}}]\n"))))
+
+(test-case "item 4: the LEAF miss is reported under the FULL path"
+  ;; Not under the top hop: `{:zp missing-required}` would be a lie, since
+  ;; `:zp` is right there in the value.
+  (define r (run-ws-pre-last (string-append deep-sel-setup
+                                        "[validate NeedsZp {:email \"e\" :zp {}}]\n")))
+  (check-regexp-match #rx"result::err" r)
+  (check-regexp-match #rx":zp[.]code" r)
+  (check-regexp-match #rx"missing-required" r))
+
+(test-case "item 4: the TOP HOP is required too — the more surprising half"
+  ;; This also returned `ok` before: the whole path was dropped, so an absent
+  ;; `:zp` was not a read-capability miss either.
+  (define r (run-ws-pre-last (string-append deep-sel-setup
+                                        "[validate NeedsZp {:email \"e\"}]\n")))
+  (check-regexp-match #rx"result::err" r)
+  (check-regexp-match #rx":zp prologos::data::reason::missing-required" r))
+
+(test-case "item 4: a non-map on the path is a MISS, not an accept"
+  ;; Unlike the type WITNESS (which declines to assert what it cannot read), a
+  ;; `:requires` is a claim about REACHABILITY — a path that cannot be walked is
+  ;; unreachable by definition. The field is typed `Zp` so this is also a
+  ;; type-mismatch; what this pins is that the requires-miss is reported.
+  (define r (run-ws-pre-last (string-append deep-sel-setup
+                                        "[validate NeedsZp {:email \"e\" :zp 5}]\n")))
+  (check-regexp-match #rx"result::err" r))
+
+(test-case "item 4: a SINGLE-segment :requires is unchanged (the A/B)"
+  ;; The rewrite replaced the filter that produced req-syms, so the shallow
+  ;; behaviour it used to compute has to be re-pinned, not assumed.
+  (define setup "schema Pr\n  :nm String\n  :ag Int\nselection NmOnly from Pr :requires [:nm]\n")
+  (check-regexp-match #rx"result::ok"
+                      (run-ws-pre-last (string-append setup "[validate NmOnly {:nm \"a\" :ag 9}]\n")))
+  (check-regexp-match #rx":nm prologos::data::reason::missing-required"
+                      (run-ws-pre-last (string-append setup "[validate NmOnly {:ag 9}]\n"))))
+
+
+(test-case "a selection whose declaration FAILED is not usable"
+  ;; Found while probing item 4. Every selection is pre-registered at preparse
+  ;; with empty requires/provides so `known-type-name?` works during spec
+  ;; processing; when the declaration then fails, nothing replaces the stub.
+  ;; `validate` found it, saw no required fields, and returned `ok` FOR ANY
+  ;; INPUT — so the file reported one error and then carried a selection that
+  ;; validated everything, which is worse than the error.
+  ;;
+  ;; ⚠ The trigger used to be a wildcard `:requires`, which did not tokenize in
+  ;; WS mode. That is FIXED, so this now uses a path naming a field the parent
+  ;; schema does not have — any failing declaration leaves the same stub, and
+  ;; the point of the test is the stub, not the particular way in.
+  (define src (string-append
+               "schema Wz\n  :z String\n"
+               "schema Wo\n  :m Wz\n  :other String\n"
+               "selection Wsel from Wo :requires [:nosuchfield]\n"
+               "[validate Wsel {:other \"o\"}]\n"))
+  (define rs (run-ws-pre src))
+  ;; the declaration still errors — that part was always true
+  (check-true (ormap (lambda (r) (regexp-match? #rx"nosuchfield" r)) rs)
+              "the bad :requires path must still be reported")
+  ;; …and the validate must NOT come back ok
+  (check-false (ormap (lambda (r) (regexp-match? #rx"result::ok" r)) rs)
+               "THE BUG: validating against the stub accepted any value")
+  (check-true (ormap (lambda (r) (regexp-match? #rx"never completed" r)) rs)
+              "and it should say why, not just fail"))
+
+;; ---- the WILDCARD `:requires` spelling, now readable in WS mode ------------
+
+(test-case "a wildcard :requires parses in a .prologos file"
+  ;; `:address.*` used to be a hard registration error in WS: the reader's
+  ;; six-member dot band discriminates on the SECOND character and `*` belongs
+  ;; to broadcast-access, which needs an identifier after the star. A star at
+  ;; the END of a path matched nothing, so the dot fell through as a bare `|.|`
+  ;; and the selection parser reported "expected keyword field path, got '|.|".
+  ;; The spelling worked only under the native sexp reader — sexp-green,
+  ;; WS-broken.
+  (define setup (string-append
+                 "schema Wz2\n  :z String\n  :y Int\n"
+                 "schema Wo2\n  :m Wz2\n  :other String\n"))
+  (define rs (run-ws-pre (string-append setup
+                                        "selection Wc from Wo2 :requires [:m.*]\n"
+                                        "[validate Wc {:m {:z \"v\" :y 1} :other \"o\"}]\n")))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"registered" r)) rs)
+              "the selection must register")
+  (check-true (ormap (lambda (r) (regexp-match? #rx"result::ok" r)) rs))
+  ;; and its TOP HOP is required, which is unambiguous even though the
+  ;; quantifier under it is not yet enforced
+  (check-regexp-match
+   #rx":m prologos::data::reason::missing-required"
+   (run-ws-pre-last (string-append setup
+                                   "selection Wc2 from Wo2 :requires [:m.*]\n"
+                                   "[validate Wc2 {:other \"o\"}]\n"))))
+
+(test-case "`.**` reconstitutes too, and it is NOT the bare-dot shape"
+  ;; `.**` arrives as ($broadcast-access *) — the star consumed as the marker
+  ;; and the SECOND star as the "field" — so it needs its own arm, not the
+  ;; bare-`.` one. Worth its own case: handling only `.*` leaves `.**` erroring.
+  (define rs (run-ws-pre (string-append
+                          "schema Wz3\n  :z String\n"
+                          "schema Wo3\n  :m Wz3\n  :other String\n"
+                          "selection Wd from Wo3 :requires [:m.** :other]\n"
+                          "[validate Wd {:m {:z \"v\"} :other \"o\"}]\n")))
+  (check-false (ormap (lambda (r) (regexp-match? #rx"expected keyword field path" r)) rs)
+               "`.**` must reconstitute, not strand a token")
+  (check-true (ormap (lambda (r) (regexp-match? #rx"result::ok" r)) rs)))
+
+
+;; ============================================================================
+;; NESTED SEAL FORCING (the deep-walker charter's item 1, 2026-08-03).
+;;
+;; The commit-time forcer was top-node-only, so `def top := [Pos {:n 0}]`
+;; errored while the same seal one level inside a list or a map committed
+;; silently.
+;; ============================================================================
+
+(define seal-schema "schema Psx\n  :n Int :check (> _ 0)\n")
+
+(test-case "item 1: a failing seal inside a MAP literal is caught"
+  (define rs (run-ws-pre (string-append seal-schema "def m := {:a [Psx {:n 0}]}\n")))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"failed check" r)) rs)
+              "THE BUG: a seal nested in a map committed silently"))
+
+(test-case "item 1: a failing seal inside a LIST is caught"
+  ;; `expr-subfields` would find this one and NOT the map case above — the
+  ;; cons spine is expr fields, a champ's payload is a Racket structure. Both
+  ;; are here so the walk cannot regress to the shallower one and stay green.
+  (define rs (run-ws-pre (string-append seal-schema "def l := '[[Psx {:n 0}]]\n")))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"failed check" r)) rs)))
+
+(test-case "item 1: a seal under a BINDER is deliberately NOT forced"
+  ;; The load-bearing exclusion. A seal under a binder may reference the bound
+  ;; variable, so forcing it evaluates a body that has not been applied — it
+  ;; could panic on a value the program never constructs. If this ever flips,
+  ;; it flips in a test.
+  (define rs (run-ws-pre-raw (string-append seal-schema
+                                            "def f := [fn [x : Int] [Psx {:n 0}]]\n")))
+  (check-false (ormap prologos-error? rs)
+               "forcing under a binder would evaluate an unapplied body"))
+
+(test-case "item 1: PASSING seals still commit at every depth"
+  ;; The other half — the walk must not turn correct nesting into an error.
+  (define rs (run-ws-pre-raw
+              (string-append seal-schema
+                             "def a := [Psx {:n 5}]\n"
+                             "def b := '[[Psx {:n 5}] [Psx {:n 6}]]\n"
+                             "def c := {:k [Psx {:n 5}]}\n"
+                             "def d := {:k '[{:j [Psx {:n 7}]}]}\n")))
+  (check-false (ormap prologos-error? rs)))
+
+(test-case "item 1: a bare nested PANIC keeps its top-node bound (the asymmetry)"
+  ;; Not an oversight. A seal is a commit-time CONTRACT (D22: tabulation
+  ;; forces), so a failing one is an error whether or not anything reads it. A
+  ;; bare panic inside a constructed value is an ordinary lazy value the
+  ;; program may never force, and erroring on it would make laziness
+  ;; unobservable. This is the B8 pin restated next to its counterpart.
+  (define rs (run-ws-raw (string-append
+                          "spec boom9 Int -> Int\n"
+                          "defn boom9 [x]\n  [panic \"NESTED\"]\n"
+                          "def q := {:x [boom9 1]}\n")))
+  (check-false (ormap prologos-error? rs)))
+
+
+;; ============================================================================
+;; The presence marker moved from SUFFIX to PREFIX (2026-08-03).
+;;
+;; F1b.7g made `?`-terminated keys readable, so a field literally named
+;; `active?` and PRESENT rendered `{:active? Bool}` — identical to an OPTIONAL
+;; field named `active`. Two different row types printed the same string.
+;; ============================================================================
+
+(test-case "presence-unknown marks with a `?` PREFIX, which cannot collide"
+  ;; The dynamic-dissoc writer is what mints 'unknown presences.
+  (define r (run-ws-pre-last
+             (string-append "def mm := {:active? true :n 1}\n"
+                            "def kk : Keyword := :n\n"
+                            "def dd := [map-dissoc mm kk]\n"
+                            "dd\n")))
+  ;; all three cases distinguishable at once: `:?n` is field `n` optional,
+  ;; `:?active?` is field `active?` optional — and a PRESENT `active?` would
+  ;; render `:active?`, which neither of these is.
+  (check-regexp-match #rx":[?]n Int" r "an optional field marks in FRONT")
+  (check-regexp-match #rx":[?]active[?] Bool" r
+                      "a `?`-named field that is ALSO optional shows both, unambiguously")
+  (check-false (regexp-match? #rx":n[?]" r) "the suffix spelling is gone"))
+
+(test-case "a PRESENT `?`-named field still renders as itself"
+  ;; The other half of the ambiguity: this must NOT gain a marker.
+  (define r (run-ws-pre-last "def mp := {:active? true}\nmp\n"))
+  (check-regexp-match #rx":active[?] Bool" r)
+  (check-false (regexp-match? #rx":[?]active" r)
+               "a present field must carry no presence marker"))
+
+
+;; ============================================================================
+;; PREPARSE FORM-failure containment (2026-08-03).
+;;
+;; Every `(error 'functor …)` / `(error 'trait …)` / `(error 'spec …)` in
+;; macros.rkt — ~150 sites — used to take the WHOLE FILE down. Preparse runs
+;; before any command, so an escaping raise left no expansion to run anything
+;; from: a raw Racket message plus a `context...:` dump, exit 1, and NO numbered
+;; results at all, not even for commands that had already succeeded.
+;;
+;; Same class already fixed for the reader (`$reader-error`), `let`
+;; (`$let-error`) and `.( )` mixfix (`$mixfix-error`); this reuses that channel
+;; rather than adding a fourth.
+;; ============================================================================
+
+(test-case "preparse containment: a bad declaration does not take the file down"
+  (define rs (run-ws-pre-raw
+              (string-append "def before := 1\n"
+                             "functor Broken := nope\n"
+                             "def after := 2\n"
+                             "after\n")))
+  ;; the malformed form is ONE counted error…
+  (check-true (ormap prologos-error? rs) "the bad declaration must be reported")
+  ;; …and the commands on BOTH sides of it still ran, which is the whole point
+  (check-true (ormap (lambda (r) (regexp-match? #rx"before" (format "~a" r))) rs)
+              (format "the command BEFORE it was lost: ~v" rs))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"^2 : Int" (format "~a" r))) rs)
+              (format "the command AFTER it was lost: ~v" rs)))
+
+(test-case "preparse containment: TWO bad declarations are two errors, not one abort"
+  (define rs (run-ws-pre-raw
+              (string-append "def a := 1\n"
+                             "functor B1 := nope\n"
+                             "trait B2 X\n  m : X\n"
+                             "def z := 3\n"
+                             "z\n")))
+  (check-equal? (length (filter prologos-error? rs)) 2 (format "~v" rs))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"^3 : Int" (format "~a" r))) rs)
+              (format "~v" rs)))
+
+(test-case "preparse containment: CONTEXT-establishing forms are NOT contained"
+  ;; `ns` / `imports` / `exports` / `foreign` set up what every later form
+  ;; depends on, so a failure there genuinely invalidates the rest. Containing
+  ;; them was tried and measured worse: with `imports` contained, a file whose
+  ;; import failed for "no namespace is in scope" carried on and reported
+  ;; "Unbound variable: module" — a named, deliberately-built diagnostic
+  ;; replaced by a downstream symptom.
+  (define raised?
+    (with-handlers ([(lambda (_) #t) (lambda (_) #t)])
+      (run-ws-pre-raw "imports prologos::nonexistent::module\ndef q := 1\n")
+      #f))
+  (check-true raised? "an imports failure must still stop the file"))
+
 ;; ============================================================
 ;; D4.P4b-ii-1 — the (subject kind × sort) SEMANTIC TABLE
 ;; ============================================================
@@ -2886,7 +3542,14 @@
   ;; because the gate refused everything and the admit branch had ZERO
   ;; coverage. Caught at the adversarial verify; the fixture-makes-the-pin-
   ;; vacuous class, on the very slice that quoted it.
-  (tc:select-view (selection-entry 'NameOnly 'Person '((#:name)) '() '() #f)
+  ;; MERGE 2026-08-05: `selection-entry` gained a 7th field (`stub?`) on this
+  ;; branch, so this direct constructor — added upstream against the 6-field
+  ;; version — needs the extra argument. `#f` = not a stub, which is what an
+  ;; ordinary fixture selection is. Exactly the `pipeline.md` § "New Struct
+  ;; Field" step that says to grep for DIRECT CONSTRUCTOR CALLS across the whole
+  ;; tree, not just `struct-copy`: this one arrived from the other side of a
+  ;; merge, so no grep at field-addition time could have found it.
+  (tc:select-view (selection-entry 'NameOnly 'Person '((#:name)) '() '() #f #f)
                   (expr-fvar 'NameOnly)))
 
 (test-case "P4b-ii-1 table (PATH × selection, out of view): refuses NAMING THE CAPABILITY"

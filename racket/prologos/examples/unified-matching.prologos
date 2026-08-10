@@ -146,13 +146,14 @@ defn my-head [xs : List Nat] : Nat
 [my-head '[1N 2N 3N]]
 [my-head '[42N]]
 
-;; ISSUE: Constructing list data with `def xs : List Nat := cons 1N [cons 2N nil]`
-;; fails in WS mode due to $nat-literal sentinel interaction with := body parsing.
-;; The quote-list syntax '[...] works as the clean alternative.
-;;
-;; Ideal syntax (commented out — WS := body parsing issue):
-;; def sample-list : List Nat := cons 1N [cons 2N [cons 3N nil]]
-;; [my-head sample-list]
+;; The ideal syntax, live since 2026-08-02. It was commented out with a note
+;; that `def xs : List Nat := cons 1N [cons 2N nil]` failed in WS mode —
+;; `expand-def-assign` was said to require exactly one form after `:=`. It wraps
+;; a multi-token RHS as an application, so this works; the note outlived the
+;; behaviour it described.
+
+def sample-list : List Nat := cons 1N [cons 2N [cons 3N nil]]
+[my-head sample-list]
 
 
 ;; ========================================================================
@@ -498,12 +499,13 @@ defn classify-cond [n : Int] : Int
 ;;
 ;; Known surface syntax issues uncovered during this capstone:
 ;;
-;; ISSUE 1: WS-mode `def x := cons 1N [cons 2N nil]` fails.
-;;   expand-def-assign in macros.rkt requires exactly one form after :=,
-;;   but the WS reader produces multiple inline elements (cons, ($nat-literal 1),
-;;   [cons ...]). Fix: wrap multiple elements as implicit application.
+;; ISSUE 1: RESOLVED (verified 2026-08-02). `def x := cons 1N [cons 2N nil]`
+;;   works, with and without a type annotation — `expand-def-assign` wraps a
+;;   multi-token RHS as an application, which is the fix this note asked for.
+;;   The `def sample-list` example above is uncommented again.
 ;;
-;; ISSUE 2: Multi-bracket defn `defn f [a] [b] body` doesn't work in
-;;   WS mode (or sexp mode). Pre-existing limitation. The standard pattern
-;;   is uncurried single-bracket: `defn f [a b] body`.
-;;   Affects both regular defn and params+arms defn.
+;; ISSUE 2: STILL TRUE, and a design NON-GOAL rather than a defect.
+;;   Multi-bracket defn `defn f [a] [b] body` does not work in either mode, and
+;;   the standard pattern is the uncurried single-bracket `defn f [a b] body`
+;;   (prologos-syntax.md: "Uncurried"). It is a clean per-command error naming
+;;   what it expected, not a crash.

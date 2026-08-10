@@ -1,3 +1,10 @@
+> **⚠ GENERATED ARTIFACT — STALE. Read `README.org` instead.**
+> `README.org` is the canonical source (`workflow.md`: "ALL edits MUST go to the
+> `.org`"). Claims here may already have been retracted at the source.
+> For how far behind this export is RIGHT NOW, run `tools/check-doc-twins.sh`
+> — it reads both files' last commit times, so it cannot itself go stale.
+> Regenerating needs org-export (emacs or pandoc).
+
 - [Overview](#org558388a)
 - [Documents](#orgb813f16)
 - [How These Relate to Other Docs](#org34c389d)

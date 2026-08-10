@@ -5,7 +5,8 @@
 ;;; A? nilable type sugar, and nil? predicate.
 ;;;
 
-(require rackunit
+(require "test-support.rkt"
+         rackunit
          racket/list
          racket/path
          racket/string
@@ -246,7 +247,7 @@
 
 ;; Run WS code via temp file using shared environment
 (define (run-ws s)
-  (define tmp (make-temporary-file "prologos-test-~a.prologos"))
+  (define tmp (make-prologos-temp-file))
   (call-with-output-file tmp #:exists 'replace
     (lambda (out) (display s out)))
   (define result

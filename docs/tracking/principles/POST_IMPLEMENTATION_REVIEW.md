@@ -1,3 +1,10 @@
+> **⚠ GENERATED ARTIFACT — STALE. Read `POST_IMPLEMENTATION_REVIEW.org` instead.**
+> `POST_IMPLEMENTATION_REVIEW.org` is the canonical source (`workflow.md`: "ALL edits MUST go to the
+> `.org`"). Claims here may already have been retracted at the source.
+> For how far behind this export is RIGHT NOW, run `tools/check-doc-twins.sh`
+> — it reads both files' last commit times, so it cannot itself go stale.
+> Regenerating needs org-export (emacs or pandoc).
+
 - [Purpose](#org756992b)
 - [The Questions a PIR Must Answer](#orgc0ef11e)
   - [Factual Foundation](#org7287500)

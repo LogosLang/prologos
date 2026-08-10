@@ -1,0 +1,615 @@
+ns prologos::ocapn::handshake
+
+;; ========================================
+;; OCapN handshake — Phase 58.b
+;; ========================================
+;;
+;; Build the canonical 4-field signed `op:start-session` wire bytes
+;; using captp-core's syrup codec + crypto FFI. This is the SINGLE
+;; client implementation of the handshake — an earlier revision had
+;; a parallel Racket-side fixture whose syrup encoder duplicated
+;; `prologos::ocapn::syrup-wire`; that fixture was deleted in
+;; Phase 58.b-3 once this module subsumed it.
+;;
+;; Wire shape:
+;;
+;;   <op:start-session ver pubkey-sexpr location sig-sexpr>
+;;
+;;   pubkey-sexpr = (public-key (ecc (curve Ed25519) (flags eddsa) (q PK)))
+;;   sig-sexpr    = (sig-val (eddsa (r R) (s S)))
+;;   location     = <ocapn-peer 'tcp-testing-only ADDRESS HINTS>
+;;
+;; Signature is over the syrup-encoded `<my-location LOC>`.
+;;
+;; IMPLEMENTATION NOTE — why bytes-level assembly:
+;;
+;; Records are assembled at the BYTES level here: each arg is
+;; pre-encoded, then concatenated between `<label` and `>`.
+;;
+;; The original reason was that `encode` wrapped a multi-arg record's
+;; arguments in a list — `<label [a b c]>` where the spec wants
+;; `<label a b c>`. That is no longer true (`encode-payload` in
+;; syrup-wire splices a list payload), so `wire::encode-record` would
+;; do. What still holds is the SECOND reason below: the signature
+;; covers exact bytes, and assembling them here keeps the bytes we
+;; sign and the bytes we send provably identical.
+;;
+;; Likewise, crypto byte-payloads (pubkey, sig halves) are
+;; Latin-1-encoded Strings where 1 char == 1 wire byte, so their
+;; length prefix is the CHAR count (`str::length`), never the UTF-8
+;; byte count. `bytes-atom` below spells that rule out locally
+;; because these payloads are assembled at the bytes level anyway;
+;; it must stay byte-identical to syrup-wire's `syrup-bytes` arm,
+;; which measures the same way.
+;;
+;; `gen-keypair-raw` below is not used in this module — it is
+;; re-exported. The interop test server imports `prologos::ocapn::crypto`
+;; through nothing else, so `:refer-all` on THIS module is its only path
+;; to a keypair handle. Dropping it from the refer list breaks the server.
+
+require [prologos::ocapn::syrup    :refer [SyrupValue syrup-list syrup-symbol
+                                            syrup-bytes syrup-string syrup-tagged
+                                            syrup-dict]]
+        [prologos::ocapn::syrup-wire :as wire :refer [encode encode-record]]
+        [prologos::ocapn::crypto   :refer [gen-keypair-raw pubkey-raw sign-raw verify-raw]]
+        [prologos::data::list      :refer [List nil cons]]
+        [prologos::data::string    :as str :refer []]
+        [prologos::data::char      :as char :refer []]
+        [prologos::data::option    :refer [Option some none]]
+
+;; Hex-decode inbound frame bytes. The conversion is an FFI call
+;; rather than a Prologos loop because the tree-walking reducer is
+;; far too slow at incremental byte-string assembly — see
+;; ocapn-frame-ffi.rkt.
+foreign racket "ocapn-frame-ffi.rkt"
+  [ocapn-hex-decode :as hex-to-bytes : String -> String]
+
+;; ----------------------------------------
+;; Bytes-level assembly primitives
+;; ----------------------------------------
+
+spec concat-strings [List String] -> String
+defn concat-strings
+  | nil          -> ""
+  | cons hd tl   -> str::append hd [concat-strings tl]
+
+spec list-bytes [List String] -> String
+  :doc "Assemble `[item-bytes...]` from already-encoded element byte-strings."
+defn list-bytes [item-bytes]
+  str::append "[" [str::append [concat-strings item-bytes] "]"]
+
+spec record-bytes String [List String] -> String
+  :doc "Assemble `<label arg-bytes...>` from a label + already-encoded arg byte-strings."
+defn record-bytes [label arg-bytes]
+  str::append "<"
+    [str::append [wire::encode [syrup-symbol label]]
+      [str::append [concat-strings arg-bytes] ">"]]
+
+;; A Syrup `bstr` atom is `<byte-count>:<bytes>`. For Latin-1
+;; byte-strings, the byte count == the char count (str::length).
+spec bytes-atom String -> String
+  :doc "Encode a Latin-1 byte-string as a Syrup bstr: <char-count>:<chars>."
+defn bytes-atom [b]
+  str::append [str::from-int [str::length b]] [str::append ":" b]
+
+;; ----------------------------------------
+;; gcrypt-style s-expressions (bytes-level)
+;; ----------------------------------------
+;;
+;; gcrypt s-exprs are nested syrup-lists whose head is a name-
+;; symbol. Lists encode as `[items]` with no length prefix, so the
+;; list structure is fine — but the q/r/s payloads are crypto
+;; bytes-atoms needing the Latin-1-correct length.
+
+spec gcrypt-pair-sym-bytes String String -> String
+  :doc "Wire bytes for a gcrypt (key SYMBOL) sub-form."
+defn gcrypt-pair-sym-bytes [key sym]
+  list-bytes
+    [cons [wire::encode [syrup-symbol key]]
+      [cons [wire::encode [syrup-symbol sym]] nil]]
+
+spec gcrypt-pair-bytes-atom String String -> String
+  :doc "Wire bytes for a gcrypt (key BYTES-ATOM) sub-form."
+defn gcrypt-pair-bytes-atom [key payload]
+  list-bytes
+    [cons [wire::encode [syrup-symbol key]]
+      [cons [bytes-atom payload] nil]]
+
+spec gcrypt-pubkey-bytes String -> String
+  :doc "Wire bytes for (public-key (ecc (curve Ed25519) (flags eddsa) (q PK)))."
+defn gcrypt-pubkey-bytes [pk]
+  list-bytes
+    [cons [wire::encode [syrup-symbol "public-key"]]
+      [cons [list-bytes
+              [cons [wire::encode [syrup-symbol "ecc"]]
+                [cons [gcrypt-pair-sym-bytes "curve" "Ed25519"]
+                  [cons [gcrypt-pair-sym-bytes "flags" "eddsa"]
+                    [cons [gcrypt-pair-bytes-atom "q" pk] nil]]]]]
+        nil]]
+
+spec gcrypt-sig-bytes String String -> String
+  :doc "Wire bytes for (sig-val (eddsa (r R) (s S)))."
+defn gcrypt-sig-bytes [r s]
+  list-bytes
+    [cons [wire::encode [syrup-symbol "sig-val"]]
+      [cons [list-bytes
+              [cons [wire::encode [syrup-symbol "eddsa"]]
+                [cons [gcrypt-pair-bytes-atom "r" r]
+                  [cons [gcrypt-pair-bytes-atom "s" s] nil]]]]
+        nil]]
+
+;; ----------------------------------------
+;; Location: <ocapn-peer transport address hints>
+;; ----------------------------------------
+
+;; HINTS is a Syrup DICT with STRING keys — `{4"host…4"port…}`. Not a
+;; list, and not symbol keys: `contrib/syrup.py` encodes the reference
+;; `OCapNPeer.hints` as a Python dict of `str`, and `testing_only_tcp.py`
+;; subscripts it as `ocapn_peer.hints["host"]`. We emitted a list of
+;; two-element symbol-keyed sub-lists, which no peer can read, on the
+;; strength of a comment claiming the SyrupValue model had no dict —
+;; `syrup-dict` has been in `syrup.prologos` (encoded AND decoded) the
+;; whole time. Syrup canonicalises a dict by sorted encoded key, and
+;; `4"host` sorts before `4"port`, so the pairs are written here in
+;; canonical order — the bytes a peer re-encodes to check our
+;; signature are the bytes we sent.
+spec hints-bytes String String -> String
+  :doc "Wire bytes for the netlayer hints dict {\"host\" H \"port\" P}."
+defn hints-bytes [host port]
+  wire::encode
+    [syrup-dict
+      [cons [syrup-string "host"]
+        [cons [syrup-string host]
+          [cons [syrup-string "port"]
+            [cons [syrup-string port] nil]]]]]
+
+spec ocapn-peer-bytes String String String String -> String
+  :doc "Build the wire bytes for <ocapn-peer 'TRANSPORT ADDRESS HINTS>. transport/address are ASCII so the generic encoder is fine for them."
+defn ocapn-peer-bytes [transport address host port]
+  record-bytes "ocapn-peer"
+    [cons [wire::encode [syrup-symbol transport]]
+      [cons [wire::encode [syrup-string address]]
+        [cons [hints-bytes host port] nil]]]
+
+;; ----------------------------------------
+;; my-location envelope + signing
+;; ----------------------------------------
+;;
+;; The OCapN spec mandates the signature is over the syrup-encoded
+;; `<my-location LOC>` envelope, not over LOC directly — this
+;; prevents a captured signature being replayed as a bare location.
+
+spec my-location-envelope-bytes String -> String
+  :doc "Wrap pre-encoded location bytes in <my-location LOC>."
+defn my-location-envelope-bytes [location-bytes]
+  record-bytes "my-location" [cons location-bytes nil]
+
+spec sign-location Nat String -> String
+  :doc "Given a keypair handle + pre-encoded location bytes, return the 64-byte Ed25519 signature over the my-location envelope."
+defn sign-location [kp location-bytes]
+  sign-raw kp [my-location-envelope-bytes location-bytes]
+
+;; ----------------------------------------
+;; Build the signed op:start-session bytes
+;; ----------------------------------------
+
+spec start-session-bytes String Nat String -> String
+  :doc "Build the 4-field signed <op:start-session ver pubkey loc sig> wire bytes given (captp-version, keypair-handle, pre-encoded-location-bytes). 4 DIRECT record args."
+defn start-session-bytes [ver kp location-bytes]
+  let pk := [pubkey-raw kp]
+    let sig := [sign-location kp location-bytes]
+      let r := [str::slice sig 0 32]
+        let s := [str::slice sig 32 64]
+          [record-bytes "op:start-session"
+            [cons [wire::encode [syrup-string ver]]
+              [cons [gcrypt-pubkey-bytes pk]
+                [cons location-bytes
+                  [cons [gcrypt-sig-bytes r s] nil]]]]]
+
+;; ----------------------------------------
+;; Build the full handshake in one call
+;; ----------------------------------------
+;;
+;; The keypair is SUPPLIED, never generated here. There used to be a
+;; `mk-handshake-bytes` convenience wrapper that generated one into a
+;; `let` and returned only the bytes: the handle it dropped stayed in
+;; crypto-ffi's keypair table, unreachable, on every call — and a caller
+;; holding only the bytes could not sign anything afterwards. A
+;; third-party handoff has to SIGN a desc:handoff-receive with the same
+;; key the peer named as the receiver, which is the key we handshake
+;; with, so owning the handle is a requirement, not a convenience. The
+;; wrapper had no callers (the test server already uses this entry
+;; point) and was deleted rather than patched.
+spec handshake-bytes-with-key String Nat String String String String -> String
+defn handshake-bytes-with-key [ver kp transport address host port]
+  start-session-bytes ver kp [ocapn-peer-bytes transport address host port]
+
+;; Sign an arbitrary payload and return the 64 raw signature bytes (r ++ s).
+;; `sign-location` above wraps its argument in the my-location envelope; a
+;; handoff-receive is signed BARE, over exactly the record bytes.
+spec sign-bytes Nat String -> String
+defn sign-bytes [kp payload]
+  sign-raw kp payload
+
+;; The gcrypt sig-val form of a 64-byte raw signature. Split at 32 because
+;; Ed25519's signature IS r ++ s, and the wire form names the halves.
+spec sig-val-bytes String -> String
+  :doc "Wrap 64 raw signature bytes as (sig-val (eddsa (r R) (s S)))."
+defn sig-val-bytes [sig]
+  gcrypt-sig-bytes [str::slice sig 0 32] [str::slice sig 32 64]
+
+;; `<desc:sig-envelope BODY (sig-val …)>` over exactly the BODY bytes.
+;;
+;; Signed BARE — over the encoded record and nothing else. That is the
+;; difference from `sign-location`, which wraps its argument in the
+;; my-location envelope first; a `desc:handoff-give` and a
+;; `desc:handoff-receive` are both signed as they stand.
+;;
+;; Taking the body as pre-encoded BYTES rather than a SyrupValue is
+;; deliberate: the signature covers the exact bytes that go on the wire, and
+;; re-encoding a decoded value is the one operation that can silently change
+;; them (a dict re-sorted, a length recomputed). The caller signs what it
+;; sends.
+spec sig-envelope-bytes Nat String -> String
+  :doc "Sign BODY with the keypair and wrap it as <desc:sig-envelope BODY SIG>."
+defn sig-envelope-bytes [kp body]
+  record-bytes "desc:sig-envelope"
+    [cons body [cons [sig-val-bytes [sign-bytes kp body]] nil]]
+
+;; ----------------------------------------
+;; Incoming handshake validation — Phase 58.c / 58.d
+;; ----------------------------------------
+;;
+;; The OCapN spec requires the receiver of an op:start-session to
+;; reject it (with op:abort) when the CapTP version is unsupported
+;; (58.c) or the location signature does not verify (58.d). The
+;; decision logic lives HERE, in the core implementation — the test
+;; server is a thin TCP shell that only frames bytes.
+;;
+;; Inbound wire bytes reach this module HEX-ENCODED: embedding
+;; arbitrary Latin-1 bytes in a Prologos string literal (the server's
+;; only channel into a Prologos call) is fragile, so the server
+;; hex-encodes the frame and `hex-to-bytes` (FFI) recovers it here.
+
+;; --- op:abort builder ---
+
+spec abort-bytes String -> String
+  :doc "Build the <op:abort reason> wire bytes for a reason string."
+defn abort-bytes [reason]
+  record-bytes "op:abort" [cons [wire::encode [syrup-string reason]] nil]
+
+;; --- Syrup value skipper ---
+;;
+;; `skip-value frame off` returns the offset just past one complete
+;; Syrup value at `off`. Unlike syrup-wire's `decode-at`, it produces
+;; no decoded structure — it is structure-agnostic delimiter / length
+;; counting. That is the point: the signature is over the peer's
+;; BYTES, so the location field has to be sliced out verbatim rather
+;; than decoded and re-encoded, which is only byte-identical when the
+;; peer's encoding was canonical. (`decode-at` and the SyrupValue
+;; model DO handle `{}` dicts — `syrup-dict` in syrup.prologos — so
+;; dicts are not the reason this exists.)
+
+spec is-int-sep? Int -> Bool
+defn is-int-sep? [sep]
+  match [int-eq sep 43]
+    | true  -> true
+    | false -> int-eq sep 45
+
+spec is-atom-sep? Int -> Bool
+defn is-atom-sep? [sep]
+  match [int-eq sep 58]
+    | true  -> true
+    | false ->
+        match [int-eq sep 34]
+          | true  -> true
+          | false -> int-eq sep 39
+
+spec skip-atom-by-sep Int Int Int -> [Option Int]
+defn skip-atom-by-sep [len sep-off sep]
+  match [is-int-sep? sep]
+    | true  -> some [int+ sep-off 1]
+    | false ->
+        match [is-atom-sep? sep]
+          | true  -> some [int+ [int+ sep-off 1] len]
+          | false -> none
+
+spec skip-atom-tail String Int Int -> [Option Int]
+defn skip-atom-tail [frame len sep-off]
+  match [int-lt [str::length frame] [int+ sep-off 1]]
+    | true  -> none
+    | false -> skip-atom-by-sep len sep-off [char::code [str::ref frame sep-off]]
+
+spec skip-atom String Int -> [Option Int]
+defn skip-atom [frame off]
+  let ri := [wire::read-digits frame off]
+    skip-atom-tail frame [wire::ri-value ri] [wire::ri-end ri]
+
+;; n / t / f are 1 byte; F (single float) + 4; D (double) + 8.
+spec skip-flat Int Int -> [Option Int]
+defn skip-flat [cc off]
+  match [int-eq cc 110]
+    | true  -> some [int+ off 1]
+    | false ->
+        match [int-eq cc 116]
+          | true  -> some [int+ off 1]
+          | false ->
+              match [int-eq cc 102]
+                | true  -> some [int+ off 1]
+                | false ->
+                    match [int-eq cc 70]
+                      | true  -> some [int+ off 5]
+                      | false ->
+                          match [int-eq cc 68]
+                            | true  -> some [int+ off 9]
+                            | false -> none
+
+;; Skip composite children until the closing delimiter `close`.
+spec skip-many [String -> Int -> [Option Int]] String Int Int -> [Option Int]
+defn skip-many [skp frame off close]
+  match [int-lt [str::length frame] [int+ off 1]]
+    | true  -> none
+    | false ->
+        match [int-eq [char::code [str::ref frame off]] close]
+          | true  -> some [int+ off 1]
+          | false ->
+              match [skp frame off]
+                | none   -> none
+                | some e -> skip-many skp frame e close
+
+spec skip-value String Int -> [Option Int]
+defn skip-value [frame off]
+  match [int-lt [str::length frame] [int+ off 1]]
+    | true  -> none
+    | false ->
+        let c := [str::ref frame off]
+          let cc := [char::code c]
+            match [wire::digit? c]
+              | true  -> [skip-atom frame off]
+              | false ->
+                  match [int-eq cc 91]
+                    | true  -> [skip-many skip-value frame [int+ off 1] 93]
+                    | false ->
+                        match [int-eq cc 60]
+                          | true  -> [skip-many skip-value frame [int+ off 1] 62]
+                          | false ->
+                              match [int-eq cc 123]
+                                | true  -> [skip-many skip-value frame [int+ off 1] 125]
+                                | false -> [skip-flat cc off]
+
+;; --- syrup-list navigation ---
+
+spec list-nth [List SyrupValue] Int -> [Option SyrupValue]
+defn list-nth [xs n]
+  match xs
+    | nil      -> none
+    | cons h t ->
+        match [int-eq n 0]
+          | true  -> some h
+          | false -> list-nth t [int- n 1]
+
+spec syrup-list-nth SyrupValue Int -> [Option SyrupValue]
+defn syrup-list-nth [v n]
+  match v
+    | syrup-list xs -> list-nth xs n
+    | _             -> none
+
+spec syrup-bytes-value SyrupValue -> [Option String]
+defn syrup-bytes-value [v]
+  match v
+    | syrup-bytes b -> some b
+    | _             -> none
+
+spec syrup-string-value SyrupValue -> [Option String]
+defn syrup-string-value [v]
+  match v
+    | syrup-string s -> [some s]
+    | _              -> none
+
+spec is-start-session-label? SyrupValue -> Bool
+defn is-start-session-label? [v]
+  match v
+    | syrup-symbol s -> [str::eq s "op:start-session"]
+    | _              -> false
+
+;; A gcrypt sub-form `[key value]` — return the value's bytes.
+spec pair-elem1-bytes SyrupValue -> [Option String]
+defn pair-elem1-bytes [pr]
+  match [syrup-list-nth pr 1]
+    | none    -> none
+    | some bv -> syrup-bytes-value bv
+
+spec pair-elem1-at SyrupValue Int -> [Option String]
+defn pair-elem1-at [lst n]
+  match [syrup-list-nth lst n]
+    | none    -> none
+    | some pr -> pair-elem1-bytes pr
+
+;; --- gcrypt s-expression extraction ---
+;;
+;; pubkey = (public-key (ecc (curve Ed25519) (flags eddsa) (q PK)))
+;; sig    = (sig-val (eddsa (r R) (s S)))
+
+spec q-from-ecc SyrupValue -> [Option String]
+defn q-from-ecc [ecc]
+  match [syrup-list-nth ecc 3]
+    | none        -> none
+    | some q-pair -> pair-elem1-bytes q-pair
+
+spec extract-pubkey-q SyrupValue -> [Option String]
+  :doc "Pull the 32-byte raw Ed25519 public key from a gcrypt public-key sexpr."
+defn extract-pubkey-q [pubkey-sv]
+  match [syrup-list-nth pubkey-sv 1]
+    | none     -> none
+    | some ecc -> q-from-ecc ecc
+
+spec sig-append-s SyrupValue String -> [Option String]
+defn sig-append-s [eddsa r]
+  match [pair-elem1-at eddsa 2]
+    | none   -> none
+    | some s -> some [str::append r s]
+
+spec sig-from-eddsa SyrupValue -> [Option String]
+defn sig-from-eddsa [eddsa]
+  match [pair-elem1-at eddsa 1]
+    | none   -> none
+    | some r -> sig-append-s eddsa r
+
+spec extract-sig SyrupValue -> [Option String]
+  :doc "Pull the 64-byte signature (r ++ s) from a gcrypt sig-val sexpr."
+defn extract-sig [sig-sv]
+  match [syrup-list-nth sig-sv 1]
+    | none       -> none
+    | some eddsa -> sig-from-eddsa eddsa
+
+;; --- parsed start-session ---
+
+data ParsedSS
+  ;; version, pubkey-q (32 bytes), location-raw-bytes, signature (64 bytes)
+  parsed-ss : String -> String -> String -> String
+
+spec ss-version ParsedSS -> String
+defn ss-version [p]
+  match p
+    | parsed-ss v _ _ _ -> v
+
+;; Field accessors. The type had only `ss-version`, so nothing outside this
+;; module could look at the pubkey, the location or the signature — which is
+;; also why its signed path had no unit test that could construct a NEGATIVE
+;; case.
+spec ss-pubkey ParsedSS -> String
+defn ss-pubkey [p]
+  match p
+    | parsed-ss _ q _ _ -> q
+
+spec ss-location ParsedSS -> String
+defn ss-location [p]
+  match p
+    | parsed-ss _ _ loc _ -> loc
+
+spec ss-signature ParsedSS -> String
+defn ss-signature [p]
+  match p
+    | parsed-ss _ _ _ sig -> sig
+
+spec ss-verify-sig ParsedSS -> Bool
+  :doc "Verify the Ed25519 location signature against the my-location envelope."
+defn ss-verify-sig [p]
+  match p
+    | parsed-ss _ q loc-raw sig -> [verify-raw q [my-location-envelope-bytes loc-raw] sig]
+
+;; --- 4-field parse chain ---
+;;
+;; <op:start-session ver pubkey location sig>. The version / pubkey /
+;; signature fields are decoded with `decode-at` (no dicts inside);
+;; the location is skipped raw with `skip-value` (it carries a `{}`
+;; hints dict) and its byte-slice feeds the my-location envelope.
+;;
+;; The record DELIMITERS are checked, not assumed. This chain used to
+;; start decoding at offset 1 without looking at byte 0, and stop after
+;; the fourth field without looking for `>` — so a frame that merely
+;; happened to contain a plausible label survived into
+;; `decide-signature`, where the only remaining gate is a signature the
+;; sender chose. Failing open into a crypto decision is the wrong
+;; direction to fail. `<` is checked in `parse-start-session`; the
+;; closing `>` is checked here, and because it must fall exactly after
+;; field four it is also the record's arity check.
+
+spec is-close-record? String Int -> Bool
+  :doc "True iff `off` is in range and holds the record terminator `>`."
+defn is-close-record? [frame off]
+  match [int-lt off [str::length frame]]
+    | false -> false
+    | true  -> int-eq [char::code [str::ref frame off]] 62
+
+spec pss-finish String String String String SyrupValue Int -> [Option ParsedSS]
+defn pss-finish [frame ver q loc-raw sig-sv e5]
+  match [is-close-record? frame e5]
+    | false -> none
+    | true  ->
+        match [extract-sig sig-sv]
+          | none     -> none
+          | some sig -> some [parsed-ss ver q loc-raw sig]
+
+spec pss-finish-loc String String String String Int -> [Option ParsedSS]
+defn pss-finish-loc [frame ver q loc-raw e4]
+  match [wire::decode-at frame e4]
+    | none   -> none
+    | some d -> pss-finish frame ver q loc-raw [wire::d-value d] [wire::d-consumed d]
+
+spec pss-after-q String String String Int -> [Option ParsedSS]
+defn pss-after-q [frame ver q e3]
+  match [skip-value frame e3]
+    | none    -> none
+    | some e4 -> pss-finish-loc frame ver q [str::slice frame e3 e4] e4
+
+spec pss-after-pubkey String String SyrupValue Int -> [Option ParsedSS]
+defn pss-after-pubkey [frame ver pubkey-sv e3]
+  match [extract-pubkey-q pubkey-sv]
+    | none   -> none
+    | some q -> pss-after-q frame ver q e3
+
+spec pss-after-version String String Int -> [Option ParsedSS]
+defn pss-after-version [frame ver e2]
+  match [wire::decode-at frame e2]
+    | none   -> none
+    | some d -> pss-after-pubkey frame ver [wire::d-value d] [wire::d-consumed d]
+
+spec pss-check-version String SyrupValue Int -> [Option ParsedSS]
+defn pss-check-version [frame ver-sv e2]
+  match [syrup-string-value ver-sv]
+    | none     -> none
+    | some ver -> pss-after-version frame ver e2
+
+spec pss-after-label String SyrupValue Int -> [Option ParsedSS]
+defn pss-after-label [frame label e1]
+  match [is-start-session-label? label]
+    | false -> none
+    | true  ->
+        match [wire::decode-at frame e1]
+          | none   -> none
+          | some d -> pss-check-version frame [wire::d-value d] [wire::d-consumed d]
+
+;; Split out so `parse-start-session` stays two matches deep.
+spec pss-after-open String -> [Option ParsedSS]
+defn pss-after-open [frame]
+  match [wire::decode-at frame 1]
+    | none   -> none
+    | some d -> pss-after-label frame [wire::d-value d] [wire::d-consumed d]
+
+spec parse-start-session String -> [Option ParsedSS]
+  :doc "Decode an inbound op:start-session frame into its four fields. Rejects anything that is not exactly `<op:start-session a b c d>`."
+defn parse-start-session [frame]
+  match [int-lt [str::length frame] 2]
+    | true  -> none
+    | false ->
+        match [int-eq [char::code [str::ref frame 0]] 60]
+          | false -> none
+          | true  -> pss-after-open frame
+
+;; --- top-level decision ---
+
+spec decide-signature ParsedSS -> String
+defn decide-signature [p]
+  match [ss-verify-sig p]
+    | true  -> ""
+    | false -> [abort-bytes "invalid location signature"]
+
+spec decide-version String ParsedSS -> String
+defn decide-version [expected-ver p]
+  match [str::eq [ss-version p] expected-ver]
+    | true  -> [decide-signature p]
+    | false -> [abort-bytes "unsupported CapTP version"]
+
+spec decide-incoming String [Option ParsedSS] -> String
+defn decide-incoming [expected-ver mp]
+  match mp
+    | none   -> [abort-bytes "expected op:start-session"]
+    | some p -> [decide-version expected-ver p]
+
+spec check-incoming-start-session String String -> String
+  :doc "Validate an inbound op:start-session frame (hex-encoded wire
+        bytes). Returns the empty string when the handshake is
+        acceptable, or op:abort wire bytes to send before closing."
+defn check-incoming-start-session [expected-ver hex-frame]
+  decide-incoming expected-ver [parse-start-session [hex-to-bytes hex-frame]]

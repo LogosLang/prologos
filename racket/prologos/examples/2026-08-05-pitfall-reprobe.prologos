@@ -1,0 +1,71 @@
+ns pfp
+
+;; Pitfall re-probe after the 2026-08-05 upstream merge.
+;; Each block is the SHAPE the pitfall says fails. If the file runs clean,
+;; the entry is stale.
+
+;; ---- #38: `let X := EXPR` value spanning multiple lines ----
+def p38 : Int :=
+  let a := [int+ 1
+                 2]
+    [int+ a 10]
+
+;; ---- #23: multi-token `defn` body on a single line without outer brackets ----
+spec p23 Int -> Int
+defn p23 [x] int+ x 1
+
+;; ---- #22: `[Option Nat] -> Int` in a spec ----
+spec p22 [Option Nat] -> Int
+defn p22 [o]
+  match o
+    | none   -> 0
+    | some n -> 1
+
+;; ---- #36: multi-line application, continuation arg on its own line ----
+spec p36 Int Int Int -> Int
+defn p36 [a b c] [int+ [int+ a b] c]
+
+def p36r : Int :=
+  [p36 1
+       2
+       3]
+
+;; ---- #21: multi-line clause body under a `|` arm ----
+spec p21 Nat -> Nat
+defn p21
+  | zero ->
+    0N
+  | suc n ->
+    [nat+ n 1N]
+
+;; ---- #42: a pattern VARIABLE whose name matches a data constructor ----
+data P42 { p42a : Int, p42b : Int }
+
+spec p42f P42 -> Int
+defn p42f [v]
+  match v
+    | p42a n -> n
+    | p42b n -> [int+ n 100]
+
+;; ---- #16: forward reference inside a module ----
+spec p16-odd Nat -> Bool
+spec p16-even Nat -> Bool
+defn p16-even
+  | zero -> true
+  | suc n -> [p16-odd n]
+defn p16-odd
+  | zero -> false
+  | suc n -> [p16-even n]
+
+;; ---- #5: `none` / `some` without explicit type args ----
+def p5 := [some 3]
+
+;; ---- results ----
+p38
+[p23 5]
+[p22 [some 2N]]
+p36r
+[p21 [suc [suc zero]]]
+[p42f [p42b 5]]
+[p16-even [suc [suc zero]]]
+p5

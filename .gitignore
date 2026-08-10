@@ -57,6 +57,10 @@ racket/prologos/data/cache/
 mempalace.yaml
 entities.json
 
+# Python bytecode cache (OCapN interop test runner)
+__pycache__/
+*.pyc
+
 # Generated propagator-network module caches (.pnet embeds machine-specific abs paths + mtimes; regenerable, like .zo)
 racket/prologos/data/cache/pnet/
 # ...and by extension, wherever they land. The path-scoped rule above only

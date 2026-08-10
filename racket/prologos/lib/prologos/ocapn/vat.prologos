@@ -1,0 +1,614 @@
+ns prologos::ocapn::vat
+
+;; ========================================
+;; Local Vat (event loop, no threads, no IO)
+;; ========================================
+;;
+;; A vat is the "world" inside which a population of actors live and
+;; messages are processed atomically one turn at a time. In Goblins
+;; the vat is mutable, owned by a thread; here it's a pure data
+;; structure that you `step` to advance one turn.
+;;
+;; Architecture:
+;;
+;;   Vat = (next-id, actors, promises, queue)
+;;     next-id   — Nat counter for fresh refr/promise ids
+;;     actors    — list of ActorEntry  (id × Actor)
+;;     promises  — list of PromiseEntry (id × PromiseState)
+;;     queue     — list of pending VatMessage (FIFO; we cons on the
+;;                 right by appending; small constant; no perf claim)
+;;
+;; The "turn" boundary is `step-vat`: pop one message, deliver it,
+;; integrate effects (and possibly resolve queued pipelined messages
+;; on freshly-fulfilled promises). `run-vat` repeats until the queue
+;; is empty or fuel runs out.
+;;
+;; Note: this vat does NOT do I/O, threads, or actual networking. It
+;; is the abstract semantic core. A future captp-session module
+;; bridges this to a session-typed wire transport.
+
+require [prologos::ocapn::syrup
+         :refer [SyrupValue
+                 syrup-null syrup-bool syrup-nat syrup-int syrup-string
+                 syrup-symbol syrup-list syrup-tagged
+                 syrup-refr syrup-promise syrup-dict syrup-set syrup-float]]
+        [prologos::ocapn::promise
+         :refer [PromiseState
+                 pst-unresolved pst-fulfilled pst-broken
+                 unresolved? fulfilled? broken? resolved?
+                 fulfill break enqueue take-queue
+                 resolution-value fresh]]
+        [prologos::ocapn::behavior
+         :refer [BehaviorTag
+                 beh-cell beh-counter beh-greeter beh-echo
+                 beh-adder beh-forwarder beh-fulfiller beh-resolver
+                 Effect eff-send-only eff-send-remote eff-resolve eff-break
+                 eff-spawn
+                 beh-car-factory-builder beh-car-factory beh-car
+                 ActStep act-step act-step-pending
+                 step-state step-return step-effects step-answers?
+                 step-behavior
+                 eff-connect
+                 OutReq out-dial out-send
+                 beh-sturdyref-enlivener]]
+        [prologos::data::list   :refer [List nil cons append]]
+        [prologos::data::option :refer [Option none some]]
+        [prologos::data::nat    :refer [add nat-eq? max]]
+        [prologos::data::string :as str :refer []]
+
+;; ========================================
+;; Actor records
+;; ========================================
+;;
+;; An Actor packs a behaviour tag and its current state. The state is a
+;; single SyrupValue (use syrup-list for multi-field state).
+
+data Actor
+  actor : BehaviorTag -> SyrupValue
+
+spec actor-tag Actor -> BehaviorTag
+defn actor-tag
+  | actor t _ -> t
+
+spec actor-state Actor -> SyrupValue
+defn actor-state
+  | actor _ s -> s
+
+;; ========================================
+;; Table entries (concrete, monomorphic)
+;; ========================================
+;;
+;; We could use [List [Sigma [_ <Nat>] T]] but concrete entry types
+;; avoid potential issues with parametric Sigma in constructor
+;; positions and read more clearly.
+
+data ActorEntry
+  actor-entry : Nat -> Actor
+
+spec ae-id ActorEntry -> Nat
+defn ae-id
+  | actor-entry i _ -> i
+
+spec ae-actor ActorEntry -> Actor
+defn ae-actor
+  | actor-entry _ a -> a
+
+data PromiseEntry
+  promise-entry : Nat -> PromiseState
+
+spec pe-id PromiseEntry -> Nat
+defn pe-id
+  | promise-entry i _ -> i
+
+spec pe-state PromiseEntry -> PromiseState
+defn pe-state
+  | promise-entry _ s -> s
+
+;; ========================================
+;; Vat messages (in-memory; not on the wire)
+;; ========================================
+;;
+;; A vat-internal message: target actor id, args, optional answer-pos
+;; (the promise id to settle with the return value).
+
+data VatMsg
+  ;; vmsg-deliver target args answer-pos
+  ;;   when answer-pos = some pid, the actor's return value resolves pid.
+  ;;   when answer-pos = none,     the result is discarded (deliver-only).
+  vmsg-deliver : Nat -> SyrupValue -> [Option Nat]
+
+spec vmsg-target VatMsg -> Nat
+defn vmsg-target
+  | vmsg-deliver t _ _ -> t
+
+spec vmsg-args VatMsg -> SyrupValue
+defn vmsg-args
+  | vmsg-deliver _ a _ -> a
+
+spec vmsg-answer-pos VatMsg -> Option Nat
+defn vmsg-answer-pos
+  | vmsg-deliver _ _ ap -> ap
+
+;; Convenience.
+
+spec mk-deliver Nat SyrupValue Nat -> VatMsg
+defn mk-deliver [t a p]
+  vmsg-deliver t a [some p]
+
+spec mk-deliver-only Nat SyrupValue -> VatMsg
+defn mk-deliver-only [t a]
+  vmsg-deliver t a none
+
+;; ========================================
+;; Assoc-list utilities (over our concrete entry types)
+;; ========================================
+
+spec actor-table-get Nat [List ActorEntry] -> Option Actor
+defn actor-table-get [k entries]
+  match entries
+    | nil -> none
+    | cons e rest ->
+        match [nat-eq? k [ae-id e]]
+          | true  -> some [ae-actor e]
+          | false -> actor-table-get k rest
+
+;; Replace in place; append only when `k` is absent.
+;;
+;; An earlier revision consed at the head and let the newest write shadow
+;; the older ones (Copilot review #28#discussion_r3150426596). That is O(1)
+;; per write, but it leaves every superseded entry resident forever: the
+;; table grows with the number of WRITES rather than with the number of live
+;; actors, and `actor-table-get` — which runs once per delivery, and
+;; `promise-table-get` once per question per pump pass — walks all of them.
+;; Each delivery rewrites its target's state, so a session of D deliveries
+;; paid O(D²) in lookups to save O(D · live) in writes.
+;;
+;; Replacement keeps the table at exactly the live-entry count, so lookup
+;; cost stops depending on how long the session has been running. The
+;; recursive form was tried once before and timed the OCapN test files out
+;; on Racket 8.14 under the 120s-per-file runner; that measurement predates
+;; the runners setting PLT_CS_COMPILE_LIMIT, which is what stopped the
+;; reducer's giant match functions from being interpreted.
+spec actor-table-set Nat Actor [List ActorEntry] -> List ActorEntry
+defn actor-table-set [k a entries]
+  match entries
+    | nil -> [cons [actor-entry k a] [nil ActorEntry]]
+    | cons e rest ->
+        match [nat-eq? k [ae-id e]]
+          | true  -> [cons [actor-entry k a] rest]
+          | false -> [cons e [actor-table-set k a rest]]
+
+spec promise-table-get Nat [List PromiseEntry] -> Option PromiseState
+defn promise-table-get [k entries]
+  match entries
+    | nil -> none
+    | cons e rest ->
+        match [nat-eq? k [pe-id e]]
+          | true  -> some [pe-state e]
+          | false -> promise-table-get k rest
+
+;; Same replace-in-place as actor-table-set above (Copilot review
+;; #28#discussion_r3150426729). This one is where shadowing cost the most:
+;; `resolve-promise` / `break-promise` write once per settlement, so under
+;; the cons form the settled entry was consed in FRONT of the unresolved one
+;; it superseded — correct, but the stale entry stayed resident forever and
+;; every settled promise cost two slots on every subsequent scan.
+spec promise-table-set Nat PromiseState [List PromiseEntry] -> List PromiseEntry
+defn promise-table-set [k s entries]
+  match entries
+    | nil -> [cons [promise-entry k s] [nil PromiseEntry]]
+    | cons e rest ->
+        match [nat-eq? k [pe-id e]]
+          | true  -> [cons [promise-entry k s] rest]
+          | false -> [cons e [promise-table-set k s rest]]
+
+;; ========================================
+;; Vat
+;; ========================================
+
+data Vat
+  ;; vat next-id actors promises queue outbound
+  ;; `outbound` = messages a behaviour explicitly addressed to a PEER export
+  ;; position, via `eff-send-remote` (Phase 59b part 3). The vat stays
+  ;; wire-agnostic: it records "this one is not for anybody here", the bridge
+  ;; decides that means "send to peer".
+  ;;
+  ;; The entry condition is the EFFECT, not a failed actor-table lookup. An
+  ;; earlier revision also routed any undeliverable `vmsg-deliver` here,
+  ;; which made an inbound `op:deliver` to a position we do not hold come
+  ;; back out at the peer — see the reject arm in `deliver-msg`.
+  vat : Nat -> [List ActorEntry] -> [List PromiseEntry] -> [List VatMsg] -> [List VatMsg] -> [List OutReq]
+
+;; Selectors.
+
+spec vat-next-id Vat -> Nat
+defn vat-next-id
+  | vat n _ _ _ _ _ -> n
+
+spec vat-actors Vat -> List ActorEntry
+defn vat-actors
+  | vat _ a _ _ _ _ -> a
+
+spec vat-promises Vat -> List PromiseEntry
+defn vat-promises
+  | vat _ _ p _ _ _ -> p
+
+spec vat-queue Vat -> List VatMsg
+defn vat-queue
+  | vat _ _ _ q _ _ -> q
+
+;; Phase 59b part 3: messages the vat could not deliver locally.
+spec vat-outbound Vat -> List VatMsg
+defn vat-outbound
+  | vat _ _ _ _ o _ -> o
+
+;; Outbound CONNECTION requests: locations a behaviour asked us to dial, via
+;; `eff-connect`. Same shape and same reason as `outbound` above — the vat
+;; stays pure and wire-agnostic, recording "somebody wants a connection here"
+;; and leaving the socket to the driver, which drains this list between steps.
+;;
+;; This is what lets the sturdyref enlivener be an ACTOR rather than a special
+;; case in the driver: enlivening means opening a socket, a behaviour cannot,
+;; and before this the driver had to intercept the deliver before captp-core
+;; saw it. See the gaps document §0.2.
+spec vat-dials Vat -> List OutReq
+defn vat-dials
+  | vat _ _ _ _ _ d -> d
+
+spec clear-dials Vat -> Vat
+  :doc "Drop the pending dial requests, once the driver has taken them."
+defn clear-dials
+  | vat n acts proms q ob _ -> vat n acts proms q ob [nil OutReq]
+
+spec enqueue-out-req OutReq Vat -> Vat
+defn enqueue-out-req [r v]
+  vat [vat-next-id v] [vat-actors v] [vat-promises v] [vat-queue v] [vat-outbound v] [append [vat-dials v] [cons r [nil OutReq]]]
+
+
+;; ========================================
+;; Construction
+;; ========================================
+
+;; Empty vat: no actors, no promises, no queue, next-id = 0.
+def empty-vat : Vat := [vat zero nil nil nil nil nil]
+
+;; ========================================
+;; Allocation result — concrete struct
+;; ========================================
+;;
+;; vat-spawn / fresh-promise / send all need to return BOTH a new vat AND
+;; a freshly-allocated id. We use a concrete `Allocated` struct rather
+;; than `Sigma Vat Nat`. Concrete structs avoid two ergonomics issues
+;; observed here: (1) `match | pair a b ->` destructuring a `Sigma`
+;; result ran into "could not infer" elaborator errors when re-
+;; constructing a Sigma in the body; (2) `[fst p]`/`[snd p]` used
+;; twice on the same `p` triggers a QTT multiplicity violation in
+;; some elaboration paths. A concrete struct bypasses both.
+
+data Allocated
+  allocated : Vat -> Nat
+
+spec alloc-vat Allocated -> Vat
+defn alloc-vat
+  | allocated v _ -> v
+
+spec alloc-id Allocated -> Nat
+defn alloc-id
+  | allocated _ n -> n
+
+;; ========================================
+;; Spawn / fresh-promise
+;; ========================================
+
+spec vat-spawn BehaviorTag SyrupValue Vat -> Allocated
+defn vat-spawn
+  | tag init-state [vat n acts proms q ob dl] ->
+      allocated [vat [suc n] [actor-table-set n [actor tag init-state] acts] proms q ob dl] n
+
+spec fresh-promise Vat -> Allocated
+defn fresh-promise
+  | vat n acts proms q ob dl ->
+      allocated [vat [suc n] acts [promise-table-set n fresh proms] q ob dl] n
+
+;; enqueue-msg: append a VatMsg at the END of the queue (FIFO).
+
+spec enqueue-msg VatMsg Vat -> Vat
+defn enqueue-msg
+  | m [vat n acts proms q ob dl] ->
+      vat n acts proms [append q [cons m nil]] ob dl
+
+;; ========================================
+;; Sending
+;; ========================================
+;;
+;; send: target args -> (vat', promise-id)
+;; Allocates a result promise, enqueues a deliver, returns the promise.
+
+;; send-only: target args -> vat'  (fire-and-forget)
+
+spec send-only Nat SyrupValue Vat -> Vat
+defn send-only [target args v]
+  enqueue-msg [vmsg-deliver target args none] v
+
+;; ========================================
+;; Promise resolution
+;; ========================================
+;;
+;; resolve-promise: settle pid := fulfilled val.
+;;
+;; Phase 0 design note: we DROP the flush-queued-messages step. The
+;; PromiseState's `pst-unresolved` carries `List SyrupValue` which is
+;; the WIRE-LEVEL message representation; the vat's main queue holds
+;; `List VatMsg` (target+args+answer-pos). Flushing across the
+;; representational boundary requires rewriting each queued
+;; SyrupValue into a VatMsg with the resolved target's refr, which
+;; is non-trivial (decoded args etc.). Deferred to Phase 1; the
+;; pipeline tests cover the PromiseState-level algebra, and vat-level
+;; pipelining works for the FullFiller pattern (actor sends
+;; eff-resolve directly, no transit through the promise queue).
+;; See goblin-pitfalls #11.
+
+spec resolve-promise Nat SyrupValue Vat -> Vat
+defn resolve-promise
+  | pid val [vat n acts proms q ob dl] ->
+      match [promise-table-get pid proms]
+        | none -> [vat n acts proms q ob dl]   ;; unknown promise, no-op
+        | some s ->
+            match [resolved? s]
+              | true  -> [vat n acts proms q ob dl]   ;; already settled, monotone no-op
+              | false ->
+                  [vat n acts [promise-table-set pid [fulfill val s] proms] q ob dl]
+
+spec break-promise Nat SyrupValue Vat -> Vat
+defn break-promise
+  | pid reason [vat n acts proms q ob dl] ->
+      match [promise-table-get pid proms]
+        | none -> [vat n acts proms q ob dl]
+        | some s ->
+            match [resolved? s]
+              | true  -> [vat n acts proms q ob dl]
+              | false ->
+                  [vat n acts [promise-table-set pid [break reason s] proms] q ob dl]
+
+;; ========================================
+;; Effect interpretation
+;; ========================================
+;;
+;; Append to `outbound`, preserving ORDER (append, not cons — a behaviour
+;; that sends twice must have them emitted in that order).
+spec enqueue-outbound VatMsg Vat -> Vat
+defn enqueue-outbound [m v]
+  [vat [vat-next-id v] [vat-actors v] [vat-promises v] [vat-queue v] [append [vat-outbound v] [cons m nil]] [vat-dials v]]
+
+;; Apply one Effect to the vat: a send-only enqueues on the LOCAL queue;
+;; a send-remote goes straight to the outbound queue; resolve/break
+;; settle the corresponding promise.
+;;
+;; eff-send-remote skips the actor-table lookup on purpose. Its target is
+;; the PEER's export position, which is drawn from a different counter than
+;; our actor ids and collides with them freely — see the namespace note on
+;; `data Effect` in behavior.prologos. Routing it through `send-only` would
+;; let `deliver-msg` find a same-numbered LOCAL actor and deliver there.
+
+;; next-id must never move BACKWARDS: it is the sole allocator for both actor
+;; ids and promise ids, so lowering it re-issues ids that are already live and
+;; the next `vat-spawn` / `fresh-promise` silently overwrites an existing
+;; entry. In the normal case `id` IS the next-id the behaviour was handed, and
+;; `[suc id]` and the max agree — but that was an invariant the previous
+;; `[suc id]` only asserted in a comment. Taking the max makes it hold for any
+;; id a caller passes, which is what the comment claimed.
+;;
+;; Still NOT enforced structurally: at most one `eff-spawn` per turn (see
+;; `data Effect` in behavior.prologos). Two spawns in one effect list both name
+;; the same id; the max stops the second from rewinding next-id, but the first
+;; actor is still overwritten. Enforcing that means handing the behaviour a
+;; supply of ids rather than one — a change to `step-behavior`'s signature and
+;; to every behaviour that spawns.
+spec place-actor Nat BehaviorTag SyrupValue Vat -> Vat
+defn place-actor [id tag st v]
+  vat [max [suc id] [vat-next-id v]] [actor-table-set id [actor tag st] [vat-actors v]] [vat-promises v] [vat-queue v] [vat-outbound v] [vat-dials v]
+
+spec apply-effect Effect Vat -> Vat
+defn apply-effect
+  | [eff-send-only   t a]  v -> send-only t a v
+  | [eff-send-remote t a]  v -> enqueue-outbound [vmsg-deliver t a none] v
+  | [eff-resolve pid val]  v -> resolve-promise pid val v
+  | [eff-break   pid val]  v -> break-promise   pid val v
+  ;; The id was handed to the behaviour as the vat's next free id (see
+  ;; `eff-spawn` in behavior.prologos), so placing the actor there and bumping
+  ;; next-id past it keeps the two in step. `vat-spawn` cannot be reused: it
+  ;; picks the id itself, and the behaviour has already published this one in
+  ;; its return value.
+  | [eff-spawn id tag st]  v -> place-actor id tag st v
+  ;; The vat records the request and stays pure; the driver opens the socket.
+  | [eff-connect loc]      v -> enqueue-out-req [out-dial loc] v
+
+spec apply-effects [List Effect] Vat -> Vat
+defn apply-effects
+  | nil           v -> v
+  | [cons e rest] v -> apply-effects rest [apply-effect e v]
+
+;; ========================================
+;; send (uses send-only via the vat queue)
+;; ========================================
+
+spec send Nat SyrupValue Vat -> Allocated
+defn send [target args v]
+  match [fresh-promise v]
+    | allocated v1 pid ->
+        allocated [enqueue-msg [vmsg-deliver target args [some Nat pid]] v1] pid
+
+;; ========================================
+;; The Turn
+;; ========================================
+;;
+;; Apply the result of a single act-step to the vat: store new actor
+;; state, run effects, settle answer promise.
+
+;; A behaviour signals failure by RETURNING `<Error reason>` — it has no other
+;; way to, since the answer promise is allocated by the vat and the behaviour
+;; never learns its id, so it cannot emit `eff-break` against it.
+;;
+;; Without this the promise is FULFILLED with an error-shaped value, and the
+;; peer is told `['fulfill <Error …>]` where it expects `['break reason]`. The
+;; difference is invisible locally (both settle, both answer) and only shows up
+;; against a peer that checks which one it got — upstream's pipelined-break
+;; test does exactly that, and it is the case where being wrong matters most,
+;; because a broken link is supposed to break the rest of the chain.
+;;
+;; `<Error r>` is the same wrapper `wrap-error` produces on the way out, so the
+;; convention is one shape, read consistently in both directions.
+spec error-reason-of SyrupValue -> [Option SyrupValue]
+defn error-reason-of [v]
+  match v
+    | syrup-tagged t p ->
+        match [str::eq t "Error"]
+          | true  -> some p
+          | false -> [none SyrupValue]
+    | _ -> [none SyrupValue]
+
+spec settle-answer Nat SyrupValue Vat -> Vat
+defn settle-answer [pid rv v]
+  match [error-reason-of rv]
+    | none   -> resolve-promise pid rv v
+    | some r -> break-promise pid r v
+
+;; `answers?` is false when the behaviour had no answer to give (see
+;; `act-step-pending`). The promise then stays PENDING rather than being
+;; settled with an invented value — the answer is coming from somewhere else,
+;; and settling it here would beat the real one.
+spec step-after-act Nat Actor SyrupValue SyrupValue [List Effect] Bool [Option Nat] Vat -> Vat
+defn step-after-act [target old-act new-state rv effects answers? ap v]
+  let acts1 := [actor-table-set target [actor [actor-tag old-act] new-state] [vat-actors v]]
+    let v1 := [vat [vat-next-id v] acts1 [vat-promises v] [vat-queue v] [vat-outbound v] [vat-dials v]]
+      let v2 := [apply-effects effects v1]
+        match answers?
+          | false -> v2
+          | true  ->
+              match ap
+                | none -> v2
+                | some pid -> settle-answer pid rv v2
+
+;; deliver: look up the target actor, run its behaviour, integrate
+;; effects, settle the answer-promise (if any) with the return value.
+;;
+;; Missing-target handling (Copilot review #28#discussion_r3150426741):
+;; if the target id has no actor in the table, we BREAK any answer
+;; promise rather than dropping the message — otherwise an `ask`
+;; against a non-existent actor would hang on its result-promise
+;; forever. The break-reason carries the original args so callers
+;; can debug what couldn't be delivered.
+
+spec deliver-msg VatMsg Vat -> Vat
+defn deliver-msg [m v]
+  let target := [vmsg-target m]
+    let args := [vmsg-args m]
+      let ap := [vmsg-answer-pos m]
+        match [actor-table-get target [vat-actors v]]
+          | none ->
+              match ap
+                ;; REJECT, do not re-address. Phase 59b part 3 routed this
+                ;; arm to `enqueue-outbound`, on the reading that a message
+                ;; with no local actor "must be" a behaviour talking to a
+                ;; peer export. That reading is the very heuristic
+                ;; `eff-send-remote` was introduced to kill (see the
+                ;; namespace note on `data Effect` in behavior.prologos): a
+                ;; VatMsg carries no provenance, so the arm fires for an
+                ;; INBOUND `op:deliver` too. The bridge then drains
+                ;; `vat-outbound` back to the peer as an `op:deliver` at
+                ;; the same position — a target we do not hold, reinterpreted
+                ;; in the peer's own namespace. A peer typo, or a chosen
+                ;; position, becomes traffic we emit against an object of
+                ;; the peer's choosing.
+                ;;
+                ;; Every legitimate producer of outbound traffic already
+                ;; bypasses this path: `eff-send-remote` writes
+                ;; `vat-outbound` directly in `apply-effect`, and the two
+                ;; forwarding loops in captp-core only call `send-only`
+                ;; after a successful `lookup-actor`. So the target here is
+                ;; either a peer position we never exported or a behaviour
+                ;; bug, and neither is deliverable.
+                | none     -> v
+                ;; ap = some breaks: sending to a peer AND awaiting an
+                ;; answer is an outbound QUESTION (needs an entry in the
+                ;; outbound-questions table) and is NOT built.
+                | some pid -> break-promise pid args v
+          | some a ->
+              let s := [step-behavior [actor-tag a] [actor-state a] args [vat-next-id v]]
+                step-after-act target a [step-state s] [step-return s] [step-effects s] [step-answers? s] ap v
+
+;; ========================================
+;; step-vat: process one queued message
+;; ========================================
+;;
+;; If the queue is non-empty, process the head message and return
+;; (some new-vat). If the queue is empty, return none — the vat has
+;; reached quiescence.
+
+spec step-vat Vat -> Option Vat
+defn step-vat [v]
+  match [vat-queue v]
+    | nil -> none
+    | cons m rest ->
+        let v1 := [vat [vat-next-id v] [vat-actors v] [vat-promises v] rest [vat-outbound v] [vat-dials v]]
+          some [deliver-msg m v1]
+
+;; ========================================
+;; run-vat: run-to-quiescence with fuel
+;; ========================================
+;;
+;; POST-CONDITION, and the whole of the exhaustion signal: `run-vat` returns
+;; a vat whose queue is empty IFF the run reached quiescence. `step-vat`
+;; returns `none` only on an empty queue, so the sole way out with work left
+;; is fuel hitting zero. `vat-quiescent?` names that test; a caller that does
+;; not consult it cannot tell "nothing left to do" from "ran out of turns".
+;;
+;; That silence has already cost one debugging cycle — `drain-fuel` was
+;; raised 5 → 20 in `connection-step` because a send was being left on the
+;; queue with no error anywhere, which moved the threshold rather than the
+;; failure mode, and the mechanism is unchanged at 20.
+;;
+;; Deliberately NOT done here: breaking the answer promises of the messages
+;; still queued. Exhaustion is not undeliverability. `connection-step`
+;; carries the vat (queue included) forward into the next
+;; `ConnectionState`, so a message left over is DEFERRED to the next frame,
+;; not lost; breaking it would turn a delay into a wrong answer sent to the
+;; peer. What is missing is the caller's check, not a retraction here.
+spec vat-quiescent? Vat -> Bool
+  :doc "True iff the vat has no queued messages — i.e. iff the last run-vat reached quiescence rather than exhausting its fuel."
+defn vat-quiescent? [v]
+  match [vat-queue v]
+    | nil        -> true
+    | cons _ _   -> false
+
+spec run-vat Nat Vat -> Vat
+defn run-vat [fuel v]
+  match fuel
+    | zero -> v
+    | suc f ->
+        match [step-vat v]
+          | none -> v
+          | some v1 -> run-vat f v1
+
+;; ========================================
+;; Inspection helpers
+;; ========================================
+
+spec lookup-promise Nat Vat -> Option PromiseState
+defn lookup-promise [pid v]
+  promise-table-get pid [vat-promises v]
+
+spec lookup-actor Nat Vat -> Option Actor
+defn lookup-actor [aid v]
+  actor-table-get aid [vat-actors v]
+
+spec list-length-helper [List VatMsg] Nat -> Nat
+defn list-length-helper [xs n]
+  match xs
+    | nil -> n
+    | cons _ rest -> list-length-helper rest [suc n]
+
+;; queue length — for tests asserting forward progress
+spec queue-length Vat -> Nat
+defn queue-length [v]
+  list-length-helper [vat-queue v] zero

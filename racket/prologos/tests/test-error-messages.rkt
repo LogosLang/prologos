@@ -12,6 +12,7 @@
          racket/string
          racket/list
          racket/path
+         racket/file
          "test-support.rkt"
          "../prelude.rkt"
          "../syntax.rkt"
@@ -54,6 +55,20 @@
 
 (define (run-ns-last s)
   (last (run-ns s)))
+
+;; Level 3 (WS FILE) runner — required for the unannotated-param remedy table
+;; below. That corner is WS-only: the identical program in sexp SUCCEEDS, so a
+;; `process-string` test would assert the opposite of the real behaviour. (The
+;; three-level rule, earning its keep: sexp-green is not WS-correct.)
+(define (run-ws-file-results src)
+  (define tmp (make-temporary-file "prologos-errmsg-~a.prologos"))
+  (call-with-output-file tmp #:exists 'replace (lambda (o) (display src o)))
+  (define rs (parameterize ([current-lib-paths (list prelude-lib-dir)]
+                            [current-module-registry prelude-module-registry])
+               (install-module-loader!)
+               (process-file (path->string tmp))))
+  (delete-file tmp)
+  (map (lambda (r) (format "~a" r)) rs))
 
 ;; ========================================
 ;; Unit tests: meta-source-info struct
@@ -457,6 +472,51 @@
               (format "got: ~v" msg))
   (check-false (regexp-match? branch-mismatch-rx msg) (format "got: ~v" msg)))
 
+(test-case "branch-result mismatch: an arm that READS its pattern-bound field (L2)"
+  ;; The residual the fix left open: `branch-result-leaves` extended each arm's
+  ;; ctx with `(expr-hole)` per binding rather than the constructor's real field
+  ;; types, so an arm that reads its binding inferred a hole,
+  ;; `type-unreportable?` refused it, fewer than two reportable types survived,
+  ;; and the caller fell back to the parameter hint — advice that is false
+  ;; twice over here, since the parameter is not the problem and a `spec` is
+  ;; present.
+  ;;
+  ;; Two things were needed and BOTH are load-bearing: the arm ctx now comes
+  ;; from `reduce-arm-ctx` (the derivation `check-reduce-structural` and qtt's
+  ;; twin already share), and the peel threads the EXPECTED type so the
+  ;; parameter — hence the scrutinee — has a real type to decompose. Fixing
+  ;; only the first leaves this case reporting the old message, because the
+  ;; scrutinee is still a hole.
+  (define r (run-ns-ws-last
+             "ns t\nspec c5 Nat -> Nat\ndefn c5\n  | zero  -> \"s\"\n  | suc n -> n\n"))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (define msg (prologos-error-message r))
+  (check-true (regexp-match? branch-mismatch-rx msg) (format "got: ~v" msg))
+  (check-true (regexp-match? #rx"String" msg) (format "got: ~v" msg))
+  (check-true (regexp-match? #rx"Nat" msg) (format "got: ~v" msg))
+  (check-false (regexp-match? #rx"cannot infer the type of an unannotated" msg)
+               (format "got: ~v" msg)))
+
+(test-case "branch-result mismatch: field-reading arm with NO spec (L2)"
+  ;; Same shape without a `spec`. The peel falls back to whatever the def seam
+  ;; was checking against; the point is that it must not REGRESS to the
+  ;; parameter hint when the expected type runs out.
+  (define r (run-ns-ws-last
+             "ns t\ndefn c6\n  | zero  -> \"s\"\n  | suc n -> n\n"))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (define msg (prologos-error-message r))
+  (check-true (regexp-match? branch-mismatch-rx msg) (format "got: ~v" msg))
+  (check-false (regexp-match? #rx"cannot infer the type of an unannotated" msg)
+               (format "got: ~v" msg)))
+
+(test-case "a field-reading arm that AGREES still type-checks (control)"
+  ;; The derived arm ctx must not turn a working program into an error. This is
+  ;; the control the arm-ctx change could break and the message tests could not
+  ;; detect: they only ever look at failing programs.
+  (define r (run-ns-ws-last
+             "ns t\nspec c7 Nat -> Nat\ndefn c7\n  | zero  -> 0N\n  | suc n -> n\n"))
+  (check-false (prologos-error? r) (format "expected success, got: ~v" r)))
+
 (test-case "matching clause result types still type-check (control, L2)"
   ;; the working case must stay working — both routes
   (define r1 (run-ns-ws-last "ns t\ndefn ok1\n  | 0 -> {:a 1}\n  | n -> {:a 9}\n"))
@@ -576,3 +636,354 @@
   (check-true (regexp-match? branch-mismatch-rx msg) (format "got: ~v" msg))
   (check-false (regexp-match? #rx"cannot infer the type of an unannotated" msg)
                (format "got: ~v" msg)))
+
+;; ---------------------------------------------------------------------------
+;; An unbracketed application as a `defn` body
+;; ---------------------------------------------------------------------------
+;;
+;; `defn bump [x] int+ x 1` (rather than `[int+ x 1]`) reported, WITH a spec
+;; present, "Type mismatch … [fn [x <Int>] [fn [y <Int>] [fn [z <Int>] [int+ y
+;; z]]]]" — a message about a three-parameter lambda the user never wrote.
+;;
+;; Two faults, and the first hid the second. `inject-spec-into-defn` spliced
+;; `,@body-forms` unconditionally, so three body forms became
+;; `(defn bump [x <Int>] <Int> int+ x 1)`, which parses as a THREE-parameter
+;; typed defn — bypassing the parser's bare-params guard entirely. Without a
+;; spec the same source already got a proper parse error, so the two paths
+;; disagreed about the same mistake.
+;;
+;; Fix: under a spec, more than one body form means the mistake, so decline to
+;; inject and let the parser's guard speak. Declining rather than raising is
+;; deliberate — this runs inside `preparse-expand-all`, where a raise costs the
+;; whole file. And the guard's message now names the actual mistake instead of
+;; the return-type slot.
+
+(define unbracketed-body-rx #rx"application written without brackets")
+
+(test-case "unbracketed defn body: WITH a spec (the path that was bypassed)"
+  (define r (run-ns-last "(ns ub1)\n(spec b1 Int -> Int)\n(defn b1 (x) int+ x 1)"))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (define msg (prologos-error-message r))
+  (check-true (regexp-match? unbracketed-body-rx msg) (format "got: ~v" msg))
+  ;; names the head token, so the suggested spelling is actionable
+  (check-true (regexp-match? #rx"int\\+" msg) (format "got: ~v" msg))
+  ;; and no longer talks about a lambda the user never wrote
+  (check-false (regexp-match? #rx"Type mismatch" msg) (format "got: ~v" msg)))
+
+(test-case "unbracketed defn body: WITHOUT a spec — the two paths agree"
+  ;; The no-spec path always errored; the point is that both now give the SAME
+  ;; message. A test on either alone would have missed the disagreement.
+  (define with-spec
+    (prologos-error-message
+     (run-ns-last "(ns ub2)\n(spec b2 Int -> Int)\n(defn b2 (x) int+ x 1)")))
+  (define no-spec
+    (prologos-error-message (run-ns-last "(ns ub3)\n(defn b2 (x) int+ x 1)")))
+  (check-true (regexp-match? unbracketed-body-rx no-spec) (format "got: ~v" no-spec))
+  (check-equal? no-spec with-spec
+                "the spec'd and un-spec'd paths must report the same mistake"))
+
+(test-case "unbracketed defn body: a specced LET CHAIN is not the mistake (control)"
+  ;; The guard's bare-symbol head is load-bearing, and this is why. "A
+  ;; well-formed defn under a spec has exactly one body form" is FALSE: a `let`
+  ;; chain is legitimately several forms at injection time, because the
+  ;; sibling-chain merge runs later. Declining on mere multiplicity dropped the
+  ;; spec's types for every specced let-chain defn. Those forms are LISTS; only
+  ;; the mistake leads with a bare symbol.
+  (define r (run-ns-ws-last
+             "ns ub4\nspec b4 Int -> Int\ndefn b4 [n]\n  let a := 4\n  let b := 5\n    [+ n [+ a b]]\n"))
+  (check-false (prologos-error? r) (format "expected success, got: ~v" r)))
+
+(test-case "a well-formed spec'd defn still works (control)"
+  ;; The guard declines injection on >1 body form; this is the one-form case it
+  ;; must not touch. 1872 `defn` sites in lib/ ride on this.
+  (define r (run-ns-last "(ns ub5)\n(spec b5 Int -> Int)\n(defn b5 (x) (int+ x 1))"))
+  (check-false (prologos-error? r) (format "expected success, got: ~v" r))
+  (check-true (regexp-match? #rx"b5 : Int -> Int" (format "~a" r)) (format "got: ~v" r)))
+
+;; ========================================
+;; A module-load failure names WHERE and WHAT (OCapN review U3)
+;; ========================================
+;;
+;; `load-module` raised with only `prologos-error-message`, so a library
+;; module's error arrived as a bare "Unbound variable" — no NAME and no
+;; SRCLOC. The reader was left to find the offending line by hand in a module
+;; they may not have written, and both facts were on the error struct the
+;; whole time.
+;;
+;; It now renders with `format-error`, the same renderer the per-command path
+;; uses, so a failure inside an imported module reads exactly like the same
+;; failure in a top-level file.
+
+(require racket/file (only-in racket/string string-contains?))
+
+(test-case "module-load failure: names the file, the line, and the variable"
+  (define lib (make-temporary-file "prologos-u3-~a" 'directory))
+  (define dir (build-path lib "prologos" "u3t"))
+  (make-directory* dir)
+  (call-with-output-file (build-path dir "bad.prologos") #:exists 'truncate
+    (lambda (o) (display (string-append "ns prologos::u3t::bad\n\n"
+                                        "spec f Int -> Int\n"
+                                        "defn f [x] [nonexistent-fn x]\n") o)))
+  (define user (build-path lib "user.prologos"))
+  (call-with-output-file user #:exists 'truncate
+    (lambda (o) (display "ns u3tuser\n\nimports prologos::u3t::bad\n\ndef r := 1\n" o)))
+  (define msg
+    (with-handlers ([exn:fail? exn-message])
+      (parameterize ([current-lib-paths (list lib)])
+        (install-module-loader!)
+        (process-file user))
+      "NO ERROR RAISED"))
+  ;; the three facts that were missing, asserted separately so a partial
+  ;; regression says which one went
+  (check-true (string-contains? msg "nonexistent-fn")
+              (format "the offending NAME is missing: ~a" msg))
+  (check-true (string-contains? msg "bad.prologos")
+              (format "the offending FILE is missing: ~a" msg))
+  (check-true (regexp-match? #rx"bad[.]prologos:[0-9]+:[0-9]+" msg)
+              (format "the LINE:COLUMN is missing: ~a" msg))
+  ;; …and it still says which module failed to load, which was the one thing
+  ;; the old message did carry
+  (check-true (string-contains? msg "prologos::u3t::bad")
+              (format "the module name is missing: ~a" msg))
+  (delete-directory/files lib #:must-exist? #f))
+
+;; ========================================
+;; D4.P3a item 19 — the row-annotation refusal names the `{…}` collision
+;; ========================================
+;;
+;; `def q : {:a Int} := {:a 1}` used to report the bare "Expression is not a
+;; valid type", which sends the reader to check whether `Int` is a type. The
+;; problem is the `{…}`: in type position that is the implicit-binder group
+;; (`{A B : Type}`), so a row annotation has no writable spelling.
+;;
+;; The message deliberately does NOT promise one — whether `{…}` can also mean
+;; a row there is an open owner ruling. It points at what works TODAY, which is
+;; inference, and the second test pins that the advice is true by running it.
+
+(test-case "item19/a row annotation names the binder-group collision, not `Int`"
+  (define rs (run-ns "(def q : {:a Int} := {:a 1})"))
+  (define msg (format "~a" (last rs)))
+  (check-true (string-contains? msg "row type has no writable spelling")
+              (format "generic not-a-type message survived: ~a" msg))
+  (check-true (string-contains? msg "{A B : Type}")
+              (format "the message must name the colliding form: ~a" msg))
+  ;; the remedy must be the one that works, not "annotate it properly"
+  (check-true (string-contains? msg "inference") (format "no working remedy: ~a" msg)))
+
+(test-case "item19/the remedy the message gives actually works"
+  ;; If this ever fails, the message is giving advice the compiler no longer
+  ;; honours — worse than the generic text it replaced.
+  (define rs (run-ns "(def q := {:a 1})"))
+  (check-regexp-match #rx"q : \\{:a Int\\}" (format "~a" (last rs))))
+
+(test-case "item19/a genuinely non-row bad type KEEPS the generic message"
+  ;; The guided arm must not become the only thing is-type/err can say. A
+  ;; keyword-row literal is the ONLY shape that reaches it.
+  (define rs (run-ns "(def q : 42 := 1)"))
+  (define msg (format "~a" (last rs)))
+  (check-false (string-contains? msg "row type has no writable spelling")
+               (format "the row arm swallowed a non-row input: ~a" msg)))
+
+;; ========================================
+;; The remedy TABLE behind that hint (measured 2026-08-04)
+;; ========================================
+;;
+;; The hint says "Add a `spec`, or annotate". Both halves are now true, but one
+;; of them was not: a body that is exactly a `.field` projection reached spec
+;; injection with its access sentinel still raw, looked like two body forms led
+;; by a bare symbol, and was DECLINED — silently. `spec e Point -> Int` +
+;; `defn e [p] gpt.x` defined `e : _ -> Int` at zero errors, and
+;; `[e "not a point"]` was then accepted. Fixed in macros.rkt.
+;;
+;; These pin the whole table so the message and the behaviour cannot drift
+;; apart again. They are Level 3 (WS FILE) on purpose: the corner was WS-only —
+;; the identical program in sexp always succeeded, so a `process-string` test
+;; would have asserted the opposite of the real behaviour.
+;;
+;; WARNING: each case uses its OWN defn name. `process-file` restores the
+;; module / trait / impl registries but NOT the spec store, so a shared name
+;; leaks across these runs and surfaces as an unrelated "type has 1 type
+;; parameters but defn has 2 params". Same trap documented in
+;; tests/test-capability-spec-forms.rkt.
+
+(define POINT-SCHEMA "schema Point\n  :x Int\n  :y Int\n")
+
+(test-case "unannotated-param remedy: `spec` fixes a BARE .field body (was silently declined)"
+  (define rs (run-ws-file-results
+              (string-append "ns t1d\n" POINT-SCHEMA
+                             "spec hd Point -> Int\n"
+                             "defn hd [p] p.x\n")))
+  (check-false (ormap (lambda (r) (regexp-match? #rx"unannotated parameter" r)) rs)
+               (format "~v" rs))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"hd : .*Point -> Int" r)) rs)
+              (format "the spec did not reach the parameter: ~v" rs)))
+
+(test-case "unannotated-param: a declined spec is UNSOUND, not just unhelpful"
+  ;; The reason the case above is a bug and not a diagnostic nit. With the spec
+  ;; declined, the defn took `_ -> Int` and call sites stopped being checked.
+  (define rs (run-ws-file-results
+              (string-append "ns t1j\n" POINT-SCHEMA
+                             "def gpt := [the Point {:x 1 :y 2}]\n"
+                             "spec ej Point -> Int\n"
+                             "defn ej [p] gpt.x\n"
+                             "[ej \"not a point\"]\n")))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"ej : .*Point -> Int" r)) rs)
+              (format "the spec was dropped again: ~v" rs))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"ERROR|error" r)) rs)
+              (format "a String argument to a Point parameter was ACCEPTED: ~v" rs)))
+
+(test-case "unannotated-param remedy: `spec` fixes the same projection written out"
+  (define rs (run-ws-file-results
+              (string-append "ns t1g\n" POINT-SCHEMA
+                             "spec hg Point -> Int\n"
+                             "defn hg [p] [map-get p :x]\n")))
+  (check-false (ormap (lambda (r) (regexp-match? #rx"unannotated parameter" r)) rs)
+               (format "~v" rs)))
+
+(test-case "unannotated-param remedy: a NESTED .field projection is fine under a spec"
+  (define rs (run-ws-file-results
+              (string-append "ns t1h\n" POINT-SCHEMA
+                             "spec hh Point -> Int\n"
+                             "defn hh [p] [int+ p.x 0]\n")))
+  (check-false (ormap (lambda (r) (regexp-match? #rx"unannotated parameter" r)) rs)
+               (format "~v" rs)))
+
+(test-case "unannotated-param remedy: the fused annotation works with no spec"
+  (define rs (run-ws-file-results
+              (string-append "ns t1i\n" POINT-SCHEMA
+                             "defn hi [p:Point] p.x\n")))
+  (check-false (ormap (lambda (r) (regexp-match? #rx"unannotated parameter" r)) rs)
+               (format "~v" rs)))
+
+(test-case "unannotated-param remedy: `spec` fixes the arithmetic case"
+  (define r (run-ns-last "(ns t1a)\n(spec k Int -> Int)\n(defn k [x] (+ x 1))"))
+  (check-false (prologos-error? r) (format "spec should fix arithmetic: ~v" r)))
+
+(test-case "spec injection still DECLINES an unbracketed application (the guard's target)"
+  ;; The guard this fix narrowed exists to catch `defn bump [x] int+ x 1`, where
+  ;; splicing the spec's types produced a phantom three-parameter lambda. It must
+  ;; still fire — including when the mistake CONTAINS a projection, which is the
+  ;; case a naive "no sentinels present" relaxation would have broken.
+  (define plain (run-ws-file-results
+                 (string-append "ns t1k\n"
+                                "spec bump Int -> Int\n"
+                                "defn bump [x] int+ x 1\n")))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"without brackets" r)) plain)
+              (format "~v" plain))
+  (define with-proj (run-ws-file-results
+                     (string-append "ns t1l\n" POINT-SCHEMA
+                                    "spec bump2 Point -> Int\n"
+                                    "defn bump2 [p] int+ p.x 1\n")))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"without brackets" r)) with-proj)
+              (format "a projection inside the mistake disarmed the guard: ~v" with-proj)))
+
+(test-case "unannotated-param hint: both advertised remedies are named"
+  (define r (run-ns-last "(ns t1f)\n(defn g [p] (map-get p :x))"))
+  (define m (prologos-error-message r))
+  (check-true (regexp-match? #rx"Add a `spec`" m) (format "got: ~v" m))
+  (check-true (regexp-match? #rx"fused form" m) (format "got: ~v" m)))
+
+;; ========================================
+;; Token-level srcloc precision under a spec (2026-08-04)
+;; ========================================
+;;
+;; DEFERRED listed this as "errors point to enclosing `defn` instead of exact
+;; token", blocked on "full propagator integration (cell-per-node)". Neither
+;; half held: `surf-var` carries its own srcloc and the elaborator threads it,
+;; and precision was already exact everywhere EXCEPT a defn carrying a `spec`.
+;;
+;; Cause: `datum` is `(syntax->datum stx)` — a recursive strip — so a form that
+;; gets REWRITTEN is re-wrapped by `(datum->syntax #f final-datum stx)`, which
+;; stamps the whole form's location onto every new sub-object. Spec injection
+;; rewrites; a spec-less defn does not, and returns its original syntax intact.
+;;
+;; The fix re-attaches the original syntax objects to trailing elements the
+;; rewrite left untouched (the body forms). These pin the DELTA — a bare
+;; "is it precise" assertion would have passed before the fix on the spec-less
+;; case and proved nothing.
+
+(define (unbound-srcloc src)
+  ;; → (list line col span) of the first Unbound-variable error, or #f
+  (define tmp (make-temporary-file "prologos-srcloc-~a.prologos"))
+  (call-with-output-file tmp #:exists 'replace (lambda (o) (display src o)))
+  (define rs (parameterize ([current-lib-paths (list prelude-lib-dir)]
+                            [current-module-registry prelude-module-registry])
+               (install-module-loader!)
+               (process-file (path->string tmp))))
+  (delete-file tmp)
+  (for/or ([r (in-list rs)])
+    (and (prologos-error? r)
+         (regexp-match? #rx"Unbound variable" (prologos-error-message r))
+         (let ([l (prologos-error-srcloc r)])
+           (and l (list (srcloc-line l) (srcloc-col l) (srcloc-span l)))))))
+
+(test-case "srcloc/a spec'd defn reports the TOKEN, not the enclosing defn"
+  ;; `undef_withspec` is 14 chars, on line 5 at column 10.
+  (define got (unbound-srcloc (string-append "ns srcA\n\n"
+                                             "spec n Int -> Int\n"
+                                             "defn n [x]\n"
+                                             "  [int+ x undef_withspec]\n")))
+  (check-equal? got (list 5 10 14)
+                (format "expected the token at 5:10 span 14, got ~v" got)))
+
+(test-case "srcloc/single-line spec'd defn body too"
+  ;; The shape that showed layout was NOT the variable: one line, still a spec.
+  ;; `undef_1line` is 11 chars, on line 4 at column 19.
+  (define got (unbound-srcloc (string-append "ns srcB\n\n"
+                                             "spec p Int -> Int\n"
+                                             "defn p [x] [int+ x undef_1line]\n")))
+  (check-equal? got (list 4 19 11)
+                (format "expected the token at 4:19 span 11, got ~v" got)))
+
+(test-case "srcloc/a spec-LESS defn was already precise (the control)"
+  ;; This one passed before the fix. It is here so a regression that coarsens
+  ;; everything is distinguishable from one that only coarsens the spec'd path.
+  (define got (unbound-srcloc (string-append "ns srcC\n\n"
+                                             "defn m [x]\n"
+                                             "  [int+ x undef_nospec]\n")))
+  (check-equal? got (list 4 10 12)
+                (format "expected the token at 4:10 span 12, got ~v" got)))
+
+;; ============================================================================
+;; Union narrowing — `match` and `the` on a union value (2026-08-05)
+;; ============================================================================
+;;
+;; Both were the bare "Could not infer type", which names inference for what is
+;; really a missing language feature and sends the reader looking for an
+;; annotation that would not have helped. DEFERRED had this filed as
+;; "convenience forms for matching on union values", which undersold it: there
+;; are no forms at all.
+
+(test-case "a `match` on a union value names the union and says why"
+  (define r (string-join (run-ws-file-results
+             (string-append "ns umt\n"
+                            "def x : <Int | String> := 42\n"
+                            "match x\n"
+                            "  | 0 -> \"zero\"\n"
+                            "  | _ -> \"other\"\n")) " | "))
+  (check-true (string-contains? r "union")
+              (format "expected the union to be named; got: ~a" r))
+  (check-true (string-contains? r "Int | String")
+              (format "expected the member list; got: ~a" r))
+  (check-true (string-contains? r "data")
+              (format "expected the `data` workaround; got: ~a" r)))
+
+(test-case "`the` narrowing a union to a member says there is no down-cast"
+  (define r (string-join (run-ws-file-results
+             (string-append "ns umt2\n"
+                            "def x : <Int | String> := 42\n"
+                            "[the Int x]\n")) " | "))
+  (check-true (string-contains? r "down-cast")
+              (format "expected the down-cast wording; got: ~a" r))
+  (check-true (string-contains? r "Int | String")
+              (format "expected the member list; got: ~a" r)))
+
+(test-case "annotating with the WHOLE union still works (the hint must not over-fire)"
+  ;; The control. If this ever starts erroring, the hint is describing a
+  ;; limitation that has grown past what it claims.
+  (define r (string-join (run-ws-file-results
+             (string-append "ns umt3\n"
+                            "def x : <Int | String> := 42\n"
+                            "[the <Int | String> x]\n")) " | "))
+  (check-false (string-contains? r "ERROR")
+               (format "annotating with the union itself must be accepted; got: ~a" r)))

@@ -1,0 +1,772 @@
+ns prologos::ocapn::behavior
+
+;; ========================================
+;; Built-in actor behaviours
+;; ========================================
+;;
+;; In Goblins, an actor's behaviour is an arbitrary Racket closure.
+;; In Prologos there is no straightforward way to store heterogeneous
+;; closures inside a single `data` constructor and dispatch them at
+;; runtime — so we model behaviours as a closed sum (BehaviorTag) and
+;; provide a fixed dispatcher (`step-behavior`) keyed by tag.
+;;
+;; Adding a new actor type means: (1) extending `BehaviorTag`,
+;; (2) writing the per-tag step function, (3) extending
+;; `step-behavior` to dispatch it. This is the load-bearing limitation
+;; documented in goblin-pitfalls #3.
+;;
+;; The built-in set is small but covers the patterns we test. This list is
+;; the file's index and must stay in step with `data BehaviorTag` below —
+;; it is the whole of it, not a sample:
+;;
+;;   beh-cell      — settable storage cell. msg = tagged "set" v / "get"
+;;   beh-counter   — incrementable counter. msg = tagged "inc" / "get"
+;;   beh-greeter   — greeter that constructs greetings
+;;   beh-echo      — returns its argument unchanged
+;;   beh-adder     — running sum, message = arg, state = total
+;;   beh-forwarder — forwards everything to a fixed target refr id
+;;   beh-fulfiller — resolves a promise with a constant value (for tests)
+;;   beh-resolver  — upstream's promise resolver: interprets ['fulfill v]
+;;                   and ['break r] rather than resolving with the message
+;;   beh-car-factory-builder — answers with a fresh beh-car-factory actor
+;;   beh-car-factory         — answers with a fresh beh-car actor
+;;   beh-car                 — answers "Vroom! I am a <color> <model> car!"
+;;   beh-sturdyref-enlivener — asks for an outbound connection to the
+;;                   location an `ocapn-sturdyref` names (`eff-connect`)
+;;   beh-sink        — absorbs a message and answers nothing; exists so an
+;;                   export position can be REAL rather than reserved by
+;;                   convention
+
+require [prologos::ocapn::syrup
+         :refer [SyrupValue
+                 syrup-null syrup-bool syrup-nat syrup-int syrup-string
+                 syrup-symbol syrup-list syrup-tagged
+                 syrup-refr syrup-promise syrup-dict syrup-set syrup-float
+                 wire-nat]]
+        [prologos::data::list   :refer [List nil cons]]
+        [prologos::data::option :refer [Option none some]]
+        [prologos::data::nat    :refer [add]]
+        [prologos::data::string :as str :refer []]
+        ;; For `re-encode` in the sturdyref enlivener: an `eff-connect` asks
+        ;; for a location by the peer's OWN bytes, and re-encoding is what
+        ;; reproduces them. syrup-wire depends only on syrup, so this adds no
+        ;; cycle.
+        [prologos::ocapn::syrup-wire :as wire :refer []]
+
+;; ========================================
+;; Behaviour tags
+;; ========================================
+
+data BehaviorTag
+  beh-cell
+  beh-counter
+  beh-greeter
+  beh-echo
+  beh-adder
+  beh-forwarder
+  beh-fulfiller
+  ;; Upstream's promise RESOLVER: interprets ['fulfill v] / ['break r]
+  ;; rather than resolving with the whole message (which beh-fulfiller does).
+  beh-resolver
+  ;; The Car Factory chain (upstream's promise-pipelining tests). Three
+  ;; behaviours, each of which RETURNS A NEW OBJECT rather than a value:
+  ;;   builder --()--------------> a car factory
+  ;;   factory --([color model])-> a car
+  ;;   car     --()--------------> "Vroom! I am a <color> <model> car!"
+  ;; This is what `eff-spawn` exists for; see the note on `data Effect`.
+  beh-car-factory-builder
+  beh-car-factory
+  beh-car
+  ;; The STURDYREF ENLIVENER. Given an `ocapn-sturdyref`, it asks for an
+  ;; outbound connection to the location the sturdyref names.
+  ;;
+  ;; It exists as a behaviour at all only because `eff-connect` does. Before
+  ;; that, enlivening was a special case in the driver — it had to be, since a
+  ;; behaviour cannot open a socket — and the export position it answers on
+  ;; had no actor behind it.
+  beh-sturdyref-enlivener
+  ;; Absorbs a message and answers NOTHING. Its only purpose is to make an
+  ;; export position REAL: something the connection's own table holds, rather
+  ;; than a number reserved by convention.
+  ;;
+  ;; It could not exist before `act-step-pending` — any behaviour that
+  ;; answered would put a reply on the wire for a message whose real handler
+  ;; is somewhere else entirely.
+  beh-sink
+
+;; ========================================
+;; Side-effects an actor can request
+;; ========================================
+;;
+;; The vat fully owns the world; behaviours don't mutate anything.
+;; They describe what they want done as a list of Effects, which the
+;; vat interprets atomically when the turn closes.
+
+;; TWO ID NAMESPACES, deliberately distinguished. A `Nat` target is
+;; ambiguous on its own: it can name a LOCAL actor (a key in the vat's
+;; actor table) or a REMOTE object the peer exported to us (which arrives
+;; on the wire as `desc:import-object N` and must be addressed back as
+;; `desc:export N`). Those numbers are drawn from independent counters and
+;; DO collide in practice.
+;;
+;; `deliver-msg` used to disambiguate by heuristic — "no local actor at
+;; this id, therefore it must be remote". That silently misroutes whenever
+;; the peer's id happens to match one of ours. It bit the upstream greeter
+;; test exactly: the peer delivers `<desc:import-object 1>` to the greeter,
+;; which itself sits at local actor id 1, so the greeter's reply was
+;; delivered back to the greeter instead of going out on the wire. Nothing
+;; errored; the connection simply produced no bytes and upstream timed out.
+;;
+;; So the namespace is part of the effect, not something to infer later.
+;; What the vat wants the driver to do with the OUTSIDE WORLD, once the turn
+;; closes. The vat accumulates these and stays pure; the driver drains them.
+;;
+;; One list of these rather than one list per kind: adding a field to `Vat`
+;; means touching every construction site, and the kinds share a lifetime —
+;; they are all "things this turn asked the world for".
+data OutReq
+  ;; Open a connection to the location these bytes name.
+  out-dial : String
+  ;; Send wire bytes to the peer at this location, on whatever connection we
+  ;; have to it. (location, bytes)
+  out-send : String -> String
+
+data Effect
+  ;; Send to a LOCAL refr (fire-and-forget) — `t` is a vat actor-table key.
+  eff-send-only   : Nat -> SyrupValue
+  ;; Send to a REMOTE object the peer exported — `t` is the peer's export
+  ;; position, straight to the outbound queue with no actor-table lookup.
+  eff-send-remote : Nat -> SyrupValue
+  ;; Resolve a promise with a value (pst-fulfilled).
+  eff-resolve     : Nat -> SyrupValue
+  ;; Break a promise with a reason (pst-broken).
+  eff-break       : Nat -> SyrupValue
+  ;; Ask for an outbound CONNECTION to the location these bytes name.
+  ;;
+  ;; The payload is a re-encoded `ocapn-sturdyref` / `ocapn-peer`, not a
+  ;; parsed address: parsing it is the dialler's job, and re-encoding is what
+  ;; reproduces the peer's own bytes.
+  ;;
+  ;; This is the effect that lets enlivening be a BEHAVIOUR. A behaviour is
+  ;; pure and cannot open a socket, so the sturdyref enlivener used to be a
+  ;; special case in the driver, which intercepted the deliver before the
+  ;; bridge ever saw it — export position 5 had no actor at all. With the
+  ;; effect, the behaviour says what it wants, the vat records it, and the
+  ;; driver drains it between steps, exactly as `eff-send-remote` already
+  ;; works. See the gaps document §0.2.
+  eff-connect     : String
+  ;; NOTE — there is deliberately NO `eff-send-on` here.
+  ;;
+  ;; One was built: a behaviour naming a PEER by location, with the driver
+  ;; resolving it to a connection. It shipped with ZERO producers, because the
+  ;; thing it was built for — the third-party-handoff gifter — turned out not
+  ;; to be a behaviour at all. A handoff role has no swiss-num, answers no
+  ;; message of its own, and must name connections, so it is protocol
+  ;; machinery and lives in the driver, which reaches the send queue directly.
+  ;;
+  ;; Removed rather than left: an effect no behaviour emits is scaffolding,
+  ;; and the tracking document recorded it as the mechanism of a migration
+  ;; that in fact bypassed it. If a genuine behaviour ever needs to address a
+  ;; peer by name, add it back with its producer in the same commit.
+  eff-spawn       : Nat -> BehaviorTag -> SyrupValue
+
+;; ========================================
+;; ActStep — what one method invocation produces
+;; ========================================
+;;
+;; new-state, return-value, side-effects.
+
+;; TWO outcomes, and the second is not a value.
+;;
+;; `act-step` answers: its return value settles the caller's answer promise.
+;; `act-step-pending` does NOT — it says "I have acted; the answer comes from
+;; somewhere else." Every ActStep used to answer, and `step-after-act` settled
+;; the promise unconditionally, so a behaviour that legitimately has no answer
+;; had no way to say so and was forced to invent one.
+;;
+;; The sturdyref enlivener is the case that forced this. Enlivening means
+;; opening a socket, so the behaviour's job ends at `eff-connect`; the reply
+;; the peer waits for is a signed `desc:handoff-give` that only the driver can
+;; build. An enlivener written with `act-step` answers immediately with
+;; something wrong and beats the real reply — measured: the conformance suite
+;; goes 24 -> 23 with the peer receiving an echoed sturdyref where it expects
+;; a sig-envelope.
+;;
+;; `syrup-null` is deliberately NOT the way to say this. `no-op` returns null
+;; and several behaviours rely on that settling their promise, so overloading
+;; it would silently leave those pending.
+data ActStep
+  act-step         : SyrupValue -> SyrupValue -> [List Effect]
+  act-step-pending : SyrupValue -> [List Effect]
+
+;; Selectors.
+
+spec step-state ActStep -> SyrupValue
+defn step-state
+  | act-step st _ _        -> st
+  | act-step-pending st _  -> st
+
+;; Meaningless for a pending step; `step-answers?` gates every read of it.
+spec step-return ActStep -> SyrupValue
+defn step-return
+  | act-step _ rv _        -> rv
+  | act-step-pending _ _   -> syrup-null
+
+spec step-effects ActStep -> List Effect
+defn step-effects
+  | act-step _ _ es        -> es
+  | act-step-pending _ es  -> es
+
+spec step-answers? ActStep -> Bool
+  :doc "False when the behaviour has no answer and the promise must stay pending."
+defn step-answers?
+  | act-step _ _ _         -> true
+  | act-step-pending _ _   -> false
+
+;; ========================================
+;; A small helper: "no change" step
+;; ========================================
+
+spec no-op SyrupValue -> ActStep
+  :doc "Return state unchanged with no effects, return-value = state"
+defn no-op [state]
+  act-step state state nil
+
+;; ========================================
+;; Per-behavior step functions
+;; ========================================
+
+;; --- echo ---
+spec step-echo SyrupValue SyrupValue -> ActStep
+defn step-echo [state args]
+  act-step state args nil
+
+;; --- cell ---
+;; State: stored value. Args: tagged "set" v / "get" / anything.
+spec step-cell SyrupValue SyrupValue -> ActStep
+defn step-cell
+  | state [syrup-tagged tag p] ->
+      match [str::eq tag "set"]
+        | true  -> act-step p syrup-null nil
+        | false -> match [str::eq tag "get"]
+            | true  -> no-op state
+            | false -> no-op state
+  | state syrup-null        -> no-op state
+  | state [syrup-bool _]    -> no-op state
+  | state [syrup-nat _]     -> no-op state
+  | state [syrup-int _]     -> no-op state
+  | state [syrup-string _]  -> no-op state
+  | state [syrup-symbol _]  -> no-op state
+  ;; syrup-bytes was added to the SyrupValue data type at Phase 19 and this
+  ;; match was never extended, so `step-cell` on a bytes argument fell through
+  ;; to `??__match-fail` — a typed hole at ActStep, returned silently at zero
+  ;; errors. Surfaced by W3002 (the non-exhaustive-match warning) the day it
+  ;; landed; nothing had noticed in the interim.
+  | state [syrup-bytes _]   -> no-op state
+  | state [syrup-list _]    -> no-op state
+  | state [syrup-refr _]    -> no-op state
+  | state [syrup-promise _] -> no-op state
+  | state [syrup-dict _]    -> no-op state
+  | state [syrup-set _]    -> no-op state
+  | state [syrup-float _]    -> no-op state
+
+;; --- counter ---
+;; State: syrup-nat n. Args: tagged "inc" _ | tagged "get" _.
+;; Adds an explicit "get" branch (returns count without changing it)
+;; per Copilot review #28#discussion_r3150426679 — the previous
+;; version advertised "get" in this comment but treated it as a
+;; no-op alongside every other unknown tag.
+spec step-counter SyrupValue SyrupValue -> ActStep
+defn step-counter [state args]
+  match state
+    | syrup-nat n ->
+        match args
+          | syrup-tagged tag _ ->
+              match [str::eq tag "inc"]
+                | true  -> act-step [syrup-nat [add n [suc zero]]]
+                                    [syrup-nat [add n [suc zero]]]
+                                    nil
+                | false -> match [str::eq tag "get"]
+                    | true  -> no-op state    ;; return count, state unchanged
+                    | false -> no-op state    ;; unknown tag
+          | syrup-null      -> no-op state
+          | syrup-bool _    -> no-op state
+          | syrup-nat _     -> no-op state
+          | syrup-int _     -> no-op state
+          | syrup-string _  -> no-op state
+          | syrup-symbol _  -> no-op state
+          | syrup-list _    -> no-op state
+          | syrup-refr _    -> no-op state
+          | syrup-promise _ -> no-op state
+          | syrup-dict _   -> no-op state
+          | syrup-set _   -> no-op state
+          | syrup-float _   -> no-op state
+    | syrup-null      -> no-op state
+    | syrup-bool _    -> no-op state
+    | syrup-int _     -> no-op state
+    | syrup-string _  -> no-op state
+    | syrup-symbol _  -> no-op state
+    | syrup-list _    -> no-op state
+    | syrup-tagged _ _ -> no-op state
+    | syrup-refr _    -> no-op state
+    | syrup-promise _ -> no-op state
+    | syrup-dict _   -> no-op state
+    | syrup-set _   -> no-op state
+    | syrup-float _   -> no-op state
+
+;; --- greeter ---
+;; State: syrup-string greeting. Args: syrup-string name.
+;; Returns syrup-string "{greeting}, {name}!".
+;; (Trailing "!" added per Copilot review
+;; #28#discussion_r3150426776 — implementation now matches comment.)
+;; --- upstream-spec greeter support (Phase 59b part 3) ---
+;;
+;; Upstream's Greeter takes a REFR and SENDS "Hello" to it — a different
+;; behaviour from our original string-greeting greeter. Rather than change
+;; the existing semantics (tests depend on it), the refr / list-of-refr
+;; arms, which previously did nothing, now send.
+;;
+;; Factored into helpers because step-greeter is already a 2-deep match and
+;; a 3-deep nested match fails at IMPORT time (prologos-syntax.md).
+;; refr-id-of precedes first-refr-in: single-pass modules, callee first (#16).
+
+;; A peer reference arrives on the wire as a TAGGED descriptor
+;; (`desc:import-object N` when the peer hands us one of its objects),
+;; not as a bare syrup-refr. Addressing it back is `desc:export N`,
+;; which listener-notify-bytes emits. Handling only syrup-refr made the
+;; greeter silently no-op on every real upstream frame.
+
+spec first-nat-in [List SyrupValue] -> [Option Nat]
+defn first-nat-in [xs]
+  match xs
+    | nil        -> [none Nat]
+    | [cons h _] ->
+        match h
+          | syrup-nat n      -> [some n]
+          | syrup-null       -> [none Nat]
+          | syrup-bool _     -> [none Nat]
+          | syrup-int _      -> [none Nat]
+          | syrup-string _   -> [none Nat]
+          | syrup-symbol _   -> [none Nat]
+          | syrup-list _     -> [none Nat]
+          | syrup-tagged _ _ -> [none Nat]
+          | syrup-refr _     -> [none Nat]
+          | syrup-promise _  -> [none Nat]
+          | syrup-dict  _   -> [none Nat]
+          | syrup-set  _   -> [none Nat]
+          | syrup-float  _   -> [none Nat]
+
+;; A syrup RECORD decodes as tag + an ARGUMENT LIST, so the payload of
+;; <desc:import-object 7> is [syrup-nat 7], not a bare syrup-nat. Accept
+;; both: the bare form is what hand-built test values use, the list form
+;; is what the wire actually delivers.
+;; A descriptor's table position arrives as a Syrup POSITIVE INTEGER on the
+;; wire (`<18'desc:import-object1+>` — the `+` suffix), so it decodes to
+;; `syrup-int`, NOT `syrup-nat`. This arm used to return none for
+;; `syrup-int`, which is why the greeter silently found no target in a
+;; descriptor it had just been handed: length-1 list, right tag, and still
+;; `none`. Delegate to syrup's `wire-nat`, which is the ONE reader for this
+;; (it carries the negative guard); do not re-derive the conversion here.
+spec nat-payload SyrupValue -> [Option Nat]
+defn nat-payload [v]
+  match v
+    | syrup-nat n      -> [some n]
+    | syrup-int _      -> wire-nat v
+    | syrup-list xs    -> first-nat-in xs
+    | syrup-null       -> [none Nat]
+    | syrup-bool _     -> [none Nat]
+    | syrup-string _   -> [none Nat]
+    | syrup-symbol _   -> [none Nat]
+    | syrup-tagged _ _ -> [none Nat]
+    | syrup-refr _     -> [none Nat]
+    | syrup-promise _  -> [none Nat]
+    | syrup-dict  _   -> [none Nat]
+    | syrup-set  _   -> [none Nat]
+    | syrup-float  _   -> [none Nat]
+
+spec desc-target-of String SyrupValue -> [Option Nat]
+defn desc-target-of [tag inner]
+  match [str::eq tag "desc:import-object"]
+    | true  -> nat-payload inner
+    | false ->
+        match [str::eq tag "desc:export"]
+          | true  -> nat-payload inner
+          | false -> [none Nat]
+
+spec refr-id-of SyrupValue -> [Option Nat]
+defn refr-id-of [v]
+  match v
+    | syrup-refr t     -> [some t]
+    | syrup-null       -> [none Nat]
+    | syrup-bool _     -> [none Nat]
+    | syrup-nat _      -> [none Nat]
+    | syrup-int _      -> [none Nat]
+    | syrup-string _   -> [none Nat]
+    | syrup-symbol _   -> [none Nat]
+    | syrup-list _     -> [none Nat]
+    | syrup-tagged t inner -> desc-target-of t inner
+    | syrup-promise _  -> [none Nat]
+    | syrup-dict  _   -> [none Nat]
+    | syrup-set  _   -> [none Nat]
+    | syrup-float  _   -> [none Nat]
+
+spec first-refr-in [List SyrupValue] -> [Option Nat]
+defn first-refr-in [xs]
+  match xs
+    | nil        -> [none Nat]
+    | [cons h _] -> refr-id-of h
+
+;; The refr the greeter is handed came off the wire as a
+;; `desc:import-object` / `desc:export` descriptor, so `t` is the PEER's
+;; export position, not one of our actor ids — hence eff-send-remote.
+;; Using eff-send-only here is what made the upstream test hang: see the
+;; namespace note on `data Effect` above.
+spec greeter-send SyrupValue [Option Nat] -> ActStep
+defn greeter-send
+  | state none     -> no-op state
+  | state [some t] -> act-step state syrup-null [cons [eff-send-remote t [syrup-list [cons [syrup-string "Hello"] nil]]] nil]
+
+spec step-greeter SyrupValue SyrupValue -> ActStep
+defn step-greeter [state args]
+  match state
+    | syrup-string g ->
+        match args
+          | syrup-string n ->
+              act-step state
+                [syrup-string [str::append [str::append [str::append g ", "] n] "!"]]
+                nil
+          | syrup-null      -> no-op state
+          | syrup-bool _    -> no-op state
+          | syrup-nat _     -> no-op state
+          | syrup-int _     -> no-op state
+          | syrup-symbol _  -> no-op state
+          | syrup-list xs   -> greeter-send state [first-refr-in xs]
+          | syrup-tagged _ _ -> no-op state
+          | syrup-refr t    -> greeter-send state [some t]
+          | syrup-promise _ -> no-op state
+          | syrup-dict _   -> no-op state
+          | syrup-set _   -> no-op state
+          | syrup-float _   -> no-op state
+    | syrup-null      -> no-op state
+    | syrup-bool _    -> no-op state
+    | syrup-nat _     -> no-op state
+    | syrup-int _     -> no-op state
+    | syrup-symbol _  -> no-op state
+    | syrup-list _    -> no-op state
+    | syrup-tagged _ _ -> no-op state
+    | syrup-refr _    -> no-op state
+    | syrup-promise _ -> no-op state
+    | syrup-dict _   -> no-op state
+    | syrup-set _   -> no-op state
+    | syrup-float _   -> no-op state
+
+;; --- adder ---
+;; State: syrup-nat running-total. Args: syrup-nat addend.
+;; new state := total + addend; return new total.
+spec step-adder SyrupValue SyrupValue -> ActStep
+defn step-adder [state args]
+  match state
+    | syrup-nat t ->
+        match args
+          | syrup-nat a ->
+              act-step [syrup-nat [add t a]] [syrup-nat [add t a]] nil
+          | syrup-null      -> no-op state
+          | syrup-bool _    -> no-op state
+          | syrup-int _     -> no-op state
+          | syrup-string _  -> no-op state
+          | syrup-symbol _  -> no-op state
+          | syrup-list _    -> no-op state
+          | syrup-tagged _ _ -> no-op state
+          | syrup-refr _    -> no-op state
+          | syrup-promise _ -> no-op state
+          | syrup-dict _   -> no-op state
+          | syrup-set _   -> no-op state
+          | syrup-float _   -> no-op state
+    | syrup-null      -> no-op state
+    | syrup-bool _    -> no-op state
+    | syrup-int _     -> no-op state
+    | syrup-string _  -> no-op state
+    | syrup-symbol _  -> no-op state
+    | syrup-list _    -> no-op state
+    | syrup-tagged _ _ -> no-op state
+    | syrup-refr _    -> no-op state
+    | syrup-promise _ -> no-op state
+    | syrup-dict _   -> no-op state
+    | syrup-set _   -> no-op state
+    | syrup-float _   -> no-op state
+
+;; --- forwarder ---
+;; State: syrup-refr target. Forwards args via a fire-and-forget send.
+;; Returns null.
+spec step-forwarder SyrupValue SyrupValue -> ActStep
+defn step-forwarder [state args]
+  match state
+    | syrup-refr t ->
+        act-step state syrup-null
+                 [cons [eff-send-only t args] nil]
+    | syrup-null       -> act-step state syrup-null nil
+    | syrup-bool _     -> act-step state syrup-null nil
+    | syrup-nat _      -> act-step state syrup-null nil
+    | syrup-int _      -> act-step state syrup-null nil
+    | syrup-string _   -> act-step state syrup-null nil
+    | syrup-symbol _   -> act-step state syrup-null nil
+    | syrup-list _     -> act-step state syrup-null nil
+    | syrup-tagged _ _ -> act-step state syrup-null nil
+    | syrup-promise _  -> act-step state syrup-null nil
+    | syrup-dict  _   -> act-step state syrup-null nil
+    | syrup-set  _   -> act-step state syrup-null nil
+    | syrup-float  _   -> act-step state syrup-null nil
+
+;; --- fulfiller ---
+;; State: syrup-promise pid (the promise to settle).
+;; Args: any value. Resolves the named promise to that value, returns null.
+spec step-fulfiller SyrupValue SyrupValue -> ActStep
+defn step-fulfiller [state args]
+  match state
+    | syrup-promise pid ->
+        act-step state syrup-null
+                 [cons [eff-resolve pid args] nil]
+    | syrup-null       -> act-step state syrup-null nil
+    | syrup-bool _     -> act-step state syrup-null nil
+    | syrup-nat _      -> act-step state syrup-null nil
+    | syrup-int _      -> act-step state syrup-null nil
+    | syrup-string _   -> act-step state syrup-null nil
+    | syrup-symbol _   -> act-step state syrup-null nil
+    | syrup-list _     -> act-step state syrup-null nil
+    | syrup-tagged _ _ -> act-step state syrup-null nil
+    | syrup-refr _     -> act-step state syrup-null nil
+
+;; ========================================
+;; Dispatcher — the "ABI" for actors
+;; ========================================
+
+;; --- resolver (upstream promise-resolver pair) ---
+;;
+;; State: `syrup-promise pid` — the vow this resolver settles.
+;; Message: `['fulfill <value>]` or `['break <reason>]`.
+;;
+;; beh-fulfiller cannot serve here: it emits `eff-resolve pid args` with the
+;; WHOLE message, so settling produced `['fulfill ['fulfill ok]]` where
+;; upstream expects `['fulfill ok]` — and a break came back as a FULFILL
+;; whose value happened to be `['break oh-no]`, inverting the outcome.
+;;
+;; Helper chain rather than a nested match: a three-deep `match` in one body
+;; does not elaborate (prologos-syntax.md § "Never write three-deep nested
+;; match").
+
+spec resolver-settle Nat String SyrupValue -> ActStep
+defn resolver-settle [pid verb payload]
+  match [str::eq verb "break"]
+    | true  -> act-step [syrup-promise pid] syrup-null [cons [eff-break pid payload] nil]
+    | false -> act-step [syrup-promise pid] syrup-null [cons [eff-resolve pid payload] nil]
+
+spec resolver-payload Nat String [List SyrupValue] -> ActStep
+defn resolver-payload [pid verb rest]
+  match rest
+    | nil        -> resolver-settle pid verb syrup-null
+    | [cons p _] -> resolver-settle pid verb p
+
+spec resolver-verb Nat [List SyrupValue] -> ActStep
+defn resolver-verb [pid xs]
+  match xs
+    | nil -> no-op [syrup-promise pid]
+    | [cons h rest] ->
+        match h
+          | syrup-symbol verb -> resolver-payload pid verb rest
+          | _                 -> no-op [syrup-promise pid]
+
+spec resolver-with-pid Nat SyrupValue -> ActStep
+defn resolver-with-pid [pid args]
+  match args
+    | syrup-list xs -> resolver-verb pid xs
+    | _             -> no-op [syrup-promise pid]
+
+spec step-resolver SyrupValue SyrupValue -> ActStep
+defn step-resolver [state args]
+  match state
+    | syrup-promise pid -> resolver-with-pid pid args
+    | _                 -> no-op state
+
+;; ========================================
+;; (color, model) — the Car Factory's one argument shape
+;; ========================================
+;;
+;; Its own type rather than a raw pair, so "is this a well-formed car spec?"
+;; is answered once, in `pair-of-symbols`, and the two callers cannot disagree
+;; about it. Upstream drives the malformed case deliberately ([1 2 3 4 5]) and
+;; requires a BREAK, so the rejection path is load-bearing, not defensive.
+
+data ColorModel
+  color-model : String -> String
+
+spec cm-color ColorModel -> String
+defn cm-color [c]
+  match c
+    | color-model a _ -> a
+
+spec cm-model ColorModel -> String
+defn cm-model [c]
+  match c
+    | color-model _ b -> b
+
+spec cm-syrup ColorModel -> SyrupValue
+defn cm-syrup [c]
+  syrup-list [cons [syrup-symbol [cm-color c]] [cons [syrup-symbol [cm-model c]] nil]]
+
+spec sym-name SyrupValue -> [Option String]
+defn sym-name [v]
+  match v
+    | syrup-symbol s -> some s
+    | _              -> [none String]
+
+spec two-syms-with-color String SyrupValue [List SyrupValue] -> [Option ColorModel]
+defn two-syms-with-color [c b tail]
+  match tail
+    | [cons _ _] -> [none ColorModel]
+    | nil ->
+        match [sym-name b]
+          | none -> [none ColorModel]
+          | some m -> some [color-model c m]
+
+spec two-syms-tail SyrupValue SyrupValue [List SyrupValue] -> [Option ColorModel]
+defn two-syms-tail [a b tail]
+  match [sym-name a]
+    | none -> [none ColorModel]
+    | some c -> two-syms-with-color c b tail
+
+;; Exactly two symbols, no more and no fewer.
+spec two-syms [List SyrupValue] -> [Option ColorModel]
+defn two-syms [xs]
+  match xs
+    | nil -> [none ColorModel]
+    | [cons a rest] ->
+        match rest
+          | nil -> [none ColorModel]
+          | [cons b tail] -> two-syms-tail a b tail
+
+spec pair-of-symbols SyrupValue -> [Option ColorModel]
+defn pair-of-symbols [v]
+  match v
+    | syrup-list xs -> two-syms xs
+    | _             -> [none ColorModel]
+
+;; The factory's args are a LIST whose first element is the (color model) pair.
+spec first-pair-of-symbols SyrupValue -> [Option ColorModel]
+defn first-pair-of-symbols [args]
+  match args
+    | syrup-list xs ->
+        match xs
+          | nil -> [none ColorModel]
+          | [cons h _] -> pair-of-symbols h
+    | _ -> [none ColorModel]
+
+;; ========================================
+;; The Car Factory chain
+;; ========================================
+;;
+;; Upstream's promise-pipelining tests walk a three-link chain in which every
+;; answer is a NEW OBJECT: builder -> factory -> car -> string. The peer never
+;; waits for a link to resolve before addressing the next one, so the whole
+;; chain travels as pipelined messages against unresolved answers.
+;;
+;; Each link answers with `<desc:export ID>` — a reference the peer can
+;; address — and creates the actor behind it via `eff-spawn` at the id the vat
+;; handed us. The reply and the actor therefore name the same id without any
+;; coordination step.
+
+;; A reference to one of our own objects, as the peer must address it.
+spec export-desc Nat -> SyrupValue
+defn export-desc [n]
+  syrup-tagged "desc:export" [syrup-nat n]
+
+;; --- car ---
+;; State: [syrup-symbol color, syrup-symbol model]. Any message -> the string.
+;; Upstream asserts the exact text, including "I am" (not "I'm").
+spec car-vroom String String -> SyrupValue
+defn car-vroom [color model]
+  syrup-string [str::append "Vroom! I am a " [str::append color [str::append " " [str::append model " car!"]]]]
+
+spec step-car SyrupValue SyrupValue -> ActStep
+defn step-car [state args]
+  match [pair-of-symbols state]
+    | none -> act-step state [syrup-string "Vroom! I am a car!"] nil
+    | some cm -> act-step state [car-vroom [cm-color cm] [cm-model cm]] nil
+
+;; --- car factory ---
+;; Args: [[color model]] — ONE argument which is a two-symbol list.
+;; Anything else is an error: upstream drives exactly that case and requires
+;; the answer to BREAK, which is what makes the pipelined-break test meaningful.
+spec step-car-factory SyrupValue SyrupValue Nat -> ActStep
+defn step-car-factory [state args fresh]
+  match [first-pair-of-symbols args]
+    | none -> act-step state [syrup-tagged "Error" [syrup-string "car factory expects (color model)"]] nil
+    | some cm -> act-step state [export-desc fresh] [cons [eff-spawn fresh beh-car [cm-syrup cm]] nil]
+
+;; --- car factory builder ---
+;; Any message -> a new car factory.
+spec step-car-factory-builder SyrupValue SyrupValue Nat -> ActStep
+defn step-car-factory-builder [state args fresh]
+  act-step state [export-desc fresh] [cons [eff-spawn fresh beh-car-factory syrup-null] nil]
+
+;; `fresh` is the vat's next free actor id, handed in so a behaviour can name
+;; the object it is about to create in its own return value (see `eff-spawn`).
+;; --- sturdyref enlivener ---
+;;
+;; The argument is checked before it is used: the label must be
+;; `ocapn-sturdyref`. This path is what makes us open an outbound TCP
+;; connection on peer-chosen bytes, so accepting any record shape at all
+;; would let a peer point the dialler wherever it liked. The INTERIOR is the
+;; dialler's to parse and reject; the label is what is gated here.
+;;
+;; What gets asked for is the sturdyref RE-ENCODED, not a parsed location:
+;; re-encoding reproduces the peer's own bytes, and parsing belongs to
+;; whoever opens the socket.
+spec sturdyref-arg SyrupValue -> [Option String]
+defn sturdyref-arg [v]
+  match v
+    | syrup-tagged tag _ ->
+        match [str::eq tag "ocapn-sturdyref"]
+          | true  -> some [wire::re-encode v]
+          | false -> [none String]
+    | _ -> [none String]
+
+spec first-sturdyref-arg SyrupValue -> [Option String]
+defn first-sturdyref-arg [args]
+  match args
+    | syrup-list xs ->
+        match xs
+          | nil        -> [none String]
+          | [cons h _] -> sturdyref-arg h
+    | _ -> [none String]
+
+;; The answer is the sturdyref itself, echoed. The peer learns the connection
+;; was requested; the capability it is actually after arrives over the
+;; connection the driver opens, not in this reply.
+spec step-sink SyrupValue -> ActStep
+defn step-sink [state]
+  act-step-pending state nil
+
+spec step-sturdyref-enlivener SyrupValue SyrupValue -> ActStep
+defn step-sturdyref-enlivener [state args]
+  match [first-sturdyref-arg args]
+    | none     -> no-op state
+    ;; PENDING, not an answer: the reply is a signed handoff-give the driver
+    ;; builds once the connection is up.
+    | some loc -> act-step-pending state [cons [eff-connect loc] nil]
+
+spec step-behavior BehaviorTag SyrupValue SyrupValue Nat -> ActStep
+defn step-behavior [tag state args fresh]
+  match tag
+    | beh-cell      -> step-cell state args
+    | beh-counter   -> step-counter state args
+    | beh-greeter   -> step-greeter state args
+    | beh-echo      -> step-echo state args
+    | beh-adder     -> step-adder state args
+    | beh-forwarder -> step-forwarder state args
+    | beh-fulfiller -> step-fulfiller state args
+    | beh-resolver  -> step-resolver state args
+    | beh-car-factory-builder -> step-car-factory-builder state args fresh
+    | beh-car-factory -> step-car-factory state args fresh
+    | beh-car       -> step-car state args
+    | beh-sturdyref-enlivener -> step-sturdyref-enlivener state args
+    | beh-sink      -> step-sink state

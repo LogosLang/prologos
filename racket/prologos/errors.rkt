@@ -212,12 +212,26 @@
            (list (format "  ~a" uv-msg))))
       "\n")]
     [(multiplicity-error _ _ variable declared actual)
+     ;; ⚠ `declared` / `actual` are OMITTED when unknown (2026-08-03). QTT P4
+     ;; fills them with real values whenever `explain-qtt-failure` can PROVE a
+     ;; cause; when it cannot, the fallback passes `#f` and there is nothing to
+     ;; say. It used to pass the literal strings "declared" and "actual", which
+     ;; rendered as
+     ;;
+     ;;     Declared multiplicity: declared
+     ;;     Actual usage: actual
+     ;;
+     ;; — two lines that LOOK like data and are not. Found while reading a real
+     ;; multiplicity failure, where they cost a pass of trying to interpret
+     ;; them. Absent fields say "not determined"; placeholder fields say
+     ;; something false.
      (string-join
-      (list (format "Error at ~a" loc-str)
-            (format "  ~a" msg)
-            (format "  Variable: ~a" variable)
-            (format "  Declared multiplicity: ~a" declared)
-            (format "  Actual usage: ~a" actual))
+      (append
+       (list (format "Error at ~a" loc-str)
+             (format "  ~a" msg)
+             (format "  Variable: ~a" variable))
+       (if declared (list (format "  Declared multiplicity: ~a" declared)) '())
+       (if actual   (list (format "  Actual usage: ~a" actual)) '()))
       "\n")]
     [(not-a-type-error _ _ expr)
      (string-join

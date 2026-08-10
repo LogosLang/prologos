@@ -510,12 +510,50 @@
         [(expr-Float32? t) 'Float32] [(expr-Float64? t) 'Float64]
         [else #f]))
 
-(define (field-type->witness-tag ft)
+(define (field-type->witness-tag ft [seen '()])
   (let ([t (whnf ft)])
     (cond
       ;; union: ⋃ of branch tags (mirrors field-type-satisfies? some-branch)
       [(expr-union? t)
-       (cons 'union (map field-type->witness-tag (flatten-union t)))]
+       (cons 'union (map (lambda (b) (field-type->witness-tag b seen))
+                         (flatten-union t)))]
+      ;; ---- SUB-SCHEMA / nested-row descent ------------------------------
+      ;; A field typed by ANOTHER SCHEMA (`:server Server`) or by an inline row
+      ;; type. Emits a structural `(row (K . T) …)` tag so the runtime witness
+      ;; can DESCEND into the nested value.
+      ;;
+      ;; This is the deep-walker charter's item 3, and the defect it closes is
+      ;; an ASYMMETRY rather than a missing feature: the STATIC seal descends
+      ;; into a nested literal and rejects a bad inner field, while runtime
+      ;; `validate` returned `ok` on the same mistake in data — `[validate
+      ;; Config bad]` with `bad.server.port` a String in an Int slot. Runtime
+      ;; validate is the demo's headline flow (external data → validate →
+      ;; Result), so the asymmetry ran exactly the wrong way round. Both
+      ;; field-type shapes reach here because a schema NAME does not whnf
+      ;; through to its row (verified — `whnf` leaves `(expr-fvar 'M::Server)`
+      ;; alone); the registry lookup is what resolves it, and `schema->row` is
+      ;; the ONE projection already used for that, not a second enumeration.
+      ;;
+      ;; ⚠ THE SEEN-SET IS NOT SPECULATIVE. Recursion is on FIELD TYPES, and a
+      ;; schema field's type is a bare name resolved through the same registry,
+      ;; so `schema Node :next Node` is expressible TODAY and would recur
+      ;; forever. On a cycle the tag degrades to 'any — the D28 posture: a
+      ;; recursive schema is un-witnessable at bake time, and accepting is
+      ;; strictly better than either looping or false-rejecting. (This is also
+      ;; the honest form of the charter's "depth discipline" gate: cyclic
+      ;; descent is declined, not silently mis-tagged.)
+      ;;
+      ;; 'nat rows (tuples) are deliberately NOT tagged: the runtime arm keys by
+      ;; keyword into a champ, and a tuple is an rrb. Positional descent is its
+      ;; own shape and would need its own arm on both sides.
+      [(and (expr-fvar? t)
+            (not (memq (expr-fvar-name t) seen))
+            (lookup-schema-by-name (expr-fvar-name t)))
+       => (lambda (schema)
+            (row-witness-tag (schema->row schema)
+                             (cons (expr-fvar-name t) seen)))]
+      [(and (expr-Record? t) (eq? (expr-Record-key-domain t) 'keyword))
+       (row-witness-tag t seen)]
       ;; primitive: the subtype closure over the witnessable slice
       [(prim-type-expr->tag t)
        (cons 'prim
@@ -528,20 +566,150 @@
       [(and (expr-fvar? t) (refined-name? (bare-name (expr-fvar-name t))))
        (field-type->witness-tag
         (schema-field-type->expr (refined-name->base (bare-name (expr-fvar-name t)))))]
+      ;; ---- the NON-CTOR CARRIERS: PVec / Map / Set --------------------------
+      ;; These three never reach the ctor arm below — their values are an rrb, a
+      ;; champ and an hset, not constructor applications — so they sat at 'any
+      ;; and a `(PVec Int)` field accepted `@[1 "z"]`. Their elements are
+      ;; directly readable from the carrier, so no ctor-meta or spine walking is
+      ;; involved; each is just "recurse on the element tag".
+      ;;
+      ;; A POSITIVE list of three known heads, matched by BARE name, with the
+      ;; arity checked: an unrecognized head still falls through to the ctor arm
+      ;; and then to 'any. Nothing here can fire on a carrier we have not
+      ;; modelled.
+      [(let-values ([(head args) (decompose-type-app t)])
+         (and head
+              (let ([bare (bare-name head)])
+                (cond
+                  [(and (eq? bare 'PVec) (= (length args) 1))
+                   (list 'pvec (field-type->witness-tag (car args) seen))]
+                  [(and (eq? bare 'Set) (= (length args) 1))
+                   (list 'hset (field-type->witness-tag (car args) seen))]
+                  [(and (eq? bare 'Map) (= (length args) 2))
+                   (list 'hmap
+                         (field-type->witness-tag (car args) seen)
+                         (field-type->witness-tag (cadr args) seen))]
+                  [else #f]))))
+       => values]
       ;; a CONFIRMED data type (bare head OR applied container head with
-      ;; registered ctors): the tier-2 HEAD route — element args are NOT
-      ;; recursed (deferred to the walker charter). Only emit (ctor …) when the
-      ;; head genuinely has ctors, else fall to 'any (never false-reject an
-      ;; abstract/type-var field).
-      [(let-values ([(head _args) (decompose-type-app t)])
+      ;; registered ctors). Only fires when the head genuinely has ctors, else
+      ;; falls to 'any (never false-reject an abstract/type-var field).
+      ;;
+      ;; TIER-2 ELEMENT RECURSION (the walker charter's item 2, 2026-08-03):
+      ;; this used to emit a bare `(ctor Name)` — "the value's ctor belongs to
+      ;; this type" and nothing about its ARGUMENTS. So a `(List String)` field
+      ;; accepted `[cons 1 nil]` and an `(Option Int)` field accepted
+      ;; `[some "z"]`: validate returned `ok` on data that is wrong, which is
+      ;; the same class of silent acceptance as the sub-schema gap above.
+      ;;
+      ;; `data-witness-tag` computes the per-constructor, per-field tags by
+      ;; substituting the applied type arguments into each ctor's registered
+      ;; field-type datums. The charter's own note was right that the METADATA
+      ;; already existed (`ctor-meta` carries params + field-types) and that
+      ;; what was missing is the substitution + recursion + depth discipline.
+      ;;
+      ;; It returns #f — falling through to the old `(ctor Name)` — whenever
+      ;; anything is not fully determined: a ctor with no registered meta, an
+      ;; arity that does not line up, a field-type datum that will not convert.
+      ;; That fallback is the whole safety story: the precise tag is a strict
+      ;; refinement of the old one, and where it cannot be computed the old
+      ;; behaviour stands rather than a guess.
+      [(let-values ([(head args) (decompose-type-app t)])
          (and head
               (let* ([bare (bare-name head)]
                      [ctors (lookup-type-ctors bare)])
-                (and (pair? ctors) bare))))
-       => (lambda (bare) (list 'ctor bare))]
+                (and (pair? ctors)
+                     (cons bare (or (data-witness-tag bare ctors args t seen)
+                                    (list 'ctor bare)))))))
+       => cdr]
       ;; functions (Pi), type vars, unknown/abstract heads, higher-kinded —
       ;; unwitnessable → skip
       [else 'any])))
+
+;; `(data Name NSKIP (Ctor FieldTag …) …)` — the per-constructor field tags for
+;; an applied (or bare) data type, or #f to decline.
+;;
+;; NSKIP is the count of leading TYPE arguments a constructor value carries:
+;; `[some 1]` reduces to `(some Int 1)` and `[cons 1 nil]` to
+;; `(cons Int 1 (cons Int 2 (nil ?m)))`, so the runtime has to step over the
+;; erased type params before it reaches the fields. It comes from the ctor's own
+;; `params`, not from a count of the applied arguments, because a BARE data type
+;; (`Color`) has zero of both and must still tag.
+;;
+;; `self` marks a field whose substituted type IS the type being tagged — the
+;; `(List A)` tail of `cons`. The runtime re-enters the whole tag there, which
+;; is what makes a list check EVERY element rather than just its head. Without
+;; it this function would not terminate on any recursive type.
+;;
+;; DECLINES (returns #f) rather than guessing, in every one of these cases:
+;;   - a ctor name with no registered `ctor-meta`
+;;   - more params than applied arguments (a partially-applied type constructor)
+;;   - a field-type datum that will not convert (`schema-field-type->expr`
+;;     raises on shapes it does not model, and that raise must not escape into
+;;     the elaborator)
+;;   - the type is already on the `seen` path (mutual recursion: A holds a B
+;;     holds an A). `self` covers DIRECT recursion; anything longer degrades to
+;;     `(ctor …)`, which is the pre-existing precision, not a regression.
+(define (data-witness-tag bare ctors args t seen)
+  (and (not (memq bare seen))
+       (with-handlers ([exn:fail? (lambda (_) #f)])
+         (let ([seen* (cons bare seen)]
+               [nskip (box #f)])
+           (let ([entries
+                  (for/list ([cname (in-list ctors)])
+                    (define meta (or (lookup-ctor cname)
+                                     (lookup-ctor (bare-name cname))))
+                    (unless meta (raise (make-exn:fail "no meta" (current-continuation-marks))))
+                    (define pnames
+                      (for/list ([p (in-list (ctor-meta-params meta))])
+                        (if (pair? p) (car p) p)))
+                    (when (> (length pnames) (length args))
+                      (raise (make-exn:fail "arity" (current-continuation-marks))))
+                    (define nsk (length pnames))
+                    (cond [(unbox nskip) => (lambda (n)
+                                              (unless (= n nsk)
+                                                (raise (make-exn:fail "nskip" (current-continuation-marks)))))]
+                          [else (set-box! nskip nsk)])
+                    (define env (map cons pnames args))
+                    (cons (bare-name cname)
+                          (for/list ([ft (in-list (ctor-meta-field-types meta))])
+                            (define fe (field-datum->expr/subst ft env))
+                            (if (equal? (whnf fe) t)
+                                'self
+                                (field-type->witness-tag fe seen*)))))])
+             (list* 'data bare (or (unbox nskip) 0) entries))))))
+
+;; A field-type DATUM → expr, with type parameters substituted by the applied
+;; argument EXPRS. `schema-field-type->expr` cannot do this itself: its input is
+;; a datum and the substitutions are exprs, so the two live on different sides
+;; of the conversion. Every non-parameter leaf defers to it, so the resolution
+;; rules (ns-context, global-env, bare fallback) stay in ONE place.
+(define (field-datum->expr/subst datum env)
+  (cond
+    [(and (symbol? datum) (assq datum env)) => cdr]
+    [(and (pair? datum) (eq? (car datum) '$union))
+     (let build ([parts (cdr datum)])
+       (if (null? (cdr parts))
+           (field-datum->expr/subst (car parts) env)
+           (expr-union (field-datum->expr/subst (car parts) env)
+                       (build (cdr parts)))))]
+    [(and (pair? datum) (eq? (car datum) '$arrow))
+     (expr-Pi 'mw
+              (field-datum->expr/subst (cadr datum) env)
+              (field-datum->expr/subst (caddr datum) env))]
+    [(and (list? datum) (>= (length datum) 2))
+     (for/fold ([acc (field-datum->expr/subst (car datum) env)])
+               ([a (in-list (cdr datum))])
+       (expr-app acc (field-datum->expr/subst a env)))]
+    [else (schema-field-type->expr datum)]))
+
+;; A keyword row → its `(row (K . T) …)` tag. Shared by the two arms above so
+;; the schema route and the inline-row route cannot produce different shapes.
+(define (row-witness-tag rec seen)
+  (cons 'row
+        (for/list ([f (in-list (expr-Record-fields rec))])
+          (cons (car f)
+                (field-type->witness-tag (record-field-type (cdr f)) seen)))))
 
 ;; Look up a field keyword in a schema's field list.
 ;; Returns the schema-field or #f.
@@ -1717,6 +1885,37 @@
                                      seen sort)])))]
     [else (select-step-kind-unhandled 'select-below-field (car steps))]))
 
+;; CIU T6 D4.P3a item 18: the TYPE-side sibling of syntax.rkt's
+;; `record-mark-all-unknown` (D24's dynamic-DISSOC writer). The two are duals:
+;;
+;;   dynamic dissoc — presence becomes uncertain, type-if-present stays a fact
+;;   dynamic assoc  — presence stays a fact, TYPE-if-present becomes uncertain
+;;
+;; An unknown key hits AT MOST ONE label, so after the assoc each known field
+;; is either unchanged or replaced by the inserted value — and `<T | V>` is the
+;; join of exactly those two possibilities. Sound, and tighter than D24's
+;; per-field fresh meta because assoc KNOWS V (update-in's arbitrary fn does not).
+;;
+;; Without this the row kept `:host String` while the runtime value held
+;; `:host 42`, and a select then LAUNDERED the desync into a CLOSED
+;; `{:host String}` over an Int — stripping even the `| _` that had at least
+;; advertised uncertainty. That laundering was item 18.
+;;
+;; Homogeneous assoc is unaffected: build-union-type dedups, so <Int | Int>
+;; collapses back to Int and `map-assoc {:a 1} kk 5` still types `{:a Int | _}`.
+;;
+;; Presence is CARRIED, not forced to 'present: a row that reached here through
+;; a prior dynamic dissoc has 'unknown fields, and adding one unknown key does
+;; not make any particular one of them present again.
+(define (record-widen-all-with rec vt)
+  (expr-Record (expr-Record-key-domain rec)
+               (for/list ([fld (in-list (expr-Record-fields rec))])
+                 (cons (car fld)
+                       (record-field
+                        (build-union-type (list (record-field-type (cdr fld)) vt))
+                        (record-field-presence (cdr fld)))))
+               'dyn))
+
 (define (record-value-bound ctx rec [src (dyn-row-source 'dyn-row-values)])
   (cond
     [(eq? (expr-Record-tail rec) 'dyn)
@@ -1949,7 +2148,8 @@
                                         suffixes  ;; requires-paths = path suffixes
                                         '()       ;; provides-paths = empty
                                         '()       ;; includes-names = empty
-                                        #f))      ;; srcloc = synthetic
+                                        #f        ;; srcloc = synthetic
+                                        #f))      ;; stub? = no, this one is real
                        ;; Install as type in global-env (4A.c-iii-a: always-mnr)
                        (global-env-add-type-only sub-name (expr-Type (lzero)))
                        (expr-fvar sub-name))]))]))]
@@ -3023,11 +3223,23 @@
                (if (expr-error? vt) (expr-error) (record-extend rec kw vt)))]
             [_
              ;; CIU T6 F1a.2 p1b (D16): dynamic-key extension keeps the KNOWN
-             ;; fields and flips the tail to 'dyn — strictly more informative
-             ;; than the old (Map Keyword Open). The inserted value's type is
-             ;; not recorded (bounds-free tail; named cost, §12.2).
-             (if (and (check ctx k (expr-Keyword)) (not (expr-error? (infer ctx v))))
-                 (make-record (expr-Record-key-domain rec) (expr-Record-fields rec) 'dyn)
+             ;; field LABELS and flips the tail to 'dyn — strictly more
+             ;; informative than the old (Map Keyword Open).
+             ;;
+             ;; D4.P3a item 18: each kept field's TYPE widens to <T | V>. D16
+             ;; kept the types verbatim, which was UNSOUND — the dynamic key
+             ;; may be any one of those very labels, so `map-assoc {:host
+             ;; String …} kh 42` claimed `:host String` over a runtime 42. The
+             ;; tail is still bounds-free (V is not recorded there, the §12.2
+             ;; named cost); what changed is that V is now recorded where it
+             ;; CAN land — see record-widen-all-with.
+             ;;
+             ;; Evaluation order is load-bearing: the key check short-circuits
+             ;; `infer`, so a non-Keyword key reports only its own error, as
+             ;; before.
+             (if (check ctx k (expr-Keyword))
+                 (let ([vt (infer ctx v)])
+                   (if (expr-error? vt) (expr-error) (record-widen-all-with rec vt)))
                  (expr-error))])]
          [(expr-Map kt vt)
           (cond
@@ -3964,8 +4176,40 @@
          [_ (expr-error)]))]
 
     ;; ---- Foreign function: look up type from global env ----
-    [(expr-foreign-fn name _ _ _ _ _ _ _)
-     (or (global-env-lookup-type name) (expr-error))]
+    ;; …then PEEL one Pi per already-accumulated argument. `global-env-lookup-type`
+    ;; returns the FULL registered Pi, which is the type of the node with an
+    ;; EMPTY `args`; once `reduction.rkt`'s partial-application arm has appended
+    ;; k arguments, the node's type is the remainder after k applications.
+    ;;
+    ;; Returning the full Pi was arity-wrong by exactly `(length args)`. It has
+    ;; been invisible because every position reachable from elaboration has
+    ;; `args = '()` — the accumulating node is built only inside `whnf`, on the
+    ;; hole-section path — so the peel is a no-op on the common path and the
+    ;; loop simply stops being wrong on the uncommon one.
+    ;;
+    ;; `subst` on the codomain, not a bare unwrap: a dependent foreign
+    ;; signature's later domains can mention the earlier arguments, and the
+    ;; argument expression is what they must mention.
+    ;;
+    ;; qtt's `inferQ` twin delegates HERE for the type (the no-drift twin
+    ;; pattern), so fixing this fixes both — which was the reason the residual
+    ;; said fixing it means fixing both.
+    [(expr-foreign-fn name _ _ args _ _ _ _)
+     (let ([full (global-env-lookup-type name)])
+       (cond
+         [(not full) (expr-error)]
+         [(null? args) full]
+         [else
+          (let loop ([ty full] [as args])
+            (cond
+              [(null? as) ty]
+              [else
+               (match (whnf ty)
+                 [(expr-Pi _ _ cod) (loop (subst 0 (car as) cod) (cdr as))]
+                 ;; more accumulated args than the registered type has Pis —
+                 ;; the node is malformed, and saying so beats handing back a
+                 ;; type that is wrong by a different amount.
+                 [_ (expr-error)])]))]))]
 
     ;; ---- PropNetwork type constructors ----
     [(expr-net-type) (expr-Type (lzero))]

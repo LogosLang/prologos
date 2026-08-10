@@ -233,14 +233,14 @@
   (check-equal? (functor-entry-name fe) 'MyAlias))
 
 (test-case "G4: functor conflicting with data type → error"
-  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
-  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
-  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
-  ;; they still raise (they fail before the guarded seam), and converting them
-  ;; would have weakened a correct assertion.
-  (check-true (yields-prologos-error?
-   (lambda ()
-     (parameterize ([current-spec-store (hasheq)]
+  ;; 2026-08-03: a preparse FORM failure is now a per-command error VALUE, not
+  ;; an escaping raise (macros.rkt § per-FORM failure containment) — the file's
+  ;; other commands survive it. The message assertion is what this test is
+  ;; about and is unchanged; only the channel it arrives on moved.
+  (check-regexp-match
+   #rx"functor `Result` conflicts with existing data type"
+   (format "~a"
+    (let ()     (parameterize ([current-spec-store (hasheq)]
                     [current-property-store (hasheq)]
                     [current-functor-store (hasheq)]
                     [current-preparse-registry (current-preparse-registry)]
@@ -255,14 +255,10 @@
        (process-string-ws "functor Result {A : Type}\n  :unfolds A\n"))))))
 
 (test-case "G4: functor conflicting with type name → error"
-  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
-  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
-  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
-  ;; they still raise (they fail before the guarded seam), and converting them
-  ;; would have weakened a correct assertion.
-  (check-true (yields-prologos-error?
-   (lambda ()
-     (parameterize ([current-spec-store (hasheq)]
+  (check-regexp-match
+   #rx"functor `MyData` conflicts with existing data type"
+   (format "~a"
+    (let ()     (parameterize ([current-spec-store (hasheq)]
                     [current-property-store (hasheq)]
                     [current-functor-store (hasheq)]
                     [current-preparse-registry (current-preparse-registry)]

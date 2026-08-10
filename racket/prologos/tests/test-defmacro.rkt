@@ -111,6 +111,35 @@
   ;; Single $ is not a pattern var (need at least one char after $)
   (check-false (pattern-var? '$)))
 
+(test-case "pattern-var?: EVERY reader sentinel is excluded — enumerated, not sampled"
+  ;; D4.P1b-ii spin-off 3. `$set-literal` and `$mixfix` answered #t while their
+  ;; ten siblings answered #f — the whole exclusion list exists because a
+  ;; sentinel treated as a pattern variable makes `datum-subst` RAISE inside a
+  ;; defmacro template, and a raise on the preparse path is a WHOLE-FILE ABORT.
+  ;;
+  ;; Enumerated rather than spot-checked, because the defect IS the per-member
+  ;; gap: a test sampling one or two sentinels passed for the whole time these
+  ;; two were missing.
+  (for ([s (in-list '($angle-type $brace-params $foreign-block
+                      $dot-access $nil-dot-access $postfix-index
+                      $broadcast-access $dot-key $nil-dot-key
+                      $retired-selection $let-error $mixfix-error
+                      $reader-error $let-block $goal-rhs $let-noop-body
+                      $dot-brace $select-brace $select
+                      $set-literal $mixfix))])
+    (check-false (pattern-var? s)
+                 (format "~a is a reader sentinel, not a pattern variable" s))))
+
+(test-case "datum-subst: a sentinel in a template passes through"
+  ;; `$dot-access` is the control that was always right; the other two were
+  ;; excluded from `pattern-var?` alongside it. Since the polarity inversion
+  ;; below, ALL unbound `$`-symbols pass through, so this is now one case of a
+  ;; general rule rather than three special ones — kept because these are the
+  ;; two the D4.P1b-ii filing named.
+  (check-equal? (datum-subst (list '$set-literal 1) (hasheq)) '($set-literal 1))
+  (check-equal? (datum-subst (list '$mixfix 1) (hasheq)) '($mixfix 1))
+  (check-equal? (datum-subst (list '$dot-access 1) (hasheq)) '($dot-access 1)))
+
 ;; ========================================
 ;; datum-subst tests
 ;; ========================================
@@ -142,111 +171,17 @@
   (check-equal? (datum-subst '(foo $args ... bar) (hasheq '$args '(1 2 3)))
                 '(foo 1 2 3 bar)))
 
-;; ========================================
-;; A template's pattern variables are the ones the PATTERN BOUND (2026-08-01)
-;; ========================================
-;; ⚠ THE PIN BELOW WAS FLIPPED, and it is the whole point of this block.
-;;
-;; `datum-subst` used to `error` on any `$`-headed symbol missing from the
-;; bindings. `pattern-var?` decides by NAME — `$`-prefixed minus a
-;; hand-maintained denylist — but the READER mints `$`-headed sentinels for
-;; ordinary surface syntax, and `datum-subst` recurses into every element
-;; including list heads. So the error did not fire on typos; it fired on
-;; SENTINELS, as a raise at preparse, i.e. a WHOLE-FILE ABORT.
-;;
-;; Measured at 969bfd6c: a defmacro template containing `5N`, `1/2` or `|>`
-;; each took the whole file down with zero results. The denylist was missing
-;; TWENTY-FOUR reader-minted sentinels. A denylist cannot be the answer — it
-;; must re-enumerate every sentinel the reader will ever mint, and it had
-;; already failed twice before (`$dot-brace` and `$select` both carry
-;; "whole-file abort in a defmacro template" notes in macros.rkt) and a third
-;; time for `$bcast-step`, minted one commit earlier by the `:` mint.
-;;
-;; `bindings` is the authority: a pattern variable is one the PATTERN bound.
-;; Anything else is a literal. Sentinels then work BY CONSTRUCTION.
-
-(test-case "datum-subst: an UNBOUND $-symbol is a literal, not an error"
-  ;; Was `(check-exn exn:fail? …)`. That pin encoded the abort as intended
-  ;; behaviour, which is why the sentinel class survived three sightings.
-  (check-equal? (datum-subst '$unbound (hasheq)) '$unbound)
-  ;; …and a BOUND one still substitutes, which is the property that matters.
-  (check-equal? (datum-subst '$x (hasheq '$x 42)) 42))
-
-(test-case "datum-subst: reader sentinels survive a template by construction"
-  ;; The four measured aborts, at the datum level. These are not exotic: they
-  ;; are a Nat literal, a rational, a list literal and a pipeline.
-  (for ([sentinel (in-list '($nat-literal $rat-literal $list-literal $pipe-gt
-                             $bcast-step $mixfix $quasiquote $typed-hole))])
-    (define template (list 'f (list sentinel 5) '$u))
-    (check-equal? (datum-subst template (hasheq '$u 'arg))
-                  (list 'f (list sentinel 5) 'arg)
-                  (format "~a must pass through a template untouched" sentinel))))
-
-(test-case "L3: a sentinel-bearing macro template does NOT abort the file"
-  ;; THE CONTAINMENT PIN. Before the fix each of these returned NOTHING —
-  ;; `process-file` raised out of preparse, so `def before-marker` (written
-  ;; ABOVE the macro use) never ran either. The datum-level pins above cannot
-  ;; observe that; only a real file with siblings can.
-  (for ([lit (in-list '("5N" "1/2" "'[1 2 3]"))])
-    (define rs (run-file-ws
-                (string-append
-                 "ns dm-l3\n"
-                 "def before-marker := 1\n"
-                 "defn pair [p q] p\n"
-                 "defmacro mk [$u]\n"
-                 "  [pair $u " lit "]\n"
-                 "def used := [mk 9]\n"
-                 "def after-marker := 2\n")))
-    ;; 4 results: before-marker, pair, used, after-marker (defmacro is consumed)
-    (check-equal? (length rs) 4
-                  (format "template with ~a must not kill the file; got: ~v" lit rs))
-    (check-false (prologos-error? (first rs))
-                 (format "~a: the command BEFORE the macro must run" lit))
-    (check-false (prologos-error? (last rs))
-                 (format "~a: the command AFTER it must run" lit))))
-
-(test-case "L3: a `name:key` template stays contained (the `$bcast-step` sighting)"
-  ;; ⚠ THIS PIN WAS NARROWED, and the reason is worth keeping.
+(test-case "datum-subst: an unbound variable PASSES THROUGH (polarity inverted 2026-08-03)"
+  ;; This test asserted a RAISE until D4.P1b-iii item 8. The raise was a
+  ;; whole-file abort on the preparse path, and `pattern-var?`'s hand-kept
+  ;; exclusion list was the only thing holding 23 reader sentinels out of it —
+  ;; so `'[1 2]` inside a template took the file down. The polarity is now
+  ;; "bound ⇒ substitute", which makes every sentinel safe by construction.
   ;;
-  ;; It originally also asserted the message text — that the sentinel reached
-  ;; P4c-2's guided "broadcast `:field` is not implemented yet" diagnostic,
-  ;; which the abort had been MASKING. That held while the `:` mint was ON by
-  ;; default: `$u:field` read as `($u ($bcast-step :field))`, and `$bcast-step`
-  ;; was the third sentinel to trip the pattern-variable abort.
-  ;;
-  ;; CIU T6 D4.P4c-2 then INVERTED THE MINT DEFAULT (`68cdaae7`), so at HEAD
-  ;; `$u:field` reads as plain `($u :field)` and mints no sentinel at all. The
-  ;; message assertion was therefore pinned to a reader default, not to this
-  ;; seam's behaviour, and it went red the moment that default flipped — caught
-  ;; on merging main, before it could reach anyone else.
-  ;;
-  ;; What survives here is the property that is actually THIS file's business:
-  ;; the form stays CONTAINED. Coverage of `$bcast-step` itself is unaffected —
-  ;; it is named explicitly in the datum-level "reader sentinels survive a
-  ;; template by construction" pin above, which does not depend on whether the
-  ;; reader currently mints it. That is the durable half; this is the L3 half.
-  (define rs (run-file-ws (string-append
-                           "ns dm-bcast\n"
-                           "def before-marker := 1\n"
-                           "defmacro getb [$u]\n"
-                           "  [$u:field]\n"
-                           "def m := {:field 7}\n"
-                           "getb m\n"
-                           "def after-marker := 2\n")))
-  (check-equal? (length rs) 4 (format "got: ~v" rs))
-  (check-false (prologos-error? (first rs)) "the command BEFORE must run")
-  (check-false (prologos-error? (last rs)) "the command AFTER must run")
-  (define msgs (for/list ([r (in-list rs)] #:when (prologos-error? r))
-                 (prologos-error-message r)))
-  (check-equal? (length msgs) 1 (format "expected exactly one error; got: ~v" rs)))
-
-(test-case "datum-subst: the SPLICE branch keeps its unbound error"
-  ;; Deliberately NOT relaxed. A sentinel is a list HEAD followed by its
-  ;; payload, never a bare symbol followed by `...`, so this arm cannot be
-  ;; tripped by one and its typo signal stays clean.
-  (check-exn exn:fail?
-    (lambda () (datum-subst '(foo $args ...) (hasheq)))))
-
+  ;; Deliberately CHANGED, not deleted: an unbound template variable is still
+  ;; wrong, it now fails at the USE site as an ordinary unbound-variable error
+  ;; naming the symbol, per-command and with a srcloc.
+  (check-equal? (datum-subst '$unbound (hasheq)) '$unbound))
 ;; ========================================
 ;; preparse-expand-form tests
 ;; ========================================
@@ -482,3 +417,95 @@
     (check-equal? (length results) 2)
     (check-equal? (syntax->datum (car results)) '(check zero : Nat))
     (check-equal? (syntax->datum (cadr results)) '(eval zero))))
+
+;; ========================================
+;; Template polarity: an UNBOUND `$`-symbol passes through (D4.P1b-iii item 8)
+;; ========================================
+;;
+;; `datum-subst` used to RAISE on any `$`-symbol not in `bindings`, and
+;; `pattern-var?`'s hand-maintained exclusion list was the only thing keeping
+;; reader sentinels out of that raise. A census put the residual at 23 of 33 —
+;; so a plain quoted list inside a defmacro template took the WHOLE FILE down.
+;;
+;; The fix is the polarity, not 23 more exclusions: the only thing that makes a
+;; symbol a pattern variable is being BOUND by the macro's pattern, and
+;; `bindings` knows that exactly. Every sentinel is then safe BY CONSTRUCTION.
+;;
+;; These tests enumerate the census rather than sampling it — the defect was a
+;; per-member gap, and a test checking one or two members passed throughout.
+
+(define reader-sentinels-in-templates
+  '($clause-sep $compose $decimal-literal $exp-literal $facts-sep
+    $float-literal $list-literal $list-tail $lseq-literal $mixfix
+    $narrow-eq $nat-literal $pipe $pipe-gt $posit-literal $quasiquote
+    $rat-literal $rest $rest-param $set-literal $typed-hole $unquote
+    $vec-literal))
+
+(test-case "datum-subst: every censused reader sentinel passes through a template"
+  (for ([sym (in-list reader-sentinels-in-templates)])
+    (check-equal? (datum-subst (list sym 1 2) (hasheq '$x 99))
+                  (list sym 1 2)
+                  (format "~a must survive a template unchanged" sym))))
+
+(test-case "datum-subst: a BOUND variable still substitutes, scalar and spliced"
+  (check-equal? (datum-subst '$x (hasheq '$x 42)) 42)
+  (check-equal? (datum-subst '($x) (hasheq '$x 42)) '(42))
+  (check-equal? (datum-subst '($xs ...) (hasheq '$xs '(1 2 3))) '(1 2 3)))
+
+(test-case "datum-subst: a bound splice variable that is NOT a list still raises"
+  ;; The one raise worth keeping: the variable IS bound, so this is a genuine
+  ;; misuse rather than an unrecognized symbol.
+  (check-exn exn:fail?
+             (lambda () (datum-subst '($x ...) (hasheq '$x 1)))))
+
+(test-case "datum-subst: a TYPO'D template variable passes through, to fail at the USE site"
+  ;; What the inversion costs, pinned so it is a decision rather than a
+  ;; surprise. `$typoo` is not bound and is not a sentinel; it survives
+  ;; substitution and becomes an ordinary unbound-variable error where the
+  ;; macro is used — per-command, with a srcloc, file intact. Better than the
+  ;; whole-file abort it replaces.
+  (check-equal? (datum-subst '($typoo) (hasheq '$x 1)) '($typoo)))
+
+;; ========================================
+;; pp-datum renders ACCESS SENTINELS (D4.P1b-iii spin-off 7)
+;; ========================================
+;;
+;; Every access sentinel rendered as a RAW SENTINEL — `($dot-access foo)`
+;; verbatim — while `$brace-params` rendered. Any diagnostic printing a datum
+;; that contains an access form leaked compiler internals into user-facing
+;; text.
+;;
+;; The expected spellings mirror the READER's own emission shapes
+;; (parse-reader's `token-entry->stx` / `group-items`), not a guess: e.g.
+;; `nil-dot-access` strips TWO leading chars from the lexeme, which is `?.`.
+
+(require (only-in "../pretty-print.rkt" pp-datum))
+
+(test-case "pp-datum: access sentinels render as their surface spelling"
+  (check-equal? (pp-datum '($dot-access foo))       ".foo")
+  (check-equal? (pp-datum '($nil-dot-access foo))   "?.foo")
+  (check-equal? (pp-datum '($broadcast-access foo)) "*.foo")
+  (check-equal? (pp-datum '($dot-key :k))           ".:k")
+  (check-equal? (pp-datum '($nil-dot-key :k))       "?.:k")
+  (check-equal? (pp-datum '($postfix-index 0))      "[0]")
+  (check-equal? (pp-datum '($select-brace a b))     "{a b}")
+  (check-equal? (pp-datum '($dot-brace a b))        ".{a b}")
+  ;; the FUSED select head — the one that survives preparse, and therefore the
+  ;; one a binder-position diagnostic actually meets
+  (check-equal? (pp-datum '($select base a))        "base{a}"))
+
+(test-case "pp-datum: no access sentinel survives into rendered text"
+  ;; The property, independent of the individual spellings above: whatever the
+  ;; rendering is, the internal `$name` must not appear in it. This is what a
+  ;; user-facing diagnostic actually depends on.
+  (for ([d (in-list '(($dot-access foo) ($nil-dot-access foo) ($broadcast-access foo)
+                      ($dot-key :k) ($nil-dot-key :k) ($postfix-index 0)
+                      ($select-brace a b) ($dot-brace a b) ($select base a)
+                      ($brace-params A B) ($set-literal 1) ($vec-literal 1)))])
+    (define out (pp-datum d))
+    (check-false (regexp-match? #rx"[$]" out)
+                 (format "~v leaked a sentinel: ~a" d out))))
+
+(test-case "pp-datum: sentinels nested inside an ordinary form render too"
+  ;; The realistic diagnostic shape — the sentinel is never the whole datum.
+  (check-equal? (pp-datum '(f ($dot-access bar) 1)) "(f .bar 1)"))

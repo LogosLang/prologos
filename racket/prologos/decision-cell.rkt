@@ -453,6 +453,50 @@
        [entries (cons (cons worldview-bitmask new-val)
                       (tagged-cell-value-entries tcv))])]))
 
+;; ---------------------------------------------------------------------------
+;; Entry-list union, WITHOUT duplicates.
+;;
+;; Both merges below used a bare `(append new-entries old-entries)`, and that is
+;; a lattice-contract violation hiding in a one-liner: merge must be IDEMPOTENT,
+;; and `(tagged-cell-merge x x)` returned an entry list twice as long as x's.
+;;
+;; The consequence is not a wrong answer, it is a HANG. A cell whose lattice
+;; value is stable but whose REPRESENTATION grows every round looks changed to
+;; the scheduler's change detection, so its dependents re-fire, re-write the
+;; same entries, and the network never quiesces. `tagged-cell-read` then merges
+;; every matching entry on every read, so the per-read cost grows with the list
+;; too — measured at 49% of total time under the union-type repro, with
+;; `attribute-map-merge-fn` alone at 30% SELF.
+;;
+;; That repro (`def x : <Int | String> := 42` / `x` / `[int+ 1 2]`) has been on
+;; file since 2026-06-29 as "the `:type`-facet union join not reaching a
+;; fixpoint". The join may well be fine. It is the CARRIER that is not
+;; idempotent.
+;;
+;; Dedup is by `equal?` on the whole `(bitmask . value)` pair, keeping the FIRST
+;; occurrence — which is exactly what the ordering comments below require:
+;; "NEW entries first — later writes win at same specificity", and
+;; `tagged-cell-read` takes the first match when no domain-merge is supplied.
+;; Dropping a later exact duplicate cannot change either the first-match answer
+;; or the merge-all answer (merging v with v is v for any idempotent domain
+;; merge — and a non-idempotent domain merge is already a lattice violation).
+;;
+;; ⚠ Deliberately a linear `member` scan rather than a hash. `pipeline.md`
+;; records that Racket's `equal-hash-code` is DEPTH-BOUNDED at ~17 levels, so
+;; hashing values that contain expr trees collapses whole families into a few
+;; buckets and degrades to a linear scan running full structural `equal?`
+;; anyway — at 647,773× the cost in the measured case. The scan is honest about
+;; being O(n) and, because it keeps n from growing at all, n stays small.
+(define (union-entries new-entries old-entries)
+  (cond
+    [(null? old-entries) new-entries]
+    [(null? new-entries) old-entries]
+    [else
+     (for/fold ([acc (reverse new-entries)]
+                #:result (reverse acc))
+               ([e (in-list old-entries)])
+       (if (member e acc) acc (cons e acc)))]))
+
 ;; Merge: union entries from both sides. Base merges via the caller's merge-fn.
 ;; The caller (net-cell-write) applies the cell's registered merge-fn to the
 ;; overall value. For tagged-cell-value, the merge unions entry lists.
@@ -462,8 +506,8 @@
      (tagged-cell-value
       (tagged-cell-value-base new)  ;; newer base wins (or caller merges)
       ;; NEW entries first — later writes win at same specificity
-      (append (tagged-cell-value-entries new)
-              (tagged-cell-value-entries old)))]
+      (union-entries (tagged-cell-value-entries new)
+                     (tagged-cell-value-entries old)))]
     [(tagged-cell-value? old)
      ;; New is plain — treat as base update
      (struct-copy tagged-cell-value old [base new])]
@@ -489,8 +533,8 @@
         ;; NEW entries first — later writes appear earlier in the list.
         ;; tagged-cell-read uses strict > for popcount, so the first match
         ;; at max specificity wins. Newest write = first in list = returned.
-        (append (tagged-cell-value-entries new)
-                (tagged-cell-value-entries old)))]
+        (union-entries (tagged-cell-value-entries new)
+                       (tagged-cell-value-entries old)))]
       [(tagged-cell-value? old)
        (struct-copy tagged-cell-value old
          [base (domain-merge (tagged-cell-value-base old) new)])]
@@ -619,13 +663,32 @@
 ;; Empty nogood set
 (define nogood-empty '())
 
-;; Merge: append (functionally equivalent to set-union for unique nogoods)
-;; Uses list representation for simplicity — nogoods are typically small (< 100).
+;; Merge: set-union over the list representation. Nogoods are typically small
+;; (< 100), so a linear scan is the right cost.
+;;
+;; ⚠ This was a bare `(append old new)` under the comment "functionally
+;; equivalent to set-union for unique nogoods" — and that parenthetical was
+;; doing all the work, unchecked. `(nogood-merge x x)` returned x's list TWICE,
+;; so the merge was not idempotent and the declared lattice ("P(P(AssumptionId))
+;; under set-union", two lines up) was not one.
+;;
+;; That is the same defect that made `tagged-cell-merge` hang the type-checker
+;; for fourteen months: a cell whose lattice VALUE is stable but whose
+;; REPRESENTATION grows on every merge reads as changed to the scheduler, so its
+;; dependents re-fire forever. This one is a live cell merge —
+;; `atms.rkt:231` — so it carried the same hazard.
+;;
+;; Found by `tests/test-merge-laws.rkt` on its FIRST run, which is the argument
+;; for that file existing.
 (define (nogood-merge old new)
   (cond
     [(null? old) new]
     [(null? new) old]
-    [else (append old new)]))
+    [else
+     (for/fold ([acc (reverse old)]
+                #:result (reverse acc))
+               ([ng (in-list new)])
+       (if (member ng acc) acc (cons ng acc)))]))
 
 ;; Add a single nogood
 (define (nogood-add ngs nogood-set)

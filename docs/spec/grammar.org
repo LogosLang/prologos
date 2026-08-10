@@ -1394,6 +1394,85 @@ defr lookup [+key -val]
   &> (table key val)
 #+end_src
 
+** The POL Syntax Cluster (Rel T1, 2026-07-25)
+
+Three additive spellings landed together. The older parenthesized forms above
+remain legal everywhere; these are what a =.prologos= file actually looks like.
+
+*** Fact rows: =||= blocks, one row per line, or =|= separators
+
+#+begin_src prologos
+defr digits [?d]
+  || 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+#+end_src
+
+Pipes mark EXPLICIT rows: each segment must match the arity exactly, and an
+empty segment is an error. Without pipes the terms CHUNK by arity, and a
+partial remainder is a loud error — it used to register a silent dead row that
+no query could match.
+
+*** Rule clauses: =&>= groups may drop the goal parens
+
+The =&>= line's HEAD TOKEN chooses the reading. A =(= head means the line is a
+SEQUENCE of paren goals (each one parenthesized; mixing errors). A symbol head
+means the line is EXACTLY ONE goal, and parens inside it are ARGUMENT terms —
+which is what makes =not (= c n)= work.
+
+#+begin_src prologos
+defr fruit-not-of-color [?fruit ?not-color]
+  &> fruit-color fruit color      ;; bare head -> one goal
+     not (= color not-color)      ;; goal column -> sibling goal
+#+end_src
+
+Continuation lines, relative to the first goal's column: at the goal column is
+a SIBLING goal (conjunction); indented deeper CONTINUES the previous goal; a
+line between the =&>= column and the goal column is a mis-indent error naming
+both columns. A zero-arg goal on its own line must be written =(foo)= — a lone
+token is spliced bare by the reader and cannot be told from an argument.
+
+*** Goals carry an implicit =solve= at command position
+
+Goal-ness comes from context (=defr= / =solve= / =rel= bodies) or, everywhere
+else, from PARENS:
+
+#+begin_src prologos
+(fruit-not-of-color f "red")        ;; == solve (fruit-not-of-color f "red")
+def blues := (fruit-color f "blue") ;; == := solve (...)
+#+end_src
+
+=foo x= and =[foo x]= stay APPLICATION; keyword heads keep their own forms.
+Scope is command position ONLY — top-level commands and a =def= RHS — not
+general expression position. The goal keywords =rel=, =not=, ===, =is= take the
+implicit solve too, so =(not (blocked "c"))= at top level IS a NAF query;
+=guard= and =cut= are excluded because a top-level solve does not dispatch them
+either. The functional readings live on the BRACKET spelling: =[not true]= is
+=false=, =[= 1 1]= is =true=.
+
+*NOTE — an institutionalized WS/sexp divergence.* =(f x)= is a GOAL in WS mode
+but stays an APPLICATION in the sexp IR: the WS reader marks paren origin and
+the native sexp reader does not. Sexp-mode fixtures get application.
+
+*** Fused parameter types
+
+A relation parameter may carry a fused single-token type (Aspect C, C.b.1):
+
+#+begin_src prologos
+defr small [?n:Int]
+  || 1 | 2 | 3
+#+end_src
+
+Chained =?x:A:B= is RESERVED for the UCS track and is an error today, exactly
+as chained =x:A:B= is in a =defn= param list. The older narrowing-constraint
+chain =?x:Nat:Even= is dead in WS mode and its spelling collides with this one.
+
+** Solution sets are BAGS, not sets
+
+=solve= returns ONE ROW PER DERIVATION PATH, so duplicate rows are expected and
+intended: the multiplicity IS the derivation count (ℕ-semiring provenance — a
+duplicate row is a distinct proof). This matches Prolog's =findall= / =bagof=
+default. Duplicate rows are not a bug to fix; an opt-in =distinct= (the =setof=
+analogue) is deferred.
+
 ** Anonymous Relations (rel)
 
 #+begin_src prologos

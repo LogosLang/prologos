@@ -22,6 +22,11 @@
          "errors.rkt"
          "pretty-print.rkt"
          "global-env.rkt"
+         ;; For the cross-constructor hint: `lookup-ctor` gives a constructor's
+         ;; OWNING type, which is the whole content of the message. No cycle —
+         ;; typing-core already requires macros, and macros requires nothing here.
+         (only-in "macros.rkt" lookup-ctor ctor-meta-type-name)
+         (only-in "namespace.rkt" split-qualified-name)
          "elab-speculation-bridge.rkt"
          "atms.rkt"
          ;; PPN 4C 3C.c.3 (2026-05-24): translator + struct constructor for
@@ -124,6 +129,33 @@
   (cond
     [(expr-map-get? x) (cons (expr-map-get-m x) (expr-map-get-k x))]
     [(expr-get? x) (cons (expr-get-coll x) (expr-get-key x))]
+    ;; ⚠ MERGE 2026-08-05 — the THIRD shape, and without it this whole hint went
+    ;; dark. D4.P4b-ii migrated `.field` off `$dot-access`→`map-get` and onto
+    ;; `$select-path`→`expr-select`, so `n.name` stopped matching either arm
+    ;; above and the guided "…has type Int, which has no fields" silently
+    ;; degraded to the generic "the subject is not a record".
+    ;;
+    ;; This is the family-sibling class `pipeline.md` § "Exhaustive Walkers"
+    ;; names: a fix (or here, a consumer) written for one member of a family
+    ;; while a later change moves the family. Nothing failed loudly — the hint
+    ;; is an `or` arm, so losing it just falls through to a worse message.
+    ;;
+    ;; Only the SINGLE plain key is a projection in this sense: one branch, one
+    ;; step, and that step a bare symbol (a `.field`). A caret/sub/ordinal step,
+    ;; or several branches, is a select BLOCK — a different construct with its
+    ;; own diagnostics, and mis-claiming it here would be worse than declining.
+    ;; NB the branches ride inside an `expr-path` carrier (syntax.rkt), not as a
+    ;; bare list — reading them as a list is how the first attempt at this arm
+    ;; silently matched nothing.
+    [(and (expr-select? x)
+          (expr-path? (expr-select-branches x))
+          (let ([bs (expr-path-branches (expr-select-branches x))])
+            (and (list? bs) (= (length bs) 1)
+                 (let ([steps (car bs)])
+                   (and (list? steps) (= (length steps) 1)
+                        (symbol? (car steps)))))))
+     (cons (expr-select-subject x)
+           (expr-keyword (car (car (expr-path-branches (expr-select-branches x))))))]
     [else #f]))
 
 (define (format-closed-row-miss rec kw names)
@@ -195,6 +227,23 @@
        (and (exact-nonnegative-integer? n) n))]
     [else #f]))
 
+;; Types that provably carry NEITHER fields NOR positions, so that a projection
+;; off them cannot succeed under any elaboration. Positive list, conservative
+;; #f default — see the branch that consumes it for why the polarity is
+;; load-bearing rather than stylistic.
+;;
+;; Absent on purpose: `expr-Record` (the four branches above own it), PVec /
+;; Map / List and every other carrier ctor (projectable), `expr-meta` and
+;; `expr-fvar` (unknown — a schema fvar resolves to a row).
+(define (unprojectable-type? t)
+  (or (expr-Int? t) (expr-Nat? t) (expr-Rat? t)
+      (expr-Posit8? t) (expr-Posit16? t) (expr-Posit32? t) (expr-Posit64? t)
+      (expr-Bool? t) (expr-Char? t) (expr-String? t)
+      (expr-Unit? t)
+      ;; a function has no projections either — there is no UFCS in Prologos,
+      ;; `x.f` is `[map-get x :f]` and nothing else.
+      (expr-Pi? t)))
+
 (define (closed-row-miss-hint ctx e names)
   (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
     (let search ([x e])
@@ -217,6 +266,57 @@
                             (and (closed-nat-row? tm)
                                  (not (record-lookup-field tm idx))
                                  (format-closed-tuple-oob tm idx names)))))))
+            ;; ---- the two MIRROR cases (D4.P2 item 9, added 2026-08-03) ----
+            ;; Q_R5 gave the nat domain its own OOB branch; its two neighbours
+            ;; still fell through to a bare "Could not infer type". The
+            ;; adjudicator singled out the first of these — an ORDINAL on a
+            ;; KEYWORD row is the most plausible first-contact error on a new
+            ;; positional surface, and Q_R5's own rationale was "the first
+            ;; thing a user would hit".
+            ;;
+            ;; Placed AFTER the ordinal branch and BEFORE the keyword branch,
+            ;; deliberately: each is guarded on the OPPOSITE domain to the
+            ;; branch it sits next to, so no input can match two of them. The
+            ;; filing's warning is why that matters — "the branch order in
+            ;; `closed-row-miss-hint` is exactly where P2's own regression came
+            ;; from; adding arms without an A/B against a pinned baseline is
+            ;; how a correct diagnostic gets suppressed". A/B'd on a
+            ;; seven-shape battery: the four previously-good messages are
+            ;; byte-identical after.
+
+            ;; ORDINAL key on a KEYWORD-domain row: `cfg.0`
+            (let ([mk (projection-parts x)])
+              (and mk
+                   (let ([idx (ordinal-key-index (cdr mk))])
+                     (and idx
+                          (let ([tm (whnf (infer ctx (car mk)))])
+                            (and (expr-Record? tm)
+                                 (eq? (expr-Record-key-domain tm) 'keyword)
+                                 (format
+                                  (string-append
+                                   "Could not infer type — `.~a` is ORDINAL access, but ~a is a "
+                                   "keyword row: its fields are NAMED. Write `.field` "
+                                   "(available: ~a).")
+                                  idx (pp-expr tm names)
+                                  (string-join
+                                   (for/list ([f (in-list (expr-Record-fields tm))])
+                                     (format ":~a" (car f)))
+                                   " "))))))))
+
+            ;; KEYWORD key on a NAT-domain row (tuple): `het.name`
+            (let ([mk (projection-parts x)])
+              (and mk
+                   (expr-keyword? (cdr mk))
+                   (let ([tm (whnf (infer ctx (car mk)))])
+                     (and (expr-Record? tm)
+                          (eq? (expr-Record-key-domain tm) 'nat)
+                          (format
+                           (string-append
+                            "Could not infer type — `:~a` names a field, but ~a is a tuple: "
+                            "its slots are POSITIONAL. Write `.N` (valid indices 0–~a).")
+                           (expr-keyword-name (cdr mk)) (pp-expr tm names)
+                           (max 0 (sub1 (length (expr-Record-fields tm)))))))))
+
             (let ([mk (projection-parts x)])
                  (and mk
                       (expr-keyword? (cdr mk))
@@ -230,6 +330,49 @@
                              (eq? (expr-Record-tail tm) 'closed)
                              (not (record-lookup-field tm (expr-keyword-name (cdr mk))))
                              (format-closed-row-miss tm (expr-keyword-name (cdr mk)) names)))))
+
+            ;; ---- NON-PROJECTABLE CARRIER (D4.P2 item 9, second half) ----
+            ;; The four branches above all require the carrier's type to be a
+            ;; Record. Project off anything else — `n.0` where `n : Int`,
+            ;; `s.0` where `s : String` — and the whole chain declined, so the
+            ;; user got a bare "Could not infer type" naming neither the
+            ;; carrier nor its type. That is the same gap Q_R5 opened this
+            ;; function to close, one carrier-kind over.
+            ;;
+            ;; ⚠ THE POSITIVE LIST IS THE POINT, and it is `definitely-not-map?`'s
+            ;; lesson (`pipeline.md` § Exhaustive Walkers) applied to types: a
+            ;; NEGATIVE guard ("not a Record") would fire on every carrier the
+            ;; hint has no business judging — a PVec (`v.0` is VALID and reaches
+            ;; here whenever some *sibling* subterm is what failed), a Map, a
+            ;; type meta, a schema fvar, and every carrier kind added later.
+            ;; `search` recurses into subterms, so a false positive here does
+            ;; not merely add noise: it OUTRANKS the real message. Enumerating
+            ;; POSITIVELY the types that provably have neither fields nor
+            ;; positions makes the claim self-evidently true at every site it
+            ;; can fire, and makes an unrecognized carrier decline by default.
+            (let ([mk (projection-parts x)])
+              (and mk
+                   (let ([tm (whnf (infer ctx (car mk)))])
+                     (and (unprojectable-type? tm)
+                          (let ([carrier (pp-expr (car mk) names)]
+                                [ty (pp-expr tm names)])
+                            (cond
+                              [(ordinal-key-index (cdr mk))
+                               => (lambda (idx)
+                                    (format
+                                     (string-append
+                                      "Could not infer type — `.~a` is positional access, but ~a "
+                                      "has type ~a, which has no positions. `.N` needs a tuple "
+                                      "⟨…⟩ or a PVec.")
+                                     idx carrier ty))]
+                              [(expr-keyword? (cdr mk))
+                               (format
+                                (string-append
+                                 "Could not infer type — `.~a` is field access, but ~a has type "
+                                 "~a, which has no fields. `.field` needs a record {…} or a map.")
+                                (expr-keyword-name (cdr mk)) carrier ty)]
+                              [else #f]))))))
+
                (ormap search (expr-subfields x)))))))
 
 ;; ========================================
@@ -527,19 +670,72 @@
          ;; named one field/position whose siblings have other types, and under
          ;; 'union it is one component. Saying "each element" there was false AND
          ;; self-contradictory with the prefix — the verify's headline finding.
-         (format
-          (string-append
-           "Could not infer type — select: "
-           (case bcast
-             [(elem)  "each element"]
-             [(at)    "the value there"]
-             [(union) "that component"]
-             [else    "the subject"])
-           "~a is not a record"
-           (if block?
-               "; a select block projects fields of a keyword row"
-               ", so it has no fields to access"))
-          (if (null? path) "" (format " (branch `~a`)" branch-str))))]
+         ;; DEFERRED D4.P3a item 20's "cheap interim improvement". A
+         ;; SELECTION-typed subject is refused DELIBERATELY, not because its
+         ;; shape is wrong: a selection is a capability-restricted VIEW
+         ;; (F1b.5-s4 `:requires`), and projecting through one without the
+         ;; read-capability check would bypass the restriction. Saying "is not a
+         ;; record" of a thing that is precisely a restricted record view sends
+         ;; the reader to check their subject's shape, which is fine.
+         ;;
+         ;; MERGE 2026-08-05: the selection case is the SPECIFIC one and stays
+         ;; first; main's `block?` split is kept as the general fallback, so a
+         ;; dot access and a select block still word the refusal differently.
+         (if (and (expr-fvar? row) (lookup-selection-by-name (expr-fvar-name row)))
+             (format
+              (string-append
+               "Could not infer type — select: the subject~a is the selection `~a`, "
+               "and a select block does not project THROUGH a selection. A "
+               "selection is a capability-restricted view (`:requires`), so "
+               "projecting through it would bypass the restriction it exists to "
+               "enforce — this is a deliberate refusal, not a shape mismatch. "
+               "Select from the underlying record instead.")
+              (if (null? path) "" (format " (branch `~a`)" branch-str))
+              (expr-fvar-name row))
+             ;; NAME THE TYPE when we provably can. Restored 2026-08-05 after
+             ;; the `main` merge: this branch's hint said "`.name` is field
+             ;; access, but `n` has type `Int`, which has no fields", and
+             ;; D4.P4b-ii's move of `.field` onto `expr-select` routed the case
+             ;; here, where the generic "is not a record" answered first.
+             ;;
+             ;; Not a new precedence decision — this file already states the
+             ;; rule at `infer/err`: "most specific first". `unprojectable-type?`
+             ;; is a POSITIVE list, so it fires only where the claim is provably
+             ;; true and an unrecognized carrier declines to the generic text
+             ;; below by default.
+             ;; DOT ACCESS only. For a select BLOCK (`n{a}`) the phrase "field
+             ;; access" is the wrong construct — a block is not a dot access —
+             ;; and the block wording below is already the specific one for it.
+             ;; MERGE 2026-08-05: `(not bcast)` added alongside `(not block?)`.
+             ;; Under a broadcast this message names the WRONG value — it says
+             ;; "the subject has type String" when the subject is the carrier and
+             ;; the carrier is fine; one ELEMENT is the String. That is precisely
+             ;; the class main's `bcast` wording below exists to fix, and three
+             ;; of its `test-path-selection` cases caught this arm stealing them.
+             ;; So: name the type when we are talking about the subject, and defer
+             ;; to the axis-aware noun when we are not.
+             (if (and (not block?) (not bcast) (unprojectable-type? row))
+                 (format
+                  (string-append
+                   "Could not infer type — select: `~a`~a is field access, but the "
+                   "subject has type ~a, which has no fields. `.field` needs a "
+                   "record {…} or a map.")
+                  (or label "the step")
+                  (if (null? path) "" (format " (branch `~a`)" branch-str))
+                  (pp-expr row '()))
+                  (format
+                   (string-append
+                    "Could not infer type — select: "
+                    (case bcast
+                      [(elem)  "each element"]
+                      [(at)    "the value there"]
+                      [(union) "that component"]
+                      [else    "the subject"])
+                    "~a is not a record"
+                    (if block?
+                        "; a select block projects fields of a keyword row"
+                        ", so it has no fields to access"))
+                   (if (null? path) "" (format " (branch `~a`)" branch-str))))))]
     ;; ---- D4.P3c: the ordinal fail kinds ----
     [(ordinal-oob)
      (string-append
@@ -907,13 +1103,47 @@
      (append (branch-result-leaves (expr-boolrec-true-case x) ctx)
              (branch-result-leaves (expr-boolrec-false-case x) ctx))]
     [(expr-reduce? x)
-     (append*
-      (for/list ([arm (in-list (expr-reduce-arms x))])
-        (branch-result-leaves
-         (expr-reduce-arm-body arm)
+     ;; Derive each arm's binder types from the SCRUTINEE's type, exactly as
+     ;; `check-reduce-structural` does — `reduce-scrutinee-decompose` +
+     ;; `reduce-arm-ctx`, already exported for qtt.rkt's twin, so this is a
+     ;; third consumer of one derivation rather than a fourth copy of it.
+     ;;
+     ;; Extending with `(expr-hole)` per binding (what this did) is what made
+     ;; the hint give up on the commonest shape there is: an arm that READS its
+     ;; pattern-bound field. `defn f | zero -> "s" | suc n -> n` inferred `n`'s
+     ;; type as a hole, `type-unreportable?` refused it, fewer than two
+     ;; reportable types survived, and the caller fell back to "cannot infer the
+     ;; type of an unannotated parameter … add a `spec`" — advice that is false
+     ;; twice over, since the parameter is not the problem and a spec may well
+     ;; be present.
+     ;;
+     ;; Hole extension stays as the FALLBACK, not as an error: the scrutinee
+     ;; type may not infer here (this runs on an already-failing path), or the
+     ;; type may have no constructor metadata (the Church-fold case
+     ;; `reduce-scrutinee-decompose` reports as #f). Both must keep degrading to
+     ;; "unreportable, drop the leaf" rather than guessing — a WRONG binder type
+     ;; would put a wrong type in a user-facing message, which is worse than the
+     ;; message this replaces.
+     (let* ([scrut-ty (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+                        (whnf (infer ctx (expr-reduce-scrutinee x))))]
+            [decomposable? (and (expr? scrut-ty) (not (expr-error? scrut-ty)))])
+       (define-values (tc-name t-args)
+         (if decomposable?
+             (with-handlers ([(lambda (_) #t) (lambda (_) (values #f '()))])
+               (reduce-scrutinee-decompose scrut-ty))
+             (values #f '())))
+       (define (hole-ctx arm)
          (for/fold ([c ctx])
                    ([_ (in-range (expr-reduce-arm-binding-count arm))])
-           (ctx-extend c (expr-hole) 'mw)))))]
+           (ctx-extend c (expr-hole) 'mw)))
+       (append*
+        (for/list ([arm (in-list (expr-reduce-arms x))])
+          (define derived
+            (and tc-name
+                 (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+                   (reduce-arm-ctx ctx arm tc-name t-args))))
+          (branch-result-leaves (expr-reduce-arm-body arm)
+                                (or derived (hole-ctx arm))))))]
     [(and (expr-app? x) (expr-lam? (expr-app-func x)))
      (let* ([lam (expr-app-func x)]
             [arg-ty (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
@@ -956,7 +1186,7 @@
    " branches of an `if` all share ONE result type"
    " (a union result type is not inferred here)."))
 
-(define (branch-result-mismatch-hint ctx e names)
+(define (branch-result-mismatch-hint ctx e names [expected #f])
   (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
     ;; Peel lambdas to reach the branch spine. Generated clause lambdas are
     ;; hole-domain by construction (macros.rkt:10282/:10294); an annotated
@@ -964,12 +1194,29 @@
     ;; stays sound. Reaching the spine with ZERO peels is fine and intended — a
     ;; plain `def x : Int := if c 1 "x"` gets the branch message instead of a
     ;; bare "Type mismatch".
-    (let peel ([x e] [c ctx])
+    ;;
+    ;; `expected` (the type the caller was CHECKING against) is peeled in
+    ;; lockstep, and its domain supplies the binder type wherever the lambda's
+    ;; own is a hole. Without it the parameter enters the ctx as a hole, the
+    ;; SCRUTINEE's type is then a hole, and `branch-result-leaves` cannot
+    ;; decompose it to derive the arms' field types — which is exactly the
+    ;; shape the hint used to give up on. `spec f Nat -> Nat` supplies `Nat`
+    ;; here; with no spec `expected` is still whatever the def seam had, and
+    ;; when it runs out the fallback is the hole, i.e. the previous behaviour.
+    (let peel ([x e] [c ctx] [want expected])
+      (define (want-dom) (and (expr? want)
+                              (let ([w (whnf want)])
+                                (and (expr-Pi? w) (expr-Pi-domain w)))))
+      (define (want-cod) (and (expr? want)
+                              (let ([w (whnf want)])
+                                (and (expr-Pi? w) (expr-Pi-codomain w)))))
       (cond
         [(and (expr-lam? x)
               (let ([d (expr-lam-type x)])
                 (or (expr-hole? d) (expr-meta? d))))
-         (peel (expr-lam-body x) (ctx-extend c (expr-lam-type x) 'mw))]
+         (peel (expr-lam-body x)
+               (ctx-extend c (or (want-dom) (expr-lam-type x)) 'mw)
+               (want-cod))]
         [(not (or (expr-reduce? x) (expr-boolrec? x))) #f]
         [else
          (let* ([leaves (branch-result-leaves x c)]
@@ -988,6 +1235,95 @@
                 (format-branch-result-mismatch distinct names)))]))))
 
 ;; ========================================
+;; Union-scrutinee / union-downcast hint (2026-08-05)
+;; ========================================
+;;
+;; A value whose type is a union cannot be MATCHED on, and cannot be narrowed to
+;; one of its members with `the`. Both fail with the bare "Could not infer type",
+;; which names inference for what is really a missing language feature — the
+;; message sends the reader to look for a type annotation that would not have
+;; helped.
+;;
+;; DEFERRED filed this as "Pattern Matching for Union Values — convenience forms
+;; for matching on union values", which undersells it: there are no forms at all,
+;; convenient or otherwise. Probed 2026-08-05, all at 1 error each:
+;;
+;;   def x : <Int | String> := 42
+;;   match x | 0 -> "zero" | _ -> "other"     ⇒ Could not infer type
+;;   [the Int x]                              ⇒ Could not infer type
+;;
+;; (`[the <Int | String> x]` — annotating with the union ITSELF — works, so the
+;; union is perfectly usable as long as you never look inside it.)
+;;
+;; Same contract as the hints above: post-hoc, best-effort, runs ONLY on the
+;; already-failing path, purely additive text, every exception swallowed to the
+;; plain message. It cannot introduce a failure; at worst it declines to fire.
+
+(define (union-type? t) (expr-union? t))
+
+;; Render a union as its member list for the message: "Int | String".
+(define (pp-union-members t names)
+  (string-join (map (lambda (b) (pp-expr b names)) (flatten-union-local t)) " | "))
+
+(define (union-narrowing-hint ctx e names)
+  (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+    (let search ([x e])
+      (and (expr? x)
+           (or (match x
+                 ;; A `match` on a LITERAL pattern does not survive as an
+                 ;; expr-reduce — the pattern compiler emits a lambda applied to
+                 ;; the scrutinee, with a HOLE parameter type:
+                 ;;
+                 ;;   [[fn [x <_>] [boolrec … [int= x 0]]] umatch2::x]
+                 ;;
+                 ;; so matching on the node kind would have missed the case that
+                 ;; motivated this hint. Match the compiled SHAPE instead.
+                 [(expr-app (expr-lam _m (? expr-hole?) _b) arg)
+                  (let ([ts (whnf (infer ctx arg))])
+                    (and (not (expr-error? ts))
+                         (union-type? ts)
+                         (string-append
+                          "Could not infer type — cannot `match` on a union value:"
+                          " the scrutinee has type " (pp-union-members ts names)
+                          ", and pattern matching cannot narrow a union to one of"
+                          " its members (no case analysis on unions yet)."
+                          " Workarounds: keep the value at its union type and"
+                          " annotate with the whole union (`[the <"
+                          (pp-union-members ts names)
+                          "> v]`), or use a `data` type with one constructor per"
+                          " case, which `match` does narrow.")))]
+                 ;; The uncompiled form, for scrutinees that DO survive as a reduce.
+                 [(expr-reduce scrutinee _arms _structural?)
+                  (let ([ts (whnf (infer ctx scrutinee))])
+                    (and (not (expr-error? ts))
+                         (union-type? ts)
+                         (string-append
+                          "Could not infer type — cannot `match` on a union value:"
+                          " the scrutinee has type " (pp-union-members ts names)
+                          ", and pattern matching cannot narrow a union to one of"
+                          " its members (no case analysis on unions yet)."
+                          " Workarounds: keep the value at its union type and"
+                          " annotate with the whole union (`[the <"
+                          (pp-union-members ts names)
+                          "> v]`), or use a `data` type with one constructor per"
+                          " case, which `match` does narrow.")))]
+                 ;; `the T v` / an annotation narrowing a union to a member.
+                 [(expr-ann term type)
+                  (let ([tt (whnf (infer ctx term))])
+                    (and (not (expr-error? tt))
+                         (union-type? tt)
+                         (not (union-type? type))
+                         (string-append
+                          "Could not infer type — cannot narrow a union with `the`:"
+                          " the value has type " (pp-union-members tt names)
+                          " and the annotation asks for " (pp-expr type names)
+                          ", but there is no down-cast from a union to one of its"
+                          " members. Annotating with the whole union (`<"
+                          (pp-union-members tt names) ">`) is accepted.")))]
+                 [_ #f])
+               (ormap search (expr-subfields x)))))))
+
+;; ========================================
 ;; Infer with error reporting
 ;; ========================================
 ;; Returns (or/c Expr? prologos-error?)
@@ -1003,6 +1339,7 @@
                                     (app-domain-schema-hint ctx e names);; F1b.7f (b) schema arg vs param
                                     (select-block-hint ctx e names)     ;; D4.P3a (before S7: branch-aware)
                                     (closed-row-miss-hint ctx e names)  ;; S7
+                                    (union-narrowing-hint ctx e names)  ;; unions (2026-08-05)
                                     (if (hole-lambda-over-generic-op? e)
                                         i70-inference-hint
                                         "Could not infer type"))
@@ -1057,6 +1394,59 @@
 ;;     honest scaffolding framing)
 ;;   - union-exhaustion-error.derivation-chain field shape FLIPS atomically
 ;;     to (listof derivation-chain) per Q-B.2 + Q-C.6 locks
+
+;; ========================================
+;; Hint: a match arm naming another type's constructor
+;; ========================================
+;;
+;; `reduce-arm-ctx` REJECTS such an arm, and is right to — a `Bool` is never a
+;; `Box3`, so the arm can never match. But it rejects by returning #f, which
+;; surfaces as the generic "Type mismatch": accurate, and no help at all. The
+;; reader is left to spot the foreign name inside a pretty-printed expr.
+;;
+;; The hint re-derives the fact rather than being threaded down from the
+;; rejection: the failing expression still carries everything needed — the
+;; scrutinee's type from the lambda binder, and each arm's constructor name —
+;; and a post-hoc hint cannot make the rejection wrong, only better explained.
+;; Same shape as the branch-result and QTT hints in the chain below.
+;;
+;; Returns #f whenever it cannot show the arm is foreign, so it can only ever
+;; ADD information to a rejection that has already happened.
+(define (cross-ctor-arm-hint e)
+  ;; `bare-name` is typing-core-internal; this is the same one-liner
+  ;; ('prologos::data::list::List → 'List). A hint that got it wrong could only
+  ;; fail to fire, never fire wrongly.
+  (define (bare s)
+    (define-values (_p short) (split-qualified-name s))
+    (or short s))
+  (define (owning-type cname)
+    (define meta (and cname (lookup-ctor cname)))
+    (and meta (ctor-meta-type-name meta)))
+  ;; The shape a `defn` produces: the binder type IS the scrutinee type.
+  (define scrut-tc
+    (match e
+      [(expr-lam _ dom (expr-reduce _ _ _))
+       (let-values ([(tc _args) (reduce-scrutinee-decompose dom)]) tc)]
+      [_ #f]))
+  (define hit
+    (and scrut-tc
+         (match e
+           [(expr-lam _ _ (expr-reduce _ arms _))
+            (for/or ([arm (in-list arms)])
+              (define cname (expr-reduce-arm-ctor-name arm))
+              (define owner (owning-type cname))
+              (and owner
+                   (not (eq? (bare owner) (bare scrut-tc)))
+                   (cons cname owner)))]
+           [_ #f])))
+  (and hit
+       (format (string-append
+                "`~a` is a constructor of `~a`, not `~a` — that arm can never "
+                "match. Either the constructor name is wrong for a `~a`, or the "
+                "scrutinee was meant to be a `~a`.")
+               (bare (car hit)) (bare (cdr hit)) (bare scrut-tc)
+               (bare scrut-tc) (bare (cdr hit)))))
+
 (define (check/err ctx e t [loc srcloc-unknown] [names '()])
   (if (check ctx e t)
       #t
@@ -1188,22 +1578,87 @@
                    [branch-result-msg
                     (and (not seal-msg)
                          (not seal-type-msg)
-                         (branch-result-mismatch-hint ctx e names))]
+                         ;; `t` is the type being CHECKED against — its domains
+                         ;; are what let the peel give the parameter a real
+                         ;; type instead of a hole.
+                         (branch-result-mismatch-hint ctx e names t))]
+                   [cross-ctor-msg
+                    (and (not seal-msg)
+                         (not seal-type-msg)
+                         (not branch-result-msg)
+                         (cross-ctor-arm-hint e))]
                    [infer-hint-msg
                     (and (not seal-msg)
                          (not branch-result-msg)
+                         (not cross-ctor-msg)
                          (expr-error? actual)
                          (expr-lam? e)
                          (let ([dom (expr-lam-type e)])
                            (or (expr-hole? dom) (expr-meta? dom)))
+                         ;; The suggested spelling is FUSED (`[x:T]`), which
+                         ;; works everywhere. This message used to say
+                         ;; `[x : T]`, and the spaced form works for `fn` but
+                         ;; is a PARSE ERROR for a `defn` parameter list —
+                         ;; verified at both string and file level. Since this
+                         ;; message cannot tell which one it is looking at (by
+                         ;; the time it fires, both are `expr-lam`), it has to
+                         ;; name the spelling that is valid for both.
+                         ;;
+                         ;; The old advice sent the reader to a parse error, and
+                         ;; then to a cascading "Unbound variable" for the name
+                         ;; they were trying to define.
+                         ;;
+                         ;; 2026-08-04: this claim — "`spec` is the answer that
+                         ;; always works" — was measured and found FALSE, then
+                         ;; made true by fixing the counterexample rather than
+                         ;; by weakening the message.
+                         ;;
+                         ;; The counterexample: a body that is exactly a
+                         ;; projection (`defn h [p] p.x`) reaches spec injection
+                         ;; with its access sentinel still RAW, so it looks like
+                         ;; two body forms led by a bare symbol — the shape
+                         ;; `inject-spec-into-defn`'s guard declines. The spec
+                         ;; was dropped SILENTLY: `spec e Point -> Int` +
+                         ;; `defn e [p] gpt.x` defined `e : _ -> Int` at zero
+                         ;; errors, and `[e "not a point"]` was then accepted.
+                         ;; Fixed in macros.rkt by counting the forms the body
+                         ;; will have once folded. The remedy table is pinned in
+                         ;; tests/test-error-messages.rkt.
                          (string-append
                           "cannot infer the type of an unannotated parameter — "
                           "it is used here in a way that requires a known type "
                           "(e.g. field projection `.field` or arithmetic). "
-                          "Annotate the parameter (`[x : T]`) or add a `spec`."))])
+                          "Add a `spec`, or annotate the parameter with the "
+                          "fused form (`[x:T]`, single-token types only)."))]
+                   ;; CIU T6 D4.P2 item 9 (2026-08-03): the projection hints on
+                   ;; the CHECK door.
+                   ;;
+                   ;; `def q : Int := het.9` reported a bare "Type mismatch Int
+                   ;; <could not infer>" while the identical expression one
+                   ;; line up — unannotated, or under `(the Int …)` — got the
+                   ;; full "index 9 is out of range for the 2-tuple ⟨Int
+                   ;; String⟩ — valid indices 0–1". ADDING an annotation made
+                   ;; the diagnostic strictly worse, which is backwards.
+                   ;;
+                   ;; The gate is `(expr-error? actual)`: the check failed
+                   ;; BECAUSE inference gave up, so the infer-door hint is
+                   ;; describing this very failure and transfers verbatim.
+                   ;; When `actual` is a real type the mismatch is a genuine
+                   ;; expected-vs-got and this must stay out of the way.
+                   ;;
+                   ;; LAST in the `or` on purpose: every message above it is
+                   ;; more specific (it knows `t`; this one does not), so this
+                   ;; can only ever replace the bare fallback. One hint, two
+                   ;; consumers — the two doors cannot drift.
+                   [row-miss-msg
+                    (and (not seal-msg) (not seal-type-msg) (not branch-result-msg)
+                         (not cross-ctor-msg) (not infer-hint-msg)
+                         (expr-error? actual)
+                         (closed-row-miss-hint ctx e names))])
               (type-mismatch-error
                loc
-               (or seal-msg seal-type-msg branch-result-msg infer-hint-msg
+               (or seal-msg seal-type-msg branch-result-msg cross-ctor-msg
+                   infer-hint-msg row-miss-msg
                    "Type mismatch")
                (pp-expr t names)
                (if (expr-error? actual) "<could not infer>" (pp-expr actual names))
@@ -1344,14 +1799,49 @@
 ;; ========================================
 ;; Is-type with error reporting
 ;; ========================================
+;; An all-keyword map LITERAL, as the elaborator builds one: an
+;; `expr-map-assoc` spine bottoming out at `expr-map-empty`
+;; (elaborator.rkt § surf-map-literal).
+;;
+;; D4.P3a item 19: `def q : {:a Int} := {:a 1}` reaches is-type with exactly
+;; this shape, and the generic "Expression is not a valid type" sends the
+;; reader to check whether `Int` is a type. The problem is the `{…}`.
+;;
+;; Keyword-only ON PURPOSE. A non-keyword literal elaborates to
+;; `expr-map-literal` (a different node) and never arrives here — every probe
+;; of that route reports from another site instead ("Type mismatch" on a def,
+;; "Could not infer type" under `fn`). An arm for it would be dead code
+;; asserting a reachability nothing demonstrates.
+(define (keyword-row-literal? e)
+  (let loop ([e e])
+    (cond
+      [(expr-map-assoc? e)
+       (and (expr-keyword? (expr-map-assoc-k e)) (loop (expr-map-assoc-m e)))]
+      [(expr-map-empty? e) #t]
+      [else #f])))
+
 ;; Returns (or/c #t prologos-error?)
 ;; Sprint 9: optional `names` for de Bruijn recovery in error messages
 (define (is-type/err ctx e [loc srcloc-unknown] [names '()])
   (if (is-type ctx e)
       #t
-      (not-a-type-error loc
-                         "Expression is not a valid type"
-                         (pp-expr e names))))
+      (not-a-type-error
+       loc
+       ;; Deliberately does NOT promise a spelling. Whether `{…}` can mean a
+       ;; row in type position is an open owner ruling — `{}` already means the
+       ;; implicit-binder group there (`{A B : Type}`), so the two would
+       ;; collide. Until that is settled the honest message names the collision
+       ;; and points at what DOES work today, which is inference: `def q :=
+       ;; {:a 1}` infers `{:a Int}` exactly.
+       (if (keyword-row-literal? e)
+           (string-append
+            "a row type has no writable spelling yet — in type position `{…}` is "
+            "the implicit-binder group (`{A B : Type}`), so this reads as a map "
+            "literal, not a row.\n"
+            "  Drop the annotation and let inference mint the row: `def q := {:a 1}` "
+            "gives `q : {:a Int}`.")
+           "Expression is not a valid type")
+       (pp-expr e names))))
 
 ;; ========================================
 ;; QTT multiplicity check with error reporting
@@ -1468,10 +1958,13 @@
             (string-append "the parameter of type " (pp-expr ty names))
             (pp-mult-user declared)
             (pp-mult-user actual))]
-          ;; Nothing proven — keep the message that shipped before P4.
+          ;; Nothing proven. Pass #f for the two analysis fields rather than
+          ;; the literal strings "declared"/"actual" this used to send — those
+          ;; rendered as `Declared multiplicity: declared`, which reads as data
+          ;; and is not. The renderer omits a #f field entirely.
           [_
            (multiplicity-error loc
                                "Multiplicity violation"
                                (pp-expr e names)
-                               "declared"
-                               "actual")]))))
+                               #f
+                               #f)]))))

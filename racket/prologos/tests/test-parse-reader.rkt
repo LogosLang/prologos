@@ -17,7 +17,7 @@
          (only-in "../parse-reader.rkt" read-all-forms-string)
          ;; D4.P1b-ii Q_N3: the two-grouper agreement guard needs the OTHER
          ;; grouping implementation (surface-rewrite's tree layer).
-         (only-in "../surface-rewrite.rkt" group-tree-node))
+         (only-in "../surface-rewrite.rkt" group-tree-node refine-tag))
 
 ;; Helper: register patterns once
 (register-default-token-patterns!)
@@ -1689,6 +1689,88 @@
   (check-equal? (read-all-forms-string "1.5")     '(($decimal-literal 3/2)))
   (check-equal? (read-all-forms-string "3.14")    '(($decimal-literal 157/50)))
   (check-equal? (read-all-forms-string "[+ 1 2.5]") '((+ 1 ($decimal-literal 5/2)))))
+
+;; ========================================
+;; `.( )` at the TREE layer — a KNOWN DIVERGENCE, pinned (D4.P1b-ii spin-off 1)
+;; ========================================
+;;
+;; ⚠ THIS TEST PINS A DEFECT, NOT CORRECT BEHAVIOUR. Read it before "fixing"
+;; what it asserts.
+;;
+;; `dot-lparen` is absent from surface-rewrite.rkt entirely, so `.(` falls to
+;; `group-items-to-tree`'s generic token arm and the first `)` closes the
+;; ENCLOSING group. The two grouping implementations disagree, with ZERO errors:
+;;
+;;   (a .( b ) c)
+;;     DATUM: (a ($mixfix b) c)          ;; c RETAINED in the outer group
+;;     TREE:  paren-group(a .( b) + c    ;; c EXPELLED
+;;
+;; The owner ruling (Q_N2) is that this is NOT fixable by adding an arm:
+;; `'mixfix-group` and its consumer were deleted at D4.P1a, so a new arm could
+;; only emit `'paren-group` and erase the distinction; and the angle-suppression
+;; half needs a `'mixfix` FRAME concept `group-items-to-tree` does not have.
+;;
+;; The third reason given was "no test pins `.( )` at the tree layer, so any
+;; shape change would ship unguarded". THAT reason is what this removes. The
+;; divergence is deliberate-for-now; going UNNOTICED is not. When a track picks
+;; this up (P4, or whenever the tree grouper grows a frame concept), this test
+;; is the one to update, and its failure is the signal that the shape moved.
+
+(test-case "`.( )` KNOWN DIVERGENCE: datum retains the trailing token, tree expels it"
+  (register-default-token-patterns!)
+  (define src "(a .( b ) c)")
+  ;; datum layer: `c` is INSIDE the outer form, and the mixfix group is marked
+  (check-equal? (map syntax->datum (read-all-forms-from-tree (read-to-tree src) src "t"))
+                '((a ($mixfix b) c))
+                "datum layer changed — if this is the intended fix, update the tree half below too")
+  ;; tree layer: a plain paren-group, and `c` is a SIBLING of it rather than a member
+  (define tree-str
+    (let ([o (open-output-string)])
+      (write (refine-tag (group-tree-node (parse-tree-root (read-to-tree src)))) o)
+      (get-output-string o)))
+  (check-true (regexp-match? #rx"paren-group" tree-str)
+              "the tree layer no longer makes a paren-group here")
+  (check-false (regexp-match? #rx"mixfix-group" tree-str)
+               "a `mixfix-group` tag reappeared — D4.P1a deleted it and its consumer")
+  ;; The expulsion itself: `c` appears AFTER the paren-group node's closing
+  ;; parenthesis in the written form, i.e. it is not among its children.
+  (check-true (regexp-match? #rx"paren-group.*\"b\".*\"c\"" tree-str)
+              "shape moved — re-derive whether `c` is still expelled"))
+
+;; ========================================
+;; U2: the tree builder is linear, and correct at EOF
+;; ========================================
+;;
+;; `build-tree-from-domains` was quadratic TWICE: `find-line-start-pos`
+;; rescanned the character buffer from zero for EVERY content line, and
+;; `find-content-line-for-pos` walked a LIST with `list-ref` for EVERY token.
+;; Measured at 28.3 s to build the tree for one 4066-line file; 91 ms after.
+;;
+;; The correctness case below is the one that cost 28 suite failures on the
+;; first cut: the line-start scan wrote at EOF as well as at each newline, and
+;; at EOF `line` is the LAST line — whose start had already been recorded — so
+;; the write moved that whole line's tokens to the end of the buffer. A file
+;; WITHOUT a trailing newline is where that shows, and it is exactly the shape
+;; a hand-written fixture tends not to have.
+
+(test-case "U2: a file with NO trailing newline parses identically to one with"
+  (register-default-token-patterns!)
+  (define without "ns a\ndef x := 1\ndef y := 2")
+  (define with    "ns a\ndef x := 1\ndef y := 2\n")
+  (define (forms src) (map syntax->datum (read-all-forms-from-tree (read-to-tree src) src "t")))
+  (check-equal? (forms without) '((ns a) (def x := 1) (def y := 2))
+                "the LAST line's tokens moved — the EOF write-back bug")
+  (check-equal? (forms without) (forms with)
+                "trailing newline must not change the parse"))
+
+(test-case "U2: token-to-line assignment survives blank and indented lines"
+  ;; Blank lines advance the SOURCE line counter without producing a content
+  ;; line, which is precisely where a line-start vector indexed by the wrong
+  ;; counter goes wrong. Indented continuations exercise the same mapping.
+  (register-default-token-patterns!)
+  (define src "ns a\n\ndef x := 1\n\n\ndefn f [n]\n  [int+ n 1]\n")
+  (check-equal? (map syntax->datum (read-all-forms-from-tree (read-to-tree src) src "t"))
+                '((ns a) (def x := 1) (defn f (n) (int+ n 1)))))
 
 ;; ============================================================
 ;; D4.P4c-1 (Q_U16b) — `colon-annotation` becomes a REAL token type

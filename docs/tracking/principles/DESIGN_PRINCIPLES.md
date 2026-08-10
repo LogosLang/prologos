@@ -1,3 +1,10 @@
+> **⚠ GENERATED ARTIFACT — STALE. Read `DESIGN_PRINCIPLES.org` instead.**
+> `DESIGN_PRINCIPLES.org` is the canonical source (`workflow.md`: "ALL edits MUST go to the
+> `.org`"). Claims here may already have been retracted at the source.
+> For how far behind this export is RIGHT NOW, run `tools/check-doc-twins.sh`
+> — it reads both files' last commit times, so it cannot itself go stale.
+> Regenerating needs org-export (emacs or pandoc).
+
 - [Core Values](#org1fb5c6e)
   - [Correctness Through Types](#orge765c87)
   - [Simplicity of Foundation](#orga658b0c)

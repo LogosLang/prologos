@@ -396,3 +396,91 @@
   (check-false (contains-open-container?
                 (mk-champ (expr-keyword ':f)
                           (expr-lam 'mw (expr-Nat) (expr-bvar 0))))))
+
+;; ========================================
+;; `occurs?` sees a meta inside a CONTAINER (substitution-containment, META half)
+;; ========================================
+;;
+;; The containment defect's bvar half was closed by the NbE fix; the META half
+;; stayed open with an explicit next step — "a probe of a champ carrying an
+;; UNSOLVED meta through zonk and through `occurs?`; `occurs?` is the
+;; higher-stakes one (an unsound occur-check admits cyclic solutions)."
+;;
+;; Probed 2026-08-03 and it WAS unsound: `occurs?` walks structs generically via
+;; `struct->vector`, and a champ/hset/rrb stores its entries in a RACKET VECTOR
+;; inside its nodes. `(vector? …)` is not `(struct? …)`, so the walk stopped
+;; dead there and answered #f for a meta that was plainly present.
+;;
+;; The controls are what make this a test rather than a demonstration: the same
+;; meta in a Record field and in a plain application always answered #t, so a
+;; test that only checked those would have passed throughout.
+
+(require (only-in "../unify.rkt" occurs?)
+         (only-in "../champ.rkt" champ-empty champ-insert)
+         (only-in "../rrb.rkt" rrb-from-list))
+
+(define occ-meta (expr-meta 'occ-probe #f))
+(define occ-key (expr-keyword 'a))
+
+(test-case "occurs?: a meta inside a champ VALUE is found"
+  (check-true (occurs? 'occ-probe
+                       (expr-champ (champ-insert champ-empty
+                                                 (equal-hash-code occ-key)
+                                                 occ-key occ-meta)))))
+
+(test-case "occurs?: a meta inside an hset KEY is found"
+  ;; The key position matters separately — a set stores the term AS the key.
+  (check-true (occurs? 'occ-probe
+                       (expr-hset (champ-insert champ-empty
+                                                (equal-hash-code occ-meta)
+                                                occ-meta #t)))))
+
+(test-case "occurs?: a meta inside an rrb ELEMENT is found"
+  (check-true (occurs? 'occ-probe (expr-rrb (rrb-from-list (list occ-meta))))))
+
+(test-case "occurs?: the controls that always passed, and the negative"
+  ;; bare meta and plain application answered #t before the fix too — asserting
+  ;; only these is how the container gap stayed invisible.
+  (check-true (occurs? 'occ-probe occ-meta))
+  (check-true (occurs? 'occ-probe (expr-app (expr-fvar 'f) occ-meta)))
+  ;; and a DIFFERENT meta must still not be found, or the fix is just "yes"
+  (check-false (occurs? 'other-meta
+                        (expr-champ (champ-insert champ-empty
+                                                  (equal-hash-code occ-key)
+                                                  occ-key occ-meta)))))
+
+;; ========================================
+;; `conv-nf` sees INTO containers too (same defect family, opposite direction)
+;; ========================================
+;;
+;; `conv-nf` walks structs generically and stopped at the same RACKET VECTOR
+;; `occurs?` did — so container entries fell to `equal?`, which is STRICTER
+;; than conv: no hole-as-wildcard, no meta-identity rule.
+;;
+;; The failure direction is the OPPOSITE of `occurs?`'s and is why this one is
+;; not a soundness bug: it answered #f where conv should say #t, so it could
+;; REJECT a valid conversion but never ACCEPT an invalid one. Both negatives
+;; below are asserted for exactly that reason — a "fix" that just returns #t
+;; for containers would satisfy the positives alone.
+
+(require (only-in "../reduction.rkt" conv-nf))
+
+(define conv-key (expr-keyword 'a))
+(define (conv-map v)
+  (expr-champ (champ-insert champ-empty (equal-hash-code conv-key) conv-key v)))
+
+(test-case "conv-nf: a hole inside a champ VALUE acts as a wildcard"
+  (check-true (conv-nf (conv-map (expr-hole)) (conv-map (expr-Int)))))
+
+(test-case "conv-nf: a hole inside an rrb ELEMENT acts as a wildcard"
+  (check-true (conv-nf (expr-rrb (rrb-from-list (list (expr-hole))))
+                       (expr-rrb (rrb-from-list (list (expr-Int)))))))
+
+(test-case "conv-nf: containers with DIFFERENT contents still differ"
+  ;; The negatives that keep the fix honest.
+  (check-false (conv-nf (conv-map (expr-Int)) (conv-map (expr-Nat))))
+  (check-false (conv-nf (expr-rrb (rrb-from-list (list (expr-Int))))
+                        (expr-rrb (rrb-from-list (list (expr-Nat)))))))
+
+(test-case "conv-nf: identical containers convert (control)"
+  (check-true (conv-nf (conv-map (expr-Int)) (conv-map (expr-Int)))))

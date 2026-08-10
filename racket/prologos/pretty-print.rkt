@@ -496,17 +496,47 @@
     ;; Record/tuple structural-row type (CIU T6 F1): keyword-domain → {:a Int :b String};
     ;; nat-domain → ⟨Int String⟩ (tuple, F1a-col). dyn tail → trailing " | _" (F1a.2).
     [(expr-Record kd fields tail)
-     (let ([body (string-join
+     ;; A UNION field type must carry its `<…>` here, even though pp-expr
+     ;; renders unions bare elsewhere. In a row, a bare `|` is ambiguous three
+     ;; ways: against the next field, against the `| _` dyn-tail marker, and
+     ;; against a tuple's next position. `{:host Int | String :port Int | _}`
+     ;; reads as a row whose tail is `| String :port Int | _`. `<…>` is also
+     ;; the only spelling a union has in source, so this renders what a user
+     ;; would write rather than inventing a display-only bracket.
+     ;;
+     ;; Surfaced 2026-08-04 by the D4.P3a item 18 fix, which made union field
+     ;; types reachable from ordinary dynamic-key assoc for the first time.
+     (let* ([pp-field-type
+             (lambda (t)
+               (if (expr-union? t)
+                   (format "<~a>" (pp-expr t names))
+                   (pp-expr t names)))]
+            [body (string-join
                   (for/list ([fld (in-list fields)])
                     (if (eq? kd 'keyword)
-                        ;; F1b.3 (D24): 'unknown marks display as a `?` label
-                        ;; suffix ({:a? Int | _}). Known edge: a 'present field
-                        ;; whose label itself ends in `?` is indistinguishable
-                        ;; (accepted display-only ambiguity, syntax.rkt spec).
-                        (format ":~a~a ~a" (car fld)
+                        ;; F1b.3 (D24): a presence-'unknown field is marked with
+                        ;; a `?`.
+                        ;;
+                        ;; ⚠ THE MARKER IS A PREFIX, NOT A SUFFIX (2026-08-03),
+                        ;; and the position is what makes it unambiguous rather
+                        ;; than merely different. As a SUFFIX it collided:
+                        ;; F1b.7g made `?`-terminated keys readable, so a field
+                        ;; literally NAMED `active?` and present rendered
+                        ;; `{:active? Bool}` — identical to an optional field
+                        ;; named `active`. Two different row types printed the
+                        ;; same string.
+                        ;;
+                        ;; A PREFIX cannot collide, by the reader's own grammar:
+                        ;; `recognize-keyword` requires `char-alphabetic?` for
+                        ;; the character after the colon, so no user field can
+                        ;; ever be named `?active`. The marker lives in a
+                        ;; position the lexer reserves, which makes the
+                        ;; distinction structural instead of conventional.
+                        (format ":~a~a ~a"
                                 (if (eq? (record-field-presence (cdr fld)) 'unknown) "?" "")
-                                (pp-expr (record-field-type (cdr fld)) names))
-                        (pp-expr (record-field-type (cdr fld)) names)))
+                                (car fld)
+                                (pp-field-type (record-field-type (cdr fld))))
+                        (pp-field-type (record-field-type (cdr fld)))))
                   " ")]
            [dyn (if (eq? tail 'dyn) " | _" "")])
        (if (eq? kd 'keyword)
@@ -1464,7 +1494,14 @@
     [(expr-generic-abs a) (uses-bvar0? a)]
     [(expr-generic-from-int t a) (or (uses-bvar0? t) (uses-bvar0? a))]
     [(expr-generic-from-rat t a) (or (uses-bvar0? t) (uses-bvar0? a))]
-    [(expr-foreign-fn _ _ _ _ _ _ _ _) #f]
+    ;; Foreign function. NOT a closed leaf: `args` ACCUMULATES whnf'd Prologos
+    ;; argument expressions on the partial-application path
+    ;; (reduction.rkt:2176), so a node reachable under a binder can hold an
+    ;; OPEN term. The comment here used to say "opaque leaf -- no Prologos
+    ;; sub-expressions", asserting an invariant nothing enforced: the
+    ;; `expr-champ` shape from pipeline.md § "Exhaustive Walkers", where the
+    ;; same claim cost silently dropped arguments and variable capture.
+    [(expr-foreign-fn _ _ _ args _ _ _ _) (ormap uses-bvar0? args)]
     [(expr-reduce scrut arms _)
      (or (uses-bvar0? scrut)
          (ormap (lambda (arm) (uses-bvar0? (expr-reduce-arm-body arm))) arms))]
@@ -1689,6 +1726,57 @@
          [(eq? h '$lseq-literal)
           (format "~~[~a]" (pp-datum-list (cdr d)))]
 
+         ;; ---- ACCESS SENTINELS (D4.P1b-iii spin-off 7, 2026-08-03) ----
+         ;; Every one of these rendered as a RAW SENTINEL — `($dot-access foo)`
+         ;; verbatim in user-facing text — while `$brace-params` above
+         ;; rendered. Any diagnostic that prints a datum containing an access
+         ;; form leaked compiler internals to the reader.
+         ;;
+         ;; The shapes are the reader's own (parse-reader's `token-entry->stx`
+         ;; and `group-items`), so these mirror emission rather than guessing.
+         ;; `$dot-key` / `$nil-dot-key` / `$broadcast-access` are RETIRED
+         ;; sentinels the reader still emits, and rendering them is precisely
+         ;; how their guided retirement errors read.
+
+         ;; ($dot-access field) → .field
+         [(and (eq? h '$dot-access) (pair? (cdr d)) (null? (cddr d)))
+          (format ".~a" (pp-datum (cadr d)))]
+
+         ;; ($nil-dot-access field) → ?.field
+         [(and (eq? h '$nil-dot-access) (pair? (cdr d)) (null? (cddr d)))
+          (format "?.~a" (pp-datum (cadr d)))]
+
+         ;; ($broadcast-access field) → *.field   (RETIRED surface)
+         [(and (eq? h '$broadcast-access) (pair? (cdr d)) (null? (cddr d)))
+          (format "*.~a" (pp-datum (cadr d)))]
+
+         ;; ($dot-key :k) → .:k   ·   ($nil-dot-key :k) → ?.:k   (RETIRED)
+         [(and (eq? h '$dot-key) (pair? (cdr d)) (null? (cddr d)))
+          (format ".~a" (pp-datum (cadr d)))]
+         [(and (eq? h '$nil-dot-key) (pair? (cdr d)) (null? (cddr d)))
+          (format "?.~a" (pp-datum (cadr d)))]
+
+         ;; ($postfix-index e ...) → [e ...]
+         [(eq? h '$postfix-index)
+          (format "[~a]" (pp-datum-list (cdr d)))]
+
+         ;; ($select-brace item ...) → {item ...}
+         ;; The ADJACENT brace; its non-adjacent sibling is $brace-params above,
+         ;; and both spell the same way — the distinction is where they attach,
+         ;; which the surrounding datum already shows.
+         [(eq? h '$select-brace)
+          (format "{~a}" (pp-datum-list (cdr d)))]
+
+         ;; ($dot-brace item ...) → .{item ...}
+         [(eq? h '$dot-brace)
+          (format ".{~a}" (pp-datum-list (cdr d)))]
+
+         ;; ($select subject branch ...) → subject{branch ...}
+         ;; D4.P3a's FUSED select head — the one that survives preparse, and
+         ;; therefore the one a binder-position diagnostic actually meets.
+         [(and (eq? h '$select) (pair? (cdr d)))
+          (format "~a{~a}" (pp-datum (cadr d)) (pp-datum-list (cddr d)))]
+
          ;; ⭐ D4.P4b-ii-2b — ($select-path subj field) → subj.field.
          ;; THE FOURTH CONSECUTIVE MISSED pretty-print.rkt SITE, found by the
          ;; verify. `pp-expr`'s select arm was fixed at b-ii-1 and that census
@@ -1702,6 +1790,7 @@
          [(and (eq? h '$select-path) (pair? (cdr d)) (pair? (cddr d))
                (null? (cdddr d)))
           (format "~a.~a" (pp-datum (cadr d)) (pp-datum (caddr d)))]
+
 
          ;; ($rest-param name) → ...name
          [(and (eq? h '$rest-param) (pair? (cdr d)) (null? (cddr d)))

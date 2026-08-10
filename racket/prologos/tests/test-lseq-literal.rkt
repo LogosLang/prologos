@@ -81,8 +81,11 @@
   (check-equal? forms '(($lseq-literal 1 2 3))))
 
 (test-case "reader: WS ~42 is rejected (N6c: ~N removed; ~[ unaffected)"
-  (check-exn (regexp "approximate literals were removed")
-             (lambda () (read-all-forms-string "~42"))))
+  ;; Still a rejection — delivered as a MARKER in the token stream rather than
+  ;; a raise. The raise cost the whole file: tokenization completes before any
+  ;; command runs, so there was no token stream left to run the others from.
+  (check-equal? (read-all-forms-string "~42")
+                '(($reader-error "`~` approximate literals were removed — bare decimals are Posit32 (3.14); use pNN literals for other widths (3.14p16, or 3.14p for Posit64)"))))
 
 ;; ========================================
 ;; Reader tests: sexp reader ~[] support

@@ -99,7 +99,21 @@
 ;;   (list 'domain-override)     — site uses #:domain keyword
 ;;   (list 'multi-line)          — can't parse from this line
 ;;   (list 'parameterized-passthrough name)      — named but name is parameterized-passthrough
-(define (extract-merge-fn line variant)
+;; ⚠ `param-read-names` ADDED 2026-08-03 — names bound in THIS file by a local
+;; `(define NAME (current-SOMETHING))`, i.e. a parameter read.
+;;
+;; Without it the lint reported such a binding as an unregistered merge
+;; FUNCTION. `meta-universe.rkt` does exactly this four times
+;; (`type-merge` / `mult-merge` / `level-merge` / `session-merge`, each read
+;; from `(current-…-universe-merge)`), and all four showed up as "NEW
+;; unregistered merge functions" — names that cannot be registered because no
+;; such function exists. They are the same shape as the hardcoded
+;; `merge` / `merge-fn` passthroughs, just spelled per-domain.
+;;
+;; This matters beyond tidiness: a guard that cries wolf on local variables is
+;; one people learn to baseline reflexively, and this one had accumulated three
+;; months of unexamined drift by the time anyone looked.
+(define (extract-merge-fn line variant [param-read-names (hash)])
   (cond
     ;; batch: can't classify from single line
     [(string=? variant "net-new-cells-batch")
@@ -120,7 +134,8 @@
      (define m (regexp-match pattern line))
      (cond
        [(not m) '(multi-line)]
-       [(member (cadr m) parameterized-passthroughs)
+       [(or (member (cadr m) parameterized-passthroughs)
+            (hash-ref param-read-names (cadr m) #f))
         (list 'parameterized-passthrough (cadr m))]
        [else
         (list 'named (cadr m))])]))
@@ -130,6 +145,15 @@
 (define (scan-file file-path)
   (define content (file->string file-path))
   (define lines (string-split content "\n" #:trim? #f))
+  ;; Names this file binds to a parameter read — `(define NAME (current-X))`.
+  ;; Collected before classifying so a call site using one is recognised as a
+  ;; passthrough rather than an unregistrable "merge function".
+  (define param-read-names
+    (for/hash ([l (in-list lines)]
+               #:do [(define m (regexp-match
+                                #px"^\\s*\\(define\\s+([a-zA-Z][a-zA-Z0-9!?*/<>+=:-]*)\\s+\\(current-[a-zA-Z0-9!?*/<>+=:-]+\\)" l))]
+               #:when m)
+      (values (cadr m) #t)))
   (for/list ([line (in-list lines)]
              [line-num (in-naturals 1)]
              #:when (cell-call-variant? line)
@@ -138,7 +162,7 @@
              ;; skip struct definitions and function signatures
              #:unless (regexp-match? #px"^\\(struct\\s|^\\(define\\s+\\(net-new-cell" line))
     (define variant (cell-call-variant? line))
-    (define classification (extract-merge-fn line variant))
+    (define classification (extract-merge-fn line variant param-read-names))
     (list line-num variant classification)))
 
 ;; Find merge functions that are already registered.
@@ -219,7 +243,16 @@
                            (not (regexp-match? #rx"/tools/" (path->string f)))
                            (not (regexp-match? #rx"/compiled/" (path->string f)))
                            (not (regexp-match? #rx"/benchmarks/" (path->string f)))
-                           (not (regexp-match? #rx"/examples/" (path->string f)))))
+                           (not (regexp-match? #rx"/examples/" (path->string f)))
+                           ;; ⚠ /data/probes/ ADDED 2026-08-03. A probe is a
+                           ;; one-off measurement script kept for the record,
+                           ;; not production — but it was being counted among
+                           ;; the "110 production sites" and its merge fn
+                           ;; flagged as new unregistered surface. A guard that
+                           ;; reports a probe file teaches people to baseline
+                           ;; reflexively, which is how this one accumulated
+                           ;; three months of drift unnoticed.
+                           (not (regexp-match? #rx"/data/probes/" (path->string f)))))
       f))
 
   (define registered-fns (find-registered-merge-fns source-files))

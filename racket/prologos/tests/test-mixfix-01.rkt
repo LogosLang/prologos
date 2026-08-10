@@ -189,9 +189,15 @@
   (define result (preparse-expand-form '($mixfix xs ++ ys)))
   (check-equal? result '(append xs ys)))
 
-(test-case "pratt: empty expression errors"
-  (check-exn exn:fail?
-    (lambda () (preparse-expand-form '($mixfix)))))
+(test-case "pratt: empty expression yields a per-command error marker"
+  ;; It used to RAISE, out of `preparse-expand-all` and past every command in
+  ;; the file. The expander now collapses its own failures to a
+  ;; `($mixfix-error msg)` datum, which parser.rkt turns into a `parse-error`
+  ;; VALUE with the form's location — the `$let-error` channel, reused rather
+  ;; than duplicated.
+  (define result (preparse-expand-form '($mixfix)))
+  (check-equal? (car result) '$mixfix-error (format "got: ~v" result))
+  (check-true (regexp-match? #rx"Empty" (cadr result)) (format "got: ~v" result)))
 
 ;; ========================================
 ;; Shared Fixture for E2E tests
@@ -245,7 +251,7 @@
 
 ;; Run WS code via temp file using shared environment
 (define (run-ws s)
-  (define tmp (make-temporary-file "prologos-test-~a.prologos"))
+  (define tmp (make-prologos-temp-file))
   (call-with-output-file tmp #:exists 'replace
     (lambda (out) (display s out)))
   (define result

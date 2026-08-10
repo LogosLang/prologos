@@ -1441,6 +1441,105 @@ the architecture was supposed to deliver, AND did we MAINTAIN it
 through subsequent sub-phases?" Both Catalogue1 (shipped) and
 Catalogue2 (initially captured) miss the Challenge (durably maintained).
 
+** External Cross-Impl Gates Substitute for Self-Validation
+
+When a track ports a protocol against an external counterparty, a
+foreign-generated golden + drift gate is a stronger test than any
+hand-written assertion. Hand-written tests validate against your
+understanding of the spec; foreign-generated tests validate against
+the spec itself.
+
+*The pattern*. The OCapN interop track ran ~tools/interop/gen-syrup-vectors.mjs~
+inside ~@endo/ocapn~, committed the output as a fixture, and added a
+CI step ~git diff --exit-code~ on the fixture. Any change to the JS
+encoder forces a fixture update; any drift between Racket encode/decode
+and JS encode/decode triggers a test failure on the next CI run.
+
+*Result*. 4 of 5 interop bugs in the OCapN track (UTF-8 byte length,
+~null~ as record child, multi-arity record encoding, sign-suffix on
+int) were caught by this gate. None would have been found by
+hand-written tests because the test author shared the same
+misunderstanding as the encoder author.
+
+*The implication for D:I ratio*. The longitudinal target for
+design-to-implementation is 1.5:1. OCapN's ratio was ~0.17:1. The
+track succeeded because the external spec plus the foreign-generated
+drift gate substituted for design rounds. **The D:I target is
+conditional on whether external validation exists**: with an external
+counterparty + drift gate, low D:I is fine; without one, low D:I is
+technical debt.
+
+*Operational rule*. When porting a protocol or implementing against
+an external spec, a foreign-generated drift gate is **mandatory test
+infrastructure**, not optional. Add it as Phase 1 work, before the
+encoder/decoder code. Treat hand-written wire vectors as a last-resort
+substitute for foreign goldens.
+
+*Discovered in*: OCapN Interop track (2026-04-29 → 2026-05-04, PIR
+2026-05-04). 1 data point as a track-defining lesson; codified
+proactively because the pattern generalizes to any future protocol
+port (XMPP, Matrix, MLS, etc.).
+
+** Closed-World ~data~ Is a Phase-0 Simplification, Not a Permanent Architecture
+
+When porting against a language with first-class user-extensible
+behaviors (Goblins's runtime-defined actor closures, Erlang's
+dynamic ~gen_server~ callbacks, etc.), and the target language
+(Prologos) has only closed-world ~data~ declarations, the
+right Phase-0 move is to **enumerate the behaviors needed for
+acceptance** and call it scaffolding with a retirement plan. The
+wrong move is to insist on first-class behaviors before any wire
+bytes flow.
+
+*The pattern*. OCapN Phase 0 enumerated 7 behaviors (cell, counter,
+greeter, echo, adder, forwarder, fulfiller) as a closed ~BehaviorTag~
+~data~ declaration. 117 tests green in one session. Phase 22
+(open-world behaviors) DEFERRED with explicit language-blocker
+rationale: needs heterogeneous existential containers OR first-class
+trait-method values, neither of which exist in Prologos today.
+
+*Why this works*. Phase-0 acceptance does NOT need user-extensible
+behaviors; it needs a vat algebra that proves the wire algebra. The
+language gap becomes visible to the next phase, when behaviors need
+to come from outside the prelude.
+
+*Operational rule*. When a port faces a language gap, take the simpler
+version with a clear retirement plan. Name it as scaffolding in the
+design doc, schedule the retirement phase, do not let the language
+gap block the port. Forbidden phrasing: "we'll come back to it."
+Required phrasing: "DEFERRED to language phase X because Prologos
+lacks Y, retirement criterion is Z."
+
+*Discovered in*: OCapN Interop track Phase 0 + Phase 22 deferral
+(2026-04-27 → 2026-05-04). 1 data point but generalizes to any
+application port hitting a language gap.
+
+** Helper Chains Around Nested-Match Elaboration
+
+Three-deep nested ~match~ inside a single function body fails to
+elaborate at *import time* with "Unbound variable" errors in
+Prologos's current elaborator. The fix is mechanical: factor into
+a chain of single-match helpers. This shipped twice in the OCapN
+track (Phases 15 and 21) before the pattern was codified.
+
+*The pattern*. Replace ~defn f [x] match a | ... | _ -> match b | ... | _ -> match c | ...~
+with three helpers: ~f~ matches ~a~ and dispatches to ~f-step2~
+which matches ~b~ and dispatches to ~f-step3~ which matches ~c~.
+Same semantics for the user, no elaborator failure.
+
+*Why this matters*. Until the underlying elaborator bug is fixed,
+this is the safe pattern. Each occurrence cost ~30 minutes of
+diagnosis on a failing import. Recognizing the shape on sight is
+worth it.
+
+*Operational rule*. Never write three-deep nested ~match~ as a single
+function body. Always factor into a chain. Codified in
+~prologos-syntax.md~.
+
+*Discovered in*: OCapN Interop track Phase 15 (commit ~594ce90~,
+question-table mapping) and Phase 21 (commit ~c8782e9~, pipelining
+helpers). Two occurrences within a single track was the threshold
+for codifying as a workaround.
 ** Cell / Propagator / Scheduler Orthogonality — Codified Architectural Principle
 
 When optimization pressure surfaces on the propagator substrate, the natural
@@ -1931,3 +2030,69 @@ had accumulated across CIU T6 D4 (P1a, P3b, P4c-4a) and this arc with **zero**
 entries in either the ambient rules tier or this document — the exact
 "lesson lives only in the dailies" failure =workflow.md= names. Ambient one-liner:
 =.claude/rules/pipeline.md= § "A Raise on the Parse/Expansion Path".
+
+** A Merge Whose Idempotence Is DOCUMENTED Rather Than CHECKED Hangs the Network
+
+*The lesson*: =merge(x, x) = x= is the one law every cell merge must satisfy,
+and it is the one that was written into three ambient rule files and enforced in
+none. A merge that unions two collections with a bare =append= satisfies
+monotonicity and satisfies "the lattice is set-union" in its comment, and still
+grows its carrier on every write. The lattice VALUE is stable; the
+REPRESENTATION is not. Change-detection compares representations, so every round
+sees a change, dependents re-fire, and the network **never quiesces**.
+
+*Why this class is worse than a wrong answer*: it is a HANG. There is no bad
+value to inspect, no failing assertion, no error to grep. And it accelerates —
+the representation grows, so each subsequent read and merge costs more. The
+=tagged-cell-merge= instance sat live for **fourteen months**, took the LSP down
+alongside the type-checker, and the fix was eight lines in the cell.
+
+*Why the framing sent everyone to the wrong subsystem*: the entry was filed as
+"the =:type=-facet union join not reaching a fixpoint". That names the JOIN. The
+join was innocent — it is the CARRIER underneath every facet that was not a
+lattice. A whole year of type-lattice and quantale work was aimed at the named
+component while the defect sat one layer down, in code shared by every cell in
+the system. **When a fixpoint does not converge, check the carrier before the
+join**; the thing the entry names is the thing someone already suspected, which
+is weak evidence.
+
+*Why the comments do not help — they actively hurt*: all three in-tree instances
+carried a comment asserting the property they violated. "functionally equivalent
+to set-union for unique nogoods." "the lattice is P(P(AssumptionId)) under
+set-union." Each parenthetical is doing load-bearing work ("for unique
+nogoods" — unique BY WHAT?) and nothing checks it. A comment asserting an
+algebraic law is a claim, and an unchecked claim about a law is worth less than
+no claim, because it stops the next reader from checking.
+
+*What actually found the other two*: a contract test
+(=tests/test-merge-laws.rkt=) over a table of every registered merge. It found
+=nogood-merge= (a live cell merge in =atms.rkt=, same shape, same latent hang)
+and =merge-hasheq-list-append= **on its first run** — after fourteen months in
+which reading the code had not. The design points worth keeping:
+- Idempotence is checked UNCONDITIONALLY; commutativity and associativity are
+  opt-in per merge, because several merges here are deliberately
+  last-write-wins. A blanket law suite would have been abandoned as too noisy.
+- Comparison is up to an =equiv=, because a set carried as a list has an
+  ORDER that set-union never claimed. Testing representations produces false
+  failures; testing lattice values produces the real ones.
+- A merge that is knowingly NOT a join is registered anyway and pinned as a
+  known non-lattice, so the distinction stays visible rather than being omitted
+  and silently re-litigated.
+
+*The corollary about fuel*: fuel does not bound this and cannot. Fuel is a
+FIRE-COUNT budget, decremented per propagator fired; a single fire merging an
+unbounded value runs forever with fuel to spare. Reaching for a bound as a
+safety net against a non-lattice is treating the symptom at a layer that
+structurally cannot see it. (Compounding the point: that fuel's
+=on-write-check= was itself unreachable under speculation until 2026-08-05 — the
+hot fast path is gated on =(not under-speculation?)= and the slow path never
+consulted it. The net was relying on a guard that was switched off in exactly
+the mode that needed it.)
+
+Origin: promoted 2026-08-05, three instances in one arc — =tagged-cell-merge=
+(found by a 14-month hunt at the wrong layer), =nogood-merge= and
+=merge-hasheq-list-append= (both found by the contract test on its first run).
+The second and third are what promoted it: one instance is a bug, three is a
+class, and the ratio between "months of reading" and "first run of a law test"
+is the argument for the tier. Ambient one-liner: =.claude/rules/on-network.md=
+§ "CHECK idempotence — do not document it".

@@ -345,12 +345,18 @@
                                     (b32-row (cons 'a (expr-int 2)) (cons 'b (expr-string "t"))))))
                 "[prologos::data::list::List {:a Int :b String}]"))
 
+;; ⚠ A union field carries its `<…>` (2026-08-04, with the D4.P3a item 18 fix).
+;; Bare, these snapshots were ambiguous: `{:b String | Int}` reads as a row whose
+;; TAIL is `| Int`, which is the same shape the dyn-tail marker `| _` uses. The
+;; brackets are the union's only source spelling, so this is what a user writes.
+;; Do not "simplify" them back out.
+
 (test-case "B3.2 unit FILL: heterogeneous observations join into a union"
   (check-equal? (pp-expr (refine-solve-row-type-for-display
                           (b32-List (b32-rec (cons 'b (expr-hole))))
                           (b32-list (b32-row (cons 'b (expr-string "s")))
                                     (b32-row (cons 'b (expr-int 3))))))
-                "[prologos::data::list::List {:b String | Int}]"))
+                "[prologos::data::list::List {:b <String | Int>}]"))
 
 (test-case "B3.2 unit: observation DISAGREEING with the static union is discarded"
   ;; a branch outside the static union would signal a defect elsewhere; the echo
@@ -358,7 +364,7 @@
   (check-equal? (pp-expr (refine-solve-row-type-for-display
                           (b32-List (b32-rec (cons 'b (expr-union (expr-Int) (expr-Bool)))))
                           (b32-list (b32-row (cons 'b (expr-string "s"))))))
-                "[prologos::data::list::List {:b Int | Bool}]"))
+                "[prologos::data::list::List {:b <Int | Bool>}]"))
 
 (test-case "B3.2 unit: solve-one's BARE row refines too"
   (check-equal? (pp-expr (refine-solve-row-type-for-display
@@ -389,13 +395,13 @@
                           (b32-PVec (b32-rec (cons 'b (expr-hole))))
                           (b32-pvec (b32-row (cons 'b (expr-string "s")))
                                     (b32-row (cons 'b (expr-int 3))))))
-                "[PVec {:b String | Int}]"))
+                "[PVec {:b <String | Int>}]"))
 
 (test-case "SolveCarrier unit: observation DISAGREEING with the static union is discarded (PVec carrier)"
   (check-equal? (pp-expr (refine-solve-row-type-for-display
                           (b32-PVec (b32-rec (cons 'b (expr-union (expr-Int) (expr-Bool)))))
                           (b32-pvec (b32-row (cons 'b (expr-string "s"))))))
-                "[PVec {:b Int | Bool}]"))
+                "[PVec {:b <Int | Bool>}]"))
 
 (test-case "SolveCarrier unit: an EMPTY PVec observes nothing (type unchanged)"
   ;; the empty result is `@[]` now, not `nil` — the walker must return no rows

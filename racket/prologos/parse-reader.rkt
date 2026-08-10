@@ -73,6 +73,12 @@
  ;; Embedded lattice merge functions
  rrb-embedded-merge
 
+ ;; D4.P1b-iii spin-off 5: exported so surface-rewrite's `langle` arm can make
+ ;; the SAME decision this file's does — whether a `<` opens an angle group at
+ ;; all. The two groupers diverged on `<`-adjacent braces precisely because
+ ;; only one of them consulted this.
+ has-matching-rangle?
+
  ;; Phase 3a: Read API
  (struct-out parse-tree)
  read-to-tree
@@ -208,6 +214,23 @@
   #:transparent)
 
 ;; A registered token pattern
+
+;; Line (1-based) and column (0-based) of a character offset in the char buffer.
+;;
+;; For diagnostics raised DURING TOKENIZATION. Those run before any syntax
+;; object exists, so there is no other way for them to say WHERE — and a reader
+;; raise takes the whole file with it, which makes "where" the only thing the
+;; reader can still offer. Every one of them used to report a bare message and
+;; a Racket `context...:` dump.
+;;
+;; O(pos), which is fine on a path that is about to abort.
+(define (rrb-line-col rrb pos)
+  (let loop ([i 0] [line 1] [col 0])
+    (cond
+      [(or (>= i pos) (>= i (rrb-size rrb))) (values line col)]
+      [(char=? (rrb-get rrb i) #\newline) (loop (add1 i) (add1 line) 0)]
+      [else (loop (add1 i) line (add1 col))])))
+
 (struct token-pattern
   (name        ;; symbol: pattern identifier
    recognizer  ;; (string pos) → match-length | #f
@@ -1346,13 +1369,15 @@
   (register-token-pattern!
    (token-pattern 'tilde-lbracket (lambda (rrb pos) (recognize-tilde-lbracket rrb pos))
                   (lambda (s p l) 'tilde-lbracket) 85))
-  ;; (N6c) ~N approximate literals removed — the pattern now raises a
-  ;; migration hint (fires on the production tokenizer, any entry path)
+  ;; (N6c) ~N approximate literals removed — the token carries a MARKER, and
+  ;; `token-entry->stx` turns it into `($reader-error "msg")` so the parser
+  ;; reports one per-command error (the `$let-error` channel). It used to
+  ;; RAISE here, which cost the whole file: tokenization completes before any
+  ;; command runs, so a raise leaves no token stream to run the other commands
+  ;; from. The message survived the change; the other commands now do too.
   (register-token-pattern!
    (token-pattern 'tilde-number (lambda (rrb pos) (recognize-removed-tilde-number rrb pos))
-                  (lambda (s p l)
-                    (error 'prologos-reader
-                           "`~~` approximate literals were removed — bare decimals are Posit32 (3.14); use pNN literals for other widths (3.14p16, or 3.14p for Posit64)"))
+                  (lambda (s p l) 'tilde-number)
                   86))
   ;; Backtick and comma (quasiquote/unquote)
   (register-token-pattern!
@@ -1750,13 +1775,42 @@
 
   ;; Step 1: Map each token to its content-line index
   ;; (by comparing token start-pos to line boundaries in char-rrb)
+  ;;
+  ;; OCapN review U2: this was quadratic TWICE OVER, and measured at 28.3 s to
+  ;; build the tree for one 4066-line file (captp-core).
+  ;;   (a) `find-line-start-pos` rescanned char-rrb FROM ZERO for every content
+  ;;       line — O(lines x chars).
+  ;;   (b) `find-content-line-for-pos` did a linear walk using `list-ref` on a
+  ;;       LIST, per token — O(tokens x lines^2) in the worst case, because
+  ;;       `list-ref` is itself O(i).
+  ;; Fixed as the filing prescribed: ONE pass over the characters to build a
+  ;; line-start VECTOR, then binary search per token.
+  (define source-line-starts
+    ;; index = source line number, value = its first char position. One scan.
+    (let* ([n (rrb-size char-rrb)]
+           [starts (make-vector (add1 n) 0)])   ;; upper bound: every char a newline
+      ;; starts[0] is 0 by initialization and each newline records the NEXT
+      ;; line's start. Do NOT write at EOF: `line` there is the LAST line,
+      ;; whose start was already recorded, and overwriting it with the
+      ;; end-of-buffer position silently moves that whole line's tokens.
+      ;; (Cost me 28 suite failures on the first cut.)
+      (let loop ([pos 0] [line 0])
+        (cond
+          [(>= pos n) starts]
+          [(char=? (rrb-get char-rrb pos) #\newline)
+           (vector-set! starts (add1 line) (add1 pos))
+           (loop (add1 pos) (add1 line))]
+          [else (loop (add1 pos) line)]))))
+
   (define line-boundaries
-    ;; For each content line, find its start position in the source
-    (for/list ([li (in-range (rrb-size content-line-indices))])
-      (define source-line (rrb-get content-line-indices li))
-      ;; Find the position of this source line in the char-rrb
-      ;; (count newlines to find line start)
-      (find-line-start-pos char-rrb source-line)))
+    ;; For each content line, its start position — a VECTOR, so the per-token
+    ;; lookup below can binary-search instead of walking a list.
+    (build-vector (rrb-size content-line-indices)
+                  (lambda (li)
+                    (let ([source-line (rrb-get content-line-indices li)])
+                      (if (< source-line (vector-length source-line-starts))
+                          (vector-ref source-line-starts source-line)
+                          (rrb-size char-rrb))))))
 
   ;; Step 2: Assign tokens to content lines
   (define line-tokens (make-vector n-lines '()))
@@ -1869,12 +1923,23 @@
           [else (loop (+ pos 1) line)]))))
 
 ;; Helper: find which content line a character position belongs to
+;; The greatest i < n-lines with (<= boundaries[i] pos), or 0 if none.
+;; `line-boundaries` is a VECTOR of monotonically-increasing line starts, so
+;; this is a binary search. It was a linear walk with `list-ref` on a LIST —
+;; O(lines^2) per token — and is the second half of the U2 quadratic.
 (define (find-content-line-for-pos pos line-boundaries n-lines)
-  (let loop ([i (- n-lines 1)])
-    (cond
-      [(< i 0) 0]
-      [(<= (list-ref line-boundaries i) pos) i]
-      [else (loop (- i 1))])))
+  (define hi-bound (min n-lines (vector-length line-boundaries)))
+  (cond
+    [(<= hi-bound 0) 0]
+    [(< pos (vector-ref line-boundaries 0)) 0]
+    [else
+     (let loop ([lo 0] [hi (sub1 hi-bound)])
+       (if (>= lo hi)
+           lo
+           (let ([mid (quotient (+ lo hi 1) 2)])
+             (if (<= (vector-ref line-boundaries mid) pos)
+                 (loop mid hi)
+                 (loop lo (sub1 mid))))))]))
 
 
 ;; ============================================================
@@ -2290,10 +2355,15 @@
     (define entry (rrb-get disamb-rrb i))
     (define type (set-first (token-entry-types entry)))
     (define lexeme (token-entry-lexeme entry))
+    ;; Every raise in this loop reports line and column. They abort the whole
+    ;; file (tokenization completes before any command runs), so the position
+    ;; is the only thing they can still tell the reader.
+    (define-values (err-line err-col) (rrb-line-col char-rrb (token-entry-start-pos entry)))
     ;; Reject negative Nats (-3N)
     (when (and (eq? type 'nat-literal)
                (string-contains? lexeme "-"))
-      (error 'tokenize-string "Negative Nat literal not allowed: ~a" lexeme))
+      (error 'tokenize-string "line ~a, column ~a: Negative Nat literal not allowed: ~a"
+             err-line err-col lexeme))
     ;; (N6c) Reject stray ~ with a migration hint: `~N` approximate literals
     ;; were removed (`~[` LSeq is tokenized earlier and never reaches here).
     (when (and (eq? type 'symbol)
@@ -2303,10 +2373,12 @@
                         (let ([c (string-ref lexeme 1)])
                           (or (char-numeric? c) (char=? c #\-))))))
       (error 'prologos-reader
-             "`~~` approximate literals were removed — bare decimals are Posit32 (3.14); use pNN literals for other widths (3.14p16, or 3.14p for Posit64)"))
+             "line ~a, column ~a: `~~` approximate literals were removed — bare decimals are Posit32 (3.14); use pNN literals for other widths (3.14p16, or 3.14p for Posit64)"
+             err-line err-col))
     ;; Reject standalone & (must use &> for rule clauses)
     (when (and (eq? type 'symbol) (equal? lexeme "&"))
-      (error 'prologos-reader "Unexpected & — use &> for rule clauses"))
+      (error 'prologos-reader "line ~a, column ~a: Unexpected & — use &> for rule clauses"
+             err-line err-col))
     ;; Reject standalone . (must use .name for dot-access)
     (when (and (eq? type 'symbol) (equal? lexeme "."))
       (error 'prologos-reader "Unexpected character: .")))
@@ -2375,11 +2447,40 @@
   ;; datum->syntax expects: line ≥ 1 or #f, col ≥ 0 or #f, pos ≥ 1 or #f, span ≥ 0 or #f
   ;; pos must be ≥ 1 (1-based). Callers pass either 0-based token positions
   ;; (converted via make-stx-from-token) or already-1-based positions from syntax objects.
+  ;;
+  ;; #f is accepted for every field, as the line above always said it was. It
+  ;; was not: the guards compared with `>` first, so a #f line raised a raw
+  ;; Racket contract violation out of the reader — losing the WHOLE FILE, with
+  ;; no per-command error and no source location to point at.
+  ;;
+  ;; #f arrives here legitimately. This function MAPS 0 to #f for line and
+  ;; column, so any syntax object it builds for an empty form and any later
+  ;; caller reading `(syntax-line …)` back off it hands #f straight back in. A
+  ;; bare top-level `[]` did exactly that round trip (`read-all-forms-from-tree`
+  ;; re-wrapping a `'()` element) and took the file down with it.
+  (define (pos-or-f v) (and (real? v) (> v 0) v))
+  (define (nonneg-or-f v) (and (real? v) (>= v 0) v))
   (datum->syntax #f datum (list source
-                                (if (> line 0) line #f)
-                                (if (>= col 0) col #f)
-                                (if (> pos 0) pos 1)
-                                (if (>= span 0) span #f))))
+                                (pos-or-f line)
+                                (nonneg-or-f col)
+                                (or (pos-or-f pos) 1)
+                                (nonneg-or-f span))))
+
+;; The source range spanning `first`..`last`, as (values line col pos span),
+;; tolerating syntax objects with no location. Three sites computed this inline
+;; with `(- (+ (syntax-position last) (syntax-span last)) (syntax-position
+;; first))`, which raises on #f rather than degrading to "no location" — and a
+;; raise here is a whole-file abort, since this all runs before any command.
+(define (stx-range first last)
+  (define p1 (syntax-position first))
+  (define p2 (syntax-position last))
+  (define s2 (syntax-span last))
+  (values (syntax-line first)
+          (syntax-column first)
+          p1
+          (if (and (real? p1) (real? p2) (real? s2))
+              (max 1 (- (+ p2 s2) p1))
+              #f)))
 
 ;; Convert a token-entry → syntax object
 (define (token-entry->stx entry source source-str)
@@ -2444,6 +2545,14 @@
       [else (string->symbol lexeme)]))
 
   (case type
+    ;; (N6c) `~N` — removed. A reader-level rejection that is nonetheless a
+    ;; PER-COMMAND error: the marker rides the token stream to the parser,
+    ;; which converts it exactly like `$let-error`. The loc lives on the syntax
+    ;; object now, so the text no longer spells out line and column.
+    [(tilde-number)
+     (make-stx (list (make-stx '$reader-error source line col pos1 0)
+                     "`~` approximate literals were removed — bare decimals are Posit32 (3.14); use pNN literals for other widths (3.14p16, or 3.14p for Posit64)")
+               source line col pos1 span)]
     ;; Compound tokens that produce sentinel syntax lists
     [(dot-access)
      (define field-sym (string->symbol (substring lexeme 1)))
@@ -2558,14 +2667,26 @@
 (define (mixfix-close? ct)
   (eq? ct 'mixfix-rparen))
 
-(define (wrap-stx-list elems source)
-  (if (null? elems)
-      (make-stx '() source 0 0 0 0)
-      (let ([first (car elems)] [last (last-stx elems)])
-        (make-stx elems source (syntax-line first) (syntax-column first)
-                  (syntax-position first)
-                  (max 1 (- (+ (syntax-position last) (syntax-span last))
-                            (syntax-position first)))))))
+;; `#:at` supplies a location for the EMPTY case, where there are no elements to
+;; take a range from. Without it an empty group is located nowhere, and "nowhere"
+;; is not inert: `make-stx` maps 0 to #f, `stx-range` then propagates #f up to the
+;; enclosing form, and a downstream consumer that keys on line number sees the
+;; project's unknown-location sentinel rather than a line. A bare top-level `[]`
+;; rode that all the way into `merge-preparse-and-tree-parser`, whose line-keyed
+;; merge matched it against an unrelated command's surf.
+;;
+;; The opening bracket's own token is the natural answer — an empty group is at
+;; the bracket. Callers that have it should pass it.
+(define (wrap-stx-list elems source #:at [at-token #f] #:source-str [source-str #f])
+  (cond
+    [(pair? elems)
+     (let-values ([(line col pos span) (stx-range (car elems) (last-stx elems))])
+       (make-stx elems source line col pos span))]
+    [(and at-token source-str)
+     (define start (token-entry-start-pos at-token))
+     (define-values (line col) (pos->line-col source-str start))
+     (make-stx '() source line col (+ start 1) 0)]
+    [else (make-stx '() source 0 0 0 0)]))
 
 ;; Convert a parse-tree-node to syntax elements.
 ;; Uses flatten-then-group on the FULL token sequence (depth-first)
@@ -3448,6 +3569,26 @@
        ;; bracket-binding head (car of head-elems is a group) or empty head:
        ;; not the aligned surface.
        [(or (null? head-elems) (pair? (syntax-e (car head-elems)))) elems]
+       ;; OCapN review U1: a head binding ending in `:=` has NO VALUE on its
+       ;; line, so the aligned-block reading — which assumes the head line IS a
+       ;; complete binding — mis-groups: the BODY line gets folded into the
+       ;; value's argument list. Verified before fixing:
+       ;;
+       ;;     defn g [n]
+       ;;       let x :=
+       ;;           [f n 1]
+       ;;         [int+ x 10]
+       ;;
+       ;; became `[f n 1 [int+ x 10]]` — "Too many arguments to 'f'", expected
+       ;; 2 got 3, naming a function the user never mis-called.
+       ;;
+       ;; Declining here hands the form to the nested/continuation-value path,
+       ;; which is the one that reads "value on the following line" correctly.
+       ;; Narrow by construction: it fires only when the head line ENDS at the
+       ;; `:=`, which is exactly the shape with no value to bind.
+       [(let ([last-head (last head-elems)])
+          (eq? (syntax-e last-head) ':=))
+        elems]
        [else
         (define cols (sort (remove-duplicates (map syntax-column cont-elems)) <))
         (define body-col (car cols))
@@ -3996,7 +4137,8 @@
                    ;; invisible to every existing match arm; the sexp reader
                    ;; (native (…) reading) never attaches it, so sexp
                    ;; application is untouched by construction.
-                   (let ([grp (wrap-stx-list inner source)])
+                   (let ([grp (wrap-stx-list inner source
+                                             #:at item #:source-str source-str)])
                      (loop next-i
                            (cons (if (eq? type 'lparen)
                                      (syntax-property grp 'prologos-paren-origin #t)
@@ -4334,14 +4476,8 @@
     [(null? elems) (make-stx '() source 0 0 0 0)]
     [(= (length elems) 1) (car elems)]
     [else
-     (define first (car elems))
-     (define last (last-stx elems))
-     (make-stx elems source
-               (syntax-line first)
-               (syntax-column first)
-               (syntax-position first)
-               (max 1 (- (+ (syntax-position last) (syntax-span last))
-                         (syntax-position first))))]))
+     (define-values (line col pos span) (stx-range (car elems) (last-stx elems)))
+     (make-stx elems source line col pos span)]))
 
 (define (last-stx lst)
   (if (null? (cdr lst)) (car lst) (last-stx (cdr lst))))
@@ -4390,14 +4526,8 @@
       [(and (= (length elems) 1) (pair? (syntax-e (car elems))))
        (car elems)]
       [else
-       (define first (car elems))
-       (define last (last-stx elems))
-       (make-stx elems source
-                 (syntax-line first)
-                 (syntax-column first)
-                 (syntax-position first)
-                 (max 1 (- (+ (syntax-position last) (syntax-span last))
-                           (syntax-position first))))])))
+       (define-values (line col pos span) (stx-range (car elems) (last-stx elems)))
+       (make-stx elems source line col pos span)])))
 
 ;; Compatibility: read-all-forms-string replacement
 (define (compat-read-all-forms-string str)

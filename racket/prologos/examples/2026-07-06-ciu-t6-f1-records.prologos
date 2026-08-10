@@ -356,9 +356,12 @@ def hm := {"a" 1 "b" "x"}
 ;;     expr-map-literal all-at-once typing; homogeneous stays exact)
 
 def dd := [map-dissoc {:a 1 :b 2} kk]
-;;79=>~ dd : {:a? Int :b? Int | _}
+;;79=>~ dd : {:?a Int :?b Int | _}
 ;;   ← ✏ F1b.3 (D24, supersedes the D20 drop-all): labels + types RETAINED,
-;;     every presence marked 'unknown (the ? suffix) — the types stay facts
+;;     every presence marked 'unknown (the ? PREFIX — 2026-08-03: it was a
+;;     SUFFIX and collided with a field literally named `a?`, which F1b.7g made
+;;     writable; a prefix cannot collide because the reader requires an
+;;     alphabetic character after the colon) — the types stay facts
 ;;     (comparison precision), presence stays uncertain (projection still
 ;;     mints metas, gated-identically)
 
@@ -430,11 +433,11 @@ def dx := [map-get dm :c]
 ;; ============================================================
 
 def wdd := [map-dissoc {:p 1 :q "s"} kk]
-;;89=> wdd : {:p? Int :q? String | _} defined.
+;;89=> wdd : {:?p Int :?q String | _} defined.
 ;;   ← D24: labels + types RETAINED under dynamic dissoc, marked 'unknown
 
 wdd
-;;90=> {:q "s", :p 1} : {:p? Int :q? String | _}
+;;90=> {:q "s", :p 1} : {:?p Int :?q String | _}
 
 wdd.q
 ;;91=>~ "s" : ?

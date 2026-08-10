@@ -1,0 +1,487 @@
+#lang racket/base
+
+;;; test-ocapn-handoff.rkt — the third-party-handoff surface.
+;;;
+;;; Why this file exists: the gifter and receiver roles shipped with ZERO
+;;; tests. The evidence offered was "conformance 24/24" — a gate the gaps
+;;; document itself classifies as MEDIUM debt, because it is an allow-list of
+;;; 24 hand-named upstream tests rather than the upstream suite. §0.2's stated
+;;; consequence of those roles living in Racket was THREE things: not
+;;; self-hosting, NOT COVERED BY THE UNIT SUITE, and not reasonable-about in
+;;; the language. The migration fixed the first and third, left the second
+;;; where it was, and the finding was marked closed.
+;;;
+;;; Everything covered here is a pure, total function over strings. There was
+;;; never an infrastructure reason for the gap.
+;;;
+;;; The identity properties are pinned against upstream's own definitions
+;;; (ocapn-test-suite `utils/captp.py:113-146`), not against our output — a
+;;; test asserting only "what the code does today" would have passed just as
+;;; happily on the encoded-vs-raw side-id bug that cost a conformance run.
+
+(require rackunit
+         racket/list
+         racket/string
+         "test-support.rkt"
+         "../macros.rkt"
+         "../prelude.rkt"
+         "../syntax.rkt"
+         "../source-location.rkt"
+         "../surface-syntax.rkt"
+         "../errors.rkt"
+         "../metavar-store.rkt"
+         "../parser.rkt"
+         "../elaborator.rkt"
+         "../pretty-print.rkt"
+         "../global-env.rkt"
+         "../driver.rkt"
+         "../namespace.rkt"
+         "../multi-dispatch.rkt")
+
+(define shared-preamble
+  "(ns test-ocapn-handoff)
+(imports (prologos::ocapn::core :refer-all))
+(imports (prologos::ocapn::message :refer-all))
+(imports (prologos::ocapn::captp-wire :refer-all))
+(imports (prologos::ocapn::syrup-wire :refer-all))
+(imports (prologos::ocapn::captp-core :refer-all))
+(imports (prologos::ocapn::pipelining :refer (promise-queue-length)))
+(imports (prologos::ocapn::captp-interop-helpers :refer (framed-concat)))
+(imports (prologos::data::list :refer (List nil cons)))
+(imports (prologos::data::option :refer (Option some none unwrap-or)))
+(imports (prologos::data::string :as str :refer ()))
+(imports (prologos::ocapn::crypto :refer-all))
+(imports (prologos::ocapn::handshake :refer-all))
+(imports (prologos::ocapn::interop-driver :refer-all))
+")
+
+(define-values (shared-global-env
+                shared-ns-context
+                shared-module-reg
+                shared-trait-reg
+                shared-impl-reg
+                shared-param-impl-reg
+                shared-ctor-reg
+                shared-type-meta)
+  (parameterize ([current-file-module-network-ref (make-module-network)]
+                 [current-ns-context #f]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-ctor-registry (current-ctor-registry)]
+                 [current-type-meta (current-type-meta)]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry]
+                 [current-param-impl-registry prelude-param-impl-registry]
+                 [current-multi-defn-registry (current-multi-defn-registry)]
+                 [current-spec-store (hasheq)])
+    (install-module-loader!)
+    (process-string shared-preamble)
+    (values (global-env-snapshot)
+            (current-ns-context)
+            (current-module-registry)
+            (current-trait-registry)
+            (current-impl-registry)
+            (current-param-impl-registry)
+            (current-ctor-registry)
+            (current-type-meta))))
+
+(define (run s)
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
+                 [current-ns-context shared-ns-context]
+                 [current-module-registry shared-module-reg]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry shared-trait-reg]
+                 [current-impl-registry shared-impl-reg]
+                 [current-param-impl-registry shared-param-impl-reg]
+                 [current-ctor-registry shared-ctor-reg]
+                 [current-type-meta shared-type-meta])
+    (process-string s)))
+
+(define (run-last s) (last (run s)))
+
+(define (check-contains actual substr [msg #f])
+  (check-true (string-contains? actual substr)
+              (or msg (format "Expected ~s to contain ~s" actual substr))))
+
+;; ========================================
+;; Phase 11 — incoming op:deliver applied to vat
+;; ========================================
+
+
+;; ----------------------------------------------------------------
+;; Identity derivation — properties upstream requires, not our output
+;; ----------------------------------------------------------------
+
+(test-case "handoff/sha256d is SHA-256 twice, 32 bytes out, not one round"
+  (check-contains (run-last "(eval (str::length (sha256d \"abc\")))") "32")
+  (check-contains (run-last "(eval (str::eq (sha256d \"abc\") (sha256-raw \"abc\")))") "false"))
+
+(test-case "handoff/session-id-of is SYMMETRIC — both peers derive it alone"
+  ;; captp.py:125-146 sorts the two side-ids before hashing precisely so that
+  ;; neither peer needs a round trip to agree on the session id.
+  (check-contains
+   (run-last "(eval (str::eq (session-id-of \"aaa\" \"bbb\") (session-id-of \"bbb\" \"aaa\")))")
+   "true")
+  (check-contains (run-last "(eval (str::length (session-id-of \"aaa\" \"bbb\")))") "32"))
+
+(test-case "handoff/session-id-of separates different peers"
+  (check-contains
+   (run-last "(eval (str::eq (session-id-of \"aaa\" \"bbb\") (session-id-of \"aaa\" \"ccc\")))")
+   "false"))
+
+(test-case "handoff/side-id hashes the ENCODED key sexp, never the raw q"
+  ;; REGRESSION PIN. Hashing the raw 32-byte q instead of the encoded
+  ;; (public-key (ecc ...)) s-expression produces a plausible 32-byte digest
+  ;; either way, so the only symptom was a session id the peer disagreed with
+  ;; several frames later. The two must differ.
+  (check-contains
+   (run-last
+    "(eval (str::eq (side-id-of-encoded-key (gcrypt-pubkey-bytes \"0123456789abcdef0123456789abcdef\"))
+                    (side-id-of-encoded-key \"0123456789abcdef0123456789abcdef\")))")
+   "false"))
+
+;; ----------------------------------------------------------------
+;; Peer location keys
+;; ----------------------------------------------------------------
+
+(test-case "handoff/peer-location-key ignores hints — a peer is not an address"
+  (check-contains
+   (run-last
+    "(eval (str::eq (unwrap-or \"\" (peer-location-key (syrup-tagged \"ocapn-peer\" (syrup-list (cons (syrup-symbol \"tcp\") (cons (syrup-string \"abc\") (cons (syrup-string \"h1\") nil)))))))
+                    (unwrap-or \"\" (peer-location-key (syrup-tagged \"ocapn-peer\" (syrup-list (cons (syrup-symbol \"tcp\") (cons (syrup-string \"abc\") (cons (syrup-string \"DIFFERENT\") nil)))))))))")
+   "true"))
+
+(test-case "handoff/peer-location-key is injective — the NUL join is load-bearing"
+  ;; ("a","bc") and ("ab","c") must not collide into one peer.
+  (check-contains
+   (run-last
+    "(eval (str::eq (unwrap-or \"\" (peer-location-key (syrup-tagged \"ocapn-peer\" (syrup-list (cons (syrup-symbol \"a\") (cons (syrup-string \"bc\") nil))))))
+                    (unwrap-or \"\" (peer-location-key (syrup-tagged \"ocapn-peer\" (syrup-list (cons (syrup-symbol \"ab\") (cons (syrup-string \"c\") nil))))))))")
+   "false"))
+
+(test-case "handoff/peer-location-key refuses a non-ocapn-peer record"
+  (check-contains
+   (run-last
+    "(eval (unwrap-or \"REFUSED\" (peer-location-key (syrup-tagged \"something-else\" (syrup-list (cons (syrup-symbol \"a\") (cons (syrup-string \"b\") nil)))))))")
+   "REFUSED"))
+
+;; ----------------------------------------------------------------
+;; Descriptor reading — the two silent decoder traps
+;; ----------------------------------------------------------------
+
+(test-case "handoff/desc-position reads a ONE-arg record whose payload is bare"
+  ;; pitfall #55: a single-argument record's payload is the VALUE, not a
+  ;; one-element list, so every list-shaped reader finds zero arguments.
+  (check-contains
+   (run-last "(eval (unwrap-or (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))) (desc-position (syrup-tagged \"desc:export\" (syrup-nat (suc (suc (suc (suc (suc (suc (suc zero))))))))))))")
+   "7N"))
+
+(test-case "handoff/desc-position accepts BOTH wire spellings of a nat"
+  ;; pitfall #56: a wire nat arrives as syrup-nat OR non-negative syrup-int
+  ;; depending on provenance. Matching one spelling silently misses the other,
+  ;; and the wire decoder emits the int form.
+  (check-contains
+   (run-last "(eval (unwrap-or zero (desc-position (syrup-tagged \"desc:export\" (syrup-int 7)))))")
+   "7N"))
+
+(test-case "handoff/desc-position rejects a non-descriptor tag"
+  (check-contains
+   (run-last "(eval (unwrap-or zero (desc-position (syrup-tagged \"not-a-desc\" (syrup-int 7)))))")
+   "0N"))
+
+;; ----------------------------------------------------------------
+;; The parked-enliven blob
+;; ----------------------------------------------------------------
+
+(test-case "handoff/the enliven blob round-trips its five fields"
+  (check-contains
+   (run-last "(eval (blob-string (pending-enliven-blob \"reqloc\" (suc (suc (suc zero))) \"exploc\" \"GIVE\" \"gid-7\") zero))")
+   "reqloc")
+  (check-contains
+   (run-last "(eval (blob-nat (pending-enliven-blob \"reqloc\" (suc (suc (suc zero))) \"exploc\" \"GIVE\" \"gid-7\") (suc zero)))")
+   "3N")
+  (check-contains
+   (run-last "(eval (blob-string (pending-enliven-blob \"reqloc\" zero \"exploc\" \"GIVE\" \"gid-7\") (suc (suc (suc (suc zero))))))")
+   "gid-7"))
+
+(test-case "handoff/blob-ok? rejects a blob that did not decode"
+  ;; REGRESSION PIN. blob-nat answers zero for BOTH "absent" and "malformed",
+  ;; and zero is the peer's BOOTSTRAP position — so an unreadable blob used to
+  ;; send a fulfill to the peer's bootstrap object rather than sending nothing.
+  (check-contains (run-last "(eval (blob-ok? \"not-syrup-at-all\"))") "false")
+  (check-contains
+   (run-last "(eval (blob-ok? (pending-enliven-blob \"l\" (suc zero) \"e\" \"G\" \"g\")))") "true"))
+
+(test-case "handoff/finish-handoff emits NOTHING for an undecodable blob"
+  (check-contains (run-last "(eval (length (finish-handoff \"not-syrup-at-all\" (suc zero))))") "0N")
+  (check-contains
+   (run-last "(eval (length (finish-handoff (pending-enliven-blob \"l\" (suc zero) \"e\" \"G\" \"g\") (suc zero))))")
+   "2N"))
+
+;; ----------------------------------------------------------------
+;; Frame builders
+;; ----------------------------------------------------------------
+
+(test-case "handoff/handoff-give carries upstream's five fields in order"
+  ;; captp_types.py:296-307 — receiver-key, exporter-location, session,
+  ;; gifter-side, gift-id.
+  (define f (run-last "(eval (handoff-give-bytes \"K\" \"L\" \"S\" \"O\" \"G\"))"))
+  (check-contains f "desc:handoff-give")
+  (check-contains f "1:S")
+  (check-contains f "1:O")
+  (check-contains f "1:G"))
+
+(test-case "handoff/handoff-receive splices the signed give VERBATIM"
+  ;; Re-encoding a decoded give would invalidate its signature over a
+  ;; difference we would never see.
+  (define f (run-last "(eval (handoff-receive-bytes \"SESS\" \"SIDE\" (suc (suc zero)) \"RAWGIVE\"))"))
+  (check-contains f "desc:handoff-receive")
+  (check-contains f "RAWGIVE"))
+
+(test-case "handoff/the withdraw frame is a bootstrap deliver"
+  (define f (run-last "(eval (withdraw-frame-bytes \"ENV\"))"))
+  (check-contains f "op:deliver")
+  (check-contains f "withdraw-gift")
+  (check-contains f "desc:export"))
+
+(test-case "handoff/the fetch frame names the reserved slot as its resolve-me"
+  (define f (run-last "(eval (fetch-frame-bytes \"swiss\" (suc (suc zero))))"))
+  (check-contains f "fetch")
+  (check-contains f "desc:import-object"))
+
+;; ----------------------------------------------------------------
+;; Signing
+;; ----------------------------------------------------------------
+
+(test-case "handoff/sig-envelope wraps the body in a gcrypt sig-val"
+  (define f (run-last "(eval (sig-envelope-bytes (gen-keypair-raw unit) \"BODY\"))"))
+  (check-contains f "desc:sig-envelope")
+  (check-contains f "sig-val")
+  (check-contains f "eddsa")
+  (check-contains f "BODY"))
+
+(test-case "handoff/a signature verifies under its own key"
+  (check-contains
+   (run-last "(eval (let (kp (gen-keypair-raw unit)) (verify-raw (pubkey-raw kp) \"msg\" (sign-bytes kp \"msg\"))))")
+   "true"))
+
+;; ----------------------------------------------------------------
+;; Binding a handoff-receive to the connection it arrives on
+;; ----------------------------------------------------------------
+;;
+;; Until these fields were checked, a signed `desc:handoff-receive` was a
+;; BEARER TOKEN at our exporter: both were read, but only to build the replay
+;; identity. Upstream asserts on the session field
+;; (tests/third_party_handoffs.py:123,159).
+;;
+;; Pinned against the DERIVATION, not against our output — the same discipline
+;; as the identity tests above, and for the same reason: an encoded-vs-raw
+;; side-id bug produces a plausible 32-byte digest either way.
+
+(test-case "handoff/a peer we cannot identify cannot be bound to"
+  ;; The legacy unsigned two-field handshake leaves `bs-peer-key` empty, and a
+  ;; handoff from an unidentified peer is refused rather than waved through.
+  (check-contains
+   (run-last "(eval (str::eq (peer-side-id-of bridge-state-empty) \"\"))")
+   "true"))
+
+(test-case "handoff/the peer's side-id hashes the ENCODED key, not the raw q"
+  (check-contains
+   (run-last
+    (string-append
+     "(eval (let (q (pubkey-raw (gen-keypair-raw unit))"
+     "            st (bs-set-peer-key q bridge-state-empty))"
+     "        (str::eq (peer-side-id-of st)"
+     "                 (side-id-of-encoded-key (gcrypt-pubkey-bytes q)))))"))
+   "true")
+  ;; And is NOT the hash of the raw key -- the trap this is named for.
+  (check-contains
+   (run-last
+    (string-append
+     "(eval (let (q (pubkey-raw (gen-keypair-raw unit))"
+     "            st (bs-set-peer-key q bridge-state-empty))"
+     "        (str::eq (peer-side-id-of st) (side-id-of-encoded-key q))))"))
+   "false"))
+
+;; A decoded desc:handoff-receive naming session/side, for the binding checks.
+;;
+;; The give has to be ENCODED bytes, not an arbitrary string: the 4th field is
+;; spliced VERBATIM (deliberately -- re-encoding a decoded give would invalidate
+;; its signature), so a raw placeholder makes the whole record undecodable and
+;; every field read comes back `none`. Which reads as "does not bind" -- so the
+;; three negative cases below would pass for the wrong reason, and the positive
+;; case is what catches it.
+(define (receive-naming sess side)
+  (format
+   (string-append
+    "(unwrap-or syrup-null (decode-value"
+    "  (handoff-receive-bytes ~a ~a zero (encode (syrup-symbol \"G\")))))")
+   sess side))
+
+(test-case "handoff/a receive naming this session and this side BINDS"
+  (check-contains
+   (run-last
+    (format "(eval (receive-binds-to? ~a \"A\" \"B\"))"
+            (receive-naming "(session-id-of \"A\" \"B\")" "\"B\"")))
+   "true"))
+
+(test-case "handoff/a receive naming ANOTHER side does not bind"
+  ;; The property that turns a leaked receive into a denial rather than a
+  ;; theft: it is useless to anyone but the peer that made it.
+  (check-contains
+   (run-last
+    (format "(eval (receive-binds-to? ~a \"A\" \"B\"))"
+            (receive-naming "(session-id-of \"A\" \"B\")" "\"C\"")))
+   "false"))
+
+(test-case "handoff/a receive aimed at ANOTHER exporter does not bind"
+  ;; Same receiver, same side-id, different exporter: only the session field
+  ;; distinguishes them, which is exactly why it has to be checked.
+  (check-contains
+   (run-last
+    (format "(eval (receive-binds-to? ~a \"A\" \"B\"))"
+            (receive-naming "(session-id-of \"OTHER-EXPORTER\" \"B\")" "\"B\"")))
+   "false"))
+
+(test-case "handoff/a receive missing its session field does not bind"
+  (check-contains
+   (run-last
+    (string-append
+     "(eval (receive-binds-to? (unwrap-or syrup-null "
+     "  (decode-value (record-bytes \"desc:handoff-receive\" nil))) \"A\" \"B\"))"))
+   "false"))
+
+;; ----------------------------------------------------------------
+;; The replay set outlives the connection
+;; ----------------------------------------------------------------
+;;
+;; It used to live on BridgeState, which dies when the connection does — so
+;; withdraw, reconnect, replay the identical signed receive was a double-spend
+;; for the price of a reconnect. A session id is derived only from the two
+;; side-ids, so reconnecting with the same key reproduces it exactly; nothing
+;; about the identity is per-connection. Upstream happens to generate a fresh
+;; keypair per session (utils/captp.py:49-50), which is what made the
+;; per-connection set look safe. An attacker is under no such obligation.
+
+(require (only-in "../ocapn-handoff-ffi.rkt"
+                  ocapn-handoff-claim ocapn-handoff-used? ocapn-handoff-reset!))
+
+(test-case "handoff/an identity can be claimed once"
+  (ocapn-handoff-reset!)
+  (check-false (ocapn-handoff-used? "sess|side|0"))
+  (check-true (ocapn-handoff-claim "sess|side|0"))
+  (check-true (ocapn-handoff-used? "sess|side|0"))
+  (check-false (ocapn-handoff-claim "sess|side|0")
+               "a second claim of one identity is a replay"))
+
+(test-case "handoff/the claim is test-and-set, not check-then-mark"
+  ;; The two-call form is a race with the same shape as the bug above: the
+  ;; server gives each connection its own thread, so two connections replaying
+  ;; one receive concurrently would both read \"unused\" and both proceed.
+  ;; Exactly one of N concurrent claimants may win.
+  (ocapn-handoff-reset!)
+  (define results
+    (let ([out '()] [sema (make-semaphore 1)])
+      (define ts
+        (for/list ([_ (in-range 16)])
+          (thread (lambda ()
+                    (define r (ocapn-handoff-claim "contended"))
+                    (call-with-semaphore sema (lambda () (set! out (cons r out))))))))
+      (for-each thread-wait ts)
+      out))
+  (check-equal? (length (filter values results)) 1
+                "exactly one claimant may win")
+  (ocapn-handoff-reset!))
+
+(test-case "handoff/distinct identities do not collide"
+  (ocapn-handoff-reset!)
+  (check-true (ocapn-handoff-claim "sess|side|0"))
+  (check-true (ocapn-handoff-claim "sess|side|1"))
+  (ocapn-handoff-reset!)
+  (check-false (ocapn-handoff-used? "sess|side|0")))
+
+;; ----------------------------------------------------------------
+;; Gift ids: unguessable, and a duplicate cannot shadow
+;; ----------------------------------------------------------------
+;;
+;; The gift table is exporter-GLOBAL (deposit and withdraw are on different
+;; connections) and `deposit-gift` is reachable by any peer that finishes a
+;; handshake. Lookup returns the NEWEST match and removal removes EVERY match,
+;; so an id a peer can predict is an id it can shadow: deposit first, and the
+;; honest give then fails to authenticate against the attacker's key -- and the
+;; honest entry is deleted alongside the attacker's.
+
+(require (only-in "../ocapn-enliven-ffi.rkt" ocapn-gift-id))
+
+(test-case "handoff/gift ids are unguessable, not a counter"
+  (define a (ocapn-gift-id "p-"))
+  (define b (ocapn-gift-id "p-"))
+  (check-not-equal? a b)
+  (check-equal? (string-length a) (+ 2 32) "128 bits, hex")
+  (check-true (regexp-match? #px"^p-[0-9a-f]{32}$" a))
+  ;; The property a counter fails: knowing one id tells you nothing about the
+  ;; next. 20 draws, no repeats and no arithmetic relationship to check beyond
+  ;; distinctness -- the point is that "the one after p-3" is not a thing.
+  (define draws (for/list ([_ (in-range 20)]) (ocapn-gift-id "p-")))
+  (check-equal? (length (remove-duplicates draws)) 20))
+
+(test-case "handoff/the FIRST deposit of an id wins"
+  ;; Not the newest. `gift-lookup-loop` returns the newest match, so without
+  ;; the guard the second deposit is what a withdrawal would find.
+  (check-contains
+   (run-last
+    (string-append
+     "(eval (bs-lookup-gift \"g\" (bs-add-gift \"g\" (suc (suc zero))"
+     "                             (bs-add-gift \"g\" (suc zero) bridge-state-empty))))"))
+   "1"))
+
+(test-case "handoff/a second depositor cannot rebind an id to its own key"
+  ;; The key is what `give-authentic-for-gift?` checks the give against, so
+  ;; rebinding it is the whole attack: the honest gifter's give stops
+  ;; verifying.
+  (check-contains
+   (run-last
+    (string-append
+     "(eval (unwrap-or \"NONE\" (bs-gifter-key \"g\""
+     "  (bs-add-gift \"g\" (suc (suc zero)) (bs-set-peer-key \"ATTACKER\""
+     "    (bs-add-gift \"g\" (suc zero) (bs-set-peer-key \"HONEST\" bridge-state-empty)))))))"))
+   "HONEST"))
+
+;; ----------------------------------------------------------------
+;; Export reservations survive
+;; ----------------------------------------------------------------
+
+(test-case "handoff/two reservations on one connection do not collide"
+  ;; `reserve-export-id` is fetch → spawn → stash. If the stash does not land
+  ;; (or is later overwritten by a snapshot taken before it), `next-id` rolls
+  ;; back and the SECOND reservation hands out the position the first is
+  ;; already using -- and, worse, a later `fresh-promise` can hand out a
+  ;; position an actor occupies. Structural collision-freedom is the entire
+  ;; reason this function exists rather than a counter starting at 900.
+  ;;
+  ;; A distinctive cid, because the connection table is process-global.
+  (define r
+    (run-last
+     (string-append
+      "(eval (let (a (reserve-export-id 4242N))"
+      "        (let (b (reserve-export-id 4242N))"
+      "          (nat-eq? a b))))")))
+  (check-contains r "false"))
+
+;; ----------------------------------------------------------------
+;; One reader per descriptor
+;; ----------------------------------------------------------------
+
+(test-case "handoff/a desc position is the BARE payload, never a list"
+  ;; Two readers of one descriptor is the bug this pins. captp-wire's
+  ;; `unwrap-target-tagged` takes `wire-nat` and nothing else; the driver used
+  ;; to fall back to element 0 of a list, so `<desc:export [5]>` was a valid
+  ;; target on one side of the same program and malformed on the other.
+  (check-contains
+   (run-last "(eval (unwrap-or 999N (desc-position (syrup-tagged \"desc:export\" (syrup-nat 5N)))))")
+   "5")
+  (check-contains
+   (run-last "(eval (unwrap-or 999N (desc-position (syrup-tagged \"desc:export\" (syrup-list (cons (syrup-nat 5N) nil))))))")
+   "999"))

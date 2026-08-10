@@ -128,7 +128,13 @@
     (define defs
       (process-trait '(trait Convertible ($brace-params A B)
                         (convert : A -> B))))
-    (check-equal? (length defs) 1)
+    ;; 2026-08-03: TWO defs now — the accessor AND a derived bare `convert`.
+    ;; `B` occurs only in the RESULT, which used to disqualify the method; the
+    ;; derive rule now allows a result-position parameter when the method TAKES
+    ;; arguments, because the expected type can solve it. Verified end to end,
+    ;; not just counted: with `impl Convertible Int Bool`, `def y : Bool :=
+    ;; [convert 0]` gives `true` and `[convert 5]` gives `false`.
+    (check-equal? (length defs) 2)
     (define tm (lookup-trait 'Convertible))
     (check-equal? (length (trait-meta-params tm)) 2)))
 

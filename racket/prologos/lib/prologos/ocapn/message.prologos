@@ -1,0 +1,277 @@
+ns prologos::ocapn::message
+
+;; ========================================
+;; CapTP messages (op:*)
+;; ========================================
+;;
+;; CapTP is the wire protocol between OCapN peers. Each peer maintains
+;; four tables (questions, answers, exports, imports) and exchanges the
+;; following operation messages. Refer to OCapN's CapTP Specification
+;; for the canonical bit-level encoding; here we model them as
+;; first-class values at the abstract-syntax level.
+;;
+;; The local vat (vat.prologos) uses a SUBSET of these for in-process
+;; message delivery; the over-network variants extend the core ops with
+;; descriptors. This module is shared between the two paths.
+
+require [prologos::ocapn::syrup :refer [SyrupValue syrup-list]]
+        [prologos::data::list   :refer [List nil cons]]
+        [prologos::data::option :refer [Option none some]]
+
+;; ========================================
+;; CapTP Operations
+;; ========================================
+;;
+;; Field naming follows the CapTP spec doc:
+;;   to-desc      — target descriptor (refr id, locally; export-table
+;;                  entry, on-wire)
+;;   args         — message arguments (a syrup-list)
+;;   answer-pos   — promise position to bind the result; if absent the
+;;                  send is fire-and-forget
+;;   resolve-me   — descriptor of a resolver to be notified
+
+data CapTPOp
+  ;; op:start-session — handshake. Carries protocol version and a
+  ;; locator for the peer's identity, modelled as a SyrupValue
+  ;; (Symbol or string).
+  ;; The wire record has FOUR fields —
+  ;;   <op:start-session ver pubkey-sexp locator sig-sexp>
+  ;; (`utils/captp_types.py:372-391`). Three are carried here:
+  ;; (version, session-pubkey-sexp, locator).
+  ;;
+  ;; The SIGNATURE is not, because nothing downstream would check it:
+  ;; `handshake.prologos` verifies the locator signature on the raw
+  ;; bytes, where it has the keypair and the exact bytes that were
+  ;; signed. Re-deriving those from a decoded value is the
+  ;; canonicalisation problem all over again.
+  ;;
+  ;; The PUBKEY is carried, and that is load-bearing rather than
+  ;; completeness for its own sake: it identifies the peer on this
+  ;; session, and the exporter needs it to check that a
+  ;; `desc:handoff-give` was actually signed by the peer that
+  ;; deposited the gift. Without it the whole third-party handoff
+  ;; verification chain is self-attested (see `captp-core`'s
+  ;; § handoff verification).
+  ;;
+  ;; A legacy two-field frame — which our own Node interop harness
+  ;; speaks — decodes with `syrup-null` in the pubkey slot.
+  ;;   version session-pubkey-sexp locator
+  op-start-session : String -> SyrupValue -> SyrupValue
+  ;; op:abort — terminate session with a reason string.
+  op-abort : String
+  ;; op:deliver — deliver to target; binds answer-pos for pipelining,
+  ;; resolve-me names a resolver to be notified.
+  ;;   target args answer-pos resolve-me
+  op-deliver : Nat -> SyrupValue -> [Option Nat] -> [Option Nat]
+  ;; op:deliver-only — delivery without expecting a result. Equivalent
+  ;; to op:deliver with answer-pos = none and resolve-me = none, but
+  ;; modelled separately because the wire format distinguishes them.
+  op-deliver-only : Nat -> SyrupValue
+  ;; op:listen — register that we're interested in being notified when
+  ;; the target promise settles.
+  ;; op:listen — three fields on the wire:
+  ;;   <op:listen to-desc resolve-me wants-partial>
+  ;; (`utils/captp_types.py:429-433`). `wants-partial` asks to be told
+  ;; about a PARTIAL resolution — a promise resolving to another promise
+  ;; — rather than only about the final settled value.
+  ;;   target resolver wants-partial
+  op-listen : Nat -> Nat -> Bool
+  ;; op:gc-export — peer no longer needs an exported object; decrement
+  ;; the local refcount.
+  ;; LEGACY SPELLING. `op:gc-export` (singular, two scalars) is not in
+  ;; the OCapN spec and is not in upstream's CAPTP_TYPES
+  ;; (`utils/captp_types.py:558-576`); no conforming peer sends it. It
+  ;; stays because captp-core's audit-log path consumes it. The wire
+  ;; form a peer actually sends is `op-gc-exports` below.
+  op-gc-export : Nat -> Nat                ;; export-pos refcount-delta
+  ;; op:gc-answer — peer is done with an answer position.
+  ;; LEGACY SPELLING, same story as op-gc-export. See op-gc-answers.
+  op-gc-answer : Nat
+  ;; op:gc-exports — the SPEC form, and the one every conforming peer
+  ;; sends: two PARALLEL lists, export position i paired with wire
+  ;; delta i.
+  ;;   <op:gc-exports [export-pos …] [wire-delta …]>
+  ;; The decoder does not force the two lists to the same length —
+  ;; upstream asserts only the record's 2-field arity — so a consumer
+  ;; must pair them defensively and stop at the shorter one.
+  ;;   export-positions wire-deltas
+  op-gc-exports : [List Nat] -> [List Nat]
+  ;; op:gc-answers — the SPEC form: ONE list of answer positions.
+  ;;   <op:gc-answers [answer-pos …]>
+  ;;   answer-positions
+  op-gc-answers : [List Nat]
+  ;; op:deliver-to-answer — peer is REPLYING to a question we asked
+  ;; OR pipelining onto one of their own questions. Wire form:
+  ;;   <op:deliver <desc:answer N> args ap rm>
+  ;; where N is the q-pos (ours when peer replies; peer's when peer
+  ;; pipelines), ap is the answer-pos for THIS deliver (so peer can
+  ;; await an answer to a pipelined Q), and rm is the resolver.
+  ;; Phase 44: ap retained so the bridge can break-forward queued msgs'
+  ;; answers when the chained promise breaks.
+  ;;   our-question-pos args answer-pos resolver
+  op-deliver-to-answer : Nat -> SyrupValue -> [Option Nat] -> [Option Nat]
+  ;;
+  ;; (Phase 52b note: an earlier revision added dedicated
+  ;; `op-deposit-gift` and `op-withdraw-gift` CapTPOp variants.
+  ;; Those were reverted on 2026-05-18: the OCapN canonical model
+  ;; — see `@endo/ocapn/src/client/ocapn.js:528+` — dispatches gift
+  ;; handoff as METHOD CALLS on the bootstrap object (export 0)
+  ;; rather than as new wire ops. The gift TABLE infrastructure
+  ;; from Phase 52 stays; the wire surface is handled inside the
+  ;; existing op-deliver dispatch by recognising specific method
+  ;; names ("deposit-gift" / "withdraw-gift") when target = 0.)
+
+;; ========================================
+;; Constructors (smart wrappers)
+;; ========================================
+
+spec mk-deliver Nat SyrupValue Nat Nat -> CapTPOp
+  :doc "Build an op:deliver expecting a result on answer-pos with resolver"
+defn mk-deliver [target args answer-pos resolver]
+  op-deliver target args [some answer-pos] [some resolver]
+
+spec mk-deliver-only Nat SyrupValue -> CapTPOp
+  :doc "Build a fire-and-forget op:deliver-only"
+defn mk-deliver-only [target args]
+  op-deliver-only target args
+
+spec mk-deliver-no-resolver Nat SyrupValue Nat -> CapTPOp
+  :doc "Build an op:deliver expecting a result on answer-pos but no resolver"
+defn mk-deliver-no-resolver [target args answer-pos]
+  op-deliver target args [some answer-pos] none
+
+;; ========================================
+;; Predicates
+;; ========================================
+
+;; `deliver?` is true for BOTH deliver shapes, and `deliver-target`
+;; returns a bare `Nat` for both — but the two Nats index DIFFERENT
+;; tables: `op-deliver`'s is an export-table position, and
+;; `op-deliver-to-answer`'s is a question/answer-table position. Nothing
+;; in the type distinguishes them, so a caller that treats
+;; `deliver-target` as an export index will read the wrong table for
+;; half its inputs. `deliver-to-answer?` below is the discriminator;
+;; call it before using the target.
+spec deliver? CapTPOp -> Bool
+  :doc "True for op:deliver AND op:deliver-to-answer — see deliver-to-answer?"
+defn deliver?
+  | op-start-session _ _ _ -> false
+  | op-abort _             -> false
+  | op-deliver _ _ _ _     -> true
+  | op-deliver-only _ _    -> false
+  | op-listen _ _ _          -> false
+  | op-gc-export _ _       -> false
+  | op-gc-answer _         -> false
+  | op-gc-exports _ _      -> false
+  | op-gc-answers _        -> false
+  | op-deliver-to-answer _ _ _ _ -> true
+
+spec deliver-to-answer? CapTPOp -> Bool
+  :doc "Discriminates the two shapes deliver? conflates: true iff deliver-target names a question/answer position rather than an export position."
+defn deliver-to-answer?
+  | op-start-session _ _ _ -> false
+  | op-abort _             -> false
+  | op-deliver _ _ _ _     -> false
+  | op-deliver-only _ _    -> false
+  | op-listen _ _ _          -> false
+  | op-gc-export _ _       -> false
+  | op-gc-answer _         -> false
+  | op-gc-exports _ _      -> false
+  | op-gc-answers _        -> false
+  | op-deliver-to-answer _ _ _ _ -> true
+
+spec deliver-only? CapTPOp -> Bool
+defn deliver-only?
+  | op-start-session _ _ _ -> false
+  | op-abort _             -> false
+  | op-deliver _ _ _ _     -> false
+  | op-deliver-only _ _    -> true
+  | op-listen _ _ _          -> false
+  | op-gc-export _ _       -> false
+  | op-gc-answer _         -> false
+  | op-gc-exports _ _      -> false
+  | op-gc-answers _        -> false
+  | op-deliver-to-answer _ _ _ _ -> false
+
+spec listen? CapTPOp -> Bool
+defn listen?
+  | op-start-session _ _ _ -> false
+  | op-abort _             -> false
+  | op-deliver _ _ _ _     -> false
+  | op-deliver-only _ _    -> false
+  | op-listen _ _ _          -> true
+  | op-gc-export _ _       -> false
+  | op-gc-answer _         -> false
+  | op-gc-exports _ _      -> false
+  | op-gc-answers _        -> false
+  | op-deliver-to-answer _ _ _ _ -> false
+
+spec abort? CapTPOp -> Bool
+defn abort?
+  | op-start-session _ _ _ -> false
+  | op-abort _             -> true
+  | op-deliver _ _ _ _     -> false
+  | op-deliver-only _ _    -> false
+  | op-listen _ _ _          -> false
+  | op-gc-export _ _       -> false
+  | op-gc-answer _         -> false
+  | op-gc-exports _ _      -> false
+  | op-gc-answers _        -> false
+  | op-deliver-to-answer _ _ _ _ -> false
+
+;; ========================================
+;; Selectors
+;; ========================================
+
+spec deliver-target CapTPOp -> Option Nat
+  :doc "The target position. For op-deliver / op-deliver-only it indexes the EXPORT table; for op-deliver-to-answer it indexes the QUESTION/ANSWER table. Use deliver-to-answer? to tell them apart."
+defn deliver-target
+  | op-start-session _ _ _ -> none
+  | op-abort _             -> none
+  | op-deliver t _ _ _     -> some t
+  | op-deliver-only t _    -> some t
+  | op-listen _ _ _          -> none
+  | op-gc-export _ _       -> none
+  | op-gc-answer _         -> none
+  | op-gc-exports _ _      -> none
+  | op-gc-answers _        -> none
+  | op-deliver-to-answer t _ _ _ -> some t
+
+spec deliver-args CapTPOp -> Option SyrupValue
+defn deliver-args
+  | op-start-session _ _ _ -> none
+  | op-abort _             -> none
+  | op-deliver _ a _ _     -> some a
+  | op-deliver-only _ a    -> some a
+  | op-listen _ _ _          -> none
+  | op-gc-export _ _       -> none
+  | op-gc-answer _         -> none
+  | op-gc-exports _ _      -> none
+  | op-gc-answers _        -> none
+  | op-deliver-to-answer _ a _ _ -> some a
+
+spec deliver-answer-pos CapTPOp -> Option Nat
+defn deliver-answer-pos
+  | op-start-session _ _ _ -> none
+  | op-abort _             -> none
+  | op-deliver _ _ ap _    -> ap
+  | op-deliver-only _ _    -> none
+  | op-listen _ _ _          -> none
+  | op-gc-export _ _       -> none
+  | op-gc-answer _         -> none
+  | op-gc-exports _ _      -> none
+  | op-gc-answers _        -> none
+  | op-deliver-to-answer _ _ ap _ -> ap
+
+spec deliver-resolver CapTPOp -> Option Nat
+defn deliver-resolver
+  | op-start-session _ _ _ -> none
+  | op-abort _             -> none
+  | op-deliver _ _ _ r     -> r
+  | op-deliver-only _ _    -> none
+  | op-listen _ _ _          -> none
+  | op-gc-export _ _       -> none
+  | op-gc-answer _         -> none
+  | op-gc-exports _ _      -> none
+  | op-gc-answers _        -> none
+  | op-deliver-to-answer _ _ _ rm -> rm

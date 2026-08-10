@@ -508,7 +508,21 @@
             ;; Langle → angle group
             ;; (D4.P1a: the mixfix-rbrace exclusions here and below died with
             ;;  the dot-lbrace routing — no close-type can be mixfix-rbrace.)
-            [(eq? type 'langle)
+            ;; D4.P1b-iii spin-off 5: a `<` opens an angle group ONLY if a
+            ;; matching `>` exists — the same test parse-reader's langle arm
+            ;; makes, now shared rather than re-decided. Without the fallback
+            ;; this arm opened an angle group UNCONDITIONALLY, so `m<{a}`
+            ;; grouped as angle-group(brace-group) here while the datum layer
+            ;; read operator-`<` + `$select-brace`. That is a live LAYER
+            ;; DIVERGENCE on the `<` DISCLOSE surface (spec §3.7), reachable
+            ;; today at lib/examples/foray.prologos's `users:<{0.userName^}`.
+            ;;
+            ;; Falling through to the generic token arm — rather than
+            ;; synthesising some other node — is what makes the two agree: the
+            ;; reader treats an unmatched `<` as a plain operator token, and so
+            ;; does this now.
+            [(and (eq? type 'langle)
+                  (has-matching-rangle? vec (+ i 1) end close-type))
              (define-values (inner next-i)
                (group-items-to-tree vec (+ i 1) end 'rangle srcloc indent))
              (define group-node (parse-tree-node 'angle-group (list->rrb inner) srcloc indent))

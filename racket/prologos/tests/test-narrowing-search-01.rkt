@@ -78,7 +78,7 @@
 
 ;; Run WS code via temp file using shared environment
 (define (run-ws s)
-  (define tmp (make-temporary-file "prologos-test-~a.prologos"))
+  (define tmp (make-prologos-temp-file))
   (call-with-output-file tmp #:exists 'replace
     (lambda (out) (display s out)))
   (define result
@@ -219,3 +219,37 @@
 (test-case "pipeline/sexp: bare ?x = 5 → binds x (constructor inversion)"
   (define result (run-last "(= ?x 5)"))
   (check-true (string-contains? result "{:x")))
+
+
+;; ============================================================================
+;; HIGHER-ORDER narrowing: the WS gap, pinned (DEFERRED § FL Narrowing, 2026-08-03).
+;;
+;; `narrow [apply-op ?f 3N 2N] = 5N` in a .prologos file returns `nil` — no
+;; solutions, no error. Re-probed at HEAD and still exactly true.
+;;
+;; ⚠ A CORRECTION TO THE ENTRY, which says "the infrastructure works at
+;; sexp/API level (23 tests pass); the WS pipeline does not reach it". The 23
+;; tests are the narrowing suite in GENERAL — grep across every narrowing test
+;; file finds NO higher-order case at all, at any level. So "works at sexp
+;; level" is not something the suite establishes; it is an inference from
+;; adjacent coverage. The gap may be narrower or wider than the entry says.
+;;
+;; What is locked here is the OBSERVABLE behaviour, so that a future fix flips
+;; a test rather than being noticed by accident, and so the silence is on the
+;; record as silence: `nil` is indistinguishable from "no solution exists",
+;; which is the part that makes this worse than an error.
+;; ============================================================================
+
+(test-case "narrowing/higher-order query returns nil SILENTLY (the WS gap)"
+  (define rs (run-ws
+              (string-append
+               "spec apply-op [Nat -> Nat -> Nat] Nat Nat -> Nat\n"
+               "defn apply-op [f a b] [f a b]\n"
+               "narrow [apply-op ?f 3N 2N] = 5N\n")))
+  ;; no error is raised — that is the defect, not a nicety
+  (check-false (ormap prologos-error? rs)
+               (format "if this ever becomes a loud refusal, THIS assertion flips: ~v" rs))
+  ;; …and the answer is the empty solution set, which cannot be told apart
+  ;; from a genuine "no solutions"
+  (check-true (regexp-match? #rx"nil" (format "~a" (last rs)))
+              (format "~v" rs)))

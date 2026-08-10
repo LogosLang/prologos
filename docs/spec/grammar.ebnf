@@ -16,7 +16,9 @@
 (*   - ? special-sequence ? for lexer-level constructs                 *)
 (*   - [...] for optional, {...} for repetition, (...) for grouping   *)
 (*                                                                     *)
-(* Date: 2026-02-21                                                    *)
+(* Date: 2026-02-21; §5.28 (relational) updated 2026-08-03 for the      *)
+(* Rel T1 POL syntax cluster (POL.7 fact rows, POL.8 parenless goals,   *)
+(* POL.9 implicit solve, Aspect C fused ?x:T params).                   *)
 (* ================================================================== *)
 
 
@@ -1050,35 +1052,99 @@ multi-arity     = { '|' , '[' , rel-params , ']' , clause-body } ;
 (* Anonymous relation *)
 anon-relation   = '(' , 'rel' , '[' , rel-params , ']' , clause-body , ')' ;
 
-(* Relation parameters with optional mode annotations *)
+(* Relation parameters with optional mode annotations.
+   A param may carry a FUSED type annotation (Rel T1 Aspect C, C.b.1):
+   ?x:Int constrains the logic variable to a runtime domain. The type is a
+   SINGLE token, exactly as in `defn` params and `let` bindings. *)
 rel-params      = { mode-param } ;
-mode-param      = '?' , identifier           (* free logic variable *)
+mode-param      = '?' , identifier , [ ':' , type-name ]  (* free logic var, opt. fused type *)
                 | '+' , identifier           (* input mode *)
                 | '-' , identifier           (* output mode *)
                 | identifier                 (* no mode annotation *)
                 ;
+type-name       = ? uppercase letter ? , { ident-char } ;
 
-(* Narrowing variables with optional constraint chains (Phase 3c).
-   ?x:Nat:Even constrains the logic variable x to type Nat satisfying Even.
-   Constraint names must start with uppercase (type names).
-   The colon-constraint segments are greedily consumed by the reader when
-   ':' is immediately followed by an uppercase letter. *)
-narrow-var      = '?' , identifier , { ':' , constraint-name } ;
+(* Narrowing variables with constraint CHAINS (?x:Nat:Even) are DEAD IN WS MODE
+   and their spelling COLLIDES with the fused single-type annotation above.
+   Retained here only to document the conflict: a chained `?x:A:B` is reserved
+   for the UCS track and is an error today, exactly as chained `x:A:B` is in a
+   `defn` param list. Do not read this production as live surface. *)
+narrow-var      = '?' , identifier , { ':' , constraint-name } ;   (* RESERVED *)
 constraint-name = ? uppercase letter ? , { ident-char } ;
 
-(* Clause body: goals separated by sentinels *)
-clause-body     = '&>' , { goal }            (* rule clause: head :- goals *)
-                | '||' , { fact-row }        (* fact block: ground data *)
+(* Clause body: goals separated by sentinels.
+
+   LAYOUT IS PART OF THE GRAMMAR HERE and cannot be expressed in pure EBNF; the
+   productions below are the token-level shape, with the layout rules stated as
+   prose because that is where they actually live (Rel T1 POL.8).
+
+   `&>` groups may DROP the goal parens, and the line's HEAD TOKEN decides how
+   the line reads:
+     - a '(' head  => the line is a SEQUENCE of paren goals, each parenthesized
+                      (mixing parenthesized and bare on one line is an error);
+     - a symbol head => the line is EXACTLY ONE goal, and any parens inside it
+                      are ARGUMENT terms — which is what makes `not (= c n)`
+                      parse as one negation goal over a unification term.
+
+   Continuation lines, relative to the first goal's column:
+     - at the goal column   => a SIBLING goal (conjunction);
+     - indented deeper      => continues the PREVIOUS goal;
+     - between the `&>` column and the goal column => a mis-indent error that
+       names both columns.
+
+   Inside explicit parens — `(rel [x] &> ...)` — the reader suspends indent
+   grouping, but the same grammar applies (the parser regroups by srcloc). A
+   zero-arg goal on its own line must be written `(foo)`: a lone token is
+   spliced bare by the reader and cannot be told from an argument. *)
+clause-body     = '&>' , clause-goals        (* rule clause: head :- goals *)
+                | '||' , fact-block          (* fact block: ground data *)
                 | { goal }                   (* bare goals: implicit clause *)
                 ;
 
+clause-goals    = paren-goal , { paren-goal }   (* '(' head: a sequence *)
+                | bare-goal                     (* symbol head: exactly ONE *)
+                ;
+paren-goal      = goal ;
+bare-goal       = identifier , { expr } ;       (* parens inside are ARGUMENTS *)
+
+(* Fact block. Each `||` line is a ROW. A row may be split into several
+   EXPLICIT rows by `|` separators on one line; each `|` segment must match the
+   relation's arity exactly, and an empty segment is an error. Without `|`,
+   terms CHUNK by arity, and a partial remainder is a LOUD ERROR (it formerly
+   registered a silent dead row no query could match). *)
+fact-block      = { fact-line } ;
+fact-line       = fact-row , { '|' , fact-row } ;
 fact-row        = expr , { expr } ;          (* row of ground terms *)
 
-(* Goals *)
+(* Goals.
+
+   A paren group in COMMAND POSITION *is* a goal — it carries an implicit
+   `solve` (Rel T1 POL.9). Goal-ness comes from context (`defr` / `solve` /
+   `rel` bodies) or, everywhere else, from PARENS:
+
+       (fruit-not-of-color f "red")        == solve (fruit-not-of-color f "red")
+       def blues := (fruit-color f "blue") == := solve (...)
+
+   `foo x` and `[foo x]` stay APPLICATION; keyword heads keep their own forms
+   (`(match ...)`, `(+ 1 2)`). Scope is command position ONLY — top-level
+   commands and a `def` RHS — NOT general expression position.
+
+   The GOAL KEYWORDS `rel`, `not`, `=`, `is` take the implicit solve too, so
+   `(not (blocked "c"))` at top level IS a NAF query. `guard` and `cut` are
+   deliberately excluded: a top-level solve does not dispatch them either.
+   The functional readings live on the BRACKET spelling — `[not true]` is
+   `false`, `[= 1 1]` is `true`.
+
+   *** WS / SEXP DIVERGENCE, institutionalized and accepted (POL.9) ***
+   `(f x)` is a GOAL in WS mode but stays an APPLICATION in the sexp IR: the WS
+   reader marks paren origin and the native sexp reader does not. Sexp-mode
+   fixtures — including sexp-style forms embedded in .prologos files — get
+   application. *)
 goal            = '(' , identifier , { expr } , ')'   (* relational goal application *)
                 | '(' , '=' , expr , expr , ')'        (* unification goal *)
                 | '(' , 'is' , identifier , expr , ')' (* functional eval in relational context *)
                 | '(' , 'not' , goal , ')'             (* negation-as-failure *)
+                | bare-goal                            (* WS `&>` groups only — see above *)
                 ;
 
 (* Solve / Explain *)

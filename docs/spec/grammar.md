@@ -1,3 +1,10 @@
+> **⚠ GENERATED ARTIFACT — STALE. Read `grammar.org` instead.**
+> `grammar.org` is the canonical source (`workflow.md`: "ALL edits MUST go to the
+> `.org`"). Claims here may already have been retracted at the source.
+> For how far behind this export is RIGHT NOW, run `tools/check-doc-twins.sh`
+> — it reads both files' last commit times, so it cannot itself go stale.
+> Regenerating needs org-export (emacs or pandoc).
+
 - [Introduction](#org68bb08e)
 - [Lexical Grammar](#orgad4de3d)
   - [Comments](#orgdb987f9)

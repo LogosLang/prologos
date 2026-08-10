@@ -335,11 +335,21 @@
     [(string? v) (expr-string v)]
     [(boolean? v) (if v (expr-true) (expr-false))]
     [(exact-integer? v) (expr-int v)]
-    ;; Already an AST expression
-    [(or (expr-zero? v) (expr-suc? v) (expr-nat-val? v) (expr-true? v) (expr-false? v)
-         (expr-string? v) (expr-int? v) (expr-keyword? v) (expr-fvar? v)
-         (expr-app? v) (expr-champ? v) (expr-lam? v) (expr-pair? v))
-     v]
+    ;; Already an AST expression — ANY of them.
+    ;;
+    ;; This was a hand-enumerated list of thirteen predicates in front of an
+    ;; `unknown` fallback, which is the exhaustive-walker shape `pipeline.md`
+    ;; warns about: a node kind not on the list falls through and the fallback
+    ;; does the wrong thing QUIETLY. It did. A relational variable unified with
+    ;; a collection literal came back as the symbol `unknown` while the static
+    ;; row type was derived correctly — the one place the static row type and
+    ;; the actual row provably disagreed.
+    ;;
+    ;; `expr?` is the whole point of the fallback anyway: it exists to catch RAW
+    ;; RACKET values arriving from the solver's normalization boundary (strings,
+    ;; booleans, integers, handled above), not to filter AST nodes. Every expr
+    ;; passes through, including the ones added tomorrow.
+    [(expr? v) v]
     [else (expr-fvar (if (symbol? v) v 'unknown))]))
 
 ;; ── Rel T1 Aspect B (typed solution rows), entry-gate (b) ──────────────────────
@@ -548,14 +558,22 @@
 ;; a de Bruijn variable FREE w.r.t. the container boundary is the poisoned
 ;; shape: shift/subst treat these containers as closed leaves (BY CONTRACT
 ;; under ruling (D) — champ is a closed runtime map value), so a later beta
-;; over the enclosing binder silently drops the argument or captures. Until the
-;; SUB.3 fix (NbE open-the-binder) makes the shape unconstructible, refuse to
-;; PERSIST it at the three nf-persisting boundaries (solve/solve-one is-goal
-;; answer rows + validate base-ok) — a loud per-command error via the POL.4
-;; exn:prologos-solve pattern instead of a silent wrong answer. Deliberately
-;; NOT at shift/subst (no srcloc/command context) and NOT at the champ mint
-;; (fires on correct display-only code — driver.rkt legitimately nf's eval
-;; results for display).
+;; over the enclosing binder silently drops the argument or captures.
+;;
+;; ⚠ "Until the SUB.3 fix …" is how this read until 2026-08-04, and SUB.3
+;; LANDED at `7ea49168` — NbE open-the-binder makes the shape unconstructible,
+;; and SUB.3b (`036b59f7`) closed the narrowing sibling. The tripwire is NOT a
+;; stopgap awaiting that fix; per the design doc's SUB.3a row it is
+;; deliberately KEPT as the standing invariant guard — "an assertion, not a
+;; dual mechanism". Do not remove it on the strength of SUB.3 being done: being
+;; done is precisely what the assertion now asserts.
+;;
+;; It refuses to PERSIST the poisoned shape at the three nf-persisting
+;; boundaries (solve/solve-one is-goal answer rows + validate base-ok) — a loud
+;; per-command error via the POL.4 exn:prologos-solve pattern instead of a
+;; silent wrong answer. Deliberately NOT at shift/subst (no srcloc/command
+;; context) and NOT at the champ mint (fires on correct display-only code —
+;; driver.rkt legitimately nf's eval results for display).
 ;;
 ;; The walk is depth-aware INSIDE containers: a bvar bound by a binder that is
 ;; itself inside the container (e.g. an answer row holding a closed lambda,
@@ -2149,6 +2167,14 @@
        ;; absent+no-default+NOT-required → a partial-view SKIP (D22.4 amendment 2:
        ;; :requires is a read-capability, not a completeness contract).
        (define required? (list-ref entry 6))
+       ;; 2026-08-03 (walker charter item 4): the REMAINDER of each deep
+       ;; `:requires` path whose top hop is this field. `'()` for a schema and
+       ;; for any field with no deep requirement, which is almost all of them.
+       ;; Read defensively: a plan baked before this slot existed (a `.pnet`
+       ;; written by an older build, or a hand-built plan in a test) is one
+       ;; entry short, and a missing deep-requires list means exactly "no deep
+       ;; requirements" — the correct reading, not a crash.
+       (define req-subpaths (if (> (length entry) 7) (list-ref entry 7) '()))
        (define kexpr (expr-keyword kw))
        (define khash (equal-hash-code kexpr))
        (define found (champ-lookup c khash kexpr))
@@ -2162,6 +2188,40 @@
               (loop (cdr entries) okc errc any-err?))]  ; SKIP (view: optional field)
          [else
           (define val (nf (if (eq? found 'none) default found)))
+          ;; The deep-`:requires` read-capability, checked INSIDE this field's
+          ;; value. Reported under the full dotted path (`:address.zip`) rather
+          ;; than under the top hop, because the err champ is keyed by field and
+          ;; `{:address missing-required}` would be a lie — `:address` is right
+          ;; there. `missing-required` is the correct Reason: this IS a
+          ;; read-capability miss, just one level in.
+          ;;
+          ;; A non-map value on the path is a MISS, not an accept: unlike the
+          ;; type WITNESS (which declines to assert what it cannot read), a
+          ;; `:requires` is a claim about reachability, and a path that cannot
+          ;; be walked is unreachable by definition.
+          (define deep-misses
+            (for/list ([sp (in-list req-subpaths)]
+                       #:unless (let walk ([v val] [steps sp])
+                                  (and (expr-champ? v)
+                                       (let* ([k (expr-keyword (car steps))]
+                                              [hit (champ-lookup (expr-champ-racket-champ v)
+                                                                 (equal-hash-code k) k)])
+                                         (and (not (eq? hit 'none))
+                                              (or (null? (cdr steps))
+                                                  (walk (nf hit) (cdr steps))))))))
+              sp))
+          (define (add-deep-misses e a)
+            (if (null? deep-misses)
+                (values e a)
+                (values (for/fold ([e e]) ([sp (in-list deep-misses)])
+                          (let ([k (expr-keyword
+                                    (string->symbol
+                                     (string-join (cons (symbol->string kw)
+                                                        (map symbol->string sp))
+                                                  ".")))])
+                            (champ-insert e (equal-hash-code k) k
+                                          (expr-fvar missing-name))))
+                        #t)))
           (cond
             ;; type-witness (the s1 acceptance tags; skip-safe by construction)
             [(not (value-witnesses-tag? val tag))
@@ -2177,7 +2237,7 @@
                                      (expr-fvar default-uneval-name)
                                      (expr-app (expr-app (expr-fvar typemis-name)
                                                          (expr-string type-str))
-                                               (expr-string (value-kind-string val)))))
+                                               (expr-string (witness-got-string val tag)))))
                    #t)]
             [else
              ;; :check pred (baked expr-lam; beta via nf)
@@ -2185,12 +2245,14 @@
              (cond
                ;; no :check on this field → passes
                [(not pred-result)
-                (loop (cdr entries) (champ-insert okc khash kexpr val) errc any-err?)]
+                (let-values ([(e a) (add-deep-misses errc any-err?)])
+                  (loop (cdr entries) (champ-insert okc khash kexpr val) e a))]
                ;; panic in a pred → the panic IS the node's result (D27.3)
                [(expr-panic? pred-result) pred-result]
                ;; a clean Bool result: true passes, false is a check-failed
                [(expr-true? pred-result)
-                (loop (cdr entries) (champ-insert okc khash kexpr val) errc any-err?)]
+                (let-values ([(e a) (add-deep-misses errc any-err?)])
+                  (loop (cdr entries) (champ-insert okc khash kexpr val) e a))]
                [(expr-false? pred-result)
                 (loop (cdr entries) okc
                       (champ-insert errc khash kexpr
@@ -2298,8 +2360,7 @@
 (define (whnf e)
   (define cache (current-whnf-cache))
   (cond
-    [(and cache (hash-ref cache e #f))
-     => values]
+    [(and cache (hash-ref cache e #f)) => values]
     [else
      (define result (whnf-impl e))
      ;; Issue #70 (N6e-E5): do NOT cache a result that is an (unsolved) meta —
@@ -2350,6 +2411,13 @@
       ;; Structural forms (not reducible at head)
       (expr-lam? e) (expr-pair? e) (expr-union? e)
       (expr-vcons? e) (expr-vnil? e)
+      ;; The Fin constructors, alongside their Vec counterparts. Canonical by
+      ;; the same argument: `whnf-impl/match` has no bare-head arm for either
+      ;; (both appear only under `nf` congruence), so reaching the full match
+      ;; can only end at `[_ e]`. Added when `vindex` gained its computation
+      ;; rules — its congruence arm now whnf's the INDEX, so these are on a
+      ;; path that is actually taken.
+      (expr-fzero? e) (expr-fsuc? e)
       ;; D4.P4a: container VALUE carriers. This list held every container
       ;; TYPE former (Map/Set/PVec/TVec/TMap/TSet/Record) and ZERO of the
       ;; value carriers, so every champ/rrb/hset reaching whnf paid the full
@@ -2457,6 +2525,18 @@
     ;; Vec eliminators: vhead/vtail on vcons
     [(expr-vhead _ _ (expr-vcons _ _ hd _)) (whnf hd)]
     [(expr-vtail _ _ (expr-vcons _ _ _ tl)) (whnf tl)]
+    ;; …and vindex, which had NO computation rule at all (QTT P5 residual 1):
+    ;; it appeared only as an `nf` congruence arm, so it type-checked and
+    ;; multiplicity-checked and then sat there as a stuck term. The two rules
+    ;; are forced by the indices — `i : Fin n` and `v : Vec A n` step in
+    ;; lockstep, so a canonical index always meets a canonical vector:
+    ;;   vindex(A, n, fzero(m),   vcons(A, m, hd, tl)) -> hd
+    ;;   vindex(A, n, fsuc(m, j), vcons(A, m, _,  tl)) -> vindex(A, m, j, tl)
+    ;; The recursive arm rebuilds at length `m` (the tail's length), not `n`,
+    ;; because that is the length `tl` actually has.
+    [(expr-vindex _ _ (expr-fzero _) (expr-vcons _ _ hd _)) (whnf hd)]
+    [(expr-vindex t _ (expr-fsuc m j) (expr-vcons _ _ _ tl))
+     (whnf (expr-vindex t m j tl))]
 
     ;; Foreign function application: accumulate args, call when arity reached
     [(expr-app (expr-foreign-fn name proc arity args marshal-in marshal-out src-mod rkt-name) arg)
@@ -2519,6 +2599,14 @@
     [(expr-vtail t n v)
      (let ([v* (whnf v)])
        (if (equal? v* v) e (whnf (expr-vtail t n v*))))]
+    ;; vindex needs BOTH the index and the vector canonical, so reduce both and
+    ;; retry if either moved. Reducing only the vector (the vhead/vtail shape)
+    ;; would leave `vindex(A, n, [f x], vcons …)` stuck on a computable index.
+    [(expr-vindex t n i v)
+     (let ([i* (whnf i)] [v* (whnf v)])
+       (if (and (equal? i* i) (equal? v* v))
+           e
+           (whnf (expr-vindex t n i* v*))))]
 
     ;; ---- Int iota rules: compute when arguments are int literals ----
 
@@ -4497,8 +4585,7 @@
 (define (nf e)
   (define cache (current-nf-cache))
   (cond
-    [(and cache (hash-ref cache e #f))
-     => values]
+    [(and cache (hash-ref cache e #f)) => values]
     [else
      (define result (nf-whnf (whnf e)))
      ;; POL.10 hardening: match whnf's Issue-#70 guard — never cache a result
@@ -4616,7 +4703,23 @@
     [(expr-int-lt a b) (expr-int-lt (nf a) (nf b))]
     [(expr-int-le a b) (expr-int-le (nf a) (nf b))]
     [(expr-int-eq a b) (expr-int-eq (nf a) (nf b))]
-    [(expr-from-nat n) (expr-from-nat (nf n))]
+    ;; from-nat must RE-FIRE its rule after normalizing the argument, not just
+    ;; rebuild the node. `whnf` cannot see through `(suc <unreduced>)` — it does
+    ;; not go under constructors — so a from-nat over a COMPUTED Nat arrives
+    ;; here still stuck, with an argument that only `nf` can turn into a
+    ;; numeral. Rebuilding blindly left it stuck forever.
+    ;;
+    ;; The old code was silent in the worst way: it survived to the FFI
+    ;; boundary and died there as "Cannot marshal to integer — not an Int
+    ;; literal: #(struct:expr-from-nat #(struct:expr-nat-val 4))", naming a
+    ;; fully-reduced argument and pointing at the marshaller, which is correct.
+    ;; It only bit for values built by arithmetic: `from-nat 1N` is a literal,
+    ;; and `from-nat (suc zero)` reduces under whnf, so every small hand-written
+    ;; case worked and the whole suite was green.
+    [(expr-from-nat n)
+     (let* ([n* (nf n)]
+            [k (nat-value n*)])
+       (if k (expr-int k) (expr-from-nat n*)))]
 
     ;; Rat normalization
     [(expr-Rat) e]
@@ -4989,8 +5092,18 @@
     [(expr-narrow func args target vars)
      (expr-narrow (nf func) (map nf args) (nf target) vars)]
 
-    ;; Foreign function: opaque leaf (already in WHNF)
-    [(expr-foreign-fn _ _ _ _ _ _ _ _) e]
+    ;; Foreign function. NOT a closed leaf: `args` ACCUMULATES whnf'd Prologos
+    ;; argument expressions on the partial-application path
+    ;; (reduction.rkt:2176), so a node reachable under a binder can hold an
+    ;; OPEN term. The comment here used to say "opaque leaf -- no Prologos
+    ;; sub-expressions", asserting an invariant nothing enforced: the
+    ;; `expr-champ` shape from pipeline.md § "Exhaustive Walkers", where the
+    ;; same claim cost silently dropped arguments and variable capture.
+    [(expr-foreign-fn name proc arity args mi mo sm rn)
+     (define args* (map nf args))
+     (if (andmap eq? args args*)
+         e
+         (expr-foreign-fn name proc arity args* mi mo sm rn))]
 
     ;; Union types: normalize components
     [(expr-union l r) (expr-union (nf l) (nf r))]
@@ -5051,4 +5164,21 @@
             (= (vector-length va) (vector-length vb))
             (for/and ([i (in-range 1 (vector-length va))]) ; skip struct-name at 0
               (conv-nf (vector-ref va i) (vector-ref vb i)))))]
+    ;; Substitution-containment defect, META half (2026-08-03): the struct walk
+    ;; above stops at a RACKET VECTOR, which is exactly where a champ/hset/rrb
+    ;; keeps its entries — `(vector? …)` is not `(struct? …)`. Those fell to
+    ;; `equal?`, which is STRICTER than conv: no hole-as-wildcard, no
+    ;; meta-identity rule.
+    ;;
+    ;; The failure direction is the OPPOSITE of `occurs?`'s and worth stating:
+    ;; this was INCOMPLETE, not unsound — it answered #f where conv should say
+    ;; #t (a hole inside a map value or a vector element failed to act as a
+    ;; wildcard, while a bare hole worked), so it could reject a valid
+    ;; conversion but never accept an invalid one. Probed before fixing.
+    ;;
+    ;; Read-only, like `occurs?`, which is why this half is a recursion arm and
+    ;; the substituting walkers still need the reconstructive treatment.
+    [(and (vector? a) (vector? b))
+     (and (= (vector-length a) (vector-length b))
+          (for/and ([x (in-vector a)] [y (in-vector b)]) (conv-nf x y)))]
     [else (equal? a b)]))

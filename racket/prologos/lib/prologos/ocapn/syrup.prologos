@@ -1,0 +1,345 @@
+ns prologos::ocapn::syrup
+
+;; ========================================
+;; Syrup-style value model for OCapN
+;; ========================================
+;;
+;; Syrup is the OCapN serialisation format. We do NOT implement the
+;; bytewise wire format here (that would require byte-string IO with
+;; capability-restricted FFI). Instead we model Syrup's *abstract*
+;; value space — the set of things a CapTP message can carry.
+;;
+;; The mapping below mirrors the Model.md document:
+;;   atoms      : null | bool | int | symbol | string
+;;   containers : list | struct (record) | tagged
+;;   references : refr id | promise id
+;;
+;; Byte-arrays, floats and sets are all here. Floats and sets were absent for
+;; a long time and that was a real gap, not a scoping decision: the reference
+;; emits both (`contrib/syrup.py`), so a peer that sent one got a decode
+;; failure from us and no diagnostic.
+;;
+;; Identifiers are Nat (vat-local). A wire serialiser would translate
+;; these to the descriptor table positions (desc:export N etc.) at
+;; the CapTP boundary; that translation lives in captp-session.
+
+require [prologos::data::list   :refer [List nil cons]]
+        [prologos::data::option :refer [Option none some]]
+
+;; ========================================
+;; Syrup values
+;; ========================================
+;;
+;; Note on the `tagged` constructor: in Syrup-as-spec, tagged values
+;; carry a SYMBOL label and an arbitrary payload, e.g. <op:deliver ...>.
+;; We follow that convention for CapTP messages (see message.prologos).
+
+data SyrupValue
+  syrup-null
+  syrup-bool   : Bool
+  syrup-nat    : Nat
+  syrup-int    : Int
+  syrup-string : String
+  syrup-symbol : String                  ;; symbol name as a string
+  ;; Phase 19: opaque bytestring — wire form `<len>:<bytes>`.
+  ;; Backed by Prologos String at the model level (the FFI layer
+  ;; treats String as a byte sequence). Distinct from syrup-string
+  ;; on the wire (different marker char) — used for cryptographic
+  ;; payloads, raw blobs, etc.
+  syrup-bytes  : String
+  syrup-list   : List SyrupValue
+  ;; A Syrup DICTIONARY — wire form `{ k1 v1 k2 v2 ... }`.
+  ;;
+  ;; Represented as a FLAT alternating key/value list rather than an assoc
+  ;; list: the flat form reuses `List SyrupValue`, so every existing list
+  ;; helper, `encode-many` and `decode-many-loop` all apply unchanged. Order
+  ;; is preserved exactly as decoded — Syrup canonicalises by sorted key on
+  ;; the wire, and since we neither re-sort nor re-order, re-encoding a
+  ;; decoded dict is byte-identical. That is what `re-encode` needs in order to
+  ;; reproduce a peer's bytes for signature verification — and it is true of
+  ;; the INBOUND direction only. It read as a blanket licence not to sort
+  ;; anywhere, which left every frame we originate non-canonical; `encode`
+  ;; sorts (see `encode-dict-body` in syrup-wire).
+  ;;
+  ;; This was the last unimplemented Syrup form we needed, and its absence was
+  ;; invisible until it wasn't: `OCapNPeer` carries its netlayer hints as a
+  ;; dict (`{4"host9"127.0.0.14"port5"22116}`), so EVERY frame carrying a
+  ;; location — third-party handoffs, sturdyrefs — died at the first `{` with
+  ;; decode-op returning `none` and no diagnostic.
+  syrup-dict   : List SyrupValue
+  ;; A Syrup SET — wire form `#` item* `$`, canonicalised by sorted encoded
+  ;; item exactly as a dict is by sorted key.
+  syrup-set    : List SyrupValue
+  ;; A Syrup FLOAT, carried as its RAW WIRE PAYLOAD INCLUDING THE MARKER
+  ;; byte: "D" ++ 8 big-endian IEEE-754 bytes, or "F" ++ 4.
+  ;;
+  ;; Not as a number. Nothing in this stack does float arithmetic, and the one
+  ;; thing the codec owes a peer is byte-exactness — a signature covers bytes.
+  ;; Decoding an `F` to a number and re-encoding it as the `D` the reference
+  ;; emits would be a value-preserving round trip that changes the bytes, i.e.
+  ;; precisely the class of defect `re-encode` exists to avoid. Keeping the
+  ;; marker in the payload makes both forms round-trip exactly and costs one
+  ;; constructor instead of two.
+  syrup-float  : String
+  ;; tagged label + payload (payload can itself be a syrup-list)
+  syrup-tagged : String -> SyrupValue
+  ;; An object reference, vat-local position. The peer's import/export
+  ;; tables map these to <desc:export N> on the wire.
+  syrup-refr     : Nat
+  syrup-promise  : Nat
+
+;; ========================================
+;; Predicates (one per constructor)
+;; ========================================
+;;
+;; We deliberately spell out every constructor in every predicate,
+;; because match-with-wildcard on user-defined data triggers a known
+;; type-inference limitation (see goblin-pitfalls #2 and the matching
+;; comment in prologos::data::datum).
+
+spec null? SyrupValue -> Bool
+defn null?
+  | syrup-null         -> true
+  | syrup-bool _       -> false
+  | syrup-nat _        -> false
+  | syrup-int _        -> false
+  | syrup-string _     -> false
+  | syrup-symbol _     -> false
+  | syrup-list _       -> false
+  | syrup-tagged _ _   -> false
+  | syrup-bytes _      -> false
+  | syrup-refr _       -> false
+  | syrup-promise _    -> false
+  | syrup-dict    _   -> false
+  | syrup-set _ -> false
+  | syrup-float _ -> false
+
+spec bool? SyrupValue -> Bool
+defn bool?
+  | syrup-null         -> false
+  | syrup-bool _       -> true
+  | syrup-nat _        -> false
+  | syrup-int _        -> false
+  | syrup-string _     -> false
+  | syrup-symbol _     -> false
+  | syrup-list _       -> false
+  | syrup-tagged _ _   -> false
+  | syrup-bytes _      -> false
+  | syrup-refr _       -> false
+  | syrup-promise _    -> false
+  | syrup-dict    _   -> false
+  | syrup-set _ -> false
+  | syrup-float _ -> false
+
+spec refr? SyrupValue -> Bool
+defn refr?
+  | syrup-null         -> false
+  | syrup-bool _       -> false
+  | syrup-nat _        -> false
+  | syrup-int _        -> false
+  | syrup-string _     -> false
+  | syrup-symbol _     -> false
+  | syrup-list _       -> false
+  | syrup-tagged _ _   -> false
+  | syrup-bytes _      -> false
+  | syrup-refr _       -> true
+  | syrup-promise _    -> false
+  | syrup-dict    _   -> false
+  | syrup-set _ -> false
+  | syrup-float _ -> false
+
+spec promise? SyrupValue -> Bool
+defn promise?
+  | syrup-null         -> false
+  | syrup-bool _       -> false
+  | syrup-nat _        -> false
+  | syrup-int _        -> false
+  | syrup-string _     -> false
+  | syrup-symbol _     -> false
+  | syrup-list _       -> false
+  | syrup-tagged _ _   -> false
+  | syrup-bytes _      -> false
+  | syrup-refr _       -> false
+  | syrup-promise _    -> true
+  | syrup-dict _       -> false
+  | syrup-set _ -> false
+  | syrup-float _ -> false
+
+spec tagged? SyrupValue -> Bool
+defn tagged?
+  | syrup-null         -> false
+  | syrup-bool _       -> false
+  | syrup-nat _        -> false
+  | syrup-int _        -> false
+  | syrup-string _     -> false
+  | syrup-symbol _     -> false
+  | syrup-list _       -> false
+  | syrup-tagged _ _   -> true
+  | syrup-bytes _      -> false
+  | syrup-refr _       -> false
+  | syrup-promise _    -> false
+  | syrup-dict    _   -> false
+  | syrup-set _ -> false
+  | syrup-float _ -> false
+
+;; ========================================
+;; Selectors
+;; ========================================
+;; Total functions returning Option (no partial pattern matches).
+
+spec get-nat SyrupValue -> Option Nat
+defn get-nat
+  | syrup-null         -> none
+  | syrup-bool _       -> none
+  | syrup-nat n        -> some n
+  | syrup-int _        -> none
+  | syrup-string _     -> none
+  | syrup-symbol _     -> none
+  | syrup-list _       -> none
+  | syrup-tagged _ _   -> none
+  | syrup-bytes _      -> none
+  | syrup-refr _       -> none
+  | syrup-promise _    -> none
+  | syrup-dict    _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
+
+spec get-string SyrupValue -> Option String
+defn get-string
+  | syrup-null         -> none
+  | syrup-bool _       -> none
+  | syrup-nat _        -> none
+  | syrup-int _        -> none
+  | syrup-string s     -> some s
+  | syrup-symbol _     -> none
+  | syrup-list _       -> none
+  | syrup-tagged _ _   -> none
+  | syrup-bytes _      -> none
+  | syrup-refr _       -> none
+  | syrup-promise _    -> none
+  | syrup-dict    _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
+
+spec get-refr SyrupValue -> Option Nat
+defn get-refr
+  | syrup-null         -> none
+  | syrup-bool _       -> none
+  | syrup-nat _        -> none
+  | syrup-int _        -> none
+  | syrup-string _     -> none
+  | syrup-symbol _     -> none
+  | syrup-list _       -> none
+  | syrup-tagged _ _   -> none
+  | syrup-bytes _      -> none
+  | syrup-refr id      -> some id
+  | syrup-promise _    -> none
+  | syrup-dict    _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
+
+spec get-promise SyrupValue -> Option Nat
+defn get-promise
+  | syrup-null         -> none
+  | syrup-bool _       -> none
+  | syrup-nat _        -> none
+  | syrup-int _        -> none
+  | syrup-string _     -> none
+  | syrup-symbol _     -> none
+  | syrup-list _       -> none
+  | syrup-tagged _ _   -> none
+  | syrup-bytes _      -> none
+  | syrup-refr _       -> none
+  | syrup-promise id   -> some id
+  | syrup-dict _       -> [none Nat]
+  | syrup-set _ -> [none Nat]
+  | syrup-float _ -> none
+
+spec get-tag SyrupValue -> Option String
+defn get-tag
+  | syrup-null         -> none
+  | syrup-bool _       -> none
+  | syrup-nat _        -> none
+  | syrup-int _        -> none
+  | syrup-string _     -> none
+  | syrup-symbol _     -> none
+  | syrup-list _       -> none
+  | syrup-tagged t _   -> some t
+  | syrup-bytes _      -> none
+  | syrup-refr _       -> none
+  | syrup-promise _    -> none
+  | syrup-dict    _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
+
+spec get-payload SyrupValue -> Option SyrupValue
+defn get-payload
+  | syrup-null         -> none
+  | syrup-bool _       -> none
+  | syrup-nat _        -> none
+  | syrup-int _        -> none
+  | syrup-string _     -> none
+  | syrup-symbol _     -> none
+  | syrup-list _       -> none
+  | syrup-tagged _ p   -> some p
+  | syrup-bytes _      -> none
+  | syrup-refr _       -> none
+  | syrup-promise _    -> none
+  | syrup-dict    _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
+
+;; Int -> Nat, clamped at 0.
+;;
+;; This was structural recursion — `int-to-nat-loop` building `suc` by `suc`
+;; — under a comment asserting "only used for table-position decoding (small
+;; Nats) so the cost is acceptable". Nothing enforced that, and the input is
+;; entirely peer-controlled: `wire-nat` is applied to inbound `desc:export` /
+;; `desc:answer` / `desc:import-object` payloads, so the 18 wire bytes
+;; `<op:deliver <desc:export 100000000+> …>` bought an unbounded stall in the
+;; connection handler. Measured on the old loop: 2 ms at N=10, 1 398 ms at
+;; N=20 000, and superlinear.
+;;
+;; The fix is not a cap. `Nat` has an O(1) native representation
+;; (`expr-nat-val`, the Idris-2 model) and a foreign whose RESULT type is
+;; declared `Nat` marshals through `integer->nat`, which constructs one
+;; directly. `max` is total, needs no wrapper module, and gives the clamp for
+;; free.
+foreign racket "racket/base" [max :as int-max-to-nat : Int -> Int -> Nat]
+
+spec int-to-nat Int -> Nat
+defn int-to-nat [i]
+  int-max-to-nat 0 i
+
+spec wire-nat SyrupValue -> [Option Nat]
+defn wire-nat
+  | syrup-int i ->
+      match [int-lt i 0]
+        | true  -> none
+        | false -> some [int-to-nat i]
+  | syrup-nat n      -> some n
+  | syrup-null       -> none
+  | syrup-bool _     -> none
+  | syrup-string _   -> none
+  | syrup-symbol _   -> none
+  | syrup-list _     -> none
+  | syrup-tagged _ _ -> none
+  | syrup-refr _     -> none
+  | syrup-bytes _  -> none
+  | syrup-promise _  -> none
+  | syrup-dict  _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
+
+;; ========================================
+;; Convenience constructors
+;; ========================================
+
+spec mk-tagged String SyrupValue -> SyrupValue
+defn mk-tagged [tag payload]
+  syrup-tagged tag payload
+
+spec mk-record String [List SyrupValue] -> SyrupValue
+  :doc "A record with a tag and a list of fields, encoded as tagged+list"
+defn mk-record [tag fields]
+  syrup-tagged tag [syrup-list fields]

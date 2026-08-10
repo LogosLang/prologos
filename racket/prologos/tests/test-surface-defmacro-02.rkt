@@ -144,15 +144,13 @@
 
 (test-case "defmacro/malformed-error"
   ;; Missing template
-  ;; ⚠ G2/B: was `check-exn` — a preparse syntax failure is a per-command error
-  ;; VALUE now, not a raise. Same proposition ("REFUSED, not silently accepted"),
-  ;; new channel. The 11 sibling `check-exn` sites in these files were LEFT ALONE:
-  ;; they still raise (they fail before the guarded seam), and converting them
-  ;; would have weakened a correct assertion.
-  (check-true (yields-prologos-error?
-    (lambda ()
-      (run-ns "(ns dm25)\n(defmacro (bad))")))))
-
+  (check-regexp-match
+   #rx"defmacro"
+    ;; 2026-08-03: a preparse FORM failure is a per-command error VALUE now
+    ;; (macros.rkt § per-FORM failure containment), not an escaping raise.
+    ;; Converting also TIGHTENS this: bare `exn:fail?` was satisfied by any
+    ;; failure at all; it now has to be this one.
+   (format "~a" (run-ns "(ns dm25)\n(defmacro (bad))"))))
 
 (test-case "defmacro/infinite-loop-error"
   ;; Macro that expands to itself → depth limit error

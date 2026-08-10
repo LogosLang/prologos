@@ -1,0 +1,52 @@
+;; Minimal repro — a 2-argument multi-arity `defn` over NULLARY constructors
+;; discriminates on the FIRST argument only, and says nothing about it.
+;;
+;; Compiles. Type-checks. 0 errors. Wrong answers:
+;;   [keq ka ka] -> true   (correct)
+;;   [keq ka kb] -> true   (WRONG — hits the `ka ka` arm)
+;;   [keq kb ka] -> true   (WRONG — hits the `kb kb` arm)
+;; The `| _ _ -> false` catch-all is unreachable.
+;;
+;; Found 2026-08-05 while replacing captp-core's Peano kind tags with a real
+;; sum type: `refr-kind-eq?` was written in this shape and quietly broke OCapN
+;; brand-check. One assertion in the whole tree distinguishes the two cases.
+;;
+;; ✅ FIXED 2026-08-05. Cause: `param-names` in `expand-defn-pattern-group` asked
+;; "are these all variables?" on the RAW patterns, before `normalize-pattern`
+;; consults `lookup-ctor`. A bare nullary ctor is a `pat-atom var` then, so
+;; `all-var?` was #t and the parameters got named after the PATTERNS — two
+;; parameters both named `ka` — so the second dispatch column re-read the first
+;; argument. Regression test: tests/test-multiarity-nullary-dispatch.rkt.
+;;
+;; Two earlier root causes published for this were wrong: "matches first arg
+;; only" and "the parser cannot split bare names". Instrumenting showed the parse
+;; and the normalized rows were both correct. Kept in DEFERRED as a worked
+;; example of inferring a mechanism instead of looking at one.
+;;
+;; This file now prints true/false/false/true. It stays as the minimal
+;; reproduction the fix was built against; the enforcing version lives in
+;; tests/test-multiarity-nullary-dispatch.rkt.
+
+ns multiarity-nullary-repro
+
+data K
+  ka
+  kb
+  kc
+
+spec keq K K -> Bool
+defn keq
+  | ka ka -> true
+  | kb kb -> true
+  | kc kc -> true
+  | _ _ -> false
+
+def r1 := [keq ka ka]
+def r2 := [keq ka kb]
+def r3 := [keq kb ka]
+def r4 := [keq kb kb]
+
+r1
+r2
+r3
+r4

@@ -20,6 +20,7 @@ current-capability-warnings
 current-capability-warnings-cell-id
 current-cell-id-namespace
 current-cfa-result
+current-check-fire-invariants?
 current-clock-cell-id
 current-coercion-registry
 current-coercion-registry-cell-id
@@ -39,6 +40,8 @@ current-defn-param-names
 current-deprecation-warnings
 current-deprecation-warnings-cell-id
 current-domain-classification-lookup
+current-duplicate-binding-warnings
+current-duplicate-binding-warnings-cell-id
 current-effect-executor
 current-elaborating-name
 current-emit-error-diagnostics
@@ -51,6 +54,8 @@ current-hasmethod-constraint-cell-id
 current-hasmethod-resolution-bridge-fn
 current-hasmethod-wakeup-cell-id
 current-impl-registry-cell-id
+current-inexhaustive-match-warnings
+current-inexhaustive-match-warnings-cell-id
 current-infer-constraints-mode?
 current-infra-assumption
 current-is-eval-fn
@@ -88,6 +93,7 @@ current-nf-cache
 current-ns-prop-cell-write
 current-ns-prop-new-cell
 current-observatory
+current-own-import-specs
 current-parallel-executor
 current-param-impl-registry-cell-id
 current-parsing-relational-goal?
@@ -128,6 +134,7 @@ current-relation-store
 current-relation-store-version
 current-relational-env
 current-repl-mode
+current-residuation-enabled?
 current-resolution-executor-pure
 current-retry-unify
 current-schema-registry
@@ -157,6 +164,7 @@ current-structural-mult-bridge
 current-subtype-check-count
 current-subtype-registry
 current-subtype-registry-cell-id
+current-suppress-duplicate-binding-warnings?
 current-termination-registry
 current-trait-cell-map-cell-id
 current-trait-constraint-cell-id

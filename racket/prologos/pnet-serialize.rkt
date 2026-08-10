@@ -25,6 +25,10 @@
          "syntax.rkt"
          "namespace.rkt"
          "source-location.rkt"
+         ;; Session type nodes. Added 2026-08-05 — the WHOLE family, not the
+         ;; one that detonated. `sessions.rkt` depends only on
+         ;; prelude/syntax/substitution, so there is no cycle.
+         "sessions.rkt"
          (only-in "propagator.rkt" cell-id
                   prop-network prop-network? make-prop-network
                   prop-net-hot prop-net-warm prop-net-cold
@@ -96,7 +100,13 @@
          relink-foreign-marshallers!
          foreign-module-path->require-spec
          pnet-stale?
+         reset-lib-source-staleness-cache!
          pnet-path-for-module
+         ;; The format's shape, exported so a test can pin it — it was a bare
+         ;; literal inside two functions that disagreed by construction (31 on
+         ;; the write side, a `>= 14` minimum on the read side).
+         PNET_VERSION
+         PNET_SLOT_COUNT
          ;; For testing
          make-serializer
          deep-struct->serializable
@@ -187,6 +197,23 @@
 ;; holding a Set has cross-process hashes baked in, and exact equality is the
 ;; only reliable sweep.
 (define PNET_VERSION 10)
+
+;; How many slots the positional payload has, for THIS version.
+;;
+;; `serialize-module-state` and `deserialize-module-state` exchange a bare
+;; positional list and driver.rkt's cache-hit arm is its only consumer, so
+;; nothing named the slots or checked the count. Appending is safe; INSERTING a
+;; slot anywhere before the tail shifts every later position — and because
+;; almost every slot is a hasheq, the types are indistinguishable. The failure
+;; mode is silent wrong registries, which is the #78 severity class exactly.
+;;
+;; Checked on BOTH sides. The writer asserts before it writes, so a mis-ordered
+;; build fails at the machine that made it rather than at whoever reads the
+;; cache; the reader requires exact equality, so a short or long payload is a
+;; cache miss instead of a shifted read.
+;;
+;; Bump this with PNET_VERSION whenever the payload gains or loses a slot.
+(define PNET_SLOT_COUNT 31)
 
 ;; ============================================================
 ;; Serialization: struct->vector + gensym tagging + foreign-proc
@@ -382,6 +409,35 @@
   (reg0! expr-zero) (reg0! expr-refl) (reg0! expr-Nat) (reg0! expr-Bool)
   (reg0! expr-true) (reg0! expr-false) (reg0! expr-Unit) (reg0! expr-unit)
   (reg0! expr-Nil) (reg0! expr-nil) (reg0! expr-hole) (reg0! expr-error)
+  ;; --- session types (2026-08-05) ---
+  ;; UNREGISTERED until now, and the failure was the one `pipeline.md` warns
+  ;; about: an unregistered node does NOT error at cache read — the unknown-tag
+  ;; fallback returns a raw VECTOR that PRINTS like the struct, and it fails the
+  ;; first predicate to touch it, arbitrarily far away. Here that was
+  ;; `sess-mu-body: contract violation; expected sess-mu?; given
+  ;; '#(struct:sess-mu …)` — a value that looks exactly like what it is being
+  ;; told it is not. The quote is the tell.
+  ;;
+  ;; `lib/prologos/core/io-protocols.prologos` declares FOUR recursive session
+  ;; protocols, so this broke the STANDARD LIBRARY for anyone with a warm
+  ;; `.pnet` cache, while passing for anyone whose cache was cold. Found by a
+  ;; cache-state change, not by a code change — which is why it had survived.
+  ;;
+  ;; The whole family is registered, not just `sess-mu`: registering only the
+  ;; node that detonated is the "registration-by-detonation" pattern this file
+  ;; has already been swept for once this session.
+  (reg0! sess-end)
+  (reg1! sess-mu (sess-end))
+  (reg1! sess-svar 0)
+  (reg1! sess-choice '())
+  (reg1! sess-offer '())
+  (reg2! sess-send (expr-Nat) (sess-end))
+  (reg2! sess-recv (expr-Nat) (sess-end))
+  (reg2! sess-dsend (expr-Nat) (sess-end))
+  (reg2! sess-drecv (expr-Nat) (sess-end))
+  (reg2! sess-async-send (expr-Nat) (sess-end))
+  (reg2! sess-async-recv (expr-Nat) (sess-end))
+  (reg0! sess-branch-error)
   (reg0! expr-Int) (reg0! expr-Rat) (reg0! expr-Char) (reg0! expr-String)
   (reg0! expr-Keyword) (reg0! lzero)
 
@@ -449,6 +505,26 @@
   (reg3! expr-reduce-arm 'ctor 0 (expr-unit))
   (reg3! expr-Eq (expr-Nat) (expr-zero) (expr-zero))
 
+  ;; QTT P5 residual 2: the Vec/Fin family — 9 nodes, ZERO registrations until
+  ;; 2026-08-03. Harmless only while no cached module contains one, and P5 is
+  ;; exactly what changed that: it made Vec/Fin defs pass the QTT gate for the
+  ;; first time, so they can now reach a library body and be cached.
+  ;;
+  ;; The failure this prevents does not look like a missing registration. An
+  ;; unregistered tag does not error at cache read — the reader's unknown-tag
+  ;; fallback returns a raw VECTOR, which then fails the first struct `match`
+  ;; to touch it, arbitrarily far away, with an error that PRINTS like the real
+  ;; struct (`#(struct:expr-vcons …)`). See `pipeline.md` item 6.
+  (reg2! expr-Vec (expr-Nat) (expr-zero))
+  (reg1! expr-Fin (expr-zero))
+  (reg1! expr-vnil (expr-Nat))
+  (regN! expr-vcons (expr-Nat) (expr-zero) (expr-unit) (expr-unit))
+  (reg1! expr-fzero (expr-zero))
+  (reg2! expr-fsuc (expr-zero) (expr-unit))
+  (reg3! expr-vhead (expr-Nat) (expr-zero) (expr-unit))
+  (reg3! expr-vtail (expr-Nat) (expr-zero) (expr-unit))
+  (regN! expr-vindex (expr-Nat) (expr-zero) (expr-unit) (expr-unit))
+
   ;; --- Four-arg ---
   (regN! expr-natrec (expr-Nat) (expr-unit) (expr-unit) (expr-zero))
   (regN! expr-boolrec (expr-Bool) (expr-unit) (expr-unit) (expr-true))
@@ -483,7 +559,7 @@
   ;; a raw vector that PRINTS like the struct it impersonates.
   (regN! schema-field    #f #f #f #f)           ;; keyword type-datum default-val check-pred
   (regN! schema-entry    #f '() #f #f)          ;; name fields closed? srcloc
-  (regN! selection-entry #f #f '() '() '() #f)  ;; name schema-name requires-paths provides-paths includes-names srcloc
+  (regN! selection-entry #f #f '() '() '() #f #f)  ;; name schema-name requires-paths provides-paths includes-names srcloc stub?
   (regN! session-entry   #f #f #f)              ;; name session-type srcloc
   (regN! strategy-entry  #f '() #f)             ;; name properties srcloc
   (regN! process-entry   #f #f #f '() #f)       ;; name session-type proc-body caps srcloc
@@ -607,8 +683,28 @@
   ;; library use is the Q11 Posit->Float instances.
   (for ([op (list expr-generic-from-rat expr-generic-from-int)])
     (auto-cache! op d d))
-  ;; Int/Rat ops
-  (for ([op (list expr-int-add expr-int-sub expr-int-mul expr-int-div expr-int-lt expr-int-eq)])
+  ;; …and the TWELVE SIBLINGS of those two, unregistered until 2026-08-03.
+  ;; This is `pipeline.md`'s "a fix applied to one member of a family but not
+  ;; its siblings" verbatim: from-rat/from-int were registered because they
+  ;; detonated (the Q11 Posit→Float instances), and the arithmetic and
+  ;; comparison nodes right beside them were left. Same landmine, same family,
+  ;; and these are the ones a user actually writes — every `+` `-` `*` `/` `<`
+  ;; in a generic context elaborates to one.
+  (for ([op (list expr-generic-add expr-generic-sub expr-generic-mul expr-generic-div
+                  expr-generic-lt expr-generic-le expr-generic-gt expr-generic-ge
+                  expr-generic-eq expr-generic-mod)])
+    (auto-cache! op d d))
+  (for ([op (list expr-generic-negate expr-generic-abs)])
+    (auto-cache! op d))
+  ;; Posit sqrt + from-nat: the Float lists below carry `sqrt`, the Posit lists
+  ;; above do not, and neither carries `from-nat`. Same sibling gap.
+  (for ([op (list expr-p8-sqrt expr-p16-sqrt expr-p32-sqrt expr-p64-sqrt
+                  expr-p8-from-nat expr-p16-from-nat expr-p32-from-nat expr-p64-from-nat)])
+    (auto-cache! op d))
+  ;; Int ops
+  (for ([op (list expr-int-add expr-int-sub expr-int-mul expr-int-div expr-int-lt expr-int-eq
+                  ;; `le` and `mod` were missing while `lt` and `eq` were present.
+                  expr-int-le expr-int-mod)])
     (auto-cache! op d d))
   (for ([op (list expr-int-neg expr-int-abs)])
     (auto-cache! op d))
@@ -792,11 +888,90 @@
        (> (file-or-directory-modify-seconds driver-zo-path)
           (file-or-directory-modify-seconds pnet-path))))
 
+;; ============================================================
+;; Transitive-source staleness (2026-08-03)
+;; ============================================================
+;;
+;; `source-hash-for-module` compares ONE file's mtime — the module's own — so a
+;; module whose DEPENDENCY changed is reported fresh, and its cached env
+;; snapshot still carries the dependency's OLD contributions. That is not a
+;; freshness nicety; it is a silent WRONG ANSWER. Verified before fixing:
+;;
+;;   base:  defn basev [x] [int+ x 1]
+;;   mid:   imports base;  defn midv [x] [basev x]
+;;   user:  imports mid;   def r := [midv 10]        => 11
+;;
+;; edit `base` to `[int+ x 100]`, re-run the USER file only:
+;;   cache ON, mid.pnet present  -> 11   ← the pre-edit answer
+;;   cache OFF                   -> 110
+;;   cache ON, mid.pnet deleted  -> 110
+;;
+;; This is the SAME SHAPE as the driver.zo check directly above, applied to the
+;; second input class: a `.pnet` is a function of the Racket compiler AND of
+;; every `.prologos` source that fed it. The zo check already answers "the
+;; compiler changed"; this answers "a library source changed".
+;;
+;; DELIBERATELY BLUNT — newest mtime across ALL library sources, not a
+;; per-module dependency set. The precise alternative is to record each
+;; module's dep list in its `.pnet` and walk it, which is better and which the
+;; dep-edges field once existed for; it was RETIRED as write-only (PPN 4C
+;; Addendum Phase 4B.1), so the precise version means re-adding it with a
+;; consumer. Choosing correct-and-slightly-blunt over correct-with-bookkeeping
+;; follows the driver.zo precedent rather than inventing a policy. The cost is
+;; paid ONLY when a `.prologos` under a lib path is edited, and is one cache
+;; regeneration sweep (~3-4 s for the ~55 prelude modules, per the v4->v5 note).
+;;
+;; MEMOIZED per process, KEYED BY THE LIB PATHS. The scan is one
+;; `directory-list` walk and a load of N modules would otherwise repeat it N
+;; times — but `current-lib-paths` genuinely varies within a process (every
+;; test that builds a temp lib rebinds it), so a single unkeyed box answers for
+;; the WRONG directory set. That is not theoretical: the first cut used one box
+;; and turned `test-pnet-registry-restore`'s intended cache HITS into misses,
+;; failing two assertions written precisely to catch "a MISS produces the
+;; correct answer and proves nothing".
+(define lib-sources-newest-cache (make-hash))
+
+(define (newest-lib-source-seconds)
+  (define key (map (lambda (p) (if (path? p) (path->string p) (format "~a" p)))
+                   (current-lib-paths)))
+  (cond
+    [(hash-ref lib-sources-newest-cache key #f) => values]
+    [else
+     (define newest
+       (for*/fold ([acc 0])
+                  ([root (in-list (current-lib-paths))]
+                   #:when (and (path-string? root) (directory-exists? root)))
+         (let walk ([dir root] [acc acc])
+           (for/fold ([acc acc])
+                     ([p (in-list (with-handlers ([exn:fail? (lambda (_) '())])
+                                    (directory-list dir #:build? #t)))])
+             (cond
+               [(directory-exists? p) (walk p acc)]
+               [(regexp-match? #rx"[.]prologos$" (path->string p))
+                (max acc (with-handlers ([exn:fail? (lambda (_) 0)])
+                           (file-or-directory-modify-seconds p)))]
+               [else acc])))))
+     (hash-set! lib-sources-newest-cache key newest)
+     newest]))
+
+;; Exported so a test can force a re-scan after writing a source file; also the
+;; honest escape hatch for a long-lived process that DOES edit lib sources.
+(define (reset-lib-source-staleness-cache!)
+  (hash-clear! lib-sources-newest-cache))
+
+(define (lib-sources-stale? pnet-path)
+  (and (file-exists? pnet-path)
+       (> (newest-lib-source-seconds)
+          (file-or-directory-modify-seconds pnet-path))))
+
 (define (pnet-stale? ns-sym source-path)
   (define pnet-path (pnet-path-for-module ns-sym))
   (or (not (file-exists? pnet-path))
       ;; Track 10B: check infrastructure staleness (Racket code changed)
       (infrastructure-stale? pnet-path)
+      ;; …and library-source staleness (a `.prologos` this module may depend on
+      ;; changed). Without this a dependency edit returns the PRE-EDIT answer.
+      (lib-sources-stale? pnet-path)
       (let ([cached-data (with-handlers ([exn? (lambda (_) #f)])
                            (call-with-input-file pnet-path read))])
         (or (not cached-data)
@@ -888,6 +1063,12 @@
              s-user-ops             ;; 29
              s-user-precs           ;; 30
              ))
+     ;; The count is part of the format, so a mismatch here is a bug in THIS
+     ;; function, caught at write time rather than becoming a shifted read.
+     (unless (= (length pnet-data) PNET_SLOT_COUNT)
+       (error 'serialize-module-state
+              "payload has ~a slots, PNET_SLOT_COUNT is ~a — a slot was added or removed without bumping the constant (and PNET_VERSION)"
+              (length pnet-data) PNET_SLOT_COUNT))
      (define pnet-path (pnet-path-for-module ns-sym))
      (make-directory* (path-only pnet-path))
      ;; Atomic write: write to temp, then rename
@@ -907,9 +1088,12 @@
               (list? raw)
               (= (car raw) PNET_VERSION)
               (equal? (cadr raw) (source-hash-for-module ns-sym source-path))
-              ;; Valid — reconstruct
-              ;; Phase 2e: includes 10 registries (indices 7-16)
-              (and (>= (length raw) 14)  ;; minimum version with 7 registries
+              ;; Valid — reconstruct.
+              ;; EXACT length, not a minimum. The version gate above already
+              ;; requires an exact match, so a payload of this version always
+              ;; has every slot; a `>=` here let a short or mis-ordered file
+              ;; through to a shifted read instead of failing as a cache miss.
+              (and (= (length raw) PNET_SLOT_COUNT)
                    (let ([s-env   (list-ref raw 2)]
                          [s-specs (list-ref raw 3)]
                          [s-locs  (list-ref raw 4)]
@@ -922,27 +1106,24 @@
                          [s-coerce  (list-ref raw 12)]
                          [s-cap     (list-ref raw 13)])
                      ;; Phase 2e: also extract trait + impl registries if present
-                     (define s-trait (and (>= (length raw) 17) (list-ref raw 14)))
-                     (define s-impl  (and (>= (length raw) 17) (list-ref raw 15)))
-                     (define s-pimpl (and (>= (length raw) 17) (list-ref raw 16)))
-                     (define s-spec-reg (and (>= (length raw) 18) (list-ref raw 17)))
-                     (define s-tycon-a  (and (>= (length raw) 19) (list-ref raw 18)))
-                     (define s-bundle  (and (>= (length raw) 20) (list-ref raw 19)))
-                     (define s-dparam (and (>= (length raw) 21) (list-ref raw 20)))
-                     (define s-tlaws  (and (>= (length raw) 22) (list-ref raw 21)))
-                     (define s-props  (and (>= (length raw) 23) (list-ref raw 22)))
-                     (define s-funcs  (and (>= (length raw) 24) (list-ref raw 23)))
-                     ;; #78 P2 (v4): indices 24-30. The length guards here are
-                     ;; vestigial — pnet-stale? and the gate above both require
-                     ;; EXACT version equality, so a v4 file always has all 31
-                     ;; slots — but they are kept in the existing style.
-                     (define s-schema    (and (>= (length raw) 25) (list-ref raw 24)))
-                     (define s-selection (and (>= (length raw) 26) (list-ref raw 25)))
-                     (define s-session   (and (>= (length raw) 27) (list-ref raw 26)))
-                     (define s-strategy  (and (>= (length raw) 28) (list-ref raw 27)))
-                     (define s-process   (and (>= (length raw) 29) (list-ref raw 28)))
-                     (define s-userops   (and (>= (length raw) 30) (list-ref raw 29)))
-                     (define s-userprecs (and (>= (length raw) 31) (list-ref raw 30)))
+                     (define s-trait (list-ref raw 14))
+                     (define s-impl  (list-ref raw 15))
+                     (define s-pimpl (list-ref raw 16))
+                     (define s-spec-reg (list-ref raw 17))
+                     (define s-tycon-a  (list-ref raw 18))
+                     (define s-bundle  (list-ref raw 19))
+                     (define s-dparam (list-ref raw 20))
+                     (define s-tlaws  (list-ref raw 21))
+                     (define s-props  (list-ref raw 22))
+                     (define s-funcs  (list-ref raw 23))
+                     ;; #78 P2 (v4): indices 24-30.
+                     (define s-schema    (list-ref raw 24))
+                     (define s-selection (list-ref raw 25))
+                     (define s-session   (list-ref raw 26))
+                     (define s-strategy  (list-ref raw 27))
+                     (define s-process   (list-ref raw 28))
+                     (define s-userops   (list-ref raw 29))
+                     (define s-userprecs (list-ref raw 30))
                      (list (deep-serializable->struct s-env)
                            (deep-serializable->struct s-specs)
                            (deep-serializable->struct s-locs)
@@ -955,28 +1136,30 @@
                            (deep-serializable->struct s-sub)
                            (deep-serializable->struct s-coerce)
                            (deep-serializable->struct s-cap)
-                           ;; 3 new registries (or empty if old .pnet format)
-                           (if s-trait (deep-serializable->struct s-trait) (hasheq))
-                           (if s-impl  (deep-serializable->struct s-impl)  (hasheq))
-                           (if s-pimpl (deep-serializable->struct s-pimpl) (hasheq))
-                           (if s-spec-reg (deep-serializable->struct s-spec-reg) (hash))
-                           (if s-tycon-a (deep-serializable->struct s-tycon-a) (hasheq))
-                           (if s-bundle (deep-serializable->struct s-bundle) (hasheq))
-                           (if s-dparam (deep-serializable->struct s-dparam) (hasheq))
-                           (if s-tlaws (deep-serializable->struct s-tlaws) (hasheq))
-                           (if s-props (deep-serializable->struct s-props) (hasheq))
-                           (if s-funcs (deep-serializable->struct s-funcs) (hasheq))
+                           ;; The "or empty if old .pnet format" fallbacks that
+                           ;; used to guard these are gone with the length
+                           ;; guards: an exact-length payload of this version
+                           ;; always has every slot, so the fallbacks were
+                           ;; unreachable — a second mechanism standing in front
+                           ;; of the version gate and hiding what it does.
+                           (deep-serializable->struct s-trait)
+                           (deep-serializable->struct s-impl)
+                           (deep-serializable->struct s-pimpl)
+                           (deep-serializable->struct s-spec-reg)
+                           (deep-serializable->struct s-tycon-a)
+                           (deep-serializable->struct s-bundle)
+                           (deep-serializable->struct s-dparam)
+                           (deep-serializable->struct s-tlaws)
+                           (deep-serializable->struct s-props)
+                           (deep-serializable->struct s-funcs)
                            ;; #78 P2 (v4) — returned positions 21-27.
-                           ;; Defaults match each parameter's own default so a
-                           ;; restore fold preserves key-comparison semantics
-                           ;; (all 7 default to hasheq; none is equal?-keyed).
-                           (if s-schema    (deep-serializable->struct s-schema)    (hasheq))
-                           (if s-selection (deep-serializable->struct s-selection) (hasheq))
-                           (if s-session   (deep-serializable->struct s-session)   (hasheq))
-                           (if s-strategy  (deep-serializable->struct s-strategy)  (hasheq))
-                           (if s-process   (deep-serializable->struct s-process)   (hasheq))
-                           (if s-userops   (deep-serializable->struct s-userops)   (hasheq))
-                           (if s-userprecs (deep-serializable->struct s-userprecs) (hasheq))
+                           (deep-serializable->struct s-schema)
+                           (deep-serializable->struct s-selection)
+                           (deep-serializable->struct s-session)
+                           (deep-serializable->struct s-strategy)
+                           (deep-serializable->struct s-process)
+                           (deep-serializable->struct s-userops)
+                           (deep-serializable->struct s-userprecs)
                            )))))))
 
 ;; ============================================================

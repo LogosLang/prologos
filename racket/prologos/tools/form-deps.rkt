@@ -350,8 +350,27 @@
 ;; ============================================================
 
 ;; Recursively collect all symbols from a datum tree.
+;; A `$`-headed symbol is a READER SENTINEL or a macro pattern variable, never
+;; a dependency on another form. Filtering them here — structurally, by the one
+;; property they all share — replaces the hand-kept `$` entries in
+;; `syntax-keywords`, which listed ten and omitted roughly thirty
+;; (`$nil-dot-access`, `$postfix-index`, `$select-brace`, `$dot-brace`,
+;; `$list-literal`, `$vec-literal`, `$quasiquote`, `$rest`, the numeric-literal
+;; family, the error markers…). Every omission was a SPURIOUS DEPENDENCY in
+;; this tool's output, and every sentinel added to the language was one more.
+;; Same shape, and the same fix, as the `datum-subst` polarity inversion
+;; (`pipeline.md` § "Exhaustive Walkers": prefer the structural answer).
+;; The named entries in `syntax-keywords` are kept — they document the
+;; sentinels a reader of that list expects to see — but they are no longer
+;; load-bearing for the `$` family.
+(define (reader-sentinel-symbol? s)
+  (and (symbol? s)
+       (let ([str (symbol->string s)])
+         (and (> (string-length str) 0) (char=? (string-ref str 0) #\$)))))
+
 (define (collect-symbols datum)
   (cond
+    [(and (symbol? datum) (reader-sentinel-symbol? datum)) (seteq)]
     [(symbol? datum) (seteq datum)]
     [(pair? datum) (set-union (collect-symbols (car datum))
                               (collect-symbols (cdr datum)))]

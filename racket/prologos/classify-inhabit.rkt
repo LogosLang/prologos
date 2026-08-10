@@ -34,6 +34,7 @@
          (only-in "merge-fn-registry.rkt" register-merge-fn!/lattice))
 
 (provide
+ merge-classify-inhabit  ;; testing support: tests/test-merge-laws.rkt
  ;; Tag-layer value shape
  (struct-out classify-inhabit-value)
  classify-inhabit-value-bot?

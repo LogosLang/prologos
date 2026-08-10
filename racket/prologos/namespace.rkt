@@ -97,6 +97,8 @@
  process-foreign
  ;; Spec propagation callback (set by driver.rkt for HKT implicit arg insertion)
  current-spec-propagation-handler
+ current-suppress-duplicate-binding-warnings?
+ current-own-import-specs
  ;; Phase 3c: Namespace cell infrastructure
  current-ns-prop-net-box
  current-ns-prop-cell-write
@@ -496,6 +498,30 @@
   (struct-copy ns-context ctx
     [alias-map (hash-set (ns-context-alias-map ctx) alias ns-sym)]))
 
+
+;; The ns-context, or a named error.
+;;
+;; `load-module` parameterizes `current-ns-context` to #f, and a file with NO
+;; `ns` declaration never sets one — the `book/` chapter files are all like
+;; this, being prose rather than importable modules. When such a file processes
+;; its OWN `require`s there is no namespace to add them to, and
+;; `ns-context-add-refer` died on `ns-context-refer-map: contract violation,
+;; given: #f`: a raw Racket error, whole file lost, naming a struct accessor.
+;;
+;; The message names the module being IMPORTED, because that is what this
+;; function is given — but the fault is with the IMPORTER, and it says so. An
+;; earlier draft blamed the imported module and was wrong: the first module to
+;; trip it (`prologos::core::collection-traits`) has an `ns` on line 1.
+(define (require-ns-context ns-sym)
+  (or (current-ns-context)
+      (error 'imports
+             (string-append
+              "cannot import ~a: no namespace is in scope. The IMPORTING file has"
+              " no `ns` declaration — the `book/` chapter files are prose, not"
+              " importable modules, so importing one (or anything that pulls one"
+              " in) fails here.")
+             ns-sym)))
+
 ;; Add specific referred names: (require [prologos::data::nat :refer [add mult]])
 ;; Maps each short name → fully-qualified name
 (define (ns-context-add-refer ctx ns-sym names)
@@ -673,6 +699,36 @@
 ;; Signature: (module-info (listof symbol)) → void
 ;; Called when :refer or :refer-all imports names that may have specs.
 ;; Set by driver.rkt to bridge namespace.rkt ↔ current-spec-store.
+;; issue #67 (2026-08-03): what the file's OWN imports have bound so far —
+;; `name → spec-entry` — and a flag set while the PRELUDE auto-imports run.
+;; Both are read by the spec-propagation handler in driver.rkt.
+;;
+;; The pair encodes ONE rule: warn when the user's own imports collide with EACH
+;; OTHER, and only then. The two cases it deliberately excludes were both
+;; measured and both would have been noise:
+;;
+;;   - PRELUDE-INTERNAL. The prelude collides on TWELVE spec names by itself
+;;     (`all? any? concat drop filter find head length map reduce reduce1
+;;     take`) because it imports both `prologos::data::list` and
+;;     `prologos::core::collections`. Real, filed — and not something a user can
+;;     act on. Reporting it would put the same twelve names under every file
+;;     anyone writes.
+;;   - OWN-import SHADOWING the prelude. `imports prologos::data::list` on its
+;;     own rebinds fourteen prelude names, and that is what an explicit import
+;;     is FOR. Warning on it would make the ordinary act of importing a module
+;;     noisy.
+;;
+;; What is left is the case the user created and can fix: two of their own
+;; imports disagreeing. The line is ACTIONABILITY throughout.
+;;
+;; It lives HERE rather than beside the warning it suppresses because
+;; `namespace.rkt` cannot require `warnings.rkt` — that edge closes a cycle
+;; through `metavar-store.rkt`. Putting it at the emit SITE's side of the
+;; boundary also reads correctly: the suppression is a policy about which
+;; imports are worth reporting, not a property of the warning category.
+(define current-suppress-duplicate-binding-warnings? (make-parameter #f))
+(define current-own-import-specs (make-parameter (hasheq)))
+
 (define current-spec-propagation-handler (make-parameter #f))
 
 ;; ========================================
@@ -957,20 +1013,40 @@
     (or no-prelude?
         (eq? ns-sym 'prologos::core)
         (prelude-dependency? ns-sym)))
+  ;; issue #67 (2026-08-03): the AUTO-imports are suppressed for
+  ;; duplicate-binding reporting, and the reason is not that they are clean —
+  ;; measured, the prelude collides on TWELVE spec names all by itself
+  ;; (`all? any? concat drop filter find head length map reduce reduce1 take`),
+  ;; because it imports both `prologos::data::list` and
+  ;; `prologos::core::collections`. That is a real finding, and it is filed;
+  ;; what it is NOT is something a user can act on. Reporting it would put the
+  ;; same twelve names under every file anyone ever writes, which is how a
+  ;; default-on diagnostic becomes noise people learn to ignore.
+  ;;
+  ;; The line drawn is ACTIONABILITY: a collision the user's own `imports`
+  ;; created is theirs to resolve; one the curated prelude created is the
+  ;; project's, and belongs in the project's tracker rather than in their
+  ;; output.
+  ;; issue #67: the `ns` declaration is already declared above to be "the
+  ;; import-set unit boundary", so it is also where the own-import record
+  ;; starts over. Reusing the boundary the file already has beats inventing a
+  ;; second one.
+  (current-own-import-specs (hasheq))
   (when (current-module-loader)
-    (cond
-      [skip-prelude?
-       ;; Library modules and :no-prelude: just get prologos::core
-       (unless (eq? ns-sym 'prologos::core)
-         (with-handlers ([exn:fail? (lambda (e) (void))])
-           (process-imports '(imports [prologos::core :refer-all]))))]
-      [else
-       ;; User modules: get the full prelude
-       ;; Each imports is individually wrapped so one failure doesn't
-       ;; prevent loading of subsequent modules.
-       (for ([req (in-list prelude-imports)])
-         (with-handlers ([exn:fail? (lambda (e) (void))])
-           (process-imports req)))])))
+    (parameterize ([current-suppress-duplicate-binding-warnings? #t])
+      (cond
+        [skip-prelude?
+         ;; Library modules and :no-prelude: just get prologos::core
+         (unless (eq? ns-sym 'prologos::core)
+           (with-handlers ([exn:fail? (lambda (e) (void))])
+             (process-imports '(imports [prologos::core :refer-all]))))]
+        [else
+         ;; User modules: get the full prelude
+         ;; Each imports is individually wrapped so one failure doesn't
+         ;; prevent loading of subsequent modules.
+         (for ([req (in-list prelude-imports)])
+           (with-handlers ([exn:fail? (lambda (e) (void))])
+             (process-imports req)))]))))
 
 ;; (exports name ...)
 ;; (exports :all)
@@ -1058,7 +1134,7 @@
                        "~a does not export ~a (exports: ~a)"
                        ns-sym name exports))))
           (current-ns-context
-           (ns-context-add-refer (current-ns-context) ns-sym names))
+           (ns-context-add-refer (require-ns-context ns-sym) ns-sym names))
           ;; Propagate specs for imported names (needed for implicit arg insertion
           ;; of where-constraint dicts in HKT generic functions)
           (when (and mod (current-spec-propagation-handler))
@@ -1068,13 +1144,13 @@
          ;; :refer-all (WS reader may strip colon: 'refer-all or ':refer-all)
          [(memq (car dirs) '(:refer-all refer-all))
           (current-ns-context
-           (ns-context-add-refer-all (current-ns-context) ns-sym))
+           (ns-context-add-refer-all (require-ns-context ns-sym) ns-sym))
           ;; Also add explicit refers for all exports so they resolve without registry lookup
           (when mod
             (define exports (module-info-exports mod))
             (unless (and (pair? exports) (eq? (car exports) ':all))
               (current-ns-context
-               (ns-context-add-refer (current-ns-context) ns-sym exports)))
+               (ns-context-add-refer (require-ns-context ns-sym) ns-sym exports)))
             ;; Propagate specs for all exported names
             (when (current-spec-propagation-handler)
               ((current-spec-propagation-handler) mod exports)))

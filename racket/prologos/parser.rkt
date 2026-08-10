@@ -35,6 +35,10 @@
                   fused-type-annot? fused-annot->type-symbol
                   split-glued-name-datum))
 
+;; pp-datum only — for the binder-position access-sentinel message. No cycle:
+;; pretty-print.rkt does not require parser.rkt.
+(require (only-in "pretty-print.rkt" pp-datum))
+
 (provide parse-datum
          parse-toplevel-datum  ;; Rel T1 POL.9: command-position paren-goal dispatch
          parse-string
@@ -645,6 +649,18 @@
     ;; List form
     [(pair? d)
      (parse-list d loc stx)]
+
+    ;; Empty group → nil. The tree spine has always said this
+    ;; (`parse-bracket-group-tree`: "empty brackets = nil"), and `def x := []`
+    ;; is tested as the empty list. THIS spine said "Unexpected datum: ()", and
+    ;; the disagreement was invisible only because of a second bug: an empty
+    ;; group carried no source line, the merge treated its unknown-location
+    ;; sentinel as a line, and the error surf got swapped for whatever other
+    ;; located-nowhere surf the tree spine happened to hold. That accident was
+    ;; doing the recovery. With the merge key tightened, the two spines have to
+    ;; actually agree — so they do.
+    [(null? d)
+     (surf-nil loc)]
 
     [else
      (parse-error loc (format "Unexpected datum: ~a" d) d)]))
@@ -1257,6 +1273,23 @@
             ;; must take the ONE Q_T4a message, not the P3c branch pointer.
             [(and (number? it) (pair? (cdr items)) (caret-ish? (cadr items)))
              (fail ordinal-rekey-message)]
+            ;; `k^:x` (D4.P3b item 21): in WS mode the lexeme does NOT glue
+            ;; through the colon, so this arrives as TWO items — `k^` and the
+            ;; keyword `:x` — and the splitter's own `#\:` arm never fires (it
+            ;; is reachable from sexp-mode datums only: the F1b sexp-green ≠
+            ;; WS-correct class). Without this the input fell through to the
+            ;; generic "block keys are written bare" message, whose ACTION
+            ;; happens to resolve it — degraded, not lying — but which names
+            ;; the wrong construct. Detect the shape here and give the
+            ;; splitter's message, so both readers say the same thing.
+            [(and (re-key-sym? it)
+                  (let ([str (symbol->string it)])
+                    (char=? (string-ref str (sub1 (string-length str))) #\^))
+                  (pair? (cdr items))
+                  (kw-sym? (cadr items)))
+             (fail (format "`~a~a` — a rename target is a bare label, not a keyword (write `~a~a`)"
+                           it (cadr items)
+                           it (substring (symbol->string (cadr items)) 1)))]
             ;; ---- `^`-bearing branch head → the splitter
             [(re-key-sym? it)
              (split-step it (lambda (step)
@@ -1502,6 +1535,55 @@
                       (if (eq? head '$def-error)
                           "def: malformed def form"
                           "let: malformed let expression"))
+                  #f)]
+    ;; …and the same channel for `.( )` mixfix. Its three failure modes
+    ;; (incomparable precedence groups, an empty `.( )`, a trailing token) used
+    ;; to RAISE out of `preparse-expand-all` and cost the whole file. Same
+    ;; (pair? args) guard, LOAD-BEARING for the same reason.
+    [(and (symbol? head) (eq? head '$mixfix-error))
+     (parse-error loc
+                  (if (and (pair? args) (string? (stx->datum (car args))))
+                      (stx->datum (car args))
+                      "mixfix: malformed .( ) expression")
+                  #f)]
+    ;; …and the same channel for `do` (2026-08-03). `expand-do` raised plain
+    ;; `(error 'do …)`, so a malformed statement took the whole file: a `defn`
+    ;; body containing `do` / `cfg{a}` printed ZERO commands — not even the
+    ;; `def` above it — and leaked the internal `($select-brace a)` sentinel
+    ;; into a raw Racket dump. Filed as D4.P3a item 16, which named this exact
+    ;; seat. Same (pair? args) guard, LOAD-BEARING for the same reason.
+    [(and (symbol? head) (eq? head '$do-error))
+     (parse-error loc
+                  (if (and (pair? args) (string? (stx->datum (car args))))
+                      (stx->datum (car args))
+                      "do: malformed do expression")
+                  #f)]
+    ;; …and the same channel for READER-level rejections (today: the removed
+    ;; `~N` approximate literal). These used to raise during TOKENIZATION,
+    ;; which is strictly worse than a parse-time raise: tokenization finishes
+    ;; before any command runs, so there was no token stream left to run the
+    ;; file's other commands from and the whole file was lost. Carrying a
+    ;; marker in the token stream costs nothing and makes it per-command. Same
+    ;; (pair? args) guard, LOAD-BEARING for the same reason.
+    ;; …and the same channel for a PREPARSE FORM-processing failure. Every
+    ;; `(error 'functor …)` / `(error 'trait …)` / `(error 'spec …)` in
+    ;; macros.rkt used to escape preparse and take the whole file with it —
+    ;; preparse finishes before any command runs, so there was no expansion
+    ;; left to run the file's other commands from, and the user got a raw
+    ;; Racket message plus a `context...:` dump with zero numbered results.
+    ;; macros.rkt's dispatch now contains the failure per FORM and emits this
+    ;; marker in its place; the commands before and after it still run.
+    [(and (symbol? head) (eq? head '$preparse-error))
+     (parse-error loc
+                  (if (and (pair? args) (string? (stx->datum (car args))))
+                      (stx->datum (car args))
+                      "malformed declaration")
+                  #f)]
+    [(and (symbol? head) (eq? head '$reader-error))
+     (parse-error loc
+                  (if (and (pair? args) (string? (stx->datum (car args))))
+                      (stx->datum (car args))
+                      "reader: malformed input")
                   #f)]
     ;; …and the raw retired sentinels (targetless shapes the fold passes through)
     [(and (symbol? head) (eq? head '$dot-key))
@@ -1936,7 +2018,37 @@
                            (surf-lam (binder-info name #f (surf-hole loc)) inner loc))
                          body param-names))]
              [else
-              (parse-error loc "fn: all parameters except body must be bare symbols or a binder (x : T)" #f)])])]
+              ;; A `let` among the "parameters" is the commonest way to land
+              ;; here, and the generic message names the wrong thing entirely.
+              ;; `[fn [n : Int] let k := 4 [int+ n k]]` puts the whole let INSIDE
+              ;; the fn's bracket — brackets suspend indent grouping, so the
+              ;; bracket swallows the let's tokens and they arrive as parameters.
+              ;; Saying "parameters must be bare symbols" sends the reader to
+              ;; look at `n`, which is fine.
+              ;;
+              ;; By the time we see it the let is USUALLY no longer the symbol
+              ;; `let`: `expand-let` has already run over the fn's argument list
+              ;; and, finding no body, rewritten it to a `($let-error msg)`
+              ;; marker. Match both — the marker for the expanded case, the bare
+              ;; symbol for the paths that reach the parser unexpanded.
+              (if (ormap (lambda (a)
+                           (let ([d (stx->datum a)])
+                             ;; `stx->datum` is SHALLOW, so a marker's head is
+                             ;; still a syntax object — unwrap it too.
+                             (or (eq? d 'let)
+                                 (and (pair? d)
+                                      (eq? (stx->datum (car d)) '$let-error)))))
+                         params)
+                  (parse-error
+                   loc
+                   (string-append
+                    "fn: a `let` here is being read as a PARAMETER. Brackets "
+                    "suspend indent grouping, so `[fn [x : T] let y := v body]` "
+                    "puts the whole `let` inside the fn's bracket. Parenthesize "
+                    "it — `[fn [x : T] (let y := v body)]` — or hoist the "
+                    "binding out of the fn.")
+                   #f)
+                  (parse-error loc "fn: all parameters except body must be bare symbols or a binder (x : T)" #f))])])]
 
        ;; (Pi (x : T) body) or (Pi (x :m T) body)
        [(Pi)
@@ -4661,14 +4773,70 @@
               (if (prologos-error? rest) rest
                   (cons first rest)))))))
 
+;; An ACCESS SENTINEL inside a binder position — `[fn [x base{a}] x]`,
+;; `spec idf{A} A -> A`. The binder walkers' generic message dumps the raw
+;; datum, which means SYNTAX OBJECTS with absolute file paths and an internal
+;; sentinel name, and never mentions the construct the user actually wrote
+;; (D4.P1b-iii spin-off 7).
+;;
+;; Returns the guided message, or #f when the datum holds no sentinel — so the
+;; generic message still owns every other malformed binder.
+;;
+;; The scan is over the WHOLE datum rather than its head: the sentinel arrives
+;; as the second element of `(x ($select base a))`, not as the form's head, and
+;; a head-only test finds nothing. Sentinel names come from `pattern-var?`'s
+;; access family in macros.rkt; a name not listed simply falls through to the
+;; generic message, which is the pre-existing behaviour.
+(define access-sentinel-names
+  '($select $select-brace $dot-brace $dot-access $nil-dot-access
+    $postfix-index $broadcast-access $dot-key $nil-dot-key
+    $retired-selection))
+
+(define (binder-access-sentinel d)
+  (let scan ([x d])
+    (cond
+      [(and (symbol? x) (memq x access-sentinel-names)) x]
+      [(syntax? x) (scan (syntax-e x))]
+      [(pair? x) (or (scan (car x)) (scan (cdr x)))]
+      [else #f])))
+
+;; DEEP-strip before rendering. `stx->datum` is SHALLOW, so `d` is typically a
+;; LIST whose ELEMENTS are still syntax objects — printing it embeds
+;; `#<syntax:/abs/path/f.prologos:5:10 x>` in user-facing text, which is the
+;; leak this item is about, reintroduced one layer down. `syntax->datum` on the
+;; outer value is not enough either, precisely because the outer value is a
+;; plain list here. Recurse over both shapes.
+(define (strip-syntax-deep x)
+  (cond
+    [(syntax? x) (strip-syntax-deep (syntax-e x))]
+    [(pair? x) (cons (strip-syntax-deep (car x)) (strip-syntax-deep (cdr x)))]
+    [else x]))
+
+(define (binder-sentinel-message d)
+  (let ([sent (binder-access-sentinel d)])
+    (and sent
+         (format
+          (string-append
+           "a binder cannot contain a field-access or select form — `~a` is an "
+           "access expression, and a parameter position takes a NAME (`[x]`), "
+           "a typed binder (`[x <T>]` / `(x : T)`) or the fused form `[x:T]`. "
+           "Bind the value first, then access it in the body.")
+          (pp-datum (strip-syntax-deep d))))))
+
 ;; ========================================
 ;; Parse binder: (x : T) or (x :m T)
 ;; ========================================
 (define (parse-binder stx loc)
   (define d (stx->datum stx))
   (cond
+    ;; the PAYLOAD is stripped too — it feeds the `Near:` rendering, so an
+    ;; unstripped one puts the syntax objects back in front of the user by a
+    ;; different route than the message.
+    [(binder-sentinel-message d) => (lambda (m) (parse-error loc m (strip-syntax-deep d)))]
     [(not (pair? d))
-     (parse-error loc (format "Expected binder [x <T>], got ~a" d) d)]
+     (parse-error loc (format "Expected binder [x <T>], got ~a"
+                              (pp-datum (strip-syntax-deep d)))
+                  (strip-syntax-deep d))]
     [else
      (define parts
        (if (syntax? stx) (syntax->list stx) d))
@@ -4762,10 +4930,17 @@
             [ty (binder-info name #f ty)]
             [else (binder-info name #f (surf-hole loc))]))]
 
+       ;; the PAYLOAD is stripped too — it feeds the `Near:` rendering, so an
+    ;; unstripped one puts the syntax objects back in front of the user by a
+    ;; different route than the message.
+    [(binder-sentinel-message d) => (lambda (m) (parse-error loc m (strip-syntax-deep d)))]
        [else
+        ;; …and the generic message gets the same deep strip, for the same
+        ;; reason: it dumped raw syntax objects with absolute paths too.
         (parse-error loc
-                     (format "Expected binder [x <T>] or (x : T), got ~a" d)
-                     d)])]))
+                     (format "Expected binder [x <T>] or (x : T), got ~a"
+                             (pp-datum (strip-syntax-deep d)))
+                     (strip-syntax-deep d))])]))
 
 ;; Check if a symbol is a multiplicity annotation
 (define (mult-annot? s)
@@ -4883,10 +5058,17 @@
                      check-from)))))
 
 ;; Parse a multi-body defn: defn name "doc" | clause1 | clause2 ...
+;;
+;; The guards RETURN their errors. `(unless (symbol? name) (parse-error …))`
+;; computes the error and discards it, and `defn 5 [x]` then reached
+;; `symbol->string` on the 5 — a raw contract violation and a whole-file abort,
+;; with the correct diagnosis computed and unused one line above. Same shape as
+;; the eight in `parse-match-pattern-arm`; see the note there.
 (define (parse-defn-multi args loc)
+ (let/ec return
   (define name (stx->datum (car args)))
   (unless (symbol? name)
-    (parse-error loc (format "defn: expected name, got ~a" name) name))
+    (return (parse-error loc (format "defn: expected a name, got ~a" name) name)))
   ;; Skip optional docstring
   (define-values (docstring clause-args)
     (let ([rest (cdr args)])
@@ -4895,7 +5077,16 @@
           (values (stx->datum (car rest)) (cdr rest))
           (values #f rest))))
   (when (null? clause-args)
-    (parse-error loc (format "defn ~a: multi-body defn requires at least one clause" name) #f))
+    (return (parse-error loc (format "defn ~a: a multi-body defn needs at least one `|` clause" name) #f)))
+  ;; `defn f []` with `|` arms leaves an EMPTY param bracket as the first
+  ;; clause-arg, and the `(car d)` on it below is a raw contract violation —
+  ;; whole-file abort. A zero-parameter function has nothing for its arms to
+  ;; match on, so the arms are the error, and saying that is more use than
+  ;; saying `car`.
+  (when (and (pair? clause-args) (null? (stx->datum (car clause-args))))
+    (return (parse-error loc
+              (format "defn ~a: this defn has no parameters, so its `|` arms have nothing to match on" name)
+              #f)))
   ;; Detect: defn f [params] | arms syntax
   ;; First clause-arg is a bracket form (param list, NOT $pipe-prefixed),
   ;; then optionally `: RetType` tokens, then all remaining are $pipe forms.
@@ -4934,7 +5125,7 @@
          (parse-defn-clause clause-stx name loc)))
      (define first-err (findf prologos-error? clauses))
      (if first-err first-err
-         (surf-defn-multi name docstring clauses loc))]))
+         (surf-defn-multi name docstring clauses loc))])))
 
 ;; ========================================
 ;; defn f [params] | pattern arms syntax
@@ -4943,6 +5134,11 @@
 ;; Desugars to defn-pattern-clause list, compiled by compile-pattern-group.
 
 (define (parse-defn-params-and-patterns name docstring clause-args ret-type-tokens loc)
+ (let/ec return
+  ;; `(car clause-args)` on an empty list is a raw contract violation and a
+  ;; whole-file abort, so the emptiness is checked before it is taken.
+  (when (null? clause-args)
+    (return (parse-error loc (format "defn ~a: expected a parameter list" name) #f)))
   ;; First element is param list, rest (after ret-type-tokens) are $pipe pattern arms
   (define params-stx (car clause-args))
   ;; Skip param bracket and ret-type-tokens to get $pipe arms
@@ -4983,8 +5179,8 @@
         ;; Bare params: [x y z]
         [else (length elems)])))
   (when (= arity 0)
-    (parse-error loc
-      (format "defn ~a: params+patterns syntax requires at least one parameter" name) #f))
+    (return (parse-error loc
+      (format "defn ~a: the `[params] | arms` form needs at least one parameter" name) #f)))
   ;; Register user-facing param names for bound-arg display in narrowing/solve.
   ;; Extract names from the bracket: [x y] → (x y), [x : T, y : T] → (x y)
   (let ([elems (map stx->datum param-elems)])
@@ -5051,16 +5247,20 @@
       (parse-defn-param-pattern-arm arm-stx name arity loc)))
   (define first-err (findf prologos-error? clauses))
   (if first-err first-err
-      (surf-defn-multi name docstring clauses loc)))
+      (surf-defn-multi name docstring clauses loc))))
 
 ;; Parse one arm of defn f [params] | pat... -> body into a defn-pattern-clause.
+;; The guards RETURN. See `parse-match-pattern-arm` for the class: `parse-error`
+;; returns a value, so `(unless C (parse-error …))` computes the diagnosis,
+;; discards it, and falls through into the code the guard was rejecting.
 (define (parse-defn-param-pattern-arm arm-stx name arity loc)
+ (let/ec return
   (define d (stx->datum arm-stx))
   (define parts
     (if (syntax? arm-stx) (syntax->list arm-stx)
         (if (list? d) (map (lambda (x) (datum->syntax #f x)) d) #f)))
   (unless parts
-    (parse-error loc (format "defn ~a: pattern arm must be a list" name) #f))
+    (return (parse-error loc (format "defn ~a: pattern arm must be a list" name) #f)))
   ;; Strip $pipe
   (define cleaned
     (if (and (not (null? parts)) (eq? (stx->datum (car parts)) '$pipe))
@@ -5070,11 +5270,11 @@
     (for/or ([p (in-list cleaned)] [i (in-naturals)])
       (and (eq? (stx->datum p) '->) i)))
   (unless arrow-idx
-    (parse-error loc (format "defn ~a: pattern arm missing ->" name) #f))
+    (return (parse-error loc (format "defn ~a: a pattern arm needs `->`; write `| PATTERN -> BODY`" name) #f)))
   (define pre-arrow (take cleaned arrow-idx))
   (define body-parts (drop cleaned (+ arrow-idx 1)))
   (when (null? body-parts)
-    (parse-error loc (format "defn ~a: pattern arm missing body after ->" name) #f))
+    (return (parse-error loc (format "defn ~a: this pattern arm has nothing after its `->`" name) #f)))
 
   ;; Split pre-arrow into pattern forms and optional guard at `when`
   (define-values (pat-forms guard-forms)
@@ -5099,10 +5299,18 @@
     (if (= (length body-parts) 1) (car body-parts)
         (datum->syntax #f (map stx->datum body-parts) (car body-parts))))
   (define body (parse-datum body-stx))
-  (when (prologos-error? body) body)
+  (when (prologos-error? body) (return body))
   ;; Parse patterns based on arity
   (define patterns
     (cond
+      ;; Arity 0 has no arm below — `else` is "arity > 1" — so it fell through
+      ;; to an empty pattern list and crashed downstream on `(car patterns)`.
+      ;; `defn f []` with `| … -> …` arms is the shape; a zero-parameter
+      ;; function has nothing to match on, so the arms are the error.
+      [(= arity 0)
+       (return (parse-error loc
+                 (format "defn ~a: this defn has no parameters, so its `|` arms have nothing to match on" name)
+                 #f))]
       ;; Arity 1: group ALL forms into a single pattern
       [(= arity 1)
        (cond
@@ -5126,7 +5334,7 @@
          (parse-single-pattern pf loc))]))
   (define first-err (findf prologos-error? patterns))
   (if first-err first-err
-      (defn-pattern-clause patterns guard body loc)))
+      (defn-pattern-clause patterns guard body loc))))
 
 ;; ========================================
 ;; Pattern parsing for pattern-based defn clauses
@@ -5276,6 +5484,7 @@
 ;;    or: ($pipe [params...] <RetType> body) — arity clause
 ;;    or: ($pipe [patterns...] -> body)       — pattern clause
 (define (parse-defn-clause clause-stx name loc)
+ (let/ec return
   (define d (stx->datum clause-stx))
   (define parts
     (if (syntax? clause-stx) (syntax->list clause-stx)
@@ -5331,11 +5540,11 @@
              (parse-datum guard-stx))))
      (define body-parts (drop cleaned (+ arrow-idx 1)))
      (when (and (pair? guard-forms) (null? pattern-stxs))
-       (parse-error loc (format "defn ~a: `when` guard with no pattern before it" name) #f))
+       (return (parse-error loc (format "defn ~a: a `when` guard needs a pattern before it" name) #f)))
      (when (null? pattern-stxs)
-       (parse-error loc (format "defn ~a: pattern clause needs at least one pattern before ->" name) #f))
+       (return (parse-error loc (format "defn ~a: a pattern clause needs at least one pattern before `->`" name) #f)))
      (when (null? body-parts)
-       (parse-error loc (format "defn ~a: pattern clause missing body after ->" name) #f))
+       (return (parse-error loc (format "defn ~a: this pattern clause has nothing after its `->`" name) #f)))
      (define body-stx
        (if (= (length body-parts) 1)
            (car body-parts)
@@ -5452,12 +5661,27 @@
                  (defn-clause full-type param-names body loc)])])]
           [else
            (parse-error loc (format "defn ~a: clause expected <ReturnType>, : ReturnType, or -> for pattern clause, got ~a"
-                                    name (stx->datum ret-type-stx)) #f)])])]))
+                                    name (stx->datum ret-type-stx)) #f)])])])))
 
 ;; ========================================
 ;; Parse defn: (defn name : type [params...] body)
 ;; ========================================
 (define (parse-defn args loc)
+  ;; The NAME is checked once, here, before any shape dispatch.
+  ;;
+  ;; Each shape below had (or lacked) its own name guard, and the ones that had
+  ;; it DISCARDED the error — so `defn 5 [x] x` reached `symbol->string` on the
+  ;; 5 and died with a raw contract violation, a whole-file abort. Fixing the
+  ;; guard in `parse-defn-multi` alone just moved the crash to `qualify-name`
+  ;; in the driver, because a different shape was taking the call. One check at
+  ;; the entry covers every shape, including ones added later.
+  (define nm (and (pair? args) (stx->datum (car args))))
+  (cond
+    [(not (symbol? nm))
+     (parse-error loc (format "defn: expected a name, got ~a" nm) nm)]
+    [else (parse-defn-shape args loc)]))
+
+(define (parse-defn-shape args loc)
   ;; NEWEST: (defn name {A B} [param <T> ...] <ReturnType> body) — with implicit type params
   ;; Sprint 10: (defn name [x y z] <ReturnType> body) — bare params, types inferred
   ;; NEW: (defn name [param <T> ...] <ReturnType> body) — typed binders
@@ -5548,7 +5772,21 @@
      => (lambda (payload) (retired-selection-error 'bcast-step-binder payload loc))]
 
     [else
-     (parse-error loc "defn requires: (defn name [x <T> ...] <ReturnType> body) or (defn name : type [params] body)" #f)]))
+     ;; The commonest way to land here is a SPACED parameter annotation —
+     ;; `defn f [n : Nat]`. That works for `fn` and not for a `defn` parameter
+     ;; list, which takes the fused form (single-token types only), exactly like
+     ;; `let`. Worth naming, because the message that used to be here showed
+     ;; SEXP syntax at a WS-mode parse failure and the reader then hit a second,
+     ;; unrelated "Unbound variable" for the name they were defining.
+     (parse-error
+      loc
+      (string-append
+       "defn: could not read the parameter list or body. In WS mode a typed "
+       "parameter is FUSED — `defn f [n:Nat]`, single-token types only — or "
+       "give the types in a `spec`. The spaced form `[n : Nat]` works for `fn` "
+       "but not here. (sexp: `(defn name [x <T> ...] <ReturnType> body)` or "
+       "`(defn name : type [params] body)`.)")
+      #f)]))
 
 ;; ========================================
 ;; Parse defn with implicit type params: (defn name {A B} [params...] <RetType> body)
@@ -5650,6 +5888,22 @@
                        all-binders))
               (define param-names (map binder-info-name all-binders))
               (surf-defn name full-type param-names body loc)])])]
+       ;; More than one form after the parameter list, headed by a plain symbol,
+       ;; is almost always an application written without brackets:
+       ;; `defn bump [x] int+ x 1` instead of `defn bump [x] [int+ x 1]`. Say so
+       ;; — the generic message names the RETURN TYPE slot, which sends the
+       ;; reader looking for a type annotation they never meant to write.
+       [(and (>= (length rest-args) 2)
+             (symbol? (stx->datum ret-type-stx)))
+        (parse-error
+         loc
+         (format (string-append
+                  "defn ~a: the body looks like an application written without "
+                  "brackets — write `[~a …]`. A `defn` takes ONE body form after "
+                  "its parameter list; everything after `~a` was read as more of "
+                  "the definition, not as arguments to it.")
+                 name (stx->datum ret-type-stx) (stx->datum ret-type-stx))
+         #f)]
        [else
         (parse-error loc (format "defn: expected <ReturnType> or : ReturnType, got ~a"
                                  (stx->datum ret-type-stx)) #f)])]))
@@ -5721,6 +5975,22 @@
                        binders))
               (define param-names (map binder-info-name binders))
               (surf-defn name full-type param-names body loc)])])]
+       ;; More than one form after the parameter list, headed by a plain symbol,
+       ;; is almost always an application written without brackets:
+       ;; `defn bump [x] int+ x 1` instead of `defn bump [x] [int+ x 1]`. Say so
+       ;; — the generic message names the RETURN TYPE slot, which sends the
+       ;; reader looking for a type annotation they never meant to write.
+       [(and (>= (length rest-args) 2)
+             (symbol? (stx->datum ret-type-stx)))
+        (parse-error
+         loc
+         (format (string-append
+                  "defn ~a: the body looks like an application written without "
+                  "brackets — write `[~a …]`. A `defn` takes ONE body form after "
+                  "its parameter list; everything after `~a` was read as more of "
+                  "the definition, not as arguments to it.")
+                 name (stx->datum ret-type-stx) (stx->datum ret-type-stx))
+         #f)]
        [else
         (parse-error loc (format "defn: expected <ReturnType> or : ReturnType, got ~a"
                                  (stx->datum ret-type-stx)) #f)])]))
@@ -5880,6 +6150,22 @@
                        binders))
               (define param-names (map binder-info-name binders))
               (surf-defn name full-type param-names body loc)])])]
+       ;; More than one form after the parameter list, headed by a plain symbol,
+       ;; is almost always an application written without brackets:
+       ;; `defn bump [x] int+ x 1` instead of `defn bump [x] [int+ x 1]`. Say so
+       ;; — the generic message names the RETURN TYPE slot, which sends the
+       ;; reader looking for a type annotation they never meant to write.
+       [(and (>= (length rest-args) 2)
+             (symbol? (stx->datum ret-type-stx)))
+        (parse-error
+         loc
+         (format (string-append
+                  "defn ~a: the body looks like an application written without "
+                  "brackets — write `[~a …]`. A `defn` takes ONE body form after "
+                  "its parameter list; everything after `~a` was read as more of "
+                  "the definition, not as arguments to it.")
+                 name (stx->datum ret-type-stx) (stx->datum ret-type-stx))
+         #f)]
        [else
         (parse-error loc (format "defn: expected <ReturnType> or : ReturnType, got ~a"
                                  (stx->datum ret-type-stx)) #f)])]))
@@ -7569,10 +7855,12 @@
   (cond
     [(< (length args) 1)
      (parse-error loc "strategy requires a name: (strategy Name :key val ...)" #f)]
+    ;; Hoisted out of the `else` arm below, where it was a value-discarding
+    ;; `unless` and `strategy 5` reached `symbol->string` on the 5.
+    [(not (symbol? (stx->datum (car args))))
+     (parse-error loc (format "strategy: expected a name, got ~a" (stx->datum (car args))) #f)]
     [else
      (define name (stx->datum (car args)))
-     (unless (symbol? name)
-       (parse-error loc (format "strategy: expected name, got ~a" name) #f))
      ;; Collect remaining items as raw datum property pairs
      (define props
        (let loop ([remaining (cdr args)] [acc '()])
@@ -8147,7 +8435,24 @@
 ;; Parse a single match arm into a match-pattern-arm.
 ;; Match is always arity-1 (single scrutinee), so all pattern forms before ->
 ;; are grouped into a single pattern via parse-single-pattern.
+;; Every guard below RETURNS its error. They used to compute one and throw it
+;; away — `(unless arrow-idx (parse-error …))` evaluates the error, discards the
+;; value, and falls through to `(take cleaned arrow-idx)` with `arrow-idx` = #f.
+;; So `match 5 | 0 111` (no `->`) died on a raw `take: contract violation`:
+;; whole-file abort, zero commands, and a message about `take` rather than the
+;; missing arrow that the code had already diagnosed correctly one line above.
+;;
+;; EIGHT of them, in a function whose immediate neighbour `parse-map-literal`
+;; carries a comment describing this exact defect being fixed there ("It was a
+;; value-discarding `when` that fell through to the loop below and hard-crashed").
+;; Found in one function, left in its sibling.
+;;
+;; An escape rather than restructuring into a cond chain: the guards are spread
+;; through a sequence of interdependent `define`s, and threading them into
+;; nested conds is how a parser acquires a different bug.
 (define (parse-match-pattern-arm arm-stx loc)
+ (let/ec return
+  (define (fail msg) (return (parse-error loc msg #f)))
   (define d (stx->datum arm-stx))
   (define parts
     (cond
@@ -8155,8 +8460,7 @@
       [(list? d) (map (lambda (x) (datum->syntax #f x)) d)]
       [(list? arm-stx) (map (lambda (x) (datum->syntax #f x)) arm-stx)]
       [else #f]))
-  (unless parts
-    (parse-error loc "match arm must be a list" #f))
+  (unless parts (fail "match arm must be a list"))
 
   ;; Skip leading $pipe if present (WS mode)
   (define cleaned
@@ -8170,15 +8474,15 @@
     (for/or ([p (in-list cleaned)] [i (in-naturals)])
       (and (eq? (stx->datum p) '->) i)))
   (unless arrow-idx
-    (parse-error loc "match arm missing -> separator" #f))
+    (fail (string-append
+           "match arm is missing its `->`. Each arm is `| PATTERN -> BODY`; "
+           "write `| 0 -> 111` rather than `| 0 111`.")))
 
   (define pre-arrow (take cleaned arrow-idx))
   (define body-parts (drop cleaned (+ arrow-idx 1)))
 
-  (when (null? pre-arrow)
-    (parse-error loc "match arm missing pattern" #f))
-  (when (null? body-parts)
-    (parse-error loc "match arm missing body after ->" #f))
+  (when (null? pre-arrow) (fail "match arm is missing its pattern, before the `->`"))
+  (when (null? body-parts) (fail "match arm is missing its body, after the `->`"))
 
   ;; Split pre-arrow into pattern forms and optional guard at `when`
   (define-values (pat-forms guard-forms)
@@ -8188,8 +8492,7 @@
           (values (take pre-arrow when-idx) (drop pre-arrow (+ when-idx 1)))
           (values pre-arrow '()))))
 
-  (when (null? pat-forms)
-    (parse-error loc "match arm missing pattern" #f))
+  (when (null? pat-forms) (fail "match arm is missing its pattern, before the `->`"))
 
   ;; Parse guard expression (if present)
   (define guard
@@ -8199,7 +8502,7 @@
                              (datum->syntax #f (map stx->datum guard-forms)
                                             (car guard-forms)))])
           (parse-datum guard-stx))))
-  (when (and guard (prologos-error? guard)) guard)
+  (when (and guard (prologos-error? guard)) (return guard))
 
   ;; Parse body
   (define body-stx
@@ -8210,7 +8513,7 @@
                        (map stx->datum body-parts)
                        (car body-parts))))
   (define body (parse-datum body-stx))
-  (when (prologos-error? body) body)
+  (when (prologos-error? body) (return body))
 
   ;; Parse pattern: match is arity-1, group all forms into one pattern.
   ;; Single form → parse directly via parse-single-pattern.
@@ -8226,9 +8529,9 @@
        (parse-single-pattern
         (datum->syntax #f (map stx->datum pat-forms) (car pat-forms))
         loc)]))
-  (when (prologos-error? pattern) pattern)
+  (when (prologos-error? pattern) (return pattern))
 
-  (match-pattern-arm (list pattern) guard body loc))
+  (match-pattern-arm (list pattern) guard body loc)))
 
 ;; ========================================
 ;; Convenience: parse from string

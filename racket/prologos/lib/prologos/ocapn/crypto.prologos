@@ -1,0 +1,121 @@
+ns prologos::ocapn::crypto
+
+;; ========================================
+;; Ed25519 cryptographic operations — Phase 58.b
+;; ========================================
+;;
+;; Foreign-function bridge into libsodium via crypto-ffi.rkt.
+;; Provides the Ed25519 primitives needed to build OCapN's
+;; signed op:start-session handshake.
+;;
+;; The FFI bindings here do NOT carry a `:requires (CryptoCap)`
+;; annotation, and the header used to claim they all did.
+;;
+;; They should, and it is not currently possible. `:requires` on an FFI
+;; binding makes the whole module UNIMPORTABLE from a `.prologos` file:
+;; the requirement propagates to the caller, and there is no way to
+;; introduce a root capability anywhere in the chain, so every consumer
+;; fails at load with "E2001: Required capability CryptoCap not
+;; available in scope. Add it as a function parameter". Wrapping the
+;; bindings in same-module functions does not help — the wrapper carries
+;; the requirement — and neither does importing the capability type.
+;;
+;; `prologos::ocapn::tcp-testing` is cited as proof the convention is
+;; live. It is not: that module tags every binding `:requires (NetCap)`
+;; and CANNOT BE IMPORTED either. Nothing imports it, and its test loads
+;; it through the sexp `imports` path, which does not hit the same
+;; check — so the breakage has no witness. Verified 2026-07-29 by
+;; requiring each module from a one-line `.prologos` probe.
+;;
+;; So this is a LANGUAGE gap, not an OCapN one: the capability system
+;; has no root introduction form, and until it does, `:requires` is
+;; expressible only in modules nothing imports.
+;;
+;; So the annotations are absent and the `CryptoCap` import below is
+;; retained as the marker for where they go. Keypair handles are opaque Nats;
+;; bytes payloads (signature, pubkey, message) are carried as
+;; Latin-1-encoded Strings — the same convention used by
+;; `syrup-bytes` in the wire codec.
+;;
+;; Wire shapes built ON TOP of these primitives (gcrypt-style
+;; s-expressions for pubkey + signature, signed location payload)
+;; live in `captp-core.prologos`'s session-bytes builder.
+
+require [prologos::core::capabilities :refer (CryptoCap)]
+        [prologos::data::string       :as str :refer []]
+
+;; ----------------------------------------
+;; Primitive FFI bindings
+;; ----------------------------------------
+
+;; Generate a fresh Ed25519 keypair. Returns an opaque handle to a
+;; (pubkey, secret-key) pair stored in the FFI's handle table. The
+;; handle stays valid until `close-keypair-raw` releases it; nothing
+;; releases it automatically, and no current caller releases it at all
+;; — a session key is generated once and held for the life of the
+;; process. Anything that generates keypairs in a LOOP must release.
+foreign racket "crypto-ffi.rkt" [crypto-gen-keypair :as gen-keypair-raw : Unit -> Nat]
+
+;; Extract the 32-byte raw Ed25519 public key for a keypair handle.
+;; Returned as a Latin-1 String (32 chars, each char = 1 byte).
+foreign racket "crypto-ffi.rkt" [crypto-pubkey :as pubkey-raw : Nat -> String]
+
+;; Sign a message (Latin-1 bytes-as-string) with the keypair's
+;; private key. Returns the 64-byte detached signature as a
+;; Latin-1 String.
+foreign racket "crypto-ffi.rkt" [crypto-sign :as sign-raw : Nat -> String -> String]
+
+;; Verify an Ed25519 signature. All three arguments are Latin-1
+;; Strings of raw bytes: (public-key, message, signature).
+foreign racket "crypto-ffi.rkt" [crypto-verify :as verify-raw : String -> String -> String -> Bool]
+
+;; Release a keypair handle, zeroing the secret key first. Returns
+;; true if the handle was present.
+foreign racket "crypto-ffi.rkt" [crypto-close-keypair :as close-keypair-raw : Nat -> Bool]
+
+;; SHA-256 of Latin-1 message bytes, as a 32-byte Latin-1 String.
+;;
+;; Not part of the signing story, but the other hash the CapTP session layer
+;; needs. A side-id is SHA256d(the ENCODED public-key s-expression) and a
+;; session id is SHA256d("prot0" ++ min(a,b) ++ max(a,b)) — upstream
+;; utils/captp.py:115-146. Both appear inside a `desc:handoff-give` and a
+;; `desc:handoff-receive`, so a third-party handoff cannot be built without
+;; them. Until this existed the derivation could only be done in Racket,
+;; which is a large part of why the gifter and receiver roles lived there.
+foreign racket "crypto-ffi.rkt" [crypto-sha256 :as sha256-raw : String -> String]
+
+;; The doubled hash is what the protocol actually uses; neither caller wants
+;; a single round, so name the composite rather than making every site
+;; remember to apply it twice.
+spec sha256d String -> String
+  :doc "SHA-256 applied twice — the form every CapTP identity uses."
+defn sha256d [s]
+  sha256-raw [sha256-raw s]
+
+;; A CapTP side-id: the doubled hash of the ENCODED public-key s-expression —
+;; the Syrup bytes of `(public-key (ecc (curve Ed25519) (flags eddsa) (q PK)))`,
+;; NOT the 32-byte raw q inside it.
+;;
+;; Named for the distinction because getting it wrong is invisible: both
+;; inputs are byte strings, both produce a plausible 32-byte digest, and the
+;; only symptom is a session id that disagrees with the peer's several frames
+;; later. Upstream is unambiguous — `self.public_key.to_syrup()`,
+;; utils/captp.py:115-123.
+spec side-id-of-encoded-key String -> String
+  :doc "The side-id of a peer, from its ENCODED public-key s-expression bytes."
+defn side-id-of-encoded-key [pk-sexp-bytes]
+  sha256d pk-sexp-bytes
+
+;; The session id shared by two sides. Defined so both peers compute the same
+;; value without another round trip: the two side-ids are sorted as octet
+;; strings, so the pair is unordered.
+;;
+;; `str::lt` is `string<?`, which compares by code point — and every one of
+;; these strings is Latin-1, where a code point IS its byte. So this is the
+;; octet ordering upstream sorts by, not merely a similar one.
+spec session-id-of String String -> String
+  :doc "SHA256d(\"prot0\" ++ min(a,b) ++ max(a,b)) — the CapTP session id."
+defn session-id-of [a b]
+  match [str::lt a b]
+    | true  -> sha256d [str::append "prot0" [str::append a b]]
+    | false -> sha256d [str::append "prot0" [str::append b a]]

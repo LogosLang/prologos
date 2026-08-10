@@ -18,6 +18,7 @@
 (require racket/match
          racket/list
          "syntax.rkt"
+         (only-in "prelude.rkt" compatible)
          "macros.rkt"          ;; subtype-pair?
          "type-lattice.rkt"    ;; type-top, type-bot, type-lattice-merge, has-unsolved-meta?, try-unify-pure
          "union-types.rkt"     ;; SRE Track 2H: flatten-union, build-union-type
@@ -126,6 +127,31 @@
     [(and (expr-Record? t1) (expr-Map? t2)) (record-subtypes-map? t1 t2)]
     ;; CIU T6 F1a-col: the tuple→PVec α (same bridge, positional domain).
     [(and (expr-Record? t1) (expr-PVec? t2)) (record-subtypes-pvec? t1 t2)]
+    ;; Pi multiplicity is an UPPER BOUND on how the function uses its argument,
+    ;; so a Pi that uses it LESS fits where one that may use it more is wanted.
+    ;; That relation is already written down — it is exactly `compatible`, the
+    ;; same predicate every binder check uses (`compatible 'mw 'm0` = #t). This
+    ;; arm applies it structurally instead of demanding the mults be identical.
+    ;;
+    ;; The case that forced it: a type constructor's kind is `Pi m0 Type Type`
+    ;; (its type argument IS erased), while a spec's `{C : Type -> Type}` writes
+    ;; an unannotated arrow, which defaults to `mw`. So `length '[1 2 3]` on a
+    ;; `def` RHS failed with "Multiplicity violation" — the lying-diagnostic
+    ;; shape from `pipeline.md`, naming QTT for a kind mismatch. It survived
+    ;; because typing-core sees `C` as an unsolved META and meta-solving never
+    ;; compares multiplicities; only the post-freeze QTT pass meets the concrete
+    ;; `List` and the two spellings collide.
+    ;;
+    ;; Normalize-then-delegate rather than re-deriving Pi's variance here: swap
+    ;; in t2's multiplicity and recur, so domain/codomain go through the one
+    ;; existing structural path. Terminates — the mults are equal on the recur.
+    [(and (expr-Pi? t1) (expr-Pi? t2)
+          (not (eq? (expr-Pi-mult t1) (expr-Pi-mult t2)))
+          (compatible (expr-Pi-mult t2) (expr-Pi-mult t1)))
+     (subtype? (expr-Pi (expr-Pi-mult t2)
+                        (expr-Pi-domain t1)
+                        (expr-Pi-codomain t1))
+               t2)]
     ;; SRE structural path: only if BOTH are compound types.
     ;; Atoms (expr-Nat, expr-Int, expr-Bool, etc.) skip the structural
     ;; path entirely — eliminates 1.85μs overhead from sre-constructor-tag.

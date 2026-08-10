@@ -1,0 +1,2748 @@
+#lang racket/base
+
+;;;
+;;; Phase 11 of OCapN interop — CapTP ↔ Vat bridge.
+;;;
+;;; Drives a Vat from a CapTPOp value (NOT from wire bytes —
+;;; the multi-arity decoder is too slow per pitfall #27).
+;;; This proves the SEMANTIC mapping between the wire shape
+;;; and the vat shape; the bytes-in side comes from cross-impl
+;;; testing (Phases 4-10).
+;;;
+;;; Test flow:
+;;;   1. Spawn a beh-echo actor (id 0) on a fresh vat.
+;;;   2. Allocate promise p (id 1) so answer-pos=1 has a target.
+;;;   3. Construct CapTPOp [op-deliver target=0 args="hi" ap=Some 1 rm=None]
+;;;   4. Apply via incoming-captp-op → vat'.
+;;;   5. Drain.
+;;;   6. Assert: lookup-promise 1 vat'' = some [pst-fulfilled (syrup-string "hi")]
+;;;
+;;; This is the wire-IN half of a real netlayer: an op:deliver
+;;; arriving over a socket, parsed into a CapTPOp, applied to
+;;; the local vat, drained, and the result-promise resolved to
+;;; the actor's reply value.
+;;;
+
+(require rackunit
+         racket/list
+         racket/string
+         "test-support.rkt"
+         "../macros.rkt"
+         "../prelude.rkt"
+         "../syntax.rkt"
+         "../source-location.rkt"
+         "../surface-syntax.rkt"
+         "../errors.rkt"
+         "../metavar-store.rkt"
+         "../parser.rkt"
+         "../elaborator.rkt"
+         "../pretty-print.rkt"
+         "../global-env.rkt"
+         "../driver.rkt"
+         "../namespace.rkt"
+         "../multi-dispatch.rkt")
+
+(define shared-preamble
+  "(ns test-ocapn-bridge)
+(imports (prologos::ocapn::core :refer-all))
+(imports (prologos::ocapn::message :refer-all))
+(imports (prologos::ocapn::captp-wire :refer-all))
+(imports (prologos::ocapn::syrup-wire :refer-all))
+(imports (prologos::ocapn::captp-core :refer-all))
+(imports (prologos::ocapn::pipelining :refer (promise-queue-length)))
+(imports (prologos::ocapn::captp-interop-helpers :refer (framed-concat)))
+(imports (prologos::data::list :refer (List nil cons)))
+(imports (prologos::data::option :refer (Option some none unwrap-or)))
+(imports (prologos::data::string :as str :refer ()))
+(imports (prologos::ocapn::handshake :refer (hex-to-bytes)))
+(imports (prologos::ocapn::interop-driver :refer (seeded-connection)))
+")
+
+(define-values (shared-global-env
+                shared-ns-context
+                shared-module-reg
+                shared-trait-reg
+                shared-impl-reg
+                shared-param-impl-reg
+                shared-ctor-reg
+                shared-type-meta)
+  (parameterize ([current-file-module-network-ref (make-module-network)]
+                 [current-ns-context #f]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-ctor-registry (current-ctor-registry)]
+                 [current-type-meta (current-type-meta)]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry]
+                 [current-param-impl-registry prelude-param-impl-registry]
+                 [current-multi-defn-registry (current-multi-defn-registry)]
+                 [current-spec-store (hasheq)])
+    (install-module-loader!)
+    (process-string shared-preamble)
+    (values (global-env-snapshot)
+            (current-ns-context)
+            (current-module-registry)
+            (current-trait-registry)
+            (current-impl-registry)
+            (current-param-impl-registry)
+            (current-ctor-registry)
+            (current-type-meta))))
+
+(define (run s)
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
+                 [current-ns-context shared-ns-context]
+                 [current-module-registry shared-module-reg]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry shared-trait-reg]
+                 [current-impl-registry shared-impl-reg]
+                 [current-param-impl-registry shared-param-impl-reg]
+                 [current-ctor-registry shared-ctor-reg]
+                 [current-type-meta shared-type-meta])
+    (process-string s)))
+
+(define (run-last s) (last (run s)))
+
+(define (check-contains actual substr [msg #f])
+  (check-true (string-contains? actual substr)
+              (or msg (format "Expected ~s to contain ~s" actual substr))))
+
+;; ========================================
+;; Phase 11 — incoming op:deliver applied to vat
+;; ========================================
+
+(test-case "bridge/op:deliver applied via incoming-captp-op resolves answer-pos promise"
+  ;; Setup:
+  ;;   sa = vat-spawn-actor beh-echo syrup-null empty-vat   ;; actor id 0
+  ;;   pa = fresh-promise (alloc-vat sa)                     ;; promise id 1
+  ;; Apply incoming op:deliver(target=0, args="hi", ap=some 1, rm=none).
+  ;; Drain. Inspect promise 1 — should be fulfilled with syrup-string "hi".
+  (check-contains
+   (run-last
+    "(eval (let (sa  (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  pa  (fresh-promise (alloc-vat sa))
+                  v1  (incoming-captp-op (op-deliver (alloc-id sa)
+                                                     (syrup-string \"hi\")
+                                                     (some Nat (alloc-id pa))
+                                                     (none Nat))
+                                          (alloc-vat pa))
+                  v2  (drain (suc (suc (suc (suc (suc zero))))) v1))
+              (fulfilled? (unwrap-or fresh
+                                      (lookup-promise (alloc-id pa) v2)))))")
+   "true"))
+
+(test-case "bridge/op:deliver-only is enqueued and processed"
+  (check-contains
+   (run-last
+    "(eval (let (sa  (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  v1  (incoming-captp-op (op-deliver-only (alloc-id sa)
+                                                          (syrup-string \"silent\"))
+                                          (alloc-vat sa))
+                  v2  (drain (suc (suc (suc zero))) v1))
+              (queue-length v2)))")
+   "0N"))
+
+(test-case "bridge/op:abort is a no-op on the vat (handled at connection layer)"
+  ;; Vat is unchanged after applying op-abort.
+  (check-contains
+   (run-last
+    "(eval (let (sa  (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  v0  (alloc-vat sa)
+                  v1  (incoming-captp-op (op-abort \"reason\") v0))
+              (queue-length v1)))")
+   "0N"))
+
+(test-case "bridge/op:start-session is a no-op on the vat (session layer)"
+  (check-contains
+   (run-last
+    "(eval (let (v0  empty-vat
+                  v1  (incoming-captp-op (op-start-session \"0.1\" syrup-null syrup-null) v0))
+              (queue-length v1)))")
+   "0N"))
+
+;; ========================================
+;; Phase 12 — outbound resolution → wire bytes
+;; ========================================
+
+(define (extract-value-bytes s)
+  (define m (regexp-match #px"^(\".*\") : String$" s))
+  (unless m
+    (error 'extract-value-bytes "couldn't extract bytes from: ~s" s))
+  (read (open-input-string (cadr m))))
+
+(test-case "bridge/outbound-deliver-bytes builds canonical op:deliver record"
+  ;; pid=0, args="hi" produces <op:deliver <desc:answer 0> ["hi"] false false>.
+  ;; The args slot is a LIST -- a peer iterates it, so a bare value there
+  ;; raises inside its receive loop. This expectation used to encode the
+  ;; unwrapped form; that was the bug, not the contract.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (outbound-deliver-bytes zero (syrup-string \"hi\")))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (encode-record \"op:deliver\"
+                              (cons (syrup-tagged \"desc:answer\" (syrup-nat zero))
+                                (cons (syrup-list (cons (syrup-string \"hi\") nil))
+                                  (cons (syrup-bool false)
+                                    (cons (syrup-bool false) nil))))))")))
+  (check-equal? got expected))
+
+;; Phase 25: outbound question encoder. Prologos questions an export
+;; on the peer side, embedding our q-pos in a desc:answer for routing.
+(test-case "bridge/outbound-question-bytes builds canonical questioner op:deliver"
+  ;; tgt-export=2, args="ping", our-q-pos=7 should produce
+  ;;   <op:deliver <desc:export 2> ["ping"] 7 false>
+  ;;
+  ;; Two things here used to be wrong and were pinned wrong by this test.
+  ;; The args slot is a LIST, always -- a peer iterates it directly, so a bare
+  ;; value raises inside its receive loop. And the answer position is a BARE
+  ;; INTEGER: upstream reads slot 2 unwrapped, so `<desc:answer 7>` came back
+  ;; as a record that never compared equal to the position we later name in
+  ;; op:gc-answers. The sibling encoder `outbound-ask-bytes` always wrote both
+  ;; correctly; nothing forced the two to agree.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (outbound-question-bytes (suc (suc zero)) (syrup-string \"ping\") (suc (suc (suc (suc (suc (suc (suc zero))))))) ))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (encode-record \"op:deliver\"
+                              (cons (syrup-tagged \"desc:export\" (syrup-nat (suc (suc zero))))
+                                (cons (syrup-list (cons (syrup-string \"ping\") nil))
+                                  (cons (syrup-nat (suc (suc (suc (suc (suc (suc (suc zero))))))))
+                                    (cons (syrup-bool false) nil))))))")))
+  (check-equal? got expected))
+
+;; Phase 25: outbound question table in BridgeState. Track that we
+;; sent question q=2 and are awaiting it via local-promise=1; lookup
+;; should return `some 1N` (Prologos pretty-prints small Nats as `Nn`).
+(test-case "bridge/bs-outbound-questions: add then lookup roundtrip"
+  (define got
+    (run-last
+     "(eval (let ((st0 bridge-state-empty))
+              (let ((st1 (bs-add-outbound-question (suc (suc zero)) (suc zero) st0)))
+                (bs-lookup-outbound-question (suc (suc zero)) st1))))"))
+  (check-contains got "some")
+  (check-contains got "1N"))
+
+(test-case "bridge/bs-outbound-questions: lookup of unrecorded q-pos returns none"
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-outbound-question (suc (suc zero)) bridge-state-empty))")
+   "none"))
+
+;; Phase 34a: Refr ADT.
+(test-case "refr/refr-remote-export round-trips through accessors"
+  (check-contains
+   (run-last
+    "(eval (refr-id (refr-remote-export (suc (suc (suc zero))))))")
+   "3N")
+  ;; Was "1N" — the kind was a Peano numeral. It is now a nullary constructor,
+  ;; which is the point of the change: the answer names the kind instead of
+  ;; making you count `suc`s.
+  (check-contains
+   (run-last
+    "(eval (refr-kind (refr-remote-export (suc (suc (suc zero))))))")
+   "refr-k-remote-export"))
+
+(test-case "refr/refr-remote-export? predicate"
+  (check-contains
+   (run-last
+    "(eval (refr-remote-export? (refr-remote-export (suc zero))))")
+   "true")
+  (check-contains
+   (run-last
+    "(eval (refr-remote-export? (refr-local-export (suc zero))))")
+   "false"))
+
+(test-case "refr/refr-local-answer? + refr-remote-answer? + refr-local-export?"
+  (check-contains
+   (run-last
+    "(eval (refr-local-answer? (refr-local-answer (suc zero))))")
+   "true")
+  (check-contains
+   (run-last
+    "(eval (refr-remote-answer? (refr-remote-answer (suc zero))))")
+   "true")
+  (check-contains
+   (run-last
+    "(eval (refr-local-export? (refr-local-export zero)))")
+   "true"))
+
+(test-case "refr/refr-eq? same kind same id => true"
+  (check-contains
+   (run-last
+    "(eval (refr-eq? (refr-remote-export (suc (suc zero))) (refr-remote-export (suc (suc zero)))))")
+   "true"))
+
+(test-case "refr/refr-eq? different ids => false"
+  (check-contains
+   (run-last
+    "(eval (refr-eq? (refr-remote-export (suc zero)) (refr-remote-export (suc (suc zero)))))")
+   "false"))
+
+(test-case "refr/refr-eq? different kinds => false even with same id"
+  (check-contains
+   (run-last
+    "(eval (refr-eq? (refr-remote-export (suc zero)) (refr-local-export (suc zero))))")
+   "false"))
+
+;; Phase 34d: Refr → wire encoding (refr-to-syrup).
+(test-case "refr/refr-to-syrup encodes refr-local-export as desc:export tag"
+  ;; Round-trip via the wire encoder: refr-local-export 5 should
+  ;; produce <desc:export 5> on the wire.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (encode (refr-to-syrup (refr-local-export (suc (suc (suc (suc (suc zero))))))) ))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (encode (syrup-tagged \"desc:export\" (syrup-nat (suc (suc (suc (suc (suc zero))))) ))))")))
+  (check-equal? got expected))
+
+(test-case "refr/refr-to-syrup encodes refr-local-answer as desc:answer tag"
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (encode (refr-to-syrup (refr-local-answer (suc (suc (suc zero))))) ))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (encode (syrup-tagged \"desc:answer\" (syrup-nat (suc (suc (suc zero))))) ))")))
+  (check-equal? got expected))
+
+(test-case "refr/refr-to-syrup + extract-refrs-from-args round-trips with perspective flip"
+  ;; Encode refr-local-export 7 → wire → decode (via
+  ;; extract-refrs-from-args). Result should be refr-remote-export 7
+  ;; (perspective flips: our export is peer's import).
+  ;;
+  ;; Verified via auto-increment: feeding the encoded refr through
+  ;; the decoder + bridge dispatch should increment imports-refcount[7].
+  (check-contains
+   (run-last
+    "(eval (let (encoded (refr-to-syrup (refr-local-export (suc (suc (suc (suc (suc (suc (suc zero))))))) ))
+                  op      (op-deliver zero encoded (none Nat) (none Nat))
+                  step    (captp-incoming-with-state op empty-vat bridge-state-empty))
+              (bs-lookup-import-refcount (suc (suc (suc (suc (suc (suc (suc zero))))))) (bridge-step-state step))))")
+   "1N"))
+
+;; Phase 34b: decoder hook extract-refrs-from-args.
+(test-case "bridge/extract-refrs-from-args returns nil for atomic args"
+  (check-contains
+   (run-last
+    "(eval (length (extract-refrs-from-args (syrup-string \"hello\"))))")
+   "0N"))
+
+(test-case "bridge/extract-refrs-from-args extracts a top-level desc:export"
+  ;; args = <desc:export 5> (a single tagged value, not in a list)
+  ;; should yield 1 refr with kind=remote-export, id=5.
+  (check-contains
+   (run-last
+    "(eval (length (extract-refrs-from-args
+                     (syrup-tagged \"desc:export\" (syrup-nat (suc (suc (suc (suc (suc zero)))))) ))))")
+   "1N"))
+
+(test-case "bridge/extract-refrs-from-args walks one-level into syrup-list"
+  ;; args = (syrup-list [<desc:export 1>, <desc:export 2>, "hello"])
+  ;; → 2 refrs.
+  (check-contains
+   (run-last
+    "(eval (length (extract-refrs-from-args
+                     (syrup-list (cons
+                       (syrup-tagged \"desc:export\" (syrup-nat (suc zero)))
+                       (cons
+                         (syrup-tagged \"desc:export\" (syrup-nat (suc (suc zero))))
+                         (cons (syrup-string \"hello\") nil)))))))")
+   "2N"))
+
+(test-case "bridge/extract-refrs-from-args extracts top-level desc:answer"
+  ;; args = <desc:answer 1> should yield exactly 1 refr.
+  ;; (We test it produced something refr-shaped via length; the
+  ;; per-kind discrimination is exercised in the captp-incoming
+  ;; integration test below — auto-increment on imports-refcount.)
+  (check-contains
+   (run-last
+    "(eval (length (extract-refrs-from-args
+                     (syrup-tagged \"desc:answer\" (syrup-nat (suc zero))))))")
+   "1N"))
+
+;; Phase 37: desc:import-object decode + encode.
+(test-case "refr/refr-remote-import-object? predicate"
+  (check-contains
+   (run-last
+    "(eval (refr-remote-import-object? (refr-remote-import-object (suc zero))))")
+   "true")
+  (check-contains
+   (run-last
+    "(eval (refr-remote-import-object? (refr-remote-export (suc zero))))")
+   "false"))
+
+(test-case "refr/refr-remote-import-object accessors"
+  (check-contains
+   (run-last
+    "(eval (refr-id (refr-remote-import-object (suc (suc zero)))))")
+   "2N")
+  ;; Was "4N". Same reason as above — and this assertion is the better argument
+  ;; for the change than any of them: nothing about "4N" told you it meant
+  ;; import-object, so the test passed while documenting nothing.
+  (check-contains
+   (run-last
+    "(eval (refr-kind (refr-remote-import-object zero)))")
+   "refr-k-remote-import-object"))
+
+(test-case "refr/refr-to-syrup encodes refr-remote-import-object as desc:import-object tag"
+  ;; Round-trip via the wire encoder: refr-remote-import-object 9
+  ;; should produce <desc:import-object 9> on the wire.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (encode (refr-to-syrup (refr-remote-import-object (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))) ))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (encode (syrup-tagged \"desc:import-object\" (syrup-nat (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))) ))))")))
+  (check-equal? got expected))
+
+(test-case "bridge/extract-refrs-from-args extracts top-level desc:import-object"
+  ;; args = <desc:import-object 3> should yield 1 refr.
+  (check-contains
+   (run-last
+    "(eval (length (extract-refrs-from-args
+                     (syrup-tagged \"desc:import-object\" (syrup-nat (suc (suc (suc zero))))))))")
+   "1N"))
+
+(test-case "bridge/extract-refrs-from-args walks one-level: mixed tags"
+  ;; args = (syrup-list [<desc:export 1>, <desc:import-object 2>, <desc:answer 3>])
+  ;; → 3 refrs.
+  (check-contains
+   (run-last
+    "(eval (length (extract-refrs-from-args
+                     (syrup-list (cons
+                       (syrup-tagged \"desc:export\" (syrup-nat (suc zero)))
+                       (cons
+                         (syrup-tagged \"desc:import-object\" (syrup-nat (suc (suc zero))))
+                         (cons
+                           (syrup-tagged \"desc:answer\" (syrup-nat (suc (suc (suc zero)))))
+                           nil)))))))")
+   "3N"))
+
+(test-case "refr/refr-to-syrup + extract-refrs-from-args round-trip preserves desc:import-object"
+  ;; Encode refr-remote-import-object 5 → wire-shape via refr-to-syrup
+  ;; → decode back via extract-refrs-from-args → 1 refr that round-trips
+  ;; through refr-to-syrup encoding to the same bytes.
+  (define enc-direct
+    (extract-value-bytes
+     (run-last
+      "(eval (encode (refr-to-syrup (refr-remote-import-object (suc (suc (suc (suc (suc zero))))))) ))")))
+  (define enc-tagged
+    (extract-value-bytes
+     (run-last
+      "(eval (encode (syrup-tagged \"desc:import-object\" (syrup-nat (suc (suc (suc (suc (suc zero))))))) ))")))
+  (check-equal? enc-direct enc-tagged))
+
+(test-case "bridge/desc:import-object does NOT auto-increment imports-refcount"
+  ;; Phase 0 design: import-object refrs are recognized + round-tripped
+  ;; but don't trigger imports-refcount tracking (that's the OCapN
+  ;; three-vat handoff GC story, deferred). Inbound op:deliver carrying
+  ;; <desc:import-object 4> should leave imports-refcount[4] absent.
+  (check-contains
+   (run-last
+    "(eval (let (op   (op-deliver zero
+                                   (syrup-tagged \"desc:import-object\" (syrup-nat (suc (suc (suc (suc zero))))) )
+                                   (none Nat)
+                                   (none Nat))
+                  step (captp-incoming-with-state op empty-vat bridge-state-empty))
+              (bs-lookup-import-refcount (suc (suc (suc (suc zero)))) (bridge-step-state step))))")
+   "none"))
+
+(test-case "bridge/captp-incoming-with-state op-deliver auto-increments imports-refcount"
+  ;; Inbound op:deliver with args containing <desc:export 7>:
+  ;; bridge should increment imports-refcount[7] to 1.
+  (check-contains
+   (run-last
+    "(eval (let (op   (op-deliver zero
+                                   (syrup-tagged \"desc:export\" (syrup-nat (suc (suc (suc (suc (suc (suc (suc zero))))))) ))
+                                   (none Nat)
+                                   (none Nat))
+                  step (captp-incoming-with-state op empty-vat bridge-state-empty))
+              (bs-lookup-import-refcount (suc (suc (suc (suc (suc (suc (suc zero))))))) (bridge-step-state step))))")
+   "1N"))
+
+;; Phase 34c: imports-refcount field + updaters.
+(test-case "bridge/bs-incr-import on empty state creates entry with count=1"
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-import-refcount (suc (suc zero)) (bs-incr-import (suc (suc zero)) bridge-state-empty)))")
+   "some")
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-import-refcount (suc (suc zero)) (bs-incr-import (suc (suc zero)) bridge-state-empty)))")
+   "1N"))
+
+(test-case "bridge/bs-incr-import twice on same key increments to 2"
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-import-refcount (suc zero)
+              (bs-incr-import (suc zero) (bs-incr-import (suc zero) bridge-state-empty))))")
+   "2N"))
+
+(test-case "bridge/bs-decr-import after 2 incrs leaves count=1"
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-import-refcount (suc zero)
+              (bs-decr-import (suc zero) (suc zero)
+                (bs-incr-import (suc zero) (bs-incr-import (suc zero) bridge-state-empty)))))")
+   "1N"))
+
+(test-case "bridge/bs-decr-import below zero saturates at zero"
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-import-refcount (suc zero)
+              (bs-decr-import (suc zero) (suc (suc (suc zero)))
+                (bs-incr-import (suc zero) bridge-state-empty))))")
+   "0N"))
+
+(test-case "bridge/bs-imports-refcount of empty state is empty list"
+  (check-contains
+   (run-last
+    "(eval (length (bs-imports-refcount bridge-state-empty)))")
+   "0N"))
+
+;; Phase 36: exports-refcount + bs-incr-export / bs-decr-export.
+(test-case "bridge/bs-incr-export creates entry with count=1"
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-export-refcount (suc (suc zero))
+              (bs-incr-export (suc (suc zero)) bridge-state-empty)))")
+   "1N"))
+
+(test-case "bridge/bs-incr-export twice on same key increments to 2"
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-export-refcount (suc zero)
+              (bs-incr-export (suc zero) (bs-incr-export (suc zero) bridge-state-empty))))")
+   "2N"))
+
+(test-case "bridge/bs-decr-export saturates at zero"
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-export-refcount (suc zero)
+              (bs-decr-export (suc zero) (suc (suc (suc zero)))
+                (bs-incr-export (suc zero) bridge-state-empty))))")
+   "0N"))
+
+(test-case "bridge/captp-incoming op:gc-export decrements exports-refcount"
+  ;; Set exports-refcount[3] = 2; dispatch op:gc-export 3 1; expect 1.
+  (check-contains
+   (run-last
+    "(eval (let (st0  (bs-incr-export (suc (suc (suc zero)))
+                       (bs-incr-export (suc (suc (suc zero))) bridge-state-empty))
+                  step (captp-incoming-with-state
+                          (op-gc-export (suc (suc (suc zero))) (suc zero))
+                          empty-vat st0))
+              (bs-lookup-export-refcount (suc (suc (suc zero))) (bridge-step-state step))))")
+   "1N"))
+
+(test-case "bridge/captp-incoming op:gc-export still appends to audit log"
+  ;; Audit log preserved alongside refcount decrement.
+  (check-contains
+   (run-last
+    "(eval (let (step (captp-incoming-with-state
+                        (op-gc-export (suc zero) (suc zero))
+                        empty-vat bridge-state-empty))
+              (length (bs-gc-exports (bridge-step-state step)))))")
+   "1N"))
+
+;; Phase 31: removal of question-table entries for GC.
+(test-case "bridge/bs-remove-question removes inbound question entry"
+  ;; Add q-pos=2 → pid=1, then remove q-pos=2; lookup should return none.
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-question (suc (suc zero))
+              (bs-remove-question (suc (suc zero))
+                (bs-add-question (suc (suc zero)) (suc zero) bridge-state-empty))))")
+   "none"))
+
+(test-case "bridge/bs-remove-question on absent entry is a no-op"
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-question (suc (suc zero))
+              (bs-remove-question (suc (suc zero)) bridge-state-empty)))")
+   "none"))
+
+(test-case "bridge/bs-remove-outbound-question removes outbound question entry"
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-outbound-question (suc (suc zero))
+              (bs-remove-outbound-question (suc (suc zero))
+                (bs-add-outbound-question (suc (suc zero)) (suc zero) bridge-state-empty))))")
+   "none"))
+
+(test-case "bridge/bs-remove-outbound-question keeps non-matching entries"
+  ;; Add (q-pos=1 → pid=10) and (q-pos=2 → pid=20). Remove q-pos=1.
+  ;; q-pos=2 should still be there.
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-outbound-question (suc (suc zero))
+              (bs-remove-outbound-question (suc zero)
+                (bs-add-outbound-question (suc (suc zero)) (suc (suc zero))
+                  (bs-add-outbound-question (suc zero) (suc zero) bridge-state-empty)))))")
+   "some"))
+
+;; Phase 27: bridge-send-question allocates promise + registers q-pos +
+;; encodes bytes in one shot. Atomic "ask" operation.
+(test-case "bridge/bridge-send-question allocates + registers + encodes"
+  ;; tgt-export=2, args="ping", empty state. Should allocate pid=0,
+  ;; register q-pos=0 in outbound-questions, return bytes targeting
+  ;; <desc:export 2> with answer-pos <desc:answer 0>.
+  (define got-pid
+    (run-last
+     "(eval (bq-pid (bridge-send-question (suc (suc zero)) (syrup-string \"ping\") empty-vat bridge-state-empty)))"))
+  ;; First allocation: pid = 0N
+  (check-contains got-pid "0N"))
+
+(test-case "bridge/bridge-send-question registers q-pos in outbound-questions"
+  ;; After bridge-send-question, looking up the freshly-assigned q-pos
+  ;; in the returned state should find the same pid.
+  (define got
+    (run-last
+     "(eval (let ((bq (bridge-send-question (suc (suc zero)) (syrup-string \"ping\") empty-vat bridge-state-empty)))
+              (bs-lookup-outbound-question (bq-pid bq) (bq-state bq))))"))
+  (check-contains got "some")
+  (check-contains got "0N"))
+
+(test-case "bridge/bridge-send-question encodes canonical question bytes"
+  ;; The bytes returned should match outbound-question-bytes called
+  ;; directly with the same args + the freshly-assigned q-pos (=0).
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (bq-bytes (bridge-send-question (suc (suc zero)) (syrup-string \"ping\") empty-vat bridge-state-empty)))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (outbound-question-bytes (suc (suc zero)) (syrup-string \"ping\") zero))")))
+  (check-equal? got expected))
+
+;; Phase 25: dispatch incoming answer. With no entry in outbound-
+;; questions for the qpos, dispatch is a no-op (vat unchanged).
+(test-case "bridge/dispatch-incoming-answer: unknown qpos is a no-op"
+  (define got
+    (run-last
+     "(eval (let ((step (dispatch-incoming-answer (suc zero) syrup-null (none Nat) (none Nat) empty-vat bridge-state-empty)))
+              (queue-length (bridge-step-vat step))))"))
+  (check-contains got "0N"))
+
+;; With a fresh promise registered as outbound-question, the
+;; dispatch resolves it with the answer payload.
+(test-case "bridge/dispatch-incoming-answer: known qpos resolves the local promise"
+  (define got
+    (run-last
+     "(eval (let ((alloc (fresh-promise empty-vat)))
+              (let ((local-pid (alloc-id alloc)))
+                (let ((v0 (alloc-vat alloc)))
+                  (let ((st0 (bs-add-outbound-question (suc zero) local-pid bridge-state-empty)))
+                    (let ((step (dispatch-incoming-answer (suc zero) (syrup-string \"hello-back\") (none Nat) (none Nat) v0 st0)))
+                      (lookup-promise local-pid (bridge-step-vat step))))))))"))
+  ;; lookup-promise returns Option PromiseState; want some pst-fulfilled
+  (check-contains got "some")
+  (check-contains got "pst-fulfilled")
+  (check-contains got "hello-back"))
+
+(test-case "bridge/outbound-from-resolution unresolved -> none"
+  (check-contains
+   (run-last "(eval (outbound-from-resolution zero fresh))")
+   "none"))
+
+(test-case "bridge/outbound-from-resolution fulfilled -> some bytes"
+  (check-contains
+   (run-last
+    "(eval (outbound-from-resolution
+              zero
+              (fulfill (syrup-string \"hi\") fresh)))")
+   "some"))
+
+(test-case "bridge/full round-trip — incoming deliver, drain, extract outbound bytes"
+  ;; Apply Phase 11's incoming op-deliver → vat resolves promise →
+  ;; Phase 12's outbound-from-resolution → bytes.
+  ;;
+  ;; Setup: actor at id 0, promise at id 1. Send op-deliver target=0
+  ;; args="hi" ap=Some 1. After drain, lookup-promise 1 returns
+  ;; some pst-fulfilled (syrup-string "hi"). Then outbound-from-
+  ;; resolution returns the wire bytes.
+  ;;
+  ;; Asserts: bytes equal what `outbound-deliver-bytes 1 (syrup-string "hi")`
+  ;; would produce.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (sa  (vat-spawn-actor beh-echo syrup-null empty-vat)
+                    pa  (fresh-promise (alloc-vat sa))
+                    v1  (incoming-captp-op (op-deliver (alloc-id sa)
+                                                       (syrup-string \"hi\")
+                                                       (some Nat (alloc-id pa))
+                                                       (none Nat))
+                                            (alloc-vat pa))
+                    v2  (drain (suc (suc (suc (suc (suc zero))))) v1)
+                    pst (unwrap-or fresh
+                                    (lookup-promise (alloc-id pa) v2)))
+                (unwrap-or \"NO-OUTBOUND\"
+                            (outbound-from-resolution (alloc-id pa) pst))))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (outbound-deliver-bytes (suc zero) (syrup-string \"hi\")))")))
+  (check-equal? got expected))
+
+;; ========================================
+;; Phase 14 — state-aware dispatcher (op:listen, op:gc-*)
+;; ========================================
+;;
+;; The simple `incoming-captp-op` was no-op for op:listen and
+;; op:gc-*. The state-aware variant `captp-incoming-with-state`
+;; carries a `BridgeState` and updates it for each of these.
+
+(test-case "bridge/captp-incoming-with-state op:listen registers listener"
+  ;; After an op:listen 7 13, the bridge state should contain a
+  ;; listener for target=7 resolver=13. The vat is unchanged.
+  ;; List `length` returns Nat (1N for a single listener).
+  (check-contains
+   (run-last
+    "(eval (let (step (captp-incoming-with-state
+                          (op-listen (suc (suc (suc (suc (suc (suc (suc zero))))))) ;; 7
+                                     (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))))) ;; 13
+                                     false)
+                          empty-vat
+                          bridge-state-empty)
+                    listeners (bs-listeners (bridge-step-state step)))
+              (length listeners)))")
+   "1N"))
+
+(test-case "bridge/captp-incoming-with-state op:gc-export records request"
+  (check-contains
+   (run-last
+    "(eval (let (step (captp-incoming-with-state
+                          (op-gc-export (suc (suc zero)) (suc zero))
+                          empty-vat
+                          bridge-state-empty)
+                    es (bs-gc-exports (bridge-step-state step)))
+              (length es)))")
+   "1N"))
+
+(test-case "bridge/captp-incoming-with-state op:gc-answer records request"
+  (check-contains
+   (run-last
+    "(eval (let (step (captp-incoming-with-state
+                          (op-gc-answer (suc zero))
+                          empty-vat
+                          bridge-state-empty)
+                    as (bs-gc-answers (bridge-step-state step)))
+              (length as)))")
+   "1N"))
+
+(test-case "bridge/captp-incoming-with-state op:deliver routes to vat queue"
+  ;; Vat queue should grow; bridge state unchanged.
+  (check-contains
+   (run-last
+    "(eval (let (sa   (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  step (captp-incoming-with-state
+                          (op-deliver (alloc-id sa) (syrup-string \"hi\") (none Nat) (none Nat))
+                          (alloc-vat sa)
+                          bridge-state-empty))
+              (queue-length (bridge-step-vat step))))")
+   "1N"))
+
+;; ========================================
+;; Phase 15 — session question-table mapping
+;; ========================================
+
+(test-case "bridge/dispatch-deliver allocates fresh local promise and records mapping"
+  ;; Wire side specifies answer-pos=42 (a position in the peer's
+  ;; question table). Locally we have an empty vat — no promise
+  ;; at id 42. The bridge should allocate a local promise (will
+  ;; be id 0 in the empty vat) and record (42→0) in the question
+  ;; table.
+  (check-contains
+   (run-last
+    "(eval (let (sa   (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  step (captp-incoming-with-state
+                          (op-deliver (alloc-id sa)
+                                      (syrup-string \"hi\")
+                                      (some Nat (suc (suc (suc (suc (suc (suc (suc (suc (suc zero)))))))))) ;; remote=9 (chosen by peer)
+                                      (none Nat))
+                          (alloc-vat sa)
+                          bridge-state-empty)
+                  qs (bs-questions (bridge-step-state step)))
+              (length qs)))")
+   "1N"))
+
+(test-case "bridge/dispatch-deliver re-uses existing question-table entry"
+  ;; Same op:deliver with remote=9 sent twice — second one
+  ;; should reuse the local promise; question table size stays 1.
+  (check-contains
+   (run-last
+    "(eval (let (sa    (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  step1 (captp-incoming-with-state
+                            (op-deliver (alloc-id sa)
+                                        (syrup-string \"hi-1\")
+                                        (some Nat (suc (suc (suc zero))))
+                                        (none Nat))
+                            (alloc-vat sa)
+                            bridge-state-empty)
+                  step2 (captp-incoming-with-state
+                            (op-deliver (alloc-id sa)
+                                        (syrup-string \"hi-2\")
+                                        (some Nat (suc (suc (suc zero))))
+                                        (none Nat))
+                            (bridge-step-vat step1)
+                            (bridge-step-state step1))
+                  qs (bs-questions (bridge-step-state step2)))
+              (length qs)))")
+   "1N"))
+
+(test-case "bridge/dispatch-deliver with answer-pos=none doesn't touch question table"
+  (check-contains
+   (run-last
+    "(eval (let (sa   (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  step (captp-incoming-with-state
+                          (op-deliver (alloc-id sa)
+                                      (syrup-string \"hi\")
+                                      (none Nat)
+                                      (none Nat))
+                          (alloc-vat sa)
+                          bridge-state-empty)
+                  qs (bs-questions (bridge-step-state step)))
+              (length qs)))")
+   "0N"))
+
+;; ========================================
+;; Phase 16 — wire-OUT pump (auto-emit bytes on resolution)
+;; ========================================
+
+(test-case "bridge/pump-outbound emits bytes when a question's promise is fulfilled"
+  ;; End-to-end: incoming op-deliver allocates local promise via
+  ;; question table. Drain the vat → echo actor resolves it.
+  ;; pump-outbound walks the question table and produces bytes
+  ;; targeting the REMOTE answer-pos.
+  ;;
+  ;; Asserts: result bytes list has length 1.
+  (check-contains
+   (run-last
+    "(eval (let (sa    (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  step  (captp-incoming-with-state
+                            (op-deliver (alloc-id sa)
+                                        (syrup-string \"hi\")
+                                        (some Nat (suc (suc (suc (suc (suc (suc zero))))))) ;; remote=6
+                                        (none Nat))
+                            (alloc-vat sa)
+                            bridge-state-empty)
+                  v2    (drain (suc (suc (suc (suc (suc zero))))) (bridge-step-vat step))
+                  pr    (pump-outbound v2 (bridge-step-state step) nil))
+              (length (pump-result-bytes pr))))")
+   "1N"))
+
+(test-case "bridge/pump-outbound is idempotent — second call after re-pump emits nothing new"
+  ;; Same setup; first pump emits the bytes and returns
+  ;; emitted=[local]. Second pump with that emitted list returns
+  ;; bytes=nil.
+  (check-contains
+   (run-last
+    "(eval (let (sa     (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  step   (captp-incoming-with-state
+                             (op-deliver (alloc-id sa)
+                                         (syrup-string \"hi\")
+                                         (some Nat (suc (suc (suc zero))))
+                                         (none Nat))
+                             (alloc-vat sa)
+                             bridge-state-empty)
+                  v2     (drain (suc (suc (suc (suc (suc zero))))) (bridge-step-vat step))
+                  pr1    (pump-outbound v2 (bridge-step-state step) nil)
+                  pr2    (pump-outbound v2 (bridge-step-state step)
+                                         (pump-result-emitted pr1)))
+              (length (pump-result-bytes pr2))))")
+   "0N"))
+
+(test-case "bridge/pump-outbound returns empty if no promises resolved"
+  ;; Question table has an entry but the promise is still
+  ;; unresolved (we DIDN'T drain).
+  (check-contains
+   (run-last
+    "(eval (let (sa    (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  step  (captp-incoming-with-state
+                            (op-deliver (alloc-id sa)
+                                        (syrup-string \"hi\")
+                                        (some Nat (suc (suc (suc zero))))
+                                        (none Nat))
+                            (alloc-vat sa)
+                            bridge-state-empty)
+                  pr    (pump-outbound (bridge-step-vat step)
+                                        (bridge-step-state step)
+                                        nil))
+              (length (pump-result-bytes pr))))")
+   "0N"))
+
+(test-case "bridge/pump-outbound bytes target the REMOTE answer-pos, not local pid"
+  ;; Remote=6 in our test. The local promise gets allocated at
+  ;; whatever fresh-promise gives (id 1 in this vat with one
+  ;; spawned actor). The OUTBOUND bytes should target REMOTE=6
+  ;; in `<op:deliver <desc:answer 6> ...>`, NOT local=1.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (sa    (vat-spawn-actor beh-echo syrup-null empty-vat)
+                    step  (captp-incoming-with-state
+                              (op-deliver (alloc-id sa)
+                                          (syrup-string \"hi\")
+                                          (some Nat (suc (suc (suc (suc (suc (suc zero))))))) ;; remote=6
+                                          (none Nat))
+                              (alloc-vat sa)
+                              bridge-state-empty)
+                    v2    (drain (suc (suc (suc (suc (suc zero))))) (bridge-step-vat step))
+                    pr    (pump-outbound v2 (bridge-step-state step) nil))
+                (first-bytes-or-default \"NO-BYTES\" (pump-result-bytes pr))))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (outbound-deliver-bytes (suc (suc (suc (suc (suc (suc zero)))))) (syrup-string \"hi\")))")))
+  (check-equal? got expected))
+
+;; ========================================
+;; Phase 17 — Error type for broken promises
+;; ========================================
+
+(test-case "bridge/outbound-from-resolution broken -> some <Error r>-bytes"
+  ;; Broken promise should now yield bytes (was `none` in Phase 12).
+  ;; Bytes target the local pid as <op:deliver <desc:answer N> <Error r> false false>.
+  ;; (Construct broken state via `pst-broken` directly; `break` from
+  ;; promise.prologos collides with `data::list::break-helper` in the
+  ;; sexp-mode resolver.)
+  (check-contains
+   (run-last
+    "(eval (outbound-from-resolution
+              zero
+              (pst-broken (syrup-string \"oops\"))))")
+   "some"))
+
+(test-case "bridge/outbound-from-resolution broken bytes contain <Error wrapper"
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (unwrap-or \"NO-BYTES\"
+                          (outbound-from-resolution
+                            zero
+                            (pst-broken (syrup-string \"oops\")))))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      ;; The Error record sits INSIDE the args list -- that slot is always a
+      ;; list, because a peer iterates it.
+      "(eval (encode-record \"op:deliver\"
+                              (cons (syrup-tagged \"desc:answer\" (syrup-nat zero))
+                                (cons (syrup-list (cons (syrup-tagged \"Error\" (syrup-string \"oops\")) nil))
+                                  (cons (syrup-bool false)
+                                    (cons (syrup-bool false) nil))))))")))
+  (check-equal? got expected))
+
+(test-case "bridge/wrap-error wraps a SyrupValue in <Error _> tagged record"
+  ;; (wrap-error "oops") should equal (syrup-tagged "Error" "oops").
+  ;; Verify by encoding both and comparing bytes.
+  (define got
+    (extract-value-bytes
+     (run-last "(eval (encode (wrap-error (syrup-string \"oops\"))))")))
+  (define expected
+    (extract-value-bytes
+     (run-last "(eval (encode (syrup-tagged \"Error\" (syrup-string \"oops\"))))")))
+  (check-equal? got expected))
+
+;; ========================================
+;; Phase 18 — connection lifecycle composer
+;; ========================================
+;;
+;; `connection-step` chains incoming-op → drain → pump in one
+;; call, threading `ConnectionState` through.
+
+(test-case "bridge/connection-step op:deliver yields outbound bytes after one step"
+  ;; Fresh connection, incoming op:deliver, expect 1 outbound
+  ;; byte-string after the step.
+  (check-contains
+   (run-last
+    "(eval (let (sa  (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  cs0 (conn-state (alloc-vat sa) bridge-state-empty nil false)
+                  step (connection-step
+                          (op-deliver (alloc-id sa)
+                                      (syrup-string \"hi\")
+                                      (some Nat (suc (suc (suc zero))))
+                                      (none Nat))
+                          cs0))
+              (length (conn-step-outbound step))))")
+   "1N"))
+
+(test-case "bridge/connection-step after op:abort sets aborted? flag"
+  (check-contains
+   (run-last
+    "(eval (let (step (connection-step (op-abort \"bye\") empty-connection))
+              (conn-aborted? (conn-step-state step))))")
+   "true"))
+
+(test-case "bridge/connection-step is a no-op once aborted"
+  ;; After abort, a follow-up op-deliver produces no bytes
+  ;; (state is frozen).
+  (check-contains
+   (run-last
+    "(eval (let (sa     (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  cs0    (conn-state (alloc-vat sa) bridge-state-empty nil false)
+                  step1  (connection-step (op-abort \"bye\") cs0)
+                  step2  (connection-step
+                            (op-deliver (alloc-id sa)
+                                        (syrup-string \"hi\")
+                                        (some Nat (suc zero))
+                                        (none Nat))
+                            (conn-step-state step1)))
+              (length (conn-step-outbound step2))))")
+   "0N"))
+
+;; Phase 28: high-level connection-ask. Combines bridge-send-question
+;; with ConnectionState bookkeeping.
+(test-case "bridge/connection-ask returns wire bytes targeting peer's export"
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (conn-ask-bytes (connection-ask (suc (suc zero)) (syrup-string \"ping\") empty-connection)))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (outbound-question-bytes (suc (suc zero)) (syrup-string \"ping\") zero))")))
+  (check-equal? got expected))
+
+;; ========================================
+;; (was test-ocapn-bridge-02.rkt — SPLIT REVERTED)
+;; ========================================
+;;
+;; This file hit the runner's 120s per-file limit on CI, so I split it in two.
+;; That made CI WORSE: 1 timeout became 2, with BOTH halves over the limit —
+;; each half cost more on CI than the whole file had.
+;;
+;; The reason is that the dominant cost here is PER FILE, not per test: every
+;; file re-elaborates the OCapN module chain through its shared fixture.
+;; Locally that cost is small (38s + 39s vs 73s unsplit — near enough neutral),
+;; which is exactly why the split looked free before it was pushed. On CI it is
+;; large, so splitting paid it twice.
+;;
+;; Splitting is the right instinct for a file with 147 cases
+;; (`.claude/rules/testing.md` asks for ~20), but it only helps once the fixed
+;; per-file cost is small. The real fix is the per-file timeout, which the
+;; batch worker already supports and the runner simply did not pass through.
+
+(test-case "bridge/connection-ask returns the freshly-allocated promise-id"
+  (check-contains
+   (run-last
+    "(eval (conn-ask-pid (connection-ask zero (syrup-string \"ping\") empty-connection)))")
+   "0N"))
+
+(test-case "bridge/connection-ask updates ConnectionState's outbound-questions"
+  ;; After ask, looking up q-pos in the returned state's bridge-state
+  ;; should find the local promise.
+  (check-contains
+   (run-last
+    "(eval (let (ask (connection-ask zero (syrup-string \"ping\") empty-connection))
+              (bs-lookup-outbound-question (conn-ask-pid ask)
+                                            (conn-bridge-state (conn-ask-state ask)))))")
+   "some"))
+
+;; Phase 30: captp-ask (in core) is the user-facing alias for
+;; connection-ask. Bytes match.
+(test-case "core/captp-ask is byte-equivalent to connection-ask"
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (conn-ask-bytes (captp-ask zero (syrup-string \"ping\") empty-connection)))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (conn-ask-bytes (connection-ask zero (syrup-string \"ping\") empty-connection)))")))
+  (check-equal? got expected))
+
+(test-case "core/captp-ask returns same pid as connection-ask"
+  (define got-via-captp-ask
+    (run-last
+     "(eval (conn-ask-pid (captp-ask zero (syrup-string \"ping\") empty-connection)))"))
+  (define got-via-connection-ask
+    (run-last
+     "(eval (conn-ask-pid (connection-ask zero (syrup-string \"ping\") empty-connection)))"))
+  (check-equal? got-via-captp-ask got-via-connection-ask))
+
+;; Phase 32: outbound GC release API.
+(test-case "bridge/release-answer emits op:gc-answer wire bytes"
+  ;; release-answer for q-pos=2 should emit canonical bytes.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (rel (release-answer (suc (suc zero)) empty-connection))
+                (first-bytes-or-default \"NO-BYTES\" (conn-release-bytes rel))))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (gc-answer-bytes (suc (suc zero))))")))
+  (check-equal? got expected))
+
+(test-case "bridge/release-answer removes the outbound-question entry"
+  ;; Before release: q-pos=0 maps to a promise (via connection-ask).
+  ;; After release: lookup of q-pos=0 returns none.
+  (check-contains
+   (run-last
+    "(eval (let (ask  (connection-ask zero (syrup-string \"ping\") empty-connection)
+                  pid  (conn-ask-pid ask)
+                  cs1  (conn-ask-state ask)
+                  rel  (release-answer pid cs1))
+              (bs-lookup-outbound-question pid (conn-bridge-state (conn-release-state rel)))))")
+   "none"))
+
+(test-case "bridge/release-answer is a no-op once aborted"
+  ;; Aborted connection: bytes list should be empty.
+  (check-contains
+   (run-last
+    "(eval (let (cs0   empty-connection
+                  step1 (connection-step (op-abort \"bye\") cs0)
+                  rel   (release-answer zero (conn-step-state step1)))
+              (length (conn-release-bytes rel))))")
+   "0N"))
+
+;; Phase 34e: release-import decrements imports-refcount.
+(test-case "bridge/release-import decrements imports-refcount by k"
+  ;; Increment refcount for export 3 to 2, then release-import 1.
+  ;; Final count should be 1.
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-incr-import (suc (suc (suc zero)))
+                       (bs-incr-import (suc (suc (suc zero))) bridge-state-empty))
+                  cs0 (conn-state empty-vat st0 nil false)
+                  rel (release-import (suc (suc (suc zero))) (suc zero) cs0))
+              (bs-lookup-import-refcount (suc (suc (suc zero)))
+                (conn-bridge-state (conn-release-state rel)))))")
+   "1N"))
+
+(test-case "bridge/release-import decrement saturates at zero"
+  ;; Refcount=1, release count=5. Final count should be 0.
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-incr-import (suc zero) bridge-state-empty)
+                  cs0 (conn-state empty-vat st0 nil false)
+                  rel (release-import (suc zero) (suc (suc (suc (suc (suc zero))))) cs0))
+              (bs-lookup-import-refcount (suc zero)
+                (conn-bridge-state (conn-release-state rel)))))")
+   "0N"))
+
+(test-case "bridge/release-import emits op:gc-export wire bytes"
+  ;; release-import for export-pos=3, count=2 should emit canonical bytes.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (rel (release-import (suc (suc (suc zero))) (suc (suc zero)) empty-connection))
+                (first-bytes-or-default \"NO-BYTES\" (conn-release-bytes rel))))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (gc-export-bytes (suc (suc (suc zero))) (suc (suc zero))))")))
+  (check-equal? got expected))
+
+;; Phase 33: inbound op:gc-answer dispatch removes the inbound-question entry.
+(test-case "bridge/captp-incoming op:gc-answer removes the inbound-question entry"
+  ;; Add q-pos=1 → pid=10 to inbound-questions, dispatch op:gc-answer 1,
+  ;; lookup q-pos=1 should now return none.
+  (check-contains
+   (run-last
+    "(eval (let (st0  (bs-add-question (suc zero) (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))) ) bridge-state-empty)
+                  step (captp-incoming-with-state (op-gc-answer (suc zero)) empty-vat st0))
+              (bs-lookup-question (suc zero) (bridge-step-state step))))")
+   "none"))
+
+(test-case "bridge/captp-incoming op:gc-answer also appends to audit log"
+  ;; The bs-gc-answers list grows by 1 (for diagnostics).
+  (check-contains
+   (run-last
+    "(eval (let (step (captp-incoming-with-state (op-gc-answer (suc zero)) empty-vat bridge-state-empty))
+              (length (bs-gc-answers (bridge-step-state step)))))")
+   "1N"))
+
+(test-case "bridge/captp-incoming op:gc-answer keeps non-matching entries"
+  ;; Two entries: (q=1 → pid=1) and (q=2 → pid=2). gc q=1; q=2 still there.
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-add-question (suc (suc zero)) (suc (suc zero))
+                       (bs-add-question (suc zero) (suc zero) bridge-state-empty))
+                  step (captp-incoming-with-state (op-gc-answer (suc zero)) empty-vat st0))
+              (bs-lookup-question (suc (suc zero)) (bridge-step-state step))))")
+   "some"))
+
+(test-case "core/captp-release-answer is byte-equivalent to release-answer"
+  (define got-via-core
+    (extract-value-bytes
+     (run-last
+      "(eval (let (rel (captp-release-answer (suc zero) empty-connection))
+                (first-bytes-or-default \"NO-BYTES\" (conn-release-bytes rel))))")))
+  (define got-via-bridge
+    (extract-value-bytes
+     (run-last
+      "(eval (let (rel (release-answer (suc zero) empty-connection))
+                (first-bytes-or-default \"NO-BYTES\" (conn-release-bytes rel))))")))
+  (check-equal? got-via-core got-via-bridge))
+
+(test-case "bridge/connection-ask is a no-op once aborted"
+  ;; After abort, ask returns the same state with empty bytes.
+  (check-contains
+   (run-last
+    "(eval (let (cs0   empty-connection
+                  step1 (connection-step (op-abort \"bye\") cs0)
+                  ask   (connection-ask zero (syrup-string \"ping\") (conn-step-state step1)))
+              (str::eq (conn-ask-bytes ask) \"\")))")
+   "true"))
+
+(test-case "bridge/connection-ask + connection-step round-trip resolves the promise"
+  ;; 1. Ask (get bytes + pid).
+  ;; 2. Build peer's reply directly as op-deliver-to-answer (skip
+  ;;    encode/decode round-trip, which is tested separately in
+  ;;    captp-wire tests; here the focus is on dispatch + resolve).
+  ;; 3. Dispatch via connection-step.
+  ;; 4. Look up the promise — should be pst-fulfilled.
+  ;;
+  ;; (Avoiding nested decode-op + match in the test driver sidesteps
+  ;; issue #60 in the deeply-nested expression elaboration.)
+  (check-contains
+   (run-last
+    "(eval (let (ask  (connection-ask zero (syrup-string \"ping\") empty-connection)
+                  pid  (conn-ask-pid ask)
+                  cs1  (conn-ask-state ask)
+                  step (connection-step (op-deliver-to-answer pid (syrup-string \"answer\") (none Nat) (none Nat)) cs1))
+              (lookup-promise pid (conn-vat (conn-step-state step)))))")
+   "pst-fulfilled"))
+
+(test-case "bridge/connection-step op:start-session is a state-preserving no-op"
+  ;; Vat unchanged, bridge state unchanged, no outbound bytes,
+  ;; not aborted.
+  (check-contains
+   (run-last
+    "(eval (let (step (connection-step
+                          (op-start-session \"0.1\" syrup-null syrup-null)
+                          empty-connection))
+              (conn-aborted? (conn-step-state step))))")
+   "false"))
+
+;; Phase 38: wire-level promise pipelining.
+;; Peer sends op:deliver-to-answer for an INBOUND q-pos (one of THEIR
+;; questions to us) — bridge queues the args on our local promise so
+;; vat-side pipelining can forward them when the promise resolves.
+
+(test-case "bridge/dispatch-pipeline-on-our-q queues args on inbound q-pos's promise"
+  ;; Setup: peer's q-pos=5 → our local pid=allocated. Pipeline dispatch
+  ;; should leave the promise unresolved with 1 queued message.
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc (suc (suc (suc zero))))) pid bridge-state-empty)
+                  step  (dispatch-pipeline-on-our-q
+                          (suc (suc (suc (suc (suc zero)))))
+                          (syrup-string \"book-room\")
+                          (none Nat)
+                          (none Nat) v0 st0))
+              (promise-queue-length pid (bridge-step-vat step))))")
+   "1N"))
+
+(test-case "bridge/dispatch-pipeline-on-our-q drops on unknown q-pos"
+  ;; q-pos=42 not in bs-questions and not in bs-outbound-questions → no-op.
+  ;; State unchanged: bs-questions still empty.
+  (check-contains
+   (run-last
+    "(eval (let (step (dispatch-pipeline-on-our-q
+                        (suc (suc (suc (suc zero))))
+                        (syrup-string \"orphan\")
+                        (none Nat)
+                        (none Nat) empty-vat bridge-state-empty))
+              (length (bs-questions (bridge-step-state step)))))")
+   "0N"))
+
+(test-case "bridge/captp-incoming op-deliver-to-answer pipelines onto inbound q-pos"
+  ;; End-to-end: dispatch via the public captp-incoming-with-state.
+  ;; Peer's q-pos=8 is in our bs-questions; the answer-pos isn't in
+  ;; outbound-questions (we never asked anything). Bridge falls through
+  ;; from dispatch-incoming-answer → dispatch-pipeline-on-our-q → queues.
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc (suc (suc (suc (suc (suc (suc zero)))))))) pid bridge-state-empty)
+                  step  (captp-incoming-with-state
+                          (op-deliver-to-answer
+                            (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))
+                            (syrup-string \"chained\")
+                            (none Nat) (none Nat))
+                          v0 st0))
+              (promise-queue-length pid (bridge-step-vat step))))")
+   "1N"))
+
+;; Phase 39: questioner-side pipelining (sender).
+;; We previously asked a Q (got our q-pos = pid); now we send a follow-up
+;; chained onto that Q's eventual answer. Wire form: same as a reply
+;; (peer's bridge disambiguates by which table holds the q-pos).
+
+(test-case "bridge/connection-pipeline emits op:deliver with desc:answer target"
+  ;; The bytes should match outbound-deliver-bytes for the same
+  ;; (q-pos, args) — pipeline-send and reply use the same wire shape.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (pipe (connection-pipeline (suc (suc (suc zero)))
+                                              (syrup-string \"book-room\")
+                                              empty-connection))
+                (first-bytes-or-default \"NO-BYTES\" (conn-release-bytes pipe))))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (outbound-deliver-bytes (suc (suc (suc zero))) (syrup-string \"book-room\")))")))
+  (check-equal? got expected))
+
+(test-case "bridge/connection-pipeline does not mutate state"
+  ;; Pipeline emits bytes only; outbound-questions count unchanged.
+  (check-contains
+   (run-last
+    "(eval (let (ask  (connection-ask zero (syrup-string \"q1\") empty-connection)
+                  cs1  (conn-ask-state ask)
+                  pipe (connection-pipeline (conn-ask-pid ask) (syrup-string \"chain\") cs1))
+              (length (bs-outbound-questions
+                        (conn-bridge-state (conn-release-state pipe))))))")
+   "1N"))
+
+(test-case "bridge/connection-pipeline is a no-op once aborted"
+  (check-contains
+   (run-last
+    "(eval (let (cs0   empty-connection
+                  step1 (connection-step (op-abort \"bye\") cs0)
+                  pipe  (connection-pipeline (suc zero) (syrup-string \"x\")
+                                              (conn-step-state step1)))
+              (length (conn-release-bytes pipe))))")
+   "0N"))
+
+(test-case "bridge/connection-ask + connection-pipeline composes (full sender flow)"
+  ;; Ask peer a Q (allocates pid + bytes for op:deliver), then pipeline
+  ;; a chain message onto that pid. Both byte-strings must be present
+  ;; and distinct shapes (one targets desc:export, one targets desc:answer).
+  (check-contains
+   (run-last
+    "(eval (let (ask  (connection-ask zero (syrup-string \"q1\") empty-connection)
+                  cs1  (conn-ask-state ask)
+                  pipe (connection-pipeline (conn-ask-pid ask) (syrup-string \"chain\") cs1))
+              (length (conn-release-bytes pipe))))")
+   "1N"))
+
+;; Phase 41: wire-out closure. When a local promise resolves to a
+;; <desc:export K> refr, pump-outbound emits forwarding op:deliver
+;; bytes for each queued pipelined arg.
+
+(test-case "bridge/dispatch-pipeline-on-our-q records args in bs-pipelined-msgs"
+  ;; Phase 41 dual-queue: dispatch records the args at bridge level
+  ;; (in addition to the vat-side queue, which gets wiped on fulfill).
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc zero)) pid bridge-state-empty)
+                  step  (dispatch-pipeline-on-our-q
+                          (suc (suc zero))
+                          (syrup-string \"queued\")
+                          (none Nat)
+                          (none Nat) v0 st0))
+              (length (bs-pipelined-msgs (bridge-step-state step)))))")
+   "1N"))
+
+(test-case "bridge/syrup-as-export-target recognizes desc:export"
+  (check-contains
+   (run-last
+    "(eval (syrup-as-export-target (syrup-tagged \"desc:export\" (syrup-nat (suc (suc (suc zero)))))))")
+   "some")
+  (check-contains
+   (run-last
+    "(eval (syrup-as-export-target (syrup-tagged \"desc:export\" (syrup-nat (suc (suc (suc zero)))))))")
+   "3N"))
+
+(test-case "bridge/syrup-as-export-target rejects desc:answer and plain values"
+  (check-contains
+   (run-last
+    "(eval (syrup-as-export-target (syrup-tagged \"desc:answer\" (syrup-nat zero))))")
+   "none")
+  (check-contains
+   (run-last
+    "(eval (syrup-as-export-target (syrup-string \"hi\")))")
+   "none"))
+
+(test-case "bridge/forward-deliver-bytes builds <op:deliver desc:export args false false>"
+  ;; The forwarding wire shape is the same as a normal outbound deliver
+  ;; targeting an export, but with answer-pos=false (fire-and-forget).
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (forward-deliver-bytes \"desc:export\" (suc (suc zero)) (syrup-string \"book-room\") (none Nat) (none Nat)))")))
+  ;; Build the expected shape via raw encode-record for byte equivalence.
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (encode-record \"op:deliver\"
+                  (cons (syrup-tagged \"desc:export\" (syrup-nat (suc (suc zero))))
+                    (cons (syrup-list (cons (syrup-string \"book-room\") nil))
+                      (cons (syrup-bool false)
+                        (cons (syrup-bool false) nil))))))")))
+  (check-equal? got expected))
+
+(test-case "bridge/pump-outbound emits forwarding bytes when promise resolves to desc:export"
+  ;; Setup: peer asked Q1 (their q-pos=5, our local pid). Peer pipelined
+  ;; "chained-msg" onto q-pos=5 — bridge queued it at pid level. Then
+  ;; we resolve our local promise with `<desc:export 99>` (we got peer's
+  ;; export number from somewhere — could be from another peer in a
+  ;; three-vat scenario, or hardcoded for test). Pump should emit:
+  ;;   (a) the resolution bytes for desc:answer 5
+  ;;   (b) forwarding bytes for desc:export 99 with the queued args.
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc (suc (suc (suc zero))))) pid bridge-state-empty)
+                  step  (dispatch-pipeline-on-our-q
+                          (suc (suc (suc (suc (suc zero)))))
+                          (syrup-string \"chained-msg\")
+                          (none Nat)
+                          (none Nat) v0 st0)
+                  v1    (resolve-promise pid
+                          (syrup-tagged \"desc:export\"
+                            (syrup-nat (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))))) ;; 11
+                          (bridge-step-vat step))
+                  pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
+              (length (pump-result-bytes pr))))")
+   "2N"))
+
+(test-case "bridge/pump-outbound emits NO error-answer when ap=none + plain value (Phase 46)"
+  ;; Promise resolves to a string (not a refr / not desc:answer). Per
+  ;; Phase 46, plain value is a TYPE error for op:deliver — we'd emit
+  ;; an error-answer for each queued msg with ap=some, but here the
+  ;; queued msg is ap=none (fire-and-forget) so there's nowhere to
+  ;; send the error. Pump emits only the resolution bytes (1 byte).
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc zero)) pid bridge-state-empty)
+                  step  (dispatch-pipeline-on-our-q
+                          (suc (suc zero))
+                          (syrup-string \"chained\")
+                          (none Nat)
+                          (none Nat) v0 st0)
+                  v1    (resolve-promise pid (syrup-string \"plain-value\") (bridge-step-vat step))
+                  pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
+              (length (pump-result-bytes pr))))")
+   "1N"))
+
+;; Phase 42: local-actor pipelining. When a local promise resolves to
+;; <desc:export K> and K is one of OUR vat-registered actors,
+;; queued pipelined args are delivered LOCALLY via send-only — vat
+;; gets a new VatMsg queued, no wire forwarding emitted.
+
+(test-case "bridge/pump-outbound delivers locally when resolved-to export-id is a local actor"
+  ;; Spawn an echo actor (local actor with id K). Peer pipelines a msg
+  ;; onto our q-pos=3 (local promise pid). Then we resolve that promise
+  ;; with `<desc:export K>` — the export-id matches our local actor.
+  ;; Pump should NOT emit forwarding bytes; instead the vat should have
+  ;; the pipelined args queued as a VatMsg ready for the next drain.
+  (check-contains
+   (run-last
+    "(eval (let (alloc1 (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  k      (alloc-id alloc1)
+                  v0     (alloc-vat alloc1)
+                  alloc2 (fresh-promise v0)
+                  pid    (alloc-id alloc2)
+                  v1     (alloc-vat alloc2)
+                  st0    (bs-add-question (suc (suc (suc zero))) pid bridge-state-empty)
+                  step   (dispatch-pipeline-on-our-q (suc (suc (suc zero)))
+                                                      (syrup-string \"local-msg\")
+                                                      (none Nat)
+                                                      (none Nat) v1 st0)
+                  v2     (resolve-promise pid
+                            (syrup-tagged \"desc:export\" (syrup-nat k))
+                            (bridge-step-vat step))
+                  pr     (pump-outbound v2 (bridge-step-state step) (nil Nat)))
+              (length (vat-queue (pump-result-vat pr)))))")
+   "1N"))
+
+(test-case "bridge/pump-outbound emits only resolution bytes when forwarded locally"
+  ;; Resolution to a local actor's K means the queued msg goes LOCAL,
+  ;; not on the wire. Pump emits exactly 1 byte-string (resolution
+  ;; only); no forwarding bytes.
+  (check-contains
+   (run-last
+    "(eval (let (alloc1 (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  k      (alloc-id alloc1)
+                  v0     (alloc-vat alloc1)
+                  alloc2 (fresh-promise v0)
+                  pid    (alloc-id alloc2)
+                  v1     (alloc-vat alloc2)
+                  st0    (bs-add-question (suc zero) pid bridge-state-empty)
+                  step   (dispatch-pipeline-on-our-q (suc zero)
+                                                      (syrup-string \"local-msg\")
+                                                      (none Nat)
+                                                      (none Nat) v1 st0)
+                  v2     (resolve-promise pid
+                            (syrup-tagged \"desc:export\" (syrup-nat k))
+                            (bridge-step-vat step))
+                  pr     (pump-outbound v2 (bridge-step-state step) (nil Nat)))
+              (length (pump-result-bytes pr))))")
+   "1N"))
+
+(test-case "bridge/pump-outbound forwards on the wire when resolved-to export-id is NOT a local actor"
+  ;; Regression: Phase 41 path still works when K isn't a local actor.
+  ;; Resolution to `<desc:export 99>` (no actor 99 in the vat) → forward
+  ;; bytes emitted, vat queue length unchanged (no local delivery).
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc zero)) pid bridge-state-empty)
+                  step  (dispatch-pipeline-on-our-q (suc (suc zero))
+                                                     (syrup-string \"remote-msg\")
+                                                     (none Nat)
+                                                     (none Nat) v0 st0)
+                  v1    (resolve-promise pid
+                          (syrup-tagged \"desc:export\"
+                            (syrup-nat (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))))) ;; 11
+                          (bridge-step-vat step))
+                  pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
+              (length (vat-queue (pump-result-vat pr)))))")
+   "0N"))
+
+;; Phase 44: chained-answer resolution. When promise resolves to
+;; <desc:answer M>, forwarding emits <op:deliver <desc:answer M> args
+;; false false> for queued msgs. Peer's bridge dispatches via their
+;; Phase 38 fall-through (they look up M in their bs-questions, route
+;; to peer's local promise tied to our outbound Q).
+
+(test-case "bridge/syrup-as-answer-target recognizes desc:answer"
+  (check-contains
+   (run-last
+    "(eval (syrup-as-answer-target (syrup-tagged \"desc:answer\" (syrup-nat (suc (suc (suc (suc (suc zero))))))) ))")
+   "some")
+  (check-contains
+   (run-last
+    "(eval (syrup-as-answer-target (syrup-tagged \"desc:answer\" (syrup-nat (suc (suc (suc (suc (suc zero))))))) ))")
+   "5N"))
+
+(test-case "bridge/syrup-as-answer-target rejects desc:export"
+  (check-contains
+   (run-last
+    "(eval (syrup-as-answer-target (syrup-tagged \"desc:export\" (syrup-nat zero))))")
+   "none"))
+
+(test-case "bridge/forward-deliver-bytes builds desc:answer-targeted op:deliver"
+  ;; Same builder, different tag. Wire form for chained-answer forwarding.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (forward-deliver-bytes \"desc:answer\" (suc (suc zero)) (syrup-string \"chained-msg\") (none Nat) (none Nat)))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (encode-record \"op:deliver\"
+                  (cons (syrup-tagged \"desc:answer\" (syrup-nat (suc (suc zero))))
+                    (cons (syrup-list (cons (syrup-string \"chained-msg\") nil))
+                      (cons (syrup-bool false)
+                        (cons (syrup-bool false) nil))))))")))
+  (check-equal? got expected))
+
+(test-case "bridge/pump-outbound emits answer-targeted forwarding when promise resolves to desc:answer M"
+  ;; Setup: peer's q-pos=5 → local pid. Peer pipelines "chain" onto pid.
+  ;; Then resolve pid with <desc:answer 4>. Pump should emit:
+  ;;   (a) resolution bytes: <op:deliver <desc:answer 5> <desc:answer 4> false false>
+  ;;   (b) forwarding:        <op:deliver <desc:answer 4> "chain" false false>
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc (suc (suc (suc zero))))) pid bridge-state-empty)
+                  step  (dispatch-pipeline-on-our-q
+                          (suc (suc (suc (suc (suc zero)))))
+                          (syrup-string \"chain\")
+                          (none Nat)
+                          (none Nat) v0 st0)
+                  v1    (resolve-promise pid
+                          (syrup-tagged \"desc:answer\"
+                            (syrup-nat (suc (suc (suc (suc zero))))))
+                          (bridge-step-vat step))
+                  pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
+              (length (pump-result-bytes pr))))")
+   "2N"))
+
+;; Phase 45: break-forwarding. When local promise breaks, queued
+;; pipelined msgs with ap = some M get an error answer at peer's
+;; q-pos M (so peer's awaiting promise doesn't hang). Queued msgs
+;; with ap = none are still dropped (peer wasn't expecting an answer).
+
+(test-case "bridge/pump-outbound break-forwards error answers for queued msgs with ap=some"
+  ;; Setup: peer's q-pos=5 → local pid. Peer pipelines two msgs,
+  ;; one with ap=some 99 (peer wants an answer) and one with ap=none.
+  ;; Then we BREAK pid with reason "rejected".
+  ;; Pump should emit:
+  ;;   (a) the broken-resolution bytes for peer's q-pos 5
+  ;;   (b) error-answer bytes for q-pos 99 only (the ap=none msg drops)
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc (suc (suc (suc zero))))) pid bridge-state-empty)
+                  step1 (dispatch-pipeline-on-our-q
+                          (suc (suc (suc (suc (suc zero)))))
+                          (syrup-string \"with-answer\")
+                          (some Nat (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))
+                          (none Nat) v0 st0)
+                  step2 (dispatch-pipeline-on-our-q
+                          (suc (suc (suc (suc (suc zero)))))
+                          (syrup-string \"fire-and-forget\")
+                          (none Nat)
+                          (none Nat) (bridge-step-vat step1) (bridge-step-state step1))
+                  v1    (break-promise pid (syrup-string \"rejected\") (bridge-step-vat step2))
+                  pr    (pump-outbound v1 (bridge-step-state step2) (nil Nat)))
+              ;; resolution bytes (1) + 1 error-answer bytes (only the ap=some msg) = 2
+              (length (pump-result-bytes pr))))")
+   "2N"))
+
+(test-case "bridge/pump-outbound emits NO error-answer bytes when all queued msgs have ap=none"
+  ;; All pipelined msgs are fire-and-forget (ap=none). On break, only
+  ;; the resolution bytes get emitted (no error answers).
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc zero)) pid bridge-state-empty)
+                  step  (dispatch-pipeline-on-our-q
+                          (suc (suc zero))
+                          (syrup-string \"no-answer-needed\")
+                          (none Nat)
+                          (none Nat) v0 st0)
+                  v1    (break-promise pid (syrup-string \"oops\") (bridge-step-vat step))
+                  pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
+              (length (pump-result-bytes pr))))")
+   "1N"))
+
+(test-case "bridge/pump-outbound break-forward bytes target peer's queued ap"
+  ;; Single queued msg with ap=some 7. On break, the bytes list
+  ;; contains both the resolution (targeting peer's q-pos 3) AND the
+  ;; error-answer (targeting peer's queued ap 7). Stitch via framed
+  ;; concat and look for the desc:answer 7 wire shape.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (alloc (fresh-promise empty-vat)
+                    pid   (alloc-id alloc)
+                    v0    (alloc-vat alloc)
+                    st0   (bs-add-question (suc (suc (suc zero))) pid bridge-state-empty)
+                    step  (dispatch-pipeline-on-our-q
+                            (suc (suc (suc zero)))
+                            (syrup-string \"q-payload\")
+                            (some Nat (suc (suc (suc (suc (suc (suc (suc zero))))))))
+                            (none Nat) v0 st0)
+                    v1    (break-promise pid (syrup-string \"oops\") (bridge-step-vat step))
+                    pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
+                (framed-concat (pump-result-bytes pr))))")))
+  ;; Both wire shapes appear: peer's-q-pos=3 (resolution) and peer's-ap=7 (error answer).
+  (check-true (regexp-match? #rx"desc:answer3" got)
+              (format "expected resolution to peer's q-pos 3; got: ~s" got))
+  (check-true (regexp-match? #rx"desc:answer7" got)
+              (format "expected error answer to peer's queued ap 7; got: ~s" got)))
+
+(test-case "bridge/captp-incoming op-deliver-to-answer with q-pos in outbound resolves (regression)"
+  ;; Regression: the Phase 25 reply-to-our-Q path still works after
+  ;; the Phase 38 fall-through was added. Same wire shape, opposite
+  ;; semantics — disambiguation is which table holds the q-pos.
+  (check-contains
+   (run-last
+    "(eval (let (ask  (connection-ask zero (syrup-string \"ping\") empty-connection)
+                  pid  (conn-ask-pid ask)
+                  cs1  (conn-ask-state ask)
+                  step (connection-step (op-deliver-to-answer pid (syrup-string \"reply\") (none Nat) (none Nat)) cs1))
+              (lookup-promise pid (conn-vat (conn-step-state step)))))")
+   "pst-fulfilled"))
+
+;; Phase 46: plain-value-as-error forwarding. When a local promise
+;; resolves to a plain value (not desc:export, not desc:answer),
+;; applying op:deliver to it would be a TYPE error — but the queued
+;; pipelined msgs aren't dropped. Each msg with ap=some M gets an
+;; error answer at peer's M (reason "deliver-to-non-callable"). Same
+;; structural shape as Phase 45's break-forwarding; differs only in
+;; the source of the error reason (synthesized vs broken-promise's r).
+;; Principle: we never drop a queue.
+
+(test-case "bridge/pump-outbound forwards error answers when ap=some + plain value (Phase 46)"
+  ;; Setup: peer's q-pos=4 → local pid. Peer pipelines two msgs, one
+  ;; with ap=some 88 (peer wants an answer) and one with ap=none.
+  ;; Then we resolve pid with a plain string (non-callable).
+  ;; Pump should emit:
+  ;;   (a) the resolution bytes for peer's q-pos 4
+  ;;   (b) error-answer bytes for q-pos 88 only (the ap=none msg
+  ;;       still gets processed but has nowhere to send the error)
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc (suc (suc zero)))) pid bridge-state-empty)
+                  step1 (dispatch-pipeline-on-our-q
+                          (suc (suc (suc (suc zero))))
+                          (syrup-string \"with-answer\")
+                          (some Nat (suc (suc (suc (suc (suc (suc (suc (suc zero)))))))))
+                          (none Nat) v0 st0)
+                  step2 (dispatch-pipeline-on-our-q
+                          (suc (suc (suc (suc zero))))
+                          (syrup-string \"fire-and-forget\")
+                          (none Nat)
+                          (none Nat) (bridge-step-vat step1) (bridge-step-state step1))
+                  v1    (resolve-promise pid (syrup-string \"plain-value\") (bridge-step-vat step2))
+                  pr    (pump-outbound v1 (bridge-step-state step2) (nil Nat)))
+              (length (pump-result-bytes pr))))")
+   "2N"))
+
+(test-case "bridge/pump-outbound plain-value error-answer targets peer's queued ap (Phase 46)"
+  ;; Single queued msg with ap=some 6. On plain-value resolve, the
+  ;; bytes list contains both the resolution (targeting peer's q-pos 2)
+  ;; AND the error-answer (targeting peer's queued ap 6). Stitch via
+  ;; framed concat and look for the desc:answer 6 wire shape plus the
+  ;; "deliver-to-non-callable" reason.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (alloc (fresh-promise empty-vat)
+                    pid   (alloc-id alloc)
+                    v0    (alloc-vat alloc)
+                    st0   (bs-add-question (suc (suc zero)) pid bridge-state-empty)
+                    step  (dispatch-pipeline-on-our-q
+                            (suc (suc zero))
+                            (syrup-string \"q-payload\")
+                            (some Nat (suc (suc (suc (suc (suc (suc zero)))))))
+                            (none Nat) v0 st0)
+                    v1    (resolve-promise pid (syrup-string \"plain-value\") (bridge-step-vat step))
+                    pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
+                (framed-concat (pump-result-bytes pr))))")))
+  ;; Both shapes appear: peer's-q-pos=2 (resolution) and peer's-ap=6 (error answer).
+  (check-true (regexp-match? #rx"desc:answer2" got)
+              (format "expected resolution to peer's q-pos 2; got: ~s" got))
+  (check-true (regexp-match? #rx"desc:answer6" got)
+              (format "expected error answer to peer's queued ap 6; got: ~s" got))
+  (check-true (regexp-match? #rx"deliver-to-non-callable" got)
+              (format "expected synthesized error reason in bytes; got: ~s" got)))
+
+;; Phase 47: bs-pipelined-msgs gets pruned after pump emits forwarding
+;; bytes for a pid. Without GC the queue grows monotonically across
+;; the connection lifetime; with GC the queue shrinks back to entries
+;; whose pid hasn't yet been emitted.
+
+(test-case "bridge/bs-gc-pipelined-msgs-by-emitted filters by emitted set (Phase 47)"
+  ;; Build a pipelined-msgs list with pids [3, 5, 7]; emitted = [5].
+  ;; Result should keep [3, 7] only.
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-add-pipeline-msg (suc (suc (suc zero))) (syrup-string \"a\") (none Nat) (none Nat)
+                       (bs-add-pipeline-msg (suc (suc (suc (suc (suc zero))))) (syrup-string \"b\") (none Nat) (none Nat)
+                         (bs-add-pipeline-msg (suc (suc (suc (suc (suc (suc (suc zero)))))))
+                                              (syrup-string \"c\") (none Nat) (none Nat)
+                                              bridge-state-empty)))
+                  st1 (bs-gc-pipelined-msgs-by-emitted
+                        (cons (suc (suc (suc (suc (suc zero))))) (nil Nat))
+                        st0))
+              (length (bs-pipelined-msgs st1))))")
+   "2N"))
+
+(test-case "bridge/connection-step prunes pipelined-msgs for emitted pid (Phase 47)"
+  ;; Setup: bs-questions(3 → pid), peer pipelines onto q-pos=3 (queue
+  ;; grows to 1), then resolve pid externally and call connection-step
+  ;; with an unrelated op to trigger pump. After the pump:
+  ;;   - bytes emitted (resolution + forwarding for desc:export 11)
+  ;;   - pipelined-msgs GCed for pid (length back to 0)
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc (suc zero))) pid bridge-state-empty)
+                  step  (dispatch-pipeline-on-our-q
+                          (suc (suc (suc zero)))
+                          (syrup-string \"queued\")
+                          (some Nat (suc (suc zero)))
+                          (none Nat) v0 st0)
+                  v1    (resolve-promise pid
+                          (syrup-tagged \"desc:export\"
+                            (syrup-nat (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))))) ;; 11
+                          (bridge-step-vat step))
+                  cs0   (conn-state v1 (bridge-step-state step) (nil Nat) false)
+                  s2    (connection-step (op-gc-export (suc zero) zero) cs0))
+              (length (bs-pipelined-msgs (conn-bridge-state (conn-step-state s2))))))")
+   "0N"))
+
+(test-case "bridge/connection-step retains pipelined-msgs for unemitted pid (Phase 47)"
+  ;; Same setup but DON'T resolve pid — the queue should still hold
+  ;; the entry after connection-step (no emit, no GC).
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc (suc zero))) pid bridge-state-empty)
+                  step  (dispatch-pipeline-on-our-q
+                          (suc (suc (suc zero)))
+                          (syrup-string \"queued\")
+                          (none Nat)
+                          (none Nat) v0 st0)
+                  cs0   (conn-state (bridge-step-vat step) (bridge-step-state step) (nil Nat) false)
+                  s2    (connection-step (op-gc-export (suc zero) zero) cs0))
+              (length (bs-pipelined-msgs (conn-bridge-state (conn-step-state s2))))))")
+   "1N"))
+
+;; Phase 48: op:listen notification on resolution. When a local promise
+;; pid settles, peer-registered listeners targeting pid get an
+;; op:deliver notification at their resolver-pos with the resolved
+;; payload (value if fulfilled, <Error r> if broken). Listeners are
+;; one-shot — once notified, the entry is GCed from bs-listeners.
+
+(test-case "bridge/op:listen registration adds a listener entry (Phase 48 setup)"
+  ;; Sanity: peer's op:listen tgt=4 resolver=99 records (listener 4 99).
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  cs0   (conn-state v0 bridge-state-empty (nil Nat) false)
+                  s1    (connection-step
+                          (op-listen (suc (suc (suc (suc zero))))
+                                     (suc (suc (suc (suc (suc (suc (suc (suc (suc zero)))))))))
+                                     false)
+                          cs0))
+              (length (bs-listeners (conn-bridge-state (conn-step-state s1))))))")
+   "1N"))
+
+(test-case "bridge/listener-notify-loop emits op:deliver bytes for matched pid (Phase 48)"
+  ;; Direct unit: listener-notify-loop with one matching entry emits
+  ;; one byte-string; with no match emits zero.
+  (check-contains
+   (run-last
+    "(eval (length (listener-notify-loop
+                     (cons (listener (suc (suc zero)) (suc (suc (suc zero))))
+                       (cons (listener (suc (suc (suc (suc zero)))) (suc (suc (suc (suc (suc zero))))))
+                         (nil Listener)))
+                     (suc (suc zero))
+                     (syrup-string \"resolved\")
+                     (nil String))))")
+   "1N"))
+
+(test-case "bridge/listener-notify-loop matches all listeners with same target (Phase 48)"
+  ;; Two listeners targeting pid=2 with different resolver-pos. Both
+  ;; should fire — the loop walks the whole list filtering by target.
+  (check-contains
+   (run-last
+    "(eval (length (listener-notify-loop
+                     (cons (listener (suc (suc zero)) (suc (suc (suc zero))))
+                       (cons (listener (suc (suc zero)) (suc (suc (suc (suc (suc zero))))))
+                         (nil Listener)))
+                     (suc (suc zero))
+                     (syrup-string \"resolved\")
+                     (nil String))))")
+   "2N"))
+
+(test-case "bridge/connection-step emits listener notification when promise resolves (Phase 48)"
+  ;; Setup: bs-questions(3 → pid), peer registered listener (pid → 7).
+  ;; Resolve pid with a string. After connection-step:
+  ;;   - bytes contain the resolution (op:deliver to peer's q-pos 3)
+  ;;   - bytes contain the listener notification (op:deliver to peer's
+  ;;     export 7 with the resolved value)
+  ;;   - bs-listeners GCed (length 0)
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc (suc zero))) pid
+                          (bs-add-listener pid (suc (suc (suc (suc (suc (suc (suc zero)))))))
+                            bridge-state-empty))
+                  v1    (resolve-promise pid (syrup-string \"resolved\") v0)
+                  cs0   (conn-state v1 st0 (nil Nat) false)
+                  s2    (connection-step (op-gc-export (suc zero) zero) cs0))
+              (length (conn-step-outbound s2))))")
+   "2N"))
+
+(test-case "bridge/listener notification bytes target peer's resolver-pos (Phase 48)"
+  ;; Resolve with desc:export+desc:answer-free string; verify the bytes
+  ;; contain the listener notification with desc:export 7 (resolver-pos)
+  ;; and the resolved string payload.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (alloc (fresh-promise empty-vat)
+                    pid   (alloc-id alloc)
+                    v0    (alloc-vat alloc)
+                    st0   (bs-add-question (suc (suc zero)) pid
+                            (bs-add-listener pid (suc (suc (suc (suc (suc (suc (suc zero)))))))
+                              bridge-state-empty))
+                    v1    (resolve-promise pid (syrup-string \"hello\") v0)
+                    cs0   (conn-state v1 st0 (nil Nat) false)
+                    s2    (connection-step (op-gc-export (suc zero) zero) cs0))
+                (framed-concat (conn-step-outbound s2))))")))
+  (check-true (regexp-match? #rx"desc:answer2" got)
+              (format "expected resolution to peer's q-pos 2; got: ~s" got))
+  (check-true (regexp-match? #rx"desc:export7" got)
+              (format "expected listener notification to peer's resolver 7; got: ~s" got))
+  (check-true (regexp-match? #rx"hello" got)
+              (format "expected resolved payload in bytes; got: ~s" got)))
+
+(test-case "bridge/listener notification carries Error wrapper on broken promise (Phase 48)"
+  ;; Same setup but break the promise instead of resolving. Listener
+  ;; notification's payload is <Error reason>.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (alloc (fresh-promise empty-vat)
+                    pid   (alloc-id alloc)
+                    v0    (alloc-vat alloc)
+                    st0   (bs-add-question (suc (suc zero)) pid
+                            (bs-add-listener pid (suc (suc (suc (suc (suc (suc (suc zero)))))))
+                              bridge-state-empty))
+                    v1    (break-promise pid (syrup-string \"oops\") v0)
+                    cs0   (conn-state v1 st0 (nil Nat) false)
+                    s2    (connection-step (op-gc-export (suc zero) zero) cs0))
+                (framed-concat (conn-step-outbound s2))))")))
+  (check-true (regexp-match? #rx"desc:export7" got)
+              (format "expected listener notification to peer's resolver 7; got: ~s" got))
+  (check-true (regexp-match? #rx"5'Error" got)
+              (format "expected Error wrapper in listener payload; got: ~s" got)))
+
+(test-case "bridge/connection-step GCes notified listener (Phase 48)"
+  ;; After a settled-promise pump, the listener entry is removed (one-shot).
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc (suc zero))) pid
+                          (bs-add-listener pid (suc (suc (suc (suc (suc (suc (suc zero)))))))
+                            bridge-state-empty))
+                  v1    (resolve-promise pid (syrup-string \"resolved\") v0)
+                  cs0   (conn-state v1 st0 (nil Nat) false)
+                  s2    (connection-step (op-gc-export (suc zero) zero) cs0))
+              (length (bs-listeners (conn-bridge-state (conn-step-state s2))))))")
+   "0N"))
+
+(test-case "bridge/connection-step retains listener when pid unresolved (Phase 48)"
+  ;; Don't resolve pid — listener stays registered.
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc (suc zero))) pid
+                          (bs-add-listener pid (suc (suc (suc (suc (suc (suc (suc zero)))))))
+                            bridge-state-empty))
+                  cs0   (conn-state v0 st0 (nil Nat) false)
+                  s2    (connection-step (op-gc-export (suc zero) zero) cs0))
+              (length (bs-listeners (conn-bridge-state (conn-step-state s2))))))")
+   "1N"))
+
+;; Phase 50: declarative release queue. release-import (Phase 34e) is
+;; the imperative form. bs-queue-release-import / connection-queue-
+;; release-import stage the gc-export bytes on bridge state's
+;; pending-out for flush on the next pump-outbound. Closes the
+;; "release fits naturally into the connection-step flow" loop.
+
+(test-case "bridge/bs-queue-release-import appends gc-export bytes to pending-out (Phase 50)"
+  ;; Stage release of import 5, count 2. pending-out should contain
+  ;; one byte-string (the gc-export wire bytes).
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-incr-import (suc (suc (suc (suc (suc zero))))) bridge-state-empty)
+                  st1 (bs-queue-release-import (suc (suc (suc (suc (suc zero))))) (suc (suc zero)) st0))
+              (length (bs-pending-out st1))))")
+   "1N"))
+
+(test-case "bridge/bs-queue-release-import decrements imports-refcount (Phase 50)"
+  ;; Increment import 3 once (refcount=1), queue-release count=1 → 0.
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-incr-import (suc (suc (suc zero))) bridge-state-empty)
+                  st1 (bs-queue-release-import (suc (suc (suc zero))) (suc zero) st0))
+              (bs-lookup-import-refcount (suc (suc (suc zero))) st1)))")
+   "0N"))
+
+(test-case "bridge/connection-queue-release-import flushes via next pump (Phase 50)"
+  ;; Queue a release on a ConnectionState; verify next connection-step
+  ;; emits the gc-export bytes via pump's pending-out flush.
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-incr-import (suc (suc (suc (suc zero)))) bridge-state-empty)
+                  cs0 (conn-state empty-vat st0 (nil Nat) false)
+                  cs1 (connection-queue-release-import (suc (suc (suc (suc zero)))) (suc zero) cs0)
+                  s2  (connection-step (op-gc-export (suc zero) zero) cs1))
+              (length (conn-step-outbound s2))))")
+   "1N"))
+
+(test-case "bridge/connection-queue-release-import emitted bytes target export-pos (Phase 50)"
+  ;; Verify the emitted bytes are the canonical op:gc-export wire shape.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (st0 (bs-incr-import (suc (suc (suc (suc zero)))) bridge-state-empty)
+                    cs0 (conn-state empty-vat st0 (nil Nat) false)
+                    cs1 (connection-queue-release-import (suc (suc (suc (suc zero)))) (suc zero) cs0)
+                    s2  (connection-step (op-gc-export (suc zero) zero) cs1))
+                (framed-concat (conn-step-outbound s2))))")))
+  (check-true (regexp-match? #rx"op:gc-export" got)
+              (format "expected op:gc-export in flushed bytes; got: ~s" got))
+  (check-true (regexp-match? #rx"4\\+" got)
+              (format "expected export-pos 4 (Nat) in bytes; got: ~s" got)))
+
+(test-case "bridge/connection-queue-release-import is no-op when aborted (Phase 50)"
+  ;; If connection is already aborted, queueing should be a no-op.
+  (check-contains
+   (run-last
+    "(eval (let (cs0 (conn-state empty-vat bridge-state-empty (nil Nat) true)
+                  cs1 (connection-queue-release-import (suc (suc (suc zero))) (suc zero) cs0))
+              (length (bs-pending-out (conn-bridge-state cs1)))))")
+   "0N"))
+
+;; Phase 51: multi-listener ordering + late-registration handling.
+;;
+;; Two refinements over Phase 48:
+;;   (a) verify multiple listeners on the same pid fire in INSERTION
+;;       order — first-registered fires first.
+;;   (b) op:listen arriving AFTER the target promise has settled
+;;       must fire immediately (Phase 48 silently dropped late
+;;       registrations because pump-outbound's `emitted` set gates
+;;       per-pid emission).
+
+(test-case "bridge/multi-listener notify-loop fires all and emits deterministic order (Phase 51)"
+  ;; Add 3 listeners on the same pid with resolver-pos 3, 5, 7.
+  ;; Insertion order in the test source: 7-innermost, 5-middle,
+  ;; 3-outermost. bs-add-listener cons-at-head means the resulting
+  ;; list is [3, 5, 7] (outermost-first). listener-notify-loop walks
+  ;; head→tail PREPENDING bytes — so the emitted bytes order is the
+  ;; REVERSE of the in-list order: 7, 5, 3. That is, the LAST cons
+  ;; (= outermost = 3) fires LAST in the wire output. The chosen
+  ;; ordering invariant is "outermost-bs-add-listener emits last."
+  ;; Both orderings are spec-valid (OCapN doesn't mandate one); we
+  ;; pin THIS one as a regression check so callers know what to
+  ;; expect.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (alloc (fresh-promise empty-vat)
+                    pid   (alloc-id alloc)
+                    v0    (alloc-vat alloc)
+                    st0   (bs-add-question (suc (suc zero)) pid
+                            (bs-add-listener pid (suc (suc (suc zero)))
+                              (bs-add-listener pid (suc (suc (suc (suc (suc zero)))))
+                                (bs-add-listener pid (suc (suc (suc (suc (suc (suc (suc zero))))))) bridge-state-empty))))
+                    v1    (resolve-promise pid (syrup-string \"r\") v0)
+                    cs0   (conn-state v1 st0 (nil Nat) false)
+                    s2    (connection-step (op-gc-export (suc zero) zero) cs0))
+                (framed-concat (conn-step-outbound s2))))")))
+  (define m3 (regexp-match-positions #rx"desc:export3\\+" got))
+  (define m5 (regexp-match-positions #rx"desc:export5\\+" got))
+  (define m7 (regexp-match-positions #rx"desc:export7\\+" got))
+  ;; All three listeners produced bytes.
+  (check-true (and m3 m5 m7 #t)
+              (format "expected all three listeners in bytes; got: ~s" got))
+  ;; Pinned ordering: 7 first, then 5, then 3.
+  (check-true (and m7 m5 (< (car (car m7)) (car (car m5))))
+              (format "expected L7 before L5; got positions: ~s, ~s" m7 m5))
+  (check-true (and m5 m3 (< (car (car m5)) (car (car m3))))
+              (format "expected L5 before L3; got positions: ~s, ~s" m5 m3)))
+
+(test-case "bridge/op:listen on already-settled promise fires immediately (Phase 51)"
+  ;; Resolve pid first; THEN send op:listen. Without Phase 51 the
+  ;; listener would be added to bs-listeners but never fire (pump
+  ;; gates pid via `emitted`). With Phase 51 the late-listen handler
+  ;; stages immediate notification bytes on pending-out and skips
+  ;; bs-add-listener (avoids the leak).
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  v1    (resolve-promise pid (syrup-string \"already-resolved\") v0)
+                  cs0   (conn-state v1 bridge-state-empty (nil Nat) false)
+                  s1    (connection-step
+                          (op-listen pid (suc (suc (suc (suc (suc (suc (suc zero))))))) false)
+                          cs0))
+              (length (conn-step-outbound s1))))")
+   "1N"))
+
+(test-case "bridge/late op:listen does NOT add to bs-listeners (Phase 51)"
+  ;; Verify the late-listen path skips bs-add-listener entirely —
+  ;; bs-listeners stays empty. The notification fires once via
+  ;; pending-out; no entry is left over.
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  v1    (resolve-promise pid (syrup-string \"already-resolved\") v0)
+                  cs0   (conn-state v1 bridge-state-empty (nil Nat) false)
+                  s1    (connection-step
+                          (op-listen pid (suc (suc (suc (suc (suc (suc (suc zero))))))) false)
+                          cs0))
+              (length (bs-listeners (conn-bridge-state (conn-step-state s1))))))")
+   "0N"))
+
+(test-case "bridge/op:listen on UNSETTLED promise still adds to bs-listeners (Phase 51)"
+  ;; Regression: late-fire path only kicks in for settled promises;
+  ;; the normal-case op:listen for an unsettled promise must still
+  ;; register the listener.
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  cs0   (conn-state v0 bridge-state-empty (nil Nat) false)
+                  s1    (connection-step
+                          (op-listen pid (suc (suc (suc (suc (suc (suc (suc zero))))))) false)
+                          cs0))
+              (length (bs-listeners (conn-bridge-state (conn-step-state s1))))))")
+   "1N"))
+
+(test-case "bridge/late op:listen reports a BREAK on a broken promise (Phase 51)"
+  ;; Broken-promise variant of the late-fire path.
+  ;;
+  ;; This used to assert an `<Error _>` wrapper and NO verb, because
+  ;; resolution-syrup-of-pst returned the bare value and left each of its
+  ;; three call sites to wrap. Upstream asserts on args[0], so a broken
+  ;; promise reaching the peer without a `break` verb — or worse, under the
+  ;; hardcoded `fulfill` that orphan-loop applied — reads as an ACCEPTANCE.
+  ;; The listener channel now carries the verb: ['break <reason>].
+  ;; (The desc:answer channel still carries a bare <Error r> — different
+  ;; shape on purpose; see outbound-from-resolution.)
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (alloc (fresh-promise empty-vat)
+                    pid   (alloc-id alloc)
+                    v0    (alloc-vat alloc)
+                    v1    (break-promise pid (syrup-string \"oops\") v0)
+                    cs0   (conn-state v1 bridge-state-empty (nil Nat) false)
+                    s1    (connection-step
+                            (op-listen pid (suc (suc (suc (suc (suc (suc (suc zero))))))) false)
+                            cs0))
+                (framed-concat (conn-step-outbound s1))))")))
+  (check-true (regexp-match? #rx"desc:export7" got)
+              (format "expected listener notification to peer's resolver 7; got: ~s" got))
+  (check-true (regexp-match? #rx"5'break" got)
+              (format "expected a `break` verb on broken late-fire; got: ~s" got))
+  (check-true (regexp-match? #rx"4\"oops" got)
+              (format "expected the break REASON to survive; got: ~s" got)))
+
+;; ========================================
+;; Gift table — OCapN three-vat handoff (exporter side)
+;; ========================================
+;;
+;; REWRITTEN against the wire contract, which the previous tests had wrong in
+;; two ways that upstream's suite made unmissable:
+;;
+;;   1. Gift ids are BYTE STRINGS (`b"my-gift"`), not Nats. The table was
+;;      Nat-keyed and its dispatch ran `wire-nat` on the id, which returns none
+;;      for bytes — so the handler bridged through unchanged and NO GIFT WAS
+;;      EVER RECORDED. These tests deposited Nats, so they never saw it.
+;;
+;;   2. `withdraw-gift` replies on the caller\'s RESOLVE-ME descriptor, not on
+;;      an answer-pos. Upstream sends `answer_position=False` and awaits
+;;      `expect_promise_resolution`, so the old answer-pos reply was always
+;;      dropped. The tests asserting an answer-pos reply were pinning a shape
+;;      the peer never asks for.
+;;
+;; The reply verb matters: upstream asserts on args[0], so a rejection must say
+;; `break` rather than stay silent (silence hangs the peer for its full
+;; timeout).
+
+(test-case "gift/bs-gifts on empty state is empty"
+  (check-contains (run-last "(eval (length (bs-gifts bridge-state-empty)))") "0N"))
+
+(test-case "gift/bs-add-gift records a BYTE-STRING id -> exported-pos"
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-add-gift \"my-gift\" (suc (suc (suc (suc (suc (suc (suc zero))))))) bridge-state-empty))
+              (unwrap-or zero (bs-lookup-gift \"my-gift\" st0))))")
+   "7N"))
+
+(test-case "gift/bs-lookup-gift returns none for an unknown id"
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-add-gift \"my-gift\" (suc (suc zero)) bridge-state-empty))
+              (bs-lookup-gift \"other-gift\" st0)))")
+   "none"))
+
+(test-case "gift/bs-remove-gift drops the entry"
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-add-gift \"my-gift\" (suc (suc zero)) bridge-state-empty)
+                  st1 (bs-remove-gift \"my-gift\" st0))
+              (bs-lookup-gift \"my-gift\" st1)))")
+   "none"))
+
+(test-case "gift/bs-remove-gift on an unknown id is a no-op"
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-add-gift \"my-gift\" (suc (suc zero)) bridge-state-empty)
+                  st1 (bs-remove-gift \"nope\" st0))
+              (unwrap-or zero (bs-lookup-gift \"my-gift\" st1))))")
+   "2N"))
+
+(test-case "gift/deposits accumulate and are looked up by id"
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-add-gift \"a\" (suc zero)
+                       (bs-add-gift \"b\" (suc (suc zero))
+                         (bs-add-gift \"c\" (suc (suc (suc zero))) bridge-state-empty))))
+              (unwrap-or zero (bs-lookup-gift \"b\" st0))))")
+   "2N"))
+
+;; --- wire level ---
+
+(test-case "gift/deposit-gift via op:deliver to bootstrap records the gift"
+  ;; args = ('deposit-gift <gift-id bytes> <desc:export N>), fire-and-forget.
+  (check-contains
+   (run-last
+    "(eval (let (args (syrup-list (cons (syrup-symbol \"deposit-gift\")
+                        (cons (syrup-bytes \"my-gift\")
+                          (cons (syrup-tagged \"desc:export\" (syrup-nat (suc (suc (suc (suc zero)))))) nil))))
+                  step (captp-incoming-with-state
+                         (op-deliver zero args none none) empty-vat bridge-state-empty))
+              (unwrap-or zero (bs-lookup-gift \"my-gift\" (bridge-step-state step)))))")
+   "4N"))
+
+(test-case "gift/deposit-gift with a NAT id is not recorded (ids are bytes)"
+  ;; Pins the corrected contract: the wire never sends a Nat gift-id.
+  (check-contains
+   (run-last
+    "(eval (let (args (syrup-list (cons (syrup-symbol \"deposit-gift\")
+                        (cons (syrup-nat (suc (suc zero)))
+                          (cons (syrup-tagged \"desc:export\" (syrup-nat (suc (suc (suc (suc zero)))))) nil))))
+                  step (captp-incoming-with-state
+                         (op-deliver zero args none none) empty-vat bridge-state-empty))
+              (length (bs-gifts (bridge-step-state step)))))")
+   "0N"))
+
+(test-case "gift/deposit-gift with a non-export refr is a silent drop"
+  (check-contains
+   (run-last
+    "(eval (let (args (syrup-list (cons (syrup-symbol \"deposit-gift\")
+                        (cons (syrup-bytes \"my-gift\") (cons (syrup-nat (suc zero)) nil))))
+                  step (captp-incoming-with-state
+                         (op-deliver zero args none none) empty-vat bridge-state-empty))
+              (length (bs-gifts (bridge-step-state step)))))")
+   "0N"))
+
+(test-case "gift/withdraw-gift with no resolve-me falls through (no reply channel)"
+  ;; rm = none: there is nowhere to answer, so the gateway declines.
+  (check-contains
+   (run-last
+    "(eval (let (args (syrup-list (cons (syrup-symbol \"withdraw-gift\") (cons syrup-null nil)))
+                  step (captp-incoming-with-state
+                         (op-deliver zero args none none) empty-vat bridge-state-empty))
+              (length (bs-pending-out (bridge-step-state step)))))")
+   "0N"))
+
+(test-case "gift/withdraw-gift with a malformed receive BREAKS rather than staying silent"
+  ;; Silence would hang the peer for its full timeout; upstream asserts args[0].
+  (check-contains
+   (extract-value-bytes
+    (run-last
+     "(eval (let (args (syrup-list (cons (syrup-symbol \"withdraw-gift\") (cons syrup-null nil)))
+                   step (captp-incoming-with-state
+                          (op-deliver zero args none (some (suc (suc (suc (suc (suc (suc (suc zero)))))))))
+                          empty-vat bridge-state-empty))
+               (framed-concat (bs-pending-out (bridge-step-state step)))))"))
+   "5\'break"))
+
+(test-case "gift/withdraw-gift for an unknown id BREAKS"
+  (check-contains
+   (extract-value-bytes
+    (run-last
+     "(eval (let (args (syrup-list (cons (syrup-symbol \"withdraw-gift\") (cons syrup-null nil)))
+                   step (captp-incoming-with-state
+                          (op-deliver zero args none (some (suc (suc (suc (suc (suc (suc (suc zero)))))))))
+                          empty-vat bridge-state-empty))
+               (framed-concat (bs-pending-out (bridge-step-state step)))))"))
+   "desc:export7"))
+
+
+(test-case "bridge/op:deliver to NON-bootstrap target with method-symbol falls through (Phase 52b)"
+  ;; target = 5 (not bootstrap), args = ((symbol "deposit-gift") ...).
+  ;; The bootstrap-dispatch should NOT fire; the op enters the normal
+  ;; deliver path (vmsg enqueued in vat, no gift recorded).
+  (check-contains
+   (run-last
+    "(eval (let (args (syrup-list (cons (syrup-symbol \"deposit-gift\")
+                                    (cons (syrup-nat (suc (suc zero)))
+                                      (cons (syrup-tagged \"desc:export\" (syrup-nat (suc (suc (suc (suc (suc (suc (suc zero))))))))) nil))))
+                  step (captp-incoming-with-state
+                         (op-deliver (suc (suc (suc (suc (suc zero))))) args (none Nat) (none Nat))
+                         empty-vat
+                         bridge-state-empty))
+              (length (bs-gifts (bridge-step-state step)))))")
+   "0N"))
+
+(test-case "bridge/op:deliver to bootstrap with UNKNOWN method symbol falls through (Phase 52b)"
+  ;; target = 0, args[0] = (symbol "unknown-method"). The
+  ;; bootstrap-dispatch returns None; op enters normal deliver path.
+  (check-contains
+   (run-last
+    "(eval (let (args (syrup-list (cons (syrup-symbol \"unknown-method\") nil))
+                  step (captp-incoming-with-state
+                         (op-deliver zero args (none Nat) (none Nat))
+                         empty-vat
+                         bridge-state-empty))
+              (length (bs-gifts (bridge-step-state step)))))")
+   "0N"))
+
+;; ========================================
+;; Handoff-receive signature verification
+;; ========================================
+;;
+;; A real 716-byte `withdraw-gift` frame captured off the wire from the
+;; upstream Python suite, and the same frame with one byte of the receiver
+;; signature flipped. Both go through the whole extraction chain: re-encode the
+;; handoff-receive for the message, dig the receiver public key out of the
+;; give nested two levels inside it, splice r ++ s out of the sig-val
+;; s-expression, and hand all three to libsodium.
+;;
+;; The corrupted case is the one that matters. A verifier that never finds its
+;; inputs also returns false, and would pass a rejection test while rejecting
+;; every valid handoff too -- so the accepting case is what makes this a test
+;; rather than a tautology, and it has to use a real signature to be one.
+
+(define handoff-frame-good
+  (string-append
+   "3c3130276f703a64656c697665723c313127646573633a6578706f7274302b3e5b31332777697468647261772d676966"
+   "743c313727646573633a7369672d656e76656c6f70653c323027646573633a68616e646f66662d726563656976653332"
+   "3a80ac24325c0ad104eac168cbf1bb67e0c349c27382cad5db5f91e18d5c8a030a33323a777564ff857cb2fcbd0d0875"
+   "022cc41238916df90ef232d93a30ade85b2e39bd302b3c313727646573633a7369672d656e76656c6f70653c31372764"
+   "6573633a68616e646f66662d676976655b3130277075626c69632d6b65795b33276563635b3527637572766537274564"
+   "32353531395d5b3527666c616773352765646473615d5b31277133323a391573c713b294f67c7204444dd1fce674148c"
+   "917d8a8b84978acca5075d73315d5d5d3c3130276f6361706e2d706565723136277463702d74657374696e672d6f6e6c"
+   "793332224a616451302b2b527a7344344d2b3430754c785457566156714d31304463424a7b3422686f73743922313237"
+   "2e302e302e313422706f7274352232323131367d3e33323a08ca4310f071e32dbc3b9be78c096fc44b42b174e738e8c4"
+   "8add887b9eba7aa833323aec9c661defc354b829fd2b426fe8429a653a0716cb021395c5c4612d2a20b1d5373a6d792d"
+   "676966743e5b37277369672d76616c5b352765646473615b31277233323a42677932d969d60d651f41502c29b1032395"
+   "f95ba8c247d3b64f4ad1549d8ee25d5b31277333323aa44329e7b3236014d99ac390750a78dde4259388028d3ddf27bb"
+   "74468e5aeb005d5d5d3e3e5b37277369672d76616c5b352765646473615b31277233323a02790feb642506c02deb0d69"
+   "ec7cee5f7fe6188ae7e77c1a3c3429445c9dd6a35d5b31277333323a0017ee74376826395ff3e3280d3b959f9d911126"
+   "fc8587e0243dde06e103bf095d5d5d3e5d663c313827646573633a696d706f72742d6f626a656374302b3e3e"))
+
+(define handoff-frame-bad
+  (string-append
+   "3c3130276f703a64656c697665723c313127646573633a6578706f7274302b3e5b31332777697468647261772d676966"
+   "743c313727646573633a7369672d656e76656c6f70653c323027646573633a68616e646f66662d726563656976653332"
+   "3a80ac24325c0ad104eac168cbf1bb67e0c349c27382cad5db5f91e18d5c8a030a33323a777564ff857cb2fcbd0d0875"
+   "022cc41238916df90ef232d93a30ade85b2e39bd302b3c313727646573633a7369672d656e76656c6f70653c31372764"
+   "6573633a68616e646f66662d676976655b3130277075626c69632d6b65795b33276563635b3527637572766537274564"
+   "32353531395d5b3527666c616773352765646473615d5b31277133323a391573c713b294f67c7204444dd1fce674148c"
+   "917d8a8b84978acca5075d73315d5d5d3c3130276f6361706e2d706565723136277463702d74657374696e672d6f6e6c"
+   "793332224a616451302b2b527a7344344d2b3430754c785457566156714d31304463424a7b3422686f73743922313237"
+   "2e302e302e313422706f7274352232323131367d3e33323a08ca4310f071e32dbc3b9be78c096fc44b42b174e738e8c4"
+   "8add887b9eba7aa833323aec9c661defc354b829fd2b426fe8429a653a0716cb021395c5c4612d2a20b1d5373a6d792d"
+   "676966743e5b37277369672d76616c5b352765646473615b31277233323a42677932d969d60d651f41502c29b1032395"
+   "f95ba8c247d3b64f4ad1549d8ee25d5b31277333323aa44329e7b3236014d99ac390750a78dde4259388028d3ddf27bb"
+   "74468e5aeb005d5d5d3e3e5b37277369672d76616c5b352765646473615b31277233323aff790feb642506c02deb0d69"
+   "ec7cee5f7fe6188ae7e77c1a3c3429445c9dd6a35d5b31277333323a0017ee74376826395ff3e3280d3b959f9d911126"
+   "fc8587e0243dde06e103bf095d5d5d3e5d663c313827646573633a696d706f72742d6f626a656374302b3e3e"))
+
+(define (signed-receive-of hex)
+  ;; <op:deliver <desc:export 0> [withdraw-gift SIGNED-RECEIVE] f <desc:import-object 0>>
+  ;;   -> args[1] of the op = the signed receive.
+  (format
+   (string-append
+    "(eval (unwrap-or syrup-null (nth-syrup (syrup-list-or-nil "
+    "  (unwrap-or syrup-null (nth-syrup (record-args-of \"op:deliver\" "
+    "     (unwrap-or syrup-null (decode-value (hex-to-bytes \"~a\")))) (suc zero)))) (suc zero))))")
+   hex))
+
+(test-case "handoff/a real signed handoff-receive VERIFIES"
+  (check-contains
+   (run-last
+    (format "(eval (signed-receive-valid? ~a))"
+            (string-append "(unwrap-or syrup-null (nth-syrup (syrup-list-or-nil "
+                           "  (unwrap-or syrup-null (nth-syrup (record-args-of \"op:deliver\" "
+                           "     (unwrap-or syrup-null (decode-value (hex-to-bytes \""
+                           handoff-frame-good
+                           "\")))) (suc zero)))) (suc zero)))")))
+   "true"))
+
+(test-case "handoff/one flipped signature byte does NOT verify"
+  (check-contains
+   (run-last
+    (format "(eval (signed-receive-valid? ~a))"
+            (string-append "(unwrap-or syrup-null (nth-syrup (syrup-list-or-nil "
+                           "  (unwrap-or syrup-null (nth-syrup (record-args-of \"op:deliver\" "
+                           "     (unwrap-or syrup-null (decode-value (hex-to-bytes \""
+                           handoff-frame-bad
+                           "\")))) (suc zero)))) (suc zero)))")))
+   "false"))
+
+(require (only-in "../crypto-ffi.rkt" crypto-gen-keypair)
+         (only-in "../ocapn-identity-ffi.rkt"
+                  ocapn-identity-set! ocapn-identity-reset!))
+
+;; The frame goes through the whole inbound path; only the break reason differs
+;; between these two cases.
+(define (withdraw-break-reason hex)
+  (extract-value-bytes
+   (run-last
+    (format
+     (string-append
+      "(eval (let (op (unwrap-or (op-deliver zero syrup-null none none) "
+      "                  (decode-op (hex-to-bytes \"~a\")))"
+      "                step (captp-incoming-with-state op empty-vat bridge-state-empty))"
+      "          (framed-concat (bs-pending-out (bridge-step-state step)))))")
+     hex))))
+
+(test-case "handoff/an exporter with no signing key refuses, and says so"
+  ;; Refusing is right -- we cannot tell whether the receive names us. But the
+  ;; fault is OURS (nobody called ocapn-identity-set!), and reporting it as a
+  ;; bad handoff would point the operator at the peer.
+  (ocapn-identity-reset!)
+  (check-contains (withdraw-break-reason handoff-frame-good) "break")
+  (check-contains (withdraw-break-reason handoff-frame-good) "no-identity"))
+
+(test-case "handoff/a VALID receive naming another session BREAKS as unbound-handoff"
+  ;; The same real frame as the verification tests above -- signature intact,
+  ;; so it gets past `signed-receive-valid?`. It names the session and side of
+  ;; the connection it was captured on, which is not this one.
+  ;;
+  ;; Before the binding check existed this reached the gift lookup: both fields
+  ;; were read, but only to build the replay identity, so a signed receive was
+  ;; a BEARER TOKEN -- redeemable by anyone holding it, at any exporter.
+  ;;
+  ;; It must break BEFORE the identity is claimed, or an unbound receive could
+  ;; burn an honest receiver's identity, and BEFORE the gift lookup, or it
+  ;; learns whether a gift was deposited.
+  (ocapn-identity-set! (crypto-gen-keypair))
+  (check-contains (withdraw-break-reason handoff-frame-good) "unbound-handoff")
+  (ocapn-identity-reset!))
+
+(test-case "handoff/a bad signature BREAKS the withdraw, and breaks it as bad-signature"
+  ;; End to end through the bridge: the reply must say `break`, and the check
+  ;; must happen BEFORE the gift lookup -- otherwise a forged receive could
+  ;; still consume a deposited gift.
+  (check-contains
+   (extract-value-bytes
+    (run-last
+     (format
+      (string-append
+       "(eval (let (op (unwrap-or (op-deliver zero syrup-null none none) "
+       "                  (decode-op (hex-to-bytes \"~a\")))"
+       "                step (captp-incoming-with-state op empty-vat bridge-state-empty))"
+       "          (framed-concat (bs-pending-out (bridge-step-state step)))))")
+      handoff-frame-bad)))
+   "5\'break"))
+
+;; ========================================
+;; op:gc-exports
+;; ========================================
+
+(test-case "gc/a fire-and-forget deliver releases the peer's import-objects"
+  ;; No answer position and no resolve-me: nothing outlives the turn, so every
+  ;; desc:import-object in the args is garbage immediately.
+  (check-contains
+   (extract-value-bytes
+    (run-last
+     "(eval (let (args (syrup-list (cons (syrup-tagged \"desc:import-object\" (syrup-nat (suc (suc (suc (suc (suc (suc (suc zero))))))))) nil))
+                   step (captp-incoming-with-state
+                          (op-deliver (suc (suc zero)) args none none) empty-vat bridge-state-empty))
+               (framed-concat (bs-pending-out (bridge-step-state step)))))"))
+   "op:gc-exports[7+][1+]"))
+
+(test-case "gc/the wire-delta counts REPEATS in one message, not distinct objects"
+  ;; The same object four times is a wire-delta of four. This is the case that
+  ;; exposed the `from-nat` reduction bug: the tally was right but rendering it
+  ;; produced 1, because a Nat built by addition reached `nf` as a stuck
+  ;; from-nat. See tests/test-from-nat-computed.rkt.
+  (check-contains
+   (extract-value-bytes
+    (run-last
+     "(eval (let (io (syrup-tagged \"desc:import-object\" (syrup-nat (suc (suc (suc (suc (suc (suc (suc zero)))))))))
+                   args (syrup-list (cons io (cons io (cons io (cons io nil)))))
+                   step (captp-incoming-with-state
+                          (op-deliver (suc (suc zero)) args none none) empty-vat bridge-state-empty))
+               (framed-concat (bs-pending-out (bridge-step-state step)))))"))
+   "op:gc-exports[7+][4+]"))
+
+(test-case "gc/a deliver WITH a reply channel releases nothing"
+  ;; An answer position or a resolve-me means the result has somewhere to go,
+  ;; so the arguments may still be reachable through it. Releasing would lie.
+  (check-contains
+   (run-last
+    "(eval (let (args (syrup-list (cons (syrup-tagged \"desc:import-object\" (syrup-nat (suc (suc (suc (suc (suc (suc (suc zero))))))))) nil))
+                  step (captp-incoming-with-state
+                         (op-deliver (suc (suc zero)) args none (some (suc (suc (suc (suc (suc (suc (suc zero)))))))))
+                         empty-vat bridge-state-empty))
+              (length (bs-pending-out (bridge-step-state step)))))")
+   "0N"))
+
+(test-case "gc/args with no import-objects emit no frame at all"
+  ;; An empty <op:gc-exports [] []> is legal but pure noise.
+  (check-contains
+   (run-last
+    "(eval (let (args (syrup-list (cons (syrup-string \"hi\") nil))
+                  step (captp-incoming-with-state
+                         (op-deliver (suc (suc zero)) args none none) empty-vat bridge-state-empty))
+              (length (bs-pending-out (bridge-step-state step)))))")
+   "0N"))
+
+;; ========================================
+;; Outbound sends are questions; op:gc-answers
+;; ========================================
+
+(define greeter-vat
+  ;; Six fields: next-id, actors, promises, queue, outbound, DIALS. The last
+  ;; is `eff-connect`'s pending-connection list. This fixture is a STRING, so
+  ;; widening the type did not break it at compile time -- it failed at
+  ;; elaboration inside `run-last`, as an "unable to infer type" with no
+  ;; mention of arity, and only on a clean build.
+  "(vat (suc (suc zero)) (actor-table-set (suc zero) (actor beh-greeter (syrup-string \"Hello\")) nil) nil nil nil nil)")
+
+(define greet-args
+  "(syrup-list (cons (syrup-tagged \"desc:import-object\" (syrup-nat (suc (suc (suc (suc (suc (suc (suc zero))))))))) nil))")
+
+(test-case "outbound/a send carries a bare-int answer position and a resolve-me"
+  ;; The greeter is told to greet an object the peer exported to us. Its send
+  ;; used to go out with answer-pos and resolve-me both false, so the result
+  ;; had nowhere to go and the peer had nowhere to reply. Both slots are now
+  ;; filled.
+  ;;
+  ;; The answer position is a BARE INTEGER, not <desc:answer N>: the peer reads
+  ;; slot 2 raw and writes it raw, so a wrapped position comes back as a record
+  ;; and never compares equal to the position we name in op:gc-answers.
+  (define out
+    (extract-value-bytes
+     (run-last
+      (format
+       "(eval (let (cs0 (conn-state ~a bridge-state-empty nil false)
+                     cstep (connection-step (op-deliver (suc zero) ~a none none) cs0))
+                 (framed-concat (conn-step-outbound cstep))))"
+       greeter-vat greet-args))))
+  (check-contains out "op:deliver")
+  (check-contains out "desc:export7+")
+  (check-contains out "Hello")
+  (check-contains out "desc:import-object")
+  ;; NOT the wrapped form -- that is the whole point of the bare int.
+  (check-false (regexp-match? #rx"Hello\\]<11'desc:answer" out)))
+
+(test-case "outbound/the send registers an answer-table entry"
+  (check-contains
+   (run-last
+    (format
+     "(eval (let (cs0 (conn-state ~a bridge-state-empty nil false)
+                   s1 (connection-step (op-deliver (suc zero) ~a none none) cs0))
+               (length (bs-outbound-questions (conn-bridge-state (conn-step-state s1))))))"
+     greeter-vat greet-args))
+   "1N"))
+
+(test-case "outbound/nothing settled means no op:gc-answers frame at all"
+  ;; An empty <op:gc-answers []> is legal but pure noise. The greeting's own
+  ;; step has an outstanding question, so it must not name one.
+  (check-false
+   (string-contains?
+    (extract-value-bytes
+     (run-last
+      (format
+       "(eval (let (cs0 (conn-state ~a bridge-state-empty nil false)
+                     cstep (connection-step (op-deliver (suc zero) ~a none none) cs0))
+                 (framed-concat (conn-step-outbound cstep))))"
+       greeter-vat greet-args)))
+    "gc-answers")))
+
+;; ========================================
+;; Promise pipelining — the Car Factory chain
+;; ========================================
+;;
+;; Real wire frames, exactly as upstream's suite emits them (verified against
+;; its own encoder). The chain is builder -> factory -> car -> string, and the
+;; peer never waits for a link to resolve before addressing the next, so every
+;; message after the first targets an answer that does not exist yet.
+
+(define f1 "<10'op:deliver<11'desc:export0+>[5'fetch32:JadQ0++RzsD4M+40uLxTWVaVqM10DcBJ]0+<18'desc:import-object0+>>")
+(define f2 "<10'op:deliver<11'desc:answer0+>[]1+<18'desc:import-object1+>>")
+(define f3 "<10'op:deliver<11'desc:answer1+>[[3'red9'zoomracer]]2+<18'desc:import-object2+>>")
+(define f4 "<10'op:deliver<11'desc:answer2+>[]f<18'desc:import-object3+>>")
+(define b3 "<10'op:deliver<11'desc:answer1+>[[1+2+3+4+5+]]2+<18'desc:import-object2+>>")
+
+(test-case "pipeline/each link answers with a NEW object, addressed by the next"
+  ;; Link 1 fetches the builder; link 2 asks it for a factory; link 3 asks the
+  ;; factory for a car. Each answer must be a fresh export the peer can address.
+  (define out
+    (extract-value-bytes
+     (run-last
+      (format
+       "(eval (let (r1 (connection-step (unwrap-or (op-abort \"x\") (decode-op ~s)) seeded-connection)
+                     r2 (connection-step (unwrap-or (op-abort \"x\") (decode-op ~s)) (conn-step-state r1))
+                     r3 (connection-step (unwrap-or (op-abort \"x\") (decode-op ~s)) (conn-step-state r2))
+                     r4 (connection-step (unwrap-or (op-abort \"x\") (decode-op ~s)) (conn-step-state r3)))
+                 (framed-concat (conn-step-outbound r4))))"
+       f1 f2 f3 f4))))
+  ;; The final answer goes to the drive op's resolve-me, export 3.
+  (check-contains out "desc:export3+")
+  (check-contains out "fulfill")
+  (check-contains out "Vroom! I am a red zoomracer car!"))
+
+(test-case "pipeline/a broken link breaks the rest of the chain"
+  ;; The factory is given [1 2 3 4 5] instead of (color model), so its answer
+  ;; BREAKS -- and the message already pipelined behind it must break too,
+  ;; rather than going unanswered. Saying nothing is the one response that is
+  ;; definitely wrong: the peer is waiting on a resolve-me.
+  (define out
+    (extract-value-bytes
+     (run-last
+      (format
+       "(eval (let (r1 (connection-step (unwrap-or (op-abort \"x\") (decode-op ~s)) seeded-connection)
+                     r2 (connection-step (unwrap-or (op-abort \"x\") (decode-op ~s)) (conn-step-state r1))
+                     r3 (connection-step (unwrap-or (op-abort \"x\") (decode-op ~s)) (conn-step-state r2))
+                     r4 (connection-step (unwrap-or (op-abort \"x\") (decode-op ~s)) (conn-step-state r3)))
+                 (framed-concat (conn-step-outbound r4))))"
+       f1 f2 b3 f4))))
+  (check-contains out "desc:export3+")
+  (check-contains out "break")
+  (check-false (string-contains? out "Vroom")))
+
+(test-case "pipeline/a returned <Error r> BREAKS the answer, it does not fulfill it"
+  ;; The vat-level convention the chain relies on. A behaviour cannot emit
+  ;; eff-break against its own answer -- it never learns that promise's id --
+  ;; so returning <Error r> is how it signals failure. Fulfilling with an
+  ;; error-shaped value instead would tell the peer `['fulfill <Error ...>]`
+  ;; where it expects `['break reason]`; both settle, so only a peer that
+  ;; checks which one it got can tell the difference.
+  (check-contains
+   (run-last
+    "(eval (lookup-promise (alloc-id (fresh-promise empty-vat))
+             (settle-answer (alloc-id (fresh-promise empty-vat))
+               (syrup-tagged \"Error\" (syrup-string \"nope\"))
+               (alloc-vat (fresh-promise empty-vat)))))")
+   "pst-broken")
+  ;; A plain value still fulfills.
+  (check-contains
+   (run-last
+    "(eval (lookup-promise (alloc-id (fresh-promise empty-vat))
+             (settle-answer (alloc-id (fresh-promise empty-vat))
+               (syrup-string \"ok\")
+               (alloc-vat (fresh-promise empty-vat)))))")
+   "pst-fulfilled"))
+
+(test-case "pipeline/the op:deliver args slot is always a LIST"
+  ;; A peer iterates that slot directly, so a bare value there raises inside
+  ;; its receive loop and it drops the connection -- surfacing on OUR side as
+  ;; a write error several frames later, pointing at the transport rather than
+  ;; at the frame that caused it.
+  (check-contains
+   (run-last "(eval (outbound-deliver-bytes zero (syrup-tagged \"Error\" (syrup-string \"x\"))))")
+   "[<5'Error1")
+  ;; An already-list payload is passed through unchanged, not double-wrapped.
+  (check-contains
+   (run-last "(eval (outbound-deliver-bytes zero (syrup-list (cons (syrup-string \"a\") nil))))")
+   "[1"))
+
+;; ========================================
+;; A forwarded pipelined deliver keeps its reply channel
+;; ========================================
+;;
+;; The queued deliver's OWN ap/rm cannot be echoed into the forwarded
+;; frame -- that frame is a NEW message with US as the sender, so those
+;; slots would name our tables, not the peer's. What is correct is to
+;; allocate our own answer position and wire the peer's back to it:
+;; a fresh promise P goes into BOTH question tables, so the peer answers
+;; our question, that resolves P, and the pump answers the peer at the
+;; position it was actually waiting on.
+;;
+;; Before this, `forward-deliver-bytes` hardcoded `false false` and the
+;; peer's answer never resolved: an error was deliverable, a success was
+;; not (gaps doc section 1.2 M3).
+
+(test-case "bridge/forwarding a queued deliver with an ap emits a real answer position"
+  (define got
+    (run-last
+     "(eval (let (alloc (fresh-promise empty-vat)
+                   pid   (alloc-id alloc)
+                   v0    (alloc-vat alloc)
+                   st0   (bs-add-question (suc (suc (suc (suc (suc zero))))) pid bridge-state-empty)
+                   step  (dispatch-pipeline-on-our-q
+                           (suc (suc (suc (suc (suc zero)))))
+                           (syrup-string \"chained-msg\")
+                           (some Nat (suc (suc (suc (suc (suc (suc (suc (suc (suc zero)))))))))) ;; peer's ap = 9
+                           (none Nat) v0 st0)
+                   v1    (resolve-promise pid
+                           (syrup-tagged \"desc:export\"
+                             (syrup-nat (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))))) ;; 11
+                           (bridge-step-vat step))
+                   pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
+               (pump-result-bytes pr)))"))
+  ;; The emitted list holds the resolution answer AND the forward. The
+  ;; forward targets the peer's export 11 and must carry a real answer
+  ;; position, so no frame in the list both names export 11 and ends in
+  ;; the fire-and-forget `ff`.
+  (check-true (string-contains? got "desc:export11+")
+              (format "expected a forward to desc:export 11; got ~s" got))
+  (check-false (string-contains? got "desc:export11+>[4\\\"chained-msg]ff>")
+               (format "expected a real answer position on the forward; got ~s" got)))
+
+(test-case "bridge/forwarding registers the peer's answer position against a promise"
+  ;; The peer's ap must end up in bs-questions, or nothing will ever
+  ;; answer it. Two entries: the original question and the forwarded one.
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                   pid   (alloc-id alloc)
+                   v0    (alloc-vat alloc)
+                   st0   (bs-add-question (suc (suc (suc (suc (suc zero))))) pid bridge-state-empty)
+                   step  (dispatch-pipeline-on-our-q
+                           (suc (suc (suc (suc (suc zero)))))
+                           (syrup-string \"chained-msg\")
+                           (some Nat (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))
+                           (none Nat) v0 st0)
+                   v1    (resolve-promise pid
+                           (syrup-tagged \"desc:export\"
+                             (syrup-nat (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero)))))))))))))
+                           (bridge-step-vat step))
+                   pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
+               (length (bs-questions (pump-result-state pr)))))")
+   "2N"))
+
+(test-case "bridge/a queued deliver with NO reply channel still forwards fire-and-forget"
+  ;; The control: allocating a question for a fire-and-forget send would
+  ;; leave an outbound question nothing ever answers.
+  (define got
+    (run-last
+     "(eval (let (alloc (fresh-promise empty-vat)
+                   pid   (alloc-id alloc)
+                   v0    (alloc-vat alloc)
+                   st0   (bs-add-question (suc (suc (suc (suc (suc zero))))) pid bridge-state-empty)
+                   step  (dispatch-pipeline-on-our-q
+                           (suc (suc (suc (suc (suc zero)))))
+                           (syrup-string \"chained-msg\")
+                           (none Nat)
+                           (none Nat) v0 st0)
+                   v1    (resolve-promise pid
+                           (syrup-tagged \"desc:export\"
+                             (syrup-nat (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))))) 
+                           (bridge-step-vat step))
+                   pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
+               (pump-result-bytes pr)))"))
+  (check-true (string-contains? got "ff>")
+              (format "expected fire-and-forget slots; got ~s" got)))

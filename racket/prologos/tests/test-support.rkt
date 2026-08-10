@@ -14,6 +14,8 @@
 ;;;
 
 (require racket/list
+         racket/file
+         racket/os
          racket/path
          racket/port
          racket/string
@@ -33,7 +35,14 @@
          "../namespace.rkt"
          "../warnings.rkt"           ;; Track 7 Phase 6d: init-warning-cells!
          "../global-constraints.rkt"  ;; Track 7 Phase 6d: init-narrow-cells!
-         (only-in "../propagator.rkt" with-forked-network)) ;; Track 10 Phase 3c: network fork
+         (only-in "../propagator.rkt" with-forked-network) ;; Track 10 Phase 3c: network fork
+         ;; Rel T1: the relation store is a parameter, and `pipeline.md`
+         ;; § "New Racket Parameter" names THIS FILE and batch-worker.rkt as
+         ;; items 2 and 3 of the checklist. It was in neither, so `solve` in a
+         ;; `run-ns*` context saw a store that was not the ambient one — typing
+         ;; as untyped where production types, silently. Instance #7 of that
+         ;; class.
+         (only-in "../relations.rkt" current-relation-store))
 
 (provide ;; G2/B — preparse failures are VALUES now, not raises
          yields-prologos-error?
@@ -59,7 +68,39 @@
          run-simple-capture-stderr
          ;; Rich failure diagnostics: custom check with provenance
          check-prologos
-         error-provenance-summary)
+         error-provenance-summary
+         ;; Collision-free scratch files for WS-mode (process-file) tests
+         make-prologos-temp-file)
+
+;; ========================================
+;; Temp files for WS-mode tests
+;; ========================================
+;;
+;; 23 test files drive `process-file` through a scratch `.prologos` file, and
+;; every one of them used the SAME `make-temporary-file` template. That is
+;; safe within a process -- Racket disambiguates with a counter -- but the
+;; counter is per-process, and the suite runs four batch workers. Two workers
+;; landing in the same millisecond generate the same name, and the loser dies
+;; with
+;;
+;;     open-output-file: file exists
+;;       path: /var/tmp/prologos-test-17852384651785238465047.prologos
+;;
+;; then fails somewhere unrelated -- the observed symptom was
+;; "Unbound variable: <" in a mixfix test, because the file it went on to read
+;; was not the one it meant to write.
+;;
+;; It is load-dependent and rare, so it presents as a test that "passes
+;; individually, fails in batch, sometimes" -- which is also the signature of
+;; two genuine architectural bugs in this project (the collection-path trap and
+;; parameter leakage), and it cost a wrong diagnosis before being read
+;; properly. Two sightings: test-mixfix-01 on CI (2026-07-27) and
+;; test-mixfix-02 locally (2026-07-28).
+;;
+;; The PID makes the name unique across workers; the counter keeps it unique
+;; within one.
+(define (make-prologos-temp-file)
+  (make-temporary-file (format "prologos-test-~a-~~a.prologos" (getpid))))
 
 ;; ========================================
 ;; Compute lib-dir from this file's location
@@ -144,12 +185,28 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 10 Phase 3c: fork replaces 8 network params
                  [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
+                 ;; Immutable hasheq, so binding the current value is a full
+                 ;; per-call isolation: a `defr` inside the call rebinds a NEW
+                 ;; store and cannot escape.
+                 [current-relation-store (current-relation-store)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
                  )
     (with-forked-network current-prop-net-box
-      (install-module-loader!)
-      (last (process-string s)))))
+     ;; …and the PERSISTENT REGISTRY network too. Forking only the prop net
+     ;; left the cell-backed registries (spec store, preparse registry, schema
+     ;; registry) on ONE shared network for the life of the batch-worker
+     ;; process, and `spec-store-lookup` reads the CELL FIRST
+     ;; (macros.rkt:496) — so a `spec` registered by one test FILE was still
+     ;; there for the next. The per-file snapshot the worker takes restores
+     ;; the `current-spec-store` PARAMETER, which the cell read never
+     ;; consults; the dual-write is what hid it.
+     ;;
+     ;; Forking from the prelude box keeps everything the prelude registered
+     ;; and discards what this call writes.
+     (with-forked-network current-persistent-registry-net-box
+        (install-module-loader!)
+        (last (process-string s))))))
 
 ;; Process a string and return ALL results (list).
 (define (run-ns-all s)
@@ -163,12 +220,28 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 10 Phase 3c: fork replaces 8 network params
                  [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
+                 ;; Immutable hasheq, so binding the current value is a full
+                 ;; per-call isolation: a `defr` inside the call rebinds a NEW
+                 ;; store and cannot escape.
+                 [current-relation-store (current-relation-store)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
                  )
     (with-forked-network current-prop-net-box
-      (install-module-loader!)
-      (process-string s))))
+     ;; …and the PERSISTENT REGISTRY network too. Forking only the prop net
+     ;; left the cell-backed registries (spec store, preparse registry, schema
+     ;; registry) on ONE shared network for the life of the batch-worker
+     ;; process, and `spec-store-lookup` reads the CELL FIRST
+     ;; (macros.rkt:496) — so a `spec` registered by one test FILE was still
+     ;; there for the next. The per-file snapshot the worker takes restores
+     ;; the `current-spec-store` PARAMETER, which the cell read never
+     ;; consults; the dual-write is what hid it.
+     ;;
+     ;; Forking from the prelude box keeps everything the prelude registered
+     ;; and discards what this call writes.
+     (with-forked-network current-persistent-registry-net-box
+        (install-module-loader!)
+        (process-string s)))))
 
 ;; ========================================
 ;; WS-mode helpers (primary design target)
@@ -187,12 +260,28 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 10 Phase 3c: fork replaces 8 network params
                  [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
+                 ;; Immutable hasheq, so binding the current value is a full
+                 ;; per-call isolation: a `defr` inside the call rebinds a NEW
+                 ;; store and cannot escape.
+                 [current-relation-store (current-relation-store)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
                  )
     (with-forked-network current-prop-net-box
-      (install-module-loader!)
-      (last (process-string-ws s)))))
+     ;; …and the PERSISTENT REGISTRY network too. Forking only the prop net
+     ;; left the cell-backed registries (spec store, preparse registry, schema
+     ;; registry) on ONE shared network for the life of the batch-worker
+     ;; process, and `spec-store-lookup` reads the CELL FIRST
+     ;; (macros.rkt:496) — so a `spec` registered by one test FILE was still
+     ;; there for the next. The per-file snapshot the worker takes restores
+     ;; the `current-spec-store` PARAMETER, which the cell read never
+     ;; consults; the dual-write is what hid it.
+     ;;
+     ;; Forking from the prelude box keeps everything the prelude registered
+     ;; and discards what this call writes.
+     (with-forked-network current-persistent-registry-net-box
+        (install-module-loader!)
+        (last (process-string-ws s))))))
 
 (define (run-ns-ws-all s)
   (parameterize ([current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
@@ -205,12 +294,28 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 10 Phase 3c: fork replaces 8 network params
                  [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
+                 ;; Immutable hasheq, so binding the current value is a full
+                 ;; per-call isolation: a `defr` inside the call rebinds a NEW
+                 ;; store and cannot escape.
+                 [current-relation-store (current-relation-store)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
                  )
     (with-forked-network current-prop-net-box
-      (install-module-loader!)
-      (process-string-ws s))))
+     ;; …and the PERSISTENT REGISTRY network too. Forking only the prop net
+     ;; left the cell-backed registries (spec store, preparse registry, schema
+     ;; registry) on ONE shared network for the life of the batch-worker
+     ;; process, and `spec-store-lookup` reads the CELL FIRST
+     ;; (macros.rkt:496) — so a `spec` registered by one test FILE was still
+     ;; there for the next. The per-file snapshot the worker takes restores
+     ;; the `current-spec-store` PARAMETER, which the cell read never
+     ;; consults; the dual-write is what hid it.
+     ;;
+     ;; Forking from the prelude box keeps everything the prelude registered
+     ;; and discards what this call writes.
+     (with-forked-network current-persistent-registry-net-box
+        (install-module-loader!)
+        (process-string-ws s)))))
 
 ;; ========================================
 ;; GDE-4: Structured error testing helpers
@@ -224,11 +329,27 @@
                    [current-error-port stderr-out]
                    ;; Track 10 Phase 3c: fork replaces 8 network params
                    [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
+                 ;; Immutable hasheq, so binding the current value is a full
+                 ;; per-call isolation: a `defr` inside the call rebinds a NEW
+                 ;; store and cannot escape.
+                 [current-relation-store (current-relation-store)]
                    [current-module-registry-cell-id   #f]
                    [current-ns-context-cell-id        #f]
                    )
       (with-forked-network current-prop-net-box
-        (process-string s))))
+     ;; …and the PERSISTENT REGISTRY network too. Forking only the prop net
+     ;; left the cell-backed registries (spec store, preparse registry, schema
+     ;; registry) on ONE shared network for the life of the batch-worker
+     ;; process, and `spec-store-lookup` reads the CELL FIRST
+     ;; (macros.rkt:496) — so a `spec` registered by one test FILE was still
+     ;; there for the next. The per-file snapshot the worker takes restores
+     ;; the `current-spec-store` PARAMETER, which the cell read never
+     ;; consults; the dual-write is what hid it.
+     ;;
+     ;; Forking from the prelude box keeps everything the prelude registered
+     ;; and discards what this call writes.
+     (with-forked-network current-persistent-registry-net-box
+          (process-string s)))))
   (cons results (get-output-string stderr-out)))
 
 ;; Assert that an error has a non-empty provenance field.

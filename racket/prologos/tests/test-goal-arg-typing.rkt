@@ -137,17 +137,44 @@
   (check-false (prologos-error? r) (result-msg r))
   (check-true (string-contains? r ":x 2") r))
 
-(test-case "control: `=` operands stay TERMS — not tightened, status quo pinned"
-  ;; `=` does not evaluate: a well-typed compound RHS and an ill-typed one render
-  ;; IDENTICALLY (`unknown`). That is why `expr-unify-goal` is out of scope for
-  ;; the DEFERRED 52 fix. If a future change makes `=` evaluate, BOTH of these
-  ;; move together — and this pin is what will say so.
+(test-case "control: `=` operands stay TERMS — and the two no longer render alike"
+  ;; ⚠ UPDATED at the 2026-08-05 merge. This pin said "a well-typed compound RHS
+  ;; and an ill-typed one render IDENTICALLY (`unknown`)", and asked to be
+  ;; revisited "if a future change makes `=` evaluate". It fired — but NOT for
+  ;; the reason it named, and the distinction is the whole point of keeping it.
+  ;;
+  ;; `=` still does NOT evaluate: the well-typed RHS renders as the TERM
+  ;; `[+ 1 1]`, not as `2`. What changed is the REPRESENTATION — this branch's
+  ;; `10f5a080` let compound terms survive the AST↔solver round trip, so a
+  ;; well-typed compound now renders itself instead of collapsing to `unknown`.
+  ;; The ill-typed one still cannot round-trip and still shows `unknown`.
+  ;;
+  ;; The entry's PREMISE survives intact: the two still render IDENTICALLY in
+  ;; shape — both as their own terms now, where both were `unknown` before. So
+  ;; `expr-unify-goal` is still correctly out of scope for DEFERRED 52.
+  ;;
+  ;; ⚠ I first updated this test asserting that `bad` still showed `unknown`,
+  ;; having inferred it from the suite reporting only ONE failure here. That was
+  ;; wrong: rackunit's first failing `check-true` ABORTS the rest of its
+  ;; test-case, so the second assertion never ran and its silence was not a pass.
+  ;; Measured instead of inferred, both round-trip. Absence of a second failure
+  ;; in a test-case is not evidence about the second assertion.
+  ;;
+  ;; Pinned in the shape that keeps the real signal: evaluation is asserted
+  ;; ABSENT explicitly, so a change that genuinely makes `=` evaluate still fails
+  ;; here rather than sliding through on a rendering change.
   (define ok  (run "(= x [+ 1 1])"))
   (define bad (run "(= x [+ \"str\" 1])"))
   (check-false (prologos-error? ok) (result-msg ok))
   (check-false (prologos-error? bad) (result-msg bad))
-  (check-true (string-contains? ok ":x unknown") ok)
-  (check-true (string-contains? bad ":x unknown") bad))
+  ;; the RHS is still a TERM, not a value — this is the load-bearing assertion
+  (check-true (string-contains? ok "[+ 1 1]") ok)
+  (check-false (string-contains? ok ":x 2")
+               (format "`=` must NOT evaluate its RHS; got: ~a" ok))
+  ;; ill-typed compounds render as terms too — `=` does not type-check them
+  (check-true (string-contains? bad "[+ \"str\" 1]") bad)
+  (check-false (string-contains? bad "unknown")
+               (format "compounds round-trip now; got: ~a" bad)))
 
 (test-case "control: `=` on ground terms still unifies"
   (define r (run "(= 1 1)"))

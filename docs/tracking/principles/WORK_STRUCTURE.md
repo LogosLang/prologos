@@ -1,3 +1,10 @@
+> **⚠ GENERATED ARTIFACT — STALE. Read `WORK_STRUCTURE.org` instead.**
+> `WORK_STRUCTURE.org` is the canonical source (`workflow.md`: "ALL edits MUST go to the
+> `.org`"). Claims here may already have been retracted at the source.
+> For how far behind this export is RIGHT NOW, run `tools/check-doc-twins.sh`
+> — it reads both files' last commit times, so it cannot itself go stale.
+> Regenerating needs org-export (emacs or pandoc).
+
 - [Purpose](#orgf36cd04)
 - [1. The Work Unit Hierarchy](#orgd4a7cd1)
   - [1.1 Series](#org356fd41)

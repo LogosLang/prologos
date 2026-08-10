@@ -1,0 +1,42 @@
+ns pfp2
+
+;; Round 2 — the four the first probe could not settle, each written as the
+;; pitfall's OWN failing shape rather than as its workaround.
+
+;; ---- #21: multi-line clause body under a `|` arm (real fn this time) ----
+spec p21 Nat -> Nat
+defn p21
+  | zero ->
+    0N
+  | suc n ->
+    n
+
+;; ---- #22: the BARE form the entry says mis-parses ----
+;;      "Option Nat -> Int parses as multi-arg Pi, not (Option Nat) -> Int"
+spec p22bare Option Nat -> Int
+defn p22bare [o]
+  match o
+    | none   -> 0
+    | some n -> 1
+
+;; ---- #36: UNBRACKETED continuation args (the entry's actual shape) ----
+spec p36 Int Int Int -> Int
+defn p36 [a b c] [int+ [int+ a b] c]
+
+def p36u : Int :=
+  p36 1
+      2
+      3
+
+;; ---- #42: a pattern VARIABLE whose name matches a data constructor ----
+data Colour { red : Unit, green : Unit }
+
+spec p42f Int -> Int
+defn p42f [n]
+  match n
+    | red -> [int+ red 1]
+
+p21 [suc [suc zero]]
+[p22bare [some 2N]]
+p36u
+[p42f 7]

@@ -13,6 +13,10 @@ foreign racket "racket/base" ["string<?" :as lt : String -> String -> Bool]
 
 ;; --- Length & access ---
 foreign racket "racket/base" [string-length :as length : String -> Int]
+;; UTF-8 byte length (== `length` for ASCII strings, but counts
+;; multi-byte chars by their byte count). Needed for wire formats
+;; that prefix data with byte counts (e.g. OCapN Syrup).
+foreign racket "racket/base" [string-utf-8-length :as bytes-length : String -> Int]
 foreign racket "racket/base" [string-ref :as ref : String -> Int -> Char]
 
 ;; --- Construction ---
@@ -33,3 +37,72 @@ foreign racket "racket/string" [string-suffix? :as ends-with? : String -> String
 foreign racket "racket/base" [string-upcase :as upper : String -> String]
 foreign racket "racket/base" [string-downcase :as lower : String -> String]
 foreign racket "racket/base" [string-titlecase :as capitalize : String -> String]
+
+;; --- Unicode normalization (UAX #15) ---
+;;
+;; The four normalization forms, bridged to Racket rather than reimplemented:
+;; the alternative is a UAX #15 decomposition table, and the runtime already
+;; carries one.
+;;
+;; Which one to use, since picking wrong is the usual mistake:
+;;
+;;   NFC  canonical decomposition then canonical COMPOSITION. Store and
+;;        transmit this one; it is what W3C and most wire formats expect.
+;;   NFD  canonical decomposition only. For stripping diacritics or indexing
+;;        by base letter.
+;;   NFKC compatibility decomposition then canonical composition. Folds
+;;        formatting distinctions. LOSSY -- search keys and identifier
+;;        folding, never round-tripping user data.
+;;   NFKD compatibility decomposition only. Lossy in the same way.
+;;
+;; Canonical equivalence is why this matters: two strings a reader cannot tell
+;; apart, and that a font renders identically, are NOT `eq` unless they are in
+;; the same form. Normalize both sides before comparing text a person typed.
+;;
+;; The `NormForm` type and the `normalize` dispatcher live in
+;; `prologos::core::string-ops`: this module is a prelude-less leaf, and a
+;; `match` over a user `data` needs machinery it does not have.
+foreign racket "racket/base" [string-normalize-nfc :as normalize-nfc : String -> String]
+foreign racket "racket/base" [string-normalize-nfd :as normalize-nfd : String -> String]
+foreign racket "racket/base" [string-normalize-nfkc :as normalize-nfkc : String -> String]
+foreign racket "racket/base" [string-normalize-nfkd :as normalize-nfkd : String -> String]
+
+;; --- Grapheme clusters (UAX #29) ---
+;;
+;; A user-perceived character. "é" written as e + U+0301 is TWO code points and
+;; one grapheme; a ZWJ family emoji is five code points and one grapheme. Any
+;; operation a person would describe in terms of "characters" — counting,
+;; truncating, reversing — means graphemes, not `length` and `ref`.
+;;
+;; Bridged to Racket, which already carries the UAX #29 tables. Reimplementing
+;; the segmentation state machine here would mean ~30KB of Unicode data for a
+;; result the runtime already computes.
+;;
+;; `grapheme-span` gives the number of CODE POINTS in the cluster beginning at
+;; an index, which is the primitive everything else is built from — see
+;; `graphemes` and `grapheme-reverse` in `prologos::core::string-ops`.
+foreign racket "racket/base" [string-grapheme-count :as grapheme-count : String -> Int]
+foreign racket "racket/base" [string-grapheme-span :as grapheme-span : String -> Int -> Int]
+
+;; --- Regular expressions ---
+;;
+;; Bridged to Racket's regexp engine. The DEFERRED entry deferred this on
+;; "depends on a regex library (not yet designed)" — a Prologos-level regex AST
+;; is indeed undesigned, but the RUNTIME has an engine, and a string-pattern
+;; bridge needs no new type.
+;;
+;; The pattern is a STRING, compiled by Racket on each call. That is the honest
+;; trade for having no `Regex` type yet: correct, and slower than a compiled
+;; pattern would be in a loop. When the Prologos-level design lands it can
+;; introduce a compiled handle without changing these signatures' meaning.
+;;
+;; Syntax is Racket's `regexp` (POSIX-ish extended), not `pregexp` (Perl-ish).
+;; The difference bites on `\d` and `\w`, which are pregexp-only — write
+;; `[0-9]` and `[a-zA-Z0-9_]`.
+;;
+;; `regex-quote` escapes a string so it matches literally, which is what any
+;; caller building a pattern from user input needs and almost never remembers.
+foreign racket "racket/base" [regexp-match? :as regex-match? : String -> String -> Bool]
+foreign racket "racket/base" [regexp-replace :as regex-replace : String -> String -> String -> String]
+foreign racket "racket/base" ["regexp-replace*" :as regex-replace-all : String -> String -> String -> String]
+foreign racket "racket/base" [regexp-quote :as regex-quote : String -> String]

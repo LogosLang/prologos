@@ -1,3 +1,10 @@
+> **⚠ GENERATED ARTIFACT — STALE. Read `LANGUAGE_VISION.org` instead.**
+> `LANGUAGE_VISION.org` is the canonical source (`workflow.md`: "ALL edits MUST go to the
+> `.org`"). Claims here may already have been retracted at the source.
+> For how far behind this export is RIGHT NOW, run `tools/check-doc-twins.sh`
+> — it reads both files' last commit times, so it cannot itself go stale.
+> Regenerating needs org-export (emacs or pandoc).
+
 - [The Elevator Pitch](#orgfd17594)
 - [What Problem Does Prologos Solve?](#orga5a3d0a)
 - [Formal Methods for Everyone](#orge5f8580)
