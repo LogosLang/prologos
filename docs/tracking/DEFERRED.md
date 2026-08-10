@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 101**
+> ### **NEXT FREE: 102**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6341,3 +6341,58 @@ honest message is per-keyword: "a `not` goal answers yes/no — there are no row
 to select from". Non-blocking (no wrong answer, no abort); found by slice 7's
 second adversarial verify.
 
+
+---
+
+### 101. ⬜ ⭐ THE NON-IDENTIFIER STAR CARRIERS ARE UNSPELLABLE — the P4e-0 mint was REVERTED, and the gap is filed rather than left silent
+
+`*` is ruled SORT-GENERIC ([Q_U23](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u23)) and its
+surface was ruled sort-generic too ([Q_U27](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u27)).
+**Only the IDENTIFIER band delivers that today.** `ident-continue?` admits `*`,
+so `database*` / `:tags*` / `c*d` arrive as ONE token and the parser splits
+them. Every other carrier still shatters:
+
+| spelling | at HEAD |
+|---|---|
+| `m{0*}` · `m{0 *}` | byte-identical datums — the ordinal splat is **unspellable** |
+| `x{a}*` · `[f x]*` · `xs:{a}*` | the star is a loose sibling |
+| `xs:0*` | the `$bcast-step` mint is destroyed (`recognize-colon-annotation`'s trailing guard declines on `*`) |
+| `x.0*` | the `$postfix-index` is destroyed (`recognize-dot-ordinal`'s **byte-identical twin** guard) |
+| `*_` on any non-identifier carrier | leaks `Unbound variable *_` |
+
+**WHY THE FIRST TWO ATTEMPTS FAILED — read this before the third.**
+
+**Attempt 1, a COUNT-CHANGING adjacency mint** (`bfba68d5`, reverted here).
+`*` is postfix, so the mint consumed the item BEFORE it. Measured consequences:
+· four preparse forms silently accepted a SHORTENED form, two of them losing a
+definition (`bundle Bx := (Add Sub)*` produced NO output where the spaced form
+correctly errors) · the glued Sigma spelling `<(x : Nat)* Nat>` became a parse
+error, a clean regression · the two groupers wrapped DIFFERENT items on `<`/`>`
+· `$star-step` could not be expressed in slice 7's head-set vocabulary, because
+its membership was CONDITIONAL on its payload.
+
+**Attempt 2, a COUNT-PRESERVING marker** (designed, never written — refuted by
+grounding `wf_282dce0e-2ac`). `segment-select-items` is reached ONLY from the
+args of a `$select`/`$select-path` node, and the fold CLOSES the selection as it
+goes — so a non-sentinel marker is left a SIBLING of the finished node, outside
+the args. Three of four bands would get *"it appeared here without a selection
+to attach to"* with a selection immediately to their left. Registering it
+instead collides with slice 7's TWO arity classes (`test-solve-carrier.rkt` now
+pins that arity-1 lists are not sentinels) and orphans subjects: `[f]*.a` folds
+`.a` onto the marker, dropping `f`.
+
+**THE LESSON, and it is the one to carry into attempt 3**: both designs modelled
+the mint's blast radius as *the selection surface*. **It is the whole reader.**
+Preparse form validators, the angle/type grammar, the tree grouper's `result`
+and slice 7's subject-marking all sit upstream or sideways of
+`segment-select-items`, and all four are where the defects were.
+
+**Attempt 3 must open with a MEASURED MAP** [owner, 2026-08-09]: every consumer
+that counts items, every consumer that switches on shape, and every grammar that
+already claims `*` — enumerated from the code, not from intuition about where a
+star can safely fire.
+
+**Also owed, independent of the mint**: `recognize-dot-ordinal`'s guard is the
+untouched twin of `recognize-colon-annotation`'s; a band-dependent divergence
+makes `(G):f*` keep the implicit solve while `(G):0*` loses it on a purely
+lexical accident (latent now, a silent wrong answer once `*` has semantics).

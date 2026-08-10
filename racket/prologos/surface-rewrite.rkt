@@ -603,19 +603,6 @@
                            result)))]
             [(bcast-step-trigger? vec i result item type)
              (loop (+ i 1) (cons item result))]
-            ;; D4.P4e-0 (Q_U27): the STAR mint's TREE TWIN — and unlike the arm
-            ;; directly above (which is a behavioural no-op, byte-identical to
-            ;; the `[else]` below because that mint is count-PRESERVING), this
-            ;; one is REAL. `*` is postfix, so the datum mint consumes the item
-            ;; before it; carrying the tokens through unchanged here would make
-            ;; the two layers disagree in COUNT. The Q_N3 v2 guard's new row
-            ;; pins the correspondence.
-            [(star-step-trigger? vec i result item type)
-             (loop (+ i 1)
-                   (cons (parse-tree-node 'star-step-group
-                                          (list->rrb (list (car result)))
-                                          srcloc indent)
-                         (cdr result)))]
             ;; Regular token → add to result
             [else
              (loop (+ i 1) (cons item result))])]

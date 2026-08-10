@@ -6723,38 +6723,6 @@
 (define (bcast-step? x)
   (and (list? x) (= (length x) 2) (eq? (car x) '$bcast-step)))
 
-;; D4.P4e-0 (Q_U27): the STAR reader sentinel, `($star-step <wrapped>)`.
-;; ⚠ Unlike every sibling above, this mint ALREADY CONSUMED its preceding item
-;; at the GROUPER — `*` is postfix, so the mint is count-changing and the datum
-;; arrives with the starred thing INSIDE it (`m{0*}` →
-;; `($select-brace ($star-step 0))`). It still belongs in `access-sentinel?`,
-;; because at top level the star attaches to a SUBJECT the fold must recognize:
-;; `m:0*` → `(m ($star-step ($bcast-step :0)))`, which without this registration
-;; leaks the sentinel into EXPRESSION position and reports
-;; `Unbound variable $star-step`. Measured — that is exactly what the first cut
-;; of this slice did, and it is DEFERRED 37's lesson repeating one sentinel later.
-(define (star-step? x)
-  (and (list? x) (= (length x) 2) (eq? (car x) '$star-step)))
-
-;; ⭐⭐ D4.P4e-0 — THE DISCRIMINATOR, and it is the slice's subtlest point.
-;; `$star-step` is UNLIKE every other access sentinel: because `*` is postfix
-;; and the mint is count-changing, it has ALREADY CONSUMED ITS OPERAND at the
-;; grouper. So it must join the fold's "consume the preceding element" family
-;; ONLY when its payload is itself base-needing:
-;;   · `m:0*`   → `(m ($star-step ($bcast-step :0)))`  — payload needs a base,
-;;                so the star inherits that need and `m` is it.
-;;   · `[f 1]*` → `($star-step (f 1))`                  — payload is a COMPLETE
-;;                expression; the star needs nothing and must stay put.
-;; ⚠ MEASURED, and it is why this predicate exists: with an unconditional
-;; `star-step?` in `access-sentinel?`, `def q := [f 1]*` folded the star onto
-;; the BINDING MARKER — `(def q ($select-path := ($star-step (f 1))))`, three
-;; items — and reported the generic `def requires: (def name <type> body)`. A
-;; sentinel that swallows a LEFT sibling it has no business touching is exactly
-;; the P1b-iii class this fold's own comments record, arriving from the one
-;; direction those comments did not anticipate: a mint that is already complete.
-(define (star-step-with-base? x)
-  (and (star-step? x) (access-sentinel? (cadr x))))
-
 ;; Check if a datum element is a ($postfix-index key) sentinel
 (define (postfix-index? x)
   (and (list? x) (= (length x) 2) (eq? (car x) '$postfix-index)))
@@ -6816,24 +6784,21 @@
 ;; hidden second list would have made it one more, in a file the author of the
 ;; new sentinel has no reason to open.
 (define (access-sentinel? x)
-  ;; ⚠ MERGE RESOLUTION (slice 7 x P4e-0, 2026-08-09) — BOTH sides, because
-  ;; they are not alternatives. P4e-0 added `star-step-with-base?`; slice 7
-  ;; replaced the flat disjunction with a lookup over reader-forms.rkt's head
-  ;; sets so parse-reader.rkt can consume the SAME list at reader time.
+  ;; Slice 7 replaced the flat disjunction with a lookup over reader-forms.rkt's
+  ;; head sets, so parse-reader.rkt can consume the SAME list at reader time.
   ;;
-  ;; `$star-step` CANNOT become a head-set entry, and that is the subtle part:
-  ;; its membership is CONDITIONAL and recursive — a star is base-needing only
-  ;; when its PAYLOAD is (`m:0*` yes, `[f 1]*` no). A flat head list cannot say
-  ;; "member iff its payload is a member", and adding `$star-step` to one
-  ;; unconditionally would re-introduce the measured P4e-0 bug it exists to
-  ;; prevent: `def q := [f 1]*` folding the star onto the BINDING MARKER.
-  ;; So the head-set lookup covers the flat families and the conditional clause
-  ;; rides alongside it, verbatim.
-  (or (and (list? x) (pair? x)
-           (let ([h (car x)])
-             (or (and (= (length x) 2) (memq h arity2-access-sentinel-heads) #t)
-                 (and (memq h brace-access-sentinel-heads) #t))))
-      (star-step-with-base? x)))
+  ;; ⚠ D4.P4e-0 REVERT (2026-08-09): a `star-step-with-base?` clause rode
+  ;; alongside this lookup and is GONE with the mint. Recorded because the shape
+  ;; is the finding, not the code: `$star-step` could not become a head-set entry
+  ;; at all — its membership was CONDITIONAL and recursive (base-needing only
+  ;; when its payload was: `m:0*` yes, `[f 1]*` no), and a flat head list cannot
+  ;; say "member iff its payload is a member". A sentinel that cannot be
+  ;; expressed in the head-set vocabulary the rest of the family shares is a
+  ;; design smell, and it was pointing at the real defect the whole time.
+  (and (list? x) (pair? x)
+       (let ([h (car x)])
+         (or (and (= (length x) 2) (memq h arity2-access-sentinel-heads) #t)
+             (and (memq h brace-access-sentinel-heads) #t)))))
 
 ;; Unified rewrite for ALL access sentinels in a flat datum list.
 ;; Handles: $dot-access, $nil-dot-access, $postfix-index (live) and the
@@ -6954,23 +6919,6 @@
            ;; a guided per-command message, exactly as the bare-sentinel siblings
            ;; do; a fold-time refusal here would have no srcloc to point at.
            [(bcast-step? (car elems))
-            (if (null? acc)
-                (loop (cdr elems) (cons (car elems) acc))
-                (let* ([target (car acc)]
-                       [wrapped `($select-path ,target ,(car elems))])
-                  (loop (cdr elems) (cons wrapped (cdr acc)))))]
-           ;; ⭐ D4.P4e-0 (Q_U27) — THE STAR ARM. The ω arm above VERBATIM: the
-           ;; sentinel rides WHOLE so the parser does the one interpretation,
-           ;; and the emitted head is `$select-path`, which is not an
-           ;; `access-sentinel?` member — so the fixpoint obligation is met the
-           ;; same way.
-           ;; ⚠ REGISTERING `star-step?` IN `access-sentinel?` IS NOT ENOUGH ON
-           ;; ITS OWN — that predicate only GATES the fold; each sentinel needs
-           ;; its own arm here or it falls to `[else]` and stays a sibling.
-           ;; Measured: with the gate but not this arm, `m:0*` reported
-           ;; `Unbound variable $star-step`, the sentinel having leaked into
-           ;; expression position. Two sites, and the first one alone looks done.
-           [(star-step-with-base? (car elems))
             (if (null? acc)
                 (loop (cdr elems) (cons (car elems) acc))
                 (let* ([target (car acc)]

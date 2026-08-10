@@ -55,9 +55,6 @@
  adjacent-to-base?
  ;; D4.P4c-2: THE `:` gate trigger — both groupers consume this one predicate.
  bcast-step-trigger? bcast-brace-trigger?
- ;; D4.P4e-0 (Q_U27): THE STAR mint trigger — same discipline, ONE definition
- ;; consumed by BOTH groupers. A second copy is the F1b.7g drift class.
- star-step-trigger?
  ;; D4.P4c-4a: THE ENABLE-SET, exported so a TEST can grant a context. It was an
  ;; unexported `define`, so the only way to exercise ANY of the preservation
  ;; machinery was source mutation on a scratch build (DEFERRED 38) — and
@@ -1031,24 +1028,12 @@
        (if (not (and c3 (ident-continue? c3))) 2 #f))]
     ;; digit arm — consume the whole run, THEN apply the guard
     ;;
-    ;; ⚠ D4.P4e-0 (Q_U27): the trailing guard EXCLUDES `*`, and that exclusion
-    ;; is load-bearing. `ident-continue?` admits `*`, so before this the guard
-    ;; declined `:0*` outright — the annotation never formed, `xs:0*` came out
-    ;; as a bare `:` plus `0` plus `*`, and the ω band was split against itself:
-    ;; its KEYWORD carrier fused the star and reached the flatten refusal
-    ;; (`xs:tags*`) while its ORDINAL carrier could not mint at all. That is the
-    ;; unspellable-case hole Q_U27 exists to close, one layer below the grouper.
-    ;;
-    ;; Safe HERE and only here: a keyword cannot begin with a digit, so there is
-    ;; no `:0*`-shaped keyword for this arm to collide with. The LETTER arm
-    ;; (`:w`/`:m`) is deliberately NOT changed — `:w*` could plausibly be a real
-    ;; keyword name, and nothing needs it.
     [(char-numeric? c2)
      (let loop ([i (+ pos 2)])
        (define c (rrb-char-at rrb i))
        (cond
          [(and c (char-numeric? c)) (loop (+ i 1))]
-         [(and c (ident-continue? c) (not (char=? c #\*))) #f]   ;; e.g. `:10abc` — not an annotation
+         [(and c (ident-continue? c)) #f]   ;; e.g. `:10abc` — not an annotation
          [else (- i pos)]))]
     [else #f]))
 
@@ -4081,39 +4066,6 @@
        (adjacent-to-base? vec i result item)
        (not (prev-token-not-emitted? vec i))))
 
-;; D4.P4e-0 (Q_U27) — THE STAR MINT TRIGGER. A bare `*` token BYTE-ADJACENT to a
-;; non-empty local result.
-;;
-;; ⚠ `*` IS POSTFIX, so this mint is COUNT-CHANGING: it consumes the item BEFORE
-;; it (`0` + `*` → `($star-step 0)`, 2 items → 1). That places it on the
-;; `bcast-brace-trigger?` precedent — **the tree twin must FUSE** — and NOT on
-;; its nearer-looking sibling above, whose tree arm is a behavioural NO-OP
-;; (byte-identical to its own `[else]`) precisely because that mint is
-;; count-PRESERVING. Copying the wrong sibling would ship a datum-layer mint
-;; with no tree twin: a silent two-grouper divergence, the F1b.7g class.
-;;
-;; ⚠ Keys on the LEXEME, deliberately, NOT on a new classifier type. A bare `*`
-;; is classified `'symbol` by `recognize-symbol`, and `token-entry` already
-;; carries the raw string (the `(string=? (token-entry-lexeme next) ">")` site
-;; upstream is the same move). Minting a new token type would oblige an EXPLICIT
-;; `token-entry->stx` arm per Q_U16b's warning, for zero gain — and `*` must keep
-;; reading as the bound multiply function in expression position (`[* 3 4]`,
-;; `def s := *`), which a type change puts at risk.
-;;
-;; ⚠ THE DECLINE IS A CLASS, not a list — `prev-token-not-emitted?` is copied
-;; from the `:` twins, where shipping it "as a list of one" cost a BLOCKING
-;; regression. A quote lexes as a non-emitting token, so the star after it would
-;; be byte-adjacent to something that is NOT `(car result)`.
-;;
-;; The IDENTIFIER band is NOT handled here and cannot be: `database*` fuses into
-;; ONE token (`ident-continue?` admits `*`), so adjacency has nothing to see.
-;; That band is the parser-side splitter — Q_U27's forced hybrid.
-(define (star-step-trigger? vec i result item type)
-  (and (eq? type 'symbol)
-       (string=? (token-entry-lexeme item) "*")
-       (adjacent-to-base? vec i result item)
-       (not (prev-token-not-emitted? vec i))))
-
 ;; ⚠ THE DECLINE IS A CLASS, NOT A LIST OF SPECIAL CASES — and it was shipped as
 ;; a list of one, which cost a BLOCKING regression.
 ;;
@@ -4561,20 +4513,6 @@
                                      (+ (token-entry-start-pos item) 1)
                                      (- (token-entry-end-pos item) (token-entry-start-pos item)))
                            result)))]
-            ;; D4.P4e-0 (Q_U27): the STAR mint — POSTFIX, so it CONSUMES the
-            ;; preceding result item and re-pushes it wrapped. COUNT-CHANGING
-            ;; (2 items → 1), like the `:{` mint two arms up and unlike the `:`
-            ;; mint directly above. `adjacent-to-base?` carries the
-            ;; `(pair? result)` conjunct, so `(car result)` is safe here.
-            [(star-step-trigger? vec i result item type)
-             (let-values ([(ln cl) (pos->line-col source-str (token-entry-start-pos item))])
-               (loop (+ i 1)
-                     (cons (make-stx (list (make-stx '$star-step source ln cl
-                                                     (token-entry-start-pos item) 0)
-                                           (car result))
-                                     source ln cl
-                                     (token-entry-start-pos item) 1)
-                           (cdr result))))]
             ;; Regular token
             [else
              (loop (+ i 1) (cons (token-entry->stx item source source-str) result))])]

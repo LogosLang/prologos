@@ -1066,6 +1066,21 @@
      (let ([name (string->symbol (substring str 0 i))]
            [k (substring str (add1 i))])
        (cond
+         ;; ⚠ D4.P4e-0 — DEFERRED 90, AND THE PLACE THE FIRST FIX GOT WRONG.
+         ;; This test MUST precede every arm below. Shipped once BELOW them, it
+         ;; refused only the three plain-`^` spellings while the `^-`
+         ;; collapse-rename arm returned first and took its target verbatim —
+         ;; so `x{k^-a*}`, `x{k^-_*}`, `x{k^-*}`, `x{k^-a*b}`, `x{k^-*a}` and
+         ;; `x{k^-a**}` all DEFINED starred fields at ZERO errors, one of them
+         ;; a field literally named `*`. The entry said "filed as one member;
+         ;; it is three" — it is any `^`-continuation containing a star, and
+         ;; the fix that under-counted it was the fix for an under-count.
+         ;; Q_U29: a star in a lexeme is the OPERATOR or it is nothing, so a
+         ;; label bearing one is not a label. Hoisting is the whole repair —
+         ;; the same twin-drift class `pipeline.md` names, committed inside a
+         ;; patch written to close it.
+         [(regexp-match? #rx"[*]" k)
+          (values #f (format "`~a` — a rename target may not contain `*`; `*` is the layer-delete operator, and a segment carries at most one operator suffix" str))]
          [(string=? k "")   (values name 'dissolve)]
          [(string=? k "_")  (values name 'synth)]
          [(string=? k "-")  (values name 'collapse)]
@@ -1086,23 +1101,6 @@
           (values #f (format "`~a` — a rename target is a bare label, not a keyword (write `^~a`)" str (substring k 1)))]
          [(char<=? #\0 (string-ref k 0) #\9)
           (values #f (format "`~a` — a rename target may not begin with a digit (`.N` is ordinal access; the renamed field would be unreachable)" str))]
-         ;; ⚠ D4.P4e-0 — DEFERRED 90. The rename CATCH-ALL below accepts any
-         ;; continuation, so every operator character rode through as label
-         ;; text: measured at HEAD, `x{k^_*}` defined a field named `_*`,
-         ;; `x{k^a*}` one named `a*`, and bare `x{k^*}` one named `*` — all at
-         ;; ZERO errors. Filed as one member; it is three.
-         ;;
-         ;; Q_U29 decides it: a star in a lexeme is the OPERATOR or it is
-         ;; nothing, and a label bearing a star is not a label. Refusing here
-         ;; also discharges this entry's PRECEDENCE requirement in the other
-         ;; direction — `k*^a` is caught by `split-step`'s plain-name check,
-         ;; because a splat has no single output key to re-key (the same reason
-         ;; the landed dot-band `^` refusal gives). So a segment lexeme carries
-         ;; AT MOST ONE operator suffix, which falls out of existing rulings
-         ;; rather than needing a third. Monotone: each refusal may become a
-         ;; meaning later, never the reverse.
-         [(regexp-match? #rx"[*]" k)
-          (values #f (format "`~a` — a rename target may not contain `*`; `*` is the layer-delete operator, and a segment carries at most one operator suffix" str))]
          [else (values name (cons 'rename (string->symbol k)))]))]))
 
 ;; D4.P4e-0 (Q_U27 / Q_U29) — THE STAR SPLITTER: the IDENTIFIER half of the
@@ -1357,12 +1355,6 @@
             [(re-key-sym? it)
              (split-step it (lambda (step)
                               (loop (cdr items) (list step) #f (closed-acc))))]
-            ;; ---- D4.P4e-0: the star family, BOTH sources ----
-            ;; (a) the grouper's sentinel — every NON-identifier head. The mint
-            ;;     is count-changing, so the starred item is WRAPPED, not a
-            ;;     sibling: `m{0*}` → `($select-brace ($star-step 0))`.
-            [(eq? (head-of it) '$star-step)
-             (fail (star-not-yet-message "*"))]
             ;; (b) the fused identifier band — `database*`, `database*_`, and
             ;;     the Q_U29 mid-star error. `split-star-lexeme` distinguishes.
             [(star-sym? it)
@@ -1650,22 +1642,6 @@
     ;; siblings above: a user-written zero-arg head must not raise here.
     [(and (symbol? head) (eq? head '$bcast-step))
      (retired-selection-error 'bcast-step (and (pair? args) (stx->datum (car args))) loc)]
-
-    ;; D4.P4e-0 (Q_U27) — a `$star-step` in EXPRESSION position. Same duty as
-    ;; the `$bcast-step` arm above and the same `(pair? args)` guard, for the
-    ;; same reason: a user-written zero-arg head must not raise here.
-    ;; ⚠ This arm is the BACKSTOP, not the fix. The fix is `access-sentinel?`
-    ;; in macros.rkt, which folds the sentinel onto its subject so it never
-    ;; reaches expression position at all. Both, because a sentinel that CAN
-    ;; leak should report itself rather than surface as `Unbound variable
-    ;; $star-step` — which is what it did before either landed.
-    [(and (symbol? head) (eq? head '$star-step))
-     (parse-error loc
-                  (string-append
-                   "`*` (flatten) is not implemented yet — it appeared here"
-                   " without a selection to attach to. Spell the flatten"
-                   " separately for now")
-                  #f)]
 
     ;; CIU T6 D4.P1b-ii — `.{ }` NOT-YET (as distinct from the RETIRED sentinels
     ;; above). P1b-ii makes the mid-path sub-block LEX and GROUP; its semantics

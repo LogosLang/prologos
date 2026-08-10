@@ -5854,49 +5854,14 @@
 (define (p4e0-has? out rx)
   (ormap (lambda (s) (regexp-match? rx s)) out))
 
-;; ---- A. the adjacency mint: NON-identifier heads (datum layer) ----
-
-(test-case "P4e-0 A1: a glued `*` after an ORDINAL mints; the SPACED twin does not"
-  ;; The discrimination that does not exist at HEAD. If these two ever produce
-  ;; the same datum again, the ordinal splat is unspellable and Q_U23's
-  ;; sort-generic rule has a hole in it.
-  (check-equal? (read-all-forms-string "m{0*}")
-                '((m ($select-brace ($star-step 0))))
-                "glued star after an ordinal must MINT (count-changing: 2 items -> 1)")
-  (check-equal? (read-all-forms-string "m{0 *}")
-                '((m ($select-brace 0 *)))
-                "SPACED star must stay two items — this is the must-not-change twin"))
-
-(test-case "P4e-0 A2: a glued `*` after a CLOSER mints (the brace/bracket/paren family)"
-  (check-equal? (read-all-forms-string "x{a}*")
-                '((x ($star-step ($select-brace a))))
-                "glued star after `}` must wrap the preceding group")
-  (check-equal? (read-all-forms-string "xs:{a}*")
-                '((xs ($star-step ($bcast-step ($select-brace a)))))
-                "glued star after an omega sub-block must wrap the whole bcast step"))
-
-(test-case "P4e-0 A3: the mint is TYPE-BLIND — it rides `adjacent-to-base?`, not an enumerated list"
-  ;; The named drift risk (D4 §5.P4e-0 mini-design): enumerating carriers.
-  ;; A bracket closer is not a brace closer and was never enumerated anywhere.
-  ;;
-  ;; ⚠ THE SHAPE HERE IS ONE LEVEL FLATTER THAN ITS SIBLINGS, and that is the
-  ;; mint being count-changing, not a bug. `x{a}*` leaves TWO items (`x` and the
-  ;; wrapped group) so the form is `(x ($star-step …))`; `[f x]*` leaves ONE, so
-  ;; the form IS the node. The first draft of this pin asserted the extra layer
-  ;; and failed — the CODE was right and the EXPECTATION was wrong.
-  (check-equal? (read-all-forms-string "[f x]*")
-                '(($star-step (f x)))
-                "a bracket closer must join the focus set FREE, with no arm of its own")
-  ;; …and because a single-item form is datum-indistinguishable from an
-  ;; application of `$star-step`, the fold cannot fire on it. That is precisely
-  ;; what the parser BACKSTOP arm is for: it must be a guided per-command error,
-  ;; never `Unbound variable $star-step`.
-  (define out (map (lambda (r) (format "~a" r))
-                   (process-string-ws "ns p4e0a3\ndef f := [fn [x : Int] x]\ndef q := [f 1]*\ndef after := 42")))
-  (check-true (ormap (lambda (s) (regexp-match? #rx"not implemented yet" s)) out)
-              (format "the backstop must give a guided error: ~a" out))
-  (check-false (ormap (lambda (s) (regexp-match? #rx"Unbound variable \\$star-step" s)) out)
-               (format "the sentinel must never leak to expression position: ~a" out)))
+;; ---- A. THE MINT IS REVERTED (D4.P4e-0 re-cut, 2026-08-09) ----
+;; The adjacency mint that made `m{0*}` / `x{a}*` / `[f x]*` spellable is GONE.
+;; It was count-changing at the READER, which silently shortened preparse forms
+;; (a `bundle` body went from a guided error to accepting garbage) and broke the
+;; glued Sigma spelling `<(x : Nat)* Nat>`. What remains below is the IDENTIFIER
+;; band, which never needed a mint: `ident-continue?` admits `*`, so
+;; `database*` / `:tags*` / `c*d` arrive as ONE token and the parser splits them.
+;; The non-identifier carriers are a FILED GAP, not a silent one — DEFERRED 101.
 
 ;; ---- B. the splitter: IDENTIFIER heads ----
 
