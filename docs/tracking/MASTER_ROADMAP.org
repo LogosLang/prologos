@@ -762,6 +762,33 @@ was fixed, and a double-spend at the exporter that was NOT. Backlog:
 Language/tooling traps found on the way are pitfalls #52–#57 in
 [[file:2026-04-27_GOBLIN_PITFALLS.md][Goblin Pitfalls]].
 
+** The OCapN branch is now mostly COMPILER work (2026-08-05)
+
+The branch behind PR #28 opened as the OCapN port and is no longer mostly that.
+Running a real protocol through the compiler kept surfacing compiler defects,
+and fixing them became a second body of work: of **280 changed files, 184 are
+core**, and of 492 non-merge commits, ~185 change core code (the April/May
+"core-touching" ones are mostly OCapN phases that grazed =driver.rkt=; the
+month histogram is 13 / 50 / 59 / **252**).
+
+Split out, themed, with complexity ratings and commit hashes:
+[[file:2026-08-05_2030_CORE_CHANGES_VS_MAIN.md][Core changes vs main]]. **Read
+that before reviewing the compiler side of PR #28.** Headlines: whole-file
+aborts on the parse path (marker-seat pattern, ~11 commits); silent wrong
+answers (~13, incl. an unsound =occurs?= and a recursive process typed as
+terminating); performance (capability-inference memo **402 s → 57 s**;
+=looseBVarRange= on =subst= **40.8×**); ~28 diagnostics; schema/=validate=
+runtime descent; =.pnet= cache correctness; and the cell-merge lattice contract
+— a merge documented as idempotent and not checked, which hung the type-checker
+for fourteen months (=5a684215=), with a contract test that then found two more
+merges on its first run (=94e6330d=).
+
+Four questions gate the largest remaining share and are the OWNER'S:
+[[file:2026-08-05_1751_FOUR_OPEN_OWNER_RULINGS.md][Four open owner rulings]] —
+each with what is already probed and true, the options and their costs, and what
+the ruling unblocks. Also linked from =DEFERRED.md='s header, which had its
+first staleness sweep in four months at the same time (107 → 71 active entries).
+
 ** Outstanding work on the OCapN branch (PRE-DATES the above; rows 54–57 are stale)
 
 The OCapN branch (~claude/ocapn-prologos-implementation-auLxZ~) ships

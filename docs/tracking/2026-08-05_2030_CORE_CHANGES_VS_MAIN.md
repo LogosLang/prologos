@@ -41,10 +41,11 @@ where the real core work is:
 | 2026-07 | 59 | OCapN interop endgame + three compiler perf fixes + CI repair |
 | 2026-08 | **252** | almost entirely compiler work |
 
-**Verification state**: suite **558 files / 10 867 tests green** after merging
-115 upstream commits (2026-08-05). This branch alone before that merge was
-551 / 10 674. `main`'s tree carries 493 test files; this branch carries 566
-(+73, of which 38 are OCapN → **+35 core test files**), plus 51 modified.
+**Verification state**: suite **560 files / 10 917 tests green** at `368ddcd2`.
+(It was 558 / 10 867 immediately after merging 115 upstream commits earlier the
+same day; 551 / 10 674 on this branch alone before that merge.) `main`'s tree
+carries 493 test files; this branch carries 566 (+73, of which 38 are OCapN →
+**+35 core test files**), plus 51 modified.
 
 ---
 
@@ -212,7 +213,58 @@ module body.
 
 ---
 
-## 7. New capability — **M–L**
+## 7. The cell-merge lattice contract — **S** to fix, and the largest single find
+
+Added after the first draft of this document, and it belongs near the top on
+value even though it is bottom of the list on line count.
+
+**`5a684215` — the union-type type-checker hang.** Filed for over a year as
+*"the `:type`-facet union join not reaching a fixpoint"*. That framing names the
+**join**, and the join was innocent. The defect was one layer down, in the
+**carrier**: `tagged-cell-merge` unions two lists of tagged entries with a bare
+`append`, so `merge(x, x)` returns twice x's entries. The lattice *value* is
+stable; the *representation* grows on every write. Change-detection compares
+representations, so every round sees a change, dependents re-fire, and the
+network never quiesces.
+
+It is a **hang**, not a wrong answer — no bad value to inspect, no assertion, no
+error to grep — and it accelerates, because each round's representation is
+bigger than the last. It also took the LSP down alongside the type-checker. The
+fix is 8 lines in the cell. It had been live for fourteen months.
+
+**`94e6330d` — the contract test, which found two more on its first run.**
+`tests/test-merge-laws.rkt` checks every registered merge (13 today) for
+idempotence unconditionally, with commutativity/associativity opt-in per merge
+because several here are deliberately last-write-wins. It immediately found
+`nogood-merge` (a live cell merge in `atms.rkt`, same shape, same latent hang)
+and `merge-hasheq-list-append`. Fourteen months of reading the code had not.
+
+**`45616b4d` → `5207ddc3` → `65e89d2b` — the third one dissolved.** Probing
+`merge-hasheq-list-append`'s three cells showed they are **write-only**: nothing
+reads them, so the merge question was moot and the cells were retired instead of
+fixed. The middle commit is a failed first attempt whose scope was wrong and
+which the suite caught; it is in the history deliberately.
+
+**`e8ecec93` — the fuel bound was switched off exactly when speculation was on.**
+Found while asking whether fuel could have bounded the hang. It could not — fuel
+is a *fire-count* budget and cannot bound the cost of one fire — but the probe
+turned up that its `on-write-check` was unreachable under speculation anyway:
+the hot fast path is gated on `(not under-speculation?)` and the slow path never
+consulted it.
+
+**`259e04ca`** is worth reading as method: I had assumed a retry loop was
+responsible and a ten-minute probe said it is one fire. The guess is recorded
+next to the measurement that killed it.
+
+The ambient lesson is now in `.claude/rules/on-network.md` § *CHECK idempotence
+— do not document it*, with the full record in `DEVELOPMENT_LESSONS.org`. The
+short form: all three instances carried a comment asserting the property they
+violated, and a comment asserting an algebraic law is worth less than no comment
+because it stops the next reader from checking.
+
+---
+
+## 8. New capability — **M–L**
 
 | what | size | commits |
 |---|---|---|
@@ -229,7 +281,7 @@ module body.
 
 ---
 
-## 8. Guards and tooling — **M**, and the theme is *guards that had rusted*
+## 9. Guards and tooling — **M**, and the theme is *guards that had rusted*
 
 | commit | |
 |---|---|
@@ -289,8 +341,17 @@ code, and should be read as **S** despite the line count.
 
 ## Provenance
 
-Every claim in this document is derived from `git` on the branch at
-`c34eb349`, not from memory. The commit-to-theme mapping was produced
-mechanically and then hand-corrected; the April/May "core-touching" commits are
-mostly OCapN phases and are excluded from the themed sections above even though
-they appear in the 374 count.
+Every claim in this document is derived from `git` on the branch, not from
+memory. First written at `c34eb349`; **refreshed at `368ddcd2`**, which added
+§7 (the cell-merge lattice contract) and moved the suite figure to 560 / 10 917.
+The commit-to-theme mapping was produced mechanically and then hand-corrected;
+the April/May "core-touching" commits are mostly OCapN phases and are excluded
+from the themed sections above even though they appear in the 374 count.
+
+Not themed above, because they are small and self-describing: `91362074` gives
+the POL syntax cluster Level-3 (`.prologos` file) coverage of its own;
+`585201ac` puts a gate on the last structural residue rather than redesigning
+it; `c785df1b` re-probed a held-back residue, found it a duplicate, corrected
+and archived it; `368ddcd2` makes a union value say why you cannot look inside
+it; `7fc8293c` cleans comment drift left by my own retirement and moves the
+warning to the source.

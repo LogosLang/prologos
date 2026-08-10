@@ -40,6 +40,26 @@ When encountering off-network state, ask:
 
 Every cell value must be a lattice element with a monotone merge. If you can't define a merge function, the value doesn't belong on the network yet — but that's a design signal, not a permanent excuse. Find the lattice.
 
+### ⚠ CHECK idempotence — do not document it (promoted 2026-08-05, 3 instances)
+
+`merge(x, x)` must equal `x`. This obligation was written in three ambient rule files and **enforced in none**, and the gap cost fourteen months.
+
+**The failure shape**: a merge that unions two collections with a bare `append`. `(merge x x)` returns twice x's elements, so the cell's lattice VALUE is stable while its REPRESENTATION grows on every write. Change-detection sees a change every round, dependents re-fire, and the network **never quiesces** — a HANG, not a wrong answer. Read cost grows with the representation too, so it accelerates.
+
+**Why it hides**: the merge's own comment usually asserts the property it violates. All three in-tree instances did — *"functionally equivalent to set-union for unique nogoods"*, *"the lattice is P(P(AssumptionId)) under set-union"*. The parenthetical does the work and nothing checks it.
+
+| instance | found by | consequence |
+|---|---|---|
+| `tagged-cell-merge` / `make-tagged-merge` | a 14-month hunt, at the wrong layer | union-type type-checker hang; also took the LSP down |
+| `nogood-merge` | `tests/test-merge-laws.rkt`, **first run** | live cell merge (`atms.rkt`), same latent hazard |
+| `merge-hasheq-list-append` | same run | its 3 cells turned out write-only; retired instead |
+
+**Do this**: add every new cell merge to the `MERGES` table in `tests/test-merge-laws.rkt` (13 registered today). One `(E "name" fn samples)` row. Idempotence is checked unconditionally; `#:laws '(commutative associative)` is opt-IN, because several merges here are deliberately last-write-wins (`merge-hasheq-replace`). Pass an `equiv` when the carrier's representation is looser than its lattice value — a set carried as a list has an order set-union never claimed. A merge that is knowingly NOT a join (`merge-list-dedup-append`) is registered anyway and pinned as a known non-lattice, so the distinction stays visible instead of being omitted.
+
+**Debug rule**: a propagator network that will not quiesce is a merge that is not idempotent **until proven otherwise**. Check the carrier before the join. The union-type hang was filed as *"the `:type`-facet union join not reaching a fixpoint"* and the join was innocent — that framing sent it at the type-lattice/quantale work for over a year, and the fix was 8 lines in the cell.
+
+**Fuel will not save you**: fuel is a FIRE-COUNT budget, decremented per propagator fired. It cannot bound the cost of ONE fire, so a single fire merging an unbounded value runs forever with fuel to spare. (Its `on-write-check` was also unreachable under speculation until 2026-08-05 — the hot fast path is gated on `(not under-speculation?)` and the slow path never consulted it.)
+
 ## Topology Requests for Dynamic Registration
 
 When a propagator discovers it needs infrastructure that doesn't exist yet (e.g., a table cell for an unregistered relation), it emits a topology request. The topology stratum (between BSP rounds) processes the request, allocates cells, updates registries. This is the CALM-safe protocol for structural mutation.
