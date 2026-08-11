@@ -2193,7 +2193,36 @@ items of the hold-point, ruled before P4a opened:
   knowable in advance); make `$postfix-star` a head-set member (O7 — its
   membership is conditional, and `access-sentinel?` requires `(list? x)` so a
   bare atom can never satisfy it anyway).
-  **Next free Q-label: U37.**
+
+- <a id="q-u37"></a>**⭐⭐ Q_U37 — THE STAR'S REFUSAL IS DECIDED IN TERRITORY,
+  NOT AT PREPARSE-EVERYWHERE [owner, 2026-08-11 — assent to the recommended
+  course after the 1a-iii verify].** The fold fuses ONLY in selection territory
+  ([Q_U36](#q-u36)'s positive predecessor test) and otherwise **LEAVES THE STAR
+  IN PLACE** for the downstream seat that owns the territory:
+  · **expression territory** → `parse-datum`'s guided [Q_U35](#q-u35) refusal
+    (the single choke point every head-dispatched arm misses);
+  · **type territory** (`<…>`, incl. preparse-synthesized `$angle-type`) →
+    `unwrap-angle-type`'s [Q_U31](#q-u31) Sigma-specific refusal;
+  · **data territory** (quasiquote) → NOTHING is rewritten; the star is captured
+    as the `*` the user wrote (the lowering normalizes the sentinel back).
+  **WHY IT IS A RULING**: it is [Q_U34](#q-u34)'s own logic extended one layer in
+  — `.( … )` is arithmetic territory, so no mint inside mixfix; `<…>` is where
+  `*` is Sigma's SEPARATOR; a quasiquote body is data. The 1a-iii attempt's
+  refusal-at-preparse marker assumed every star was the fold's business, and the
+  adversarial verify measured the two consequences at once: the marker PRE-EMPTED
+  the Sigma seat (its guided refusal shipped unreachable — Q_U31's message never
+  fired) and it put a three-element list where the quasiquote lowering expects a
+  symbol. One wrong assumption, two symptoms; two patches would have been two
+  workarounds.
+  **NAMED COST, accepted eyes-open**: slice 1a-i's preparse datum invariant ("no
+  unconsumed star survives preparse") is RESTATED — preparse genuinely cannot
+  decide every case, because the context that decides lives downstream. The gate
+  becomes: *an unconsumed star is refused (or captured as data) by the seat that
+  owns its territory, and the internal name never reaches the user* — enforced by
+  the E2E message/abort/leak pins plus per-seat positive pins, not by a blanket
+  preparse scan. Narrowing an instrument to fit code is the move this arc warns
+  against; the narrowing here is to the semantic claim, and the claim was wrong.
+  **Next free Q-label: U38.**
 
 - <a id="star-census"></a>**⭐ THE STAR-SURFACE CENSUS IS THE DESIGN'S INPUT
   [owner-commissioned, 2026-08-09].** After two failed attempts, the owner ruled
@@ -2228,7 +2257,7 @@ items of the hold-point, ruled before P4a opened:
   Until then they existed ONLY in a session transcript, which is not durable
   storage — and the owner's ruling is that attempt 3 opens from the MEASURED MAP,
   which cannot be honoured against an unreadable artifact.
-  (Q-label register: see [Q_U36](#q-u36), the latest ruling — **next free U37**.)
+  (Q-label register: see [Q_U37](#q-u37), the latest ruling — **next free U38**.)
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
@@ -8026,6 +8055,34 @@ first and every verify round then found a defect in the previous round's FIX:
      a new diagnostic. Its own comment already says so: *"Giving them this same
      message is P4e-1's first deliverable; until it lands, do not read this
      comment as a contract."*
+
+   **⛔ ATTEMPT 1 (2026-08-11) — BUILT, VERIFIED, REVERTED; patch parked at the
+   session scratchpad (`slice-1a-iii.patch`), findings recorded here, ruling
+   [Q_U37](#q-u37).** The build was CLOSE and most of it survives into attempt 2:
+   the rename, the gate disjunct, the Q_U36 fuse, both Q_U31 family edits and the
+   parked-test uncomment were all correct in content. What was wrong was WHERE
+   one decision was made — the fold emitted Q_U35's refusal as a
+   `($retired-selection star-no-selection)` marker at preparse, EVERYWHERE.
+   The adversarial verify measured the two consequences of that one assumption:
+   1. **The marker PRE-EMPTED the Sigma seat.** Inside `$angle-type` contents the
+      star was rewritten before `unwrap-angle-type` could see it, so the Q_U31
+      Sigma refusal this slice added **shipped unreachable** — its guided message
+      never fired, the generic Q_U35 text fired instead. A refusal written and
+      landed, and structurally dead on arrival.
+   2. **The marker broke the quasiquote lowering** — a three-element list where a
+      symbol was expected, in data territory where nothing should be rewritten.
+   Plus four smaller: the `xs[0]*` matrix-row comment contradicts the positive
+   list (bracket-postfix is NOT on the carrier per §2.4, so the refusal is
+   correct-for-now — fix the COMMENT) · the backstop's message text was a
+   verbatim duplicate of the marker's · the fold's fixpoint comment no longer
+   covered the widened gate · prose in a code slot.
+   **MEASURED WINS TO RE-EARN in attempt 2** (they were real, and the abort pin
+   is where they show): the fuse retired the two `match-scrut` aborts for the
+   usable carriers (21 → 19), and the preparse marker retired six `pattern-pos`
+   aborts (19 → 13). Attempt 2 keeps the first (the fuse stays) and gives back
+   the second (the marker goes) — the six `pattern-pos` cells return to
+   DEFERRED 108's pre-existing residue, which is honest: they were shielded by
+   the wrong mechanism, not fixed.
 
 **Scope OUT, with reasons** — [Q_U23](#q-u23)'s Map/strict-merge ruling (this
 slice ships the *not-yet message*, never the flatten, so the semantics are not
