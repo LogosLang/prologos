@@ -34,7 +34,7 @@ rulings, censuses and test delta live in its own section.
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
 | **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [§5.P4c](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([inverted default](#p4c-2-inverted)) · [P4c-3](#p4c-3) ✅ `d477772c` · [P4c-4a](#p4c-4a) ✅ `f31237fd` · [P4c-4b](#p4c-4b) ✅ `6b22515d` (end to end) · **[P4c-4c](#p4c-4c-close) ✅ `ae26f540`** — broadcast is REACHABLE: PVec ω value semantics + **G2** + the preparse seam guard. ⭐ The verify caught a BLOCKING whole-file abort every gate was blind to; owner ruled the structural fix ([close](#p4c-4c-close)) · [Q_U18](#q-u18) ✅ · DEFERRED 43 ✅ · 48 RULED uniform · P4c-5 ⬜ |
 | **P4d** | **The carriers** — Map/keyword-row · het tuple · PVec-of-union · closed-schema subjects · the Q_U9 refusal's message split · corpus re-fate · **Q_U19 ✅ RULED (A)** | ✅ | [§5.P4d](#p4d) · slices **0 ✅ 1 ✅ 2 ✅ 3 ✅ 4a ✅ 4a' ✅ 4b ✅ 4c ✅ 4d-1 ✅ 4d-2 ✅ 5 ✅ 6 ✅** — broadcast is LIVE over PVec · Map · keyword-row · het tuple · union · closed schema. ⭐ The CLOSE's own audit found a whole-file abort in slice 3's code (slice 5) and Q1 re-opened as a live defect (slice 6). All THREE owner questions discharged: Q1 ruled+implemented · [Q2](#q-u22) answered (fix → DEFERRED 88) · Q3 answered (broadcast → 58 re-scoped; contract → 89) |
-| **P4e** | **The `*` family · disclose `<`/`:<` · branch-initial `:`** — ⭐ **`*` is SORT-GENERIC** (deletes the layer the preceding step created: `:diags*` mapcat, `database*` splat). `.*` retires as row-splat and rebinds to **ravel**; `*_` adds provenance keys; branch-initial `:` admits the **ordinal² transpose** | 🔄 | [§5.P4e](#p4e) · RE-SCOPED 2026-08-08 ([Q_U23](#q-u23)–[Q_U29](#q-u29)) · ⛔ attempt 1 REVERTED `d0ac2a58` ([DEFERRED 101](DEFERRED.md)); attempt 3 opens from [the census](#star-census) ([Q_U30](#q-u30)/[Q_U31](#q-u31), prereq [102](DEFERRED.md) ✅ `41458174`) · PREP ✅ `f63612e7`+`ae67419f` ([Q_U32](#q-u32)) · **slice A SHIPPED** `e7a49228`, **slice B REVERTED** `0e007864`: [§5.P4e-0-a3](#p4e-0-a3) · ⭐ **P4e-1a ✅ COMPLETE** `9cac0099` — the mint has its CONSUMER. [Q_U36](#q-u36) positive-list fuse + [Q_U37](#q-u37) territory-scoped refusal; 3 slices (attempt 1 of the last REVERTED); suite 10143/488/0, battery 476: [§5.P4e-1a](#p4e-1a) |
+| **P4e** | **The `*` family · disclose `<`/`:<` · branch-initial `:`** — ⭐ **`*` is SORT-GENERIC** (deletes the layer the preceding step created: `:diags*` mapcat, `database*` splat). `.*` retires as row-splat and rebinds to **ravel**; `*_` adds provenance keys; branch-initial `:` admits the **ordinal² transpose** | 🔄 | [§5.P4e](#p4e) · RE-SCOPED 2026-08-08 ([Q_U23](#q-u23)–[Q_U29](#q-u29)) · ⛔ attempt 1 REVERTED `d0ac2a58` ([DEFERRED 101](DEFERRED.md)); attempt 3 opens from [the census](#star-census) ([Q_U30](#q-u30)/[Q_U31](#q-u31), prereq [102](DEFERRED.md) ✅ `41458174`) · PREP ✅ `f63612e7`+`ae67419f` ([Q_U32](#q-u32)) · **slice A SHIPPED** `e7a49228`, **slice B REVERTED** `0e007864`: [§5.P4e-0-a3](#p4e-0-a3) · ⭐ **P4e-1a ✅ COMPLETE** `9cac0099` — the mint has its CONSUMER. [Q_U36](#q-u36) positive-list fuse + [Q_U37](#q-u37) territory-scoped refusal; 3 slices (attempt 1 of the last REVERTED); suite 10143/488/0, battery 476: [§5.P4e-1a](#p4e-1a) · **P4e-1b 🔄 mini-audit DONE** (`wf_4b91ca25-73a`) — [Q_U38](#q-u38) collision REFUSED (conservative on the `'dyn` tail; the gate moves to typing) + [Q_U39](#q-u39) closer-adjacent `*_` mint SPLIT OUT; ω placement OPEN: [§5.P4e-1b](#p4e-1b) |
 | **P4c-5** | **The `.*name` retirement + FULL residue disposal** — the last P4c residue, sequenced AFTER P4e | ⬜ | [§5.P4c-5](#p4c-5) · ⚠ **row ADDED at the P4d close 2026-08-08** — previously visible only as a `P4c-5 ⬜` fragment inside P4c's Notes cell |
 | **PF** | **Path first-classness** (substrate; **P5's prerequisite**) — ⭐ **Q_U17 RULED B2**: a Path segment is a first-class `Step` value. Reify the closed six-kind union as a `data Step` ADT on the `Datum` pattern; `Path` stays GROUND; `segments : Path -> [List Step]`. Repairs the dead `path-segments` in the SAME change | ⬜ | [§5.PF](#pf) · [Q_U17](#q-u17) · panel `wf_68178bd3-eea` |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery · ⚠ B3 needs [PF](#pf) |
@@ -2222,7 +2222,101 @@ items of the hold-point, ruled before P4a opened:
   the E2E message/abort/leak pins plus per-seat positive pins, not by a blanket
   preparse scan. Narrowing an instrument to fit code is the move this arc warns
   against; the narrowing here is to the semantic claim, and the claim was wrong.
-  **Next free Q-label: U38.**
+
+- <a id="q-u38"></a>**⭐⭐ Q_U38 — A NOMINAL-JOIN COLLISION IS REFUSED, AND
+  CONSERVATIVELY ON THE `'dyn` TAIL [owner, 2026-08-11 — "Refuse, and
+  conservatively on the dyn tail"].** A `*` whose lifted keys would collide —
+  with a sibling branch's written key, or with another splat's lifted key — is a
+  guided error, not a silent merge. Where the subject's row is CLOSED the
+  collision is provable and refused on proof; where the row is `'dyn`-tailed the
+  lifted key set is only a LOWER BOUND, and the refusal fires on POSSIBILITY.
+  **WHAT THIS OVERTURNS**: [Q_U23](#q-u23)'s "P4e needs no P5 machinery for it,
+  because P3a already landed strict merge" — **REFUTED, and by twice as much as
+  the refutation first written**. There are **TWO** silent last-write-wins sites,
+  not one: `make-record` (syntax.rkt, `;; last write wins`) is the TYPE-level
+  constructor and IS on the select path via `select-assemble-row`
+  (typing-core.rkt), and its VALUE twin `entries->value` (reduction.rkt) folds
+  `champ-insert`, which also overwrites. The design named one and stopped.
+  **WHY THE LANDED GATE CANNOT DO IT — the mechanical root**:
+  `select-branch-top-keys` (syntax.rkt) takes **exactly one parameter**, the
+  branch's step list. No ctx, no type, no subject. `dup-output-key` and
+  `mixed-sorts?` (parser.rkt) are pure static folds over it, so **no arm added
+  there can express a subject-derived key**. The check therefore MOVES to typing,
+  at the row-assembly seat, which is the first place a closed row's fields are
+  visible. ⚠ `mixed-sorts?` is the more dangerous of the two blind gates — it
+  runs one line BEFORE `dup-output-key` and is the sole guarantor of an invariant
+  both assembly points consume by inspecting their FIRST component only, so its
+  residue is a silently WRONG CARRIER for the level, not an error.
+  **THE ENTAILMENT, accepted eyes-open**: on an open-tailed subject, `*` plus ANY
+  sibling branch is refused; a star as the SOLE branch has nothing to collide
+  with and stays legal.
+  **⚠ A THIRD FACT NO FACET FOUND, and it constrains how the rule may be
+  PHRASED**: the two layers disagree about field ORDER. `make-record`
+  CANONICALIZES (sorts by label after deduping); `entries->value` does NOT (the
+  champ carries insertion order). Measured at HEAD: value `{:url "u",
+  :pool-size 10}` against type `{:pool-size Int :url String}` from one
+  expression. So a rule phrased as *"the later one wins"* is well-defined only
+  against the ENTRIES list and never against the printed row — which is one more
+  reason the answer is refusal rather than a merge. Any test pinning splat output
+  must pin value order and type order SEPARATELY.
+  **CALIBRATION, stated because it is the honest cost**: "strict merge" is a
+  SELECT-SURFACE-ONLY policy. Map literals have no duplicate gate (`{:a 1 :a 2}`
+  → `{:a 2}`, 0 errors), `map-merge` is documented right-wins, `record-extend` is
+  explicitly right-priority. This ruling makes selection stricter than every
+  surface beside it. Accepted: the star is a STRUCTURAL operator and a silently
+  dropped layer is the failure this whole arc exists to avoid.
+  **The remedy the refusal names is [Q_U24](#q-u24)'s `*_`** — see
+  [Q_U39](#q-u39) for where it is spellable. ⚠ `*_` removes collisions in the
+  ORDINARY case, **not universally** — a sibling literally named `database-url`
+  still collides, and two layers can synthesize the same key (`{:a-b {:c 1} :a
+  {:b-c 1}}` → both `a-b*_` and `a*_` yield `:a-b-c`). The refusal machinery
+  covers `*_` too; it just fires rarely there instead of nearly always.
+  **Substrate note**: a defined-collision primitive already exists and is unused
+  — `champ-insert-join` (champ.rkt) takes a `join-fn`, **zero production
+  callers**. It has NO type-layer twin (`make-record` has three parameters and no
+  join), so a merge ruling would have needed new type-side substrate either way.
+  ⚠ Prior ruling that already conceded the premise: the parser refuses `*` with
+  `^` because *"a splat lifts N keys, so there is no single output key for `^` to
+  re-key"* (parser.rkt) — the cont axis is already closed to `*`.
+
+- <a id="q-u39"></a>**⭐ Q_U39 — THE CLOSER-ADJACENT `*_` MINT IS A FOLLOW-ON
+  SLICE, NOT PART OF THE SEMANTICS SLICE [owner, 2026-08-11 — "Split it into a
+  follow-on slice makes sense to me"].** P4e-1b lands the flatten, [Q_U38](#q-u38)'s
+  refusal, and `*_` **in the fused-identifier band only** — which costs nothing
+  lexically, because it already works there. Giving `c{a}*_` / `xs:{a}*_` a
+  spelling is its own slice, with its own adversarial verify.
+  **THE MEASURED ASYMMETRY** (all at HEAD, one probe): `cfg{database*_}`,
+  `cfg.database*_` and `rows:tags*_` all reach the guided message and are
+  DISTINGUISHED from their bare-`*` twins (`split-star-lexeme` already returns
+  `'flatten-synth`). `cfg{database}*_` and `rows:{tags}*_` give a bare
+  **`Unbound variable`** — the mint gate is `(string=? lexeme "*")`, EXACT
+  equality (parse-reader.rkt), so `*_` after a closer lexes as an ordinary
+  identifier. ⚠ The diagnostic does not even name `*_`; same wording defect as
+  `values.*`.
+  **WHY SPLIT RATHER THAN WIDEN**: `$postfix-star` is deliberately a BARE ATOM,
+  and that choice is what made 1a-ii's Tier-O arms TWO LINES instead of a
+  checklist. Adding `*_` means a second bare sentinel or a payload — and a
+  payload re-opens the arity/head-set questions 1a settled. Either way it re-runs
+  `pipeline.md` § "a new sentinel, an old recognizer" (leak gate · fuse arm ·
+  `unmint-star-for-echo` · `pattern-var?` · `parse-datum` · `unwrap-angle-type`)
+  **one slice after we last ran it** — the mid-flight widening *Watching 9*
+  records as where this arc introduces its defects (3 data points).
+  **THE COST, named**: for one slice the two result-level carriers get a refusal
+  that must teach a REWRITE into the other band (`m{a b}*` → `m{a*_ b*_}`), not a
+  one-character suffix fix — a wart the user meets exactly when already stuck,
+  and a partial departure from Q_U24's "land together" rationale. Monotone, so
+  the spelling can be added at any time.
+  **⚠ SELF-CORRECTION, recorded because it nearly priced the decision wrong**: I
+  first told the owner that widening the mint "costs a monotonicity break." **Too
+  strong.** `c{a}*_` is an ERROR today (`Unbound variable`) unless the user has
+  deliberately written `def *_ := …` — which does work (measured: `*_ : Int
+  defined.`). So widening is **error → meaning** in every practical case, i.e.
+  monotone; the non-monotone sliver is only the deliberately-bound case, and it
+  is the SAME trade [Q_U33](#q-u33) already accepted for bare `*`, where the cost
+  was strictly HIGHER (`*` is a live first-class operator with ~76 spaced
+  arithmetic sites). The overstatement made `*_` look more expensive than it is,
+  at the exact moment `*_` was the remedy under discussion.
+  **Next free Q-label: U40.**
 
 - <a id="star-census"></a>**⭐ THE STAR-SURFACE CENSUS IS THE DESIGN'S INPUT
   [owner-commissioned, 2026-08-09].** After two failed attempts, the owner ruled
@@ -2257,7 +2351,7 @@ items of the hold-point, ruled before P4a opened:
   Until then they existed ONLY in a session transcript, which is not durable
   storage — and the owner's ruling is that attempt 3 opens from the MEASURED MAP,
   which cannot be honoured against an unreadable artifact.
-  (Q-label register: see [Q_U37](#q-u37), the latest ruling — **next free U38**.)
+  (Q-label register: see [Q_U39](#q-u39), the latest ruling — **next free U40**.)
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
@@ -8107,6 +8201,115 @@ first and every verify round then found a defect in the previous round's FIX:
 slice ships the *not-yet message*, never the flatten, so the semantics are not
 reached) · the `.*` retirement inventory (Q_U23's own surface) · DEFERRED 106 +
 107 (pre-existing, differential-proven).
+
+<a id="p4e-1b"></a>
+
+#### §5.P4e-1b — the `*` SEMANTICS  (opened 2026-08-11 · ⬜ mini-audit DONE, rulings [Q_U38](#q-u38)+[Q_U39](#q-u39), **not implemented**)
+
+Mini-audit `wf_4b91ca25-73a` (5 partitioned read-only facets + completeness
+critic, HEAD-pinned `4cf8cad3`). **Every load-bearing claim below was
+R-lens-verified on the main thread** — two of the critic's were corrected in the
+process, and one facet's headline was discarded.
+
+**WHAT THE AUDIT SETTLED** (each re-measured here, not inherited):
+
+- **The collision refutation is TWICE AS WIDE as recorded** — two last-write-wins
+  sites, not one. `make-record` is the TYPE-level constructor and IS on the
+  select path (`select-assemble-row`, typing-core.rkt); `entries->value`
+  (reduction.rkt) is its VALUE twin, a `champ-insert` fold. → [Q_U38](#q-u38).
+- **Both parse gates are blind for a MECHANICAL reason**: `select-branch-top-keys`
+  takes exactly ONE parameter. Not an oversight — a structural bound. → Q_U38.
+- **The two layers disagree about field ORDER** (`make-record` sorts;
+  `entries->value` does not). No facet found this; the critic did. → Q_U38.
+- **`*_` is already live in the fused-identifier band and absent from the
+  closer-adjacent one**, mint gate `(string=? lexeme "*")`. → [Q_U39](#q-u39).
+- **[Q_U23](#q-u23)'s identity claim CONFIRMED at BOTH layers** — and it had been
+  covered by NO facet; the critic measured it. `cfg{database.{url pool-size}}` ≡
+  `cfg{database}` and `cfg{database^.{url pool-size}}` ≡ `cfg.database`,
+  byte-identical, robust to branch reorder. **This is the strongest evidence that
+  the splat's plumbing already exists and behaves as Q_U23 predicts.**
+- **[Q_U23](#q-u23)'s splitter claim CONFIRMED verbatim** — `split-star-lexeme`
+  has exactly THREE call sites, mirroring `split-step`'s three, and the ω payload
+  does arrive colon-leading and string-stripped while the others arrive bare.
+- **[Q_U24](#q-u24)'s inheritance CONFIRMED** — `^-_` carries `'collapse-synth`
+  (a collapse; ONE flat entry lifts) while `^_` carries `'synth` (relabel in
+  place, nesting preserved), and `split-star-lexeme` already records at its own
+  site that `'flatten-synth` inherits `^-_`'s rule.
+- **Not blocked on PF.** The step vocabulary is plain s-expressions, so a star
+  kind needs no ADT. `path-segments`'s whole-file abort is pre-existing, filed,
+  and off the star's path — but the PF repair INHERITS the star as a marshalling
+  obligation (`(expr-keyword seg)` assumes bare symbols; a star step is a list).
+
+**⚠ CORRECTIONS TO THE AUDIT ITSELF — it is not authoritative either:**
+
+1. **The critic's headline capture-gap is a REPRESENTATION QUESTION, not a
+   refutation.** It found (verified) that the ω band's local `push` wraps every
+   minted step in `make-select-bcast` unconditionally, so a star landing there
+   rides as the ω INNER — `(@bcast <star-step>)` — and called that a
+   contradiction of Q_U23's own headline example. **The structural fact holds;
+   the contradiction does not follow.** Read through the layer model, inner
+   placement may be RIGHT: `xs:diags` yields a vector whose inner layer is what
+   each `diags` contributed, and "delete the layer the preceding step created"
+   plausibly means splice each element's contribution into the parent. The star
+   also rides inside the `:diags*` TOKEN, so the surface puts it there lexically
+   too. **OPEN — owner ruling owed; see below.**
+2. **"At least 20 sites" is NOT verified and must not be quoted.** The recipe IS
+   stale — `select-step-kind` dispatches at parser.rkt (the `^`-in-path-access
+   refusal) and typing-core.rkt (`select-tier-subject`'s ω peel) are outside its
+   13-site list, both confirmed by independent census, and its boast that the
+   sixth kind *"met all thirteen … with no correction needed"* is therefore
+   false. But the open-coded classifier grep returns 16 sites outside
+   `syntax.rkt` and several sit INSIDE functions the recipe already names.
+   The honest number needs per-site enclosing-function attribution — slice work,
+   not a citable figure.
+3. **Facet 2's headline is DISCARDED.** It opened *"REFUTES THE FACET'S OWN
+   FRAMING: `make-record` is NEVER called on a runtime selection result"* and
+   called the main-thread measurement mis-anchored. It is right that
+   `make-record` is type-level; its framing would have cost us the refutation.
+   `select-assemble-row` puts it squarely on the select path. The design's defect
+   was UNDER-COUNTING, not mis-naming.
+
+**CAPTURE GAPS carried forward** (not 1b's work unless marked):
+
+- **Three ω-inner dispatchers are load-bearing and none is on the recipe**:
+  `bcast-apply` (reduction.rkt), `select-bcast-lift` and
+  `select-bcast-inner-apply/non-union` (typing-core.rkt). All three branch on
+  `select-sub-step?` and fall through to a symbol/generic path otherwise — so a
+  star inner would be handled SILENTLY as a symbol. **This IS 1b's work** if the
+  ω placement question resolves inner.
+- `select-step-name` / `select-step-cont` end in permissive `[else s]` / `[else #f]`
+  tails and sit outside the recipe BY DESIGN. A star kind would get the RAW STEP
+  LIST back from the first (the DEFERRED 40/46 raw-list-in-a-message class) and
+  `#f` from the second — and `#f` is what `findf select-step-cont` and
+  `branch-problem`'s positional check key on. **1b's work.**
+- **`select-sorts` is `'(path block)` — the SELECTOR sort, not a container sort.**
+  Two facets caught this independently. "The sort follows the layer" reads as a
+  claim about `select-sorts` and is NOT one; the container decision is a separate
+  keyed/keyless fork inside `entries->value`. **Correct the vocabulary before
+  "sort-generic" is used again.**
+- **The rule is not total over the vocabulary**: an ordinal STEP `.N` contributes
+  NO output level (Q_U2 Reading A), and a `'path` selection builds no layer at
+  all. Two different reasons, both needing a stated disposition.
+- **The `.*` retirement's TEST surface was swept by nobody** — `test-selection-paths.rkt`
+  carries **17** lines with a live `.*`/`.**` spelling (measured) across a
+  56-case file, plus `test-path-selection.rkt`'s `#p(a.*)` refuse-loudly pins.
+  That is the bulk of what a retirement must move. **P4e-2, not 1b.**
+- **`selection-field-unrestricted?` (typing-core.rkt) is the ONLY place the
+  selection `*`/`**` carries TYPE-level meaning** and is absent from every
+  consumer list this design has written. **P4e-2.**
+- **The retirement inventory intersects uncommitted owner WIP** —
+  `lib/examples/foray.prologos` documents `.*` as the splat operator and is
+  MODIFIED in the working tree. Any sweep that edits it collides.
+- A repo-root grep picks up `.claude/worktrees/` and silently double-counts
+  against a stale branch. **Scope every sweep to `racket/`, `docs/`, `tests/`.**
+
+**SCOPE, per [Q_U39](#q-u39)**: 1b lands the flatten + Q_U38's refusal + `*_` in
+the fused-identifier band. OUT: the closer-adjacent `*_` mint (own slice);
+the `.*` retirement + ravel (P4e-2); DEFERRED 106–112.
+
+**OPEN, ruling owed before implementation**: the ω placement — does a star in the
+ω band ride INSIDE `(@bcast …)` or apply to the wrapper's result? It decides the
+step's shape, hence the step kind, hence every downstream site.
 
 <a id="pf"></a>
 
