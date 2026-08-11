@@ -506,12 +506,58 @@ seven Racket mutable hash tables reached over FFI** — `ocapn-conn-ffi`,
 not. Every one is the red flag `.claude/rules/on-network.md` names — a hasheq
 of "things the system knows about" that has not become a cell.
 
+**⚠ The paragraph below is WRONG and is corrected immediately after it.** It is
+left standing rather than edited, per this document's convention.
+
 The root is structural, not laziness: **Prologos has no way to express state
 that outlives one top-level call and is shared across connections.** A pure
 behaviour cannot hold it, and there is no cell substrate reachable from a
 `.prologos` program. Until there is, the tables have to live somewhere, and
 FFI is the honest place — but it should be recorded as the gap it is rather
 than as an implementation detail of seven small modules.
+
+##### Correction, 2026-08-11 — "no way to express state" is false
+
+Challenged and checked. `ConnectionState` is an ordinary ADT, and
+
+```
+spec run-step Nat CapTPOp ConnectionState -> String
+```
+
+already TAKES the state as a value and builds the next one. Ordinary state
+threading — the plain functional answer, fold the actions over the previous
+state — is expressible, and is in fact HALF WRITTEN: only the return half is
+missing. The new state exits sideways through `conn-stash` rather than through
+the return type, which is what `emit-after-stash` is named for.
+
+Three things actually keep that fold open, and only the third is interesting:
+
+1. **The loop is not in Prologos.** Racket owns the accept loop, so Racket owns
+   the accumulator. Nothing in the language prevents the fold; there is simply
+   no Prologos-side loop to hang it on.
+2. **The FFI channel is stringly-typed.** `process-string` evaluates source text
+   and returns a PRETTY-PRINTED result — which is why every call site regexps
+   `"…" : String`. A `(ConnectionState, Bytes)` pair cannot cross it. Threading
+   the state would mean serializing the whole vat to text and re-parsing it per
+   frame. A practical blocker, not a language one.
+3. **Cross-connection sharing is genuinely not one fold.** Three of the seven
+   tables would dissolve if the loop moved into Prologos: `conn` is per-cid,
+   `dial` is already an `OutReq` list IN THE LANGUAGE that the server merely
+   drains, and `identity` is a single process constant. The other four cannot
+   fold, for the reason the code gives at the declaration — *"a give arrives on
+   the gifter's connection and is spent on the exporter's, so like the gift
+   table it has to outlive either one."* N connection threads, one gift table:
+   a per-connection fold has one accumulator per connection, and a value
+   deposited on A's must be visible on B's.
+
+Which is exactly why the fix shape said **cell** and not "thread the state". A
+cell with a monotone merge IS the answer to "several concurrent folds that must
+share", and the gift table is close to the textbook case, since deposits only
+accumulate.
+
+So the gap is narrower than first written: not "no state", but **four shared
+tables sitting in Racket hashes where the project's own thesis says they belong
+in cells** — and three others that are merely waiting for the loop to move.
 
 Two cross-language duplicates found while verifying this are now closed rather
 than merely noted: `op:abort` had two encoders (one deleted, the retired one
