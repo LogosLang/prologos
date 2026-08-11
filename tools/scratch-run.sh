@@ -125,6 +125,20 @@ RUNNER="$REPO/racket/prologos/tools/run-file.rkt"
 
 ARGS=()
 [ "$CHECK" -eq 1 ] && ARGS+=(--check)
+# ⚠ bash 3.2 (what macOS ships, and what this script runs under) treats
+# "${ARGS[@]}" on an EMPTY array as an unbound-variable error under `set -u`,
+# so the DEFAULT invocation — no `-c`, hence an empty ARGS — aborted before the
+# child ever launched: `scratch-run.sh: line 136: ARGS[@]: unbound variable`.
+# Only the `-c` path had a non-empty array, which is why the break survived:
+# the one flag that was exercised was the one that masked it.
+# `${ARGS[@]+"${ARGS[@]}"}` expands to nothing when unset and to the quoted
+# elements otherwise — the portable bash-3.2 idiom. Do NOT "simplify" it back.
+# Found 2026-08-11 at D4.P4e-1b: FIVE independent data points in one session —
+# three grounding-audit facets, the completeness critic, and the main thread —
+# and three of those hand-rolled a bypass rather than report it, which is the
+# precise antecedent of the 2026-08-08 orphaned-harness incident this script
+# exists to prevent. A broken sanctioned path does not stop probes; it makes
+# them unsafe.
 
 # ── (2) timeout WITH -k. Prefer coreutils `gtimeout` when present (macOS ships
 # no `timeout` of its own); either accepts -k.
@@ -133,7 +147,7 @@ if [ -z "$TIMEOUT_BIN" ]; then
   echo "scratch-run.sh: no timeout/gtimeout on PATH — refusing to run unbounded" >&2
   exit 2
 fi
-"$TIMEOUT_BIN" -k 10 "$TIMEOUT" "$RACKET" "$RUNNER" "${ARGS[@]}" "$FILE" &
+"$TIMEOUT_BIN" -k 10 "$TIMEOUT" "$RACKET" "$RUNNER" ${ARGS[@]+"${ARGS[@]}"} "$FILE" &
 CHILD_PID=$!
 CHILD_PGID="$(ps -o pgid= -p "$CHILD_PID" 2>/dev/null | tr -d ' ' || echo "$CHILD_PID")"
 
