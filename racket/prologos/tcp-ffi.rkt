@@ -50,7 +50,8 @@
 ;;; only simple. See goblin-pitfalls #19.
 
 (require racket/tcp
-         racket/string)
+         racket/string
+         "../../tools/interop/ocapn-framing.rkt")
 
 (provide
  tcp-listen
@@ -60,6 +61,11 @@
  tcp-send-line
  tcp-recv-line-ret
  tcp-recv-cached
+ tcp-send-frame
+ tcp-recv-frame-ret
+ tcp-recv-frame-cached
+ tcp-recv-frame-eof?
+ current-framing-strategy
  tcp-close
  tcp-ffi-registry
  ;; Test-only helpers
@@ -152,6 +158,65 @@
 (define (tcp-recv-cached conn-id)
   (hash-ref tcp-recv-cache conn-id ""))
 
+;; ========================================
+;; Frame IO (SH-1)
+;; ========================================
+;;
+;; The line ops above are LF-delimited, which is fine for the
+;; tcp-testing-only netlayer and useless for OCapN: a Syrup frame is
+;; arbitrary bytes and 0x0a occurs inside them constantly. These read and
+;; write ONE FRAME under `current-framing-strategy` — netstring by default
+;; on the OCapN wire.
+;;
+;; The framing itself is DELIBERATELY not reimplemented here. It is
+;; `ocapn-framing.rkt`, the same module the interop server uses, so there is
+;; one framing implementation rather than two that agree until they do not.
+;; The require reaches into `tools/` from the library, which is backwards;
+;; `tests/test-ocapn-syrup-wire.rkt` already does the same. Moving the module
+;; into the library proper belongs with the driver migration (step 5), not
+;; here — noted rather than silently tolerated.
+;;
+;; Payloads cross as LATIN-1 STRINGS, 1 char == 1 byte, which is how every
+;; other Prologos/Racket wire-byte boundary in this codebase carries frames.
+
+(define tcp-frame-cache (make-hasheq))
+(define tcp-frame-eof   (make-hasheq))
+
+;; Write one frame. Returns the handle, so a caller in a lazy reducer can
+;; force the effect by depending on the result.
+(define (tcp-send-frame conn-id payload)
+  (define entry (tcp-lookup conn-id))
+  (define out (cdr entry))
+  (write-frame out (string->bytes/latin-1 payload))
+  (flush-output out)
+  conn-id)
+
+;; Read one frame; cache it under the handle; return the handle.
+;;
+;; EOF is recorded SEPARATELY rather than as an empty payload. An empty
+;; frame and a closed socket are different events, and collapsing them is
+;; precisely the mistake the gaps document keeps re-learning — "a malformed
+;; frame and an absent frame are indistinguishable to everything except the
+;; bytes". A loop that cannot tell them apart either spins forever on a dead
+;; socket or drops a legitimate zero-length frame.
+(define (tcp-recv-frame-ret conn-id)
+  (define entry (tcp-lookup conn-id))
+  (define in (car entry))
+  (define fr (read-frame in))
+  (define eof? (or (eof-object? fr) (not fr)))
+  (hash-set! tcp-frame-eof conn-id eof?)
+  (hash-set! tcp-frame-cache conn-id (if eof? "" (bytes->string/latin-1 fr)))
+  conn-id)
+
+(define (tcp-recv-frame-cached conn-id)
+  (hash-ref tcp-frame-cache conn-id ""))
+
+;; True iff the last `tcp-recv-frame-ret` on this handle hit EOF. Defaults to
+;; #t for a handle never read: "no frame available" is the safe answer, since
+;; the unsafe one keeps a loop running on a socket that has nothing to say.
+(define (tcp-recv-frame-eof? conn-id)
+  (hash-ref tcp-frame-eof conn-id #t))
+
 (define (tcp-close handle-id)
   (define kind (tcp-kind handle-id))
   (case kind
@@ -166,6 +231,8 @@
      (close-output-port out)])
   (hash-remove! tcp-table handle-id)
   (hash-remove! tcp-recv-cache handle-id)
+  (hash-remove! tcp-frame-cache handle-id)
+  (hash-remove! tcp-frame-eof handle-id)
   (void))
 
 (define tcp-close-listener
