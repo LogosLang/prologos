@@ -16,25 +16,32 @@
 ;;;   (`init-connection` / `step-connection`). Crypto (libsodium FFI) and
 ;;;   the Syrup codec both live inside Prologos.
 ;;;
-;;;   This file owns the sockets, and the two pieces of routing that
-;;;   need one: the crossed-hellos tie-break (§ Crossed hellos) and the
-;;;   third-party-handoff gifter/receiver plumbing (§ Third-party
-;;;   handoff). Both have to write to a connection other than the one
-;;;   being serviced, which a pure Prologos behaviour cannot do.
+;;;   This file owns the SOCKETS: accepting, dialling, framing, teardown,
+;;;   and the mutable tables that track which connection reaches which
+;;;   peer. It decides nothing about the protocol.
+;;;
+;;; Both third-party-handoff roles and the crossed-hellos RULE used to live
+;;; here too. They no longer do — see § Third-party handoff and
+;;; `crossed-hellos-verdict`. What is left of crossed hellos here is the
+;;; teardown; the verdict is `crossed-hellos-abort-ours?` in
+;;; `prologos::ocapn::handshake`.
 ;;;
 ;;; Per connection:
 ;;;   1. Send our signed start-session.
 ;;;   2. Read the peer's; validate it through Prologos; op:abort on reject.
-;;;   3. Run the frame loop — parse, route handoff traffic, hand the frame
-;;;      to captp-core, write back whatever it produces.
+;;;   3. Run the frame loop — hand each frame to captp-core, write back
+;;;      whatever it produces, drain any dials or cross-connection sends
+;;;      the step queued.
 ;;;
-;;; Known gap (docs/tracking/2026-07-28_OCAPN_IMPLEMENTATION_GAPS.md §1.8):
-;;; the handoff routing here runs on the same bytes captp-core is about to
-;;; see, and nothing forces the two to agree on what a frame means. The
-;;; gates below (structural parse + export-position checks + receiver-key
-;;; check) narrow the overlap; moving the routing into Prologos so there is
-;;; one implementation is the real fix and needs an exported resolve-me
-;;; from the connection's own export table.
+;;; The Syrup reader below no longer ROUTES anything: gaps document §1.8
+;;; recorded a second handoff implementation running on the same bytes
+;;; captp-core was about to see, with nothing forcing the two to agree, and
+;;; that implementation is gone. The reader is still run over every inbound
+;;; frame, but only as a DIFFERENTIAL CHECK — a frame `read-frame` accepted
+;;; and this reader rejects is a disagreement between two Syrup
+;;; implementations, and the frame loop says so loudly. Same code, opposite
+;;; role: it was a liability when it decided things, and it is an oracle now
+;;; that it decides nothing.
 
 (require racket/cmdline
          "../../racket/prologos/ocapn-dial-ffi.rkt"
@@ -899,6 +906,30 @@
        #f]
       [else v])))
 
+;; The tie-break itself is PROTOCOL, and lives in Prologos
+;; (`crossed-hellos-abort-ours?`, handshake.prologos). This is the socket
+;; teardown around it, which does not.
+;;
+;; It used to be an inlined `(bytes<? our-side-id theirs)` here — a rule both
+;; peers must evaluate identically, expressed in a language neither peer's
+;; implementation is written in, with no test. Side-ids cross as hex; see the
+;; hex wrapper's note for why the Prologos side decodes rather than comparing
+;; hex directly.
+;;
+;; Deliberately NO fallback to a local `bytes<?`. Keeping one would mask a
+;; break in the migrated path behind an answer that happens to agree, which is
+;; the failure mode that made this worth moving. If the call raises, the
+;; connection dies loudly instead of guessing a verdict.
+(define (crossed-hellos-verdict ours theirs)
+  (define r (last-result
+             (run-prologos/locked
+              (format "(eval (crossed-hellos-abort-ours-hex? ~s ~s))"
+                      (bytes->hex-string ours) (bytes->hex-string theirs)))))
+  (cond
+    [(and (string? r) (regexp-match? #px"^true : Bool$" r)) #t]
+    [(and (string? r) (regexp-match? #px"^false : Bool$" r)) #f]
+    [else (error 'crossed-hellos-verdict "not a Bool: ~s" r)]))
+
 ;; ========================================
 ;; Third-party handoff — BOTH ROLES MIGRATED
 ;; ========================================
@@ -1210,7 +1241,7 @@
                    ;; verdict without another round trip.
                    [crossed
                     (define theirs (peer-hello-side-id hello))
-                    (define ours-first? (bytes<? our-side-id theirs))
+                    (define ours-first? (crossed-hellos-verdict our-side-id theirs))
                     (printf "ocapn-test-server: crossed hellos; aborting the ~a connection~n"
                             (if ours-first? "OUTGOING" "incoming"))
                     (define abort-bytes (build-abort-bytes "crossed hellos"))

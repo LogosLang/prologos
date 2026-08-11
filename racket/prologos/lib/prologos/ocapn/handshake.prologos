@@ -278,6 +278,57 @@ spec abort-bytes String -> String
 defn abort-bytes [reason]
   record-bytes "op:abort" [cons [wire::encode [syrup-string reason]] nil]
 
+;; --- Crossed hellos ---
+;;
+;; Two peers can dial each other at the same moment and end up with two
+;; sessions where CapTP wants one. The tie is broken by a rule both sides
+;; evaluate independently and agree on with no extra round trip: sort the two
+;; side-ids as octet strings, and abort the connection DIALLED BY whichever
+;; sorts first.
+;;
+;; ANTISYMMETRY is the whole mechanism. Peer A asking "abort the connection I
+;; dialled?" and peer B asking the same question get OPPOSITE answers, because
+;; `lt` is antisymmetric and each side passes its own id first. That is why no
+;; negotiation is needed — and it is the property the tests pin, since a rule
+;; that happened to be symmetric would kill both connections or neither, and
+;; either failure looks like a flake rather than a logic error.
+;;
+;; `str::lt` is `string<?`, comparing by code point; a side-id is Latin-1,
+;; where a code point IS its byte. So this is upstream's octet ordering, not
+;; merely a similar one — the same argument `session-id-of` makes in
+;; crypto.prologos, and it has to hold for the same reason: both peers must
+;; sort identically.
+;;
+;; EQUAL side-ids mean the same key on both ends — a peer that dialled itself.
+;; Both ends then compute `false`, so exactly one verdict is reached rather
+;; than two contradictory ones. It is degenerate either way; what matters is
+;; that it is not a coin flip.
+;;
+;; This rule used to be a bare `bytes<?` inlined in the interop server's accept
+;; thread, which is why it is a named function with tests rather than an
+;; expression: it is protocol, and the socket teardown around it is not.
+
+spec crossed-hellos-abort-ours? String String -> Bool
+  :doc "Given our side-id and the peer's, should we abort the connection WE dialled?"
+defn crossed-hellos-abort-ours? [ours theirs]
+  str::lt ours theirs
+
+;; The same rule reached from the interop server, whose side-ids are 32 raw
+;; SHA-256 bytes. They cross as HEX for the reason given above `hex-to-bytes`:
+;; a Prologos string literal is the server's only channel, and arbitrary
+;; Latin-1 in one is fragile.
+;;
+;; It decodes rather than comparing the hex directly. Fixed-width lowercase hex
+;; IS order-preserving, so comparing the hex would give the same answer — but
+;; only while both ids stay the same length and the same case, neither of which
+;; anything checks. Decoding costs one FFI call per crossed hello (a rare
+;; event) and removes the assumption.
+
+spec crossed-hellos-abort-ours-hex? String String -> Bool
+  :doc "Crossed-hellos verdict from hex-encoded side-ids."
+defn crossed-hellos-abort-ours-hex? [ours-hex theirs-hex]
+  crossed-hellos-abort-ours? [hex-to-bytes ours-hex] [hex-to-bytes theirs-hex]
+
 ;; --- Syrup value skipper ---
 ;;
 ;; `skip-value frame off` returns the offset just past one complete
