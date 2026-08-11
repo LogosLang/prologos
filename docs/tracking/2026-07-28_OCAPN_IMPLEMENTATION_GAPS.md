@@ -411,16 +411,26 @@ that I could reproduce was real.
 
 ## 0. The three structural gaps
 
-> **As-written 2026-07-28.** 0.1 is fixed (the allow-list is drift-checked
-> against the modules it targets). 0.2 is unchanged and is still the largest
-> piece of debt here. 0.3's substance was right and its stated mechanism was
-> wrong — see § Corrections.
+> **As-written 2026-07-28. Status re-verified against code 2026-08-11.**
+> 0.1 is fixed (the allow-list is drift-checked against the modules it
+> targets). 0.3 is closed — see its own note and § Corrections. 0.2 is
+> **largely closed**; what remains is not what it names. See § 0.2 status
+> below, which supersedes the entry's "single largest piece of debt".
 
 These are not bugs. They are places where the implementation is shaped by the
 test suite rather than by the protocol, and no amount of local fixing addresses
 them.
 
 ### 0.1 The conformance gate is an allow-list, not the suite — MEDIUM
+
+> **CLOSED.** `check_allow_list_drift` (ocapn-run-tests.py) enumerates the
+> `test_*` methods of every targeted class AND every test-bearing class of
+> every targeted module, and reports anything `SELECTED` does not name. Drift
+> is printed up front and turned into a non-zero exit at the END, so the run
+> that discovers it still produces a conformance signal. Currently zero drift
+> against six modules. Note for anyone counting: `grep -c 'def test_'` upstream
+> returns 25, but `test_abort_after_setup` is commented out in `op_abort.py` —
+> the 24 we run are every ENABLED upstream test, not a subset of 25.
 
 `tools/interop/ocapn-run-tests.py` names all 24 tests explicitly. Upstream's own
 `test_runner.py` can only load a whole *module*, and it imports the Tor onion
@@ -457,6 +467,57 @@ single largest piece of debt in the OCapN work.
 **Fix shape**: the effect vocabulary needs `eff-connect`, `eff-send-on` (a named
 connection) and `eff-sign`, plus a connection registry as a first-class cell.
 That is a design task, not a refactor.
+
+#### 0.2 status, 2026-08-11 — verified against code, supersedes the above
+
+Taking the entry's own three items in turn:
+
+| | |
+|---|---|
+| gifter + receiver roles | **migrated** to `interop-driver.prologos`, working on the DECODED op rather than scanning frame bytes |
+| crossed-hellos mitigation | **migrated** — the RULE is `crossed-hellos-abort-ours?` in `handshake.prologos`; the socket teardown stays with the sockets |
+| outbound connection management | **still Racket, and correctly so** — this is `tcp-connect`, ports and threads |
+
+The fix shape resolved differently than predicted, and the difference is worth
+recording because two of its three items were wrong:
+
+- **`eff-connect`** landed as designed, and turned out to be load-bearing for
+  something the entry did not anticipate: it is what let §0.3 close.
+- **`eff-send-on`** was built, shipped with ZERO producers, and was **removed**.
+  The thing it existed for — the handoff gifter — is not a behaviour at all: it
+  has no swiss-num, answers no message of its own, and must name connections.
+  It is protocol machinery, and it lives in the driver, which reaches the send
+  queue directly. The note in `behavior.prologos` records this at the
+  definition site.
+- **`eff-sign` does not exist and is not needed.** The capability landed as a
+  foreign function (`ocapn-identity-ffi.rkt` + `sig-envelope-bytes`) because the
+  signer is the driver, not a pure behaviour. An effect is how a behaviour asks
+  the world for something; the driver IS the world here.
+
+So "the single largest piece of debt in the OCapN work" is no longer accurate,
+and the sentence above should be read as of its date.
+
+**What is actually left is a different gap**, and naming it here rather than
+quietly closing 0.2: **the protocol state those migrated roles operate on is
+seven Racket mutable hash tables reached over FFI** — `ocapn-conn-ffi`,
+`ocapn-peer-ffi` (the connection registry the fix shape wanted as a cell),
+`ocapn-gift-ffi`, `ocapn-give-ffi`, `ocapn-enliven-ffi`, `ocapn-dial-ffi`,
+`ocapn-identity-ffi`. The roles are expressed in the language; their state is
+not. Every one is the red flag `.claude/rules/on-network.md` names — a hasheq
+of "things the system knows about" that has not become a cell.
+
+The root is structural, not laziness: **Prologos has no way to express state
+that outlives one top-level call and is shared across connections.** A pure
+behaviour cannot hold it, and there is no cell substrate reachable from a
+`.prologos` program. Until there is, the tables have to live somewhere, and
+FFI is the honest place — but it should be recorded as the gap it is rather
+than as an implementation detail of seven small modules.
+
+Two cross-language duplicates found while verifying this are now closed rather
+than merely noted: `op:abort` had two encoders (one deleted, the retired one
+kept as a test oracle), and the side-id was computed independently on each side
+of the FFI (they agree; a differential oracle now says so instead of a comment
+in each file claiming it).
 
 ### 0.3 Export position 5 has no vat actor — MEDIUM
 

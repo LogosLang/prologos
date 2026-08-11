@@ -243,8 +243,11 @@ def resolver-pair : SyrupValue :=
                     [cons [import-object-desc resolver-actor-pos] nil]]]
 
 ;; The highest id this file hands out that does NOT come from a parameter.
-;; `sturdyref-enlivener-pos` is in here even though 5N gets no actor: the peer
-;; can still name it, so nothing else may be allocated there. Split across
+;; `sturdyref-enlivener-pos` is in here because 5N is seeded like the rest —
+;; `beh-sturdyref-enlivener`, in `seeded-vat` below. It used to be here for the
+;; opposite reason, as an id the peer could name but which held no actor (gaps
+;; document §0.3); that was closed by `eff-connect` and `act-step-pending`, and
+;; the comment saying otherwise outlived the fix. Split across
 ;; three defs because a continuation line starting with a bare identifier
 ;; parses as a sibling form, so each of these has to fit on one line.
 def max-bootstrap-pos : Nat := [nat::max car-factory-builder-pos [nat::max promise-resolver-pos sturdyref-enlivener-pos]]
