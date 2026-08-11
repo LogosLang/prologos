@@ -255,47 +255,99 @@
   (set! tcp-world-tick (add1 tcp-world-tick))
   tcp-world-tick)
 
+;; ========================================
+;; Effects are memoized on their tick — REQUIRED, not an optimisation
+;; ========================================
+;;
+;; The reducer is CALL-BY-NAME: it does not share an evaluated redex, so a
+;; `match` that binds two fields of an effect's result re-evaluates that effect
+;; once per field actually used. Measured, not inferred — instrumenting the FFI
+;; showed `accept` entered TWICE with the same tick, the second call blocking
+;; forever on a listener whose only client had already been accepted:
+;;
+;;     FFI accept called (tick 1)
+;;     client: connected
+;;     FFI accept called (tick 1)     <- same tick, second real accept
+;;
+;; A World token fixes ORDER; it does not make an effect at-most-once, because
+;; nothing stops the reducer from walking the same subterm twice.
+;;
+;; So an effect here is a FUNCTION OF ITS TICK. The tick names a point in the
+;; program's history, and asking twice what happened at that point returns what
+;; happened, rather than making it happen again. Re-evaluation becomes
+;; harmless instead of catastrophic, which is the only workable arrangement
+;; when the evaluator is free to re-walk a term.
+;;
+;; This is why the whole scheme threads a tick rather than a unit token: a
+;; token with no identity gives the memo nothing to key on.
+;;
+;; Cost: the table grows with the number of effects performed. Fine for a test
+;; server and a real leak for a long-lived one. Bounding it needs a notion of
+;; "no reduction can still reach tick N", which the reducer does not currently
+;; expose — recorded here rather than hidden.
+
+(define effect-memo (make-hash))
+
+(define (memoized key thunk)
+  (hash-ref effect-memo key
+            (lambda ()
+              (define v (thunk))
+              (hash-set! effect-memo key v)
+              v)))
+
+;; Payload and EOF, keyed by the tick the READ produced — not by handle. Keyed
+;; by handle they would report whatever the LAST read on that socket saw, so a
+;; re-walk of an older subterm would silently observe a newer frame.
+(define frame-at-tick (make-hash))
+(define eof-at-tick   (make-hash))
+
 ;; Read the current tick. `dep` is deliberately unused — it exists so the
 ;; caller must already hold something the effect produced. Ops that must
 ;; return a HANDLE use this to get their new tick, since a foreign call
-;; returns one value and the handle is that value.
+;; returns one value and the handle is that value. Memoized on `dep` so a
+;; re-walk cannot observe a clock that has since moved on.
 (define (tcp-tick-after dep)
-  (void dep)
-  tcp-world-tick)
-
-(define (tcp-frame-send tick conn-id payload)
-  (void tick)
-  (tcp-send-frame conn-id payload)
-  (tcp-bump!))
-
-(define (tcp-frame-recv tick conn-id)
-  (void tick)
-  (tcp-recv-frame-ret conn-id)
-  (tcp-bump!))
-
-;; `tick` is deliberately unused: it exists to be a dependency.
-(define (tcp-frame-payload-at tick conn-id)
-  (void tick)
-  (tcp-recv-frame-cached conn-id))
-
-(define (tcp-frame-eof-at tick conn-id)
-  (void tick)
-  (tcp-recv-frame-eof? conn-id))
-
-;; Accept and listen return a HANDLE, so their new tick comes from
-;; `tcp-tick-after` applied to that handle. Both block.
-(define (tcp-frame-accept tick server-id)
-  (void tick)
-  (begin0 (tcp-accept server-id) (tcp-bump!)))
+  (memoized (list 'tick-after dep) (lambda () tcp-world-tick)))
 
 (define (tcp-frame-listen tick port)
-  (void tick)
-  (begin0 (tcp-listen port) (tcp-bump!)))
+  (memoized (list 'listen tick port)
+            (lambda () (begin0 (tcp-listen port) (tcp-bump!)))))
+
+(define (tcp-frame-accept tick server-id)
+  (memoized (list 'accept tick server-id)
+            (lambda () (begin0 (tcp-accept server-id) (tcp-bump!)))))
+
+(define (tcp-frame-send tick conn-id payload)
+  (memoized (list 'send tick conn-id payload)
+            (lambda ()
+              (tcp-send-frame conn-id payload)
+              (tcp-bump!))))
+
+(define (tcp-frame-recv tick conn-id)
+  (memoized (list 'recv tick conn-id)
+            (lambda ()
+              (tcp-recv-frame-ret conn-id)
+              (define t2 (tcp-bump!))
+              (hash-set! frame-at-tick t2 (tcp-recv-frame-cached conn-id))
+              (hash-set! eof-at-tick   t2 (tcp-recv-frame-eof? conn-id))
+              t2)))
+
+;; `conn-id` is unused: the tick already identifies the read. It stays in the
+;; signature so the Prologos side reads as "the payload of THIS connection's
+;; read", and so a future change can check the two agree.
+(define (tcp-frame-payload-at tick conn-id)
+  (void conn-id)
+  (hash-ref frame-at-tick tick ""))
+
+(define (tcp-frame-eof-at tick conn-id)
+  (void conn-id)
+  (hash-ref eof-at-tick tick #t))
 
 (define (tcp-frame-close tick handle-id)
-  (void tick)
-  (tcp-close handle-id)
-  (tcp-bump!))
+  (memoized (list 'close tick handle-id)
+            (lambda ()
+              (with-handlers ([exn:fail? void]) (tcp-close handle-id))
+              (tcp-bump!))))
 
 (define (tcp-close handle-id)
   (define kind (tcp-kind handle-id))

@@ -1,0 +1,89 @@
+ns prologos::io::server :no-prelude
+
+;; ========================================
+;; A frame server loop, written in Prologos
+;; ========================================
+;;
+;; The event loop itself — accept, read, write, repeat — expressed in the
+;; language rather than in the Racket host. This is the step the OCapN work
+;; needs: while the loop lives in Racket, Racket owns the accumulator, which is
+;; why per-connection state sits in an FFI hash table instead of being threaded
+;; like any other value.
+;;
+;; Ordering comes from `prologos::core::world`: every action consumes a World
+;; and produces the next, so the loop cannot run its steps out of order even
+;; though reduction is lazy. Read `core::world` for what that does and does not
+;; guarantee.
+;;
+;; ----------------------------------------
+;; Cost
+;; ----------------------------------------
+;;
+;; A loop iteration in the current reducer costs ~6.7 ms, and is LINEAR in the
+;; iteration count (measured at N = 100 / 300 / 1000: 678 / 2025 / 6745 ms — no
+;; blowup, no stack growth). Against that, moving the loop in REMOVES the
+;; ~3.8 ms `process-string` the host pays per frame to re-parse and re-elaborate
+;; its call. Roughly break-even per frame.
+;;
+;; The constraint that actually matters is GRANULARITY: one iteration per
+;; FRAME is fine, one per BYTE is hopeless. That is why frame assembly and hex
+;; decoding stay on the Racket side of the FFI and are not rewritten here.
+
+require [prologos::core::world :refer [World world]]
+        [prologos::io::net     :refer [ConnH ServerH
+                                        Recv recv
+                                        Accepted accepted
+                                        Listening listening
+                                        net-listen net-accept net-send net-recv
+                                        net-close-conn net-close-server]]
+
+;; ========================================
+;; Echo one connection
+;; ========================================
+;;
+;; Read a frame, write it back, repeat until the peer goes away.
+;;
+;; The EOF test is the loop's whole termination argument, and it is why
+;; `net-recv` reports EOF as a field rather than as an empty payload. A peer
+;; that sends a zero-length frame is still talking; a peer that closed is not.
+;; Collapsing the two gives a server that either spins on a dead socket or
+;; hangs up on a live one, and both look like a network fault rather than a
+;; logic error.
+;;
+;; `w` is consumed exactly once on every path: handed to `net-recv`, and the
+;; World that comes back is handed on to exactly one of the two arms. That is
+;; what makes this a legal linear program, and it is also, precisely, the
+;; statement that the loop has no branch which forgets to advance the world.
+
+spec echo-conn ConnH -> <(w :1 World) -> World>
+defn echo-conn [c]
+  fn [w :1 World]
+    match [[net-recv c] w]
+      | recv w2 payload eof ->
+          match eof
+            | true  -> [[net-close-conn c] w2]
+            | false -> [[echo-conn c] [[net-send c payload] w2]]
+
+;; ========================================
+;; Serve one connection, then stop
+;; ========================================
+;;
+;; Binds the port, accepts ONE peer, echoes until that peer closes, and shuts
+;; the listener down. The whole program is a single World transformer, so a
+;; caller runs it by handing it `initial-world`.
+;;
+;; Both matches are inlined to TWO deep rather than factored into helpers.
+;; A helper would read better and does not work: module-level definitions are
+;; not forward-referenceable, so `echo-conn` calling a helper defined below it
+;; fails at import with "Unbound variable", and moving the helper above only
+;; moves the problem, since the two are mutually recursive. Self-recursion is
+;; fine; that is what the `false` arm above relies on.
+
+spec echo-once Nat -> <(w :1 World) -> World>
+defn echo-once [port]
+  fn [w :1 World]
+    match [[net-listen port] w]
+      | listening w2 s ->
+          match [[net-accept s] w2]
+            | accepted w3 c ->
+                [[net-close-server s] [[echo-conn c] w3]]

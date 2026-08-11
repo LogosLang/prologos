@@ -125,6 +125,65 @@
       (check-true (tcp-recv-frame-eof? b))
       (check-equal? (tcp-recv-frame-cached b) ""))))
 
+;; ------------------------------------------------------------------
+;; Effects are functions of their tick
+;; ------------------------------------------------------------------
+;;
+;; The reducer is CALL-BY-NAME: it does not share an evaluated redex, so a
+;; `match` binding two fields of an effect's result re-evaluates that effect
+;; once per field used. Measured — instrumenting the FFI showed `accept`
+;; entering twice with the same tick, the second call blocking forever on a
+;; listener whose only client had already been taken.
+;;
+;; So the World token orders effects but does NOT make them at-most-once, and
+;; the memo on `(op, tick, args)` is what does. These pin that, because it is
+;; an invariant nothing else would catch: without it the failures are a hang or
+;; a duplicated frame, arbitrarily far from the cause.
+
+(test-case "an effect is a function of its tick"
+  (with-pair
+    (lambda (a b)
+      ;; Twice at the SAME tick — a re-walk of one subterm, not two sends.
+      (tcp-frame-send 100 a "once")
+      (tcp-frame-send 100 a "once")
+      (tcp-recv-frame-ret b)
+      (check-equal? (tcp-recv-frame-cached b) "once")
+      ;; Nothing more on the wire. Send a sentinel and check it arrives NEXT:
+      ;; a second copy of "once" would be read here instead.
+      (tcp-frame-send 101 a "sentinel")
+      (tcp-recv-frame-ret b)
+      (check-equal? (tcp-recv-frame-cached b) "sentinel"
+                    "the same effect ran twice at one tick"))))
+
+(test-case "a different tick is a different effect"
+  ;; The other half. If the memo key were too coarse — the connection alone,
+  ;; say — the second send would be swallowed and the loop would stall.
+  (with-pair
+    (lambda (a b)
+      (tcp-frame-send 200 a "first")
+      (tcp-frame-send 201 a "second")
+      (check-equal? (for/list ([_ 2])
+                      (tcp-recv-frame-ret b)
+                      (tcp-recv-frame-cached b))
+                    (list "first" "second")))))
+
+(test-case "a re-read at one tick sees that read, not a later one"
+  ;; Payload and EOF are keyed by the tick the READ produced, not by handle.
+  ;; Keyed by handle they would report whatever the socket saw MOST RECENTLY,
+  ;; so re-walking an older subterm would silently observe a newer frame —
+  ;; a wrong answer rather than a hang.
+  (with-pair
+    (lambda (a b)
+      (tcp-frame-send 300 a "alpha")
+      (tcp-frame-send 301 a "beta")
+      (define t1 (tcp-frame-recv 310 b))
+      (check-equal? (tcp-frame-payload-at t1 b) "alpha")
+      (define t2 (tcp-frame-recv t1 b))
+      (check-equal? (tcp-frame-payload-at t2 b) "beta")
+      ;; The older tick still answers with the older frame.
+      (check-equal? (tcp-frame-payload-at t1 b) "alpha"
+                    "an earlier tick observed a later frame"))))
+
 (test-case "closing a handle drops its frame state"
   (define port (free-port))
   (define srv (tcp-listen port))
