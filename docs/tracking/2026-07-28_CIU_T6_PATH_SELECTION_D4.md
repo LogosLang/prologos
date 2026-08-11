@@ -7997,6 +7997,36 @@ first and every verify round then found a defect in the previous round's FIX:
    stays red until all of it lands. Splitting means landing a knowingly-red
    battery.
 
+   **⭐ THE FUSE SEAT IS GROUNDED — the open question from the P4e-1a audit is
+   ANSWERED, and the answer is favourable** (measured at `79e34380`; this is the
+   one thing 1a-iii most needed settled before writing code):
+   - **`rewrite-dot-access` does NOT have the selection-CLOSING property that
+     killed attempt 2.** That property belongs to `segment-select-items`, which
+     [DEFERRED 101](DEFERRED.md) records is *"reached ONLY from the args of a
+     `$select`/`$select-path` node, and the fold CLOSES the selection as it goes
+     — so a non-sentinel marker is left a SIBLING of the finished node, outside
+     the args."* `rewrite-dot-access` is a **different fold**: it keeps each
+     wrapped node in its accumulator, where the next sentinel can consume it.
+     The design's choice of seat is sound, not lucky.
+   - **Its arms already have exactly the postfix shape the star needs.** The
+     `$dot-access` arm takes `(car acc)` as the target and replaces it with
+     `($select-path target field)` — *consume the preceding element*, which is
+     what a postfix `*` is. The ω arm added at P4c-4b is that arm verbatim except
+     the payload rides WHOLE. A star arm is the same shape a third time.
+   - **⚠ THE FIXPOINT OBLIGATION IS THE ONE TO RESPECT.** The emitted head must
+     NOT be an `access-sentinel?` member, or `preparse-expand-subforms` re-enters
+     and **swallows one LEFT sibling per pass** — the P1b-iii defect that
+     silently dropped a `defn` clause at zero errors. Verified: neither
+     `arity2-access-sentinel-heads` nor `brace-access-sentinel-heads` contains
+     `$select-path`, which is why the existing arms emit it.
+   - **The refusal message already exists and is reachable for free.**
+     `star-not-yet-message` (parser.rkt) fires from `segment-select-items`, i.e.
+     from the ARGS of a `$select`/`$select-path` node — so a star fused INTO
+     those args inherits the message the parked test expects, rather than needing
+     a new diagnostic. Its own comment already says so: *"Giving them this same
+     message is P4e-1's first deliverable; until it lands, do not read this
+     comment as a contract."*
+
 **Scope OUT, with reasons** — [Q_U23](#q-u23)'s Map/strict-merge ruling (this
 slice ships the *not-yet message*, never the flatten, so the semantics are not
 reached) · the `.*` retirement inventory (Q_U23's own surface) · DEFERRED 106 +
