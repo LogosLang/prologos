@@ -30,7 +30,10 @@ ns prologos::io::server :no-prelude
 ;; decoding stay on the Racket side of the FFI and are not rewritten here.
 
 require [prologos::core::world :refer [World world]]
-        [prologos::io::net     :refer [ConnH ServerH
+        [prologos::data::list  :refer [List nil cons]]
+        [prologos::data::nat   :as nat :refer [nat-eq?]]
+        [prologos::io::net     :refer [ConnH ServerH conn-h conn-id server-id
+                                        Synced synced net-sync
                                         Recv recv
                                         Accepted accepted
                                         Listening listening
@@ -87,3 +90,127 @@ defn echo-once [port]
           match [[net-accept s] w2]
             | accepted w3 c ->
                 [[net-close-server s] [[echo-conn c] w3]]
+
+;; ========================================
+;; Many connections, ONE loop, ONE state
+;; ========================================
+;;
+;; `echo-once` above serves a single peer. This serves many — and the whole
+;; point is what the state looks like while it does: `SrvState` is an ORDINARY
+;; VALUE threaded through the loop.
+;;
+;; That is the observation the OCapN migration turns on. The five shared FFI
+;; hash tables that hold handoff state exist because the Racket server gives
+;; each connection its own THREAD, so per-connection state cannot be an
+;; accumulator — it has to be somewhere both threads can reach. One loop over a
+;; multiplexed handle set removes the reason: state becomes fields, not tables.
+;;
+;; SEQUENTIAL, deliberately. `net-sync` returns one ready handle and it is
+;; serviced before anything else runs, so a slow peer delays the others. That
+;; is the accepted cost of getting the loop into the language; parallel service
+;; is the on-network question and is not answered here.
+
+;; server, open connections, connections still expected.
+;;
+;; The third field is what lets a TEST terminate. A real server would drop it
+;; and loop forever, which is the only difference between this and one.
+data SrvState
+  srv-state : ServerH -> [List ConnH] -> Nat
+
+spec srv-server SrvState -> ServerH
+defn srv-server [st]
+  match st
+    | srv-state s _ _ -> s
+
+;; The handle ids to wait on: every open connection, plus the listener while
+;; we still expect more peers. Dropping the listener once we do not is what
+;; lets the loop finish rather than blocking on an accept nobody will make.
+spec conn-ids [List ConnH] -> [List Nat]
+defn conn-ids
+  | nil          -> [nil Nat]
+  | cons c rest  -> [cons [conn-id c] [conn-ids rest]]
+
+spec remove-conn Nat [List ConnH] -> [List ConnH]
+defn remove-conn
+  | _ nil         -> [nil ConnH]
+  | h [cons c rest] ->
+      match [nat-eq? h [conn-id c]]
+        | true  -> remove-conn h rest
+        | false -> [cons c [remove-conn h rest]]
+
+spec watch-list SrvState -> [List Nat]
+defn watch-list [st]
+  match st
+    | srv-state s conns remaining ->
+        match [nat-eq? remaining 0N]
+          | true  -> conn-ids conns
+          | false -> [cons [server-id s] [conn-ids conns]]
+
+;; Nothing left to wait for: no peer still expected and none still open.
+spec srv-done? SrvState -> Bool
+defn srv-done? [st]
+  match st
+    | srv-state _ conns remaining ->
+        match [nat-eq? remaining 0N]
+          | false -> false
+          | true  -> match conns
+                       | nil      -> true
+                       | cons _ _ -> false
+
+;; One step's outcome: the world after it, and the state after it.
+data Served
+  served : World -> SrvState
+
+spec accept-one ServerH [List ConnH] Nat -> <(w :1 World) -> Served>
+defn accept-one [s conns remaining]
+  fn [w :1 World]
+    match [[net-accept s] w]
+      | accepted w2 c ->
+          served w2 [srv-state s [cons c conns] [pred remaining]]
+
+;; Echo one frame, or retire the connection when its peer has gone.
+spec echo-one ServerH [List ConnH] Nat ConnH -> <(w :1 World) -> Served>
+defn echo-one [s conns remaining c]
+  fn [w :1 World]
+    match [[net-recv c] w]
+      | recv w2 payload eof ->
+          match eof
+            | true  -> served [[net-close-conn c] w2] [srv-state s [remove-conn [conn-id c] conns] remaining]
+            | false -> served [[net-send c payload] w2] [srv-state s conns remaining]
+
+spec handle-ready SrvState Nat -> <(w :1 World) -> Served>
+defn handle-ready [st ready]
+  fn [w :1 World]
+    match st
+      | srv-state s conns remaining ->
+          match [nat-eq? ready [server-id s]]
+            | true  -> [[accept-one s conns remaining] w]
+            | false -> [[echo-one s conns remaining [conn-h ready]] w]
+
+;; Wait for something to happen, then handle it.
+spec serve-once SrvState -> <(w :1 World) -> Served>
+defn serve-once [st]
+  fn [w :1 World]
+    match [[net-sync [watch-list st]] w]
+      | synced w2 ready -> [[handle-ready st ready] w2]
+
+;; The loop. Self-recursive only: `serve-once` is defined above and does not
+;; call back, because module-level definitions are not forward-referenceable
+;; and a mutually recursive pair fails at import with an unbound variable.
+spec serve-loop SrvState -> <(w :1 World) -> World>
+defn serve-loop [st]
+  fn [w :1 World]
+    match [srv-done? st]
+      | true  -> w
+      | false ->
+          match [[serve-once st] w]
+            | served w2 st2 -> [[serve-loop st2] w2]
+
+;; Serve `n` connections concurrently on `port`, returning when all have
+;; closed.
+spec serve-n Nat Nat -> <(w :1 World) -> World>
+defn serve-n [port n]
+  fn [w :1 World]
+    match [[net-listen port] w]
+      | listening w2 s ->
+          [[net-close-server s] [[serve-loop [srv-state s [nil ConnH] n]] w2]]

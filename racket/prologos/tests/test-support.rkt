@@ -27,6 +27,7 @@
          "../surface-syntax.rkt"
          "../errors.rkt"
          "../metavar-store.rkt"
+         (only-in "../reduction.rkt" current-reduction-fuel-budget)
          "../parser.rkt"
          "../elaborator.rkt"
          "../pretty-print.rkt"
@@ -131,6 +132,11 @@
                  [current-impl-registry (current-impl-registry)]
                  [current-param-impl-registry (current-param-impl-registry)]
                  [current-capability-registry (current-capability-registry)]
+                 ;; SH step 4: the per-command reduction-fuel BUDGET. Reset per
+                 ;; test so a file that raises it for a server loop cannot leak
+                 ;; the raised value into the next file's commands, where a
+                 ;; divergent term would spin instead of erroring.
+                 [current-reduction-fuel-budget (current-reduction-fuel-budget)]
                  ;; CIU T6 F1b.5-s1d: the five registry params added to the
                  ;; macros snapshot (pipeline.md New-Parameter checklist parity)
                  [current-schema-registry (current-schema-registry)]

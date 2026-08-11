@@ -44,7 +44,7 @@
 
 (provide whnf nf nf-whnf conv conv-nf
          current-nf-cache current-whnf-cache
-         current-reduction-fuel current-nat-value-cache
+         current-reduction-fuel current-reduction-fuel-budget current-nat-value-cache
          ;; CIU T6 F1b.5-s2: the degradation guard (exemption-list membership
          ;; is test-pinned — the D22/P6 silent-value-loss class)
          definitely-not-map?
@@ -2356,6 +2356,24 @@
 ;; Fuel: #f = unlimited, or a box containing remaining step count.
 ;; Use (box N) to set a limit; whnf-impl decrements on each call.
 (define current-reduction-fuel (make-parameter #f))
+
+;; How much fuel a command gets. `driver.rkt` builds the per-command box from
+;; this; `#f` means NO limit.
+;;
+;; The default is the REPL-command budget, and it is right for a command: a
+;; type-check that needs a million reduction steps has almost certainly
+;; diverged. It is wrong for a PROGRAM. A server loop written in Prologos
+;; (prologos::io::server) is one reduction that runs for as long as the server
+;; does, and 1M steps is a few hundred frames.
+;;
+;; This is the knob the existing architecture avoids needing: interop-driver's
+;; header notes it runs "one `process-string` per frame, so each frame gets a
+;; fresh reduction-fuel budget". Moving the loop into the language means one
+;; long reduction instead of many short ones, and the budget has to move with
+;; it. Raising it does NOT make a divergent program terminate — it trades a
+;; bounded wrong answer for an unbounded one, so `#f` belongs to callers that
+;; have their own way to stop (a test timeout, a supervisor), not to commands.
+(define current-reduction-fuel-budget (make-parameter 1000000))
 
 (define (whnf e)
   (define cache (current-whnf-cache))

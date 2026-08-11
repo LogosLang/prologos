@@ -69,6 +69,7 @@ ns prologos::io::net :no-prelude
 
 require [prologos::core::world       :refer [World world world-tick]]
         [prologos::core::capabilities :refer (NetCap)]
+        [prologos::data::list        :refer [List nil cons]]
 
 ;; ========================================
 ;; FFI — all :requires (NetCap)
@@ -92,7 +93,9 @@ foreign racket "tcp-ffi.rkt" :requires (NetCap)
 foreign racket "tcp-ffi.rkt" :requires (NetCap)
   [tcp-frame-close   :as raw-close   : Nat -> Nat -> Nat]
 foreign racket "tcp-ffi.rkt" :requires (NetCap)
-  [tcp-tick-after    :as tick-after  : Nat -> Nat]
+  [tcp-tick-after    :as tick-after  : Nat -> Nat -> Nat]
+foreign racket "tcp-ffi.rkt" :requires (NetCap)
+  [tcp-sync-any      :as raw-sync    : Nat -> [List Nat] -> Nat]
 
 ;; ========================================
 ;; Typed handles
@@ -193,7 +196,7 @@ defn net-listen [port]
     match w
       | world t ->
           let sid : Nat := [raw-listen t port]
-            listening [world [tick-after sid]] [server-h sid]
+            listening [world [tick-after t sid]] [server-h sid]
 
 ;; Accept one connection. BLOCKS.
 spec net-accept ServerH -> <(w :1 World) -> Accepted>
@@ -202,7 +205,7 @@ defn net-accept [s]
     match w
       | world t ->
           let cid : Nat := [raw-accept t [server-id s]]
-            accepted [world [tick-after cid]] [conn-h cid]
+            accepted [world [tick-after t cid]] [conn-h cid]
 
 ;; Write one frame.
 spec net-send ConnH String -> <(w :1 World) -> World>
@@ -236,3 +239,38 @@ defn net-close-server [s]
     match w
       | world t ->
           world [raw-close t [server-id s]]
+
+;; ========================================
+;; Multiplexing
+;; ========================================
+
+;; Which handle became ready, and the world after waiting.
+data Synced
+  synced : World -> Nat
+
+spec synced-world Synced -> World
+defn synced-world [s]
+  match s
+    | synced w _ -> w
+
+spec synced-handle Synced -> Nat
+defn synced-handle [s]
+  match s
+    | synced _ h -> h
+
+;; Block until one of `handles` is ready; answer which. A listener is ready
+;; when a connection is pending, a connection when a frame can be read.
+;;
+;; `ready` is used twice below — once to date the new world and once as the
+;; answer. Under a call-by-name reducer that re-walks the underlying `raw-sync`
+;; application, and it is SAFE only because effects are memoized on their tick
+;; (see tcp-ffi.rkt): the second walk returns the handle the first one waited
+;; for instead of waiting again. Without the memo this line would block twice
+;; and the server would service every other event.
+spec net-sync [List Nat] -> <(w :1 World) -> Synced>
+defn net-sync [handles]
+  fn [w :1 World]
+    match w
+      | world t ->
+          let ready : Nat := [raw-sync t handles]
+            synced [world [tick-after t ready]] ready

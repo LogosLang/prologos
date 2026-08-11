@@ -73,6 +73,7 @@
  tcp-tick-after
  tcp-frame-listen
  tcp-frame-close
+ tcp-sync-any
  current-framing-strategy
  tcp-close
  tcp-ffi-registry
@@ -304,10 +305,21 @@
 ;; Read the current tick. `dep` is deliberately unused — it exists so the
 ;; caller must already hold something the effect produced. Ops that must
 ;; return a HANDLE use this to get their new tick, since a foreign call
-;; returns one value and the handle is that value. Memoized on `dep` so a
-;; re-walk cannot observe a clock that has since moved on.
-(define (tcp-tick-after dep)
-  (memoized (list 'tick-after dep) (lambda () tcp-world-tick)))
+;; returns one value and the handle is that value.
+;;
+;; Keyed on (previous-tick, dep), and the previous-tick half is LOAD-BEARING.
+;; Keyed on `dep` alone it looks right — a handle is unique per accept — and it
+;; deadlocks the server loop: `dep` is the handle `sync` returned, the same
+;; connection comes back ready on every iteration, so the second iteration hits
+;; the memo and gets the FIRST iteration's tick. The clock stops, the next
+;; `sync` runs at a tick it has already answered, and the loop spins on one
+;; cached event forever. Observed as `FFI sync tick=6 handles=(1)` repeating
+;; after the peer had already disconnected.
+;;
+;; The rule the whole memo depends on: a key must identify a POINT IN TIME, and
+;; any component that recurs cannot supply that on its own.
+(define (tcp-tick-after tick dep)
+  (memoized (list 'tick-after tick dep) (lambda () tcp-world-tick)))
 
 (define (tcp-frame-listen tick port)
   (memoized (list 'listen tick port)
@@ -342,6 +354,45 @@
 (define (tcp-frame-eof-at tick conn-id)
   (void conn-id)
   (hash-ref eof-at-tick tick #t))
+
+;; ========================================
+;; Multiplexing (SH-4)
+;; ========================================
+;;
+;; Block until ONE of `handles` is ready, and return which. A listener is ready
+;; when a connection is pending; a connection is ready when a frame can be
+;; read. That is the whole of what a single-threaded server needs to service
+;; many peers.
+;;
+;; Racket's `sync` is exactly this primitive, which is why no polling loop
+;; appears here — `tcp-accept-ready?` exists and building the server on it
+;; would busy-wait.
+;;
+;; SEQUENTIAL by construction: one handle is returned, the caller services it,
+;; and nothing else runs meanwhile. That is the accepted tradeoff for getting
+;; the loop into the language; parallel service is the on-network question, not
+;; this one.
+;;
+;; An empty handle list would block forever with nothing able to wake it, so it
+;; answers with the sentinel instead. The caller is expected not to ask — the
+;; Prologos side checks its own done-condition first — but "hang" is the wrong
+;; way to report a caller's mistake.
+(define tcp-sync-none -1)
+
+(define (tcp-sync-any tick handles)
+  (memoized (list 'sync tick handles)
+            (lambda ()
+              (cond
+                [(null? handles) tcp-sync-none]
+                [else
+                 (define evts
+                   (for/list ([h (in-list handles)])
+                     (define target
+                       (case (tcp-kind h)
+                         [(listener) (tcp-lookup h)]
+                         [else (car (tcp-lookup h))]))   ;; (cons in out) -> in
+                     (wrap-evt target (lambda (_) h))))
+                 (begin0 (apply sync evts) (tcp-bump!))]))))
 
 (define (tcp-frame-close tick handle-id)
   (memoized (list 'close tick handle-id)

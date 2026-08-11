@@ -184,6 +184,29 @@
       (check-equal? (tcp-frame-payload-at t1 b) "alpha"
                     "an earlier tick observed a later frame"))))
 
+(test-case "a memo key must identify a point in TIME, not just a thing"
+  ;; `tcp-tick-after` answers "what is the clock now", memoized so a re-walk
+  ;; cannot see a clock that has since moved. Keyed on its `dep` argument alone
+  ;; it looks right — a handle is unique per accept — and it DEADLOCKS the
+  ;; server loop: `dep` is the handle `sync` returned, the same connection is
+  ;; ready on every iteration, so iteration two hits the memo and receives
+  ;; iteration one's tick. The clock stops; the next `sync` runs at a tick it
+  ;; has already answered; the loop replays one cached event forever.
+  ;;
+  ;; Observed before the fix as `FFI sync tick=6 handles=(1)` repeating after
+  ;; the peer had disconnected. Pinned here because the symptom is a hang with
+  ;; no error, arbitrarily far from the key that caused it.
+  (with-pair
+    (lambda (a b)
+      ;; Same (tick, dep) twice: stable, which is the whole point of the memo.
+      (define first-answer (tcp-tick-after 900 a))
+      (check-equal? (tcp-tick-after 900 a) first-answer)
+      ;; Advance the clock, then ask again with the SAME dep at a NEW tick.
+      ;; This must move. If it does not, the loop above cannot progress.
+      (tcp-frame-send 901 a "advance")
+      (check-not-equal? (tcp-tick-after 902 a) first-answer
+                        "the clock froze: tick-after ignored its tick argument"))))
+
 (test-case "closing a handle drops its frame state"
   (define port (free-port))
   (define srv (tcp-listen port))

@@ -787,7 +787,8 @@
                  ;; See docs/tracking/2026-07-27_SUBSTITUTION_QUADRATIC_BLOWUP_DESIGN.md
                  [current-nf-cache (make-hasheq)]         ;; per-command nf memoization
                  [current-whnf-cache (make-hasheq)]       ;; per-command whnf memoization
-                 [current-reduction-fuel (box 1000000)]  ;; 1M step limit
+                 [current-reduction-fuel (let ([b (current-reduction-fuel-budget)])
+                                           (and b (box b)))]  ;; #f budget = no limit
                  [current-nat-value-cache (make-hasheq)]  ;; per-command nat-value memoization
                  [current-narrow-var-constraints (hasheq)] ;; Phase 3c: per-command constraint chain
                  [current-coercion-warnings '()]         ;; per-command coercion warnings

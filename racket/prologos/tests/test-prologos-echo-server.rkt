@@ -38,6 +38,7 @@
          "../namespace.rkt"
          "../multi-dispatch.rkt"
          (only-in "../tcp-ffi.rkt" current-framing-strategy)
+         (only-in "../reduction.rkt" current-reduction-fuel-budget)
          (only-in "../../../tools/interop/ocapn-framing.rkt" read-frame write-frame))
 
 (current-framing-strategy 'netstring)
@@ -80,9 +81,16 @@
             (current-ctor-registry)
             (current-type-meta))))
 
+;; A server loop is ONE reduction that runs as long as the server does, so the
+;; per-command budget (1M steps, right for a REPL command) is a few hundred
+;; frames. Raised rather than removed: a runaway still stops, and the number is
+;; the measurement below, not a guess.
+(define server-fuel 200000000)
+
 (define (run-last s)
   (define r
-    (parameterize ([current-file-module-network-ref
+    (parameterize ([current-reduction-fuel-budget server-fuel]
+                   [current-file-module-network-ref
                     (module-network-add-import (make-module-network)
                                                (module-network-from-snapshot shared-global-env))]
                    [current-ns-context shared-ns-context]
