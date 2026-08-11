@@ -1,0 +1,75 @@
+ns prologos::core::world :no-prelude
+
+;; ========================================
+;; The World token — effect ordering as a data dependency
+;; ========================================
+;;
+;; Reduction is LAZY in argument position. That makes effect ordering a
+;; problem the language does not solve for you: two foreign calls with no
+;; data dependency between them may run in either order, and one whose result
+;; is structurally predictable may not run at all.
+;;
+;; The existing answer in this codebase is to force an effect by MATCHING on
+;; its result. It works, and `emit-after-stash` in `interop-driver.prologos`
+;; documents its own fragility at the site: its two match arms are
+;; deliberately different, because writing them identically would let "any
+;; arm-collapsing rewrite fold them away — and folding it away DELETES the
+;; stash". An effect whose survival depends on an optimiser not noticing
+;; something is not ordered, it is unexamined.
+;;
+;; A World token replaces that with a data dependency. An effectful operation
+;; takes a World and returns the next one, so the only way to perform the
+;; second effect is to already hold what the first produced. Ordering lives in
+;; the dataflow, where the reducer must respect it.
+;;
+;; ----------------------------------------
+;; Why the tick is a real number
+;; ----------------------------------------
+;;
+;; A World carries a Nat that the FFI's global clock produces. It would be
+;; simpler to make World a nullary constructor — and it would reintroduce the
+;; exact hazard above. A token with one inhabitant is a value the reducer can
+;; produce WITHOUT running the effect, so the dependency becomes decorative.
+;; The tick cannot be computed without the effect having run.
+;;
+;; ----------------------------------------
+;; What linearity buys, and what it does not
+;; ----------------------------------------
+;;
+;; A World parameter declared `:1` must be consumed EXACTLY ONCE. QTT enforces
+;; both halves, and the diagnostics already exist:
+;;
+;;   used twice → "declared `:1` (linear) but is used more than once"
+;;   dropped    → "must be consumed; nothing may drop it"
+;;
+;; Using it twice would mean two futures branching off one past — two effects
+;; both claiming to follow the same predecessor, which is precisely the
+;; ambiguity the token exists to remove. Dropping it would mean an effect
+;; whose result nothing depends on, which is the one a lazy reducer is
+;; entitled to skip.
+;;
+;; HONEST LIMIT, stated rather than discovered later: `world` is an ordinary
+;; constructor, so a module that refers it can mint a World from nothing and
+;; step outside the ordering. Nothing here prevents that. Preventing it needs
+;; an abstract type — a constructor visible to its own module and no other —
+;; which Phase 0 does not have. The mitigation available today is the refer
+;; list: import `World` and `world-tick` and leave `world` alone. `io::net`
+;; does need the constructor, because it is the module that builds the next
+;; World from a tick.
+
+data World
+  world : Nat
+
+spec world-tick World -> Nat
+  :doc "The clock reading this World stands at."
+defn world-tick [w]
+  match w
+    | world n -> n
+
+;; The World a program starts from.
+;;
+;; Zero rather than the clock's current value: this names the BEGINNING, and
+;; every effect after it produces a tick from the clock itself. Handing out a
+;; live reading here would make the first World depend on whatever ran before
+;; the program, which is the opposite of what a starting point means.
+def initial-world : World := [world 0N]

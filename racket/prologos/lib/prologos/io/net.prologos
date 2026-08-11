@@ -1,0 +1,238 @@
+ns prologos::io::net :no-prelude
+
+;; ========================================
+;; Frame IO over TCP, ordered by the World token
+;; ========================================
+;;
+;; The socket operations a Prologos-side event loop needs, threaded through
+;; `prologos::core::world` so their order is a data dependency rather than a
+;; convention. Read that module first — it says why the token exists and what
+;; linearity does and does not buy.
+;;
+;; ----------------------------------------
+;; An action IS a linear World transformer
+;; ----------------------------------------
+;;
+;; Every operation here returns a value of type
+;;
+;;     [Pi [w :1 World] <result>]
+;;
+;; — a function that consumes exactly one World and produces the next state of
+;; the world. `net-send c payload` does not send anything; it is the SENDING,
+;; as a value, and it happens when a World is handed to it.
+;;
+;; This is an effect as a VALUE, applied to a world — the shape a
+;; state-threading IO type has everywhere else.
+;;
+;; It is also the only shape Phase 0 will accept. `defn` rejects a `:1`
+;; parameter outright (the parser asks for a fused type or a `spec`), and a
+;; `defn` whose body is a `fn` cannot be inferred from an annotated parameter
+;; either. What works is a `spec` carrying the multiplicity in an
+;; angle-bracket Pi, with the `defn` parameters left UNANNOTATED:
+;;
+;;     spec net-send ConnH String -> <(w :1 World) -> World>
+;;     defn net-send [c payload] (fn [w :1 World] ...)
+;;
+;; The spec registers SILENTLY — it prints nothing, which makes it easy to
+;; believe it was ignored. It is required: without it a `defn` whose body is a
+;; `fn` cannot be inferred, annotated parameters or not.
+;;
+;; MEASURED, because the obvious reading is wrong. The `:1` is carried if
+;; EITHER the spec's Pi binder or the body's `fn` binder declares it — widen
+;; just one and `infer` still reports `[Pi [w :1 World] World]`. A DISAGREEMENT
+;; between the two is accepted silently, resolving to the restrictive side. So
+;; a spec here is not the authority on its own function's multiplicity, and
+;; reading one as if it were will mislead you. Both sites declare `:1`
+;; deliberately; `test-world-linearity.rkt` fails when both are widened.
+;;
+;; ----------------------------------------
+;; Why the reads take a tick
+;; ----------------------------------------
+;;
+;; `net-recv` reads a frame and returns the payload WITH the new world, in one
+;; `Recv`. It cannot be split into "read" then "get the payload", because the
+;; getter would have no data dependency on the read and a lazy reducer could
+;; evaluate it first. The FFI's `tcp-frame-payload-at` therefore takes the
+;; tick the read produced. It ignores the value; it needs its argument to be
+;; unobtainable before the read.
+;;
+;; ----------------------------------------
+;; Known limit, stated up front
+;; ----------------------------------------
+;;
+;; `Recv` holds a World in an ordinary field, and data fields carry no
+;; multiplicity. So `recv-world` can be applied to the same `Recv` twice and
+;; yield two Worlds — the branching-timeline case linearity exists to stop,
+;; reachable through the bundle rather than through the parameter. Closing it
+;; needs linear fields, which Phase 0 does not have. `test-world-linearity.rkt`
+;; pins this as a KNOWN GAP rather than leaving it to be discovered.
+
+require [prologos::core::world       :refer [World world world-tick]]
+        [prologos::core::capabilities :refer (NetCap)]
+
+;; ========================================
+;; FFI — all :requires (NetCap)
+;; ========================================
+;;
+;; Each takes a tick as its first argument. See above: the tick is evidence,
+;; not data, and every one of these ignores its value.
+
+foreign racket "tcp-ffi.rkt" :requires (NetCap)
+  [tcp-frame-listen  :as raw-listen  : Nat -> Nat -> Nat]
+foreign racket "tcp-ffi.rkt" :requires (NetCap)
+  [tcp-frame-accept  :as raw-accept  : Nat -> Nat -> Nat]
+foreign racket "tcp-ffi.rkt" :requires (NetCap)
+  [tcp-frame-send    :as raw-send    : Nat -> Nat -> String -> Nat]
+foreign racket "tcp-ffi.rkt" :requires (NetCap)
+  [tcp-frame-recv    :as raw-recv    : Nat -> Nat -> Nat]
+foreign racket "tcp-ffi.rkt" :requires (NetCap)
+  [tcp-frame-payload-at :as raw-payload : Nat -> Nat -> String]
+foreign racket "tcp-ffi.rkt" :requires (NetCap)
+  [tcp-frame-eof-at  :as raw-eof     : Nat -> Nat -> Bool]
+foreign racket "tcp-ffi.rkt" :requires (NetCap)
+  [tcp-frame-close   :as raw-close   : Nat -> Nat -> Nat]
+foreign racket "tcp-ffi.rkt" :requires (NetCap)
+  [tcp-tick-after    :as tick-after  : Nat -> Nat]
+
+;; ========================================
+;; Typed handles
+;; ========================================
+;;
+;; Named types rather than bare Nats so a listener cannot be passed where a
+;; connection belongs. Same reasoning as `tcp-testing.prologos`, which these
+;; do not replace: that module is the LINE-oriented netlayer and keeps its own
+;; handles until the OCapN driver moves onto these (step 5), at which point it
+;; is the one to retire.
+
+data ServerH
+  server-h : Nat
+
+data ConnH
+  conn-h : Nat
+
+spec server-id ServerH -> Nat
+defn server-id [s]
+  match s
+    | server-h n -> n
+
+spec conn-id ConnH -> Nat
+defn conn-id [c]
+  match c
+    | conn-h n -> n
+
+;; ========================================
+;; Results that carry the next World
+;; ========================================
+
+;; A completed read: the new world, the payload, and whether the peer is done.
+;;
+;; EOF is a FIELD, not an empty payload. A zero-length frame and a closed
+;; socket both carry no bytes, and a loop that cannot tell them apart either
+;; spins on a dead peer or drops a legitimate empty frame.
+data Recv
+  recv : World -> String -> Bool
+
+spec recv-world Recv -> World
+defn recv-world [r]
+  match r
+    | recv w _ _ -> w
+
+spec recv-payload Recv -> String
+defn recv-payload [r]
+  match r
+    | recv _ p _ -> p
+
+spec recv-eof? Recv -> Bool
+defn recv-eof? [r]
+  match r
+    | recv _ _ e -> e
+
+;; A completed accept: the new world and the connection that arrived.
+data Accepted
+  accepted : World -> ConnH
+
+spec accepted-world Accepted -> World
+defn accepted-world [a]
+  match a
+    | accepted w _ -> w
+
+spec accepted-conn Accepted -> ConnH
+defn accepted-conn [a]
+  match a
+    | accepted _ c -> c
+
+;; A completed listen.
+data Listening
+  listening : World -> ServerH
+
+spec listening-world Listening -> World
+defn listening-world [l]
+  match l
+    | listening w _ -> w
+
+spec listening-server Listening -> ServerH
+defn listening-server [l]
+  match l
+    | listening _ s -> s
+
+;; ========================================
+;; Actions
+;; ========================================
+;;
+;; Each carries a `spec` whose World parameter is `:1`. Writing the spec
+;; WITHOUT the multiplicity would be worse than having none: it would silently
+;; widen the parameter to `mw` and throw the guarantee away while still looking
+;; like documentation. Parameters are deliberately unannotated — the spec is
+;; what types them, and a fused annotation here defeats inference of the `fn`
+;; body.
+
+;; Bind a listener on 127.0.0.1:port.
+spec net-listen Nat -> <(w :1 World) -> Listening>
+defn net-listen [port]
+  fn [w :1 World]
+    match w
+      | world t ->
+          let sid : Nat := [raw-listen t port]
+            listening [world [tick-after sid]] [server-h sid]
+
+;; Accept one connection. BLOCKS.
+spec net-accept ServerH -> <(w :1 World) -> Accepted>
+defn net-accept [s]
+  fn [w :1 World]
+    match w
+      | world t ->
+          let cid : Nat := [raw-accept t [server-id s]]
+            accepted [world [tick-after cid]] [conn-h cid]
+
+;; Write one frame.
+spec net-send ConnH String -> <(w :1 World) -> World>
+defn net-send [c payload]
+  fn [w :1 World]
+    match w
+      | world t ->
+          world [raw-send t [conn-id c] payload]
+
+;; Read one frame. BLOCKS. The payload and the EOF flag are read at the tick
+;; the read produced — see the header on why they cannot be separate actions.
+spec net-recv ConnH -> <(w :1 World) -> Recv>
+defn net-recv [c]
+  fn [w :1 World]
+    match w
+      | world t ->
+          let t2 : Nat := [raw-recv t [conn-id c]]
+            recv [world t2] [raw-payload t2 [conn-id c]] [raw-eof t2 [conn-id c]]
+
+;; Close a connection or a listener.
+spec net-close-conn ConnH -> <(w :1 World) -> World>
+defn net-close-conn [c]
+  fn [w :1 World]
+    match w
+      | world t ->
+          world [raw-close t [conn-id c]]
+
+spec net-close-server ServerH -> <(w :1 World) -> World>
+defn net-close-server [s]
+  fn [w :1 World]
+    match w
+      | world t ->
+          world [raw-close t [server-id s]]

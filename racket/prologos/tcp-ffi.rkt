@@ -65,6 +65,14 @@
  tcp-recv-frame-ret
  tcp-recv-frame-cached
  tcp-recv-frame-eof?
+ tcp-frame-send
+ tcp-frame-recv
+ tcp-frame-payload-at
+ tcp-frame-eof-at
+ tcp-frame-accept
+ tcp-tick-after
+ tcp-frame-listen
+ tcp-frame-close
  current-framing-strategy
  tcp-close
  tcp-ffi-registry
@@ -216,6 +224,78 @@
 ;; the unsafe one keeps a loop running on a socket that has nothing to say.
 (define (tcp-recv-frame-eof? conn-id)
   (hash-ref tcp-frame-eof conn-id #t))
+
+;; ========================================
+;; World-threaded frame IO (SH-2)
+;; ========================================
+;;
+;; The same operations, but each takes a TICK and returns the next one. The
+;; tick is the runtime half of `prologos::core::world`; see that module for
+;; why a World token exists at all.
+;;
+;; Why the tick is a real value and not a token the compiler could invent:
+;; reduction is lazy in argument position, so an expression with no data
+;; dependency on an effect may be evaluated BEFORE it — or, if its result is
+;; structurally predictable, not at all. `tcp-frame-payload-at` therefore takes
+;; the tick that `tcp-frame-recv` produced. It ignores the value; what it needs
+;; is that its argument cannot be computed without the read having happened.
+;; The tick is EVIDENCE, and threading it is what puts the ordering in the
+;; dataflow rather than in a convention.
+;;
+;; This is the same reasoning `emit-after-stash` (interop-driver.prologos)
+;; spells out for its deliberately-different match arms, made structural
+;; instead of idiomatic.
+
+;; ONE global tick. Every effectful op below bumps it; `tcp-tick-after` reads
+;; it back. The VALUE is a real monotone clock (useful when reading a trace);
+;; its job in the type system is only to be a value that cannot exist before
+;; the effect that produced it.
+(define tcp-world-tick 0)
+(define (tcp-bump!)
+  (set! tcp-world-tick (add1 tcp-world-tick))
+  tcp-world-tick)
+
+;; Read the current tick. `dep` is deliberately unused — it exists so the
+;; caller must already hold something the effect produced. Ops that must
+;; return a HANDLE use this to get their new tick, since a foreign call
+;; returns one value and the handle is that value.
+(define (tcp-tick-after dep)
+  (void dep)
+  tcp-world-tick)
+
+(define (tcp-frame-send tick conn-id payload)
+  (void tick)
+  (tcp-send-frame conn-id payload)
+  (tcp-bump!))
+
+(define (tcp-frame-recv tick conn-id)
+  (void tick)
+  (tcp-recv-frame-ret conn-id)
+  (tcp-bump!))
+
+;; `tick` is deliberately unused: it exists to be a dependency.
+(define (tcp-frame-payload-at tick conn-id)
+  (void tick)
+  (tcp-recv-frame-cached conn-id))
+
+(define (tcp-frame-eof-at tick conn-id)
+  (void tick)
+  (tcp-recv-frame-eof? conn-id))
+
+;; Accept and listen return a HANDLE, so their new tick comes from
+;; `tcp-tick-after` applied to that handle. Both block.
+(define (tcp-frame-accept tick server-id)
+  (void tick)
+  (begin0 (tcp-accept server-id) (tcp-bump!)))
+
+(define (tcp-frame-listen tick port)
+  (void tick)
+  (begin0 (tcp-listen port) (tcp-bump!)))
+
+(define (tcp-frame-close tick handle-id)
+  (void tick)
+  (tcp-close handle-id)
+  (tcp-bump!))
 
 (define (tcp-close handle-id)
   (define kind (tcp-kind handle-id))
