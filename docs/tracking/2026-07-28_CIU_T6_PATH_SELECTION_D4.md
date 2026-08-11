@@ -8019,12 +8019,31 @@ first and every verify round then found a defect in the previous round's FIX:
    arm and prints its internal name, because **appearing there is the defect** —
    `*` would hide a leak inside `expand`. Both reversals are pinned with their
    reasoning so the next bare-symbol sentinel does not re-derive them.
-3. ⬜ **1a-iii — the atomic change.** Rename `token-entry->stx`'s arm + the gate
-   disjunct + the [Q_U36](#q-u36) positive-list fuse + [Q_U35](#q-u35)'s refusal
-   + [Q_U31](#q-u31)'s refusal at BOTH families; uncomment the two parked tests.
-   **Cannot be split**: the live gate arms the instant the symbol is emitted and
-   stays red until all of it lands. Splitting means landing a knowingly-red
-   battery.
+3. ✅ **1a-iii — the atomic change** (`9cac0099`, attempt 2 per [Q_U37](#q-u37);
+   attempt 1 recorded below). Battery 469 → 476 · neighbourhood 497 across 14
+   files · acceptance 84/84 by diff · **full suite 10143 / 488 / 0** · five
+   mutations kill. `xs:{a}*` and `c{a}*` reach `star-not-yet-message`; the two
+   parked tests are LIVE; `[f x]*` takes the guided refusal; the glued Sigma
+   takes the angle-generic type-seat message at both families (the live family-2
+   route is the SPEC spelling); quote/quasiquote capture the star as `*`.
+   **The fuse RETIRED two whole-file aborts** (DEFERRED 108: 21 → 19 — the
+   usable carriers in match-scrutinee now get a guided message).
+   **⭐⭐ ROUND 2'S VERIFY FOUND THE RENAME LEAKING THROUGH ERROR ECHOES** — the
+   def seam and the fn binder error both echo source datums, and the rename
+   silently changed the echoed content from `*` to the internal sentinel, in two
+   seats the matrix's leak pin structurally cannot see (off-matrix positions).
+   Fixed via `unmint-star-for-echo`: error echoes render the USER'S spelling
+   (capture-fidelity, same argument as the quasiquote arm — and the OPPOSITE of
+   `pp-datum`, where the internal name is deliberately the tell). Also: the
+   family-2 pin was VACUOUS (`|defn requires` alternation — an instrument hedged
+   into its own blind spot; the defn spelling dies before the arm is reached)
+   and its comment asserted the dead route; both corrected, and the fifth mutant
+   (the `memq '$postfix-star` disjunct) now kills. The preparse-RAISED set is a
+   pinned snapshot (3 cells, all star-free pre-existing). Filed: **DEFERRED
+   110** (pipe-terminal fused star — `expand-pipe-block`'s one-element unwrap
+   spreads a fused node; pre-existing, pinned AS an accident) · **111** (the
+   raw-datum-echoing error-site CLASS: two instances fixed, census unclaimed) ·
+   **112** (`$facts-sep`, star-free, rel-territory).
 
    **⭐ THE FUSE SEAT IS GROUNDED — the open question from the P4e-1a audit is
    ANSWERED, and the answer is favourable** (measured at `79e34380`; this is the
