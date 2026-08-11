@@ -6169,16 +6169,27 @@
   ;; the SPACED spelling — the one Q_U31 keeps — is unaffected
   (check-equal? (p4e-star-type "<(x : Nat) * Nat>") 'symbol))
 
-(test-case "P4e-0 A: the mint is COUNT-PRESERVING and DATUM-INVISIBLE"
+(test-case "P4e-0 A: the mint is COUNT-PRESERVING (and its datum-invisibility ENDED at 1a-iii)"
   ;; Count: one `*` token in, one out — this is what makes it not attempt 1.
+  ;; ⭐ STILL THE LOAD-BEARING HALF, and unchanged by the rename. The count is what
+  ;; keeps the ~416 count-gated validator arms out of it; the datum was only ever
+  ;; the A/B convenience.
   (check-equal? (length (p4e-token-types "[f x]* ")) (length (p4e-token-types "[f x] * "))
                 "glued and spaced must produce the SAME token count")
-  ;; Datum: unchanged from the 'symbol era, exactly as the `colon-annotation`
-  ;; promotion (Q_U16b) kept its datum invariant so the corpus A/B stays clean.
-  (check-equal? (read-all-forms-string "[f x]*") '(((f x) *))
-                "the datum must not move — the A/B baseline depends on it")
-  (check-equal? (read-all-forms-string "[f x]*") (read-all-forms-string "[f x] *")
-                "glued and spaced still read identically at the DATUM layer"))
+  ;; ⚠⚠ THE DATUM HALF IS DELIBERATELY RETIRED HERE — D4.P4e-1a slice 1a-iii.
+  ;; This asserted `'(((f x) *))` with the rationale "the datum must not move — the
+  ;; A/B baseline depends on it". That was TRUE OF SLICE A and is the exact thing
+  ;; 1a-iii exists to undo: datum-invisibility is also what made the mint INERT, so
+  ;; no consumer could see it. Moving the datum IS the rename. Rewritten rather than
+  ;; deleted, because "a fact has a timestamp" is this arc's own lesson and a pin
+  ;; that silently disappears takes its reasoning with it.
+  (check-equal? (read-all-forms-string "[f x]*") '(((f x) $postfix-star))
+                "the glued star now carries a DISTINCT datum — this is the rename")
+  ;; and the space is what makes them differ, which is Q_U33's whole ruling
+  (check-equal? (read-all-forms-string "[f x] *") '(((f x) *))
+                "the SPACED spelling keeps the bare `*` — a space is significant")
+  (check-not-equal? (read-all-forms-string "[f x]*") (read-all-forms-string "[f x] *")
+                    "glued and spaced now DIFFER at the datum layer"))
 
 (test-case "P4e-0 A: a `*` at position 0 does not abort (the rrb-char-at -1 class)"
   ;; `rrb-char-at` guards only the UPPER bound and `rrb-get` RAISES on -1, and a
@@ -6303,26 +6314,26 @@
 (define (p4e1-has? src rx)
   (and (ormap (lambda (s) (regexp-match? rx s)) (p4e1-msgs src)) #t))
 
-;; (test-case "P4e-1a: the SELECTION carriers reach the guided not-yet message"
-;;   ;; The contract `star-not-yet-message`'s comment claims and does not yet keep.
-;;   ;; These two are what survives [Q_U35]: their predecessor IS a selection step.
-;;   (check-true (p4e1-has? "ns q1\ndef c := {:a 1}\ndef b := c{a}*"
-;;                          #rx"\\(flatten\\) is not implemented yet")
-;;               "x{a}* — preceding step is a select-brace")
-;;   (check-true (p4e1-has? "ns q2\ndef xs := @[{:a 1}]\ndef b := xs:{a}*"
-;;                          #rx"\\(flatten\\) is not implemented yet")
-;;               "xs:{a}* — preceding step is a broadcast"))
+(test-case "P4e-1a: the SELECTION carriers reach the guided not-yet message"
+  ;; The contract `star-not-yet-message`'s comment claims and does not yet keep.
+  ;; These two are what survives [Q_U35]: their predecessor IS a selection step.
+  (check-true (p4e1-has? "ns q1\ndef c := {:a 1}\ndef b := c{a}*"
+                         #rx"\\(flatten\\) is not implemented yet")
+              "x{a}* — preceding step is a select-brace")
+  (check-true (p4e1-has? "ns q2\ndef xs := @[{:a 1}]\ndef b := xs:{a}*"
+                         #rx"\\(flatten\\) is not implemented yet")
+              "xs:{a}* — preceding step is a broadcast"))
 
-;; (test-case "P4e-1a [Q_U35]: `*` after a NON-SELECTION expression is refused"
-;;   ;; Not "Could not infer type" (today's accident) and not a leaked sentinel —
-;;   ;; a guided refusal. The star is a PATH-SELECTION operator only.
-;;   (check-true (p4e1-has? "ns q3\ndefn f [z] z\ndef b := [f 1]*" #rx"selection|flatten")
-;;               "[f x]* — no preceding step")
-;;   (check-true (p4e1-has? "ns q4\ndefn f [z] z\ndef b := (f 1)*" #rx"selection|flatten")
-;;               "(f x)* — no preceding step")
-;;   ;; ⚠ and the refusal must NOT be a leaked internal sentinel
-;;   (check-false (p4e1-has? "ns q5\ndefn f [z] z\ndef b := [f 1]*" #rx"\\$postfix-star")
-;;                "no internal sentinel may reach the user"))
+(test-case "P4e-1a [Q_U35]: `*` after a NON-SELECTION expression is refused"
+  ;; Not "Could not infer type" (today's accident) and not a leaked sentinel —
+  ;; a guided refusal. The star is a PATH-SELECTION operator only.
+  (check-true (p4e1-has? "ns q3\ndefn f [z] z\ndef b := [f 1]*" #rx"selection|flatten")
+              "[f x]* — no preceding step")
+  (check-true (p4e1-has? "ns q4\ndefn f [z] z\ndef b := (f 1)*" #rx"selection|flatten")
+              "(f x)* — no preceding step")
+  ;; ⚠ and the refusal must NOT be a leaked internal sentinel
+  (check-false (p4e1-has? "ns q5\ndefn f [z] z\ndef b := [f 1]*" #rx"\\$postfix-star")
+               "no internal sentinel may reach the user"))
 
 (test-case "P4e-1a: the SPACED forms keep their current meaning [Q_U32 guard rail]"
   ;; `*` is a first-class operator; the spaced spelling must stay an ordinary
@@ -6346,7 +6357,7 @@
 ;;
 ;; The enumeration now lives in ONE place — `tools/star-arrival-matrix.rkt` —
 ;; and is read, never copied. Adding a carrier or context there widens this gate
-;; automatically. Measured there: 10 minting carriers x 19 arrival contexts =
+;; automatically. Measured there: 11 minting carriers x 19 arrival contexts =
 ;; **190 cells**, plus 4 controls that must never mint and a mixfix context where
 ;; Q_U34's gate blocks everything.
 ;;
@@ -6381,16 +6392,26 @@
 ;; failure mode a coverage instrument cannot self-report. The set is recorded as
 ;; a MEASURED SNAPSHOT and compared as a whole, so a NEW abort turns this red and
 ;; so does a FIX (which should then update the snapshot and file the win).
+;; ⭐⭐ 21 → 19, AND THE NUMBER'S HISTORY IS THE LESSON. The fuse retired the two
+;; `match-scrut` aborts for the USABLE carriers (`c{a}*`, `xs:{a}*` now get a
+;; guided message where they used to kill the whole file) — that stands. An
+;; intermediate cut measured 13 here and celebrated it: its preparse-refusal
+;; marker also shielded six `pattern-pos` cells from `compile-match-tree`'s
+;; `list-ref` abort. [Q_U37](#q-u37) removed the marker — it was pre-empting the
+;; Sigma seat and breaking quasiquote — and those six cells RETURNED, which is
+;; honest: they were shielded by the wrong mechanism, not fixed. They are
+;; DEFERRED 108's pre-existing residue (a SPACED star aborts them identically),
+;; and their fix belongs to the `compile-match-tree` sibling of DEFERRED 103,
+;; not to the star surface.
 (define p4e1-known-aborting-cells   ;; DEFERRED 108 — context . carrier, MEASURED
   '(;; pattern position — 7, `list-ref` family (DEFERRED 103's sibling)
     ("pattern-pos" . "bcast-brace")  ("pattern-pos" . "quote-list")
     ("pattern-pos" . "pvec")         ("pattern-pos" . "hset")
     ("pattern-pos" . "map-lit")      ("pattern-pos" . "mixfix-close")
     ("pattern-pos" . "postfix-index")
-    ;; match scrutinee — 14, `car` family; note THREE CONTROLS are here, which is
-    ;; what rules slice A's mint out as the cause
+    ;; match scrutinee — 12, `car` family; THREE CONTROLS sit here, which is what
+    ;; rules the mint out as the cause
     ("match-scrut" . "bracket-app")  ("match-scrut" . "paren-app")
-    ("match-scrut" . "select-brace") ("match-scrut" . "bcast-brace")
     ("match-scrut" . "quote-list")   ("match-scrut" . "pvec")
     ("match-scrut" . "hset")         ("match-scrut" . "map-lit")
     ("match-scrut" . "quasiquote")   ("match-scrut" . "mixfix-close")
@@ -6478,21 +6499,85 @@
   (with-handlers ([(lambda (e) #t) (lambda (e) 'RAISED)])
     (for/list ([d (in-list (read-all-forms-string src))]) (preparse-expand-form d))))
 
-(define (p4e1-datum-has-sym? d s)
-  (let scan ([d d])
-    (cond [(eq? d s) #t]
-          [(pair? d) (or (scan (car d)) (scan (cdr d)))]
-          [(vector? d) (for/or ([x (in-vector d)]) (scan x))]
-          [else #f])))
+;; ⚠⚠ THE PREPARSE OBSERVABLE IS A THREE-WAY PARTITION, NOT A BOOLEAN — and the
+;; boolean version of this gate has now been WRONG TWICE, in opposite directions,
+;; which is why the partition is pinned cell-by-cell against a measured table.
+;;   Cut 1 ("no star survives preparse") flagged the FUSED form as a leak.
+;;   Cut 2 refined "survives" to "unconsumed" — and then FORCED the implementation
+;;   into refusing at preparse-everywhere to satisfy it, which pre-empted the
+;;   Sigma seat and broke the quasiquote lowering. The instrument shaped the code;
+;;   [Q_U37](#q-u37) is the ruling that unwound it.
+;; Under Q_U37 a star's preparse fate is one of THREE, each legitimate somewhere:
+;;   'consumed — payload of a `$select-path`/`$select` node (the fuse, or an
+;;               in-block arg). These heads route their args through
+;;               `segment-select-items`, where the star's parser arm lives.
+;;   'bare     — passed through untouched, for a DOWNSTREAM territory seat:
+;;               `parse-datum` (expression → Q_U35), `unwrap-angle-type` (type →
+;;               Q_U31). Cut 2 called every one of these a defect; they are the
+;;               design.
+;;   'gone     — no `$postfix-star` remains: data territory captured it as `*`
+;;               (quasiquote), or a `let` error marker embedded the offending
+;;               datum as a STRING (the message-leak pin owns that seat).
+;; What is NOT legitimate is a cell CHANGING class silently — a fusion break
+;; demotes consumed→bare, a regression to cut 2's marker turns bare→gone, a
+;; normalization break turns gone→bare. The table below is the measured truth.
+(define p4e1-star-consuming-heads '($select-path $select))
 
-(define (p4e1-sentinel-survives? src)
+(define (p4e1-star-class src)
+  ;; 'consumed | 'bare | 'gone | 'RAISED over the cell's preparsed forms.
+  ;; 'bare wins over 'consumed when both occur — a leak beside a fuse is a leak.
   (define ds (p4e1-preparsed src))
-  (and (not (eq? ds 'RAISED)) (p4e1-datum-has-sym? ds '$postfix-star)))
+  (cond
+    [(eq? ds 'RAISED) 'RAISED]
+    [else
+     (define has-consumed #f)
+     (define has-bare #f)
+     (let scan ([d ds] [parent #f])
+       (cond
+         [(eq? d '$postfix-star)
+          (if (memq parent p4e1-star-consuming-heads)
+              (set! has-consumed #t)
+              (set! has-bare #t))]
+         [(pair? d)
+          (let ([h (and (symbol? (car d)) (car d))])
+            (let loop ([xs d] [first? #t])
+              (when (pair? xs)
+                (scan (car xs) (if first? parent h))
+                (loop (cdr xs) #f))
+              (when (and (not (pair? xs)) xs) (scan xs h))))]
+         [(vector? d) (for ([x (in-vector d)]) (scan x parent))]
+         [else (void)]))
+     (cond [has-bare 'bare] [has-consumed 'consumed] [else 'gone])]))
+
+;; The EXPECTED table — rules plus measured exceptions, stated openly.
+;; ⚠ RAISED cells are excluded ON EVIDENCE, not convenience: every preparse-level
+;; raise was differentialed STAR-FREE — `.(1 + [f 1] *)` raises identically
+;; SPACED (a dangling arithmetic operator, correctly diagnosed), and the
+;; quasiquote raises reproduce with NO star at all (`` `['[1 2]] `` — nested
+;; `$list-literal`/`$mixfix` in a quasiquote body, pre-existing). E2E the option-B
+;; seam guard converts all of them to per-command errors.
+(define (p4e1-expected-class kname cname)
+  (cond
+    ;; in-block position: every carrier is an arg of `$select` — consumed
+    [(equal? kname "select-item") 'consumed]
+    ;; data territory: the star is captured as the `*` the user wrote
+    [(equal? kname "quasiquote-body") 'gone]
+    ;; DEFERRED 106's seat: the `let` error paths embed the datum as a STRING
+    ;; (let-nested) or split by binding shape (let-bracket — measured: the
+    ;; 3-item bindings surface the datum, the others embed it)
+    [(equal? kname "let-nested") 'gone]
+    [(equal? kname "let-bracket")
+     (if (member cname '("select-brace" "bcast-brace" "postfix-index")) 'bare 'gone)]
+    ;; everywhere the fold runs: Q_U36's positive list decides
+    [(member cname '("select-brace" "bcast-brace")) 'consumed]
+    [else 'bare]))
 
 ;; What the prelude ALONE emits — MEASURED, not assumed. The dead assertion this
 ;; replaces was `(pair? msgs)`, which can never fail: the prelude always
 ;; contributes lines, so a non-raising batch is never empty.
 (define star-prelude-results (p4e1-pre-msgs star-prelude))
+
+(define p4e1-observed-leaks '())
 
 (test-case "P4e-1a slice 1a-i: no arrival position leaks the sentinel at the user"
   ;; Batched for cost (env setup dominates); a batch that RAISES falls back to
@@ -6510,13 +6595,35 @@
                 (list->seteq (map (lambda (p) (string->symbol (format "~a/~a" (car p) (cdr p))))
                                   p4e1-known-aborting-cells))
                 "the DEFERRED 108 abort set changed — a NEW abort, or one was fixed")
-  ;; ---- PRIMARY: no unconsumed sentinel survives preparse, in ANY of the cells.
-  ;; Per-cell and total — 280 of 280, including the 19 that abort E2E (preparse
-  ;; either raises, which is DEFERRED 108 and pinned above, or it yields a datum
-  ;; we can inspect). This is the assertion that actually arms at slice 1a-iii.
-  (for* ([k (in-list star-contexts)] [c (in-list star-carriers)])
-    (check-false (p4e1-sentinel-survives? (p4e1-cell-src k c))
-                 (format "$postfix-star survived preparse: ~a / ~a" (car k) (car c))))
+  ;; ---- PRIMARY: the preparse PARTITION — every minting cell lands in exactly
+  ;; the class the table predicts. A cell changing class is the regression:
+  ;; consumed→bare = fusion broke · bare→gone = cut 2's marker came back ·
+  ;; gone→bare = a data-capture normalization broke.
+  ;; ⚠ The preparse-RAISED cells are a PINNED SNAPSHOT too — the verify caught
+  ;; the skip being open-ended: without the snapshot, a change that makes a
+  ;; minting cell RAISE at preparse would green its partition cell silently
+  ;; (the E2E abort pin cannot see it — the G2 seam converts preparse raises to
+  ;; per-command errors — and the leak pin only fires if the message happens to
+  ;; carry the sentinel). All three members reproduce with NO STAR AT ALL
+  ;; (nested `$list-literal`/`$mixfix` inside a quasiquote body), so they are
+  ;; pre-existing, but the SET is what must not move unnoticed.
+  (define observed-preparse-raises '())
+  (for* ([k (in-list star-contexts)]
+         #:unless (equal? (car k) "mixfix!")   ;; control context: no mint at all
+         [c (in-list star-carriers)]
+         #:when (star-minting-carrier? c))
+    (define got (p4e1-star-class (p4e1-cell-src k c)))
+    (if (eq? got 'RAISED)
+        (set! observed-preparse-raises
+              (cons (string->symbol (format "~a/~a" (car k) (car c)))
+                    observed-preparse-raises))
+        (check-equal? got (p4e1-expected-class (car k) (car c))
+                      (format "preparse star class moved: ~a / ~a" (car k) (car c)))))
+  (check-equal? (list->seteq observed-preparse-raises)
+                (seteq 'quasiquote-body/quote-list
+                       'quasiquote-body/quasiquote
+                       'quasiquote-body/mixfix-close)
+                "the preparse-RAISED set changed — a new raw-level raise, or one was fixed")
 
   ;; ---- SECONDARY: the user-facing message channel.
   ;; Only ~38% of cells can ever show the sentinel in rendered text (see the note
@@ -6541,8 +6648,28 @@
                   (format "context ~a produced only the prelude's lines — the carrier forms vanished"
                           (car k))))
     (for* ([ms (in-list msg-lists)] #:unless (eq? ms 'RAISED) [m (in-list ms)])
-      (check-false (regexp-match? #rx"\\$postfix-star" m)
-                   (format "sentinel leaked in context ~a: ~a" (car k) m)))))
+      (when (regexp-match? #rx"\\$postfix-star" m)
+        (set! p4e1-observed-leaks (cons (car k) p4e1-observed-leaks)))))
+  ;; ⚠⚠ THE MESSAGE LEAKS ARE PINNED AS A SET, exactly like the abort set, and for
+  ;; the same reason: silently excluding them would narrow the gate, which is the
+  ;; one failure a coverage instrument cannot self-report. TWO members, both
+  ;; PRE-EXISTING seats the star merely joins — each proven by a star-free
+  ;; differential:
+  ;; · `let-nested` — [DEFERRED 106](DEFERRED.md): the binding value is reached by
+  ;;   NONE of the four `rewrite-dot-access` seats, and `let`'s "unrecognized
+  ;;   format" error prints the raw datum verbatim. It leaked `$select-brace`
+  ;;   before this slice existed.
+  ;; · `spec-type` — [DEFERRED 109](DEFERRED.md): a SELECTION sentinel in a spec's
+  ;;   type region mis-fuses with the `$angle-type` HEAD SYMBOL as its subject
+  ;;   (`spec s c{a} -> Int` → `($select $angle-type a)`, NO STAR INVOLVED — `c.a`
+  ;;   garbles identically) and the defn/spec seam prints raw SYNTAX OBJECTS.
+  ;;   The star lands beside an already-garbled message; note the seam even
+  ;;   INSERTS an arrow, so the star's fold-time predecessor is `->`, which is
+  ;;   why Q_U36's fuse correctly declines it there.
+  ;; Pinning both is what turns this red the day either seat is fixed.
+  (check-equal? (list->seteq (map string->symbol p4e1-observed-leaks))
+                (seteq 'let-nested 'spec-type)
+                "the set of contexts leaking the sentinel into a user message changed"))
 
 (test-case "P4e-1a slice 1a-i: the matrix's own mint expectations hold"
   ;; The gate above is only meaningful if the matrix still describes reality.
@@ -6670,3 +6797,100 @@
   (define ok (run-ws-pre "defn fp [z] z\ndefmacro mq [$q] [fp $q]\ndef vq := [mq 1]"))
   (check-false (ormap (lambda (m) (regexp-match? #rx"Unbound variable" m)) ok)
                (format "an ordinary macro param binds normally: ~s" ok)))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4e-1a slice 1a-iii — THE TERRITORY SEATS  [Q_U37]
+;; Each seat that owns a territory gets its own E2E pin, because the failure
+;; mode Q_U37 fixed was precisely a seat SHIPPING UNREACHABLE: attempt 1's
+;; preparse marker pre-empted the Sigma arm, so a refusal existed in the tree,
+;; was green under every gate, and never fired. A pin per seat is what makes
+;; "the seat is reachable" a tested property instead of an architectural hope.
+;; ---------------------------------------------------------------------------
+
+(test-case "P4e-1a [Q_U31]: the glued star in TYPE territory takes the type-seat message"
+  ;; type territory: `unwrap-angle-type` owns it, and its message must be the
+  ;; type-seat guidance ("needs a SPACE"), NOT Q_U35's generic expression
+  ;; refusal — the difference between the two is exactly what attempt 1 lost.
+  (check-true (p4e1-has? "def v : <(x : Nat)* Nat> := 1"
+                         #rx"needs a SPACE")
+              "glued Sigma takes the type-seat guidance")
+  ;; the spaced spelling — the one Q_U31 keeps — still elaborates as a Sigma
+  (check-true (p4e1-has? "def v : <(x : Nat) * Nat> := 1"
+                         #rx"Sigma")
+              "spaced Sigma still IS a Sigma (the type-mismatch names it)")
+  ;; the message is ANGLE-GENERIC: a union with a glued star gets the same
+  ;; add-a-space guidance, not advice about a product type it never wrote
+  (check-true (p4e1-has? "defn f [z] z\ndef u : <Int | [f 1]*> := 1"
+                         #rx"needs a SPACE")
+              "a union with a glued star gets the angle-generic guidance")
+  ;; family 2: the $angle-type synthesized AT PREPARSE from a grouped param type.
+  ;; ⚠ The live route is the **SPEC** spelling — an earlier version of this leg
+  ;; probed the DEFN spelling with a `|defn requires` alternation, and the verify
+  ;; showed that spelling dies at the generic defn shape check BEFORE the family-2
+  ;; arm is reached, star or no star: the pin passed on a star-independent
+  ;; message, i.e. it was hedged into exactly the blind spot it existed to catch.
+  ;; This leg is what makes deleting `param-type->angle-type`'s
+  ;; `$postfix-star` disjunct turn the battery red.
+  (check-true (p4e1-has? "spec g2 ([List Nat]* Nat) -> Int\ndefn g2 [z] 1"
+                         #rx"needs a SPACE")
+              "the grouped SPEC param routes to the type seat"))
+
+(test-case "P4e-1a [Q_U37]: data territory captures the star as `*`, never the internal name"
+  ;; quasiquote: the Datum VALUE must carry the `*` the user wrote — capture
+  ;; fidelity. (Contrast pp-datum, which prints the internal name because THERE
+  ;; an escaped sentinel is the defect. Same symbol, opposite obligations.)
+  (define msgs (p4e1-msgs "defn f [z] z\ndef q := `[[f 1]*]\nq"))
+  (check-true (ormap (lambda (m) (regexp-match? #rx"datum-sym '\\*" m)) msgs)
+              (format "the quoted star renders as `*` in the Datum value: ~s" msgs))
+  (check-false (ormap (lambda (m) (regexp-match? #rx"\\$postfix-star" m)) msgs)
+               "and the internal name appears nowhere"))
+
+(test-case "P4e-1a [Q_U35]: an application bracket BREAKS the selection chain"
+  ;; `[c{a}]*` — the selection is wrapped in a bracket app, so the star's
+  ;; syntactic predecessor is the APP, not the selection: refused, with the
+  ;; expression-territory message. Pinned because the opposite reading (fuse
+  ;; through the wrapper) is plausible enough that someone will propose it;
+  ;; folding is OUTSIDE-IN, so the fold sees the raw bracket app — making this
+  ;; a structural consequence, not a choice a later edit could quietly flip.
+  (check-true (p4e1-has? "def c := {:a 1}\ndef q := [c{a}]*"
+                         #rx"applies to a SELECTION step")
+              "bracket-wrapped selection + star is refused (expression territory)")
+  ;; and the direct spelling still fuses to the not-yet message
+  (check-true (p4e1-has? "def c := {:a 1}\ndef q := c{a}*"
+                         #rx"\\(flatten\\) is not implemented yet")
+              "the unwrapped spelling still reaches the fused not-yet message"))
+
+(test-case "P4e-1a 1a-iii: error ECHOES render the user's `*`, never the sentinel"
+  ;; TWO seats the attempt-2 verify found OFF-MATRIX (def-name position and fn
+  ;; binder position are not arrival contexts, so the leak-set pin structurally
+  ;; cannot see them): both echo the offending source datum into their message,
+  ;; and the rename had silently changed the echoed content from `*` to
+  ;; `$postfix-star`. `unmint-star-for-echo` restores the user's spelling.
+  (define d1 (p4e1-msgs "defn f [z] z\ndef [f 1]* := 2"))
+  (check-false (ormap (lambda (m) (regexp-match? #rx"\\$postfix-star" m)) d1)
+               (format "def-seam echo carries no sentinel: ~s" d1))
+  (check-true (ormap (lambda (m) (regexp-match? #rx"unexpected tokens" m)) d1)
+              "and the def-seam error itself still fires")
+  (define d2 (p4e1-msgs "defn f [z] z\ndef g := [fn [x [f 1]*] x]"))
+  (check-false (ormap (lambda (m) (regexp-match? #rx"\\$postfix-star" m)) d2)
+               (format "fn-binder echo carries no sentinel: ~s" d2))
+  (check-true (ormap (lambda (m) (regexp-match? #rx"Expected binder" m)) d2)
+              "and the binder error itself still fires"))
+
+(test-case "P4e-1a 1a-iii: the pipe-TERMINAL fused star — DEFERRED 110's measured accident, pinned"
+  ;; `|> c{a}*` (terminal): the fold FUSES correctly, then `expand-pipe-block`'s
+  ;; single-element unwrap re-wrap cannot tell "one fused item that is a list"
+  ;; from "a list of parts" and SPREADS the fused node — so the star lands bare
+  ;; and takes Q_U35's message, which is factually FALSE here (there IS a
+  ;; selection to its left). PRE-EXISTING ambiguity (`|> c{a}` starless →
+  ;; `Unbound variable`, same spread); the star only makes it deterministic.
+  ;; Pinned AS the accident, exactly like Q_U19's pin froze one: this documents
+  ;; today's routing, it must not be read as a ruling. Fixing DEFERRED 110 turns
+  ;; this red, which is how the fix claims the cell.
+  (check-true (p4e1-has? "def c := {:a 1}\ndef r1 := |> c{a}*"
+                         #rx"applies to a SELECTION step")
+              "terminal pipe star currently takes the (wrong) expression refusal")
+  ;; the NON-terminal spelling is correct today and must stay so
+  (check-true (p4e1-has? "defn f [z] z\ndef c := {:a 1}\ndef r2 := |> c{a}* f"
+                         #rx"\\(flatten\\) is not implemented yet")
+              "a mid-pipe fused star reaches the not-yet message"))

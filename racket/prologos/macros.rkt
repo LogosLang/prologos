@@ -51,6 +51,7 @@
          preparse-macro?
          expand-lseq-literal
          pattern-var?
+         unmint-star-for-echo   ;; D4.P4e-1a — error echoes render the user's `*`
          datum-match
          datum-subst
          process-defmacro
@@ -5163,7 +5164,23 @@
     ;; e.g. (A * B) → ($angle-type A * B) → parsed as Sigma(_, A, B)
     ;; Without this, (A * B) as a single sub-list inside $angle-type gets
     ;; delegated to parse-datum which treats * as a variable name.
-    [(and (list? ptype) (pair? ptype) (memq '* ptype))
+    ;; ⚠ D4.P4e-1a slice 1a-iii — `$postfix-star` joins the `*` here, and this is
+    ;; [Q_U31](#q-u31)'s SECOND identity family, which its cost estimate never
+    ;; counted. A grouped param type is where an `$angle-type` gets SYNTHESIZED at
+    ;; preparse — long after the reader — which is why a reader-seated refusal
+    ;; could not reach this case and why the refusal had to ride the rename.
+    ;; ⚠ THE LIVE ROUTE IS THE **SPEC** SPELLING, measured:
+    ;; `spec g ([List Nat]* Nat) -> Int` reaches `unwrap-angle-type`'s guided
+    ;; Sigma refusal through this arm. An earlier comment here claimed the DEFN
+    ;; spelling (`defn f [x ([List A]* B)]`) as the route — FALSE, refuted by the
+    ;; attempt-2 verify: that spelling dies at the generic `defn requires` shape
+    ;; check before this function is ever reached, star or no star. The pin at
+    ;; `test-path-selection.rkt` targets the spec spelling for exactly that
+    ;; reason. Without this disjunct the star-bearing group falls to the
+    ;; single-element wrap below and takes Q_U35's EXPRESSION message — wrong
+    ;; seat, though still guided.
+    [(and (list? ptype) (pair? ptype)
+          (or (memq '* ptype) (memq '$postfix-star ptype)))
      `($angle-type ,@ptype)]
     ;; All other grouped types: wrap as single element for parse-datum
     ;; Handles: (-> Nat Nat), (List A), (Sigma (_ ...) B), (Option A), etc.
@@ -5812,8 +5829,10 @@
           (half-glued-arrow-hint name (car before)))
      => values]
     [else
+     ;; `unmint-star-for-echo`: a glued star in this run must echo as the `*`
+     ;; the user typed, not the sentinel (D4.P4e-1a; verify-found seat)
      (format "def ~a: unexpected tokens before `:=`: ~a — ~a"
-             name before (spellings))]))
+             name (unmint-star-for-echo before) (spellings))]))
 
 ;; ========================================
 ;; Built-in pre-parse macros
@@ -6898,13 +6917,69 @@
       [(and (eq? (car xs) '|.|) (number? (cadr xs)) (eq? (caddr xs) '^)) #t]
       [else (scan (cdr xs))])))
 
+;; ⭐ D4.P4e-1a slice 1a-iii — [Q_U36](#q-u36)'s POSITIVE LIST, and the whole of it.
+;; A star fuses iff the item to its LEFT is one of the closed set of SELECTION
+;; heads. Stated as what DOES fuse, never as what does not: the arrival surface is
+;; 11 carriers x 19 contexts and six of those carriers were missing from this
+;; design's own inventory, so the non-selection side cannot be enumerated ahead of
+;; time. Adding a selection head here is the only edit a new sort should need.
+;;
+;; ⚠ This is deliberately NOT a `reader-forms.rkt` head set. Those are consumed by
+;; `access-sentinel?`, which asks "is THIS item a sentinel"; this asks "is the item
+;; BEFORE me a selection" — a different question about a different datum, which is
+;; precisely how it sidesteps the conditional-membership problem
+;; (`2026-08-09_STAR_SURFACE_CENSUS.md` Tier-O **O7**) that killed slice B.
+(define star-fusable-heads '($select $select-path))
+
+(define (star-fusable-target? x)
+  (and (pair? x) (symbol? (car x)) (memq (car x) star-fusable-heads) #t))
+
+;; ⭐ D4.P4e-1a slice 1a-iii — ERROR ECHOES RENDER THE USER'S SPELLING.
+;; The reader mints `$postfix-star` before it can know what territory the star is
+;; in; when an error message ECHOES SOURCE BACK at the user, the internal name
+;; must not appear — the user wrote `*`. Found by the attempt-2 adversarial
+;; verify: `def [f 1]* := 2` and a star in an `fn` binder both echoed the raw
+;; datum, and the rename silently changed the echoed content from `*` to the
+;; sentinel (`d0ac2a58`'s internal-name class, in two seats the matrix's leak
+;; pin structurally cannot see). Same capture-fidelity argument as the
+;; quasiquote arm; CONTRAST `pp-datum`, which deliberately prints the internal
+;; name because an escaped sentinel in a post-preparse datum IS the defect.
+;; Syntax objects are unwrapped for display — an echo is for humans.
+(define (unmint-star-for-echo d)
+  (cond
+    [(syntax? d) (unmint-star-for-echo (syntax->datum d))]
+    [(eq? d '$postfix-star) '*]
+    [(pair? d) (cons (unmint-star-for-echo (car d)) (unmint-star-for-echo (cdr d)))]
+    [else d]))
+
 (define (rewrite-dot-access datum)
   (cond
     [(not (list? datum)) datum]
     [(null? datum) datum]
     ;; Check for any access sentinels in the list
     ;; (D4.P3b: the `x.0^` shatter carries NO sentinel — gate it in too)
-    [(not (or (ormap access-sentinel? datum) (ordinal-rekey-shatter? datum)))
+    ;; (D4.P4e-1a: `$postfix-star` is a BARE ATOM, and `access-sentinel?` opens
+    ;;  `(and (list? x) (pair? x) …)` — so it can never satisfy that predicate and
+    ;;  needs its own disjunct. `ordinal-rekey-shatter?` above is the in-file
+    ;;  precedent for exactly this: a sentinel-FREE shape with its own clause.
+    ;;  ⚠ MEASURED REACHABILITY, stated so the disjunct is not over-read: for every
+    ;;  SURFACE spelling the disjunct is redundant — a fusable predecessor always
+    ;;  arrives WITH its own sentinel in the same list (`$select-brace`,
+    ;;  `$bcast-step`), which opens the gate anyway, and folding is OUTSIDE-IN, so
+    ;;  an outer star sees the UNFOLDED inner (`[c{a}]*`'s predecessor is the raw
+    ;;  bracket app, correctly declined). What the disjunct covers is a
+    ;;  PRE-FOLDED arrival — a `($select …)` beside a bare star in one list, which
+    ;;  only a re-entry pass (macro expansion) can produce. No surface spelling
+    ;;  constructs that today (a defmacro template holding `c{a}` is TWO datums
+    ;;  and is rejected); it is kept because re-entry is a real code path
+    ;;  (P1b-iii) and the wrong outcome there would be a guided-but-WRONG refusal
+    ;;  of a genuine selection. Under [Q_U37](#q-u37) the arm passes non-fusable
+    ;;  stars through UNCHANGED, so admitting a list here never rewrites anything
+    ;;  the star arm does not own — the fold result equals the input and
+    ;;  `preparse-expand-subforms` does not re-enter.)
+    [(not (or (ormap access-sentinel? datum)
+              (ordinal-rekey-shatter? datum)
+              (memq '$postfix-star datum)))
      datum]
     ;; Pattern 2a/3a (RETIRED): ($dot-key :kw) at head or standalone
     [(dot-key? (car datum))
@@ -6932,6 +7007,48 @@
            ;; The FIELD rides as a bare SYMBOL, not a `:keyword` — the payload
            ;; is the step vocabulary (`389f6802`'s encoding convergence), and
            ;; the parser's `$select-path` arm segments it.
+           ;; ⭐⭐ D4.P4e-1a slice 1a-iii — THE STAR ARM. [Q_U36](#q-u36): a POSITIVE
+           ;; list over the PREDECESSOR. Fuse iff the accumulated item to the left
+           ;; is SELECTION-SHAPED; everything else is [Q_U35](#q-u35)'s refusal,
+           ;; as a genuine `else`. Never an enumeration of what to refuse — the
+           ;; measured surface is 11 carriers x 19 contexts, six of which this
+           ;; design had never counted, so the non-selection side is not knowable
+           ;; in advance. `pipeline.md`'s `definitely-not-map?` inversion is the
+           ;; in-tree precedent for the safe direction.
+           ;;
+           ;; The star WRAPS, exactly as the `$dot-access` arm below does — one
+           ;; carrier per LEVEL. `c{a}*` becomes
+           ;; `($select-path ($select c a) $postfix-star)`, so the star arrives as
+           ;; an ITEM of the enclosing selection and `segment-select-items`
+           ;; produces `star-not-yet-message` for it. The refusal message is
+           ;; therefore INHERITED, not newly invented.
+           ;;
+           ;; ⚠ FIXPOINT: the emitted head is `$select-path`, which is NOT an
+           ;; `access-sentinel?` member, so this cannot re-trigger the fold. A
+           ;; sentinel-headed result makes `preparse-expand-subforms` re-enter and
+           ;; swallow one LEFT sibling per pass — the P1b-iii defect that silently
+           ;; dropped a `defn` clause at ZERO errors.
+           ;; ⚠⚠ NON-FUSABLE STARS ARE LEFT IN PLACE — [Q_U37](#q-u37), and this
+           ;; exact line has now been written BOTH other ways, so the history is
+           ;; the argument. Cut 1 left the star for the parser; slice 1a-i's
+           ;; then-blanket datum gate flagged it. Cut 2 "fixed" that by emitting a
+           ;; `($retired-selection star-no-selection)` marker here — and the
+           ;; adversarial verify measured the two consequences of deciding at
+           ;; preparse-everywhere: the marker PRE-EMPTED the Sigma seat
+           ;; (`unwrap-angle-type` never saw the star, so [Q_U31](#q-u31)'s guided
+           ;; refusal shipped structurally unreachable) and it put a three-element
+           ;; list where the quasiquote lowering expects a symbol.
+           ;; The fold's authority is the PREDECESSOR, nothing more. It fuses in
+           ;; selection territory and otherwise leaves the star for the seat that
+           ;; owns the territory: `parse-datum` (expression → Q_U35's message),
+           ;; `unwrap-angle-type` (type → Q_U31's message), the quasiquote
+           ;; lowering (data → captured as the `*` the user wrote).
+           [(eq? (car elems) '$postfix-star)
+            (if (and (pair? acc) (star-fusable-target? (car acc)))
+                (loop (cdr elems)
+                      (cons `($select-path ,(car acc) $postfix-star) (cdr acc)))
+                ;; not the fold's territory — pass it through untouched
+                (loop (cdr elems) (cons (car elems) acc)))]
            [(dot-access? (car elems))
             (if (null? acc)
                 (loop (cdr elems) (cons (car elems) acc))
@@ -7730,6 +7847,14 @@
 ;; Convert a raw datum to Datum constructor calls
 (define (datum->datum-expr d)
   (cond
+    ;; ⭐ D4.P4e-1a slice 1a-iii — [Q_U37](#q-u37): a quoted body is DATA
+    ;; territory, so nothing is rewritten and the star is captured as the `*`
+    ;; the USER WROTE. The reader minted `$postfix-star` before it could know it
+    ;; was inside a quote; capturing that spelling would put an internal name
+    ;; into a user-visible Datum value. This is capture-fidelity, NOT display —
+    ;; contrast `pp-datum`, which deliberately prints the internal name because
+    ;; there an escaped sentinel IS the defect. Here it is legitimate source.
+    [(eq? d '$postfix-star) `(datum-sym (symbol-lit *))]
     ;; Keyword-like symbols (:foo) → (datum-kw :foo)
     [(keyword-like-symbol? d) `(datum-kw ,d)]
     ;; Regular symbols → (datum-sym (symbol-lit name))
@@ -7776,6 +7901,9 @@
     ;; ($unquote expr) — pass expr through raw
     [(and (pair? d) (eq? (car d) '$unquote) (pair? (cdr d)) (null? (cddr d)))
      (cadr d)]
+    ;; the star sentinel is captured as the `*` the user wrote — Q_U37 data
+    ;; territory; see `datum->datum-expr`'s twin arm for the full reasoning
+    [(eq? d '$postfix-star) `(datum-sym (symbol-lit *))]
     ;; Keyword-like symbols (:foo) → (datum-kw :foo)
     [(keyword-like-symbol? d) `(datum-kw ,d)]
     ;; Regular symbols → (datum-sym (symbol-lit name))

@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 109**
+> ### **NEXT FREE: 113**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6760,3 +6760,106 @@ the gate — the one failure mode a coverage instrument cannot self-report.
 
 **Not fixed at P4e-1a**: pre-existing, differential-proven, and it is a
 `compile-match-tree` / match-scrutinee defect rather than star-surface work.
+
+### 109. ⬜ A SELECTION SENTINEL in a `spec`/`defn` TYPE REGION mis-fuses with `$angle-type` AS ITS SUBJECT, and the seam prints raw SYNTAX OBJECTS — pre-existing, star-free
+
+Found at D4.P4e-1a attempt 2 by the message-leak gate (the E2E pin that compares
+leaking contexts as a SET); **proven pre-existing by star-free differentials**
+before filing:
+
+```
+spec s1 c{a} -> Int    (no star)
+  → defn: expected <ReturnType> or : ReturnType, got
+    (#<syntax… ($select $angle-type a)> #<syntax… ->> #<syntax… Int>)
+spec s2 c.a -> Int     (no star, the DOT sibling)
+  → … ($select-path $angle-type a) …                      ← identical class
+```
+
+**Two defects in one seat:**
+1. **The mis-fusion.** `rewrite-dot-access` runs over a type-region list whose
+   HEAD is the `$angle-type` symbol, so the select-brace/dot arms wrap **the head
+   symbol itself** as their subject — `($select $angle-type a)`, a nonsense node.
+   The fold's "wrap the predecessor" assumes expression position; a type list's
+   first element is a SENTINEL HEAD, not a value.
+2. **The display.** The `defn: expected <ReturnType>` error formats raw SYNTAX
+   OBJECTS (`#<syntax…>`) into a user message — internal representation at the
+   user, the same class as DEFERRED 106's `let` seat. Under P4e-1a a
+   `$postfix-star` rides along (`spec s0 c{a}* -> Int` shows it verbatim), which
+   is how the gate caught the seat — but the star is a PASSENGER: the seam even
+   INSERTS an arrow, so the star's fold-time predecessor is `->` and Q_U36's
+   fuse correctly declines it.
+
+**Adjacent, not duplicate**: DEFERRED 106 is "a seam the fold never reaches";
+this is the opposite — a seam the fold reaches AND SHOULD NOT, plus raw-syntax
+display. The ARROW T1 `spec e-> Int -> Int` silent-accept class lives at this
+same seam.
+
+**Pinned**: `tests/test-path-selection.rkt`'s message-leak set carries
+`spec-type` as a member; fixing either half moves the set and turns the battery
+red, which is how the fix claims its win.
+
+### 110. ⬜ `expand-pipe-block`'s single-element unwrap cannot tell "ONE fused item that is a list" from "a list of parts" — a TERMINAL fused star in `|>` gets a factually FALSE refusal
+
+Found by the D4.P4e-1a attempt-2 adversarial verify; **the ambiguity is
+PRE-EXISTING** (starless control: `def r0 := |> c{a}` → `Unbound variable` — the
+spread turns the fold's `($select c a)` into `init='$select`), but the star's
+fused output is ALWAYS list-shaped, so the new surface lands in it
+deterministically.
+
+**Measured**:
+
+```
+def r1  := |> c{a}*     → "`*` (flatten) applies to a SELECTION step — there is
+                           no selection to its left here"   ← FALSE; the fold fused it
+def r1b := |> c{a}* f   → the not-yet message               ← correct (mid-pipe)
+```
+
+**Cause**: `expand-pipe-block` (macros.rkt) re-wraps the fold result with
+`(if (list? folded) folded (list folded))` — the one-element unwrap at the
+fold's exit returns the fused `($select-path ($select c a) $postfix-star)`
+ITSELF, which is a list, so the pipe expander spreads it as parts:
+`init = '$select-path`, steps = the fragments. Its own comment ("the
+single-element unwrap at the fold's exit is re-wrapped") is false for every
+fused-selection result.
+
+**Pinned as the accident** (`test-path-selection.rkt`, "the pipe-TERMINAL fused
+star"), exactly as Q_U19's pin froze one: the pin documents today's routing and
+must not be read as a ruling. Fixing this entry turns that pin red, which is how
+the fix claims the cell. ⚠ Note the fix is in PIPE territory, not star
+territory — the unwrap needs a shape test that distinguishes a single folded
+NODE from a parts list (e.g. keying on the known fold-output heads), and the
+starless `|> c{a}` case should come right with it.
+
+### 111. ⬜ CLASS: error sites that echo RAW PREPARSE DATUMS into user messages — two fixed instances, no census
+
+The D4.P4e-1a attempt-2 verify found TWO seats where an error message echoes the
+offending source datum verbatim, so the star rename silently changed the echoed
+content from `*` (what the user typed) to `$postfix-star` (the internal name):
+the `def` seam's "unexpected tokens before `:=`" (macros.rkt) and the `fn`
+binder error (parser.rkt, which printed raw `#<syntax …>` objects). Both are
+FIXED in the slice via `unmint-star-for-echo` (macros.rkt) + battery pins — but
+they were found **by luck of two probes, not by enumeration**, and the
+adjudicator's point stands: every `format`/`error` site that interpolates an
+unparsed datum is a candidate seat, and the matrix's leak pin only sees the 19
+arrival contexts.
+
+**The ask**: a grep-driven census of raw-datum-echoing error sites
+(`format` + `~a`/`~s` over preparse-level datums in macros.rkt / parser.rkt /
+driver.rkt / namespace.rkt), each classified: echoes user source (should render
+the user's spelling — route through `unmint-star-for-echo` or a successor) vs
+internal diagnostics. DEFERRED 106 (`let` prints its raw datum) and DEFERRED 109
+(`spec` seam prints raw syntax) are the two KNOWN unfixed members; `pol8-bad-head-error`
+and `process-ns-declaration`'s segment message were flagged at 1a-ii as two more.
+Related-but-different: `$facts-sep` (DEFERRED 112) leaks as an UNBOUND VARIABLE,
+not an echo.
+
+### 112. ⬜ `defr` + `||` fact blocks leak `Unbound variable: $facts-sep` — star-free, pre-existing
+
+Ambient observation from the D4.P4e-1a attempt-2 verify (also seen during the
+1a-i matrix work as "Unbound variable $facts-sep" in defr/goal-argument
+contexts): `defr pair2 [?a ?b]` followed by a `|| …` fact block — and the
+minimal `|| 1 | 2` under an arity-1 defr — reports `Unbound variable:
+$facts-sep`. An internal sentinel surfacing at the user with NO star anywhere;
+structurally untouchable by the P4e work (every added arm keys on
+`$postfix-star`). The `||` fact-row machinery emits `$facts-sep` and some path
+fails to consume it. Rel-territory (POL.7 fact rows), not star territory.

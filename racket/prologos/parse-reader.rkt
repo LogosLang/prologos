@@ -2576,7 +2576,18 @@
       ;; deliberately unchanged from the 'symbol era: the mint is DATUM-INVISIBLE,
       ;; so the corpus A/B baseline stays clean and the TYPE carries the
       ;; information on its own. Its consumer lands with the `*` semantics.
-      [(postfix-star) (string->symbol lexeme)]
+      ;; ⭐ D4.P4e-1a slice 1a-iii — THE MINT GETS A DATUM. Slice A deliberately
+      ;; rendered this as a plain `*` so the token type was datum-INVISIBLE and
+      ;; the corpus A/B stayed clean; that is also why it was INERT. Emitting a
+      ;; distinct symbol is the whole of the rename, and it is the event that ARMS
+      ;; every consumer: the fuse at `rewrite-dot-access`, [Q_U35](#q-u35)'s
+      ;; refusal, and [Q_U31](#q-u31)'s glued-Sigma refusal all key on it.
+      ;; ⚠ It is a BARE ATOM by design, not `($postfix-star)`. A list would have
+      ;; to pick an arity class in the `reader-forms.rkt` head sets, and
+      ;; [Q_U36](#q-u36) records why it cannot: membership would be CONDITIONAL on
+      ;; the predecessor, which a flat head list cannot express — the shape that
+      ;; killed slice B. As an atom it is consumed by POSITION instead.
+      [(postfix-star) '$postfix-star]
       [(char) (cond
                 ;; 'X' char literal → the char
                 [(and (= (string-length lexeme) 3)

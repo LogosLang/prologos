@@ -387,6 +387,35 @@
   (cond
     [(null? contents)
      (parse-error loc "Empty type annotation <>" #f)]
+    ;; ⭐⭐ D4.P4e-1a slice 1a-iii — [Q_U31](#q-u31)'s GLUED-SIGMA REFUSAL, and this
+    ;; is the seat it has to have. The refusal CANNOT be a datum test: glued and
+    ;; spaced Sigma were byte-identical datums until this slice, which is exactly
+    ;; why Q_U31's stated cost ("one guided error at a `star-symbol?` call site")
+    ;; was recorded as not implementable as written. The rename is what makes them
+    ;; distinguishable — a glued `*` now arrives as `$postfix-star` — so the
+    ;; refusal RIDES the rename rather than preceding it.
+    ;; ⚠ IT IS NOT OPTIONAL AND IT IS NOT DEFERRABLE. `<(x : Nat)* Nat>` is legal
+    ;; today and elaborates to `[Sigma Nat Nat]` at zero errors; its `*` follows a
+    ;; `)` closer outside mixfix, so it MINTS. Without this arm `star-symbol?`'s
+    ;; `(memq s '(* $star))` simply returns #f and a live type silently becomes
+    ;; something else — a Tier-A silent-wrong-answer that the battery, the
+    ;; acceptance files and the corpus A/B are all blind to (the pin checks the
+    ;; TOKEN TYPE, which does not change; no acceptance file spells a glued Sigma;
+    ;; the corpus mints nowhere). Ruling and hazard both recorded at slice A's
+    ;; "the glued Sigma DOES mint" pin.
+    ;; ⚠ The message is ANGLE-GENERIC on purpose: this ormap keys on any
+    ;; `$postfix-star` among the parts, so it also fires for unions and other
+    ;; non-Sigma angle groups — verify-measured on `<Int | [f 1]*>`, where the
+    ;; earlier "a product type needs a SPACE" opener was advice about a form the
+    ;; user had not written. Inside `<…>` the guidance is the same either way:
+    ;; add the space.
+    [(ormap (lambda (p) (eq? (stx->datum p) '$postfix-star)) parts)
+     (parse-error loc
+       (string-append
+        "inside `<…>`, `*` needs a SPACE before it — glued to a closing bracket,"
+        " `*` is the path-selection flatten operator, not a type operator. For a"
+        " product type write `<(x : A) * B>`, not `<(x : A)* B>`")
+       #f)]
     ;; Dependent Pi/Sigma: <(x : A) -> B> or <(x : A) * B>
     [(and (>= (length parts) 3)
           (paren-binder-group? (car parts))
@@ -597,6 +626,29 @@
   (define loc (datum-srcloc stx))
   (define d (stx->datum stx))
   (cond
+    ;; ⭐⭐ D4.P4e-1a slice 1a-iii — [Q_U35](#q-u35)'s SEAT, and [Q_U37](#q-u37) is
+    ;; why it is HERE. The fold fuses only in selection territory and otherwise
+    ;; leaves the star IN PLACE, because the context that decides lives downstream:
+    ;; this arm owns EXPRESSION territory, `unwrap-angle-type` owns TYPE territory
+    ;; (the Sigma-specific message), and the quasiquote lowering owns DATA
+    ;; territory (captured as `*`). A bare star in argument position misses every
+    ;; head-dispatched arm, so this is the single choke point every non-selection
+    ;; expression arrival funnels through — including the seats the fold never
+    ;; reaches at all ([DEFERRED 106](DEFERRED.md)'s nested-shorthand `let`).
+    ;; Without it the star falls to `parse-symbol` and surfaces as
+    ;; `Unbound variable $postfix-star` — an internal sentinel at the user,
+    ;; `d0ac2a58`'s class.
+    ;; ⚠ Must precede the `symbol?` arm — `parse-symbol` would otherwise resolve it
+    ;; as an ordinary name.
+    [(eq? d '$postfix-star)
+     (parse-error loc
+       (string-append
+        "`*` (flatten) applies to a SELECTION step — there is no selection to its"
+        " left here. Write it after a path or block access, e.g. `xs:{a}*` or"
+        " `cfg{a}*`; a bare `*` between values is multiplication, and a spaced"
+        " `*` after a value is the operator")
+       #f)]
+
     ;; Bare symbol
     [(symbol? d)
      (parse-symbol d loc)]
@@ -833,6 +885,10 @@
     ;; also means zero new registrations: `$retired-selection` is already in
     ;; `pattern-var?` and already has its parser arm, and the nine-tier
     ;; registration surface is precisely what this phase learned to respect.)
+    ;; (A `star-no-selection` kind lived here for one cut of D4.P4e-1a and was
+    ;; REMOVED by [Q_U37](#q-u37): the fold no longer marks non-fusable stars, so
+    ;; the kind had no producer. Q_U35's refusal lives at `parse-datum`'s
+    ;; `$postfix-star` arm — the seat that owns expression territory.)
     [(select-block)
      ;; D4.P3a: `x{…}` now WORKS — only the top-level `.{…}` form reaches this
      ;; marker (its meaning outside a block is unruled; refused, monotone).
@@ -1379,6 +1435,17 @@
                               (loop (cdr items) (list step) #f (closed-acc))))]
             ;; (b) the fused identifier band — `database*`, `database*_`, and
             ;;     the Q_U29 mid-star error. `split-star-lexeme` distinguishes.
+            ;; ⭐ D4.P4e-1a slice 1a-iii — THE FUSED STAR ARRIVES HERE as a bare
+            ;; `$postfix-star` ITEM, because `rewrite-dot-access` wraps it as
+            ;; `($select-path <selection> $postfix-star)` and this caller passes
+            ;; every arg after the subject through as an item. So the non-identifier
+            ;; carriers (`c{a}*`, `xs:{a}*`) inherit the SAME message the fused
+            ;; identifier band has been giving all along — which is what
+            ;; `star-not-yet-message`'s own comment promised as "P4e-1's first
+            ;; deliverable". Must precede `star-sym?`: `split-star-lexeme` on a bare
+            ;; sentinel would report a mid-lexeme error naming the internal symbol.
+            [(eq? it '$postfix-star)
+             (fail (star-not-yet-message "the preceding step, flattened"))]
             [(star-sym? it)
              (let-values ([(name cont) (split-star-lexeme it)])
                (cond
@@ -4920,9 +4987,16 @@
             [else (binder-info name #f (surf-hole loc))]))]
 
        [else
+        ;; `unmint-star-for-echo` also unwraps syntax objects — the echo is for
+        ;; humans, and a glued star must show as the `*` the user typed, not the
+        ;; sentinel (D4.P4e-1a; verify-found seat). The struct's datum FIELD gets
+        ;; the same treatment: `parse-error-datum` has zero programmatic
+        ;; consumers (grep), and the driver's error channel prints the whole
+        ;; struct, so a raw payload here is user-visible too.
         (parse-error loc
-                     (format "Expected binder [x <T>] or (x : T), got ~a" d)
-                     d)])]))
+                     (format "Expected binder [x <T>] or (x : T), got ~a"
+                             (unmint-star-for-echo d))
+                     (unmint-star-for-echo d))])]))
 
 ;; Check if a symbol is a multiplicity annotation
 (define (mult-annot? s)

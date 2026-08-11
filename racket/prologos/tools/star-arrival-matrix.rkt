@@ -9,7 +9,8 @@
 ;; touched the design doc and the battery, nothing else). So at HEAD the number
 ;; was UNFALSIFIABLE: it could not be re-derived, extended, or audited from the
 ;; tree. The P4e-1a mini-audit regenerated it and found D4's frame reproduces
-;; EXACTLY *as a 21% sub-frame* — the real surface is 10 carriers x 19 contexts,
+;; EXACTLY *as a sub-frame* — the real surface is 11 minting carriers x 19 contexts
+;; (the verify added `xs[0]*` to the audit's ten),
 ;; because six carriers were never counted and nine contexts were never listed.
 ;;
 ;; **The last three blocking defects in this arc were all BAD ENUMERATIONS.**
@@ -54,9 +55,20 @@
     ("mixfix-close"  ".(1 + 2)*"  #t)   ;; ⚠ uncounted — star AFTER the mixfix
     ("postfix-index" "xs[0]*"    #t)   ;; ⚠ the ONE arrival where the star shares a
                                        ;; datum list with a FOLDING sentinel
-                                       ;; (`$postfix-index`) — the highest-value
-                                       ;; cell for the 1a-iii fuse, and it was
-                                       ;; missing from every prior enumeration
+                                       ;; (`$postfix-index`) — missing from every
+                                       ;; prior enumeration.
+                                       ;; ⚠ It takes Q_U35's REFUSAL, not the fuse
+                                       ;; — an earlier draft here called it "the
+                                       ;; highest-value cell for the fuse", which
+                                       ;; contradicted the shipped positive list.
+                                       ;; `xs[0]` folds to `get`, and bracket-
+                                       ;; postfix KEEPS its current semantics
+                                       ;; outside the selection carrier (D4 §2.4,
+                                       ;; owner: revisit at X.close) — so its
+                                       ;; predecessor is NOT selection-shaped.
+                                       ;; Monotone: the refusal can become a
+                                       ;; meaning if §2.4's revisit puts brackets
+                                       ;; on the carrier.
     ;; ---- controls: NOT minting. Three distinct mechanisms, one each. ----
     ("ord-bcast!"    "xs:0*"      #f)   ;; shatters — no carrier token (DEFERRED 105)
     ("ord-dot!"      "x.0*"       #f)   ;; shatters — no carrier token (DEFERRED 105)
