@@ -499,10 +499,13 @@ and the sentence above should be read as of its date.
 
 **What is actually left is a different gap**, and naming it here rather than
 quietly closing 0.2: **the protocol state those migrated roles operate on is
-seven Racket mutable hash tables reached over FFI** — `ocapn-conn-ffi`,
+eight Racket mutable state modules reached over FFI** — `ocapn-conn-ffi`,
 `ocapn-peer-ffi` (the connection registry the fix shape wanted as a cell),
-`ocapn-gift-ffi`, `ocapn-give-ffi`, `ocapn-enliven-ffi`, `ocapn-dial-ffi`,
-`ocapn-identity-ffi`. The roles are expressed in the language; their state is
+`ocapn-gift-ffi`, `ocapn-give-ffi`, `ocapn-enliven-ffi`, `ocapn-handoff-ffi`
+(the replay set), `ocapn-dial-ffi`, `ocapn-identity-ffi`. (`ocapn-frame-ffi` is
+pure and does not count.) An earlier revision of this paragraph said SEVEN and
+omitted the replay set — which is, ironically, the only one of the eight that
+is genuinely monotone. The roles are expressed in the language; their state is
 not. Every one is the red flag `.claude/rules/on-network.md` names — a hasheq
 of "things the system knows about" that has not become a cell.
 
@@ -540,24 +543,50 @@ Three things actually keep that fold open, and only the third is interesting:
    `"…" : String`. A `(ConnectionState, Bytes)` pair cannot cross it. Threading
    the state would mean serializing the whole vat to text and re-parsing it per
    frame. A practical blocker, not a language one.
-3. **Cross-connection sharing is genuinely not one fold.** Three of the seven
-   tables would dissolve if the loop moved into Prologos: `conn` is per-cid,
+3. **Cross-connection sharing is genuinely not one fold.** Three of the eight
+   would dissolve if the loop moved into Prologos: `conn` is per-cid,
    `dial` is already an `OutReq` list IN THE LANGUAGE that the server merely
-   drains, and `identity` is a single process constant. The other four cannot
+   drains, and `identity` is a single process constant. The other five cannot
    fold, for the reason the code gives at the declaration — *"a give arrives on
    the gifter's connection and is spent on the exporter's, so like the gift
    table it has to outlive either one."* N connection threads, one gift table:
    a per-connection fold has one accumulator per connection, and a value
    deposited on A's must be visible on B's.
 
-Which is exactly why the fix shape said **cell** and not "thread the state". A
-cell with a monotone merge IS the answer to "several concurrent folds that must
-share", and the gift table is close to the textbook case, since deposits only
-accumulate.
+Which is exactly why the fix shape said **cell** and not "thread the state": a
+cell is the answer to "several concurrent folds that must share".
 
-So the gap is narrower than first written: not "no state", but **four shared
-tables sitting in Racket hashes where the project's own thesis says they belong
-in cells** — and three others that are merely waiting for the loop to move.
+**But the cell is not free, and an earlier draft of this paragraph got that
+wrong too.** It called the gift table "close to the textbook case, since
+deposits only accumulate". Deposits do NOT only accumulate — a withdrawal
+REMOVES the gift (`bs-remove-gift`, captp-core.prologos:2316 and :2393), and it
+must, or the same gift is spendable twice. So the live-gift table is
+non-monotone and is not a join-semilattice as it stands.
+
+Two principled routes, both already in the project's vocabulary:
+
+* **Two monotone sets (the 2P-Set shape).** Keep an adds-set and a removes-set,
+  both grow-only, and DERIVE the live table as `adds \ removes`. The codebase
+  is already half-way there by accident: `gk-used` used to live in the gift
+  table and was moved out to a process-wide replay set, which IS grow-only. The
+  SRE primary-vs-derived question (Q5) is exactly this choice.
+* **S(-1) retraction.** `structural-thinking.md` already states that retraction
+  is not imperative removal but lattice narrowing, and the stratification rules
+  reserve a stratum for it.
+
+⚠ **The 2P-Set route has a trap that this codebase has already been bitten by
+once.** A tombstone keyed on the gift-id alone is peer-choosable: gift ids are
+opaque bytes the peer supplies, so an attacker could tombstone an id before
+anyone uses it, or permanently poison one. That is the same shape as the
+`used:`-prefix exploit recorded above — constructed keys sharing a namespace
+with peer-supplied ones. Any tombstone key has to include something the peer
+cannot choose (the depositing session), exactly as the replay identity now
+length-prefixes its parts.
+
+So the gap is narrower than first written but harder than "make it a cell": not
+"no state", but **five shared tables where the project's thesis says cells
+belong, of which only the replay set is monotone as it stands** — plus three
+that are merely waiting for the loop to move.
 
 Two cross-language duplicates found while verifying this are now closed rather
 than merely noted: `op:abort` had two encoders (one deleted, the retired one
