@@ -183,6 +183,44 @@
   (check-true (abort-ours-hex? (bytes->hex-string a) b-upper)
               "verdict followed hex order instead of octet order"))
 
+;; --- The op:abort the teardown sends ---
+;;
+;; Losing a crossed hello means sending `<op:abort "crossed hellos">`. Those
+;; bytes were assembled by a second encoder in the interop server; it is gone,
+;; and `abort-bytes` in `prologos::ocapn::handshake` is the only one left.
+;;
+;; The retired builder is transcribed below as a TEST ORACLE. That is the
+;; difference between retiring a duplicate and keeping one: as an oracle it
+;; can only report a divergence, where as a production fallback it would
+;; supply an answer that hides one.
+
+(define (retired-server-abort-bytes reason)
+  (define r (string->bytes/latin-1 reason))
+  (bytes-append #"<8'op:abort"
+                (string->bytes/latin-1 (number->string (bytes-length r)))
+                #"\"" r #">"))
+
+(define (prologos-abort-bytes reason)
+  (define out (run-last (format "(eval (abort-bytes ~s))" reason)))
+  (define m (regexp-match #px"^(\".*\") : String$" (string-trim out)))
+  (unless m (error 'prologos-abort-bytes "unreadable: ~s" out))
+  (string->bytes/latin-1 (read (open-input-string (cadr m)))))
+
+(test-case "op:abort bytes match the retired server encoder"
+  (for ([reason (in-list (list "crossed hellos"
+                               "start-session validation failed"
+                               ""
+                               "a"))])
+    (check-equal? (prologos-abort-bytes reason)
+                  (retired-server-abort-bytes reason)
+                  (format "op:abort encoding diverged for ~s" reason))))
+
+(test-case "op:abort is the literal wire shape, not merely self-consistent"
+  ;; Both implementations agreeing proves nothing if both are wrong, so pin
+  ;; one case against the bytes written out by hand.
+  (check-equal? (prologos-abort-bytes "crossed hellos")
+                #"<8'op:abort14\"crossed hellos>"))
+
 (test-case "the difference is found wherever it sits"
   ;; A prefix-only comparison passes when ids differ early and fails here.
   (define a (id-with-byte-at 31 1))

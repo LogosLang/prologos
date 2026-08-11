@@ -374,14 +374,35 @@
   (define b (string->bytes/latin-1 s))
   (bytes-append (string->bytes/latin-1 (number->string (bytes-length b))) #"'" b))
 
-;; `<op:abort "reason">`. Built directly rather than through captp-wire:
-;; this runs on the accept thread before any connection state exists, and
-;; the frame is two atoms.
+;; `<op:abort "reason">` — built by `abort-bytes` in
+;; `prologos::ocapn::handshake`, which is the only implementation.
+;;
+;; It used to be assembled here instead, on the reasoning that this "runs on
+;; the accept thread before any connection state exists". That was never the
+;; obstacle it sounded like: `validate-incoming` calls into Prologos from the
+;; same thread, and `abort-bytes` is pure and needs no connection state at all.
+;;
+;; The reasons are compile-time constants, so all of them are built ONCE at
+;; startup and looked up thereafter. That is not an optimisation — it is what
+;; lets the validation-failure path use the single implementation without
+;; calling into Prologos from a handler for a Prologos call that just failed.
+;; A miss cannot happen for a literal, and falls back to a live call rather
+;; than to a second encoder.
+(define abort-reasons
+  (list "start-session validation failed"
+        "crossed hellos"))
+
+(define (compute-abort-bytes reason)
+  (extract-latin1-bytes
+   (last-result (run-prologos/locked (format "(eval (abort-bytes ~s))" reason)))))
+
+(define abort-bytes-cache (make-hash))
+
 (define (build-abort-bytes reason)
-  (define r (string->bytes/latin-1 reason))
-  (bytes-append #"<8'op:abort"
-                (string->bytes/latin-1 (number->string (bytes-length r)))
-                #"\"" r #">"))
+  (hash-ref abort-bytes-cache reason (lambda () (compute-abort-bytes reason))))
+
+(for ([r (in-list abort-reasons)])
+  (hash-set! abort-bytes-cache r (compute-abort-bytes r)))
 
 ;; ========================================
 ;; OCapN shapes, read structurally
