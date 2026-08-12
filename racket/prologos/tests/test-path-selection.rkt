@@ -1576,8 +1576,16 @@
   (check-true (expr-select? stuck)))
 
 (test-case "P3a verify: trailing steps after a terminal sub-block panic (constructed IR)"
-  ;; The parser grammar forbids the shape; the reducer now enforces it rather
-  ;; than silently discarding the trailing steps.
+  ;; The reducer enforces the shape rather than silently discarding the trailing
+  ;; steps. ⚠ ROUND 2, F5 — THIS COMMENT USED TO SAY "the parser grammar forbids
+  ;; the shape", which is what the panic itself said, and BOTH were false: the
+  ;; depth-≥2 shield forbade it, and C2 removed the shield. Round 1 corrected the
+  ;; sibling `below-components`; F5 corrected `below-value`'s wording.
+  ;; ⭐ AND THIS PIN IS WHY THE FIX HAD TO BE SWEPT FOR ECHOES. It constructs the
+  ;; exact residue that arm's own note called undemonstrated, and it stayed GREEN
+  ;; straight through a message that asserted a falsehood — because it asserted
+  ;; only `expr-panic?`. Watching #5, "pins that assert KINDS never assert
+  ;; MESSAGES", verbatim. The message is now pinned too.
   (define subj (whnf (expr-select (expr-fvar 'x) (expr-path '((a)) 'block) #f)))
   (check-true (expr-select? subj)) ;; sanity: stuck neutral stays stuck
   (define bad-branches '((a (@sub (b)) c)))
@@ -1588,7 +1596,13 @@
     (expr-champ (champ-insert champ-empty (equal-hash-code (expr-keyword 'a)) (expr-keyword 'a)
                               (expr-champ inner))))
   (define r (whnf (expr-select champ-subj (expr-path bad-branches 'block) #f)))
-  (check-true (expr-panic? r) "trailing steps after @sub must panic, not vanish"))
+  (check-true (expr-panic? r) "trailing steps after @sub must panic, not vanish")
+  ;; F5: the message must state the true invariant, never a parser prohibition.
+  (define msg (format "~a" r))
+  (check-regexp-match #rx"not terminal" msg)
+  (check-regexp-match #rx"compiler-invariant violation" msg)
+  (check-false (regexp-match? #rx"grammar forbids" msg)
+               (format "the panic must not assert a prohibition the parser never made; got: ~a" msg)))
 
 (test-case "P3a verify: the sub-block empty message does not claim `{}` is a map literal"
   (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{server.{}}\n")))

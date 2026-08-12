@@ -1008,8 +1008,19 @@
 ;; it would around a starless result. Firing early would compute the layer over
 ;; the whole remaining prefix — which re-nests — and that is the BRANCH-ROOT
 ;; reading Q_U46 rejected, reappearing one level down.
+(define (select-steps-star-tail? steps)
+  (and (pair? steps) (pair? (cdr steps)) (null? (cddr steps))
+       (select-star-step? (cadr steps))
+       (not (select-star-step? (car steps)))))
+
 ;; ⭐ 1b-iii-C2 VERIFY ROUND 1 — the two predicates the round-1 defects needed,
 ;; both here for the same reason as their neighbours: more than one seat asks.
+;; ⚠ ROUND 2, F7 — THEY WERE SPLICED ABOVE THIS POINT, between the header of
+;; `select-steps-star-tail?` and the function that header guards: ~40 lines and
+;; two unrelated definitions separating a PRECONDITION ("⚠ EXACTLY TWO, and that
+;; is the subtle half") from the code it constrains. Moved below it, so a reader
+;; meets the rule and the function together — which is the only reason the rule
+;; survives the next edit.
 ;;
 ;; `select-step-makes-no-layer?` — does this step contribute NO output level, so
 ;; that a star after it has nothing to delete? [Q_U2] Reading A for ordinals.
@@ -1050,10 +1061,6 @@
                       (ormap select-branch-has-star?/deep (cdr s))))))
          b))
 
-(define (select-steps-star-tail? steps)
-  (and (pair? steps) (pair? (cdr steps)) (null? (cddr steps))
-       (select-star-step? (cadr steps))
-       (not (select-star-step? (car steps)))))
 (define (make-select-star cont) (list '@star cont))
 
 ;; ⭐ D4.P4e-1b slice 1b-iii-A [Q_U44] — CANONICAL KEY ORDER, defined ONCE.

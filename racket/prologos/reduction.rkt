@@ -2228,18 +2228,47 @@
                                     (format "select: `*` — ~a (typing carries the user-facing refusal; reaching the value layer with this shape is a compiler-invariant violation)" why))))))))]
         ;; ⚠ THE ARM ORDER ABOVE IS LOAD-BEARING, and getting it wrong is how the
         ;; first cut of C2 failed. The `@sub` arm below matches ANY sub-headed
-        ;; step list and panics when anything follows it ("steps after a terminal
-        ;; sub-block") — so with the tail arm placed after it, `two{a.{x y}*}` and
-        ;; `vh{0.{0}*}` both died there instead of joining. Typing's twin does not
+        ;; step list and panics when anything follows it (the non-terminal-sub
+        ;; message — round 2 F5 corrected its WORDING, not its guard, so the
+        ;; hazard this note describes is unchanged) — so with the tail arm placed
+        ;; after it, `two{a.{x y}*}` and `vh{0.{0}*}` both died there instead of
+        ;; joining. Typing's twin does not
         ;; have the same hazard (its sub arm carries a `(null? (cdr steps))`
         ;; guard), which is exactly the kind of asymmetry that makes a
         ;; "same change in both files" edit wrong in one of them.
+        ;; ⚠⚠ ROUND 2, F5 — THE MESSAGE ASSERTED A PROHIBITION THAT NEVER EXISTED.
+        ;; It read "the parser grammar forbids this shape". The parser never
+        ;; forbade it; the depth-≥2 SHIELD did, and C2 removed the shield. Round 1
+        ;; found the identical false assertion in the sibling `below-components`
+        ;; twelve lines above and fixed it there — this one was left, which is the
+        ;; sibling-function shape this slice has now paid for three times.
+        ;;
+        ;; ⭐ THE SIBLING'S FIX IS THE WRONG FIX HERE, and that asymmetry is the
+        ;; whole reason this is a message change and not a delegation.
+        ;; `below-components` could match typing's twin — terminal-only, else
+        ;; delegate to `branch-entries` — because its fallthrough IS the branch
+        ;; walk. This arm's fallthrough is the `memq` arm below, which LISTS
+        ;; `sub`; that entry is DEAD only while this arm guards on `@sub` alone
+        ;; (its own P4a site-8 comment says so). Delegating would revive it and
+        ;; run `branch-entries` on a `(@sub …)` head — projecting a RAW STEP LIST
+        ;; as a nominal key, the class D4.P4a removed.
+        ;;
+        ;; ⚠ LATENT FROM THE SURFACE, BUT NOT UNEXERCISED — and I wrote the
+        ;; opposite here first. `(sub ★)` does NOT reach this arm (the star-TAIL
+        ;; arm above catches it, a sub-step not being a star), so the residue is
+        ;; `((@sub …) s₂ …)` with a NON-star follower and no surface spelling was
+        ;; demonstrated. I recorded that as "no pin can exercise it" — FALSE:
+        ;; `test-path-selection.rkt`'s P3a-verify pin constructs exactly this IR
+        ;; (`'((a (@sub (b)) c))`) and reaches this panic. It stayed green across
+        ;; the wording change because it asserted only `expr-panic?` — the
+        ;; assert-the-KIND-never-the-MESSAGE class this track is watching — so
+        ;; round 2 pinned the message there as part of this fix.
         [(and (pair? (car steps)) (eq? (car (car steps)) '@sub))
          (if (null? (cdr steps))
              (entries->value (level-entries v (cdr (car steps))))
              (return (expr-panic
                       (expr-string
-                       "select: internal — steps after a terminal sub-block (the parser grammar forbids this shape)"))))]
+                       "select: internal — steps follow a sub-block that is not terminal (typing carries the user-facing refusal; reaching the value layer with this shape is a compiler-invariant violation)"))))]
         [(number? (car steps))
          ;; ordinal STEP: descend, no output level (Reading A); seen carries
          ;; (numbers contribute no synth name — the shared walk skips them)
