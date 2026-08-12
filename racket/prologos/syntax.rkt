@@ -948,10 +948,55 @@
 ;; pipeline.md does not apply and a named classifier is the available
 ;; structural form.
 ;;
-;; ADDING A KIND — the COMPLETE site list (13 sites, FIVE files).
-;; ⚠ P4c-3 ADDED THE SIXTH KIND, `(@bcast step)`, THROUGH THIS RECIPE. It met
-;; all thirteen; the recipe held with no correction needed, which is the first
-;; time an enumeration in this track has survived a new member intact. ⚠ The first
+;; ADDING A KIND — the site list. ⚠⚠ **CORRECTED AT D4.P4e-1b (2026-08-11): IT
+;; WAS NOT COMPLETE, AND ITS OWN BOAST OF COMPLETENESS IS WHAT MADE IT
+;; DANGEROUS.** The list below (13 functions, FIVE files) is REAL but PARTIAL.
+;; Measured by attributing every live dispatch site to its enclosing function
+;; (indentation-aware, so nested helpers charge to themselves):
+;;
+;;     59 live dispatch sites · 35 inside the 13 named functions · 24 outside,
+;;     of which the classifier family itself (select-step-kind, /display,
+;;     -unhandled, the export manifest) accounts for the bulk, leaving:
+;;
+;;   TWO deliberately outside, and THE RECIPE NEVER SAID SO — `select-step-name`
+;;   and `select-step-cont` (below). Their permissive `[else s]` / `[else #f]`
+;;   tails mean a new kind gets a WRONG ANSWER rather than a raise:
+;;   `select-step-name` hands back the RAW STEP LIST (the DEFERRED 40/46
+;;   raw-list-into-a-user-message class) and `select-step-cont` answers `#f` —
+;;   which is exactly what `findf select-step-cont` (parser.rkt, the `^`-in-path
+;;   refusal) and `branch-problem`'s positional check key on. These are the
+;;   vocabulary's silent trapdoors; a new kind MUST decide both deliberately.
+;;
+;;   EIGHT genuinely OMITTED sites, each in a function this list never named:
+;;     parser.rkt       segment-select-items — the bare-`.`-after-caret arm
+;;                      segment-select-items — the head-name recovery, whose
+;;                                             `[else "field"]` is a SILENT wrong
+;;                                             default in a USER-FACING message
+;;                      parse-list           — the `^`-in-path-access refusal
+;;     reduction.rkt    bcast-apply
+;;     typing-core.rkt  select-tier-subject  — the ω PEEL (DEFERRED 43's
+;;                                             silent-miss class)
+;;                      select-bcast-lift
+;;                      select-bcast-inner-apply/non-union
+;;                      select-below-components
+;;
+;; Reproduce before trusting (coordinates drift; the FUNCTION NAMES do not):
+;;   grep -n 'select-step-kind\|select-key-step?\|select-sub-step?\|
+;;            select-ord-step?\|select-bcast-step?' *.rkt
+;; then attribute each hit to its INNERMOST enclosing `define`. ⚠ A pass that
+;; matches only column-0 `define` charges every nested helper to its enclosing
+;; top-level function and over-counts the omissions ~3× — six entries in the list
+;; below are themselves nested, so the tell is the list appearing to have no live
+;; sites. That instrument defect was made and caught during this correction.
+;;
+;; ⚠ P4c-3 ADDED THE SIXTH KIND, `(@bcast step)`, THROUGH THIS RECIPE and this
+;; comment claimed it *"met all thirteen; the recipe held with no correction
+;; needed, which is the first time an enumeration in this track has survived a
+;; new member intact."* **THAT CLAIM IS FALSE, and it is struck.** The sixth kind
+;; met the thirteen because the thirteen were the only places anyone looked; four
+;; of the eight omissions above are ω-specific functions that `(@bcast step)`
+;; ITSELF introduced. An enumeration cannot be validated by the member it was
+;; written for. ⚠ The first
 ;; cut of this recipe said "every `case (select-step-kind …)` in syntax.rkt,
 ;; typing-core.rkt and reduction.rkt", which was written from the eight sites
 ;; a name-grep found. That census was SYNTAX-directed and structurally could
@@ -1088,6 +1133,23 @@
 ;; step, or is behind a `memq` guard that excludes `bcast` — so it fixes the
 ;; ninth and changes nothing else. A standing obligation on nine call sites that
 ;; has already been sprung once is not a property to pin; it is a trap to remove.
+;; ⚠⚠ THE TWO PERMISSIVE TAILS — named at D4.P4e-1b (2026-08-11) because the
+;; "adding a kind" recipe above had never listed them, and they are the
+;; vocabulary's only SILENT trapdoors. Every other consumer raises through
+;; `select-step-kind-unhandled` on an unknown kind; these two answer.
+;;   · `select-step-name`'s `[else s]` hands back the RAW STEP LIST for any kind
+;;     that is neither bcast nor caret. For a LIST-shaped kind that is an
+;;     internal datum rendered into a user-facing message — DEFERRED 40/46's
+;;     class. (It is correct for the two ATOM kinds, `key` and `ord-step`, which
+;;     is why it has never fired wrongly: today every list-shaped kind is either
+;;     unwrapped first or excluded by a `memq` guard.)
+;;   · `select-step-cont`'s `[else #f]` reports "no continuation", and `#f` is
+;;     load-bearing downstream: `findf select-step-cont` (parser.rkt's
+;;     `^`-in-path-access refusal) and `branch-problem`'s positional check both
+;;     key on it. A new kind that legitimately carries a cont and is not added
+;;     here is silently treated as carrying none.
+;; A NEW KIND MUST DECIDE BOTH DELIBERATELY. Adding an arm is usually right;
+;; leaving the tail is defensible ONLY for an atom-shaped kind, and then say so.
 (define (select-step-name s)
   (cond
     [(select-bcast-step? s) (select-step-name (select-bcast-inner s))]

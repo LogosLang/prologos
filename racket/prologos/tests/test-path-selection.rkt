@@ -6894,3 +6894,155 @@
   (check-true (p4e1-has? "defn f [z] z\ndef c := {:a 1}\ndef r2 := |> c{a}* f"
                          #rx"\\(flatten\\) is not implemented yet")
               "a mid-pipe fused star reaches the not-yet message"))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4e-1b — THE `*` SEMANTICS.  ⚠⚠ EVERYTHING BELOW IS PARKED (COMMENTED).
+;; ---------------------------------------------------------------------------
+;; Failing-test-first artifacts for P4e-1b, written at slice 1b-i against the
+;; rulings and PARKED per this repo's acceptance-file idiom. They fail at HEAD by
+;; design: the star reaches `star-not-yet-message` and has no semantics yet.
+;;
+;; UNCOMMENT BY SLICE — the grouping is the slicing plan (D4 §5.P4e-1b):
+;;   1b-iii  → the VECTOR block (contents joined are vectors / keyless)
+;;   1b-iv   → the NOMINAL blocks (keywise join, Q_U38 collisions, Q_U41 `*_`,
+;;             Q_U42 same-key vectors, and the Q_U40 law + its ω qualifier)
+;;
+;; THE RULE UNDER TEST — [Q_U40], one sentence: `*` deletes the container layer
+;; the PRECEDING STEP contributed, joining its contents into the enclosing level;
+;; the join's SORT follows the CONTENTS — vectors CONCAT · Maps join KEYWISE
+;; ([Q_U38] refuses collisions) · keyless components CONCAT (spec §3.6 rule 5) ·
+;; leaves ERROR (rule 4). [Q_U42] makes that one RECURSIVE rule: a shared key
+;; whose two values are vectors CONCATENATES rather than erroring.
+;;
+;; ⚠ EXPECTED-VALUE PROVENANCE: every subject below was MEASURED at HEAD and the
+;; starless forms print as shown in the comments; the STARRED expectations are
+;; derived from the rulings and cannot be run until the slice lands. That is the
+;; point of parking them — but it also means a wrong expectation here is a wrong
+;; expectation that will look like an implementation bug. Re-derive from Q_U40's
+;; sentence, not from these strings, if one of them fights you.
+;; ⚠ DISPLAY NOTE, measured: a TUPLE prints `@[…]` at the VALUE level and `⟨…⟩`
+;; at the TYPE level, so a keyless result is not distinguishable from a PVec by
+;; its value alone — assert on the TYPE where the sort is the thing under test.
+
+;; ---- 1b-iii: VECTOR contents CONCAT (spec v1's ω·ω→ω; no collision possible)
+;;
+;; (test-case "P4e-1b [Q_U40] 1b-iii: vector contents CONCATENATE"
+;;   ;; `rowsv:tags` measures at HEAD as @[@[1 2] @[3]] : [PVec [PVec Int]].
+;;   ;; The ω step contributed the outer layer; deleting it joins the contents,
+;;   ;; which are vectors — the spec's own normative `build.modules:diags*:msg`.
+;;   (check-true (p4e1-has? "ns v1\ndef rowsv := @[{:tags @[1 2]} {:tags @[3]}]\nrowsv:tags*"
+;;                          #rx"@\\[1 2 3\\]")
+;;               "rowsv:tags* mapcats to @[1 2 3]")
+;;   ;; keyless/ordinal components concatenate in written order (§3.6 rule 5), so
+;;   ;; a collision is STRUCTURALLY impossible on this axis — Q_U38 never fires.
+;;   ;; `vv{0 1}` measures as @[@[1 2] @[3 4]] : ⟨[PVec Int] [PVec Int]⟩.
+;;   (check-true (p4e1-has? "ns v2\ndef vv := @[@[1 2] @[3 4]]\nvv{0 1}*"
+;;                          #rx"@\\[1 2 3 4\\]")
+;;               "vv{0 1}* concatenates the two keyless components")
+;;   ;; the ω twin: `vv:{0 1}` measures as @[@[1 2] @[3 4]] : [PVec ⟨Int Int⟩] —
+;;   ;; per element a 2-tuple. Deleting the ω layer ravels the matrix.
+;;   (check-true (p4e1-has? "ns v3\ndef vv := @[@[1 2] @[3 4]]\nvv:{0 1}*"
+;;                          #rx"@\\[1 2 3 4\\]")
+;;               "vv:{0 1}* is a RAVEL, and it needs no special case"))
+
+;; ---- 1b-iv: NOMINAL contents join KEYWISE
+;;
+;; (test-case "P4e-1b [Q_U40] 1b-iv: Map contents join KEYWISE"
+;;   ;; `m2{a b}` measures as {:a {:x 1}, :b {:y 2}}. The block contributed that
+;;   ;; layer; deleting it joins {:x 1} and {:y 2} — distinct keys, so no Q_U38.
+;;   (check-true (p4e1-has? "ns n1\ndef m2 := {:a {:x 1} :b {:y 2}}\nm2{a b}*"
+;;                          #rx":x 1.*:y 2")
+;;               "m2{a b}* splices both branches into one level")
+;;   ;; n = 1 is an IDENTITY with the dot spelling, exactly as `{p^}` is an honest
+;;   ;; 1-tuple at n = 1 (spec §3.3). `cfg.database` measures {:url "u", :pool-size 10}.
+;;   (check-true (p4e1-has? "ns n2\ndef cfg := {:database {:url \"u\" :pool-size 10} :version \"1.0.0\"}\ncfg{database}*"
+;;                          #rx":url \"u\".*:pool-size 10")
+;;               "cfg{database}* is cfg.database — the n=1 identity, harmless")
+;;   ;; the headline splat from [Q_U23], branch-level, alongside a sibling
+;;   (check-true (p4e1-has? "ns n3\ndef cfg := {:database {:url \"u\" :pool-size 10} :version \"1.0.0\"}\ncfg{database* version}"
+;;                          #rx":version \"1.0.0\"")
+;;               "cfg{database* version} lifts database's keys beside :version")
+;;   ;; under a BROADCAST, Map contents join across elements
+;;   (check-true (p4e1-has? "ns n4\ndef rowsm := @[{:cfg {:a 1}} {:cfg {:b 2}}]\nrowsm:cfg*"
+;;                          #rx":a 1.*:b 2")
+;;               "rowsm:cfg* joins the per-element Maps — distinct keys")
+;;   ;; same key, both values Map-shaped → §3.6 rule 2 recurses
+;;   (check-true (p4e1-has? "ns n5\ndef rowsm := @[{:cfg {:a 1}} {:cfg {:b 2}}]\nrowsm:{cfg}*"
+;;                          #rx":cfg \\{:a 1, :b 2\\}")
+;;               "rowsm:{cfg}* recurses under the shared :cfg"))
+
+;; ---- 1b-iv: the [Q_U40] LAW *and its ω qualifier* — the qualifier is the half
+;;      that a test must carry, because the law alone reads as unconditional.
+;;
+;; (test-case "P4e-1b [Q_U40]: the distribution law, and its NON-equivalence under ω"
+;;   ;; WITH NO INTERVENING ω the law holds: distributing the star over every
+;;   ;; branch equals starring the result.
+;;   (define bare-branchwise (p4e1-msgs "ns l1\ndef m2 := {:a {:x 1} :b {:y 2}}\nm2{a* b*}"))
+;;   (define bare-result     (p4e1-msgs "ns l2\ndef m2 := {:a {:x 1} :b {:y 2}}\nm2{a b}*"))
+;;   (check-equal? (last bare-branchwise) (last bare-result)
+;;                 "x{p* q*} = x{p q}* when the preceding step is a BLOCK")
+;;   ;; ⚠ UNDER A BROADCAST THEY ARE NOT EQUIVALENT — branch stars delete into the
+;;   ;; PER-ELEMENT block level; a trailing star deletes the CONTAINER layer the ω
+;;   ;; step contributed. One level apart. This pin is the qualifier: without it a
+;;   ;; later reader (or a normalization pass) will assume the law is total.
+;;   (check-true (p4e1-has? "ns l3\ndef m := @[{:a {:x 1} :b {:y 2}} {:a {:x 3} :b {:y 4}}]\nm:{a* b*}"
+;;                          #rx"@\\[\\{:x 1, :y 2\\} \\{:x 3, :y 4\\}\\]")
+;;               "m:{a* b*} splices PER ELEMENT — two in, two out")
+;;   (check-true (p4e1-has? "ns l4\ndef m := @[{:a {:x 1} :b {:y 2}} {:a {:x 3} :b {:y 4}}]\nm:{a b}*"
+;;                          #rx"duplicate output key")
+;;               "m:{a b}* joins ACROSS elements and collides on :x — NOT the same")
+;;   ;; and the branch form is strictly MORE expressive: the stars need not be
+;;   ;; uniform, which the result form cannot say at all.
+;;   (check-true (p4e1-has? "ns l5\ndef m := @[{:a {:x 1} :b {:y 2}} {:a {:x 3} :b {:y 4}}]\nm:{a* b}"
+;;                          #rx":x 1, :b \\{:y 2\\}")
+;;               "m:{a* b} splices a and KEEPS b's key"))
+
+;; ---- 1b-iv: [Q_U38] collisions REFUSE, and [Q_U41]'s `*_` is the remedy
+;;
+;; (test-case "P4e-1b [Q_U38]/[Q_U41]: collisions refuse; `*_` recovers on KEYED layers"
+;;   ;; a splat colliding with a SIBLING's written key
+;;   (check-true (p4e1-has? "ns c1\ndef cfg := {:database {:url \"u\" :version 2} :version \"1.0.0\"}\ncfg{database* version}"
+;;                          #rx"duplicate output key :version")
+;;               "lifted :version collides with the written :version — refused")
+;;   ;; the map-generic broadcast: every element contributes the same keys
+;;   (check-true (p4e1-has? "ns c2\ndef regions := {:eu {:host \"e\" :port 80} :us {:host \"u\" :port 443}}\nregions:{host port}*"
+;;                          #rx"duplicate output key")
+;;               "regions:{host port}* collides on :host and :port")
+;;   ;; …and `*_` removes it by construction — [Q_U24]'s own motivating example,
+;;   ;; reachable only because [Q_U40] put the star OUTER. The deleted layer here
+;;   ;; is KEYED (:eu/:us), which is exactly [Q_U41]'s domain.
+;;   (check-true (p4e1-has? "ns c3\ndef regions := {:eu {:host \"e\" :port 80} :us {:host \"u\" :port 443}}\nregions:{host port}*_"
+;;                          #rx":eu-host.*:eu-port.*:us-host.*:us-port")
+;;               "regions:{host port}*_ synthesizes from the deleted layer's keys")
+;;   ;; [Q_U41]: over a POSITIONAL deleted layer there is no key to synthesize
+;;   ;; from — refused, and the advice is to drop the underscore (Q_U42 makes the
+;;   ;; plain star do the job here).
+;;   (check-true (p4e1-has? "ns c4\ndef rowsv := @[{:tags @[1 2]} {:tags @[3]}]\nrowsv:{tags}*_"
+;;                          #rx"`\\*_`")
+;;               "`*_` over a positional layer is a guided refusal naming itself"))
+
+;; ---- 1b-iv: [Q_U42] — the join is ONE RECURSIVE rule; same-key vectors CONCAT
+;;
+;; (test-case "P4e-1b [Q_U42]: a shared key holding VECTORS concatenates, at any depth"
+;;   ;; the case that forced the ruling: the join recurses into :tags and finds two
+;;   ;; VECTORS. §3.6 rule 2 wants Maps, rule 3 wants two branches with identical
+;;   ;; spines — these are two ELEMENTS of one traversal, so it fell to rule 4 BY
+;;   ;; ELIMINATION. Q_U42 rules concat, so the operator says the same thing about
+;;   ;; vectors at depth 1 as it does at depth 0.
+;;   (check-true (p4e1-has? "ns q1\ndef rowsv := @[{:tags @[1 2]} {:tags @[3]}]\nrowsv:{tags}*"
+;;                          #rx":tags @\\[1 2 3\\]")
+;;               "rowsv:{tags}* concatenates under the shared :tags")
+;;   ;; …and it is genuinely DIFFERENT from the descent spelling: projection keeps
+;;   ;; the key, descent drops it. Both are useful; that is the expressivity the
+;;   ;; ruling bought.
+;;   (check-true (p4e1-has? "ns q2\ndef rowsv := @[{:tags @[1 2]} {:tags @[3]}]\nrowsv:tags*"
+;;                          #rx"@\\[1 2 3\\]")
+;;               "rowsv:tags* drops the key — the descent twin")
+;;   ;; it COMPOSES: recurse on :a, then concat on :t
+;;   (check-true (p4e1-has? "ns q3\ndef d := @[{:a {:t @[1]}} {:a {:t @[2]}}]\nd:{a}*"
+;;                          #rx":a \\{:t @\\[1 2\\]\\}")
+;;               "d:{a}* recurses on :a and concatenates :t")
+;;   ;; nothing else moves: LEAF values at a shared key still error (§3.6 rule 4)
+;;   (check-true (p4e1-has? "ns q4\ndef pair := @[{:host \"a\"} {:host \"b\" :port 1}]\npair:{host}*"
+;;                          #rx"duplicate output key|leaf")
+;;               "shared key on LEAVES is still an error — Q_U42 moved only vectors"))
