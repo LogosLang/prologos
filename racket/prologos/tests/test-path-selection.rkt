@@ -7050,6 +7050,67 @@
 ;;                          #rx":cfg \\{:a 1, :b 2\\}")
 ;;               "rowsm:{cfg}* recurses under the shared :cfg"))
 
+;; ---- 1b-iii [Q_U45]: L★'s SECOND qualifier, and the LEGALITY pair -----------
+;;
+;; PARKED, per the acceptance-file idiom: all six spellings below refuse at HEAD
+;; (`7fd25f35`, measured — the guided not-yet, `a*` / `zz*` / "the preceding
+;; step, flattened"), so these fail for exactly the right reason. Slice 1b-iii-B
+;; uncomments them.
+;;
+;; ⭐⭐ WHY THIS BLOCK EXISTS AT ALL: Q_U40's law L★ was recorded with ONE
+;; qualifier (no intervening ω) and every worked example behind it used MAPS.
+;; [Q_U45] widened it — L★ also fails for VECTOR contents with no ω anywhere,
+;; and it fails on ARITY before order ever enters: the distributed form is an
+;; n-TUPLE of vectors, the result form ONE FLAT vector. The Map side is equal
+;; only because a Map-valued branch star SPLICES its keys, which is the same
+;; operation the result form's keywise join performs.
+;;
+;; ⚠ VALUES/TYPES below are PREDICTED FROM THE RULINGS, not measured — nothing is
+;; implemented. Adjust the rendering if it lands differently; do NOT adjust the
+;; PROPOSITIONS (equal for Maps · NOT equal for vectors · the legality pair).
+;; Subject order is measured though: `mm : {:aa [PVec Int] :zz [PVec Int]}`, i.e.
+;; `make-record`'s `symbol<?` canonical order, which is what [Q_U44] names.
+;;
+;; (test-case "P4e-1b [Q_U45]: L★ holds for MAP contents and FAILS for VECTOR contents"
+;;   (define M "ns u1\ndef m2 := {:a {:x 1} :b {:y 2}}\n")
+;;   (define V "ns u2\ndef mm := {:zz @[1 2] :aa @[3 4]}\n")
+;;   ;; MAP contents — the two sides agree, which is L★ holding.
+;;   (check-equal? (p4e1-last (string-append M "m2{a* b*}"))
+;;                 (p4e1-last (string-append M "m2{a b}*"))
+;;                 "L★ HOLDS for Map contents — the branch stars SPLICE, which is what the result form's keywise join does")
+;;   ;; VECTOR contents — the two sides differ, and they differ in ARITY.
+;;   ;; Use the EXACT type comparison: a substring regex cannot separate
+;;   ;; `[PVec Int]` from `⟨[PVec Int] [PVec Int]⟩`, which is the vacuity this
+;;   ;; slice's instrument fix exists to prevent.
+;;   (check-false (equal? (p4e1-last (string-append V "mm{zz* aa*}"))
+;;                        (p4e1-last (string-append V "mm{zz aa}*")))
+;;                "L★ FAILS for vector contents — [Q_U45]")
+;;   (check-true (p4e1-type=? (string-append V "mm{zz* aa*}") "⟨[PVec Int] [PVec Int]⟩")
+;;               "distributed: each branch contributes ONE keyless component → a TUPLE, written order")
+;;   (check-true (p4e1-type=? (string-append V "mm{zz aa}*") "[PVec Int]")
+;;               "result: one keyed layer deleted, contents concatenated → ONE flat vector")
+;;   (check-true (p4e1-has? (string-append V "mm{zz aa}*") #rx"@\\[3 4 1 2\\]")
+;;               "…in CANONICAL key order (aa before zz), per [Q_U44]"))
+;;
+;; (test-case "P4e-1b [Q_U45]: the LEGALITY pair — absorption is observable WITHOUT computing the answer"
+;;   ;; ⭐ The owner's criterion, and it is the better test: a Map-valued branch
+;;   ;; star contributes KEYED components, which sit beside an unstarred keyed
+;;   ;; branch; a vector-valued one contributes ONE KEYLESS component, which
+;;   ;; cannot. Checkable as a LEGALITY difference, not an equality one.
+;;   (check-true (p4e1-has? "ns u3\ndef m2 := {:a {:x 1} :b {:y 2}}\nm2{a* b}"
+;;                          #rx":x 1.*:b \\{:y 2\\}")
+;;               "m2{a* b} is LEGAL — splice `a`, KEEP `b`'s key. [Q_U40] calls this the reason the branch form is strictly more expressive")
+;;   (check-true (p4e1-has? "ns u4\ndef mm := {:zz @[1 2] :aa @[3 4]}\nmm{zz* aa}"
+;;                          #rx"mixed keyed/keyless")
+;;               "mm{zz* aa} is an L4 mixed-sorts error — one keyless component beside one keyed")
+;;   ;; ⛔ AND THIS PAIR IS WHY THE PARSER GATE MUST NOT CLASSIFY. Attempt 2
+;;   ;; answered `(list #f)` for every star branch, i.e. KEYLESS, which makes the
+;;   ;; FIRST check above an L4 error too — refusing [Q_U40]'s own headline
+;;   ;; example. The parser cannot tell Map contents from vector contents; that is
+;;   ;; the whole reason [Q_U43] moved the decision to typing. See D4 § the
+;;   ;; attempt-3 audit, finding A2, and the `'()` pin above.
+;;   )
+
 ;; ---- 1b-iv: the [Q_U40] LAW *and its ω qualifier* — the qualifier is the half
 ;;      that a test must carry, because the law alone reads as unconditional.
 ;;

@@ -1296,8 +1296,25 @@
     ;; branch's sort follows its CONTENTS, which are subject-derived: keyed when
     ;; they are Maps, keyless when they are vectors or ordinal components. This
     ;; classifier cannot see them. Q_U43 moves the L4 sort decision to typing for
-    ;; star-bearing branches; the #f here is INERT (the parser refuses the star
-    ;; before any branch walk runs) and must not be read as a classification.
+    ;; star-bearing branches; the #f here must not be read as a classification.
+    ;;
+    ;; ⚠⚠⚠ THE REASON THIS #f IS SAFE WAS REWRITTEN AT 1b-iii-A, AND THE OLD
+    ;; REASON IS THE SHAPE THAT GOT 1b-iii REVERTED TWICE. It read: "the #f here
+    ;; is INERT (the parser refuses the star before any branch walk runs)". That
+    ;; is a PRECONDITION THE SEAT MIGRATION DELETES — and the migration is the
+    ;; whole point of 1b-iii, so the comment was guaranteed to rot, and did. Its
+    ;; sibling at `select-branch-top-keys` rotted the same way, one slice apart.
+    ;;
+    ;; The replacement is a CHECKABLE INVARIANT rather than a precondition:
+    ;;   EVERY production consumer pre-checks for a star BEFORE consulting this.
+    ;; All three, and the grep that audits them is `select-branch-keyless?`:
+    ;;   · syntax.rkt      `select-branch-top-keys` — `[(ormap select-star-step? b) '()]`
+    ;;                     immediately above its call. LIVE TODAY.
+    ;;   · reduction.rkt   `branch-entries`         — star arm ahead of `col`   [1b-iii]
+    ;;   · typing-core.rkt `select-branch-entries`  — star arm ahead of `col`   [1b-iii]
+    ;; Adding a consumer means adding its shield, or giving this predicate a real
+    ;; answer — which it cannot have without the subject. Do not restore a reason
+    ;; that depends on what some OTHER layer currently refuses.
     (and (eq? (select-step-kind s) 'caret)
          (eq? (select-step-cont s) 'dissolve))))
 
@@ -1332,9 +1349,26 @@
       ;; in the `case`: the first cut put it there and the pin caught it.)
       ;; `'()` is NOT a classification — it is the recorded ABSENCE of one, per
       ;; Q_U43, which moves both gates to typing where the subject's row is
-      ;; visible. Safe only while the star cannot reach a block; THE CARVE-OUT AT
-      ;; THE GATES IS 1b-iv WORK. A nested star inside a `(@sub …)` reaches this
-      ;; same pre-check through the recursive `append-map` below.
+      ;; visible. A nested star inside a `(@sub …)` reaches this same pre-check
+      ;; through the recursive `append-map` below.
+      ;;
+      ;; ⚠⚠ REASON REWRITTEN AT 1b-iii-A — the old one ("safe only while the star
+      ;; cannot reach a block; THE CARVE-OUT AT THE GATES IS 1b-iv WORK") was a
+      ;; precondition the SEAT MIGRATION deletes, and its sibling comment at
+      ;; `select-branch-keyless?` rotted identically. `'()` is right BEFORE and
+      ;; AFTER the migration, and here is the part that has to be checked rather
+      ;; than assumed:
+      ;;   · `'()` lets `m2{a* b}` through the parser, which is CORRECT — Q_U40
+      ;;     rules it legal (splice `a`, KEEP `b`'s key) and calls it the reason
+      ;;     the branch form is strictly more expressive.
+      ;;   · `'()` ALSO lets `mm{zz* aa}` through, which is an L4 mixed-sorts
+      ;;     ERROR — so TYPING OWES THAT CHECK. It does not exist yet. Until it
+      ;;     lands, a star branch beside a keyed sibling reaches `make-record`
+      ;;     with a `#f` label and RAISES (round 1's defect #2).
+      ;; ⛔ DO NOT "FIX" THIS TO `(list #f)`. Attempt 2 did, classifying every star
+      ;; branch KEYLESS, and it refuses `m2{a* b}` — the parser cannot tell Map
+      ;; contents from vector contents, which is the entire reason Q_U43 moved the
+      ;; decision to typing. Recorded at D4 § the attempt-3 audit, finding A2.
       [(ormap select-star-step? b) '()]
       [col
        (list (cond
