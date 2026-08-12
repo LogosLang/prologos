@@ -8914,6 +8914,32 @@ fixes themselves:**
 · `(list #f)` is honest for what 1b-iii ACCEPTS but is also applied to shapes it
   REFUSES, where it PRE-EMPTS the star's own message with an L4 sort error.
 
+<a id="p4e-1b-iii-a"></a>
+
+##### §5.P4e-1b-iii-A — make the observations trustworthy  (✅ 2026-08-12)
+
+The audit's findings do not fit one atomic slice, and B below is irreducible (the
+seat migration forces the twins' arms; an arm that refuses in one slice and joins
+in the next is the dual-path scaffolding 1b-ii refused to build; and the join
+forces the classification, or `mm{zz* aa}` reaches `make-record` with a `#f` label
+and raises). So A absorbs everything star-free, and B is pre-pinned instead of
+made smaller. **Thesis: you cannot verify semantics with a broken instrument and a
+lying echo.** Battery 481 → **484**; every item landed INERT for star behaviour.
+
+| # | landed | finding |
+|---|---|---|
+| 1 | `f0d91853` | **The battery's own instrument was vacuous.** `p4e1-has?` ormapped EVERY output including setup `def` lines, so an expectation that is a substring of a subject's printed type could never fail — measured on the attempt-2 patch's headline pin against the STARLESS control. Fixed LOUDLY (restrict to the final command's output) so vacuous pins redden rather than needing to be guessed at; `p4e1-any-has?` is the visible opt-out, `p4e1-type=?` compares types exactly. ⚠ **My first pin for it OVER-CLAIMED** — it asserted the restriction kills the `[PVec Int]` regex, which it cannot, because the WRONG answer contains that substring too. The two defects are independent; the pin now separates them and pins the containment half as STILL LIVE. ⚠ Exactly ONE pin reddened across 35 call sites, and it was mine — which does NOT vindicate the other 34: the loud fix only catches a pin depending EXCLUSIVELY on setup output. |
+| 4 | `43c91859` | **The two rotted PRECONDITIONS replaced with a checkable invariant** — the structural point of the slice. `select-branch-keyless?`'s *"the parser refuses the star before any branch walk runs"* becomes *"every production consumer pre-checks for a star before consulting this"*, with all three named and the grep that audits them. `select-branch-top-keys`' *"safe only while the star cannot reach a block; THE CARVE-OUT IS 1b-iv WORK"* becomes what must actually be checked, and now **forbids the parked patch's `(list #f)`** in writing. A third instance of the same comment class was found in the BATTERY and corrected. Q_U45's legality pair parked. |
+| 2 | `e38845a9` | **Canonical key order gets ONE definition** — comparator in `syntax.rkt` (the only home upstream of both twins), walker at `reduction.rkt` MODULE level because `select-reduce`'s `sort` parameter shadows Racket's `sort` for ~470 lines. It returns `#f` rather than inventing an order for a key it cannot speak for. ⭐ **The pin's KEY SET is the finding**: `{:a :a!}` separates `symbol<?` from the struct-display order where attempt 2's `aa`/`mm`/`zz` set agreed under both — and the pin carries an explicit MUTATION GUARD asserting they disagree, so it tells us if it ever stops being evidence. **Mutation-tested**: attempt 2's exact ordering turns it red. |
+| 3 | `dd5d145c` | **The FAIL-KIND axis was a silent trapdoor.** `format-select-fail`'s `[else #f]` falls through to the generic message, and NESTED it is a contract violation a blanket handler swallows. Measured: all 14 live kinds have arms, so it was UNREACHABLE — a pure trapdoor — and 1b-iii-B adds THREE kinds to this axis. Made total, and it **reports rather than raises**: a raise in the message formatter is a whole-file abort on the `infer` path. |
+| 5 | [DEFERRED 113](DEFERRED.md) | **`pp-expr`'s `'path` arm hardcodes `.`** while `pp-select-branch` honours `first?` — the identical bug one arm over was fixed at P4d-0 slice 5 and the sibling never swept. ⚠ **FILED, NOT FIXED, and the reason is a correction to the audit**: its user-visible claim (`c{a}*` echoes as `c{a}.*`) **did not reproduce** — the probe's diagnostics never route through that arm. The CODE SHAPE is verified; the rendering is not. What is owed is a diagnostic that actually reaches it. |
+
+**B's pre-pinned set, still to write**: the six arrival positions · the legality
+pair (parked) · the ω non-equivalence (parked, uncomment) · L★'s vector
+non-equivalence (parked) · the discriminating key set (landed) · a tripwire
+planting a star in a `rest` position at the four `select-step-kind-unhandled`
+sites, so C32's unreachability argument stops living in an audit.
+
 ⚠ **THE PARKED PATCHES LIVE IN A PRIOR SESSION'S SCRATCHPAD**, not the current
 one: `/private/tmp/claude-501/-Users-avanti-dev-projects-prologos/311a1847-2220-4539-bd51-0e2270a3625f/scratchpad/slice-1b-iii-attempt{1,2}.patch`
 (attempt 2 = 427 added lines, six files: parser +42/−10 · reduction +105 ·

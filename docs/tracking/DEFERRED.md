@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 113**
+> ### **NEXT FREE: 114**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6863,3 +6863,52 @@ $facts-sep`. An internal sentinel surfacing at the user with NO star anywhere;
 structurally untouchable by the P4e work (every added arm keys on
 `$postfix-star`). The `||` fact-row machinery emits `$facts-sep` and some path
 fails to consume it. Rel-territory (POL.7 fact rows), not star territory.
+
+---
+
+### 113. ⬜ `pp-expr`'s `'path` arm HARDCODES the `.` separator while `pp-select-branch` honours `first?` — the same defect fixed one arm over at P4d-0 slice 5, sibling never swept
+
+Found by the D4.P4e-1b-iii attempt-3 mini-audit (`wf_bbf1169e-340`), and **filed
+rather than fixed because the user-visible half did NOT reproduce on the probe I
+wrote for it** — see the honesty note below.
+
+**VERIFIED by code read** (`pretty-print.rkt`, quoted at HEAD `7fd25f35`):
+
+```racket
+[(path)  (if (= (length branches) 1)
+             (format "~a.~a" (pp-expr subject names)          ;; ← hardcoded `.`
+                     (string-join (map pp-select-branch (list (car branches))) ""))
+             ...)]
+```
+
+`pp-select-branch` renders its FIRST step with `first? = #t` — i.e. deliberately
+*without* a leading separator, because the caller is supposed to supply the right
+one. This caller always supplies `.`. So a branch whose first step carries its own
+glyph renders with BOTH: an ω branch as `users.:tags`, and (under P4e-1b) a
+branch-initial star as `c{a}.*`, which is not a spelling the language has.
+
+⭐ **The identical bug one arm over was already fixed**, and its comment states the
+shape exactly: *"D4.P4d-0 slice 5: honour `first?` — this arm hardcoded `.{` and
+ignored the flag the bcast arm passes, so `users:{a b}` rendered as the NONEXISTENT
+spelling `users:.{a b}` in every diagnostic path (the bcast arm's own comment
+claimed otherwise)."* The sibling site was not swept then. ⚠ The `[(star)]` arm's
+own comment reasons about `first?` (*"a branch-INITIAL star … is a real spelling,
+and `.{*}` would be a nonexistent one"*) — it does its half correctly; the
+separator is emitted by a caller that knows nothing about the branch's first step.
+
+⚠ **HONESTY NOTE, and it is why this is a filing and not a fix.** The audit stated
+the consequence as user-visible (`c{a}*` "will echo as `c{a}.*`"). **I could not
+reproduce it**: a probe at HEAD using `users:nosuch` and `c.nosuch` returned the
+field-miss diagnostics, which do not route through `pp-expr`'s `'path` arm at all.
+So what is established is the CODE SHAPE, not the user-facing rendering. What is
+owed before fixing: identify which diagnostics (or value displays) actually render
+a `'path`-sort `expr-select` through `pp-expr`, and pin one. If none does, the arm
+is unreachable and the fix is trivial-but-untestable — which is itself worth
+knowing, and is the same "argued-unreachable" trap this arc keeps paying for.
+
+**Not P4e-1b-iii work**: pre-existing, star-free (the ω spelling exhibits it
+without any star), and *Watching 9* — mid-flight widening is where this arc
+introduces its defects. The 1b-ii display pin cannot see it: it calls
+`pp-select-branch` directly and never goes through `pp-expr`.
+
+---
