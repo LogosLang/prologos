@@ -8934,6 +8934,30 @@ lying echo.** Battery 481 → **484**; every item landed INERT for star behaviou
 | 3 | `dd5d145c` | **The FAIL-KIND axis was a silent trapdoor.** `format-select-fail`'s `[else #f]` falls through to the generic message, and NESTED it is a contract violation a blanket handler swallows. Measured: all 14 live kinds have arms, so it was UNREACHABLE — a pure trapdoor — and 1b-iii-B adds THREE kinds to this axis. Made total, and it **reports rather than raises**: a raise in the message formatter is a whole-file abort on the `infer` path. |
 | 5 | [DEFERRED 113](DEFERRED.md) | **`pp-expr`'s `'path` arm hardcodes `.`** while `pp-select-branch` honours `first?` — the identical bug one arm over was fixed at P4d-0 slice 5 and the sibling never swept. ⚠ **FILED, NOT FIXED, and the reason is a correction to the audit**: its user-visible claim (`c{a}*` echoes as `c{a}.*`) **did not reproduce** — the probe's diagnostics never route through that arm. The CODE SHAPE is verified; the rendering is not. What is owed is a diagnostic that actually reaches it. |
 
+**⚠ B IS NOT IRREDUCIBLE — CORRECTED 2026-08-12, and I had asserted otherwise.**
+Setting B up, the split fell out: land BOTH TWINS' REAL ARMS **INERT** first, then
+migrate the parser seat. At HEAD the parser still refuses, so no star reaches the
+twins and the arms are correct-but-unreachable code — exactly how 1a-ii landed the
+Tier-O arms. ⚠ This is NOT the refusing-arm scaffolding 1b-ii rejected: that was a
+placeholder a later slice would REPLACE, whereas these are the actual join, merely
+not yet live. Twin atomicity is preserved (both in one commit) and the largest
+chunk of risk leaves the migration commit.
+
+| slice | content | why it is safe alone |
+|---|---|---|
+| **1b-iii-B1** | `branch-entries` + `select-branch-entries` star arms **at matching positions, FIRST in each cond, ahead of `col`/`keyless?`** · the layer walk (`below-value` / `select-below-field`) · the vector concat via A's `champ-values/canonical` + the existing `rrb-concat` · the three failure kinds + their `format-select-fail` arms · **typing's L4 sort check** (Q_U43's actual migration) | INERT — the parser refuses, so nothing reaches the arms. Gate is battery + neighbourhood + "star behaviour byte-identical to HEAD" |
+| **1b-iii-B2** | the parser position rule across all four bands · `star-not-yet-message` retired **definition and all** · uncomment the parked pins | one move makes B1 reachable; every behaviour it exposes is already pinned |
+
+⚠ **B1's own traps, from the audit**: the twins DIVERGE on an empty layer
+(typing's `(pair? contents)` refuses, reduction's `(andmap … '())` mints `@[]`)
+and on `seen` (reduction forwards it, typing resets to `'()`) — decide both
+explicitly, they are twin-contract questions nobody has ruled · typing's contents
+arm needs the TAIL and PRESENCE guards the tree already ships
+(`closed-keyword-row?`, syntax.rkt) or a `'dyn` row silently joins a SUBSET ·
+reduction's non-vector arm is an INVARIANT guard reached via
+`(return (expr-panic …))`, **never `error`** · and `champ-values/canonical`
+returns `#f` for an un-orderable key, which is NOT "empty" — panic on it.
+
 **B's pre-pinned set, still to write**: the six arrival positions · the legality
 pair (parked) · the ω non-equivalence (parked, uncomment) · L★'s vector
 non-equivalence (parked) · the discriminating key set (landed) · a tripwire
