@@ -134,7 +134,7 @@ Full set + index: `docs/tracking/principles/README.org`
 | Running tests / benchmarks | `testing.md` § benchmarking | `tools/` directory |
 | Committing / branching / PR | `workflow.md` | hook discipline + commit-message style |
 | Resuming after compact | `HANDOFF_PROTOCOL.org` | latest dailies + active design doc |
-| Writing dailies / after a rewind | `DAILIES_METHODOLOGY.org` | the STATE head + Relay-Note protocol |
+| Writing dailies / **writing a Relay Note** (rewind *or* fresh session) | `DAILIES_METHODOLOGY.org` | the STATE head + the Relay-Note protocol's four obligations |
 | Designing a new feature | `DESIGN_METHODOLOGY.org` | the 5 stages, mantra audits |
 | Adversarial critique round | `CRITIQUE_METHODOLOGY.org` | P/R/M/S lenses, SRE lattice lens |
 | Writing a PIR | `POST_IMPLEMENTATION_REVIEW.org` | 16 questions |

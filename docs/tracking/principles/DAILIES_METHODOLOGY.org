@@ -97,15 +97,55 @@ head; the old file's log stays as immutable history. "Day" = creation-to-creatio
 (a file may span calendar dates), but bounded by these roll triggers — the
 interval is no longer open-ended.
 
-* Relay Notes — the re-grounding mechanism after a REWIND
+* Relay Notes — the re-grounding mechanism (REWIND *or* FRESH SESSION)
 
-When the owner rewinds the conversation (for context headroom), the resuming turn
-has no chat history of the intervening work — ON-DISK IS AUTHORITATIVE. A RELAY
-NOTE is the crystallized re-grounding blob the owner pastes into the resumed
-turn. It is GENERATED FROM the STATE head (same content, expanded), NOT a thing
-that accumulates in the dailies body.
+A RELAY NOTE is the crystallized re-grounding blob the owner PASTES into the
+next turn. It is GENERATED FROM the STATE head (same content, expanded), NOT a
+thing that accumulates in the dailies body.
 
-The observed high-value shape:
+⚠ *CORRECTED 2026-08-11 (owner).* This section previously scoped relay notes to
+REWINDS only and called them "the rewind sibling" of the fresh-session protocol.
+They serve BOTH, and the four points below were understood between us but written
+down nowhere — so a session could describe the artifact correctly from having
+SEEN one and still miss every operational obligation. Saying *"Relay Protocol"*
+or *"let's write a Relay Note"* now implies all of it.
+
+** The two destinations
+
+- *A FRESH SESSION* — typically ACCOMPANIED BY a handoff document
+  ([[file:HANDOFF_PROTOCOL.org][HANDOFF_PROTOCOL.org]]), if one was asked for. The note is the entry
+  point; the handoff is the durable §1–§6 record it points AT.
+- *A REWOUND TURN in the SAME conversation* — the resuming turn has no chat
+  history of the intervening work, so ON-DISK IS AUTHORITATIVE.
+
+** Four obligations, all implied by the request
+
+1. *WRITE IT AS A MARKDOWN BLOCK IN THE CONVERSATION.* One fenced block, so the
+   owner can COPY-PASTE it whole into the next session or the rewound turn. It is
+   a message artifact, not a file — do not commit it; the durable record is the
+   dailies + the handoff.
+2. *SAY WHICH DESTINATION IT IS FOR* — fresh session or rewind. They differ in
+   what the reader already has: a rewound turn shares this conversation's earlier
+   context, a fresh session shares nothing.
+3. *IF IT IS FOR A REWIND, NAME THE IDEAL TURN TO REWIND TO.* This is a JUDGEMENT
+   the writer owes the owner, not a detail to leave open: identify the turn whose
+   context is the right base to build from, BALANCED against leaving enough
+   context headroom to do the next work. Say which turn and WHY — what that turn
+   already establishes, and what is deliberately being left behind.
+4. ⚠ *BEFORE WRITING IT, BRING THE GROUNDING UP TO DATE.* The relay note is a MAP
+   to the durable artifacts; if they are stale the note propagates the staleness
+   into a session that cannot detect it. So first ensure:
+   - the *DAILIES* — STATE head refreshed (HEAD/suite/battery/NEXT), LOG appended
+     for every commit since the last update;
+   - the *MEMORIES* (~memory/~ + ~MEMORY.md~) — the live-state block for the
+     active initiative reflects reality;
+   - the *DESIGN / TRACK DOCUMENT(S)* — rulings recorded, tracker rows marked,
+     per-slice records written, registers (DEFERRED next-free, Q-label next-free)
+     bumped.
+   Only then write the note. A relay note written over stale grounding is worse
+   than none: it is confidently wrong at exactly the moment nobody can check it.
+
+** The observed high-value shape
 
 - ⚠ RUN ~git log~ + ~git status~ FIRST — on-disk is ahead of the chat.
 - HEAD ~hash~ + the recent commit chain.
@@ -116,11 +156,26 @@ The observed high-value shape:
 - RESUME TARGET — the single next action.
 - DISCIPLINES — the per-change gate, commit conventions, owner-dialogue style.
 
+Plus, when the note carries lessons: *THE FACTS THAT OUTLAST THE SLICE* — the
+transferable failure shapes and rulings-behind-the-rulings. This is the part not
+recoverable from ~git log~, and in practice the highest-value section: a
+successor that knows only the code state repeats the same mistake.
+
+And close with *FIRST MOVE* — re-verify, read, then SUMMARIZE UNDERSTANDING BACK
+to the owner BEFORE starting work. That summarize-back is the checkpoint against
+a session that believes it has context and does not.
+
 Discipline: a resuming session re-grounds from git + docs FIRST, then trusts the
-relay note as a MAP, not authority — coordinates drift, so re-grep. Relay notes
-are the rewind sibling of the compact/fresh-session protocol in
-[[file:HANDOFF_PROTOCOL.org][HANDOFF_PROTOCOL.org]]; if more than one ever shares a surface, SUPERSEDED-tag the
-stale ones.
+relay note as a MAP, not authority — coordinates drift, so re-grep. Never trust a
+hash in prose: the note should TELL the reader to re-derive HEAD and re-MEASURE
+counts, and should supply the command rather than the number where it matters.
+Relay notes and the compact/fresh-session protocol in [[file:HANDOFF_PROTOCOL.org][HANDOFF_PROTOCOL.org]] are
+complements, not alternatives — the note is the entry point, the handoff is the
+record. If more than one ever shares a surface, SUPERSEDED-tag the stale ones.
+
+⚠ *WRITE-ON-REQUEST ONLY.* Relay notes and handoffs are produced when the owner
+ASKS. A session that writes one unprompted has usually mistaken a natural
+boundary for an instruction.
 
 * Anti-patterns (from the survey — do NOT reintroduce)
 
