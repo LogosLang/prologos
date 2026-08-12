@@ -8956,7 +8956,7 @@ B1/B2 — land the machinery INERT, then migrate the seat.** C repeats it.
 
 | slice | content | why it is safe alone |
 |---|---|---|
-| **1b-iii-C1** | **The deep-landing machinery, INERT.** The shared join helper, extracted from `star-branch-entries`/`star-entries` (behaviour-preserving for the depth-1 path), plus **star-TAIL arms** on `select-below-field` / `select-below-components` and their reduction twins. Doc-truth in the same commit. | The branch-level star pre-check stays TOTAL and both shields stay up, so nothing reaches the new arms from the surface — reachable by direct unit call only, exactly how B1 was verified. ⚠ Also closes a live abort: `walk-to-leaf`'s and both below-walks' `[else]`s are plain `error` and `select-step-kind` maps `(@star …)` to `'star`. |
+| **1b-iii-C1** ✅ `4f30a171` | **The SHARED JOIN, hoisted and returning BARE.** `star-join-type` (typing-core) + `star-join-value` (reduction) at module level, both exported; each twin's existing caller now wraps keyless (its remainder-empty case). `select-below-field` exported as C2's seat. syntax.rkt doc-truth. ⚠ **RE-SCOPED mid-slice**: the tail ARMS moved to C2 — see the note below. | Pure extraction. Battery 498 → **501**, 0/0 by direct require; every pre-existing pin green IS the regression proof (the B1 pins already exercise depth-1 through both twins). **Mutation-tested PER TWIN**, inverted in place: re-wrapping typing's return → 3 FAILURE + 3 ERROR, reduction's → 2 FAILURE + 4 ERROR, the C1 pin among them each time. ⚠ Both mutant runs **exited 0**. E2E star surface byte-identical to pre-C1; neighbourhood 318 `[4/4]`; acceptance 0 errors. |
 | **1b-iii-C2** | **The seat migrates: the pre-check NARROWS and both shields come out, atomically.** The three gap dispositions · the `vh{0.{0}*}` pin flipped WITH its reasoning · **the dup seat's first arm** and **the L4 message fix** (both below) · the E2E battery. | The whole observable change, atomic. Twin-order divergence at this seat has already caused a whole-file abort once. |
 
 **⭐⭐ THE IMPLEMENTATION SHAPE — CORRECTED 2026-08-12 BY TRACING THE ARMS, and
@@ -8991,6 +8991,25 @@ last-step) … then re-nest through the outer steps"*, and that C1 should
    uses** — returning a keyless component at the branch level. So
    [Q_U48](#q-u48)'s *"`*-` is to `*` what `^-` is to `^`"* is truer than the
    ruling claimed: they share an IMPLEMENTATION, not merely a shape.
+
+⚠⚠ **C1 WAS RE-SCOPED MID-SLICE, AND THE REASON IS A VERIFICATION-STANDARD ONE
+THAT ONLY APPEARED WHEN I TRIED TO WRITE THE PIN.** C1 was to land both star-TAIL
+arms INERT, B1-style, verified by direct unit call. On the typing side that works
+(`select-below-field` is now exported; a pin on `[hosts ★]` fails at HEAD by
+returning the 1-tuple). **The reduction side has no such seam**: both
+`star-entries` and `below-value` live *inside* `select-reduce`'s ~470-line scope
+and neither is exportable, while `select-reduce` itself refuses a deep branch at
+the shield. So that C1 would have shipped the typing arm directly pinned and the
+reduction arm **mutation-tested only** — at the seat whose own comment says
+landing either alone is *"not a half-measure but a REGRESSION"*, and where a
+twin-order divergence already cost a whole-file abort. Verifying one twin to a
+lower standard than the other is the wrong trade here.
+**So C1 became the EXTRACTION** — hoist the join to module level in both files,
+which makes both twins equally pinnable *and* escapes the `sort` shadow the audit
+independently flagged — and **the tail arms moved to C2**, where they are thin
+(call the helper, wrap per caller) and land together with the E2E that observes
+them. The substance is verified symmetrically; the wiring ships with its
+instrument.
 
 ⚠ **AND THE PRE-CHECK NARROWING IS SAFE, VERIFIED — but only because two [leaf]
 classifiers already handle `star` deliberately.** C2 narrows the branch-level
