@@ -1640,6 +1640,26 @@
               "(none — the map is empty)"
               (string-join (sort (map fmt-map-key (champ-keys c)) string<?) " "))))
 
+;; ⭐ D4.P4e-1b slice 1b-iii-A [Q_U44] — the champ walker for the star's join.
+;; ⚠⚠ IT LIVES AT MODULE LEVEL DELIBERATELY, and the reason is two lines above:
+;; `select-reduce` binds a parameter named `sort` (:1643) and the next top-level
+;; define is `validate-tabulate` — so EVERY internal helper between them is in
+;; the shadow, and calling Racket's `sort` there applies the symbol `'path` as a
+;; procedure. `assertive-miss-message` was hoisted for exactly this, and the star's
+;; join is the first thing since that would trip it (measured: the only two live
+;; `(sort ` calls in this file both sit OUTSIDE the window, so nothing catches it
+;; today). Attempt 2 shipped the shadowing bug for a probe cycle.
+;;
+;; Returns the layer's values in CANONICAL KEY ORDER, or `#f` when the layer holds
+;; a key this ordering cannot speak for. `#f` is NOT "empty" and must not be
+;; treated as one — the caller reports an invariant violation through the panic
+;; channel. Inventing an order for an un-orderable key is the defect Q_U44
+;; replaced; declining to is the point of this shape.
+(define (champ-values/canonical root)
+  (let ([entries (champ-entries root)])
+    (and (andmap (lambda (kv) (canonical-keyword-key? (car kv))) entries)
+         (map cdr (sort entries canonical-keyword-key<? #:key car)))))
+
 (define (select-reduce subj-expr branches sort tier)
   ;; D4.P4b-ii-2b (the verify, M3): NO DEFAULTS. `#f` is not a neutral tier —
   ;; reduction reads it as the BLOCK tier and PANICS, so a caller that omitted

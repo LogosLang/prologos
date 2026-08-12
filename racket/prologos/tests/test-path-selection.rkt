@@ -7289,11 +7289,42 @@
   ;; normally, or Q_U43 would have silently disabled the gates for everyone.
   (check-equal? (select-branch-top-keys (list 'database)) '(database)
                 "a starless branch is untouched — the pre-check is star-only")
-  ;; ⚠ THE OBLIGATION THIS PIN CARRIES: '() means the parser's two gates see
-  ;; NOTHING for a star branch. That is safe only while the star cannot reach
-  ;; them. When 1b-iv makes it reachable, the carve-out must land WITH it —
-  ;; if these are still '() and a star reaches a block, that is the bug.
+  ;; ⚠ THE OBLIGATION THIS PIN CARRIES — CORRECTED AT 1b-iii-A, because it was
+  ;; the same rotted precondition as the two comments in syntax.rkt. It read:
+  ;; "safe only while the star cannot reach them. When 1b-iv makes it reachable,
+  ;; the carve-out must land WITH it." The seat migration is 1b-**iii**, not
+  ;; 1b-iv. `'()` means the parser's two gates see NOTHING for a star branch,
+  ;; and that is CORRECT before and after the migration — it is what lets
+  ;; `m2{a* b}` through, which [Q_U40] rules legal. The obligation the migration
+  ;; creates is that TYPING must carry the L4 sort check (it does not yet), NOT
+  ;; that this walk must start classifying. ⛔ `(list #f)` is the wrong repair:
+  ;; it refuses `m2{a* b}` — D4 § the attempt-3 audit, finding A2.
   (void))
+
+(test-case "P4e-1b [Q_U44] 1b-iii-A: canonical key order is `symbol<?` on the NAME, and the key set DISCRIMINATES"
+  ;; ⭐ THE KEY SET IS THE POINT. Attempt 2 sorted `(format "~a" key)` — the
+  ;; TRANSPARENT STRUCT's display form — while its comment AND its new pin both
+  ;; claimed `symbol<?`. It survived because its `aa`/`mm`/`zz` set orders the
+  ;; same under both comparators. `{:a :a!}` does not: `format` renders
+  ;; `#(struct:expr-keyword a)` vs `#(struct:expr-keyword a!)`, and at the
+  ;; deciding character `!` is ASCII 33 while `)` is 41 — so the struct-display
+  ;; order puts `:a!` FIRST and `symbol<?` puts `:a` first.
+  (define ka  (expr-keyword 'a))
+  (define ka! (expr-keyword 'a!))
+  ;; 1. the ruling: `symbol<?` on the NAME, matching `make-record`'s own `less?`
+  (check-true  (canonical-keyword-key<? ka ka!) ":a sorts before :a! — `symbol<?` on the name")
+  (check-false (canonical-keyword-key<? ka! ka) "…and not the other way")
+  ;; 2. ⭐ THE MUTATION GUARD: this pair must actually SEPARATE the two
+  ;;    comparators, or it is the same vacuous set attempt 2 shipped. If the
+  ;;    struct rendering ever changes so that these agree, this check goes red
+  ;;    and the pin above stops being evidence — which is the signal we want.
+  (check-false (string<? (format "~a" ka) (format "~a" ka!))
+               "the struct-display order DISAGREES here — which is what makes check 1 discriminating")
+  ;; 3. the guard is total and separate: a non-keyword key is not orderable here,
+  ;;    and the walker reports that rather than inventing an order.
+  (check-true  (canonical-keyword-key? ka))
+  (check-false (canonical-keyword-key? 'a)      "a bare symbol is not a champ keyword key")
+  (check-false (canonical-keyword-key? 0)       "nor is a nat — `make-record`'s 'nat fork is an rrb at the value layer"))
 
 (test-case "P4e-1b 1b-ii: the flatten RENDERS postfix, and never as the unhandled marker"
   ;; pretty-print is the ONE consumer that must not raise (it is on the

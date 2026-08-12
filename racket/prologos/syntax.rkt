@@ -178,6 +178,8 @@
  ;; D4.P4e-1b (Q_U40): the flatten step. `select-star-cont` is the ONLY reader of
  ;; its continuation — `select-step-cont` deliberately answers #f (see its note).
  select-star-step? select-star-cont make-select-star
+ ;; [Q_U44] canonical key order — ONE definition, shared by both twins.
+ canonical-keyword-key? canonical-keyword-key<?
  select-step-cont select-cont-collapse? select-cont-rename
  select-branch-collapse select-branch-keyless?
  select-step-output-name select-synth-name select-branch-top-keys
@@ -956,6 +958,34 @@
 ;; scaffolding — and the star cannot reach them while the parser refuses.
 (define (select-star-step? s) (and (pair? s) (eq? (car s) '@star)))
 (define (make-select-star cont) (list '@star cont))
+
+;; ⭐ D4.P4e-1b slice 1b-iii-A [Q_U44] — CANONICAL KEY ORDER, defined ONCE.
+;; When the star's join concatenates the values of a KEYED layer into a vector,
+;; an order has to be MANUFACTURED, and Q_U44 rules it canonical: the `symbol<?`
+;; order `make-record` already canonicalizes record labels with (see its own
+;; `less?`, this file). Champ hash order was the defect Q_U44 killed — arbitrary
+;; and liable to move with the champ implementation.
+;;
+;; ⛔ ATTEMPT 2 SORTED `(format "~a" key)` AND ITS COMMENT *AND* ITS NEW PIN BOTH
+;; CLAIMED `symbol<?`. A champ key is the `expr-keyword` STRUCT, and it is
+;; `#:transparent`, so `format` renders `#(struct:expr-keyword reset)` — whose
+;; trailing `)` (ASCII 41) reorders any proper-prefix pair whose extra character
+;; sorts below it (`!` `$` `%` `&` `'`, all legal in Prologos identifiers).
+;; MEASURED: `reset` vs `reset!` → `format` says #f where `symbol<?` says #t.
+;; The pin missed it because its `aa`/`mm`/`zz` key set AGREES under both.
+;;
+;; ⚠ SCOPE, and it is deliberate: this is `make-record`'s **'keyword** fork only.
+;; `make-record` also has a 'nat fork (plain `<`), but a nat-domain level is an
+;; `expr-rrb` at the VALUE layer — `entries->value`'s keyless branch builds one —
+;; so it never reaches a champ walk and is already ordered. A champ CAN still
+;; hold a non-keyword key (`map-assoc` inserts any whnf'd expr), which is why the
+;; guard below is separate and total: the WALKER checks it and reports an
+;; invariant violation through reduction's panic channel rather than inventing an
+;; order here. A comparator that silently ordered the un-orderable is exactly the
+;; defect this replaces.
+(define (canonical-keyword-key? k) (expr-keyword? k))
+(define (canonical-keyword-key<? a b)
+  (symbol<? (expr-keyword-name a) (expr-keyword-name b)))
 ;; The star's OWN continuation. ⚠ Read it with THIS, never with
 ;; `select-step-cont` — see that function's note: `'flatten`/`'flatten-synth`
 ;; are not CARET conts and must not enter that channel.
