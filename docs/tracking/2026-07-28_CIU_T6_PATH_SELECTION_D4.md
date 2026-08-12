@@ -8754,11 +8754,27 @@ fixes themselves:**
    `vh := @[@[@[1 2]] @[@[3]]]`: `vh{0.{0}*}` → `@[@[@[1 2]] @[@[1 2] @[3]]]` at
    **ZERO errors** — the second component is `concat(vh)`, the flatten of the
    WHOLE SUBJECT rather than of the sub-block the star was written on. At HEAD
-   this arm was a guided per-command error. ⚠ **All three sibling star arms
-   respect `cur`; this one alone does not**, and its own comment justifies that
-   with "the star arrives alone" — true only for the OUTER `$select-path`
+   this arm was a guided per-command error. Its own comment justifies ignoring
+   `cur` with "the star arrives alone" — true only for the OUTER `$select-path`
    carrier, not for an in-block arrival. Same class as round 1's
    `m{tags* name}`, one layer in.
+   ⚠⚠ **FRAMING CORRECTED 2026-08-12, by reading the parked patch rather than
+   inheriting this record — and the correction changes the FIX.** This entry
+   first read *"all three sibling star arms respect `cur`; this one alone does
+   not"*. **TWO do**: the ω arm and the `$dot-access` arm, both genuine
+   CONTINUATION arms. The third — `star-sym?`, the fused `database*` band —
+   **also calls `(closed-acc)` unconditionally, and is CORRECT to**, because a
+   bare name always starts a branch (it sits beside `plain-key?`, which does the
+   same). `closed-acc` is `(if cur (cons (reverse cur) acc) acc)`, so calling it
+   closes the branch in progress and opens a new one holding only the star —
+   which IS the branch-initial reading, i.e. operate on the subject.
+   **The real defect**: the bare `$postfix-star` sentinel is the one arm
+   reachable in **BOTH** positions — branch-initial as the outer `$select-path`
+   carrier, continuation when written in-block — and it assumes only the first.
+   So the fix is a **position decision, not a transplant from a sibling**, and
+   the missing pin must spell a postfix star **AFTER A SUB-BLOCK**, where `cur`
+   is non-empty (`vh{0.{0}*}` is that shape; `vh{0*}` is not — there the star
+   fuses into the lexeme and takes the `star-sym?` arm).
 2. **⭐ BLOCKING — Q_U44's fix does not implement the order it claims.**
    `champ-values/canonical` sorts by `(format "~a" key)`, which for a keyword key
    renders the TRANSPARENT STRUCT `#(struct:expr-keyword NAME)`. The trailing `)`
@@ -8785,11 +8801,19 @@ fixes themselves:**
   REFUSES, where it PRE-EMPTS the star's own message with an L4 sort error.
 
 **WHAT ATTEMPT 3 MUST DO** — beyond attempt 2's list, which still stands: make
-the `$postfix-star` arm respect `cur` like its three siblings (and pin an
-in-block postfix star, which nothing covered); sort on the keyword NAME with
-`symbol<?`; split `star-not-yet` into distinct failure kinds so mid-branch, leaf
-and nominal each say the true thing; and add a key set that SEPARATES `symbol<?`
-from the struct-display order to the battery.
+the `$postfix-star` arm **decide its branch POSITION** rather than always
+`(closed-acc)`-ing (see the framing correction above — it is not "copy a
+sibling"), and pin an in-block postfix star after a sub-block, which nothing
+covered; sort on the keyword NAME with `symbol<?`; split `star-not-yet` into
+distinct failure kinds so mid-branch, leaf and nominal each say the true thing;
+and add a key set that SEPARATES `symbol<?` from the struct-display order to the
+battery (`{:a :a!}` — `!` is ASCII 33, below `)`'s 41).
+
+⚠ **THE PARKED PATCHES LIVE IN A PRIOR SESSION'S SCRATCHPAD**, not the current
+one: `/private/tmp/claude-501/-Users-avanti-dev-projects-prologos/311a1847-2220-4539-bd51-0e2270a3625f/scratchpad/slice-1b-iii-attempt{1,2}.patch`
+(attempt 2 = 427 added lines, six files: parser · reduction · syntax ·
+typing-core · typing-errors · the battery). Every "parked at the session
+scratchpad" above means THAT path.
 
 **WHAT ATTEMPT 2 MUST DO DIFFERENTLY**: land the parser gates' star carve-out
 **with** the seat migration, not after it; place the typing star check ahead of
