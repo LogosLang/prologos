@@ -6906,6 +6906,15 @@ a `'path`-sort `expr-select` through `pp-expr`, and pin one. If none does, the a
 is unreachable and the fix is trivial-but-untestable — which is itself worth
 knowing, and is the same "argued-unreachable" trap this arc keeps paying for.
 
+⚠ **THE OWED REPRODUCTION LANDED 2026-08-12, at 1b-iii-B2** — measured, not
+inferred: `users := {:name "alice"}` / `users:tags*` renders its echo as
+`bcast-e2e::users.:tags*` — the hardcoded `.` before the ω step's `:`, exactly
+the predicted nonexistent-spelling class (`users.:tags`), with B2's star riding
+along. Route: `inference-failed-error`'s message tail → `pp-expr`'s `'path` arm.
+So the arm IS reachable from a live diagnostic and the fix is testable — this
+entry is ready to be scheduled. (The B2 pin beside it documents the echo as
+capture-fidelity-with-a-wrong-separator, not a field-name defect.)
+
 **Not P4e-1b-iii work**: pre-existing, star-free (the ω spelling exhibits it
 without any star), and *Watching 9* — mid-flight widening is where this arc
 introduces its defects. The 1b-ii display pin cannot see it: it calls

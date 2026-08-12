@@ -1585,12 +1585,28 @@
                  (cond
                    [(null? contents) (fail-k 'star-not-yet l)]
                    [(not (andmap (lambda (c) (expr-PVec? (whnf c))) contents))
-                    (if (andmap (lambda (c)
-                                  (let ([w (whnf c)])
-                                    (or (expr-Record? w) (expr-Map? w))))
-                                contents)
-                        (fail-k 'star-nominal l)
-                        (fail-k 'star-leaf l))]
+                    ;; ⚠ the nominal bucket is KEYWISE-joinable contents ONLY —
+                    ;; an expr-Map or a KEYWORD-domain row. A nat-domain row is
+                    ;; POSITIONAL (its join would be concat, statically-arity'd),
+                    ;; so calling it "Map-valued" was a wrong attribution
+                    ;; (measured on `vh{0.{0}*}` at B2); it takes the generic
+                    ;; honest not-yet instead.
+                    (cond
+                      [(andmap (lambda (c)
+                                 (let ([w (whnf c)])
+                                   (or (expr-Map? w)
+                                       (and (expr-Record? w)
+                                            (eq? (expr-Record-key-domain w) 'keyword)))))
+                               contents)
+                       (fail-k 'star-nominal l)]
+                      [(andmap (lambda (c)
+                                 (let ([w (whnf c)])
+                                   (or (expr-Record? w) (expr-Map? w) (expr-PVec? w))))
+                               contents)
+                       ;; containers, but not one keywise-joinable family —
+                       ;; tuple contents / mixed container sorts
+                       (fail-k 'star-not-yet l)]
+                      [else (fail-k 'star-leaf l)])]
                    [(eq? (select-star-cont star) 'flatten-synth)
                     ;; Q_U41: `*_` is NOMINAL-ONLY — provenance comes from the
                     ;; deleted layer's KEYS, and vector contents have none.

@@ -26,7 +26,11 @@
                   ;; D4.P4c-4b: THE PRODUCER BRIDGE. Until this import the smart
                   ;; constructor had ZERO production callers — the step kind and
                   ;; all thirteen of its arms existed with nothing building one.
-                  make-select-bcast)
+                  make-select-bcast
+                  ;; D4.P4e-1b slice 1b-iii-B2: the star's producer bridge — this
+                  ;; file is the ONLY producer of `(@star cont)`, minted from the
+                  ;; four `segment-select-items` star bands.
+                  make-select-star)
          ;; LET P4: the fused primitives moved here (the one definition —
          ;; macros.rkt consumes them at the datum level, and this module
          ;; requires macros.rkt, so they cannot live in this file).
@@ -1251,23 +1255,14 @@
          (let ([str (symbol->string s)])
            (and (> (string-length str) 0)
                 (not (char=? (string-ref str 0) #\$))))))
-  ;; D4.P4e-0's CONSUMER, for the FUSED IDENTIFIER BAND ONLY. The
-  ;; "(flatten) is not implemented yet" substring is load-bearing: the battery
-  ;; pin matches it, and text and pin move together.
-  ;; ⚠ CORRECTED 2026-08-10: this said "every star that now reaches the parser
-  ;; takes a guided not-yet". **It does not.** Only the band whose star is
-  ;; FUSED INTO THE LEXEME reaches here — `database*`, `:tags*`, `.name*` — via
-  ;; `split-star-lexeme`. The four carriers slice A unlocked (`x{a}*`,
-  ;; `xs:{a}*`, `[f x]*`, `(f x)*`) carry the star as a SEPARATE token typed
-  ;; `postfix-star`, which is datum-invisible and has NO consumer, so they give
-  ;; `Could not infer type` instead. Giving them this same message is P4e-1's
-  ;; first deliverable; until it lands, do not read this comment as a contract.
-  (define (star-not-yet-message shown)
-    (format (string-append
-             "`*` (flatten) is not implemented yet — `~a` would delete one layer"
-             " of what the preceding step produces. Spell the flatten separately"
-             " for now")
-            shown))
+  ;; ⚠ D4.P4e-1b slice 1b-iii-B2: `star-not-yet-message` is RETIRED — definition
+  ;; and all four callers together (the audit caught attempt 2 removing the
+  ;; callers and leaving the definition as dead code carrying a live-contract
+  ;; comment). The parser now MINTS `(@star cont)` unconditionally at the four
+  ;; star bands, and the refusal lives DOWNSTREAM at typing, which is the first
+  ;; seat that can see the layer's sort (Q_U38/Q_U43's whole argument). The
+  ;; "(flatten) is not implemented yet" substring survives in typing-errors.rkt's
+  ;; star-nominal/hetero/omega-tuple arms — text and pins moved seat TOGETHER.
   (define (fail msg) (values #f (parse-error loc msg #f)))
   (define (head-of tagged) (and (pair? tagged) (symbol? (car tagged)) (car tagged)))
   ;; `^`-ish item: the bare `^` symbol or a `^`-leading lexeme (the ordinal
@@ -1438,20 +1433,43 @@
             ;; ⭐ D4.P4e-1a slice 1a-iii — THE FUSED STAR ARRIVES HERE as a bare
             ;; `$postfix-star` ITEM, because `rewrite-dot-access` wraps it as
             ;; `($select-path <selection> $postfix-star)` and this caller passes
-            ;; every arg after the subject through as an item. So the non-identifier
-            ;; carriers (`c{a}*`, `xs:{a}*`) inherit the SAME message the fused
-            ;; identifier band has been giving all along — which is what
-            ;; `star-not-yet-message`'s own comment promised as "P4e-1's first
-            ;; deliverable". Must precede `star-sym?`: `split-star-lexeme` on a bare
-            ;; sentinel would report a mid-lexeme error naming the internal symbol.
+            ;; every arg after the subject through as an item. (Until B2 this arm
+            ;; REFUSED with the guided not-yet; it now MINTS, and the refusal
+            ;; lives at typing.) Must precede `star-sym?`: `split-star-lexeme` on
+            ;; a bare sentinel would report a mid-lexeme error naming the
+            ;; internal symbol.
+            ;; ⭐⭐ 1b-iii-B2 — THE POSITION RULE, derived from the reader's mint
+            ;; (audit A1): `postfix-star` requires byte-adjacency to a preceding
+            ;; CLOSER, and a block's own `{` is an OPENER, so a bare
+            ;; `$postfix-star` can NEVER be a payload's first item. Therefore
+            ;;   cur = #f   ⇔ the outer `$select-path` carrier ⇔ the SUBJECT
+            ;;   cur non-#f ⇔ in-block                         ⇔ CONS onto the branch
+            ;; Six in-block arrival positions are measured (after `.{…}`, after an
+            ;; ordinal, after an in-block ω, after `^`+sub, via the recursive
+            ;; call, mid-payload with a sibling) and the rule covers all of them;
+            ;; a `cur-subbed?`-keyed test would cover ONE. Attempt 2 called
+            ;; `(closed-acc)` unconditionally here — re-basing an in-block star
+            ;; onto the SUBJECT (`vh{0.{0}*}` → concat(vh) at zero errors).
+            ;; ⚠ `cur-subbed?` is PRESERVED on the cons (position H, decided):
+            ;; the star does not unseal the sub-block-terminal rule; anything the
+            ;; seal misses falls to typing's star-mid-branch refusal.
             [(eq? it '$postfix-star)
-             (fail (star-not-yet-message "the preceding step, flattened"))]
+             (if cur
+                 (loop (cdr items) (cons (make-select-star 'flatten) cur) cur-subbed? acc)
+                 (loop (cdr items) (list (make-select-star 'flatten)) #f (closed-acc)))]
+            ;; 1b-iii-B2: the fused band MINTS — one item, TWO steps, the star
+            ;; normalized OUTWARD to a sibling of the name it was glued to
+            ;; (Q_U40's only lexical obligation). `cur` is newest-first, hence
+            ;; (star name). `(closed-acc)` unconditionally is CORRECT here —
+            ;; a bare identifier item always starts a branch, exactly like its
+            ;; neighbour `plain-key?` (the audit's C2 adjudication).
             [(star-sym? it)
              (let-values ([(name cont) (split-star-lexeme it)])
                (cond
                  [(not name) (fail cont)]
-                 [else (fail (star-not-yet-message
-                              (format "~a*~a" name (if (eq? cont 'flatten-synth) "_" ""))))]))]
+                 [else (loop (cdr items)
+                             (list (make-select-star cont) name)
+                             #f (closed-acc))]))]
             [(plain-key? it)
              (loop (cdr items) (list it) #f (closed-acc))]
             ;; ⭐ D4.P4c-4b — THE ω ARMS. Mirror the `$dot-access` arms below,
@@ -1563,13 +1581,20 @@
                  ;; `reader-forms.rkt` records it as DELIBERATELY ABSENT, a
                  ;; deferred ruling. Only the KEYWORD carrier reaches here, and
                  ;; that part was and is true.
+                 ;; 1b-iii-B2: mint. ⚠ THE STAR MUST NOT GO THROUGH `push` —
+                 ;; `push` wraps in `make-select-bcast`, which would put the star
+                 ;; INSIDE the ω wrapper; Q_U40 rules it OUTER: `rows:tags*` is
+                 ;; `[(@bcast tags) (@star flatten)]`, the star a SIBLING.
                  [(regexp-match? #rx"[*]" bare)
                   (let-values ([(name cont) (split-star-lexeme (string->symbol bare))])
                     (cond
                       [(not name) (fail cont)]
-                      [else (fail (star-not-yet-message
-                                   (format ":~a*~a" name
-                                           (if (eq? cont 'flatten-synth) "_" ""))))]))]
+                      [else
+                       (let ([bstep (make-select-bcast name)]
+                             [sstep (make-select-star cont)])
+                         (if cur
+                             (loop (cdr items) (cons sstep (cons bstep cur)) cur-subbed? acc)
+                             (loop (cdr items) (list sstep bstep) #f (closed-acc))))]))]
                  ;; `^` RE-KEY — route to the ONE splitter, as `$dot-access` does
                  [(regexp-match? #rx"\\^" bare)
                   (split-step (string->symbol bare) push)]
@@ -1585,13 +1610,19 @@
             ;; consumed `cfg` as the subject), so a `cur`-guarded arm would miss
             ;; the headline spelling entirely — the same mistake the `$bcast-step`
             ;; arm's first cut made and recorded three screens above.
+            ;; 1b-iii-B2: mint — same outward normalization as the ω arm.
+            ;; `cfg.database*` is `[database (@star flatten)]`, two steps from
+            ;; one fused item; the no-`cur` leg is the headline `$select-path`
+            ;; spelling (the caller has already consumed the subject).
             [(and (eq? (head-of it) '$dot-access) (star-sym? (cadr it)))
              (let-values ([(name cont) (split-star-lexeme (cadr it))])
                (cond
                  [(not name) (fail cont)]
-                 [else (fail (star-not-yet-message
-                              (format ".~a*~a" name
-                                      (if (eq? cont 'flatten-synth) "_" ""))))]))]
+                 [else
+                  (let ([sstep (make-select-star cont)])
+                    (if cur
+                        (loop (cdr items) (cons sstep (cons name cur)) cur-subbed? acc)
+                        (loop (cdr items) (list sstep name) #f (closed-acc))))]))]
             ;; ---- `^`-bearing descent payload → the splitter
             [(and (eq? (head-of it) '$dot-access) cur (re-key-sym? (cadr it)))
              (split-step (cadr it) (lambda (step)

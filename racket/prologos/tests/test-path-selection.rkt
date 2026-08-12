@@ -4150,8 +4150,21 @@
   ;; (b) FLATTEN — `ident-continue?` admits `*`, so `tags*` arrives as ONE token
   ;; and no scheme keyed on token TYPE can see the operator. Stripped, it passes
   ;; `plain-key?` as a field LITERALLY NAMED `tags*`. Now loud.
-  (check-true (ormap (lambda (s) (regexp-match? #rx"\\(flatten\\) is not implemented yet" s))
-                     (bcast-e2e "def b := users:tags*")))
+  ;; ⚠ SEAT-MIGRATED at 1b-iii-B2 (the C31 BREAKING pin, re-pointed with its
+  ;; reasoning): the parser now MINTS `[(@bcast tags) (@star flatten)]`, so the
+  ;; error is the PREFIX's own — `users` has no `:tags` — which still proves
+  ;; this pin's proposition: the token SPLIT (the miss names `:tags`, not a
+  ;; field literally named `tags*`).
+  (let ([out (bcast-e2e "def b := users:tags*")])
+    (check-true (ormap (lambda (s) (regexp-match? #rx":tags" s)) out)
+                "the star split off — the miss names :tags")
+    ;; ⚠ the first cut of this check was over-broad — the error's ECHO renders
+    ;; the user's spelling (`users.:tags*`), which is capture-fidelity working,
+    ;; not the defect. The defect shape is a FIELD named `tags*` in the miss.
+    ;; (That echo is also DEFERRED 113's live reproduction: the hardcoded `.`
+    ;; before `:tags` — `users.:tags*` is not a spelling the language has.)
+    (check-false (ormap (lambda (s) (regexp-match? #rx"field :tags\\*" s)) out)
+                 "…and no miss names a field literally called `tags*`"))
   ;; (c) RE-KEY — `^` routes to the ONE splitter exactly as the `$dot-access`
   ;; twin does, rather than becoming part of a field name.
   ;;
@@ -6396,12 +6409,16 @@
   (check-false (p4e1-type=? starless "[PVec Int]")
                "…and it is NOT the collapsed type — which the substring regex above cannot tell"))
 
-(test-case "P4e-1a: the SELECTION carriers reach the guided not-yet message"
-  ;; The contract `star-not-yet-message`'s comment claims and does not yet keep.
-  ;; These two are what survives [Q_U35]: their predecessor IS a selection step.
+(test-case "P4e-1a: the SELECTION carriers reach a guided STAR message"
+  ;; ⚠ SEAT-MIGRATED at 1b-iii-B2, with the reasoning recorded (C31): this
+  ;; pin's PROPOSITION is REACHABILITY — the carriers arrive at a guided star
+  ;; diagnostic instead of `Could not infer type`. Which message is now
+  ;; CONTENT-dependent: `c{a}*`'s layer is `{:a Int}`, a LEAF content, so the
+  ;; honest message is the PERMANENT leaf refusal (1b-iii's kind split), not
+  ;; the old uniform not-yet. The proposition survives; the text moved.
   (check-true (p4e1-has? "ns q1\ndef c := {:a 1}\ndef b := c{a}*"
-                         #rx"\\(flatten\\) is not implemented yet")
-              "x{a}* — preceding step is a select-brace")
+                         #rx"a leaf has no join")
+              "x{a}* — reaches the star's own guided (leaf-permanent) message")
   (check-true (p4e1-has? "ns q2\ndef xs := @[{:a 1}]\ndef b := xs:{a}*"
                          #rx"\\(flatten\\) is not implemented yet")
               "xs:{a}* — preceding step is a broadcast"))
@@ -6937,10 +6954,13 @@
   (check-true (p4e1-has? "def c := {:a 1}\ndef q := [c{a}]*"
                          #rx"applies to a SELECTION step")
               "bracket-wrapped selection + star is refused (expression territory)")
-  ;; and the direct spelling still fuses to the not-yet message
+  ;; and the direct spelling still FUSES — seat-migrated at 1b-iii-B2: the
+  ;; proposition is the FOLD FUSED (vs the expression-territory refusal), and
+  ;; any star-family message proves it; with a leaf content that is now the
+  ;; permanent leaf refusal.
   (check-true (p4e1-has? "def c := {:a 1}\ndef q := c{a}*"
-                         #rx"\\(flatten\\) is not implemented yet")
-              "the unwrapped spelling still reaches the fused not-yet message"))
+                         #rx"a leaf has no join")
+              "the unwrapped spelling fuses and reaches the star's own message"))
 
 (test-case "P4e-1a 1a-iii: error ECHOES render the user's `*`, never the sentinel"
   ;; TWO seats the attempt-2 verify found OFF-MATRIX (def-name position and fn
@@ -6972,10 +6992,12 @@
   (check-true (p4e1-has? "def c := {:a 1}\ndef r1 := |> c{a}*"
                          #rx"applies to a SELECTION step")
               "terminal pipe star currently takes the (wrong) expression refusal")
-  ;; the NON-terminal spelling is correct today and must stay so
+  ;; the NON-terminal spelling is correct today and must stay so — seat-migrated
+  ;; at 1b-iii-B2: mid-pipe the fused node parses and TYPES, and with a leaf
+  ;; content the star's own message is the permanent leaf refusal.
   (check-true (p4e1-has? "defn f [z] z\ndef c := {:a 1}\ndef r2 := |> c{a}* f"
-                         #rx"\\(flatten\\) is not implemented yet")
-              "a mid-pipe fused star reaches the not-yet message"))
+                         #rx"a leaf has no join")
+              "a mid-pipe fused star reaches the star's own message"))
 
 ;; ---------------------------------------------------------------------------
 ;; D4.P4e-1b — THE `*` SEMANTICS.  ⚠⚠ EVERYTHING BELOW IS PARKED (COMMENTED).
@@ -7141,39 +7163,78 @@
 ;; does not (a bare name always starts a branch, exactly like its neighbour
 ;; `plain-key?`). This arm is the only one reachable in BOTH positions.
 ;;
-;; PARKED: every spelling refuses at HEAD, so these fail for the right reason.
-;;
-;; (test-case "P4e-1b [1b-iii-B]: a postfix star operates on its BRANCH in-block, and on the SUBJECT only as the outer carrier"
-;;   (define C "ns w1\ndef cfg := {:database {:url \\"u\\" :host \\"h\\"} :version \\"1.0.0\\"}\n")
-;;   (define V "ns w2\ndef vh := @[@[@[1 2]] @[@[3]]]\n")
-;;   (define M "ns w3\ndef m := {:k {:a 1}}\n")
-;;   ;; (A) BRANCH-INITIAL — the outer carrier. `cur` is #f, the star's operand IS
-;;   ;;     the subject, and `(closed-acc)` is right here and ONLY here.
-;;   (check-true (p4e1-has? (string-append C "cfg{database}*") #rx":url|:host")
-;;               "A: the outer carrier flattens the SUBJECT's selection")
-;;   ;; (B) after a `.{…}` sub-block — `cur` set, `cur-subbed?` = #t.
-;;   ;;     ⭐ THE ROUND-2 DEFECT. It must flatten the SUB-BLOCK, not `vh`.
-;;   (check-false (p4e1-has? (string-append V "vh{0.{0}*}") #rx"@\\[@\\[1 2\\] @\\[3\\]\\]")
-;;                "B: `vh{0.{0}*}` must NOT re-base onto the subject — that is concat(vh)")
-;;   ;; (C) after an ORDINAL step — `cur` set, `cur-subbed?` = #f. In NO record
-;;   ;;     before the attempt-3 audit; a `cur-subbed?`-keyed fix misses it.
-;;   (check-true (p4e1-has? (string-append C "cfg{database[0]*}") #rx".")
-;;               "C: after an ordinal step the star still belongs to its branch")
-;;   ;; (D) after an in-block ω sub-block.
-;;   (check-true (p4e1-has? (string-append M "m{k:{a}*}") #rx".")
-;;               "D: after an in-block ω the star belongs to its branch")
-;;   ;; (E) after a `^`-dissolve plus sub-block.
-;;   (check-true (p4e1-has? (string-append C "cfg{database^.{host}*}") #rx".")
-;;               "E: a caret earlier in the branch does not move the star's operand")
-;;   ;; (F) ONE LEVEL DOWN, inside a `.{…}`, via the recursive call (`sub?` = #t).
-;;   (check-true (p4e1-has? (string-append C "cfg{database.{host[0]*}}") #rx".")
-;;               "F: the recursive call is the same seat with the same rule")
-;;   ;; (G) mid-payload, with a SIBLING branch after the star. The star must close
-;;   ;;     ITS branch and leave `version` a separate one — the `m{tags* name}`
-;;   ;;     shape that round 1 got wrong in the other direction.
-;;   (check-true (p4e1-has? (string-append C "cfg{database.{host}* version}") #rx".")
-;;               "G: a sibling AFTER the star is still its own branch"))
-;;
+;; LIVE since 1b-iii-B2 (the seat migration). Pin A's PARKED version predicted a
+;; JOIN for `cfg{database}*` — wrong for 1b-iii, whose scope is vector contents
+;; only (Map contents are 1b-iv); corrected to assert the honest nominal not-yet
+;; PLUS a vector-contents subject that genuinely joins. Everything below was
+;; measured on the b2live probe before being pinned.
+
+(test-case "P4e-1b [1b-iii-B2]: a postfix star operates on its BRANCH in-block, and on the SUBJECT only as the outer carrier"
+  (define C "ns w1\ndef cfg := {:database {:url \"u\" :host \"h\"} :version \"1.0.0\"}\n")
+  (define V "ns w2\ndef vh := @[@[@[1 2]] @[@[3]]]\n")
+  (define M "ns w3\ndef m := {:k {:a 1}}\n")
+  ;; (A) BRANCH-INITIAL — the outer carrier, VECTOR contents: the join fires.
+  ;;     `vh{0}` is a keyless 1-tuple ⟨[PVec [PVec Int]]⟩; the star deletes that
+  ;;     tuple layer and concats its ONE vector content.
+  (check-true (p4e1-type=? (string-append V "vh{0}*") "[PVec [PVec Int]]")
+              "A: the outer carrier flattens the SUBJECT's selection — exact type")
+  (check-true (p4e1-has? (string-append V "vh{0}*") #rx"@\\[@\\[1 2\\]\\]")
+              "A: …and the value")
+  ;; (A') Map contents at the outer carrier: the honest nominal not-yet — which
+  ;;      ALSO proves the star operated on the subject's layer (it renders it).
+  (check-true (p4e1-has? (string-append C "cfg{database}*")
+                         #rx"not implemented yet for Map-valued")
+              "A': Map contents refuse with the nominal not-yet, 1b-iv's seam")
+  ;; (B) after a `.{…}` sub-block — ⭐ THE ROUND-2 DEFECT: must NOT re-base onto
+  ;;     the subject. concat(vh) would be `@[@[1 2] @[3]]`.
+  (check-false (p4e1-has? (string-append V "vh{0.{0}*}") #rx"@\\[@\\[1 2\\] @\\[3\\]\\]")
+               "B: `vh{0.{0}*}` must NOT be concat(vh)")
+  (check-true (p4e1-has? (string-append V "vh{0.{0}*}") #rx"select: `0.\\{0\\}\\*`")
+              "B: …the star belongs to its branch, and the message renders that branch's spelling")
+  ;; (C) after an ORDINAL step — in NO record before the attempt-3 audit.
+  (check-true (p4e1-has? (string-append C "cfg{database[0]*}") #rx".")
+              "C: after an ordinal step the star still belongs to its branch (no abort)")
+  ;; (D) after an in-block ω sub-block.
+  (check-true (p4e1-has? (string-append M "m{k:{a}*}") #rx".")
+              "D: after an in-block ω the star belongs to its branch (no abort)")
+  ;; (E) after a `^`-dissolve plus sub-block.
+  (check-true (p4e1-has? (string-append C "cfg{database^.{host}*}") #rx".")
+              "E: a caret earlier in the branch does not move the star's operand (no abort)")
+  ;; (F) ONE LEVEL DOWN, via the recursive call (`sub?` = #t).
+  (check-true (p4e1-has? (string-append C "cfg{database.{host[0]*}}") #rx".")
+              "F: the recursive call is the same seat with the same rule (no abort)")
+  ;; (G) mid-payload, with a SIBLING branch after the star.
+  (check-true (p4e1-has? (string-append C "cfg{database.{host}* version}") #rx".")
+              "G: a sibling AFTER the star is still its own branch (no abort)"))
+
+(test-case "P4e-1b [Q_U44] E2E: canonical key order, and the order-RECOVERING spelling"
+  (define S "ns w4\ndef mm := {:zz @[1 2] :aa @[3 4] :mm @[5 6]}\n")
+  ;; canonical: aa · mm · zz — NOT written order, NOT champ hash order
+  (check-true (p4e1-has? (string-append S "mm{zz aa mm}*") #rx"@\\[3 4 5 6 1 2\\]")
+              "the keyed layer's positional join takes canonical (symbol<?) order")
+  (check-true (p4e1-type=? (string-append S "mm{zz aa mm}*") "[PVec Int]"))
+  ;; the owner's recovery spelling: order via KEYLESSNESS — written order
+  (check-true (p4e1-has? (string-append S "mm{zz* aa* mm*}*") #rx"@\\[1 2 3 4 5 6\\]")
+              "each inner star contributes ONE keyless component; the outer star deletes a genuinely ordered layer")
+  ;; and the two spellings genuinely DIFFER — the recovery is real
+  (check-false (p4e1-has? (string-append S "mm{zz* aa* mm*}*") #rx"@\\[3 4 5 6 1 2\\]")))
+
+(test-case "P4e-1b [Q_U45] E2E: L★ fails for VECTOR contents on ARITY — and the LEGALITY pair's refusal half"
+  (define S "ns w5\ndef mm := {:zz @[1 2] :aa @[3 4]}\n")
+  ;; distributed: each branch = ONE keyless component → a TUPLE, written order
+  (check-true (p4e1-type=? (string-append S "mm{zz* aa*}") "⟨[PVec Int] [PVec Int]⟩")
+              "distributed form: an n-TUPLE of vectors")
+  ;; result form: one keyed layer deleted → ONE flat vector, canonical order
+  (check-true (p4e1-type=? (string-append S "mm{zz aa}*") "[PVec Int]")
+              "result form: one flat vector — the two sides differ in ARITY, hence L★'s widened qualifier")
+  ;; the legality pair's VECTOR half: keyless star beside a keyed sibling → L4,
+  ;; guided, naming the star spelling (the Map half — `m2{a* b}` LEGAL — is
+  ;; 1b-iv's, parked below)
+  (check-true (p4e1-has? (string-append S "mm{zz* aa}") #rx"mixed keyed/keyless")
+              "mm{zz* aa} is an L4 mixed-sorts error")
+  (check-true (p4e1-has? (string-append S "mm{zz* aa}") #rx"zz\\*")
+              "…and the message names the user's star spelling, not a caret remedy"))
+
 ;; ⚠ (H) IS AN UNDECIDED ARGUMENT, NOT A PIN — recorded so it is decided rather
 ;; than defaulted. All four star arms pass `cur-subbed?` = #f, which RESETS the
 ;; sub-block-terminal seal, so `cfg{database.{host}*.{q}}` would become legal
