@@ -34,7 +34,7 @@ rulings, censuses and test delta live in its own section.
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
 | **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [§5.P4c](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([inverted default](#p4c-2-inverted)) · [P4c-3](#p4c-3) ✅ `d477772c` · [P4c-4a](#p4c-4a) ✅ `f31237fd` · [P4c-4b](#p4c-4b) ✅ `6b22515d` (end to end) · **[P4c-4c](#p4c-4c-close) ✅ `ae26f540`** — broadcast is REACHABLE: PVec ω value semantics + **G2** + the preparse seam guard. ⭐ The verify caught a BLOCKING whole-file abort every gate was blind to; owner ruled the structural fix ([close](#p4c-4c-close)) · [Q_U18](#q-u18) ✅ · DEFERRED 43 ✅ · 48 RULED uniform · P4c-5 ⬜ |
 | **P4d** | **The carriers** — Map/keyword-row · het tuple · PVec-of-union · closed-schema subjects · the Q_U9 refusal's message split · corpus re-fate · **Q_U19 ✅ RULED (A)** | ✅ | [§5.P4d](#p4d) · slices **0 ✅ 1 ✅ 2 ✅ 3 ✅ 4a ✅ 4a' ✅ 4b ✅ 4c ✅ 4d-1 ✅ 4d-2 ✅ 5 ✅ 6 ✅** — broadcast is LIVE over PVec · Map · keyword-row · het tuple · union · closed schema. ⭐ The CLOSE's own audit found a whole-file abort in slice 3's code (slice 5) and Q1 re-opened as a live defect (slice 6). All THREE owner questions discharged: Q1 ruled+implemented · [Q2](#q-u22) answered (fix → DEFERRED 88) · Q3 answered (broadcast → 58 re-scoped; contract → 89) |
-| **P4e** | **The `*` family · disclose `<`/`:<` · branch-initial `:`** — ⭐ **`*` is SORT-GENERIC** (deletes the layer the preceding step created: `:diags*` mapcat, `database*` splat). `.*` retires as row-splat and rebinds to **ravel**; `*_` adds provenance keys; branch-initial `:` admits the **ordinal² transpose** | 🔄 | [§5.P4e](#p4e) · RE-SCOPED 2026-08-08 ([Q_U23](#q-u23)–[Q_U29](#q-u29)) · ⛔ attempt 1 REVERTED `d0ac2a58` ([DEFERRED 101](DEFERRED.md)); attempt 3 opens from [the census](#star-census) ([Q_U30](#q-u30)/[Q_U31](#q-u31), prereq [102](DEFERRED.md) ✅ `41458174`) · PREP ✅ `f63612e7`+`ae67419f` ([Q_U32](#q-u32)) · **slice A SHIPPED** `e7a49228`, **slice B REVERTED** `0e007864`: [§5.P4e-0-a3](#p4e-0-a3) · ⭐ **P4e-1a ✅ COMPLETE** `9cac0099` — the mint has its CONSUMER. [Q_U36](#q-u36) positive-list fuse + [Q_U37](#q-u37) territory-scoped refusal; 3 slices (attempt 1 of the last REVERTED); suite 10143/488/0, battery 476: [§5.P4e-1a](#p4e-1a) · **P4e-1b 🔄 SEMANTICS FULLY RULED, not implemented** (audit `wf_4b91ca25-73a`) — [Q_U38](#q-u38) collision REFUSED (conservative on the `'dyn` tail; gate moves to typing) · [Q_U39](#q-u39) closer-adjacent `*_` mint SPLIT OUT · ⭐⭐ [Q_U40](#q-u40) the star attaches **OUTER**, one rule over both axes, and it yields the law `x{p₁* … pₙ*} ≡ x{p₁ … pₙ}*` · [Q_U41](#q-u41) `*_` is NOMINAL-ONLY · [Q_U42](#q-u42) same-key VECTORS CONCAT, closing the last semantic question and making the join one recursive rule at every depth. Slicing proposed 4-way (i recipe · ii kind+arms · iii vector · iv nominal+collision+`*_`): [§5.P4e-1b](#p4e-1b) |
+| **P4e** | **The `*` family · disclose `<`/`:<` · branch-initial `:`** — ⭐ **`*` is SORT-GENERIC** (deletes the layer the preceding step created: `:diags*` mapcat, `database*` splat). `.*` retires as row-splat and rebinds to **ravel**; `*_` adds provenance keys; branch-initial `:` admits the **ordinal² transpose** | 🔄 | [§5.P4e](#p4e) · RE-SCOPED 2026-08-08 ([Q_U23](#q-u23)–[Q_U29](#q-u29)) · ⛔ attempt 1 REVERTED `d0ac2a58` ([DEFERRED 101](DEFERRED.md)); attempt 3 opens from [the census](#star-census) ([Q_U30](#q-u30)/[Q_U31](#q-u31), prereq [102](DEFERRED.md) ✅ `41458174`) · PREP ✅ `f63612e7`+`ae67419f` ([Q_U32](#q-u32)) · **slice A SHIPPED** `e7a49228`, **slice B REVERTED** `0e007864`: [§5.P4e-0-a3](#p4e-0-a3) · ⭐ **P4e-1a ✅ COMPLETE** `9cac0099` — the mint has its CONSUMER. [Q_U36](#q-u36) positive-list fuse + [Q_U37](#q-u37) territory-scoped refusal; 3 slices (attempt 1 of the last REVERTED); suite 10143/488/0, battery 476: [§5.P4e-1a](#p4e-1a) · **P4e-1b 🔄 SEMANTICS FULLY RULED, not implemented** (audit `wf_4b91ca25-73a`) — [Q_U38](#q-u38) collision REFUSED (conservative on the `'dyn` tail; gate moves to typing) · [Q_U39](#q-u39) closer-adjacent `*_` mint SPLIT OUT · ⭐⭐ [Q_U40](#q-u40)–[Q_U48](#q-u48). ⭐ **The flatten is LIVE at depth ≤ 1** (1b-iii shipped, `d5934397`); depth ≥ 2 is shielded pending [Q_U47](#q-u47)'s landing rule, now ruled. Semantics + slicing: [§5.P4e-1b](#p4e-1b) · remaining slices C1 · C2 · iv · v: [§5.P4e-1b-sequencing](#p4e-1b-sequencing) |
 | **P4c-5** | **The `.*name` retirement + FULL residue disposal** — the last P4c residue, sequenced AFTER P4e | ⬜ | [§5.P4c-5](#p4c-5) · ⚠ **row ADDED at the P4d close 2026-08-08** — previously visible only as a `P4c-5 ⬜` fragment inside P4c's Notes cell |
 | **PF** | **Path first-classness** (substrate; **P5's prerequisite**) — ⭐ **Q_U17 RULED B2**: a Path segment is a first-class `Step` value. Reify the closed six-kind union as a `data Step` ADT on the `Datum` pattern; `Path` stays GROUND; `segments : Path -> [List Step]`. Repairs the dead `path-segments` in the SAME change | ⬜ | [§5.PF](#pf) · [Q_U17](#q-u17) · panel `wf_68178bd3-eea` |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery · ⚠ B3 needs [PF](#pf) |
@@ -2739,6 +2739,141 @@ items of the hold-point, ruled before P4a opened:
   implementation inherited. Corrected there.
   **Next free Q-label: U47.**
 
+- <a id="q-u47"></a>**⭐⭐ Q_U47 — THE JOIN LANDS AS THE *REMAINDER'S* COMPONENT:
+  KEYED WHERE A STEP SURVIVES TO NAME IT, KEYLESS OTHERWISE [owner, 2026-08-12 —
+  "I'm favoring the shape of A… that's looking closer to design intent in the
+  spec"].** Discharges the gap [Q_U46](#q-u46)'s sentence left open: *"lands BARE
+  as the value of the still-surviving `sₙ₋₁`"* has no referent when nothing above
+  `sₙ` names a key.
+
+  **THE RULE, one sentence with no exceptions:**
+  > The join lands as the component that **branch-minus-star-minus-`sₙ`** would
+  > produce — **keyed** if that remainder names a key, **keyless** otherwise,
+  > *including when the remainder is empty*.
+
+  **THE FOUR SHAPES IT COVERS** (subjects `cfg := {:db {:hosts @[1 2] :ports
+  @[80]}}` · `mm := {:zz @[1 2] :aa @[3 4]}` · `vh := @[@[@[1 2]] @[@[3]]]`;
+  depth-1 MEASURED at HEAD, the rest are this ruling's targets):
+
+  | spelling | remainder | lands | note |
+  |---|---|---|---|
+  | `mm{zz*}` | `'()` | **keyless** | MEASURED `@[@[1 2]] : ⟨[PVec Int]⟩` — the shipped answer, unchanged |
+  | `cfg{db.hosts*}` | `[db]` | keyed `:db` | `{:db @[1 2]}` |
+  | `cfg{db^.hosts*}` | `[(@key db dissolve)]` | **keyless** | the dissolve splices; nothing survives to name it |
+  | `vh{0.{0}*}` | `[(@ord 0)]` | **keyless** | an ordinal head names nothing |
+
+  **⭐ WHY — THE MACHINERY ALREADY HOLDS THE ANSWER.** MEASURED by direct call at
+  HEAD: `select-branch-top-keys '(db)` → `(db)` · `'((@key db dissolve))` →
+  `(#f)` · `'((@ord 0))` → `(#f)`. The classifier already answers *keyless* for
+  exactly the shapes a refusal would have rejected, so refusing means writing a
+  guard against a correct answer the code is holding.
+  **⚠ THE TWO CANDIDATE RULES DIVERGE, AND THE OBVIOUS ONE IS WRONG** — MEASURED:
+  drop-the-star-only gives `'((@key db dissolve) hosts)` → `(hosts)`, which
+  fabricates a key the output does not carry (the exact class Q_U43's `'()`
+  exists to prevent); drop-star-**AND**-`sₙ` gives `(#f)`, which is correct
+  because the join REPLACES `hosts`' component and a dissolved head then splices
+  it keylessly. The two agree on every plain-key branch, which is why the wrong
+  rule looks safe.
+  ⚠⚠ **IMPLEMENTATION TRAP, MEASURED**: `select-branch-top-keys '()` **RAISES**
+  (`car: contract violation`). The empty remainder is the depth-1 case — i.e. the
+  most common one — so a literal "drop two, then ask" implementation crashes
+  immediately. The empty case must be answered without calling it.
+
+  **WHAT IT BUYS — [Q_U44](#q-u44) GENERALIZES FROM DEPTH 1 TO ANY DEPTH.** Q_U44
+  rules that a keyed layer joins in CANONICAL order and that written order is
+  recovered by opting into KEYLESSNESS (`mm{zz* aa* mm*}*` → `@[1 2 3 4 5 6]`).
+  Under Q_U47 the same idiom works at depth — with `d := {:p {:u @[1]} :q {:v
+  @[2]}}`, `d{p.u* q.v*}*` joins in canonical order while `d{p^.u* q^.v*}*` is
+  keyless-and-therefore-written-order. Under a refusal the second is unwritable.
+  This is a shipped ruling composing with itself, not a new idea.
+  **REJECTED, each with its reason:**
+  · **guided refusal for the unnamed case** — refuses shapes the classifier
+    already answers; makes the rule an exception the user must learn with no
+    surface cue (*"`*` works at depth, unless the step above happens to be
+    dissolved or an ordinal head"*); costs the written-order-at-depth idiom. It
+    is the *"conservatism buying nothing"* shape [Q_U40](#q-u40) already rejected
+    once, when the same argument killed its block-generic option.
+  · **split it** (refuse the ordinal-head case, allow the dissolve case) — two
+    structurally identical situations behaving differently, which is the
+    objection that killed Q_U40's SPELLING-DETERMINED option.
+  · **refuse everywhere, including depth-1** (uniform in the other direction) —
+    **disqualified three ways**: non-monotone (spec §3.6 bars meaning →
+    refusal), it breaks shipped and pinned behaviour, and Q_U44's recovery
+    spelling DEPENDS on depth-1 landing keyless, so it would delete a ruling made
+    four days earlier.
+  **COST, accepted eyes-open**: monotonicity is SPENT here — a meaning cannot
+  later become a refusal, so the refusal option is gone for good. And
+  `vh{0.{0}*}`'s battery pin (`test-path-selection.rkt`, written deliberately at
+  1b-iii-B2) flips from refusal to keyless success; the flip must carry its
+  reasoning, not be re-pointed silently.
+
+  **⚠⚠ WHAT THIS DOES *NOT* RULE — AND Q_U40'S OWN HEADLINE EXAMPLE IS THE
+  UNANSWERED CASE.** Q_U47 rules the LANDING for **vector** contents. Q_U40's
+  `m{a* b}` → `{:x 1, :b {:y 2}}` is depth-1 with **nominal** contents, where the
+  join SPLICES its fields into the level rather than landing as one component —
+  whereas depth-1 vector contents land as ONE keyless component (MEASURED
+  `mm{zz*}` → `⟨[PVec Int]⟩`). So splice-vs-single-component for a nominal join,
+  at any depth, is **1b-iv's question** and is deliberately left open here.
+  Recorded because the two readings look like one rule until the contents differ.
+  **Next free Q-label: U48.**
+
+- <a id="q-u48"></a>**⭐ Q_U48 — `*-` IS THE STAR FAMILY'S *TOTAL COLLAPSE*, AND
+  ITS SEMANTICS ARE FORCED RATHER THAN CHOSEN [owner, 2026-08-12 — "the `*-` and
+  the `^-`, with a reading of, pick the key and bring it to the top, flatten"].**
+
+  **THE RULE:**
+  > `*-` flattens **and** collapses every surviving ancestor: the join lands
+  > **KEYLESS at the branch's top level**, whatever the remainder would have
+  > named.
+
+  **IT IS TO `*` WHAT `^-` IS TO `^` — the total form beside the selective one**,
+  and the caret family's behaviour is MEASURED at HEAD (`dd := {:p {:u @[1] :w
+  @[9]} :q {:v @[2]}}` · `e3 := {:a {:b {:c @[1 2]}}}`):
+  · `dd{p.u^-}` → `{:u @[1]}` · `dd{p^.u}` → `{:u @[1]}` — **identical at depth 2**
+  · `e3{a.b.c^-}` → `{:c @[1 2]}` · `e3{a^.b^.c}` → `{:c @[1 2]}` — `^-` ≡
+    dissolving EVERY ancestor, exactly as [Q_T7](#q-t7) says
+  · `e3{a.b^.c}` → `{:a {:c @[1 2]}}` — the SELECTIVE form says something the
+    total form cannot, which is why both earn their keep
+  The star family inherits that shape verbatim: `d{p.u*- q.v*-}*` ≡
+  `d{p^.u* q^.v*}*` **at depth 2** (the owner's observation, and it holds), and
+  they separate at depth ≥ 3 — `e3{a.b.c*-}` collapses all ancestry while
+  `e3{a.b^.c*}` keeps `:a`.
+
+  **⭐ THE SEMANTICS ARE FORCED, NOT CHOSEN.** Two readings are available and only
+  one coheres. Reading 1 (adopted): land keyless at the top. Reading 2, the
+  literal parallel to `^-`'s *"collapse ancestry, KEEP the leaf key"*, would give
+  `dd{p.u*-}` → `{:u @[1]}` — **incoherent**, because `*` deletes the layer `u`
+  contributed and `:u` is the key naming that layer, so re-attaching it puts back
+  exactly what the operator removed. That is [Q_U23](#q-u23)'s identity defect,
+  the one that retired `.*`. So `*-` must land keyless — which is the owner's own
+  reading, arrived at independently.
+  **⚠ IT THEREFORE DEPENDS ON [Q_U47](#q-u47)**: `*-`'s landing is Q_U47's
+  keyless case made unconditional. Under a refusal ruling `*-` would have had to
+  invent keyless landing for itself.
+  **THE LEXICAL SURFACE IS ALREADY FREE, MEASURED**: `dd{p.u*-}` at HEAD does not
+  fall through to an unbound variable — `u*-` fuses into ONE lexeme (`-` is an
+  `ident-continue?` char) and reaches `split-star-lexeme`, which returns the
+  guided *"`*` is the layer-delete operator and attaches at the END of a
+  segment"*. That is exactly where `*_` sat before [Q_U39](#q-u39). So in the
+  FUSED-IDENTIFIER band `*-` costs one arm in the splitter's continuation grammar
+  plus one `(@star cont)` value (`'flatten-collapse`) and **no reader change at
+  all** — strictly cheaper than `*_`'s closer-adjacent mint, which is why that
+  one needed its own slice.
+  **NOT A SECOND SPELLING** (the [Q_U22](#q-u22) bar): total and selective are
+  different expressivity, proven by the measured `e3{a.b^.c}` above — the same
+  justification Q_T7 already accepted for `^-` beside `^`.
+  **SLICE PLACEMENT — the star-SUFFIX slice, after 1b-iv** (see
+  [§5.P4e-1b-sequencing](#p4e-1b-sequencing)). Ruled now rather than later for a
+  concrete implementation reason: Q_U47's landing is CONDITIONAL (re-nest iff the
+  remainder names a key) and `*-`'s is UNCONDITIONAL (never re-nest). They are one
+  code path with a flag, and knowing that now keeps 1b-iii-C from baking the
+  condition in.
+  **⚠ OPEN, deliberately not ruled**: `*-_` (collapse + provenance, the analogue
+  of `^-_`'s flat provenance recovery — MEASURED `dd{p.u^-_}` → `{:p-u @[1]}`).
+  It is the obvious next member and it interacts with [Q_U41](#q-u41)'s
+  nominal-only scoping for `*_`. Decide it WITH the suffix slice, not before.
+  **Next free Q-label: U49.**
+
 - <a id="q-u43"></a>**⭐ Q_U43 — THE L4 SORT CHECK MOVES TO TYPING FOR STAR-BEARING
   BRANCHES, AS [Q_U38](#q-u38)'s COROLLARY [owner, 2026-08-11 — "move the sort
   check to typing per Q_U38's corollary"].** Q_U38 moved the COLLISION check;
@@ -2802,7 +2937,7 @@ items of the hold-point, ruled before P4a opened:
   Until then they existed ONLY in a session transcript, which is not durable
   storage — and the owner's ruling is that attempt 3 opens from the MEASURED MAP,
   which cannot be honoured against an unreadable artifact.
-  (Q-label register: see [Q_U46](#q-u46), the latest ruling — **next free U47**.)
+  (Q-label register: see [Q_U48](#q-u48), the latest ruling — **next free U49**.)
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
@@ -8809,6 +8944,81 @@ without one. ⚠ The refusal channels are `bcast-carrier` (typing-errors.rkt) an
 `(return (expr-panic …))` through reduction's single `let/ec` — a raw `error`
 here is a WHOLE-FILE ABORT, which is why P4c-4c retired its predecessor rather
 than leaving it in the tree.
+
+<a id="p4e-1b-sequencing"></a>
+
+##### §5.P4e-1b-sequencing — the remaining slices  (decided 2026-08-12; owner delegated the slicing)
+
+Set after [Q_U47](#q-u47) + [Q_U48](#q-u48) and the 1b-iii-C grounding audit
+(`wf_00c82b4e-219`, 6 facets + critic, HEAD-pinned `0feca574`). **The organizing
+constraint is that 1b-iii has TWO reverts, and the shape that finally worked was
+B1/B2 — land the machinery INERT, then migrate the seat.** C repeats it.
+
+| slice | content | why it is safe alone |
+|---|---|---|
+| **1b-iii-C1** | **The deep-landing machinery, INERT.** A `star` arm on BOTH below-walks (`select-below-field`, `below-value`) returning the join **BARE** — the shape the `bcast` arm already argues for in both files (*"would wrap the result in a spurious level"*) — plus Q_U47's landing rule with the **re-nest decision FACTORED as an explicit value, not inlined** (Q_U48 makes it a flag later). Doc-truth in the same commit. | `star-branch-entries`/`star-entries` still shield depth ≥ 2, so no surface traffic reaches the new arms. ⚠ Also CLOSES a live abort: both `[else]`s are plain `error` and `select-step-kind` maps `(@star …)` to `'star`, so a star reaching a below-walk **takes the file down** today. |
+| **1b-iii-C2** | **The shield lifts, in BOTH twins atomically.** The three gap dispositions (deep-keyed → keyed · deep-unnamed → keyless · ordinal-as-`sₙ` → the ruled guided refusal) · the `vh{0.{0}*}` pin flipped WITH its reasoning · **the dup seat's first arm** and **the L4 message fix** (both below) · the E2E battery. | The whole observable change, atomic. Twin-order divergence at this seat has already caused a whole-file abort once. |
+| **1b-iv** | **NOMINAL semantics** + [Q_U38](#q-u38)'s full collision rule + `*_` in the fused band, together per [Q_U24](#q-u24). **Plus the question Q_U47 deliberately left open**: does a nominal join SPLICE its fields into the level or land as one component? Q_U40's own `m{a* b}` → `{:x 1, :b {:y 2}}` is that case. | unchanged from the plan above |
+| **1b-v — the star-SUFFIX slice** | **`*-`** ([Q_U48](#q-u48)) · the **`*-_`** decision · [Q_U39](#q-u39)'s closer-adjacent `*_` mint. One slice, one verify. | The cont vocabulary settles ONCE: `*_` and `*-` each add a `(@star cont)` value, and `*-_` interacts with [Q_U41](#q-u41)'s nominal-only scoping, which is 1b-iv's ruling. |
+| **P4e-2** | the `.*` retirement inventory + [Q_U26](#q-u26) ravel | unchanged |
+
+**⚠ TWO HOLES C2 OPENS, AND THEY ARE C2's TO CLOSE** — both found by the
+grounding audit, neither in any prior record:
+
+1. **The duplicate-output-key check has NO SEAT ANYWHERE.**
+   `select-branch-top-keys` returns `'()` for every star branch (syntax.rkt), so
+   the parser's `dup-output-key` cannot see a deep star's surviving key; typing
+   still asserts the parser owns uniqueness (typing-core.rkt, *"duplicate-free
+   … BY CONSTRUCTION"*); and nothing checks downstream. The moment a deep star's
+   key survives, `cfg{db.hosts* db}` is a **silent last-win** at both layers
+   (`make-record`'s `;; last write wins` and `entries->value`'s `champ-insert`).
+   **C2 opens the seat Q_U38 named, with its star-vs-written-sibling arm; 1b-iv
+   extends the SAME seat to the general rule (star-vs-star lifted keys, the
+   `'dyn` tail).** That is one seat built incrementally, NOT the dual-path
+   scaffolding 1b-ii refused — each arm is the real check, not a placeholder.
+   ⚠ It cannot be closed earlier: it is unreachable until C2 makes a deep star's
+   key survive, so there is nothing to test against before then.
+2. **The `star-l4-mixed` message acquires a lying population.** It hardcodes that
+   the star branch is the KEYLESS one and `findf`s the first star branch
+   regardless of which side is keyless (typing-errors.rkt + typing-core.rkt), so
+   a deep KEYED star beside a keyless sibling (`cfg{db.hosts* ports^}`) would be
+   told it *"contributes a KEYLESS component"* — the opposite of what happened.
+   Message-only, at a site C2 makes reachable, so it lands with C2.
+
+**⚠ THE INSTRUMENT OBLIGATION, and it is the reason C's battery is written
+FIRST.** *Deleting the shield produces a GREEN WRONG ANSWER, not a failure.*
+Under the shipped branch-root algorithm with the shield merely removed,
+`rows{k:s*}` returns the RAW field keyless at **0 errors** — the silent
+wrong answer the shield's own comment predicts. And five of the six deep-shape
+battery pins assert `#rx"."`, which matches anything. Three consequences:
+· **write the depth-≥2 assertions BEFORE touching either shield**;
+· **new pins must be `'block`-sorted or E2E** — every existing star unit pin uses
+  `'path`, whose arm extracts `(record-field-type (cdr (car comps)))` and
+  DISCARDS the key, so a `'path` pin cannot tell keyed from keyless and would be
+  vacuous for exactly the flip C rules on;
+· **the headline pin is the WEAK one** — a key `sₙ` yields exactly ONE content, so
+  `cfg{db.hosts*}`'s concat is an identity and cannot discriminate a broken join
+  (and it is what `^..` already does — MEASURED `{:db @[1 2]}`). The
+  discriminating shapes are the multi-content ones, `two{a.{x y}*}` and
+  `cfg{db.{hosts ports}*}`, and they are also where the slice's real new power
+  lives.
+
+**⚠ BAND AGREEMENT IS STRUCTURAL, NOT ALGORITHMIC — do not pin it as if the path
+band implemented this.** Q_U13's NEST mints one `$select-path` carrier per level,
+so the path band never builds a multi-step prefix and `cfg.db.hosts*` succeeds at
+depth 1 without the shield ever firing. **Q_U46/Q_U47 are a BLOCK-BAND-ONLY
+change.** And the bands genuinely DISAGREE on ω — MEASURED `rows.k:s*` →
+`@[1 2 3]` against the block-band target `{:k {:s @[1 2 3]}}`, because the block
+ω preserves the inner key and the path ω does not. Band agreement is a valid pin
+for the KEY case only.
+
+**Recorded as settled, so it is not re-opened**: the twins' `seen` contract is
+uniform (both FORWARD — the record's claim that typing resets was stale, fixed at
+B1), and the empty-layer asymmetry (typing refuses, reduction mints `@[]`) is a
+DELIBERATE B1 decision in the safe direction, not an open question.
+
+**Out of the P4e line entirely**: [DEFERRED 116](DEFERRED.md), the bracket-ordinal
+redundancy — it touches the reader's adjacency mint, nowhere near this seat.
 
 <a id="p4e-1b-iii"></a>
 

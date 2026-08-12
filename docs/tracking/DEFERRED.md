@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 116**
+> ### **NEXT FREE: 117**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6968,3 +6968,51 @@ symptom a **guided error**; this entry is the LAW's repair, which belongs with
 **P5** (Ruling B + L2 factoring — `§5.P5`). ⚠ Write it before P5 builds the
 normalizer, not after: a normalizer that silently changes a program's legality
 is the worst shape this class can take.
+
+### 116. ⬜ THE BRACKET ORDINAL `m[0]` IS REDUNDANT WITH `m.0` — but ONLY for a LITERAL index; `m[i]` is dynamic indexing with no dot-band spelling
+
+Raised by the owner 2026-08-12 during the D4.P4e-1b-iii-C co-design ("deprecate
+the `m[0]`, it's redundant with `m.0`, and out of scope if it complicates
+implementation"). **Filed rather than ruled, because measuring it falsified half
+the premise.**
+
+**MEASURED at `0feca574`** (`v := @[10 20 30]`, `i := 1`):
+
+| spelling | result |
+|---|---|
+| `v[0]` | `10 : Int` |
+| `v.0` | `10 : Int` — **identical** |
+| `v[i]` | **`20 : Int`** |
+| `v.i` | ERROR — *"`i` is not a field of a vector element position — a vector subject takes ordinal steps (`.N`) or ordinal branches (`x{N M}`)"* |
+
+So the redundancy holds **only for a literal index**. `v[i]` is DYNAMIC
+indexing and the dot band cannot express it: `.N` takes a literal ordinal or a
+field name, and a variable is neither. This is the `[k]` ordinal/dynamic sort
+that [Q_U12](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u12) lists as a deferred
+sort — the dynamic half turns out to be already live.
+
+**Also measured**: `cfg2{a[0].b}` and `cfg2{a.0.b}` are byte-identical
+(`{:a {:b @[1 2]}}`), and the starred forms render the IDENTICAL label `a.0.b*` —
+the printer already normalizes the bracket away. **Zero corpus sites** for a
+bracket ordinal inside a select block.
+
+**⚠ IT DOES NOT SIMPLIFY THE STAR WORK, and that was the reason offered for
+doing it now.** [Q_U47](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u47)'s gap is
+about steps that contribute no output NAME. Deprecating `[0]` removes a
+*spelling* of the ord-step but leaves `.0`, and it does not touch the ordinal
+BRANCH HEAD (`vh{0 …}`), which is a different kind — MEASURED `vh{0}` →
+`⟨[PVec [PVec Int]]⟩`, a keyless tuple component. Every gap shape survives the
+deprecation.
+
+**THREE FRAMINGS, none ruled:**
+1. **Deprecate the LITERAL bracket only** — keeps `v[i]`. But the bracket form
+   still exists, so the reader's `adjacent-to-base?` mint stays and little is
+   actually simplified.
+2. **Deprecate the whole bracket postfix** — loses dynamic indexing until some
+   spelling replaces it. Non-monotone against a live capability.
+3. **Leave it, file the redundancy** — the display already normalizes, and 0
+   corpus sites means nothing is confused by it today.
+
+**Placement**: OUT of the P4e line. It touches the reader's adjacency mint,
+nowhere near the selection twins, and it wants its own slice with its own
+verify. Sequenced in D4 §5.P4e-1b-sequencing as explicitly outside.
