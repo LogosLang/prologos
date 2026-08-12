@@ -2656,6 +2656,89 @@ items of the hold-point, ruled before P4a opened:
   the analogous shape one level down to CONCAT rather than error.
   **Next free Q-label: U46.**
 
+- <a id="q-u46"></a>**⭐⭐ Q_U46 — A DEEP `*` DELETES THE LAYER ITS *PRECEDING STEP*
+  MADE, AND THE JOIN LANDS **BARE** BELOW THE SURVIVING KEY ("B-splice")
+  [owner, 2026-08-12].** Discharges [the deep-prefix question](#q-deep-prefix)
+  and lifts the 1b-iii shield.
+
+  **THE RULE, in one sentence:**
+  > For a branch `s₁.s₂ … sₙ*`, the star deletes the layer **sₙ** contributed,
+  > joins that layer's contents, and the result lands as the **value** of the
+  > still-surviving `sₙ₋₁` — every prefix step above re-nests around it
+  > unchanged.
+
+  **WORKED, on `cfg := {:db {:hosts @[1 2] :ports @[80]}}` and
+  `two := {:a {:x @[1] :y @[2 3]}}` (starless baselines MEASURED at `68604a07`):**
+
+  | spelling | starless baseline | **Q_U46 (B-splice)** | the REJECTED branch-root reading |
+  |---|---|---|---|
+  | `cfg{db.hosts*}` | `{:db {:hosts @[1 2]}}` | `{:db @[1 2]}` | `{:hosts @[1 2]}` |
+  | `two{a.{x y}*}` | `{:a {:x @[1] :y @[2 3]}}` | **`{:a @[1 2 3]}`** | `{:x @[1] :y @[2 3]}` |
+  | `rows{k:s*}` | `{:k @[{:s @[1]} {:s @[2 3]}]}` | **`{:k {:s @[1 2 3]}}`** | the RAW field, 0 errors |
+
+  **⭐⭐ WHY — AND THE ARGUMENT IS MECHANICAL, NOT AESTHETIC.** The branch-root
+  reading takes the layer to be the WHOLE re-nest, and a bare chain re-nests to a
+  SINGLE-KEY map at every level — so its contents are always **exactly one
+  thing**, and "join one thing" is the identity. **Under branch-root a deep star
+  can never JOIN; it only unwraps one level of ancestry, which `^` already
+  spells** (MEASURED: `cfg{db^.hosts}` → `{:hosts @[1 2]}` is byte-identical to
+  what branch-root would produce). That is precisely the defect
+  [Q_U23](#q-u23) diagnosed when it retired `.*` — *"an IDENTITY wherever the
+  head key survives"* — and [Q_U22](#q-u22)'s bar on teaching a second spelling.
+  Under Q_U46 the innermost layer's contents can be MANY (a sub-block's fields,
+  an ω's per-element values), so the star genuinely joins.
+  **Spec support**: §3.5 *"Postfix, **after the step whose result it flattens**"*
+  — the only sentence naming which step, and it names the preceding one.
+  **Band agreement**: the PATH band already implements this (MEASURED
+  `cfg.db.hosts*` → `@[1 2]`, i.e. `hosts`' layer deleted, not `db`'s), because
+  Q_U13's NEST caps a path prefix at one step. Q_U46 makes
+  `cfg{db.hosts*}` the projection of that same answer under the surviving key;
+  branch-root keeps a DIFFERENT key and so breaks Q_U40's *"ONE rule across BOTH
+  axes"*.
+  **THE EXPRESSIVITY IT BUYS, and it is exactly two idioms** — everything else in
+  the family is already spellable and was verified so:
+  1. **group N sibling fields into ONE vector under a chosen key** —
+     `two{a.{x y}*}` → `{:a @[1 2 3]}`. ⚠ `^` CANNOT reach it: MEASURED,
+     `two{a.{x y}^..}` is refused (*"a `^` operates on the segment to its
+     LEFT"*), because the segment to its left is a `}`.
+  2. **cross-element ω join with ancestry kept** — `rows{k:s*}` →
+     `{:k {:s @[1 2 3]}}`. ⚠ The block band's ω KEEPS the inner key (MEASURED:
+     `rows3{k:s}` removes `:t` per element but keeps `:s`), so the contents are
+     Maps and the join is KEYWISE — the inner `:s` survives. This corrects an
+     earlier prediction of `{:k @[1 2 3]}` in the co-design.
+  **REJECTED, each with its reason:**
+  · **branch-root** (the shipped algorithm sentence) — the identity/duplicate
+    argument above; also its one non-duplicate shape was a MEASURED silent wrong
+    answer (`rows{k:s*}` returning the raw field at 0 errors).
+  · **B-tuple** (the join lands as an honest 1-tuple, `{:a ⟨@[1 2 3]⟩}`) —
+    consistent with §3.3's honest nesting, but it makes `zz.q*` byte-identical to
+    the SHIPPED `zz.{q*}` (MEASURED `{:zz ⟨@[1 2]⟩}`), trading one
+    duplicate-spelling objection for another AND losing the flat result that is
+    the shape a user writes by hand.
+  · **permanent refusal** (keep the shield; rule `.{…}`/`^..`/`^-` the sanctioned
+    deep spellings) — costs both new idioms for no correctness gain, and the
+    shield's own message already concedes the question is answerable.
+  **⚠ HONEST COST, stated**: for a plain key-terminal chain, Q_U46's answer
+  DUPLICATES `^..` (MEASURED: `cfg{db.hosts^..}` → `{:db @[1 2]}`). The
+  difference from branch-root is WHERE: Q_U46 duplicates only in the DEGENERATE
+  case (one content, where joining and unwrapping coincide) and is new whenever
+  there are several; branch-root duplicates in EVERY case.
+  **TWO GAPS, RULED AS GUIDED ERRORS [owner, same turn]:**
+  1. **An ORDINAL prefix has no "preceding step's layer"** — [Q_U2](#q-u2)
+     Reading A says an ordinal step contributes NO output level, so
+     `nested{a[0]*}` has nothing for the rule to quantify over. **Guided error**,
+     naming the reason.
+  2. **L2's normal form is not legality-preserving across a star** — MEASURED:
+     `bd{modules:{diags* name}}` is an L4 mixed keyed/keyless error, so
+     `{p:a* p:b} ⟶ p:{a* b}` cannot be applied blind. **Guided error** at the
+     seat; the law's side condition is filed as [DEFERRED 115](DEFERRED.md) for
+     P5, which owns L2.
+  **⚠ D4's OWN ALGORITHM SENTENCE IS SUPERSEDED** — see
+  [§5.P4e-1b-iii](#p4e-1b-iii): *"the below-walk over the prefix … that re-nested
+  value IS the layer"* described the branch-root reading and is the sentence the
+  implementation inherited. Corrected there.
+  **Next free Q-label: U47.**
+
 - <a id="q-u43"></a>**⭐ Q_U43 — THE L4 SORT CHECK MOVES TO TYPING FOR STAR-BEARING
   BRANCHES, AS [Q_U38](#q-u38)'s COROLLARY [owner, 2026-08-11 — "move the sort
   check to typing per Q_U38's corollary"].** Q_U38 moved the COLLISION check;
@@ -2719,7 +2802,7 @@ items of the hold-point, ruled before P4a opened:
   Until then they existed ONLY in a session transcript, which is not durable
   storage — and the owner's ruling is that attempt 3 opens from the MEASURED MAP,
   which cannot be honoured against an unreadable artifact.
-  (Q-label register: see [Q_U45](#q-u45), the latest ruling — **next free U46**.)
+  (Q-label register: see [Q_U46](#q-u46), the latest ruling — **next free U47**.)
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
@@ -8751,6 +8834,18 @@ star, the layer is `(below-value v prefix seen)` — or `v` itself when the star
 branch-initial. ⚠ `below-value` RE-NESTS (`cfg{database}` → `{:database …}`),
 which is exactly right here: that re-nested value IS the layer being deleted.
 
+⚠⚠ **THE SENTENCE ABOVE IS SUPERSEDED AT DEPTH ≥ 2 BY [Q_U46](#q-u46), AND IT IS
+THE SENTENCE THE IMPLEMENTATION INHERITED.** "The below-walk over the WHOLE
+prefix is the layer" describes the BRANCH-ROOT reading. It is correct at prefix
+depth ≤ 1 — where every worked example in every ruling lives, so the divergence
+was invisible — and WRONG at depth ≥ 2, where Q_U40's own words ("the layer the
+PRECEDING step contributed") and this sentence give different answers. Q_U46
+rules the preceding-step reading. **Read at depth ≥ 2: the layer is the one the
+LAST PREFIX STEP made; steps above it re-nest around the join unchanged.** The
+branch-root reading is additionally self-defeating — a bare chain re-nests to a
+single-key map at every level, so its contents are always exactly one thing and
+the "join" is an identity unwrap that `^` already spells.
+
 | spelling | layer | contents | join |
 |---|---|---|---|
 | `cfg{database}*` | `{:database {…}}` | one Map | `{:url …, :pool-size …}` ≡ `cfg.database` |
@@ -8972,8 +9067,15 @@ DEFERRED 103-sibling note) · `#p(a.b*)` (pre-existing →
 
 <a id="q-deep-prefix"></a>
 
-**⚠⚠ THE NEXT OWNER QUESTION — WHICH LAYER DOES A DEEP FLATTEN DELETE? (for the
-1b-iv co-design; the shield holds until it is ruled.)** At prefix depth ≥ 2,
+**✅ RULED 2026-08-12 — [Q_U46](#q-u46) adopts B-splice: the star deletes the
+layer its PRECEDING step made, and the join lands BARE below the surviving key.
+The two gaps (an ordinal prefix; L2's normal form across a star) are ruled GUIDED
+ERRORS. The shield below becomes the implementation target: replace the
+`star-deep-prefix` refusal with the preceding-step layer walk in BOTH twins, keep
+the refusal for the ordinal-prefix gap. Original framing retained for the
+record:**
+
+**⚠⚠ THE OWNER QUESTION — WHICH LAYER DOES A DEEP FLATTEN DELETE?** At prefix depth ≥ 2,
 §5.P4e-1b-iii's own algorithm sentence (*"the below-walk over the prefix … that
 re-nested value IS the layer"* — the branch-ROOT layer) and [Q_U40](#q-u40)'s
 rule (*"the layer the PRECEDING step contributed"*) **give different answers**,

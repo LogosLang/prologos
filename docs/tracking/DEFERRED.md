@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 115**
+> ### **NEXT FREE: 116**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6943,3 +6943,28 @@ WHOLE-FILE abort (`compile-match-tree` `list-ref`, macros.rkt:11484 at
 (`| mm{zz}* -> 1` kills the file) — is **DEFERRED 103's sibling** (that entry
 already records the `list-ref` signature) **+ DEFERRED 108's abort set**; noted
 there rather than re-filed. Starless controls (`| 1 2 -> 3`) abort identically.
+
+---
+
+### 115. ⬜ L2's normal form is NOT legality-preserving across a `*` — `{p:a* p:b} ⟶ p:{a* b}` needs a side condition (P5 owns L2)
+
+Found in the [Q_U46](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u46) design round
+(options panel `wf_f8461dda-659`), measured at `68604a07`.
+
+Spec §4's **L2 (Factoring / normal form)** is `{p:a p:b} ⟶ p:{a b}` when spines
+are identical, and §3.6's spine definition **does not mention `*`**. Read
+literally, `modules:diags*` and `modules:diags` share a spine — so a normalizer
+would factor a starred branch together with an unstarred sibling.
+
+**MEASURED that this is not legality-preserving**: `bd{modules:{diags* name}}`
+is an **L4 mixed keyed/keyless error** — the star's branch contributes a KEYLESS
+component (its contents join into a vector) beside the keyed `name`, and one
+level assembles a Map OR a tuple, never both. So the factored form can be ILLEGAL
+where the unfactored form is fine.
+
+**What is owed**: L2's side condition, written so a future normalization pass
+cannot apply the law across a star-bearing branch. Q_U46 rules the seat-level
+symptom a **guided error**; this entry is the LAW's repair, which belongs with
+**P5** (Ruling B + L2 factoring — `§5.P5`). ⚠ Write it before P5 builds the
+normalizer, not after: a normalizer that silently changes a program's legality
+is the worst shape this class can take.
