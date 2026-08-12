@@ -38,7 +38,13 @@
          ;; pattern follows typing-propagators.rkt:28 precedent.
          (only-in "metavar-store.rkt" current-prop-net-box))
 
-(provide infer/err
+(provide ;; D4.P4e-1b slice 1b-iii-A: exported for the TOTALITY pin only, on this
+         ;; file's own established rationale (1b-ii exported `pp-select-branch`
+         ;; for the same reason) — the fail-kind `[else]` DEGRADES to a generic
+         ;; message rather than raising, which is exactly the failure an E2E
+         ;; test cannot see. Not part of the error surface; do not build on it.
+         format-select-fail
+         infer/err
          check/err
          is-type/err
          checkQ-top/err
@@ -597,7 +603,27 @@
      (format
       "Could not infer type — select: ordinal `~a` (branch `~a`) needs a tuple or vector subject; ~a~a"
       label branch-str why remedy)]
-    [else #f]))
+    ;; ⭐ D4.P4e-1b slice 1b-iii-A — THE FAIL-KIND AXIS IS NOW TOTAL.
+    ;; This arm was `#f`, and `#f` here is SILENT: it falls through `infer/err`'s
+    ;; `or` chain to the generic "Could not infer type", and NESTED it is worse —
+    ;; three arms in this same function `string-append` the recursive result, so a
+    ;; `#f` there is a contract violation that `select-block-hint`'s blanket
+    ;; handler then swallows to `#f` as well. A missed arm therefore costs its
+    ;; message with no signal anywhere.
+    ;; MEASURED at 1b-iii-A: all 14 live `select-fail` kinds have arms, so this
+    ;; branch is UNREACHABLE today — i.e. it is a pure trapdoor, and 1b-iii-B adds
+    ;; THREE new kinds to this axis (mid-branch · leaf-permanent · nominal-not-yet).
+    ;; D4.P4a closed the same trapdoor on the step-kind axis and P4b-ii-1 on the
+    ;; sort axis; this axis was never swept.
+    ;; ⚠ IT REPORTS RATHER THAN RAISES, and that is the doctrine, not timidity:
+    ;; this is the MESSAGE FORMATTER, reached while rendering an error that has
+    ;; already happened. A raise here is a WHOLE-FILE ABORT on the primary `infer`
+    ;; path and a silently-swallowed `#f` on the hint path — the same asymmetry
+    ;; that makes reduction `return` a panic instead of calling `error`. A named,
+    ;; deliberately ugly message is the loud-AND-safe form.
+    [else
+     (format "Could not infer type — select: no message arm for fail kind `~a` (compiler defect: `format-select-fail` is missing an arm; this axis is meant to be total)"
+             (select-fail-kind fail))]))
 
 (define (select-block-hint ctx e names)
   (with-handlers ([(lambda (_) #t) (lambda (_) #f)])

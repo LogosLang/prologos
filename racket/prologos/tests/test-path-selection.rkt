@@ -28,6 +28,9 @@
          "../reduction.rkt"
          "../namespace.rkt"
          (prefix-in tc: "../typing-core.rkt")   ;; D4.P4a: select-project, for the totality pins
+         ;; D4.P4e-1b 1b-iii-A: the FAIL-KIND totality pin. Relative path, per
+         ;; testing.md — a collection-path require loads a SECOND compiler instance.
+         (prefix-in te: "../typing-errors.rkt")
          (prefix-in tr: "../trait-resolution.rkt")
          (prefix-in u: "../unify.rkt")
          (prefix-in gc: "../global-constraints.rkt")
@@ -7299,6 +7302,28 @@
   ;; creates is that TYPING must carry the L4 sort check (it does not yet), NOT
   ;; that this walk must start classifying. ⛔ `(list #f)` is the wrong repair:
   ;; it refuses `m2{a* b}` — D4 § the attempt-3 audit, finding A2.
+  (void))
+
+(test-case "P4e-1b 1b-iii-A: the FAIL-KIND axis is TOTAL — a missing arm is LOUD, not silent"
+  ;; ⭐ WHY THIS IS PINNED AT ALL. `format-select-fail`'s `[else]` was `#f`, and
+  ;; #f there is silent: it falls through `infer/err`'s `or` chain to the generic
+  ;; "Could not infer type", and NESTED it is worse — three arms in that function
+  ;; `string-append` the recursive result, so a #f is a contract violation that
+  ;; `select-block-hint`'s blanket handler swallows. All 14 live kinds have arms,
+  ;; so the branch is UNREACHABLE today — a pure trapdoor — and 1b-iii-B adds
+  ;; THREE new kinds to this axis. An E2E test structurally cannot see this,
+  ;; which is why the formatter is exported for the pin.
+  (define msg (te:format-select-fail (tc:select-fail 'no-such-kind-1b-iii '() #f #f) '()))
+  (check-true (string? msg)
+              "an unhandled fail kind yields a MESSAGE, not #f — the silent fall-through is closed")
+  (check-true (regexp-match? #rx"no-such-kind-1b-iii" msg)
+              "…and it NAMES the unhandled kind, so the next miss is self-identifying")
+  (check-true (regexp-match? #rx"compiler defect" msg)
+              "…and says it is a compiler defect rather than blaming the user's program")
+  ;; ⚠ AND IT MUST NOT RAISE. This is the message formatter, reached while
+  ;; rendering an error that already happened: a raise here is a WHOLE-FILE abort
+  ;; on the primary `infer` path. `check-true (string? …)` above already proves
+  ;; it returned; this states the reason so nobody "improves" it into an `error`.
   (void))
 
 (test-case "P4e-1b [Q_U44] 1b-iii-A: canonical key order is `symbol<?` on the NAME, and the key set DISCRIMINATES"
