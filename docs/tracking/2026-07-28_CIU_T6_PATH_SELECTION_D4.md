@@ -8957,7 +8957,7 @@ B1/B2 — land the machinery INERT, then migrate the seat.** C repeats it.
 | slice | content | why it is safe alone |
 |---|---|---|
 | **1b-iii-C1** ✅ `4f30a171` | **The SHARED JOIN, hoisted and returning BARE.** `star-join-type` (typing-core) + `star-join-value` (reduction) at module level, both exported; each twin's existing caller now wraps keyless (its remainder-empty case). `select-below-field` exported as C2's seat. syntax.rkt doc-truth. ⚠ **RE-SCOPED mid-slice**: the tail ARMS moved to C2 — see the note below. | Pure extraction. Battery 498 → **501**, 0/0 by direct require; every pre-existing pin green IS the regression proof (the B1 pins already exercise depth-1 through both twins). **Mutation-tested PER TWIN**, inverted in place: re-wrapping typing's return → 3 FAILURE + 3 ERROR, reduction's → 2 FAILURE + 4 ERROR, the C1 pin among them each time. ⚠ Both mutant runs **exited 0**. E2E star surface byte-identical to pre-C1; neighbourhood 318 `[4/4]`; acceptance 0 errors. |
-| **1b-iii-C2** ✅ `68014124` (instrument `d8776b66`) | **THE DEEP FLATTEN IS LIVE.** `cfg{db.hosts*}` → `{:db @[1 2]}` · `two{a.{x y}*}` → `{:a @[1 2 3]}` · depth 3 works. Pre-check narrowed via `select-branch-deep-star?`; ONE star-TAIL arm per twin (`select-steps-star-tail?`, exactly `(sₙ ★)`) returning C1's join BARE; both shields out; `star-dup-key` seat; L4 message de-lied; `star-deep-prefix` re-scoped to the ordinal gap. | ⭐ **Two of the three landings needed NO CODE** — the dissolve and ord-branch arms already wrap keyless, and `select-below-components` needed no twin arm at all. Battery 504 → **511**, 0/0 · neighbourhood 348 `[5/5]` · acceptance 0 errors · adversarial verify delegated (`wf_bf354f2d-675`), rounds 2–3 budgeted; full suite queued behind it. Record: [§5.P4e-1b-iii-C2](#p4e-1b-iii-c2) |
+| **1b-iii-C2** ✅ `68014124` (instrument `d8776b66`) | **THE DEEP FLATTEN IS LIVE.** `cfg{db.hosts*}` → `{:db @[1 2]}` · `two{a.{x y}*}` → `{:a @[1 2 3]}` · depth 3 works. Pre-check narrowed via `select-branch-deep-star?`; ONE star-TAIL arm per twin (`select-steps-star-tail?`, exactly `(sₙ ★)`) returning C1's join BARE; both shields out; `star-dup-key` seat; L4 message de-lied; `star-deep-prefix` re-scoped to the ordinal gap. | ⭐ **Two of the three landings needed NO CODE** — the dissolve and ord-branch arms already wrap keyless, and `select-below-components` needed no twin arm at all. Battery 504 → **511**, 0/0 · neighbourhood 348 `[5/5]` · acceptance 0 errors · adversarial verify **round 1 DONE** (`wf_bf354f2d-675`) — 3 BLOCKING regressions fixed at `eee68262`; **round 2 owed**, plus 3 diagnostic majors and the full suite. Record: [§5.P4e-1b-iii-C2](#p4e-1b-iii-c2) |
 
 <a id="p4e-1b-iii-c2"></a>
 
@@ -9001,6 +9001,51 @@ a keyless sibling was told the reverse of what happened.
   reaches the seat; the reaching spelling is the BRACKET one, `a[0]*` — which is
   what [DEFERRED 116](DEFERRED.md) proposes deprecating, so that deprecation
   would make this ruled gap unreachable.
+
+**⭐⭐ VERIFY ROUND 1 (`wf_bf354f2d-675`, 4 lenses + adjudicator) — THREE BLOCKING
+regressions, fixed at `eee68262`; the battery, neighbourhood and acceptance were
+GREEN over every one.** All three re-measured on the main thread before acting.
+
+**ONE ROOT CAUSE, THREE SYMPTOMS.** `below-components` / `select-below-components`
+is a SECOND route into the branch machinery, reached through a DISSOLVED head,
+and C2 treated only the `below-value` route. **The comment that closed the
+question is the one that caused it**: *"`select-below-components` needs NO twin
+of this arm … Verified, not assumed"* — typing's twin was verified; reduction's
+sibling was never opened.
+
+| # | measured at `68014124` | fix |
+|---|---|---|
+| 1 | **silent wrong answer, ORDER-DEPENDENT** — `s7{a^.{b.c*} b}` → `{:b @[9]}` vs `s7{b a^.{b.c*}}` → `{:b @["x" "y"]}`: same selection, branches swapped, different VALUE and TYPE, zero errors. The dup gate's `ormap select-star-step?` saw only TOP-LEVEL steps, so a star inside a `(@sub …)` was invisible and a dissolved head spliced its keyed component in. **Verbatim the failure that gate was added to prevent, one nesting level down.** | `select-branch-has-star?/deep` (syntax.rkt), recursing into sub-payloads |
+| 2 | **silently answered the question [Q_U46] RESERVED** — `y{a[0]*}` refused while `y{a^[0]*}` answered `⟨[PVec Int]⟩`, deleting a layer the ordinal never made and contradicting a refusal the same run printed two lines earlier. The ordinal check shipped at ONE seat; the dissolved spelling reaches the layer through the other. | `select-step-makes-no-layer?` at **both** layer-computing seats |
+| 3 | **twin divergence** — `cfg{db^.{hosts ports}*}`: typing ACCEPTED, reduction PANICKED with *"steps after a terminal sub-block (the parser grammar forbids this shape)"*, asserting impossible a shape C2 made reachable. ⭐ The parser never forbade it — the depth-≥2 SHIELD did. | reduction's `below-components` matched to typing's twin: terminal-only, else delegate |
+
+⚠ **AND THE ENUMERATION THAT HID IT WAS WRONG ON ITS FACE.** `star-join-type`'s
+header — the argument justifying the whole C1/C2 design — listed **THREE**
+callers and named `select-below-components` as the third. There are TWO; it
+delegates and wraps nothing. *An enumeration that is wrong about ITSELF is how a
+seat gets skipped.* Corrected, as was the `select-star-step?` PRECONDITION header
+(stale for all of C2 — the **fourth** instance of that shape and the **second**
+in that same comment; rewritten to state the CONTRACT rather than the STATE so it
+survives the next slice).
+
+**STILL OWED FROM ROUND 1 — three diagnostic-quality MAJORS, C2's own:**
+· the tail arm computes its label from the two-step list `(sₙ ★)`, so every
+  failure routed through it echoes only the last two steps where the sibling seat
+  prints the whole branch — diagnostic quality now depends on which seat caught it;
+· `star-dup-key`'s remedy *"drop the `*` so the layers nest"* is **itself an
+  error** on the very example the commit cites (dropping the star does not change
+  the branch's surviving key); the parser's own pre-existing message offers the
+  third option that generalises (group same-head branches into one sub-block);
+· `star-l4-mixed` still misleads when BOTH branches are starred at different
+  depths — both remedies are non-actions and the fix is the OPPOSITE of one of
+  them (you must ADD a caret).
+
+**FILED, PRE-EXISTING**: [DEFERRED 117](DEFERRED.md) (the L4 gate shares the dup
+gate's top-level-only blindness — deliberately NOT widened here, per *Watching
+9*, and the two must be widened together) · **118** (the block-band ω with a
+symbol inner assembles instead of extracting — and it is why one C2 pin is green
+for the wrong reason) · **119** · **120** · **121** (the p4e1 Level-2/Level-3
+divergence that PARKED the dup pin).
 
 ⚠ **KNOWN NARROWNESS, pinned rather than hidden**: the ordinal refusal's label
 renders `0*` (the tail steps) rather than the branch the user wrote. The tail arm

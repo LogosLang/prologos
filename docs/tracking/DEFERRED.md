@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 117**
+> ### **NEXT FREE: 122**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7016,3 +7016,81 @@ deprecation.
 **Placement**: OUT of the P4e line. It touches the reader's adjacency mint,
 nowhere near the selection twins, and it wants its own slice with its own
 verify. Sequenced in D4 §5.P4e-1b-sequencing as explicitly outside.
+
+### 117. ⬜ ⭐ THE L4 SORT GATE SHARES THE DUP GATE'S TOP-LEVEL-ONLY BLINDNESS — a keyless star component spliced from inside a `(@sub …)` behind a dissolve reaches `select-assemble-row` unchecked
+
+Found by the D4.P4e-1b-iii-C2 adversarial verify (`wf_bf354f2d-675`).
+**PRE-EXISTING — reproduces identically on the pre-C2 build**, so C2 neither
+caused nor closed it. Filed because it is the SAME gate defect as the blocking
+dup finding, three lines away, and **any fix must widen both gates together**.
+
+Typing's star L4 check in `select-level-components` tests
+`(ormap (lambda (br) (ormap select-star-step? br)) branches)` — the branch's
+TOP-LEVEL steps only. C2's verify round 1 gave the dup gate a recursive test
+(`select-branch-has-star?/deep`, syntax.rkt) and **deliberately did not widen the
+L4 one**, because that is a behaviour change to a pre-existing gate and
+mid-flight widening is where this arc introduces defects (*Watching 9*).
+
+**Two manifestations, by component order:**
+· keyed-first → `symbol<?: contract violation` and the file produces **NO output
+  at all** (whole-file abort);
+· keyless-first → silently DEMOTES the level to a positional tuple and DROPS the
+  keyed sibling's key, at zero errors.
+
+**What is owed**: widen the L4 gate to `select-branch-has-star?/deep` and pin
+both orders, as the dup gate now is. Cheap — the predicate already exists.
+
+---
+
+### 118. ⬜ ⭐ AN ω STEP WITH A *SYMBOL* INNER, INSIDE A SELECT BLOCK, ASSEMBLES A NARROWED ROW INSTEAD OF EXTRACTING THE FIELD — `x{k:s}` ≡ `x{k:{s}}` at zero errors, and the bands disagree
+
+Found by the same verify. **PRE-EXISTING.** Directly contradicts
+[Q_U20](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u20) as written ~60 lines above
+the offending call. The PATH band extracts correctly (`x.k:s`), the BLOCK band
+does not, so the two bands disagree on a shape C2 has just made live.
+
+⚠ **IT MAKES A C2 PIN GREEN FOR THE WRONG REASON, and that is why it is filed
+loud.** The pin asserting `rows{k:s*}` "STAYS REFUSED — its join is nominal"
+reasons that *"the layer is the ω's vector whose ELEMENTS are Maps"*. Those
+elements are Maps **only because the block-band ω failed to extract**. When this
+entry is fixed the layer becomes `[PVec [PVec Int]]`, the star joins, and the pin
+flips — a pin that will break on an unrelated CORRECT fix, having been read as
+evidence that the nominal case is properly shielded. Whoever fixes this must
+re-read that pin rather than repair it.
+
+---
+
+### 119. ⬜ A CARET IMMEDIATELY BEFORE A STAR IS A GUIDED REFUSAL AT THE BRANCH HEAD BUT IS SILENTLY SWALLOWED AT DEPTH ≥ 2
+
+Same verify; **PRE-EXISTING** (parser.rkt untouched by C2), flagged because C2 is
+what makes deep stars the thing users write. At depth ≥ 2 the `*` is absorbed
+into the field name, producing a misleading "field not present" error whose
+echoed branch **carries no star at all** — so the diagnostic hides the operator
+the user actually wrote.
+
+---
+
+### 120. ⬜ A `def` WHOSE NAME COLLIDES WITH A PRELUDE CONSTRUCTOR IS ACCEPTED AGAINST *ANY* ANNOTATION AT ZERO ERRORS
+
+Same verify, unrelated to the star; filed as a **probe-hygiene trap**. It looks
+exactly like a type-soundness hole in whatever slice is under test, and it cost
+the verifier a cycle. Recorded so the next one does not pay it again.
+
+---
+
+### 121. ⬜ `p4e1`'s STRING PATH FAILS TO BIND A SUBJECT THAT `process-file` BINDS FINE — a LEVEL-2 vs LEVEL-3 harness divergence that PARKED a real pin
+
+Found at C2 verify round 1 while pinning the duplicate-key fix. The subject
+`def s7 := {:a {:b {:c @[1 2]}} :b @[9]}` binds under `process-file` (probe
+verified, the dup error fires correctly) but under the battery's `p4e1` string
+helpers the NEXT command reports `Unbound variable s7`.
+
+**Consequence, and it is the reason this is filed rather than shrugged at**: a
+verified fix for a BLOCKING silent-wrong-answer is parked commented instead of
+pinned, because its pin cannot run. An unpinned fix is how that defect shipped in
+the first place. The class is `testing.md` § "Three-level WS validation" — the
+Level-2/Level-3 gap — appearing in the instrument rather than in the language.
+
+**What is owed**: either find the p4e1 subject shape that binds (and unpark the
+pin at `test-path-selection.rkt`'s "a star NESTED in a sub-block is visible to
+the dup gate"), or give the case an acceptance-file row instead.
