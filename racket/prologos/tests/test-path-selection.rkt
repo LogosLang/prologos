@@ -6311,8 +6311,87 @@
   ;; full per-command output for a WS string, as strings
   (map (lambda (r) (format "~a" r)) (process-string-ws src)))
 
+;; ⭐⭐ D4.P4e-1b slice 1b-iii-A — THE INSTRUMENT WAS VACUOUS, AND SYSTEMICALLY SO.
+;; `p4e1-has?` used to `ormap` over EVERY per-command output — INCLUDING the
+;; setup `def` lines — so any expectation whose regex is a substring of a
+;; SUBJECT's printed value or type could never fail. Measured at `7fd25f35` on
+;; the attempt-2 patch's headline new pin (`rowsv:tags*` "collapses the type to
+;; [PVec Int]"), against the STARLESS control:
+;;
+;;   [0] "rowsv : [PVec {:tags [PVec Int]}] defined."   ← the SETUP line matches
+;;   [1] "@[@[1 2] @[3]] : [PVec [PVec Int]]"           ← the WRONG answer matches
+;;   (p4e1-has? … #rx"\\[PVec Int\\]")  ⇒  #t
+;;
+;; Vacuous twice over, while the patch's comment called it "the assertion that
+;; caught the implementation's one real defect".
+;;
+;; THE FIX IS DELIBERATELY LOUD RATHER THAN CAREFUL: `p4e1-has?` keeps its name
+;; and all its call sites but now looks ONLY at the final command's output — the
+;; expression under test. Any pin that was passing on a setup line's rendering
+;; turns RED, which converts a silent systemic weakness into an enumerable list.
+;; A pin that GENUINELY needs an earlier line (e.g. "`before` survived") says so
+;; with `p4e1-any-has?`; that is a deliberate, visible opt-out.
+;; ⚠ This closes the SETUP-LINE half only. The CONTAINMENT half — `[PVec [PVec
+;; Int]]` contains `[PVec Int]` — is a weak REGEX, not a weak instrument; assert
+;; a type with `p4e1-type=?`, which compares the rendered type EXACTLY.
+(define (p4e1-last src)
+  (let ([ms (p4e1-msgs src)])
+    (if (null? ms) "" (car (reverse ms)))))
+
 (define (p4e1-has? src rx)
+  (and (regexp-match? rx (p4e1-last src)) #t))
+
+;; the deliberate opt-out: match ANY per-command output, setup lines included.
+(define (p4e1-any-has? src rx)
   (and (ormap (lambda (s) (regexp-match? rx s)) (p4e1-msgs src)) #t))
+
+;; the rendered TYPE of the final command, or #f when it printed no `V : T`.
+;; Splits on the LAST " : " so a record type's `{:k T}` interior cannot confuse
+;; it, and drops a trailing `defined.` so a `def` line is comparable too.
+(define (p4e1-type src)
+  (let* ([s (p4e1-last src)]
+         [ms (regexp-match #rx"^.* : (.*)$" s)])
+    (and ms
+         (let ([t (cadr ms)])
+           (if (regexp-match? #rx" defined[.]$" t)
+               (substring t 0 (- (string-length t) (string-length " defined.")))
+               t)))))
+
+(define (p4e1-type=? src expected)
+  (equal? (p4e1-type src) expected))
+
+(test-case "P4e-1b [1b-iii-A]: the INSTRUMENT discriminates — a setup line can no longer satisfy a pin"
+  ;; The exact source the attempt-2 patch's headline pin used, minus the star.
+  ;; If `p4e1-has?` ever goes back to scanning every output, line 1 turns this red.
+  (define starless "ns v1t\ndef rowsv := @[{:tags @[1 2]} {:tags @[3]}]\nrowsv:tags")
+  ;; Measured outputs at `7fd25f35`:
+  ;;   [0] "rowsv : [PVec {:tags [PVec Int]}] defined."
+  ;;   [1] "@[@[1 2] @[3]] : [PVec [PVec Int]]"
+  ;;
+  ;; ⚠ THIS PIN'S FIRST CUT WAS ITSELF AN OVER-CLAIM, and running it is what
+  ;; caught that — it asserted the restriction kills `#rx"\\[PVec Int\\]"` on the
+  ;; starless control. It does not, and cannot: the WRONG answer on line [1]
+  ;; contains that substring. The two defects are independent and the pin now
+  ;; separates them instead of conflating them.
+  ;;
+  ;; HALF 1 — THE SETUP-LINE DEFECT, pinned as fixed. `{:tags` appears ONLY in
+  ;; the subject's own printed type on line [0], never in the expression's output.
+  (check-false (p4e1-has? starless #rx"\\{:tags")
+               "a setup line's rendering can no longer satisfy a pin")
+  (check-true (p4e1-any-has? starless #rx"\\{:tags")
+              "…and it really is there — the deliberate opt-out still sees it, which is what makes the check above discriminating")
+  ;; HALF 2 — THE CONTAINMENT DEFECT is a weak REGEX, not a weak instrument, and
+  ;; the restriction does NOT rescue it: `[PVec [PVec Int]]` contains `[PVec Int]`,
+  ;; so the attempt-2 pin would still pass on the starless control AND on the
+  ;; wrong answer. Pinned as STILL TRUE so nobody reads half 1 as covering it.
+  (check-true (p4e1-has? starless #rx"\\[PVec Int\\]")
+              "a substring type regex remains satisfiable by the WRONG answer — restricting the instrument does not fix a weak expectation")
+  ;; …and the exact comparison is what separates them. 1b-iii's join pins must
+  ;; use `p4e1-type=?`, not a substring regex, for every type claim.
+  (check-true (p4e1-type=? starless "[PVec [PVec Int]]")
+              "the starless projection's type, exactly")
+  (check-false (p4e1-type=? starless "[PVec Int]")
+               "…and it is NOT the collapsed type — which the substring regex above cannot tell"))
 
 (test-case "P4e-1a: the SELECTION carriers reach the guided not-yet message"
   ;; The contract `star-not-yet-message`'s comment claims and does not yet keep.
