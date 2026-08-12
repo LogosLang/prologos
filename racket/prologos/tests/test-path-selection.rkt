@@ -7207,6 +7207,193 @@
 ;;     otherwise it does not discriminate;
 ;;   · and pin the reduction twin the same way — both twins have the same [else].
 
+;; ---- 1b-iii-B1: the twins' star arms — UNIT pins, LIVE while the parser still
+;;      refuses. The parser mints no (@star …) step at HEAD, so E2E cannot reach
+;;      the twins — but `tc:select-project` and `select-reduce` are exported, and
+;;      the P4a totality pins established exactly this idiom (hand-built subjects,
+;;      hand-built branches). FAILING-TEST-FIRST: at HEAD every case below dies in
+;;      `select-step-kind-unhandled` (an ERROR, not a FAILURE — count both), which
+;;      is the right reason: the arms do not exist yet.
+
+(define B1-STAR   (make-select-star 'flatten))
+(define B1-STAR-S (make-select-star 'flatten-synth))
+(define B1-PVI    (expr-PVec (expr-Int)))
+(define (b1-row . fields) (make-record 'keyword fields 'closed))
+(define (b1-f ty) (record-field ty 'present))
+
+(test-case "1b-iii-B1 typing: a trailing star JOINS vector contents — EXACT type, on the discriminating key set"
+  ;; {:a [PVec Int] :a! [PVec Int]} — slice A's key set, so a comparator regression
+  ;; shows here too. `'path` sort = the outer `$select-path` carrier's sort.
+  (define row (b1-row (cons 'a (b1-f B1-PVI)) (cons 'a! (b1-f B1-PVI))))
+  (let-values ([(t f) (tc:select-project '() row (list (list B1-STAR)) 'path)])
+    (check-false f "the all-vectors join must succeed")
+    (check-true (equal? t B1-PVI)
+                "concat of n [PVec Int] is [PVec Int] — EXACT equality, the anti-vacuous form")))
+
+(test-case "1b-iii-B1 typing: the star flattens ITS branch's layer, not the subject — the prefix walk"
+  ;; branch (tags ★) over {:name Keyword :tags [PVec Int]}: the layer is the
+  ;; re-nested {:tags [PVec Int]}, contents = one vector → [PVec Int]
+  (define row (b1-row (cons 'name (b1-f (expr-Keyword))) (cons 'tags (b1-f B1-PVI))))
+  (let-values ([(t f) (tc:select-project '() row (list (list 'tags B1-STAR)) 'path)])
+    (check-false f)
+    (check-true (equal? t B1-PVI))))
+
+(test-case "1b-iii-B1 typing TRIPWIRE: a star in a REST position is a FAIL VALUE, never a raise"
+  ;; The audit argued the four `select-step-kind-unhandled` sites unreachable for
+  ;; stars. An argued-unreachable precondition living in a document is the
+  ;; artifact class that caused both reverts — so it is pinned, both shapes.
+  (define row (b1-row (cons 'a (b1-f B1-PVI))))
+  (check-not-exn
+   (lambda ()
+     (let-values ([(t f) (tc:select-project '() row (list (list B1-STAR 'a)) 'block)])
+       (check-false t "a mid-branch star must not project")
+       (check-equal? (tc:select-fail-kind f) 'star-mid-branch))))
+  (check-not-exn
+   (lambda ()
+     (let-values ([(t f) (tc:select-project '() row (list (list B1-STAR B1-STAR)) 'block)])
+       (check-equal? (tc:select-fail-kind f) 'star-mid-branch
+                     "two stars in one branch: the first is mid-branch")))))
+
+(test-case "1b-iii-B1 typing: each failure KIND says the true thing — no conflated star-not-yet"
+  ;; attempt 2 routed leaf AND nominal AND synth through ONE kind, telling a
+  ;; String leaf it "needs the nominal (Map-valued) case" — both wrong.
+  (define nom-inner (b1-row (cons 'x (b1-f (expr-Int)))))
+  ;; leaf contents → PERMANENT
+  (let-values ([(t f) (tc:select-project '() (b1-row (cons 'a (b1-f (expr-Int))))
+                                         (list (list B1-STAR)) 'path)])
+    (check-equal? (tc:select-fail-kind f) 'star-leaf))
+  ;; Map contents → genuinely not-yet (1b-iv)
+  (let-values ([(t f) (tc:select-project '() (b1-row (cons 'a (b1-f nom-inner)))
+                                         (list (list B1-STAR)) 'path)])
+    (check-equal? (tc:select-fail-kind f) 'star-nominal))
+  ;; open row → not statically known (Q_U38 conservative on the tail)
+  (let-values ([(t f) (tc:select-project '() (make-record 'keyword
+                                                          (list (cons 'a (b1-f B1-PVI))) 'dyn)
+                                         (list (list B1-STAR)) 'path)])
+    (check-equal? (tc:select-fail-kind f) 'star-open-row))
+  ;; non-present field → same: the contents are not statically known
+  (let-values ([(t f) (tc:select-project '() (make-record 'keyword
+                                                          (list (cons 'a (record-field B1-PVI 'unknown))) 'closed)
+                                         (list (list B1-STAR)) 'path)])
+    (check-equal? (tc:select-fail-kind f) 'star-open-row))
+  ;; `*_` over vector contents → Q_U41: nominal-only, names the alternative
+  (let-values ([(t f) (tc:select-project '() (b1-row (cons 'a (b1-f B1-PVI)))
+                                         (list (list B1-STAR-S)) 'path)])
+    (check-equal? (tc:select-fail-kind f) 'star-synth-positional))
+  ;; heterogeneous element types → needs a union join, not landed
+  (let-values ([(t f) (tc:select-project '() (b1-row (cons 'a (b1-f B1-PVI))
+                                                     (cons 'b (b1-f (expr-PVec (expr-Keyword)))))
+                                         (list (list B1-STAR)) 'path)])
+    (check-equal? (tc:select-fail-kind f) 'star-hetero)))
+
+(test-case "1b-iii-B1 typing: the ω-container layer — element type stands for every content"
+  ;; [PVec [PVec Int]] ★ → [PVec Int] — rowsv:tags*'s type collapse as a UNIT
+  ;; pin with exact equality (the E2E version was the vacuous instrument).
+  (let-values ([(t f) (tc:select-project '() (expr-PVec B1-PVI) (list (list B1-STAR)) 'path)])
+    (check-false f)
+    (check-true (equal? t B1-PVI)))
+  ;; [PVec {:x Int}] ★ → nominal, not-yet
+  (let-values ([(t f) (tc:select-project '() (expr-PVec (b1-row (cons 'x (b1-f (expr-Int)))))
+                                         (list (list B1-STAR)) 'path)])
+    (check-equal? (tc:select-fail-kind f) 'star-nominal))
+  ;; [PVec ⟨Int⟩] ★ → tuple arity × runtime length is not static
+  (let-values ([(t f) (tc:select-project '() (expr-PVec (make-record 'nat (list (cons 0 (b1-f (expr-Int)))) 'closed))
+                                         (list (list B1-STAR)) 'path)])
+    (check-equal? (tc:select-fail-kind f) 'star-omega-tuple))
+  ;; [PVec Int] ★ → leaf elements, permanent
+  (let-values ([(t f) (tc:select-project '() B1-PVI (list (list B1-STAR)) 'path)])
+    (check-equal? (tc:select-fail-kind f) 'star-leaf)))
+
+(test-case "1b-iii-B1 typing: mixed keyed/keyless under a star is a GUIDED L4 fail — BOTH branch orders"
+  ;; Q_U44's obligation: `m{name tags*}` must be a guided error, not a
+  ;; make-record #f-label raise — and `m{tags* name}` must not silently drop.
+  (define row (b1-row (cons 'name (b1-f (expr-Keyword))) (cons 'tags (b1-f B1-PVI))))
+  (check-not-exn
+   (lambda ()
+     (let-values ([(t f) (tc:select-project '() row (list (list 'name) (list 'tags B1-STAR)) 'block)])
+       (check-equal? (tc:select-fail-kind f) 'star-l4-mixed))))
+  (check-not-exn
+   (lambda ()
+     (let-values ([(t f) (tc:select-project '() row (list (list 'tags B1-STAR) (list 'name)) 'block)])
+       (check-equal? (tc:select-fail-kind f) 'star-l4-mixed
+                     "the reordered block takes the SAME guided error — round 1 silently dropped :name here")))))
+
+(test-case "1b-iii-B1: the star messages say the true thing — and render the user's spelling"
+  (define row (b1-row (cons 'name (b1-f (expr-Keyword))) (cons 'tags (b1-f B1-PVI))))
+  (define (msg-of branches [sort 'path])
+    (let-values ([(t f) (tc:select-project '() row branches sort)])
+      (te:format-select-fail f '())))
+  ;; the LEAF message must claim permanence, not "not yet"
+  (let-values ([(t f) (tc:select-project '() (b1-row (cons 'a (b1-f (expr-Int))))
+                                         (list (list B1-STAR)) 'path)])
+    (check-true (regexp-match? #rx"permanent" (te:format-select-fail f '()))
+                "a leaf refusal is permanent and says so"))
+  ;; the NOMINAL message keeps the established not-yet substring (C31 pins)
+  (let-values ([(t f) (tc:select-project '() (b1-row (cons 'a (b1-f (b1-row (cons 'x (b1-f (expr-Int)))))))
+                                         (list (list B1-STAR)) 'path)])
+    (check-true (regexp-match? #rx"not implemented yet" (te:format-select-fail f '()))))
+  ;; the L4 message names the STAR spelling, not a caret remedy the user never wrote
+  (check-true (regexp-match? #rx"tags\\*" (msg-of (list (list 'name) (list 'tags B1-STAR)) 'block))
+              "the guided L4 error interpolates the user's star spelling"))
+
+(test-case "1b-iii-B1 reduction: the join concatenates in CANONICAL key order — the value layer, discriminating set"
+  (define ka  (expr-keyword 'a))
+  (define ka! (expr-keyword 'a!))
+  (define m-a  (expr-int 11))
+  (define m-a! (expr-int 22))
+  (define subj (expr-champ
+                (champ-insert
+                 (champ-insert champ-empty (equal-hash-code ka!) ka!
+                               (expr-rrb (rrb-from-list (list m-a!))))
+                 (equal-hash-code ka) ka
+                 (expr-rrb (rrb-from-list (list m-a))))))
+  (define r (select-reduce subj (list (list B1-STAR)) 'path #f))
+  (check-true (expr-rrb? r) "the join yields a vector")
+  (check-equal? (rrb-to-list (expr-rrb-racket-rrb r)) (list m-a m-a!)
+                "canonical (symbol<?) order — :a before :a!; the struct-display order reverses this pair"))
+
+(test-case "1b-iii-B1 reduction: an rrb layer concatenates in ELEMENT order — and the empty layer is the concat identity"
+  (define m1 (expr-int 1)) (define m2 (expr-int 2)) (define m3 (expr-int 3))
+  (define subj (expr-rrb (rrb-from-list
+                          (list (expr-rrb (rrb-from-list (list m1 m2)))
+                                (expr-rrb (rrb-from-list (list m3)))))))
+  (define r (select-reduce subj (list (list B1-STAR)) 'path #f))
+  (check-equal? (rrb-to-list (expr-rrb-racket-rrb r)) (list m1 m2 m3)
+                "written/element order for a positional layer")
+  ;; the empty champ layer: concat of nothing is @[] — the identity, decided
+  ;; deliberately rather than inherited (typing is conservative here; the value
+  ;; layer is total)
+  (define r0 (select-reduce (expr-champ champ-empty) (list (list B1-STAR)) 'path #f))
+  (check-true (expr-rrb? r0))
+  (check-equal? (rrb-to-list (expr-rrb-racket-rrb r0)) '()))
+
+(test-case "1b-iii-B1 reduction TRIPWIRE: star misuse PANICS through the let/ec — never a raise"
+  (define ka (expr-keyword 'a))
+  (define subj (expr-champ (champ-insert champ-empty (equal-hash-code ka) ka
+                                         (expr-rrb (rrb-from-list (list (expr-int 1)))))))
+  ;; mid-branch star: typing refuses this; the value layer must panic, not raise
+  (check-not-exn
+   (lambda ()
+     (check-true (expr-panic? (select-reduce subj (list (list B1-STAR 'a)) 'path #f))
+                 "a star in a REST position panics per-command")))
+  ;; leaf contents: invariant guard, same channel
+  (define leaf-subj (expr-champ (champ-insert champ-empty (equal-hash-code ka) ka (expr-int 7))))
+  (check-not-exn
+   (lambda ()
+     (check-true (expr-panic? (select-reduce leaf-subj (list (list B1-STAR)) 'path #f)))))
+  ;; mixed keyed/keyless with a star present: the L4 invariant guard, both orders
+  (define mix-subj
+    (expr-champ (champ-insert
+                 (champ-insert champ-empty (equal-hash-code ka) ka
+                               (expr-rrb (rrb-from-list (list (expr-int 1)))))
+                 (equal-hash-code (expr-keyword 'name)) (expr-keyword 'name)
+                 (expr-int 9))))
+  (check-not-exn
+   (lambda ()
+     (check-true (expr-panic? (select-reduce mix-subj
+                                             (list (list 'name) (list 'a B1-STAR)) 'block #f))
+                 "a star's keyless component beside keyed siblings panics — typing's L4 check owns the user-facing form"))))
+
 ;; ---- 1b-iv: the [Q_U40] LAW *and its ω qualifier* — the qualifier is the half
 ;;      that a test must carry, because the law alone reads as unconditional.
 ;;

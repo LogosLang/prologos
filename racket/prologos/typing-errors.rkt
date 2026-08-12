@@ -603,6 +603,45 @@
      (format
       "Could not infer type — select: ordinal `~a` (branch `~a`) needs a tuple or vector subject; ~a~a"
       label branch-str why remedy)]
+    ;; ⭐⭐ D4.P4e-1b slice 1b-iii-B1 — THE STAR's FAILURE KINDS, each saying the
+    ;; TRUE thing. Attempt 2 routed leaf, nominal and synth through ONE
+    ;; `star-not-yet`, telling a String leaf it "needs the nominal (Map-valued)
+    ;; case" — temporary framing for a permanent error AND a wrong attribution.
+    ;; `label` carries the user's SPELLING (`pp-select-branch` over the branch —
+    ;; `database*`, `tags*`, `0.{0}*`), restoring the interpolation attempt 1
+    ;; degraded to a bare `*`; `row` carries the LAYER where the arm computed it.
+    ;; The not-yet family keeps the established "`*` (flatten) is not implemented
+    ;; yet" substring — five 1a-era pins assert it, and B2's seat migration
+    ;; re-points them here.
+    [(star-mid-branch)
+     (format "select: `~a` — `*` is only supported at the END of a branch; a step after a flatten (descending into the joined result) is not implemented yet"
+             label)]
+    [(star-leaf)
+     (format "select: `~a` — `*` deletes the layer the preceding step produced and joins its CONTENTS; here the layer is `~a`, whose contents are not containers, and a leaf has no join. This is a permanent refusal, not a not-yet"
+             label (pp-expr row names))]
+    [(star-nominal)
+     (format "select: `~a` — `*` (flatten) is not implemented yet for Map-valued contents: the layer `~a` would join keywise (collisions refuse; `*_` synthesizes provenance keys). The nominal case is the next slice; vector contents already flatten"
+             label (pp-expr row names))]
+    [(star-hetero)
+     (format "select: `~a` — `*` (flatten) is not implemented yet for MIXED element types: the layer `~a`'s vectors do not share one element type, and the union join is not landed"
+             label (pp-expr row names))]
+    [(star-omega-tuple)
+     (format "select: `~a` — `*` (flatten) is not implemented yet for tuple elements under a broadcast: the concatenated arity is (tuple arity × the container's runtime length), which no static type carries"
+             label (pp-expr row names))]
+    [(star-not-yet)
+     ;; the residual honest not-yet (e.g. an empty row layer, whose element
+     ;; type nothing names) — deliberately generic, deliberately rare.
+     (format "select: `~a` — `*` (flatten) is not implemented yet for this layer (`~a`)"
+             label (pp-expr row names))]
+    [(star-open-row)
+     (format "select: `~a` — the layer `~a`'s row is not fully known (an open `'dyn` tail, or fields not provably present), so the flatten's contents are not statically known; ~a"
+             label (pp-expr row names) remedies)]
+    [(star-synth-positional)
+     (format "select: `~a` — `*_` synthesizes keys from the deleted layer's KEYS, and this layer is positional (its contents join into a vector): there are no keys to draw from. Use bare `*` to flatten positionally"
+             label)]
+    [(star-l4-mixed)
+     (format "mixed keyed/keyless sorts in the select block (L4) — `~a` contributes a KEYLESS component (its contents join into a vector) beside keyed sibling branches, and one level assembles a Map OR a tuple, never both. Star the sibling branches too, or select the flatten separately"
+             label)]
     ;; ⭐ D4.P4e-1b slice 1b-iii-A — THE FAIL-KIND AXIS IS NOW TOTAL.
     ;; This arm was `#f`, and `#f` here is SILENT: it falls through `infer/err`'s
     ;; `or` chain to the generic "Could not infer type", and NESTED it is worse —

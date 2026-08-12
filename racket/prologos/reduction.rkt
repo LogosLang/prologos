@@ -1920,8 +1920,7 @@
       ;; inner ASSEMBLES, always, regardless of the outer selector's sort. The
       ;; symbol path below mirrors the top-level sort dispatch unchanged.
       (if (select-sub-step? inner)
-          (entries->value
-           (append-map (lambda (b) (branch-entries v b '())) (cdr inner)))
+          (entries->value (level-entries v (cdr inner)))
       (let ([entries (branch-entries v (list inner) '())])
         (case sort
           [(block) (entries->value entries)]
@@ -1944,6 +1943,68 @@
     ;; over the FULL branch via the SHARED select-synth-name walk; resets at
     ;; a `.{…}` sub-block (branch-of-its-block scope — Q_U4: subject-root
     ;; preferred, flip deferred; DEFERRED 23).
+    ;; ⭐⭐ D4.P4e-1b slice 1b-iii-B1 [Q_U40/Q_U42/Q_U44] — THE FLATTEN's VALUE,
+    ;; the atomic twin of typing's `star-branch-entries`, and its arm sits FIRST
+    ;; in `branch-entries`' cond at the SAME POSITION as the typing twin's.
+    ;; The layer is `below-value` over the prefix (RE-NESTED — that row IS the
+    ;; layer being deleted), or `v` itself when the star is branch-initial.
+    ;; Contents: a champ layer's values in CANONICAL key order (Q_U44 —
+    ;; `champ-values/canonical`, module-level, outside the `sort` shadow) or an
+    ;; rrb layer's elements in ELEMENT order. All contents rrbs ⇒ concat via
+    ;; `rrb-concat` ⇒ ONE keyless component. The empty champ layer concats to
+    ;; `@[]` — the identity; typing is deliberately more conservative there.
+    ;; ⚠ EVERY refusal here is an INVARIANT GUARD through `(return (expr-panic
+    ;; …))`, NEVER `error` — typing carries the user-facing refusal, and
+    ;; reduction must not depend on typing having run (`select-reduce` is called
+    ;; from whnf; a raise here is a WHOLE-FILE abort).
+    (define (star-entries v b seen)
+      (let* ([rev (reverse b)]
+             [star (car rev)]
+             [prefix (reverse (cdr rev))]
+             [oops (lambda (why)
+                     (return (expr-panic (expr-string
+                       (format "select: `*` — ~a (typing carries the user-facing refusal; reaching the value layer with this shape is a compiler-invariant violation)"
+                               why)))))])
+        (cond
+          [(or (not (select-star-step? star)) (ormap select-star-step? prefix))
+           (oops "a step after the flatten — `*` is only supported at the END of a branch")]
+          [else
+           (let* ([layer (whnf (if (null? prefix) v (below-value v prefix seen)))]
+                  [contents
+                   (cond
+                     [(expr-champ? layer)
+                      (or (champ-values/canonical (expr-champ-racket-champ layer))
+                          (oops "the deleted layer's keys admit no canonical order (non-keyword keys)"))]
+                     [(expr-rrb? layer)
+                      (let ([r (expr-rrb-racket-rrb layer)])
+                        (for/list ([i (in-range (rrb-size r))]) (rrb-get r i)))]
+                     [else (oops "the deleted layer is a leaf — it has no contents to join")])])
+             (cond
+               [(eq? (select-star-cont star) 'flatten-synth)
+                (oops "`*_` synthesizes keys from the deleted layer's KEYS, and this join is positional")]
+               [(andmap (lambda (c) (expr-rrb? (whnf c))) contents)
+                (list (cons #f
+                            (expr-rrb
+                             (for/fold ([acc (rrb-from-list '())])
+                                       ([c (in-list contents)])
+                               (rrb-concat acc (expr-rrb-racket-rrb (whnf c)))))))]
+               [else
+                (oops "non-vector contents (the nominal join is the next slice; mixed or leaf contents have no join)")]))])))
+    ;; ⭐ 1b-iii-B1 — the LEVEL assembly guard, the reduction mirror of typing's
+    ;; star L4 check in `select-level-components`. STAR-GATED for the same
+    ;; reason (starless behaviour must not move), and an invariant guard for the
+    ;; same reason (typing's guided `star-l4-mixed` fires first on the typed
+    ;; path). Without it, `entries->value`'s first-component fork either raises
+    ;; in `make-record` (keyed first) or silently drops the keyed siblings
+    ;; (keyless first) — round 1's defects #2/#3, order-dependent.
+    (define (level-entries v bs)
+      (let ([entries (append-map (lambda (b) (branch-entries v b '())) bs)])
+        (when (and (ormap (lambda (b) (ormap select-star-step? b)) bs)
+                   (ormap (lambda (e) (car e)) entries)
+                   (ormap (lambda (e) (not (car e))) entries))
+          (return (expr-panic (expr-string
+            "select: internal — a flatten's keyless component beside keyed siblings reached the value layer (typing's star L4 check refuses this block)"))))
+        entries))
     ;; D4.P3c: v is the RAW subject value (champ OR rrb) — each branch
     ;; dispatches per its head kind, mirroring typing's per-branch dispatch.
     ;; component ::= (cons kw-label . value) keyed | (cons #f value) keyless.
@@ -1976,6 +2037,11 @@
                 (walk (cdr steps) hit)))))
       (let ([col (select-branch-collapse b)])
         (cond
+          ;; ⭐⭐ 1b-iii-B1: FIRST, before `col`/`keyless?` — both read the
+          ;; branch's LAST step, which for a star branch is the star (or a caret
+          ;; after one — round 1's abort). Same position as the typing twin's.
+          [(ormap select-star-step? b)
+           (star-entries v b seen)]
           [col
            (list (cons (cond [(select-cont-rename col)]
                              [(eq? col 'collapse-synth)
@@ -2052,7 +2118,7 @@
       (cond
         [(and (pair? (car steps)) (eq? (car (car steps)) '@sub))
          (if (null? (cdr steps))
-             (append-map (lambda (b) (branch-entries v b '())) (cdr (car steps)))
+             (level-entries v (cdr (car steps)))
              (return (expr-panic
                       (expr-string
                        "select: internal — steps after a terminal sub-block (the parser grammar forbids this shape)"))))]
@@ -2064,8 +2130,7 @@
       (cond
         [(and (pair? (car steps)) (eq? (car (car steps)) '@sub))
          (if (null? (cdr steps))
-             (entries->value
-              (append-map (lambda (b) (branch-entries v b '())) (cdr (car steps))))
+             (entries->value (level-entries v (cdr (car steps))))
              (return (expr-panic
                       (expr-string
                        "select: internal — steps after a terminal sub-block (the parser grammar forbids this shape)"))))]
@@ -2106,7 +2171,7 @@
     ;; whnf'd the subject N times. Pure win (whnf is a pure function of the
     ;; expr); this makes the code match its own documented contract.
     (let* ([subj* (whnf subj-expr)]
-           [entries (append-map (lambda (b) (branch-entries subj* b '())) branches)])
+           [entries (level-entries subj* branches)])
       ;; D4.P4b-ii-2a — THE `'path` ASSEMBLY. A block PROJECTS (assemble the
       ;; components into a row/tuple); a path EXTRACTS (yield the leaf value).
       ;; Both sorts assembled a ROW before this slice, which is why the fold

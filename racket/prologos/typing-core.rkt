@@ -1475,7 +1475,26 @@
 (define (select-level-components ctx tm branches path sort)
   (let loop ([bs branches] [comps '()])
     (if (null? bs)
-        (values (reverse comps) #f)
+        (let ([cs (reverse comps)])
+          ;; ⭐ 1b-iii-B1 — [Q_U43]'s ACTUAL migration + [Q_U44]'s obligation. The
+          ;; parser's L4 gate answers `'()` for a star branch (it cannot know a
+          ;; subject-derived sort), so THIS is the first seat that can check
+          ;; keyed-vs-keyless for a star-bearing block — and `m{name tags*}` /
+          ;; `m{tags* name}` must BOTH take a guided error here rather than a
+          ;; `make-record` `#f`-label raise (round 1's defects #2/#3).
+          ;; ⚠ STAR-GATED deliberately: a starless mixed level cannot reach here
+          ;; (the parser refuses it), and the pre-existing first-component
+          ;; assembly behaviour for starless blocks must not move in this slice.
+          (if (and (ormap (lambda (br) (ormap select-star-step? br)) branches)
+                   (ormap (lambda (c) (car c)) cs)
+                   (ormap (lambda (c) (not (car c))) cs))
+              (values #f (select-fail 'star-l4-mixed path
+                                      (string->symbol
+                                       (pp-select-branch
+                                        (findf (lambda (br) (ormap select-star-step? br))
+                                               branches)))
+                                      tm))
+              (values cs #f)))
         (let-values ([(es bf) (select-branch-entries ctx tm (car bs) path '() sort)])
           (if bf
               (values #f bf)
@@ -1501,6 +1520,131 @@
 ;; the SHARED select-synth-name walk. Scope is the branch of the block the
 ;; leaf sits in (`seen` resets at `.{…}` — Q_U4: subject-root preferred,
 ;; flip deferred; DEFERRED 23).
+;; ⭐⭐ D4.P4e-1b slice 1b-iii-B1 [Q_U40/Q_U42/Q_U44] — THE FLATTEN's TYPE, the
+;; atomic twin of reduction's `star-entries`. BRANCH-LEVEL, and its arm sits
+;; FIRST in `select-branch-entries`' cond AT THE SAME POSITION as the reduction
+;; twin's — round 1's whole-file abort was exactly this pair diverging (reduction
+;; checked the star first, typing last, so a caret leaf routed into
+;; `walk-to-leaf`, which has no star arm and raises).
+;;
+;; THE ALGORITHM (D4 §5.P4e-1b-iii): with `prefix` = the branch's steps before
+;; the star, the LAYER being deleted is `select-below-field` over the prefix —
+;; which RE-NESTS (`{:tags [PVec Int]}` for branch `tags*`), and that re-nested
+;; row IS the layer — or the subject's own type when the star is branch-initial
+;; (the outer `$select-path` carrier). The layer's CONTENTS are its field types
+;; (a row), its component types (a tuple), or its element type standing for
+;; every element (a PVec). All contents PVecs of ONE element type ⇒ concat ⇒ a
+;; single KEYLESS component of that same PVec type. Everything else refuses with
+;; the kind that says the TRUE thing — attempt 2 conflated leaf, nominal and
+;; synth into one `star-not-yet`, telling a String leaf it "needs the nominal
+;; (Map-valued) case".
+;;
+;; ⚠ `seen` is FORWARDED, not reset — attempt 2 passed `'()` here while
+;; reduction forwarded, so a `^_` in the star's prefix would synthesize
+;; different keys on the two sides (audit C33). The twins take the same `seen`.
+;;
+;; ⚠ TAIL + PRESENCE guards (audit G7): a `'dyn`-tailed row exposes only its
+;; KNOWN fields here while reduction's champ holds every runtime key — joining
+;; the known subset silently would be a wrong answer, so an open row REFUSES
+;; (Q_U38's conservative-on-the-tail, applied to contents). Same for a field
+;; whose presence is not `'present`.
+;;
+;; ⚠ TYPING IS DELIBERATELY MORE CONSERVATIVE THAN REDUCTION in two cells, and
+;; that is the safe direction (a typed program never reaches the divergence;
+;; the whnf path gets the more-defined value): the EMPTY layer (reduction mints
+;; `@[]`, the concat identity; typing cannot name its element type without a
+;; fresh meta, so it refuses not-yet) and HETEROGENEOUS element types
+;; (reduction concatenates rrbs regardless; typing wants the union join, which
+;; is not landed).
+(define (star-branch-entries ctx tm b path seen sort)
+  (define label (string->symbol (pp-select-branch b)))
+  (define (fail-k kind [r tm]) (values #f (select-fail kind path label r)))
+  (let* ([rev (reverse b)]
+         [star (car rev)]
+         [prefix (reverse (cdr rev))])
+    (cond
+      ;; a step AFTER the star, or a second star: Q_U40 defines `*` against the
+      ;; PRECEDING layer; descending into the joined result is meaningful but
+      ;; unruled. Loud refusal — this is also what keeps a caret-after-star out
+      ;; of `walk-to-leaf` (round 1's abort).
+      [(or (not (select-star-step? star)) (ormap select-star-step? prefix))
+       (fail-k 'star-mid-branch)]
+      [else
+       (let-values ([(layer lf)
+                     (if (null? prefix)
+                         (values tm #f)
+                         (select-below-field ctx (whnf tm) prefix path seen sort))])
+         (if lf
+             (values #f lf)
+             (let ([l (whnf layer)])
+               ;; contents = the deleted layer's component TYPES, in the order
+               ;; the join uses (canonical for a keyword row — `make-record`
+               ;; already canonicalizes, so field order IS `symbol<?` order;
+               ;; index order for a tuple).
+               (define (join-contents contents)
+                 (cond
+                   [(null? contents) (fail-k 'star-not-yet l)]
+                   [(not (andmap (lambda (c) (expr-PVec? (whnf c))) contents))
+                    (if (andmap (lambda (c)
+                                  (let ([w (whnf c)])
+                                    (or (expr-Record? w) (expr-Map? w))))
+                                contents)
+                        (fail-k 'star-nominal l)
+                        (fail-k 'star-leaf l))]
+                   [(eq? (select-star-cont star) 'flatten-synth)
+                    ;; Q_U41: `*_` is NOMINAL-ONLY — provenance comes from the
+                    ;; deleted layer's KEYS, and vector contents have none.
+                    (fail-k 'star-synth-positional l)]
+                   [(not (let ([es (map (lambda (c) (expr-PVec-elem-type (whnf c)))
+                                        contents)])
+                           (andmap (lambda (e) (equal? e (car es))) es)))
+                    (fail-k 'star-hetero l)]
+                   [else
+                    (values (list (cons #f (record-field
+                                            (expr-PVec (expr-PVec-elem-type
+                                                        (whnf (car contents))))
+                                            'present)))
+                            #f)]))
+               (cond
+                 [(expr-Record? l)
+                  (cond
+                    [(eq? (expr-Record-key-domain l) 'nat)
+                     ;; a TUPLE layer: static arity, component types in index
+                     ;; (= written) order — `vv{0 1}*`'s side of the split.
+                     (join-contents (map (lambda (f) (record-field-type (cdr f)))
+                                         (expr-Record-fields l)))]
+                    [(not (closed-keyword-row? l)) (fail-k 'star-open-row l)]
+                    [(not (andmap (lambda (f)
+                                    (eq? (record-field-presence (cdr f)) 'present))
+                                  (expr-Record-fields l)))
+                     (fail-k 'star-open-row l)]
+                    [else
+                     (join-contents (map (lambda (f) (record-field-type (cdr f)))
+                                         (expr-Record-fields l)))])]
+                 [(expr-PVec? l)
+                  ;; the ω container: ONE element type stands for every content.
+                  (let ([e (whnf (expr-PVec-elem-type l))])
+                    (cond
+                      [(expr-PVec? e)
+                       (if (eq? (select-star-cont star) 'flatten-synth)
+                           (fail-k 'star-synth-positional l)
+                           ;; concat of n `[PVec T]` is `[PVec T]` — spec §3.5's
+                           ;; ω·ω→ω, `rowsv:tags*`'s type collapse.
+                           (values (list (cons #f (record-field
+                                                   (expr-PVec (expr-PVec-elem-type e))
+                                                   'present)))
+                                   #f))]
+                      [(and (expr-Record? e) (eq? (expr-Record-key-domain e) 'nat))
+                       ;; tuple elements: the concatenated arity is (tuple arity ×
+                       ;; runtime length), which no static type carries.
+                       (fail-k 'star-omega-tuple l)]
+                      [(or (expr-Record? e) (expr-Map? e))
+                       (fail-k 'star-nominal l)]
+                      [else (fail-k 'star-leaf l)]))]
+                 [(expr-Map? l) (fail-k 'star-nominal l)]
+                 [(expr-fvar? l) (fail-k 'star-open-row l)]
+                 [else (fail-k 'star-leaf l)]))))])))
+
 (define (select-branch-entries ctx tm b path seen sort)
   (define (walk-to-leaf k)  ;; shared by collapse + keyless: k gets leaf ft
     ;; P3c verify (rank 1): the `(@ord N)` head arm — an ordinal-headed
@@ -1546,6 +1690,13 @@
             [else (walk (cdr steps) (whnf ft) (append path (list name)))])))))
   (let ([col (select-branch-collapse b)])
     (cond
+      ;; ⭐⭐ 1b-iii-B1: the star arm is FIRST — before `col` and `keyless?` —
+      ;; because the star REMOVES the label the head would have contributed, and
+      ;; both pre-classifiers read `(car (reverse b))`, which for a star-bearing
+      ;; branch is the star (or worse, a caret AFTER a star — round 1's abort).
+      ;; SAME POSITION as the reduction twin's arm, by construction.
+      [(ormap select-star-step? b)
+       (star-branch-entries ctx tm b path seen sort)]
       [col
        (walk-to-leaf
         (lambda (ft)
