@@ -8561,7 +8561,7 @@ landed the KIND with a guided not-yet, P4c-4c landed the semantics):**
 |---|---|---|
 | **1b-i** ✅ `226844f1` | recipe corrected + battery parked. **Measured: 59 live dispatch sites · 35 in the 13 named functions · 2 deliberately-outside-and-undocumented (`select-step-name`/`select-step-cont`, the vocabulary's only SILENT trapdoors) · 8 genuinely OMITTED** — and FOUR of the eight are ω functions `(@bcast step)` itself introduced, so the "met all thirteen" boast is struck: an enumeration cannot be validated by the member it was written for. ⚠ My first attribution pass over-counted ~3× (41 vs 8) by matching only column-0 `define`; six recipe entries are themselves nested | +0 live (deliberate) · battery 476 → 476 |
 | **1b-ii** ✅ `dbb9ec77` | `(@star cont)` joins the closed union; the two trapdoors DECIDED (`select-step-name` → #f explicitly, `select-step-cont` → #f deliberately — the star's cont is not a CARET cont); [Q_U43](#q-u43)'s pre-check. ⭐ **The failing test caught my Q_U43 arm in the wrong place** — it went in the head `case`, which dispatches on `(car b)` while a star is almost always LAST, so the branch reported `'(database)`: a key the star had DELETED. Moved to an `ormap` pre-check. ⚠ typing/reduction NOT armed — a refusing arm would be replaced by iii/iv's real one (ban-dual-paths) | +5 live · 476 → **481** |
-| **1b-iii** | **VECTOR semantics**, typing + reduction ATOMICALLY (spec v1's `ω·ω→ω`). Collisions structurally impossible — concat is total | the vector battery |
+| **1b-iii** 🔄 mini-audit DONE, not implemented | **VECTOR semantics**, typing + reduction ATOMICALLY (spec v1's `ω·ω→ω`). Collisions structurally impossible — concat is total. **Audit finding + the algorithm: [§5.P4e-1b-iii](#p4e-1b-iii)** | the vector battery |
 | **1b-iv** | **NOMINAL semantics** + [Q_U38](#q-u38)'s typing-seated collision refusal + `*_`, together per [Q_U24](#q-u24) | nominal battery · collision refusals · `*_` |
 
 The iii/iv split is **the spec's own migration path** (§3.5 "v1: vector layers
@@ -8574,6 +8574,70 @@ without one. ⚠ The refusal channels are `bcast-carrier` (typing-errors.rkt) an
 `(return (expr-panic …))` through reduction's single `let/ec` — a raw `error`
 here is a WHOLE-FILE ABORT, which is why P4c-4c retired its predecessor rather
 than leaving it in the tree.
+
+<a id="p4e-1b-iii"></a>
+
+##### §5.P4e-1b-iii — the VECTOR semantics  (mini-audit 2026-08-11 · ⬜ not implemented)
+
+**⭐⭐ THE FINDING: THE STAR IS A BRANCH-LEVEL TRANSFORM, NOT A STEP ARM — and
+that is now the THIRD walk with the same requirement.** `branch-entries`
+(reduction.rkt) opens with branch-level pre-classifications — `col` (collapse),
+then `select-branch-keyless?` — and only then dispatches on the head step. The
+star belongs with the first group, for the same reason that moved the
+[Q_U43](#q-u43) arm at 1b-ii: **the star removes the label the preceding step
+would have contributed.** `cfg{database}*` must not yield `{:database …}` — the
+`:database` key IS the layer being deleted — but that label is decided in the
+`key`/`caret`/`sub` arm at the branch HEAD, long before a trailing star is
+looked at. A `case` arm for `'star` fires too late to unmake it. Same for the
+typing twin `select-branch-entries` (typing-core.rkt), which has the identical
+cond shape and returns `(values components failure)`.
+
+**THE ALGORITHM, one rule, checked against four cases.** *Take the deleted
+layer's CONTENTS — a Map's VALUES or a vector's ELEMENTS — and JOIN them; the
+join's sort follows the contents.* With `prefix` = the branch's steps before the
+star, the layer is `(below-value v prefix seen)` — or `v` itself when the star is
+branch-initial. ⚠ `below-value` RE-NESTS (`cfg{database}` → `{:database …}`),
+which is exactly right here: that re-nested value IS the layer being deleted.
+
+| spelling | layer | contents | join |
+|---|---|---|---|
+| `cfg{database}*` | `{:database {…}}` | one Map | `{:url …, :pool-size …}` ≡ `cfg.database` |
+| `cfg{database*}` | `{:database {…}}` | one Map | splices at the BLOCK level |
+| `m2{a b}*` | `{:a {:x 1} :b {:y 2}}` | two Maps | `{:x 1, :y 2}` |
+| `rowsv:tags*` | `@[@[1 2] @[3]]` | two vectors | `@[1 2 3]` — spec's `ω·ω→ω` |
+| `vv:{0 1}*` | `@[⟨1 2⟩ ⟨3 4⟩]` | two tuples | `⟨1 2 3 4⟩` — the ravel |
+
+**1b-iii implements ONLY the all-contents-are-vectors rows** (concat, total, no
+collision possible). Map contents are 1b-iv.
+⚠ **The condition is on the CONTENTS, not the layer** — a Map layer whose values
+are vectors joins by CONCAT and is therefore 1b-iii, not 1b-iv. "The sort follows
+the CONTENTS" is Q_U40's wording and it decides this.
+
+**SEAT MIGRATION, owner-assented 2026-08-11.** The parser cannot know the sort —
+that is the whole basis of Q_U38/Q_U43 — so `segment-select-items` must MINT the
+step unconditionally and the nominal refusal moves DOWNSTREAM to typing, keeping
+its *"(flatten) is not implemented yet"* text (nominal genuinely lands at 1b-iv).
+Consequence: several P4e-1a pins move seat and must be migrated **with the
+reasoning recorded, not silently** — including `[c{a}]*`, whose predecessor
+analysis is parser-side and needs re-checking rather than re-pointing.
+
+**Reduction's non-vector arm is an INVARIANT guard, not a user error** — typing
+runs first and carries the user-facing refusal, so a non-vector reaching the
+value layer is a compiler-invariant violation. That is the established split at
+this seat (the `bcast` arm's own comment states it).
+
+**Scoped OUT of 1b-iii, to be refused loudly**: a MID-branch star
+(`cfg{database*.x}`). Q_U40 defines the star against the preceding layer; a step
+AFTER it descends into the joined result, which is meaningful but unruled. 1b-iii
+handles a TRAILING star only.
+
+**Sites**: `segment-select-items` ×4 bands (the `$postfix-star` item + the three
+fused-identifier bands via `split-star-lexeme`) · `branch-entries` +
+`below-value` (reduction) · `select-branch-entries` + `select-below-field`
+(typing) · the vector parked tests · the migrated 1a pins.
+**Value accessors, verified**: `expr-champ-racket-champ` + `champ-entries` ·
+`expr-rrb-racket-rrb` + `rrb-size`/`rrb-get` · assembly via `entries->value`,
+whose keyed/keyless fork reads the FIRST component's key.
 
 <a id="pf"></a>
 
