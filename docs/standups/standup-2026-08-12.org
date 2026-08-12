@@ -1,0 +1,136 @@
+#+TITLE: Standup — 2026-08-12
+#+DATE: 2026-08-12
+
+* Yesterday (since 2026-07-28 standup)
+
+A very long interval — **364 commits over 15 days**, and one track dominates:
+**CIU Track 6 Path Selection** ran D4.P1 → P2 → P3 → P4a → P4b → P4c → P4d →
+P4e, i.e. from the lexical seams all the way to a working broadcast and a
+half-built flatten. Alongside it, five smaller tracks closed or advanced —
+**QTT P1–P7**, the **LET** track, **ARROW T1**, **SolveCarrier**, and the
+two-spine parser convergence — plus a **DEFERRED clearing run** (51/51c/52,
+57–59, 61, 102) and a **test-suite build-time recovery**. Suite GREEN
+throughout, now **10 143 tests / 488 files / 0 failures**. Session logs:
+~docs/tracking/standups/2026-07-28_dailies.md~ through ~2026-08-11_dailies.md~
+(six rolls).
+
+** CIU T6 — Path Selection: the surface is built, the star is half-landed
+
+*** P1 → P3: the seams, ordinals, and blocks
+
+- **P1a** (~859b529d~) the retirement batch + the marker-form diagnostic seat,
+  failing-test-first. **P1b** in three slices (~fc65ca54~ · ~1a1091d4~ ·
+  ~a6af2761~): the top-level ~<~ swallow, WS narrowing typed vars, the ~?~
+  reservation; the ~.{~ opener re-minted across **eight** sites with a
+  two-grouper agreement guard; brace adjacency + the head registry + Q_M8's
+  multi-digit ordinals.
+- **P2** (~3005170b~) ordinal access ~.N~ on the ~$postfix-index~ mechanism.
+- **P3 COMPLETE** in three slices — **P3a** (~290f77f9~) the ~expr-select~ node
+  + KEYED blocks, so ~x{…}~ finally has semantics; **P3b** (~36ce601c~) the
+  whole ~^~ family (dissolve · rename · ~^_~ · ~^-~ · ~^..~); **P3c**
+  (~1b021d57~) keyless + L4 + honest nesting.
+
+*** P4a → P4d: step kinds, the selector carrier, and the broadcast
+
+- **P4a** (~2cef148b~) step-kind TOTALITY across thirteen sites in five files.
+- **P4b** converged the selector ENCODING — ~#p(…)~ retired for *fabricating
+  ~<error>~ values at zero errors* (~f072c115~), then one representation for
+  ~#p(…)~ and ~x{…}~ with the FFI as the marshalling boundary (~389f68022~ ·
+  ~2e3fc14e~), then the ~(subject kind × sort)~ table, whose verify found a
+  **live capability bypass** (~7ba7bdad~).
+- **P4c** landed the broadcast ~:~ end to end: the mint + reader post-pass
+  binder unwrap (~b1399016~), Q_U16's loud-refusal hardening (~8c4faee2~), the
+  owner ruling to **INVERT THE DEFAULT** which erased all seven regressions
+  (~68cdaae7~), the **sixth step kind ~(@bcast step)~** across all thirteen
+  sites (~3b998aa8~), then ~6b22515d~ / ~51e260ab~ / ~ae26f540~ — a broadcast
+  goes end to end, **EVALUATES** (PVec ω value semantics, L1 fusion falls out),
+  and becomes reachable with the enable-set retired.
+- **P4d** in eight slices (~00e52c42~ → ~44da4627~): the keyword-row and Map
+  carriers, the HET tuple carrier, PVec-of-UNION by keys-intersection, carrier
+  advice that stops lying and starts FUSING, a CLOSED schema as the row it
+  denotes, per-carrier refusals, three-valued broadcast diagnostics, and a paren
+  goal keeping its implicit solve under a postfix access.
+
+*** P4e — the ~*~ (flatten) family: three reverts, a census, and a full ruling set
+
+The hardest stretch of the interval, and the one still open.
+
+- The **star MINT was reverted** (~d0ac2a58~) — count-CHANGING at the reader,
+  and the reader is not the selection surface. The owner then ruled that attempt
+  3 must open from a **measured map**: the **star-surface census**
+  (~docs/research/2026-08-09_STAR_SURFACE_CENSUS.md~, ~1.39M tokens, 38
+  constraints, 12 approaches). Its two biggest finds were **not star defects** —
+  the abort seam (fixed, ~41458174~) and a bare ~*~ being a legal irrefutable
+  PATTERN that silently deletes later ~match~ arms.
+- **P4e-0** slice A shipped the ~postfix-star~ **token type** (~e7a49228~) after
+  three adversarial verifies; slice B (the tokenizer repair) was built, verified
+  and **reverted** — DEFERRED 105.
+- **P4e-1a COMPLETE** in three slices (~ff9b7d81~ · ~dc458109~ · ~9cac0099~):
+  the arrival matrix generator, the Tier-O sentinel arms, and the CONSUMER.
+  ~xs:{a}*~ / ~c{a}*~ now reach a guided not-yet message. Attempt 1 of the last
+  slice was reverted — **Q_U37**, the star's refusal is decided IN TERRITORY.
+- **P4e-1b**: the semantics are now **fully ruled** — Q_U38 (collision REFUSED,
+  gate moves to typing) · Q_U39 · **Q_U40 the star attaches OUTER** · Q_U41 ·
+  Q_U42 (same-key vectors concat) · Q_U43 · **Q_U44** (canonical key order, with
+  ~mm{zz* aa* mm*}*~ recovering written order). Slices **1b-i** (~226844f1~) and
+  **1b-ii** (~dbb9ec77~) shipped; **1b-iii built and reverted TWICE**.
+
+** QTT P1–P7 — multiplicity checking got real
+
+Seven commits in one day (~966226cf~ → ~63dea0b6~): eliminator branches **JOIN,
+they do not ADD** (~mult-join~ was the missing alternation operator); pattern
+matching is multiplicity-checked; linear types are linear **per path** (owner
+ruling: option 3); the message says what actually went wrong; eight skipped
+nodes armed; ~contains-unsupported-qtt?~ **deleted** rather than kept as
+belt-and-suspenders; the Church-fold agreement hole closed (a real leak AND a
+double-free had been type-checking clean); and ω-scaling for repeatedly-applied
+arguments across nine nodes.
+
+** LET, ARROW T1, SolveCarrier, and the two-spine convergence
+
+- **LET P0–P4** (~0effba9c~ → ~feb79740~) plus top-level ~let~ (~aea73811~):
+  the 13-raise whole-file-abort class closed, sibling chains as one scope,
+  aligned blocks with strict column discipline, fused ~var:Type~ binders and
+  multi-line values. Discharges issue #21.
+- **ARROW T1** (~5616e3c7~ · ~70062522~ · ~004c025d~): ~->~ glued between
+  identifier characters is part of the name (~int->str~), with a guided error
+  for the half-glued spelling.
+- **SolveCarrier P1–P2** (~b2c4366a~ · ~b5b641b9~): ~solve~/~explain~ return
+  PVec; ~let x := (goal …)~ carries the implicit solve. P1's adversarial verify
+  found a **live ~.pnet~ hash-persistence defect the census missed**.
+- **The two-spine parser question, answered by measurement** (~0ae2ec86~ →
+  ~52e99e1f~): a spine census, then raw-datum mode taking agreement from
+  **29% → 82% → 98%**, with the residual settled at 4 under process isolation —
+  half of the original residual was pollution.
+
+** Infrastructure, DEFERRED, and one process artifact
+
+- **Build time**: parallel + staged ~raco make~ (~d8f0389a~) — warm precompile
+  **34.7s → 1.2s**, cold driver+491 tests 147s → 63s, plus a latent subprocess
+  **deadlock** fixed on the way.
+- **DEFERRED clearing**: 51/51c/52 (srcloc-preserving preparse; the POL.8
+  parenless-clause limit LIFTED), 57, 58 (the origin index — cons-cell identity
+  was already an exact provenance marker), 59, 61, 102. Plus the numbering
+  collision materializing on merge (~07cddd16~) — which is what produced the
+  owner's **monotonic-numbering ruling**.
+- ~tools/scratch-run.sh~'s DEFAULT invocation was **broken** (~990db79e~) and
+  three agents hand-rolled a bypass rather than report it — the antecedent of
+  the August 8 orphan incident.
+- **The Relay-Note protocol is written down** (~c2182b66~): two destinations
+  (fresh session *or* rewound turn) and four obligations, including bringing
+  dailies, memories and design docs current FIRST.
+
+* Today
+
+- **CIU T6 D4.P4e-1b slice 1b-iii, ATTEMPT 3** — resuming from the parked
+  attempt-2 patch, whose four round-1 fixes all held. Four fixes: the
+  ~$postfix-star~ parser arm must decide its BRANCH POSITION rather than always
+  re-basing onto the subject; sort keyed-layer contents on the keyword NAME with
+  ~symbol<?~; split ~star-not-yet~ into distinct failure kinds (mid-branch ·
+  LEAF, which is PERMANENT · nominal); and a battery key set that separates
+  ~symbol<?~ from struct-display order.
+- Then **1b-iv** (nominal semantics + Q_U38's typing-seated collision refusal +
+  ~*_~), the closer-adjacent ~*_~ mint slice, **P4e-2** (the ~.*~ retirement +
+  ravel), then PF → P5 → PX → P6 → X.close (PIR-gated).
+
+* Conversations
