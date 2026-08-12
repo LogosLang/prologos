@@ -2022,9 +2022,25 @@
           ;; ⭐ 1b-iii-C2: the depth-≥2 shield is GONE here too — a deep trailing star
           ;; no longer reaches this function; the join happens at `below-value`'s
           ;; star-TAIL arm. What remains is the remainder-EMPTY case plus the
-          ;; invariant guards. The ORDINAL gap's refusal is typing's to render;
-          ;; reaching the value layer with that shape is an invariant violation.
-          
+          ;; invariant guards.
+          ;; ⚠⚠ ROUND 2, F3(a) — THIS ARM WAS A COMMENT. The line above used to end
+          ;; *"The ORDINAL gap's refusal is typing's to render; reaching the value
+          ;; layer with that shape is an invariant violation"* — an invariant
+          ;; ASSERTED IN PROSE with nothing enforcing it, sitting on the blank line
+          ;; C2's removed shield had occupied. That is `pipeline.md` § "Exhaustive
+          ;; Walkers" red flag #1 verbatim, and it is why the next reader stops
+          ;; looking. Round 1's fix hoisted `select-step-makes-no-layer?` for
+          ;; exactly this and reached BOTH TYPING seats and NEITHER reduction one —
+          ;; round 1's own defect class (a twin left unaudited) reproduced by round
+          ;; 1's own fix. The header six lines up forbids the excuse: reduction
+          ;; must not depend on typing having run.
+          ;; Latent today — both twins are selected by the same `select-branch-deep-star?`
+          ;; pre-check, so anything reaching here is refused by typing first — but
+          ;; the NEXT shield removal is precisely how round 1's defect #3 became
+          ;; reachable, and its sibling twelve lines away already panics on this
+          ;; same condition. Two seats, one policy.
+          [(and (pair? prefix) (select-step-makes-no-layer? (car (reverse prefix))))
+           (oops "an ordinal step contributes no layer to delete")]
           [else
            ;; ⭐ 1b-iii-C1: the join is SHARED (`star-join-value`, module level).
            ;; THIS caller is the remainder-EMPTY one — depth ≤ 1 — so it wraps the
@@ -2196,7 +2212,14 @@
         ;; one reaches HERE typing did not run, which is an invariant violation.
         [(select-steps-star-tail? steps)
          (let ([sn (car steps)] [star (cadr steps)])
-           (if (memq (select-step-kind sn) '(ord-step ord-branch))
+           ;; ⚠ ROUND 2, F3(b): was a HAND-COPIED `(memq (select-step-kind sn)
+           ;; '(ord-step ord-branch))`. Set-equivalent, so this is drift, not
+           ;; behaviour — but Q_U46's ordinal gap is scheduled to CLOSE, and a
+           ;; second copy is how widening moves one twin and leaves the other.
+           ;; This seat's own pre-check comment states the rule ("a second
+           ;; hand-written copy is the drift this seat has already paid a
+           ;; whole-file abort for"); the copy sat eleven lines under it.
+           (if (select-step-makes-no-layer? sn)
                (return (expr-panic (expr-string
                  "select: `*` — an ordinal step contributes no layer to delete (typing carries the user-facing refusal)")))
                (star-join-value (below-value v (list sn) seen) star

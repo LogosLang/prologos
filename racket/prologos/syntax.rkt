@@ -1030,11 +1030,24 @@
 ;; either. Measured: `s7{a^.{b.c*} b}` and `s7{b a^.{b.c*}}` returned DIFFERENT
 ;; values and DIFFERENT types at ZERO errors, i.e. the answer depended on the
 ;; order the branches were written.
+;; ⚠ ROUND 2, F4 — AND THE NAME USED TO OVERCLAIM. This said "ANYWHERE" while
+;; recursing into `(@sub …)` ONLY. The step vocabulary is a CLOSED union of seven
+;; kinds and exactly TWO carry a nestable payload — `@sub` and `@bcast` — so the
+;; gap was total and nameable: a star inside `xs:{…}` was invisible to it exactly
+;; as one inside `.{…}` had been. ω-TRANSPARENCY is a written invariant of this
+;; predicate's own [leaf] family, and all four siblings (`select-step-name`,
+;; `select-step-cont`, `select-branch-collapse`, `select-branch-keyless?`) unwrap
+;; through `select-bcast-inner` first; the new predicate joined the family
+;; without it. Unwrapping is the two-line repair, and it means "ANYWHERE" is now
+;; true rather than aspirational.
 (define (select-branch-has-star?/deep b)
-  (ormap (lambda (s)
-           (or (select-star-step? s)
-               (and (select-sub-step? s)
-                    (ormap select-branch-has-star?/deep (cdr s)))))
+  (ormap (lambda (s0)
+           (let ([s (if (eq? (select-step-kind s0) 'bcast)
+                        (select-bcast-inner s0)
+                        s0)])
+             (or (select-star-step? s)
+                 (and (select-sub-step? s)
+                      (ormap select-branch-has-star?/deep (cdr s))))))
          b))
 
 (define (select-steps-star-tail? steps)
