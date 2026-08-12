@@ -7114,6 +7114,99 @@
 ;;   ;; attempt-3 audit, finding A2, and the `'()` pin above.
 ;;   )
 
+;; ---- 1b-iii-B: THE ARRIVAL POSITIONS ---------------------------------------
+;;
+;; ⭐⭐ THE PIN NOTHING HAD. Round 2 of attempt 2 was reverted because the
+;; `$postfix-star` arm called `(closed-acc)` unconditionally, so a postfix star
+;; arriving INSIDE a block was re-based onto the SUBJECT — `vh{0.{0}*}` returned
+;; `concat(vh)` at ZERO errors. D4 recorded ONE continuation shape. The
+;; attempt-3 audit measured SIX, and all seven spellings below were re-measured
+;; on the main thread at `7fd25f35`: every one reaches the SAME arm
+;; (`parser.rkt`'s `$postfix-star`), returning that arm's exact text
+;; ("the preceding step, flattened"). So the arm is the single seat, and the only
+;; question is what it does with `cur`.
+;;
+;; ⭐ THE POSITION RULE IS DERIVED, NOT TRANSPLANTED [audit A1]. The reader mints
+;; `postfix-star` only for a `*` byte-adjacent to a preceding token in
+;; `group-closer-types` = '(rbracket rparen rbrace) — and a block's own `{` is an
+;; OPENER. So a bare `$postfix-star` can NEVER be the first item of a block or
+;; sub-block payload, and therefore:
+;;
+;;     cur = #f      ⇔  the outer `$select-path` carrier  ⇔  operate on the SUBJECT
+;;     cur non-#f    ⇔  in-block                          ⇔  CONS onto the branch
+;;
+;; ⚠ A fix keyed on `cur-subbed?` instead covers exactly ONE of the six (B), which
+;; is why "respect `cur` like the siblings" was the wrong instruction: two
+;; siblings are CONTINUATION arms and respect `cur`, while `star-sym?` correctly
+;; does not (a bare name always starts a branch, exactly like its neighbour
+;; `plain-key?`). This arm is the only one reachable in BOTH positions.
+;;
+;; PARKED: every spelling refuses at HEAD, so these fail for the right reason.
+;;
+;; (test-case "P4e-1b [1b-iii-B]: a postfix star operates on its BRANCH in-block, and on the SUBJECT only as the outer carrier"
+;;   (define C "ns w1\ndef cfg := {:database {:url \\"u\\" :host \\"h\\"} :version \\"1.0.0\\"}\n")
+;;   (define V "ns w2\ndef vh := @[@[@[1 2]] @[@[3]]]\n")
+;;   (define M "ns w3\ndef m := {:k {:a 1}}\n")
+;;   ;; (A) BRANCH-INITIAL — the outer carrier. `cur` is #f, the star's operand IS
+;;   ;;     the subject, and `(closed-acc)` is right here and ONLY here.
+;;   (check-true (p4e1-has? (string-append C "cfg{database}*") #rx":url|:host")
+;;               "A: the outer carrier flattens the SUBJECT's selection")
+;;   ;; (B) after a `.{…}` sub-block — `cur` set, `cur-subbed?` = #t.
+;;   ;;     ⭐ THE ROUND-2 DEFECT. It must flatten the SUB-BLOCK, not `vh`.
+;;   (check-false (p4e1-has? (string-append V "vh{0.{0}*}") #rx"@\\[@\\[1 2\\] @\\[3\\]\\]")
+;;                "B: `vh{0.{0}*}` must NOT re-base onto the subject — that is concat(vh)")
+;;   ;; (C) after an ORDINAL step — `cur` set, `cur-subbed?` = #f. In NO record
+;;   ;;     before the attempt-3 audit; a `cur-subbed?`-keyed fix misses it.
+;;   (check-true (p4e1-has? (string-append C "cfg{database[0]*}") #rx".")
+;;               "C: after an ordinal step the star still belongs to its branch")
+;;   ;; (D) after an in-block ω sub-block.
+;;   (check-true (p4e1-has? (string-append M "m{k:{a}*}") #rx".")
+;;               "D: after an in-block ω the star belongs to its branch")
+;;   ;; (E) after a `^`-dissolve plus sub-block.
+;;   (check-true (p4e1-has? (string-append C "cfg{database^.{host}*}") #rx".")
+;;               "E: a caret earlier in the branch does not move the star's operand")
+;;   ;; (F) ONE LEVEL DOWN, inside a `.{…}`, via the recursive call (`sub?` = #t).
+;;   (check-true (p4e1-has? (string-append C "cfg{database.{host[0]*}}") #rx".")
+;;               "F: the recursive call is the same seat with the same rule")
+;;   ;; (G) mid-payload, with a SIBLING branch after the star. The star must close
+;;   ;;     ITS branch and leave `version` a separate one — the `m{tags* name}`
+;;   ;;     shape that round 1 got wrong in the other direction.
+;;   (check-true (p4e1-has? (string-append C "cfg{database.{host}* version}") #rx".")
+;;               "G: a sibling AFTER the star is still its own branch"))
+;;
+;; ⚠ (H) IS AN UNDECIDED ARGUMENT, NOT A PIN — recorded so it is decided rather
+;; than defaulted. All four star arms pass `cur-subbed?` = #f, which RESETS the
+;; sub-block-terminal seal, so `cfg{database.{host}*.{q}}` would become legal
+;; while `cfg{database.{host}.{q}}` stays refused. The star arm also sits ABOVE
+;; all three `cur-subbed?` guards, so it is the one step gated by PLACEMENT
+;; rather than by decision. Measured at HEAD: the star arm wins that race today.
+;;
+;; ---- 1b-iii-B: THE TRIPWIRE at the four raise sites -------------------------
+;;
+;; ⚠⚠ THE AUDIT ARGUED THIS UNREACHABLE, AND AN ARGUED-UNREACHABLE PRECONDITION
+;; LIVING IN A DOCUMENT IS THE ARTIFACT CLASS THAT CAUSED BOTH REVERTS. The four
+;; `select-step-kind-unhandled` sites (typing-core `select-below-field` ×2 and
+;; the reduction twins) are plain `error`, i.e. a WHOLE-FILE ABORT — and reaching
+;; them needs a branch that both STARTS with a star and CONTINUES, which the
+;; position rule above proves a user cannot spell. That argument may be right and
+;; it must not be the only thing standing between us and an abort: pin it.
+;;
+;; ⚠ THE CALL SHAPE IS NOT WRITTEN HERE ON PURPOSE. The obvious sketch —
+;; `(tc:select-project <a type> (list (list (make-select-star 'flatten) 'host)) 'block)`
+;; — names an argument I have NOT verified (`select-project`'s subject/type
+;; parameter, and whether a hand-built branch reaches `select-below-field` at all
+;; from that entry point). Shipping a plausible-looking call that a later reader
+;; uncomments and trusts is the hedged-instrument failure this file has already
+;; paid for twice (1a-iii's vacuous family-2 alternation; 1b-ii's documentary
+;; `select-step-cont` pin). WHAT THE PIN OWES, when 1b-iii-B writes it:
+;;   · derive `select-project`'s real signature and a subject type that reaches
+;;     `select-below-field` with a multi-step branch;
+;;   · assert `check-not-exn` — the failure mode is a RAISE, so an assertion on
+;;     the returned message would pass vacuously if the call never got there;
+;;   · MUTATION-TEST it by removing the star arm and confirming it raises,
+;;     otherwise it does not discriminate;
+;;   · and pin the reduction twin the same way — both twins have the same [else].
+
 ;; ---- 1b-iv: the [Q_U40] LAW *and its ω qualifier* — the qualifier is the half
 ;;      that a test must carry, because the law alone reads as unconditional.
 ;;
