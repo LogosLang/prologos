@@ -52,6 +52,24 @@
          ;; can only be pinned by direct call (the `select-reduce` /
          ;; `uses-bvar0?` precedent). Zero behavioural change from exporting.
          select-row-of select-project-field
+         ;; ⭐ D4.P4e-1b slice 1b-iii-C1: the BELOW-walk, same test-seam argument
+         ;; one layer down. Q_U47's landing EMERGES from which caller receives the
+         ;; bare join, so the star-TAIL arm's whole contract is "returns the join
+         ;; BARE, the caller re-nests" — and that contract is invisible through
+         ;; `select-project`, which only ever shows the CALLER's assembled row.
+         ;; C1 lands the arm INERT (the branch-level pre-check is still total and
+         ;; both shields are up), so a direct call is the ONLY way to reach it —
+         ;; exactly the position b-ii-1's `'path` column was in. Zero behavioural
+         ;; change from exporting.
+         select-below-field
+         ;; …and the SHARED JOIN itself, which is C1's substance. Exported so it
+         ;; can be pinned SYMMETRICALLY against its reduction twin
+         ;; (`star-join-value`) — the reduction side has no other seam, because
+         ;; both its walks are nested inside `select-reduce`'s ~470-line scope.
+         ;; Verifying one twin and mutation-testing the other is not the same
+         ;; standard, and this is the seat where a twin divergence already cost a
+         ;; whole-file abort.
+         star-join-type
          (struct-out select-uniform) (struct-out select-view)
          (struct-out select-union)
          ;; QTT P2 (2026-07-30): the reduce-arm binder derivation, shared with
@@ -1590,11 +1608,45 @@
                          (select-below-field ctx (whnf tm) prefix path seen sort))])
          (if lf
              (values #f lf)
-             (let ([l (whnf layer)])
-               ;; contents = the deleted layer's component TYPES, in the order
-               ;; the join uses (canonical for a keyword row — `make-record`
-               ;; already canonicalizes, so field order IS `symbol<?` order;
-               ;; index order for a tuple).
+             ;; ⭐ 1b-iii-C1: the join is SHARED (`star-join-type`, module level).
+             ;; THIS caller is the remainder-EMPTY one — depth ≤ 1 — so it wraps
+             ;; the bare join KEYLESS, which is Q_U47's empty-remainder case and
+             ;; the behaviour that shipped at B2. The other two callers wrap
+             ;; differently; see the helper's own comment.
+             (let-values ([(ty jf) (star-join-type layer star fail-k)])
+               (if jf
+                   (values #f jf)
+                   (values (list (cons #f (record-field ty 'present))) #f)))))])))
+
+;; ⭐⭐ D4.P4e-1b slice 1b-iii-C1 — THE SHARED JOIN, hoisted to module level and
+;; exported. Given the LAYER a star deletes and the star STEP, produce the
+;; JOINED TYPE — **BARE**, with no component wrapper.
+;;
+;; ⚠⚠ THE BARE RETURN IS THE WHOLE POINT, and it is [Q_U47] made structural. The
+;; LANDING — keyed under a surviving label, or keyless at the level — is the
+;; CALLER's decision, because each caller IS the branch remainder's own arm:
+;;   · `star-branch-entries`     remainder EMPTY      → `(cons #f joined)` keyless
+;;   · `select-below-field`      a surviving KEY      → returns it BARE; the key
+;;                                                      arm above re-nests it
+;;   · `select-below-components` a DISSOLVED survivor → `(cons #f joined)`, spliced
+;; A helper that picked a wrapper here would force ONE landing on all three, and
+;; the wrapper it would naturally pick is the keyless one — which assembles into
+;; the **B-tuple Q_U46 rejected**. That is not a hypothetical: it is live and
+;; legal today as `cfg{db.{hosts*}}` → `{:db @[@[1 2]]} : {:db ⟨[PVec Int]⟩}`.
+;;
+;; `fail-k` is `(kind layer) → (values #f failure)`, supplied by the caller so a
+;; failure carries the CALLER's path and branch label rather than this helper's.
+;; ⚠ Its reduction twin is `star-join-value` (reduction.rkt), and the two must
+;; move together — this seat has already produced one whole-file abort from a
+;; twin-order divergence, and the file says landing either alone is "not a
+;; half-measure but a REGRESSION".
+(define (star-join-type layer star fail-k)
+  (let ([l (whnf layer)])
+    ;; contents = the deleted layer's component TYPES, in the order
+    ;; the join uses (canonical for a keyword row — `make-record`
+    ;; already canonicalizes, so field order IS `symbol<?` order;
+    ;; index order for a tuple).
+    (let ()
                (define (join-contents contents)
                  (cond
                    [(null? contents) (fail-k 'star-not-yet l)]
@@ -1635,10 +1687,11 @@
                            (andmap (lambda (e) (equal? e (car es))) es)))
                     (fail-k 'star-hetero l)]
                    [else
-                    (values (list (cons #f (record-field
-                                            (expr-PVec (expr-PVec-elem-type
-                                                        (whnf (car contents))))
-                                            'present)))
+                    ;; 1b-iii-C1: BARE — the caller wraps. (Was a keyless
+                    ;; component here; see this function's header for why that
+                    ;; choice cannot live at this layer.)
+                    (values (expr-PVec (expr-PVec-elem-type
+                                        (whnf (car contents))))
                             #f)]))
                (cond
                  [(expr-Record? l)
@@ -1664,11 +1717,8 @@
                        (if (eq? (select-star-cont star) 'flatten-synth)
                            (fail-k 'star-synth-positional l)
                            ;; concat of n `[PVec T]` is `[PVec T]` — spec §3.5's
-                           ;; ω·ω→ω, `rowsv:tags*`'s type collapse.
-                           (values (list (cons #f (record-field
-                                                   (expr-PVec (expr-PVec-elem-type e))
-                                                   'present)))
-                                   #f))]
+                           ;; ω·ω→ω, `rowsv:tags*`'s type collapse. BARE (C1).
+                           (values (expr-PVec (expr-PVec-elem-type e)) #f))]
                       [(and (expr-Record? e) (eq? (expr-Record-key-domain e) 'nat))
                        ;; tuple elements: the concatenated arity is (tuple arity ×
                        ;; runtime length), which no static type carries.
@@ -1678,7 +1728,7 @@
                       [else (fail-k 'star-leaf l)]))]
                  [(expr-Map? l) (fail-k 'star-nominal l)]
                  [(expr-fvar? l) (fail-k 'star-open-row l)]
-                 [else (fail-k 'star-leaf l)]))))])))
+                 [else (fail-k 'star-leaf l)]))))
 
 (define (select-branch-entries ctx tm b path seen sort)
   (define (walk-to-leaf k)  ;; shared by collapse + keyless: k gets leaf ft

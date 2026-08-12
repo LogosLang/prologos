@@ -949,13 +949,23 @@
 ;; (spec §3.6 rule 5) · leaves ERROR (rule 4). Q_U42 makes it one RECURSIVE rule:
 ;; a shared key whose two values are vectors CONCATENATES rather than erroring.
 ;;
-;; ⚠ THE KIND IS INERT AT 1b-ii. The parser still refuses at
-;; `segment-select-items`, so nothing MINTS an `(@star …)` from any spelling —
-;; the arms below are reachable only from a hand-built step list (which is how
-;; the battery exercises them). The value/type semantics land at 1b-iii (vector)
-;; and 1b-iv (nominal). ⚠ Deliberately NOT armed here: typing-core and reduction.
-;; A refusing arm there would be REPLACED by 1b-iii/iv's real arm — dual-path
-;; scaffolding — and the star cannot reach them while the parser refuses.
+;; ⚠⚠ THE "INERT AT 1b-ii" HEADER THAT STOOD HERE WAS FALSE FROM 1b-iii-B2
+;; (`d5934397`) UNTIL 1b-iii-C1, and this is the first thing a reader grounding
+;; on the star opens. It said the parser still refuses so nothing mints an
+;; `(@star …)`; the seat migration made four sites mint one, and the flatten has
+;; been LIVE ever since. Corrected rather than deleted, because "a precondition
+;; written into a comment and then invalidated a slice later" is the exact shape
+;; that got 1b-iii reverted TWICE — its two other instances were at
+;; `select-branch-top-keys` and `select-branch-keyless?`, and this was the third.
+;;
+;; STATE AT 1b-iii-C1. The kind is LIVE: the parser mints `(@star cont)` from all
+;; four bands, and the VECTOR semantics are shipped in both twins for prefix
+;; depth ≤ 1. Depth ≥ 2 is SHIELDED in `star-branch-entries` / `star-entries`
+;; pending [Q_U47]'s landing rule — C1 has hoisted the shared join
+;; (`star-join-type` / `star-join-value`, module level in typing-core and
+;; reduction) and C2 lifts the shields onto it. Nominal contents are 1b-iv.
+;; ⚠ Whoever changes that: this comment is a PRECONDITION. Re-read it at the
+;; seat before invalidating it, and correct it in the SAME commit.
 (define (select-star-step? s) (and (pair? s) (eq? (car s) '@star)))
 (define (make-select-star cont) (list '@star cont))
 

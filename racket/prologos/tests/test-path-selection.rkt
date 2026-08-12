@@ -7473,6 +7473,71 @@
                                              (list (list 'name) (list 'a B1-STAR)) 'block #f))
                  "a star's keyless component beside keyed siblings panics — typing's L4 check owns the user-facing form"))))
 
+;; ---- 1b-iii-C1: THE SHARED JOIN, pinned SYMMETRICALLY in both twins ----
+;;
+;; C1 is a pure EXTRACTION: the join is hoisted to module level in both files
+;; (`star-join-type` / `star-join-value`) and returns the joined type/value
+;; **BARE**. Everything above is the regression proof that behaviour did not
+;; move; these two pin the NEW contract, which is BARENESS.
+;;
+;; ⚠ WHY BARENESS IS WORTH A PIN OF ITS OWN. [Q_U47]'s landing — keyed under a
+;; surviving label, keyless at the level — belongs to the CALLER, because each
+;; caller IS the branch remainder's own arm. If the join wrapped its own result
+;; it would force ONE landing on all three callers, and the wrapper it would
+;; naturally choose is the keyless one, which assembles into the **B-tuple
+;; Q_U46 rejected**. That is not hypothetical: it is live and legal today as
+;; `cfg{db.{hosts*}}` → `{:db @[@[1 2]]} : {:db ⟨[PVec Int]⟩}`. So a future
+;; re-wrap here is a silent regression to a REJECTED design, and these are what
+;; catch it.
+;;
+;; ⚠ BOTH use a TWO-CONTENT layer. A one-content layer — which is every
+;; key-terminal chain, `cfg{db.hosts*}` included — makes the concat an IDENTITY,
+;; so it cannot discriminate a broken join. That is the audit's finding and it
+;; is why the headline spelling is the weak pin.
+;;
+;; ⚠ The reduction side is pinnable AT ALL only because C1 hoisted it: both of
+;; that file's walks live inside `select-reduce`'s ~470-line scope, where the
+;; parameter `sort` also shadows Racket's `sort`. Before the hoist this twin
+;; could only have been mutation-tested while its partner was directly pinned.
+
+(define (c1-fail-k kind r) (values #f (list 'c1-fail kind)))
+
+(test-case "1b-iii-C1 typing: the shared join returns the joined type BARE — not a component"
+  (define layer (b1-row (cons 'x (b1-f B1-PVI)) (cons 'y (b1-f B1-PVI))))
+  (let-values ([(ty f) (tc:star-join-type layer B1-STAR c1-fail-k)])
+    (check-false f "two vector contents join")
+    (check-true (equal? ty B1-PVI)
+                "concat of two [PVec Int] is [PVec Int] — EXACT, the anti-vacuous form")
+    (check-false (pair? ty)
+                 "BARE: a component wrapper here forces one landing on all three callers")))
+
+(test-case "1b-iii-C1 typing: the shared join reports through the CALLER's fail-k"
+  ;; leaf contents — the caller supplies the failure constructor, so the failure
+  ;; carries the caller's path/label rather than the helper's
+  (define layer (b1-row (cons 'x (b1-f (expr-Int)))))
+  (let-values ([(ty f) (tc:star-join-type layer B1-STAR c1-fail-k)])
+    (check-false ty)
+    (check-equal? f (list 'c1-fail 'star-leaf)
+                  "the kind is the caller's to render — C1 moves no message")))
+
+(test-case "1b-iii-C1 reduction: the shared join returns the joined VALUE bare, in canonical key order"
+  (define ka  (expr-keyword 'a))
+  (define ka! (expr-keyword 'a!))
+  (define v-a  (expr-rrb (rrb-from-list (list (expr-int 11)))))
+  (define v-a! (expr-rrb (rrb-from-list (list (expr-int 22)))))
+  ;; inserted a!-first so insertion order DISAGREES with canonical order
+  (define layer (expr-champ
+                 (champ-insert
+                  (champ-insert champ-empty (equal-hash-code ka!) ka! v-a!)
+                  (equal-hash-code ka) ka v-a)))
+  (define r (star-join-value layer B1-STAR
+                             (lambda (why) (error 'c1-pin "unexpected invariant escape: ~a" why))))
+  (check-true (expr-rrb? r) "the join is a vector")
+  (check-false (pair? r)
+               "BARE: the value twin must not wrap either, or the twins diverge on shape")
+  (check-equal? (rrb-to-list (expr-rrb-racket-rrb r)) (list (expr-int 11) (expr-int 22))
+                "canonical (symbol<?) order — :a before :a!, against insertion order"))
+
 ;; ---- 1b-iv: the [Q_U40] LAW *and its ω qualifier* — the qualifier is the half
 ;;      that a test must carry, because the law alone reads as unconditional.
 ;;

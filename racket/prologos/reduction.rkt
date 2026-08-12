@@ -43,6 +43,13 @@
          "field-witness.rkt")    ;; CIU T6 F1b.5-s2: the runtime witness interpreter (below reduction; cycle-safe)
 
 (provide whnf nf nf-whnf conv conv-nf
+         ;; ⭐ D4.P4e-1b slice 1b-iii-C1: the VALUE-side shared join, exported so
+         ;; it can be pinned SYMMETRICALLY against typing-core's
+         ;; `star-join-type`. Before the C1 hoist there was no reduction seam at
+         ;; all — both walks live inside `select-reduce`'s ~470-line scope — so
+         ;; the twin could only have been mutation-tested while its partner was
+         ;; directly pinned. Same standard, both sides.
+         star-join-value
          current-nf-cache current-whnf-cache
          current-reduction-fuel current-nat-value-cache
          ;; CIU T6 F1b.5-s2: the degradation guard (exemption-list membership
@@ -1660,6 +1667,50 @@
     (and (andmap (lambda (kv) (canonical-keyword-key? (car kv))) entries)
          (map cdr (sort entries canonical-keyword-key<? #:key car)))))
 
+;; ⭐⭐ D4.P4e-1b slice 1b-iii-C1 — THE SHARED JOIN, VALUE side. The atomic twin
+;; of typing-core's `star-join-type`; the two must always move together (this
+;; file's own rule: landing either alone is "not a half-measure but a
+;; REGRESSION", and a twin-order divergence at this seat already produced one
+;; whole-file abort).
+;;
+;; Given the LAYER a star deletes and the star STEP, produce the JOINED VALUE —
+;; **BARE**, with no component wrapper. Q_U47's landing belongs to the CALLER,
+;; because each caller is the branch remainder's own arm; see the typing twin's
+;; header for the three of them and for why a wrapper chosen here would force
+;; the B-tuple Q_U46 rejected.
+;;
+;; ⚠ HOISTED TO MODULE LEVEL DELIBERATELY, for the reason the comment above
+;; `champ-values/canonical` already gives: inside `select-reduce` the parameter
+;; `sort` shadows Racket's `sort` for ~470 lines, so a join written in that scope
+;; cannot sort and cannot be unit-pinned either. Out here it can do both.
+;;
+;; `oops` is the caller's invariant-violation escape — `(why) → ⊥` through
+;; reduction's single `let/ec`. ⚠ NEVER `error`: typing carries the user-facing
+;; refusal, and a raise on this path is a WHOLE-FILE abort.
+(define (star-join-value layer star oops)
+  (let* ([l (whnf layer)]
+         [contents
+          (cond
+            [(expr-champ? l)
+             (or (champ-values/canonical (expr-champ-racket-champ l))
+                 (oops "the deleted layer's keys admit no canonical order (non-keyword keys)"))]
+            [(expr-rrb? l)
+             (let ([r (expr-rrb-racket-rrb l)])
+               (for/list ([i (in-range (rrb-size r))]) (rrb-get r i)))]
+            [else (oops "the deleted layer is a leaf — it has no contents to join")])])
+    (cond
+      [(eq? (select-star-cont star) 'flatten-synth)
+       (oops "`*_` synthesizes keys from the deleted layer's KEYS, and this join is positional")]
+      [(andmap (lambda (c) (expr-rrb? (whnf c))) contents)
+       ;; BARE (C1) — was `(list (cons #f …))` here; the wrapper moved to the
+       ;; callers so the three landings can differ.
+       (expr-rrb
+        (for/fold ([acc (rrb-from-list '())])
+                  ([c (in-list contents)])
+          (rrb-concat acc (expr-rrb-racket-rrb (whnf c)))))]
+      [else
+       (oops "non-vector contents (the nominal join is the next slice; mixed or leaf contents have no join)")])))
+
 (define (select-reduce subj-expr branches sort tier)
   ;; D4.P4b-ii-2b (the verify, M3): NO DEFAULTS. `#f` is not a neutral tier —
   ;; reduction reads it as the BLOCK tier and PANICS, so a caller that omitted
@@ -1975,27 +2026,12 @@
           [(and (pair? prefix) (pair? (cdr prefix)))
            (oops "a multi-step prefix — which layer a deep flatten deletes is not yet ruled (typing refuses this shape)")]
           [else
-           (let* ([layer (whnf (if (null? prefix) v (below-value v prefix seen)))]
-                  [contents
-                   (cond
-                     [(expr-champ? layer)
-                      (or (champ-values/canonical (expr-champ-racket-champ layer))
-                          (oops "the deleted layer's keys admit no canonical order (non-keyword keys)"))]
-                     [(expr-rrb? layer)
-                      (let ([r (expr-rrb-racket-rrb layer)])
-                        (for/list ([i (in-range (rrb-size r))]) (rrb-get r i)))]
-                     [else (oops "the deleted layer is a leaf — it has no contents to join")])])
-             (cond
-               [(eq? (select-star-cont star) 'flatten-synth)
-                (oops "`*_` synthesizes keys from the deleted layer's KEYS, and this join is positional")]
-               [(andmap (lambda (c) (expr-rrb? (whnf c))) contents)
-                (list (cons #f
-                            (expr-rrb
-                             (for/fold ([acc (rrb-from-list '())])
-                                       ([c (in-list contents)])
-                               (rrb-concat acc (expr-rrb-racket-rrb (whnf c)))))))]
-               [else
-                (oops "non-vector contents (the nominal join is the next slice; mixed or leaf contents have no join)")]))])))
+           ;; ⭐ 1b-iii-C1: the join is SHARED (`star-join-value`, module level).
+           ;; THIS caller is the remainder-EMPTY one — depth ≤ 1 — so it wraps the
+           ;; bare join KEYLESS, matching the typing twin's own caller and the
+           ;; behaviour that shipped at B2.
+           (list (cons #f (star-join-value (if (null? prefix) v (below-value v prefix seen))
+                                           star oops)))])))
     ;; ⭐ 1b-iii-B1 — the LEVEL assembly guard, the reduction mirror of typing's
     ;; star L4 check in `select-level-components`. STAR-GATED for the same
     ;; reason (starless behaviour must not move), and an invariant guard for the
