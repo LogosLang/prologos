@@ -34,7 +34,7 @@ rulings, censuses and test delta live in its own section.
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
 | **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [§5.P4c](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([inverted default](#p4c-2-inverted)) · [P4c-3](#p4c-3) ✅ `d477772c` · [P4c-4a](#p4c-4a) ✅ `f31237fd` · [P4c-4b](#p4c-4b) ✅ `6b22515d` (end to end) · **[P4c-4c](#p4c-4c-close) ✅ `ae26f540`** — broadcast is REACHABLE: PVec ω value semantics + **G2** + the preparse seam guard. ⭐ The verify caught a BLOCKING whole-file abort every gate was blind to; owner ruled the structural fix ([close](#p4c-4c-close)) · [Q_U18](#q-u18) ✅ · DEFERRED 43 ✅ · 48 RULED uniform · P4c-5 ⬜ |
 | **P4d** | **The carriers** — Map/keyword-row · het tuple · PVec-of-union · closed-schema subjects · the Q_U9 refusal's message split · corpus re-fate · **Q_U19 ✅ RULED (A)** | ✅ | [§5.P4d](#p4d) · slices **0 ✅ 1 ✅ 2 ✅ 3 ✅ 4a ✅ 4a' ✅ 4b ✅ 4c ✅ 4d-1 ✅ 4d-2 ✅ 5 ✅ 6 ✅** — broadcast is LIVE over PVec · Map · keyword-row · het tuple · union · closed schema. ⭐ The CLOSE's own audit found a whole-file abort in slice 3's code (slice 5) and Q1 re-opened as a live defect (slice 6). All THREE owner questions discharged: Q1 ruled+implemented · [Q2](#q-u22) answered (fix → DEFERRED 88) · Q3 answered (broadcast → 58 re-scoped; contract → 89) |
-| **P4e** | **The `*` family · disclose `<`/`:<` · branch-initial `:`** — ⭐ **`*` is SORT-GENERIC** (deletes the layer the preceding step created: `:diags*` mapcat, `database*` splat). `.*` retires as row-splat and rebinds to **ravel**; `*_` adds provenance keys; branch-initial `:` admits the **ordinal² transpose** | 🔄 | [§5.P4e](#p4e) · RE-SCOPED 2026-08-08 ([Q_U23](#q-u23)–[Q_U29](#q-u29)) · ⛔ attempt 1 REVERTED `d0ac2a58` ([DEFERRED 101](DEFERRED.md)); attempt 3 opens from [the census](#star-census) ([Q_U30](#q-u30)/[Q_U31](#q-u31), prereq [102](DEFERRED.md) ✅ `41458174`) · PREP ✅ `f63612e7`+`ae67419f` ([Q_U32](#q-u32)) · **slice A SHIPPED** `e7a49228`, **slice B REVERTED** `0e007864`: [§5.P4e-0-a3](#p4e-0-a3) · ⭐ **P4e-1a ✅ COMPLETE** `9cac0099` — the mint has its CONSUMER. [Q_U36](#q-u36) positive-list fuse + [Q_U37](#q-u37) territory-scoped refusal; 3 slices (attempt 1 of the last REVERTED); suite 10143/488/0, battery 476: [§5.P4e-1a](#p4e-1a) · **P4e-1b 🔄 mini-audit DONE** (`wf_4b91ca25-73a`) — [Q_U38](#q-u38) collision REFUSED (conservative on the `'dyn` tail; the gate moves to typing) + [Q_U39](#q-u39) closer-adjacent `*_` mint SPLIT OUT; ω placement OPEN: [§5.P4e-1b](#p4e-1b) |
+| **P4e** | **The `*` family · disclose `<`/`:<` · branch-initial `:`** — ⭐ **`*` is SORT-GENERIC** (deletes the layer the preceding step created: `:diags*` mapcat, `database*` splat). `.*` retires as row-splat and rebinds to **ravel**; `*_` adds provenance keys; branch-initial `:` admits the **ordinal² transpose** | 🔄 | [§5.P4e](#p4e) · RE-SCOPED 2026-08-08 ([Q_U23](#q-u23)–[Q_U29](#q-u29)) · ⛔ attempt 1 REVERTED `d0ac2a58` ([DEFERRED 101](DEFERRED.md)); attempt 3 opens from [the census](#star-census) ([Q_U30](#q-u30)/[Q_U31](#q-u31), prereq [102](DEFERRED.md) ✅ `41458174`) · PREP ✅ `f63612e7`+`ae67419f` ([Q_U32](#q-u32)) · **slice A SHIPPED** `e7a49228`, **slice B REVERTED** `0e007864`: [§5.P4e-0-a3](#p4e-0-a3) · ⭐ **P4e-1a ✅ COMPLETE** `9cac0099` — the mint has its CONSUMER. [Q_U36](#q-u36) positive-list fuse + [Q_U37](#q-u37) territory-scoped refusal; 3 slices (attempt 1 of the last REVERTED); suite 10143/488/0, battery 476: [§5.P4e-1a](#p4e-1a) · **P4e-1b 🔄 SEMANTICS FULLY RULED, not implemented** (audit `wf_4b91ca25-73a`) — [Q_U38](#q-u38) collision REFUSED (conservative on the `'dyn` tail; gate moves to typing) · [Q_U39](#q-u39) closer-adjacent `*_` mint SPLIT OUT · ⭐⭐ [Q_U40](#q-u40) the star attaches **OUTER**, one rule over both axes, and it yields the law `x{p₁* … pₙ*} ≡ x{p₁ … pₙ}*` · [Q_U41](#q-u41) `*_` is NOMINAL-ONLY: [§5.P4e-1b](#p4e-1b) |
 | **P4c-5** | **The `.*name` retirement + FULL residue disposal** — the last P4c residue, sequenced AFTER P4e | ⬜ | [§5.P4c-5](#p4c-5) · ⚠ **row ADDED at the P4d close 2026-08-08** — previously visible only as a `P4c-5 ⬜` fragment inside P4c's Notes cell |
 | **PF** | **Path first-classness** (substrate; **P5's prerequisite**) — ⭐ **Q_U17 RULED B2**: a Path segment is a first-class `Step` value. Reify the closed six-kind union as a `data Step` ADT on the `Datum` pattern; `Path` stays GROUND; `segments : Path -> [List Step]`. Repairs the dead `path-segments` in the SAME change | ⬜ | [§5.PF](#pf) · [Q_U17](#q-u17) · panel `wf_68178bd3-eea` |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery · ⚠ B3 needs [PF](#pf) |
@@ -2316,7 +2316,131 @@ items of the hold-point, ruled before P4a opened:
   was strictly HIGHER (`*` is a live first-class operator with ~76 spaced
   arithmetic sites). The overstatement made `*_` look more expensive than it is,
   at the exact moment `*_` was the remedy under discussion.
-  **Next free Q-label: U40.**
+
+- <a id="q-u40"></a>**⭐⭐ Q_U40 — THE STAR ATTACHES *OUTER*: IT DELETES THE LAYER
+  THE PRECEDING STEP CONTRIBUTED [owner, 2026-08-11 — "OUTER seems to be looking
+  like the right shape"].** The rule, in one sentence:
+  > **`*` deletes the container layer contributed by the preceding step, joining
+  > its contents into the enclosing level. The join's SORT follows the CONTENTS**:
+  > vectors **concatenate**; Maps **join keywise** ([Q_U38](#q-u38) refuses
+  > collisions, [Q_U41](#q-u41)'s `*_` is the remedy); keyless/ordinal components
+  > **concatenate in written order** (spec §3.6 rule 5); leaves **error** (rule 4).
+
+  **ONE rule across BOTH axes** — block and broadcast, nominal and vector. That
+  uniformity is the ruling's whole case: it is [Q_U23](#q-u23)'s "sort-generic"
+  read literally, and it is the only reading under which spec **§8 Q4**'s
+  affirmative answer does work on both axes.
+  **THE WORKED BATTERY** (subjects measured at HEAD; `rowsv := @[{:tags @[1 2]}
+  {:tags @[3]}]`, `rowsm := @[{:cfg {:a 1}} {:cfg {:b 2}}]`,
+  `m := {:a {:x 1} :b {:y 2}}`):
+  · `rowsv:tags*` → `@[1 2 3]` — contents are vectors, concat. **The spec's own
+    `ω·ω→ω` and its normative example** (`build.modules:diags*:msg`, §10.4).
+  · `rowsv:{tags}*` → **refused** — every element contributes `:tags`; the
+    remedy is the DESCENT spelling, not `*_` (see Q_U41).
+  · `rowsm:cfg*` → `{:a 1, :b 2}` — Maps, distinct keys, keywise join.
+  · `rowsm:{cfg}*` → `{:cfg {:a 1, :b 2}}` — same key, both Map-shaped, spec
+    §3.6 rule 2 recursing.
+  · `m{a b}*` → `{:x 1, :y 2}` · `cfg{database}*` ≡ `cfg.database` (n=1 is an
+    identity, exactly as `{p^}` is an honest 1-tuple at n=1 per §3.3).
+  · `vv:{0 1}*` → `⟨1 2 3 4⟩` — **a matrix RAVEL falls out with no special
+    case**; ordinal/keyless layers concatenate and so **can never collide**, so
+    Q_U38's refusal structurally never fires on them.
+  **⭐ THE EQUATIONAL LAW IT PRODUCES**, in the family of §3.6's
+  `{p:a p:b} ⟶ p:{a b}`:
+  > **`x{p₁* … pₙ*} ≡ x{p₁ … pₙ}*`** — distributing the star over every branch
+  > equals starring the result.
+
+  The BRANCH form is nonetheless **strictly more expressive**, because the stars
+  need not be uniform: `m{a* b}` → `{:x 1, :b {:y 2}}` (splice `a`, KEEP `b`'s
+  key), which the result form cannot express. Selective splice vs total splice;
+  the law says the total form is the all-branches special case.
+  **REJECTED, each with its reason:**
+  · **INNER** (the star joins the innermost step) — on the broadcast axis it
+    degenerates to a **NO-OP**: `rowsm:cfg*` ≡ `rowsm:cfg`. That is precisely the
+    "identity wherever the head key survives" defect [Q_U23](#q-u23) diagnosed
+    when it retired `.*`; shipping a new operator whose broadcast behaviour is
+    silently nothing repeats the thing that ruling fixed.
+  · **SPELLING-DETERMINED** (fused ⇒ inner, closer ⇒ outer) — free structurally,
+    but two near-identical spellings would mean materially different things with
+    no visual cue.
+  · **BLOCK-GENERIC / VECTOR-ONLY-UNDER-BROADCAST** — refuses 4 of 7 battery
+    cases including the ordinal ravel, and once the rule above is stated as ONE
+    sentence the "unruled" framing stops being accurate. Conservatism buying
+    nothing.
+  **⚠ SELF-CORRECTION, and it was the objection that had been blocking OUTER**: I
+  argued that OUTER's cross-element join is the "coincidental" merge §3.6 forbids.
+  **Mis-aimed.** Ruling B governs merging *sibling branches within a block* — its
+  witness test is about ZIPPING TWO BRANCHES. A star-induced layer-delete is a
+  **fold over ONE container**, which is the explicit act §3.1 sanctions
+  (*"deleting a layer is only ever the explicit act `*`"*). The spec never
+  subordinates the star's join to Ruling B's witness requirement; inheriting its
+  COLLISION discipline (what Q_U38 did) is a separate and deliberate choice.
+  **IMPLEMENTATION DIVIDEND**: OUTER's representation is **the one already
+  shipped** — the closer-adjacent fuse emits `($select-path <preceding step>
+  $postfix-star)`, a wrapper around the whole preceding step, which IS the OUTER
+  shape. Only the fused-identifier band (`:tags*`, `.a*`) needs normalizing
+  OUTWARD, lifting the star from inside the lexeme to the wrapper. INNER would
+  have required normalizing the other way.
+  **⚠ OPEN, and 1b must settle it**: same output key with BOTH values VECTORS
+  (the `rowsv:{tags}*` shape). §3.6 rule 2 needs Maps, rule 3 needs two branches
+  with identical spines — so it falls to rule 4's error. Whether same-key vector
+  values should instead CONCATENATE is a choice the star's join has to make and
+  Ruling B does not cover. Refusing is monotone; decide it explicitly rather than
+  inheriting rule 4 by accident.
+  **⚠ [DEFERRED 105](DEFERRED.md) — the REPRESENTATION half of its blocker is
+  DISCHARGED, the COUNT half is NOT.** 105 records that R4 "cannot land until the
+  star's DATUM REPRESENTATION is decided — a wrapper sentinel, or a widened
+  `$postfix-index` arity." Q_U40 decides it: the wrapper. But 105's actual defect
+  was that restoring the carrier TOKEN makes the star a separate datum ITEM, and
+  the fuse that now consumes that item runs inside preparse — so whether the
+  count-gated form validators observe the pre-fuse or post-fuse datum is
+  **unmeasured**. Do NOT reopen R4 on the strength of this ruling alone.
+
+- <a id="q-u41"></a>**⭐ Q_U41 — `*_` IS NOMINAL-ONLY; OVER A POSITIONAL LAYER IT
+  IS A GUIDED REFUSAL [owner, 2026-08-11].** `*_` synthesizes each lifted key
+  from **the deleted layer's KEY** — so it applies exactly where the deleted
+  layer HAS keys: a block branch, a block result, or a **map-generic broadcast**
+  (§3.2.3). Over a deleted VECTOR layer it refuses and names the alternative.
+  **THE MECHANISM IS `^_`'s, and that is why this is not a special case.** §3.4:
+  *"synthesize the key from the surviving path (`a.b^_ ⇒ :a-b`)"*. A positional
+  layer has no surviving key to synthesize from. ([Q_U24](#q-u24)'s ruling that
+  `*_` follows `^-_`'s rule rather than `^_`'s is untouched — that is about
+  COLLAPSE vs relabel-in-place, a different axis, and `split-star-lexeme` already
+  records it at its own site.)
+  **`*_`'s BEST CASE is the map-generic broadcast — and it is Q_U24's own
+  motivating example, which [Q_U40](#q-u40) is what makes reachable.** Measured
+  at HEAD, `regions := {:eu {:host "eu.example.com" :port 80} :us {…}}` gives
+  `regions:{host port}` → `{:eu {:host … :port …} :us {…}}`, keys preserved. So:
+  · `regions:{host port}*` → **refused**, both elements contribute `:host`+`:port`
+  · `regions:{host port}*_` → `{:eu-host …, :eu-port 80, :us-host …, :us-port 443}`
+  **INDEX-SYNTHESIS REJECTED** (`rowsv:{tags}*_` → `{:0-tags …, :1-tags …}`),
+  three reasons in increasing seriousness:
+  1. **Often not typeable.** `rowsv : [PVec …]` — the length is not in the type,
+     so the output row's field COUNT would be runtime-determined, which a closed
+     row cannot express. It would type only over a TUPLE (`rowsm : ⟨… …⟩`,
+     static arity) — i.e. the feature would work for some vector subjects and not
+     others, on a `PVec`-vs-`⟨⟩` distinction the user never wrote.
+  2. **It inverts the key-sort thesis.** §1.1 + §8 Q2: *"nominal key IDENTITY
+     carries the meaning, order does not."* Index-derived keys make POSITION
+     carry nominal meaning. Spec **§8 Q3** (nominal→ordinal demotion order) is
+     still OPEN and *"requires a canonical key order or a prohibition"*; this is
+     the same frontier from the other side, equally unruled. If index-provenance
+     is ever wanted, **§8 Q3 is where it belongs** — monotone either way.
+  3. **It is the wrong remedy for the actual mistake.** `rowsv:{tags}*`
+     broadcasts a PROJECTION, so every element carries the identical key and the
+     join is degenerate BY CONSTRUCTION. What the user meant is the values
+     concatenated — `rowsv:tags*` → `@[1 2 3]`, the descent spelling, S1, the
+     spec's own `ω·ω→ω`. §3.6 asks for exactly this: *"Errors … SHOULD print the
+     factored (normalized) spelling as the suggested rewrite."*
+  **THE REFUSAL'S TWO BRANCHES**, because the rewrite does not always exist:
+  · contents are CONTAINERS → name the descent spelling (`rowsv:tags*`);
+  · contents are LEAVES → there is no join to be had (§3.6 rule 4), and the
+    advice is **drop the star** — `pair:host` → `@["a" "b"]` is already the
+    answer. Measured: `pair := @[{:host "a"} {:host "b" :port 1}]` (heterogeneous
+    ⇒ a tuple) has `pair:{host}*` refused for collision AND `pair:host*` refused
+    for leaves; forcing a join there is an attempt to turn positional data into
+    nominal data, which is §8 Q3's territory and not the star's.
+  **Next free Q-label: U42.**
 
 - <a id="star-census"></a>**⭐ THE STAR-SURFACE CENSUS IS THE DESIGN'S INPUT
   [owner-commissioned, 2026-08-09].** After two failed attempts, the owner ruled
@@ -2351,7 +2475,7 @@ items of the hold-point, ruled before P4a opened:
   Until then they existed ONLY in a session transcript, which is not durable
   storage — and the owner's ruling is that attempt 3 opens from the MEASURED MAP,
   which cannot be honoured against an unreadable artifact.
-  (Q-label register: see [Q_U39](#q-u39), the latest ruling — **next free U40**.)
+  (Q-label register: see [Q_U41](#q-u41), the latest ruling — **next free U42**.)
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
@@ -8307,9 +8431,30 @@ process, and one facet's headline was discarded.
 the fused-identifier band. OUT: the closer-adjacent `*_` mint (own slice);
 the `.*` retirement + ravel (P4e-2); DEFERRED 106–112.
 
-**OPEN, ruling owed before implementation**: the ω placement — does a star in the
-ω band ride INSIDE `(@bcast …)` or apply to the wrapper's result? It decides the
-step's shape, hence the step kind, hence every downstream site.
+**THE ω PLACEMENT IS RULED — [Q_U40](#q-u40) OUTER**, with [Q_U41](#q-u41)
+scoping `*_` to nominal layers. The semantics are now fully specified; what
+remains before code is the slicing plan. Three consequences for the
+implementation:
+
+1. **The representation is already in the tree.** OUTER is the shape the
+   closer-adjacent fuse emits (`($select-path <step> $postfix-star)`), so only
+   the FUSED-IDENTIFIER band needs normalizing outward — lifting the star out of
+   the lexeme to the wrapper. That is the opposite direction from what INNER
+   would have needed, and it is why the placement was worth settling before
+   writing anything.
+2. **The three ω-inner dispatchers are OFF the hook.** `bcast-apply`,
+   `select-bcast-lift` and `select-bcast-inner-apply/non-union` became
+   load-bearing only under INNER. Under OUTER the star never appears as an ω
+   inner, so their absence from the recipe stops being 1b's problem. ⚠ The recipe
+   is still stale (two confirmed `select-step-kind` sites outside its 13, and its
+   "met all thirteen" boast is false) — that remains 1b's, since 1b mints a kind.
+3. **Ordinals are the collision-free axis.** §3.6 rule 5 concatenates keyless
+   components in written order, so [Q_U38](#q-u38)'s refusal structurally never
+   fires on an ordinal layer and `vv:{0 1}*` → `⟨1 2 3 4⟩` needs no special case.
+
+**STILL OPEN, and 1b must settle it explicitly rather than inherit it**: same
+output key with BOTH values VECTORS — concatenate, or error per §3.6 rule 4? See
+[Q_U40](#q-u40)'s closing note.
 
 <a id="pf"></a>
 
