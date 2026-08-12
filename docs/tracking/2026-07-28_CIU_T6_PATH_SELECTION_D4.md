@@ -8530,7 +8530,7 @@ landed the KIND with a guided not-yet, P4c-4c landed the semantics):**
 
 | slice | content | test delta |
 |---|---|---|
-| **1b-i** | correct the stale 13-site recipe (+2 confirmed `select-step-kind` sites; attribute the open-coded classifiers to enclosing functions — the figure I refused to quote); write the Q_U40/Q_U42 battery **parked commented** | +0 live · no behaviour |
+| **1b-i** ✅ `226844f1` | recipe corrected + battery parked. **Measured: 59 live dispatch sites · 35 in the 13 named functions · 2 deliberately-outside-and-undocumented (`select-step-name`/`select-step-cont`, the vocabulary's only SILENT trapdoors) · 8 genuinely OMITTED** — and FOUR of the eight are ω functions `(@bcast step)` itself introduced, so the "met all thirteen" boast is struck: an enumeration cannot be validated by the member it was written for. ⚠ My first attribution pass over-counted ~3× (41 vs 8) by matching only column-0 `define`; six recipe entries are themselves nested | +0 live (deliberate) · battery 476 → 476 |
 | **1b-ii** | mint `(@star cont)`, `cont ∈ 'flatten \| 'flatten-synth` (what `split-star-lexeme` already returns); arms at every recipe site; typing refuses via `bcast-carrier`, reduction via `(return (expr-panic …))` — **never a raise** | vocabulary/totality pins · no user-visible change |
 | **1b-iii** | **VECTOR semantics**, typing + reduction ATOMICALLY (spec v1's `ω·ω→ω`). Collisions structurally impossible — concat is total | the vector battery |
 | **1b-iv** | **NOMINAL semantics** + [Q_U38](#q-u38)'s typing-seated collision refusal + `*_`, together per [Q_U24](#q-u24) | nominal battery · collision refusals · `*_` |
