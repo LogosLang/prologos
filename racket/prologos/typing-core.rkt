@@ -1569,6 +1569,20 @@
       ;; of `walk-to-leaf` (round 1's abort).
       [(or (not (select-star-step? star)) (ormap select-star-step? prefix))
        (fail-k 'star-mid-branch)]
+      ;; ⚠⚠ B-verify F1/F7/F8 — THE DEPTH-≥2 SHIELD, a deliberate scope
+      ;; narrowing rather than a fix. At prefix depth ≥ 2 the shipped algorithm
+      ;; ("below-walk over the WHOLE prefix; that re-nested value IS the layer" —
+      ;; D4 §5.P4e-1b-iii's own sentence) deletes the BRANCH-ROOT layer, while
+      ;; Q_U40's rule deletes "the layer the PRECEDING step contributed" — the
+      ;; two readings coincide at depth ≤ 1 (every worked example in the
+      ;; ruling's battery) and DIVERGE at depth ≥ 2 (`mm3{zz.q*}`: ruled
+      ;; `{:zz @[1 2]}`, shipped would nominal-refuse naming the root re-nest;
+      ;; and an ω behind a key silently returned the RAW field at 0 errors).
+      ;; A design-sentence-vs-ruling contradiction is an OWNER question, not a
+      ;; mid-flight widening — so depth ≥ 2 REFUSES honestly until it is ruled.
+      ;; The reduction twin panics on the same condition.
+      [(and (pair? prefix) (pair? (cdr prefix)))
+       (fail-k 'star-deep-prefix)]
       [else
        (let-values ([(layer lf)
                      (if (null? prefix)
@@ -1606,6 +1620,11 @@
                        ;; containers, but not one keywise-joinable family —
                        ;; tuple contents / mixed container sorts
                        (fail-k 'star-not-yet l)]
+                      ;; ⚠ B-verify F4: a UNION content is not a leaf — a union
+                      ;; of vectors is exactly the union-join future, and calling
+                      ;; it "permanent" was a lying message. Route to hetero.
+                      [(ormap (lambda (c) (expr-union? (whnf c))) contents)
+                       (fail-k 'star-hetero l)]
                       [else (fail-k 'star-leaf l)])]
                    [(eq? (select-star-cont star) 'flatten-synth)
                     ;; Q_U41: `*_` is NOMINAL-ONLY — provenance comes from the

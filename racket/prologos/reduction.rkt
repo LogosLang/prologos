@@ -1968,6 +1968,12 @@
         (cond
           [(or (not (select-star-step? star)) (ormap select-star-step? prefix))
            (oops "a step after the flatten — `*` is only supported at the END of a branch")]
+          ;; ⚠ B-verify F1/F7/F8 — the depth-≥2 shield, the typing twin's mirror
+          ;; (see star-branch-entries for the full reasoning): at depth ≥ 2 the
+          ;; shipped layer choice contradicts Q_U40's ruling, so it refuses
+          ;; until ruled rather than producing the root-layer value.
+          [(and (pair? prefix) (pair? (cdr prefix)))
+           (oops "a multi-step prefix — which layer a deep flatten deletes is not yet ruled (typing refuses this shape)")]
           [else
            (let* ([layer (whnf (if (null? prefix) v (below-value v prefix seen)))]
                   [contents

@@ -626,7 +626,12 @@
      (format "select: `~a` — `*` (flatten) is not implemented yet for MIXED element types: the layer `~a`'s vectors do not share one element type, and the union join is not landed"
              label (pp-expr row names))]
     [(star-omega-tuple)
-     (format "select: `~a` — `*` (flatten) is not implemented yet for tuple elements under a broadcast: the concatenated arity is (tuple arity × the container's runtime length), which no static type carries"
+     ;; ⚠ B-verify F2: this arm shipped with ONE ~a and TWO args, so `format`
+     ;; RAISED on every render and the blanket hint handler swallowed it to the
+     ;; bare generic — a raising arm is WORSE than the [else] trapdoor slice A
+     ;; closed, and it silenced Q_U40's own ravel `vv:{0 1}*`. The battery had
+     ;; pinned this kind's KIND and never its MESSAGE; all eight are pinned now.
+     (format "select: `~a` — `*` (flatten) is not implemented yet for tuple elements under a broadcast (layer `~a`): the concatenated arity is (tuple arity × the container's runtime length), which no static type carries"
              label (pp-expr row names))]
     [(star-not-yet)
      ;; the residual honest not-yet (e.g. an empty row layer, whose element
@@ -634,13 +639,18 @@
      (format "select: `~a` — `*` (flatten) is not implemented yet for this layer (`~a`)"
              label (pp-expr row names))]
     [(star-open-row)
-     (format "select: `~a` — the layer `~a`'s row is not fully known (an open `'dyn` tail, or fields not provably present), so the flatten's contents are not statically known; ~a"
+     ;; ⚠ the render loop caught this wording never naming the OPERATOR the
+     ;; user wrote — every star message names `*`.
+     (format "select: `~a` — `*` (flatten) needs the layer's full contents, and `~a`'s row is not fully known (an open `'dyn` tail, or fields not provably present); ~a"
              label (pp-expr row names) remedies)]
     [(star-synth-positional)
      (format "select: `~a` — `*_` synthesizes keys from the deleted layer's KEYS, and this layer is positional (its contents join into a vector): there are no keys to draw from. Use bare `*` to flatten positionally"
              label)]
+    [(star-deep-prefix)
+     (format "select: `~a` — `*` after a multi-step branch is not supported yet: which layer a deep flatten deletes (the preceding step's, per the ruling, or the branch root's) diverges at this depth and is not yet ruled. Flatten via a separate selection for now"
+             label)]
     [(star-l4-mixed)
-     (format "mixed keyed/keyless sorts in the select block (L4) — `~a` contributes a KEYLESS component (its contents join into a vector) beside keyed sibling branches, and one level assembles a Map OR a tuple, never both. Star the sibling branches too, or select the flatten separately"
+     (format "mixed keyed/keyless sorts in the select block (L4) — `~a` contributes a KEYLESS component (its contents join into a vector) beside keyed sibling branches, and one level assembles a Map OR a tuple, never both. Star the sibling branches too (`*` on each), or select the flatten separately"
              label)]
     ;; ⭐ D4.P4e-1b slice 1b-iii-A — THE FAIL-KIND AXIS IS NOW TOTAL.
     ;; This arm was `#f`, and `#f` here is SILENT: it falls through `infer/err`'s

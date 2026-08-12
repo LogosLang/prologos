@@ -7397,6 +7397,24 @@
   (check-true (regexp-match? #rx"tags\\*" (msg-of (list (list 'name) (list 'tags B1-STAR)) 'block))
               "the guided L4 error interpolates the user's star spelling"))
 
+(test-case "1b-iii-B: EVERY star fail kind RENDERS — a raising format arm is worse than the trapdoor"
+  ;; ⚠ B-verify F2: star-omega-tuple's arm shipped with ONE ~a and TWO args, so
+  ;; `format` raised on every render and the blanket hint handler swallowed it
+  ;; to the bare generic. The battery had pinned KINDS, never MESSAGES — this
+  ;; loop closes that class for the whole axis: every kind must yield a STRING
+  ;; mentioning the star, under check-not-exn.
+  (define row (b1-row (cons 'a (b1-f B1-PVI))))
+  (for ([kind (in-list '(star-mid-branch star-leaf star-nominal star-hetero
+                         star-omega-tuple star-not-yet star-open-row
+                         star-synth-positional star-l4-mixed star-deep-prefix))])
+    (check-not-exn
+     (lambda ()
+       (let ([msg (te:format-select-fail (tc:select-fail kind '() 'probe-label row) '())])
+         (check-true (string? msg) (format "~a must render a string" kind))
+         (check-true (regexp-match? #rx"\\*" msg)
+                     (format "~a's message must mention the star" kind))))
+     (format "rendering ~a must not raise" kind))))
+
 (test-case "1b-iii-B1 reduction: the join concatenates in CANONICAL key order — the value layer, discriminating set"
   (define ka  (expr-keyword 'a))
   (define ka! (expr-keyword 'a!))
