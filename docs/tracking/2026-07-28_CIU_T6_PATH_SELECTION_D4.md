@@ -9047,6 +9047,81 @@ symbol inner assembles instead of extracting — and it is why one C2 pin is gre
 for the wrong reason) · **119** · **120** · **121** (the p4e1 Level-2/Level-3
 divergence that PARKED the dup pin).
 
+**⭐⭐ VERIFY ROUND 2 (`wf_87b2134b-d05`, 4 lenses + adjudicator) — 13 lens
+findings → 7 survivors, 1 KILLED by the adjudicator's own re-run, 6 deduped to 3
+root causes. Round 1's three fixes all HOLD (re-measured on the main thread
+first).** The adjudicator was asked outright whether round 1's shape repeats:
+**it answered YES, TWICE**, and opened both siblings.
+
+| # | severity | finding | disposition |
+|---|---|---|---|
+| **F1** | **BLOCKING** | a `^` fused into a star-bearing segment is taken VERBATIM as field-name text in the DOT and ω bands | ✅ FIXED `73c56b2c` |
+| **F3** | MAJOR (latent) | round 1's fix reached BOTH typing seats and NEITHER reduction one; the unguarded seat asserted the invariant in PROSE, the other kept a hand-copied `memq` | ✅ FIXED `28b524d7` |
+| **F4** | MINOR | `select-branch-has-star?/deep` said "ANYWHERE" and recursed into `(@sub …)` only — blind to `(@bcast (@sub …))` | ✅ FIXED `28b524d7` |
+| **F2** | MAJOR | a parse-level state leak drops `def s0\|s1\|s7 := …`; **invalidates [DEFERRED 121](DEFERRED.md)'s diagnosis** | ⬜ [DEFERRED 122](DEFERRED.md) |
+| **F5** | MINOR | a sibling `@sub` arm still asserts *"the parser grammar forbids this shape"* for a shape C2 made reachable | ⬜ owed |
+| **F7** | MINOR | the round-1 fix spliced two definitions between a PRECONDITION header and the function it guards | ⬜ owed |
+| F6 | MINOR | a pre-existing PATH-band message; explicitly NOT a round-2 finding and NOT a regression | ⬜ with DEFERRED 105/116 |
+
+**⭐⭐ F1 — AND IT IS THE SAME CLASS A THIRD TIME, IN THE SIBLING FUNCTION.**
+`split-caret-lexeme` has guarded *"the CONT contains a `*`"* since DEFERRED 90,
+and that guard's own comment records the class being UNDER-COUNTED once already.
+The MIRROR — *"the NAME contains a `^`"* — was never written in
+`split-star-lexeme`, which returned the prefix VERBATIM. **Silent wrong answer,
+because a caret-suffixed field name is spellable** (re-measured on the main
+thread before acting):
+```
+def q := {:db {:hosts @[1 2] :hosts^ @[99]}}
+q{db.hosts^*}  ⟹  {:db @[99]}   at ZERO errors   ← a field the user never wrote
+```
+⚠ **Only ONE of three bands was safe, and only by ARM ORDER**: `re-key-sym?`
+precedes `star-sym?` branch-initially, so `cfg{db^*}` reaches the caret splitter.
+The `$dot-access` and ω bands call their star arms FIRST, making that guard
+structurally unreachable. **DEFERRED 90 declares the precedence requirement
+"✅ DISCHARGED" — and every worked example in it is BRANCH-INITIAL**, i.e. the one
+band where the guard is reached. An enumeration that is band-incomplete, and its
+own examples are why nobody noticed.
+⚠ **PROVENANCE splits by band**: the DOT band is a **C2 REGRESSION** (the depth-≥2
+shield caught it — a mid-branch caret-star has ≥2 prefix steps BY CONSTRUCTION —
+and C2 removed the shield); the ω band is pre-existing from the B2 mint.
+The guard went in `split-star-lexeme` rather than the two arms, because there it
+covers every caller BY CONSTRUCTION — the arms' ORDER is what failed — and FIRST,
+for the same reason its sibling's is hoisted.
+
+**F3 — round 1's fix generating round 1's own defect class.** The hoist existed
+so the rule could be asked *at every layer-computing seat*; `grep -rn
+select-step-makes-no-layer` returned **zero hits in reduction.rkt**. The
+unguarded seat carried the invariant as PROSE on the blank line C2's shield had
+occupied, six lines under a header forbidding the excuse — `pipeline.md`
+§ "Exhaustive Walkers" red flag #1 verbatim — while its sibling twelve lines away
+already panicked on the same condition. Two seats, opposite policies.
+⚠ **HONEST BOUND, recorded because the alternative overclaims**: F3(a) is LATENT
+and **could not be exercised**. Disabling TYPING's guard to make reduction's fire
+still refused `y{a^[0]*}`, through a DIFFERENT typing arm (`star-leaf`) — so the
+shape is prevented by two independent typing routes and the new guard is
+unreached. Correct on the twins' doctrine, and unexercised; the NEXT shield
+removal is what makes it load-bearing, which is exactly how round 1's defect #3
+became reachable.
+
+**⚠ A LANDMINE, written down BEFORE it is stepped on.** [DEFERRED 117](DEFERRED.md)
+says widen the L4 gate to `/deep`. But `star-l4-mixed`'s diagnostic renders
+`(findf … (ormap select-star-step? br))` using the **old top-level test**. Widen
+the gate without the `findf` and it returns `#f` into `pp-select-branch` on the
+ERROR path — the whole-file-abort shape this track has already shipped once.
+**The two must move in one edit.**
+
+**⚠ AND THE RECORDED FIX FOR ONE OWED MAJOR IS ITSELF WRONG — measured.** The
+round-1 record proposes adopting the parser's *"group same-head branches into one
+sub-block"* remedy for `star-dup-key`. Measured: `cfg{db.{hosts* ports}}` → an
+**L4 mixed-sorts error**. Following the record would have replaced a non-working
+remedy with a different non-working remedy — the defect class being fixed,
+repeated. **Verified-working remedies**: the `^k'` rename
+(`cfg{db^d2.hosts* db}` → `{:d2 @[1 2], :db {…}}`) for the dup, and **ADDING** a
+caret (`m{a* b^.c*}` → `⟨…⟩`) for the both-starred L4 case. ⭐ And the dup
+remedy's defect is STRUCTURAL, not per-example: under [Q_U47](#q-u47) the
+surviving key comes from the REMAINDER, which the star never touches, so dropping
+the star can NEVER resolve a collision.
+
 ⚠ **KNOWN NARROWNESS, pinned rather than hidden**: the ordinal refusal's label
 renders `0*` (the tail steps) rather than the branch the user wrote. The tail arm
 only has the tail; compounded by DEFERRED 113. The REASON is accurate, which is

@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 122**
+> ### **NEXT FREE: 123**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7078,7 +7078,22 @@ the verifier a cycle. Recorded so the next one does not pay it again.
 
 ---
 
-### 121. ⬜ `p4e1`'s STRING PATH FAILS TO BIND A SUBJECT THAT `process-file` BINDS FINE — a LEVEL-2 vs LEVEL-3 harness divergence that PARKED a real pin
+### 121. ⬜ ⚠ **THE DIAGNOSIS BELOW IS WRONG — SEE [122](#deferred-122).** `p4e1`'s STRING PATH FAILS TO BIND A SUBJECT THAT `process-file` BINDS FINE — recorded as a LEVEL-2 vs LEVEL-3 harness divergence; it is PROCESS-STATE POLLUTION
+
+> ⚠⚠ **CORRECTED 2026-08-12 by C2 verify round 2 (`wf_87b2134b-d05`).** The
+> entry below, the code comment at the parked pin, and the commit message that
+> shipped them all record this as a Level-2-vs-Level-3 harness divergence. **It
+> is not**, and the part that is wrong is the part that matters: the identical
+> string through the identical `process-string-ws` binds fine **in a clean
+> process**. It is not a property of the string path at all — it is process-state
+> pollution keyed on the subject NAME (`s`+single digit). Filed as
+> [DEFERRED 122](#deferred-122).
+> **Consequence, and it is why this correction is urgent**: as written, this entry
+> sends the next session to widen the harness, which cannot fix it. And the parked
+> pin — the regression pin for round 1's *headline* BLOCKING defect — is
+> unblockable TODAY by renaming its subject off the `s`+digit shape. It has been
+> sitting un-pinned for a recorded reason that does not hold.
+> *(Original framing retained below for the record.)*
 
 Found at C2 verify round 1 while pinning the duplicate-key fix. The subject
 `def s7 := {:a {:b {:c @[1 2]}} :b @[9]}` binds under `process-file` (probe
@@ -7094,3 +7109,52 @@ Level-2/Level-3 gap — appearing in the instrument rather than in the language.
 **What is owed**: either find the p4e1 subject shape that binds (and unpark the
 pin at `test-path-selection.rkt`'s "a star NESTED in a sub-block is visible to
 the dup gate"), or give the case an acceptance-file row instead.
+
+<a id="deferred-122"></a>
+
+### 122. ⬜ ⭐ A PARSE-LEVEL STATE LEAK SILENTLY DROPS `def s0|s1|s7 := …` AND BLAMES AN ANGLE-BRACKET ERROR ON A LINE CONTAINING NEITHER `<` NOR `*` — and it is what PARKED round 1's headline regression pin
+
+Found by CIU T6 D4.P4e-1b-iii-C2 **verify round 2** (`wf_87b2134b-d05`),
+adjudicator-confirmed by its own re-run. **Supersedes
+[DEFERRED 121](#121)'s recorded diagnosis**, which named a Level-2/Level-3
+harness divergence — measured, that is false: the identical string through the
+identical `process-string-ws` binds fine **in a clean process**.
+
+**WHAT IS MEASURED**: in a process that has already run the track's test module,
+`def s7 := 1` (and `s0`, `s1`, …) is silently DROPPED, and the reported error is
+the angle-group parser's product-type message — on a line containing neither `<`
+nor `*`. `def a := …` / `def w := …` are unaffected. The discriminator is the
+subject NAME: `s` followed by a single digit.
+
+⚠ **THE MECHANISM IS NOT LOCATED, and that is recorded rather than guessed.**
+The emit site is the `$postfix-star` arm of the angle-group parser
+(`parser.rkt`, the "ANGLE-GENERIC on purpose" arm), so reaching it for
+`(def s7 := 1)` means the parser entered an angle group for a datum containing
+none. The READER is exonerated — `read-all-forms-string` is byte-identical in
+both states. Ruled out: `tools/star-arrival-matrix.rkt`, `tests/test-support.rkt`,
+and the two angle+star sources in the battery. Candidate class: a module-level
+mutable global rather than a parameter (`parse-reader.rkt`'s
+`token-pattern-registry` is one such and is not reset between
+`process-string-ws` calls) — **not confirmed**.
+
+**WHY IT IS MORE THAN A HARNESS WART, and the escalation that was not tested**:
+a silently dropped definition meets the letter of BLOCKING. It is filed here at
+MAJOR only because it was demonstrated in a process that had first run the test
+module, and no single-file `process-file` route was found. ⚠ **The long-lived
+processes are the obvious escalation and were NOT tested** — `lsp/server.rkt` and
+`repl.rkt`. If either reproduces it, this is BLOCKING.
+
+**⭐ THE INSTRUMENT HAZARD IS THE SHARPER HALF.** Under the leak a pin's two
+checks disagree: a `check-false (p4e1-type …)` PASSES *vacuously* — the type is
+`#f` because the command errored, not because the branch was refused — while only
+the positive `check-true` catches anything. **A pin written with only the negative
+half is green for the wrong reason.** This track has already paid for exactly this
+class once (`p4e1-has?` was "VACUOUS, AND SYSTEMICALLY SO", fixed by being made
+deliberately loud); it is back through a different door, and every negative pin
+whose subject is named `s0`–`s9` is a candidate.
+
+**WHAT IS OWED**: (1) find the mutation — it is parse-level, post-reader, and
+keys on `s`+digit; (2) **un-park the dup pin, which is the regression pin for
+round 1's headline BLOCKING defect** — verified, a one-character rename of its
+subject unblocks it today; (3) correct the code comment at the parked pin, which
+repeats 121's wrong diagnosis; (4) probe the LSP/REPL routes.
