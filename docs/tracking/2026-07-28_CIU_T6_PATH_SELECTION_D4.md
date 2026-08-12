@@ -8956,8 +8956,53 @@ B1/B2 — land the machinery INERT, then migrate the seat.** C repeats it.
 
 | slice | content | why it is safe alone |
 |---|---|---|
-| **1b-iii-C1** | **The deep-landing machinery, INERT.** A `star` arm on BOTH below-walks (`select-below-field`, `below-value`) returning the join **BARE** — the shape the `bcast` arm already argues for in both files (*"would wrap the result in a spurious level"*) — plus Q_U47's landing rule with the **re-nest decision FACTORED as an explicit value, not inlined** (Q_U48 makes it a flag later). Doc-truth in the same commit. | `star-branch-entries`/`star-entries` still shield depth ≥ 2, so no surface traffic reaches the new arms. ⚠ Also CLOSES a live abort: both `[else]`s are plain `error` and `select-step-kind` maps `(@star …)` to `'star`, so a star reaching a below-walk **takes the file down** today. |
-| **1b-iii-C2** | **The shield lifts, in BOTH twins atomically.** The three gap dispositions (deep-keyed → keyed · deep-unnamed → keyless · ordinal-as-`sₙ` → the ruled guided refusal) · the `vh{0.{0}*}` pin flipped WITH its reasoning · **the dup seat's first arm** and **the L4 message fix** (both below) · the E2E battery. | The whole observable change, atomic. Twin-order divergence at this seat has already caused a whole-file abort once. |
+| **1b-iii-C1** | **The deep-landing machinery, INERT.** The shared join helper, extracted from `star-branch-entries`/`star-entries` (behaviour-preserving for the depth-1 path), plus **star-TAIL arms** on `select-below-field` / `select-below-components` and their reduction twins. Doc-truth in the same commit. | The branch-level star pre-check stays TOTAL and both shields stay up, so nothing reaches the new arms from the surface — reachable by direct unit call only, exactly how B1 was verified. ⚠ Also closes a live abort: `walk-to-leaf`'s and both below-walks' `[else]`s are plain `error` and `select-step-kind` maps `(@star …)` to `'star`. |
+| **1b-iii-C2** | **The seat migrates: the pre-check NARROWS and both shields come out, atomically.** The three gap dispositions · the `vh{0.{0}*}` pin flipped WITH its reasoning · **the dup seat's first arm** and **the L4 message fix** (both below) · the E2E battery. | The whole observable change, atomic. Twin-order divergence at this seat has already caused a whole-file abort once. |
+
+**⭐⭐ THE IMPLEMENTATION SHAPE — CORRECTED 2026-08-12 BY TRACING THE ARMS, and
+both errors were mine, written an hour earlier in this same section.** Q_U46's
+text and the first cut of this table said *"split the prefix into (outer-steps,
+last-step) … then re-nest through the outer steps"*, and that C1 should
+*"factor the re-nest decision as a flag"*. **Neither survives contact:**
+
+1. **THERE IS NO PREFIX SPLIT. The landing EMERGES from which caller receives the
+   bare join** — which is what makes Q_U47's rule ("the component the remainder
+   would produce") true by construction rather than by computation. One shared
+   helper returns the joined VALUE; three callers wrap it, and each is already
+   the remainder's own arm:
+   · **`star-branch-entries`** — remainder EMPTY → `(cons #f joined)`, keyless.
+     Depth-1, unchanged.
+   · **`select-below-field`**'s new star-TAIL arm → returns the join **BARE**;
+     the key arm above it (typing-core.rkt, *"(cons label (record-field bt …))"*)
+     re-nests it under the surviving label. **The re-nest is genuinely free.**
+   · **`select-below-components`**'s twin arm → `(cons #f joined)`, keyless,
+     spliced at the level by the `'dissolve` arm.
+   Traced: `cfg{db.hosts*}` reaches the second (keyed `:db`), `cfg{db^.hosts*}`
+   the third (dissolve splices, keyless), and `vh{0.{0}*}` the ord-branch head
+   arm, which already wraps `(cons #f …)` — so its keyless landing falls out with
+   no star-specific code at all.
+2. **THE ARM DISPATCHES ON "`steps` ENDS IN A STAR", NOT ON `(car steps)`.** A
+   star is never the HEAD of a below-walk's step list; it is always the tail. An
+   arm keyed on `(car steps)` — the obvious reading of "add a `star` arm" — would
+   never fire.
+3. **THEREFORE `*-` IS NOT A FLAG ON THIS PATH.** Under caller-re-nests the
+   caller would wrap `*-`'s join too, which is exactly what `*-` must not do. Its
+   implementation is instead `walk-to-leaf` — the **collapse descent `^-` itself
+   uses** — returning a keyless component at the branch level. So
+   [Q_U48](#q-u48)'s *"`*-` is to `*` what `^-` is to `^`"* is truer than the
+   ruling claimed: they share an IMPLEMENTATION, not merely a shape.
+
+⚠ **AND THE PRE-CHECK NARROWING IS SAFE, VERIFIED — but only because two [leaf]
+classifiers already handle `star` deliberately.** C2 narrows the branch-level
+star pre-check to the remainder-empty case so deep branches fall through to the
+head dispatch. That exposes them to `select-branch-collapse` and
+`select-branch-keyless?`, which B1 deliberately ordered AFTER the star arm.
+Checked at HEAD: `select-branch-collapse` answers `#f` for a star with a recorded
+reason (*"a `^-` collapse lifts exactly ONE flat entry … while a star lifts
+MANY"*), and `select-branch-keyless?` answers `#f` (KEYED), so neither routes a
+deep star into `walk-to-leaf` — which has **no star arm and raises**. The
+narrowing is therefore safe *today*; if either classifier's star answer ever
+moves, `walk-to-leaf` is the abort it lands in.
 | **1b-iv** | **NOMINAL semantics** + [Q_U38](#q-u38)'s full collision rule + `*_` in the fused band, together per [Q_U24](#q-u24). **Plus the question Q_U47 deliberately left open**: does a nominal join SPLICE its fields into the level or land as one component? Q_U40's own `m{a* b}` → `{:x 1, :b {:y 2}}` is that case. | unchanged from the plan above |
 | **1b-v — the star-SUFFIX slice** | **`*-`** ([Q_U48](#q-u48)) · the **`*-_`** decision · [Q_U39](#q-u39)'s closer-adjacent `*_` mint. One slice, one verify. | The cont vocabulary settles ONCE: `*_` and `*-` each add a `(@star cont)` value, and `*-_` interacts with [Q_U41](#q-u41)'s nominal-only scoping, which is 1b-iv's ruling. |
 | **P4e-2** | the `.*` retirement inventory + [Q_U26](#q-u26) ravel | unchanged |
