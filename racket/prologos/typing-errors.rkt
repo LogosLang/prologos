@@ -646,11 +646,28 @@
     [(star-synth-positional)
      (format "select: `~a` — `*_` synthesizes keys from the deleted layer's KEYS, and this layer is positional (its contents join into a vector): there are no keys to draw from. Use bare `*` to flatten positionally"
              label)]
+    ;; ⭐ 1b-iii-C2 RE-SCOPED THIS KIND. It used to refuse EVERY depth-≥2 star
+    ;; while the layer question was unruled; [Q_U46]/[Q_U47] ruled it and the
+    ;; shield came out, so the kind now guards exactly the gap the ruling
+    ;; RESERVED: an ordinal `sₙ`. Reused rather than replaced by a new kind so the
+    ;; battery's hand-written render-loop list stays correct without a second edit.
     [(star-deep-prefix)
-     (format "select: `~a` — `*` after a multi-step branch is not supported yet: which layer a deep flatten deletes (the preceding step's, per the ruling, or the branch root's) diverges at this depth and is not yet ruled. Flatten via a separate selection for now"
+     (format "select: `~a` — `*` deletes the layer the step before it produced, and an ORDINAL step produces no layer (it selects a position, it does not add a level). Star a named step instead (`x{a.b*}`), or select the element first and flatten separately"
+             label)]
+    ;; ⭐ 1b-iii-C2: the duplicate-output-key refusal. `label` here is the
+    ;; COLLIDING KEY, not a branch spelling — the collision is a property of the
+    ;; level, and naming the key is what tells the user which two branches met.
+    [(star-dup-key)
+     (format "duplicate output key `:~a` in the select block — a flatten's surviving key collides with a sibling branch's, and distinct output keys are required (strict merge; the alternative is a silent last-write-wins). Rename one with `^k'`, or drop the `*` so the layers nest instead of meeting"
              label)]
     [(star-l4-mixed)
-     (format "mixed keyed/keyless sorts in the select block (L4) — `~a` contributes a KEYLESS component (its contents join into a vector) beside keyed sibling branches, and one level assembles a Map OR a tuple, never both. Star the sibling branches too (`*` on each), or select the flatten separately"
+     ;; ⚠ 1b-iii-C2: this WORDING used to assert that the STAR branch is the
+     ;; keyless one, which was true while every star landed keyless. Under
+     ;; [Q_U47] a DEEP star lands KEYED whenever a step survives to name it, so
+     ;; `cfg{db.hosts* ports^}` is a keyed star beside a keyless SIBLING — the
+     ;; opposite arrangement, and the old text told the user the reverse of what
+     ;; happened. It now names the branch without claiming which side it is on.
+     (format "mixed keyed/keyless sorts in the select block (L4) — `~a` is a star branch whose landing and its sibling branches' do not agree: one level assembles a Map OR a tuple, never both. Match them — star the siblings too (`*` on each), drop the `^` that made a sibling keyless, or select the flatten separately"
              label)]
     ;; ⭐ D4.P4e-1b slice 1b-iii-A — THE FAIL-KIND AXIS IS NOW TOTAL.
     ;; This arm was `#f`, and `#f` here is SILENT: it falls through `infer/err`'s

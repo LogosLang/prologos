@@ -7189,8 +7189,8 @@
   ;;     the subject. concat(vh) would be `@[@[1 2] @[3]]`.
   (check-false (p4e1-has? (string-append V "vh{0.{0}*}") #rx"@\\[@\\[1 2\\] @\\[3\\]\\]")
                "B: `vh{0.{0}*}` must NOT be concat(vh)")
-  (check-true (p4e1-has? (string-append V "vh{0.{0}*}") #rx"select: `0.\\{0\\}\\*`")
-              "B: …the star belongs to its branch, and the message renders that branch's spelling")
+  (check-true (p4e1-type=? (string-append V "vh{0.{0}*}") "⟨[PVec Int]⟩")
+              "B: …the star belongs to its BRANCH, not the subject — FLIPPED at 1b-iii-C2 from a refusal to a keyless success, deliberately")
   ;; (C) after an ORDINAL step — in NO record before the attempt-3 audit.
   (check-true (p4e1-has? (string-append C "cfg{database[0]*}") #rx".")
               "C: after an ordinal step the star still belongs to its branch (no abort)")
@@ -7406,7 +7406,12 @@
   (define row (b1-row (cons 'a (b1-f B1-PVI))))
   (for ([kind (in-list '(star-mid-branch star-leaf star-nominal star-hetero
                          star-omega-tuple star-not-yet star-open-row
-                         star-synth-positional star-l4-mixed star-deep-prefix))])
+                         star-synth-positional star-l4-mixed star-deep-prefix
+                         ;; 1b-iii-C2's new kind. The loop cannot self-report an
+                         ;; UNLISTED kind, so adding a kind obliges this line in
+                         ;; the same commit as typing-errors.rkt — that coupling
+                         ;; is the whole reason the loop is hand-written.
+                         star-dup-key))])
     (check-not-exn
      (lambda ()
        (let ([msg (te:format-select-fail (tc:select-fail kind '() 'probe-label row) '())])
@@ -7585,25 +7590,25 @@
 ;; from being written AFTER the implementation, which is how a pin ends up
 ;; asserting whatever the code happens to do.
 
-;; (test-case "1b-iii-C2: a deep star lands KEYED under the surviving step — [Q_U47]"
-;;   (check-equal? (c2-line "cfg{db.hosts*}") "{:db @[1 2]} : {:db [PVec Int]}"
-;;                 "the layer `hosts` made is deleted; `db` survives and holds the join"))
+(test-case "1b-iii-C2: a deep star lands KEYED under the surviving step — [Q_U47]"
+  (check-equal? (c2-line "cfg{db.hosts*}") "{:db @[1 2]} : {:db [PVec Int]}"
+                "the layer `hosts` made is deleted; `db` survives and holds the join"))
 
-;; (test-case "1b-iii-C2: the DISCRIMINATING shapes — two contents, where a broken concat shows"
-;;   ;; ⚠ `cfg{db.hosts*}` above has ONE content, so its concat is an IDENTITY and
-;;   ;; cannot discriminate. These two can, and they are also the idiom Q_U46 says
-;;   ;; the whole ruling buys: group N siblings under a chosen key.
-;;   (check-equal? (c2-line "two{a.{x y}*}") "{:a @[1 2 3]} : {:a [PVec Int]}"
-;;                 "sub-block layer, two contents, CANONICAL key order (:x then :y)")
-;;   (check-equal? (c2-line "cfg{db.{hosts ports}*}") "{:db @[1 2 80]} : {:db [PVec Int]}"
-;;                 "canonical order :hosts before :ports — champ insertion order would differ"))
+(test-case "1b-iii-C2: the DISCRIMINATING shapes — two contents, where a broken concat shows"
+  ;; ⚠ `cfg{db.hosts*}` above has ONE content, so its concat is an IDENTITY and
+  ;; cannot discriminate. These two can, and they are also the idiom Q_U46 says
+  ;; the whole ruling buys: group N siblings under a chosen key.
+  (check-equal? (c2-line "two{a.{x y}*}") "{:a @[1 2 3]} : {:a [PVec Int]}"
+                "sub-block layer, two contents, CANONICAL key order (:x then :y)")
+  (check-equal? (c2-line "cfg{db.{hosts ports}*}") "{:db @[1 2 80]} : {:db [PVec Int]}"
+                "canonical order :hosts before :ports — champ insertion order would differ"))
 
-;; (test-case "1b-iii-C2: with NO surviving step that names a key, the join lands KEYLESS"
-;;   ;; Q_U47's `keyless otherwise` case. Both reachable spellings.
-;;   (check-equal? (c2-line "cfg{db^.hosts*}") "@[@[1 2]] : ⟨[PVec Int]⟩"
-;;                 "`db^` dissolves the only survivor — the join splices in keyless")
-;;   (check-equal? (c2-line "vh{0.{0}*}") "@[@[1 2]] : ⟨[PVec Int]⟩"
-;;                 "an (@ord N) head names nothing — keyless, and it needs no star-specific arm"))
+(test-case "1b-iii-C2: with NO surviving step that names a key, the join lands KEYLESS"
+  ;; Q_U47's `keyless otherwise` case. Both reachable spellings.
+  (check-equal? (c2-line "cfg{db^.hosts*}") "@[@[1 2]] : ⟨[PVec Int]⟩"
+                "`db^` dissolves the only survivor — the join splices in keyless")
+  (check-equal? (c2-line "vh{0.{0}*}") "@[@[1 2]] : ⟨[PVec Int]⟩"
+                "an (@ord N) head names nothing — keyless, and it needs no star-specific arm"))
 
 (test-case "1b-iii-C2: DEPTH-1 IS UNCHANGED — the rule is uniform in depth"
   (check-equal? (c2-line "mm{zz*}") "@[@[1 2]] : ⟨[PVec Int]⟩"
@@ -7611,13 +7616,29 @@
   (check-equal? (c2-line "mm{zz aa}*") "@[3 4 1 2] : [PVec Int]"
                 "the branch-INITIAL star under 'path — Q_U44 canonical, also unmoved"))
 
-;; (test-case "1b-iii-C2: BAND AGREEMENT holds for the key case — as a PROJECTION, not an identity"
-;;   ;; ⚠ The bands agree here only because the path band never builds a multi-step
-;;   ;; prefix (Q_U13's NEST mints one carrier per level), so this is STRUCTURAL
-;;   ;; agreement. It does NOT hold for ω — see the pin below.
-;;   (check-equal? (c2-line "cfg.db.hosts*") "@[1 2] : [PVec Int]")
-;;   (check-equal? (c2-line "cfg{db.hosts*}") "{:db @[1 2]} : {:db [PVec Int]}"
-;;                 "the block band is the path band's answer under the surviving key"))
+(test-case "1b-iii-C2: BAND AGREEMENT holds for the key case — as a PROJECTION, not an identity"
+  ;; ⚠ The bands agree here only because the path band never builds a multi-step
+  ;; prefix (Q_U13's NEST mints one carrier per level), so this is STRUCTURAL
+  ;; agreement. It does NOT hold for ω — see the pin below.
+  (check-equal? (c2-line "cfg.db.hosts*") "@[1 2] : [PVec Int]")
+  (check-equal? (c2-line "cfg{db.hosts*}") "{:db @[1 2]} : {:db [PVec Int]}"
+                "the block band is the path band's answer under the surviving key"))
+
+(test-case "1b-iii-C2: [Q_U44]'s written-order recovery GENERALIZES to depth — the expressivity Q_U47 was chosen for"
+  ;; ⭐ THE LOAD-BEARING EXPRESSIVITY CLAIM, and nothing pinned it. Q_U44 rules a
+  ;; keyed layer joins in CANONICAL order and that written order is recovered by
+  ;; opting into KEYLESSNESS. Under Q_U47's keyless case that idiom works at DEPTH
+  ;; too — which is the argument that decided Q_U47 against a refusal.
+  ;; ⚠ THE KEY SET IS THE POINT: `:zz`/`:aa` written zz-first, so canonical
+  ;; (symbol<?) order and written order DISAGREE. My first live check used
+  ;; `:p`/`:q` written p-first, where the two orders coincide — it printed the
+  ;; same vector for both spellings and demonstrated NOTHING. A pin for an
+  ;; ordering claim has to use keys whose orders differ, or it is vacuous.
+  (define W "ns c2o\ndef w := {:zz {:u @[1 2]} :aa {:v @[3 4]}}\n")
+  (check-equal? (p4e1-last (string-append W "w{zz.u* aa.v*}*")) "@[3 4 1 2] : [PVec Int]"
+                "keyed deep stars → the outer join takes CANONICAL key order")
+  (check-equal? (p4e1-last (string-append W "w{zz^.u* aa^.v*}*")) "@[1 2 3 4] : [PVec Int]"
+                "dissolve makes them keyless → tuple in WRITTEN order (§3.3), Q_U44's recovery at depth"))
 
 (test-case "1b-iii-C2: the ω-behind-a-key case STAYS REFUSED — its join is nominal, i.e. 1b-iv"
   ;; The layer is the ω's vector whose ELEMENTS are Maps, so the join is keywise.
@@ -7626,29 +7647,48 @@
   (define out (c2-line "rows{k:s*}"))
   (check-true (c2-refused? "rows{k:s*}")
               (format "a nominal join must still refuse, not silently answer: ~a" out))
-  (check-false (regexp-match? #rx"PVec \\{:s" out)
-               (format "and it must not leak the raw field as the answer: ~a" out)))
+  ;; ⚠ THIS SECOND CHECK WAS WRONG AS FIRST WRITTEN and the run caught it: the
+  ;; guided refusal legitimately QUOTES the layer type (`[PVec {:s …}]`) while
+  ;; explaining what would join, so a regex banning that text banned the correct
+  ;; message. What must not happen is the raw field being returned as the ANSWER,
+  ;; and `c2-refused?` above is what says so. Kept as a positive instead.
+  (check-true (regexp-match? #rx"nominal|Map-valued" out)
+              (format "and it must name WHY it refuses — the join is keywise: ~a" out)))
 
-;; (test-case "1b-iii-C2: an ORDINAL as the LAST prefix step is a GUIDED refusal — Q_U46's ruled gap"
-;;   ;; Q_U2 Reading A: an ordinal contributes no output level, so there is no
-;;   ;; preceding-step layer for the rule to quantify over.
-;;   (define out (c2-line "nested{a.0*}"))
-;;   (check-true (c2-refused? "nested{a.0*}")
-;;               (format "the ordinal gap is a refusal: ~a" out))
-;;   (check-true (regexp-match? #rx"ordinal" out)
-;;               (format "and it must NAME the reason rather than fall through: ~a" out)))
+(test-case "1b-iii-C2: an ORDINAL as the LAST prefix step is a GUIDED refusal — Q_U46's ruled gap"
+  ;; Q_U2 Reading A: an ordinal contributes no output level, so there is no
+  ;; preceding-step layer for the rule to quantify over.
+  ;; ⚠ SPELLING MATTERS HERE, and my first cut used the one that never arrives:
+  ;; `nested{a.0*}` is a PARSE error ("stray `.` in a select block") and never
+  ;; reaches the typing seat at all. The ordinal-as-`sₙ` shape that DOES reach it
+  ;; is the BRACKET spelling — which is also the one DEFERRED 116 proposes
+  ;; deprecating, so if that deprecation ever lands this gap becomes unreachable
+  ;; and this pin is where that shows.
+  (define out (c2-line "nested{a[0]*}"))
+  (check-true (c2-refused? "nested{a[0]*}")
+              (format "the ordinal gap is a refusal: ~a" out))
+  (check-true (regexp-match? #px"(?i:ordinal)" out)
+              (format "and it must NAME the reason rather than fall through: ~a" out))
+  ;; ⚠ KNOWN DIAGNOSTIC NARROWNESS, pinned so it is not mistaken for correct:
+  ;; the label renders `0*` — the TAIL steps — not the branch the user wrote
+  ;; (`a[0]*`). The tail arm only has the tail; the full branch is the caller's.
+  ;; Compounded by DEFERRED 113 (pp hardcodes `.`), which is why even a full
+  ;; label would print `a.0*` for a bracket spelling. The REASON is accurate,
+  ;; which is what Q_U46 asked for; the ECHO is not yet.
+  (check-true (regexp-match? #rx"`0\\*`" out)
+              (format "documents today's narrow label — widen it and this pin says so: ~a" out)))
 
-;; (test-case "1b-iii-C2: a deep star's surviving key COLLIDING with a sibling is refused, not last-win"
-;;   ;; ⚠ THE HOLE C2 OPENS. `select-branch-top-keys` returns '() for star branches,
-;;   ;; so the parser's dup gate cannot see the surviving `:db`; typing still asserts
-;;   ;; the parser owns uniqueness; nothing checks downstream. Both assembly points
-;;   ;; then LAST-WIN silently (make-record's `;; last write wins`, entries->value's
-;;   ;; champ-insert). Unreachable before C2, because no deep star's key survived.
-;;   (define out (c2-line "cfg{db.hosts* db}"))
-;;   (check-true (c2-refused? "cfg{db.hosts* db}")
-;;               (format "a duplicate output key must be refused, never last-win: ~a" out))
-;;   (check-true (regexp-match? #rx"duplicate|:db" out)
-;;               (format "and it must name the colliding key: ~a" out)))
+(test-case "1b-iii-C2: a deep star's surviving key COLLIDING with a sibling is refused, not last-win"
+  ;; ⚠ THE HOLE C2 OPENS. `select-branch-top-keys` returns '() for star branches,
+  ;; so the parser's dup gate cannot see the surviving `:db`; typing still asserts
+  ;; the parser owns uniqueness; nothing checks downstream. Both assembly points
+  ;; then LAST-WIN silently (make-record's `;; last write wins`, entries->value's
+  ;; champ-insert). Unreachable before C2, because no deep star's key survived.
+  (define out (c2-line "cfg{db.hosts* db}"))
+  (check-true (c2-refused? "cfg{db.hosts* db}")
+              (format "a duplicate output key must be refused, never last-win: ~a" out))
+  (check-true (regexp-match? #rx"duplicate|:db" out)
+              (format "and it must name the colliding key: ~a" out)))
 
 (test-case "1b-iii-C2: the L4 message must not call a KEYED deep star keyless"
   ;; The message hardcodes that the star branch is the keyless one and `findf`s

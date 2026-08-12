@@ -2019,12 +2019,12 @@
         (cond
           [(or (not (select-star-step? star)) (ormap select-star-step? prefix))
            (oops "a step after the flatten — `*` is only supported at the END of a branch")]
-          ;; ⚠ B-verify F1/F7/F8 — the depth-≥2 shield, the typing twin's mirror
-          ;; (see star-branch-entries for the full reasoning): at depth ≥ 2 the
-          ;; shipped layer choice contradicts Q_U40's ruling, so it refuses
-          ;; until ruled rather than producing the root-layer value.
-          [(and (pair? prefix) (pair? (cdr prefix)))
-           (oops "a multi-step prefix — which layer a deep flatten deletes is not yet ruled (typing refuses this shape)")]
+          ;; ⭐ 1b-iii-C2: the depth-≥2 shield is GONE here too — a deep trailing star
+          ;; no longer reaches this function; the join happens at `below-value`'s
+          ;; star-TAIL arm. What remains is the remainder-EMPTY case plus the
+          ;; invariant guards. The ORDINAL gap's refusal is typing's to render;
+          ;; reaching the value layer with that shape is an invariant violation.
+          
           [else
            ;; ⭐ 1b-iii-C1: the join is SHARED (`star-join-value`, module level).
            ;; THIS caller is the remainder-EMPTY one — depth ≤ 1 — so it wraps the
@@ -2082,7 +2082,14 @@
           ;; ⭐⭐ 1b-iii-B1: FIRST, before `col`/`keyless?` — both read the
           ;; branch's LAST step, which for a star branch is the star (or a caret
           ;; after one — round 1's abort). Same position as the typing twin's.
-          [(ormap select-star-step? b)
+          ;; ⭐⭐ 1b-iii-C2 — THE SEAT MIGRATION, twin of typing-core's. A
+          ;; well-formed DEEP trailing star falls through to the head dispatch so
+          ;; the arms re-nest around the join; every other star shape still routes
+          ;; to `star-entries`, which owns the remainder-EMPTY landing and all the
+          ;; invariant guards. Both twins use the SAME predicate from syntax.rkt —
+          ;; a second hand-written copy is the drift this seat has already paid a
+          ;; whole-file abort for.
+          [(and (ormap select-star-step? b) (not (select-branch-deep-star? b)))
            (star-entries v b seen)]
           [col
            (list (cons (cond [(select-cont-rename col)]
@@ -2170,6 +2177,30 @@
     ;; level (Q_U2); keyed chains build their nested level.
     (define (below-value v steps seen)
       (cond
+        ;; ⭐⭐ 1b-iii-C2 — THE STAR-TAIL ARM, twin of typing's. Exactly `(sₙ ★)`;
+        ;; returns the join BARE for the caller to wrap. AHEAD of the memq arm for
+        ;; the same reason its typing twin is: falling through runs
+        ;; `entries->value`, which would wrap the join in a spurious level — the
+        ;; argument the `bcast` arm below already makes for itself.
+        ;; ⚠ An ordinal `sₙ` is typing's guided refusal (Q_U46's reserved gap); if
+        ;; one reaches HERE typing did not run, which is an invariant violation.
+        [(select-steps-star-tail? steps)
+         (let ([sn (car steps)] [star (cadr steps)])
+           (if (memq (select-step-kind sn) '(ord-step ord-branch))
+               (return (expr-panic (expr-string
+                 "select: `*` — an ordinal step contributes no layer to delete (typing carries the user-facing refusal)")))
+               (star-join-value (below-value v (list sn) seen) star
+                                (lambda (why)
+                                  (return (expr-panic (expr-string
+                                    (format "select: `*` — ~a (typing carries the user-facing refusal; reaching the value layer with this shape is a compiler-invariant violation)" why))))))))]
+        ;; ⚠ THE ARM ORDER ABOVE IS LOAD-BEARING, and getting it wrong is how the
+        ;; first cut of C2 failed. The `@sub` arm below matches ANY sub-headed
+        ;; step list and panics when anything follows it ("steps after a terminal
+        ;; sub-block") — so with the tail arm placed after it, `two{a.{x y}*}` and
+        ;; `vh{0.{0}*}` both died there instead of joining. Typing's twin does not
+        ;; have the same hazard (its sub arm carries a `(null? (cdr steps))`
+        ;; guard), which is exactly the kind of asymmetry that makes a
+        ;; "same change in both files" edit wrong in one of them.
         [(and (pair? (car steps)) (eq? (car (car steps)) '@sub))
          (if (null? (cdr steps))
              (entries->value (level-entries v (cdr (car steps))))

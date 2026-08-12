@@ -1512,7 +1512,32 @@
                                         (findf (lambda (br) (ormap select-star-step? br))
                                                branches)))
                                       tm))
-              (values cs #f)))
+              ;; ⭐⭐ 1b-iii-C2 — THE DUPLICATE-OUTPUT-KEY SEAT, and C2 is what makes
+              ;; it necessary. `select-branch-top-keys` answers `'()` for a star
+              ;; branch, so the parser's `dup-output-key` gate cannot see a deep
+              ;; star's SURVIVING key; typing still asserts the parser guarantees
+              ;; uniqueness; and nothing checked downstream. Both assembly points
+              ;; then LAST-WIN silently (`make-record`'s `;; last write wins`,
+              ;; `entries->value`'s `champ-insert`). Measured before this arm
+              ;; existed: `cfg{db.hosts* db}` → `{:db {:ports @[80], :hosts
+              ;; @[1 2]}}` at ZERO errors, the star's `:db` quietly overwritten.
+              ;; Unreachable before C2 — no deep star's key survived to collide.
+              ;;
+              ;; ⚠ THIS IS [Q_U38]'s SEAT, opened with its star-vs-sibling arm.
+              ;; 1b-iv extends the SAME seat to the general rule (star-vs-star
+              ;; lifted keys, the `'dyn` tail). One seat built incrementally —
+              ;; NOT the dual-path scaffolding 1b-ii refused, because this arm is
+              ;; the real check and not a placeholder to be replaced.
+              ;; ⚠ STAR-GATED for the same reason the L4 check above is: a
+              ;; starless duplicate is the parser's, and it still catches those.
+              (let ([dup (and (ormap (lambda (br) (ormap select-star-step? br)) branches)
+                              (let loop ([ks (filter values (map car cs))] [seen '()])
+                                (cond [(null? ks) #f]
+                                      [(memq (car ks) seen) (car ks)]
+                                      [else (loop (cdr ks) (cons (car ks) seen))])))])
+                (if dup
+                    (values #f (select-fail 'star-dup-key path dup tm))
+                    (values cs #f)))))
         (let-values ([(es bf) (select-branch-entries ctx tm (car bs) path '() sort)])
           (if bf
               (values #f bf)
@@ -1587,20 +1612,19 @@
       ;; of `walk-to-leaf` (round 1's abort).
       [(or (not (select-star-step? star)) (ormap select-star-step? prefix))
        (fail-k 'star-mid-branch)]
-      ;; ⚠⚠ B-verify F1/F7/F8 — THE DEPTH-≥2 SHIELD, a deliberate scope
-      ;; narrowing rather than a fix. At prefix depth ≥ 2 the shipped algorithm
-      ;; ("below-walk over the WHOLE prefix; that re-nested value IS the layer" —
-      ;; D4 §5.P4e-1b-iii's own sentence) deletes the BRANCH-ROOT layer, while
-      ;; Q_U40's rule deletes "the layer the PRECEDING step contributed" — the
-      ;; two readings coincide at depth ≤ 1 (every worked example in the
-      ;; ruling's battery) and DIVERGE at depth ≥ 2 (`mm3{zz.q*}`: ruled
-      ;; `{:zz @[1 2]}`, shipped would nominal-refuse naming the root re-nest;
-      ;; and an ω behind a key silently returned the RAW field at 0 errors).
-      ;; A design-sentence-vs-ruling contradiction is an OWNER question, not a
-      ;; mid-flight widening — so depth ≥ 2 REFUSES honestly until it is ruled.
-      ;; The reduction twin panics on the same condition.
-      [(and (pair? prefix) (pair? (cdr prefix)))
-       (fail-k 'star-deep-prefix)]
+      ;; ⭐ 1b-iii-C2: THE DEPTH-≥2 SHIELD IS GONE. A deep trailing star no longer
+      ;; reaches this function at all — `select-branch-entries`' narrowed
+      ;; pre-check routes it to the head dispatch, and the join happens at
+      ;; `select-below-field`'s star-TAIL arm. What is left here is the
+      ;; remainder-EMPTY case (depth ≤ 1) plus every refusal.
+      ;;
+      ;; ⚠ THE ORDINAL GAP KEEPS A REFUSAL, and it is the one [Q_U46] reserved:
+      ;; an ordinal step contributes NO output level (Q_U2 Reading A), so when
+      ;; `sₙ` is an ordinal there is no preceding-step layer for the rule to
+      ;; quantify over. It is enforced at the tail arm, where `sₙ` is visible.
+      ;; The `star-deep-prefix` KIND survives, re-scoped to exactly that gap —
+      ;; reusing it rather than minting a kind keeps the render loop's
+      ;; hand-written list correct without a second edit.
       [else
        (let-values ([(layer lf)
                      (if (null? prefix)
@@ -1780,7 +1804,22 @@
       ;; both pre-classifiers read `(car (reverse b))`, which for a star-bearing
       ;; branch is the star (or worse, a caret AFTER a star — round 1's abort).
       ;; SAME POSITION as the reduction twin's arm, by construction.
-      [(ormap select-star-step? b)
+      ;; ⭐⭐ 1b-iii-C2 — THE SEAT MIGRATION. The pre-check NARROWS: a well-formed
+      ;; DEEP trailing star now falls through to the head dispatch, so the arms
+      ;; below re-nest around the join exactly as they do around a starless
+      ;; result. That is what makes [Q_U47]'s landing EMERGE rather than be
+      ;; computed — each arm is the branch remainder's own arm.
+      ;; ⚠ EVERY OTHER star shape still routes here, and must: `star-branch-entries`
+      ;; owns the remainder-EMPTY landing (depth ≤ 1, keyless) AND every star
+      ;; refusal, including the mid-branch one. A malformed star reaching the head
+      ;; dispatch would arrive at `select-below-field` with a star at the HEAD of
+      ;; its step list, match no arm, and hit the `[else]` — a plain `error`, i.e.
+      ;; a whole-file abort. Round 1's abort, one seat over.
+      ;; ⚠ It is SAFE to fall through past `col`/`keyless?` below only because both
+      ;; already answer for `star` deliberately (`select-branch-collapse` → #f with
+      ;; its reason; `select-branch-keyless?` → #f). If either ever moves,
+      ;; `walk-to-leaf` — which has NO star arm — is the abort it lands in.
+      [(and (ormap select-star-step? b) (not (select-branch-deep-star? b)))
        (star-branch-entries ctx tm b path seen sort)]
       [col
        (walk-to-leaf
@@ -1913,6 +1952,42 @@
 ;; including the keyless 1-tuple (`admins.{0}` ≠ `admins.0`).
 (define (select-below-field ctx ft steps path seen sort)
   (cond
+    ;; ⭐⭐ 1b-iii-C2 — THE STAR-TAIL ARM, and it is the whole seat migration.
+    ;; Fires on EXACTLY `(sₙ ★)` and returns the join **BARE**; the arm that
+    ;; called us — a key arm, a caret arm, an ordinal arm — then wraps it, and
+    ;; THAT is [Q_U47]'s landing. Nothing here decides keyed vs keyless.
+    ;;
+    ;; ⚠ AHEAD OF THE `memq` ARM DELIBERATELY. Falling through to it would
+    ;; delegate to the branch walk and then `select-assemble-row`, whose
+    ;; keyless-first fork mints a nat-domain 1-TUPLE — the B-tuple [Q_U46]
+    ;; rejected, and it is live and legal today as `cfg{db.{hosts*}}` →
+    ;; `{:db ⟨[PVec Int]⟩}`. The `bcast` arm below already argues this exact
+    ;; point for itself ("would wrap the result in a spurious level").
+    ;;
+    ;; ⚠ `select-below-components` needs NO twin of this arm: it routes a
+    ;; non-terminal-sub straight to `select-branch-entries`, where `(hosts ★)`
+    ;; is not DEEP and so takes the remainder-empty keyless landing — which is
+    ;; precisely what a dissolved survivor should splice. Verified, not assumed.
+    [(select-steps-star-tail? steps)
+     (let* ([sn (car steps)]
+            [star (cadr steps)]
+            [label (string->symbol (pp-select-branch steps))]
+            [fail-k (lambda (kind r) (values #f (select-fail kind path label r)))])
+       (cond
+         ;; [Q_U46]'s RESERVED GAP: an ordinal step contributes no output level
+         ;; (Q_U2 Reading A), so `sₙ` made no layer for the star to delete. Guided
+         ;; refusal, NOT a fall-through — falling through would compute the layer
+         ;; of whatever the ordinal descended INTO, silently answering a question
+         ;; the ruling declined to answer.
+         ;; ⚠ Only as `sₙ`. An ordinal ABOVE `sₙ` (`cfg2{a[0].b*}`) is fine: it is
+         ;; invisible to the re-nest exactly as it is in the starless control.
+         [(memq (select-step-kind sn) '(ord-step ord-branch))
+          (fail-k 'star-deep-prefix ft)]
+         [else
+          (let-values ([(layer lf) (select-below-field ctx ft (list sn) path seen sort)])
+            (if lf
+                (values #f lf)
+                (star-join-type layer star fail-k)))]))]
     [(and (select-sub-step? (car steps)) (null? (cdr steps)))
      (let-values ([(comps cf) (select-level-components ctx ft (cdr (car steps)) path sort)])
        (if cf (values #f cf) (values (select-assemble-row comps) #f)))]

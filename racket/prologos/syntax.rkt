@@ -178,6 +178,7 @@
  ;; D4.P4e-1b (Q_U40): the flatten step. `select-star-cont` is the ONLY reader of
  ;; its continuation — `select-step-cont` deliberately answers #f (see its note).
  select-star-step? select-star-cont make-select-star
+ select-branch-deep-star? select-steps-star-tail?
  ;; [Q_U44] canonical key order — ONE definition, shared by both twins.
  canonical-keyword-key? canonical-keyword-key<?
  select-step-cont select-cont-collapse? select-cont-rename
@@ -967,6 +968,41 @@
 ;; ⚠ Whoever changes that: this comment is a PRECONDITION. Re-read it at the
 ;; seat before invalidating it, and correct it in the SAME commit.
 (define (select-star-step? s) (and (pair? s) (eq? (car s) '@star)))
+
+;; ⭐⭐ D4.P4e-1b slice 1b-iii-C2 — THE TWO SHAPE TESTS THE SEAT MIGRATION TURNS
+;; ON. Both live HERE, in the one file that owns the step vocabulary, because
+;; each is consulted by BOTH twins and a hand-copied second definition is the
+;; drift class this track has paid for repeatedly.
+;;
+;; `select-branch-deep-star?` — is this branch a WELL-FORMED DEEP trailing star,
+;; i.e. one the head dispatch should handle rather than the branch-level star
+;; pre-check? Deep means at least TWO prefix steps, so the remainder (the branch
+;; minus the star minus `sₙ`) is NON-EMPTY and [Q_U47]'s landing is the caller's
+;; to make. Everything else a star can appear in — `[★]`, `[k ★]`, a star that is
+;; not last, two stars — stays with `star-branch-entries`, which owns the
+;; remainder-EMPTY landing and every star refusal.
+;; ⚠ The malformed shapes MUST keep routing there. A mid-branch star that fell
+;; through to the head dispatch would reach `select-below-field` with a star at
+;; the HEAD of its step list, match no arm, and hit the `[else]` — which is a
+;; plain `error`, i.e. a WHOLE-FILE abort. That is round 1's abort, one seat over.
+(define (select-branch-deep-star? b)
+  (let ([rev (reverse b)])
+    (and (pair? rev)
+         (select-star-step? (car rev))          ;; ends in a star
+         (pair? (cdr rev)) (pair? (cddr rev))   ;; …with ≥ 2 prefix steps
+         (not (ormap select-star-step? (cdr rev))))))
+
+;; `select-steps-star-tail?` — is this below-walk step list EXACTLY `(sₙ ★)`?
+;; ⚠ EXACTLY TWO, and that is the subtle half. The tail arm must fire only when
+;; the layer to delete is the one `sₙ` makes. On `(b c ★)` it must NOT fire: the
+;; walk has to consume `b` normally so `b` re-nests around the join, exactly as
+;; it would around a starless result. Firing early would compute the layer over
+;; the whole remaining prefix — which re-nests — and that is the BRANCH-ROOT
+;; reading Q_U46 rejected, reappearing one level down.
+(define (select-steps-star-tail? steps)
+  (and (pair? steps) (pair? (cdr steps)) (null? (cddr steps))
+       (select-star-step? (cadr steps))
+       (not (select-star-step? (car steps)))))
 (define (make-select-star cont) (list '@star cont))
 
 ;; ⭐ D4.P4e-1b slice 1b-iii-A [Q_U44] — CANONICAL KEY ORDER, defined ONCE.
