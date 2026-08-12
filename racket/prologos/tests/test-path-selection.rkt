@@ -7771,6 +7771,76 @@
   (check-false (regexp-match? #rx"`db.hosts\\*` contributes a KEYLESS component" out)
                (format "…but it must not say the STAR is the keyless one: ~a" out)))
 
+
+;; ---- 1b-iii-C2 verify ROUND 2, F1 — a CARET fused into a star-bearing segment
+;;      is taken VERBATIM as field-name text. BLOCKING: silent wrong answer.
+;;
+;; `split-star-lexeme` splits on the first `*` and returns the prefix verbatim,
+;; with no caret handling. Its SIBLING `split-caret-lexeme` has carried the
+;; mirror-image guard since DEFERRED 90 — "a rename target may not contain `*`"
+;; — and that guard's own comment records the class being UNDER-COUNTED once
+;; already. This is the same class a third time, in the sibling function, in the
+;; other direction.
+;;
+;; Only the BRANCH-INITIAL band was safe, and only by ARM ORDER: `re-key-sym?`
+;; sits ahead of `star-sym?`, so `cfg{db^*}` reaches the caret splitter. The DOT
+;; and ω bands call their star arms BEFORE their caret siblings, so the guard is
+;; structurally unreachable from them.
+;;
+;; ⚠ PROVENANCE: the dot band is a C2 REGRESSION. Pre-C2 the depth-≥2 shield
+;; caught every dot-band instance (a mid-branch caret-star has ≥2 prefix steps by
+;; construction), so this was a `star-deep-prefix` refusal. C2 removed the shield
+;; and nothing replaced it. The ω band is pre-existing from the B2 mint.
+;; ⚠ Subjects deliberately avoid the `s`+digit naming shape — see DEFERRED 121.
+
+(test-case "1b-iii-C2 R2/F1: a caret fused into a star segment must REFUSE, not read a different field"
+  ;; the SILENT case, and it is why this is BLOCKING rather than a bad message:
+  ;; a caret-suffixed field name is spellable, so the misread has a real target.
+  (define src (string-append "ns f1a\n"
+                             "def q := {:db {:hosts @[1 2] :hosts^ @[99]}}\n"
+                             "q{db.hosts^*}"))
+  (check-true (p4e1-has? src #rx"at most one operator suffix")
+              (format "`hosts^*` must take the one-operator-suffix refusal; got: ~s"
+                      (p4e1-last src)))
+  ;; the discriminating half: it must not ANSWER at all. Before the fix this
+  ;; returned `{:db @[99]}` — the contents of `:hosts^`, a field the user never
+  ;; wrote — at ZERO errors.
+  (check-false (p4e1-type src)
+               (format "a refused branch must print no value; got: ~s" (p4e1-last src))))
+
+(test-case "1b-iii-C2 R2/F1: the ω band takes the same refusal as the dot band"
+  (define src (string-append "ns f1b\n"
+                             "def rws := {:k @[{:tg @[1]} {:tg @[2 3]}]}\n"
+                             "rws{k:tg^*}"))
+  (check-true (p4e1-has? src #rx"at most one operator suffix")
+              (format "the ω band must refuse `tg^*` too; got: ~s" (p4e1-last src))))
+
+(test-case "1b-iii-C2 R2/F1 CONTROL: the branch-initial band already refused, and must keep doing so"
+  ;; this is the band whose safety was accidental (arm order); the fix must not
+  ;; move it, and if it ever regresses this says so separately from the two above
+  (define src (string-append "ns f1c\n"
+                             "def cfg := {:db {:hosts @[1 2] :ports @[80]}}\n"
+                             "cfg{db^*}"))
+  (check-true (p4e1-has? src #rx"at most one operator suffix")
+              (format "branch-initial must keep its DEFERRED-90 refusal; got: ~s"
+                      (p4e1-last src))))
+
+(test-case "1b-iii-C2 R2/F1 CONTROL: the caretless and starless spellings are untouched"
+  ;; the fix keys on a caret in the star's NAME residue, so neither of these may
+  ;; move. Full line, value AND type — `[PVec Int]` is a substring of others.
+  (define star-only (string-append "ns f1d\n"
+                                   "def cfg := {:db {:hosts @[1 2] :ports @[80]}}\n"
+                                   "cfg{db.hosts*}"))
+  (check-true (p4e1-has? star-only #rx"\\{:db @\\[1 2\\]\\}")
+              (format "the plain deep flatten must be unchanged; got: ~s" (p4e1-last star-only)))
+  (check-equal? (p4e1-type star-only) "{:db [PVec Int]}"
+                (format "…and its TYPE; got: ~s" (p4e1-last star-only)))
+  (define caret-only (string-append "ns f1e\n"
+                                    "def cfg := {:db {:hosts @[1 2] :ports @[80]}}\n"
+                                    "cfg{db.hosts^}"))
+  (check-equal? (p4e1-type caret-only) "⟨[PVec Int]⟩"
+                (format "the caret alone still dissolves; got: ~s" (p4e1-last caret-only))))
+
 ;; ---- 1b-iv: the [Q_U40] LAW *and its ω qualifier* — the qualifier is the half
 ;;      that a test must carry, because the law alone reads as unconditional.
 ;;

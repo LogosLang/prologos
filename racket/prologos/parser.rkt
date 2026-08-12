@@ -1217,14 +1217,48 @@
      ;; because there is no segment at all to attach to.
      (values #f (format "`~a` — `*` is postfix; it attaches to the END of a segment" str))]
     [else
-     (let ([name (string->symbol (substring str 0 first-star))]
+     (let ([name-str (substring str 0 first-star)]
            [k (substring str (add1 first-star))])
        (cond
-         [(string=? k "")  (values name 'flatten)]
+         ;; ⚠⚠ D4.P4e-1b-iii-C2 verify ROUND 2, F1 — THE MIRROR OF DEFERRED 90,
+         ;; AND THE SAME CLASS A THIRD TIME, IN THIS FUNCTION'S OWN SIBLING.
+         ;; `split-caret-lexeme` has guarded "the CONT contains a `*`" since
+         ;; DEFERRED 90, and that guard's comment records the class being
+         ;; UNDER-COUNTED once already. The mirror — "the NAME contains a `^`" —
+         ;; was never written here, so this function returned the prefix VERBATIM
+         ;; and a caret rode into a field name.
+         ;; MEASURED before the fix, and it is a SILENT WRONG ANSWER because a
+         ;; caret-suffixed field name is spellable:
+         ;;   def q := {:db {:hosts @[1 2] :hosts^ @[99]}}
+         ;;   q{db.hosts^*}  ⟹  {:db @[99]}   at ZERO errors
+         ;; — the contents of `:hosts^`, a field the user never wrote.
+         ;; ⚠ ONLY the BRANCH-INITIAL band was safe, and only by ARM ORDER
+         ;; (`re-key-sym?` precedes `star-sym?`), so `cfg{db^*}` reached the
+         ;; caret splitter. The `$dot-access` and ω bands call their star arms
+         ;; BEFORE their caret siblings, making that guard structurally
+         ;; unreachable from two of the three bands. DEFERRED 90 declares the
+         ;; precedence requirement DISCHARGED — and every worked example in it is
+         ;; branch-initial, which is exactly the band where the guard is reached.
+         ;; ⚠ PROVENANCE: the dot band is a C2 REGRESSION (the depth-≥2 shield
+         ;; caught it — a mid-branch caret-star has ≥2 prefix steps by
+         ;; construction — and C2 removed the shield); the ω band is
+         ;; pre-existing from the B2 mint.
+         ;; THE GUARD LIVES HERE, not in the two arms, because here it covers
+         ;; every caller BY CONSTRUCTION — the arms' order is what failed.
+         ;; It is the FIRST arm for the same reason its sibling's is hoisted:
+         ;; below the arms it would miss whichever residue returned first.
+         [(regexp-match? #rx"\\^" name-str)
+          (values #f (format (string-append
+                              "`~a` — a segment name may not contain `^`; `^` re-keys and `*`"
+                              " deletes a layer, and a segment carries at most one operator"
+                              " suffix. Spell them as separate segments — `x{k^.f*}` re-keys"
+                              " above and flattens below")
+                             str))]
+         [(string=? k "")  (values (string->symbol name-str) 'flatten)]
          ;; Q_U24's provenance form. Its rule is `^-_`'s (synthesize over the
          ;; deleted layer), NOT `^_`'s — recorded so the semantics slice cannot
          ;; inherit the wrong parent and silently degrade `*_` to bare `*`.
-         [(string=? k "_") (values name 'flatten-synth)]
+         [(string=? k "_") (values (string->symbol name-str) 'flatten-synth)]
          [else (values #f (star-mid-lexeme-message str))]))]))
 
 (define (segment-select-items items loc [sub? #f])
