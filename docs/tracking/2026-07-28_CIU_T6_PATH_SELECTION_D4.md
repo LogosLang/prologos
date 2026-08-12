@@ -8957,7 +8957,7 @@ B1/B2 — land the machinery INERT, then migrate the seat.** C repeats it.
 | slice | content | why it is safe alone |
 |---|---|---|
 | **1b-iii-C1** ✅ `4f30a171` | **The SHARED JOIN, hoisted and returning BARE.** `star-join-type` (typing-core) + `star-join-value` (reduction) at module level, both exported; each twin's existing caller now wraps keyless (its remainder-empty case). `select-below-field` exported as C2's seat. syntax.rkt doc-truth. ⚠ **RE-SCOPED mid-slice**: the tail ARMS moved to C2 — see the note below. | Pure extraction. Battery 498 → **501**, 0/0 by direct require; every pre-existing pin green IS the regression proof (the B1 pins already exercise depth-1 through both twins). **Mutation-tested PER TWIN**, inverted in place: re-wrapping typing's return → 3 FAILURE + 3 ERROR, reduction's → 2 FAILURE + 4 ERROR, the C1 pin among them each time. ⚠ Both mutant runs **exited 0**. E2E star surface byte-identical to pre-C1; neighbourhood 318 `[4/4]`; acceptance 0 errors. |
-| **1b-iii-C2** ✅ `68014124` (instrument `d8776b66`) | **THE DEEP FLATTEN IS LIVE.** `cfg{db.hosts*}` → `{:db @[1 2]}` · `two{a.{x y}*}` → `{:a @[1 2 3]}` · depth 3 works. Pre-check narrowed via `select-branch-deep-star?`; ONE star-TAIL arm per twin (`select-steps-star-tail?`, exactly `(sₙ ★)`) returning C1's join BARE; both shields out; `star-dup-key` seat; L4 message de-lied; `star-deep-prefix` re-scoped to the ordinal gap. | ⭐ **Two of the three landings needed NO CODE** — the dissolve and ord-branch arms already wrap keyless, and `select-below-components` needed no twin arm at all. Battery 504 → **511**, 0/0 · neighbourhood 348 `[5/5]` · acceptance 0 errors · adversarial verify **round 1 DONE** (`wf_bf354f2d-675`) — 3 BLOCKING regressions fixed at `eee68262`; **round 2 owed**, plus 3 diagnostic majors and the full suite. Record: [§5.P4e-1b-iii-C2](#p4e-1b-iii-c2) |
+| **1b-iii-C2** ✅ `68014124` (instrument `d8776b66`) | **THE DEEP FLATTEN IS LIVE.** `cfg{db.hosts*}` → `{:db @[1 2]}` · `two{a.{x y}*}` → `{:a @[1 2 3]}` · depth 3 works. Pre-check narrowed via `select-branch-deep-star?`; ONE star-TAIL arm per twin (`select-steps-star-tail?`, exactly `(sₙ ★)`) returning C1's join BARE; both shields out; `star-dup-key` seat; L4 message de-lied; `star-deep-prefix` re-scoped to the ordinal gap. | ⭐ **Two of the three landings needed NO CODE** — the dissolve and ord-branch arms already wrap keyless, and `select-below-components` needed no twin arm at all. Battery 504 → **520**, 0/0 · neighbourhood `[4/4]` · acceptance 0 errors · adversarial verify **rounds 1 AND 2 DONE** (`wf_bf354f2d-675`, `wf_87b2134b-d05`) — 3 BLOCKING fixed at `eee68262`, R2's F1/F3/F4 at `73c56b2c`+`28b524d7`, **R2's tail (F5, F7, the 3 diagnostic majors, DEFERRED 122's un-park) at `7ed99f39`+**. ⬜ **Full suite still owed** (unrun since `5e4a3338`). Records: [§5.P4e-1b-iii-C2](#p4e-1b-iii-c2) · [the R2 tail](#p4e-1b-iii-c2-r2-tail) |
 
 <a id="p4e-1b-iii-c2"></a>
 
@@ -9059,9 +9059,67 @@ first).** The adjudicator was asked outright whether round 1's shape repeats:
 | **F3** | MAJOR (latent) | round 1's fix reached BOTH typing seats and NEITHER reduction one; the unguarded seat asserted the invariant in PROSE, the other kept a hand-copied `memq` | ✅ FIXED `28b524d7` |
 | **F4** | MINOR | `select-branch-has-star?/deep` said "ANYWHERE" and recursed into `(@sub …)` only — blind to `(@bcast (@sub …))` | ✅ FIXED `28b524d7` |
 | **F2** | MAJOR | a parse-level state leak drops `def s0\|s1\|s7 := …`; **invalidates [DEFERRED 121](DEFERRED.md)'s diagnosis** | ⬜ [DEFERRED 122](DEFERRED.md) |
-| **F5** | MINOR | a sibling `@sub` arm still asserts *"the parser grammar forbids this shape"* for a shape C2 made reachable | ⬜ owed |
-| **F7** | MINOR | the round-1 fix spliced two definitions between a PRECONDITION header and the function it guards | ⬜ owed |
+| **F5** | MINOR | a sibling `@sub` arm still asserts *"the parser grammar forbids this shape"* for a shape C2 made reachable | ✅ FIXED `7ed99f39` |
+| **F7** | MINOR | the round-1 fix spliced two definitions between a PRECONDITION header and the function it guards | ✅ FIXED `7ed99f39` |
 | F6 | MINOR | a pre-existing PATH-band message; explicitly NOT a round-2 finding and NOT a regression | ⬜ with DEFERRED 105/116 |
+
+<a id="p4e-1b-iii-c2-r2-tail"></a>
+
+**⭐⭐ ROUND 2's TAIL — F5, F7, the three diagnostic MAJORS and DEFERRED 122's
+rename, closed at `7ed99f39` + the majors commit. Two of the four went a
+different way than the work order said, and BOTH divergences came from
+measuring instead of adopting.**
+
+· **F5 — the sibling's fix was the WRONG fix.** Round 1 repaired
+`below-components` by going terminal-only-else-delegate; `below-value` cannot,
+because its fallthrough is the `memq` arm which LISTS `sub` — an entry its own
+P4a site-8 comment records as dead *only while this arm guards on `@sub` alone*.
+Delegating would revive it and project a RAW STEP LIST as a nominal key, the
+class D4.P4a removed. So: wording corrected, guard untouched. Owner ruled the
+cheap honest-message fix and to record it latent.
+· ⚠ **AND "LATENT, NO PIN CAN REACH IT" WAS FALSE — caught by sweeping for
+echoes of the string being renamed.** No SURFACE spelling reaches the residue
+(`(sub ★)` is taken by the tail arm above), but the P3a-verify pin constructs it
+directly as IR — `'((a (@sub (b)) c))` — and had been GREEN for its whole life
+across a message asserting a prohibition that never existed, because it asserted
+only `expr-panic?`. *Watching 5* verbatim, the second time this slice has paid
+for it. The message is pinned now.
+· **F7** — `select-steps-star-tail?`'s "⚠ EXACTLY TWO" precondition was ~40 lines
+and two definitions from the function it guards; the definition moved up under
+its header. Verified pure motion (added and removed blocks byte-identical).
+· **MAJOR (b), `star-dup-key`** — *"drop the `*`"* removed. Wrong BY
+CONSTRUCTION under [Q_U47] (the surviving key comes from the remainder, which
+the star never touches) and MEASURED: `cfg{db.hosts db}` is still refused, so
+the advice only relocated the error to the parser's gate. ⚠ The round-1 record's
+proposed replacement (sub-block grouping) measured as an **L4 error** and was
+NOT adopted — pinned so it cannot be adopted from the record later. Shipped
+remedies, each RUN: `cfg{db^d2.hosts* db}` ✓, `cfg{db.hosts* db^d2}` ✓ (hence
+"EITHER branch"), `cfg{db.hosts*}` alone ✓.
+· **MAJOR (c), `star-l4-mixed`** — the old list was a NON-ACTION for half its
+population: with both branches starred at different depths, "star the siblings
+too" is already done and "drop the `^`" names a caret that is not there. ⭐ The
+root error was talking about STARS when Q_U47 makes the landing a property of
+the REMAINDER — MEASURED, `m2{a* b*}` works (both branch-initial) while
+`m2{a* d.c*}` does not, though both are "starred on each". The message now
+states the RULE and the fix is ADDING a caret (`m2{a* d^.c*}` ✓). The reverse
+direction is not spellable (`a^k1*` → *"a rename target may not contain `*`"*).
+· **MAJOR (a) — TRIED, MEASURED, REVERTED, and filed as [DEFERRED 123](DEFERRED.md).**
+The tail arm's label echoes `(sₙ ★)` (`y2{a.b[0]*}` → ``0*``) where the sibling
+seat labels from the whole branch. `(append path steps)` looks free — `path` IS
+the consumed prefix, measured `()` at top level so it does not double-count —
+but `path` stores bare NAMES, so `y3{a^.b[0]*}`, `y3{a.b[0]*}` and
+`y3{a^r.b[0]*}` ALL rendered ``a.b.0*``: in a multi-branch block that names a
+SIBLING as the failing branch. **A label that identifies too little beats one
+that identifies the wrong thing** — this round's own doctrine, applied against
+my own fix. ⭐ And the lossiness is SYSTEMIC: `format-select-fail`'s `branch-str`
+already dot-joins `path` for every other fail kind, so it carries the same
+collapse today, unmeasured.
+· **DEFERRED 122** — the parked pin un-parked by renaming its subject `s7` →
+`subj`, and its comment corrected (it repeated 121's disproved diagnosis).
+**Mutation-verified against the defect it exists for**: with round 1's `/deep`
+recursion reverted, `subj{a^.{b.c*} b}` → `{:b @[9]}` at zero errors and the pin
+reddens with that output in its message. The mechanism behind 122 is still NOT
+located; the rename is a workaround and says so.
 
 **⭐⭐ F1 — AND IT IS THE SAME CLASS A THIRD TIME, IN THE SIBLING FUNCTION.**
 `split-caret-lexeme` has guarded *"the CONT contains a `*`"* since DEFERRED 90,

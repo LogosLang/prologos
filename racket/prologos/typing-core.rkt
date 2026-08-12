@@ -1996,6 +1996,29 @@
     [(select-steps-star-tail? steps)
      (let* ([sn (car steps)]
             [star (cadr steps)]
+            ;; ⚠⚠ ROUND 2 MAJOR (a) — KNOWN NARROW, AND THE OBVIOUS FIX WAS
+            ;; TRIED, MEASURED AND REVERTED. Do not re-attempt it blind.
+            ;; The narrowness is real: this arm holds only `(sₙ ★)`, so the label
+            ;; echoes the last two steps of a branch the user wrote in full —
+            ;; MEASURED, `y2{a.b[0]*}` reports ``0*`` — while the sibling seat
+            ;; `star-branch-entries` labels from the whole branch `b`. Diagnostic
+            ;; quality therefore depends on which seat caught the failure.
+            ;; ⭐ `(append path steps)` LOOKS like the free fix, because `path` IS
+            ;; the consumed prefix (measured: `(a b)` for `y2{a.b[0]*}`, `(a)` for
+            ;; `y{a[0]*}`, and `()` at top level, so it does not double-count).
+            ;; ⛔ IT TRADES A NARROW LABEL FOR A WRONG ONE. `path` stores bare
+            ;; NAMES, not steps — the cont suffix is dropped — so three DIFFERENT
+            ;; branches collapse onto one label. Measured under the candidate fix:
+            ;; `y3{a^.b[0]*}`, `y3{a.b[0]*}` and `y3{a^r.b[0]*}` ALL reported
+            ;; ``a.b.0*``. In a multi-branch block that names a SIBLING branch as
+            ;; the failing one. A label that identifies too little is better than
+            ;; one that identifies the wrong thing, which is this round's whole
+            ;; doctrine.
+            ;; ⚠ THE LOSSINESS IS SYSTEMIC, NOT LOCAL: `format-select-fail`'s
+            ;; `branch-str` already renders `path` dot-joined for every OTHER
+            ;; fail kind, so it carries the same defect today. The real repair is
+            ;; to make `path` carry STEPS rather than names (~20 `append path`
+            ;; sites + that renderer + both twins) — its own slice, not this arm's.
             [label (string->symbol (pp-select-branch steps))]
             [fail-k (lambda (kind r) (values #f (select-fail kind path label r)))])
        (cond

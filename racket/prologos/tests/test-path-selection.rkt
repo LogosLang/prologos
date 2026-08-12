@@ -7654,43 +7654,48 @@
   (check-equal? (p4e1-last (string-append W "w{zz^.u* aa^.v*}*")) "@[1 2 3 4] : [PVec Int]"
                 "dissolve makes them keyless → tuple in WRITTEN order (§3.3), Q_U44's recovery at depth"))
 
-;; ⚠⚠ PARKED, AND THE REASON IS AN INSTRUMENT LIMIT, NOT AN OPEN DEFECT.
-;; The FIX is verified — by `tools/scratch-run.sh` on a real file, both branch
-;; orders now give `duplicate output key `:b``, where at 68014124 they gave
-;; `{:b @[9]}` and `{:b @["x" "y"]}`, different value AND type, at zero errors.
-;; The PIN cannot run: under `p4e1`'s string path the subject `def s7 := {:a {:b
-;; {:c @[1 2]}} :b @[9]}` never binds — the next command reports `Unbound
-;; variable s7` — while the identical source through `process-file` defines it
-;; fine. That is a LEVEL-2 vs LEVEL-3 divergence in the harness (the class
-;; `testing.md` § "Three-level WS validation" names), not a star defect, and
-;; chasing it here would be mid-flight widening.
-;; ⭐ RECORDED RATHER THAN QUIETLY DROPPED because an unpinned fix is how this
-;; defect shipped in the first place. What is owed: either a p4e1 subject shape
-;; that binds, or an acceptance-file row. The other two round-1 pins are LIVE.
-;; (test-case "1b-iii-C2 verify round 1: a star NESTED in a sub-block is visible to the dup gate — order-INdependently"
-;;   ;; ⭐⭐ THE ROUND-1 BLOCKING DEFECT. The dup gate tested `ormap
-;;   ;; select-star-step?` over each branch's TOP-LEVEL steps, so a star inside a
-;;   ;; `(@sub …)` was invisible; a dissolved head then spliced its keyed component
-;;   ;; into the level and two branches delivered `:b` with no gate seeing either.
-;;   ;; Measured at 68014124: these two lines — the SAME selection, branches swapped
-;;   ;; — returned `{:b @[9]}` and `{:b @["x" "y"]}`, different VALUE and different
-;;   ;; TYPE, at ZERO errors. Verbatim the failure the gate was added to prevent,
-;;   ;; one nesting level down. BOTH ORDERS are pinned, because order was the tell.
-;;   ;; ⚠ Int contents, not String: a string literal inside a Racket string inside a
-;;   ;; python-generated pin is three escaping layers, and the first cut of this pin
-;;   ;; failed there rather than in the compiler. The defect does not depend on the
-;;   ;; content type.
-;;   ;; ⚠ AND THE FAILURE MESSAGE CARRIES THE OBSERVED OUTPUT. The first cut
-;;   ;; interpolated only the source, so when it went red it could not say what had
-;;   ;; actually come back — the *Watching 8* lesson (print the ACTUAL output beside
-;;   ;; the assertion) costing a cycle in the very pin written to close a defect.
-;;   (define S "ns c2n\ndef s7 := {:a {:b {:c @[1 2]}} :b @[9]}\n")
-;;   (for ([src (in-list (list "s7{a^.{b.c*} b}" "s7{b a^.{b.c*}}"))])
-;;     (define out (p4e1-last (string-append S src)))
-;;     (check-false (p4e1-type (string-append S src))
-;;                  (format "~a must not silently answer — got: ~a" src out))
-;;     (check-true (regexp-match? #rx"duplicate output key" out)
-;;                 (format "~a must name the collision — got: ~a" src out))))
+;; ⭐⭐ UN-PARKED at verify ROUND 2 by a ONE-CHARACTER RENAME of the subject, and
+;; the reason it was parked was NOT what the parking note said.
+;;
+;; The note claimed a LEVEL-2 vs LEVEL-3 harness divergence — `p4e1`'s string
+;; path failing to bind a subject that `process-file` binds fine. Round 2
+;; measured that and it is FALSE: the identical string through the identical
+;; `process-string-ws` binds fine IN A CLEAN PROCESS. The real discriminator is
+;; the subject NAME — `s` followed by a single digit — dropped by a parse-level
+;; state leak in a process that has already run this module. [DEFERRED 122],
+;; which supersedes [DEFERRED 121]'s recorded diagnosis. The mechanism is still
+;; not located; the rename is what makes the pin runnable today, and it is
+;; recorded as a workaround rather than a fix.
+;;
+;; ⚠ AND THE PARKING WAS ITSELF THE HAZARD DEFERRED 122 NAMES. Under the leak
+;; this pin's negative half (`check-false p4e1-type`) would have PASSED
+;; VACUOUSLY — the type is #f because the command errored, not because the
+;; branch was refused. Only the positive half catches anything. Both halves are
+;; kept deliberately, which is why this pin is trustworthy now that it runs.
+(test-case "1b-iii-C2 verify round 1: a star NESTED in a sub-block is visible to the dup gate — order-INdependently"
+  ;; ⭐⭐ THE ROUND-1 BLOCKING DEFECT, and this is its regression pin. The dup gate
+  ;; tested `ormap select-star-step?` over each branch's TOP-LEVEL steps, so a
+  ;; star inside a `(@sub …)` was invisible; a dissolved head then spliced its
+  ;; keyed component into the level and two branches delivered `:b` with no gate
+  ;; seeing either. Measured at 68014124: these two lines — the SAME selection,
+  ;; branches swapped — returned `{:b @[9]}` and `{:b @["x" "y"]}`, different
+  ;; VALUE and different TYPE, at ZERO errors. Verbatim the failure the gate was
+  ;; added to prevent, one nesting level down. BOTH ORDERS are pinned, because
+  ;; order was the tell.
+  ;; ⚠ Int contents, not String: a string literal inside a Racket string is an
+  ;; escaping layer the defect does not depend on.
+  ;; ⚠ THE SUBJECT IS `subj`, NOT `s7`, AND THAT IS LOAD-BEARING — see the note
+  ;; above and DEFERRED 122. Do not "tidy" it back to a short `s`-plus-digit name.
+  ;; ⚠ AND THE FAILURE MESSAGE CARRIES THE OBSERVED OUTPUT (Watching 8): the
+  ;; first cut interpolated only the source, so when red it could not say what
+  ;; had actually come back.
+  (define S "ns c2n\ndef subj := {:a {:b {:c @[1 2]}} :b @[9]}\n")
+  (for ([src (in-list (list "subj{a^.{b.c*} b}" "subj{b a^.{b.c*}}"))])
+    (define out (p4e1-last (string-append S src)))
+    (check-false (p4e1-type (string-append S src))
+                 (format "~a must not silently answer — got: ~a" src out))
+    (check-true (regexp-match? #rx"duplicate output key" out)
+                (format "~a must name the collision — got: ~a" src out))))
 
 (test-case "1b-iii-C2 verify round 1: the ordinal gap refuses at BOTH layer-computing seats"
   ;; ⭐⭐ ROUND-1 BLOCKING. The ordinal check shipped at the tail arm only; a
@@ -7784,6 +7789,75 @@
               (format "keyed star beside a keyless sibling is still an L4 error: ~a" out))
   (check-false (regexp-match? #rx"`db.hosts\\*` contributes a KEYLESS component" out)
                (format "…but it must not say the STAR is the keyless one: ~a" out)))
+
+;; ---- 1b-iii-C2 verify ROUND 2, the DIAGNOSTIC MAJORS — a remedy is pinned by
+;;      RUNNING it, not by reading it.
+;;
+;; ⚠⚠ BOTH messages recommended actions that DO NOT WORK, and in one case the
+;; round-1 record's proposed replacement did not work either — which is why every
+;; remedy below is asserted twice: the message must NAME it, and the spelling it
+;; names must PRODUCE the measured line. A remedy pinned only as message text is
+;; the "advice that does not work" class this track has already shipped once.
+;; ⚠ Subjects avoid the `s`+digit naming shape — see DEFERRED 122.
+
+(define C2V-L4 (string-append C2V "def m2 := {:a @[1 2] :b @[3 4] :d {:c @[5 6]}}\n"))
+(define (l4-line src) (p4e1-last (string-append C2V-L4 src)))
+(define (l4-refused? src) (not (p4e1-type (string-append C2V-L4 src))))
+
+(test-case "1b-iii-C2 R2 major: `star-dup-key`'s remedies are the ones that WORK — dropping the star is not one"
+  (define out (c2-line "cfg{db.hosts* db}"))
+  ;; ⛔ the removed remedy, and it was wrong BY CONSTRUCTION: under [Q_U47] the
+  ;; surviving key comes from the REMAINDER, which the star never touches.
+  (check-false (regexp-match? #rx"drop the `\\*` so the layers nest" out)
+               (format "must not advise dropping the star — it cannot move the surviving key: ~a" out))
+  ;; …and here is the proof it cannot: the same branch with the star dropped is
+  ;; STILL refused. The old advice merely relocated the error to the parser gate.
+  (check-true (c2-refused? "cfg{db.hosts db}")
+              "dropping the star leaves the collision — it only moves which gate refuses")
+  ;; ✅ the remedies the message now names, each RUN
+  (check-true (regexp-match? #rx"\\^k'" out)
+              (format "must name the rename remedy: ~a" out))
+  (check-equal? (c2-line "cfg{db^d2.hosts* db}")
+                "{:d2 @[1 2], :db {:ports @[80], :hosts @[1 2]}} : {:d2 [PVec Int] :db {:hosts [PVec Int] :ports [PVec Int]}}"
+                "renaming the STAR branch resolves the collision")
+  (check-equal? (c2-line "cfg{db.hosts* db^d2}")
+                "{:d2 {:ports @[80], :hosts @[1 2]}, :db @[1 2]} : {:d2 {:hosts [PVec Int] :ports [PVec Int]} :db [PVec Int]}"
+                "…and so does renaming the SIBLING — hence \"EITHER branch\"")
+  (check-equal? (c2-line "cfg{db.hosts*}")
+                "{:db @[1 2]} : {:db [PVec Int]}"
+                "selecting the flatten in its own block is the third working remedy")
+  ;; ⛔ AND THE ROUND-1 RECORD'S PROPOSED REPLACEMENT IS ALSO WRONG — pinned so
+  ;; the next session cannot adopt it from the record. Measured: an L4 error.
+  (check-true (c2-refused? "cfg{db.{hosts* ports}}")
+              "sub-block grouping does NOT survive a star — do not adopt it here")
+  (check-false (regexp-match? #rx"sub-block" out)
+               (format "so the message must not offer sub-block grouping: ~a" out)))
+
+(test-case "1b-iii-C2 R2 major: `star-l4-mixed` names the RULE, so its remedy is an action in every case"
+  ;; the misleading population: BOTH branches starred, at different depths. The
+  ;; old list said "star the siblings too" (already done) and "drop the `^`"
+  ;; (there is no `^`) — two non-actions, and the real fix is the OPPOSITE of the
+  ;; second: ADD a caret.
+  (define out (l4-line "m2{a* d.c*}"))
+  (check-true (l4-refused? "m2{a* d.c*}")
+              (format "keyless star beside a KEYED star is still an L4 error: ~a" out))
+  (check-false (regexp-match? #rx"star the siblings too \\(`\\*` on each\\)" out)
+               (format "must not offer an action already taken: ~a" out))
+  (check-false (regexp-match? #rx"drop the `\\^` that made a sibling keyless" out)
+               (format "must not name a caret that is not there: ~a" out))
+  ;; ✅ the rule, and the two spellings it licenses — each RUN
+  (check-true (regexp-match? #rx"lands KEYLESS exactly when no step survives" out)
+              (format "must state the rule that decides the landing: ~a" out))
+  (check-equal? (l4-line "m2{a* d^.c*}")
+                "@[@[1 2] @[5 6]] : ⟨[PVec Int] [PVec Int]⟩"
+                "ADDING a caret dissolves the surviving key — the opposite of the old advice")
+  (check-equal? (l4-line "m2{a* b*}")
+                "@[@[1 2] @[3 4]] : ⟨[PVec Int] [PVec Int]⟩"
+                "starring a sibling works ONLY when that sibling has no surviving key")
+  ;; …which is exactly why the unconditional form was wrong: same "star each",
+  ;; opposite outcome, and the discriminator is the remainder, not the star.
+  (check-true (l4-refused? "m2{a* d.c*}")
+              "starring both is not sufficient when one keeps a key"))
 
 
 ;; ---- 1b-iii-C2 verify ROUND 2, F1 — a CARET fused into a star-bearing segment

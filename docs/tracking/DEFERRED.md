@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 123**
+> ### **NEXT FREE: 124**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7158,3 +7158,53 @@ keys on `s`+digit; (2) **un-park the dup pin, which is the regression pin for
 round 1's headline BLOCKING defect** — verified, a one-character rename of its
 subject unblocks it today; (3) correct the code comment at the parked pin, which
 repeats 121's wrong diagnosis; (4) probe the LSP/REPL routes.
+
+---
+
+### 123. ⬜ ⭐ `select-fail`'s `path` CARRIES NAMES, NOT STEPS — so every label built from it COLLAPSES DISTINCT BRANCHES, and that is what blocks the star tail-arm's narrow label
+
+Found by CIU T6 D4.P4e-1b-iii-C2 **verify round 2**, while fixing the third of
+the round's diagnostic majors. The obvious fix was written, MEASURED, and
+REVERTED — this entry exists so the next session does not re-attempt it blind.
+
+**THE SURFACE DEFECT** (round 2's owed major (a)): `select-below-field`'s
+star-TAIL arm holds only `(sₙ ★)`, so its label echoes the last two steps of a
+branch the user wrote in full. MEASURED: `y2{a.b[0]*}` reports ``0*``. Its
+sibling seat `star-branch-entries` labels from the whole branch `b`, so
+**diagnostic quality depends on which seat caught the failure**.
+
+**THE FIX THAT LOOKS FREE, AND WHY IT IS NOT.** `path` IS the consumed prefix —
+measured `(a b)` for `y2{a.b[0]*}`, `(a)` for `y{a[0]*}`, `()` at top level, so
+`(append path steps)` does not double-count — and it renders the right branch:
+``a.b.0*``. ⛔ **But `path` stores bare NAMES, dropping the cont suffix, so
+distinct branches collapse onto one label.** Measured under the candidate fix,
+three DIFFERENT branches all reported ``a.b.0*``:
+
+```
+y3{a^.b[0]*}   ⟹  `a.b.0*`
+y3{a.b[0]*}    ⟹  `a.b.0*`
+y3{a^r.b[0]*}  ⟹  `a.b.0*`
+```
+
+In a multi-branch block that **names a sibling branch as the failing one**. A
+label that identifies too little is better than one that identifies the wrong
+thing, so the change was reverted and the narrow label kept.
+
+**⭐ THE LOSSINESS IS SYSTEMIC, NOT LOCAL — this is the half that makes it worth
+an entry.** `format-select-fail`'s `branch-str`
+(`(string-join (map (lambda (p) (format "~a" p)) path) ".")`, typing-errors.rkt)
+already renders `path` dot-joined for **every other fail kind**, so it carries
+the same collapse today, for kinds far outside the star work. Nobody has
+measured which of those messages can name the wrong branch.
+
+**THE REPAIR**: make `path` carry STEPS rather than names — ~20 `append path`
+sites in typing-core.rkt (some already append the step, e.g. the ordinal arm;
+others the name, e.g. the bcast arms), plus `branch-str`, plus the reduction
+twin. Then both the tail arm's label and `branch-str` can render through
+`pp-select-branch` and be faithful. Its own slice; **do not do it inside a star
+slice**.
+
+⚠ **A SECOND, SMALLER RESIDUAL, recorded so it is not mistaken for this one**:
+`pp-select-branch` renders every `ord-step` as `.N`, so even a faithful label
+would spell `y{a[0]*}`'s branch as `a.0*`. That is [DEFERRED 113](#113)'s class
+(a renderer hardcoding `.`), not this one.

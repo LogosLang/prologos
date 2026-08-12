@@ -657,8 +657,27 @@
     ;; ⭐ 1b-iii-C2: the duplicate-output-key refusal. `label` here is the
     ;; COLLIDING KEY, not a branch spelling — the collision is a property of the
     ;; level, and naming the key is what tells the user which two branches met.
+    ;; ⚠⚠ ROUND 2 — "or drop the `*` so the layers nest instead of meeting" was
+    ;; WRONG, and wrong BY CONSTRUCTION rather than on some example. Under
+    ;; [Q_U47] the surviving key comes from the REMAINDER — the branch minus the
+    ;; star minus `sₙ` — which the star never touches. Dropping the star cannot
+    ;; move that key, so it can never resolve a collision. MEASURED:
+    ;; `cfg{db.hosts* db}` refuses here, and `cfg{db.hosts db}` (the same branch
+    ;; with the star dropped) refuses too — it merely hands the user from this
+    ;; gate to the PARSER's duplicate gate. A remedy that relocates the error is
+    ;; worse than none: it reads as progress.
+    ;; ⚠ AND THE ROUND-1 RECORD'S PROPOSED REPLACEMENT IS ALSO WRONG — measured
+    ;; before adopting, which is the only reason it was caught. It suggested
+    ;; borrowing the parser's "group same-head branches into one sub-block"
+    ;; remedy; `cfg{db.{hosts* ports}}` is an **L4 mixed-sorts error**. (That
+    ;; remedy is correct for the parser's own STARLESS population; it does not
+    ;; survive a star.) Following the record would have swapped one non-working
+    ;; remedy for another — the defect class being fixed, repeated.
+    ;; ✅ BOTH REMEDIES BELOW ARE MEASURED WORKING, in both directions:
+    ;; `cfg{db^d2.hosts* db}` → `{:d2 @[1 2], :db {…}}` · `cfg{db.hosts* db^d2}`
+    ;; → `{:d2 {…}, :db @[1 2]}` · `cfg{db.hosts*}` alone → `{:db @[1 2]}`.
     [(star-dup-key)
-     (format "duplicate output key `:~a` in the select block — a flatten's surviving key collides with a sibling branch's, and distinct output keys are required (strict merge; the alternative is a silent last-write-wins). Rename one with `^k'`, or drop the `*` so the layers nest instead of meeting"
+     (format "duplicate output key `:~a` in the select block — a flatten's surviving key collides with a sibling branch's, and distinct output keys are required (strict merge; the alternative is a silent last-write-wins). Rename EITHER branch with `^k'` (`x{k^k2.f* k}`), or select the flatten in its own block. Note that dropping the `*` will not help: the surviving key comes from the steps BEFORE the star, which the star does not touch"
              label)]
     [(star-l4-mixed)
      ;; ⚠ 1b-iii-C2: this WORDING used to assert that the STAR branch is the
@@ -667,7 +686,23 @@
      ;; `cfg{db.hosts* ports^}` is a keyed star beside a keyless SIBLING — the
      ;; opposite arrangement, and the old text told the user the reverse of what
      ;; happened. It now names the branch without claiming which side it is on.
-     (format "mixed keyed/keyless sorts in the select block (L4) — `~a` is a star branch whose landing and its sibling branches' do not agree: one level assembles a Map OR a tuple, never both. Match them — star the siblings too (`*` on each), drop the `^` that made a sibling keyless, or select the flatten separately"
+     ;; ⚠⚠ ROUND 2 — THE REMEDY LIST WAS A NON-ACTION FOR HALF ITS POPULATION,
+     ;; and the actual fix was the OPPOSITE of one of the entries. When BOTH
+     ;; branches are starred at different depths (`m2{a* d.c*}`), "star the
+     ;; siblings too" is already done and "drop the `^`" names a caret that is
+     ;; not there — so the user is told to do two things that cannot be done.
+     ;; MEASURED: the fix is to ADD a caret — `m2{a* d^.c*}` →
+     ;; `@[@[1 2] @[5 6]]`. ⭐ THE ROOT OF THE OLD LIST'S ERROR is that it talked
+     ;; about STARS when [Q_U47] makes the landing a property of the REMAINDER:
+     ;; a star lands keyless exactly when nothing survives to name it. So
+     ;; `m2{a* b*}` DOES work (measured — both branch-initial, both remainders
+     ;; empty) while `m2{a* d.c*}` does not, though both are "starred on each".
+     ;; Naming the RULE rather than a spelling is what makes the message true
+     ;; across the whole population.
+     ;; ⚠ The reverse direction is NOT spellable: `m2{a^k1* d.c*}` is refused
+     ;; ("a rename target may not contain `*`"), so making the keyless side keyed
+     ;; is not offered.
+     (format "mixed keyed/keyless sorts in the select block (L4) — `~a` is a star branch whose landing and its sibling branches' do not agree: one level assembles a Map OR a tuple, never both. A star lands KEYLESS exactly when no step survives after it to name it, so make the landings agree: add a `^` to dissolve a sibling's surviving key (`x{a* b^.c*}`), or star a sibling that has no surviving key of its own (`x{a* b*}`), or select the flatten in its own block. Adding a `*` to a sibling that keeps a key will NOT match them"
              label)]
     ;; ⭐ D4.P4e-1b slice 1b-iii-A — THE FAIL-KIND AXIS IS NOW TOTAL.
     ;; This arm was `#f`, and `#f` here is SILENT: it falls through `infer/err`'s
