@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 114**
+> ### **NEXT FREE: 115**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6921,3 +6921,25 @@ introduces its defects. The 1b-ii display pin cannot see it: it calls
 `pp-select-branch` directly and never goes through `pp-expr`.
 
 ---
+
+---
+
+### 114. ⬜ `#p(a.b*)` accepts a star-fused segment as a LITERAL KEY, and `[get-in m #p(a.b*)]` yields a first-class `<error>` VALUE at ZERO errors — pre-existing, star-adjacent
+
+Found by the 1b-iii-B adversarial verify (`wf_30884180-93c`), independently
+reproduced with controls. `def p2 := #p(a.b*)` → `p2 : Path defined.` at 0
+errors (the `b*` stored as a literal key — Q_U28's operator-wins ruling violated
+on this surface); `[get-in m p2]` → `<error> : _` printed as a FIRST-CLASS VALUE
+with zero error lines, where the inline miss control `[get-in m #p(a.nosuch)]`
+is loud. PRE-EXISTING relative to B1/B2 (the `#p` reader is not one of the four
+migrated bands; census G6: `#p(…)` is an opaque reader region). Two defects: the
+star-in-path-literal acceptance, and the `<error>`-as-value leak (the P4b-i
+`#p` retirement's residue). The fix likely belongs with the `#p` vocabulary's
+disposal (P4e-2 / the `.*` retirement inventory's neighbour).
+
+⚠ F3 from the same verify — a match row carrying an extra pattern is a
+WHOLE-FILE abort (`compile-match-tree` `list-ref`, macros.rkt:11484 at
+`d5934397`), which the star surface hands users a natural road into
+(`| mm{zz}* -> 1` kills the file) — is **DEFERRED 103's sibling** (that entry
+already records the `list-ref` signature) **+ DEFERRED 108's abort set**; noted
+there rather than re-filed. Starless controls (`| 1 2 -> 3`) abort identically.

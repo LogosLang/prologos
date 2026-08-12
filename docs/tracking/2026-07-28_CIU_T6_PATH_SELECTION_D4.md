@@ -8958,6 +8958,35 @@ reduction's non-vector arm is an INVARIANT guard reached via
 `(return (expr-panic …))`, **never `error`** · and `champ-values/canonical`
 returns `#f` for an un-orderable key, which is NOT "empty" — panic on it.
 
+**⭐⭐ VERIFY ROUND 1 (`wf_30884180-93c`, 2026-08-12) — five distinct defects, the
+battery green over every one; fixed/shielded at `5e4a3338`.** Deduped: the
+star-omega-tuple format arm RAISED on every render (1 `~a`, 2 args) and the
+blanket hint handler swallowed it to the bare generic — fixed, plus a RENDER
+LOOP pinning all ten kinds' messages, which immediately caught two MORE wording
+defects (open-row never named `*`; l4's remedy was abstract) · union contents
+were branded PERMANENT — routed to hetero · an ω behind a key returned the RAW
+field at 0 errors and `mm3{zz.q*}` took a false nominal — the **depth-≥2
+divergence**, SHIELDED (below) · a match extra-pattern abort (pre-existing →
+DEFERRED 103-sibling note) · `#p(a.b*)` (pre-existing →
+[DEFERRED 114](DEFERRED.md)).
+
+<a id="q-deep-prefix"></a>
+
+**⚠⚠ THE NEXT OWNER QUESTION — WHICH LAYER DOES A DEEP FLATTEN DELETE? (for the
+1b-iv co-design; the shield holds until it is ruled.)** At prefix depth ≥ 2,
+§5.P4e-1b-iii's own algorithm sentence (*"the below-walk over the prefix … that
+re-nested value IS the layer"* — the branch-ROOT layer) and [Q_U40](#q-u40)'s
+rule (*"the layer the PRECEDING step contributed"*) **give different answers**,
+and every worked example in the ruling's battery is depth ≤ 1 where they
+coincide. Worked divergence: `mm3 := {:zz {:q @[1 2]}}`, `mm3{zz.q*}` — the
+ruling reads *delete `q`'s layer, keep `zz`'s nesting* → `{:zz @[1 2]}`; the
+shipped sentence deletes the re-nest's OUTER layer → a false nominal refusal
+(and, one shape over, an ω behind a key silently returned the raw field). Both
+twins now REFUSE prefix length ≥ 2 (`star-deep-prefix`, guided, naming the
+unruled question); depth ≤ 1 — every ruled example, the headline ω·ω→ω, Q_U44's
+spellings — stays live. When ruled, the D4 algorithm sentence must be corrected
+to match, and the shield becomes the implementation of the answer.
+
 **B's pre-pinned set, still to write**: the six arrival positions · the legality
 pair (parked) · the ω non-equivalence (parked, uncomment) · L★'s vector
 non-equivalence (parked) · the discriminating key set (landed) · a tripwire
