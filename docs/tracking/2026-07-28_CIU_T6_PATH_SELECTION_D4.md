@@ -8561,7 +8561,7 @@ landed the KIND with a guided not-yet, P4c-4c landed the semantics):**
 |---|---|---|
 | **1b-i** ✅ `226844f1` | recipe corrected + battery parked. **Measured: 59 live dispatch sites · 35 in the 13 named functions · 2 deliberately-outside-and-undocumented (`select-step-name`/`select-step-cont`, the vocabulary's only SILENT trapdoors) · 8 genuinely OMITTED** — and FOUR of the eight are ω functions `(@bcast step)` itself introduced, so the "met all thirteen" boast is struck: an enumeration cannot be validated by the member it was written for. ⚠ My first attribution pass over-counted ~3× (41 vs 8) by matching only column-0 `define`; six recipe entries are themselves nested | +0 live (deliberate) · battery 476 → 476 |
 | **1b-ii** ✅ `dbb9ec77` | `(@star cont)` joins the closed union; the two trapdoors DECIDED (`select-step-name` → #f explicitly, `select-step-cont` → #f deliberately — the star's cont is not a CARET cont); [Q_U43](#q-u43)'s pre-check. ⭐ **The failing test caught my Q_U43 arm in the wrong place** — it went in the head `case`, which dispatches on `(car b)` while a star is almost always LAST, so the branch reported `'(database)`: a key the star had DELETED. Moved to an `ormap` pre-check. ⚠ typing/reduction NOT armed — a refusing arm would be replaced by iii/iv's real one (ban-dual-paths) | +5 live · 476 → **481** |
-| **1b-iii** 🔄 mini-audit DONE, not implemented | **VECTOR semantics**, typing + reduction ATOMICALLY (spec v1's `ω·ω→ω`). Collisions structurally impossible — concat is total. **Audit finding + the algorithm: [§5.P4e-1b-iii](#p4e-1b-iii)** | the vector battery |
+| **1b-iii** ⛔ attempt 1 BUILT · VERIFIED · **REVERTED** | **VECTOR semantics**, typing + reduction ATOMICALLY (spec v1's `ω·ω→ω`). Collisions structurally impossible — concat is total. **Audit finding + the algorithm: [§5.P4e-1b-iii](#p4e-1b-iii)** | the vector battery |
 | **1b-iv** | **NOMINAL semantics** + [Q_U38](#q-u38)'s typing-seated collision refusal + `*_`, together per [Q_U24](#q-u24) | nominal battery · collision refusals · `*_` |
 
 The iii/iv split is **the spec's own migration path** (§3.5 "v1: vector layers
@@ -8638,6 +8638,65 @@ fused-identifier bands via `split-star-lexeme`) · `branch-entries` +
 **Value accessors, verified**: `expr-champ-racket-champ` + `champ-entries` ·
 `expr-rrb-racket-rrb` + `rrb-size`/`rrb-get` · assembly via `entries->value`,
 whose keyed/keyless fork reads the FIRST component's key.
+
+**⛔ ATTEMPT 1 (2026-08-11) — BUILT, VERIFIED, REVERTED.** Patch parked at the
+session scratchpad (`slice-1b-iii-attempt1.patch`, 393 lines), same disposition
+as 1a-iii attempt 1. The build was CLOSE — the headline cases were right
+(`rowsv:tags*` → `@[1 2 3] : [PVec Int]`, `vv{0 1}*` → `@[1 2 3 4]`, nominal
+refusing, battery 482 green, neighbourhood 325 green) — and it was **wrong in
+the one place the whole slice turns on**. Adversarial verify `wf_ba4a51b3-2f8`;
+all three re-measured on the main thread before the revert.
+
+**⭐⭐ THE ROOT CAUSE IS ONE THING, AND I HAD WRITTEN IT DOWN MYSELF.**
+`select-branch-top-keys` returns `'()` for a star-bearing branch — [Q_U43](#q-u43)'s
+recorded *absence* of a check — and the comment I wrote at that arm in **1b-ii**
+says, verbatim: *"safe ONLY because the star cannot reach this walk at 1b-ii (the
+parser refuses first). THE CARVE-OUT AT THE TWO GATES IS 1b-iv WORK."* **The
+seat migration IS what makes the star reach a block.** I invalidated my own
+stated precondition one slice later and did not re-read the warning I had left
+at the exact site. The carve-out is not 1b-iv work; **it is the price of the seat
+migration and must land WITH it.**
+
+**THE THREE VERIFIED DEFECTS:**
+1. **WHOLE-FILE ABORT — a `^` after a star.** `cfg{database*.host^}` → empty
+   output, not even the `data` decl. A **TWIN ORDER DIVERGENCE**: reduction
+   checks the star FIRST (before `col`/`keyless?`), typing checks it LAST — so a
+   caret leaf routes into `walk-to-leaf`, which has no `star` arm →
+   `select-step-kind-unhandled` → raise. ⚠ **The typing arm's own comment
+   asserted the parity that does not exist** (*"BRANCH-LEVEL, before the head
+   dispatch, for the same reason as the reduction twin"*). `^_` does NOT abort
+   (neither collapse nor dissolve), which is why the shape hides.
+2. **WHOLE-FILE ABORT — a star beside a keyed sibling.** `m{name tags*}` →
+   `symbol<?: contract violation … given: #f`, empty output. The star's keyless
+   component reaches `make-record 'keyword` with a `#f` label, because L4
+   (`mixed-sorts?`) cannot see it — Q_U43's `'()` again.
+3. **SILENT WRONG ANSWER — the same block, branches reordered.** `m{tags* name}`
+   → `@[@[@[1 2] @[3]] "x"] : ⟨[PVec [PVec Int]] String⟩` at **ZERO errors**;
+   `:name` is silently discarded, because `entries->value` reads only the FIRST
+   entry's key to choose keyed-vs-keyless. **So one illegal block either takes
+   the file down or silently loses data purely by the order the user wrote the
+   branches in.**
+
+**TWO FURTHER FINDINGS, both real, neither blocking:**
+- **Champ order.** A Map layer whose values are vectors concatenates in CHAMP
+  HASH order: `mm{zz aa mm}*` and `mm{mm aa zz}*` are **byte-identical** and
+  neither is written order. That path is deliberately in 1b-iii's scope ("the
+  sort follows the CONTENTS"), and its own comment cites §3.6 rule 5's *written
+  order* — which a champ cannot honour. Needs a ruling or a scope cut.
+- **Diagnostic degradation.** The refusal stopped naming the user's spelling:
+  six structurally different spellings all render the byte-identical message with
+  a bare `*`. HEAD interpolated `database*` / `:tags*` / `.name*`. The
+  typing-errors comment claims the wording is preserved — the wording is, the
+  **interpolated argument** is not, and that was the guided part. Corollary:
+  `star-not-yet-message` (parser.rkt) reaches **zero callers**.
+
+**WHAT ATTEMPT 2 MUST DO DIFFERENTLY**: land the parser gates' star carve-out
+**with** the seat migration, not after it; place the typing star check ahead of
+`col`/`keyless?` so the twins genuinely match (and pin the caret-after-star case,
+which nothing covered); decide the champ-order question; restore per-spelling
+interpolation in the message. ⚠ The battery was GREEN over all three defects —
+482 cases, plus a 325-test neighbourhood. **No spelling in the battery mixed a
+star with a keyed sibling, and none put a caret after a star.**
 
 <a id="pf"></a>
 
