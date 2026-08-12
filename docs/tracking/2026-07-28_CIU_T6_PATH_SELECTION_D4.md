@@ -2503,7 +2503,36 @@ items of the hold-point, ruled before P4a opened:
   `rowsv:tags*` → `@[1 2 3]` (key dropped) versus `rowsv:{tags}*` →
   `{:tags @[1 2 3]}` (key kept). It also STRIKES [Q_U41](#q-u41)'s third
   supporting argument; see there.
-  **Next free Q-label: U43.**
+
+- <a id="q-u43"></a>**⭐ Q_U43 — THE L4 SORT CHECK MOVES TO TYPING FOR STAR-BEARING
+  BRANCHES, AS [Q_U38](#q-u38)'s COROLLARY [owner, 2026-08-11 — "move the sort
+  check to typing per Q_U38's corollary"].** Q_U38 moved the COLLISION check;
+  this moves the SORT (L4 keyed-vs-keless) check, which rides the identical walk
+  with the identical blindness.
+  **WHY IT IS FORCED, discovered writing 1b-ii's arms.** `select-branch-top-keys`
+  is documented *"Fully static; the parser's duplicate check AND the L4
+  sort-homogeneity check both run on these"*, and returns one component per
+  surviving output — a key SYMBOL (keyed) or `#f` (keyless). **A star branch's
+  components are SUBJECT-DERIVED**: neither their identity nor their SORT is
+  knowable from the step list. Every available answer is wrong differently:
+  · `'()` — contributes nothing, which is exactly the silent miss the P4a comment
+    says it fixed (*"a sixth kind silently contributed NO component, so the L4
+    sort check and the duplicate check would both simply not see it"*);
+  · `(list #f)` — declares the branch KEYLESS, wrong whenever the contents are
+    Maps, and would raise a spurious L4 mixed-sorts error against keyed siblings;
+  · `(list s)` — a key literally named `(@star …)`.
+  So the star breaks the function's stated contract for one kind. ⚠ The audit's
+  critic had already flagged `mixed-sorts?` as **the more dangerous of the two
+  blind gates** — it runs one line BEFORE `dup-output-key` and its residue is a
+  silently WRONG CARRIER for the whole level rather than an error.
+  **WHAT LANDS**: `select-branch-top-keys` gets an explicit `'star` arm that
+  RECORDS that it cannot answer; the parser's two gates carve out star-bearing
+  branches with the reason at the site; typing performs both checks where the
+  subject's row is visible. ⚠ The carve-out is **1b-iv work** — under 1b-ii the
+  star refuses before any walk reaches it, so the arm ships INERT and the
+  obligation is written where 1b-iv picks it up. Building the carve-out now would
+  be mid-flight widening (*Watching 9*).
+  **Next free Q-label: U44.**
 
 - <a id="star-census"></a>**⭐ THE STAR-SURFACE CENSUS IS THE DESIGN'S INPUT
   [owner-commissioned, 2026-08-09].** After two failed attempts, the owner ruled
@@ -2538,7 +2567,7 @@ items of the hold-point, ruled before P4a opened:
   Until then they existed ONLY in a session transcript, which is not durable
   storage — and the owner's ruling is that attempt 3 opens from the MEASURED MAP,
   which cannot be honoured against an unreadable artifact.
-  (Q-label register: see [Q_U42](#q-u42), the latest ruling — **next free U43**.)
+  (Q-label register: see [Q_U43](#q-u43), the latest ruling — **next free U44**.)
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
@@ -8531,7 +8560,7 @@ landed the KIND with a guided not-yet, P4c-4c landed the semantics):**
 | slice | content | test delta |
 |---|---|---|
 | **1b-i** ✅ `226844f1` | recipe corrected + battery parked. **Measured: 59 live dispatch sites · 35 in the 13 named functions · 2 deliberately-outside-and-undocumented (`select-step-name`/`select-step-cont`, the vocabulary's only SILENT trapdoors) · 8 genuinely OMITTED** — and FOUR of the eight are ω functions `(@bcast step)` itself introduced, so the "met all thirteen" boast is struck: an enumeration cannot be validated by the member it was written for. ⚠ My first attribution pass over-counted ~3× (41 vs 8) by matching only column-0 `define`; six recipe entries are themselves nested | +0 live (deliberate) · battery 476 → 476 |
-| **1b-ii** | mint `(@star cont)`, `cont ∈ 'flatten \| 'flatten-synth` (what `split-star-lexeme` already returns); arms at every recipe site; typing refuses via `bcast-carrier`, reduction via `(return (expr-panic …))` — **never a raise** | vocabulary/totality pins · no user-visible change |
+| **1b-ii** ✅ `dbb9ec77` | `(@star cont)` joins the closed union; the two trapdoors DECIDED (`select-step-name` → #f explicitly, `select-step-cont` → #f deliberately — the star's cont is not a CARET cont); [Q_U43](#q-u43)'s pre-check. ⭐ **The failing test caught my Q_U43 arm in the wrong place** — it went in the head `case`, which dispatches on `(car b)` while a star is almost always LAST, so the branch reported `'(database)`: a key the star had DELETED. Moved to an `ormap` pre-check. ⚠ typing/reduction NOT armed — a refusing arm would be replaced by iii/iv's real one (ban-dual-paths) | +5 live · 476 → **481** |
 | **1b-iii** | **VECTOR semantics**, typing + reduction ATOMICALLY (spec v1's `ω·ω→ω`). Collisions structurally impossible — concat is total | the vector battery |
 | **1b-iv** | **NOMINAL semantics** + [Q_U38](#q-u38)'s typing-seated collision refusal + `*_`, together per [Q_U24](#q-u24) | nominal battery · collision refusals · `*_` |
 
