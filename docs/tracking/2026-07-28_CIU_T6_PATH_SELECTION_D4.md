@@ -8609,7 +8609,7 @@ landed the KIND with a guided not-yet, P4c-4c landed the semantics):**
 |---|---|---|
 | **1b-i** ✅ `226844f1` | recipe corrected + battery parked. **Measured: 59 live dispatch sites · 35 in the 13 named functions · 2 deliberately-outside-and-undocumented (`select-step-name`/`select-step-cont`, the vocabulary's only SILENT trapdoors) · 8 genuinely OMITTED** — and FOUR of the eight are ω functions `(@bcast step)` itself introduced, so the "met all thirteen" boast is struck: an enumeration cannot be validated by the member it was written for. ⚠ My first attribution pass over-counted ~3× (41 vs 8) by matching only column-0 `define`; six recipe entries are themselves nested | +0 live (deliberate) · battery 476 → 476 |
 | **1b-ii** ✅ `dbb9ec77` | `(@star cont)` joins the closed union; the two trapdoors DECIDED (`select-step-name` → #f explicitly, `select-step-cont` → #f deliberately — the star's cont is not a CARET cont); [Q_U43](#q-u43)'s pre-check. ⭐ **The failing test caught my Q_U43 arm in the wrong place** — it went in the head `case`, which dispatches on `(car b)` while a star is almost always LAST, so the branch reported `'(database)`: a key the star had DELETED. Moved to an `ormap` pre-check. ⚠ typing/reduction NOT armed — a refusing arm would be replaced by iii/iv's real one (ban-dual-paths) | +5 live · 476 → **481** |
-| **1b-iii** ⛔ attempt 1 BUILT · VERIFIED · **REVERTED** | **VECTOR semantics**, typing + reduction ATOMICALLY (spec v1's `ω·ω→ω`). Collisions structurally impossible — concat is total. **Audit finding + the algorithm: [§5.P4e-1b-iii](#p4e-1b-iii)** | the vector battery |
+| **1b-iii** ⛔ attempts 1 AND 2 BUILT · VERIFIED · **REVERTED** | **VECTOR semantics**, typing + reduction ATOMICALLY (spec v1's `ω·ω→ω`). Collisions structurally impossible — concat is total. **Audit finding + the algorithm: [§5.P4e-1b-iii](#p4e-1b-iii)** | the vector battery |
 | **1b-iv** | **NOMINAL semantics** + [Q_U38](#q-u38)'s typing-seated collision refusal + `*_`, together per [Q_U24](#q-u24) | nominal battery · collision refusals · `*_` |
 
 The iii/iv split is **the spec's own migration path** (§3.5 "v1: vector layers
@@ -8737,6 +8737,59 @@ migration and must land WITH it.**
   typing-errors comment claims the wording is preserved — the wording is, the
   **interpolated argument** is not, and that was the guided part. Corollary:
   `star-not-yet-message` (parser.rkt) reaches **zero callers**.
+
+**⛔ ATTEMPT 2 (2026-08-11) — BUILT, VERIFIED, REVERTED. Round 2 found defects
+IN THE FIXES, which is this track's single most reliable pattern.** Patch parked
+(`slice-1b-iii-attempt2.patch`, 603 lines). Verify `wf_096fc42a-87d`; both
+blocking defects re-measured on the main thread before the revert.
+All four round-1 fixes DID hold — `cfg{database*.host^}` became a per-command
+error, both branch orders of `m{name tags*}` gave the guided L4 error, Q_U44's
+canonical order and the owner's `mm{zz* aa* mm*}*` recovery spelling both worked,
+battery 486 / 0 / 0, neighbourhood 382. **Two NEW defects, both introduced by the
+fixes themselves:**
+1. **⭐⭐ BLOCKING — SILENT WRONG ANSWER, and a REGRESSION the seat migration
+   introduced.** The `$postfix-star` arm ignores `cur` and unconditionally calls
+   `(closed-acc)`, so a postfix `*` arriving INSIDE a block is silently re-based
+   onto the SUBJECT as its own extra branch. Measured with
+   `vh := @[@[@[1 2]] @[@[3]]]`: `vh{0.{0}*}` → `@[@[@[1 2]] @[@[1 2] @[3]]]` at
+   **ZERO errors** — the second component is `concat(vh)`, the flatten of the
+   WHOLE SUBJECT rather than of the sub-block the star was written on. At HEAD
+   this arm was a guided per-command error. ⚠ **All three sibling star arms
+   respect `cur`; this one alone does not**, and its own comment justifies that
+   with "the star arrives alone" — true only for the OUTER `$select-path`
+   carrier, not for an in-block arrival. Same class as round 1's
+   `m{tags* name}`, one layer in.
+2. **⭐ BLOCKING — Q_U44's fix does not implement the order it claims.**
+   `champ-values/canonical` sorts by `(format "~a" key)`, which for a keyword key
+   renders the TRANSPARENT STRUCT `#(struct:expr-keyword NAME)`. The trailing `)`
+   (ASCII 41) makes the order diverge from `symbol<?` whenever one key is a
+   strict prefix of a sibling whose next char is below `)` — `!`, `$`, `%`, `&`,
+   `'`, all legal in Prologos identifiers. Measured: `bang := {:a @[1] :a! @[2]}`
+   types as `{:a … :a! …}` (symbol<? order) but `bang{a a!}*` → `@[2 1]`, `:a!`'s
+   value FIRST. **The code comment AND the new battery pin both assert
+   "canonical = `symbol<?` over the keys" — a claim the implementation does not
+   keep**, and no test key set separates them. Two further consequences of
+   sorting a struct's DISPLAY form: mixed key kinds order by struct NAME, and
+   renaming `expr-keyword` would silently reorder every flatten in the language.
+   Fix is to sort on the keyword's NAME with `symbol<?`, matching `make-record`.
+**Three MAJOR non-blocking findings, all diagnostic quality:**
+· the MID-BRANCH star's message is a LYING DIAGNOSTIC — label degrades to a bare
+  `*` (because `select-step-name` of a star is `#f`) and the text claims the
+  shape "needs the nominal (Map-valued) case" even when the contents are ALL
+  VECTORS. The accurate sentence already exists in reduction.rkt and is
+  unreachable by design. `*_` mid-branch is worse: it renders bare `*` too,
+  because the suffix is read off `(car (reverse b))`, which is not the star.
+· a LEAF-contents refusal says "not implemented yet" for what Q_U40 rules a
+  PERMANENT error — there is no future case that will make a String leaf join.
+· `(list #f)` is honest for what 1b-iii ACCEPTS but is also applied to shapes it
+  REFUSES, where it PRE-EMPTS the star's own message with an L4 sort error.
+
+**WHAT ATTEMPT 3 MUST DO** — beyond attempt 2's list, which still stands: make
+the `$postfix-star` arm respect `cur` like its three siblings (and pin an
+in-block postfix star, which nothing covered); sort on the keyword NAME with
+`symbol<?`; split `star-not-yet` into distinct failure kinds so mid-branch, leaf
+and nominal each say the true thing; and add a key set that SEPARATES `symbol<?`
+from the struct-display order to the battery.
 
 **WHAT ATTEMPT 2 MUST DO DIFFERENTLY**: land the parser gates' star carve-out
 **with** the seat migration, not after it; place the typing star check ahead of
