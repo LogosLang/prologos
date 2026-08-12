@@ -8957,7 +8957,55 @@ B1/B2 — land the machinery INERT, then migrate the seat.** C repeats it.
 | slice | content | why it is safe alone |
 |---|---|---|
 | **1b-iii-C1** ✅ `4f30a171` | **The SHARED JOIN, hoisted and returning BARE.** `star-join-type` (typing-core) + `star-join-value` (reduction) at module level, both exported; each twin's existing caller now wraps keyless (its remainder-empty case). `select-below-field` exported as C2's seat. syntax.rkt doc-truth. ⚠ **RE-SCOPED mid-slice**: the tail ARMS moved to C2 — see the note below. | Pure extraction. Battery 498 → **501**, 0/0 by direct require; every pre-existing pin green IS the regression proof (the B1 pins already exercise depth-1 through both twins). **Mutation-tested PER TWIN**, inverted in place: re-wrapping typing's return → 3 FAILURE + 3 ERROR, reduction's → 2 FAILURE + 4 ERROR, the C1 pin among them each time. ⚠ Both mutant runs **exited 0**. E2E star surface byte-identical to pre-C1; neighbourhood 318 `[4/4]`; acceptance 0 errors. |
-| **1b-iii-C2** | **The seat migrates: the pre-check NARROWS and both shields come out, atomically.** The three gap dispositions · the `vh{0.{0}*}` pin flipped WITH its reasoning · **the dup seat's first arm** and **the L4 message fix** (both below) · the E2E battery. | The whole observable change, atomic. Twin-order divergence at this seat has already caused a whole-file abort once. |
+| **1b-iii-C2** ✅ `68014124` (instrument `d8776b66`) | **THE DEEP FLATTEN IS LIVE.** `cfg{db.hosts*}` → `{:db @[1 2]}` · `two{a.{x y}*}` → `{:a @[1 2 3]}` · depth 3 works. Pre-check narrowed via `select-branch-deep-star?`; ONE star-TAIL arm per twin (`select-steps-star-tail?`, exactly `(sₙ ★)`) returning C1's join BARE; both shields out; `star-dup-key` seat; L4 message de-lied; `star-deep-prefix` re-scoped to the ordinal gap. | ⭐ **Two of the three landings needed NO CODE** — the dissolve and ord-branch arms already wrap keyless, and `select-below-components` needed no twin arm at all. Battery 504 → **511**, 0/0 · neighbourhood 348 `[5/5]` · acceptance 0 errors · adversarial verify delegated (`wf_bf354f2d-675`), rounds 2–3 budgeted; full suite queued behind it. Record: [§5.P4e-1b-iii-C2](#p4e-1b-iii-c2) |
+
+<a id="p4e-1b-iii-c2"></a>
+
+**§5.P4e-1b-iii-C2 — what the slice found.**
+
+⭐⭐ **Q_U47 IS IMPLEMENTED BY NOT IMPLEMENTING IT.** Nothing computes the
+landing. The pre-check narrows, the deep star falls through to the head dispatch,
+one tail arm returns the join BARE, and whichever caller catches it supplies the
+wrapper — so the rule *"the component the remainder would produce"* holds because
+the caller **is** that remainder's arm. Measured consequence: the KEYED case is
+the key arm's existing re-nest, and the two KEYLESS cases (`cfg{db^.hosts*}`,
+`vh{0.{0}*}`) required **no new code** — the dissolve and ord-branch arms already
+wrap `(cons #f …)`. `select-below-components` was scoped for a twin arm and
+needed none: it routes a non-terminal sub to `select-branch-entries`, where
+`(hosts ★)` is not DEEP and so takes the remainder-empty keyless landing.
+
+⭐ **THE EXPRESSIVITY ARGUMENT THAT DECIDED Q_U47 IS NOW PINNED — and my first
+live check FAILED TO DEMONSTRATE IT.** Q_U44's written-order recovery
+generalizes to depth: on `w := {:zz {:u @[1 2]} :aa {:v @[3 4]}}`,
+`w{zz.u* aa.v*}*` → `@[3 4 1 2]` (canonical) versus `w{zz^.u* aa^.v*}*` →
+`@[1 2 3 4]` (written). The first probe used `:p`/`:q` written p-first, where
+canonical and written order **coincide** — it printed the same vector twice and
+proved nothing. *An ordering claim needs keys whose orders differ, or its pin is
+vacuous.*
+
+**THE TWO HOLES, CLOSED.** The dup seat was measured open first:
+`cfg{db.hosts* db}` → `{:db {:ports @[80], :hosts @[1 2]}}` at **zero errors**,
+the star's surviving `:db` silently overwritten. New kind `star-dup-key`, added
+to the battery's hand-written render loop in the same commit (it cannot
+self-report an unlisted kind). The L4 message asserted the STAR is the keyless
+branch — true only while every star landed keyless — so a deep KEYED star beside
+a keyless sibling was told the reverse of what happened.
+
+**TWO DEFECTS THE RUN CAUGHT, both from assuming the twins are symmetric:**
+· **ARM ORDER.** Reduction's `@sub` arm matches ANY sub-headed step list and
+  panics when anything follows it, so with the tail arm placed after it
+  `two{a.{x y}*}` and `vh{0.{0}*}` died in *"steps after a terminal sub-block"*.
+  Typing's sub arm carries a `(null? (cdr steps))` guard and has no such hazard —
+  exactly the asymmetry that makes "the same edit in both files" wrong in one.
+· **THE ORDINAL GAP'S SPELLING.** `nested{a.0*}` is a PARSE error and never
+  reaches the seat; the reaching spelling is the BRACKET one, `a[0]*` — which is
+  what [DEFERRED 116](DEFERRED.md) proposes deprecating, so that deprecation
+  would make this ruled gap unreachable.
+
+⚠ **KNOWN NARROWNESS, pinned rather than hidden**: the ordinal refusal's label
+renders `0*` (the tail steps) rather than the branch the user wrote. The tail arm
+only has the tail; compounded by DEFERRED 113. The REASON is accurate, which is
+what Q_U46 asked for; the ECHO is not yet.
 
 **⭐⭐ THE IMPLEMENTATION SHAPE — CORRECTED 2026-08-12 BY TRACING THE ARMS, and
 both errors were mine, written an hour earlier in this same section.** Q_U46's
