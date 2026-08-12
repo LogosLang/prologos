@@ -7538,6 +7538,128 @@
   (check-equal? (rrb-to-list (expr-rrb-racket-rrb r)) (list (expr-int 11) (expr-int 22))
                 "canonical (symbol<?) order — :a before :a!, against insertion order"))
 
+
+;; ---- 1b-iii-C2: THE DEEP FLATTEN, E2E ----
+;;
+;; ⚠⚠ WRITTEN BEFORE EITHER SHIELD MOVED, and that ordering is the point.
+;; Removing the shields does NOT produce a failure to chase — it produces a GREEN
+;; WRONG ANSWER: under the shipped branch-root algorithm `rows{k:s*}` returns the
+;; raw field keyless at 0 errors. Five of the six pre-existing deep-shape pins
+;; assert `#rx"."`, which matches anything, and every star UNIT pin uses the
+;; `'path` sort, whose arm discards the key and so cannot see the keyed/keyless
+;; flip [Q_U47] rules on. So this block is the instrument, and it exists first.
+;;
+;; Assertions compare the FULL rendered line (value AND type) rather than a
+;; regex: `[PVec [PVec Int]]` contains `[PVec Int]`, so a containment match would
+;; pass on the wrong answer — the weakness slice A recorded and did not close.
+
+(define C2V (string-append
+             "ns c2s\n"
+             "def cfg := {:db {:hosts @[1 2] :ports @[80]}}\n"
+             "def two := {:a {:x @[1] :y @[2 3]}}\n"
+             "def mm := {:zz @[1 2] :aa @[3 4]}\n"
+             "def vh := @[@[@[1 2]] @[@[3]]]\n"
+             "def rows := {:k @[{:s @[1]} {:s @[2 3]}]}\n"
+             "def nested := {:a @[{:b @[1]} {:b @[2]}]}\n"))
+
+(define (c2-line src) (p4e1-last (string-append C2V src)))
+
+;; ⚠ AN ERROR IS NOT A LINE STARTING WITH "ERROR" AT THIS SEAM, and my first cut
+;; of the refusal pins below assumed it was. `p4e1-msgs` yields the error
+;; STRUCT's printed form (`#(struct:inference-failed-error …)`), not the numbered
+;; `process-file` display line — so `#rx"^ERROR"` matched nothing and four pins
+;; were red for the wrong reason. Running them BEFORE implementing is what caught
+;; it; had they been written after, they would have been "fixed" by the
+;; implementation and shipped vacuous. A refusal is therefore asserted as
+;; (no successful `V : T`) AND (the guidance text is present) — a negative and a
+;; positive, because either alone passes on the wrong thing.
+(define (c2-refused? src) (not (p4e1-type (string-append C2V src))))
+
+;; ⚠⚠ SIX OF THE TEN PINS BELOW ARE PARKED COMMENTED — the acceptance-file idiom
+;; this track already used to land P4e-1a's failing tests. They are WRITTEN and
+;; were RUN: at C1's HEAD exactly these six are RED, each for the reason its name
+;; claims, and the other four are GREEN because they assert behaviour that is
+;; already correct (depth-1 unmoved; the two refusals that the shield supplies
+;; today and the nominal join must keep supplying tomorrow). C2 uncomments the
+;; six as it lands. Parking rather than deleting is what keeps the instrument
+;; from being written AFTER the implementation, which is how a pin ends up
+;; asserting whatever the code happens to do.
+
+;; (test-case "1b-iii-C2: a deep star lands KEYED under the surviving step — [Q_U47]"
+;;   (check-equal? (c2-line "cfg{db.hosts*}") "{:db @[1 2]} : {:db [PVec Int]}"
+;;                 "the layer `hosts` made is deleted; `db` survives and holds the join"))
+
+;; (test-case "1b-iii-C2: the DISCRIMINATING shapes — two contents, where a broken concat shows"
+;;   ;; ⚠ `cfg{db.hosts*}` above has ONE content, so its concat is an IDENTITY and
+;;   ;; cannot discriminate. These two can, and they are also the idiom Q_U46 says
+;;   ;; the whole ruling buys: group N siblings under a chosen key.
+;;   (check-equal? (c2-line "two{a.{x y}*}") "{:a @[1 2 3]} : {:a [PVec Int]}"
+;;                 "sub-block layer, two contents, CANONICAL key order (:x then :y)")
+;;   (check-equal? (c2-line "cfg{db.{hosts ports}*}") "{:db @[1 2 80]} : {:db [PVec Int]}"
+;;                 "canonical order :hosts before :ports — champ insertion order would differ"))
+
+;; (test-case "1b-iii-C2: with NO surviving step that names a key, the join lands KEYLESS"
+;;   ;; Q_U47's `keyless otherwise` case. Both reachable spellings.
+;;   (check-equal? (c2-line "cfg{db^.hosts*}") "@[@[1 2]] : ⟨[PVec Int]⟩"
+;;                 "`db^` dissolves the only survivor — the join splices in keyless")
+;;   (check-equal? (c2-line "vh{0.{0}*}") "@[@[1 2]] : ⟨[PVec Int]⟩"
+;;                 "an (@ord N) head names nothing — keyless, and it needs no star-specific arm"))
+
+(test-case "1b-iii-C2: DEPTH-1 IS UNCHANGED — the rule is uniform in depth"
+  (check-equal? (c2-line "mm{zz*}") "@[@[1 2]] : ⟨[PVec Int]⟩"
+                "empty remainder → keyless; this is the B2 answer and must not move")
+  (check-equal? (c2-line "mm{zz aa}*") "@[3 4 1 2] : [PVec Int]"
+                "the branch-INITIAL star under 'path — Q_U44 canonical, also unmoved"))
+
+;; (test-case "1b-iii-C2: BAND AGREEMENT holds for the key case — as a PROJECTION, not an identity"
+;;   ;; ⚠ The bands agree here only because the path band never builds a multi-step
+;;   ;; prefix (Q_U13's NEST mints one carrier per level), so this is STRUCTURAL
+;;   ;; agreement. It does NOT hold for ω — see the pin below.
+;;   (check-equal? (c2-line "cfg.db.hosts*") "@[1 2] : [PVec Int]")
+;;   (check-equal? (c2-line "cfg{db.hosts*}") "{:db @[1 2]} : {:db [PVec Int]}"
+;;                 "the block band is the path band's answer under the surviving key"))
+
+(test-case "1b-iii-C2: the ω-behind-a-key case STAYS REFUSED — its join is nominal, i.e. 1b-iv"
+  ;; The layer is the ω's vector whose ELEMENTS are Maps, so the join is keywise.
+  ;; ⚠ This is the shape that returns the RAW FIELD keyless at 0 errors if the
+  ;; shield is merely deleted — the green-wrong-answer this block exists to catch.
+  (define out (c2-line "rows{k:s*}"))
+  (check-true (c2-refused? "rows{k:s*}")
+              (format "a nominal join must still refuse, not silently answer: ~a" out))
+  (check-false (regexp-match? #rx"PVec \\{:s" out)
+               (format "and it must not leak the raw field as the answer: ~a" out)))
+
+;; (test-case "1b-iii-C2: an ORDINAL as the LAST prefix step is a GUIDED refusal — Q_U46's ruled gap"
+;;   ;; Q_U2 Reading A: an ordinal contributes no output level, so there is no
+;;   ;; preceding-step layer for the rule to quantify over.
+;;   (define out (c2-line "nested{a.0*}"))
+;;   (check-true (c2-refused? "nested{a.0*}")
+;;               (format "the ordinal gap is a refusal: ~a" out))
+;;   (check-true (regexp-match? #rx"ordinal" out)
+;;               (format "and it must NAME the reason rather than fall through: ~a" out)))
+
+;; (test-case "1b-iii-C2: a deep star's surviving key COLLIDING with a sibling is refused, not last-win"
+;;   ;; ⚠ THE HOLE C2 OPENS. `select-branch-top-keys` returns '() for star branches,
+;;   ;; so the parser's dup gate cannot see the surviving `:db`; typing still asserts
+;;   ;; the parser owns uniqueness; nothing checks downstream. Both assembly points
+;;   ;; then LAST-WIN silently (make-record's `;; last write wins`, entries->value's
+;;   ;; champ-insert). Unreachable before C2, because no deep star's key survived.
+;;   (define out (c2-line "cfg{db.hosts* db}"))
+;;   (check-true (c2-refused? "cfg{db.hosts* db}")
+;;               (format "a duplicate output key must be refused, never last-win: ~a" out))
+;;   (check-true (regexp-match? #rx"duplicate|:db" out)
+;;               (format "and it must name the colliding key: ~a" out)))
+
+(test-case "1b-iii-C2: the L4 message must not call a KEYED deep star keyless"
+  ;; The message hardcodes that the star branch is the keyless one and `findf`s
+  ;; the first star branch regardless of which side actually is. A deep star is
+  ;; KEYED, so this population is new at C2 and the old wording lies to it.
+  (define out (c2-line "cfg{db.hosts* ports^}"))
+  (check-true (c2-refused? "cfg{db.hosts* ports^}")
+              (format "keyed star beside a keyless sibling is still an L4 error: ~a" out))
+  (check-false (regexp-match? #rx"`db.hosts\\*` contributes a KEYLESS component" out)
+               (format "…but it must not say the STAR is the keyless one: ~a" out)))
+
 ;; ---- 1b-iv: the [Q_U40] LAW *and its ω qualifier* — the qualifier is the half
 ;;      that a test must carry, because the law alone reads as unconditional.
 ;;
