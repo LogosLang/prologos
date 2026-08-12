@@ -2504,6 +2504,54 @@ items of the hold-point, ruled before P4a opened:
   `{:tags @[1 2 3]}` (key kept). It also STRIKES [Q_U41](#q-u41)'s third
   supporting argument; see there.
 
+- <a id="q-u44"></a>**⭐ Q_U44 — A KEYED LAYER'S POSITIONAL JOIN TAKES CANONICAL
+  KEY ORDER, AND `x{a* b* c*}*` IS THE ORDER-RECOVERING SPELLING [owner,
+  2026-08-11].** When [Q_U40](#q-u40)'s join concatenates the values of a **keyed**
+  layer into a vector, the contents are ordered by **canonical key order** (the
+  `symbol<?` order `make-record` already canonicalizes with) — not by champ hash
+  order, and not by written order.
+  **THE DEFECT IT REPLACES, measured at 1b-iii attempt 1**: contents were read
+  via `champ-entries`, so `mm{zz aa mm}*` and `mm{mm aa zz}*` were
+  **byte-identical** at `@[3 4 1 2 5 6]` — neither written order nor anything a
+  reader could predict, and liable to move if the champ implementation changes.
+  **⭐ WHY THE TWO SPELLINGS STILL AGREEING IS *CORRECT*, not a residual wart.**
+  Under canonical order those two spellings still produce the same answer, and
+  that is right: spec §1.1 + §8 Q2 rule that *nominal key IDENTITY carries the
+  meaning, order does not*, so for a KEYED block the two spellings **are the same
+  selection**. Hash order was not wrong for collapsing them — it was wrong for
+  being ARBITRARY and UNSTABLE. Canonical order removes exactly that and leaves
+  the key-sort thesis intact. *(Recorded because the first analysis of this
+  question treated the collapse as the defect and recommended refusal on that
+  basis — the wrong diagnosis produced the wrong recommendation.)*
+  **THE ORDER-RECOVERING SPELLING [owner]**, and it introduces no new mechanism:
+  ```
+  mm := {:zz @[1 2] :aa @[3 4] :mm @[5 6]}
+  mm{zz aa mm}*      →  @[3 4 5 6 1 2]     canonical (aa · mm · zz)
+  mm{zz* aa* mm*}*   →  @[1 2 3 4 5 6]     WRITTEN order
+  ```
+  Each inner star deletes its own branch's key layer — whose contents are a
+  SINGLE vector, so no order is fabricated — and contributes it as a **KEYLESS**
+  component. Three keyless components make a keyless level, which spec §3.3
+  defines as *"tuple components in written order"*. The outer star then deletes a
+  layer that is genuinely ordered. **The user recovers order by opting into
+  KEYLESSNESS, which is already the language's own carrier of positional
+  meaning.**
+  **The pairing is [Q_U38](#q-u38)'s shape**: a principled default plus a
+  first-class way to ask for the other thing (there, refuse + `*_`; here,
+  canonical + `{a* b* c*}*`).
+  **Rejected-with-reason**: *written order by default* — contingent on an
+  OrderedMap the language does not have; deriving it would force the star's two
+  halves to compute contents differently by layer sort. *Outright refusal* —
+  costs expressivity the design intends, and the "surprising order" objection
+  dissolves once the remedy is IN the language.
+  **⚠ OBLIGATION IT CREATES**: `mm{zz* name}` mixes a KEYLESS branch with a KEYED
+  one — an L4 sort error, and exactly attempt 1's defect #2 shape (which aborted
+  in `make-record` instead of erroring). The parser-gate carve-out must make that
+  a **guided** L4 error: users following the documented recovery spelling will
+  hit it whenever they mistype, so this is now an ergonomics requirement, not
+  only a correctness one.
+  **Next free Q-label: U45.**
+
 - <a id="q-u43"></a>**⭐ Q_U43 — THE L4 SORT CHECK MOVES TO TYPING FOR STAR-BEARING
   BRANCHES, AS [Q_U38](#q-u38)'s COROLLARY [owner, 2026-08-11 — "move the sort
   check to typing per Q_U38's corollary"].** Q_U38 moved the COLLISION check;
@@ -2567,7 +2615,7 @@ items of the hold-point, ruled before P4a opened:
   Until then they existed ONLY in a session transcript, which is not durable
   storage — and the owner's ruling is that attempt 3 opens from the MEASURED MAP,
   which cannot be honoured against an unreadable artifact.
-  (Q-label register: see [Q_U43](#q-u43), the latest ruling — **next free U44**.)
+  (Q-label register: see [Q_U44](#q-u44), the latest ruling — **next free U45**.)
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
