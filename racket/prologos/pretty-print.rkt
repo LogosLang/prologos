@@ -36,7 +36,17 @@
          ;; monomorphic and hold bare symbols), so the pin has to call the
          ;; walker directly. Same rationale as `select-reduce`'s P4a export;
          ;; zero behavioural change.
-         uses-bvar0?)
+         uses-bvar0?
+         ;; D4.P4e-1b slice 1b-ii: exported for the STEP-RENDERING pin, on the
+         ;; same rationale as `uses-bvar0?` above. The `(@star cont)` kind is
+         ;; UNCONSTRUCTIBLE from surface syntax at 1b-ii — the parser still
+         ;; refuses the star, so no spelling reaches the renderer — and this is
+         ;; the one consumer that must NOT raise on an unhandled kind (it is on
+         ;; the error-message path, so a missing arm degrades to a marker rather
+         ;; than a crash). A marker is exactly the failure an end-to-end test
+         ;; cannot see, so the arm can only be pinned by calling the renderer
+         ;; directly. Zero behavioural change.
+         pp-select-branch)
 
 ;; ========================================
 ;; Name supply for de Bruijn -> named variables
@@ -166,6 +176,14 @@
       ;; inner step as #t so the inner never emits a leading dot: `:` is already
       ;; the separator, and `users:.name` would be wrong.
       [(bcast) (string-append ":" (step->string (select-bcast-inner s) #t))]
+      ;; D4.P4e-1b (Q_U40): the flatten renders POSTFIX, as the user writes it —
+      ;; `database*` / `database*_`. It never emits a leading dot even when
+      ;; `first?` is #f, because the star attaches to the step BEFORE it: the
+      ;; separator (if any) was already emitted by that step's own rendering.
+      ;; ⚠ `first?` is deliberately ignored here, unlike every other arm — a
+      ;; branch-INITIAL star (`cfg{database}*`, where the star's operand is the
+      ;; SUBJECT) is a real spelling, and `.{*}` would be a nonexistent one.
+      [(star) (if (eq? (select-star-cont s) 'flatten-synth) "*_" "*")]
       [else (format "«unrendered-step-kind:~a:~s»" (select-step-kind/display s) s)]))
   (apply string-append
          (for/list ([s (in-list b)] [i (in-naturals)])

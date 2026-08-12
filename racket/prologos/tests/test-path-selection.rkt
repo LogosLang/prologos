@@ -7046,3 +7046,124 @@
 ;;   (check-true (p4e1-has? "ns q4\ndef pair := @[{:host \"a\"} {:host \"b\" :port 1}]\npair:{host}*"
 ;;                          #rx"duplicate output key|leaf")
 ;;               "shared key on LEAVES is still an error — Q_U42 moved only vectors"))
+
+;; ---------------------------------------------------------------------------
+;; D4.P4e-1b slice 1b-ii — THE `(@star cont)` KIND, exercised DIRECTLY.
+;; ---------------------------------------------------------------------------
+;; ⚠ These are LIVE, unlike the parked block above, and the distinction is the
+;; point of the slice: 1b-ii adds the kind to the vocabulary but NOTHING mints
+;; one — `segment-select-items` still refuses the star, so no spelling reaches
+;; these arms. Ten unexercised arms is how a "landed inert" slice ships a defect
+;; nobody sees (1a-ii's arms were two lines and could be read; these cannot).
+;; So the battery drives them from HAND-BUILT step lists, the same data-driven
+;; shape `test-solve-carrier.rkt` uses over the head sets. Zero surface change,
+;; real coverage.
+
+(define star-f  (make-select-star 'flatten))
+(define star-fs (make-select-star 'flatten-synth))
+
+(test-case "P4e-1b 1b-ii: `(@star cont)` joins the closed union as a SIXTH kind"
+  (check-equal? (select-step-kind star-f) 'star)
+  (check-equal? (select-step-kind star-fs) 'star)
+  (check-true (select-star-step? star-f))
+  ;; the constructor/accessor round-trip, both conts
+  (check-equal? (select-star-cont star-f) 'flatten)
+  (check-equal? (select-star-cont star-fs) 'flatten-synth)
+  ;; and it is DISJOINT from every sibling predicate — a star must not be
+  ;; mistaken for a caret (which would put it in the `^` cont channel) nor for
+  ;; a bcast (which would send `select-bcast-inner` at its cont symbol).
+  (check-false (select-key-step? star-f))
+  (check-false (select-sub-step? star-f))
+  (check-false (select-ord-step? star-f))
+  (check-false (select-bcast-step? star-f))
+  ;; the union's own error text must name the new member, or the next kind's
+  ;; author reads a stale vocabulary out of the raise they hit
+  (check-true (regexp-match? #rx"@star"
+                             (with-handlers ([exn:fail? (lambda (e) (exn-message e))])
+                               (select-step-kind '(@nosuch 1)) "no raise"))
+              "the closed-union raise lists (@star cont)"))
+
+(test-case "P4e-1b 1b-ii: the star NAMES nothing, and its cont stays OUT of the caret channel"
+  ;; `select-step-name` — an explicit arm, because the `[else s]` tail would
+  ;; hand the RAW STEP LIST back into user-facing messages (DEFERRED 40/46).
+  ;; Mutation check: the tail's answer is the step itself, so asserting #f
+  ;; discriminates the arm from its absence.
+  (check-false (select-step-name star-f))
+  (check-not-equal? (select-step-name star-f) star-f
+                    "the raw step list must NOT leak through select-step-name")
+  ;; `select-step-cont` — a DELIBERATE #f. The star does carry a continuation,
+  ;; but this channel is the CARET vocabulary (select-cont-collapse?, and
+  ;; parser's `findf select-step-cont`); `'flatten` arriving there would misfire.
+  ;; ⚠ HONEST LABEL: these two checks are DOCUMENTARY, NOT DISCRIMINATING — the
+  ;; `[else #f]` tail answers #f too, so they pass with or without the arm. They
+  ;; are kept because they state the intended contract, but do NOT read them as
+  ;; coverage of the arm. The discriminating assertion is the NEXT one: the two
+  ;; cont channels must be DISJOINT, and that is what a regression would break.
+  (check-false (select-step-cont star-f))
+  (check-false (select-step-cont star-fs))
+  ;; ⭐ THE DISCRIMINATING PIN: the cont is reachable by its OWN accessor while
+  ;; the caret channel stays empty. Route `'flatten` into `select-step-cont` and
+  ;; this pair goes inconsistent — which is the regression worth catching.
+  (check-equal? (select-star-cont star-fs) 'flatten-synth)
+  (check-not-equal? (select-step-cont star-fs) (select-star-cont star-fs)
+                    "the caret channel and the star channel must stay disjoint")
+  ;; the star is not a collapse cont either — `select-cont-collapse?` must not
+  ;; accept the star's vocabulary
+  (check-false (select-cont-collapse? 'flatten))
+  (check-false (select-cont-collapse? 'flatten-synth)))
+
+(test-case "P4e-1b 1b-ii [Q_U40]: no output name — and `*_`'s prefix comes from the PRECEDING step"
+  (check-false (select-step-output-name star-f))
+  (check-false (select-step-output-name star-fs)
+               "`*_` names nothing EITHER — this is the non-obvious half")
+  ;; the consequence, and it is why #f is right for both conts: the synth name
+  ;; of a `*_` branch is computed from the steps BEFORE the star, so it is the
+  ;; preceding key that supplies `database` in `:database-url`.
+  (check-equal? (select-synth-name (list 'database star-fs)) 'database
+                "the synth prefix survives the star, and comes from `database`"))
+
+(test-case "P4e-1b 1b-ii [Q_U43]: the two [leaf] classifiers, and the one that CANNOT answer"
+  (define b (list 'database star-f))
+  ;; a star is collapse-ADJACENT, not a collapse: `^-` lifts ONE flat entry,
+  ;; a star lifts MANY. #f here is correct, not merely inherited.
+  (check-false (select-branch-collapse b))
+  ;; ⚠ this #f is NOT known to be right — a star branch's sort follows its
+  ;; SUBJECT-DERIVED contents, which this classifier cannot see. Q_U43 moves the
+  ;; L4 decision to typing. Pinned so that a later edit teaching this function to
+  ;; "answer" for stars turns the battery red and has to justify itself.
+  (check-false (select-branch-keyless? b))
+  ;; and the walk that breaks its own "Fully static" contract for this kind
+  (check-equal? (select-branch-top-keys (list star-f)) '()
+                "Q_U43: the static walk records that it cannot answer")
+  ;; ⚠ THE CASE THAT CAUGHT THE FIRST CUT. The star is almost always LAST, and
+  ;; `select-branch-top-keys` dispatches on `(car b)` — so an arm in that `case`
+  ;; was nearly unreachable and this branch reported `'(database)`: a key the
+  ;; star has DELETED and the output does not carry. Not merely blind — WRONG,
+  ;; and it would have fed a phantom key to `dup-output-key`. Hence the
+  ;; pre-check. This is the assertion that discriminates the two placements.
+  (check-equal? (select-branch-top-keys (list 'database star-f)) '()
+                "a TRAILING star pre-classifies the whole branch")
+  (check-equal? (select-branch-top-keys (list 'database star-fs)) '()
+                "…and `*_` likewise — the cont does not change the blindness")
+  ;; …and the pre-check must not OVER-fire: a starless branch still answers
+  ;; normally, or Q_U43 would have silently disabled the gates for everyone.
+  (check-equal? (select-branch-top-keys (list 'database)) '(database)
+                "a starless branch is untouched — the pre-check is star-only")
+  ;; ⚠ THE OBLIGATION THIS PIN CARRIES: '() means the parser's two gates see
+  ;; NOTHING for a star branch. That is safe only while the star cannot reach
+  ;; them. When 1b-iv makes it reachable, the carve-out must land WITH it —
+  ;; if these are still '() and a star reaches a block, that is the bug.
+  (void))
+
+(test-case "P4e-1b 1b-ii: the flatten RENDERS postfix, and never as the unhandled marker"
+  ;; pretty-print is the ONE consumer that must not raise (it is on the
+  ;; error-message path), so a missing arm shows up as a marker rather than a
+  ;; crash — which means only an explicit assertion catches it.
+  (check-equal? (pp-select-branch (list 'database star-f)) "database*")
+  (check-equal? (pp-select-branch (list 'database star-fs)) "database*_")
+  ;; branch-INITIAL star: `first?` is deliberately ignored, because
+  ;; `cfg{database}*` is a real spelling and `.{*}` is not
+  (check-equal? (pp-select-branch (list star-f)) "*")
+  (check-false (regexp-match? #rx"unrendered-step-kind"
+                              (pp-select-branch (list 'database star-f)))
+               "the star must not fall through to the unhandled-kind marker"))

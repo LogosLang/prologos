@@ -175,6 +175,9 @@
  ;; D4.P4a: the step-kind totality dispatcher + the consumer-side else
  select-step-kind select-step-kind-unhandled select-step-kind/display
  select-bcast-step? select-bcast-inner make-select-bcast
+ ;; D4.P4e-1b (Q_U40): the flatten step. `select-star-cont` is the ONLY reader of
+ ;; its continuation — `select-step-cont` deliberately answers #f (see its note).
+ select-star-step? select-star-cont make-select-star
  select-step-cont select-cont-collapse? select-cont-rename
  select-branch-collapse select-branch-keyless?
  select-step-output-name select-synth-name select-branch-top-keys
@@ -930,6 +933,34 @@
 
 (define (make-select-bcast step) (list '@bcast step))
 
+;; D4.P4e-1b (Q_U40): `(@star cont)` — THE FLATTEN / LAYER-DELETE STEP.
+;;   cont ::= 'flatten        (bare `*`)
+;;          | 'flatten-synth  (`*_`, the Q_U24 provenance variant)
+;; Those two symbols are exactly what `split-star-lexeme` (parser.rkt) already
+;; returns, so the parser mints this kind without inventing a vocabulary.
+;;
+;; SEMANTICS (Q_U40, one sentence): the star deletes the container layer
+;; contributed by the PRECEDING step — everything to its left in its branch, or
+;; the SUBJECT when it is branch-initial — and joins that layer's contents into
+;; the enclosing level. The join's SORT follows the CONTENTS: vectors CONCAT ·
+;; Maps join KEYWISE (Q_U38 refuses collisions) · keyless components CONCAT
+;; (spec §3.6 rule 5) · leaves ERROR (rule 4). Q_U42 makes it one RECURSIVE rule:
+;; a shared key whose two values are vectors CONCATENATES rather than erroring.
+;;
+;; ⚠ THE KIND IS INERT AT 1b-ii. The parser still refuses at
+;; `segment-select-items`, so nothing MINTS an `(@star …)` from any spelling —
+;; the arms below are reachable only from a hand-built step list (which is how
+;; the battery exercises them). The value/type semantics land at 1b-iii (vector)
+;; and 1b-iv (nominal). ⚠ Deliberately NOT armed here: typing-core and reduction.
+;; A refusing arm there would be REPLACED by 1b-iii/iv's real arm — dual-path
+;; scaffolding — and the star cannot reach them while the parser refuses.
+(define (select-star-step? s) (and (pair? s) (eq? (car s) '@star)))
+(define (make-select-star cont) (list '@star cont))
+;; The star's OWN continuation. ⚠ Read it with THIS, never with
+;; `select-step-cont` — see that function's note: `'flatten`/`'flatten-synth`
+;; are not CARET conts and must not enter that channel.
+(define (select-star-cont s) (cadr s))
+
 ;; D4.P4a — THE STEP-KIND TOTALITY DISPATCHER (owner ruling 2026-07-31:
 ;; route ALL EIGHT dispatch sites through this one classifier).
 ;;
@@ -1030,12 +1061,14 @@
     [(select-sub-step? s) 'sub]         ;; (@sub . branches) — terminal sub-block
     [(select-ord-step? s) 'ord-branch]  ;; (@ord N) — ordinal BRANCH head
     [(select-bcast-step? s) 'bcast]     ;; (@bcast step) — the ω/broadcast step
+    [(select-star-step? s) 'star]       ;; (@star cont) — D4.P4e-1b, the FLATTEN
     [else
      (error 'select-step-kind
             (string-append
              "unknown select step kind: ~s\n"
              "  the step vocabulary is a CLOSED union: symbol | number"
-             " | (@key name cont) | (@sub . branches) | (@ord N) | (@bcast step)\n"
+             " | (@key name cont) | (@sub . branches) | (@ord N) | (@bcast step)"
+             " | (@star cont)\n"
              "  a new kind must be added to select-step-kind AND given an arm"
              " in every `case` over it (D4.P4a)")
             s)]))
@@ -1154,12 +1187,26 @@
   (cond
     [(select-bcast-step? s) (select-step-name (select-bcast-inner s))]
     [(select-key-step? s) (cadr s)]
+    ;; D4.P4e-1b: the star NAMES NOTHING — it deletes a layer, and the keys it
+    ;; lifts are SUBJECT-derived. An explicit arm because `(@star cont)` is
+    ;; LIST-shaped: without it the `[else s]` tail hands the raw step list back,
+    ;; and this function feeds user-facing messages (DEFERRED 40/46's class).
+    [(select-star-step? s) #f]
     [else s]))
 
 (define (select-step-cont s)
   (cond
     [(select-bcast-step? s) (select-step-cont (select-bcast-inner s))]
     [(select-key-step? s) (caddr s)]
+    ;; D4.P4e-1b — A DELIBERATE `#f`, and the reasoning is the point. The star
+    ;; DOES carry a continuation (`'flatten` / `'flatten-synth`), so returning it
+    ;; here would look like the honest answer. It is not: this channel is the
+    ;; CARET cont vocabulary, consumed by `select-cont-collapse?` and by
+    ;; parser.rkt's `findf select-step-cont` (the `^`-in-path-access refusal). A
+    ;; `'flatten` arriving there would be read as a caret continuation and
+    ;; misfire. The star's cont is read with `select-star-cont`, deliberately
+    ;; kept out of this channel — the two vocabularies are disjoint on purpose.
+    [(select-star-step? s) #f]
     [else #f]))
 
 (define (select-cont-collapse? c)
@@ -1187,6 +1234,11 @@
     ;; a silent #f here defeats the guards downstream instead of reaching
     ;; them — the branch is then mis-sorted with no raise anywhere.
     ;; Identical for all five known kinds (only `caret` ever answered #t).
+    ;; ⚠ D4.P4e-1b: `star` answers #f here, and that is CORRECT rather than
+    ;; merely inherited — a `^-` collapse lifts exactly ONE flat entry to the
+    ;; enclosing level, while a star lifts MANY. Collapse-adjacent, not a
+    ;; collapse. Recorded because this is a [leaf] site, where a #f nobody
+    ;; examined is how a kind gets mis-sorted with no raise downstream.
     (and (eq? (select-step-kind s) 'caret)
          (let ([c (select-step-cont s)])
            (and (select-cont-collapse? c) c)))))
@@ -1216,6 +1268,14 @@
     ;; keys `:name` exactly as `users.name` does. NOT `#f` like `ord-step`:
     ;; transparent here means DELEGATE, not "contributes nothing".
     [(bcast) (select-step-output-name (select-bcast-inner s))]
+    ;; D4.P4e-1b (Q_U40): the star contributes NO output name, and this is right
+    ;; for BOTH conts — which is the non-obvious part. `*_`'s synth prefix comes
+    ;; from the PRECEDING step, not from the star: `cfg{database*_ …}` has branch
+    ;; [database (@star flatten-synth)], `select-synth-name` joins the surviving
+    ;; names, `database` comes from the key step, the star adds nothing, and
+    ;; `:database-url` falls out. `#f` here is NOT the `ord-step` "transparent"
+    ;; reading — it is "this step names nothing of its own".
+    [(star) #f]
     [else (select-step-kind-unhandled 'select-step-output-name s)]))
 
 ;; D4.P3c: the `^`-terminated (keyless) branch pre-classifier — a branch
@@ -1231,6 +1291,13 @@
     ;; D4.P4a: classify the leaf — same upstream-of-the-guards argument as
     ;; select-branch-collapse. A silent #f here mis-sorts the branch as KEYED,
     ;; which then feeds the parser's L4 sort check and duplicate-key check.
+    ;; ⚠⚠ D4.P4e-1b (Q_U43): `star` answers #f here — i.e. "KEYED" — and unlike
+    ;; `select-branch-collapse`'s #f that answer is NOT known to be right. A star
+    ;; branch's sort follows its CONTENTS, which are subject-derived: keyed when
+    ;; they are Maps, keyless when they are vectors or ordinal components. This
+    ;; classifier cannot see them. Q_U43 moves the L4 sort decision to typing for
+    ;; star-bearing branches; the #f here is INERT (the parser refuses the star
+    ;; before any branch walk runs) and must not be read as a classification.
     (and (eq? (select-step-kind s) 'caret)
          (eq? (select-step-cont s) 'dissolve))))
 
@@ -1253,6 +1320,22 @@
 (define (select-branch-top-keys b)
   (let ([col (select-branch-collapse b)])
     (cond
+      ;; ⚠⚠ D4.P4e-1b (Q_U43) — PRE-CLASSIFY a star-bearing branch, BEFORE the
+      ;; head dispatch below. The head dispatch reads `(car b)`, and a star is
+      ;; almost always LAST (`database*` is [database (@star flatten)]), so an
+      ;; arm in the `case` would be nearly unreachable — and the fall-through is
+      ;; not merely blind, it is WRONG: the branch would report `:database`, a
+      ;; key the star has DELETED and which the output therefore does not carry.
+      ;; `dup-output-key` would then compare a phantom key against siblings and
+      ;; `mixed-sorts?` would classify the branch keyed on that basis.
+      ;; (Found by the 1b-ii failing test, which is why the arm is here and not
+      ;; in the `case`: the first cut put it there and the pin caught it.)
+      ;; `'()` is NOT a classification — it is the recorded ABSENCE of one, per
+      ;; Q_U43, which moves both gates to typing where the subject's row is
+      ;; visible. Safe only while the star cannot reach a block; THE CARVE-OUT AT
+      ;; THE GATES IS 1b-iv WORK. A nested star inside a `(@sub …)` reaches this
+      ;; same pre-check through the recursive `append-map` below.
+      [(ormap select-star-step? b) '()]
       [col
        (list (cond
                [(select-cont-rename col)]
@@ -1267,6 +1350,11 @@
          (case (select-step-kind s)
            [(key) (list s)]
            [(ord-branch) (list #f)]
+           ;; ⚠ D4.P4e-1b: `star` has NO arm here BY DESIGN — the pre-check at
+           ;; the top of this function classifies star-bearing branches before
+           ;; the head dispatch is reached, so an arm here would be a second path
+           ;; to the same answer (ban-dual-paths). See that pre-check for why the
+           ;; walk cannot answer for a star at all (Q_U43).
            ;; a bare-number STEP head arises only from dissolve-splice
            ;; continuations — transparent (Q_U2: no output level); an
            ;; ordinal-terminal chain has no surviving key → keyless.
