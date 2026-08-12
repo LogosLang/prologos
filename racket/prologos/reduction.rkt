@@ -2165,12 +2165,22 @@
     ;; D4.P3a verify hardening carried: a sub-block is TERMINAL.
     (define (below-components v steps seen)
       (cond
-        [(and (pair? (car steps)) (eq? (car (car steps)) '@sub))
-         (if (null? (cdr steps))
-             (level-entries v (cdr (car steps)))
-             (return (expr-panic
-                      (expr-string
-                       "select: internal — steps after a terminal sub-block (the parser grammar forbids this shape)"))))]
+        ;; ⚠⚠ VERIFY ROUND 1 — THIS ARM PANICKED ON A SHAPE C2 MADE REACHABLE, and
+        ;; its message asserted the shape was impossible. `x{k^.{a b}*}` is a
+        ;; dissolved head, a terminal sub-block, then a star: typing ACCEPTS it
+        ;; (its twin `select-below-components` guards on terminality and
+        ;; DELEGATES), reduction panicked. Measured at `68014124`:
+        ;; `cfg{db^.{hosts ports}*}` → "panic: select: internal — steps after a
+        ;; terminal sub-block (the parser grammar forbids this shape)".
+        ;; ⭐ THE PARSER NEVER FORBADE IT; the depth-≥2 shield did, and C2 removed
+        ;; the shield. Now matched to typing: fire only when the sub is TERMINAL,
+        ;; otherwise delegate — where the narrowed pre-check routes `(sub ★)` to
+        ;; `star-entries`' remainder-empty keyless landing, exactly as typing does.
+        ;; ⚠ C2 diagnosed this EXACT asymmetry for `below-value` twelve lines away
+        ;; and hoisted its tail arm for it — then declared this sibling safe
+        ;; "verified, not assumed", having checked typing's twin and not this one.
+        [(and (pair? (car steps)) (eq? (car (car steps)) '@sub) (null? (cdr steps)))
+         (level-entries v (cdr (car steps)))]
         [else (branch-entries v steps seen)]))
     ;; the VALUE below a kept/renamed head: terminal sub-block assembles
     ;; honestly (incl. the keyless 1-tuple); ordinal steps descend with no

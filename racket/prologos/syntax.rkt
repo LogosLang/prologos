@@ -179,6 +179,7 @@
  ;; its continuation — `select-step-cont` deliberately answers #f (see its note).
  select-star-step? select-star-cont make-select-star
  select-branch-deep-star? select-steps-star-tail?
+ select-step-makes-no-layer? select-branch-has-star?/deep
  ;; [Q_U44] canonical key order — ONE definition, shared by both twins.
  canonical-keyword-key? canonical-keyword-key<?
  select-step-cont select-cont-collapse? select-cont-rename
@@ -959,12 +960,20 @@
 ;; that got 1b-iii reverted TWICE — its two other instances were at
 ;; `select-branch-top-keys` and `select-branch-keyless?`, and this was the third.
 ;;
-;; STATE AT 1b-iii-C1. The kind is LIVE: the parser mints `(@star cont)` from all
-;; four bands, and the VECTOR semantics are shipped in both twins for prefix
-;; depth ≤ 1. Depth ≥ 2 is SHIELDED in `star-branch-entries` / `star-entries`
-;; pending [Q_U47]'s landing rule — C1 has hoisted the shared join
-;; (`star-join-type` / `star-join-value`, module level in typing-core and
-;; reduction) and C2 lifts the shields onto it. Nominal contents are 1b-iv.
+;; STATE AT 1b-iii-C2 + verify round 1. The kind is LIVE and so is the DEEP
+;; flatten: the parser mints `(@star cont)` from all four bands, both shields are
+;; GONE, and vector contents join at ANY prefix depth. The landing is [Q_U47]'s —
+;; keyed under a surviving named step, keyless otherwise — and it is produced by
+;; whichever caller catches the bare join, not computed anywhere. Nominal
+;; contents are 1b-iv. The ordinal gap ([Q_U46]) is a guided refusal at BOTH
+;; layer-computing seats.
+;; ⚠ THIS HEADER WAS STALE FOR THE WHOLE OF C2 — it still said "STATE AT
+;; 1b-iii-C1 … depth ≥ 2 is SHIELDED", present tense, at a HEAD where it was not,
+;; and the adversarial verify is what caught it. That is the FOURTH instance of
+;; the shape named below, and the second time it was THIS comment. Rewriting it
+;; is cheap; the reason it keeps rotting is that it describes state rather than
+;; contract, so it is now written to survive the next slice: what is invariant is
+;; the LANDING RULE, not which shields happen to exist.
 ;; ⚠ Whoever changes that: this comment is a PRECONDITION. Re-read it at the
 ;; seat before invalidating it, and correct it in the SAME commit.
 (define (select-star-step? s) (and (pair? s) (eq? (car s) '@star)))
@@ -999,6 +1008,35 @@
 ;; it would around a starless result. Firing early would compute the layer over
 ;; the whole remaining prefix — which re-nests — and that is the BRANCH-ROOT
 ;; reading Q_U46 rejected, reappearing one level down.
+;; ⭐ 1b-iii-C2 VERIFY ROUND 1 — the two predicates the round-1 defects needed,
+;; both here for the same reason as their neighbours: more than one seat asks.
+;;
+;; `select-step-makes-no-layer?` — does this step contribute NO output level, so
+;; that a star after it has nothing to delete? [Q_U2] Reading A for ordinals.
+;; ⚠ IT MUST BE ASKED AT EVERY SEAT THAT COMPUTES A LAYER, not just one. C2
+;; shipped the check at the tail arm only, and the dissolve route reaches the
+;; layer through `star-branch-entries` instead — so `y{a[0]*}` refused while
+;; `y{a^[0]*}` silently ANSWERED, deleting a layer the ordinal never made and
+;; committing by accident to the question Q_U46 deliberately reserved.
+(define (select-step-makes-no-layer? s)
+  (memq (select-step-kind s) '(ord-step ord-branch)))
+
+;; `select-branch-has-star?/deep` — does this branch contain a star ANYWHERE,
+;; including inside a `(@sub …)` payload?
+;; ⚠ THE RECURSION IS THE POINT. A plain `ormap select-star-step?` sees only the
+;; branch's TOP-LEVEL steps, so a star nested in a sub-block is invisible — and
+;; a dissolved head then SPLICES that star's keyed component into the enclosing
+;; level, where two branches can deliver the same output key with no gate seeing
+;; either. Measured: `s7{a^.{b.c*} b}` and `s7{b a^.{b.c*}}` returned DIFFERENT
+;; values and DIFFERENT types at ZERO errors, i.e. the answer depended on the
+;; order the branches were written.
+(define (select-branch-has-star?/deep b)
+  (ormap (lambda (s)
+           (or (select-star-step? s)
+               (and (select-sub-step? s)
+                    (ormap select-branch-has-star?/deep (cdr s)))))
+         b))
+
 (define (select-steps-star-tail? steps)
   (and (pair? steps) (pair? (cdr steps)) (null? (cddr steps))
        (select-star-step? (cadr steps))

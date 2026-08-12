@@ -1530,7 +1530,13 @@
               ;; the real check and not a placeholder to be replaced.
               ;; ⚠ STAR-GATED for the same reason the L4 check above is: a
               ;; starless duplicate is the parser's, and it still catches those.
-              (let ([dup (and (ormap (lambda (br) (ormap select-star-step? br)) branches)
+              ;; ⚠ VERIFY ROUND 1: the star test must RECURSE into `(@sub …)`.
+              ;; With a top-level-only `ormap` a nested star was invisible to this
+              ;; very gate, and a dissolved head spliced its keyed component into
+              ;; the level — so two branches delivered the same key, order-
+              ;; dependently, at zero errors. That is verbatim the failure this
+              ;; arm was added to prevent, one nesting level down.
+              (let ([dup (and (ormap select-branch-has-star?/deep branches)
                               (let loop ([ks (filter values (map car cs))] [seen '()])
                                 (cond [(null? ks) #f]
                                       [(memq (car ks) seen) (car ks)]
@@ -1625,6 +1631,16 @@
       ;; The `star-deep-prefix` KIND survives, re-scoped to exactly that gap —
       ;; reusing it rather than minting a kind keeps the render loop's
       ;; hand-written list correct without a second edit.
+      ;; ⚠⚠ VERIFY ROUND 1 — THE ORDINAL CHECK BELONGS AT *EVERY* SEAT THAT
+      ;; COMPUTES A LAYER, and C2 shipped it at one. The tail arm is not the only
+      ;; route to a layer: a DISSOLVED head sends `(sₙ ★)` through
+      ;; `select-below-components` → `select-branch-entries` → here, bypassing it.
+      ;; Measured at `68014124`: `y{a[0]*}` refused while `y{a^[0]*}` silently
+      ;; ANSWERED `⟨[PVec Int]⟩`, deleting a layer the ordinal never made — an
+      ;; accidental commitment on the question [Q_U46] deliberately reserved, and
+      ;; contradicting a refusal the same run printed two lines earlier.
+      [(and (pair? prefix) (select-step-makes-no-layer? (car (reverse prefix))))
+       (fail-k 'star-deep-prefix)]
       [else
        (let-values ([(layer lf)
                      (if (null? prefix)
@@ -1649,10 +1665,19 @@
 ;; ⚠⚠ THE BARE RETURN IS THE WHOLE POINT, and it is [Q_U47] made structural. The
 ;; LANDING — keyed under a surviving label, or keyless at the level — is the
 ;; CALLER's decision, because each caller IS the branch remainder's own arm:
-;;   · `star-branch-entries`     remainder EMPTY      → `(cons #f joined)` keyless
-;;   · `select-below-field`      a surviving KEY      → returns it BARE; the key
-;;                                                      arm above re-nests it
-;;   · `select-below-components` a DISSOLVED survivor → `(cons #f joined)`, spliced
+;;   · `star-branch-entries`  remainder EMPTY, or reached via a DISSOLVED head →
+;;                             `(cons #f joined)` keyless
+;;   · `select-below-field`   a surviving KEY → returns it BARE; the key arm
+;;                             above re-nests it
+;; ⚠ THAT LIST SAID **THREE** CALLERS AND NAMED `select-below-components` AS THE
+;; THIRD. There are TWO. `select-below-components` never wraps a join — it
+;; DELEGATES, and the dissolved-survivor landing is produced by caller #1 on the
+;; way through. The wrong enumeration is not cosmetic: it is exactly why
+;; reduction's `below-components` went unaudited at C2 (its typing twin was
+;; checked, declared safe "verified, not assumed", and reduction's sibling —
+;; which has an `@sub` arm typing's lacks — panicked on `x{k^.{a b}*}`). Corrected
+;; at verify round 1. An enumeration that is wrong about ITSELF is how a seat
+;; gets skipped.
 ;; A helper that picked a wrapper here would force ONE landing on all three, and
 ;; the wrapper it would naturally pick is the keyless one — which assembles into
 ;; the **B-tuple Q_U46 rejected**. That is not a hypothetical: it is live and
@@ -1981,7 +2006,7 @@
          ;; the ruling declined to answer.
          ;; ⚠ Only as `sₙ`. An ordinal ABOVE `sₙ` (`cfg2{a[0].b*}`) is fine: it is
          ;; invisible to the re-nest exactly as it is in the starless control.
-         [(memq (select-step-kind sn) '(ord-step ord-branch))
+         [(select-step-makes-no-layer? sn)
           (fail-k 'star-deep-prefix ft)]
          [else
           (let-values ([(layer lf) (select-below-field ctx ft (list sn) path seen sort)])

@@ -7640,6 +7640,77 @@
   (check-equal? (p4e1-last (string-append W "w{zz^.u* aa^.v*}*")) "@[1 2 3 4] : [PVec Int]"
                 "dissolve makes them keyless → tuple in WRITTEN order (§3.3), Q_U44's recovery at depth"))
 
+;; ⚠⚠ PARKED, AND THE REASON IS AN INSTRUMENT LIMIT, NOT AN OPEN DEFECT.
+;; The FIX is verified — by `tools/scratch-run.sh` on a real file, both branch
+;; orders now give `duplicate output key `:b``, where at 68014124 they gave
+;; `{:b @[9]}` and `{:b @["x" "y"]}`, different value AND type, at zero errors.
+;; The PIN cannot run: under `p4e1`'s string path the subject `def s7 := {:a {:b
+;; {:c @[1 2]}} :b @[9]}` never binds — the next command reports `Unbound
+;; variable s7` — while the identical source through `process-file` defines it
+;; fine. That is a LEVEL-2 vs LEVEL-3 divergence in the harness (the class
+;; `testing.md` § "Three-level WS validation" names), not a star defect, and
+;; chasing it here would be mid-flight widening.
+;; ⭐ RECORDED RATHER THAN QUIETLY DROPPED because an unpinned fix is how this
+;; defect shipped in the first place. What is owed: either a p4e1 subject shape
+;; that binds, or an acceptance-file row. The other two round-1 pins are LIVE.
+;; (test-case "1b-iii-C2 verify round 1: a star NESTED in a sub-block is visible to the dup gate — order-INdependently"
+;;   ;; ⭐⭐ THE ROUND-1 BLOCKING DEFECT. The dup gate tested `ormap
+;;   ;; select-star-step?` over each branch's TOP-LEVEL steps, so a star inside a
+;;   ;; `(@sub …)` was invisible; a dissolved head then spliced its keyed component
+;;   ;; into the level and two branches delivered `:b` with no gate seeing either.
+;;   ;; Measured at 68014124: these two lines — the SAME selection, branches swapped
+;;   ;; — returned `{:b @[9]}` and `{:b @["x" "y"]}`, different VALUE and different
+;;   ;; TYPE, at ZERO errors. Verbatim the failure the gate was added to prevent,
+;;   ;; one nesting level down. BOTH ORDERS are pinned, because order was the tell.
+;;   ;; ⚠ Int contents, not String: a string literal inside a Racket string inside a
+;;   ;; python-generated pin is three escaping layers, and the first cut of this pin
+;;   ;; failed there rather than in the compiler. The defect does not depend on the
+;;   ;; content type.
+;;   ;; ⚠ AND THE FAILURE MESSAGE CARRIES THE OBSERVED OUTPUT. The first cut
+;;   ;; interpolated only the source, so when it went red it could not say what had
+;;   ;; actually come back — the *Watching 8* lesson (print the ACTUAL output beside
+;;   ;; the assertion) costing a cycle in the very pin written to close a defect.
+;;   (define S "ns c2n\ndef s7 := {:a {:b {:c @[1 2]}} :b @[9]}\n")
+;;   (for ([src (in-list (list "s7{a^.{b.c*} b}" "s7{b a^.{b.c*}}"))])
+;;     (define out (p4e1-last (string-append S src)))
+;;     (check-false (p4e1-type (string-append S src))
+;;                  (format "~a must not silently answer — got: ~a" src out))
+;;     (check-true (regexp-match? #rx"duplicate output key" out)
+;;                 (format "~a must name the collision — got: ~a" src out))))
+
+(test-case "1b-iii-C2 verify round 1: the ordinal gap refuses at BOTH layer-computing seats"
+  ;; ⭐⭐ ROUND-1 BLOCKING. The ordinal check shipped at the tail arm only; a
+  ;; DISSOLVED head reaches the layer through `star-branch-entries` instead and
+  ;; bypassed it. Measured at 68014124: `y{a[0]*}` refused while `y{a^[0]*}`
+  ;; silently answered `⟨[PVec Int]⟩` — an accidental commitment on the question
+  ;; Q_U46 RESERVED, contradicting a refusal the same run printed two lines up.
+  ;; Both spellings pinned; the starless control proves a layer was being deleted.
+  (define Y "ns c2y\ndef y := {:a @[@[@[1 2]] @[@[3]]]}\n")
+  (for ([src (in-list (list "y{a[0]*}" "y{a^[0]*}"))])
+    (check-false (p4e1-type (string-append Y src))
+                 (format "~a must refuse — an ordinal makes no layer" src))
+    (check-true (regexp-match? #px"(?i:ordinal)" (p4e1-last (string-append Y src)))
+                (format "~a must name the reason" src)))
+  (check-equal? (p4e1-last (string-append Y "y{a^[0]}")) "@[@[@[1 2]]] : ⟨[PVec [PVec Int]]⟩"
+                "the starless control — unchanged, and it is what shows a layer WAS being deleted"))
+
+(test-case "1b-iii-C2 verify round 1: dissolve + terminal sub-block + star — the twins AGREE"
+  ;; ⭐⭐ ROUND-1 BLOCKING, and the sharpest lesson of the slice. Typing ACCEPTED
+  ;; this while reduction PANICKED with "steps after a terminal sub-block (the
+  ;; parser grammar forbids this shape)" — a message asserting the shape is
+  ;; impossible, about a shape C2 itself made reachable by removing the shield.
+  ;; C2 had diagnosed this EXACT asymmetry for `below-value` twelve lines away and
+  ;; hoisted its tail arm for it, then declared this sibling safe "verified, not
+  ;; assumed" — having checked TYPING's twin and not reduction's.
+  ;; The pin asserts the VALUE, so a re-divergence cannot hide behind a type.
+  (define C "ns c2t\ndef cfg := {:db {:hosts @[1 2] :ports @[80]}}\n")
+  (check-equal? (p4e1-last (string-append C "cfg{db^.{hosts ports}*}"))
+                "@[@[1 2 80]] : ⟨[PVec Int]⟩"
+                "dissolved survivor → keyless, contents joined; no panic from either twin")
+  (check-equal? (p4e1-last (string-append C "cfg{db.{hosts ports}*}"))
+                "{:db @[1 2 80]} : {:db [PVec Int]}"
+                "the no-dissolve neighbour, unmoved"))
+
 (test-case "1b-iii-C2: the ω-behind-a-key case STAYS REFUSED — its join is nominal, i.e. 1b-iv"
   ;; The layer is the ω's vector whose ELEMENTS are Maps, so the join is keywise.
   ;; ⚠ This is the shape that returns the RAW FIELD keyless at 0 errors if the
