@@ -2345,11 +2345,22 @@ items of the hold-point, ruled before P4a opened:
   · `vv:{0 1}*` → `⟨1 2 3 4⟩` — **a matrix RAVEL falls out with no special
     case**; ordinal/keyless layers concatenate and so **can never collide**, so
     Q_U38's refusal structurally never fires on them.
-  **⭐ THE EQUATIONAL LAW IT PRODUCES**, in the family of §3.6's
+  **⭐ THE EQUATIONAL LAW IT PRODUCES** (call it **L★**), in the family of §3.6's
   `{p:a p:b} ⟶ p:{a b}`:
   > **`x{p₁* … pₙ*} ≡ x{p₁ … pₙ}*`** — distributing the star over every branch
   > equals starring the result — **PROVIDED the preceding step is a BLOCK, with
-  > no intervening ω.**
+  > no intervening ω** ⚠ **AND the branches' contents are MAPS —
+  > [Q_U45](#q-u45), 2026-08-12.**
+
+  ⚠⚠ **DO NOT READ THE QUALIFIER BELOW AS COMPLETE — [Q_U45](#q-u45) WIDENED IT.**
+  The ω qualifier recorded here is necessary and NOT sufficient: L★ also fails for
+  VECTOR contents with no ω anywhere, and it fails on **ARITY**, not on order
+  (`mm{zz* aa*}` is an n-TUPLE of vectors; `mm{zz aa}*` is one flat vector). The
+  Map side is equal only because a Map-valued branch star SPLICES its keys, which
+  is the same operation the result form's keywise join performs — and every worked
+  example in this ruling's battery used Maps, which is why the gap survived. Q_U45
+  also records the surface-observable form: `m2{a* b}` is LEGAL (splice `a`, keep
+  `b`'s key) while `mm{zz* aa}` is an L4 mixed-sorts error.
 
   ⚠ **THE QUALIFIER WAS MISSING WHEN THIS RULING WAS FIRST WRITTEN, and the
   owner's question is what found it** (2026-08-11, same session). **Under a
@@ -2552,6 +2563,99 @@ items of the hold-point, ruled before P4a opened:
   only a correctness one.
   **Next free Q-label: U45.**
 
+- <a id="q-u45"></a>**⭐⭐ Q_U45 — L★'s QUALIFIER WIDENS: THE DISTRIBUTION LAW HOLDS
+  ONLY WHERE THE JOIN IS KEYWISE. THE VECTOR CASE IS A DELIBERATE
+  NON-EQUIVALENCE, NOT A COLLISION WITH [Q_U44](#q-u44) [owner, 2026-08-12].**
+
+  **THE LAW, stated once — it is cited constantly and was written down nowhere in
+  one piece, which is why the defect below survived three sessions:**
+  > **L★  `x{p₁* … pₙ*}  ≡  x{p₁ … pₙ}*`** — *star every branch* equals *star the
+  > whole result.*
+
+  **THE AMENDMENT — one clause; NO program changes meaning.** L★ holds provided
+  the preceding step is a BLOCK, **with no intervening ω, AND the branches'
+  contents are Maps** — equivalently, the star's join is KEYWISE, so each branch
+  star's contribution is **absorbed** by the enclosing level rather than
+  **stacked** as a keyless component. `mm{zz aa}*` and `mm{zz* aa*}` keep exactly
+  the values [Q_U40](#q-u40) and Q_U44 already give them; what changes is that we
+  stop asserting they are equal, and the vector case is PINNED as a
+  non-equivalence beside the ω one.
+
+  **⭐⭐ WHY IT FAILS FOR VECTORS — ON *SHAPE* BEFORE ORDER EVER ENTERS.** This
+  was first framed (by me) as an ordering conflict with Q_U44. It is not. With
+  `mm := {:zz @[1 2] :aa @[3 4] :mm @[5 6]}`:
+
+  | spelling | result | why |
+  |---|---|---|
+  | `mm{zz aa mm}*` | `@[3 4 5 6 1 2]` : `[PVec Int]` | ONE keyed layer deleted; contents = three vectors; concat in CANONICAL order (aa·mm·zz) |
+  | `mm{zz* aa* mm*}` | `@[@[1 2] @[3 4] @[5 6]]` : `⟨[PVec Int] …⟩` | each branch deletes ITS OWN key layer, whose contents are a *single* vector → **one keyless component each**; three of them = a TUPLE, written order |
+  | `mm{zz* aa* mm*}*` | `@[1 2 3 4 5 6]` : `[PVec Int]` | Q_U44's recovery — the outer star deletes that keyless layer; keyless contents concat in WRITTEN order |
+
+  Rows 1 and 2 are L★'s two sides, and they differ in **ARITY** — an n-tuple of
+  vectors against one flat vector. Row 2 is Q_U44's own text, not an inference
+  (*"whose contents are a SINGLE vector, so no order is fabricated — and
+  contributes it as a KEYLESS component"*). The Map side is equal because a
+  Map-valued branch star **splices its keys** into the enclosing block level,
+  which is the same operation the result form's keywise join performs:
+  `m2{a* b*}` ≡ `m2{a b}*` ≡ `{:x 1, :y 2}`. **Every worked example behind L★
+  used Maps. That is why nobody caught it.**
+
+  **⭐ AND THE NON-EQUIVALENCE IS Q_U44's MECHANISM SEEN FROM THE OTHER SIDE, not
+  a conflict with it.** Q_U44's whole device is *order is recovered by opting into
+  KEYLESSNESS*. The distributed form IS opting into keylessness. Rows 1 and 3 —
+  both flat — differ only in order, and that difference is precisely what Q_U44
+  sells. Row 4 makes the other half visible: `mm{aa zz mm}*` is byte-identical to
+  row 1, because §1.1 + §8 Q2 rule that for a KEYED block, key IDENTITY carries
+  the meaning and order does not.
+  ⚠ **A precision the deliberation turned on**: the Map join is order-insensitive
+  because the RESULT IS A MAP (a Map's identity is its key→value association;
+  order never enters), **NOT** because of the champ's hash ordering — hash order
+  was the DEFECT Q_U44 killed. Order has to be *manufactured* only when Map
+  contents are flattened INTO a vector, and that is exactly where Q_U44 rules
+  canonical. Three regimes: **Map→Map, order never arises · Map→vector, order is
+  manufactured ⇒ CANONICAL · keyless→vector, order is already there ⇒ WRITTEN.**
+
+  **⭐⭐ THE SURFACE-OBSERVABLE FORM, and it is the better test [owner's
+  observation, 2026-08-12 — "in the vector cases they all must have `*`
+  postfixed, whereas in the Map case it would not be an error if one branch were
+  and the other not"].** Absorption shows up as a LEGALITY difference, not only an
+  equality one:
+  ```
+  m2{a* b}    →  {:x 1, :b {:y 2}}   LEGAL — splice `a`, KEEP `b`'s key
+  mm{zz* aa}  →  L4 mixed keyed/keyless — one keyless component beside one keyed
+  ```
+  A Map-valued branch star contributes KEYED components, which sit happily beside
+  an unstarred keyed branch; a vector-valued branch star contributes ONE KEYLESS
+  component, which cannot. **This is checkable without computing the answer**, so
+  it is what the battery should assert. Q_U40 already names `m{a* b}` as the
+  reason the branch form is *strictly more expressive*.
+
+  **⛔ AND IT FALSIFIES THE PARKED PATCH'S `(list #f)`** — see
+  [§5.P4e-1b-iii](#p4e-1b-iii) finding A2. Classifying every star branch KEYLESS
+  at the parser makes `m2{a* b}` an L4 error, i.e. **the patch refuses Q_U40's own
+  headline expressivity example.** `(list #f)` is right for vector contents and
+  wrong for Map contents, and the parser cannot tell which — which is the whole
+  reason Q_U43 moved the check to typing.
+
+  **COST, accepted eyes-open**: L★'s side condition stops being SYNTACTIC ("is
+  there an ω in the spelling?") and becomes SEMANTIC ("are the contents Maps?"),
+  so a user cannot apply the law by pattern-matching on syntax, and P5's L2
+  factoring cannot use it as a rewrite without a type-directed guard. Mitigation:
+  that is where the information already lives — Q_U38 and Q_U43 moved the star's
+  collision and sort checks to TYPING for exactly this reason, so a type-directed
+  side condition on a star law is consistent with the design rather than a new
+  exception.
+  **Rejected-with-reason** (all three break something landed): *make a vector
+  branch star SPLICE its elements* — does not even rescue L★ (`@[1 2 3 4]` vs
+  `@[3 4 1 2]`) and destroys Q_U44's recovery, which works *because* the inner
+  star contributes one component and fabricates no order · *make the result form
+  written-order* — contradicts Q_U44 head-on, needs an OrderedMap the language
+  does not have, and would make `mm{zz aa}*` differ from `mm{aa zz}*`, breaking
+  the §1.1/§8 Q2 thesis · *refuse a star over a keyed layer with vector contents*
+  — kills the headline concat case and runs against [Q_U42](#q-u42), which ruled
+  the analogous shape one level down to CONCAT rather than error.
+  **Next free Q-label: U46.**
+
 - <a id="q-u43"></a>**⭐ Q_U43 — THE L4 SORT CHECK MOVES TO TYPING FOR STAR-BEARING
   BRANCHES, AS [Q_U38](#q-u38)'s COROLLARY [owner, 2026-08-11 — "move the sort
   check to typing per Q_U38's corollary"].** Q_U38 moved the COLLISION check;
@@ -2615,7 +2719,7 @@ items of the hold-point, ruled before P4a opened:
   Until then they existed ONLY in a session transcript, which is not durable
   storage — and the owner's ruling is that attempt 3 opens from the MEASURED MAP,
   which cannot be honoured against an unreadable artifact.
-  (Q-label register: see [Q_U44](#q-u44), the latest ruling — **next free U45**.)
+  (Q-label register: see [Q_U45](#q-u45), the latest ruling — **next free U46**.)
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
@@ -8773,8 +8877,18 @@ fixes themselves:**
    carrier, continuation when written in-block — and it assumes only the first.
    So the fix is a **position decision, not a transplant from a sibling**, and
    the missing pin must spell a postfix star **AFTER A SUB-BLOCK**, where `cur`
-   is non-empty (`vh{0.{0}*}` is that shape; `vh{0*}` is not — there the star
-   fuses into the lexeme and takes the `star-sym?` arm).
+   is non-empty (`vh{0.{0}*}` is that shape).
+   ⚠⚠ **THE PARENTHETICAL THIS CORRECTION ORIGINALLY CARRIED IS ITSELF FALSIFIED
+   — see [the attempt-3 audit](#p4e-1b-iii-audit3) finding A5.** It read *"`vh{0*}`
+   is not — there the star fuses into the lexeme and takes the `star-sym?` arm"*.
+   MEASURED at HEAD: nothing fuses (the mint needs a preceding CLOSER and `0` is a
+   number token), so `0` and `*` are separate items and the message is
+   `split-star-lexeme`'s first-star-at-zero. It reaches `star-sym?` only on the
+   `[(not name) (fail cont)]` leg. **The correction was right about the defect and
+   wrong about the neighbouring band, by inheriting a reading instead of measuring
+   it — the same failure it was written to fix.** A1's position rule (derived from
+   the mint) is the durable statement; this cell is kept as written rather than
+   silently repaired, because the pattern is the finding.
 2. **⭐ BLOCKING — Q_U44's fix does not implement the order it claims.**
    `champ-values/canonical` sorts by `(format "~a" key)`, which for a keyword key
    renders the TRANSPARENT STRUCT `#(struct:expr-keyword NAME)`. The trailing `)`
@@ -8800,20 +8914,148 @@ fixes themselves:**
 · `(list #f)` is honest for what 1b-iii ACCEPTS but is also applied to shapes it
   REFUSES, where it PRE-EMPTS the star's own message with an L4 sort error.
 
-**WHAT ATTEMPT 3 MUST DO** — beyond attempt 2's list, which still stands: make
-the `$postfix-star` arm **decide its branch POSITION** rather than always
-`(closed-acc)`-ing (see the framing correction above — it is not "copy a
-sibling"), and pin an in-block postfix star after a sub-block, which nothing
-covered; sort on the keyword NAME with `symbol<?`; split `star-not-yet` into
-distinct failure kinds so mid-branch, leaf and nominal each say the true thing;
-and add a key set that SEPARATES `symbol<?` from the struct-display order to the
-battery (`{:a :a!}` — `!` is ASCII 33, below `)`'s 41).
-
 ⚠ **THE PARKED PATCHES LIVE IN A PRIOR SESSION'S SCRATCHPAD**, not the current
 one: `/private/tmp/claude-501/-Users-avanti-dev-projects-prologos/311a1847-2220-4539-bd51-0e2270a3625f/scratchpad/slice-1b-iii-attempt{1,2}.patch`
-(attempt 2 = 427 added lines, six files: parser · reduction · syntax ·
-typing-core · typing-errors · the battery). Every "parked at the session
+(attempt 2 = 427 added lines, six files: parser +42/−10 · reduction +105 ·
+syntax +21/−1 · typing-core +78 · typing-errors +17 · battery +151/−29; it
+`git apply --check`s clean at `7fd25f35`). Every "parked at the session
 scratchpad" above means THAT path.
+
+<a id="p4e-1b-iii-audit3"></a>
+
+##### The attempt-3 mini-audit (2026-08-12, `wf_bbf1169e-340`) — the four-item list was NOT the work
+
+6 partitioned read-only facets + the adversarial completeness critic, HEAD-pinned
+`7fd25f35`, ~1.55M tokens, **37 critic findings · 17 capture gaps · 16 R-lens
+targets**. Every claim below was R-lens-verified on the main thread before being
+recorded. **Three of the four recorded items stand; the audit found the list is a
+subset, and one of the four rested on a sentence that does not exist.**
+
+**⭐⭐ A1 — THE POSITION RULE IS DERIVABLE, TOTAL, AND NEEDS NO `cur-subbed?`
+TEST.** The reader mints `postfix-star` only for a `*` byte-adjacent to a
+preceding token in `group-closer-types = '(rbracket rparen rbrace)`
+(parse-reader.rkt:2081, :1619) — and a block's own `{` is an **OPENER**. So a bare
+`$postfix-star` **can never be the first item of a block or sub-block payload**.
+Therefore:
+> `cur = #f` ⇔ the outer `$select-path` carrier ⇔ operate on the **SUBJECT**;
+> `cur` non-`#f` ⇔ in-block ⇔ **CONS onto the branch**.
+
+Derived from the mint, not transplanted from a sibling arm — which is what the
+record's "respect `cur` like its siblings" framing would have produced.
+
+**⭐ A1b — SIX ARRIVAL POSITIONS, MEASURED; THIS DOCUMENT RECORDED ONE.** All six
+reach parser.rkt:1447 (probed at HEAD): (A) branch-initial outer carrier `c{a}*`
+· (B) after a `.{…}` sub-block `vh{0.{0}*}` (`cur-subbed?`=#t) · **(C) after an
+ORDINAL step `cfg{database[0]*}` (`cur-subbed?`=#f — in no record)** · (D) after
+an in-block ω `m{k:{a}*}` · (E) after `^`-dissolve + sub `cfg{database^.{host}*}`
+· (F) one level down via the recursive call `cfg{database.{host[0]*}}` (`sub?`=#t)
+· plus mid-payload with a SIBLING after it, `cfg{database.{host}* name}`. **A fix
+keyed on `cur-subbed?` covers one of six**; the `cur` rule covers all.
+
+**⛔ A2 — `(list #f)` REFUSES [Q_U40](#q-u40)'s OWN HEADLINE EXAMPLE.** The patch's
+Q_U43 pre-check answers `(list #f)` for every star branch — KEYLESS — and leaves
+both parser gates live. Trace `m2{a* b}`: branch 1 → `(#f)`, branch 2 → `(b)`, so
+`mixed-sorts?` (parser.rkt:1335) is `(and #t #t)` → **L4 error at the parser**,
+against a spelling Q_U40 rules legal and calls the reason the branch form is
+*strictly more expressive*. `(list #f)` is right for VECTOR contents and wrong for
+MAP contents and **the parser cannot tell which** — the whole reason Q_U43 moved
+the check to typing. See [Q_U45](#q-u45); found by the owner's uniformity
+observation, not by a facet. *(Derived from the patch against the live gate; the
+patch is not applied, so this is a failing-test-first pin, not a measurement.)*
+
+**⛔ A3 — THE THIRD INSTANCE OF THE REVERT SHAPE IS SITTING UNTOUCHED.** Two
+comments in `syntax.rkt` carry the SAME precondition the seat migration deletes,
+and the patch addresses one:
+· `select-branch-top-keys`' pre-check — *"Safe only while the star cannot reach a
+  block; THE CARVE-OUT AT THE GATES IS 1b-iv WORK"* (syntax.rkt:1333-1337);
+· `select-branch-keyless?` — *"the #f here is INERT (the parser refuses the star
+  before any branch walk runs) and must not be read as a classification"*
+  (syntax.rkt:1294-1301), **untouched by the patch, and its `(check-false …)` pin
+  untouched too**.
+After the patch, two classifiers in one file give **opposite** sort answers for
+the same star branch (keyless vs keyed), both pinned. ⚠ And the pre-check's own
+comment says `'()` *"moves both gates to typing"* — the patch's typing hunks
+contain **no collision check and no sort check at all**, so a comment asserts as
+done a migration that exists in no tree.
+
+**⛔ A4 — THE MID-BRANCH SENTENCE DOES NOT EXIST.** This document said *"the
+accurate mid-branch wording already exists in reduction.rkt and is unreachable"*.
+**MEASURED: `grep flatten reduction.rkt` → 5 hits, all `flatten-union` /
+`flatten-app`.** The sentence exists only inside the parked patch. The claim was
+written from the patch's perspective as if applied — and attempt 3 starts from
+HEAD, so it would have searched for it and found nothing.
+
+**⛔ A5 — MY OWN 2026-08-12 PARENTHETICAL IS FALSIFIED, and it made an
+unimplemented band look implemented.** I wrote that `vh{0*}` "is not that shape —
+there the star fuses into the lexeme and takes the `star-sym?` arm". **MEASURED at
+HEAD: `vh{0*}` → `` `*` — `*` is postfix; it attaches to the END of a segment ``**
+— `split-star-lexeme`'s first-star-at-zero message, which can only arise if the
+lexeme IS `*`, i.e. `0` and `*` are SEPARATE items and **nothing fuses** (the mint
+needs a preceding CLOSER; `0` is a number token). It does take `star-sym?`, but on
+the `[(not name) (fail cont)]` leg. **The in-block ordinal band `m{0*}` is
+unimplemented and its message tells the user to do what they already did** — the
+DEFERRED 101 "unspellable ordinal splat", still live. Same failure class as the
+one that correction was fixing: I inherited a reading instead of measuring.
+
+**⛔ A6 — Q_U44 NAMES HALF OF `make-record`.** syntax.rkt:1406-1413 DEDUPS
+last-write-wins via `make-hash` and THEN forks on key-domain — `symbol<?` for
+`'keyword`, `<` for `'nat`. A helper written to the ruling as stated cannot serve
+a nat-domain layer, and non-keyword champ keys are reachable at runtime.
+
+**⛔ A7 — THE HEADLINE NEW INSTRUMENT IS VACUOUS AND ITS COMMENT CLAIMS THE
+OPPOSITE.** `p4e1-has?` (tests:6314) `ormap`s over **all** per-command output
+**including the setup `def` lines**, and `def rowsv` itself renders
+`rowsv : [PVec {:tags [PVec Int]}]` — which contains `[PVec Int]`, as does the
+WRONG answer `[PVec [PVec Int]]`. The patch's type-collapse check therefore cannot
+fail, while its comment calls it *"the assertion that caught the implementation's
+one real defect"*. **Systemic**: any expectation whose regex is a substring of a
+subject's printed value or type is silently vacuous.
+
+**FURTHER VERIFIED FINDINGS, each a slice obligation** — `star-not-yet-message`
+has FOUR callers (not the census's 5); the patch removes all four but not the
+DEFINITION, leaving dead code carrying a live-contract comment (parser.rkt:1254) ·
+`format-select-fail` ends in `[else #f]` (typing-errors.rkt:600), so splitting the
+fail kind into three walks into a SILENT catch-all — and three nesting sites
+`string-append` the recursive result, so a `#f` there is a contract violation that
+`select-block-hint`'s blanket handler (:603, one of FOUR in that file) swallows ·
+the same star raise is a WHOLE-FILE ABORT on the primary `infer` path and a
+silently-swallowed `#f` on the hint path · the typing arm lacks a TAIL guard (a
+`'dyn` row exposes only KNOWN fields ⇒ silent SUBSET join) and a PRESENCE guard,
+both of which the tree already ships (`closed-keyword-row?`, syntax.rkt:1435) ·
+the twins DIVERGE on an empty layer (typing's `(pair? contents)` refuses;
+reduction's `(andmap … '())` mints `@[]`) and on `seen` (reduction forwards,
+typing resets to `'()`) · `rrb-concat` already exists and the patch open-codes the
+join · the parser's gate-safety comment (parser.rkt:1323) claims
+`select-branch-top-keys` is "the SHARED walk … typing + reduction use" — **it has
+ZERO references in either file** · `pp-expr`'s `'path` arm hardcodes a `.`
+(pretty-print.rkt:592), so `c{a}*` will echo as the nonexistent `c{a}.*` — the
+identical bug one arm over was fixed at P4d-0 slice 5 and the sibling not swept ·
+the ω non-equivalence pin is fully COMMENTED at tests:6975-6998 and the patch does
+not uncomment it · `*_` has **no postfix carrier at all** (`c{a}*_` → bare
+`Unbound variable`; the mint is `(string=? lexeme "*")`), so the arm's hardcoded
+`'flatten` is right by accident and `*_` is classified KEYED, not keyless — the
+patch pins the wrong answer.
+**Confirmed as recorded**: the `sort` shadow (reduction.rkt:1643→:2111, and the
+two live `(sort ` calls both sit OUTSIDE it, so 1b-iii's helper is the first thing
+that would trip it) · `entries->value`'s first-component fork, whose twin
+`select-assemble-row` RE-INDEXES, so `m{tags* name}` silently re-indexes while
+`m{name tags*}` RAISES — same block, reordered · attempt 2 did fix the twin ORDER
+divergence.
+
+**WHERE A CANONICAL-ORDER HELPER BELONGS** (none exists — the tree's three champ
+sorts are all `(format "~a" key)` or diagnostic-only): the COMPARATOR in
+`syntax.rkt`, which already owns `expr-keyword`, `make-record` and `record-field`
+and requires neither champ nor rrb; the champ WALKER at `reduction.rkt` MODULE
+level, outside the `sort` shadow. `typing-core` requires `reduction`, one-way, so
+reduction cannot import from typing.
+
+**⚠ ONE AUDIT CLAIM DOWNGRADED**: a facet traced `c{a}*.host*` to a whole-file
+abort; the critic showed the nearest reachable shape refuses cleanly and that
+reaching the raise needs a branch that both STARTS with a star and CONTINUES —
+which A1's position rule proves impossible. **That is an argued-unreachable
+precondition living in an audit, which is precisely the artifact class that caused
+both reverts.** It owes a comment at the four `select-step-kind-unhandled` sites
+plus a tripwire planting a star in a `rest` position — not a note in a document.
 
 **WHAT ATTEMPT 2 MUST DO DIFFERENTLY**: land the parser gates' star carve-out
 **with** the seat migration, not after it; place the typing star check ahead of
