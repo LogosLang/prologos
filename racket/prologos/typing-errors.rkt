@@ -630,7 +630,7 @@
     ;; layer is positional — false for a Map layer, and the exact twin-drift
     ;; defect 1b-iv-A fixed.
     [(star-nominal)
-     (format "select: `~a` — `*_` (flatten with synthesized keys) is not implemented yet for Map-valued contents (layer `~a`). Its key-synthesis rule is not yet ruled: it is undecided whether the synthesized prefix comes from the deleted layer's key or from the contents' own keys. Bare `*` flattens this layer keywise today"
+     (format "select: `~a` — `*_` (flatten with synthesized keys) is not implemented yet for Map-valued contents (layer `~a`). Its key-synthesis rule is not yet ruled: it is undecided whether the synthesized prefix comes from the deleted layer's key or from the contents' own keys. Whether bare `*` flattens this same layer depends on its contents — try it"
              label (pp-expr row names))]
     [(star-hetero)
      (format "select: `~a` — `*` (flatten) is not implemented yet for MIXED element types: the layer `~a`'s vectors do not share one element type, and the union join is not landed"
@@ -676,6 +676,13 @@
      ;; silently picking a side.
      (format "select: `~a` — `*` (flatten) cannot join Map-valued contents under `:` (broadcast): every element of `~a` shares ONE element type, so a keywise join would contribute the same keys once per element and collide for any length above 1 (the length is not statically known). Flatten a single element's layer instead, or select the fields individually"
              label (pp-expr row names))]
+    ;; ⚠ 1b-iv VERIFY — this arm is reached from TWO producers and used to render
+    ;; the LAYER for both, so a Map-typed CONTENT was reported as "the layer …
+    ;; is a `Map` type" when the layer is a record. MEASURED: `mo{o*}` on
+    ;; `{:o [Map Keyword Int]}` said `{:o [Map Keyword Int]}` "is a `Map` type"
+    ;; — false — and offered "use a record-typed layer", which is a no-op when
+    ;; the layer already is one. The producers now pass the offending TYPE, so
+    ;; the text is true for both.
     [(star-map-opaque)
      ;; ⚠ PERMANENT, not "not yet" — and that distinction is the whole reason it
      ;; is its own kind. A `[Map K V]` carries no field list at all, so a
@@ -683,7 +690,7 @@
      ;; under Q_U38's refuse-on-possibility that is a final answer. The shared
      ;; `star-nominal` message promises "the nominal case is the next slice",
      ;; which would be a lie here however many slices land.
-     (format "select: `~a` — `*` (flatten) needs to know a layer's keys to join it keywise, and `~a` is a `Map` type, whose keys are not statically known (this is permanent, not a not-yet: a key collision there can be neither proven nor ruled out). Use a record-typed layer, or seal the subject against a schema"
+     (format "select: `~a` — `*` (flatten) needs to know the keys it is joining, and `~a` is a `Map` type, whose keys are not statically known (this is permanent, not a not-yet: a key collision there can be neither proven nor ruled out). Give it a record type — annotate or seal the subject against a schema"
              label (pp-expr row names))]
     [(star-open-row)
      ;; ⚠ the render loop caught this wording never naming the OPERATOR the
@@ -730,7 +737,18 @@
     ;; `cfg{db^d2.hosts* db}` → `{:d2 @[1 2], :db {…}}` · `cfg{db.hosts* db^d2}`
     ;; → `{:d2 {…}, :db @[1 2]}` · `cfg{db.hosts*}` alone → `{:db @[1 2]}`.
     [(star-dup-key)
-     (format "duplicate output key `:~a` in the select block — a flatten's surviving key collides with a sibling branch's, and distinct output keys are required (strict merge; the alternative is a silent last-write-wins). Rename EITHER branch with `^k'` (`x{k^k2.f* k}`), or select the flatten in its own block. Note that dropping the `*` will not help: the surviving key comes from the steps BEFORE the star, which the star does not touch"
+     ;; ⚠⚠ 1b-iv VERIFY — "Rename EITHER branch" NAMED AN UNSPELLABLE REMEDY, and
+     ;; the diagnosis is false for the population B2 added to this gate.
+     ;; MEASURED: `coll{inner^k2* other*}` → "a rename target may not contain
+     ;; `*`" — a starred branch CANNOT be renamed, so of the two branches only
+     ;; the un-starred one is renameable (`collw{inner* k^k2}` → `{:k 1, :k2 9}`
+     ;; ✓). And since Q_U49 the colliding key may be a LIFTED one, from inside
+     ;; the joined layer, which no branch names — for which "the surviving key
+     ;; comes from the steps BEFORE the star" is simply not true.
+     ;; ⭐ The message no longer asserts WHICH kind of key collided (the gate
+     ;; folds over assembled component keys and cannot tell), so it states only
+     ;; what is true of both and names remedies that work for both.
+     (format "duplicate output key `:~a` in the select block — two branches deliver the same output key, and distinct keys are required (strict merge; the alternative is a silent last-write-wins). The key may be one a branch NAMES, or one a `*` LIFTED out of its layer. Rename an UNSTARRED branch with `^k'` (`x{k^k2}`) — a starred segment cannot carry a rename — or select the flatten in its own block. If the key was lifted, dropping the `*` does not help either: it re-nests the layer under the key the star was deleting"
              label)]
     [(star-l4-mixed)
      ;; ⚠ 1b-iii-C2: this WORDING used to assert that the STAR branch is the
@@ -780,7 +798,17 @@
      ;; from it, rather than to enumerate spellings that hold for one population.
      ;; "Select the flatten in its own block" is the one clause that was an action
      ;; in every population measured, so it stays and is marked as always working.
-     (format "mixed keyed/keyless sorts in the select block (L4) — `~a` is a star branch whose landing and its sibling branches' do not agree: one level assembles a Map OR a tuple, never both. A branch lands KEYLESS exactly when no key survives BEFORE the star to name the layer, so make every branch at this level agree by dissolving the keys that do survive — a `^` on each surviving segment, on WHICHEVER branch keeps one INCLUDING the star branch itself (`x{a* b^.c*}`; at depth you may need one per level, `x{a* b^.c^.d*}`). Note that adding a `*` to a branch that still keeps a key does NOT change its landing. Selecting the flatten in its own block always works"
+     ;; ⚠⚠ 1b-iv VERIFY — [Q_U49] NEGATED THE RULE THIS MESSAGE STATED, and its
+     ;; remedy now points AWAY from the fix that works. The old text said a
+     ;; branch lands KEYLESS when no key survives before the star; since Q_U49 a
+     ;; star whose contents are MAPS lands KEYED (it splices), and only a VECTOR
+     ;; join lands keyless. MEASURED: `mx{a* c^}` is an L4 error while
+     ;; `mx{a* c}` WORKS (`{:c 7, :x 1}`) — i.e. the fix is to STOP dissolving
+     ;; the sibling, the exact opposite of "add a `^`".
+     ;; ⭐ Stated from the ruling: the landing follows the CONTENTS, so the
+     ;; remedy is to make the two landings agree on keyed-ness, and which
+     ;; direction that is depends on what the star's contents are.
+     (format "mixed keyed/keyless sorts in the select block (L4) — `~a` is a star branch whose landing and its sibling branches' do not agree: one level assembles a Map OR a tuple, never both. A star's landing follows its CONTENTS: Map contents splice in as KEYED fields, vector contents land as ONE KEYLESS component, and a key surviving before the star keeps the join nested under it. So make the level agree — if the `*` lands keyed, stop dissolving its siblings (drop a `^`, as in `x{a* b}`); if it lands keyless, dissolve the keys that survive on the others (a `^` per surviving level, as in `x{a* b^.c^.d*}`). Selecting the flatten in its own block always works"
              label)]
     ;; ⭐ D4.P4e-1b slice 1b-iii-A — THE FAIL-KIND AXIS IS NOW TOTAL.
     ;; This arm was `#f`, and `#f` here is SILENT: it falls through `infer/err`'s

@@ -1811,6 +1811,22 @@
                        ;; tuple elements: the concatenated arity is (tuple arity ×
                        ;; runtime length), which no static type carries.
                        (fail-k 'star-omega-tuple l)]
+                      ;; ⚠ 1b-iv VERIFY — THE ω ARM SKIPPED THE CLASSIFICATION
+                      ;; ITS SIBLINGS DO, so it answered the N-copies collision
+                      ;; argument for element types that cannot collide at all.
+                      ;; MEASURED: `rows0:cfg*` on `@[{:cfg {}} {:cfg {}}]` (an
+                      ;; element row with ZERO known keys) was told a keywise
+                      ;; join "would contribute the same keys once per element
+                      ;; and collide" — there are no keys to collide. An opaque
+                      ;; Map element is likewise not a collision question but an
+                      ;; opacity one. Ask the same questions first; only a CLOSED
+                      ;; record with at least one known field earns the N-copies
+                      ;; argument.
+                      [(expr-Map? e) (fail-k 'star-map-opaque e)]
+                      [(and (expr-Record? e) (not (closed-keyword-row? e)))
+                       (fail-k 'star-open-row e)]
+                      [(and (expr-Record? e) (null? (expr-Record-fields e)))
+                       (fail-k 'star-not-yet l)]
                       [(or (expr-Record? e) (expr-Map? e))
                        ;; 1b-iv-B2: the ω layer's element type stands for EVERY
                        ;; content, so a keywise join of N of them contributes the
@@ -1904,7 +1920,9 @@
         (values (make-record 'keyword (reverse acc) 'closed) #f)
         (let ([w (whnf (car cs))])
           (cond
-            [(expr-Map? w) (fail-k 'star-map-opaque l)]
+            ;; ⚠ 1b-iv VERIFY: report the offending CONTENT `w`, not the layer.
+            ;; Reporting `l` said "the layer … is a `Map` type" of a record.
+            [(expr-Map? w) (fail-k 'star-map-opaque w)]
             [(not (closed-keyword-row? w)) (fail-k 'star-open-row l)]
             [(not (andmap (lambda (f) (eq? (record-field-presence (cdr f)) 'present))
                           (expr-Record-fields w)))
@@ -2021,7 +2039,7 @@
                   ;; re-nests and `ft` is a row, not a join. Without that test we
                   ;; would splice any Map-typed field, which is why the
                   ;; single-value return looked like a blocker.
-                  [(select-steps-star-tail? rest)
+                  [(select-steps-yield-bare-join? rest)
                    (values (star-keyless-landing ft sort) #f)]
                   [else (values (list (cons #f (record-field ft 'present))) #f)]))])))]
       [(number? (car b))

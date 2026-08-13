@@ -180,6 +180,7 @@
  select-star-step? select-star-cont make-select-star
  select-branch-deep-star? select-steps-star-tail?
  select-step-makes-no-layer? select-branch-has-star?/deep
+ select-steps-yield-bare-join?
  ;; [Q_U44] canonical key order — ONE definition, shared by both twins.
  canonical-keyword-key? canonical-keyword-key<?
  select-step-cont select-cont-collapse? select-cont-rename
@@ -1060,6 +1061,28 @@
                  (and (select-sub-step? s)
                       (ormap select-branch-has-star?/deep (cdr s))))))
          b))
+
+;; ⭐⭐ 1b-iv VERIFY — "WILL THIS WALK END IN A BARE JOIN?", which is what the
+;; CALLERS actually need to ask, and is NOT the same question as the tail arm's.
+;; `select-steps-star-tail?` answers "is THIS step list exactly `(sₙ ★)`", which
+;; is right for the ARM. B2 used it caller-side as a PROXY for "did the tail arm
+;; fire", and that proxy is a FALSE NEGATIVE through TRANSPARENT steps: an
+;; ordinal contributes no layer (Q_U2 Reading A) and the below-walk recurses
+;; straight through it, so `(0 m ★)` DOES end in a bare join — but the two-step
+;; test says no. MEASURED before this fix, at 0 errors:
+;;   vk1{0.m*}      ⟹  {:x 1} : {:x Int}          rest = (m ★)   — SPLICED
+;;   vk2{0 .0.m*}   ⟹  @[{:x 1}] : ⟨{:x Int}⟩     rest = (0 m ★) — NOT spliced
+;; with `w2{0 .0.{m n}*}` proving the JOIN itself ran (both fields merged) and
+;; only the LANDING differed. Two spellings of the same shape, two landings.
+;; ⚠ THE ARM'S OWN "EXACTLY TWO" WARNING IS UNTOUCHED AND MUST STAY SO: it fires
+;; on exactly `(sₙ ★)` because a KEYED prefix step has to re-nest. That reason is
+;; precisely what does NOT apply to a step making no layer, which is why skipping
+;; those here is the same rule rather than a relaxation of it.
+(define (select-steps-yield-bare-join? steps)
+  (let loop ([ss steps])
+    (if (and (pair? ss) (pair? (cdr ss)) (select-step-makes-no-layer? (car ss)))
+        (loop (cdr ss))
+        (select-steps-star-tail? ss))))
 
 (define (make-select-star cont) (list '@star cont))
 

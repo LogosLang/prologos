@@ -7868,8 +7868,19 @@
   ;; ✅ the remedies the message now names, each RUN
   ;; ⚠ ROUND 3 (#7): pin the WIDENING, not just the operator — a bare `^k'`
   ;; regex was already green before "EITHER branch" was added.
-  (check-true (regexp-match? #rx"Rename EITHER branch with `\\^k'`" out)
-              (format "must name the rename remedy AND that either side works: ~a" out))
+  ;; ⚠⚠ 1b-iv VERIFY: "Rename EITHER branch" NAMED AN UNSPELLABLE REMEDY.
+  ;; MEASURED: `coll{inner^k2* other*}` → "a rename target may not contain `*`",
+  ;; so a STARRED branch cannot carry a rename and only the unstarred side is
+  ;; renameable. The message says so now, and both halves are pinned by RUNNING
+  ;; them — the round-3 lesson applied to round 4's own finding.
+  (check-true (regexp-match? #rx"Rename an UNSTARRED branch" out)
+              (format "must name the remedy that is actually spellable: ~a" out))
+  ;; ⚠ the rename must be on the SAME segment as the star — `db^d2.hosts*`
+  ;; renames an EARLIER segment and is perfectly legal (it is round 3's working
+  ;; remedy). It is `seg^k*` that cannot be spelled.
+  (check-true (regexp-match? #rx"a rename target may not contain"
+                             (c2-line "cfg{db^k2* ports}"))
+              "…because a STARRED segment cannot also carry a rename")
   (check-equal? (c2-line "cfg{db^d2.hosts* db}")
                 "{:d2 @[1 2], :db {:ports @[80], :hosts @[1 2]}} : {:d2 [PVec Int] :db {:hosts [PVec Int] :ports [PVec Int]}}"
                 "renaming the STAR branch resolves the collision")
@@ -7916,10 +7927,13 @@
   ;; i.e. the shipped rule asserted every star lands keyless, while
   ;; `e3{a.b.c*}` → `{:a {:b @[1 2]}}` lands KEYED. The sibling message written
   ;; in the same commit had it right ("the steps BEFORE the star").
-  (check-true (regexp-match? #rx"lands KEYLESS exactly when no key survives BEFORE" out)
-              (format "must state the rule in the direction that is TRUE: ~a" out))
-  (check-false (regexp-match? #rx"survives after it" out)
-               (format "the backwards form is vacuous for a branch-final operator: ~a" out))
+  ;; ⚠ 1b-iv VERIFY: [Q_U49] NEGATED the round-3 rule sentence. A nominal star
+  ;; lands KEYED (it splices); only a VECTOR join lands keyless. So the message
+  ;; now states the CONTENTS rule, and the remedy follows the actual landing.
+  (check-true (regexp-match? #rx"landing follows its CONTENTS" out)
+              (format "must state the rule Q_U49 left true: ~a" out))
+  (check-false (regexp-match? #rx"survives after it|lands KEYLESS exactly when" out)
+               (format "neither superseded rule sentence may survive: ~a" out))
   (check-equal? (l4-line "m2{a* d^.c*}")
                 "@[@[1 2] @[5 6]] : ⟨[PVec Int] [PVec Int]⟩"
                 "ADDING a caret dissolves the surviving key — the opposite of the old advice")
@@ -7964,10 +7978,16 @@
                 "…and at depth it takes one caret per surviving level")
   ;; (5) the message must therefore NOT scope the action to siblings only, and
   ;;     must warn that adding a `*` is not one.
-  (check-true (regexp-match? #rx"INCLUDING the star branch itself" base)
-              (format "the remedy must not be scoped to siblings: ~a" base))
-  (check-true (regexp-match? #rx"one per level" base)
-              (format "…and must say a single caret may not be enough: ~a" base)))
+  (check-true (regexp-match? #rx"per surviving level" base)
+              (format "…and must say a single caret may not be enough: ~a" base))
+  ;; ⚠ 1b-iv VERIFY: the message must offer BOTH directions, because which one
+  ;; applies depends on the star's contents — MEASURED, `mx{a* c^}` is an L4
+  ;; error while `mx{a* c}` works, i.e. the fix there is to STOP dissolving.
+  (check-true (regexp-match? #rx"stop dissolving" base)
+              (format "a keyed (spliced) star needs the OPPOSITE remedy: ~a" base))
+  (check-equal? (p4e1-last "ns l4d\ndef mx := {:a {:x 1} :c 7}\nmx{a* c}")
+                "{:c 7, :x 1} : {:c Int :x Int}"
+                "…and that remedy WORKS — dropping the sibling's `^`"))
 
 
 ;; ---- 1b-iii-C2 verify ROUND 2, F1 — a CARET fused into a star-bearing segment
@@ -8626,3 +8646,34 @@
   (for ([src (in-list (list "nv{k^.a* m}" "nv{m k^.a*}"))])
     (check-true (regexp-match? #rx"mixed keyed/keyless sorts" (p4e1-last (string-append N src)))
                 (format "control: ~a was already refused and must stay refused" src))))
+
+(test-case "1b-iv VERIFY: a TRANSPARENT ordinal must not change whether the landing splices"
+  ;; ⭐ THE SEMANTIC finding of the round. B2 used `select-steps-star-tail?`
+  ;; caller-side as a proxy for "did the tail arm fire", and that proxy is a
+  ;; FALSE NEGATIVE through steps that contribute no layer: an ordinal is
+  ;; TRANSPARENT (Q_U2 Reading A — the below-walk recurses straight through it),
+  ;; so `(0 m ★)` does end in a bare join, but the exactly-two test says no.
+  ;; MEASURED before the fix, at ZERO errors — two spellings of one shape, two
+  ;; landings:
+  ;;   vk1{0.m*}     ⟹  {:x 1} : {:x Int}         rest = (m ★)   SPLICED
+  ;;   vk2{0 .0.m*}  ⟹  @[{:x 1}] : ⟨{:x Int}⟩    rest = (0 m ★) NOT spliced
+  ;; ⚠ The ARM keeps its exactly-two test and its "EXACTLY TWO" warning: it
+  ;; fires on `(sₙ ★)` because a KEYED prefix step must re-nest, and that reason
+  ;; is precisely what does not apply to a step making no layer. The CALLERS ask
+  ;; the different question — "will this walk end in a bare join?" — via
+  ;; `select-steps-yield-bare-join?`.
+  (check-equal? (p4e1-last "ns yb1\ndef vk1 := @[{:m {:x 1}}]\nvk1{0.m*}")
+                "{:x 1} : {:x Int}"
+                "one transparent ordinal: splices")
+  (check-equal? (p4e1-last "ns yb2\ndef vk2 := @[@[{:m {:x 1}}]]\nvk2{0 .0.m*}")
+                "{:x 1} : {:x Int}"
+                "TWO transparent ordinals: must splice identically")
+  (check-equal? (p4e1-last "ns yb3\ndef w2 := @[@[{:m {:x 1} :n {:y 2}}]]\nw2{0 .0.{m n}*}")
+                "{:y 2, :x 1} : {:x Int :y Int}"
+                "…and the multi-content join lands spliced too, not as a 1-tuple")
+  ;; the CONTROL that keeps the arm honest: a KEYED prefix step still re-nests,
+  ;; because it DOES make a layer. If this ever splices, the skip has widened
+  ;; past Q_U2 and into the branch-root reading Q_U46 rejected.
+  (check-equal? (p4e1-last "ns yb4\ndef e3 := {:a {:b {:c {:x 1}}}}\ne3{a.b.c*}")
+                "{:a {:b {:x 1}}} : {:a {:b {:x Int}}}"
+                "a keyed prefix step still re-nests — the skip is ordinals ONLY"))

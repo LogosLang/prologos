@@ -1787,6 +1787,23 @@
       ;; identity"). The grounding audit predicted this exactly: "adding a nominal
       ;; arm after the vector arm silently keeps `@[]` … arm order, not a ruling,
       ;; decides the empty join's SORT". It is unruled, so it must not MOVE here.
+      ;; ⚠⚠ 1b-iv VERIFY (S8) — TYPING'S TWO PERMANENT REFUSALS HAVE **NO
+      ;; EXPRESSIBLE SIBLING HERE**, and I proved that by writing one and having
+      ;; it break a working shape. Both are TYPE properties that the value layer
+      ;; cannot see:
+      ;;   · `star-map-opaque` — an opaque `[Map K V]` and a closed record are
+      ;;     BOTH champs at runtime; nothing distinguishes them.
+      ;;   · `star-omega-nominal` — the ω container is an rrb, but so is the
+      ;;     perfectly legal Seat B keyless layer. The guard I added
+      ;;     (`rrb layer + champ contents ⇒ oops`) made `vhm{0.{0}*}` PANIC where
+      ;;     typing splices — reduction refusing where typing ACCEPTS, which is
+      ;;     the very divergence the guard was meant to prevent, inverted. The
+      ;;     Q_U49 Seat B pin caught it immediately; reverted.
+      ;; ⭐ So the honest statement is not "this twin is missing an arm" but
+      ;; "this distinction does not exist at this layer". Recorded here because
+      ;; the verify round filed it as a MINOR gap and the answer is that it is
+      ;; not a gap — the asymmetry is inherent. The collision guard, which IS
+      ;; expressible, is present and is what keeps the value layer safe.
       [(and (pair? contents) (andmap (lambda (c) (expr-champ? (whnf c))) contents))
        ;; ⚠⚠ `*_` MUST NOT FALL INTO THE NOMINAL JOIN. Caught by the 1b-iv-A seat
        ;; pin: routing champ contents to the join before testing the cont meant a
@@ -2246,7 +2263,7 @@
                  ;; `select-steps-star-tail?` answers exactly "is this a BARE star
                  ;; join?" here as well.
                  (let ([bv (below-value elem (cdr b) '())])
-                   (if (select-steps-star-tail? (cdr b))
+                   (if (select-steps-yield-bare-join? (cdr b))
                        (star-keyless-landing-value bv asort)
                        (list (cons #f bv))))))]
           [(number? (car b))
