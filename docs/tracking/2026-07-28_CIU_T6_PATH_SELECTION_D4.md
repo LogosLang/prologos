@@ -2874,6 +2874,85 @@ items of the hold-point, ruled before P4a opened:
   nominal-only scoping for `*_`. Decide it WITH the suffix slice, not before.
   **Next free Q-label: U49.**
 
+- <a id="q-u49"></a>**⭐⭐ Q_U49 — A NOMINAL JOIN *SPLICES* ITS FIELDS INTO THE
+  ENCLOSING LEVEL, AT EVERY SEAT [owner, 2026-08-13 — "take (a) — land it B1/B2
+  style"].** This answers the question [Q_U47](#q-u47) deliberately left open.
+
+  **THE RULE:**
+  > When `*` deletes a layer whose CONTENTS are Maps, the keywise join contributes
+  > **KEYED COMPONENTS** to the enclosing level — it splices. When the contents are
+  > vectors it contributes ONE KEYLESS component, as it does today. The landing's
+  > sort follows the CONTENTS, which is [Q_U40](#q-u40)'s rule applied literally.
+  > ⚠ Unchanged where a key SURVIVES: `cfgn{db.conf*}` → `{:db {:x 1}}`. The
+  > remainder names the landing per Q_U47, so the fields nest INSIDE `:db` and no
+  > splice question arises. **The splice is only ever about the KEYLESS landing.**
+
+  **⭐ IT IS NOT AN EXCEPTION TO THE SPEC — IT IS WHAT "THE SORT FOLLOWS THE
+  CONTENTS" MEANS.** Measured at HEAD, the vector half already behaves this way:
+  a vector-valued join contributes a keyless component, so `mv{a* b}` is an L4
+  error (keyless star beside a keyed sibling) while `mv{a* b*}` is a 2-tuple. A
+  Map-valued join contributes KEYED material, and keyed material at a level IS
+  components-with-keys. So Q_U40's `m{a* b}` → `{:x 1, :b {:y 2}}` is the same
+  rule, not a special case. The rejected reading — land as ONE keyless component
+  — would make a Map-valued join contribute a KEYLESS one, i.e. the sort would
+  follow the WRAPPER rather than the contents, contradicting Q_U40 directly.
+
+  **⭐⭐ AND [Q_U45](#q-u45)'s L★ DECIDES IT INDEPENDENTLY.** L★ says
+  `x{p₁* … pₙ*} ≡ x{p₁ … pₙ}*` holds for MAP contents and fails for vectors ON
+  ARITY. The vector half is measured exactly so (`mv{a* b*}` → `⟨[PVec Int]
+  [PVec Int]⟩` vs `mv{a b}*` → `[PVec Int]`). Under SPLICE the Map half holds:
+  `mn{a* b*}` and `mn{a b}*` both give `{:x 1, :y 2}`. Under one-component it
+  gives `⟨{:x 1} {:y 2}⟩` vs `{:x 1, :y 2}` — **unequal, so one-component
+  FALSIFIES a ruling already made.**
+
+  **THE EXPRESSIVITY ARGUMENT, and it is decisive on its own**: under
+  one-component `mn{a*}` → `⟨{:x Int}⟩` — the star deletes the `:a` layer and the
+  keyless wrapper immediately puts one back, net zero — and `mn{a* b}` is an L4
+  error, so a nominal splat could never combine with a sibling. The nominal star
+  would be a no-op with extra steps. Splice is what makes it the FIELD-LIFTING
+  operator the feature exists for.
+
+  **⚠ THE COST MODEL THAT ALMOST CHOSE THE OTHER OPTION WAS WRONG, and it was the
+  grounding audit's most consequential structural claim.** The audit reported
+  splice as *"IMPOSSIBLE at the ordinal-head route without changing the
+  below-walk's return contract in BOTH twins"*, which argued for splicing only at
+  Seat A and refusing Seat B. **Refuted by reading the arm**: the ord-branch
+  caller has `rest` — the very step list it passed to `select-below-field` — in
+  scope, and `select-steps-star-tail?` is already exported and already used two
+  arms away. So the caller can ask *"is this returned type a BARE star join?"*
+  with an exact, local test: true precisely when the tail arm fired at this
+  level, false for `(b c ★)` where the walk re-nests. Reduction's twin has
+  `(cdr b)` in the same position. Splice at Seat B is therefore **a predicate
+  test at one arm per twin, not a contract change** — and with that saving gone,
+  the Seat-A-only option bought nothing but an arbitrary refusal.
+  ⭐ **The lesson is the R-lens one**: the audit's cost estimate, not its facts,
+  is what would have made the wrong ruling. Verify the load-bearing claim.
+
+  **THE FOUR SEATS, worked** (`mn := {:a {:x 1} :b {:y 2}}`,
+  `cfgn := {:db {:conf {:x 1} :other {:y 2}}}`, `vhm := @[@[{:x 1}] @[{:y 2}]]`):
+  · **A1 remainder-empty** `mn{a*}` → `{:x 1}` · `mn{a* b}` → `{:x 1, :b {:y 2}}`
+  · **A2 dissolved head** `cfgn{db^.conf*}` → `{:x 1}`
+  · **B keyed** `cfgn{db.conf*}` → `{:db {:x 1}}` — unchanged, no splice
+  · **B keyless (ordinal head)** `vhm{0.{0}*}` → `{:x 1}` — the shape the
+    refuted cost model would have refused.
+
+  **WHAT IT BUYS THE COLLISION RULE FOR FREE**: spliced fields become keyed
+  components AT THE LEVEL, so the existing dup gate's `(filter values (map car
+  cs))` fold catches splice-vs-sibling and splice-vs-splice with **no new code**.
+  Only content-vs-content collisions INSIDE one join need a new check, and that
+  belongs at the join itself. [Q_U38](#q-u38)'s seat is therefore two arms, not
+  a new mechanism.
+
+  **SCOPE — what this ruling does NOT settle, flagged rather than silently
+  deferred**: (1) `expr-Map` contents have **no enumerable keys**
+  (`(struct expr-Map (k-type v-type))`), so a collision there is neither provable
+  nor refutable — under Q_U38's refuse-on-possibility that is a PERMANENT refusal,
+  not a not-yet, and it needs its own fail kind because today's message promises
+  "the nominal case is the next slice". (2) `*_`'s PREFIX SOURCE is
+  under-specified — [Q_U41](#q-u41)'s two worked examples disagree about whether
+  the synthesized key comes from the deleted layer's key or the contents' keys —
+  so `*_` is NOT in this slice's scope on the strength of this ruling alone.
+
 - <a id="q-u43"></a>**⭐ Q_U43 — THE L4 SORT CHECK MOVES TO TYPING FOR STAR-BEARING
   BRANCHES, AS [Q_U38](#q-u38)'s COROLLARY [owner, 2026-08-11 — "move the sort
   check to typing per Q_U38's corollary"].** Q_U38 moved the COLLISION check;
@@ -9307,7 +9386,10 @@ MANY"*), and `select-branch-keyless?` answers `#f` (KEYED), so neither routes a
 deep star into `walk-to-leaf` — which has **no star arm and raises**. The
 narrowing is therefore safe *today*; if either classifier's star answer ever
 moves, `walk-to-leaf` is the abort it lands in.
-| **1b-iv** | **NOMINAL semantics** + [Q_U38](#q-u38)'s full collision rule + `*_` in the fused band, together per [Q_U24](#q-u24). **Plus the question Q_U47 deliberately left open**: does a nominal join SPLICE its fields into the level or land as one component? Q_U40's own `m{a* b}` → `{:x 1, :b {:y 2}}` is that case. | unchanged from the plan above |
+| **1b-iv-A** ⬜ | **The instrument + the twin-order fix.** Failing-test-first pins for every seat in [Q_U49](#q-u49)'s worked table, `'block`-sorted or E2E (a `'path` pin discards the key and cannot tell keyed from keyless — the flip this slice rules on). **PLUS the `'flatten-synth` arm-order divergence, fixed FIRST**: typing tests it at position 3 of `join-contents` (after the nominal bucket) while reduction tests it as its FIRST cond arm, so the moment a nominal `*_` passes typing, reduction panics *"this join is positional"* — false for a champ layer. Latent today ONLY because typing refuses nominal first, i.e. masked by exactly the shield 1b-iv removes. Fourth instance of the class in this slice, and the first one caught BEFORE implementing. | Pure instrument + a defect fix whose shield is still up. |
+| **1b-iv-B1** ⬜ | **The nominal join lands in BOTH twins, INERT.** ⚠ **This is a SIGNATURE change, not an arm addition** — both twins DISCARD the layer's keys before joining (typing maps `record-field-type` over fields; reduction's `champ-values/canonical` ends `(map cdr …)`), and a keywise join needs them. So: a keyed-contents channel in both, the keywise join itself, and the content-vs-content collision refusal at the join. Still unreachable — the nominal refusal arm stays ahead of it. | The B1 shape that finally worked for 1b-iii after two reverts: semantics atomic across the twins, verified by direct call, zero surface change. |
+| **1b-iv-B2** ⬜ | **THE SPLICE GOES LIVE.** Remove the nominal shield for the DECIDABLE case; splice at the callers — free at Seat A (`star-branch-entries` already returns a component list; the dissolve route delegates to it) and a `select-steps-star-tail?` test at the ord-branch arm for Seat B keyless. [Q_U38](#q-u38)'s splice-vs-sibling and splice-vs-splice checks come FREE at the existing level dup gate. ⚠ `expr-Map` contents split off with their own PERMANENT-refusal kind (no enumerable keys ⇒ never provable, never refutable). | Thin wiring + the E2E that observes it, landing together. |
+| **1b-iv-C (scope flag, NOT this slice)** | `*_` is NOT carried by [Q_U49](#q-u49): its PREFIX SOURCE is under-specified and [Q_U41](#q-u41)'s two worked examples disagree (deleted layer's key vs contents' keys). Needs a ruling before code. Q_U39 separately defers the closer-adjacent band, so Q_U41's own showcase spelling is unreachable anyway. | Named rather than silently deferred. |
 | **1b-v — the star-SUFFIX slice** | **`*-`** ([Q_U48](#q-u48)) · the **`*-_`** decision · [Q_U39](#q-u39)'s closer-adjacent `*_` mint. One slice, one verify. | The cont vocabulary settles ONCE: `*_` and `*-` each add a `(@star cont)` value, and `*-_` interacts with [Q_U41](#q-u41)'s nominal-only scoping, which is 1b-iv's ruling. |
 | **P4e-2** | the `.*` retirement inventory + [Q_U26](#q-u26) ravel | unchanged |
 
