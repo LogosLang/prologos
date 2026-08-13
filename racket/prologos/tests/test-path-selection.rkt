@@ -8555,3 +8555,74 @@
   (check-true (regexp-match? #rx"compiler-invariant violation" (unbox why))
               (format "…as an invariant violation, since typing owns the user-facing refusal. Got: ~a"
                       (unbox why))))
+
+(test-case "1b-iv VERIFY [Q_U20]: a SUB inner assembles at 'block, so TYPE and VALUE agree about the splice"
+  ;; ⭐⭐ THE BLOCKING DEFECT OF THE 1b-iv VERIFY ROUND, and it was in my own fix
+  ;; for B2's `'path` regression. That fix threaded the sort into both landing
+  ;; HELPERS and neither twin's FEED: typing forces a LITERAL `'block` for a sub
+  ;; inner at two sites (Q_U20 — "a SUB inner ASSEMBLES AT 'block, ALWAYS,
+  ;; regardless of the outer selector's sort"), while reduction's `bcast-apply`
+  ;; passed `select-reduce`'s OUTER sort down the chain. Under an ω outer with a
+  ;; `'path` carrier, typing spliced and reduction did not.
+  ;; MEASURED before the fix, at ZERO errors:
+  ;;   vv:{a*}  =>  @[@[{:x 1}] @[{:x 2}]]  :  [PVec {:x Int}]
+  ;; the type saying each element IS the joined row while the value wrapped each
+  ;; in a spurious 1-tuple — and it PROPAGATED: `def r := vv:{a*}` then `r:x`
+  ;; gave `none : [PVec Int]`, a well-typed expression whose value is `none`.
+  ;; ⚠ THE PIN ASSERTS THE FULL LINE precisely because the TYPE was already
+  ;; right; only a value-and-type assertion can see this class at all.
+  (define V "ns u20v\ndef vv := @[{:a {:x 1}} {:a {:x 2}}]\n")
+  (check-equal? (p4e1-last (string-append V "vv:{a*}"))
+                "@[{:x 1} {:x 2}] : [PVec {:x Int}]"
+                "ω outer + nominal splice: the value must not re-wrap what the type flattened")
+  ;; …and the downstream access must reach the field, not `none`.
+  (check-equal? (p4e1-last (string-append V "def r := vv:{a*}\nr:x"))
+                "@[1 2] : [PVec Int]"
+                "the split propagated into a well-typed `none`; it must not")
+  ;; THE THREE CONTROLS that isolate the mover to the sort feed — each already
+  ;; agreed before the fix, and must still agree.
+  (check-equal? (p4e1-last (string-append V "def bb := {:v vv}\nbb{v:{a*}}"))
+                "{:v @[{:x 1} {:x 2}]} : {:v [PVec {:x Int}]}"
+                "control: a 'block outer always agreed")
+  (check-equal? (p4e1-last "ns u20k\ndef vk := @[{:a @[1 2]} {:a @[3 4]}]\nvk:{a*}")
+                "@[@[@[1 2]] @[@[3 4]]] : [PVec ⟨[PVec Int]⟩]"
+                "control: VECTOR contents wrap in BOTH layers — unchanged")
+  (check-equal? (p4e1-last (string-append V "vv:{a}"))
+                "@[{:a {:x 1}} {:a {:x 2}}] : [PVec {:a {:x Int}}]"
+                "control: starless is untouched"))
+
+(test-case "1b-iv VERIFY [DEFERRED 117]: the L4 gate sees a star NESTED in a sub-block — both manifestations"
+  ;; ⭐⭐ BLOCKING, PRE-EXISTING, and it had been written down as a landmine before
+  ;; it was stepped on. The L4 sort gate used the SHALLOW `ormap
+  ;; select-star-step?` while the dup gate thirty lines below already used
+  ;; `select-branch-has-star?/deep` — minted at C2 verify round 1 for this exact
+  ;; class. A star inside a `(@sub …)` was invisible, so the level assembled a
+  ;; keyed component beside a keyless one. TWO manifestations, both measured on
+  ;; the untouched VECTOR path (so this is not 1b-iv's doing):
+  ;;   nv{m k^.{a*}} -> WHOLE-FILE ABORT (`symbol<?: contract violation` out of
+  ;;                    `make-record`; NO output at all, not even `before`)
+  ;;   nv{k^.{a*} m} -> `@[@[1 2] @[9]]` at ZERO errors, `:m`'s key silently
+  ;;                    dropped — order-dependent, the round-1 defect shape
+  ;; while the UN-NESTED `nv{k^.a* m}` refused correctly in both orders, which is
+  ;; what isolates the shallow test as the mover.
+  (define N "ns d117\ndef nv := {:k {:a @[1 2]} :m @[9]}\n")
+  (for ([src (in-list (list "nv{m k^.{a*}}" "nv{k^.{a*} m}"))])
+    (define out (p4e1-last (string-append N src)))
+    (check-false (p4e1-type (string-append N src))
+                 (format "~a must be REFUSED, never assembled: ~a" src out))
+    (check-true (regexp-match? #rx"mixed keyed/keyless sorts" out)
+                (format "~a must be refused by the L4 gate: ~a" src out))
+    ;; ⚠ THE LABEL IS THE OTHER HALF OF THE LANDMINE. The diagnostic renders via
+    ;; the SAME predicate, so widening only the gate hands `pp-select-branch` a
+    ;; `#f` on the ERROR path — the whole-file-abort shape this track has already
+    ;; shipped once. If the `findf` did not move with the gate, this goes red.
+    (check-true (regexp-match? #rx"k\\^[.][{]a[*][}]" out)
+                (format "~a must name the NESTED branch, not #f: ~a" src out)))
+  ;; …and the file SURVIVES — a per-command error, not an abort.
+  (check-true (p4e1-any-has? (string-append N "nv{m k^.{a*}}\ndef after := 2")
+                             #rx"after")
+              "the refusal must be per-command; the whole-file abort is the defect")
+  ;; the un-nested control, which always worked, still does — in BOTH orders.
+  (for ([src (in-list (list "nv{k^.a* m}" "nv{m k^.a*}"))])
+    (check-true (regexp-match? #rx"mixed keyed/keyless sorts" (p4e1-last (string-append N src)))
+                (format "control: ~a was already refused and must stay refused" src))))

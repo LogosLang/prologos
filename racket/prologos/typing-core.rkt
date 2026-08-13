@@ -1504,13 +1504,30 @@
           ;; ⚠ STAR-GATED deliberately: a starless mixed level cannot reach here
           ;; (the parser refuses it), and the pre-existing first-component
           ;; assembly behaviour for starless blocks must not move in this slice.
-          (if (and (ormap (lambda (br) (ormap select-star-step? br)) branches)
+          ;; ⚠⚠ [DEFERRED 117] DISCHARGED — and it was BLOCKING, in two directions.
+          ;; This gate used the SHALLOW `(ormap select-star-step? br)` while the
+          ;; dup gate thirty lines below already used
+          ;; `select-branch-has-star?/deep` (minted at C2 verify round 1 for
+          ;; exactly this class). So a star nested inside a `(@sub …)` was
+          ;; INVISIBLE here, and the level assembled a keyed component beside a
+          ;; keyless one. MEASURED at HEAD, on the untouched VECTOR path:
+          ;;   nv{m k^.{a*}}  ⟹  WHOLE-FILE ABORT (`symbol<?: contract violation`
+          ;;                     out of `make-record`; no output at all)
+          ;;   nv{k^.{a*} m}  ⟹  `@[@[1 2] @[9]]` at ZERO errors — `:m`'s key
+          ;;                     silently dropped, order-dependently
+          ;; while the un-nested `nv{k^.a* m}` refuses correctly in BOTH orders.
+          ;; ⭐ THE GATE AND ITS `findf` MOVE IN ONE EDIT, and that was written
+          ;; down as a landmine before it was stepped on: the diagnostic renders
+          ;; its label with the SAME predicate, so widening only the gate hands
+          ;; `pp-select-branch` a `#f` on the ERROR path — the whole-file-abort
+          ;; shape this track has already shipped once.
+          (if (and (ormap select-branch-has-star?/deep branches)
                    (ormap (lambda (c) (car c)) cs)
                    (ormap (lambda (c) (not (car c))) cs))
               (values #f (select-fail 'star-l4-mixed path
                                       (string->symbol
                                        (pp-select-branch
-                                        (findf (lambda (br) (ormap select-star-step? br))
+                                        (findf select-branch-has-star?/deep
                                                branches)))
                                       tm))
               ;; ⭐⭐ 1b-iii-C2 — THE DUPLICATE-OUTPUT-KEY SEAT, and C2 is what makes

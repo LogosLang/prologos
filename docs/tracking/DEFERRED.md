@@ -7017,7 +7017,24 @@ deprecation.
 nowhere near the selection twins, and it wants its own slice with its own
 verify. Sequenced in D4 §5.P4e-1b-sequencing as explicitly outside.
 
-### 117. ⬜ ⭐ THE L4 SORT GATE SHARES THE DUP GATE'S TOP-LEVEL-ONLY BLINDNESS — a keyless star component spliced from inside a `(@sub …)` behind a dissolve reaches `select-assemble-row` unchecked
+### 117. ✅ DISCHARGED 2026-08-13 (1b-iv verify) ⭐ THE L4 SORT GATE SHARED THE DUP GATE'S TOP-LEVEL-ONLY BLINDNESS — a keyless star component spliced from inside a `(@sub …)` behind a dissolve reaches `select-assemble-row` unchecked
+
+**✅ DISCHARGED** at the 1b-iv adversarial verify — and its exposure was
+UNDERSTATED here, which is why it is worth re-reading rather than just closing.
+The entry called it "cheap — the predicate already exists". It was also
+**BLOCKING, in two directions**, measured on the untouched VECTOR path (so it
+never needed 1b-iv to be reachable):
+· `nv{m k^.{a*}}` → **WHOLE-FILE ABORT** (`symbol<?: contract violation` out of
+  `make-record`; no output at all, not even the preceding `def`)
+· `nv{k^.{a*} m}` → `@[@[1 2] @[9]]` at **ZERO errors**, `:m`'s key silently
+  dropped — order-dependent, the round-1 defect shape exactly
+while the un-nested `nv{k^.a* m}` refused correctly in both orders.
+⭐ **The landmine held**: the gate and its diagnostic's `findf` were widened in
+ONE edit, because the message renders its label with the SAME predicate — widen
+the gate alone and `pp-select-branch` gets a `#f` on the ERROR path, which is the
+whole-file-abort shape this track has already shipped once. Reduction's
+`level-entries` twin was widened in the same edit. Pinned with both
+manifestations, both orders, the label, and file survival.
 
 Found by the D4.P4e-1b-iii-C2 adversarial verify (`wf_bf354f2d-675`).
 **PRE-EXISTING — reproduces identically on the pre-C2 build**, so C2 neither

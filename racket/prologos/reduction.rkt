@@ -2069,7 +2069,7 @@
       ;; inner ASSEMBLES, always, regardless of the outer selector's sort. The
       ;; symbol path below mirrors the top-level sort dispatch unchanged.
       (if (select-sub-step? inner)
-          (entries->value (level-entries v (cdr inner)))
+          (entries->value (level-entries v (cdr inner) 'block))
       (let ([entries (branch-entries v (list inner) '())])
         (case sort
           [(block) (entries->value entries)]
@@ -2106,7 +2106,7 @@
     ;; …))`, NEVER `error` — typing carries the user-facing refusal, and
     ;; reduction must not depend on typing having run (`select-reduce` is called
     ;; from whnf; a raise here is a WHOLE-FILE abort).
-    (define (star-entries v b seen)
+    (define (star-entries v b seen [asort sort])
       (let* ([rev (reverse b)]
              [star (car rev)]
              [prefix (reverse (cdr rev))]
@@ -2151,7 +2151,7 @@
            (star-keyless-landing-value
             (star-join-value (if (null? prefix) v (below-value v prefix seen))
                              star oops)
-            sort)])))
+            asort)])))
     ;; ⭐ 1b-iii-B1 — the LEVEL assembly guard, the reduction mirror of typing's
     ;; star L4 check in `select-level-components`. STAR-GATED for the same
     ;; reason (starless behaviour must not move), and an invariant guard for the
@@ -2159,9 +2159,24 @@
     ;; path). Without it, `entries->value`'s first-component fork either raises
     ;; in `make-record` (keyed first) or silently drops the keyed siblings
     ;; (keyless first) — round 1's defects #2/#3, order-dependent.
-    (define (level-entries v bs)
-      (let ([entries (append-map (lambda (b) (branch-entries v b '())) bs)])
-        (when (and (ormap (lambda (b) (ormap select-star-step? b)) bs)
+    ;; ⚠⚠ `asort` IS Q_U20's RULE MADE REACHABLE HERE, and its absence was a
+    ;; BLOCKING type/value split. A SUB inner ASSEMBLES AT 'block ALWAYS,
+    ;; regardless of the outer selector's sort — typing forces that with a
+    ;; LITERAL `'block` at two sites; reduction's `bcast-apply` fed this chain
+    ;; `select-reduce`'s OUTER sort instead, so under an ω outer with a `'path`
+    ;; carrier the star landing did not splice while typing's did.
+    ;; MEASURED at 0 errors before the fix: `vv:{a*}` on
+    ;; `@[{:a {:x 1}} {:a {:x 2}}]` gave value `@[@[{:x 1}] @[{:x 2}]]` against
+    ;; type `[PVec {:x Int}]`, and it PROPAGATED — `def r := vv:{a*}` then `r:x`
+    ;; yielded `none : [PVec Int]`, a well-typed expression whose value is none.
+    ;; ⭐ 1b-iv-B2 threaded the sort into both landing HELPERS and neither twin's
+    ;; FEED — the one-seat-not-the-sibling class, in my own fix for it.
+    (define (level-entries v bs [asort sort])
+      (let ([entries (append-map (lambda (b) (branch-entries v b '() asort)) bs)])
+        ;; ⚠ [DEFERRED 117]: the reduction twin of the L4 gate carried the same
+        ;; SHALLOW test, so it could not catch what typing could not either.
+        ;; Widened with its sibling, in the same edit.
+        (when (and (ormap select-branch-has-star?/deep bs)
                    (ormap (lambda (e) (car e)) entries)
                    (ormap (lambda (e) (not (car e))) entries))
           (return (expr-panic (expr-string
@@ -2170,7 +2185,7 @@
     ;; D4.P3c: v is the RAW subject value (champ OR rrb) — each branch
     ;; dispatches per its head kind, mirroring typing's per-branch dispatch.
     ;; component ::= (cons kw-label . value) keyed | (cons #f value) keyless.
-    (define (branch-entries v b seen)
+    (define (branch-entries v b seen [asort sort])
       ;; shared by collapse + keyless: descend every step to the leaf value.
       ;; P3c verify (rank 1): the `(@ord N)` head arm — the ATOMIC twin of
       ;; typing's walk-to-leaf arm (missing here = champ-of panic on rrb).
@@ -2210,7 +2225,7 @@
           ;; a second hand-written copy is the drift this seat has already paid a
           ;; whole-file abort for.
           [(and (ormap select-star-step? b) (not (select-branch-deep-star? b)))
-           (star-entries v b seen)]
+           (star-entries v b seen asort)]
           [col
            (list (cons (cond [(select-cont-rename col)]
                              [(eq? col 'collapse-synth)
@@ -2232,14 +2247,14 @@
                  ;; join?" here as well.
                  (let ([bv (below-value elem (cdr b) '())])
                    (if (select-steps-star-tail? (cdr b))
-                       (star-keyless-landing-value bv sort)
+                       (star-keyless-landing-value bv asort)
                        (list (cons #f bv))))))]
           [(number? (car b))
            ;; bare-number STEP chain (splice continuation): transparent
            (let ([elem (index-into v (car b) (car b))])
              (if (null? (cdr b))
                  (list (cons #f elem))
-                 (branch-entries elem (cdr b) seen)))]
+                 (branch-entries elem (cdr b) seen asort)))]
           ;; D4.P4a site 7: was a bare `[else …]` — a sixth kind was silently
           ;; projected as a NOMINAL KEY. Guard rather than `case`: the body is
           ;; the walk's largest arm. `sub` joins `key`/`caret` because that is
