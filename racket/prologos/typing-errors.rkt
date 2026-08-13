@@ -669,9 +669,15 @@
     ;; ⚠ AND THE ROUND-1 RECORD'S PROPOSED REPLACEMENT IS ALSO WRONG — measured
     ;; before adopting, which is the only reason it was caught. It suggested
     ;; borrowing the parser's "group same-head branches into one sub-block"
-    ;; remedy; `cfg{db.{hosts* ports}}` is an **L4 mixed-sorts error**. (That
-    ;; remedy is correct for the parser's own STARLESS population; it does not
-    ;; survive a star.) Following the record would have swapped one non-working
+    ;; remedy; `cfg{db.{hosts* ports}}` is an **L4 mixed-sorts error**.
+    ;; ⚠ ROUND 3 NARROWED THIS CLAIM — round 2 wrote "it does not survive a star",
+    ;; which overgeneralises past the evidence. MEASURED: it survives fine when
+    ;; EVERY grouped branch is starred (`cfg{db.{hosts* ports*}}` →
+    ;; `{:db @[@[1 2] @[80]]}`, 0 errors); it is starring SOME BUT NOT ALL of them
+    ;; that mixes the sorts — which is Q_U47's rule again. Still not adopted as a
+    ;; remedy here, because the user would have to star every sibling to make it
+    ;; work and the message cannot know they want that.
+    ;; Following the record would have swapped one non-working
     ;; remedy for another — the defect class being fixed, repeated.
     ;; ✅ BOTH REMEDIES BELOW ARE MEASURED WORKING, in both directions:
     ;; `cfg{db^d2.hosts* db}` → `{:d2 @[1 2], :db {…}}` · `cfg{db.hosts* db^d2}`
@@ -702,7 +708,32 @@
      ;; ⚠ The reverse direction is NOT spellable: `m2{a^k1* d.c*}` is refused
      ;; ("a rename target may not contain `*`"), so making the keyless side keyed
      ;; is not offered.
-     (format "mixed keyed/keyless sorts in the select block (L4) — `~a` is a star branch whose landing and its sibling branches' do not agree: one level assembles a Map OR a tuple, never both. A star lands KEYLESS exactly when no step survives after it to name it, so make the landings agree: add a `^` to dissolve a sibling's surviving key (`x{a* b^.c*}`), or star a sibling that has no surviving key of its own (`x{a* b*}`), or select the flatten in its own block. Adding a `*` to a sibling that keeps a key will NOT match them"
+     ;;
+     ;; ⚠⚠ VERIFY ROUND 3 — THE ROUND-2 REWRITE REPEATED THE VERY CLASS IT FIXED,
+     ;; and it did so because it was derived from ONE example instead of from the
+     ;; ruling. Two defects, both MEASURED:
+     ;; 1. **THE RULE WAS STATED BACKWARDS.** It said a star lands keyless "when
+     ;;    no step survives AFTER it" — but `*` is branch-FINAL (`a*.p` → "`*` is
+     ;;    only supported at the END of a branch"), so that condition is
+     ;;    VACUOUSLY TRUE and the sentence asserts every star lands keyless.
+     ;;    False: `e3{a.b.c*}` → `{:a {:b @[1 2]}}`, KEYED. ⭐ And the sibling
+     ;;    message authored in the SAME commit already said it correctly —
+     ;;    `star-dup-key`: "the surviving key comes from the steps BEFORE the
+     ;;    star". Two messages, one rule, opposite directions.
+     ;; 2. **BOTH REMEDIES WERE NON-ACTIONS OUTSIDE THE ONE EXAMPLE.** Measured:
+     ;;    `pc{db.hosts* ports*}` returns the error BYTE-IDENTICAL (starring a
+     ;;    sibling that keeps a key changes nothing); `pc{db.hosts* ports^^}` is
+     ;;    a parse error (one `^` per segment); at depth 3 `d3{a* x^.y.z*}` is
+     ;;    byte-identical to `d3{a* x.y.z*}` — one caret is not enough. And the
+     ;;    action that DOES work was never named, because in the driving example
+     ;;    the star branch happened to be the keyless one: dissolve the key on
+     ;;    WHICHEVER branch keeps one, INCLUDING THE STAR BRANCH ITSELF
+     ;;    (`pc{db^.hosts* ports^}` ✓, `d3{a* x^.y^.z*}` ✓, `d3{a* x.y.z^}` ✓).
+     ;; ⭐ The repair is to state Q_U47's REMAINDER rule and let the action follow
+     ;; from it, rather than to enumerate spellings that hold for one population.
+     ;; "Select the flatten in its own block" is the one clause that was an action
+     ;; in every population measured, so it stays and is marked as always working.
+     (format "mixed keyed/keyless sorts in the select block (L4) — `~a` is a star branch whose landing and its sibling branches' do not agree: one level assembles a Map OR a tuple, never both. A branch lands KEYLESS exactly when no key survives BEFORE the star to name the layer, so make every branch at this level agree by dissolving the keys that do survive — a `^` on each surviving segment, on WHICHEVER branch keeps one INCLUDING the star branch itself (`x{a* b^.c*}`; at depth you may need one per level, `x{a* b^.c^.d*}`). Note that adding a `*` to a branch that still keeps a key does NOT change its landing. Selecting the flatten in its own block always works"
              label)]
     ;; ⭐ D4.P4e-1b slice 1b-iii-A — THE FAIL-KIND AXIS IS NOW TOTAL.
     ;; This arm was `#f`, and `#f` here is SILENT: it falls through `infer/err`'s

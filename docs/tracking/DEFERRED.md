@@ -7194,15 +7194,41 @@ thing, so the change was reverted and the narrow label kept.
 an entry.** `format-select-fail`'s `branch-str`
 (`(string-join (map (lambda (p) (format "~a" p)) path) ".")`, typing-errors.rkt)
 already renders `path` dot-joined for **every other fail kind**, so it carries
-the same collapse today, for kinds far outside the star work. Nobody has
-measured which of those messages can name the wrong branch.
+the same collapse today, for kinds far outside the star work.
 
-**THE REPAIR**: make `path` carry STEPS rather than names — ~20 `append path`
+⚠⚠ **CORRECTED BY VERIFY ROUND 3 ON TWO POINTS — this entry shipped wrong about
+its own subject, twice.**
+
+1. **IT IS LIVE, NOT A LATENT QUALITY RISK.** This entry originally said "nobody
+   has measured which of those messages can name the wrong branch". Measured
+   now: the `subject-other` kind does exactly that. `rec3{a.b a^r.b.zzz}` (on
+   `{:a {:b @[@[1 2]]}}`) reports ``select: `zzz` (branch `a.b`)`` — and
+   `rec3{a.b}` alone succeeds, so **the branch the message names is a valid
+   sibling that did not fail**. Three distinct branches (`a^r.b.zzz`,
+   `a.b.zzz`, `a^.b.zzz`) all render the same label.
+2. **THERE IS A SECOND COLLAPSE CHANNEL, and the original diagnosis named only
+   the first.** It is not just that `path` drops the cont suffix: the ω /
+   broadcast marker is dropped too. `rowz{k:s.zzz}` renders ``(branch `k.s`)``,
+   and `rowz{k.s.zzz}` proves `k.s` is not merely a different spelling — it
+   fails one step EARLIER, so the label names a branch that could not have
+   produced this error.
+
+**THE REPAIR**: make `path` carry STEPS rather than names — **24** `append path`
 sites in typing-core.rkt (some already append the step, e.g. the ordinal arm;
-others the name, e.g. the bcast arms), plus `branch-str`, plus the reduction
-twin. Then both the tail arm's label and `branch-str` can render through
-`pp-select-branch` and be faithful. Its own slice; **do not do it inside a star
-slice**.
+others the name, e.g. the bcast arms), plus `branch-str`, plus `pp-select-branch`.
+Then both the tail arm's label and `branch-str` can render faithfully. Its own
+slice; **do not do it inside a star slice**.
+
+⚠ **AND THE SCOPE ABOVE ORIGINALLY CHARGED FOR A "REDUCTION TWIN" THAT DOES NOT
+EXIST** (round 3, #9). Measured: `reduction.rkt` has **0** `append path` sites
+and **0** `select-fail` sites; its four walks (`level-entries`, `branch-entries`,
+`below-components`, `below-value`) take no `path` parameter at all, and its star
+failures are `expr-panic` values carrying fixed strings with no branch label.
+Reduction has **no seat in this repair**. The stale clause read as a
+co-migration obligation of the kind `pipeline.md` makes ATOMIC, so a future
+session would either hunt for a reduction-side `path` and find nothing, or ADD
+one believing a twin was owed. ⭐ It survived a full verify round because **pins
+assert kinds and code, never prose** — the same class F5 was landed to fix.
 
 ⚠ **A SECOND, SMALLER RESIDUAL, recorded so it is not mistaken for this one**:
 `pp-select-branch` renders every `ord-step` as `.N`, so even a faithful label

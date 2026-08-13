@@ -7784,10 +7784,29 @@
   ;; The message hardcodes that the star branch is the keyless one and `findf`s
   ;; the first star branch regardless of which side actually is. A deep star is
   ;; KEYED, so this population is new at C2 and the old wording lies to it.
-  (define out (c2-line "cfg{db.hosts* ports^}"))
-  (check-true (c2-refused? "cfg{db.hosts* ports^}")
-              (format "keyed star beside a keyless sibling is still an L4 error: ~a" out))
-  (check-false (regexp-match? #rx"`db.hosts\\*` contributes a KEYLESS component" out)
+  ;;
+  ;; ⚠⚠ VERIFY ROUND 3 — THIS PIN WAS VACUOUS FROM BIRTH (`d8776b66`), AND ITS
+  ;; VACUITY IS WHY ROUND 2's REMEDY REWRITE COULD SPECIALISE TO THE WRONG
+  ;; POPULATION. `C2V`'s `cfg` is `{:db {:hosts … :ports …}}` — `:ports` lives
+  ;; UNDER `:db`, so `cfg{db.hosts* ports^}` died at field resolution
+  ;; ("field :ports is not present … available fields: :db") and never reached
+  ;; the L4 seat at all. `c2-refused?` is #t for that error, and the `check-false`
+  ;; matched nothing, so BOTH halves passed on an unrelated failure. The pin
+  ;; therefore covered the keyed-star population in name only, and the round-2
+  ;; rewrite was derived from the OTHER population with nothing to contradict it.
+  ;; ⭐ Fixed by giving it a subject where the keyless sibling is genuinely
+  ;; top-level, and by adding the POSITIVE half `c2-refused?`'s own header
+  ;; demands — assert WHICH gate refused, not merely that nothing was produced.
+  (define L4V (string-append C2V "def pc := {:db {:hosts @[1 2]} :ports @[80]}\n"))
+  (define src "pc{db.hosts* ports^}")
+  (define out (p4e1-last (string-append L4V src)))
+  (check-false (p4e1-type (string-append L4V src))
+               (format "keyed star beside a keyless sibling is still an L4 error: ~a" out))
+  (check-true (regexp-match? #rx"mixed keyed/keyless sorts" out)
+              (format "…and it must be the L4 gate that refused, not field resolution: ~a" out))
+  (check-true (regexp-match? #rx"`db.hosts\\*`" out)
+              (format "…naming the star branch the user wrote: ~a" out))
+  (check-false (regexp-match? #rx"contributes a KEYLESS component" out)
                (format "…but it must not say the STAR is the keyless one: ~a" out)))
 
 ;; ---- 1b-iii-C2 verify ROUND 2, the DIAGNOSTIC MAJORS — a remedy is pinned by
@@ -7811,12 +7830,20 @@
   (check-false (regexp-match? #rx"drop the `\\*` so the layers nest" out)
                (format "must not advise dropping the star — it cannot move the surviving key: ~a" out))
   ;; …and here is the proof it cannot: the same branch with the star dropped is
-  ;; STILL refused. The old advice merely relocated the error to the parser gate.
+  ;; STILL refused. ⚠ ROUND 3 (#7): assert WHICH gate refused, not merely that
+  ;; nothing was produced — `c2-refused?` is a bare negative and is #t for an
+  ;; unrelated missing-field error too, which is precisely how the sibling
+  ;; keyed-star pin stayed vacuous for its whole life. The file's own
+  ;; `c2-refused?` header already requires "a negative AND a positive".
   (check-true (c2-refused? "cfg{db.hosts db}")
               "dropping the star leaves the collision — it only moves which gate refuses")
+  (check-true (regexp-match? #rx"duplicate output key" (c2-line "cfg{db.hosts db}"))
+              "…and the gate it moves to is the PARSER's duplicate gate, not something unrelated")
   ;; ✅ the remedies the message now names, each RUN
-  (check-true (regexp-match? #rx"\\^k'" out)
-              (format "must name the rename remedy: ~a" out))
+  ;; ⚠ ROUND 3 (#7): pin the WIDENING, not just the operator — a bare `^k'`
+  ;; regex was already green before "EITHER branch" was added.
+  (check-true (regexp-match? #rx"Rename EITHER branch with `\\^k'`" out)
+              (format "must name the rename remedy AND that either side works: ~a" out))
   (check-equal? (c2-line "cfg{db^d2.hosts* db}")
                 "{:d2 @[1 2], :db {:ports @[80], :hosts @[1 2]}} : {:d2 [PVec Int] :db {:hosts [PVec Int] :ports [PVec Int]}}"
                 "renaming the STAR branch resolves the collision")
@@ -7828,8 +7855,19 @@
                 "selecting the flatten in its own block is the third working remedy")
   ;; ⛔ AND THE ROUND-1 RECORD'S PROPOSED REPLACEMENT IS ALSO WRONG — pinned so
   ;; the next session cannot adopt it from the record. Measured: an L4 error.
+  ;; ⚠ ROUND 3 (#8) NARROWED THE CLAIM. Round 2 wrote "sub-block grouping does
+  ;; NOT survive a star", which overgeneralises: it survives fine when EVERY
+  ;; grouped branch is starred (pinned below). What breaks it is starring SOME
+  ;; but not all — Q_U47's rule again. Both spellings are pinned so a future
+  ;; session that tries the natural all-starred form finds the record already
+  ;; knows about it, instead of concluding the comment is simply wrong.
   (check-true (c2-refused? "cfg{db.{hosts* ports}}")
-              "sub-block grouping does NOT survive a star — do not adopt it here")
+              "sub-block grouping with SOME branches starred mixes the sorts — do not adopt it here")
+  (check-true (regexp-match? #rx"mixed keyed/keyless sorts" (c2-line "cfg{db.{hosts* ports}}"))
+              "…and it is the L4 gate that says so")
+  (check-equal? (c2-line "cfg{db.{hosts* ports*}}")
+                "{:db @[@[1 2] @[80]]} : {:db ⟨[PVec Int] [PVec Int]⟩}"
+                "…but ALL-starred grouping does survive — the round-2 claim was too broad")
   (check-false (regexp-match? #rx"sub-block" out)
                (format "so the message must not offer sub-block grouping: ~a" out)))
 
@@ -7845,19 +7883,65 @@
                (format "must not offer an action already taken: ~a" out))
   (check-false (regexp-match? #rx"drop the `\\^` that made a sibling keyless" out)
                (format "must not name a caret that is not there: ~a" out))
-  ;; ✅ the rule, and the two spellings it licenses — each RUN
-  (check-true (regexp-match? #rx"lands KEYLESS exactly when no step survives" out)
-              (format "must state the rule that decides the landing: ~a" out))
+  ;; ✅ the rule — stated in the RIGHT DIRECTION. ⚠ ROUND 3: round 2 pinned
+  ;; "no step survives AFTER it", and that regex kept a FALSE sentence green.
+  ;; `*` is branch-FINAL (`e3{a*.p}` → "`*` is only supported at the END of a
+  ;; branch"), so "nothing survives after it" is vacuously true of every star —
+  ;; i.e. the shipped rule asserted every star lands keyless, while
+  ;; `e3{a.b.c*}` → `{:a {:b @[1 2]}}` lands KEYED. The sibling message written
+  ;; in the same commit had it right ("the steps BEFORE the star").
+  (check-true (regexp-match? #rx"lands KEYLESS exactly when no key survives BEFORE" out)
+              (format "must state the rule in the direction that is TRUE: ~a" out))
+  (check-false (regexp-match? #rx"survives after it" out)
+               (format "the backwards form is vacuous for a branch-final operator: ~a" out))
   (check-equal? (l4-line "m2{a* d^.c*}")
                 "@[@[1 2] @[5 6]] : ⟨[PVec Int] [PVec Int]⟩"
                 "ADDING a caret dissolves the surviving key — the opposite of the old advice")
-  (check-equal? (l4-line "m2{a* b*}")
-                "@[@[1 2] @[3 4]] : ⟨[PVec Int] [PVec Int]⟩"
-                "starring a sibling works ONLY when that sibling has no surviving key")
-  ;; …which is exactly why the unconditional form was wrong: same "star each",
-  ;; opposite outcome, and the discriminator is the remainder, not the star.
+  ;; …and the discriminator is the REMAINDER, not the star: starring a branch
+  ;; that still keeps a key changes nothing.
   (check-true (l4-refused? "m2{a* d.c*}")
               "starring both is not sufficient when one keeps a key"))
+
+(test-case "1b-iii-C2 R3: the L4 remedy must be an ACTION in the populations round 2 never measured"
+  ;; ⚠⚠ ROUND 3's HEADLINE. Round 2's remedies were derived from ONE example
+  ;; (`m2{a* d.c*}`, where the STAR branch was the keyless one) and are
+  ;; NON-ACTIONS elsewhere. All four facts below are measured; the last is the
+  ;; action that works and that round 2 never named.
+  (define V (string-append C2V
+                           "def pc := {:db {:hosts @[1 2]} :ports @[80]}\n"
+                           "def d3 := {:a @[1 2] :x {:y {:z @[5 6]}}}\n"))
+  (define (line src) (p4e1-last (string-append V src)))
+  ;; ⚠ The rendered error ENDS WITH THE SOURCE EXPRESSION (`… c2s::pc{…}`), so
+  ;; two byte-identical MESSAGES can never compare equal as whole lines — the
+  ;; first cut of these pins asserted the full line and went red for that reason
+  ;; alone, not for any behaviour. Strip the echo; the claim is about the
+  ;; message, i.e. that applying the remedy changed NOTHING the user is told.
+  (define (msg src) (regexp-replace #rx" c2s::.*$" (line src) ""))
+  ;; (1) the star branch can be the KEYED one — then "dissolve a SIBLING's key"
+  ;;     is aimed at the wrong branch entirely.
+  (define base (line "pc{db.hosts* ports^}"))
+  (check-true (regexp-match? #rx"mixed keyed/keyless sorts" base)
+              (format "the keyed-star population must reach the L4 gate: ~a" base))
+  ;; (2) starring the keyless sibling is a NON-ACTION — byte-identical message.
+  (check-equal? (msg "pc{db.hosts* ports*}") (msg "pc{db.hosts* ports^}")
+                "starring a sibling that keeps no key leaves the error unchanged")
+  ;; (3) at depth 3 ONE caret is not enough — also byte-identical.
+  (check-equal? (msg "d3{a* x^.y.z*}") (msg "d3{a* x.y.z*}")
+                "one caret at depth 3 is a non-action; the message must not imply otherwise")
+  ;; (4) ✅ THE ACTIONS THAT WORK, each RUN — dissolve on WHICHEVER branch keeps
+  ;;     a key, including the star branch itself, one per surviving level.
+  (check-equal? (line "pc{db^.hosts* ports^}")
+                "@[@[1 2] @[80]] : ⟨[PVec Int] [PVec Int]⟩"
+                "dissolving the STAR branch's own key is the fix when it is the keyed one")
+  (check-equal? (line "d3{a* x^.y^.z*}")
+                "@[@[1 2] @[5 6]] : ⟨[PVec Int] [PVec Int]⟩"
+                "…and at depth it takes one caret per surviving level")
+  ;; (5) the message must therefore NOT scope the action to siblings only, and
+  ;;     must warn that adding a `*` is not one.
+  (check-true (regexp-match? #rx"INCLUDING the star branch itself" base)
+              (format "the remedy must not be scoped to siblings: ~a" base))
+  (check-true (regexp-match? #rx"one per level" base)
+              (format "…and must say a single caret may not be enough: ~a" base)))
 
 
 ;; ---- 1b-iii-C2 verify ROUND 2, F1 — a CARET fused into a star-bearing segment
