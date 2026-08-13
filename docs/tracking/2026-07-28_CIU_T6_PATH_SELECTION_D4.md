@@ -9142,6 +9142,65 @@ first).** The adjudicator was asked outright whether round 1's shape repeats:
 | **F7** | MINOR | the round-1 fix spliced two definitions between a PRECONDITION header and the function it guards | ✅ FIXED `7ed99f39` |
 | F6 | MINOR | a pre-existing PATH-band message; explicitly NOT a round-2 finding and NOT a regression | ⬜ with DEFERRED 105/116 |
 
+<a id="p4e-1b-iv"></a>
+
+##### §5.P4e-1b-iv — the NOMINAL splice  (A `b216f926` · B1 `714607dc` · B2 `0e2f5af7`)
+
+**[Q_U49] shipped at all four seats.** Measured live: `mn{a*}` → `{:x 1}` ·
+`mn{a* b}` → `{:b {:y 2}, :x 1}` · `mn{a b}*` → `{:y 2, :x 1}` ·
+`cfgn{db^.conf*}` → `{:x 1}` · `cfgn{db.conf*}` → `{:db {:x 1}}` (KEYED, nests) ·
+`vhm{0.{0}*}` → `{:x 1}`. Vector contrast UNCHANGED (`mv{a* b}` still L4).
+Suite **10203/488/0**, battery 521 → **536**.
+
+⭐ **TWO THINGS CAME OUT CHEAPER THAN THE AUDIT PRICED THEM.** Seat B cost a
+`select-steps-star-tail?` test per twin, not a contract change (the audit's
+estimate is what would have chosen the wrong ruling — see [Q_U49](#q-u49)). And
+on the type side **the splice is a NO-OP CONVERSION**: a level component
+`(key-or-#f . record-field)` and a row field `(key . record-field)` are the same
+shape, so [Q_U38](#q-u38)'s splice-vs-sibling and splice-vs-splice checks cost
+**no code** — the level's existing `(filter values (map car cs))` fold sees the
+lifted keys. Verified: `coll{inner* other*}` and `collw{inner* k}` both refuse.
+
+⚠ **B1's SCOPE WAS WRONG WHEN I ANNOUNCED IT, and the correction is the
+lesson.** I told the owner B1 was "a signature change, not an arm addition",
+carrying the audit's *"1b-iv changes both helpers' SIGNATURES"*. Checked before
+implementing: `join-contents` already receives the CONTENTS; the layer's keys are
+discarded because that IS the layer delete, and they are needed for `*_`
+PROVENANCE only — which Q_U49 put out of scope. B1 is 93 lines of pure insertion.
+**The audit's claim is true of `*_` and I generalised it without measuring.**
+
+⚠⚠ **THREE DEFECTS SELF-CAUGHT BY RUNNING THE UN-PARKED PINS, all introduced by
+B2 itself:**
+1. **The `'path` carrier regression** — splicing regardless of sort broke
+   `cfg{database}*` and `mn{a b}*` ("the subject is not a record"): a path
+   selector must yield exactly ONE component. ⭐ The fix is the RULE, not a
+   patch — **splicing needs an enclosing level to splice into, and a `'path`
+   landing has none; its join IS the value**, which is exactly Q_U40's
+   `m{a b}*` → `{:x 1, :y 2}`, a case the sort-blind version could not produce.
+2. **The EMPTY-layer sort flip**, predicted verbatim by the audit (*"arm order,
+   not a ruling, decides the empty join's SORT"*): `(andmap … '())` is `#t`, so
+   an empty layer matched the champ arm and `@[]` became `{}`. A `pair?` guard
+   restores it; the case stays unruled, so it must not MOVE.
+3. **`*_` fell into the nominal join on the VALUE side**, dropping key-synthesis.
+   Typing's guard is not a defence — this seat's doctrine is that reduction must
+   not depend on typing having run. Caught by A's seat pin, written for exactly
+   this.
+
+⚠ **TWO OF MY OWN PINS WERE WRONG**: `coll{inner* inner}` does NOT collide
+(`inner*` lifts `:k`, the plain branch keeps `:inner`), and two pins asserted a
+full rendered line and reddened on ORDER while the semantics were right —
+`make-record` canonicalizes, the champ carries HASH order. That is Q_U38's third
+fact, which says to pin value and type SEPARATELY.
+
+**KINDS**: `star-nominal` RE-SCOPED to the `*_` not-yet (leaving "the nominal
+case is the next slice" would have made it a lie the moment the shield fell);
+`star-omega-nominal` and `star-map-opaque` minted, each with its message and the
+battery render-loop entry in the same commit.
+⚠ **OPEN — the ω tension**: `star-omega-nominal` refuses on Q_U38's
+possibility rule, but [Q_U40](#q-u40)'s own `rowsm:cfg*` worked example assumes
+DISJOINT keys — true of that value, not expressible in its type. Recorded rather
+than silently decided; wants a ruling or a DEFERRED.
+
 <a id="p4e-1b-iii-c2-r3"></a>
 
 **⭐⭐ VERIFY ROUND 3 (`wf_1bb04012-af2`, 4 lenses + adjudicator) — 14 raw → 7
@@ -9386,9 +9445,9 @@ MANY"*), and `select-branch-keyless?` answers `#f` (KEYED), so neither routes a
 deep star into `walk-to-leaf` — which has **no star arm and raises**. The
 narrowing is therefore safe *today*; if either classifier's star answer ever
 moves, `walk-to-leaf` is the abort it lands in.
-| **1b-iv-A** ⬜ | **The instrument + the twin-order fix.** Failing-test-first pins for every seat in [Q_U49](#q-u49)'s worked table, `'block`-sorted or E2E (a `'path` pin discards the key and cannot tell keyed from keyless — the flip this slice rules on). **PLUS the `'flatten-synth` arm-order divergence, fixed FIRST**: typing tests it at position 3 of `join-contents` (after the nominal bucket) while reduction tests it as its FIRST cond arm, so the moment a nominal `*_` passes typing, reduction panics *"this join is positional"* — false for a champ layer. Latent today ONLY because typing refuses nominal first, i.e. masked by exactly the shield 1b-iv removes. Fourth instance of the class in this slice, and the first one caught BEFORE implementing. | Pure instrument + a defect fix whose shield is still up. |
-| **1b-iv-B1** ⬜ | **The nominal join lands in BOTH twins, INERT.** ⚠ **This is a SIGNATURE change, not an arm addition** — both twins DISCARD the layer's keys before joining (typing maps `record-field-type` over fields; reduction's `champ-values/canonical` ends `(map cdr …)`), and a keywise join needs them. So: a keyed-contents channel in both, the keywise join itself, and the content-vs-content collision refusal at the join. Still unreachable — the nominal refusal arm stays ahead of it. | The B1 shape that finally worked for 1b-iii after two reverts: semantics atomic across the twins, verified by direct call, zero surface change. |
-| **1b-iv-B2** ⬜ | **THE SPLICE GOES LIVE.** Remove the nominal shield for the DECIDABLE case; splice at the callers — free at Seat A (`star-branch-entries` already returns a component list; the dissolve route delegates to it) and a `select-steps-star-tail?` test at the ord-branch arm for Seat B keyless. [Q_U38](#q-u38)'s splice-vs-sibling and splice-vs-splice checks come FREE at the existing level dup gate. ⚠ `expr-Map` contents split off with their own PERMANENT-refusal kind (no enumerable keys ⇒ never provable, never refutable). | Thin wiring + the E2E that observes it, landing together. |
+| **1b-iv-A** ✅ `b216f926` | **The instrument + the twin-order fix.** Failing-test-first pins for every seat in [Q_U49](#q-u49)'s worked table, `'block`-sorted or E2E (a `'path` pin discards the key and cannot tell keyed from keyless — the flip this slice rules on). **PLUS the `'flatten-synth` arm-order divergence, fixed FIRST**: typing tests it at position 3 of `join-contents` (after the nominal bucket) while reduction tests it as its FIRST cond arm, so the moment a nominal `*_` passes typing, reduction panics *"this join is positional"* — false for a champ layer. Latent today ONLY because typing refuses nominal first, i.e. masked by exactly the shield 1b-iv removes. Fourth instance of the class in this slice, and the first one caught BEFORE implementing. | Pure instrument + a defect fix whose shield is still up. |
+| **1b-iv-B1** ✅ `714607dc` | **The nominal join lands in BOTH twins, INERT.** ⚠ **This is a SIGNATURE change, not an arm addition** — both twins DISCARD the layer's keys before joining (typing maps `record-field-type` over fields; reduction's `champ-values/canonical` ends `(map cdr …)`), and a keywise join needs them. So: a keyed-contents channel in both, the keywise join itself, and the content-vs-content collision refusal at the join. Still unreachable — the nominal refusal arm stays ahead of it. | The B1 shape that finally worked for 1b-iii after two reverts: semantics atomic across the twins, verified by direct call, zero surface change. |
+| **1b-iv-B2** ✅ `0e2f5af7` | **THE SPLICE GOES LIVE.** Remove the nominal shield for the DECIDABLE case; splice at the callers — free at Seat A (`star-branch-entries` already returns a component list; the dissolve route delegates to it) and a `select-steps-star-tail?` test at the ord-branch arm for Seat B keyless. [Q_U38](#q-u38)'s splice-vs-sibling and splice-vs-splice checks come FREE at the existing level dup gate. ⚠ `expr-Map` contents split off with their own PERMANENT-refusal kind (no enumerable keys ⇒ never provable, never refutable). | Thin wiring + the E2E that observes it, landing together. |
 | **1b-iv-C (scope flag, NOT this slice)** | `*_` is NOT carried by [Q_U49](#q-u49): its PREFIX SOURCE is under-specified and [Q_U41](#q-u41)'s two worked examples disagree (deleted layer's key vs contents' keys). Needs a ruling before code. Q_U39 separately defers the closer-adjacent band, so Q_U41's own showcase spelling is unreachable anyway. | Named rather than silently deferred. |
 | **1b-v — the star-SUFFIX slice** | **`*-`** ([Q_U48](#q-u48)) · the **`*-_`** decision · [Q_U39](#q-u39)'s closer-adjacent `*_` mint. One slice, one verify. | The cont vocabulary settles ONCE: `*_` and `*-` each add a `(@star cont)` value, and `*-_` interacts with [Q_U41](#q-u41)'s nominal-only scoping, which is 1b-iv's ruling. |
 | **P4e-2** | the `.*` retirement inventory + [Q_U26](#q-u26) ravel | unchanged |
