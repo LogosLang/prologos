@@ -8957,7 +8957,7 @@ B1/B2 — land the machinery INERT, then migrate the seat.** C repeats it.
 | slice | content | why it is safe alone |
 |---|---|---|
 | **1b-iii-C1** ✅ `4f30a171` | **The SHARED JOIN, hoisted and returning BARE.** `star-join-type` (typing-core) + `star-join-value` (reduction) at module level, both exported; each twin's existing caller now wraps keyless (its remainder-empty case). `select-below-field` exported as C2's seat. syntax.rkt doc-truth. ⚠ **RE-SCOPED mid-slice**: the tail ARMS moved to C2 — see the note below. | Pure extraction. Battery 498 → **501**, 0/0 by direct require; every pre-existing pin green IS the regression proof (the B1 pins already exercise depth-1 through both twins). **Mutation-tested PER TWIN**, inverted in place: re-wrapping typing's return → 3 FAILURE + 3 ERROR, reduction's → 2 FAILURE + 4 ERROR, the C1 pin among them each time. ⚠ Both mutant runs **exited 0**. E2E star surface byte-identical to pre-C1; neighbourhood 318 `[4/4]`; acceptance 0 errors. |
-| **1b-iii-C2** ✅ `68014124` (instrument `d8776b66`) | **THE DEEP FLATTEN IS LIVE.** `cfg{db.hosts*}` → `{:db @[1 2]}` · `two{a.{x y}*}` → `{:a @[1 2 3]}` · depth 3 works. Pre-check narrowed via `select-branch-deep-star?`; ONE star-TAIL arm per twin (`select-steps-star-tail?`, exactly `(sₙ ★)`) returning C1's join BARE; both shields out; `star-dup-key` seat; L4 message de-lied; `star-deep-prefix` re-scoped to the ordinal gap. | ⭐ **Two of the three landings needed NO CODE** — the dissolve and ord-branch arms already wrap keyless, and `select-below-components` needed no twin arm at all. Battery 504 → **520**, 0/0 · neighbourhood `[4/4]` · acceptance 0 errors · adversarial verify **rounds 1 AND 2 DONE** (`wf_bf354f2d-675`, `wf_87b2134b-d05`) — 3 BLOCKING fixed at `eee68262`, R2's F1/F3/F4 at `73c56b2c`+`28b524d7`, **R2's tail (F5, F7, the 3 diagnostic majors, DEFERRED 122's un-park) at `7ed99f39`+**. ⬜ **Full suite still owed** (unrun since `5e4a3338`). Records: [§5.P4e-1b-iii-C2](#p4e-1b-iii-c2) · [the R2 tail](#p4e-1b-iii-c2-r2-tail) |
+| **1b-iii-C2** ✅ `68014124` (instrument `d8776b66`) | **THE DEEP FLATTEN IS LIVE.** `cfg{db.hosts*}` → `{:db @[1 2]}` · `two{a.{x y}*}` → `{:a @[1 2 3]}` · depth 3 works. Pre-check narrowed via `select-branch-deep-star?`; ONE star-TAIL arm per twin (`select-steps-star-tail?`, exactly `(sₙ ★)`) returning C1's join BARE; both shields out; `star-dup-key` seat; L4 message de-lied; `star-deep-prefix` re-scoped to the ordinal gap. | ⭐ **Two of the three landings needed NO CODE** — the dissolve and ord-branch arms already wrap keyless, and `select-below-components` needed no twin arm at all. Battery 504 → **521**, 0/0 · neighbourhood `[4/4]` · acceptance 0 errors · ✅ **suite 10188/488/0 at `428e0c80`** · adversarial verify **rounds 1, 2 AND 3 DONE** (`wf_bf354f2d-675`, `wf_87b2134b-d05`, `wf_1bb04012-af2`) — 3 BLOCKING at `eee68262`, R2's F1/F3/F4 at `73c56b2c`+`28b524d7`, R2's tail at `7ed99f39`+`6a64f2b2`, **R3 at `428e0c80` (round 2's own remedy rewrite repeated the class it fixed)**. Records: [§5.P4e-1b-iii-C2](#p4e-1b-iii-c2) · [the R2 tail](#p4e-1b-iii-c2-r2-tail) · [R3](#p4e-1b-iii-c2-r3) |
 
 <a id="p4e-1b-iii-c2"></a>
 
@@ -9062,6 +9062,65 @@ first).** The adjudicator was asked outright whether round 1's shape repeats:
 | **F5** | MINOR | a sibling `@sub` arm still asserts *"the parser grammar forbids this shape"* for a shape C2 made reachable | ✅ FIXED `7ed99f39` |
 | **F7** | MINOR | the round-1 fix spliced two definitions between a PRECONDITION header and the function it guards | ✅ FIXED `7ed99f39` |
 | F6 | MINOR | a pre-existing PATH-band message; explicitly NOT a round-2 finding and NOT a regression | ⬜ with DEFERRED 105/116 |
+
+<a id="p4e-1b-iii-c2-r3"></a>
+
+**⭐⭐ VERIFY ROUND 3 (`wf_1bb04012-af2`, 4 lenses + adjudicator) — 14 raw → 7
+SURVIVORS + 2 charged elsewhere, 5 killed or merged by the adjudicator's own
+re-runs. Fixed at `428e0c80`. THE HEADLINE IS THAT ROUND 2's REMEDY REWRITE
+REPEATED THE CLASS IT WAS FIXING**, and the reason it could is the sharper
+finding. All re-measured on the main thread before acting.
+
+| # | severity | finding | disposition |
+|---|---|---|---|
+| **#1** | MAJOR | `star-l4-mixed`'s round-2 remedies were derived from ONE example and are NON-ACTIONS in three other measured populations; the action that works is never named | ✅ FIXED `428e0c80` |
+| **#2** | MAJOR | the ONLY pin covering the keyed-star population is VACUOUS **from birth** (`d8776b66`) — it dies at field resolution and never reaches the L4 seat | ✅ FIXED `428e0c80` |
+| **#3** | MAJOR | DEFERRED 123 is LIVE, not latent — and has a SECOND collapse channel (the ω marker) its diagnosis never named | ✅ entry corrected |
+| **#5** | MINOR | the rule round 2 stated is **directionally backwards**, and vacuous for a branch-final operator | ✅ FIXED `428e0c80` |
+| **#7** | MINOR | the round-2 pins under-discriminate (bare `c2-refused?` negatives; a regex blind to the widening) | ✅ FIXED `428e0c80` |
+| **#8** | MINOR | *"sub-block grouping does not survive a star"* is an OVERCLAIM — it survives when ALL grouped branches are starred | ✅ narrowed + both spellings pinned |
+| **#9** | MINOR | DEFERRED 123's repair scope charges for a **reduction twin that does not exist** | ✅ entry corrected |
+| #4 | MAJOR | [DEFERRED 117](DEFERRED.md) reproduces at HEAD and its exposure is UNDERSTATED — a whole-file abort from ordinary surface syntax | ⬜ pre-existing, deferral stands |
+| #6 | MINOR | LATENT — typing's `select-step-name` `[else s]` renders a raw IR step list into a user-facing message; the comment above it asserts that cannot happen | ⬜ constructed-IR only |
+
+**⭐⭐ #1 + #5 + #2 ARE ONE STORY, AND IT IS THE MOST INSTRUCTIVE OF THE SLICE.**
+Round 2 fixed two messages whose remedies did not work. Its replacement for
+`star-l4-mixed` was derived from the ONE example in front of it —
+`m2{a* d.c*}`, where the STAR branch happened to be the KEYLESS one — so both
+remedies were written as things to do to a *sibling*. Measured outside that
+shape: `pc{db.hosts* ports*}` returns the error **byte-identical**,
+`pc{db.hosts* ports^^}` is a parse error, and at depth 3 `d3{a* x^.y.z*}` is
+byte-identical to the unfixed spelling. The action that works is on the STAR
+branch (`pc{db^.hosts* ports^}` ✓, `d3{a* x^.y^.z*}` ✓) and was never named.
+· **#5 is why it read as fine**: the rule was stated as *"no step survives AFTER
+it"*, but `*` is branch-FINAL, so the condition is **vacuously true** and the
+sentence asserts every star lands keyless — while `e3{a.b.c*}` lands KEYED. The
+sibling message authored in the SAME commit said it correctly (*"the steps
+BEFORE the star"*). One rule, two messages, opposite directions.
+· **#2 is why nothing caught it**: the only pin covering the keyed-star
+population has been vacuous since `d8776b66` — `C2V`'s `cfg` nests `:ports`
+under `:db`, so `cfg{db.hosts* ports^}` died at field resolution and never
+reached the L4 gate. Its negative half is `#t` for that unrelated error and its
+`check-false` matched nothing. **A vacuous pin does not merely fail to catch a
+defect; it licenses a rewrite to specialise to the wrong population.**
+⭐ **The repair is to derive the message from the RULING rather than the
+example** — state Q_U47's remainder rule and let the action follow from it.
+
+⚠ **AND THE FIX FOR A LYING MESSAGE MUST NOT ITSELF OVERCLAIM** (#8). Round 2
+wrote *"sub-block grouping does not survive a star"*; measured, it survives when
+**every** grouped branch is starred (`cfg{db.{hosts* ports*}}` → `{:db @[@[1 2]
+@[80]]}`). Narrowed, with BOTH spellings pinned so the next session that tries
+the natural all-starred form finds the record already knows.
+
+⚠ **TWO CORRECTIONS TO [DEFERRED 123](DEFERRED.md), BOTH MINE, ONE DAY OLD**
+(#3, #9): it is LIVE (`rec3{a.b a^r.b.zzz}` names ``(branch `a.b`)`` while
+`rec3{a.b}` alone SUCCEEDS — a valid sibling named as the failing branch); it
+has a second collapse channel (the ω marker); and its repair scope charged for a
+**reduction twin that does not exist** (reduction: 0 `append path`, 0
+`select-fail`, no `path` parameter at all). That last clause read as an ATOMIC
+co-migration obligation and would have sent the next session hunting a seat that
+isn't there. ⭐ **It survived a whole verify round because pins assert kinds and
+code, never prose.**
 
 <a id="p4e-1b-iii-c2-r2-tail"></a>
 
