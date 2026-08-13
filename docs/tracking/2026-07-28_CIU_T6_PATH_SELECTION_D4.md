@@ -2953,6 +2953,83 @@ items of the hold-point, ruled before P4a opened:
   the synthesized key comes from the deleted layer's key or the contents' keys —
   so `*_` is NOT in this slice's scope on the strength of this ruling alone.
 
+- <a id="q-u50"></a>**⭐⭐ Q_U50 — THE ω "TENSION" DISSOLVES: THE TYPE SYSTEM
+  ALREADY DISCRIMINATES [owner, 2026-08-13 — "yes to the ω dissolution"].**
+  [Q_U40](#q-u40)'s worked battery claims `rowsm:cfg*` → `{:a 1, :b 2}`;
+  [Q_U38](#q-u38) refuses a nominal ω join on POSSIBILITY, because under ω one
+  element type stands for every element. Filed at the 1b-iv verify as a
+  contradiction between two rulings. **It is not one — MEASURED:**
+  ```
+  rowsm := @[{:cfg {:a 1}} {:cfg {:b 2}}]  ⟹ ⟨{:cfg {:a Int}} {:cfg {:b Int}}⟩  TUPLE
+  rowsm:cfg*                                ⟹ {:a 1, :b 2}          ✓ Q_U40's claim
+  homog := @[{:cfg {:a 1}} {:cfg {:a 2}}]  ⟹ [PVec {:cfg {:a Int}}]           PVEC
+  homog:cfg*                                ⟹ refused, `star-omega-nominal`  ✓ Q_U38
+  ```
+  **THE DISCRIMINATOR IS THE SUBJECT'S OWN TYPE, and the language already
+  computes it.** A vector literal whose elements have DIFFERENT row types cannot
+  be a `PVec` — it types as a TUPLE with per-position types, so the join's
+  contributors are individually known and non-collision is **provable**. A
+  vector whose elements share a row type is a `PVec` with a RUNTIME length —
+  the same keys N times, N unknown — so a collision is **possible**.
+  ⭐ **This is Q_U38's rule doing real work rather than over-refusing**: it
+  refuses exactly where the type cannot rule a collision out, and gets out of the
+  way where it can. `star-omega-nominal` fires on precisely the `PVec` side.
+  **NO CODE CHANGE.** Owed: the message should name the tuple case as the remedy
+  it currently lacks (a fixed-arity literal with distinct element rows joins).
+
+- <a id="q-u51"></a>**⭐⭐ Q_U51 — `*_`'s PREFIX SOURCE IS FORCED, AND `*_` SHIPS
+  WITH [Q_U39](#q-u39)'s MINT, NOT IN THE FUSED BAND ALONE [owner, 2026-08-13 —
+  "take (b) with Q_U39's mint"].**
+
+  **THE PREFIX RULE, in one sentence:**
+  > Each lifted field's key is `<the key its content sat under in the deleted
+  > layer>-<the field's own key>`.
+
+  ⭐ **IT IS FORCED, NOT CHOSEN** — the same shape as [Q_U48](#q-u48). The rival
+  reading is "prefix = the SEGMENT the star attaches to"; in the fused band they
+  COINCIDE (the layer is always the re-nest `{:seg {…}}`), and in a multi-content
+  layer there is no single segment for it to name, so only the content-key
+  reading is total. It also honours Q_U24's explicit instruction to inherit
+  `^-_`'s rule rather than `^_`'s: the DELETED key is the prefix, not the
+  surviving path (`^_` measured for contrast: `e2{a.b^_}` → `{:a {:a-b 1}}`).
+
+  **⚠ THE FILED DISAGREEMENT WAS A FALSE ALARM.** The 1b-iv grounding audit read
+  Q_U24's two examples as two rules. Measured, they are two EXPRESSIONS with
+  different layers, and one rule covers both:
+  | spelling | layer (measured) | contents | prefix |
+  |---|---|---|---|
+  | `cfg{database*_}` | `{:database {:url … :pool-size …}}` | one, under `:database` | `database` |
+  | `regions{eu*_}` | `{:eu {:host … :port …}}` | one, under `:eu` | `eu` |
+  | `top{regions*_}` | `{:regions {:eu … :us …}}` | one, under `:regions` | `regions` |
+
+  **⭐⭐ AND THE REASON IT SHIPS WITH THE MINT: `*_`'s ENTIRE JUSTIFICATION IS
+  CURRENTLY UNSPELLABLE.** [Q_U24](#q-u24) adopted `*_` as the collision remover
+  — *"it removes nominal-join collisions BY CONSTRUCTION"* — and a cross-content
+  collision needs a layer with SEVERAL contents. Measured:
+  ```
+  mn{a b}*   ⟹ {:y 2, :x 1}       multi-content layer, closer-adjacent band
+  mn{a b}*_  ⟹ Unbound variable    …but `*_` cannot be written there [DEFERRED 124]
+  mn{a*_}    ⟹ layer {:a {:x Int}} the only spellable band: ONE content, ALWAYS
+  ```
+  A fused `seg*_`'s layer is the re-nest of ONE step, so it has exactly one
+  content BY CONSTRUCTION and a cross-content collision cannot arise. Shipping
+  `*_` there delivers `:database-url` — real, and useful — but the operator
+  **cannot do the thing it was adopted for**, and its closer-adjacent refusal
+  could not even be exercised.
+  **THE EXPRESSIVITY ARGUMENT, which is what decided it**: `cfg{database*_}` has
+  workarounds (`cfg{database^.url database^.pool-size}`, or renames) — it is
+  convenience. `regions:{host port}*_` → `{:eu-host …, :us-port …}` has NONE:
+  bare `*` refuses (every region contributes `:host`), and no spelling flattens a
+  homogeneous Map-of-Map while keeping provenance. **That capability is the whole
+  reason the operator exists, and it lives entirely in the band we cannot yet
+  write.** So the mint is not a nicety attached to the slice — it is the slice.
+  ⚠ Rejected alternative (a) "ship the fused band now": it would field an
+  operator that works where it is not needed and is unspellable where it is, and
+  would rule the prefix on evidence drawn ONLY from single-content layers — the
+  derive-from-the-example failure that cost three message rewrites this session.
+  ⚠ Rejected (c) "rule now, implement later" as second-best: more honest than
+  (a), but it leaves the not-yet live in a band where the answer is now known.
+
 - <a id="q-u43"></a>**⭐ Q_U43 — THE L4 SORT CHECK MOVES TO TYPING FOR STAR-BEARING
   BRANCHES, AS [Q_U38](#q-u38)'s COROLLARY [owner, 2026-08-11 — "move the sort
   check to typing per Q_U38's corollary"].** Q_U38 moved the COLLISION check;
@@ -9500,7 +9577,7 @@ moves, `walk-to-leaf` is the abort it lands in.
 | **1b-iv-B1** ✅ `714607dc` | **The nominal join lands in BOTH twins, INERT.** ⚠ **This is a SIGNATURE change, not an arm addition** — both twins DISCARD the layer's keys before joining (typing maps `record-field-type` over fields; reduction's `champ-values/canonical` ends `(map cdr …)`), and a keywise join needs them. So: a keyed-contents channel in both, the keywise join itself, and the content-vs-content collision refusal at the join. Still unreachable — the nominal refusal arm stays ahead of it. | The B1 shape that finally worked for 1b-iii after two reverts: semantics atomic across the twins, verified by direct call, zero surface change. |
 | **1b-iv-B2** ✅ `0e2f5af7` | **THE SPLICE GOES LIVE.** Remove the nominal shield for the DECIDABLE case; splice at the callers — free at Seat A (`star-branch-entries` already returns a component list; the dissolve route delegates to it) and a `select-steps-star-tail?` test at the ord-branch arm for Seat B keyless. [Q_U38](#q-u38)'s splice-vs-sibling and splice-vs-splice checks come FREE at the existing level dup gate. ⚠ `expr-Map` contents split off with their own PERMANENT-refusal kind (no enumerable keys ⇒ never provable, never refutable). | Thin wiring + the E2E that observes it, landing together. |
 | **1b-iv-C (scope flag, NOT this slice)** | `*_` is NOT carried by [Q_U49](#q-u49): its PREFIX SOURCE is under-specified and [Q_U41](#q-u41)'s two worked examples disagree (deleted layer's key vs contents' keys). Needs a ruling before code. Q_U39 separately defers the closer-adjacent band, so Q_U41's own showcase spelling is unreachable anyway. | Named rather than silently deferred. |
-| **1b-v — the star-SUFFIX slice** | **`*-`** ([Q_U48](#q-u48)) · the **`*-_`** decision · [Q_U39](#q-u39)'s closer-adjacent `*_` mint. One slice, one verify. | The cont vocabulary settles ONCE: `*_` and `*-` each add a `(@star cont)` value, and `*-_` interacts with [Q_U41](#q-u41)'s nominal-only scoping, which is 1b-iv's ruling. |
+| **1b-v — the star-SUFFIX slice** | **`*-`** ([Q_U48](#q-u48)) · the **`*-_`** decision · [Q_U39](#q-u39)'s closer-adjacent mint **+ `*_` itself, per [Q_U51](#q-u51)** — the mint is not attached to the slice, it IS the slice, because `*_`'s whole justification lives in the band the mint opens ([DEFERRED 124](DEFERRED.md)). The prefix rule is already RULED and forced. | The cont vocabulary settles ONCE: `*_` and `*-` each add a `(@star cont)` value, and `*-_` interacts with [Q_U41](#q-u41)'s nominal-only scoping, which is 1b-iv's ruling. |
 | **P4e-2** | the `.*` retirement inventory + [Q_U26](#q-u26) ravel | unchanged |
 
 **⚠ TWO HOLES C2 OPENS, AND THEY ARE C2's TO CLOSE** — both found by the
