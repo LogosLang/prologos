@@ -5913,8 +5913,13 @@
   ;; Q_U28: the operator wins (matching `^`). The mint slice's consumer is a
   ;; guided not-yet, so the observable is a REFUSAL naming the operator.
   (define out (p4e0-star-e2e "def q := cfg{database*}\ndef after := 42"))
-  (check-true (p4e0-has? out #rx"not implemented yet")
-              (format "identifier-headed star must be split and refused, not read as a field: ~a" out))
+  ;; ⚠ 1b-iv-B2 MOVED THIS SEAM. The pin's subject is the SPLIT — that
+  ;; `database*` is two tokens, not a field name — and it used to observe that
+  ;; via the nominal not-yet. The nominal join now LANDS, so the observable is
+  ;; the joined fields; the second check below is the one that always carried
+  ;; the pin's actual claim.
+  (check-true (p4e0-has? out #rx":port|:url")
+              (format "identifier-headed star must be split and JOINED, not read as a field: ~a" out))
   (check-false (p4e0-has? out #rx"database\\*` is not present|field :database\\*")
                (format "must NOT read `database*` as a field name: ~a" out)))
 
@@ -6433,8 +6438,12 @@
   (check-true (p4e1-has? "ns q1\ndef c := {:a 1}\ndef b := c{a}*"
                          #rx"a leaf has no join")
               "x{a}* — reaches the star's own guided (leaf-permanent) message")
+  ;; ⚠ 1b-iv-B2: the ω-element nominal case keeps a REFUSAL but got its own kind
+  ;; and message (one element type stands for N contents ⇒ the same keys N
+  ;; times). The pin's PROPOSITION is reachability — a guided star message rather
+  ;; than `Could not infer type` — and that survives; the text moved again.
   (check-true (p4e1-has? "ns q2\ndef xs := @[{:a 1}]\ndef b := xs:{a}*"
-                         #rx"\\(flatten\\) is not implemented yet")
+                         #rx"cannot join Map-valued contents")
               "xs:{a}* — preceding step is a broadcast"))
 
 (test-case "P4e-1a [Q_U35]: `*` after a NON-SELECTION expression is refused"
@@ -7196,9 +7205,13 @@
               "A: …and the value")
   ;; (A') Map contents at the outer carrier: the honest nominal not-yet — which
   ;;      ALSO proves the star operated on the subject's layer (it renders it).
-  (check-true (p4e1-has? (string-append C "cfg{database}*")
-                         #rx"not implemented yet for Map-valued")
-              "A': Map contents refuse with the nominal not-yet, 1b-iv's seam")
+  ;; ⚠ 1b-iv-B2 [Q_U49]: this WAS the nominal not-yet seam. The closer-adjacent
+  ;; star is a `'path` carrier, so its landing is the joined map ITSELF (there is
+  ;; no enclosing level to splice into) — Q_U40's own `m{a b}*` case.
+  (check-true (p4e1-has? (string-append C "cfg{database}*") #rx":url")
+              "A': Map contents now JOIN keywise; the path landing is the joined map")
+  (check-true (p4e1-type=? (string-append C "cfg{database}*") "{:host String :url String}")
+              "…and the TYPE is the joined row, canonicalized by label")
   ;; (B) after a `.{…}` sub-block — ⭐ THE ROUND-2 DEFECT: must NOT re-base onto
   ;;     the subject. concat(vh) would be `@[@[1 2] @[3]]`.
   (check-false (p4e1-has? (string-append V "vh{0.{0}*}") #rx"@\\[@\\[1 2\\] @\\[3\\]\\]")
@@ -7338,9 +7351,11 @@
                                          (list (list B1-STAR)) 'path)])
     (check-equal? (tc:select-fail-kind f) 'star-leaf))
   ;; Map contents → genuinely not-yet (1b-iv)
+  ;; ⚠ 1b-iv-B2: nominal contents JOIN now instead of refusing.
   (let-values ([(t f) (tc:select-project '() (b1-row (cons 'a (b1-f nom-inner)))
                                          (list (list B1-STAR)) 'path)])
-    (check-equal? (tc:select-fail-kind f) 'star-nominal))
+    (check-false f "a nominal layer joins keywise at 1b-iv")
+    (check-true (expr-Record? t) "…and yields a row"))
   ;; open row → not statically known (Q_U38 conservative on the tail)
   (let-values ([(t f) (tc:select-project '() (make-record 'keyword
                                                           (list (cons 'a (b1-f B1-PVI))) 'dyn)
@@ -7368,9 +7383,12 @@
     (check-false f)
     (check-true (equal? t B1-PVI)))
   ;; [PVec {:x Int}] ★ → nominal, not-yet
+  ;; ⚠ 1b-iv-B2: the ω-element nominal case keeps a REFUSAL (one element type
+  ;; stands for N contents ⇒ the same keys N times), but no longer shares the
+  ;; `star-nominal` kind, which is now the `*_` not-yet.
   (let-values ([(t f) (tc:select-project '() (expr-PVec (b1-row (cons 'x (b1-f (expr-Int)))))
                                          (list (list B1-STAR)) 'path)])
-    (check-equal? (tc:select-fail-kind f) 'star-nominal))
+    (check-equal? (tc:select-fail-kind f) 'star-omega-nominal))
   ;; [PVec ⟨Int⟩] ★ → tuple arity × runtime length is not static
   (let-values ([(t f) (tc:select-project '() (expr-PVec (make-record 'nat (list (cons 0 (b1-f (expr-Int)))) 'closed))
                                          (list (list B1-STAR)) 'path)])
@@ -7404,9 +7422,14 @@
     (check-true (regexp-match? #rx"permanent" (te:format-select-fail f '()))
                 "a leaf refusal is permanent and says so"))
   ;; the NOMINAL message keeps the established not-yet substring (C31 pins)
+  ;; ⚠ 1b-iv-B2: this shape now JOINS; the surviving nominal not-yet is `*_`.
   (let-values ([(t f) (tc:select-project '() (b1-row (cons 'a (b1-f (b1-row (cons 'x (b1-f (expr-Int)))))))
                                          (list (list B1-STAR)) 'path)])
-    (check-true (regexp-match? #rx"not implemented yet" (te:format-select-fail f '()))))
+    (check-false f "a nested row layer joins keywise at 1b-iv"))
+  (let-values ([(t f) (tc:select-project '() (b1-row (cons 'a (b1-f (b1-row (cons 'x (b1-f (expr-Int)))))))
+                                         (list (list (make-select-star 'flatten-synth))) 'path)])
+    (check-true (regexp-match? #rx"not implemented yet" (te:format-select-fail f '()))
+                "…and `*_` is the nominal not-yet that remains"))
   ;; the L4 message names the STAR spelling, not a caret remedy the user never wrote
   (check-true (regexp-match? #rx"tags\\*" (msg-of (list (list 'name) (list 'tags B1-STAR)) 'block))
               "the guided L4 error interpolates the user's star spelling"))
@@ -7427,7 +7450,8 @@
                          ;; is the whole reason the loop is hand-written.
                          star-dup-key
                          ;; 1b-iv-B1's two, same obligation, same commit.
-                         star-content-collision star-map-opaque))])
+                         star-content-collision star-map-opaque
+                         star-omega-nominal))])
     (check-not-exn
      (lambda ()
        (let ([msg (te:format-select-fail (tc:select-fail kind '() 'probe-label row) '())])
@@ -7744,8 +7768,8 @@
   ;; explaining what would join, so a regex banning that text banned the correct
   ;; message. What must not happen is the raw field being returned as the ANSWER,
   ;; and `c2-refused?` above is what says so. Kept as a positive instead.
-  (check-true (regexp-match? #rx"nominal|Map-valued" out)
-              (format "and it must name WHY it refuses — the join is keywise: ~a" out)))
+  (check-true (regexp-match? #rx"Map-valued|same keys|element type" out)
+              (format "and it must name WHY it refuses — one element type, N contents: ~a" out)))
 
 (test-case "1b-iii-C2: an ORDINAL as the LAST prefix step is a GUIDED refusal — Q_U46's ruled gap"
   ;; Q_U2 Reading A: an ordinal contributes no output level, so there is no
@@ -8290,7 +8314,8 @@
              "def two := {:a {:x 1} :b {:y 2} :c {:z 3}}\n"
              "def cfgn := {:db {:conf {:x 1} :other {:y 2}}}\n"
              "def vhm := @[@[{:x 1}] @[{:y 2}]]\n"
-             "def coll := {:inner {:k 1} :other {:k 2}}\n"))
+             "def coll := {:inner {:k 1} :other {:k 2}}\n"
+             "def collw := {:inner {:k 1} :k 9}\n"))
 
 (define (u49-line src) (p4e1-last (string-append U49 src)))
 (define (u49-refused? src) (not (p4e1-type (string-append U49 src))))
@@ -8316,18 +8341,27 @@
 ;; (it asserts CURRENT behaviour, and is the proof the splice is the contents
 ;; rule and not a blanket change) and the seat pin for the `*_` arm order.
 
-;; (test-case "1b-iv [Q_U49] SEAT A1: a nominal join SPLICES at the remainder-empty landing"
-;;   ;; The sole-branch case. Under the REJECTED one-component reading this would be
-;;   ;; `⟨{:x Int}⟩` — the star deleting a layer and the wrapper putting one back.
-;;   (check-equal? (u49-line "mn{a*}") "{:x 1} : {:x Int}"
-;;                 "a Map-valued join contributes KEYED components, not a keyless 1-tuple"))
+(test-case "1b-iv [Q_U49] SEAT A1: a nominal join SPLICES at the remainder-empty landing"
+  ;; The sole-branch case. Under the REJECTED one-component reading this would be
+  ;; `⟨{:x Int}⟩` — the star deleting a layer and the wrapper putting one back.
+  (check-equal? (u49-line "mn{a*}") "{:x 1} : {:x Int}"
+                "a Map-valued join contributes KEYED components, not a keyless 1-tuple"))
 
-;; (test-case "1b-iv [Q_U49] SEAT A1: the spliced fields sit BESIDE a keyed sibling"
-;;   ;; ⭐ Q_U40's own worked example, and the case that decides the ruling: under
-;;   ;; one-component this is an L4 mixed-sorts ERROR (keyless star + keyed sibling),
-;;   ;; which is what the VECTOR contents still correctly give (`mv{a* b}`).
-;;   (check-equal? (u49-line "mn{a* b}") "{:x 1, :b {:y 2}} : {:x Int :b {:y Int}}"
-;;                 "a Map-valued join is keyed material, so it mixes with keyed siblings"))
+(test-case "1b-iv [Q_U49] SEAT A1: the spliced fields sit BESIDE a keyed sibling"
+  ;; ⭐ Q_U40's own worked example, and the case that decides the ruling: under
+  ;; one-component this is an L4 mixed-sorts ERROR (keyless star + keyed sibling),
+  ;; which is what the VECTOR contents still correctly give (`mv{a* b}`).
+  ;; ⚠ VALUE ORDER AND TYPE ORDER ARE PINNED SEPARATELY, per [Q_U38]'s own third
+  ;; fact: `make-record` CANONICALIZES by label while the champ carries hash
+  ;; order, so one expression's value and type print their fields in different
+  ;; orders. My first cut asserted a single full line and went red on ORDER while
+  ;; the semantics were right — the pin was wrong, not the join.
+  (check-true (p4e1-type=? (string-append U49 "mn{a* b}") "{:b {:y Int} :x Int}")
+              (format "the TYPE is the spliced level: ~a" (u49-line "mn{a* b}")))
+  (check-true (regexp-match? #rx":x 1" (u49-line "mn{a* b}"))
+              "the lifted field is present at the level")
+  (check-true (regexp-match? #rx":b [{]:y 2[}]" (u49-line "mn{a* b}"))
+              "…beside the keyed sibling, which is untouched"))
 
 (test-case "1b-iv [Q_U49] the VECTOR contrast is PRESERVED — the sort follows the CONTENTS"
   ;; The same shape with vector contents must STILL be an L4 error. This is the
@@ -8341,47 +8375,59 @@
   (check-equal? (p4e1-last (string-append V "mv{a*}")) "@[@[1 2]] : ⟨[PVec Int]⟩"
                 "a vector-valued join is still ONE keyless component"))
 
-;; (test-case "1b-iv [Q_U49] L★ HOLDS for Map contents — the law that decided the ruling"
-;;   ;; [Q_U45]: `x{p1* … pn*}` ≡ `x{p1 … pn}*` for MAP contents. Under
-;;   ;; one-component the left side is `⟨{:x Int} {:y Int}⟩` and the law BREAKS.
-;;   (check-equal? (u49-line "mn{a* b*}") (u49-line "mn{a b}*")
-;;                 "L★: distributing the star over each branch equals starring the block")
-;;   (check-equal? (u49-line "mn{a* b*}") "{:x 1, :y 2} : {:x Int :y Int}"
-;;                 "…and both sides are the spliced level, not a tuple"))
+(test-case "1b-iv [Q_U49] L★ HOLDS for Map contents — the law that decided the ruling"
+  ;; [Q_U45]: `x{p1* … pn*}` ≡ `x{p1 … pn}*` for MAP contents. Under
+  ;; one-component the left side is `⟨{:x Int} {:y Int}⟩` and the law BREAKS.
+  (check-equal? (u49-line "mn{a* b*}") (u49-line "mn{a b}*")
+                "L★: distributing the star over each branch equals starring the block")
+  (check-true (p4e1-type=? (string-append U49 "mn{a* b*}") "{:x Int :y Int}")
+              "…and both sides are the spliced level, not a tuple")
+  (check-true (and (regexp-match? #rx":x 1" (u49-line "mn{a* b*}"))
+                   (regexp-match? #rx":y 2" (u49-line "mn{a* b*}")))
+              "both lifted fields land"))
 
-;; (test-case "1b-iv [Q_U49] SEAT A2: a DISSOLVED head splices too"
-;;   (check-equal? (u49-line "cfgn{db^.conf*}") "{:x 1} : {:x Int}"
-;;                 "the dissolve route delegates to Seat A, so it splices for free"))
+(test-case "1b-iv [Q_U49] SEAT A2: a DISSOLVED head splices too"
+  (check-equal? (u49-line "cfgn{db^.conf*}") "{:x 1} : {:x Int}"
+                "the dissolve route delegates to Seat A, so it splices for free"))
 
-;; (test-case "1b-iv [Q_U49] SEAT B KEYED: a surviving key means NO splice — the fields NEST"
-;;   ;; ⚠ The half of Q_U47 that does NOT change. The remainder `db` names the
-;;   ;; landing, so the join lands INSIDE `:db`. If this ever splices, the ruling
-;;   ;; has been over-applied.
-;;   (check-equal? (u49-line "cfgn{db.conf*}") "{:db {:x 1}} : {:db {:x Int}}"
-;;                 "a surviving key still names the landing; the splice is keyless-only"))
+(test-case "1b-iv [Q_U49] SEAT B KEYED: a surviving key means NO splice — the fields NEST"
+  ;; ⚠ The half of Q_U47 that does NOT change. The remainder `db` names the
+  ;; landing, so the join lands INSIDE `:db`. If this ever splices, the ruling
+  ;; has been over-applied.
+  (check-equal? (u49-line "cfgn{db.conf*}") "{:db {:x 1}} : {:db {:x Int}}"
+                "a surviving key still names the landing; the splice is keyless-only"))
 
-;; (test-case "1b-iv [Q_U49] SEAT B KEYLESS: the ordinal head splices — the shape the refuted cost model would have refused"
-;;   ;; ⭐ This is the (a)-vs-(b) discriminator. The grounding audit reported this as
-;;   ;; needing a contract change in both twins; refuted by reading the arm — the
-;;   ;; ord-branch caller has `rest` in scope and `select-steps-star-tail?` is
-;;   ;; already exported, so the test is exact and local.
-;;   (check-equal? (u49-line "vhm{0.{0}*}") "{:x 1} : {:x Int}"
-;;                 "Seat B's keyless landing splices like every other keyless landing"))
+(test-case "1b-iv [Q_U49] SEAT B KEYLESS: the ordinal head splices — the shape the refuted cost model would have refused"
+  ;; ⭐ This is the (a)-vs-(b) discriminator. The grounding audit reported this as
+  ;; needing a contract change in both twins; refuted by reading the arm — the
+  ;; ord-branch caller has `rest` in scope and `select-steps-star-tail?` is
+  ;; already exported, so the test is exact and local.
+  (check-equal? (u49-line "vhm{0.{0}*}") "{:x 1} : {:x Int}"
+                "Seat B's keyless landing splices like every other keyless landing"))
 
-;; (test-case "1b-iv [Q_U38] the collision refusal, which the splice makes FREE at the level gate"
-;;   ;; Spliced fields become keyed components AT THE LEVEL, so the existing dup
-;;   ;; gate's `(filter values (map car cs))` fold sees them with no new code.
-;;   ;; ⚠ MEASURED at 1b-iv-A: this shape currently reports the NOMINAL NOT-YET, not
-;;   ;; a collision — the branch loop returns on the FIRST branch failure, so the
-;;   ;; level gate is downstream of every branch refusal. The collision rule and its
-;;   ;; first possible test therefore land in the SAME slice; there is no
-;;   ;; pre-existing red test to lean on here.
-;;   (check-true (u49-refused? "coll{inner* other*}")
-;;               "two splats lifting the same key must be refused, never last-win")
-;;   (check-true (regexp-match? #rx"duplicate output key" (u49-line "coll{inner* other*}"))
-;;               "…and it must be the duplicate gate that says so")
-;;   (check-true (u49-refused? "coll{inner* inner}")
-;;               "a lifted key colliding with a written sibling is refused too"))
+(test-case "1b-iv [Q_U38] the collision refusal, which the splice makes FREE at the level gate"
+  ;; Spliced fields become keyed components AT THE LEVEL, so the existing dup
+  ;; gate's `(filter values (map car cs))` fold sees them with no new code.
+  ;; ⚠ MEASURED at 1b-iv-A: this shape currently reports the NOMINAL NOT-YET, not
+  ;; a collision — the branch loop returns on the FIRST branch failure, so the
+  ;; level gate is downstream of every branch refusal. The collision rule and its
+  ;; first possible test therefore land in the SAME slice; there is no
+  ;; pre-existing red test to lean on here.
+  (check-true (u49-refused? "coll{inner* other*}")
+              "two splats lifting the same key must be refused, never last-win")
+  (check-true (regexp-match? #rx"duplicate output key" (u49-line "coll{inner* other*}"))
+              "…and it must be the duplicate gate that says so")
+  ;; ⚠ MY FIRST CUT USED `coll{inner* inner}` AND IT WAS THE WRONG SHAPE —
+  ;; measured, it answers `{:inner {:k 1}, :k 1}` at 0 errors, and CORRECTLY:
+  ;; `inner*` lifts `:k` while the plain `inner` branch keeps `:inner`, so the
+  ;; two output keys never meet. A lifted key collides with a WRITTEN sibling
+  ;; only when the sibling's own output key is the lifted one.
+  (check-true (regexp-match? #rx":inner|:k" (u49-line "coll{inner* inner}"))
+              "…and a NON-colliding lift beside a sibling is legal, not refused")
+  (check-true (u49-refused? "collw{inner* k}")
+              "a lifted key colliding with a written sibling's OUTPUT key is refused")
+  (check-true (regexp-match? #rx"duplicate output key" (u49-line "collw{inner* k}"))
+              "…by the level's dup gate, which the splice reaches for free"))
 
 (test-case "1b-iv-A: the twins agree on WHEN `*_` is 'positional' — the arm-order divergence, pinned at the seat"
   ;; ⭐⭐ THE FOURTH TWIN-DRIFT INSTANCE OF THIS SLICE, and the first caught before

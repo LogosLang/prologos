@@ -619,8 +619,18 @@
     [(star-leaf)
      (format "select: `~a` — `*` deletes the layer the preceding step produced and joins its CONTENTS; here the layer is `~a`, whose contents are not containers, and a leaf has no join. This is a permanent refusal, not a not-yet"
              label (pp-expr row names))]
+    ;; ⚠⚠ 1b-iv-B2 RE-SCOPED THIS KIND, and leaving the old wording would have
+    ;; made it a LIE the moment the shield came down. It used to say "the nominal
+    ;; case is the next slice" — bare `*` now flattens Map-valued contents
+    ;; keywise ([Q_U49]), so the only nominal thing still unimplemented is `*_`,
+    ;; and this kind now guards exactly that. Re-scoped rather than replaced so
+    ;; the battery's hand-written render-loop list stays correct without an edit
+    ;; (the same move C2 made with `star-deep-prefix`).
+    ;; ⚠ It must NOT fall to `star-synth-positional`, whose message asserts the
+    ;; layer is positional — false for a Map layer, and the exact twin-drift
+    ;; defect 1b-iv-A fixed.
     [(star-nominal)
-     (format "select: `~a` — `*` (flatten) is not implemented yet for Map-valued contents: the layer `~a` would join keywise (collisions refuse; `*_` synthesizes provenance keys). The nominal case is the next slice; vector contents already flatten"
+     (format "select: `~a` — `*_` (flatten with synthesized keys) is not implemented yet for Map-valued contents (layer `~a`). Its key-synthesis rule is not yet ruled: it is undecided whether the synthesized prefix comes from the deleted layer's key or from the contents' own keys. Bare `*` flattens this layer keywise today"
              label (pp-expr row names))]
     [(star-hetero)
      (format "select: `~a` — `*` (flatten) is not implemented yet for MIXED element types: the layer `~a`'s vectors do not share one element type, and the union join is not landed"
@@ -654,6 +664,17 @@
      ;; ⚠ The remedy is NOT `^k'` — a rename re-keys a BRANCH, and both colliding
      ;; keys here come from INSIDE the joined layer, where no branch names them.
      (format "select: `~a` — `*` (flatten) joins the layer's contents keywise, and two of them carry the same key, so the join would silently drop one (layer `~a`). Star a narrower layer, or select the colliding fields as separate branches"
+             label (pp-expr row names))]
+    [(star-omega-nominal)
+     ;; ⚠ NOT a bare not-yet, and not [Q_U49]'s nominal join either. Under ω the
+     ;; ELEMENT TYPE stands for every content, so a keywise join of N contents
+     ;; contributes the SAME key set N times — a collision for any N>1, and N is
+     ;; a runtime length. [Q_U38] refuses on possibility, so this refuses.
+     ;; ⚠ It is in tension with [Q_U40]'s own worked example `rowsm:cfg*` →
+     ;; `{:a 1, :b 2}`, which assumes the elements carry DISJOINT keys — true of
+     ;; that value, not expressible in its type. Recorded as DEFERRED rather than
+     ;; silently picking a side.
+     (format "select: `~a` — `*` (flatten) cannot join Map-valued contents under `:` (broadcast): every element of `~a` shares ONE element type, so a keywise join would contribute the same keys once per element and collide for any length above 1 (the length is not statically known). Flatten a single element's layer instead, or select the fields individually"
              label (pp-expr row names))]
     [(star-map-opaque)
      ;; ⚠ PERMANENT, not "not yet" — and that distinction is the whole reason it

@@ -1710,6 +1710,26 @@
 ;; type twin's `make-record` sorts by label. So the joined value's printed order
 ;; and its type's printed order can disagree. That is pre-existing and is
 ;; Q_U38's third fact; any pin must assert the two separately.
+;; ⭐⭐ D4.P4e-1b slice 1b-iv-B2 [Q_U49] — THE KEYLESS LANDING, value side, stated
+;; ONCE for both keyless callers (the typing twin's `star-keyless-landing` is the
+;; mirror; the two must not drift).
+;; ⚠⚠ THE KEY REPRESENTATIONS DIFFER ACROSS THE LAYERS AND A NAIVE SPLICE IS A
+;; SILENT WRONG ANSWER. A level ENTRY's key is a SYMBOL — `entries->value` does
+;; `(kw-of (car e))` and `kw-of` is `(expr-keyword label)` — while a champ's
+;; entry keys are already `expr-keyword` STRUCTS. Handing champ entries straight
+;; back would produce `(expr-keyword (expr-keyword 'x))`, a doubly-wrapped key
+;; that no lookup matches and nothing would have reported. Unwrap to the symbol.
+;; (The TYPE side has no such hazard: a row field and a component are literally
+;; the same shape there.)
+;; ⚠ Takes the SORT for the same reason its typing twin does: a `'path` carrier
+;; extracts exactly one component, so splicing there is a contract violation.
+;; Under `'path` the joined map IS the value — [Q_U40]'s `m{a b}*`.
+(define (star-keyless-landing-value jv sort)
+  (if (and (eq? sort 'block) (expr-champ? jv))
+      (map (lambda (kv) (cons (expr-keyword-name (car kv)) (cdr kv)))
+           (champ-entries (expr-champ-racket-champ jv)))
+      (list (cons #f jv))))
+
 (define (star-nominal-join-value contents oops)
   (expr-champ
    (for/fold ([acc champ-empty]) ([c (in-list contents)])
@@ -1755,8 +1775,30 @@
     ;; not a ruling, decides the empty join's SORT; that stays true and stays
     ;; where it was.
     (cond
+      ;; ⭐⭐ 1b-iv-B2: the shield comes down here too. Was an unconditional
+      ;; escape; the nominal join is B1's `star-nominal-join-value`, which
+      ;; escapes on a non-map content or a collision. ⚠ Typing owns every
+      ;; user-facing refusal on this path, so reaching an escape here is still an
+      ;; invariant violation, not a diagnosis.
+      ;; ⚠⚠ THE `pair?` GUARD IS LOAD-BEARING AND I SHIPPED IT WRONG FIRST.
+      ;; `(andmap … '())` is #t, so without it an EMPTY layer matched this arm and
+      ;; the empty join became `{}` instead of `@[]` — a silent sort change to a
+      ;; behaviour pinned since 1b-iii-B1 ("the empty layer is the concat
+      ;; identity"). The grounding audit predicted this exactly: "adding a nominal
+      ;; arm after the vector arm silently keeps `@[]` … arm order, not a ruling,
+      ;; decides the empty join's SORT". It is unruled, so it must not MOVE here.
+      [(and (pair? contents) (andmap (lambda (c) (expr-champ? (whnf c))) contents))
+       ;; ⚠⚠ `*_` MUST NOT FALL INTO THE NOMINAL JOIN. Caught by the 1b-iv-A seat
+       ;; pin: routing champ contents to the join before testing the cont meant a
+       ;; `*_` silently produced a BARE keywise join, dropping the key-synthesis
+       ;; semantics entirely — and typing's guard is not a defence, because this
+       ;; seat's standing doctrine is that reduction must not depend on typing
+       ;; having run. Same shape as the arm-order defect A fixed, one arm over.
+       (if (eq? (select-star-cont star) 'flatten-synth)
+           (oops "`*_` over Map-valued contents synthesizes keys, and that rule is not yet ruled (typing carries the user-facing refusal)")
+           (star-nominal-join-value contents oops))]
       [(not (andmap (lambda (c) (expr-rrb? (whnf c))) contents))
-       (oops "non-vector contents (the nominal join is the next slice; mixed or leaf contents have no join)")]
+       (oops "mixed or leaf contents have no join (typing carries the user-facing refusal)")]
       [(eq? (select-star-cont star) 'flatten-synth)
        (oops "`*_` synthesizes keys from the deleted layer's KEYS, and this join is positional")]
       [else
@@ -2102,8 +2144,14 @@
            ;; THIS caller is the remainder-EMPTY one — depth ≤ 1 — so it wraps the
            ;; bare join KEYLESS, matching the typing twin's own caller and the
            ;; behaviour that shipped at B2.
-           (list (cons #f (star-join-value (if (null? prefix) v (below-value v prefix seen))
-                                           star oops)))])))
+           ;; 1b-iv-B2 [Q_U49]: SPLICE a nominal join into the level; a vector
+           ;; join stays one keyless entry. The dissolved-head route lands here
+           ;; too, so A1 and A2 splice from the same line — the typing twin's
+           ;; Seat A caller does exactly this.
+           (star-keyless-landing-value
+            (star-join-value (if (null? prefix) v (below-value v prefix seen))
+                             star oops)
+            sort)])))
     ;; ⭐ 1b-iii-B1 — the LEVEL assembly guard, the reduction mirror of typing's
     ;; star L4 check in `select-level-components`. STAR-GATED for the same
     ;; reason (starless behaviour must not move), and an invariant guard for the
@@ -2178,7 +2226,14 @@
                   [elem (index-into v n n)])
              (if (null? (cdr b))
                  (list (cons #f elem))
-                 (list (cons #f (below-value elem (cdr b) '())))))]
+                 ;; 1b-iv-B2 [Q_U49] — SEAT B keyless, the twin of typing's
+                 ;; ord-branch arm. `(cdr b)` is the step list we pass down, so
+                 ;; `select-steps-star-tail?` answers exactly "is this a BARE star
+                 ;; join?" here as well.
+                 (let ([bv (below-value elem (cdr b) '())])
+                   (if (select-steps-star-tail? (cdr b))
+                       (star-keyless-landing-value bv sort)
+                       (list (cons #f bv))))))]
           [(number? (car b))
            ;; bare-number STEP chain (splice continuation): transparent
            (let ([elem (index-into v (car b) (car b))])

@@ -1657,7 +1657,11 @@
              (let-values ([(ty jf) (star-join-type layer star fail-k)])
                (if jf
                    (values #f jf)
-                   (values (list (cons #f (record-field ty 'present))) #f)))))])))
+                   ;; 1b-iv-B2 [Q_U49]: SPLICE if the join is nominal, one keyless
+                   ;; component if it is a vector. The dissolved-head route lands
+                   ;; here too (`select-below-components` delegates), so A1 and A2
+                   ;; splice from the same line.
+                   (values (star-keyless-landing ty sort) #f)))))])))
 
 ;; ⭐⭐ D4.P4e-1b slice 1b-iii-C1 — THE SHARED JOIN, hoisted to module level and
 ;; exported. Given the LAYER a star deletes and the star STEP, produce the
@@ -1714,7 +1718,24 @@
                                        (and (expr-Record? w)
                                             (eq? (expr-Record-key-domain w) 'keyword)))))
                                contents)
-                       (fail-k 'star-nominal l)]
+                       ;; ⭐⭐ 1b-iv-B2 [Q_U49] — THE SHIELD COMES DOWN. This arm
+                       ;; was `(fail-k 'star-nominal l)`; the nominal join is B1's
+                       ;; `star-nominal-join-type`, which itself splits out the
+                       ;; cases that still refuse: `expr-Map` contents
+                       ;; (PERMANENTLY — no static key set), an open or
+                       ;; non-`'present` content row (Q_U38 conservative), and a
+                       ;; content-vs-content key collision.
+                       ;; ⚠ `*_` IS NOT CARRIED BY Q_U49 and must not slip through
+                       ;; here: its key-synthesis rule is unruled (Q_U41's two
+                       ;; worked examples disagree about whether the prefix comes
+                       ;; from the deleted layer's key or the contents' keys), so
+                       ;; it keeps a not-yet. It CANNOT fall to the
+                       ;; `star-synth-positional` arm below — that message says
+                       ;; "this layer is positional", which is false here, and is
+                       ;; precisely the twin-drift defect 1b-iv-A fixed.
+                       (if (eq? (select-star-cont star) 'flatten-synth)
+                           (fail-k 'star-nominal l)
+                           (star-nominal-join-type contents fail-k l))]
                       [(andmap (lambda (c)
                                  (let ([w (whnf c)])
                                    (or (expr-Record? w) (expr-Map? w) (expr-PVec? w))))
@@ -1774,9 +1795,23 @@
                        ;; runtime length), which no static type carries.
                        (fail-k 'star-omega-tuple l)]
                       [(or (expr-Record? e) (expr-Map? e))
-                       (fail-k 'star-nominal l)]
+                       ;; 1b-iv-B2: the ω layer's element type stands for EVERY
+                       ;; content, so a keywise join of N of them contributes the
+                       ;; SAME key set N times — a collision for any N>1, and N is
+                       ;; dynamic. Under [Q_U38]'s refuse-on-possibility that is a
+                       ;; refusal, so the ω nominal case does NOT land with Q_U49.
+                       ;; ⚠ It no longer shares `star-nominal` (now the `*_`
+                       ;; not-yet), and the generic `star-not-yet` was tried and
+                       ;; rejected: a pre-existing pin asks this refusal to name
+                       ;; WHY, and "not implemented yet for this layer" does not.
+                       ;; Its own kind, with the N-copies argument written out.
+                       (fail-k 'star-omega-nominal l)]
                       [else (fail-k 'star-leaf l)]))]
-                 [(expr-Map? l) (fail-k 'star-nominal l)]
+                 ;; 1b-iv-B2: an opaque MAP *layer*, same argument as an opaque
+                 ;; map CONTENT — no static key set, so its join can never be
+                 ;; shown collision-free. Permanent, and no longer sharing the
+                 ;; `*_`-not-yet kind.
+                 [(expr-Map? l) (fail-k 'star-map-opaque l)]
                  [(expr-fvar? l) (fail-k 'star-open-row l)]
                  [else (fail-k 'star-leaf l)]))))
 
@@ -1811,6 +1846,37 @@
 ;; `star-open-row` guards apply to the LAYER only, while the rows whose keys
 ;; actually collide are the CONTENTS — the conservative half of Q_U38 that the
 ;; audit found unbuilt.
+;; ⭐⭐ D4.P4e-1b slice 1b-iv-B2 [Q_U49] — THE KEYLESS LANDING, stated ONCE.
+;; A keyless landing SPLICES a nominal join's fields into the enclosing level and
+;; keeps a vector join as ONE keyless component. Both keyless callers go through
+;; here so the rule cannot drift between them — this slice has paid three times
+;; for the same rule living at two seats.
+;;
+;; ⭐ THE SPLICE IS A NO-OP CONVERSION: a level COMPONENT is `(key-or-#f .
+;; record-field)` and a row FIELD is `(key . record-field)` — the same shape. So
+;; splicing is literally handing back the fields, and the level's existing dup
+;; gate (`(filter values (map car cs))`) then sees the lifted keys for free,
+;; which is what makes [Q_U38]'s splice-vs-sibling check cost no code.
+;;
+;; ⚠ The KEYED landing does NOT come through here: when the remainder names a
+;; key the join nests INSIDE it (`cfgn{db.conf*}` → `{:db {:x 1}}`, Q_U47
+;; unchanged). The splice is a property of the KEYLESS landing only.
+;; ⚠⚠ THE SORT IS LOAD-BEARING, AND SHIPPING WITHOUT IT WAS A REGRESSION.
+;; A `'path` carrier EXTRACTS its single component (`select-reduce`: "a path
+;; selector must yield exactly ONE component"), so splicing N components into one
+;; breaks the contract — measured: `cfg{database}*` and `mn{a b}*` died with
+;; "the subject is not a record". The closer-adjacent star (`x{p …}*`) is exactly
+;; that carrier.
+;; ⭐ And the restriction is not a patch, it is the rule: SPLICING NEEDS AN
+;; ENCLOSING LEVEL TO SPLICE INTO, and a `'path` landing has none — its join IS
+;; the value. That is precisely [Q_U40]'s own `m{a b}*` → `{:x 1, :y 2}`, which
+;; the sort-blind version could not produce.
+(define (star-keyless-landing ty sort)
+  (if (and (eq? sort 'block)
+           (expr-Record? ty) (eq? (expr-Record-key-domain ty) 'keyword))
+      (expr-Record-fields ty)
+      (list (cons #f (record-field ty 'present)))))
+
 (define (star-nominal-join-type contents fail-k l)
   (let loop ([cs contents] [acc '()] [seen (hasheq)])
     (if (null? cs)
@@ -1927,9 +1993,20 @@
              [else
               (let-values ([(ft bf) (select-below-field ctx (whnf elem) rest
                                                         (append path (list n)) '() sort)])
-                (if bf
-                    (values #f bf)
-                    (values (list (cons #f (record-field ft 'present))) #f)))])))]
+                (cond
+                  [bf (values #f bf)]
+                  ;; ⭐⭐ 1b-iv-B2 [Q_U49] — SEAT B's KEYLESS LANDING, the shape the
+                  ;; grounding audit reported as needing a contract change in both
+                  ;; twins. It does not: `rest` is the very step list we passed
+                  ;; down, so `select-steps-star-tail?` answers EXACTLY the
+                  ;; question "is `ft` a BARE star join?" — true only when the tail
+                  ;; arm fired at THIS level, false for `(b c ★)` where the walk
+                  ;; re-nests and `ft` is a row, not a join. Without that test we
+                  ;; would splice any Map-typed field, which is why the
+                  ;; single-value return looked like a blocker.
+                  [(select-steps-star-tail? rest)
+                   (values (star-keyless-landing ft sort) #f)]
+                  [else (values (list (cons #f (record-field ft 'present))) #f)]))])))]
       [(number? (car b))
        ;; a bare-number STEP chain (dissolve-splice continuation): descend
        ;; transparently; an ordinal-terminal chain is a keyless component.
