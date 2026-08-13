@@ -71,6 +71,7 @@
          ;; whole-file abort.
          star-join-type
          star-nominal-join-type
+         star-synth-join-type
          (struct-out select-uniform) (struct-out select-view)
          (struct-out select-union)
          ;; QTT P2 (2026-07-30): the reduce-arm binder derivation, shared with
@@ -1936,6 +1937,55 @@
                  [else (inner (cdr fs)
                               (cons (car fs) acc)
                               (hash-set seen (car (car fs)) #t))]))])))))
+
+;; ⭐⭐ D4.P4e-1b slice 1b-v-B1b — THE `*_` JOIN, TYPE side. The keyed sibling of
+;; `star-nominal-join-type`, landing in the SAME commit as its value twin, for
+;; the reason this seat has already paid a whole-file abort for.
+;;
+;; [Q_U51] rules each lifted field's key is `<the key its content sat under in
+;; the deleted layer>-<the field's own key>`, so unlike the bare-`*` join this
+;; one needs the layer's KEYS — which is why `*` never needed a signature change
+;; here and `*_` does. `keyed-contents` is a list of `(content-key . content)`.
+;;
+;; ⚠ LANDED INERT: NO CALL SITE CALLS THIS YET. The `'flatten-synth` arms still
+;; refuse, so the surface is unchanged; B2a threads the keys at the call sites
+;; and removes that shield. Exported so it can be pinned by DIRECT CALL, which
+;; is the only verification an inert helper admits (1b-iii-C1's standard, and the
+;; reason that slice was re-scoped when one twin could not meet it).
+;;
+;; ⚠ THE COLLISION CHECK SURVIVES SYNTHESIS AND IS NOT DECORATION. [Q_U38]:
+;; `*_` removes collisions in the ORDINARY case, not universally — two layers can
+;; synthesize the SAME key (`{:a-b {:c 1} :a {:b-c 1}}` gives `:a-b-c` twice).
+;; It fires rarely here instead of nearly always; it must still fire.
+(define (star-synth-join-type keyed-contents fail-k l)
+  (let loop ([kcs keyed-contents] [acc '()] [seen (hasheq)])
+    (if (null? kcs)
+        ;; fields accumulated reversed; `make-record` canonicalizes by label, so
+        ;; the order here is not observable in the TYPE. ⚠ The VALUE twin's champ
+        ;; does NOT canonicalize — pin value order and type order SEPARATELY
+        ;; (Q_U38's third fact).
+        (values (make-record 'keyword (reverse acc) 'closed) #f)
+        (let* ([ck (car (car kcs))]
+               [w  (whnf (cdr (car kcs)))])
+          (cond
+            [(expr-Map? w) (fail-k 'star-map-opaque w)]
+            [(not (closed-keyword-row? w)) (fail-k 'star-open-row l)]
+            [(not (andmap (lambda (f) (eq? (record-field-presence (cdr f)) 'present))
+                          (expr-Record-fields w)))
+             (fail-k 'star-open-row l)]
+            [else
+             (let inner ([fs (expr-Record-fields w)] [acc acc] [seen seen])
+               (cond
+                 [(null? fs) (loop (cdr kcs) acc seen)]
+                 [else
+                  (let ([sk (select-synth-prefixed-key ck (car (car fs)))])
+                    (if (hash-ref seen sk #f)
+                        ;; two SYNTHESIZED keys collided — rare, and exactly the
+                        ;; case Q_U38 says the machinery still has to cover.
+                        (fail-k 'star-content-collision l)
+                        (inner (cdr fs)
+                               (cons (cons sk (cdr (car fs))) acc)
+                               (hash-set seen sk #t))))]))])))))
 
 (define (select-branch-entries ctx tm b path seen sort)
   (define (walk-to-leaf k)  ;; shared by collapse + keyless: k gets leaf ft

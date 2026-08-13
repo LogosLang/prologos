@@ -186,6 +186,7 @@
  select-step-cont select-cont-collapse? select-cont-rename
  select-branch-collapse select-branch-keyless?
  select-step-output-name select-synth-name select-branch-top-keys
+ select-synth-separator select-synth-prefixed-key
  record-map-field-types record-map-field-types/labeled make-record record-extend record-lookup-field record-remove
  closed-nat-row? closed-keyword-row? record-mark-all-unknown
  ;; Map (persistent hash map)
@@ -1477,11 +1478,29 @@
 
 ;; Reading N (Q_T4b′) + `^-_` flat provenance (Q_T7): join the surviving
 ;; output names with `-`. Scope = the branch of the block the leaf sits in.
+
+;; ⭐ D4.P4e-1b slice 1b-v — THE SYNTH SEPARATOR, DEFINED ONCE.
+;; `^_` / `^-_` join the surviving path with it; [Q_U51] rules `*_`'s lifted key
+;; is `<the key its content sat under in the deleted layer>-<the field's own
+;; key>`, and [Q_U24] rules `*_` inherits `^-_`'s rule rather than `^_`'s. Two
+;; operators, one convention — so it lives in one place. A second copy of a
+;; separator is the F1b.7g drift shape in miniature.
+(define select-synth-separator "-")
+
 (define (select-synth-name steps)
   (string->symbol
    (string-join
     (map symbol->string (filter values (map select-step-output-name steps)))
-    "-")))
+    select-synth-separator)))
+
+;; [Q_U51]'s provenance key for `*_`: the content's own key, then the field's.
+;; ⚠ Takes SYMBOLS and returns a SYMBOL — the callers hold champ/record keys,
+;; which are already symbols at both layers.
+(define (select-synth-prefixed-key content-key field-key)
+  (string->symbol
+   (string-append (symbol->string content-key)
+                  select-synth-separator
+                  (symbol->string field-key))))
 
 ;; The output COMPONENTS a branch contributes AT ITS BLOCK'S LEVEL — a
 ;; dissolved head splices its continuation's components (Q_T3:

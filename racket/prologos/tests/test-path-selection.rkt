@@ -29,6 +29,7 @@
          "../namespace.rkt"
          ;; D4.P4e-1b slice 1b-v: the star sentinel FAMILY table, pinned directly.
          (prefix-in rf: "../reader-forms.rkt")
+         (prefix-in red: "../reduction.rkt")   ;; 1b-v-B1b: the `*_` value join, by direct call
          (prefix-in tc: "../typing-core.rkt")   ;; D4.P4a: select-project, for the totality pins
          ;; D4.P4e-1b 1b-iii-A: the FAIL-KIND totality pin. Relative path, per
          ;; testing.md — a collection-path require loads a SECOND compiler instance.
@@ -8086,6 +8087,64 @@
 ;;   (check-true (p4e1-has? "ns l5\ndef m := @[{:a {:x 1} :b {:y 2}} {:a {:x 3} :b {:y 4}}]\nm:{a* b}"
 ;;                          #rx":x 1, :b \\{:y 2\\}")
 ;;               "m:{a* b} splices a and KEEPS b's key"))
+
+(test-case "P4e-1b [1b-v-B1b]: the `*_` join synthesizes <content-key>-<field-key> — the TYPE twin, by direct call"
+  ;; ⭐ INERT: no call site reaches these yet (the `'flatten-synth` arms still
+  ;; refuse), so a direct call is the ONLY verification available — the standard
+  ;; 1b-iii-C1 was re-scoped to meet when one twin could not.
+  ;; [Q_U51]: each lifted key is `<the key its content sat under>-<its own key>`.
+  (define eu (b1-row (cons 'host (b1-f (expr-Keyword))) (cons 'port (b1-f (expr-Int)))))
+  (define us (b1-row (cons 'host (b1-f (expr-Keyword))) (cons 'port (b1-f (expr-Int)))))
+  (define kc (list (cons 'eu eu) (cons 'us us)))
+  (define (boom kind r) (values 'FAILED kind))
+
+  ;; --- TYPE side ---
+  (let-values ([(ty f) (tc:star-synth-join-type kc boom (b1-row))])
+    (check-false f "distinct prefixes must not collide")
+    (check-true (expr-Record? ty))
+    ;; ⚠ TYPE order is `make-record`'s CANONICAL order, and is pinned SEPARATELY
+    ;; from the value's — Q_U38's third fact, and the two genuinely differ.
+    (check-equal? (map car (expr-Record-fields ty))
+                  '(eu-host eu-port us-host us-port)
+                  "the four lifted keys, canonically ordered"))
+
+  ;; --- the collision that survives synthesis [Q_U38] ---
+  ;; `{:a-b {:c …} :a {:b-c …}}` — both contents synthesize `:a-b-c`. `*_` removes
+  ;; collisions in the ORDINARY case, not universally, and the machinery must
+  ;; still fire here.
+  (let-values ([(ty f) (tc:star-synth-join-type
+                        (list (cons 'a-b (b1-row (cons 'c (b1-f (expr-Int)))))
+                              (cons 'a   (b1-row (cons 'b-c (b1-f (expr-Int))))))
+                        boom (b1-row))])
+    (check-equal? ty 'FAILED "a synthesized-key collision must still refuse")
+    (check-equal? f 'star-content-collision "…as a collision, not some other kind"))
+
+  ;; --- the separator is SHARED with `^-_`, not a local choice [Q_U24] ---
+  (check-equal? (select-synth-prefixed-key 'eu 'host) 'eu-host)
+  (check-equal? select-synth-separator "-"
+                "one separator, so `*_` and `^-_` cannot drift apart"))
+
+;; ⚠⚠ THE VALUE TWIN GETS ITS OWN `test-case`, AND THAT IS NOT COSMETIC.
+;; rackunit ABORTS a test-case at the first failure, so with both twins in one
+;; case a mutation to TYPING masked the value pin entirely — it never ran, and
+;; the run reported ONE failure where two twins were mutated. A red pin can hide
+;; a sibling exactly as a green one can. "Mutation-test PER TWIN" requires a
+;; case per twin.
+(test-case "P4e-1b [1b-v-B1b]: …and the VALUE twin lifts the same keys — separate case, so neither masks the other"
+  (define (mk-champ . kvs)
+    (expr-champ (for/fold ([a champ-empty]) ([kv (in-list kvs)])
+                  (champ-insert a (equal-hash-code (car kv)) (car kv) (cdr kv)))))
+  (define vkc (list (cons 'eu (mk-champ (cons 'host (expr-int 1)) (cons 'port (expr-int 2))))
+                    (cons 'us (mk-champ (cons 'host (expr-int 3)) (cons 'port (expr-int 4))))))
+  (define v (red:star-synth-join-value vkc (lambda (why) (error 'pin "unexpected oops: ~a" why))))
+  (check-true (expr-champ? v))
+  ;; ⚠ VALUE order is the champ's, NOT canonical — so this pin asserts the SET,
+  ;; deliberately, rather than importing the type side's ordering assumption.
+  (check-equal? (sort (map (lambda (kv) (symbol->string (car kv)))
+                           (champ-entries (expr-champ-racket-champ v)))
+                      string<?)
+                '("eu-host" "eu-port" "us-host" "us-port")
+                "the value twin lifts the same four keys"))
 
 (test-case "P4e-1b [1b-v-B1]: the postfix-star sentinel FAMILY is ONE table, and the closer band reads it"
   ;; ⭐ B1 lands the cont channel INERT: the reader still mints only

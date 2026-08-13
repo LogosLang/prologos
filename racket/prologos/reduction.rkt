@@ -51,6 +51,7 @@
          ;; directly pinned. Same standard, both sides.
          star-join-value
          star-nominal-join-value
+         star-synth-join-value
          current-nf-cache current-whnf-cache
          current-reduction-fuel current-nat-value-cache
          ;; CIU T6 F1b.5-s2: the degradation guard (exemption-list membership
@@ -1742,6 +1743,38 @@
                                  k))
                    (champ-insert a (equal-hash-code k) k (cdr kv)))))
            (oops "a non-map content reached the nominal join (typing carries the user-facing refusal)"))))))
+
+;; ⭐⭐ D4.P4e-1b slice 1b-v-B1b — THE `*_` JOIN, VALUE side. The twin of
+;; typing-core's `star-synth-join-type`, landing in the SAME commit — this file's
+;; standing rule for this seat is that landing either alone is "not a half-measure
+;; but a REGRESSION", and a twin-order divergence here already produced one
+;; whole-file abort.
+;;
+;; `keyed-contents` is a list of `(content-key . content)`. [Q_U51]: each lifted
+;; key is `<content-key>-<field-key>`, built by `select-synth-prefixed-key` —
+;; the SHARED helper in syntax.rkt, so this and `^-_` cannot drift on the
+;; separator ([Q_U24] rules `*_` inherits `^-_`'s convention).
+;;
+;; ⚠ LANDED INERT alongside its typing twin: no call site calls it yet. Pinned by
+;; DIRECT CALL, which is the only verification an inert helper admits.
+;;
+;; ⚠ The collision escape stays, and is NOT dead: [Q_U38] notes `*_` removes
+;; collisions in the ordinary case only — two layers can synthesize the same key.
+;; Typing carries the user-facing refusal; reaching here is an invariant
+;; violation, hence `oops` rather than a value.
+(define (star-synth-join-value keyed-contents oops)
+  (expr-champ
+   (for/fold ([acc champ-empty]) ([kc (in-list keyed-contents)])
+     (let ([ck (car kc)]
+           [w  (whnf (cdr kc))])
+       (if (expr-champ? w)
+           (for/fold ([a acc]) ([kv (in-list (champ-entries (expr-champ-racket-champ w)))])
+             (let ([sk (select-synth-prefixed-key ck (car kv))])
+               (if (champ-has-key? a (equal-hash-code sk) sk)
+                   (oops (format "two joined contents both synthesize the key `~a` (typing carries the user-facing refusal; a collision reaching the value layer is a compiler-invariant violation)"
+                                 sk))
+                   (champ-insert a (equal-hash-code sk) sk (cdr kv)))))
+           (oops "a non-map content reached the `*_` join (typing carries the user-facing refusal)"))))))
 
 (define (star-join-value layer star oops)
   (let* ([l (whnf layer)]
