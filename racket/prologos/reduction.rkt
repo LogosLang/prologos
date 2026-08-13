@@ -1698,18 +1698,38 @@
              (let ([r (expr-rrb-racket-rrb l)])
                (for/list ([i (in-range (rrb-size r))]) (rrb-get r i)))]
             [else (oops "the deleted layer is a leaf — it has no contents to join")])])
+    ;; ⚠⚠ 1b-iv-A — THE ARM ORDER HERE DIVERGED FROM THE TYPING TWIN, and the
+    ;; divergence was invisible because the shield 1b-iv removes was masking it.
+    ;; `'flatten-synth` used to be the FIRST cond arm, tested before `contents`
+    ;; was classified at all — so ANY `*_`, over any layer, got
+    ;;   "`*_` synthesizes keys from the deleted layer's KEYS, and this join is
+    ;;    positional"
+    ;; which is FALSE for a champ (keyed) layer — precisely the layer `*_` exists
+    ;; for. Typing's twin has always tested it AFTER the non-PVec bucket
+    ;; (`join-contents`), so the message fires only when the contents really ARE
+    ;; positional. Latent today ONLY because typing refuses nominal contents
+    ;; first and reduction never runs; 1b-iv-B2 removes exactly that shield.
+    ;; ⭐ FOURTH instance of the twin-drift class in this slice, and the FIRST
+    ;; caught before implementing rather than by a verify round.
+    ;; Re-ordered to mirror typing exactly: non-vector bucket → `'flatten-synth`
+    ;; → the vector join.
+    ;; ⚠ The EMPTY layer is deliberately unchanged: `(andmap … '())` is #t, so an
+    ;; empty layer still falls through to the concat and yields `@[]` (typing
+    ;; refuses it — a recorded B1 asymmetry in the safe direction). Arm order,
+    ;; not a ruling, decides the empty join's SORT; that stays true and stays
+    ;; where it was.
     (cond
+      [(not (andmap (lambda (c) (expr-rrb? (whnf c))) contents))
+       (oops "non-vector contents (the nominal join is the next slice; mixed or leaf contents have no join)")]
       [(eq? (select-star-cont star) 'flatten-synth)
        (oops "`*_` synthesizes keys from the deleted layer's KEYS, and this join is positional")]
-      [(andmap (lambda (c) (expr-rrb? (whnf c))) contents)
+      [else
        ;; BARE (C1) — was `(list (cons #f …))` here; the wrapper moved to the
        ;; callers so the three landings can differ.
        (expr-rrb
         (for/fold ([acc (rrb-from-list '())])
                   ([c (in-list contents)])
-          (rrb-concat acc (expr-rrb-racket-rrb (whnf c)))))]
-      [else
-       (oops "non-vector contents (the nominal join is the next slice; mixed or leaf contents have no join)")])))
+          (rrb-concat acc (expr-rrb-racket-rrb (whnf c)))))])))
 
 (define (select-reduce subj-expr branches sort tier)
   ;; D4.P4b-ii-2b (the verify, M3): NO DEFAULTS. `#f` is not a neutral tier —

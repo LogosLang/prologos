@@ -8262,3 +8262,162 @@
   (check-false (regexp-match? #rx"unrendered-step-kind"
                               (pp-select-branch (list 'database star-f)))
                "the star must not fall through to the unhandled-kind marker"))
+
+;; ============================================================
+;; CIU T6 D4.P4e-1b slice 1b-iv-A — THE INSTRUMENT for [Q_U49]
+;;
+;; ⚠⚠ WRITTEN RED, DELIBERATELY, AND RUN BEFORE IMPLEMENTING. Every pin below
+;; asserts 1b-iv's TARGET and fails at 1b-iv-A with the nominal not-yet. Running
+;; them first is what caught C2's instrument being wrong about its own
+;; observable; the same discipline applies here.
+;;
+;; ⚠ `'block`-sorted or E2E ONLY. A `'path` pin extracts
+;; `(record-field-type (cdr (car comps)))` and DISCARDS the key — so it cannot
+;; tell KEYED from KEYLESS, which is exactly the flip [Q_U49] rules on. A `'path`
+;; pin here would be vacuous for the whole slice.
+;;
+;; ⚠ Assertions compare the FULL rendered line (value AND type). `{:x Int}` is a
+;; substring of `{:x Int :y Int}`, so a regex would pass on the wrong answer.
+;;
+;; ⚠ Subjects avoid the `s`+digit shape (DEFERRED 122).
+;; ============================================================
+
+(define U49 (string-append
+             "ns u49\n"
+             "def mn := {:a {:x 1} :b {:y 2}}\n"
+             "def two := {:a {:x 1} :b {:y 2} :c {:z 3}}\n"
+             "def cfgn := {:db {:conf {:x 1} :other {:y 2}}}\n"
+             "def vhm := @[@[{:x 1}] @[{:y 2}]]\n"
+             "def coll := {:inner {:k 1} :other {:k 2}}\n"))
+
+(define (u49-line src) (p4e1-last (string-append U49 src)))
+(define (u49-refused? src) (not (p4e1-type (string-append U49 src))))
+
+;; ⚠⚠ THE SEVEN PINS BELOW ARE PARKED COMMENTED — WRITTEN, AND RUN RED FIRST.
+;; This is the acceptance-file idiom this track used for P4e-1a's and C2's
+;; failing tests: the instrument lands with the slice that writes it, the suite
+;; stays green, and 1b-iv-B2 un-parks them as the splice goes live.
+;; MEASURED RED at 1b-iv-A (each reports the nominal not-yet, which is the
+;; shield B2 removes):
+;;   mn{a*}            expected {:x 1} : {:x Int}
+;;   mn{a* b}          expected {:x 1, :b {:y 2}} : {:x Int :b {:y Int}}
+;;   mn{a* b*} ≡ mn{a b}*   (L★ — the two sides currently differ, so the pin is
+;;                           NOT vacuous today; check that again when it goes green)
+;;   cfgn{db^.conf*}   expected {:x 1} : {:x Int}
+;;   cfgn{db.conf*}    expected {:db {:x 1}} : {:db {:x Int}}   ← the NO-splice half
+;;   vhm{0.{0}*}       expected {:x 1} : {:x Int}               ← Seat B keyless
+;;   coll{inner* other*}  expected a duplicate-output-key refusal
+;; ⚠ The collision pin's FIRST check (`u49-refused?`) passes VACUOUSLY today —
+;; the shape is refused by the not-yet, not by the dup gate — which is why the
+;; positive half asserting "duplicate output key" is what actually holds it up.
+;; ⚠ Two pins in this block are LIVE and must stay live: the VECTOR-contrast pin
+;; (it asserts CURRENT behaviour, and is the proof the splice is the contents
+;; rule and not a blanket change) and the seat pin for the `*_` arm order.
+
+;; (test-case "1b-iv [Q_U49] SEAT A1: a nominal join SPLICES at the remainder-empty landing"
+;;   ;; The sole-branch case. Under the REJECTED one-component reading this would be
+;;   ;; `⟨{:x Int}⟩` — the star deleting a layer and the wrapper putting one back.
+;;   (check-equal? (u49-line "mn{a*}") "{:x 1} : {:x Int}"
+;;                 "a Map-valued join contributes KEYED components, not a keyless 1-tuple"))
+
+;; (test-case "1b-iv [Q_U49] SEAT A1: the spliced fields sit BESIDE a keyed sibling"
+;;   ;; ⭐ Q_U40's own worked example, and the case that decides the ruling: under
+;;   ;; one-component this is an L4 mixed-sorts ERROR (keyless star + keyed sibling),
+;;   ;; which is what the VECTOR contents still correctly give (`mv{a* b}`).
+;;   (check-equal? (u49-line "mn{a* b}") "{:x 1, :b {:y 2}} : {:x Int :b {:y Int}}"
+;;                 "a Map-valued join is keyed material, so it mixes with keyed siblings"))
+
+(test-case "1b-iv [Q_U49] the VECTOR contrast is PRESERVED — the sort follows the CONTENTS"
+  ;; The same shape with vector contents must STILL be an L4 error. This is the
+  ;; pin that proves the splice is the contents rule and not a blanket change.
+  (define V (string-append "ns u49v\ndef mv := {:a @[1 2] :b @[3 4]}\n"))
+  (check-false (p4e1-type (string-append V "mv{a* b}"))
+               "vector contents still land KEYLESS and still refuse a keyed sibling")
+  (check-true (regexp-match? #rx"mixed keyed/keyless sorts"
+                             (p4e1-last (string-append V "mv{a* b}")))
+              "…and it is still the L4 gate that says so")
+  (check-equal? (p4e1-last (string-append V "mv{a*}")) "@[@[1 2]] : ⟨[PVec Int]⟩"
+                "a vector-valued join is still ONE keyless component"))
+
+;; (test-case "1b-iv [Q_U49] L★ HOLDS for Map contents — the law that decided the ruling"
+;;   ;; [Q_U45]: `x{p1* … pn*}` ≡ `x{p1 … pn}*` for MAP contents. Under
+;;   ;; one-component the left side is `⟨{:x Int} {:y Int}⟩` and the law BREAKS.
+;;   (check-equal? (u49-line "mn{a* b*}") (u49-line "mn{a b}*")
+;;                 "L★: distributing the star over each branch equals starring the block")
+;;   (check-equal? (u49-line "mn{a* b*}") "{:x 1, :y 2} : {:x Int :y Int}"
+;;                 "…and both sides are the spliced level, not a tuple"))
+
+;; (test-case "1b-iv [Q_U49] SEAT A2: a DISSOLVED head splices too"
+;;   (check-equal? (u49-line "cfgn{db^.conf*}") "{:x 1} : {:x Int}"
+;;                 "the dissolve route delegates to Seat A, so it splices for free"))
+
+;; (test-case "1b-iv [Q_U49] SEAT B KEYED: a surviving key means NO splice — the fields NEST"
+;;   ;; ⚠ The half of Q_U47 that does NOT change. The remainder `db` names the
+;;   ;; landing, so the join lands INSIDE `:db`. If this ever splices, the ruling
+;;   ;; has been over-applied.
+;;   (check-equal? (u49-line "cfgn{db.conf*}") "{:db {:x 1}} : {:db {:x Int}}"
+;;                 "a surviving key still names the landing; the splice is keyless-only"))
+
+;; (test-case "1b-iv [Q_U49] SEAT B KEYLESS: the ordinal head splices — the shape the refuted cost model would have refused"
+;;   ;; ⭐ This is the (a)-vs-(b) discriminator. The grounding audit reported this as
+;;   ;; needing a contract change in both twins; refuted by reading the arm — the
+;;   ;; ord-branch caller has `rest` in scope and `select-steps-star-tail?` is
+;;   ;; already exported, so the test is exact and local.
+;;   (check-equal? (u49-line "vhm{0.{0}*}") "{:x 1} : {:x Int}"
+;;                 "Seat B's keyless landing splices like every other keyless landing"))
+
+;; (test-case "1b-iv [Q_U38] the collision refusal, which the splice makes FREE at the level gate"
+;;   ;; Spliced fields become keyed components AT THE LEVEL, so the existing dup
+;;   ;; gate's `(filter values (map car cs))` fold sees them with no new code.
+;;   ;; ⚠ MEASURED at 1b-iv-A: this shape currently reports the NOMINAL NOT-YET, not
+;;   ;; a collision — the branch loop returns on the FIRST branch failure, so the
+;;   ;; level gate is downstream of every branch refusal. The collision rule and its
+;;   ;; first possible test therefore land in the SAME slice; there is no
+;;   ;; pre-existing red test to lean on here.
+;;   (check-true (u49-refused? "coll{inner* other*}")
+;;               "two splats lifting the same key must be refused, never last-win")
+;;   (check-true (regexp-match? #rx"duplicate output key" (u49-line "coll{inner* other*}"))
+;;               "…and it must be the duplicate gate that says so")
+;;   (check-true (u49-refused? "coll{inner* inner}")
+;;               "a lifted key colliding with a written sibling is refused too"))
+
+(test-case "1b-iv-A: the twins agree on WHEN `*_` is 'positional' — the arm-order divergence, pinned at the seat"
+  ;; ⭐⭐ THE FOURTH TWIN-DRIFT INSTANCE OF THIS SLICE, and the first caught before
+  ;; implementing rather than by a verify round. `star-join-value`'s
+  ;; `'flatten-synth` arm used to be the FIRST cond arm — tested before `contents`
+  ;; was classified at all — so ANY `*_`, over ANY layer, was told
+  ;;   "`*_` … and this join is positional"
+  ;; which is FALSE for a champ (keyed) layer, i.e. exactly the layer `*_` exists
+  ;; for. Typing's twin has always tested it AFTER the non-PVec bucket, so it only
+  ;; says "positional" when the contents really are.
+  ;;
+  ;; ⚠ THIS IS UNREACHABLE FROM THE SURFACE TODAY — typing refuses nominal
+  ;; contents first, so reduction never runs on this shape. Rather than record it
+  ;; LATENT and unexercised (the F3(a) shape), it is pinned AT THE SEAT by direct
+  ;; call, which is available because C1 exported both helpers. When 1b-iv-B2
+  ;; removes typing's shield this pin is already standing.
+  (define kx (expr-keyword 'x))
+  (define inner (champ-insert champ-empty (equal-hash-code kx) kx (expr-int 1)))
+  ;; a KEYED (champ) layer whose single content is itself a champ — the nominal
+  ;; shape, and the one the old arm order mis-described as positional.
+  (define ka (expr-keyword 'a))
+  (define layer (expr-champ (champ-insert champ-empty (equal-hash-code ka) ka
+                                          (expr-champ inner))))
+  (define synth-star (make-select-star 'flatten-synth))
+  (define why (box #f))
+  (define r (let/ec esc
+              (star-join-value layer synth-star
+                               (lambda (w) (set-box! why w) (esc 'escaped)))))
+  (check-eq? r 'escaped "a nominal layer still escapes — B1 has not landed the join yet")
+  (check-false (regexp-match? #rx"positional" (unbox why))
+               (format "…but it must NOT be told the join is positional — the layer is KEYED. Got: ~a"
+                       (unbox why)))
+  ;; …and the genuinely positional case must STILL say so, or the fix overshot.
+  (define vlayer (expr-champ (champ-insert champ-empty (equal-hash-code ka) ka
+                                           (expr-rrb (rrb-from-list (list (expr-int 7)))))))
+  (define why2 (box #f))
+  (let/ec esc2
+    (star-join-value vlayer synth-star (lambda (w) (set-box! why2 w) (esc2 'e))))
+  (check-true (regexp-match? #rx"positional" (unbox why2))
+              (format "a vector-content layer under `*_` IS positional and must say so. Got: ~a"
+                      (unbox why2))))
