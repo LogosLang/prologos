@@ -7429,10 +7429,15 @@
   (let-values ([(t f) (tc:select-project '() (b1-row (cons 'a (b1-f (b1-row (cons 'x (b1-f (expr-Int)))))))
                                          (list (list B1-STAR)) 'path)])
     (check-false f "a nested row layer joins keywise at 1b-iv"))
+  ;; ⚠⚠ 1b-v-B2a FLIPPED THIS PIN, and it flipped for the RULED reason — [Q_U51]
+  ;; settled the prefix source, so the "nominal not-yet that remains" no longer
+  ;; remains. Re-read rather than repaired: the assertion now pins the JOIN and
+  ;; its synthesized key, which is what the not-yet was standing in for.
   (let-values ([(t f) (tc:select-project '() (b1-row (cons 'a (b1-f (b1-row (cons 'x (b1-f (expr-Int)))))))
                                          (list (list (make-select-star 'flatten-synth))) 'path)])
-    (check-true (regexp-match? #rx"not implemented yet" (te:format-select-fail f '()))
-                "…and `*_` is the nominal not-yet that remains"))
+    (check-false f "`*_` over a keyed nominal layer JOINS at 1b-v-B2a")
+    (check-equal? (map car (expr-Record-fields t)) '(a-x)
+                  "…synthesizing <content-key>-<field-key> per Q_U51"))
   ;; the L4 message names the STAR spelling, not a caret remedy the user never wrote
   (check-true (regexp-match? #rx"tags\\*" (msg-of (list (list 'name) (list 'tags B1-STAR)) 'block))
               "the guided L4 error interpolates the user's star spelling"))
@@ -8088,6 +8093,60 @@
 ;;                          #rx":x 1, :b \\{:y 2\\}")
 ;;               "m:{a* b} splices a and KEEPS b's key"))
 
+(test-case "P4e-1b [1b-v-B2a]: `*_` is LIVE in the three bands that spell it — [Q_U51]'s prefix, E2E"
+  ;; ⭐ The shield is down. [Q_U51]: each lifted key is `<the key its content sat
+  ;; under in the deleted layer>-<the field's own key>`.
+  ;; ⚠ VALUE order and TYPE order are asserted TOGETHER only because the FULL
+  ;; rendered line is asserted — and they genuinely DIFFER below (`make-record`
+  ;; canonicalizes; the champ carries hash order). Q_U38's third fact, live: a
+  ;; pin that derived one order from the other would be wrong.
+  (define V (string-append "ns b2a\n"
+                           "def mn := {:a {:x 1} :b {:y 2}}\n"
+                           "def cfg := {:database {:url \"u\" :pool-size 10}}\n"
+                           "def regions := {:eu {:host \"e\" :port 80} :us {:host \"u\" :port 443}}\n"))
+  (define (line src) (p4e1-last (string-append V src)))
+
+  ;; BAND 1 — fused, branch-initial. The layer is the re-nest of ONE step.
+  (check-equal? (line "mn{a*_}") "{:a-x 1} : {:a-x Int}"
+                "the fused band synthesizes <content-key>-<field-key>")
+  ;; …and this is [Q_U24]'s OWN motivating example, finally reachable.
+  (check-equal? (line "cfg{database*_}")
+                "{:database-pool-size 10, :database-url \"u\"} : {:database-pool-size Int :database-url String}"
+                "Q_U24's `:database-url` — the example the operator was adopted for")
+  ;; BAND 2 — dot-access
+  (check-equal? (line "mn.a*_") "{:a-x 1} : {:a-x Int}"
+                "the dot band agrees with the fused band")
+  ;; [Q_U51]'s own table row
+  (check-equal? (line "regions{eu*_}")
+                "{:eu-port 80, :eu-host \"e\"} : {:eu-host String :eu-port Int}"
+                "Q_U51's table: prefix is the key the content sat under")
+  ;; ⚠ THE CONTRAST IS THE POINT — bare `*` must be UNCHANGED. If this ever
+  ;; matches the `*_` line, the cont channel has stopped discriminating.
+  (check-equal? (line "mn{a*}") "{:x 1} : {:x Int}"
+                "bare `*` still drops the key — `*_` is a different operator")
+  (check-equal? (line "cfg{database*}")
+                "{:url \"u\", :pool-size 10} : {:pool-size Int :url String}"
+                "…at every band"))
+
+(test-case "P4e-1b [1b-v-B2a]: `*_` over a POSITIONAL layer still refuses — [Q_U41], and the message is now TRUE"
+  ;; The ω layer here is a TUPLE (`⟨{:a Int} {:b Int}⟩`) — its contents sat at
+  ;; INDICES, so there is no key to synthesize from. [Q_U41] is nominal-only.
+  ;; ⭐ And the message finally MEANS it: `star-synth-positional` says "this layer
+  ;; is positional", which was FALSE on the keyword-row path it also served before
+  ;; B2a threaded the keys. Now only a genuinely keyless layer reaches it.
+  (define V (string-append "ns b2p\n"
+                           "def rowsn := @[{:cfg {:a 1}} {:cfg {:b 2}}]\n"))
+  (define src "rowsn:cfg*_")
+  (define out (p4e1-last (string-append V src)))
+  (check-false (p4e1-type (string-append V src))
+               (format "`*_` over a positional layer must refuse: ~a" out))
+  (check-true (regexp-match? #rx"this layer is positional" out)
+              (format "…naming the true reason: ~a" out))
+  ;; the bare-`*` sibling on the SAME subject still joins — so the refusal is
+  ;; about `*_`, not about the shape.
+  (check-equal? (p4e1-last (string-append V "rowsn:cfg*")) "{:a 1, :b 2} : {:a Int :b Int}"
+                "bare `*` over the same layer is unaffected"))
+
 (test-case "P4e-1b [1b-v-B1b]: the `*_` join synthesizes <content-key>-<field-key> — the TYPE twin, by direct call"
   ;; ⭐ INERT: no call site reaches these yet (the `'flatten-synth` arms still
   ;; refuse), so a direct call is the ONLY verification available — the standard
@@ -8131,16 +8190,27 @@
 ;; a sibling exactly as a green one can. "Mutation-test PER TWIN" requires a
 ;; case per twin.
 (test-case "P4e-1b [1b-v-B1b]: …and the VALUE twin lifts the same keys — separate case, so neither masks the other"
+  ;; ⚠⚠ KEYS ARE `expr-keyword` STRUCTS HERE, NOT SYMBOLS — and the first cut of
+  ;; this pin used symbols, which is a shape production NEVER produces. It passed,
+  ;; while the real path raised `symbol->string: contract violation` out of `whnf`
+  ;; — a WHOLE-FILE ABORT, caught by the E2E probe and not by this pin.
+  ;; The type layer keys rows by bare symbols; the value layer keys champs by
+  ;; `expr-keyword`. `star-nominal-join-*` never noticed because bare `*` passes
+  ;; keys through untouched; `*_` is the first operation here that READS one.
   (define (mk-champ . kvs)
     (expr-champ (for/fold ([a champ-empty]) ([kv (in-list kvs)])
-                  (champ-insert a (equal-hash-code (car kv)) (car kv) (cdr kv)))))
-  (define vkc (list (cons 'eu (mk-champ (cons 'host (expr-int 1)) (cons 'port (expr-int 2))))
-                    (cons 'us (mk-champ (cons 'host (expr-int 3)) (cons 'port (expr-int 4))))))
+                  (let ([k (expr-keyword (car kv))])
+                    (champ-insert a (equal-hash-code k) k (cdr kv))))))
+  ;; content keys arrive from `champ-keys/canonical`, i.e. also `expr-keyword`
+  (define vkc (list (cons (expr-keyword 'eu)
+                          (mk-champ (cons 'host (expr-int 1)) (cons 'port (expr-int 2))))
+                    (cons (expr-keyword 'us)
+                          (mk-champ (cons 'host (expr-int 3)) (cons 'port (expr-int 4))))))
   (define v (red:star-synth-join-value vkc (lambda (why) (error 'pin "unexpected oops: ~a" why))))
   (check-true (expr-champ? v))
   ;; ⚠ VALUE order is the champ's, NOT canonical — so this pin asserts the SET,
   ;; deliberately, rather than importing the type side's ordering assumption.
-  (check-equal? (sort (map (lambda (kv) (symbol->string (car kv)))
+  (check-equal? (sort (map (lambda (kv) (symbol->string (expr-keyword-name (car kv))))
                            (champ-entries (expr-champ-racket-champ v)))
                       string<?)
                 '("eu-host" "eu-port" "us-host" "us-port")
@@ -8633,9 +8703,17 @@
   (define r (let/ec esc
               (star-join-value layer synth-star
                                (lambda (w) (set-box! why w) (esc 'escaped)))))
-  (check-eq? r 'escaped "a nominal layer still escapes — B1 has not landed the join yet")
-  (check-false (regexp-match? #rx"positional" (unbox why))
-               (format "…but it must NOT be told the join is positional — the layer is KEYED. Got: ~a"
+  ;; ⚠⚠ 1b-v-B2a FLIPPED THE FIRST HALF OF THIS PIN, by design. It asserted the
+  ;; keyed layer ESCAPES ("B1 has not landed the join yet"); B2a landed it, so the
+  ;; keyed layer now JOINS. The pin's PURPOSE is unchanged and is the reason it
+  ;; was written: the twins must agree on WHEN `*_` is positional, and reduction
+  ;; must never tell a KEYED layer that it is. Escaping-without-saying-positional
+  ;; and joining both satisfy that; joining is simply the stronger outcome, and
+  ;; the vector half below still holds the line.
+  (check-true (expr-champ? r)
+              (format "a KEYED layer under `*_` now JOINS (1b-v-B2a); got: ~a" r))
+  (check-false (unbox why)
+               (format "…and must not escape at all, let alone as positional. Got: ~a"
                        (unbox why)))
   ;; …and the genuinely positional case must STILL say so, or the fix overshot.
   (define vlayer (expr-champ (champ-insert champ-empty (equal-hash-code ka) ka

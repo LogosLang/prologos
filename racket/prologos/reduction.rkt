@@ -1669,6 +1669,16 @@
     (and (andmap (lambda (kv) (canonical-keyword-key? (car kv))) entries)
          (map cdr (sort entries canonical-keyword-key<? #:key car)))))
 
+;; ⭐ 1b-v-B2a — the KEYED sibling, for `*_`. Same canonical order and the same
+;; `#f`-is-not-empty contract; it simply keeps the keys `champ-values/canonical`
+;; drops, because [Q_U51]'s prefix IS the key its content sat under. Written as a
+;; sibling rather than by changing the original's shape: `*` has no use for the
+;; keys and its call site is the hot one.
+(define (champ-keys/canonical root)
+  (let ([entries (champ-entries root)])
+    (and (andmap (lambda (kv) (canonical-keyword-key? (car kv))) entries)
+         (map car (sort entries canonical-keyword-key<? #:key car)))))
+
 ;; ⭐⭐ D4.P4e-1b slice 1b-iii-C1 — THE SHARED JOIN, VALUE side. The atomic twin
 ;; of typing-core's `star-join-type`; the two must always move together (this
 ;; file's own rule: landing either alone is "not a half-measure but a
@@ -1762,6 +1772,22 @@
 ;; collisions in the ordinary case only — two layers can synthesize the same key.
 ;; Typing carries the user-facing refusal; reaching here is an invariant
 ;; violation, hence `oops` rather than a value.
+;; ⚠⚠ THE TWINS DISAGREE ABOUT WHAT A KEY *IS*, AND IT COST A WHOLE-FILE ABORT.
+;; A TYPE-layer row's fields are keyed by bare SYMBOLS (`expr-Record-fields`), but
+;; a VALUE-layer champ is keyed by `expr-keyword` STRUCTS. `star-nominal-join-*`
+;; never noticed, because the bare-`*` join passes keys through untouched — `*_`
+;; is the first operation at this seat that has to READ one. Handing an
+;; `expr-keyword` to `select-synth-prefixed-key` raised `symbol->string: contract
+;; violation` straight out of `whnf`, i.e. a WHOLE-FILE ABORT, and the B1b
+;; direct-call pin did not catch it because I built its champs with SYMBOL keys —
+;; a shape production never produces. The pin now uses `expr-keyword`.
+;; ⭐ The synthesis itself stays in the ONE shared helper; only the wrapping is
+;; local, because only this layer wraps.
+(define (synth-champ-key content-key field-key)
+  (let ([fk (if (expr-keyword? field-key) (expr-keyword-name field-key) field-key)]
+        [ck (if (expr-keyword? content-key) (expr-keyword-name content-key) content-key)])
+    (expr-keyword (select-synth-prefixed-key ck fk))))
+
 (define (star-synth-join-value keyed-contents oops)
   (expr-champ
    (for/fold ([acc champ-empty]) ([kc (in-list keyed-contents)])
@@ -1769,7 +1795,7 @@
            [w  (whnf (cdr kc))])
        (if (expr-champ? w)
            (for/fold ([a acc]) ([kv (in-list (champ-entries (expr-champ-racket-champ w)))])
-             (let ([sk (select-synth-prefixed-key ck (car kv))])
+             (let ([sk (synth-champ-key ck (car kv))])
                (if (champ-has-key? a (equal-hash-code sk) sk)
                    (oops (format "two joined contents both synthesize the key `~a` (typing carries the user-facing refusal; a collision reaching the value layer is a compiler-invariant violation)"
                                  sk))
@@ -1778,6 +1804,11 @@
 
 (define (star-join-value layer star oops)
   (let* ([l (whnf layer)]
+         ;; ⚠ 1b-v-B2a: `#f` means the layer is POSITIONAL — no keys to
+         ;; synthesize from — which is [Q_U41]'s refusal condition carried in the
+         ;; data, exactly as the typing twin's `keys` argument does.
+         [keys (and (expr-champ? l)
+                    (champ-keys/canonical (expr-champ-racket-champ l)))]
          [contents
           (cond
             [(expr-champ? l)
@@ -1844,8 +1875,12 @@
        ;; semantics entirely — and typing's guard is not a defence, because this
        ;; seat's standing doctrine is that reduction must not depend on typing
        ;; having run. Same shape as the arm-order defect A fixed, one arm over.
+       ;; ⭐⭐ 1b-v-B2a — `*_`'s SHIELD COMES DOWN HERE TOO, atomically with the
+       ;; typing twin. [Q_U51] ruled the prefix source, B1b landed the join.
        (if (eq? (select-star-cont star) 'flatten-synth)
-           (oops "`*_` over Map-valued contents synthesizes keys, and that rule is not yet ruled (typing carries the user-facing refusal)")
+           (if keys
+               (star-synth-join-value (map cons keys contents) oops)
+               (oops "`*_` over a keyless layer reached the value join (typing carries the user-facing refusal)"))
            (star-nominal-join-value contents oops))]
       [(not (andmap (lambda (c) (expr-rrb? (whnf c))) contents))
        (oops "mixed or leaf contents have no join (typing carries the user-facing refusal)")]

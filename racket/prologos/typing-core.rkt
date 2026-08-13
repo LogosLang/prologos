@@ -1719,7 +1719,12 @@
     ;; already canonicalizes, so field order IS `symbol<?` order;
     ;; index order for a tuple).
     (let ()
-               (define (join-contents contents)
+               ;; ⭐⭐ 1b-v-B2a — `keys` IS THE `*_` CHANNEL. `#f` means the layer is
+               ;; POSITIONAL and has no keys to synthesize from, which is exactly
+               ;; [Q_U41]'s refusal condition — so the distinction is carried in the
+               ;; data rather than re-derived, and the two call sites below each
+               ;; say which they are.
+               (define (join-contents contents [keys #f])
                  (cond
                    [(null? contents) (fail-k 'star-not-yet l)]
                    [(not (andmap (lambda (c) (expr-PVec? (whnf c))) contents))
@@ -1751,8 +1756,17 @@
                        ;; `star-synth-positional` arm below — that message says
                        ;; "this layer is positional", which is false here, and is
                        ;; precisely the twin-drift defect 1b-iv-A fixed.
+                       ;; ⭐⭐ 1b-v-B2a — `*_`'s SHIELD COMES DOWN, for the KEYED
+                       ;; layer only. [Q_U51] ruled the prefix source FORCED
+                       ;; (`<the key its content sat under>-<its own key>`), which
+                       ;; is what the not-yet above was waiting on; B1b landed the
+                       ;; join. ⚠ A layer with NO keys still refuses, and through
+                       ;; `star-synth-positional` — which is TRUE there and was
+                       ;; false in the nominal case, the distinction 1b-iv-A fixed.
                        (if (eq? (select-star-cont star) 'flatten-synth)
-                           (fail-k 'star-nominal l)
+                           (if keys
+                               (star-synth-join-type (map cons keys contents) fail-k l)
+                               (fail-k 'star-synth-positional l))
                            (star-nominal-join-type contents fail-k l))]
                       [(andmap (lambda (c)
                                  (let ([w (whnf c)])
@@ -1788,16 +1802,24 @@
                     [(eq? (expr-Record-key-domain l) 'nat)
                      ;; a TUPLE layer: static arity, component types in index
                      ;; (= written) order — `vv{0 1}*`'s side of the split.
+                     ;; ⚠ 1b-v-B2a: NO keys — a nat-domain row's contents sit at
+                     ;; INDICES, so `*_` has nothing to synthesize from and takes
+                     ;; [Q_U41]'s positional refusal. Passing `#f` explicitly
+                     ;; rather than defaulting, so the choice is visible here.
                      (join-contents (map (lambda (f) (record-field-type (cdr f)))
-                                         (expr-Record-fields l)))]
+                                         (expr-Record-fields l))
+                                    #f)]
                     [(not (closed-keyword-row? l)) (fail-k 'star-open-row l)]
                     [(not (andmap (lambda (f)
                                     (eq? (record-field-presence (cdr f)) 'present))
                                   (expr-Record-fields l)))
                      (fail-k 'star-open-row l)]
                     [else
+                     ;; ⚠ 1b-v-B2a: the KEYED layer — its field names ARE [Q_U51]'s
+                     ;; prefix source, in the same order as the contents.
                      (join-contents (map (lambda (f) (record-field-type (cdr f)))
-                                         (expr-Record-fields l)))])]
+                                         (expr-Record-fields l))
+                                    (map car (expr-Record-fields l)))])]
                  [(expr-PVec? l)
                   ;; the ω container: ONE element type stands for every content.
                   (let ([e (whnf (expr-PVec-elem-type l))])
