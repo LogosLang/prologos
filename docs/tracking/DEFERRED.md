@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 128**
+> ### **NEXT FREE: 129**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7378,3 +7378,49 @@ did not mint) so blindness cannot read as success.
 whole-file-aborting cells as a SET compared whole. A reader widening changes which
 sources abort, so it will turn red and needs a deliberate re-baseline. It will
 look like a regression.
+
+---
+
+### 128. ⬜ ⭐⭐ Q_U42 AND Q_U50 ARE IN TENSION AND HEAD IMPLEMENTS Q_U50 — a same-key VECTOR collision under ω refuses where Q_U42 rules it concatenates
+
+Found by CIU T6 D4.P4e-1b slice **1b-v-A**, by RUNNING the pre-written Q_U42 pin
+block before touching it rather than reading it. Both of Q_U42's worked examples
+diverge, not just one.
+
+**MEASURED at HEAD** (`53df2b4d`):
+```
+rowsv := @[{:tags @[1 2]} {:tags @[3]}]     ⟹ [PVec {:tags [PVec Int]}]   (homogeneous)
+rowsv:{tags}*   ⟹ ERROR: … cannot join Map-valued contents under `:` (broadcast) …
+                   [Q_U42 rules {:tags @[1 2 3]}]
+dcomp := @[{:a {:t @[1]}} {:a {:t @[2]}}]
+dcomp:{a}*      ⟹ ERROR: … same star-omega-nominal refusal …
+                   [Q_U42 rules {:a {:t @[1 2]}}]
+rowsv:tags*     ⟹ @[1 2 3]                  ← the DESCENT twin matches its ruling
+```
+
+**THE TENSION.** [Q_U42](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u42) rules that
+when the keywise join recurses into a shared key whose two values are VECTORS it
+**concatenates** — its argument being that the top-level rule already says vectors
+concatenate, and one operator must not say the opposite one level down.
+[Q_U50](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u50) rules that a **homogeneous
+`PVec`** under ω refuses on POSSIBILITY, because one element type stands for every
+element — "the same keys N times, N unknown". `rowsv` is homogeneous, so it lands
+in Q_U50's refusal and Q_U42's promise at once.
+
+**⭐ A PLAUSIBLE RESOLUTION, NOT RULED**: Q_U50's argument turns on a collision
+**dropping** something, and concatenating N vectors is **total for any N** — the
+unknown length is not a problem for concat. So the possibility-refusal arguably
+should fire only where the colliding values would drop, i.e. NOT on Q_U42's
+population. That would make Q_U50 refuse Map-valued and leaf-valued collisions
+under ω while letting vector-valued ones through, which is exactly Q_U42's "one
+recursive rule at every depth".
+
+**WHY IT IS FILED RATHER THAN RULED HERE**: Q_U42 is unimplemented, its
+implementation is in no current slice, and this is a ruling question for the
+owner — not something 1b-v should decide in passing. ⚠ **The pin block stays
+PARKED and must NOT be "fixed" to match HEAD**, which would encode the opposite
+of a ruling. The parked block carries this note.
+
+⚠ Q_U50's record says "NO CODE CHANGE" and lists one owed message improvement; it
+did not consider Q_U42's population. That is how two rulings agreed separately and
+disagreed jointly.

@@ -8085,31 +8085,92 @@
 ;;                          #rx":x 1, :b \\{:y 2\\}")
 ;;               "m:{a* b} splices a and KEEPS b's key"))
 
-;; ---- 1b-iv: [Q_U38] collisions REFUSE, and [Q_U41]'s `*_` is the remedy
+;; ---- 1b-iv/1b-v: [Q_U38] collisions REFUSE, and [Q_U41]'s `*_` is the remedy
 ;;
-;; (test-case "P4e-1b [Q_U38]/[Q_U41]: collisions refuse; `*_` recovers on KEYED layers"
-;;   ;; a splat colliding with a SIBLING's written key
-;;   (check-true (p4e1-has? "ns c1\ndef cfg := {:database {:url \"u\" :version 2} :version \"1.0.0\"}\ncfg{database* version}"
-;;                          #rx"duplicate output key :version")
-;;               "lifted :version collides with the written :version — refused")
-;;   ;; the map-generic broadcast: every element contributes the same keys
-;;   (check-true (p4e1-has? "ns c2\ndef regions := {:eu {:host \"e\" :port 80} :us {:host \"u\" :port 443}}\nregions:{host port}*"
-;;                          #rx"duplicate output key")
-;;               "regions:{host port}* collides on :host and :port")
-;;   ;; …and `*_` removes it by construction — [Q_U24]'s own motivating example,
-;;   ;; reachable only because [Q_U40] put the star OUTER. The deleted layer here
-;;   ;; is KEYED (:eu/:us), which is exactly [Q_U41]'s domain.
+;; ⚠⚠ SLICE 1b-v-A RAN THIS BLOCK BEFORE TOUCHING IT — the discipline that keeps
+;; catching things — AND FOUND ALL FOUR CHECKS UNUSABLE AS WRITTEN. Two are
+;; exercisable but STALE (their regexes predate kinds 1b-iii/1b-iv minted); two
+;; are structurally unexercisable ([DEFERRED 124]). Uncommenting as-is gave four
+;; failures for reasons unrelated to what they pin.
+;;   · the duplicate key is now BACKTICKED, so `#rx"duplicate output key :version"`
+;;     does not match `` duplicate output key `:version` ``;
+;;   · `regions:{host port}*` no longer reaches the parser's duplicate gate at
+;;     all — 1b-iv gave it the dedicated `star-content-collision` kind, whose text
+;;     never contains the phrase "duplicate output key".
+;; The two exercisable checks are LIVE below, asserted against measured text.
+
+(test-case "P4e-1b [Q_U38]: a lifted key colliding with a WRITTEN sibling is refused"
+  ;; the splat lifts `:version` out of `:database`; a sibling branch writes
+  ;; `:version` too. Strict merge, so this is a guided error and never last-win.
+  (define src (string-append "ns c1\n"
+                             "def cfg := {:database {:url \"u\" :version 2} :version \"1.0.0\"}\n"
+                             "cfg{database* version}"))
+  (define out (p4e1-last src))
+  (check-false (p4e1-type src)
+               (format "a lifted-vs-written collision must be refused: ~a" out))
+  ;; ⚠ BACKTICKED — asserting the shape the message actually has, not the shape
+  ;; the pre-written check assumed.
+  (check-true (regexp-match? #rx"duplicate output key `:version`" out)
+              (format "…and it must name the colliding key, backticked: ~a" out)))
+
+(test-case "P4e-1b [Q_U38]: a map-generic broadcast collides on EVERY lifted key"
+  ;; every region contributes `:host` and `:port`, so the keywise join would drop
+  ;; one of each. This is the shape [Q_U41] adopted `*_` to rescue — and the
+  ;; rescue spelling is unspellable today, which is what slice 1b-v is for.
+  (define src (string-append "ns c2\n"
+                             "def regions := {:eu {:host \"e\" :port 80} :us {:host \"u\" :port 443}}\n"
+                             "regions:{host port}*"))
+  (define out (p4e1-last src))
+  (check-false (p4e1-type src)
+               (format "a cross-content collision must be refused: ~a" out))
+  ;; ⚠ 1b-iv routed this to `star-content-collision`, NOT the parser's dup gate.
+  ;; Pinning the kind's own text is what makes the pin discriminate; the old
+  ;; `#rx"duplicate output key"` would now pass on the WRONG gate if either moved.
+  (check-true (regexp-match? #rx"joins the layer's contents keywise" out)
+              (format "…via the star's own collision kind: ~a" out))
+  (check-false (regexp-match? #rx"duplicate output key" out)
+              (format "…and NOT via the parser's duplicate gate: ~a" out)))
+
+;; ⚠⚠ PARKED — THE SLICE 1b-v INSTRUMENT, WRITTEN AND RUN RED FIRST.
+;; These two are `*_` at the CLOSER-ADJACENT seat, which [DEFERRED 124] shows is
+;; structurally unspellable at HEAD: `regions:{host port}*_` and `rowsv:{tags}*_`
+;; both give a bare `ERROR: Unbound variable` — MEASURED at slice 1b-v-A, which
+;; is the RED state they are supposed to have. They go live at 1b-v-B2, when the
+;; mint teaches the closer band the cont channel it is missing.
+;; ⚠ DO NOT "fix" them by weakening the regex — the failure they must show is the
+;; SYNTHESIZED KEYS, and a pin that passes on the Unbound-variable error would be
+;; the vacuous-pin class this track has already paid for twice.
+;; (test-case "P4e-1b [Q_U41]/[Q_U51]: `*_` synthesizes from the deleted layer's keys"
 ;;   (check-true (p4e1-has? "ns c3\ndef regions := {:eu {:host \"e\" :port 80} :us {:host \"u\" :port 443}}\nregions:{host port}*_"
 ;;                          #rx":eu-host.*:eu-port.*:us-host.*:us-port")
-;;               "regions:{host port}*_ synthesizes from the deleted layer's keys")
-;;   ;; [Q_U41]: over a POSITIONAL deleted layer there is no key to synthesize
-;;   ;; from — refused, and the advice is to drop the underscore (Q_U42 makes the
-;;   ;; plain star do the job here).
+;;               "regions:{host port}*_ synthesizes <content-key>-<field-key> [Q_U51]")
+;;   ;; [Q_U41]: over a POSITIONAL deleted layer there is no key to synthesize from
 ;;   (check-true (p4e1-has? "ns c4\ndef rowsv := @[{:tags @[1 2]} {:tags @[3]}]\nrowsv:{tags}*_"
-;;                          #rx"`\\*_`")
+;;                          #rx"`\*_`")
 ;;               "`*_` over a positional layer is a guided refusal naming itself"))
 
 ;; ---- 1b-iv: [Q_U42] — the join is ONE RECURSIVE rule; same-key vectors CONCAT
+;;
+;; ⚠⚠ PARKED, AND NOT MERELY "NOT YET IMPLEMENTED" — [Q_U42] IS IN TENSION WITH
+;; [Q_U50], AND HEAD IMPLEMENTS Q_U50. Found by running this block at slice
+;; 1b-v-A rather than reading it.
+;; MEASURED at HEAD: `rowsv:{tags}*` and `dcomp:{a}*` — BOTH of Q_U42's worked
+;; examples — take the `star-omega-nominal` refusal, not the ruled answer.
+;;   Q_U42 rules: a same-key collision whose values are VECTORS CONCATENATES
+;;               (`rowsv:{tags}*` → `{:tags @[1 2 3]}`), because the top-level
+;;               rule already says vectors concatenate and one operator must not
+;;               say the opposite one level down.
+;;   Q_U50 rules: a HOMOGENEOUS `PVec` under ω refuses on POSSIBILITY — "the same
+;;               keys N times, N unknown", so a collision is possible.
+;; ⭐ THE TENSION IS REAL AND HAS A PLAUSIBLE RESOLUTION NOBODY HAS RULED:
+;; Q_U50's "N unknown" argument turns on a collision DROPPING something, and
+;; concatenating N vectors is TOTAL for any N — so it does not bite on exactly
+;; Q_U42's population. `rowsv` types as `[PVec {:tags [PVec Int]}]` (homogeneous),
+;; which is precisely where Q_U50 refuses and Q_U42 promises an answer.
+;; ⚠ SO DO NOT "FIX" THESE PINS TO MATCH HEAD — that would encode the opposite of
+;; a ruling. They stay parked until the tension is ruled. [DEFERRED 128]
+;; ⚠ Note also `rowsv:tags*` (the DESCENT twin) DOES answer `@[1 2 3]` at HEAD and
+;; matches its ruling — so the divergence is specific to the PROJECTION spelling.
 ;;
 ;; (test-case "P4e-1b [Q_U42]: a shared key holding VECTORS concatenates, at any depth"
 ;;   ;; the case that forced the ruling: the join recurses into :tags and finds two

@@ -43,17 +43,17 @@
 ;; The trailing `!` names a control that must NOT mint.
 ;; ---------------------------------------------------------------------------
 (define star-carriers
-  '(("bracket-app"   "[f 1]*"     #t)   ;; ] closer
-    ("paren-app"     "(f 1)*"     #t)   ;; ) closer
-    ("select-brace"  "c{a}*"      #t)   ;; } closer — a USABLE carrier (Q_U35)
-    ("bcast-brace"   "xs:{a}*"    #t)   ;; } closer — a USABLE carrier (Q_U35)
-    ("quote-list"    "'[1 2]*"    #t)   ;; ⚠ uncounted by D4 §5.P4e-1
-    ("pvec"          "@[1 2]*"    #t)   ;; ⚠ uncounted
-    ("hset"          "#{1 2}*"    #t)   ;; ⚠ uncounted
-    ("map-lit"       "{:a 1}*"    #t)   ;; ⚠ uncounted
-    ("quasiquote"    "`[a 1]*"    #t)   ;; ⚠ uncounted
-    ("mixfix-close"  ".(1 + 2)*"  #t)   ;; ⚠ uncounted — star AFTER the mixfix
-    ("postfix-index" "xs[0]*"    #t)   ;; ⚠ the ONE arrival where the star shares a
+  '(("bracket-app"   "[f 1]%S%"     mint)   ;; ] closer
+    ("paren-app"     "(f 1)%S%"     mint)   ;; ) closer
+    ("select-brace"  "c{a}%S%"      mint)   ;; } closer — a USABLE carrier (Q_U35)
+    ("bcast-brace"   "xs:{a}%S%"    mint)   ;; } closer — a USABLE carrier (Q_U35)
+    ("quote-list"    "'[1 2]%S%"    mint)   ;; ⚠ uncounted by D4 §5.P4e-1
+    ("pvec"          "@[1 2]%S%"    mint)   ;; ⚠ uncounted
+    ("hset"          "#{1 2}%S%"    mint)   ;; ⚠ uncounted
+    ("map-lit"       "{:a 1}%S%"    mint)   ;; ⚠ uncounted
+    ("quasiquote"    "`[a 1]%S%"    mint)   ;; ⚠ uncounted
+    ("mixfix-close"  ".(1 + 2)%S%"  mint)   ;; ⚠ uncounted — star AFTER the mixfix
+    ("postfix-index" "xs[0]%S%"    mint)   ;; ⚠ the ONE arrival where the star shares a
                                        ;; datum list with a FOLDING sentinel
                                        ;; (`$postfix-index`) — missing from every
                                        ;; prior enumeration.
@@ -70,11 +70,11 @@
                                        ;; meaning if §2.4's revisit puts brackets
                                        ;; on the carrier.
     ;; ---- controls: NOT minting. Three distinct mechanisms, one each. ----
-    ("ord-bcast!"    "xs:0*"      #f)   ;; shatters — no carrier token (DEFERRED 105)
-    ("ord-dot!"      "x.0*"       #f)   ;; shatters — no carrier token (DEFERRED 105)
-    ("in-block!"     "m{0*}"      #f)   ;; star is an ITEM inside the block
-    ("path-literal!" "#p(a)*"     #f)   ;; `#p(a)` is ONE token; no rparen precedes
-    ("fuse-band!"    "c.a*"       #f))) ;; ⚠ THE THIRD MECHANISM: no `*` TOKEN EXISTS
+    ("ord-bcast!"    "xs:0%S%"      symbol)   ;; shatters — no carrier token (DEFERRED 105)
+    ("ord-dot!"      "x.0%S%"       symbol)   ;; shatters — no carrier token (DEFERRED 105)
+    ("in-block!"     "m{0%S%}"     symbol)   ;; star is an ITEM inside the block
+    ("path-literal!" "#p(a)%S%"     symbol)   ;; `#p(a)` is ONE token; no rparen precedes
+    ("fuse-band!"    "c.a%S%"       none))) ;; ⚠ THE THIRD MECHANISM: no `*` TOKEN EXISTS
                                         ;; at all — it fuses into the identifier
                                         ;; band. The other controls have a `*` token
                                         ;; that fails the closer test; this one has
@@ -138,7 +138,15 @@
 (define star-prelude
   "defn f [z] z\ndef c := {:a 1}\ndef xs := @[{:a 1}]\ndef x := @[7]\ndef m := {:a 1}\n")
 
-(define (star-minting-carrier? c) (caddr c))
+(define (star-carrier-expect c) (caddr c))
+(define (star-minting-carrier? c) (eq? (star-carrier-expect c) 'mint))
+
+;; ⭐ DEFERRED 127 — THE SPELLING DIMENSION. Every carrier source above used to
+;; hardcode a bare `*`, so this matrix measured ONE spelling while claiming to
+;; measure the mint. After a reader widening it would have reported full coverage
+;; of a question it had stopped asking. The sources now carry `%S%`; the matrix
+;; runs once per spelling and reports each.
+(define star-spellings '("*" "*_" "*-" "*-_"))
 (define (star-arrival-context? k) (not (regexp-match? #rx"!$" (car k))))
 
 ;; One cell's source fragment. `n` disambiguates binder names so many cells can
@@ -152,9 +160,10 @@
 ;; the star still sat against `]`, so the mint tally still came out 190 and the
 ;; mutation tests still went red — **the instrument was malformed and every
 ;; check agreed with it.** Taking the record makes the mistake unrepresentable.
-(define (star-cell-source ctx carrier n)
-  (string-replace (string-replace (cadr ctx) "%N%" (number->string n))
-                  "%C%" (cadr carrier)))
+(define (star-cell-source ctx carrier n [spelling "*"])
+  (string-replace (string-replace (string-replace (cadr ctx) "%N%" (number->string n))
+                                  "%C%" (cadr carrier))
+                  "%S%" spelling))
 
 ;; ---------------------------------------------------------------------------
 ;; MEASUREMENT — the token type of the LAST `*`.
@@ -168,9 +177,16 @@
   (define tok (tokenize-char-rrb (make-char-rrb-from-string src)))
   (define bd (make-bracket-depth-rrb tok src))
   (define-values (narrowed _changed?) (disambiguate-tokens tok bd))
-  (let loop ([ts (rrb-to-list narrowed)] [found #f])
+  ;; ⚠⚠ DEFERRED 127 — THIS GATE USED TO BE `(string=? lexeme "*")`, the SAME
+  ;; exact-lexeme shape as the mint it exists to verify, so a source whose only
+  ;; star token was `*_` left `found` at #f and the matrix reported "does not
+  ;; mint". It could not tell "correctly does not mint" from "I cannot see this
+  ;; token" — and the CONTROLS passed for the second reason while claiming the
+  ;; first. `'none` now names that case explicitly so blindness cannot read as
+  ;; success.
+  (let loop ([ts (rrb-to-list narrowed)] [found 'none])
     (cond [(null? ts) found]
-          [(string=? (token-entry-lexeme (car ts)) "*")
+          [(member (token-entry-lexeme (car ts)) star-spellings)
            (loop (cdr ts) (set-first (token-entry-types (car ts))))]
           [else (loop (cdr ts) found)])))
 
@@ -180,22 +196,47 @@
 (module+ main
   (define n-carriers (length (filter star-minting-carrier? star-carriers)))
   (define n-contexts (length (filter star-arrival-context? star-contexts)))
-  (printf "~a\nSTAR ARRIVAL MATRIX  —  ~a carriers x ~a contexts (+ controls)\n~a\n"
-          (make-string 78 #\=) (length star-carriers) (length star-contexts)
-          (make-string 78 #\=))
-  (define total-mint
-    (for/sum ([c (in-list star-carriers)])
-      (define per
-        (for/sum ([k (in-list star-contexts)])
-          (if (star-mints? (string-append star-prelude (star-cell-source k c 0))) 1 0)))
-      (printf "  ~a ~a  mints in ~a of ~a contexts~a\n"
-              (if (star-minting-carrier? c) "MINT" "ctrl")
-              (~a (car c) #:min-width 14) (~a per #:min-width 2) (length star-contexts)
-              (if (star-minting-carrier? c) "" "   <- must be 0"))
-      per))
-  (printf "~a\nTOTAL MINTING CELLS: ~a   (expected ~a x ~a = ~a)\n"
-          (make-string 78 #\-) total-mint n-carriers n-contexts (* n-carriers n-contexts))
+  (printf "~a\nSTAR ARRIVAL MATRIX  —  ~a carriers x ~a contexts (+ controls)\n"
+          (make-string 78 #\=) (length star-carriers) (length star-contexts))
+  (printf "spellings: ~a\n~a\n" star-spellings (make-string 78 #\=))
+
+  ;; ⭐ DEFERRED 127 — ONE PASS PER SPELLING. The old driver ran the bare `*`
+  ;; only, so a widened reader would have been measured at full coverage for a
+  ;; question it had stopped asking. Each spelling now reports its own totals,
+  ;; and the CONTROLS are checked against a DECLARED expectation rather than
+  ;; "must be 0" — a control that is silently invisible to the gate no longer
+  ;; passes for the same reason a correct one does.
+  (define (run-spelling sp)
+    (printf "\n---- spelling `~a` ~a\n" sp (make-string (max 0 (- 60 (string-length sp))) #\-))
+    (define total-mint
+      (for/sum ([c (in-list star-carriers)])
+        (define expect (star-carrier-expect c))
+        (define outcomes
+          (for/list ([k (in-list star-contexts)])
+            (star-last-token-type (string-append star-prelude (star-cell-source k c 0 sp)))))
+        (define per (for/sum ([o (in-list outcomes)]) (if (eq? o 'postfix-star) 1 0)))
+        (define off (for/list ([o (in-list outcomes)] #:unless (eq? o expect)) o))
+        (printf "  ~a ~a  mints in ~a of ~a~a\n"
+                (if (eq? expect 'mint) "MINT" "ctrl")
+                (~a (car c) #:min-width 14) (~a per #:min-width 2) (length star-contexts)
+                (cond
+                  [(eq? expect 'mint) ""]
+                  [(null? off) (format "   <- ok, all ~a as declared" expect)]
+                  [else (format "   <- ⚠ EXPECTED ~a, saw ~a" expect
+                                (remove-duplicates off))]))
+        per))
+    (printf "  TOTAL MINTING CELLS: ~a   (expected ~a x ~a = ~a)~a\n"
+            total-mint n-carriers n-contexts (* n-carriers n-contexts)
+            (if (= total-mint (* n-carriers n-contexts)) "" "   <- ⚠ not full"))
+    total-mint)
+
+  (define bare (run-spelling "*"))
+  (for ([sp (in-list (cdr star-spellings))]) (run-spelling sp))
+  (printf "~a\n" (make-string 78 #\-))
   ;; D4 §5.P4e-1's frame: 4 carriers x 11 contexts = 44 cells, of which 40 ARRIVE.
-  ;; Compare arrivals to arrivals — 40 against this file's minting total.
-  (printf "D4 §5.P4e-1 counted 40 arrivals (4 x 11 frame) — ~a% of the ~a measured here.\n"
-          (inexact->exact (round (* 100 (/ 40.0 total-mint)))) total-mint))
+  (printf "D4 §5.P4e-1 counted 40 arrivals (4 x 11 frame) — ~a% of the ~a measured here for `*`.\n"
+          (inexact->exact (round (* 100 (/ 40.0 bare)))) bare)
+  ;; ⚠ A non-bare spelling reporting 0 is the PRE-MINT state, not a defect —
+  ;; slice 1b-v-A records it RED on purpose. It becomes the regression signal the
+  ;; moment the reader widens.
+  (printf "⚠ a non-`*` spelling at 0 is the PRE-MINT state (slice 1b-v); non-zero after the mint.\n"))
