@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 125**
+> ### **NEXT FREE: 128**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7262,8 +7262,25 @@ upcoming `*_` slice will otherwise assume a coverage the surface cannot deliver.
 
 **MEASURED**: `mn{a*_}` reaches the intended guided refusal (the FUSED-identifier
 band works). `mn{a b}*` is a live spelling. `mn{a b}*_` does NOT reach the `*_`
-path at all — after a closing `}` the reader does not split `*_` the way it does
-after an identifier, so it lexes as `*` applied to `_`.
+path at all.
+
+⚠⚠ **THE MECHANISM ABOVE WAS WRONG — CORRECTED 2026-08-13 by the 1b-v grounding
+audit and re-verified on the main thread.** This entry said `*_` after a closer
+"lexes as `*` applied to `_`". It does not: it lexes as **ONE symbol token
+`*_`**. `*` is `ident-start?` and `_`, `-`, `*` are ALL `ident-continue?`, so
+`recognize-symbol` swallows the whole run — the lexeme `"*"` that the mint gate
+tests for never exists as a separate token. Measured through `tokenize-string`:
+`"x{a b}*_ "` → `(symbol *_)`, `"x{a b}*- "` → `(symbol *-)`. Confirmed by a
+second route: `mn{a}* _` (SPACED) gives *"Could not infer type"* — the star DOES
+mint and a lone `_` lands in argument position — while `mn{a}*_` gives
+*"Unbound variable"*. If the glued form were `*` applied to `_` the two would be
+identical.
+⭐ **The conclusion stands and the FIX gets cheaper**: relaxing the gate's
+exact-lexeme test is SUFFICIENT: no token-splitting is required. ⚠ But the gate
+is a FOUR-part conjunction (lexeme · not-in-mixfix · non-empty output · a
+byte-adjacent predecessor whose type is a group closer), and the parser's
+`$postfix-star` arm additionally HARDCODES `'flatten` in both legs, never calling
+`split-star-lexeme` — so it is a TWO-SITE change. See [Q_U52](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u52).
 
 **WHY IT MATTERS FOR THE NEXT SLICE**: `*_`'s guard in `star-join-type` is
 reachable only from the fused band. Any claim that `*_` is "refused everywhere"
@@ -7276,3 +7293,88 @@ this entry is the narrower fact that the seat cannot even be probed today.
 identifier (which is Q_U39's mint, so it belongs with that ruling), or record
 explicitly in the `*_` slice that the closer-adjacent seat is out of scope and
 its guard is unexercised-by-construction.
+
+
+---
+
+### 125. ⬜ ⭐ `.*_` AND `.*-` ARE ALREADY OWNED BY THE RETIRED-BROADCAST RECOGNIZER — so Q_U26's ravel and the star's continuation grammar are on a collision course at the CHARACTER level
+
+Found by the CIU T6 D4.P4e-1b slice 1b-v grounding audit's completeness critic
+(`wf_cc1a72a0-75b`), by enumerating the hazard surface by CHARACTER after the
+facets had enumerated it by sentinel NAME.
+
+**MEASURED**:
+```
+rv.*   ⟹ ERROR: Unbound variable
+rv.*_  ⟹ ERROR: broadcast `.*_` was retired — its replacement is `:_` (e.g. `xs:_`)
+rv.*-  ⟹ ERROR: broadcast `.*-` was retired — its replacement is `:-` (e.g. `xs:-`)
+```
+`recognize-broadcast-access` (parse-reader.rkt) matches `.` `*` then any
+`ident-continue?` char — and `_` and `-` ARE `ident-continue?`. So it consumes
+`.*_` and `.*-` and reads them as `.*` plus a field named `_` / `-`.
+
+**WHY IT MATTERS**: [Q_U26](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u26) rules
+RAVEL to be bare `.*`. If the star's continuation grammar is `{"" _ - -_}` — as
+[Q_U48](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u48) and
+[Q_U51](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u51) imply — then `.*_` is
+ravel-with-synth, and today it emits a message about a feature retired for
+entirely unrelated reasons. Ravel is itself unimplemented (`rv.*` is
+`Unbound variable`), so nothing is broken **yet**; the collision lands whenever
+P4e-2 implements ravel or 1b-vi mints `*-`.
+
+**OWED**: decide who owns `.*_` / `.*-` before either lands. Not 1b-v's — 1b-v
+touches the closer-adjacent band only ([Q_U52](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u52)).
+
+---
+
+### 126. ⬜ THE ANGLE BAND IS A FOURTH CARRIER OF DEFERRED 124's DEGRADATION — a glued `*_` inside `<…>` silently loses Q_U31's guided Sigma refusal
+
+Found by the same critic run. DEFERRED 124 names three carriers; this is a
+fourth, and it is in a different grammar.
+
+**MEASURED**:
+```
+def pr : <(x : Nat)* Nat>   ⟹ ERROR: inside `<…>`, `*` needs a SPACE before it — glued to a
+                               closing bracket, `*` is the path-selection flatten operator…
+def qr : <(x : Nat)*_ Nat>  ⟹ ERROR: Unbound variable
+```
+`unwrap-angle-type` (parser.rkt) switches on the `$postfix-star` sentinel, so a
+spelling that never mints reaches it as an ordinary symbol and the Q_U31 refusal
+does not fire. ⚠ Its WS-mode twin `tree-parser.rkt`'s Sigma detector keys on the
+LEXEME `"*"` instead of the sentinel — a twin-drift pair worth moving together.
+
+**OWED**: when the mint widens, this arm must recognize the new sentinel or the
+guided refusal silently narrows. In scope for 1b-v's census, filed separately
+because the *fix* is the same edit and the *risk* is that it is forgotten.
+
+---
+
+### 127. ⬜ ⭐⭐ `tools/star-arrival-matrix.rkt` CANNOT DISTINGUISH "CORRECTLY DOES NOT MINT" FROM "I CANNOT SEE THIS TOKEN" — and after a reader widening it reports FULL COVERAGE of a question it has stopped asking
+
+Found by the same critic run. This is the instrument built specifically because
+D4 §5.P4e-1's reach claim needed evidence, so its blindness is load-bearing.
+
+**TWO INDEPENDENT DEFECTS, both verified:**
+1. `star-last-token-type` gates on `(string=? (token-entry-lexeme (car ts)) "*")`
+   — the SAME exact-lexeme shape as the mint it exists to verify. A source whose
+   only star token is `*_` leaves `found` at `#f`, so `star-mints?` answers "does
+   not mint".
+2. **The carrier table hardcodes a bare `*` in ALL 11 minting sources** (`"c{a}*"`,
+   `"xs:{a}*"`, `"@[1 2]*"`, …). So a widened reader is measured at 190/190 cells
+   covered and **0 cells for the new spelling**, with nothing in the run saying so.
+
+⭐ **THE CONTROLS ARE THE SHARPER HALF.** The three non-minting controls satisfy
+"must be 0" because `star-last-token-type` returns `#f` when there is no `*`
+token *at all*. A new `*_` control would pass for the identical reason — i.e. the
+instrument's pass and its blindness are the same observation. That is the vacuous-
+pin class this track has already paid for twice, in the one artifact whose job is
+to prevent it.
+
+**OWED**: widen both the gate and the carrier table in the same commit as any
+reader mint, and give the controls a POSITIVE assertion (the token was seen AND
+did not mint) so blindness cannot read as success.
+
+⚠ **RELATED RE-BASELINE, not a bug**: the DEFERRED-108 abort snapshot pins 19
+whole-file-aborting cells as a SET compared whole. A reader widening changes which
+sources abort, so it will turn red and needs a deliberate re-baseline. It will
+look like a regression.

@@ -3030,6 +3030,59 @@ items of the hold-point, ruled before P4a opened:
   ⚠ Rejected (c) "rule now, implement later" as second-best: more honest than
   (a), but it leaves the not-yet live in a band where the answer is now known.
 
+- <a id="q-u52"></a>**⭐⭐ Q_U52 — 1b-v IS THE MINT *PLUS* `*_`'s SEMANTICS; `*-`
+  AND `*-_` SPLIT OUT TO 1b-vi [owner, 2026-08-13 — "Ok on the (b) lean"].**
+
+  **THE QUESTION, which the 1b-v grounding audit's four facets all failed to ask
+  and its completeness critic did**: is 1b-v a MINT, or is it the SEMANTICS? Both
+  facets scoped the slice as *reader gate + `parser.rkt`'s closer-band cont
+  channel + sentinel shape*. Measured, that scope delivers **a better error
+  message at one band** and leaves [Q_U51](#q-u51)'s motivating capability
+  non-existent — which is the shape Q_U51 itself rejected when it declined "ship
+  the fused band now".
+
+  **WHAT `regions:{host port}*_` → `{:eu-host …, :us-port …}` ACTUALLY NEEDS,
+  beyond the mint** (all measured at HEAD): lifting the typing shield that sends
+  every `*_` over Map contents to `star-nominal`'s not-yet · implementing
+  Q_U51's prefix join in `star-nominal-join-type` · the **key threading** both
+  twins skip (typing maps `record-field-type` over fields; reduction's
+  `champ-values/canonical` ends `(map cdr …)`) · and the ω/broadcast **Record**
+  arm, which has **no cont test at all** — `homog:cfg*` and `homog:cfg*_` produce
+  BYTE-IDENTICAL message bodies, so `*_` there is today neither served nor
+  distinctly refused.
+
+  **WHY `*-` SPLITS OUT — three reasons, none of them "it is big":**
+  1. **It carries two UNRULED questions.** A *renamed* ancestor survives a deep
+     star (`t4{a^p.b.c*}` → `{:p {:b {:x 1}}}`, measured) and `^p`/`^` are
+     mutually exclusive spellings of one step — so "total collapse" has no
+     defined answer for an explicit rename, and the dissolve-equivalence route
+     cannot even pose the question. `^` after `:` is refused outright (Q_U19), so
+     a broadcast ancestor is unwritable too. Those are rulings, not code.
+  2. **`*->` IS NOT ONE TOKEN** — `>` breaks the identifier (measured:
+     `mn{a*-> b}` errors at `a*-`, with `>` separate). The moment `*-` is an
+     operator, `x{a*-> b}` becomes a valid `*-` step plus a stray `>`, and
+     `<(x : A)*- B>` acquires a new reading. The caret family never had this
+     hazard; `*-` inherits it from `->` (ARROW T1's territory).
+  3. **The cont axis has no totality dispatcher.** `select-star-cont` is a bare
+     `cadr`; all five production readers are BINARY tests on `'flatten-synth`, so
+     a third value silently reads as bare `*` — including `pp-expr`, which would
+     render `*-` as `"*"` and feed that wrong echo into every `*-` label. The P4a
+     totality doctrine has never been applied here. That work belongs with the
+     spelling that needs it.
+
+  **CONSEQUENCE FOR THE SENTINEL SHAPE** — this is what makes the scope ruling
+  also settle the shape question. Under (b) the mint adds **ONE** spelling, so it
+  is **two bare sentinels**, not four: `$postfix-star` (unchanged) and a new one
+  for `*_`. The payload option's whole cost was the arity/head-set decision at
+  `access-sentinel?`, and the N-sentinel option's loudest cost was believed to be
+  `pattern-var?`'s whole-file abort — **which is FALSE at HEAD** (see the record
+  below). With one new spelling and no abort, N-bare-sentinels wins on every axis.
+  ⭐ **AND THE NAME IS LOAD-BEARING, CHEAPLY**: the leak gate and four sibling
+  pins match an **unanchored substring** `#rx"\$postfix-star"`, so naming it
+  `$postfix-star-synth` keeps five existing gates covering it FOR FREE. Any other
+  name silently narrows them. (`p4e1-star-class` is an identity test and needs the
+  new name added regardless.)
+
 - <a id="q-u43"></a>**⭐ Q_U43 — THE L4 SORT CHECK MOVES TO TYPING FOR STAR-BEARING
   BRANCHES, AS [Q_U38](#q-u38)'s COROLLARY [owner, 2026-08-11 — "move the sort
   check to typing per Q_U38's corollary"].** Q_U38 moved the COLLISION check;
@@ -9101,6 +9154,109 @@ without one. ⚠ The refusal channels are `bcast-carrier` (typing-errors.rkt) an
 here is a WHOLE-FILE ABORT, which is why P4c-4c retired its predecessor rather
 than leaving it in the tree.
 
+<a id="p4e-1b-v"></a>
+
+##### §5.P4e-1b-v — the grounding audit  (2026-08-13, `wf_cc1a72a0-75b` — 4 facets + a completeness critic that had to be RE-RUN after the first crashed)
+
+⭐⭐ **THE AUDIT MOVED THE SLICE IN BOTH DIRECTIONS, and the critic moved it more
+than the facets did.**
+
+**SMALLER THAN Q_U39 FRAMED IT.** `*_` is **already fully parsed** and already
+reaches a dedicated, operator-naming refusal in **three of the four bands** —
+`split-star-lexeme` returns `'flatten-synth`, and the fused, `$dot-access` and ω
+bands all thread that `cont` into `make-select-star`. **Only the closer-adjacent
+band is deficient, and it never calls the splitter at all**: `parser.rkt`'s
+`$postfix-star` arm hardcodes `'flatten` in BOTH legs. So the mint is a TWO-SITE
+change (the reader gate, that parser arm), not "mint a new operator".
+
+**⚠ DEFERRED 124's MECHANISM IS WRONG — verified on the main thread, not taken
+from the report.** It records that `x{a b}*_` "lexes as `*` applied to `_`".
+MEASURED through `tokenize-string`: it is **ONE symbol token `*_`**. `*` is
+`ident-start?` and `_`/`-`/`*` are all `ident-continue?`, so `recognize-symbol`
+swallows the lot. Independent confirmation by a second route: `mn{a}* _` (spaced)
+gives *"Could not infer type"* — the star DOES mint and a lone `_` lands in
+argument position — while `mn{a}*_` gives *"Unbound variable"*. Different errors,
+therefore not the same parse. **The conclusion in 124 stands; the cause does
+not** — and it changes the fix, because relaxing the gate's lexeme test is then
+SUFFICIENT and no token-splitting is needed.
+
+**⚠⚠ AND THE FACET'S HEADLINE FOOTGUN IS FALSE AT HEAD — I repeated it to the
+owner before the critic tested it.** The facet marked "verified" that each new
+bare sentinel MUST join `pattern-var?`'s exclusion list or a `defmacro` template
+raises out of preparse (the whole-file-abort class). Its evidence was the comment
+block above `pattern-var?`. **That comment is stale**; the structural fix landed
+2026-08-01 (`datum-subst` asks whether the symbol is a DECLARED macro parameter,
+so an unbound one passes through). MEASURED: `defmacro lit [] '[1 2]` + `[lit]`
+⟹ **0 errors**. ⭐ `.claude/rules/pipeline.md` ALREADY carries this correction,
+including the sentence *"macros.rkt's own comment above `pattern-var?` still
+carries the stale claim"* — so the ambient rule was right, the facet quoted the
+stale artefact, and I relayed the artefact. **A stale in-code comment outranked a
+corrected ambient rule in my own reading.** This removed the loudest argument
+against N-bare-sentinels, from the wrong side of the ledger.
+
+**THE CENSUS WAS ENUMERATING THE WRONG THING.** The count (15 production lines)
+is right, but 2 are *emits* and 1 a table entry — and emits cannot MISS a new
+spelling, they re-emit whatever already matched, so they fail differently.
+⭐ More importantly the census enumerated the sentinel **NAME**, while three
+hazard sites key on the **CHARACTER**: `recognize-broadcast-access`,
+`tree-parser.rkt`'s WS-mode Sigma detector (the twin of `parser.rkt`'s Q_U31
+angle refusal, keyed on lexeme rather than sentinel), and `recognize-dot-access`'s
+"not `.*`" guard.
+
+**⭐ A LIVE COLLISION NOBODY HAD NAMED**, and it is the character-level census
+that found it: the retired-broadcast recognizer **already owns** `.*_` and `.*-`
+— MEASURED, `rv.*_` ⟹ *"broadcast `.*_` was retired — its replacement is `:_`"*.
+[Q_U26](#q-u26) rules ravel to be bare `.*`, so if the star's continuation
+grammar is `{"" _ - -_}` then `.*_` is ravel-with-synth and today emits a message
+about a feature retired for unrelated reasons. **[DEFERRED 125].**
+
+**THE ANGLE BAND IS A FOURTH CARRIER OF DEFERRED 124's DEGRADATION** (measured):
+`<(x : Nat)*_ Nat>` ⟹ *"Unbound variable"*, where the bare form takes Q_U31's
+guided refusal. **[DEFERRED 126].**
+
+**⚠⚠ THE INSTRUMENT IS WORSE THAN BLIND — it would report FULL COVERAGE of a
+question it had stopped asking.** `tools/star-arrival-matrix.rkt` gates on
+`(string=? (token-entry-lexeme …) "*")` — the same exact-lexeme shape as the mint
+it exists to verify — AND its 11-carrier table hardcodes a bare `*` in every
+source string. After a widening it reports 190/190 covered and 0 cells for the
+new spelling, silently. ⭐ Its CONTROLS are the sharper half: they pass because
+`star-last-token-type` returns `#f` when there is no `*` token at all, so **the
+instrument cannot distinguish "correctly does not mint" from "I cannot see this
+token"** — which is exactly the distinction the widening turns into the whole
+question. **[DEFERRED 127].**
+
+**⭐ A NAMING DECISION THAT IS CHEAP NOW AND EXPENSIVE LATER.** The leak gate and
+four sibling pins match an **unanchored substring** `#rx"\$postfix-star"`, so
+naming the new sentinel `$postfix-star-synth` keeps five gates covering it for
+free; any other name silently narrows them. `p4e1-star-class` is an identity test
+and needs the new name regardless. Ruled into [Q_U52](#q-u52).
+
+**RULINGS THAT HAVE DIVERGED FROM HEAD, and 1b-v would inherit all three:**
+· **[Q_U42](#q-u42) diverges in BOTH its examples**, not just the headline one —
+  `rowsv:{tags}*` and the compose example `dcomp:{a}*` both take the
+  `star-omega-nominal` refusal where the ruling claims an answer. Fixing "the one
+  example" would leave the ruling still diverged.
+· **[Q_U45](#q-u45)'s literal output text is stale** — it states `{:x 1, :y 2}`;
+  HEAD prints `{:y 2, :x 1}`. The *equivalence* the ruling actually claims holds;
+  only the printed order differs. ⭐ So **even a ruling's own example text is not
+  a safe pin source** — "derive from the ruling, not the example" one layer down.
+· **The pre-written 1b-v pin block** (commented out in the battery) has 2 of 4
+  checks unexercisable (closer-adjacent) and **the other 2 STALE** — their
+  regexes predate kinds 1b-iii/1b-iv minted (a backticked key; `star-content-collision`
+  replacing "duplicate output key"). Uncommenting as-is gives 4 failures.
+
+**AND A RE-BASELINE NOBODY HAS SCHEDULED**: the DEFERRED-108 snapshot pins 19
+whole-file-aborting cells **as a set, compared whole**. A reader widening changes
+which sources abort, so it will go red and needs a deliberate re-baseline — not a
+bug, and it will look like one.
+
+**`*-`, STRESS-TESTED AND SPLIT OUT** — see [Q_U52](#q-u52) for the ruling. The
+critic could not falsify the "dissolve every ancestor, then `*`" equivalence on
+any shape where BOTH sides are writable, which is the useful result: it converts
+*"is this equivalent?"* into *"which shapes is `*-` even defined for?"* — a
+question Q_U48 has not been asked. Two families where the dissolve route cannot
+be written: a RENAMED ancestor, and a BROADCAST ancestor.
+
 <a id="p4e-1b-sequencing"></a>
 
 ##### §5.P4e-1b-sequencing — the remaining slices  (decided 2026-08-12; owner delegated the slicing)
@@ -9577,7 +9733,8 @@ moves, `walk-to-leaf` is the abort it lands in.
 | **1b-iv-B1** ✅ `714607dc` | **The nominal join lands in BOTH twins, INERT.** ⚠ **This is a SIGNATURE change, not an arm addition** — both twins DISCARD the layer's keys before joining (typing maps `record-field-type` over fields; reduction's `champ-values/canonical` ends `(map cdr …)`), and a keywise join needs them. So: a keyed-contents channel in both, the keywise join itself, and the content-vs-content collision refusal at the join. Still unreachable — the nominal refusal arm stays ahead of it. | The B1 shape that finally worked for 1b-iii after two reverts: semantics atomic across the twins, verified by direct call, zero surface change. |
 | **1b-iv-B2** ✅ `0e2f5af7` | **THE SPLICE GOES LIVE.** Remove the nominal shield for the DECIDABLE case; splice at the callers — free at Seat A (`star-branch-entries` already returns a component list; the dissolve route delegates to it) and a `select-steps-star-tail?` test at the ord-branch arm for Seat B keyless. [Q_U38](#q-u38)'s splice-vs-sibling and splice-vs-splice checks come FREE at the existing level dup gate. ⚠ `expr-Map` contents split off with their own PERMANENT-refusal kind (no enumerable keys ⇒ never provable, never refutable). | Thin wiring + the E2E that observes it, landing together. |
 | **1b-iv-C (scope flag, NOT this slice)** | `*_` is NOT carried by [Q_U49](#q-u49): its PREFIX SOURCE is under-specified and [Q_U41](#q-u41)'s two worked examples disagree (deleted layer's key vs contents' keys). Needs a ruling before code. Q_U39 separately defers the closer-adjacent band, so Q_U41's own showcase spelling is unreachable anyway. | Named rather than silently deferred. |
-| **1b-v — the star-SUFFIX slice** | **`*-`** ([Q_U48](#q-u48)) · the **`*-_`** decision · [Q_U39](#q-u39)'s closer-adjacent mint **+ `*_` itself, per [Q_U51](#q-u51)** — the mint is not attached to the slice, it IS the slice, because `*_`'s whole justification lives in the band the mint opens ([DEFERRED 124](DEFERRED.md)). The prefix rule is already RULED and forced. | The cont vocabulary settles ONCE: `*_` and `*-` each add a `(@star cont)` value, and `*-_` interacts with [Q_U41](#q-u41)'s nominal-only scoping, which is 1b-iv's ruling. |
+| **1b-v — the `*_` slice** ⬜ | [Q_U39](#q-u39)'s closer-adjacent **mint** (two bare sentinels, `$postfix-star-synth`) **+ `*_`'s SEMANTICS** — the shield lift, [Q_U51](#q-u51)'s prefix join, the **key threading** both twins skip, and the ω/broadcast Record arm's missing cont test. Scoped by [Q_U52](#q-u52): the mint alone would ship a better error message and leave Q_U51's capability non-existent. | The prefix rule is RULED and forced; the mint adds ONE spelling so the sentinel question collapses to two bare atoms. Record: [§5.P4e-1b-v](#p4e-1b-v) |
+| **1b-vi — the star-COLLAPSE slice** ⬜ | **`*-`** ([Q_U48](#q-u48)) · the **`*-_`** decision · the cont-axis **totality dispatcher** · plus TWO owed rulings [Q_U52](#q-u52) surfaced: what "total collapse" does to a **renamed** ancestor (`^p` and `^` are mutually exclusive spellings of one step), and the **`*->` token boundary** (`>` breaks the identifier, so `x{a*-> b}` would become a `*-` step plus a stray `>`). | Split from 1b-v because those two are RULINGS, not implementation, and because `*-` is the spelling that forces the totality work. |
 | **P4e-2** | the `.*` retirement inventory + [Q_U26](#q-u26) ravel | unchanged |
 
 **⚠ TWO HOLES C2 OPENS, AND THEY ARE C2's TO CLOSE** — both found by the
