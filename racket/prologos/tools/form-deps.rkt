@@ -45,6 +45,10 @@
          '$postfix-star   ;; D4.P4e-1a slice 1a-ii — inert until 1a-iii emits it;
                           ;; without it the dependency graph gains a spurious
                           ;; cross-form reference to a reader sentinel
+         '$postfix-star-synth ;; D4.P4e-1b slice 1b-v — the `*_` member of the same
+                          ;; family; inert until 1b-v-B2 widens the mint. Listed
+                          ;; NOW because a table entry that lags its family is how
+                          ;; the graph gains exactly the spurious edge above.
          'where 'of 'refl 'J
          'Type 'Unit 'unit))
 

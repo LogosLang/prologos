@@ -37,7 +37,12 @@
          (only-in "reader-forms.rkt"
                   colon-symbol? digit-headed-colon-symbol?
                   fused-type-annot? fused-annot->type-symbol
-                  split-glued-name-datum))
+                  split-glued-name-datum
+                  ;; CIU T6 D4.P4e-1b slice 1b-v: the star sentinel FAMILY, so
+                  ;; the three dispatch sites below cover every spelling by
+                  ;; delegating to ONE predicate instead of inlining an identity
+                  ;; test each — the drift shape reader-forms.rkt exists to forbid.
+                  postfix-star-sentinel? postfix-star-sentinel-cont))
 
 (provide parse-datum
          parse-toplevel-datum  ;; Rel T1 POL.9: command-position paren-goal dispatch
@@ -413,7 +418,7 @@
     ;; earlier "a product type needs a SPACE" opener was advice about a form the
     ;; user had not written. Inside `<…>` the guidance is the same either way:
     ;; add the space.
-    [(ormap (lambda (p) (eq? (stx->datum p) '$postfix-star)) parts)
+    [(ormap (lambda (p) (postfix-star-sentinel? (stx->datum p))) parts)
      (parse-error loc
        (string-append
         "inside `<…>`, `*` needs a SPACE before it — glued to a closing bracket,"
@@ -644,7 +649,7 @@
     ;; `d0ac2a58`'s class.
     ;; ⚠ Must precede the `symbol?` arm — `parse-symbol` would otherwise resolve it
     ;; as an ordinary name.
-    [(eq? d '$postfix-star)
+    [(postfix-star-sentinel? d)
      (parse-error loc
        (string-append
         "`*` (flatten) applies to a SELECTION step — there is no selection to its"
@@ -1487,10 +1492,22 @@
             ;; ⚠ `cur-subbed?` is PRESERVED on the cons (position H, decided):
             ;; the star does not unseal the sub-block-terminal rule; anything the
             ;; seal misses falls to typing's star-mid-branch refusal.
-            [(eq? it '$postfix-star)
-             (if cur
-                 (loop (cdr items) (cons (make-select-star 'flatten) cur) cur-subbed? acc)
-                 (loop (cdr items) (list (make-select-star 'flatten)) #f (closed-acc)))]
+            ;; ⭐⭐ 1b-v-B1 — THE CONT CHANNEL, and this arm is the whole gap.
+            ;; It hardcoded `'flatten` in BOTH legs and never called
+            ;; `split-star-lexeme`, so the closer-adjacent band was the ONE band
+            ;; of four that could not carry a continuation. Its three siblings
+            ;; (fused-identifier, `$dot-access`, ω) have threaded `cont` since
+            ;; 1b-iii. The cont now comes from the SENTINEL's own table entry.
+            ;; ⚠ INERT AT B1 BY CONSTRUCTION: the reader still mints only
+            ;; `$postfix-star`, whose cont IS `'flatten`, so this is
+            ;; byte-identical until B2 widens the mint. That ordering is
+            ;; deliberate — widening the reader first would make `x{a b}*_`
+            ;; silently mean `x{a b}*`, a wrong answer rather than a refusal.
+            [(postfix-star-sentinel? it)
+             (let ([cont (postfix-star-sentinel-cont it)])
+               (if cur
+                   (loop (cdr items) (cons (make-select-star cont) cur) cur-subbed? acc)
+                   (loop (cdr items) (list (make-select-star cont)) #f (closed-acc))))]
             ;; 1b-iii-B2: the fused band MINTS — one item, TWO steps, the star
             ;; normalized OUTWARD to a sibling of the name it was glued to
             ;; (Q_U40's only lexical obligation). `cur` is newest-first, hence

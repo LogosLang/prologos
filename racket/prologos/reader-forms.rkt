@@ -73,7 +73,16 @@
          arity2-access-sentinel-heads
          brace-access-sentinel-heads
          subject-preserving-access-heads
-         subject-preserving-access-head?)
+         subject-preserving-access-head?
+         ;; CIU T6 D4.P4e-1b slice 1b-v: the postfix-star sentinel FAMILY.
+         ;; parse-reader.rkt mints from a lexeme; parser.rkt and macros.rkt
+         ;; dispatch on the sentinel — opposite sides of a module boundary.
+         postfix-star-sentinel-table
+         postfix-star-sentinel?
+         postfix-star-sentinel-cont
+         postfix-star-sentinel-lexeme
+         postfix-star-lexeme->sentinel
+         postfix-star-lexemes)
 
 ;; The complete set. One entry today; the point is that it is ONE entry in ONE
 ;; place rather than an unfindable literal.
@@ -224,3 +233,59 @@
 
 (define (subject-preserving-access-head? x)
   (and (symbol? x) (memq x subject-preserving-access-heads) #t))
+
+;; ============================================================
+;; The postfix-star sentinel FAMILY — the ONE table (CIU T6 D4.P4e-1b slice 1b-v)
+;; ============================================================
+;; ⭐ WHY THIS LIVES HERE, and it is the same reason as every block above: TWO
+;; layers on opposite sides of a module boundary must agree. `parse-reader.rkt`
+;; MINTS the sentinel from a lexeme (reader time); `parser.rkt` and `macros.rkt`
+;; DISPATCH on it (parse + preparse). parse-reader.rkt cannot require macros.rkt,
+;; so without this table the family would be spelled out three times — and a
+;; second copy of a recognizer is precisely the drift this module exists to
+;; forbid (the F1b.7g bug: `recognize-keyword` had drifted from `ident-continue?`
+;; for eight characters while its siblings delegated).
+;;
+;; ⚠⚠ THE SET IS DELIBERATELY TWO, NOT FOUR. [Q_U52] split `*-` and `*-_` to
+;; slice 1b-vi because they carry two UNRULED questions (what "total collapse"
+;; does to a RENAMED ancestor, and the `*->` token boundary — `>` breaks the
+;; identifier, so `x{a*-> b}` would become a `*-` step plus a stray `>`) and
+;; because the cont axis has no totality dispatcher yet. Adding them here is a
+;; one-line change WHEN those are ruled; adding them EARLY would mint spellings
+;; that lex and then meet a cont no consumer knows — which renders as a silent
+;; bare `*` at all five `select-star-cont` readers, including the printer.
+;;
+;; ⚠ THE NAME `$postfix-star-synth` IS LOAD-BEARING, not cosmetic. The battery's
+;; leak gate and four sibling pins match an UNANCHORED substring `#rx"\$postfix-star"`,
+;; so a `$postfix-star`-PREFIXED name keeps five existing gates covering the new
+;; sentinel for free. Any other name silently narrows them. (`p4e1-star-class` is
+;; an identity test and needs the new name listed explicitly regardless.)
+;;
+;; Each entry is (SENTINEL CONT LEXEME). The lexeme direction is not decoration:
+;; `unmint-star-for-echo`, the quote and quasiquote lowerings all have to render
+;; the operator the USER WROTE, and getting that wrong is a silent wrong echo.
+(define postfix-star-sentinel-table
+  '(($postfix-star       flatten       "*")
+    ($postfix-star-synth flatten-synth "*_")))
+
+(define (postfix-star-sentinel? x)
+  (and (symbol? x) (assq x postfix-star-sentinel-table) #t))
+
+;; the `(@star cont)` continuation this sentinel carries — `#f` if not one
+(define (postfix-star-sentinel-cont x)
+  (let ([e (and (symbol? x) (assq x postfix-star-sentinel-table))])
+    (and e (cadr e))))
+
+;; the SURFACE spelling, for echo / quote lowering
+(define (postfix-star-sentinel-lexeme x)
+  (let ([e (and (symbol? x) (assq x postfix-star-sentinel-table))])
+    (and e (caddr e))))
+
+;; the reader's direction: a lexeme the mint gate should re-type, or #f
+(define (postfix-star-lexeme->sentinel lex)
+  (let loop ([t postfix-star-sentinel-table])
+    (cond [(null? t) #f]
+          [(string=? lex (caddr (car t))) (car (car t))]
+          [else (loop (cdr t))])))
+
+(define postfix-star-lexemes (map caddr postfix-star-sentinel-table))

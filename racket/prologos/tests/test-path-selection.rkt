@@ -27,6 +27,8 @@
          "../driver.rkt"
          "../reduction.rkt"
          "../namespace.rkt"
+         ;; D4.P4e-1b slice 1b-v: the star sentinel FAMILY table, pinned directly.
+         (prefix-in rf: "../reader-forms.rkt")
          (prefix-in tc: "../typing-core.rkt")   ;; D4.P4a: select-project, for the totality pins
          ;; D4.P4e-1b 1b-iii-A: the FAIL-KIND totality pin. Relative path, per
          ;; testing.md — a collection-path require loads a SECOND compiler instance.
@@ -8084,6 +8086,41 @@
 ;;   (check-true (p4e1-has? "ns l5\ndef m := @[{:a {:x 1} :b {:y 2}} {:a {:x 3} :b {:y 4}}]\nm:{a* b}"
 ;;                          #rx":x 1, :b \\{:y 2\\}")
 ;;               "m:{a* b} splices a and KEEPS b's key"))
+
+(test-case "P4e-1b [1b-v-B1]: the postfix-star sentinel FAMILY is ONE table, and the closer band reads it"
+  ;; ⭐ B1 lands the cont channel INERT: the reader still mints only
+  ;; `$postfix-star`, so nothing on the surface moves. The only way to know the
+  ;; wiring is live is to exercise the table directly and to mutate it — both
+  ;; done at B1. These pins are what keep B2 from drifting it.
+  ;; ⚠ The set is deliberately TWO, not four: [Q_U52] split `*-`/`*-_` to 1b-vi.
+  (check-equal? (map car rf:postfix-star-sentinel-table)
+                '($postfix-star $postfix-star-synth)
+                "the family is exactly the two spellings 1b-v mints")
+  (check-equal? (rf:postfix-star-sentinel-cont '$postfix-star) 'flatten)
+  (check-equal? (rf:postfix-star-sentinel-cont '$postfix-star-synth) 'flatten-synth)
+  ;; the reverse direction is not decoration — `unmint-star-for-echo` and both
+  ;; quote lowerings render the operator the USER WROTE from it.
+  (check-equal? (rf:postfix-star-sentinel-lexeme '$postfix-star) "*")
+  (check-equal? (rf:postfix-star-sentinel-lexeme '$postfix-star-synth) "*_")
+  ;; the reader's direction, which B2 turns on
+  (check-equal? (rf:postfix-star-lexeme->sentinel "*") '$postfix-star)
+  (check-equal? (rf:postfix-star-lexeme->sentinel "*_") '$postfix-star-synth)
+  (check-false (rf:postfix-star-lexeme->sentinel "*-")
+               "`*-` is 1b-vi's — minting it here would meet a cont no consumer knows")
+  (check-false (rf:postfix-star-lexeme->sentinel "a*")
+               "the table is exact, not a prefix match")
+  ;; the predicate every census site now delegates to
+  (check-true  (rf:postfix-star-sentinel? '$postfix-star))
+  (check-true  (rf:postfix-star-sentinel? '$postfix-star-synth))
+  (check-false (rf:postfix-star-sentinel? '$dot-access))
+  (check-false (rf:postfix-star-sentinel? "not-a-symbol"))
+  ;; ⚠ THE NAME IS LOAD-BEARING: the battery's leak gate and four sibling pins
+  ;; match an UNANCHORED `$postfix-star` substring regex, so a `$postfix-star`-prefixed
+  ;; name keeps them covering the new sentinel for free. Pinned so a rename
+  ;; cannot silently narrow five gates.
+  (check-true (for/and ([e (in-list rf:postfix-star-sentinel-table)])
+                (regexp-match? #rx"^[$]postfix-star" (symbol->string (car e))))
+              "every family member must keep the `$postfix-star` prefix"))
 
 ;; ---- 1b-iv/1b-v: [Q_U38] collisions REFUSE, and [Q_U41]'s `*_` is the remedy
 ;;

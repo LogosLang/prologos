@@ -1172,7 +1172,7 @@
        (not (eq? x '$select-brace))     ; D4.P1b-iii adjacent-brace select block
        (not (eq? x '$select))           ; D4.P3a fused select head (LOUD-if-missed: whole-file abort in a defmacro template)
        (not (eq? x '$select-path))      ; D4.P4b-ii-2b the DOT select head — same LOUD-if-missed class
-       (not (eq? x '$postfix-star))     ; D4.P4e-1a slice 1a-ii — the star sentinel, landed INERT
+       (not (postfix-star-sentinel? x)) ; D4.P4e-1a slice 1a-ii; 1b-v made it the FAMILY — the star sentinel, landed INERT
                                         ; (1a-iii emits it). ⚠ It is the FIRST BARE-SYMBOL sentinel,
                                         ; which falsifies the invariant `datum-subst-list`'s splice
                                         ; arm is justified by ("never a bare symbol followed by
@@ -5180,7 +5180,7 @@
     ;; single-element wrap below and takes Q_U35's EXPRESSION message — wrong
     ;; seat, though still guided.
     [(and (list? ptype) (pair? ptype)
-          (or (memq '* ptype) (memq '$postfix-star ptype)))
+          (or (memq '* ptype) (ormap postfix-star-sentinel? ptype)))
      `($angle-type ,@ptype)]
     ;; All other grouped types: wrap as single element for parse-datum
     ;; Handles: (-> Nat Nat), (List A), (Sigma (_ ...) B), (Option A), etc.
@@ -6948,7 +6948,10 @@
 (define (unmint-star-for-echo d)
   (cond
     [(syntax? d) (unmint-star-for-echo (syntax->datum d))]
-    [(eq? d '$postfix-star) '*]
+    ;; ⚠ 1b-v-B1: echo the lexeme the USER WROTE, not a hardcoded `*`. With the
+    ;; family this is the difference between echoing `*_` and silently echoing
+    ;; `*` — a wrong echo in the one helper whose whole job is a faithful echo.
+    [(postfix-star-sentinel? d) (string->symbol (postfix-star-sentinel-lexeme d))]
     [(pair? d) (cons (unmint-star-for-echo (car d)) (unmint-star-for-echo (cdr d)))]
     [else d]))
 
@@ -6979,7 +6982,7 @@
     ;;  `preparse-expand-subforms` does not re-enter.)
     [(not (or (ormap access-sentinel? datum)
               (ordinal-rekey-shatter? datum)
-              (memq '$postfix-star datum)))
+              (ormap postfix-star-sentinel? datum)))
      datum]
     ;; Pattern 2a/3a (RETIRED): ($dot-key :kw) at head or standalone
     [(dot-key? (car datum))
@@ -7043,10 +7046,14 @@
            ;; owns the territory: `parse-datum` (expression → Q_U35's message),
            ;; `unwrap-angle-type` (type → Q_U31's message), the quasiquote
            ;; lowering (data → captured as the `*` the user wrote).
-           [(eq? (car elems) '$postfix-star)
+           [(postfix-star-sentinel? (car elems))
+            ;; ⚠ 1b-v-B1: re-emit the sentinel that MATCHED, not the literal
+            ;; `$postfix-star`. A construction site cannot MISS a new spelling —
+            ;; it emits whatever the arm above matched — but it can emit the
+            ;; WRONG one, which is a silent cont downgrade.
             (if (and (pair? acc) (star-fusable-target? (car acc)))
                 (loop (cdr elems)
-                      (cons `($select-path ,(car acc) $postfix-star) (cdr acc)))
+                      (cons `($select-path ,(car acc) ,(car elems)) (cdr acc)))
                 ;; not the fold's territory — pass it through untouched
                 (loop (cdr elems) (cons (car elems) acc)))]
            [(dot-access? (car elems))
@@ -7854,7 +7861,7 @@
     ;; into a user-visible Datum value. This is capture-fidelity, NOT display —
     ;; contrast `pp-datum`, which deliberately prints the internal name because
     ;; there an escaped sentinel IS the defect. Here it is legitimate source.
-    [(eq? d '$postfix-star) `(datum-sym (symbol-lit *))]
+    [(postfix-star-sentinel? d) `(datum-sym (symbol-lit ,(string->symbol (postfix-star-sentinel-lexeme d))))]
     ;; Keyword-like symbols (:foo) → (datum-kw :foo)
     [(keyword-like-symbol? d) `(datum-kw ,d)]
     ;; Regular symbols → (datum-sym (symbol-lit name))
@@ -7903,7 +7910,7 @@
      (cadr d)]
     ;; the star sentinel is captured as the `*` the user wrote — Q_U37 data
     ;; territory; see `datum->datum-expr`'s twin arm for the full reasoning
-    [(eq? d '$postfix-star) `(datum-sym (symbol-lit *))]
+    [(postfix-star-sentinel? d) `(datum-sym (symbol-lit ,(string->symbol (postfix-star-sentinel-lexeme d))))]
     ;; Keyword-like symbols (:foo) → (datum-kw :foo)
     [(keyword-like-symbol? d) `(datum-kw ,d)]
     ;; Regular symbols → (datum-sym (symbol-lit name))
