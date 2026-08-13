@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 124**
+> ### **NEXT FREE: 125**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7251,3 +7251,28 @@ assert kinds and code, never prose** — the same class F5 was landed to fix.
 `pp-select-branch` renders every `ord-step` as `.N`, so even a faithful label
 would spell `y{a[0]*}`'s branch as `a.0*`. That is [DEFERRED 113](#113)'s class
 (a renderer hardcoding `.`), not this one.
+
+---
+
+### 124. ⬜ `*_` IS STRUCTURALLY UNSPELLABLE AT THE CLOSER-ADJACENT SEAT — `x{a b}*_` lexes as `*` applied to `_`, so that seat's guided not-yet can never fire from the surface
+
+Found by the CIU T6 D4.P4e-1b-iv adversarial verify (`wf_0df64e7f-231`).
+**Pre-existing lexing** — untouched by 1b-iv — but it is recorded now because the
+upcoming `*_` slice will otherwise assume a coverage the surface cannot deliver.
+
+**MEASURED**: `mn{a*_}` reaches the intended guided refusal (the FUSED-identifier
+band works). `mn{a b}*` is a live spelling. `mn{a b}*_` does NOT reach the `*_`
+path at all — after a closing `}` the reader does not split `*_` the way it does
+after an identifier, so it lexes as `*` applied to `_`.
+
+**WHY IT MATTERS FOR THE NEXT SLICE**: `*_`'s guard in `star-join-type` is
+reachable only from the fused band. Any claim that `*_` is "refused everywhere"
+is therefore untestable at the closer-adjacent seat — the seat that produced the
+`'path` regression 1b-iv-B2 self-caught, and the one whose landing Q_U49 made
+sort-sensitive. ⚠ [Q_U39](#q-u39) already defers the closer-adjacent `*_` MINT;
+this entry is the narrower fact that the seat cannot even be probed today.
+
+**OPTIONS**: teach the reader to split `*_` after a closer as it does after an
+identifier (which is Q_U39's mint, so it belongs with that ruling), or record
+explicitly in the `*_` slice that the closer-adjacent seat is out of scope and
+its guard is unexercised-by-construction.

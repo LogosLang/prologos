@@ -9142,6 +9142,57 @@ first).** The adjudicator was asked outright whether round 1's shape repeats:
 | **F7** | MINOR | the round-1 fix spliced two definitions between a PRECONDITION header and the function it guards | ✅ FIXED `7ed99f39` |
 | F6 | MINOR | a pre-existing PATH-band message; explicitly NOT a round-2 finding and NOT a regression | ⬜ with DEFERRED 105/116 |
 
+<a id="p4e-1b-iv-verify"></a>
+
+##### §5.P4e-1b-iv verify — 2 BLOCKING + 9  (`dbb8a55d` · `729ac3b0`)
+
+`wf_0df64e7f-231`, 4 lenses + adjudicator: 16 raw → 11 survivors, none killed
+outright, 5 merged to 2 root causes. Suite **10206/488/0**, battery **539**.
+⭐ **The sibling question answered YES FOUR TIMES** — asking it outright has now
+produced findings in THREE consecutive rounds.
+
+**BLOCKING ×2:**
+· **A TYPE/VALUE SPLIT, in my own fix.** [Q_U20] rules that a SUB inner assembles
+  at `'block` ALWAYS; typing forces it with a literal at two sites, reduction's
+  `bcast-apply` fed the chain the OUTER sort. B2's `'path` fix reached both
+  landing HELPERS and **neither twin's FEED**. Measured at 0 errors:
+  `vv:{a*}` → value `@[@[{:x 1}] @[{:x 2}]]` against type `[PVec {:x Int}]`, and
+  it PROPAGATED — `r:x` → `none : [PVec Int]`, a well-typed expression whose
+  value is `none`.
+· **[DEFERRED 117] discharged**, and its exposure was understated: on the
+  UNTOUCHED vector path `nv{m k^.{a*}}` is a WHOLE-FILE ABORT and the swapped
+  order silently drops a key at 0 errors. ⭐ The landmine held — gate and `findf`
+  moved in ONE edit, plus reduction's twin.
+
+**THE SEMANTIC ONE**: a TRANSPARENT ordinal changed whether the landing spliced.
+`select-steps-star-tail?` was used caller-side as a proxy for "did the tail arm
+fire" and is a false negative through no-layer steps — `vk1{0.m*}` spliced,
+`vk2{0 .0.m*}` did not. Minted `select-steps-yield-bare-join?`; the ARM keeps its
+exactly-two test, because a KEYED prefix must re-nest and that reason simply does
+not apply to a step making no layer.
+
+**FOUR MESSAGES Q_U49 HAD FALSIFIED**, each remedy RUN: `star-dup-key` named an
+UNSPELLABLE remedy (a starred segment cannot carry a rename — `seg^k*` is a parse
+error) and mis-diagnosed lifted keys; `star-l4-mixed`'s rule was negated (a
+nominal star lands KEYED) and its remedy pointed the wrong way (`mx{a* c^}` is an
+error, `mx{a* c}` works); the re-scoped `star-nominal` promised bare `*` works
+where it PERMANENTLY refuses; `star-map-opaque` rendered the LAYER when it fired
+from the CONTENT arm. The ω arm also skipped its siblings' classification and
+gave the N-copies argument to zero-key element rows.
+
+⚠⚠ **AND ONE FILED GAP WAS NOT ONE** — the verify's S8 said the two permanent
+typing refusals lack sibling arms in `star-join-value`. **I wrote one and it
+broke a working shape**: `rrb layer + champ contents ⇒ oops` made `vhm{0.{0}*}`
+panic where typing splices — reduction refusing where typing ACCEPTS, the
+divergence inverted. Both refusals are TYPE properties invisible at the value
+layer (an opaque Map and a closed record are both champs; an ω container and a
+legal Seat B keyless layer are both rrbs). **The asymmetry is inherent, not an
+omission**, and that is now recorded at the seat.
+
+⚠ Recorded, not fixed: [DEFERRED 124](DEFERRED.md) — `*_` is structurally
+unspellable at the closer-adjacent seat, so the upcoming `*_` slice must not
+assume coverage there.
+
 <a id="p4e-1b-iv"></a>
 
 ##### §5.P4e-1b-iv — the NOMINAL splice  (A `b216f926` · B1 `714607dc` · B2 `0e2f5af7`)
