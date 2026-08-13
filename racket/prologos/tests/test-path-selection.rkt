@@ -7425,7 +7425,9 @@
                          ;; UNLISTED kind, so adding a kind obliges this line in
                          ;; the same commit as typing-errors.rkt — that coupling
                          ;; is the whole reason the loop is hand-written.
-                         star-dup-key))])
+                         star-dup-key
+                         ;; 1b-iv-B1's two, same obligation, same commit.
+                         star-content-collision star-map-opaque))])
     (check-not-exn
      (lambda ()
        (let ([msg (te:format-select-fail (tc:select-fail kind '() 'probe-label row) '())])
@@ -8421,3 +8423,89 @@
   (check-true (regexp-match? #rx"positional" (unbox why2))
               (format "a vector-content layer under `*_` IS positional and must say so. Got: ~a"
                       (unbox why2))))
+
+;; ============================================================
+;; CIU T6 D4.P4e-1b slice 1b-iv-B1 [Q_U49] — the KEYWISE NOMINAL JOIN, both
+;; twins, INERT. Nothing on the surface reaches these yet (the `star-nominal`
+;; arms still fire ahead of them); B2 flips those arms. Verified by DIRECT CALL,
+;; which is the only verification available to an inert slice — and the shape
+;; that finally worked for 1b-iii after two reverts.
+;; ⚠ MUTATION-TESTED PER TWIN, since a direct-call pin on new code proves only
+;; that the code runs.
+;; ============================================================
+
+(define (b1iv-row . kvs)   ;; (b1iv-row '(x . Int) …) → a closed keyword row TYPE
+  (make-record 'keyword
+               (map (lambda (kv) (cons (car kv) (record-field (cdr kv) 'present))) kvs)
+               'closed))
+(define (b1iv-fail-k kind l) (values #f (tc:select-fail kind '() 'b1-label l)))
+
+(test-case "1b-iv-B1 typing: the nominal join MERGES its contents' fields keywise"
+  (define c1 (b1iv-row (cons 'x (expr-Int))))
+  (define c2 (b1iv-row (cons 'y (expr-Int))))
+  (let-values ([(ty f) (tc:star-nominal-join-type (list c1 c2) b1iv-fail-k c1)])
+    (check-false f "distinct keys must join, not refuse")
+    (check-true (expr-Record? ty) "the join of Map contents is a row")
+    (check-equal? (sort (map car (expr-Record-fields ty)) symbol<?) '(x y)
+                  "both contents' fields survive the merge")
+    (check-false (pair? ty)
+                 "BARE — the join returns a type, never a component; the caller wraps")))
+
+(test-case "1b-iv-B1 typing: a COLLISION between contents REFUSES, and does so BEFORE make-record"
+  ;; ⚠ The ordering is the point. `make-record` dedups LAST-WRITE-WINS silently,
+  ;; so a check after the fact could never see the field it had already dropped.
+  (define c1 (b1iv-row (cons 'k (expr-Int))))
+  (define c2 (b1iv-row (cons 'k (expr-Int))))
+  (let-values ([(ty f) (tc:star-nominal-join-type (list c1 c2) b1iv-fail-k c1)])
+    (check-false ty "a colliding join must not produce a type")
+    (check-eq? (tc:select-fail-kind f) 'star-content-collision
+               "…and it must be the collision kind, not a generic not-yet")))
+
+(test-case "1b-iv-B1 typing: an `expr-Map` content refuses PERMANENTLY, with its own kind"
+  ;; A `[Map K V]` has no field list, so a collision there can be neither proven
+  ;; nor ruled out — a permanent answer, and the shared `star-nominal` message
+  ;; ("the nominal case is the next slice") would lie about it forever.
+  (let-values ([(ty f) (tc:star-nominal-join-type
+                        (list (expr-Map (expr-Keyword) (expr-Int)))
+                        b1iv-fail-k (b1iv-row (cons 'x (expr-Int))))])
+    (check-false ty)
+    (check-eq? (tc:select-fail-kind f) 'star-map-opaque)))
+
+(test-case "1b-iv-B1 typing: an OPEN content row refuses — the conservative half of [Q_U38]"
+  ;; The pre-B1 `star-open-row` guards applied to the LAYER only; the rows whose
+  ;; keys actually collide are the CONTENTS, and they had no seat.
+  (define open-row (make-record 'keyword
+                                (list (cons 'x (record-field (expr-Int) 'present)))
+                                'dyn))
+  (let-values ([(ty f) (tc:star-nominal-join-type (list open-row) b1iv-fail-k open-row)])
+    (check-false ty "an open content row cannot prove non-collision")
+    (check-eq? (tc:select-fail-kind f) 'star-open-row)))
+
+(test-case "1b-iv-B1 reduction: the value twin merges keywise and returns the champ BARE"
+  (define (row1 k v)
+    (expr-champ (champ-insert champ-empty (equal-hash-code (expr-keyword k))
+                              (expr-keyword k) (expr-int v))))
+  (define r (star-nominal-join-value (list (row1 'x 1) (row1 'y 2))
+                                     (lambda (why) (error 'b1-pin "unexpected escape: ~a" why))))
+  (check-true (expr-champ? r) "the nominal join yields a champ")
+  (check-false (pair? r) "BARE — the twins must agree on shape, or C1's contract breaks")
+  (check-equal? (sort (map (lambda (kv) (expr-keyword-name (car kv)))
+                           (champ-entries (expr-champ-racket-champ r)))
+                      symbol<?)
+                '(x y)
+                "both contents' entries survive"))
+
+(test-case "1b-iv-B1 reduction: a colliding join ESCAPES rather than silently overwriting"
+  ;; `champ-insert` overwrites silently — the second of [Q_U38]'s two
+  ;; last-write-wins sites. The guard is `champ-has-key?` BEFORE the insert.
+  (define (row1 k v)
+    (expr-champ (champ-insert champ-empty (equal-hash-code (expr-keyword k))
+                              (expr-keyword k) (expr-int v))))
+  (define why (box #f))
+  (define r (let/ec esc
+              (star-nominal-join-value (list (row1 'k 1) (row1 'k 2))
+                                       (lambda (w) (set-box! why w) (esc 'escaped)))))
+  (check-eq? r 'escaped "a collision must escape, never last-win")
+  (check-true (regexp-match? #rx"compiler-invariant violation" (unbox why))
+              (format "…as an invariant violation, since typing owns the user-facing refusal. Got: ~a"
+                      (unbox why))))

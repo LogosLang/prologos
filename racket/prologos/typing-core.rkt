@@ -70,6 +70,7 @@
          ;; standard, and this is the seat where a twin divergence already cost a
          ;; whole-file abort.
          star-join-type
+         star-nominal-join-type
          (struct-out select-uniform) (struct-out select-view)
          (struct-out select-union)
          ;; QTT P2 (2026-07-30): the reduce-arm binder derivation, shared with
@@ -1778,6 +1779,62 @@
                  [(expr-Map? l) (fail-k 'star-nominal l)]
                  [(expr-fvar? l) (fail-k 'star-open-row l)]
                  [else (fail-k 'star-leaf l)]))))
+
+;; ⭐⭐ D4.P4e-1b slice 1b-iv-B1 [Q_U49] — THE KEYWISE NOMINAL JOIN, type side.
+;; INERT at B1: `star-join-type`'s `star-nominal` arms still fire ahead of this,
+;; so nothing on the surface reaches it. B2 flips those arms to call it. Landed
+;; now, atomically with its reduction twin, and verified by DIRECT CALL — the
+;; B1/B2 shape that finally worked for 1b-iii after two reverts.
+;;
+;; `contents` are the deleted layer's VALUES (for a nominal layer, one closed
+;; keyword row each). The join merges their FIELDS; the layer's own keys are
+;; discarded, because discarding them IS the layer delete. ⚠ Those keys are what
+;; `*_` would need for provenance — which is why `*_` is NOT carried by Q_U49 and
+;; why this function needs no keyed-contents channel. (The grounding audit said
+;; 1b-iv "changes both helpers' SIGNATURES"; that is true of `*_` only, and was
+;; carried over to the plain join without checking. It does not.)
+;;
+;; ⚠⚠ THE COLLISION REFUSAL MUST PRECEDE `make-record`, NOT FOLLOW IT.
+;; `make-record` dedups LAST-WRITE-WINS **silently** (syntax.rkt), so a check
+;; after the fact could never see the field it had already dropped. This is one
+;; of the TWO silent overwrite sites [Q_U38] names; the other is the value
+;; twin's `champ-insert`, guarded the same way.
+;;
+;; ⚠ `expr-Map` CONTENTS ARE A THIRD CASE AND REFUSE PERMANENTLY, not "not yet".
+;; `(struct expr-Map (k-type v-type))` carries NO field list, so a collision
+;; there can never be proven and never be refuted — under Q_U38's
+;; refuse-on-possibility that is a permanent answer, and it needs its own kind
+;; because the shared `star-nominal` message promises "the nominal case is the
+;; next slice".
+;;
+;; ⚠ CONTENT openness is checked HERE, and it had no seat before. The pre-B1
+;; `star-open-row` guards apply to the LAYER only, while the rows whose keys
+;; actually collide are the CONTENTS — the conservative half of Q_U38 that the
+;; audit found unbuilt.
+(define (star-nominal-join-type contents fail-k l)
+  (let loop ([cs contents] [acc '()] [seen (hasheq)])
+    (if (null? cs)
+        ;; fields are accumulated reversed; `make-record` canonicalizes by label
+        ;; anyway, so the order here is not observable in the TYPE. ⚠ The VALUE
+        ;; twin's champ does NOT canonicalize, so value order and type order can
+        ;; disagree — pin them separately (Q_U38's third fact).
+        (values (make-record 'keyword (reverse acc) 'closed) #f)
+        (let ([w (whnf (car cs))])
+          (cond
+            [(expr-Map? w) (fail-k 'star-map-opaque l)]
+            [(not (closed-keyword-row? w)) (fail-k 'star-open-row l)]
+            [(not (andmap (lambda (f) (eq? (record-field-presence (cdr f)) 'present))
+                          (expr-Record-fields w)))
+             (fail-k 'star-open-row l)]
+            [else
+             (let inner ([fs (expr-Record-fields w)] [acc acc] [seen seen])
+               (cond
+                 [(null? fs) (loop (cdr cs) acc seen)]
+                 [(hash-ref seen (car (car fs)) #f)
+                  (fail-k 'star-content-collision l)]
+                 [else (inner (cdr fs)
+                              (cons (car fs) acc)
+                              (hash-set seen (car (car fs)) #t))]))])))))
 
 (define (select-branch-entries ctx tm b path seen sort)
   (define (walk-to-leaf k)  ;; shared by collapse + keyless: k gets leaf ft

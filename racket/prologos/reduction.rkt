@@ -50,6 +50,7 @@
          ;; the twin could only have been mutation-tested while its partner was
          ;; directly pinned. Same standard, both sides.
          star-join-value
+         star-nominal-join-value
          current-nf-cache current-whnf-cache
          current-reduction-fuel current-nat-value-cache
          ;; CIU T6 F1b.5-s2: the degradation guard (exemption-list membership
@@ -1687,6 +1688,41 @@
 ;; `oops` is the caller's invariant-violation escape — `(why) → ⊥` through
 ;; reduction's single `let/ec`. ⚠ NEVER `error`: typing carries the user-facing
 ;; refusal, and a raise on this path is a WHOLE-FILE abort.
+;; ⭐⭐ D4.P4e-1b slice 1b-iv-B1 [Q_U49] — THE KEYWISE NOMINAL JOIN, value side.
+;; The twin of `star-nominal-join-type`, landing in the SAME commit — the two
+;; "below a kept head" walks are the pair this slice has already paid three
+;; twin-drift defects for, and B1's whole shape is "both twins, atomically,
+;; inert". INERT here too: `star-join-value`'s non-vector arm still escapes ahead
+;; of it, so nothing on the surface reaches this at B1.
+;;
+;; ⚠ COLLISIONS ESCAPE BEFORE `champ-insert`, never after — `champ-insert`
+;; overwrites silently, and it is the second of [Q_U38]'s two silent
+;; last-write-wins sites (the first is the type twin's `make-record`). Guarded
+;; with `champ-has-key?`, which is why the check is possible without the unused
+;; `champ-insert-join`.
+;;
+;; ⚠ THE ESCAPE IS AN INVARIANT VIOLATION, NOT A USER-FACING REFUSAL. Typing's
+;; twin carries the guided message; if a collision reaches the value layer,
+;; typing did not run. That is this file's standing doctrine for the star seat.
+;;
+;; ⚠ ORDER: the champ does NOT canonicalize (its entry order is hash order —
+;; measured, and NOT insertion order as the design once recorded), while the
+;; type twin's `make-record` sorts by label. So the joined value's printed order
+;; and its type's printed order can disagree. That is pre-existing and is
+;; Q_U38's third fact; any pin must assert the two separately.
+(define (star-nominal-join-value contents oops)
+  (expr-champ
+   (for/fold ([acc champ-empty]) ([c (in-list contents)])
+     (let ([w (whnf c)])
+       (if (expr-champ? w)
+           (for/fold ([a acc]) ([kv (in-list (champ-entries (expr-champ-racket-champ w)))])
+             (let ([k (car kv)])
+               (if (champ-has-key? a (equal-hash-code k) k)
+                   (oops (format "two joined contents both carry the key `~a` (typing carries the user-facing refusal; a collision reaching the value layer is a compiler-invariant violation)"
+                                 k))
+                   (champ-insert a (equal-hash-code k) k (cdr kv)))))
+           (oops "a non-map content reached the nominal join (typing carries the user-facing refusal)"))))))
+
 (define (star-join-value layer star oops)
   (let* ([l (whnf layer)]
          [contents

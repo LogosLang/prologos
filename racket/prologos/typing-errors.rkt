@@ -638,6 +638,32 @@
      ;; type nothing names) — deliberately generic, deliberately rare.
      (format "select: `~a` — `*` (flatten) is not implemented yet for this layer (`~a`)"
              label (pp-expr row names))]
+    ;; ⭐⭐ 1b-iv-B1 [Q_U49/Q_U38] — the two kinds the NOMINAL join needs. Minted
+    ;; WITH their arms and with the battery's hand-written render-loop entry in
+    ;; the SAME commit: that loop cannot self-report an unlisted kind, and a `#f`
+    ;; arm here is SILENT (it falls through `infer/err`'s `or` chain to the bare
+    ;; generic, and nested it is a contract violation the blanket handler
+    ;; swallows). Both kinds are unreachable until B2 flips the `star-nominal`
+    ;; arms; landing the messages now is what keeps the axis total meanwhile.
+    [(star-content-collision)
+     ;; The collision INSIDE one join — two of the joined contents carry the same
+     ;; key. Distinct from `star-dup-key`, which is the LEVEL collision (a lifted
+     ;; key against a sibling branch's). That one comes free once the splice
+     ;; lands, because spliced fields become keyed components the existing dup
+     ;; gate already folds over; this one has no other seat.
+     ;; ⚠ The remedy is NOT `^k'` — a rename re-keys a BRANCH, and both colliding
+     ;; keys here come from INSIDE the joined layer, where no branch names them.
+     (format "select: `~a` — `*` (flatten) joins the layer's contents keywise, and two of them carry the same key, so the join would silently drop one (layer `~a`). Star a narrower layer, or select the colliding fields as separate branches"
+             label (pp-expr row names))]
+    [(star-map-opaque)
+     ;; ⚠ PERMANENT, not "not yet" — and that distinction is the whole reason it
+     ;; is its own kind. A `[Map K V]` carries no field list at all, so a
+     ;; collision among its contents can never be PROVEN and never be REFUTED;
+     ;; under Q_U38's refuse-on-possibility that is a final answer. The shared
+     ;; `star-nominal` message promises "the nominal case is the next slice",
+     ;; which would be a lie here however many slices land.
+     (format "select: `~a` — `*` (flatten) needs to know a layer's keys to join it keywise, and `~a` is a `Map` type, whose keys are not statically known (this is permanent, not a not-yet: a key collision there can be neither proven nor ruled out). Use a record-typed layer, or seal the subject against a schema"
+             label (pp-expr row names))]
     [(star-open-row)
      ;; ⚠ the render loop caught this wording never naming the OPERATOR the
      ;; user wrote — every star message names `*`.
