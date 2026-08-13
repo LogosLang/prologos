@@ -188,7 +188,13 @@
 (define skip-only? (make-parameter #f))
 (define extra-skips (make-parameter '()))
 (define record-timings? (make-parameter #t))
-(define timeout-secs (make-parameter 600))
+;; Per-file timeout, now genuinely threaded to batch-worker.rkt (see the spawn
+;; site). 300 rather than the old nominal 600: the value is REAL now, so it is
+;; also how long a hung file blocks the suite. 300 is 2.5x the largest honest
+;; file (test-path-selection.rkt at 112-117s) and still 2x faster than 600 at
+;; catching a hang. ⚠ It is strictly MORE headroom than shipped before in BOTH
+;; modes — the effective limit was the worker's hardcoded 120s, not this number.
+(define timeout-secs (make-parameter 300))
 (define do-precompile? (make-parameter #t))
 (define do-pnet-cache? (make-parameter #t))
 (define show-failures? (make-parameter #f))
@@ -750,9 +756,18 @@
   (define all-procs '())
   (define all-stdins '())
 
+  ;; ⚠⚠ THE `--timeout` FLAG DID NOT REACH THE WORKER, AND THE RUNNER PRINTED IT
+  ;; ANYWAY. This spawned `batch-worker.rkt --stdin` with no `--file-timeout`, so
+  ;; the per-file kill was ALWAYS the worker's own default (120s) no matter what
+  ;; `--timeout` said — while the banner three lines below announced "timeout:
+  ;; 600s". A file at 117s was therefore 97% of a budget nobody could see and the
+  ;; documented knob could not raise. Passing it makes the printed number true and
+  ;; gives ONE place to set the limit.
+  (define file-timeout-arg (number->string (timeout-secs)))
   (for ([i (in-range jobs)])
     (define-values (proc stdout stdin stderr)
-      (subprocess #f #f #f racket-path batch-worker-path "--stdin"))
+      (subprocess #f #f #f racket-path batch-worker-path "--stdin"
+                  "--file-timeout" file-timeout-arg))
     (set! all-procs (cons proc all-procs))
     (set! all-stdins (cons stdin all-stdins))
     ;; Send first file to each worker to get them started
@@ -783,11 +798,22 @@
   (define collected '())
   (define timeout-count 0)
   (define bailed? #f)
-  (let loop ([remaining file-count] [count 0])
+  (let loop ([remaining file-count] [count 0] [first-waited 0])
     (when (> remaining 0)
       ;; Track 10B: Use short timeout (30s) for the FIRST result.
       ;; If no result arrives in 30s, workers likely crashed silently.
       ;; Subsequent results use the normal per-file timeout.
+      ;;
+      ;; ⚠⚠ 30s IS A LIVENESS PROBE, NOT A DEADLINE — and treating it as a
+      ;; deadline made the runner UNUSABLE for its own slowest file. With
+      ;; `--tests test-path-selection.rkt` that file IS the first result, and it
+      ;; honestly takes ~112s, so the runner declared "⛔ DEAD WORKERS" at 30s and
+      ;; advised recompiling — a diagnosis that is simply wrong, on a clean tree,
+      ;; for a file that was running fine. (That is the documented "the targeted
+      ;; runner ABORTS test-path-selection.rkt" wart; it was never about that
+      ;; file.) The probe now RE-ARMS while the workers are actually alive, and
+      ;; only reports dead workers when they are dead or the real timeout is
+      ;; reached — so the banner means what it says.
       (define first-result-timeout 30)
       (define effective-timeout
         (if (= count 0) first-result-timeout (timeout-secs)))
@@ -860,16 +886,27 @@
               (with-handlers ([exn:fail? void])
                 (subprocess-kill p #t)))]
            [else
-            (loop (sub1 remaining) (add1 count))])]
+            (loop (sub1 remaining) (add1 count) first-waited)])]
         [else
          ;; Timeout — check if this is dead-worker (first result never arrived)
          ;; vs per-file timeout (individual test took too long)
          (cond
+           [(and (= count 0)
+                 (< (+ first-waited first-result-timeout) (timeout-secs))
+                 (ormap (λ (p) (eq? (subprocess-status p) 'running)) all-procs))
+            ;; The workers are ALIVE — the first file is merely slow. Re-arm the
+            ;; probe instead of misreporting a crash. The worker's own per-file
+            ;; timeout is what bounds a genuine hang, and it produces a result,
+            ;; so this cannot spin forever; the `first-waited` guard bounds it
+            ;; regardless if a worker ever wedges without exiting.
+            (loop remaining count (+ first-waited first-result-timeout))]
            [(= count 0)
-            ;; No results AT ALL — workers crashed silently.
+            ;; No results AT ALL, and the workers are gone (or we have waited out
+            ;; the full per-file budget) — this is the real crash case.
             (printf "\n")
             (printf "╔══════════════════════════════════════════════════════════╗\n")
-            (printf "║  ⛔ DEAD WORKERS — no results after ~as               ║\n" first-result-timeout)
+            (printf "║  ⛔ DEAD WORKERS — no results after ~as               ║\n"
+                    (+ first-waited first-result-timeout))
             (printf "║                                                        ║\n")
             (printf "║  All batch workers crashed before producing output.    ║\n")
             (printf "║  ACTION: Run `raco make driver.rkt` to recompile.     ║\n")
