@@ -423,7 +423,50 @@ safe because `_line_end` is there to kill the wrong branch. That attacks the
 coupling at its root instead of alternating between its two ends.
 
 ⚠ Do not resume by re-trying the table above; those five combinations are
-exhausted. Verified restored to known-good after the revert: clean 25, swallows
+exhausted.
+
+<a id="p6-angle"></a>
+#### 7.0.2 `angle_group` unification LANDED — and the same-line variant GENERATES but must not ship
+
+**Landed and kept**: `angle_expr` and `angle_type` are now ONE rule,
+`angle_group`, used in expression position, type position, and as a `defn`
+return type. Conflict #2 is dissolved **by construction** — there is nothing to
+decide between, because there is only one rule; position decides the LABEL, not
+the parse. Verified regression-free twice: clean 25, swallows 6, worst 51%,
+error-bytes 4.7%, and `<Bool>` returns / angle types / angle expressions /
+spec arrows / trait / defr / linear arrows all at 0.
+
+**Attempted on top, and REVERTED**: the same-line `defn` body.
+
+What it established, which four earlier rounds never reached:
+
+1. **It generates.** With #2 dissolved, `_line_end` plus two conflict
+   declarations (`[$._same_line_head, $.expression]`,
+   `[$.defn_form, $.expression]`) produce a parser.
+2. **The target shapes parse**: bracketed bodies, bare applications, atoms,
+   `<Bool>` returns — all 0.
+3. **`_line_end` does its job, verified on the TREE not the error count**:
+   `defn my-id [x] x` followed by a line starting with `[` yields **two
+   `top_level` nodes**. No swallow. The mechanism is sound.
+4. ⛔ **But it is catastrophic at corpus scale.** Clean files rose 25 → 30, and
+   **swallows rose 6 → 17 with SIX FILES parsing as a single 100% `ERROR`
+   node** (`numerics-tutorial-demo` 28.5 KB, `book/lattices` 25.5 KB,
+   `unified-matching` 16.4 KB, `2026-03-26-ppn-track0`, and two `audit/` files).
+   Error-bytes 4.7% → **17.6%**.
+
+**Diagnosis**: the two conflict declarations are too BROAD. They admit
+`expression` at a decision point reachable from far more contexts than the
+same-line defn, so GLR takes a wrong global branch and a whole file dies. The
+per-shape probes cannot see this — every isolated probe passed. **Only the
+locality metric caught it**, which is the second time §7 has earned its keep.
+
+**Next attempt should narrow the declaration, not the body.** The body
+restriction (`_same_line_head`, no angle) is fine and did its job; it is the
+conflict pairs that need to be scoped so they cannot fire outside a `defn`
+line — or replaced by something that does not open `expression` at all.
+
+⚠ Do not ship a same-line variant on a green ERROR-count or on green shape
+probes. It was green on both while destroying six files. Verified restored to known-good after the revert: clean 25, swallows
 6, worst 51%, and multi-clause defn / impl+`<Bool>` / trait / defr / linear
 arrows all still parse at 0.
 

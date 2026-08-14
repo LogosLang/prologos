@@ -522,7 +522,7 @@
                   "name": "return_type",
                   "content": {
                     "type": "SYMBOL",
-                    "name": "angle_type"
+                    "name": "angle_group"
                   }
                 }
               ]
@@ -2559,7 +2559,7 @@
         },
         {
           "type": "SYMBOL",
-          "name": "angle_expr"
+          "name": "angle_group"
         },
         {
           "type": "SYMBOL",
@@ -2611,7 +2611,7 @@
         }
       ]
     },
-    "angle_expr": {
+    "angle_group": {
       "type": "SEQ",
       "members": [
         {
@@ -3261,7 +3261,7 @@
         },
         {
           "type": "SYMBOL",
-          "name": "angle_type"
+          "name": "angle_group"
         },
         {
           "type": "SYMBOL",
@@ -3352,26 +3352,6 @@
         {
           "type": "STRING",
           "value": "]"
-        }
-      ]
-    },
-    "angle_type": {
-      "type": "SEQ",
-      "members": [
-        {
-          "type": "STRING",
-          "value": "<"
-        },
-        {
-          "type": "REPEAT1",
-          "content": {
-            "type": "SYMBOL",
-            "name": "type_expr"
-          }
-        },
-        {
-          "type": "STRING",
-          "value": ">"
         }
       ]
     },

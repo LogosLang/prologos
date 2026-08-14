@@ -178,7 +178,7 @@ module.exports = grammar({
       optional(field('params', $.param_list)),
       optional(choice(
         seq(':', field('return_type', $.type_expr)),
-        field('return_type', $.angle_type),
+        field('return_type', $.angle_group),
       )),
       $._indent,
       choice(
@@ -606,7 +606,7 @@ module.exports = grammar({
       $.pipe_expr,
       $.grouped_expr,
       $.paren_expr,
-      $.angle_expr,
+      $.angle_group,
       $.application,
       $.atom,
     ),
@@ -618,7 +618,18 @@ module.exports = grammar({
     paren_expr: $ => seq('(', repeat1($.expression), ')'),
 
     // Angle bracket expression: <(x : A) -> B>
-    angle_expr: $ => seq('<', repeat1(choice($.expression, token.immediate('->'), token.immediate('*'), $.typed_binder_paren)), '>'),
+    // ONE rule for every `<…>` group, in expression AND type position.
+    //
+    // There used to be two DIFFERENT rules matching the same delimiters — one
+    // for expressions, one for types — which made every `<` after a defn's
+    // params genuinely ambiguous.  That is the conflict that blocked same-line
+    // bodies through four rounds (§7.0) and reappeared each time the other
+    // conflict was addressed (§7.0.1).
+    //
+    // Unifying dissolves it at the source: there is nothing to decide between,
+    // because there is only one rule.  POSITION decides the LABEL (a group
+    // after params is a return type) rather than the parse.
+    angle_group: $ => seq('<', repeat1(choice($.expression, token.immediate('->'), token.immediate('*'), $.typed_binder_paren)), '>'),
 
     typed_binder_paren: $ => seq('(', $.identifier, ':', $.type_expr, ')'),
 
@@ -792,7 +803,7 @@ module.exports = grammar({
       $.arrow_type,
       $.type_application,
       $.grouped_type,
-      $.angle_type,
+      $.angle_group,
       $.identifier,
     ),
 
@@ -813,14 +824,6 @@ module.exports = grammar({
 
     grouped_type: $ => seq('[', repeat1($.type_expr), ']'),
 
-    // <Type> — the angle-delimited type annotation.
-    //
-    // Absent from the grammar entirely before 2026-08-14, while the corpus
-    // writes it on 394 `defn` lines: `defn eq? [x y] <Bool>`.  Only the colon
-    // form `: Bool` was accepted, so essentially every method inside every
-    // `impl` failed to parse — which is why `impl` and `defn` between them held
-    // 59% of the remaining error mass.
-    angle_type: $ => seq('<', repeat1($.type_expr), '>'),
 
     // ============================================================
     // Atoms and terminals
