@@ -28,6 +28,7 @@ ARROW (2026-08-05), Rel T1 (2026-07-25) — and the grammar has not.
 | P5d | Angle-typed params `[iv <Interval>]` + swallow triage | ✅ | 136 corpus lines; first try, no conflicts. Clean 26 → **27** — [§5.p5d](#p5d) |
 | P5e | `string` made a single token (`;` inside a string was lexed as a comment) | ✅ | **`data/reason` cleared**; swallows 6 → **5** — [§5.p5e](#p5e) |
 | P5f | **Same-line `defn` bodies** — scanner-level, after 3 rule formulations failed | ✅ | **Swallows 5 → 2**, bytes 4.6% → **2.7%**, clean 27 → **29** — [§5.p5f](#p5f) |
+| P5g | **Inline paren match arms** (`match h (pat -> body)`) - the `fio` swallow | done | **Swallows 2 -> 1**, worst 51% -> **31%**; fio's worst error 1852 B -> **156 B** - see 5.P5g |
 | P6 | Re-baseline, regenerate, reinstall, font-lock check | ⬜ | `install.sh`; then unblock SURF T1 |
 | P7 | TSG T1.close — gate wiring, DEFERRED triage, PIR-lite | ⬜ | Consider adding the gate to pre-commit |
 
@@ -831,6 +832,45 @@ Only the swallow count separated a fix from a catastrophe, and it separated them
 by a factor of twelve (2 vs 24). On this grammar, locality is not a nicer
 headline — it is the only measurement that distinguishes the two outcomes.
 
+<a id="p5g"></a>
+### 5.P5g - inline paren match arms (`fio`)
+
+`match h (mk-handle idx -> ...)` - arms written inline in parens, the sexp arm
+spelling used inside a WS file. This was fio's 51% swallow.
+
+**Why precedence could not fix it.** Three rules claim `( ... -> ... )`:
+`paren_expr`, the arm, and `defr_rule`. But the blocking ambiguity is not that
+outer choice - it is the INTERIOR: at `(true ...` the parser must decide between
+`atom` and `literal_pattern`, and the only distinguisher, `->`, is arbitrarily
+far ahead. That is an LR(1) problem; a `prec` on the arm cannot reach it. The
+earlier attempts produced a cascading conflict family, exactly as recorded.
+
+**The fix - unbounded lookahead in the scanner.** `_arm_lparen` is a `(` emitted
+ONLY when the matching `)` has a `->` before it at depth 0. Strings and comments
+are skipped so an arrow inside them cannot decide it. `paren_expr` then begins
+with a DIFFERENT TOKEN, and the interior ambiguity is gone by construction
+rather than by precedence. `prec(10)` remains but now does only the narrow job it
+can: arm-arrow vs `arrow_op`-as-atom after the `->`.
+
+**The bug that made it look like a failure**: the scanner is entered wherever the
+parser stopped, which for `match h (...)` is the SPACE before the paren, not the
+paren. The first version tested `lookahead == '('` immediately, never fired, and
+every probe still read 2 errors against a cleanly generated grammar. Skip
+horizontal whitespace first, with `skip_ch` so it stays out of the token.
+
+**Measured**: swallows **2 -> 1** - worst **51% -> 31%** - error-bytes 2.7% ->
+**2.6%**. fio's own worst error 1,852 B (51%) -> **156 B (4%)**, total 1,908 ->
+212: an 89% reduction, all remaining damage local.
+
+**This is the second time the scanner solved what rules could not** (P5f the
+first). The pattern is explicit: when the disambiguator is arbitrarily far from
+the decision point, no rule or precedence helps, and the external scanner - which
+may look ahead without bound - is the right layer. Reach for it FIRST next time,
+not after three rule formulations.
+
+Residual in fio: `foreign racket "..." [name :as alias : Type -> Type]`, 3 errors
+per line. Separate gap, logged below.
+
 ---
 
 ## 6. Deferred / discovered
@@ -838,6 +878,7 @@ headline — it is the only measurement that distinguishes the two outcomes.
 - Spaced `*` in Sigma types (`<(x : A) * B>`) — pre-existing, absent from lib.
 - `defr` bare-head `&>` continuation form (paren-goal form works).
 - `:laws` blocks inside traits (`- :name/:forall/:holds`) — the `:forall` cluster.
+- `foreign` with `:as alias : Type -> Type` inside the bracket group - fio's residual.
 - Two-segment qualified names `a::b` (three-segment ones are fine).
 - `<(Type 0)>` — parenthesised type inside an angle type. A naive `paren_type` did NOT fix it (see §5.P3b); needs real diagnosis.
 - `[x : Bool y : Bool]` — SPACED typed params, several in one list: `type_application` greedily takes `Bool y`. The fused `[x:Int]` form is fine.
