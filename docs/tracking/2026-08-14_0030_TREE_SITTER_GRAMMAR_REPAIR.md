@@ -25,6 +25,7 @@ ARROW (2026-08-05), Rel T1 (2026-07-25) — and the grammar has not.
 | P5 | `defr` + relational syntax (Rel T1) | ✅ | Was absent entirely; 6/7 shapes → 0. Clean 23 → **25** — [§5.p5](#p5) |
 | P5b | Bracketed patterns in clause heads (`\| [zero] -> …`) | ✅ | Found while diagnosing §7.0.4. Generated first try, no conflicts. 4.7% → **4.5%** |
 | P5c | `=` unify operator (narrowing goals) | ✅ | No `=` token existed at all; 65 corpus lines. Clean 25 → **26** — [§5.p5c](#p5c) |
+| P5d | Angle-typed params `[iv <Interval>]` + swallow triage | ✅ | 136 corpus lines; first try, no conflicts. Clean 26 → **27** — [§5.p5d](#p5d) |
 | P6 | Re-baseline, regenerate, reinstall, font-lock check | ⬜ | `install.sh`; then unblock SURF T1 |
 | P7 | TSG T1.close — gate wiring, DEFERRED triage, PIR-lite | ⬜ | Consider adding the gate to pre-commit |
 
@@ -290,6 +291,53 @@ Open: the BARE-HEAD `&>` continuation form (`&> fruit-color fruit color` with
 sibling goals on following lines). The paren-goal form works.
 
 ---
+
+<a id="p5d"></a>
+### 5.P5d — angle-typed params, and the swallow-list triage
+
+**Triage first, per the tell** — sort missing-vs-contested before spending.
+
+| file | cause | verdict |
+|---|---|---|
+| `ppn-track2b` 33% | opens at `defn add-ten [x] [int+ x 10]` | **BLOCKED** — same-line `defn` |
+| `1A-iii-probe` 31% | opens at `defn p1-inc [n] [int+ n 1]` | **BLOCKED** — same-line `defn` |
+| `narrowing-demo` 33% | residue is same-line `defn` | **BLOCKED** |
+| `lattices` 31% | line 524 `defn top [] <Parity>` | **CONTESTED** — see below |
+| `reason` 20% | reproduces standalone at lines 67–120 | minimisable, **next target** |
+
+§7.2's guess was right: three of six swallows are blocked behind the deferred
+construct and are not targets.
+
+**LANDED — `angle_param` (`11f7df6e`).** `typed_param` required the colon, so
+`[iv <Interval>]` — **136 corpus lines** — could not parse. Generated first try,
+no conflicts, no regressions: the missing-shape signature exactly.
+Clean **26 → 27**, MISSING **90 → 72**, ERROR 3721 → 3657, bytes 4.5% → 4.4%.
+
+**`lattices` — differential established, cause NOT yet fixable.** Isolated by
+delete-line and then substitution on the full file:
+
+| line 524 | worst error |
+|---|---|
+| `defn top [] <Parity>` | **8024** |
+| `defn top [] : Parity` | **8024** |
+| `defn top []` | 253 |
+| `defn top [q] <Parity>` | 253 |
+| `defn top <Parity>` | 253 |
+
+So the trigger is **an EMPTY param list followed by ANY return type**. It does
+NOT reproduce in a minimal snippet — only against the real 216 lines that follow
+— which is the contested signature, not a missing shape.
+
+**Tried and REVERTED**: splitting `param_list` into an explicit `[]` branch
+instead of `repeat`'s zero case. Numbers came back byte-identical (clean 27,
+3657, 50826), so the ambiguity hypothesis is WRONG and the change earned
+nothing. Backed out, same discipline as `paren_type`.
+
+⚠ **Method correction worth keeping**: prefix-bisect (`sed -n '523,Np'`) reported
+a false cause — truncating mid-`impl` manufactures an error at the cut. The
+relay note warned of exactly this. **Delete-window and substitution on the FULL
+file are the sound techniques**; prefix truncation is not.
+
 
 <a id="locality"></a>
 ## 7. ⭐ The metric this track should have been using — LOCALITY
