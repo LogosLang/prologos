@@ -1494,8 +1494,15 @@
     select-synth-separator)))
 
 ;; [Q_U51]'s provenance key for `*_`: the content's own key, then the field's.
-;; ⚠ Takes SYMBOLS and returns a SYMBOL — the callers hold champ/record keys,
-;; which are already symbols at both layers.
+;; ⚠⚠ TAKES SYMBOLS AND RETURNS A SYMBOL — AND THE CALLERS DO **NOT** ALL HOLD
+;; SYMBOLS. This comment used to claim they were "already symbols at both
+;; layers"; that is exactly the falsity that cost a WHOLE-FILE ABORT at 1b-v-B2a.
+;; A TYPE-layer row is keyed by bare symbols, but a VALUE-layer champ is keyed by
+;; `expr-keyword` STRUCTS, and handing one here raises `symbol->string: contract
+;; violation` out of `whnf`. The value seat adapts before calling
+;; (`synth-champ-key`, reduction.rkt) — that adaptation is the CALLER's job and
+;; must stay so, because only that layer wraps.
+;; ⚠ Any NEW caller must check which layer's keys it holds.
 (define (select-synth-prefixed-key content-key field-key)
   (string->symbol
    (string-append (symbol->string content-key)

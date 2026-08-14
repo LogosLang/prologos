@@ -6659,7 +6659,15 @@
      (define has-bare #f)
      (let scan ([d ds] [parent #f])
        (cond
-         [(eq? d '$postfix-star)
+         ;; ⚠⚠ 1b-v VERIFY S10 — THIS IS AN IDENTITY TEST, and it is the ONE gate
+         ;; the `$postfix-star` NAME-PREFIX trick does not rescue. Its siblings
+         ;; (the leak gate and four pins) match an unanchored substring, so
+         ;; `$postfix-star-synth` is covered there for free; here a new sentinel
+         ;; matched neither this arm nor `p4e1-star-consuming-heads`, so it set
+         ;; neither flag and the cell classified `'gone` — the class this block
+         ;; documents as "no `$postfix-star` remains". A GENUINE LEAK of the new
+         ;; sentinel would therefore have PASSED. Delegates to the family now.
+         [(rf:postfix-star-sentinel? d)
           (if (memq parent p4e1-star-consuming-heads)
               (set! has-consumed #t)
               (set! has-bare #t))]
@@ -8128,8 +8136,18 @@
   (check-equal? (line "regions{eu*_}")
                 "{:eu-port 80, :eu-host \"e\"} : {:eu-host String :eu-port Int}"
                 "Q_U51's table: prefix is the key the content sat under")
-  ;; ⚠ THE CONTRAST IS THE POINT — bare `*` must be UNCHANGED. If this ever
-  ;; matches the `*_` line, the cont channel has stopped discriminating.
+  )
+
+;; ⚠⚠ 1b-v VERIFY S4 — THE CONTRAST GETS ITS OWN `test-case`. rackunit aborts a
+;; case at its first failure, so bundling these behind the `*_` assertions meant a
+;; cont-channel regression would break the `*_` lines FIRST and these would never
+;; run — the pins written to DETECT that regression, masked by it. Same structure
+;; d09d4a49 split apart one commit earlier, reintroduced one commit later.
+(test-case "P4e-1b [1b-v-B2a]: …and bare `*` is UNCHANGED — the contrast, in its own case"
+  (define V (string-append "ns b2ac\n"
+                           "def mn := {:a {:x 1} :b {:y 2}}\n"
+                           "def cfg := {:database {:url \"u\" :pool-size 10}}\n"))
+  (define (line src) (p4e1-last (string-append V src)))
   (check-equal? (line "mn{a*}") "{:x 1} : {:x Int}"
                 "bare `*` still drops the key — `*_` is a different operator")
   (check-equal? (line "cfg{database*}")
@@ -8393,7 +8411,11 @@
 ;;               "regions:{host port}*_ synthesizes <content-key>-<field-key> [Q_U51]")
 ;;   ;; [Q_U41]: over a POSITIONAL deleted layer there is no key to synthesize from
 ;;   (check-true (p4e1-has? "ns c4\ndef rowsv := @[{:tags @[1 2]} {:tags @[3]}]\nrowsv:{tags}*_"
-;;                          #rx"`\*_`")
+;;                          #rx"`[*]_`")   ;; ⚠ character class — `\*` is an INVALID
+                                       ;; Racket string escape and would make this
+                                       ;; FILE fail to READ when unparked (zero
+                                       ;; tests, not one failing test). Caught by
+                                       ;; the 1b-v verify, S9.
 ;;               "`*_` over a positional layer is a guided refusal naming itself"))
 
 ;; ---- 1b-iv: [Q_U42] — the join is ONE RECURSIVE rule; same-key vectors CONCAT
@@ -8796,6 +8818,17 @@
   (check-false (unbox why)
                (format "…and must not escape at all, let alone as positional. Got: ~a"
                        (unbox why)))
+  ;; ⚠⚠ 1b-v VERIFY S5 — THE TWO ASSERTIONS ABOVE ARE NOT ENOUGH, and the verify
+  ;; proved it by measurement: a silent fall-through to the BARE nominal join
+  ;; satisfies both (it also returns a champ and also does not escape). The flip
+  ;; at B2a therefore removed this pin's ability to catch the very thing
+  ;; reduction.rkt's comment still credits it with — "`*_` MUST NOT FALL INTO THE
+  ;; NOMINAL JOIN. Caught by the 1b-iv-A seat pin". The KEYS are the only
+  ;; discriminator: the synth join lifts `:a-x`, the nominal join lifts `:x`.
+  (check-equal? (map (lambda (kv) (expr-keyword-name (car kv)))
+                     (champ-entries (expr-champ-racket-champ r)))
+                '(a-x)
+                "…and it must be the SYNTH join — the nominal join would lift `:x`")
   ;; …and the genuinely positional case must STILL say so, or the fix overshot.
   (define vlayer (expr-champ (champ-insert champ-empty (equal-hash-code ka) ka
                                            (expr-rrb (rrb-from-list (list (expr-int 7)))))))

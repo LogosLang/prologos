@@ -1783,10 +1783,20 @@
 ;; a shape production never produces. The pin now uses `expr-keyword`.
 ;; ⭐ The synthesis itself stays in the ONE shared helper; only the wrapping is
 ;; local, because only this layer wraps.
-(define (synth-champ-key content-key field-key)
-  (let ([fk (if (expr-keyword? field-key) (expr-keyword-name field-key) field-key)]
-        [ck (if (expr-keyword? content-key) (expr-keyword-name content-key) content-key)])
-    (expr-keyword (select-synth-prefixed-key ck fk))))
+;; ⚠ 1b-v VERIFY S15 — `oops`, NEVER a raise. The LAYER's keys are guarded by
+;; `champ-keys/canonical`, which declines rather than inventing an order; the
+;; CONTENT's keys had no such guard, so a non-keyword content key would have
+;; reached `symbol->string` and raised — a WHOLE-FILE ABORT where this seat's
+;; whole doctrine is that reduction reports through the panic channel. Same class
+;; as the abort B2a already paid for, one level in.
+(define (synth-champ-key content-key field-key oops)
+  (define (name-of k what)
+    (cond [(expr-keyword? k) (expr-keyword-name k)]
+          [(symbol? k) k]
+          [else (oops (format "a non-keyword ~a key reached the `*_` join (typing carries the user-facing refusal)"
+                              what))]))
+  (expr-keyword (select-synth-prefixed-key (name-of content-key "content")
+                                           (name-of field-key "field"))))
 
 (define (star-synth-join-value keyed-contents oops)
   (expr-champ
@@ -1795,10 +1805,15 @@
            [w  (whnf (cdr kc))])
        (if (expr-champ? w)
            (for/fold ([a acc]) ([kv (in-list (champ-entries (expr-champ-racket-champ w)))])
-             (let ([sk (synth-champ-key ck (car kv))])
+             (let ([sk (synth-champ-key ck (car kv) oops)])
                (if (champ-has-key? a (equal-hash-code sk) sk)
+                   ;; ⚠ 1b-v VERIFY S8: `sk` is an `expr-keyword` STRUCT, so a
+                   ;; bare `~a` printed `#(struct:expr-keyword a-b-c)`. B2a's
+                   ;; key-shape adapter reached the insert and the has-key check
+                   ;; and NOT the `format` that renders the same value — one
+                   ;; seat, not its sibling, inside one expression.
                    (oops (format "two joined contents both synthesize the key `~a` (typing carries the user-facing refusal; a collision reaching the value layer is a compiler-invariant violation)"
-                                 sk))
+                                 (if (expr-keyword? sk) (expr-keyword-name sk) sk)))
                    (champ-insert a (equal-hash-code sk) sk (cdr kv)))))
            (oops "a non-map content reached the `*_` join (typing carries the user-facing refusal)"))))))
 
