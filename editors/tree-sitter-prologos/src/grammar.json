@@ -178,12 +178,28 @@
       }
     },
     "require_declaration": {
+      "type": "PREC_RIGHT",
+      "value": 0,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "STRING",
+            "value": "require"
+          },
+          {
+            "type": "REPEAT1",
+            "content": {
+              "type": "SYMBOL",
+              "name": "require_group"
+            }
+          }
+        ]
+      }
+    },
+    "require_group": {
       "type": "SEQ",
       "members": [
-        {
-          "type": "STRING",
-          "value": "require"
-        },
         {
           "type": "STRING",
           "value": "["
@@ -197,16 +213,11 @@
           }
         },
         {
-          "type": "CHOICE",
-          "members": [
-            {
-              "type": "SYMBOL",
-              "name": "require_clause"
-            },
-            {
-              "type": "BLANK"
-            }
-          ]
+          "type": "REPEAT",
+          "content": {
+            "type": "SYMBOL",
+            "name": "require_clause"
+          }
         },
         {
           "type": "STRING",
@@ -287,41 +298,24 @@
       ]
     },
     "imports_declaration": {
-      "type": "SEQ",
-      "members": [
-        {
-          "type": "STRING",
-          "value": "imports"
-        },
-        {
-          "type": "STRING",
-          "value": "["
-        },
-        {
-          "type": "FIELD",
-          "name": "module",
-          "content": {
-            "type": "SYMBOL",
-            "name": "qualified_name"
-          }
-        },
-        {
-          "type": "CHOICE",
-          "members": [
-            {
+      "type": "PREC_RIGHT",
+      "value": 0,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "STRING",
+            "value": "imports"
+          },
+          {
+            "type": "REPEAT1",
+            "content": {
               "type": "SYMBOL",
-              "name": "require_clause"
-            },
-            {
-              "type": "BLANK"
+              "name": "require_group"
             }
-          ]
-        },
-        {
-          "type": "STRING",
-          "value": "]"
-        }
-      ]
+          }
+        ]
+      }
     },
     "exports_declaration": {
       "type": "SEQ",

@@ -20,6 +20,7 @@ ARROW (2026-08-05), Rel T1 (2026-07-25) — and the grammar has not.
 | P2 | `let` (LET track, 2026-07-31) | ✅ | All 8 documented shapes → 0. Corpus barely moves (−549 B) because the corpus barely uses `let` — [§5.p2](#p2) |
 | P3 | `fn` lambda with typed params | ✅ | **Already fixed by P1b/P2** — every shape 0 errors, no work needed. The "(fn 272" cluster was a leading-token artifact — [§5.p3](#p3) |
 | P3b | `<Type>` return annotations (`defn f [x] <Bool>`) | ✅ | The real gap behind `impl` 36% + `defn` 23%. 394 corpus lines. Clean files 19 → **21** — [§5.p3b](#p3b) |
+| P3c | `require` / `imports` (the `ns` 16.9% cluster) | ✅ | `ns` was INNOCENT — one 19,280 B swallow in one file. Clean 21 → **22** — [§5.p3c](#p3c) |
 | P4 | `trait` body | ⬜ | |
 | P5 | `defr` + relational syntax (Rel T1) | ⬜ | `defr` appears **0** times in grammar.js |
 | P6 | Re-baseline, regenerate, reinstall, font-lock check | ⬜ | `install.sh`; then unblock SURF T1 |
@@ -209,11 +210,49 @@ It did not fix its target (still 2 errors) and cost ~900 bytes, so it did not
 earn its place and was backed out rather than left in as plausible-looking dead
 weight.
 
+<a id="p3c"></a>
+### 5.P3c — `require` / `imports` (and `ns` was innocent)
+
+The `ns` 16.9% cluster was **one `ERROR` node, in one file**: 19,280 bytes —
+67% of `foray.prologos` — starting at line 1. `ns` itself parses at 0 and always
+did. Fourth time the leading-token clustering has pointed at the wrong
+construct; here it pointed at a construct with no defect at all.
+
+The actual cause was on the next line:
+
+```
+require [prologos::data::nat    :as nat  :refer [add mult zero?]]
+        [prologos::data::bool   :as bool :refer [not]]
+```
+
+`require_declaration` allowed exactly **one** bracket group and **one** clause,
+while the language takes several groups (often on continuation lines) each
+carrying both `:as` and `:refer`. Rewritten as `repeat1($.require_group)` with
+`repeat($.require_clause)` inside; `imports_declaration` shared the defect and
+the fix.
+
+Verified: `:as`+`:refer` together, and 1/2/4 groups with real module paths, all
+0 — including the real foray header. Clean files 21 → **22**.
+
+⚠ **But corpus bytes moved only −56**, because foray's single 19,280 B swallow
+was replaced by **207 smaller errors totalling 20,497 B**. The file is a
+1,548-line deliberate kitchen-sink tour, so it hits every remaining gap at once
+and now fails at all of them individually instead of once at the top.
+
+**Metric skew worth knowing**: foray alone is 20,497 of 117,091 remaining
+error-bytes — **17.5% of the whole corpus's error mass in one atypical file**.
+Track-level byte percentages should be read with that in mind.
+
+**Curiosity, logged not chased**: two-segment module names (`a::b`) fail where
+three-segment ones (`prologos::data::nat`) parse. Synthetic-probe artifact —
+every real corpus path has three segments.
+
 ---
 
 ## 6. Deferred / discovered
 
 - Spaced `*` in Sigma types (`<(x : A) * B>`) — pre-existing, absent from lib.
+- Two-segment qualified names `a::b` (three-segment ones are fine).
 - `<(Type 0)>` — parenthesised type inside an angle type. A naive `paren_type` did NOT fix it (see §5.P3b); needs real diagnosis.
 - `[x : Bool y : Bool]` — SPACED typed params, several in one list: `type_application` greedily takes `Bool y`. The fused `[x:Int]` form is fine.
 - `do` bindings (`[do [x := 1] x]`) — 1 → 2 errors after P2; pre-existing, absent from lib.

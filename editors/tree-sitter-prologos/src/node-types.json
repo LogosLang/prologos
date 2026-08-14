@@ -1061,24 +1061,13 @@
   {
     "type": "imports_declaration",
     "named": true,
-    "fields": {
-      "module": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "qualified_name",
-            "named": true
-          }
-        ]
-      }
-    },
+    "fields": {},
     "children": {
-      "multiple": false,
-      "required": false,
+      "multiple": true,
+      "required": true,
       "types": [
         {
-          "type": "require_clause",
+          "type": "require_group",
           "named": true
         }
       ]
@@ -1597,6 +1586,21 @@
   {
     "type": "require_declaration",
     "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "require_group",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "require_group",
+    "named": true,
     "fields": {
       "module": {
         "multiple": false,
@@ -1610,7 +1614,7 @@
       }
     },
     "children": {
-      "multiple": false,
+      "multiple": true,
       "required": false,
       "types": [
         {

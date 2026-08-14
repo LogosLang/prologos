@@ -93,11 +93,22 @@ module.exports = grammar({
       repeat1($.identifier),
     )),
 
-    require_declaration: $ => seq(
+    // `require' takes ONE OR MORE bracket groups, and each group may carry
+    // SEVERAL clauses — `[m :as x :refer [a b]]' is the ordinary spelling.
+    //
+    // The pre-2026-08-14 rule allowed exactly one group and one clause, so a
+    // real multi-module require failed from its first line.  In foray.prologos
+    // that produced a SINGLE ERROR node of 19,280 bytes — 67% of the file, and
+    // the whole of the `ns' 16.9% cluster, which had nothing to do with `ns'.
+    require_declaration: $ => prec.right(seq(
       'require',
+      repeat1($.require_group),
+    )),
+
+    require_group: $ => seq(
       '[',
       field('module', $.qualified_name),
-      optional($.require_clause),
+      repeat($.require_clause),
       ']',
     ),
 
@@ -108,13 +119,10 @@ module.exports = grammar({
       seq(':refer', '[', ']'),  // side-effect import
     ),
 
-    imports_declaration: $ => seq(
+    imports_declaration: $ => prec.right(seq(
       'imports',
-      '[',
-      field('module', $.qualified_name),
-      optional($.require_clause),
-      ']',
-    ),
+      repeat1($.require_group),
+    )),
 
     exports_declaration: $ => seq(
       'exports',
