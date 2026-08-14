@@ -29,6 +29,7 @@
 ;;; Code:
 
 (require 'treesit)
+(require 'cl-lib)
 (require 'prologos-mode)
 (require 'prologos-font-lock)
 (require 'prologos-indent)
@@ -45,96 +46,327 @@
 (autoload 'prologos-clear-results "prologos-repl" "Clear inline result overlays." t)
 
 ;; ============================================================
-;; Font-lock rules
+;; Font-lock — generated from the SHARED query file
 ;; ============================================================
+;;
+;; The highlight rules live in
+;; `editors/tree-sitter-prologos/queries/highlights.scm' and are shared with the
+;; VS Code semantic-token provider.  Emacs used to carry its own inline copy,
+;; which is why query work landed in VS Code and reached Emacs not at all: this
+;; file had ZERO references to highlights.scm and no captures for map keys,
+;; keyword literals, PVec literals or path steps.  Reading the shared file ENDS
+;; that duplication rather than deepening it.
+;;
+;; Three properties of the arrangement are load-bearing:
+;;
+;;   ORDER IS SEMANTIC.  highlights.scm is first-match-wins by FILE ORDER, and
+;;   so is this.  `treesit-font-lock-settings' is applied in LIST order --
+;;   verified empirically rather than assumed, because the plausible alternative
+;;   (feature LEVEL governs) would silently invert the file's precedence and
+;;   turn, say, the `map_literal key:' rule into a vacuous one.  A rule with
+;;   :override nil cannot repaint what an earlier rule already painted, so
+;;   emitting settings in file order reproduces the file's semantics exactly.
+;;   Hence: settings stay in file order, and :override is NEVER set.
+;;
+;;   GENERIC CAPTURES.  The file names captures `@variable.parameter', not Emacs
+;;   faces.  `prologos-ts--capture-faces' maps them, using the same
+;;   `foo.bar.baz' -> `foo.bar' -> `foo' fallback as CAPTURE_MAP in
+;;   src/semanticTokens.ts.  The queries rely on that fallback existing.
+;;
+;;   FEATURES ARE OURS ALONE.  A .scm has no notion of
+;;   `treesit-font-lock-level', so the feature is derived from the capture name.
+;;   It controls enable/disable ONLY, never order.
+
+(defvar prologos-ts--dir
+  (file-name-directory (or load-file-name buffer-file-name default-directory))
+  "Directory of this file, captured at LOAD time.
+`load-file-name' is bound only while loading, so it cannot be read later.")
+
+(defcustom prologos-ts-highlights-file
+  (expand-file-name "../tree-sitter-prologos/queries/highlights.scm"
+                    prologos-ts--dir)
+  "Shared tree-sitter highlight query, also consumed by the VS Code extension."
+  :type 'file
+  :group 'prologos)
+
+(defconst prologos-ts--capture-faces
+  '(("keyword"             . font-lock-keyword-face)
+    ("function"            . font-lock-function-name-face)
+    ("constructor"         . font-lock-constant-face)
+    ("type"                . font-lock-type-face)
+    ("type.builtin"        . font-lock-type-face)
+    ("type.definition"     . font-lock-type-face)
+    ("constant"            . font-lock-constant-face)
+    ("constant.builtin"    . font-lock-constant-face)
+    ("constant.other"      . font-lock-constant-face)
+    ("namespace"           . font-lock-constant-face)
+    ("property"            . font-lock-property-use-face)
+    ("operator"            . font-lock-operator-face)
+    ("number"              . font-lock-number-face)
+    ("string"              . font-lock-string-face)
+    ("character"           . font-lock-string-face)
+    ("comment"             . font-lock-comment-face)
+    ("attribute"           . prologos-multiplicity-face)
+    ("variable.parameter"  . font-lock-variable-name-face)
+    ("variable.other"      . font-lock-variable-name-face)
+    ("variable.other.hole" . prologos-hole-face)
+    ;; `variable' is deliberately NIL, and the rule is DROPPED rather than
+    ;; painted.  highlights.scm ends with a bare `(identifier) @variable'
+    ;; fallback that claims every otherwise-unmatched identifier.  In VS Code
+    ;; `variable' is the NEUTRAL token, so that costs nothing; in Emacs the
+    ;; neutral rendering is *no face at all*, and mapping it to
+    ;; `font-lock-variable-name-face' would colour every identifier in the
+    ;; buffer -- a wall of colour, and a regression against today's behaviour,
+    ;; where Emacs paints none of them.
+    ;;
+    ;; This also drops the `identifier_pattern' and `let_binding' rules, which
+    ;; share the capture.  Those ARE binding sites and arguably deserve colour;
+    ;; if we want that, the right fix is a DISTINCT capture in the shared .scm
+    ;; (`@variable.definition'), which would benefit both editors -- not a
+    ;; second divergent mapping here.
+    ("variable"            . nil))
+  "Map from highlights.scm capture names to Emacs faces.
+A nil face means the rule is dropped.  Lookup falls back
+`foo.bar.baz' -> `foo.bar' -> `foo', mirroring CAPTURE_MAP in
+src/semanticTokens.ts.")
+
+(defconst prologos-ts--capture-features
+  '(("comment"    . comment)
+    ("string"     . string)
+    ("character"  . string)
+    ("keyword"    . keyword)
+    ("function"   . function)
+    ("namespace"  . definition)
+    ("type"       . type)
+    ("constant"   . constant)
+    ("constructor" . constant)
+    ("property"   . property)
+    ("number"     . number)
+    ("operator"   . operator)
+    ("attribute"  . multiplicity)
+    ("variable"   . variable))
+  "Map from capture name to `treesit-font-lock-feature-list' feature.
+Same prefix fallback as `prologos-ts--capture-faces'.  Features govern
+enable/disable via `treesit-font-lock-level' and NOTHING about order.")
+
+(defun prologos-ts--capture-lookup (capture alist)
+  "Look CAPTURE up in ALIST, falling back on dotted prefixes.
+`foo.bar.baz' tries `foo.bar.baz', then `foo.bar', then `foo' — the same
+walk CAPTURE_MAP performs in src/semanticTokens.ts.
+
+⚠ `save-match-data' is REQUIRED, not hygiene.  This runs inside the
+replacement function of `replace-regexp-in-string', which reads the match
+data back after REP returns; the `string-match' below clobbers it and the
+replacement then lands one character short.  The observed symptom was
+`@font-lock-type-facen' / `@prologos-hole-facee' — the capture's final
+character stranded after the substitution.  Those are VALID capture names,
+so every query still compiled and zero were skipped; they simply named
+faces that do not exist and painted nothing."
+  (save-match-data
+    (let ((name capture) hit)
+      (while (and name (not hit))
+        (setq hit (assoc name alist))
+        (setq name (and (string-match "\\`\\(.*\\)\\.[^.]+\\'" name)
+                        (match-string 1 name))))
+      hit)))
+
+(defun prologos-ts--translate-regexp (re)
+  "Translate RE from tree-sitter (PCRE-ish) syntax to Emacs regexp syntax.
+
+Emacs DOES evaluate `#match?' in a string query — but with EMACS regexp
+syntax, where `(', `)' and `|' are LITERAL.  So highlights.scm's
+`^(Int|Bool)$' matches the literal text \"(Int|Bool)\", i.e. nothing, and
+does so SILENTLY: the query compiles and the rule is simply dead.  That
+killed all three identifier-matched rules (pseudo-keywords, builtin types,
+builtin constants) — a regression against the inline rules this replaced,
+which used Emacs's own `:match' form.
+
+Signals an error on any construct not handled, so an untranslatable
+pattern is SKIPPED VISIBLY rather than shipped dead."
+  (let ((out "") (i 0) (n (length re)))
+    (while (< i n)
+      (let ((c (aref re i)))
+        (cond
+         ;; Escape: copy the pair through untouched.
+         ((eq c ?\\)
+          (when (>= (1+ i) n) (error "Trailing backslash in regexp %S" re))
+          (let ((next (aref re (1+ i))))
+            (when (memq next '(?d ?w ?s ?D ?W ?S ?b ?B))
+              (error "PCRE class \\%c has no direct Emacs equivalent in %S" next re))
+            (setq out (concat out (substring re i (+ i 2))) i (+ i 2))))
+         ;; Character class: copy verbatim to the closing bracket.
+         ((eq c ?\[)
+          (let ((j (1+ i)))
+            (when (and (< j n) (eq (aref re j) ?^)) (setq j (1+ j)))
+            (when (and (< j n) (eq (aref re j) ?\])) (setq j (1+ j)))
+            (while (and (< j n) (not (eq (aref re j) ?\]))) (setq j (1+ j)))
+            (when (>= j n) (error "Unterminated [...] in regexp %S" re))
+            (setq out (concat out (substring re i (1+ j))) i (1+ j))))
+         ;; Groups and alternation are the whole point of the translation.
+         ((eq c ?\()
+          (if (and (< (+ i 2) n) (eq (aref re (1+ i)) ??) (eq (aref re (+ i 2)) ?:))
+              (setq out (concat out "\\(?:") i (+ i 3))
+            (setq out (concat out "\\(?:") i (1+ i))))
+         ((eq c ?\)) (setq out (concat out "\\)") i (1+ i)))
+         ((eq c ?|)  (setq out (concat out "\\|") i (1+ i)))
+         ((eq c ?{)  (error "PCRE {n,m} repetition is untranslated in %S" re))
+         (t (setq out (concat out (string c)) i (1+ i))))))
+    out))
+
+(defun prologos-ts--split-query (text)
+  "Split TEXT, a tree-sitter query file, into top-level patterns IN ORDER.
+A pattern is one balanced group (or a bare string) plus any `@capture'
+tokens that immediately follow it.  Emacs's own sexp scanner does the
+lexing, so strings, comments and both bracket kinds are handled for us."
+  (with-temp-buffer
+    (insert text)
+    (let ((tbl (make-syntax-table)))
+      (modify-syntax-entry ?\( "()" tbl)
+      (modify-syntax-entry ?\) ")(" tbl)
+      (modify-syntax-entry ?\[ "(]" tbl)
+      (modify-syntax-entry ?\] ")[" tbl)
+      (modify-syntax-entry ?\" "\"" tbl)
+      (modify-syntax-entry ?\\ "\\" tbl)
+      (modify-syntax-entry ?\; "<" tbl)
+      (modify-syntax-entry ?\n ">" tbl)
+      ;; Everything that can appear inside a capture or predicate name must be
+      ;; symbol-constituent, or `forward-sexp' stops mid-token.
+      (dolist (c '(?@ ?. ?- ?? ?! ?# ?_ ?* ?> ?< ?= ?| ?& ?: ?+ ?/ ?%))
+        (modify-syntax-entry c "_" tbl))
+      (set-syntax-table tbl))
+    (goto-char (point-min))
+    (let (out)
+      (while (progn (forward-comment (buffer-size)) (not (eobp)))
+        (let ((start (point)) end)
+          (forward-sexp 1)
+          (setq end (point))
+          ;; Absorb trailing @captures belonging to this pattern.
+          (while (save-excursion
+                   (forward-comment (buffer-size))
+                   (and (not (eobp)) (eq (char-after) ?@)))
+            (forward-comment (buffer-size))
+            (forward-sexp 1)
+            (setq end (point)))
+          (push (string-trim (buffer-substring-no-properties start end)) out)))
+      (nreverse out))))
+
+(defun prologos-ts--pattern-captures (pattern)
+  "Return the distinct capture names in PATTERN, in order of appearance."
+  (let ((pos 0) out)
+    (while (string-match "@\\([a-zA-Z][a-zA-Z0-9._]*\\)" pattern pos)
+      (cl-pushnew (match-string 1 pattern) out :test #'equal)
+      (setq pos (match-end 0)))
+    (nreverse out)))
+
+(defvar prologos-ts--skipped-patterns nil
+  "Patterns skipped while building the rules, with the reason.
+Non-nil here means Emacs is showing LESS than highlights.scm specifies.")
+
+(defun prologos-ts--build-font-lock-rules (&optional file)
+  "Build `treesit-font-lock-rules' arguments from FILE (a .scm query).
+Returns the argument list, in FILE ORDER.  Patterns whose capture has no
+face, or which the installed grammar cannot compile, are skipped and
+recorded in `prologos-ts--skipped-patterns' — a query that references a
+node type the grammar lacks would otherwise take the whole feature down
+with it (`treesit-font-lock-rules-mismatch')."
+  (setq file (or file prologos-ts-highlights-file))
+  (setq prologos-ts--skipped-patterns nil)
+  (if (not (file-readable-p file))
+      (progn
+        (display-warning
+         'prologos
+         (format "highlights.scm not found at %s — tree-sitter font-lock disabled" file)
+         :error)
+        nil)
+    (let ((patterns (prologos-ts--split-query
+                     (with-temp-buffer (insert-file-contents file)
+                                       (buffer-string))))
+          args)
+      (dolist (pat patterns)
+        (let* ((caps (prologos-ts--pattern-captures pat))
+               (primary (car caps))
+               (face-cell (and primary (prologos-ts--capture-lookup
+                                        primary prologos-ts--capture-faces)))
+               (feature (cdr (or (and primary (prologos-ts--capture-lookup
+                                               primary prologos-ts--capture-features))
+                                 '(nil . nil)))))
+          (cond
+           ((null primary)
+            (push (cons pat "no capture") prologos-ts--skipped-patterns))
+           ((null face-cell)
+            (push (cons pat (format "capture %s not in the face map" primary))
+                  prologos-ts--skipped-patterns))
+           ((null (cdr face-cell))
+            ;; Deliberately unpainted (see `variable' above) — not a defect.
+            nil)
+           (t
+            ;; Rewrite every @capture in the pattern (predicates reference it
+            ;; too, so a partial rewrite would break `#match?'), then translate
+            ;; any #match? regexp into Emacs syntax.
+            (let* ((q (replace-regexp-in-string
+                       "@\\([a-zA-Z][a-zA-Z0-9._]*\\)"
+                       (lambda (m)
+                         (let* ((c (substring m 1))
+                                (cell (prologos-ts--capture-lookup
+                                       c prologos-ts--capture-faces)))
+                           (if (and cell (cdr cell))
+                               (concat "@" (symbol-name (cdr cell)))
+                             m)))
+                       pat t t))
+                   (q (condition-case err
+                          (replace-regexp-in-string
+                           "(#\\(?:match\\|not-match\\)\\?[ \t\n]+@[^ \t\n]+[ \t\n]+\"\\(\\(?:[^\"\\\\]\\|\\\\.\\)*\\)\""
+                           (lambda (m)
+                             (save-match-data
+                               (string-match
+                                "\\`\\(.*\"\\)\\(\\(?:[^\"\\\\]\\|\\\\.\\)*\\)\\(\"\\)\\'" m)
+                               (concat
+                                (match-string 1 m)
+                                ;; DOUBLE the backslashes.  tree-sitter parses
+                                ;; the query text and unescapes string literals
+                                ;; BEFORE Emacs ever sees the regexp, so a
+                                ;; single `\(' arrives as a bare `(' and the
+                                ;; Emacs-dialect regexp we just built decays
+                                ;; right back into the PCRE one that matches
+                                ;; nothing.  Measured: single -> nil captures,
+                                ;; doubled -> ("Int" "Bool").
+                                ;; LITERAL=t, so NEWTEXT is inserted verbatim:
+                                ;; it must be the TWO-character string "\\",
+                                ;; i.e. "\\\\" in source.  Writing the usual
+                                ;; "\\\\\\\\" here doubles twice and emits four.
+                                (replace-regexp-in-string
+                                 "\\\\" "\\\\"
+                                 (prologos-ts--translate-regexp (match-string 2 m))
+                                 t t)
+                                (match-string 3 m))))
+                           q t t)
+                        (error
+                         (push (cons pat (format "regexp translation: %S" err))
+                               prologos-ts--skipped-patterns)
+                         nil))))
+              ;; q is nil when regexp translation refused the pattern; it has
+              ;; already been recorded as skipped.
+              (when (and q
+                         (condition-case err
+                             (progn (treesit-query-compile 'prologos q t) t)
+                           (error (push (cons pat (format "%S" err))
+                                        prologos-ts--skipped-patterns)
+                                  nil)))
+                (setq args (append args (list :language 'prologos
+                                              :feature (or feature 'variable)
+                                              q)))))))))
+      (when prologos-ts--skipped-patterns
+        (display-warning
+         'prologos
+         (format "%d highlight pattern(s) skipped; see `prologos-ts--skipped-patterns'"
+                 (length prologos-ts--skipped-patterns))
+         :warning))
+      args)))
 
 (defconst prologos-ts-font-lock-rules
-  (treesit-font-lock-rules
-   ;; Level 1: comments and strings
-   :language 'prologos
-   :feature 'comment
-   '((comment) @font-lock-comment-face)
-
-   :language 'prologos
-   :feature 'string
-   '((string) @font-lock-string-face)
-
-   ;; Level 2: keywords (grammar keywords + identifier-matched keywords)
-   ;; The token list below MUST be a subset of the grammar's anonymous
-   ;; ("named": false) tokens in src/node-types.json — referencing a token the
-   ;; installed grammar lacks makes Emacs 31 disable the whole `keyword' feature
-   ;; (treesit-font-lock-rules-mismatch).  Regenerate the list after grammar
-   ;; changes (and rebuild the grammar via install.sh).
-   :language 'prologos
-   :feature 'keyword
-   '(["def" "defn" "defmacro" "spec" "data" "deftype" "match" "fn"
-      "trait" "impl" "bundle" "property" "functor" "foreign"
-      "relation" "clause" "subtype" "capability"
-      "ns" "imports" "exports" "provide" "require"
-      "the" "let" "do" "if" "cond" "when" "check" "eval" "infer" "where"
-      ":refer" ":as" ":all" ":no-prelude"] @font-lock-keyword-face)
-
-   :language 'prologos
-   :feature 'keyword
-   :override t
-   '(((identifier) @font-lock-keyword-face
-      ;; Keywords the grammar does NOT yet tokenize (schema/defr/rel/solve/
-      ;; explain/forall/exists/query and friends) — matched as identifiers here
-      ;; until they gain proper grammar rules (see the grammar-tokens follow-up).
-      (:match "\\`\\(?:def\\|defn\\|data\\|deftype\\|match\\|fn\\|ns\\|provide\\|require\\|the\\|let\\|do\\|if\\|forall\\|exists\\|check\\|eval\\|infer\\|defmacro\\|spec\\|relation\\|clause\\|query\\|foreign\\|trait\\|impl\\|schema\\|defr\\|solve\\|solver\\|solve-one\\|solve-with\\|explain\\|explain-with\\|rel\\)\\'"
-              @font-lock-keyword-face)))
-   ;; TODO: When the tree-sitter grammar adds `foreign` declarations,
-   ;; add structural rules for :as aliases, racket language identifier,
-   ;; and imported symbol names (currently only identifier-matched).
-
-   ;; Level 2: function/definition names
-   :language 'prologos
-   :feature 'function
-   '((defn_form name: (identifier) @font-lock-function-name-face)
-     (def_form name: (identifier) @font-lock-function-name-face))
-
-   :language 'prologos
-   :feature 'definition
-   '((data_form name: (identifier) @font-lock-type-face)
-     (data_constructor name: (identifier) @font-lock-constant-face)
-     (ns_declaration name: (qualified_name) @font-lock-constant-face))
-
-   ;; Level 3: built-in type names (identifier-matched)
-   :language 'prologos
-   :feature 'type
-   :override t
-   '(((identifier) @font-lock-type-face
-      (:match "\\`\\(?:Pi\\|Sigma\\|Type\\|Nat\\|Bool\\|Posit8\\|Vec\\|Fin\\|Eq\\|Chan\\|Session\\)\\'"
-              @font-lock-type-face)))
-
-   ;; Level 3: type expressions from grammar nodes
-   :language 'prologos
-   :feature 'type
-   '((type_expr (identifier) @font-lock-type-face)
-     (type_application (identifier) @font-lock-type-face)
-     (implicit_params (identifier) @font-lock-type-face))
-
-   ;; Level 3: built-in constants (identifier-matched)
-   :language 'prologos
-   :feature 'constant
-   :override t
-   '(((identifier) @font-lock-constant-face
-      (:match "\\`\\(?:zero\\|true\\|false\\|refl\\|pair\\|inc\\|vnil\\|vcons\\|fzero\\|fsuc\\|nil\\|cons\\|nothing\\|just\\|posit8\\)\\'"
-              @font-lock-constant-face)))
-
-   :language 'prologos
-   :feature 'number
-   '((number) @font-lock-number-face)
-
-   ;; Level 4: operators and multiplicity
-   :language 'prologos
-   :feature 'operator
-   '(["->" "|"] @font-lock-operator-face)
-
-   :language 'prologos
-   :feature 'multiplicity
-   '((multiplicity) @prologos-multiplicity-face))
-  "Tree-sitter font-lock rules for Prologos.")
+  (let ((args (prologos-ts--build-font-lock-rules)))
+    (and args (apply #'treesit-font-lock-rules args)))
+  "Tree-sitter font-lock rules for Prologos, generated from highlights.scm.")
 
 ;; ============================================================
 ;; Defun name extraction
@@ -359,7 +591,7 @@ and delegates interior fontification to scheme-mode/racket-mode."
   (setq-local treesit-font-lock-feature-list
               '((comment string)
                 (keyword function definition)
-                (type constant number multiplicity)
+                (type constant number multiplicity property variable)
                 (operator)))
 
   ;; Syntax propertize — angle brackets + racket{...} escape blocks
