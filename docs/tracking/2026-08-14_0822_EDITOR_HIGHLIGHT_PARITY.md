@@ -18,7 +18,7 @@ contract well enough that a third editor is a *mapping table*, not a port.
 | Phase | Description | Status | Notes |
 |---|---|---|---|
 | P0 | Capture registry + D1 renames | 🔄 | Verification ✅ + all 4 renames ✅ `77d1d893`. **Registry itself still open — blocked on D2.** [§3.1](#p0), [§D1](#d1) |
-| P1 | Parity harness: one fixture, capture-by-capture, asserted in BOTH | ⬜ | Makes drift *detectable* — [§3.2](#p1) |
+| P1 | Parity harness: one fixture, capture-by-capture, asserted in BOTH | ✅ | `30671d9d`. **Query layer is ALREADY in parity** — 205 captures, identical. [§8](#p1-record) |
 | P2 | TextMate: declared, and made to AGREE where it overlaps | ⬜ | Kills drift cause 1 — [§3.3](#p2), amended by [§7.4](#d3-critique) |
 | P3 | Review `semanticTokenScopes` per capture | ⬜ | Kills drift cause 2; settles the blue/orange class — [§3.4](#p3) |
 | P4 | The four catalogued issues, on the repaired base | ⬜ | [§4](#issues) |
@@ -452,3 +452,55 @@ Not a decision — the two coherent positions:
 Either is defensible. The first is where I would lean, on 7.3 alone — but 7.3
 depends on whether Linguist/GitHub reach is something the owner wants, which is
 a product question, not a technical one.
+
+---
+
+<a id="p1-record"></a>
+## 8. Per-phase records
+
+### P1 — parity harness ✅ (2026-08-14, `30671d9d`)
+
+`parity/` — `fixture.prologos` (0 ERROR nodes, exercises all 20 captures),
+`golden.tsv` (205 rows), `dump-captures.el`, `dump-captures.mjs`,
+`check-parity.sh`.
+
+**Result: the two consumers already agree, byte for byte.** So the four
+catalogued issues in §4 are **not** query-layer problems — P2 and P3 are acting
+on the layers below (TextMate, `semanticTokenScopes`, the two mappings). That is
+precisely the fact §4 wanted established before P2 moved, and it narrows P2:
+three of the four were *suspected* TextMate, and the query layer is now excluded
+as a cause rather than assumed innocent.
+
+**⭐ The harness was wrong before the code was, and it would have blamed the
+wrong editor.** The first dump used raw `treesit-query-capture`, skipping the
+`#match?` translation. Emacs evaluates `#match?` in EMACS regexp dialect — `(`
+and `|` are literal — so every identifier-matched capture fell through to the
+`(identifier) @variable` fallback: `Int`/`String` → `@variable` rather than
+`@type.builtin`, `zero` → `@variable`, `solve` → `@variable`. `type.builtin` is
+the ONLY capture reachable *only* via `#match?`, which is why it was the single
+visibly-missing one — a 19/20 that looked like a fixture-coverage gap and was
+actually an instrument bug. Freezing that golden would have made VS Code (which
+uses JS RegExp, and was correct) the reported divergence.
+
+Fixed by extraction, not duplication: `prologos-ts-translate-query-predicates`
+now has ONE home in `prologos-ts-mode.el` and is called by the font-lock builder
+and the harness alike. Behaviour-preserving — 69 settings, 0 skipped.
+
+**Golden shape ruling.** RAW captures, canonical `(line, col, capture)` order —
+**not** the consumer's resolved first-match-wins view. `treesit-query-capture`
+returns in NODE order, not query-file order, so implementing that rule in the
+harness encodes one engine's traversal as the contract. Per-consumer resolution
+is checked separately, if at all.
+
+**Both power-checked** (a green gate proves nothing until seen red): disabling
+the predicate bridge → 12 divergent lines; perturbing one golden row → exit 1.
+The gate also refuses when the fixture gains an ERROR node, since captures
+inside one vanish and the golden would shrink while staying green.
+
+**Verified alongside**: the deployed `.wasm` is byte-identical to a fresh emcc
+build, so both consumers genuinely run one grammar. ⚠ **Gap left open**: the
+dylib carries a provenance file and the wasm carries none, so wasm staleness is
+undetectable without emsdk and a rebuild. Worth closing in P2 or T1.close.
+
+**Not included**: capture → mapping completeness. That is P0's, P0 is blocked on
+D2, and half-implementing it here would front-run the ruling.
