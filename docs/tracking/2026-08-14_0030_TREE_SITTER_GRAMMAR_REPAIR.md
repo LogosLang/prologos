@@ -1187,7 +1187,7 @@ highlighting degrade gracefully on exactly the half-written code an editor
 spends its time in.
 
 <a id="hl-issue-3"></a>
-### 9.4 NEW — multi-entry map literals parse with the WRONG STRUCTURE
+### 9.4 ✅ FIXED — multi-entry map literals parsed with the WRONG STRUCTURE
 
 Found 2026-08-14 while verifying the `map_literal` capture. `{:name "a" :age 3}`
 parses as **one** key/value pair whose value swallows the rest:
@@ -1215,8 +1215,47 @@ keys fall back to `@constant.other`). Larger for **SURF T1**, which will
 navigate this tree — a map's entries are not siblings, so sibling motion inside
 a map literal is wrong.
 
-**Likely fix**: narrow the `value:` field from `$.expression` to an
-application-free choice (atom / grouped / paren / angle), since a Prologos map
-value is a single term — `{:k [f x]}` uses brackets. NOT attempted here: TSG T1
-is closed, `{` is contested territory (P5i needed a scanner token), and any
-grammar change must be measured by swallow count. Filed for an owner decision.
+**✅ FIXED 2026-08-14** (owner-directed). `value:` narrowed from `$.expression`
+to `_map_value` = `choice(atom, grouped_expr, paren_expr, angle_group)`. Nothing
+real is lost: every corpus value is a literal, identifier, keyword, quoted list
+or bracketed group, and an application is always written bracketed.
+Generated first try, **no conflicts**.
+
+⚠ **Commas had to come with it.** The corpus writes `{:to "b", :w 3}`, and `,`
+is NOT in `extras` — in Prologos `,` is *unquote*. Under the old greedy value it
+was swallowed and so never mattered; narrowing the value would have turned a
+silently-wrong parse into a LOUD error on real corpus code. Checked against the
+COMPILER first, which typechecks that map at 0 errors, so `optional(',')` is
+accepted between entries — exactly where no unquote can begin.
+
+**Verified**: 9 map shapes (1/2/3 entries, comma-separated, string+number,
+keyword values, quoted-list values, bracketed application, nested map) all go
+from ONE swallowing pair to correct per-entry pairs, at 0 errors. Reaches real
+code — `2026-03-16-track6-acceptance.prologos` now yields 2 map nodes with 5
+keys, both multi-key. All map keys now capture `@property` instead of only the
+first. Gate **byte-identical** (clean 34, ERROR 3168, swallows 0, 1.7%, worst
+13%) — expected, and the point of this entry: the gate never could see it.
+
+Pinned by `test/corpus/map_literal.txt` (3 cases, hand-written expectations).
+
+<a id="hl-issue-5"></a>
+### 9.5 NEW — `tree-sitter test` is 19-of-29 RED, with stale expectations
+
+Found while adding the map corpus test. `test/corpus/*.txt` was last touched
+**2026-02-13**; TSG T1 rewrote `defn_arm`, `let_expr`, `trait`, `defr`,
+`require_group`, param lists and more on 2026-08-14. The 19 failures are exactly
+those constructs — the files encode PRE-REPAIR tree shapes.
+
+Not caused by the map fix: **no corpus test mentioned map literals at all**
+before this one, and passing went 7 → 10 with 3 added.
+
+⚠ **Do NOT run `tree-sitter test --update` to clear it.** That command accepts
+whatever the grammar currently emits as correct — which, applied to §9.4's map
+bug, would have BAKED IN the swallowing parse as the expected tree and turned a
+regression detector into a regression recorder. Each expectation needs reading
+against the language, not blanket regeneration.
+
+The track ran on `check-corpus.sh` and never wired this suite into anything.
+Two blind spots now recorded together: the gate cannot see wrong-but-clean trees
+(§9.4), and the structural suite that could has been red and ungated for six
+months.

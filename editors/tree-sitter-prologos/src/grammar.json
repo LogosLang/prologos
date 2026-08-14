@@ -2167,6 +2167,27 @@
         ]
       }
     },
+    "_map_value": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "atom"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "grouped_expr"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "paren_expr"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "angle_group"
+        }
+      ]
+    },
     "map_literal": {
       "type": "SEQ",
       "members": [
@@ -2192,8 +2213,20 @@
                 "name": "value",
                 "content": {
                   "type": "SYMBOL",
-                  "name": "expression"
+                  "name": "_map_value"
                 }
+              },
+              {
+                "type": "CHOICE",
+                "members": [
+                  {
+                    "type": "STRING",
+                    "value": ","
+                  },
+                  {
+                    "type": "BLANK"
+                  }
+                ]
               }
             ]
           }

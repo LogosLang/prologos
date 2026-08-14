@@ -1378,7 +1378,19 @@
         "required": false,
         "types": [
           {
-            "type": "expression",
+            "type": "angle_group",
+            "named": true
+          },
+          {
+            "type": "atom",
+            "named": true
+          },
+          {
+            "type": "grouped_expr",
+            "named": true
+          },
+          {
+            "type": "paren_expr",
             "named": true
           }
         ]

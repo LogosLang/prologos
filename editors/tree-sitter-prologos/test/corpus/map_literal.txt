@@ -1,0 +1,72 @@
+===
+Map literal with two entries
+===
+
+def m := {:name "alice" :age 30N}
+
+---
+
+(source_file
+  (top_level
+    (def_form
+      name: (identifier)
+      value: (expression
+        (atom
+          (map_literal
+            key: (keyword_literal)
+            value: (atom
+              (string))
+            key: (keyword_literal)
+            value: (atom
+              (nat_literal))))))))
+
+===
+Map literal with comma separators
+===
+
+def m := {:to "b", :w 3}
+
+---
+
+(source_file
+  (top_level
+    (def_form
+      name: (identifier)
+      value: (expression
+        (atom
+          (map_literal
+            key: (keyword_literal)
+            value: (atom
+              (string))
+            key: (keyword_literal)
+            value: (atom
+              (number))))))))
+
+===
+Map literal with a bracketed application as a value
+===
+
+def m := {:f [dbl 2] :g 3}
+
+---
+
+(source_file
+  (top_level
+    (def_form
+      name: (identifier)
+      value: (expression
+        (atom
+          (map_literal
+            key: (keyword_literal)
+            value: (grouped_expr
+              (expression
+                (application
+                  (expression
+                    (atom
+                      (identifier)))
+                  (expression
+                    (atom
+                      (number))))))
+            key: (keyword_literal)
+            value: (atom
+              (number))))))))

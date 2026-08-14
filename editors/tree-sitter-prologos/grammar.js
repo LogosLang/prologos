@@ -519,9 +519,38 @@ module.exports = grammar({
     // A plain rule competing with `implicit_params` for `{` collapsed error
     // recovery across the corpus, so the disambiguation is lexical and the
     // parser never has to choose.
+    // A map VALUE is a single term, never a bare application.
+    //
+    // It used to be `$.expression`, which includes `application` — and
+    // juxtaposition IS application, so the value ran greedily to the closing
+    // brace: `{:a 1 :b 2}` parsed as ONE pair with value `1 :b 2`.
+    //
+    // ⚠ That emitted NO `ERROR` and no `MISSING` node. The parse succeeded and
+    // was merely wrong, so swallow-count and unparsed-% — the metrics this
+    // whole track was gated on — could not see it (TSG T1 §9.4). It was found
+    // by inspecting field structure, not by the gate.
+    //
+    // Excluding `application` loses nothing real: every corpus value is a
+    // literal, identifier, keyword, quoted list or bracketed group, and an
+    // application is always written bracketed (`{:f [dbl 2]}`).
+    _map_value: $ => choice(
+      $.atom,
+      $.grouped_expr,
+      $.paren_expr,
+      $.angle_group,
+    ),
+
     map_literal: $ => seq(
       $._map_open,
-      repeat(seq(field('key', $.keyword_literal), field('value', $.expression))),
+      repeat(seq(
+        field('key', $.keyword_literal),
+        field('value', $._map_value),
+        // `,` between entries is legal — verified against the COMPILER, which
+        // typechecks `{:to "b", :w 3, :from "a"}` at 0 errors. It is not in
+        // `extras` because in Prologos `,` is unquote, not whitespace; it is
+        // accepted here specifically, where no unquote can begin.
+        optional(','),
+      )),
       '}',
     ),
 
