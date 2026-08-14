@@ -19,7 +19,7 @@ contract well enough that a third editor is a *mapping table*, not a port.
 |---|---|---|---|
 | P0 | Capture registry + D1 renames | ✅ | `7fd4445c`. D2 ruled **option E**; `queries/captures.md` + two-direction gate; 9 dead entries deleted. [§9](#p0-record) |
 | P1 | Parity harness: one fixture, capture-by-capture, asserted in BOTH | ✅ | `30671d9d`. **Query layer is ALREADY in parity** — 205 captures, identical. [§8](#p1-record) |
-| P2 | TextMate: declared, and made to AGREE where it overlaps | ⬜ | Kills drift cause 1 — [§3.3](#p2), amended by [§7.4](#d3-critique) |
+| P2 | TextMate: declared, and made to AGREE where it overlaps | 🔄 | Census landed `81ac5a01`; **blocked on a grammar defect it found** — [§10](#p2-record) |
 | P3 | Review `semanticTokenScopes` per capture | ⬜ | Kills drift cause 2; settles the blue/orange class — [§3.4](#p3) |
 | P4 | The four catalogued issues, on the repaired base | ⬜ | [§4](#issues) |
 | P5 | `#match?` dialect lint (or retire the predicate) | ⬜ | [§3.5](#p5) |
@@ -570,3 +570,58 @@ reviewed exception, ratchet-style) · nine entries deleted from `CAPTURE_MAP`.
 ⚠ Power-checked three ways, and the check found a bug in the checker itself:
 `nreverse` is destructive, so the violation count read 1 while two failures
 printed. Counted before reversing now.
+
+---
+
+<a id="p2-record"></a>
+## 10. P2 record — the census, and what it found (2026-08-14, `81ac5a01`)
+
+Per [§7.5](#d3-critique), census before cutting. `parity/census.mjs` reports, per
+character span, which TextMate scope paints it and which capture claims it —
+using `vscode-textmate` + `vscode-oniguruma`, the engine VS Code actually runs,
+because TextMate patterns are Oniguruma and a JS-RegExp approximation would be
+wrong in exactly the way that then drives the D3 product decision.
+
+### ⭐⭐ `(comment) @comment` is UNREACHABLE, and both editors were covering for it
+
+| file | `comment` nodes | `;;` lines |
+|---|---|---|
+| `core/eq.prologos` | **0** | 57 |
+| `data/list.prologos` | **0** | 116 |
+| `parity/fixture.prologos` | 1 | 24 |
+
+The grammar declares comments correctly — `extras` at `grammar.js:34`, the rule
+at `:1142`. The **external scanner** consumes them first: `src/scanner.c` (~:399)
+skips comment-only lines while computing indentation, so the characters are gone
+before the parser can tokenize the extra. The query rule is not wrong; it is
+unreachable.
+
+**Why five months passed without notice: each editor covers for it privately.**
+Emacs paints comments from its **syntax table** (`prologos-ts-mode.el:262`) —
+22 of 24 fixture comment lines fontified despite ~1 node. VS Code paints them
+from **TextMate** (1121 fixture chars of `comment.line.semicolon.prologos`).
+
+So a consumer reading only `highlights.scm` — *the audience this whole track is
+for* — gets no comment highlighting at all. That is §1(1) one level down, and
+strictly worse: there, one editor covered for the shared file; here **both**
+cover for the **grammar**, by different private mechanisms, so comparing the two
+editors to each other can never reveal it. P1 passes precisely because they agree
+perfectly about the one capture they both barely receive.
+
+### ⚠ A gap in the gates, now visible
+
+A capture can be written in the query, documented in `captures.md`, and mapped by
+every consumer, while the grammar emits no node for it. `check-vocabulary`
+inspects the query TEXT; `check-parity` inspects consumer AGREEMENT. **Neither
+asks whether the tree actually contains the node.** A third check —
+"every capture fires at least once over the corpus" — would close it, and would
+have caught this on day one.
+
+### Consequence for P2's sequencing
+
+The census's "TextMate only" bucket is dominated by comments (1121 of 1124
+chars). That is not TextMate being over-broad — it is TextMate *compensating*.
+Reducing TextMate before the scanner is fixed would delete the only thing
+painting comments in VS Code. **P2 is therefore blocked on a TSG-side scanner
+fix**, and D3 should not be ruled on the current census, because the biggest
+number in it is an artifact of a defect rather than a real division of labour.
