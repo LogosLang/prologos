@@ -22,7 +22,7 @@ ARROW (2026-08-05), Rel T1 (2026-07-25) — and the grammar has not.
 | P3b | `<Type>` return annotations (`defn f [x] <Bool>`) | ✅ | The real gap behind `impl` 36% + `defn` 23%. 394 corpus lines. Clean files 19 → **21** — [§5.p3b](#p3b) |
 | P3c | `require` / `imports` (the `ns` 16.9% cluster) | ✅ | `ns` was INNOCENT — one 19,280 B swallow in one file. Clean 21 → **22** — [§5.p3c](#p3c) |
 | P4 | `trait` body | ✅ | **Biggest win of the track**: error-bytes 10.2% → **4.2%**, −69,008 B in one rule — [§5.p4](#p4) |
-| P5 | `defr` + relational syntax (Rel T1) | ⬜ | `defr` appears **0** times in grammar.js |
+| P5 | `defr` + relational syntax (Rel T1) | ✅ | Was absent entirely; 6/7 shapes → 0. Clean 23 → **25** — [§5.p5](#p5) |
 | P6 | Re-baseline, regenerate, reinstall, font-lock check | ⬜ | `install.sh`; then unblock SURF T1 |
 | P7 | TSG T1.close — gate wiring, DEFERRED triage, PIR-lite | ⬜ | Consider adding the gate to pre-commit |
 
@@ -272,11 +272,58 @@ single win of the track by a wide margin.
 Still open: the `:laws` block itself (2 errors) — the `:forall` cluster. Bare
 methods, arrow methods and `:doc` are all 0.
 
+<a id="p5"></a>
+### 5.P5 — `defr` (Rel Track 1)
+
+`defr` appeared **zero** times in `grammar.js` while the corpus carries **207**
+such lines — purely additive, not corrective. Added `defr_form` with a `||` FACT
+block (rows across lines, `|`-separated on a line) and a `&>` RULE clause, plus
+`relation_params` over logic variables.
+
+6 of 7 shapes → 0: one/multi-row facts, arity-2 rows, `|` separators, `&>` with
+paren goals, and `&>` with `not`. Clean files 23 → **25**. Error-bytes
+48,083 → 53,574 (+5,491) — newly reachable relational code failing deeper in.
+
+Open: the BARE-HEAD `&>` continuation form (`&> fruit-color fruit color` with
+sibling goals on following lines). The paren-goal form works.
+
+---
+
+<a id="locality"></a>
+## 7. ⭐ The metric this track should have been using — LOCALITY
+
+Owner note, 2026-08-14: `foray.prologos` is a scratchpad. It deliberately holds
+forms that do not run, some kept broken on purpose as reminders. It is not
+dirty by accident.
+
+> *"a grammar that can still be functional in presence of dirty code is a
+> valuable thing"*
+
+That is the right frame, and it retires the instinct to exclude foray as noise.
+**Editor support is always operating on half-written code** — the buffer is
+mid-edit essentially all the time. So the property that matters is not "the
+corpus parses at 0", it is:
+
+**a broken form damages ITSELF and stops there.**
+
+Font-lock and the surfer stay usable in a file with a bad form in it, provided
+the error does not swallow the rest. That reframes several results in this
+track: P3c replaced foray's single 19,280 B swallow with 207 small errors, which
+the byte metric scored as a REGRESSION and locality would have scored as a large
+win — the damage went from 67% of the file to a set of local spots.
+
+**Proposed metric for the endgame** (not yet implemented): per file, the size of
+the LARGEST error node, and the fraction of the file it covers. Track the max
+and the distribution rather than the sum. A grammar with 500 tiny errors is
+better editor infrastructure than one with 3 file-swallowing ones, and today's
+headline number says the opposite.
+
 ---
 
 ## 6. Deferred / discovered
 
 - Spaced `*` in Sigma types (`<(x : A) * B>`) — pre-existing, absent from lib.
+- `defr` bare-head `&>` continuation form (paren-goal form works).
 - `:laws` blocks inside traits (`- :name/:forall/:holds`) — the `:forall` cluster.
 - Two-segment qualified names `a::b` (three-segment ones are fine).
 - `<(Type 0)>` — parenthesised type inside an angle type. A naive `paren_type` did NOT fix it (see §5.P3b); needs real diagnosis.

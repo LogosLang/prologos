@@ -649,6 +649,76 @@
     }
   },
   {
+    "type": "defr_facts",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "defr_form",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "params": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "relation_params",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "defr_facts",
+          "named": true
+        },
+        {
+          "type": "defr_rule",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "defr_rule",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "deftype_form",
     "named": true,
     "fields": {
@@ -1592,6 +1662,25 @@
     }
   },
   {
+    "type": "relation_params",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "logic_variable",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "require_clause",
     "named": true,
     "fields": {},
@@ -1863,6 +1952,10 @@
         },
         {
           "type": "defn_form",
+          "named": true
+        },
+        {
+          "type": "defr_form",
           "named": true
         },
         {
@@ -2237,6 +2330,10 @@
     "named": false
   },
   {
+    "type": "&>",
+    "named": false
+  },
+  {
     "type": "'",
     "named": false
   },
@@ -2394,6 +2491,10 @@
     "named": false
   },
   {
+    "type": "defr",
+    "named": false
+  },
+  {
     "type": "deftype",
     "named": false
   },
@@ -2539,6 +2640,10 @@
   },
   {
     "type": "|>",
+    "named": false
+  },
+  {
+    "type": "||",
     "named": false
   },
   {

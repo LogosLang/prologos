@@ -70,6 +70,7 @@ module.exports = grammar({
       $.subtype_declaration,
       $.capability_declaration,
       $.relation_form,
+      $.defr_form,
       $.clause_form,
       $.check_form,
       $.eval_form,
@@ -407,6 +408,39 @@ module.exports = grammar({
       field('body', $.block_body),
       $._dedent,
     ),
+
+    // `defr` — relational definitions (Rel Track 1, 2026-07-25).
+    //
+    // Absent from the grammar ENTIRELY: `defr` appeared zero times, while the
+    // corpus carries 207 such lines.  Body is either a `||` FACT block (rows of
+    // terms, one row per line, optionally `|`-separated on a line) or a `&>`
+    // RULE clause (a conjunction of goals).
+    defr_form: $ => seq(
+      'defr',
+      field('name', $.identifier),
+      optional(field('params', $.relation_params)),
+      $._indent,
+      repeat1(choice($.defr_facts, $.defr_rule, $._newline)),
+      $._dedent,
+    ),
+
+    relation_params: $ => seq(
+      '[',
+      repeat1(choice($.logic_variable, $.identifier)),
+      ']',
+    ),
+
+    // Rows continue across lines until the block dedents; `|` separates rows
+    // written on one line.
+    defr_facts: $ => prec.right(seq(
+      '||',
+      repeat1(choice($.expression, '|')),
+    )),
+
+    defr_rule: $ => prec.right(seq(
+      '&>',
+      repeat1($.expression),
+    )),
 
     clause_form: $ => seq(
       'clause',
