@@ -130,3 +130,63 @@ A fix for a rare construct cannot move the corpus (`let`: 83 lines against 1,423
 `defn` lines; `qualified_name`: byte-identical). That is a fact about the corpus,
 not a verdict on the fix. But `paren_type` and the `param_list` split both failed
 their own targets *and* measured flat — those were reverted.
+
+---
+
+## ⭐ `queries/highlights.scm` is THE source of truth — both editors read it
+
+Since 2026-08-14 the shared query is consumed by **both** the VS Code
+semantic-token provider (`src/semanticTokens.ts`) and Emacs
+(`prologos-ts-mode.el`). **Neither carries its own copy. Do not add inline
+highlight rules to either** — that is the duplication that let the query rot for
+five months while VS Code's TextMate layer covered for it.
+
+Each consumer contributes exactly one thing: a **capture → native face/token**
+mapping. Full record + the open phases:
+`docs/tracking/2026-08-14_0822_EDITOR_HIGHLIGHT_PARITY.md`.
+
+### The vocabulary is the Neovim standard
+
+Capture names follow `:help treesitter-highlight-groups`. A custom **LEAF** is
+fine (`@variable.logic` is ours) because the dotted fallback lands it on a
+standard root. A custom **ROOT** has nothing to fall back to and renders as
+**nothing** in a stock consumer — that is what `@namespace` did until it became
+`@module`. Pinned by `prologos-ts-test/captures-use-standard-roots`.
+
+⚠ **Do NOT verify captures against a locally installed Neovim below 0.10.** The
+pre-rename generation lacks `@variable.parameter`, `@attribute` and `@module` —
+checking against it concludes our CORRECT captures are wrong and "fixes" them
+backwards. Verify against Neovim **master**, or confirm the local nvim is 0.10+.
+
+### ORDER IS SEMANTIC, in both consumers
+
+The file is **first-match-wins by FILE ORDER**, not by specificity. A rule placed
+below the general rule it was meant to beat is **vacuous** — it compiles and
+never fires. The bare `(identifier) @variable` fallback must stay LAST.
+
+Emacs reproduces this because `treesit-font-lock-settings` is applied in **LIST
+order** — feature LEVEL does not reorder it (measured, not assumed). So settings
+are emitted in file order and **`:override` is NEVER set**.
+
+### ⭐ Verify captures FIRE, not that they compile
+
+This class has bitten **four times**, and every instance had "0 patterns
+skipped" true while rules painted nothing. Assert on actual captures/faces over
+real snippets; "it parses" and "it compiles" both mean nothing here.
+
+Three specific traps, all silent:
+- **`#match?` uses EMACS regexp syntax in Emacs** (`(` and `|` are literal), and
+  tree-sitter **unescapes the query string first**, so backslashes must be
+  DOUBLED. Bridged by `prologos-ts--translate-regexp`, which RAISES on anything
+  untranslatable so a bad pattern is skipped VISIBLY.
+- **Match data.** Calling `string-match` inside a `replace-regexp-in-string`
+  replacement function clobbers what it reads back — substitutions land one
+  character short, producing a VALID capture name for a face that does not exist.
+- **A capture with no mapping entry is silently dropped.** `@attribute` is
+  dropped in VS Code today, deliberately.
+
+### Editing the shared query
+
+Run `./install.sh` after ANY `.scm` change — it copies the file to the VS Code
+extension. The corpus gate measures the installed **parser** and does not see
+`.scm` edits at all, so a green gate is NOT evidence the query is fine.
