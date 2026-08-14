@@ -509,31 +509,54 @@
         "required": true,
         "types": [
           {
+            "type": "defn_arm_body",
+            "named": true
+          }
+        ]
+      },
+      "guard": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
             "type": "expression",
             "named": true
           }
         ]
       },
-      "params": {
-        "multiple": false,
+      "pattern": {
+        "multiple": true,
         "required": true,
         "types": [
           {
-            "type": "param_list",
-            "named": true
-          }
-        ]
-      },
-      "return_type": {
-        "multiple": false,
-        "required": false,
-        "types": [
-          {
-            "type": "type_expr",
+            "type": "pattern",
             "named": true
           }
         ]
       }
+    }
+  },
+  {
+    "type": "defn_arm_body",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "block_body",
+          "named": true
+        },
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "match_expr",
+          "named": true
+        }
+      ]
     }
   },
   {

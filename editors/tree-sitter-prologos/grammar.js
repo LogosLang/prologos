@@ -151,35 +151,53 @@ module.exports = grammar({
     // Function definitions
     // ============================================================
 
-    // Multi-arity defn with | arms, or single-arity
+    // Single-arity defn, or multi-clause defn with | arms.
+    //
+    // The param list is OPTIONAL and independent of which body form
+    // follows, because both of these are legal:
+    //
+    //   defn is-zero            defn nth [n xs]
+    //     | zero  -> true         | n nil -> [none Int]
+    //     | suc _ -> false        | n [cons h t] -> ...
+    //
+    // The pre-2026-08-14 rule tied "has params" to "single-arity" and so
+    // could not parse the second, which is the common shape in the corpus.
     defn_form: $ => seq(
       'defn',
       field('name', $.identifier),
       optional(field('implicit_params', $.implicit_params)),
+      optional(field('params', $.param_list)),
+      optional(seq(':', field('return_type', $.type_expr))),
+      $._indent,
       choice(
-        // Single-arity: defn name [params] body
-        seq(
-          field('params', $.param_list),
-          optional(seq(':', field('return_type', $.type_expr))),
-          $._indent,
-          field('body', $.block_body),
-          $._dedent,
-        ),
-        // Multi-arity: defn name | [p1] body1 | [p2] body2
-        seq(
-          $._indent,
-          repeat1($.defn_arm),
-          $._dedent,
-        ),
+        repeat1($.defn_arm),
+        field('body', $.block_body),
       ),
+      $._dedent,
     ),
 
-    defn_arm: $ => seq(
+    // `| pattern... -> body`, mirroring `match_arm`.
+    //
+    // Two corrections over the pre-2026-08-14 rule, which was written as
+    // `| param_list body` and therefore matched nothing the language emits:
+    //   1. the arrow is REQUIRED and was absent entirely;
+    //   2. clause heads are PATTERNS, not a bracketed param list — one per
+    //      parameter, so `| n nil -> …` carries two.
+    defn_arm: $ => prec.right(5, seq(
       '|',
-      field('params', $.param_list),
-      optional(seq(':', field('return_type', $.type_expr))),
-      field('body', $.expression),
+      repeat1(field('pattern', $.pattern)),
+      optional(seq('when', field('guard', $.expression))),
+      '->',
+      field('body', $.defn_arm_body),
       optional($._newline),
+    )),
+
+    // A clause body is inline after `->`, or indented on the lines below —
+    // the latter is how a nested `match` is written in a clause.
+    defn_arm_body: $ => choice(
+      $.match_expr,
+      $.expression,
+      seq($._indent, $.block_body, $._dedent),
     ),
 
     // Value definitions
