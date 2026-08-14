@@ -52,19 +52,31 @@ parses nest ERROR nodes hundreds deep, so the recursive version crashed
 on the worst file in the corpus and reported nothing at all."
   (with-temp-buffer
     (insert-file-contents file)
-    (let ((errors 0) (missing 0))
+    (let ((errors 0) (missing 0) (bytes 0))
       (if (not (treesit-language-available-p 'prologos))
-          (list -1 -1 0)
+          (list -1 -1 0 0)
         (treesit-parser-create 'prologos)
         (let ((stack (list (treesit-parser-root-node
                             (car (treesit-parser-list))))))
           (while stack
             (let ((node (pop stack)))
               (cond
-               ((equal (treesit-node-type node) "ERROR") (cl-incf errors))
-               ((treesit-node-check node 'missing) (cl-incf missing)))
-              (dolist (c (treesit-node-children node)) (push c stack)))))
-        (list errors missing (count-lines (point-min) (point-max)))))))
+               ((equal (treesit-node-type node) "ERROR")
+                (cl-incf errors)
+                ;; Count the SPAN, and do not descend: nested ERRORs are
+                ;; inside this one and their bytes are already counted.
+                (cl-incf bytes (- (treesit-node-end node)
+                                  (treesit-node-start node))))
+               (t
+                (when (treesit-node-check node 'missing) (cl-incf missing))
+                (dolist (c (treesit-node-children node)) (push c stack)))))))
+        (list errors missing (count-lines (point-min) (point-max)) bytes)))))
+
+(defun buffer-size-of-corpus (files)
+  "Total byte size of FILES, for the unparsed-percentage denominator."
+  (let ((n 0))
+    (dolist (f files n)
+      (cl-incf n (or (file-attribute-size (file-attributes f)) 0)))))
 
 (defun prologos-ts-check-corpus ()
   "Scan the corpus and report grammar coverage.  Exit non-zero on failure."
@@ -89,22 +101,23 @@ on the worst file in the corpus and reported nothing at all."
                           (file-regular-p f)
                           (file-readable-p f))))
                  files))
-         (rows '()) (total 0) (total-missing 0) (clean 0) (lines 0))
+         (rows '()) (total 0) (total-missing 0) (clean 0) (lines 0) (total-bytes 0))
     (unless (treesit-language-available-p 'prologos)
       (message "FATAL: tree-sitter grammar for prologos is not installed.")
       (message "       Run editors/tree-sitter-prologos/install.sh first.")
       (kill-emacs 2))
     (dolist (f files)
-      (pcase-let ((`(,e ,m ,l) (prologos-ts-check--scan-file f)))
+      (pcase-let ((`(,e ,m ,l ,b) (prologos-ts-check--scan-file f)))
         (cl-incf total e) (cl-incf total-missing m) (cl-incf lines l)
+        (cl-incf total-bytes b)
         (if (and (zerop e) (zerop m)) (cl-incf clean)
-          (push (list e m l (file-relative-name f root)) rows))))
-    (setq rows (sort rows (lambda (a b) (> (car a) (car b)))))
+          (push (list e m l (file-relative-name f root) b) rows))))
+    (setq rows (sort rows (lambda (a b) (> (nth 4 a) (nth 4 b)))))
     (message "")
-    (message "  %-58s %7s %7s %7s" "FILE" "ERRORS" "MISSING" "LINES")
+    (message "  %-52s %8s %7s %7s %7s" "FILE" "ERR-BYTE" "ERRORS" "MISSING" "LINES")
     (message "  %s" (make-string 82 ?-))
     (dolist (r (seq-take rows 25))
-      (message "  %-58s %7d %7d %7d" (nth 3 r) (nth 0 r) (nth 1 r) (nth 2 r)))
+      (message "  %-52s %8d %7d %7d %7d" (nth 3 r) (nth 4 r) (nth 0 r) (nth 1 r) (nth 2 r)))
     (when (> (length rows) 25)
       (message "  ... and %d more file(s) with errors" (- (length rows) 25)))
     (message "  %s" (make-string 82 ?-))
@@ -113,6 +126,16 @@ on the worst file in the corpus and reported nothing at all."
              (if (zerop (length files)) 0.0
                (* 100.0 (/ (float clean) (length files))))
              (length rows) total total-missing lines)
+    ;; THE headline metric.  ERROR COUNT IS MISLEADING: a grammar fix that lets
+    ;; a construct parse further replaces one swallowing mega-ERROR with several
+    ;; precise small ones, so the count RISES while coverage improves.  Bytes
+    ;; inside ERROR spans measure how much text the grammar fails to understand,
+    ;; which is the thing we actually care about.  (Learned 2026-08-14: the
+    ;; multi-clause defn fix moved count 8336 -> 8456 while being an improvement.)
+    (message "  ERROR-BYTES %d of %d (%.1f%% of the corpus unparsed)"
+             total-bytes (buffer-size-of-corpus files)
+             (if (zerop (buffer-size-of-corpus files)) 0.0
+               (* 100.0 (/ (float total-bytes) (buffer-size-of-corpus files)))))
     (message "")
     (let ((budget (if prologos-ts-check--max
                       (string-to-number prologos-ts-check--max) 0)))
