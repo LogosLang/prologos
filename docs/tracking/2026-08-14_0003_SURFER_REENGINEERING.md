@@ -1,7 +1,7 @@
 # Surfer Re-engineering — SURF Track 1
 
-**Status**: 🔄 in progress · **Opened** 2026-08-14 · **Owner ruling** on all three
-opening questions recorded in §2.
+**Status**: ⏸️ **BLOCKED** on the tree-sitter grammar — see [§0](#blocked) ·
+**Opened** 2026-08-14 · **Owner rulings** in §2 and §0.
 
 Re-engineering `prologos-surfer-mode` after it was disabled in practice (the
 `use-package` block in the owner's config has been commented out for a while).
@@ -17,12 +17,49 @@ take its interaction model, not its implementation.
 
 ---
 
+<a id="blocked"></a>
+## 0. ⏸️ BLOCKED — the grammar cannot carry this yet (measured 2026-08-14)
+
+P0 wrote a WS-mode fixture and validated it through the compiler: **0 errors, 7
+forms**. The same file yields **7 `ERROR` nodes** under tree-sitter. That prompted
+a corpus scan, and the result stops the track:
+
+| measure | value |
+|---|---|
+| `grammar.js` last touched | **2026-03-11** (`899b2263c`) — five months; LET, ARROW and Rel T1 all landed after |
+| library files scanned | 51 |
+| files parsing **clean** | **14** |
+| files with `ERROR` nodes | **37** (73%) |
+| total `ERROR` nodes | **2,123** (`conversions.prologos`: 498 in 828 lines) |
+
+`core/` alone holds 1,866, clustered by the leading token of the offending line:
+`defn` **779** · `(fn` 272 · `spec` 191 · `|` 124 · `:forall` 63 · `def` 55 ·
+`foreign` 45 · `trait` 39. `defr` — the entire Rel T1 relational syntax —
+appears **zero** times in `grammar.js`.
+
+**So this is not lag on new syntax; it fails on `defn`, `spec`, `def`, `trait`,
+the core of the language.** A surfer built here would be erratic in ~3/4 of real
+files and would be blamed for it. Note the blast radius is wider than the surfer:
+`prologos-ts-mode` font-lock runs off the same tree.
+
+**Owner ruling (2026-08-14): fix the grammar FIRST.** SURF T1 resumes when the
+corpus parses clean. Tracked as **TSG Track 1** —
+`2026-08-14_0030_TREE_SITTER_GRAMMAR_REPAIR.md`.
+
+⚠ **Method note, third instance this session.** The registry path was invisible
+to greps; the cold-start bug was invisible to 48 green unit tests; this was
+invisible until the corpus was actually parsed. In each case the *instrument*,
+not the reasoning, was the binding constraint. The design above was sound and
+would still have produced a broken tool.
+
+---
+
 ## Progress Tracker
 
 | Phase | Description | Status | Notes |
 |---|---|---|---|
-| P0 | WS-mode fixture + test scaffold | ⬜ | Existing `test/sample.prologos` is **sexp mode** — wrong shape for a layout surfer |
-| P1 | Node model: navigable nodes, extent-collapse, parent/child/sibling (pure, no UI) | ⬜ | The whole correctness surface; testable without a display |
+| P0 | WS-mode fixture + test scaffold | ✅ | `test/surfer-sample.prologos` — compiler-clean (0 errors). Existing `test/sample.prologos` is **sexp mode**, wrong shape for a layout surfer |
+| P1 | Node model: navigable nodes, extent-collapse, parent/child/sibling (pure, no UI) | ⏸️ | **Blocked on TSG T1** — [§0](#blocked). Design stands; the tree under it does not |
 | P2 | Transient session: entry/exit, single overlay, `C-M-*` motions | ⬜ | The gopcaml mechanism — [§4.2](#p2) |
 | P3 | Header-line breadcrumb (the always-on component) | ⬜ | [§4.3](#p3) |
 | P4 | Selection: mark node, expand/contract | ⬜ | `C-M-SPC` |

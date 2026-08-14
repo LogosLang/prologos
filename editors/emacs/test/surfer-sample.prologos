@@ -1,0 +1,46 @@
+;; Fixture for prologos-surfer tests — WS mode (the primary target).
+;;
+;; test/sample.prologos is `#lang prologos/sexp` and is therefore the WRONG
+;; shape for a layout-based surfer: in sexp mode structure comes from brackets,
+;; and the whole point here is that it comes from INDENTATION.
+;;
+;; Kept deliberately small and hand-checked.  Every construct below is here
+;; because some navigation case needs it; the comments say which.
+
+ns surfer-sample
+
+;; --- single-line top-level forms: sibling motion at depth 0 ---
+def a := 1
+def b := 2
+
+;; --- a multi-line form: down/up must cross the indent boundary ---
+defn dbl [x]
+  [int* x 2]
+
+;; --- nested clauses: the deep case for down-motion and for the breadcrumb,
+;;     which should read `defn nth > match > arm` somewhere inside here.
+;;     The spec is REQUIRED: without it the two clauses infer `Option ?a` and
+;;     `Option ?b` and fail to unify.  Keeping the fixture type-clean means it
+;;     can also serve as a corpus file rather than only as a parse target. ---
+spec nth Int [List Int] -> [Option Int]
+defn nth [n xs]
+  | n nil -> [none Int]
+  | n [cons h t] ->
+    match [eq n 0]
+      | true  -> [some Int h]
+      | false -> [nth [- n 1] t]
+
+;; --- an interior blank line: the form continues past it, so a node's extent
+;;     must span the gap rather than stopping at it ---
+spec spread Int -> Int
+defn spread [x]
+  let y 1
+
+  [+ x y]
+
+;; --- a bare expression as a top-level form: the retired keyword-regexp model
+;;     could not see this at all ---
+[dbl 21]
+
+;; --- trailing content, so the last real form is never also the buffer end ---
+def z := 3
