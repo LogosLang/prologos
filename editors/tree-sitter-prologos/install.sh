@@ -46,7 +46,22 @@ echo "==> building $LIB"
 
 echo "==> installing to $DEST/$LIB"
 mkdir -p "$DEST"
-cp "$LIB" "$DEST/$LIB"
+# ATOMIC REPLACE, never `cp` over the live file.
+#
+# On macOS (Apple Silicon especially) overwriting a .dylib IN PLACE while any
+# process has it mapped invalidates the code-signature pages, and the kernel
+# kills that process: SIGKILL, "Code Signature Invalid", crashing thread inside
+# dyld with no frame from the library itself.  A running Emacs with a .prologos
+# buffer open is exactly such a process — i.e. the normal case when you run this
+# script, which even tells you to "restart Emacs" afterwards.
+#
+# `mv` within the same directory is a rename: it swaps the DIRECTORY ENTRY and
+# leaves the old inode alone, so already-mapped processes keep the file they
+# mapped and only new loads see the new one.  Costs nothing; prevents a crash
+# that looks like a grammar bug.  (Diagnosed 2026-08-14 from three Emacs crash
+# reports.)
+cp "$LIB" "$DEST/.$LIB.incoming.$$"
+mv -f "$DEST/.$LIB.incoming.$$" "$DEST/$LIB"
 
 echo
 echo "Done. Restart Emacs to load the rebuilt grammar."
