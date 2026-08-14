@@ -358,8 +358,20 @@ with it (`treesit-font-lock-rules-mismatch')."
       (when prologos-ts--skipped-patterns
         (display-warning
          'prologos
-         (format "%d highlight pattern(s) skipped; see `prologos-ts--skipped-patterns'"
-                 (length prologos-ts--skipped-patterns))
+         (concat
+          (format "%d highlight pattern(s) skipped — those constructs will not\ncolour:\n"
+                  (length prologos-ts--skipped-patterns))
+          (mapconcat (lambda (s)
+                       (format "  %s"
+                               (replace-regexp-in-string
+                                "\n *" " " (truncate-string-to-width (car s) 68))))
+                     (reverse prologos-ts--skipped-patterns) "\n")
+          "\n\nIf these name node types the grammar should have, the usual cause is a
+STALE MAPPED GRAMMAR: Emacs maps a tree-sitter dylib once per session and
+cannot unmap it, so install.sh replaces the file on disk while this session
+keeps the parser it already loaded.  Reloading the Emacs side cannot fix
+that — it is the one case that needs a fresh Emacs.  Full detail in
+`prologos-ts--skipped-patterns'.")
          :warning))
       args)))
 
