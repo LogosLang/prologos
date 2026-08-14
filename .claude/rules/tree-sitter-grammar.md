@@ -36,7 +36,28 @@ provenance file, not mtimes.
 Installing while Emacs is open is **safe** (atomic rename). A running Emacs
 keeps the parser it mapped; the new one is picked up at its next start.
 
-## ⭐ Read SWALLOWS first. Error COUNT rises when the grammar improves.
+## ⭐ Read SWALLOWS first, and watch MISSING. Error COUNT rises when the grammar improves.
+
+**Three signals, and they are not interchangeable** (owner, 2026-08-14):
+
+- **SWALLOWS** — the gated metric. One ERROR node covering ≥20% of a file is the
+  failure that makes an editor unusable.
+- **MISSING going UP is a STRONGER defect signal than ERROR going up.** A MISSING
+  node is the parser reporting it had to *invent* a token to continue — which
+  means a rule matched and then could not be satisfied, i.e. a rule that is
+  WRONG rather than absent. ERROR is a lagging signal by comparison: one big
+  ERROR swallows everything inside it, so other defects become invisible, and
+  the count improves while a real regression rides along underneath.
+- **ERROR count is anti-correlated with progress** and must never be read alone.
+
+Measured instance (TSG T1 §9.7): a first cut of path selection moved
+ERROR 3054 → 2743 — an apparent win — while pushing **MISSING 74 → 110**. All
++36 were a `}` the parser invented because `select_block` assumed bare
+identifiers where the corpus writes whole paths. The headline number improved
+throughout; only the MISSING delta showed the regression. **When MISSING rises,
+stop and difference it against a rebuilt pre-change grammar — do not net it off
+against an ERROR drop.**
+
 
 A **swallow** is one ERROR node covering ≥20% of a file — the failure that makes
 an editor unusable, because font-lock and navigation lose the whole region

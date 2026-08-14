@@ -11,3 +11,12 @@
 # (one swallowing mega-ERROR becomes several precise small ones).
 max_swallows=0
 max_unparsed_pct=1.6
+
+# max_missing gates the MISSING total, SEPARATELY from ERROR — and it is the
+# more sensitive of the two. A MISSING node is the parser reporting it had to
+# INVENT a token, i.e. a rule that matched and then could not be satisfied: a
+# rule that is WRONG rather than absent. ERROR count is lagging, because one big
+# ERROR swallows everything inside it. Measured 2026-08-14 (§9.7): a change that
+# moved ERROR 3054 -> 2743 simultaneously pushed MISSING 74 -> 110, and only the
+# MISSING delta showed it.
+max_missing=77

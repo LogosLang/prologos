@@ -33,6 +33,16 @@
   "Maximum tolerated SWALLOW count (files with one ERROR over 20%).
 This is the PRIMARY gate.  Supplied from `corpus-budget.txt'.")
 
+(defvar prologos-ts-check--max-missing nil
+  "Maximum tolerated MISSING-node total.  Supplied from `corpus-budget.txt'.
+
+Gated separately from ERROR, and deliberately so: a MISSING node is the parser
+reporting it had to INVENT a token to continue, i.e. a rule that matched and
+then could not be satisfied — a rule that is WRONG rather than absent.  ERROR
+count is the lagging signal, because one big ERROR swallows everything inside
+it; a regression can ride along underneath a falling ERROR count.  Measured
+2026-08-14 (§9.7): ERROR 3054 -> 2743 while MISSING 74 -> 110.")
+
 (defvar prologos-ts-check--max-pct nil
   "Maximum tolerated percentage of the corpus inside ERROR spans.")
 
@@ -167,6 +177,7 @@ on the worst file in the corpus and reported nothing at all."
     ;; because one swallowing mega-ERROR becomes several precise small ones.
     ;; Gating it would push toward worse grammars.  `--max' remains for ad-hoc use.
     (let* ((sw-budget (prologos-ts-check--num prologos-ts-check--max-swallows))
+           (miss-budget (prologos-ts-check--num prologos-ts-check--max-missing))
            (pct-budget (prologos-ts-check--num prologos-ts-check--max-pct))
            (pct (if (zerop (buffer-size-of-corpus files)) 0.0
                   (* 100.0 (/ (float total-bytes)
@@ -176,6 +187,10 @@ on the worst file in the corpus and reported nothing at all."
         (push (format "swallows %d exceeds budget %d" swallowed sw-budget) fails))
       (when (and pct-budget (> pct pct-budget))
         (push (format "unparsed %.1f%% exceeds budget %.1f%%" pct pct-budget) fails))
+      (progn
+        (when (and miss-budget (> total-missing miss-budget))
+          (push (format "MISSING %d exceeds budget %d — a rule matched and could not be satisfied; difference it against a rebuilt pre-change grammar rather than netting it off against an ERROR drop"
+                        total-missing miss-budget) fails)))
       ;; Legacy count budget, only when explicitly asked for a non-zero one.
       (let ((count-budget (prologos-ts-check--num prologos-ts-check--max)))
         (when (and count-budget (> count-budget 0)
@@ -185,9 +200,10 @@ on the worst file in the corpus and reported nothing at all."
       (if (null fails)
           (progn
             (message "PASS%s"
-                     (if (or sw-budget pct-budget)
-                         (format " (budget: swallows<=%s, unparsed<=%s%%)"
-                                 (or sw-budget "-") (or pct-budget "-"))
+                     (if (or sw-budget pct-budget miss-budget)
+                         (format " (budget: swallows<=%s, unparsed<=%s%%, missing<=%s)"
+                                 (or sw-budget "-") (or pct-budget "-")
+                                 (or miss-budget "-"))
                        ""))
             (kill-emacs 0))
         (dolist (f (nreverse fails)) (message "FAIL: %s" f))

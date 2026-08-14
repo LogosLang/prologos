@@ -20,12 +20,14 @@ MAX=0
 ALLOW_STALE=0
 MAX_SWALLOWS=""
 MAX_PCT=""
+MAX_MISSING=""
 ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --max) MAX="$2"; shift 2 ;;
     --allow-stale) ALLOW_STALE=1; shift ;;
     --max-swallows) MAX_SWALLOWS="$2"; shift 2 ;;
+    --max-missing) MAX_MISSING="$2"; shift 2 ;;
     *)     ARGS+=("$1"); shift ;;
   esac
 done
@@ -65,12 +67,16 @@ fi
 if [ -z "$MAX_PCT" ] && [ -f "$BUDGET_FILE" ]; then
   MAX_PCT="$(sed -n 's/^max_unparsed_pct=//p' "$BUDGET_FILE")"
 fi
+if [ -z "$MAX_MISSING" ] && [ -f "$BUDGET_FILE" ]; then
+  MAX_MISSING="$(sed -n 's/^max_missing=//p' "$BUDGET_FILE")"
+fi
 
 exec emacs -Q --batch \
   -L ../emacs \
   --eval "(setq prologos-ts-check--max \"$MAX\")" \
   --eval "(setq prologos-ts-check--max-swallows \"${MAX_SWALLOWS:-}\")" \
   --eval "(setq prologos-ts-check--max-pct \"${MAX_PCT:-}\")" \
+  --eval "(setq prologos-ts-check--max-missing \"${MAX_MISSING:-}\")" \
   -l ./check-corpus.el \
   -f prologos-ts-check-corpus \
   ${ARGS[@]+"${ARGS[@]}"}
