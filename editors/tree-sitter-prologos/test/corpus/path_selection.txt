@@ -1,0 +1,79 @@
+; Path selection — spec: docs/research/2026-07-28_path-selection-spec.md §2.
+;
+; Every step opener is `token.immediate`, because §2.2 makes three characters
+; juxtaposition-sensitive: `x:k` is a broadcast step but `x :k` is application
+; to a keyword literal, and `x{…}` is a select block but `x {…}` is a literal.
+; The pair of tests at the end pins exactly that distinction — without them a
+; broadcast rule can look correct while never firing at all, which is how the
+; first cut of `broadcast_step` shipped green and did nothing.
+
+===
+Full path: nominal, broadcast, flatten, broadcast
+===
+
+def c := record.orders:items*:sku
+
+---
+
+(source_file
+  (top_level
+    (def_form
+      name: (identifier)
+      value: (expression
+        (path_expr
+          base: (identifier)
+          (path_step
+            (nominal_step
+              key: (identifier)))
+          (path_step
+            (broadcast_step
+              step: (identifier)))
+          (path_step
+            (flatten_step))
+          (path_step
+            (broadcast_step
+              step: (identifier))))))))
+
+===
+Ordinal selection block
+===
+
+def e := party:name{1 0}
+
+---
+
+(source_file
+  (top_level
+    (def_form
+      name: (identifier)
+      value: (expression
+        (path_expr
+          base: (identifier)
+          (path_step
+            (broadcast_step
+              step: (identifier)))
+          (path_step
+            (select_block
+              (number)
+              (number))))))))
+
+===
+Adjacency: a SPACED colon stays a keyword literal, not a broadcast step
+===
+
+def b := admins :name
+
+---
+
+(source_file
+  (top_level
+    (def_form
+      name: (identifier)
+      value: (expression
+        (application
+          (expression
+            (atom
+              (identifier)))
+          (expression
+            (atom
+              (keyword_literal))))))))

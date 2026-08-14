@@ -1314,3 +1314,61 @@ the rule is `repeat($.expression)` and juxtaposition IS application. This matche
 `list_literal` exactly (`'[1 2 3]` nests identically), so it is the established
 convention rather than a new defect; whether either should yield flat elements
 is one question affecting both.
+
+<a id="hl-issue-7"></a>
+### 9.7 ✅ Path selection — the whole ADOPTED surface
+
+`foray.prologos:969` `record.orders:items*:sku` and `:981` `party:name{1 0}`
+were the last errors in the reported region. The grammar had **no path
+selection at all** (`grep dot_access|path_select|postfix|selector` → 0).
+
+Implemented against spec §2.1: `.k` nominal · `.N` ordinal · `:s` broadcast ·
+`*` flatten · `{a b}`/`{N M}` select block · `.{…}` block descend · `.*`
+row-splat · `^`/`^k'`/`^_` key operator. **`<` disclose deliberately omitted** —
+spec'd but not implemented in the language (owner, 2026-08-14).
+
+**Every step opener is `token.immediate`, and that is the design.** Spec §2.2
+makes three characters juxtaposition-sensitive — `x:k` vs `x :k`, `x{…}` vs
+`x {…}`, `a^b` vs `a^ b`. `token.immediate` matches only when no extra was
+skipped, i.e. adjacent. No scanner token was needed: unlike `_map_open`, which
+must look FORWARD past spaces to classify a brace, this decision is about what
+came immediately BEFORE, which the lexer already knows.
+
+⭐⭐ **`broadcast_step` shipped GREEN AND VACUOUS on the first cut.** Written as
+`seq(token.immediate(':'), $.identifier)`, it parsed `admins:name` at **zero
+errors** — as `application(admins, keyword_literal)`, exactly as before, because
+`keyword_literal` is a single token `/:[a-zA-Z_]…/` and the lexer takes it.
+A rule that compiles, matches nothing, and reports success. Only dumping the
+TREE showed it. Fixed by matching the whole `:name` shape as an immediate token.
+Third instance this session of "parses" ≠ "works" (after the vacuous query rules
+and §9.4).
+
+⚠ **A regression the ERROR count HID.** The first cut moved ERROR 3054 → 2743
+while pushing **MISSING 74 → 110**. The +36 was entirely `}`: `select_block` was
+`repeat(choice(identifier, number))`, but block contents are BRANCHES — the
+corpus writes `app-config{server.host^ database.url^}` and nests blocks through
+`^.{…}`. Widened to accept paths; MISSING settled at 77 (+3 vs baseline).
+**Found only by differencing the MISSING breakdown against a rebuilt pre-change
+grammar** — the headline number was improving throughout.
+
+**Measured**:
+
+| | before | after |
+|---|---|---|
+| ERROR | 3054 | **2690** |
+| MISSING | 74 | 77 |
+| error-bytes | 18571 | **18196** |
+| unparsed | 1.6% | **1.6%** |
+| swallows | 0 | **0** |
+
+Budget ratcheted `max_unparsed_pct` 1.7 → **1.6**. `foray.prologos` now carries
+**163** `path_expr` nodes (was 0) and L969/L981 are clean. Two declared
+conflicts (`[_path_base, atom]`, `[_path_base, expression]`) — an identifier can
+open a path or stand alone, and the LR state must choose before seeing whether a
+step follows; inside angle types `<A *` vs `<A*` differ only by adjacency.
+Queries capture steps as `@property`. Pinned by `test/corpus/path_selection.txt`,
+including an adjacency test adding that a SPACED `:` stays a keyword literal —
+the pin that would have caught the vacuous first cut.
+
+**Still open**: some exotic block forms in the CIU T6 acceptance file (`..`
+recursive descent, `^-` variants) remain unparsed; `..` is DEFERRED in the spec.

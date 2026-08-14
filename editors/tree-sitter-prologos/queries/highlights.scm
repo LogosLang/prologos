@@ -111,6 +111,24 @@
 (type_arg_group (identifier) @type)
 
 ; ============================================================
+; Path selection (spec §2.1)
+; ============================================================
+;
+; A path STEP names a field, so its identifier is `@property`, not a variable —
+; the distinction TextMate cannot make, since `admins:name` and `admins :name`
+; differ only by a space. Placed before the builtin/constant matches below so a
+; step whose name happens to collide with a builtin still reads as a step.
+
+(nominal_step key: (identifier) @property)
+(broadcast_step step: (identifier) @property)
+(ordinal_step index: (number) @number)
+
+; The step OPERATORS themselves.
+(flatten_step) @operator
+(row_splat) @operator
+(key_op) @operator
+
+; ============================================================
 ; Built-in constants (identifier-matched)
 ; ============================================================
 

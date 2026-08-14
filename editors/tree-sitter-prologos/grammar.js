@@ -40,6 +40,14 @@ module.exports = grammar({
 
   conflicts: $ => [
     [$.fn_param, $.fn_body],
+    // An identifier can open a path (`x.y`) or stand alone as an atom, and the
+    // parser must choose BEFORE seeing whether a step follows. Surfaced inside
+    // angle types, where `<A *` is the Sigma `*` and `<A*` would be a flatten
+    // step — the tokens differ only by adjacency, which the LEXER knows and the
+    // LR state does not. Declaring it lets tree-sitter carry both and settle it
+    // on the actual token.
+    [$._path_base, $.atom],
+    [$._path_base, $.expression],
   ],
 
   rules: {
@@ -727,6 +735,7 @@ module.exports = grammar({
     // ============================================================
 
     expression: $ => choice(
+      $.path_expr,
       $.fn_expr,
       $.let_expr,
       $.if_expr,
@@ -875,6 +884,125 @@ module.exports = grammar({
     )),
 
     // Application by juxtaposition
+    // ============================================================
+    // Path selection  (spec: docs/research/2026-07-28_path-selection-spec.md §2)
+    // ============================================================
+    //
+    // A postfix chain of steps on a focus: `record.orders:items*:sku`,
+    // `party:name{1 0}`, `app-config.database.pool-size`.
+    //
+    // ⭐ EVERY step opener is `token.immediate`, and that is the whole design.
+    // Spec §2.2: three characters are JUXTAPOSITION-SENSITIVE — whitespace
+    // decides the reading.
+    //
+    //     x:k   broadcast step        x :k   application to a keyword literal
+    //     x{…}  select block          x {…}  a map/block literal
+    //     a^b   rename                a^ b   keyless leaf, then sibling `b`
+    //
+    // `token.immediate` matches only when NO extra was skipped, which is
+    // exactly "adjacent". It needs no scanner token — unlike `_map_open`,
+    // which must look FORWARD past spaces to classify a brace; here the
+    // decision is about what came immediately BEFORE, and the lexer already
+    // knows that.
+    //
+    // Binds tighter than `application` (prec 3 vs 2): `[f x.y]` applies `f` to
+    // `x.y`, not `f.y` to anything.
+    path_expr: $ => prec.left(3, seq(
+      field('base', $._path_base),
+      repeat1($.path_step),
+    )),
+
+    // Only a self-delimiting focus can carry a path — an identifier, a
+    // literal, or a bracketed group. Not a bare application: `f x.y` paths off
+    // `x`, not off `f x`.
+    _path_base: $ => choice(
+      $.identifier,
+      $.grouped_expr,
+      $.paren_expr,
+      $.map_literal,
+      $.pvec_literal,
+      $.list_literal,
+    ),
+
+    path_step: $ => choice(
+      $.row_splat,
+      $.nominal_step,
+      $.ordinal_step,
+      $.broadcast_step,
+      $.flatten_step,
+      $.select_block,
+      $.key_op,
+      $.block_descend,
+    ),
+
+    // `.*` — row-splat. MUST precede `.k`, or `.` + `*` wins and splits it.
+    row_splat: $ => token.immediate('.*'),
+
+    nominal_step: $ => seq(token.immediate('.'), field('key', $.identifier)),
+    ordinal_step: $ => seq(token.immediate('.'), field('index', $.number)),
+
+    // `:s` broadcast — grade ω, maps one step over the level, shape preserved.
+    // Without the immediacy this is `application(r, :items)`: a parse that
+    // SUCCEEDS with the wrong tree and emits no ERROR, so the corpus gate
+    // cannot see it (the §9.4 class).
+    // Matches the WHOLE `:name` shape, not `:` + identifier.
+    //
+    // ⚠ The split version PARSED AT ZERO ERRORS AND NEVER FIRED:
+    // `keyword_literal` is one token `/:[a-zA-Z_]…/`, so the lexer took it and
+    // `admins:name` stayed `application(admins, :name)` — a rule that compiles,
+    // matches nothing, and reports success. Third instance this session of
+    // "parses" not meaning "works"; only dumping the tree shows it.
+    //
+    // Same shape as `keyword_literal`, but `token.immediate`, so adjacency
+    // alone separates `x:k` (broadcast) from `x :k` (keyword literal) — which
+    // is exactly what spec §2.2 asks for.
+    broadcast_step: $ => field('step',
+      alias(token.immediate(/:[a-zA-Z_][a-zA-Z0-9_?!\-']*/), $.identifier)),
+
+    // `*` flatten, postfix and adjacent — `…:diags*:msg`. Adjacency is what
+    // separates it from the spaced binary `*` (Sigma / multiplication).
+    flatten_step: $ => token.immediate('*'),
+
+    // `{a b}` nominal / `{N M}` ordinal n-ary selection.
+    //
+    // ⚠ Block contents are BRANCHES, and a branch is itself a path — not the
+    // bare identifier/number the first cut assumed. The corpus writes
+    // `app-config{server.host^ database.url^}` and even nests blocks through
+    // `^.{…}`. The narrow version mis-fired on exactly those, inserting a
+    // MISSING `}` (+26 across the corpus) — caught by differentially comparing
+    // the MISSING breakdown against the pre-change grammar, since the ERROR
+    // count went DOWN over the same change and hid it.
+    select_block: $ => seq(
+      token.immediate('{'),
+      repeat($._select_branch),
+      '}',
+    ),
+
+    _select_branch: $ => choice(
+      $.path_expr,
+      $.identifier,
+      $.number,
+    ),
+
+    // `^` key operator: `k^` dissolve · `k^k'` rename · `p^_` synth.
+    // The continuation is `token.immediate` too, which is what distinguishes
+    // `a^b` (rename) from `a^ b` (dissolve, then a sibling branch).
+    key_op: $ => seq(
+      token.immediate('^'),
+      optional(choice(
+        field('rename', alias(token.immediate(/[a-zA-Z_][a-zA-Z0-9_?!-]*/), $.identifier)),
+        field('synth', token.immediate('_')),
+      )),
+    ),
+
+    // `.{…}` — descend into a nested selection block, as in
+    // `database^.{url pool-size}`. Distinct from `nominal_step`, which takes an
+    // identifier after the dot.
+    block_descend: $ => seq(token.immediate('.'), $.select_block),
+
+    // `<` disclose is spec'd but NOT IMPLEMENTED in the language (owner,
+    // 2026-08-14), so the grammar deliberately does not accept it.
+
     application: $ => prec.left(2, seq(
       $.expression,
       $.expression,
