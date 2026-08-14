@@ -577,13 +577,33 @@ module.exports = grammar({
     ),
 
     // Let expression: (let name := expr body) or let name := expr (WS)
+    // `let` after the LET track (2026-07-31).
+    //
+    // Three things the pre-2026-08-14 rule got wrong, all of them making the
+    // COMMON spellings unparseable while the rare one worked:
+    //   1. `:=' was REQUIRED.  It is optional everywhere — `let x 4' is the
+    //      ordinary form and `let x := 4' the emphatic one.
+    //   2. exactly ONE binding was allowed.  Aligned blocks and sibling
+    //      chains bind several in one scope.
+    //   3. the bracket form `let [x 5 y 6] body' did not exist at all.
+    //
+    // Binder shape is `typed_param_or_bare', which already handles both the
+    // spaced `x : Int' and the fused `x:Int' the params rule accepts — the
+    // lexer does not care about the spaces, so one rule covers both.
     let_expr: $ => prec.right(seq(
       'let',
-      field('name', $.identifier),
-      optional(seq(':', field('type', $.type_expr))),
-      ':=',
-      field('value', $.expression),
+      choice(
+        seq('[', repeat1($.let_binding), ']'),
+        repeat1($.let_binding),
+      ),
       optional(field('body', $.expression)),
+    )),
+
+    let_binding: $ => prec.right(seq(
+      field('name', $.typed_param_or_bare),
+      optional(':='),
+      field('value', $.expression),
+      optional($._newline),
     )),
 
     // If expression: (if cond then else) or if cond then else (WS 3-arg)

@@ -2482,14 +2482,6 @@
             "value": "let"
           },
           {
-            "type": "FIELD",
-            "name": "name",
-            "content": {
-              "type": "SYMBOL",
-              "name": "identifier"
-            }
-          },
-          {
             "type": "CHOICE",
             "members": [
               {
@@ -2497,26 +2489,74 @@
                 "members": [
                   {
                     "type": "STRING",
-                    "value": ":"
+                    "value": "["
                   },
                   {
-                    "type": "FIELD",
-                    "name": "type",
+                    "type": "REPEAT1",
                     "content": {
                       "type": "SYMBOL",
-                      "name": "type_expr"
+                      "name": "let_binding"
                     }
+                  },
+                  {
+                    "type": "STRING",
+                    "value": "]"
                   }
                 ]
+              },
+              {
+                "type": "REPEAT1",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "let_binding"
+                }
+              }
+            ]
+          },
+          {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "FIELD",
+                "name": "body",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "expression"
+                }
               },
               {
                 "type": "BLANK"
               }
             ]
+          }
+        ]
+      }
+    },
+    "let_binding": {
+      "type": "PREC_RIGHT",
+      "value": 0,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "FIELD",
+            "name": "name",
+            "content": {
+              "type": "SYMBOL",
+              "name": "typed_param_or_bare"
+            }
           },
           {
-            "type": "STRING",
-            "value": ":="
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "STRING",
+                "value": ":="
+              },
+              {
+                "type": "BLANK"
+              }
+            ]
           },
           {
             "type": "FIELD",
@@ -2530,12 +2570,8 @@
             "type": "CHOICE",
             "members": [
               {
-                "type": "FIELD",
-                "name": "body",
-                "content": {
-                  "type": "SYMBOL",
-                  "name": "expression"
-                }
+                "type": "SYMBOL",
+                "name": "_newline"
               },
               {
                 "type": "BLANK"

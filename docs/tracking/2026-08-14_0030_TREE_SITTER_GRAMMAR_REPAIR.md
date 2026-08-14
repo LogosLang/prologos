@@ -17,7 +17,7 @@ ARROW (2026-08-05), Rel T1 (2026-07-25) — and the grammar has not.
 | P0 | Corpus gate + baseline | ✅ | `check-corpus.sh` — commit `321391bf`. Baseline in §1 |
 | P1 | Multi-clause `defn` (`\| pat -> body`) | ✅ | `3d43a89f`. Isolated fix only; the corpus gain arrived with P1b — [§5.p1](#p1) |
 | P1b | Bare operators as atoms (`+ - * / \|>`) | ✅ | Unplanned; **it is what unblocked P1**. Error-bytes 13.9% → **10.0%** — [§5.p1b](#p1b) |
-| P2 | `let` (LET track, 2026-07-31) | ⬜ | |
+| P2 | `let` (LET track, 2026-07-31) | ✅ | All 8 documented shapes → 0. Corpus barely moves (−549 B) because the corpus barely uses `let` — [§5.p2](#p2) |
 | P3 | `fn` lambda with typed params | ⬜ | |
 | P4 | `trait` body | ⬜ | |
 | P5 | `defr` + relational syntax (Rel T1) | ⬜ | `defr` appears **0** times in grammar.js |
@@ -135,11 +135,43 @@ measurement and was one rule away from being a large win. A gap that sits
 *downstream* of the one you fixed will mask the fix entirely. Do not revert on a
 flat corpus number alone — check whether the construct now reaches new territory.
 
+<a id="p2"></a>
+### 5.P2 — `let`
+
+`let_expr` **required `:=`**, allowed exactly **one** binding, and had no
+bracket form. So the rare spelling parsed and every common one did not:
+`let x := 4` worked; `let x 4` did not.
+
+Rewritten: `:=` optional, `repeat1($.let_binding)` for aligned blocks and
+sibling chains, plus `seq('[', repeat1($.let_binding), ']')` for the bracket
+form. Binder is `typed_param_or_bare`, which already covers spaced `x : Int` and
+fused `x:Int` — the lexer does not care about the spaces, so one rule serves.
+
+All **8** documented shapes now parse at 0 errors: nested shorthand · sibling
+chain · aligned block · `:=` · typed spaced · typed fused · bracket flat · the
+blank-line-inside case. No regressions in defn / operators / match / spec / ns.
+
+⚠ **But the corpus moved only 114,793 → 114,244 error-bytes (−549 B, 0.05pp)**,
+clean files 18 → 19. Not a disappointment — a fact about the corpus: `let`
+appears on **83 lines across 9 files**, against **1,423** `defn` lines. The LET
+track landed 2026-07-31, three weeks ago, so the library predates it almost
+entirely. The fix is for the code being written now, not the code already there.
+
+**Method note, the mirror of P1's**: P1 was a real fix that the corpus number
+hid. P2 is a real fix the corpus number cannot show, because the construct is
+rare. Neither is measurable by error-bytes alone — the isolated shape probes are
+what establish correctness, and the corpus number only tells you the *blast
+radius*. Use both; do not let either alone decide.
+
+**Discovered**: `[do [x := 1] x]` regressed 1 → 2 errors. Pre-existing failure,
+absent from the lib corpus, logged in §6 rather than chased.
+
 ---
 
 ## 6. Deferred / discovered
 
 - Spaced `*` in Sigma types (`<(x : A) * B>`) — pre-existing, absent from lib.
+- `do` bindings (`[do [x := 1] x]`) — 1 → 2 errors after P2; pre-existing, absent from lib.
 - `clean` file count is still 18/142: most files carry several of the remaining
   gaps, so files only go clean when the LAST gap in them lands. Error-bytes is
   the metric that moves in the meantime.
