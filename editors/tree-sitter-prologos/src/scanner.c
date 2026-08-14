@@ -207,9 +207,24 @@ bool tree_sitter_prologos_external_scanner_scan(
 
     /* Content on this line that is not a newline, EOF or a comment means the
      * body starts here.  A comment does NOT count: `defn f [x]  ;; note` has
-     * its body below. */
+     * its body below.
+     *
+     * `<` and `:` are ALSO excluded, and that is not cosmetic: they begin a
+     * RETURN TYPE (`defn f [x] <Bool>` / `defn f [x] : Bool`).  Without this
+     * the marker fires before the return type, the parser takes `<Bool>` as
+     * the same-line BODY, and the indented real body is swallowed into it —
+     * measured as a 3-error, whole-body ERROR node.  GLR hides it when the
+     * body is simple, so it surfaces only on complex bodies, which is exactly
+     * the shape `lattices.prologos` is full of.
+     *
+     * Suppressing here is correct rather than a workaround: a body genuinely
+     * starting with `<` would be an angle GROUP, which is type-level syntax by
+     * the delimiter convention, and one starting with `:` would be a bare
+     * keyword literal.  Neither is a real defn body.  After the parser consumes
+     * the return type the scanner is asked again, and decides properly then. */
     if (!lexer->eof(lexer) && lexer->lookahead != '\n' &&
-        lexer->lookahead != ';') {
+        lexer->lookahead != ';' && lexer->lookahead != '<' &&
+        lexer->lookahead != ':') {
       lexer->result_symbol = SAME_LINE_BODY;
       return true;
     }
