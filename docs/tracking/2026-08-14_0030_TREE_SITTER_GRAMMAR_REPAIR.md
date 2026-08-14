@@ -18,7 +18,8 @@ ARROW (2026-08-05), Rel T1 (2026-07-25) — and the grammar has not.
 | P1 | Multi-clause `defn` (`\| pat -> body`) | ✅ | `3d43a89f`. Isolated fix only; the corpus gain arrived with P1b — [§5.p1](#p1) |
 | P1b | Bare operators as atoms (`+ - * / \|>`) | ✅ | Unplanned; **it is what unblocked P1**. Error-bytes 13.9% → **10.0%** — [§5.p1b](#p1b) |
 | P2 | `let` (LET track, 2026-07-31) | ✅ | All 8 documented shapes → 0. Corpus barely moves (−549 B) because the corpus barely uses `let` — [§5.p2](#p2) |
-| P3 | `fn` lambda with typed params | ⬜ | |
+| P3 | `fn` lambda with typed params | ✅ | **Already fixed by P1b/P2** — every shape 0 errors, no work needed. The "(fn 272" cluster was a leading-token artifact — [§5.p3](#p3) |
+| P3b | `<Type>` return annotations (`defn f [x] <Bool>`) | ✅ | The real gap behind `impl` 36% + `defn` 23%. 394 corpus lines. Clean files 19 → **21** — [§5.p3b](#p3b) |
 | P4 | `trait` body | ⬜ | |
 | P5 | `defr` + relational syntax (Rel T1) | ⬜ | `defr` appears **0** times in grammar.js |
 | P6 | Re-baseline, regenerate, reinstall, font-lock check | ⬜ | `install.sh`; then unblock SURF T1 |
@@ -166,11 +167,55 @@ radius*. Use both; do not let either alone decide.
 **Discovered**: `[do [x := 1] x]` regressed 1 → 2 errors. Pre-existing failure,
 absent from the lib corpus, logged in §6 rather than chased.
 
+<a id="p3"></a>
+### 5.P3 — `fn` lambda: nothing to do
+
+Every `fn` shape already parsed at 0 errors before this phase started: bracket
+and paren forms, typed and fused params, wildcard, multiplicity, literal bodies,
+multiple param groups. P1b/P2 had fixed them as a side effect — `fn` bodies are
+full of operators.
+
+**The `(fn` 272 figure that put this on the plan was a leading-token artifact**,
+the same one that inflated `defn` to 779: it counts the first token of the line
+CONTAINING the error, and those lines began `(fn …` while the errors inside them
+were operators. Third time this clustering has misdirected. Only *isolated
+shape probes* establish which construct is broken; the clustering is a heat map
+of where errors land, not of what causes them.
+
+<a id="p3b"></a>
+### 5.P3b — `<Type>` return annotations
+
+Re-deriving the cluster from CURRENT error mass (rather than the stale March
+figures) turned up: `impl` 36.0% · `defn` 23.0% · `ns` 16.9% · `trait` 4.4%.
+Reading the actual `impl` bodies gave the cause immediately —
+
+```
+impl Eq Nat
+  defn eq? [x y] <Bool>      <-- angle-bracket return type
+    nat-eq? x y
+```
+
+`defn_form` accepted only the colon form `: Bool`. There was **no angle-delimited
+type rule anywhere in the grammar**, while the corpus writes one on **394**
+`defn` lines — so essentially every method inside every `impl` failed. Added
+`angle_type` and accepted it in `defn`'s return position alongside `:`.
+
+Result: the real `impl` block 2 → **0**; clean files 19 → **21**; ERROR count
+4478 → 4000. Error-BYTES 114,244 → 117,147 (+2,903) — the P1 pattern again:
+newly reachable regions now fail on gaps further in.
+
+**Rejected and reverted in the same phase**: a `paren_type` rule for `<(Type 0)>`.
+It did not fix its target (still 2 errors) and cost ~900 bytes, so it did not
+earn its place and was backed out rather than left in as plausible-looking dead
+weight.
+
 ---
 
 ## 6. Deferred / discovered
 
 - Spaced `*` in Sigma types (`<(x : A) * B>`) — pre-existing, absent from lib.
+- `<(Type 0)>` — parenthesised type inside an angle type. A naive `paren_type` did NOT fix it (see §5.P3b); needs real diagnosis.
+- `[x : Bool y : Bool]` — SPACED typed params, several in one list: `type_application` greedily takes `Bool y`. The fused `[x:Int]` form is fine.
 - `do` bindings (`[do [x := 1] x]`) — 1 → 2 errors after P2; pre-existing, absent from lib.
 - `clean` file count is still 18/142: most files carry several of the remaining
   gaps, so files only go clean when the LAST gap in them lands. Error-bytes is

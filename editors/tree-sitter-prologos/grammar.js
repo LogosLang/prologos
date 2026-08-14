@@ -167,7 +167,10 @@ module.exports = grammar({
       field('name', $.identifier),
       optional(field('implicit_params', $.implicit_params)),
       optional(field('params', $.param_list)),
-      optional(seq(':', field('return_type', $.type_expr))),
+      optional(choice(
+        seq(':', field('return_type', $.type_expr)),
+        field('return_type', $.angle_type),
+      )),
       $._indent,
       choice(
         repeat1($.defn_arm),
@@ -717,6 +720,7 @@ module.exports = grammar({
       $.arrow_type,
       $.type_application,
       $.grouped_type,
+      $.angle_type,
       $.identifier,
     ),
 
@@ -732,6 +736,15 @@ module.exports = grammar({
     )),
 
     grouped_type: $ => seq('[', repeat1($.type_expr), ']'),
+
+    // <Type> — the angle-delimited type annotation.
+    //
+    // Absent from the grammar entirely before 2026-08-14, while the corpus
+    // writes it on 394 `defn` lines: `defn eq? [x y] <Bool>`.  Only the colon
+    // form `: Bool` was accepted, so essentially every method inside every
+    // `impl` failed to parse — which is why `impl` and `defn` between them held
+    // 59% of the remaining error mass.
+    angle_type: $ => seq('<', repeat1($.type_expr), '>'),
 
     // ============================================================
     // Atoms and terminals
