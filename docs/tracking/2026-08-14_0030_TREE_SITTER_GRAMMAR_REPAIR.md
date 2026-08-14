@@ -32,8 +32,8 @@ ARROW (2026-08-05), Rel T1 (2026-07-25) — and the grammar has not.
 | P5h | **`impl` paren type args** — the `lattices` swallow | ✅ | **SWALLOWS 1 → 0**; worst 31% → **13%**; bytes 2.6% → **1.8%** — [§5.p5h](#p5h) |
 | P5i | **Map literals** via a `_map_open` scanner token — the contested `{` | ✅ | Plain rule regressed (swallows 0→2); lexical split holds swallows at **0**, bytes 1.8% → **1.7%** — [§5.p5i](#p5i) |
 | P5j | `qualified_name` first segment could not be 1 char (`a::b`) | ✅ | Deferred note's diagnosis was WRONG — not segment COUNT, first-segment LENGTH. Corpus byte-identical — [§5.p5j](#p5j) |
-| P6 | Re-baseline, regenerate, reinstall, font-lock check | ⬜ | `install.sh`; then unblock SURF T1 |
-| P7 | TSG T1.close — gate wiring, DEFERRED triage, PIR-lite | ⬜ | Consider adding the gate to pre-commit |
+| P6 | Drift tooling: staleness guard · ratchet · smoke test · provenance · tripwire | ✅ | `1eca2bcb`, `e3ff2335`. All verified to FIRE — [§8](#close) |
+| P7 | **TSG T1.close** | ✅ | Owner ruling: no PIR — close recorded here as [§8](#close) |
 
 ---
 
@@ -995,6 +995,84 @@ probe = revert.**
 - `<(Type 0)>` — parenthesised type inside an angle type. A naive `paren_type` did NOT fix it (see §5.P3b); needs real diagnosis.
 - `[x : Bool y : Bool]` — SPACED typed params, several in one list: `type_application` greedily takes `Bool y`. The fused `[x:Int]` form is fine.
 - `do` bindings (`[do [x := 1] x]`) — 1 → 2 errors after P2; pre-existing, absent from lib.
-- `clean` file count is still 18/142: most files carry several of the remaining
-  gaps, so files only go clean when the LAST gap in them lands. Error-bytes is
-  the metric that moves in the meantime.
+- ~~`clean` file count is still 18/142~~ — **closed at 34/142**. The note held:
+  files go clean only when the LAST gap in them lands, which is why the count
+  moved late and in steps.
+
+
+---
+
+<a id="close"></a>
+## 8. Close — TSG Track 1 (2026-08-14)
+
+Owner ruling: **no PIR**; the closing measurements and remarks live here.
+
+### 8.1 Final measurements
+
+| metric | baseline | close | |
+|---|---|---|---|
+| files SWALLOWED (one ERROR ≥20% of file) | **9** | **0** | ✅ |
+| worst single ERROR, as % of its file | **100%** | **13%** | |
+| corpus unparsed (ERROR-bytes) | **13.6%** | **1.7%** | −87% |
+| clean files | 18 / 142 | **34 / 142** | +89% |
+| ERROR nodes | 4,832 | 3,087 | |
+
+A file existing as **one entire ERROR node** is gone, and so is every swallow.
+Worst-case local damage is 13% of one file. The gate is ratcheted at
+`max_swallows=0`, `max_unparsed_pct=1.8`.
+
+⚠ **ERROR count fell only 36% while bytes fell 87%, and that is expected**, not a
+shortfall: fixes convert one swallowing mega-ERROR into several precise small
+ones. Count is the metric that moves least on real progress — see §8.3.
+
+### 8.2 What landed
+
+Thirteen grammar phases. Ordinary gaps — the grammar simply lacked the shape,
+one rule each, generated first try: multi-clause `defn` · bare operators · `let`
+· `<Type>` returns · `require`/`imports` groups · `trait` bodies · `defr` ·
+bracketed clause patterns · `=` · angle-typed params · `string` as one token ·
+`qualified_name`'s first segment. Contested shapes — two rules already claiming
+the syntax, each needing a **lexical split** rather than a better rule:
+same-line `defn` bodies (`_same_line_body`), inline paren match arms
+(`_arm_lparen`), map literals (`_map_open`).
+
+Plus the drift tooling (§P6): staleness guard, ratchet, smoke test, provenance,
+pre-commit tripwire, and the ambient rules file.
+
+### 8.3 What the track taught
+
+1. **Tree-sitter never fails — it recovers.** That is why five months of drift
+   produced no symptom. Any grammar needs an explicit measurement or it rots
+   invisibly; the measurement is the deliverable as much as the rules are.
+2. **The obvious metrics are anti-correlated with progress.** ERROR count rises
+   on improvement; error-bytes lag by a phase. **Swallow count** — one ERROR
+   covering ≥20% of a file — is the honest headline, and it exists because the
+   owner pointed out that a grammar must stay useful on deliberately dirty code.
+   Editor support is always operating on half-written text, so what matters is
+   that a broken form **damages itself and stops there**.
+3. **Leading-token clustering misdirected 4 times out of 4**, including at `ns`,
+   which had no defect at all. It shows where errors land, never what causes
+   them. Only minimal-snippet probes establish causation.
+4. **Probes are necessary and not sufficient.** Every reverted same-line
+   formulation was green on all shape probes while driving swallows 6 → 24.
+   Correctness comes from probes; blast radius only from the corpus.
+5. **The tell is cheap and reliable**: first-try generation ⇒ a missing shape,
+   one rule. Conflicts that migrate as you reshape ⇒ a contested shape, needing
+   a scanner-level split. Grep for competing claimants before spending.
+6. **Instruments needed fixing mid-flight, three times** — the recursive walk
+   blew the stack on exactly the worst file; Emacs lock files broke the scan;
+   `EXIT=$?` after a pipe measured `tail`. Budget for instrument repair.
+
+### 8.4 Deferred
+
+Seven items in §6, all small and all local (no swallows): Sigma spaced `*`,
+`defr` bare-head continuations, trait `:laws`, `foreign :as`, `<(Type 0)>`,
+spaced multi-param type lists, `do` bindings. None blocks SURF T1.
+
+### 8.5 What this unblocks
+
+**SURF T1** (`2026-08-14_0003_SURFER_REENGINEERING.md`) — ⏸️ BLOCKED becomes
+open. ⚠ Its P1 node model was designed against the OLD tree and must be
+re-checked: navigable-node sets, extent-collapse and the breadcrumb all read a
+materially different grammar now (three new scanner tokens, `angle_group`
+unified, `trait_method`/`defr_form`/`require_group` added).
