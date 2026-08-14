@@ -17,7 +17,7 @@ contract well enough that a third editor is a *mapping table*, not a port.
 
 | Phase | Description | Status | Notes |
 |---|---|---|---|
-| P0 | Capture registry + D1 renames (`namespace`->`module`, drop `.other`) | ⬜ | Kills drift cause 3 — [§3.1](#p0), [§D1](#d1). ⚠ verify the standard list upstream FIRST |
+| P0 | Capture registry + D1 renames | 🔄 | Verification ✅ + all 4 renames ✅ `77d1d893`. **Registry itself still open — blocked on D2.** [§3.1](#p0), [§D1](#d1) |
 | P1 | Parity harness: one fixture, capture-by-capture, asserted in BOTH | ⬜ | Makes drift *detectable* — [§3.2](#p1) |
 | P2 | TextMate: declared, and made to AGREE where it overlaps | ⬜ | Kills drift cause 1 — [§3.3](#p2), amended by [§7.4](#d3-critique) |
 | P3 | Review `semanticTokenScopes` per capture | ⬜ | Kills drift cause 2; settles the blue/orange class — [§3.4](#p3) |
