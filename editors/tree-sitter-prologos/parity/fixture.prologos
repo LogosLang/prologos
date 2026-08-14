@@ -1,0 +1,81 @@
+;; EHP parity fixture — exercises every capture in queries/highlights.scm.
+;;
+;; This file is read by BOTH consumers through the same query. It is a
+;; HIGHLIGHTING fixture, not a program: it must PARSE with zero ERROR nodes
+;; (an ERROR region yields no captures and would bake a hole into the golden),
+;; but it is not required to type-check.
+;;
+;; Keep it stable. Changing it changes the golden, and the golden is the
+;; contract the two editors are held to.
+
+ns parity::fixture
+
+require [prologos::data::list :refer [map]]
+
+;; --- keywords the grammar does NOT tokenize (identifier-matched) ---
+def solved := [solve ?goal]
+
+;; --- literals ---
+def n := 42
+def r := 3.5
+def s := "a string"
+def c := \a
+def k := :a-keyword
+def m := {:key 1 :other 2}
+
+;; --- constants + booleans ---
+def z := zero
+def t := true
+
+;; --- multiplicity annotation (attaches to an angle_param) ---
+defn ignore [x :0 <Int>]
+  0
+
+;; --- typed + bare params, angle return type ---
+defn add2 [x:Int y]
+  [+ x y]
+
+;; --- let binding names are @variable, not @variable.parameter ---
+defn withlet [q]
+  let acc 1
+  [+ q acc]
+
+;; --- match, patterns, wildcard, arrows ---
+defn classify [v]
+  match v
+    | zero  -> "z"
+    | _     -> "other"
+
+;; --- data declaration: type.definition + constructors ---
+data Colour
+  | Red
+  | Green
+
+;; --- trait: type.definition + trait_method + implicit params ---
+trait Show {A}
+  show : A -> String
+
+;; --- impl: trait_name is a @type ---
+impl Show Colour
+  defn show [v]
+    "colour"
+
+;; --- spec with builtin + applied types ---
+spec pick Int [List Int] -> [Option Int]
+
+;; --- relational form (Rel T1): defr, ||, &>, =, logic variables ---
+defr digit [?d]
+  || 0 | 1 | 2
+
+defr twice [?a ?b]
+  &> digit a
+     = b a
+
+;; --- typed hole (`??`, distinct from a `?x` logic variable) ---
+def hole := ??
+
+;; --- operators as first-class values ---
+def folded := [reduce + 0 '[1 2 3]]
+
+;; --- quote ---
+def quoted := '[1 2]

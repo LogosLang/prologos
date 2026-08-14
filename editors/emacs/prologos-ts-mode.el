@@ -173,6 +173,42 @@ faces that do not exist and painted nothing."
                         (match-string 1 name))))
       hit)))
 
+(defun prologos-ts-translate-query-predicates (query)
+  "Return QUERY with every `#match?'/`#not-match?' regexp in Emacs dialect.
+
+Extracted so the font-lock builder and the EHP parity harness
+\(parity/dump-captures.el) share ONE implementation.  They must: a harness
+that skips this step silently loses every `#match?'-driven capture to the
+`(identifier) @variable' fallback, and would then bake that wrong answer
+into the golden and blame the OTHER editor for the difference.  Measured
+2026-08-14 while building the harness: `Int', `zero' and `solve' all came
+back as @variable.
+
+DOUBLES the backslashes.  tree-sitter parses the query text and unescapes
+string literals BEFORE Emacs ever sees the regexp, so a single `\\(' arrives
+as a bare `(' and the Emacs-dialect regexp decays right back into the PCRE
+one that matches nothing.  Measured: single -> nil captures, doubled ->
+(\"Int\" \"Bool\").  LITERAL=t, so NEWTEXT is inserted verbatim: it must be
+the TWO-character string \"\\\\\", i.e. \"\\\\\\\\\" in source.  Writing the
+usual four-backslash form doubles twice and emits four.
+
+Signals an error if `prologos-ts--translate-regexp' refuses a pattern; the
+caller decides whether that skips the pattern or fails the run."
+  (replace-regexp-in-string
+   "(#\\(?:match\\|not-match\\)\\?[ \t\n]+@[^ \t\n]+[ \t\n]+\"\\(\\(?:[^\"\\\\]\\|\\\\.\\)*\\)\""
+   (lambda (m)
+     (save-match-data
+       (string-match
+        "\\`\\(.*\"\\)\\(\\(?:[^\"\\\\]\\|\\\\.\\)*\\)\\(\"\\)\\'" m)
+       (concat
+        (match-string 1 m)
+        (replace-regexp-in-string
+         "\\\\" "\\\\"
+         (prologos-ts--translate-regexp (match-string 2 m))
+         t t)
+        (match-string 3 m))))
+   query t t))
+
 (defun prologos-ts--translate-regexp (re)
   "Translate RE from tree-sitter (PCRE-ish) syntax to Emacs regexp syntax.
 
@@ -317,32 +353,7 @@ with it (`treesit-font-lock-rules-mismatch')."
                              m)))
                        pat t t))
                    (q (condition-case err
-                          (replace-regexp-in-string
-                           "(#\\(?:match\\|not-match\\)\\?[ \t\n]+@[^ \t\n]+[ \t\n]+\"\\(\\(?:[^\"\\\\]\\|\\\\.\\)*\\)\""
-                           (lambda (m)
-                             (save-match-data
-                               (string-match
-                                "\\`\\(.*\"\\)\\(\\(?:[^\"\\\\]\\|\\\\.\\)*\\)\\(\"\\)\\'" m)
-                               (concat
-                                (match-string 1 m)
-                                ;; DOUBLE the backslashes.  tree-sitter parses
-                                ;; the query text and unescapes string literals
-                                ;; BEFORE Emacs ever sees the regexp, so a
-                                ;; single `\(' arrives as a bare `(' and the
-                                ;; Emacs-dialect regexp we just built decays
-                                ;; right back into the PCRE one that matches
-                                ;; nothing.  Measured: single -> nil captures,
-                                ;; doubled -> ("Int" "Bool").
-                                ;; LITERAL=t, so NEWTEXT is inserted verbatim:
-                                ;; it must be the TWO-character string "\\",
-                                ;; i.e. "\\\\" in source.  Writing the usual
-                                ;; "\\\\\\\\" here doubles twice and emits four.
-                                (replace-regexp-in-string
-                                 "\\\\" "\\\\"
-                                 (prologos-ts--translate-regexp (match-string 2 m))
-                                 t t)
-                                (match-string 3 m))))
-                           q t t)
+                          (prologos-ts-translate-query-predicates q)
                         (error
                          (push (cons pat (format "regexp translation: %S" err))
                                prologos-ts--skipped-patterns)
