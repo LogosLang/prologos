@@ -239,6 +239,37 @@ verification: it means a Neovim user's Prologos keyword literals would colour
 That is precisely the third-party leverage D1 was adopted for, and I would not
 have got there from memory.
 
+#### ✅ CONFIRMED by a SECOND, INDEPENDENT source (2026-08-14, later same day)
+
+The owner upgraded Neovim **0.9.4 → 0.12.4**, so the *bundled* doc is now the
+modern generation and can be cross-checked against the WebFetch of master used
+above. Re-classified against `/opt/homebrew/share/nvim/runtime/doc/treesitter.txt`
+(90 captures):
+
+```
+standard 18 · custom-with-valid-root 2 · BROKEN 0
+```
+
+Up from **16 / 3 / 1**. Both sources agree, including on `@string.special.symbol`
+— which is the rename with the least intuition behind it, and therefore the one
+most worth a second source. The single broken capture is gone: nothing we emit
+now renders as *nothing* in a stock Neovim.
+
+⚠ Note the local doc only became usable BECAUSE of the upgrade. At 0.9.4 it
+would still have given the opposite answer. "Check it locally" is safe advice
+only once you have verified which generation the local copy is.
+
+**Toolchain re-verified after the upgrade** (tree-sitter also bumped): grammar
+regenerated with no drift in the committed `src/parser.c`; corpus gate unmoved
+(swallows 0, unparsed 1.6%, missing 77); Emacs ERT 63/63; `tsc --noEmit` clean.
+
+⚠ **The tree-sitter CLI is effectively pinned, and that is load-bearing.**
+`install.sh` prefers the repo-local `node_modules/.bin/tree-sitter` (**0.25.10**)
+over PATH; Homebrew now carries **0.26.12**. That pin is what keeps the
+generated parser reproducible against what is committed. Bumping the repo-local
+CLI regenerates `parser.c` and is a deliberate act with its own verification —
+not something to drift into by upgrading Homebrew.
+
 **Still open in P0**: whether to take the `@string.special.symbol` recommendation
 (it changes the VS Code colour of every `:keyword` — currently orange via
 `constant.language`), and the Emacs-side lockstep noted above.
