@@ -2392,7 +2392,31 @@
         },
         {
           "type": "SYMBOL",
+          "name": "grouped_pattern"
+        },
+        {
+          "type": "SYMBOL",
           "name": "identifier_pattern"
+        }
+      ]
+    },
+    "grouped_pattern": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "["
+        },
+        {
+          "type": "REPEAT1",
+          "content": {
+            "type": "SYMBOL",
+            "name": "pattern"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": "]"
         }
       ]
     },
@@ -2497,24 +2521,8 @@
           "name": "nat_literal"
         },
         {
-          "type": "SEQ",
-          "members": [
-            {
-              "type": "STRING",
-              "value": "["
-            },
-            {
-              "type": "REPEAT1",
-              "content": {
-                "type": "SYMBOL",
-                "name": "pattern"
-              }
-            },
-            {
-              "type": "STRING",
-              "value": "]"
-            }
-          ]
+          "type": "SYMBOL",
+          "name": "grouped_pattern"
         }
       ]
     },

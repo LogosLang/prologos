@@ -23,6 +23,7 @@ ARROW (2026-08-05), Rel T1 (2026-07-25) — and the grammar has not.
 | P3c | `require` / `imports` (the `ns` 16.9% cluster) | ✅ | `ns` was INNOCENT — one 19,280 B swallow in one file. Clean 21 → **22** — [§5.p3c](#p3c) |
 | P4 | `trait` body | ✅ | **Biggest win of the track**: error-bytes 10.2% → **4.2%**, −69,008 B in one rule — [§5.p4](#p4) |
 | P5 | `defr` + relational syntax (Rel T1) | ✅ | Was absent entirely; 6/7 shapes → 0. Clean 23 → **25** — [§5.p5](#p5) |
+| P5b | Bracketed patterns in clause heads (`\| [zero] -> …`) | ✅ | Found while diagnosing §7.0.4. Generated first try, no conflicts. 4.7% → **4.5%** |
 | P6 | Re-baseline, regenerate, reinstall, font-lock check | ⬜ | `install.sh`; then unblock SURF T1 |
 | P7 | TSG T1.close — gate wiring, DEFERRED triage, PIR-lite | ⬜ | Consider adding the gate to pre-commit |
 
@@ -662,6 +663,27 @@ parens a distinguishing token, or by admitting the arm only where `defr` cannot
 appear.
 
 fio stays at 51%.
+
+<a id="p5b"></a>
+### 5.P5b — bracketed patterns in clause heads
+
+Found while diagnosing §7.0.4, not planned. `| [zero] -> zero` and
+`| [[suc k]] -> …` did not parse: `[ pattern… ]` was accepted as an ARGUMENT
+(spelled inline inside `pattern_arg`) but was not a `pattern` in its own right.
+
+Added `grouped_pattern` and **shared it with `pattern_arg`** rather than
+spelling the shape twice — two rules over one shape is exactly what made `<…>`
+ambiguous for four rounds (§7.0.2). It generated first try with **no conflict
+declarations**, which is itself the signal that the shape was simply missing
+rather than contested.
+
+Error-bytes 54,367 → **51,390** (4.7% → 4.5%); swallows unchanged at 6, worst
+unchanged at 51%, clean files unchanged at 25. Regression-free across
+head-tail patterns, constructor patterns, wildcards, literals, multi-pattern
+clauses, impl/trait/defr/let, and bare top-level forms.
+
+Modest — but it moves one axis and worsens none, which is not true of most of
+today's attempts.
 
 ---
 

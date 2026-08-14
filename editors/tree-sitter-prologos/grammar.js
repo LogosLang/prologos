@@ -556,8 +556,18 @@ module.exports = grammar({
       $.constructor_pattern,
       $.literal_pattern,
       $.head_tail_pattern,
+      $.grouped_pattern,
       $.identifier_pattern,
     ),
+
+    // `[ pattern… ]` — a bracketed pattern.
+    //
+    // This shape was already accepted as an ARGUMENT (inline in `pattern_arg`)
+    // but not as a pattern in its own right, so a clause head like
+    // `| [zero] -> zero` could not parse.  Defined ONCE here and shared with
+    // `pattern_arg`, rather than spelled out in both: two rules over one shape
+    // is what made `<…>` ambiguous for four rounds (§7.0.2).
+    grouped_pattern: $ => seq('[', repeat1($.pattern), ']'),
 
     wildcard_pattern: $ => '_',
 
@@ -589,7 +599,7 @@ module.exports = grammar({
       '_',
       $.number,
       $.nat_literal,
-      seq('[', repeat1($.pattern), ']'),
+      $.grouped_pattern,
     ),
 
     // ============================================================

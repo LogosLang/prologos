@@ -970,6 +970,21 @@
     }
   },
   {
+    "type": "grouped_pattern",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "pattern",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "grouped_type",
     "named": true,
     "fields": {},
@@ -1465,6 +1480,10 @@
           "named": true
         },
         {
+          "type": "grouped_pattern",
+          "named": true
+        },
+        {
           "type": "head_tail_pattern",
           "named": true
         },
@@ -1488,9 +1507,13 @@
     "named": true,
     "fields": {},
     "children": {
-      "multiple": true,
+      "multiple": false,
       "required": false,
       "types": [
+        {
+          "type": "grouped_pattern",
+          "named": true
+        },
         {
           "type": "identifier",
           "named": true
@@ -1501,10 +1524,6 @@
         },
         {
           "type": "number",
-          "named": true
-        },
-        {
-          "type": "pattern",
           "named": true
         }
       ]
