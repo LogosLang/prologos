@@ -1,7 +1,13 @@
 # Surfer Re-engineering — SURF Track 1
 
-**Status**: ⏸️ **BLOCKED** on the tree-sitter grammar — see [§0](#blocked) ·
-**Opened** 2026-08-14 · **Owner rulings** in §2 and §0.
+**Status**: ⬜ **UNBLOCKED, not started** — TSG T1 closed the grammar blocker
+(§0 is kept as the record of why this track stopped) · **Opened** 2026-08-14 ·
+**Owner rulings** in §2 and §0.
+
+⚠ **Before implementing P1, re-check the node model against the REPAIRED
+grammar.** It now has `pvec_literal`, `path_expr` and its step nodes, three
+scanner tokens, and a unified `angle_group` — so the tree this track will
+navigate is materially different from the one §4.1 was designed against.
 
 Re-engineering `prologos-surfer-mode` after it was disabled in practice (the
 `use-package` block in the owner's config has been commented out for a while).
@@ -59,7 +65,7 @@ would still have produced a broken tool.
 | Phase | Description | Status | Notes |
 |---|---|---|---|
 | P0 | WS-mode fixture + test scaffold | ✅ | `test/surfer-sample.prologos` — compiler-clean (0 errors). Existing `test/sample.prologos` is **sexp mode**, wrong shape for a layout surfer |
-| P1 | Node model: navigable nodes, extent-collapse, parent/child/sibling (pure, no UI) | ⏸️ | **Blocked on TSG T1** — [§0](#blocked). Design stands; the tree under it does not |
+| P1 | Node model: navigable nodes, extent-collapse, parent/child/sibling (pure, no UI) | ⬜ | Unblocked. ⚠ re-check §4.1 against the repaired grammar first |
 | P2 | Transient session: entry/exit, single overlay, `C-M-*` motions | ⬜ | The gopcaml mechanism — [§4.2](#p2) |
 | P3 | Header-line breadcrumb (the always-on component) | ⬜ | [§4.3](#p3) |
 | P4 | Selection: mark node, expand/contract | ⬜ | `C-M-SPC` |
