@@ -1089,6 +1089,29 @@
     }
   },
   {
+    "type": "law_entry",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "implicit_params",
+          "named": true
+        },
+        {
+          "type": "keyword_literal",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "let_binding",
     "named": true,
     "fields": {
@@ -1959,10 +1982,71 @@
           "named": true
         },
         {
+          "type": "trait_metadata",
+          "named": true
+        },
+        {
+          "type": "trait_method",
+          "named": true
+        },
+        {
           "type": "where_clause",
           "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "trait_metadata",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "implicit_params",
+          "named": true
+        },
+        {
+          "type": "keyword_literal",
+          "named": true
+        },
+        {
+          "type": "law_entry",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "trait_method",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "type": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "type_expr",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {

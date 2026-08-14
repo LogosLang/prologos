@@ -21,7 +21,7 @@ ARROW (2026-08-05), Rel T1 (2026-07-25) — and the grammar has not.
 | P3 | `fn` lambda with typed params | ✅ | **Already fixed by P1b/P2** — every shape 0 errors, no work needed. The "(fn 272" cluster was a leading-token artifact — [§5.p3](#p3) |
 | P3b | `<Type>` return annotations (`defn f [x] <Bool>`) | ✅ | The real gap behind `impl` 36% + `defn` 23%. 394 corpus lines. Clean files 19 → **21** — [§5.p3b](#p3b) |
 | P3c | `require` / `imports` (the `ns` 16.9% cluster) | ✅ | `ns` was INNOCENT — one 19,280 B swallow in one file. Clean 21 → **22** — [§5.p3c](#p3c) |
-| P4 | `trait` body | ⬜ | |
+| P4 | `trait` body | ✅ | **Biggest win of the track**: error-bytes 10.2% → **4.2%**, −69,008 B in one rule — [§5.p4](#p4) |
 | P5 | `defr` + relational syntax (Rel T1) | ⬜ | `defr` appears **0** times in grammar.js |
 | P6 | Re-baseline, regenerate, reinstall, font-lock check | ⬜ | `install.sh`; then unblock SURF T1 |
 | P7 | TSG T1.close — gate wiring, DEFERRED triage, PIR-lite | ⬜ | Consider adding the gate to pre-commit |
@@ -247,11 +247,37 @@ Track-level byte percentages should be read with that in mind.
 three-segment ones (`prologos::data::nat`) parse. Synthetic-probe artifact —
 every real corpus path has three segments.
 
+<a id="p4"></a>
+### 5.P4 — `trait` bodies
+
+The body accepted only `spec_form | defn_form | def_form`. But a trait method
+signature is **bare** — `eq? : A A -> Bool`, with no `spec` keyword — so the one
+thing every trait actually contains could not parse, and each trait failed
+*entirely*, swallowing its whole body. Traits are large; that is where the mass
+was.
+
+Added `trait_method` (bare `name : type`) and `trait_metadata` (`:doc "…"`, and
+`:laws` with an indented list of `- :name/:forall/:holds` entries).
+
+⚠ **Conflict worth remembering**: a trailing `optional($._newline)` inside each
+child was a genuine ambiguity, because the trait body already offers `_newline`
+as a sibling choice. `match_arm` and `data_constructor` carry the same trailing
+optional safely — their parents do *not* offer `_newline` alongside. Removing it
+from the children resolved it; do not copy that idiom without checking the parent.
+
+**Result — error-bytes 117,091 → 48,083 (10.2% → 4.2%)**: −69,008 bytes, 59% of
+all remaining error mass, from one rule. Clean files 22 → **23**. The largest
+single win of the track by a wide margin.
+
+Still open: the `:laws` block itself (2 errors) — the `:forall` cluster. Bare
+methods, arrow methods and `:doc` are all 0.
+
 ---
 
 ## 6. Deferred / discovered
 
 - Spaced `*` in Sigma types (`<(x : A) * B>`) — pre-existing, absent from lib.
+- `:laws` blocks inside traits (`- :name/:forall/:holds`) — the `:forall` cluster.
 - Two-segment qualified names `a::b` (three-segment ones are fine).
 - `<(Type 0)>` — parenthesised type inside an angle type. A naive `paren_type` did NOT fix it (see §5.P3b); needs real diagnosis.
 - `[x : Bool y : Bool]` — SPACED typed params, several in one list: `type_application` greedily takes `Bool y`. The fused `[x:Int]` form is fine.

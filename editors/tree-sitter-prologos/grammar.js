@@ -278,9 +278,39 @@ module.exports = grammar({
       optional(field('params', $.implicit_params)),
       optional($.where_clause),
       $._indent,
-      repeat1(choice($.spec_form, $.defn_form, $.def_form, $._newline)),
+      repeat1(choice(
+        $.trait_method,
+        $.trait_metadata,
+        $.spec_form, $.defn_form, $.def_form,
+        $._newline,
+      )),
       $._dedent,
     ),
+
+    // A trait method signature is BARE — `eq? : A A -> Bool`, with no `spec`
+    // keyword.  The pre-2026-08-14 body accepted only spec/defn/def forms, so
+    // the one thing every trait actually contains could not parse.
+    trait_method: $ => prec(3, seq(
+      field('name', $.identifier),
+      ':',
+      field('type', $.type_expr),
+    )),
+
+    // `:doc "..."`, and `:laws` followed by an indented list of `- :name ...`
+    // law entries.  This is also the home of the `:forall` error cluster.
+    trait_metadata: $ => prec.right(seq(
+      $.keyword_literal,
+      optional(choice($.expression, $.implicit_params)),
+      optional(seq($._indent, repeat1(choice($.law_entry, $._newline)), $._dedent)),
+    )),
+
+    law_entry: $ => prec.right(seq(
+      '-',
+      repeat1(seq(
+        $.keyword_literal,
+        optional(choice($.expression, $.implicit_params)),
+      )),
+    )),
 
     impl_form: $ => seq(
       'impl',
