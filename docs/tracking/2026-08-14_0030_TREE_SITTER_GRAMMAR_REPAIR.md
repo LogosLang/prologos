@@ -466,7 +466,59 @@ conflict pairs that need to be scoped so they cannot fire outside a `defn`
 line — or replaced by something that does not open `expression` at all.
 
 ⚠ Do not ship a same-line variant on a green ERROR-count or on green shape
-probes. It was green on both while destroying six files. Verified restored to known-good after the revert: clean 25, swallows
+probes. It was green on both while destroying six files.
+
+<a id="p6-narrow"></a>
+#### 7.0.3 Narrowing the declaration — tried, and it is NOT the cause
+
+Second formulation, 2026-08-14. Reverted.
+
+**The diagnosis that motivated it was right, and useful.** Bisecting a 100%
+file located the trigger exactly: two bare top-level `[…]` forms in a row —
+
+```
+[zero? 0N]
+
+[add 3N 4N]
+```
+
+**with no `defn` anywhere in sight.** `[$._same_line_head, $.expression]` had
+made those alternative reductions of the same `grouped_expr`, destabilising
+top-level parsing everywhere. So the declarations really were too broad.
+
+**But removing them did not help — it made it worse.** The narrowest possible
+formulation — plain `expression` body, no shadow rules, no return-type slot,
+**no conflict declarations at all**, and it generates cleanly — measured:
+
+| | baseline | broad declarations | no declarations |
+|---|---|---|---|
+| swallows | **6** | 17 | **24** |
+| worst single error | **51%** | 100% | **100%** |
+| error-bytes | **4.7%** | 17.6% | **20.2%** |
+| clean files | 25 | 30 | 28 |
+
+⛔ **So the conflict declarations are not the cause. The same-line variant
+itself destabilises the grammar at scale**, in both formulations.
+
+**And it is invisible to probes, structurally.** Every isolated shape passed
+both times — target bodies, the swallow hazard (verified on the TREE: two
+`top_level` nodes), all regressions. With the narrow formulation the trigger
+line still failed at line 91 of the file, yet **none of the minimal repros
+reproduce it**: `def` + two bare forms, indented defn + bare form, two bare
+forms with a comment between — all 0. The failure needs ~90 lines of
+accumulated parser state. That is global instability, not a local rule error.
+
+**Where this leaves it.** Three attempts (§7.0, §7.0.1, §7.0.3) across two
+independent formulations. The angle unification (§7.0.2) was a genuine advance
+and is landed; `_line_end` is sound and its mechanism verified. What is NOT
+established is that `defn params expression _line_end` can coexist with a
+grammar where `expression` is also a top-level form.
+
+**Do not resume by re-formulating the same rule.** The next honest step is to
+find out WHY a long file destabilises — e.g. inspect the parse-table conflict
+count before/after, or reduce a failing file mechanically to a minimal case
+rather than guessing at repros. Until that cause is known, this is not a
+tuning problem. Verified restored to known-good after the revert: clean 25, swallows
 6, worst 51%, and multi-clause defn / impl+`<Bool>` / trait / defr / linear
 arrows all still parse at 0.
 
