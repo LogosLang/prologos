@@ -1,0 +1,9 @@
+# Captures a consumer does not (yet) map, with the reason.
+#
+# A row here is a DELIBERATE, REVIEWED exception: check-vocabulary.sh would
+# otherwise fail on it. Adding a row is like raising a budget in
+# corpus-budget.txt — it belongs in a commit message with a reason, and it
+# should come back out.
+#
+# consumer<TAB>capture<TAB>why
+vscode	attribute	EHP P3 — needs a new `decorator` legend type AND a semanticTokenScopes entry, i.e. a colour decision rather than a rename. Emacs paints it with prologos-multiplicity-face today; VS Code paints nothing.

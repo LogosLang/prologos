@@ -26,12 +26,8 @@ import { Parser, Language, Query, Node } from 'web-tree-sitter';
 const CAPTURE_MAP = new Map<string, [string, string[]]>([
   ['keyword', ['keyword', []]],
   ['function', ['function', []]],
-  ['function.builtin', ['function', ['defaultLibrary']]],
-  ['function.call', ['function', []]],
   ['variable', ['variable', []]],
   ['variable.parameter', ['parameter', []]],
-  ['variable.builtin', ['variable', ['defaultLibrary']]],
-  ['parameter', ['parameter', []]],
   ['type', ['type', []]],
   ['type.builtin', ['type', ['defaultLibrary']]],
   ['type.definition', ['type', ['declaration']]],
@@ -59,11 +55,6 @@ const CAPTURE_MAP = new Map<string, [string, string[]]>([
   ['variable.logic', ['variable', []]],
   ['variable.hole', ['variable', []]],
   ['property', ['property', []]],
-  ['macro', ['macro', []]],
-  ['label', ['label', []]],
-  ['punctuation', ['operator', []]],
-  ['punctuation.bracket', ['operator', []]],
-  ['punctuation.delimiter', ['operator', []]],
 ]);
 
 export const LEGEND = new vscode.SemanticTokensLegend(
