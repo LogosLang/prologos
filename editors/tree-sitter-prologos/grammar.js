@@ -869,7 +869,15 @@ module.exports = grammar({
 
     number: $ => /[0-9]+(?:\.[0-9]+)?/,
 
-    string: $ => seq('"', /[^"]*/, '"'),
+    // ONE TOKEN, not a seq.
+    //
+    // As `seq('"', /[^"]*/, '"')` the three pieces are separate tokens, so
+    // `extras` — which includes `comment: token(seq(';', /.*/))` — could be
+    // interleaved BETWEEN them.  A semicolon inside a string was therefore
+    // lexed as a COMMENT, eating the closing quote and the rest of the line:
+    // `[join "; " xs]` failed, `[join ", " xs]` parsed.  Wrapping in `token`
+    // makes the string atomic so nothing can intrude.
+    string: $ => token(seq('"', /[^"]*/, '"')),
 
     comment: $ => token(seq(';', /.*/)),
   },

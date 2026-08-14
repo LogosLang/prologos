@@ -26,6 +26,7 @@ ARROW (2026-08-05), Rel T1 (2026-07-25) — and the grammar has not.
 | P5b | Bracketed patterns in clause heads (`\| [zero] -> …`) | ✅ | Found while diagnosing §7.0.4. Generated first try, no conflicts. 4.7% → **4.5%** |
 | P5c | `=` unify operator (narrowing goals) | ✅ | No `=` token existed at all; 65 corpus lines. Clean 25 → **26** — [§5.p5c](#p5c) |
 | P5d | Angle-typed params `[iv <Interval>]` + swallow triage | ✅ | 136 corpus lines; first try, no conflicts. Clean 26 → **27** — [§5.p5d](#p5d) |
+| P5e | `string` made a single token (`;` inside a string was lexed as a comment) | ✅ | **`data/reason` cleared**; swallows 6 → **5** — [§5.p5e](#p5e) |
 | P6 | Re-baseline, regenerate, reinstall, font-lock check | ⬜ | `install.sh`; then unblock SURF T1 |
 | P7 | TSG T1.close — gate wiring, DEFERRED triage, PIR-lite | ⬜ | Consider adding the gate to pre-commit |
 
@@ -337,6 +338,36 @@ nothing. Backed out, same discipline as `paren_type`.
 a false cause — truncating mid-`impl` manufactures an error at the cut. The
 relay note warned of exactly this. **Delete-window and substitution on the FULL
 file are the sound techniques**; prefix truncation is not.
+
+
+<a id="p5e"></a>
+### 5.P5e — `string` was not a token (semicolons ate the rest of the line)
+
+`data/reason`'s swallow minimised, by delete-line on the FULL file, to line 69 —
+and the operative content was `[join "; " …]`. **A string containing a
+semicolon.**
+
+`string: $ => seq('"', /[^"]*/, '"')` is a **seq**, so its three pieces are
+separate tokens and `extras` can be interleaved between them. `extras` includes
+`comment: token(seq(';', /.*/))`. So a `;` inside a string was lexed as a
+COMMENT, eating the closing quote and the rest of the line. Measured:
+`[join "; " xs]` failed, `[join ", " xs]` parsed. 29 corpus strings contain one.
+
+Fix: `token(seq('"', /[^"]*/, '"'))` — atomic, same language, nothing can
+intrude. Regression-checked: plain strings, escapes, empty strings, real
+comments, comment-only lines all still correct.
+
+**Result — `data/reason` CLEARED; swallows 6 → 5.**
+
+⚠ **And `1A-iii-probe` grew 31% → 53%**, taking the "worst" headline from 51% to
+53% and bytes 50,826 → 52,682. Verified: it still opens at line 61
+`defn p1-inc [n] [int+ n 1]` — the **blocked** same-line `defn`. The file is
+entirely inside that construct's blast radius and simply reaches further before
+failing. It resolves when same-line `defn` lands, not before.
+
+**This is why swallow COUNT is the better headline than worst-percentage**: the
+count fell (a file genuinely cleared) while the max rose (a blocked file
+extended). Reporting only the max would have called a real fix a regression.
 
 
 <a id="locality"></a>

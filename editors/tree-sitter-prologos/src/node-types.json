@@ -1892,11 +1892,6 @@
     }
   },
   {
-    "type": "string",
-    "named": true,
-    "fields": {}
-  },
-  {
     "type": "subtype_declaration",
     "named": true,
     "fields": {
@@ -2374,10 +2369,6 @@
     "fields": {}
   },
   {
-    "type": "\"",
-    "named": false
-  },
-  {
     "type": "&>",
     "named": false
   },
@@ -2657,6 +2648,10 @@
   {
     "type": "spec",
     "named": false
+  },
+  {
+    "type": "string",
+    "named": true
   },
   {
     "type": "subtype",
