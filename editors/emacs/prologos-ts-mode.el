@@ -98,8 +98,11 @@
     ("type.definition"     . font-lock-type-face)
     ("constant"            . font-lock-constant-face)
     ("constant.builtin"    . font-lock-constant-face)
-    ("constant.other"      . font-lock-constant-face)
-    ("namespace"           . font-lock-constant-face)
+    ;; `:foo' — renamed from constant.other to the Neovim standard for
+    ;; symbols/atoms. The FACE is unchanged on purpose: the rename is a
+    ;; vocabulary change, not a colour decision.
+    ("string.special.symbol" . font-lock-constant-face)
+    ("module"              . font-lock-constant-face)
     ("property"            . font-lock-property-use-face)
     ("operator"            . font-lock-operator-face)
     ("number"              . font-lock-number-face)
@@ -108,8 +111,8 @@
     ("comment"             . font-lock-comment-face)
     ("attribute"           . prologos-multiplicity-face)
     ("variable.parameter"  . font-lock-variable-name-face)
-    ("variable.other"      . font-lock-variable-name-face)
-    ("variable.other.hole" . prologos-hole-face)
+    ("variable.logic"      . font-lock-variable-name-face)
+    ("variable.hole"       . prologos-hole-face)
     ;; `variable' is deliberately NIL, and the rule is DROPPED rather than
     ;; painted.  highlights.scm ends with a bare `(identifier) @variable'
     ;; fallback that claims every otherwise-unmatched identifier.  In VS Code
@@ -136,7 +139,7 @@ src/semanticTokens.ts.")
     ("character"  . string)
     ("keyword"    . keyword)
     ("function"   . function)
-    ("namespace"  . definition)
+    ("module"     . definition)
     ("type"       . type)
     ("constant"   . constant)
     ("constructor" . constant)

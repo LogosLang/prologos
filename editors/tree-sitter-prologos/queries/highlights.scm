@@ -1,8 +1,14 @@
 ; Tree-sitter highlights for Prologos
 ;
-; Consumed by the VS Code semantic-token provider (src/semanticTokens.ts).
-; Emacs still uses inline `treesit-font-lock-rules' in prologos-ts-mode.el;
-; this file is the shared target both should eventually read.
+; THE source of truth for Prologos syntax highlighting. Consumed by BOTH the
+; VS Code semantic-token provider (src/semanticTokens.ts) and Emacs
+; (prologos-ts-mode.el, since 2026-08-14) — neither carries its own copy.
+;
+; Capture names follow the Neovim standard vocabulary
+; (`:help treesitter-highlight-groups`), verified against Neovim master
+; 2026-08-14. Custom leaves are allowed where no standard one fits, but their
+; ROOT must be standard so an unknown leaf still falls back to a sensible
+; colour in a consumer that has never heard of it.
 ;
 ; ORDER IS SEMANTIC. The provider takes FIRST MATCH WINS, keyed by start
 ; offset, so specific captures must precede general ones and the bare
@@ -71,7 +77,7 @@
 (functor_form name: (identifier) @type.definition)
 (defmacro_form name: (identifier) @function)
 (relation_form name: (identifier) @function)
-(ns_declaration name: (qualified_name) @namespace)
+(ns_declaration name: (qualified_name) @module)
 (subtype_declaration sub: (identifier) @type)
 (subtype_declaration super: (identifier) @type)
 (capability_declaration name: (identifier) @type.definition)
@@ -96,7 +102,7 @@
 
 ; `module:` is a field of require_group, not of the declaration —
 ; require/imports take one or more groups since TSG T1 P3c.
-(require_group module: (qualified_name) @namespace)
+(require_group module: (qualified_name) @module)
 
 ; ============================================================
 ; Built-in types (identifier-matched)
@@ -207,9 +213,9 @@
 ; precede the generic `(keyword_literal)` below: first match wins by FILE ORDER,
 ; not by specificity, so placing it after would silently never fire.
 (map_literal key: (keyword_literal) @property)
-(keyword_literal) @constant.other
-(logic_variable) @variable.other
-(typed_hole) @variable.other.hole
+(keyword_literal) @string.special.symbol
+(logic_variable) @variable.logic
+(typed_hole) @variable.hole
 ["true" "false"] @constant.builtin
 (comment) @comment
 

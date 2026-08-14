@@ -40,9 +40,24 @@ const CAPTURE_MAP = new Map<string, [string, string[]]>([
   ['constructor', ['enumMember', []]],
   ['number', ['number', []]],
   ['string', ['string', []]],
+  // Char literals are string-like; mapping them to an EXISTING legend type
+  // needs no protocol change.  Was dropped entirely before 2026-08-14.
+  ['character', ['string', []]],
+  // NOTE: `@attribute' (multiplicity + metadata) is still DROPPED here.  Closing
+  // it needs a new legend type (`decorator') AND a semanticTokenScopes entry —
+  // i.e. picking a colour, which is an EHP P3 decision, not a rename.  Emacs
+  // paints it as prologos-multiplicity-face today; VS Code paints nothing.
   ['comment', ['comment', []]],
   ['operator', ['operator', []]],
-  ['namespace', ['namespace', []]],
+  ['module', ['namespace', []]],
+  // `:foo' — the Neovim standard capture for symbols/atoms (what Clojure and
+  // Elixir keywords use).  Mapped EXPLICITLY rather than left to the
+  // `string.special.symbol' -> `string.special' -> `string' fallback, which
+  // would have silently recoloured every keyword literal as a string: the
+  // rename is a vocabulary change, and the colour decision belongs to EHP P3.
+  ['string.special.symbol', ['variable', ['readonly']]],
+  ['variable.logic', ['variable', []]],
+  ['variable.hole', ['variable', []]],
   ['property', ['property', []]],
   ['macro', ['macro', []]],
   ['label', ['label', []]],

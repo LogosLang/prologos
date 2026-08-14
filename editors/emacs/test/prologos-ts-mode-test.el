@@ -773,3 +773,37 @@ set — if feature level governed instead, the two would collide."
                 (prologos-ts-test--face-at src ":name")))
     (should (eq 'font-lock-constant-face
                 (prologos-ts-test--face-at src ":other")))))
+
+(defconst prologos-ts-test--nvim-standard-roots
+  '("variable" "constant" "module" "label" "string" "character" "boolean"
+    "number" "type" "attribute" "property" "function" "constructor" "operator"
+    "keyword" "punctuation" "comment" "markup" "diff" "tag")
+  "Root capture names in the Neovim standard vocabulary.
+Verified against Neovim master `runtime/doc/treesitter.txt' on 2026-08-14.
+⚠ Do NOT re-verify against a locally installed Neovim: 0.9.4 ships the
+PRE-RENAME list (@namespace, @field, @conditional, @parameter) and lacks
+@variable.parameter, @attribute and @module entirely — checking against it
+would conclude our correct captures are wrong.")
+
+(ert-deftest prologos-ts-test/captures-use-standard-roots ()
+  "Every capture in highlights.scm has a Neovim-standard ROOT.
+
+D1 (EHP T1): we adopted the Neovim vocabulary so a third-party editor can map
+our captures with knowledge it already has.  Custom LEAVES are fine —
+`@variable.logic' is ours — because the dotted fallback lands them on a
+standard root.  A custom ROOT has nothing to fall back to and would render as
+nothing in a consumer that has not special-cased us; `@namespace' was exactly
+that until it became `@module'."
+  (skip-unless prologos-ts-test--treesit-available)
+  (let* ((scm (with-temp-buffer
+                (insert-file-contents prologos-ts-highlights-file)
+                (buffer-string)))
+         (caps (delete-dups
+                (delq nil (mapcar (lambda (p) (car (prologos-ts--pattern-captures p)))
+                                  (prologos-ts--split-query scm)))))
+         (offenders (seq-remove
+                     (lambda (c)
+                       (member (car (split-string c "\\.")) 
+                               prologos-ts-test--nvim-standard-roots))
+                     caps)))
+    (should (equal '() offenders))))
