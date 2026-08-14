@@ -7529,7 +7529,17 @@ workflow transcript at
 
 ---
 
-### 133. ⬜ ⭐ THE BATTERY'S STAR-TOKEN HELPERS ARE EXACT-LEXEME `"*"` AND SO ARE STRUCTURALLY BLIND TO `*_` — DEFERRED 127's defect one layer down, where its repair never propagated
+### 133. ✅ **DISCHARGED `862fc7e3`** (filed and fixed same day) ⭐ THE BATTERY'S STAR-TOKEN HELPERS ARE EXACT-LEXEME `"*"` AND SO ARE STRUCTURALLY BLIND TO `*_` — DEFERRED 127's defect one layer down, where its repair never propagated
+
+> **FIXED at `862fc7e3`** (B2b step 1). Both helpers now sweep a star-operator
+> REGEX (`#rx"^[*][-_]*$"` — deliberately not a fifth hand-copied spelling list,
+> and deliberately WIDER than the reserved family) and report an explicit `'none`
+> rather than `#f`. RED observed first (`actual: #f / expected: 'symbol`).
+> ⭐ The power-check then caught a VACUOUS pin in the new rows themselves — a
+> last-star row giving `OLD=symbol NEW=symbol`, passing for opposite reasons —
+> replaced with one measured at `OLD=postfix-star NEW=symbol` that stays
+> discriminating after B2b. Containment pinned; the 5 pre-existing star rows
+> verified byte-identical under the widening. Battery 550 → 553.
 
 Found by the CIU T6 D4.P4e-1b slice **1b-v-B2b** grounding (`wf_7f5bda0c-500`,
 completeness critic). **A PRECONDITION FOR B2b's OWN TESTS**, not a latent issue:
