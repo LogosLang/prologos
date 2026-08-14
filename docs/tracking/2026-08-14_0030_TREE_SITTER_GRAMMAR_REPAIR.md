@@ -632,6 +632,37 @@ fio therefore stays at 51% until (2) lands; the arrow fix alone does not move it
 because the arrow sits *inside* the region the match arm already swallowed.
 9 occurrences corpus-wide, but they are what makes fio the worst file.
 
+**§7.1.1 — the "parse the interior as an expression" recommendation was TRIED
+(2026-08-14) and does not dissolve it either.** Reverted.
+
+The idea was this section's own: parse the arm's left side as expressions rather
+than patterns, resolving pattern-vs-expression at ONE place. It is sound as far
+as it goes — the pattern/expression conflict family really does disappear. But a
+NEW family replaces it, and the conflict walked three positions:
+
+1. `'match' atom • '('` — is the `(` an application argument to the scrutinee,
+   or the first arm?  Declared `[$.expression, $.match_expr]`; narrow and
+   defensible.  Conflict moved.
+2. `'match' atom match_expr_repeat2 • '('` — the same question once per
+   repetition step.  Dropped `repeat1` to a single arm (corpus-justified: only
+   **4** lines carry two inline arms).  Conflict moved again.
+3. `'match' atom '(' defr_rule_repeat1 '->' • '['` — now INSIDE the arm, and
+   pulling in `defr_rule`, because `&> expression+` also competes for
+   `( … -> … )`.
+
+**So the blocker is not pattern-vs-expression specifically. It is that
+`( … -> … )` is claimed by `paren_expr`, by the inline match arm, AND by
+`defr_rule`** — three rules over one shape. Resolving two of the three still
+leaves a conflict.
+
+⚠ Do not re-attempt by moving the interior between patterns and expressions;
+both sides have now been tried. A fix has to make `( … -> … )` unambiguous
+ACROSS all three claimants at once — most plausibly by giving the arrow inside
+parens a distinguishing token, or by admitting the arm only where `defr` cannot
+appear.
+
+fio stays at 51%.
+
 ---
 
 ## 6. Deferred / discovered
