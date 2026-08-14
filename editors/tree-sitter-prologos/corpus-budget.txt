@@ -1,0 +1,13 @@
+# TSG corpus budget — the RATCHET.
+#
+# check-corpus.sh fails if the installed grammar is worse than this.
+# Lower these when you improve the grammar; raising one is a deliberate act
+# that belongs in a commit message with a reason.
+#
+# max_swallows is the PRIMARY gate.  A "swallow" is one ERROR node covering
+# >=20% of a file — the failure that makes an editor unusable, because
+# font-lock and navigation lose the whole region rather than the bad form.
+# Error COUNT is deliberately not gated: it RISES when the grammar improves
+# (one swallowing mega-ERROR becomes several precise small ones).
+max_swallows=0
+max_unparsed_pct=1.8

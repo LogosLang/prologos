@@ -96,6 +96,7 @@ in `namespace.rkt`. Use `ns foo :no-prelude` to opt out. Library modules
 - @.claude/rules/prologos-syntax.md — WS-mode syntax conventions
 - @.claude/rules/testing.md — test commands, benchmarking tiers, hook gates
 - @.claude/rules/workflow.md — commit/review/methodology discipline
+- @.claude/rules/tree-sitter-grammar.md — grammar workflow, metrics, the contested-shape recipe
 - @.claude/rules/mempalace.md — experimental semantic-search tool guidelines
 
 ## Process documents (docs/tracking/principles/)
@@ -133,6 +134,7 @@ Full set + index: `docs/tracking/principles/README.org`
 | Writing a `.prologos` example | `prologos-syntax.md` | `examples/` for prior art |
 | Running tests / benchmarks | `testing.md` § benchmarking | `tools/` directory |
 | Committing / branching / PR | `workflow.md` | hook discipline + commit-message style |
+| Changing user-facing syntax | `tree-sitter-grammar.md` | update the grammar in `X.close`, or file a DEFERRED |
 | Resuming after compact | `HANDOFF_PROTOCOL.org` | latest dailies + active design doc |
 | Writing dailies / **writing a Relay Note** (rewind *or* fresh session) | `DAILIES_METHODOLOGY.org` | the STATE head + the Relay-Note protocol's four obligations |
 | Designing a new feature | `DESIGN_METHODOLOGY.org` | the 5 stages, mantra audits |

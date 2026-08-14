@@ -63,7 +63,52 @@ mkdir -p "$DEST"
 cp "$LIB" "$DEST/.$LIB.incoming.$$"
 mv -f "$DEST/.$LIB.incoming.$$" "$DEST/$LIB"
 
+# --- SMOKE TEST: does the thing we just installed actually load and parse? ---
+#
+# Not ceremony.  On 2026-08-14 a bad install SIGKILLed every Emacs that touched
+# it, and the failure was read as "the new grammar hangs" — a wrong diagnosis
+# that cost a revert and a detour, because nothing checked the installed
+# artifact at the point of installation.  This is ~0.3s.
+echo "==> smoke test"
+SMOKE="$(mktemp -t prologos-smoke).prologos"
+printf 'defn f [x]\n  [int+ x 1]\n' > "$SMOKE"
+if timeout -k 5 60 emacs -Q --batch --eval "(progn
+      (require 'treesit)
+      (unless (treesit-language-available-p 'prologos)
+        (message \"SMOKE FAIL: grammar not loadable\") (kill-emacs 1))
+      (with-temp-buffer
+        (insert-file-contents \"$SMOKE\")
+        (treesit-parser-create 'prologos)
+        (treesit-buffer-root-node))
+      (message \"    ok — loads and parses\"))" 2>&1 | tail -1; then
+  :
+else
+  echo "    SMOKE TEST FAILED — the installed parser does not load/parse." >&2
+  echo "    The previous parser was replaced by atomic rename, so any RUNNING" >&2
+  echo "    Emacs is unaffected; new sessions would get this one." >&2
+  rm -f "$SMOKE"
+  exit 1
+fi
+rm -f "$SMOKE"
+
+# --- PROVENANCE: what exactly is installed? ---
+#
+# Content hash, not mtime.  mtimes lie across worktrees, fresh checkouts and
+# clock skew; the hash answers "is the installed parser built from THIS source?"
+# directly.  check-corpus.sh reads this to refuse measuring a stale parser —
+# the footgun that made a real fix look like it did nothing.
+PROV="$DEST/$LIB.provenance"
+SRC_HASH="$(cat grammar.js src/scanner.c 2>/dev/null | shasum -a 256 | cut -d" " -f1)"
+{
+  echo "source_sha256=$SRC_HASH"
+  echo "git_sha=$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+  echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+} > "$PROV"
+echo "==> provenance: ${SRC_HASH:0:12} @ $(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+
 echo
-echo "Done. Restart Emacs to load the rebuilt grammar."
-echo "Verify in Emacs: open a .prologos file — no treesit-font-lock warning,"
-echo "and keywords (def, defn, spec, defmacro, trait, ...) are highlighted."
+echo "Done. A RUNNING Emacs keeps the parser it already mapped — this reaches it"
+echo "at its next start.  Nothing else is needed; the install is atomic and safe"
+echo "to run with Emacs open."
+echo "Verify: open a .prologos file — no treesit-font-lock warning, and keywords"
+echo "(def, defn, spec, defmacro, trait, ...) are highlighted."

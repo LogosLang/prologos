@@ -33,6 +33,41 @@ if [ -z "$REPO_ROOT" ]; then
   exit 1
 fi
 
+# ============================================================
+# Gate 0: TREE-SITTER GRAMMAR DRIFT TRIPWIRE
+# ============================================================
+#
+# WARNS (never blocks) when a commit changes the surface-syntax reader/parser
+# but not the tree-sitter grammar.
+#
+# Why this exists: the grammar drifted FIVE MONTHS behind the language with no
+# signal at all, because tree-sitter never fails — it recovers, emits ERROR
+# nodes, and every consumer (font-lock, folding, the surfer) degrades silently.
+# By the time TSG Track 1 measured it, 87% of the corpus mis-parsed. The signal
+# has to fire when the drift is CREATED; a corpus scan months later is an
+# autopsy, not an alarm.
+#
+# Warn rather than block, deliberately: plenty of parser edits are internal and
+# imply no grammar change, and a hook that cries wolf gets bypassed reflexively.
+staged_all=$(git diff --cached --name-only --diff-filter=AM || true)
+surface_touched=$(echo "$staged_all" | grep -E 'racket/prologos/(parse-reader|tree-parser|parser|macros|surface-syntax)\.rkt$' || true)
+grammar_touched=$(echo "$staged_all" | grep -E 'editors/tree-sitter-prologos/(grammar\.js|src/scanner\.c)$' || true)
+if [ -n "$surface_touched" ] && [ -z "$grammar_touched" ]; then
+  echo "" >&2
+  echo "⚠  tree-sitter grammar drift tripwire" >&2
+  echo "   This commit changes the surface reader/parser:" >&2
+  echo "$surface_touched" | sed 's/^/     /' >&2
+  echo "   but does NOT touch editors/tree-sitter-prologos/grammar.js." >&2
+  echo "" >&2
+  echo "   If it adds or changes USER-FACING SYNTAX, the grammar needs the same" >&2
+  echo "   change — otherwise editor support degrades silently for that syntax." >&2
+  echo "   Update the grammar and run ./install.sh && ./check-corpus.sh, or file" >&2
+  echo "   a DEFERRED entry saying why not." >&2
+  echo "   (Internal parser refactors legitimately need nothing — this is a" >&2
+  echo "    warning, not a gate.)" >&2
+  echo "" >&2
+fi
+
 # Get staged .rkt files (added or modified, not deleted)
 files=$(git diff --cached --name-only --diff-filter=AM | grep '\.rkt$' || true)
 

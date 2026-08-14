@@ -29,6 +29,17 @@
 (defvar prologos-ts-check--max nil
   "Maximum tolerated ERROR-node total; nil means zero.")
 
+(defvar prologos-ts-check--max-swallows nil
+  "Maximum tolerated SWALLOW count (files with one ERROR over 20%).
+This is the PRIMARY gate.  Supplied from `corpus-budget.txt'.")
+
+(defvar prologos-ts-check--max-pct nil
+  "Maximum tolerated percentage of the corpus inside ERROR spans.")
+
+(defun prologos-ts-check--num (v)
+  "Parse V as a number, or nil when unset/empty."
+  (and v (stringp v) (not (string-empty-p v)) (string-to-number v)))
+
 (defconst prologos-ts-check--default-dirs
   '("racket/prologos/lib" "racket/prologos/examples" "editors/emacs/test")
   "Corpus roots, relative to the repo root.")
@@ -149,12 +160,37 @@ on the worst file in the corpus and reported nothing at all."
              (if (zerop (buffer-size-of-corpus files)) 0.0
                (* 100.0 (/ (float total-bytes) (buffer-size-of-corpus files)))))
     (message "")
-    (let ((budget (if prologos-ts-check--max
-                      (string-to-number prologos-ts-check--max) 0)))
-      (if (<= (+ total total-missing) budget)
-          (progn (message "PASS (budget %d)" budget) (kill-emacs 0))
-        (message "FAIL: %d error/missing node(s) exceeds budget %d"
-                 (+ total total-missing) budget)
+    ;; --- RATCHET ---
+    ;;
+    ;; Gated on SWALLOWS first and unparsed PERCENTAGE second.  Error COUNT is
+    ;; deliberately NOT gated by default: it RISES when the grammar improves,
+    ;; because one swallowing mega-ERROR becomes several precise small ones.
+    ;; Gating it would push toward worse grammars.  `--max' remains for ad-hoc use.
+    (let* ((sw-budget (prologos-ts-check--num prologos-ts-check--max-swallows))
+           (pct-budget (prologos-ts-check--num prologos-ts-check--max-pct))
+           (pct (if (zerop (buffer-size-of-corpus files)) 0.0
+                  (* 100.0 (/ (float total-bytes)
+                              (buffer-size-of-corpus files)))))
+           (fails '()))
+      (when (and sw-budget (> swallowed sw-budget))
+        (push (format "swallows %d exceeds budget %d" swallowed sw-budget) fails))
+      (when (and pct-budget (> pct pct-budget))
+        (push (format "unparsed %.1f%% exceeds budget %.1f%%" pct pct-budget) fails))
+      ;; Legacy count budget, only when explicitly asked for a non-zero one.
+      (let ((count-budget (prologos-ts-check--num prologos-ts-check--max)))
+        (when (and count-budget (> count-budget 0)
+                   (> (+ total total-missing) count-budget))
+          (push (format "error+missing %d exceeds --max %d"
+                        (+ total total-missing) count-budget) fails)))
+      (if (null fails)
+          (progn
+            (message "PASS%s"
+                     (if (or sw-budget pct-budget)
+                         (format " (budget: swallows<=%s, unparsed<=%s%%)"
+                                 (or sw-budget "-") (or pct-budget "-"))
+                       ""))
+            (kill-emacs 0))
+        (dolist (f (nreverse fails)) (message "FAIL: %s" f))
         (kill-emacs 1)))))
 
 (provide 'check-corpus)
