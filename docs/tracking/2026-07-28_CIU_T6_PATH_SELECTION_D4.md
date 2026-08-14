@@ -3064,11 +3064,20 @@ items of the hold-point, ruled before P4a opened:
      `<(x : A)*- B>` acquires a new reading. The caret family never had this
      hazard; `*-` inherits it from `->` (ARROW T1's territory).
   3. **The cont axis has no totality dispatcher.** `select-star-cont` is a bare
-     `cadr`; all five production readers are BINARY tests on `'flatten-synth`, so
-     a third value silently reads as bare `*` — including `pp-expr`, which would
-     render `*-` as `"*"` and feed that wrong echo into every `*-` label. The P4a
-     totality doctrine has never been applied here. That work belongs with the
-     spelling that needs it.
+     `cadr`; all **six** production readers are BINARY tests on `'flatten-synth`,
+     so a third value silently reads as bare `*` — including `pp-expr`, which
+     would render `*-` as `"*"` and feed that wrong echo into every `*-` label.
+     The P4a totality doctrine has never been applied here. That work belongs
+     with the spelling that needs it.
+     ⚠ **CORRECTED 2026-08-13 (the B2b grounding, `wf_7f5bda0c-500`): this said
+     FIVE, and five was WRONG WHEN WRITTEN — not stale.** The readers are
+     `pretty-print.rkt:186`, `reduction.rkt:1895`, `reduction.rkt:1902`,
+     `typing-core.rkt:1766`, `typing-core.rkt:1784`, `typing-core.rkt:1850`.
+     `git log -S` puts the phrase's introduction at `2625b38f` (slice 1b-v-B1);
+     reading that commit's own blobs gives six. The number was inherited from the
+     source comment at `reader-forms.rkt:256`, which carried it first — so this
+     is a **two-carrier** error and correcting either one alone leaves the other
+     lying. Both fixed in the same commit as this note.
 
   **CONSEQUENCE FOR THE SENTINEL SHAPE** — this is what makes the scope ruling
   also settle the shape question. Under (b) the mint adds **ONE** spelling, so it
@@ -3082,6 +3091,113 @@ items of the hold-point, ruled before P4a opened:
   `$postfix-star-synth` keeps five existing gates covering it FOR FREE. Any other
   name silently narrows them. (`p4e1-star-class` is an identity test and needs the
   new name added regardless.)
+
+- <a id="q-u53"></a>**⭐⭐ Q_U53 — THE EMIT'S MISS-CASE IS RULED OUT AT THE *GATE*,
+  NOT HANDLED AT THE EMIT; AND THE FAMILY GETS ONE SEMANTIC AUTHORITY, FOLDED IN
+  ITS OWN SLICE BEFORE 1b-vi [owner, 2026-08-13 — "C, and land the fold before
+  1b-vi"].**
+
+  **THE QUESTION.** B2b routes the reader's sentinel emit through
+  `postfix-star-lexeme->sentinel`, which returns `#f` on a table miss. What should
+  the emit do in that miss-case?
+
+  **PART 1 — THE MISS-CASE IS NOT GIVEN A BEHAVIOUR. IT IS MADE UNREACHABLE.**
+  The gate's lexeme conjunct becomes an EXACT-membership test against the family
+  table, and the emit performs the same lookup on the same entry's lexeme. Then
+  *"the emit missed"* ≡ *"the gate would not have minted"* — and the gate did
+  mint. `postfix-star-lexemes` (reader-forms.rkt) already exists for exactly this
+  and has **zero consumers**; it is one of two unexercised exports B1 landed.
+
+  ⭐ **THE THREE ALTERNATIVES ARE DISQUALIFIED INDEPENDENTLY, EACH BY MEASUREMENT
+  (grounding `wf_7f5bda0c-500`, 5 facets + critic, all R-lens-verified in the main
+  session):**
+  · **A bare `#f` is a SILENT WRONG ANSWER that reaches user-visible data.** It
+    passes TWO permissive `[else]` arms (`parse-reader.rkt:2612` inner, `:2710`
+    outer — neither validates), and both quote lowerings test the star sentinel
+    FIRST and fall through to the boolean arm (`macros.rkt:7864` precedes `:7877`;
+    twin at `:7913`/`:7926`), so it lands as `(datum-bool false)` inside a `Datum`
+    — and data territory is exactly where [Q_U37](#q-u37) routes non-fusable
+    stars. ⚠⚠ **It is WORSE than the sentinel leaking**: `$postfix-star`
+    deliberately has NO `pp-datum` arm so that a leak prints its internal name,
+    whereas `#f` hits the boolean arm (`pretty-print.rkt:1652`) and prints
+    `false`. The debugging tool someone chasing a star leak reaches for would show
+    nothing wrong.
+  · **A fallback to `$postfix-star`** is [DEFERRED 129](DEFERRED.md)'s hazard
+    relocated from gate to emit, and is Q_U52 §3's cont-axis defect one layer up:
+    the user's spelling silently means bare `*`.
+  · **A raise is an UNCATCHABLE whole-file abort.** `parse-reader.rkt` contains
+    **ZERO** `with-handlers` (verified, `grep -c` → 0), and the G2 preparse-seam
+    guard that degrades raises to per-command errors lives inside
+    `preparse-expand-all`, which `driver.rkt` calls strictly AFTER
+    `read-all-syntax-ws` — so it structurally cannot catch one.
+
+  ⭐ **CONSEQUENCE — THE "SHOULD WE ALSO PLANT AN ASSERTION?" QUESTION DISSOLVES,
+  rather than being decided.** The only assertion mechanism available at the
+  reader IS the raise, and the raise is disqualified on its own merits. So there
+  is no belt-and-suspenders tension to adjudicate: **the canary belongs in a TEST
+  that pins gate-and-table agreement, never in the emit.**
+
+  **WHY THE READER MUST NOT CREATE THE CASE AT ALL** — the house already answered
+  this one band over, and chose NEITHER silent-default NOR raise.
+  `split-star-lexeme` (parser.rkt:1213–1267) is a TOTAL lexeme→cont dispatch whose
+  `[else]` returns a user-facing message that the caller turns into a per-command
+  `parse-error` **value** (`fail`, parser.rkt:1305). It picked the error channel
+  available at ITS layer. The reader has no such channel, so it must not
+  manufacture the case. This is also the spec's own posture: §2.2 mitigates
+  juxtaposition ambiguity by making *"the confusing spelling also the ill-typed
+  one"* — surfaced at the owning seat, never silently resolved.
+
+  **PART 2 — ONE SEMANTIC AUTHORITY, FOLDED IN ITS OWN SLICE, BEFORE 1b-vi.**
+  ⚠⚠ **B1's claim that "the family lives as ONE table" IS NOT TRUE AT HEAD.** Four
+  sites independently encode which star spellings exist and what each means:
+
+  | # | site | what it knows | who reads it |
+  |---|---|---|---|
+  | 1 | `reader-forms.rkt:267` the table | lexeme ↔ sentinel ↔ cont | the CLOSER-ADJACENT band's cont (parser.rkt:1506) + the echo seat and both quote lowerings (macros.rkt:6954, :7864, :7913) |
+  | 2 | `parser.rkt:1213` `split-star-lexeme` | suffix → cont (`""`→flatten, `"_"`→flatten-synth) | the FUSED, `$dot-access` and ω bands (parser.rkt:1518, :1640, :1669) |
+  | 3 | `tools/form-deps.rkt:48` `syntax-keywords` | the sentinel NAMES | 9 `set-subtract` sites in that tool |
+  | 4 | `tools/star-arrival-matrix.rkt:149` `star-spellings` | the four SPELLINGS | the mint verifier |
+
+  ⭐ **SITES 1 AND 2 ANSWER THE SAME QUESTION FOR DISJOINT BANDS, so nothing
+  cross-checks them.** MEASURED at HEAD in one file: `mn{a*_}` (fused, site 2) →
+  `{:a-x Int}` ✅ · `mn{a}*_` (closer, site 1) → `ERROR: Unbound variable` ❌ ·
+  `mn{a}*` (control) → `{:x Int}` ✅. Same operator, two authorities, and they
+  agree today only because one author wrote both.
+
+  **THE FOLD**: `split-star-lexeme`'s suffix dispatch reconstructs the operator
+  lexeme (`(string-append "*" k)`) and asks the table. Worked: `a*` → `k=""` →
+  `"*"` → `flatten`; `a*_` → `"*_"` → `flatten-synth`; `a*xyz` → `"*xyz"` → not in
+  table → the SAME `star-mid-lexeme-message` as today. **Behaviour-preserving on
+  every input**, and the totality of the `[else]` is untouched.
+
+  ⚠ **SITES 3 AND 4 GET PINS, NOT FOLDS — and site 4's reason is load-bearing.**
+  `star-spellings` is DELIBERATELY a superset of the table (it lists `*-`/`*-_`,
+  which do not mint) because [DEFERRED 127](DEFERRED.md)'s entire repair was that
+  the instrument must be able to SEE a non-minting spelling in order to report it
+  as 0. **Deriving site 4 from the table would re-blind the mint verifier** — so
+  the correct assertion is CONTAINMENT (every table lexeme ∈ `star-spellings`;
+  every table sentinel ∈ `syntax-keywords`), never derivation.
+
+  **THE SEQUENCING, AND WHY (owner chose C over B):** B2b lands MINIMAL — gate +
+  emit + [DEFERRED 130](DEFERRED.md) — keeping its risk surface READER-ONLY so the
+  three live bands cannot regress. The fold is its own following slice, so a
+  regression in the reader change and a regression in the parser change have ONE
+  suspect each. This is the shape that has actually worked in this phase (A → B1 →
+  B2: land machinery inert, then migrate the seat). **The fold lands BEFORE
+  1b-vi** [owner] so that ruling `*-` costs a table row rather than a table row
+  plus a parser edit plus two tool lists.
+
+  **THE EXPRESSIVITY ARGUMENT, which is not about `*_`:** it is what the NEXT
+  continuation costs to RULE. The family will grow at least twice more — 1b-vi's
+  `*-`/`*-_`, and spec [§8 Q4](../research/2026-07-28_path-selection-spec.md)
+  (`*` on Map layers) is still OPEN. Under one authority that is a one-line table
+  edit; under two it is four edits whose half-states are each a live defect (see
+  the drift table in [§5.P4e-1b-v-B2b](#p4e-1b-v-b2b)). Spec §7.5 marks
+  first-class selectors "load-bearing" — selectors reify as data — and a table
+  with a lexeme column IS that reification started early; two hand-written
+  dispatches are not. This ruling is also a down-payment on spec **§8 Q8**
+  (*"lexical grammar … including error-message obligations"*), which is open and
+  is precisely this question.
 
 - <a id="q-u43"></a>**⭐ Q_U43 — THE L4 SORT CHECK MOVES TO TYPING FOR STAR-BEARING
   BRANCHES, AS [Q_U38](#q-u38)'s COROLLARY [owner, 2026-08-11 — "move the sort
@@ -9209,6 +9325,75 @@ READ) and `p4e1-star-class`'s identity test (a genuine `*_` leak would classify
 121.9s two arcs ago and the 300s limit `a4cbe7b8` installed. Battery 539 → 550.
 At ~24s per slice the headroom bought at `a4cbe7b8` is ~6 slices, not indefinite.
 
+<a id="p4e-1b-v-b2b"></a>
+
+##### §5.P4e-1b-v-B2b — the mint: grounding + the ruling it produced  (2026-08-13, `wf_7f5bda0c-500` — 5 facets + completeness critic; every load-bearing claim R-lens-verified in the main session)
+
+**Ruled as [Q_U53](#q-u53).** This section carries the evidence the ruling rests
+on. ⚠ The audit ran at `96ef73f0`, two commits past its `66db7703` pin (both are
+path/hook repairs touching no audit-relevant file); the critic flagged the drift
+itself, which is the behaviour the HEAD-pin discipline exists to produce.
+
+**⭐⭐ THE FACT THAT REFRAMED THE QUESTION, AND NO FACET STATED IT — the critic
+did.** `$postfix-star-synth` **has ZERO producers anywhere in the tree.**
+Verified: the table row (reader-forms.rkt:269), one comment (:258),
+`tools/form-deps.rkt:48`, and six test pins. No emit site. Meanwhile all TEN
+production consumers of `postfix-star-sentinel?` (parser.rkt:421, :652, :1506;
+macros.rkt:1175, :5183, :6954, :6985, :7049, :7864, :7913) handle it for free
+because the predicate is table-driven. **The downstream is fully wired and the
+upstream is empty**, so B2b's emit would be the FIRST AND ONLY producer — which
+makes the miss-case not a behaviour change to an existing path but *the initial
+contract of a path that does not yet exist*.
+
+**⭐ AND THE THREE "LIVE" BANDS NEVER TOUCH THE TABLE.** `*_` works in the fused,
+`$dot-access` and ω bands via `split-star-lexeme`, which maps the suffix AFTER the
+star straight to a cont and never consults `postfix-star-sentinel-table`. Measured
+in one file at HEAD:
+
+| band | source | authority | result |
+|---|---|---|---|
+| fused | `mn{a*_}` | `split-star-lexeme` | ✅ `{:a-x Int}` |
+| closer-adjacent | `mn{a}*_` | the sentinel table | ❌ `ERROR: Unbound variable` |
+| control | `mn{a}*` | the sentinel table | ✅ `{:x Int}` |
+
+**THE DRIFT TABLE — what a half-done 1b-vi produces** (the argument for Q_U53
+part 2; sites numbered as in the ruling's table):
+
+| edited | not edited | what the user gets |
+|---|---|---|
+| site 1 | site 2 | `cfg{db}*-` collapses; `cfg{db*-}` refused — **the same operator working in one band and refused in another** |
+| site 2 | site 1 | the mirror image |
+| 1 + 2 | site 3 | works; `form-deps` gains a spurious cross-form edge |
+| 1 + 2 + 3 | site 4 | works; **the arrival matrix reports `*-` at 0/209 and calls it covered** — DEFERRED 127 reoccurring in the tool built to prevent it |
+
+Rows 1–2 are the one-seat-not-its-sibling shape that has produced a blocking
+defect in FOUR consecutive verify rounds on this phase.
+
+**FOUR ENUMERATIONS THE AUDIT FOUND WRONG, three of them ours:**
+· **[DEFERRED 129](DEFERRED.md)'s "keep ONE token type … the compat remap" names
+  ONE site; there are NINETEEN** — 3 production (parse-reader.rkt:2089, :2341,
+  :2590), 2 TOOL (`tools/star-arrival-matrix.rkt:193`, `:217`), 14 battery rows.
+  ⭐ The two tool sites are the ones that bite: DEFERRED 127 widened that
+  instrument's LEXEME test to `star-spellings` and left its TYPE test bare, so a
+  token-type split silently re-blinds the mint verifier.
+· **Q_U52 §3's "all five `select-star-cont` readers" is SIX, and was wrong when
+  written** — corrected in both carriers (see Q_U52's own note).
+· **`parse-reader.rkt:2339-2340` calls `tools/golden-capture.rkt` "the sole
+  non-test consumer" of the compat token type.** It is not —
+  `benchmarks/micro/bench-ppn-track1.rkt:117` reads `(token-type tok)` too
+  (verified on the main thread after the critic flagged it UNVERIFIED). Display-only
+  and harmless, but the enumeration under-counts and will under-count again.
+· **A FOURTH family copy nobody had named**: `tools/form-deps.rkt:48`. No facet's
+  grep shape found it — it is neither a lexeme table nor a type switch. Its own
+  comment already anticipates B2b and was deliberately kept AHEAD of the mint.
+
+**AND A PRECONDITION FOR B2b's OWN TESTS** — [DEFERRED 133](DEFERRED.md): the
+battery helpers `p4e-star-type` / `p4e-last-star-type` are exact-lexeme `"*"`, so
+they return `#f` on a `*_` source and **cannot tell "correctly did not mint" from
+"I cannot see this token."** That is verbatim the DEFERRED-127 defect, one layer
+down; the repair landed in the tool and never propagated to the suite. Any B2b row
+written with these helpers has no power until they are widened.
+
 <a id="p4e-1b-v"></a>
 
 ##### §5.P4e-1b-v — the grounding audit  (2026-08-13, `wf_cc1a72a0-75b` — 4 facets + a completeness critic that had to be RE-RUN after the first crashed)
@@ -9789,7 +9974,9 @@ moves, `walk-to-leaf` is the abort it lands in.
 | **1b-iv-B2** ✅ `0e2f5af7` | **THE SPLICE GOES LIVE.** Remove the nominal shield for the DECIDABLE case; splice at the callers — free at Seat A (`star-branch-entries` already returns a component list; the dissolve route delegates to it) and a `select-steps-star-tail?` test at the ord-branch arm for Seat B keyless. [Q_U38](#q-u38)'s splice-vs-sibling and splice-vs-splice checks come FREE at the existing level dup gate. ⚠ `expr-Map` contents split off with their own PERMANENT-refusal kind (no enumerable keys ⇒ never provable, never refutable). | Thin wiring + the E2E that observes it, landing together. |
 | **1b-iv-C (scope flag, NOT this slice)** | `*_` is NOT carried by [Q_U49](#q-u49): its PREFIX SOURCE is under-specified and [Q_U41](#q-u41)'s two worked examples disagree (deleted layer's key vs contents' keys). Needs a ruling before code. Q_U39 separately defers the closer-adjacent band, so Q_U41's own showcase spelling is unreachable anyway. | Named rather than silently deferred. |
 | **1b-v — the `*_` slice** 🔄 **A/B1/B1b/B2a + verify SHIPPED; B2b (the mint) remains** | [Q_U39](#q-u39)'s closer-adjacent **mint** (two bare sentinels, `$postfix-star-synth`) **+ `*_`'s SEMANTICS** — the shield lift, [Q_U51](#q-u51)'s prefix join, the **key threading** both twins skip, and the ω/broadcast Record arm's missing cont test. Scoped by [Q_U52](#q-u52): the mint alone would ship a better error message and leave Q_U51's capability non-existent. | The prefix rule is RULED and forced; the mint adds ONE spelling so the sentinel question collapses to two bare atoms. Record: [§5.P4e-1b-v](#p4e-1b-v) |
-| **1b-vi — the star-COLLAPSE slice** ⬜ | **`*-`** ([Q_U48](#q-u48)) · the **`*-_`** decision · the cont-axis **totality dispatcher** · plus TWO owed rulings [Q_U52](#q-u52) surfaced: what "total collapse" does to a **renamed** ancestor (`^p` and `^` are mutually exclusive spellings of one step), and the **`*->` token boundary** (`>` breaks the identifier, so `x{a*-> b}` would become a `*-` step plus a stray `>`). | Split from 1b-v because those two are RULINGS, not implementation, and because `*-` is the spelling that forces the totality work. |
+| **1b-v-B2b — the reader MINT** ⬜ | Widen the gate's lexeme conjunct to EXACT table membership; route the emit through the same lookup ([DEFERRED 129](DEFERRED.md)); [DEFERRED 130](DEFERRED.md)'s two refusal messages ride along. **MINIMAL by ruling** — reader-only, so the three live bands cannot regress. Preconditions the grounding found: the battery's `p4e-star-type` / `p4e-last-star-type` helpers are exact-lexeme `"*"` and structurally blind to `*_` ([DEFERRED 133](DEFERRED.md)), and the DEFERRED-108 snapshot needs a deliberate re-baseline. | Scoped by [Q_U53](#q-u53) part 1: the miss-case is ruled out at the GATE, not handled at the emit. Record: [§5.P4e-1b-v-B2b](#p4e-1b-v-b2b) |
+| **1b-v-C — the FOLD** ⬜ | `split-star-lexeme`'s suffix dispatch delegates to the family table, so the four bands share ONE semantic authority; containment PINS (never derivation) for the two tool lists. Behaviour-preserving on every input. | [Q_U53](#q-u53) part 2 [owner: "land the fold before 1b-vi"]. Its own slice so the reader change and the parser change have one suspect each. |
+| **1b-vi — the star-COLLAPSE slice** ⬜ (**after 1b-v-C**) | **`*-`** ([Q_U48](#q-u48)) · the **`*-_`** decision · the cont-axis **totality dispatcher** · plus TWO owed rulings [Q_U52](#q-u52) surfaced: what "total collapse" does to a **renamed** ancestor (`^p` and `^` are mutually exclusive spellings of one step), and the **`*->` token boundary** (`>` breaks the identifier, so `x{a*-> b}` would become a `*-` step plus a stray `>`). | Split from 1b-v because those two are RULINGS, not implementation, and because `*-` is the spelling that forces the totality work. ⭐ Sequenced AFTER the fold [owner] so ruling `*-` costs a table row, not four edits. |
 | **P4e-2** | the `.*` retirement inventory + [Q_U26](#q-u26) ravel | unchanged |
 
 **⚠ TWO HOLES C2 OPENS, AND THEY ARE C2's TO CLOSE** — both found by the

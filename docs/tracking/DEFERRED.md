@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 133**
+> ### **NEXT FREE: 134**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7451,6 +7451,23 @@ landed at B1 and currently with NO production consumer — that absence is the
 signal). ⚠ Keep ONE token type: `parse-reader.rkt`'s compat remap keys on
 `postfix-star`, and splitting the type would need that site too.
 
+⚠⚠ **THAT PARENTHETICAL UNDER-COUNTS BY 18 — corrected 2026-08-13 (the B2b
+grounding `wf_7f5bda0c-500`, R-lens-verified).** Sites keyed on the bare
+`postfix-star` TOKEN TYPE: **3 production** (parse-reader.rkt:2089 the mint, :2341
+the compat remap, :2590 the emit) · **2 TOOL** (`tools/star-arrival-matrix.rkt:193`,
+`:217`) · **14 battery rows** (tests/test-path-selection.rkt). ⭐ **The two TOOL
+sites are the ones that bite**: [DEFERRED 127](#127) widened that instrument's
+LEXEME test to `star-spellings` and left its TYPE test bare, so splitting the
+token type would silently re-blind the mint verifier — reinstating exactly the
+defect 127 repaired, in the instrument whose job is verifying this mint. The
+"keep ONE token type" advice STANDS; only its cost estimate was wrong.
+
+⭐ **RULED as [Q_U53](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u53)**: the emit's
+miss-case is not given a behaviour — it is made UNREACHABLE by widening the gate's
+lexeme conjunct to EXACT table membership, so gate and emit ask one question of one
+datum. A bare `#f`, a fallback, and a raise are each disqualified independently
+(the raise is uncatchable — `parse-reader.rkt` has zero `with-handlers`).
+
 ---
 
 ### 130. ⬜ THE PARSER'S TWO STAR REFUSAL MESSAGES HARDCODE `*` WHILE B1 FAMILY-IZED THE THREE ECHO SEATS — one seat, not its sibling, inside a single commit
@@ -7509,3 +7526,29 @@ is a shape change to a function under active edit in this slice.
 set (16, of which 12 are addressed at `b12d02ed` and `cb555002`) is in the
 workflow transcript at
 `.claude/projects/…/subagents/workflows/wf_fc98d241-4e5/journal.jsonl`.
+
+---
+
+### 133. ⬜ ⭐ THE BATTERY'S STAR-TOKEN HELPERS ARE EXACT-LEXEME `"*"` AND SO ARE STRUCTURALLY BLIND TO `*_` — DEFERRED 127's defect one layer down, where its repair never propagated
+
+Found by the CIU T6 D4.P4e-1b slice **1b-v-B2b** grounding (`wf_7f5bda0c-500`,
+completeness critic). **A PRECONDITION FOR B2b's OWN TESTS**, not a latent issue:
+any B2b row written with these helpers has no power.
+
+**THE FACT** (verified): in `tests/test-path-selection.rkt` (~:6110-6132),
+`p4e-star-type` uses `(assoc "*" (p4e-token-types src))` and `p4e-last-star-type`
+uses `(string=? (car (car ts)) "*")`. Both match the lexeme EXACTLY, so on a `*_`
+source both return `#f` — and `#f` is indistinguishable from "this source
+correctly does not mint."
+
+**WHY IT IS THE SAME DEFECT AS [127](#127)**: that entry describes
+`tools/star-arrival-matrix.rkt` gating on `(string=? … "*")` — *"it could not
+distinguish 'correctly does not mint' from 'I cannot see this token'"* — and its
+repair swept `star-spellings` and returned an explicit `'none` so blindness could
+not read as success. **The repair landed in the tool and never reached the
+suite.** The class is now at three instances in this phase.
+
+**FIX**: widen both helpers to sweep the spelling set and report an explicit
+not-seen value (mirroring `star-last-token-type`), or add spelling-parameterized
+twins. ⚠ Do it BEFORE writing any B2b row, and mutation-test that a blind helper
+now FAILS rather than silently passing.

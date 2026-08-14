@@ -253,7 +253,13 @@
 ;; because the cont axis has no totality dispatcher yet. Adding them here is a
 ;; one-line change WHEN those are ruled; adding them EARLY would mint spellings
 ;; that lex and then meet a cont no consumer knows — which renders as a silent
-;; bare `*` at all five `select-star-cont` readers, including the printer.
+;; bare `*` at all SIX `select-star-cont` readers, including the printer.
+;; (pretty-print.rkt:186 · reduction.rkt:1895, :1902 · typing-core.rkt:1766,
+;; :1784, :1850 — anchor on the names, the coordinates drift.)
+;; ⚠ THIS SAID "FIVE" AND FIVE WAS WRONG WHEN WRITTEN, not stale: `git log -S`
+;; dates the phrase to `2625b38f` (slice 1b-v-B1), where reading that commit's
+;; own blobs already gives six. Q_U52 in D4 INHERITED the number from here, so
+;; the miscount had two carriers; both corrected 2026-08-13.
 ;;
 ;; ⚠ THE NAME `$postfix-star-synth` IS LOAD-BEARING, not cosmetic. The battery's
 ;; leak gate and four sibling pins match an UNANCHORED substring `#rx"\$postfix-star"`,
