@@ -803,7 +803,15 @@ module.exports = grammar({
     // Longest-match keeps these from stealing other syntax: `->' beats `-',
     // `>>' beats `>', `|>' beats `|', and `int*' / `p8+' still lex as
     // identifiers because those DO start with a letter.
-    operator: $ => choice('+', '-', '*', '/', '|>'),
+    // `=` is the UNIFY operator (reserved for it — never binding, which is
+    // `:=`).  It had no token at all, so the 65 corpus lines writing narrowing
+    // goals — `[add ?x ?y] = 7N`, `(= ?x 5)` — could not parse.
+    //
+    // Added as an operator atom rather than as a bespoke top-level goal rule:
+    // that keeps `(= a b)` and `x = y` working through the ordinary
+    // application path, and adds no new competition for any existing shape.
+    // Longest-match keeps `:=` intact.
+    operator: $ => choice('+', '-', '*', '/', '|>', '='),
 
     // ============================================================
     // Types

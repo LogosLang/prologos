@@ -24,6 +24,7 @@ ARROW (2026-08-05), Rel T1 (2026-07-25) — and the grammar has not.
 | P4 | `trait` body | ✅ | **Biggest win of the track**: error-bytes 10.2% → **4.2%**, −69,008 B in one rule — [§5.p4](#p4) |
 | P5 | `defr` + relational syntax (Rel T1) | ✅ | Was absent entirely; 6/7 shapes → 0. Clean 23 → **25** — [§5.p5](#p5) |
 | P5b | Bracketed patterns in clause heads (`\| [zero] -> …`) | ✅ | Found while diagnosing §7.0.4. Generated first try, no conflicts. 4.7% → **4.5%** |
+| P5c | `=` unify operator (narrowing goals) | ✅ | No `=` token existed at all; 65 corpus lines. Clean 25 → **26** — [§5.p5c](#p5c) |
 | P6 | Re-baseline, regenerate, reinstall, font-lock check | ⬜ | `install.sh`; then unblock SURF T1 |
 | P7 | TSG T1.close — gate wiring, DEFERRED triage, PIR-lite | ⬜ | Consider adding the gate to pre-commit |
 
@@ -684,6 +685,32 @@ clauses, impl/trait/defr/let, and bare top-level forms.
 
 Modest — but it moves one axis and worsens none, which is not true of most of
 today's attempts.
+
+<a id="p5c"></a>
+### 5.P5c — `=`, the unify operator (narrowing goals)
+
+`narrowing-demo` (33%) turned out to be 549 lines of commentary around ~35 lines
+of code, and those lines are dominated by narrowing goals: `[add ?x ?y] = 7N`,
+`add ?x ?y = 0N`, `(= ?x 5)`.
+
+**The grammar had no `=` token anywhere.** 65 corpus lines use one. Added `=` to
+the `operator` atom rather than inventing a top-level goal rule — that keeps
+both `(= a b)` and `x = y` working through the ordinary application path and
+adds no competition for any existing shape. Longest-match keeps `:=` intact
+(verified: `def a := 1`, `let x := 4` unaffected).
+
+Clean files 25 → **26**; ERROR count 3876 → 3721; error-bytes 51,390 → 51,250.
+Regression-free.
+
+⚠ **narrowing-demo is NOT cleared**: down to **2** error nodes from 19, but
+still 33% swallowed. Its residue is two same-line `defn [n] : Nat [add n n]`
+lines — the contested construct deferred by §7.0.4. It cannot go clean until
+that lands, which confirms the ordering rather than contradicting it.
+
+**Pattern worth noting across P5b and P5c**: both were MISSING shapes, both
+generated first try with no conflict declarations, both were regression-free.
+That is now a reliable tell — a shape the grammar simply lacks costs one rule;
+a shape two rules already compete for costs a design.
 
 ---
 
