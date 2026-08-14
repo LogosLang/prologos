@@ -61,7 +61,15 @@ if (facets.length === 0) {
 
 // Discipline preamble prepended to EVERY facet — encodes the codified rules so
 // the agent process follows our process by construction.
-const DISCIPLINE = `Read-only grounding audit for the Prologos compiler (repo /Users/avanti/dev/projects/prologos; source under racket/prologos/).
+const DISCIPLINE = `Read-only grounding audit for the Prologos compiler.
+
+⚠ NO ABSOLUTE PATHS. This preamble used to name a hardcoded \`/Users/…\` checkout;
+the project moved (2026-08-13) and that directory stopped existing, so every agent
+was being pointed at nothing — and it was never right on another machine anyway.
+Derive the root yourself with \`git rev-parse --show-toplevel\`, and treat EVERY
+path below as RELATIVE to it (compiler source lives under racket/prologos/). Do not
+take an absolute path from any document, prompt, or comment: cite paths relative to
+the repo root so your findings survive the next move and read on any machine.
 
 DISCIPLINE — follow exactly:
 - FIRST run \`git rev-parse HEAD\` and CITE the result. Expected ${head}. If it DIFFERS, say so PROMINENTLY: every line number must be verified against the ACTUAL current file, never assumed.

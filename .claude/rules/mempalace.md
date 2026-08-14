@@ -141,13 +141,17 @@ If any of those fail — or if the recency problem causes a real bug — uninsta
 
 ## Uninstall (if we decide to back out)
 
+Run from the repo root (`cd "$(git rev-parse --show-toplevel)"`). Paths here are
+deliberately RELATIVE — the absolute ones this block used to carry went stale the
+moment the project moved (2026-08-13) and were never right on another machine.
+
 ```
 uv tool uninstall mempalace
 rm -rf ~/.mempalace/
-rm /Users/avanti/dev/projects/prologos/mempalace.yaml
-rm /Users/avanti/dev/projects/prologos/entities.json
-rm /Users/avanti/dev/projects/prologos/.mcp.json
-rm /Users/avanti/dev/projects/prologos/.claude/rules/mempalace.md
+rm mempalace.yaml
+rm entities.json
+rm .mcp.json
+rm .claude/rules/mempalace.md
 # Then remove @.claude/rules/mempalace.md from CLAUDE.md's rules line
 ```
 

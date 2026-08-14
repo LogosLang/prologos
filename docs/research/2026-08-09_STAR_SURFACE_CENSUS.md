@@ -838,7 +838,10 @@ Each of these was flagged by the source that would have owned it, rather than gu
 <a id="files"></a>
 ## Appendix — repo surfaces the census read
 
-All read-only, all under `/Users/avanti/dev/projects/prologos/racket/prologos/` unless noted. **Anchor on the symbol names, not on coordinates — they drift.**
+All read-only, all under `racket/prologos/` **relative to the repo root** unless
+noted (paths here were absolute until 2026-08-13; the project moved and they went
+stale, which is why they are relative now). **Anchor on the symbol names, not on
+coordinates — they drift.**
 
 | File | Surfaces named by the census |
 |---|---|

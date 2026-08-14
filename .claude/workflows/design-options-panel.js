@@ -54,14 +54,24 @@ if (clusters.length === 0) {
   return { error: 'no clusters', subphase }
 }
 
-const repo = '/Users/avanti/dev/projects/prologos'
+// ⚠ NO ABSOLUTE REPO PATH. A hardcoded `/Users/…` checkout silently pointed every
+// agent at a directory that stopped existing when the project moved (2026-08-13),
+// and was never right on another machine. Agents derive the root themselves; all
+// paths quoted below are RELATIVE to it.
+const REPO_ROOT_RULE =
+  'Work in this repository. Derive its root with `git rev-parse --show-toplevel` ' +
+  'and treat EVERY path below as relative to that root (compiler source lives ' +
+  'under racket/prologos/). Do not use an absolute path from any document or ' +
+  'prompt — they go stale across machines and moves.'
 
 // The design-process briefing — encodes our lenses inline AND points at the docs
 // to READ (genuine grounding in process, per the user's instruction). Prepended
 // to every propose agent.
 const PROCESS_PRIMER = `You are a Prologos design contributor. Prologos is a functional-logic language whose compiler runs ON A PROPAGATOR NETWORK (cells hold lattice values; propagators react; a BSP scheduler fires them). The whole project is bringing elaboration ON-NETWORK.
 
-GROUND YOURSELF IN OUR DESIGN PROCESS — read these (repo ${repo}) before proposing:
+${REPO_ROOT_RULE}
+
+GROUND YOURSELF IN OUR DESIGN PROCESS — read these (paths relative to the repo root) before proposing:
 - docs/tracking/principles/DESIGN_PRINCIPLES.org — the 10 load-bearing principles + the Hyperlattice Conjecture + Cell/Propagator/Scheduler Orthogonality + the Specialized Cell Type Framework. (Read it.)
 - .claude/rules/on-network.md — the DESIGN MANTRA ("All-at-once, all in parallel, structurally emergent information flow ON-NETWORK") + the on-network mandate + red-flag patterns. (Read it.)
 - .claude/rules/structural-thinking.md — the SRE lattice lens (6 questions), the Hasse-diagram optimality argument, Module Theory, retraction-as-narrowing. (Read it.)
@@ -154,7 +164,9 @@ const critiqued = await pipeline(
   ),
   // Stage 2 — CRITIQUE (adversarial, grounded in critique methodology)
   (proposal, c) => agent(
-    `You are an ADVERSARIAL DESIGN CRITIC for the Prologos compiler (repo ${repo}). GROUND YOURSELF in our critique methodology before critiquing — READ:
+    `You are an ADVERSARIAL DESIGN CRITIC for the Prologos compiler. ${REPO_ROOT_RULE}
+
+GROUND YOURSELF in our critique methodology before critiquing — READ:
 - docs/tracking/principles/CRITIQUE_METHODOLOGY.org — the P/R/M lenses + the SRE Lattice Lens + "Cataloguing Instead of Challenging" + "Receiving External Critique: Grounded Pushback".
 - docs/tracking/principles/DESIGN_METHODOLOGY.org § Stage 3 — the P/R/M/S self-critique lenses + the Design Mantra Audit + the adversarial framing (catalogue vs challenge, two columns).
 

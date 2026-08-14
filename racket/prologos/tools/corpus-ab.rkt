@@ -37,8 +37,23 @@
 (require racket/cmdline racket/system racket/port racket/string
          racket/file racket/list racket/path)
 
+;; ⚠ NO ABSOLUTE PATHS. `--head` defaulted to a hardcoded `/Users/…` checkout,
+;; which silently pointed at the wrong tree the moment the project moved (it did,
+;; 2026-08-13) and was never right on another machine. Anchor from THIS SCRIPT's
+;; own module path instead — the canonical house idiom (`run-affected-tests.rkt`
+;; § project-root) — because it is CWD-INDEPENDENT, unlike the walk-up-from-CWD
+;; variants elsewhere in tools/. This file lives at racket/prologos/tools/, so the
+;; repo root is three levels up, and `head-tree` IS the repo root (it is used as
+;; `<tree>/racket/prologos/tools/run-file.rkt` at run-one/subprocess).
+(define this-repo-root
+  (let ([src (resolved-module-path-name
+              (variable-reference->resolved-module-path
+               (#%variable-reference)))])
+    (path->string
+     (simplify-path (build-path (path-only src) 'up 'up 'up)))))
+
 (define base-tree   (make-parameter #f))
-(define head-tree   (make-parameter "/Users/avanti/dev/projects/prologos"))
+(define head-tree   (make-parameter this-repo-root))
 (define out-dir     (make-parameter #f))
 (define per-file-timeout (make-parameter 120))     ; seconds
 (define per-file-memory  (make-parameter 2048))    ; MB — a single file needs ~150
@@ -51,7 +66,7 @@
    #:once-each
    [("--base") tree "Baseline tree (its tools/run-file.rkt is used for leg A)"
     (base-tree tree)]
-   [("--head") tree "Head tree (default: the main checkout)"
+   [("--head") tree "Head tree (default: this script's own repo root)"
     (head-tree tree)]
    [("--out") dir "Directory for per-file outputs (default: a temp dir)"
     (out-dir dir)]

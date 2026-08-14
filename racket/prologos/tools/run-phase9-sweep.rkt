@@ -16,8 +16,9 @@
 ;;; Output is markdown to stdout. Capture with redirection for design doc:
 ;;;   racket tools/run-phase9-sweep.rkt > /tmp/phase9-findings.md
 ;;;
-;;; Usage from project root:
-;;;   cd /Users/avanti/dev/projects/prologos/racket/prologos
+;;; Usage, from the repo root (no absolute paths — they break on every other
+;;; machine, and broke here when the project moved 2026-08-13):
+;;;   cd racket/prologos
 ;;;   racket tools/run-phase9-sweep.rkt
 ;;;
 ;;; Estimated wall time: ~45-60 min (one-time; Type domain depth-1 sweep
