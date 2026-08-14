@@ -514,11 +514,51 @@ and is landed; `_line_end` is sound and its mechanism verified. What is NOT
 established is that `defn params expression _line_end` can coexist with a
 grammar where `expression` is also a top-level form.
 
-**Do not resume by re-formulating the same rule.** The next honest step is to
-find out WHY a long file destabilises — e.g. inspect the parse-table conflict
-count before/after, or reduce a failing file mechanically to a minimal case
-rather than guessing at repros. Until that cause is known, this is not a
-tuning problem. Verified restored to known-good after the revert: clean 25, swallows
+<a id="p6-why"></a>
+#### 7.0.4 WHY long files destabilise — ANSWERED: it degrades ERROR RECOVERY
+
+Answered 2026-08-14 by mechanical reduction. **It is not length.**
+
+⚠ **The first reduction produced an ARTIFACT, and that is worth recording.**
+Delta-debugging the failing prefix on the property "the whole file is one
+ERROR" minimised to a single line — `defn nat-double` — because *any truncated
+form* satisfies it. The reducer was right; the property was wrong. Checked
+against the old grammar: that bare header errors under BOTH. **A reduction
+property must be DIFFERENTIAL** (fails under new AND NOT under old), or it
+minimises to "incomplete input".
+
+**The real construct**, from the same file:
+
+```
+defn nat-double
+  | [zero]  -> zero
+  | [[suc k]] -> suc [suc [nat-double k]]
+```
+
+| grammar | result |
+|---|---|
+| HEAD (no same-line variant) | **3 local ERRORs** |
+| with same-line variant | **ONE ERROR spanning the whole file** |
+
+**The mechanism: the same-line variant degrades tree-sitter's ERROR RECOVERY.**
+A second continuation at the `defn` decision point means that when input matches
+NEITHER, GLR has explored both branches and can no longer localise — a contained
+3-error region becomes a total swallow.
+
+**The corpus numbers said this and I misread them twice.** Clean files ROSE
+(25 → 28/30) while swallows rose (6 → 24). Files that parsed cleanly stayed
+clean, and some newly became clean from same-line support; only files that were
+ALREADY failing got catastrophically worse. That is an amplifier, not a new
+defect.
+
+**Consequence for the plan.** Same-line `defn` is blocked by neither conflicts,
+declaration breadth, nor `_line_end` — all solved. It is blocked by the corpus
+still containing constructs the grammar cannot parse, each of which it amplifies
+from local to total. **Attempt it LAST**, once the remaining gaps are closed.
+
+**Discovered en route, unrelated**: `| [zero] -> zero` — a BRACKETED PATTERN in
+a clause head — is not accepted by `pattern` (`constructor_pattern` is
+`identifier pattern_arg+`; there is no bare `[…]` alternative). A genuine gap. Verified restored to known-good after the revert: clean 25, swallows
 6, worst 51%, and multi-clause defn / impl+`<Bool>` / trait / defr / linear
 arrows all still parse at 0.
 
