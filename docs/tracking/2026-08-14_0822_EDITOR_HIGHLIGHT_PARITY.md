@@ -207,24 +207,41 @@ standard**:
 
 The three customs are *legal* — the dotted convention means an unknown leaf
 falls back to a standard root, so a consumer that has never heard of them still
-gets a sensible colour. But `.other` carries no meaning. Proposed renames, to
-be settled in P0:
+gets a sensible colour. Proposed renames are in the verification below.
 
-| now | proposed | why |
-|---|---|---|
-| `@namespace` | `@module` | the upstream rename; free correctness |
-| `@constant.other` | `@constant` | `.other` distinguishes it from nothing |
-| `@variable.other` | `@variable.logic` | it is a logic variable (`?x`) — say so |
-| `@variable.other.hole` | `@variable.hole` | typed holes; two levels bought nothing |
+#### ✅ VERIFIED against upstream (2026-08-14) — P0 task 1, DONE
 
-⚠ **Renaming is exactly the drift P0 exists to prevent, and proves the case:**
-`@variable` maps to NO face in Emacs on purpose, so `@variable.logic` would fall
-back to *nothing* unless the Emacs map gains an explicit entry in the same
-commit. One rename, two files, silent loss if you forget.
+Checked against **Neovim master `runtime/doc/treesitter.txt`**
+(`treesitter-highlight-groups`), which has owned the standard list since 0.9.
+Result: **16 standard · 3 custom-with-valid-root · 1 broken.**
 
-⚠ The standard list above is from the convention as I know it and **must be
-verified against upstream `nvim-treesitter` docs in P0** before we rename
-anything. Getting it wrong is worse than not adopting.
+⚠ **A local copy is NOT a safe source.** This machine has nvim **0.9.4**, whose
+doc is the *pre-rename* generation: it lists `@namespace @field @conditional
+@parameter @float @include @repeat @exception @text.*` and contains **none** of
+`@variable.parameter @attribute @module @number.float @keyword.import` — i.e.
+none of the modern names, including two we already use. Verifying against it
+would have produced the opposite conclusion. (Unrelated: that nvim binary is
+currently broken — `dyld: Symbol not found: _ts_language_version`, its 0.9.4
+build against tree-sitter 0.26.9. The doc file still reads fine.)
+
+**Corrections to the pre-verification table:**
+
+| capture | earlier claim | verified | action |
+|---|---|---|---|
+| `@namespace` | "deprecated → `@module`" | **worse — the ROOT `namespace` is not standard**, so it does not even fall back. A Neovim user's theme gives it *nothing* today. | → `@module` |
+| `@constant.other` | "→ `@constant`" | `@constant` is valid, but **`@string.special.symbol` is the standard capture for symbols/atoms** — what Clojure `:foo` and Elixir `:foo` use. Prologos keyword literals are exactly that. | → `@string.special.symbol` (recommended) |
+| `@variable.other` | "→ `@variable.logic`" | confirmed: no standard leaf fits a logic variable; custom leaf under a standard root is the idiomatic move | → `@variable.logic` |
+| `@variable.other.hole` | "→ `@variable.hole`" | confirmed. (`@comment.todo` was considered — apt for a placeholder, wrong for a non-comment.) | → `@variable.hole` |
+
+⭐ The `@string.special.symbol` finding is the one that pays for the
+verification: it means a Neovim user's Prologos keyword literals would colour
+**the same as their Clojure keywords**, with no theme configuration at all.
+That is precisely the third-party leverage D1 was adopted for, and I would not
+have got there from memory.
+
+**Still open in P0**: whether to take the `@string.special.symbol` recommendation
+(it changes the VS Code colour of every `:keyword` — currently orange via
+`constant.language`), and the Emacs-side lockstep noted above.
 
 <a id="d2"></a>
 ### D2 — registry format: 🔬 OPEN, analysis below
