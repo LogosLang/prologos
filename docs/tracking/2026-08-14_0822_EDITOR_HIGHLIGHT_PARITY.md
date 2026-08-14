@@ -19,7 +19,7 @@ contract well enough that a third editor is a *mapping table*, not a port.
 |---|---|---|---|
 | P0 | Capture registry + D1 renames (`namespace`->`module`, drop `.other`) | ⬜ | Kills drift cause 3 — [§3.1](#p0), [§D1](#d1). ⚠ verify the standard list upstream FIRST |
 | P1 | Parity harness: one fixture, capture-by-capture, asserted in BOTH | ⬜ | Makes drift *detectable* — [§3.2](#p1) |
-| P2 | Reduce TextMate to a declared, disjoint bootstrap | ⬜ | Kills drift cause 1 — [§3.3](#p2) |
+| P2 | TextMate: declared, and made to AGREE where it overlaps | ⬜ | Kills drift cause 1 — [§3.3](#p2), amended by [§7.4](#d3-critique) |
 | P3 | Review `semanticTokenScopes` per capture | ⬜ | Kills drift cause 2; settles the blue/orange class — [§3.4](#p3) |
 | P4 | The four catalogued issues, on the repaired base | ⬜ | [§4](#issues) |
 | P5 | `#match?` dialect lint (or retire the predicate) | ⬜ | [§3.5](#p5) |
@@ -81,8 +81,9 @@ reports it.
 ## 2. The target
 
 1. `highlights.scm` is authoritative for everything it captures.
-2. Anything else a native layer paints is **declared, disjoint, and tested** to
-   be disjoint.
+2. Anything else a native layer paints is **declared**, and where it overlaps
+   the query the two must **agree** — tested. (Amended from "disjoint" by
+   [§7.4](#d3-critique).)
 3. Each consumer contributes exactly one thing: a **capture → native face/token
    mapping**, drawn from one shared registry.
 4. Divergence is a **test failure**, not a discovery.
@@ -129,7 +130,14 @@ the change most likely to silently remove colour, and the harness is what would
 catch it.
 
 <a id="p2"></a>
-### 3.3 (P2) TextMate reduced to a declared bootstrap
+### 3.3 (P2) TextMate declared, and made to agree
+
+> ⚠ **AMENDED by [§7.4](#d3-critique).** This section originally required
+> TextMate to be *disjoint* from the query. That is over-strict: it would
+> foreclose TextMate's value as the portable format for consumers that never run
+> our extension. The invariant is **agreement**, not disjointness — overlap is
+> fine, disagreement is the bug. The text below is kept for the reasoning about
+> why TextMate cannot simply be deleted; read its bullets through the amendment.
 
 TextMate cannot simply be deleted: semantic tokens arrive only after activation
 and a parse, and a user can switch them off
