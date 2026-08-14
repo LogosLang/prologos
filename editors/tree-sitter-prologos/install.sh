@@ -63,6 +63,30 @@ mkdir -p "$DEST"
 cp "$LIB" "$DEST/.$LIB.incoming.$$"
 mv -f "$DEST/.$LIB.incoming.$$" "$DEST/$LIB"
 
+# --- WASM for the VS Code extension (optional) ---
+#
+# The VS Code extension drives semantic highlighting from the SAME grammar, via
+# web-tree-sitter. Building it here is what keeps the two editors from drifting
+# apart: without this step VS Code silently keeps whatever .wasm it last had,
+# which is the exact failure mode this whole track was about.
+#
+# Skipped without complaint when emcc is absent — it is not needed for Emacs.
+# emsdk is not on PATH by default; source its emsdk_env.sh first if you want it.
+WASM="tree-sitter-prologos.wasm"
+VSCODE_GRAMMARS="../vscode-prologos/grammars"
+if command -v emcc >/dev/null 2>&1; then
+  echo "==> building $WASM (emcc found)"
+  "$TS" build --wasm
+  if [ -d "$VSCODE_GRAMMARS" ] || mkdir -p "$VSCODE_GRAMMARS"; then
+    cp "$WASM" "$VSCODE_GRAMMARS/$WASM"
+    cp queries/highlights.scm "../vscode-prologos/queries/highlights.scm" 2>/dev/null || true
+    echo "    installed to $VSCODE_GRAMMARS/ (+ highlights.scm)"
+  fi
+else
+  echo "==> skipping wasm (emcc not on PATH — Emacs does not need it)"
+  echo "    for VS Code: source your emsdk_env.sh, then re-run this script"
+fi
+
 # --- SMOKE TEST: does the thing we just installed actually load and parse? ---
 #
 # Not ceremony.  On 2026-08-14 a bad install SIGKILLed every Emacs that touched

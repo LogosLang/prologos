@@ -1,0 +1,137 @@
+import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
+import { Parser, Language, Query } from 'web-tree-sitter';
+
+/**
+ * Tree-sitter-driven semantic highlighting.
+ *
+ * The TextMate grammar in `syntaxes/prologos.tmLanguage.json` is regex-based:
+ * it colours tokens, but it cannot tell a parameter from a call, a type from a
+ * value, or a binding occurrence from a use — none of that is expressible
+ * without a parse. This provider runs the SAME grammar Emacs uses, compiled to
+ * wasm, and drives VS Code's semantic-token layer from `queries/highlights.scm`.
+ *
+ * Semantic tokens LAYER OVER TextMate rather than replacing it: anything we do
+ * not capture keeps its TextMate colour, so this degrades to the status quo
+ * instead of to nothing.
+ */
+
+/** Capture name -> [VS Code token type, ...modifiers].
+ *
+ * A Map, not an object literal: capture names come from the grammar, and a
+ * plain-object lookup on names like `constructor` or `__proto__` returns
+ * PROTOTYPE members rather than undefined. (TypeScript flagged the
+ * `constructor` key, which is how this surfaced.) */
+const CAPTURE_MAP = new Map<string, [string, string[]]>([
+  ['keyword', ['keyword', []]],
+  ['function', ['function', []]],
+  ['function.builtin', ['function', ['defaultLibrary']]],
+  ['function.call', ['function', []]],
+  ['variable', ['variable', []]],
+  ['variable.parameter', ['parameter', []]],
+  ['variable.builtin', ['variable', ['defaultLibrary']]],
+  ['parameter', ['parameter', []]],
+  ['type', ['type', []]],
+  ['type.builtin', ['type', ['defaultLibrary']]],
+  ['type.definition', ['type', ['declaration']]],
+  ['constant', ['variable', ['readonly']]],
+  ['constant.builtin', ['variable', ['readonly', 'defaultLibrary']]],
+  ['constructor', ['enumMember', []]],
+  ['number', ['number', []]],
+  ['string', ['string', []]],
+  ['comment', ['comment', []]],
+  ['operator', ['operator', []]],
+  ['namespace', ['namespace', []]],
+  ['property', ['property', []]],
+  ['macro', ['macro', []]],
+  ['label', ['label', []]],
+  ['punctuation', ['operator', []]],
+  ['punctuation.bracket', ['operator', []]],
+  ['punctuation.delimiter', ['operator', []]],
+]);
+
+export const LEGEND = new vscode.SemanticTokensLegend(
+  ['keyword', 'function', 'variable', 'parameter', 'type', 'enumMember',
+   'number', 'string', 'comment', 'operator', 'namespace', 'property',
+   'macro', 'label'],
+  ['declaration', 'readonly', 'defaultLibrary'],
+);
+
+export class PrologosSemanticTokens implements vscode.DocumentSemanticTokensProvider {
+  private parser: Parser | undefined;
+  private query: Query | undefined;
+  private ready: Promise<void>;
+
+  constructor(private extensionPath: string, private channel: vscode.OutputChannel) {
+    this.ready = this.init();
+  }
+
+  private async init(): Promise<void> {
+    try {
+      await Parser.init();
+      const wasmPath = path.join(this.extensionPath, 'grammars', 'tree-sitter-prologos.wasm');
+      const queryPath = path.join(this.extensionPath, 'queries', 'highlights.scm');
+      if (!fs.existsSync(wasmPath)) {
+        this.channel.appendLine(`semantic tokens: grammar wasm not found at ${wasmPath}`);
+        this.channel.appendLine('  build it: cd editors/tree-sitter-prologos && tree-sitter build --wasm');
+        return;
+      }
+      const lang = await Language.load(wasmPath);
+      this.parser = new Parser();
+      this.parser.setLanguage(lang);
+      this.query = new Query(lang, fs.readFileSync(queryPath, 'utf8'));
+      this.channel.appendLine('semantic tokens: tree-sitter grammar loaded');
+    } catch (err: any) {
+      // Never let this take the extension down — TextMate highlighting stays.
+      this.channel.appendLine(`semantic tokens: disabled (${err?.message ?? err})`);
+    }
+  }
+
+  async provideDocumentSemanticTokens(
+    document: vscode.TextDocument,
+    _token: vscode.CancellationToken,
+  ): Promise<vscode.SemanticTokens | undefined> {
+    await this.ready;
+    if (!this.parser || !this.query) return undefined;
+
+    const tree = this.parser.parse(document.getText());
+    if (!tree) return undefined;
+
+    const builder = new vscode.SemanticTokensBuilder(LEGEND);
+
+    // FIRST MATCH WINS, which is tree-sitter's own convention and matters
+    // here: `add-ten` is captured as both @function (specific, listed first)
+    // and @variable (the catch-all). Emitting both would let the generic one
+    // win in the editor. Keyed by start offset so a later, broader capture at
+    // the same position is dropped.
+    const claimed = new Set<number>();
+
+    for (const cap of this.query.captures(tree.rootNode)) {
+      const mapping = CAPTURE_MAP.get(cap.name)
+        // `foo.bar.baz` falls back to `foo.bar`, then `foo`.
+        ?? CAPTURE_MAP.get(cap.name.split('.').slice(0, -1).join('.'))
+        ?? CAPTURE_MAP.get(cap.name.split('.')[0]);
+      if (!mapping) continue;
+
+      const start = cap.node.startIndex;
+      if (claimed.has(start)) continue;
+      claimed.add(start);
+
+      // Multi-line captures cannot be expressed as one token; skip rather than
+      // emit a wrong range (comments and strings are TextMate's job anyway).
+      if (cap.node.startPosition.row !== cap.node.endPosition.row) continue;
+
+      builder.push(
+        cap.node.startPosition.row,
+        cap.node.startPosition.column,
+        cap.node.endPosition.column - cap.node.startPosition.column,
+        LEGEND.tokenTypes.indexOf(mapping[0]),
+        mapping[1].reduce((acc, m) => acc | (1 << LEGEND.tokenModifiers.indexOf(m)), 0),
+      );
+    }
+
+    tree.delete();
+    return builder.build();
+  }
+}

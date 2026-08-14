@@ -2,3 +2,8 @@ out/
 node_modules/
 *.vsix
 .vscode-test/
+
+# Built from editors/tree-sitter-prologos via install.sh — a build artifact,
+# untracked for the same reason the .dylib is (commit b3369312).
+grammars/*.wasm
+queries/highlights.scm

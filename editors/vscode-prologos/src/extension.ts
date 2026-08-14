@@ -9,6 +9,7 @@ import { ReplManager } from './repl';
 import { DecorationsManager } from './decorations';
 import { InfoViewProvider } from './infoview';
 import { PropagatorViewManager } from './propagatorView';
+import { PrologosSemanticTokens, LEGEND } from './semanticTokens';
 
 let client: LanguageClient | undefined;
 let replManager: ReplManager | undefined;
@@ -20,6 +21,20 @@ export function activate(context: vscode.ExtensionContext) {
   const outputChannel = vscode.window.createOutputChannel('Prologos');
   const replChannel = vscode.window.createOutputChannel('Prologos REPL');
   outputChannel.appendLine('Prologos extension activating...');
+
+  // Semantic highlighting is registered FIRST, deliberately.
+  //
+  // Everything below can `return` early — no Racket, no server.rkt — and those
+  // returns would take highlighting with them. Highlighting depends on neither:
+  // it runs the tree-sitter grammar in-process from a wasm asset shipped with
+  // the extension. So it must not sit behind the LSP's preconditions.
+  context.subscriptions.push(
+    vscode.languages.registerDocumentSemanticTokensProvider(
+      { scheme: 'file', language: 'prologos' },
+      new PrologosSemanticTokens(context.extensionPath, outputChannel),
+      LEGEND,
+    ),
+  );
 
   // Resolve Racket path — check setting, then common locations
   const config = vscode.workspace.getConfiguration('prologos');
