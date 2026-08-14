@@ -6115,9 +6115,29 @@
   (for/list ([t (in-list (rrb-to-list narrowed))])
     (cons (token-entry-lexeme t) (set-first (token-entry-types t)))))
 
+;; ⭐ [DEFERRED 133] — "is this token the STANDALONE star operator, whatever it is
+;; spelled?" A REGEX, deliberately, and not a copy of the mint table or of
+;; `tools/star-arrival-matrix.rkt`'s `star-spellings`: an instrument must be
+;; strictly WIDER than the question it verifies (that is [DEFERRED 127]'s lesson),
+;; and a hand-copied list is the drift shape this track keeps paying for. This
+;; matches `*` `*_` `*-` `*-_` and also spellings the family has NOT reserved
+;; (`*__`, `*--`), which is correct — those must be VISIBLE so they can be
+;; reported as `symbol` rather than vanish into `#f`.
+;; ⚠ It matches the WHOLE lexeme, so the FUSED band's `da*_` is deliberately NOT
+;; a hit: that is a different band with a different authority (`split-star-lexeme`),
+;; and conflating them is what [Q_U53] part 2 exists to stop.
+(define (p4e-star-token-lexeme? lex)
+  (regexp-match? #rx"^[*][-_]*$" lex))
+
 (define (p4e-star-type src)
-  ;; the type of the FIRST lone `*` token, or #f if there is none
-  (cond [(assoc "*" (p4e-token-types src)) => cdr] [else #f]))
+  ;; the type of the FIRST standalone star-operator token; `'none` if there is
+  ;; no such token AT ALL. ⚠ `'none`, not `#f` — see [DEFERRED 133]: `#f`
+  ;; conflated "correctly does not mint" with "I cannot see this token", which
+  ;; is exactly how a blind gate reports success.
+  (let loop ([ts (p4e-token-types src)])
+    (cond [(null? ts) 'none]
+          [(p4e-star-token-lexeme? (car (car ts))) (cdr (car ts))]
+          [else (loop (cdr ts))])))
 
 (define (p4e-last-star-type src)
   ;; ⚠ USE THIS WHEN THE SOURCE CONTAINS MORE THAN ONE `*`. `p4e-star-type` takes
@@ -6126,9 +6146,13 @@
   ;; `symbol` and the row fails for a reason unrelated to its name. That is the
   ;; result-narrowing test-helper hazard this track has already paid for once
   ;; (`run-last` swallowing a first-form refusal); it cost a false RED here.
-  (let loop ([ts (p4e-token-types src)] [found #f])
+  ;; ⚠ [DEFERRED 133]: sweeps the star-operator SPELLING SPACE, not the literal
+  ;; `"*"`, and reports `'none` rather than `#f` when no such token exists —
+  ;; mirroring `star-last-token-type` in tools/star-arrival-matrix.rkt, whose
+  ;; identical repair (DEFERRED 127) never propagated down here.
+  (let loop ([ts (p4e-token-types src)] [found 'none])
     (cond [(null? ts) found]
-          [(string=? (car (car ts)) "*") (loop (cdr ts) (cdr (car ts)))]
+          [(p4e-star-token-lexeme? (car (car ts))) (loop (cdr ts) (cdr (car ts)))]
           [else (loop (cdr ts) found)])))
 
 (test-case "P4e-0 A: a `*` glued to a CLOSER gets the postfix-star type"
@@ -6141,6 +6165,53 @@
   ;; the Q_U32 guard rail pins — it must not move.
   (check-equal? (p4e-star-type "[f x] * ") 'symbol)
   (check-equal? (p4e-star-type "cfg{a} * ") 'symbol))
+
+;; ---------------------------------------------------------------------------
+;; ⭐⭐ [DEFERRED 133] — THE HELPERS MUST BE ABLE TO *SEE* A SPELLING THEY DO NOT
+;; MINT. This is [DEFERRED 127]'s defect a THIRD time, one layer down: that entry
+;; fixed `tools/star-arrival-matrix.rkt`, whose gate was `(string=? lexeme "*")`
+;; — the SAME exact-lexeme shape as the mint it verifies — so it could not tell
+;; "correctly does not mint" from "I cannot see this token". The repair landed in
+;; the TOOL and never propagated to the SUITE.
+;;
+;; These rows are the failing-test-first for that repair. With the blind helpers
+;; they report `#f` (no `"*"` token exists in a `*_` source — it is ONE token
+;; whose lexeme is `"*_"`), so they FAIL; with the widened helpers they report
+;; the type and PASS. ⚠ They must keep passing through B2b — the VALUE changes
+;; from `symbol` to `postfix-star` when the mint widens, which is B2b's own row;
+;; what these pin is that the helper can SEE the token either way.
+;; ---------------------------------------------------------------------------
+(test-case "P4e-0 A [DEFERRED 133]: the helpers SEE a non-minting star spelling, and say so"
+  ;; pre-B2b these are all `symbol` — the point is that they are not `#f`/`'none`
+  (check-equal? (p4e-star-type "cfg{a}*_ ") 'symbol
+                "`*_` is ONE token; a helper that cannot see it reports #f")
+  (check-equal? (p4e-star-type "cfg{a}*- ") 'symbol "`*-`")
+  (check-equal? (p4e-star-type "cfg{a}*-_ ") 'symbol "`*-_`")
+  ;; ⚠⚠ THE LAST-STAR ROW WAS VACUOUS ON ITS FIRST DRAFT AND THE POWER-CHECK
+  ;; CAUGHT IT. It read `.(1 * 2)` … `cfg{a}*_`, where the blind helper reports
+  ;; `symbol` (the arithmetic star) and the widened one ALSO reports `symbol`
+  ;; (the `*_`) — the same answer for opposite reasons, so the check passed
+  ;; either way. The discriminating source needs a FIRST star that MINTS and a
+  ;; LAST one that cannot: `*--` is not a reserved spelling, so it stays
+  ;; `symbol` before AND after B2b, which keeps this row from going vacuous the
+  ;; moment the mint widens. It also exercises the predicate's deliberate
+  ;; over-match — an unreserved spelling must be VISIBLE, not `#f`.
+  (check-equal? (p4e-last-star-type "cfg{x}* cfg{y}*-- ") 'symbol
+                "the LAST star-family token wins, and an UNRESERVED spelling is still seen"))
+
+(test-case "P4e-0 A [DEFERRED 133]: 'no star token at all' is DISTINCT from 'did not mint'"
+  ;; The whole point of DEFERRED 127: `#f` conflated these two. An explicit
+  ;; `'none` keeps blindness from reading as a successful negative result.
+  (check-equal? (p4e-star-type "cfg{a} ") 'none "no star token anywhere")
+  (check-equal? (p4e-last-star-type "cfg{a} ") 'none "no star token anywhere"))
+
+(test-case "P4e-0 A [DEFERRED 133]: CONTAINMENT — every minting lexeme is one the helper can see"
+  ;; [Q_U53] rules the two tool lists get CONTAINMENT pins, never derivation:
+  ;; the instrument's spelling space must stay a SUPERSET of the mint table, or
+  ;; it re-blinds itself. This is that pin, at the battery layer.
+  (for ([lex (in-list (map caddr rf:postfix-star-sentinel-table))])
+    (check-true (p4e-star-token-lexeme? lex)
+                (format "table lexeme ~s is invisible to the battery's star helpers" lex))))
 
 (test-case "P4e-0 A: the `>`-FINAL OPERATORS are not closers — a char lookback would mint here"
   ;; ⚠ THE GUARD THAT DECIDED THE DESIGN. Each of these has the `*` byte-adjacent
