@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 129**
+> ### **NEXT FREE: 133**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7424,3 +7424,88 @@ of a ruling. The parked block carries this note.
 ⚠ Q_U50's record says "NO CODE CHANGE" and lists one owed message improvement; it
 did not consider Q_U42's population. That is how two rulings agreed separately and
 disagreed jointly.
+
+---
+
+### 129. ⬜ ⭐ THE READER'S SENTINEL EMIT IS SPELLING-BLIND — `token-entry->stx` maps the token TYPE to a hardcoded `'$postfix-star` and never consults the lexeme, so B2b's mint has a wrong-answer route B1's ordering argument does not cover
+
+Found by the CIU T6 D4.P4e-1b slice 1b-v adversarial verify (`wf_fc98d241-4e5`,
+survivor S12). **Not a defect at HEAD** — it is a precondition B2b must satisfy,
+recorded because B1's commit message argues the ordering removes exactly this
+hazard and the argument has a gap.
+
+**THE FACT** (verified): `token-entry->stx` (parse-reader.rkt) has ONE sentinel
+emit, `[(postfix-star) '$postfix-star]`, keyed on the token TYPE. The mint gate in
+`disambiguate-tokens` types a token via an exact-lexeme test and sets
+`(seteq 'postfix-star)` for ALL spellings it accepts. So the LEXEME is available
+at the emit site and is not read.
+
+**WHY IT MATTERS AT B2b**: B1 landed the cont channel first precisely so that
+widening the reader could not make `x{a b}*_` silently MEAN `x{a b}*`. That
+argument covers the PARSER arm. It does not cover the EMIT: if B2b widens only
+the gate's lexeme test and leaves the emit hardcoded, every widened spelling
+still emits `$postfix-star`, whose cont is `'flatten` — reproducing the exact
+wrong answer by a different route.
+**WHAT B2b MUST DO**: emit via `postfix-star-lexeme->sentinel` (reader-forms.rkt,
+landed at B1 and currently with NO production consumer — that absence is the
+signal). ⚠ Keep ONE token type: `parse-reader.rkt`'s compat remap keys on
+`postfix-star`, and splitting the type would need that site too.
+
+---
+
+### 130. ⬜ THE PARSER'S TWO STAR REFUSAL MESSAGES HARDCODE `*` WHILE B1 FAMILY-IZED THE THREE ECHO SEATS — one seat, not its sibling, inside a single commit
+
+Found by the same verify (survivor S13). B1 made `unmint-star-for-echo` and both
+quote lowerings render the lexeme the USER WROTE, and left the two REFUSAL
+messages — `unwrap-angle-type`'s glued-star arm and `parse-datum`'s star arm
+(parser.rkt) — hardcoding `*` in their prose.
+
+**Latent today**: both arms now RECOGNIZE the family (B1 rewired their
+predicates), but the only spelling that reaches them is `*`, because the reader
+mints only that. **At B2b it becomes live**: a glued `*_` inside `<…>` will take
+Q_U31's refusal and be told about `*`.
+
+**Cheap, and it belongs with B2b** — the lexeme is already available via
+`postfix-star-sentinel-lexeme`.
+
+---
+
+### 131. ⬜ `star-dup-key`'s "dropping the `*` does not help either" IS MEASURABLY FALSE, and `*_` gives it a second population
+
+Found by the same verify (survivor S14). The clause reads: *"If the key was
+lifted, dropping the `*` does not help either: it re-nests the layer under the
+key the star was deleting."*
+
+**MEASURED FALSE** — the verify's own run shows the remedy applied to the very
+expression the message was complaining about, working:
+```
+… duplicate output key `:a-x` … dropping the `*` does not help either …
+{:a {:x 1}, :a-x 9} : {:a {:x Int} :a-x Int}      ← that exact remedy, applied
+```
+The clause over-generalises from the case where the re-nested key COLLIDES with
+the sibling to the case where it does not.
+
+⚠ **This is the THIRD wrong remedy found in this message family** (the round-2
+`star-dup-key` rewrite and the round-3 `star-l4-mixed` rewrite were the first
+two), and the pattern is the same each time: a remedy derived from the one
+example in front of the author. See the standing lesson — **derive the message
+from the RULING, and RUN every remedy it names**.
+
+---
+
+### 132. ⬜ `join-contents`' `keys` parameter keeps a silent `#f` DEFAULT, so a future third call site inherits Q_U41's positional refusal by OMISSION
+
+Found by the same verify (survivor S16). `(define (join-contents contents [keys #f]) …)`
+in `star-join-type`. B2a's own comment five lines above states the invariant —
+"the absence of keys IS [Q_U41]'s refusal condition … the two call sites below
+each say which they are" — and the signature un-states it by defaulting.
+
+Both existing call sites pass explicitly (one of them passes `#f` deliberately,
+with a comment saying so). A third would silently get the positional refusal.
+**Fix**: make the parameter required. Trivial; filed rather than done because it
+is a shape change to a function under active edit in this slice.
+
+⚠ Filed together with **129–131** from one verify run; the run's full survivor
+set (16, of which 12 are addressed at `b12d02ed` and `cb555002`) is in the
+workflow transcript at
+`.claude/projects/…/subagents/workflows/wf_fc98d241-4e5/journal.jsonl`.

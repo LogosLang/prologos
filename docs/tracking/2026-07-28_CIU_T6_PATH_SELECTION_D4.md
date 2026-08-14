@@ -9154,6 +9154,61 @@ without one. ⚠ The refusal channels are `bcast-carrier` (typing-errors.rkt) an
 here is a WHOLE-FILE ABORT, which is why P4c-4c retired its predecessor rather
 than leaving it in the tree.
 
+<a id="p4e-1b-v-shipped"></a>
+
+##### §5.P4e-1b-v — WHAT SHIPPED  (A → B1 → B1b → B2a → verify, 2026-08-13)
+
+**`*_` IS LIVE in the three bands that spell it.** Measured:
+`mn{a*_}` → `{:a-x 1}` · `cfg{database*_}` → `{:database-pool-size 10,
+:database-url "u"}` (**[Q_U24]'s own motivating example**) · `mn.a*_` →
+`{:a-x 1}` · `regions{eu*_}` → `{:eu-port 80, :eu-host "e"}` (**[Q_U51]'s table
+row**) · `rmdup:cfg*_` → `{:us-x 2, :eu-x 1}` (**the capability Q_U51 calls the
+whole point** — per-content prefixes keeping a SHARED `:x` apart, where bare `*`
+must refuse) · `rowsn:cfg*_` → refused, positional ([Q_U41]).
+The CLOSER-ADJACENT band is still `Unbound variable` — that is **B2b**'s.
+
+| slice | content | gate |
+|---|---|---|
+| **A** ✅ `317ae5af` | The instrument. The arrival matrix could not SEE the spelling it verifies (exact-lexeme gate + a bare `*` hardcoded in all 11 carrier sources); now templated per spelling with the CONTROLS asserting a DECLARED outcome. ⭐ The controls were the real defect: they passed "must be 0" because the gate returned `#f` when there was no star token AT ALL, so "correctly does not mint" and "I cannot see this token" were one observation. Mutation-tested: the old gate makes them report *"EXPECTED symbol, saw none"*. Also: ran the four pre-written 1b-v pins BEFORE touching them and found ALL FOUR unusable. | `*` 209/209, `*_`/`*-`/`*-_` 0/209 — the pre-mint RED, visible for the first time |
+| **B1** ✅ `2625b38f` | The cont channel, INERT. The closer-adjacent band never called `split-star-lexeme` and hardcoded `'flatten` in both legs. The family lives as ONE table in `reader-forms.rkt` (bidirectional — `unmint-star-for-echo` and both quote lowerings must render the lexeme the USER WROTE); ten dispatch sites delegate to one predicate. ⭐ Ordering is the design: widening the reader FIRST would make `x{a b}*_` silently MEAN `x{a b}*`. | inert E2E across every band; **liveness proved by mutation** — flipping the table's cont moves the closer band ONLY, the dot band unchanged |
+| **B1b** ✅ `d09d4a49` | The `*_` join in both twins, INERT. The signature change `*` never needed: both twins discarded the layer's keys. Separator defined ONCE in syntax.rkt (shared with `^-_` per [Q_U24]). | mutation-tested PER TWIN — ⭐ and doing it properly found MY OWN pin structure masking a twin (one `test-case`, rackunit aborts at first failure, so mutating both twins gave ONE failure) |
+| **B2a** ✅ `161e8bc1` | The shield removed; `keys` threaded, and `#f` IS [Q_U41]'s refusal condition carried in the data. | ⚠⚠ **THE TWINS DISAGREE ABOUT WHAT A KEY IS** — type rows are keyed by SYMBOLS, value champs by `expr-keyword` STRUCTS. `star-nominal-join-*` never noticed because bare `*` passes keys through untouched; `*_` is the first operation here that READS one. WHOLE-FILE ABORT. ⭐ The B1b direct-call pin did not catch it because it built champs with SYMBOL keys — **a shape production never produces**. The E2E probe caught it in one run. |
+| **verify** ✅ `b12d02ed` + `cb555002` | `wf_fc98d241-4e5` — 29 raw → 16 survivors, 3 killed (one on the adjudicator's own re-measurement). 12 fixed; 4 filed as [DEFERRED 129–132](DEFERRED.md). | suite **10217/488/0** |
+
+**⭐⭐ THE VERIFY'S ANSWER TO THE STANDING QUESTION: YES, SIX TIMES** — and in
+three of them a comment IN THE TREE asserted the sibling was safe, including one
+in B2a's own commit body (*"`star-synth-positional`'s message now MEANS what it
+says"*) and one in a test comment beside it. The three MAJORs:
+· **S1** — ONE message served TWO producers whose truths are COMPLEMENTARY, so
+  each falsified a different half of one sentence and one falsified the REMEDY: a
+  KEYED row was told "no keys to draw from" with its key right there, and a
+  nat-domain layer was told "use bare `*` to flatten positionally" while bare `*`
+  joined it KEYWISE in the same run. ⭐ The adjudicator CORRECTED a lens on the
+  fix: threading `keys` into the sibling arm is not the cure ([Q_U49] keeps a
+  vector join one keyless component), so the KIND is split — no key to prefix
+  WITH vs no FIELDS to prefix — and both now render the LAYER, which this was the
+  one star kind not to do.
+· **S2** — the ω branch tested the cont in its FIRST sub-arm only, so five
+  siblings handed `*_` bare `*`'s message VERBATIM (`homog:cfg*` and
+  `homog:cfg*_` were BYTE-IDENTICAL). ⭐ Fixed with ONE arm at the branch head,
+  not five: an ω layer IS a `PVec`, so Q_U41 holds for every sub-case.
+· **S3** — `*_`'s collision reported bare `*`'s reason, which the same run
+  disproves (the contents carry DIFFERENT keys and bare `*` joins fine). The
+  value twin got a synthesis-specific escape at B1b and the USER-FACING type twin
+  did not.
+Also: **`star-nominal` RETIRED** — zero producers, and its message still said the
+synthesis rule "is not yet ruled". ⭐ It stayed green because the battery's render
+loop PRODUCES every kind by hand — **rendering a kind proves nothing about
+whether anything produces it**. And **two landmines sitting directly under B2b**:
+the PARKED pin's invalid `\*` escape (unparking it would make the battery fail to
+READ) and `p4e1-star-class`'s identity test (a genuine `*_` leak would classify
+`'gone` and PASS — the one gate the name-prefix trick cannot rescue).
+
+⚠ **THE INSTRUMENT'S OWN HEADROOM IS BEING SPENT FAST.**
+`test-path-selection.rkt` measured **145.5s** at the end of this arc, against
+121.9s two arcs ago and the 300s limit `a4cbe7b8` installed. Battery 539 → 550.
+At ~24s per slice the headroom bought at `a4cbe7b8` is ~6 slices, not indefinite.
+
 <a id="p4e-1b-v"></a>
 
 ##### §5.P4e-1b-v — the grounding audit  (2026-08-13, `wf_cc1a72a0-75b` — 4 facets + a completeness critic that had to be RE-RUN after the first crashed)
@@ -9733,7 +9788,7 @@ moves, `walk-to-leaf` is the abort it lands in.
 | **1b-iv-B1** ✅ `714607dc` | **The nominal join lands in BOTH twins, INERT.** ⚠ **This is a SIGNATURE change, not an arm addition** — both twins DISCARD the layer's keys before joining (typing maps `record-field-type` over fields; reduction's `champ-values/canonical` ends `(map cdr …)`), and a keywise join needs them. So: a keyed-contents channel in both, the keywise join itself, and the content-vs-content collision refusal at the join. Still unreachable — the nominal refusal arm stays ahead of it. | The B1 shape that finally worked for 1b-iii after two reverts: semantics atomic across the twins, verified by direct call, zero surface change. |
 | **1b-iv-B2** ✅ `0e2f5af7` | **THE SPLICE GOES LIVE.** Remove the nominal shield for the DECIDABLE case; splice at the callers — free at Seat A (`star-branch-entries` already returns a component list; the dissolve route delegates to it) and a `select-steps-star-tail?` test at the ord-branch arm for Seat B keyless. [Q_U38](#q-u38)'s splice-vs-sibling and splice-vs-splice checks come FREE at the existing level dup gate. ⚠ `expr-Map` contents split off with their own PERMANENT-refusal kind (no enumerable keys ⇒ never provable, never refutable). | Thin wiring + the E2E that observes it, landing together. |
 | **1b-iv-C (scope flag, NOT this slice)** | `*_` is NOT carried by [Q_U49](#q-u49): its PREFIX SOURCE is under-specified and [Q_U41](#q-u41)'s two worked examples disagree (deleted layer's key vs contents' keys). Needs a ruling before code. Q_U39 separately defers the closer-adjacent band, so Q_U41's own showcase spelling is unreachable anyway. | Named rather than silently deferred. |
-| **1b-v — the `*_` slice** ⬜ | [Q_U39](#q-u39)'s closer-adjacent **mint** (two bare sentinels, `$postfix-star-synth`) **+ `*_`'s SEMANTICS** — the shield lift, [Q_U51](#q-u51)'s prefix join, the **key threading** both twins skip, and the ω/broadcast Record arm's missing cont test. Scoped by [Q_U52](#q-u52): the mint alone would ship a better error message and leave Q_U51's capability non-existent. | The prefix rule is RULED and forced; the mint adds ONE spelling so the sentinel question collapses to two bare atoms. Record: [§5.P4e-1b-v](#p4e-1b-v) |
+| **1b-v — the `*_` slice** 🔄 **A/B1/B1b/B2a + verify SHIPPED; B2b (the mint) remains** | [Q_U39](#q-u39)'s closer-adjacent **mint** (two bare sentinels, `$postfix-star-synth`) **+ `*_`'s SEMANTICS** — the shield lift, [Q_U51](#q-u51)'s prefix join, the **key threading** both twins skip, and the ω/broadcast Record arm's missing cont test. Scoped by [Q_U52](#q-u52): the mint alone would ship a better error message and leave Q_U51's capability non-existent. | The prefix rule is RULED and forced; the mint adds ONE spelling so the sentinel question collapses to two bare atoms. Record: [§5.P4e-1b-v](#p4e-1b-v) |
 | **1b-vi — the star-COLLAPSE slice** ⬜ | **`*-`** ([Q_U48](#q-u48)) · the **`*-_`** decision · the cont-axis **totality dispatcher** · plus TWO owed rulings [Q_U52](#q-u52) surfaced: what "total collapse" does to a **renamed** ancestor (`^p` and `^` are mutually exclusive spellings of one step), and the **`*->` token boundary** (`>` breaks the identifier, so `x{a*-> b}` would become a `*-` step plus a stray `>`). | Split from 1b-v because those two are RULINGS, not implementation, and because `*-` is the spelling that forces the totality work. |
 | **P4e-2** | the `.*` retirement inventory + [Q_U26](#q-u26) ravel | unchanged |
 
