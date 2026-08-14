@@ -19,6 +19,42 @@
     }
   },
   {
+    "type": "angle_param",
+    "named": true,
+    "fields": {
+      "multiplicity": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "multiplicity",
+            "named": true
+          }
+        ]
+      },
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "type": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "angle_group",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "application",
     "named": true,
     "fields": {},
@@ -2287,6 +2323,10 @@
       "multiple": false,
       "required": true,
       "types": [
+        {
+          "type": "angle_param",
+          "named": true
+        },
         {
           "type": "bare_param",
           "named": true

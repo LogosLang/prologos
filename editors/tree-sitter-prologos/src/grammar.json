@@ -2158,9 +2158,54 @@
         },
         {
           "type": "SYMBOL",
+          "name": "angle_param"
+        },
+        {
+          "type": "SYMBOL",
           "name": "bare_param"
         }
       ]
+    },
+    "angle_param": {
+      "type": "PREC",
+      "value": 2,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "FIELD",
+            "name": "name",
+            "content": {
+              "type": "SYMBOL",
+              "name": "identifier"
+            }
+          },
+          {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "FIELD",
+                "name": "multiplicity",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "multiplicity"
+                }
+              },
+              {
+                "type": "BLANK"
+              }
+            ]
+          },
+          {
+            "type": "FIELD",
+            "name": "type",
+            "content": {
+              "type": "SYMBOL",
+              "name": "angle_group"
+            }
+          }
+        ]
+      }
     },
     "typed_param": {
       "type": "PREC",

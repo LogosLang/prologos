@@ -495,8 +495,23 @@ module.exports = grammar({
 
     typed_param_or_bare: $ => choice(
       $.typed_param,
+      $.angle_param,
       $.bare_param,
     ),
+
+    // `[iv <Interval>]` — a parameter typed with an ANGLE GROUP and NO colon.
+    //
+    // `typed_param` requires the colon (`[iv : Interval]`), so this spelling —
+    // 136 corpus lines — could not parse.  It fails as `MISSING "]"`, because
+    // the parser closes the param list early and then hunts for a bracket that
+    // is already spent; recovery then swallows forward.  In lattices.prologos
+    // that one line cost an 8,024-byte ERROR spanning 216 lines (31% of the
+    // file), attributed by the tooling to a `defn` 30 lines above it.
+    angle_param: $ => prec(2, seq(
+      field('name', $.identifier),
+      optional(field('multiplicity', $.multiplicity)),
+      field('type', $.angle_group),
+    )),
 
     typed_param: $ => prec(2, seq(
       field('name', $.identifier),
