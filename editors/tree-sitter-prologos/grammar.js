@@ -940,7 +940,16 @@ module.exports = grammar({
     // ============================================================
 
     // Supports both dot-separated (prologos.data.nat) and :: separated (prologos::data::nat)
-    qualified_name: $ => /[a-zA-Z_][a-zA-Z0-9_.\-]+(::[\$a-zA-Z_][a-zA-Z0-9_.\-]*)*/,
+    // NOTE the `*` on the first segment, not `+`.
+    //
+    // It was `+`, which requires a first char PLUS ONE MORE — so the FIRST
+    // segment had to be at least two characters and `a::b` was unparseable
+    // while `ab::c` parsed.  Nothing to do with how many segments there are,
+    // which is what the deferred note recorded and what the original probe
+    // (`a::b` vs `prologos::data::nat`) made it look like: those differ in
+    // segment count AND in first-segment length, and only the latter mattered.
+    // `identifier` right below already uses `*` correctly.
+    qualified_name: $ => /[a-zA-Z_][a-zA-Z0-9_.\-]*(::[\$a-zA-Z_][a-zA-Z0-9_.\-]*)*/,
 
     identifier: $ => /\$?[a-zA-Z_][a-zA-Z0-9_!?*+\-']*(::[\$a-zA-Z_][a-zA-Z0-9_!?*+\-']*)*/,
 

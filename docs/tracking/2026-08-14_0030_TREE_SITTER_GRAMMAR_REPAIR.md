@@ -31,6 +31,7 @@ ARROW (2026-08-05), Rel T1 (2026-07-25) — and the grammar has not.
 | P5g | **Inline paren match arms** (`match h (pat -> body)`) - the `fio` swallow | done | **Swallows 2 -> 1**, worst 51% -> **31%**; fio's worst error 1852 B -> **156 B** - see 5.P5g |
 | P5h | **`impl` paren type args** — the `lattices` swallow | ✅ | **SWALLOWS 1 → 0**; worst 31% → **13%**; bytes 2.6% → **1.8%** — [§5.p5h](#p5h) |
 | P5i | **Map literals** via a `_map_open` scanner token — the contested `{` | ✅ | Plain rule regressed (swallows 0→2); lexical split holds swallows at **0**, bytes 1.8% → **1.7%** — [§5.p5i](#p5i) |
+| P5j | `qualified_name` first segment could not be 1 char (`a::b`) | ✅ | Deferred note's diagnosis was WRONG — not segment COUNT, first-segment LENGTH. Corpus byte-identical — [§5.p5j](#p5j) |
 | P6 | Re-baseline, regenerate, reinstall, font-lock check | ⬜ | `install.sh`; then unblock SURF T1 |
 | P7 | TSG T1.close — gate wiring, DEFERRED triage, PIR-lite | ⬜ | Consider adding the gate to pre-commit |
 
@@ -949,6 +950,40 @@ the scanner on one character of lookahead**, so the parser never chooses. Used
 for same-line `defn` (P5f) and map literals here. Both landed with no conflict
 declarations; both had rule-shaped predecessors that collapsed recovery.
 
+<a id="p5j"></a>
+### 5.P5j — `qualified_name`'s first segment
+
+```
+qualified_name: /[a-zA-Z_][a-zA-Z0-9_.\-]+(::…)*/
+                                          ^ `+`, not `*`
+```
+
+A first character **plus one or more** — so the FIRST segment had to be at least
+two characters. `a::bc` was unparseable; `ab::c` parsed. `identifier`, one line
+below, already used `*` correctly.
+
+⚠ **The deferred note recorded the wrong cause.** It said two-segment names fail
+where three-segment ones parse — because the original probe compared `a::b`
+against `prologos::data::nat`, which differ in segment *count* **and** in
+first-segment *length*. Only the latter mattered: `a::b::c` (three segments)
+fails too, and `ab::c` (two segments) is fine. A differential needs to vary ONE
+thing; that one varied two, and the note propagated the wrong one for four
+phases.
+
+Fixed by `+` → `*`. Probes: `a::bc`, `a::b::c`, `ns a::b` all 3→**0**; no
+regression in 1/2/3-segment `ns`, real `require`, multi-group `require`,
+`imports`, or qualified calls.
+
+**Corpus byte-identical** (clean 34, swallows 0, worst 13%, 1.7%) — no real
+module path has a single-character first segment.
+
+**On the "revert anything that measures flat" rule**: this stays. That rule is
+about changes that fail *their own target* and measure flat (`paren_type`, the
+`param_list` split — neither fixed what it was for). This one demonstrably fixes
+its target and regresses nothing; the corpus simply cannot show it, exactly as
+with `let` at P2. **Flat corpus + passing probe = keep; flat corpus + failing
+probe = revert.**
+
 ---
 
 ## 6. Deferred / discovered
@@ -957,7 +992,6 @@ declarations; both had rule-shaped predecessors that collapsed recovery.
 - `defr` bare-head `&>` continuation form (paren-goal form works).
 - `:laws` blocks inside traits (`- :name/:forall/:holds`) — the `:forall` cluster.
 - `foreign` with `:as alias : Type -> Type` inside the bracket group - fio's residual.
-- Two-segment qualified names `a::b` (three-segment ones are fine).
 - `<(Type 0)>` — parenthesised type inside an angle type. A naive `paren_type` did NOT fix it (see §5.P3b); needs real diagnosis.
 - `[x : Bool y : Bool]` — SPACED typed params, several in one list: `type_application` greedily takes `Bool y`. The fused `[x:Int]` form is fine.
 - `do` bindings (`[do [x := 1] x]`) — 1 → 2 errors after P2; pre-existing, absent from lib.
