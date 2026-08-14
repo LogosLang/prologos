@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { Parser, Language, Query } from 'web-tree-sitter';
+import { Parser, Language, Query, Node } from 'web-tree-sitter';
 
 /**
  * Tree-sitter-driven semantic highlighting.
@@ -58,6 +58,34 @@ export const LEGEND = new vscode.SemanticTokensLegend(
   ['declaration', 'readonly', 'defaultLibrary'],
 );
 
+/**
+ * True when NODE sits inside (or is) an ERROR subtree.
+ *
+ * Where the parse is known-wrong, trusting it produces *confidently wrong*
+ * colour, which is worse than none: TextMate still covers the region, so
+ * suppressing here degrades to the status quo rather than to nothing.
+ *
+ * The concrete case (TSG T1 §9.3): a doubled `]` in `foray.prologos` puts the
+ * region in ERROR, and `type_application` — `prec.left(2, seq(identifier,
+ * repeat1(...)))`, with no extent bound — then absorbs every identifier-shaped
+ * token across SIX lines, including a `def` keyword. The query faithfully
+ * painted all of it `@type`. Note the multi-line guard below does not catch
+ * this: the runaway node is multi-line, but the captures are its single-line
+ * identifier children.
+ *
+ * This bounds the blast radius of every future grammar gap, not just that one.
+ *
+ * ⚠ `isError`, walking ANCESTORS — deliberately not `hasError`, which is true
+ * for any node with a bad descendant and would therefore be true at the root of
+ * every imperfect file, suppressing the entire document.
+ */
+function insideErrorSubtree(node: Node): boolean {
+  for (let n: Node | null = node; n; n = n.parent) {
+    if (n.isError) return true;
+  }
+  return false;
+}
+
 export class PrologosSemanticTokens implements vscode.DocumentSemanticTokensProvider {
   private parser: Parser | undefined;
   private query: Query | undefined;
@@ -113,6 +141,11 @@ export class PrologosSemanticTokens implements vscode.DocumentSemanticTokensProv
         ?? CAPTURE_MAP.get(cap.name.split('.').slice(0, -1).join('.'))
         ?? CAPTURE_MAP.get(cap.name.split('.')[0]);
       if (!mapping) continue;
+
+      // Known-wrong parse: leave the region to TextMate rather than colouring
+      // it confidently wrong.  Checked BEFORE claiming, so a suppressed capture
+      // does not block a later valid one at the same offset.
+      if (insideErrorSubtree(cap.node)) continue;
 
       const start = cap.node.startIndex;
       if (claimed.has(start)) continue;

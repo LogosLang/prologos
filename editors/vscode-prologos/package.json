@@ -40,6 +40,70 @@
         "path": "./syntaxes/prologos.tmLanguage.json"
       }
     ],
+    "semanticTokenScopes": [
+      {
+        "language": "prologos",
+        "scopes": {
+          "keyword": [
+            "keyword.control.prologos"
+          ],
+          "function": [
+            "entity.name.function.prologos"
+          ],
+          "function.defaultLibrary": [
+            "support.function.prologos"
+          ],
+          "variable": [
+            "variable.other.prologos"
+          ],
+          "variable.readonly": [
+            "constant.language.prologos"
+          ],
+          "variable.readonly.defaultLibrary": [
+            "constant.language.prologos"
+          ],
+          "parameter": [
+            "variable.parameter.prologos"
+          ],
+          "type": [
+            "support.type.prologos"
+          ],
+          "type.defaultLibrary": [
+            "support.type.prologos"
+          ],
+          "type.declaration": [
+            "entity.name.type.prologos"
+          ],
+          "enumMember": [
+            "constant.language.prologos"
+          ],
+          "number": [
+            "constant.numeric.prologos"
+          ],
+          "string": [
+            "string.quoted.double.prologos"
+          ],
+          "comment": [
+            "comment.line.semicolon.prologos"
+          ],
+          "operator": [
+            "keyword.operator.prologos"
+          ],
+          "namespace": [
+            "entity.name.namespace.prologos"
+          ],
+          "property": [
+            "variable.other.property.prologos"
+          ],
+          "macro": [
+            "entity.name.function.macro.prologos"
+          ],
+          "label": [
+            "constant.other.keyword.prologos"
+          ]
+        }
+      }
+    ],
     "snippets": [
       {
         "language": "prologos",

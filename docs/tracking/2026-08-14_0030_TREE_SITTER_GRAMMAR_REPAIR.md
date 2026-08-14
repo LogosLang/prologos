@@ -1096,11 +1096,38 @@ font-lock through **inline** `treesit-font-lock-rules` (3 sites in
 the queries serves both editors, and would let `prologos-ts-mode` eventually
 move onto the shared `.scm`.
 
-### 9.1 Open: the queries are SPARSE
+### 9.1 ✅ Queries filled out (2026-08-14)
 
-`highlights.scm` mentions **44 of the grammar's 111 named node types**. It was
-repaired to *compile* (§ commit `591468ca`) but not extended. This is the
-principal quality gap and the next piece of work.
+`highlights.scm` mentioned **43 of 111** named node types; now **56**, and
+**zero** word-like grammar tokens are left uncaptured. Added: `defr_form` +
+`defr` + the relational operators `&>` `||` `=` · `trait_method` names ·
+`let_binding` names · `map_literal` keys · `angle_param` · `type_arg_group` ·
+the `operator` / `arrow_op` / `compose_op` / `linear_arrow` atoms ·
+`trait_metadata` / `law_entry`.
+
+**Two invariants are now written into the file's header, because breaking
+either fails SILENTLY:**
+
+1. **Leaf-only.** Capture leaves, never containers. VS Code's
+   `SemanticTokensBuilder` requires NON-OVERLAPPING tokens, so capturing
+   `(angle_group)` *and* the identifier inside it emits two overlapping ranges;
+   and a container capture paints its whole extent one colour, which is §9.3's
+   runaway bug reproduced deliberately. `(angle_group (identifier) @type)` was
+   also simply invalid — `angle_group`'s children are `expression` /
+   `typed_binder_paren`, no direct identifier.
+2. **First match wins by FILE ORDER, not specificity.** Two rules were written
+   below the general rule they were meant to beat and were therefore VACUOUS —
+   they compiled and never fired: `(map_literal key: …)` under
+   `(keyword_literal)`, and the two `let_binding` rules under `(bare_param …)`.
+   Both hoisted. ⚠ Caught only by asserting that captures actually APPEAR on
+   real snippets; compiling proves nothing about matching.
+
+Verified by capture test: a `let` binding name is now `@variable` while a `defn`
+parameter stays `@variable.parameter` — the structural distinction TextMate
+cannot make, which is the whole point of the layer.
+
+Deliberately NOT captured: the ubiquitous `[` `]` `(` `)` `{` `}` brackets —
+highest-noise, lowest-information, and TextMate already colours them.
 
 <a id="hl-issue-1"></a>
 ### 9.2 Issue 1 — keywords lost their distinct colour
@@ -1110,7 +1137,8 @@ who colours them: **semantic tokens are coloured by the theme's SEMANTIC rules**
 which are typically less specific than the TextMate scopes the tmLanguage was
 hitting (`keyword.control.prologos` and friends).
 
-**Fix direction**: add `contributes.semanticTokenScopes` to `package.json`,
+**✅ FIXED 2026-08-14** — 19 mappings added. Original direction:
+add `contributes.semanticTokenScopes` to `package.json`,
 mapping each semantic token type to the TextMate scope the theme already styles.
 That makes themes without semantic rules fall back to the right colours instead
 of a generic one. Do NOT solve it by dropping `@keyword` captures — that would
@@ -1149,6 +1177,46 @@ including the `def` KEYWORD on L149. The query then faithfully paints all of it
    context where nothing closed. Riskier (it is a hot rule) and should be
    measured by swallow count, per the usual discipline.
 
+**✅ (1) DONE 2026-08-14** — `insideErrorSubtree` in `semanticTokens.ts`.
+⚠ It walks ANCESTORS checking `isError`, deliberately not `hasError`, which is
+true for any node with a bad descendant and would therefore be true at the root
+of every imperfect file — suppressing the whole document. (2) remains open.
+
 Recommend (1) first: it is a provider change, measurable by eye, and it makes
 highlighting degrade gracefully on exactly the half-written code an editor
 spends its time in.
+
+<a id="hl-issue-3"></a>
+### 9.4 NEW — multi-entry map literals parse with the WRONG STRUCTURE
+
+Found 2026-08-14 while verifying the `map_literal` capture. `{:name "a" :age 3}`
+parses as **one** key/value pair whose value swallows the rest:
+
+```
+field=key    keyword_literal  ":name"
+field=value  expression       "\"a\" :age 3"      <-- swallows both later tokens
+```
+
+The rule reads correctly —
+`repeat(seq(field('key', $.keyword_literal), field('value', $.expression)))` —
+but `$.expression` includes `application`, and juxtaposition IS application, so
+the value greedily takes everything to the closing brace.
+
+⚠⚠ **This is INVISIBLE to the corpus gate.** It produces no `ERROR` and no
+`MISSING` node: the parse succeeds, it is merely *wrong*. Swallow count and
+unparsed-% cannot see it. That is a real limit of the instrument this track
+built, and worth stating plainly — the gate measures whether text parses, not
+whether the tree it produces is right.
+
+**Not rare**: 522 multi-entry vs 285 single-entry map literals in the corpus.
+
+**Impact**: mild for highlighting (only the first key gets `@property`; later
+keys fall back to `@constant.other`). Larger for **SURF T1**, which will
+navigate this tree — a map's entries are not siblings, so sibling motion inside
+a map literal is wrong.
+
+**Likely fix**: narrow the `value:` field from `$.expression` to an
+application-free choice (atom / grouped / paren / angle), since a Prologos map
+value is a single term — `{:k [f x]}` uses brackets. NOT attempted here: TSG T1
+is closed, `{` is contested territory (P5i needed a scanner token), and any
+grammar change must be measured by swallow count. Filed for an owner decision.

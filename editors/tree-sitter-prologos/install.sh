@@ -74,13 +74,25 @@ mv -f "$DEST/.$LIB.incoming.$$" "$DEST/$LIB"
 # emsdk is not on PATH by default; source its emsdk_env.sh first if you want it.
 WASM="tree-sitter-prologos.wasm"
 VSCODE_GRAMMARS="../vscode-prologos/grammars"
+VSCODE_QUERIES="../vscode-prologos/queries"
+
+# highlights.scm is PLAIN TEXT and has nothing to do with wasm, so its copy is
+# NOT gated on emcc.  It used to be, inside the branch below, which meant
+# editing the queries and running this script without emsdk sourced left the
+# extension on a STALE .scm and said nothing — the same silent-drift failure
+# this script exists to prevent, one level down.  Caught 2026-08-14 by hashing
+# source against deployed.
+if [ -d "$VSCODE_QUERIES" ] || mkdir -p "$VSCODE_QUERIES"; then
+  cp queries/highlights.scm "$VSCODE_QUERIES/highlights.scm"
+  echo "==> installed highlights.scm to $VSCODE_QUERIES/"
+fi
+
 if command -v emcc >/dev/null 2>&1; then
   echo "==> building $WASM (emcc found)"
   "$TS" build --wasm
   if [ -d "$VSCODE_GRAMMARS" ] || mkdir -p "$VSCODE_GRAMMARS"; then
     cp "$WASM" "$VSCODE_GRAMMARS/$WASM"
-    cp queries/highlights.scm "../vscode-prologos/queries/highlights.scm" 2>/dev/null || true
-    echo "    installed to $VSCODE_GRAMMARS/ (+ highlights.scm)"
+    echo "    installed to $VSCODE_GRAMMARS/"
   fi
 else
   echo "==> skipping wasm (emcc not on PATH — Emacs does not need it)"
