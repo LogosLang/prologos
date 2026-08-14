@@ -629,9 +629,15 @@
     ;; ⚠ It must NOT fall to `star-synth-positional`, whose message asserts the
     ;; layer is positional — false for a Map layer, and the exact twin-drift
     ;; defect 1b-iv-A fixed.
-    [(star-nominal)
-     (format "select: `~a` — `*_` (flatten with synthesized keys) is not implemented yet for Map-valued contents (layer `~a`). Its key-synthesis rule is not yet ruled: it is undecided whether the synthesized prefix comes from the deleted layer's key or from the contents' own keys. Whether bare `*` flattens this same layer depends on its contents — try it"
-             label (pp-expr row names))]
+    ;; ⚠⚠ `star-nominal` IS RETIRED (1b-v-B2a verify, S6). It had ZERO producers
+    ;; — its last one was replaced when B2a removed the shield — and its surviving
+    ;; message still asserted that `*_`'s key-synthesis rule "is not yet ruled",
+    ;; which is exactly what [Q_U51] settled and B2a implemented. A dead arm with
+    ;; a FALSE message is worse than no arm: the `[else]` trapdoor below REPORTS
+    ;; loudly, so an unexpected kind is visible, whereas this one would have
+    ;; answered confidently and wrongly if anything ever reached it.
+    ;; ⚠ It stayed green because the battery's render loop PRODUCES every kind by
+    ;; hand — rendering a kind proves nothing about whether anything produces it.
     [(star-hetero)
      (format "select: `~a` — `*` (flatten) is not implemented yet for MIXED element types: the layer `~a`'s vectors do not share one element type, and the union join is not landed"
              label (pp-expr row names))]
@@ -697,9 +703,43 @@
      ;; user wrote — every star message names `*`.
      (format "select: `~a` — `*` (flatten) needs the layer's full contents, and `~a`'s row is not fully known (an open `'dyn` tail, or fields not provably present); ~a"
              label (pp-expr row names) remedies)]
+    ;; ⚠⚠ 1b-v-B2a VERIFY — THIS WAS ONE MESSAGE SERVING TWO PRODUCERS WHOSE
+    ;; TRUTHS ARE COMPLEMENTARY, so each falsified a different half of the same
+    ;; sentence, and one of them falsified the REMEDY. Measured before the split:
+    ;;   · `veccy{a*_}` on `{:a [PVec Int]}` — a KEYED row — was told "this layer
+    ;;     is positional … there are no keys to draw from". False: `:a` is right
+    ;;     there. What is actually missing is FIELDS to prefix, because Q_U49
+    ;;     makes a vector join ONE KEYLESS component.
+    ;;   · `rowsn:cfg*_` on a nat-domain layer with RECORD contents was told
+    ;;     "(its contents join into a vector)" and "Use bare `*` to flatten
+    ;;     positionally" — and bare `*` on that very expression joins KEYWISE
+    ;;     into a Map. The remedy described the opposite of what it does.
+    ;; ⭐ B2a threaded the `keys` channel into the NOMINAL-contents arm and not
+    ;; its VECTOR-contents sibling — the one-seat-not-the-sibling shape again, and
+    ;; the commit that shipped it claimed this message "now MEANS what it says".
+    ;; ⚠ Threading `keys` into the sibling arm is NOT the fix: Q_U49 says a vector
+    ;; join stays one keyless component, so `*_` must still refuse there — only
+    ;; the wording would change. The kinds are split instead, and BOTH now render
+    ;; the LAYER (this was the one star kind whose format string had no `~a` for
+    ;; it, so it asserted a property of something it never showed).
+    ;; ⚠⚠ 1b-v-B2a VERIFY — `*_`'s COLLISION IS ITS OWN KIND. It reported bare
+    ;; `*`'s `star-content-collision`, which says "two of them carry the same
+    ;; key" — measurably false for `*_`: on `cdup:cfg*_` the contents carry `:c`
+    ;; and `:b-c`, and bare `*` joins that same layer FINE. What collides is what
+    ;; `*_` BUILDS. [Q_U38] predicted this population exactly ("`*_` removes
+    ;; collisions in the ORDINARY case, not universally"), so the message names
+    ;; the synthesized key and offers the remedy that actually applies.
+    [(star-synth-collision)
+     (format "select: `~a` — `*_` prefixes each content's fields with the key that content sat under, and two contents of `~a` synthesize the SAME key, so the join would silently drop one. Their own field names differ — it is the prefixed forms that meet. Rename one content with `^k'`, or select them separately"
+             label (pp-expr row names))]
     [(star-synth-positional)
-     (format "select: `~a` — `*_` synthesizes keys from the deleted layer's KEYS, and this layer is positional (its contents join into a vector): there are no keys to draw from. Use bare `*` to flatten positionally"
-             label)]
+     ;; the layer's contents sit at POSITIONS — there is no key to prefix WITH.
+     (format "select: `~a` — `*_` prefixes each lifted field with the key its content sat under, and this layer's contents sit at POSITIONS, not keys (layer `~a`): there is nothing to prefix with. Bare `*` joins these contents directly"
+             label (pp-expr row names))]
+    [(star-synth-vector-contents)
+     ;; the layer HAS keys, but its contents are vectors — no FIELDS to prefix.
+     (format "select: `~a` — `*_` prefixes the FIELDS of each content, and this layer's contents are vectors (layer `~a`), which concatenate into one keyless component: there are no fields to prefix. Use bare `*`"
+             label (pp-expr row names))]
     ;; ⭐ 1b-iii-C2 RE-SCOPED THIS KIND. It used to refuse EVERY depth-≥2 star
     ;; while the layer question was unruled; [Q_U46]/[Q_U47] ruled it and the
     ;; shield came out, so the kind now guards exactly the gap the ruling

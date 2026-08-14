@@ -1782,9 +1782,20 @@
                        (fail-k 'star-hetero l)]
                       [else (fail-k 'star-leaf l)])]
                    [(eq? (select-star-cont star) 'flatten-synth)
-                    ;; Q_U41: `*_` is NOMINAL-ONLY — provenance comes from the
-                    ;; deleted layer's KEYS, and vector contents have none.
-                    (fail-k 'star-synth-positional l)]
+                    ;; Q_U41: `*_` is NOMINAL-ONLY. ⚠⚠ 1b-v-B2a VERIFY — THIS ARM
+                    ;; IGNORED `keys`, so a KEYED layer whose contents happen to
+                    ;; be vectors (`{:a [PVec Int]}`) was told "this layer is
+                    ;; positional … no keys to draw from", which is false: `:a` is
+                    ;; right there. B2a threaded `keys` into the NOMINAL bucket
+                    ;; above and not into this sibling.
+                    ;; ⭐ The distinction is REAL, not cosmetic, and each half has
+                    ;; a DIFFERENT true remedy: with no keys there is nothing to
+                    ;; prefix WITH; with keys but vector contents there are no
+                    ;; FIELDS to prefix, because Q_U49 makes a vector join one
+                    ;; keyless component. `keys` decides which.
+                    (if keys
+                        (fail-k 'star-synth-vector-contents l)
+                        (fail-k 'star-synth-positional l))]
                    [(not (let ([es (map (lambda (c) (expr-PVec-elem-type (whnf c)))
                                         contents)])
                            (andmap (lambda (e) (equal? e (car es))) es)))
@@ -1824,12 +1835,24 @@
                   ;; the ω container: ONE element type stands for every content.
                   (let ([e (whnf (expr-PVec-elem-type l))])
                     (cond
+                      ;; ⚠⚠ 1b-v-B2a VERIFY — HOISTED. The cont was tested in the
+                      ;; FIRST sub-arm only, so the other five handed `*_` bare
+                      ;; `*`'s message VERBATIM: measured, `homog:cfg*` and
+                      ;; `homog:cfg*_` were BYTE-IDENTICAL, and one of the borrowed
+                      ;; messages says "not implemented yet" for a case [Q_U41]
+                      ;; rejects PERMANENTLY while another gives a collision
+                      ;; argument that is not why `*_` fails.
+                      ;; ⭐ ONE arm covers all six, and it is TRUE for all six: an ω
+                      ;; layer IS a `PVec`, so its contents sit at POSITIONS in
+                      ;; every sub-case and `*_` never has a key to prefix with.
+                      ;; That is [Q_U41] stated once at the level where it holds,
+                      ;; rather than six times where five were forgotten.
+                      [(eq? (select-star-cont star) 'flatten-synth)
+                       (fail-k 'star-synth-positional l)]
                       [(expr-PVec? e)
-                       (if (eq? (select-star-cont star) 'flatten-synth)
-                           (fail-k 'star-synth-positional l)
-                           ;; concat of n `[PVec T]` is `[PVec T]` — spec §3.5's
-                           ;; ω·ω→ω, `rowsv:tags*`'s type collapse. BARE (C1).
-                           (values (expr-PVec (expr-PVec-elem-type e)) #f))]
+                       ;; concat of n `[PVec T]` is `[PVec T]` — spec §3.5's
+                       ;; ω·ω→ω, `rowsv:tags*`'s type collapse. BARE (C1).
+                       (values (expr-PVec (expr-PVec-elem-type e)) #f)]
                       [(and (expr-Record? e) (eq? (expr-Record-key-domain e) 'nat))
                        ;; tuple elements: the concatenated arity is (tuple arity ×
                        ;; runtime length), which no static type carries.
@@ -2004,7 +2027,16 @@
                     (if (hash-ref seen sk #f)
                         ;; two SYNTHESIZED keys collided — rare, and exactly the
                         ;; case Q_U38 says the machinery still has to cover.
-                        (fail-k 'star-content-collision l)
+                        ;; ⚠⚠ 1b-v-B2a VERIFY: this reported bare `*`'s
+                        ;; `star-content-collision`, whose prose says "two of them
+                        ;; carry the same key" — MEASURABLY FALSE here. On
+                        ;; `cdup:cfg*_` the contents carry `:c` and `:b-c`
+                        ;; (DIFFERENT keys) and bare `*` joins that same layer
+                        ;; FINE; it is the SYNTHESIZED keys that collide. The
+                        ;; value twin got a synthesis-specific escape at B1b and
+                        ;; the USER-FACING type twin did not — one seat, not its
+                        ;; sibling, and the user-facing half was the one missed.
+                        (fail-k 'star-synth-collision l)
                         (inner (cdr fs)
                                (cons (cons sk (cdr (car fs))) acc)
                                (hash-set seen sk #t))))]))])))))

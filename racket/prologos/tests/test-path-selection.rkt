@@ -7369,10 +7369,13 @@
                                                           (list (cons 'a (record-field B1-PVI 'unknown))) 'closed)
                                          (list (list B1-STAR)) 'path)])
     (check-equal? (tc:select-fail-kind f) 'star-open-row))
-  ;; `*_` over vector contents → Q_U41: nominal-only, names the alternative
+  ;; `*_` over vector contents → Q_U41: nominal-only, names the alternative.
+  ;; ⚠ 1b-v-B2a VERIFY split this kind. The layer here is `{:a [PVec Int]}` — it
+  ;; HAS a key, so calling it "positional" was false; what is missing is FIELDS to
+  ;; prefix, because Q_U49 makes a vector join one keyless component.
   (let-values ([(t f) (tc:select-project '() (b1-row (cons 'a (b1-f B1-PVI)))
                                          (list (list B1-STAR-S)) 'path)])
-    (check-equal? (tc:select-fail-kind f) 'star-synth-positional))
+    (check-equal? (tc:select-fail-kind f) 'star-synth-vector-contents))
   ;; heterogeneous element types → needs a union join, not landed
   (let-values ([(t f) (tc:select-project '() (b1-row (cons 'a (b1-f B1-PVI))
                                                      (cons 'b (b1-f (expr-PVec (expr-Keyword)))))
@@ -7449,7 +7452,7 @@
   ;; loop closes that class for the whole axis: every kind must yield a STRING
   ;; mentioning the star, under check-not-exn.
   (define row (b1-row (cons 'a (b1-f B1-PVI))))
-  (for ([kind (in-list '(star-mid-branch star-leaf star-nominal star-hetero
+  (for ([kind (in-list '(star-mid-branch star-leaf star-hetero
                          star-omega-tuple star-not-yet star-open-row
                          star-synth-positional star-l4-mixed star-deep-prefix
                          ;; 1b-iii-C2's new kind. The loop cannot self-report an
@@ -7459,7 +7462,12 @@
                          star-dup-key
                          ;; 1b-iv-B1's two, same obligation, same commit.
                          star-content-collision star-map-opaque
-                         star-omega-nominal))])
+                         star-omega-nominal
+                         ;; 1b-v-B2a verify's two, same obligation, same commit:
+                         ;; the kind split that gave each producer a TRUE message,
+                         ;; and `*_`'s own collision (which had been borrowing bare
+                         ;; `*`'s, whose prose is false for a synthesized clash).
+                         star-synth-vector-contents star-synth-collision))])
     (check-not-exn
      (lambda ()
        (let ([msg (te:format-select-fail (tc:select-fail kind '() 'probe-label row) '())])
@@ -8128,6 +8136,70 @@
                 "{:url \"u\", :pool-size 10} : {:pool-size Int :url String}"
                 "…at every band"))
 
+(test-case "P4e-1b [1b-v-B2a verify]: the `*_` refusals each state a TRUTH — one message, two producers, was falsifiable both ways"
+  ;; ⚠⚠ `star-synth-positional` served TWO producers whose truths are
+  ;; COMPLEMENTARY, so each falsified a different half of one sentence — and one
+  ;; falsified the REMEDY. Split into two kinds; both now render the LAYER, which
+  ;; this was the only star kind not to do.
+  (define V (string-append "ns b2v\n"
+                           "def veccy := {:a @[1 2]}\n"
+                           "def rowsn := @[{:cfg {:a 1}} {:cfg {:b 2}}]\n"
+                           "def homog := @[{:cfg {:a 1}} {:cfg {:a 2}}]\n"))
+  (define (line src) (p4e1-last (string-append V src)))
+
+  ;; (a) a KEYED layer whose contents are VECTORS — it HAS a key (`:a`), so
+  ;;     "no keys to draw from" was false. What is missing is FIELDS to prefix.
+  (define a (line "veccy{a*_}"))
+  (check-true (regexp-match? #rx"contents are vectors" a) (format "got: ~a" a))
+  (check-false (regexp-match? #rx"this layer is positional" a)
+               (format "a keyed layer must NOT be called positional: ~a" a))
+  (check-true (regexp-match? #rx"\\{:a \\[PVec Int\\]\\}" a)
+              (format "…and the layer must be SHOWN, not just asserted about: ~a" a))
+  ;; (b) a POSITIONAL layer with RECORD contents — "its contents join into a
+  ;;     vector" and "use bare `*` to flatten positionally" were both false.
+  (define b (line "rowsn:cfg*_"))
+  (check-true (regexp-match? #rx"sit at POSITIONS, not keys" b) (format "got: ~a" b))
+  (check-false (regexp-match? #rx"join into a vector" b)
+               (format "these contents join KEYWISE — the old parenthetical lied: ~a" b))
+  ;; …and the remedy it now names is the one that WORKS, run here:
+  (check-equal? (line "rowsn:cfg*") "{:a 1, :b 2} : {:a Int :b Int}"
+                "bare `*` joins these keywise — which is what the message now says")
+  ;; (c) the ω branch tested the cont in ONE sub-arm, so `*` and `*_` were
+  ;;     BYTE-IDENTICAL for the other five. They must now differ.
+  (check-false (equal? (line "homog:cfg*") (line "homog:cfg*_"))
+               "`*` and `*_` must not hand the user the same sentence")
+  (check-true (regexp-match? #rx"sit at POSITIONS, not keys" (line "homog:cfg*_"))
+              (format "…and `*_`'s reason is its own: ~a" (line "homog:cfg*_"))))
+
+(test-case "P4e-1b [1b-v-B2a verify]: a SYNTHESIZED-key collision is its own kind — bare `*`'s prose is false for it"
+  ;; The contents carry DIFFERENT field names; only the PREFIXED forms meet. Bare
+  ;; `*` joins this very layer fine, which is what makes the borrowed message
+  ;; ("two of them carry the same key") measurably wrong.
+  (define V (string-append "ns b2c\n"
+                           "def cdup := {:a-b {:cfg {:c 1}} :a {:cfg {:b-c 2}}}\n"))
+  (check-equal? (p4e1-last (string-append V "cdup:cfg*")) "{:c 1, :b-c 2} : {:b-c Int :c Int}"
+                "bare `*` joins the same layer — the contents do NOT share a key")
+  (define out (p4e1-last (string-append V "cdup:cfg*_")))
+  (check-false (p4e1-type (string-append V "cdup:cfg*_"))
+               (format "…but `*_` collides on the synthesized key: ~a" out))
+  (check-true (regexp-match? #rx"synthesize the SAME key" out) (format "got: ~a" out))
+  (check-false (regexp-match? #rx"two of them carry the same key" out)
+               (format "bare `*`'s reason is false here — their own names differ: ~a" out)))
+
+(test-case "P4e-1b [1b-v-B2a verify]: the capability [Q_U51] calls the whole point — per-content prefixes disambiguating a SHARED field"
+  ;; ⚠ The B2a pins covered only SINGLE-content layers, which is Q_U51's own
+  ;; stated reason for rejecting "ship the fused band now" — reproduced inside the
+  ;; pin block. This is the multi-content case, and it is the one that does work
+  ;; a bare `*` cannot: the same field name in two contents, kept apart by
+  ;; provenance.
+  (define V (string-append "ns b2r\n"
+                           "def rmdup := {:eu {:cfg {:x 1}} :us {:cfg {:x 2}}}\n"))
+  (check-false (p4e1-type (string-append V "rmdup:cfg*"))
+               "bare `*` cannot: both contents carry `:x` and one would be dropped")
+  (check-equal? (p4e1-last (string-append V "rmdup:cfg*_"))
+                "{:us-x 2, :eu-x 1} : {:eu-x Int :us-x Int}"
+                "`*_` keeps them apart by prefixing each with the key it sat under"))
+
 (test-case "P4e-1b [1b-v-B2a]: `*_` over a POSITIONAL layer still refuses — [Q_U41], and the message is now TRUE"
   ;; The ω layer here is a TUPLE (`⟨{:a Int} {:b Int}⟩`) — its contents sat at
   ;; INDICES, so there is no key to synthesize from. [Q_U41] is nominal-only.
@@ -8140,8 +8212,14 @@
   (define out (p4e1-last (string-append V src)))
   (check-false (p4e1-type (string-append V src))
                (format "`*_` over a positional layer must refuse: ~a" out))
-  (check-true (regexp-match? #rx"this layer is positional" out)
+  ;; ⚠ 1b-v-B2a VERIFY: the wording moved because the SENTENCE was falsifiable —
+  ;; it served a keyed layer too. This pin asserted the half that was true only
+  ;; here, so it could not have caught that. It now pins the layer-shape claim
+  ;; AND that the message shows the layer it is describing.
+  (check-true (regexp-match? #rx"sit at POSITIONS, not keys" out)
               (format "…naming the true reason: ~a" out))
+  (check-true (regexp-match? #rx"⟨[{]:a Int[}] [{]:b Int[}]⟩" out)
+              (format "…and SHOWING the layer it describes: ~a" out))
   ;; the bare-`*` sibling on the SAME subject still joins — so the refusal is
   ;; about `*_`, not about the shape.
   (check-equal? (p4e1-last (string-append V "rowsn:cfg*")) "{:a 1, :b 2} : {:a Int :b Int}"
@@ -8176,7 +8254,10 @@
                               (cons 'a   (b1-row (cons 'b-c (b1-f (expr-Int))))))
                         boom (b1-row))])
     (check-equal? ty 'FAILED "a synthesized-key collision must still refuse")
-    (check-equal? f 'star-content-collision "…as a collision, not some other kind"))
+    ;; ⚠ 1b-v-B2a VERIFY: `*_`'s collision got its OWN kind. Borrowing bare `*`'s
+    ;; meant borrowing its prose, which says the contents "carry the same key" —
+    ;; false here, and disproved in the same run by bare `*` joining fine.
+    (check-equal? f 'star-synth-collision "…as a SYNTHESIZED-key collision specifically"))
 
   ;; --- the separator is SHARED with `^-_`, not a local choice [Q_U24] ---
   (check-equal? (select-synth-prefixed-key 'eu 'host) 'eu-host)
