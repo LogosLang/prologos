@@ -36,6 +36,9 @@
 ;; REPL integration (autoloaded — only loaded when first invoked)
 (autoload 'prologos-repl "prologos-repl" "Start or switch to the Prologos REPL." t)
 (autoload 'prologos-send-form "prologos-repl" "Send the top-level form at point." t)
+;; Autoloaded too, so the retired name still resolves from a cold Emacs --
+;; the obsolete alias itself lives in prologos-repl.el.
+(autoload 'prologos-eval-last-sexp "prologos-repl" "Obsolete alias for `prologos-send-form'." t)
 (autoload 'prologos-eval-region "prologos-repl" "Evaluate the region." t)
 (autoload 'prologos-eval-buffer "prologos-repl" "Evaluate the entire buffer." t)
 (autoload 'prologos-load-file "prologos-repl" "Load current file into REPL." t)
