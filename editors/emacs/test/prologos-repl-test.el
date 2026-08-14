@@ -203,6 +203,68 @@ moving point erased the answer.  Nothing but an edit should clear it."
       (insert " ")
       (should (= (length prologos--result-overlays) 0)))))
 
+(ert-deftest prologos-repl-test/result-cleared-on-keyboard-quit ()
+  "C-g dismisses results without touching the text."
+  (prologos-repl-test--in-buffer "def a := 1"
+    (goto-char (point-max))
+    (prologos--display-inline-result "1 : Int" (point) 1 (point))
+    (should (= (length prologos--result-overlays) 1))
+    (let ((before (buffer-string)))
+      (condition-case nil (keyboard-quit) (quit nil))
+      (should (= (length prologos--result-overlays) 0))
+      (should (string= before (buffer-string))))))
+
+(ert-deftest prologos-repl-test/quit-advice-is-installed ()
+  "Every command in `prologos-clear-results-commands' carries the advice.
+Includes ones Evil defines, which may not be loaded here -- advice-add
+accepts an undefined symbol and applies when it is defined."
+  (dolist (cmd prologos-clear-results-commands)
+    (should (advice-member-p #'prologos--clear-results-on-quit cmd))))
+
+(ert-deftest prologos-repl-test/quit-clear-is-buffer-local ()
+  "A quit in one buffer must not wipe another buffer's results.
+Aborting an unrelated prompt should leave results you are still reading."
+  (let ((other (generate-new-buffer "*prologos-other*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer other
+            (insert "def b := 2")
+            (prologos-mode)
+            (prologos--display-inline-result "2 : Int" (point-max)
+                                             1 (point-max))
+            (should (= (length prologos--result-overlays) 1)))
+          ;; Quit from a DIFFERENT buffer.
+          (with-temp-buffer (condition-case nil (keyboard-quit) (quit nil)))
+          (with-current-buffer other
+            (should (= (length prologos--result-overlays) 1))))
+      (kill-buffer other))))
+
+(ert-deftest prologos-repl-test/unload-function-strips-advice ()
+  "Unloading must remove the advice, or every C-g in the session breaks.
+
+`unload-feature' unbinds `prologos--clear-results-on-quit' but leaves
+advice installed on `keyboard-quit', so a stale advice reference makes
+C-g fail with `void-function' EVERYWHERE -- not just in Prologos
+buffers.  The reload script unloads this feature, so this is the live
+path, not a hypothetical one."
+  (should (fboundp 'prologos-repl-unload-function))
+  (let ((saved prologos--advised-quit-commands))
+    (unwind-protect
+        (progn
+          (should (advice-member-p #'prologos--clear-results-on-quit
+                                   'keyboard-quit))
+          (prologos-repl-unload-function)
+          (should-not (advice-member-p #'prologos--clear-results-on-quit
+                                       'keyboard-quit))
+          ;; C-g must still behave like a plain quit, not error.
+          (should (eq 'quit (condition-case nil
+                                (progn (keyboard-quit) 'no-signal)
+                              (quit 'quit)
+                              (error 'error)))))
+      ;; Restore for the rest of the suite.
+      (setq prologos--advised-quit-commands saved)
+      (prologos-refresh-clear-results-advice))))
+
 (ert-deftest prologos-repl-test/clear-results-is-a-command ()
   "prologos-clear-results dismisses results without touching the text."
   (prologos-repl-test--in-buffer "def a := 1"
@@ -311,10 +373,11 @@ only matched def/defn/spec/... keywords."
   (should (eq (lookup-key prologos-mode-map (kbd "C-x C-e"))
               'prologos-send-form)))
 
-(ert-deftest prologos-repl-test/mode-map-send-form-super-return ()
-  "s-<return> -- cmd+enter on macOS -- should also send the form.
-This is the binding that makes Emacs match the VS Code extension."
-  (should (eq (lookup-key prologos-mode-map (kbd "s-<return>"))
+(ert-deftest prologos-repl-test/mode-map-send-form-meta-return ()
+  "M-<return> should also send the form.
+The Command key is bound to Meta in this configuration, so this is the
+same physical gesture as cmd+enter in the VS Code extension."
+  (should (eq (lookup-key prologos-mode-map (kbd "M-<return>"))
               'prologos-send-form)))
 
 (ert-deftest prologos-repl-test/mode-map-eval-region ()
@@ -359,10 +422,11 @@ Pinned so a copy-paste of the old keymap cannot quietly bring it back."
   (should (eq (lookup-key prologos-ts-mode-map (kbd "C-x C-e"))
               'prologos-send-form)))
 
-(ert-deftest prologos-repl-test/ts-mode-map-send-form-super-return ()
-  "s-<return> should also send the form in prologos-ts-mode-map."
+(ert-deftest prologos-repl-test/ts-mode-map-send-form-meta-return ()
+  "M-<return> should also send the form in prologos-ts-mode-map.
+Both keymaps must agree; they drifted once already."
   (skip-unless (boundp 'prologos-ts-mode-map))
-  (should (eq (lookup-key prologos-ts-mode-map (kbd "s-<return>"))
+  (should (eq (lookup-key prologos-ts-mode-map (kbd "M-<return>"))
               'prologos-send-form)))
 
 (ert-deftest prologos-repl-test/ts-mode-map-eval-region ()

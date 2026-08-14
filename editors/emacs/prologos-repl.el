@@ -10,7 +10,7 @@
 
 ;; Comint-based REPL integration for Prologos.  Provides:
 ;; - Start/switch to REPL (C-c C-z)
-;; - Send the top-level form at point (C-x C-e, s-<return>)
+;; - Send the top-level form at point (C-x C-e, M-<return>)
 ;; - Evaluate region (C-c C-r)
 ;; - Evaluate buffer (C-c C-k)
 ;; - Load file into REPL (C-c C-l)
@@ -68,6 +68,24 @@
   "Seconds to wait for the REPL's startup banner before giving up.
 A cold REPL loads the prelude, so the first prompt can take a while."
   :type 'number
+  :group 'prologos-repl)
+
+(defcustom prologos-clear-results-commands
+  '(keyboard-quit
+    minibuffer-keyboard-quit
+    keyboard-escape-quit
+    evil-force-normal-state
+    evil-normal-state
+    evil-escape)
+  "Commands that also dismiss inline results.
+Editing always clears results; these are the additional \"done looking
+at that\" gestures -- C-g, and ESC under Evil.
+
+Advice is attached to every symbol listed, INCLUDING ones not defined
+yet, so Evil need not be loaded first.  If ESC runs something else in
+your configuration, add it here and call
+`prologos-refresh-clear-results-advice'."
+  :type '(repeat symbol)
   :group 'prologos-repl)
 
 (defcustom prologos-inline-result-timeout nil
@@ -440,6 +458,57 @@ Results persist until an edit, so this is the way to dismiss them
 without touching the text."
   (interactive)
   (prologos--clear-inline-results))
+
+;; ------------------------------------------------------------
+;; Dismiss on a quit gesture (C-g, ESC)
+;; ------------------------------------------------------------
+;;
+;; ADVICE, not `post-command-hook', and the choice is forced: C-g runs
+;; `keyboard-quit', which SIGNALS.  The signal unwinds past the command
+;; loop's post-command-hook call, so a hook-based check of `this-command'
+;; is not reliably reached.  Advice runs before the signal, always.
+
+(defvar prologos--advised-quit-commands nil
+  "Commands currently carrying `prologos--clear-results-on-quit'.")
+
+(defun prologos--clear-results-on-quit (&rest _)
+  "Advice: dismiss THIS buffer's inline results on a quit gesture.
+Only the current buffer is touched, so aborting an unrelated minibuffer
+prompt with C-g does not wipe results you are still reading elsewhere."
+  (when prologos--result-overlays
+    (prologos--clear-inline-results)))
+
+(defun prologos-refresh-clear-results-advice ()
+  "Sync quit-clearing advice with `prologos-clear-results-commands'.
+Call after customizing that list."
+  (interactive)
+  (dolist (cmd prologos--advised-quit-commands)
+    (unless (memq cmd prologos-clear-results-commands)
+      (advice-remove cmd #'prologos--clear-results-on-quit)))
+  (setq prologos--advised-quit-commands nil)
+  (dolist (cmd prologos-clear-results-commands)
+    ;; advice-add accepts a symbol that is not fbound yet; the advice
+    ;; takes effect if and when the command is defined.
+    (unless (advice-member-p #'prologos--clear-results-on-quit cmd)
+      (advice-add cmd :before #'prologos--clear-results-on-quit))
+    (push cmd prologos--advised-quit-commands)))
+
+(prologos-refresh-clear-results-advice)
+
+(defun prologos-repl-unload-function ()
+  "Strip quit-clearing advice when this feature is unloaded.
+
+NOT optional.  `unload-feature' unbinds
+`prologos--clear-results-on-quit' but leaves the advice installed on
+`keyboard-quit', so without this hook EVERY C-g in the session -- in any
+buffer, Prologos or not -- fails with `void-function'.  The reload
+script unloads this feature, which is exactly when it would bite.
+
+Returning nil lets `unload-feature' proceed with normal unloading."
+  (dolist (cmd prologos--advised-quit-commands)
+    (advice-remove cmd #'prologos--clear-results-on-quit))
+  (setq prologos--advised-quit-commands nil)
+  nil)
 
 ;; ============================================================
 ;; Evaluation commands

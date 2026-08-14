@@ -296,9 +296,10 @@ Prologos .prologos files always use WS mode.")
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-c C-z") #'prologos-repl)
     (define-key map (kbd "C-x C-e") #'prologos-send-form)
-    ;; s-<return> IS cmd+enter on macOS -- the same key the VS Code
-    ;; extension binds to prologos.evalTopLevel.
-    (define-key map (kbd "s-<return>") #'prologos-send-form)
+    ;; M-<return> is the cmd+enter equivalent here: this configuration
+    ;; binds the Command key to Meta, so this is the same physical
+    ;; gesture the VS Code extension binds to prologos.evalTopLevel.
+    (define-key map (kbd "M-<return>") #'prologos-send-form)
     (define-key map (kbd "C-c C-r") #'prologos-eval-region)
     (define-key map (kbd "C-c C-k") #'prologos-eval-buffer)
     (define-key map (kbd "C-c C-l") #'prologos-load-file)
