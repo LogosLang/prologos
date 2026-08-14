@@ -17,7 +17,7 @@ contract well enough that a third editor is a *mapping table*, not a port.
 
 | Phase | Description | Status | Notes |
 |---|---|---|---|
-| P0 | Capture registry: one machine-readable table both consumers read | ⬜ | Kills drift cause 3 — [§3.1](#p0) |
+| P0 | Capture registry + D1 renames (`namespace`->`module`, drop `.other`) | ⬜ | Kills drift cause 3 — [§3.1](#p0), [§D1](#d1). ⚠ verify the standard list upstream FIRST |
 | P1 | Parity harness: one fixture, capture-by-capture, asserted in BOTH | ⬜ | Makes drift *detectable* — [§3.2](#p1) |
 | P2 | Reduce TextMate to a declared, disjoint bootstrap | ⬜ | Kills drift cause 1 — [§3.3](#p2) |
 | P3 | Review `semanticTokenScopes` per capture | ⬜ | Kills drift cause 2; settles the blue/orange class — [§3.4](#p3) |
@@ -180,11 +180,219 @@ headlessly, so the harness is the instrument.
 
 ---
 
-## 5. Open decisions
+## 5. Decisions
 
-- **D1 — vocabulary**: adopt `nvim-treesitter` capture names as the contract
-  (recommended: maximum third-party leverage), or define a Prologos-specific set?
-- **D2 — registry format**: JSON (both read natively) vs generating both
-  mappings from one source at build time. JSON is simpler and has no build step.
-- **D3 — TextMate floor**: how much is the bootstrap allowed to paint? Comments
-  and strings only, or also brackets/delimiters?
+<a id="d1"></a>
+### D1 — vocabulary: ✅ RULED (2026-08-14) — adopt `nvim-treesitter` names
+
+Owner: adopt, and note that community is the likely first third party, so set
+them up well.
+
+**We are closer than expected.** Classified 2026-08-14 — **16 of 20 already
+standard**:
+
+| status | captures |
+|---|---|
+| standard (16) | `attribute` `character` `comment` `constant.builtin` `constructor` `function` `keyword` `number` `operator` `property` `string` `type` `type.builtin` `type.definition` `variable` `variable.parameter` |
+| **deprecated (1)** | `namespace` → **`module`** (nvim renamed it) |
+| custom, standard root (3) | `constant.other` · `variable.other` · `variable.other.hole` |
+
+The three customs are *legal* — the dotted convention means an unknown leaf
+falls back to a standard root, so a consumer that has never heard of them still
+gets a sensible colour. But `.other` carries no meaning. Proposed renames, to
+be settled in P0:
+
+| now | proposed | why |
+|---|---|---|
+| `@namespace` | `@module` | the upstream rename; free correctness |
+| `@constant.other` | `@constant` | `.other` distinguishes it from nothing |
+| `@variable.other` | `@variable.logic` | it is a logic variable (`?x`) — say so |
+| `@variable.other.hole` | `@variable.hole` | typed holes; two levels bought nothing |
+
+⚠ **Renaming is exactly the drift P0 exists to prevent, and proves the case:**
+`@variable` maps to NO face in Emacs on purpose, so `@variable.logic` would fall
+back to *nothing* unless the Emacs map gains an explicit entry in the same
+commit. One rename, two files, silent loss if you forget.
+
+⚠ The standard list above is from the convention as I know it and **must be
+verified against upstream `nvim-treesitter` docs in P0** before we rename
+anything. Getting it wrong is worse than not adopting.
+
+<a id="d2"></a>
+### D2 — registry format: 🔬 OPEN, analysis below
+
+See [§6](#d2-analysis). Owner asked for tradeoffs and worked examples with room
+to deliberate; no recommendation is being forced.
+
+<a id="d3"></a>
+### D3 — TextMate floor: 🔬 OPEN, critique below
+
+See [§7](#d3-critique). Owner's leaning: TextMate as a fallback for when
+tree-sitter is unreachable; strip down, then build back. Invited critique — and
+there is a substantive one, which also **corrects §3.3 of this document**.
+
+---
+
+<a id="d2-analysis"></a>
+## 6. D2 — how should the mapping be shared?
+
+### The question behind the question
+
+A third-party editor **cannot use our mappings**. They can use our *vocabulary*.
+So "share the mapping" splits in two:
+
+- **the vocabulary** — capture names + what each MEANS. Genuinely shared, and
+  the thing a contributor needs.
+- **the per-consumer mapping** — capture → face / token. Inherently one per
+  editor. Putting ours in one file is convenience; it is not shared with anyone.
+
+Whether those live in one file or two is the actual decision.
+
+### Option A — one JSON registry, both consumers read it at runtime
+
+```jsonc
+// queries/captures.json
+{ "variable.parameter": {
+    "doc": "a bound parameter name",
+    "vscode": { "type": "parameter", "modifiers": [] },
+    "emacs":  { "face": "font-lock-variable-name-face" } } }
+```
+Emacs: `json-parse-buffer` at load. VS Code: `readFileSync` + `JSON.parse`.
+
+**For** — one file to edit; no build step; no generated artifact to go stale;
+a contributor reads one file to learn the whole vocabulary.
+**Against** — every consumer's mapping is in a file the other consumer also
+loads, so the file grows a section per editor and nobody's section is where
+their code is; JSON has no comments (workable via `doc`); Emacs gains a runtime
+file dependency (it already has one for `highlights.scm`, so this is marginal).
+
+### Option B — one source, both mappings generated at build time
+
+Source table → emits `captureMap.ts` and `prologos-ts-capture-map.el`.
+
+**For** — native literals, no runtime parse; can validate at generation.
+**Against** — a build step in two languages; **two generated files committed to
+git, which someone will eventually hand-edit** — the classic failure of this
+shape; and a stale generated file is a silent wrong-colour, the exact class we
+are trying to leave. Buys little: the parse it avoids is ~20 entries.
+
+### Option C — the `.scm` carries its own mapping in comments
+
+**For** — literally one file.
+**Against** — abuses the query format, no tooling understands it, and we would
+be hand-parsing comments. Listed to be dismissed.
+
+### Option D — keep two mappings, add a completeness TEST
+
+No new format. A test asserts every capture in `highlights.scm` resolves in
+both `CAPTURE_MAP` and `prologos-ts--capture-faces`.
+
+**For** — smallest change; each mapping stays next to the code that uses it;
+**and this test is needed under every option anyway**.
+**Against** — no single place to read the vocabulary, so the contributor story
+is "read two files in two languages and infer the convention".
+
+### Option E — vocabulary file + per-consumer mappings + the test
+
+`queries/captures.md` (or `.json`) defines names and meanings ONLY. Each
+consumer keeps its own mapping beside its own code. The P0 test asserts
+three-way completeness: vocabulary ⊇ what the `.scm` uses, and each mapping
+covers the vocabulary.
+
+**For** — puts the shared thing (meaning) in the shared place and the
+per-editor thing (appearance) with that editor; the contributor doc is then
+"here is the vocabulary, write your own mapping", which is the honest contract;
+no consumer loads another consumer's data.
+**Against** — three files instead of one; the vocabulary file can drift from
+the `.scm` (which is what the test is for).
+
+### What to weigh
+
+1. **Which failure hurts more** — a mapping silently missing an entry (A and E
+   prevent by construction only if the test exists; the test is what actually
+   prevents it under all options), or a generated file going stale (B only)?
+2. **Who is the reader?** If the contributor story is the point, E optimises for
+   it and A is close behind. B and D are worst for it.
+3. **Is a build step acceptable** in a repo whose editor tooling currently has
+   none for Emacs?
+
+⚠ Note the common factor: **the completeness test does the real work in every
+option.** The format choice is mostly about the contributor's reading
+experience, not about preventing drift. That is worth being explicit about
+before spending deliberation on the format.
+
+---
+
+<a id="d3-critique"></a>
+## 7. D3 — critique of "TextMate as fallback only"
+
+Owner's leaning is right in intent, and I have three corrections plus one that
+changes this document's own design.
+
+### 7.1 "Fallback when TS is unreachable" is not a thing VS Code can express
+
+TextMate is the language's *grammar*; it always runs. Semantic tokens **layer
+over** it and win where they apply. There is no switch reading "use TextMate
+only if semantic tokens are unavailable".
+
+So the fallback the owner wants **already exists, automatically, in the
+overlap** — and does not exist at all outside it. Outside the overlap TextMate
+is not a fallback, it is the *permanent and only* authority. The design question
+is therefore not "when does TextMate apply" but **"how much non-overlap do we
+tolerate, and must the overlap agree?"**
+
+### 7.2 The wasm dependency is a BUILD problem, not a runtime one
+
+The `.wasm` ships inside the `.vsix`. For an installed extension tree-sitter is
+always reachable. The genuinely-unreachable cases are narrower:
+
+1. before the extension activates (a real, visible window on a cold open);
+2. the user set `editor.semanticHighlighting.enabled: false`;
+3. **our own dev loop with no emcc** — today's situation, and the one that
+   actually bit.
+
+(3) argues for **CI building the wasm**, not for shaping the grammar around it.
+Letting a missing build tool dictate the highlighting architecture would be
+solving the wrong problem.
+
+### 7.3 The strongest argument against stripping: TextMate has its own audience
+
+`.tmLanguage.json` is the portable syntax format for consumers that will never
+run our extension — GitHub/Linguist being the obvious one, and Sublime-family
+tools by conversion. We have not pursued that, so this is **option value rather
+than current reach** — but stripping TextMate to comments-and-strings forecloses
+it, and the cost of keeping it is only that it must not *disagree*.
+
+### 7.4 ⭐ This corrects §3.3 of this document
+
+I wrote that TextMate must be **disjoint** from the `.scm`. Given 7.1 and 7.3,
+the better invariant is **agreement**:
+
+> TextMate may paint anything. Where both layers paint the same span, they must
+> agree. Overlap is fine; *disagreement* is the bug.
+
+Same harness tests it, and it is strictly weaker — so it permits keeping a
+useful TextMate grammar instead of forcing a strip. I think my original
+"disjoint" was over-strict and would have thrown away 7.3 for tidiness.
+
+### 7.5 On "strip everything down to see where both sides sit"
+
+Endorse the intent, question the method. We do not have to *strip* to *see*: the
+P1 harness can emit a per-span census of who paints what, with nothing removed.
+Stripping first gives a period of visibly worse highlighting **with no instrument
+to tell you whether it got worse** — the same shape as every other trap this
+project has hit recently. Recommended order: census first, then cut with
+evidence, then rebuild.
+
+### 7.6 What I would put to the owner
+
+Not a decision — the two coherent positions:
+
+- **Keep TextMate reasonably complete**, enforce *agreement*, and treat it as
+  the portable format for non-tree-sitter consumers (7.3).
+- **Reduce it to a genuine bootstrap** (comments, strings, numbers), accept that
+  a cold open is briefly plain, and give up the portable-format option.
+
+Either is defensible. The first is where I would lean, on 7.3 alone — but 7.3
+depends on whether Linguist/GitHub reach is something the owner wants, which is
+a product question, not a technical one.
