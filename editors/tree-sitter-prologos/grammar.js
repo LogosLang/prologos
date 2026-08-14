@@ -641,6 +641,7 @@ module.exports = grammar({
       $.typed_hole,
       $.arrow_op,
       $.compose_op,
+      $.operator,
       $.list_literal,
       $.quote_expr,
       $.quasiquote_expr,
@@ -672,6 +673,21 @@ module.exports = grammar({
     // Operators as tokens
     arrow_op: $ => '->',
     compose_op: $ => '>>',
+
+    // Bare arithmetic/pipeline operators.
+    //
+    // `identifier' requires a leading [a-zA-Z_], so `+' `-' `*' `/' could not
+    // be identifiers, and there was no token for them anywhere — which made
+    // `[+ a b]' unparseable.  Since Numerics N6e-E2 these are FIRST-CLASS
+    // VALUES (`reduce + 0 xs'), so they are atoms, not just heads.
+    //
+    // Counts in the corpus at the time of adding: + 257, * 100, - 39, / 23.
+    // `->' is deliberately absent — it is already `arrow_op' above.
+    //
+    // Longest-match keeps these from stealing other syntax: `->' beats `-',
+    // `>>' beats `>', `|>' beats `|', and `int*' / `p8+' still lex as
+    // identifiers because those DO start with a letter.
+    operator: $ => choice('+', '-', '*', '/', '|>'),
 
     // ============================================================
     // Types

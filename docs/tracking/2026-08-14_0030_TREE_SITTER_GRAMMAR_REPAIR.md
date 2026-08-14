@@ -15,7 +15,8 @@ ARROW (2026-08-05), Rel T1 (2026-07-25) — and the grammar has not.
 | Phase | Description | Status | Notes |
 |---|---|---|---|
 | P0 | Corpus gate + baseline | ✅ | `check-corpus.sh` — commit `321391bf`. Baseline in §1 |
-| P1 | Multi-clause `defn` (`\| pat -> body`) | ⬜ | Largest single cluster — [§2](#gaps) |
+| P1 | Multi-clause `defn` (`\| pat -> body`) | ✅ | `3d43a89f`. Isolated fix only; the corpus gain arrived with P1b — [§5.p1](#p1) |
+| P1b | Bare operators as atoms (`+ - * / \|>`) | ✅ | Unplanned; **it is what unblocked P1**. Error-bytes 13.9% → **10.0%** — [§5.p1b](#p1b) |
 | P2 | `let` (LET track, 2026-07-31) | ⬜ | |
 | P3 | `fn` lambda with typed params | ⬜ | |
 | P4 | `trait` body | ⬜ | |
@@ -93,6 +94,52 @@ old parser and reports no change, which reads as "my fix did nothing".
 
 ---
 
-## 4. Per-phase records
+## 5. Per-phase records
 
-*(filled in as phases land)*
+<a id="p1"></a>
+### 5.P1 — multi-clause `defn` (`3d43a89f`)
+
+`defn_arm` was `| param_list body`: **no `->` at all**, and a bracketed param
+list where the language writes patterns. `defn_form` additionally tied "has a
+param list" to "is single-arity", so `defn nth [n xs]` + `|` clauses — the
+common corpus shape — could not parse. Rewritten against `match_arm`, which
+already worked and was the right model. `defn_arm_body` also accepts an indented
+block (how a nested `match` is written in a clause).
+
+Isolated: multi-clause with and without params both 1–2 errors → **0**.
+Corpus at the time: **flat-to-worse** (156,370 → 158,746 error-bytes). Committed
+as WIP with that stated, on the hypothesis that clause bodies were now reachable
+and immediately hitting the *next* gap. P1b confirmed it.
+
+<a id="p1b"></a>
+### 5.P1b — bare operators as atoms
+
+`identifier` requires a leading `[a-zA-Z_]`, so `+ - * /` could not be
+identifiers, and no token existed for them anywhere: `[+ a b]` was unparseable.
+Since Numerics N6e-E2 they are also first-class **values** (`reduce + 0 xs`), so
+they belong in `atom`, not merely in head position. Corpus counts drove the set:
+`+` 257 · `*` 100 · `-` 39 · `/` 23 · `|>`. `->` excluded — already `arrow_op`.
+
+**Result — error-bytes 158,746 (13.9%) → 114,793 (10.0%)**: 43,953 bytes
+recovered, 27.7% of the remaining error mass, in one rule. And it retroactively
+paid for P1: the full `nth` clause probe — multi-clause + nested `match` +
+`[- n 1]` — went from 2 errors to **0** only once both landed.
+
+Regression-checked: `int*`, `p8+` still lex as identifiers (they start with a
+letter); `->`, `>>` unaffected by longest-match. The spaced-`*` Sigma type
+`<(x : A) * B>` still fails, but it failed **worse before** (4 errors → 3) and
+does not occur in the lib corpus — pre-existing, not caused here.
+
+⚠ **Lesson for the remaining phases**: P1 looked like a failure by its own
+measurement and was one rule away from being a large win. A gap that sits
+*downstream* of the one you fixed will mask the fix entirely. Do not revert on a
+flat corpus number alone — check whether the construct now reaches new territory.
+
+---
+
+## 6. Deferred / discovered
+
+- Spaced `*` in Sigma types (`<(x : A) * B>`) — pre-existing, absent from lib.
+- `clean` file count is still 18/142: most files carry several of the remaining
+  gaps, so files only go clean when the LAST gap in them lands. Error-bytes is
+  the metric that moves in the meantime.

@@ -2767,6 +2767,10 @@
         },
         {
           "type": "SYMBOL",
+          "name": "operator"
+        },
+        {
+          "type": "SYMBOL",
           "name": "list_literal"
         },
         {
@@ -2874,6 +2878,31 @@
     "compose_op": {
       "type": "STRING",
       "value": ">>"
+    },
+    "operator": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "+"
+        },
+        {
+          "type": "STRING",
+          "value": "-"
+        },
+        {
+          "type": "STRING",
+          "value": "*"
+        },
+        {
+          "type": "STRING",
+          "value": "/"
+        },
+        {
+          "type": "STRING",
+          "value": "|>"
+        }
+      ]
     },
     "type_expr": {
       "type": "CHOICE",
