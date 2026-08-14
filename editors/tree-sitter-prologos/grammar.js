@@ -338,10 +338,19 @@ module.exports = grammar({
       )),
     )),
 
+    // ⚠ The type position accepts a PARENTHESISED argument group —
+    // `impl Lattice (Map K V)`.  Only 8 corpus lines use it, but one of them
+    // detonated an 8,024-byte swallow (31% of lattices.prologos): the ERROR
+    // surfaced 260 lines LATER, at line 524, so neither the leading-token
+    // clustering nor reading the error site could find it.  Delete-window
+    // bisection on the full file did.
+    //
+    // Deliberately NOT added to `type_expr` generally: a broad `paren_type`
+    // was tried earlier, failed to fix its target, and measured worse.
     impl_form: $ => seq(
       'impl',
       field('trait_name', $.identifier),
-      field('type', repeat1(choice($.identifier, $.grouped_type))),
+      field('type', repeat1(choice($.identifier, $.grouped_type, $.type_arg_group))),
       optional($.where_clause),
       $._indent,
       repeat1(choice($.defn_form, $.def_form, $._newline)),
@@ -354,6 +363,12 @@ module.exports = grammar({
       ':=',
       '(',
       repeat1($.identifier),
+      ')',
+    ),
+
+    type_arg_group: $ => seq(
+      '(',
+      repeat1(choice($.identifier, $.grouped_type)),
       ')',
     ),
 

@@ -29,6 +29,7 @@ ARROW (2026-08-05), Rel T1 (2026-07-25) — and the grammar has not.
 | P5e | `string` made a single token (`;` inside a string was lexed as a comment) | ✅ | **`data/reason` cleared**; swallows 6 → **5** — [§5.p5e](#p5e) |
 | P5f | **Same-line `defn` bodies** — scanner-level, after 3 rule formulations failed | ✅ | **Swallows 5 → 2**, bytes 4.6% → **2.7%**, clean 27 → **29** — [§5.p5f](#p5f) |
 | P5g | **Inline paren match arms** (`match h (pat -> body)`) - the `fio` swallow | done | **Swallows 2 -> 1**, worst 51% -> **31%**; fio's worst error 1852 B -> **156 B** - see 5.P5g |
+| P5h | **`impl` paren type args** — the `lattices` swallow | ✅ | **SWALLOWS 1 → 0**; worst 31% → **13%**; bytes 2.6% → **1.8%** — [§5.p5h](#p5h) |
 | P6 | Re-baseline, regenerate, reinstall, font-lock check | ⬜ | `install.sh`; then unblock SURF T1 |
 | P7 | TSG T1.close — gate wiring, DEFERRED triage, PIR-lite | ⬜ | Consider adding the gate to pre-commit |
 
@@ -871,6 +872,45 @@ not after three rule formulations.
 Residual in fio: `foreign racket "..." [name :as alias : Type -> Type]`, 3 errors
 per line. Separate gap, logged below.
 
+<a id="p5h"></a>
+### 5.P5h — `impl` paren type args (and the map-literal attempt, reverted)
+
+**`impl Lattice (Map K V)`** — a parenthesised type argument. `impl_form`'s type
+was `repeat1(choice(identifier, grouped_type))` and `grouped_type` is `[…]`
+only, so paren args had no rule. Only **8** corpus lines use the shape; one of
+them detonated the 8,024-byte swallow.
+
+⭐ **The diagnosis is the story.** The ERROR node started at line **524**; the
+cause was at line **263** — 260 lines earlier. No amount of reading the error
+site could have found it, and the leading-token clustering pointed at `impl`,
+which is only where recovery happened to begin. **Delete-window bisection on the
+FULL file** found it: deleting lines 260–339 collapsed the error while every
+other window left it intact. This is the method correction from earlier in the
+track paying off — prefix truncation would have manufactured a cut-point error
+and pointed somewhere else again.
+
+⚠ **Two probes were CONFOUNDED and briefly sent me wrong**: I compared
+"paren type + `where`" against "paren type, no `where`" while also varying the
+BODY (`{}` vs `x`). The `where` clause was innocent; the real second finding was
+that `{}` fails. Vary one thing.
+
+**Result: swallows 1 → 0** · worst single error 31% → **13%** · error-bytes
+2.6% → **1.8%** · clean files 34. **No file in the corpus now has a single error
+covering 20% of it.**
+
+**REVERTED in the same phase — map literals.** `{}` and `{:name "alice"}` have
+no rule at all (`{` was only ever `implicit_params`), and **644 corpus lines**
+contain one, so it looked like the next big win. Added, all shapes parsed, and
+implicit params still worked — but measured: **swallows 0 → 2**, error-bytes
+1.8% → 3.7%, MISSING 75 → 154. Reverted.
+
+⭐ **The tell held again.** `{` is already claimed by `implicit_params`, so this
+is a CONTESTED shape, and contested shapes resist rule-shaping — exactly like
+same-line `defn` and `fio`. The uncontested additions this session
+(`type_arg_group`, `angle_param`, `=`, `defr`, operators, `string`) all landed
+first try. Map literals need the same treatment same-line `defn` got: a
+disambiguation, not a rule. Logged in §6.
+
 ---
 
 ## 6. Deferred / discovered
@@ -879,6 +919,7 @@ per line. Separate gap, logged below.
 - `defr` bare-head `&>` continuation form (paren-goal form works).
 - `:laws` blocks inside traits (`- :name/:forall/:holds`) — the `:forall` cluster.
 - `foreign` with `:as alias : Type -> Type` inside the bracket group - fio's residual.
+- **Map literals** `{}` / `{:k v}` — no rule; 644 corpus lines. A plain rule REGRESSED (swallows 0 → 2); contested with `implicit_params`, needs a disambiguation.
 - Two-segment qualified names `a::b` (three-segment ones are fine).
 - `<(Type 0)>` — parenthesised type inside an angle type. A naive `paren_type` did NOT fix it (see §5.P3b); needs real diagnosis.
 - `[x : Bool y : Bool]` — SPACED typed params, several in one list: `type_application` greedily takes `Bool y`. The fused `[x:Int]` form is fine.

@@ -1130,6 +1130,10 @@
           {
             "type": "identifier",
             "named": true
+          },
+          {
+            "type": "type_arg_group",
+            "named": true
           }
         ]
       }
@@ -2227,6 +2231,25 @@
   },
   {
     "type": "type_application",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "grouped_type",
+          "named": true
+        },
+        {
+          "type": "identifier",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "type_arg_group",
     "named": true,
     "fields": {},
     "children": {
