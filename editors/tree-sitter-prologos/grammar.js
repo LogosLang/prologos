@@ -796,11 +796,15 @@ module.exports = grammar({
       $.identifier,
     ),
 
+    // `->` and the QTT multiplicity arrows `-0>` / `-1>` (erased / linear).
+    // Only `->` existed; `-1>` lexed as `-`, `1`, `>` and broke the spec.
     arrow_type: $ => prec.right(1, seq(
       $.type_expr,
-      '->',
+      choice('->', $.linear_arrow),
       $.type_expr,
     )),
+
+    linear_arrow: $ => token(/-[0-9]+>/),
 
     type_application: $ => prec.left(2, seq(
       $.identifier,

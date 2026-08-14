@@ -3280,14 +3280,30 @@
             "name": "type_expr"
           },
           {
-            "type": "STRING",
-            "value": "->"
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "STRING",
+                "value": "->"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "linear_arrow"
+              }
+            ]
           },
           {
             "type": "SYMBOL",
             "name": "type_expr"
           }
         ]
+      }
+    },
+    "linear_arrow": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PATTERN",
+        "value": "-[0-9]+>"
       }
     },
     "type_application": {

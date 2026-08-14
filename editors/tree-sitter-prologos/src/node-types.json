@@ -62,6 +62,10 @@
       "required": true,
       "types": [
         {
+          "type": "linear_arrow",
+          "named": true
+        },
+        {
           "type": "type_expr",
           "named": true
         }
@@ -2553,6 +2557,10 @@
   {
     "type": "let",
     "named": false
+  },
+  {
+    "type": "linear_arrow",
+    "named": true
   },
   {
     "type": "logic_variable",

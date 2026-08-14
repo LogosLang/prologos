@@ -339,6 +339,34 @@ made the owner's scratchpad usable in an editor.
 `examples/2026-03-30-ppn-track2b` 33% · `book/lattices` 31% ·
 `examples/2026-04-22-1A-iii-probe` 31% · `data/reason` 20%.
 
+<a id="fio"></a>
+### 7.1 `core/fio.prologos` (51%) — half done, half BLOCKED
+
+Two causes, diagnosed by locating the largest ERROR node (lines 39–80) and
+reading it:
+
+1. **QTT multiplicity arrows `-0>` / `-1>`** (`spec fio-write Handle -1> String
+   -> Handle`). Only `->` existed, so `-1>` lexed as `-`, `1`, `>`.
+   ✅ **FIXED** — `linear_arrow: token(/-[0-9]+>/)` as an alternative in
+   `arrow_type`. 14 occurrences corpus-wide.
+2. **Inline paren match arms** (`match h (mk-handle idx -> body)`) — the
+   sexp-style one-line arm, as opposed to the indented `|` form.
+   ⏸️ **BLOCKED, attempted and backed out.**
+
+**Why (2) is blocked, so it is not re-attempted the same way**: `(` + something
++ `->` is genuinely ambiguous between `paren_expr` and a match arm until the
+`->` is reached, and the ambiguity is not one conflict but a FAMILY — it
+reappeared for `true` (`atom` vs `literal_pattern`), then `identifier` (`atom`
+vs `identifier_pattern`), and would continue through `constructor_pattern` vs
+`application`. Declaring conflicts pairwise chases it forever. A real fix needs
+pattern-vs-expression resolved at one place — e.g. parse the arm interior as an
+expression and reinterpret, or gate on `->` lookahead — which is a design task,
+not a rule tweak.
+
+fio therefore stays at 51% until (2) lands; the arrow fix alone does not move it,
+because the arrow sits *inside* the region the match arm already swallowed.
+9 occurrences corpus-wide, but they are what makes fio the worst file.
+
 ---
 
 ## 6. Deferred / discovered
