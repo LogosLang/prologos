@@ -312,11 +312,32 @@ track: P3c replaced foray's single 19,280 B swallow with 207 small errors, which
 the byte metric scored as a REGRESSION and locality would have scored as a large
 win — the damage went from 67% of the file to a set of local spots.
 
-**Proposed metric for the endgame** (not yet implemented): per file, the size of
-the LARGEST error node, and the fraction of the file it covers. Track the max
-and the distribution rather than the sum. A grammar with 500 tiny errors is
-better editor infrastructure than one with 3 file-swallowing ones, and today's
-headline number says the opposite.
+**IMPLEMENTED 2026-08-14.** `check-corpus.sh` now reports, per file, the size of
+the LARGEST error node and the fraction of the file it covers; the table sorts
+by that fraction, and the summary counts **swallows** — files where one error
+node covers ≥20%.
+
+**A/B against the original pre-repair grammar, which is the honest track number:**
+
+| | before | after |
+|---|---|---|
+| files SWALLOWED (one error ≥20% of file) | **9** | **6** |
+| worst single error, as % of its file | **100%** | **51%** |
+| clean files | 18 | 25 |
+| error-bytes | 13.6% | 4.7% |
+
+A file existing as **one entire ERROR node** — 100% — is gone. The worst case
+halved. Ordinary files now sit at 3–6% local damage.
+
+⭐ And the reframing pays for itself immediately on the file that prompted it:
+**foray dropped out of the swallowed list entirely** (67% before P3c, now under
+18%). By bytes, P3c looked like a −56 B nothing; by locality it was the fix that
+made the owner's scratchpad usable in an editor.
+
+**Remaining swallows, worst first** — the actionable endgame list:
+`core/fio.prologos` 51% · `examples/narrowing-demo` 33% ·
+`examples/2026-03-30-ppn-track2b` 33% · `book/lattices` 31% ·
+`examples/2026-04-22-1A-iii-probe` 31% · `data/reason` 20%.
 
 ---
 

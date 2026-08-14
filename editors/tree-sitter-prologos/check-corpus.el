@@ -52,9 +52,9 @@ parses nest ERROR nodes hundreds deep, so the recursive version crashed
 on the worst file in the corpus and reported nothing at all."
   (with-temp-buffer
     (insert-file-contents file)
-    (let ((errors 0) (missing 0) (bytes 0))
+    (let ((errors 0) (missing 0) (bytes 0) (worst 0))
       (if (not (treesit-language-available-p 'prologos))
-          (list -1 -1 0 0)
+          (list -1 -1 0 0 0 0)
         (treesit-parser-create 'prologos)
         (let ((stack (list (treesit-parser-root-node
                             (car (treesit-parser-list))))))
@@ -65,12 +65,15 @@ on the worst file in the corpus and reported nothing at all."
                 (cl-incf errors)
                 ;; Count the SPAN, and do not descend: nested ERRORs are
                 ;; inside this one and their bytes are already counted.
-                (cl-incf bytes (- (treesit-node-end node)
-                                  (treesit-node-start node))))
+                (let ((span (- (treesit-node-end node)
+                               (treesit-node-start node))))
+                  (cl-incf bytes span)
+                  (setq worst (max worst span))))
                (t
                 (when (treesit-node-check node 'missing) (cl-incf missing))
                 (dolist (c (treesit-node-children node)) (push c stack)))))))
-        (list errors missing (count-lines (point-min) (point-max)) bytes)))))
+        (list errors missing (count-lines (point-min) (point-max)) bytes
+              worst (buffer-size))))))
 
 (defun buffer-size-of-corpus (files)
   "Total byte size of FILES, for the unparsed-percentage denominator."
@@ -101,23 +104,30 @@ on the worst file in the corpus and reported nothing at all."
                           (file-regular-p f)
                           (file-readable-p f))))
                  files))
-         (rows '()) (total 0) (total-missing 0) (clean 0) (lines 0) (total-bytes 0))
+         (rows '()) (total 0) (total-missing 0) (clean 0) (lines 0) (total-bytes 0)
+         (swallowed 0) (worst-frac 0.0))
     (unless (treesit-language-available-p 'prologos)
       (message "FATAL: tree-sitter grammar for prologos is not installed.")
       (message "       Run editors/tree-sitter-prologos/install.sh first.")
       (kill-emacs 2))
     (dolist (f files)
-      (pcase-let ((`(,e ,m ,l ,b) (prologos-ts-check--scan-file f)))
+      (pcase-let ((`(,e ,m ,l ,b ,w ,sz) (prologos-ts-check--scan-file f)))
         (cl-incf total e) (cl-incf total-missing m) (cl-incf lines l)
         (cl-incf total-bytes b)
-        (if (and (zerop e) (zerop m)) (cl-incf clean)
-          (push (list e m l (file-relative-name f root) b) rows))))
-    (setq rows (sort rows (lambda (a b) (> (nth 4 a) (nth 4 b)))))
+        (let ((frac (if (zerop sz) 0.0 (/ (float w) sz))))
+          ;; A "swallow": ONE error node covering a fifth of the file.  That is
+          ;; the failure that makes an editor unusable — font-lock and
+          ;; navigation lose the whole region, not just the bad form.
+          (when (>= frac 0.20) (cl-incf swallowed))
+          (setq worst-frac (max worst-frac frac))
+          (if (and (zerop e) (zerop m)) (cl-incf clean)
+            (push (list e m l (file-relative-name f root) b w frac) rows)))))
+    (setq rows (sort rows (lambda (a b) (> (nth 6 a) (nth 6 b)))))
     (message "")
-    (message "  %-52s %8s %7s %7s %7s" "FILE" "ERR-BYTE" "ERRORS" "MISSING" "LINES")
+    (message "  %-46s %8s %7s %9s %7s" "FILE" "WORST-B" "WORST%" "ERR-BYTE" "ERRORS")
     (message "  %s" (make-string 82 ?-))
     (dolist (r (seq-take rows 25))
-      (message "  %-52s %8d %7d %7d %7d" (nth 3 r) (nth 4 r) (nth 0 r) (nth 1 r) (nth 2 r)))
+      (message "  %-46s %8d %6.0f%% %9d %7d" (nth 3 r) (nth 5 r) (* 100.0 (nth 6 r)) (nth 4 r) (nth 0 r)))
     (when (> (length rows) 25)
       (message "  ... and %d more file(s) with errors" (- (length rows) 25)))
     (message "  %s" (make-string 82 ?-))
@@ -132,6 +142,8 @@ on the worst file in the corpus and reported nothing at all."
     ;; inside ERROR spans measure how much text the grammar fails to understand,
     ;; which is the thing we actually care about.  (Learned 2026-08-14: the
     ;; multi-clause defn fix moved count 8336 -> 8456 while being an improvement.)
+    (message "  LOCALITY: %d file(s) SWALLOWED (one error >=20%% of the file); worst single error covers %.0f%% of its file"
+             swallowed (* 100.0 worst-frac))
     (message "  ERROR-BYTES %d of %d (%.1f%% of the corpus unparsed)"
              total-bytes (buffer-size-of-corpus files)
              (if (zerop (buffer-size-of-corpus files)) 0.0
