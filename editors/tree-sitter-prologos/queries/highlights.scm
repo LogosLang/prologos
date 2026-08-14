@@ -35,9 +35,20 @@
  ; Rel T1 (2026-07-25) — absent from the grammar until TSG T1 P5.
  "defr"] @keyword
 
-; Keywords that appear as identifiers (not grammar tokens)
+; Keywords that appear as identifiers (not grammar tokens).
+;
+; Everything here is a real keyword the grammar does NOT tokenize, so it
+; arrives as a plain `identifier' and can only be recognised by name.  Words
+; the grammar DOES tokenize (def, defn, trait, impl, foreign, defr, ...) belong
+; in the anonymous-token list above and must NOT be repeated here: in
+; expression position they are ordinary identifiers, and `[trait x]' is a call
+; to a variable named `trait', not a keyword.
+;
+; The relational + schema names were added 2026-08-14 when Emacs moved onto this
+; file: its retired inline rules matched them and this list did not, so adopting
+; the shared query would have silently dropped them. VS Code never had them.
 ((identifier) @keyword
-  (#match? @keyword "^(forall|exists|solve|query|expand|expand-1|expand-full|parse|elaborate|with-transient|transient|reduce)$"))
+  (#match? @keyword "^(forall|exists|solve|solver|solve-one|solve-with|explain|explain-with|rel|schema|query|expand|expand-1|expand-full|parse|elaborate|with-transient|transient|reduce)$"))
 
 ":no-prelude" @keyword
 ":refer" @keyword

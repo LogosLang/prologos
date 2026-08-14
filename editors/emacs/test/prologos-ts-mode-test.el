@@ -430,27 +430,48 @@
 ;; ============================================================
 
 (ert-deftest prologos-ts-test/font-lock-foreign-keyword ()
-  "The identifier `foreign' should get keyword face via :match predicate."
+  "`foreign' gets keyword face at DECLARATION position.
+
+Was pinned in EXPRESSION position (`foreign x' inside a defn body) back when the
+grammar did not tokenize the word and only an identifier regexp could reach
+it.  It is a grammar token now, so expression position is a plain identifier
+there — `[foreign x]' calls a variable named `foreign' — and the shared
+highlights.scm deliberately does not colour it.  Declaration position is the
+case that carries meaning, so that is what this pins."
   (skip-unless prologos-ts-test--treesit-available)
-  (prologos-ts-test--in-buffer "defn foo [x : Nat] : Nat\n  foreign x\n"
+  (prologos-ts-test--in-buffer "foreign racket \"racket/base\"\n"
     (goto-char (point-min))
     (search-forward "foreign")
     (let ((face (get-text-property (match-beginning 0) 'face)))
       (should (eq face 'font-lock-keyword-face)))))
 
 (ert-deftest prologos-ts-test/font-lock-trait-keyword ()
-  "The identifier `trait' should get keyword face via :match predicate."
+  "`trait' gets keyword face at DECLARATION position.
+
+Was pinned in EXPRESSION position (`trait x' inside a defn body) back when the
+grammar did not tokenize the word and only an identifier regexp could reach
+it.  It is a grammar token now, so expression position is a plain identifier
+there — `[trait x]' calls a variable named `trait' — and the shared
+highlights.scm deliberately does not colour it.  Declaration position is the
+case that carries meaning, so that is what this pins."
   (skip-unless prologos-ts-test--treesit-available)
-  (prologos-ts-test--in-buffer "defn foo [x : Nat] : Nat\n  trait x\n"
+  (prologos-ts-test--in-buffer "trait Show A\n  spec show A -> String\n"
     (goto-char (point-min))
     (search-forward "trait")
     (let ((face (get-text-property (match-beginning 0) 'face)))
       (should (eq face 'font-lock-keyword-face)))))
 
 (ert-deftest prologos-ts-test/font-lock-impl-keyword ()
-  "The identifier `impl' should get keyword face via :match predicate."
+  "`impl' gets keyword face at DECLARATION position.
+
+Was pinned in EXPRESSION position (`impl x' inside a defn body) back when the
+grammar did not tokenize the word and only an identifier regexp could reach
+it.  It is a grammar token now, so expression position is a plain identifier
+there — `[impl x]' calls a variable named `impl' — and the shared
+highlights.scm deliberately does not colour it.  Declaration position is the
+case that carries meaning, so that is what this pins."
   (skip-unless prologos-ts-test--treesit-available)
-  (prologos-ts-test--in-buffer "defn foo [x : Nat] : Nat\n  impl x\n"
+  (prologos-ts-test--in-buffer "impl Show Nat\n  defn show [x]\n    x\n"
     (goto-char (point-min))
     (search-forward "impl")
     (let ((face (get-text-property (match-beginning 0) 'face)))
@@ -634,3 +655,121 @@ causes tree-sitter to absorb the following `def' into a type_application."
 (provide 'prologos-ts-mode-test)
 
 ;;; prologos-ts-mode-test.el ends here
+
+;; ============================================================
+;; Shared highlights.scm bridge
+;; ============================================================
+;;
+;; prologos-ts-mode reads editors/tree-sitter-prologos/queries/highlights.scm
+;; instead of carrying its own inline copy.  Every test below is a pin on a bug
+;; that was SILENT: each produced a query that compiled cleanly and painted
+;; nothing, so "0 patterns skipped" proves nothing on its own.
+
+(defun prologos-ts-test--face-at (src needle)
+  "Fontify SRC in `prologos-ts-mode' and return the face on NEEDLE."
+  (with-temp-buffer
+    (insert src)
+    (prologos-ts-mode)
+    (setq-local treesit-font-lock-level 4)
+    (treesit-font-lock-recompute-features)
+    (font-lock-ensure)
+    (goto-char (point-min))
+    (and (search-forward needle nil t)
+         (get-text-property (- (point) (length needle)) 'face))))
+
+(ert-deftest prologos-ts-test/highlights-file-is-found ()
+  "The shared query file must be locatable from the loaded mode."
+  (skip-unless prologos-ts-test--treesit-available)
+  (should (file-readable-p prologos-ts-highlights-file))
+  (should (string-suffix-p "queries/highlights.scm" prologos-ts-highlights-file)))
+
+(ert-deftest prologos-ts-test/highlights-no-patterns-skipped ()
+  "Every pattern in highlights.scm must map to a face and compile.
+A skip means Emacs is showing LESS than the shared file specifies."
+  (skip-unless prologos-ts-test--treesit-available)
+  (prologos-ts--build-font-lock-rules)
+  (should (null prologos-ts--skipped-patterns)))
+
+(ert-deftest prologos-ts-test/highlights-fallback-is-last-and-unpainted ()
+  "The bare `(identifier) @variable' fallback stays last, and is not painted.
+Painting it would colour every identifier in the buffer."
+  (skip-unless prologos-ts-test--treesit-available)
+  (let ((pats (prologos-ts--split-query
+               (with-temp-buffer
+                 (insert-file-contents prologos-ts-highlights-file)
+                 (buffer-string)))))
+    (should (equal "(identifier) @variable" (car (last pats)))))
+  (should (null (cdr (assoc "variable" prologos-ts--capture-faces)))))
+
+(ert-deftest prologos-ts-test/capture-lookup-prefix-fallback ()
+  "`foo.bar.baz' falls back to `foo.bar' then `foo', as CAPTURE_MAP does."
+  (let ((alist '(("a.b" . face-ab) ("a" . face-a))))
+    (should (eq 'face-ab (cdr (prologos-ts--capture-lookup "a.b.c" alist))))
+    (should (eq 'face-ab (cdr (prologos-ts--capture-lookup "a.b" alist))))
+    (should (eq 'face-a  (cdr (prologos-ts--capture-lookup "a.z" alist))))
+    (should (null (prologos-ts--capture-lookup "zz" alist)))))
+
+(ert-deftest prologos-ts-test/capture-lookup-preserves-match-data ()
+  "The lookup must not clobber match data.
+
+Regression pin.  It runs inside `replace-regexp-in-string''s replacement
+function, which reads the match data back afterwards; without
+`save-match-data' the substitution landed one character short and emitted
+`@font-lock-type-facen'.  That is a VALID capture name, so the query still
+compiled and simply named a face that does not exist."
+  (should (string-match "\\`\\(x+\\)\\(y+\\)\\'" "xxyy"))
+  (prologos-ts--capture-lookup "a.b.c" '(("a" . face-a)))
+  (should (equal "xx" (match-string 1 "xxyy")))
+  (should (equal "yy" (match-string 2 "xxyy"))))
+
+(ert-deftest prologos-ts-test/regexp-translation ()
+  "tree-sitter regexp syntax is translated to Emacs syntax."
+  (should (equal "^\\(?:a\\|b\\)$" (prologos-ts--translate-regexp "^(a|b)$")))
+  (should (equal "^\\(?:a\\)$"     (prologos-ts--translate-regexp "^(?:a)$")))
+  (should (equal "[a-z]+"          (prologos-ts--translate-regexp "[a-z]+")))
+  ;; Untranslatable constructs must RAISE, so the pattern is skipped visibly
+  ;; rather than shipped dead.
+  (should-error (prologos-ts--translate-regexp "\\d+"))
+  (should-error (prologos-ts--translate-regexp "a{2,3}")))
+
+(ert-deftest prologos-ts-test/match-predicate-rules-actually-fire ()
+  "The three `#match?' rules must PAINT, not merely compile.
+
+Two independent silent failures had to be fixed for this to pass: the
+regexp arrived in tree-sitter dialect, where Emacs reads `(' and `|' as
+literals; and tree-sitter unescapes the query string before Emacs sees it,
+so the backslashes must be doubled.  Either one alone leaves all three
+rules dead, with the query compiling and zero patterns skipped."
+  (skip-unless prologos-ts-test--treesit-available)
+  (should (eq 'font-lock-type-face
+              (prologos-ts-test--face-at "spec f Int -> Bool\n" "Int")))
+  (should (eq 'font-lock-constant-face
+              (prologos-ts-test--face-at "def x := zero\n" "zero")))
+  (should (eq 'font-lock-keyword-face
+              (prologos-ts-test--face-at "def y := [solve q]\n" "solve"))))
+
+(ert-deftest prologos-ts-test/shared-query-captures-reach-emacs ()
+  "Query work done for VS Code must now reach Emacs too.
+These captures had NO counterpart in the retired inline rules."
+  (skip-unless prologos-ts-test--treesit-available)
+  (should (eq 'font-lock-property-use-face
+              (prologos-ts-test--face-at "def m := {:name 1}\n" ":name")))
+  (should (eq 'font-lock-constant-face
+              (prologos-ts-test--face-at "def k := :standalone\n" ":standalone")))
+  (should (eq 'font-lock-variable-name-face
+              (prologos-ts-test--face-at "defr p [?d]\n  || 1\n" "?d")))
+  (should (eq 'font-lock-property-use-face
+              (prologos-ts-test--face-at "def r := users:name\n" ":name"))))
+
+(ert-deftest prologos-ts-test/file-order-beats-specificity ()
+  "A map KEY reads as a property; a bare keyword literal as a constant.
+
+Both are `(keyword_literal)'.  Only FILE ORDER separates them, so this
+pins that settings are emitted in file order and that `:override' is never
+set — if feature level governed instead, the two would collide."
+  (skip-unless prologos-ts-test--treesit-available)
+  (let ((src "def m := {:name :other}\n"))
+    (should (eq 'font-lock-property-use-face
+                (prologos-ts-test--face-at src ":name")))
+    (should (eq 'font-lock-constant-face
+                (prologos-ts-test--face-at src ":other")))))
