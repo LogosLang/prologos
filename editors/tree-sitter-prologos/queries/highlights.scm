@@ -45,8 +45,9 @@
 ; Module system
 ; ============================================================
 
-(require_declaration module: (qualified_name) @namespace)
-(imports_declaration module: (qualified_name) @namespace)
+; `module:` is a field of require_group, not of the declaration —
+; require/imports take one or more groups since TSG T1 P3c.
+(require_group module: (qualified_name) @namespace)
 
 ; ============================================================
 ; Built-in types (identifier-matched)
@@ -87,7 +88,7 @@
 ; Operators
 ; ============================================================
 
-["->" "|" "|>" ">>" ":=" "*" "via"] @operator
+["->" "|" "|>" ":=" "*" "via"] @operator
 
 ; ============================================================
 ; Multiplicity annotations
