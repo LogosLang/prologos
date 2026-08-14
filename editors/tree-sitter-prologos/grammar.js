@@ -26,6 +26,7 @@ module.exports = grammar({
     $._indent,
     $._dedent,
     $._newline,
+    $._same_line_body,
   ],
 
   extras: $ => [
@@ -175,17 +176,40 @@ module.exports = grammar({
       'defn',
       field('name', $.identifier),
       optional(field('implicit_params', $.implicit_params)),
-      optional(field('params', $.param_list)),
-      optional(choice(
-        seq(':', field('return_type', $.type_expr)),
-        field('return_type', $.angle_group),
-      )),
-      $._indent,
       choice(
-        repeat1($.defn_arm),
-        field('body', $.block_body),
+        // Body (or clauses) on indented lines below.
+        seq(
+          optional(field('params', $.param_list)),
+          optional($._defn_return_type),
+          $._indent,
+          choice(
+            repeat1($.defn_arm),
+            field('body', $.block_body),
+          ),
+          $._dedent,
+        ),
+        // Body on the SAME line: `defn add-ten [x] [int+ x 10]` (255 corpus
+        // lines).  `_same_line_body` is a ZERO-WIDTH scanner token; the lexer
+        // picks the branch on one character of lookahead, so this is a plain
+        // shift rather than an ambiguity.
+        //
+        // The param list is REQUIRED here, and that is load-bearing rather
+        // than a description of the syntax: it is what keeps
+        // `_same_line_body` out of `valid_symbols` until the params have been
+        // consumed.  Make it optional and the scanner fires right after
+        // `defn NAME`, takes `[x]` as the body, and strands the real one.
+        seq(
+          field('params', $.param_list),
+          optional($._defn_return_type),
+          $._same_line_body,
+          field('body', $.expression),
+        ),
       ),
-      $._dedent,
+    ),
+
+    _defn_return_type: $ => choice(
+      seq(':', field('return_type', $.type_expr)),
+      field('return_type', $.angle_group),
     ),
 
     // `| pattern... -> body`, mirroring `match_arm`.

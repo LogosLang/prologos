@@ -26,6 +26,7 @@ enum TokenType {
   INDENT,
   DEDENT,
   NEWLINE,
+  SAME_LINE_BODY,
 };
 
 /* Scanner state */
@@ -175,6 +176,46 @@ bool tree_sitter_prologos_external_scanner_scan(
    * parser needs a token. If the parser expects INDENT/DEDENT/NEWLINE,
    * we look at the current line's indentation.
    */
+
+  /* --- SAME_LINE_BODY: a zero-width marker meaning "the body is on THIS
+   *     line, not on an indented line below".
+   *
+   * This exists so the SCANNER decides `defn f [x] body` vs `defn f [x]` +
+   * indented body, instead of the parser.  Rule-shaping cannot do it: `[x]`
+   * and `[body]` are both bracket groups, so the parser cannot tell a second
+   * param list from a body, and every grammar-level formulation of the choice
+   * degraded tree-sitter's ERROR RECOVERY badly (measured: swallows 6 -> 24).
+   *
+   * Here the branch is chosen by ONE token on ONE character of lookahead, so
+   * it is an ordinary shift, not an ambiguity.
+   *
+   * Correctness rests on the grammar making this token valid ONLY after a
+   * param list (the same-line branch requires params).  Otherwise it would
+   * fire immediately after `defn NAME`, swallow `[x]` as the body, and leave
+   * the real body stranded. */
+  if (valid_symbols[SAME_LINE_BODY]) {
+    /* Mark the end BEFORE looking ahead, so the token stays zero-width at the
+     * current position no matter how much whitespace we consume peeking. */
+    lexer->mark_end(lexer);
+
+    while (!lexer->eof(lexer) &&
+           (lexer->lookahead == ' ' || lexer->lookahead == '\t' ||
+            lexer->lookahead == '\r')) {
+      skip_ch(lexer);
+    }
+
+    /* Content on this line that is not a newline, EOF or a comment means the
+     * body starts here.  A comment does NOT count: `defn f [x]  ;; note` has
+     * its body below. */
+    if (!lexer->eof(lexer) && lexer->lookahead != '\n' &&
+        lexer->lookahead != ';') {
+      lexer->result_symbol = SAME_LINE_BODY;
+      return true;
+    }
+    /* Otherwise fall through to the ordinary INDENT/DEDENT/NEWLINE handling.
+     * Falling through is safe: the whitespace we skipped above is exactly what
+     * that path skips first anyway. */
+  }
 
   /* If none of our tokens are valid, bail out immediately */
   if (!valid_symbols[INDENT] && !valid_symbols[DEDENT] && !valid_symbols[NEWLINE]) {

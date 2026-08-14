@@ -27,6 +27,7 @@ ARROW (2026-08-05), Rel T1 (2026-07-25) — and the grammar has not.
 | P5c | `=` unify operator (narrowing goals) | ✅ | No `=` token existed at all; 65 corpus lines. Clean 25 → **26** — [§5.p5c](#p5c) |
 | P5d | Angle-typed params `[iv <Interval>]` + swallow triage | ✅ | 136 corpus lines; first try, no conflicts. Clean 26 → **27** — [§5.p5d](#p5d) |
 | P5e | `string` made a single token (`;` inside a string was lexed as a comment) | ✅ | **`data/reason` cleared**; swallows 6 → **5** — [§5.p5e](#p5e) |
+| P5f | **Same-line `defn` bodies** — scanner-level, after 3 rule formulations failed | ✅ | **Swallows 5 → 2**, bytes 4.6% → **2.7%**, clean 27 → **29** — [§5.p5f](#p5f) |
 | P6 | Re-baseline, regenerate, reinstall, font-lock check | ⬜ | `install.sh`; then unblock SURF T1 |
 | P7 | TSG T1.close — gate wiring, DEFERRED triage, PIR-lite | ⬜ | Consider adding the gate to pre-commit |
 
@@ -790,6 +791,45 @@ that lands, which confirms the ordering rather than contradicting it.
 generated first try with no conflict declarations, both were regression-free.
 That is now a reliable tell — a shape the grammar simply lacks costs one rule;
 a shape two rules already compete for costs a design.
+
+<a id="p5f"></a>
+### 5.P5f — same-line `defn` bodies (the one that needed a design)
+
+`defn add-ten [x] [int+ x 10]` — **255 corpus lines**, and the blocker for three
+of the five remaining swallows.
+
+**Why three rule formulations failed.** The competition is at the TOKEN level:
+`[x]` and `[int+ x 10]` are both bracket groups, so no rule can tell a second
+param list from a body. Every grammar-level formulation put a second
+continuation at the `defn` decision point, and that degraded tree-sitter's
+**error recovery** — measured at the time: swallows 6 → 17 → **24**, worst
+51% → **100%**, *while clean files rose*. Constructs that had failed with three
+local errors became whole-file swallows. All three were reverted.
+
+**The design that works: move the decision into the SCANNER.**
+`_same_line_body` is a zero-width external token. The scanner marks the end
+before peeking, skips spaces/tabs, and emits it when what follows is neither a
+newline, EOF, nor a comment. The branch is then chosen by ONE token on ONE
+character of lookahead — an ordinary shift, not an ambiguity. Generated first
+try, **no conflict declarations**.
+
+⭐ **The load-bearing detail is not in the scanner but in the grammar**: the
+same-line branch makes the **param list REQUIRED**. That is what keeps
+`_same_line_body` out of `valid_symbols` until the params have been consumed.
+Make it `optional` and the scanner fires immediately after `defn NAME`, takes
+`[x]` as the body, and strands the real one. The scanner cannot distinguish
+"before params" from "after params" on its own — the grammar has to withhold the
+token, and `valid_symbols` is the channel that does it.
+
+**Measured** (baseline → after): swallows **5 → 2** · error-bytes 4.6% →
+**2.7%** (−21,432 B, 41% of the remaining mass) · clean files 27 → **29**.
+Cleared `ppn-track2b`, `1A-iii-probe` and `narrowing-demo` — all three of the
+files whose first failing line was a same-line `defn`.
+
+**Method note**: the shape probes were green for the *reverted* formulations too.
+Only the swallow count separated a fix from a catastrophe, and it separated them
+by a factor of twelve (2 vs 24). On this grammar, locality is not a nicer
+headline — it is the only measurement that distinguishes the two outcomes.
 
 ---
 

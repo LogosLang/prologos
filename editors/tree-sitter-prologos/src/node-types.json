@@ -614,6 +614,10 @@
           {
             "type": "block_body",
             "named": true
+          },
+          {
+            "type": "expression",
+            "named": true
           }
         ]
       },
