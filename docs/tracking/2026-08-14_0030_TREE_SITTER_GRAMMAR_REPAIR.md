@@ -368,16 +368,28 @@ whole-line-scope question, and the honest options are:
   NEWLINE; a `_line_end` token would let the body rule say "to end of line",
   which is exactly the constraint. Most faithful to a layout language, and the
   scanner is the layer that owns layout.
-- **(b) accept the greedy read.** Let the body be one `application` and let it
-  absorb trailing groups. Wrong tree for `defn f [x] [a] [b]`, but that shape
-  may not occur — check the corpus before rejecting.
+- **(b) accept the greedy read.** ❌ **DISQUALIFIED BY MEASUREMENT
+  (2026-08-14).** Two shapes were checked:
+  · *sibling* groups on the defn line (`defn f [x] [a] [b]`): **0 genuine
+    cases**. The 5 apparent hits are NESTED groups inside one body
+    (`defn on [f g x y] [f [g x] [g y]]`), which greedy parses correctly.
+  · a same-line defn followed by a **next line starting with `[`**: **7 real
+    occurrences**, e.g. `defn my-id …` then `[my-id 42]`. Newlines are
+    `extras`, so a greedy application body **absorbs the following top-level
+    form as an argument**. That is a whole-form swallow — exactly the locality
+    failure §7 exists to eliminate, and it would be self-inflicted.
 - **(c) `prec.dynamic`** to prefer ending the defn over extending the
   application. Cheapest, least principled, and needs a corpus check that it
   never picks wrong.
 
 ⚠ **Do not attempt this again by adding conflict declarations.** Four rounds
-established that they move the failure rather than remove it. The next attempt
-should start from (a).
+established that they move the failure rather than remove it.
+
+**RULING (2026-08-14, measured): take (a), the `_line_end` scanner token.** (b)
+is disqualified above; (c) `prec.dynamic` would face the same next-line hazard
+and would hide it behind a heuristic rather than state it. The scanner already
+owns layout, and "a same-line body ends at the line" is a layout fact — putting
+it anywhere else is what has failed four times.
 
 <a id="sameline"></a>
 ### 7.2 The five remaining swallows are ONE cause — and it is the same blocker
