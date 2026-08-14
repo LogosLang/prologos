@@ -61,13 +61,18 @@ export function activate(context: vscode.ExtensionContext) {
 
   outputChannel.appendLine(`Extension path: ${context.extensionPath}`);
 
+  // Derived from the server path we just verified — NOT from extensionPath,
+  // which points outside the checkout for a symlinked or .vsix install.
+  const sourceRoot = resolveSourceRoot(serverModule);
+  outputChannel.appendLine(`Source root: ${sourceRoot}`);
+
   const serverOptions: ServerOptions = {
     command: racketPath,
     args: [serverModule],
     options: {
       env: { ...process.env },
       // Set cwd to the prologos source root so requires resolve
-      cwd: path.join(context.extensionPath, '..', '..', 'racket', 'prologos'),
+      cwd: sourceRoot,
     },
   };
 
@@ -163,17 +168,70 @@ export async function deactivate(): Promise<void> {
   }
 }
 
+/** Relative location of the LSP server from the repo root. */
+const SERVER_REL = path.join('racket', 'prologos', 'lsp', 'server.rkt');
+
 /**
  * Find the LSP server.rkt file.
+ *
+ * The extension can be loaded several ways, and each puts `extensionPath`
+ * somewhere different — so we resolve rather than assume:
+ *
+ *   1. `prologos.serverPath` setting — always wins.
+ *   2. In place inside the repo (`code --extensionDevelopmentPath=...`):
+ *      extensionPath IS <repo>/editors/vscode-prologos, so `../..` is the root.
+ *   3. Symlinked into ~/.vscode/extensions: extensionPath is the SYMLINK, whose
+ *      `../..` is ~/, not the repo. realpath() lands back in the repo.
+ *   4. Copied/installed from a .vsix: no path relation to the repo at all —
+ *      fall back to an open workspace folder that contains the server.
+ *
+ * Returns the case-2 guess when nothing is found, so the caller's
+ * "not found at X" message names the path a developer expects.
  */
 function resolveServerPath(context: vscode.ExtensionContext): string {
+  const fs = require('fs');
   const config = vscode.workspace.getConfiguration('prologos');
   const configuredPath = config.get<string>('serverPath');
-  if (configuredPath) {
+  if (configuredPath && configuredPath.length > 0) {
     return configuredPath;
   }
-  // Default: assume extension is in editors/vscode-prologos/
-  return path.join(context.extensionPath, '..', '..', 'racket', 'prologos', 'lsp', 'server.rkt');
+
+  const inRepo = path.join(context.extensionPath, '..', '..', SERVER_REL);
+
+  const candidates = [inRepo];
+
+  // Symlinked install — resolve the link back to the checkout.
+  try {
+    const real = fs.realpathSync(context.extensionPath);
+    if (real !== context.extensionPath) {
+      candidates.push(path.join(real, '..', '..', SERVER_REL));
+    }
+  } catch {
+    // realpath can fail on a dangling link; the other candidates still apply.
+  }
+
+  // Installed copy — look for the checkout among the open workspace folders.
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    candidates.push(path.join(folder.uri.fsPath, SERVER_REL));
+  }
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return path.resolve(candidate);
+    }
+  }
+
+  return path.resolve(inRepo);
+}
+
+/**
+ * The Racket source root (`<repo>/racket/prologos`), derived from the RESOLVED
+ * server path rather than from extensionPath — the server is what actually
+ * pins the checkout, and it is the one path we have already verified exists.
+ */
+function resolveSourceRoot(serverModule: string): string {
+  // <root>/racket/prologos/lsp/server.rkt -> <root>/racket/prologos
+  return path.resolve(path.dirname(serverModule), '..');
 }
 
 /**
