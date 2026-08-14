@@ -1076,3 +1076,79 @@ open. ⚠ Its P1 node model was designed against the OLD tree and must be
 re-checked: navigable-node sets, extent-collapse and the breadcrumb all read a
 materially different grammar now (three new scanner tokens, `angle_group`
 unified, `trait_method`/`defr_form`/`require_group` added).
+
+
+---
+
+<a id="vscode"></a>
+## 9. Follow-on — VS Code semantic highlighting (`498d990e`)
+
+The extension had **no tree-sitter at all**: highlighting came from
+`syntaxes/prologos.tmLanguage.json`, a regex TextMate grammar, so none of this
+track reached VS Code. Now wired: `tree-sitter build --wasm` → web-tree-sitter
+0.25.10 (version-matched to the CLI) → `queries/highlights.scm` → a
+`DocumentSemanticTokensProvider`. `install.sh` builds and copies the wasm when
+`emcc` is present (emsdk at `~/drausen/emsdk`, not on PATH by default).
+
+⭐ **Mutual benefit, and it is the reason to invest**: Emacs currently does
+font-lock through **inline** `treesit-font-lock-rules` (3 sites in
+`prologos-ts-mode.el`), duplicating what `highlights.scm` expresses. Filling out
+the queries serves both editors, and would let `prologos-ts-mode` eventually
+move onto the shared `.scm`.
+
+### 9.1 Open: the queries are SPARSE
+
+`highlights.scm` mentions **44 of the grammar's 111 named node types**. It was
+repaired to *compile* (§ commit `591468ca`) but not extended. This is the
+principal quality gap and the next piece of work.
+
+<a id="hl-issue-1"></a>
+### 9.2 Issue 1 — keywords lost their distinct colour
+
+Keywords ARE still captured as `@keyword` outside error regions. What changed is
+who colours them: **semantic tokens are coloured by the theme's SEMANTIC rules**,
+which are typically less specific than the TextMate scopes the tmLanguage was
+hitting (`keyword.control.prologos` and friends).
+
+**Fix direction**: add `contributes.semanticTokenScopes` to `package.json`,
+mapping each semantic token type to the TextMate scope the theme already styles.
+That makes themes without semantic rules fall back to the right colours instead
+of a generic one. Do NOT solve it by dropping `@keyword` captures — that would
+give up the structural knowledge for a theming problem.
+
+<a id="hl-issue-2"></a>
+### 9.3 Issue 2 — a runaway `type_application` paints six lines orange
+
+Reported as L144:3–L149:49 of `foray.prologos` sharing one colour. Diagnosed —
+**this is not a query bug**:
+
+```
+identifier "def" @L149:0
+  <- type_application [L144-L149]     <-- runs away across SIX lines
+    <- type_expr      [L144-L149]
+      <- ERROR        [L142-L150]
+        <- source_file
+```
+
+L143 is `xs : [List A]] : [List A]` — a doubled `]`, genuinely broken code in a
+scratchpad. The local parse fails, and `type_application` is
+`prec.left(2, seq(identifier, repeat1(...)))` with **no extent bound**, so inside
+the error region it absorbs every identifier-shaped token across six lines,
+including the `def` KEYWORD on L149. The query then faithfully paints all of it
+`@type`.
+
+**Two independent fix directions, and they compose:**
+
+1. **Provider-level, cheap and general — suppress semantic tokens inside ERROR
+   subtrees.** Where the parse is known-wrong, trusting it produces
+   *confidently wrong* colour, which is worse than falling back; TextMate still
+   colours those regions. This bounds the blast radius of every future grammar
+   gap, not just this one, and is the same locality argument that governed the
+   whole track — applied one layer up.
+2. **Grammar-level — bound `type_application`.** It should not cross a line in a
+   context where nothing closed. Riskier (it is a hot rule) and should be
+   measured by swallow count, per the usual discipline.
+
+Recommend (1) first: it is a provider change, measurable by eye, and it makes
+highlighting degrade gracefully on exactly the half-written code an editor
+spends its time in.
