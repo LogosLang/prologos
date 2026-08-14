@@ -385,6 +385,48 @@ whole-line-scope question, and the honest options are:
 ⚠ **Do not attempt this again by adding conflict declarations.** Four rounds
 established that they move the failure rather than remove it.
 
+<a id="p6-lineend"></a>
+#### 7.0.1 `_line_end` IMPLEMENTED — and the ruling was necessary but NOT sufficient
+
+Attempted 2026-08-14 (post-rewind), reverted to known-good. The scanner half
+**works**; the ruling's premise was right and its sufficiency was wrong.
+
+**What is settled — the scanner design is sound.** `LINE_END` added to
+`enum TokenType` (last, so existing indices do not shift) and `$._line_end` to
+`externals` (same position — the two orders MUST match). It is emitted
+**zero-width**: `mark_end()` before any lookahead, so it consumes nothing and
+the INDENT/DEDENT/NEWLINE machinery still sees the newline on the next call.
+That separation is essential — a `_line_end` that swallowed the newline would
+destroy the DEDENT closing an enclosing `impl`. Also emitted at EOF, so a
+same-line `defn` as the final line can close. It generated and behaved.
+
+**What is NOT settled — conflicts #2 and #4 are COUPLED, and that is new.**
+Three further rounds, and they oscillate:
+
+| move | outcome |
+|---|---|
+| same-line body = `expression` | **#2** — `<` is `angle_expr` (body) or `angle_type` (return) |
+| body restricted to non-angle head | **#4** — `defn f [x] [g x] • [` |
+| declare `[$._same_line_head, $.expression]` | **#2 returns** — the declaration itself makes `expression` reachable after `param_list` |
+| also restrict arguments to non-angle | **#4 returns** |
+| both restrictions + the declaration | **#2 returns** |
+
+So it is not that declarations "move the failure" — it is sharper than that:
+**#4 can only be resolved by admitting `expression` in that position, and doing
+so is exactly what recreates #2.** They cannot both be closed by rule shaping.
+
+**PROPOSED ROOT FIX (untried, and the next thing to attempt):** #2 exists only
+because `angle_type` and `angle_expr` are two DIFFERENT rules that both match
+`<…>`. Unify them into a single `angle_group` rule and let position decide the
+LABEL rather than the parse — then #2 cannot arise, and #4's declaration becomes
+safe because `_line_end` is there to kill the wrong branch. That attacks the
+coupling at its root instead of alternating between its two ends.
+
+⚠ Do not resume by re-trying the table above; those five combinations are
+exhausted. Verified restored to known-good after the revert: clean 25, swallows
+6, worst 51%, and multi-clause defn / impl+`<Bool>` / trait / defr / linear
+arrows all still parse at 0.
+
 **RULING (2026-08-14, measured): take (a), the `_line_end` scanner token.** (b)
 is disqualified above; (c) `prec.dynamic` would face the same next-line hazard
 and would hide it behind a heuristic rather than state it. The scanner already
