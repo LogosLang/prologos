@@ -339,6 +339,42 @@ made the owner's scratchpad usable in an editor.
 `examples/2026-03-30-ppn-track2b` 33% · `book/lattices` 31% ·
 `examples/2026-04-22-1A-iii-probe` 31% · `data/reason` 20%.
 
+<a id="sameline"></a>
+### 7.2 The five remaining swallows are ONE cause — and it is the same blocker
+
+Diagnosed 2026-08-14 by reading each file's largest ERROR node. Three of the
+five open at an identical construct:
+
+```
+defn apply-op [f x y] [f x y]      narrowing-demo, from line 300
+defn add-ten  [x] [int+ x 10]      ppn-track2b,    from line 81
+defn p1-inc   [n] [int+ n 1]       1A-iii-probe,   from line 61
+```
+
+**A SAME-LINE `defn` body.** `defn_form` demanded `$._indent`, so a one-line
+defn was unrepresentable — and **255 corpus lines write it**, at 3–4 errors
+each. It is the single largest remaining gap by occurrence.
+
+⏸️ **BLOCKED, attempted and reverted**, and it is the SAME ambiguity family as
+the paren match arm in §7.1:
+
+- first `defn f <A -> B>`: a body may begin with `<`, which is also how the
+  `<Type>` return annotation begins — undecidable until the closing `>`;
+- restricting the body to non-angle forms then exposed the real one:
+  `defn add-ten [x] [int+ x 10]` — **`param_list` and `grouped_expr` are BOTH
+  `[…]`**, so nothing distinguishes "the first bracket group is the params"
+  from "it is the body" without lookahead.
+
+Conflict declarations do not close it; each one exposes the next. The fix is the
+same design task as §7.1 — **decide bracket-group ROLE by position/lookahead in
+one place**, rather than by rule shape. Doing that would unblock the same-line
+defn body AND the paren match arm together, which is the whole remaining
+swallow list bar `lattices` and `reason`.
+
+Not attempted here: `book/lattices` (opens at `defn top [] <Parity>` inside an
+impl — same-line-adjacent) and `data/reason` (opens at a multi-line bracket
+continuation). Both plausibly the same root; unverified.
+
 <a id="fio"></a>
 ### 7.1 `core/fio.prologos` (51%) — half done, half BLOCKED
 
