@@ -1259,3 +1259,58 @@ The track ran on `check-corpus.sh` and never wired this suite into anything.
 Two blind spots now recorded together: the gate cannot see wrong-but-clean trees
 (§9.4), and the structural suite that could has been red and ungated for six
 months.
+
+<a id="hl-issue-6"></a>
+### 9.6 ✅ FIXED — `@[…]` PVec literals, and maps opening a continuation line
+
+Reported 2026-08-14: spurious painting on `foray.prologos:963-965` and
+`:976-978`. **Two independent causes**, and the second is the general one.
+
+**(a) `@[` was not in the grammar at all** — `grep "'@"` over `grammar.js`
+returned **zero** hits, while the corpus holds **252** `@[` across 13 files.
+Every one opened an `ERROR` that then contained the maps written inside it, so
+the maps parsed correctly and were painted wrongly because of their surroundings.
+`@[…]` is a persistent-vector literal (compiler: `@[1 2 3] : [PVec Int]`). Added
+as `pvec_literal`, with `@[` as ONE token following the `'[` precedent —
+a separate `@` would also admit `@ [1 2]`, which is not the syntax.
+
+**(b) ⭐ The general cause — a map opening a CONTINUATION LINE was never a map.**
+`_map_open` (the P5i scanner token) skipped spaces and tabs before the brace but
+**deliberately not newlines** — "which belong to the INDENT logic". Right outside
+a bracket group, wrong inside one, where brackets span lines freely. So
+
+```
+@[{:name "Frodo"}
+  {:name "Gimli"}]      <-- this brace was never MAP_OPEN
+```
+
+failed while the identical maps on ONE line parsed. **Not `@[`-specific**:
+plain `[` and `'[` failed identically, which is what showed it was the scanner
+and not the new rule. Fixed by skipping newlines only when no layout token is
+expected (`!valid_symbols[INDENT|DEDENT|NEWLINE]`) — the proxy for "inside a
+bracket group", where a newline carries no layout meaning.
+
+**Measured** — the gate IMPROVED, unlike §9.4 which it could not see at all:
+
+| | before | after |
+|---|---|---|
+| ERROR nodes | 3168 | **3054** |
+| MISSING | 76 | **74** |
+| error-bytes | 19550 | **18571** |
+| unparsed | 1.7% | **1.6%** |
+| swallows | 0 | **0** |
+
+Budget ratcheted `max_unparsed_pct` 1.8 → **1.7**. In `foray.prologos`
+specifically: **65** map literals and **48** PVec literals now recognised (PVec
+was 0), and neither reported range carries an ERROR any more. Regression-checked
+on plain block layout and implicit params (`{A : Type}`), the two things the
+newline skip could have broken. Pinned by `test/corpus/map_literal.txt`.
+
+⚠ Still erroring nearby, and NOT this bug: L969 `record.orders:items*:sku` and
+L981 `party:name{2 1}` — path-selection syntax (CIU T6), a separate gap.
+
+**Filed, not changed**: `pvec_literal` elements nest under `application`, because
+the rule is `repeat($.expression)` and juxtaposition IS application. This matches
+`list_literal` exactly (`'[1 2 3]` nests identically), so it is the established
+convention rather than a new defect; whether either should yield flat elements
+is one question affecting both.

@@ -150,6 +150,10 @@
           "named": true
         },
         {
+          "type": "pvec_literal",
+          "named": true
+        },
+        {
           "type": "quasiquote_expr",
           "named": true
         },
@@ -1730,6 +1734,21 @@
     }
   },
   {
+    "type": "pvec_literal",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "quasiquote_expr",
     "named": true,
     "fields": {},
@@ -2571,6 +2590,10 @@
   },
   {
     "type": "??",
+    "named": false
+  },
+  {
+    "type": "@[",
     "named": false
   },
   {

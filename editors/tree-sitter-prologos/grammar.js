@@ -773,6 +773,22 @@ module.exports = grammar({
       ']',
     ),
 
+    // Persistent-vector literal: `@[1 2 3]`, typing as `[PVec Int]`.
+    //
+    // The grammar knew `@` NOT AT ALL — zero occurrences — while the corpus has
+    // 252 `@[` across 13 files, so every one produced an ERROR node that then
+    // swallowed the maps written inside it. That is the reported "spurious
+    // painting" on foray.prologos:963-965 and :976-978: the maps parse fine,
+    // but they sit inside the ERROR the unknown `@` opens.
+    //
+    // `@[` is ONE token, following `'[` for list_literal directly above — a
+    // separate `@` would also admit `@ [1 2]`, which is not the syntax.
+    pvec_literal: $ => seq(
+      '@[',
+      repeat($.expression),
+      ']',
+    ),
+
     // Anonymous lambda: fn [params] body
     fn_expr: $ => prec.right(seq(
       'fn',
@@ -879,6 +895,7 @@ module.exports = grammar({
       $.compose_op,
       $.operator,
       $.list_literal,
+      $.pvec_literal,
       $.map_literal,
       $.quote_expr,
       $.quasiquote_expr,

@@ -70,3 +70,41 @@ def m := {:f [dbl 2] :g 3}
             key: (keyword_literal)
             value: (atom
               (number))))))))
+
+===
+PVec literal with maps on continuation lines
+===
+
+def party
+  @[{:name "Frodo"}
+    {:name "Gimli"}]
+
+---
+
+; NOTE the `application` wrapper: `pvec_literal` is `repeat($.expression)`, and
+; juxtaposition IS application, so elements nest exactly as they already do in
+; `list_literal` ('[1 2 3] nests identically).  Matching that convention is
+; deliberate; whether either should instead yield flat elements is a separate
+; question affecting both, filed rather than changed here.
+(source_file
+  (top_level
+    (def_form
+      name: (identifier)
+      body: (block_body
+        (expression
+          (atom
+            (pvec_literal
+              (expression
+                (application
+                  (expression
+                    (atom
+                      (map_literal
+                        key: (keyword_literal)
+                        value: (atom
+                          (string)))))
+                  (expression
+                    (atom
+                      (map_literal
+                        key: (keyword_literal)
+                        value: (atom
+                          (string))))))))))))))

@@ -311,11 +311,31 @@ bool tree_sitter_prologos_external_scanner_scan(
    * they open with an identifier. */
   if (valid_symbols[MAP_OPEN]) {
     /* The scanner runs BEFORE `extras' are skipped, so the lookahead here is
-     * usually the space after `:=', not the brace.  Skip spaces/tabs first —
-     * but never newlines, which belong to the INDENT logic below. */
+     * usually the space after `:=', not the brace.  Skip spaces/tabs first.
+     *
+     * NEWLINES are skipped only when no layout token is expected.  That
+     * condition is the proxy for "we are inside a bracket group", where
+     * brackets span lines freely and a newline carries no layout meaning;
+     * outside one, a newline belongs to the INDENT/DEDENT logic below and
+     * eating it here would break every block.
+     *
+     * Without this, a `{` that OPENS A CONTINUATION LINE was never seen as a
+     * map: lookahead was `\n', the skip loop stopped, MAP_OPEN was not emitted,
+     * and the brace lexed as implicit-params — so
+     *
+     *     @[{:name "Frodo"}
+     *       {:name "Gimli"}]     <-- this one failed
+     *
+     * errored while the same maps on ONE line parsed. Reported 2026-08-14 as
+     * spurious painting on foray.prologos:963-965 and :976-978; it is not
+     * `@[`-specific — plain `[' and `'[' failed identically. */
+    bool layout_expected = valid_symbols[INDENT] ||
+                           valid_symbols[DEDENT] ||
+                           valid_symbols[NEWLINE];
     while (!lexer->eof(lexer) &&
            (lexer->lookahead == ' ' || lexer->lookahead == '\t' ||
-            lexer->lookahead == '\r')) {
+            lexer->lookahead == '\r' ||
+            (!layout_expected && lexer->lookahead == '\n'))) {
       skip_ch(lexer);
     }
   }
