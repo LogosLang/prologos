@@ -50,8 +50,10 @@
   (should (string= prologos-repl-buffer-name "*prologos-repl*")))
 
 (ert-deftest prologos-repl-test/default-timeout ()
-  "Default inline result timeout should be 10 seconds."
-  (should (= prologos-inline-result-timeout 10)))
+  "Default inline result timeout should be nil.
+nil means results persist until the buffer is modified, matching the VS
+Code extension.  A number here would silently reintroduce timed expiry."
+  (should (null prologos-inline-result-timeout)))
 
 ;; ============================================================
 ;; Test: Result parsing
@@ -130,21 +132,86 @@
     (prologos--clear-inline-results)
     (should (= (length prologos--result-overlays) 0))))
 
-(ert-deftest prologos-repl-test/display-replaces-previous ()
-  "Displaying a new result should clear the previous one."
-  (prologos-repl-test--in-buffer "(eval zero)\n(eval true)"
-    (goto-char 12) ;; after first sexp
-    (prologos--display-inline-result "zero : Nat" (point))
-    (should (= (length prologos--result-overlays) 1))
-    ;; Display a second result — should clear the first
+(ert-deftest prologos-repl-test/display-keeps-independent-results ()
+  "Results for DIFFERENT forms coexist.
+This is the behaviour change: results used to be mutually exclusive, so
+evaluating a second form erased the first.  Now a screenful of forms can
+each carry their own answer, as in the VS Code extension."
+  (prologos-repl-test--in-buffer "def a := 1\ndef b := 2"
+    (let ((first-end (save-excursion (goto-char (point-min))
+                                     (end-of-line) (point)))
+          (second-end (point-max)))
+      (prologos--display-inline-result "1 : Int" first-end 1 first-end)
+      (prologos--display-inline-result "2 : Int" second-end
+                                       (1+ first-end) second-end)
+      (should (= (length prologos--result-overlays) 2))
+      (prologos--clear-inline-results))))
+
+(ert-deftest prologos-repl-test/display-replaces-overlapping-result ()
+  "Re-sending the SAME form replaces just that form's result."
+  (prologos-repl-test--in-buffer "def a := 1\ndef b := 2"
+    (let ((end (save-excursion (goto-char (point-min))
+                               (end-of-line) (point))))
+      (prologos--display-inline-result "stale" end 1 end)
+      (prologos--display-inline-result "1 : Int" end 1 end)
+      (should (= (length prologos--result-overlays) 1))
+      (should (string-match-p "=> 1 : Int"
+                              (overlay-get (car prologos--result-overlays)
+                                           'after-string)))
+      (prologos--clear-inline-results))))
+
+;; ============================================================
+;; Test: Overlay PERSISTENCE (results survive commands, die on edits)
+;; ============================================================
+
+(ert-deftest prologos-repl-test/result-survives-commands ()
+  "A result must NOT be cleared by the next command.
+The old implementation hung clearing on `pre-command-hook', so merely
+moving point erased the answer.  Nothing but an edit should clear it."
+  (prologos-repl-test--in-buffer "def a := 1"
     (goto-char (point-max))
-    (prologos--display-inline-result "true : Bool" (point))
+    (prologos--display-inline-result "1 : Int" (point) 1 (point))
     (should (= (length prologos--result-overlays) 1))
-    (let ((ov (car prologos--result-overlays)))
-      (should (string-match-p "=> true : Bool"
-                              (overlay-get ov 'after-string))))
-    ;; Clean up
+    ;; Simulate real command activity: move around, run a command loop step.
+    (goto-char (point-min))
+    (forward-word)
+    (run-hooks 'pre-command-hook)
+    (run-hooks 'post-command-hook)
+    (should (= (length prologos--result-overlays) 1))
     (prologos--clear-inline-results)))
+
+(ert-deftest prologos-repl-test/result-cleared-on-modification ()
+  "Editing the buffer clears every result, as onDidChangeTextDocument does."
+  (prologos-repl-test--in-buffer "def a := 1"
+    (goto-char (point-max))
+    (prologos--display-inline-result "1 : Int" (point) 1 (point))
+    (should (= (length prologos--result-overlays) 1))
+    (insert "\ndef b := 2")
+    (should (= (length prologos--result-overlays) 0))))
+
+(ert-deftest prologos-repl-test/modification-clears-all-results ()
+  "One edit clears ALL results, not just the one at the edit site."
+  (prologos-repl-test--in-buffer "def a := 1\ndef b := 2"
+    (let ((first-end (save-excursion (goto-char (point-min))
+                                     (end-of-line) (point))))
+      (prologos--display-inline-result "1 : Int" first-end 1 first-end)
+      (prologos--display-inline-result "2 : Int" (point-max)
+                                       (1+ first-end) (point-max))
+      (should (= (length prologos--result-overlays) 2))
+      ;; Edit at the END of the buffer; the result at the TOP must go too.
+      (goto-char (point-max))
+      (insert " ")
+      (should (= (length prologos--result-overlays) 0)))))
+
+(ert-deftest prologos-repl-test/clear-results-is-a-command ()
+  "prologos-clear-results dismisses results without touching the text."
+  (prologos-repl-test--in-buffer "def a := 1"
+    (goto-char (point-max))
+    (prologos--display-inline-result "1 : Int" (point) 1 (point))
+    (let ((before (buffer-string)))
+      (prologos-clear-results)
+      (should (= (length prologos--result-overlays) 0))
+      (should (string= before (buffer-string))))))
 
 (ert-deftest prologos-repl-test/overlay-face ()
   "Inline result overlay should use the correct face."
@@ -158,6 +225,79 @@
     (prologos--clear-inline-results)))
 
 ;; ============================================================
+;; Test: Top-level form detection (layout-based)
+;; ============================================================
+;;
+;; These mirror getTopLevelFormRange in src/forms.ts.  If the two ever
+;; disagree, C-x C-e and cmd+enter evaluate different text.
+
+(defun prologos-repl-test--form-at (content line col)
+  "Return the form text found with point on LINE (1-based) at COL."
+  (let ((buf (generate-new-buffer "*prologos-form-test*")))
+    (unwind-protect
+        (with-current-buffer buf
+          (insert content)
+          (prologos-mode)
+          (goto-char (point-min))
+          (forward-line (1- line))
+          (forward-char col)
+          (let ((b (prologos--top-level-form-bounds)))
+            (and b (buffer-substring-no-properties (car b) (cdr b)))))
+      (kill-buffer buf))))
+
+(ert-deftest prologos-repl-test/form-bounds-single-line ()
+  "A one-line top-level form is found from anywhere on that line."
+  (let ((src "def a := 1\ndef b := 2\n"))
+    (should (string= (prologos-repl-test--form-at src 1 0) "def a := 1"))
+    (should (string= (prologos-repl-test--form-at src 1 5) "def a := 1"))
+    (should (string= (prologos-repl-test--form-at src 2 0) "def b := 2"))))
+
+(ert-deftest prologos-repl-test/form-bounds-bare-expression ()
+  "A bare expression is a form.
+The retired defun-based command could not see this at all -- its regexp
+only matched def/defn/spec/... keywords."
+  (should (string= (prologos-repl-test--form-at "[+ 1 2]\n" 1 3)
+                   "[+ 1 2]")))
+
+(ert-deftest prologos-repl-test/form-bounds-from-continuation-line ()
+  "Point on an indented continuation line finds the whole form."
+  (let ((src "defn nth [n xs]\n  | n nil -> none\n  | n x -> x\n\ndef after := 1\n"))
+    ;; from the middle clause
+    (should (string= (prologos-repl-test--form-at src 2 4)
+                     "defn nth [n xs]\n  | n nil -> none\n  | n x -> x"))
+    ;; and from the header
+    (should (string= (prologos-repl-test--form-at src 1 0)
+                     "defn nth [n xs]\n  | n nil -> none\n  | n x -> x"))))
+
+(ert-deftest prologos-repl-test/form-bounds-blank-line-inside-form ()
+  "A blank line stays INSIDE the form when the next non-blank is indented."
+  (let ((src "defn f [x]\n  let y 1\n\n  [+ x y]\n\ndef after := 1\n"))
+    (should (string= (prologos-repl-test--form-at src 1 0)
+                     "defn f [x]\n  let y 1\n\n  [+ x y]"))))
+
+(ert-deftest prologos-repl-test/form-bounds-stops-at-next-top-level ()
+  "A column-0 line ends the previous form, with no blank line needed."
+  (let ((src "def a := 1\ndef b := 2\n"))
+    (should (string= (prologos-repl-test--form-at src 1 0) "def a := 1"))))
+
+(ert-deftest prologos-repl-test/form-bounds-stops-at-col0-comment ()
+  "A column-0 comment is a boundary, not a continuation."
+  (let ((src "def a := 1\n;; a note\ndef b := 2\n"))
+    (should (string= (prologos-repl-test--form-at src 1 0) "def a := 1"))))
+
+(ert-deftest prologos-repl-test/form-bounds-trims-trailing-blanks ()
+  "Trailing blank lines are not part of the form."
+  (let ((src "defn f [x]\n  [+ x 1]\n\n\ndef after := 1\n"))
+    (should (string= (prologos-repl-test--form-at src 1 0)
+                     "defn f [x]\n  [+ x 1]"))))
+
+(ert-deftest prologos-repl-test/form-bounds-empty-buffer ()
+  "An empty buffer has no form -- bounds are nil, and send-form errors."
+  (should (null (prologos-repl-test--form-at "" 1 0)))
+  (prologos-repl-test--in-buffer ""
+    (should-error (prologos-send-form) :type 'user-error)))
+
+;; ============================================================
 ;; Test: Keymap bindings — prologos-mode
 ;; ============================================================
 
@@ -166,10 +306,16 @@
   (should (eq (lookup-key prologos-mode-map (kbd "C-c C-z"))
               'prologos-repl)))
 
-(ert-deftest prologos-repl-test/mode-map-eval-last-sexp ()
-  "C-x C-e should be bound to prologos-eval-last-sexp."
+(ert-deftest prologos-repl-test/mode-map-send-form ()
+  "C-x C-e should be bound to prologos-send-form."
   (should (eq (lookup-key prologos-mode-map (kbd "C-x C-e"))
-              'prologos-eval-last-sexp)))
+              'prologos-send-form)))
+
+(ert-deftest prologos-repl-test/mode-map-send-form-super-return ()
+  "s-<return> -- cmd+enter on macOS -- should also send the form.
+This is the binding that makes Emacs match the VS Code extension."
+  (should (eq (lookup-key prologos-mode-map (kbd "s-<return>"))
+              'prologos-send-form)))
 
 (ert-deftest prologos-repl-test/mode-map-eval-region ()
   "C-c C-r should be bound to prologos-eval-region."
@@ -186,10 +332,11 @@
   (should (eq (lookup-key prologos-mode-map (kbd "C-c C-l"))
               'prologos-load-file)))
 
-(ert-deftest prologos-repl-test/mode-map-eval-defun ()
-  "C-c C-d should be bound to prologos-eval-defun-at-point."
-  (should (eq (lookup-key prologos-mode-map (kbd "C-c C-d"))
-              'prologos-eval-defun-at-point)))
+(ert-deftest prologos-repl-test/mode-map-eval-defun-retired ()
+  "C-c C-d must be UNBOUND -- prologos-eval-defun-at-point was retired.
+Pinned so a copy-paste of the old keymap cannot quietly bring it back."
+  (should (null (lookup-key prologos-mode-map (kbd "C-c C-d"))))
+  (should-not (fboundp 'prologos-eval-defun-at-point)))
 
 ;; ============================================================
 ;; Test: Keymap bindings — prologos-ts-mode (if available)
@@ -206,11 +353,17 @@
   (should (eq (lookup-key prologos-ts-mode-map (kbd "C-c C-z"))
               'prologos-repl)))
 
-(ert-deftest prologos-repl-test/ts-mode-map-eval-last-sexp ()
+(ert-deftest prologos-repl-test/ts-mode-map-send-form ()
   "C-x C-e should be bound in prologos-ts-mode-map."
   (skip-unless (boundp 'prologos-ts-mode-map))
   (should (eq (lookup-key prologos-ts-mode-map (kbd "C-x C-e"))
-              'prologos-eval-last-sexp)))
+              'prologos-send-form)))
+
+(ert-deftest prologos-repl-test/ts-mode-map-send-form-super-return ()
+  "s-<return> should also send the form in prologos-ts-mode-map."
+  (skip-unless (boundp 'prologos-ts-mode-map))
+  (should (eq (lookup-key prologos-ts-mode-map (kbd "s-<return>"))
+              'prologos-send-form)))
 
 (ert-deftest prologos-repl-test/ts-mode-map-eval-region ()
   "C-c C-r should be bound in prologos-ts-mode-map."
@@ -230,11 +383,10 @@
   (should (eq (lookup-key prologos-ts-mode-map (kbd "C-c C-l"))
               'prologos-load-file)))
 
-(ert-deftest prologos-repl-test/ts-mode-map-eval-defun ()
-  "C-c C-d should be bound in prologos-ts-mode-map."
+(ert-deftest prologos-repl-test/ts-mode-map-eval-defun-retired ()
+  "C-c C-d must be UNBOUND in prologos-ts-mode-map too."
   (skip-unless (boundp 'prologos-ts-mode-map))
-  (should (eq (lookup-key prologos-ts-mode-map (kbd "C-c C-d"))
-              'prologos-eval-defun-at-point)))
+  (should (null (lookup-key prologos-ts-mode-map (kbd "C-c C-d")))))
 
 ;; ============================================================
 ;; Test: REPL mode definition
@@ -259,12 +411,53 @@
 (ert-deftest prologos-repl-test/commands-interactive ()
   "All evaluation commands should be interactive."
   (should (commandp 'prologos-repl))
-  (should (commandp 'prologos-eval-last-sexp))
+  (should (commandp 'prologos-send-form))
   (should (commandp 'prologos-eval-region))
   (should (commandp 'prologos-eval-buffer))
   (should (commandp 'prologos-load-file))
-  (should (commandp 'prologos-eval-defun-at-point))
+  (should (commandp 'prologos-clear-results))
   (should (commandp 'prologos-repl-clear)))
+
+;; ============================================================
+;; Test: Integration — needs a live Racket + the prologos collection
+;; ============================================================
+
+(defun prologos-repl-test--kill-repl ()
+  "Kill the REPL buffer if one exists, without prompting."
+  (when (get-buffer prologos-repl-buffer-name)
+    (let ((kill-buffer-query-functions nil))
+      (kill-buffer prologos-repl-buffer-name))))
+
+(ert-deftest prologos-repl-test/cold-start-result-is-not-the-banner ()
+  "The FIRST evaluation must return its own result, not the startup banner.
+
+Regression pin.  `make-comint-in-buffer' returns before the process has
+printed anything, so the banner used to still be in flight when the
+first callback was enqueued: the output filter matched the banner's own
+trailing prompt, popped that callback, and delivered the version string
+as the result -- while the real result arrived later to an empty queue
+and was silently dropped.  Only the COLD path shows it, which is why it
+survived; and persistent overlays made it stay on screen.
+`prologos-repl-ensure' now waits for the first prompt."
+  (skip-unless (prologos-repl-test--racket-available-p))
+  (unwind-protect
+      (progn
+        (prologos-repl-test--kill-repl)   ; force the cold path
+        (prologos-repl-test--in-buffer "def cold := 1"
+          (goto-char (point-max))
+          (prologos-send-form)
+          (let ((n 0))
+            (while (and (null prologos--result-overlays) (< n 240))
+              (accept-process-output nil 0.5)
+              (setq n (1+ n))))
+          (should prologos--result-overlays)
+          (let ((text (substring-no-properties
+                       (overlay-get (car prologos--result-overlays)
+                                    'after-string))))
+            (should-not (string-match-p "Prologos v" text))
+            (should-not (string-match-p ":quit to exit" text))
+            (should (string-match-p "cold" text)))))
+    (prologos-repl-test--kill-repl)))
 
 ;; ============================================================
 ;; Provide
