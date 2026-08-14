@@ -27,6 +27,7 @@ enum TokenType {
   DEDENT,
   NEWLINE,
   SAME_LINE_BODY,
+  ARM_LPAREN,
 };
 
 /* Scanner state */
@@ -216,6 +217,67 @@ bool tree_sitter_prologos_external_scanner_scan(
      * Falling through is safe: the whitespace we skipped above is exactly what
      * that path skips first anyway. */
   }
+
+  /* --- ARM_LPAREN: a `(` that opens a MATCH ARM, not a paren expression.
+   *
+   * `match h (mk-handle idx -> …)` writes arms inline in parens.  At the `(`
+   * the parser cannot tell an arm from a `paren_expr`, because the only
+   * distinguisher — the `->` — is arbitrarily far ahead, and inside the group
+   * `true` is ambiguous between `atom` and `literal_pattern`.  That is an
+   * LR(1) problem and precedence cannot fix it; the earlier grammar-level
+   * attempts produced a cascading conflict family.
+   *
+   * The scanner has UNBOUNDED lookahead, so it settles it here: scan to the
+   * matching `)` and emit ARM_LPAREN only if a `->` occurs at depth 0 inside.
+   * `paren_expr` then starts with a DIFFERENT TOKEN and the ambiguity is gone
+   * by construction rather than by precedence.
+   *
+   * Strings and comments are skipped so an `->` inside them cannot decide it. */
+  if (valid_symbols[ARM_LPAREN]) {
+    /* The scanner is entered wherever the parser stopped, which for
+     * `match h (arm)` is the SPACE before the paren — not the paren.  Skip
+     * horizontal whitespace first, with skip_ch so it stays out of the token. */
+    while (!lexer->eof(lexer) &&
+           (lexer->lookahead == ' ' || lexer->lookahead == '\t' ||
+            lexer->lookahead == '\r')) {
+      skip_ch(lexer);
+    }
+    if (lexer->lookahead != '(') goto not_an_arm;
+    advance_ch(lexer);
+    lexer->mark_end(lexer);   /* the token is exactly the `(` */
+
+    int depth = 0;
+    bool found_arrow = false;
+    while (!lexer->eof(lexer)) {
+      int32_t c = lexer->lookahead;
+      if (c == '"') {                       /* skip a string literal */
+        advance_ch(lexer);
+        while (!lexer->eof(lexer) && lexer->lookahead != '"') advance_ch(lexer);
+        if (!lexer->eof(lexer)) advance_ch(lexer);
+        continue;
+      }
+      if (c == ';') {                       /* skip a comment to end of line */
+        while (!lexer->eof(lexer) && lexer->lookahead != '\n') advance_ch(lexer);
+        continue;
+      }
+      if (c == '(' || c == '[' || c == '{') { depth++; advance_ch(lexer); continue; }
+      if (c == ')' && depth == 0) break;    /* matching close — decision made */
+      if (c == ')' || c == ']' || c == '}') { depth--; advance_ch(lexer); continue; }
+      if (c == '-' && depth == 0) {
+        advance_ch(lexer);
+        if (lexer->lookahead == '>') { found_arrow = true; break; }
+        continue;
+      }
+      advance_ch(lexer);
+    }
+
+    if (found_arrow) {
+      lexer->result_symbol = ARM_LPAREN;
+      return true;   /* extent is the mark: just the `(` */
+    }
+    return false;    /* not an arm — let `(` lex normally */
+  }
+  not_an_arm:;
 
   /* If none of our tokens are valid, bail out immediately */
   if (!valid_symbols[INDENT] && !valid_symbols[DEDENT] && !valid_symbols[NEWLINE]) {

@@ -1428,8 +1428,48 @@
         {
           "type": "match_arm",
           "named": true
+        },
+        {
+          "type": "match_paren_arm",
+          "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "match_paren_arm",
+    "named": true,
+    "fields": {
+      "body": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      },
+      "guard": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      },
+      "pattern": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "pattern",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {

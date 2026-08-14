@@ -27,6 +27,7 @@ module.exports = grammar({
     $._dedent,
     $._newline,
     $._same_line_body,
+    $._arm_lparen,
   ],
 
   extras: $ => [
@@ -564,13 +565,36 @@ module.exports = grammar({
     // Match expressions
     // ============================================================
 
-    match_expr: $ => seq(
+    // `match` takes arms either on INDENTED lines (`| pat -> body`) or inline
+    // in PARENS on the same line (`match h (mk-handle idx -> …)`) — the sexp
+    // arm spelling, used inside WS files.
+    //
+    // The inline form is why fio.prologos was a 51% swallow.
+    match_expr: $ => prec.right(seq(
       'match',
       field('scrutinee', $.expression),
-      $._indent,
-      repeat1($.match_arm),
-      $._dedent,
-    ),
+      choice(
+        seq($._indent, repeat1($.match_arm), $._dedent),
+        repeat1($.match_paren_arm),
+      ),
+    )),
+
+    // Outranks `paren_expr`, which also matches `( … )` and would happily read
+    // `(zero -> true)` as three expressions — `->` is an atom.  The precedence
+    // is what settles that, and what stops the SCRUTINEE from swallowing the
+    // arm as an application argument.
+    // prec(10) settles arm-arrow vs `arrow_op`-as-atom after the `->`.  Safe to
+    // state as a precedence now that `_arm_lparen` has removed the real
+    // ambiguity; on the plain `'('` spelling this same prec did NOT help,
+    // because the undecidable part was the interior, not the arrow.
+    match_paren_arm: $ => prec(10, seq(
+      $._arm_lparen,
+      field('pattern', $.pattern),
+      optional(seq('when', field('guard', $.expression))),
+      '->',
+      field('body', $.expression),
+      ')',
+    )),
 
     match_arm: $ => prec.right(5, seq(
       '|',
