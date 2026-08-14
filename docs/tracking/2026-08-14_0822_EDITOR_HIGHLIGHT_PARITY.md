@@ -17,7 +17,7 @@ contract well enough that a third editor is a *mapping table*, not a port.
 
 | Phase | Description | Status | Notes |
 |---|---|---|---|
-| P0 | Capture registry + D1 renames | 🔄 | Verification ✅ + all 4 renames ✅ `77d1d893`. **Registry itself still open — blocked on D2.** [§3.1](#p0), [§D1](#d1) |
+| P0 | Capture registry + D1 renames | ✅ | `7fd4445c`. D2 ruled **option E**; `queries/captures.md` + two-direction gate; 9 dead entries deleted. [§9](#p0-record) |
 | P1 | Parity harness: one fixture, capture-by-capture, asserted in BOTH | ✅ | `30671d9d`. **Query layer is ALREADY in parity** — 205 captures, identical. [§8](#p1-record) |
 | P2 | TextMate: declared, and made to AGREE where it overlaps | ⬜ | Kills drift cause 1 — [§3.3](#p2), amended by [§7.4](#d3-critique) |
 | P3 | Review `semanticTokenScopes` per capture | ⬜ | Kills drift cause 2; settles the blue/orange class — [§3.4](#p3) |
@@ -275,7 +275,7 @@ not something to drift into by upgrading Homebrew.
 `constant.language`), and the Emacs-side lockstep noted above.
 
 <a id="d2"></a>
-### D2 — registry format: 🔬 OPEN, analysis below
+### D2 — registry format: ✅ RULED (2026-08-14) — **option E**, strict vocabulary, roots policy. [§9](#p0-record)
 
 See [§6](#d2-analysis). Owner asked for tradeoffs and worked examples with room
 to deliberate; no recommendation is being forced.
@@ -504,3 +504,69 @@ undetectable without emsdk and a rebuild. Worth closing in P2 or T1.close.
 
 **Not included**: capture → mapping completeness. That is P0's, P0 is blocked on
 D2, and half-implementing it here would front-run the ruling.
+
+---
+
+<a id="p0-record"></a>
+## 9. P0 record — D2 ruled, registry landed (2026-08-14, `7fd4445c`)
+
+**Ruling: option E**, strict vocabulary, plus an explicit roots policy. The
+owner's stated reason was **decomplection**, and it is the right frame: meaning
+is shared, appearance is per-editor, and one registry carrying both was the
+complecting move.
+
+The argument that decided it over A was **coupling, not tidiness**. Under A both
+consumers load one file, so a contributor editing *their* editor's section can
+break an editor they have never opened. Under E that is impossible — and the
+people it protects are exactly the third parties the track is for.
+
+### ⚠ The premise in §1(3) was stale
+
+Measured at HEAD before ruling: of 20 captures, **19 map exactly in both**. Three
+of §1(3)'s four divergences had already been closed by D1's renames. The single
+real gap is `attribute`, and it is deliberate — closing it is P3's colour
+decision, not a mapping fix.
+
+**So the problem D2 was framed to prevent — two mappings drifting — was one
+documented gap. The actual mess was the opposite direction: nine entries in the
+VS Code map that the query never emits.** Forward-only completeness, which is all
+§3.1 specified, reports every one of them as healthy.
+
+### The nine, and why each went
+
+Provably dead: resolving all 205 fixture captures through the map and through
+map-minus-nine gives **0 differing tokens** — and the claim rests on the `.scm`
+never emitting those names, not on fixture coverage. All nine entered at
+`498d990e`, the commit that *created* the provider: speculative vocabulary
+written before the `.scm` was authoritative.
+
+| group | entries | why |
+|---|---|---|
+| contradicted by a ruling | `punctuation`, `punctuation.bracket`, `punctuation.delimiter` | the `.scm` header rules brackets out as "highest-noise/lowest-information" |
+| contradicted by a ruling | `macro` | `defmacro_form name` is deliberately `@function` |
+| contradicted by a ruling | `parameter` | not nvim vocabulary (D1); `variable.parameter` already maps to the identical target |
+| redundant | `function.call`, `punctuation.bracket`, `punctuation.delimiter` | the root produces a byte-identical token |
+| open, but implausible | `variable.builtin`, `label` | Prologos has no `self`/`this` and no labels |
+| open, plausible | `function.builtin` | deleted anyway — strict vocabulary admits no reserved class |
+
+### Roots policy — enforced, not described
+
+A root and a speculative leaf are indistinguishable in a diff, so the checker
+decides: **an entry is legitimate iff it is emitted, or is a proper
+dotted-prefix ancestor of something emitted.**
+
+Roots earn it — dropping `variable` changes 60 of 205 captures, `function` 21,
+`type` 9. A speculative leaf catches nothing its root would not, and differs only
+by a modifier — an appearance decision that cannot be made before knowing what
+emits it. `constant` (latent root of `constant.builtin`) passes; `function.call`
+did not.
+
+### What landed
+
+`queries/captures.md` (contract, 20 captures, no colours) ·
+`parity/check-vocabulary.sh` (both directions) · `parity/known-gaps.tsv` (the one
+reviewed exception, ratchet-style) · nine entries deleted from `CAPTURE_MAP`.
+
+⚠ Power-checked three ways, and the check found a bug in the checker itself:
+`nreverse` is destructive, so the violation count read 1 while two failures
+printed. Counted before reversing now.
