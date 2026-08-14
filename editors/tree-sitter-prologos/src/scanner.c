@@ -27,6 +27,7 @@ enum TokenType {
   DEDENT,
   NEWLINE,
   SAME_LINE_BODY,
+  MAP_OPEN,
   ARM_LPAREN,
 };
 
@@ -293,6 +294,45 @@ bool tree_sitter_prologos_external_scanner_scan(
     return false;    /* not an arm — let `(` lex normally */
   }
   not_an_arm:;
+
+  /* --- MAP_OPEN: the `{` of a MAP LITERAL, as a token distinct from the `{`
+   *     of implicit params.
+   *
+   * `{` is contested: `{A : Type}` is implicit params, `{:k v}` and `{}` are
+   * map literals.  Adding a plain `map_literal` rule alongside `implicit_params`
+   * measured CATASTROPHIC — not a local failure but a recovery collapse, with
+   * arithmetic.prologos going 28 B -> 2894 B and equality.prologos 26 B ->
+   * 1779 B, and two files becoming swallows.  Same signature as the rejected
+   * same-line-defn rules.
+   *
+   * So the two `{`s become two TOKENS, and no parser state has to choose: a
+   * map literal's brace is one whose next non-space character is `:` (a
+   * keyword key) or `}` (empty map).  Implicit params never start that way —
+   * they open with an identifier. */
+  if (valid_symbols[MAP_OPEN]) {
+    /* The scanner runs BEFORE `extras' are skipped, so the lookahead here is
+     * usually the space after `:=', not the brace.  Skip spaces/tabs first —
+     * but never newlines, which belong to the INDENT logic below. */
+    while (!lexer->eof(lexer) &&
+           (lexer->lookahead == ' ' || lexer->lookahead == '\t' ||
+            lexer->lookahead == '\r')) {
+      skip_ch(lexer);
+    }
+  }
+  if (valid_symbols[MAP_OPEN] && lexer->lookahead == '{') {
+    advance_ch(lexer);
+    lexer->mark_end(lexer);          /* the token is exactly the `{` */
+    while (!lexer->eof(lexer) &&
+           (lexer->lookahead == ' ' || lexer->lookahead == '\t' ||
+            lexer->lookahead == '\r' || lexer->lookahead == '\n')) {
+      skip_ch(lexer);
+    }
+    if (lexer->lookahead == ':' || lexer->lookahead == '}') {
+      lexer->result_symbol = MAP_OPEN;
+      return true;
+    }
+    return false;                    /* not a map — let `{` lex normally */
+  }
 
   /* If none of our tokens are valid, bail out immediately */
   if (!valid_symbols[INDENT] && !valid_symbols[DEDENT] && !valid_symbols[NEWLINE]) {

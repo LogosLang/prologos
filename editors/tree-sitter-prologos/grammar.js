@@ -27,6 +27,7 @@ module.exports = grammar({
     $._dedent,
     $._newline,
     $._same_line_body,
+    $._map_open,
     $._arm_lparen,
   ],
 
@@ -512,6 +513,18 @@ module.exports = grammar({
     // Shared syntax
     // ============================================================
 
+    // Map literals — `{:name "alice"}` and `{}`.  644 corpus lines.
+    //
+    // Opens with `_map_open`, a SCANNER token, not a bare `{`: see scanner.c.
+    // A plain rule competing with `implicit_params` for `{` collapsed error
+    // recovery across the corpus, so the disambiguation is lexical and the
+    // parser never has to choose.
+    map_literal: $ => seq(
+      $._map_open,
+      repeat(seq(field('key', $.keyword_literal), field('value', $.expression))),
+      '}',
+    ),
+
     implicit_params: $ => seq(
       '{',
       repeat1(choice(
@@ -837,6 +850,7 @@ module.exports = grammar({
       $.compose_op,
       $.operator,
       $.list_literal,
+      $.map_literal,
       $.quote_expr,
       $.quasiquote_expr,
       $.unquote_expr,

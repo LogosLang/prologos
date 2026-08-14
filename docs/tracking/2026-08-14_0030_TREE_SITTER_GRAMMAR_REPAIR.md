@@ -30,6 +30,7 @@ ARROW (2026-08-05), Rel T1 (2026-07-25) — and the grammar has not.
 | P5f | **Same-line `defn` bodies** — scanner-level, after 3 rule formulations failed | ✅ | **Swallows 5 → 2**, bytes 4.6% → **2.7%**, clean 27 → **29** — [§5.p5f](#p5f) |
 | P5g | **Inline paren match arms** (`match h (pat -> body)`) - the `fio` swallow | done | **Swallows 2 -> 1**, worst 51% -> **31%**; fio's worst error 1852 B -> **156 B** - see 5.P5g |
 | P5h | **`impl` paren type args** — the `lattices` swallow | ✅ | **SWALLOWS 1 → 0**; worst 31% → **13%**; bytes 2.6% → **1.8%** — [§5.p5h](#p5h) |
+| P5i | **Map literals** via a `_map_open` scanner token — the contested `{` | ✅ | Plain rule regressed (swallows 0→2); lexical split holds swallows at **0**, bytes 1.8% → **1.7%** — [§5.p5i](#p5i) |
 | P6 | Re-baseline, regenerate, reinstall, font-lock check | ⬜ | `install.sh`; then unblock SURF T1 |
 | P7 | TSG T1.close — gate wiring, DEFERRED triage, PIR-lite | ⬜ | Consider adding the gate to pre-commit |
 
@@ -911,6 +912,43 @@ same-line `defn` and `fio`. The uncontested additions this session
 first try. Map literals need the same treatment same-line `defn` got: a
 disambiguation, not a rule. Logged in §6.
 
+<a id="p5i"></a>
+### 5.P5i — map literals, and the contested-shape recipe applied a second time
+
+`{}` and `{:name "alice"}` — **644 corpus lines**, no rule at all: `{` was only
+ever `implicit_params`.
+
+**The plain rule regressed catastrophically** (measured in P5h and again here):
+swallows 0 → 2, error-bytes 1.8% → 3.7%, MISSING 75 → 154, with
+`arithmetic.prologos` going **28 B → 2,894 B** and `equality.prologos`
+**26 B → 1,779 B**. Neither file contains a map literal — this was a global
+error-recovery collapse, the same signature the rejected same-line-`defn` rules
+produced.
+
+**The fix is the same recipe as P5f: make the two `{`s two TOKENS.** A scanner
+token `_map_open` consumes a `{` only when its next non-space character is `:`
+(a keyword key) or `}` (empty map). Implicit params always open with an
+identifier, so no parser state ever has to choose.
+
+| | plain rule | `_map_open` |
+|---|---|---|
+| swallows | 0 → **2** | 0 → **0** |
+| error-bytes | 1.8% → 3.7% | 1.8% → **1.7%** |
+| MISSING | 75 → **154** | 75 → 76 |
+| ERROR count | — | 3528 → **3087** |
+
+⚠ **The bug that made it look inert at first**: the external scanner runs
+*before* `extras` are skipped, so `lexer->lookahead` at entry is the SPACE after
+`:=`, not the brace. The token never fired and the `{` came back as a
+one-character ERROR. Skip spaces/tabs first — but never newlines, which belong
+to the INDENT logic. `_same_line_body` needed the same care.
+
+⭐ **The contested-shape recipe now has two data points and a name.** When a
+shape is claimed by an existing rule, do not shape rules — **split the token in
+the scanner on one character of lookahead**, so the parser never chooses. Used
+for same-line `defn` (P5f) and map literals here. Both landed with no conflict
+declarations; both had rule-shaped predecessors that collapsed recovery.
+
 ---
 
 ## 6. Deferred / discovered
@@ -919,7 +957,6 @@ disambiguation, not a rule. Logged in §6.
 - `defr` bare-head `&>` continuation form (paren-goal form works).
 - `:laws` blocks inside traits (`- :name/:forall/:holds`) — the `:forall` cluster.
 - `foreign` with `:as alias : Type -> Type` inside the bracket group - fio's residual.
-- **Map literals** `{}` / `{:k v}` — no rule; 644 corpus lines. A plain rule REGRESSED (swallows 0 → 2); contested with `implicit_params`, needs a disambiguation.
 - Two-segment qualified names `a::b` (three-segment ones are fine).
 - `<(Type 0)>` — parenthesised type inside an angle type. A naive `paren_type` did NOT fix it (see §5.P3b); needs real diagnosis.
 - `[x : Bool y : Bool]` — SPACED typed params, several in one list: `type_application` greedily takes `Bool y`. The fused `[x:Int]` form is fine.

@@ -134,6 +134,10 @@
           "named": true
         },
         {
+          "type": "map_literal",
+          "named": true
+        },
+        {
           "type": "nat_literal",
           "named": true
         },
@@ -1353,6 +1357,32 @@
           "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "map_literal",
+    "named": true,
+    "fields": {
+      "key": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "keyword_literal",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {
