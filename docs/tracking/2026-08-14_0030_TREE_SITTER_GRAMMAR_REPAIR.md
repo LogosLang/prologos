@@ -339,6 +339,46 @@ made the owner's scratchpad usable in an editor.
 `examples/2026-03-30-ppn-track2b` 33% · `book/lattices` 31% ·
 `examples/2026-04-22-1A-iii-probe` 31% · `data/reason` 20%.
 
+<a id="bracketrole"></a>
+### 7.0 The bracket-role design — ATTEMPTED, and what it actually needs
+
+Attempted 2026-08-14 and reverted. Recording the conflict CHAIN, because each
+attempt got one step further and the sequence is the finding:
+
+1. `[$.param_list, $.grouped_expr]` declared at the real decision point —
+   **this worked**, where earlier leaf-pair declarations
+   (`atom`/`literal_pattern`) had not. Conflict moved on.
+2. `defn f <A -> B>` — body-may-start-with-`<` vs the `<Type>` return
+   annotation. Removed by restricting the same-line body to non-angle forms
+   (positional: an angle group there is ALWAYS a return type).
+3. `defn f [x] • [` — the parser had already REDUCED the first group to
+   `grouped_expr`. Restructured so the same-line variant is one explicit
+   sequence `params THEN body`, making the first group params *by
+   construction*.
+4. `defn f [x] [g x] • [` — and here it still stands: a `grouped_expr` body
+   followed by another `[` is ambiguous with `application`
+   (`expression expression`), which would consume it as an argument.
+
+**So the remaining question is not "params or body" — that is solved — it is
+"where does a same-line body END".** `[int+ x 10] [more]` is one application in
+expression position and two things in defn position. That is a genuine
+whole-line-scope question, and the honest options are:
+
+- **(a) a scanner token.** The external scanner already emits INDENT/DEDENT/
+  NEWLINE; a `_line_end` token would let the body rule say "to end of line",
+  which is exactly the constraint. Most faithful to a layout language, and the
+  scanner is the layer that owns layout.
+- **(b) accept the greedy read.** Let the body be one `application` and let it
+  absorb trailing groups. Wrong tree for `defn f [x] [a] [b]`, but that shape
+  may not occur — check the corpus before rejecting.
+- **(c) `prec.dynamic`** to prefer ending the defn over extending the
+  application. Cheapest, least principled, and needs a corpus check that it
+  never picks wrong.
+
+⚠ **Do not attempt this again by adding conflict declarations.** Four rounds
+established that they move the failure rather than remove it. The next attempt
+should start from (a).
+
 <a id="sameline"></a>
 ### 7.2 The five remaining swallows are ONE cause — and it is the same blocker
 
