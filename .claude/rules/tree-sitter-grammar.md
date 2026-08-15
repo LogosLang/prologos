@@ -28,6 +28,34 @@ cd editors/tree-sitter-prologos
 ./check-corpus.sh     # gate against corpus-budget.txt
 ```
 
+## ⭐ Changing the grammar: A/B PER FILE, with `grammar-ab.sh`
+
+```bash
+./install.sh && ./grammar-ab.sh save    # BEFORE the change
+#   …edit grammar.js…
+./install.sh && ./grammar-ab.sh diff    # AFTER — exit 1 if ANY file got worse
+```
+
+**Never judge a grammar change by netted totals.** A real fix can improve one
+file while error-RECOVERY CHURN degrades another that does not contain the
+construct at all, and the total hides it. `grammar-ab.sh` names every file that
+moved, in both directions.
+
+⚠ **This rule was UNCODIFIED until 2026-08-15** — it lived only in relay notes,
+carried by hand between sessions, and had no instrument. So the A/B kept being
+improvised, and the improvisations produced **three wrong answers in one
+sitting, all the same mistake: parsing a gate's DISPLAY output as data.**
+`tail`'s exit code read as the gate's · a REFUSAL (exit 3, stale artifact,
+nothing measured) reported as "25 files improved to zero" · and
+`check-corpus.sh`'s per-file table read as complete when it is **truncated to
+the top 25**, so absence scored as zero and manufactured a phantom regression.
+The columns were never verified either: that table prints `997` for a file whose
+ERROR count is `129`.
+
+**So: do not scrape another tool's display. `grammar-ab.sh` measures the tree
+directly and owns its output.** The same lesson one layer up produced
+`racket/prologos/tools/corpus-ab.rkt`.
+
 `install.sh` FIRST, always. The gate measures the **installed dylib**, not
 `grammar.js`. A staleness guard now refuses (exit 3) when the installed parser
 was not built from the current source — it compares a content hash from the
