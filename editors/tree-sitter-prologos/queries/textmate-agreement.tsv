@@ -48,7 +48,13 @@ number	constant.numeric
 operator	keyword.operator punctuation
 property	variable.other support.variable constant.other.keyword
 string	string
-string.special.symbol	constant.other.keyword string
+# ⚠ `string' was listed here until 2026-08-15 and was VESTIGIAL: TextMate has
+# exactly one string-family rule (`string.quoted.double', matching `"'), so it
+# can never paint a keyword literal as a string.  The entry permitted a
+# disagreement that cannot occur, and it contradicted this file's own rule
+# three paragraphs up — `string' against `constant.language' IS two specific
+# scopes that cannot both be right.  Removed; the gate stays green.
+string.special.symbol	constant.other.keyword
 type	support.type entity.name.type storage.type
 type.builtin	support.type storage.type
 type.definition	entity.name support.type

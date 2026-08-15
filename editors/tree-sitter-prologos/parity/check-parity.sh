@@ -72,6 +72,43 @@ if [ "$EMACS_ONLY" = "0" ]; then
   fi
 fi
 
+# --- EXTENSION BUILD GUARD ---
+#
+# VS Code runs out/*.js, not src/*.ts.  Until 2026-08-15 nothing built that
+# artifact in install.sh and NO GATE EVER LOADED IT — dump-captures.mjs reads
+# the repo query and the wasm directly, so the mapping that decides COLOUR was
+# the one artifact with neither a builder nor a consumer.
+#
+# It went stale by 21 hours and the symptom was visual only: out/ had no entry
+# for `string.special.symbol', so the capture fell down its own dotted root to
+# `string' and every keyword literal took STRING chrome in VS Code.  Emacs loads
+# .el SOURCE, needs no build, and was therefore correct — which made it read as
+# a cross-editor disagreement rather than a stale build.
+#
+# ⚠ This guard cannot see a WRONG mapping, only an OUT-OF-DATE one.  Whether the
+# mapping is right is check-tokens.mjs's question, and whether both editors
+# render alike is nobody's question yet.
+EXT_DIR="../../vscode-prologos"
+EXT_OUT_PROV="$EXT_DIR/out/.provenance"
+TS_SRC_HASH="$(cat "$EXT_DIR"/src/*.ts 2>/dev/null | shasum -a 256 | cut -d' ' -f1)"
+
+if [ "$EMACS_ONLY" = "0" ] && [ -n "$TS_SRC_HASH" ]; then
+  BUILT_HASH=""
+  [ -f "$EXT_OUT_PROV" ] && BUILT_HASH="$(sed -n 's/^source_sha256=//p' "$EXT_OUT_PROV")"
+  if [ -z "$BUILT_HASH" ]; then
+    echo "STALE?: the extension's out/ has no provenance — it predates this" >&2
+    echo "        guard, or was built by hand.  Re-run ../install.sh." >&2
+    exit 3
+  elif [ "$BUILT_HASH" != "$TS_SRC_HASH" ]; then
+    echo "STALE: the extension's out/ was NOT built from the current src/." >&2
+    echo "  out/:   ${BUILT_HASH:0:12}" >&2
+    echo "  src/:   ${TS_SRC_HASH:0:12}" >&2
+    echo "  VS Code is running an OLD capture->token mapping, so its COLOURS" >&2
+    echo "  do not follow this repo.  Re-run ../install.sh." >&2
+    exit 3
+  fi
+fi
+
 # --- QUERY SYNC GUARD ---
 #
 # install.sh copies queries/highlights.scm into the extension, and NOTHING
@@ -175,7 +212,7 @@ if [ "$status" = "0" ]; then
     echo "  The extension's query copy was NOT checked either."
   else
     echo "PASS — both consumers agree with the golden on $n captures"
-    echo "  (extension's wasm and highlights.scm both verified current)"
+    echo "  (extension's wasm, highlights.scm and out/ all verified current)"
   fi
 fi
 exit "$status"

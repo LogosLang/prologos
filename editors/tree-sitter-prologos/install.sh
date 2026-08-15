@@ -124,6 +124,40 @@ else
   # is left untouched, so check-parity.sh can tell whether it went stale.
 fi
 
+# --- THE EXTENSION'S OWN TYPESCRIPT (the capture -> token MAPPING) ---
+#
+# The third artifact, and the one that was missed.  VS Code runs out/*.js, not
+# src/*.ts.  Nothing here built it and no gate loaded it, so the mapping could
+# sit 21 hours behind its source while every gate stayed green.
+#
+# That is exactly what happened: out/semanticTokens.js had no entry for
+# `string.special.symbol', so the capture fell down its own dotted root
+# (`string.special.symbol' -> `string.special' -> `string') and every keyword
+# literal rendered with STRING chrome in VS Code while Emacs — which loads .el
+# SOURCE and needs no build — showed the intended constant colour.  Reported as
+# an aesthetic regression on 2026-08-15.
+#
+# The wasm block above already carries this lesson for the grammar, and the
+# highlights.scm copy carries it one level down.  This is the same lesson a
+# third time, at the layer where APPEARANCE is decided.
+VSCODE_EXT="../vscode-prologos"
+TS_SRC_HASH="$(cat "$VSCODE_EXT"/src/*.ts 2>/dev/null | shasum -a 256 | cut -d" " -f1)"
+
+if [ -x "$VSCODE_EXT/node_modules/.bin/tsc" ]; then
+  echo "==> compiling the VS Code extension (src/*.ts -> out/)"
+  ( cd "$VSCODE_EXT" && ./node_modules/.bin/tsc -p ./ )
+  {
+    echo "source_sha256=$TS_SRC_HASH"
+    echo "git_sha=$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+    echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  } > "$VSCODE_EXT/out/.provenance"
+  echo "    out/ provenance: ${TS_SRC_HASH:0:12}"
+else
+  echo "==> skipping extension compile (no tsc — run npm install in $VSCODE_EXT)"
+  # As with the wasm: do NOT delete out/.  A stale build still highlights, and
+  # its provenance is left alone so check-parity.sh can say it went stale.
+fi
+
 # --- SMOKE TEST: does the thing we just installed actually load and parse? ---
 #
 # Not ceremony.  On 2026-08-14 a bad install SIGKILLed every Emacs that touched
