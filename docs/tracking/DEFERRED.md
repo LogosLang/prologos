@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 138**
+> ### **NEXT FREE: 139**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7526,6 +7526,64 @@ is a shape change to a function under active edit in this slice.
 set (16, of which 12 are addressed at `b12d02ed` and `cb555002`) is in the
 workflow transcript at
 `.claude/projects/…/subagents/workflows/wf_fc98d241-4e5/journal.jsonl`.
+
+---
+
+### 138. ⬜ ⭐ THE `.org` → `.md` EXPORT PIPELINE STOPPED, AND 7 OF 13 TWINS ARE SUBSTANTIALLY STALE — three of them may hold content that a regeneration would DESTROY
+
+Found by the **EHP T1.close doc-truth sweep** (2026-08-14). Started as one file
+and the entry's own "check the other twins" instruction found a systemic problem.
+
+**The `.org` is canonical and the `.md` is a generated artifact** (`workflow.md`).
+The export stopped running at different times for different files:
+
+| twin | `.org` | `.md` | .org last | .md last |
+|---|---|---|---|---|
+| `DEVELOPMENT_LESSONS` | **2005** | **367** | 2026-08-15 | **2026-02-25** |
+| `DESIGN_METHODOLOGY` | **1921** | **708** | 2026-07-25 | 2026-03-24 |
+| `DESIGN_PRINCIPLES` | **1168** | **602** | 2026-05-17 | 2026-03-24 |
+| `POST_IMPLEMENTATION_REVIEW` | 608 | 496 | — | — |
+| `GÖDEL_COMPLETENESS` | 458 | 332 | — | — |
+| `CRITIQUE_METHODOLOGY` | 449 | 349 | — | — |
+| `LANGUAGE_VISION` | 471 | 383 | — | — |
+
+`DEVELOPMENT_LESSONS.md` is missing ~1,600 lines and **every lesson promoted
+since February**. `DESIGN_METHODOLOGY.md` is missing ~1,200.
+
+⚠⚠ **AND THREE TWINS HAVE A *LARGER* `.md` THAN `.org`** — which is the more
+dangerous direction, because it means content was probably added to the
+GENERATED file and exists nowhere else. `workflow.md` states the consequence
+outright: *"Content added only to `.md` WILL BE LOST on the next org-mode
+export."*
+
+| twin | `.md` − `.org` | note |
+|---|---|---|
+| `PATTERNS_AND_CONVENTIONS` | **+14** | `.org` 2026-04-17, `.md` 2026-02-24 — so the `.md` is BOTH older and larger |
+| `RELATIONAL_LANGUAGE_VISION` | **+11** | `.org` 2026-07-25, `.md` 2026-02-25 |
+| `ERGONOMICS` | +4 | roughly contemporaneous, likely formatting |
+
+**Diff those three before regenerating anything.** A blanket re-export would
+silently delete whatever is only in the `.md`.
+
+⚠ **This is an instance of the lesson it is missing** ([Fail-Open](principles/DEVELOPMENT_LESSONS.org)).
+Nothing about a stale `.md` announces staleness. It opens, it renders, it looks
+like a document. A reader lands on a February view of the project's methodology
+with no signal that a canonical file exists holding five times the content.
+
+**Remedies, all the owner's call:**
+
+1. **Diff the three inverted twins first**, and move any `.md`-only content into
+   the `.org`.
+2. Then **regenerate** — an org-export operation the owner runs. Do not
+   hand-edit a `.md`.
+3. Or **delete the `.md` twins** if nothing consumes them. A stale export that
+   nobody generates is pure liability.
+4. Or **add a generated-artifact header** naming the canonical source, so the
+   file at least states its own status.
+
+Not urgent for correctness — every agent-facing rule points at the `.org`, and
+`CLAUDE.md` names the `.org` as canonical. The exposure is a human opening the
+`.md` directly, and the `.md`-only content in remedy 1.
 
 ---
 

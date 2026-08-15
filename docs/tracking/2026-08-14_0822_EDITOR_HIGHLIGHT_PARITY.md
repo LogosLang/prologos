@@ -24,7 +24,7 @@ contract well enough that a third editor is a *mapping table*, not a port.
 | P4 | The four catalogued issues, on the repaired base | ✅ | **ALL FOUR FIXED** — `a0781086` · `978db44b` · `c40c7a01`. **Not one residual cause was TextMate**: the query, the grammar, the grammar, and TextMate+grammar. [§15](#p4-record) · [§16](#p4-record-2) · [§17](#p4-record-3) |
 | P5 | `#match?` dialect lint (or retire the predicate) | ✅ | Gate `parity/check-regexps.sh` + a translator hole closed. ⭐ The grammar-token route **cannot** retire it — 2 of 3 uses match LIBRARY names ([DEFERRED 137](DEFERRED.md)). [§18](#p5-record) |
 | P6 | `docs/ADDING_AN_EDITOR.md` — the contributor contract | ✅ | Written in **Simplified Technical English** (ASD-STE100, strict). Two of my own claims were wrong and caught by checking. [§19](#p6-record) |
-| P7 | EHP T1.close — PIR-lite, DEFERRED triage | 🔄 | PIR-lite [§20](#pir-lite). Triage + lesson promotion in progress |
+| P7 | EHP T1.close — PIR-lite, DEFERRED triage | ✅ | PIR-lite [§20](#pir-lite) · triage + gaps [§21](#close-triage) · **Fail-Open promoted to both tiers** · DEFERRED 138 filed |
 
 ---
 
@@ -1435,12 +1435,16 @@ the healthy one.
 
 | item | status |
 |---|---|
-| All phases ✅ | P0–P6 done |
+| All phases ✅ | P0–P7 done |
 | Gates green | 7/7 |
-| DEFERRED triage | ⬜ next |
-| Lesson promotion | ⬜ next — the fail-open pattern, 8 data points |
-| Memory fold | ⬜ next |
+| DEFERRED triage | ✅ [§21](#close-triage) — clean; 134/135/136 discharged in-arc, 137 correctly parked |
+| Lesson promotion | ✅ **Fail-Open**, both tiers (`workflow.md` + `DEVELOPMENT_LESSONS.org`). ⚠ Count corrected 8 → 9, and the honest discount recorded: 7 of 9 from this arc |
+| Memory fold | ✅ reviewed — **nothing owed**. Everything from P5/P6 landed in the repo (rules tier, docs, register), which is where it belongs |
+| Doc-truth sweep | ✅ — and it found **DEFERRED 138**: the `.org`→`.md` export stopped, 7 of 13 twins stale, 3 with a LARGER `.md` that a regeneration would destroy |
 | Suite | not re-run; no compiler surface touched |
+
+**EHP Track 1 is CLOSED.** Next: SURF T1, whose unblock condition needs
+restating per [§21](#close-triage) before it opens.
 
 ---
 
