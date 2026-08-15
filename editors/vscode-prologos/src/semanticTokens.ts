@@ -23,6 +23,21 @@ import { Parser, Language, Query, Node } from 'web-tree-sitter';
  * plain-object lookup on names like `constructor` or `__proto__` returns
  * PROTOTYPE members rather than undefined. (TypeScript flagged the
  * `constructor` key, which is how this surfaced.) */
+/* ⭐ SCOPE-FALLBACK PRINCIPLE — CONVENTION PARITY (owner ruling, 2026-08-15).
+ *
+ * The semanticTokenScopes fallbacks in package.json must resolve each concept
+ * to the scope the ecosystem's MOST-THEMED grammar uses for the SAME concept:
+ * map keys -> `support.type.property-name' (what JSON keys are), definitions
+ * -> `meta.definition.variable' / `entity.name.variable' (what TS/JS emit),
+ * parameters -> `variable.parameter'.  NEVER a Prologos-private scope
+ * (`variable.other.property.prologos' etc.) — no theme has heard of those, so
+ * every theme resolves them by accident, and FOUR paint attempts failed that
+ * way in one day (attribute-name, constant.language, constant.other, and a
+ * shipped colour override, all retired).  Under convention parity a theme
+ * renders Prologos exactly as it renders its JSON and its TypeScript — which
+ * is the theme's own coherent aesthetic, the maximum achievable without
+ * painting over anyone's theme, and instantly checkable: open a .json file
+ * beside a .prologos file and the keys must match. */
 const CAPTURE_MAP = new Map<string, [string, string[]]>([
   ['keyword', ['keyword', []]],
   ['function', ['function', []]],
