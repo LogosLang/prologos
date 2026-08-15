@@ -21,7 +21,7 @@ contract well enough that a third editor is a *mapping table*, not a port.
 | P1 | Parity harness: one fixture, capture-by-capture, asserted in BOTH | ✅ | `30671d9d`. **Query layer is ALREADY in parity** — identical in both. Golden now **228** (was 205; the scanner fix made comments visible). [§8](#p1-record) |
 | P2 | TextMate: declared, and made to AGREE where it overlaps | ✅ | Census `81ac5a01` · scanner `e8b9ab0f` · D3 + gate `294dbc0f` · **the 5 disagreements closed `805e14be` + `9a329c68`** — 3 were TextMate bugs, 1 an agreement gap, 1 a recorded divergence. **All five gates green.** [§13](#p2-close) |
 | P3 | Review `semanticTokenScopes` per capture | ✅ | `8b42cfb0`. `@attribute` coloured (last known gap closed) — **and 3 of its 4 rules were VACUOUS, 90% of its spans mispainted**. 3 dead scope entries + 2 dead legend types removed. New gate `check-tokens.mjs`. [§14](#p3-close) |
-| P4 | The four catalogued issues, on the repaired base | ✅ | All four re-checked. **#1 resolved by P3; #2, #3, #4 each have a residual cause, and NOT ONE of them is TextMate** — [DEFERRED 135](DEFERRED.md) (query), [136](DEFERRED.md) (grammar), [134](DEFERRED.md) (grammar). [§15](#p4-record) · [§16](#p4-record-2) |
+| P4 | The four catalogued issues, on the repaired base | ✅ | All four re-checked; **#1–#3 FIXED** (`a0781086`, `978db44b`), #4 half — [DEFERRED 134](DEFERRED.md) remains. **Not one residual cause was TextMate.** [§15](#p4-record) · [§16](#p4-record-2) |
 | P5 | `#match?` dialect lint (or retire the predicate) | ⬜ | [§3.5](#p5) |
 | P6 | `docs/ADDING_AN_EDITOR.md` — the contributor contract | ⬜ | The deliverable that makes this leverage |
 | P7 | EHP T1.close — PIR-lite, DEFERRED triage | ⬜ | |
@@ -179,7 +179,7 @@ grammar tokens (which would also fix `[trait x]`-style questions at the source).
 |---|---|---|---|
 | 1 | ✅ **RESOLVED** ([§15](#p4-record)) — three keyword roles, three colours; the split is by design and P3 gave metadata keys their own. Map `{}` keys blue, implicit-map keys orange | Explained in §1(2) — `@property` vs `@constant.other` through two scopes. A capture-level decision. | **P3** |
 | 2 | ✅ **FIXED `a0781086`** — was the QUERY, not TextMate ([DEFERRED 135](DEFERRED.md) discharged). Only the dotted `nominal_step` was chromed as a key. Path-selection branches paint as keywords, not key chrome | ~~Suspected TextMate showing through~~ — **refuted**: zero disagreement with TextMate over those spans. | [§16](#p4-record-2) |
-| 3 | ✅ **CONFIRMED — the GRAMMAR** ([DEFERRED 136](DEFERRED.md)). `key_op` cannot parse `^-`/`^..`; the ERROR region is the suppression boundary. `foray.prologos:712` — closing inner projection ≠ opening | ~~nested projection braces → TextMate~~ — **refuted**: not a brace rule. | [§16](#p4-record-2) |
+| 3 | ✅ **FIXED `978db44b`** — was the GRAMMAR ([DEFERRED 136](DEFERRED.md) discharged). `key_op` could not parse `^-`/`^..`; the ERROR region was the suppression boundary. `foray.prologos:712` — closing inner projection ≠ opening | ~~nested projection braces → TextMate~~ — **refuted**: not a brace rule. | [§16](#p4-record-2) |
 | 4 | ⚠ **HALF-FIXED** ([§15](#p4-record)). TextMate mis-lex fixed `805e14be`; the residual cause is a GRAMMAR bug — [DEFERRED 134](DEFERRED.md). Fused `var:Type` mispaint | Probed: the grammar is right (`x`→parameter, `Int`→builtin type). So the mispaint is a layer above — TextMate, or the scope map. | **P2/P3**, confirm in **P1** |
 
 ⚠ Three of four are *suspected* TextMate. That suspicion is exactly what P1
@@ -1041,7 +1041,7 @@ which would put an ERROR node in a fixture required to parse clean. Golden
 hour**: running `check-parity.sh` before `install.sh` reported STALE with a diff,
 on exactly the drift it was built for.
 
-### Issue #3 — the GRAMMAR. [DEFERRED 136](DEFERRED.md)
+### Issue #3 — the GRAMMAR. ✅ FIXED `978db44b` ([DEFERRED 136](DEFERRED.md) discharged)
 
 `key_op`'s continuation is `optional(choice(rename:/[a-zA-Z_]…/, synth:'_'))`, so
 it must start with a letter or `_`. The whole `-` collapse family is
@@ -1062,6 +1062,31 @@ opening" is not a brace rule: the stranded `-` becomes an `ERROR`, and
 `semanticTokens.ts` suppresses semantic tokens inside ERROR subtrees *by design*,
 so part of the span falls through to TextMate and part does not. **The asymmetry
 the owner saw is the suppression boundary.**
+
+**Fixed**: `key_op`'s continuation now spells the whole grammar — `..` plus
+`-`? · {ε | label | `_`} — branch-by-branch rather than as nested optionals, so
+no alternative can match empty. All seven forms parse at 0 ERROR/MISSING.
+
+⭐⭐ **The census gate then caught a defect the fix EXPOSED, dead since before
+it.** The rename regex started `[a-zA-Z_]`, so it matched a bare `_` and won:
+`^_` parsed as a rename to a field literally called `_`, and
+`field('synth', …)` never matched. Invisible until [§16](#p4-record-2)'s DEFERRED
+135 fix started painting the rename identifier — at which point `_` came out
+`@property` and disagreed with TextMate. **Third vacuous rule in this arc**,
+after the three `@attribute` rules ([§14](#p3-close)) and the `:refer` comment
+([§13](#p2-close)).
+
+⚠ **The corpus summary alone would have misled.** ERROR 2700 → 2693, MISSING
+76 → 75, swallows 0, unparsed 1.3% — all good — but **error-BYTES rose
+14586 → 14691**, which is *not* the documented count/bytes anti-correlation. A
+per-file A/B against the committed grammar attributed it: `foray.prologos`
+improved (the fix), while `collection-traits` (×2) and `sudoku-demo` moved the
+other way — **and none of those three contains a `^`**. It is error-recovery
+churn: adding alternatives perturbs the LR tables, so recovery takes different
+paths in already-broken files. Recorded in `corpus-budget.txt`.
+
+Ratchet tightened `max_missing` 76 → 75; fixture gains the family; golden
+260 → 298.
 
 ### ⭐ The pattern across all four
 
