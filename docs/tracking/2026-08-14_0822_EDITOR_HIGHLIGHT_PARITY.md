@@ -177,10 +177,10 @@ grammar tokens (which would also fix `[trait x]`-style questions at the source).
 
 | # | Issue | Diagnosis | Phase |
 |---|---|---|---|
-| 1 | Map `{}` keys blue, implicit-map keys orange | Explained in §1(2) — `@property` vs `@constant.other` through two scopes. A capture-level decision. | **P3** |
+| 1 | ✅ **CONFIRMED TextMate** ([§12](#d3-ruled)). Map `{}` keys blue, implicit-map keys orange | Explained in §1(2) — `@property` vs `@constant.other` through two scopes. A capture-level decision. | **P3** |
 | 2 | Path-selection branches paint as keywords, not key chrome | Suspected TextMate showing through; `.scm` captures steps as `@property`. | **P2**, confirm in **P1** |
 | 3 | `foray.prologos:712` — closing inner projection ≠ opening | `app-config{server.ssl.{enabled^-ssl cert-path^cert}}`; nested projection braces, and the `.scm` captures no brackets → TextMate. | **P2** |
-| 4 | Fused `var:Type` mispaint (regression from path selection) | Probed: the grammar is right (`x`→parameter, `Int`→builtin type). So the mispaint is a layer above — TextMate, or the scope map. | **P2/P3**, confirm in **P1** |
+| 4 | ✅ **CONFIRMED TextMate mis-lex** ([§12](#d3-ruled)). Fused `var:Type` mispaint | Probed: the grammar is right (`x`→parameter, `Int`→builtin type). So the mispaint is a layer above — TextMate, or the scope map. | **P2/P3**, confirm in **P1** |
 
 ⚠ Three of four are *suspected* TextMate. That suspicion is exactly what P1
 exists to convert into fact before P2 acts on it — colours cannot be read
@@ -281,7 +281,7 @@ See [§6](#d2-analysis). Owner asked for tradeoffs and worked examples with room
 to deliberate; no recommendation is being forced.
 
 <a id="d3"></a>
-### D3 — TextMate floor: 🔬 OPEN, critique below
+### D3 — TextMate floor: ✅ RULED (2026-08-14) — **keep it**; we want Linguist/GitHub reach. Invariant is AGREEMENT ([§7.4](#d3-critique)), enforced by `census.mjs --gate`. [§12](#d3-ruled)
 
 See [§7](#d3-critique). Owner's leaning: TextMate as a fallback for when
 tree-sitter is unreachable; strip down, then build back. Invited critique — and
@@ -705,3 +705,55 @@ reports the difference as a finding.
 Power-checked in all four states. Also fixed: `--emacs-only` used to print
 "PASS — both consumers agree" after checking one consumer; it now states what it
 ran and that the run says nothing about parity.
+
+---
+
+<a id="d3-ruled"></a>
+## 12. D3 ruled, and the agreement gate (2026-08-14, `294dbc0f`)
+
+**Ruling: keep TextMate reasonably complete.** The owner wants Linguist/GitHub
+reach, which is §7.3's option value made concrete, so TextMate is the portable
+syntax format for consumers that never run our extension. Invariant is
+**agreement** (§7.4), enforced by `census.mjs --gate` against
+`queries/textmate-agreement.tsv`.
+
+That file is a **vocabulary↔vocabulary** correspondence, not a third consumer
+mapping — TextMate scope names are the same standard Linguist consumes — so it
+lives beside `captures.md`.
+
+### ⭐ The refinement that makes the invariant usable
+
+**TextMate being LESS SPECIFIC is not a disagreement.** `defn foo` and a
+reference to `foo` are the same regex; TextMate structurally cannot tell a
+definition from a variable. `@function` over `variable.other` is the semantic
+layer *adding* information — the point of the layering — not a contradiction.
+`*GENERIC*` names the scopes meaning "nothing more specific to say".
+
+Effect: 10 pairs / 150 chars → **5 pairs / 24 chars**, and everything removed was
+expected by construction.
+
+### ⚠ The gate's first run was wrong, and the output's implausibility is what caught it
+
+It compared TextMate against the committed **golden**, which is deliberately RAW
+(every match, canonically sorted) because that is the right contract for
+comparing two ENGINES. Wrong input here: it still carries the
+`(identifier) @variable` fallback rows that first-match-wins discards, so it
+reported `Int` as `@variable`-vs-`support.type` when the consumer paints
+`@type.builtin` and the layers agree. The census now resolves exactly as
+`semanticTokens.ts` does. Same lesson as P1, one layer along: **right data, wrong
+question.**
+
+### The five real disagreements
+
+| chars | capture | TextMate scope | what it is |
+|---|---|---|---|
+| 10 | `@property` | `constant.other.keyword` | map keys `:key` — **issue #1** |
+| 6 | `@keyword` | `constant.other.keyword` | `:refer` |
+| 4 | `@module` | `keyword.control.declaration` | the `ns` / `require` line |
+| 3 | `@type.builtin` | `constant.other.keyword` | `Int` in `x:Int` — **issue #4** |
+| 1 | `@comment` | `keyword.operator.wildcard` | the `_` pattern |
+
+**Issues #1 and #4 are now CONFIRMED TextMate**, with the query excluded as a
+cause rather than assumed innocent — exactly what P1 and P2 existed to establish.
+#4 is a TextMate mis-lex: it reads the `:Int` of a fused annotation as a keyword
+literal.
