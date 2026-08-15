@@ -21,7 +21,7 @@ contract well enough that a third editor is a *mapping table*, not a port.
 | P1 | Parity harness: one fixture, capture-by-capture, asserted in BOTH | ✅ | `30671d9d`. **Query layer is ALREADY in parity** — identical in both. Golden now **228** (was 205; the scanner fix made comments visible). [§8](#p1-record) |
 | P2 | TextMate: declared, and made to AGREE where it overlaps | ✅ | Census `81ac5a01` · scanner `e8b9ab0f` · D3 + gate `294dbc0f` · **the 5 disagreements closed `805e14be` + `9a329c68`** — 3 were TextMate bugs, 1 an agreement gap, 1 a recorded divergence. **All five gates green.** [§13](#p2-close) |
 | P3 | Review `semanticTokenScopes` per capture | ✅ | `8b42cfb0`. `@attribute` coloured (last known gap closed) — **and 3 of its 4 rules were VACUOUS, 90% of its spans mispainted**. 3 dead scope entries + 2 dead legend types removed. New gate `check-tokens.mjs`. [§14](#p3-close) |
-| P4 | The four catalogued issues, on the repaired base | ✅ | All four re-checked; **#1–#3 FIXED** (`a0781086`, `978db44b`), #4 half — [DEFERRED 134](DEFERRED.md) remains. **Not one residual cause was TextMate.** [§15](#p4-record) · [§16](#p4-record-2) |
+| P4 | The four catalogued issues, on the repaired base | ✅ | **ALL FOUR FIXED** — `a0781086` · `978db44b` · `c40c7a01`. **Not one residual cause was TextMate**: the query, the grammar, the grammar, and TextMate+grammar. [§15](#p4-record) · [§16](#p4-record-2) · [§17](#p4-record-3) |
 | P5 | `#match?` dialect lint (or retire the predicate) | ⬜ | [§3.5](#p5) |
 | P6 | `docs/ADDING_AN_EDITOR.md` — the contributor contract | ⬜ | The deliverable that makes this leverage |
 | P7 | EHP T1.close — PIR-lite, DEFERRED triage | ⬜ | |
@@ -180,7 +180,7 @@ grammar tokens (which would also fix `[trait x]`-style questions at the source).
 | 1 | ✅ **RESOLVED** ([§15](#p4-record)) — three keyword roles, three colours; the split is by design and P3 gave metadata keys their own. Map `{}` keys blue, implicit-map keys orange | Explained in §1(2) — `@property` vs `@constant.other` through two scopes. A capture-level decision. | **P3** |
 | 2 | ✅ **FIXED `a0781086`** — was the QUERY, not TextMate ([DEFERRED 135](DEFERRED.md) discharged). Only the dotted `nominal_step` was chromed as a key. Path-selection branches paint as keywords, not key chrome | ~~Suspected TextMate showing through~~ — **refuted**: zero disagreement with TextMate over those spans. | [§16](#p4-record-2) |
 | 3 | ✅ **FIXED `978db44b`** — was the GRAMMAR ([DEFERRED 136](DEFERRED.md) discharged). `key_op` could not parse `^-`/`^..`; the ERROR region was the suppression boundary. `foray.prologos:712` — closing inner projection ≠ opening | ~~nested projection braces → TextMate~~ — **refuted**: not a brace rule. | [§16](#p4-record-2) |
-| 4 | ⚠ **HALF-FIXED** ([§15](#p4-record)). TextMate mis-lex fixed `805e14be`; the residual cause is a GRAMMAR bug — [DEFERRED 134](DEFERRED.md). Fused `var:Type` mispaint | Probed: the grammar is right (`x`→parameter, `Int`→builtin type). So the mispaint is a layer above — TextMate, or the scope map. | **P2/P3**, confirm in **P1** |
+| 4 | ✅ **FIXED** — TextMate half `805e14be`, grammar half `c40c7a01` ([DEFERRED 134](DEFERRED.md) discharged). Fused `var:Type` mispaint | Probed: the grammar is right (`x`→parameter, `Int`→builtin type). So the mispaint is a layer above — TextMate, or the scope map. | **P2/P3**, confirm in **P1** |
 
 ⚠ Three of four are *suspected* TextMate. That suspicion is exactly what P1
 exists to convert into fact before P2 acts on it — colours cannot be read
@@ -1103,3 +1103,50 @@ the three-layer render makes the *topmost* layer the default explanation, and
 only probing each layer separately distinguishes them. That is what P1's harness
 and the census were built for, and this is the first phase to use them
 adversarially rather than to confirm.
+
+---
+
+<a id="p4-record-3"></a>
+## 17. Issue #4's other half — the fused param type (2026-08-15, `c40c7a01`)
+
+`typed_param`'s type is now `_param_type` — `identifier | grouped_type |
+angle_group`, exactly the alternatives that cannot absorb what follows.
+**The compiler is the authority and says the fused type is atomic**: measured,
+`[xs:List Int]` elaborates to TWO parameters, `xs : List` plus a bare `Int`.
+
+⚠ **This corrects [§15](#p4-record)'s claim that `[x:Int y]` is invalid.** It is
+valid (`f3 : Int _ -> Int`); that probe's errors came from its *body*. Only the
+spaced `[x : Int]` is genuinely rejected.
+
+**A GLR conflict, not a narrowing.** `typed_param` is shared with `let_binding`,
+whose type may legitimately be multi-token (`let f : Int -> Bool := v`).
+Declaring `[$._param_type, $.type_expr]` lets the parser carry both. A/B'd: all
+three `let` shapes parse identically before and after — including the `->` one,
+which was already failing at HEAD.
+
+⭐ **Every corpus signal improved**, unlike [§16](#p4-record-2)'s change: clean
+**34 → 35**, ERROR 2693 → **2579**, MISSING 75 → **73**, bytes 14691 → **14529**.
+
+### ⚠ Two defects the fix itself caused, and how each was caught
+
+1. **A colour regression, caught by dumping captures — not by a gate.** The fused
+   type used to be a `type_application` carrying its own `@type`; bounding it to
+   a bare identifier left a USER type with no type rule, so `Point` fell to
+   `@variable`. **`Int` did not** — the builtin rule matches it by name, which is
+   exactly what made the loss easy to miss. Fixed with
+   `(typed_param type: (identifier) @type)`.
+
+2. ⭐⭐ **That comment then broke two gates, exposing an instrument gap.**
+   `check-vocabulary` and `check-reachability` both extract capture names by
+   regex over the **raw query text, comments included**. Latent forever, because
+   every earlier comment mention happened to name a real capture. Mine ended a
+   sentence — *"fell to @variable."* — and `.` is in the character class, so a
+   capture named `variable.` was emitted and failed both gates at once as
+   undocumented **and** unreachable. Both extractors now strip full-line comments
+   (not to end-of-line — a `#match?` may contain a `;`), and the fix was proven
+   still discriminating: a real undocumented capture in query *code* fails, the
+   same text in a comment is ignored.
+
+**EHP T1 P4 is complete.** Across all four catalogued issues, not one residual
+cause was TextMate: the query, the grammar, the grammar, and TextMate *plus* the
+grammar.
