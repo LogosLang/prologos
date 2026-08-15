@@ -898,7 +898,7 @@ through to TextMate, which looks like working highlighting. Proven able to fail
 on all three shapes before being trusted.
 
 <a id="scm-copy-gap"></a>
-### ⚠ OPEN — a harness blind spot found here, not yet closed
+### ✅ CLOSED (`292e23f7`) — a harness blind spot found here
 
 The parity harness reads the **repo** `queries/highlights.scm` for *both*
 consumers (`census.mjs:99`, `dump-captures.mjs:25`). The VS Code extension ships
@@ -906,5 +906,28 @@ its **own copy**, which was stale after the hoist. So a green parity run does no
 prove the extension's copy is current — only `install.sh` syncs it, and only the
 *parser* artifacts are guarded by content hash.
 
-Synced and verified by `cmp` this time. **The gate should assert it**, the way
-corpus/parity assert parser provenance. Next increment.
+**Now gated.** `check-parity.sh` refuses (exit 3) when the extension's copy
+differs from the source or is missing, and `--emacs-only` states that it skipped
+the check rather than staying silent.
+
+⭐ Checked by **direct comparison**, not a `.provenance` sidecar, and the
+difference from the dylib/wasm guards is principled: those are BUILD OUTPUTS, so
+a recorded source hash is the only available handle; this is a **verbatim copy**,
+so the files can be compared to each other — strictly stronger, because a sidecar
+can be correct beside a wrong file.
+
+`install.sh` had already learned half of this (its `:80` comment records
+un-gating the `.scm` copy from emcc for the same reason). *The half left over is
+that a correct copier does not help when nobody runs it.*
+
+| probe | result |
+|---|---|
+| extension copy drifts (one line) | exit 3 `STALE`, with a diff |
+| extension copy missing | exit 3 `MISSING` |
+| `--emacs-only` | exit 0, skipped **and said so** |
+| restored | exit 0 |
+
+Ambient rules updated: the gate table is now **six** (`check-tokens.mjs` from P3
+was missing from it too), and census's "blind to" column now names its real
+limit — *anything the fixture does not exercise*, which is precisely what hid
+the vacuous `@attribute` rules.
