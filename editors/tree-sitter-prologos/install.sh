@@ -87,16 +87,41 @@ if [ -d "$VSCODE_QUERIES" ] || mkdir -p "$VSCODE_QUERIES"; then
   echo "==> installed highlights.scm to $VSCODE_QUERIES/"
 fi
 
+# SRC_HASH identifies the SOURCE both artifacts are built from, so the dylib and
+# the wasm can be compared against the same thing.  Defined here because the wasm
+# block below needs it too.
+SRC_HASH="$(cat grammar.js src/scanner.c 2>/dev/null | shasum -a 256 | cut -d" " -f1)"
+
+write_wasm_provenance() {
+  # $1 = directory holding a copy of the wasm
+  {
+    echo "source_sha256=$SRC_HASH"
+    echo "git_sha=$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+    echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  } > "$1/$WASM.provenance"
+}
+
 if command -v emcc >/dev/null 2>&1; then
   echo "==> building $WASM (emcc found)"
+  # ⚠ emcc requires Python >= 3.10 and picks up Xcode's 3.9 by default, failing
+  # with an assertion.  That failure lands AFTER the dylib is installed, so
+  # without a guard the session ends with Emacs on the NEW grammar and VS Code
+  # on the OLD one — the exact divergence the provenance below exists to catch.
+  # Set EMSDK_PYTHON to a 3.10+ interpreter if this trips.
   "$TS" build --wasm
+  write_wasm_provenance .
   if [ -d "$VSCODE_GRAMMARS" ] || mkdir -p "$VSCODE_GRAMMARS"; then
     cp "$WASM" "$VSCODE_GRAMMARS/$WASM"
+    write_wasm_provenance "$VSCODE_GRAMMARS"
     echo "    installed to $VSCODE_GRAMMARS/"
   fi
+  echo "    wasm provenance: ${SRC_HASH:0:12}"
 else
   echo "==> skipping wasm (emcc not on PATH — Emacs does not need it)"
   echo "    for VS Code: source your emsdk_env.sh, then re-run this script"
+  # Deliberately do NOT delete an existing wasm: it may still be valid, and
+  # deleting it would silently disable VS Code semantic tokens.  Its provenance
+  # is left untouched, so check-parity.sh can tell whether it went stale.
 fi
 
 # --- SMOKE TEST: does the thing we just installed actually load and parse? ---
@@ -134,7 +159,6 @@ rm -f "$SMOKE"
 # directly.  check-corpus.sh reads this to refuse measuring a stale parser —
 # the footgun that made a real fix look like it did nothing.
 PROV="$DEST/$LIB.provenance"
-SRC_HASH="$(cat grammar.js src/scanner.c 2>/dev/null | shasum -a 256 | cut -d" " -f1)"
 {
   echo "source_sha256=$SRC_HASH"
   echo "git_sha=$(git rev-parse HEAD 2>/dev/null || echo unknown)"

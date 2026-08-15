@@ -8,3 +8,5 @@ bindings/
 # Built grammar libraries — platform-specific; build locally via install.sh
 *.dylib
 *.so
+# Build-artifact provenance — describes a gitignored artifact, so it is one too.
+*.wasm.provenance

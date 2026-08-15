@@ -7,3 +7,5 @@ node_modules/
 # untracked for the same reason the .dylib is (commit b3369312).
 grammars/*.wasm
 queries/highlights.scm
+# Build-artifact provenance — describes a gitignored artifact, so it is one too.
+grammars/*.wasm.provenance

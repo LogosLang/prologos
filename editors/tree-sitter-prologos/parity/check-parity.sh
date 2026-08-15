@@ -30,6 +30,48 @@ for a in "$@"; do
   esac
 done
 
+# --- WASM STALENESS GUARD ---
+#
+# The node side loads ../../vscode-prologos/grammars/*.wasm.  If that is older
+# than the source, this script compares Emacs-at-HEAD against VS-Code-at-
+# whenever, and reports a DIVERGENCE that is an artifact of the build rather
+# than a real disagreement — or worse, an AGREEMENT that is equally meaningless.
+#
+# Not hypothetical: install.sh's wasm step fails when emcc picks up a Python
+# older than 3.10, and it fails AFTER the dylib is installed. That leaves Emacs
+# on the new grammar and VS Code on the old one, with nothing to say so. It has
+# happened twice.
+#
+# Compared by CONTENT HASH of the same sources the dylib is checked against, so
+# "current" means the same thing for both artifacts.
+WASM_DIR="../../vscode-prologos/grammars"
+WASM_PROV="$WASM_DIR/tree-sitter-prologos.wasm.provenance"
+SRC_HASH="$(cat ../grammar.js ../src/scanner.c 2>/dev/null | shasum -a 256 | cut -d' ' -f1)"
+
+if [ "$EMACS_ONLY" = "0" ]; then
+  if [ ! -f "$WASM_DIR/tree-sitter-prologos.wasm" ]; then
+    echo "no wasm at $WASM_DIR — VS Code side cannot run." >&2
+    echo "  Build it: EMSDK_PYTHON=<python3.10+> PATH=<emsdk>:\$PATH ../install.sh" >&2
+    echo "  Or measure Emacs alone: $0 --emacs-only" >&2
+    exit 3
+  fi
+  INSTALLED_HASH=""
+  [ -f "$WASM_PROV" ] && INSTALLED_HASH="$(sed -n 's/^source_sha256=//p' "$WASM_PROV")"
+  if [ -z "$INSTALLED_HASH" ]; then
+    echo "STALE?: the wasm has no provenance — it predates this guard, or was" >&2
+    echo "        built by hand.  Re-run ../install.sh so the two consumers are" >&2
+    echo "        known to share one grammar, or pass --emacs-only." >&2
+    exit 3
+  elif [ "$INSTALLED_HASH" != "$SRC_HASH" ]; then
+    echo "STALE: the wasm was NOT built from the current source." >&2
+    echo "  wasm:   ${INSTALLED_HASH:0:12}" >&2
+    echo "  source: ${SRC_HASH:0:12}" >&2
+    echo "  Emacs and VS Code would be running DIFFERENT grammars, so any" >&2
+    echo "  parity result here is meaningless.  Re-run ../install.sh." >&2
+    exit 3
+  fi
+fi
+
 FIXTURE="fixture.prologos"
 GOLDEN="golden.tsv"
 EM_OUT="$(mktemp -t parity-emacs)"
@@ -84,6 +126,14 @@ if [ "$EMACS_ONLY" = "0" ]; then
 fi
 
 if [ "$status" = "0" ]; then
-  echo "PASS — both consumers agree with the golden on $(wc -l < "$GOLDEN" | tr -d ' ') captures"
+  n="$(wc -l < "$GOLDEN" | tr -d ' ')"
+  if [ "$EMACS_ONLY" = "1" ]; then
+    # Say what actually ran.  Claiming "both consumers agree" after checking one
+    # is the same misleading-pass shape this harness exists to eliminate.
+    echo "PASS (EMACS ONLY) — Emacs matches the golden on $n captures."
+    echo "  VS Code was NOT checked; this run says nothing about parity."
+  else
+    echo "PASS — both consumers agree with the golden on $n captures"
+  fi
 fi
 exit "$status"
