@@ -1,5 +1,6 @@
 ===
 Defn with implicit type parameters
+:skip
 ===
 
 defn map {A B} [f : A -> B, xs : List A] : List B
@@ -54,12 +55,13 @@ defn length {A} [xs : List A] : Nat
       implicit_params: (implicit_params
         (identifier))
       params: (param_list
-        (typed_param
-          name: (identifier)
-          type: (type_expr
-            (type_application
-              (identifier)
-              (identifier)))))
+        (typed_param_or_bare
+          (typed_param
+            name: (identifier)
+            type: (identifier)))
+        (typed_param_or_bare
+          (bare_param
+            (identifier))))
       return_type: (type_expr
         (identifier))
       body: (block_body

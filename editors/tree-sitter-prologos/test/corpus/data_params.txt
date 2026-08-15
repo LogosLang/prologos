@@ -12,8 +12,9 @@ data List {A}
   (top_level
     (data_form
       name: (identifier)
-      type_params: (implicit_params
-        (identifier))
+      type_params: (data_params
+        (implicit_params
+          (identifier)))
       (data_constructor
         name: (identifier))
       (data_constructor
@@ -41,9 +42,10 @@ data Result {A E}
   (top_level
     (data_form
       name: (identifier)
-      type_params: (implicit_params
-        (identifier)
-        (identifier))
+      type_params: (data_params
+        (implicit_params
+          (identifier)
+          (identifier)))
       (data_constructor
         name: (identifier)
         type: (type_expr

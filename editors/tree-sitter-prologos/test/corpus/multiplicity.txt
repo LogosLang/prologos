@@ -14,16 +14,16 @@ defn sym {A} [a :0 : A, b :0 : A] : A
       implicit_params: (implicit_params
         (identifier))
       params: (param_list
-        (typed_param
-          name: (identifier)
-          multiplicity: (multiplicity)
-          type: (type_expr
-            (identifier)))
-        (typed_param
-          name: (identifier)
-          multiplicity: (multiplicity)
-          type: (type_expr
-            (identifier))))
+        (typed_param_or_bare
+          (typed_param
+            name: (identifier)
+            multiplicity: (multiplicity)
+            type: (identifier)))
+        (typed_param_or_bare
+          (typed_param
+            name: (identifier)
+            multiplicity: (multiplicity)
+            type: (identifier))))
       return_type: (type_expr
         (identifier))
       body: (block_body

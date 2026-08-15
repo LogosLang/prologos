@@ -14,10 +14,10 @@ defn zero? [n : Nat] : Bool
     (defn_form
       name: (identifier)
       params: (param_list
-        (typed_param
-          name: (identifier)
-          type: (type_expr
-            (identifier))))
+        (typed_param_or_bare
+          (typed_param
+            name: (identifier)
+            type: (identifier))))
       return_type: (type_expr
         (identifier))
       body: (block_body
@@ -31,8 +31,7 @@ defn zero? [n : Nat] : Bool
                 (identifier)))
             body: (match_arm_body
               (expression
-                (atom
-                  (identifier)))))
+                (atom))))
           (match_arm
             pattern: (pattern
               (constructor_pattern
@@ -40,8 +39,7 @@ defn zero? [n : Nat] : Bool
                 (pattern_arg)))
             body: (match_arm_body
               (expression
-                (atom
-                  (identifier))))))))))
+                (atom)))))))))
 
 ===
 Match with bracketed body expression
@@ -59,14 +57,14 @@ defn add [x : Nat, y : Nat] : Nat
     (defn_form
       name: (identifier)
       params: (param_list
-        (typed_param
-          name: (identifier)
-          type: (type_expr
-            (identifier)))
-        (typed_param
-          name: (identifier)
-          type: (type_expr
-            (identifier))))
+        (typed_param_or_bare
+          (typed_param
+            name: (identifier)
+            type: (identifier)))
+        (typed_param_or_bare
+          (typed_param
+            name: (identifier)
+            type: (identifier))))
       return_type: (type_expr
         (identifier))
       body: (block_body

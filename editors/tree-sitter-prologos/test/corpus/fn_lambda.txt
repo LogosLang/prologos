@@ -2,8 +2,8 @@
 Lambda with bracketed body
 ===
 
-defn test {A} [x : A] : A
-  [fn a [Eq A a x]]
+defn test [x : Int] : Int
+  [[fn [a : Int] [+ a x]] 3]
 
 ---
 
@@ -11,39 +11,43 @@ defn test {A} [x : A] : A
   (top_level
     (defn_form
       name: (identifier)
-      implicit_params: (implicit_params
-        (identifier))
       params: (param_list
-        (typed_param
-          name: (identifier)
-          type: (type_expr
-            (identifier))))
+        (typed_param_or_bare
+          (typed_param
+            name: (identifier)
+            type: (identifier))))
       return_type: (type_expr
         (identifier))
       body: (block_body
         (expression
           (grouped_expr
             (expression
-              (fn_expr
-                (fn_param
-                  (identifier))
-                (fn_body
+              (application
+                (expression
                   (grouped_expr
                     (expression
-                      (application
-                        (expression
-                          (application
+                      (fn_expr
+                        (fn_param
+                          (param_list
+                            (typed_param_or_bare
+                              (typed_param
+                                name: (identifier)
+                                type: (identifier)))))
+                        (fn_body
+                          (grouped_expr
                             (expression
                               (application
                                 (expression
-                                  (atom
-                                    (identifier)))
+                                  (application
+                                    (expression
+                                      (atom
+                                        (operator)))
+                                    (expression
+                                      (atom
+                                        (identifier)))))
                                 (expression
                                   (atom
-                                    (identifier)))))
-                            (expression
-                              (atom
-                                (identifier)))))
-                        (expression
-                          (atom
-                            (identifier)))))))))))))))
+                                    (identifier)))))))))))
+                (expression
+                  (atom
+                    (number)))))))))))

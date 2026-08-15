@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 143**
+> ### **NEXT FREE: 144**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6673,3 +6673,43 @@ as its own TSG track; census `-` list items and inline-brace mixing first.
 **Interim (2026-08-15, this commit)**: all keyword literals render in the
 default-paint family in VS Code, which the owner confirmed as the acceptable
 baseline (distinct from numerals). Per-key chrome waits on this entry.
+
+
+---
+
+<a id="d143"></a>
+### 143. ⬜ SPACED compound param types mis-parse — `name : A -> B` ERRORs at the arrow, `name : List A` silently SPLITS into two params
+
+Filed 2026-08-15 from the golden-regeneration pass: the two `-u`-resistant
+tests reduced to this ONE root cause (the nested-match test's arm errors were
+cascade damage from its broken param header, not a match defect — the nested
+match parses clean with simple params, measured).
+
+Compiler-verified VALID at 0 errors:
+
+```
+defn map2 {A B} [f : A -> B, xs : List A] : List B     -- types correctly
+defn filter2 {A} [pred : A -> Bool, xs : List A] : ...  -- types correctly
+```
+
+Grammar today: `_param_type` is ATOMIC (grouped/angle/identifier) per
+DEFERRED 134, whose bound was measured correct for the FUSED form — but the
+spaced form was collateral: `A -> B` leaves the arrow homeless (ERROR) and
+`List A` becomes `xs : List` plus a BARE PARAM `A` at E0 — the silent-split
+shape 134's own comment documents for fused, now on syntax the compiler
+ACCEPTS.
+
+**Design note for the fix**: 134's greed argument does not transfer wholesale.
+The fused bound exists because `[p1:Point p2:Point]` has no delimiter between
+a type and the next name; the SPACED form is delimited by `,` and `]`, so a
+spaced `typed_param` could admit a wider type rule than a fused one. Bound the
+two separately.
+
+**Census alongside**: bare-param `fn` (`[fn a body]`) — the compiler parses it
+(fails only in typing for unrelated reasons); the grammar has no rule. Decide
+whether it is documented syntax before arming it.
+
+**Pins**: `test/corpus/implicit_params.txt` "Defn with implicit type
+parameters" and `test/corpus/nested_match.txt` "Nested match in match arm
+body", both marked `:skip` with this entry as the reason — un-skip them when
+this lands; they are the acceptance tests.

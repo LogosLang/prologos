@@ -9,8 +9,10 @@ require [prologos.core.eq-trait :refer [nat-eq]]
 (source_file
   (top_level
     (require_declaration
-      module: (qualified_name)
-      (identifier))))
+      (require_group
+        module: (qualified_name)
+        (require_clause
+          (identifier))))))
 
 ===
 Multiple requires
@@ -24,9 +26,13 @@ require [prologos.data.bool :refer [not]]
 (source_file
   (top_level
     (require_declaration
-      module: (qualified_name)
-      (identifier)))
+      (require_group
+        module: (qualified_name)
+        (require_clause
+          (identifier)))))
   (top_level
     (require_declaration
-      module: (qualified_name)
-      (identifier))))
+      (require_group
+        module: (qualified_name)
+        (require_clause
+          (identifier))))))

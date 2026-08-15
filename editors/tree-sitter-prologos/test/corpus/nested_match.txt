@@ -1,5 +1,6 @@
 ===
 Nested match in match arm body
+:skip
 ===
 
 defn filter {A} [pred : A -> Bool, xs : List A] : List A

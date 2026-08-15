@@ -14,10 +14,10 @@ defn pred [n : Nat] : Nat
     (defn_form
       name: (identifier)
       params: (param_list
-        (typed_param
-          name: (identifier)
-          type: (type_expr
-            (identifier))))
+        (typed_param_or_bare
+          (typed_param
+            name: (identifier)
+            type: (identifier))))
       return_type: (type_expr
         (identifier))
       body: (block_body
@@ -58,10 +58,10 @@ defn double [n : Nat] : Nat
     (defn_form
       name: (identifier)
       params: (param_list
-        (typed_param
-          name: (identifier)
-          type: (type_expr
-            (identifier))))
+        (typed_param_or_bare
+          (typed_param
+            name: (identifier)
+            type: (identifier))))
       return_type: (type_expr
         (identifier))
       body: (block_body
