@@ -6305,7 +6305,7 @@ datum. A bare `#f`, a fallback, and a raise are each disqualified independently
 
 ---
 
-### 140. ⬜ `let` BINDS ONLY THE FIRST NAME IN TWO OF ITS FOUR SHAPES — the aligned block and the bracket form
+### 140. 🔄 HALF FIXED (`c809c5d0`) — `let` bound only the first name in two shapes; the BRACKET form is repaired, the ALIGNED BLOCK remains
 
 Filed 2026-08-15 from an owner report (`foray.prologos:136-137`: "`x` is coloured
 as a parameter, but `z` is not"). Measured by rendered FACE, which is what the
@@ -6315,8 +6315,8 @@ user actually sees:
 |---|---|
 | sibling chain (`let y 4` / `let z 5`) | ✅ both |
 | nested shorthand (`let y 4` / indented `let z 5`) | ✅ both |
-| **aligned block** (`let y 4` / `    z 5`) | ❌ **first only** |
-| **bracket form** (`let [y 4 z 5]`) | ❌ **first only** |
+| **aligned block** (`let y 4` / `    z 5`) | ❌ **first only — STILL OPEN** |
+| ~~bracket form~~ (`let [y 4 z 5]`) | ✅ **FIXED `c809c5d0`** |
 
 Both broken shapes are **documented canonical syntax** in
 `.claude/rules/prologos-syntax.md` — the aligned block is called "the canonical
@@ -6340,6 +6340,52 @@ have — the scanner-token recipe in `.claude/rules/tree-sitter-grammar.md`.
 **Not urgent**: it is a missing colour on binding sites, not a mis-parse — 0
 ERROR nodes in the aligned form. The sibling-chain and nested spellings are
 unaffected and are what most code uses.
+
+---
+
+#### ✅ BRACKET HALF FIXED — `c809c5d0` (2026-08-15)
+
+A separate bracket rule whose value is exactly one datum
+(`path_expr | grouped_expr | paren_expr | atom`), aliased to `let_binding` so
+the node type the queries match stays one name. `application` is deliberately
+excluded: juxtaposition is precisely what must not cross a binding boundary.
+
+⭐ **This entry UNDER-RECORDED the defect.** With `:=` spelled out —
+`let [y := 4 z := 5]`, which the compiler accepts at 0 errors — the same greed
+produced an **ERROR node**, not merely a missing binding. All four bracket
+spellings (plain · `:=` · `y : Int := 4` · grouped value) now bind every name at
+0 errors, pinned by `test/corpus/let_bracket.txt`.
+
+⚠ **The trap, caught by the per-file A/B on its first real use**: including
+`angle_group` in the value choice regressed `sample.prologos` **M0 → M1 with
+ERROR unchanged**, so a netted total would have read as a pure win. In
+`(let [x <Nat> (inc zero)]` the parser then took `x` as a bare name and `<Nat>`
+as its VALUE, stranding `(inc zero)`. **An angle group after a binder name is
+that binder's TYPE, never its value.** Pinned by a corpus test.
+
+#### ⬜ ALIGNED HALF — what it actually costs
+
+Measured, not estimated. The failing parse is one `let_binding` whose value is a
+single `application` spanning lines 1–3: it swallows the second binding **and**
+the body.
+
+The discriminator is a COLUMN — `.claude/rules/prologos-syntax.md` defines the
+body as sitting strictly between the `let` column and the binding column — and
+the LR state does not have it. Per the contested-shape recipe this is scanner
+work, and specifically:
+
+1. a zero-width token emitted just after `let`, to CAPTURE the first binding's
+   column (the scanner cannot otherwise know it);
+2. a second zero-width token separating "next aligned binding" from "the body",
+   valid only after a complete layout binding;
+3. a per-`let` column **stack** in `Scanner` (lets nest), plus the matching
+   change to `serialize`/`deserialize` — the existing `indent_stack` shows the
+   shape but the format is offset-versioned, so adding a field is a format
+   change.
+
+That is the same size as the three contested-shape tokens already in the
+scanner, each of which the rules file records as needing "a DESIGN, not a better
+rule". It is not a follow-on to the bracket fix.
 
 ---
 
