@@ -31,6 +31,11 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const EXT  = join(HERE, '..', '..', 'vscode-prologos');
 const ARGV = process.argv.slice(2);
 const GATE = ARGV.includes('--gate');
+// --explain prints the actual spans behind each disagreement.  Counts alone
+// say a pair is wrong but not WHICH text is wrong, and every one of these is a
+// per-construct design call — you cannot rule on `@property` vs
+// `constant.other.keyword` without seeing that it is `:key` inside a map.
+const EXPLAIN = ARGV.includes('--explain');
 const FIX  = ARGV.find(a => !a.startsWith('--')) || join(HERE, 'fixture.prologos');
 
 // Both ship CommonJS; imported from ESM their API lands under `.default`.
@@ -110,11 +115,33 @@ for (const cap of query.captures(tree.rootNode)) {
 // --- Report ---
 const both = [], tmOnly = new Map(), tsOnly = new Map();
 const pairs = new Map();  // "capture -> scope" -> count
+const pairPos = new Map();  // same key -> ["row:col", ...], for --explain
 
 for (const [k, scope] of tm) {
   const cap = ts.get(k);
   if (cap === undefined) tmOnly.set(scope, (tmOnly.get(scope) || 0) + 1);
-  else { both.push(k); const p = `${cap}\t${scope}`; pairs.set(p, (pairs.get(p) || 0) + 1); }
+  else {
+    both.push(k);
+    const p = `${cap}\t${scope}`;
+    pairs.set(p, (pairs.get(p) || 0) + 1);
+    if (!pairPos.has(p)) pairPos.set(p, []);
+    pairPos.get(p).push(k);
+  }
+}
+
+// Contiguous same-row columns -> one run, so a span reads as its text rather
+// than as N single characters.
+function runsFor(p) {
+  const ks = (pairPos.get(p) || [])
+    .map(k => k.split(':').map(Number))
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const runs = [];
+  for (const [row, col] of ks) {
+    const last = runs[runs.length - 1];
+    if (last && last.row === row && col === last.end + 1) last.end = col;
+    else runs.push({ row, start: col, end: col });
+  }
+  return runs;
 }
 for (const [k, cap] of ts) if (!tm.has(k)) tsOnly.set(cap, (tsOnly.get(cap) || 0) + 1);
 
@@ -172,7 +199,17 @@ console.log('\n=== D3 AGREEMENT: overlapping spans where the two layers DISAGREE
 if (bad.length === 0) {
   console.log('  none — every overlap agrees');
 } else {
-  for (const e of bad) console.log(`  ${String(e.n).padStart(5)}  @${e.cap.padEnd(22)} ${e.scope}`);
+  for (const e of bad) {
+    console.log(`  ${String(e.n).padStart(5)}  @${e.cap.padEnd(22)} ${e.scope}`);
+    if (EXPLAIN) {
+      for (const r of runsFor(`${e.cap}\t${e.scope}`)) {
+        const text = lines[r.row - 1] ?? '';
+        console.log(`           L${String(r.row).padStart(3)}  ${JSON.stringify(text.slice(r.start, r.end + 1))}`
+                    + `   in:  ${text.trim()}`);
+      }
+    }
+  }
   console.log(`\n  ${bad.length} disagreeing pair(s), ${bad.reduce((s, e) => s + e.n, 0)} chars`);
+  if (!EXPLAIN) console.log('  (re-run with --explain to see the spans)');
 }
 if (GATE && bad.length) process.exit(1);

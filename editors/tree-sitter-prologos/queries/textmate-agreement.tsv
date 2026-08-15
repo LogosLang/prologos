@@ -26,6 +26,14 @@
 #
 # A real disagreement is TextMate being CONFIDENTLY DIFFERENT: two specific
 # scopes that cannot both be right.
+#
+# `property <- constant.other.keyword` is the same idea one step along: a map
+# key in this language IS a keyword literal, so TextMate naming the LEXICAL
+# class is correct and `@property` is the semantic layer adding the ROLE. Not
+# two claims that cannot both be right. This is deliberately a per-capture
+# allowance and NOT a *GENERIC* entry: `constant.other.keyword` against
+# `@type.builtin` was a real TextMate mis-lex of `x:Int`, and making it
+# generic would have hidden that.
 *GENERIC*	variable.other
 
 attribute	storage.modifier
@@ -38,7 +46,7 @@ keyword	keyword
 module	entity.name.namespace punctuation.separator.namespace
 number	constant.numeric
 operator	keyword.operator punctuation
-property	variable.other support.variable
+property	variable.other support.variable constant.other.keyword
 string	string
 string.special.symbol	constant.other.keyword string
 type	support.type entity.name.type storage.type

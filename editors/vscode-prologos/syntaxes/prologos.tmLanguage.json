@@ -3,27 +3,72 @@
   "name": "Prologos",
   "scopeName": "source.prologos",
   "patterns": [
-    { "include": "#comment" },
-    { "include": "#string" },
-    { "include": "#char-literal" },
-    { "include": "#keyword-literal" },
-    { "include": "#nat-literal" },
-    { "include": "#rational-literal" },
-    { "include": "#approx-literal" },
-    { "include": "#number" },
-    { "include": "#boolean" },
-    { "include": "#multiplicity" },
-    { "include": "#operator" },
-    { "include": "#quote-syntax" },
-    { "include": "#hole" },
-    { "include": "#declaration-keyword" },
-    { "include": "#expression-keyword" },
-    { "include": "#module-keyword" },
-    { "include": "#builtin-type" },
-    { "include": "#builtin-constant" },
-    { "include": "#logic-variable" },
-    { "include": "#qualified-name" },
-    { "include": "#identifier" }
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#string"
+    },
+    {
+      "include": "#char-literal"
+    },
+    {
+      "include": "#module-clause-keyword"
+    },
+    {
+      "include": "#keyword-literal"
+    },
+    {
+      "include": "#nat-literal"
+    },
+    {
+      "include": "#rational-literal"
+    },
+    {
+      "include": "#approx-literal"
+    },
+    {
+      "include": "#number"
+    },
+    {
+      "include": "#boolean"
+    },
+    {
+      "include": "#multiplicity"
+    },
+    {
+      "include": "#operator"
+    },
+    {
+      "include": "#quote-syntax"
+    },
+    {
+      "include": "#hole"
+    },
+    {
+      "include": "#declaration-keyword"
+    },
+    {
+      "include": "#expression-keyword"
+    },
+    {
+      "include": "#module-keyword"
+    },
+    {
+      "include": "#builtin-type"
+    },
+    {
+      "include": "#builtin-constant"
+    },
+    {
+      "include": "#logic-variable"
+    },
+    {
+      "include": "#qualified-name"
+    },
+    {
+      "include": "#identifier"
+    }
   ],
   "repository": {
     "comment": {
@@ -51,8 +96,8 @@
     },
     "keyword-literal": {
       "name": "constant.other.keyword.prologos",
-      "match": ":[a-zA-Z_][a-zA-Z0-9_?!'-]*",
-      "comment": "Keyword literals like :foo, :bar — but NOT :refer, :as, :no-prelude etc. (those are handled as module-keyword)"
+      "match": "(?<![a-zA-Z0-9_?!':-]):[a-zA-Z_][a-zA-Z0-9_?!'-]*",
+      "comment": "Keyword literals like :foo, :bar. The lookbehind keeps this off the ':Int' of a fused annotation (x:Int) and off a '::' path segment; :refer/:as/:all/:no-prelude are #module-clause-keyword."
     },
     "nat-literal": {
       "name": "constant.numeric.natural.prologos",
@@ -140,11 +185,11 @@
     },
     "declaration-keyword": {
       "name": "keyword.control.declaration.prologos",
-      "match": "(?<![a-zA-Z0-9_-])(?:defmacro|deftype|defn|defr|def|data|spec|trait|impl|bundle|property|functor|foreign|subtype|capability|relation|clause|schema|solver)(?![a-zA-Z0-9_?!'-])"
+      "match": "(?<![a-zA-Z0-9_:-])(?:defmacro|deftype|defn|defr|def|data|spec|trait|impl|bundle|property|functor|foreign|subtype|capability|relation|clause|schema|solver)(?![a-zA-Z0-9_?!':-])"
     },
     "expression-keyword": {
       "name": "keyword.control.expression.prologos",
-      "match": "(?<![a-zA-Z0-9_-])(?:with-transient|solve-with|solve-one|explain-with|expand-full|expand-1|match|fn|let|if|cond|do|the|forall|exists|where|when|transient|reduce|eval|infer|check|expand|parse|elaborate|solve|explain|rel|query)(?![a-zA-Z0-9_?!'-])"
+      "match": "(?<![a-zA-Z0-9_:-])(?:with-transient|solve-with|solve-one|explain-with|expand-full|expand-1|match|fn|let|if|cond|do|the|forall|exists|where|when|transient|reduce|eval|infer|check|expand|parse|elaborate|solve|explain|rel|query)(?![a-zA-Z0-9_?!':-])"
     },
     "module-keyword": {
       "name": "keyword.control.module.prologos",
@@ -177,6 +222,11 @@
     "identifier": {
       "name": "variable.other.prologos",
       "match": "[a-zA-Z_][a-zA-Z0-9_?!'-]*"
+    },
+    "module-clause-keyword": {
+      "name": "keyword.control.module.prologos",
+      "match": ":(?:no-prelude|refer|as|all)(?![a-zA-Z0-9_?!'-])",
+      "comment": "Module clause markers. MUST be included before #keyword-literal, which would otherwise lex them as :foo constants. Set matches grammar.js."
     }
   }
 }
