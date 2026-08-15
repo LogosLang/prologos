@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 134**
+> ### **NEXT FREE: 135**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7528,6 +7528,45 @@ workflow transcript at
 `.claude/projects/…/subagents/workflows/wf_fc98d241-4e5/journal.jsonl`.
 
 ---
+
+### 134. ⬜ `type_application` IS GREEDY INSIDE A FUSED `typed_param`, so `[p1:Point p2:Point]` MIS-PARSES — valid code the COMPILER accepts at 0 errors
+
+Found by EHP T1 P4 while re-checking catalogued issue #4 on the repaired base.
+
+`defn point-add2 [p1:Point p2:Point]` compiles at **0 errors**
+(`point-add2 : p::Point p::Point -> p::Point defined.`). The grammar reads it as:
+
+```
+typed_param "p1:Point p2"
+  identifier "p1"
+  type_expr "Point p2"
+    type_application "Point p2"    <- the type EATS the next parameter
+ERROR ":Point"
+```
+
+So the second parameter is painted as a **type**, and the stranded `:Point`
+becomes an ERROR region — where `semanticTokens.ts` deliberately suppresses
+semantic tokens, so VS Code falls through to TextMate. That fall-through is the
+residual half of issue #4's "fused `var:Type` mispaint"; the TextMate half was
+fixed at `805e14be`.
+
+**Why it was previously judged "the grammar is right"** (§4 of the EHP doc): the
+probe used a SINGLE fused param, where the grammar IS right. The defect needs a
+SECOND one to appear — the differential varied more than one thing.
+
+⚠ **Incidence is small and was nearly overstated.** A first scan counted 124 of
+1609 param_lists containing an ERROR, but that conflated two populations: most
+are the SPACED form (`[x : Int  y : Int]`), which the **compiler also rejects**,
+so the grammar is right about those. The confirmed valid-but-mis-parsed shape —
+two or more FUSED typed params — is **2 sites**:
+`lib/examples/foray.prologos:1424` and
+`examples/2026-07-31-let-toplevel.prologos:37`.
+
+**Fix**: bound the type in a fused `typed_param` so it cannot absorb a following
+identifier — the fused spelling is documented as single-token types only
+(`prologos-syntax.md`), so the type there should not be a `type_application` at
+all. TSG work, not EHP; filed rather than done because it is a grammar change
+with its own corpus gate to re-measure.
 
 ### 133. ✅ **DISCHARGED `862fc7e3`** (filed and fixed same day) ⭐ THE BATTERY'S STAR-TOKEN HELPERS ARE EXACT-LEXEME `"*"` AND SO ARE STRUCTURALLY BLIND TO `*_` — DEFERRED 127's defect one layer down, where its repair never propagated
 

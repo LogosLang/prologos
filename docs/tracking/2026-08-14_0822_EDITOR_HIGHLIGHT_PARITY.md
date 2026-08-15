@@ -21,7 +21,7 @@ contract well enough that a third editor is a *mapping table*, not a port.
 | P1 | Parity harness: one fixture, capture-by-capture, asserted in BOTH | ✅ | `30671d9d`. **Query layer is ALREADY in parity** — identical in both. Golden now **228** (was 205; the scanner fix made comments visible). [§8](#p1-record) |
 | P2 | TextMate: declared, and made to AGREE where it overlaps | ✅ | Census `81ac5a01` · scanner `e8b9ab0f` · D3 + gate `294dbc0f` · **the 5 disagreements closed `805e14be` + `9a329c68`** — 3 were TextMate bugs, 1 an agreement gap, 1 a recorded divergence. **All five gates green.** [§13](#p2-close) |
 | P3 | Review `semanticTokenScopes` per capture | ✅ | `8b42cfb0`. `@attribute` coloured (last known gap closed) — **and 3 of its 4 rules were VACUOUS, 90% of its spans mispainted**. 3 dead scope entries + 2 dead legend types removed. New gate `check-tokens.mjs`. [§14](#p3-close) |
-| P4 | The four catalogued issues, on the repaired base | ⬜ | [§4](#issues) |
+| P4 | The four catalogued issues, on the repaired base | 🔄 | **#1 ✅ resolved · #4 ⚠ HALF — the residual cause is the GRAMMAR ([DEFERRED 134](DEFERRED.md)), not TextMate.** #2/#3 not yet re-checked. [§15](#p4-record) |
 | P5 | `#match?` dialect lint (or retire the predicate) | ⬜ | [§3.5](#p5) |
 | P6 | `docs/ADDING_AN_EDITOR.md` — the contributor contract | ⬜ | The deliverable that makes this leverage |
 | P7 | EHP T1.close — PIR-lite, DEFERRED triage | ⬜ | |
@@ -177,10 +177,10 @@ grammar tokens (which would also fix `[trait x]`-style questions at the source).
 
 | # | Issue | Diagnosis | Phase |
 |---|---|---|---|
-| 1 | ✅ **CONFIRMED TextMate** ([§12](#d3-ruled)). Map `{}` keys blue, implicit-map keys orange | Explained in §1(2) — `@property` vs `@constant.other` through two scopes. A capture-level decision. | **P3** |
+| 1 | ✅ **RESOLVED** ([§15](#p4-record)) — three keyword roles, three colours; the split is by design and P3 gave metadata keys their own. Map `{}` keys blue, implicit-map keys orange | Explained in §1(2) — `@property` vs `@constant.other` through two scopes. A capture-level decision. | **P3** |
 | 2 | Path-selection branches paint as keywords, not key chrome | Suspected TextMate showing through; `.scm` captures steps as `@property`. | **P2**, confirm in **P1** |
 | 3 | `foray.prologos:712` — closing inner projection ≠ opening | `app-config{server.ssl.{enabled^-ssl cert-path^cert}}`; nested projection braces, and the `.scm` captures no brackets → TextMate. | **P2** |
-| 4 | ✅ **CONFIRMED TextMate mis-lex** ([§12](#d3-ruled)). Fused `var:Type` mispaint | Probed: the grammar is right (`x`→parameter, `Int`→builtin type). So the mispaint is a layer above — TextMate, or the scope map. | **P2/P3**, confirm in **P1** |
+| 4 | ⚠ **HALF-FIXED** ([§15](#p4-record)). TextMate mis-lex fixed `805e14be`; the residual cause is a GRAMMAR bug — [DEFERRED 134](DEFERRED.md). Fused `var:Type` mispaint | Probed: the grammar is right (`x`→parameter, `Int`→builtin type). So the mispaint is a layer above — TextMate, or the scope map. | **P2/P3**, confirm in **P1** |
 
 ⚠ Three of four are *suspected* TextMate. That suspicion is exactly what P1
 exists to convert into fact before P2 acts on it — colours cannot be read
@@ -931,3 +931,59 @@ Ambient rules updated: the gate table is now **six** (`check-tokens.mjs` from P3
 was missing from it too), and census's "blind to" column now names its real
 limit — *anything the fixture does not exercise*, which is precisely what hid
 the vacuous `@attribute` rules.
+
+---
+
+<a id="p4-record"></a>
+## 15. P4 — issues #1 and #4 re-checked on the repaired base (2026-08-15)
+
+### Issue #1 — ✅ resolved, and P3 is what resolved it
+
+Verified by probe: a keyword literal now paints by **role**, three ways, and no
+two roles share a colour by accident.
+
+| source | capture | why |
+|---|---|---|
+| `{:a 1 :b 2}` | `@property` | map key — rule sits above the generic one |
+| `:doc` in a metadata / trait / law entry | `@attribute` | **P3 hoisted these; they used to fall through to the bare-keyword colour** |
+| `def bare := :a-keyword` | `@string.special.symbol` | a free-standing keyword literal |
+
+The blue/orange contrast §1(2) describes is **by design** and that section already
+said so. What was a genuine defect — metadata keys sharing the bare-keyword
+colour despite being structurally keys — was fixed by the [§14](#p3-close)
+hoist. Zero disagreements on the probe.
+
+⚠ **What could NOT be reproduced**: an "implicit map" whose keys render unlike
+`{}` keys. The grammar has exactly five `keyword_literal` contexts
+(`metadata_entry`, `trait_metadata`, `law_entry`, `map_literal key:`, `atom`) and
+no implicit-map form. A type-level `{:a Int}` is **rejected by the compiler**
+too ("Expression is not a valid type"), so that is not it either. If the symptom
+persists, it needs a concrete example to chase.
+
+### Issue #4 — ⚠ half-fixed, and the residual cause is the GRAMMAR
+
+The TextMate mis-lex is genuinely fixed (`805e14be`): `Int` in `x:Int` now paints
+`@type.builtin` ↔ `support.type`, agreeing.
+
+But a second, independent cause remains. `type_application` is greedy inside a
+fused `typed_param`, so **`[p1:Point p2:Point]` — which the compiler accepts at
+0 errors — mis-parses**: the type absorbs the next parameter and `:Point` is
+stranded as an `ERROR`. `semanticTokens.ts` suppresses semantic tokens inside
+ERROR subtrees by design, so VS Code falls through to TextMate — *which is the
+mispaint*. Filed as **[DEFERRED 134](DEFERRED.md)**; it is TSG work, not EHP.
+
+**§4's "the grammar is right" was measured on a SINGLE fused param**, where it
+is. The defect needs a second one. The differential varied more than one thing.
+
+### ⚠ Two of my own claims, corrected before they were reported
+
+1. I hypothesised the type-level `{:a Int}` was an unparsed **grammar gap**. The
+   compiler rejects it too, so the grammar is right and the syntax is invalid.
+2. I first measured the param-list defect at **124 of 1609 param_lists**. That
+   conflated two populations: most are the SPACED form `[x : Int  y : Int]`,
+   which the **compiler also rejects**. The confirmed valid-but-mis-parsed shape
+   is **2 sites**. The honest number is 60× smaller than the first one.
+
+Both were caught by checking against the COMPILER before writing them down —
+the compiler is the authority on what is valid, and the grammar can only be
+wrong relative to it.
