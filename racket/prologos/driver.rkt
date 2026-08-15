@@ -88,6 +88,7 @@
          (only-in "ctor-registry.rkt" lookup-ctor-desc))
 
 (provide process-command
+         ws-string->surfs   ;; SURF T1 P3/P4 — production WS parse, returns the surf list
          ;; #78: exported so the regression test can drive its cell-coverage
          ;; assertion off the PRODUCTION table rather than a copy of it — a
          ;; hand-copied list in a test cannot detect an omission from a
@@ -2647,6 +2648,23 @@
 ;; (N6e-E5.2) merge-cell-surfs-with-preparse DELETED — dead code (zero
 ;; callers; it was a bare error-swallowing filter, the same defect class as
 ;; the merge-preparse-and-tree-parser #:when fixed above).
+
+;; SURF T1 P3/P4 — the production WS parse, exposed as a value.
+;;
+;; `process-string-ws-inner-impl` does exactly this and then calls
+;; `process-surfs`.  The structural editor needs the surfs THEMSELVES, and so
+;; does the spike that decides whether they are navigable, so the parse half is
+;; factored out here rather than duplicated in a probe.  Duplicating it would
+;; have measured a different tree than production uses — which is precisely the
+;; error the tree-spine-only spike made.
+;;
+;; ⚠ Not pure: `preparse-expand-all` registers macros, data, traits and impls.
+;; Call it the way the compiler does, inside a fresh module context.
+(define (ws-string->surfs s)
+  (define raw-stxs (read-all-syntax-ws (open-input-string s) "<ws-string>"))
+  (define expanded-stxs (preparse-expand-all raw-stxs))
+  (define preparse-surfs (map parse-toplevel-datum expanded-stxs))
+  (merge-preparse-and-tree-parser s preparse-surfs))
 
 (define (process-surfs surfs)
   ;; Common tail for both old and new paths.

@@ -383,3 +383,63 @@ majority, so the true figure is 90%. Two walker defects preceded it: counting
   146 error nodes. Unexplained.
 - Before P4, re-run against the **merged** surfs. `merge-preparse-and-tree-parser`
   is not exported, so that needs a small export.
+
+<a id="p3-merged"></a>
+## 8. P3 (continued) — the MERGED tree, which is the one that matters
+
+The spine measurement was of the wrong tree, as flagged. `ws-string->surfs` now
+exposes the production WS parse (`driver.rkt`), and the same walk over it:
+
+| file | nodes | depth | located (last field) | located (anywhere) | error nodes |
+|---|---|---|---|---|---|
+| core/io | **0** | 0 | — | — | 0 |
+| core/eq | 454 | 7 | 90% | 90% | 0 |
+| core/collections | 1394 | 13 | 86% | 86% | 0 |
+| core/conversions | 2689 | 7 | 92% | 92% | 0 |
+| examples/foray | 1911 | 9 | 96% | 96% | 3 |
+| **total** | **6448** | | **92%** | **92%** | **3** |
+
+### It differs from the spine on every axis that mattered
+
+- **Error nodes 279 → 3.** The merge fills in what the tree spine could not, as
+  its own comment says it does. The spine's 258 `prologos-error` nodes were an
+  artifact of the route, not a property of the tree. The caveat was correct.
+- **Nodes 3062 → 6448.** `conversions.prologos` goes 197 → **2689**, because the
+  spine was collapsing most of its forms into one error node each.
+- **`loc-last` and `loc-anywhere` are EQUAL at 92%.** In the merged tree, when a
+  node has a location it is always in the last field. The "search other fields"
+  fallback the spine seemed to require buys **nothing** here.
+
+### So: what would full coverage actually take?
+
+Three separable steps, and only the first is small:
+
+1. **Teach the extractor the list form.** `surf-node-srcloc` tests `(srcloc? last)`
+   and the tree parser writes a 4-element `(line col start end)` list into the
+   same field. This is the one-line-ish change, and in the merged tree it is
+   **the only one that buys anything** — it takes usable coverage to **92%**.
+2. **Characterize the remaining 8%.** Not done. `loc-anywhere == loc-last` proves
+   it is not hidden in another field, so these nodes carry no position at all.
+   Which kinds, and whether they are source constructs or metadata, is unmeasured.
+3. **Make the parser emit positions for whatever step 2 finds.** Only this reaches
+   100%, and it is a parser change, not an extractor change.
+
+⚠ So the honest answer to "is the extractor a one-line fix for full coverage" is
+**no**. It is a one-line fix for the 60% of nodes whose positions already exist
+and are simply unreadable. Full coverage needs step 3, and step 2 has to run first.
+
+### ⚠ Two anomalies, unexplained
+
+- **`io.prologos` yields 0 nodes.** An 11-line file that produced 87 nodes on the
+  spine produces an empty surf list through the merge. Plausibly every form is
+  preparse-consumed (`ns` / `require` / `provide`), but that is a guess and it is
+  not verified. **Do not build on the merged path until this is understood.**
+- **`collections.prologos` reaches depth 13**, against 6 on the spine.
+
+### The `srcloc` field holds two types, and that is a codebase fact
+
+`surf-var` is `(struct surf-var (name srcloc))`. In 884 of 1258 spine cases that
+field held a **list**, not a `srcloc`. The field name and the convention comment
+in `surface-syntax.rkt` both say srcloc. Whichever is intended, the two producers
+disagree, and `surf-node-srcloc` — 3 production call sites — silently sees only
+one of them.
