@@ -101,7 +101,7 @@
           ],
           "variable.declaration": [
             "meta.definition.variable.prologos",
-            "entity.name.variable.prologos"
+            "variable.parameter.prologos"
           ]
         }
       }
