@@ -133,8 +133,10 @@ while you are operating on it — and invisible otherwise.
 The compiler tree, fetched over LSP once per session, carries navigation.
 Tree-sitter keeps font-lock and stops being load-bearing for the surfer.
 
-Measured basis: warm LSP round trip **0.6 ms**; parse of the largest corpus file
-**10.9 ms** after PARSE T1. Session entry therefore costs about **12 ms**.
+⚠ **The "about 12 ms" estimate this section carried was WRONG — see [§10](#p4-cost).**
+It used `parse-string-to-cells` (10.9 ms), but production parses with
+`ws-string->surfs`, and the cell parse is only 10% of that. Measured session
+entry is **8 ms** for a 5 KB file and **134 ms** for the largest corpus file.
 
 ### ⚠ Owner correction — incrementality is a temporary gap, not a property
 
@@ -504,3 +506,63 @@ empty tree, so the endpoint must let a caller distinguish **"parsed fine, no
 navigable forms"** from **"failed to parse"**. If the surfer conflates them it
 will report a parse error on a perfectly good file, which is the class of defect
 this track exists to remove.
+
+<a id="p4-cost"></a>
+## 10. P4 — endpoint cost, measured (2026-08-15)
+
+### Position-collapse is worth far more than the 3% I first measured
+
+A child at the *same source position* as its parent is not a navigable step.
+Collapsing on that rule:
+
+| file | raw nodes | navigable | reduction | raw depth | navigable depth |
+|---|---|---|---|---|---|
+| core/eq | 454 | 143 | **68%** | 8 | 5 |
+| core/collections | 1394 | 681 | 51% | **14** | **8** |
+| core/conversions | 2689 | 744 | **72%** | 8 | 3 |
+| examples/foray | 1911 | 1343 | 30% | 10 | 8 |
+
+The earlier "degenerate wrappers 3%" used a stricter test — *exactly one* struct
+child **and** matching position. The real rule only needs the position match, and
+it removes **30–72%** of nodes. §4.1's collapse rule is load-bearing after all,
+in its position-based form.
+
+**`collections.prologos` depth 14, explained.** The deepest chain is a **type**,
+not code:
+
+```
+surf-defn [34:1] → surf-pi ×5 [34:1] → binder-info
+                 → surf-sigma ×2 [34:11] → surf-pi → surf-arrow ×2 → surf-app → surf-var
+```
+
+All fourteen levels sit at **one or two source positions** — the implicit binders
+of `map`'s type, one `surf-pi` each. Descending them moves the cursor nowhere,
+which is exactly the failure collapse exists to prevent. Not an anomaly: the
+depth is real and the navigable depth is 8.
+
+### Payload and cost
+
+| file | bytes | `read-to-tree` | `ws-string->surfs` | preparse+merge | JSON | serialize |
+|---|---|---|---|---|---|---|
+| core/eq | 5,215 | 2.2 ms | **8.2 ms** | 6.0 ms (74%) | 6.4 KB | 0.6 ms |
+| core/collections | 9,964 | 4.7 ms | **25.7 ms** | 20.9 ms (82%) | 29.5 KB | 2.4 ms |
+| core/conversions | 26,546 | 11.4 ms | **110.2 ms** | 98.8 ms (90%) | 33.2 KB | 2.9 ms |
+| examples/foray | 28,552 | 13.0 ms | **133.5 ms** | 120.5 ms (90%) | 58.0 KB | 4.4 ms |
+
+**Session entry = parse + serialize + 0.6 ms round trip.** So **~9 ms** for a
+typical 5 KB module and **~138 ms** for the largest file in the corpus.
+Perceptible on the first `C-M-*` press of a big file, invisible thereafter,
+because motion is local to the fetched tree.
+
+⚠ **PARSE T1 fixed the smaller half.** `read-to-tree` — the part it made linear —
+is now only **10%** of production parse. The remaining 90% is preparse + merge,
+and it is **superlinear at roughly n^1.6** (5.5× the bytes costs 16× the time).
+Not cubic, so not urgent, but a 100 KB file would be near a second.
+
+### ⚠ Measurement trap, and I fell in it
+
+My first endpoint run reported foray at **3379 ms**. That was a **cold single
+run** — first call for that file in the process, including JIT and registration.
+Warm best-of-3 is **133.5 ms**, a **25× difference**. I nearly reported session
+entry as unaffordable on the strength of one uninstrumented number. Same lesson
+as `testing.md` § bench A/B: one wall-clock reading is not a measurement.
