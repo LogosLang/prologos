@@ -178,7 +178,7 @@ grammar tokens (which would also fix `[trait x]`-style questions at the source).
 | # | Issue | Diagnosis | Phase |
 |---|---|---|---|
 | 1 | ✅ **RESOLVED** ([§15](#p4-record)) — three keyword roles, three colours; the split is by design and P3 gave metadata keys their own. Map `{}` keys blue, implicit-map keys orange | Explained in §1(2) — `@property` vs `@constant.other` through two scopes. A capture-level decision. | **P3** |
-| 2 | ✅ **CONFIRMED — the QUERY, not TextMate** ([DEFERRED 135](DEFERRED.md)). Only the dotted `nominal_step` is chromed as a key. Path-selection branches paint as keywords, not key chrome | ~~Suspected TextMate showing through~~ — **refuted**: zero disagreement with TextMate over those spans. | [§16](#p4-record-2) |
+| 2 | ✅ **FIXED `a0781086`** — was the QUERY, not TextMate ([DEFERRED 135](DEFERRED.md) discharged). Only the dotted `nominal_step` was chromed as a key. Path-selection branches paint as keywords, not key chrome | ~~Suspected TextMate showing through~~ — **refuted**: zero disagreement with TextMate over those spans. | [§16](#p4-record-2) |
 | 3 | ✅ **CONFIRMED — the GRAMMAR** ([DEFERRED 136](DEFERRED.md)). `key_op` cannot parse `^-`/`^..`; the ERROR region is the suppression boundary. `foray.prologos:712` — closing inner projection ≠ opening | ~~nested projection braces → TextMate~~ — **refuted**: not a brace rule. | [§16](#p4-record-2) |
 | 4 | ⚠ **HALF-FIXED** ([§15](#p4-record)). TextMate mis-lex fixed `805e14be`; the residual cause is a GRAMMAR bug — [DEFERRED 134](DEFERRED.md). Fused `var:Type` mispaint | Probed: the grammar is right (`x`→parameter, `Int`→builtin type). So the mispaint is a layer above — TextMate, or the scope map. | **P2/P3**, confirm in **P1** |
 
@@ -997,7 +997,7 @@ wrong relative to it.
 §4 suspected TextMate for each; the census reports **zero disagreement** with
 TextMate over the spans in question, in both cases.
 
-### Issue #2 — the QUERY. [DEFERRED 135](DEFERRED.md)
+### Issue #2 — the QUERY. ✅ FIXED `a0781086` ([DEFERRED 135](DEFERRED.md) discharged)
 
 `highlights.scm` chromes exactly one key position on a path,
 `(nominal_step key: (identifier) @property)`. Measured on
@@ -1008,6 +1008,38 @@ branches (`port`, `version`) and the `^ssl` rename target all fall to
 
 All five are keys under the law *dot DESCENDS · brace SELECTS · `:` BROADCASTS ·
 `^` RE-KEYS*. One concept, two renderings — which is the reported symptom.
+
+**Fixed** with three captures placed above `(key_op) @operator` (which spans the
+whole `^ssl`, so file order decides):
+
+```
+(select_block (path_expr . (identifier) @property))
+(select_block (identifier) @property)
+(key_op (identifier) @property)
+```
+
+⭐⭐ **The `select_block` ancestor is load-bearing.** The OUTER `path_expr` of
+`cfg{…}` has head `cfg` — the **subject**, not a key — so a bare
+`(path_expr . (identifier) @property)` would have recoloured every path subject
+in the corpus. It surfaced only from dumping the FULL tree; the `select_block`
+subtree I had been reading does not contain the subject and would have hidden
+it. Verified on real code: `app-config` still resolves to `@variable` alone.
+
+The flagged design call — the rename target — went to `@property` like every
+other key: the vocabulary draws no read/write distinction for a field name, and
+having the new name read differently from the old one is the inconsistency being
+removed.
+
+Measured: **135 identifiers across 3 files** gain key chrome; on the probe
+`@property` 7 → 30 chars and `@variable` 26 → 3 (exactly the subject). Fixture
+gains a path form so the golden holds this permanently — the `@attribute` lesson
+from [§14](#p3-close) — deliberately avoiding the `^-` family (DEFERRED 136),
+which would put an ERROR node in a fixture required to parse clean. Golden
+**234 → 260**.
+
+⭐ The query-sync guard from [§14](#scm-copy-gap) **earned itself within the
+hour**: running `check-parity.sh` before `install.sh` reported STALE with a diff,
+on exactly the drift it was built for.
 
 ### Issue #3 — the GRAMMAR. [DEFERRED 136](DEFERRED.md)
 
