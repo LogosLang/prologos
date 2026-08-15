@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 140**
+> ### **NEXT FREE: 141**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6302,6 +6302,44 @@ miss-case is not given a behaviour — it is made UNREACHABLE by widening the ga
 lexeme conjunct to EXACT table membership, so gate and emit ask one question of one
 datum. A bare `#f`, a fallback, and a raise are each disqualified independently
 (the raise is uncatchable — `parse-reader.rkt` has zero `with-handlers`).
+
+---
+
+### 140. ⬜ `let` BINDS ONLY THE FIRST NAME IN TWO OF ITS FOUR SHAPES — the aligned block and the bracket form
+
+Filed 2026-08-15 from an owner report (`foray.prologos:136-137`: "`x` is coloured
+as a parameter, but `z` is not"). Measured by rendered FACE, which is what the
+user actually sees:
+
+| `let` shape | binds? |
+|---|---|
+| sibling chain (`let y 4` / `let z 5`) | ✅ both |
+| nested shorthand (`let y 4` / indented `let z 5`) | ✅ both |
+| **aligned block** (`let y 4` / `    z 5`) | ❌ **first only** |
+| **bracket form** (`let [y 4 z 5]`) | ❌ **first only** |
+
+Both broken shapes are **documented canonical syntax** in
+`.claude/rules/prologos-syntax.md` — the aligned block is called "the canonical
+multi-binding layout" — and both compile at **0 errors** (probe: `let y [+ 2 2]`
+/ `    z [+ y y]` / `  * z z` → `64 : Int`). So the grammar is wrong relative to
+the compiler, per the standing rule.
+
+**Diagnosis**: `let_binding` is `seq(name, optional(':='), value, optional(newline))`
+and `value` is a full `$.expression`. It is GREEDY. In the bracket form
+`let [y 4 z 5]` it takes `4 z 5` as ONE application, yielding a single binding —
+which is why the bracket form fails even though `let_expr` already spells
+`seq('[', repeat1($.let_binding), ']')`. The aligned form fails the same way,
+with the continuation line read as the BODY.
+
+**Why it is not a one-liner**: the two shapes need different value grammars. In
+brackets a value is exactly one datum (flat name/value pairs); in the layout form
+it runs to end-of-line and may continue on deeper-indented lines. Separating
+"next aligned binding" from "the body" is column knowledge the LR state does not
+have — the scanner-token recipe in `.claude/rules/tree-sitter-grammar.md`.
+
+**Not urgent**: it is a missing colour on binding sites, not a mis-parse — 0
+ERROR nodes in the aligned form. The sibling-chain and nested spellings are
+unaffected and are what most code uses.
 
 ---
 
