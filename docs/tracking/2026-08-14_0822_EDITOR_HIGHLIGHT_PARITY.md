@@ -19,7 +19,7 @@ contract well enough that a third editor is a *mapping table*, not a port.
 |---|---|---|---|
 | P0 | Capture registry + D1 renames | ✅ | `7fd4445c`. D2 ruled **option E**; `queries/captures.md` + two-direction gate; 9 dead entries deleted. [§9](#p0-record) |
 | P1 | Parity harness: one fixture, capture-by-capture, asserted in BOTH | ✅ | `30671d9d`. **Query layer is ALREADY in parity** — identical in both. Golden now **228** (was 205; the scanner fix made comments visible). [§8](#p1-record) |
-| P2 | TextMate: declared, and made to AGREE where it overlaps | 🔄 | Census `81ac5a01` · scanner `e8b9ab0f` (comments 1%→100%) · **D3 ruled + agreement gate `294dbc0f`**. Remaining: fix the **5 disagreements**. [§10](#p2-record), [§12](#d3-ruled) |
+| P2 | TextMate: declared, and made to AGREE where it overlaps | ✅ | Census `81ac5a01` · scanner `e8b9ab0f` · D3 + gate `294dbc0f` · **the 5 disagreements closed `805e14be` + `9a329c68`** — 3 were TextMate bugs, 1 an agreement gap, 1 a recorded divergence. **All five gates green.** [§13](#p2-close) |
 | P3 | Review `semanticTokenScopes` per capture | ⬜ | Kills drift cause 2; settles the blue/orange class — [§3.4](#p3) |
 | P4 | The four catalogued issues, on the repaired base | ⬜ | [§4](#issues) |
 | P5 | `#match?` dialect lint (or retire the predicate) | ⬜ | [§3.5](#p5) |
@@ -757,3 +757,84 @@ question.**
 cause rather than assumed innocent — exactly what P1 and P2 existed to establish.
 #4 is a TextMate mis-lex: it reads the `:Int` of a fused annotation as a keyword
 literal.
+
+---
+
+<a id="p2-close"></a>
+## 13. P2 closed — the five disagreements (2026-08-15, `805e14be` · `9a329c68`)
+
+24 chars → 0 unwaived. **Three were TextMate bugs, one was our agreement table
+being too narrow, and one is a deliberate divergence now recorded as such.**
+
+### The instrument came first, again
+
+`census.mjs --explain` prints the SPANS behind each pair, not just the counts.
+Every one of these is a per-construct judgement and counts cannot support one —
+`@property` vs `constant.other.keyword` is unrulable until you see the text is
+`:key` inside a map. Adding it turned five guesses into four obvious calls.
+
+### ⭐⭐ `:refer` — a comment asserting a property the file did not have
+
+`keyword-literal` carried: *"but NOT :refer, :as, :no-prelude etc. (those are
+handled as module-keyword)"*. `module-keyword` matches only
+`ns|provide|require|imports|exports`. **The comment was false when it was
+written**, and it is the reason the bug survived review — anyone checking would
+read the comment and move on. Same shape as the hook installer that PRINTED the
+relative form while linking absolute (dailies (xiv)).
+
+Fixed structurally: a `module-clause-keyword` rule ordered **before**
+`keyword-literal`, its set taken from `grammar.js` (`:no-prelude` `:refer` `:as`
+`:all`) rather than from prose.
+
+### The other two TextMate bugs — both guard defects
+
+| span | was | cause |
+|---|---|---|
+| `data` in `prologos::data::list` | `keyword.control.declaration` | lookbehind excluded `[a-zA-Z0-9_-]` but not `:`, so a path segment spelling a keyword was claimed |
+| `Int` in `x:Int` (**issue #4**) | `constant.other.keyword` | `keyword-literal` lexed the `:Int` of a fused annotation as `:keyword` |
+
+`:` added to both guards on `declaration-keyword` / `expression-keyword`;
+`keyword-literal` gained a lookbehind rejecting a `:` preceded by an identifier
+char or another `:`. **Issue #4 is now explained, not merely confirmed.**
+
+### The one that was not a bug
+
+`@property` over `constant.other.keyword` for map keys: a map key in this
+language **is** a keyword literal, so TextMate names the lexical class correctly
+and `@property` adds the ROLE. Allowed per-capture — deliberately **not** via
+`*GENERIC*`, which would also have swallowed the `@type.builtin` mis-lex above.
+That distinction is written into `textmate-agreement.tsv`.
+
+<a id="wildcard"></a>
+### The wildcard — recorded, not resolved (owner ruling 2026-08-15)
+
+`_` stays `@comment`: the de-emphasis is deliberate and documented, and it reads
+as "ignore this". TextMate cannot express de-emphasis;
+`keyword.operator.wildcard` is the honest static reading for Linguist/GitHub, and
+painting `_` as a comment there would make GitHub render it as though commented
+out.
+
+It lives in `known-gaps.tsv`, **not** `textmate-agreement.tsv` — that file states
+what MEANS THE SAME, and this pair knowingly differs. *An exemption and an
+equivalence are different claims.* `textmate` rows take a 4th field (the scope);
+`check-vocabulary` reads only the first two and matches by consumer, so the row
+is inert there (verified).
+
+⭐ **A PASS states its own scope**: with a row waived the gate prints
+`none beyond 1 deliberate divergence(s) listed above`, never a bare "every
+overlap agrees".
+
+### Falsification, both directions
+
+| probe | expected | got |
+|---|---|---|
+| exemption pointed at a different scope | fail | exit 1 — scope-specific, not a blanket `@comment` waiver |
+| unrelated `property` allowance removed | fail | exit 1 — a new genuine disagreement is still caught |
+| restored | pass | exit 0 |
+
+### ⚠ A claim of mine, corrected before it was asserted
+
+I suspected the wildcard capture was inflating `@comment` coverage past 100%. It
+is not: that gate queries `(comment)` **nodes** directly, not the `.scm`'s
+`@comment` captures. The 101% is trailing comments — a comment node on a line
+that does not *start* with `;`. Checked before writing it down.
