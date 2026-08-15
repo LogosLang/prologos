@@ -115,6 +115,48 @@ while you are operating on it — and invisible otherwise.
 
 ---
 
+<a id="carrier"></a>
+## 2b. Carrier decision (2026-08-15)
+
+**R4 — owner ruling: the HYBRID.** Layout carries the always-on breadcrumb.
+The compiler tree, fetched over LSP once per session, carries navigation.
+Tree-sitter keeps font-lock and stops being load-bearing for the surfer.
+
+Measured basis: warm LSP round trip **0.6 ms**; parse of the largest corpus file
+**10.9 ms** after PARSE T1. Session entry therefore costs about **12 ms**.
+
+### ⚠ Owner correction — incrementality is a temporary gap, not a property
+
+The tradeoff table listed "not incremental, a full reparse per fetch" as a cost
+of the compiler carrier. That is a **statement about today, not about the
+design**. Incremental compilation is a stated project goal, reached through the
+propagator network and cell persistence — `.claude/rules/stratification.md`
+§ "Candidate Future Strata" says compiler passes are stratum-separable and that
+running them as BSP strata "gives incremental-compilation for free via cell
+persistence".
+
+The groundwork is visible in the code already. The parse **is** the cell
+pipeline: `parse-string-to-cells` builds cells on a `prop-network`. The merge
+creates per-form cells and `driver.rkt:2564` records their state as
+*"cells landed, propagator wiring unbuilt"* (PPN Master row 3), explicitly not
+abandonment.
+
+**Three consequences for this design, and they are not cosmetic:**
+
+1. **Tree-sitter's remaining edge is temporary.** Incremental reparse was its
+   one durable advantage over the compiler. It expires.
+2. **Do NOT build a staleness layer.** A stale-tree cache with position
+   re-anchoring (gopcaml's `of_state_immediate`) is scaffolding that incremental
+   compilation makes redundant. Keep the fallback to layout, which is already
+   written and costs nothing. This is the `workflow.md` red flag applied ahead
+   of time rather than after.
+3. **Shape the request for incrementality now.** The session asks for *the tree*
+   and lets the server decide whether it recomputed or reused. Do not put "full
+   reparse" into the protocol, and do not let the client hold a tree it believes
+   it owns.
+
+---
+
 ## 3. What we take from gopcaml, and what we do not
 
 **Take — the interaction model.** A structural command builds a cursor over the
