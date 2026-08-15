@@ -51,7 +51,8 @@ defn withlet [q]
 defn classify [v]
   match v
     | zero  -> "z"
-    | _     -> "other"
+    | n     -> "other"
+    | _     -> "w"
 
 ;; --- data declaration: type.definition + constructors ---
 data Colour

@@ -26,7 +26,14 @@ import { Parser, Language, Query, Node } from 'web-tree-sitter';
 const CAPTURE_MAP = new Map<string, [string, string[]]>([
   ['keyword', ['keyword', []]],
   ['function', ['function', []]],
-  ['variable', ['variable', []]],
+  // The bare `variable' catch-all is DELIBERATELY UNMAPPED.  It claims every
+  // otherwise-unmatched identifier — 6123 winning spans in core/, 79.3% of
+  // them plain `atom' references — so assigning it a semantic role paints
+  // over half the buffer.  Emacs has always left it nil; this is the same
+  // restraint on this side.  Recorded in parity/known-gaps.tsv.
+  // ⚠ Visually inert: TextMate's own identifier rule already paints these
+  // `variable.other.prologos', the SAME scope this token resolved to.
+  ['variable.definition', ['variable', ['declaration']]],
   ['variable.parameter', ['parameter', []]],
   ['type', ['type', []]],
   ['type.builtin', ['type', ['defaultLibrary']]],

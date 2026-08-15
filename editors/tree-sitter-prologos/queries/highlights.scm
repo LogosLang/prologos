@@ -178,7 +178,13 @@
 ; Patterns
 ; ============================================================
 
-(identifier_pattern (identifier) @variable)
+; A pattern binder is a BINDING SITE, not a reference — `| z -> ...' introduces
+; `z'.  It was @variable, which is the catch-all every unmatched identifier
+; falls to, so a binder was indistinguishable from a use.  Measured 2026-08-15:
+; 6123 spans in core/ win as bare @variable and 79.3% of them are plain `atom'
+; references, so the catch-all is correctly NEUTRAL and the binders had to move
+; out of it rather than the catch-all becoming loud.
+(identifier_pattern (identifier) @variable.definition)
 (constructor_pattern (identifier) @constructor)
 (wildcard_pattern) @comment
 

@@ -98,6 +98,9 @@
           ],
           "variable.unsolved": [
             "invalid"
+          ],
+          "variable.declaration": [
+            "variable.other.definition.prologos"
           ]
         }
       }

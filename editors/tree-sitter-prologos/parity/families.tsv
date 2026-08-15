@@ -49,7 +49,10 @@ operator	font-lock-operator-face	keyword.operator punctuation
 namespace		entity.name.namespace
 property	font-lock-property-use-face font-lock-property-name-face	variable.other.property support.variable
 variable	font-lock-variable-use-face	variable.other
-parameter	font-lock-variable-name-face	variable.parameter
+# `binding' covers BOTH a parameter and a pattern binder: each is a name being
+# bound, which is one role. Longest-prefix matching keeps
+# `variable.other.definition' here and plain `variable.other' in `variable'.
+binding	font-lock-variable-name-face	variable.parameter variable.other.definition
 modifier	font-lock-preprocessor-face	storage.modifier
 warning	font-lock-warning-face	invalid
 none	nil	

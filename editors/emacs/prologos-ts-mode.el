@@ -118,6 +118,7 @@
     ;; `font-lock-variable-use-face' inherits `font-lock-variable-name-face', so
     ;; a stock theme renders them alike and a theme that cares can separate them.
     ("variable.parameter"  . font-lock-variable-name-face)
+    ("variable.definition" . font-lock-variable-name-face)
     ("variable.logic"      . font-lock-variable-use-face)
     ("variable.hole"       . prologos-hole-face)
     ;; `variable' is deliberately NIL, and the rule is DROPPED rather than
@@ -129,11 +130,14 @@
     ;; buffer -- a wall of colour, and a regression against today's behaviour,
     ;; where Emacs paints none of them.
     ;;
-    ;; This also drops the `identifier_pattern' and `let_binding' rules, which
-    ;; share the capture.  Those ARE binding sites and arguably deserve colour;
-    ;; if we want that, the right fix is a DISTINCT capture in the shared .scm
-    ;; (`@variable.definition'), which would benefit both editors -- not a
-    ;; second divergent mapping here.
+    ;; ✅ DONE 2026-08-15, exactly as this comment proposed: the binding sites
+    ;; moved OUT of the catch-all into `@variable.definition' in the shared .scm,
+    ;; so both editors gained them at once.  What remains under `variable' is
+    ;; references, and measurement backs the restraint — 6123 spans in core/ win
+    ;; as bare @variable and 79.3% of them are plain `atom' references.
+    ;; ⚠ `let_binding' names were NOT part of it: they reach the query through
+    ;; `typed_param_or_bare', so they were already `@variable.parameter' and were
+    ;; never in the catch-all.  The comment's pairing of the two was wrong.
     ("variable"            . nil))
   "Map from highlights.scm capture names to Emacs faces.
 A nil face means the rule is dropped.  Lookup falls back

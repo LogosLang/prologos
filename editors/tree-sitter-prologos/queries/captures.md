@@ -82,6 +82,7 @@ the distinction is a test and not a comment.
 | `variable.hole` | a typed hole (`??`, `??name`) |
 | `variable.logic` | a logic variable (`?x`) in relational code |
 | `variable.parameter` | a bound parameter name |
+| `variable.definition` | a name being BOUND by a pattern — the `z` in `\| z -> ...`. A binding site, not a reference |
 
 Two of these are custom leaves on standard roots: `variable.hole` and
 `variable.logic`. Both are Prologos-specific concepts with no standard name, and
