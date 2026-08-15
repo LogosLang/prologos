@@ -234,12 +234,27 @@ pattern is SKIPPED VISIBLY rather than shipped dead."
               (error "PCRE class \\%c has no direct Emacs equivalent in %S" next re))
             (setq out (concat out (substring re i (+ i 2))) i (+ i 2))))
          ;; Character class: copy verbatim to the closing bracket.
+         ;;
+         ;; ⚠ The contents are CHECKED, not merely copied.  The \d guard below
+         ;; fires only OUTSIDE a class, so `[\d]' used to pass through silently
+         ;; and mean two different things: a digit in PCRE, and "backslash or
+         ;; d" in Emacs.  That broke this function's own documented contract —
+         ;; untranslatable input is supposed to RAISE, never to translate
+         ;; wrongly — so the divergence was invisible on both sides.
          ((eq c ?\[)
           (let ((j (1+ i)))
             (when (and (< j n) (eq (aref re j) ?^)) (setq j (1+ j)))
             (when (and (< j n) (eq (aref re j) ?\])) (setq j (1+ j)))
             (while (and (< j n) (not (eq (aref re j) ?\]))) (setq j (1+ j)))
             (when (>= j n) (error "Unterminated [...] in regexp %S" re))
+            (let ((body (substring re (1+ i) j))
+                  (k 0))
+              (while (< k (1- (length body)))
+                (when (and (eq (aref body k) ?\\)
+                           (memq (aref body (1+ k)) '(?d ?w ?s ?D ?W ?S ?b ?B)))
+                  (error "PCRE class \\%c inside [...] has no Emacs equivalent in %S"
+                         (aref body (1+ k)) re))
+                (setq k (1+ k))))
             (setq out (concat out (substring re i (1+ j))) i (1+ j))))
          ;; Groups and alternation are the whole point of the translation.
          ((eq c ?\()

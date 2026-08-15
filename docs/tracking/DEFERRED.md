@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 137**
+> ### **NEXT FREE: 138**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7526,6 +7526,42 @@ is a shape change to a function under active edit in this slice.
 set (16, of which 12 are addressed at `b12d02ed` and `cb555002`) is in the
 workflow transcript at
 `.claude/projects/…/subagents/workflows/wf_fc98d241-4e5/journal.jsonl`.
+
+---
+
+### 137. ⬜ SHOULD THE PSEUDO-KEYWORD LIST BECOME GRAMMAR TOKENS? — the one third of `#match?` that a grammar change *could* retire
+
+Filed by **EHP T1 P5** (2026-08-14), which asked whether the `#match?` dialect
+hazard could be deleted at the source instead of linted. Answer for two of the
+three uses: **no, and it would be wrong.**
+
+`queries/highlights.scm` has exactly three `#match?` predicates, each matching
+`(identifier)` **by name**:
+
+| line | capture | what the words are |
+|---|---|---|
+| `:112` | `@type.builtin` | `Nat`, `Option`, `PVec`, `Posit8`, … |
+| `:175` | `@constant.builtin` | `zero`, `cons`, `nothing`, `ok`, … |
+| `:57` | `@keyword` | `forall`, `exists`, `solve`, `rel`, `schema`, `query`, … |
+
+**`:112` and `:175` must stay name-matched.** Those are **library names, not
+syntax** — `Option` is literally `data Option {A}` in
+`lib/prologos/book/pairs-and-options.prologos:88`. The grammar has no business
+knowing them, a user may shadow them, and tokenizing them would make the grammar
+assert something false. The query's own comment already draws this line: words
+the grammar *does* tokenize "must NOT be repeated here".
+
+**`:57` is the open question.** `forall`/`exists`/`solve`/`rel`/`schema`/`query`
+are arguably real syntax the grammar simply does not tokenize yet (the query file
+says so in as many words). Promoting them would let the rule match a node type
+instead of a name — but it is TSG work with its own risk: a *variable* named
+`solve` must not tokenize as a keyword, so the promotion has to be positional,
+which is exactly the kind of contextual rule that produced the
+`[trait x]` caveat already recorded there.
+
+**Not urgent**: the dialect hazard itself is closed by the P5 gate
+(`parity/check-regexps.sh`), so this is a modelling improvement, not a defect.
+Revisit when TSG next opens.
 
 ---
 

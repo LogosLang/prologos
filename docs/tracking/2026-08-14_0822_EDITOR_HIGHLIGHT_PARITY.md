@@ -22,7 +22,7 @@ contract well enough that a third editor is a *mapping table*, not a port.
 | P2 | TextMate: declared, and made to AGREE where it overlaps | ✅ | Census `81ac5a01` · scanner `e8b9ab0f` · D3 + gate `294dbc0f` · **the 5 disagreements closed `805e14be` + `9a329c68`** — 3 were TextMate bugs, 1 an agreement gap, 1 a recorded divergence. **All five gates green.** [§13](#p2-close) |
 | P3 | Review `semanticTokenScopes` per capture | ✅ | `8b42cfb0`. `@attribute` coloured (last known gap closed) — **and 3 of its 4 rules were VACUOUS, 90% of its spans mispainted**. 3 dead scope entries + 2 dead legend types removed. New gate `check-tokens.mjs`. [§14](#p3-close) |
 | P4 | The four catalogued issues, on the repaired base | ✅ | **ALL FOUR FIXED** — `a0781086` · `978db44b` · `c40c7a01`. **Not one residual cause was TextMate**: the query, the grammar, the grammar, and TextMate+grammar. [§15](#p4-record) · [§16](#p4-record-2) · [§17](#p4-record-3) |
-| P5 | `#match?` dialect lint (or retire the predicate) | ⬜ | [§3.5](#p5) |
+| P5 | `#match?` dialect lint (or retire the predicate) | ✅ | Gate `parity/check-regexps.sh` + a translator hole closed. ⭐ The grammar-token route **cannot** retire it — 2 of 3 uses match LIBRARY names ([DEFERRED 137](DEFERRED.md)). [§18](#p5-record) |
 | P6 | `docs/ADDING_AN_EDITOR.md` — the contributor contract | ⬜ | The deliverable that makes this leverage |
 | P7 | EHP T1.close — PIR-lite, DEFERRED triage | ⬜ | |
 
@@ -1150,3 +1150,80 @@ which was already failing at HEAD.
 **EHP T1 P4 is complete.** Across all four catalogued issues, not one residual
 cause was TextMate: the query, the grammar, the grammar, and TextMate *plus* the
 grammar.
+
+---
+
+<a id="p5-record"></a>
+## 18. P5 record — the `#match?` dialect gate ✅ (2026-08-14)
+
+### The question §3.5 asked, answered NO
+
+§3.5 offered two resolutions — lint, or "reduce `#match?` usage by promoting
+those words to grammar tokens". The relay note sharpened it: all three uses are
+plain `^(a|b|c)$`, already translatable, so *is the lint guarding a hazard the
+grammar route would delete outright?*
+
+**It would not, and for two of the three it would be wrong.** The three
+predicates match `(identifier)` **by name**:
+
+| line | capture | what those words ARE |
+|---|---|---|
+| `:112` | `@type.builtin` | `Nat`, `Option`, `PVec`, `Posit8` … |
+| `:175` | `@constant.builtin` | `zero`, `cons`, `nothing`, `ok` … |
+| `:57` | `@keyword` | `forall`, `solve`, `rel`, `schema`, `query` … |
+
+`:112`/`:175` are **library names, not syntax** — `Option` is literally
+`data Option {A}` in `book/pairs-and-options.prologos:88`. The grammar has no
+business knowing them, users may shadow them, and tokenizing them would make the
+grammar assert something false. The query's own comment already draws exactly
+this line. Only `:57` is a candidate, and it is TSG work with a positional-rule
+risk → **[DEFERRED 137](DEFERRED.md)**, filed, register bumped to 138.
+
+So `#match?` stays regardless, and the gate is not guarding an absent hazard.
+
+### ⭐ And the guard was already broken — measured, not suspected
+
+`prologos-ts--translate-regexp` documents its contract as *"signals an error on
+any construct not handled, so an untranslatable pattern is SKIPPED VISIBLY
+rather than shipped dead."* It violated that contract:
+
+```
+\d      ->  RAISES                     ✓ as documented
+[\d]    ->  "[\d]"   (no error)        ✗ silently WRONG
+```
+
+The `\d`-family check fired only **outside** a character class. `[\d]` is a digit
+in PCRE and "backslash or d" in Emacs — a silent divergence, in the one function
+whose entire job is to prevent silent divergence. Fixed: the class body is now
+scanned, and `[\d]` / `[^\s]` / `[]\d]` all raise while `[[:alpha:]]`, `[0-9a-f]`
+and `[abc]` still pass.
+
+### What landed
+
+- `prologos-ts-mode.el` — the class-content check above.
+- `parity/check-regexps.sh` + `.el` — the **seventh gate**. It extracts every
+  `#match?` / `#not-match?` pattern and runs it through the translator.
+  ⭐ **It carries no notion of its own about what is translatable** — it calls
+  the translator. Two parallel definitions of one subset drift, and this project
+  has paid for that shape more than once.
+- `.claude/rules/tree-sitter-grammar.md` — six gates → seven, with what this one
+  is blind to.
+
+### Instrument rule, all five clauses
+
+1. **Built** it. 2. **Proved it can FAIL** — poisoned the query with
+`^[\d]+$`: exit **1** and the pattern named; restored byte-identical, exit **0**.
+3. **What it cannot see**: everything except `#match?`; it says nothing about
+what a pattern *means*, only that both dialects can express it. 4. **A PASS
+states its own scope** — "every `#match?` is honourable by both consumers", not
+"the query is correct". 5. **Contract checked before reuse**: the translator's
+documented contract is precisely what turned out to be false, which is why the
+hole was found at all.
+
+⚠ The extractor is **comment-safe by construction**, tested against the trap
+this project has already hit twice — a sibling gate broken by comment prose
+containing the token it scans for. Verified: `#match?` inside a comment yields 0
+extractions; a comment mentioning it followed by a real one yields 1; a regex
+containing `;` is not truncated; an escaped `\"` inside the pattern is handled.
+
+**All seven gates green** at the close of P5.

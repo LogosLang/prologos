@@ -202,7 +202,7 @@ extension. The corpus gate measures the installed **parser** and does not see
 
 ---
 
-## ⭐ The six editor gates — run them, and know what each CANNOT see
+## ⭐ The seven editor gates — run them, and know what each CANNOT see
 
 From `editors/tree-sitter-prologos/`. Each answers a different question; a green
 one says nothing about the others' question.
@@ -215,6 +215,21 @@ one says nothing about the others' question.
 | `parity/check-reachability.sh` | does every capture FIRE somewhere? | **coverage** — `@comment` passed at 1455 hits while ~99% broken; use `--coverage` |
 | `parity/census.mjs --gate` | do TextMate and tree-sitter AGREE where they overlap? (`--explain` shows the SPANS) | anything the FIXTURE does not exercise |
 | `parity/check-tokens.mjs` | is every VS Code semantic token in the legend AND given a colour, with no dead entries? | whether the capture producing it ever fires |
+| `parity/check-regexps.sh` | can BOTH consumers honour every `#match?` regex? | everything except `#match?` — it says nothing about what the patterns MEAN, only that both dialects can express them |
+
+⭐ **`#match?` is read in two dialects, and the mismatch is SILENT.** Emacs
+evaluates it in **Emacs** regexp syntax, where `(`, `)` and `|` are LITERAL — so
+`^(Int|Bool)$` matches the literal text `(Int|Bool)`, i.e. nothing, and the rule
+is simply dead. VS Code gets PCRE. `prologos-ts--translate-regexp` bridges it and
+RAISES on anything it cannot express, so a bad pattern is skipped *visibly* in
+Emacs; `check-regexps.sh` is what catches it at commit time, for both consumers.
+The gate calls the translator rather than carrying its own copy of the
+subset — **one authority, so the two cannot drift.**
+
+⚠ Two of the three `#match?` uses can never be retired by a grammar change:
+`@type.builtin` and `@constant.builtin` match **library names, not syntax**
+(`Option` is `data Option {A}` in the book). Only the pseudo-keyword list is a
+candidate — [DEFERRED 137](../../docs/tracking/DEFERRED.md).
 
 ⚠ `install.sh` FIRST, always: check-corpus and check-parity both refuse a stale
 artifact (exit 3), by CONTENT HASH. The dylib and the wasm each carry a
