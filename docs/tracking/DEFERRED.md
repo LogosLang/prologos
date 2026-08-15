@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 139**
+> ### **NEXT FREE: 140**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6422,38 +6422,93 @@ Not urgent for correctness — every agent-facing rule points at the `.org`, and
 
 ---
 
-### 137. ⬜ SHOULD THE PSEUDO-KEYWORD LIST BECOME GRAMMAR TOKENS? — the one third of `#match?` that a grammar change *could* retire
+### 137. ⬜ ⭐ THE PSEUDO-KEYWORD LIST IS PAINTED BY NAME, UNCONDITIONALLY — so `def solve := 1` paints `solve` as a KEYWORD, and the words are CONTEXTUAL, not promotable wholesale
 
-Filed by **EHP T1 P5** (2026-08-14), which asked whether the `#match?` dialect
-hazard could be deleted at the source instead of linted. Answer for two of the
-three uses: **no, and it would be wrong.**
+**REWRITTEN 2026-08-14** after measuring. It was filed as "should these become
+grammar tokens?" — the measurement answers **no**, and finds a live mispaint
+underneath it.
 
-`queries/highlights.scm` has exactly three `#match?` predicates, each matching
-`(identifier)` **by name**:
+`queries/highlights.scm:57` matches 19 words against `(identifier)` **by name**:
+`forall exists solve solver solve-one solve-with explain explain-with rel schema
+query expand expand-1 expand-full parse elaborate with-transient transient reduce`.
 
-| line | capture | what the words are |
-|---|---|---|
-| `:112` | `@type.builtin` | `Nat`, `Option`, `PVec`, `Posit8`, … |
-| `:175` | `@constant.builtin` | `zero`, `cons`, `nothing`, `ok`, … |
-| `:57` | `@keyword` | `forall`, `exists`, `solve`, `rel`, `schema`, `query`, … |
+### Measurement 1 — 18 of 19 bind as ORDINARY VARIABLES at 0 errors
 
-**`:112` and `:175` must stay name-matched.** Those are **library names, not
-syntax** — `Option` is literally `data Option {A}` in
-`lib/prologos/book/pairs-and-options.prologos:88`. The grammar has no business
-knowing them, a user may shadow them, and tokenizing them would make the grammar
-assert something false. The query's own comment already draws this line: words
-the grammar *does* tokenize "must NOT be repeated here".
+`def solve := 1`, `def query := 2`, `def schema := 3`, `def parse := 5` … all
+compile clean. Only **`with-transient`** raises (a genuine preparse form:
+*"expected (with-transient coll fn-expr)"*).
 
-**`:57` is the open question.** `forall`/`exists`/`solve`/`rel`/`schema`/`query`
-are arguably real syntax the grammar simply does not tokenize yet (the query file
-says so in as many words). Promoting them would let the rule match a node type
-instead of a name — but it is TSG work with its own risk: a *variable* named
-`solve` must not tokenize as a keyword, so the promotion has to be positional,
-which is exactly the kind of contextual rule that produced the
-`[trait x]` caveat already recorded there.
+**So tokenizing them in the grammar would mis-parse legal code.** Same argument
+that keeps `@type.builtin` and `@constant.builtin` name-matched: a word the user
+may bind is not syntax the grammar may claim.
 
-**Not urgent**: the dialect hazard itself is closed by the P5 gate
-(`parity/check-regexps.sh`), so this is a modelling improvement, not a defect.
-Revisit when TSG next opens.
+### ⚠ Measurement 2 — but binding-ability does NOT prove non-keyword-ness
+
+`reduce` fails to bind, and it **is a real keyword**: `tree-parser.rkt:1430`
+gives it the same head-position treatment as `match`, and `surface-syntax.rkt`
+carries `surf-reduce` + `reduce-arm` for `reduce scrutinee | ctor bindings ->
+body`. It is *also* a prelude trait method (`collection-traits.prologos:60`, and
+`reduce + 0 xs` in the syntax rules).
+
+⚠⚠ **METHOD NOTE — this cost a wrong edit, caught before it landed.** The first
+pass concluded "`reduce` is not a command" from grepping `parser.rkt` /
+`parse-reader.rkt` / `driver.rkt` — **the sexp path**. WS mode goes through
+**`tree-parser.rkt`**, which was not grepped, and a deletion of a real keyword
+was about to ship. **The authority for "is this a WS keyword" is
+`tree-parser.rkt`, not `parser.rkt`.**
+
+### The live consequence
+
+The rule is unconditional, so these words paint as keywords **everywhere**:
+
+```
+def solve := 1     'solve' -> font-lock-keyword-face        <- WRONG
+def foo   := 1     'foo'   -> font-lock-function-name-face  <- right
+```
+
+This is the `[trait x]` hazard the query's own comment documents for the
+*anonymous-token* list. The `#match?` list has it too, and the comment does not
+cover it.
+
+### The shape of a fix — positional, not promotional
+
+The grammar already models it: `check_form`, `eval_form` and `infer_form` are
+explicit rules, so those keywords are tokenized **by position** and the query
+matches a node instead of a name. Any of the 19 that are genuine command forms
+belong in that shape. That is this entry, correctly scoped — and it is **TSG
+work**, gated on 139's audit.
+
+**Not urgent**: cosmetic, and the dialect hazard that prompted the original
+filing is separately closed by `parity/check-regexps.sh`.
 
 ---
+
+### 139. ⬜ AUDIT THE 19 PSEUDO-KEYWORDS: which are syntax, and in WHICH POSITIONS — the prerequisite for 137
+
+Filed 2026-08-14 by EHP T1.close, when 137's measurement showed the list is
+heterogeneous and that a wholesale answer does not exist.
+
+For each of the 19 words at `highlights.scm:57`, establish:
+
+1. **Is it a keyword at all?** ⚠ Check **`tree-parser.rkt`** (the WS path) and
+   `surface-syntax.rkt`, not only `parser.rkt` / `parse-reader.rkt`. Grepping the
+   sexp path alone produced a wrong answer for `reduce` and nearly shipped a
+   deletion of a real keyword.
+2. **In which POSITIONS?** `reduce` is a head-position eliminator **and** a
+   prelude trait method. `solve` is a command-position adverb **and** a bindable
+   name. The answer is a position, not a boolean.
+3. **Does a grammar node already exist** for that position, or must one be added
+   in the `check_form` / `eval_form` shape?
+
+Known so far, from 137's measurement:
+
+| word | evidence |
+|---|---|
+| `with-transient` | **genuine preparse form** — raises when bound |
+| `reduce` | **genuine keyword** (`tree-parser.rkt:1430`, same as `match`) **and** a prelude trait method |
+| the other 17 | bind as ordinary variables at 0 errors; keyword-ness in other positions **unestablished** |
+
+Output: a table of word × position × grammar-node — exactly what 137 needs to
+scope its rules. Until then the query keeps matching by name, and the mispaint
+137 records stands.
+
