@@ -10,3 +10,6 @@ bindings/
 *.so
 # Build-artifact provenance — describes a gitignored artifact, so it is one too.
 *.wasm.provenance
+
+# grammar-ab baselines — a local measurement, not a shared artifact.
+.grammar-ab-baseline*.tsv
