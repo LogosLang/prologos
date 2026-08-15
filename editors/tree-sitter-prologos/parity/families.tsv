@@ -48,8 +48,8 @@ comment	font-lock-comment-face	comment
 operator	font-lock-operator-face	keyword.operator punctuation
 namespace		entity.name.namespace
 property	font-lock-property-use-face font-lock-property-name-face	variable.other.property support.variable
-variable	font-lock-variable-name-face font-lock-variable-use-face	variable.other
-parameter		variable.parameter
+variable	font-lock-variable-use-face	variable.other
+parameter	font-lock-variable-name-face	variable.parameter
 modifier	font-lock-preprocessor-face	storage.modifier
-warning	font-lock-warning-face	
+warning	font-lock-warning-face	invalid
 none	nil	

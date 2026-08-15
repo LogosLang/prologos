@@ -56,7 +56,13 @@ const CAPTURE_MAP = new Map<string, [string, string[]]>([
   // rename is a vocabulary change, and the colour decision belongs to EHP P3.
   ['string.special.symbol', ['variable', ['readonly']]],
   ['variable.logic', ['variable', []]],
-  ['variable.hole', ['variable', []]],
+  // An unsolved hole is not an ordinary variable — it is the one thing in the
+  // buffer that WANTS attention.  Emacs has said so since the start
+  // (prologos-hole-face = font-lock-warning-face + box); VS Code rendered it
+  // identically to every other variable until 2026-08-15, when
+  // check-families.sh made the disagreement visible.  The `unsolved' modifier
+  // exists so semanticTokenScopes can point it somewhere themes actually paint.
+  ['variable.hole', ['variable', ['unsolved']]],
   ['property', ['property', []]],
 ]);
 
@@ -67,7 +73,7 @@ export const LEGEND = new vscode.SemanticTokensLegend(
   ['keyword', 'function', 'variable', 'parameter', 'type', 'enumMember',
    'number', 'string', 'comment', 'operator', 'namespace', 'property',
    'decorator'],
-  ['declaration', 'readonly', 'defaultLibrary'],
+  ['declaration', 'readonly', 'defaultLibrary', 'unsolved'],
 );
 
 /**

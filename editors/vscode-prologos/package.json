@@ -95,6 +95,9 @@
           "decorator": [
             "storage.modifier.prologos",
             "storage.modifier"
+          ],
+          "variable.unsolved": [
+            "invalid"
           ]
         }
       }

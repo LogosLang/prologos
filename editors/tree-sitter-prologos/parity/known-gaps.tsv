@@ -28,6 +28,4 @@ textmate	comment	DELIBERATE. The query paints the wildcard `_` as @comment to de
 #
 # family<TAB>capture<TAB>why
 family	module	EXPECTED TO STAY. Emacs has no namespace face; `font-lock-constant-face` for a module name is the long-standing Emacs convention. VS Code says `entity.name.namespace` (#CB4B16 in Solarized Dark), which is more precise than Emacs can be. Not a disagreement about meaning — a vocabulary limit on one side.
-family	variable.parameter	EXPECTED TO STAY. Emacs offers no face meaning "parameter" as distinct from "variable", so it uses `font-lock-variable-name-face`. ⚠ Note the VISIBLE effect is the inverse of the `variable` row: VS Code leaves parameters at the theme default and paints plain variables, Emacs does the opposite.
 family	variable	⚠ UNRESOLVED — owner ruling owed. Emacs paints plain variables NOTHING (deliberate restraint); VS Code paints every one `variable.other` = #268BD2 blue in Solarized Dark. Together with the `variable.parameter` row the two editors are almost exactly INVERTED. Remove this row once ruled.
-family	variable.hole	⚠ UNRESOLVED — owner ruling owed, and the strongest candidate for a real defect. An unsolved hole `?name` is conspicuous in Emacs (font-lock-warning-face + box) and indistinguishable from an ordinary variable in VS Code (both #268BD2). Remove this row once fixed.

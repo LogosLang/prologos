@@ -110,8 +110,15 @@
     ("character"           . font-lock-string-face)
     ("comment"             . font-lock-comment-face)
     ("attribute"           . prologos-multiplicity-face)
+    ;; NAME vs USE is the binding-site / reference split Emacs 29 added, and it
+    ;; is exactly the distinction VS Code draws with `parameter' vs `variable'.
+    ;; A parameter IS a binding site, so it keeps the NAME face; a logic
+    ;; variable is a reference, so it takes the USE face and lands in the same
+    ;; family VS Code puts it in.  Visually inert by default —
+    ;; `font-lock-variable-use-face' inherits `font-lock-variable-name-face', so
+    ;; a stock theme renders them alike and a theme that cares can separate them.
     ("variable.parameter"  . font-lock-variable-name-face)
-    ("variable.logic"      . font-lock-variable-name-face)
+    ("variable.logic"      . font-lock-variable-use-face)
     ("variable.hole"       . prologos-hole-face)
     ;; `variable' is deliberately NIL, and the rule is DROPPED rather than
     ;; painted.  highlights.scm ends with a bare `(identifier) @variable'
