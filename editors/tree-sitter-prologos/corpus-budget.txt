@@ -10,7 +10,7 @@
 # Error COUNT is deliberately not gated: it RISES when the grammar improves
 # (one swallowing mega-ERROR becomes several precise small ones).
 max_swallows=0
-max_unparsed_pct=1.6
+max_unparsed_pct=1.3
 
 # max_missing gates the MISSING total, SEPARATELY from ERROR — and it is the
 # more sensitive of the two. A MISSING node is the parser reporting it had to
@@ -19,4 +19,10 @@ max_unparsed_pct=1.6
 # ERROR swallows everything inside it. Measured 2026-08-14 (§9.7): a change that
 # moved ERROR 3054 -> 2743 simultaneously pushed MISSING 74 -> 110, and only the
 # MISSING delta showed it.
-max_missing=77
+max_missing=76
+
+# Ratcheted 2026-08-14 by the comment-scanner fix (EHP P2): the scanner no
+# longer consumes comment-only lines as part of its lookahead token, so those
+# bytes are parsed rather than swallowed.  unparsed 1.6 -> 1.3, missing 77 -> 76.
+# ERROR COUNT ROSE 2689 -> 2700 in the same change, which is the documented
+# anti-correlation, not a regression: error-BYTES fell by 3607.

@@ -1,10 +1,19 @@
 1	0	comment	;; EHP parity fixture — exercises every capture in queries/highlights.scm.
+2	0	comment	;;
+3	0	comment	;; This file is read by BOTH consumers through the same query. It is a
+4	0	comment	;; HIGHLIGHTING fixture, not a program: it must PARSE with zero ERROR nodes
+5	0	comment	;; (an ERROR region yields no captures and would bake a hole into the golden),
+6	0	comment	;; but it is not required to type-check.
+7	0	comment	;;
+8	0	comment	;; Keep it stable. Changing it changes the golden, and the golden is the
+9	0	comment	;; contract the two editors are held to.
 11	0	keyword	ns
 11	3	module	parity::fixture
 13	0	keyword	require
 13	9	module	prologos::data::list
 13	30	keyword	:refer
 13	38	variable	map
+15	0	comment	;; --- keywords the grammar does NOT tokenize (identifier-matched) ---
 16	0	keyword	def
 16	4	function	solved
 16	4	variable	solved
@@ -12,6 +21,7 @@
 16	15	keyword	solve
 16	15	variable	solve
 16	21	variable.logic	?goal
+18	0	comment	;; --- literals ---
 19	0	keyword	def
 19	4	function	n
 19	4	variable	n
@@ -47,6 +57,7 @@
 24	17	property	:other
 24	17	string.special.symbol	:other
 24	24	number	2
+26	0	comment	;; --- constants + booleans ---
 27	0	keyword	def
 27	4	function	z
 27	4	variable	z
@@ -58,6 +69,7 @@
 28	4	variable	t
 28	6	operator	:=
 28	9	constant.builtin	true
+30	0	comment	;; --- multiplicity annotation (attaches to an angle_param) ---
 31	0	keyword	defn
 31	5	function	ignore
 31	5	variable	ignore
@@ -67,6 +79,7 @@
 31	19	type.builtin	Int
 31	19	variable	Int
 32	2	number	0
+34	0	comment	;; --- typed + bare params, angle return type ---
 35	0	keyword	defn
 35	5	function	add2
 35	5	variable	add2
@@ -80,6 +93,7 @@
 36	3	operator	+
 36	5	variable	x
 36	7	variable	y
+38	0	comment	;; --- let binding names are @variable, not @variable.parameter ---
 39	0	keyword	defn
 39	5	function	withlet
 39	5	variable	withlet
@@ -93,6 +107,7 @@
 41	3	operator	+
 41	5	variable	q
 41	7	variable	acc
+43	0	comment	;; --- match, patterns, wildcard, arrows ---
 44	0	keyword	defn
 44	5	function	classify
 44	5	variable	classify
@@ -110,6 +125,7 @@
 47	6	comment	_
 47	12	operator	->
 47	15	string	"other"
+49	0	comment	;; --- data declaration: type.definition + constructors ---
 50	0	keyword	data
 50	5	type.definition	Colour
 50	5	variable	Colour
@@ -119,6 +135,7 @@
 52	2	operator	|
 52	4	constructor	Green
 52	4	variable	Green
+54	0	comment	;; --- trait: type.definition + trait_method + implicit params ---
 55	0	keyword	trait
 55	6	type.definition	Show
 55	6	variable	Show
@@ -130,6 +147,7 @@
 56	11	operator	->
 56	14	type.builtin	String
 56	14	variable	String
+58	0	comment	;; --- impl: trait_name is a @type ---
 59	0	keyword	impl
 59	5	type	Show
 59	5	variable	Show
@@ -140,6 +158,7 @@
 60	13	variable	v
 60	13	variable.parameter	v
 61	4	string	"colour"
+63	0	comment	;; --- spec with builtin + applied types ---
 64	0	keyword	spec
 64	5	function	pick
 64	5	variable	pick
@@ -159,6 +178,7 @@
 64	36	type	Int
 64	36	type.builtin	Int
 64	36	variable	Int
+66	0	comment	;; --- relational form (Rel T1): defr, ||, &>, =, logic variables ---
 67	0	keyword	defr
 67	5	function	digit
 67	5	variable	digit
@@ -181,11 +201,13 @@
 72	5	operator	=
 72	7	variable	b
 72	9	variable	a
+74	0	comment	;; --- typed hole (`??`, distinct from a `?x` logic variable) ---
 75	0	keyword	def
 75	4	function	hole
 75	4	variable	hole
 75	9	operator	:=
 75	12	variable.hole	??
+77	0	comment	;; --- operators as first-class values ---
 78	0	keyword	def
 78	4	function	folded
 78	4	variable	folded
@@ -197,6 +219,7 @@
 78	28	number	1
 78	30	number	2
 78	32	number	3
+80	0	comment	;; --- quote ---
 81	0	keyword	def
 81	4	function	quoted
 81	4	variable	quoted

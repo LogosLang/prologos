@@ -371,6 +371,19 @@ bool tree_sitter_prologos_external_scanner_scan(
   bool found_newline = false;
   int indent = 0;
 
+  /* Set when we look PAST a comment-only line.  The indentation decision still
+   * uses the next REAL line (a comment's own indentation must not decide block
+   * structure — that is why this loop skips them at all), but the emitted token
+   * must END BEFORE the comment so the normal lexer can tokenize it as the
+   * `extras` comment the grammar declares.
+   *
+   * Without this the scanner consumed the comment characters as part of its
+   * lookahead and the parser never saw them: `(comment) @comment' covered ~1%
+   * of the library's comment lines (EHP P2, 2026-08-14).  Both editors hid it —
+   * Emacs paints comments from its syntax table, VS Code from TextMate — so it
+   * was invisible to every consumer-comparison we had. */
+  bool marked_before_comment = false;
+
   /* Skip any spaces/tabs before the first newline (trailing whitespace) */
   while (!lexer->eof(lexer) && (lexer->lookahead == ' ' || lexer->lookahead == '\t' || lexer->lookahead == '\r')) {
     skip_ch(lexer);
@@ -397,8 +410,17 @@ bool tree_sitter_prologos_external_scanner_scan(
     } else if (lexer->lookahead == '\t') {
       skip_ch(lexer);
     } else if (lexer->lookahead == ';' && found_newline) {
-      /* Comment-only line — skip to end of line, then continue
-       * looking for the next non-blank line. */
+      /* Comment-only line.  End the TOKEN here, before the comment, so the
+       * parser resumes at it and lexes it as an `extras' comment; then keep
+       * looking ahead (consuming) for the next real line's indentation, which
+       * is what the layout decision below is actually based on.
+       *
+       * We have advanced past at least one '\n' to get here, so the token has
+       * non-zero width and tree-sitter will not discard it as empty. */
+      if (!marked_before_comment) {
+        lexer->mark_end(lexer);
+        marked_before_comment = true;
+      }
       while (!lexer->eof(lexer) && lexer->lookahead != '\n') {
         skip_ch(lexer);
       }
@@ -414,8 +436,14 @@ bool tree_sitter_prologos_external_scanner_scan(
   }
 
   /* Mark token end AFTER consuming newlines with advance().
-   * The token now covers the newline character(s), giving it non-zero size. */
-  lexer->mark_end(lexer);
+   * The token now covers the newline character(s), giving it non-zero size.
+   *
+   * Unless we already marked it before a comment — everything consumed since
+   * then was pure lookahead to find the next real line's indentation, and must
+   * stay OUTSIDE the token so the comment remains lexable. */
+  if (!marked_before_comment) {
+    lexer->mark_end(lexer);
+  }
 
   /* At EOF after newlines — emit DEDENTs for remaining levels */
   if (lexer->eof(lexer)) {
