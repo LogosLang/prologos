@@ -18,8 +18,8 @@ contract well enough that a third editor is a *mapping table*, not a port.
 | Phase | Description | Status | Notes |
 |---|---|---|---|
 | P0 | Capture registry + D1 renames | ✅ | `7fd4445c`. D2 ruled **option E**; `queries/captures.md` + two-direction gate; 9 dead entries deleted. [§9](#p0-record) |
-| P1 | Parity harness: one fixture, capture-by-capture, asserted in BOTH | ✅ | `30671d9d`. **Query layer is ALREADY in parity** — 205 captures, identical. [§8](#p1-record) |
-| P2 | TextMate: declared, and made to AGREE where it overlaps | 🔄 | Census `81ac5a01`; scanner fixed `e8b9ab0f` (comment coverage 1%→100%) — **unblocked**. [§10](#p2-record) |
+| P1 | Parity harness: one fixture, capture-by-capture, asserted in BOTH | ✅ | `30671d9d`. **Query layer is ALREADY in parity** — identical in both. Golden now **228** (was 205; the scanner fix made comments visible). [§8](#p1-record) |
+| P2 | TextMate: declared, and made to AGREE where it overlaps | 🔄 | Census `81ac5a01` · scanner `e8b9ab0f` (comments 1%→100%) · **D3 ruled + agreement gate `294dbc0f`**. Remaining: fix the **5 disagreements**. [§10](#p2-record), [§12](#d3-ruled) |
 | P3 | Review `semanticTokenScopes` per capture | ⬜ | Kills drift cause 2; settles the blue/orange class — [§3.4](#p3) |
 | P4 | The four catalogued issues, on the repaired base | ⬜ | [§4](#issues) |
 | P5 | `#match?` dialect lint (or retire the predicate) | ⬜ | [§3.5](#p5) |
