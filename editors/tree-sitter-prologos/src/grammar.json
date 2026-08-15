@@ -2293,8 +2293,17 @@
         {
           "type": "REPEAT",
           "content": {
-            "type": "SYMBOL",
-            "name": "typed_param_or_bare"
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "typed_param_or_bare"
+              },
+              {
+                "type": "STRING",
+                "value": ","
+              }
+            ]
           }
         },
         {
@@ -4096,6 +4105,10 @@
     [
       "fn_param",
       "fn_body"
+    ],
+    [
+      "param_list",
+      "unquote_expr"
     ],
     [
       "_path_base",

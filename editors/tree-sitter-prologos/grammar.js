@@ -40,6 +40,12 @@ module.exports = grammar({
 
   conflicts: $ => [
     [$.fn_param, $.fn_body],
+    // A `,` after `[` is a param separator, but `unquote_expr` also opens on
+    // `,`.  They cannot be told apart by the LR state — a param list is never
+    // inside a quasiquote, and only the surrounding context knows that.  GLR
+    // carries both and the valid parse wins.  tree-sitter names this pair
+    // itself when the conflict is left undeclared.
+    [$.param_list, $.unquote_expr],
     // An identifier can open a path (`x.y`) or stand alone as an atom, and the
     // parser must choose BEFORE seeing whether a step follows. Surfaced inside
     // angle types, where `<A *` is the Sigma `*` and `<A*` would be a flatten
@@ -586,7 +592,17 @@ module.exports = grammar({
 
     param_list: $ => seq(
       '[',
-      repeat($.typed_param_or_bare),
+      // The COMMA is a separator and the compiler accepts it: `[x : A,
+      // xs : [List A]]` compiles at 0 errors, as do `[+ 1, 2]` and `'[1, 2, 3]`.
+      // parse-reader.rkt:4484 is explicit — at qq-depth 0 a comma IS a
+      // separator, and only inside a quasiquote does it mean unquote.
+      //
+      // It cannot go in `extras` (global — it would eat the comma
+      // `unquote_expr` needs), and `seq(param, optional(','))` adds a choice
+      // point after every param that destabilises the table far away.  As a
+      // repeat ALTERNATIVE it competes with `unquote_expr` head-on, which is
+      // declared below rather than hidden.
+      repeat(choice($.typed_param_or_bare, ',')),
       ']',
     ),
 
