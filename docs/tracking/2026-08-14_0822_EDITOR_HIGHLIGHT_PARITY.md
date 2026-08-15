@@ -498,9 +498,8 @@ The gate also refuses when the fixture gains an ERROR node, since captures
 inside one vanish and the golden would shrink while staying green.
 
 **Verified alongside**: the deployed `.wasm` is byte-identical to a fresh emcc
-build, so both consumers genuinely run one grammar. ⚠ **Gap left open**: the
-dylib carries a provenance file and the wasm carries none, so wasm staleness is
-undetectable without emsdk and a rebuild. Worth closing in P2 or T1.close.
+build, so both consumers genuinely run one grammar. ⚠ **Gap CLOSED 2026-08-14 (`72af1b02`)** — see below. It had been left open as
+"worth closing in P2 or T1.close"; it bit twice before that.
 
 **Not included**: capture → mapping completeness. That is P0's, P0 is blocked on
 D2, and half-implementing it here would front-run the ruling.
@@ -680,3 +679,29 @@ from **1124 chars (1121 of them comments) to 3**. The remainder is
 almost entirely *redundant* with the query rather than *compensating* for it, and
 **D3 can be ruled on evidence that means what it says** — which it could not,
 one commit ago.
+
+---
+
+## 11. The wasm provenance gap — closed (2026-08-14, `72af1b02`)
+
+The dylib carried provenance and `check-corpus.sh` refused a stale parser; the
+wasm had neither, so VS Code's half of the shared grammar could drift silently.
+
+**It bit twice in two sessions, both by the same route.** `install.sh` builds the
+dylib first and the wasm second; the wasm step fails when emcc picks up a Python
+older than 3.10 (Xcode ships 3.9). The failure is loud, but lands *after* the
+dylib is installed — so the session ends with **Emacs on the new grammar and VS
+Code on the old**, and every later parity run compares two different grammars and
+reports the difference as a finding.
+
+- `install.sh` writes `<wasm>.provenance` beside both copies, same fields and same
+  `SRC_HASH` inputs as the dylib — so "current" means one thing for both.
+  Verified: both now report `ecc916df762c`.
+- `check-parity.sh` exits 3 on a stale or unprovenanced wasm, distinguishing
+  **absent** / **unprovenanced** / **stale** (printing both hashes).
+- A skipped wasm build does **not** delete an existing wasm — it may still be
+  valid, and deleting it would silently disable VS Code semantic tokens.
+
+Power-checked in all four states. Also fixed: `--emacs-only` used to print
+"PASS — both consumers agree" after checking one consumer; it now states what it
+ran and that the run says nothing about parity.
