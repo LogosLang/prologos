@@ -20,7 +20,7 @@ contract well enough that a third editor is a *mapping table*, not a port.
 | P0 | Capture registry + D1 renames | ✅ | `7fd4445c`. D2 ruled **option E**; `queries/captures.md` + two-direction gate; 9 dead entries deleted. [§9](#p0-record) |
 | P1 | Parity harness: one fixture, capture-by-capture, asserted in BOTH | ✅ | `30671d9d`. **Query layer is ALREADY in parity** — identical in both. Golden now **228** (was 205; the scanner fix made comments visible). [§8](#p1-record) |
 | P2 | TextMate: declared, and made to AGREE where it overlaps | ✅ | Census `81ac5a01` · scanner `e8b9ab0f` · D3 + gate `294dbc0f` · **the 5 disagreements closed `805e14be` + `9a329c68`** — 3 were TextMate bugs, 1 an agreement gap, 1 a recorded divergence. **All five gates green.** [§13](#p2-close) |
-| P3 | Review `semanticTokenScopes` per capture | ⬜ | Kills drift cause 2; settles the blue/orange class — [§3.4](#p3) |
+| P3 | Review `semanticTokenScopes` per capture | ✅ | `8b42cfb0`. `@attribute` coloured (last known gap closed) — **and 3 of its 4 rules were VACUOUS, 90% of its spans mispainted**. 3 dead scope entries + 2 dead legend types removed. New gate `check-tokens.mjs`. [§14](#p3-close) |
 | P4 | The four catalogued issues, on the repaired base | ⬜ | [§4](#issues) |
 | P5 | `#match?` dialect lint (or retire the predicate) | ⬜ | [§3.5](#p5) |
 | P6 | `docs/ADDING_AN_EDITOR.md` — the contributor contract | ⬜ | The deliverable that makes this leverage |
@@ -838,3 +838,73 @@ I suspected the wildcard capture was inflating `@comment` coverage past 100%. It
 is not: that gate queries `(comment)` **nodes** directly, not the `.scm`'s
 `@comment` captures. The 101% is trailing comments — a comment node on a line
 that does not *start* with `;`. Checked before writing it down.
+
+---
+
+<a id="p3-close"></a>
+## 14. P3 closed — the colour was the small half (2026-08-15, `8b42cfb0`)
+
+P3 owed `@attribute` a colour — the last row in `known-gaps.tsv`. The colour
+needed no fresh decision: `decorator` (the standard VS Code type for
+annotations) → `storage.modifier`, the family TextMate already paints
+multiplicities with, so both layers land on one colour. Doing it properly found
+the real defect.
+
+### ⭐⭐ Three of `@attribute`'s four rules were VACUOUS
+
+`highlights.scm:213` warns, in its own words, *"first match wins by FILE ORDER,
+not by specificity, so placing it after would silently never fire"* — and
+`(map_literal key: …) @property` obeys it. The three `@attribute` rules —
+`metadata_entry`, `trait_metadata`, `law_entry` — sat ~20 lines **below** the
+generic `(keyword_literal) @string.special.symbol`, under a separate
+"Constraints and metadata" heading. **They never fired.**
+
+| `@attribute` site | corpus occurrences | fired? |
+|---|---|---|
+| `(multiplicity)` — line 200, above the generic rule | 18 | ✅ |
+| `metadata_entry` / `trait_metadata` / `law_entry` | **158 (90%)** | ❌ painted `@string.special.symbol` |
+
+**The file states the rule and then breaks it two headings later.** Grouping by
+topic ("Constraints and metadata") fought an ordering constraint, and topic won.
+
+### ⭐ And `check-reachability` was green over it the whole time
+
+`@attribute` fires — from the multiplicity site — so the gate passed. *Fires
+somewhere is not coverage.* Identical shape to `@comment` passing at 1455 hits
+while ~99% broken (§10). Third instance of that clause in this track.
+
+**Why it was invisible**: the parity fixture exercised ONE of the four sites.
+The fixture now carries a `:doc` metadata entry, so the site is covered by the
+harness rather than by inspection. Golden **228 → 234**, both consumers agree.
+
+Hoisting then created a genuine new disagreement, `@attribute` over
+`constant.other.keyword` for `:doc` — resolved **symmetrically** with the
+`@property` call in [§13](#p2-close): a metadata key IS a keyword literal;
+TextMate names the lexical class, the capture adds the role.
+
+### Dead entries, one layer along from P0's nine
+
+`function.defaultLibrary`, `macro`, `label` were declared in
+`semanticTokenScopes` and produced by nothing — and neither emitted by the query
+nor declared in `captures.md`. Removed with the two dead legend types.
+
+### The new gate
+
+`parity/check-tokens.mjs` asserts the correspondence both ways: every produced
+type is in the LEGEND and has a scope entry; no dead scope entries; no dead
+legend types. The load-bearing one is **produced-but-unscoped**, which fails
+silently — VS Code emits the token, no theme rule matches, and the text falls
+through to TextMate, which looks like working highlighting. Proven able to fail
+on all three shapes before being trusted.
+
+<a id="scm-copy-gap"></a>
+### ⚠ OPEN — a harness blind spot found here, not yet closed
+
+The parity harness reads the **repo** `queries/highlights.scm` for *both*
+consumers (`census.mjs:99`, `dump-captures.mjs:25`). The VS Code extension ships
+its **own copy**, which was stale after the hoist. So a green parity run does not
+prove the extension's copy is current — only `install.sh` syncs it, and only the
+*parser* artifacts are guarded by content hash.
+
+Synced and verified by `cmp` this time. **The gate should assert it**, the way
+corpus/parity assert parser provenance. Next increment.
