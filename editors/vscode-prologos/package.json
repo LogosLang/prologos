@@ -1,7 +1,7 @@
 {
   "name": "prologos",
   "displayName": "Prologos",
-  "description": "Language support for Prologos — functional-logic language with dependent types, session types, and propagator networks",
+  "description": "Language support for Prologos \u2014 functional-logic language with dependent types, session types, and propagator networks",
   "version": "0.1.0",
   "publisher": "prologos",
   "license": "MIT",
@@ -90,7 +90,7 @@
             "entity.name.namespace.prologos"
           ],
           "property": [
-            "variable.other.property.prologos"
+            "entity.other.attribute-name.prologos"
           ],
           "decorator": [
             "storage.modifier.prologos",
