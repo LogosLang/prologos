@@ -6387,6 +6387,15 @@ That is the same size as the three contested-shape tokens already in the
 scanner, each of which the rules file records as needing "a DESIGN, not a better
 rule". It is not a follow-on to the bracket fix.
 
+**Design phase OPEN**: `2026-08-15_0705_LET_ALIGNED_BLOCK.md` (TSG Track 2).
+⭐ Its P0 is already ✅ and it is the part worth reading: the grammar-only
+route was **built twice and measured**, not waved away. Both formulations make
+the aligned block work and both regress the shapes they were not about —
+the sibling chain gains an ERROR and the nested form binds the literal `let`
+**as a name**. Nested and aligned are the same token sequence and differ only
+in indent DEPTH relative to the first binding's column, which is precisely what
+the LR state lacks.
+
 ---
 
 ### 130. ⬜ THE PARSER'S TWO STAR REFUSAL MESSAGES HARDCODE `*` WHILE B1 FAMILY-IZED THE THREE ECHO SEATS — one seat, not its sibling, inside a single commit
