@@ -1513,3 +1513,76 @@ baseline. Otherwise the next reader meets a condition that reads unmet.
 | **The fail-open lesson has 8 data points and no `DEVELOPMENT_LESSONS.org` entry** | **medium** | ⬜ promotion — the one genuine debt of this close |
 
 No gap here blocks closing EHP T1 or starting SURF T1.
+
+---
+
+<a id="chrome-arc"></a>
+## 22. POST-CLOSE — the chrome arc: five failed rounds, one principle, one instrument (2026-08-15)
+
+EHP T1 closed with every gate green. The owner then reported, with screenshots
+across several themes, that VS Code rendered map keys indistinguishable from
+types and numerals while Emacs did not. Five rounds followed. Recorded here in
+full because the *shape* of the failure is the lesson; the actionable form is
+ambient in `.claude/rules/tree-sitter-grammar.md`.
+
+### 22.1 The five rounds
+
+| # | change | outcome |
+|---|---|---|
+| 1 | `property` → `entity.other.attribute-name` | **regression** — keys moved *into* the numeric blue |
+| 2 | keywords off the constants' token pair → `constant.other.symbol` | no better; `constant.other` is blue too |
+| 3 | custom token `prologosKeyword` + `configurationDefaults` colour | *worked* — and was **wrong**: an extension must not paint over other people's themes (owner ruling) |
+| 4 | convention parity, keys → JSON's `support.type.property-name` | binders fixed, keys still blue |
+| 5 | keys → YAML's `entity.name.tag`, binders → `variable.parameter` | ✅ accepted |
+
+### 22.2 What was actually wrong — private scopes
+
+Every fallback the extension had ever shipped was a **Prologos-private
+invention**: `variable.other.property.prologos`,
+`variable.other.definition.prologos`, `constant.other.symbol.prologos`. No
+theme has heard of those names, so each theme resolved them by prefix accident
+into whatever broad family it happened to paint. Rounds 1, 2 and 4 were all the
+same category error — choosing *which unknown* to hand the theme.
+
+**The principle (owner ruling, 2026-08-15): CONVENTION PARITY.** Themes do not
+style scopes, they style concepts they already know, because every theme is
+tested against JSON and TypeScript. Each concept therefore resolves to the
+scope those grammars emit for the same concept. Recorded at the `CAPTURE_MAP`
+in `semanticTokens.ts`, where the next scope decision is made.
+
+### 22.3 The instrument — `parity/theme-survey.py`
+
+Rounds 1–4 were judged by convention folklore. Round 5 was judged by
+**measurement**: the survey resolves candidate scopes against every theme in
+`~/.vscode/extensions` (30 at the time) and prints the colour table.
+
+| candidate | verdict |
+|---|---|
+| `support.type.property-name` (JSON keys) | collides with numbers **and** types in all **10** GitHub variants; plain-fg in One Dark |
+| `entity.name.tag` (YAML keys) | distinct from both in **29/30** (exception: a colorblind variant that compresses hues) |
+| `meta.definition.variable` (TS defs) | **unstyled in 17/30** |
+| `variable.parameter` | styled in **30/30** — the only such column |
+
+YAML is also the truer analogy: the layout map *is* the YAML shape. And binders
+sharing parameter chrome is what the system already believed — Emacs paints
+both with one face, `families.tsv` declares one `binding` family, and the
+owner's own DEFERRED 140 report said binders should look "coloured as a
+parameter".
+
+### 22.4 The gate that did not exist
+
+Every gate stayed green through all five rounds, because none of them asks what
+a capture RESOLVES TO in a theme. `check-families` compares *roles*; parity
+compares *captures*; reachability asks whether a capture fires. Colour is
+per-theme by design — so the survey is an **instrument**, not a gate, and the
+judgement stays human. That is the honest boundary: we can measure the palette,
+we cannot assert a colour.
+
+### 22.5 Coda — the last discrepancy was not chrome at all
+
+The owner's final report (binders unpainted inside `defn`, painted at top
+level) had no chrome cause: `semanticTokens.ts` skips captures inside ERROR
+subtrees, and those bodies contained `.( … )`, a corpus-spelled construct the
+grammar lacked. Fixed as the infix escape group (`fc6a44db`, ERROR −113).
+Promoted to the ambient rules as a diagnostic: **an unpainted region is a parse
+error, not a chrome bug.**
