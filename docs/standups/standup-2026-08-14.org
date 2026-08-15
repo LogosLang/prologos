@@ -1,0 +1,94 @@
+#+TITLE: Standup — 2026-08-14
+#+DATE: 2026-08-14
+
+* Yesterday (since 2026-08-12 standup)
+
+**182 commits**, and the interval splits cleanly in two. It opened on **CIU T6
+D4.P4e** and finished the flatten family — 1b-iii through 1b-v, the deep flatten
+live and twice-verified. Then the project **moved on disk**, which broke editor
+support, and repairing that turned into the interval's second and larger half:
+**123 commits of editor work** across four tracks — the path/registration
+repairs, an Emacs REPL round, **TSG Track 1** (tree-sitter grammar), and **EHP
+Track 1** (highlight parity), with **SURF Track 1** opened and parked. Session
+log: ~docs/tracking/standups/2026-08-12_dailies.md~, LOG (i)–(xxxviii).
+
+** CIU T6 — the flatten family lands
+
+- **1b-iii** in three stages: **A** (~f0d91853~·~43c91859~·~e38845a9~·~dd5d145c~)
+  the instrument, preconditions, ordering substrate and fail-kind trapdoor; **B1**
+  (~1c0c5123~) the semantics in both twins, inert; **B2** (~d5934397~) the flatten
+  goes live — ~rowsv:tags*~ → ~@[1 2 3]~. Then **C1** (~4f30a171~) hoisting the
+  shared join to return BARE, and **C2** (~68014124~) the deep flatten.
+  ⭐ **Q_U47 turned out to be implemented by NOT implementing it** — two of the
+  three landings needed no code at all.
+- **Four verify rounds**, and they are the story: round 1 found 5 defects with the
+  battery green over every one; C2's rounds found 3 BLOCKING regressions all
+  arriving through the one route a comment of mine declared safe, then a fresh
+  defect class generated *by* round 1's fixes — three times, the third in a
+  sibling function. ⭐ **A pin that was vacuous from BIRTH is why the class could
+  repeat.**
+- **1b-iv** (~c02efd18~) the nominal splice; **1b-v** (~cb555002~) ~*_~ live, the
+  verify answering the standing question YES six times. Rulings Q_U45–Q_U53.
+- **Parked here**, deliberately, when the editor breakage took priority. Next is
+  **1b-v B2b** (minimal, per Q_U53) with **DEFERRED 133 as a precondition for its
+  own tests**.
+
+** The project moved, and editor support went dark
+
+- **Path/registration repairs** (~83effe09~·~96ef73f0~): six live absolute paths
+  went relative. ⭐ The one that mattered was not a path at all — ~core.hooksPath~
+  pointed at the pre-move directory, so **git had been running no hooks since the
+  move** and the paren-balance gate was silently inert.
+- **A fourth registration site, found only by running the thing**: ~prologos-repl~
+  failed with "collection not found". The ~prologos~ collection is a **linked
+  Racket package** recorded in ~links.rktd~ + ~pkgs.rktd~, both naming the old
+  checkout. A grep-shaped audit is blind where a path lives in a registry.
+- **VS Code was never a path bug at all**: the extension had **never been
+  installed** — it only ever ran as a dev host. Installing it exposed a latent
+  ~../..~ assumption that fails silently.
+
+** Emacs: send-form, persistent results, and two bugs the tests could not see
+
+- ~prologos-eval-last-sexp~ → **~prologos-send-form~**, matching ~cmd+enter~;
+  ~backward-sexp~ was the wrong tool for a layout-sensitive language. Results now
+  **persist until an edit** rather than until the next keystroke; C-g/ESC dismiss.
+- ⭐ **The E2E found a cold-start bug that had been answering with the REPL
+  banner** and silently dropping the real result — invisible to 48 green unit
+  tests, because units never start a process.
+- ⭐ The advice implementing C-g clearing **would have broken C-g globally** on
+  the first reload, until an unload hook was added.
+
+** TSG T1 — the grammar was five months stale (CLOSED)
+
+Opened because SURF T1 needed a tree and the corpus scan said 13% of files parsed
+clean. Closed with **swallows 0, unparsed 1.7%**. ⭐ **The metric was wrong for
+most of the track** — ERROR *count* is anti-correlated with progress, and MISSING
+rising is the stronger defect signal. Drift is now structurally visible, and VS
+Code runs the same grammar.
+
+** EHP T1 — highlight parity (P0–P4 closed)
+
+- **P0** capture registry, D2 ruled option E. **P1** the harness — ⭐ which found
+  **the two editors already agreed** and the *harness* was what was wrong.
+- **P2** the five TextMate disagreements: ⭐ **three were TextMate bugs**, one a
+  comment asserting a property the file did not have, one a recorded divergence.
+- **P3** ~@attribute~ coloured — ⭐ **the colour was the small half: three of its
+  four rules were VACUOUS**, 90% of spans mispainted, while the reachability gate
+  stayed green because the fourth fires.
+- **P4** ⭐ **all four catalogued issues FIXED, and not one residual cause was
+  TextMate** — the query, the grammar, the grammar, and TextMate+grammar.
+- **Six gates now green**, including two built this interval; the query-sync guard
+  closed a hole parity could not see *by construction*.
+
+* Today
+
+- **EHP P5** — the ~#match?~ dialect hazard. ⚠ It may be smaller than its design
+  assumes: all three uses are plain ~^(a|b|c)$~ alternations, already inside the
+  translatable subset, so a lint would guard a hazard that is not present. The
+  real call is lint-vs-**promote-those-words-to-grammar-tokens**, which would
+  delete the hazard outright.
+- Then **P6** (~docs/ADDING_AN_EDITOR.md~ — the contributor contract that makes
+  this arc leverage) and **P7** (EHP T1.close, PIR-gated).
+- **SURF T1** is unblocked and not started; **CIU T6** resumes after.
+
+* Conversations
