@@ -19,7 +19,7 @@ contract well enough that a third editor is a *mapping table*, not a port.
 |---|---|---|---|
 | P0 | Capture registry + D1 renames | ✅ | `7fd4445c`. D2 ruled **option E**; `queries/captures.md` + two-direction gate; 9 dead entries deleted. [§9](#p0-record) |
 | P1 | Parity harness: one fixture, capture-by-capture, asserted in BOTH | ✅ | `30671d9d`. **Query layer is ALREADY in parity** — 205 captures, identical. [§8](#p1-record) |
-| P2 | TextMate: declared, and made to AGREE where it overlaps | 🔄 | Census landed `81ac5a01`; **blocked on a grammar defect it found** — [§10](#p2-record) |
+| P2 | TextMate: declared, and made to AGREE where it overlaps | 🔄 | Census `81ac5a01`; scanner fixed `e8b9ab0f` (comment coverage 1%→100%) — **unblocked**. [§10](#p2-record) |
 | P3 | Review `semanticTokenScopes` per capture | ⬜ | Kills drift cause 2; settles the blue/orange class — [§3.4](#p3) |
 | P4 | The four catalogued issues, on the repaired base | ⬜ | [§4](#issues) |
 | P5 | `#match?` dialect lint (or retire the predicate) | ⬜ | [§3.5](#p5) |
@@ -651,3 +651,32 @@ Where an independent expected count exists, measure COVERAGE instead:
 cheap ground truth). That is the instrument the scanner fix moves, per area,
 before and after. Reachability keeps its value for the *completely* dead case —
 it just never had the resolution for this one.
+
+### ✅ Unblocked — the scanner fix (2026-08-14, `e8b9ab0f`)
+
+The scanner marked its token end AFTER looking past comment-only lines, so the
+parser resumed beyond them. Fix: mark the end BEFORE the first comment and keep
+looking ahead. **The layout decision is unchanged** — indentation still comes
+from the next real line, which is why the loop skips comments at all; only the
+token boundary moved.
+
+| | before | after |
+|---|---|---|
+| comment coverage, `lib` | 1% | **100%** |
+| comment coverage, total | 9% | **101%**\* |
+| MISSING | 77 | **76** |
+| unparsed | 1.6% | **1.3%** |
+| error-bytes | 18193 | **14586** |
+| ERROR count | 2689 | 2700 |
+
+\* >100% is expected: the denominator counts `;`-starting lines, the numerator
+counts comment TOKENS, so a trailing `foo ;; note` scores in one and not the
+other. ERROR rising while error-bytes fall by 3607 is the documented
+anti-correlation. Ratchet tightened to 1.3 / 76.
+
+**What this does to the census — and therefore to D3.** "TextMate only" collapses
+from **1124 chars (1121 of them comments) to 3**. The remainder is
+`keyword.operator.quote` ×2 and one `constant.other.keyword`. So TextMate is now
+almost entirely *redundant* with the query rather than *compensating* for it, and
+**D3 can be ruled on evidence that means what it says** — which it could not,
+one commit ago.
