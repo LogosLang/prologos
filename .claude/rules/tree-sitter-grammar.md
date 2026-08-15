@@ -228,6 +228,59 @@ Run `./install.sh` after ANY `.scm` change — it copies the file to the VS Code
 extension. The corpus gate measures the installed **parser** and does not see
 `.scm` edits at all, so a green gate is NOT evidence the query is fine.
 
+### ⭐⭐ VS Code scope fallbacks: CONVENTION PARITY, and MEASURE with `theme-survey.py`
+
+A capture reaching the right token still renders wrong if its
+`semanticTokenScopes` fallback names a scope **no theme has heard of**. Themes
+do not style scopes, they style **concepts** — and every theme is tested against
+JSON and TypeScript. So a fallback must be the scope the ecosystem's
+most-themed grammar uses for the SAME concept, never a Prologos-private
+invention:
+
+| concept | fallback | i.e. renders like |
+|---|---|---|
+| map keys, path steps | `entity.name.tag` | the theme's **YAML keys** |
+| binders (`let`, match) | `variable.parameter` (+ `meta.definition.variable` outer) | the theme's **params** |
+| params | `variable.parameter` | same |
+
+⚠ **And when two conventions exist for one concept, MEASURE — do not pick by
+taste.** `parity/theme-survey.py` resolves any scope list against every theme
+installed in `~/.vscode/extensions` and prints the colour table:
+
+```bash
+python3 parity/theme-survey.py                     # default candidates
+python3 parity/theme-survey.py scope1 scope2 ...   # your own
+```
+
+Measured 2026-08-15 over 30 themes: JSON's `support.type.property-name` — the
+"obvious" key convention — **collides with numbers AND types in all ten GitHub
+variants** and is plain-foreground in One Dark, while YAML's `entity.name.tag`
+is distinct in 29/30. Likewise `meta.definition.variable` is unstyled in 17/30
+while `variable.parameter` is styled in **30/30**. ⚠ Private scopes
+(`*.prologos` leaves on invented roots) cost **five** rounds of guessing in one
+day — attribute-name, constant.language, constant.other, a shipped colour
+override, and the JSON key scope — before the principle was written down.
+
+**Never ship a colour**: `configurationDefaults` with
+`editor.semanticTokenColorCustomizations` paints over the user's theme. It was
+tried, and retired the same day by owner ruling. Personal taste belongs in the
+user's own settings; the extension ships *roles*.
+
+### ⭐ An UNPAINTED region in VS Code is a PARSE ERROR, not a chrome bug
+
+`semanticTokens.ts` deliberately skips captures inside an **ERROR subtree**
+("leave known-wrong regions to TextMate"). So a construct the grammar lacks
+strips semantic colour from *everything recovery swallows with it* — including
+correct code on neighbouring lines.
+
+Diagnosed 2026-08-15: `let` binders appeared unpainted inside `defn` bodies but
+painted at top level. Same capture, same token — the difference was
+`.([f a b] + x)` nearby, a construct with no grammar rule, whose ERROR node
+covered the `let` lines. **Healthy-tree vs error-zone, not one construct vs
+another.** So: when chrome is missing in one place and present in another for
+the same construct, dump the tree and look for an ERROR *around* it before
+touching the query or the scopes.
+
 ---
 
 ## ⭐ The eight editor gates — run them, and know what each CANNOT see
