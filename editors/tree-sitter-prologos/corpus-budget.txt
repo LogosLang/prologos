@@ -19,7 +19,7 @@ max_unparsed_pct=1.3
 # ERROR swallows everything inside it. Measured 2026-08-14 (§9.7): a change that
 # moved ERROR 3054 -> 2743 simultaneously pushed MISSING 74 -> 110, and only the
 # MISSING delta showed it.
-max_missing=73
+max_missing=71
 
 # Ratcheted 2026-08-14 by the comment-scanner fix (EHP P2): the scanner no
 # longer consumes comment-only lines as part of its lookahead token, so those
@@ -44,3 +44,10 @@ max_missing=73
 # clean 34 -> 35, ERROR 2693 -> 2579, MISSING 75 -> 73, error-bytes
 # 14691 -> 14529. Unlike the `^-` change above, EVERY signal moved the right way
 # here — count, missing AND bytes — so no recovery-churn caveat applies.
+
+# Ratcheted 2026-08-15 a third time by the fused-let colon + bundle-comma fixes
+# (TSG T2 pre-P1, c2dedd72): MISSING 73 -> 71 (both collection-traits copies'
+# invented `)` gone), ERROR down 6 across 5 files, and the per-file A/B was
+# 6 better / 0 worse. The fused-let case is the sharper lesson: it sat at E0/M0
+# — a SUCCEEDING parse with the wrong tree — so no count-based gate could ever
+# have seen it; only dumping the tree did.

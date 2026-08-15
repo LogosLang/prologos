@@ -3196,11 +3196,33 @@
                 ]
               },
               {
-                "type": "REPEAT1",
-                "content": {
-                  "type": "SYMBOL",
-                  "name": "let_binding"
-                }
+                "type": "SEQ",
+                "members": [
+                  {
+                    "type": "SYMBOL",
+                    "name": "_let_open"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "let_binding"
+                  },
+                  {
+                    "type": "REPEAT",
+                    "content": {
+                      "type": "SEQ",
+                      "members": [
+                        {
+                          "type": "SYMBOL",
+                          "name": "_let_align"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "let_binding"
+                        }
+                      ]
+                    }
+                  }
+                ]
               }
             ]
           },
@@ -4245,6 +4267,14 @@
     {
       "type": "SYMBOL",
       "name": "_arm_lparen"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_let_open"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_let_align"
     }
   ],
   "inline": [],

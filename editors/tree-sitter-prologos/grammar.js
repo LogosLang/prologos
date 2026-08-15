@@ -29,6 +29,9 @@ module.exports = grammar({
     $._same_line_body,
     $._map_open,
     $._arm_lparen,
+    // APPEND ONLY — the correspondence with scanner.c's enum is POSITIONAL.
+    $._let_open,
+    $._let_align,
   ],
 
   extras: $ => [
@@ -899,7 +902,17 @@ module.exports = grammar({
       'let',
       choice(
         seq('[', repeat1(alias($._bracket_let_binding, $.let_binding)), ']'),
-        repeat1($.let_binding),
+        // `_let_open' is zero-width and carries no shape of its own; it exists
+        // so the SCANNER records the first binding's column.  Requiring it here
+        // (rather than making it optional) is what keeps it from firing in the
+        // bracket branch — the `_same_line_body' precedent, where an optional
+        // predecessor let the token fire one position early.
+        // One binding, then aligned continuations, each introduced by the
+        // scanner's column test.  The structure the tokens enforce IS the
+        // documented layout rule: bindings share the first binding's column,
+        // the body sits shallower.
+        seq($._let_open, $.let_binding,
+            repeat(seq($._let_align, $.let_binding))),
       ),
       optional(field('body', $.expression)),
     )),

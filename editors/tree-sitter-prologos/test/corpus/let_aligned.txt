@@ -1,0 +1,386 @@
+================================================================
+let, aligned block — EVERY aligned name binds (DEFERRED 140, second half)
+================================================================
+
+defn f [n]
+  let y 4
+      z 5
+    [+ n [+ y z]]
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (defn_form
+      (identifier)
+      (param_list
+        (typed_param_or_bare
+          (bare_param
+            (identifier))))
+      (block_body
+        (expression
+          (let_expr
+            (let_binding
+              (typed_param_or_bare
+                (bare_param
+                  (identifier)))
+              (expression
+                (atom
+                  (number))))
+            (let_binding
+              (typed_param_or_bare
+                (bare_param
+                  (identifier)))
+              (expression
+                (application
+                  (expression
+                    (atom
+                      (number)))
+                  (expression
+                    (grouped_expr
+                      (expression
+                        (application
+                          (expression
+                            (application
+                              (expression
+                                (atom
+                                  (operator)))
+                              (expression
+                                (atom
+                                  (identifier)))))
+                          (expression
+                            (grouped_expr
+                              (expression
+                                (application
+                                  (expression
+                                    (application
+                                      (expression
+                                        (atom
+                                          (operator)))
+                                      (expression
+                                        (atom
+                                          (identifier)))))
+                                  (expression
+                                    (atom
+                                      (identifier))))))))))))))))))))
+
+================================================================
+let, aligned block with := — same shape, := spelling
+================================================================
+
+defn f [a]
+  let x := 4
+      y := 5
+    [+ a [+ x y]]
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (defn_form
+      (identifier)
+      (param_list
+        (typed_param_or_bare
+          (bare_param
+            (identifier))))
+      (block_body
+        (expression
+          (let_expr
+            (let_binding
+              (typed_param_or_bare
+                (bare_param
+                  (identifier)))
+              (expression
+                (atom
+                  (number))))
+            (let_binding
+              (typed_param_or_bare
+                (bare_param
+                  (identifier)))
+              (expression
+                (application
+                  (expression
+                    (atom
+                      (number)))
+                  (expression
+                    (grouped_expr
+                      (expression
+                        (application
+                          (expression
+                            (application
+                              (expression
+                                (atom
+                                  (operator)))
+                              (expression
+                                (atom
+                                  (identifier)))))
+                          (expression
+                            (grouped_expr
+                              (expression
+                                (application
+                                  (expression
+                                    (application
+                                      (expression
+                                        (atom
+                                          (operator)))
+                                      (expression
+                                        (atom
+                                          (identifier)))))
+                                  (expression
+                                    (atom
+                                      (identifier))))))))))))))))))))
+
+================================================================
+let, aligned block, three bindings
+================================================================
+
+defn f [n]
+  let a 1
+      b 2
+      c 3
+    [+ a [+ b c]]
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (defn_form
+      (identifier)
+      (param_list
+        (typed_param_or_bare
+          (bare_param
+            (identifier))))
+      (block_body
+        (expression
+          (let_expr
+            (let_binding
+              (typed_param_or_bare
+                (bare_param
+                  (identifier)))
+              (expression
+                (atom
+                  (number))))
+            (let_binding
+              (typed_param_or_bare
+                (bare_param
+                  (identifier)))
+              (expression
+                (atom
+                  (number))))
+            (let_binding
+              (typed_param_or_bare
+                (bare_param
+                  (identifier)))
+              (expression
+                (application
+                  (expression
+                    (atom
+                      (number)))
+                  (expression
+                    (grouped_expr
+                      (expression
+                        (application
+                          (expression
+                            (application
+                              (expression
+                                (atom
+                                  (operator)))
+                              (expression
+                                (atom
+                                  (identifier)))))
+                          (expression
+                            (grouped_expr
+                              (expression
+                                (application
+                                  (expression
+                                    (application
+                                      (expression
+                                        (atom
+                                          (operator)))
+                                      (expression
+                                        (atom
+                                          (identifier)))))
+                                  (expression
+                                    (atom
+                                      (identifier))))))))))))))))))))
+
+================================================================
+let, aligned continuation after a multi-line bracketed value
+================================================================
+
+defn f [a]
+  let x [+ 1
+         2]
+      y 5
+    [+ x y]
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (defn_form
+      (identifier)
+      (param_list
+        (typed_param_or_bare
+          (bare_param
+            (identifier))))
+      (block_body
+        (expression
+          (let_expr
+            (let_binding
+              (typed_param_or_bare
+                (bare_param
+                  (identifier)))
+              (expression
+                (grouped_expr
+                  (expression
+                    (application
+                      (expression
+                        (application
+                          (expression
+                            (atom
+                              (operator)))
+                          (expression
+                            (atom
+                              (number)))))
+                      (expression
+                        (atom
+                          (number))))))))
+            (let_binding
+              (typed_param_or_bare
+                (bare_param
+                  (identifier)))
+              (expression
+                (application
+                  (expression
+                    (atom
+                      (number)))
+                  (expression
+                    (grouped_expr
+                      (expression
+                        (application
+                          (expression
+                            (application
+                              (expression
+                                (atom
+                                  (operator)))
+                              (expression
+                                (atom
+                                  (identifier)))))
+                          (expression
+                            (atom
+                              (identifier))))))))))))))))
+
+================================================================
+let, sibling chain is NOT a continuation — let is never a name
+================================================================
+
+defn f [a]
+  let x 4
+  let y 5
+    [+ x y]
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (defn_form
+      (identifier)
+      (param_list
+        (typed_param_or_bare
+          (bare_param
+            (identifier))))
+      (block_body
+        (expression
+          (let_expr
+            (let_binding
+              (typed_param_or_bare
+                (bare_param
+                  (identifier)))
+              (expression
+                (atom
+                  (number))))
+            (expression
+              (let_expr
+                (let_binding
+                  (typed_param_or_bare
+                    (bare_param
+                      (identifier)))
+                  (expression
+                    (application
+                      (expression
+                        (atom
+                          (number)))
+                      (expression
+                        (grouped_expr
+                          (expression
+                            (application
+                              (expression
+                                (application
+                                  (expression
+                                    (atom
+                                      (operator)))
+                                  (expression
+                                    (atom
+                                      (identifier)))))
+                              (expression
+                                (atom
+                                  (identifier))))))))))))))))))
+
+================================================================
+let, nested at deeper indent is the BODY — let is never a name
+================================================================
+
+defn f [a]
+  let x 4
+    let y 5
+      [+ x y]
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (defn_form
+      (identifier)
+      (param_list
+        (typed_param_or_bare
+          (bare_param
+            (identifier))))
+      (block_body
+        (expression
+          (let_expr
+            (let_binding
+              (typed_param_or_bare
+                (bare_param
+                  (identifier)))
+              (expression
+                (application
+                  (expression
+                    (atom
+                      (number)))
+                  (expression
+                    (let_expr
+                      (let_binding
+                        (typed_param_or_bare
+                          (bare_param
+                            (identifier)))
+                        (expression
+                          (application
+                            (expression
+                              (atom
+                                (number)))
+                            (expression
+                              (grouped_expr
+                                (expression
+                                  (application
+                                    (expression
+                                      (application
+                                        (expression
+                                          (atom
+                                            (operator)))
+                                        (expression
+                                          (atom
+                                            (identifier)))))
+                                    (expression
+                                      (atom
+                                        (identifier)))))))))))))))))))))

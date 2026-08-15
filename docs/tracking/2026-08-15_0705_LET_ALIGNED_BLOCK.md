@@ -1,7 +1,8 @@
 # `let` Aligned Block — TSG Track 2
 
-**Status**: 🔄 design open · **Opened** 2026-08-15 · Closes the remaining half of
-[DEFERRED 140](DEFERRED.md). The bracket half shipped at `c809c5d0`.
+**Status**: ✅ **SHIPPED** (P1+P2+P3 in one commit; P4's pins and gates green) ·
+**Opened** 2026-08-15 · Closes the remaining half of [DEFERRED 140](DEFERRED.md).
+The bracket half shipped at `c809c5d0`.
 
 The **aligned block** is the documented canonical multi-binding layout
 (`.claude/rules/prologos-syntax.md`), and the grammar binds only its first name:
@@ -23,10 +24,10 @@ relative to the compiler, per the standing rule.
 | Phase | Description | Status | Notes |
 |---|---|---|---|
 | P0 | Establish that grammar-only routes fail, and why | ✅ | Two formulations built and measured — [§2](#why-not-grammar) |
-| P1 | `LET_OPEN`: capture the first binding's column | ⬜ | Zero-width, emitted after `let` |
-| P2 | `LET_ALIGN`: separate a continuation binding from the body | ⬜ | Zero-width, column comparison |
-| P3 | Per-`let` column stack + serialization | ⬜ | Format change — [§4.3](#serial) |
-| P4 | Corpus tests + per-file A/B + seven gates | ⬜ | |
+| P1 | `LET_OPEN`: capture the first binding's column | ✅ | Zero-width, emitted after `let`; **must FALL THROUGH when declining** — [§6.1](#p5-records) |
+| P2 | `LET_ALIGN`: separate a continuation binding from the body | ✅ | Column test at line boundary + a second site in the pending-DEDENT flush; **recovery-gated** — [§6.2](#p5-records) |
+| P3 | Per-`let` column stack + serialization | ✅ | Folded into P1 deliberately: a scanner carrying unserialized state is a live incremental-reparse bug from the first commit |
+| P4 | Corpus tests + per-file A/B + seven gates | ✅ | 6 pins in `let_aligned.txt`; A/B **1 better · 1 worse (justified: a NEGATIVE test now errors where the compiler does) · 141 unchanged**; all 8 gates green |
 
 ---
 
@@ -117,7 +118,7 @@ Pinned before any change, and re-checked after each phase:
 | nested (`let y 4` / indented `let z 5`) | 2 bindings, E=0, and **`let` is never a name** |
 | bracket, all four spellings | every name binds, E=0 (`test/corpus/let_bracket.txt`) |
 | sexp `let [x <Nat> (inc zero)]` | one binding, `angle_param` name, M=0 |
-| aligned, multi-line `match` value | E=0 |
+| aligned, multi-line `match` value | ~~E=0~~ **REVISED** — see below |
 
 ---
 
@@ -173,3 +174,58 @@ parser deserializes as "no open lets" rather than as garbage.
    per `let`, not per line.
 3. **Error recovery churn.** Any change here can degrade files that contain no
    `let` at all. Gate with `./grammar-ab.sh diff`, per file, never netted.
+
+
+---
+
+<a id="p5-records"></a>
+## 6. Per-phase records (shipped 2026-08-15)
+
+### 6.1 P1 — and the fall-through the A/B caught on its first run
+
+`LET_OPEN` initially `return false`d when declining. That suppresses the
+layout tokens whenever `LET_OPEN` is valid ALONGSIDE them — measured **8
+better / 15 WORSE**, `foray.prologos` E122→E170, damage concentrated in files
+with no aligned `let` at all. A netted total reads that as roughly neutral;
+the per-file gate refused it. `_same_line_body` falls through for exactly this
+reason, and now `LET_OPEN` does too. Second finding: removing `get_column()`
+entirely reproduced the identical residual damage — one-variable
+differential, so the churn was never the lexer call.
+
+### 6.2 P2 — two emission sites, and the recovery gate
+
+The column test needs TWO sites: the ordinary line boundary, and the
+pending-DEDENT flush — a multi-line value (`match` arms, deep continuation)
+dedents back to the binding column, and at that moment the newline is already
+consumed, so the flush must offer `LET_ALIGN` before its queued `NEWLINE`.
+The pop lives where a SHALLOWER line arrives while `LET_ALIGN` is valid — not
+on DEDENT, which would close the let under its own multi-line value.
+
+⭐ **Recovery gating is load-bearing.** In error recovery tree-sitter marks
+EVERY symbol valid; `LET_OPEN` then pushes bogus columns inside broken regions
+and `LET_ALIGN` matches them coincidentally — measured +23 ERROR in
+track7-acceptance and +2 in ppn-track4, whose only `let` is in a COMMENT.
+Detected via the impossible-set idiom (`SAME_LINE_BODY`+`LET_OPEN`+
+`ARM_LPAREN`+`MAP_OPEN` all valid ⇒ recovery) and both let tokens sit it out.
+After gating: **1 better · 1 worse · 141 unchanged**, and the single worse is
+`let-toplevel.prologos`'s NEGATIVE test (`;;16=>~`) — a compiler-rejected
+aligned binding that used to be silently swallowed at E0 and now errors
+exactly where the compiler does. Recorded as justified.
+
+### 6.3 The pin that failed for the RIGHT reason — pin5 revised
+
+"Aligned block with a multi-line `match` value, E=0" is unreachable by
+alignment work: `match` as a binding VALUE never forms a `match_expr` at all
+(`match a` parses as application, the arms leak into the enclosing `defn`),
+identically with and without alignment, while body-position `match` is fine.
+Pre-existing, upstream, now **[DEFERRED 141](DEFERRED.md#d141)**. The pin's
+actual intent — the dedent-back-to-column path — is covered by the bracketed
+and deep-continuation multi-line-value pins, both E0 with 2 bindings, both
+compiler-verified.
+
+### 6.4 What P0's "do not retry" bought
+
+Neither grammar-only attempt was re-tried. The scanner route hit neither of
+their failure modes: sibling chain and nested stay E0 with `let` never a
+name — pinned in `let_aligned.txt` alongside the three aligned spellings and
+the multi-line-value continuation.

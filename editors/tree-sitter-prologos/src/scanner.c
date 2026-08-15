@@ -21,7 +21,9 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-/* Token types — must match the order in grammar.js externals array */
+/* Token types — must match the order in grammar.js externals array.
+ * APPEND ONLY: the correspondence is positional, so inserting in the middle
+ * silently renumbers every token after it. */
 enum TokenType {
   INDENT,
   DEDENT,
@@ -29,10 +31,13 @@ enum TokenType {
   SAME_LINE_BODY,
   MAP_OPEN,
   ARM_LPAREN,
+  LET_OPEN,
+  LET_ALIGN,
 };
 
 /* Scanner state */
 #define MAX_INDENT_STACK 128
+#define MAX_LET_STACK 32
 
 typedef struct {
   int indent_stack[MAX_INDENT_STACK];
@@ -42,6 +47,21 @@ typedef struct {
    * The NEWLINE that follows the dedents is also tracked separately. */
   int pending_dedents;
   bool pending_newline_after_dedents;
+  /* Column of the FIRST BINDING of each currently-open layout `let`.
+   *
+   * This is the discriminator the LR state cannot have.  Nested and aligned
+   * `let`s are the SAME token sequence — `let`, binding, INDENT — differing
+   * only in how deep the indent is RELATIVE TO THIS COLUMN:
+   *
+   *     let y 4              let y 4
+   *       let z 5                z 5
+   *       ^ shallower  =>        ^ equal  =>
+   *         the BODY               a CONTINUATION BINDING
+   *
+   * Per-`let` rather than per-line: a `let` whose body is another `let` at the
+   * same column is a sibling chain, not a continuation (design §5.2). */
+  int let_col_stack[MAX_LET_STACK];
+  int let_depth;
 } Scanner;
 
 /* ============================================================
@@ -90,6 +110,24 @@ unsigned tree_sitter_prologos_external_scanner_serialize(
     offset += 2;
   }
 
+  /* let-column stack, APPENDED AFTER the variable-length indent array.
+   *
+   * The position matters.  The indent array has no terminator and its length
+   * is implied by stack_size, so anything new has to go after it.  Putting it
+   * here also makes the format backward-compatible in the direction that can
+   * actually happen: state written by a parser without this field simply runs
+   * out of bytes, and `deserialize` leaves let_depth at 0 — "no open lets" —
+   * rather than reading indent levels as columns. */
+  if (offset + 1 <= TREE_SITTER_SERIALIZATION_BUFFER_SIZE) {
+    buffer[offset++] = (char)s->let_depth;
+    for (int i = 0; i < s->let_depth; i++) {
+      if (offset + 2 > TREE_SITTER_SERIALIZATION_BUFFER_SIZE) break;
+      int16_t col = (int16_t)s->let_col_stack[i];
+      memcpy(buffer + offset, &col, 2);
+      offset += 2;
+    }
+  }
+
   return offset;
 }
 
@@ -100,6 +138,9 @@ void tree_sitter_prologos_external_scanner_deserialize(
   s->pending_newline_after_dedents = false;
   s->indent_stack[0] = 0;
   s->stack_size = 1;
+  /* Reset here, not after the reads: every short-buffer path below returns
+   * early, and each one must leave "no open lets" rather than stale columns. */
+  s->let_depth = 0;
 
   if (length == 0) return;
 
@@ -129,6 +170,18 @@ void tree_sitter_prologos_external_scanner_deserialize(
     s->indent_stack[0] = 0;
     s->stack_size = 1;
   }
+
+  /* let-column stack — only if bytes remain.  Older state stops here. */
+  if (offset + 1 <= length) {
+    int depth = (unsigned char)buffer[offset++];
+    for (int i = 0; i < depth; i++) {
+      if (offset + 2 > length) break;
+      int16_t col;
+      memcpy(&col, buffer + offset, 2);
+      offset += 2;
+      if (s->let_depth < MAX_LET_STACK) s->let_col_stack[s->let_depth++] = col;
+    }
+  }
 }
 
 /* ============================================================
@@ -147,10 +200,45 @@ bool tree_sitter_prologos_external_scanner_scan(
     void *payload, TSLexer *lexer, const bool *valid_symbols) {
   Scanner *s = (Scanner *)payload;
 
+  /* During ERROR RECOVERY tree-sitter calls the scanner with EVERY symbol
+   * valid — a state no grammar rule can produce, since LET_OPEN (only after
+   * the `let` keyword) and SAME_LINE_BODY (only after a defn param list) have
+   * no legitimate common position.  The let tokens must sit out recovery:
+   * LET_OPEN would push a bogus column inside any broken region (and never
+   * pop it), and LET_ALIGN fires on coincidental column matches against that
+   * stale stack — measured as +23 ERROR churn in track7-acceptance and +2 in
+   * ppn-track4, files whose only `let` is in a COMMENT.  The pre-existing
+   * tokens are left as they were: they are content-gated, their recovery
+   * behaviour is part of the committed baseline, and changing it here would
+   * make this change unattributable. */
+  bool in_error_recovery =
+      valid_symbols[SAME_LINE_BODY] && valid_symbols[LET_OPEN] &&
+      valid_symbols[ARM_LPAREN] && valid_symbols[MAP_OPEN];
+
   /* --- Emit pending DEDENTs from a multi-level dedent --- */
   if (s->pending_dedents > 0 && valid_symbols[DEDENT]) {
     s->pending_dedents--;
     lexer->result_symbol = DEDENT;
+    return true;
+  }
+
+  /* --- After a multi-level dedent, a continuation binding may land EXACTLY
+   *     on the open let's binding column --- the multi-line-value case:
+   *
+   *         let k : Int := match a
+   *                          | 1 -> 10
+   *             j 5                     <- dedents from the arms to col of k
+   *
+   * The dedent scan already consumed the newline and positioned the lexer at
+   * the line's first content character, so its column IS the line's indent.
+   * When it equals the top of the let stack, this line is a binding, and the
+   * queued NEWLINE would end the binding phase instead --- so LET_ALIGN takes
+   * priority over the pending NEWLINE, and only over that. */
+  if (s->pending_newline_after_dedents && s->pending_dedents == 0
+      && valid_symbols[LET_ALIGN] && !in_error_recovery && s->let_depth > 0
+      && (int)lexer->get_column(lexer) == s->let_col_stack[s->let_depth - 1]) {
+    s->pending_newline_after_dedents = false;
+    lexer->result_symbol = LET_ALIGN;
     return true;
   }
 
@@ -232,6 +320,61 @@ bool tree_sitter_prologos_external_scanner_scan(
     /* Otherwise fall through to the ordinary INDENT/DEDENT/NEWLINE handling.
      * Falling through is safe: the whitespace we skipped above is exactly what
      * that path skips first anyway. */
+  }
+
+  /* --- LET_OPEN: a zero-width marker after `let`, recording the COLUMN of the
+   *     first binding.
+   *
+   * That column is the whole point.  It is the only thing separating an
+   * ALIGNED continuation binding from the BODY of the `let`, and the LR state
+   * does not have it: both are `let`, binding, INDENT, and differ only in the
+   * indent's depth relative to this column.  `prologos-syntax.md` states the
+   * rule directly — the body "sits strictly between the `let` column and the
+   * binding column".
+   *
+   * Two grammar-only formulations were built and measured before falling back
+   * here (design §2).  Both made the aligned block bind correctly and both
+   * regressed the shapes they were NOT about: the sibling chain gained an
+   * ERROR and the nested form bound the literal `let` AS A NAME.
+   *
+   * Declining on `[` is what leaves the BRACKET branch reachable: at this
+   * point the parser has not chosen between `let [x 4 y 5]` and the layout
+   * form, so the scanner refusing the token is what selects bracket.
+   *
+   * Per design §5.1 and the `_same_line_body` precedent, correctness also
+   * rests on the GRAMMAR making this token valid only in the layout branch —
+   * a token that can fire a position early strands the thing it was meant to
+   * introduce. */
+  if (valid_symbols[LET_OPEN] && !in_error_recovery) {
+    /* Mark first: the token stays zero-width wherever the peek ends up. */
+    lexer->mark_end(lexer);
+
+    while (!lexer->eof(lexer) &&
+           (lexer->lookahead == ' ' || lexer->lookahead == '\t' ||
+            lexer->lookahead == '\r')) {
+      skip_ch(lexer);
+    }
+
+    if (!lexer->eof(lexer) && lexer->lookahead != '\n' &&
+        lexer->lookahead != ';' && lexer->lookahead != '[') {
+      if (s->let_depth < MAX_LET_STACK) {
+        s->let_col_stack[s->let_depth++] = (int)lexer->get_column(lexer);
+      }
+      lexer->result_symbol = LET_OPEN;
+      return true;
+    }
+    /* Fall through — do NOT `return false' here.
+     *
+     * LET_OPEN can be valid AT THE SAME TIME as INDENT/DEDENT/NEWLINE, and
+     * returning would suppress the layout tokens the parser was also asking
+     * for.  Measured: the returning version scored 8 files better, 15 WORSE,
+     * with foray.prologos going E122 -> E170 — damage concentrated in files
+     * containing no aligned `let` at all, which is the error-recovery churn
+     * signature.  `_same_line_body' falls through for exactly this reason and
+     * says so.
+     *
+     * Safe for the same reason it is safe there: the only thing consumed above
+     * is horizontal whitespace, which the layout path skips first anyway. */
   }
 
   /* --- ARM_LPAREN: a `(` that opens a MATCH ARM, not a paren expression.
@@ -457,6 +600,41 @@ bool tree_sitter_prologos_external_scanner_scan(
       return true;
     }
     return false;
+  }
+
+  /* --- LET_ALIGN: is this line a CONTINUATION BINDING of an open layout
+   *     `let`, or something else?  The column decides, and only the column:
+   *
+   *       indent == first binding's column  ->  another binding (LET_ALIGN)
+   *       indent  < that column             ->  the binding phase is OVER;
+   *                                             pop, fall through, and the
+   *                                             normal INDENT/DEDENT path
+   *                                             makes this line the body
+   *       indent  > that column             ->  the previous binding's VALUE
+   *                                             continues (multi-line value);
+   *                                             no pop, fall through
+   *
+   * This runs BEFORE the INDENT/NEWLINE/DEDENT branches because the aligned
+   * line would otherwise be an INDENT (deeper than the enclosing block) and
+   * the value-extension rules would absorb it --- which is precisely the
+   * baseline failure: ONE binding whose value swallows the rest of the form.
+   *
+   * The pop lives HERE and not on DEDENT: a value deeper than the binding
+   * column dedents back without ending the binding phase, so popping on
+   * DEDENT would close the let under its own multi-line value (the pinned
+   * `match`-value shape).  Popping when a SHALLOWER line arrives while the
+   * parser still expects a binding is the one moment "this let takes no more
+   * bindings" is actually known. */
+  if (valid_symbols[LET_ALIGN] && !in_error_recovery && s->let_depth > 0) {
+    int col = s->let_col_stack[s->let_depth - 1];
+    if (indent == col) {
+      lexer->result_symbol = LET_ALIGN;   /* token spans the crossed newline */
+      return true;
+    }
+    if (indent < col) {
+      s->let_depth--;
+      /* fall through --- INDENT/DEDENT/NEWLINE below handles the line */
+    }
   }
 
   int current_indent = s->indent_stack[s->stack_size - 1];

@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 141**
+> ### **NEXT FREE: 142**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6305,7 +6305,7 @@ datum. A bare `#f`, a fallback, and a raise are each disqualified independently
 
 ---
 
-### 140. 🔄 HALF FIXED (`c809c5d0`) — `let` bound only the first name in two shapes; the BRACKET form is repaired, the ALIGNED BLOCK remains
+### 140. ✅ FIXED — `let` bound only the first name in two shapes; bracket at `c809c5d0`, aligned block at TSG T2 P1+P2 (LET_OPEN/LET_ALIGN scanner tokens)
 
 Filed 2026-08-15 from an owner report (`foray.prologos:136-137`: "`x` is coloured
 as a parameter, but `z` is not"). Measured by rendered FACE, which is what the
@@ -6315,7 +6315,7 @@ user actually sees:
 |---|---|
 | sibling chain (`let y 4` / `let z 5`) | ✅ both |
 | nested shorthand (`let y 4` / indented `let z 5`) | ✅ both |
-| **aligned block** (`let y 4` / `    z 5`) | ❌ **first only — STILL OPEN** |
+| ~~aligned block~~ (`let y 4` / `    z 5`) | ✅ **FIXED — TSG T2** |
 | ~~bracket form~~ (`let [y 4 z 5]`) | ✅ **FIXED `c809c5d0`** |
 
 Both broken shapes are **documented canonical syntax** in
@@ -6605,3 +6605,36 @@ Output: a table of word × position × grammar-node — exactly what 137 needs t
 scope its rules. Until then the query keeps matching by name, and the mispaint
 137 records stands.
 
+
+
+---
+
+<a id="d141"></a>
+### 141. ⬜ `match` (and friends?) AS A BINDING VALUE never forms a `match_expr` — the arms leak into the enclosing form, at ONE error
+
+Filed 2026-08-15 from TSG T2's pinned-shape battery. The pin "aligned block with
+a multi-line `match` value" failed, and isolation showed the failure has
+NOTHING to do with alignment:
+
+```
+defn f [a]
+  let k : Int := match a       <- `match a` parses as APPLICATION(match, a)
+                   | 1 -> 10   <- this arm leaks out as a defn_arm of f
+                   | m -> m
+    [+ k a]
+```
+
+Measured (2026-08-15, post-`c2dedd72` grammar): identical E1 / 0 `match_expr`
+with and without an aligned continuation binding; `match` in BODY position
+parses fine (E0, 1 `match_expr`). The compiler accepts the annotated form at 0
+errors (`prologos-syntax.md` documents it, with the type annotation required),
+so the grammar is wrong relative to the compiler.
+
+**Scope note**: probably not `match`-specific — any layout-armed expression in
+VALUE position (`match`, possibly `if`/`fio` arms) may share the gap. Census
+before fixing.
+
+**Why deferred rather than fixed in TSG T2**: it is upstream of the aligned
+block, pre-existing, and the aligned machinery behaves identically on it
+(adds no errors, invents nothing). Folding it in would have made the A/B
+verdict unattributable.
