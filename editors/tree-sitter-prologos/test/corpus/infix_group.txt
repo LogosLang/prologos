@@ -1,0 +1,269 @@
+================================================================
+infix escape group, basic — .( a op b )
+================================================================
+
+def r := .(3/4 + 10/8)
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (def_form
+      (identifier)
+      (expression
+        (atom
+          (infix_group
+            (expression
+              (application
+                (expression
+                  (application
+                    (expression
+                      (atom
+                        (rat_literal)))
+                    (expression
+                      (atom
+                        (operator)))))
+                (expression
+                  (atom
+                    (rat_literal)))))))))))
+
+================================================================
+infix escape group, bare comparison — the scanner decides < is an operator
+================================================================
+
+def t := .(3 < 5)
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (def_form
+      (identifier)
+      (expression
+        (atom
+          (infix_group
+            (expression
+              (atom
+                (number)))
+            (operator)
+            (expression
+              (atom
+                (number)))))))))
+
+================================================================
+infix escape group, two-char comparisons
+================================================================
+
+def u := .( 5 <= 5 )
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (def_form
+      (identifier)
+      (expression
+        (atom
+          (infix_group
+            (expression
+              (atom
+                (number)))
+            (operator)
+            (expression
+              (atom
+                (number)))))))))
+
+================================================================
+infix escape group, nested parens
+================================================================
+
+def v := .(((3.13 + 1.0) * 10) - 41.3)
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (def_form
+      (identifier)
+      (expression
+        (atom
+          (infix_group
+            (expression
+              (application
+                (expression
+                  (application
+                    (expression
+                      (paren_expr
+                        (expression
+                          (application
+                            (expression
+                              (application
+                                (expression
+                                  (paren_expr
+                                    (expression
+                                      (application
+                                        (expression
+                                          (application
+                                            (expression
+                                              (atom
+                                                (number)))
+                                            (expression
+                                              (atom
+                                                (operator)))))
+                                        (expression
+                                          (atom
+                                            (number)))))))
+                                (expression
+                                  (atom
+                                    (operator)))))
+                            (expression
+                              (atom
+                                (number)))))))
+                    (expression
+                      (atom
+                        (operator)))))
+                (expression
+                  (atom
+                    (number)))))))))))
+
+================================================================
+infix escape group as a let-block BODY — the shape that unmasked it
+================================================================
+
+defn f [x:Int] : Int
+  let a 3
+      b 4
+    .([g a b] + x)
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (defn_form
+      (identifier)
+      (param_list
+        (typed_param_or_bare
+          (typed_param
+            (identifier)
+            (identifier))))
+      (type_expr
+        (identifier))
+      (block_body
+        (expression
+          (let_expr
+            (let_binding
+              (typed_param_or_bare
+                (bare_param
+                  (identifier)))
+              (expression
+                (atom
+                  (number))))
+            (let_binding
+              (typed_param_or_bare
+                (bare_param
+                  (identifier)))
+              (expression
+                (application
+                  (expression
+                    (atom
+                      (number)))
+                  (expression
+                    (atom
+                      (infix_group
+                        (expression
+                          (application
+                            (expression
+                              (application
+                                (expression
+                                  (grouped_expr
+                                    (expression
+                                      (application
+                                        (expression
+                                          (application
+                                            (expression
+                                              (atom
+                                                (identifier)))
+                                            (expression
+                                              (atom
+                                                (identifier)))))
+                                        (expression
+                                          (atom
+                                            (identifier)))))))
+                                (expression
+                                  (atom
+                                    (operator)))))
+                            (expression
+                              (atom
+                                (identifier)))))))))))))))))
+
+================================================================
+infix escape group as a paren-fn BODY
+================================================================
+
+def r := [map Int Int (fn [x : Int] .(x * x)) [int-range 1 6]]
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (def_form
+      (identifier)
+      (expression
+        (grouped_expr
+          (expression
+            (application
+              (expression
+                (application
+                  (expression
+                    (application
+                      (expression
+                        (application
+                          (expression
+                            (atom
+                              (identifier)))
+                          (expression
+                            (atom
+                              (identifier)))))
+                      (expression
+                        (atom
+                          (identifier)))))
+                  (expression
+                    (paren_expr
+                      (expression
+                        (fn_expr
+                          (fn_param
+                            (param_list
+                              (typed_param_or_bare
+                                (typed_param
+                                  (identifier)
+                                  (identifier)))))
+                          (fn_body
+                            (infix_group
+                              (expression
+                                (application
+                                  (expression
+                                    (application
+                                      (expression
+                                        (atom
+                                          (identifier)))
+                                      (expression
+                                        (atom
+                                          (operator)))))
+                                  (expression
+                                    (atom
+                                      (identifier)))))))))))))
+              (expression
+                (grouped_expr
+                  (expression
+                    (application
+                      (expression
+                        (application
+                          (expression
+                            (atom
+                              (identifier)))
+                          (expression
+                            (atom
+                              (number)))))
+                      (expression
+                        (atom
+                          (number))))))))))))))

@@ -33,6 +33,7 @@ module.exports = grammar({
     $._let_open,
     $._let_align,
     $._kv_key,
+    $._infix_cmp,
   ],
 
   extras: $ => [
@@ -65,6 +66,7 @@ module.exports = grammar({
     // At `let x : Int • ->` the parser cannot yet know which it is in, so it
     // carries both and settles on the tokens that actually follow.
     [$._param_type, $.type_expr],
+
   ],
 
   rules: {
@@ -945,6 +947,20 @@ module.exports = grammar({
       $.grouped_expr,
       $.paren_expr,
       $.identifier,
+      // `.( … )` is a legal fn body — `(fn [x : Int] .(x * x))` is corpus
+      // spelling; without this the parser INVENTED an identifier for the
+      // body and dumped the group outside as an application argument.
+      $.infix_group,
+    ),
+
+    // `.( … )` — the INFIX ESCAPE group, named so fn_body can share it with
+    // atom.  See the comment at its atom usage for the full story.
+    infix_group: $ => seq(
+      alias(token(seq('.', '(')), '.('),
+      repeat(choice($.expression,
+                    alias($._infix_cmp, $.operator),
+                    alias(choice('==', '!='), $.operator))),
+      ')',
     ),
 
     // Let expression: (let name := expr body) or let name := expr (WS)
@@ -1221,6 +1237,23 @@ module.exports = grammar({
     )),
 
     atom: $ => choice(
+      // `.( … )` — the INFIX ESCAPE group (`.(3/4 + 10/8)`, `.(x - y)`,
+      // `.([square x] + [square y])`).  Compiler-valid at 0 errors; the
+      // grammar had NO rule for it, so every site was an ERROR region — and
+      // the VS Code provider deliberately yields error regions to TextMate,
+      // which is how `let` binders near one lost their semantic paint while
+      // identical binders in clean regions kept it (owner report,
+      // 2026-08-15: "toplevel vs defn" — really healthy-tree vs error-zone).
+      // The token is the GLUED `.(` — corpus writes it glued, always — so it
+      // cannot collide with `nominal_step`'s path-context immediate dot.
+      // The interior rides the ordinary expression grammar: operators are
+      // atoms, so infix spellings glom into one application, which is
+      // lenient and exactly enough for an editor.
+      // The interior mixes expressions with COMPARISON operators, and the
+      // bare `<' / `>' would otherwise lex as ANGLE-GROUP delimiters — the
+      // corpus's `.(3 < 5)` had the parser inventing a closing `>' (MISSING
+      // rose while ERROR fell, the exact signal the A/B refuses to net).
+      $.infix_group,
       $.identifier,
       $.nat_literal,
       $.rat_literal,

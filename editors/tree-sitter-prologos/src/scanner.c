@@ -34,6 +34,7 @@ enum TokenType {
   LET_OPEN,
   LET_ALIGN,
   KV_KEY,
+  INFIX_CMP,
 };
 
 /* Scanner state */
@@ -456,6 +457,30 @@ bool tree_sitter_prologos_external_scanner_scan(
     /* Fall through — the whitespace consumed above is what every later
      * branch skips first anyway (the LET_OPEN lesson: never return false
      * from a shared position). */
+  }
+
+  /* --- INFIX_CMP: `<' `<=' `>' `>=' inside a `.( ... )' infix group.
+   *
+   * The bare `<' is a SHARED TERMINAL with the angle-group open, and the
+   * expression grammar is greedy: application absorbs `< 5' as an angle
+   * argument and error recovery invents the closing `>' (measured: MISSING
+   * rose at every `.(3 < 5)' site).  External tokens PREEMPT the internal
+   * lexer, so where the grammar declares this token valid — operand position
+   * inside a dot group, and nowhere else — a comparison char is an OPERATOR
+   * by construction and the angle reading never starts.  Stateless. */
+  if (valid_symbols[INFIX_CMP] && !in_error_recovery) {
+    while (!lexer->eof(lexer) &&
+           (lexer->lookahead == ' ' || lexer->lookahead == '\t' ||
+            lexer->lookahead == '\r')) {
+      skip_ch(lexer);
+    }
+    if (lexer->lookahead == '<' || lexer->lookahead == '>') {
+      advance_ch(lexer);
+      if (lexer->lookahead == '=') advance_ch(lexer);
+      lexer->mark_end(lexer);
+      lexer->result_symbol = INFIX_CMP;
+      return true;
+    }
   }
 
   /* --- ARM_LPAREN: a `(` that opens a MATCH ARM, not a paren expression.

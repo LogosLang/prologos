@@ -3330,6 +3330,79 @@
         {
           "type": "SYMBOL",
           "name": "identifier"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "infix_group"
+        }
+      ]
+    },
+    "infix_group": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "TOKEN",
+            "content": {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "STRING",
+                  "value": "."
+                },
+                {
+                  "type": "STRING",
+                  "value": "("
+                }
+              ]
+            }
+          },
+          "named": false,
+          "value": ".("
+        },
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "expression"
+              },
+              {
+                "type": "ALIAS",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "_infix_cmp"
+                },
+                "named": true,
+                "value": "operator"
+              },
+              {
+                "type": "ALIAS",
+                "content": {
+                  "type": "CHOICE",
+                  "members": [
+                    {
+                      "type": "STRING",
+                      "value": "=="
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "!="
+                    }
+                  ]
+                },
+                "named": true,
+                "value": "operator"
+              }
+            ]
+          }
+        },
+        {
+          "type": "STRING",
+          "value": ")"
         }
       ]
     },
@@ -4029,6 +4102,10 @@
       "members": [
         {
           "type": "SYMBOL",
+          "name": "infix_group"
+        },
+        {
+          "type": "SYMBOL",
           "name": "identifier"
         },
         {
@@ -4455,6 +4532,10 @@
     {
       "type": "SYMBOL",
       "name": "_kv_key"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_infix_cmp"
     }
   ],
   "inline": [],

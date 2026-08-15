@@ -122,6 +122,10 @@
           "named": true
         },
         {
+          "type": "infix_group",
+          "named": true
+        },
+        {
           "type": "keyword_literal",
           "named": true
         },
@@ -946,6 +950,10 @@
           "named": true
         },
         {
+          "type": "infix_group",
+          "named": true
+        },
+        {
           "type": "paren_expr",
           "named": true
         }
@@ -1253,6 +1261,25 @@
       "types": [
         {
           "type": "expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "infix_group",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "operator",
           "named": true
         }
       ]
@@ -2868,6 +2895,10 @@
   },
   {
     "type": ".",
+    "named": false
+  },
+  {
+    "type": ".(",
     "named": false
   },
   {
