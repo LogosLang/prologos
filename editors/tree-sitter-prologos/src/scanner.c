@@ -33,6 +33,7 @@ enum TokenType {
   ARM_LPAREN,
   LET_OPEN,
   LET_ALIGN,
+  KV_KEY,
 };
 
 /* Scanner state */
@@ -375,6 +376,86 @@ bool tree_sitter_prologos_external_scanner_scan(
      *
      * Safe for the same reason it is safe there: the only thing consumed above
      * is horizontal whitespace, which the layout path skips first anyway. */
+  }
+
+  /* --- KV_KEY: a zero-width marker before a keyword literal that OPENS A
+   *     LAYOUT-MAP ENTRY, as opposed to a keyword that IS a value.
+   *
+   * The compiler's contract (census, 2026-08-15): an entry REQUIRES a
+   * payload — a same-line value, or an INDENT block below.  A bare `:foo`
+   * body is the VALUE :foo (`x : Keyword`), so `kv_entry` vs `atom` at a
+   * keyword_literal is undecidable in the LR state — the payload sits after
+   * the keyword — but decidable HERE with lookahead, which makes the branch
+   * an ordinary shift.  Emitting KV_KEY also severs the application-glom:
+   * an expression value cannot absorb the next entry's keyword, because that
+   * keyword now arrives behind a token application cannot consume.
+   *
+   * Stateless: nothing to serialize. */
+  if (valid_symbols[KV_KEY] && !in_error_recovery) {
+    lexer->mark_end(lexer);   /* zero-width, wherever the peek wanders */
+
+    while (!lexer->eof(lexer) &&
+           (lexer->lookahead == ' ' || lexer->lookahead == '\t' ||
+            lexer->lookahead == '\r')) {
+      skip_ch(lexer);
+    }
+
+    if (lexer->lookahead == ':') {
+      int key_col = (int)lexer->get_column(lexer);
+      advance_ch(lexer);
+      /* Must be a KEYWORD (`:name`), not `:=` / `:0` / a lone colon. */
+      if ((lexer->lookahead >= 'a' && lexer->lookahead <= 'z') ||
+          (lexer->lookahead >= 'A' && lexer->lookahead <= 'Z') ||
+          lexer->lookahead == '_') {
+        /* Consume the keyword body (the grammar's own charset). */
+        while (!lexer->eof(lexer) &&
+               ((lexer->lookahead >= 'a' && lexer->lookahead <= 'z') ||
+                (lexer->lookahead >= 'A' && lexer->lookahead <= 'Z') ||
+                (lexer->lookahead >= '0' && lexer->lookahead <= '9') ||
+                lexer->lookahead == '_' || lexer->lookahead == '?' ||
+                lexer->lookahead == '!' || lexer->lookahead == '-' ||
+                lexer->lookahead == '\'')) {
+          advance_ch(lexer);
+        }
+        while (!lexer->eof(lexer) &&
+               (lexer->lookahead == ' ' || lexer->lookahead == '\t' ||
+                lexer->lookahead == '\r')) {
+          skip_ch(lexer);
+        }
+        if (!lexer->eof(lexer) && lexer->lookahead != '\n' &&
+            lexer->lookahead != ';') {
+          /* Same-line payload — this keyword is a KEY. */
+          lexer->result_symbol = KV_KEY;
+          return true;
+        }
+        /* No same-line payload: a key iff an INDENT BLOCK follows.  Peek the
+         * next real line's indent (skipping blanks and comment-only lines,
+         * as the layout path does) and compare against the key's column. */
+        {
+          int indent = 0;
+          bool found_line = false;
+          while (!lexer->eof(lexer) && !found_line) {
+            if (lexer->lookahead == '\n') { indent = 0; advance_ch(lexer); }
+            else if (lexer->lookahead == ' ') { indent++; advance_ch(lexer); }
+            else if (lexer->lookahead == '\t' || lexer->lookahead == '\r') {
+              advance_ch(lexer);
+            } else if (lexer->lookahead == ';') {
+              while (!lexer->eof(lexer) && lexer->lookahead != '\n')
+                advance_ch(lexer);
+            } else {
+              found_line = true;
+            }
+          }
+          if (found_line && indent > key_col) {
+            lexer->result_symbol = KV_KEY;
+            return true;
+          }
+        }
+      }
+    }
+    /* Fall through — the whitespace consumed above is what every later
+     * branch skips first anyway (the LET_OPEN lesson: never return false
+     * from a shared position). */
   }
 
   /* --- ARM_LPAREN: a `(` that opens a MATCH ARM, not a paren expression.

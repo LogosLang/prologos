@@ -32,6 +32,7 @@ module.exports = grammar({
     // APPEND ONLY — the correspondence with scanner.c's enum is POSITIONAL.
     $._let_open,
     $._let_align,
+    $._kv_key,
   ],
 
   extras: $ => [
@@ -686,9 +687,71 @@ module.exports = grammar({
     // ============================================================
 
     block_body: $ => repeat1(choice(
+      $.layout_map,
       $.match_expr,
       $._expression_line,
       $._newline,
+    )),
+
+    // ============================================================
+    // Layout map — DEFERRED 142
+    // ============================================================
+    //
+    // The indentation kv form (`def business` + `:name "JMZI"` lines).  Until
+    // 2026-08-15 this had NO grammar structure: it parsed as ONE nested
+    // application glom of keyword atoms, at E0 — so no query could tell a KEY
+    // from a VALUE, and every consumer saw a silently wrong tree.
+    //
+    // The compiler (flatten-ws-kv-pairs) is the authority, and the census
+    // pinned the shape:
+    //   · one entry per LINE (`:x 1 :y 2` on one line: REJECTED)
+    //   · an entry REQUIRES a payload — same-line value or INDENT block; a
+    //     bare `:foo` body is a keyword VALUE (`x : Keyword`), and a
+    //     payload-less key with siblings is an ERROR.  Payload-ness is what
+    //     separates entry from bare-keyword expression, and it is visible in
+    //     ONE token of lookahead (NEWLINE/DEDENT vs anything else).
+    //   · `-` items: `- :n "a"` + siblings at the KEY's column; the dash's
+    //     2-column offset means the machinery sees a plain INDENT block —
+    //     UNLIKE the aligned let, no column stack is needed, every nesting
+    //     level here is a real indent-stack level.  Scalar items (`- 1`) are
+    //     one value on the dash line.
+    //   · NOT legal as a `let` block value (compiler: "let block binding
+    //     must be `name value`") — so the rule lives in block_body only.
+    // No `_newline' alternative of its own: each kv_entry consumes its
+    // trailing newline, so a blank line between entries is block_body's — the
+    // overlap was an unresolvable block_body/layout_map conflict otherwise.
+    layout_map: $ => prec.right(repeat1($.kv_entry)),
+
+    kv_entry: $ => prec.right(seq(
+      // The scanner decides key-vs-value by PAYLOAD lookahead and the entry
+      // starts with a token `atom` cannot consume — the kv_entry/atom
+      // conflict dissolves, and an expression value cannot glom the next
+      // entry's keyword.
+      $._kv_key,
+      field('key', alias($.keyword_literal, $.map_key)),
+      field('value', choice(
+        $.expression,
+        $._kv_block,
+      )),
+      optional($._newline),
+    )),
+
+    // A nested payload: either a deeper map, or a run of `-` items.
+    _kv_block: $ => seq(
+      $._indent,
+      choice($.layout_map, repeat1(choice($.kv_item, $._newline))),
+      $._dedent,
+    ),
+
+    // `- :n "a"` + sibling entries arrive as an INDENT block relative to the
+    // dash line; `- 1` is a scalar item.
+    kv_item: $ => prec.right(seq(
+      '-',
+      choice(
+        seq($.kv_entry, optional(seq($._indent, $.layout_map, $._dedent))),
+        $.expression,
+      ),
+      optional($._newline),
     )),
 
     _expression_line: $ => $.expression,

@@ -342,3 +342,24 @@
 114	11	operator	:=
 114	16	number	1
 114	18	number	2
+116	0	comment	;; --- LAYOUT map (DEFERRED 142): keys are @property map_key nodes; a keyword
+117	0	comment	;;     VALUE (:active) stays a keyword_literal with symbol chrome; `-` items ---
+118	0	keyword	def
+118	4	function	biz
+118	4	variable	biz
+119	2	property	:info
+120	4	property	:name
+120	10	string	"J"
+121	4	property	:status
+121	12	string.special.symbol	:active
+122	2	property	:items
+123	4	operator	-
+123	6	property	:n
+123	9	string	"a"
+124	6	property	:v
+124	9	number	1
+125	4	operator	-
+125	6	property	:n
+125	9	string	"b"
+126	6	property	:v
+126	9	number	2

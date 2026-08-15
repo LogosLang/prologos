@@ -208,6 +208,10 @@
           "named": true
         },
         {
+          "type": "layout_map",
+          "named": true
+        },
+        {
           "type": "match_expr",
           "named": true
         }
@@ -1301,6 +1305,63 @@
     }
   },
   {
+    "type": "kv_entry",
+    "named": true,
+    "fields": {
+      "key": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "map_key",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          },
+          {
+            "type": "kv_item",
+            "named": true
+          },
+          {
+            "type": "layout_map",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "kv_item",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "kv_entry",
+          "named": true
+        },
+        {
+          "type": "layout_map",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "law_entry",
     "named": true,
     "fields": {},
@@ -1318,6 +1379,21 @@
         },
         {
           "type": "keyword_literal",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "layout_map",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "kv_entry",
           "named": true
         }
       ]
@@ -3001,6 +3077,10 @@
   },
   {
     "type": "logic_variable",
+    "named": true
+  },
+  {
+    "type": "map_key",
     "named": true
   },
   {

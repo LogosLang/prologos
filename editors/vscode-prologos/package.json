@@ -101,9 +101,6 @@
           ],
           "variable.declaration": [
             "variable.other.definition.prologos"
-          ],
-          "prologosKeyword": [
-            "constant.other.symbol.prologos"
           ]
         }
       }
@@ -212,20 +209,6 @@
           "type": "string",
           "default": "",
           "description": "Path to the Prologos LSP server (server.rkt). Auto-detected if empty."
-        }
-      }
-    },
-    "semanticTokenTypes": [
-      {
-        "id": "prologosKeyword",
-        "superType": "enumMember",
-        "description": "Prologos keyword literal (:foo) \u2014 keys and keyword values"
-      }
-    ],
-    "configurationDefaults": {
-      "editor.semanticTokenColorCustomizations": {
-        "rules": {
-          "prologosKeyword": "#C586C0"
         }
       }
     }

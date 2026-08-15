@@ -61,17 +61,13 @@ const CAPTURE_MAP = new Map<string, [string, string[]]>([
   // `string.special.symbol' -> `string.special' -> `string' fallback, which
   // would have silently recoloured every keyword literal as a string: the
   // rename is a vocabulary change, and the colour decision belongs to EHP P3.
-  // Symbols carry a CUSTOM token type with an explicit default colour
-  // (package.json configurationDefaults), and that is the point: THREE
-  // conventional scopes were measured in the owner's themes — constant.language,
-  // entity.other.attribute-name, constant.other — and every one rendered in the
-  // same numeric blue as types and numbers, across themes.  No scope choice can
-  // make keywords distinctive there; scope-mapping delegates the decision to
-  // the theme, and these themes decline it.  A custom token + default rule is
-  // the one route that bypasses the theme's scope table (user-overridable, and
-  // superType enumMember keeps a semantic fallback if the rule is cleared).
-  // This is what Emacs does structurally: keywords own a FACE.
-  ['string.special.symbol', ['prologosKeyword', []]],
+  // A keyword VALUE is a constant-family thing, and stays one.  The 2026-08-15
+  // chrome chase ended when DEFERRED 142 gave layout-map KEYS real structure:
+  // keys are @property nodes now, so the key/value distinction lives in the
+  // GRAMMAR and flows through the shared pipeline — the shipped colour
+  // override (custom token + configurationDefaults) was retired the same day,
+  // per the owner: an extension must not paint over other people's themes.
+  ['string.special.symbol', ['variable', ['readonly']]],
   ['variable.logic', ['variable', []]],
   // An unsolved hole is not an ordinary variable — it is the one thing in the
   // buffer that WANTS attention.  Emacs has said so since the start
@@ -87,7 +83,7 @@ export const LEGEND = new vscode.SemanticTokensLegend(
   // Every entry here is produced by CAPTURE_MAP above; parity/check-tokens.mjs
   // gates that in both directions.  `macro' and `label' were removed in EHP P3:
   // nothing emitted them and captures.md never declared them.
-  ['keyword', 'function', 'variable', 'parameter', 'type', 'enumMember', 'prologosKeyword',
+  ['keyword', 'function', 'variable', 'parameter', 'type', 'enumMember',
    'number', 'string', 'comment', 'operator', 'namespace', 'property',
    'decorator'],
   ['declaration', 'readonly', 'defaultLibrary', 'unsolved'],

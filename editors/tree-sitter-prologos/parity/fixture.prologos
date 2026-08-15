@@ -112,3 +112,15 @@ def folded := [reduce + 0 '[1 2 3]]
 
 ;; --- quote ---
 def quoted := '[1 2]
+
+;; --- LAYOUT map (DEFERRED 142): keys are @property map_key nodes; a keyword
+;;     VALUE (:active) stays a keyword_literal with symbol chrome; `-` items ---
+def biz
+  :info
+    :name "J"
+    :status :active
+  :items
+    - :n "a"
+      :v 1
+    - :n "b"
+      :v 2

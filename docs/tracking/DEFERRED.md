@@ -6643,7 +6643,7 @@ verdict unattributable.
 ---
 
 <a id="d142"></a>
-### 142. ⬜ THE LAYOUT MAP HAS NO GRAMMAR STRUCTURE — keys are unreachable by any query, and the tree is an application GLOM
+### 142. ✅ FIXED (same-day) — the layout map has real grammar structure; keys are `map_key` @property nodes, and the colour override this replaced is RETIRED
 
 Filed 2026-08-15 from the map-key chrome work. The layout form:
 
@@ -6670,9 +6670,20 @@ nests; `-` introduces list items), i.e. the contested-shape recipe again —
 scanner + column knowledge, sibling of the aligned-let work (TSG T2). Scope it
 as its own TSG track; census `-` list items and inline-brace mixing first.
 
-**Interim (2026-08-15, this commit)**: all keyword literals render in the
-default-paint family in VS Code, which the owner confirmed as the acceptable
-baseline (distinct from numerals). Per-key chrome waits on this entry.
+**CLOSED 2026-08-15, same day** (owner: "address DEFERRED 142 here"). The
+compiler census pinned the contract — one entry per line; an entry REQUIRES a
+payload (bare `:foo` is a keyword VALUE, `x : Keyword`); `-` items take
+sibling entries at the key's column; not legal as a `let` block value — and
+the construct turned out NOT to need the aligned-let column stack: the dash's
+2-column offset makes every nesting level a real indent-stack level. One
+zero-width scanner token (`KV_KEY`, stateless: emitted before a line-leading
+keyword iff a payload follows, by lookahead) both settles kv_entry-vs-atom and
+SEVERS the application glom, since a value expression cannot absorb a keyword
+that arrives behind a token application cannot consume. Keys flow through the
+shared @property pipeline in both consumers; the shipped colour override
+(custom token + configurationDefaults) was retired in the same commit — the
+owner's ruling: an extension must not paint over other people's themes.
+Pinned by `test/corpus/layout_map.txt` (5 cases) + the parity fixture.
 
 
 ---

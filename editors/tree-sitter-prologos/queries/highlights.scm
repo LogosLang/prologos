@@ -260,6 +260,13 @@
 ; precede the generic `(keyword_literal)` below: first match wins by FILE ORDER,
 ; not by specificity, so placing it after would silently never fire.
 (map_literal key: (keyword_literal) @property)
+; LAYOUT-map keys (DEFERRED 142): the same role through the same pipeline.
+; `map_key` is the aliased node the layout grammar gives a key, so the rule
+; needs no ordering protection from the generic keyword rules below — the
+; node type itself is distinct.  A keyword VALUE (`:status :active` — the
+; second one) stays `keyword_literal` and keeps symbol chrome.
+(map_key) @property
+(kv_item "-" @operator)
 ; Same rule, and it was VIOLATED here until EHP P3 (2026-08-15): these three sat
 ; ~20 lines BELOW the generic rule, under a "Constraints and metadata" heading,
 ; and were therefore vacuous — 158 of @attribute's 176 corpus occurrences (90%)

@@ -1,0 +1,159 @@
+================================================================
+layout map, basic kv block — keys are map_key nodes (DEFERRED 142)
+================================================================
+
+def p
+  :x 1
+  :y 2
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (def_form
+      (identifier)
+      (block_body
+        (layout_map
+          (kv_entry
+            (map_key)
+            (expression
+              (atom
+                (number))))
+          (kv_entry
+            (map_key)
+            (expression
+              (atom
+                (number)))))))))
+
+================================================================
+layout map, bare keyword body is a VALUE, not a key
+================================================================
+
+def x
+  :foo
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (def_form
+      (identifier)
+      (block_body
+        (expression
+          (atom
+            (keyword_literal)))))))
+
+================================================================
+layout map, nested blocks and a keyword VALUE
+================================================================
+
+def b
+  :info
+    :name "J"
+    :status :active
+  :agent
+    :type "i"
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (def_form
+      (identifier)
+      (block_body
+        (layout_map
+          (kv_entry
+            (map_key)
+            (layout_map
+              (kv_entry
+                (map_key)
+                (expression
+                  (atom
+                    (string))))
+              (kv_entry
+                (map_key)
+                (expression
+                  (atom
+                    (keyword_literal))))))
+          (kv_entry
+            (map_key)
+            (layout_map
+              (kv_entry
+                (map_key)
+                (expression
+                  (atom
+                    (string)))))))))))
+
+================================================================
+layout map, dash items with sibling entries
+================================================================
+
+def h
+  :items
+    - :n "a"
+      :v 1
+    - :n "b"
+      :v 2
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (def_form
+      (identifier)
+      (block_body
+        (layout_map
+          (kv_entry
+            (map_key)
+            (kv_item
+              (kv_entry
+                (map_key)
+                (expression
+                  (atom
+                    (string))))
+              (layout_map
+                (kv_entry
+                  (map_key)
+                  (expression
+                    (atom
+                      (number))))))
+            (kv_item
+              (kv_entry
+                (map_key)
+                (expression
+                  (atom
+                    (string))))
+              (layout_map
+                (kv_entry
+                  (map_key)
+                  (expression
+                    (atom
+                      (number))))))))))))
+
+================================================================
+layout map, scalar dash items
+================================================================
+
+def l
+  :items
+    - 1
+    - 2
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (def_form
+      (identifier)
+      (block_body
+        (layout_map
+          (kv_entry
+            (map_key)
+            (kv_item
+              (expression
+                (atom
+                  (number))))
+            (kv_item
+              (expression
+                (atom
+                  (number))))))))))
