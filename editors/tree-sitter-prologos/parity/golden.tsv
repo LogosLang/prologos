@@ -233,28 +233,66 @@
 84	44	variable	port
 84	50	property	version
 84	50	variable	version
-86	0	comment	;; --- typed hole (`??`, distinct from a `?x` logic variable) ---
-87	0	keyword	def
-87	4	function	hole
-87	4	variable	hole
-87	9	operator	:=
-87	12	variable.hole	??
-89	0	comment	;; --- operators as first-class values ---
+85	0	comment	;;     The `^-` COLLAPSE family (Q_T7) and the parent collapse `^..`
+86	0	comment	;;     (Q_T8). Could not be in the fixture until 2026-08-15 — the grammar
+87	0	comment	;;     could not parse them (DEFERRED 136) and they would have planted an
+88	0	comment	;;     ERROR node in a fixture required to parse clean. ---
+89	0	keyword	def
+89	4	function	collapsed
+89	4	variable	collapsed
+89	14	operator	:=
+89	17	variable	cfg
+89	21	property	server
+89	21	variable	server
+89	28	property	host
+89	28	variable	host
+89	32	operator	^-_
+89	36	property	database
+89	36	variable	database
+89	45	property	url
+89	45	variable	url
+89	48	operator	^-
+89	51	property	alpha
+89	51	variable	alpha
+89	57	property	beta
+89	57	variable	beta
+89	61	operator	^-gamma
+89	63	property	gamma
+89	63	variable	gamma
 90	0	keyword	def
-90	4	function	folded
-90	4	variable	folded
-90	11	operator	:=
-90	15	keyword	reduce
-90	15	variable	reduce
-90	22	operator	+
-90	24	number	0
-90	28	number	1
-90	30	number	2
-90	32	number	3
-92	0	comment	;; --- quote ---
+90	4	function	parented
+90	4	variable	parented
+90	13	operator	:=
+90	16	variable	cfg
+90	20	property	server
+90	20	variable	server
+90	27	property	ssl
+90	27	variable	ssl
+90	31	property	enabled
+90	31	variable	enabled
+90	38	operator	^..
+92	0	comment	;; --- typed hole (`??`, distinct from a `?x` logic variable) ---
 93	0	keyword	def
-93	4	function	quoted
-93	4	variable	quoted
-93	11	operator	:=
-93	16	number	1
-93	18	number	2
+93	4	function	hole
+93	4	variable	hole
+93	9	operator	:=
+93	12	variable.hole	??
+95	0	comment	;; --- operators as first-class values ---
+96	0	keyword	def
+96	4	function	folded
+96	4	variable	folded
+96	11	operator	:=
+96	15	keyword	reduce
+96	15	variable	reduce
+96	22	operator	+
+96	24	number	0
+96	28	number	1
+96	30	number	2
+96	32	number	3
+98	0	comment	;; --- quote ---
+99	0	keyword	def
+99	4	function	quoted
+99	4	variable	quoted
+99	11	operator	:=
+99	16	number	1
+99	18	number	2

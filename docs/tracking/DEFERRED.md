@@ -7529,7 +7529,7 @@ workflow transcript at
 
 ---
 
-### 136. ⬜ `key_op` CANNOT PARSE THE `^-` COLLAPSE FAMILY OR `^..` — landed language surface (CIU T6 D4.P3b) that the grammar never learned
+### 136. ✅ **DISCHARGED** (filed and fixed same day) `key_op` CANNOT PARSE THE `^-` COLLAPSE FAMILY OR `^..` — landed language surface (CIU T6 D4.P3b) that the grammar never learned
 
 Found by EHP T1 P4 re-checking catalogued issue #3, which points at
 `foray.prologos:712`:
@@ -7564,7 +7564,35 @@ TextMate and part does not. The asymmetry is the suppression boundary, not a
 brace rule.
 
 Corpus: `^-_` ×3 in `examples/2026-07-26-ciu-t6-path-selection.prologos`, plus
-`foray.prologos:712`. **Fix**: extend `key_op`'s continuation to
+`foray.prologos:712`. **FIXED 2026-08-15.** `key_op`'s continuation now spells the whole grammar —
+`..` (Q_T8) and `-`? · {ε | label | `_`} (Q_T7) — written out branch-by-branch
+rather than as nested optionals, so no alternative can match empty. All seven
+forms parse at 0 ERROR/MISSING, and `^a-b` (a rename with an internal dash) is
+unaffected.
+
+⭐⭐ **The census gate then caught a bug the fix EXPOSED — a `synth` field that
+had been dead since before this change.** The rename regex started `[a-zA-Z_]`,
+so it matched a bare `_` and won: `^_` parsed as a rename to a field literally
+called `_`, and `field('synth', …)` never matched. Invisible until DEFERRED 135
+started painting the rename identifier, at which point `_` came out `@property`
+and disagreed with TextMate's `keyword.operator.wildcard`. Regex tightened to
+`[a-zA-Z][…]*|_[…]+` so `_` alone is the synth marker while `_abc` is still a
+rename (longest match). **Third vacuous rule found in this arc.**
+
+⚠ **Corpus A/B against the committed grammar, per-file**: ERROR 2700 → 2693,
+MISSING 76 → 75, swallows 0 → 0, unparsed 1.3% → 1.3%. But ERROR-BYTES ROSE
+14586 → 14691 (+105), and that is **not** the documented count/bytes
+anti-correlation. Attributed: `foray.prologos` improved (bytes 1031 → 1022,
+missing 113 → 106) — that is the fix — while `collection-traits.prologos` (×2
+copies) and `sudoku-demo` moved the other way, **and none of those three files
+contains a `^`**. What fails in collection-traits is `fold`/`reduce`/`deftype`/
+`fmap`. It is ERROR-RECOVERY CHURN: adding alternatives perturbs the LR tables,
+so recovery takes different paths in files that were already broken.
+
+Ratchet tightened `max_missing` 76 → 75. Fixture gains the family and `^..`;
+golden 260 → 298. All six gates green.
+
+**Original fix note**: extend `key_op`'s continuation to
 `optional('-')` + the existing choice, and add `^..`. TSG work; re-measure with
 `check-corpus.sh` after.
 

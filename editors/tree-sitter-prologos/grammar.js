@@ -984,13 +984,47 @@ module.exports = grammar({
       $.number,
     ),
 
-    // `^` key operator: `k^` dissolve · `k^k'` rename · `p^_` synth.
+    // `^` key operator: `k^` dissolve · `k^k'` rename · `p^_` synth,
+    // plus the `-` COLLAPSE family (Q_T7) and the parent collapse `^..` (Q_T8).
     // The continuation is `token.immediate` too, which is what distinguishes
     // `a^b` (rename) from `a^ b` (dissolve, then a sibling branch).
+    //
+    // The full continuation grammar, per D4 Q_T7, is `-`? · {ε | label | `_`},
+    // plus `..`.  Until 2026-08-15 this rule implemented the MIDDLE of that and
+    // neither edge: the rename alternative must start with `[a-zA-Z_]`, so
+    // every `-` form was unparseable and `^..` had no alternative at all —
+    // `^-`, `^-_`, `^-label` and `^..` each produced an ERROR node while the
+    // COMPILER accepted them at 0 errors (DEFERRED 136).
+    //
+    // ⚠ The rename regex EXCLUDES a bare `_`. It used to start `[a-zA-Z_]`, so
+    // it matched `_` and won — which made `field('synth', …)` DEAD in the
+    // ORIGINAL rule too: `^_` parsed as a rename to a field literally called
+    // `_`. Surfaced 2026-08-15 only because DEFERRED 135 started painting the
+    // rename identifier, and the census then disagreed with TextMate over it.
+    // `_abc` is still a rename (longest match), `_` alone is the synth marker.
+    //
+    // Spelled out rather than nested-optional so no branch can match empty:
+    // `optional(seq(optional('-'), optional(...)))` is ambiguous with the outer
+    // `optional`, and the `-` branch here always consumes its `-`.
     key_op: $ => seq(
       token.immediate('^'),
       optional(choice(
-        field('rename', alias(token.immediate(/[a-zA-Z_][a-zA-Z0-9_?!-]*/), $.identifier)),
+        // Q_T8 — parent-key collapse.  `..`, NOT `.`: `a.b^.c` would read
+        // identically to the legitimate mid-path dissolve `a`·`b^`·`.c`, a
+        // silent one-space meaning flip between two well-typed forms.
+        field('parent', token.immediate('..')),
+        // Q_T7 — `^-` collapses the branch flat; the continuation is the same
+        // {ε | label | `_`} as without the dash.  ⚠ Eyes-open per Q_T7: after
+        // `^` a leading `-` IS the collapse marker, so a rename target that
+        // literally begins with `-` is unsupported by construction.
+        seq(
+          field('collapse', token.immediate('-')),
+          optional(choice(
+            field('rename', alias(token.immediate(/[a-zA-Z][a-zA-Z0-9_?!-]*|_[a-zA-Z0-9_?!-]+/), $.identifier)),
+            field('synth', token.immediate('_')),
+          )),
+        ),
+        field('rename', alias(token.immediate(/[a-zA-Z][a-zA-Z0-9_?!-]*|_[a-zA-Z0-9_?!-]+/), $.identifier)),
         field('synth', token.immediate('_')),
       )),
     ),

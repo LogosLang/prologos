@@ -1258,6 +1258,26 @@
     "type": "key_op",
     "named": true,
     "fields": {
+      "collapse": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "-",
+            "named": false
+          }
+        ]
+      },
+      "parent": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "..",
+            "named": false
+          }
+        ]
+      },
       "rename": {
         "multiple": false,
         "required": false,
@@ -2748,6 +2768,10 @@
   },
   {
     "type": ".",
+    "named": false
+  },
+  {
+    "type": "..",
     "named": false
   },
   {

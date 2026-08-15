@@ -82,6 +82,12 @@ defr twice [?a ?b]
 ;;     `^-` collapse family, which the grammar cannot parse (DEFERRED 136)
 ;;     and which would put an ERROR node in the fixture. ---
 def picked := cfg{server^.{ssl^.enabled^ssl port} version}
+;;     The `^-` COLLAPSE family (Q_T7) and the parent collapse `^..`
+;;     (Q_T8). Could not be in the fixture until 2026-08-15 — the grammar
+;;     could not parse them (DEFERRED 136) and they would have planted an
+;;     ERROR node in a fixture required to parse clean. ---
+def collapsed := cfg{server.host^-_ database.url^- alpha.beta^-gamma}
+def parented := cfg{server.ssl.enabled^..}
 
 ;; --- typed hole (`??`, distinct from a `?x` logic variable) ---
 def hole := ??

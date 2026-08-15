@@ -19,10 +19,23 @@ max_unparsed_pct=1.3
 # ERROR swallows everything inside it. Measured 2026-08-14 (§9.7): a change that
 # moved ERROR 3054 -> 2743 simultaneously pushed MISSING 74 -> 110, and only the
 # MISSING delta showed it.
-max_missing=76
+max_missing=75
 
 # Ratcheted 2026-08-14 by the comment-scanner fix (EHP P2): the scanner no
 # longer consumes comment-only lines as part of its lookahead token, so those
 # bytes are parsed rather than swallowed.  unparsed 1.6 -> 1.3, missing 77 -> 76.
 # ERROR COUNT ROSE 2689 -> 2700 in the same change, which is the documented
 # anti-correlation, not a regression: error-BYTES fell by 3607.
+
+# Ratcheted 2026-08-15 by the `^-` collapse family + `^..` landing in `key_op`
+# (DEFERRED 136): missing 76 -> 75, ERROR 2700 -> 2693.
+#
+# ⚠ ERROR-BYTES ROSE 14586 -> 14691 (+105) in the same change, and that is NOT
+# the documented count/bytes anti-correlation — it is ERROR-RECOVERY CHURN.
+# Attributed per-file by A/B against the committed grammar: foray.prologos
+# IMPROVED (bytes 1031 -> 1022, missing 113 -> 106) which is the fix itself,
+# while collection-traits.prologos (x2 copies) and sudoku-demo moved the other
+# way — and NONE of those three files contains a `^` at all. Adding alternatives
+# to a rule perturbs the LR tables, so recovery takes different paths in files
+# that are ALREADY broken; what fails in collection-traits is fold/reduce/
+# deftype/fmap, nothing this change touched. unparsed% and swallows unmoved.

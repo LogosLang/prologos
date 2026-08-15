@@ -3569,6 +3569,73 @@
               "members": [
                 {
                   "type": "FIELD",
+                  "name": "parent",
+                  "content": {
+                    "type": "IMMEDIATE_TOKEN",
+                    "content": {
+                      "type": "STRING",
+                      "value": ".."
+                    }
+                  }
+                },
+                {
+                  "type": "SEQ",
+                  "members": [
+                    {
+                      "type": "FIELD",
+                      "name": "collapse",
+                      "content": {
+                        "type": "IMMEDIATE_TOKEN",
+                        "content": {
+                          "type": "STRING",
+                          "value": "-"
+                        }
+                      }
+                    },
+                    {
+                      "type": "CHOICE",
+                      "members": [
+                        {
+                          "type": "CHOICE",
+                          "members": [
+                            {
+                              "type": "FIELD",
+                              "name": "rename",
+                              "content": {
+                                "type": "ALIAS",
+                                "content": {
+                                  "type": "IMMEDIATE_TOKEN",
+                                  "content": {
+                                    "type": "PATTERN",
+                                    "value": "[a-zA-Z][a-zA-Z0-9_?!-]*|_[a-zA-Z0-9_?!-]+"
+                                  }
+                                },
+                                "named": true,
+                                "value": "identifier"
+                              }
+                            },
+                            {
+                              "type": "FIELD",
+                              "name": "synth",
+                              "content": {
+                                "type": "IMMEDIATE_TOKEN",
+                                "content": {
+                                  "type": "STRING",
+                                  "value": "_"
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "BLANK"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "FIELD",
                   "name": "rename",
                   "content": {
                     "type": "ALIAS",
@@ -3576,7 +3643,7 @@
                       "type": "IMMEDIATE_TOKEN",
                       "content": {
                         "type": "PATTERN",
-                        "value": "[a-zA-Z_][a-zA-Z0-9_?!-]*"
+                        "value": "[a-zA-Z][a-zA-Z0-9_?!-]*|_[a-zA-Z0-9_?!-]+"
                       }
                     },
                     "named": true,
