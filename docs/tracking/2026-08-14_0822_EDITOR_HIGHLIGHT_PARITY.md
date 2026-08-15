@@ -582,13 +582,26 @@ using `vscode-textmate` + `vscode-oniguruma`, the engine VS Code actually runs,
 because TextMate patterns are Oniguruma and a JS-RegExp approximation would be
 wrong in exactly the way that then drives the D3 product decision.
 
-### ⭐⭐ `(comment) @comment` is UNREACHABLE, and both editors were covering for it
+### ⭐⭐ `(comment) @comment` covers ~1% of the library, and both editors were covering for it
 
-| file | `comment` nodes | `;;` lines |
-|---|---|---|
-| `core/eq.prologos` | **0** | 57 |
-| `data/list.prologos` | **0** | 116 |
-| `parity/fixture.prologos` | 1 | 24 |
+> ⚠ **CORRECTED 2026-08-14 (`ac3b97d4`).** This section first read
+> "`@comment` is UNREACHABLE / produces ZERO nodes in real files". That
+> generalized from a **two-file sample** — `eq.prologos` and `list.prologos`,
+> both genuinely at zero and both among the 47 of 73 library files that are.
+> The third gate measured the corpus: the rule fires **1394 times** and covers
+> **~1%** of library comment lines. The defect and its diagnosis stand; the
+> magnitude claim was wrong, and it was wrong in the direction that overstates.
+
+| area | captures | `;` lines | coverage |
+|---|---|---|---|
+| `lib` (real WS Prologos) | 47 | 4064 | **1%** |
+| `examples` | 1346 | 11631 | 12% |
+| `editors/emacs/test` | 1 | 54 | 2% |
+| **total** | 1394 | 15749 | **9%** |
+
+
+Per-file zeros are common — `core/eq.prologos` 0 of 57, `data/list.prologos`
+0 of 116 — but they are not universal, which is what the original claim missed.
 
 The grammar declares comments correctly — `extras` at `grammar.js:34`, the rule
 at `:1142`. The **external scanner** consumes them first: `src/scanner.c` (~:399)
@@ -625,3 +638,16 @@ Reducing TextMate before the scanner is fixed would delete the only thing
 painting comments in VS Code. **P2 is therefore blocked on a TSG-side scanner
 fix**, and D3 should not be ruled on the current census, because the biggest
 number in it is an artifact of a defect rather than a real division of labour.
+
+### ⚠ The third gate does not catch this either (added `ac3b97d4`)
+
+`check-reachability.sh` asks whether a capture ever fires. `@comment` **passes**
+it, with 1455 corpus hits, while being ~99% broken in the library. **"Fires
+somewhere" is a floor, not a health check** — a capture can be 99% broken and
+read as healthy.
+
+Where an independent expected count exists, measure COVERAGE instead:
+`check-reachability.sh --coverage` does that for comments (`;`-lines being a
+cheap ground truth). That is the instrument the scanner fix moves, per area,
+before and after. Reachability keeps its value for the *completely* dead case —
+it just never had the resolution for this one.
