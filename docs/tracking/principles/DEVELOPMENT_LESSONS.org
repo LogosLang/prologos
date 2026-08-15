@@ -1931,3 +1931,75 @@ had accumulated across CIU T6 D4 (P1a, P3b, P4c-4a) and this arc with **zero**
 entries in either the ambient rules tier or this document — the exact
 "lesson lives only in the dailies" failure =workflow.md= names. Ambient one-liner:
 =.claude/rules/pipeline.md= § "A Raise on the Parse/Expansion Path".
+
+** Fail-Open: A Mechanism That Never Fires Is Indistinguishable From One That Works
+
+*The lesson*: a guard, gate, flag, registration or claim that is ABSENT or INERT
+produces **no output** — and no output is also what correct operation produces.
+The healthy state and the broken state are indistinguishable by observation. Not
+merely quiet: *identical*. A test that passes because it asserts nothing looks
+exactly like a test that passes because the code is right. Hooks that never run
+print nothing, and hooks that run clean also print nothing.
+
+*Why inspection cannot find it*: the instinct on suspecting a fault is to look
+harder at the mechanism. Looking harder cannot separate these two states, because
+they have the same signature. Only an EXPERIMENT can — specifically one that
+makes the mechanism FAIL. If you have never seen it report a problem, you do not
+know that it can.
+
+*Distinct from its two neighbours in this file*, and the distinction is the whole
+point:
+
+- "Validated Is Not Deployed" — the mechanism EXISTS and is not the default.
+- "Belt-and-Suspenders Masks Bugs" — TWO mechanisms, one masking the other's bug.
+- *This one* — the mechanism does not exist, or exists and NEVER FIRES.
+
+*Nine instances, across git config, agent tooling, an editor extension, a parser,
+a query file, an elisp guard, a cache flag and a bench flag*:
+
+| # | instance | what was absent or inert | how it presented |
+|---+----------+--------------------------+------------------|
+| 1 | =core.hooksPath= pointed at the pre-move directory | git ran NO hooks for weeks | the paren-balance pre-commit gate was silently inert; commits looked normal |
+| 2 | =grounding-audit.js= opened every agent prompt with a repo path that did not exist | the anchor | agents fell back to cwd and reported normally |
+| 3 | VS Code =activate()= returned early when the LSP server was not found | every interactive command's registration | highlighting kept working, because a grammar is declarative and needs no activation — so the broken state LOOKED like the working one |
+| 4 | the tree-sitter grammar was five months stale | nothing — the parser worked, it described an older language | tree-sitter RECOVERS: it emits ERROR nodes and continues. 13% of files parsed clean and nothing reported a problem |
+| 5 | =parity/check-parity.sh= read the REPO copy of =highlights.scm= for both consumers | the check itself | it could not see the extension's own copy going stale, BY CONSTRUCTION |
+| 6 | three of =@attribute='s four query rules sat below a generic rule | those three rules | ~90% of its spans mispainted while =check-reachability= stayed GREEN, because the fourth rule fired |
+| 7 | =prologos-ts--translate-regexp= checked =\d= only OUTSIDE a character class | half the guard | =[\d]= translated silently wrong. Found by READING THE CONTRACT, not by any failure |
+| 8 | =--no-pnet-cache= was a NO-OP (the worker acted on env ="1"=, the parameter defaulted =#t=) | the flag | it "ruled out" the cache while the cache was in play — a null result used as EXONERATION |
+| 9 | =bench-ab --ref= was never implemented, while =workflow.md= instructed its use | the flag | the documented default A/B path silently measured IDENTICAL CODE TWICE and reported the difference as a result |
+
+Instances 8 and 9 predate the arc that produced 1–7, were documented
+independently, and were not filed as instances of anything. That is what makes
+this more than one arc's artifact.
+
+*The tell*: any sentence of the form "X ruled out Y", or "the gate is green",
+where you have never seen X report a problem. A null result is only evidence if
+the instrument can produce a non-null one.
+
+*The countermeasure, validated in-arc*: build the instrument, **prove it can fail
+on purpose**, state what it CANNOT see, and make a PASS state its own scope.
+Applied at EHP T1 P5 it caught a false contract in a shipped guard; applied at P6
+it caught two wrong paths in a draft contributor document, either of which would
+have sent a contributor to a file that does not exist.
+
+*⭐ The meta-lesson, and the reason this was promoted*: three LOCAL forms of the
+same countermeasure were derived independently before the general form was
+written down —
+
+1. =testing.md=: "if a cache-disabling flag is load-bearing for a diagnosis,
+   verify it actually flips the parameter" (from instance 8).
+2. =workflow.md=: "worktree-pinning is not the safer option, it is the ONLY one"
+   (from instance 9).
+3. =tree-sitter-grammar.md=: the five-clause instrument rule (from 1–7).
+
+Three subsystems, three months apart, same countermeasure, no cross-reference.
+**A lesson being re-derived is a lesson that was promoted too narrowly.** The
+count was not what earned promotion here — the re-derivation was.
+
+*Honest scope note*: seven of the nine come from a single arc in which the author
+was already primed to see this shape, so the count should be read with that
+discount. The two independent pre-arc instances are what carry the argument.
+
+*Origin*: promoted 2026-08-14 at EHP T1.close, after the arc's PIR-lite (§20 of
+=2026-08-14_0822_EDITOR_HIGHLIGHT_PARITY.md=) found the pattern at Q16.
