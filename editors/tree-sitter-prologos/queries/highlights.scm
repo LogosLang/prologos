@@ -198,6 +198,12 @@
 
 (fn_param (identifier) @variable.parameter)
 (typed_param name: (identifier) @variable.parameter)
+; The TYPE of a fused param. Needed from 2026-08-15: the type used to be a
+; `type_application`, which carried its own @type capture, and bounding it to a
+; bare identifier (DEFERRED 134) left a USER type with no type rule at all —
+; `Point` fell to @variable. `Int` did not, because the builtin rule above
+; matches it by name, which is exactly what made the loss easy to miss.
+(typed_param type: (identifier) @type)
 (bare_param (identifier) @variable.parameter)
 
 

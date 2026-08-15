@@ -2661,7 +2661,15 @@
         "required": true,
         "types": [
           {
-            "type": "type_expr",
+            "type": "angle_group",
+            "named": true
+          },
+          {
+            "type": "grouped_type",
+            "named": true
+          },
+          {
+            "type": "identifier",
             "named": true
           }
         ]

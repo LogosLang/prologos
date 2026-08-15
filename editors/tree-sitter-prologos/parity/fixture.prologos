@@ -35,6 +35,13 @@ defn ignore [x :0 <Int>]
 defn add2 [x:Int y]
   [+ x y]
 
+;; --- TWO fused typed params.  The type of a fused param is ATOMIC, so `Point`
+;;     must NOT absorb `p2`: this parsed as `p1 : (Point p2)` with `:Point`
+;;     stranded as an ERROR until 2026-08-15 (DEFERRED 134), on a shape the
+;;     compiler accepts at 0 errors. ---
+defn point-add2 [p1:Point p2:Point]
+  p1
+
 ;; --- let binding names are @variable, not @variable.parameter ---
 defn withlet [q]
   let acc 1

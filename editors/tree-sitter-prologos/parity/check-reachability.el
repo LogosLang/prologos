@@ -87,6 +87,21 @@
                                    (file-regular-p f) (file-readable-p f))))
                           (directory-files-recursively dir "\\.prologos\\'"))))))
 
+(defun prologos-scm--strip-comments (s)
+  "Drop full-line `;' comments from S.
+
+The extractor below scans the RAW query text, so PROSE in a comment was being
+read as code.  Latent until 2026-08-15: every earlier comment mention happened
+to name a REAL capture.  Writing \"fell to @variable.\" then emitted a capture
+called `variable.' — the sentence period, absorbed by `.' in the character
+class — failing this gate and check-vocabulary at once.
+
+Only whole-line comments are stripped, not from `;' to end-of-line: a
+`#match?' pattern may legitimately contain one."
+  (mapconcat (lambda (line)
+               (if (string-match-p "\\`[ \t]*;" line) "" line))
+             (split-string s "\n") "\n"))
+
 (defun prologos-reach-check ()
   "Report per-capture reachability.  Exit non-zero if any capture never fires."
   (unless (treesit-language-available-p 'prologos)
@@ -101,7 +116,7 @@
     (let ((s (with-temp-buffer
                (insert-file-contents
                 (expand-file-name "../queries/highlights.scm" prologos-reach--dir))
-               (buffer-string)))
+               (prologos-scm--strip-comments (buffer-string))))
           (i 0))
       (while (string-match "@\\([a-zA-Z][a-zA-Z0-9._]*\\)" s i)
         (cl-pushnew (match-string 1 s) declared :test #'string=)

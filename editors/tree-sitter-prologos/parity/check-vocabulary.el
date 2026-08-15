@@ -41,10 +41,27 @@
   (unless (file-readable-p path) (error "cannot read %s" path))
   (with-temp-buffer (insert-file-contents path) (buffer-string)))
 
+(defun prologos-scm--strip-comments (s)
+  "Drop full-line `;' comments from S.
+
+The capture extractors below scan the RAW query text, so PROSE in a comment
+was being read as code.  Latent until 2026-08-15: every earlier comment
+mention happened to name a REAL capture, so nothing showed.  Writing
+\"fell to @variable.\" then emitted a capture called `variable.' — the
+sentence period, which `.' in the character class absorbed — and it failed
+BOTH gates at once as undocumented AND unreachable.
+
+Only whole-line comments are stripped, not from `;' to end-of-line: a
+`#match?' pattern may legitimately contain one."
+  (mapconcat (lambda (line)
+               (if (string-match-p "\\`[ \t]*;" line) "" line))
+             (split-string s "\n") "\n"))
+
 (defun prologos-vocab--emitted ()
   "Captures `highlights.scm' actually emits."
   (let ((s (prologos-vocab--slurp (prologos-vocab--path "../queries/highlights.scm")))
         (out '()) (i 0))
+    (setq s (prologos-scm--strip-comments s))
     (while (string-match "@\\([a-zA-Z][a-zA-Z0-9._]*\\)" s i)
       (push (match-string 1 s) out)
       (setq i (match-end 0)))

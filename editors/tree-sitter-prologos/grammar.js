@@ -48,6 +48,13 @@ module.exports = grammar({
     // on the actual token.
     [$._path_base, $.atom],
     [$._path_base, $.expression],
+    // A `name : Type` binder is shared by PARAM LISTS and `let` bindings, and
+    // the two want DIFFERENT types: a param's is atomic (`[p1:Point p2:Point]`
+    // is two params — see `_param_type`), while a let's may be multi-token
+    // (`let f : Int -> Bool := v`, which the syntax rules require `:=` for).
+    // At `let x : Int • ->` the parser cannot yet know which it is in, so it
+    // carries both and settles on the tokens that actually follow.
+    [$._param_type, $.type_expr],
   ],
 
   rules: {
@@ -607,8 +614,30 @@ module.exports = grammar({
       field('name', $.identifier),
       optional(field('multiplicity', $.multiplicity)),
       ':',
-      field('type', $.type_expr),
+      field('type', $._param_type),
     )),
+
+    // The type of a `name:Type` parameter is ATOMIC — NOT a full `type_expr`.
+    //
+    // `type_expr` admits `type_application` (`prec.left(2, seq(identifier,
+    // repeat1(...)))`, unbounded) and `arrow_type`, both of which are GREEDY and
+    // absorb the NEXT PARAMETER: `[p1:Point p2:Point]` parsed as
+    // `p1 : (Point p2)` with `:Point` stranded as an ERROR, on code the compiler
+    // accepts at 0 errors (DEFERRED 134).
+    //
+    // The COMPILER is the authority here and treats a fused type as atomic —
+    // measured: `[xs:List Int]` elaborates to TWO parameters,
+    // `xs : List` and a bare `Int`, not to one parameter typed `List Int`.
+    //
+    // The alternatives kept are exactly those that CANNOT absorb what follows:
+    // a single identifier, and the two self-delimiting bracket forms. Dropping
+    // `arrow_type` costs nothing real — a fused `Int->Bool` lexes as ONE
+    // identifier anyway, since `->` is an ident-continue sequence (ARROW T1).
+    _param_type: $ => choice(
+      $.grouped_type,
+      $.angle_group,
+      $.identifier,
+    ),
 
     bare_param: $ => prec(3, $.identifier),
 

@@ -2400,11 +2400,28 @@
             "name": "type",
             "content": {
               "type": "SYMBOL",
-              "name": "type_expr"
+              "name": "_param_type"
             }
           }
         ]
       }
+    },
+    "_param_type": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "grouped_type"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "angle_group"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "identifier"
+        }
+      ]
     },
     "bare_param": {
       "type": "PREC",
@@ -4087,6 +4104,10 @@
     [
       "_path_base",
       "expression"
+    ],
+    [
+      "_param_type",
+      "type_expr"
     ]
   ],
   "precedences": [],

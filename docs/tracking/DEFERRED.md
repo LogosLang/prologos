@@ -7647,7 +7647,7 @@ call**: the rename target is a key being *created*, not read, so it may want a
 different capture than `@property`. And this changes rendered colour, so it is
 the owner's to rule on. Golden will move.
 
-### 134. ⬜ `type_application` IS GREEDY INSIDE A FUSED `typed_param`, so `[p1:Point p2:Point]` MIS-PARSES — valid code the COMPILER accepts at 0 errors
+### 134. ✅ **DISCHARGED** `type_application` IS GREEDY INSIDE A FUSED `typed_param`, so `[p1:Point p2:Point]` MIS-PARSES — valid code the COMPILER accepts at 0 errors
 
 Found by EHP T1 P4 while re-checking catalogued issue #4 on the repaired base.
 
@@ -7680,7 +7680,39 @@ two or more FUSED typed params — is **2 sites**:
 `lib/examples/foray.prologos:1424` and
 `examples/2026-07-31-let-toplevel.prologos:37`.
 
-**Fix**: bound the type in a fused `typed_param` so it cannot absorb a following
+**FIXED 2026-08-15.** `typed_param`'s type is now `_param_type` —
+`identifier | grouped_type | angle_group`, i.e. exactly the alternatives that
+CANNOT absorb what follows. `type_application` and `arrow_type` are dropped;
+a fused `Int->Bool` lexes as one identifier anyway (ARROW T1), so nothing real
+is lost.
+
+⚠ **The compiler is the authority and says the fused type is ATOMIC** —
+measured: `[xs:List Int]` elaborates to TWO parameters, `xs : List` plus a bare
+`Int`, not one parameter typed `List Int`.
+
+⚠ **Also corrects this entry's own claim that `[x:Int y]` is invalid.** It is
+valid — `f3 : Int _ -> Int defined.` The earlier probe's errors came from its
+BODY (`[+ x y]` with `y : _`), not the param list. Only the SPACED `[x : Int]`
+is genuinely rejected, so the grammar erroring on it is correct.
+
+**A GLR conflict, not a narrowing**: `typed_param` is shared with `let_binding`,
+and a `let` type may legitimately be multi-token (`let f : Int -> Bool := v`).
+Declaring `[$._param_type, $.type_expr]` lets the parser carry both and settle on
+the following tokens. A/B'd: all three `let` shapes parse identically before and
+after, including the `-> ` one, which was ALREADY failing at HEAD (pre-existing,
+not caused here).
+
+⭐ **Every corpus signal improved** — unlike DEFERRED 136, no recovery-churn
+caveat: clean **34 → 35**, ERROR 2693 → **2579**, MISSING 75 → **73**,
+error-bytes 14691 → **14529**. Ratchet tightened to 73.
+
+⚠ **And it caused a colour regression the dump caught**: the fused type used to
+be a `type_application`, which carried its own `@type`; bounding it to a bare
+identifier left a USER type with no type rule, so `Point` fell to `@variable`.
+`Int` did NOT, because the builtin rule matches it by name — which is exactly
+what made the loss easy to miss. Added `(typed_param type: (identifier) @type)`.
+
+**Original fix note**: bound the type in a fused `typed_param` so it cannot absorb a following
 identifier — the fused spelling is documented as single-token types only
 (`prologos-syntax.md`), so the type there should not be a `type_application` at
 all. TSG work, not EHP; filed rather than done because it is a grammar change

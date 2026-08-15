@@ -19,7 +19,7 @@ max_unparsed_pct=1.3
 # ERROR swallows everything inside it. Measured 2026-08-14 (§9.7): a change that
 # moved ERROR 3054 -> 2743 simultaneously pushed MISSING 74 -> 110, and only the
 # MISSING delta showed it.
-max_missing=75
+max_missing=73
 
 # Ratcheted 2026-08-14 by the comment-scanner fix (EHP P2): the scanner no
 # longer consumes comment-only lines as part of its lookahead token, so those
@@ -39,3 +39,8 @@ max_missing=75
 # to a rule perturbs the LR tables, so recovery takes different paths in files
 # that are ALREADY broken; what fails in collection-traits is fold/reduce/
 # deftype/fmap, nothing this change touched. unparsed% and swallows unmoved.
+
+# Ratcheted 2026-08-15 again by bounding a fused param's type (DEFERRED 134):
+# clean 34 -> 35, ERROR 2693 -> 2579, MISSING 75 -> 73, error-bytes
+# 14691 -> 14529. Unlike the `^-` change above, EVERY signal moved the right way
+# here — count, missing AND bytes — so no recovery-churn caveat applies.
