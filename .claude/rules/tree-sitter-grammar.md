@@ -193,7 +193,7 @@ extension. The corpus gate measures the installed **parser** and does not see
 
 ---
 
-## ⭐ The four editor gates — run them, and know what each CANNOT see
+## ⭐ The six editor gates — run them, and know what each CANNOT see
 
 From `editors/tree-sitter-prologos/`. Each answers a different question; a green
 one says nothing about the others' question.
@@ -201,14 +201,18 @@ one says nothing about the others' question.
 | gate | asks | blind to |
 |---|---|---|
 | `./check-corpus.sh` | does real code PARSE? (swallows / unparsed% / missing) | anything about captures |
-| `parity/check-parity.sh` | do BOTH consumers see the same captures? | whether the grammar emits the node at all |
+| `parity/check-parity.sh` | do BOTH consumers see the same captures? — **and are the extension's wasm AND `highlights.scm` current?** | whether the grammar emits the node at all |
 | `parity/check-vocabulary.sh` | is every capture documented + mapped, both directions? | whether it ever fires |
 | `parity/check-reachability.sh` | does every capture FIRE somewhere? | **coverage** — `@comment` passed at 1455 hits while ~99% broken; use `--coverage` |
-| `parity/census.mjs --gate` | do TextMate and tree-sitter AGREE where they overlap? | — |
+| `parity/census.mjs --gate` | do TextMate and tree-sitter AGREE where they overlap? (`--explain` shows the SPANS) | anything the FIXTURE does not exercise |
+| `parity/check-tokens.mjs` | is every VS Code semantic token in the legend AND given a colour, with no dead entries? | whether the capture producing it ever fires |
 
 ⚠ `install.sh` FIRST, always: check-corpus and check-parity both refuse a stale
 artifact (exit 3), by CONTENT HASH. The dylib and the wasm each carry a
-`.provenance` file; "current" means the same thing for both.
+`.provenance` file; "current" means the same thing for both. The extension's
+`highlights.scm` is checked DIFFERENTLY — by comparing it to the source file
+directly, since it is a verbatim COPY rather than a build output, and a direct
+comparison cannot be fooled by a correct sidecar beside a wrong file.
 
 ⚠ **emcc needs Python ≥3.10 and picks Xcode's 3.9**, so `install.sh` builds the
 dylib and then FAILS on the wasm — leaving Emacs new and VS Code old. Set
@@ -216,14 +220,19 @@ dylib and then FAILS on the wasm — leaving Emacs new and VS Code old. Set
 
 ## ⭐⭐ The instrument rule — five clauses, all paid for
 
-Nine instrument failures across TSG/EHP, in five distinct species:
+Eleven instrument failures across TSG/EHP, in five distinct species:
 
 1. **Instrument wrong** — the parity harness evaluated `#match?` in Emacs
    dialect-blind mode; it would have blamed the *correct* editor.
 2. **Question missing** — every gate green while `@comment` was ~99% broken,
-   because none asked whether the grammar emits the node.
+   because none asked whether the grammar emits the node. Again 2026-08-15:
+   the parity harness reads the **repo** `.scm` for BOTH consumers, so it
+   could not see the extension's own copy going stale — it asserted the
+   wasm's currency and silently assumed the query's.
 3. **Resolution too coarse** — reachability PASSES a capture that fires 1455
-   times and covers 1% of what it should.
+   times and covers 1% of what it should. Again 2026-08-15: `@attribute`
+   passed while three of its four rules sat BELOW the generic
+   `(keyword_literal)` rule and never fired — 90% of its spans mispainted.
 4. **Report overstates scope** — `--emacs-only` printed "both consumers agree"
    after checking one consumer.
 5. **Right data, wrong question** — the agreement gate reused the RAW parity

@@ -72,6 +72,46 @@ if [ "$EMACS_ONLY" = "0" ]; then
   fi
 fi
 
+# --- QUERY SYNC GUARD ---
+#
+# install.sh copies queries/highlights.scm into the extension, and NOTHING
+# verified it afterwards.  So editing the query and running the gates without
+# re-running install.sh left the extension on the OLD query while every gate
+# stayed green — and this harness cannot see that by construction, because it
+# reads the REPO copy for BOTH consumers (census.mjs, dump-captures.mjs).  The
+# "VS Code" side above is honest about the wasm and was silently wrong about the
+# query.  Happened 2026-08-15 during EHP P3, one commit after the query moved.
+#
+# install.sh already learned half of this (its :80 comment records un-gating the
+# copy from emcc for the same reason).  The half left over is that a correct
+# copier does not help when nobody runs it.
+#
+# Compared DIRECTLY rather than through a .provenance sidecar, unlike the dylib
+# and wasm above.  Those are BUILD OUTPUTS — you cannot compare a .dylib to
+# grammar.js, so a recorded source hash is the only available handle.  This is a
+# VERBATIM COPY, so the two files can be compared to each other, which is
+# strictly stronger: a sidecar can be correct beside a wrong file.
+EXT_QUERY="../../vscode-prologos/queries/highlights.scm"
+SRC_QUERY="../queries/highlights.scm"
+
+if [ "$EMACS_ONLY" = "0" ]; then
+  if [ ! -f "$EXT_QUERY" ]; then
+    echo "MISSING: the extension has no queries/highlights.scm." >&2
+    echo "  VS Code would fall back to TextMate alone — which LOOKS like working" >&2
+    echo "  highlighting.  Re-run ../install.sh." >&2
+    exit 3
+  elif ! cmp -s "$SRC_QUERY" "$EXT_QUERY"; then
+    echo "STALE: the extension's highlights.scm differs from the source." >&2
+    echo "  source:    $SRC_QUERY" >&2
+    echo "  extension: $EXT_QUERY" >&2
+    diff -u "$EXT_QUERY" "$SRC_QUERY" 2>/dev/null | sed -n '1,20p' >&2 || true
+    echo "  The extension would run a DIFFERENT query from the one measured" >&2
+    echo "  here, so this run's result does not describe VS Code.  Re-run" >&2
+    echo "  ../install.sh." >&2
+    exit 3
+  fi
+fi
+
 FIXTURE="fixture.prologos"
 GOLDEN="golden.tsv"
 EM_OUT="$(mktemp -t parity-emacs)"
@@ -132,8 +172,10 @@ if [ "$status" = "0" ]; then
     # is the same misleading-pass shape this harness exists to eliminate.
     echo "PASS (EMACS ONLY) — Emacs matches the golden on $n captures."
     echo "  VS Code was NOT checked; this run says nothing about parity."
+    echo "  The extension's query copy was NOT checked either."
   else
     echo "PASS — both consumers agree with the golden on $n captures"
+    echo "  (extension's wasm and highlights.scm both verified current)"
   fi
 fi
 exit "$status"
