@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 135**
+> ### **NEXT FREE: 137**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7528,6 +7528,72 @@ workflow transcript at
 `.claude/projects/…/subagents/workflows/wf_fc98d241-4e5/journal.jsonl`.
 
 ---
+
+### 136. ⬜ `key_op` CANNOT PARSE THE `^-` COLLAPSE FAMILY OR `^..` — landed language surface (CIU T6 D4.P3b) that the grammar never learned
+
+Found by EHP T1 P4 re-checking catalogued issue #3, which points at
+`foray.prologos:712`:
+`app-config{server.ssl.{enabled^-ssl cert-path^cert}}`.
+
+`grammar.js` `key_op`:
+
+```js
+key_op: $ => seq(token.immediate('^'), optional(choice(
+  field('rename', alias(token.immediate(/[a-zA-Z_][a-zA-Z0-9_?!-]*/), $.identifier)),
+  field('synth',  token.immediate('_')))))
+```
+
+The rename alternative must START with a letter or `_`, so every `-` continuation
+is unrepresentable. Measured, one form per probe:
+
+| form | grammar | compiler |
+|---|---|---|
+| `^` · `^_` · `^lbl` | 0 ERROR | ✅ |
+| **`^-` · `^-_` · `^-lbl`** | **1 ERROR each** | ✅ **0 errors** (`cfg{server.host^-_}` → `{:server-host String}`; `^-` → `{:host String}`) |
+| **`^..`** | **1 ERROR** | (Q_T8) |
+
+The `-` collapse family is **Q_T7** and `^..` is **Q_T8**, both landed at
+`36ce601c` (D4.P3b). The design doc states the continuation grammar as
+`-`?·{ε\|label\|`_`} + `^..`; the tree-sitter rule implements the middle of it
+and neither edge.
+
+**Why it renders as issue #3's "closing inner projection ≠ opening"**: the
+stranded `-` becomes an `ERROR`, and `semanticTokens.ts` suppresses semantic
+tokens inside ERROR subtrees *by design*, so part of the span falls through to
+TextMate and part does not. The asymmetry is the suppression boundary, not a
+brace rule.
+
+Corpus: `^-_` ×3 in `examples/2026-07-26-ciu-t6-path-selection.prologos`, plus
+`foray.prologos:712`. **Fix**: extend `key_op`'s continuation to
+`optional('-')` + the existing choice, and add `^..`. TSG work; re-measure with
+`check-corpus.sh` after.
+
+### 135. ⬜ SELECT-BLOCK BRANCH NAMES ARE KEYS BUT PAINT AS `@variable` — only the DOTTED step gets `@property`, so one concept renders two ways
+
+Found by EHP T1 P4 re-checking catalogued issue #2. **Refutes the filed
+diagnosis**: §4 recorded "suspected TextMate showing through". The census reports
+**zero disagreement** with TextMate over these spans — it is purely a query
+choice.
+
+`queries/highlights.scm` has exactly one key capture on a path:
+`(nominal_step key: (identifier) @property)`. Measured on
+`cfg{server^.{ssl^.enabled^ssl port} version}`:
+
+| span | node | capture |
+|---|---|---|
+| `enabled` | `nominal_step` (a `.step`) | `@property` ✅ |
+| `server`, `ssl` | head `identifier` of a `path_expr` | `@variable` ❌ |
+| `port`, `version` | bare branch `identifier` in a `select_block` | `@variable` ❌ |
+| `ssl` in `^ssl` | rename target inside `key_op` | `@variable` ❌ |
+
+All five are keys under the law *"dot DESCENDS · brace SELECTS · `:` BROADCASTS ·
+`^` RE-KEYS"*; only the one reached by a dot is chromed as one.
+
+**Fix**: capture the other key positions — the `path_expr` head, bare
+`select_block` branches, and the `key_op` rename target. ⚠ **Carries a design
+call**: the rename target is a key being *created*, not read, so it may want a
+different capture than `@property`. And this changes rendered colour, so it is
+the owner's to rule on. Golden will move.
 
 ### 134. ⬜ `type_application` IS GREEDY INSIDE A FUSED `typed_param`, so `[p1:Point p2:Point]` MIS-PARSES — valid code the COMPILER accepts at 0 errors
 

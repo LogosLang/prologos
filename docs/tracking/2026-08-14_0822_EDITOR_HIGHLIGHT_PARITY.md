@@ -21,7 +21,7 @@ contract well enough that a third editor is a *mapping table*, not a port.
 | P1 | Parity harness: one fixture, capture-by-capture, asserted in BOTH | ✅ | `30671d9d`. **Query layer is ALREADY in parity** — identical in both. Golden now **228** (was 205; the scanner fix made comments visible). [§8](#p1-record) |
 | P2 | TextMate: declared, and made to AGREE where it overlaps | ✅ | Census `81ac5a01` · scanner `e8b9ab0f` · D3 + gate `294dbc0f` · **the 5 disagreements closed `805e14be` + `9a329c68`** — 3 were TextMate bugs, 1 an agreement gap, 1 a recorded divergence. **All five gates green.** [§13](#p2-close) |
 | P3 | Review `semanticTokenScopes` per capture | ✅ | `8b42cfb0`. `@attribute` coloured (last known gap closed) — **and 3 of its 4 rules were VACUOUS, 90% of its spans mispainted**. 3 dead scope entries + 2 dead legend types removed. New gate `check-tokens.mjs`. [§14](#p3-close) |
-| P4 | The four catalogued issues, on the repaired base | 🔄 | **#1 ✅ resolved · #4 ⚠ HALF — the residual cause is the GRAMMAR ([DEFERRED 134](DEFERRED.md)), not TextMate.** #2/#3 not yet re-checked. [§15](#p4-record) |
+| P4 | The four catalogued issues, on the repaired base | ✅ | All four re-checked. **#1 resolved by P3; #2, #3, #4 each have a residual cause, and NOT ONE of them is TextMate** — [DEFERRED 135](DEFERRED.md) (query), [136](DEFERRED.md) (grammar), [134](DEFERRED.md) (grammar). [§15](#p4-record) · [§16](#p4-record-2) |
 | P5 | `#match?` dialect lint (or retire the predicate) | ⬜ | [§3.5](#p5) |
 | P6 | `docs/ADDING_AN_EDITOR.md` — the contributor contract | ⬜ | The deliverable that makes this leverage |
 | P7 | EHP T1.close — PIR-lite, DEFERRED triage | ⬜ | |
@@ -178,8 +178,8 @@ grammar tokens (which would also fix `[trait x]`-style questions at the source).
 | # | Issue | Diagnosis | Phase |
 |---|---|---|---|
 | 1 | ✅ **RESOLVED** ([§15](#p4-record)) — three keyword roles, three colours; the split is by design and P3 gave metadata keys their own. Map `{}` keys blue, implicit-map keys orange | Explained in §1(2) — `@property` vs `@constant.other` through two scopes. A capture-level decision. | **P3** |
-| 2 | Path-selection branches paint as keywords, not key chrome | Suspected TextMate showing through; `.scm` captures steps as `@property`. | **P2**, confirm in **P1** |
-| 3 | `foray.prologos:712` — closing inner projection ≠ opening | `app-config{server.ssl.{enabled^-ssl cert-path^cert}}`; nested projection braces, and the `.scm` captures no brackets → TextMate. | **P2** |
+| 2 | ✅ **CONFIRMED — the QUERY, not TextMate** ([DEFERRED 135](DEFERRED.md)). Only the dotted `nominal_step` is chromed as a key. Path-selection branches paint as keywords, not key chrome | ~~Suspected TextMate showing through~~ — **refuted**: zero disagreement with TextMate over those spans. | [§16](#p4-record-2) |
+| 3 | ✅ **CONFIRMED — the GRAMMAR** ([DEFERRED 136](DEFERRED.md)). `key_op` cannot parse `^-`/`^..`; the ERROR region is the suppression boundary. `foray.prologos:712` — closing inner projection ≠ opening | ~~nested projection braces → TextMate~~ — **refuted**: not a brace rule. | [§16](#p4-record-2) |
 | 4 | ⚠ **HALF-FIXED** ([§15](#p4-record)). TextMate mis-lex fixed `805e14be`; the residual cause is a GRAMMAR bug — [DEFERRED 134](DEFERRED.md). Fused `var:Type` mispaint | Probed: the grammar is right (`x`→parameter, `Int`→builtin type). So the mispaint is a layer above — TextMate, or the scope map. | **P2/P3**, confirm in **P1** |
 
 ⚠ Three of four are *suspected* TextMate. That suspicion is exactly what P1
@@ -987,3 +987,62 @@ is. The defect needs a second one. The differential varied more than one thing.
 Both were caught by checking against the COMPILER before writing them down —
 the compiler is the authority on what is valid, and the grammar can only be
 wrong relative to it.
+
+---
+
+<a id="p4-record-2"></a>
+## 16. P4 — issues #2 and #3 re-checked (2026-08-15)
+
+**Both confirmed as real, and both filed diagnoses were wrong about the layer.**
+§4 suspected TextMate for each; the census reports **zero disagreement** with
+TextMate over the spans in question, in both cases.
+
+### Issue #2 — the QUERY. [DEFERRED 135](DEFERRED.md)
+
+`highlights.scm` chromes exactly one key position on a path,
+`(nominal_step key: (identifier) @property)`. Measured on
+`cfg{server^.{ssl^.enabled^ssl port} version}`, only `enabled` — the one reached
+by a dot — is `@property`. The `path_expr` heads (`server`, `ssl`), the bare
+branches (`port`, `version`) and the `^ssl` rename target all fall to
+`@variable`.
+
+All five are keys under the law *dot DESCENDS · brace SELECTS · `:` BROADCASTS ·
+`^` RE-KEYS*. One concept, two renderings — which is the reported symptom.
+
+### Issue #3 — the GRAMMAR. [DEFERRED 136](DEFERRED.md)
+
+`key_op`'s continuation is `optional(choice(rename:/[a-zA-Z_]…/, synth:'_'))`, so
+it must start with a letter or `_`. The whole `-` collapse family is
+unrepresentable:
+
+| form | grammar | compiler |
+|---|---|---|
+| `^` · `^_` · `^lbl` | 0 ERROR | ✅ |
+| **`^-` · `^-_` · `^-lbl`** | **1 ERROR each** | ✅ **0 errors** |
+| **`^..`** | **1 ERROR** | (Q_T8) |
+
+These are **Q_T7** and **Q_T8**, landed at `36ce601c` (D4.P3b). The design doc
+gives the continuation as `-`?·{ε\|label\|`_`} + `^..`; the grammar implements
+the middle and neither edge.
+
+⭐ **And this explains the symptom mechanically.** "Closing inner projection ≠
+opening" is not a brace rule: the stranded `-` becomes an `ERROR`, and
+`semanticTokens.ts` suppresses semantic tokens inside ERROR subtrees *by design*,
+so part of the span falls through to TextMate and part does not. **The asymmetry
+the owner saw is the suppression boundary.**
+
+### ⭐ The pattern across all four
+
+| # | filed as | actually |
+|---|---|---|
+| 1 | TextMate | capture-level; fixed by P3's hoist |
+| 2 | TextMate (suspected) | **query** — missing key captures |
+| 3 | TextMate (suspected) | **grammar** — `key_op` gap |
+| 4 | TextMate mis-lex | TextMate **and** grammar; only half was TextMate |
+
+TextMate was the visible layer, so it drew the suspicion every time. It was the
+whole story **once**. The lesson is not "stop suspecting TextMate" — it is that
+the three-layer render makes the *topmost* layer the default explanation, and
+only probing each layer separately distinguishes them. That is what P1's harness
+and the census were built for, and this is the first phase to use them
+adversarially rather than to confirm.
