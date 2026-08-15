@@ -3138,8 +3138,13 @@
                   {
                     "type": "REPEAT1",
                     "content": {
-                      "type": "SYMBOL",
-                      "name": "let_binding"
+                      "type": "ALIAS",
+                      "content": {
+                        "type": "SYMBOL",
+                        "name": "_bracket_let_binding"
+                      },
+                      "named": true,
+                      "value": "let_binding"
                     }
                   },
                   {
@@ -3224,6 +3229,56 @@
           }
         ]
       }
+    },
+    "_bracket_let_binding": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "FIELD",
+          "name": "name",
+          "content": {
+            "type": "SYMBOL",
+            "name": "typed_param_or_bare"
+          }
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "STRING",
+              "value": ":="
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "FIELD",
+          "name": "value",
+          "content": {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "path_expr"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "grouped_expr"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "paren_expr"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "atom"
+              }
+            ]
+          }
+        }
+      ]
     },
     "if_expr": {
       "type": "PREC_RIGHT",

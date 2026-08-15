@@ -879,18 +879,56 @@ module.exports = grammar({
     let_expr: $ => prec.right(seq(
       'let',
       choice(
-        seq('[', repeat1($.let_binding), ']'),
+        seq('[', repeat1(alias($._bracket_let_binding, $.let_binding)), ']'),
         repeat1($.let_binding),
       ),
       optional(field('body', $.expression)),
     )),
 
+    // The LAYOUT binding.  Its value is a full expression: it may be an
+    // application, and it may continue onto deeper-indented lines.
     let_binding: $ => prec.right(seq(
       field('name', $.typed_param_or_bare),
       optional(':='),
       field('value', $.expression),
       optional($._newline),
     )),
+
+    // The BRACKET binding — flat name/value pairs on ONE line, so the value is
+    // exactly one datum.
+    //
+    // A full `$.expression' here is GREEDY and that is DEFERRED 140: in
+    // `let [y 4 z 5]' it takes `4 z 5' as a single application, the form
+    // collapses to ONE binding, and it does so with ZERO error nodes — the
+    // second name simply never becomes a binding site.  With `:=' spelled out
+    // (`let [y := 4 z := 5]', which the compiler accepts at 0 errors) the same
+    // greed produced an ERROR node instead.
+    //
+    // `application' is deliberately absent from the choice below: juxtaposition
+    // is precisely what must not cross a binding boundary here.  A value that
+    // needs juxtaposition is written bracketed — `let [y [+ 1 2] z 5]' — which
+    // `grouped_expr' covers.
+    //
+    // ⚠ `angle_group' is NOT a value here, and leaving it in cost a real
+    // regression the per-file A/B caught: in `(let [x <Nat> (inc zero)]' the
+    // parser then read `x' as a bare name and `<Nat>' as its VALUE, stranding
+    // `(inc zero)' with no name — MISSING 0 -> 1 in sample.prologos while the
+    // ERROR count did not move at all.  An angle group after a binder name is
+    // that binder's TYPE (`angle_param'), never its value.
+    //
+    // Aliased to `let_binding' so the node type queries match stays ONE name:
+    // highlights.scm:202-203 select `(let_binding name: …)' and must keep
+    // painting both shapes.
+    _bracket_let_binding: $ => seq(
+      field('name', $.typed_param_or_bare),
+      optional(':='),
+      field('value', choice(
+        $.path_expr,
+        $.grouped_expr,
+        $.paren_expr,
+        $.atom,
+      )),
+    ),
 
     // If expression: (if cond then else) or if cond then else (WS 3-arg)
     if_expr: $ => prec.right(seq(

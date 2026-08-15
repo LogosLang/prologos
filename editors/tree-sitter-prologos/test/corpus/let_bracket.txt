@@ -1,0 +1,152 @@
+================================================================
+let, bracket form — EVERY name binds (DEFERRED 140)
+================================================================
+
+defn f [n]
+  let [y 4 z 5]
+    [+ y z]
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (defn_form
+      name: (identifier)
+      params: (param_list
+        (typed_param_or_bare
+          (bare_param
+            (identifier))))
+      body: (block_body
+        (expression
+          (let_expr
+            (let_binding
+              name: (typed_param_or_bare
+                (bare_param
+                  (identifier)))
+              value: (atom
+                (number)))
+            (let_binding
+              name: (typed_param_or_bare
+                (bare_param
+                  (identifier)))
+              value: (atom
+                (number)))
+            body: (expression
+              (grouped_expr
+                (expression
+                  (application
+                    (expression
+                      (application
+                        (expression
+                          (atom
+                            (operator)))
+                        (expression
+                          (atom
+                            (identifier)))))
+                    (expression
+                      (atom
+                        (identifier)))))))))))))
+
+================================================================
+let, bracket form with := — binds, and emits no ERROR
+================================================================
+
+defn f [n]
+  let [y := 4 z := 5]
+    [+ y z]
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (defn_form
+      name: (identifier)
+      params: (param_list
+        (typed_param_or_bare
+          (bare_param
+            (identifier))))
+      body: (block_body
+        (expression
+          (let_expr
+            (let_binding
+              name: (typed_param_or_bare
+                (bare_param
+                  (identifier)))
+              value: (atom
+                (number)))
+            (let_binding
+              name: (typed_param_or_bare
+                (bare_param
+                  (identifier)))
+              value: (atom
+                (number)))
+            body: (expression
+              (grouped_expr
+                (expression
+                  (application
+                    (expression
+                      (application
+                        (expression
+                          (atom
+                            (operator)))
+                        (expression
+                          (atom
+                            (identifier)))))
+                    (expression
+                      (atom
+                        (identifier)))))))))))))
+
+================================================================
+let, bracket form — an angle group after the name is its TYPE, not a value
+================================================================
+
+(eval (let [x <Nat> (inc zero)]
+  (add x x)))
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (expression
+      (paren_expr
+        (expression
+          (application
+            (expression
+              (atom
+                (identifier)))
+            (expression
+              (paren_expr
+                (expression
+                  (let_expr
+                    (let_binding
+                      name: (typed_param_or_bare
+                        (angle_param
+                          name: (identifier)
+                          type: (angle_group
+                            (expression
+                              (atom
+                                (identifier))))))
+                      value: (paren_expr
+                        (expression
+                          (application
+                            (expression
+                              (atom
+                                (identifier)))
+                            (expression
+                              (atom
+                                (identifier)))))))
+                    body: (expression
+                      (paren_expr
+                        (expression
+                          (application
+                            (expression
+                              (application
+                                (expression
+                                  (atom
+                                    (identifier)))
+                                (expression
+                                  (atom
+                                    (identifier)))))
+                            (expression
+                              (atom
+                                (identifier)))))))))))))))))
