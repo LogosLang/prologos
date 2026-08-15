@@ -322,3 +322,64 @@ The first two navigate a **data structure**, not code. `def app-config › :serv
 › :ssl` tells you which subsection of a config map you are editing. A node-type
 breadcrumb renders the same position as `map › entry › map › entry`, which is
 information-free. Layout handles code and data with one rule.
+
+<a id="p3-spike"></a>
+## 7. P3 — the surf-tree spike (2026-08-15)
+
+Reflective walk over the surface tree for five real files. Route copied from
+`tools/spine-census.rkt`: `read-to-tree` → `group-tree-node` → `refine-tag` →
+`rewrite-tree` → `parse-top-level-forms-from-tree`.
+
+| file | nodes | depth | located | struct-form | list-form | degenerate |
+|---|---|---|---|---|---|---|
+| core/io | 87 | 2 | 99% | 86 | 0 | 0% |
+| core/eq | 170 | 6 | 86% | 95 | 51 | 2% |
+| core/collections | 1067 | 6 | 98% | 164 | 886 | 0% |
+| core/conversions | 197 | 3 | **26%** | 42 | 9 | 0% |
+| examples/foray | 1541 | 8 | 91% | 698 | 711 | 5% |
+| **total** | **3062** | | **90%** | 1085 | 1657 | **3%** |
+
+### The tree is navigable — three findings in its favour
+
+1. **It is small and shallow.** 87 to 1541 nodes, depth 2 to 8. The tree-sitter
+   tree over the same `lib/` had `expression` alone appearing **34,138** times as
+   a pure wrapper. Session payload is not a concern.
+2. **Degenerate wrappers are 3%**, against tree-sitter's pervasive wrapping.
+   §4.1's extent-collapse rule was designed against the tree-sitter tree. Against
+   the compiler tree it is close to unnecessary — keep it, but it stops being
+   load-bearing.
+3. **90% of nodes carry a position.**
+
+### ⚠⚠ The finding that matters: TWO location representations
+
+The last field is a position in two different shapes:
+
+- a `srcloc` **struct** — 1085 nodes
+- a plain **4-element list** `(line col start end)` — **1657 nodes, the majority**
+
+`surf-node-srcloc`, the shipped reflective extractor this design leans on,
+tests `(srcloc? last)` and returns `#f` otherwise. **It therefore returns `#f`
+for roughly 60% of tree-parser-produced nodes.** The premise that generic
+extraction gives us position coverage for free is true structurally and false in
+practice until the extractor accepts both shapes.
+
+⚠ It has **3 production call sites** (`driver.rkt` ×2, `elaborator.rkt`). Whether
+that degrades error locations today is **unverified** and worth checking on its
+own account — it is not only a surfer concern.
+
+### ⚠ My own measurement was wrong first, in the direction that would have killed the design
+
+The first corrected run reported **35% located** and I was about to report it as
+a blocker. The detector recognised only the struct form. The list form is the
+majority, so the true figure is 90%. Two walker defects preceded it: counting
+`srcloc` structs as tree nodes, and recursing into them.
+
+### Caveats on scope
+
+- This is the **tree spine**, not the merged production surfs. 279 `error` nodes
+  include `"ns: consumed by preparse"` — expected here, because production merges
+  the tree spine with preparse surfs and falls back per form.
+- `conversions.prologos` at 26% located is the outlier and correlates with its
+  146 error nodes. Unexplained.
+- Before P4, re-run against the **merged** surfs. `merge-preparse-and-tree-parser`
+  is not exported, so that needs a small export.
