@@ -6,4 +6,15 @@
 # should come back out.
 #
 # consumer<TAB>capture<TAB>why
+#
+# `textmate` rows take a FOURTH field, the scope, and record a deliberate
+# AGREEMENT divergence for census.mjs --gate rather than an unmapped capture.
+# check-vocabulary reads only the first two fields and matches by consumer, so
+# these rows are inert there. They are kept here, not in
+# queries/textmate-agreement.tsv, because that file states what MEANS THE SAME:
+# putting this pair in it would assert `comment` == `keyword.operator.wildcard`,
+# which is false and would let a genuine comment/wildcard confusion through.
+#
+# textmate<TAB>capture<TAB>why<TAB>scope
 vscode	attribute	EHP P3 — needs a new `decorator` legend type AND a semanticTokenScopes entry, i.e. a colour decision rather than a rename. Emacs paints it with prologos-multiplicity-face today; VS Code paints nothing.
+textmate	comment	DELIBERATE. The query paints the wildcard `_` as @comment to de-emphasise it (captures.md: "a comment; also the wildcard pattern _") — it reads as "ignore this". TextMate cannot express de-emphasis, and `keyword.operator.wildcard` is the honest static reading for Linguist/GitHub. Owner ruling 2026-08-15: keep both. Painting `_` as a comment in TextMate too would make GitHub render it as if commented out.	keyword.operator.wildcard

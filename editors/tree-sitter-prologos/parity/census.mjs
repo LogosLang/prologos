@@ -190,14 +190,50 @@ function allowed(cap, scope) {
   return false;   // capture with no correspondence declared
 }
 
-const bad = [...pairs.entries()]
+// Deliberate, reviewed divergences: `textmate` rows in known-gaps.tsv, which
+// carry the scope in a 4th field. Kept OUT of textmate-agreement.tsv on purpose
+// — that file states what means the SAME thing, and these are pairs that
+// knowingly differ.
+const exempt = [];
+for (const line of readFileSync(join(HERE, 'known-gaps.tsv'), 'utf8').split('\n')) {
+  if (!line.trim() || line.startsWith('#')) continue;
+  const f = line.split('\t');
+  if (f[0] === 'textmate' && f[1] && f[3]) {
+    exempt.push({ cap: f[1].trim(), scope: f[3].trim() });
+  }
+}
+const isExempt = (cap, scope) =>
+  exempt.some(x => x.cap === cap && scope.startsWith(x.scope));
+
+const disagreeing = [...pairs.entries()]
   .map(([p, n]) => { const [cap, scope] = p.split('\t'); return { cap, scope, n }; })
   .filter(e => !allowed(e.cap, e.scope))
   .sort((a, b) => b.n - a.n);
 
+const waived = disagreeing.filter(e => isExempt(e.cap, e.scope));
+const bad    = disagreeing.filter(e => !isExempt(e.cap, e.scope));
+
+if (waived.length) {
+  console.log('\n=== KNOWN DIVERGENCE: deliberate, reviewed (known-gaps.tsv) ===');
+  for (const e of waived) {
+    console.log(`  ${String(e.n).padStart(5)}  @${e.cap.padEnd(22)} ${e.scope}`);
+    if (EXPLAIN) {
+      for (const r of runsFor(`${e.cap}\t${e.scope}`)) {
+        const text = lines[r.row - 1] ?? '';
+        console.log(`           L${String(r.row).padStart(3)}  ${JSON.stringify(text.slice(r.start, r.end + 1))}`
+                    + `   in:  ${text.trim()}`);
+      }
+    }
+  }
+}
+
 console.log('\n=== D3 AGREEMENT: overlapping spans where the two layers DISAGREE ===');
 if (bad.length === 0) {
-  console.log('  none — every overlap agrees');
+  // A PASS states its own scope: silence here would read as "the two layers
+  // agree everywhere", which is not what was checked when a row is waived.
+  console.log(waived.length
+    ? `  none beyond ${waived.length} deliberate divergence(s) listed above`
+    : '  none — every overlap agrees');
 } else {
   for (const e of bad) {
     console.log(`  ${String(e.n).padStart(5)}  @${e.cap.padEnd(22)} ${e.scope}`);
