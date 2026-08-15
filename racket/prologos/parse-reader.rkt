@@ -1747,7 +1747,17 @@
          disambiguate-tokens
 
          ;; Phase 1e+: Full parse pipeline (all 5 domains)
-         parse-string-to-cells)
+         parse-string-to-cells
+
+         ;; PARSE T1 — exported ONLY so the contract tests can assert the fast
+         ;; forms against the slow ones they replaced (the differential-oracle
+         ;; pattern, .claude/rules/pipeline.md § Exhaustive Walkers).  Not for
+         ;; production use: `find-line-start-pos` is O(C) per call and is the
+         ;; reason Step 1 was quadratic.
+         find-line-start-pos
+         compute-line-starts
+         line-start-at
+         find-content-line-for-pos)
 
 ;; Build the parse tree from indent RRB + token RRB + bracket-depth RRB.
 ;; ⚠ Described as "the fire function for the tree-builder propagator", but no
@@ -1776,13 +1786,14 @@
 
   ;; Step 1: Map each token to its content-line index
   ;; (by comparing token start-pos to line boundaries in char-rrb)
+  ;; One O(C) pass for ALL line starts, then a lookup per content line.  This
+  ;; used to call `find-line-start-pos` per line, each rescanning from 0, i.e.
+  ;; O(L x C).  A VECTOR (not a list) so Step 2 can binary-search it.  PARSE T1.
+  (define line-starts (compute-line-starts char-rrb))
+  (define n-chars (rrb-size char-rrb))
   (define line-boundaries
-    ;; For each content line, find its start position in the source
-    (for/list ([li (in-range (rrb-size content-line-indices))])
-      (define source-line (rrb-get content-line-indices li))
-      ;; Find the position of this source line in the char-rrb
-      ;; (count newlines to find line start)
-      (find-line-start-pos char-rrb source-line)))
+    (for/vector ([li (in-range (rrb-size content-line-indices))])
+      (line-start-at line-starts (rrb-get content-line-indices li) n-chars)))
 
   ;; Step 2: Assign tokens to content lines
   (define line-tokens (make-vector n-lines '()))
@@ -1883,6 +1894,11 @@
   parse-bot)
 
 ;; Helper: find the character position where source line N starts
+;;
+;; ⚠ O(C) PER CALL — it rescans from position 0 every time.  Retained only as
+;; the differential oracle for `compute-line-starts` (see the contract test in
+;; tests/test-parse-reader.rkt); the parse itself must NOT call it per line,
+;; which is what made Step 1 O(L x C).  PARSE T1.
 (define (find-line-start-pos char-rrb source-line)
   (if (= source-line 0)
       0
@@ -1894,13 +1910,62 @@
            (loop (+ pos 1) (+ line 1))]
           [else (loop (+ pos 1) line)]))))
 
-;; Helper: find which content line a character position belongs to
-(define (find-content-line-for-pos pos line-boundaries n-lines)
-  (let loop ([i (- n-lines 1)])
+;; All source-line start positions, in ONE pass over char-rrb.
+;;
+;; Returns a vector indexed by SOURCE LINE NUMBER.  Replaces L separate
+;; `find-line-start-pos` calls (each O(C)) with a single O(C) walk.
+;;
+;; Reproduces `find-line-start-pos` exactly, including its edge cases:
+;;   line 0                  -> 0
+;;   line k                  -> the position just past the kth newline
+;;   line >= (vector-length) -> (rrb-size char-rrb), matching the old loop's
+;;                              fallthrough when it runs off the end
+;; The last case is why lookups go through `line-start-at` rather than a bare
+;; `vector-ref` — an out-of-range source line is REACHABLE and had a defined
+;; answer before, so it must keep it.
+(define (compute-line-starts char-rrb)
+  (define n (rrb-size char-rrb))
+  (let loop ([pos 0] [acc (list 0)])
     (cond
-      [(< i 0) 0]
-      [(<= (list-ref line-boundaries i) pos) i]
-      [else (loop (- i 1))])))
+      [(>= pos n) (list->vector (reverse acc))]
+      [(char=? (rrb-get char-rrb pos) #\newline)
+       (loop (+ pos 1) (cons (+ pos 1) acc))]
+      [else (loop (+ pos 1) acc)])))
+
+(define (line-start-at starts source-line n-chars)
+  (if (< source-line (vector-length starts))
+      (vector-ref starts source-line)
+      n-chars))
+
+;; Helper: find which content line a character position belongs to.
+;;
+;; LINE-BOUNDARIES is a VECTOR of line start positions, ascending.  Returns the
+;; largest index i < N-LINES with boundaries[i] <= POS, or 0 when none matches
+;; — identical to the backward linear scan it replaces.
+;;
+;; ⚠ THIS WAS 81% OF PARSE TIME.  It used `list-ref` on a LIST while scanning
+;; backwards from n-lines-1, so each probe cost O(i) and each token cost O(L^2);
+;; with T proportional to L that made the whole parse O(L^3).  Measured at the
+;; real shapes of conversions.prologos (L=828, T~3757): 873.6 ms as written,
+;; 0.3 ms as below.  PARSE T1.
+;;
+;; The ascending-order precondition is a property of the caller (line starts
+;; are generated in increasing source order) and is pinned by a contract test
+;; rather than assumed here.
+(define (find-content-line-for-pos pos line-boundaries n-lines)
+  ;; Clamp to the vector: the old code would have raised on `list-ref` if
+  ;; n-lines exceeded the boundary count, so this range can only differ where
+  ;; the old code crashed.
+  (let loop ([lo 0]
+             [hi (min (- n-lines 1) (- (vector-length line-boundaries) 1))]
+             [best 0])
+    (cond
+      [(> lo hi) best]
+      [else
+       (define mid (quotient (+ lo hi) 2))
+       (if (<= (vector-ref line-boundaries mid) pos)
+           (loop (+ mid 1) hi mid)
+           (loop lo (- mid 1) best))])))
 
 
 ;; ============================================================

@@ -2441,6 +2441,7 @@
   (define expanded-stxs (preparse-expand-all raw-stxs))
   (define surfs (map parse-toplevel-datum expanded-stxs))
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
+  (set-phase-timings-parse-ms! pt (unbox last-ws-parse-ms))  ;; PARSE T1 P4
   (define pv (provenance-counters 0 0 0 0 0 0 0 0))
   (define qs (make-quiescence-stats))
   (define mem-before (measure-memory-before))
@@ -2526,6 +2527,11 @@
 ;; so the form cells are READ, then the preparse pass-through here goes too.
 ;; See docs/tracking/2026-08-02_LOC_TO_LINE_MERGE_DEFECT.md and
 ;; DEFERRED.md § "Dual-spine parser merge".
+;; PARSE T1 P4: elapsed ms of the most recent WS parse.  A box rather than a
+;; `time-phase!` because the parse completes before the reported
+;; `phase-timings` struct exists — see the note at the `read-to-tree` call.
+(define last-ws-parse-ms (box 0.0))
+
 (define (merge-preparse-and-tree-parser source-str preparse-surfs)
   (register-default-token-patterns!)
   ;; Reader pipeline. `pt` is still needed: the FORM-CELL block below derives its
@@ -2534,7 +2540,22 @@
   ;; header. Those functions are untouched and still have live callers
   ;; (surface-rewrite.rkt internally, tools/spine-census.rkt, the Track 3
   ;; micro-benchmark, tests/test-parse-reader.rkt).
+  ;; PARSE T1 P4: `parse_ms` existed in performance-counters.rkt but
+  ;; `time-phase! parse` had ZERO call sites, so it printed 0 on every
+  ;; benchmark run — and 0 is indistinguishable from "fast".  That is how an
+  ;; O(L^3) parse stayed invisible: a 26 KB file took 1073 ms here and the
+  ;; counter said 0.
+  ;;
+  ;; ⚠ `time-phase!` CANNOT be used at this site.  It writes to
+  ;; `(current-phase-timings)`, but the parse runs BEFORE the `phase-timings`
+  ;; struct that gets reported is created and parameterized (process-file
+  ;; builds `surfs` first, then `pt`; `process-surfs` receives surfs already
+  ;; parsed).  Wiring it here compiled, ran, and still printed 0 — a second
+  ;; dead counter dressed as a fix.  So the elapsed time is stashed and
+  ;; stamped into `pt` at each reporting site instead.
+  (define parse-t0 (current-inexact-monotonic-milliseconds))
   (define pt (read-to-tree source-str))
+  (set-box! last-ws-parse-ms (- (current-inexact-monotonic-milliseconds) parse-t0))
 
   ;; PPN Track 3 Phase 6+3a: create per-form cells on the elab-network.
   ;; ⚠ KEEP. These are Track 3's DELIVERABLE and the merge's intended
@@ -2630,6 +2651,7 @@
 (define (process-surfs surfs)
   ;; Common tail for both old and new paths.
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
+  (set-phase-timings-parse-ms! pt (unbox last-ws-parse-ms))  ;; PARSE T1 P4
   (define pv (provenance-counters 0 0 0 0 0 0 0 0))
   (define qs (make-quiescence-stats))
   (define mem-before (measure-memory-before))
@@ -2744,6 +2766,7 @@
        ;; sexp reader never attaches 'prologos-paren-origin.
        (map parse-toplevel-datum expanded-stxs)]))
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
+  (set-phase-timings-parse-ms! pt (unbox last-ws-parse-ms))  ;; PARSE T1 P4
   (define pv (provenance-counters 0 0 0 0 0 0 0 0))
   (define qs (make-quiescence-stats))
   (define mem-before (measure-memory-before))

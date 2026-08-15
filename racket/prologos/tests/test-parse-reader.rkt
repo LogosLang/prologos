@@ -4,7 +4,8 @@
 ;;; Tests for PPN Track 1: Propagator-Based Reader
 ;;;
 
-(require rackunit
+(require racket/runtime-path
+         rackunit
          racket/set
          racket/list
          racket/string
@@ -1734,3 +1735,82 @@
     (define toks (token-types-from-rrb (tokenize-char-rrb (make-char-rrb-from-string s))))
     (check-equal? (car (list-ref toks 1)) 'keyword s)
     (check-equal? (cdr (list-ref toks 1)) lex)))
+
+;; ============================================================
+;; PARSE T1 — the O(L^3) repair, pinned differentially
+;; ============================================================
+;;
+;; These are the correctness half of a PURE OPTIMIZATION: the parse got 102x
+;; faster on a 26 KB file, which is worth nothing if it changed one tree.  Each
+;; test asserts the fast form against the slow form it replaced, over REAL
+;; corpus text rather than toy strings.
+
+;; ⚠ RUNTIME PATH, not a cwd-relative one.  These files resolve from `tests/`
+;; but NOT from `racket/prologos`, and the batch worker's cwd decides which —
+;; so a cwd-relative path would leave the corpus EMPTY and every differential
+;; below would pass VACUOUSLY.  `define-runtime-path` anchors to this source
+;; file, and the emptiness check turns any future breakage into a failure
+;; instead of a silent green.
+(define-runtime-path parse-t1--lib-core "../lib/prologos/core")
+
+(define (parse-t1--corpus-sources)
+  ;; Real files, spanning the size range where the cubic bit (742 B -> 28 KB).
+  (define srcs
+    (for/list ([base '("io.prologos" "eq.prologos"
+                       "collections.prologos" "conversions.prologos")]
+               #:when (file-exists? (build-path parse-t1--lib-core base)))
+      (cons base (file->string (build-path parse-t1--lib-core base)))))
+  (check-true (>= (length srcs) 4)
+              "PARSE T1 differential corpus is missing files — these tests would be VACUOUS")
+  srcs)
+
+(test-case "PARSE T1: compute-line-starts == find-line-start-pos, every line"
+  ;; The one-pass vector must agree with the per-line rescan it replaced,
+  ;; INCLUDING the out-of-range case (a source line past the last newline
+  ;; answered (rrb-size char-rrb) before, and must still).
+  (for ([src (in-list (map cdr (parse-t1--corpus-sources)))])
+    (define char-rrb (make-char-rrb-from-string src))
+    (define n (rrb-size char-rrb))
+    (define starts (compute-line-starts char-rrb))
+    ;; +3 past the end exercises the fallthrough
+    (for ([ln (in-range (+ 3 (vector-length starts)))])
+      (check-equal? (line-start-at starts ln n)
+                    (find-line-start-pos char-rrb ln)
+                    (format "line ~a" ln)))))
+
+(test-case "PARSE T1: line starts are ASCENDING (binary search's precondition)"
+  ;; find-content-line-for-pos binary-searches; if boundaries were ever
+  ;; unsorted it would return a wrong line SILENTLY.  Pin the property.
+  (for ([src (in-list (map cdr (parse-t1--corpus-sources)))])
+    (define starts (compute-line-starts (make-char-rrb-from-string src)))
+    (for ([i (in-range 1 (vector-length starts))])
+      (check-true (< (vector-ref starts (sub1 i)) (vector-ref starts i))
+                  "line starts must strictly increase"))))
+
+(test-case "PARSE T1: binary search == backward linear scan, every position"
+  ;; The retired implementation, verbatim, as the oracle.
+  (define (linear-scan pos boundaries n-lines)
+    (let loop ([i (- n-lines 1)])
+      (cond [(< i 0) 0]
+            [(<= (list-ref boundaries i) pos) i]
+            [else (loop (- i 1))])))
+  (for ([src (in-list (map cdr (parse-t1--corpus-sources)))])
+    (define starts (compute-line-starts (make-char-rrb-from-string src)))
+    (define as-list (vector->list starts))
+    (define n (vector-length starts))
+    ;; every line start, every line end, and the gaps between
+    (for ([pos (in-range 0 (string-length src)
+                         (max 1 (quotient (string-length src) 400)))])
+      (check-equal? (find-content-line-for-pos pos starts n)
+                    (linear-scan pos as-list n)
+                    (format "pos ~a" pos)))))
+
+(test-case "PARSE T1: empty and newline-only inputs behave as before"
+  (for ([src (in-list '("" "\n" "\n\n\n" "x" "x\n"))])
+    (define char-rrb (make-char-rrb-from-string src))
+    (define n (rrb-size char-rrb))
+    (define starts (compute-line-starts char-rrb))
+    (for ([ln (in-range 0 5)])
+      (check-equal? (line-start-at starts ln n)
+                    (find-line-start-pos char-rrb ln)
+                    (format "~s line ~a" src ln)))))
