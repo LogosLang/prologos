@@ -192,15 +192,28 @@
 ; Parameters and bindings
 ; ============================================================
 
-; A `let` binding NAME is a local binding, not a parameter — and `bare_param`
-; serves BOTH, so only the enclosing node tells them apart. That is precisely
-; what a regex grammar cannot see.
+; A `let` binding NAME is a binding SITE — like a match binder, and unlike a
+; use.  `@variable.definition` is the capture the vocabulary already has for
+; that (see `identifier_pattern` above); `bare_param` serves let names AND
+; params, so only the enclosing node tells them apart.
+;
+; ⚠ These two rules said `@variable` (inert-by-design) until 2026-08-15, and
+; that intent was enforced by NEITHER consumer, each for its own reason:
+; Emacs DROPS a nil-mapped capture's rule entirely (prologos-ts-mode's
+; "Deliberately unpainted" arm), so the @variable.parameter rules below
+; painted let names; VS Code has no map entry for `variable` and skips it
+; BEFORE claiming the span, so the same later capture claimed it there too.
+; Both editors rendered "parameter" against the query's stated design, the
+; parity golden recorded all three captures on the span (raw lists match ->
+; green), and no gate asks which capture WINS.  A capture whose meaning is
+; "paint nothing" is only real if every consumer both maps it and claims with
+; it — otherwise it is a comment wearing a capture's clothes.
 ;
 ; MUST precede the `bare_param` rule below: first match wins by file order, so
 ; placing it after made these two rules VACUOUS — they compiled, and never
 ; fired. Caught by testing that captures actually appear, not that they parse.
-(let_binding name: (typed_param_or_bare (bare_param (identifier) @variable)))
-(let_binding name: (typed_param_or_bare (typed_param name: (identifier) @variable)))
+(let_binding name: (typed_param_or_bare (bare_param (identifier) @variable.definition)))
+(let_binding name: (typed_param_or_bare (typed_param name: (identifier) @variable.definition)))
 
 (fn_param (identifier) @variable.parameter)
 (typed_param name: (identifier) @variable.parameter)

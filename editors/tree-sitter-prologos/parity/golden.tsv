@@ -109,211 +109,236 @@
 42	29	type	Point
 42	29	variable	Point
 43	2	variable	p1
-45	0	comment	;; --- let binding names are @variable, not @variable.parameter ---
-46	0	keyword	defn
-46	5	function	withlet
-46	5	variable	withlet
-46	14	variable	q
-46	14	variable.parameter	q
-47	2	keyword	let
-47	6	variable	acc
-47	6	variable	acc
-47	6	variable.parameter	acc
-47	10	number	1
-48	3	operator	+
-48	5	variable	q
-48	7	variable	acc
-50	0	comment	;; --- match, patterns, wildcard, arrows ---
-51	0	keyword	defn
-51	5	function	classify
-51	5	variable	classify
-51	15	variable	v
-51	15	variable.parameter	v
-52	2	keyword	match
-52	8	variable	v
-53	4	operator	|
-53	6	constant.builtin	zero
-53	6	variable	zero
-53	6	variable.definition	zero
-53	12	operator	->
-53	15	string	"z"
-54	4	operator	|
-54	6	variable	n
-54	6	variable.definition	n
-54	12	operator	->
-54	15	string	"other"
-55	4	operator	|
-55	6	comment	_
-55	12	operator	->
-55	15	string	"w"
-57	0	comment	;; --- data declaration: type.definition + constructors ---
-58	0	keyword	data
-58	5	type.definition	Colour
-58	5	variable	Colour
-59	2	operator	|
-59	4	constructor	Red
-59	4	variable	Red
-60	2	operator	|
-60	4	constructor	Green
-60	4	variable	Green
-62	0	comment	;; --- trait: type.definition + trait_method + implicit params ---
-63	0	keyword	trait
-63	6	type.definition	Show
-63	6	variable	Show
-63	12	type	A
-63	12	variable	A
-64	2	function	show
-64	2	variable	show
-64	9	variable	A
-64	11	operator	->
-64	14	type.builtin	String
-64	14	variable	String
-66	0	comment	;; --- impl: trait_name is a @type ---
-67	0	keyword	impl
-67	5	type	Show
-67	5	variable	Show
-67	10	variable	Colour
-68	2	keyword	defn
-68	7	function	show
-68	7	variable	show
-68	13	variable	v
-68	13	variable.parameter	v
-69	4	string	"colour"
-71	0	comment	;; --- spec with builtin + applied types, plus a metadata entry: the
-72	0	comment	;;     `:doc' keyword is @attribute, NOT @string.special.symbol. Added in
-73	0	comment	;;     EHP P3 because the fixture exercised only ONE of @attribute's four
-74	0	comment	;;     sites, which is how three of them stayed vacuous unnoticed. ---
-75	0	keyword	spec
-75	5	function	pick
-75	5	variable	pick
-75	10	type	Int
-75	10	type.builtin	Int
-75	10	variable	Int
-75	15	type	List
-75	15	type.builtin	List
-75	15	variable	List
-75	20	type	Int
-75	20	type.builtin	Int
-75	20	variable	Int
-75	25	operator	->
-75	29	type	Option
-75	29	type.builtin	Option
-75	29	variable	Option
-75	36	type	Int
-75	36	type.builtin	Int
-75	36	variable	Int
-76	2	attribute	:doc
-76	2	string.special.symbol	:doc
-76	7	string	"pick an element"
-78	0	comment	;; --- relational form (Rel T1): defr, ||, &>, =, logic variables ---
-79	0	keyword	defr
-79	5	function	digit
-79	5	variable	digit
-79	12	variable.logic	?d
-80	2	operator	||
-80	5	number	0
-80	7	operator	|
-80	9	number	1
-80	11	operator	|
-80	13	number	2
-82	0	keyword	defr
-82	5	function	twice
-82	5	variable	twice
-82	12	variable.logic	?a
-82	15	variable.logic	?b
-83	2	operator	&>
-83	5	variable	digit
-83	11	variable	a
-84	5	operator	=
-84	5	operator	=
-84	7	variable	b
-84	9	variable	a
-86	0	comment	;; --- path selection: dot DESCENDS · brace SELECTS · `^` RE-KEYS.  Every
-87	0	comment	;;     branch name is a KEY (@property) and the SUBJECT is not (@variable).
-88	0	comment	;;     Added 2026-08-15 with DEFERRED 135's fix: without a path form here
-89	0	comment	;;     the golden could not hold the distinction.  Deliberately avoids the
-90	0	comment	;;     `^-` collapse family, which the grammar cannot parse (DEFERRED 136)
-91	0	comment	;;     and which would put an ERROR node in the fixture. ---
-92	0	keyword	def
-92	4	function	picked
-92	4	variable	picked
-92	11	operator	:=
-92	14	variable	cfg
-92	18	property	server
-92	18	variable	server
-92	24	operator	^
-92	27	property	ssl
-92	27	variable	ssl
-92	30	operator	^
-92	32	property	enabled
-92	32	variable	enabled
-92	39	operator	^ssl
-92	40	property	ssl
-92	40	variable	ssl
-92	44	property	port
-92	44	variable	port
-92	50	property	version
-92	50	variable	version
-93	0	comment	;;     The `^-` COLLAPSE family (Q_T7) and the parent collapse `^..`
-94	0	comment	;;     (Q_T8). Could not be in the fixture until 2026-08-15 — the grammar
-95	0	comment	;;     could not parse them (DEFERRED 136) and they would have planted an
-96	0	comment	;;     ERROR node in a fixture required to parse clean. ---
-97	0	keyword	def
-97	4	function	collapsed
-97	4	variable	collapsed
-97	14	operator	:=
-97	17	variable	cfg
-97	21	property	server
-97	21	variable	server
-97	28	property	host
-97	28	variable	host
-97	32	operator	^-_
-97	36	property	database
-97	36	variable	database
-97	45	property	url
-97	45	variable	url
-97	48	operator	^-
-97	51	property	alpha
-97	51	variable	alpha
-97	57	property	beta
-97	57	variable	beta
-97	61	operator	^-gamma
-97	63	property	gamma
-97	63	variable	gamma
-98	0	keyword	def
-98	4	function	parented
-98	4	variable	parented
-98	13	operator	:=
-98	16	variable	cfg
-98	20	property	server
-98	20	variable	server
-98	27	property	ssl
-98	27	variable	ssl
-98	31	property	enabled
-98	31	variable	enabled
-98	38	operator	^..
-100	0	comment	;; --- typed hole (`??`, distinct from a `?x` logic variable) ---
-101	0	keyword	def
-101	4	function	hole
-101	4	variable	hole
-101	9	operator	:=
-101	12	variable.hole	??
-103	0	comment	;; --- operators as first-class values ---
+45	0	comment	;; --- let binding names are @variable.definition: binding SITES, like match
+46	0	comment	;;     binders — not parameters, not plain uses.  The aligned block is here so
+47	0	comment	;;     the harness exercises LET_ALIGN's tree, not just the single binding. ---
+48	0	keyword	defn
+48	5	function	withlet
+48	5	variable	withlet
+48	14	variable	q
+48	14	variable.parameter	q
+49	2	keyword	let
+49	6	variable	acc
+49	6	variable.definition	acc
+49	6	variable.parameter	acc
+49	10	number	1
+50	3	operator	+
+50	5	variable	q
+50	7	variable	acc
+52	0	keyword	defn
+52	5	function	withaligned
+52	5	variable	withaligned
+52	18	variable	q
+52	18	variable.parameter	q
+53	2	keyword	let
+53	6	variable	acc
+53	6	variable.definition	acc
+53	6	variable.parameter	acc
+53	10	number	1
+54	6	variable	lim
+54	6	variable.definition	lim
+54	6	variable.parameter	lim
+54	10	type	Int
+54	10	type.builtin	Int
+54	10	variable	Int
+54	14	operator	:=
+54	17	number	9
+55	5	operator	+
+55	7	variable	acc
+55	12	operator	+
+55	14	variable	lim
+55	18	variable	q
+57	0	comment	;; --- match, patterns, wildcard, arrows ---
+58	0	keyword	defn
+58	5	function	classify
+58	5	variable	classify
+58	15	variable	v
+58	15	variable.parameter	v
+59	2	keyword	match
+59	8	variable	v
+60	4	operator	|
+60	6	constant.builtin	zero
+60	6	variable	zero
+60	6	variable.definition	zero
+60	12	operator	->
+60	15	string	"z"
+61	4	operator	|
+61	6	variable	n
+61	6	variable.definition	n
+61	12	operator	->
+61	15	string	"other"
+62	4	operator	|
+62	6	comment	_
+62	12	operator	->
+62	15	string	"w"
+64	0	comment	;; --- data declaration: type.definition + constructors ---
+65	0	keyword	data
+65	5	type.definition	Colour
+65	5	variable	Colour
+66	2	operator	|
+66	4	constructor	Red
+66	4	variable	Red
+67	2	operator	|
+67	4	constructor	Green
+67	4	variable	Green
+69	0	comment	;; --- trait: type.definition + trait_method + implicit params ---
+70	0	keyword	trait
+70	6	type.definition	Show
+70	6	variable	Show
+70	12	type	A
+70	12	variable	A
+71	2	function	show
+71	2	variable	show
+71	9	variable	A
+71	11	operator	->
+71	14	type.builtin	String
+71	14	variable	String
+73	0	comment	;; --- impl: trait_name is a @type ---
+74	0	keyword	impl
+74	5	type	Show
+74	5	variable	Show
+74	10	variable	Colour
+75	2	keyword	defn
+75	7	function	show
+75	7	variable	show
+75	13	variable	v
+75	13	variable.parameter	v
+76	4	string	"colour"
+78	0	comment	;; --- spec with builtin + applied types, plus a metadata entry: the
+79	0	comment	;;     `:doc' keyword is @attribute, NOT @string.special.symbol. Added in
+80	0	comment	;;     EHP P3 because the fixture exercised only ONE of @attribute's four
+81	0	comment	;;     sites, which is how three of them stayed vacuous unnoticed. ---
+82	0	keyword	spec
+82	5	function	pick
+82	5	variable	pick
+82	10	type	Int
+82	10	type.builtin	Int
+82	10	variable	Int
+82	15	type	List
+82	15	type.builtin	List
+82	15	variable	List
+82	20	type	Int
+82	20	type.builtin	Int
+82	20	variable	Int
+82	25	operator	->
+82	29	type	Option
+82	29	type.builtin	Option
+82	29	variable	Option
+82	36	type	Int
+82	36	type.builtin	Int
+82	36	variable	Int
+83	2	attribute	:doc
+83	2	string.special.symbol	:doc
+83	7	string	"pick an element"
+85	0	comment	;; --- relational form (Rel T1): defr, ||, &>, =, logic variables ---
+86	0	keyword	defr
+86	5	function	digit
+86	5	variable	digit
+86	12	variable.logic	?d
+87	2	operator	||
+87	5	number	0
+87	7	operator	|
+87	9	number	1
+87	11	operator	|
+87	13	number	2
+89	0	keyword	defr
+89	5	function	twice
+89	5	variable	twice
+89	12	variable.logic	?a
+89	15	variable.logic	?b
+90	2	operator	&>
+90	5	variable	digit
+90	11	variable	a
+91	5	operator	=
+91	5	operator	=
+91	7	variable	b
+91	9	variable	a
+93	0	comment	;; --- path selection: dot DESCENDS · brace SELECTS · `^` RE-KEYS.  Every
+94	0	comment	;;     branch name is a KEY (@property) and the SUBJECT is not (@variable).
+95	0	comment	;;     Added 2026-08-15 with DEFERRED 135's fix: without a path form here
+96	0	comment	;;     the golden could not hold the distinction.  Deliberately avoids the
+97	0	comment	;;     `^-` collapse family, which the grammar cannot parse (DEFERRED 136)
+98	0	comment	;;     and which would put an ERROR node in the fixture. ---
+99	0	keyword	def
+99	4	function	picked
+99	4	variable	picked
+99	11	operator	:=
+99	14	variable	cfg
+99	18	property	server
+99	18	variable	server
+99	24	operator	^
+99	27	property	ssl
+99	27	variable	ssl
+99	30	operator	^
+99	32	property	enabled
+99	32	variable	enabled
+99	39	operator	^ssl
+99	40	property	ssl
+99	40	variable	ssl
+99	44	property	port
+99	44	variable	port
+99	50	property	version
+99	50	variable	version
+100	0	comment	;;     The `^-` COLLAPSE family (Q_T7) and the parent collapse `^..`
+101	0	comment	;;     (Q_T8). Could not be in the fixture until 2026-08-15 — the grammar
+102	0	comment	;;     could not parse them (DEFERRED 136) and they would have planted an
+103	0	comment	;;     ERROR node in a fixture required to parse clean. ---
 104	0	keyword	def
-104	4	function	folded
-104	4	variable	folded
-104	11	operator	:=
-104	15	keyword	reduce
-104	15	variable	reduce
-104	22	operator	+
-104	24	number	0
-104	28	number	1
-104	30	number	2
-104	32	number	3
-106	0	comment	;; --- quote ---
-107	0	keyword	def
-107	4	function	quoted
-107	4	variable	quoted
-107	11	operator	:=
-107	16	number	1
-107	18	number	2
+104	4	function	collapsed
+104	4	variable	collapsed
+104	14	operator	:=
+104	17	variable	cfg
+104	21	property	server
+104	21	variable	server
+104	28	property	host
+104	28	variable	host
+104	32	operator	^-_
+104	36	property	database
+104	36	variable	database
+104	45	property	url
+104	45	variable	url
+104	48	operator	^-
+104	51	property	alpha
+104	51	variable	alpha
+104	57	property	beta
+104	57	variable	beta
+104	61	operator	^-gamma
+104	63	property	gamma
+104	63	variable	gamma
+105	0	keyword	def
+105	4	function	parented
+105	4	variable	parented
+105	13	operator	:=
+105	16	variable	cfg
+105	20	property	server
+105	20	variable	server
+105	27	property	ssl
+105	27	variable	ssl
+105	31	property	enabled
+105	31	variable	enabled
+105	38	operator	^..
+107	0	comment	;; --- typed hole (`??`, distinct from a `?x` logic variable) ---
+108	0	keyword	def
+108	4	function	hole
+108	4	variable	hole
+108	9	operator	:=
+108	12	variable.hole	??
+110	0	comment	;; --- operators as first-class values ---
+111	0	keyword	def
+111	4	function	folded
+111	4	variable	folded
+111	11	operator	:=
+111	15	keyword	reduce
+111	15	variable	reduce
+111	22	operator	+
+111	24	number	0
+111	28	number	1
+111	30	number	2
+111	32	number	3
+113	0	comment	;; --- quote ---
+114	0	keyword	def
+114	4	function	quoted
+114	4	variable	quoted
+114	11	operator	:=
+114	16	number	1
+114	18	number	2

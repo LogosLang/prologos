@@ -42,10 +42,17 @@ defn add2 [x:Int y]
 defn point-add2 [p1:Point p2:Point]
   p1
 
-;; --- let binding names are @variable, not @variable.parameter ---
+;; --- let binding names are @variable.definition: binding SITES, like match
+;;     binders — not parameters, not plain uses.  The aligned block is here so
+;;     the harness exercises LET_ALIGN's tree, not just the single binding. ---
 defn withlet [q]
   let acc 1
   [+ q acc]
+
+defn withaligned [q]
+  let acc 1
+      lim:Int := 9
+    [+ acc [+ lim q]]
 
 ;; --- match, patterns, wildcard, arrows ---
 defn classify [v]
