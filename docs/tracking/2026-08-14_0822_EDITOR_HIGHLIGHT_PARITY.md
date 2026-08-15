@@ -24,7 +24,7 @@ contract well enough that a third editor is a *mapping table*, not a port.
 | P4 | The four catalogued issues, on the repaired base | ✅ | **ALL FOUR FIXED** — `a0781086` · `978db44b` · `c40c7a01`. **Not one residual cause was TextMate**: the query, the grammar, the grammar, and TextMate+grammar. [§15](#p4-record) · [§16](#p4-record-2) · [§17](#p4-record-3) |
 | P5 | `#match?` dialect lint (or retire the predicate) | ✅ | Gate `parity/check-regexps.sh` + a translator hole closed. ⭐ The grammar-token route **cannot** retire it — 2 of 3 uses match LIBRARY names ([DEFERRED 137](DEFERRED.md)). [§18](#p5-record) |
 | P6 | `docs/ADDING_AN_EDITOR.md` — the contributor contract | ✅ | Written in **Simplified Technical English** (ASD-STE100, strict). Two of my own claims were wrong and caught by checking. [§19](#p6-record) |
-| P7 | EHP T1.close — PIR-lite, DEFERRED triage | ⬜ | |
+| P7 | EHP T1.close — PIR-lite, DEFERRED triage | 🔄 | PIR-lite [§20](#pir-lite). Triage + lesson promotion in progress |
 
 ---
 
@@ -1279,3 +1279,233 @@ it is line **277 of 277** in `highlights.scm` — literally the final line.
 
 `captures.md` now points at the full contract, so the vocabulary half no longer
 reads as if it were the whole obligation.
+
+---
+
+<a id="pir-lite"></a>
+## 20. EHP T1.close — PIR-lite (2026-08-14)
+
+Scoped as a **PIR-lite** per `WORK_STRUCTURE.org`: a track whose deliverables are
+tooling and documents, with no compiler surface touched. Built from the 16
+questions in `POST_IMPLEMENTATION_REVIEW.org` rather than from memory, but
+compressing Q3 (timeline — the LOG already is one), Q10, Q12, Q14 and Q15, which
+have little to say here. Q16 is kept in full, because it is the one that pays.
+
+### Q1 — Stated objectives, scored
+
+From [§2](#the-target), written at open:
+
+| # | objective | outcome |
+|---|---|---|
+| 1 | `highlights.scm` is authoritative for everything it captures | ✅ both editors read the one file; no inline rules remain in either |
+| 2 | anything else a native layer paints is **declared**, and agrees where it overlaps | ✅ TextMate declared in `textmate-agreement.tsv` (22 rows), enforced by `census.mjs --gate`, exceptions in `known-gaps.tsv` (1 row) |
+| 3 | each consumer contributes exactly one thing — a capture → face/token mapping | ✅ enforced both directions by `check-vocabulary.sh` |
+| 4 | divergence is a **test failure**, not a discovery | ✅ seven gates; every obligation above has one that proves it |
+
+All four met. ⚠ Objective 2 was **amended mid-track** — it read "disjoint" at
+open and became "agree where it overlaps" at [§7.4](#d3-critique). That was a
+correction to the design, not a weakening: "disjoint" is not a thing VS Code can
+express.
+
+### Q2 — What was delivered
+
+- **Seven gates**, four of them new this track: `check-parity.sh`,
+  `check-vocabulary.sh`, `check-reachability.sh`, `check-tokens.mjs`,
+  `check-regexps.sh`, plus `census.mjs --gate` and the pre-existing
+  `check-corpus.sh`.
+- **One shared query**, 277 lines, 314 captures over the fixture.
+- **A capture registry** (`queries/captures.md`) on the Neovim standard
+  vocabulary, verified against Neovim master, with a roots policy that is a test
+  rather than a comment.
+- **A contributor contract** (`docs/ADDING_AN_EDITOR.md`, 215 lines, STE).
+- **Bug fixes**: 4 catalogued issues, 3 DEFERRED discharged (134/135/136), the
+  scanner comment fix, the wasm provenance gap, the query-sync guard, and the
+  `translate-regexp` character-class hole.
+- **52 commits** since the track opened.
+
+### Q4 — Deferred, and why
+
+- **DEFERRED 137** — should the pseudo-keyword list become grammar tokens? TSG
+  work, and a modelling improvement rather than a defect. The dialect hazard it
+  would have addressed is already closed by P5's gate.
+- **SURF T1** — was blocked by TSG T1, now unblocked and not started. Deliberate:
+  the surfer needed a tree that parses.
+
+### Q5 — What went well
+
+- **Building the harness before acting on the catalogue.** P1 was scheduled as
+  "the load-bearing phase", and it earned the label immediately: it found the two
+  editors **already agreed**, and that the harness itself was what was wrong. Had
+  P2 acted on the four catalogued issues first, three of the four fixes would have
+  gone into TextMate, which turned out to be the cause of **none** of them.
+- **Objective 4 as a design constraint, not a slogan.** Every obligation ended up
+  with a gate that proves it. That is why the arc kept finding pre-existing bugs
+  instead of only the ones it set out to fix.
+
+### Q6 — What went wrong
+
+- **The four catalogued issues were mis-diagnosed at open.** Three of four were
+  filed as "suspected TextMate". The residual causes were: the query, the
+  grammar, the grammar, and TextMate+grammar. The suspicion was recorded as
+  suspicion, and P1 was built to convert it to fact — so the process held even
+  though the initial reading did not.
+- **My own new rules were vacuous twice** — two query rules added during §9, and
+  the `@attribute` hoist exposed three more that predated me.
+- **Two gates were broken by comment prose**, because their extractors read the
+  raw query text.
+
+### Q7 — Where we got lucky
+
+- **The `@comment` finding was overstated when first written**, and the third
+  gate corrected it the same day. Had reachability not been built when it was,
+  "unreachable" would have gone into the record as fact. Luck, in that the gate
+  happened to land before the claim hardened.
+- **`[\d]` never appeared in the query.** The `translate-regexp` hole was live for
+  the whole time the function existed, and nothing exercised it. It was found by
+  reading the contract, not by a failure.
+
+### Q8 — What surprised us
+
+1. **The two editors already agreed.** The premise of the track — that they
+   drifted — was measurably false at P1, and the drift ran the *opposite* way
+   from the one the design defended against.
+2. **Not one of the four issues was TextMate.**
+3. **`@attribute`'s colour was the small half** — three of its four rules were
+   vacuous, mispainting ~90% of its spans, while the reachability gate stayed
+   green because the fourth fired.
+4. **A guard's documented contract was false** (`translate-regexp`), found only
+   because P5 intended to delegate to it.
+
+### Q9 — How the architecture held up
+
+The shared-query model held. The one structural change the track forced was
+**where the mapping lives**: D2 ruled option E (vocabulary file + per-consumer
+mappings + a two-direction test) over a single runtime registry, and that has
+been stable since. The roots policy is the part most likely to be re-litigated —
+it is subtle, and it is only legible as a test.
+
+### Q11 — Technical debt accepted
+
+- `golden.tsv` is a **recorded** artifact. It must be re-recorded deliberately
+  when the query changes, and the warning against treating it as a target now
+  lives in two places (the harness comment and the contributor contract).
+- The parity harness is hardcoded to two editors. A third needs a dump program.
+  Documented rather than generalised, because there is no third editor yet and
+  generalising for an absent consumer is how speculative entries got into the VS
+  Code map in the first place.
+
+### Q13 — Assumptions that were wrong
+
+| assumed | actual |
+|---|---|
+| the two editors had drifted apart | they agreed; the harness was wrong |
+| TextMate was the likely cause of the reported issues | cause of none of them |
+| `@attribute` needed a colour | it needed a colour *and* three of its rules to fire at all |
+| `translate-regexp` was safe to delegate to | its documented contract was false |
+| the wasm was `prologos.wasm` in the extension dir | wrong name, wrong directory (caught writing P6) |
+
+The through-line: **every one of these was a belief about an artifact that was
+never checked against the artifact.**
+
+### Q16 — Pattern, not isolated outcome
+
+This is the question that pays, and the answer is one pattern with **eight**
+data points across the arc:
+
+> **A guard, gate, registration or claim that is ABSENT or INERT produces no
+> signal, and the absence of signal is read as the absence of a problem.**
+
+`core.hooksPath` (hooks silently off for weeks) · the audit template's false repo
+anchor · `activate()`'s early return (commands unregistered while highlighting
+kept working) · the five-month-stale grammar (tree-sitter *recovers*) · the
+extension's `.scm` going stale, invisible **by construction** · `@attribute`'s
+three vacuous rules · `translate-regexp`'s false contract · and two of my own
+claims in P6.
+
+Cross-referencing prior PIRs, this is the same family as "Validated ≠ Deployed"
+and "Belt-and-Suspenders Masks Bugs" — both already promoted — but it is
+*distinct* from them: those describe a mechanism that exists and is not load-
+bearing. This one describes a mechanism that **does not exist**, or exists and
+**never fires**, where the system's normal appearance is indistinguishable from
+the healthy one.
+
+**→ Promotion is owed.** See the close checklist below.
+
+### Close checklist
+
+| item | status |
+|---|---|
+| All phases ✅ | P0–P6 done |
+| Gates green | 7/7 |
+| DEFERRED triage | ⬜ next |
+| Lesson promotion | ⬜ next — the fail-open pattern, 8 data points |
+| Memory fold | ⬜ next |
+| Suite | not re-run; no compiler surface touched |
+
+---
+
+<a id="close-triage"></a>
+## 21. EHP T1.close — DEFERRED triage + gap review (2026-08-14)
+
+### DEFERRED triage: clean, and short
+
+Reviewed the whole register (64 open, 25 discharged) for items this arc
+unblocked, made irrelevant, or should have filed.
+
+| entry | verdict |
+|---|---|
+| **134 / 135 / 136** | ✅ filed AND discharged in this arc |
+| **137** | ⬜ correctly parked — TSG work, a modelling improvement, not a defect. The hazard it addresses is already closed by P5's gate |
+| **125** | not ours — "grammar" there means the *language's* star-continuation grammar, not tree-sitter |
+| everything else (103–132) | CIU T6 star family. Untouched by this arc, and this arc does not unblock any of them |
+
+**Nothing became stale and nothing is missing.** No register entry mentions the
+surfer, so SURF T1 carries no DEFERRED prerequisites.
+
+### Gap review — is SURF T1 actually unblocked?
+
+⚠ **SURF T1's stated unblock condition is STALE, and it should be restated
+rather than met.** [§0 of the surfer doc](2026-08-14_0003_SURFER_REENGINEERING.md)
+says the track "resumes when the corpus parses clean". It does not parse clean,
+and it probably never will:
+
+```
+files 142 | clean 35 (25%) | ERROR 2579 | MISSING 73
+LOCALITY: 0 files SWALLOWED; worst single error covers 14% of its file
+ERROR-BYTES 1.3% of the corpus unparsed
+```
+
+That condition was written **before** TSG T1 established that ERROR *count* is
+anti-correlated with progress and that **swallows** is the metric that tracks
+editor usability. "Parses clean" is the old metric's phrasing, and holding SURF
+to it would block the track forever on a number that is not the right number.
+
+**The measurement that actually gates a surfer** — a navigation tool cares
+whether the *form it is standing in* has structure:
+
+| measure over `lib/` (77 files) | value |
+|---|---|
+| top-level forms | 7745 |
+| forms **fully navigable** (no ERROR anywhere inside) | **7029 — 90.8%** |
+| forms containing an ERROR | 716 — 9.2% |
+
+**So SURF T1 is unblocked in substance**: ~9 forms in 100 will degrade, the
+degradation is local (0 swallows, worst error 14% of one file), and the surfer's
+design already handles it — a form containing an ERROR simply offers less
+structure to walk.
+
+**Action owed at SURF T1 open**: restate the unblock condition in §0 as
+*0 swallows + ≥90% of top-level forms navigable*, and record 90.8% as the
+baseline. Otherwise the next reader meets a condition that reads unmet.
+
+### Remaining gaps, named
+
+| gap | severity | disposition |
+|---|---|---|
+| SURF T1's unblock condition is phrased in the retired metric | low | restate at SURF open (above) |
+| 9.2% of top-level forms contain an ERROR | low | inherent; TSG T2 territory, not a blocker |
+| The parity harness is hardcoded to two editors | low | documented in `ADDING_AN_EDITOR.md`; generalising for an absent third consumer is the speculative-entry mistake |
+| `golden.tsv` must be re-recorded by hand when the query changes | low | accepted; warned in two places |
+| **The fail-open lesson has 8 data points and no `DEVELOPMENT_LESSONS.org` entry** | **medium** | ⬜ promotion — the one genuine debt of this close |
+
+No gap here blocks closing EHP T1 or starting SURF T1.
