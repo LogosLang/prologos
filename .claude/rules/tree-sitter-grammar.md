@@ -190,3 +190,48 @@ Three specific traps, all silent:
 Run `./install.sh` after ANY `.scm` change — it copies the file to the VS Code
 extension. The corpus gate measures the installed **parser** and does not see
 `.scm` edits at all, so a green gate is NOT evidence the query is fine.
+
+---
+
+## ⭐ The four editor gates — run them, and know what each CANNOT see
+
+From `editors/tree-sitter-prologos/`. Each answers a different question; a green
+one says nothing about the others' question.
+
+| gate | asks | blind to |
+|---|---|---|
+| `./check-corpus.sh` | does real code PARSE? (swallows / unparsed% / missing) | anything about captures |
+| `parity/check-parity.sh` | do BOTH consumers see the same captures? | whether the grammar emits the node at all |
+| `parity/check-vocabulary.sh` | is every capture documented + mapped, both directions? | whether it ever fires |
+| `parity/check-reachability.sh` | does every capture FIRE somewhere? | **coverage** — `@comment` passed at 1455 hits while ~99% broken; use `--coverage` |
+| `parity/census.mjs --gate` | do TextMate and tree-sitter AGREE where they overlap? | — |
+
+⚠ `install.sh` FIRST, always: check-corpus and check-parity both refuse a stale
+artifact (exit 3), by CONTENT HASH. The dylib and the wasm each carry a
+`.provenance` file; "current" means the same thing for both.
+
+⚠ **emcc needs Python ≥3.10 and picks Xcode's 3.9**, so `install.sh` builds the
+dylib and then FAILS on the wasm — leaving Emacs new and VS Code old. Set
+`EMSDK_PYTHON=/opt/homebrew/bin/python3.13` with emsdk on PATH.
+
+## ⭐⭐ The instrument rule — five clauses, all paid for
+
+Nine instrument failures across TSG/EHP, in five distinct species:
+
+1. **Instrument wrong** — the parity harness evaluated `#match?` in Emacs
+   dialect-blind mode; it would have blamed the *correct* editor.
+2. **Question missing** — every gate green while `@comment` was ~99% broken,
+   because none asked whether the grammar emits the node.
+3. **Resolution too coarse** — reachability PASSES a capture that fires 1455
+   times and covers 1% of what it should.
+4. **Report overstates scope** — `--emacs-only` printed "both consumers agree"
+   after checking one consumer.
+5. **Right data, wrong question** — the agreement gate reused the RAW parity
+   golden (built for engine-vs-engine) to answer a layer-vs-layer question.
+
+**So: build the instrument · prove it can FAIL · ask what it cannot see · make a
+PASS state its own scope · check an artifact's CONTRACT before reusing it.**
+
+⚠ And measure the corpus before generalising: a two-file sample produced
+"`@comment` is unreachable" when the truth was ~1%. The correction cost more than
+the measurement would have.
