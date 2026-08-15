@@ -384,7 +384,15 @@ module.exports = grammar({
       field('name', $.identifier),
       ':=',
       '(',
-      repeat1($.identifier),
+      // Commas are OPTIONAL separators: the corpus writes both
+      // `(Add Sub Mul)` and `(Seqable, Buildable, ...)`, and the compiler
+      // accepts both at 0 errors (measured 2026-08-15).  Without this the
+      // comma spelling was a permanent error-recovery zone — `,` lexed as
+      // UNQUOTE, the close paren went MISSING, and the region churned under
+      // every unrelated lexer change, which is how it kept showing up in
+      // per-file A/Bs as damage from changes that never touched it.
+      $.identifier,
+      repeat(seq(optional(','), $.identifier)),
       ')',
     ),
 
@@ -629,7 +637,18 @@ module.exports = grammar({
     typed_param: $ => prec(2, seq(
       field('name', $.identifier),
       optional(field('multiplicity', $.multiplicity)),
-      ':',
+      // The colon of a FUSED annotation (`x:Int`) must out-lex
+      // `keyword_literal`, which matches the longer `:Int` at the same
+      // position.  Where both are valid — a let binding's name position, where
+      // a keyword could also begin the VALUE — longest-match takes the keyword
+      // and produces a binding whose value is `:Int` with the real value
+      // swallowed: E0/M0, a parse that SUCCEEDS with the wrong tree, invisible
+      // to the corpus gate (§9.4 class; `broadcast_step` below is the same fix
+      // for the same thief).  Lexical precedence beats match length, and
+      // `token.immediate` keeps the win adjacency-only, so the SPACED
+      // `let k := :foo` (compiler-valid) still lexes as a keyword.  The plain
+      // `':'` alternative keeps the spaced type form (`x : Int := 4`) working.
+      choice(alias(token.immediate(prec(1, ':')), ':'), ':'),
       field('type', $._param_type),
     )),
 

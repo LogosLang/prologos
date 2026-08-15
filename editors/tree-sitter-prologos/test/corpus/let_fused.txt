@@ -1,0 +1,127 @@
+================================================================
+let, fused typed binding — the colon is a TYPE colon, not a keyword
+================================================================
+
+defn f [a]
+  let x:Int 4
+    [+ a x]
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (defn_form
+      (identifier)
+      (param_list
+        (typed_param_or_bare
+          (bare_param
+            (identifier))))
+      (block_body
+        (expression
+          (let_expr
+            (let_binding
+              (typed_param_or_bare
+                (typed_param
+                  (identifier)
+                  (identifier)))
+              (expression
+                (application
+                  (expression
+                    (atom
+                      (number)))
+                  (expression
+                    (grouped_expr
+                      (expression
+                        (application
+                          (expression
+                            (application
+                              (expression
+                                (atom
+                                  (operator)))
+                              (expression
+                                (atom
+                                  (identifier)))))
+                          (expression
+                            (atom
+                              (identifier))))))))))))))))
+
+================================================================
+let, fused typed binding with := — same, and := still separates
+================================================================
+
+defn f [a]
+  let x:Int := 4
+    [+ a x]
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (defn_form
+      (identifier)
+      (param_list
+        (typed_param_or_bare
+          (bare_param
+            (identifier))))
+      (block_body
+        (expression
+          (let_expr
+            (let_binding
+              (typed_param_or_bare
+                (typed_param
+                  (identifier)
+                  (identifier)))
+              (expression
+                (application
+                  (expression
+                    (atom
+                      (number)))
+                  (expression
+                    (grouped_expr
+                      (expression
+                        (application
+                          (expression
+                            (application
+                              (expression
+                                (atom
+                                  (operator)))
+                              (expression
+                                (atom
+                                  (identifier)))))
+                          (expression
+                            (atom
+                              (identifier))))))))))))))))
+
+================================================================
+let, keyword literal as value — := spelling keeps the keyword
+================================================================
+
+defn f [a]
+  let k := :foo
+    a
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (defn_form
+      (identifier)
+      (param_list
+        (typed_param_or_bare
+          (bare_param
+            (identifier))))
+      (block_body
+        (expression
+          (let_expr
+            (let_binding
+              (typed_param_or_bare
+                (bare_param
+                  (identifier)))
+              (expression
+                (application
+                  (expression
+                    (atom
+                      (keyword_literal)))
+                  (expression
+                    (atom
+                      (identifier))))))))))))

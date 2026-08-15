@@ -1,0 +1,32 @@
+================================================================
+bundle, space-separated (the CLAUDE.md spelling)
+================================================================
+
+bundle Num := (Add Sub Mul)
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (bundle_form
+      (identifier)
+      (identifier)
+      (identifier)
+      (identifier))))
+
+================================================================
+bundle, comma-separated (the collection-traits spelling)
+================================================================
+
+bundle Collection := (Seqable, Buildable, Foldable, Reducible)
+
+----------------------------------------------------------------
+
+(source_file
+  (top_level
+    (bundle_form
+      (identifier)
+      (identifier)
+      (identifier)
+      (identifier)
+      (identifier))))
