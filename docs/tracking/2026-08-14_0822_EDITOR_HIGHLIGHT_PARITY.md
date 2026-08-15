@@ -23,7 +23,7 @@ contract well enough that a third editor is a *mapping table*, not a port.
 | P3 | Review `semanticTokenScopes` per capture | ✅ | `8b42cfb0`. `@attribute` coloured (last known gap closed) — **and 3 of its 4 rules were VACUOUS, 90% of its spans mispainted**. 3 dead scope entries + 2 dead legend types removed. New gate `check-tokens.mjs`. [§14](#p3-close) |
 | P4 | The four catalogued issues, on the repaired base | ✅ | **ALL FOUR FIXED** — `a0781086` · `978db44b` · `c40c7a01`. **Not one residual cause was TextMate**: the query, the grammar, the grammar, and TextMate+grammar. [§15](#p4-record) · [§16](#p4-record-2) · [§17](#p4-record-3) |
 | P5 | `#match?` dialect lint (or retire the predicate) | ✅ | Gate `parity/check-regexps.sh` + a translator hole closed. ⭐ The grammar-token route **cannot** retire it — 2 of 3 uses match LIBRARY names ([DEFERRED 137](DEFERRED.md)). [§18](#p5-record) |
-| P6 | `docs/ADDING_AN_EDITOR.md` — the contributor contract | ⬜ | The deliverable that makes this leverage |
+| P6 | `docs/ADDING_AN_EDITOR.md` — the contributor contract | ✅ | Written in **Simplified Technical English** (ASD-STE100, strict). Two of my own claims were wrong and caught by checking. [§19](#p6-record) |
 | P7 | EHP T1.close — PIR-lite, DEFERRED triage | ⬜ | |
 
 ---
@@ -1227,3 +1227,55 @@ extractions; a comment mentioning it followed by a real one yields 1; a regex
 containing `;` is not truncated; an escaped `\"` inside the pattern is handled.
 
 **All seven gates green** at the close of P5.
+
+---
+
+<a id="p6-record"></a>
+## 19. P6 record — `docs/ADDING_AN_EDITOR.md` ✅ (2026-08-14)
+
+The deliverable that makes this arc leverage rather than a private cleanup: what
+a new editor must implement, what is shared versus per-editor, and **which gate
+proves which obligation**.
+
+### Written in Simplified Technical English (ASD-STE100), strict mode
+
+Owner's call, and the right register for this document: it is a contract with
+procedures, and a contributor who misreads it does real work in the wrong place.
+Strict mode means active voice, one instruction per sentence, ≤25 words, no
+semicolons, no phrasal verbs, and one word for one meaning throughout.
+
+Measured on the finished file: **0 semicolons, 0 sentences over 25 words, across
+148 prose sentences.**
+
+One deliberate glossary entry resolves a genuine cross-document synonym: this
+document says **editor**, `captures.md` says *consumer*, and the glossary states
+that they are the same thing. Rotating the two silently is exactly the ambiguity
+STE exists to remove.
+
+### ⭐ Two of my own claims were wrong, and only checking caught them
+
+Both were plausible, and both would have sent a contributor to a file that does
+not exist or a task that is not the task:
+
+| claim as first written | truth |
+|---|---|
+| the wasm is `prologos.wasm`, installed to "the extension directory" | it is **`tree-sitter-prologos.wasm`**, installed to `editors/vscode-prologos/grammars/` — and `install.sh` *also* copies `highlights.scm` into `vscode-prologos/queries/`, which is a build output nobody should edit |
+| "Add your editor to `parity/check-parity.sh`" | the harness is **hardcoded to two editors**. It diffs each against `golden.tsv` through a per-editor dump program. A third editor needs its own dump program emitting the 4-field TSV, not a registration |
+
+The second is the more useful correction: it turns one line of the contract into
+a real section describing the dump-program contract (line, column, capture,
+text) and the warning that `golden.tsv` is a **record, not a target**.
+
+⚠ This is the same lesson as P5's, one layer out. There the translator's
+*documented contract* was false. Here my *own draft's* claims were false. In both
+cases the fix was to check the artifact before writing about it — and in a
+contributor contract, an unchecked path is worse than no document, because it
+spends someone else's time.
+
+### Also verified rather than asserted
+
+The document tells contributors to keep `(identifier) @variable` last. Checked:
+it is line **277 of 277** in `highlights.scm` — literally the final line.
+
+`captures.md` now points at the full contract, so the vocabulary half no longer
+reads as if it were the whole obligation.

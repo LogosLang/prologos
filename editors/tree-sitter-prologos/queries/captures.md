@@ -15,6 +15,10 @@ colour in a consumer that has never heard of it.
 
 ## Adding an editor
 
+This file covers the **vocabulary** half only. The whole contract — grammar
+artifacts, the shared query, the parity harness, and which gate proves which
+obligation — is `docs/ADDING_AN_EDITOR.md`.
+
 1. Read the table below.
 2. Write a `capture → your face/token` mapping in your own plugin.
 3. Cover every row. Cover the **roots** too — see the policy below.
