@@ -1,0 +1,50 @@
+# Capture -> TextMate scope prefixes that MEAN THE SAME THING.
+#
+# D3 ruling (2026-08-14): TextMate stays reasonably complete and is treated as
+# the portable syntax format for consumers that will never run our extension —
+# Linguist/GitHub being the concrete one. Per §7.4 the invariant is AGREEMENT,
+# not disjointness:
+#
+#     TextMate may paint anything. Where both layers paint the same span, they
+#     must agree. Overlap is fine; DISAGREEMENT is the bug.
+#
+# This file is what makes "agree" testable. It is not a third consumer mapping:
+# TextMate scope names are themselves a shared, standard vocabulary (the same
+# one Linguist consumes), so this is a vocabulary<->vocabulary correspondence and
+# belongs beside captures.md rather than inside either editor.
+#
+# Format:  capture <TAB> space-separated allowed scope prefixes
+# A span agrees if the TextMate scope starts with ANY listed prefix.
+#
+# ⭐ `*GENERIC*` lists TextMate scopes that mean "I have nothing more specific to
+# say". Those NEVER count as disagreement, and the distinction is the whole
+# point of the layering: TextMate cannot tell a definition name from a variable
+# — `defn foo` and a reference to `foo` are the same regex — so `@function` over
+# `variable.other` is the semantic layer ADDING information, not the two layers
+# contradicting each other. In VS Code the semantic token wins anyway; for
+# Linguist, `variable.other` is the honest limit of a regex grammar.
+#
+# A real disagreement is TextMate being CONFIDENTLY DIFFERENT: two specific
+# scopes that cannot both be right.
+*GENERIC*	variable.other
+
+attribute	storage.modifier
+character	constant.character
+comment	comment
+constant.builtin	constant.language constant.other
+constructor	entity.name support.function constant.language
+function	entity.name support.function
+keyword	keyword
+module	entity.name.namespace punctuation.separator.namespace
+number	constant.numeric
+operator	keyword.operator punctuation
+property	variable.other support.variable
+string	string
+string.special.symbol	constant.other.keyword string
+type	support.type entity.name.type storage.type
+type.builtin	support.type storage.type
+type.definition	entity.name support.type
+variable	variable.other
+variable.hole	variable.other
+variable.logic	variable.other
+variable.parameter	variable.other variable.parameter

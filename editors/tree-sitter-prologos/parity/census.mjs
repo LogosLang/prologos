@@ -17,7 +17,11 @@
 // evaluated `#match?` in the wrong dialect and would have blamed the correct
 // editor.)
 //
-// Usage:  node census.mjs [fixture.prologos]
+// `--gate` additionally enforces the D3 AGREEMENT invariant: where both layers
+// paint the same span, the TextMate scope must correspond to the capture, per
+// queries/textmate-agreement.tsv. Exits non-zero on disagreement.
+//
+// Usage:  node census.mjs [fixture.prologos] [--gate]
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -25,7 +29,9 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const EXT  = join(HERE, '..', '..', 'vscode-prologos');
-const FIX  = process.argv[2] || join(HERE, 'fixture.prologos');
+const ARGV = process.argv.slice(2);
+const GATE = ARGV.includes('--gate');
+const FIX  = ARGV.find(a => !a.startsWith('--')) || join(HERE, 'fixture.prologos');
 
 // Both ship CommonJS; imported from ESM their API lands under `.default`.
 const oniguruma = (await import(join(EXT, 'node_modules', 'vscode-oniguruma', 'release', 'main.js'))).default;
@@ -68,14 +74,37 @@ lines.forEach((line, i) => {
   }
 });
 
-// tree-sitter captures, from the committed golden (already agreed by BOTH
-// consumers in P1 — so "what the query paints" is not in question here).
-const ts = new Map();  // "line:col" -> capture
-for (const l of readFileSync(join(HERE, 'golden.tsv'), 'utf8').split('\n')) {
-  if (!l.trim()) continue;
-  const [line, col, cap, text] = l.split('\t');
-  const n = text.replace(/\\n/g, '\n').length;
-  for (let c = 0; c < n; c++) ts.set(`${+line}:${+col + c}`, cap);
+// tree-sitter captures — RESOLVED the way src/semanticTokens.ts resolves them:
+// `query.captures()` order, FIRST MATCH PER START OFFSET wins, multi-line
+// captures skipped (they cannot be one semantic token).
+//
+// ⚠ NOT the committed golden.  The golden is deliberately RAW — every match,
+// canonically sorted — because that is the right contract for comparing two
+// ENGINES.  It is the wrong input for this question: it still contains the
+// `(identifier) @variable` fallback rows that first-match-wins discards, so
+// comparing TextMate against it reports disagreements at spans where the
+// consumer paints something else entirely.  Measured: doing that flagged `Int`
+// as @variable-vs-support.type when the consumer actually paints @type.builtin,
+// and the two layers agree.
+const wasmPath = join(HERE, '..', 'tree-sitter-prologos.wasm');
+const tsmod = await import(join(EXT, 'node_modules', 'web-tree-sitter', 'tree-sitter.js'));
+await tsmod.Parser.init();
+const lang   = await tsmod.Language.load(wasmPath);
+const parser = new tsmod.Parser(); parser.setLanguage(lang);
+const query  = new tsmod.Query(lang, readFileSync(join(HERE, '..', 'queries', 'highlights.scm'), 'utf8'));
+const tree   = parser.parse(source);
+
+const ts = new Map();  // "line:col" -> capture (resolved)
+const claimed = new Set();
+for (const cap of query.captures(tree.rootNode)) {
+  const start = cap.node.startIndex;
+  if (claimed.has(start)) continue;
+  claimed.add(start);
+  if (cap.node.startPosition.row !== cap.node.endPosition.row) continue;
+  const row = cap.node.startPosition.row + 1;
+  for (let c = cap.node.startPosition.column; c < cap.node.endPosition.column; c++) {
+    ts.set(`${row}:${c}`, cap.name);
+  }
 }
 
 // --- Report ---
@@ -106,3 +135,44 @@ console.log('\n=== TEXTMATE ONLY: the permanent, sole authority for these ===');
 console.log('\n=== TREE-SITTER ONLY: TextMate leaves these to semantic tokens ===');
 [...tsOnly.entries()].sort((a, b) => b[1] - a[1]).forEach(([c, n]) =>
   console.log(`  ${String(n).padStart(5)}  @${c}`));
+
+// --- D3 AGREEMENT INVARIANT ---
+const agree = new Map();
+for (const line of readFileSync(join(HERE, '..', 'queries', 'textmate-agreement.tsv'), 'utf8').split('\n')) {
+  if (!line.trim() || line.startsWith('#')) continue;
+  const [cap, prefixes] = line.split('\t');
+  agree.set(cap.trim(), prefixes.trim().split(/\s+/));
+}
+if (agree.size === 0) throw new Error('parsed ZERO agreement rows — checker is broken, not the data');
+
+const GENERIC = agree.get('*GENERIC*') || [];
+function isGeneric(scope) {
+  return GENERIC.some(x => scope === x || scope.startsWith(x + '.'));
+}
+
+function allowed(cap, scope) {
+  // TextMate having nothing specific to say is not a disagreement.
+  if (isGeneric(scope)) return true;
+  // dotted-prefix fallback on the CAPTURE, same as the consumers use
+  let parts = cap.split('.');
+  while (parts.length) {
+    const p = agree.get(parts.join('.'));
+    if (p) return p.some(x => scope === x || scope.startsWith(x + '.'));
+    parts.pop();
+  }
+  return false;   // capture with no correspondence declared
+}
+
+const bad = [...pairs.entries()]
+  .map(([p, n]) => { const [cap, scope] = p.split('\t'); return { cap, scope, n }; })
+  .filter(e => !allowed(e.cap, e.scope))
+  .sort((a, b) => b.n - a.n);
+
+console.log('\n=== D3 AGREEMENT: overlapping spans where the two layers DISAGREE ===');
+if (bad.length === 0) {
+  console.log('  none — every overlap agrees');
+} else {
+  for (const e of bad) console.log(`  ${String(e.n).padStart(5)}  @${e.cap.padEnd(22)} ${e.scope}`);
+  console.log(`\n  ${bad.length} disagreeing pair(s), ${bad.reduce((s, e) => s + e.n, 0)} chars`);
+}
+if (GATE && bad.length) process.exit(1);
