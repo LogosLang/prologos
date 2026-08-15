@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 142**
+> ### **NEXT FREE: 143**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6638,3 +6638,38 @@ before fixing.
 block, pre-existing, and the aligned machinery behaves identically on it
 (adds no errors, invents nothing). Folding it in would have made the A/B
 verdict unattributable.
+
+
+---
+
+<a id="d142"></a>
+### 142. ⬜ THE LAYOUT MAP HAS NO GRAMMAR STRUCTURE — keys are unreachable by any query, and the tree is an application GLOM
+
+Filed 2026-08-15 from the map-key chrome work. The layout form:
+
+```
+def business
+  :business-info
+    :name "JMZI"
+    :status :active
+```
+
+parses as NESTED APPLICATIONS of keyword atoms — measured:
+`((((:business-info :name) "JMZI") :status) :active)`, one spine, E0. The
+compiler's `flatten-ws-kv-pairs` preparse gives this real key/value structure;
+the tree-sitter grammar has no counterpart, so:
+
+- **No query can tell a KEY from a VALUE** (`:status` vs `:active` — same node
+  shape, and glom nesting even destroys head-position as a proxy). Key-specific
+  chrome for the layout form is impossible until this lands.
+- The tree is silently WRONG (E0) for every consumer — folding, the surfer's
+  future node model, and any structural query over records.
+
+The construct is INDENT-shaped (kv lines at a column are siblings; deeper
+nests; `-` introduces list items), i.e. the contested-shape recipe again —
+scanner + column knowledge, sibling of the aligned-let work (TSG T2). Scope it
+as its own TSG track; census `-` list items and inline-brace mixing first.
+
+**Interim (2026-08-15, this commit)**: all keyword literals render in the
+default-paint family in VS Code, which the owner confirmed as the acceptable
+baseline (distinct from numerals). Per-key chrome waits on this entry.

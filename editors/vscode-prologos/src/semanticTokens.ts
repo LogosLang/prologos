@@ -61,7 +61,15 @@ const CAPTURE_MAP = new Map<string, [string, string[]]>([
   // `string.special.symbol' -> `string.special' -> `string' fallback, which
   // would have silently recoloured every keyword literal as a string: the
   // rename is a vocabulary change, and the colour decision belongs to EHP P3.
-  ['string.special.symbol', ['variable', ['readonly']]],
+  // Symbols get their OWN token+modifier pair (constants keep variable+
+  // readonly -> constant.language).  Sharing meant keyword literals could
+  // never diverge from constants/numbers at the theme layer — measured in the
+  // owner's themes, where constant.language and entity.other.attribute-name
+  // BOTH land in the numeric blue, while unstyled scopes render default.
+  // `constant.other.symbol' is the Ruby/Clojure symbol convention: unstyled
+  // (default paint, visibly distinct from numbers) in themes that do not
+  // style it, true symbol colour in those that do.  Same constant FAMILY.
+  ['string.special.symbol', ['enumMember', ['readonly']]],
   ['variable.logic', ['variable', []]],
   // An unsolved hole is not an ordinary variable — it is the one thing in the
   // buffer that WANTS attention.  Emacs has said so since the start

@@ -90,7 +90,7 @@
             "entity.name.namespace.prologos"
           ],
           "property": [
-            "entity.other.attribute-name.prologos"
+            "variable.other.property.prologos"
           ],
           "decorator": [
             "storage.modifier.prologos",
@@ -101,6 +101,9 @@
           ],
           "variable.declaration": [
             "variable.other.definition.prologos"
+          ],
+          "enumMember.readonly": [
+            "constant.other.symbol.prologos"
           ]
         }
       }
