@@ -64,13 +64,24 @@ would still have produced a broken tool.
 
 | Phase | Description | Status | Notes |
 |---|---|---|---|
-| P0 | WS-mode fixture + test scaffold | ✅ | `test/surfer-sample.prologos` — compiler-clean (0 errors). Existing `test/sample.prologos` is **sexp mode**, wrong shape for a layout surfer |
-| P1 | Node model: navigable nodes, extent-collapse, parent/child/sibling (pure, no UI) | ⬜ | Unblocked. ⚠ re-check §4.1 against the repaired grammar first |
-| P2 | Transient session: entry/exit, single overlay, `C-M-*` motions | ⬜ | The gopcaml mechanism — [§4.2](#p2) |
-| P3 | Header-line breadcrumb (the always-on component) | ⬜ | [§4.3](#p3) |
-| P4 | Selection: mark node, expand/contract | ⬜ | `C-M-SPC` |
-| P5 | Integration: retire the old model, defcustoms, docs, reload-script note | ⬜ | Old surfer's 67 tests mostly encode the retired model |
-| P6 | SURF T1.close — bench-free close, DEFERRED triage, PIR-lite | ⬜ | |
+| P0 | WS-mode fixture | ✅ | `test/surfer-sample.prologos` — compiler-clean (0 errors) |
+| P1 | **Breadcrumb — MEASURE the layout walk on real files** | ⬜ | Settles the two open unknowns by inspection, not taste: show the current line or only its ancestors, and how to truncate |
+| P2 | **Breadcrumb — implement** (layout only, no LSP, no dependency) | ⬜ | [§4.3](#p3). Ships and is usable on its own |
+| P3 | **Spike — dump `surf-*` trees for real files** | ⬜ | srcloc coverage · granularity · degenerate wrappers. Decides whether the compiler tree is navigable before we build an endpoint for it |
+| P4 | LSP structure endpoint | ⬜ | Ask for *the tree*; never encode "full reparse" — [§2b](#carrier) |
+| P5 | Node model over the compiler tree | ⬜ | [§4.1](#p1-node-model). Re-check against the repaired grammar's shape |
+| P6 | Transient session: entry/exit, one overlay, `C-M-*` | ⬜ | The gopcaml mechanism — [§4.2](#p2) |
+| P7 | Selection: mark node, expand/contract | ⬜ | `C-M-SPC` |
+| P8 | Integration: retire the old model, defcustoms, docs | ⬜ | Old surfer's 67 tests mostly encode the retired model |
+| P9 | SURF T1.close | ⬜ | |
+
+⚠ **Resequenced 2026-08-15 (owner).** The breadcrumb moved to the front. It was
+P3 of 6 and is now P1–P2 of 9. Old → new: P3→P2, P1→P5, P2→P6, P4→P7, P5→P8,
+P6→P9. Three reasons the new order is better: the breadcrumb has **no
+dependency** on the LSP work and can ship alone; it is the only always-on
+surface, so it earns feedback earliest; and the spike (P3) tells us whether the
+compiler tree is navigable **before** we spend a phase building an endpoint to
+serve it.
 
 **Deferred to SURF Track 2**: structural *transformation* (gopcaml's
 move-forward/back, transpose, structural kill/copy). Owner ruling: navigation
