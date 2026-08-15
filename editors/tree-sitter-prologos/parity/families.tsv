@@ -1,0 +1,55 @@
+# Semantic FAMILIES — the role a capture plays, stated in each consumer's own
+# vocabulary.
+#
+# ⚠ READ THIS BEFORE ADDING A ROW. This file does NOT contradict captures.md's
+# "meaning is shared, appearance is per-editor". It relies on it.
+#
+#   COLOUR is per-editor and per-theme. Nothing here constrains a colour.
+#   ROLE is meaning, and captures.md says meaning is shared.
+#
+# A family is the ROLE: "this is a constant", "this is a type". Each consumer
+# expresses the same role in its own vocabulary — Emacs as a face, VS Code as a
+# TextMate scope through semanticTokenScopes. The theme then picks the pixels.
+#
+# So when the two consumers put ONE capture in TWO families, they disagree about
+# what the thing IS, not about how it should look. That is a meaning
+# disagreement wearing an appearance costume, and it is what check-families.sh
+# exists to catch.
+#
+# Why this gate exists: parity/check-parity.sh proves both consumers see the
+# same CAPTURES. Nothing compared what those captures RESOLVE TO, so a shared
+# capture could render as two different kinds of thing with every gate green.
+# Found 2026-08-15 when keyword literals took string chrome in VS Code.
+#
+# Format:  family <TAB> emacs faces (space-separated) <TAB> vscode scope prefixes
+#
+# Matching is LONGEST PREFIX WINS on the VS Code side, so `variable.other.property'
+# beats `variable.other'. An Emacs face is resolved through its `:inherit' chain,
+# so a project face lands in the family of whatever it inherits.
+#
+# A family may be empty on one side. `namespace' has no standard Emacs face, and
+# `parameter' has none either — Emacs offers no face that means "parameter" as
+# distinct from "variable". An empty column means "this consumer cannot express
+# this role", which is a real answer and NOT a licence to diverge: a capture
+# whose two sides land in different families still fails. Record a deliberate
+# divergence in known-gaps.tsv with consumer `family'.
+#
+# ⚠ EXACTLY ONE TAB between columns, and no alignment padding. Aligning with
+# runs of tabs produced empty fields that shifted every column, and 19 of 21
+# captures silently read as UNCLASSIFIED on this file's first run.
+
+keyword	font-lock-keyword-face	keyword.control
+function	font-lock-function-name-face	entity.name.function support.function
+type	font-lock-type-face	support.type entity.name.type storage.type
+constant	font-lock-constant-face	constant.language constant.other
+string	font-lock-string-face	string
+number	font-lock-number-face	constant.numeric
+comment	font-lock-comment-face	comment
+operator	font-lock-operator-face	keyword.operator punctuation
+namespace		entity.name.namespace
+property	font-lock-property-use-face font-lock-property-name-face	variable.other.property support.variable
+variable	font-lock-variable-name-face font-lock-variable-use-face	variable.other
+parameter		variable.parameter
+modifier	font-lock-preprocessor-face	storage.modifier
+warning	font-lock-warning-face	
+none	nil	

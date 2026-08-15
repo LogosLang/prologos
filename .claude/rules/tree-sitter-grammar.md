@@ -202,7 +202,7 @@ extension. The corpus gate measures the installed **parser** and does not see
 
 ---
 
-## ⭐ The seven editor gates — run them, and know what each CANNOT see
+## ⭐ The eight editor gates — run them, and know what each CANNOT see
 
 From `editors/tree-sitter-prologos/`. Each answers a different question; a green
 one says nothing about the others' question.
@@ -216,6 +216,7 @@ one says nothing about the others' question.
 | `parity/census.mjs --gate` | do TextMate and tree-sitter AGREE where they overlap? (`--explain` shows the SPANS) | anything the FIXTURE does not exercise |
 | `parity/check-tokens.mjs` | is every VS Code semantic token in the legend AND given a colour, with no dead entries? | whether the capture producing it ever fires |
 | `parity/check-regexps.sh` | can BOTH consumers honour every `#match?` regex? | everything except `#match?` — it says nothing about what the patterns MEAN, only that both dialects can express them |
+| `parity/check-families.sh` | do both consumers give a capture the same ROLE? | COLOUR (per-theme, deliberately), and whether either mapping is RIGHT |
 
 ⭐ **`#match?` is read in two dialects, and the mismatch is SILENT.** Emacs
 evaluates it in **Emacs** regexp syntax, where `(`, `)` and `|` are LITERAL — so
@@ -230,6 +231,19 @@ subset — **one authority, so the two cannot drift.**
 `@type.builtin` and `@constant.builtin` match **library names, not syntax**
 (`Option` is `data Option {A}` in the book). Only the pseudo-keyword list is a
 candidate — [DEFERRED 137](../../docs/tracking/DEFERRED.md).
+
+⭐ **Parity proves both consumers see the same CAPTURES. It never asked what
+those captures RESOLVE TO** — so one capture could be a constant in Emacs and a
+string in VS Code with every gate green. That is not hypothetical: it is how a
+stale `out/` shipped keyword literals with string chrome (2026-08-15).
+`check-families.sh` asks the missing question, comparing ROLE (a family declared
+in `parity/families.tsv`) and never colour — colour is per-theme by design,
+role is meaning, and `captures.md` says meaning is shared.
+
+⚠ **`out/` is a build artifact and VS Code runs it, not `src/`.** `install.sh`
+compiles it and stamps `out/.provenance`; `check-parity.sh` refuses a stale one.
+Emacs loads `.el` SOURCE and needs no build — so when one editor is right and
+the other wrong, **ask which one runs a build artifact before comparing configs.**
 
 ⚠ `install.sh` FIRST, always: check-corpus and check-parity both refuse a stale
 artifact (exit 3), by CONTENT HASH. The dylib and the wasm each carry a
