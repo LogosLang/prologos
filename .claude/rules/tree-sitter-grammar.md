@@ -106,6 +106,15 @@ PARENT also offers `_newline` as a sibling choice. `match_arm` and
 
 ## Diagnosis
 
+- ⭐ **THE COMPILER IS THE AUTHORITY on what is valid; the grammar can only be
+  wrong RELATIVE to it.** Run the construct through `tools/scratch-run.sh` before
+  calling anything a grammar bug. This caught three wrong claims in one session
+  (2026-08-15): a type-level `{:a Int}` "grammar gap" that is simply invalid
+  syntax; a param-list defect measured at 124 sites that was **2** once the
+  spaced form the compiler *also* rejects was excluded; and an `[x:Int y]`
+  judged invalid when the probe's own BODY was at fault. It cuts the other way
+  too — `[p1:Point p2:Point]` compiles at 0 errors and the grammar mis-parsed
+  it, which is what made that a real bug.
 - **Leading-token clustering MISDIRECTS — 4 for 4.** It counts the first token
   of the line *containing* an error, so it fingered `defn` (779, really
   multi-clause arms), `(fn` (272, really operators), and `ns` (16.9%, a
