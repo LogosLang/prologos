@@ -36,8 +36,16 @@ import { Parser, Language, Query, Node } from 'web-tree-sitter';
  * shipped colour override, all retired).  Under convention parity a theme
  * renders Prologos exactly as it renders its JSON and its TypeScript — which
  * is the theme's own coherent aesthetic, the maximum achievable without
- * painting over anyone's theme, and instantly checkable: open a .json file
- * beside a .prologos file and the keys must match. */
+ * painting over anyone's theme.
+ *
+ * ⭐ AND WHEN TWO CONVENTIONS EXIST FOR ONE CONCEPT, MEASURE — do not pick by
+ * taste.  Keys had two: JSON's `support.type.property-name' and YAML's
+ * `entity.name.tag'.  parity/theme-survey.py resolved both against every
+ * INSTALLED theme (30 at the time): the JSON scope collides with numbers/types
+ * in ALL TEN GitHub variants and falls to plain foreground in One Dark, while
+ * the YAML scope is distinct from both in 29/30 (the deliberate exception:
+ * a colorblind theme that compresses hues).  YAML is also the truer analogy —
+ * the layout map IS the YAML shape.  So keys wear the YAML-key convention. */
 const CAPTURE_MAP = new Map<string, [string, string[]]>([
   ['keyword', ['keyword', []]],
   ['function', ['function', []]],

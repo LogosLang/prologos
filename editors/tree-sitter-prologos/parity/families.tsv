@@ -47,7 +47,7 @@ number	font-lock-number-face	constant.numeric
 comment	font-lock-comment-face	comment
 operator	font-lock-operator-face	keyword.operator punctuation
 namespace		entity.name.namespace
-property	font-lock-property-use-face font-lock-property-name-face	variable.other.property support.variable support.type.property-name
+property	font-lock-property-use-face font-lock-property-name-face	variable.other.property support.variable entity.name.tag
 variable	font-lock-variable-use-face	variable.other
 # `binding' covers BOTH a parameter and a pattern binder: each is a name being
 # bound, which is one role. Longest-prefix matching keeps

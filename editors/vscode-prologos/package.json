@@ -90,7 +90,7 @@
             "entity.name.namespace.prologos"
           ],
           "property": [
-            "support.type.property-name.prologos"
+            "entity.name.tag.prologos"
           ],
           "decorator": [
             "storage.modifier.prologos",
