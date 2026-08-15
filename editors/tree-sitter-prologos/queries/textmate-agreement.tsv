@@ -36,7 +36,7 @@
 # generic would have hidden that.
 *GENERIC*	variable.other
 
-attribute	storage.modifier
+attribute	storage.modifier constant.other.keyword
 character	constant.character
 comment	comment
 constant.builtin	constant.language constant.other

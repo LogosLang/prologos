@@ -213,6 +213,15 @@
 ; precede the generic `(keyword_literal)` below: first match wins by FILE ORDER,
 ; not by specificity, so placing it after would silently never fire.
 (map_literal key: (keyword_literal) @property)
+; Same rule, and it was VIOLATED here until EHP P3 (2026-08-15): these three sat
+; ~20 lines BELOW the generic rule, under a "Constraints and metadata" heading,
+; and were therefore vacuous — 158 of @attribute's 176 corpus occurrences (90%)
+; painted as @string.special.symbol instead. check-reachability passed
+; @attribute the whole time, because `(multiplicity)` above DOES fire; "fires
+; somewhere" is not coverage.
+(metadata_entry (keyword_literal) @attribute)
+(trait_metadata (keyword_literal) @attribute)
+(law_entry (keyword_literal) @attribute)
 (keyword_literal) @string.special.symbol
 (logic_variable) @variable.logic
 (typed_hole) @variable.hole
@@ -232,9 +241,6 @@
 ; ============================================================
 
 (where_clause "where" @keyword)
-(metadata_entry (keyword_literal) @attribute)
-(trait_metadata (keyword_literal) @attribute)
-(law_entry (keyword_literal) @attribute)
 
 ; ============================================================
 ; Identifiers (fallback — must be last)

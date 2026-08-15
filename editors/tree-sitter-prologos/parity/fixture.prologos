@@ -60,8 +60,12 @@ impl Show Colour
   defn show [v]
     "colour"
 
-;; --- spec with builtin + applied types ---
+;; --- spec with builtin + applied types, plus a metadata entry: the
+;;     `:doc' keyword is @attribute, NOT @string.special.symbol. Added in
+;;     EHP P3 because the fixture exercised only ONE of @attribute's four
+;;     sites, which is how three of them stayed vacuous unnoticed. ---
 spec pick Int [List Int] -> [Option Int]
+  :doc "pick an element"
 
 ;; --- relational form (Rel T1): defr, ||, &>, =, logic variables ---
 defr digit [?d]

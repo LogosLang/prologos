@@ -50,9 +50,6 @@
           "function": [
             "entity.name.function.prologos"
           ],
-          "function.defaultLibrary": [
-            "support.function.prologos"
-          ],
           "variable": [
             "variable.other.prologos"
           ],
@@ -95,11 +92,9 @@
           "property": [
             "variable.other.property.prologos"
           ],
-          "macro": [
-            "entity.name.function.macro.prologos"
-          ],
-          "label": [
-            "constant.other.keyword.prologos"
+          "decorator": [
+            "storage.modifier.prologos",
+            "storage.modifier"
           ]
         }
       }

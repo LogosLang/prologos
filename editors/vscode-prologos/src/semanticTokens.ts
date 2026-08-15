@@ -39,10 +39,13 @@ const CAPTURE_MAP = new Map<string, [string, string[]]>([
   // Char literals are string-like; mapping them to an EXISTING legend type
   // needs no protocol change.  Was dropped entirely before 2026-08-14.
   ['character', ['string', []]],
-  // NOTE: `@attribute' (multiplicity + metadata) is still DROPPED here.  Closing
-  // it needs a new legend type (`decorator') AND a semanticTokenScopes entry —
-  // i.e. picking a colour, which is an EHP P3 decision, not a rename.  Emacs
-  // paints it as prologos-multiplicity-face today; VS Code paints nothing.
+  // `@attribute' — multiplicities (`:0' `:1' `:w') and the keyword in a
+  // metadata / trait-metadata / law entry.  `decorator' is the standard VS Code
+  // type for annotations.  The COLOUR is not a fresh choice: TextMate already
+  // paints multiplicities `storage.modifier.multiplicity.prologos', so the
+  // semanticTokenScopes entry points at the same `storage.modifier' family and
+  // the two layers land on one colour (EHP P3, closing the last known gap).
+  ['attribute', ['decorator', []]],
   ['comment', ['comment', []]],
   ['operator', ['operator', []]],
   ['module', ['namespace', []]],
@@ -58,9 +61,12 @@ const CAPTURE_MAP = new Map<string, [string, string[]]>([
 ]);
 
 export const LEGEND = new vscode.SemanticTokensLegend(
+  // Every entry here is produced by CAPTURE_MAP above; parity/check-tokens.mjs
+  // gates that in both directions.  `macro' and `label' were removed in EHP P3:
+  // nothing emitted them and captures.md never declared them.
   ['keyword', 'function', 'variable', 'parameter', 'type', 'enumMember',
    'number', 'string', 'comment', 'operator', 'namespace', 'property',
-   'macro', 'label'],
+   'decorator'],
   ['declaration', 'readonly', 'defaultLibrary'],
 );
 

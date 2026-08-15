@@ -158,71 +158,77 @@
 60	13	variable	v
 60	13	variable.parameter	v
 61	4	string	"colour"
-63	0	comment	;; --- spec with builtin + applied types ---
-64	0	keyword	spec
-64	5	function	pick
-64	5	variable	pick
-64	10	type	Int
-64	10	type.builtin	Int
-64	10	variable	Int
-64	15	type	List
-64	15	type.builtin	List
-64	15	variable	List
-64	20	type	Int
-64	20	type.builtin	Int
-64	20	variable	Int
-64	25	operator	->
-64	29	type	Option
-64	29	type.builtin	Option
-64	29	variable	Option
-64	36	type	Int
-64	36	type.builtin	Int
-64	36	variable	Int
-66	0	comment	;; --- relational form (Rel T1): defr, ||, &>, =, logic variables ---
-67	0	keyword	defr
-67	5	function	digit
-67	5	variable	digit
-67	12	variable.logic	?d
-68	2	operator	||
-68	5	number	0
-68	7	operator	|
-68	9	number	1
-68	11	operator	|
-68	13	number	2
-70	0	keyword	defr
-70	5	function	twice
-70	5	variable	twice
-70	12	variable.logic	?a
-70	15	variable.logic	?b
-71	2	operator	&>
+63	0	comment	;; --- spec with builtin + applied types, plus a metadata entry: the
+64	0	comment	;;     `:doc' keyword is @attribute, NOT @string.special.symbol. Added in
+65	0	comment	;;     EHP P3 because the fixture exercised only ONE of @attribute's four
+66	0	comment	;;     sites, which is how three of them stayed vacuous unnoticed. ---
+67	0	keyword	spec
+67	5	function	pick
+67	5	variable	pick
+67	10	type	Int
+67	10	type.builtin	Int
+67	10	variable	Int
+67	15	type	List
+67	15	type.builtin	List
+67	15	variable	List
+67	20	type	Int
+67	20	type.builtin	Int
+67	20	variable	Int
+67	25	operator	->
+67	29	type	Option
+67	29	type.builtin	Option
+67	29	variable	Option
+67	36	type	Int
+67	36	type.builtin	Int
+67	36	variable	Int
+68	2	attribute	:doc
+68	2	string.special.symbol	:doc
+68	7	string	"pick an element"
+70	0	comment	;; --- relational form (Rel T1): defr, ||, &>, =, logic variables ---
+71	0	keyword	defr
+71	5	function	digit
 71	5	variable	digit
-71	11	variable	a
-72	5	operator	=
-72	5	operator	=
-72	7	variable	b
-72	9	variable	a
-74	0	comment	;; --- typed hole (`??`, distinct from a `?x` logic variable) ---
-75	0	keyword	def
-75	4	function	hole
-75	4	variable	hole
-75	9	operator	:=
-75	12	variable.hole	??
-77	0	comment	;; --- operators as first-class values ---
-78	0	keyword	def
-78	4	function	folded
-78	4	variable	folded
-78	11	operator	:=
-78	15	keyword	reduce
-78	15	variable	reduce
-78	22	operator	+
-78	24	number	0
-78	28	number	1
-78	30	number	2
-78	32	number	3
-80	0	comment	;; --- quote ---
-81	0	keyword	def
-81	4	function	quoted
-81	4	variable	quoted
-81	11	operator	:=
-81	16	number	1
-81	18	number	2
+71	12	variable.logic	?d
+72	2	operator	||
+72	5	number	0
+72	7	operator	|
+72	9	number	1
+72	11	operator	|
+72	13	number	2
+74	0	keyword	defr
+74	5	function	twice
+74	5	variable	twice
+74	12	variable.logic	?a
+74	15	variable.logic	?b
+75	2	operator	&>
+75	5	variable	digit
+75	11	variable	a
+76	5	operator	=
+76	5	operator	=
+76	7	variable	b
+76	9	variable	a
+78	0	comment	;; --- typed hole (`??`, distinct from a `?x` logic variable) ---
+79	0	keyword	def
+79	4	function	hole
+79	4	variable	hole
+79	9	operator	:=
+79	12	variable.hole	??
+81	0	comment	;; --- operators as first-class values ---
+82	0	keyword	def
+82	4	function	folded
+82	4	variable	folded
+82	11	operator	:=
+82	15	keyword	reduce
+82	15	variable	reduce
+82	22	operator	+
+82	24	number	0
+82	28	number	1
+82	30	number	2
+82	32	number	3
+84	0	comment	;; --- quote ---
+85	0	keyword	def
+85	4	function	quoted
+85	4	variable	quoted
+85	11	operator	:=
+85	16	number	1
+85	18	number	2
