@@ -140,6 +140,28 @@
 (broadcast_step step: (identifier) @property)
 (ordinal_step index: (number) @number)
 
+; A SELECT-BLOCK BRANCH names a field too, and until 2026-08-15 only the dotted
+; step above was chromed as one — so `cfg{server^.{ssl^.enabled^ssl port}}` gave
+; `enabled` key colour and left `server`, `port` and the `^ssl` rename target as
+; plain variables. One concept, two renderings (DEFERRED 135).
+;
+; ⚠ The `select_block` ancestor is LOAD-BEARING, not decoration. A `path_expr`
+; head is a key only INSIDE a select block: the OUTER `path_expr` of
+; `cfg{...}` has head `cfg`, which is the SUBJECT and must stay a variable.
+; `(path_expr . (identifier) @property)` on its own would recolour every path
+; subject in the corpus.
+(select_block (path_expr . (identifier) @property))
+(select_block (identifier) @property)
+
+; The `^` rename TARGET is a key being CREATED. Captured as @property like every
+; other key — the vocabulary draws no read/write distinction for a field name,
+; and having the new name read differently from the old one is the very
+; inconsistency this block removes.
+;
+; ⚠ MUST precede `(key_op) @operator` below, which spans the whole `^ssl`
+; including the identifier: first match wins by FILE ORDER.
+(key_op (identifier) @property)
+
 ; The step OPERATORS themselves.
 (flatten_step) @operator
 (row_splat) @operator

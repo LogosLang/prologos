@@ -7568,7 +7568,7 @@ Corpus: `^-_` ×3 in `examples/2026-07-26-ciu-t6-path-selection.prologos`, plus
 `optional('-')` + the existing choice, and add `^..`. TSG work; re-measure with
 `check-corpus.sh` after.
 
-### 135. ⬜ SELECT-BLOCK BRANCH NAMES ARE KEYS BUT PAINT AS `@variable` — only the DOTTED step gets `@property`, so one concept renders two ways
+### 135. ✅ **DISCHARGED** (filed and fixed same day) SELECT-BLOCK BRANCH NAMES ARE KEYS BUT PAINT AS `@variable` — only the DOTTED step gets `@property`, so one concept renders two ways
 
 Found by EHP T1 P4 re-checking catalogued issue #2. **Refutes the filed
 diagnosis**: §4 recorded "suspected TextMate showing through". The census reports
@@ -7589,7 +7589,31 @@ choice.
 All five are keys under the law *"dot DESCENDS · brace SELECTS · `:` BROADCASTS ·
 `^` RE-KEYS"*; only the one reached by a dot is chromed as one.
 
-**Fix**: capture the other key positions — the `path_expr` head, bare
+**FIXED 2026-08-15.** Three captures added, placed above `(key_op) @operator`
+(which spans the whole `^ssl`, so file order decides):
+
+```
+(select_block (path_expr . (identifier) @property))
+(select_block (identifier) @property)
+(key_op (identifier) @property)
+```
+
+⭐ **The `select_block` ancestor is load-bearing, not decoration.** The OUTER
+`path_expr` of `cfg{...}` has head `cfg` — the SUBJECT — so a bare
+`(path_expr . (identifier) @property)` would have recoloured every path subject
+in the corpus. Verified on real code
+(`2026-07-26-ciu-t6-path-selection.prologos:80`): `app-config` still resolves to
+`@variable` alone, while all nine branch names take key chrome.
+
+The design call on the rename target went to `@property` like every other key:
+the vocabulary draws no read/write distinction for a field name, and having the
+new name read differently from the old one is the inconsistency being removed.
+
+Measured: **135 identifiers across 3 files** gain key chrome. Fixture extended
+with a path form (deliberately avoiding the `^-` family, DEFERRED 136), golden
+**234 → 260**, all six gates green.
+
+**Original fix note**: capture the other key positions — the `path_expr` head, bare
 `select_block` branches, and the `key_op` rename target. ⚠ **Carries a design
 call**: the rename target is a key being *created*, not read, so it may want a
 different capture than `@property`. And this changes rendered colour, so it is

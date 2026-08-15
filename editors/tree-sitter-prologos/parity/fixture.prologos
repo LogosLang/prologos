@@ -75,6 +75,14 @@ defr twice [?a ?b]
   &> digit a
      = b a
 
+;; --- path selection: dot DESCENDS · brace SELECTS · `^` RE-KEYS.  Every
+;;     branch name is a KEY (@property) and the SUBJECT is not (@variable).
+;;     Added 2026-08-15 with DEFERRED 135's fix: without a path form here
+;;     the golden could not hold the distinction.  Deliberately avoids the
+;;     `^-` collapse family, which the grammar cannot parse (DEFERRED 136)
+;;     and which would put an ERROR node in the fixture. ---
+def picked := cfg{server^.{ssl^.enabled^ssl port} version}
+
 ;; --- typed hole (`??`, distinct from a `?x` logic variable) ---
 def hole := ??
 

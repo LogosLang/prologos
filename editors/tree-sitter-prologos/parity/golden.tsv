@@ -207,28 +207,54 @@
 76	5	operator	=
 76	7	variable	b
 76	9	variable	a
-78	0	comment	;; --- typed hole (`??`, distinct from a `?x` logic variable) ---
-79	0	keyword	def
-79	4	function	hole
-79	4	variable	hole
-79	9	operator	:=
-79	12	variable.hole	??
-81	0	comment	;; --- operators as first-class values ---
-82	0	keyword	def
-82	4	function	folded
-82	4	variable	folded
-82	11	operator	:=
-82	15	keyword	reduce
-82	15	variable	reduce
-82	22	operator	+
-82	24	number	0
-82	28	number	1
-82	30	number	2
-82	32	number	3
-84	0	comment	;; --- quote ---
-85	0	keyword	def
-85	4	function	quoted
-85	4	variable	quoted
-85	11	operator	:=
-85	16	number	1
-85	18	number	2
+78	0	comment	;; --- path selection: dot DESCENDS · brace SELECTS · `^` RE-KEYS.  Every
+79	0	comment	;;     branch name is a KEY (@property) and the SUBJECT is not (@variable).
+80	0	comment	;;     Added 2026-08-15 with DEFERRED 135's fix: without a path form here
+81	0	comment	;;     the golden could not hold the distinction.  Deliberately avoids the
+82	0	comment	;;     `^-` collapse family, which the grammar cannot parse (DEFERRED 136)
+83	0	comment	;;     and which would put an ERROR node in the fixture. ---
+84	0	keyword	def
+84	4	function	picked
+84	4	variable	picked
+84	11	operator	:=
+84	14	variable	cfg
+84	18	property	server
+84	18	variable	server
+84	24	operator	^
+84	27	property	ssl
+84	27	variable	ssl
+84	30	operator	^
+84	32	property	enabled
+84	32	variable	enabled
+84	39	operator	^ssl
+84	40	property	ssl
+84	40	variable	ssl
+84	44	property	port
+84	44	variable	port
+84	50	property	version
+84	50	variable	version
+86	0	comment	;; --- typed hole (`??`, distinct from a `?x` logic variable) ---
+87	0	keyword	def
+87	4	function	hole
+87	4	variable	hole
+87	9	operator	:=
+87	12	variable.hole	??
+89	0	comment	;; --- operators as first-class values ---
+90	0	keyword	def
+90	4	function	folded
+90	4	variable	folded
+90	11	operator	:=
+90	15	keyword	reduce
+90	15	variable	reduce
+90	22	operator	+
+90	24	number	0
+90	28	number	1
+90	30	number	2
+90	32	number	3
+92	0	comment	;; --- quote ---
+93	0	keyword	def
+93	4	function	quoted
+93	4	variable	quoted
+93	11	operator	:=
+93	16	number	1
+93	18	number	2
