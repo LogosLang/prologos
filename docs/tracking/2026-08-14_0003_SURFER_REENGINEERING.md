@@ -267,3 +267,58 @@ identity changes (the existing overlay code already uses this comparison,
   until we see real paths in real files.
 - **Q2** — Does `C-M-*` collide with anything in the owner's Spacemacs/evil setup?
   To be checked against a live config at P2, not assumed.
+
+<a id="p1-measured"></a>
+## 6. P1 — the breadcrumb, measured (2026-08-15)
+
+The layout walk implemented as a probe and run over every non-blank,
+non-comment line in `lib/` — **6,769 positions**. No grammar, no compiler: the
+walk takes each strictly-less-indented line above, which is exactly what the
+breadcrumb will have at runtime.
+
+### Depth of the path
+
+| | |
+|---|---|
+| mean | 1.10 |
+| median | 1 |
+| p90 / p99 / max | 3 / 4 / 9 |
+
+Distribution: **0 ancestors 41%** · 1 → 26% · 2 → 21% · 3 → 8% · 4 → 3% · 5+ → ~0%
+
+### Width
+
+| | median | p90 | p99 | max |
+|---|---|---|---|---|
+| segment length | 20 | 45 | 90 | 99 |
+| total, ancestors only | 18 | 74 | 157 | 290 |
+| total, including the current line | 51 | 118 | 206 | 334 |
+
+### What it settles
+
+**Unknown 1 — show the current line, or only its ancestors?** Ancestors-only is
+**empty 41% of the time**, because two-fifths of positions sit on a top-level
+line with nothing above them. A header line that is blank two-fifths of the time
+costs a screen row and returns nothing. Pure ancestors-only is therefore out;
+the choice is between always including the current line (redundant at depth 0)
+and adding a constant root segment so the path is never empty.
+
+**Unknown 2 — truncation.** A per-segment cap near **24 characters** keeps the
+median segment (20) whole and cuts the tail (p90 45, max 99). Depth ≥4 is **3%**
+of positions, so middle-elision is a rare path, not the common one. No adaptive
+width scheme is needed to start.
+
+### ⭐ An argument for layout that the type-based options cannot answer
+
+Real paths from the corpus:
+
+```
+def app-config  ›  :server  ›  :ssl  ›  [:cert-path "/etc/ssl/cert.pem"]
+def app-config  ›  :admins  ›  - :name "Alice"  ›  [:role :super]
+defn fib-rec [a b n]  ›  match n  ›  | _ ->  ›  [fib-rec b .(a + b) .(n - 1)]
+```
+
+The first two navigate a **data structure**, not code. `def app-config › :server
+› :ssl` tells you which subsection of a config map you are editing. A node-type
+breadcrumb renders the same position as `map › entry › map › entry`, which is
+information-free. Layout handles code and data with one rule.
