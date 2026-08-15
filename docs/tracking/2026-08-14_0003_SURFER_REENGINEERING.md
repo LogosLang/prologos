@@ -443,3 +443,64 @@ field held a **list**, not a `srcloc`. The field name and the convention comment
 in `surface-syntax.rkt` both say srcloc. Whichever is intended, the two producers
 disagree, and `surf-node-srcloc` — 3 production call sites — silently sees only
 one of them.
+
+<a id="p3-resolved"></a>
+## 9. P3 (concluded) — the extractor needs NO change, and the 8% is one struct
+
+### ⛔ Do not teach `surf-node-srcloc` the list form
+
+Measured on the merged tree, 6448 nodes:
+
+| location field holds | count |
+|---|---|
+| `srcloc` **struct** | 5925 (92%) |
+| list, any variant | **0** |
+| nothing | 523 (8%) |
+
+**There are zero list-form locations in the production tree.** The list form is
+produced by the tree spine, and the merge's tree leg is deliberately off — the
+defect doc `2026-08-02_LOC_TO_LINE_MERGE_DEFECT.md` §0 says so in terms: *"the
+spine must stay off"*.
+
+So the change I proposed would be **dead code on the production path**, and
+worse than dead: `tree-parser.rkt:52-73` documents that the two spines number
+lines on **different bases** (tree 0-based, preparse 1-based) and that three
+consumers require the struct — `format-srcloc` **raises** on a list, the LSP's
+`srcloc->range` silently falls back to 0:0, and `register-definition-location!`
+is `.pnet`-serialized for the struct shape only. Teaching the extractor to pass
+list-form locations through would reopen exactly the hazard that note closed,
+and its §0 opens by saying its own "minimal fix" *"WOULD HAVE SHIPPED A SILENT
+WRONG-ANSWER BUG"*.
+
+⚠ **Root cause of my error, third time in this track**: I measured the tree
+spine and generalized to production. The 60% list-form figure is real — of the
+spine. Production never sees it.
+
+### The 8% is ONE struct type, and it is correct
+
+| kind | unlocated | of total |
+|---|---|---|
+| `binder-info` | **520** | 520 |
+| `parse-error` | 3 | 3 |
+
+`binder-info` is `(struct binder-info (name mult type))` — declared under
+*"Binder information (for lam, Pi, Sigma)"*. **It has no location field at all**,
+and should not: it is metadata describing a binder, and the binder it describes
+carries the position. Every one of the 520 is unlocated because the struct has
+nowhere to put a location, not because one went missing.
+
+**So effective coverage over real source nodes is ~100%, not 92%.** The headline
+figure was diluted by counting metadata as tree nodes — my walker's choice, not
+a property of the tree.
+
+### `io.prologos` yielding zero is CORRECT
+
+The file is 11 lines: one `ns`, eight `foreign` declarations, and comments.
+Every form is preparse-consumed, so nothing reaches the surf list. Zero is the
+right answer.
+
+⚠ **But it is a real API constraint for P4.** A file can legitimately produce an
+empty tree, so the endpoint must let a caller distinguish **"parsed fine, no
+navigable forms"** from **"failed to parse"**. If the surfer conflates them it
+will report a parse error on a perfectly good file, which is the class of defect
+this track exists to remove.
