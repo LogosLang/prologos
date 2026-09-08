@@ -20,7 +20,12 @@
          racket/cmdline
          racket/format
          "../parse-reader.rkt"
-         "../stratify.rkt")
+         "../stratify.rkt"
+         ;; 1b-v-C [Q_U54]: the star family's sentinel NAMES are DERIVED from
+         ;; the one table, so this list cannot lag a new row. (A pin was the
+         ;; alternative; this file is a script — `command-line` runs at module
+         ;; level — so requiring it from the battery breaks batch-worker.)
+         (only-in "../reader-forms.rkt" postfix-star-sentinel-table))
 
 ;; ============================================================
 ;; Configuration
@@ -34,6 +39,7 @@
 
 ;; Syntax keywords/builtins that are never cross-form references.
 (define syntax-keywords
+  (set-union
   (seteq 'match 'fn 'if 'the 'let 'do 'def 'defn 'spec 'data 'trait 'impl
          'deftype 'defmacro 'bundle 'property 'functor 'check 'eval 'infer
          'expand 'foreign 'require 'provide 'ns 'module 'subtype
@@ -42,15 +48,16 @@
          '$pipe '$angle-type '$brace-params '$quote '$dot-access '$dot-key
          '$retired-selection
          '$mixfix '$pipe-gt '$compose
-         '$postfix-star   ;; D4.P4e-1a slice 1a-ii — inert until 1a-iii emits it;
-                          ;; without it the dependency graph gains a spurious
-                          ;; cross-form reference to a reader sentinel
-         '$postfix-star-synth ;; D4.P4e-1b slice 1b-v — the `*_` member of the same
-                          ;; family; inert until 1b-v-B2 widens the mint. Listed
-                          ;; NOW because a table entry that lags its family is how
-                          ;; the graph gains exactly the spurious edge above.
+         ;; the `$postfix-star` family is spliced in BELOW, from its table (1b-v-C)
          'where 'of 'refl 'J
-         'Type 'Unit 'unit))
+         'Type 'Unit 'unit)
+  ;; 1b-v-C [Q_U54]: every star-family sentinel, DERIVED, so a new row can never
+  ;; be a name this tool mistakes for a reference. (⚠ The verify measured that a
+  ;; MISSING sentinel produces no visible edge TODAY — `name-registry` holds
+  ;; defined names only, and no form defines a `$`-name — so the report cannot
+  ;; witness this set; derivation is what makes it right, not a diff of output.
+  ;; The access sentinels this set omits are DEFERRED.md's old spin-off item 7.)
+  (list->seteq (map car postfix-star-sentinel-table))))
 
 ;; ============================================================
 ;; Data Structures

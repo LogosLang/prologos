@@ -509,7 +509,7 @@ apple-colors
 app-config{database}*_
 ;;90=> {:database-pool-size 10, :database-url "localhost/guild-db"} : {:database-pool-size Int :database-url String}
 
-;; L2 — the FUSED band, same subject, same answer (two authorities today; one after 1b-v-C)
+;; L2 — the FUSED band, same subject, same answer — ONE authority since 1b-v-C (the table)
 app-config{database*_}
 ;;91=> {:database-pool-size 10, :database-url "localhost/guild-db"} : {:database-pool-size Int :database-url String}
 

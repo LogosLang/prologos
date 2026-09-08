@@ -45,7 +45,10 @@
                   postfix-star-sentinel? postfix-star-sentinel-cont
                   ;; 1b-v-B2b [DEFERRED 130]: the two refusal messages render
                   ;; the spelling the USER WROTE, never a hardcoded `*`.
-                  postfix-star-sentinel-lexeme))
+                  postfix-star-sentinel-lexeme
+                  ;; 1b-v-C [Q_U53 part 2]: `split-star-lexeme` asks the table
+                  ;; for its cont instead of carrying its own two-arm copy.
+                  postfix-star-lexeme->sentinel))
 
 (provide parse-datum
          parse-toplevel-datum  ;; Rel T1 POL.9: command-position paren-goal dispatch
@@ -1287,11 +1290,24 @@
                               " suffix. Spell them as separate segments — `x{k^.f*}` re-keys"
                               " above and flattens below")
                              str))]
-         [(string=? k "")  (values (string->symbol name-str) 'flatten)]
-         ;; Q_U24's provenance form. Its rule is `^-_`'s (synthesize over the
-         ;; deleted layer), NOT `^_`'s — recorded so the semantics slice cannot
-         ;; inherit the wrong parent and silently degrade `*_` to bare `*`.
-         [(string=? k "_") (values (string->symbol name-str) 'flatten-synth)]
+         ;; ⭐ 1b-v-C [Q_U53 part 2] — THE FOLD. This used to be two arms of its
+         ;; own, `""`→'flatten and `"_"`→'flatten-synth: a second copy of the
+         ;; spelling↔cont pair, serving the fused/dot/ω bands while the closer
+         ;; band read the FAMILY TABLE — the same operator meaning what two
+         ;; pieces of code said, agreeing only by shared authorship (measured:
+         ;; `mn{a*_}` and `mn{a}*_` went through different authorities).
+         ;; The suffix `k` is the operator minus its star, so reconstruct the
+         ;; operator lexeme and ask the table. Behaviour-preserving on EVERY
+         ;; input: `""`→"*"→'flatten, `"_"`→"*_"→'flatten-synth, anything else
+         ;; misses the exact-match table and takes the SAME `[else]` as before.
+         ;; ⚠ TWO obligations, both pinned: this arm stays BELOW the `^`-guard
+         ;; above (else `a^*` from the dot/ω bands would answer `(a^ . flatten)`,
+         ;; verify-round F1's silent wrong answer), and the lookup is on the
+         ;; RECONSTRUCTED operator, never the fused lexeme — the table is exact
+         ;; and `"a*"`→#f is pinned. Adding a spelling is now a table row.
+         [(postfix-star-lexeme->sentinel (string-append "*" k))
+          => (lambda (sent) (values (string->symbol name-str)
+                                    (postfix-star-sentinel-cont sent)))]
          [else (values #f (star-mid-lexeme-message str))]))]))
 
 (define (segment-select-items items loc [sub? #f])

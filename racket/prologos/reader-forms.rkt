@@ -82,7 +82,11 @@
          postfix-star-sentinel-cont
          postfix-star-sentinel-lexeme
          postfix-star-lexeme->sentinel
-         postfix-star-lexemes)
+         postfix-star-lexemes
+         ;; 1b-v-C [Q_U54]: the PRINTER's direction — cont → the lexeme to render.
+         ;; pretty-print.rkt's star arm used to hardcode `"*_"`/`"*"`, a second
+         ;; lexeme↔cont copy that was user-facing through every star refusal label.
+         postfix-star-cont->lexeme)
 
 ;; The complete set. One entry today; the point is that it is ONE entry in ONE
 ;; place rather than an unfindable literal.
@@ -253,9 +257,12 @@
 ;; because the cont axis has no totality dispatcher yet. Adding them here is a
 ;; one-line change WHEN those are ruled; adding them EARLY would mint spellings
 ;; that lex and then meet a cont no consumer knows — which renders as a silent
-;; bare `*` at all SIX `select-star-cont` readers, including the printer.
-;; (pretty-print.rkt:186 · reduction.rkt:1895, :1902 · typing-core.rkt:1766,
-;; :1784, :1850 — anchor on the names, the coordinates drift.)
+;; bare `*` at the five `select-star-cont` readers in typing/reduction. (Since
+;; 1b-v-C the sixth, the PRINTER, is table-driven and renders an unknown cont
+;; LOUDLY as `«unrendered-star-cont:…»` instead — one seat of the totality gap
+;; closed; the other five are 1b-vi's.)
+;; (pretty-print.rkt's star arm — now table-driven · reduction.rkt ×2 ·
+;; typing-core.rkt ×3 — `grep -n select-star-cont`; anchor on the names.)
 ;; ⚠ THIS SAID "FIVE" AND FIVE WAS WRONG WHEN WRITTEN, not stale: `git log -S`
 ;; dates the phrase to `2625b38f` (slice 1b-v-B1), where reading that commit's
 ;; own blobs already gives six. Q_U52 in D4 INHERITED the number from here, so
@@ -272,6 +279,9 @@
 ;; the operator the USER WROTE, and getting that wrong is a silent wrong echo.
 (define postfix-star-sentinel-table
   '(($postfix-star       flatten       "*")
+    ;; Q_U24's provenance form. Its rule is `^-_`'s (synthesize over the DELETED
+    ;; layer), NOT `^_`'s — recorded on the row itself since 1b-v-C, when this
+    ;; table became the one place the spelling↔cont pair is stated.
     ($postfix-star-synth flatten-synth "*_")))
 
 (define (postfix-star-sentinel? x)
@@ -292,6 +302,15 @@
   (let loop ([t postfix-star-sentinel-table])
     (cond [(null? t) #f]
           [(string=? lex (caddr (car t))) (car (car t))]
+          [else (loop (cdr t))])))
+
+;; the PRINTER's direction (1b-v-C [Q_U54]): the lexeme a cont renders as, or #f.
+;; `#f` is the printer's cue to render its LOUD unknown-cont tell rather than a
+;; silent `*` — the Q_U52 §3 hazard, closed at the one seat where it was live.
+(define (postfix-star-cont->lexeme cont)
+  (let loop ([t postfix-star-sentinel-table])
+    (cond [(null? t) #f]
+          [(eq? cont (cadr (car t))) (caddr (car t))]
           [else (loop (cdr t))])))
 
 (define postfix-star-lexemes (map caddr postfix-star-sentinel-table))

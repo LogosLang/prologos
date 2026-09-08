@@ -942,8 +942,13 @@
 ;; D4.P4e-1b (Q_U40): `(@star cont)` — THE FLATTEN / LAYER-DELETE STEP.
 ;;   cont ::= 'flatten        (bare `*`)
 ;;          | 'flatten-synth  (`*_`, the Q_U24 provenance variant)
-;; Those two symbols are exactly what `split-star-lexeme` (parser.rkt) already
-;; returns, so the parser mints this kind without inventing a vocabulary.
+;; The vocabulary's ONE home is `postfix-star-sentinel-table` (reader-forms.rkt).
+;; Since 1b-v-C both cont ROUTES read it — the closer-adjacent band via the
+;; sentinel; the fused, `$dot-access` and ω bands via `split-star-lexeme`
+;; (parser.rkt) and the reconstructed operator lexeme — so the parser mints this
+;; kind without inventing a vocabulary, and
+;; the printer renders it from the same table. (Before 1b-v-C the splitter
+;; carried its own copy of the pair; this comment named it as the source.)
 ;;
 ;; SEMANTICS (Q_U40, one sentence): the star deletes the container layer
 ;; contributed by the PRECEDING step — everything to its left in its branch, or

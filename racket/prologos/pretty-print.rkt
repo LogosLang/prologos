@@ -21,7 +21,10 @@
          "propagator.rkt"
          "union-find.rkt"
          "atms.rkt"
-         "tabling.rkt")
+         "tabling.rkt"
+         ;; 1b-v-C [Q_U54]: the star step renders its spelling FROM THE FAMILY
+         ;; TABLE. reader-forms.rkt is a pure leaf (racket/string only) — no cycle.
+         (only-in "reader-forms.rkt" postfix-star-cont->lexeme))
 
 (provide pp-expr
          pp-session
@@ -183,7 +186,17 @@
       ;; ⚠ `first?` is deliberately ignored here, unlike every other arm — a
       ;; branch-INITIAL star (`cfg{database}*`, where the star's operand is the
       ;; SUBJECT) is a real spelling, and `.{*}` would be a nonexistent one.
-      [(star) (if (eq? (select-star-cont s) 'flatten-synth) "*_" "*")]
+      ;; ⭐ 1b-v-C [Q_U54] — this was `(if (eq? cont 'flatten-synth) "*_" "*")`:
+      ;; a hardcoded cont→lexeme copy, USER-FACING because typing-core builds
+      ;; every star refusal label through `pp-select-branch`. At 1b-vi it would
+      ;; have labelled a `*-` step `*` (Q_U52 §3's own words). Now the table
+      ;; answers, and a cont the table does not know renders LOUDLY — the
+      ;; `«unrendered-…»` tell this function already uses one arm below — rather
+      ;; than as a silent `*`. (The CARET family's `cont->string` above keeps
+      ;; its literals: it has no table at all, and is out of this slice.)
+      [(star) (let ([cont (select-star-cont s)])
+                (or (postfix-star-cont->lexeme cont)
+                    (format "«unrendered-star-cont:~s»" cont)))]
       [else (format "«unrendered-step-kind:~a:~s»" (select-step-kind/display s) s)]))
   (apply string-append
          (for/list ([s (in-list b)] [i (in-naturals)])

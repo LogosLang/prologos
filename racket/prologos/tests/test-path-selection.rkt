@@ -6124,8 +6124,10 @@
 ;; (`*__`, `*--`), which is correct — those must be VISIBLE so they can be
 ;; reported as `symbol` rather than vanish into `#f`.
 ;; ⚠ It matches the WHOLE lexeme, so the FUSED band's `da*_` is deliberately NOT
-;; a hit: that is a different band with a different authority (`split-star-lexeme`),
-;; and conflating them is what [Q_U53] part 2 exists to stop.
+;; a hit: that is a FUSED symbol, not the operator TOKEN. (Since 1b-v-C its
+;; splitter, `split-star-lexeme`, reads the SAME table as the closer band — one
+;; authority — but the token shapes still differ, and this helper is about the
+;; standalone operator token the reader's gate types.)
 (define (p4e-star-token-lexeme? lex)
   (regexp-match? #rx"^[*][-_]*$" lex))
 
@@ -9295,4 +9297,24 @@
   (for ([lex (in-list rf:postfix-star-lexemes)])
     (check-true (and (member lex star-spellings) #t)
                 (format "table lexeme ~s is invisible to tools/star-arrival-matrix.rkt's star-spellings ~s" lex star-spellings))))
+
+;; ⭐ THE VERIFY's ANSWER TO THE STANDING QUESTION, and it was in the TEST TIER.
+;; The fold added a LOUD miss tell to the printer and a `#f` miss contract to the
+;; accessor — and pinned neither, while their sibling marker
+;; `«unrendered-step-kind»` is pinned both ways. A regression that made the
+;; printer's miss arm render a silent `*` again (the exact hazard Q_U54 closes)
+;; would have passed the battery. One seat, not its sibling — by omission.
+(test-case "1b-v-C C-10: an UNKNOWN cont renders LOUDLY at the printer, never as a silent `*` [Q_U54]"
+  (define out (pp-select-branch (list 'database (make-select-star 'bogus-cont))))
+  (check-true (string-contains? out "«unrendered-star-cont:bogus-cont»")
+              (format "the loud tell must name the cont; observed: ~s" out))
+  (check-false (string-contains? out "database*")
+               (format "…and must NOT fall back to bare `*`; observed: ~s" out)))
+
+(test-case "1b-v-C C-11: `postfix-star-cont->lexeme` answers #f on a miss and the row's lexeme on a hit"
+  (check-false (rf:postfix-star-cont->lexeme 'bogus-cont) "a cont not in the table has no lexeme")
+  (check-false (rf:postfix-star-cont->lexeme "*") "a STRING is not a cont — `eq?`, no coercion")
+  (for ([row (in-list rf:postfix-star-sentinel-table)])
+    (check-equal? (rf:postfix-star-cont->lexeme (cadr row)) (caddr row)
+                  (format "row ~s round-trips cont → lexeme" row))))
 
