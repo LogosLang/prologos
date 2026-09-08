@@ -9454,6 +9454,82 @@ they return `#f` on a `*_` source and **cannot tell "correctly did not mint" fro
 down; the repair landed in the tool and never propagated to the suite. Any B2b row
 written with these helpers has no power until they are widened.
 
+<a id="p4e-1b-v-c"></a>
+
+##### §5.P4e-1b-v-C — THE FOLD: one semantic authority  (pins `24fc1be4` · the fold `a492bbb7`, 2026-09-08)
+
+**Ruled by [Q_U53](#q-u53) part 2 and [Q_U54](#q-u54).** Grounding
+`wf_8c8b9fc2-54b` (5 facets + critic); verify `wf_34ba9e6b-dea`.
+
+**WHAT CHANGED.** `split-star-lexeme`'s two suffix arms (`""`→flatten,
+`"_"`→flatten-synth) — a second copy of the spelling↔cont pair serving the
+fused/dot/ω bands — became ONE clause: reconstruct the operator lexeme
+`(string-append "*" k)`, ask `postfix-star-lexeme->sentinel`, take its cont.
+The `^`-guard stays above it; the `[else]` is untouched. The PRINTER's star arm
+(`(if (eq? cont 'flatten-synth) "*_" "*")` — the **fifth encoder** the ruling's
+"four sites" had missed, user-facing through every star refusal label) asks the
+table via a new `postfix-star-cont->lexeme`, rendering an unknown cont LOUDLY as
+`«unrendered-star-cont:…»` instead of a silent `*`. `tools/form-deps.rkt`'s
+`syntax-keywords` DERIVES the star family from the table — correct BY
+CONSTRUCTION (`(map car table)` is the two removed literals). ⚠ **The "report
+byte-identical old vs new" I first offered as evidence is a ZERO-POWER
+instrument** (the verify measured identity even with `syntax-keywords` EMPTY:
+the report prints counts, and references are consulted only under a
+module-level SCC, of which there are none). Step A (`24fc1be4`) had already
+exported `star-spellings` so the battery PINS site 4 (never derivation — that
+list is a superset by DEFERRED 127's design) and widened the tripwire to
+`reader-forms.rkt`.
+
+**⭐ THE LIVENESS PROOF IS AN ASYMMETRY, MEASURED TWICE.** Flip the `*_` row's
+cont to `flatten` in the table (the "`*_` silently means `*`" mutant):
+BEFORE the fold → **4** red cases (the table pin, the two closer-band pins, the
+printer pin); AFTER → **14**, none vanished — the ten new reds are every
+fused/dot/ω `*_` pin (C-1, C-4, C-6a/b, the B2a E2E and refusal pins) and the
+printer's render pin. Same operator, ONE authority, every band. Reverted
+byte-identical under a checksum each time; a real rebuild forced each time.
+
+**PINS FIRST, AND THEY WERE MOSTLY ABSENT.** The grounding found six band×spelling
+cells with ZERO pins and the "byte-identical messages" obligation unenforced.
+Step A (`24fc1be4`) pinned all six at baselines MEASURED this session and every
+refusal message in FULL, one cell per test-case; plus the printer's containment
+(C-8) and the matrix's (C-9). ⭐ **A facet was wrong about C-5**: it said
+`x.a^*_` takes the star splitter's guard; measured, the top-level dot band's
+caret arm comes first and it takes the CARET guard — guard routing is per band
+and is now pinned as measured (C-7c makes the fused band's interception
+explicit).
+
+**WHAT THE GROUNDING CORRECTED, ours again**: "no test requires a `tools/`
+module" (B2b step 1) — five do, and the battery itself has required the matrix
+since 1a-i; my grep was single-line-blind. Q_U53's "sites 3 and 4 get pins,
+never derivation" over-generalized DEFERRED 127's reason to a list that wants
+exactly the names — amended in Q_U54. The two tools are not alike: the matrix is
+a library, `form-deps` a SCRIPT whose `command-line` runs at module level (a
+battery require breaks `batch-worker` — measured by the audit).
+
+**THE VERIFY (`wf_34ba9e6b-dea`, 4 lenses + adjudicator): NO BLOCKING FINDING** — the
+splitter proven at the FUNCTION boundary (a 26-lexeme differential against the
+old arms, all `SAME`), the `.pnet` round-trip `eq?`-stable, no abort path. ⭐ **The
+standing question answered outright: the one-seat-not-its-sibling shape appeared
+ONLY BY OMISSION, in the TEST TIER** — the new loud tell and the accessor's `#f`
+miss had no pin while their sibling marker `«unrendered-step-kind»` is pinned
+both ways; a regression back to a silent `*` would have passed. Pinned as C-10 /
+C-11, power proven by mutating the printer arm back. **The enumeration of what
+remains hardcoded, restated without "exactly"**: the five typing/reduction
+`select-star-cont` readers (silent bare-`*` on an unknown cont — 1b-vi's
+totality dispatcher); **`typing-errors.rkt`'s PROSE column — 15 formatters whose
+sentences spell `*`/`*_` per KIND while the LABEL beside them is now
+table-driven — the printer defect's twin one seat over, true today, live at
+1b-vi exactly as the printer would have been; it belongs in 1b-vi's totality
+inventory**; `reduction.rkt`'s two `oops` strings; the two DEFERRED-130 arms'
+`(string=? lex "*")` selectors (ruling-derived, deliberate); the matrix's
+`star-spellings` (a tool literal, pinned); the battery's regex (wider by
+design); the grammar ([DEFERRED 144]). And the CARET family carries the
+identical two-copy shape (parser literal arms ↔ pretty-print's `cont->string`
+with a silent `[else "^?"]`) with no table — filed as [DEFERRED 145](DEFERRED.md).
+
+Battery **571 → 573** · matrix `*_` 209/209 unchanged · acceptance `--check`
+88/88 ([90] ≡ [91], now through ONE authority) · suite **✅ **10248 / 488 / 0**, 189.0 s**.
+
 <a id="p4e-1b-v-b2b-shipped"></a>
 
 ##### §5.P4e-1b-v-B2b — WHAT SHIPPED  (step 1 `862fc7e3` · the mint `940c9c88`, 2026-09-08)
@@ -10087,7 +10163,7 @@ moves, `walk-to-leaf` is the abort it lands in.
 | **1b-iv-C (scope flag, NOT this slice)** | `*_` is NOT carried by [Q_U49](#q-u49): its PREFIX SOURCE is under-specified and [Q_U41](#q-u41)'s two worked examples disagree (deleted layer's key vs contents' keys). Needs a ruling before code. Q_U39 separately defers the closer-adjacent band, so Q_U41's own showcase spelling is unreachable anyway. | Named rather than silently deferred. |
 | **1b-v — the `*_` slice** 🔄 **A/B1/B1b/B2a + verify SHIPPED; B2b (the mint) remains** | [Q_U39](#q-u39)'s closer-adjacent **mint** (two bare sentinels, `$postfix-star-synth`) **+ `*_`'s SEMANTICS** — the shield lift, [Q_U51](#q-u51)'s prefix join, the **key threading** both twins skip, and the ω/broadcast Record arm's missing cont test. Scoped by [Q_U52](#q-u52): the mint alone would ship a better error message and leave Q_U51's capability non-existent. | The prefix rule is RULED and forced; the mint adds ONE spelling so the sentinel question collapses to two bare atoms. Record: [§5.P4e-1b-v](#p4e-1b-v) |
 | **1b-v-B2b — the reader MINT** ✅ `940c9c88` | Widen the gate's lexeme conjunct to EXACT table membership; route the emit through the same lookup ([DEFERRED 129](DEFERRED.md)); [DEFERRED 130](DEFERRED.md)'s two refusal messages ride along. **MINIMAL by ruling** — reader-only, so the three live bands cannot regress. Preconditions the grounding found: the battery's `p4e-star-type` / `p4e-last-star-type` helpers are exact-lexeme `"*"` and structurally blind to `*_` ([DEFERRED 133](DEFERRED.md)), and the DEFERRED-108 snapshot needs a deliberate re-baseline. | Scoped by [Q_U53](#q-u53) part 1: the miss-case is ruled out at the GATE, not handled at the emit. Record: [§5.P4e-1b-v-B2b](#p4e-1b-v-b2b) · shipped: [§5.P4e-1b-v-B2b-shipped](#p4e-1b-v-b2b-shipped) |
-| **1b-v-C — the FOLD** ⬜ | `split-star-lexeme`'s suffix dispatch delegates to the family table, so the four bands share ONE semantic authority; containment PINS (never derivation) for the two tool lists. Behaviour-preserving on every input. | [Q_U53](#q-u53) part 2 [owner: "land the fold before 1b-vi"]. Its own slice so the reader change and the parser change have one suspect each. |
+| **1b-v-C — the FOLD** ✅ `24fc1be4` (pins) · `a492bbb7` | `split-star-lexeme`'s suffix dispatch AND the printer's cont→lexeme delegate to the family table, so the four bands and every star label share ONE semantic authority; site 3 (`form-deps`) DERIVED, site 4 (the matrix) PINNED. Behaviour-preserving on every input. | [Q_U53](#q-u53) part 2 + [Q_U54](#q-u54) (the printer folds too; site 3 derived, site 4 pinned). Record: [§5.P4e-1b-v-C](#p4e-1b-v-c) |
 | **1b-vi — the star-COLLAPSE slice** ⬜ (**after 1b-v-C**) | **`*-`** ([Q_U48](#q-u48)) · the **`*-_`** decision · the cont-axis **totality dispatcher** · plus TWO owed rulings [Q_U52](#q-u52) surfaced: what "total collapse" does to a **renamed** ancestor (`^p` and `^` are mutually exclusive spellings of one step), and the **`*->` token boundary** (`>` breaks the identifier, so `x{a*-> b}` would become a `*-` step plus a stray `>`). | Split from 1b-v because those two are RULINGS, not implementation, and because `*-` is the spelling that forces the totality work. ⭐ Sequenced AFTER the fold [owner] so ruling `*-` costs a table row, not four edits. |
 | **P4e-2** | the `.*` retirement inventory + [Q_U26](#q-u26) ravel | unchanged |
 

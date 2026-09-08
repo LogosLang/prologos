@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 145**
+> ### **NEXT FREE: 146**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6184,7 +6184,7 @@ because the *fix* is the same edit and the *risk* is that it is forgotten.
 
 ---
 
-### 127. ⬜ ⭐⭐ `tools/star-arrival-matrix.rkt` CANNOT DISTINGUISH "CORRECTLY DOES NOT MINT" FROM "I CANNOT SEE THIS TOKEN" — and after a reader widening it reports FULL COVERAGE of a question it has stopped asking
+### 127. ✅ **DISCHARGED — repair in `tools/star-arrival-matrix.rkt` since 1b-v-A; containment PINNED at `24fc1be4` (C-9)** ⭐⭐ `tools/star-arrival-matrix.rkt` CANNOT DISTINGUISH "CORRECTLY DOES NOT MINT" FROM "I CANNOT SEE THIS TOKEN" — and after a reader widening it reports FULL COVERAGE of a question it has stopped asking
 
 Found by the same critic run. This is the instrument built specifically because
 D4 §5.P4e-1's reach claim needed evidence, so its blindness is load-bearing.
@@ -6778,4 +6778,26 @@ shows up in the corpus gate without anyone remembering it.
 (`angle_group`'s `token.immediate('*')` is irrelevant: the compiler refuses a
 glued star inside `<…>` per Q_U31, and a grammar that accepts more than the
 compiler is the harmless direction.)
+
+---
+
+### 145. ⬜ THE CARET FAMILY CARRIES THE SAME TWO-COPY SHAPE THE STAR FOLD RETIRED — parser literal arms ↔ pretty-print's `cont->string` with a silent `[else "^?"]`, and NO table
+
+Found by the 1b-v-C adversarial verify (`wf_34ba9e6b-dea`). The star family now
+has ONE authority (`postfix-star-sentinel-table`, reader-forms.rkt) read by the
+reader, the splitter, the printer and `form-deps`. The `^` family
+(`^` / `^k` / `^_` / `^-` / `^-_`) has none: `split-caret-lexeme` (parser.rkt)
+carries its cont vocabulary as literal arms, and `pretty-print.rkt`'s
+`cont->string` — directly above the star arm — re-spells it by hand, with a
+SILENT `[else "^?"]` fallback (the star arm's miss now renders LOUDLY).
+
+**Why filed, not fixed at 1b-v-C**: the star fold was scoped to the star arm by
+[Q_U54](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u54); the caret family is
+stable (no growth queued), so the drift hazard is latent rather than live.
+**When**: with the cont-axis totality work at 1b-vi, or at PF — whichever first
+touches `cont->string`. Fix shape: a caret table of the same three-column shape
+(sentinel · cont · lexeme), the splitter and printer delegating, a render pin
+per row. ⚠ Keep the star and caret tables SEPARATE: [Q_U31]/[Q_U29] rule that a
+segment carries at most one operator suffix, and the guards in each splitter
+test for the OTHER family's character — two tables, two guards, by design.
 
