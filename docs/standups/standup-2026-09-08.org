@@ -1,0 +1,82 @@
+#+TITLE: Standup — 2026-09-08
+#+DATE: 2026-09-08
+
+* Yesterday (since 2026-08-14 standup)
+
+**173 commits.** The interval is almost entirely the **editor arc** finishing —
+TSG 52, EHP 43, SURF 10 — with CIU T6 **parked** on 2026-08-15 and **resumed
+today**. The editor half is summarised from the record
+(~docs/tracking/standups/2026-08-15_dailies.md~ STATE + LOG (i)); the CIU half is
+this session's own work (LOG (ii) there, and the new ~2026-09-08_dailies.md~).
+
+** The editor arc closes (TSG T1 · TSG T2 · EHP T1 · PARSE T1)
+
+- **TSG T1 §9.7** put the whole ADOPTED path-selection surface into the grammar
+  (~e21c1b23~) — and the first cut was **green and vacuous**: ERROR fell
+  3054→2743 while MISSING rose 74→110, all invented ~}~ tokens. The owner's
+  MISSING-over-ERROR principle is now enforced in the gate. The infix escape
+  group ~.( … )~ landed (~fc6a44db~, ERROR −113), and the "toplevel vs defn"
+  binder mystery was error-subtree yielding all along.
+- **EHP T1 chrome endgame**: *convention parity* — every fallback scope resolves
+  to what the ecosystem's most-themed grammar uses for the same concept, chosen
+  by **measuring all 30 installed themes** (~parity/theme-survey.py~ is now an
+  instrument): keys wear YAML's key convention, binders the parameter convention
+  (the survey's only 30/30 column). The colour override is retired; DEFERRED 142
+  gave the layout map real grammar structure. The owner confirmed no remaining
+  discrepancy between the two editors.
+- **PARSE T1** (~0e34bc15~): the WS parse was **O(L³)** — a ~list-ref~ inside a
+  backwards scan; 26 KB file **1073 ms → 10.5 ms (102×)**, and ~parse_ms~, which
+  had printed 0 for months behind a dead counter, is wired. PIR waived.
+- **SURF T1**: P1 measured the breadcrumb over 6769 real positions (41% have no
+  ancestors), P3 spiked the surf tree (~surf-node-srcloc~ misses 60% of
+  positions; the extractor needs no change), P4 measured endpoint cost (~9 ms
+  typical, 138 ms worst — the 12 ms estimate was wrong). The carrier is **ruled
+  (R4, hybrid)**; P2 the breadcrumb is next there, behind the depth-0 question.
+
+** CIU T6 resumed — 1b-v-B2b, the reader mint, SHIPPED
+
+- First the ground moved under it: the project's path move had left
+  ~core.hooksPath~ pointing at the old checkout, so **git had run NO hooks for
+  weeks** — the ~check-parens~ gate inert and failing open. Fixed with relative
+  links, a guard that refuses to install into a void, and a real firing test
+  (~96ef73f0~); every live absolute path went relative (~83effe09~).
+- **Q_U53 ruled** (~c18a5a9d~), in two parts after a grounding whose critic found
+  the fact its facets missed: ~$postfix-star-synth~ had **zero producers** and
+  the three live bands never touched the family table — B1's "one table" was
+  false at HEAD. Part 1: the emit's miss-case is made *unreachable* at the gate
+  (a bare ~#f~, a fallback, and a raise each disqualified by measurement; the
+  raise is uncatchable). Part 2: one semantic authority, folded in its own slice
+  **before 1b-vi** (option C).
+- **B2b shipped** (~862fc7e3~ step 1 · ~940c9c88~ the mint · ~4cde7f03~ ·
+  ~a4c68cee~ · ~9f88ecf9~): one conjunct widened to exact table membership, the
+  emit the same call on the same entry. Arrival matrix ~*_~ **0/209 → 209/209**,
+  ~*-~/~*-_~ still 0. Mutation-tested in DEFERRED 129's exact shape. Suite
+  **10230/488/0**. ⭐ The audit's "DEFERRED-108 will go red" was measured
+  **false** (fifth round of a verify finding whose remedy was wrong), and the
+  power-check caught a **vacuous pin in my own new rows** before it landed.
+- The acceptance file had **no ~*_~ in any band**; §L added — closer seat and
+  fused band print byte-identical answers, which is the fold's contract,
+  measured. The grammar tripwire fired and was right: **DEFERRED 144**
+  (~flatten_step~ is a bare ~*~; X.close, since 1b-vi changes the token again).
+
+* Today
+
+- **CIU T6 1b-v-C — the fold** [owner: "open 1b-v-C, the fold"]:
+  ~split-star-lexeme~ delegates its suffix dispatch to
+  ~postfix-star-sentinel-table~, keeping the ~[else]~ total and every message
+  byte-identical; containment pins (never derivation) for the two tool lists.
+  Grounding delegated at ~9f88ecf9~; R-lens its targets, then co-design the
+  three open shapes (one-shot ~lexeme->cont~ accessor or two lookups; where the
+  containment pins live given no test requires a ~tools/~ module; whether a pure
+  delegation has an "inert" step). Then **1b-vi**.
+- **SURF T1 P2** remains the other live thread.
+
+* Conversations
+
+- The Q_U53 ruling was worked as examples, per the owner's standing preference
+  — options, tradeoffs, the spec (§8 Q8, §2.2, §7.5) and the expressivity call
+  in full at the decision point; the owner asked that shorthand ("copy #2", "the
+  table") be spelled out with its source each time. Noted, and applied.
+- On resuming: the dailies said CIU T6 was PARKED with SURF T1 P2 next; the
+  divergence was flagged and the owner's "proceed" followed. New dailies opened
+  at the owner's word as the track shifts back.
