@@ -9402,7 +9402,15 @@ written with these helpers has no power until they are widened.
 `regions:{host port}*_` synthesizes `:eu-host … :us-port` ([Q_U51]) and
 `rowsv:{tags}*_` refuses naming `*_` ([Q_U41]). The arrival matrix reads **`*_`
 209/209** (was 0/209 — the deliberate RED), **`*-`/`*-_` still 0/209**, every
-control asserting its declared outcome. Acceptance 0 errors, markers 0–88.
+control asserting its declared outcome. Acceptance 0 errors, markers 0–88 — and
+**§L appended (markers 90–93)**: L1 (closer seat) and L2 (fused band) print
+**byte-identical** answers for the same subject — the two authorities' agreement,
+now measured in the acceptance file rather than asserted — plus [Q_U51]'s ω form
+`regions:{host port}*_` and the bare-`*` contrast. ⚠ **[DEFERRED 144]**: the
+tree-sitter `flatten_step` is a bare `*`, so the closer-seat `*_` mis-parses in
+the editor; §L puts it in the corpus, which makes the gap MEASURABLE by
+`check-corpus.sh`. Filed for X.close (1b-vi changes the token again), per the
+grammar rule's "or file a DEFERRED entry saying why not".
 
 | step | content | gate |
 |---|---|---|

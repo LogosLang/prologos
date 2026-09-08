@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 144**
+> ### **NEXT FREE: 145**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6740,3 +6740,42 @@ whether it is documented syntax before arming it.
 parameters" and `test/corpus/nested_match.txt` "Nested match in match arm
 body", both marked `:skip` with this entry as the reason — un-skip them when
 this lands; they are the acceptance tests.
+
+---
+
+### 144. ⬜ THE TREE-SITTER GRAMMAR'S `flatten_step` IS A BARE `*` — the star-continuation family (`*_` LIVE at 1b-v-B2b; `*-`/`*-_` at 1b-vi) mis-parses at the CLOSER seat in the editor
+
+Found by the grammar-drift tripwire firing on `940c9c88` (CIU T6 slice
+1b-v-B2b), which is exactly what it exists for.
+
+**THE FACT** (verified): `editors/tree-sitter-prologos/grammar.js` has
+`flatten_step: $ => token.immediate('*')`. The compiler now mints `*_`
+closer-adjacent (`x{a}*_`, `[f x]*_`, `xs:{a}*_`), so the grammar consumes the
+`*` and strands the `_` — an ERROR / mis-paint on precisely the syntax B2b
+added. ⚠ The FUSED band (`x{a*_ b}`) is fine BY ACCIDENT: the grammar's
+identifier regex `[a-zA-Z_][a-zA-Z0-9_!?*+\-']*` admits `*` and `_` mid-name,
+the same accident the compiler's `ident-continue?` makes — one identifier token
+in both. Only the closer seat is broken.
+
+**WHY FILED, NOT FIXED** (the rule: grammar at `X.close`, or a DEFERRED entry
+saying why not): CIU T6 still has 1b-v-C, 1b-vi, P4e-2, PF, P5, PX, P6 ahead,
+and **1b-vi changes this token AGAIN** — `*-` and `*-_`, plus the `*->` boundary
+question [Q_U52](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u52) raised, which is a
+grammar question as much as a reader one (`x{a*-> b}`). Doing it once at
+X.close, after the family is final, is the fix that survives.
+
+**FIX SHAPE when it lands**: `flatten_step: $ => token.immediate(/\*[-_]*/)` —
+a SUPERSET of the family, mirroring the battery's `p4e-star-token-lexeme?` and
+the matrix's `star-spellings`, per [Q_U53](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u53)'s
+containment rule (an instrument or a grammar that is exactly the mint table
+re-blinds itself the moment the table grows) — plus a corpus test. ⚠ Read
+MISSING before ERROR when judging it (tree-sitter-grammar.md).
+
+**IT IS MEASURABLE TODAY**: the acceptance file's §L (added at B2b) carries the
+closer-seat `*_` forms, and `./check-corpus.sh` scans `examples/` — so the gap
+shows up in the corpus gate without anyone remembering it.
+
+(`angle_group`'s `token.immediate('*')` is irrelevant: the compiler refuses a
+glued star inside `<…>` per Q_U31, and a grammar that accepts more than the
+compiler is the harmless direction.)
+

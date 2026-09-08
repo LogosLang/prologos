@@ -490,3 +490,33 @@ def apple-colors :=
 
 apple-colors
 ;;89=> @["red" "green"] : [PVec String]
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; §L  SYNTHESIZED KEYS — `*_` flattens a layer AND keeps the deleted layer's
+;;     key as a PREFIX on each lifted field  [Q_U24 · Q_U51 · D4.P4e-1b-v ✅]
+;; ───────────────────────────────────────────────────────────────────────────
+;; Bare `*` deletes a layer; its keys are gone. `*_` deletes the same layer but
+;; synthesizes `<the key its content sat under>-<its own key>` — the provenance
+;; form, `^-_`'s rule one layer down. This is what keeps a SHARED field name
+;; apart when several contents are lifted into one level (Q_U51: "the whole
+;; point"), where bare `*` must refuse the collision.
+;; ⚠ Appended at 1b-v-B2b, the slice that made the CLOSER seat spell it: the
+;; same operator now reads through ONE reader gate at the closer seat and
+;; through `split-star-lexeme` in the fused/dot/ω bands — L1 and L2 pin that
+;; they AGREE, which is the contract 1b-v-C (the fold) makes structural.
+
+;; L1 — the closer seat, Q_U24's own motivating example on our guild hall
+app-config{database}*_
+;;90=> {:database-pool-size 10, :database-url "localhost/guild-db"} : {:database-pool-size Int :database-url String}
+
+;; L2 — the FUSED band, same subject, same answer (two authorities today; one after 1b-v-C)
+app-config{database*_}
+;;91=> {:database-pool-size 10, :database-url "localhost/guild-db"} : {:database-pool-size Int :database-url String}
+
+;; L3 — ω over a Map: every region's fields lifted, each prefixed by ITS region (Q_U51)
+regions:{host port}*_
+;;92=> {:us-host "us.example.com", :ap-port 8443, :ap-host "ap.example.com", :eu-port 443, :us-port 443, :eu-host "eu.example.com"} : {:ap-host String :ap-port Int :eu-host String :eu-port Int :us-host String :us-port Int}
+
+;; L4 — the contrast: bare `*` at the same seat lifts the fields UNPREFIXED
+app-config{database}*
+;;93=> {:url "localhost/guild-db", :pool-size 10} : {:pool-size Int :url String}
