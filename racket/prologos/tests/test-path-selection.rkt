@@ -6181,10 +6181,14 @@
 ;; from `symbol` to `postfix-star` when the mint widens, which is B2b's own row;
 ;; what these pin is that the helper can SEE the token either way.
 ;; ---------------------------------------------------------------------------
-(test-case "P4e-0 A [DEFERRED 133]: the helpers SEE a non-minting star spelling, and say so"
-  ;; pre-B2b these are all `symbol` — the point is that they are not `#f`/`'none`
-  (check-equal? (p4e-star-type "cfg{a}*_ ") 'symbol
-                "`*_` is ONE token; a helper that cannot see it reports #f")
+(test-case "P4e-0 A [DEFERRED 133]: the helpers SEE every star spelling, minting or not, and say which"
+  ;; ⚠ B2b FLIPPED THE FIRST ROW. At step 1 all four were `symbol` — the point
+  ;; was only that none is `#f`/`'none`. B2b makes `*_` a TABLE lexeme, so the
+  ;; gate mints it; `*-` / `*-_` are NOT in the table ([Q_U52] — 1b-vi, two
+  ;; owner rulings first) and stay `symbol`. That contrast is the whole of
+  ;; [Q_U53] part 1 at the gate: exact membership, nothing wider.
+  (check-equal? (p4e-star-type "cfg{a}*_ ") 'postfix-star
+                "`*_` is ONE token; the widened gate MINTS it (it was `symbol` before B2b)")
   (check-equal? (p4e-star-type "cfg{a}*- ") 'symbol "`*-`")
   (check-equal? (p4e-star-type "cfg{a}*-_ ") 'symbol "`*-_`")
   ;; ⚠⚠ THE LAST-STAR ROW WAS VACUOUS ON ITS FIRST DRAFT AND THE POWER-CHECK
@@ -6212,6 +6216,75 @@
   (for ([lex (in-list (map caddr rf:postfix-star-sentinel-table))])
     (check-true (p4e-star-token-lexeme? lex)
                 (format "table lexeme ~s is invisible to the battery's star helpers" lex))))
+
+;; ---------------------------------------------------------------------------
+;; ⭐⭐ [Q_U53] PART 1's CANARY — the assertion that CANNOT live at the emit.
+;;
+;; The ruling: the gate's lexeme conjunct and the sentinel emit ask ONE question
+;; (`postfix-star-lexeme->sentinel`) of ONE datum (the entry's lexeme, which is
+;; immutable once typed), so "the emit missed" ≡ "the gate would not have
+;; minted" — and the gate did. That invariant has NO home in production: the
+;; only assertion mechanism at the reader is a raise, `parse-reader.rkt` has
+;; zero `with-handlers`, and the G2 preparse guard runs strictly AFTER the
+;; reader — so a raise there is an uncatchable WHOLE-FILE ABORT. It is pinned
+;; HERE instead, on the SAME token entry: the type the gate assigned, beside the
+;; datum `token-entry->stx` emitted for it.
+;;
+;; Why this beats a full `read-all-syntax-ws` read: preparse FUSES the star in
+;; selection territory ([Q_U37]), so by the time a form is readable the
+;; sentinel's IDENTITY is gone. `token-entry->stx` on the entry itself is the
+;; reader's own datum, before anything can consume it.
+;; ---------------------------------------------------------------------------
+(define (p4e-last-star-entry src)
+  ;; the LAST star-family token ENTRY (see `p4e-last-star-type` for why LAST),
+  ;; or #f if there is none
+  (register-default-token-patterns!)
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string src)))
+  (define bd-rrb (make-bracket-depth-rrb tok-rrb src))
+  (define-values (narrowed _changed?) (disambiguate-tokens tok-rrb bd-rrb))
+  (for/fold ([found #f]) ([t (in-list (rrb-to-list narrowed))])
+    (if (p4e-star-token-lexeme? (token-entry-lexeme t)) t found)))
+
+(define (p4e-emitted-star-datum src)
+  ;; what the reader EMITS for the last star-family token; `'none` if there is
+  ;; no such token. ⚠ Pass the REAL source string as `source-str`: `pos->line-col`
+  ;; does `string-ref` with no length check (pipeline.md), and `""` is the
+  ;; impossible-input default that raises.
+  (define e (p4e-last-star-entry src))
+  (if e (syntax->datum (token-entry->stx e 'p4e-canary src)) 'none))
+
+(test-case "P4e-0 A [Q_U53 canary]: the gate MINTS every table lexeme at the closer seat"
+  (for ([lex (in-list (map caddr rf:postfix-star-sentinel-table))])
+    (define src (string-append "cfg{a}" lex " "))
+    (check-equal? (p4e-last-star-type src) 'postfix-star
+                  (format "table lexeme ~s did not mint in ~s" lex src))))
+
+(test-case "P4e-0 A [Q_U53 canary]: the EMIT produces each table lexeme's OWN sentinel"
+  ;; This is [DEFERRED 129]'s hazard, pinned. A spelling-blind emit hands EVERY
+  ;; minted spelling `$postfix-star`, whose cont is `flatten` — so `x{a b}*_`
+  ;; would silently MEAN `x{a b}*`, the wrong answer B1's ordering argument was
+  ;; written to prevent, reached by the other route. MUTATION: hardcode the emit
+  ;; back to `'$postfix-star` and the `*_` iteration here goes RED while the
+  ;; gate case above stays GREEN — the two halves are independently powered.
+  (for ([row (in-list rf:postfix-star-sentinel-table)])
+    (define sent (car row))
+    (define lex (caddr row))
+    (define src (string-append "cfg{a}" lex " "))
+    (define got (p4e-emitted-star-datum src))
+    (check-equal? got sent
+                  (format "for ~s the emit produced ~s, not its table sentinel ~s" src got sent))))
+
+(test-case "P4e-0 A [Q_U53 canary]: an UNRESERVED star spelling does not mint"
+  ;; `*--` is not in the table and never will be (the family reserves `*` `*_`
+  ;; `*-` `*-_`), so this stays discriminating past 1b-vi. [Q_U52]'s own `*-` /
+  ;; `*-_` are pinned `symbol` by the DEFERRED-133 rows above.
+  (check-equal? (p4e-last-star-type "cfg{a}*-- ") 'symbol
+                "an unreserved spelling must not mint — exact membership, nothing wider"))
+
+(test-case "P4e-0 A [Q_U53 canary]: an UNRESERVED star spelling emits as the plain symbol the user wrote"
+  ;; its own case, not a second check above: a red gate check would MASK this one
+  (check-equal? (p4e-emitted-star-datum "cfg{a}*-- ") '*--
+                "no sentinel, no fallback — the reader hands an unreserved spelling through untouched"))
 
 (test-case "P4e-0 A: the `>`-FINAL OPERATORS are not closers — a char lookback would mint here"
   ;; ⚠ THE GUARD THAT DECIDED THE DESIGN. Each of these has the `*` byte-adjacent
@@ -8476,18 +8549,21 @@
 ;; ⚠ DO NOT "fix" them by weakening the regex — the failure they must show is the
 ;; SYNTHESIZED KEYS, and a pin that passes on the Unbound-variable error would be
 ;; the vacuous-pin class this track has already paid for twice.
-;; (test-case "P4e-1b [Q_U41]/[Q_U51]: `*_` synthesizes from the deleted layer's keys"
-;;   (check-true (p4e1-has? "ns c3\ndef regions := {:eu {:host \"e\" :port 80} :us {:host \"u\" :port 443}}\nregions:{host port}*_"
-;;                          #rx":eu-host.*:eu-port.*:us-host.*:us-port")
-;;               "regions:{host port}*_ synthesizes <content-key>-<field-key> [Q_U51]")
-;;   ;; [Q_U41]: over a POSITIONAL deleted layer there is no key to synthesize from
-;;   (check-true (p4e1-has? "ns c4\ndef rowsv := @[{:tags @[1 2]} {:tags @[3]}]\nrowsv:{tags}*_"
-;;                          #rx"`[*]_`")   ;; ⚠ character class — `\*` is an INVALID
-                                       ;; Racket string escape and would make this
-                                       ;; FILE fail to READ when unparked (zero
-                                       ;; tests, not one failing test). Caught by
-                                       ;; the 1b-v verify, S9.
-;;               "`*_` over a positional layer is a guided refusal naming itself"))
+;; ⭐ UN-PARKED at 1b-v-B2b, as TWO test-cases rather than one: rackunit aborts a
+;; `test-case` at its first failed check, so a single case would let a red
+;; synthesis pin MASK the refusal pin (this arc's lesson #3, paid for twice).
+(test-case "P4e-1b [Q_U41]/[Q_U51]: `*_` synthesizes from the deleted layer's keys — CLOSER band"
+  (let ([out (p4e1-last "ns c3\ndef regions := {:eu {:host \"e\" :port 80} :us {:host \"u\" :port 443}}\nregions:{host port}*_")])
+    (check-true (regexp-match? #rx":eu-host.*:eu-port.*:us-host.*:us-port" out)
+                (format "regions:{host port}*_ must synthesize <content-key>-<field-key> [Q_U51]; observed: ~a" out))))
+
+(test-case "P4e-1b [Q_U41]: `*_` over a POSITIONAL deleted layer is a guided refusal naming itself — CLOSER band"
+  ;; [Q_U41]: no key to synthesize from. ⚠ character class `[*]` — `\*` is an
+  ;; INVALID Racket string escape and would make this FILE fail to READ (zero
+  ;; tests, not one failing test). Caught by the 1b-v verify, S9.
+  (let ([out (p4e1-last "ns c4\ndef rowsv := @[{:tags @[1 2]} {:tags @[3]}]\nrowsv:{tags}*_")])
+    (check-true (regexp-match? #rx"`[*]_`" out)
+                (format "`*_` over a positional layer must refuse naming `*_`; observed: ~a" out))))
 
 ;; ---- 1b-iv: [Q_U42] — the join is ONE RECURSIVE rule; same-key vectors CONCAT
 ;;

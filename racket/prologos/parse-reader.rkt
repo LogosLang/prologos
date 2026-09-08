@@ -2143,7 +2143,22 @@
                   ;; defensive: `rrb-get` RAISES on a negative index, and a raise
                   ;; here is a WHOLE-FILE ABORT (pipeline.md). A lone `*` at file
                   ;; position 0 is legal today (`* 3 5` → 15).
-                  [(and (string=? lexeme "*")
+                  ;; ⭐ [Q_U53] part 1 (1b-v-B2b) — EXACT TABLE MEMBERSHIP, and
+                  ;; the SAME question the emit asks (`token-entry->stx`'s
+                  ;; postfix-star arm). This read `(string=? lexeme "*")`, so
+                  ;; `*_` — ONE token, since `*`/`_`/`-` are all
+                  ;; `ident-continue?` — fell through to `symbol` and surfaced
+                  ;; as `Unbound variable`. Widening to the family table makes
+                  ;; gate ⇔ emit hold BY CONSTRUCTION: "the emit missed" would
+                  ;; mean this conjunct was false, and it was true. So the emit
+                  ;; carries no fallback (DEFERRED 129's hazard, relocated) and
+                  ;; no raise (this file has zero `with-handlers`; a raise here
+                  ;; is an uncatchable WHOLE-FILE ABORT). The agreement is
+                  ;; pinned in the battery's [Q_U53 canary] instead.
+                  ;; ⚠ `*-` / `*-_` are NOT in the table ([Q_U52] — 1b-vi, two
+                  ;; owner rulings first) and therefore do NOT mint. That
+                  ;; exclusion is a property of the DATA, not a second list.
+                  [(and (postfix-star-lexeme->sentinel lexeme)
                         (not in-mixfix?)
                         (> (rrb-size result) 0)
                         (let ([prev (rrb-get result (- (rrb-size result) 1))])
@@ -2652,7 +2667,16 @@
       ;; [Q_U36](#q-u36) records why it cannot: membership would be CONDITIONAL on
       ;; the predecessor, which a flat head list cannot express — the shape that
       ;; killed slice B. As an atom it is consumed by POSITION instead.
-      [(postfix-star) '$postfix-star]
+      ;; ⭐ 1b-v-B2b — THE EMIT READS THE LEXEME ([DEFERRED 129], [Q_U53]).
+      ;; This was `'$postfix-star`, keyed on the token TYPE alone; widening the
+      ;; gate without touching it would hand EVERY minted spelling bare `*`'s
+      ;; sentinel, whose cont is `flatten` — `x{a b}*_` silently MEANING
+      ;; `x{a b}*`, the exact wrong answer B1's ordering was written to
+      ;; prevent, by the other route. The lookup CANNOT miss: the gate minted
+      ;; this entry with the SAME call on the SAME lexeme, and `token-entry`
+      ;; is immutable once typed (its only `struct-copy` replaces `types`).
+      ;; No `or`-fallback, no raise — see the gate's note for why each is out.
+      [(postfix-star) (postfix-star-lexeme->sentinel lexeme)]
       [(char) (cond
                 ;; 'X' char literal → the char
                 [(and (= (string-length lexeme) 3)

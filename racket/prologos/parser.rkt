@@ -42,7 +42,10 @@
                   ;; the three dispatch sites below cover every spelling by
                   ;; delegating to ONE predicate instead of inlining an identity
                   ;; test each — the drift shape reader-forms.rkt exists to forbid.
-                  postfix-star-sentinel? postfix-star-sentinel-cont))
+                  postfix-star-sentinel? postfix-star-sentinel-cont
+                  ;; 1b-v-B2b [DEFERRED 130]: the two refusal messages render
+                  ;; the spelling the USER WROTE, never a hardcoded `*`.
+                  postfix-star-sentinel-lexeme))
 
 (provide parse-datum
          parse-toplevel-datum  ;; Rel T1 POL.9: command-position paren-goal dispatch
@@ -418,13 +421,27 @@
     ;; earlier "a product type needs a SPACE" opener was advice about a form the
     ;; user had not written. Inside `<…>` the guidance is the same either way:
     ;; add the space.
-    [(ormap (lambda (p) (postfix-star-sentinel? (stx->datum p))) parts)
-     (parse-error loc
-       (string-append
-        "inside `<…>`, `*` needs a SPACE before it — glued to a closing bracket,"
-        " `*` is the path-selection flatten operator, not a type operator. For a"
-        " product type write `<(x : A) * B>`, not `<(x : A)* B>`")
-       #f)]
+    ;; [DEFERRED 130] (1b-v-B2b): the message ECHOES the spelling the user
+    ;; wrote. B1 family-ized this predicate, so `*_` reaches the arm once the
+    ;; reader mints it — and was about to be told about `*`. The bare-`*` text
+    ;; is BYTE-IDENTICAL to before (its pins do not move). For any other member
+    ;; "add a space" is not the remedy — a spaced `*_` is not a Sigma either —
+    ;; so the guidance is derived from the RULING ([Q_U31]: only a spaced bare
+    ;; `*` is a product), not from the `*` example.
+    [(for/first ([p (in-list parts)] #:when (postfix-star-sentinel? (stx->datum p))) p)
+     => (lambda (p)
+          (define lex (postfix-star-sentinel-lexeme (stx->datum p)))
+          (parse-error loc
+            (if (string=? lex "*")
+                (string-append
+                 "inside `<…>`, `*` needs a SPACE before it — glued to a closing bracket,"
+                 " `*` is the path-selection flatten operator, not a type operator. For a"
+                 " product type write `<(x : A) * B>`, not `<(x : A)* B>`")
+                (string-append
+                 "inside `<…>`, `" lex "` is a path-selection star operator, not a type"
+                 " operator — it has no type-level reading, glued or spaced. For a"
+                 " product type write `<(x : A) * B>` (a spaced bare `*`)"))
+            #f))]
     ;; Dependent Pi/Sigma: <(x : A) -> B> or <(x : A) * B>
     [(and (>= (length parts) 3)
           (paren-binder-group? (car parts))
@@ -649,14 +666,25 @@
     ;; `d0ac2a58`'s class.
     ;; ⚠ Must precede the `symbol?` arm — `parse-symbol` would otherwise resolve it
     ;; as an ordinary name.
+    ;; [DEFERRED 130] (1b-v-B2b): echoes the spelling the user wrote and its
+    ;; cont, from the family table. The multiplication clause is a fact about
+    ;; bare `*` ONLY — derived from the ruling, not from the example in front
+    ;; of the author (this message family's THIRD wrong-remedy lesson) — so it
+    ;; renders for `*` alone, and the `*` text is byte-identical to before.
     [(postfix-star-sentinel? d)
-     (parse-error loc
-       (string-append
-        "`*` (flatten) applies to a SELECTION step — there is no selection to its"
-        " left here. Write it after a path or block access, e.g. `xs:{a}*` or"
-        " `cfg{a}*`; a bare `*` between values is multiplication, and a spaced"
-        " `*` after a value is the operator")
-       #f)]
+     (let ([lex (postfix-star-sentinel-lexeme d)]
+           [cont (symbol->string (postfix-star-sentinel-cont d))])
+       (parse-error loc
+         (string-append
+          "`" lex "` (" cont ") applies to a SELECTION step — there is no selection to its"
+          " left here. Write it after a path or block access, e.g. `xs:{a}" lex "` or"
+          " `cfg{a}" lex "`"
+          (if (string=? lex "*")
+              (string-append
+               "; a bare `*` between values is multiplication, and a spaced"
+               " `*` after a value is the operator")
+              ""))
+         #f))]
 
     ;; Bare symbol
     [(symbol? d)
