@@ -50,7 +50,10 @@ fi
 # Warn rather than block, deliberately: plenty of parser edits are internal and
 # imply no grammar change, and a hook that cries wolf gets bypassed reflexively.
 staged_all=$(git diff --cached --name-only --diff-filter=AM || true)
-surface_touched=$(echo "$staged_all" | grep -E 'racket/prologos/(parse-reader|tree-parser|parser|macros|surface-syntax)\.rkt$' || true)
+# 1b-v-C: reader-forms.rkt added — it is where the star family's spellings LIVE
+# (one table), so a spelling can now be added without touching parser.rkt at all;
+# without this line a table-only widening would slip past the tripwire (fail-open).
+surface_touched=$(echo "$staged_all" | grep -E 'racket/prologos/(parse-reader|tree-parser|parser|macros|surface-syntax|reader-forms)\.rkt$' || true)
 grammar_touched=$(echo "$staged_all" | grep -E 'editors/tree-sitter-prologos/(grammar\.js|src/scanner\.c)$' || true)
 if [ -n "$surface_touched" ] && [ -z "$grammar_touched" ]; then
   echo "" >&2

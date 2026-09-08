@@ -3199,6 +3199,66 @@ items of the hold-point, ruled before P4a opened:
   (*"lexical grammar … including error-message obligations"*), which is open and
   is precisely this question.
 
+- <a id="q-u54"></a>**⭐ Q_U54 — 1b-v-C FOLDS THE FIFTH ENCODER TOO: THE PRINTER's
+  cont→lexeme JOINS THE TABLE; SITE 3 IS DERIVED, SITE 4 IS PINNED [owner,
+  2026-09-08 — "Let's go with B, yes"].**
+
+  **THE QUESTION** (the 1b-v-C grounding, `wf_8c8b9fc2-54b`): [Q_U53](#q-u53)
+  part 2 enumerated FOUR sites that encode the star family. Its completeness
+  critic found a **fifth**, and it is user-facing: `pretty-print.rkt`'s star arm
+  derives the SPELLING from the CONT with both lexemes hardcoded —
+  `[(star) (if (eq? (select-star-cont s) 'flatten-synth) "*_" "*")]` — and
+  `typing-core` builds every star refusal label through `pp-select-branch`. It
+  predates the table (slice 1b-ii). It is exactly the hazard [Q_U52](#q-u52) §3
+  named in words: *"`pp-expr` would render `*-` as `"*"` and feed that wrong
+  echo into every `*-` label."*
+
+  **WORKED ON 1b-vi's `*-`.** Under *A* (fold the splitter only): add the table
+  row, the reader mints, every band works — and the first type error on a `*-`
+  step is labelled `*`. The message says the user wrote `x{a*}`; they did not.
+  Under *B*: the printer asks the table for the cont's lexeme and prints `*-`;
+  the row is the whole change, and a rendering pin per row makes a half-done
+  row loud. **B is ruled.** Cost: one accessor (`postfix-star-cont->lexeme`, a
+  row lookup — the table had no cont→lexeme direction), one require edge
+  `pretty-print.rkt → reader-forms.rkt` (cycle-free: reader-forms is a pure
+  leaf), one arm. ⚠ The CARET family's `cont->string` sits directly above that
+  arm, equally hardcoded, and has NO table at all — out of scope; the fold
+  touches the star arm only.
+
+  **SPEC**: §8 Q8's second clause — errors *"SHOULD print the normalized /
+  remedied spelling"* — is what the printer arm violates the moment the family
+  grows; §7.5's first-class selectors want operators as data, and a printer
+  that hardcodes the spelling is the last place the vocabulary lives as prose.
+  **EXPRESSIVITY**: the fold's point is that ruling `*-` costs a table row.
+  Under A it costs a row AND a printer edit that nothing turns red for.
+
+  **THE AMENDMENT TO Q_U53's TEXT, accepted**: "sites 3 and 4 get pins, never
+  derivation" over-generalized. The reason — an instrument must stay a SUPERSET
+  or it re-blinds itself ([DEFERRED 127]) — is true of **site 4** only
+  (`star-spellings`, `tools/star-arrival-matrix.rkt`), which is PINNED
+  (`postfix-star-lexemes ⊆ star-spellings`; the tool already has `provide` +
+  `module+ main` and the battery already requires it — the earlier claim that
+  "no test requires a tools/ module" was FALSE, five do). **Site 3**
+  (`syntax-keywords`, `tools/form-deps.rkt`) wants EXACTLY the sentinel names,
+  so it is DERIVED from the table (`(map car postfix-star-sentinel-table)`);
+  it cannot lag. That also avoids restructuring a SCRIPT (`command-line` and
+  the whole analysis run at module level; requiring it from the battery fails
+  under `batch-worker` — measured by the audit) just to pin it. ⚠ Site 3
+  already omits five ACCESS sentinels — a recorded pre-existing hole this does
+  not touch.
+
+  **THE OBLIGATIONS THE RULING INHERITS** (all verified): the hoisted
+  `^`-in-name guard stays BEFORE the table lookup; the lookup is on the
+  RECONSTRUCTED operator `(string-append "*" k)`, never the fused lexeme (the
+  table is exact; `"a*"`→#f is pinned); `parser.rkt`'s `only-in` must widen
+  (it lacks `postfix-star-lexeme->sentinel`); the six band×spelling cells with
+  ZERO pins are pinned at their MEASURED baselines before the fold; every
+  refusal message is pinned in FULL (today the mid message is pinned by the one
+  word `map-get`); the tripwire adds `reader-forms.rkt` to its watch list (a
+  table-only widening would otherwise slip past it); `syntax.rkt`'s vocabulary
+  comment stops naming the splitter as the source. Record:
+  [§5.P4e-1b-v-C](#p4e-1b-v-c).
+
 - <a id="q-u43"></a>**⭐ Q_U43 — THE L4 SORT CHECK MOVES TO TYPING FOR STAR-BEARING
   BRANCHES, AS [Q_U38](#q-u38)'s COROLLARY [owner, 2026-08-11 — "move the sort
   check to typing per Q_U38's corollary"].** Q_U38 moved the COLLISION check;

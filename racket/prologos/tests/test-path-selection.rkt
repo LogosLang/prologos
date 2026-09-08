@@ -9173,3 +9173,126 @@
   (check-equal? (p4e1-last "ns yb4\ndef e3 := {:a {:b {:c {:x 1}}}}\ne3{a.b.c*}")
                 "{:a {:b {:x 1}}} : {:a {:b {:x Int}}}"
                 "a keyed prefix step still re-nests — the skip is ordinals ONLY"))
+
+;; ═══════════════════════════════════════════════════════════════════════════
+;; D4.P4e-1b slice 1b-v-C — THE FOLD [Q_U53 part 2 · Q_U54]. PINS FIRST.
+;;
+;; The fold is BEHAVIOUR-PRESERVING, so there is no failing-test-first for it;
+;; what there is instead is a regression ORACLE. The 1b-v-C grounding found SIX
+;; band×spelling cells with ZERO pins — exactly where a "preserving" fold could
+;; break with nothing going red — and found the "byte-identical messages"
+;; obligation essentially UNENFORCED (the mid message pinned by the one word
+;; `map-get`; the `^`-guard by a fragment three producers share). These pins
+;; assert the MEASURED HEAD baselines (probe-1bvc-cells / -guard, this session)
+;; in FULL, one cell per `test-case` so a red cannot mask a sibling.
+;; ⚠ Guard ROUTING is per band and was measured, not read: the FUSED band's
+;; caret arm precedes its star arm, so `a^*_` there takes the CARET splitter's
+;; guard and never enters `split-star-lexeme`; dot-in-block and ω reach the STAR
+;; splitter's own hoisted guard. A facet claimed the opposite for one cell.
+;; ═══════════════════════════════════════════════════════════════════════════
+(define cfold-sib  "ns cfold1\ndef sib := {:a {:x 1} :b {:y 2}}\n")
+(define cfold-rm   "ns cfold2\ndef rm := {:eu {:cfg {:x 1}}}\n")
+(define cfold-wmap "ns cfold3\ndef wmap := {:k {:eu {:s {:x 1}} :us {:s {:x 2}}}}\n")
+(define cfold-wvec "ns cfold4\ndef wvec := {:k @[{:s {:x 1}} {:s {:x 2}}]}\n")
+
+(test-case "1b-v-C C-1: FUSED band, `*_` WITH A SIBLING — `x{a*_ b}` (was unpinned)"
+  (define src (string-append cfold-sib "sib{a*_ b}"))
+  (check-equal? (p4e1-type src) "{:a-x Int :b {:y Int}}"
+                (format "type; observed: ~a" (p4e1-last src)))
+  ;; value keys pinned, champ ORDER not (it is carrier-determined, Q_U44)
+  (check-true (and (string-contains? (p4e1-last src) ":a-x 1")
+                   (string-contains? (p4e1-last src) ":b {:y 2}"))
+              (format "value; observed: ~a" (p4e1-last src))))
+
+(test-case "1b-v-C C-2: FUSED band, LEADING star `x{*a}` — the `*name` arm, in FULL (was unpinned)"
+  (define src (string-append cfold-sib "sib{*a}"))
+  (check-false (p4e1-type src) (format "must refuse; observed: ~a" (p4e1-last src)))
+  (check-true (string-contains? (p4e1-last src)
+                "`*a` — `*` is postfix; it attaches to the END of a segment")
+              (format "the :1249 arm's own sentence, whole; observed: ~a" (p4e1-last src))))
+
+(test-case "1b-v-C C-3: the MID-star `[else]` under a synth-looking suffix `a*_x` — the whole message, not `map-get`"
+  (define src (string-append cfold-sib "sib{a*_x}"))
+  (check-false (p4e1-type src) (format "must refuse; observed: ~a" (p4e1-last src)))
+  (check-true (string-contains? (p4e1-last src)
+                (string-append "`a*_x` — `*` is the layer-delete operator and attaches at the END of a"
+                               " segment, so `a*_x` is neither a field nor an operator."
+                               " A field literally named `a*_x` is reached with `[map-get x :a*_x]`"))
+              (format "star-mid-lexeme-message, all four echoes; observed: ~a" (p4e1-last src))))
+
+(test-case "1b-v-C C-4: $dot-access band, `*_` IN-BLOCK (cur set) — `x{a.b*_}` (was unpinned)"
+  (define src (string-append cfold-rm "rm{eu.cfg*_}"))
+  (check-equal? (p4e1-type src) "{:eu {:cfg-x Int}}"
+                (format "observed: ~a" (p4e1-last src))))
+
+(test-case "1b-v-C C-5: $dot-access TOP-LEVEL `x.a^*_` takes the CARET guard — it never reaches split-star-lexeme (measured)"
+  (define src (string-append cfold-rm "rm.eu^*_"))
+  (check-false (p4e1-type src) (format "must refuse; observed: ~a" (p4e1-last src)))
+  (check-true (string-contains? (p4e1-last src)
+                (string-append "`eu^*_` — a rename target may not contain `*`; `*` is the layer-delete"
+                               " operator, and a segment carries at most one operator suffix"))
+              (format "split-caret-lexeme's guard (DEFERRED 90), whole; observed: ~a" (p4e1-last src))))
+
+(test-case "1b-v-C C-6a: ω band IN-BLOCK over a MAP layer — `x{k:s*_}` (no baseline existed before this session)"
+  (define src (string-append cfold-wmap "wmap{k:s*_}"))
+  (check-equal? (p4e1-type src) "{:k {:eu-s {:x Int} :us-s {:x Int}}}"
+                (format "observed: ~a" (p4e1-last src))))
+
+(test-case "1b-v-C C-6b: ω band IN-BLOCK over a POSITIONAL layer — `x{k:s*_}` refuses per [Q_U41], naming `:s*_`"
+  (define src (string-append cfold-wvec "wvec{k:s*_}"))
+  (check-false (p4e1-type src) (format "must refuse; observed: ~a" (p4e1-last src)))
+  (check-true (string-contains? (p4e1-last src)
+                (string-append "`:s*_` — `*_` prefixes each lifted field with the key its content sat under,"
+                               " and this layer's contents sit at POSITIONS, not keys"
+                               " (layer `[PVec {:s {:x Int}}]`): there is nothing to prefix with."
+                               " Bare `*` joins these contents directly"))
+              (format "the Q_U41 refusal, whole; observed: ~a" (p4e1-last src))))
+
+(test-case "1b-v-C C-7a: the STAR splitter's hoisted `^`-guard, in FULL, from the $dot-access IN-BLOCK band"
+  (define src (string-append cfold-rm "rm{eu.cfg^*_}"))
+  (check-false (p4e1-type src) (format "must refuse; observed: ~a" (p4e1-last src)))
+  (check-true (string-contains? (p4e1-last src)
+                (string-append "`cfg^*_` — a segment name may not contain `^`; `^` re-keys and `*` deletes a"
+                               " layer, and a segment carries at most one operator suffix. Spell them as"
+                               " separate segments — `x{k^.f*}` re-keys above and flattens below"))
+              (format "the :1284 guard's own sentence; observed: ~a" (p4e1-last src))))
+
+(test-case "1b-v-C C-7b: the STAR splitter's hoisted `^`-guard, in FULL, from the ω band"
+  (define src (string-append cfold-wmap "wmap{k:s^*_}"))
+  (check-false (p4e1-type src) (format "must refuse; observed: ~a" (p4e1-last src)))
+  (check-true (string-contains? (p4e1-last src)
+                (string-append "`s^*_` — a segment name may not contain `^`; `^` re-keys and `*` deletes a"
+                               " layer, and a segment carries at most one operator suffix. Spell them as"
+                               " separate segments — `x{k^.f*}` re-keys above and flattens below"))
+              (format "the :1284 guard's own sentence; observed: ~a" (p4e1-last src))))
+
+(test-case "1b-v-C C-7c: the FUSED band's caret arm INTERCEPTS `a^*_` — it takes the CARET guard, not the star guard"
+  ;; This is the ordering F1 documented (`re-key-sym?` precedes `star-sym?` in
+  ;; the fused band). Pinned so the fold's guard-ORDER obligation (the star
+  ;; splitter's `^`-guard stays before its table lookup) is asserted where the
+  ;; star splitter IS reached (C-7a/b), and the fused band's different route is
+  ;; not mistaken for a gap in it.
+  (define src (string-append cfold-sib "sib{a^*_}"))
+  (check-false (p4e1-type src) (format "must refuse; observed: ~a" (p4e1-last src)))
+  (check-true (string-contains? (p4e1-last src) "a rename target may not contain `*`")
+              (format "caret guard, not the star guard; observed: ~a" (p4e1-last src))))
+
+(test-case "1b-v-C C-8: the PRINTER renders each table row's OWN lexeme — the fifth encoder's containment pin [Q_U54]"
+  ;; pretty-print's star arm was `(if (eq? cont 'flatten-synth) "*_" "*")` — a
+  ;; hardcoded cont→lexeme copy, user-facing through every star refusal label.
+  ;; Table-driven, this loop is what goes red at 1b-vi if a row lands without
+  ;; the printer knowing its spelling.
+  (for ([row (in-list rf:postfix-star-sentinel-table)])
+    (define cont (cadr row)) (define lex (caddr row))
+    (check-equal? (pp-select-branch (list 'database (make-select-star cont)))
+                  (string-append "database" lex)
+                  (format "row ~s: the printer must render its lexeme" row))))
+
+(test-case "1b-v-C C-9: CONTAINMENT — every mint-table lexeme is one the arrival matrix can SEE [Q_U54, site 4]"
+  ;; `star-spellings` is a deliberate SUPERSET (DEFERRED 127: the instrument
+  ;; must see non-minting spellings to report them as 0); it is PINNED, never
+  ;; derived. This is the pin.
+  (for ([lex (in-list rf:postfix-star-lexemes)])
+    (check-true (and (member lex star-spellings) #t)
+                (format "table lexeme ~s is invisible to tools/star-arrival-matrix.rkt's star-spellings ~s" lex star-spellings))))
+

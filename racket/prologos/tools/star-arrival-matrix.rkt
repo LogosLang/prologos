@@ -32,7 +32,11 @@
 
 (provide star-carriers star-contexts star-prelude
          star-cell-source star-minting-carrier? star-arrival-context?
-         star-last-token-type star-mints?)
+         star-last-token-type star-mints?
+         ;; 1b-v-C [Q_U54]: exported so the battery can pin CONTAINMENT —
+         ;; every mint-table lexeme must be one this instrument can SEE. Pinned,
+         ;; never derived: this list is a deliberate SUPERSET (DEFERRED 127).
+         star-spellings)
 
 ;; ---------------------------------------------------------------------------
 ;; THE CARRIERS — every shape in which a `*` can sit byte-adjacent to a CLOSER.
