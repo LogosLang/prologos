@@ -6262,7 +6262,15 @@ disagreed jointly.
 
 ---
 
-### 129. ⬜ ⭐ THE READER'S SENTINEL EMIT IS SPELLING-BLIND — `token-entry->stx` maps the token TYPE to a hardcoded `'$postfix-star` and never consults the lexeme, so B2b's mint has a wrong-answer route B1's ordering argument does not cover
+### 129. ✅ **DISCHARGED `940c9c88`** ⭐ THE READER'S SENTINEL EMIT IS SPELLING-BLIND — `token-entry->stx` maps the token TYPE to a hardcoded `'$postfix-star` and never consults the lexeme, so B2b's mint has a wrong-answer route B1's ordering argument does not cover
+
+> **FIXED at `940c9c88`** (slice 1b-v-B2b, per [Q_U53](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u53)):
+> the emit is `(postfix-star-lexeme->sentinel lexeme)` — the SAME call the widened
+> gate makes on the SAME entry, so the miss-case is unreachable by construction.
+> No fallback, no raise. ⭐ Mutation-tested in the exact shape this entry
+> describes: emit hardcoded back with the gate widened gives `*_` →
+> `$postfix-star` (gate still minting), and the battery's [Q_U53 canary] emit
+> half goes red on it while the gate half stays green.
 
 Found by the CIU T6 D4.P4e-1b slice 1b-v adversarial verify (`wf_fc98d241-4e5`,
 survivor S12). **Not a defect at HEAD** — it is a precondition B2b must satisfy,
@@ -6398,7 +6406,15 @@ the LR state lacks.
 
 ---
 
-### 130. ⬜ THE PARSER'S TWO STAR REFUSAL MESSAGES HARDCODE `*` WHILE B1 FAMILY-IZED THE THREE ECHO SEATS — one seat, not its sibling, inside a single commit
+### 130. ✅ **DISCHARGED `940c9c88`** THE PARSER'S TWO STAR REFUSAL MESSAGES HARDCODE `*` WHILE B1 FAMILY-IZED THE THREE ECHO SEATS — one seat, not its sibling, inside a single commit
+
+> **FIXED at `940c9c88`** (rode with 1b-v-B2b): both arms —
+> `unwrap-angle-type`'s glued-star refusal and `parse-datum`'s star arm — render
+> `postfix-star-sentinel-lexeme` of the sentinel they matched. The bare-`*` text
+> is BYTE-IDENTICAL to before (its pins did not move); for any other member the
+> guidance is derived from the RULING ([Q_U31]: only a spaced bare `*` is a
+> product) rather than from the `*` example — and the multiplication clause,
+> a fact about `*` alone, renders for `*` alone.
 
 Found by the same verify (survivor S13). B1 made `unmint-star-for-echo` and both
 quote lowerings render the lexeme the USER WROTE, and left the two REFUSAL

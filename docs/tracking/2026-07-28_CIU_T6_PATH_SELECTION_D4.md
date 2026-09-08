@@ -9394,6 +9394,50 @@ they return `#f` on a `*_` source and **cannot tell "correctly did not mint" fro
 down; the repair landed in the tool and never propagated to the suite. Any B2b row
 written with these helpers has no power until they are widened.
 
+<a id="p4e-1b-v-b2b-shipped"></a>
+
+##### §5.P4e-1b-v-B2b — WHAT SHIPPED  (step 1 `862fc7e3` · the mint `940c9c88`, 2026-09-08)
+
+**`*_` IS LIVE AT THE CLOSER-ADJACENT SEAT.** Both parked pins now hold:
+`regions:{host port}*_` synthesizes `:eu-host … :us-port` ([Q_U51]) and
+`rowsv:{tags}*_` refuses naming `*_` ([Q_U41]). The arrival matrix reads **`*_`
+209/209** (was 0/209 — the deliberate RED), **`*-`/`*-_` still 0/209**, every
+control asserting its declared outcome. Acceptance 0 errors, markers 0–88.
+
+| step | content | gate |
+|---|---|---|
+| **1** ✅ `862fc7e3` | [DEFERRED 133] — the battery helpers widened to a star-operator REGEX (not a fifth spelling list), reporting `'none` not `#f`. | RED first (`actual: #f`); ⭐ the power-check caught a VACUOUS pin in the new rows and it was replaced with one measured `OLD=postfix-star NEW=symbol`. 550 → 553 |
+| **2** ✅ | the instrument RUN RED: `*_` 0/209. | on record before any edit |
+| **3+4** ✅ `940c9c88` | ONE conjunct: `(string=? lexeme "*")` → `(postfix-star-lexeme->sentinel lexeme)`; the emit the SAME call on the SAME entry. No fallback, no raise ([Q_U53] part 1). [DEFERRED 130] rides: both refusal arms render the lexeme the user wrote — bare-`*` text BYTE-IDENTICAL, the multiplication clause rendered for `*` alone (it is a fact about `*`, derived from the ruling, not the example). | RED first — **5 FAILURES / 0 ERRORS**, each case red for its own reason, then 559 all-pass |
+| **5** ✅ | the 1b-v pin block UN-PARKED as TWO test-cases (lesson #3: one case lets a red synthesis pin mask the refusal pin). | both green at first run |
+
+**THE CANARY [Q_U53] ASKED FOR, and where it lives.** Four test-cases on the
+**same token entry**, through the exported `token-entry->stx`: the gate mints
+every table lexeme · the emit produces each lexeme's OWN sentinel · an
+unreserved spelling (`*--`) neither mints nor becomes a sentinel. ⭐ Sharper than
+a full `read-all-syntax-ws` read, which would need a driver export and — worse —
+sees the form AFTER preparse has fused the sentinel away ([Q_U37]), so the
+identity under test is already gone.
+
+**MUTATION-TESTED, and it is DEFERRED 129's exact shape.** Emit hardcoded back
+to `'$postfix-star` with the gate left widened, checked against LIVE source under
+a checksum: `cfg{a}*_` → **gate=`postfix-star`, emit=`$postfix-star`** — the
+`x{a b}*_`-means-`x{a b}*` wrong answer, by the emit route. The canary's emit
+half goes red there while its gate half stays green: independently powered.
+Revert byte-identical; `parse-reader`'s `.zo`/`.dep` deleted afterward so the
+rebuild is REAL and not the SHA short-circuit's guess about a moved timestamp.
+
+⭐ **THE DEFERRED-108 "IT WILL GO RED" CLAIM IS FALSE — a verify finding is a
+hypothesis too, for the FIFTH round running.** The snapshot did not move:
+`star-cell-source`'s spelling parameter DEFAULTS to `"*"` and the battery's gate
+passes three arguments, so that gate has only ever seen bare `*`. It was measured
+rather than pre-emptively re-baselined, which is the only reason the record now
+says the true thing.
+
+Battery **553 → 559**, `--tests` PASS 101.2 s (the file is holding at ~101 s —
+the instrument-headroom worry from the 1b-v close has NOT worsened this slice).
+Suite: **✅ **10230 / 488 / 0**, 172.1 s**.
+
 <a id="p4e-1b-v"></a>
 
 ##### §5.P4e-1b-v — the grounding audit  (2026-08-13, `wf_cc1a72a0-75b` — 4 facets + a completeness critic that had to be RE-RUN after the first crashed)
@@ -9974,7 +10018,7 @@ moves, `walk-to-leaf` is the abort it lands in.
 | **1b-iv-B2** ✅ `0e2f5af7` | **THE SPLICE GOES LIVE.** Remove the nominal shield for the DECIDABLE case; splice at the callers — free at Seat A (`star-branch-entries` already returns a component list; the dissolve route delegates to it) and a `select-steps-star-tail?` test at the ord-branch arm for Seat B keyless. [Q_U38](#q-u38)'s splice-vs-sibling and splice-vs-splice checks come FREE at the existing level dup gate. ⚠ `expr-Map` contents split off with their own PERMANENT-refusal kind (no enumerable keys ⇒ never provable, never refutable). | Thin wiring + the E2E that observes it, landing together. |
 | **1b-iv-C (scope flag, NOT this slice)** | `*_` is NOT carried by [Q_U49](#q-u49): its PREFIX SOURCE is under-specified and [Q_U41](#q-u41)'s two worked examples disagree (deleted layer's key vs contents' keys). Needs a ruling before code. Q_U39 separately defers the closer-adjacent band, so Q_U41's own showcase spelling is unreachable anyway. | Named rather than silently deferred. |
 | **1b-v — the `*_` slice** 🔄 **A/B1/B1b/B2a + verify SHIPPED; B2b (the mint) remains** | [Q_U39](#q-u39)'s closer-adjacent **mint** (two bare sentinels, `$postfix-star-synth`) **+ `*_`'s SEMANTICS** — the shield lift, [Q_U51](#q-u51)'s prefix join, the **key threading** both twins skip, and the ω/broadcast Record arm's missing cont test. Scoped by [Q_U52](#q-u52): the mint alone would ship a better error message and leave Q_U51's capability non-existent. | The prefix rule is RULED and forced; the mint adds ONE spelling so the sentinel question collapses to two bare atoms. Record: [§5.P4e-1b-v](#p4e-1b-v) |
-| **1b-v-B2b — the reader MINT** ⬜ | Widen the gate's lexeme conjunct to EXACT table membership; route the emit through the same lookup ([DEFERRED 129](DEFERRED.md)); [DEFERRED 130](DEFERRED.md)'s two refusal messages ride along. **MINIMAL by ruling** — reader-only, so the three live bands cannot regress. Preconditions the grounding found: the battery's `p4e-star-type` / `p4e-last-star-type` helpers are exact-lexeme `"*"` and structurally blind to `*_` ([DEFERRED 133](DEFERRED.md)), and the DEFERRED-108 snapshot needs a deliberate re-baseline. | Scoped by [Q_U53](#q-u53) part 1: the miss-case is ruled out at the GATE, not handled at the emit. Record: [§5.P4e-1b-v-B2b](#p4e-1b-v-b2b) |
+| **1b-v-B2b — the reader MINT** ✅ `940c9c88` | Widen the gate's lexeme conjunct to EXACT table membership; route the emit through the same lookup ([DEFERRED 129](DEFERRED.md)); [DEFERRED 130](DEFERRED.md)'s two refusal messages ride along. **MINIMAL by ruling** — reader-only, so the three live bands cannot regress. Preconditions the grounding found: the battery's `p4e-star-type` / `p4e-last-star-type` helpers are exact-lexeme `"*"` and structurally blind to `*_` ([DEFERRED 133](DEFERRED.md)), and the DEFERRED-108 snapshot needs a deliberate re-baseline. | Scoped by [Q_U53](#q-u53) part 1: the miss-case is ruled out at the GATE, not handled at the emit. Record: [§5.P4e-1b-v-B2b](#p4e-1b-v-b2b) · shipped: [§5.P4e-1b-v-B2b-shipped](#p4e-1b-v-b2b-shipped) |
 | **1b-v-C — the FOLD** ⬜ | `split-star-lexeme`'s suffix dispatch delegates to the family table, so the four bands share ONE semantic authority; containment PINS (never derivation) for the two tool lists. Behaviour-preserving on every input. | [Q_U53](#q-u53) part 2 [owner: "land the fold before 1b-vi"]. Its own slice so the reader change and the parser change have one suspect each. |
 | **1b-vi — the star-COLLAPSE slice** ⬜ (**after 1b-v-C**) | **`*-`** ([Q_U48](#q-u48)) · the **`*-_`** decision · the cont-axis **totality dispatcher** · plus TWO owed rulings [Q_U52](#q-u52) surfaced: what "total collapse" does to a **renamed** ancestor (`^p` and `^` are mutually exclusive spellings of one step), and the **`*->` token boundary** (`>` breaks the identifier, so `x{a*-> b}` would become a `*-` step plus a stray `>`). | Split from 1b-v because those two are RULINGS, not implementation, and because `*-` is the spelling that forces the totality work. ⭐ Sequenced AFTER the fold [owner] so ruling `*-` costs a table row, not four edits. |
 | **P4e-2** | the `.*` retirement inventory + [Q_U26](#q-u26) ravel | unchanged |
