@@ -1145,7 +1145,7 @@
   (when (and (record-timings?) (not bailed?) (not incomplete?))
     (define timings-file (make-timings-path project-root))
     (define record
-      (hasheq 'schema_version 3
+      (hasheq 'schema_version TIMINGS-SCHEMA-VERSION
               'timestamp (current-iso-timestamp)
               'commit (current-commit)
               'branch (current-branch)

@@ -119,7 +119,7 @@
 
   ;; Build run record
   (define record
-    (hasheq 'schema_version 3
+    (hasheq 'schema_version TIMINGS-SCHEMA-VERSION
             'timestamp (current-iso-timestamp)
             'commit (current-commit)
             'branch (current-branch)

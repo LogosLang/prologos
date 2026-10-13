@@ -24,6 +24,9 @@
          filename-from-path
          status-label
          current-iso-timestamp
+         seconds->iso-timestamp
+         parse-record-timestamp
+         TIMINGS-SCHEMA-VERSION
          pad-num
          pad-str
          git-output
@@ -244,16 +247,55 @@
 ;; Formatting helpers
 ;; ============================================================
 
-(define (current-iso-timestamp)
-  (define now (current-seconds))
-  (define d (seconds->date now #t))  ; UTC
-  (format "~a-~a-~aT~a:~a:~aZ"
+;; ============================================================
+;; Record timestamps (DEFERRED 164 open 5)
+;; ============================================================
+;; ⚠ This used to be `(seconds->date now #t)  ; UTC` + a literal "Z". The #t
+;; is LOCAL-TIME?, so every timestamp written through schema 3 is the LOCAL
+;; clock labelled UTC — off by 6-7 h on this machine for anything reading it
+;; as UTC. From schema 4 the local offset is explicit:
+;;   2026-10-13T03:25:00-07:00
+;; The first 19 characters are the local clock in both formats, so string
+;; order stays chronological across the cut-over (modulo DST fall-back).
+;; Readers: parse-record-timestamp, which reads a schema <= 3 "Z" as local.
+(define TIMINGS-SCHEMA-VERSION 4)
+
+(define (current-iso-timestamp) (seconds->iso-timestamp (current-seconds)))
+
+(define (seconds->iso-timestamp secs)
+  (define d (seconds->date secs #t))            ; local clock ...
+  (define off (date-time-zone-offset d))        ; ... and its offset east of UTC, seconds
+  (format "~a-~a-~aT~a:~a:~a~a~a:~a"
           (date-year d)
           (pad-num (date-month d) 2)
           (pad-num (date-day d) 2)
           (pad-num (date-hour d) 2)
           (pad-num (date-minute d) 2)
-          (pad-num (date-second d) 2)))
+          (pad-num (date-second d) 2)
+          (if (< off 0) "-" "+")
+          (pad-num (quotient (abs off) 3600) 2)
+          (pad-num (quotient (remainder (abs off) 3600) 60) 2)))
+
+;; parse-record-timestamp : string [#:schema n] -> (or/c exact-integer? #f)
+;; Epoch seconds of a record's `timestamp`. An explicit offset is honoured. A
+;; trailing "Z" is UTC only when the record says schema >= 4; in older (or
+;; unversioned) records it is the local clock mislabelled, so it is read as
+;; local — on THIS machine's zone rules, which is the machine that wrote them.
+(define (parse-record-timestamp s #:schema [schema #f])
+  (define m (and (string? s)
+                 (regexp-match #px"^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(Z|([+-])(\\d{2}):(\\d{2}))$" s)))
+  (and m
+       (let* ([n (lambda (i) (string->number (list-ref m i)))]
+              [zone (list-ref m 7)])
+         (with-handlers ([exn:fail? (lambda (e) #f)])
+           (cond
+             [(string=? zone "Z")
+              (find-seconds (n 6) (n 5) (n 4) (n 3) (n 2) (n 1)
+                            (not (and (exact-integer? schema) (>= schema 4))))]
+             [else
+              (define off (* (if (string=? (list-ref m 8) "-") -1 1)
+                             (+ (* 3600 (n 9)) (* 60 (n 10)))))
+              (- (find-seconds (n 6) (n 5) (n 4) (n 3) (n 2) (n 1) #f) off)])))))
 
 (define (pad-num n width)
   (define s (number->string n))
