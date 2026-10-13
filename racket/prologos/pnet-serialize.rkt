@@ -21,6 +21,7 @@
          racket/path
          racket/string
          racket/list
+         (only-in racket/fasl s-exp->fasl fasl->s-exp)   ; DEFERRED 151 (b) prototype: binary body
          "prelude.rkt"
          "syntax.rkt"
          "namespace.rkt"
@@ -198,7 +199,7 @@
 ;; (or older) file starts with `(10 ` rather than the header prefix, so it is
 ;; classified stale from its first bytes without being parsed, and is never
 ;; misread as a body. Every cache regenerates once on the bump.
-(define PNET_VERSION 11)
+(define PNET_VERSION 12)   ; 12: the body is fasl (DEFERRED 151 b prototype); the header stays text
 
 ;; DEFERRED 151 (a): the header is the file's first datum, written by `write` as
 ;; `(pnet-header <version> "<source-hash>")`. Readers PEEK for this prefix
@@ -934,8 +935,11 @@
        (lambda (out)
          (write pnet-header out)
          (newline out)
-         (write pnet-body out)
-         (newline out))
+         ;; v12 (DEFERRED 151 b): the body as fasl. The text `read` of a 16.9 MB
+         ;; body cost ~1.3 s; fasl reads the same data in ~55 ms. Gensyms are
+         ;; already interned `symbol$$N` tags (serialize-sym), so symbol identity
+         ;; is what the text format gave.
+         (s-exp->fasl pnet-body out))
        #:exists 'replace)
      (rename-file-or-directory tmp-path pnet-path #t)
      pnet-path))
@@ -952,7 +956,8 @@
                       (lambda (in)
                         (define h (read-pnet-header in))
                         (and (pnet-header-fresh? h ns-sym source-path)
-                             (let ([body (read in)])
+                             (let ([body (begin (read-char in)   ; the header's newline
+                                                (fasl->s-exp in))])
                                (and (list? body)
                                     (list* (cadr h) (caddr h) body)))))))])
          (and raw

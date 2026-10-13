@@ -22,7 +22,8 @@
 ;;;     deserialized body is the body that was written.
 ;;;
 
-(require rackunit
+(require (only-in racket/fasl s-exp->fasl fasl->s-exp)
+         rackunit
          racket/file
          racket/list
          racket/string
@@ -81,12 +82,19 @@
           [else (format "~a" r)])))
 
 (define cache-path (pnet-path-for-module lib-ns))
+;; v12 (DEFERRED 151 b): text header datum, newline, then the body as fasl.
 (define (read-all-data path)
   (call-with-input-file path
-    (lambda (in) (let loop ([acc '()])
-                   (define d (read in))
-                   (if (eof-object? d) (reverse acc) (loop (cons d acc)))))))
-(define (write-pnet-file! . data)
+    (lambda (in)
+      (define hdr (read in))
+      (read-char in)
+      (if (eof-object? (peek-char in)) (list hdr) (list hdr (fasl->s-exp in))))))
+;; a current-layout file: header (text) + body (fasl)
+(define (write-pnet-file! hdr body)
+  (call-with-output-file cache-path #:exists 'truncate
+    (lambda (out) (write hdr out) (newline out) (s-exp->fasl body out))))
+;; an OLD-layout file, written as text datums (v10 single datum)
+(define (write-text-data! . data)
   (call-with-output-file cache-path #:exists 'truncate
     (lambda (out) (for ([d (in-list data)]) (write d out) (newline out)))))
 (define (write-pnet-text! s)
@@ -106,8 +114,8 @@
   (check-true (ormap (lambda (s) (string-contains? s "1 : Int")) run1) (format "~a" run1))
   (check-true (bytes? written) (format "expected cache at ~a" cache-path)))
 
-(test-case "layout: header datum (pnet-header VERSION KEY), then ONE body datum"
-  (check-equal? PNET_VERSION 11)
+(test-case "layout: header datum (pnet-header VERSION KEY), then ONE fasl body"
+  (check-equal? PNET_VERSION 12)
   (check-true (regexp-match? #rx#"^[(]pnet-header " written) "file must start with the header prefix")
   (check-equal? (length written-data) 2 "header + body, nothing else")
   (define hdr (car written-data))
@@ -164,7 +172,7 @@
 
 (test-case "old single-datum layout (v10, CURRENT source key) is stale and never a crash"
   ;; exactly what the v10 writer produced: (write (list* 10 key body))
-  (write-pnet-file! (list* 10 source-key (cadr written-data)))
+  (write-text-data! (list* 10 source-key (cadr written-data)))
   (check-true (pnet-stale? lib-ns lib-file))
   (check-false (deserialize-module-state lib-ns lib-file))
   ;; an old-layout file is classified by its first bytes, without parsing it
@@ -185,13 +193,13 @@
   (define in (open-input-string "(10 \"key\" (an old body that is never closed"))
   (check-false (read-pnet-header in))
   (check-equal? (file-position in) 0)
-  ;; and on a v11 file it consumes exactly the header, leaving the body unread
+  ;; and on a v11/v12 file it consumes exactly the header, leaving the body unread
   (define in2 (open-input-string "(pnet-header 11 \"k\")\n(body never closed"))
   (check-equal? (read-pnet-header in2) '(pnet-header 11 "k"))
   (check-equal? (file-position in2) (string-length "(pnet-header 11 \"k\")")))
 
-(test-case "a load over an old-layout file falls back to source and regenerates a v11 file"
-  (write-pnet-file! (list* 10 source-key (cadr written-data)))
+(test-case "a load over an old-layout file falls back to source and regenerates a current-version file"
+  (write-text-data! (list* 10 source-key (cadr written-data)))
   (define run3 (run-consumer!))
   (check-equal? run3 run1)
   (check-true (regexp-match? #rx#"^[(]pnet-header " (file->bytes cache-path)))
