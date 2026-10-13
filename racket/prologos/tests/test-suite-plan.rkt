@@ -417,3 +417,31 @@
                     (mentions? a 'worker-module))            ; bound over WORKER-DYNAMIC-MODULES
                 (format "unexpected dynamic-require of ~s in batch-worker.rkt" a)))
   (check-true (mentions? src 'WORKER-DYNAMIC-MODULES) "the worker loads its modules from the constant"))
+
+(test-case "suite-plan/units: no test file requires another test file (only NON-TEST-MODULES may be shared)"
+  ;; A batch worker instantiates a module ONCE. A test file required by another
+  ;; test file therefore runs (and is counted) inside whichever of the two units
+  ;; that worker reaches first; the other then reports fewer tests, or PASS with
+  ;; 0 tests, which 161's gate calls INCOMPLETE. Found 2026-10-13:
+  ;; test-properties.rkt required test-generators.rkt (13 vs 8 tests; 161's first
+  ;; sighting). Shared helpers go in a module NOT named test-*.rkt.
+  (define tests-dir (simplify-path (build-path tools-dir 'up "tests")))
+  (define (require-strings form)          ; every string module path inside require forms
+    (let walk ([f form] [in-require? #f])
+      (cond
+        [(pair? f)
+         (define req? (or in-require? (eq? (car f) 'require)))
+         (append (walk (car f) req?) (walk (cdr f) req?))]
+        [(and in-require? (string? f)) (list f)]
+        [else '()])))
+  (define offenders
+    (for*/list ([p (in-list (directory-list tests-dir #:build? #t))]
+                #:when (regexp-match? #rx"/test-[^/]*[.]rkt$" (path->string p))
+                [s (in-list (require-strings
+                             (parameterize ([read-accept-reader #t] [read-accept-lang #t])
+                               (with-input-from-file p read))))]
+                #:when (let ([b (let-values ([(d n _) (split-path s)]) (path->string n))])
+                         (and (regexp-match? #rx"^test-.*[.]rkt$" b)
+                              (not (member b NON-TEST-MODULES)))))
+      (format "~a requires ~a" (let-values ([(d n _) (split-path p)]) (path->string n)) s)))
+  (check-equal? offenders '()))

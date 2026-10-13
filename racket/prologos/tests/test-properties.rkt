@@ -15,7 +15,7 @@
          "../global-env.rkt"
          (prefix-in tc: "../typing-core.rkt")
          "../performance-counters.rkt"
-         "test-generators.rkt"
+         "property-generators.rkt"  ;; generators library (not the test file: DEFERRED 161)
          "../driver.rkt")
 
 ;; ============================================================
