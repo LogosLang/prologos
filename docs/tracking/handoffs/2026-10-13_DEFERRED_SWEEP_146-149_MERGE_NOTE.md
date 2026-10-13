@@ -280,17 +280,177 @@ history has no earlier full row for this worktree, so the 490 files are known to
 
 > **✅ Closed 2026-10-13, `63d8f6af` on `deferred-sweep-146-149`.** Light fire 1 386 → 928 B (main →
 > branch; read+write 2 819 → 2 232 B). Re-attributed: the dominant items were `parameterize` ×2 (~496 B) and
-> the worklist dedup's persistent-set inserts (~350 B), not the `output-set` (32 B). Fixed locally: the dedup uses
+> the worklist dedup's persistent-set inserts (~362 B), not the `output-set` (32 B). Fixed locally: the dedup uses
 > a mutable `hasheqv`, `output-set` becomes `memq`, and the dependent folds are merged and skipped with no dependents.
 > `parameterize` is left to PAR 4 H-S (fire context is ambient state, per the Q1 audit §6). Record: merge note § 147.
 
-## 149 ⬜ WATCHING: `test-transducer-01.rkt` 1.35× slower under 9.3
+## 149 ✅ not a Racket 9.3 regression: main's tree runs the compiler's giant `match` functions INTERPRETED (no code change on this branch)
 
-(pending)
+**Under matched builds the 1.35× does not exist.** The two legs were fresh detached worktrees at `674ae09b`,
+built by one script whose only difference is the binary (`PLT_CS_COMPILE_LIMIT=1000000 raco make -j 4` of
+the five tests plus `driver.rkt`). The `.dep` headers confirm 9.0 and 9.3 `.zo`s. Each leg warmed its own
+`.pnet` cache once.
+
+| matched builds, 9.0 vs 9.3 | in-process, test-phase CPU (ABBA ×4 / ×2) | `raco test` wall (rotated ×3) |
+|---|---|---|
+| `test-transducer-01` | 1 213 / 1 242 ms (1.02×) | 4.59 / 4.63 s (1.009×) |
+| `test-transducer-02` | 849 / 861 ms (1.01×) | 4.09 / 4.14 s (1.012×) |
+| `test-lseq-01` | 620 / 622 ms (1.00×) | 3.84 / 3.86 s (1.005×) |
+| `test-reduction-perf-01-01` | 228 / 220 ms (0.96×) | 3.25 / 3.31 s (1.018×) |
+| `test-propagator-bsp` | 10 / 10 ms | — |
+
+Load phase (instantiating the compiler and the prelude): 2 612–2 655 ms on both versions. Allocation agrees to
+0.15 % (1 298.2 vs 1 300.2 MB load; 266.0 vs 265.9 MB test). **Both versions compute the same thing.** Of the 40
+`.pnet` files, 36 have identical length and token multiset after normalising the tree path (they differ only
+in hash-table print order). The other 4 differ in one gensym'd name, `meta5786$$1` vs `meta5791$$1`. That name
+comes from Racket's process-wide `gensym` (`metavar-store.rkt:1859`), whose counter already differs by version
+*before any elaboration* (2 940 under 9.0 and 2 795 under 9.3, after loading the compiler warm). The name carries no
+computational signal.
+
+**The 10-12 number reproduces exactly when the 9.3 leg is built WITHOUT `PLT_CS_COMPILE_LIMIT`** (a third
+worktree, `r93nl`, built the same way except `env -u PLT_CS_COMPILE_LIMIT`):
+
+| `raco test` wall, medians of 3 | 9.0 + limit | 9.3 + limit | 9.3, no limit | no limit ÷ 9.0 |
+|---|---|---|---|---|
+| `test-transducer-01` | 4.59 s | 4.63 s | **6.22 s** | **1.355×** (10-12: 1.36×, 1.35×) |
+| `test-transducer-02` | 4.09 | 4.14 | 5.32 | 1.30× |
+| `test-lseq-01` | 3.84 | 3.86 | 4.02 | 1.05× |
+| `test-reduction-perf-01-01` | 3.25 | 3.31 | 3.27 | 1.01× |
+
+The slowdown is file-specific because it scales with how much elaboration and reduction a file does in process.
+That is the shape the dailies saw: one file at 1.35×, three at parity. Which three files were used on 10-12 was not recorded,
+so whether `-02` was among them cannot be checked.
+
+**Profiles of the test phase** (`prof149.rkt`, 1 ms sampler, `test-transducer-01`; top frames by self time):
+
+| 9.0 + limit (1 216 ms, GC 1 027) | 9.3 + limit (1 218 ms, GC 1 025) | 9.3 no limit (2 899 ms, GC 1 191) |
+|---|---|---|
+| 29.4 % `measure-memory-before` | 28.6 % `measure-memory-before` | **41.8 % `f3224` `…/match/compiler.rkt`** |
+| 23.4 % `measure-memory-after` | 23.4 % `measure-memory-after` | **11.1 % `whnf`** (`reduction.rkt`) |
+| 10.5 % `vec-remove-insert-node` | 9.0 % `vec-remove` | 10.6 % `measure-memory-after` |
+| 9.0 % `vec-remove` | 6.2 % `module-network-add-definition` | 10.1 % `measure-memory-before` |
+| 4.4 % `pnet-stale?`, 4.4 % `deserialize-module-state` | 4.5 % / 4.5 % (the same two) | 2.6 % `nf`, 2.0 % / 2.0 % (the same two) |
+
+The matched pair has the same shape: DEFERRED 152's forced major GCs make up half, and DEFERRED 151's `.pnet` reads
+appear in both. Interpretation multiplies the mutator about 9× (≈193 → ≈1 708 ms non-GC), and the time lands in
+`match`-generated clause code inside `whnf`/`nf`. Compiled `match` code exists in the matched builds too
+(9.0: `f773 …/match/compiler.rkt` at 2.3 %; 9.3: below the top 12), so the entry's "9.2 `match`" candidate was
+right about the *place* but not the cause. At 41.8 %, that code is running interpreted.
+
+**And main's tree is in that state now.** Its `.zo`s were written 10-12 at 20:24:26–30 under 9.3. Fingerprinted
+against the two builds of identical source (main has no uncommitted `.rkt`; the branch changed only `champ`,
+`propagator` and `decision-cell`):
+- **15 of the 15 modules whose `.zo` differs between the two builds match the NO-LIMIT build** (`elaborator macros
+  parse-reader parser pretty-print qtt reduction relations sre-core substitution surface-syntax syntax
+  typing-core typing-propagators zonk`). `reduction`, `typing-core`, `elaborator` and `macros` are
+  **byte-identical** to it.
+- **0** match the limited build. 2 match neither, because their sources or inlined dependencies differ from
+  the branch: `driver`, and `propagator`. `propagator`'s main `.zo` (288 134 B) sits in the no-limit *size
+  class* (288 208 B, against 256 401 B limited), so it was built in the fallback mode too. **But its hot path behaves
+  as compiled.** 147's census on main's `propagator` gave 1 386 B per read-only fire, and a *limited* build at
+  `3a152ac9` gave 1 383 B, whereas interpreted code allocates wildly more (no-limit cold load: 128 GB against
+  1.1 GB). That fits Racket CS's fallback as I understand it (from memory of the implementation; not re-read today):
+  an oversized linklet gets an interpreted *outer layer* while its nested `lambda`s below the limit are still
+  compiled, so the penalty concentrates in individually giant functions such as `whnf`/`nf`/`subst`. Main's
+  propagator/scheduler timings are therefore probably not materially affected; that is not measured. `champ` and
+  `decision-cell` are identical under both builds, so 146's and 148's A/Bs against main's files are clean.
+  85 modules are identical under both builds and carry no signal.
+
+This is the trap `testing.md:11` describes, and it is **persistent**. The runner `putenv`s the limit, but
+`raco make` never recompiles an up-to-date `.zo`, so every suite run since has used the interpreted compiler.
+**Suite-level cost, measured** (full suite in the two 9.3 worktrees at `674ae09b`, ABAB): limited build
+**105.9 / 105.8 s**; main's build state (no limit, then four runner suites, which leave the `.zo`s untouched,
+verified after) **134.9 / 135.1 s**, i.e. **1.275×**. Both are 10 275 tests, 490/490, all pass, and the reps agree to 0.2 s across load
+2.5–11.5. Per file (307 files ≥ 300 ms): median 1.15×, p75 1.40×, and the sum of per-file wall is 704 → 936 s (1.33×).
+The worst files are `test-functor-ws-02` **25×** (0.6 → 15.1 s), `test-hashable-02` 12×, `test-firstclass-ops` 10× and
+`test-io-csv-02` 5.5×. This accounts for the dailies' 10-12 suite figure: 130.8 s under 9.3 against 95–109 s under 9.0
+("+20–37 %, the shape of noise") was this. This sweep's own tree is clean (17/17 limited): the
+`PLT_CS_COMPILE_LIMIT=1000000 raco make` at 02:06 recompiled everything downstream of `propagator.rkt`. 146–148
+claim bytes, not wall, and their A/Bs load only `champ`/`propagator`, which are not among the 15.
+
+**Remedy for main (the owner's call; this session does not touch main's tree):** delete the `compiled/`
+directories under `racket/prologos` (or at least the 15 modules' `.zo`/`.dep`; dependents follow by SHA), then
+rebuild through the runner or with `PLT_CS_COMPILE_LIMIT=1000000 raco make -j 4 driver.rkt`. Verify by
+comparing `compiled/reduction_rkt.zo` with a known limited build, or by timing `test-transducer-01` (≈4.6 s
+vs ≈6.2 s under `raco test`). **Prevention** is filed as a candidate (below), because the trap's whole problem is that
+it depends on someone remembering.
+
+**Side results, recorded so nobody chases them again:**
+- **`.pnet` bytes depend on process history.** `transducer.pnet` written by a process that elaborated its
+  dependencies from source is 747 783 B; written over warm (`.pnet`-loaded) dependencies it is 384 910 B. After
+  `(imports prologos::data::transducer …)` all 12 registries have identical counts under either file, and
+  `test-transducer-01` passes with both. So the cold-written file *repeats* its dependencies' entries.
+  This refines DEFERRED 151's "identical modulo gensym numbering", which holds only for files written the same way
+  (paste-ready addendum below).
+- The `.pnet` round-trip rebuilds every hash as `for/hasheq` (`pnet-serialize.rkt:304`, `:757`), which would
+  break an `equal?`-keyed registry with pair keys, such as the subtype registry (`macros.rkt:8071`, `:8083`).
+  **Probed: it does not bite.** The live reader holds an `equal?` table, cold and warm, and 104/104 self-lookups
+  hit. It is latent only.
+- Cold vs warm load, 9.3 + limit, `test-transducer-01`: 1 121 / 1 131 ms vs 2 702 / 2 698 ms. This independently
+  reproduces DEFERRED 151's direction (the cache is a net loss).
+
+**Probes** (preserved in the probing skill's `scripts/`): `build149.sh` (identical build per leg),
+`run149.rkt` (load/test phase split), `ab149.sh` (ABBA in-process), `rt149.sh` (`raco test`, rotated legs),
+`prof149.rkt` (test-phase sampler), `subreg.rkt` and `regcount.rkt` (the two `.pnet` side results).
+
+**Paste-ready status flip for main's `DEFERRED.md` § 149** (`⬜ WATCHING` → `✅`, append):
+
+> **✅ Closed 2026-10-13: not a 9.3 regression** (sweep branch record; no code change). Matched builds (fresh
+> worktrees, same commit, same build command, only the binary differs) are at parity on five files (`raco test`
+> 1.005–1.018×; allocation within 0.15 %; same `.pnet` networks). The 1.35× reproduces *exactly* (1.355×)
+> when 9.3 builds without `PLT_CS_COMPILE_LIMIT`. Main's tree is in that state: 15/15 distinguishable
+> giant modules match the no-limit build (4 byte-identical), written 10-12 20:24, and they persist through runner
+> suites because up-to-date `.zo`s never recompile. Profile: 41.8 % in interpreted `match` clause code plus
+> 13.7 % `whnf`/`nf`, against ≤ 2.3 % compiled `match` code under the matched builds. Remedy and prevention:
+> DEFERRED 159. Record: merge note § 149.
+
+**Paste-ready NEW entry for main's `DEFERRED.md`** (NEXT FREE was 159 at 02:40; renumber if it has moved):
+
+> ### 159. ⬜ ⭐ MAIN'S TREE RUNS THE COMPILER'S GIANT `match` FUNCTIONS INTERPRETED — a 10-12 `raco make` without `PLT_CS_COMPILE_LIMIT` (the 9.0→9.3 rebuild); the runner's `putenv` cannot repair it because up-to-date `.zo`s never recompile
+>
+> Found by DEFERRED 149. 15 modules (`reduction`, `typing-core`, `elaborator`, `macros`, `qtt`, `zonk`,
+> `substitution`, `parser`, …) match a no-limit 9.3 build of identical source, 4 byte-for-byte, and none
+> matches a limited build (`propagator.rkt` was built in the same fallback mode, but its per-fire path measures as
+> compiled; the penalty concentrates in the giant `whnf`/`nf`/`subst` functions). Cost: `test-transducer-01` 1.355×
+> (`raco test` 6.22 vs 4.59 s); test-phase mutator ≈9×;
+> full suite 1.275× (105.9 → 135.0 s; per file median 1.15×, worst 25×). Every timing taken in main since 10-12 20:24 that exercises elaboration or reduction carries it,
+> including the dailies' 9.3 suite
+> figure (130.8 s, attributed to load). **Remedy** (owner): remove `racket/prologos/**/compiled`, rebuild with
+> the limit. **Prevention** (decision; the trap is "someone must remember"): (a) `hook-guard-racket.sh` denies
+> `raco make` without `PLT_CS_COMPILE_LIMIT` in the command, which covers agents and subagents, the layer that
+> guard was built for; (b) the runner fails fast when a giant module is interpreted, using a ~1 ms
+> self-check (time `whnf`/`shift` on a fixed term; compiled vs interpreted is bimodal, and `testing.md:11` measured
+> shift at ~830×), which covers humans and every entry point that goes through the runner. (b) alone suffices for
+> correctness of the gates; (a) stops the defect being re-created. **When**: before PAR 4 pins its baseline.
+> Record: sweep merge note § 149.
+
+**Paste-ready ADDENDUM for main's `DEFERRED.md` § 151** (append):
+
+> *Addendum 2026-10-13 (DEFERRED 149 sweep):* a module's `.pnet` bytes depend on how its dependencies were
+> loaded. `transducer.pnet` written over source-elaborated dependencies is 747 783 B; written over
+> `.pnet`-loaded ones it is 384 910 B. All 12 registries have equal counts after import with either file. So
+> "identical modulo gensym numbering" holds only for files written the same way, and part of the 15.7 MB is
+> dependencies' entries repeated. That bears on fix (b), and on any cache keyed or checked by content hash.
 
 ---
 
-## Close-out (fill when all four are done)
+## Close-out
 
-- Full suite: —
-- Four before/after numbers in one table: —
+- **Full suite**: 10 275 tests, 490/490, all pass at `63d8f6af` (147's gate). Everything after it is
+  documentation; 149 changes no code. The four 9.3 worktree suites at `674ae09b` (§ 149) also all pass.
+- **The four items, before → after:**
+
+| # | measure | before | after |
+|---|---|---|---|
+| 146 | `champ-lookup`, stored key (the entry's 64 B) | 0 B (misattributed: it was `equal?` on a fresh key) | 0 B |
+| 146 | `champ-insert` of a new key, N = 256 / 65 536 | 500.4 / 1 180.3 B | 492.4 / 1 147.2 B |
+| 147 | BSP fire, read-only / read+write (census slope) | 1 386 / 2 819 B | **928 / 2 232 B** |
+| 148 | the same `(bm . v)` re-written ×10 000: entries, B/write | 10 000, 48 B | **1, 0 B** |
+| 149 | `test-transducer-01`, 9.3 ÷ 9.0, matched builds | "1.35×" (10-12) | **1.009×**; the 1.35× is main's no-limit build (1.355×) |
+
+- **For the owner, in order of urgency:**
+  1. **Rebuild main's `compiled/` with the limit** (§ 149 remedy). Main's suite is 1.275× slower than it should
+     be, some files 10–25×, and every elaboration timing taken there since 10-12 20:24 is inflated.
+  2. Paste the DEFERRED flips 146–149, the new **159** (the trap, prevention as a decision), and the **151**
+     addendum.
+  3. PAR 4's note §7a (Stage-1 "allocation per read" withdrawn) and §7b (the fire-context cost table).
