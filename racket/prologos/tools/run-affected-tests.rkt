@@ -257,6 +257,9 @@
     (do-precompile? #f)]
    ["--no-pnet-cache" "Disable .pnet module network caching (default: enabled)"
     (do-pnet-cache? #f)]
+   ["--memory-stats" "Record per-file MEMORY-STATS in timings.jsonl (forces two major GCs per process-string/process-file call, so slower; DEFERRED 152)"
+    ;; batch workers are spawned after argument parsing and inherit the environment
+    (putenv "PROLOGOS_MEMORY_STATS" "1")]
    ["--failures" "Show failure logs from last run (no tests executed)"
     (show-failures? #t)]
    ["--failures-run" id "Show the archived failure logs of run ID (or 'latest'), from data/benchmarks/failures/runs/"
