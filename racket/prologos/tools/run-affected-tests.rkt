@@ -426,11 +426,23 @@
      ;; to the batch worker, which would produce confusing errors.
      (define missing
        (filter (lambda (p) (not (file-exists? p))) normalized-files))
+     ;; SW-21: a path that is not a test unit (test-support.rkt, a library or
+     ;; fixture under tests/) is refused, not run-then-called-INCOMPLETE.
+     (define not-units
+       (for*/list ([p (in-list normalized-files)]
+                   #:unless (member p missing)
+                   [why (in-value (targeted-unit-problem p))]
+                   #:when why)
+         (cons p why)))
      (cond
-       [(pair? missing)
+       [(or (pair? missing) (pair? not-units))
         (for ([p (in-list missing)])
           (eprintf "Error: test file not found: ~a\n" p))
-        (exit 1)]
+        (for ([pw (in-list not-units)])
+          (eprintf "Error: not a test unit: ~a\n  ~a.\n" (car pw) (cdr pw)))
+        (eprintf "Nothing was run (exit ~a). Name test files: --tests tests/test-NAME.rkt\n" EXIT-USAGE)
+        ;; SW-21: was (exit 1), the code for "a test FAILED"; nothing ran.
+        (exit EXIT-USAGE)]
        [else
         (printf "Running ~a targeted test file(s) with scoped precompile...\n"
                 (length normalized-files))

@@ -37,6 +37,7 @@
          NON-TEST-MODULES
          TEST-FREE-FILES
          drop-non-test-modules
+         targeted-unit-problem
          gate-verdict
          gate-incomplete?
          gate-all-pass?
@@ -44,6 +45,7 @@
          EXIT-FAILURES
          EXIT-INCOMPLETE
          EXIT-GUARD-REFUSED
+         EXIT-USAGE
          FAILURE-RUNS-KEPT
          make-run-id
          runs-to-prune
@@ -314,6 +316,24 @@
 (define (drop-non-test-modules xs)
   (filter (lambda (x) (not (member (base-name x) NON-TEST-MODULES))) xs))
 
+;; targeted-unit-problem : path-string -> (or/c #f string?)
+;; Why a path named with --tests is NOT a test unit, or #f (SW-21). Such a
+;; path used to be dispatched anyway, report PASS with 0 tests and turn the run
+;; INCOMPLETE (EMPTY): true, but it reads as a broken suite when the command
+;; simply named the wrong file. The runner refuses it with EXIT-USAGE instead.
+;; Outside a tests/ directory nothing is judged: the runner's behaviour there
+;; is unchanged.
+(define (targeted-unit-problem p)
+  (define s (if (path? p) (path->string p) p))
+  (define name (base-name s))
+  (cond
+    [(member name NON-TEST-MODULES)
+     (format "~a is the batch worker's own fixture (suite-plan.rkt NON-TEST-MODULES): every worker loads it at startup, so it can only report 0 tests" name)]
+    [(and (regexp-match? #rx"(^|/)tests/[^/]+$" s)
+          (not (regexp-match? #rx"^test-.*[.]rkt$" name)))
+     (format "~a is a test library or fixture, not a test unit (units are tests/test-*.rkt); its checks run through the test files that use it" name)]
+    [else #f]))
+
 (define (passed? r) (equal? (hash-ref r 'status #f) "pass"))
 
 ;; gate-verdict : unit-count (listof unit-result) -> (values missing empty failed stale-test-free)
@@ -350,6 +370,8 @@
 (define EXIT-FAILURES 1)       ; some unit failed or timed out
 (define EXIT-INCOMPLETE 2)     ; some unit gave no result, or the run aborted
 (define EXIT-GUARD-REFUSED 3)  ; the re-run GUARD refused: nothing was run
+(define EXIT-USAGE 64)         ; the command named nothing runnable (EX_USAGE): a
+                               ; missing file, or not a test unit (SW-21); nothing was run
 
 ;; ============================================================
 ;; FAILURE-LOG ARCHIVE (DEFERRED 160 support)
