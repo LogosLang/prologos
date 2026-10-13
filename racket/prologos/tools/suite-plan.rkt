@@ -24,6 +24,7 @@
          racket/string)
 
 (provide historical-medians
+         record-invalid-reason
          (struct-out work-unit)
          shard-count
          plan-units
@@ -48,8 +49,9 @@
 ;;                      -> (hash/c string? exact-nonnegative-integer?)  ; equal?-keyed
 ;;
 ;; `lines` are timings.jsonl records in FILE order (oldest first). Uses the N
-;; most recent FULL-suite records (file_count >= M — targeted runs time a file
-;; without contention and read low) and returns each file's median wall_ms.
+;; most recent VALID FULL-suite records (file_count >= M — targeted runs time a
+;; file without contention and read low; record-invalid-reason excludes
+;; partial and annotated records) and returns each file's median wall_ms.
 ;; Keys are the `file` strings exactly as recorded (base names).
 ;; The hash is `equal?`-keyed: callers look up with strings they build
 ;; themselves, which are never `eq?` to the ones read from JSON.
@@ -63,7 +65,9 @@
            (with-handlers ([exn:fail? (lambda (e) #f)])
              (with-input-from-string (car ls) read-json)))
          (loop (cdr ls)
-               (if (and (hash? rec) (>= (hash-ref rec 'file_count 0) min-files))
+               (if (and (hash? rec)
+                        (>= (hash-ref rec 'file_count 0) min-files)
+                        (not (record-invalid-reason rec)))  ; DEFERRED 164 open(3)
                    (cons rec got)
                    got))])))
   (define observed
@@ -74,6 +78,26 @@
   (for/hash ([(f ms-list) (in-hash observed)])
     (define sorted (sort ms-list <))
     (values f (list-ref sorted (quotient (length sorted) 2)))))
+
+;; record-invalid-reason : jsexpr -> (or/c string? #f)
+;; Why a timings.jsonl record must not be read as a run of its files, or #f.
+;;   - it carries an "invalid" annotation (tools/annotate-invalid-timings.rkt);
+;;   - it holds FEWER results than its file_count: a fail-open recorded a
+;;     partial run as a full one (DEFERRED 164 — 13 such records in main's
+;;     file, the newest 2026-07-31). Since fd2986cc the runner no longer
+;;     writes them; this keeps any FUTURE fail-open of that shape away from
+;;     the scheduler too.
+;; A record without file_count makes no claim to check.
+(define (record-invalid-reason rec)
+  (cond
+    [(not (hash? rec)) #f]
+    [(hash-ref rec 'invalid #f) => (lambda (why) (if (string? why) why (format "~a" why)))]
+    [else
+     (define fc (hash-ref rec 'file_count #f))
+     (define rs (hash-ref rec 'results '()))
+     (define n (if (list? rs) (length rs) 0))
+     (and (exact-integer? fc) (< n fc)
+          (format "results ~a < file_count ~a (DEFERRED 164)" n fc))]))
 
 ;; ============================================================
 ;; WHALE SHARDING

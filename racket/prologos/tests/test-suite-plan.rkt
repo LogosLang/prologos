@@ -13,11 +13,19 @@
          "../tools/suite-plan.rkt"
          (only-in "../tools/suite-lock.rkt" SUITE-LOCK-BUSY-EXIT))
 
-(define (run-record file-count results)
+;; A run record of `file-count` files. Unless #:complete? #f, the given results
+;; are padded with filler files so that len(results) = file_count, as a run that
+;; reported every file has (an INCOMPLETE record is the #:complete? #f case).
+(define (run-record file-count results #:complete? [complete? #t] #:extra [extra (hasheq)])
+  (define rs (for/list ([r (in-list results)]) (hasheq 'file (car r) 'wall_ms (cdr r))))
+  (define padded
+    (if complete?
+        (append rs (for/list ([i (in-range (max 0 (- file-count (length rs))))])
+                     (hasheq 'file (format "pad-~a.rkt" i) 'wall_ms 1)))
+        rs))
   (jsexpr->string
-   (hasheq 'file_count file-count
-           'results (for/list ([r (in-list results)])
-                      (hasheq 'file (car r) 'wall_ms (cdr r))))))
+   (for/fold ([h (hasheq 'file_count file-count 'results padded)]) ([(k v) (in-hash extra)])
+     (hash-set h k v))))
 
 ;; ========================================
 ;; historical-medians — the LPT key source
@@ -41,6 +49,27 @@
           (run-record 200 '(("a.rkt" . 30)))
           (run-record 200 '(("a.rkt" . 20)))))
   (check-equal? (hash-ref (historical-medians lines #:runs 3) "a.rkt") 20))
+
+(test-case "suite-plan/medians: a record with FEWER RESULTS than file_count is skipped (DEFERRED 164)"
+  ;; 13 such records sit in main's timings.jsonl: runs that lost workers and
+  ;; were recorded as full suites before the INCOMPLETE gate (fd2986cc).
+  (define lines
+    (list (run-record 200 '(("a.rkt" . 10)))
+          (run-record 200 '(("a.rkt" . 999999)) #:complete? #f)))   ; newest, 1 of 200
+  (check-equal? (hash-ref (historical-medians lines) "a.rkt") 10))
+
+(test-case "suite-plan/medians: an ANNOTATED record (\"invalid\") is skipped; skips do not use up the window"
+  (define lines
+    (list (run-record 200 '(("a.rkt" . 10)))
+          (run-record 200 '(("a.rkt" . 20)))
+          (run-record 200 '(("a.rkt" . 777777)) #:extra (hasheq 'invalid "annotated by hand"))
+          (run-record 200 '(("a.rkt" . 888888)) #:complete? #f)))
+  ;; window of 2 VALID runs: 10 and 20 -> median index 1 of sorted = 20
+  (check-equal? (hash-ref (historical-medians lines #:runs 2) "a.rkt") 20)
+  (check-equal? (record-invalid-reason (hasheq 'file_count 3 'results '())) "results 0 < file_count 3 (DEFERRED 164)")
+  (check-equal? (record-invalid-reason (hasheq 'invalid "x" 'file_count 3 'results '())) "x")
+  (check-false (record-invalid-reason (hasheq 'file_count 1 'results (list (hasheq)))))
+  (check-false (record-invalid-reason (hasheq 'results '())) "no file_count: no claim to check"))
 
 (test-case "suite-plan/medians: malformed lines and an empty history are tolerated"
   (check-equal? (hash-count (historical-medians '())) 0)
