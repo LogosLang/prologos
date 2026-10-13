@@ -348,3 +348,17 @@ binder merges with unsolved metas.
   entries the sweep session proposed are applied above.
 - **Next**: D.2 — inputs now include §7b's fire-context decision, F3(b)'s two sites, the corrected value
   proposition, B1/B1′ as the P2 baseline pair, and an acceptance file that reaches binder merges.
+
+### Relay to a fresh session: the two owner decisions the move left open are ledgered as O-9 / O-10; main is 57 commits ahead, one file overlapping — docs commit on the branch (2026-10-13)
+- **Why / decision**: the owner continues PAR 4 in a fresh session from a relay note
+  (`DAILIES_METHODOLOGY.org` §Relay Notes). Its grounding pass (obligation 4) found the two decisions
+  the move/re-measure report put to the owner only in the chat, so D.1 §14 now ledgers them as
+  PENDING: **O-9** DEFERRED 150's production default (lean: off) and **O-10** what the first checkpoint
+  merge brings to `main` (parity test + harness certainly; the env-gated P0 instrumentation kept or
+  stripped). O-3 (observers, Appendix A) is still pending too.
+- **Surprise / correction**: none in PAR's records. `main` is 57 commits past the branch's merge-base
+  `01ef2542` (PPN series move; SW-24/25/27 of the DEFERRED sweep, with DEFERRED 160 reopened as
+  MITIGATED; register at NEXT FREE 172). Only `tools/dep-graph.rkt` changed on both sides: SW-24
+  derives the graph by scanning for `test-*.rkt`, which makes the branch's two-line registration of
+  `test-arena-parity.rkt` obsolete, so the next main→branch merge takes main's side.
+- **Next**: unchanged — D.2 (P0.5), opening by posing O-9, O-10 and O-3 with the inputs listed above.
