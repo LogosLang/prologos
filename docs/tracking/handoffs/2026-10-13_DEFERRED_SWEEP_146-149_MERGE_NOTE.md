@@ -769,3 +769,27 @@ recorded rather than re-run until green, since the change set provably does not 
 - Hermes's own command blocklist refuses any terminal command whose TEXT matches its "kill all processes" pattern
   (a heredoc that merely mentions the pid-`-1` form was refused while writing this note): a second, coarser layer
   that the repo guard does not replace.
+
+**Hooks live (2026-10-13, after the owner's consent and a desktop restart).** `hermes hooks list`: both ✓ allowed;
+`hooks doctor`: healthy. Live check: this session's `raco make` without the limit was refused before it ran, with
+the guard's 159 message.
+
+## After checkpoint 3: SW-19 … SW-22 (branch `deferred-sweep-146-149`, merge pending)
+
+Designators renamed from roman numerals to `SW-n` first (`7e2b0467`; ledger at the top of this note). Each item was
+red before its change (an end-to-end run of the old behaviour, plus failing tests), then green, then mutation-checked.
+
+| SW | commit | what | evidence |
+|---|---|---|---|
+| 19 | `c02d378a` | `record-invalid-reason`: an undeclared unit that PASSED with 0 tests invalidates its record (DEFERRED 161 open 1) | generic rule; over main's 1 936 records it matches exactly the 2 that 161 names; main's `timings.jsonl` annotated (2 records, only the key added; second pass 0) |
+| 20 | `c1d4f8f3` | every run prints `Suite lock: <mode> on <path>`; an env override is a ⚠ line at the top and under the summary (DEFERRED 166) | before: 0 lock lines under an inherited override; after: header + ⚠ + ⚠ |
+| 21 | `6e0cc7a8` | `--tests` on a non-unit (`test-support.rkt`, a library/fixture under `tests/`) is refused, exit 64; a missing file exits 64 too (was 1) | before: EMPTY → INCOMPLETE, exit 2; after: the reason, exit 64, nothing run |
+| 22 | branch `deferred-151b-pnet-fasl`: `eab8dcf7`, record `9713a1a5` | fasl `.pnet` body (`PNET_VERSION` 12), measured end to end | warm load 1 450 → 285 ms CPU, below no-cache (546): the cache now pays; bodies 40/40 equal; full suite 10 350 / 497 on v12 |
+
+Mutations (one per mechanism, all red): SW-19 rule off; SW-19 exclusions dropped; SW-21 refusal off; SW-21 library
+rule off; SW-20 never warns; SW-20 warns on the default path. Each intermediate commit was compiled and its three
+test files run in a throwaway detached worktree (44 and 45 tests pass). The branch's full suite: 10 354 / 497, all
+pass, twice (in the SW-22 A/B) = 10 350 + the 4 new test cases.
+
+**SW-22, a decision left open**: merge `deferred-151b-pnet-fasl` as DEFERRED 151 fix (b). The record:
+`docs/tracking/handoffs/2026-10-13_PNET_FASL_151B_DATA/README.md` on that branch.
