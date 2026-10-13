@@ -33,7 +33,7 @@
                   prop-network-merge-fns prop-network-propagators prop-network-cells
                   propagator-outputs propagator-inputs prop-cell-value
                   cell-id-hash prop-id-hash cell-id-n
-                  par4-scheduler-mode par4-fork-count)
+                  par4-scheduler-mode par4-fork-count par4-midrun-topology)
          (only-in "../../champ.rkt" champ-lookup champ-size champ-fold)
          (only-in "../../metavar-store.rkt" current-quiescence-scheduler)
          (only-in "../../decision-cell.rkt" tagged-cell-value? tagged-cell-value-entries)
@@ -98,6 +98,7 @@
                          calls))
        res]))
   (define f0 (unbox par4-fork-count))
+  (define mt0 (for/vector ([x (in-vector par4-midrun-topology)]) x))
   (define routes0 (hash-copy par4-solve-routes))
   (define g0 (current-gc-milliseconds))
   (define b0 (bytes-now)) (define t0 (now))
@@ -127,6 +128,9 @@
    'total_ms (r3 total-ms) 'total_mb (r3 (/ total-bytes 1e6)) 'gc_ms gc-ms
    'bytes_per_us (r3 (/ total-bytes (* 1000 total-ms)))
    'forks (- (unbox par4-fork-count) f0)
+   'midrun_props (- (vector-ref par4-midrun-topology 0) (vector-ref mt0 0))
+   'midrun_cells (- (vector-ref par4-midrun-topology 1) (vector-ref mt0 1))
+   'midrun_rounds (- (vector-ref par4-midrun-topology 2) (vector-ref mt0 2))
    'solve_routes (for/hasheq ([(k v) par4-solve-routes]) (values k (- v (hash-ref routes0 k 0))))
    'bsp_rounds (length rs) 'bsp_fires fires 'bsp_writes (for/sum ([r rs]) (cadddr r))
    'bsp_fire_ms (r3 fire-ms) 'bsp_merge_ms (r3 merge-ms)

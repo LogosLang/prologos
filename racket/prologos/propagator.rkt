@@ -201,6 +201,7 @@
  ;; PAR 4 P0 instrumentation (env knob + fork counter)
  par4-scheduler-mode
  par4-fork-count
+ par4-midrun-topology   ;; PAR 4 P0: (vector deferred-props new-cells rounds-with-either) created INSIDE fires, applied mid-S0
  ;; CALM topology guard: #t during BSP fire rounds
  current-bsp-fire-round?
  ;; PAR Track 1: Decomposition request protocol
@@ -3090,6 +3091,21 @@
 
 ;; Collect all deferred propagators from fire results.
 ;; Returns list of (list input-ids output-ids fire-fn) specs.
+;; PAR 4 P0 (topology probe): structure created INSIDE fires under BSP and applied between rounds
+;; of the S0 inner loop (not at the topology stratum). Behaviour-neutral counter.
+(define par4-midrun-topology (vector 0 0 0))
+(define (par4-count-midrun! all-results)
+  (define np (for*/sum ([r (in-list all-results)] #:when (fire-result? r)) (length (fire-result-new-propagators r))))
+  (define nc (for*/sum ([r (in-list all-results)] #:when (fire-result? r)) (length (fire-result-new-cells r))))
+  (vector-set! par4-midrun-topology 0 (+ np (vector-ref par4-midrun-topology 0)))
+  (vector-set! par4-midrun-topology 1 (+ nc (vector-ref par4-midrun-topology 1)))
+  (when (or (> np 0) (> nc 0))
+    (vector-set! par4-midrun-topology 2 (add1 (vector-ref par4-midrun-topology 2)))
+    ;; PAR4_TRAP_MIDRUN=1: make any test that reaches the unstratified path FAIL (census by suite).
+    (when par4-trap-midrun?
+      (error 'par4-midrun-topology "structure created inside a fire, applied mid-S0: ~a propagators, ~a cells" np nc))))
+(define par4-trap-midrun? (and (getenv "PAR4_TRAP_MIDRUN") #t))
+
 (define (collect-deferred-propagators all-results)
   (for*/list ([result (in-list all-results)]
               #:when (fire-result? result)
@@ -3402,7 +3418,7 @@
                                  (bulk-merge-writes snapshot+fuel all-writes))]
                      [t-merge-end (current-inexact-monotonic-milliseconds)]
                      ;; Apply deferred propagators
-                     [deferred-props (collect-deferred-propagators all-writes)]
+                     [deferred-props (begin (par4-count-midrun! all-writes) (collect-deferred-propagators all-writes))]
                      [merged-with-props
                       (for/fold ([n merged])
                                 ([spec (in-list deferred-props)])
