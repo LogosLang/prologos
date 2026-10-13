@@ -113,3 +113,27 @@ load under Racket 9.3, so the before-state is unmeasured — a bisect with build
 may be a PPN 3 defect, or an intended surface change the file never followed); re-derive the
 §18.21.25–.26 coordinates at HEAD; re-run the 4B.5.a probes (p2–p8) and the 4B.5 battery
 (`test-general-body-01`, `test-forward-ref-01`, the §6 canary); then open the 4B.5.b mini-design.
+
+### Checkpoint 1 merged to main — the gate's one failure is main's own, filed as DEFERRED 170 — (2026-10-13)
+
+**Why / decision**: Owner decision: merge the move as soon as the resolver is clean. Main had moved
+12 commits past the base (`34602ded` → `a15b1a9e`: the DEFERRED sweep's SW-19…21 runner/lock
+merge `1961d49d`, the fasl `.pnet` body merge `08acff4a`, docs). Collision surface: only
+`DEFERRED.md` changed on both sides (distinct hunks); main's working tree is owner WIP that no
+branch file touches; none of main's new lines cites an old PPN path. Merged `--no-ff` in a
+throwaway detached worktree; the resolver on the merge: 3 861 links, 121 broken — the identical
+set; 0 old-path citations. Limited build clean; `reduction_rkt.zo` = `7c07fd92…`.
+
+**Surprise / correction**: the merge's full suite failed: 10 366 tests, **1 FAILURES** —
+`test-path-selection.rkt` shards 1/5 and 3/5, `open-output-file: file exists` on a temp
+`.prologos`. Per the gate-failure protocol it was A/B'd on main's pristine code with
+`--tests tests/test-path-selection.rkt`: `a15b1a9e` fails 3 of 3, `1961d49d` 0 of 3, `34602ded`
+1 of 3; with `#:exists 'replace` → `'truncate` at its four temp-file sites, `a15b1a9e` passes 5
+of 5. Mechanism: `'replace` deletes and recreates the `make-temporary-file` file, and a twin shard
+(same code, same moment) can claim the same seconds-plus-milliseconds name in that window; the
+fasl speedup (7.5 → 4.0 s per run) tightened the shards' lockstep. A defect of main's tests, older
+than both merges, so the merge went ahead with the failure recorded. Filed as **DEFERRED 170** on
+main (fix measured, not applied: it lies outside this track). The PPN 4C baseline above
+(10 350 / all pass at `71a4ab01`) stands: that tree predates the fasl merge.
+
+**Next**: the 4B.5.b grounding mini-audit, after this checkpoint reaches the branch.
