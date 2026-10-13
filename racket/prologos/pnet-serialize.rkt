@@ -98,6 +98,8 @@
          pnet-stale?
          pnet-path-for-module
          ;; For testing
+         PNET_VERSION
+         read-pnet-header
          make-serializer
          deep-struct->serializable
          deep-serializable->struct
@@ -186,7 +188,42 @@
 ;; POISON-INVALIDATION reasoning as v3->v4 and v8->v9: any v9-or-earlier cache
 ;; holding a Set has cross-process hashes baked in, and exact equality is the
 ;; only reliable sweep.
-(define PNET_VERSION 10)
+;; v10 -> v11 (DEFERRED 151 fix (a), 2026-10-13): FORMAT. A file used to be ONE
+;; datum `(VERSION SOURCE-HASH slot2 … slot30)`, so `pnet-stale?` had to `read`
+;; the whole file (0.4–1 MB per module) to compare two elements, and the loader
+;; read it all again. Now a file is TWO data — the header
+;; `(pnet-header VERSION SOURCE-HASH)`, then the body `(slot2 … slot30)`,
+;; unchanged — and `pnet-stale?` reads only the header (see `read-pnet-header`).
+;; The version gate is still exact equality, now on the header's VERSION. A v10
+;; (or older) file starts with `(10 ` rather than the header prefix, so it is
+;; classified stale from its first bytes without being parsed, and is never
+;; misread as a body. Every cache regenerates once on the bump.
+(define PNET_VERSION 11)
+
+;; DEFERRED 151 (a): the header is the file's first datum, written by `write` as
+;; `(pnet-header <version> "<source-hash>")`. Readers PEEK for this prefix
+;; before calling `read`, so a file that is not v11-shaped (an old single-datum
+;; cache, garbage) is rejected in O(1) instead of being parsed whole.
+(define pnet-header-prefix #"(pnet-header ")
+
+;; read-pnet-header : input-port -> (or/c (list 'pnet-header any any) #f)
+;; Consumes exactly the header datum on success; never reads the body.
+(define (read-pnet-header in)
+  (define pre (peek-bytes (bytes-length pnet-header-prefix) 0 in))
+  (and (bytes? pre)
+       (bytes=? pre pnet-header-prefix)
+       (let ([h (read in)])
+         (and (list? h)
+              (= (length h) 3)
+              (eq? (car h) 'pnet-header)
+              h))))
+
+;; The staleness judgement itself — unchanged from v10: exact version
+;; equality and an equal source key.
+(define (pnet-header-fresh? h ns-sym source-path)
+  (and h
+       (equal? (cadr h) PNET_VERSION)
+       (equal? (caddr h) (source-hash-for-module ns-sym source-path))))
 
 ;; ============================================================
 ;; Serialization: struct->vector + gensym tagging + foreign-proc
@@ -797,13 +834,11 @@
   (or (not (file-exists? pnet-path))
       ;; Track 10B: check infrastructure staleness (Racket code changed)
       (infrastructure-stale? pnet-path)
-      (let ([cached-data (with-handlers ([exn? (lambda (_) #f)])
-                           (call-with-input-file pnet-path read))])
-        (or (not cached-data)
-            (not (list? cached-data))
-            (not (= (car cached-data) PNET_VERSION))
-            (not (equal? (cadr cached-data)
-                         (source-hash-for-module ns-sym source-path)))))))
+      ;; DEFERRED 151 (a): the header datum only — the body is never parsed here.
+      (not (pnet-header-fresh?
+            (with-handlers ([exn? (lambda (_) #f)])
+              (call-with-input-file pnet-path read-pnet-header))
+            ns-sym source-path))))
 
 (define (serialize-module-state ns-sym source-path module-info)
   (define-values (serialize! has-foreign?) (make-serializer))
@@ -852,10 +887,13 @@
 
   (let ()
      (define hash-val (source-hash-for-module ns-sym source-path))
-     (define pnet-data
-       (list PNET_VERSION               ;; 0: version
-             hash-val                    ;; 1: source hash
-             s-env                       ;; 2: env-snapshot
+     ;; DEFERRED 151 (a), v11: header and body are SEPARATE data, so
+     ;; `pnet-stale?` can read the header alone. Slot numbers below are those
+     ;; of the reassembled `raw` list in `deserialize-module-state`
+     ;; (0 = version, 1 = source hash, both in the header).
+     (define pnet-header (list 'pnet-header PNET_VERSION hash-val))
+     (define pnet-body
+       (list s-env                       ;; 2: env-snapshot
              s-specs                     ;; 3: specs
              s-locs                      ;; 4: definition-locations
              (module-info-exports module-info)  ;; 5: exports
@@ -893,7 +931,11 @@
      ;; Atomic write: write to temp, then rename
      (define tmp-path (make-temporary-file "pnet-~a" #f (path-only pnet-path)))
      (call-with-output-file tmp-path
-       (lambda (out) (write pnet-data out))
+       (lambda (out)
+         (write pnet-header out)
+         (newline out)
+         (write pnet-body out)
+         (newline out))
        #:exists 'replace)
      (rename-file-or-directory tmp-path pnet-path #t)
      pnet-path))
@@ -901,8 +943,18 @@
 (define (deserialize-module-state ns-sym source-path)
   (define pnet-path (pnet-path-for-module ns-sym))
   (and (file-exists? pnet-path)
+       ;; DEFERRED 151 (a): ONE pass over the file — header, then body — and
+       ;; reassembled into the v10 `raw` layout, so the slot code below is
+       ;; unchanged. The header is re-judged here (cheap now) so this function
+       ;; stays safe to call without `pnet-stale?`.
        (let ([raw (with-handlers ([exn? (lambda (_) #f)])
-                    (call-with-input-file pnet-path read))])
+                    (call-with-input-file pnet-path
+                      (lambda (in)
+                        (define h (read-pnet-header in))
+                        (and (pnet-header-fresh? h ns-sym source-path)
+                             (let ([body (read in)])
+                               (and (list? body)
+                                    (list* (cadr h) (caddr h) body)))))))])
          (and raw
               (list? raw)
               (= (car raw) PNET_VERSION)
