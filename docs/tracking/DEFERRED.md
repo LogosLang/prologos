@@ -7183,6 +7183,14 @@ There is no unit test, because this is process-level behaviour.
    `deferred-sweep-146-149` already has the fix. **Fix**: bring each live checkout to main ≥ `b45bbf44` (merge,
    rebase or cherry-pick the one hunk); which route is each branch owner's decision. Do `par4-p0` first, since
    PAR 4 pins baselines; retire dead worktrees.
+
+   **Status 2026-10-13 (owner-authorized, from the sweep session):** `par4-p0` → `a456c370`, a merge of main.
+   Gate: 10 298 / 493 all pass, with an exact file-by-file delta (merge note § Coordination). The five dormant worktrees
+   were **removed**. Each had its HEAD in main's history, no tracked changes, no untracked files, and no process,
+   and was idle 8–9 weeks; their ignored files were editor undo histories, an older (Racket 9.0) `settings.json` and
+   VS Code build output. Their two merged branches were deleted (`git branch -d`). **Still open: the two clones only.**
+   Both hold commits and records that are not on main (`egraph-relational-spike`: 12 commits, the spike's closing
+   note; `preduce-autonomy`: 62 commits, the loop's ledger and retro), so they wait on an owner decision.
 2. **Agents can still do it by hand.** `.claude/settings.local.json:71` allows `Bash(pkill:*)` without a prompt,
    and a `pkill -f racket` or `pkill -f batch-worker` from any session has the same blast radius. **Fix shape**
    (a decision): either `tools/hook-guard-racket.sh` (159's PreToolUse guard) denies a

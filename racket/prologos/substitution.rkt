@@ -9,6 +9,8 @@
 ;;; subst(k, s, expr)         : replace bvar(k) with s in expr (shifting s under binders)
 ;;; open-expr(body, arg)      : replace bvar(0) with arg and decrement other indices
 ;;;                             (used when entering a binder)
+;;; close-expr(t, fvar)       : the inverse of open-expr — abstract fvar back into bvar(0)
+;;;                             (used when leaving one)
 ;;;
 
 (require racket/match
@@ -17,7 +19,7 @@
          (only-in "loose-bvar.rkt" loose-bvar-range loose-bvar-range-cached)
          (only-in "namespace.rkt" ns-context?))
 
-(provide shift subst open-expr)
+(provide shift subst open-expr close-expr)
 
 ;; ========================================
 ;; Shift: increase bound indices >= cutoff by delta
@@ -1076,3 +1078,106 @@
 ;; ========================================
 (define (open-expr body arg)
   (subst 0 arg body))
+
+;; ========================================
+;; Close: the inverse of open-expr (locally nameless)
+;; ========================================
+;; close-expr : expr expr-fvar -> expr
+;;
+;; LAW (pinned by a property in tests/test-substitution.rkt): for an fvar x that
+;; does not occur in b,   (close-expr (open-expr b x) x) = b.
+;; Locally nameless representation (Charguéraud, JAR 2012): `open` instantiates
+;; the body's bound variable with a fresh free one so the body can be processed as
+;; a locally closed term; `close` abstracts that free variable back into the binder.
+;;
+;; open-expr = subst 0 x, which replaces bvar 0 with x AND decrements every loose
+;; bvar above it. So close first lifts the loose bvars back up — with `shift`, the
+;; authority on where indices live (its 38 closed-leaf kinds, e.g. expr-meta and
+;; expr-foreign-fn, are exactly `subst`'s) — then replaces fvar x by bvar d at
+;; binder depth d. A term with no loose bvars (the common case: try-unify-pure
+;; works on opened, closed bodies) skips the shift, so its unchanged subtrees
+;; stay eq? to the input instead of being rebuilt by `shift`.
+;;
+;; First user: type-lattice.rkt `try-unify-pure` binder arms, which opened both
+;; bodies, unified them, and returned the first argument's ORIGINAL body because
+;; nothing could close the unified one (DEFERRED F3(a), owner decision O-7).
+(define (close-expr t x)
+  (define lifted (if (eqv? (loose-bvar-range t) 0) t (shift 1 0 t)))
+  (abstract-fvar lifted (expr-fvar-name x) 0))
+
+;; abstract-fvar : expr symbol nat -> expr — fvar `name` becomes bvar `depth`.
+;; It REPLACES only; all index arithmetic is `shift`'s, above.
+;;
+;; Unlike `shift`/`subst` (which deliberately have NO catch-all, so an unhandled
+;; node hard-fails), this walker uses the GENERIC transparent-struct rebuild as
+;; its fallback — `.claude/rules/pipeline.md` § Exhaustive Walkers, answer 1, the
+;; posture of loose-bvar.rkt's `compute-range` and narrowing.rkt's
+;; `narrow-subst-bvars`. Its per-node action is uniform ("recurse into every
+;; field") except at BINDERS, so the explicit arms are exactly `shift`'s binder
+;; inventory (lam body, Pi codomain, Sigma second component, reduce arms by
+;; binding-count). A node kind added later cannot be silently skipped. Descending
+;; where `subst` does not (into its closed leaves) is harmless: x was placed by
+;; `subst`, so it is never found there and the leaf comes back eq?.
+;; eq?-preserving on subtrees that do not contain x.
+(define (abstract-fvar e name depth)
+  (match e
+    [(expr-fvar n) (if (eq? n name) (expr-bvar depth) e)]
+    [(expr-bvar _) e]
+    ;; Binders — depth routing (the inventory is `shift`'s; keep them in sync)
+    [(expr-lam m t body)
+     (rebuild-if-changed e expr-lam
+                         (list m (abstract-fvar t name depth)
+                               (abstract-fvar body name (add1 depth))))]
+    [(expr-Pi m dom cod)
+     (rebuild-if-changed e expr-Pi
+                         (list m (abstract-fvar dom name depth)
+                               (abstract-fvar cod name (add1 depth))))]
+    [(expr-Sigma t1 t2)
+     (rebuild-if-changed e expr-Sigma
+                         (list (abstract-fvar t1 name depth)
+                               (abstract-fvar t2 name (add1 depth))))]
+    [(expr-reduce scrut arms structural?)
+     (define scrut* (abstract-fvar scrut name depth))
+     (define arms*
+       (for/list ([arm (in-list arms)])
+         (define n (expr-reduce-arm-binding-count arm))
+         (define body (expr-reduce-arm-body arm))
+         (define body* (abstract-fvar body name (+ depth n)))
+         (if (eq? body body*)
+             arm
+             (expr-reduce-arm (expr-reduce-arm-ctor-name arm) n body*))))
+     (if (and (eq? scrut scrut*) (andmap eq? arms arms*))
+         e
+         (expr-reduce scrut* arms* structural?))]
+    ;; Runtime collection values are closed w.r.t. their own boundary (the Rel T1
+    ;; SUB contract stated at `shift`'s expr-champ arm above): keep them as
+    ;; leaves, exactly as `shift` does.
+    [(? expr-champ?) e] [(? expr-hset?) e] [(? expr-rrb?) e]
+    [(? expr-trrb?) e] [(? expr-tchamp?) e] [(? expr-thset?) e]
+    ;; Everything else: recurse into every field at the same depth.
+    [(? struct?)
+     (define-values (st _skipped?) (struct-info e))
+     (define vec (struct->vector e))
+     (define fields (for/list ([i (in-range 1 (vector-length vec))]) (vector-ref vec i)))
+     (define fields* (for/list ([f (in-list fields)]) (abstract-field f name depth)))
+     (if (andmap eq? fields fields*)
+         e
+         (apply (struct-type-make-constructor st) fields*))]
+    [_ e]))
+
+(define (abstract-field f name depth)
+  (cond
+    [(struct? f) (abstract-fvar f name depth)]
+    [(pair? f)
+     (let walk ([l f])
+       (cond
+         [(pair? l)
+          (define a* (abstract-field (car l) name depth))
+          (define d* (walk (cdr l)))
+          (if (and (eq? a* (car l)) (eq? d* (cdr l))) l (cons a* d*))]
+         [else l]))]
+    [else f]))
+
+(define (rebuild-if-changed e ctor fields*)
+  (define fields (cdr (vector->list (struct->vector e))))
+  (if (andmap eq? fields fields*) e (apply ctor fields*)))

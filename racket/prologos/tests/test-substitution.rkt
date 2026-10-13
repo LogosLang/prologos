@@ -396,3 +396,89 @@
   (check-false (contains-open-container?
                 (mk-champ (expr-keyword ':f)
                           (expr-lam 'mw (expr-Nat) (expr-bvar 0))))))
+
+;; ========================================
+;; close-expr: the inverse of open-expr (DEFERRED F3(a), owner decision O-7)
+;; ========================================
+;; Law: for x not free in b, (close-expr (open-expr b x) x) = b; and for any t,
+;; (open-expr (close-expr t x) x) = t. Checked on seeded pseudo-random locally
+;; nameless terms that exercise every binder kind (lam, Pi, Sigma, reduce arms
+;; with 0-2 bindings), loose bvars, decoy fvars, and node kinds that only
+;; `abstract-fvar`'s generic struct fallback handles (Vec, Eq, app, pair, suc, ann).
+
+(define (gen-term rng depth size)
+  ;; depth = binders in scope INSIDE this term + 2 extra loose levels
+  (define (pick n) (random n rng))
+  (define (leaf)
+    (case (pick 5)
+      [(0 1) (expr-bvar (pick (+ depth 2)))]   ; bound or loose
+      [(2) (expr-fvar 'decoy)]
+      [(3) (expr-Nat)]
+      [else (expr-zero)]))
+  (if (<= size 0)
+      (leaf)
+      (let ([s (sub1 size)])
+        (case (pick 11)
+          [(0) (expr-lam 'mw (gen-term rng depth (quotient s 2)) (gen-term rng (add1 depth) s))]
+          [(1) (expr-Pi 'mw (gen-term rng depth (quotient s 2)) (gen-term rng (add1 depth) s))]
+          [(2) (expr-Sigma (gen-term rng depth (quotient s 2)) (gen-term rng (add1 depth) s))]
+          [(3) (expr-reduce (gen-term rng depth (quotient s 2))
+                            (for/list ([n (in-list '(0 1 2))])
+                              (expr-reduce-arm (string->symbol (format "c~a" n)) n
+                                               (gen-term rng (+ depth n) (quotient s 2))))
+                            #t)]
+          [(4) (expr-Vec (gen-term rng depth (quotient s 2)) (gen-term rng depth (quotient s 2)))]
+          [(5) (expr-Eq (gen-term rng depth (quotient s 3)) (gen-term rng depth (quotient s 3))
+                        (gen-term rng depth (quotient s 3)))]
+          [(6) (expr-app (gen-term rng depth (quotient s 2)) (gen-term rng depth (quotient s 2)))]
+          [(7) (expr-pair (gen-term rng depth (quotient s 2)) (gen-term rng depth (quotient s 2)))]
+          [(8) (expr-suc (gen-term rng depth s))]
+          [(9) (expr-ann (gen-term rng depth (quotient s 2)) (gen-term rng depth (quotient s 2)))]
+          [else (leaf)]))))
+
+(define (count-fvar t name)
+  (cond [(and (expr-fvar? t) (eq? (expr-fvar-name t) name)) 1]
+        [(struct? t) (for/sum ([f (in-vector (struct->vector t) 1)]) (count-fvar f name))]
+        [(pair? t) (+ (count-fvar (car t) name) (count-fvar (cdr t) name))]
+        [else 0]))
+
+(test-case "close-expr: (close (open b x) x) = b on 3000 random terms"
+  (define rng (vector->pseudo-random-generator (vector 1 2 3 4 5 6)))
+  (define x (expr-fvar 'close-law-x))
+  (define opened-with-x 0)
+  (for ([i (in-range 3000)])
+    (define b (gen-term rng 0 (add1 (random 12 rng))))
+    (define o (open-expr b x))
+    (when (positive? (count-fvar o 'close-law-x)) (set! opened-with-x (add1 opened-with-x)))
+    (check-equal? (close-expr o x) b (format "term #~a: ~s" i b)))
+  ;; the property is vacuous unless x actually lands in many opened terms
+  (check-true (> opened-with-x 1000) (format "only ~a terms contained x" opened-with-x)))
+
+(test-case "close-expr: (open (close t x) x) = t on 3000 random terms containing x"
+  (define rng (vector->pseudo-random-generator (vector 6 5 4 3 2 1)))
+  (define x (expr-fvar 'close-law-x))
+  (for ([i (in-range 3000)])
+    ;; put x into the term by opening a random body with it
+    (define t (open-expr (gen-term rng 0 (add1 (random 12 rng))) x))
+    (check-equal? (open-expr (close-expr t x) x) t (format "term #~a: ~s" i t))))
+
+(test-case "close-expr: concrete cases — depth routing and the reduce-arm binding count"
+  (define x (expr-fvar 'cx))
+  (check-equal? (close-expr x x) (expr-bvar 0))
+  (check-equal? (close-expr (expr-bvar 0) x) (expr-bvar 1))          ; loose index lifted
+  (check-equal? (close-expr (expr-Pi 'mw (expr-Nat) (expr-Vec (expr-Nat) x)) x)
+                (expr-Pi 'mw (expr-Nat) (expr-Vec (expr-Nat) (expr-bvar 1))))
+  (check-equal? (close-expr (expr-reduce x (list (expr-reduce-arm 'c 2 x)) #t) x)
+                (expr-reduce (expr-bvar 0) (list (expr-reduce-arm 'c 2 (expr-bvar 2))) #t))
+  ;; generic fallback: Eq has no explicit arm in abstract-fvar
+  (check-equal? (close-expr (expr-Eq (expr-Nat) x (expr-fvar 'other)) x)
+                (expr-Eq (expr-Nat) (expr-bvar 0) (expr-fvar 'other))))
+
+(test-case "close-expr: on a term with no loose bvars, subtrees without x come back eq?"
+  (define x (expr-fvar 'cx))
+  (define shared (expr-Vec (expr-Nat) (expr-zero)))
+  (define r (close-expr (expr-pair shared x) x))
+  (check-eq? (expr-pair-fst r) shared)
+  ;; and a body that contains no x at all is returned as-is
+  (define closed (expr-Pi 'mw (expr-Nat) (expr-Vec (expr-Nat) (expr-bvar 0))))
+  (check-eq? (close-expr closed x) closed))

@@ -125,6 +125,13 @@ attribute map uses the sum.
   Pi(Nat,?pm1) ⊔ (Pi(Nat,Unit) ⊔ Unit)   = type-top     ;; contradiction detected
   ```
 
+  > **After F3(a) (`5ec697bf`, 2026-10-13):** this combined witness no longer fails. Both groupings give
+  > `type-top`, because the inner merge now keeps `Pi(Nat,Unit)`. A witness that needs only (b), evaluated at
+  > `5ec697bf` under the probe's meta-solution function: `(Bool ⊔ Pi(?pm1,Nat)) ⊔ Pi(Nat,?pm1) = Bool`, but
+  > `Bool ⊔ (Pi(?pm1,Nat) ⊔ Pi(Nat,?pm1)) = type-top`, since `Bool ⊔ Pi(?pm1,Nat) = Bool` despite the rigid head clash.
+  > The fallback is duplicated in `type-lattice-merge` (`:172-173`). Script `f3b-witness.rkt`; record: the
+  > sweep merge note § F3(a).
+
   The same three facts produce a type error or no type error depending on how they arrive.
   A merge that can return something *below* one of its inputs is not monotone, so this is outside
   what CALM covers, not just a commutativity wart. It came in with the PPN 4C T-3 Role B migration (`37aaba2b`)
@@ -152,7 +159,11 @@ Non-joins in, and the failures carry through.
   not a virtue: it is sound only because it postpones the non-join to read time, where order still decides the result.
 
 Suggested order (a conjecture about sequencing; the owner decides): **fix F3(a)** first. It is local, and the defect is clear-cut. *Prediction, not yet checked:* the fix removes
-the D1c and D1d A-law violations that come from the Pi arm, but not the ones from (b). Then do **the design work on F3(b)**: what should a
+the D1c and D1d A-law violations that come from the Pi arm, but not the ones from (b).
+*Outcome (`5ec697bf`, 2026-10-13):* consistent but weak, since it predicted a decrease of unstated size: A went
+22 → 15 (D1c) and 27 → 25 (D1d), with the remainder from (b). It did not address C, which ALSO fell (74 → 28,
+251 → 187). The PAR 4 note's restatement had added "none of the C violations"; that claim is refuted and
+corrected there. Then do **the design work on F3(b)**: what should a
 meta-blocked unification produce? The principled answer is a residual, meaning a suspended constraint,
 rather than picking one input. That is a lattice-design question, not a patch. Next, **F1 and F2 as one
 decision**: a band merge must become a join with ⊤ (a conflicting binding means contradiction), or be

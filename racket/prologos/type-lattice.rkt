@@ -30,7 +30,7 @@
          "syntax.rkt"
          "reduction.rkt"       ;; whnf (read-only)
          "zonk.rkt"            ;; zonk-at-depth (read-only)
-         "substitution.rkt"    ;; open-expr (read-only)
+         "substitution.rkt"    ;; open-expr, close-expr (read-only)
          "ctor-registry.rkt"   ;; PUnify Phase 1: descriptor-driven structural merge
          "union-types.rkt")    ;; SRE Track 2H: canonical union construction (extracted)
 
@@ -456,7 +456,8 @@
                          (define cod-a (open-expr (zonk-at-depth 1 (expr-Pi-codomain a)) x))
                          (define cod-b (open-expr (zonk-at-depth 1 (expr-Pi-codomain b)) x))
                          (define cod (try-unify-pure cod-a cod-b))
-                         (and cod (expr-Pi m1* dom (expr-Pi-codomain a))))))
+                         ;; F3(a): return the UNIFIED codomain, closed back over x.
+                         (and cod (expr-Pi m1* dom (close-expr cod x))))))
                 #f)]
            [else
             (define dom (try-unify-pure (expr-Pi-domain a) (expr-Pi-domain b)))
@@ -465,10 +466,13 @@
                    (define cod-a (open-expr (zonk-at-depth 1 (expr-Pi-codomain a)) x))
                    (define cod-b (open-expr (zonk-at-depth 1 (expr-Pi-codomain b)) x))
                    (define cod (try-unify-pure cod-a cod-b))
-                   ;; We return a reconstructed Pi with the original codomain structure.
-                   ;; Since both sides were equal (unified successfully), either original is fine.
-                   ;; Use the first side's codomain as-is (they're structurally equal after unification).
-                   (and cod (expr-Pi m1 dom (expr-Pi-codomain a)))))]))]
+                   ;; F3(a), owner decision O-7: the result is the UNIFIED codomain,
+                   ;; closed back over x. Returning `a`'s original codomain (as this
+                   ;; arm did, on the claim that both sides are "structurally equal
+                   ;; after unification") is false when a side holds an unsolved
+                   ;; meta: Pi(Nat,?m) ⊔ Pi(Nat,Unit) gave Pi(Nat,?m), the swapped
+                   ;; order Pi(Nat,Unit) — order-dependent and not an upper bound.
+                   (and cod (expr-Pi m1 dom (close-expr cod x)))))]))]
 
       ;; Sigma vs Sigma: unify fst-types, snd-types
       [(and (expr-Sigma? a) (expr-Sigma? b))
@@ -478,7 +482,7 @@
               (define snd-a (open-expr (zonk-at-depth 1 (expr-Sigma-snd-type a)) x))
               (define snd-b (open-expr (zonk-at-depth 1 (expr-Sigma-snd-type b)) x))
               (define snd (try-unify-pure snd-a snd-b))
-              (and snd (expr-Sigma fst (expr-Sigma-snd-type a)))))]
+              (and snd (expr-Sigma fst (close-expr snd x)))))]  ;; F3(a)
 
       ;; nat-val vs nat-val
       [(and (expr-nat-val? a) (expr-nat-val? b))
@@ -499,7 +503,7 @@
               (define body-a (open-expr (zonk-at-depth 1 (expr-lam-body a)) x))
               (define body-b (open-expr (zonk-at-depth 1 (expr-lam-body b)) x))
               (define body (try-unify-pure body-a body-b))
-              (and body (expr-lam (expr-lam-mult a) ty (expr-lam-body a)))))]
+              (and body (expr-lam (expr-lam-mult a) ty (close-expr body x)))))]  ;; F3(a)
 
       ;; Type vs Type: level equality (structural, no level-meta solving)
       [(and (expr-Type? a) (expr-Type? b))

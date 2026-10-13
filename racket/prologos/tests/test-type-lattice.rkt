@@ -319,6 +319,73 @@
        (check-true (has-unsolved-meta? (expr-meta 'b #f)))))))
 
 ;; ========================================
+;; F3(a): binder arms return the UNIFIED body
+;; ========================================
+;;
+;; The Pi (both branches), Sigma and lam arms of `try-unify-pure` opened both
+;; bodies with a fresh fvar, unified them, and then returned the FIRST argument's
+;; ORIGINAL body, using the unified one only as a success flag. So
+;; Pi(Nat, ?m) ⊔ Pi(Nat, Unit) returned Pi(Nat, ?m), and the swapped merge
+;; returned Pi(Nat, Unit): order-dependent, and not an upper bound of both inputs.
+;; Found by the merge-law probe (aci-laws.rkt D1c/D1d); owner decision O-7.
+;; The fix closes the unified body back over the fresh fvar (`close-expr`), so a
+;; dependent body must come back with the bound variable, not a leaked fvar.
+
+(define f3a-binder-tests
+  (test-suite
+   "F3(a): try-unify-pure binder arms keep the unified body"
+
+   (test-case "Pi: Pi(Nat, ?m) ⊔ Pi(Nat, Unit) = Pi(Nat, Unit), in both orders"
+     (define a (expr-Pi 'mw (expr-Nat) (expr-meta 'f3a-m #f)))
+     (define b (expr-Pi 'mw (expr-Nat) (expr-Unit)))
+     (check-equal? (try-unify-pure a b) b)
+     (check-equal? (try-unify-pure b a) b))
+
+   (test-case "Pi via type-unify-or-top: commutative, and the result bounds both inputs"
+     (define a (expr-Pi 'mw (expr-Nat) (expr-meta 'f3a-m #f)))
+     (define b (expr-Pi 'mw (expr-Nat) (expr-Unit)))
+     (define r (type-unify-or-top a b))
+     (check-equal? r (type-unify-or-top b a))
+     (check-equal? (type-unify-or-top r a) r)
+     (check-equal? (type-unify-or-top r b) r))
+
+   (test-case "Pi, resolved mult-meta branch: Pi(?μ:=mw, Nat, ?m) ⊔ Pi(mw, Nat, Unit), both orders"
+     (parameterize ([current-lattice-meta-solution-fn
+                     (lambda (id) (and (eq? id 'f3a-mu) 'mw))])
+       (define a (expr-Pi (mult-meta 'f3a-mu) (expr-Nat) (expr-meta 'f3a-m #f)))
+       (define b (expr-Pi 'mw (expr-Nat) (expr-Unit)))
+       (check-equal? (try-unify-pure a b) (expr-Pi 'mw (expr-Nat) (expr-Unit)))
+       (check-equal? (try-unify-pure b a) (expr-Pi 'mw (expr-Nat) (expr-Unit)))))
+
+   (test-case "Sigma: Sigma(Nat, ?m) ⊔ Sigma(Nat, Unit) = Sigma(Nat, Unit), in both orders"
+     (define a (expr-Sigma (expr-Nat) (expr-meta 'f3a-m #f)))
+     (define b (expr-Sigma (expr-Nat) (expr-Unit)))
+     (check-equal? (try-unify-pure a b) b)
+     (check-equal? (try-unify-pure b a) b))
+
+   (test-case "lam: lam(Nat, ?m) ⊔ lam(Nat, zero) = lam(Nat, zero), in both orders"
+     (define a (expr-lam 'mw (expr-Nat) (expr-meta 'f3a-m #f)))
+     (define b (expr-lam 'mw (expr-Nat) (expr-zero)))
+     (check-equal? (try-unify-pure a b) b)
+     (check-equal? (try-unify-pure b a) b))
+
+   (test-case "dependent codomain closes back to the binder: Pi(n:Nat, Vec Nat n) ⊔ Pi(Nat, ?g)"
+     ;; The unified codomain is `Vec Nat x` for the fresh fvar x; returning it
+     ;; unclosed would leak x. The result must be the bound variable again.
+     (define dep (expr-Pi 'mw (expr-Nat) (expr-Vec (expr-Nat) (expr-bvar 0))))
+     (define m   (expr-Pi 'mw (expr-Nat) (expr-meta 'f3a-g #f)))
+     (check-equal? (try-unify-pure m dep) dep)
+     (check-equal? (try-unify-pure dep m) dep))
+
+   (test-case "nested binders: the OUTER variable closes at depth 1 under the inner Pi"
+     ;; Pi(a:Nat, Pi(b:Nat, Vec Nat a)) — the body refers to the outer binder.
+     (define dep (expr-Pi 'mw (expr-Nat)
+                          (expr-Pi 'mw (expr-Nat) (expr-Vec (expr-Nat) (expr-bvar 1)))))
+     (define m   (expr-Pi 'mw (expr-Nat) (expr-Pi 'mw (expr-Nat) (expr-meta 'f3a-h #f))))
+     (check-equal? (try-unify-pure m dep) dep)
+     (check-equal? (try-unify-pure dep m) dep))))
+
+;; ========================================
 ;; Run all tests
 ;; ========================================
 
@@ -327,3 +394,4 @@
 (run-tests pure-unify-tests)
 (run-tests propnet-integration-tests)
 (run-tests phase-e1-tests)
+(run-tests f3a-binder-tests)
