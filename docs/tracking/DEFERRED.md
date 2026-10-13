@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 172**
+> ### **NEXT FREE: 174**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7729,3 +7729,74 @@ DEFERRED 103's class). **Fix shape**: a session is a PERSISTENT unit — keep it
 them per eval, writing back after; the same list makes it exhaustive by construction. **When**: with the next LSP
 item, or the sweep after SW-26.
 
+### 172. ⬜ A PROGRAM THAT EXHAUSTS REDUCTION FUEL CRASHES `process-file` — the `error 'reduction` at `reduction.rkt:2861` is an uncaught `exn:fail`, so every result in the file is lost, not just the offending command's
+
+**Found by** PPN 4C's 4B.5.b grounding audit (probes p23/p24, branch `ppn4c-elaboration-on-network` @ `0c2aaf6a`, code =
+main `150915c4`): `def z : Int := [int+ z 1]` then `z` → `process-file` raises `reduction: fuel exhausted after too many
+reduction steps` (a `whnf` / `reduce-int-binary` stack) and returns nothing; the file's `z : Int defined.` is lost with it.
+Without the use (p25) the same file runs: `z : Int defined.`, 0 errors. Measured with the audit's `probe-print.rkt`
+(process-file, one file per process).
+
+**Mechanism** (read in code): `whnf` decrements `current-reduction-fuel` (1M steps, bound per command at `driver.rkt:731`)
+and raises a plain `error` at 0 (`reduction.rkt:2861`). The file loop converts exactly one exception class per command,
+POL.4's distinguished `exn:prologos-solve` (`process-command/solve-guard`, `driver.rkt:1594`) — by design, "any other raise
+still crashes loudly (a blanket boundary would mask real compiler defects)". Fuel exhaustion is not a compiler defect: it
+is the program's own non-termination, reachable by any non-terminating evaluation (a spec'd `defn loop` reaches it —
+`tests/test-reduction-perf-01-02.rkt:43`), not only by the definition cycles that found it.
+
+**Pinned today**: `tests/test-reduction-perf-01-02.rkt:43` (skipped in the suite as pathological) expects the raise at
+`run-ns` level (`check-exn … "fuel exhausted"`); the fix flips it deliberately.
+
+**Fix shape**: raise a distinguished `exn:prologos-fuel` (sibling of `exn:prologos-solve`) and convert it in
+`process-command/solve-guard` to a per-command `prologos-error` that names the evaluation that did not finish within the
+limit. Check whether type-checking-time `whnf` (conversion under dependent types) can reach the same raise; convert there
+too. Not measured: the LSP path (`process-file #:evaluate? #f`) evaluates no top-level expression, so it is presumably
+unaffected.
+
+**Related**: PPN 4C 4B.5.b's productivity check would reject the unproductive definition cycles that reach this (p23/p26,
+accepted at definition today) — not the general case.
+
+**When**: independent of 4B.5.b; the next sweep, or with POL work.
+
+**Record**: `docs/tracking/tracks/PPN/PPN_4C/audits/2026-10-13_PPN_4C_4B5b_GROUNDING_AUDIT.md` GA-5 (on branch
+`ppn4c-elaboration-on-network` until its next checkpoint merge); probes `…/PPN_4C/research/4B5b/p23-*`–`p26-*`.
+
+### 173. ⬜ ⭐ A SPEC-LESS MUTUAL `defn` CAN COMMIT A TYPE WITH A HOLE — `g2 : Nat -> _ defined.`, after which every use of `g2` type-checks (`[int+ [g2 3N] 1] : Int`, a Bool used as an Int, 0 errors); live on main since PPN 4C 4B.5.a (`2d791705`)
+
+**Found by** PPN 4C's 4B.5.b grounding audit, probe p27 (branch `ppn4c-elaboration-on-network` @ `0c2aaf6a`, code = main
+`150915c4`):
+
+```
+defn f2 | zero -> true      | suc n -> [g2 n]
+defn g2 | zero -> [f2 zero] | suc n -> [f2 n]
+[g2 3N]
+[int+ [g2 3N] 1]
+```
+
+→ `f2 : Nat -> Bool defined.` · **`g2 : Nat -> _ defined.`** · `[p27::f2 2N] : _` (does not reduce; cause not
+investigated) · **`[int+ [p27::f2 2N] 1] : Int`** — 0 errors. The pair is well typed (both `Nat -> Bool`).
+
+**Mechanism** (read in code; consistent with p27 and p18): f2's body references g2, a same-file def-head not yet defined
+(`'pending`), so 4B.5.a's annotated deferral arm (`driver.rkt:2116-2130`) defers f2 and leaves its pre-register in place,
+re-written meta-free with `unsolved-metas-to-holes ∘ freeze` (`:2123`): for a spec-less `defn`, `Nat -> ?m` becomes
+`Nat -> _`. g2 then sees f2 as `'ground`, is not deferred, types its arms against the wildcard and commits `Nat -> _`. A
+hole unifies with anything, so no use of g2 is checked. Sibling, p18 (an ill-typed pair: `f | zero -> 0N | suc n -> [g n]`,
+`g | zero -> "s" | suc n -> [f n]`): f's branch mismatch IS reported, but g commits `Nat -> String` against f's later-refuted
+wildcard and survives f's removal; `[g 1N]` prints `[p18::f 0N] : String`. The 4B.5.a design called the premature
+`'ground` "benign under placeholder-keyed completion tracking" (addendum §18.21.26.5); that holds only for a hole-free
+(spec'd) pre-registered type.
+
+**Before 4B.5.a** both files errored (f's forward reference was an immediate Unbound) — inferred from the 4B.5 design's p2
+record at `5b0c78ed` (3 × Unbound), not re-measured.
+
+**Why ⭐**: silent acceptance at zero errors, and DEFERRED 156's operand contract would not catch it (`_` unifies with `Int`).
+
+**Fix shape**: in-track — PPN 4C 4B.5.b (decision Q-4B5.4, addendum §18.21.27): members whose types have holes are typed
+as a group and commit only when every member checks against the group's final, hole-free environment; a hole left in a
+committed top-level type is an error ("cannot infer the type of `g2` — annotate it"), never a commit. Stop-gap if 4B.5.b
+is delayed: refuse to commit a top-level type that still contains a hole produced on the deferral path.
+
+**When**: 4B.5.b, the next PPN 4C slice; before any user-facing claim that spec-less mutual recursion works.
+
+**Record**: `docs/tracking/tracks/PPN/PPN_4C/audits/2026-10-13_PPN_4C_4B5b_GROUNDING_AUDIT.md` GA-4, GA-4b (on branch
+`ppn4c-elaboration-on-network`); probes `…/PPN_4C/research/4B5b/p18-*`, `p27-*`.
