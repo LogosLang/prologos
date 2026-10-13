@@ -3260,9 +3260,29 @@ items of the hold-point, ruled before P4a opened:
   [§5.P4e-1b-v-C](#p4e-1b-v-c).
 
 - <a id="q-u55"></a>**Q_U55 — WHAT TOTAL COLLAPSE DOES TO AN ANCESTOR THAT CARRIES AN
-  EXPLICIT KEY CONTINUATION [⬜ PENDING — posed 2026-10-13, CIU 6 1b-vi].** The first
-  of the two decisions [Q_U52](#q-u52) §1 deferred. Grounding:
+  EXPLICIT KEY CONTINUATION [✅ DECIDED 2026-10-13, owner — "I'm good with Option A
+  (refuse) on Q_55. And that we fix `^-` to be in line with the behavior as well, for
+  consistency."].** The first of the two decisions [Q_U52](#q-u52) §1 deferred. Grounding:
   [`tracks/CIU/CIU_6/2026-10-13_CIU_6_P4e-1b-vi_GROUNDING_AUDIT.md`](tracks/CIU/CIU_6/2026-10-13_CIU_6_P4e-1b-vi_GROUNDING_AUDIT.md) F1–F4.
+
+  **DECIDED — A, OBSERVABLE-OR-REFUSED, ONE RULE FOR BOTH COLLAPSE FAMILIES.** Reason: it is
+  the monotone waypoint (B and C both stay reachable without breaking a program), it turns
+  today's silent drop into a guided error, and fixing `^-` costs nothing (0 uses, 0 pins).
+  **The rule, made exact by measurement** (probe `probe-1bvi-g`): the only key continuations
+  spellable on an ANCESTOR are dissolve `^` and rename `^k'` — `^_` ("attaches to the
+  branch's LAST segment") and the `^-` family ("a LEAF continuation") are already refused
+  mid-path. So: under a total collapse (`*-`, `^-`, `^-k'`) a **rename on an ancestor is
+  refused** with a guided message naming both remedies (drop the rename for total collapse;
+  keep the level with the selective spelling, e.g. `t5{a^p.b^.c*}`); under a provenance
+  collapse (`^-_`, and `*-_` iff its prefix rule reads the surviving path — decided with
+  `*-_`) the rename is observable and stays legal; a **dissolve `^` on an ancestor stays
+  legal** (redundant, same output). C stays the recorded successor if real code ever wants
+  "collapse all but the named levels". **Implementation shape**: the check is purely
+  syntactic (every ancestor's continuation and the leaf's collapse are in the step list),
+  so it lives in the ONE shared branch walk the parser's output-level checks already use —
+  not in typing; the `^-` half lands in the same 1b-vi slice as the `*-` mint, pinned
+  failing-first in both families (`e3{a^p.b.c^-}` today `{:c @[1 2]}` → refused;
+  `e3{a^p.b.c^-_}` → `{:p-b-c @[1 2]}` unchanged).
 
   **THE QUESTION IS ABOUT THE COLLAPSE FAMILY, NOT THE STAR.** A segment carries one
   operator suffix (`c^-*` is refused), so `*-` is `^-` composed with `*`, spelled as a
@@ -10208,7 +10228,7 @@ moves, `walk-to-leaf` is the abort it lands in.
 | **1b-v — the `*_` slice** 🔄 **A/B1/B1b/B2a + verify SHIPPED; B2b (the mint) remains** | [Q_U39](#q-u39)'s closer-adjacent **mint** (two bare sentinels, `$postfix-star-synth`) **+ `*_`'s SEMANTICS** — the shield lift, [Q_U51](#q-u51)'s prefix join, the **key threading** both twins skip, and the ω/broadcast Record arm's missing cont test. Scoped by [Q_U52](#q-u52): the mint alone would ship a better error message and leave Q_U51's capability non-existent. | The prefix rule is RULED and forced; the mint adds ONE spelling so the sentinel question collapses to two bare atoms. Record: [§5.P4e-1b-v](#p4e-1b-v) |
 | **1b-v-B2b — the reader MINT** ✅ `940c9c88` | Widen the gate's lexeme conjunct to EXACT table membership; route the emit through the same lookup ([DEFERRED 129](DEFERRED.md)); [DEFERRED 130](DEFERRED.md)'s two refusal messages ride along. **MINIMAL by ruling** — reader-only, so the three live bands cannot regress. Preconditions the grounding found: the battery's `p4e-star-type` / `p4e-last-star-type` helpers are exact-lexeme `"*"` and structurally blind to `*_` ([DEFERRED 133](DEFERRED.md)), and the DEFERRED-108 snapshot needs a deliberate re-baseline. | Scoped by [Q_U53](#q-u53) part 1: the miss-case is ruled out at the GATE, not handled at the emit. Record: [§5.P4e-1b-v-B2b](#p4e-1b-v-b2b) · shipped: [§5.P4e-1b-v-B2b-shipped](#p4e-1b-v-b2b-shipped) |
 | **1b-v-C — the FOLD** ✅ `24fc1be4` (pins) · `a492bbb7` | `split-star-lexeme`'s suffix dispatch AND the printer's cont→lexeme delegate to the family table, so the four bands and every star label share ONE semantic authority; site 3 (`form-deps`) DERIVED, site 4 (the matrix) PINNED. Behaviour-preserving on every input. | [Q_U53](#q-u53) part 2 + [Q_U54](#q-u54) (the printer folds too; site 3 derived, site 4 pinned). Record: [§5.P4e-1b-v-C](#p4e-1b-v-c) |
-| **1b-vi — the star-COLLAPSE slice** 🔄 (**opened 2026-10-13**, CIU 6 branch `ciu6-path-selection`; grounding: [audit](tracks/CIU/CIU_6/2026-10-13_CIU_6_P4e-1b-vi_GROUNDING_AUDIT.md); [Q_U55](#q-u55) ⬜ pending) | **`*-`** ([Q_U48](#q-u48)) · the **`*-_`** decision · the cont-axis **totality dispatcher** · plus TWO owed rulings [Q_U52](#q-u52) surfaced: what "total collapse" does to a **renamed** ancestor (`^p` and `^` are mutually exclusive spellings of one step), and the **`*->` token boundary** (`>` breaks the identifier, so `x{a*-> b}` would become a `*-` step plus a stray `>`). | Split from 1b-v because those two are RULINGS, not implementation, and because `*-` is the spelling that forces the totality work. ⭐ Sequenced AFTER the fold [owner] so ruling `*-` costs a table row, not four edits. |
+| **1b-vi — the star-COLLAPSE slice** 🔄 (**opened 2026-10-13**, CIU 6 branch `ciu6-path-selection`; grounding: [audit](tracks/CIU/CIU_6/2026-10-13_CIU_6_P4e-1b-vi_GROUNDING_AUDIT.md); [Q_U55](#q-u55) ✅ A — refuse, `^-` aligned) | **`*-`** ([Q_U48](#q-u48)) · the **`*-_`** decision · the cont-axis **totality dispatcher** · plus TWO owed rulings [Q_U52](#q-u52) surfaced: what "total collapse" does to a **renamed** ancestor (`^p` and `^` are mutually exclusive spellings of one step), and the **`*->` token boundary** (`>` breaks the identifier, so `x{a*-> b}` would become a `*-` step plus a stray `>`). | Split from 1b-v because those two are RULINGS, not implementation, and because `*-` is the spelling that forces the totality work. ⭐ Sequenced AFTER the fold [owner] so ruling `*-` costs a table row, not four edits. |
 | **P4e-2** | the `.*` retirement inventory + [Q_U26](#q-u26) ravel | unchanged |
 
 **⚠ TWO HOLES C2 OPENS, AND THEY ARE C2's TO CLOSE** — both found by the

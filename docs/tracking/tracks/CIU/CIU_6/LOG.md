@@ -112,3 +112,22 @@ are in [`../README.md`](../README.md).
 - **Next**: owner decision Q_U55; then the `*->` boundary (Q_U52 §2, reframed by F5: a message and a
   territory, zero programs at stake); then `*-_`'s prefix rule; then implementation, opening with the
   totality dispatcher's pins.
+
+### Q_U55 decided: A — a rename on an ancestor of a total collapse is refused, in BOTH collapse families; dissolve stays legal; provenance forms keep the rename — this commit (2026-10-13)
+- **Why / decision**: owner — *"I'm good with Option A (refuse) on Q_55. And that we fix `^-` to be in
+  line with the behavior as well, for consistency."* Recorded in D4's ledger
+  ([Q_U55](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u55)) with the reason (monotone waypoint;
+  the silent drop becomes a guided error; `^-` costs nothing to align — 0 uses, 0 pins) and the
+  implementation shape (a syntactic check in the shared branch walk, not typing; failing-first pins in
+  both families; the `^-` half lands in 1b-vi with the `*-` mint).
+- **Surprise / correction**: the rule turned out narrower than posed. Probe `probe-1bvi-g` shows
+  `^_` and the `^-` family are already refused on an ancestor ("attaches to the branch's LAST segment" /
+  "a LEAF continuation"), so the only spellable ancestor continuations are dissolve `^` (legal, redundant)
+  and rename `^k'` (refused under `*-`/`^-`/`^-k'`, legal under `^-_` and — pending — `*-_`).
+- **Also from this probe, for the `*->` question** (owner asked what `*->` denotes): it is not a
+  designed construct. It first appears in Q_U52 §2 (`783be940`, the 1b-v audit), as a token-boundary
+  hazard of the `*-` spelling: `-` continues an identifier and `>` does not, so a star glued to `->`
+  always lexes as `…*-` then `>`. Measured today: `spec s4 Nat *-> Nat` → "spec type for s4 has no
+  arrow"; `<(x : Nat)*- Nat>` → a bare "Type mismatch" (no lexical message), while the glued-Sigma
+  `<(x : Nat)* Nat>` gets Q_U31's guided "needs a SPACE" message.
+- **Next**: the `*->` handling (owner's call after the explanation), then `*-_`'s prefix rule.
