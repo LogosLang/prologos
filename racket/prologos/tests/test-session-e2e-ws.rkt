@@ -59,14 +59,17 @@
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
                  )
-    (process-file (build-path here "ws-session-e2e-01.prologos"))
-    ;; Greeting and Echo sessions should be registered
-    (check-true (session-entry? (lookup-session 'Greeting)))
-    (check-true (session-entry? (lookup-session 'Echo)))
-    ;; Greeting: Send String End
-    (define greeting-st (session-entry-session-type (lookup-session 'Greeting)))
-    (check-true (sess-send? greeting-st))
-    (check-true (sess-end? (sess-send-cont greeting-st)))))
+    ;; SW-27 (DEFERRED 160): the file's registrations live in its unit; read them there.
+    (process-file (build-path here "ws-session-e2e-01.prologos")
+      #:before-unit-exit
+      (λ ()
+        ;; Greeting and Echo sessions should be registered
+        (check-true (session-entry? (lookup-session 'Greeting)))
+        (check-true (session-entry? (lookup-session 'Echo)))
+        ;; Greeting: Send String End
+        (define greeting-st (session-entry-session-type (lookup-session 'Greeting)))
+        (check-true (sess-send? greeting-st))
+        (check-true (sess-end? (sess-send-cont greeting-st)))))))
 
 ;; ========================================
 ;; E2E-02: Offer + strategy
@@ -88,16 +91,19 @@
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
                  )
-    (process-file (build-path here "ws-session-e2e-02.prologos"))
-    ;; Server session
-    (define entry (lookup-session 'Server))
-    (check-true (session-entry? entry))
-    (define st (session-entry-session-type entry))
-    (check-true (sess-offer? st))
-    ;; Strategy registry
-    (check-true (strategy-entry? (lookup-strategy 'default)))
-    (check-true (strategy-entry? (lookup-strategy 'realtime)))
-    ;; Realtime strategy has overridden properties
-    (define rt (lookup-strategy 'realtime))
-    (check-equal? (hash-ref (strategy-entry-properties rt) ':fairness) ':priority)
-    (check-equal? (hash-ref (strategy-entry-properties rt) ':fuel) 10000)))
+    ;; SW-27 (DEFERRED 160): the file's registrations live in its unit; read them there.
+    (process-file (build-path here "ws-session-e2e-02.prologos")
+      #:before-unit-exit
+      (λ ()
+        ;; Server session
+        (define entry (lookup-session 'Server))
+        (check-true (session-entry? entry))
+        (define st (session-entry-session-type entry))
+        (check-true (sess-offer? st))
+        ;; Strategy registry
+        (check-true (strategy-entry? (lookup-strategy 'default)))
+        (check-true (strategy-entry? (lookup-strategy 'realtime)))
+        ;; Realtime strategy has overridden properties
+        (define rt (lookup-strategy 'realtime))
+        (check-equal? (hash-ref (strategy-entry-properties rt) ':fairness) ':priority)
+        (check-equal? (hash-ref (strategy-entry-properties rt) ':fuel) 10000)))))

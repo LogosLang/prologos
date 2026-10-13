@@ -177,12 +177,15 @@
                  [current-trait-laws (hasheq)])
     (define here (path->string (path-only (syntax-source #'here))))
     (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "algebra.prologos")))
-    (process-file file-path)
-    ;; All 4 properties should be registered
-    (check-true (property-entry? (lookup-property 'semigroup-laws)))
-    (check-true (property-entry? (lookup-property 'monoid-laws)))
-    (check-true (property-entry? (lookup-property 'functor-laws)))
-    (check-true (property-entry? (lookup-property 'commutative-add-laws)))))
+    ;; SW-27 (DEFERRED 160): the file's registrations live in its unit; read them there.
+    (process-file file-path
+      #:before-unit-exit
+      (λ ()
+        ;; All 4 properties should be registered
+        (check-true (property-entry? (lookup-property 'semigroup-laws)))
+        (check-true (property-entry? (lookup-property 'monoid-laws)))
+        (check-true (property-entry? (lookup-property 'functor-laws)))
+        (check-true (property-entry? (lookup-property 'commutative-add-laws)))))))
 
 (test-case "algebraic-laws: semigroup-laws has 1 clause"
   (parameterize ([current-spec-store (hasheq)]
@@ -193,10 +196,13 @@
                  [current-trait-laws (hasheq)])
     (define here (path->string (path-only (syntax-source #'here))))
     (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "algebra.prologos")))
-    (process-file file-path)
-    (define pe (lookup-property 'semigroup-laws))
-    (check-equal? (length (property-entry-clauses pe)) 1)
-    (check-equal? (property-clause-name (car (property-entry-clauses pe))) "associativity")))
+    ;; SW-27 (DEFERRED 160): the file's registrations live in its unit; read them there.
+    (process-file file-path
+      #:before-unit-exit
+      (λ ()
+        (define pe (lookup-property 'semigroup-laws))
+        (check-equal? (length (property-entry-clauses pe)) 1)
+        (check-equal? (property-clause-name (car (property-entry-clauses pe))) "associativity")))))
 
 (test-case "algebraic-laws: monoid-laws includes semigroup-laws"
   (parameterize ([current-spec-store (hasheq)]
@@ -207,10 +213,13 @@
                  [current-trait-laws (hasheq)])
     (define here (path->string (path-only (syntax-source #'here))))
     (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "algebra.prologos")))
-    (process-file file-path)
-    (define pe (lookup-property 'monoid-laws))
-    ;; Should have 1 include (semigroup-laws A)
-    (check-equal? (length (property-entry-includes pe)) 1)))
+    ;; SW-27 (DEFERRED 160): the file's registrations live in its unit; read them there.
+    (process-file file-path
+      #:before-unit-exit
+      (λ ()
+        (define pe (lookup-property 'monoid-laws))
+        ;; Should have 1 include (semigroup-laws A)
+        (check-equal? (length (property-entry-includes pe)) 1)))))
 
 (test-case "algebraic-laws: monoid-laws flatten yields 3 clauses"
   (parameterize ([current-spec-store (hasheq)]
@@ -221,13 +230,16 @@
                  [current-trait-laws (hasheq)])
     (define here (path->string (path-only (syntax-source #'here))))
     (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "algebra.prologos")))
-    (process-file file-path)
-    (define clauses (flatten-property 'monoid-laws))
-    ;; semigroup-laws/associativity + monoid-laws/left-identity + monoid-laws/right-identity
-    (check-equal? (length clauses) 3)
-    (check-equal? (property-clause-name (first clauses)) 'semigroup-laws/associativity)
-    (check-equal? (property-clause-name (second clauses)) 'monoid-laws/left-identity)
-    (check-equal? (property-clause-name (third clauses)) 'monoid-laws/right-identity)))
+    ;; SW-27 (DEFERRED 160): the file's registrations live in its unit; read them there.
+    (process-file file-path
+      #:before-unit-exit
+      (λ ()
+        (define clauses (flatten-property 'monoid-laws))
+        ;; semigroup-laws/associativity + monoid-laws/left-identity + monoid-laws/right-identity
+        (check-equal? (length clauses) 3)
+        (check-equal? (property-clause-name (first clauses)) 'semigroup-laws/associativity)
+        (check-equal? (property-clause-name (second clauses)) 'monoid-laws/left-identity)
+        (check-equal? (property-clause-name (third clauses)) 'monoid-laws/right-identity)))))
 
 (test-case "algebraic-laws: functor-laws has 2 clauses"
   (parameterize ([current-spec-store (hasheq)]
@@ -238,11 +250,14 @@
                  [current-trait-laws (hasheq)])
     (define here (path->string (path-only (syntax-source #'here))))
     (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "algebra.prologos")))
-    (process-file file-path)
-    (define pe (lookup-property 'functor-laws))
-    (check-equal? (length (property-entry-clauses pe)) 2)
-    (check-equal? (property-clause-name (first (property-entry-clauses pe))) "identity")
-    (check-equal? (property-clause-name (second (property-entry-clauses pe))) "composition")))
+    ;; SW-27 (DEFERRED 160): the file's registrations live in its unit; read them there.
+    (process-file file-path
+      #:before-unit-exit
+      (λ ()
+        (define pe (lookup-property 'functor-laws))
+        (check-equal? (length (property-entry-clauses pe)) 2)
+        (check-equal? (property-clause-name (first (property-entry-clauses pe))) "identity")
+        (check-equal? (property-clause-name (second (property-entry-clauses pe))) "composition")))))
 
 (test-case "algebraic-laws: commutative-add-laws has 1 clause"
   (parameterize ([current-spec-store (hasheq)]
@@ -253,7 +268,10 @@
                  [current-trait-laws (hasheq)])
     (define here (path->string (path-only (syntax-source #'here))))
     (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "algebra.prologos")))
-    (process-file file-path)
-    (define pe (lookup-property 'commutative-add-laws))
-    (check-equal? (length (property-entry-clauses pe)) 1)
-    (check-equal? (property-clause-name (car (property-entry-clauses pe))) "commutativity")))
+    ;; SW-27 (DEFERRED 160): the file's registrations live in its unit; read them there.
+    (process-file file-path
+      #:before-unit-exit
+      (λ ()
+        (define pe (lookup-property 'commutative-add-laws))
+        (check-equal? (length (property-entry-clauses pe)) 1)
+        (check-equal? (property-clause-name (car (property-entry-clauses pe))) "commutativity")))))
