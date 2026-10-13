@@ -1,0 +1,11 @@
+== M3: two writers, ior-merge cell, read-modify-write (set own bit)
+  undeclared outputs, ior merge            BSP=2  SEQ=6  expected(both updates)=6  LOST UPDATE under BSP
+  declared outputs,   ior merge            BSP=6  SEQ=6  expected(both updates)=6  OK
+== G: the guard shape — clear own bit of a worldview (bits 1,2 set = 6)
+  undeclared, LWW merge (as relations.rkt:2353)  BSP=4  SEQ=0  expected(both updates)=0  LOST UPDATE under BSP
+  DECLARED,   LWW merge (audit follow-up #1)     BSP=4  SEQ=0  expected(both updates)=0  LOST UPDATE under BSP
+== G': the lattice fix — an INVALIDATED-bits cell that only grows (ior); worldview = committed AND NOT invalidated
+  declared,   ior merge on invalidated bits       BSP=6  SEQ=6  expected(both updates)=6  OK
+== M4: a fire-once propagator, T raised 1→2→3 (fire-once ⇒ 1 productive fire, C stays 1)
+  installed at top level   BSP (fires 2 C 1 installs 1)  SEQ (fires 4 C 3 installs 1)
+  installed INSIDE a fire  BSP (fires 4 C 3 installs 1)  SEQ (fires 8 C 3 installs 2)
