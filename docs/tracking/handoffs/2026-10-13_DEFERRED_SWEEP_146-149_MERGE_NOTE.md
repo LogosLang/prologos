@@ -41,8 +41,8 @@ are all in use. **Commit messages up to and including `2792123c` use roman numer
 | SW-23 | A human-readable reader for the binary `.pnet` (owner request) | done `c6f8fff7`: `tools/pnet-dump.rkt`; main checkpoint 4 |
 | SW-24 | DEFERRED 169: keep the dependency graph current automatically, with minimal maintenance | DECIDED (owner); done `8fbaefb8` by DERIVING the graph (nothing stored); main checkpoint 5 |
 | SW-25 | The next batch is gate integrity: DEFERRED 170, 160, 81, 155 | DECIDED (owner); done — `e7cda107`, `51b6b1f9` + `922f6dd5`, `160ad2f6`, `51a24f4f` (§ SW-25) |
-| SW-26 | The batch after: silent wrong answers in the checker (DEFERRED 156 ⭐, 103 ⭐, 104, 120, 85, 86); who takes 156 (PPN 4C or the sweep) | PROPOSED — owner |
-| SW-27 | DEFERRED 160's fix shape: scope a program's registry state to its compilation unit (not restore; not FQN-keyed specs) | DECIDED (session, inside SW-25; reversible) — `51b6b1f9`; **for owner review before checkpoint 6** |
+| SW-26 | The batch after: silent wrong answers in the checker (DEFERRED 156 ⭐, 103 ⭐, 104, 120, 85, 86); who takes 156 | DECIDED (owner) for 156: **PPN 4C takes it** (it may resolve within that track; note in `tracks/PPN/PPN_4C/`); 103/104/120/85/86 not yet placed |
+| SW-27 | DEFERRED 160's fix shape: scope a program's registry state to its compilation unit (not restore; not FQN-keyed specs) | DECIDED (owner: "reasonable, for now") — `51b6b1f9`; **160 stays OPEN**: specs should be namespace-qualified, an architectural fix for PM 12B (free ordering) / PM 11 = PPN 8 (incremental) |
 
 ---
 
@@ -864,7 +864,7 @@ Owner: "let's work through the SW-25 batch". Five commits after `bac8c09c` (the 
 | item | commit | result |
 |---|---|---|
 | 170 temp-file race | `e7cda107` | 43 sites → `'truncate` (two in production code both censuses missed); `test-temp-file-hygiene.rkt` guard; `test-path-selection` sharded 2/3 failing → 5/5 passing |
-| 160 suite-only failures | `51b6b1f9`, `922f6dd5` | the leak was in the DRIVER; SW-27 below |
+| 160 suite-only failures | `51b6b1f9`, `922f6dd5` | the leak was in the DRIVER; SW-27 below — MITIGATED, still open (owner, below) |
 | 81 silent count drops | `160ad2f6` | instance = 161's mechanism (already fixed); the runner now prints `COUNT DROP` per file against its last recorded pass |
 | 155 benchmarks dirty the tree | `51a24f4f` | two writers of tracked baselines, not one; both write `data/benchmarks/runs/` |
 
@@ -890,3 +890,18 @@ for review before checkpoint 6 because it changes what `process-file` means to a
 Gate on the branch: 10 385 / 501, all pass, 12.5 s; delta against `e4e9e451` exactly +2 files / +11 tests
 (`test-temp-file-hygiene` 2, `test-file-unit-isolation` 5, `test-suite-plan` +4). Evidence:
 `handoffs/2026-10-13_SW25_DATA/`.
+
+### Owner decisions on SW-25's results (2026-10-13)
+
+- **SW-27 accepted for now; DEFERRED 160 stays open.** Owner: treating each program as self-contained is reasonable for
+  now, but properly speaking a `spec` should be fully qualified to its namespace, and a more complete solution falls into
+  the scope of incremental compilation and free ordering of modules — possibly several tracks' worth. 160's entry now
+  reads MITIGATED with that remainder, the roadmap rows that own it (PM Track 12B, `MASTER_ROADMAP.org:322`; PM Track 11
+  = PPN 8, `:56`, `:516`) and the questions that design must answer; the 2026-07-31 cross-file section likewise.
+  The owner's general point, recorded as practice: **many deferrals are like this** — a fix-around can remove the
+  symptom while the architectural take is still owed; such an entry stays open, names the remainder and the track that
+  owns it, and says which part the patch covers.
+- **156 → PPN 4C** (SW-26, for 156 only). Relayed by a note in that track's directory. Caveat recorded in 156 and in the
+  note: the fallback PPN 4C's A3 phase plans to retire is the only path that catches 156 today, so it resolves there only
+  if the on-network rules gain an operand contract.
+- **Checkpoint 6**: approved — § Checkpoint 6 below.

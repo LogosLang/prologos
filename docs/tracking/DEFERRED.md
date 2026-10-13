@@ -122,11 +122,12 @@ merge). It now DEFERS to preparse per the driver's own architecture comment —
 a structural single-implementation move with no demonstrated behavioral delta,
 claimed as exactly that. The defer is named scaffolding; it retires when the
 form-cell path grows a real let.
-## ✅ CLOSED `51b6b1f9` — Cross-FILE spec-store leakage within a batch worker (diagnosed 2026-07-31, LET P1 gate)
+## 🟡 MITIGATED `51b6b1f9` (SW-27) — Cross-FILE spec-store leakage within a batch worker (diagnosed 2026-07-31, LET P1 gate)
 
-> **Closed 2026-10-13 by SW-27 (DEFERRED 160).** The unforked box was one channel; the other was the DRIVER: registrations
+> **Mitigated 2026-10-13 by SW-27 (DEFERRED 160).** The unforked box was one channel; the other was the DRIVER: registrations
 > assign their parameters and `process-file` bound none, so it leaked in the LSP and any multi-program process too. Both
-> are now scoped per compilation unit — see 160's status. The history below is kept as found.
+> are now scoped per compilation unit. Still open (owner): specs keyed by bare name rather than by namespace — see 160.
+> The history below is kept as found.
 
 **Symptom**: `test-defn-multiarg-patterns.rkt` registered `(spec c Handle2 -1> Nat)`
 via `run-ns-ws-all`; `test-new-lattice-cell.rkt`, running LATER IN THE SAME
@@ -7039,7 +7040,7 @@ writers. **When**: any time. Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEAS
 (git-ignored); `--output PATH` re-records a baseline deliberately. Verified: the tracked files byte-identical after
 both ran; `runs/` ignored; `--output` honoured.
 
-### 156. ⬜ ⭐ ON-NETWORK INFERENCE ACCEPTS ILL-TYPED PRIMITIVE-OP OPERANDS — `[int+ 1 "x"] : Int`, `[f64+ "x" "y"] : Float64`, `[int-lt 1 "x"] : Bool`, `[from-nat "x"] : Int` all type-check
+### 156. ⬜ ⭐ → PPN 4C (owner, SW-26) — ON-NETWORK INFERENCE ACCEPTS ILL-TYPED PRIMITIVE-OP OPERANDS — `[int+ 1 "x"] : Int`, `[f64+ "x" "y"] : Float64`, `[int-lt 1 "x"] : Bool`, `[from-nat "x"] : Int` all type-check
 
 **Found by**: the LSP check-only diagnostics work (2026-10-13) — `[int+ k "x"]` printed as a
 stuck term `[int+ 3 "x"] : Int` instead of an error. **The mechanism**: every primitive op
@@ -7064,6 +7065,16 @@ mismatch is a contradiction on-network rather than a silently ignored child. Cen
 `register-typing-rule!` site with arity > 0 for the same gap. Regression pins: the probe
 expressions above must error in both `#:evaluate?` modes; `[int+ 1 2]` stays `Int`.
 **When**: soon — it is a correctness gap visible to every editor user.
+
+**Owner decision 2026-10-13 (SW-26): PPN 4C takes this** — it may resolve within that track. Relayed by a note in the
+PPN 4C track directory (`tracks/PPN/PPN_4C/2026-10-13_PPN_4C_NOTE_FROM_DEFERRED_SWEEP.md`, on its branch once that
+session commits it). Its natural home is the design's §6.4 *Aspect-coverage completion (A3, Phase 6)*
+(`tracks/PPN/PPN_4C/2026-04-17_PPN_TRACK4C_DESIGN.md`, "Problem: 76 `register-typing-rule!` entries vs ~326 `expr-*`
+structs"). **Caveat, from the mechanism above**: A3 aims to make the `infer/err` fallback reachable only for genuinely
+unrepresentable cases, and that fallback is the ONLY path that catches this hole today (`[f64+ (the Float64 1.0) "x"]`
+errors because `the` forces it). So 156 resolves inside PPN 4C only if the on-network rules gain an operand contract;
+retiring the fallback without one would make it worse (zero cases caught instead of some). The regression pins above
+should be in place before A3 retires anything.
 
 ### 157. ⬜ ⭐ BSP LOSES UPDATES TODAY: UNDECLARED WRITES BYPASS THE MERGE, AND THE RELATIONAL GUARD RETRACTS THROUGH A LAST-WRITER-WINS CELL — two failing guards in one round clear only ONE worldview bit, whether or not the output is declared
 
@@ -7164,7 +7175,7 @@ var. Two layers:
 for (b) is the self-check's two modes on this machine (limited vs no-limit build) and its false-positive rate
 at load ~25. **When**: before PAR 4 pins its baseline.
 
-### 160. ✅ **DISCHARGED `51b6b1f9` + `922f6dd5`** (SW-27: the leak was in the DRIVER — a program's registry state is now scoped to its compilation unit) — SUITE-ONLY FAILURES UNDER THE CURRENT RUNNER — a file fails inside `--all` and passes alone; 2 of 3 full runs at `fd2986cc` (`test-cond-01`: `Unbound variable classify`; `test-error-messages`: an annotated `Nat -> Nat` lambda "cannot infer the type of an unannotated parameter")
+### 160. 🟡 MITIGATED by SW-27 (`51b6b1f9` + `922f6dd5`: a program's registry state is scoped to its compilation unit) — **OPEN: specs are keyed by BARE name, not by namespace**; the architectural fix belongs to PM Track 12B (free ordering) and PM Track 11 = PPN 8 (incremental) — SUITE-ONLY FAILURES UNDER THE CURRENT RUNNER — a file fails inside `--all` and passes alone; 2 of 3 full runs at `fd2986cc` (`test-cond-01`: `Unbound variable classify`; `test-error-messages`: an annotated `Nat -> Nat` lambda "cannot infer the type of an unannotated parameter")
 
 Found during the DEFERRED 159 remedy: three full suites in main within 6 minutes (load 2–28), before
 and after the rebuild, so the build is not the cause.
@@ -7221,18 +7232,19 @@ the next suite baseline is pinned. A flaky gate makes every "all pass" probabili
   predecessor declares `(spec ok2 Nat -> Nat)` in `ns test` (`:286`); the victim's `defn ok2` in `ns t` is checked
   against it. **Mechanism established** — see § *Cross-FILE spec-store leakage* at the top of this file.
 
-**Status 2026-10-13 — discharged (SW-25 batch; decision SW-27, `51b6b1f9` + `922f6dd5`).** The open question in the
+**Status 2026-10-13 — mitigated, still open (SW-25 batch; decision SW-27, `51b6b1f9` + `922f6dd5`; see the owner's
+note below).** The open question in the
 mechanism note — "whether the driver itself (LSP, REPL) has an analogous leak" — was answered first, and it changed the
 fix: **the driver leaked too**, so this was a language bug, not only a harness artifact.
-- **Mechanism.** Registrations update their parameter by ASSIGNMENT (`register-spec!`, `macros.rkt:496`, and 16+ other
+- **Mechanism.** Registrations update their parameter by ASSIGNMENT (`register-spec!`, `macros.rkt:498`, and 16+ other
   registries), and `process-file-inner` seeds each file's registry cells from those parameters (`init-*-cells!`).
-  `process-file` bound none of them (`load-module` already scoped specs per module, `driver.rkt:3163`), so a top-level
+  `process-file` bound none of them (`load-module` already scoped specs per module, `driver.rkt:3208`), so a top-level
   program's registrations stayed in the process and seeded the next program's cells. test-support's one shared box
   was a second channel.
 - **User-visible, measured with no test code** (`process-file` as the LSP calls it): an editor re-check of ONE document
   after the user deleted `spec f` and annotated `f` inline failed "defn f has both a spec and inline type annotations"
   — the deleted spec still applied; and `spec ok2` in `ns test` broke a later `defn ok2` in `ns t` (this entry's
-  `test-error-messages` message). `racket driver.rkt a b` loops `process-file` the same way (`driver.rkt:3921`).
+  `test-error-messages` message). `racket driver.rkt a b` loops `process-file` the same way (`driver.rkt:3967`).
 - **Fix (SW-27, scope not restore).** `call-with-file-registry-scope` binds every parameter a unit's cells are seeded
   from and every cell id it assigns — 59: 24 registries + 24 cell ids (macros.rkt's ONE ordered list per family, from
   which the batch worker's save/restore are now derived), 3+3 warnings, 2+2 narrowing, the attribute-map id — to the
@@ -7248,6 +7260,19 @@ fix: **the driver leaked too**, so this was a language bug, not only a harness a
   an EARLIER program in the process (it did for LSP REPL evals after any document check, and for `run-ns` calls after
   any `run-ns-ws-file-all` in the same worker).
 - **Not covered: LSP REPL sessions** → DEFERRED 171.
+
+**Owner, 2026-10-13 — why this stays open.** SW-27 (each program self-contained) is reasonable for now. Properly
+speaking, a `spec` should be **fully qualified to its namespace**: today the spec store is keyed by the bare symbol
+(`macros.rkt:490` "symbol → spec-entry"; lookups by `bare-fname`, `elaborator.rkt:385`), so within ONE process unit two
+namespaces still share a key space — SW-27 removed the cross-PROGRAM channel, not the cross-NAMESPACE one. A complete
+solution falls into the scope of **incremental compilation** (PM Track 11, `MASTER_ROADMAP.org:56`, = PPN Track 8,
+`:516`) and **free ordering of modules** (PM Track 12B, `:322`, Stage-0 note
+`2026-06-06_PM_TRACK12B_FREE_ORDERING_ON_NETWORK.md`), and may take several tracks' worth of scope. Questions that
+design must answer, none measured here: what a spec's key is (FQN, or the namespace it is declared in); how a spec
+propagated from an import (`current-propagated-specs`) is named when two imports export the same bare name; and what
+replaces per-unit SCOPING once modules are elaborated in free order on one network — the unit boundary SW-27 relies
+on is exactly what free ordering dissolves. Until then: SW-27 holds per program, and DEFERRED 171 (REPL sessions) is
+the known gap in it.
 
 ### 161. ✅ **DISCHARGED `2999a74b` + `8014caef`** (branch `runner-queue-gate`, merged to main in `f6e530d7`) — A FILE THAT RUNS ZERO TESTS IS COUNTED AS A PASS — `test-generators.rkt` reported `PASS (0.0s)` with 0 tests in the first `--all` after a cold rebuild of `compiled/`; the INCOMPLETE check counts units that REPORTED, not units that RAN tests
 
