@@ -9318,3 +9318,282 @@
     (check-equal? (rf:postfix-star-cont->lexeme (cadr row)) (caddr row)
                   (format "row ~s round-trips cont → lexeme" row))))
 
+
+;; ===========================================================================
+;; ⭐⭐ D4.P4e-1b slice 1b-vi — THE STAR-COLLAPSE STAGE TABLE  (1b-vi-A)
+;; ===========================================================================
+;; [Q_U48] `*-` is total collapse · [Q_U55] a RENAME on an ancestor is refused
+;; under total collapse, in both families · [Q_U56] a glued `*->` gets a guided
+;; message in selection territory · [Q_U57] P: `*-_` names the whole collapsed
+;; path · [Q_U58] M (mark in the parser, act in the walkers) + the slicing
+;; A → B → C → D. D4 §5.P4e-1b-vi states the semantics once; every row tests it.
+;;
+;; ONE ROW PER BEHAVIOUR: (ID SPELLING FLIPS-AT PRE TARGET)
+;;   FLIPS-AT  the sub-slice whose code makes TARGET true ('B or 'D), or #f for
+;;             a CONTROL (PRE holds forever; TARGET is #f).
+;;   PRE / TARGET — an expectation:
+;;     (same EQUIV TYPE)  the spelling's line equals EQUIV's line, and EQUIV —
+;;                        today's spelling of the same meaning — is a VALUE whose
+;;                        type renders exactly TYPE. The expected answer is
+;;                        MEASURED from today's code (probe `probe-1bvi-p`),
+;;                        never written by hand.
+;;     (line LIT)         the line is exactly LIT.
+;;     (refused RXS NOT-RXS) a counted error (`prologos-error?`, never a
+;;                        string test — a message can contain " : ") whose
+;;                        message matches every RX and no NOT-RX.
+;;     midlex / postfix / unbound  the three PRE-MINT refusal classes, measured.
+;;
+;; WHY A STAGE CONSTANT AND NOT PARKED COMMENTS. This battery's earlier slices
+;; parked their failing pins as COMMENTS (:7793, :8822). Parked text is never
+;; read by the compiler: one parked pin carried an invalid `\*` escape that would
+;; have stopped the battery from READING when un-parked (D4 §5.P4e-1b-v). Here
+;; every target is compiled and executed on every run — the rows ahead of the
+;; stage are asserted to FAIL their target, which is both the non-vacuity proof
+;; (DR-4) and the proof that 1b-vi-C's machinery stays inert. Bumping
+;; `1bvi-stage` is the FIRST edit of each sub-slice: exactly that sub-slice's
+;; rows go red before its code exists.
+;; ⚠ SCAFFOLDING, retired at the 1b-vi close: delete `1bvi-stage` and the PRE
+;; column then (D4 §5.P4e-1b-vi).
+;; ⚠ D flips four pins OUTSIDE this table, which predate it: :6194, :6195
+;; (`p4e-star-type` → 'symbol), :8470 (the table is exactly two rows), :8482
+;; (`"*-"` has no sentinel).
+;; ===========================================================================
+
+(define 1bvi-stage 'A)
+(define 1bvi-stage-order '(A B C D))
+(define (1bvi-reached? s)
+  (and s (<= (index-of 1bvi-stage-order s) (index-of 1bvi-stage-order 1bvi-stage))))
+
+;; ⚠ Subjects avoid the `s`+digit shape (DEFERRED 122).
+(define 1bvi-fixtures
+  (string-append
+   "ns p4e1bvi\n"
+   "def app := {:server {:ssl {:enabled true :cert \"c.pem\"} :port 8080} :database {:url \"db\" :pool-size 10}}\n"
+   "def env := {:prod {:db {:url \"p-url\" :port 5432}} :dev {:db {:url \"d-url\" :port 5433}}}\n"
+   "def cloud := {:regions {:eu {:host \"e\" :port 443} :us {:host \"u\" :port 8443}}}\n"
+   "def t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}\n"
+   "def vv := {:a {:b @[@[1 2] @[3]]}}\n"
+   "def v3 := {:a {:b {:c @[@[1 2] @[3]]}}}\n"
+   "def e3 := {:a {:b {:c @[1 2]}}}\n"
+   "def rm := {:eu {:cfg {:x 1}} :us {:cfg {:x 2}}}\n"
+   "def deep := {:top {:eu {:cfg {:x 1}} :us {:cfg {:x 2}}}}\n"
+   "def hz := {:a {:b {:c-d 1}} :a-b {:c {:d 2}}}\n"
+   "def mn := {:a {:x 1} :b {:y 2}}\n"))
+(define 1bvi-fixture-count 11)
+
+(define 1bvi-rows
+  '(;; ---- E1–E10 under `*-` [Q_U48]: ≡ dissolve every ancestor, then `*`
+    ("E1-"  "app{database*-}"              D midlex  (same "app{database*}" "{:pool-size Int :url String}"))
+    ("E2-"  "app{server.ssl*-}"            D midlex  (same "app{server^.ssl*}" "{:cert String :enabled Bool}"))
+    ("E3-"  "env{prod.db*- dev.db*-}"      D midlex  (refused (#rx"duplicate output key `:port`") ()))
+    ("E4-"  "cloud{regions:{host port}*-}" D postfix (refused (#rx"`:\\{host port\\}\\*-`" #rx"carry the same key")
+                                                              (#rx"`\\*` \\(flatten\\)")))
+    ("E5-"  "app{server^srv.ssl*-}"        D midlex  (refused (#rx"`srv` can never appear under a total collapse"
+                                                               #rx"Drop `\\^srv`" #rx"keep the level") ()))
+    ("E6-"  "app{server^.ssl*-}"           D midlex  (same "app{server^.ssl*}" "{:cert String :enabled Bool}"))
+    ("E7-"  "t5{a.b.c*-}"                  D midlex  (same "t5{a^.b^.c*}" "{:m {:x Int} :n {:y Int}}"))
+    ("E8-"  "vv{a.b*-}"                    D midlex  (same "vv{a^.b*}" "⟨[PVec [PVec Int]]⟩"))
+    ("E9-"  "app{server.ssl*- server.port}" D midlex (same "app{server^.ssl* server.port}"
+                                                           "{:cert String :enabled Bool :server {:port Int}}"))
+    ("E10-" "env{prod dev}*-"              D unbound (refused (#rx"^select: `\\*-` — " #rx"carry the same key")
+                                                              (#rx"`\\*` \\(flatten\\)")))
+    ;; ---- E1–E10 under `*-_` [Q_U57 P]: ≡ every lifted field written with `^-_`
+    ("E1_"  "app{database*-_}"             D midlex  (same "app{database*_}" "{:database-pool-size Int :database-url String}"))
+    ("E2_"  "app{server.ssl*-_}"           D midlex  (same "app{server.ssl.enabled^-_ server.ssl.cert^-_}"
+                                                           "{:server-ssl-cert String :server-ssl-enabled Bool}"))
+    ("E3_"  "env{prod.db*-_ dev.db*-_}"    D midlex  (same "env{prod.db.url^-_ prod.db.port^-_ dev.db.url^-_ dev.db.port^-_}"
+                                                           "{:dev-db-port Int :dev-db-url String :prod-db-port Int :prod-db-url String}"))
+    ("E4_"  "cloud{regions:{host port}*-_}" D postfix (same "cloud{regions.eu.host^-_ regions.eu.port^-_ regions.us.host^-_ regions.us.port^-_}"
+                                                            "{:regions-eu-host String :regions-eu-port Int :regions-us-host String :regions-us-port Int}"))
+    ("E5_"  "app{server^srv.ssl*-_}"       D midlex  (same "app{server^srv.ssl.enabled^-_ server^srv.ssl.cert^-_}"
+                                                           "{:srv-ssl-cert String :srv-ssl-enabled Bool}"))
+    ("E6_"  "app{server^.ssl*-_}"          D midlex  (same "app{server^.ssl.enabled^-_ server^.ssl.cert^-_}"
+                                                           "{:ssl-cert String :ssl-enabled Bool}"))
+    ("E7_"  "t5{a.b.c*-_}"                 D midlex  (same "t5{a.b.c.m^-_ a.b.c.n^-_}" "{:a-b-c-m {:x Int} :a-b-c-n {:y Int}}"))
+    ("E8_"  "vv{a.b*-_}"                   D midlex  (refused (#rx"`b\\*-_`" #rx"no fields to prefix" #rx"Use bare `\\*-`") ()))
+    ("E9_"  "app{server.ssl*-_ server.port}" D midlex (same "app{server.ssl.enabled^-_ server.ssl.cert^-_ server.port}"
+                                                            "{:server {:port Int} :server-ssl-cert String :server-ssl-enabled Bool}"))
+    ("E10_" "env{prod dev}*-_"             D unbound (same "env{prod dev}*_" "{:dev-db {:port Int :url String} :prod-db {:port Int :url String}}"))
+    ;; ---- depth, vectors, sub-blocks, ω, the hyphen clash
+    ("X-v3"     "v3{a.b.c*-}"              D midlex  (same "v3{a^.b^.c*}" "⟨[PVec [PVec Int]]⟩"))
+    ("X-sub-"   "t5{a.{b.c*-}}"            D midlex  (same "t5{a.{b^.c*}}" "{:a {:m {:x Int} :n {:y Int}}}"))
+    ("X-sub_"   "t5{a.{b.c*-_}}"           D midlex  (same "t5{a.{b.c.m^-_ b.c.n^-_}}" "{:a {:b-c-m {:x Int} :b-c-n {:y Int}}}"))
+    ("X-omega-" "deep{top:cfg*-}"          D midlex  (refused (#rx"`:cfg\\*-`" #rx"carry the same key") (#rx"`\\*` \\(flatten\\)")))
+    ;; block-position ω KEEPS the projected key — measured, not derived (probe-1bvi-l)
+    ("X-omega_" "deep{top:cfg*-_}"         D midlex  (same "deep{top.eu.cfg^-_ top.us.cfg^-_}" "{:top-eu-cfg {:x Int} :top-us-cfg {:x Int}}"))
+    ("X-hyphen" "hz{a.b*-_ a-b.c*-_}"      D midlex  (refused (#rx"duplicate output key `?:a-b-c-d") ()))
+    ;; ---- path position: no step has an output key, so nothing collapses or is named (derived)
+    ("X-dot-"   "app.server.ssl*-"         D midlex  (same "app.server.ssl*" "{:cert String :enabled Bool}"))
+    ("X-dot_"   "app.server.ssl*-_"        D midlex  (same "app.server.ssl*_" "{:ssl-cert String :ssl-enabled Bool}"))
+    ("X-wpath-" "rm:cfg*-"                 D midlex  (refused (#rx"`:cfg\\*-`" #rx"carry the same key") (#rx"`\\*` \\(flatten\\)")))
+    ("X-wpath_" "rm:cfg*-_"                D midlex  (same "rm:cfg*_" "{:eu-x Int :us-x Int}"))
+    ;; ---- [Q_U56]: the glued arrow in selection territory; type territory is a PREDICTION
+    ("X-arrow"  "mn{a*-> b}"               D midlex  (refused (#rx"`\\*->` reads as `\\*-` then `>`") ()))
+    ("X-type"   "<(x : Nat)*- Nat>"        D unbound (refused (#rx"needs a SPACE") ()))
+    ;; ---- [Q_U55], caret half (1b-vi-B): a rename on an ancestor of `^-` / `^-k'`
+    ("C1" "e3{a^p.b.c^-}"   B (line "{:c @[1 2]} : {:c [PVec Int]}")
+                              (refused (#rx"`p` can never appear under a total collapse" #rx"Drop `\\^p`" #rx"keep the level") ()))
+    ("C2" "e3{a^p.b.c^-q}"  B (line "{:q @[1 2]} : {:q [PVec Int]}")
+                              (refused (#rx"`p` can never appear under a total collapse" #rx"Drop `\\^p`" #rx"keep the level") ()))
+    ("C3" "e3{a.b^q.c^-}"   B (line "{:c @[1 2]} : {:c [PVec Int]}")
+                              (refused (#rx"`q` can never appear under a total collapse" #rx"Drop `\\^q`" #rx"keep the level") ()))
+    ("C4" "e3{a^p.b^.c^-}"  B (line "{:c @[1 2]} : {:c [PVec Int]}")
+                              (refused (#rx"`p` can never appear under a total collapse" #rx"Drop `\\^p`" #rx"keep the level") ()))
+    ;; …and the star half (1b-vi-D), the immediate parent
+    ("C5" "t5{a.b^q.c*-}"   D midlex
+                              (refused (#rx"`q` can never appear under a total collapse" #rx"Drop `\\^q`" #rx"keep the level") ()))
+    ;; ---- CONTROLS: a dissolve stays legal; a provenance form keeps the rename
+    ("K1" "e3{a^.b.c^-}"     #f (line "{:c @[1 2]} : {:c [PVec Int]}") #f)
+    ("K2" "e3{a^p.b.c^-_}"   #f (line "{:p-b-c @[1 2]} : {:p-b-c [PVec Int]}") #f)
+    ("K3" "e3{a^p.b^q.c^-_}" #f (line "{:p-q-c @[1 2]} : {:p-q-c [PVec Int]}") #f)))
+
+(define (1bvi-row-id r) (list-ref r 0))
+(define (1bvi-row-spelling r) (list-ref r 1))
+(define (1bvi-row-flips r) (list-ref r 2))
+(define (1bvi-row-pre r) (list-ref r 3))
+(define (1bvi-row-target r) (list-ref r 4))
+
+;; the three pre-mint refusal classes, measured at `8d404681` (probe-1bvi-p)
+(define (1bvi-expand e)
+  (case e
+    [(midlex)  '(refused (#rx"is neither a field nor an operator") ())]
+    [(postfix) '(refused (#rx"`\\*` is postfix; it attaches to the END of a segment") ())]
+    [(unbound) '(refused (#rx"^Unbound variable$") ())]
+    [else e]))
+
+;; One line per result. An error is a STRUCT test, never a string test.
+(define (1bvi-line r)
+  (if (prologos-error? r)
+      (string-append "ERROR: " (format "~a" (prologos-error-message r)))
+      (format "~a" r)))
+
+;; → (cons 'ok lines) or (cons 'bad reason). Fails CLOSED: a raise, a fixture
+;; that did not load (every later line would read `Unbound variable`, which the
+;; `unbound` class would then accept — the false green noted at :117), or a
+;; result count that does not match the command count (rows would misalign).
+(define 1bvi-cache (make-hash))
+(define (1bvi-batch level forms)
+  (hash-ref!
+   1bvi-cache (cons level forms)
+   (lambda ()
+     (define src (string-append 1bvi-fixtures (string-join forms "\n") "\n"))
+     (define rs
+       (with-handlers ([exn:fail? (lambda (e) (exn-message e))])
+         (case level
+           [(file) (run-ws-raw src)]
+           [(string) (process-string-ws src)])))
+     (cond
+       [(string? rs) (cons 'bad (format "the ~a batch RAISED — a whole-file abort: ~a" level rs))]
+       [(not (= (length rs) (+ 1bvi-fixture-count (length forms))))
+        (cons 'bad (format "the ~a batch returned ~a results for ~a fixtures + ~a forms"
+                           level (length rs) 1bvi-fixture-count (length forms)))]
+       [(ormap prologos-error? (take rs 1bvi-fixture-count))
+        (cons 'bad (format "a ~a fixture failed to load: ~a" level
+                           (map 1bvi-line (filter prologos-error? (take rs 1bvi-fixture-count)))))]
+       [else (cons 'ok (map 1bvi-line (drop rs 1bvi-fixture-count)))]))))
+
+(define (1bvi-spellings) (map 1bvi-row-spelling 1bvi-rows))
+(define (1bvi-equivs)
+  (remove-duplicates
+   (for*/list ([r (in-list 1bvi-rows)]
+               [e (in-list (list (1bvi-row-pre r) (1bvi-row-target r)))]
+               #:when (and (pair? e) (eq? (car e) 'same)))
+     (cadr e))))
+
+(define (1bvi-type-of line)
+  (let ([m (regexp-match #rx"^.* : (.*)$" line)]) (and m (cadr m))))
+
+;; does LINE satisfy expectation E? → #t, or a string saying why not
+(define (1bvi-holds? e line equiv-line)
+  (match-1bvi (1bvi-expand e) line equiv-line))
+(define (match-1bvi e line equiv-line)
+  (case (car e)
+    [(line) (or (equal? line (cadr e)) (format "expected the line ~s" (cadr e)))]
+    [(refused)
+     (cond
+       [(not (regexp-match? #rx"^ERROR: " line)) "expected a refusal (a counted error)"]
+       [else
+        (let ([msg (substring line 7)])
+          (or (for/or ([rx (in-list (cadr e))])
+                (and (not (regexp-match? rx msg)) (format "the message must match ~s" rx)))
+              (for/or ([rx (in-list (caddr e))])
+                (and (regexp-match? rx msg) (format "the message must NOT match ~s" rx)))
+              #t))])]
+    [(same)
+     (cond
+       [(not equiv-line) (format "no output for the equivalent ~s" (cadr e))]
+       [(regexp-match? #rx"^ERROR: " equiv-line)
+        (format "the equivalent ~s is REFUSED today (~a) — the expected value is lost" (cadr e) equiv-line)]
+       [(not (equal? (1bvi-type-of equiv-line) (caddr e)))
+        (format "the equivalent ~s now has type ~s, pinned ~s" (cadr e) (1bvi-type-of equiv-line) (caddr e))]
+       [(not (equal? line equiv-line)) (format "expected the equivalent's line ~s" equiv-line)]
+       [else #t])]
+    [else (format "unknown expectation ~s" e)]))
+
+;; ⚠ ONE test-case, ONE check, for the whole table — deliberately. The batch
+;; cache is per process and the runner shards a file's test-cases round-robin
+;; (`tools/suite-plan.rkt:121`), so two test-cases reading the batches paid for
+;; them once per shard: measured +8.3 s on the battery (92.1 → 100.3 s summed) with
+;; the first cut's two test-cases. And rackunit stops a test-case at its first
+;; failing check, so a single combined problem list is also what lets a red run
+;; name EVERY failing row, every unusable batch and every level disagreement.
+(test-case "1b-vi-A: the stage table — batches usable, level 2 ≡ level 3, every row holds at its stage, every row ahead still FAILS its target"
+  (define f (1bvi-batch 'file (1bvi-spellings)))
+  (define s (1bvi-batch 'string (1bvi-spellings)))
+  (define q (1bvi-batch 'file (1bvi-equivs)))
+  (define batch-problems
+    (append
+     (if (memq 1bvi-stage 1bvi-stage-order) '() (list (format "unknown stage ~s" 1bvi-stage)))
+     (for/list ([b (in-list (list f s q))]
+                [what (in-list '("spellings, level 3" "spellings, level 2" "equivalents, level 3"))]
+                #:unless (eq? (car b) 'ok))
+       (format "~a: ~a" what (cdr b)))))
+  (define level-problems
+    (if (and (eq? (car f) 'ok) (eq? (car s) 'ok))
+        (for/list ([r (in-list 1bvi-rows)] [a (in-list (cdr f))] [b (in-list (cdr s))]
+                   #:unless (equal? a b))
+          (format "[~a] ~a reads differently at level 2 (`process-string-ws`) and level 3 (a `.prologos` file): ~a | ~a"
+                  (1bvi-row-id r) (1bvi-row-spelling r) b a))
+        '()))
+  (define row-problems
+    (if (and (eq? (car f) 'ok) (eq? (car q) 'ok))
+        (let* ([eqv (for/hash ([e (in-list (1bvi-equivs))] [l (in-list (cdr q))]) (values e l))]
+               [equiv-of (lambda (e)
+                           (let ([x (1bvi-expand e)])
+                             (and (pair? x) (eq? (car x) 'same) (hash-ref eqv (cadr x) #f))))])
+          (for*/list ([(r line) (in-parallel (in-list 1bvi-rows) (in-list (cdr f)))]
+                      [p (in-value
+                          (let* ([live? (1bvi-reached? (1bvi-row-flips r))]
+                                 [now (if live? (1bvi-row-target r) (1bvi-row-pre r))]
+                                 [held (1bvi-holds? now line (equiv-of now))])
+                            (cond
+                              [(not (eq? held #t))
+                               (format "[~a] ~a — ~a (~a); observed: ~a"
+                                       (1bvi-row-id r) (1bvi-row-spelling r)
+                                       (if live? "TARGET" "PRE") held line)]
+                              ;; non-vacuity: a row not yet live must FAIL its target
+                              [(and (not live?) (1bvi-row-target r)
+                                    (eq? #t (1bvi-holds? (1bvi-row-target r) line
+                                                         (equiv-of (1bvi-row-target r)))))
+                               (format "[~a] ~a — its TARGET already holds before stage ~a: the row is vacuous, or ~a's code leaked early; observed: ~a"
+                                       (1bvi-row-id r) (1bvi-row-spelling r)
+                                       (1bvi-row-flips r) (1bvi-row-flips r) line)]
+                              [else #f])))]
+                      #:when p)
+            p))
+        '()))
+  (define problems (append batch-problems level-problems row-problems))
+  (check-equal? problems '()
+                (format "stage ~a: ~a problem(s) over ~a rows:\n~a" 1bvi-stage (length problems)
+                        (length 1bvi-rows) (string-join problems "\n"))))
+
+(test-case "1b-vi-A: the table is well-formed — ids unique, every flipping row's PRE differs from its TARGET"
+  (define ids (map 1bvi-row-id 1bvi-rows))
+  (check-equal? (length ids) (length (remove-duplicates ids)) "duplicate row id")
+  (for ([r (in-list 1bvi-rows)])
+    (define fl (1bvi-row-flips r))
+    (check-true (or (not fl) (and (memq fl 1bvi-stage-order) #t)) (format "[~a] flips-at ~s" (1bvi-row-id r) fl))
+    (if fl
+        (check-not-equal? (1bvi-expand (1bvi-row-pre r)) (1bvi-row-target r)
+                          (format "[~a] PRE = TARGET: the flip is vacuous" (1bvi-row-id r)))
+        (check-false (1bvi-row-target r) (format "[~a] a control carries no TARGET" (1bvi-row-id r))))))

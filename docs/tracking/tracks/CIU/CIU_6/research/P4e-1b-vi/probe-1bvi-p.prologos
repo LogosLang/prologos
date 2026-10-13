@@ -1,0 +1,85 @@
+ns probe-1bvi-p
+def app := {:server {:ssl {:enabled true :cert "c.pem"} :port 8080} :database {:url "db" :pool-size 10}}
+def env := {:prod {:db {:url "p-url" :port 5432}} :dev {:db {:url "d-url" :port 5433}}}
+def cloud := {:regions {:eu {:host "e" :port 443} :us {:host "u" :port 8443}}}
+def t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}
+def vv := {:a {:b @[@[1 2] @[3]]}}
+def v3 := {:a {:b {:c @[@[1 2] @[3]]}}}
+def e3 := {:a {:b {:c @[1 2]}}}
+def rm := {:eu {:cfg {:x 1}} :us {:cfg {:x 2}}}
+def deep := {:top {:eu {:cfg {:x 1}} :us {:cfg {:x 2}}}}
+def hz := {:a {:b {:c-d 1}} :a-b {:c {:d 2}}}
+def mn := {:a {:x 1} :b {:y 2}}
+;; --- spellings (today's reading = the pre-mint state)
+app{database*-}
+app{server.ssl*-}
+env{prod.db*- dev.db*-}
+cloud{regions:{host port}*-}
+app{server^srv.ssl*-}
+app{server^.ssl*-}
+t5{a.b.c*-}
+vv{a.b*-}
+app{server.ssl*- server.port}
+env{prod dev}*-
+app{database*-_}
+app{server.ssl*-_}
+env{prod.db*-_ dev.db*-_}
+cloud{regions:{host port}*-_}
+app{server^srv.ssl*-_}
+app{server^.ssl*-_}
+t5{a.b.c*-_}
+vv{a.b*-_}
+app{server.ssl*-_ server.port}
+env{prod dev}*-_
+v3{a.b.c*-}
+t5{a.{b.c*-}}
+t5{a.{b.c*-_}}
+deep{top:cfg*-}
+deep{top:cfg*-_}
+hz{a.b*-_ a-b.c*-_}
+app.server.ssl*-
+app.server.ssl*-_
+rm:cfg*-
+rm:cfg*-_
+mn{a*-> b}
+<(x : Nat)*- Nat>
+e3{a^p.b.c^-}
+e3{a^p.b.c^-q}
+e3{a.b^q.c^-}
+e3{a^p.b^.c^-}
+t5{a.b^q.c*-}
+e3{a^.b.c^-}
+e3{a^p.b.c^-_}
+e3{a^p.b^q.c^-_}
+;; --- equivalents (today's spelling of the target meaning)
+app{database*}
+app{server^.ssl*}
+env{prod^.db* dev^.db*}
+cloud{regions^:{host port}*}
+app{server^.ssl*}
+t5{a^.b^.c*}
+vv{a^.b*}
+app{server^.ssl* server.port}
+env{prod dev}*
+app{database*_}
+app{server.ssl.enabled^-_ server.ssl.cert^-_}
+env{prod.db.url^-_ prod.db.port^-_ dev.db.url^-_ dev.db.port^-_}
+cloud{regions.eu.host^-_ regions.eu.port^-_ regions.us.host^-_ regions.us.port^-_}
+app{server^srv.ssl.enabled^-_ server^srv.ssl.cert^-_}
+app{server^.ssl.enabled^-_ server^.ssl.cert^-_}
+t5{a.b.c.m^-_ a.b.c.n^-_}
+vv{a.b*_}
+app{server.ssl.enabled^-_ server.ssl.cert^-_ server.port}
+env{prod dev}*_
+v3{a^.b^.c*}
+t5{a.{b^.c*}}
+t5{a.{b.c.m^-_ b.c.n^-_}}
+deep{top^:cfg*}
+deep{top.eu.cfg^-_ top.us.cfg^-_}
+hz{a.b.c-d^-_ a-b.c.d^-_}
+app.server.ssl*
+app.server.ssl*_
+rm:cfg*
+rm:cfg*_
+<(x : Nat)* Nat>
+t5{a.b^q.c*}
