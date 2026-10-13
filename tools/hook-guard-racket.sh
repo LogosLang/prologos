@@ -447,6 +447,6 @@ Running the test suite? Use the runner that owns its own workers and timeouts:
 
 Anything else that must call racket directly needs an explicit bound:
 
-    timeout -k 30 300 \"/Applications/Racket v9.0/bin/racket\" ...
+    timeout -k 30 300 \"/Applications/Racket v9.3/bin/racket\" ...
 
 See .claude/rules/testing.md § \"Running the compiler OUTSIDE the suite\"."
