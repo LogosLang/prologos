@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 167**
+> ### **NEXT FREE: 168**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7363,3 +7363,39 @@ deliberately.
 probe `lock-probe.sh` (+ `lock-inherit.rkt`, `lock-try.rkt`; racket-performance-probing skill `scripts/`): when a lock-holding parent is SIGKILLed, another process can take the lock at once, while
 the child it spawned is still running. A SIGKILLed runner therefore frees the queue while its orphaned workers finish
 their current unit (they exit at stdin EOF). That is a bounded window of contention, and only after a crash.
+
+### 167. ⬜ L1 FUSION FAILS IN BLOCK POSITION — `w4{a:b:c}` errors where the path form `w4.a:b:c` gives `@[1 2]`; zero pins anywhere for an in-block fused ω chain, and the error message is wrong under every reading
+
+**Found by** the CIU 6 1b-vi grounding audit (2026-10-13, branch `ciu6-path-selection` @ `01ef2542` = main), while
+working out what "total collapse" (`*-`, D4 Q_U48) would do to a broadcast ancestor. Probe
+`docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/probe-1bvi-f.prologos` (on the branch until the next checkpoint
+merge; output beside it), run with `tools/scratch-run.sh`:
+
+| input | result |
+|---|---|
+| `uu.a:0:userName` (path) | `@["L" "J"] : [PVec String]` |
+| `uu{a:0:userName}` (block) | ERROR — "broadcast `:userName` fails on every element — … the subject (branch `a.0`) is a tuple (nat-keyed row); a keyed block selects NAMED fields …" |
+| `w4.a:b:c` (path) | `@[1 2] : [PVec Int]` |
+| `w4{a:b:c}` (block) | ERROR — "broadcast `:c` fails on every element — … field :c is not present in the record {:b {:c Int}}; available fields: :b; in the select branch `a.b.c` …" |
+| `w4{a:{b.c}}`, `w4{a:b}` (block) | `{:a @[{:b {:c 1}} {:b {:c 2}}]}` |
+
+(`uu := {:a @[@[{:userName "L"}] @[{:userName "J"}]]}`, `w4 := {:a @[{:b {:c 1}} {:b {:c 2}}]}`.)
+
+**Mechanism — not traced; read from the message only (conjecture).** The second ω step is looked up in the ORIGINAL
+element (`:c` in `{:b {:c Int}}`), i.e. the in-block walk does not compose the chain the way the path walk does. The
+spec states L1 unconditionally (`docs/research/2026-07-28_path-selection-spec.md` §3.2.2 and §4 L1: `x:f:g` ≡ mapping
+the composite). The battery pins L1 three times, all in PATH position (`tests/test-path-selection.rkt` test-cases
+"P4c-4c: L1 FUSION is a THEOREM", "P4d-s1: L1 fusion holds across row layers", "P4d-s4a: L1 FUSION as a theorem").
+`grep -E '[a-z0-9]+\{[a-z]+:[a-z0-9]+:[a-z0-9]+'` over D4, this file and the battery finds no in-block chain at all.
+What a fused in-block chain SHOULD return (per-element projection keeps keys: `{:a @[{:b {:c 1}} …]}`, the same as
+`w4{a:{b.c}}`) is itself unstated — a decision, not only a fix. Under any reading the message is wrong: it names a
+field `:c` the user never asked of that record, and renders the branch as `a.b.c`, a spelling that means something else.
+
+**Fix shape**: decide the in-block meaning of `x{a:b:c}` (projection along the composite, keyed per element — the
+recommended reading, since it agrees with the sub-block spelling `a:{b.c}`), then compose the chain in the block walk
+(typing and reduction twins) and pin L1 in block position beside the three path pins. Until then a guided refusal
+naming the sub-block spelling is the monotone waypoint.
+
+**When**: before CIU 6 P5 (Ruling B + factoring — L2's normal form assumes L1 holds wherever an ω step can be
+written). It also bounds D4 Q_U52 §1's broadcast-ancestor question: inside one branch, the steps after an ω step are
+further fused ω steps or a sub-block, so an ω ancestor under a deep star is unobservable until this lands.
