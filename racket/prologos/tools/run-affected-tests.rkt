@@ -376,6 +376,9 @@
     (define report (make-wait-reporter mode lock-path))
     (define waited? #f)
     (define t-wait (current-inexact-milliseconds))
+    ;; DEFERRED 166 (SW-20): say where this run queues, and warn when an
+    ;; inherited PROLOGOS_SUITE_LOCK took it out of the machine-wide queue.
+    (for ([line (in-list (suite-lock-banner mode lock-path))]) (printf "~a\n" line))
     (call-with-suite-lock
      mode
      (lambda ()
@@ -1359,6 +1362,8 @@
                 [incomplete? (format "INCOMPLETE — ~a" incomplete-reason)]
                 [all-pass? "all pass"]
                 [else (format "~a FAILURES" (length failed-files))]))
+  ;; DEFERRED 166 (SW-20): repeat the override warning where the eye lands.
+  (let ([w (suite-lock-override-warning)]) (when w (printf "~a\n" w)))
   (for ([r (in-list stale-test-free)])
     (printf "NOTE: ~a is declared test-free (suite-plan.rkt TEST-FREE-FILES) but ran ~a tests — remove the declaration.\n"
             (unit-name r) (hash-ref r 'tests 0)))

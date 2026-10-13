@@ -572,6 +572,7 @@
            (reverse (file-list))))
      ;; A timing run: the machine-wide suite lock, EXCLUSIVELY (suite-lock.rkt).
      (define lock-path (suite-lock-path))
+     (for ([line (in-list (suite-lock-banner 'exclusive lock-path))]) (printf "~a\n" line))   ; DEFERRED 166
      (define ok?
        (call-with-suite-lock
         'exclusive

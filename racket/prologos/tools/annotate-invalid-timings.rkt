@@ -111,6 +111,7 @@
      #:once-each
      ["--dry-run" "Report what would be annotated; write nothing" (dry-run? #t)]
      #:args (timings-path) timings-path))
+  (for ([line (in-list (suite-lock-banner 'exclusive (suite-lock-path)))]) (printf "~a\n" line))   ; DEFERRED 166
   (define r (annotate-file! path #:dry-run? (dry-run?)))
   (printf "~a: ~a records (~a full-suite, file_count >= ~a)\n"
           path (hash-ref r 'records) (hash-ref r 'full_suite_records) FULL-SUITE-FILE-COUNT)

@@ -217,6 +217,32 @@
     (putenv "PROLOGOS_SUITE_LOCK" "/tmp/private-suite.lock")
     (check-equal? (suite-lock-path) (string->path "/tmp/private-suite.lock"))))
 
+;; DEFERRED 166 (SW-20): an inherited PROLOGOS_SUITE_LOCK took a run out of the
+;; machine-wide queue and nothing on screen said so. Every run now prints where
+;; it queues, and a ⚠ line when the env var moved it off the default.
+(define (banner-under env-value mode)
+  (parameterize ([current-environment-variables
+                  (environment-variables-copy (current-environment-variables))])
+    (environment-variables-set! (current-environment-variables) #"PROLOGOS_SUITE_LOCK"
+                                (and env-value (string->bytes/utf-8 env-value)))
+    (suite-lock-banner mode (suite-lock-path))))
+
+(test-case "suite-lock: every run names its lock; an env override is a ⚠ line naming both files (DEFERRED 166)"
+  (define dflt (path->string (default-suite-lock-path)))
+  (define plain (banner-under #f 'shared))
+  (check-equal? (length plain) 1 "default: one line, no warning")
+  (check-true (string-contains? (car plain) dflt))
+  (check-true (string-contains? (car plain) "shared"))
+  (check-false (string-contains? (car plain) "⚠"))
+  (define over (banner-under "/tmp/private-suite.lock" 'exclusive))
+  (check-equal? (length over) 2)
+  (check-true (string-contains? (car over) "/tmp/private-suite.lock") "the header names the file actually used")
+  (check-true (string-contains? (cadr over) "⚠"))
+  (check-true (string-contains? (cadr over) "PROLOGOS_SUITE_LOCK"))
+  (check-true (string-contains? (cadr over) dflt) "the warning names the queue it left")
+  (check-equal? (length (banner-under "" 'shared)) 1 "an EMPTY value is no override (suite-lock-path ignores it)")
+  (check-equal? (length (banner-under dflt 'shared)) 1 "pointing at the default path is no override"))
+
 (test-case "suite-lock: mode rule — a full suite is exclusive, a targeted run shared"
   (check-equal? (suite-lock-mode #:all? #t #:file-count 3) 'exclusive)
   (check-equal? (suite-lock-mode #:all? #f #:file-count 3) 'shared)
