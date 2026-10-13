@@ -47,6 +47,12 @@ racket/prologos/data/benchmarks/timings.jsonl
 # adds churn.
 racket/prologos/data/benchmarks/failures/
 
+# Results of measurement runs (DEFERRED 155): bench-parallel-demos.rkt and
+# tools/parity-test.rkt write a NEW timestamped file here per run, so running
+# them never rewrites a committed baseline (data/benchmarks/*.json|txt). To
+# re-baseline, pass `--output <the committed path>` and commit it deliberately.
+racket/prologos/data/benchmarks/runs/
+
 # Tangled stdlib output (generated from book chapters)
 .tangled/
 
