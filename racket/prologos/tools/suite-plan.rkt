@@ -47,7 +47,14 @@
          FAILURE-RUNS-KEPT
          make-run-id
          runs-to-prune
-         file-log-names)
+         file-log-names
+         unit-label
+         work-unit-label
+         result-label
+         unit-log-name
+         attribute-stderr
+         diagnose-worker-stderr
+         metric-line?)
 
 ;; historical-medians : (listof string) #:runs N #:min-file-count M
 ;;                      -> (hash/c string? exact-nonnegative-integer?)  ; equal?-keyed
@@ -362,3 +369,66 @@
                 (and (string-prefix? n (string-append file ".shard-"))
                      (string-suffix? n ".log"))))
           names))
+
+;; ============================================================
+;; WORKER STDERR (DEFERRED 164 open 4)
+;; ============================================================
+;; batch-worker.rkt captures current-error-port around each FILE, so test
+;; output never reaches its real stderr; what does is everything outside that
+;; window — a worker that cannot even load (a stale .zo: item (h) of the
+;; runner-queue-gate batch), a crash between files, runtime messages. The
+;; runner used to open that pipe and never read it: such output was lost, and
+;; past the ~64 KB pipe buffer the worker would block. It is now drained on its
+;; own thread, timestamped, and attributed here to the unit the worker was
+;; running when each line arrived (lines before its first dispatch belong to
+;; the worker, key #f). Attribution is by arrival time across two pipes, so a
+;; line written at the very end of one unit may land on the next.
+
+;; "test-x.rkt" or "test-x.rkt [shard I/K]" — the name a unit is reported by.
+(define (unit-label file shard-label-or-#f)
+  (if shard-label-or-#f (format "~a [shard ~a]" file shard-label-or-#f) file))
+(define (work-unit-label u)
+  (unit-label (last (string-split (work-unit-path u) "/"))
+              (and (work-unit-shard u) (shard-label (work-unit-shard u) (work-unit-k u)))))
+(define (result-label r)
+  (unit-label (hash-ref r 'file "?") (hash-ref r 'shard #f)))
+
+;; batch-worker.rkt's failure-log name for a unit.
+(define (unit-log-name file shard-label-or-#f)
+  (cond
+    [(and shard-label-or-#f (regexp-match #rx"^([0-9]+)/([0-9]+)$" shard-label-or-#f))
+     => (lambda (m) (format "~a.shard-~a-of-~a.log" file (cadr m) (caddr m)))]
+    [else (string-append file ".log")]))
+
+;; attribute-stderr : (listof (ms . work-unit)) (listof (ms . line)) -> hash
+;; Both lists chronological. Key: work-unit-label, or #f before any dispatch.
+;; Values: that unit's lines, chronological.
+(define (attribute-stderr dispatches lines)
+  (define ds (sort dispatches < #:key car))
+  (define acc
+    (for/fold ([h (hash)]) ([l (in-list (sort lines < #:key car))])
+      (define current
+        (for/fold ([cur #f]) ([d (in-list ds)] #:break (> (car d) (car l)))
+          (work-unit-label (cdr d))))
+      (hash-update h current (lambda (v) (cons (cdr l) v)) '())))
+  (for/hash ([(k v) (in-hash acc)]) (values k (reverse v))))
+
+;; diagnose-worker-stderr : (listof string) -> (or/c (list 'stale-module path) #f)
+;; A worker that died with a linklet mismatch names the module whose .zo is
+;; stale: the IMPORTING instance (compiled against an older exporter).
+(define (diagnose-worker-stderr lines)
+  (and (for/or ([l (in-list lines)]) (regexp-match? #rx"instantiate-linklet: mismatch" l))
+       (for/or ([l (in-list lines)])
+         (define m (regexp-match #rx"importing instance: \"([^\"]+)\"" l))
+         (and m (list 'stale-module (cadr m))))))
+
+;; Machine-readable metric lines every worker writes to its REAL stderr while
+;; it loads the prelude (measured 2026-10-13: 5 such lines per worker, every
+;; run — PERF-COUNTERS, PHASE-TIMINGS, PROVENANCE-STATS, MEMORY-STATS,
+;; CELL-METRICS; batch-worker.rkt strips the same prefixes from a file's
+;; captured stderr). They are not evidence: they neither keep a run's log
+;; directory nor clutter a unit's log; worker-N.stderr.log keeps them.
+(define METRIC-LINE-PREFIXES
+  '("PERF-COUNTERS:" "PHASE-TIMINGS:" "PROVENANCE-STATS:" "MEMORY-STATS:" "CELL-METRICS:"))
+(define (metric-line? l)
+  (for/or ([p (in-list METRIC-LINE-PREFIXES)]) (string-prefix? l p)))

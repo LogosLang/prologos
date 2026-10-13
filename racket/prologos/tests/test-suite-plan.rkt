@@ -309,3 +309,48 @@
   (check-equal? (sort (file-log-names "test-a.rkt" names) string<?)
                 '("test-a.rkt.log" "test-a.rkt.shard-1-of-4.log"))
   (check-equal? (file-log-names "test-c.rkt" names) '()))
+
+;; ========================================
+;; Worker stderr (DEFERRED 164 open 4) and dead-worker diagnosis
+;; ========================================
+
+(test-case "suite-plan/stderr: each line goes to the unit the worker was running when it arrived"
+  (define a (work-unit "/p/tests/test-a.rkt" #f 1 1.0))
+  (define w (work-unit "/p/tests/test-w.rkt" 1 4 1.0))
+  (define by (attribute-stderr (list (cons 100 a) (cons 200 w))
+                               (list (cons 50 "startup noise") (cons 150 "during a")
+                                     (cons 200 "at w's dispatch") (cons 900 "late in w"))))
+  (check-equal? (hash-ref by #f) '("startup noise") "before any dispatch: the worker itself")
+  (check-equal? (hash-ref by (work-unit-label a)) '("during a"))
+  (check-equal? (hash-ref by (work-unit-label w)) '("at w's dispatch" "late in w"))
+  (check-equal? (work-unit-label w) "test-w.rkt [shard 1/4]")
+  (check-equal? (result-label (hasheq 'file "test-w.rkt" 'shard "1/4")) (work-unit-label w))
+  (check-equal? (result-label (hasheq 'file "test-a.rkt")) (work-unit-label a))
+  (check-equal? (hash-count (attribute-stderr '() '())) 0))
+
+(test-case "suite-plan/stderr: a unit's log name matches batch-worker.rkt's"
+  (check-equal? (unit-log-name "test-a.rkt" #f) "test-a.rkt.log")
+  (check-equal? (unit-log-name "test-w.rkt" "1/4") "test-w.rkt.shard-1-of-4.log")
+  (check-equal? (file-log-names "test-w.rkt" (list (unit-log-name "test-w.rkt" "1/4"))) (list "test-w.rkt.shard-1-of-4.log")))
+
+;; Verbatim worker stderr from the item-(h) repro (2026-10-13): driver.rkt
+;; rebuilt, tests/compiled/test-support_rkt.zo left stale.
+(define stale-support-stderr
+  (list "instantiate-linklet: mismatch;"
+        " reference to a variable that is not exported"
+        "  name: process-file31.1"
+        "  exporting instance: \"/w/racket/prologos/driver.rkt\""
+        "  importing instance: \"/w/racket/prologos/tests/test-support.rkt\""
+        "  possible reason: modules need to be recompiled because dependencies changed"))
+
+(test-case "suite-plan/dead workers: a linklet mismatch NAMES the stale module (not 'raco make driver.rkt')"
+  (check-equal? (diagnose-worker-stderr stale-support-stderr)
+                (list 'stale-module "/w/racket/prologos/tests/test-support.rkt"))
+  (check-false (diagnose-worker-stderr '("some other crash" "context...:")))
+  (check-false (diagnose-worker-stderr '())))
+
+(test-case "suite-plan/stderr: the prelude's metric lines are not evidence"
+  (check-true (metric-line? "PERF-COUNTERS:{\"cell_allocs\":0}"))
+  (check-true (metric-line? "CELL-METRICS:{\"cells\":37}"))
+  (check-false (metric-line? "instantiate-linklet: mismatch;"))
+  (check-false (metric-line? "  PERF-COUNTERS: indented is not the prefix")))

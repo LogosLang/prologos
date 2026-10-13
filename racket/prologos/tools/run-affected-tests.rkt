@@ -594,6 +594,42 @@
                               (lambda () (run-tests test-paths project-root))))])])]))
 
 ;; ============================================================
+;; Per-worker bookkeeping
+;; ============================================================
+;; One per batch worker: what it was sent, in order, and everything it wrote
+;; to its REAL stderr (DEFERRED 164 open 4 — outside batch-worker.rkt's
+;; per-file capture). Lists are newest-first while the run is live.
+(struct worker-state (index proc [dispatched #:mutable] [stderr #:mutable]
+                            [stderr-dropped #:mutable] [drain #:mutable]))
+(define WORKER-STDERR-MAX-LINES 20000)  ; per worker; the rest is counted, not kept
+
+(define (worker-stderr-lines w) (map cdr (reverse (worker-state-stderr w))))
+;; The same, minus the prelude's metric lines (suite-plan.rkt metric-line?).
+(define (worker-evidence-lines w) (filter (lambda (l) (not (metric-line? l))) (worker-stderr-lines w)))
+
+;; Print a digest of the workers' stderr and, when it shows a linklet
+;; mismatch, the stale module and the rebuild that fixes it — the dead-worker
+;; banner used to advise `raco make driver.rkt`, which cannot fix a stale
+;; module that driver.rkt does not depend on (item (h): tests/test-support.rkt).
+(define (print-worker-stderr-digest workers #:lines [n 12])
+  (for ([w (in-list workers)]) (sync/timeout 2 (worker-state-drain w)))
+  (define any? #f)
+  (for ([w (in-list workers)])
+    (define ls (worker-evidence-lines w))
+    (unless (null? ls)
+      (unless any? (printf "\nWorker stderr (first ~a lines each; full text in this run's worker-N.stderr.log):\n" n))
+      (set! any? #t)
+      (printf "  worker ~a (pid ~a):\n" (worker-state-index w) (subprocess-pid (worker-state-proc w)))
+      (for ([l (in-list (take ls (min n (length ls))))]) (printf "    ~a\n" l))))
+  (unless any? (printf "\nThe workers wrote nothing to stderr (beyond the prelude's metric lines).\n"))
+  (define diag (for/or ([w (in-list workers)]) (diagnose-worker-stderr (worker-stderr-lines w))))
+  (when diag
+    (printf "\n⚠ STALE COMPILED MODULE: ~a\n" (cadr diag))
+    (printf "  (the importing side of a linklet mismatch: its .zo predates a dependency's rebuild)\n")
+    (printf "  Rebuild it: PLT_CS_COMPILE_LIMIT=1000000 raco make -j 4 ~a\n" (cadr diag)))
+  (flush-output))
+
+;; ============================================================
 ;; Failure-log views (DEFERRED 160 support)
 ;; ============================================================
 ;; refresh-failure-views! : fail-root run-dir file-results -> kept?
@@ -601,7 +637,8 @@
 ;;     reported, replace its logs there with this run's; (2) the archive: keep
 ;;     run-dir when the run left evidence (#:keep-run?), else remove it; prune
 ;;     to the newest FAILURE-RUNS-KEPT; point fail-root/latest at the newest.
-(define (refresh-failure-views! fail-root run-dir file-results #:keep-run? keep-run?)
+(define (refresh-failure-views! fail-root run-dir file-results #:keep-run? keep-run?
+                                #:also-files [also-files '()])
   (define (names dir)
     (if (directory-exists? dir)
         (for/list ([p (in-list (directory-list dir))]
@@ -610,8 +647,8 @@
         '()))
   (define run-logs (names run-dir))
   (define top-logs (names fail-root))
-  (for ([r (in-list file-results)])
-    (define f (hash-ref r 'file))
+  (for ([f (in-list (remove-duplicates
+                     (append (map (lambda (r) (hash-ref r 'file)) file-results) also-files)))])
     (for ([n (in-list (file-log-names f top-logs))])
       (with-handlers ([exn:fail? void]) (delete-file (build-path fail-root n))))
     (for ([n (in-list (file-log-names f run-logs))])
@@ -903,12 +940,18 @@
   ;; simulation: suite-plan.rkt pick-eligible / tests/test-suite-plan.rkt.
   (define pending units)
   (define worker-ran (make-hasheq))          ;; worker stdin port -> (hash path #t)
+  (define worker-of (make-hasheq))           ;; worker stdin port -> worker-state
+  (define t-dispatch0 (current-inexact-monotonic-milliseconds))
+  (define (now-ms) (- (current-inexact-monotonic-milliseconds) t-dispatch0))
   (define (dispatch-next! stdin)
     (define ran (hash-ref! worker-ran stdin make-hash))
     (define-values (u rest) (pick-eligible pending (lambda (p) (hash-ref ran p #f))))
     (cond
       [u (set! pending rest)
          (hash-set! ran (work-unit-path u) #t)
+         (let ([w (hash-ref worker-of stdin #f)])
+           (when w
+             (set-worker-state-dispatched! w (cons (cons (now-ms) u) (worker-state-dispatched w)))))
          (displayln (work-unit->line u) stdin)
          (flush-output stdin)]
       [else
@@ -920,6 +963,7 @@
   (define t0 (current-inexact-monotonic-milliseconds))
   (define all-procs '())
   (define all-stdins '())
+  (define all-workers '())                   ;; worker-state, by index
 
   ;; ⚠⚠ THE `--timeout` FLAG DID NOT REACH THE WORKER, AND THE RUNNER PRINTED IT
   ;; ANYWAY. This spawned `batch-worker.rkt --stdin` with no `--file-timeout`, so
@@ -942,6 +986,27 @@
                   "--failure-dir" (path->string run-dir)))
     (set! all-procs (cons proc all-procs))
     (set! all-stdins (cons stdin all-stdins))
+    (define w (worker-state i proc '() '() 0 #f))
+    (hash-set! worker-of stdin w)
+    (set! all-workers (append all-workers (list w)))
+    ;; Stderr DRAIN (DEFERRED 164 open 4): this pipe used to be opened and
+    ;; never read — anything the worker wrote outside the per-file capture was
+    ;; lost, and past the ~64 KB pipe buffer the worker would block on it.
+    (set-worker-state-drain!
+     w
+     (thread
+      (λ ()
+        (let loop ([kept 0])
+          (define line (read-line stderr 'any))
+          (unless (eof-object? line)
+            (cond
+              [(< kept WORKER-STDERR-MAX-LINES)
+               (set-worker-state-stderr! w (cons (cons (now-ms) line) (worker-state-stderr w)))
+               (loop (add1 kept))]
+              [else
+               (set-worker-state-stderr-dropped! w (add1 (worker-state-stderr-dropped w)))
+               (loop kept)])))
+        (close-input-port stderr))))
     ;; Send the first unit to each worker to get them started
     (dispatch-next! stdin)
     ;; Reader thread: parse JSONL from worker stdout → result channel
@@ -951,8 +1016,7 @@
          (define line (read-line stdout 'any))
          (cond
            [(eof-object? line)
-            (close-input-port stdout)
-            (close-input-port stderr)]
+            (close-input-port stdout)]
            [else
             (define trimmed (string-trim line))
             (unless (string=? trimmed "")
@@ -1021,9 +1085,10 @@
            (printf "║  ⛔ DEAD WORKERS — 0 tests after ~a files              ║\n" count)
            (printf "║                                                        ║\n")
            (printf "║  All batch workers crashed silently.                   ║\n")
-           (printf "║  ACTION: Run `raco make driver.rkt` to recompile.     ║\n")
-           (printf "║  Common cause: stale .zo after struct field changes.   ║\n")
-           (printf "╚══════════════════════════════════════════════════════════╝\n"))
+           (printf "║  ACTION: read the worker stderr below.                 ║\n")
+           (printf "║  Common cause: a stale .zo (named below if so).        ║\n")
+           (printf "╚══════════════════════════════════════════════════════════╝\n")
+           (print-worker-stderr-digest all-workers))
 
          ;; Early-bail: abort if too many per-file timeouts
          (when (string=? status "timeout")
@@ -1074,9 +1139,10 @@
                     (+ first-waited first-result-timeout))
             (printf "║                                                        ║\n")
             (printf "║  All batch workers crashed before producing output.    ║\n")
-            (printf "║  ACTION: Run `raco make driver.rkt` to recompile.     ║\n")
-            (printf "║  Common cause: stale .zo after struct field changes.   ║\n")
+            (printf "║  ACTION: read the worker stderr below.                 ║\n")
+            (printf "║  Common cause: a stale .zo (named below if so).        ║\n")
             (printf "╚══════════════════════════════════════════════════════════╝\n")
+            (print-worker-stderr-digest all-workers)
             (set! bailed? #t)]
            [else
             ;; Normal per-file timeout
@@ -1095,6 +1161,65 @@
   (for ([p (in-list all-procs)])
     (with-handlers ([exn:fail? void])
       (subprocess-wait p)))
+
+  ;; Worker stderr into the run's logs (DEFERRED 164 open 4). The workers have
+  ;; exited, so each drain reaches EOF; then: (1) worker-N.stderr.log holds a
+  ;; worker's whole stderr, with a marker at each dispatch; (2) a FAILED unit's
+  ;; log gains the stderr that arrived while it was current; (3) a dispatched
+  ;; unit that never REPORTED gets a NO RESULT log carrying that stderr — the
+  ;; only trace a worker that died mid-unit leaves.
+  (for ([w (in-list all-workers)]) (sync/timeout 10 (worker-state-drain w)))
+  (define reported-labels (for/hash ([r (in-list unit-results)]) (values (result-label r) #t)))
+  (define no-result-files '())
+  (for ([w (in-list all-workers)])
+    (define dispatched (reverse (worker-state-dispatched w)))
+    (define lines (reverse (worker-state-stderr w)))
+    (define by-unit (attribute-stderr dispatched lines))
+    (define pid (subprocess-pid (worker-state-proc w)))
+    (define status (subprocess-status (worker-state-proc w)))
+    (unless (null? lines)
+      (with-output-to-file (build-path run-dir (format "worker-~a.stderr.log" (worker-state-index w)))
+        #:exists 'replace
+        (lambda ()
+          (printf "=== worker ~a (pid ~a, exit ~a): stderr outside the per-file capture ===\n"
+                  (worker-state-index w) pid status)
+          (define events
+            (sort (append (for/list ([d (in-list dispatched)])
+                            (list (car d) 0 (format "--- [+~as] dispatched: ~a ---"
+                                                    (real->decimal-string (/ (car d) 1000.0) 1)
+                                                    (work-unit-label (cdr d)))))
+                          (for/list ([l (in-list lines)]) (list (car l) 1 (cdr l))))
+                  (lambda (a b) (or (< (car a) (car b))
+                                    (and (= (car a) (car b)) (< (cadr a) (cadr b)))))))
+          (for ([e (in-list events)]) (displayln (caddr e)))
+          (when (> (worker-state-stderr-dropped w) 0)
+            (printf "... ~a further lines dropped\n" (worker-state-stderr-dropped w))))))
+    (for ([d (in-list dispatched)])
+      (define u (cdr d))
+      (define label (work-unit-label u))
+      (define file (path->string (file-name-from-path (string->path (work-unit-path u)))))
+      (define slabel (and (work-unit-shard u) (shard-label (work-unit-shard u) (work-unit-k u))))
+      (define log (build-path run-dir (unit-log-name file slabel)))
+      (define (evidence ls) (filter (lambda (l) (not (metric-line? l))) ls))
+      (define err-lines (evidence (hash-ref by-unit label '())))
+      (define startup (if (eq? d (car dispatched)) (evidence (hash-ref by-unit #f '())) '()))
+      (cond
+        [(not (hash-ref reported-labels label #f))
+         (set! no-result-files (cons file no-result-files))
+         (with-output-to-file log #:exists 'replace
+           (lambda ()
+             (printf "=== ~a — NO RESULT ===\n" label)
+             (printf "run: ~a\n" run-id)
+             (printf "Dispatched to worker ~a (pid ~a, exit status ~a); it never reported this unit.\n\n"
+                     (worker-state-index w) pid status)
+             (printf "--- Worker stderr while this unit was current ---\n")
+             (for ([l (in-list (append startup err-lines))]) (displayln l))
+             (when (null? (append startup err-lines)) (printf "(none)\n"))))]
+        [(and (pair? err-lines) (file-exists? log))
+         (with-output-to-file log #:exists 'append
+           (lambda ()
+             (printf "--- Worker stderr while this unit was current (outside the per-file capture) ---\n")
+             (for ([l (in-list err-lines)]) (displayln l))))])))
 
   (define t1 (current-inexact-monotonic-milliseconds))
   (define total-wall-ms (inexact->exact (round (- t1 t0))))
@@ -1143,7 +1268,12 @@
   ;; survives in runs/<earlier-id>/.
   (define kept-run-dir?
     (refresh-failure-views! fail-root run-dir file-results
-                            #:keep-run? (not all-pass?)))
+                            ;; kept when it holds evidence: a failure / no-result,
+                            ;; or worker stderr beyond the prelude's metric lines
+                            #:keep-run? (or (not all-pass?)
+                                            (ormap (lambda (w) (pair? (worker-evidence-lines w)))
+                                                   all-workers))
+                            #:also-files no-result-files))
   (define completed-count (length file-results))
   (printf "\n~a tests in ~as (~a~a files, ~a batch workers, ~a)\n"
           total-tests
