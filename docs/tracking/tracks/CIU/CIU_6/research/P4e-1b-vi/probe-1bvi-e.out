@@ -1,0 +1,7 @@
+0: w3 : {:a [PVec {:b {:c [PVec [PVec Int]]}}]} defined.
+1: ERROR: broadcast `:c` fails on every element — Could not infer type — field :c is not present in the record {:b {:c [PVec [PVec Int]]}}; available fields: :b; in the select branch `a.b.c` — bare field access (no construction) is spelled `.c`
+2: ERROR: broadcast `:c` fails on every element — Could not infer type — field :c is not present in the record {:b {:c [PVec [PVec Int]]}}; available fields: :b; in the select branch `a.b.c` — bare field access (no construction) is spelled `.c`
+3: ERROR: broadcast `:c` fails on every element — Could not infer type — field :c is not present in the record {:b {:c [PVec [PVec Int]]}}; available fields: :b; in the select branch `a.b.c` — bare field access (no construction) is spelled `.c`
+4: ERROR: broadcast `:c` fails on every element — Could not infer type — select: the subject (branch `a.b`) is a tuple (nat-keyed row); a keyed block selects NAMED fields — ordinal selection is `x{N M}`, single-element extraction `x.N`
+5: @[@[1 2] @[3] @[4]] : [PVec [PVec Int]]
+--- 4 errors ---

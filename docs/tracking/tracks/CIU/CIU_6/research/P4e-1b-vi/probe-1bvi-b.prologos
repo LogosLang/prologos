@@ -1,0 +1,19 @@
+ns probe-1bvi-b
+
+def mn := {:a {:x 1} :b {:y 2}}
+def w := {:a @[{:b @[@[1] @[2]]} {:b @[@[3]]}]}
+
+;; --- broadcast ancestors under a deep star
+w{a:b*}
+w.a:b*
+w{a:b^*}
+w{a^:b*}
+
+;; --- the token boundary: `*->`
+mn{a*-> b}
+mn{a*- b}
+mn{a *- b}
+mn{a*-b}
+mn{a}*->
+mn{a}*-
+mn.a*-

@@ -71,3 +71,44 @@ are in [`../README.md`](../README.md).
   ([Q_U52](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u52) §1–2): what total collapse
   does to a **renamed** ancestor (`t4{a^p.b.c*-}`), and the **`*->` token boundary**. Opens
   with the grounding mini-audit, re-deriving those counts at this HEAD.
+
+### W-1 decided: CIU 6's track documents ride the branch; shared registers go to main — no commit (2026-10-13)
+- **Why / decision**: owner — *"B — … work on specific parts of the system happen under separate
+  worktrees/branchs with periodic and regular merges back into main, so that work can safely happen
+  concurrently."* So this LOG, D4's ledger and per-slice records, and the track's
+  research artifacts are committed on `ciu6-path-selection` with the code they describe, and reach `main` at
+  checkpoint merges. `DEFERRED.md` (a register every session allocates from) and the dailies (cross-track
+  STATE) are committed on `main` directly. Rejected: PAR 4's docs-on-main practice, which suits a branch
+  whose code never merges; here it would make main cite unmerged hashes as ✅ between checkpoints.
+- **Surprise / correction**: this supersedes the tracking skill's standing rule "commit the track's
+  documents to main at every milestone" for tracks whose code merges to main; the skill was amended the
+  same day.
+- **Next**: the 1b-vi grounding audit.
+
+### 1b-vi grounding audit: the renamed-ancestor question belongs to the collapse family (`^-` has the same unruled hole), `*->` predates 1b-vi, and L1 fails in block position (DEFERRED 167) — this commit (2026-10-13)
+- **Why / decision**: owner — a short audit first, plus a review of the spec "as a suggestion to review,
+  not a commandment". Record: [`2026-10-13_CIU_6_P4e-1b-vi_GROUNDING_AUDIT.md`](2026-10-13_CIU_6_P4e-1b-vi_GROUNDING_AUDIT.md);
+  probes and outputs in `research/P4e-1b-vi/`. The branch was first fast-forwarded over 20 main commits
+  (sweep + runner-queue merges, F3(a) in `substitution.rkt`/`type-lattice.rkt`) to `01ef2542`; battery 573
+  test-cases, 663/663 with the acceptance test file, acceptance markers 88/88. Findings: (1) `^-` silently
+  drops a re-keyed ancestor (`e3{a^p.b.c^-}` → `{:c …}`) while `^-_` honors it (`{:p-b-c …}`), unpinned and
+  unused. `*-` is `^-` ∘ `*` (one operator suffix per segment), so the decision is one rule for both
+  families. Posed as **[Q_U55](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u55)** (pending), options
+  A refuse / B total wins / C explicit wins, with the tradeoff analysis in the ledger. (2) In type territory
+  `Nat *-> Nat` is already not an arrow ("has no arrow"); 0 glued `*->` anywhere. (3) An in-block fused ω chain
+  errors (`w4{a:b:c}`) where the path form works, with zero pins: filed **DEFERRED 167** on main. It also
+  makes the broadcast-ancestor half of Q_U52 §1 unobservable for now. (4) The totality census: 6
+  `select-star-cont` readers (5 binary), 15 `star-*` prose arms in `format-select-fail`, 3 internal `oops`
+  strings, 2 deliberate `"*"` selectors; the battery pins `cfg{a}*-`/`*-_` as unminted (`:6194–6195`), and 1b-vi
+  flips them deliberately. (5) A spec → D4 departures table is owed (D4 §1.2 maps only the old PS rulings
+  onto the spec).
+- **Surprise / correction**: my first census pattern for "`*-` glued after an identifier" was zero-power
+  (`\]` is not an escape inside an ERE bracket, so it demanded a literal `)]*-`) and reported **0**. Running it
+  on positive controls before committing caught it. The corrected pattern finds 3 hits, all the posit names
+  `p*-to-rat` / `p*-if-nar` in comments. `p*-if-nar` is a live keyword-only form (`elaborator.rkt:947`), so
+  identifiers containing `*-` exist outside selection territory and stay safe by Q_U37's territory scoping.
+  Fail-open watch: 8-of-N. Also: Q_U52 §1's "a broadcast ancestor is unwritable" is true but does not
+  separate the options; the case is blocked one step earlier, by DEFERRED 167.
+- **Next**: owner decision Q_U55; then the `*->` boundary (Q_U52 §2, reframed by F5: a message and a
+  territory, zero programs at stake); then `*-_`'s prefix rule; then implementation, opening with the
+  totality dispatcher's pins.

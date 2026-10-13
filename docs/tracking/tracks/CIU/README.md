@@ -8,7 +8,7 @@ in the new layout and, for each, the flat documents that remain its record.
 
 | Track | Directory | State |
 |---|---|---|
-| 6 — Anonymous Records, Collections & Path Selection | [`CIU_6/`](CIU_6/) · log: [`CIU_6/LOG.md`](CIU_6/LOG.md) | 🔄 Path Selection, phase P4e (the `*` family), slice 1b-v-C ✅ `a492bbb7`; **1b-vi next**. Work continues on branch `ciu6-path-selection` (nested worktree `.claude/worktrees/ciu6-path-selection`), directory opened 2026-10-13 |
+| 6 — Anonymous Records, Collections & Path Selection | [`CIU_6/`](CIU_6/) · log: [`CIU_6/LOG.md`](CIU_6/LOG.md) | 🔄 Path Selection, phase P4e (the `*` family): slice 1b-v-C ✅ `a492bbb7`; **1b-vi 🔄 opened 2026-10-13** — [grounding audit](CIU_6/2026-10-13_CIU_6_P4e-1b-vi_GROUNDING_AUDIT.md), D4 Q_U55 pending. Work continues on branch `ciu6-path-selection` (nested worktree `.claude/worktrees/ciu6-path-selection`); per owner decision W-1 the track's documents ride the branch and reach `main` at checkpoint merges |
 
 Tracks 0–5 and 4B have no directory: none has been worked since the layout was adopted.
 

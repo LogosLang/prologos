@@ -3259,6 +3259,50 @@ items of the hold-point, ruled before P4a opened:
   comment stops naming the splitter as the source. Record:
   [§5.P4e-1b-v-C](#p4e-1b-v-c).
 
+- <a id="q-u55"></a>**Q_U55 — WHAT TOTAL COLLAPSE DOES TO AN ANCESTOR THAT CARRIES AN
+  EXPLICIT KEY CONTINUATION [⬜ PENDING — posed 2026-10-13, CIU 6 1b-vi].** The first
+  of the two decisions [Q_U52](#q-u52) §1 deferred. Grounding:
+  [`tracks/CIU/CIU_6/2026-10-13_CIU_6_P4e-1b-vi_GROUNDING_AUDIT.md`](tracks/CIU/CIU_6/2026-10-13_CIU_6_P4e-1b-vi_GROUNDING_AUDIT.md) F1–F4.
+
+  **THE QUESTION IS ABOUT THE COLLAPSE FAMILY, NOT THE STAR.** A segment carries one
+  operator suffix (`c^-*` is refused), so `*-` is `^-` composed with `*`, spelled as a
+  star continuation; its treatment of ancestors IS `^-`'s. And `^-` has the hole
+  today, unruled, unpinned and unused (0 hits in corpus and tests):
+  `e3{a^p.b.c^-}` → `{:c @[1 2]}` (the rename silently DROPPED) while
+  `e3{a^p.b.c^-_}` → `{:p-b-c @[1 2]}` (the rename HONORED, through provenance).
+  So the caret family observes an ancestor's continuation only through `_`.
+
+  **WORKED, on `t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}`** (measured: `t5{a^.b^.c*}`
+  → `{:m {:x 1} :n {:y 2}}`, the shape Q_U48 gives `t5{a.b.c*-}`; `t5{a^p.b^.c*}` →
+  `{:p {:m {:x 1} :n {:y 2}}}`). What is `t5{a^p.b.c*-}`?
+  · **A — refuse (observable-or-refused)**: a guided error — the name `p` can never
+    appear under a total collapse; drop `^p` for total collapse, or keep the level with
+    the selective star `t5{a^p.b^.c*}`. Legal wherever the continuation IS observable
+    (under `*-_` / `^-_`, if `*-_` takes `^-_`'s full-path prefix). A dissolve `^` on an
+    ancestor stays legal (redundant, same outcome). For one rule across both families,
+    `e3{a^p.b.c^-}` becomes the same error (today `{:c …}`; 0 uses, 0 pins).
+  · **B — total wins (today's `^-`)**: `{:m {:x 1} :n {:y 2}}`; `^p` is dead syntax.
+  · **C — explicit wins (a caret is a per-level instruction, the collapse marker sets
+    the DEFAULT for unspoken levels)**: `{:p {:m {:x 1} :n {:y 2}}}` ≡ `t5{a^p.b^.c*}`.
+    For one rule, `e3{a^p.b.c^-}` becomes `{:p {:c @[1 2]}}`.
+
+  **TRADEOFFS.** *Correct by Construction* (DESIGN_PRINCIPLES): B fails it (a written
+  instruction with no effect); A and C satisfy it. *Monotone migration* (spec §3.6; §1.2
+  PS7 "errors may later become meanings, never vice versa"): A is the waypoint from which
+  both B and C remain reachable without breaking a program; B and C are meanings, and each
+  forecloses the other. *Simplicity of Foundation* ("complexity through composition, not
+  special cases"): C composes (explicit beats default — no side condition); A adds a
+  legality side condition (observable-or-refused); B composes trivially. *Expressivity*: C
+  adds a shorter spelling of "collapse all but the named levels" (saves one caret per
+  unnamed ancestor); A and B add nothing over the selective form.
+  *Ergonomics*: A's error teaches the selective form; C must be learned, and the name
+  "total collapse" stops being accurate; B fails silently. *Evidence of demand*: none for
+  C (0 uses of a re-keyed ancestor under `^-`). The broadcast-ancestor half of Q_U52 §1
+  does not separate the options (no caret can follow `:`, Q_U19) and is unobservable
+  until [DEFERRED 167](DEFERRED.md) (in-block L1) lands.
+
+  **Next free Q-label: U56.**
+
 - <a id="q-u43"></a>**⭐ Q_U43 — THE L4 SORT CHECK MOVES TO TYPING FOR STAR-BEARING
   BRANCHES, AS [Q_U38](#q-u38)'s COROLLARY [owner, 2026-08-11 — "move the sort
   check to typing per Q_U38's corollary"].** Q_U38 moved the COLLISION check;
@@ -10164,7 +10208,7 @@ moves, `walk-to-leaf` is the abort it lands in.
 | **1b-v — the `*_` slice** 🔄 **A/B1/B1b/B2a + verify SHIPPED; B2b (the mint) remains** | [Q_U39](#q-u39)'s closer-adjacent **mint** (two bare sentinels, `$postfix-star-synth`) **+ `*_`'s SEMANTICS** — the shield lift, [Q_U51](#q-u51)'s prefix join, the **key threading** both twins skip, and the ω/broadcast Record arm's missing cont test. Scoped by [Q_U52](#q-u52): the mint alone would ship a better error message and leave Q_U51's capability non-existent. | The prefix rule is RULED and forced; the mint adds ONE spelling so the sentinel question collapses to two bare atoms. Record: [§5.P4e-1b-v](#p4e-1b-v) |
 | **1b-v-B2b — the reader MINT** ✅ `940c9c88` | Widen the gate's lexeme conjunct to EXACT table membership; route the emit through the same lookup ([DEFERRED 129](DEFERRED.md)); [DEFERRED 130](DEFERRED.md)'s two refusal messages ride along. **MINIMAL by ruling** — reader-only, so the three live bands cannot regress. Preconditions the grounding found: the battery's `p4e-star-type` / `p4e-last-star-type` helpers are exact-lexeme `"*"` and structurally blind to `*_` ([DEFERRED 133](DEFERRED.md)), and the DEFERRED-108 snapshot needs a deliberate re-baseline. | Scoped by [Q_U53](#q-u53) part 1: the miss-case is ruled out at the GATE, not handled at the emit. Record: [§5.P4e-1b-v-B2b](#p4e-1b-v-b2b) · shipped: [§5.P4e-1b-v-B2b-shipped](#p4e-1b-v-b2b-shipped) |
 | **1b-v-C — the FOLD** ✅ `24fc1be4` (pins) · `a492bbb7` | `split-star-lexeme`'s suffix dispatch AND the printer's cont→lexeme delegate to the family table, so the four bands and every star label share ONE semantic authority; site 3 (`form-deps`) DERIVED, site 4 (the matrix) PINNED. Behaviour-preserving on every input. | [Q_U53](#q-u53) part 2 + [Q_U54](#q-u54) (the printer folds too; site 3 derived, site 4 pinned). Record: [§5.P4e-1b-v-C](#p4e-1b-v-c) |
-| **1b-vi — the star-COLLAPSE slice** ⬜ (**after 1b-v-C**) | **`*-`** ([Q_U48](#q-u48)) · the **`*-_`** decision · the cont-axis **totality dispatcher** · plus TWO owed rulings [Q_U52](#q-u52) surfaced: what "total collapse" does to a **renamed** ancestor (`^p` and `^` are mutually exclusive spellings of one step), and the **`*->` token boundary** (`>` breaks the identifier, so `x{a*-> b}` would become a `*-` step plus a stray `>`). | Split from 1b-v because those two are RULINGS, not implementation, and because `*-` is the spelling that forces the totality work. ⭐ Sequenced AFTER the fold [owner] so ruling `*-` costs a table row, not four edits. |
+| **1b-vi — the star-COLLAPSE slice** 🔄 (**opened 2026-10-13**, CIU 6 branch `ciu6-path-selection`; grounding: [audit](tracks/CIU/CIU_6/2026-10-13_CIU_6_P4e-1b-vi_GROUNDING_AUDIT.md); [Q_U55](#q-u55) ⬜ pending) | **`*-`** ([Q_U48](#q-u48)) · the **`*-_`** decision · the cont-axis **totality dispatcher** · plus TWO owed rulings [Q_U52](#q-u52) surfaced: what "total collapse" does to a **renamed** ancestor (`^p` and `^` are mutually exclusive spellings of one step), and the **`*->` token boundary** (`>` breaks the identifier, so `x{a*-> b}` would become a `*-` step plus a stray `>`). | Split from 1b-v because those two are RULINGS, not implementation, and because `*-` is the spelling that forces the totality work. ⭐ Sequenced AFTER the fold [owner] so ruling `*-` costs a table row, not four edits. |
 | **P4e-2** | the `.*` retirement inventory + [Q_U26](#q-u26) ravel | unchanged |
 
 **⚠ TWO HOLES C2 OPENS, AND THEY ARE C2's TO CLOSE** — both found by the

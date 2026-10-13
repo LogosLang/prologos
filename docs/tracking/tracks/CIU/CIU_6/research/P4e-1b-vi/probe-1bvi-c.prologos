@@ -1,0 +1,25 @@
+ns probe-1bvi-c
+
+def t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}
+def w2 := {:a @[{:b @[1 2]} {:b @[3]}]}
+
+;; --- nominal join (Q_U49 splice) under renames
+t5{a.b.c*}
+t5{a^p.b.c*}
+t5{a^.b^.c*}
+t5{a^p.b^.c*}
+t5{a.b.c*_}
+t5{a^p.b.c*_}
+t5{a^.b.c*_}
+
+;; --- broadcast ancestor, legal joins
+w2{a:b}
+w2{a:b*}
+w2.a:b*
+w2{a^:b*}
+w2{a^q:b*}
+
+;; --- `*` / `*-` / `*->` outside selection territory
+def k1 := [int* 2 3]
+spec g1 [List Nat] -> Int
+spec g2 Nat *-> Nat
