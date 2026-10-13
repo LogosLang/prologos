@@ -81,6 +81,25 @@ and failing for every non-join tested.
    (Pi(Nat,?m) ⊔ Pi(Nat,Unit)) ⊔ Unit   = Unit       ;; contradiction erased
    Pi(Nat,?m) ⊔ (Pi(Nat,Unit) ⊔ Unit)   = type-top   ;; contradiction detected
    ```
+   > ⚠ **CORRECTION (2026-10-13, after F3(a) `5ec697bf` on `deferred-sweep-146-149`).** **Withdrawn as a witness
+   > for F3(b) alone.** This item presents it under the fallback, but it needs BOTH defects: the M1 record introduces
+   > it with "Combined with (a)" (`2026-10-13_TAGGED_CELL_DOMAIN_MERGES_M1.md:121`), and this note dropped the
+   > qualifier. F3(a) made the inner merge
+   > return `Pi(Nat,?m)` (dropping the unified `Unit`), and the fallback then erased `Pi(Nat,?m) ⊔ Unit` to
+   > `Unit`. With F3(a) fixed, the inner merge is `Pi(Nat,Unit)` and **both groupings give `type-top`**. F3(b)
+   > is still real (D1c keeps 15/3000 A violations); a witness that needs only the fallback, evaluated at
+   > `5ec697bf` under the probe's meta-solution function (`?pm3 := Nat`, `?m` unsolved):
+   > ```
+   > Bool ⊔ Pi(?m,Nat)                     = Bool       ;; rigid heads Bool vs Pi: no solution of ?m can unify them
+   > (Bool ⊔ Pi(?m,Nat)) ⊔ Pi(Nat,?m)      = Bool       ;; contradiction erased
+   > Bool ⊔ (Pi(?m,Nat) ⊔ Pi(Nat,?m))      = type-top   ;; contradiction detected
+   > ```
+   > The mechanism, read at `type-lattice.rkt:217-218` (`5ec697bf`, unchanged since `7a0116ec`): when
+   > `try-unify-pure` fails and EITHER side contains an unsolved meta ANYWHERE, the merge keeps the side without
+   > one, even when the heads already clash rigidly. The same fallback is duplicated in `type-lattice-merge` at
+   > `:172-173`, so a D.2 decision on F3(b) covers both sites. With no solution function installed,
+   > `has-unsolved-meta?` cannot see the meta and the same merge gives `type-top`, so the probe's environment
+   > matters. Script: `f3b-witness.rkt` (racket-performance-probing `scripts/`).
    A merge that can go down is outside A-1 and A-2 altogether. Under DIRECT, whether a program
    gets a type error would depend on the schedule. Attribution: ground types and solved metas are
    clean (0/3000 on every law). One unsolved meta is enough to fail.
@@ -161,6 +180,24 @@ unified body back over the fresh fvar; the inverse of `open-expr` must be locate
 obvious name exists, by grep) or written. The regression tests come from the `aci-laws.rkt` D1c/D1d cases.
 *Prediction, not yet checked*: this removes the Pi-arm share of D1's A violations but none of the C
 violations, which come from the fallback.
+
+> ⚠ **CORRECTION (2026-10-13): the prediction is REFUTED; F3(a) landed as `5ec697bf`.** ~~none of the C
+> violations~~: the fix removed C violations as well. `aci-laws.rkt` at N = 3000, same seeds, before → after:
+>
+> | family | C | A |
+> |---|---|---|
+> | D1 (elaborator-fresh metas, `:type` classifier) | 257 → **216** | 58 → 49 |
+> | D1c (one unsolved meta) | 74 → **28** | 22 → 15 |
+> | D1d (two unsolved metas) | 251 → **187** | 27 → 25 |
+> | tagged(D1), outer merge over W ∈ 0..7 | 432 → **366** | 55 → 38 |
+>
+> D1a/D1b stay 0/0; the other outer-merge rows (616 and 1197 C) are unchanged.
+>
+> The cause of the error is in the defect itself: `Pi(Nat,?m) ⊔ Pi(Nat,Unit) = Pi(Nat,?m)` against the swapped
+> `Pi(Nat,Unit)` IS a commutativity violation, produced by the binder arm, not the fallback. The prediction
+> attributed every C violation to the fallback without checking. What remains (28/187/366 C) is the fallback's
+> share plus anything else non-commutative; F3(b)'s first witness also had to be replaced (§2 item 2). Record:
+> the sweep merge note § F3(a).
 
 **Design items for D.2, each needing a decision:**
 
