@@ -47,8 +47,8 @@
 ;; override is respected. Manual `raco make` outside the runners needs the
 ;; var in the shell (see CLAUDE.local.md + .claude/rules/testing.md).
 ;; Evidence: docs/tracking/2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md §4.2.
-(unless (getenv "PLT_CS_COMPILE_LIMIT")
-  (putenv "PLT_CS_COMPILE_LIMIT" "1000000"))
+(void (unless (getenv "PLT_CS_COMPILE_LIMIT")
+        (putenv "PLT_CS_COMPILE_LIMIT" "1000000")))  ; `void`: a module-level #t prints
 
 ;; ============================================================
 ;; Skip list support
@@ -518,13 +518,29 @@
 (define (run-tests test-paths project-root)
   (define file-count (length test-paths))
 
-  ;; Step 0: Kill stale batch workers from previous runs.
-  ;; A killed test run leaves batch-worker.rkt processes alive, consuming
-  ;; resources and potentially holding file locks. Clean them up.
+  ;; Step 0: Kill ORPHANED batch workers left by a previous, killed run of THIS
+  ;; checkout's runner.
+  ;;
+  ;; ⚠⚠ THIS WAS `pkill -f batch-worker.rkt` — MACHINE-WIDE — AND IT KILLED LIVE
+  ;; RUNS. Every runner start terminated every batch worker on the machine,
+  ;; including the workers of a suite running concurrently in another session or
+  ;; worktree. Observed twice on 2026-10-13: a full suite lost all 18 workers
+  ;; mid-run (63 and 22 of 493 units reported) within seconds of a targeted run
+  ;; starting in .claude/worktrees/deferred-sweep-146-149; the live check found
+  ;; ZERO workers alive while the runner waited out its timeout — and before
+  ;; the INCOMPLETE fix below, the victim then printed "all pass".
+  ;;
+  ;; An orphan is precisely a worker whose runner died: it is reparented to
+  ;; launchd/init (PPID 1). A live run's workers are children of a live runner.
+  ;; So: PPID 1 AND this checkout's absolute batch-worker path — never another
+  ;; run's workers, never another worktree's.
   (let ([kill-result (with-handlers ([exn? (lambda (e) "")])
                        (let-values ([(proc out in err)
                                      (subprocess #f #f #f "/usr/bin/pkill"
-                                                 "-f" "batch-worker.rkt")])
+                                                 "-P" "1"
+                                                 "-f" (path->string
+                                                       (build-path project-root "tools"
+                                                                   "batch-worker.rkt")))])
                          (subprocess-wait proc)
                          (close-input-port out)
                          (close-input-port err)
