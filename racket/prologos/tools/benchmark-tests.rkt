@@ -27,7 +27,8 @@
          racket/future  ;; for processor-count
          json
          "dep-graph.rkt"
-         "bench-lib.rkt")
+         "bench-lib.rkt"
+         "suite-lock.rkt")
 
 (define do-precompile? (make-parameter #t))
 
@@ -118,7 +119,7 @@
 
   ;; Build run record
   (define record
-    (hasheq 'schema_version 3
+    (hasheq 'schema_version TIMINGS-SCHEMA-VERSION
             'timestamp (current-iso-timestamp)
             'commit (current-commit)
             'branch (current-branch)
@@ -518,6 +519,7 @@
 (define compare-ref (make-parameter #f))
 (define timeout-secs (make-parameter 600))
 (define num-jobs (make-parameter (processor-count)))
+(define no-wait? (make-parameter #f))
 (define regression-threshold (make-parameter 10))
 (define trend-file (make-parameter #f))
 (define trend-depth (make-parameter 10))
@@ -545,6 +547,8 @@
     (trend-depth (string->number n))]
    ["--no-precompile" "Skip bytecode pre-compilation step"
     (do-precompile? #f)]
+   ["--no-wait" "If another run holds the machine-wide suite lock, exit 75 instead of waiting"
+    (no-wait? #t)]
    #:multi
    ["--files" file "Benchmark specific test file(s)"
     (file-list (cons (string->symbol file) (file-list)))])
@@ -559,7 +563,23 @@
        (if (null? (file-list))
            (sort (all-test-files) symbol<?)
            (reverse (file-list))))
-     (define ok? (run-benchmark test-names (timeout-secs) (num-jobs) (regression-threshold)))
+     ;; A timing run: the machine-wide suite lock, EXCLUSIVELY (suite-lock.rkt).
+     (define lock-path (suite-lock-path))
+     (define ok?
+       (call-with-suite-lock
+        'exclusive
+        (lambda () (run-benchmark test-names (timeout-secs) (num-jobs) (regression-threshold)))
+        #:path lock-path
+        #:wait? (not (no-wait?))
+        #:checkout project-root
+        #:command (string-join (cons "benchmark-tests"
+                                     (vector->list (current-command-line-arguments))) " ")
+        #:on-wait (make-wait-reporter 'exclusive lock-path)
+        #:on-busy (lambda (holders)
+                    (printf "SUITE LOCK BUSY (--no-wait): exit ~a, nothing was measured.\n"
+                            SUITE-LOCK-BUSY-EXIT)
+                    (for ([h (in-list holders)]) (printf "  ~a\n" (format-holder h)))
+                    (exit SUITE-LOCK-BUSY-EXIT))))
      (unless ok? (exit 1))]))
 
 (main)

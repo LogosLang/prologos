@@ -481,3 +481,196 @@ it depends on someone remembering.
 - **Dailies 2026-10-12**: STATE (suite line, register, Watching (0) resolved) and a sparse LOG pointer.
 - **Next in this session: F3(a)** (owner decision O-7, handoff addendum, queued "after the item in hand (147)").
   It was not picked up before 149: the addendum landed mid-session (02:32) after the handoff had been read.
+
+---
+
+## F3(a) ✅ `try-unify-pure`'s binder arms return the unified body, closed — `5ec697bf`
+
+Owner decision **O-7** (PAR 4 D.1 §14), queued by the handoff addendum of 2026-10-13
+(`2026-10-12_DEFERRED_SWEEP_146-149_HANDOFF.md` § Addendum). Written at `5ec697bf`; base for the
+before legs: `58241c0c` (main, branch fast-forwarded to it this morning). Racket 9.3, limited build.
+
+**Defect.** The Pi arm (both the resolved-mult-meta branch and the plain branch), the Sigma arm and the lam arm of
+`try-unify-pure` (`type-lattice.rkt:459`, `:471`, `:481`, `:502` at `58241c0c`) opened both bodies with a fresh fvar,
+unified them, and returned the first argument's original body. The unified body was used only as a success flag. So
+`Pi(Nat,?m) ⊔ Pi(Nat,Unit) = Pi(Nat,?m)`, and the swapped order gave `Pi(Nat,Unit)`.
+
+**Fix.**
+- `substitution.rkt`: `close-expr`, beside `open-expr` and documented as its inverse (locally nameless close; Charguéraud,
+  JAR 2012). `shift` does every bit of index arithmetic. It is skipped when `loose-bvar-range` is 0, so unchanged subtrees
+  stay `eq?`. `abstract-fvar` only replaces the fvar.
+- `type-lattice.rkt`: the four arms return `(close-expr <unified> x)`. The comment at `:468-470` that justified the
+  defect ("structurally equal after unification") is replaced.
+
+**Deviation from the addendum's fix shape, and why.** The addendum asked for a walker over "the same node set as
+`subst`" (336 arms). `abstract-fvar` instead has explicit arms only at `shift`'s binder inventory, plus a generic
+transparent-struct fallback. This is `pipeline.md` § Exhaustive Walkers, answer 1, the posture of `loose-bvar.rkt`'s
+`compute-range`. Its action is uniform except at binders, so a 336-arm checklist would buy nothing, and a later node kind
+cannot be skipped silently. Facts checked before choosing:
+- `shift` and `subst` route depth at exactly four binders: lam/Pi/Sigma `(add1 cutoff)`, ×3 each, and reduce arms
+  `(+ cutoff binding-count)`. Grep of every recursive call's cutoff argument.
+- Their closed-leaf sets are identical: 38 kinds, including `expr-meta`, `expr-foreign-fn` and `expr-prop-network`.
+- Neither one descends into vectors or hash values.
+
+So x, which only `subst` places, can never sit where the fallback would miss it. Descending into `subst`'s leaves finds
+nothing and returns them `eq?`.
+
+**Tests** (red first: 7/7 failed before the fix):
+
+| file | added | what |
+|---|---|---|
+| `tests/test-type-lattice.rkt` | 7 | Pi, Sigma, lam, Pi via the resolved-mult-meta branch, both orders. `type-unify-or-top` commutative with the result ⊒ both inputs. A dependent codomain (`Vec Nat n`) closes back to the binder. Nested binders (outer variable at depth 1). |
+| `tests/test-substitution.rkt` | 4 | `close(open(b,x),x) = b` and `open(close(t,x),x) = t`, each on 3 000 seeded random terms. The generator covers every binder kind, reduce arms with 0–2 bindings, loose bvars, decoy fvars, and nodes only the fallback handles. A non-vacuity check requires > 1 000 terms to actually contain x. Plus concrete depth-routing cases and `eq?` sharing. |
+
+**Mutation check**: each arm's old body was restored one at a time, and every arm had its own witness. Pi/mult-meta →
+`:357`; Pi → `:341 :348 :377 :385`; Sigma → `:363`; lam → `:369`. The file was restored byte-identical
+(`cmp`).
+
+**Before/after.**
+
+1. **The merge-law probe** (`aci-laws.rkt`, N = 3 000, same seeds; outputs `aci-laws.2026-10-13.out` and
+   `aci-laws.f3a.2026-10-13.out` in racket-performance-probing `scripts/data/`):
+
+   | family | C before → after | A before → after |
+   |---|---|---|
+   | D1 (elaborator-fresh metas, `:type` classifier) | 257 → 216 | 58 → 49 |
+   | D1c (one unsolved meta) | 74 → 28 | 22 → 15 |
+   | D1d (two unsolved metas) | 251 → 187 | 27 → 25 |
+   | tagged(D1), outer merge over W ∈ 0..7 | 432 → 366 | 55 → 38 |
+
+   D1a/D1b stay 0. **The PAR 4 note's prediction is refuted.** It said "none of the C violations", but the binder arm
+   itself produced C violations: the defect's own example is one. The M1 record's narrower prediction (some A removed,
+   (b)'s remain) holds, weakly. Both documents are corrected in place, with callouts.
+
+2. **F3(b) needs a new witness.** The published one, `(Pi(Nat,?m) ⊔ Pi(Nat,Unit)) ⊔ Unit = Unit` versus `type-top`,
+   needed both defects. It now gives `type-top` both ways. A witness that needs only the fallback, under the probe's
+   meta-solution function (`f3b-witness.rkt`): `(Bool ⊔ Pi(?m,Nat)) ⊔ Pi(Nat,?m) = Bool` but
+   `Bool ⊔ (Pi(?m,Nat) ⊔ Pi(Nat,?m)) = type-top`. The mechanism (`type-lattice.rkt:217-218`): when `try-unify-pure`
+   fails and either side holds an unsolved meta anywhere, the merge keeps the other side, even across a rigid head
+   clash. The same fallback appears in `type-lattice-merge`, `:172-173`. Without a solution function,
+   `has-unsolved-meta?` is blind to the meta and the merge gives `type-top`.
+
+3. **Full suite** (BSP, `--all --force-rerun`): **10 300 tests / 492 files**. The 11f558c8 merge gate had 10 289; the +11
+   are exactly the new tests. **1 failure, `test-cond-01`.** It passed alone 2/2, and the census suite run of the same
+   code (item 5) passed it. Its message was `preparse: spec: defn classify has both a spec and inline type annotations`
+   then `Unbound variable: classify`: a check that runs before elaboration, so before any unification. That is the
+   cross-file spec-store leak class at `DEFERRED.md:125` (2026-07-31), and the same symptom was recorded twice at
+   `fd2986cc` (DEFERRED 160). It is not F3(a). ⚠ The failure log was lost: I ran the solo re-check in parallel with
+   copying the log, and the passing re-run deleted it, which is the trap DEFERRED 160 describes. The error text above
+   survives in the runner's console output.
+
+4. **Comparative corpus** (`benchmarks/comparative/`, 19 programs, `racket driver.rkt <prog>` in a pinned `58241c0c`
+   worktree against `5ec697bf`; `corpus-ab.sh` + `corpus-compare.py`): stdout byte-identical 19/19, and every
+   `PERF-COUNTERS` field identical per program. `parity-adversarial` exits 1 in BOTH trees. **This is vacuous for
+   F3(a)**: see item 5.
+
+5. **Census: does the fix change results in practice?** Measurement branch `f3a-census` (`89b0c88a`, `2f2c6fa3`; never
+   merged). Per arm, it counts successes and how often the closed unified body differs from the zonked first-argument
+   body that the pre-fix code returned:
+
+   | population | binder-arm successes | results that differ |
+   |---|---|---|
+   | comparative corpus (19 programs) | **0** | 0 |
+   | full suite (10 300 tests, all pass) | 881 (Pi 689, Sigma 185, lam 4, Pi/mult-meta 3) | **97** (Pi 74, Sigma 21, lam 1, Pi/mult-meta 1) |
+
+   So the corpus never reaches the binder arms. In the suite, the defect changed the merge result in 97 of 881 binder
+   merges (11 %), yet no existing test observed it: 10 300 pass both before and after. The level shown is wrong merge
+   values at runtime, with no observed wrong program outcome. That the values are later refined or overwritten is an
+   inference, not traced. The new unit tests are the only discriminating witnesses.
+
+**Not done here:** the `p0-profile.rkt stats` leg from `par4-p0`. Its corpus overlaps the comparative one, and item 5
+shows that population does not reach the arms. A timing A/B waits for a quiet machine: three agents were active.
+
+**Proposed PAR 4 LOG entry** (for the PAR 4 session to apply):
+
+> ### F3(a) landed (O-7): binder arms return the unified body — `5ec697bf` (sweep branch, 2026-10-13)
+> **Why / decision**: O-7. `close-expr` (the inverse of `open-expr`, generic fallback per pipeline.md) plus the four
+> arms; 11 tests, mutation-checked per arm. **Surprise / correction**: the note's prediction "none of the C violations"
+> is refuted. C also fell (D1c 74→28, D1d 251→187, tagged(D1) 432→366), and F3(b)'s published witness needed both
+> defects (replaced: `(Bool ⊔ Pi(?m,Nat)) ⊔ Pi(Nat,?m) = Bool` vs `type-top`). The fallback is duplicated
+> (`type-lattice.rkt:172-173` and `:217-218`). In the suite the defect changed 97 of 881 binder merges with no test
+> observing it; the comparative corpus never reaches the arms, so it cannot serve as P2's evidence for merge-law work.
+> **Next**: D.2 decides F3(b) at both sites, against the new witness; P0's corpus needs a program that reaches
+> binder merges with unsolved metas.
+
+---
+
+## Coordination: parallel streams, owner decisions (vii)/(viii), `par4-p0` brought up to main
+
+**Parallel streams** (owner: "launch all three now"). Each runs on its own branch in a nested worktree off `58241c0c`, and
+their files are disjoint:
+- `runner-queue-gate`: the machine-wide suite queue, then the gate batch (161, 164's open items, 162(1), and 160's
+  evidence-preserving support). Steered mid-run with one more item: the `--tests` precompile never compiles
+  `tests/test-support.rkt`, which the worker loads by `dynamic-require`, so a stale one kills every worker.
+- `guards-hook-sweep`: 159(a) and 163's `pkill` rule in `tools/hook-guard-racket.sh`, plus 162(2)'s `eq?` sweep.
+- `per-process-152-151`: 152 and 151(a).
+
+The coordinator (this session) reads each diff, re-runs its tests, checks its claims, merges in a throwaway worktree
+gated by a full suite with a file-by-file count, and only then moves main.
+
+**Owner decisions, 2026-10-13:**
+- **(vii)** F3(a) is folded into ONE checkpoint merge with the runner stream; it is not merged alone.
+- **(viii)** The sweep session brings `par4-p0` up to main itself, rather than relaying the request.
+
+**`par4-p0` → `a456c370`** (merge of main into `fbd5a322`; recorded in PAR 4 note § 7d). Clean and idle when checked.
+The only overlap, `propagator.rkt`, merged to main + exactly `par4-p0`'s 6 hunks. Merged tree: 10 298 tests / 493 files,
+all pass; the file-by-file delta was exactly `+9 test-arena-parity`, −11 F3(a) tests, nothing else. Then the branch was
+fast-forwarded, rebuilt with the limit (fingerprints match), and its own test passes in place. Still carrying the
+machine-wide `pkill`: 5 nested worktrees idle 8–9 weeks (`charming-khayyam`, `dazzling-wescoff`,
+`editor-support-path-change`, `heuristic-thompson`, `sleepy-kepler`) and 2 sibling clones (`prologos-egraph-spike`,
+`prologos-preduce-auto`). Left untouched: harmless unless a suite is started there.
+
+**Worktree cleanup (owner request, 2026-10-13).** The removal rule: HEAD is an ancestor of main, no tracked changes, no
+untracked files, no racket process with its cwd inside, ignored files inspected, and names cited only historically.
+- **Removed:** `charming-khayyam-a7835d` (`605b593f`), `dazzling-wescoff-4b692b` (`16b3a9d0`),
+  `editor-support-path-change-a3ddf9` (`9c0b6d31`), `heuristic-thompson-a2091b` (`c7c7f796`), `sleepy-kepler-8aa2cb`
+  (`8e09173d`).
+- **Branches deleted** (`git branch -d`, merged only): `clever-bhabha-f3a408` and `sleepy-kepler-8aa2cb`.
+- **Kept:** the active trees (`deferred-sweep-146-149`, the three agent streams, `par4-p0`, and `ciu6-path-selection`, the
+  other session's).
+- **Waiting on the owner:** the two sibling clones. `egraph-relational-spike` and `preduce-autonomy` hold records that are
+  not on main. Scripts: `wt-inventory.sh`, `wt-precheck.sh`.
+
+---
+
+## Checkpoint 2 (owner decision (vii)): F3(a) + the runner stream → main
+
+**Merges** in a throwaway worktree off main `e6394b3f` (the CIU 6 session's docs commit; the only overlap was
+`DEFERRED.md`, in different entries; no overlap with main's uncommitted working copy):
+- `104ba643` merges `deferred-sweep-146-149` (F3(a) + records).
+- `f6e530d7` merges `runner-queue-gate` (queue + gate batch, 12 commits).
+- `8014caef` is a follow-up fix found BY the gate (below).
+- The DEFERRED and record commit sits on top.
+
+**Coordinator verification of the runner stream before merging.**
+- Read `tools/suite-lock.rkt` in full, the targeted lock path, and the agent's note.
+- Re-ran its 44 tests (10 + 28 + 3 + 3).
+- Mutation: an exclusive waiter releasing the turnstile, i.e. no writer preference, turns "a shared taker may not
+  overtake a waiting exclusive one" red.
+- Probe `lock-probe.sh`: children do NOT inherit the lock, so a SIGKILLed holder frees it at once while its child
+  runs (recorded as 166's limitation).
+- **Live queue, first real use**: a targeted `--no-wait` run during the gate suite was refused, exit 75, naming the
+  holder (pid 45290, exclusive, since 05:19:06, checkout, command). The first attempt was NOT refused: the
+  coordinator's shell had inherited `PROLOGOS_SUITE_LOCK` from the runner agent's session, so it queued on a private
+  file. Raw locks on the real file were held throughout. Filed as **DEFERRED 166**.
+
+**Gate 1** (`f6e530d7`, new runner): 10 329 tests / 494 files, all pass. The file-by-file delta against the F3(a)
+suite was exactly the runner's new tests, plus one surprise: `test-properties.rkt` reported 8 against 13 in every
+earlier record.
+- Run alone, both runners count 13.
+- The new `'workers` record gave the victim's worker sequence (worker 5, 18 units before it), and a one-process replay
+  reproduced the 8.
+- A single-file bisect named `test-generators.rkt`: `test-properties` required it, so its 5 test-cases ran inside
+  whichever unit came first. That is DEFERRED 161's original 0-test sighting, and under the new gate it would have
+  been a false INCOMPLETE.
+- **Fixed in `8014caef`**: the generators move to `tests/property-generators.rkt`, a library; a guard in
+  `test-suite-plan.rkt` refuses test files that require test files (mutation red); one worker, both orders: 5 and 8.
+
+**Gate 2** (`8014caef`): **10 330 tests / 494 files, all pass, 56.2 s** (quiet machine). File by file against the F3(a)
+suite: `+10 test-suite-lock`, `+19 test-suite-plan` (18 + the guard), `+3 test-annotate-invalid-timings`,
+`+3 test-timings-timestamp`, and `−5 test-properties` (the double count removed). Nothing else.
+
+**DEFERRED** (this commit; register 165 → 167):
+- 161 and 164 discharged; 162 and 160 status;
+- **165** filed (stale worker dependency, discharged);
+- **166** filed (silent queue bypass; the measured lock-inheritance limitation).

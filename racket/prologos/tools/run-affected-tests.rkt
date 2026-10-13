@@ -15,6 +15,10 @@
 ;;   racket tools/run-affected-tests.rkt --no-precompile  # skip bytecode pre-compilation
 ;;   racket tools/run-affected-tests.rkt --no-pnet-cache # disable .pnet module network cache
 ;;   racket tools/run-affected-tests.rkt --failures      # show failure logs from last run
+;;   racket tools/run-affected-tests.rkt --no-wait       # exit 75 if the suite lock is busy
+;;
+;; Runs QUEUE machine-wide (suite-lock.rkt): a full suite takes the suite lock
+;; exclusively, a targeted run shares it; a later run waits for an earlier one.
 ;;
 ;; Automatically records per-file timing data to data/benchmarks/timings.jsonl.
 ;; Use benchmark-tests.rkt for reporting (--report, --trend, --compare, --slowest).
@@ -32,7 +36,9 @@
          json
          "dep-graph.rkt"
          "bench-lib.rkt"
-         "suite-plan.rkt")
+         "suite-plan.rkt"
+         "suite-lock.rkt"
+         (only-in racket/os getpid))
 
 ;; ============================================================
 ;; Compile-limit adoption (Rel T1 SUB.2, owner-blessed 2026-07-24)
@@ -204,9 +210,13 @@
 (define do-precompile? (make-parameter #t))
 (define do-pnet-cache? (make-parameter #t))
 (define show-failures? (make-parameter #f))
+(define failures-run (make-parameter #f))
 (define bail-timeout-threshold (make-parameter 3))
 (define force-rerun? (make-parameter #f))
 (define force-stale-zo? (make-parameter #f))
+;; --no-wait: when the machine-wide suite lock (suite-lock.rkt) is busy, exit
+;; SUITE-LOCK-BUSY-EXIT (75) at once instead of queueing behind the holder.
+(define no-wait? (make-parameter #f))
 ;; PPN 4C Phase 3c process improvement (2026-04-20): --tests FILE...
 ;; Targeted test mode. Takes explicit file paths, skips dep-graph inference,
 ;; runs precompile-modules! (so test .zo linklets are fresh w.r.t. any
@@ -249,6 +259,8 @@
     (do-pnet-cache? #f)]
    ["--failures" "Show failure logs from last run (no tests executed)"
     (show-failures? #t)]
+   ["--failures-run" id "Show the archived failure logs of run ID (or 'latest'), from data/benchmarks/failures/runs/"
+    (show-failures? #t) (failures-run id)]
    ["--bail-timeouts" n "Abort after N per-file timeouts (default: 3, 0=disable)"
     (bail-timeout-threshold (string->number n))]
    ["--no-bail" "Disable early-bail on timeouts"
@@ -257,6 +269,8 @@
     (force-rerun? #t)]
    ["--force-stale-zo" "Run despite stale .zo files (reproduce old behavior intentionally)"
     (force-stale-zo? #t)]
+   ["--no-wait" "If another run holds the machine-wide suite lock, exit 75 instead of waiting"
+    (no-wait? #t)]
    #:multi
    ["--skip" file "Skip an additional test file (additive with .skip-tests)"
     (extra-skips (cons (string->symbol file) (extra-skips)))]
@@ -280,9 +294,15 @@
   (define tests-dir
     (build-path project-root "tests"))
 
-  ;; --failures: show failure logs from last run, then exit
+  ;; --failures: show failure logs from last run, then exit.
+  ;; --failures-run ID: the archived logs of one run (DEFERRED 160 support).
   (when (show-failures?)
-    (define fail-dir (build-path project-root "data" "benchmarks" "failures"))
+    (define fail-root (build-path project-root "data" "benchmarks" "failures"))
+    (define runs-root (build-path fail-root "runs"))
+    (define fail-dir
+      (cond [(failures-run) (build-path (if (equal? (failures-run) "latest") fail-root runs-root)
+                                        (failures-run))]
+            [else fail-root]))
     (cond
       [(not (directory-exists? fail-dir))
        (printf "No failure logs found (directory does not exist: ~a)\n" fail-dir)]
@@ -294,36 +314,92 @@
          [(null? log-files)
           (printf "No failure logs found — all tests passed last run.\n")]
          [else
-          (printf "~a failure log(s) from last run:\n\n" (length log-files))
+          (printf "~a failure log(s) ~a:\n\n" (length log-files)
+                  (if (failures-run)
+                      (format "from run ~a" (failures-run))
+                      "— the latest per file"))
           (for ([log-path (in-list log-files)])
             (printf "~a\n" (make-string 60 #\─))
             (display (file->string log-path))
             (newline))])])
+    (define archived
+      (if (directory-exists? runs-root)
+          (sort (for/list ([p (in-list (directory-list runs-root))]) (path->string p)) string>?)
+          '()))
+    (unless (null? archived)
+      (printf "Archive (data/benchmarks/failures/runs/, newest ~a kept): ~a run(s); newest ~a. Show one: --failures-run ID|latest\n"
+              FAILURE-RUNS-KEPT (length archived) (car archived)))
     (exit 0))
 
   ;; Guard: block redundant full-suite re-runs (correct-by-construction, not discipline).
   ;; If --all and timings.jsonl was written <5min ago and no .rkt files changed since,
   ;; print a warning and exit. Use --force-rerun to override.
-  (when (and (run-all?) (not (force-rerun?)))
-    (define timings-path (build-path project-root "data" "benchmarks" "timings.jsonl"))
-    (when (file-exists? timings-path)
-      (define last-mod (file-or-directory-modify-seconds timings-path))
-      (define now (current-seconds))
-      (define elapsed (- now last-mod))
-      (when (< elapsed 300)  ;; less than 5 minutes
-        (define src-dir (build-path project-root))
-        (define any-changed?
-          (for/or ([f (in-directory src-dir)]
-                   #:when (regexp-match? #rx"\\.rkt$" (path->string f)))
-            (> (file-or-directory-modify-seconds f) last-mod)))
-        (unless any-changed?
-          (printf "\n~a\n" (make-string 60 #\═))
-          (printf "GUARD: No .rkt files changed since last suite run (~as ago).\n" elapsed)
-          (printf "Read failure logs:  racket tools/run-affected-tests.rkt --failures\n")
-          (printf "Run one test:       raco test tests/test-NAME.rkt\n")
-          (printf "Force full re-run:  add --force-rerun flag\n")
-          (printf "~a\n\n" (make-string 60 #\═))
-          (exit 0)))))
+  ;; Checked before queueing for the suite lock AND again after a wait: a run
+  ;; that queued behind another full suite of this checkout may find, once it
+  ;; holds the lock, that the run it waited for has just made it redundant.
+  (define (rerun-guard!)
+    (when (and (run-all?) (not (force-rerun?)))
+      (define timings-path (build-path project-root "data" "benchmarks" "timings.jsonl"))
+      (when (file-exists? timings-path)
+        (define last-mod (file-or-directory-modify-seconds timings-path))
+        (define now (current-seconds))
+        (define elapsed (- now last-mod))
+        (when (< elapsed 300)  ;; less than 5 minutes
+          (define src-dir (build-path project-root))
+          (define any-changed?
+            (for/or ([f (in-directory src-dir)]
+                     #:when (regexp-match? #rx"\\.rkt$" (path->string f)))
+              (> (file-or-directory-modify-seconds f) last-mod)))
+          (unless any-changed?
+            (printf "\n~a\n" (make-string 60 #\═))
+            (printf "GUARD: No .rkt files changed since last suite run (~as ago).\n" elapsed)
+            (printf "Read failure logs:  racket tools/run-affected-tests.rkt --failures\n")
+            (printf "Run one test:       raco test tests/test-NAME.rkt\n")
+            (printf "Force full re-run:  add --force-rerun flag\n")
+            (printf "Exit status ~a: NOTHING WAS RUN (not a pass).\n" EXIT-GUARD-REFUSED)
+            (printf "~a\n\n" (make-string 60 #\═))
+            ;; DEFERRED 164 open(2): was (exit 0), which read as green.
+            (exit EXIT-GUARD-REFUSED))))))
+  (rerun-guard!)
+
+  ;; Machine-wide suite QUEUE (suite-lock.rkt). A run takes the lock before it
+  ;; compiles or starts a worker and holds it to the end: 'exclusive for a
+  ;; full or suite-sized run (one worker per core), 'shared for a targeted
+  ;; run. A second run WAITS, printing who holds the lock, instead of
+  ;; contending for the cores; `--no-wait` exits 75 instead. The OS releases
+  ;; the lock if this process dies, and every `(exit n)` below releases it first.
+  (define (with-suite-lock mode thunk)
+    (define lock-path (suite-lock-path))
+    (define report (make-wait-reporter mode lock-path))
+    (define waited? #f)
+    (define t-wait (current-inexact-milliseconds))
+    (call-with-suite-lock
+     mode
+     (lambda ()
+       (when waited?
+         (printf "Suite lock acquired (~a) after waiting ~as.\n" mode
+                 (real->decimal-string (/ (- (current-inexact-milliseconds) t-wait) 1000.0) 1))
+         (rerun-guard!))
+       (thunk))
+     #:path lock-path
+     #:wait? (not (no-wait?))
+     #:checkout project-root
+     #:command (string-join (cons "run-affected-tests"
+                                  (vector->list (current-command-line-arguments)))
+                            " ")
+     #:on-wait (lambda (holders secs) (set! waited? #t) (report holders secs))
+     #:on-busy (lambda (holders)
+                 (printf "\n~a\n" (make-string 60 #\═))
+                 (printf "SUITE LOCK BUSY (--no-wait): exit ~a, nothing was run.\n"
+                         SUITE-LOCK-BUSY-EXIT)
+                 (printf "  wanted: ~a access to ~a\n" mode (path->string lock-path))
+                 (if (null? holders)
+                     (printf "  holder: unknown (no info file: it predates suite-lock.rkt, or is starting)\n")
+                     (for ([h (in-list holders)])
+                       (printf "  ~a\n" (format-holder h))))
+                 (printf "Drop --no-wait to queue behind it.\n")
+                 (printf "~a\n\n" (make-string 60 #\═))
+                 (exit SUITE-LOCK-BUSY-EXIT))))
 
   (cond
     ;; --tests FILE...: run specific files with precompile discipline.
@@ -356,16 +432,24 @@
           (for ([p (in-list normalized-files)])
             (printf "  ~a\n" p)))
         (unless (dry-run?)
+         (with-suite-lock
+          (suite-lock-mode #:all? #f #:file-count (length normalized-files))
+          (lambda ()
           ;; Scoped precompile: driver.rkt + just the targeted tests. This is
           ;; the linklet-safety guarantee for targeted runs. Fast path ~3-5s
           ;; typical (vs ~30s full-directory precompile). Skip run-tests's
           ;; global precompile since we've done the scoped one here.
           (define driver-path
             (path->string (simplify-path (build-path project-root "driver.rkt"))))
-          (define compile-paths (cons driver-path normalized-files))
+          ;; ⚠ + the batch worker's OWN modules (suite-plan.rkt
+          ;; worker-precompile-paths): it reaches tests/test-support.rkt only by
+          ;; dynamic-require, which raco make never follows, so a targeted run
+          ;; whose tests do not require test-support.rkt left its .zo stale and
+          ;; every worker died at load (item h, reproduced 2026-10-13).
+          (define worker-paths (worker-precompile-paths project-root))
           (cond
             [(do-precompile?)
-             (printf "Pre-compiling driver + ~a test file(s)...\n"
+             (printf "Pre-compiling driver + the batch worker + ~a test file(s)...\n"
                      (length normalized-files))
              (define t0 (current-inexact-monotonic-milliseconds))
              ;; STAGED + parallel via bench-lib's `raco-make-staged!`: production
@@ -374,8 +458,12 @@
              ;; does not require driver.rkt can otherwise finish before
              ;; driver_rkt.zo and look stale forever after). It also drains
              ;; raco's pipes, which the previous code did not — see raco-make!.
-             (define-values (prod-paths tst-paths)
-               (partition (lambda (p) (not (regexp-match? #rx"/tests/" p))) compile-paths))
+             (define-values (prod-targets test-targets)
+               (partition (lambda (p) (not (regexp-match? #rx"/tests/" p))) normalized-files))
+             ;; Production stage: driver.rkt, then the worker's modules (test-
+             ;; support.rkt requires driver.rkt), then any non-test targets.
+             (define prod-paths (remove-duplicates (append (list driver-path) worker-paths prod-targets)))
+             (define tst-paths (filter (lambda (p) (not (member p prod-paths))) test-targets))
              (define-values (ok output) (raco-make-staged! prod-paths tst-paths))
              (define ms (- (current-inexact-monotonic-milliseconds) t0))
              (printf "Pre-compiled in ~as\n"
@@ -396,7 +484,7 @@
                             [suppress-stale-scan? #t])
                (run-tests normalized-files project-root))]
             [else
-             (run-tests normalized-files project-root)]))])]
+             (run-tests normalized-files project-root)]))))])]
 
     ;; --all: run everything (subject to skip filter)
     [(run-all?)
@@ -411,10 +499,13 @@
              (string->symbol (path->string p)))
            '()))
      ;; PM Track 10C: filter to files that actually exist (dep-graph may have stale entries)
+     ;; DEFERRED 161: test-support.rkt & co. are not test units (suite-plan.rkt
+     ;; NON-TEST-MODULES) — dispatching the worker's own fixture ran 0 tests.
      (define all-tests
-       (sort (filter (lambda (sym)
-                       (file-exists? (build-path tests-dir (symbol->string sym))))
-                     (remove-duplicates (append known-tests disk-tests)))
+       (sort (drop-non-test-modules
+              (filter (lambda (sym)
+                        (file-exists? (build-path tests-dir (symbol->string sym))))
+                      (remove-duplicates (append known-tests disk-tests))))
              symbol<?))
      (define-values (to-run skipped) (apply-skip-filter all-tests tests-dir))
      (cond
@@ -431,7 +522,7 @@
           (define test-paths
             (for/list ([t (in-list to-run)])
               (path->string (build-path tests-dir (symbol->string t)))))
-          (run-tests test-paths project-root))])]
+          (with-suite-lock 'exclusive (lambda () (run-tests test-paths project-root))))])]
 
     ;; Normal mode: compute affected tests from git diff
     [else
@@ -451,7 +542,7 @@
      (cond
        [force-all?
         (printf "info.rkt changed — running ALL tests.\n")
-        (define all-tests (all-test-files))
+        (define all-tests (drop-non-test-modules (all-test-files)))
         (define-values (to-run skipped) (apply-skip-filter all-tests tests-dir))
         (printf "Running ~a of ~a test files~a...\n"
                 (length to-run) (length all-tests)
@@ -460,7 +551,7 @@
           (define test-paths
             (for/list ([t (in-list to-run)])
               (path->string (build-path tests-dir (symbol->string t)))))
-          (run-tests test-paths project-root))]
+          (with-suite-lock 'exclusive (lambda () (run-tests test-paths project-root))))]
 
        [else
         ;; Filter out 'run-all from classified list (shouldn't be there but safety)
@@ -484,7 +575,8 @@
              (printf "  example: ~a\n" (changed-example-name c))]))
 
         ;; Compute affected tests (pass project-root for auto-scan of new files)
-        (define affected (compute-affected-tests changes #:project-root project-root))
+        (define affected
+          (drop-non-test-modules (compute-affected-tests changes #:project-root project-root)))
 
         ;; Apply skip filter
         (define-values (to-run skipped) (apply-skip-filter affected tests-dir))
@@ -507,7 +599,92 @@
              (define test-paths
                (for/list ([t (in-list to-run)])
                  (path->string (build-path tests-dir (symbol->string t)))))
-             (run-tests test-paths project-root))])])]))
+             (with-suite-lock (suite-lock-mode #:all? #f #:file-count (length test-paths))
+                              (lambda () (run-tests test-paths project-root))))])])]))
+
+;; ============================================================
+;; Per-worker bookkeeping
+;; ============================================================
+;; One per batch worker: what it was sent, in order, and everything it wrote
+;; to its REAL stderr (DEFERRED 164 open 4 — outside batch-worker.rkt's
+;; per-file capture). Lists are newest-first while the run is live.
+(struct worker-state (index proc [dispatched #:mutable] [stderr #:mutable]
+                            [stderr-dropped #:mutable] [drain #:mutable]))
+(define WORKER-STDERR-MAX-LINES 20000)  ; per worker; the rest is counted, not kept
+
+(define (worker-stderr-lines w) (map cdr (reverse (worker-state-stderr w))))
+;; The same, minus the prelude's metric lines (suite-plan.rkt metric-line?).
+(define (worker-evidence-lines w) (filter (lambda (l) (not (metric-line? l))) (worker-stderr-lines w)))
+
+;; Print a digest of the workers' stderr and, when it shows a linklet
+;; mismatch, the stale module and the rebuild that fixes it — the dead-worker
+;; banner used to advise `raco make driver.rkt`, which cannot fix a stale
+;; module that driver.rkt does not depend on (item (h): tests/test-support.rkt).
+(define (print-worker-stderr-digest workers #:lines [n 12])
+  (for ([w (in-list workers)]) (sync/timeout 2 (worker-state-drain w)))
+  (define any? #f)
+  (for ([w (in-list workers)])
+    (define ls (worker-evidence-lines w))
+    (unless (null? ls)
+      (unless any? (printf "\nWorker stderr (first ~a lines each; full text in this run's worker-N.stderr.log):\n" n))
+      (set! any? #t)
+      (printf "  worker ~a (pid ~a):\n" (worker-state-index w) (subprocess-pid (worker-state-proc w)))
+      (for ([l (in-list (take ls (min n (length ls))))]) (printf "    ~a\n" l))))
+  (unless any? (printf "\nThe workers wrote nothing to stderr (beyond the prelude's metric lines).\n"))
+  (define diag (for/or ([w (in-list workers)]) (diagnose-worker-stderr (worker-stderr-lines w))))
+  (when diag
+    (printf "\n⚠ STALE COMPILED MODULE: ~a\n" (cadr diag))
+    (printf "  (the importing side of a linklet mismatch: its .zo predates a dependency's rebuild)\n")
+    (printf "  Rebuild it: PLT_CS_COMPILE_LIMIT=1000000 raco make -j 4 ~a\n" (cadr diag)))
+  (flush-output))
+
+;; ============================================================
+;; Failure-log views (DEFERRED 160 support)
+;; ============================================================
+;; refresh-failure-views! : fail-root run-dir file-results -> kept?
+;; (1) the per-file LATEST view at fail-root/<file>.log: for each file this run
+;;     reported, replace its logs there with this run's; (2) the archive: keep
+;;     run-dir when the run left evidence (#:keep-run?), else remove it; prune
+;;     to the newest FAILURE-RUNS-KEPT; point fail-root/latest at the newest.
+(define (refresh-failure-views! fail-root run-dir file-results #:keep-run? keep-run?
+                                #:also-files [also-files '()])
+  (define (names dir)
+    (if (directory-exists? dir)
+        (for/list ([p (in-list (directory-list dir))]
+                   #:when (file-exists? (build-path dir p)))
+          (path->string p))
+        '()))
+  (define run-logs (names run-dir))
+  (define top-logs (names fail-root))
+  (for ([f (in-list (remove-duplicates
+                     (append (map (lambda (r) (hash-ref r 'file)) file-results) also-files)))])
+    (for ([n (in-list (file-log-names f top-logs))])
+      (with-handlers ([exn:fail? void]) (delete-file (build-path fail-root n))))
+    (for ([n (in-list (file-log-names f run-logs))])
+      (with-handlers ([exn:fail? void])
+        (copy-file (build-path run-dir n) (build-path fail-root n) #t))))
+  (define runs-root (build-path fail-root "runs"))
+  (define kept? (and keep-run? (pair? run-logs)))
+  (unless kept?
+    (with-handlers ([exn:fail? void]) (delete-directory/files run-dir)))
+  (define run-names
+    (if (directory-exists? runs-root)
+        (for/list ([p (in-list (directory-list runs-root))]
+                   #:when (directory-exists? (build-path runs-root p)))
+          (path->string p))
+        '()))
+  (for ([n (in-list (runs-to-prune run-names))])
+    (with-handlers ([exn:fail? void]) (delete-directory/files (build-path runs-root n))))
+  (define newest (let ([left (sort (remove* (runs-to-prune run-names) run-names) string>?)])
+                   (and (pair? left) (car left))))
+  (when newest
+    (define link (build-path fail-root "latest"))
+    (define tmp (build-path fail-root (format ".latest-~a" (getpid))))
+    (with-handlers ([exn:fail? void])
+      (when (link-exists? tmp) (delete-file tmp))
+      (make-file-or-directory-link (build-path "runs" newest) tmp)
+      (rename-file-or-directory tmp link #t)))
+  kept?)
 
 ;; ============================================================
 ;; Batch test execution with shared prelude
@@ -558,7 +735,10 @@
   (when (do-precompile?)
     (printf "Pre-compiling modules...\n")
     (define precomp-t0 (current-inexact-monotonic-milliseconds))
-    (precompile-modules! project-root)
+    ;; The worker's own modules explicitly: tests/test-support.rkt was covered
+    ;; only by the accident of living under tests/, batch-worker.rkt not at all.
+    (precompile-modules! project-root
+                         #:extra-production (worker-precompile-paths project-root))
     (define precomp-ms (- (current-inexact-monotonic-milliseconds) precomp-t0))
     (printf "Pre-compiled in ~as\n"
             (real->decimal-string (/ precomp-ms 1000.0) 1)))
@@ -590,6 +770,19 @@
         (when (> (file-or-directory-modify-seconds driver-src)
                  (file-or-directory-modify-seconds driver-zo))
           (set! stale-files (cons (path->string driver-src) stale-files)))))
+    ;; The batch worker's own modules (item h): batch-worker.rkt and what it
+    ;; dynamic-requires — stale if their .zo is missing, older than their
+    ;; source, or older than driver_rkt.zo. Repaired in the PRODUCTION stage.
+    (let* ([driver-zo (build-path project-root "compiled" "driver_rkt.zo")]
+           [driver-ts (and (file-exists? driver-zo) (file-or-directory-modify-seconds driver-zo))])
+      (for ([src (in-list (worker-precompile-paths project-root))])
+        (define-values (dir name _d) (split-path (string->path src)))
+        (define zo (build-path dir "compiled"
+                               (string-append (regexp-replace #rx"\\.rkt$" (path->string name) "_rkt") ".zo")))
+        (when (or (not (file-exists? zo))
+                  (> (file-or-directory-modify-seconds src) (file-or-directory-modify-seconds zo))
+                  (and driver-ts (< (file-or-directory-modify-seconds zo) driver-ts)))
+          (set! stale-files (cons src stale-files)))))
     ;; Test files against production .zo.
     (let* ([driver-zo (build-path project-root "compiled" "driver_rkt.zo")]
            [driver-ts (and (file-exists? driver-zo)
@@ -616,9 +809,14 @@
          ;; Staged for the same reason as the precompile above: if driver.rkt is
          ;; among the stale set it must finish before any test .zo is written,
          ;; or the next run's scan re-flags the tests we just repaired.
-         (define-values (stale-prod stale-tests)
-           (partition (lambda (p) (not (regexp-match? #rx"/tests/" p)))
-                      (reverse stale-files)))
+         (define worker-set (worker-precompile-paths project-root))
+         (define-values (stale-prod0 stale-tests0)
+           (partition (lambda (p) (or (member p worker-set) (not (regexp-match? #rx"/tests/" p))))
+                      (remove-duplicates (reverse stale-files))))
+         ;; driver.rkt before the worker's modules (test-support requires it)
+         (define-values (stale-driver stale-rest) (partition (lambda (p) (regexp-match? #rx"/driver[.]rkt$" p)) stale-prod0))
+         (define stale-prod (append stale-driver stale-rest))
+         (define stale-tests (filter (lambda (p) (not (member p stale-prod))) stale-tests0))
          (define-values (ok output) (raco-make-staged! stale-prod stale-tests))
          (unless ok
            (eprintf "✗ Auto-recompile failed. Run `raco make` manually.\n")
@@ -707,10 +905,12 @@
   ;; default, all keys compared equal, and the "LPT" sort silently degenerated to
   ;; stable (alphabetical) order.
   ;;
-  ;; Measured impact was NIL (median effective parallelism 8.97 poisoned vs 8.96 clean
-  ;; over 282 runs) — the schedule is not what gates this suite. Fixed anyway because a
-  ;; silently-degenerating optimizer is a lie in the code, and the cost of being right
-  ;; is a few lines.
+  ;; ⚠ A "measured impact NIL" claim stood here (median effective parallelism 8.97
+  ;; "poisoned" vs 8.96 "clean" over 282 runs). It is REFUTED — DEFERRED 162: both
+  ;; legs ran the INERT sort (the hasheq lookup below never hit), so it compared
+  ;; alphabetical order with alphabetical order and says nothing about LPT. With
+  ;; the sort working (389b3413) the suite went 127.6 -> 110.5 s (one run each, on
+  ;; 159's interpreted build: the ratio holds, the absolute seconds do not).
   ;;
   ;; Now: take the per-file MEDIAN over the most recent full-suite runs. Median rather
   ;; than latest because per-file wall varies 5-10% run to run; full-suite runs only
@@ -722,7 +922,7 @@
   ;; ⚠ equal?-keyed (suite-plan.rkt). This was a `for/hasheq` over file-name
   ;; STRINGS, looked up below with a freshly built string: `eq?` never matched
   ;; (0 of 489 hits, measured 2026-10-13), so every key was +inf.0 and dispatch
-  ;; was ALPHABETICAL — including on the run that "measured impact NIL" above.
+  ;; was ALPHABETICAL — including on both legs of the refuted measurement above.
   (define historical-times
     (if (file-exists? timings-path)
         (with-handlers ([exn? (lambda (e) (hash))])
@@ -770,12 +970,18 @@
   ;; simulation: suite-plan.rkt pick-eligible / tests/test-suite-plan.rkt.
   (define pending units)
   (define worker-ran (make-hasheq))          ;; worker stdin port -> (hash path #t)
+  (define worker-of (make-hasheq))           ;; worker stdin port -> worker-state
+  (define t-dispatch0 (current-inexact-monotonic-milliseconds))
+  (define (now-ms) (- (current-inexact-monotonic-milliseconds) t-dispatch0))
   (define (dispatch-next! stdin)
     (define ran (hash-ref! worker-ran stdin make-hash))
     (define-values (u rest) (pick-eligible pending (lambda (p) (hash-ref ran p #f))))
     (cond
       [u (set! pending rest)
          (hash-set! ran (work-unit-path u) #t)
+         (let ([w (hash-ref worker-of stdin #f)])
+           (when w
+             (set-worker-state-dispatched! w (cons (cons (now-ms) u) (worker-state-dispatched w)))))
          (displayln (work-unit->line u) stdin)
          (flush-output stdin)]
       [else
@@ -787,6 +993,8 @@
   (define t0 (current-inexact-monotonic-milliseconds))
   (define all-procs '())
   (define all-stdins '())
+  (define all-workers '())                   ;; worker-state, by index
+  (define all-readers '())                   ;; stdout reader threads
 
   ;; ⚠⚠ THE `--timeout` FLAG DID NOT REACH THE WORKER, AND THE RUNNER PRINTED IT
   ;; ANYWAY. This spawned `batch-worker.rkt --stdin` with no `--file-timeout`, so
@@ -796,23 +1004,50 @@
   ;; documented knob could not raise. Passing it makes the printed number true and
   ;; gives ONE place to set the limit.
   (define file-timeout-arg (number->string (timeout-secs)))
+  ;; DEFERRED 160 support: this run's failure logs go to their OWN directory,
+  ;; which nothing edits afterwards (suite-plan.rkt § FAILURE-LOG ARCHIVE).
+  (define fail-root (build-path project-root "data" "benchmarks" "failures"))
+  (define run-id (make-run-id (current-seconds) (getpid)))
+  (define run-dir (build-path fail-root "runs" run-id))
+  (make-directory* run-dir)
   (for ([i (in-range jobs)])
     (define-values (proc stdout stdin stderr)
       (subprocess #f #f #f racket-path batch-worker-path "--stdin"
-                  "--file-timeout" file-timeout-arg))
+                  "--file-timeout" file-timeout-arg
+                  "--failure-dir" (path->string run-dir)))
     (set! all-procs (cons proc all-procs))
     (set! all-stdins (cons stdin all-stdins))
+    (define w (worker-state i proc '() '() 0 #f))
+    (hash-set! worker-of stdin w)
+    (set! all-workers (append all-workers (list w)))
+    ;; Stderr DRAIN (DEFERRED 164 open 4): this pipe used to be opened and
+    ;; never read — anything the worker wrote outside the per-file capture was
+    ;; lost, and past the ~64 KB pipe buffer the worker would block on it.
+    (set-worker-state-drain!
+     w
+     (thread
+      (λ ()
+        (let loop ([kept 0])
+          (define line (read-line stderr 'any))
+          (unless (eof-object? line)
+            (cond
+              [(< kept WORKER-STDERR-MAX-LINES)
+               (set-worker-state-stderr! w (cons (cons (now-ms) line) (worker-state-stderr w)))
+               (loop (add1 kept))]
+              [else
+               (set-worker-state-stderr-dropped! w (add1 (worker-state-stderr-dropped w)))
+               (loop kept)])))
+        (close-input-port stderr))))
     ;; Send the first unit to each worker to get them started
     (dispatch-next! stdin)
     ;; Reader thread: parse JSONL from worker stdout → result channel
-    (thread
+    (set! all-readers (cons (thread
      (λ ()
        (let loop ()
          (define line (read-line stdout 'any))
          (cond
            [(eof-object? line)
-            (close-input-port stdout)
-            (close-input-port stderr)]
+            (close-input-port stdout)]
            [else
             (define trimmed (string-trim line))
             (unless (string=? trimmed "")
@@ -821,7 +1056,11 @@
                 (when (hash? r)
                   ;; PM Track 10C: tag result with worker stdin for work-stealing dispatch
                   (async-channel-put result-ch (cons stdin r)))))
-            (loop)])))))
+            (loop)]))))
+                            all-readers)))
+  ;; Ready once EVERY worker's stdout has closed: from then on no result can
+  ;; arrive, so the collector stops waiting instead of sitting out --timeout.
+  (define readers-done (thread (λ () (for-each thread-wait all-readers))))
 
   ;; Collect results with progress output
   (define collected '())
@@ -846,7 +1085,24 @@
       (define first-result-timeout 30)
       (define effective-timeout
         (if (= count 0) first-result-timeout (timeout-secs)))
-      (define raw (sync/timeout (* effective-timeout 1.0) result-ch))
+      (define raw0 (sync/timeout (* effective-timeout 1.0) result-ch readers-done))
+      ;; Every worker has exited (all stdouts closed): take what is buffered,
+      ;; then stop. Before, a worker that died mid-unit cost the full per-file
+      ;; --timeout (300 s) of waiting for a result nobody could send, and
+      ;; workers that died at load cost the 30 s first-result probe.
+      (define workers-gone? (eq? raw0 readers-done))
+      (define raw (if workers-gone? (sync/timeout 0 result-ch) raw0))
+      (define (dead-workers-banner! waited)
+        (printf "\n")
+        (printf "╔══════════════════════════════════════════════════════════╗\n")
+        (printf "║  ⛔ DEAD WORKERS — no results after ~as               ║\n" waited)
+        (printf "║                                                        ║\n")
+        (printf "║  All batch workers crashed before producing output.    ║\n")
+        (printf "║  ACTION: read the worker stderr below.                 ║\n")
+        (printf "║  Common cause: a stale .zo (named below if so).        ║\n")
+        (printf "╚══════════════════════════════════════════════════════════╝\n")
+        (print-worker-stderr-digest all-workers)
+        (set! bailed? #t))
       (cond
         [raw
          ;; PM Track 10C: unpack (cons worker-stdin result-hash)
@@ -856,11 +1112,14 @@
          (dispatch-next! worker-stdin)
          (define ms (hash-ref r 'wall_ms))
          (define status (hash-ref r 'status))
+         ;; A unit that says pass but ran 0 tests is labelled EMPTY: it is a
+         ;; no-result for the gate below (DEFERRED 161), not a pass.
+         (define-values (_m empty-here _f _s) (gate-verdict 1 (list r)))
          (printf "[~a/~a] ~a~a ~a (~as)\n"
                  (add1 count) unit-count
                  (hash-ref r 'file)
                  (if (hash-ref r 'shard #f) (format " [shard ~a]" (hash-ref r 'shard)) "")
-                 (status-label status)
+                 (if (pair? empty-here) "EMPTY — 0 tests" (status-label status))
                  (real->decimal-string (/ ms 1000.0) 1))
          (flush-output)
          (set! collected (cons r collected))
@@ -878,9 +1137,10 @@
            (printf "║  ⛔ DEAD WORKERS — 0 tests after ~a files              ║\n" count)
            (printf "║                                                        ║\n")
            (printf "║  All batch workers crashed silently.                   ║\n")
-           (printf "║  ACTION: Run `raco make driver.rkt` to recompile.     ║\n")
-           (printf "║  Common cause: stale .zo after struct field changes.   ║\n")
-           (printf "╚══════════════════════════════════════════════════════════╝\n"))
+           (printf "║  ACTION: read the worker stderr below.                 ║\n")
+           (printf "║  Common cause: a stale .zo (named below if so).        ║\n")
+           (printf "╚══════════════════════════════════════════════════════════╝\n")
+           (print-worker-stderr-digest all-workers))
 
          ;; Early-bail: abort if too many per-file timeouts
          (when (string=? status "timeout")
@@ -909,6 +1169,14 @@
                 (subprocess-kill p #t)))]
            [else
             (loop (sub1 remaining) (add1 count) first-waited)])]
+        [workers-gone?
+         (cond
+           [(= count 0)
+            (dead-workers-banner!
+             (real->decimal-string (/ (- (current-inexact-monotonic-milliseconds) t0) 1000.0) 1))]
+           [else
+            (printf "\nNO RESULT: every batch worker has exited; ~a unit(s) never reported.\n"
+                    remaining)])]
         [else
          ;; Timeout — check if this is dead-worker (first result never arrived)
          ;; vs per-file timeout (individual test took too long)
@@ -925,16 +1193,7 @@
            [(= count 0)
             ;; No results AT ALL, and the workers are gone (or we have waited out
             ;; the full per-file budget) — this is the real crash case.
-            (printf "\n")
-            (printf "╔══════════════════════════════════════════════════════════╗\n")
-            (printf "║  ⛔ DEAD WORKERS — no results after ~as               ║\n"
-                    (+ first-waited first-result-timeout))
-            (printf "║                                                        ║\n")
-            (printf "║  All batch workers crashed before producing output.    ║\n")
-            (printf "║  ACTION: Run `raco make driver.rkt` to recompile.     ║\n")
-            (printf "║  Common cause: stale .zo after struct field changes.   ║\n")
-            (printf "╚══════════════════════════════════════════════════════════╝\n")
-            (set! bailed? #t)]
+            (dead-workers-banner! (+ first-waited first-result-timeout))]
            [else
             ;; Normal per-file timeout
             (eprintf "\nTIMEOUT: No result received for ~as. Killing ~a remaining.\n"
@@ -953,6 +1212,65 @@
     (with-handlers ([exn:fail? void])
       (subprocess-wait p)))
 
+  ;; Worker stderr into the run's logs (DEFERRED 164 open 4). The workers have
+  ;; exited, so each drain reaches EOF; then: (1) worker-N.stderr.log holds a
+  ;; worker's whole stderr, with a marker at each dispatch; (2) a FAILED unit's
+  ;; log gains the stderr that arrived while it was current; (3) a dispatched
+  ;; unit that never REPORTED gets a NO RESULT log carrying that stderr — the
+  ;; only trace a worker that died mid-unit leaves.
+  (for ([w (in-list all-workers)]) (sync/timeout 10 (worker-state-drain w)))
+  (define reported-labels (for/hash ([r (in-list unit-results)]) (values (result-label r) #t)))
+  (define no-result-files '())
+  (for ([w (in-list all-workers)])
+    (define dispatched (reverse (worker-state-dispatched w)))
+    (define lines (reverse (worker-state-stderr w)))
+    (define by-unit (attribute-stderr dispatched lines))
+    (define pid (subprocess-pid (worker-state-proc w)))
+    (define status (subprocess-status (worker-state-proc w)))
+    (unless (null? lines)
+      (with-output-to-file (build-path run-dir (format "worker-~a.stderr.log" (worker-state-index w)))
+        #:exists 'replace
+        (lambda ()
+          (printf "=== worker ~a (pid ~a, exit ~a): stderr outside the per-file capture ===\n"
+                  (worker-state-index w) pid status)
+          (define events
+            (sort (append (for/list ([d (in-list dispatched)])
+                            (list (car d) 0 (format "--- [+~as] dispatched: ~a ---"
+                                                    (real->decimal-string (/ (car d) 1000.0) 1)
+                                                    (work-unit-label (cdr d)))))
+                          (for/list ([l (in-list lines)]) (list (car l) 1 (cdr l))))
+                  (lambda (a b) (or (< (car a) (car b))
+                                    (and (= (car a) (car b)) (< (cadr a) (cadr b)))))))
+          (for ([e (in-list events)]) (displayln (caddr e)))
+          (when (> (worker-state-stderr-dropped w) 0)
+            (printf "... ~a further lines dropped\n" (worker-state-stderr-dropped w))))))
+    (for ([d (in-list dispatched)])
+      (define u (cdr d))
+      (define label (work-unit-label u))
+      (define file (path->string (file-name-from-path (string->path (work-unit-path u)))))
+      (define slabel (and (work-unit-shard u) (shard-label (work-unit-shard u) (work-unit-k u))))
+      (define log (build-path run-dir (unit-log-name file slabel)))
+      (define (evidence ls) (filter (lambda (l) (not (metric-line? l))) ls))
+      (define err-lines (evidence (hash-ref by-unit label '())))
+      (define startup (if (eq? d (car dispatched)) (evidence (hash-ref by-unit #f '())) '()))
+      (cond
+        [(not (hash-ref reported-labels label #f))
+         (set! no-result-files (cons file no-result-files))
+         (with-output-to-file log #:exists 'replace
+           (lambda ()
+             (printf "=== ~a — NO RESULT ===\n" label)
+             (printf "run: ~a\n" run-id)
+             (printf "Dispatched to worker ~a (pid ~a, exit status ~a); it never reported this unit.\n\n"
+                     (worker-state-index w) pid status)
+             (printf "--- Worker stderr while this unit was current ---\n")
+             (for ([l (in-list (append startup err-lines))]) (displayln l))
+             (when (null? (append startup err-lines)) (printf "(none)\n"))))]
+        [(and (pair? err-lines) (file-exists? log))
+         (with-output-to-file log #:exists 'append
+           (lambda ()
+             (printf "--- Worker stderr while this unit was current (outside the per-file capture) ---\n")
+             (for ([l (in-list err-lines)]) (displayln l))))])))
+
   (define t1 (current-inexact-monotonic-milliseconds))
   (define total-wall-ms (inexact->exact (round (- t1 t0))))
   (define total-tests (apply + (map (λ (r) (hash-ref r 'tests)) file-results)))
@@ -963,10 +1281,14 @@
   ;; 2026-10-13: "1629 tests in 343.6s (490 files, …, all pass)" after 63 of 493
   ;; units, with a 63-result record written as a full run. A missing result is
   ;; now a failed, unrecorded run, whatever path produced it.
-  (define incomplete? (< (length unit-results) unit-count))
-  (define all-pass?
-    (and (not incomplete?)
-         (andmap (λ (r) (string=? (hash-ref r 'status) "pass")) file-results)))
+  ;; ⚠ AND every unit that reported pass must have RUN a test (DEFERRED 161):
+  ;; a unit reporting pass with 0 tests is a no-result, exactly like a missing
+  ;; one — unless its file is declared test-free (suite-plan.rkt
+  ;; TEST-FREE-FILES). The gate is suite-plan.rkt's gate-verdict, unit-tested.
+  (define-values (missing-count empty-units _failed-units stale-test-free)
+    (gate-verdict unit-count unit-results))
+  (define incomplete? (gate-incomplete? unit-count unit-results))
+  (define all-pass? (gate-all-pass? unit-count unit-results))
 
   ;; Print summary
   (define failed-files
@@ -978,19 +1300,51 @@
     (if (hash-ref r 'shard #f)
         (format "~a [shard ~a]" (hash-ref r 'file) (hash-ref r 'shard))
         (hash-ref r 'file)))
-  ;; A passing file has no failure log of any form: clear stale per-shard logs
-  ;; (and, for a sharded file, the whole-file log) left by earlier runs.
-  (let ([fail-dir (build-path project-root "data" "benchmarks" "failures")])
-    (when (directory-exists? fail-dir)
-      (for* ([r (in-list file-results)]
-             #:when (string=? (hash-ref r 'status) "pass")
-             [p (in-list (directory-list fail-dir))])
-        (define f (hash-ref r 'file))
-        (define s (path->string p))
-        (when (or (string-prefix? s (string-append f ".shard-"))
-                  (and (hash-ref r 'shards #f) (string=? s (string-append f ".log"))))
-          (with-handlers ([exn:fail? void])
-            (delete-file (build-path fail-dir p)))))))
+  (define incomplete-reason
+    (string-join
+     (append
+      (if (> missing-count 0)
+          (list (format "~a of ~a units reported" (length unit-results) unit-count))
+          '())
+      (if (pair? empty-units)
+          (list (format "~a reported PASS with 0 tests: ~a" (length empty-units)
+                        (string-join (map unit-name empty-units) ", ")))
+          '()))
+     "; "))
+  ;; The failure-log views (DEFERRED 160 support). The ARCHIVE — run-dir — is
+  ;; never edited. The top-level per-file view is refreshed for every file
+  ;; this run reported: its old logs (whole-file and shard) are replaced by
+  ;; this run's, so a passing file shows none — and its earlier evidence
+  ;; survives in runs/<earlier-id>/.
+  ;; Which worker ran which units, in order (DEFERRED 160 support ii).
+  (define worker-seqs
+    (worker-sequences project-root
+                      (for/list ([w (in-list all-workers)])
+                        (list (worker-state-index w)
+                              (subprocess-pid (worker-state-proc w))
+                              (map cdr (reverse (worker-state-dispatched w)))))))
+  (define kept-run-dir?
+    (refresh-failure-views! fail-root run-dir file-results
+                            ;; kept when it holds evidence: a failure / no-result,
+                            ;; or worker stderr beyond the prelude's metric lines
+                            #:keep-run? (or (not all-pass?)
+                                            (ormap (lambda (w) (pair? (worker-evidence-lines w)))
+                                                   all-workers))
+                            #:also-files no-result-files))
+  (when kept-run-dir?
+    (with-handlers ([exn:fail? void])
+      (call-with-output-file (build-path run-dir "run.json") #:exists 'replace
+        (lambda (out)
+          (write-json (hasheq 'run_id run-id
+                              'checkout project-root
+                              'command (string-join (vector->list (current-command-line-arguments)) " ")
+                              'verdict (cond [bailed? "aborted"] [incomplete? "incomplete"]
+                                             [all-pass? "pass"] [else "fail"])
+                              'unit_count unit-count
+                              'units_reported (length unit-results)
+                              'workers worker-seqs)
+                      out)
+          (newline out)))))
   (define completed-count (length file-results))
   (printf "\n~a tests in ~as (~a~a files, ~a batch workers, ~a)\n"
           total-tests
@@ -999,10 +1353,18 @@
           file-count
           jobs
           (cond [bailed? (format "ABORTED — ~a timeouts" timeout-count)]
-                [incomplete? (format "INCOMPLETE — ~a of ~a units reported" (length unit-results) unit-count)]
+                [incomplete? (format "INCOMPLETE — ~a" incomplete-reason)]
                 [all-pass? "all pass"]
                 [else (format "~a FAILURES" (length failed-files))]))
+  (for ([r (in-list stale-test-free)])
+    (printf "NOTE: ~a is declared test-free (suite-plan.rkt TEST-FREE-FILES) but ran ~a tests — remove the declaration.\n"
+            (unit-name r) (hash-ref r 'tests 0)))
   (unless all-pass?
+    (for ([r (in-list empty-units)])
+      (printf "\n~a\n" (make-string 60 #\─))
+      (printf "EMPTY: ~a — reported PASS but ran 0 tests: counted as NO RESULT (DEFERRED 161).\n"
+              (unit-name r))
+      (printf "    A file that genuinely holds no tests goes in suite-plan.rkt TEST-FREE-FILES.\n"))
     (for ([r (in-list failed-units)])
       (printf "\n~a\n" (make-string 60 #\─))
       (printf "FAILED: ~a\n" (unit-name r))
@@ -1013,7 +1375,8 @@
           (printf "    ~a\n" line)))
       (newline))
     (printf "~a\n" (make-string 60 #\─))
-    (printf "Failure logs: data/benchmarks/failures/*.log\n")
+    (printf "Failure logs: data/benchmarks/failures/*.log (latest per file); this run: ~a\n"
+            (if kept-run-dir? (format "data/benchmarks/failures/runs/~a/" run-id) "(none written)"))
     ;; I2 (Track 2B process): diagnostic protocol reminder when 3+ failures.
     ;; Longitudinal pattern 3 (diagnostic discipline regression, 4+ PIRs): under
     ;; implementation pressure, the protocol of "audit domain → hypothesize →
@@ -1039,7 +1402,7 @@
                 (real->decimal-string (/ total-wall-ms 1000.0) 1)
                 file-count jobs
                 (cond [bailed? (format ", ABORTED — ~a timeouts" timeout-count)]
-                      [incomplete? (format ", INCOMPLETE — ~a of ~a units reported" (length unit-results) unit-count)]
+                      [incomplete? (format ", INCOMPLETE — ~a" incomplete-reason)]
                       [all-pass? ", all pass"]
                       [else (format ", ~a FAILURES" (length failed-files))]))
         (unless all-pass?
@@ -1055,7 +1418,7 @@
   (when (and (record-timings?) (not bailed?) (not incomplete?))
     (define timings-file (make-timings-path project-root))
     (define record
-      (hasheq 'schema_version 3
+      (hasheq 'schema_version TIMINGS-SCHEMA-VERSION
               'timestamp (current-iso-timestamp)
               'commit (current-commit)
               'branch (current-branch)
@@ -1069,11 +1432,12 @@
               'unit_count unit-count
               'all_pass all-pass?
               'source "affected"
+              'workers worker-seqs         ; DEFERRED 160 support ii
               'results file-results))
     (append-run-record timings-file record)
     (printf "Timings recorded to ~a\n" (path->string timings-file)))
 
-  (when (or bailed? incomplete?) (exit 2))
-  (unless all-pass? (exit 1)))
+  (when (or bailed? incomplete?) (exit EXIT-INCOMPLETE))
+  (unless all-pass? (exit EXIT-FAILURES)))
 
 (main)

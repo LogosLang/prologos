@@ -41,10 +41,11 @@ racket/prologos/data/benchmarks/last-run-summary.txt
 # analysis on the local machine.
 racket/prologos/data/benchmarks/timings.jsonl
 
-# Per-run failure logs from run-affected-tests.rkt. Regenerated every
-# test run (overwriting prior content). Diagnostic value is limited to
-# the most recent run; tracking just adds churn.
-racket/prologos/data/benchmarks/failures/*.log
+# Failure logs from run-affected-tests.rkt: the per-file latest view
+# (failures/*.log), the per-run archive (failures/runs/<run-id>/, newest 20
+# kept) and the failures/latest link. Local diagnostic state; tracking just
+# adds churn.
+racket/prologos/data/benchmarks/failures/
 
 # Tangled stdlib output (generated from book chapters)
 .tangled/

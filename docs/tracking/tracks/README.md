@@ -38,3 +38,7 @@ lhc, 2026-08-17): `2026-10-12_PAR_4_STAGE2_GAP_ANALYSIS.md`, matching the direct
 `MASTER_ROADMAP.org`; a session does not coin one.
 
 Current: `tracks/PAR/PAR_4/` — PAR Track 4, Arena Executors (Stage 1 + Stage 2 written; D.1 next). Stage-1 research artifacts live in the track's `research/` subdirectory, named `…_STAGE1_<TOPIC>.md`.
+`tracks/CIU/CIU_6/` — CIU Track 6, Anonymous Records, Collections & Path Selection: a track
+already deep in implementation when the layout arrived (2026-10-13). Its flat documents of
+record stay where they are and are indexed in `tracks/CIU/README.md`; the directory holds the
+LOG from 2026-10-13 on and any new artifacts.

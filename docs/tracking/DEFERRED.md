@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 165**
+> ### **NEXT FREE: 167**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7089,6 +7089,12 @@ and after the rebuild, so the build is not the cause.
   got: (type-mismatch-error … "cannot infer the type of an unannotated parameter — …" "Nat -> Nat"
   "<could not infer>" "[fn [x <_>] [reduce x | zero -> 1 | suc y -> 2]]")".
 - Run alone, they pass 3/3 and 2/2.
+- **+1, 2026-10-13 (CIU 6 worktree baseline, `58241c0c`, fresh `ciu6-path-selection` build; `reduction`/`typing-core`/
+  `elaborator`/`parser` `.zo` byte-identical to main's):** `test-error-messages` again, the same check (`:465:2`, test-case *"matching clause result
+  types still type-check (control, L2)"*) and the same message; 10 289 tests / 492 files, 57.4 s, 18 workers,
+  the file completed 81st of 496 units. Alone: 44 tests, all pass. This time the full log was copied before the
+  alone-run (`~/.hermes/profiles/logos-language-designer/cache/scratch/ciu6/fail-test-error-messages.log`,
+  scratch — pruned after 24 h idle); the runner's stdout does not record which files shared the victim's worker.
 
 The full failure logs are lost: the runner deletes a file's `data/benchmarks/failures/*.log` when a
 later run of that file passes, and the alone-runs were those later runs. The excerpts above were read
@@ -7105,7 +7111,23 @@ replay in one process of that worker's preceding files followed by the victim. *
 leak. Independently, keep failure logs per run id so the evidence survives a passing re-run. **When**: before
 the next suite baseline is pinned. A flaky gate makes every "all pass" probabilistic.
 
-### 161. ⬜ A FILE THAT RUNS ZERO TESTS IS COUNTED AS A PASS — `test-generators.rkt` reported `PASS (0.0s)` with 0 tests in the first `--all` after a cold rebuild of `compiled/`; the INCOMPLETE check counts units that REPORTED, not units that RAN tests
+**Status 2026-10-13 — the evidence tooling landed (`f6e530d7`); the investigation is still open.**
+- **Support (i)**, `1753757d`: failure logs are kept per run in `data/benchmarks/failures/runs/<run-id>/`, never
+  edited (newest 20 runs with evidence, plus `failures/latest` and `--failures-run`). A later pass no longer
+  destroys the earlier log.
+- **Support (ii)**, `6a806d03`: each run records `'workers` (per worker, its units in dispatch order) in its timings
+  record and in `runs/<id>/run.json`, including INCOMPLETE runs.
+- **First use of (ii)**: the checkpoint gate replayed one worker's 18-unit history in one process and isolated a
+  suite-only COUNT change in one step (161's library mechanism, `8014caef`).
+- **New evidence on `test-cond-01`** (F3(a) suite, 2026-10-13, branch `deferred-sweep-146-149`): the full message is
+  `preparse: spec: defn classify has both a spec and inline type annotations`, then `Unbound variable: classify`.
+  That is the cross-file spec-store leak class at the top of this file ("Cross-FILE spec-store leakage within a
+  batch worker", 2026-07-31, which names a prime suspect at `test-support.rkt:195`). The earlier sightings recorded
+  only the second half. It passed alone 2/2, and in a second full run of the same code.
+- **Next**: `--all` ×N under the new runner; for any failure, replay its worker sequence from `run.json` and bisect
+  the culprit as for 161. Start from the spec-store suspect.
+
+### 161. ✅ **DISCHARGED `2999a74b` + `8014caef`** (branch `runner-queue-gate`, merged to main in `f6e530d7`) — A FILE THAT RUNS ZERO TESTS IS COUNTED AS A PASS — `test-generators.rkt` reported `PASS (0.0s)` with 0 tests in the first `--all` after a cold rebuild of `compiled/`; the INCOMPLETE check counts units that REPORTED, not units that RAN tests
 
 Found during the DEFERRED 159 remedy. On the first full suite after `compiled/` was rebuilt (test `.zo`s
 compiled during the run), `test-generators.rkt` reported status `pass` with `'tests` = 0 and wall 0 ms; the
@@ -7117,6 +7139,35 @@ is not established. Candidate: a precompile/dispatch race on a cold test tree, s
 0 of 1 warm ones. **Fix shape**: treat `'tests` = 0 as no-result (INCOMPLETE) unless the file is declared
 test-free, or compare against the file's last recorded count. **When**: with 160; both make "all pass" mean
 less than it says.
+
+**Status 2026-10-13 — discharged at the checkpoint (`f6e530d7`).**
+
+**Fixed** in `2999a74b`. The gate lives in `tools/suite-plan.rkt` (`gate-verdict` / `gate-incomplete?` /
+`gate-all-pass?`).
+- A unit that reports PASS with 0 tests is NO RESULT: its progress line says `EMPTY — 0 tests`, the run is INCOMPLETE
+  (exit 2), and nothing is recorded.
+- The rule applies per unit, so an empty shard is caught too.
+- Legitimately empty files are named in ONE auditable list, `TEST-FREE-FILES` (currently `test-multiclause-debug.rkt`,
+  `test-p2-debug.rkt`). `tests/test-support.rkt` is no longer a unit (`NON-TEST-MODULES`).
+- Pinned by 5 test-cases in `tests/test-suite-plan.rkt`, red against the old rule.
+
+**The cause of the first sighting, found by the checkpoint gate** (`8014caef`). `test-properties.rkt` required
+`test-generators.rkt`. A batch worker instantiates a module once, so that file's 5 test-cases ran, and were counted,
+inside whichever of the two units the worker reached first. Replayed in one worker with the recorded sequence:
+`test-properties` counts 13 alone and 8 after `test-generators`. In the reverse order, `test-generators` reports PASS
+with **0** tests, which is this entry's symptom; whether the original run had that order was not recorded, so that
+attribution is an inference. Under the new gate the same artefact would have been a **false INCOMPLETE**.
+- Fix: the generators moved to `tests/property-generators.rkt`, a library the runner never dispatches.
+- Guard: `tests/test-suite-plan.rkt` fails if any `test-*.rkt` requires another one beyond `NON-TEST-MODULES`
+  (mutation: restoring the old require turns it red).
+- Old records double-counted those 5 tests whenever the two files ran in different workers (18 counted for 13).
+
+**Open**:
+1. Main's history holds 2 records with an undeclared 0-test PASS unit (`test-generators.rkt`,
+   `test-int-list-quick.rkt`, both `all_pass` true). Annotating them is a decision: (v) said annotate, but the
+   annotation tool marks only records whose results are fewer than file_count.
+2. `test-int-list-quick.rkt`'s 0-test record is NOT explained by the library mechanism: no test file requires it
+   (census at `8014caef`).
 
 ### 162. ⬜ LPT DISPATCH WAS INERT FROM THE DAY IT SHIPPED — per-file medians keyed by file-name STRINGS in a `for/hasheq`, so 0 of 489 lookups hit, every file sorted as `+inf.0`, and dispatch ran alphabetically — **fix landed `389b3413`**; a comment still states the refuted "impact was NIL" measurement, and the class sweep is open
 
@@ -7145,6 +7196,12 @@ used 159's interpreted build, so the ratio holds but the absolute seconds do not
    share a batch worker, is different. 160 conjectures that its suite-only failures were newly exposed by this.
 
 **When**: (1) any time; it takes minutes. (2) with 160's investigation, which reads the same tools.
+
+**Status 2026-10-13.** **Open 1** fixed in `36bd4e7d` (merged in `f6e530d7`): the comment now marks "impact NIL" as
+REFUTED and cites this entry. **Open 2** (the class sweep) was done on branch `guards-hook-sweep` (`d5359d2a`, NOT
+yet merged): `benchmark-tests.rkt`'s regression and variance tables were inert in exactly this way (`make-hasheq`
+keyed by file-name strings), fixed with a copied-key test. One latent site, `measure-production-n.rkt:91`, is
+interned literals today. The five runner files are clean.
 
 ### 163. ⬜ ⭐ EVERY RUNNER START KILLED EVERY BATCH WORKER ON THE MACHINE — Step 0's `pkill -f batch-worker.rkt` was machine-wide, so a run in any session, worktree or clone killed the workers of every concurrent suite — **fix landed `b45bbf44`**; 6 worktrees + 2 clones still carry the old runner
 
@@ -7177,6 +7234,14 @@ There is no unit test, because this is process-level behaviour.
    `deferred-sweep-146-149` already has the fix. **Fix**: bring each live checkout to main ≥ `b45bbf44` (merge,
    rebase or cherry-pick the one hunk); which route is each branch owner's decision. Do `par4-p0` first, since
    PAR 4 pins baselines; retire dead worktrees.
+
+   **Status 2026-10-13 (owner-authorized, from the sweep session):** `par4-p0` → `a456c370`, a merge of main.
+   Gate: 10 298 / 493 all pass, with an exact file-by-file delta (merge note § Coordination). The five dormant worktrees
+   were **removed**. Each had its HEAD in main's history, no tracked changes, no untracked files, and no process,
+   and was idle 8–9 weeks; their ignored files were editor undo histories, an older (Racket 9.0) `settings.json` and
+   VS Code build output. Their two merged branches were deleted (`git branch -d`). **Still open: the two clones only.**
+   Both hold commits and records that are not on main (`egraph-relational-spike`: 12 commits, the spike's closing
+   note; `preduce-autonomy`: 62 commits, the loop's ledger and retro), so they wait on an owner decision.
 2. **Agents can still do it by hand.** `.claude/settings.local.json:71` allows `Bash(pkill:*)` without a prompt,
    and a `pkill -f racket` or `pkill -f batch-worker` from any session has the same blast radius. **Fix shape**
    (a decision): either `tools/hook-guard-racket.sh` (159's PreToolUse guard) denies a
@@ -7193,7 +7258,7 @@ There is no unit test, because this is process-level behaviour.
 
 **When**: (1) now, because it is live in 8 checkouts. (2) and (3) with (1).
 
-### 164. ⬜ ⭐ AN INCOMPLETE RUN REPORTED "ALL PASS" AND WAS RECORDED AS A FULL SUITE — the no-result TIMEOUT path killed the workers and fell through with `bailed?` unset, and `all-pass?` was an `andmap` over only the results that DID arrive — **fix landed `fd2986cc`**; 13 such records sit in main's `timings.jsonl`, and sibling fail-opens are open
+### 164. ✅ **DISCHARGED — open items 1–5 fixed on branch `runner-queue-gate`, merged to main in `f6e530d7`** — AN INCOMPLETE RUN REPORTED "ALL PASS" AND WAS RECORDED AS A FULL SUITE — the no-result TIMEOUT path killed the workers and fell through with `bailed?` unset, and `all-pass?` was an `andmap` over only the results that DID arrive — **fix landed `fd2986cc`**; 13 such records sit in main's `timings.jsonl`, and sibling fail-opens are open
 
 **Found by**: the whale-sharding work (2026-10-13). After 63 of 493 units (the workers had been killed by 163) the
 runner printed "1629 tests in 343.6s (490 files, …, all pass)" and appended a 63-result record to
@@ -7244,3 +7309,57 @@ longitudinal read of the file does include them (baselines, PIRs, trend tools).
    decision.
 
 **When**: (1) and (3) together, before PAR 4 pins a baseline. (2), (4) and (5) any time.
+
+**Status 2026-10-13 — open items 1–5 fixed (merged in `f6e530d7`); owner decisions (iv)–(vi) applied.**
+- **Open 1** (zero tests): fixed with 161, `2999a74b`.
+- **Open 2** (GUARD exit 0): `57a542e2`. A refusal exits **3**, and the banner says "NOTHING WAS RUN". Every exit
+  code is in one table, `suite-plan.rkt` § EXIT STATUS: 0 / 1 / 2 / 3, plus 75 for a busy suite lock under `--no-wait`.
+- **Open 3** (reader filter): `fa6437fc`. `historical-medians` skips records whose results are fewer than file_count,
+  or that carry `"invalid"`. The records are annotated, not dropped, by `tools/annotate-invalid-timings.rkt`, which is
+  idempotent, atomic and holds the suite lock. On a copy of main's file it marks **24**: the 13 full-suite
+  `all_pass` ones counted here, 9 full-suite failing ones and 2 smaller runs. Main's own file: see the checkpoint
+  record.
+- **Open 4** (stderr): `58dcf0f8`. **The conjecture is measured true, and the effect is worse than lost output.**
+  About 240 KB written to a worker's stderr made the old runner report TIMEOUT for a passing file and then hang in
+  `subprocess-wait`. Worker stderr is now drained and attributed per unit. `c47c450b` stops the collector waiting
+  300 s once every worker has exited.
+- **Open 5** (timestamps): `f20220df`. `schema_version` 4 writes the local offset (`…-07:00`); `bench-lib.rkt`
+  `parse-record-timestamp` reads both forms (a schema ≤ 3 `Z` is the local clock). Old records stay as written.
+
+### 165. ✅ **DISCHARGED `bd6fddd1`** (branch `runner-queue-gate`, merged to main in `f6e530d7`) — A TARGETED RUN COULD LEAVE THE BATCH WORKER'S OWN DYNAMIC DEPENDENCY STALE, AND EVERY WORKER DIED AT LOAD — `batch-worker.rkt` loads `tests/test-support.rkt` by `dynamic-require`, which `raco make` never follows, and the `--tests` precompile built only driver.rkt and the named files
+
+**Found by** the DEFERRED-sweep session, 2026-10-13, during F3(a): reproduced twice, and again on the runner branch.
+After a driver.rkt rebuild, a targeted run whose tests do not require `test-support.rkt` left
+`tests/compiled/test-support_rkt.zo` stale. Every worker then died at load with `instantiate-linklet: mismatch …
+importing instance: tests/test-support.rkt`. The run printed DEAD WORKERS, 0 tests, ABORTED, and advised
+`raco make driver.rkt`, which cannot fix it. Even `raco make tools/batch-worker.rkt` does not reach the stale file,
+because the edge is dynamic (deliberately: `batch-worker.rkt` :51-53).
+
+**Fixed** in `bd6fddd1`:
+- the edge is declared once, as `suite-plan.rkt` `WORKER-DYNAMIC-MODULES`, and the worker dynamic-requires exactly
+  that list;
+- `worker-precompile-paths` (batch-worker.rkt plus the list) is built in the production stage by the targeted
+  precompile, the full-suite `precompile-modules!` and the `--no-precompile` stale scan;
+- 2 test-cases, one a static read of the worker;
+- `58dcf0f8`: the dead-worker banner prints the worker's stderr and names the stale module.
+
+**Open**:
+1. Every checkout older than `f6e530d7` still has the gap (see 163 open 1 for the list).
+2. The full-suite precompile path was verified by reading, not by a repro.
+
+### 166. ⬜ THE SUITE QUEUE CAN BE BYPASSED SILENTLY — an inherited `PROLOGOS_SUITE_LOCK` makes a run queue on a private lock file, and nothing on screen says so; also, the lock is not held by the workers a runner spawns
+
+**Found by** the coordinator at the checkpoint (`f6e530d7`), on the queue's first real use. A targeted `--no-wait` run went
+ahead while a full suite held the machine lock exclusively. The cause was in the shell: `PROLOGOS_SUITE_LOCK` was set
+to the runner agent's private test path, having leaked from a subagent's terminal session into the coordinator's
+persistent shell. With the variable unset, the same run was refused correctly: exit 75, with the holder named (pid,
+mode, since, checkout, command). Raw locks on the real file were held throughout, so the lock itself is sound.
+
+**Fix shape**: print the lock path and mode in every run's header, with a ⚠ line when `PROLOGOS_SUITE_LOCK` overrides
+the default. Possibly accept the override only together with an explicit flag (a decision); the tests set it
+deliberately.
+
+**Measured limitation (not a bug; record it in `suite-lock.rkt`'s header)**: children do not inherit the lock.
+probe `lock-probe.sh` (+ `lock-inherit.rkt`, `lock-try.rkt`; racket-performance-probing skill `scripts/`): when a lock-holding parent is SIGKILLed, another process can take the lock at once, while
+the child it spawned is still running. A SIGKILLed runner therefore frees the queue while its orphaned workers finish
+their current unit (they exit at stdin EOF). That is a bounded window of contention, and only after a crash.

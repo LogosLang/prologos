@@ -24,6 +24,7 @@
          racket/string)
 
 (provide historical-medians
+         record-invalid-reason
          (struct-out work-unit)
          shard-count
          plan-units
@@ -32,14 +33,40 @@
          pick-eligible
          make-shard-around
          shard-label
-         merge-shard-results)
+         merge-shard-results
+         NON-TEST-MODULES
+         TEST-FREE-FILES
+         drop-non-test-modules
+         gate-verdict
+         gate-incomplete?
+         gate-all-pass?
+         EXIT-PASS
+         EXIT-FAILURES
+         EXIT-INCOMPLETE
+         EXIT-GUARD-REFUSED
+         FAILURE-RUNS-KEPT
+         make-run-id
+         runs-to-prune
+         file-log-names
+         unit-label
+         work-unit-label
+         result-label
+         unit-log-name
+         attribute-stderr
+         diagnose-worker-stderr
+         metric-line?
+         worker-sequences
+         WORKER-MODULE
+         WORKER-DYNAMIC-MODULES
+         worker-precompile-paths)
 
 ;; historical-medians : (listof string) #:runs N #:min-file-count M
 ;;                      -> (hash/c string? exact-nonnegative-integer?)  ; equal?-keyed
 ;;
 ;; `lines` are timings.jsonl records in FILE order (oldest first). Uses the N
-;; most recent FULL-suite records (file_count >= M — targeted runs time a file
-;; without contention and read low) and returns each file's median wall_ms.
+;; most recent VALID FULL-suite records (file_count >= M — targeted runs time a
+;; file without contention and read low; record-invalid-reason excludes
+;; partial and annotated records) and returns each file's median wall_ms.
 ;; Keys are the `file` strings exactly as recorded (base names).
 ;; The hash is `equal?`-keyed: callers look up with strings they build
 ;; themselves, which are never `eq?` to the ones read from JSON.
@@ -53,7 +80,9 @@
            (with-handlers ([exn:fail? (lambda (e) #f)])
              (with-input-from-string (car ls) read-json)))
          (loop (cdr ls)
-               (if (and (hash? rec) (>= (hash-ref rec 'file_count 0) min-files))
+               (if (and (hash? rec)
+                        (>= (hash-ref rec 'file_count 0) min-files)
+                        (not (record-invalid-reason rec)))  ; DEFERRED 164 open(3)
                    (cons rec got)
                    got))])))
   (define observed
@@ -64,6 +93,26 @@
   (for/hash ([(f ms-list) (in-hash observed)])
     (define sorted (sort ms-list <))
     (values f (list-ref sorted (quotient (length sorted) 2)))))
+
+;; record-invalid-reason : jsexpr -> (or/c string? #f)
+;; Why a timings.jsonl record must not be read as a run of its files, or #f.
+;;   - it carries an "invalid" annotation (tools/annotate-invalid-timings.rkt);
+;;   - it holds FEWER results than its file_count: a fail-open recorded a
+;;     partial run as a full one (DEFERRED 164 — 13 such records in main's
+;;     file, the newest 2026-07-31). Since fd2986cc the runner no longer
+;;     writes them; this keeps any FUTURE fail-open of that shape away from
+;;     the scheduler too.
+;; A record without file_count makes no claim to check.
+(define (record-invalid-reason rec)
+  (cond
+    [(not (hash? rec)) #f]
+    [(hash-ref rec 'invalid #f) => (lambda (why) (if (string? why) why (format "~a" why)))]
+    [else
+     (define fc (hash-ref rec 'file_count #f))
+     (define rs (hash-ref rec 'results '()))
+     (define n (if (list? rs) (length rs) 0))
+     (and (exact-integer? fc) (< n fc)
+          (format "results ~a < file_count ~a (DEFERRED 164)" n fc))]))
 
 ;; ============================================================
 ;; WHALE SHARDING
@@ -210,3 +259,229 @@
        (if (hash-ref seen f #f)
            (loop (cdr rs) seen acc)
            (loop (cdr rs) (hash-set seen f #t) (cons (merged f) acc)))])))
+
+;; ============================================================
+;; THE GATE — what counts as a result (DEFERRED 161 + 164)
+;; ============================================================
+;;
+;; "All pass" must mean: every dispatched unit REPORTED (164, fd2986cc), and
+;; every unit that reported pass RAN AT LEAST ONE TEST (161). A unit reporting
+;; pass with 0 tests is a NO-RESULT, like a missing one — test-generators.rkt
+;; did exactly that on a cold build and the run was recorded as "10257 tests
+;; ... all pass". It applies per UNIT, so an empty shard is caught too (a
+;; second dynamic-require of a module in one worker is a cached no-op that
+;; looks just like this). A unit that FAILED or timed out with 0 tests is a
+;; reported failure, not a missing result: it already makes the run red, and
+;; its error is the useful output.
+;;
+;; WHY AN EXPLICIT LIST, here, rather than a marker comment in each file: an
+;; exemption from a gate should be auditable in ONE place and pinned by a test
+;; (this module's purpose); a marker travels with copy-paste into a new file
+;; and exempts it silently, and the runner would have to read every test
+;; file's text to find it. A declared file that DOES run tests is reported as
+;; a stale declaration, so the list cannot rot into a blanket exemption.
+
+;; Files under tests/ named like tests that are NOT test units. test-support.rkt
+;; is the batch worker's own fixture: every worker loads it at startup
+;; (batch-worker.rkt), so dispatching it was a cached no-op that always
+;; reported pass with 0 tests — a unit that could only ever measure nothing.
+(define NON-TEST-MODULES '("test-support.rkt"))
+
+;; Units that may legitimately run 0 tests: debug scripts that print and
+;; exercise code but hold no rackunit checks (the only zero-test units in the
+;; last full run besides test-support.rkt). They still RUN (a crash fails them);
+;; they are just not required to count tests.
+(define TEST-FREE-FILES '("test-multiclause-debug.rkt" "test-p2-debug.rkt"))
+
+(define (base-name x)
+  (define s (if (symbol? x) (symbol->string x) (if (path? x) (path->string x) x)))
+  (last (string-split s "/")))
+
+;; drop-non-test-modules : (listof (or/c symbol? string? path?)) -> same
+(define (drop-non-test-modules xs)
+  (filter (lambda (x) (not (member (base-name x) NON-TEST-MODULES))) xs))
+
+(define (passed? r) (equal? (hash-ref r 'status #f) "pass"))
+
+;; gate-verdict : unit-count (listof unit-result) -> (values missing empty failed stale-test-free)
+;;   missing          dispatched units with no result
+;;   empty            results that say pass with 0 tests, file not declared test-free
+;;   failed           results that are not pass
+;;   stale-test-free  declared test-free results that ran tests (a NOTE, not a failure)
+(define (gate-verdict unit-count unit-results #:test-free [tf TEST-FREE-FILES])
+  (define (no-tests? r) (eqv? (hash-ref r 'tests 0) 0))
+  (define (declared? r) (member (base-name (hash-ref r 'file "")) tf))
+  (values (max 0 (- unit-count (length unit-results)))
+          (filter (lambda (r) (and (passed? r) (no-tests? r) (not (declared? r)))) unit-results)
+          (filter (lambda (r) (not (passed? r))) unit-results)
+          (filter (lambda (r) (and (declared? r) (not (no-tests? r)))) unit-results)))
+
+;; No result for some unit: missing, or empty.
+(define (gate-incomplete? unit-count unit-results)
+  (define-values (missing empty failed stale) (gate-verdict unit-count unit-results))
+  (or (> missing 0) (pair? empty)))
+
+(define (gate-all-pass? unit-count unit-results)
+  (define-values (missing empty failed stale) (gate-verdict unit-count unit-results))
+  (and (= missing 0) (null? empty) (null? failed)))
+
+;; ============================================================
+;; EXIT STATUS — one table, so no two outcomes share a code
+;; ============================================================
+;; ⚠ A run that RAN NOTHING must not exit 0 (DEFERRED 164 open 2): the re-run
+;; GUARD's refusal used to `(exit 0)`, so `run --all && git commit`, or an
+;; agent reading only the status, took "ran nothing" as green (observed
+;; 2026-10-13). suite-lock.rkt's SUITE-LOCK-BUSY-EXIT (75) is the other
+;; ran-nothing outcome; tests/test-suite-plan.rkt pins that all are distinct.
+(define EXIT-PASS 0)           ; every unit reported, ran tests, and passed
+(define EXIT-FAILURES 1)       ; some unit failed or timed out
+(define EXIT-INCOMPLETE 2)     ; some unit gave no result, or the run aborted
+(define EXIT-GUARD-REFUSED 3)  ; the re-run GUARD refused: nothing was run
+
+;; ============================================================
+;; FAILURE-LOG ARCHIVE (DEFERRED 160 support)
+;; ============================================================
+;; Failure logs used to live only in data/benchmarks/failures/<file>.log, and
+;; the worker DELETED a file's log as soon as a later run of it passed — which
+;; is how 160's suite-only failure logs were lost: the alone-runs that passed
+;; were those later runs. Now every run writes into its own directory,
+;;   data/benchmarks/failures/runs/<run-id>/
+;; that nothing ever edits afterwards. The top-level <file>.log files remain
+;; as the per-file LATEST view (what --failures and every doc that names
+;; failures/test-X.rkt.log read), and failures/latest points at the newest
+;; kept run. A run that passed completely keeps no directory, so the retention
+;; window counts runs that left evidence.
+(define FAILURE-RUNS-KEPT 20)
+
+;; "YYYYMMDDTHHMMSS-<pid>", local clock: sorts chronologically as a string.
+(define (make-run-id secs pid)
+  (define d (seconds->date secs #t))
+  (define (p2 n) (if (< n 10) (format "0~a" n) (number->string n)))
+  (format "~a~a~aT~a~a~a-~a" (date-year d) (p2 (date-month d)) (p2 (date-day d))
+          (p2 (date-hour d)) (p2 (date-minute d)) (p2 (date-second d)) pid))
+
+;; The run directories to delete so that the newest `keep` remain.
+(define (runs-to-prune names #:keep [keep FAILURE-RUNS-KEPT])
+  (define newest-first (sort names string>?))
+  (if (> (length newest-first) keep) (drop newest-first keep) '()))
+
+;; The entries of `names` that are logs of `file`: "<file>.log" and its shard
+;; logs "<file>.shard-I-of-K.log" (batch-worker.rkt's two log names).
+(define (file-log-names file names)
+  (filter (lambda (n)
+            (or (string=? n (string-append file ".log"))
+                (and (string-prefix? n (string-append file ".shard-"))
+                     (string-suffix? n ".log"))))
+          names))
+
+;; ============================================================
+;; WORKER STDERR (DEFERRED 164 open 4)
+;; ============================================================
+;; batch-worker.rkt captures current-error-port around each FILE, so test
+;; output never reaches its real stderr; what does is everything outside that
+;; window — a worker that cannot even load (a stale .zo: item (h) of the
+;; runner-queue-gate batch), a crash between files, runtime messages. The
+;; runner used to open that pipe and never read it: such output was lost, and
+;; past the ~64 KB pipe buffer the worker would block. It is now drained on its
+;; own thread, timestamped, and attributed here to the unit the worker was
+;; running when each line arrived (lines before its first dispatch belong to
+;; the worker, key #f). Attribution is by arrival time across two pipes, so a
+;; line written at the very end of one unit may land on the next.
+
+;; "test-x.rkt" or "test-x.rkt [shard I/K]" — the name a unit is reported by.
+(define (unit-label file shard-label-or-#f)
+  (if shard-label-or-#f (format "~a [shard ~a]" file shard-label-or-#f) file))
+(define (work-unit-label u)
+  (unit-label (last (string-split (work-unit-path u) "/"))
+              (and (work-unit-shard u) (shard-label (work-unit-shard u) (work-unit-k u)))))
+(define (result-label r)
+  (unit-label (hash-ref r 'file "?") (hash-ref r 'shard #f)))
+
+;; batch-worker.rkt's failure-log name for a unit.
+(define (unit-log-name file shard-label-or-#f)
+  (cond
+    [(and shard-label-or-#f (regexp-match #rx"^([0-9]+)/([0-9]+)$" shard-label-or-#f))
+     => (lambda (m) (format "~a.shard-~a-of-~a.log" file (cadr m) (caddr m)))]
+    [else (string-append file ".log")]))
+
+;; attribute-stderr : (listof (ms . work-unit)) (listof (ms . line)) -> hash
+;; Both lists chronological. Key: work-unit-label, or #f before any dispatch.
+;; Values: that unit's lines, chronological.
+(define (attribute-stderr dispatches lines)
+  (define ds (sort dispatches < #:key car))
+  (define acc
+    (for/fold ([h (hash)]) ([l (in-list (sort lines < #:key car))])
+      (define current
+        (for/fold ([cur #f]) ([d (in-list ds)] #:break (> (car d) (car l)))
+          (work-unit-label (cdr d))))
+      (hash-update h current (lambda (v) (cons (cdr l) v)) '())))
+  (for/hash ([(k v) (in-hash acc)]) (values k (reverse v))))
+
+;; diagnose-worker-stderr : (listof string) -> (or/c (list 'stale-module path) #f)
+;; A worker that died with a linklet mismatch names the module whose .zo is
+;; stale: the IMPORTING instance (compiled against an older exporter).
+(define (diagnose-worker-stderr lines)
+  (and (for/or ([l (in-list lines)]) (regexp-match? #rx"instantiate-linklet: mismatch" l))
+       (for/or ([l (in-list lines)])
+         (define m (regexp-match #rx"importing instance: \"([^\"]+)\"" l))
+         (and m (list 'stale-module (cadr m))))))
+
+;; Machine-readable metric lines every worker writes to its REAL stderr while
+;; it loads the prelude (measured 2026-10-13: 5 such lines per worker, every
+;; run — PERF-COUNTERS, PHASE-TIMINGS, PROVENANCE-STATS, MEMORY-STATS,
+;; CELL-METRICS; batch-worker.rkt strips the same prefixes from a file's
+;; captured stderr). They are not evidence: they neither keep a run's log
+;; directory nor clutter a unit's log; worker-N.stderr.log keeps them.
+(define METRIC-LINE-PREFIXES
+  '("PERF-COUNTERS:" "PHASE-TIMINGS:" "PROVENANCE-STATS:" "MEMORY-STATS:" "CELL-METRICS:"))
+(define (metric-line? l)
+  (for/or ([p (in-list METRIC-LINE-PREFIXES)]) (string-prefix? l p)))
+
+;; ============================================================
+;; WORKER -> UNIT SEQUENCE (DEFERRED 160 support ii)
+;; ============================================================
+;; 160's suite-only failures are conjectured to be state leaking between
+;; files that share a worker. To replay one, you need what that worker ran
+;; and in which order. Recorded per run: in the timings record ('workers) and
+;; in the run's failure directory (run.json). Each unit is the work line as
+;; the worker read it, relative to the project root, so a worker's history
+;; replays in ONE process from racket/prologos/:
+;;   jq -r '.workers[N].units[]' run.json \
+;;     | racket tools/batch-worker.rkt --stdin --file-timeout 300
+;; worker-sequences : root (listof (list index pid (listof work-unit))) -> jsexpr
+(define (worker-sequences root workers)
+  (define prefix (let ([r (if (path? root) (path->string root) root)])
+                   (if (string-suffix? r "/") r (string-append r "/"))))
+  (define (rel p) (if (string-prefix? p prefix) (substring p (string-length prefix)) p))
+  (for/list ([w (in-list workers)])
+    (hasheq 'worker (car w)
+            'pid (cadr w)
+            'units (for/list ([u (in-list (caddr w))])
+                     (work-unit->line (struct-copy work-unit u [path (rel (work-unit-path u))]))))))
+
+;; ============================================================
+;; THE WORKER'S OWN MODULES (item h of the runner-queue-gate batch)
+;; ============================================================
+;; ⚠ batch-worker.rkt loads tests/test-support.rkt by DYNAMIC-require (on
+;; purpose: it must run before the worker snapshots post-prelude state; see
+;; batch-worker.rkt § Phase 1). `raco make` follows only static requires, so
+;; it never rebuilt test-support.rkt for the worker, and the default load
+;; handler trusts a stale .zo. Reproduced 2026-10-13: after a driver.rkt
+;; rebuild, `--tests tests/test-substitution.rkt` (a test that does not
+;; require test-support.rkt) left tests/compiled/test-support_rkt.zo stale and
+;; every worker died at load — "instantiate-linklet: mismatch … name:
+;; process-file31.1 … importing instance: tests/test-support.rkt" — printed
+;; as DEAD WORKERS, 0 tests, ABORTED. Even `raco make tools/batch-worker.rkt`
+;; does not reach it. So the edge is DECLARED here, ONCE: batch-worker.rkt
+;; dynamic-requires exactly WORKER-DYNAMIC-MODULES, and every precompile
+;; builds worker-precompile-paths in its production stage, after driver.rkt.
+;; tests/test-suite-plan.rkt pins both halves (a static read of the worker).
+(define WORKER-MODULE "tools/batch-worker.rkt")
+(define WORKER-DYNAMIC-MODULES '("tests/test-support.rkt"))   ; relative to racket/prologos/
+
+;; worker-precompile-paths : root -> (listof path-string)  ; absolute
+(define (worker-precompile-paths root)
+  (define r (let ([s (if (path? root) (path->string root) root)])
+              (if (string-suffix? s "/") s (string-append s "/"))))
+  (for/list ([m (in-list (cons WORKER-MODULE WORKER-DYNAMIC-MODULES))])
+    (string-append r m)))
