@@ -37,7 +37,7 @@ documented as test regression guard). Probe diff = 0; canary
 ** 2026-04-22 session — Track 4D vision research + charter re-sequencing (commits =4812892c= + =16bddd26=)
 
 Draft research note
-=docs/research/2026-04-22_ATTRIBUTE_GRAMMAR_UNIFICATION_VISION.md=
+=docs/tracking/tracks/PPN/research/2026-04-22_ATTRIBUTE_GRAMMAR_UNIFICATION_VISION.md=
 (~300 lines) proposing Track 4D: Attribute Grammar Substrate
 Unification — motivated by the 3-accidentally-load-bearing pattern
 as structural fingerprint of sources-of-truth fragmentation across
@@ -106,7 +106,7 @@ retirement for map operations). =atms_hypothesis_count= 17 → 5 (-70%),
 
 ** 2026-04-23 session — Step 2 baseline + hypotheses doc (=3ba56387=)
 
-=docs/tracking/2026-04-23_STEP2_BASELINE.md= (412 lines, 12 sections)
+=docs/tracking/tracks/PPN/PPN_4C/2026-04-23_STEP2_BASELINE.md= (412 lines, 12 sections)
 captured pre-Step-2 performance baseline + quantitative hypotheses +
 measurement discipline. §1 headline: meta-lifecycle 11-195× faster
 since PPN 4C started (fresh-meta 38.26 → 3.45 μs ~11×; solve-meta
@@ -167,7 +167,7 @@ READERS./ New plan: staged sub-phases starting with S2.b-i audit.
 
 ** 2026-04-23 session — Handoff + mempalace re-mine (=62836430=)
 
-=docs/tracking/handoffs/2026-04-23_PPN_4C_S2b_HANDOFF.md= (562 lines)
+=docs/tracking/tracks/PPN/PPN_4C/2026-04-23_PPN_4C_S2b_HANDOFF.md= (562 lines)
 written for next session pickup at S2.b-i. Includes PPN 4C parent D.3
 hot-load request, §5.5 cross-cutting concerns matrix (11 parent-phase
 interactions), §5.1 S2.b-i audit spec with grep commands + category

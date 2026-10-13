@@ -483,7 +483,7 @@
 (displayln "  A baseline:  data/benchmarks/tropical-pre0-baseline-2026-04-26.txt")
 (displayln "  B reference: data/benchmarks/tropical-spike-d4-2026-05-14.txt")
 (displayln "  Option 13:   data/benchmarks/tropical-spike-d4-option13-2026-05-15.txt")
-(displayln "  Design:      docs/tracking/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md")
+(displayln "  Design:      docs/tracking/tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md")
 (displayln "               §10.0.7 (1C-vi mini-design+audit), §13.7 (per-phase measurement plan)")
 (displayln "")
 (displayln "(Production C measurements complete. A/B/C report follows in 1C-vi commit 2.)")

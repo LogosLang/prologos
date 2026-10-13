@@ -16,7 +16,7 @@
 ;;; - Demand: demand set (set-union merge, Right Kan exchange mechanism)
 ;;; - Core: trivial (bot → value, ATMS-tagged)
 ;;;
-;;; See: docs/tracking/2026-03-26_PPN_TRACK0_LATTICE_DESIGN.md
+;;; See: docs/tracking/tracks/PPN/PPN_0/2026-03-26_PPN_TRACK0_LATTICE_DESIGN.md
 ;;;
 
 (provide

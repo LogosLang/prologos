@@ -28,7 +28,7 @@
 ;;;   S-tier — semantic-axis parity (PENDING)
 ;;;
 ;;; CROSS-REFERENCES:
-;;;   - docs/tracking/2026-04-21_PPN_4C_PHASE_9_DESIGN.md §7.6.16 (Phase 1E design)
+;;;   - docs/tracking/tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md §7.6.16 (Phase 1E design)
 ;;;   - data/benchmarks/tropical-pre0-baseline-2026-04-26.txt (retired M1 baseline ≈ 26 ns)
 ;;;   - benchmarks/micro/bench-tropical-fuel.rkt (harness pattern source)
 ;;;   - benchmarks/micro/bench-meta-lifecycle.rkt (with-elab-env pattern source)

@@ -14,7 +14,7 @@
 - [Effectful Propagators Research](../tracking/2026-03-06_EFFECTFUL_PROPAGATORS_RESEARCH.md)
 - [Concurrency Primitives for the .pnet → LLVM Substrate](2026-05-02_CONCURRENCY_PRIMITIVES_LLVM_SUBSTRATE.md)
 - [Architecture A+D Implementation Design](../tracking/2026-03-07_ARCHITECTURE_AD_IMPLEMENTATION_DESIGN.org)
-- [PPN 4C Tropical Quantale Addendum Design](../tracking/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md)
+- [PPN 4C Tropical Quantale Addendum Design](../tracking/tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md)
 
 ---
 

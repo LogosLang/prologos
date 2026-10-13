@@ -7,7 +7,7 @@
 
 **Related documents**:
 - [Hypergraph Rewriting + Propagator Parsing](2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md) — DPO/SPO theory, e-graphs, interaction nets
-- [Lattice Foundations for PPN](2026-03-26_LATTICE_FOUNDATIONS_PPN.md) — reduced product, CALM, chaotic iteration
+- [Lattice Foundations for PPN](../tracking/tracks/PPN/research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md) — reduced product, CALM, chaotic iteration
 - [Layered Recovery Categorical Analysis](2026-03-13_LAYERED_RECOVERY_CATEGORICAL_ANALYSIS.md) — CALM theorem §8.5, stratification
 - [SRE Track 2D Design](../tracking/2026-04-03_SRE_TRACK2D_DESIGN.md) — DPO spans, critical pair analysis
 - [Algebraic Embeddings on Lattices](2026-03-28_ALGEBRAIC_EMBEDDINGS_LATTICES.md) — Heyting, residuated lattices
