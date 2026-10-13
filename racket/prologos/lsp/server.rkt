@@ -559,7 +559,11 @@
         ;; via $/prologos/eval; an expensive top-level computation (foray.prologos:
         ;; 231 s) used to block every request queued behind this call.
         (define results (process-file tmp-path #:source-dir (source-dir-of file-path)
-                                      #:evaluate? #f))
+                                      #:evaluate? #f
+                                      ;; SW-27: the document's specs live in its unit scope;
+                                      ;; read them there (they no longer leak to this process).
+                                      #:before-unit-exit
+                                      (λ () (set! captured-spec-store (current-spec-store)))))
         ;; Extract errors from the result list
         (for ([r (in-list (or results '()))])
           (when (prologos-error? r)
@@ -568,7 +572,7 @@
       ;; Capture definition locations, type env, and spec store before parameterize exits
       (set! captured-def-locs (current-definition-locations))
       (set! captured-type-env (hasheq))  ;; PPN 4C Addendum Phase 4A.c-iii-e: current-prelude-env retired; file-save hover/completion functional restore (capture the file's env from process-file's internal mnr) → PPN Track 11
-      (set! captured-spec-store (current-spec-store))
+      ;; spec store: captured inside the unit scope above (#:before-unit-exit, SW-27)
       ;; Visualization Phase 3: capture propagator network trace
       (define net-box (current-prop-net-box))
       (when net-box
