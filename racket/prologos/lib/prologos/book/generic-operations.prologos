@@ -50,42 +50,42 @@ require [prologos::data::option           :refer [Option some none some? unwrap-
 ;; since it comes after the dict param (not a leading m0 position).
 
 ;; gmap : (A -> B) -> C A -> C B
-spec gmap {A B : Type} {C : Type -> Type} [Seqable C] -> [Buildable C] -> [A -> B] -> [C A] -> [C B]
+spec gmap [Seqable C] -> [Buildable C] -> [A -> B] -> [C A] -> [C B]
 defn gmap [$seq $build f xs]
   Buildable-from-seq $build B [lseq-map A B f [$seq A xs]]
 
 ;; gfilter : (A -> Bool) -> C A -> C A
-spec gfilter {A : Type} {C : Type -> Type} [Seqable C] -> [Buildable C] -> [A -> Bool] -> [C A] -> [C A]
+spec gfilter [Seqable C] -> [Buildable C] -> [A -> Bool] -> [C A] -> [C A]
 defn gfilter [$seq $build pred xs]
   Buildable-from-seq $build A [lseq-filter A pred [$seq A xs]]
 
 ;; gfold : (A -> B -> B) -> B -> C A -> B
-spec gfold {A B : Type} {C : Type -> Type} [Foldable C] -> [A -> B -> B] -> B -> [C A] -> B
+spec gfold [Foldable C] -> [A -> B -> B] -> B -> [C A] -> B
 defn gfold [$foldable f z xs]
   $foldable A B f z xs
 
 ;; glength : C A -> Nat
-spec glength {A : Type} {C : Type -> Type} [Seqable C] -> [C A] -> Nat
+spec glength [Seqable C] -> [C A] -> Nat
 defn glength [$seq xs]
   lseq-length [$seq A xs]
 
 ;; gconcat : C A -> C A -> C A
-spec gconcat {A : Type} {C : Type -> Type} [Seqable C] -> [Buildable C] -> [C A] -> [C A] -> [C A]
+spec gconcat [Seqable C] -> [Buildable C] -> [C A] -> [C A] -> [C A]
 defn gconcat [$seq $build xs ys]
   Buildable-from-seq $build A [lseq-append A [$seq A xs] [$seq A ys]]
 
 ;; gany? : (A -> Bool) -> C A -> Bool
-spec gany? {A : Type} {C : Type -> Type} [Foldable C] -> [A -> Bool] -> [C A] -> Bool
+spec gany? [Foldable C] -> [A -> Bool] -> [C A] -> Bool
 defn gany? [$foldable pred xs]
   $foldable A Bool (fn [a] [acc] (if [pred a] true acc)) false xs
 
 ;; gall? : (A -> Bool) -> C A -> Bool
-spec gall? {A : Type} {C : Type -> Type} [Foldable C] -> [A -> Bool] -> [C A] -> Bool
+spec gall? [Foldable C] -> [A -> Bool] -> [C A] -> Bool
 defn gall? [$foldable pred xs]
   $foldable A Bool (fn [a] [acc] (if [pred a] acc false)) true xs
 
 ;; gto-list : C A -> List A
-spec gto-list {A : Type} {C : Type -> Type} [Seqable C] -> [C A] -> [List A]
+spec gto-list [Seqable C] -> [C A] -> [List A]
 defn gto-list [$seq xs]
   lseq-to-list [$seq A xs]
 
