@@ -24,15 +24,16 @@
          racket/file
          json
          "bench-lib.rkt"
-         "bench-micro.rkt")
+         "bench-micro.rkt"
+         "suite-lock.rkt")
 
 ;; Compile-limit adoption (Rel T1 SUB.2, owner-blessed 2026-07-24): raise the
 ;; CS machine-code compile limit for every build/run this tool spawns, so A/B
 ;; comparisons run under the production compile mode (interpreted-vs-compiled
 ;; rankings demonstrably invert). Full rationale + measurements: the twin
 ;; putenv in run-affected-tests.rkt + the defect doc §4.2.
-(unless (getenv "PLT_CS_COMPILE_LIMIT")
-  (putenv "PLT_CS_COMPILE_LIMIT" "1000000"))
+(void (unless (getenv "PLT_CS_COMPILE_LIMIT")  ; `void`: a module-level #t prints
+        (putenv "PLT_CS_COMPILE_LIMIT" "1000000")))
 
 ;; ============================================================
 ;; Path anchoring
@@ -228,6 +229,10 @@
 
 (define num-runs (make-parameter 15))
 (define output-file (make-parameter #f))
+(define no-wait? (make-parameter #f))
+
+;; Flags that take NO value (reorder-args must not swallow the next argument).
+(define boolean-flags '("--no-wait"))
 
 ;; Pre-process args: reorder so flags come before positional args.
 ;; racket/cmdline requires flags before positional args — silently treating
@@ -238,6 +243,9 @@
   (let loop ([rest (vector->list args)])
     (cond
       [(null? rest) (list->vector (append (reverse flags) (reverse paths)))]
+      [(member (car rest) boolean-flags)
+       (set! flags (cons (car rest) flags))
+       (loop (cdr rest))]
       [(string-prefix? (car rest) "--")
        ;; Flag + its value (next arg)
        (if (null? (cdr rest))
@@ -259,6 +267,8 @@
     (num-runs (string->number n))]
    ["--output" file "Write JSON results to FILE"
     (output-file file)]
+   ["--no-wait" "If another run holds the machine-wide suite lock, exit 75 instead of waiting"
+    (no-wait? #t)]
    #:args paths
    (apply append
           (for/list ([p (in-list paths)])
@@ -275,11 +285,8 @@
                (printf "Warning: ~a not found, skipping.\n" p)
                '()])))))
 
-(cond
-  [(null? program-paths)
-   (printf "No programs to benchmark.\n")
-   (printf "Usage: racket tools/bench-ab.rkt benchmarks/comparative/\n")]
-  [else
+;; The measurement and its --output record (run under the suite lock below).
+(define (run-and-record)
    (define results (run-ab-comparison program-paths (num-runs)))
    ;; Persist results if --output was given
    (when (output-file)
@@ -293,4 +300,27 @@
      (call-with-output-file out-path
        (λ (port) (write-json record port) (newline port))
        #:exists 'replace)
-     (printf "Results written to ~a\n" out-path))])
+     (printf "Results written to ~a\n" out-path)))
+
+(cond
+  [(null? program-paths)
+   (printf "No programs to benchmark.\n")
+   (printf "Usage: racket tools/bench-ab.rkt benchmarks/comparative/\n")]
+  [else
+   ;; A timing run takes the machine-wide suite lock EXCLUSIVELY
+   ;; (suite-lock.rkt): a concurrent suite or targeted run would be measured
+   ;; as part of the program. It waits for the holders; --no-wait exits 75.
+   (define lock-path (suite-lock-path))
+   (call-with-suite-lock
+    'exclusive
+    (lambda () (run-and-record))
+    #:path lock-path
+    #:wait? (not (no-wait?))
+    #:checkout project-root
+    #:command (string-join (cons "bench-ab" (vector->list (current-command-line-arguments))) " ")
+    #:on-wait (make-wait-reporter 'exclusive lock-path)
+    #:on-busy (lambda (holders)
+                (printf "SUITE LOCK BUSY (--no-wait): exit ~a, nothing was measured.\n"
+                        SUITE-LOCK-BUSY-EXIT)
+                (for ([h (in-list holders)]) (printf "  ~a\n" (format-holder h)))
+                (exit SUITE-LOCK-BUSY-EXIT)))])
