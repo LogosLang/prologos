@@ -994,6 +994,7 @@
   (define all-procs '())
   (define all-stdins '())
   (define all-workers '())                   ;; worker-state, by index
+  (define all-readers '())                   ;; stdout reader threads
 
   ;; ⚠⚠ THE `--timeout` FLAG DID NOT REACH THE WORKER, AND THE RUNNER PRINTED IT
   ;; ANYWAY. This spawned `batch-worker.rkt --stdin` with no `--file-timeout`, so
@@ -1040,7 +1041,7 @@
     ;; Send the first unit to each worker to get them started
     (dispatch-next! stdin)
     ;; Reader thread: parse JSONL from worker stdout → result channel
-    (thread
+    (set! all-readers (cons (thread
      (λ ()
        (let loop ()
          (define line (read-line stdout 'any))
@@ -1055,7 +1056,11 @@
                 (when (hash? r)
                   ;; PM Track 10C: tag result with worker stdin for work-stealing dispatch
                   (async-channel-put result-ch (cons stdin r)))))
-            (loop)])))))
+            (loop)]))))
+                            all-readers)))
+  ;; Ready once EVERY worker's stdout has closed: from then on no result can
+  ;; arrive, so the collector stops waiting instead of sitting out --timeout.
+  (define readers-done (thread (λ () (for-each thread-wait all-readers))))
 
   ;; Collect results with progress output
   (define collected '())
@@ -1080,7 +1085,24 @@
       (define first-result-timeout 30)
       (define effective-timeout
         (if (= count 0) first-result-timeout (timeout-secs)))
-      (define raw (sync/timeout (* effective-timeout 1.0) result-ch))
+      (define raw0 (sync/timeout (* effective-timeout 1.0) result-ch readers-done))
+      ;; Every worker has exited (all stdouts closed): take what is buffered,
+      ;; then stop. Before, a worker that died mid-unit cost the full per-file
+      ;; --timeout (300 s) of waiting for a result nobody could send, and
+      ;; workers that died at load cost the 30 s first-result probe.
+      (define workers-gone? (eq? raw0 readers-done))
+      (define raw (if workers-gone? (sync/timeout 0 result-ch) raw0))
+      (define (dead-workers-banner! waited)
+        (printf "\n")
+        (printf "╔══════════════════════════════════════════════════════════╗\n")
+        (printf "║  ⛔ DEAD WORKERS — no results after ~as               ║\n" waited)
+        (printf "║                                                        ║\n")
+        (printf "║  All batch workers crashed before producing output.    ║\n")
+        (printf "║  ACTION: read the worker stderr below.                 ║\n")
+        (printf "║  Common cause: a stale .zo (named below if so).        ║\n")
+        (printf "╚══════════════════════════════════════════════════════════╝\n")
+        (print-worker-stderr-digest all-workers)
+        (set! bailed? #t))
       (cond
         [raw
          ;; PM Track 10C: unpack (cons worker-stdin result-hash)
@@ -1147,6 +1169,14 @@
                 (subprocess-kill p #t)))]
            [else
             (loop (sub1 remaining) (add1 count) first-waited)])]
+        [workers-gone?
+         (cond
+           [(= count 0)
+            (dead-workers-banner!
+             (real->decimal-string (/ (- (current-inexact-monotonic-milliseconds) t0) 1000.0) 1))]
+           [else
+            (printf "\nNO RESULT: every batch worker has exited; ~a unit(s) never reported.\n"
+                    remaining)])]
         [else
          ;; Timeout — check if this is dead-worker (first result never arrived)
          ;; vs per-file timeout (individual test took too long)
@@ -1163,17 +1193,7 @@
            [(= count 0)
             ;; No results AT ALL, and the workers are gone (or we have waited out
             ;; the full per-file budget) — this is the real crash case.
-            (printf "\n")
-            (printf "╔══════════════════════════════════════════════════════════╗\n")
-            (printf "║  ⛔ DEAD WORKERS — no results after ~as               ║\n"
-                    (+ first-waited first-result-timeout))
-            (printf "║                                                        ║\n")
-            (printf "║  All batch workers crashed before producing output.    ║\n")
-            (printf "║  ACTION: read the worker stderr below.                 ║\n")
-            (printf "║  Common cause: a stale .zo (named below if so).        ║\n")
-            (printf "╚══════════════════════════════════════════════════════════╝\n")
-            (print-worker-stderr-digest all-workers)
-            (set! bailed? #t)]
+            (dead-workers-banner! (+ first-waited first-result-timeout))]
            [else
             ;; Normal per-file timeout
             (eprintf "\nTIMEOUT: No result received for ~as. Killing ~a remaining.\n"
