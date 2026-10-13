@@ -674,3 +674,13 @@ suite: `+10 test-suite-lock`, `+19 test-suite-plan` (18 + the guard), `+3 test-a
 - 161 and 164 discharged; 162 and 160 status;
 - **165** filed (stale worker dependency, discharged);
 - **166** filed (silent queue bypass; the measured lock-inheritance limitation).
+
+**After checkpoint 2 (main = `01ef2542`).**
+- Both trees rebuilt with the limit (fingerprints match); the 8 merged test files pass on main (161 tests).
+- Main's `timings.jsonl` annotated (decision (v)): 24 records, 13 of them full-suite `all_pass` by DEFERRED 164's own
+  300-file threshold. The changed lines differ ONLY by the `"invalid"` key, and a second pass annotates 0.
+- `runner-queue-gate` worktree and branch removed (merged, clean). Its small scratch probes are preserved in the
+  racket-performance-probing skill (`scripts/data/agent-evidence-2026-10-13/`).
+- `par4-p0` → `3643f56e` (second bring-up; gate 10 339 / 495, delta exact; PAR 4 note § 7d). It now queues.
+- Still without the queue: `ciu6-path-selection` (the CIU 6 session's, at `e6394b3f`), the two clones, and the
+  unmerged `guards-hook-sweep` / `per-process-152-151` worktrees until checkpoint 3.
