@@ -80,7 +80,10 @@ with the main reader (`propagator.rkt:1616`, which joins) independently of 148. 
 question is downstream of a correctness one; options A–E and the discriminating
 measurements are in the session's analysis, to be folded into whichever design doc takes
 the decision. **M1 measured (2026-10-13)**: 2 of 7 production domain merges are joins;
-record `docs/tracking/2026-10-13_TAGGED_CELL_DOMAIN_MERGES_M1.md`. It also bears on
+record `docs/tracking/2026-10-13_TAGGED_CELL_DOMAIN_MERGES_M1.md`. **Placed in PAR 4**
+(owner, 2026-10-13): F3 and M2 go into PAR 4's early phases; input note written to main's
+`docs/tracking/tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_DOMAIN_MERGE_LAWS_NOTE.md` (untracked
+there, with the main tree's other PAR 4 files). It also bears on
 **PAR 4 D.1 §6.1**: the flat record "dedups on append by construction" — pair-dedup, the same
 limitation — so its `E`-entry capacity overflows under the same chain (the arena probe's
 `overflow` counter is the tell).

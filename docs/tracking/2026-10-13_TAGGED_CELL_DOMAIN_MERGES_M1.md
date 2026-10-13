@@ -52,7 +52,7 @@ call and every `promote-cell-to-tagged` target, excluding `tests/` and `benchmar
 | D2 | `mult-lattice-merge` (`mult-lattice.rkt:49`) | mult universe (`:1061`) | 0 | 0 | 0 | 0 | 0 | **join** ✓ |
 | D3 | `merge-meta-solve-identity` (`elaborator-network.rkt:997`) | level and session universes (`:1062-1063`) | 0 | 0 | 0 | 0 | 0 | **join** ✓ |
 | D4 | `scope-cell-merge` (`decision-cell.rkt:938`) | relations scope cells (`relations.rkt:2014`, `:2958`, promotions) | 0 | **254** | 0 | 0 | 0 | band (per-key LWW) |
-| D5 | `logic-var-merge` (`relations.rkt:1990`) | promoted logic-var argument cells (`relations.rkt` promote sites) | 0 | **659** | 0 | 0 | 0 | band (LWW) |
+| D5 | `logic-var-merge` (`relations.rkt:1990`) | `cell-id` args promoted at `relations.rkt:2676`, `:2759` *when* they are logic-var cells (those sites promote any `cell-id?` — inferred, not measured) | 0 | **659** | 0 | 0 | 0 | band (LWW) |
 | D6 | `attribute-map-merge-fn` (`typing-propagators.rkt:447`) | the attribute map promoted at `typing-propagators.rkt:1209` | 0 | **146** | **25** | **149** | 0 | guarded monoid |
 | D7 | `(λ (o n) n)` | `atms.rkt:644`; the promote default `propagator.rkt:1809` | 0 | **2017** | 0 | 0 | **1994** | band (LWW), no ⊥ |
 
