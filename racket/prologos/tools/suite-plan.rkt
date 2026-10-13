@@ -102,6 +102,10 @@
 ;;     file, the newest 2026-07-31). Since fd2986cc the runner no longer
 ;;     writes them; this keeps any FUTURE fail-open of that shape away from
 ;;     the scheduler too.
+;;   - one of its units reported PASS having run 0 tests, and the file is not
+;;     declared test-free or a non-test module: before 2999a74b the gate took
+;;     that as a pass (DEFERRED 161 — 2 such records in main's file, both
+;;     `all_pass` true). A result without a 'tests key makes no claim.
 ;; A record without file_count makes no claim to check.
 (define (record-invalid-reason rec)
   (cond
@@ -111,8 +115,17 @@
      (define fc (hash-ref rec 'file_count #f))
      (define rs (hash-ref rec 'results '()))
      (define n (if (list? rs) (length rs) 0))
-     (and (exact-integer? fc) (< n fc)
-          (format "results ~a < file_count ~a (DEFERRED 164)" n fc))]))
+     (define (empty-pass? r)
+       (and (hash? r) (passed? r) (eqv? (hash-ref r 'tests #f) 0)
+            (let ([f (base-name (hash-ref r 'file ""))])
+              (not (or (member f NON-TEST-MODULES) (member f TEST-FREE-FILES))))))
+     (cond
+       [(and (exact-integer? fc) (< n fc))
+        (format "results ~a < file_count ~a (DEFERRED 164)" n fc)]
+       [(and (list? rs) (findf empty-pass? rs))
+        => (lambda (r) (format "unit ~a reported PASS with 0 tests (DEFERRED 161)"
+                               (base-name (hash-ref r 'file ""))))]
+       [else #f])]))
 
 ;; ============================================================
 ;; WHALE SHARDING

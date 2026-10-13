@@ -273,6 +273,26 @@
                 (list "/x/tests/test-a.rkt")))
 
 ;; ========================================
+;; Invalid history records (DEFERRED 161 open 1, SW-19)
+;; ========================================
+
+(test-case "suite-plan/invalid: an undeclared unit that PASSED with 0 tests invalidates its record"
+  (define (rec . results) (hasheq 'file_count (length results) 'all_pass #t 'results results))
+  (define (u f t [st "pass"]) (hasheq 'file f 'status st 'tests t))
+  (check-equal? (record-invalid-reason (rec (u "test-a.rkt" 3) (u "test-generators.rkt" 0)))
+                "unit test-generators.rkt reported PASS with 0 tests (DEFERRED 161)")
+  (check-false (record-invalid-reason (rec (u "test-a.rkt" 3) (u "test-support.rkt" 0)))
+               "the worker's fixture (NON-TEST-MODULES)")
+  (check-false (record-invalid-reason (rec (u "test-a.rkt" 3) (u "test-p2-debug.rkt" 0)))
+               "declared test-free (TEST-FREE-FILES)")
+  (check-false (record-invalid-reason (rec (u "test-a.rkt" 0 "fail")))
+               "a FAILURE with 0 tests is a failure, not an empty pass")
+  (check-false (record-invalid-reason (rec (hasheq 'file "test-a.rkt" 'status "pass")))
+               "an old record without a 'tests key makes no claim")
+  (check-equal? (record-invalid-reason (hasheq 'file_count 3 'results (list (u "test-x.rkt" 0))))
+                "results 1 < file_count 3 (DEFERRED 164)" "the 164 reason is checked first"))
+
+;; ========================================
 ;; Exit status
 ;; ========================================
 
