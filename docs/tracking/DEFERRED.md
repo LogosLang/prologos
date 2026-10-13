@@ -7089,6 +7089,12 @@ and after the rebuild, so the build is not the cause.
   got: (type-mismatch-error … "cannot infer the type of an unannotated parameter — …" "Nat -> Nat"
   "<could not infer>" "[fn [x <_>] [reduce x | zero -> 1 | suc y -> 2]]")".
 - Run alone, they pass 3/3 and 2/2.
+- **+1, 2026-10-13 (CIU 6 worktree baseline, `58241c0c`, fresh `ciu6-path-selection` build; `reduction`/`typing-core`/
+  `elaborator`/`parser` `.zo` byte-identical to main's):** `test-error-messages` again, the same check (`:465:2`, test-case *"matching clause result
+  types still type-check (control, L2)"*) and the same message; 10 289 tests / 492 files, 57.4 s, 18 workers,
+  the file completed 81st of 496 units. Alone: 44 tests, all pass. This time the full log was copied before the
+  alone-run (`~/.hermes/profiles/logos-language-designer/cache/scratch/ciu6/fail-test-error-messages.log`,
+  scratch — pruned after 24 h idle); the runner's stdout does not record which files shared the victim's worker.
 
 The full failure logs are lost: the runner deletes a file's `data/benchmarks/failures/*.log` when a
 later run of that file passes, and the alone-runs were those later runs. The excerpts above were read
