@@ -33,7 +33,10 @@
          "../namespace.rkt"
          (only-in "../pnet-serialize.rkt"
                   pnet-path-for-module pnet-stale? deserialize-module-state
-                  PNET_VERSION read-pnet-header))
+                  PNET_VERSION read-pnet-header PNET-BODY-SLOTS)
+         (only-in "../tools/pnet-dump.rkt"
+                  read-pnet-file pnet-file-layout pnet-file-body pnet-summary-lines
+                  write-pnet-text pnet-canonical))
 
 ;; Unique ns so no other test's cache entry collides.
 (define lib-ns 'pnet151a-hdr)
@@ -127,7 +130,22 @@
   ;; body = the old slots 2-30 (env specs locs exports ns-string + 24 registries)
   (define body (cadr written-data))
   (check-equal? (length body) 29)
-  (check-equal? (list-ref body 4) "pnet151a-hdr"))
+  (check-equal? (length body) (length PNET-BODY-SLOTS) "the writer's body matches the slot names")
+  (check-equal? (list-ref body (index-of PNET-BODY-SLOTS 'namespace)) "pnet151a-hdr"))
+
+(test-case "tools/pnet-dump.rkt reads the real writer's file: fresh, labeled, and --text reads back"
+  (define pf (read-pnet-file cache-path))
+  (check-equal? (pnet-file-layout pf) 'fasl)
+  (define lines (pnet-summary-lines pf lib-ns))
+  (check-true (string-contains? (list-ref lines 4) "fresh") (list-ref lines 4))
+  (check-true (ormap (lambda (l) (regexp-match? #rx"^ +6  namespace .*\"pnet151a-hdr\"" l)) lines))
+  (define o (open-output-string))
+  (write-pnet-text pf o)
+  (define in (open-input-string (get-output-string o)))
+  (check-equal? (read in) (car written-data))
+  ;; canonical, not equal?: even a :no-prelude module's subtype registry is a
+  ;; pair-keyed hasheq (the built-in numeric subtypes), never equal? across reads
+  (check-equal? (pnet-canonical (read in)) (pnet-canonical (cadr written-data))))
 
 (test-case "fresh: pnet-stale? is #f right after the write"
   (check-false (pnet-stale? lib-ns lib-file)))
@@ -163,6 +181,18 @@
   (file-or-directory-modify-seconds lib-file t0)
   (check-false (pnet-stale? lib-ns lib-file))
   (check-true (list? (deserialize-module-state lib-ns lib-file))))
+
+(test-case "pnet-dump's loader verdict agrees with pnet-stale?, and names the reason"
+  (define (verdict) (list-ref (pnet-summary-lines (read-pnet-file cache-path) lib-ns) 4))
+  (define t0 (file-or-directory-modify-seconds lib-file))
+  (file-or-directory-modify-seconds lib-file (+ t0 7))
+  (check-true (pnet-stale? lib-ns lib-file))
+  (check-true (string-contains? (verdict) "STALE: the source changed") (verdict))
+  (file-or-directory-modify-seconds lib-file t0)
+  (check-true (string-contains? (verdict) "fresh") (verdict))
+  (write-pnet-file! (list 'pnet-header (sub1 PNET_VERSION) source-key) (cadr written-data))
+  (check-true (string-contains? (verdict) (format "STALE: version ~a" (sub1 PNET_VERSION))) (verdict))
+  (apply write-pnet-file! written-data))
 
 (test-case "version gate is exact equality: older, newer and non-numeric versions are stale, never a crash"
   (for ([v (list (sub1 PNET_VERSION) (add1 PNET_VERSION) "11" 'eleven)])
