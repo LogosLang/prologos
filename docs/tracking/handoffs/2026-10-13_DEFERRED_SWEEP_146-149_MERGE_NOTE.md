@@ -592,3 +592,30 @@ shows that population does not reach the arms. A timing A/B waits for a quiet ma
 > observing it; the comparative corpus never reaches the arms, so it cannot serve as P2's evidence for merge-law work.
 > **Next**: D.2 decides F3(b) at both sites, against the new witness; P0's corpus needs a program that reaches
 > binder merges with unsolved metas.
+
+---
+
+## Coordination: parallel streams, owner decisions (vii)/(viii), `par4-p0` brought up to main
+
+**Parallel streams** (owner: "launch all three now"). Each runs on its own branch in a nested worktree off `58241c0c`, and
+their files are disjoint:
+- `runner-queue-gate`: the machine-wide suite queue, then the gate batch (161, 164's open items, 162(1), and 160's
+  evidence-preserving support). Steered mid-run with one more item: the `--tests` precompile never compiles
+  `tests/test-support.rkt`, which the worker loads by `dynamic-require`, so a stale one kills every worker.
+- `guards-hook-sweep`: 159(a) and 163's `pkill` rule in `tools/hook-guard-racket.sh`, plus 162(2)'s `eq?` sweep.
+- `per-process-152-151`: 152 and 151(a).
+
+The coordinator (this session) reads each diff, re-runs its tests, checks its claims, merges in a throwaway worktree
+gated by a full suite with a file-by-file count, and only then moves main.
+
+**Owner decisions, 2026-10-13:**
+- **(vii)** F3(a) is folded into ONE checkpoint merge with the runner stream; it is not merged alone.
+- **(viii)** The sweep session brings `par4-p0` up to main itself, rather than relaying the request.
+
+**`par4-p0` → `a456c370`** (merge of main into `fbd5a322`; recorded in PAR 4 note § 7d). Clean and idle when checked.
+The only overlap, `propagator.rkt`, merged to main + exactly `par4-p0`'s 6 hunks. Merged tree: 10 298 tests / 493 files,
+all pass; the file-by-file delta was exactly `+9 test-arena-parity`, −11 F3(a) tests, nothing else. Then the branch was
+fast-forwarded, rebuilt with the limit (fingerprints match), and its own test passes in place. Still carrying the
+machine-wide `pkill`: 5 nested worktrees idle 8–9 weeks (`charming-khayyam`, `dazzling-wescoff`,
+`editor-support-path-change`, `heuristic-thompson`, `sleepy-kepler`) and 2 sibling clones (`prologos-egraph-spike`,
+`prologos-preduce-auto`). Left untouched: harmless unless a suite is started there.

@@ -303,6 +303,33 @@ What it means for PAR 4:
 `compiled/reduction_rkt.zo` with 302 215 B at this source, or time `raco test tests/test-transducer-01.rkt`:
 ≈ 4.5 s limited vs ≈ 6.1 s not). Then re-run the baseline rows that were taken in main's tree before 02:55.
 
+## 7d. `par4-p0` now has main merged in: `a456c370` (2026-10-13, owner-authorized from the sweep session)
+
+**Why.** Until it had `b45bbf44`, a runner start in `par4-p0` pkilled every batch worker on the machine
+(DEFERRED 163), including other sessions' suites. The owner asked the sweep session to bring it up to
+main rather than relay the request.
+
+**What was checked before touching it.** The tree was clean (0 dirty lines). It was idle: no process had
+its cwd there, and nothing had been modified since 02:22. PAR 4 is between P0 (complete) and D.2. The merge
+was made in a throwaway worktree. The one textual overlap, `propagator.rkt`, came out as main's file plus
+exactly `par4-p0`'s six hunks (changed lines identical; 147's markers intact). The merged tree was built with
+the compile limit. Full suite, BSP: **10 298 tests / 493 files, all pass.** File-by-file against main plus
+F3(a): `+9 test-arena-parity.rkt`, with `test-type-lattice` −7 and `test-substitution` −4 (F3(a)'s tests,
+which are not on main yet), and nothing else. Then `par4-p0` was fast-forwarded, rebuilt with the limit
+(`reduction` / `typing-core` / `macros` `.zo` = 302 215 / 289 697 / 439 415 B, matching a limited build),
+and its own `test-arena-parity` passes in place (9/9).
+
+**What it means for PAR 4.** The records citing `4097b1c8` and `fbd5a322` stay valid as records: it was a
+merge, not a rebase. Measurements taken on `par4-p0` from now on include, on the measured path:
+- 146 (`champ.rkt`);
+- 147 (`propagator.rkt`: read-only fire 1 386 → 928 B, read+write 2 819 → 2 232 B, §7b);
+- 148 (`decision-cell.rkt`);
+- the runner fixes 162–164 (effective LPT dispatch, parent-scoped cleanup, INCOMPLETE on missing results).
+
+`fbd5a322` versus `a456c370` is therefore the natural "as-is / defect-fixed" pair of baselines for P2. F3(a)
+(`5ec697bf`) and the suite queue reach `par4-p0` at the next checkpoint merge. The merge commit's message
+carries this summary for whoever resumes on the branch.
+
 ## 8. Proposed LOG entry (for whoever holds `LOG.md`)
 
 > ### P0 input from the DEFERRED sweep: 2 of 7 tagged-cell domain merges are joins; SRE's type-domain ACI declaration is fail-open — no commit on main (2026-10-13)
