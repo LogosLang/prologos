@@ -37,7 +37,8 @@
          "dep-graph.rkt"
          "bench-lib.rkt"
          "suite-plan.rkt"
-         "suite-lock.rkt")
+         "suite-lock.rkt"
+         (only-in racket/os getpid))
 
 ;; ============================================================
 ;; Compile-limit adoption (Rel T1 SUB.2, owner-blessed 2026-07-24)
@@ -209,6 +210,7 @@
 (define do-precompile? (make-parameter #t))
 (define do-pnet-cache? (make-parameter #t))
 (define show-failures? (make-parameter #f))
+(define failures-run (make-parameter #f))
 (define bail-timeout-threshold (make-parameter 3))
 (define force-rerun? (make-parameter #f))
 (define force-stale-zo? (make-parameter #f))
@@ -257,6 +259,8 @@
     (do-pnet-cache? #f)]
    ["--failures" "Show failure logs from last run (no tests executed)"
     (show-failures? #t)]
+   ["--failures-run" id "Show the archived failure logs of run ID (or 'latest'), from data/benchmarks/failures/runs/"
+    (show-failures? #t) (failures-run id)]
    ["--bail-timeouts" n "Abort after N per-file timeouts (default: 3, 0=disable)"
     (bail-timeout-threshold (string->number n))]
    ["--no-bail" "Disable early-bail on timeouts"
@@ -290,9 +294,15 @@
   (define tests-dir
     (build-path project-root "tests"))
 
-  ;; --failures: show failure logs from last run, then exit
+  ;; --failures: show failure logs from last run, then exit.
+  ;; --failures-run ID: the archived logs of one run (DEFERRED 160 support).
   (when (show-failures?)
-    (define fail-dir (build-path project-root "data" "benchmarks" "failures"))
+    (define fail-root (build-path project-root "data" "benchmarks" "failures"))
+    (define runs-root (build-path fail-root "runs"))
+    (define fail-dir
+      (cond [(failures-run) (build-path (if (equal? (failures-run) "latest") fail-root runs-root)
+                                        (failures-run))]
+            [else fail-root]))
     (cond
       [(not (directory-exists? fail-dir))
        (printf "No failure logs found (directory does not exist: ~a)\n" fail-dir)]
@@ -304,11 +314,21 @@
          [(null? log-files)
           (printf "No failure logs found — all tests passed last run.\n")]
          [else
-          (printf "~a failure log(s) from last run:\n\n" (length log-files))
+          (printf "~a failure log(s) ~a:\n\n" (length log-files)
+                  (if (failures-run)
+                      (format "from run ~a" (failures-run))
+                      "— the latest per file"))
           (for ([log-path (in-list log-files)])
             (printf "~a\n" (make-string 60 #\─))
             (display (file->string log-path))
             (newline))])])
+    (define archived
+      (if (directory-exists? runs-root)
+          (sort (for/list ([p (in-list (directory-list runs-root))]) (path->string p)) string>?)
+          '()))
+    (unless (null? archived)
+      (printf "Archive (data/benchmarks/failures/runs/, newest ~a kept): ~a run(s); newest ~a. Show one: --failures-run ID|latest\n"
+              FAILURE-RUNS-KEPT (length archived) (car archived)))
     (exit 0))
 
   ;; Guard: block redundant full-suite re-runs (correct-by-construction, not discipline).
@@ -572,6 +592,53 @@
                  (path->string (build-path tests-dir (symbol->string t)))))
              (with-suite-lock (suite-lock-mode #:all? #f #:file-count (length test-paths))
                               (lambda () (run-tests test-paths project-root))))])])]))
+
+;; ============================================================
+;; Failure-log views (DEFERRED 160 support)
+;; ============================================================
+;; refresh-failure-views! : fail-root run-dir file-results -> kept?
+;; (1) the per-file LATEST view at fail-root/<file>.log: for each file this run
+;;     reported, replace its logs there with this run's; (2) the archive: keep
+;;     run-dir when the run left evidence (#:keep-run?), else remove it; prune
+;;     to the newest FAILURE-RUNS-KEPT; point fail-root/latest at the newest.
+(define (refresh-failure-views! fail-root run-dir file-results #:keep-run? keep-run?)
+  (define (names dir)
+    (if (directory-exists? dir)
+        (for/list ([p (in-list (directory-list dir))]
+                   #:when (file-exists? (build-path dir p)))
+          (path->string p))
+        '()))
+  (define run-logs (names run-dir))
+  (define top-logs (names fail-root))
+  (for ([r (in-list file-results)])
+    (define f (hash-ref r 'file))
+    (for ([n (in-list (file-log-names f top-logs))])
+      (with-handlers ([exn:fail? void]) (delete-file (build-path fail-root n))))
+    (for ([n (in-list (file-log-names f run-logs))])
+      (with-handlers ([exn:fail? void])
+        (copy-file (build-path run-dir n) (build-path fail-root n) #t))))
+  (define runs-root (build-path fail-root "runs"))
+  (define kept? (and keep-run? (pair? run-logs)))
+  (unless kept?
+    (with-handlers ([exn:fail? void]) (delete-directory/files run-dir)))
+  (define run-names
+    (if (directory-exists? runs-root)
+        (for/list ([p (in-list (directory-list runs-root))]
+                   #:when (directory-exists? (build-path runs-root p)))
+          (path->string p))
+        '()))
+  (for ([n (in-list (runs-to-prune run-names))])
+    (with-handlers ([exn:fail? void]) (delete-directory/files (build-path runs-root n))))
+  (define newest (let ([left (sort (remove* (runs-to-prune run-names) run-names) string>?)])
+                   (and (pair? left) (car left))))
+  (when newest
+    (define link (build-path fail-root "latest"))
+    (define tmp (build-path fail-root (format ".latest-~a" (getpid))))
+    (with-handlers ([exn:fail? void])
+      (when (link-exists? tmp) (delete-file tmp))
+      (make-file-or-directory-link (build-path "runs" newest) tmp)
+      (rename-file-or-directory tmp link #t)))
+  kept?)
 
 ;; ============================================================
 ;; Batch test execution with shared prelude
@@ -862,10 +929,17 @@
   ;; documented knob could not raise. Passing it makes the printed number true and
   ;; gives ONE place to set the limit.
   (define file-timeout-arg (number->string (timeout-secs)))
+  ;; DEFERRED 160 support: this run's failure logs go to their OWN directory,
+  ;; which nothing edits afterwards (suite-plan.rkt § FAILURE-LOG ARCHIVE).
+  (define fail-root (build-path project-root "data" "benchmarks" "failures"))
+  (define run-id (make-run-id (current-seconds) (getpid)))
+  (define run-dir (build-path fail-root "runs" run-id))
+  (make-directory* run-dir)
   (for ([i (in-range jobs)])
     (define-values (proc stdout stdin stderr)
       (subprocess #f #f #f racket-path batch-worker-path "--stdin"
-                  "--file-timeout" file-timeout-arg))
+                  "--file-timeout" file-timeout-arg
+                  "--failure-dir" (path->string run-dir)))
     (set! all-procs (cons proc all-procs))
     (set! all-stdins (cons stdin all-stdins))
     ;; Send the first unit to each worker to get them started
@@ -1062,19 +1136,14 @@
                         (string-join (map unit-name empty-units) ", ")))
           '()))
      "; "))
-  ;; A passing file has no failure log of any form: clear stale per-shard logs
-  ;; (and, for a sharded file, the whole-file log) left by earlier runs.
-  (let ([fail-dir (build-path project-root "data" "benchmarks" "failures")])
-    (when (directory-exists? fail-dir)
-      (for* ([r (in-list file-results)]
-             #:when (string=? (hash-ref r 'status) "pass")
-             [p (in-list (directory-list fail-dir))])
-        (define f (hash-ref r 'file))
-        (define s (path->string p))
-        (when (or (string-prefix? s (string-append f ".shard-"))
-                  (and (hash-ref r 'shards #f) (string=? s (string-append f ".log"))))
-          (with-handlers ([exn:fail? void])
-            (delete-file (build-path fail-dir p)))))))
+  ;; The failure-log views (DEFERRED 160 support). The ARCHIVE — run-dir — is
+  ;; never edited. The top-level per-file view is refreshed for every file
+  ;; this run reported: its old logs (whole-file and shard) are replaced by
+  ;; this run's, so a passing file shows none — and its earlier evidence
+  ;; survives in runs/<earlier-id>/.
+  (define kept-run-dir?
+    (refresh-failure-views! fail-root run-dir file-results
+                            #:keep-run? (not all-pass?)))
   (define completed-count (length file-results))
   (printf "\n~a tests in ~as (~a~a files, ~a batch workers, ~a)\n"
           total-tests
@@ -1105,7 +1174,8 @@
           (printf "    ~a\n" line)))
       (newline))
     (printf "~a\n" (make-string 60 #\─))
-    (printf "Failure logs: data/benchmarks/failures/*.log\n")
+    (printf "Failure logs: data/benchmarks/failures/*.log (latest per file); this run: ~a\n"
+            (if kept-run-dir? (format "data/benchmarks/failures/runs/~a/" run-id) "(none written)"))
     ;; I2 (Track 2B process): diagnostic protocol reminder when 3+ failures.
     ;; Longitudinal pattern 3 (diagnostic discipline regression, 4+ PIRs): under
     ;; implementation pressure, the protocol of "audit domain → hypothesize →

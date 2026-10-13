@@ -18,7 +18,7 @@
 - **Full suite = regression gate only** (CRITICAL — STOP AND READ BEFORE ACTING): The full suite (~130s) is for regression checks after completing a phase, not for investigation. NEVER run the full suite to diagnose failures.
   **TRIGGER**: The moment output shows "N FAILURES" — STOP. Do NOT re-run.
   **PROTOCOL** (follow IN ORDER, do not skip steps):
-  1. **Read failure logs**: `data/benchmarks/failures/*.log` (use Read tool). The logs persist — no re-run needed to see them.
+  1. **Read failure logs**: `data/benchmarks/failures/*.log` (use Read tool). The logs persist — no re-run needed to see them. Those are the LATEST log per file (a file that later passes shows none); every run's own logs are kept, never edited, in `data/benchmarks/failures/runs/<run-id>/` (newest 20 runs that left evidence; `failures/latest` → the newest) — `--failures-run ID|latest` prints one. So copying a log before a re-run is no longer needed (DEFERRED 160 support, 2026-10-13).
   2. **Categorize**: linklet mismatch (stale .zo) vs real failure vs file-not-found (stale log)
   3. **If linklet mismatch**: `raco make tests/test-NAME.rkt` then `raco test tests/test-NAME.rkt`. NOT a full suite re-run.
   4. **If real failure**: `raco test tests/test-NAME.rkt > /tmp/test-NAME.txt 2>&1` — capture FULL output on FIRST run. Read with Read tool.

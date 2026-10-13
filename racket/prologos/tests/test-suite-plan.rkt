@@ -283,3 +283,29 @@
   (check-false (zero? EXIT-GUARD-REFUSED) "a refused run must not read as green")
   (check-false (zero? SUITE-LOCK-BUSY-EXIT))
   (check-equal? (length (remove-duplicates codes)) (length codes)))
+
+;; ========================================
+;; Failure-log archive (DEFERRED 160 support)
+;; ========================================
+
+(test-case "suite-plan/failure archive: run ids sort chronologically and are unique per process"
+  (define a (make-run-id 1791891501 42))
+  (define b (make-run-id 1791891502 7))
+  (check-regexp-match #px"^[0-9]{8}T[0-9]{6}-42$" a)
+  (check-true (string<? a b))
+  (check-not-equal? (make-run-id 1791891501 42) (make-run-id 1791891501 43)))
+
+(test-case "suite-plan/failure archive: retention keeps the newest N runs, never the excess"
+  (define names (for/list ([i 25]) (make-run-id (+ 1791891501 (* 60 i)) 1)))
+  (define doomed (runs-to-prune (reverse names) #:keep 20))
+  (check-equal? (length doomed) 5)
+  (check-equal? (sort doomed string<?) (take names 5) "the OLDEST five go")
+  (check-equal? (runs-to-prune (take names 3) #:keep 20) '())
+  (check-equal? FAILURE-RUNS-KEPT 20))
+
+(test-case "suite-plan/failure archive: a file's logs are its whole-file log and its shard logs, nothing else"
+  (define names '("test-a.rkt.log" "test-a.rkt.shard-1-of-4.log" "test-ab.rkt.log"
+                  "test-a.rkt.log.bak" "runs" "latest" "test-b.rkt.shard-0-of-2.log"))
+  (check-equal? (sort (file-log-names "test-a.rkt" names) string<?)
+                '("test-a.rkt.log" "test-a.rkt.shard-1-of-4.log"))
+  (check-equal? (file-log-names "test-c.rkt" names) '()))

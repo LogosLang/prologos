@@ -121,11 +121,14 @@
 ;; ============================================================
 ;; Failure log directory
 ;; ============================================================
-;; Write per-file failure logs to data/benchmarks/failures/
-;; for easy post-mortem inspection of batch test failures.
-(define failure-log-dir
+;; Write per-file failure logs for post-mortem inspection. The runner passes
+;; --failure-dir data/benchmarks/failures/runs/<run-id>/ (DEFERRED 160
+;; support: logs are kept PER RUN; the runner maintains the top-level
+;; per-file view). Without the flag: data/benchmarks/failures/.
+(define default-failure-log-dir
   (simplify-path (build-path (path-only (syntax-source #'here))
                              ".." "data" "benchmarks" "failures")))
+(define failure-dir-arg (make-parameter #f))
 
 ;; Per-file timeout (seconds). Kills a test file that exceeds this limit.
 ;; Default 120s is generous (slowest normal tests ~17s; pathological ~50s).
@@ -142,8 +145,15 @@
     (per-file-timeout-secs (string->number secs))]
    ["--stdin" "Read file paths from stdin (work-stealing mode)"
     (use-stdin? #t)]
+   ["--failure-dir" dir "Write failure logs into DIR (default: data/benchmarks/failures)"
+    (failure-dir-arg dir)]
    #:args files
    files))
+
+(define failure-log-dir
+  (if (failure-dir-arg)
+      (simplify-path (path->complete-path (failure-dir-arg)))
+      default-failure-log-dir))
 
 ;; Extract ERROR-DIAGNOSTIC:BEGIN...END blocks from captured stderr.
 ;; Returns (values diagnostics remaining-lines)
@@ -435,6 +445,8 @@
        (λ (out)
          (fprintf out "=== ~a~a FAILED ===\n" file-name
                   (if shard (format " (shard ~a)" (shard-label shard shard-k)) ""))
+         (when (failure-dir-arg)
+           (fprintf out "run: ~a\n" (path->string (file-name-from-path failure-log-dir))))
          (fprintf out "wall_ms: ~a\n" wall-ms)
          (fprintf out "tests: ~a (~a failures)\n\n" file-tests file-failures)
          ;; Error Diagnostics — formatted prologos errors with provenance chains
@@ -459,9 +471,11 @@
            (for ([line (in-list provenance-stats-lines)])
              (fprintf out "~a\n" line))
            (fprintf out "\n"))))]
-    ;; Clean up old failure log on pass (from previous failing run)
-    [(file-exists? log-path)
-     (delete-file log-path)])
+    ;; ⚠ A PASS NO LONGER DELETES the file's earlier failure log. That delete
+    ;; is how DEFERRED 160's suite-only failure logs were lost: the alone-runs
+    ;; that passed were the later runs. Logs now go to a per-run directory that
+    ;; nothing edits; the runner keeps the top-level per-file view current.
+    [else (void)])
 
   ;; Write JSON line to real stdout
   (write-json result-final real-stdout)

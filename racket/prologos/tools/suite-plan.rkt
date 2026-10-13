@@ -43,7 +43,11 @@
          EXIT-PASS
          EXIT-FAILURES
          EXIT-INCOMPLETE
-         EXIT-GUARD-REFUSED)
+         EXIT-GUARD-REFUSED
+         FAILURE-RUNS-KEPT
+         make-run-id
+         runs-to-prune
+         file-log-names)
 
 ;; historical-medians : (listof string) #:runs N #:min-file-count M
 ;;                      -> (hash/c string? exact-nonnegative-integer?)  ; equal?-keyed
@@ -322,3 +326,39 @@
 (define EXIT-FAILURES 1)       ; some unit failed or timed out
 (define EXIT-INCOMPLETE 2)     ; some unit gave no result, or the run aborted
 (define EXIT-GUARD-REFUSED 3)  ; the re-run GUARD refused: nothing was run
+
+;; ============================================================
+;; FAILURE-LOG ARCHIVE (DEFERRED 160 support)
+;; ============================================================
+;; Failure logs used to live only in data/benchmarks/failures/<file>.log, and
+;; the worker DELETED a file's log as soon as a later run of it passed — which
+;; is how 160's suite-only failure logs were lost: the alone-runs that passed
+;; were those later runs. Now every run writes into its own directory,
+;;   data/benchmarks/failures/runs/<run-id>/
+;; that nothing ever edits afterwards. The top-level <file>.log files remain
+;; as the per-file LATEST view (what --failures and every doc that names
+;; failures/test-X.rkt.log read), and failures/latest points at the newest
+;; kept run. A run that passed completely keeps no directory, so the retention
+;; window counts runs that left evidence.
+(define FAILURE-RUNS-KEPT 20)
+
+;; "YYYYMMDDTHHMMSS-<pid>", local clock: sorts chronologically as a string.
+(define (make-run-id secs pid)
+  (define d (seconds->date secs #t))
+  (define (p2 n) (if (< n 10) (format "0~a" n) (number->string n)))
+  (format "~a~a~aT~a~a~a-~a" (date-year d) (p2 (date-month d)) (p2 (date-day d))
+          (p2 (date-hour d)) (p2 (date-minute d)) (p2 (date-second d)) pid))
+
+;; The run directories to delete so that the newest `keep` remain.
+(define (runs-to-prune names #:keep [keep FAILURE-RUNS-KEPT])
+  (define newest-first (sort names string>?))
+  (if (> (length newest-first) keep) (drop newest-first keep) '()))
+
+;; The entries of `names` that are logs of `file`: "<file>.log" and its shard
+;; logs "<file>.shard-I-of-K.log" (batch-worker.rkt's two log names).
+(define (file-log-names file names)
+  (filter (lambda (n)
+            (or (string=? n (string-append file ".log"))
+                (and (string-prefix? n (string-append file ".shard-"))
+                     (string-suffix? n ".log"))))
+          names))
