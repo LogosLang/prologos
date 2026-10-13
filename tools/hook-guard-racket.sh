@@ -14,10 +14,19 @@
 # Reads the hook payload on stdin, decides, and prints a PreToolUse decision.
 # Silence (exit 0, no output) = allow.
 #
-# DENIES: a command that invokes the racket binary with no timeout/gtimeout -k.
+# DENIES:
+#   · a command that invokes the racket binary with no timeout/gtimeout -k;
+#   · a COMPILE — raco make|setup, raco pkg install|update, raco test --make,
+#     however raco is spelled (bare, any path, racket -l- raco) — whose
+#     environment lacks PLT_CS_COMPILE_LIMIT >= 1000000 (DEFERRED 159; the
+#     environment model is described at guard_analyse below);
+#   · a pkill/killall whose pattern or name can reach a racket process (by
+#     name, by command line, or as a regex) and is not parent-scoped with
+#     pkill -P <pid> — these act machine-wide, across sessions (DEFERRED 163).
 # ALLOWS:
 #   · anything not invoking racket at all (including `raco`, which is bounded
-#     compilation — and whose path contains no "/racket" token anyway)
+#     compilation — and whose path contains no "/racket" token anyway), as
+#     long as a compile carries the limit
 #   · tools/scratch-run.sh                (bounds it itself)
 #   · run-affected-tests.rkt, bench-ab.rkt (own their workers and timeouts)
 #   · any command already wrapped in `timeout -k` / `gtimeout -k`
@@ -43,6 +52,330 @@ deny() {
   }'
   exit 0
 }
+
+# ════════════════════════════════════════════════════════════════════════════
+# COMMAND-SHAPE RULES (DEFERRED 159, 163). These need to know WHICH word of a simple
+# command is the command, and which environment it runs with, so they work on a
+# tokenized command rather than on regexes over the raw string:
+#
+#   · split at unquoted ; & && | || ( ) ` and newlines; drop # comments; honour
+#     '…', "…" and backslash escapes (a quoted "raco make" is one word, so
+#     `git commit -m "raco make …"` and `grep "raco make"` are not compiles);
+#   · per simple command: skip shell keywords ({ ! do then …), take leading
+#     VAR=… assignments as that command's environment, then see THROUGH
+#     executors (timeout, env, nice, nohup, time, exec, xargs, sudo, …) to the
+#     command they run; `find … -exec CMD` and `bash|sh|zsh -c 'CMD'` are
+#     analysed as commands of their own, with the environment they inherit.
+#   · environment model for PLT_CS_COMPILE_LIMIT, in order of the command text:
+#     `VAR=v cmd` and `env VAR=v cmd` set it for cmd only; `export VAR=v` (or
+#     `VAR=v; export VAR`) sets it for every LATER command; a bare `VAR=v;` is a
+#     shell variable that a child does NOT see; `env -i` clears it; `unset`
+#     removes it. An export from an EARLIER Bash call is invisible here — the
+#     payload is only this command's text — so the message says to inline it.
+#
+# The analyser prints one finding per line; empty output = nothing to refuse.
+#   DENY159 <TAB> <offending simple command>
+#   PKILL|KILLALL <TAB> <flags> <TAB> p:<pattern> <TAB> <offending command>
+guard_analyse() {
+  awk '
+function base(s) { sub(/.*\//, "", s); return s }
+function is_assign(t) { return t ~ /^[A-Za-z_][A-Za-z0-9_]*=/ }
+function aname(t) { return substr(t, 1, index(t, "=") - 1) }
+function aval(t) { return substr(t, index(t, "=") + 1) }
+function limit_ok(set, val) { return set && val ~ /^[0-9]+$/ && val + 0 >= 1000000 }
+function flush_word() {
+  if (have) { NT++; T[NSEG, NT] = word }
+  word = ""; have = 0
+}
+function end_seg() {
+  flush_word()
+  if (NT > 0) { SEGNT[NSEG] = NT; NSEG++ }
+  NT = 0
+}
+function tokenize(str,    n, i, c, nc, inS, inD) {
+  NSEG = 1; NT = 0; word = ""; have = 0; inS = 0; inD = 0
+  n = length(str)
+  for (i = 1; i <= n; i++) {
+    c = substr(str, i, 1)
+    if (inS) { if (c == "\047") inS = 0; else word = word c; continue }
+    if (inD) {
+      if (c == "\\" && i < n) {
+        nc = substr(str, i + 1, 1)
+        if (nc == "\"" || nc == "\\" || nc == "$" || nc == "`") { word = word nc; i++; continue }
+        if (nc == "\n") { i++; continue }
+      }
+      if (c == "\"") inD = 0; else word = word c
+      continue
+    }
+    if (c == "\\") {
+      if (i < n) { nc = substr(str, i + 1, 1); i++; if (nc != "\n") { word = word nc; have = 1 } }
+      continue
+    }
+    if (c == "\047") { inS = 1; have = 1; continue }
+    if (c == "\"") { inD = 1; have = 1; continue }
+    if (c == " " || c == "\t") { flush_word(); continue }
+    if (c == "#" && !have) { while (i < n && substr(str, i + 1, 1) != "\n") i++; continue }
+    if (c == "&") {
+      # 2>&1, >&2, &>file are redirections, not separators
+      if ((have && word ~ /[<>]$/) || substr(str, i + 1, 1) == ">") { word = word c; have = 1; continue }
+      end_seg(); continue
+    }
+    if (c == ";" || c == "|" || c == "\n" || c == "(" || c == ")" || c == "`") { end_seg(); continue }
+    word = word c; have = 1
+  }
+  end_seg()
+}
+function seg_text(s, a, b,    j, out) {
+  out = ""
+  for (j = a; j <= b; j++) out = out (j > a ? " " : "") T[s, j]
+  gsub(/[\t\n]/, " ", out)
+  return out
+}
+function enqueue(str, set, val) { QN++; QS[QN] = str; QSET[QN] = set; QVAL[QN] = val }
+
+# One simple command: tokens T[s, i..e], run with the limit state (set, val).
+function analyse_cmd(s, i, e, set, val,    t, b, j, k, sub1, c1, compiling, flags, scoped, endopt, pats, ch, n) {
+  while (i <= e) {
+    t = T[s, i]; b = base(t)
+    if (b in EXEC) {
+      i++
+      if (b == "env" || b == "sudo") {
+        while (i <= e) {
+          t = T[s, i]
+          if (t == "-i" || t == "-" || t == "--ignore-environment") { set = 0; i++; continue }
+          if (t ~ /^-/) { if (index(ARGOPT[b], " " t " ")) i++; i++; continue }
+          if (is_assign(t)) { if (aname(t) == LIM) { set = 1; val = aval(t) }; i++; continue }
+          break
+        }
+      } else {
+        while (i <= e && T[s, i] ~ /^-./) { if (index(ARGOPT[b], " " T[s, i] " ")) i++; i++ }
+        if ((b == "timeout" || b == "gtimeout") && i <= e) i++      # the DURATION
+      }
+      continue
+    }
+    if (b == "find") {
+      for (j = i + 1; j <= e; j++)
+        if (T[s, j] == "-exec" || T[s, j] == "-execdir" || T[s, j] == "-ok" || T[s, j] == "-okdir") {
+          for (k = j + 1; k <= e && T[s, k] != ";" && T[s, k] != "+"; k++) ;
+          analyse_cmd(s, j + 1, k - 1, set, val)
+          j = k
+        }
+      return
+    }
+    if (b in SHELLS) {
+      for (j = i + 1; j < e; j++) {
+        if (T[s, j] ~ /^-[A-Za-z]*c[A-Za-z]*$/) { enqueue(T[s, j + 1], set, val); return }
+        if (T[s, j] !~ /^-/) break
+      }
+      return
+    }
+    if (b == "eval") { enqueue(seg_text(s, i + 1, e), set, val); return }
+    break
+  }
+  if (i > e) return
+
+  # ── DEFERRED 159: raco make|setup, raco pkg install|update, raco test --make,
+  # spelled as raco (any path) or as racket -l-/-l/--lib raco[/main.rkt].
+  sub1 = 0
+  if (b == "raco") sub1 = i + 1
+  else if (b == "racket")
+    for (j = i + 1; j < e; j++)
+      if ((T[s, j] == "-l-" || T[s, j] == "-l" || T[s, j] == "--lib") && T[s, j + 1] ~ /^raco(\/main(\.rkt)?)?$/) { sub1 = j + 2; break }
+  if (sub1 && sub1 <= e) {
+    compiling = 0; c1 = T[s, sub1]
+    if (c1 == "make" || c1 == "setup") compiling = 1
+    else if (c1 == "pkg" && sub1 < e && (T[s, sub1 + 1] == "install" || T[s, sub1 + 1] == "update")) compiling = 1
+    else if (c1 == "test") { for (j = sub1 + 1; j <= e; j++) if (T[s, j] == "-y" || T[s, j] == "--make") compiling = 1 }
+    if (compiling && !limit_ok(set, val)) print "DENY159\t" seg_text(s, i, e)
+  }
+
+  # ── DEFERRED 163: pkill / killall. Emit each pattern of a pkill that is NOT
+  # parent-scoped (-P/--parent), and each name of a killall (which cannot be);
+  # the shell side decides whether it can match a racket process.
+  #   PKILL|KILLALL <TAB> flags <TAB> p:<pattern> <TAB> <offending command>
+  # flags: f = full command line, i = ignore case, x = exact, r = regex (killall)
+  if (b == "pkill" || b == "killall") {
+    flags = "-"; scoped = 0; endopt = 0; pats = ""
+    for (j = i + 1; j <= e; j++) {
+      t = T[s, j]
+      if (endopt || t !~ /^-/ || t == "-") { pats = pats SUBSEP t; continue }
+      if (t == "--") { endopt = 1; continue }
+      if (t ~ /^-[0-9]+$/ || t ~ /^-(SIG)?[A-Z][A-Z]+[0-9]*$/) continue   # -9, -KILL, -USR1 (not -P123)
+      if (t ~ /^--/) {
+        if (t ~ /^--parent(=|$)/) scoped = 1
+        else if (t == "--full") flags = flags "f"
+        else if (t == "--ignore-case") flags = flags "i"
+        else if (t == "--exact") flags = flags "x"
+        else if (t == "--regexp") flags = flags "r"
+        if (t !~ /=/ && index(LONGARG, " " t " ")) j++
+        continue
+      }
+      for (k = 2; k <= length(t); k++) {
+        ch = substr(t, k, 1)
+        if (index(SHORTARG[b], ch)) {               # option with an argument
+          if (b == "pkill" && ch == "P") scoped = 1
+          if (b == "killall" && ch == "c") { if (k < length(t)) pats = pats SUBSEP substr(t, k + 1); else if (j < e) pats = pats SUBSEP T[s, j + 1] }
+          if (k == length(t)) j++
+          break
+        }
+        if (b == "pkill" && ch == "f") flags = flags "f"
+        else if (ch == "i" && b == "pkill" || ch == "I") flags = flags "i"
+        else if (b == "pkill" && ch == "x") flags = flags "x"
+        else if (b == "killall" && (ch == "m" || ch == "r")) flags = flags "r"
+      }
+    }
+    if (!(b == "pkill" && scoped)) {
+      n = split(substr(pats, 2), PARR, SUBSEP)
+      if (pats == SUBSEP) { n = 1; PARR[1] = "" }
+      for (k = 1; k <= n; k++) {
+        t = PARR[k]; gsub(/[\t\n]/, " ", t)
+        print toupper(b) "\t" flags "\tp:" t "\t" seg_text(s, i, e)
+      }
+    }
+  }
+}
+
+function analyse_segment(s,    i, e, set, val, pre, pv, j) {
+  i = 1; e = SEGNT[s]
+  while (i <= e && (T[s, i] in KW)) i++
+  set = EXP_SET; val = EXP_VAL; pre = 0
+  while (i <= e && is_assign(T[s, i])) {
+    if (aname(T[s, i]) == LIM) { set = 1; val = aval(T[s, i]); pre = 1; pv = val }
+    i++
+  }
+  if (i > e) {                     # VAR=v alone: a shell variable, NOT in a child env
+    if (pre) { SH_SET = 1; SH_VAL = pv; if (EXP_SET) EXP_VAL = pv }
+    return
+  }
+  if (T[s, i] == "export") {
+    for (j = i + 1; j <= e; j++) {
+      if (is_assign(T[s, j]) && aname(T[s, j]) == LIM) { EXP_SET = 1; EXP_VAL = aval(T[s, j]); SH_SET = 1; SH_VAL = EXP_VAL }
+      else if (T[s, j] == LIM && SH_SET) { EXP_SET = 1; EXP_VAL = SH_VAL }
+    }
+    return
+  }
+  if (T[s, i] == "unset") {
+    for (j = i + 1; j <= e; j++) if (T[s, j] == LIM) { EXP_SET = 0; SH_SET = 0 }
+    return
+  }
+  analyse_cmd(s, i, e, set, val)
+}
+
+{ buf = buf (NR > 1 ? "\n" : "") $0 }
+END {
+  LIM = "PLT_CS_COMPILE_LIMIT"
+  split("{ } ! if then else elif do while until", a, " "); for (k in a) KW[a[k]] = 1
+  split("timeout gtimeout env nice nohup time exec command builtin xargs sudo caffeinate stdbuf setsid", a, " ")
+  for (k in a) EXEC[a[k]] = 1
+  split("bash sh zsh dash ksh", a, " "); for (k in a) SHELLS[a[k]] = 1
+  ARGOPT["timeout"] = ARGOPT["gtimeout"] = " -k -s --kill-after --signal "
+  ARGOPT["nice"] = " -n "
+  ARGOPT["xargs"] = " -E -I -J -L -n -P -R -S -s -d -a "
+  ARGOPT["sudo"] = " -u -g -C -h -p -U -r -t -D -R -T "
+  ARGOPT["env"] = " -u -C -S -P "
+  ARGOPT["exec"] = " -a "
+  ARGOPT["time"] = " -f -o "
+  ARGOPT["caffeinate"] = " -t -w "
+  SHORTARG["pkill"] = "FGMNPUgstuO"      # takes an argument (P = parent: scoped)
+  SHORTARG["killall"] = "utcoynZ"       # c = a process name (checked as one)
+  LONGARG = " --parent --signal --pgroup --session --terminal --euid --uid --group --pidfile --ns --nslist --older --runstates --env --user --older-than --younger-than --context "
+  QN = 1; QS[1] = buf; QSET[1] = 0; QVAL[1] = ""
+  for (q = 1; q <= QN && q <= 32; q++) {
+    EXP_SET = QSET[q]; EXP_VAL = QVAL[q]; SH_SET = 0; SH_VAL = ""
+    tokenize(QS[q])
+    for (s = 1; s < NSEG; s++) analyse_segment(s)
+  }
+}'
+}
+
+findings="$(printf '%s' "$cmd" | guard_analyse)"
+
+# ── DEFERRED 163: can a pkill pattern / killall name reach a racket process?
+# Two tests, either suffices:
+#   (1) it NAMES one: racket, raco, batch-worker, run-affected-tests, bench-ab,
+#       prologos or .rkt, any case — this catches every checkout's absolute
+#       paths, which no fixed sample list could;
+#   (2) as the regex pkill/killall would use (grep -E is the same regcomp ERE),
+#       it matches a sample: process NAMES always, and the command LINES of
+#       live racket processes when pkill has -f. Catches `rack.t`, `.`, "".
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"
+RKT="/Applications/Racket v9.3/bin/racket"
+SAMPLE_NAMES="racket
+raco"
+SAMPLE_LINES="$RKT $ROOT/racket/prologos/tools/batch-worker.rkt --stdin --file-timeout 300
+$RKT tools/run-affected-tests.rkt --all
+$RKT $ROOT/racket/prologos/lsp/server.rkt
+$RKT -N /Applications/Racket v9.3/bin/raco -l- raco/main.rkt make -j 4 driver.rkt
+$RKT $ROOT/racket/prologos/tools/run-file.rkt probe.prologos"
+
+reaches_racket() { # reaches_racket <kind> <flags> <pattern>
+  local kind="$1" flags="$2" pat="$3" lc re samples gopt=-E
+  lc="$(printf '%s' "$pat" | tr '[:upper:]' '[:lower:]')"
+  case "$lc" in
+    *racket*|*raco*|*batch-worker*|*run-affected-tests*|*bench-ab*|*prologos*|*.rkt*) return 0 ;;
+  esac
+  # killall without -m/-r compares names exactly; (1) already covered those.
+  [ "$kind" = KILLALL ] && [[ "$flags" != *r* ]] && return 1
+  samples="$SAMPLE_NAMES"
+  [ "$kind" = PKILL ] && [[ "$flags" == *f* ]] && samples="$SAMPLE_NAMES
+$SAMPLE_LINES"
+  [[ "$flags" == *i* ]] && gopt=-Ei
+  re="$pat"; [[ "$flags" == *x* ]] && re="^($pat)\$"
+  grep $gopt -q -e "$re" <<<"$samples" 2>/dev/null
+}
+
+while IFS=$'\t' read -r kind what pat seg; do
+  case "$kind" in
+    PKILL|KILLALL)
+      reaches_racket "$kind" "$what" "${pat#p:}" || continue
+      deny "Refusing a machine-wide kill of racket processes (DEFERRED 163):
+
+    $seg
+
+pkill/killall select by process NAME or COMMAND LINE across every session on
+this machine: other agents' suites, other worktrees, the editor's LSP server.
+On 2026-10-13 a runner's \`pkill -f batch-worker.rkt\` killed all the workers of
+concurrent suites in other checkouts (main lost 18 workers, twice), and before
+fd2986cc those runs went on to print \"all pass\" (DEFERRED 164).
+
+Kill only what you started:
+
+    kill <pid>                                   # from \$! or a pgrep you have read
+    pkill -P <your-runner-pid> -f <pattern>      # only that parent's children
+
+Orphans of a runner that died (reparented to PID 1) — this checkout only:
+
+    pkill -P 1 -f \"$ROOT/racket/prologos/tools/batch-worker.rkt\"
+
+(what run-affected-tests.rkt does since b45bbf44). Look first: pgrep -fl <pattern>.
+killall cannot be parent-scoped; use kill or pkill -P." ;;
+    DENY159) deny "Refusing a compile without PLT_CS_COMPILE_LIMIT (DEFERRED 159):
+
+    $what
+
+Racket CS compiles a function larger than PLT_CS_COMPILE_LIMIT (default 10000)
+with the INTERPRETER. The compiler's giant \`match\` functions (whnf/nf,
+shift/subst, the elaborator and typing-core arms) are all larger, so a build
+without the limit is silently slow: no error, no warning. MEASURED 2026-10-13:
+main ran that way for ~6.5 h — suite 1.23-1.28x slower, single files up to 25x.
+The test runner's putenv cannot repair it afterwards: raco make never recompiles
+a .zo that is already up to date.
+
+Put the limit ON THIS COMMAND (inline):
+
+    PLT_CS_COMPILE_LIMIT=1000000 \"/Applications/Racket v9.3/bin/raco\" make -j 4 driver.rkt
+
+  or  env PLT_CS_COMPILE_LIMIT=1000000 <cmd>
+  or  export PLT_CS_COMPILE_LIMIT=1000000 && <cmd>   (in the SAME command)
+
+An export made by an EARLIER command is invisible to this check — it reads only
+this command's text — so inline it even if your shell already has it. The value
+must be a number >= 1000000. Use the quoted 9.3 binary: a bare \`raco\` on PATH
+can resolve to /opt/homebrew/bin/raco, which is Racket 9.0.
+raco setup, raco pkg install|update and raco test --make compile too; and since
+prologos-dev is a LINKED package, they rebuild the MAIN checkout's compiled/." ;;
+  esac
+done <<<"$findings"
 
 # ── Is the racket BINARY invoked? Two forms, both anchored so that merely
 # mentioning the word (grep racket, echo racket, a path in a comment) is not a
@@ -114,6 +447,6 @@ Running the test suite? Use the runner that owns its own workers and timeouts:
 
 Anything else that must call racket directly needs an explicit bound:
 
-    timeout -k 30 300 \"/Applications/Racket v9.0/bin/racket\" ...
+    timeout -k 30 300 \"/Applications/Racket v9.3/bin/racket\" ...
 
 See .claude/rules/testing.md § \"Running the compiler OUTSIDE the suite\"."

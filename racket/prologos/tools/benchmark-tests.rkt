@@ -30,6 +30,10 @@
          "bench-lib.rkt"
          "suite-lock.rkt")
 
+;; For tests/test-benchmark-tests.rkt (the run itself is the `main` submodule).
+(provide detect-regressions-v2
+         flag-high-variance)
+
 (define do-precompile? (make-parameter #t))
 
 ;; ============================================================
@@ -203,7 +207,10 @@
   (when (null? prev-runs) (list))  ;; no baseline available
 
   ;; Build per-file median baseline from previous runs
-  (define file-baselines (make-hasheq))  ;; file -> (listof ms)
+  ;; ⚠ equal?-keyed: the keys are file-name STRINGS from read-json, and no two
+  ;; records' strings are eq? — as a make-hasheq every lookup missed and this
+  ;; reported nothing, ever (DEFERRED 162; tests/test-benchmark-tests.rkt).
+  (define file-baselines (make-hash))  ;; file -> (listof ms)
   (for ([run (in-list prev-runs)])
     (for ([r (in-list (hash-ref run 'results '()))])
       (define file (hash-ref r 'file))
@@ -270,7 +277,7 @@
   (when (< (length prev-runs) 3) (list))  ;; need ≥3 runs for meaningful CV
 
   ;; Collect per-file timing samples
-  (define file-samples (make-hasheq))
+  (define file-samples (make-hash))   ;; equal?-keyed: string keys (DEFERRED 162)
   (for ([run (in-list prev-runs)])
     (for ([r (in-list (hash-ref run 'results '()))])
       (define file (hash-ref r 'file))
@@ -582,4 +589,5 @@
                     (exit SUITE-LOCK-BUSY-EXIT))))
      (unless ok? (exit 1))]))
 
-(main)
+;; A submodule, so that requiring this file (the test) does not start a run.
+(module+ main (main))
