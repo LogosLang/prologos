@@ -73,6 +73,8 @@
  print-phase-report!
 
  ;; Phase D: Memory + GC reporting
+ current-memory-stats?
+ memory-stats-enabled?
  measure-memory-before
  measure-memory-after
  print-memory-report!
@@ -395,30 +397,64 @@
 ;; Phase D: Memory + GC reporting
 ;;
 ;; Records memory usage and GC time before/after processing.
-;; Forces a major GC before measurement for consistency.
+;; Forces a major GC before measurement for consistency — and therefore runs
+;; ONLY when a MEMORY-STATS consumer opted in (DEFERRED 152).
 ;; ============================================================
 
+;; DEFERRED 152: opt-in switch for the MEMORY-STATS measurement.
+;;
+;; The two forced `(collect-garbage 'major)` calls below used to run on EVERY
+;; process-string / process-string-ws / process-file call: every test `run`,
+;; every LSP re-elaboration, every `racket driver.rkt FILE`. Measured on
+;; tests/test-transducer-01.rkt's test phase: 36 major GCs, GC 873 of 992 ms
+;; CPU. They are a measurement instrument, so they now run only when a consumer
+;; asks for the record:
+;;   - in-process: (parameterize ([current-memory-stats? #t]) …)
+;;   - subprocess consumers (the suite runner's batch workers, bench-lib's
+;;     `raco test` children): PROLOGOS_MEMORY_STATS set to anything but "" / "0".
+;;     Read per call (getenv), so a putenv after this module loaded still counts.
+;;   - CLI: `racket driver.rkt --memory-stats FILE`.
+;; When not measuring, NO MEMORY-STATS line is printed (omitted, not marked):
+;; unforced numbers mean something else (retained bytes include garbage), and
+;; batch-worker stores the LAST line per file as `memory` in timings.jsonl, so a
+;; marked-but-unforced record would silently change the meaning of that history.
+;; Every consumer (batch-worker, bench-lib, benchmark-tests, benchmark-report)
+;; already treats a missing line as "no memory record".
+(define current-memory-stats? (make-parameter #f))
+
+(define (memory-stats-enabled?)
+  (or (current-memory-stats?)
+      (let ([v (getenv "PROLOGOS_MEMORY_STATS")])
+        (and v (not (member v '("" "0"))) #t))))
+
 ;; Snapshot memory state before processing.
-;; Returns an opaque hasheq to be passed to measure-memory-after.
+;; Returns an opaque hasheq to be passed to measure-memory-after, or #f when
+;; no consumer opted in (then nothing is collected or measured).
 (define (measure-memory-before)
-  (collect-garbage 'major)
-  (hasheq 'mem_bytes (current-memory-use)
-          'gc_ms (current-gc-milliseconds)))
+  (and (memory-stats-enabled?)
+       (begin
+         (collect-garbage 'major)
+         (hasheq 'mem_bytes (current-memory-use)
+                 'gc_ms (current-gc-milliseconds)))))
 
 ;; Compute deltas after processing.
-;; Returns a hasheq suitable for JSON serialization.
+;; Returns a hasheq suitable for JSON serialization, or #f when `before` is #f —
+;; the decision is taken once, at `before`, so a pair is never half-measured.
 (define (measure-memory-after before)
-  (collect-garbage 'major)
-  (define mem-after (current-memory-use))
-  (define gc-after (current-gc-milliseconds))
-  (hasheq 'mem_before_bytes (hash-ref before 'mem_bytes)
-          'mem_after_bytes mem-after
-          'mem_retained_bytes (max 0 (- mem-after (hash-ref before 'mem_bytes)))
-          'gc_ms (- gc-after (hash-ref before 'gc_ms))))
+  (and before
+       (let ()
+         (collect-garbage 'major)
+         (define mem-after (current-memory-use))
+         (define gc-after (current-gc-milliseconds))
+         (hasheq 'mem_before_bytes (hash-ref before 'mem_bytes)
+                 'mem_after_bytes mem-after
+                 'mem_retained_bytes (max 0 (- mem-after (hash-ref before 'mem_bytes)))
+                 'gc_ms (- gc-after (hash-ref before 'gc_ms))))))
 
-;; Print MEMORY-STATS:{json} to stderr for subprocess extraction.
+;; Print MEMORY-STATS:{json} to stderr for subprocess extraction (nothing for #f).
 (define (print-memory-report! mem-stats)
-  (eprintf "MEMORY-STATS:~a\n" (jsexpr->string mem-stats)))
+  (when mem-stats
+    (eprintf "MEMORY-STATS:~a\n" (jsexpr->string mem-stats))))
 
 ;; ============================================================
 ;; Track 1 Phase 0b: Cell metrics reporting

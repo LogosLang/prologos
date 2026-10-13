@@ -32,11 +32,11 @@ elaborator. Mini-design audit codified as Stage 4 Step 1 in
 
 Stage 1 research =docs/research/2026-04-21_TROPICAL_QUANTALE_RESEARCH.md=
 (~1000 lines, 12 sections, commit =de357aa1=). Stage 2 audit
-=docs/tracking/2026-04-21_PPN_4C_PHASE_9_AUDIT.md= (~800 lines, commits
+=docs/tracking/tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_AUDIT.md= (~800 lines, commits
 =62ce9f83= + =28208613=) — grep-backed 8+1 target survey including
 BSP-LE 2B PIR overclaim on =current-speculation-stack=. Stage 3 design
 through D.3 at
-=docs/tracking/2026-04-21_PPN_4C_PHASE_9_DESIGN.md= covering Phase 1
+=docs/tracking/tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md= covering Phase 1
 (substrate + tropical fuel), Phase 2 (orchestration), Phase 3 (union
 types + hypercube). D.2 refined via self-critique; D.3 via Phase 1A
 mini-audit scope revision (=net-new-tms-cell= was LIVE in production
@@ -146,7 +146,7 @@ to D.3.
 
 *** Handoff document written (commit =f42434ea=)
 
-=docs/tracking/handoffs/2026-04-22_PPN_4C_T-3_HANDOFF.md= (360 lines, 8
+=docs/tracking/tracks/PPN/PPN_4C/2026-04-22_PPN_4C_T-3_HANDOFF.md= (360 lines, 8
 sections per HANDOFF_PROTOCOL) captures full context for seamless
 continuation.
 

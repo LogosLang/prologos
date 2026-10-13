@@ -1,0 +1,4 @@
+replace trial 1: replace 3000: (214 × open-output-file: file exists) | replace 3000: (235 × open-output-file: file exists) | replace 3000: (243 × open-output-file: file exists)
+replace trial 2: replace 3000: (184 × open-output-file: file exists) | replace 3000: (183 × open-output-file: file exists) | replace 3000: (178 × open-output-file: file exists)
+truncate trial 1: truncate 3000: 0 failures | truncate 3000: 0 failures | truncate 3000: 0 failures
+truncate trial 2: truncate 3000: 0 failures | truncate 3000: 0 failures | truncate 3000: 0 failures

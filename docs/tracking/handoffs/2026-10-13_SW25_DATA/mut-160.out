@@ -1,0 +1,28 @@
+M1 process-file runs WITHOUT the unit scope
+  5 tests in 0.5s (1 files, 1 batch workers, 1 FAILURES)
+    name:       check-equal?
+    name:       check-equal?
+    message:    "the deleted `spec f` must not survive the edit"
+    name:       check-false
+    message:    "the spec does not escape the unit"
+    name:       check-equal?
+M2 run-ns-last runs without the unit scope (fresh box kept)
+  5 tests in 0.5s (1 files, 1 batch workers, 1 FAILURES)
+    name:       check-equal?
+M3 the unit scope omits current-spec-store
+  5 tests in 0.5s (1 files, 1 batch workers, 1 FAILURES)
+    name:       check-equal?
+    name:       check-equal?
+    message:    "the deleted `spec f` must not survive the edit"
+    name:       check-false
+    message:    "the spec does not escape the unit"
+    name:       check-equal?
+    name:       check-equal?
+    message:
+M4 the unit scope omits current-attribute-map-cell-id
+  5 tests in 0.5s (1 files, 1 batch workers, 1 FAILURES)
+    name:       check-equal?
+    message:
+RESTORE
+  byte-identical
+  5 tests in 0.5s (1 files, 1 batch workers, all pass)

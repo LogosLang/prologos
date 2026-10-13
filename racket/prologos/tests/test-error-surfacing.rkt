@@ -30,7 +30,7 @@
 ;; process-file a fixture string under a fresh per-file mnr (isolation).
 (define (run-file-fixture str)
   (define tmp (make-temporary-file "errsurf-~a.prologos"))
-  (call-with-output-file tmp #:exists 'replace
+  (call-with-output-file tmp #:exists 'truncate
     (lambda (out) (display str out)))
   (define result
     (parameterize ([current-file-module-network-ref (make-module-network)]

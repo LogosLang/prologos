@@ -22,7 +22,7 @@ applications and observe what rewriting primitives they share.
 - [SRE Research](../research/2026-03-22_STRUCTURAL_REASONING_ENGINE.md)
 - [Categorical Foundations](../research/2026-03-22_CATEGORICAL_FOUNDATIONS_TYPED_PROPAGATOR_NETWORKS.md)
 - [NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md)
-- [PPN Master](2026-03-26_PPN_MASTER.md)
+- [PPN Master](tracks/PPN/2026-03-26_PPN_MASTER.md)
 - [SRE Master](2026-03-22_SRE_MASTER.md)
 - [Master Roadmap](MASTER_ROADMAP.org)
 
@@ -190,8 +190,8 @@ as application tracks complete PIRs.
 | [SRE Research](../research/2026-03-22_STRUCTURAL_REASONING_ENGINE.md) | 2026-03-22 | PUnify as universal structural reasoning, domain-parameterized decomposition | SRE = DPO hyperedge replacement; form registry = HR grammar |
 | [Categorical Foundations](../research/2026-03-22_CATEGORICAL_FOUNDATIONS_TYPED_PROPAGATOR_NETWORKS.md) | 2026-03-22 | Polynomial functors, Grothendieck fibrations, Kan extensions, quantales | Categorical grounding for network types and rewriting |
 | [NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md) | 2026-03-22 | Type theory for networks: lattice → cell → propagator → network → bridge → stratification | Types for rewrite rules; invariant levels |
-| [PPN Master §4: Bidirectional Typed Grammars](2026-03-26_PPN_MASTER.md) | 2026-03-26 | DCG bidirectionality, invariant levels, NTT type correspondence | Grammar-as-type; serialization/deserialization as dual rewriting |
-| [Lattice Foundations for PPN](../research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md) | 2026-03-26 | Abstract interpretation, semiring parsing, Datalog, monotone frameworks, categorical connections, ATMS-guided parsing | Concrete lattice design for 6 domains + reduced product + scheduling strategy |
+| [PPN Master §4: Bidirectional Typed Grammars](tracks/PPN/2026-03-26_PPN_MASTER.md) | 2026-03-26 | DCG bidirectionality, invariant levels, NTT type correspondence | Grammar-as-type; serialization/deserialization as dual rewriting |
+| [Lattice Foundations for PPN](tracks/PPN/research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md) | 2026-03-26 | Abstract interpretation, semiring parsing, Datalog, monotone frameworks, categorical connections, ATMS-guided parsing | Concrete lattice design for 6 domains + reduced product + scheduling strategy |
 | [FL-Narrowing Design](../research/2026-03-07_FL_NARROWING_DESIGN.org) | 2026-03-07 | Definitional trees, residuation-first, term lattice, needed narrowing | Strategy layer: DTs as optimal rewrite rule selection |
 | [Kan Extensions, ATMS, GFP Parsing](../research/2026-03-26_KAN_EXTENSIONS_ATMS_GFP_PARSING.md) | 2026-03-26 | Right Kan = NF-Narrowing demands, Left Kan + ATMS = 4-level search, GFP parsing bilattice, cross-network disambiguation | Deep structural connections between Kan extensions, ATMS, and parsing |
 | [Tree Rewriting as Structural Unification](../research/2026-03-26_TREE_REWRITING_AS_STRUCTURAL_UNIFICATION.md) | 2026-03-26 | Macro rewriting IS SRE decompose+reconstruct. "Rewrite" as 4th SRE relation. Track 2 normalization = SRE rule registration + quiescence. | Unifies macro expansion with structural reasoning |

@@ -23,8 +23,8 @@
 ;;;   - Modern solver-context API (atms.rkt:solver-* operations) replaces
 ;;;     deprecated atms-* internal API.
 ;;;   - PPN Track 0 architectural conclusions preserved in:
-;;;       docs/tracking/2026-03-26_PPN_TRACK0_DESIGN.md
-;;;       docs/tracking/2026-03-26_PPN_TRACK0_PIR.md
+;;;       docs/tracking/tracks/PPN/PPN_0/2026-03-26_PPN_TRACK0_LATTICE_DESIGN.md
+;;;       docs/tracking/tracks/PPN/PPN_0/2026-03-26_PPN_TRACK0_PIR.md
 ;;;
 ;;; RATIONALE (per §7.7 β1): "Retire BOTH bench files with ε2-style
 ;;; annotations — measured legacy ATMS internal patterns from pre-
@@ -46,5 +46,5 @@
 (displayln "")
 (displayln "Modern equivalents: solver-context API in atms.rkt (Phase 5.6).")
 (displayln "Architectural conclusions preserved in:")
-(displayln "  docs/tracking/2026-03-26_PPN_TRACK0_DESIGN.md")
-(displayln "  docs/tracking/2026-03-26_PPN_TRACK0_PIR.md")
+(displayln "  docs/tracking/tracks/PPN/PPN_0/2026-03-26_PPN_TRACK0_LATTICE_DESIGN.md")
+(displayln "  docs/tracking/tracks/PPN/PPN_0/2026-03-26_PPN_TRACK0_PIR.md")

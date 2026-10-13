@@ -2,7 +2,7 @@
 ;;;
 ;;; specialized-cells.rkt — D.4 1B-ii thin convenience layer (Shape 2)
 ;;;
-;;; Per docs/tracking/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md
+;;; Per docs/tracking/tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md
 ;;; §9.2.A + §9.2.0.5 Q-1B-ii-γ resolution: cell-meta struct + registration
 ;;; API + dispatch logic live in propagator.rkt; this module provides:
 ;;; - Re-exports of `specialized-cell-meta` + `net-register-specialized-cell`

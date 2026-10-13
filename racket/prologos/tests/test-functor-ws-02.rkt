@@ -104,10 +104,13 @@
     (install-module-loader!)
     (define here (path->string (path-only (syntax-source #'here))))
     (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "collection-traits.prologos")))
-    (process-file file-path)
-    ;; Both functors should be registered
-    (check-true (functor-entry? (lookup-functor 'Xf)))
-    (check-true (functor-entry? (lookup-functor 'AppResult)))))
+    ;; SW-27 (DEFERRED 160): the file's registrations live in its unit; read them there.
+    (process-file file-path
+      #:before-unit-exit
+      (λ ()
+        ;; Both functors should be registered
+        (check-true (functor-entry? (lookup-functor 'Xf)))
+        (check-true (functor-entry? (lookup-functor 'AppResult)))))))
 
 (test-case "type-functors: Xf has correct params and unfolds"
   (parameterize ([current-spec-store (hasheq)]
@@ -122,13 +125,16 @@
     (install-module-loader!)
     (define here (path->string (path-only (syntax-source #'here))))
     (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "collection-traits.prologos")))
-    (process-file file-path)
-    (define fe (lookup-functor 'Xf))
-    (check-true (functor-entry? fe))
-    ;; Should have 2 params (A and B)
-    (check-equal? (length (functor-entry-params fe)) 2)
-    ;; Should have :unfolds
-    (check-true (not (eq? #f (functor-entry-unfolds fe))))))
+    ;; SW-27 (DEFERRED 160): the file's registrations live in its unit; read them there.
+    (process-file file-path
+      #:before-unit-exit
+      (λ ()
+        (define fe (lookup-functor 'Xf))
+        (check-true (functor-entry? fe))
+        ;; Should have 2 params (A and B)
+        (check-equal? (length (functor-entry-params fe)) 2)
+        ;; Should have :unfolds
+        (check-true (not (eq? #f (functor-entry-unfolds fe))))))))
 
 (test-case "type-functors: AppResult has :doc metadata"
   (parameterize ([current-spec-store (hasheq)]
@@ -143,9 +149,12 @@
     (install-module-loader!)
     (define here (path->string (path-only (syntax-source #'here))))
     (define file-path (simplify-path (build-path here ".." "lib" "prologos" "core" "collection-traits.prologos")))
-    (process-file file-path)
-    (define fe (lookup-functor 'AppResult))
-    (check-true (functor-entry? fe))
-    (define md (functor-entry-metadata fe))
-    (check-equal? (hash-ref md ':doc #f)
-                  "A computation that may fail with a string error")))
+    ;; SW-27 (DEFERRED 160): the file's registrations live in its unit; read them there.
+    (process-file file-path
+      #:before-unit-exit
+      (λ ()
+        (define fe (lookup-functor 'AppResult))
+        (check-true (functor-entry? fe))
+        (define md (functor-entry-metadata fe))
+        (check-equal? (hash-ref md ':doc #f)
+                      "A computation that may fail with a string error")))))

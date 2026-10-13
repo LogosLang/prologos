@@ -31,7 +31,7 @@ Project-specific acronyms an agent will hit:
 - **Full suite**: `racket tools/run-affected-tests.rkt --all`
 - **Investigate failures**: read `data/benchmarks/failures/*.log` (do NOT re-run the full suite)
 - **A/B benchmark**: `racket tools/bench-ab.rkt --runs 10 benchmarks/comparative/`
-- **Validate deps**: `racket tools/update-deps.rkt --check`
+- **Dependency graph** (targeted test selection): derived from the sources on every run, nothing to regenerate; `racket tools/update-deps.rkt --check` verifies its cache
 - **Install git hooks**: `tools/install-git-hooks.sh` (one-time per clone; pre-commit + post-commit)
 - **Check delimiter balance**: `tools/check-parens.sh <file.rkt>` (also runs in pre-commit hook)
 

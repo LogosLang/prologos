@@ -1,0 +1,57 @@
+#lang racket/base
+;; DEFERRED 152 / 151(a) harness (extends DEFERRED 149's run149.rkt):
+;;   racket run152.rkt <root racket/prologos> <test file name | -> [label]
+;; Phases, each measured in-process (harness expansion excluded):
+;;   load = instantiate driver.rkt + tests/test-support.rkt (compiler + prelude via .pnet or source)
+;;   test = instantiate the test module (its fixture + test cases); "-" skips it
+;; Per phase: wall ms, process CPU ms (incl. GC), GC ms, bytes allocated (cumulative),
+;; and the number of MAJOR / minor collections (GC log receiver, topic 'GC, gc-info mode).
+;; Env: PNET=off  -> (current-use-pnet-cache? #f) before test-support loads (no read, no write)
+;;      PNETWRITE=off -> (current-pnet-write-enabled? #f)
+;; Output: one line `RESULT <label> <json>` on stdout.
+(require (only-in racket/port open-output-nowhere) json)
+(define args (current-command-line-arguments))
+(define root (vector-ref args 0))
+(define test (vector-ref args 1))
+(define label (if (> (vector-length args) 2) (vector-ref args 2) "run"))
+(define (mod rel) (list 'file (string-append root "/" rel)))
+(define gc-r (make-log-receiver (current-logger) 'debug 'GC))
+(define (drain-gc)
+  (let loop ([maj 0] [mn 0])
+    (define v (sync/timeout 0 gc-r))
+    (cond
+      [(not v) (cons maj mn)]
+      [else
+       (define d (vector-ref v 2))
+       (define mode (and (struct? d) (vector-ref (struct->vector d) 1)))
+       (if (eq? mode 'major) (loop (add1 maj) mn) (loop maj (add1 mn)))])))
+(define (snap)
+  (vector (current-inexact-milliseconds) (current-process-milliseconds)
+          (current-gc-milliseconds) (current-memory-use 'cumulative)))
+(define (delta a b) (for/list ([i 4]) (- (vector-ref b i) (vector-ref a i))))
+(define (phase->hash l gcs)
+  (hasheq 'wall_ms (inexact->exact (round (list-ref l 0)))
+          'cpu_ms (list-ref l 1)
+          'gc_ms (list-ref l 2)
+          'mb (/ (round (/ (list-ref l 3) 1e5)) 10.0)
+          'major (car gcs) 'minor (cdr gcs)))
+(void (drain-gc))
+(define s0 (snap))
+(dynamic-require (mod "driver.rkt") #f)
+(when (equal? (getenv "PNET") "off")
+  ((dynamic-require (mod "driver.rkt") 'current-use-pnet-cache?) #f))
+(when (equal? (getenv "PNETWRITE") "off")
+  ((dynamic-require (mod "driver.rkt") 'current-pnet-write-enabled?) #f))
+(dynamic-require (mod "tests/test-support.rkt") #f)
+(define s1 (snap))
+(define g1 (drain-gc))
+(unless (equal? test "-")
+  (parameterize ([current-output-port (open-output-nowhere)])
+    (dynamic-require (mod (string-append "tests/" test)) #f)))
+(define s2 (snap))
+(define g2 (drain-gc))
+(printf "RESULT ~a ~a\n" label
+        (jsexpr->string
+         (hasheq 'label label 'test test 'root root 'pnet (or (getenv "PNET") "on")
+                 'load (phase->hash (delta s0 s1) g1)
+                 'test_phase (phase->hash (delta s1 s2) g2))))

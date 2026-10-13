@@ -65,3 +65,14 @@
   (define before (file->bytes g))
   (check-equal? (hash-ref (annotate-file! g #:lock-path lock #:dry-run? #t) 'newly_annotated) 1)
   (check-equal? (file->bytes g) before "--dry-run writes nothing"))
+
+(test-case "annotate: a record whose undeclared unit PASSED with 0 tests is annotated too (DEFERRED 161, SW-19)"
+  (define empty-pass
+    (jsexpr->string (hasheq 'file_count 2 'all_pass #t
+                            'results (list (hasheq 'file "test-a.rkt" 'status "pass" 'tests 4)
+                                           (hasheq 'file "test-generators.rkt" 'status "pass" 'tests 0)))))
+  (define-values (out n-new n-already) (annotate-lines (list valid empty-pass)))
+  (check-equal? n-new 1)
+  (check-equal? (list-ref out 0) valid)
+  (check-equal? (hash-ref (string->jsexpr (list-ref out 1)) 'invalid)
+                "unit test-generators.rkt reported PASS with 0 tests (DEFERRED 161)"))

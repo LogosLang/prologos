@@ -193,5 +193,5 @@ This means Track 2D does NOT need a new stratification mechanism for rewriting. 
 - [Tree Rewriting as Structural Unification](../research/2026-03-26_TREE_REWRITING_AS_STRUCTURAL_UNIFICATION.md) — the research insight that motivates Track 2D
 - [Hypergraph Rewriting + Propagator Parsing](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md) — DPO/SPO theory, adhesive categories, critical pairs
 - [Grammar Toplevel Form](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md) — the user-facing expression of rewrite rules
-- [PPN Track 3 Design](2026-04-01_PPN_TRACK3_DESIGN.md) — form cells, dependency-set pipeline, tree-canonical parsing
+- [PPN Track 3 Design](tracks/PPN/PPN_3/2026-04-01_PPN_TRACK3_DESIGN.md) — form cells, dependency-set pipeline, tree-canonical parsing
 - [SRE Master](2026-03-22_SRE_MASTER.md) — Track 2D row

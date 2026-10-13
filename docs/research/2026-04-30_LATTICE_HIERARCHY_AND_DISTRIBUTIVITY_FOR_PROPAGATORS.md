@@ -408,7 +408,7 @@ These are research observations, not design proposals.
 - [SRE Track 2H Design](../tracking/2026-04-02_SRE_TRACK2H_DESIGN.md), [PIR](../tracking/2026-04-03_SRE_TRACK2H_PIR.md) — type lattice Heyting redesign
 - [SRE Track 2I Design](../tracking/2026-04-30_SRE_TRACK2I_SD_CHECKS_DESIGN.md) — SD checks + Phase 3c per-relation meet-registry (this note's motivating discovery)
 - [UCS Master](../tracking/2026-03-28_UCS_MASTER.md) — universal constraint solving by algebraic class
-- [PPN 4C T-3 Commit B](../tracking/2026-04-21_PPN_4C_PHASE_9_DESIGN.md) — the merge change that unwittingly flipped distributivity
+- [PPN 4C T-3 Commit B](../tracking/tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md) — the merge change that unwittingly flipped distributivity
 - [`structural-thinking.md`](../../.claude/rules/structural-thinking.md) — Hyperlattice Conjecture; SRE Lattice Lens
 
 ### One-line summary

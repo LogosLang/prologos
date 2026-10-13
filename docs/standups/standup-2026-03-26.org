@@ -23,7 +23,7 @@
 - Pre-0 benchmarks: CHAMP viable at 500K cells. All merge ops <1μs.
 - Integration test: hand-built network — happy path + ATMS ambiguity + type disambiguation
 - ~150.3s suite, 379/379 (7421 tests), all pass~
-- PIR: ~docs/tracking/2026-03-26_PPN_TRACK0_PIR.md~
+- PIR: ~docs/tracking/tracks/PPN/PPN_0/2026-03-26_PPN_TRACK0_PIR.md~
 
 ** Research Program
 - PRN (Propagator-Rewriting-Network) series established: theory series, grows from application track discoveries

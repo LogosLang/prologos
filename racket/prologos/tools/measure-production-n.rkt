@@ -88,7 +88,7 @@
     [(<= n 1000) "501-1000"]
     [else ">1000"]))
 
-(define bucket-counts (make-hasheq))
+(define bucket-counts (make-hash))   ; string keys: an eq?-table would never find them (DEFERRED 162)
 (for ([n (in-list fires)])
   (define b (bucket-of n))
   (hash-update! bucket-counts b add1 (lambda () 0)))

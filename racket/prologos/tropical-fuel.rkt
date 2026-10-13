@@ -2,7 +2,7 @@
 ;;;
 ;;; tropical-fuel.rkt — D.4 1B-iii Tropical Quantale primitive
 ;;;
-;;; Per docs/tracking/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md
+;;; Per docs/tracking/tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md
 ;;; §9 + §9.2.0.6 (1B-iii mini-design resolutions).
 ;;;
 ;;; Ships:

@@ -129,6 +129,18 @@
 ;; Fast test helpers using cached prelude
 ;; ========================================
 
+;; DEFERRED 160 (SW-27): each run-ns-* call is its own compilation unit. The post-prelude
+;; registry network is taken ONCE as a value; every call starts from a FRESH box holding it
+;; (not the shared, mutable `prelude-persistent-registry-net-box`, which the few test files
+;; that bind it directly may write to) and runs inside the driver's unit scope
+;; (`call-with-file-registry-scope`), so nothing one call registers — a spec, a trait, a
+;; ctor — is visible to the next call, in this file or in a later file on the same worker.
+;; (Before: a `spec ok2` in one file's `ns test` broke another file's `defn ok2` in `ns t`.)
+(define prelude-registry-net
+  (and prelude-persistent-registry-net-box (unbox prelude-persistent-registry-net-box)))
+(define (fresh-prelude-registry-net-box)
+  (and prelude-registry-net (box prelude-registry-net)))
+
 ;; Process a string in a fresh namespace using cached prelude modules.
 ;; Returns the LAST result (like the common run-ns-last pattern).
 ;; Each call gets a fresh global-env, ns-context, and meta-store for isolation.
@@ -145,13 +157,15 @@
                  [current-impl-registry prelude-impl-registry]
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 10 Phase 3c: fork replaces 8 network params
-                 [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
+                 [current-persistent-registry-net-box (fresh-prelude-registry-net-box)]  ;; Track 7 Phase 6d
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
                  )
-    (with-forked-network current-prop-net-box
-      (install-module-loader!)
-      (last (process-string s)))))
+    (call-with-file-registry-scope  ;; SW-27
+     (λ ()
+       (with-forked-network current-prop-net-box
+         (install-module-loader!)
+         (last (process-string s)))))))
 
 ;; Process a string and return ALL results (list).
 (define (run-ns-all s)
@@ -164,13 +178,15 @@
                  [current-impl-registry prelude-impl-registry]
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 10 Phase 3c: fork replaces 8 network params
-                 [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
+                 [current-persistent-registry-net-box (fresh-prelude-registry-net-box)]  ;; Track 7 Phase 6d
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
                  )
-    (with-forked-network current-prop-net-box
-      (install-module-loader!)
-      (process-string s))))
+    (call-with-file-registry-scope  ;; SW-27
+     (λ ()
+       (with-forked-network current-prop-net-box
+         (install-module-loader!)
+         (process-string s))))))
 
 ;; ========================================
 ;; WS-mode helpers (primary design target)
@@ -188,13 +204,15 @@
                  [current-impl-registry prelude-impl-registry]
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 10 Phase 3c: fork replaces 8 network params
-                 [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
+                 [current-persistent-registry-net-box (fresh-prelude-registry-net-box)]  ;; Track 7 Phase 6d
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
                  )
-    (with-forked-network current-prop-net-box
-      (install-module-loader!)
-      (last (process-string-ws s)))))
+    (call-with-file-registry-scope  ;; SW-27
+     (λ ()
+       (with-forked-network current-prop-net-box
+         (install-module-loader!)
+         (last (process-string-ws s)))))))
 
 (define (run-ns-ws-all s)
   (parameterize ([current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
@@ -206,13 +224,15 @@
                  [current-impl-registry prelude-impl-registry]
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 10 Phase 3c: fork replaces 8 network params
-                 [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
+                 [current-persistent-registry-net-box (fresh-prelude-registry-net-box)]  ;; Track 7 Phase 6d
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
                  )
-    (with-forked-network current-prop-net-box
-      (install-module-loader!)
-      (process-string-ws s))))
+    (call-with-file-registry-scope  ;; SW-27
+     (λ ()
+       (with-forked-network current-prop-net-box
+         (install-module-loader!)
+         (process-string-ws s))))))
 
 ;; Level 3 (`process-file`) twin of `run-ns-ws-all`: writes the source to a
 ;; temp .prologos file and runs the REAL file path. Same parameterize, so the
@@ -223,7 +243,7 @@
 ;; rather than as a changed error value.
 (define (run-ns-ws-file-all s)
   (define tmp (make-temporary-file "prologos-ws-~a.prologos"))
-  (call-with-output-file tmp #:exists 'replace (lambda (out) (display s out)))
+  (call-with-output-file tmp #:exists 'truncate (lambda (out) (display s out)))
   (define rs
     (parameterize ([current-file-module-network-ref (make-module-network)]
                    [current-ns-context #f]
@@ -233,7 +253,7 @@
                    [current-trait-registry prelude-trait-registry]
                    [current-impl-registry prelude-impl-registry]
                    [current-param-impl-registry prelude-param-impl-registry]
-                   [current-persistent-registry-net-box prelude-persistent-registry-net-box]
+                   [current-persistent-registry-net-box (fresh-prelude-registry-net-box)]
                    [current-module-registry-cell-id   #f]
                    [current-ns-context-cell-id        #f]
                    )
@@ -254,12 +274,14 @@
     (parameterize ([current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
                    [current-error-port stderr-out]
                    ;; Track 10 Phase 3c: fork replaces 8 network params
-                   [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
+                   [current-persistent-registry-net-box (fresh-prelude-registry-net-box)]  ;; Track 7 Phase 6d
                    [current-module-registry-cell-id   #f]
                    [current-ns-context-cell-id        #f]
                    )
-      (with-forked-network current-prop-net-box
-        (process-string s))))
+      (call-with-file-registry-scope  ;; SW-27
+       (λ ()
+         (with-forked-network current-prop-net-box
+           (process-string s))))))
   (cons results (get-output-string stderr-out)))
 
 ;; Assert that an error has a non-empty provenance field.

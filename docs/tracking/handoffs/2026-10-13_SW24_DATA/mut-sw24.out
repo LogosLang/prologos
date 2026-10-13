@@ -1,0 +1,7 @@
+M1 cache keyed by path only (content ignored) -> 8 tests in 1.5s (1 files, 1 batch workers, 1 FAILURES)
+M2 cache from another dep-graph.rkt trusted -> 8 tests in 1.0s (1 files, 1 batch workers, 1 FAILURES)
+M3 hidden files treated as modules -> 8 tests in 1.5s (1 files, 1 batch workers, 1 FAILURES)
+M4 compute-affected-tests ignores #:graph -> 8 tests in 1.5s (1 files, 1 batch workers, 1 FAILURES)
+M5 cache never written -> 8 tests in 1.5s (1 files, 1 batch workers, 1 FAILURES)
+restored: byte-identical
+after restore -> 8 tests in 1.5s (1 files, 1 batch workers, all pass)

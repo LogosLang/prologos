@@ -997,4 +997,4 @@ For Phase 9: NO surface exposure. Only infrastructure. Language-level exposure i
 
 This document is a living reference; cross-references from Phase 9 audit/design back here carry the full literature citation. New findings during implementation that refine the theoretical framing should be added here as supplementary sections rather than scattered across phase documents.
 
-**Next steps**: Phase 9 audit (`docs/tracking/2026-04-21_PPN_4C_PHASE_9_AUDIT.md`) opens with this research as foundational input.
+**Next steps**: Phase 9 audit (`docs/tracking/tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_AUDIT.md`) opens with this research as foundational input.
