@@ -10,7 +10,8 @@
          json
          racket/list
          racket/string
-         "../tools/suite-plan.rkt")
+         "../tools/suite-plan.rkt"
+         (only-in "../tools/suite-lock.rkt" SUITE-LOCK-BUSY-EXIT))
 
 (define (run-record file-count results)
   (jsexpr->string
@@ -241,3 +242,15 @@
                 '(test-a.rkt test-b.rkt))
   (check-equal? (drop-non-test-modules (list "/x/tests/test-support.rkt" "/x/tests/test-a.rkt"))
                 (list "/x/tests/test-a.rkt")))
+
+;; ========================================
+;; Exit status
+;; ========================================
+
+(test-case "suite-plan/exit codes: ran-nothing outcomes are NONZERO and every outcome is distinct"
+  ;; DEFERRED 164 open(2): the re-run GUARD exited 0 having run nothing.
+  (define codes (list EXIT-PASS EXIT-FAILURES EXIT-INCOMPLETE EXIT-GUARD-REFUSED SUITE-LOCK-BUSY-EXIT))
+  (check-equal? EXIT-PASS 0)
+  (check-false (zero? EXIT-GUARD-REFUSED) "a refused run must not read as green")
+  (check-false (zero? SUITE-LOCK-BUSY-EXIT))
+  (check-equal? (length (remove-duplicates codes)) (length codes)))

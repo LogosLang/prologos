@@ -336,8 +336,10 @@
             (printf "Read failure logs:  racket tools/run-affected-tests.rkt --failures\n")
             (printf "Run one test:       raco test tests/test-NAME.rkt\n")
             (printf "Force full re-run:  add --force-rerun flag\n")
+            (printf "Exit status ~a: NOTHING WAS RUN (not a pass).\n" EXIT-GUARD-REFUSED)
             (printf "~a\n\n" (make-string 60 #\═))
-            (exit 0))))))
+            ;; DEFERRED 164 open(2): was (exit 0), which read as green.
+            (exit EXIT-GUARD-REFUSED))))))
   (rerun-guard!)
 
   ;; Machine-wide suite QUEUE (suite-lock.rkt). A run takes the lock before it
@@ -1161,7 +1163,7 @@
     (append-run-record timings-file record)
     (printf "Timings recorded to ~a\n" (path->string timings-file)))
 
-  (when (or bailed? incomplete?) (exit 2))
-  (unless all-pass? (exit 1)))
+  (when (or bailed? incomplete?) (exit EXIT-INCOMPLETE))
+  (unless all-pass? (exit EXIT-FAILURES)))
 
 (main)

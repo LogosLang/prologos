@@ -38,7 +38,11 @@
          drop-non-test-modules
          gate-verdict
          gate-incomplete?
-         gate-all-pass?)
+         gate-all-pass?
+         EXIT-PASS
+         EXIT-FAILURES
+         EXIT-INCOMPLETE
+         EXIT-GUARD-REFUSED)
 
 ;; historical-medians : (listof string) #:runs N #:min-file-count M
 ;;                      -> (hash/c string? exact-nonnegative-integer?)  ; equal?-keyed
@@ -281,3 +285,16 @@
 (define (gate-all-pass? unit-count unit-results)
   (define-values (missing empty failed stale) (gate-verdict unit-count unit-results))
   (and (= missing 0) (null? empty) (null? failed)))
+
+;; ============================================================
+;; EXIT STATUS — one table, so no two outcomes share a code
+;; ============================================================
+;; ⚠ A run that RAN NOTHING must not exit 0 (DEFERRED 164 open 2): the re-run
+;; GUARD's refusal used to `(exit 0)`, so `run --all && git commit`, or an
+;; agent reading only the status, took "ran nothing" as green (observed
+;; 2026-10-13). suite-lock.rkt's SUITE-LOCK-BUSY-EXIT (75) is the other
+;; ran-nothing outcome; tests/test-suite-plan.rkt pins that all are distinct.
+(define EXIT-PASS 0)           ; every unit reported, ran tests, and passed
+(define EXIT-FAILURES 1)       ; some unit failed or timed out
+(define EXIT-INCOMPLETE 2)     ; some unit gave no result, or the run aborted
+(define EXIT-GUARD-REFUSED 3)  ; the re-run GUARD refused: nothing was run
