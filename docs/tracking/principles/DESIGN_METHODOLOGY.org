@@ -972,7 +972,7 @@ For each implementation phase:
    drift risks frame this phase — as a REFERENCE, not a design artifact.
    Design DECISIONS that emerge from the conversational dialogue persist
    into the DESIGN DOC as new subsections (see canonical examples in
-   [[file:../2026-04-21_PPN_4C_PHASE_9_DESIGN.md]] §7.5.1, §7.5.8,
+   [[file:../tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md]] §7.5.1, §7.5.8,
    §7.5.10, §7.5.11, §7.6.15). The design doc holds the current design;
    the dailies hold the commit story.
 
@@ -1002,7 +1002,7 @@ For each implementation phase:
 
    /Outputs/: persist audit findings INTO the design doc as new
    subsections alongside the mini-design decisions (see canonical
-   examples in [[file:../2026-04-21_PPN_4C_PHASE_9_DESIGN.md]] §7.6.9,
+   examples in [[file:../tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md]] §7.6.9,
    §7.6.14). Not in dailies, not in separate per-phase audit files.
 
 3. *Principles challenge mid-flight*: Every design decision made during

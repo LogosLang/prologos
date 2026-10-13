@@ -2,7 +2,7 @@
 ;;;
 ;;; tropical-fuel-primitives.rkt — D.4 1V-6 F14 retirement (§11.X.5)
 ;;;
-;;; Per docs/tracking/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md
+;;; Per docs/tracking/tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md
 ;;; §11.X.5 (1V Commit 6 mini-design): pure algebraic primitives extracted
 ;;; from tropical-fuel.rkt to a leaf module to break the import cycle:
 ;;;

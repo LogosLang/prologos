@@ -8,7 +8,7 @@
 - **[NTT](2026-03-22_NTT_SYNTAX_DESIGN.md)** (Network Type Theory): How propagators are described — syntax, type declarations, network specifications
 - **PTF** (this series): What propagators are — kinds, composition patterns, parallel profiles, lattice morphology
 - **[PAR](2026-03-27_PAR_MASTER.md)** (Parallel Scheduling): Runtime scheduling informed by PTF theory
-- **[PPN](2026-03-26_PPN_MASTER.md)** (Propagator-Parsing-Network): Application track that exercises PTF patterns
+- **[PPN](tracks/PPN/2026-03-26_PPN_MASTER.md)** (Propagator-Parsing-Network): Application track that exercises PTF patterns
 
 ---
 
@@ -45,7 +45,7 @@ Once any of these lands as a research document, promote into the Research Docume
 - **[Lattice Foundations / Hyperlattice Conjecture](../research/2026-03-26_LATTICE_FOUNDATIONS.md)** — "Any computation as fixpoint over interconnected lattice structures." PTF describes the morphology (shapes of interconnections).
 - **[Parallel Propagator Scheduling](../research/2026-03-28_PARALLEL_PROPAGATOR_SCHEDULING.md)** — Racket 9 landscape, Soufflé, Timely Dataflow. PTF kinds inform scheduling decisions.
 - **[CALM Topology Lesson](principles/DEVELOPMENT_LESSONS.org)** — Fixed topology for CALM correctness. PTF's Scatter kind (topology-creating) is the exception that requires stratification.
-- **[PPN Track 1 Design](2026-03-26_PPN_TRACK1_DESIGN.md)** — Set-latch pattern = Reduce/Barrier kind. Parse pipeline = Map-Reduce-Broadcast.
+- **[PPN Track 1 Design](tracks/PPN/PPN_1/2026-03-26_PPN_TRACK1_DESIGN.md)** — Set-latch pattern = Reduce/Barrier kind. Parse pipeline = Map-Reduce-Broadcast.
 - **[PAR Track 1 PIR](2026-03-28_PAR_TRACK1_PIR.md)** — BSP structural propagator capture. Empirical parallel profiles (fan-out vs chain).
 - **[Module Theory on Lattices](../research/2026-03-28_MODULE_THEORY_LATTICES.md)** — Propagator kinds gain algebraic grounding. Map = monotone endomorphism. Reduce = meet. Independent sub-ring elements commute = parallel-safe.
 - **[Algebraic Embeddings on Lattices](../research/2026-03-28_ALGEBRAIC_EMBEDDINGS_LATTICES.md)** — The domain's lattice structure (distributive, Heyting, residuated, Boolean, geometric) determines which propagator kinds are available and what optimizations apply. A Heyting lattice gets pseudo-complement propagators. A residuated lattice gets automatic backward propagator derivation. A Boolean lattice gets SAT/CDCL optimizations. The algebraic structure of the lattice is a type-level property that constrains and enriches the propagator kinds.

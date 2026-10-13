@@ -4,7 +4,7 @@
 **Date**: 2026-05-20
 **Stage**: 0 — Pre-research SEED note. Concern captured during PPN 4C Addendum Phase 2A.b mini-design dialogue (2026-05-20).
 **Status**: ⬜ Pending Stage 0/1 research conversation + Stage 2 audit + Stage 3 design cycle before implementation can begin.
-**Originating dialogue**: [PPN 4C Addendum D.3 §8.7.b mini-design](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) — Q1-Q4 + adversarial principles framework surfaced two levels of handler-as-scaffolding concern.
+**Originating dialogue**: [PPN 4C Addendum D.3 §8.7.b mini-design](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md) — Q1-Q4 + adversarial principles framework surfaced two levels of handler-as-scaffolding concern.
 
 ---
 
@@ -162,14 +162,14 @@ The pattern: scheduler-state migrates piecemeal. PM 13 adds the handler registry
 ## §8 References
 
 ### §8.1 Originating dialogue
-- [PPN 4C Addendum D.3 §8.7.b](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) — 2A.b mini-design + Q1-Q4 (where this concern was surfaced)
+- [PPN 4C Addendum D.3 §8.7.b](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md) — 2A.b mini-design + Q1-Q4 (where this concern was surfaced)
 - 2026-05-20 dailies entry: PM 13 capture conversation
 
 ### §8.2 Architectural precedents
 - [DESIGN_PRINCIPLES.org § Cell / Propagator / Scheduler Orthogonality](principles/DESIGN_PRINCIPLES.org) — §10.3.A taxonomy (propagator-state / scheduler-state / topology-state cell categories)
 - [DESIGN_PRINCIPLES.org § Specialized Cell Type Framework as Cross-Track Template](principles/DESIGN_PRINCIPLES.org) — §4.6 framework codified during PPN 4C Phase 1
-- [PPN 4C Tropical Quantale Addendum D.4 §4.6](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) — specialized cell type framework canonical source
-- [PPN 4C Tropical Quantale Addendum PIR §1 Delivery 2](2026-05-17_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_PIR.md) — unforeseen cross-track template delivery
+- [PPN 4C Tropical Quantale Addendum D.4 §4.6](tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) — specialized cell type framework canonical source
+- [PPN 4C Tropical Quantale Addendum PIR §1 Delivery 2](tracks/PPN/PPN_4C/2026-05-17_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_PIR.md) — unforeseen cross-track template delivery
 
 ### §8.3 Affected sites (Stage 2 audit candidates)
 - `propagator.rkt:2827` — `stratum-handlers` box (PRIMARY scope)

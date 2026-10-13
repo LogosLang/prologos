@@ -12,7 +12,7 @@
 - ~rrb-diff~: structural diff exploiting ~eq?~ subtree sharing, O(k log n)
 - A/B benchmarks: zero overhead (all within ±4% noise)
 - *380/380 GREEN, 7529 tests, 143.5s. Propagator reader is live.*
-- PIR: ~docs/tracking/2026-03-26_PPN_TRACK1_PIR.md~ (with per-phase timing + 10-PIR longitudinal survey)
+- PIR: ~docs/tracking/tracks/PPN/PPN_1/2026-03-26_PPN_TRACK1_PIR.md~ (with per-phase timing + 10-PIR longitudinal survey)
 - Design: 58% of time. Core implementation: 11%. Diagnostic switchover: 20%.
 
 ** PIR Methodology Enhancement

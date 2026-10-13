@@ -48,8 +48,8 @@ The track folds in Track 1.5 (Cell-Based TMS) because the TMS rearchitecture sho
 |----------|------|
 | [PAR Track 1 Design](../tracking/2026-03-27_PAR_TRACK1_DESIGN.md) | BSP-as-default: CALM audit, dynamic topology guards, stratified barrier protocol. BSP is now the production scheduler. |
 | [PAR Track 1 PIR](../tracking/2026-03-28_PAR_TRACK1_PIR.md) | BSP deployment: 10 bugs found (CALM violations, decomp-request invisible to diff, infinite loops), all resolved. |
-| [PPN Track 4B Design](../tracking/2026-04-05_PPN_TRACK4B_DESIGN.md) | Attribute evaluation: 5-facet attribute-map cell, P1/P2/P3 propagator patterns, on-main-network typing. Discovered need for cell-based TMS (Phase 8 blocked). |
-| [PPN Track 4B PIR](../tracking/2026-04-07_PPN_TRACK4B_PIR.md) | 90% on-network typing, 6 imperative bridges documented. TMS is the architectural bottleneck. |
+| [PPN Track 4B Design](../tracking/tracks/PPN/PPN_4B/2026-04-05_PPN_TRACK4B_DESIGN.md) | Attribute evaluation: 5-facet attribute-map cell, P1/P2/P3 propagator patterns, on-main-network typing. Discovered need for cell-based TMS (Phase 8 blocked). |
+| [PPN Track 4B PIR](../tracking/tracks/PPN/PPN_4B/2026-04-07_PPN_TRACK4B_PIR.md) | 90% on-network typing, 6 imperative bridges documented. TMS is the architectural bottleneck. |
 
 ### 2.3 Categorical and Theoretical Foundations
 

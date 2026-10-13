@@ -13,7 +13,7 @@
 - [Lattice Catalog](../research/2026-03-14_LATTICE_CATALOG.md) — taxonomy of lattice structures
 
 **Cross-series consumers**:
-- [PPN Track 3](2026-03-26_PPN_MASTER.md) — parse lattice algebraic classes (token = Boolean, surface = Distributive, type = Heyting)
+- [PPN Track 3](tracks/PPN/2026-03-26_PPN_MASTER.md) — parse lattice algebraic classes (token = Boolean, surface = Distributive, type = Heyting)
 - [UCS Master](2026-03-28_UCS_MASTER.md) — domain-polymorphic `#=` operator, solving strategy selection
 - [PAR Master](2026-03-27_PAR_MASTER.md) — domain class informs parallel scheduling strategy
 

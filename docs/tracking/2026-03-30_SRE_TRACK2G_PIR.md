@@ -8,7 +8,7 @@
 **Suite health**: 383/383 files, 7491 tests, all pass, ~130s
 **Design iterations**: D.1, D.2 (3 revisions: P1 cells, P2 ring-action, M3 Pocket Universe), D.3 (11 findings), NTT model (revealed scatter impurity), Phase 5 finding
 **Design docs**: [SRE Track 2G Design](2026-03-30_SRE_TRACK2G_DESIGN.md), [Stage 2 Audit](2026-03-30_SRE_TRACK2G_STAGE2_AUDIT.md)
-**Prior PIRs**: [PPN Track 2B](2026-03-30_PPN_TRACK2B_PIR.md), [PPN Track 2](2026-03-29_PPN_TRACK2_PIR.md), [PAR Track 1](2026-03-28_PAR_TRACK1_PIR.md), [PPN Track 1](2026-03-26_PPN_TRACK1_PIR.md)
+**Prior PIRs**: [PPN Track 2B](tracks/PPN/PPN_2B/2026-03-30_PPN_TRACK2B_PIR.md), [PPN Track 2](tracks/PPN/PPN_2/2026-03-29_PPN_TRACK2_PIR.md), [PAR Track 1](2026-03-28_PAR_TRACK1_PIR.md), [PPN Track 1](tracks/PPN/PPN_1/2026-03-26_PPN_TRACK1_PIR.md)
 **Series**: SRE (Structural Reasoning Engine) — Track 2G
 
 ---

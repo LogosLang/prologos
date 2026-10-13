@@ -15,7 +15,7 @@
 - [Kan Extensions, ATMS, GFP Parsing](2026-03-26_KAN_EXTENSIONS_ATMS_GFP_PARSING.md) — 4-level optimization strategy
 - [BSP-LE Track 2B PIR](../tracking/2026-04-16_BSP_LE_TRACK2B_PIR.md) — speculation infrastructure
 - [PRN Master](../tracking/2026-03-26_PRN_MASTER.md) — confirmed findings + universal primitives
-- [PPN 4C Tropical Quantale Addendum](../tracking/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) — substrate gating-dependency
+- [PPN 4C Tropical Quantale Addendum](../tracking/tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) — substrate gating-dependency
 
 ---
 
@@ -79,7 +79,7 @@ These are settled by existing infrastructure — the architectural design space 
 |---|---|---|
 | **On-network discipline** | Mantra non-negotiable per [`on-network.md`](../../.claude/rules/on-network.md) | Every layer is cells with monotone merges; off-network state is debt |
 | **SRE rule-registry pattern** | SRE Track 2D (13 DPO rules); `prop:ctor-desc-tag` for confluence-by-construction | PReduce's rule registry generalizes the SRE form-registry pattern; existing SRE rules become rule-registry entries with property-tag = `confluence-by-construction` |
-| **PPN 4C Phase 1B substrate** | In flight per [`PPN 4C Tropical Quantale Addendum`](../tracking/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) — ships `tropical-fuel.rkt` + residuation operator + SRE quantale-property declarations | PReduce inherits cost algebra without recreating; extraction algorithm IS the residual operator |
+| **PPN 4C Phase 1B substrate** | In flight per [`PPN 4C Tropical Quantale Addendum`](../tracking/tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) — ships `tropical-fuel.rkt` + residuation operator + SRE quantale-property declarations | PReduce inherits cost algebra without recreating; extraction algorithm IS the residual operator |
 | **BSP-LE 2B speculation** | [PIR](../tracking/2026-04-16_BSP_LE_TRACK2B_PIR.md): Q_n hypercube worldview + bitmask subcube + ATMS nogoods + S(-1) retraction | PReduce's speculative cost-bounded reduction consumes this directly; non-confluent rule cases handled |
 | **Adhesive guarantee for e-graphs** | Biondo-Castelnovo-Gadducci CALCO 2025 (e-graphs adhesive); SRE Track 2D + [Adhesive Categories](2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md) | PReduce's e-class cells inherit DPO toolkit; critical-pair analysis transfers |
 | **Quotient-module framing** | [Module Theory §6](2026-03-28_MODULE_THEORY_LATTICES.md) — e-graphs as quotient modules | Cost-guided extraction = residuation on the quotient module; algebraic frame for rule composition |
@@ -349,7 +349,7 @@ Catalog of decisions Track 1+ tracks will need to make. Not 0.1's resolution tar
 ### §10.2 Tracking documents
 - [PRN Master](../tracking/2026-03-26_PRN_MASTER.md) — confirmed findings + universal primitives (rule registration §3 is load-bearing)
 - [SH Master](../tracking/2026-04-30_SH_MASTER.md) — self-hosting series; PReduce is critical cross-series dependency
-- [PPN 4C Tropical Quantale Addendum Design](../tracking/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) — substrate prerequisite (Phase 1B residuation operator)
+- [PPN 4C Tropical Quantale Addendum Design](../tracking/tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) — substrate prerequisite (Phase 1B residuation operator)
 - [BSP-LE Track 2B PIR](../tracking/2026-04-16_BSP_LE_TRACK2B_PIR.md) — speculation infrastructure
 - [SRE Master](../tracking/2026-03-22_SRE_MASTER.md) — form registry (generalizes into PReduce's unified rule registry)
 

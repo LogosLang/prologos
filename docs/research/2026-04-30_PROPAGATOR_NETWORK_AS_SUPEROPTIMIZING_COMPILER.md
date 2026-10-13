@@ -255,7 +255,7 @@ This note makes claims at varying strength levels. Honest separation:
 
 ## 7. Open research questions
 
-1. **What's the right cost lattice?** Tropical (min-plus) is the obvious choice for Viterbi-style cheapest-derivation extraction. But propagator networks support richer quantales (per `OE Series` work, [`2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md`](../tracking/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md)). What about combined cost lattices — instruction count × code size × power consumption × latency? The quantale framework gives us the algebra; the design choice is which combination matters.
+1. **What's the right cost lattice?** Tropical (min-plus) is the obvious choice for Viterbi-style cheapest-derivation extraction. But propagator networks support richer quantales (per `OE Series` work, [`2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md`](../tracking/tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md)). What about combined cost lattices — instruction count × code size × power consumption × latency? The quantale framework gives us the algebra; the design choice is which combination matters.
 
 2. **How does dependent typing interact with super-optimization?** Equality saturation in dependently-typed contexts is an open frontier ([Moss 2025, "E-Graphs with Bindings", arXiv:2505.00807](https://arxiv.org/abs/2505.00807) starts on this). Dependent types add binding structure that complicates rewriting. We have both; the integration is research territory.
 

@@ -21,7 +21,7 @@ This unifies several already-named-but-never-formalized follow-ups:
 - §18.11.3 — "the `loading-set` cycle check retires; cycle diagnosis via lattice fixpoint."
 - §18.21.20 DQ4 — "module-load OUT → module-loading-on-network; REPL/string OUT → PPN Track 8/11."
 
-(Cross-references are to `docs/tracking/2026-04-21_PPN_4C_PHASE_9_DESIGN.md`.)
+(Cross-references are to `docs/tracking/tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md`.)
 
 ---
 
@@ -122,7 +122,7 @@ All line numbers are post-4B.3-b; re-verify at the then-current HEAD (the 4B arc
 
 ## §9 Cross-references
 
-- PPN 4C Addendum Phase 4B mini-design — `docs/tracking/2026-04-21_PPN_4C_PHASE_9_DESIGN.md` §18.21 (esp. §18.21.16 D1-D6, §18.21.22 the δ substrate, §18.21.23 the 4B.4 scope reframe that spawned this note).
+- PPN 4C Addendum Phase 4B mini-design — `docs/tracking/tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md` §18.21 (esp. §18.21.16 D1-D6, §18.21.22 the δ substrate, §18.21.23 the 4B.4 scope reframe that spawned this note).
 - PM Track 12 — `docs/tracking/2026-03-13_PROPAGATOR_MIGRATION_MASTER.md` § Track 12.
 - FREE_ORDERING — `docs/tracking/2026-02-28_1800_FREE_ORDERING.md` (the 3-pass preparse this track retires).
 - DEFERRED.md § "Free Ordering on Network (PM Track 12B)".
