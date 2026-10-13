@@ -571,6 +571,8 @@
    (test-dep '(champ.rkt propagator.rkt prop-observatory.rkt observatory-serialize.rkt trace-serialize.rkt) #f)
    'test-propagator-bsp.rkt
    (test-dep '(champ.rkt propagator.rkt) #f)
+   'test-arena-parity.rkt
+   (test-dep '(propagator.rkt) #f)
    'test-propagator-integration.rkt
    (test-dep '(driver.rkt errors.rkt global-env.rkt prelude.rkt pretty-print.rkt reduction.rkt substitution.rkt syntax.rkt typing-core.rkt) #t)
    'test-propagator-lvar.rkt

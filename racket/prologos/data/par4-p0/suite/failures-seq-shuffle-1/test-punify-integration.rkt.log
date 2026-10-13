@@ -1,0 +1,139 @@
+=== test-punify-integration.rkt FAILED ===
+wall_ms: 5360
+tests: 24 (1 failures)
+
+--- Error Diagnostics ---
+Error at <string>:1:17
+  Expected ':' or multiplicity after variable name $brace-params, got A
+  Near: $brace-params
+
+Error at <string>:1:17
+  Expected ':' or multiplicity after variable name $brace-params, got A
+  Near: $brace-params
+
+Error at <string>:1:15
+  Unbound variable: A
+
+Error at <string>:1:20
+  Expected ':' or multiplicity after variable name $brace-params, got A
+  Near: $brace-params
+
+Error at <string>:1:22
+  Expected ':' or multiplicity after variable name $brace-params, got A
+  Near: $brace-params
+
+error[E1004]: no instance found for (Seqable List)
+  --> <string>:1:7
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+Error at <string>:1:7
+  Unbound variable: Pair
+
+Error at <string>:1:7
+  Unbound variable: Pair
+
+Error at <unknown>
+  Could not infer type
+  Expression: [reduce [prologos::data::option::some Int 42] | some x -> x | none -> 0]
+
+Error at <unknown>
+  Could not infer type
+  Expression: [reduce [prologos::data::option::some Int 42] | some x -> x | none -> 0]
+
+Error at <string>:1:32
+  Unbound variable: vnil
+
+Error at <string>:1:32
+  Unbound variable: vnil
+
+Error at <unknown>
+  Could not infer type
+  Expression: [t::f true]
+
+Error at <unknown>
+  Type mismatch
+  Expected: Int
+  Got:      String
+  In expression: "hello"
+
+error[E1006]: expression does not match any branch of union type
+  --> <unknown>
+  tried Int — type mismatch (got: String)
+  tried Bool — type mismatch (got: String)
+  in expression: "hello"
+  = help: expression must match at least one branch of Int | Bool
+
+Error at <unknown>
+  Type mismatch
+  Expected: Int -> Int
+  Got:      [Pi [x <Bool>] Int]
+  In expression: [fn [x <Bool>] 0]
+
+Error at <unknown>
+  cannot infer the type of an unannotated parameter — it is used here in a way that requires a known type (e.g. field projection `.field` or arithmetic). Annotate the parameter (`[x : T]`) or add a `spec`.
+  Expected: Int -> Bool
+  Got:      <could not infer>
+  In expression: [fn [x <_>] [int+ x 1]]
+
+Error at <string>:1:32
+  Too many arguments to 't::f'
+  Function: t::f
+  Expected 1 argument, got 2
+  Signature: (Int) -> Int
+
+Error at <string>:1:17
+  Expected ':' or multiplicity after variable name $brace-params, got A
+  Near: $brace-params
+
+Error at <string>:1:20
+  Expected ':' or multiplicity after variable name $brace-params, got A
+  Near: $brace-params
+
+--- RackUnit stderr ---
+QUIESCENCE-WRITES:{"avg_changes":2.0,"avg_writes":6.0,"change_ratio":0.3333333333333333,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":1,"hist_51_plus":0,"hist_6_10":0,"max_changes":2,"max_writes":6,"runs":1,"total_changes":2,"total_writes":6}
+QUIESCENCE-WRITES:{"avg_changes":2.0,"avg_writes":2.0,"change_ratio":1.0,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":1,"hist_51_plus":0,"hist_6_10":0,"max_changes":2,"max_writes":2,"runs":1,"total_changes":2,"total_writes":2}
+--------------------
+parity: list head — implicit type arg with punify ON
+FAILURE
+name:       check-false
+location:   tests/test-punify-integration.rkt:172:2
+params:     '(#t)
+--------------------
+QUIESCENCE-WRITES:{"avg_changes":1.0,"avg_writes":5.0,"change_ratio":0.2,"hist_0":0,"hist_1":1,"hist_11_50":0,"hist_2_5":0,"hist_51_plus":0,"hist_6_10":0,"max_changes":1,"max_writes":5,"runs":1,"total_changes":1,"total_writes":5}
+
+--- Provenance Stats ---
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":1,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":1,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":1,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":3,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":3,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+

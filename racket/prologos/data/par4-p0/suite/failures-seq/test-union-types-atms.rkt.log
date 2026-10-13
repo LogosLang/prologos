@@ -1,0 +1,68 @@
+=== test-union-types-atms.rkt FAILED ===
+wall_ms: 3
+tests: 27 (7 failures)
+
+--- RackUnit stderr ---
+--------------------
+E2E: fork-on-union flow with stubbed classifier-watcher (post-3A.b semantics)
+FAILURE
+name:       check-equal?
+location:   tests/test-union-types-atms.rkt:254:4
+message:
+  "post-3A.b: 1 branch bit remains (Int retained; String narrowed by handler)"
+actual:     0
+expected:   1
+--------------------
+--------------------
+E2E: Int branch succeeds + String branch fails → 1 bit remaining in worldview
+FAILURE
+name:       check-equal?
+location:   tests/test-union-types-atms.rkt:618:4
+message:
+  "Option E: exactly 1 branch bit remains (Int succeeds; String contradicted+narrowed)"
+actual:     0
+expected:   1
+--------------------
+--------------------
+E2E: both branches succeed → both bits remain (non-committing inhabitation)
+FAILURE
+name:       check-equal?
+location:   tests/test-union-types-atms.rkt:672:4
+message:
+  "Both branches succeed → 2 branch bits remain (non-committing per OQ1)"
+actual:     0
+expected:   2
+--------------------
+--------------------
+union-all-contradict-chain/int-bool-both-fail: cell-19 populated
+FAILURE
+name:       check-true
+location:   tests/test-union-types-atms.rkt:747:4
+params:     '(#f)
+message:    "cell-19 has chain entry for the union position"
+--------------------
+--------------------
+union-all-contradict-chain/nat-string-both-fail: cell-19 populated (component variety)
+FAILURE
+name:       check-true
+location:   tests/test-union-types-atms.rkt:780:4
+params:     '(#f)
+message:    "cell-19 has chain entry for Nat|String all-fail position"
+--------------------
+--------------------
+union-all-contradict-chain/srcloc-empirical-baseline: all chain steps srcloc=#f without parameterize
+FAILURE
+name:       check-true
+location:   tests/test-union-types-atms.rkt:887:4
+params:     '(#f)
+message:    "per-branch chain list present"
+--------------------
+--------------------
+union-all-contradict-chain/srcloc-presence-via-parameterize: all chain steps srcloc=test-loc with parameterize
+FAILURE
+name:       check-true
+location:   tests/test-union-types-atms.rkt:911:4
+params:     '(#f)
+message:    "per-branch chain list present"
+--------------------
+

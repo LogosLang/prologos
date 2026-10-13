@@ -198,6 +198,9 @@
  wrap-with-worldview
  ;; Track 8 C5a: Global BSP scheduler override for A/B benchmarking
  current-use-bsp-scheduler?
+ ;; PAR 4 P0 instrumentation (env knob + fork counter)
+ par4-scheduler-mode
+ par4-fork-count
  ;; CALM topology guard: #t during BSP fire rounds
  current-bsp-fire-round?
  ;; PAR Track 1: Decomposition request protocol
@@ -1229,6 +1232,7 @@
 ;; Resets hot state (worklist, fuel) and contradiction.
 ;; O(1): two struct allocations. All data shared until child writes (CoW).
 (define (fork-prop-network net [fuel 1000000])
+  (set-box! par4-fork-count (add1 (unbox par4-fork-count)))  ;; PAR 4 P0
   ;; D.4 1C-iv-a (§10.0.6 γ1): fork-prop-network cell-reset.
   ;; Sub-network gets fresh worklist + new fuel budget. Cells are SHARED with
   ;; parent via CHAMP structural sharing (prop-network-cells net) — under D.4,
@@ -2172,7 +2176,35 @@
 ;; This is the correct level for a full A/B comparison — it catches every quiescence
 ;; invocation (unify.rkt, bridges, tabling, not just metavar-store).
 ;; PPN 4C Phase 3A.d (2026-05-22): elab-speculation.rkt retired (zero callers; stranded).
-(define current-use-bsp-scheduler? (make-parameter #t))  ;; PAR Track 1 Phase 5: BSP is the default
+;; PAR 4 P0 (2026-10-13): PROLOGOS_SCHEDULER env knob, read ONCE at module load, so a
+;; whole test suite / corpus run can be driven under another scheduler without code edits:
+;;   unset | "bsp"      → BSP (the default, unchanged)
+;;   "seq"              → sequential Gauss-Seidel drain (= DIRECT at K=1: writes visible
+;;                        immediately — chaotic iteration with one executor)
+;;   "seq-shuffle"      → the sequential drain, picking the NEXT propagator uniformly at
+;;                        random from the worklist (seed: PROLOGOS_SCHED_SEED, default 1).
+;;                        Adversarial schedule-independence test for PAR 4 A-1/A-3.
+(define par4-scheduler-mode
+  (let ([m (getenv "PROLOGOS_SCHEDULER")])
+    (cond [(member m '("seq" "seq-shuffle")) (string->symbol m)] [else 'bsp])))
+(define par4-shuffle-rng
+  (and (eq? par4-scheduler-mode 'seq-shuffle)
+       (let ([g (make-pseudo-random-generator)]
+             [seed (or (string->number (or (getenv "PROLOGOS_SCHED_SEED") "1")) 1)])
+         (parameterize ([current-pseudo-random-generator g]) (random-seed seed))
+         g)))
+;; Remove and return a uniformly random element of the list in box `b`.
+(define (par4-pick-random! b rng)
+  (define l (unbox b))
+  (define i (random (length l) rng))
+  (let loop ([l l] [i i] [acc '()])
+    (if (zero? i)
+        (begin (set-box! b (append (reverse acc) (cdr l))) (car l))
+        (loop (cdr l) (sub1 i) (cons (car l) acc)))))
+;; PAR 4 P0: fork counter (read by benchmarks/par4/p0-profile.rkt; never reset by the
+;; compiler). Single-threaded increment; the BSP fire phase does not fork.
+(define par4-fork-count (box 0))
+(define current-use-bsp-scheduler? (make-parameter (eq? par4-scheduler-mode 'bsp)))  ;; PAR Track 1 Phase 5: BSP is the default
 
 ;; CALM topology guard: #t only during a fire-and-collect-writes fire round.
 ;; NOT an error gate — net-new-cell and net-add-propagator ARE allowed in-fire
@@ -2747,8 +2779,9 @@
         [(<= (unbox remaining-fuel) 0) (finalize net)]
         [(null? (unbox wl)) (finalize net)]
         [else
-         (define pid (car (unbox wl)))
-         (set-box! wl (cdr (unbox wl)))
+         (define pid (if par4-shuffle-rng
+                         (par4-pick-random! wl par4-shuffle-rng)
+                         (let ([p (car (unbox wl))]) (set-box! wl (cdr (unbox wl))) p)))
          (set-box! remaining-fuel (sub1 (unbox remaining-fuel)))
          (define prop (champ-lookup (prop-network-propagators net)
                                      (prop-id-hash pid) pid))

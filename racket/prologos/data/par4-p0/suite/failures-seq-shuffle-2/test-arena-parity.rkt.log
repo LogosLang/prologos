@@ -1,0 +1,15 @@
+=== test-arena-parity.rkt FAILED ===
+wall_ms: 10063
+tests: 7 (1 failures)
+
+--- RackUnit stderr ---
+--------------------
+divergence/A-1/A-3 an ABSENCE-reading propagator is schedule-dependent (an undeclared stratum)
+FAILURE
+name:       check-true
+location:   tests/test-arena-parity.rkt:148:2
+params:     '(#f)
+message:
+  "expected schedule-dependence for an absence read, got ((go go top) (go go top) (go go top) (go go top))"
+--------------------
+

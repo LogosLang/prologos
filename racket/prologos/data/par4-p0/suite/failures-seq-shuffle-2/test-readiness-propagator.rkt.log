@@ -1,0 +1,14 @@
+=== test-readiness-propagator.rkt FAILED ===
+wall_ms: 3
+tests: 19 (1 failures)
+
+--- RackUnit stderr ---
+--------------------
+dep already ground at registration: threshold fires immediately
+FAILURE
+name:       check-equal?
+location:   tests/test-readiness-propagator.rkt:364:2
+actual:     2
+expected:   1
+--------------------
+

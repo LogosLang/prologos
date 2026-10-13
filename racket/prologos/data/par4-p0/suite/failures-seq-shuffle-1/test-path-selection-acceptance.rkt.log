@@ -1,0 +1,111 @@
+=== test-path-selection-acceptance.rkt FAILED ===
+wall_ms: 5154
+tests: 90 (6 failures)
+
+--- Error Diagnostics ---
+error[E1004]: no instance found for (Buildable PVec)
+  --> /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-p0/racket/prologos/tests/../examples/2026-07-26-ciu-t6-path-selection.prologos:181:0
+  No instance of Buildable for PVec
+  Available instances: Buildable Set, Buildable PVec, Buildable List, Buildable LSeq
+  Hint: Define 'impl Buildable PVec' with methods 'from-seq', 'empty-coll', 'conj'.
+  = help: add an impl for (Buildable PVec) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable PVec)
+  --> /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-p0/racket/prologos/tests/../examples/2026-07-26-ciu-t6-path-selection.prologos:184:0
+  No instance of Seqable for PVec
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable PVec' with method 'to-seq'.
+  = help: add an impl for (Seqable PVec) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Buildable List)
+  --> /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-p0/racket/prologos/tests/../examples/2026-07-26-ciu-t6-path-selection.prologos:187:0
+  No instance of Buildable for List
+  Available instances: Buildable Set, Buildable PVec, Buildable List, Buildable LSeq
+  Hint: Define 'impl Buildable List' with methods 'from-seq', 'empty-coll', 'conj'.
+  = help: add an impl for (Buildable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable PVec)
+  --> /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-p0/racket/prologos/tests/../examples/2026-07-26-ciu-t6-path-selection.prologos:237:0
+  No instance of Seqable for PVec
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable PVec' with method 'to-seq'.
+  = help: add an impl for (Seqable PVec) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable PVec)
+  --> /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-p0/racket/prologos/tests/../examples/2026-07-26-ciu-t6-path-selection.prologos:249:0
+  No instance of Seqable for PVec
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable PVec' with method 'to-seq'.
+  = help: add an impl for (Seqable PVec) or pass the dictionary explicitly
+
+--- RackUnit stderr ---
+QUIESCENCE-WRITES:{"avg_changes":4.5,"avg_writes":5.833333333333333,"change_ratio":0.7714285714285715,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":6,"hist_51_plus":0,"hist_6_10":0,"max_changes":5,"max_writes":7,"runs":6,"total_changes":27,"total_writes":35}
+--------------------
+Path Selection acceptance file: 0 errors
+FAILURE
+name:       check-equal?
+location:   tests/test-path-selection-acceptance.rkt:65:2
+message:    "acceptance file must run clean; got 5 error(s)"
+actual:
+  '("[28] No instance of Buildable for PVec\n  Available instances: Buildable Set, Buildable PVec, Buildable List, Buildable LSeq\n  Hint: Define 'impl Buildable PVec' with methods 'from-seq', 'empty-coll', 'conj'."
+  "[29] No instance of Seqable for PVec\n  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq\n  Hint: Define 'impl Seqable PVec' with method 'to-seq'."
+  "[30] No instance of Buildable for List\n  Available instances: Buildable Set, Buildable PVec, Buildable List, Buildable LSeq\n  Hint: Define 'impl Buildable List' with methods 'from-seq', 'empty-coll', 'conj'."
+  "[42] No instance of Seqable for PVec\n  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq\n  Hint: Define 'impl Seqable PVec' with method 'to-seq'."
+  "[46] No instance of Seqable for PVec\n  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq\n  Hint: Define 'impl Seqable PVec' with method 'to-seq'.")
+expected:   '()
+--------------------
+--------------------
+path-selection acceptance [28] = "@[\"Frodo\" \"Gandalf\" \"Gimli\"] : [PVec String]"
+FAILURE
+name:       check-equal?
+location:   tests/test-path-selection-acceptance.rkt:101:10
+message:    "[28]"
+actual:
+  "ERROR: No instance of Buildable for PVec\n  Available instances: Buildable Set, Buildable PVec, Buildable List, Buildable LSeq\n  Hint: Define 'impl Buildable PVec' with methods 'from-seq', 'empty-coll', 'conj'."
+expected:   "@[\"Frodo\" \"Gandalf\" \"Gimli\"] : [PVec String]"
+--------------------
+--------------------
+path-selection acceptance [29] = "@[{:who \"Frodo\", :ready false} {:who \"Gandalf\", :ready true} {:who \"Gimli\", :ready true}] : [PVec {:ready Bool :who String}]"
+FAILURE
+name:       check-equal?
+location:   tests/test-path-selection-acceptance.rkt:101:10
+message:    "[29]"
+actual:
+  "ERROR: No instance of Seqable for PVec\n  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq\n  Hint: Define 'impl Seqable PVec' with method 'to-seq'."
+expected:
+  "@[{:who \"Frodo\", :ready false} {:who \"Gandalf\", :ready true} {:who \"Gimli\", :ready true}] : [PVec {:ready Bool :who String}]"
+--------------------
+--------------------
+path-selection acceptance [30] = "'[6 7 8] : [prologos::data::list::List Int]"
+FAILURE
+name:       check-equal?
+location:   tests/test-path-selection-acceptance.rkt:101:10
+message:    "[30]"
+actual:
+  "ERROR: No instance of Buildable for List\n  Available instances: Buildable Set, Buildable PVec, Buildable List, Buildable LSeq\n  Hint: Define 'impl Buildable List' with methods 'from-seq', 'empty-coll', 'conj'."
+expected:   "'[6 7 8] : [prologos::data::list::List Int]"
+--------------------
+--------------------
+path-selection acceptance [42] = "@[50 200 9000] : [PVec Int]"
+FAILURE
+name:       check-equal?
+location:   tests/test-path-selection-acceptance.rkt:101:10
+message:    "[42]"
+actual:
+  "ERROR: No instance of Seqable for PVec\n  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq\n  Hint: Define 'impl Seqable PVec' with method 'to-seq'."
+expected:   "@[50 200 9000] : [PVec Int]"
+--------------------
+--------------------
+path-selection acceptance [46] = "@[\"Rescue the cat\" \"Debug the compiler\"] : [PVec String]"
+FAILURE
+name:       check-equal?
+location:   tests/test-path-selection-acceptance.rkt:101:10
+message:    "[46]"
+actual:
+  "ERROR: No instance of Seqable for PVec\n  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq\n  Hint: Define 'impl Seqable PVec' with method 'to-seq'."
+expected:   "@[\"Rescue the cat\" \"Debug the compiler\"] : [PVec String]"
+--------------------
+
+--- Provenance Stats ---
+PROVENANCE-STATS:{"atms_hypothesis_count":46,"atms_nogood_count":9,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":39,"speculation_pruned_count":0}
+
