@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 146**
+> ### **NEXT FREE: 157**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6801,3 +6801,28 @@ per row. ⚠ Keep the star and caret tables SEPARATE: [Q_U31]/[Q_U29] rule that 
 segment carries at most one operator suffix, and the guards in each splitter
 test for the OTHER family's character — two tables, two guards, by design.
 
+### 156. ⬜ ⭐ ON-NETWORK INFERENCE ACCEPTS ILL-TYPED PRIMITIVE-OP OPERANDS — `[int+ 1 "x"] : Int`, `[f64+ "x" "y"] : Float64`, `[int-lt 1 "x"] : Bool`, `[from-nat "x"] : Int` all type-check
+
+**Found by**: the LSP check-only diagnostics work (2026-10-13) — `[int+ k "x"]` printed as a
+stuck term `[int+ 3 "x"] : Int` instead of an error. **The mechanism**: every primitive op
+registered through `register-typing-rule!` (`typing-propagators.rkt:2132-2141`
+`register-binary-ops!`/`register-unary-ops!`; the Int/Rat/Posit/Float families from `:2192`)
+fixes the RETURN type and never constrains the operands. The imperative rule does check them
+(`typing-core.rkt:3074`, `(check ctx a (expr-Int))`), but the driver tries
+`infer-on-network/err` first and falls back to `infer` only when the network FAILS
+(`driver.rkt:791`) — so the operand check runs only when some unrelated child is
+network-unhandled: `[f64+ (the Float64 1.0) "x"]` errors (`the` forces the fallback) while
+`[f64+ g "x"]` with `g : Float64` does not. **Checking catches it**: under a `spec`,
+`defn bad [n] [int+ n "x"]` reports `Type mismatch`. So the hole is infer-mode only —
+measured on top-level expressions; unannotated `def`/`let` RHSs presumably share the path
+(UNVERIFIED). Both `#:evaluate?` modes agree, so it is static, not a reduction artefact.
+**Why filed / severity**: a soundness hole in inference — ill-typed programs are accepted and
+reduce to stuck terms; since `process-file #:evaluate? #f`, LSP diagnostics are purely static,
+so these programs get NO diagnostic at all. **Fix shape**: the rule must carry an operand
+contract — extend `register-typing-rule!` with per-child expected types (homogeneous families:
+operand = return type for arithmetic, a separate operand type for comparisons → Bool, `Nat` for
+`from-nat`), and have the propagator WRITE the expected type into each child's type cell, so a
+mismatch is a contradiction on-network rather than a silently ignored child. Census every
+`register-typing-rule!` site with arity > 0 for the same gap. Regression pins: the probe
+expressions above must error in both `#:evaluate?` modes; `[int+ 1 2]` stays `Int`.
+**When**: soon — it is a correctness gap visible to every editor user.
