@@ -104,7 +104,7 @@ Solver) and is the foundation for the SRE Series.
 |------------------+------|
 | *Master Roadmap* | [[file:2026-03-27_PAR_MASTER.md][2026-03-27_PAR_MASTER.md]] |
 | *Thesis*         | CALM guarantees order-independence only on fixed topologies. Dynamic topology (cell/propagator creation during fire) requires stratification. BSP with stratified topology enables true parallel scheduling. |
-| *Status*         | Track 0 ✅, Track 1 ✅, Track 2 R1-R2 ✅. BSP is production default. True parallel execution proven (380/380 GREEN, 4.45x speedup at scale). |
+| *Status*         | Track 0 ✅, Track 1 ✅, Track 2 R1-R2 ✅. BSP is production default. True parallel execution proven (380/380 GREEN, 4.45x speedup at scale). *2026-10-12*: Track 2 R3-R5 ➡ *Track 4 (Arena Executors)*. *2026-10-13*: Stage 1 + 2 ✅, D.1 ✅, P0 measurements ✅; phase order decided (P0.5 defects → exposure census → P1 merge laws → P2 DIRECT K=1 → P3 K>1; flat tier + forks co-designed with BSP-LE Track 3); D.2 next — [[file:tracks/PAR/PAR_4/LOG.md][PAR 4 log]]. |
 | *Origin*         | BSP scheduler vs SRE subtype decomposition (CALM violation discovered 2026-03-27), [[file:../research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md][Parallel Scheduling Research]], BSP-LE Track 4 (superseded) |
 | *Relates to*     | BSP-LE (supersedes Track 4), PM (substrate), SRE (decomposition = topology change), PPN (hypergraph rewriting = topology change), PTF (parallel profiles inform scheduling) |
 
@@ -120,8 +120,9 @@ Solver) and is the foundation for the SRE Series.
 
 | Track | Description | Status | Depends On |
 |-------+-------------+--------+------------|
-| 2 (R3-R5) | Contention analysis + literature survey + design doc | ⬜ | R1-R2 data |
+| 2 (R3-R5) | Contention analysis + literature survey + design doc | ➡ Track 4 | R1-R2 data. Reopened as Track 4's Stage 1 (2026-10-12). |
 | 3 | =:auto= heuristic (kind-aware, threshold-based) | ⬜ | Track 2, PTF Track 3 |
+| 4 | Arena Executors — scheduler-owned executors, ownership partition, direct S0 writes (chaotic iteration), flat storage tier | 🔶 Stage 1+2 ✅, D.1 ✅, P0 ✅ (2026-10-13), D.2 next | Track 2 R1-R2; [[file:tracks/PAR/PAR_4/2026-10-12_PAR_4_STAGE2_GAP_ANALYSIS.md][Stage 2]] · [[file:tracks/PAR/PAR_4/2026-10-12_PAR_4_D1_DESIGN.md][D.1]] · [[file:tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md][P0]] |
 
 *** Key Insight (2026-03-27)
 

@@ -8,7 +8,7 @@
 #
 # Exit 0 = all balanced. Exit 1 = error (with location).
 
-RACKET="/Applications/Racket v9.0/bin/racket"
+RACKET="/Applications/Racket v9.3/bin/racket"
 
 check_file() {
     local f="$1"

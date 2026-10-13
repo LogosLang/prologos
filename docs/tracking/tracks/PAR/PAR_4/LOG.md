@@ -1,0 +1,306 @@
+# PAR 4 — track LOG (append-only, newest at the bottom)
+
+Entry shape = the dailies' (`DAILIES_METHODOLOGY.org`): `### <outcome headline> — \`hash\` (date)`
+with **Why / decision**, **Surprise / correction**, **Next**. The dailies' STATE head stays the
+re-grounding surface; its sparse LOG points here. Opened 2026-10-12 with the per-track-log
+convention (`../../README.md`).
+
+### R3 measurement day, recorded first as the ad-hoc "PSF" probe series — no commit (2026-10-12)
+- **Why / decision**: owner reopened the 2B parallel-search question ("a 1–10 ns switching
+  primitive via FFI?"). Eleven probes answered it and found the real ceiling. Full text of
+  the day's four entries is in `../../../standups/2026-10-12_dailies.md` LOG (headlines:
+  *Semaphore floor reproduced; raw-memory handoff is ~60 ns* · *K-way fan-out ~1.8 µs/round;
+  allocating work goes 9× SLOWER in parallel* · *Scaling is a function of allocation
+  intensity; the solver is allocation-bound* · *Spin-pool prototype*). Consolidated as
+  §1–§3 of [`research/2026-10-12_PAR_4_STAGE1_CONTENTION_ANALYSIS.md`](research/2026-10-12_PAR_4_STAGE1_CONTENTION_ANALYSIS.md).
+- **Surprise / correction**: the session coined a series name ("PSF"). Series are
+  owner-designated; this work is **PAR 4 Stage 1**, the row the PAR master already opened. Renamed;
+  the dailies keep the historical headlines.
+- **Next**: executor = (core, arena).
+
+### Executor = (core, arena) measured; PSF-2 census; PSF-3 on the real tagged lattice — no commit (2026-10-12)
+- **Why / decision**: owner's reframing (parallelism as scheduler technology; per-core
+  executors as children of the scheduler) given its missing ingredient — an executor owns
+  memory — and measured. Census: a light fire = 1.4 KB ceremony + 0.5 KB write + 0.9 KB
+  re-merge; every written byte paid twice. Arena on the real `tagged-cell-value`: same
+  fixpoint at every K and in DIRECT (async) mode; 95–131 ns / ~0 B per fire vs 1 500 ns /
+  2.8 KB. Dailies LOG headlines: *Executor = (core, arena)…* · *PSF-2 — allocation-site
+  census…* · *PSF-3 — arena executors on the REAL tagged lattice…*. Consolidated as §4–§5
+  of the R3 record.
+- **Surprise / correction**: three harness bugs (P ∤ K caught by the fixpoint check;
+  heap baseline must delta-wrap writes; convergence counts canonical changes only) and one
+  latent quadratic in the real lattice (entries never deduplicated) — R3 record §8–§9.
+- **Next**: fire-weight sweep.
+
+### R3 closed: fire-weight sweep — 7× at K=8, 13× at K=16 at today's fire weight — no commit (2026-10-12)
+- **Why / decision**: PSF-3's "≥6× at K=8" prediction had failed on trivially light fires
+  (3 reads + a max, ~24 ns), where per-executor cost rises with K on local data — a memory
+  ceiling. Was it a design input or a footnote? `arena-tagged4.rkt` (DIRECT, quiescence,
+  `WORK=` fixnum iterations per fire):
+
+  | compute per fire | K=1 ns/fire | K=4 | K=8 | K=16 |
+  |---|---|---|---|---|
+  | ~0 | 24 | 2.4× | 2.2× | 2.9× |
+  | ~100 ns | 112 | 3.9× | 4.7× | 8.5× |
+  | ~1 µs (≈ today's fire) | 943 | 3.7× | **7.0×** | **12.8×** |
+  | ~9 µs | 8 900 | 3.9× | 7.2× | 13.4× |
+
+  Same fixpoint hash at every K and every weight. **Footnote**: at real fire weight the
+  arena executor scales near-linearly (84 % efficiency at K=16). The memory ceiling matters
+  only below ~100 ns per fire. R3 is complete; the record is
+  [`research/2026-10-12_PAR_4_STAGE1_CONTENTION_ANALYSIS.md`](research/2026-10-12_PAR_4_STAGE1_CONTENTION_ANALYSIS.md)
+  (§6 answers the PAR master's Challenge 1 directions; §7 is the candidate design for R5;
+  §8 the deferred candidates).
+- **Surprise / correction**: none in the data. Process: the track directory
+  `tracks/PAR/PAR_4/` and this LOG were opened under the new per-track layout
+  (`tracks/README.md`); the flat PAR master and `MASTER_ROADMAP.org` were NOT edited —
+  the proposed Track-2 row edit and the Challenge-1 revision note are in
+  `tracks/PAR/README.md` for the owner.
+- **Next**: **R4** (literature survey — the PAR master names STM/WAL/FFI; R3 has answered
+  those; the survey that now matters is chaotic/asynchronous iteration (Cousot, Bertsekas),
+  LVars/Bloom (CALM) and partitioned graph engines (Pregel/GraphLab/Ligra) for the ownership
+  cut) → **R5** (design doc). Owner's call whether R4 is a short note folded into R5.
+
+### Design Methodology opened: the `R` labels retired, Stage 2 gap analysis written — no commit (2026-10-12)
+- **Why / decision**: owner asked what the `R` designators are. They are the PAR master's
+  own undefined labels (`2026-03-27_PAR_MASTER.md:32-33`), used once in the 2026-03-27
+  dailies (lines 112–113) as five numbered research items of Track 2 (R1 round statistics,
+  R2 the parallel PoC, R3 contention analysis, R4 survey, R5 design doc). They duplicate the
+  methodology's stages and are never spelled out. **Retired** in this track's documents:
+  work is named by Design-Methodology stage. The 03-28 dailies also record "R3–R5 closed as
+  answered by implementation" while the master shows ⬜ — an inconsistency for the owner's
+  master edit. **Owner ruling: PAR 4 "Arena Executors"** (the PoC track is closed; this has its own
+  design/implementation/PIR, which is what a Track is). Directory and filenames renamed.
+- **Stage 2** ([`2026-10-12_PAR_4_STAGE2_GAP_ANALYSIS.md`](2026-10-12_PAR_4_STAGE2_GAP_ANALYSIS.md)),
+  grep-backed: 200 `net-cell-write` sites / 35 files; 210 reads; 107 `net-new-cell` sites with
+  **66 distinct merge functions**; `fork-prop-network` only **5 sites / 2 files**; 186
+  worldview sites / 9 files. Two facts reshape the design: (1) cells hold arbitrary values —
+  so the arena is a **storage tier** (the 4 fixnum lattices = 47 % of allocation sites),
+  plugged into the existing `specialized-cell-meta` seam (`propagator.rkt:1899-1982`), while
+  the **scheduler half** (ownership, direct S0 writes, no snapshot/diff/re-merge) applies to
+  every cell; (2) forking is rare in code — the ATMS layers bitmasks instead — so arena copy
+  may be acceptable, pending a Pre-0 count. Seven gaps/questions each mapped to a Pre-0
+  measurement or a D.1 audit; the load-bearing one is **Q1, round-synchronous visibility**
+  (DIRECT mode makes same-round writes visible).
+- **Surprise / correction**: the Stage-1 literature half is thin — R3 *names* chaotic
+  iteration, LVars/CALM and Pregel/GraphLab but did not survey them. Owed as a short
+  addendum before or alongside D.1.
+- **Next**: owner rulings (track name; D.1 scope = both halves in one design, recommended);
+  then **Stage 3 D.1** with the Pre-0 benchmark list from §3: fork frequency per query,
+  elaborator bytes/µs, edge locality on real networks, solver parity under a DIRECT prototype.
+
+### PAR 4 ruled; master + roadmap updated; Stage-1 research synthesis commissioned — no commit (2026-10-12)
+- **Why / decision**: owner rulings: the track is **PAR 4 — Arena Executors**; the PAR master
+  and `MASTER_ROADMAP.org` are to reflect it and be checked for staleness; a fresh Stage-1
+  research synthesis (prior art + frontier) is required, grounded in fundamental principles,
+  properly labelled, in the track's `research/` subdirectory. Done: directory + filenames
+  renamed `PAR_2` → `PAR_4`; the contention record moved to
+  `research/2026-10-12_PAR_4_STAGE1_CONTENTION_ANALYSIS.md`; `2026-03-27_PAR_MASTER.md`
+  gained a 2026-10-12 revision note, a Track-4 row, the Track-2 "R3–R5" row corrected from
+  ⬜ to "➡ Track 4" (the 2026-03-28 dailies had closed it as "answered by implementation";
+  the master never recorded that), and §Challenge 1 marked superseded with the reasons;
+  `MASTER_ROADMAP.org` §PAR status + planned-tracks table updated; all links checked (0
+  broken). `tracks/README.md` + `tracks/PAR/README.md` updated.
+- **Research**: mempalace is alive on this machine (CLI `mempalace search`, 94 984 drawers;
+  the MCP is not wired into this session). Prior-art corpus sized: ~8 500 lines across
+  `RESEARCH_PARALLEL.md`, the two `PARALLEL_PROPAGATOR_SCHEDULING` docs,
+  `PARALLEL_ALGORITHMS_SURVEY`, `PARALLEL_DECOMPOSITION_AND_HASSE_ADJACENCY`,
+  `MODULE_THEORY_LATTICES`, `LATTICE_HIERARCHY_AND_DISTRIBUTIVITY`,
+  `LATTICE_FOUNDATIONS_PPN` (already states "chaotic iteration = propagator scheduling"),
+  the hypercube BSP-LE addendum, `ASYNCHRONOUS_PROGRAMMING_QUANTALE`, and
+  `2026-02-23_LATTICE_PROPAGATOR_RESEARCH`. Two isolated drafting agents commissioned in
+  parallel, each with the owner's standards (first principles; prior examples critiqued
+  against our own prior art; theorem/measurement/precedent/conjecture kept apart; every
+  assumption testable and mapped to Q1–Q7 / Pre-0; citations web-verified or flagged):
+  `research/…_STAGE1_PRIOR_ART_SYNTHESIS_DRAFT.md` (what the corpus concluded, what is
+  reusable, what Stage 1 refutes) and `research/…_STAGE1_FRONTIER_SURVEY_DRAFT.md`
+  (chaotic/asynchronous iteration — Chazan–Miranker, Cousot, Bertsekas, Üresin–Dubois;
+  Tarski/ACC/widening; CALM — Ameloot et al.'s proof; LVars quasi-determinism; CRDTs and
+  delta-state CRDTs; concurrent revisions; Pregel/GraphLab/PowerGraph/Ligra/Galois;
+  Soufflé and Naiad progress tracking; Dijkstra–Scholten / Mattern termination detection;
+  Valiant's BSP cost model; region-based memory management; coherence/false sharing;
+  Radul–Sussman). The two drafts are inputs; the Stage-1 synthesis of record will be
+  written by hand from them, critiqued, and will supersede both (drafts kept as record).
+- **Next**: merge + critique the drafts into
+  `research/2026-10-12_PAR_4_STAGE1_RESEARCH_SYNTHESIS.md`; then D.1.
+
+### Stage 1 synthesis of record written; one commissioned finding withdrawn; Stage-2 census corrected — no commit (2026-10-12)
+- **Why / decision**: both drafts read in full (prior-art 323 lines, 17-row inventory, R1–R15;
+  frontier 478 lines, T1–T18, A-1…A-12, 40 verified citations, 10 flagged unverifiable). Merged
+  and critiqued by hand into
+  [`research/2026-10-12_PAR_4_STAGE1_RESEARCH_SYNTHESIS.md`](research/2026-10-12_PAR_4_STAGE1_RESEARCH_SYNTHESIS.md)
+  (supersedes both; drafts kept as record). The two load-bearing claims are now theorem
+  instances with hypotheses: S0 without a barrier = Üresin–Dubois/Bertsekas asynchronous
+  iteration (A1–A3 + box + monotone inflationary + ACC; single-writer-per-cell IS hypothesis
+  2(c)); barrier = stratum boundary = CALM's only-if (fixpoint detection is non-monotone), so
+  quiescence detection replaces the barrier and gets its own Pre-0. **Q1 is re-stated as a
+  theorem precondition**: every S0 *propagator* monotone in its inputs (A-1) — merge-is-a-join
+  is necessary, not sufficient. New design elements from the survey: a frozen bit per flat
+  record (LVars `freeze`); counter-scheme quiescence detection (Mattern/Naiad/LVish).
+- **Surprise / correction** ⚠: the frontier draft's "18 `+`/`int-merge` cells are not
+  semilattices" was traced to MY Stage-2 merge census, which had included tests/benchmarks;
+  production count is **0**. Withdrawn. The same contamination sinks Stage 2's "47 %
+  fixnum-representable sites" (also withdrawn; correction note added to the Stage-2 doc). The
+  real production non-join merges are `merge-list-append` 6, `merge-hasheq-replace` 23,
+  `merge-replace` 1 (infra cells) — the genuine A-2 audit. Second-order lesson: a static site
+  census cannot decide the storage tier (one `logic-var-merge` site ⇒ thousands of cells per
+  query); eligibility needs a **dynamic cell census** (Pre-0 A-13). Lesson for the skill: any
+  grep census must exclude tests/benchmarks/tools explicitly and say so in the artifact.
+- **Next**: **Stage 3 D.1** — design doc with: the two halves (scheduler / storage tier),
+  region lifetimes (network/query/fork), the frozen bit, quiescence detection, and the Pre-0
+  benchmark list A-1…A-13 (parity under DIRECT, dynamic cell census, fork frequency, cut
+  locality, detection scheme, fires-to-fixpoint on fuel cells, elaborator bytes/µs).
+
+### Stage 3 D.1 drafted — no commit (2026-10-12)
+- **Why / decision**: [`2026-10-12_PAR_4_D1_DESIGN.md`](2026-10-12_PAR_4_D1_DESIGN.md). Two
+  halves landable separately: **H-S** (scheduler: K as a cell, persistent parked executors,
+  ownership from a topology-stratum partition, SPSC delta lanes, DIRECT S0 writes, counter-scheme
+  quiescence detection replacing the round barrier, frozen bit) and **H-F** (storage tier: four
+  flat record kinds behind `specialized-cell-meta-storage`, Tofte–Talpin regions per partition
+  with declared lifetimes, compaction at topology, heap tier publishes by pointer store). Gates
+  present: tracker at §3 with `P4.close`; NTT model §7; mantra audit §10; principles + codebase
+  reality check §11 (file:line per phase, seam verified: `storage` has `'general` ×8,
+  `'monotone-counter` ×1); termination §8; Pre-0 §9 with 7 performance axes + 7 semantic axes
+  + parity skeleton `test-arena-parity.rkt`.
+- **Surprise / correction**: the NTT model did its job — `exec-idle` as an or-flag with reset is
+  a counter in disguise; the honest form is a monotone per-executor epoch counter (adopted for
+  D.2). And `partition` as an LWW map is only legal because it is written at the topology
+  stratum; the rule "no fire function reads `owner`" falls out.
+- **Next**: owner critique → P0 measurements → D.2. Four owner questions in §14 (region
+  lifetime default; fuel counting changes vs fires under DIRECT; observer form; scheduler state
+  as its own network).
+
+### D.1 rulings O-1/O-2/O-4 recorded; O-3 analysed (Appendix A); DEFERRED 146–149 filed; sweep worktree opened — no commit (2026-10-12)
+- **Why / decision**: owner ruled O-1 (`:query` default, `:network` registries), O-2 (fuel
+  counts *changes*, not fires), O-4 (scheduler state is its own network). O-3 needed the code
+  read, not a guess: `current-bsp-observer` (`propagator.rkt:572`, called `:3429` per BSP round
+  with a `bsp-round` carrying the per-round CHAMP snapshot) has six consumers (LSP
+  `bsp-observe`, prop-observatory, trace-serialize, measure-production-n, bench-bsp-round-stats,
+  two tests) and one deliberate non-consumer (error-explanation: provenance is on-network).
+  Decisive fact: the **sequential scheduler already emits one `bsp-round` per quiescence call**
+  (`:2599-2640`) — the contract is already "one record per scheduler-chosen unit". Options A
+  (one record per S0 run under DIRECT) / B (write-indexed event log, rounds as a view) / C
+  (retire) read adversarially against orthogonality, data orientation, on-network,
+  decomplection, provenance, simplicity. Recommendation A in P3 + B filed as debt (it repairs an
+  orthogonality violation A perpetuates), promoted into P3 if parity diagnosis needs the
+  derivation partial order. Owner to rule.
+- **Surprise / correction**: the four DEFERRED candidates noticed during Stage 1 (champ-lookup
+  64 B/read; fire-protocol ceremony; tagged-cell-value non-dedup; transducer-01 under 9.3) had
+  **not** been filed — only noted in the dailies. Filed as **146–149** (register → 150). Lesson
+  for the skill: "DEFERRED candidate" in a log entry is not a filing; file in the same step.
+- **Next**: owner rules O-3; P0. Parallel: DEFERRED 146–149 in worktree
+  `.claude/worktrees/deferred-sweep-146-149` (nested, harness convention; branch
+  `deferred-sweep-146-149`, base `7a0116ec`, compiled; first placed as a sibling dir — owner:
+  no copies of the project outside git's view — moved with `git worktree move`); handoff `../../handoffs/2026-10-12_DEFERRED_SWEEP_146-149_HANDOFF.md`.
+
+### P0 measured — small / medium / large, A/B against the pre-track record; the theory holds, the workload does not yet need most of the design, and the biggest wins are sequential defects — `4097b1c8` on branch `par4-p0` (2026-10-13)
+- **Why / decision**: owner asked for comprehensive P0 — small and large, e2e, A/B against
+  pre-track work, phase gates. Record: [`2026-10-13_PAR_4_P0_MEASUREMENTS.md`](2026-10-13_PAR_4_P0_MEASUREMENTS.md).
+  Instrumentation + harness + parity skeleton + raw data committed on branch `par4-p0` (nested
+  worktree), behaviour-neutral (PERF-COUNTERS identical to main on 5 files). Main untouched.
+- **Results**: (1) theorems hold in our code — 40 random monotone networks × 8 schedules → one
+  fixpoint; arena prototype same hash at every K and fire weight; every predicted divergence
+  observed and pinned (9-test parity skeleton). (2) PAR 2's 1.42× does not reproduce (1.03×);
+  same-machine A/B: HEAD 5.8× slower on wide networks; `git bisect` → `a7b015dd` (2026-04-15)
+  set `current-tree-reduce-threshold` 256 → ~n green threads per wide round on the SEQUENTIAL
+  executor; threshold off at HEAD 4.8–5.3× faster (DEFERRED 150). (3) S0 = 7 % of corpus work,
+  but 85 % of command time in constraints-adversarial (merge ≥ fire; `pu-value-diff` 70 %).
+  (4) search is DFS by necessity: forced ATMS gives wrong answers on all 3 solver files (Rel T1
+  A.2b) — PAR 4's search payoff is gated on BSP-LE 3. (5) e2e short-file numbers are 90 %
+  loading: `.pnet` read twice (DEFERRED 151); cache-off is 4.9× faster. (6) detection: scan
+  beats rounds 3.5–12× on chains, ties on bursts; fire-weight sweep 7.3–7.7× K=8, 11–14× K=16 at
+  ≥ 1 µs fires.
+- **Surprise / correction** ⚠: (a) MY O-2 text claimed ascent counts are schedule-independent as
+  a theorem — false (S-6: 1 vs 16); the BOUND is. Callout added to D.1 §14. (b) The sequential
+  drain is not a DIRECT-K=1 oracle: whole-suite runs fail 27–30 files, ~25 from NO STRATUM LAYER
+  (trait resolution `E1004`), 2 from BSP-only fire-once, 2 genuine (anti-monotone asc/desc;
+  readiness → `merge-list-append` duplicate — A-2 in a production pattern). (c) My parity
+  skeleton had two design errors caught by running it (a chain that never exercised `+`;
+  divergence rows inheriting the environment's drain). (d) My detection probe's barrier had a
+  double-flip race. (e) Five instrument defects filed (DEFERRED 150–155: tree-reduce, `.pnet`,
+  forced GC, parity-adversarial crash, blind counters, benches dirtying the tree); one
+  benchmark run overwrote PAR 2's tracked result in main — restored from HEAD, both kept.
+  (f) D.1's 103 install sites are 130 (+2 APIs omitted).
+- **DEFERRED register**: entries 146–155 are mine, still UNCOMMITTED in main's working tree; a
+  concurrent session committed 156 and bumped NEXT FREE to 157 past them (`f3d7f5e3`) —
+  consistent, but the block is only claimed by an uncommitted file until the owner commits it.
+- **Next**: static Q1 monotonicity audit (delegated, pending) → D.2: land DEFERRED 150 (or pin
+  B0′), acceptance file, H-S sequential path FIRST (DIRECT K=1 inside BSP's outer loop — the
+  real oracle), H-F deferred until BSP-LE 3; phase gates per P0 §6.
+
+### Q1 static audit landed — synthesis of record written; three judgements measured; Q1 is not clean and BSP is not an oracle for nine S0 cells (2026-10-13)
+- **Why / decision**: the delegated static monotonicity audit (A-1/A-2/A-3) returned
+  ([draft](2026-10-13_PAR_4_P0_Q1_MONOTONICITY_AUDIT_DRAFT.md), 651 lines, pinned `7a0116ec`).
+  Read in full; 9 load-bearing claims spot-checked against the code (all hold); synthesis of
+  record written by hand as [P0 record §9](2026-10-13_PAR_4_P0_MEASUREMENTS.md).
+- **Measured** (`benchmarks/par4/q1-mechanisms.rkt`, branch `par4-p0`): BSP loses an update when
+  two propagators write a cell undeclared in one round (2 vs 6); the guard shape loses a
+  retraction **whether or not its output is declared** (4 vs 0) — the LWW cell-1 lattice is the
+  defect, and the grow-only invalidated-bits lattice is correct under both schedules (6/6); a
+  fire-once installed inside a fire loses fire-once (4 fires vs 1 productive); the drain's
+  worklist does not dedup, so an inline installer installs twice.
+- **Result**: 157 sites audited (144 call sites + 13 wrapper callers); 3 live non-monotone,
+  8 absence-reading, 7 unstable latches; nine non-join merges written inside S0 (cell-1, scope
+  cells, tagged cells, `:usage`, `:warnings`, cell-14, cell-15, meta-solution output, type cells
+  via `type-unify-or-top`'s ambient read) — on those, BSP's answer is an artifact of its order,
+  not a least fixpoint. Decision framed for D.2 (§9.6): (A) confine vs (B) make them joins —
+  recommendation B, staged: P2 at K=1 needs neither; the lattice fixes gate P3.
+- **Surprise / correction** ⚠: my "130 install sites" was a space-delimited grep (missed
+  end-of-line calls) — the count is 144; withdrawn in §5. The audit's own proposed fix for the
+  guard ("declare the outputs") was refuted by measurement. My §2.5 wording "A-2 in a production
+  pattern … `merge-list-append`" named the test's merge; production's analogue is cell-14
+  (`resolution-stratum-merge`, append) — reworded. D.1 errata callout extended (5 items).
+- **DEFERRED**: filed 157 (lost update + guard lattice), 158 (in-fire install drops flags +
+  duplicate install); register → 159. Still uncommitted in main alongside 146–155.
+- **Next**: D.2.
+
+### P0 input from the DEFERRED sweep: 2 of 7 tagged-cell domain merges are joins; SRE's type-domain ACI declaration is fail-open — no commit on main (2026-10-13)
+*(Entry proposed by the DEFERRED-sweep session in its note §8 and applied here by the PAR 4 session, text as proposed.)*
+- **Why / decision**: DEFERRED 148 (set semantics for tagged entries, `c62cd267` on
+  `deferred-sweep-146-149`) raised the keyed-map question, whose precondition is an ACI domain
+  merge. M1 measured that precondition. The owner placed F3 and M2 in PAR 4's early phases. Note:
+  [`2026-10-13_PAR_4_P0_DOMAIN_MERGE_LAWS_NOTE.md`](2026-10-13_PAR_4_P0_DOMAIN_MERGE_LAWS_NOTE.md).
+- **Surprise / correction**: `type-unify-or-top`'s meta fallback can *erase* a contradiction
+  depending on arrival order, which is stronger than the audit's "non-commutative". `try-unify-pure`'s binder arms drop
+  the unified body. The SRE type-domain ACI declaration targets `type-lattice-merge`, not the installed merge, and
+  is confirmed by six ground atoms that cannot fail. D.1 §6.1's "closes `:453,465`" is stale (148 closed it at `:492`).
+- **Next**: D.2 decides P0-8 (M2), F3(a) in the P0.5 defect list, and F3(b)/F1/F2/E as design
+  items, before P2.
+
+### Correction applied to the Stage-1 record: `champ-lookup` reads allocate 0 B, not 64 B — no commit (2026-10-13)
+- **Surprise / correction** ⚠: my Stage-1 probe looked up freshly constructed keys, so its
+  "64 B per read" measured Racket CS's `equal?` on records, not CHAMP (found by the DEFERRED 146
+  fix, `69f64caf`; note §7a). Correction callouts added to the CONTENTION_ANALYSIS (`:184` item,
+  table row `:95` kept as the probe's raw output) and the RESEARCH_SYNTHESIS row; D.1 §6.1's
+  `'flat-tagged` row updated for DEFERRED 148. The argument for owner-held records rests on the
+  write side (path copy 492–1 147 B per new-key insert), which stands.
+- **Lesson** (for the probing skill): a lookup probe must use the *stored* key object, or report
+  stored-key and fresh-key rows side by side — production keys are `eq?`.
+
+### Owner decisions O-5/O-6/O-8 + topology guidance G-1; the unstratified in-fire topology path is unreached by the whole suite — `fbd5a322` on branch `par4-p0` (2026-10-13)
+- **Why / decision**: owner accepted the phase order (O-5: P0.5 → P0-8 census → **P1 merge
+  laws** → P2 → P3; P4/P5 co-designed with BSP-LE 3, which may start after P1), placed the
+  worldview lattice in PAR 4 P1 with BSP-LE 3 as consumer (O-6), and tracks the merge-laws note's
+  five items as PAR 4 tracker rows (O-8). O-7 (F3(a) timing) awaits this session's lean. Recorded
+  in D.1 §14 (renamed "questions and decisions"; the owner's D1–D4 labels mapped to O-5…O-8 to
+  avoid colliding with "D.1").
+- **Guidance G-1** (owner): creating propagators during propagation is a topology change and needs
+  a stratum — "a maze whose walls change mid-solve". Read against the code: BSP has a stratified
+  mechanism (topology requests → topology tier after S0 quiesces) and an unstratified one (inline
+  in-fire structure → installed between rounds of the S0 inner loop, `propagator.rkt:3372-3377`).
+- **Measured** (counter + `PAR4_TRAP_MIDRUN=1` trap, branch `par4-p0`): 0 in-fire structure on
+  the corpus (682 rounds) and forced ATMS (297 rounds); **full suite green with the trap armed**
+  (10 257 tests / 489 files); the trap fires on the M4 probe's deliberate in-fire install (power
+  check). The unstratified path is dead in production under BSP.
+- **Surprise / correction** ⚠: my previous reply's integration point §3.4 ("every executor needs
+  158 fixed and topology changes made by request") treated 158 as a defect to repair; G-1 shows it
+  is a mechanism to retire. DEFERRED 158's fix shape revised (retire; in-fire structure becomes an
+  error; requests carry the full propagator spec). P0 record §9.8 added; §9.5 reworded.
+- **Next**: O-7 lean given in reply; D.2.
+
+### O-7 decided: F3(a) lands now, standalone, in the DEFERRED-sweep session — no commit (2026-10-13)
+- **Why / decision**: owner accepted the lean — fix `try-unify-pure`'s binder arms before D.2,
+  one commit, TDD against the `aci-laws.rkt` cases, with a before/after law check (testing the
+  merge-laws note's prediction), full suite and corpus A/B. F3(b) stays a P1 design item.
+  Task written as an addendum to the sweep handoff, queued behind its current item (147).
+- **Next**: D.2.

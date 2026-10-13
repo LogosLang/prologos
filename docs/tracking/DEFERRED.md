@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 146**
+> ### **NEXT FREE: 165**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6801,3 +6801,446 @@ per row. ⚠ Keep the star and caret tables SEPARATE: [Q_U31]/[Q_U29] rule that 
 segment carries at most one operator suffix, and the guards in each splitter
 test for the OTHER family's character — two tables, two guards, by design.
 
+### 146. ✅ **DISCHARGED `69f64caf`** (branch `deferred-sweep-146-149`, merged to main in `11f558c8`) — MISATTRIBUTED: stored-key lookups allocate 0 B; the 64 B was Racket CS `equal?` on the probe's freshly built key — ~~`champ-lookup` ALLOCATES 64 B PER READ — a lookup should allocate 0; at ~5 lookups per fire it is ~10 % of a light fire's bytes~~
+
+Found by the PAR 4 Stage-1 allocation census (`census.rkt`, Racket 9.3:
+`champ-lookup` any N → **64 B**, 36–55 ns; `net-cell-write` 0/1/8 deps = 481/529/801 B).
+Site: [`champ.rkt:120`](../../racket/prologos/champ.rkt) `(define (champ-lookup root hash key)`.
+Likely cause: a closure or a boxed intermediate in the descent loop (not yet profiled —
+confirm with `(current-memory-use 'cumulative)` deltas around a single call and the
+Chez `inspect/object` of the compiled loop). **Why filed**: PAR 4 is a design track; this is a
+sequential win independent of it, and the read path is hot under EVERY scheduler.
+**When**: any time; 1–2 h. Fix shape: rewrite the descent as a named `let` over
+`(node hash shift)` with no captured lambdas; pin with a `rackcheck` property that
+`champ-lookup` allocates 0 bytes for N ∈ {16, 256, 4096}. Record: PAR 4 contention
+analysis §PSF-2 ([`tracks/PAR/PAR_4/research/…CONTENTION_ANALYSIS.md`](tracks/PAR/PAR_4/research/2026-10-12_PAR_4_STAGE1_CONTENTION_ANALYSIS.md)).
+
+**✅ Closed 2026-10-13, `69f64caf` on `deferred-sweep-146-149`.** Misattributed: the descent allocates
+0 B; the 64 B was Racket CS `equal?` on the probe's freshly constructed key. Production census: 76 %
+`eq?` hits; the real cost was new-key inserts comparing keys whose hashes already differed (85 % of
+CHAMP's `equal?` bytes, 0.04–0.25 % of total allocation). Fixed by comparing the stored hash first at all
+six data-entry sites. The model property also found and fixed two latent transient defects (`6d172922`,
+`3a152ac9`). Record: `docs/tracking/handoffs/2026-10-13_DEFERRED_SWEEP_146-149_MERGE_NOTE.md` § 146 (branch `deferred-sweep-146-149` @ `8322459b`; merged to main in `11f558c8`).
+
+### 147. ✅ **DISCHARGED `63d8f6af`** (branch `deferred-sweep-146-149`, merged to main in `11f558c8`) — light fire 1 386 → 928 B, RE-ATTRIBUTED (the dominant costs were `parameterize` and the worklist dedup) — THE FIRE PROTOCOL'S CEREMONY — `for/hasheq` output-set per fire (even for single-output propagators) and TWO `champ-fold` closures per slow-path write — ~1.4 KB of the 2.8 KB per read+write fire
+
+Same census: a BSP read-only fire costs **1 386 B / ~570 ns** before any write; a
+read+write fire **2 819 B / ~1 500 ns**; breakdown 50 % ceremony, 17 % write, 33 %
+re-merge. Sites: [`propagator.rkt:2895`](../../racket/prologos/propagator.rkt) `output-set`
+built by `for/hasheq` inside `fire-and-collect-writes` for every fire;
+[`propagator.rkt:2041`](../../racket/prologos/propagator.rkt) and `:2053` — two `champ-fold`s
+over the dependents CHAMP in `net-cell-write/slow-path`, each allocating a closure per
+write; plus `parameterize` ×2 per fire. **Why filed**: PAR 4 H-S removes the whole protocol
+(snapshot / output-set / diff / re-merge) for the DIRECT path, so a deep fix here would be
+superseded — but the BSP scheduler stays a valid scheduler and these are cheap: a
+single-output fast path (`(if (null? (cdr output-cids)) …)` with an `eq?` test instead of
+a hasheq), and one fold with the predicate hoisted. **When**: before or alongside PAR 4
+P2; A/B with the `PERF-COUNTERS` line, not wall. Success: light fire < 1 KB.
+
+**✅ Closed 2026-10-13, `63d8f6af` on `deferred-sweep-146-149`.** Light fire 1 386 → 928 B (main →
+branch; read+write 2 819 → 2 232 B). Re-attributed: the dominant items were `parameterize` ×2 (~496 B) and
+the worklist dedup's persistent-set inserts (~362 B), not the `output-set` (32 B). Fixed locally: the dedup uses
+a mutable `hasheqv`, `output-set` becomes `memq`, and the dependent folds are merged and skipped with no dependents.
+`parameterize` is left to PAR 4 H-S (fire context is ambient state, per the Q1 audit §6). Record: `docs/tracking/handoffs/2026-10-13_DEFERRED_SWEEP_146-149_MERGE_NOTE.md` § 147 (branch `deferred-sweep-146-149` @ `8322459b`; merged to main in `11f558c8`).
+
+### 148. ✅ **DISCHARGED `c62cd267`** (branch `deferred-sweep-146-149`, merged to main in `11f558c8`) — `tagged-cell-value` NEVER DEDUPLICATES ENTRIES — the speculative append and the merge both `cons`/`append` unconditionally, so a cell re-written with the same `(bitmask . value)` grows without bound
+
+Sites: [`decision-cell.rkt:453`](../../racket/prologos/decision-cell.rkt) (speculative write:
+`(cons (cons worldview-bitmask new-val) entries)` with no membership test) and `:465`
+(merge: `(append (entries new) (entries old))`, no union). Found when the PAR 4
+`arena-tagged.rkt` HEAP baseline failed to finish 100 rounds in 300 s: each round
+re-appended identical entries, so merge cost grew linearly in rounds and the "heap
+baseline" measured the leak, not the lattice (reduced to 3/10 rounds to get numbers).
+Semantically harmless today (reads take the most specific entry; duplicates do not
+change the value) — **a latent quadratic**, visible on any long-lived speculative cell.
+**Why filed**: the PAR 4 flat `'flat-tagged` record dedups on append by construction
+(D.1 §6.1), which closes it for flat cells; the heap form still needs it. Fix shape:
+membership test on the `(bm . v)` pair at `:453` (entries are short — linear is fine; add
+a `rackcheck` property: idempotent re-write leaves `(length entries)` unchanged); at
+`:465` a union that keeps "newer first". **When**: 1 h; any time.
+
+**✅ Closed 2026-10-13, `c62cd267` on `deferred-sweep-146-149`.** Set semantics on all
+three sites via one helper (`entries-union`); the live site was `make-tagged-merge:492`,
+not `:453`/`:465` (no production callers). Pure refinement, pinned by a rackcheck property
+against the old append on both reader paths. W2 re-write ×10 000: entries 10 000 → 1.
+The PAR 4 heap workload still grows (100 → 84 entries at 100 rounds) because it is an
+ascending chain per bitmask, not duplicates — the bitmask-keyed map form is a PAR 4 D.2 decision (placed there by the owner, 2026-10-13; `tracks/PAR/PAR_4/LOG.md` § DEFERRED 148), not a DEFERRED entry.
+Record: `docs/tracking/handoffs/2026-10-13_DEFERRED_SWEEP_146-149_MERGE_NOTE.md` § 148 (branch `deferred-sweep-146-149` @ `8322459b`; merged to main in `11f558c8`).
+
+### 149. ✅ **RESOLVED, NO CODE CHANGE — NOT A 9.3 REGRESSION; the 1.35× was main's build (see 159)** — ~~WATCHING — `test-transducer-01.rkt` is reproducibly ~1.35× SLOWER under Racket 9.3 than 9.0 (4.4→6.0 s, 4.3→5.8 s, worktree-pinned interleaved A/B); three other files at parity~~
+
+Measured 2026-10-12 at `7a0116ec` (9.0 brew cask vs 9.3 from racket-lang.org; both
+`raco make`d; 4 files × 2 rounds interleaved). Not yet a finding: needs a profile under
+both versions (`profile` lib, or `PLT_EXPANDER_TIMES`/`PLT_LINKLET_TIMES`) before a cause
+is claimed. Candidates: 9.2's non-linear-pattern checks in `match` (the transducer test is
+`match`-heavy), or 9.3's `racket/base` re-layering. **When**: before the next full-suite
+timing baseline is recorded under 9.3 (`data/benchmarks/timings.jsonl` ratios are
+otherwise noise under load 4–6.5). Record: dailies 2026-10-12 § Watching.
+
+**✅ Closed 2026-10-13: not a 9.3 regression** (sweep branch record; no code change). Matched builds (fresh
+worktrees, same commit, same build command, only the binary differs) are at parity on five files (`raco test`
+1.005–1.018×; allocation within 0.15 %; same `.pnet` networks). The 1.35× reproduces *exactly* (1.355×)
+when 9.3 builds without `PLT_CS_COMPILE_LIMIT`. Main's tree is in that state: 15/15 distinguishable
+giant modules match the no-limit build (4 byte-identical), written 10-12 20:24, and they persist through runner
+suites because up-to-date `.zo`s never recompile. Profile: 41.8 % in interpreted `match` clause code plus
+13.7 % `whnf`/`nf`, against ≤ 2.3 % compiled `match` code under the matched builds. Remedy and prevention:
+DEFERRED 159. Record: `docs/tracking/handoffs/2026-10-13_DEFERRED_SWEEP_146-149_MERGE_NOTE.md` § 149 (branch `deferred-sweep-146-149` @ `8322459b`; merged to main in `11f558c8`).
+
+### 150. ⬜ ⭐ THE BSP MERGE SPAWNS ~n GREEN THREADS PER WIDE ROUND BY DEFAULT — `current-tree-reduce-threshold` = 256 routes every round of ≥256 fires through `tree-reduce-fire-results … #t`, which pairs write-sets via `thread` + `channel` at every tree level; on the plain SEQUENTIAL executor that is pure overhead: 4.8–5.3× slower on wide networks
+
+Found by PAR 4 P0 (A/B against the pre-track record). PAR 2 recorded graph colouring 500
+at 1.42× (`ce4cde52`, 2026-03-28); it did not reproduce (1.03×). Same machine, same Racket
+9.3, interleaved ×2, `bench-parallel-demos.rkt` byte-identical: PAR 2's code 1.55/1.65 ms
+sequential vs HEAD 9.51/8.98 ms. `git bisect` (11 steps, bimodal 1.7 vs 9.1 ms) → first bad
+commit **`a7b015dd` (2026-04-15) "Phase 2c: semaphore-based worker pool"**, which changed
+[`propagator.rkt:2245`](../../racket/prologos/propagator.rkt) `current-tree-reduce-threshold`
+from `#f` to `256` (tuned WITH the pool attached; production runs without one). Mechanism:
+[`propagator.rkt:3397-3398`](../../racket/prologos/propagator.rkt) passes `parallel? #t`
+regardless of executor; `:3149-3152` spawns a green `thread` + `channel` per pair per level
+(Racket CS green threads: no parallelism). At HEAD, threshold 256 vs `#f`, interleaved ×2:
+graph colouring 500 9.40/9.46 → 1.98/1.96 ms (4.8×); constraint grid 12 9.62/10.91 →
+2.02/2.04 (4.8–5.3×); wave chain 1000 4.66/4.70 → 2.53/2.54 (its FIRST round fires all 999
+initially-scheduled propagators). Live in production: cold-cache prelude elaboration has
+rounds of 216–368 fires. **Fix shape** (owner's call — production default): threshold `#f`,
+or gate the tree path on a real pool executor; the green-thread `parallel?` branch can never
+win and should be deleted. **When**: before PAR 4 pins its baseline — every PAR 4 A/B is
+otherwise credited with removing this defect (P0 record §5 "two baselines"). Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md).
+
+### 151. ⬜ ⭐ THE `.pnet` MODULE CACHE IS A NET LOSS: `pnet-stale?` `read`s every WHOLE file to compare a 2-element header, then the loader reads it AGAIN — 2.6 s per process start, vs 0.53 s elaborating the same 39 modules from source
+
+[`pnet-serialize.rkt:795-806`](../../racket/prologos/pnet-serialize.rkt) `pnet-stale?`
+does `(call-with-input-file pnet-path read)` — the full datum, ~0.4–1 MB per module — to
+check `(car d)` = version and `(cadr d)` = source key; `deserialize-module-state` (`:905`)
+reads it again. Measured (PAR 4 P0, M5 Max, 9.3; same under 9.0, 77.8 vs 76.5 ms/MB): 39
+`.pnet` files, 15.7 MB, ONE full read of all = **1 207 ms**; a near-empty prelude-importing
+file costs 2 590 ms in `process-file` with the cache (profile: `deserialize-module-state` 46 %,
+`pnet-stale?` 45 %) and **526 ms with the cache disabled** — elaboration from source is now
+faster than one read of the serialized form (the cache's premise, `driver.rkt:2991` "skip
+300ms+ elaboration", is stale). Results identical modulo gensym numbering (4 files diffed).
+Batch workers amortize it per worker; every `racket driver.rkt`, `bench-ab` leg, scratch run
+and fresh LSP pays it in full. **Fix shape**: (a) immediately: put version+key in a SEPARATE
+first datum / sidecar and `read` only that; (b) then decide whether the cache earns its keep
+at all (binary `fasl`/`s-exp->fasl` instead of text `read`, or retire it). **When**: any time;
+(a) is an hour. Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md).
+
+*Addendum 2026-10-13 (DEFERRED 149 sweep):* a module's `.pnet` bytes depend on how its dependencies were
+loaded. `transducer.pnet` written over source-elaborated dependencies is 747 783 B; written over
+`.pnet`-loaded ones it is 384 910 B. All 12 registries have equal counts after import with either file. So
+"identical modulo gensym numbering" holds only for files written the same way, and part of the 15.7 MB is
+dependencies' entries repeated. That bears on fix (b), and on any cache keyed or checked by content hash.
+
+### 152. ⬜ `process-file` FORCES TWO MAJOR GCs PER CALL — `measure-memory-before`/`-after` call `(collect-garbage 'major)` unconditionally (~45 ms per file; the largest single cost of a 60 ms run)
+
+[`performance-counters.rkt:403-416`](../../racket/prologos/performance-counters.rkt). Found by
+PAR 4 P0 profiling (preloaded prelude, 10 reps): `measure-memory-before` + `-after` ≈ 33 %
+of samples on every comparative file; `gc_ms` ≈ 56–60 ms per file regardless of work. It
+inflates every `process-file` measurement (bench-ab, PHASE-TIMINGS shares) and every LSP
+re-elaboration. **Fix shape**: only when a MEMORY-STATS consumer is active (a parameter, or
+the driver CLI flag), never in library calls. **When**: any time. Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md).
+
+### 153. ⬜ `benchmarks/comparative/parity-adversarial.prologos` CRASHES AT HEAD — the DFS solver's `solve: Depth limit exceeded (100)` escapes `process-file` uncaught; `bench-ab` has been timing a crash for this file
+
+Reproduced on the pristine main checkout at `7a0116ec` (`racket driver.rkt …`) and in the
+PAR 4 P0 harness. Two defects: (a) the depth-limit error is not converted to a per-command
+`prologos-error` (contrast POL.9's conversion for unknown relations, `relations.rkt:3080`);
+(b) the benchmark's query exceeds the DFS depth limit. **When**: before the next comparative
+A/B. Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md).
+
+### 154. ⬜ THE DETERMINISTIC COUNTERS ARE BLIND TO PROPAGATOR WORK UNDER THE PRODUCTION SCHEDULER — `prop_firings` counts only the sequential drain (`propagator.rkt:2758`), and `perf-inc-prop-alloc!` is NEVER CALLED (`prop_allocs` ≡ 0)
+
+`solve-adversarial` under BSP: `cell_allocs` 4 079, `prop_firings` 0, `prop_allocs` 0. The
+`testing.md` rule "prefer the deterministic-work counters over wall for A/B" therefore cannot
+see the propagator network at all. **Fix shape**: count fires in `fire-and-collect-writes`
+(BSP) as well as the drain; call `perf-inc-prop-alloc!` in `net-add-propagator`; add
+`bsp_rounds`. PAR 4 needs these as phase-gate counters (P0 record §6). **When**: with PAR 4 P1
+at the latest. Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md).
+
+### 155. ⬜ RUNNING A MICRO-BENCHMARK DIRTIES THE TREE — `bench-parallel-demos.rkt` rewrites the TRACKED `data/benchmarks/parallel-demo-results.json` (PAR 2's recorded result, `ce4cde52`)
+
+Found when a PAR 4 P0 run overwrote it in the main checkout (restored from HEAD; both
+versions kept under the P0 data). A recorded result that any run silently replaces is not a
+record. **Fix shape**: write to an untracked `data/benchmarks/runs/<timestamp>-…json`, or
+`--output`; keep the committed file as the named baseline. Sweep the other `benchmarks/micro`
+writers. **When**: any time. Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md).
+
+### 156. ⬜ ⭐ ON-NETWORK INFERENCE ACCEPTS ILL-TYPED PRIMITIVE-OP OPERANDS — `[int+ 1 "x"] : Int`, `[f64+ "x" "y"] : Float64`, `[int-lt 1 "x"] : Bool`, `[from-nat "x"] : Int` all type-check
+
+**Found by**: the LSP check-only diagnostics work (2026-10-13) — `[int+ k "x"]` printed as a
+stuck term `[int+ 3 "x"] : Int` instead of an error. **The mechanism**: every primitive op
+registered through `register-typing-rule!` (`typing-propagators.rkt:2132-2141`
+`register-binary-ops!`/`register-unary-ops!`; the Int/Rat/Posit/Float families from `:2192`)
+fixes the RETURN type and never constrains the operands. The imperative rule does check them
+(`typing-core.rkt:3074`, `(check ctx a (expr-Int))`), but the driver tries
+`infer-on-network/err` first and falls back to `infer` only when the network FAILS
+(`driver.rkt:791`) — so the operand check runs only when some unrelated child is
+network-unhandled: `[f64+ (the Float64 1.0) "x"]` errors (`the` forces the fallback) while
+`[f64+ g "x"]` with `g : Float64` does not. **Checking catches it**: under a `spec`,
+`defn bad [n] [int+ n "x"]` reports `Type mismatch`. So the hole is infer-mode only —
+measured on top-level expressions; unannotated `def`/`let` RHSs presumably share the path
+(UNVERIFIED). Both `#:evaluate?` modes agree, so it is static, not a reduction artefact.
+**Why filed / severity**: a soundness hole in inference — ill-typed programs are accepted and
+reduce to stuck terms; since `process-file #:evaluate? #f`, LSP diagnostics are purely static,
+so these programs get NO diagnostic at all. **Fix shape**: the rule must carry an operand
+contract — extend `register-typing-rule!` with per-child expected types (homogeneous families:
+operand = return type for arithmetic, a separate operand type for comparisons → Bool, `Nat` for
+`from-nat`), and have the propagator WRITE the expected type into each child's type cell, so a
+mismatch is a contradiction on-network rather than a silently ignored child. Census every
+`register-typing-rule!` site with arity > 0 for the same gap. Regression pins: the probe
+expressions above must error in both `#:evaluate?` modes; `[int+ 1 2]` stays `Int`.
+**When**: soon — it is a correctness gap visible to every editor user.
+
+### 157. ⬜ ⭐ BSP LOSES UPDATES TODAY: UNDECLARED WRITES BYPASS THE MERGE, AND THE RELATIONAL GUARD RETRACTS THROUGH A LAST-WRITER-WINS CELL — two failing guards in one round clear only ONE worldview bit, whether or not the output is declared
+
+Two defects, measured together (`benchmarks/par4/q1-mechanisms.rkt`, branch `par4-p0`; found
+statically by the PAR 4 Q1 audit, then measured):
+(a) **Undeclared writes are applied by direct set** — `bulk-merge-writes`
+[`propagator.rkt:3018-3045`](../../racket/prologos/propagator.rkt) `struct-copy`s the
+whole cell value; it never calls the merge. Two propagators writing one cell undeclared in the
+same round: **BSP 2, sequential 6, correct 6** (ior cell, each sets its own bit). Declaring the
+outputs fixes this for a join merge (6/6). Sites with `'()` or incomplete outputs:
+`relations.rkt:2353` (guard → cell-1), `relations.rkt:2824` (tabling consumer → scope cells),
+`metavar-store.rkt:1063` (constraint-retry bridge → constraint store), `bilattice.rkt:167`
+(contradiction field).
+(b) **The guard retracts by AND-NOT read-modify-write on cell-1**, whose merge
+`worldview-cache-merge` is replacement ([`propagator.rkt:960`](../../racket/prologos/propagator.rkt);
+[`relations.rkt:2331-2349`](../../racket/prologos/relations.rkt)). Two guards failing in one
+round, worldview `0b110`: **BSP 4 (one bit still set), sequential 0** — and **declaring the
+output does NOT fix it** (still 4): replacement is not a join, so concurrent retractions lose.
+**Fix shape** (measured: 6/6 under both schedulers): retraction as GROWTH — an
+*invalidated-bits* cell with `ior` merge, and worldview = committed ∧ ¬invalidated as a derived
+read (the two-phase-set construction; Shapiro et al. 2011, CRDTs). Then the guard is monotone
+and needs no read-modify-write. Language-level impact — a failed guard's tagged writes staying
+visible — is CONJECTURE (not reproduced; the ATMS route is itself incomplete, Rel T1 A.2b).
+**When**: before PAR 4 P3 (K > 1 makes the race real at every round), or with BSP-LE 3. Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md) §9.
+
+### 158. ⬜ PROPAGATORS INSTALLED INSIDE A FIRE LOSE THEIR FLAGS — the BSP scheduler re-installs them from `(inputs outputs fire-fn)` only, dropping `PROP-FIRE-ONCE`, `#:assumption`, `#:component-paths` and srcloc; a fire-once propagator installed in a fire fires on every input change
+
+[`propagator.rkt:3060-3066`](../../racket/prologos/propagator.rkt) `collect-deferred-propagators`
+returns `(list inputs outputs fire-fn)`; `run-to-quiescence-bsp` re-installs with plain
+`net-add-propagator` (`:3376`). Measured (`q1-mechanisms.rkt`, T raised 1→2→3): fire-once at
+top level under BSP — 2 fires (one unproductive + one productive), C = 1 ✓; **the same
+propagator installed inside a fire — 4 fires, C = 3** (fire-once lost). Related, same probe:
+the sequential drain does not deduplicate its worklist, so an inline installer enqueued by
+both installation and an input write **installs twice** (2 vs 1 under BSP). Production
+exposure: fire-once / assumption-tagged installs on the inline (non-topology-request) path,
+i.e. when `current-bsp-fire-round?` is `#f` or on the DFS route — not yet enumerated.
+~~**Fix shape**: carry the `propagator` struct (flags, assumption, paths, srcloc) through
+`fire-result-new-propagators` and re-install it whole.~~ **REVISED 2026-10-13** (owner guidance:
+structure created during propagation is a topology change and requires a stratum): the inline
+path applies new structure *between rounds of the S0 inner loop* (`propagator.rkt:3372-3377`),
+not at the topology stratum, so carrying the flags through would preserve an unstratified
+mechanism. **Measured: no production code reaches it under BSP** — a trap that raises on any
+in-fire structure (`PAR4_TRAP_MIDRUN=1`, branch `par4-p0`) leaves the full suite green (10 257
+tests, 489 files), and fires on the probe's deliberate in-fire install. **Fix shape**: retire the
+path — in-fire structure creation becomes an error; discovery goes through a topology request
+that carries the whole propagator spec. **When**: PAR 4 P0.5 (before P2: DIRECT has no rounds, so
+the path has no defined application point). Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md) §9.
+
+### 159. ⬜ ⭐ A `raco make` WITHOUT `PLT_CS_COMPILE_LIMIT` SILENTLY BUILDS THE COMPILER'S GIANT `match` FUNCTIONS INTERPRETED, AND NO GATE NOTICES — main ran that way from 10-12 20:24 to 10-13 02:55 (suite 1.23–1.28× slow, single files up to 25×); remedied in main, prevention open
+
+Found by DEFERRED 149 (record: `docs/tracking/handoffs/2026-10-13_DEFERRED_SWEEP_146-149_MERGE_NOTE.md`
+§ 149, branch `deferred-sweep-146-149` @ `8322459b`). At the 9.0→9.3 switch (10-12 20:24) main's
+`compiled/` was rebuilt by a `raco make` without the limit. 15 modules (`reduction`, `typing-core`,
+`elaborator`, `macros`, `qtt`, `zonk`, `substitution`, `parser`, `pretty-print`, `syntax`,
+`surface-syntax`, `parse-reader`, `relations`, `sre-core`, `typing-propagators`) matched a no-limit
+9.3 build of identical source, 4 of them byte for byte; none matched a limited build. The runner's `putenv`
+(`run-affected-tests.rkt:49-50`) cannot repair this, because `raco make` never recompiles an up-to-date `.zo`. So
+the state survived every suite since: the first 9.3 suite, 3 minutes after that build, is the dailies'
+130.8 s. The cost lands in individually giant functions (profile: 41.8 % in interpreted `match` clause
+code, plus 13.7 % in `whnf`/`nf`). Small nested lambdas stay compiled: 147's per-fire census on main's `propagator`
+equals a limited build's within 3 B, so propagator-path bytes are unaffected.
+
+Measured with a worktree A/B at `674ae09b`, 9.3 limited vs no-limit: the full suite went 105.9 / 105.8 → 134.9 / 135.1 s
+(1.275×). Per file the median is 1.15× and p75 1.40×; the worst are `test-functor-ws-02` at 25× (0.6 → 15.1 s),
+`test-hashable-02` at 12× and `test-firstclass-ops` at 10×. `raco test test-transducer-01` went 4.59 → 6.22 s.
+
+**Remedy APPLIED 2026-10-13 ~02:55** (owner-authorized). Main's 9 `compiled/` dirs under
+`racket/prologos` were moved aside to the agent's scratch dir (`rm -rf` is hard-blocked by the agent harness; the
+copy is pruned after 24 h idle). They were rebuilt in 19 s with `PLT_CS_COMPILE_LIMIT=1000000 raco make -j 8
+driver.rkt lsp/server.rkt tools/run-affected-tests.rkt`, and 8 reference modules are now size-identical to the
+limited build. Main, same runner (`fd2986cc`): suite 69.5 s → 56.5 / 57.1 s (1.23×); `raco test
+test-transducer-01` 6.10 → 4.53 s. ⚠ An LSP server started before the rebuild still runs the
+interpreted code until it is restarted. Suite totals recorded in main between those times
+(`data/benchmarks/timings.jsonl`, 2026-10-12T20:27 … 2026-10-13T02:54, which includes the whale-sharding
+110.5 → 68 s comparison) carry the penalty. Comparisons within one run keep their direction.
+
+**Prevention: open (a decision).** The defect is that correctness depends on someone remembering an env
+var. Two layers:
+- **(a)** `tools/hook-guard-racket.sh`, the harness-enforced PreToolUse guard, denies `raco make` without
+  `PLT_CS_COMPILE_LIMIT` in the command. This covers agents and subagents, which is the layer that guard exists for,
+  but not humans.
+- **(b)** The runner, and `bench-lib.rkt`'s single `raco make`, fail fast when a giant module is interpreted,
+  using a ~1 ms self-check that times `whnf`/`shift` on a fixed term. Compiled vs interpreted is bimodal (`testing.md:11`
+  measured `shift` at ~830×). This covers every entry point through the runner, humans included, and catches the
+  state however it arose.
+
+(b) alone keeps the gates honest; (a) stops agents re-creating the state. The measurement that discriminates
+for (b) is the self-check's two modes on this machine (limited vs no-limit build) and its false-positive rate
+at load ~25. **When**: before PAR 4 pins its baseline.
+
+### 160. ⬜ ⭐ SUITE-ONLY FAILURES UNDER THE CURRENT RUNNER — a file fails inside `--all` and passes alone; 2 of 3 full runs at `fd2986cc` (`test-cond-01`: `Unbound variable classify`; `test-error-messages`: an annotated `Nat -> Nat` lambda "cannot infer the type of an unannotated parameter")
+
+Found during the DEFERRED 159 remedy: three full suites in main within 6 minutes (load 2–28), before
+and after the rebuild, so the build is not the cause.
+- **Run 1, before the rebuild:** `test-cond-01` failed at `tests/test-cond-01.rkt:44:2`, `:50:2` and later checks:
+  `(unbound-variable-error (srcloc "<ws-string>" 7 6 8) "Unbound variable" 'classify)`, meaning the file's
+  `defn classify` (under `(ns c3)`) was not visible to the `eval` that follows it.
+- **Run 3, after the rebuild:** `test-error-messages` failed at `tests/test-error-messages.rkt:465:2`, "expected success,
+  got: (type-mismatch-error … "cannot infer the type of an unannotated parameter — …" "Nat -> Nat"
+  "<could not infer>" "[fn [x <_>] [reduce x | zero -> 1 | suc y -> 2]]")".
+- Run alone, they pass 3/3 and 2/2.
+
+The full failure logs are lost: the runner deletes a file's `data/benchmarks/failures/*.log` when a
+later run of that file passes, and the alone-runs were those later runs. The excerpts above were read
+before them.
+
+**Conjecture** (not established): state leaks between files that share a batch worker. Both symptoms
+are "something this file registered or annotated is not seen", which is consistent with a namespace or registry
+collision (the tests' namespaces, `c3`/`c4`, are generic). It may be newly *exposed* rather than new: `389b3413`
+made LPT dispatch effective (dispatch had been alphabetical), which changes which files share a worker. The last
+suites before and at `389b3413` were all-pass, but that is one run each.
+
+**Discriminating measurement**: `--all` ×N recording the worker→file sequence for each failure, then a
+replay in one process of that worker's preceding files followed by the victim. **Fix shape** depends on the
+leak. Independently, keep failure logs per run id so the evidence survives a passing re-run. **When**: before
+the next suite baseline is pinned. A flaky gate makes every "all pass" probabilistic.
+
+### 161. ⬜ A FILE THAT RUNS ZERO TESTS IS COUNTED AS A PASS — `test-generators.rkt` reported `PASS (0.0s)` with 0 tests in the first `--all` after a cold rebuild of `compiled/`; the INCOMPLETE check counts units that REPORTED, not units that RAN tests
+
+Found during the DEFERRED 159 remedy. On the first full suite after `compiled/` was rebuilt (test `.zo`s
+compiled during the run), `test-generators.rkt` reported status `pass` with `'tests` = 0 and wall 0 ms; the
+run recorded "10257 tests … all pass" to `timings.jsonl`. The suite before it and the one after counted the
+file's 5 tests, and it passes alone (5 tests). `run-affected-tests.rkt:966-969` defines `all-pass?` as "every
+dispatched unit reported, and every status is `"pass"`", so a unit that reports pass after running nothing
+passes the gate. The INCOMPLETE fix (`fd2986cc`) closed missing *results*, not empty ones. Why 0 tests ran
+is not established. Candidate: a precompile/dispatch race on a cold test tree, seen in 1 of 1 cold runs and
+0 of 1 warm ones. **Fix shape**: treat `'tests` = 0 as no-result (INCOMPLETE) unless the file is declared
+test-free, or compare against the file's last recorded count. **When**: with 160; both make "all pass" mean
+less than it says.
+
+### 162. ⬜ LPT DISPATCH WAS INERT FROM THE DAY IT SHIPPED — per-file medians keyed by file-name STRINGS in a `for/hasheq`, so 0 of 489 lookups hit, every file sorted as `+inf.0`, and dispatch ran alphabetically — **fix landed `389b3413`**; a comment still states the refuted "impact was NIL" measurement, and the class sweep is open
+
+**Found by**: the whale-sharding work (2026-10-13), from a completion log that ran in alphabetical order. A probe
+printed "runner lookup (hasheq, fresh string): +inf.0 / same data, equal?-keyed hash: 96175 / lookups that hit
+with a copied key: 0 of 489". `eq?` on strings compares allocations, and a key read from JSON is never `eq?` to
+one built from a path. As a result the slowest file, `test-path-selection.rkt`, started ~17 s into the run.
+
+**Fixed** in `389b3413`. The medians moved to `tools/suite-plan.rkt` `historical-medians` (`for/hash`), pinned by
+`tests/test-suite-plan.rkt`, which goes red when `for/hasheq` is restored. Suite: 127.6 → 110.5 s. ⚠ Both runs
+used 159's interpreted build, so the ratio holds but the absolute seconds do not.
+
+**Open**:
+1. **A comment still states the refuted measurement.** `tools/run-affected-tests.rkt:710-713` says "Measured
+   impact was NIL (median effective parallelism 8.97 poisoned vs 8.96 clean over 282 runs) — the schedule is not
+   what gates this suite." Both legs of that comparison ran the inert sort, so it compared alphabetical order
+   with alphabetical order and says nothing about LPT. The same claim is at `standups/2026-07-26_dailies.md:257`;
+   that is a dailies LOG and stays as written, with the correction recorded here and at `suite-plan.rkt:16`.
+   **Fix**: rewrite the comment to cite this entry.
+2. **The class: `eq?`-keyed tables over non-interned keys.** Sweep `racket/prologos/tools/` and `tools/` for
+   `hasheq` / `make-hasheq` / `for/hasheq` whose keys are strings, paths or other freshly built data; every such
+   lookup misses silently. **Fix shape** per site: `equal?`-keyed tables, or intern (`string->symbol`) at the
+   boundary. Add one test per table showing that a lookup with a *copied* key hits; that is the test that
+   caught this.
+3. **Which files share a worker has changed.** Since `389b3413` the dispatch order, and so the set of files that
+   share a batch worker, is different. 160 conjectures that its suite-only failures were newly exposed by this.
+
+**When**: (1) any time; it takes minutes. (2) with 160's investigation, which reads the same tools.
+
+### 163. ⬜ ⭐ EVERY RUNNER START KILLED EVERY BATCH WORKER ON THE MACHINE — Step 0's `pkill -f batch-worker.rkt` was machine-wide, so a run in any session, worktree or clone killed the workers of every concurrent suite — **fix landed `b45bbf44`**; 6 worktrees + 2 clones still carry the old runner
+
+**Found by**: the whale-sharding verification (2026-10-13), observed 3×:
+- Main's full suite lost all 18 workers, first after 63 and then after 22 of 493 units, each time seconds after a
+  run started in `.claude/worktrees/deferred-sweep-146-149`. A live check found 0 workers alive while the runner
+  waited out its timeout.
+- In the other direction, that worktree's `--all` killed the 4 workers of a sharded run in main.
+
+Before `fd2986cc`, a run that lost its workers this way printed "all pass" (164).
+
+**Fixed** in `b45bbf44` (`tools/run-affected-tests.rkt:528-550`). An orphan is exactly a worker whose runner died,
+which means it has been reparented to PID 1. Cleanup is now `pkill -P 1 -f <this checkout's absolute
+tools/batch-worker.rkt>`. Verified live:
+- During a run, the old pattern matched 4 workers and the new pattern 0.
+- A concurrent targeted run no longer disturbs the long run (5/5 units).
+- Positive control: `kill -9` of the runner only → 4 orphans with PPID 1 → the next runner start → 0.
+
+There is no unit test, because this is process-level behaviour.
+
+**Open**:
+1. **The bug is still live in every checkout that predates `b45bbf44`.** A runner started in one of them still
+   kills main's workers and everyone else's. As of 2026-10-13, found by grepping each checkout's runner for
+   `"-P" "1"`:
+   - worktrees `charming-khayyam-a7835d`, `dazzling-wescoff-4b692b`, `editor-support-path-change-a3ddf9`
+     (detached HEADs), `heuristic-thompson-a2091b` (branch `clever-bhabha-f3a408`), `par4-p0`,
+     `sleepy-kepler-8aa2cb`;
+   - clones `~/dev/projects/prologos-egraph-spike` and `~/dev/projects/prologos-preduce-auto`.
+
+   `deferred-sweep-146-149` already has the fix. **Fix**: bring each live checkout to main ≥ `b45bbf44` (merge,
+   rebase or cherry-pick the one hunk); which route is each branch owner's decision. Do `par4-p0` first, since
+   PAR 4 pins baselines; retire dead worktrees.
+2. **Agents can still do it by hand.** `.claude/settings.local.json:71` allows `Bash(pkill:*)` without a prompt,
+   and a `pkill -f racket` or `pkill -f batch-worker` from any session has the same blast radius. **Fix shape**
+   (a decision): either `tools/hook-guard-racket.sh` (159's PreToolUse guard) denies a
+   `pkill`/`killall` pattern that matches racket or batch-worker without `-P`, or the allow-list is narrowed.
+3. **Is Step 0 needed at all?** From reading the code, not from a measurement: a worker exits at stdin EOF
+   (`batch-worker.rkt:182-183`), and its stdin closes when its runner dies. So an orphan should live only until
+   its current file ends, which is bounded by `--file-timeout` (the runner passes its `--timeout`, default
+   300 s). Measure this first.
+   - If it holds, Step 0 is only a speed-up and can go, removing the last kill from the runner.
+   - If it does not, a worker-side parent watchdog is the structural form: a worker knows its own runner, but a
+     runner cannot know another runner's workers.
+4. **Past timeouts can't be attributed.** Every "TIMEOUT: No result received" in any session before `b45bbf44`
+   may have been another session's runner start rather than the change under test. 164 counts the recorded ones.
+
+**When**: (1) now, because it is live in 8 checkouts. (2) and (3) with (1).
+
+### 164. ⬜ ⭐ AN INCOMPLETE RUN REPORTED "ALL PASS" AND WAS RECORDED AS A FULL SUITE — the no-result TIMEOUT path killed the workers and fell through with `bailed?` unset, and `all-pass?` was an `andmap` over only the results that DID arrive — **fix landed `fd2986cc`**; 13 such records sit in main's `timings.jsonl`, and sibling fail-opens are open
+
+**Found by**: the whale-sharding work (2026-10-13). After 63 of 493 units (the workers had been killed by 163) the
+runner printed "1629 tests in 343.6s (490 files, …, all pass)" and appended a 63-result record to
+`timings.jsonl` as a full run. That record was removed by hand; the file is untracked.
+
+**Fixed** in `fd2986cc` (`tools/run-affected-tests.rkt:966-969` plus the summary, record and exit sites after it).
+A run with fewer results than dispatched units now prints `INCOMPLETE — n of N units reported`, exits 2 and
+records nothing. Verified two ways:
+- with a scratch test file that `(exit 0)`s its worker: "INCOMPLETE — 1 of 2 units reported", exit 2, no record;
+- in the wild, on a run that reported 22 of 493 units.
+
+**Measured: the history is polluted.** In main's `racket/prologos/data/benchmarks/timings.jsonl`, 13 of 971
+full-suite records (`file_count` ≥ 300) say `all_pass: true` with fewer results than files. Every one ran to the
+timeout wall or past it:
+- 2026-03-18 … 03-26: 9 records with **0 results** (0/372 … 0/382), wall ≈ 600 s, which is "all pass" over no
+  tests at all;
+- 2026-07-14 `64529290` 279/453; 07-17 `09f002e0` 25/455; 07-24 `94f7da34` 80/470; 07-31 `cab30b9a` 220/476.
+
+The other checkouts that have a timings file have none: `deferred-sweep-146-149` (1 full record),
+`prologos-egraph-spike` (2), `prologos-preduce-auto` (42). The causes are not established; 163 is one candidate
+and worker crashes are another. These records have no current effect on scheduling: `historical-medians` reads
+the last 5 runs with `file_count` ≥ 100 (`suite-plan.rkt:46-56`), and the newest bad record is from 07-31. Any
+longitudinal read of the file does include them (baselines, PIRs, trend tools).
+
+**Open**:
+1. **Zero tests still counts as a pass** — that is 161. Together with this entry it makes up the whole
+   invariant that "all pass" means what it says: every dispatched unit reported, AND it ran ≥ 1 test.
+2. **The re-run guard exits 0 having run nothing** (`tools/run-affected-tests.rkt:307-326`). A refused `--all`
+   prints a GUARD banner and `(exit 0)`, so `run --all && git commit`, or an agent that reads only the exit
+   status, takes "ran nothing" as green. Observed 2026-10-13: a refused run's exit 0 was briefly read as a
+   result. The tradeoff is a decision:
+   - a distinct nonzero code is honest, but makes a deliberate refusal look like a failure;
+   - keeping exit 0 means the refusal has to be unmistakable everywhere it is read.
+3. **The record reader should filter as well.** `historical-medians` should skip any record whose `results` is
+   shorter than its `file_count`, so a future fail-open of any kind cannot reach the scheduler. The same
+   predicate finds the 13 records. Whether to annotate or drop them is a decision about editing history (the
+   file is untracked).
+4. **Worker stderr is never drained.** `tools/run-affected-tests.rkt:800-815` opens it and closes it only at EOF.
+   Test output cannot reach it, because `batch-worker.rkt:303` captures `current-error-port` around each file.
+   Anything written outside that window does reach it (worker-level errors, runtime messages), and past the pipe
+   buffer (~64 KB on macOS) the worker would block. Since `fd2986cc` such a block would surface as INCOMPLETE,
+   so it is loud, but its cause would be invisible. This is a conjecture; it has never been observed.
+   **Fix**: drain stderr in the reader thread into the unit's failure log.
+5. **The records misstate their own clock.** `tools/bench-lib.rkt:249` reads `(seconds->date now #t)  ; UTC`, but
+   the `#t` argument is `local-time?`, so every `timestamp` ending in `Z` is local time. Checked:
+   `(seconds->date 0 #t)` gives hour 17, offset −25200. Anything that reads these as UTC is off by 6–7 h.
+   **Fix**: pass `#f`, or drop the `Z`. Old records stay local; whether to mark the cut-over in the record is a
+   decision.
+
+**When**: (1) and (3) together, before PAR 4 pins a baseline. (2), (4) and (5) any time.

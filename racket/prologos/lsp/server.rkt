@@ -554,7 +554,12 @@
         #:exists 'replace)
       (with-handlers ([exn:fail? (lambda (e)
                                    (set! errors (cons (prologos-error #f (exn-message e)) errors)))])
-        (define results (process-file tmp-path #:source-dir (source-dir-of file-path)))
+        ;; #:evaluate? #f — diagnostics are STATIC: type-check every form but run
+        ;; no top-level eval (driver.rkt process-file). Evaluation is on request
+        ;; via $/prologos/eval; an expensive top-level computation (foray.prologos:
+        ;; 231 s) used to block every request queued behind this call.
+        (define results (process-file tmp-path #:source-dir (source-dir-of file-path)
+                                      #:evaluate? #f))
         ;; Extract errors from the result list
         (for ([r (in-list (or results '()))])
           (when (prologos-error? r)

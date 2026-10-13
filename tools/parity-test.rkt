@@ -52,7 +52,7 @@
 ;; Runner
 ;; ============================================================
 
-(define racket-path "/Applications/Racket v9.0/bin/racket")
+(define racket-path "/Applications/Racket v9.3/bin/racket")
 (define base-dir "racket/prologos")
 
 ;; Run a test file with a given strategy override.

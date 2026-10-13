@@ -23,7 +23,7 @@
 ;;; to Phase 1V or future measurement work if needed).
 ;;;
 ;;; Usage:
-;;;   "/Applications/Racket v9.0/bin/racket" \
+;;;   "/Applications/Racket v9.3/bin/racket" \
 ;;;     racket/prologos/tools/measure-production-n.rkt \
 ;;;     racket/prologos/examples/2026-04-22-1A-iii-probe.prologos
 ;;;

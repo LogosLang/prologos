@@ -20,7 +20,9 @@
          racket/file
          racket/cmdline
          json
-         rackunit/log)
+         rackunit/log
+         (only-in rackunit current-test-case-around)
+         "suite-plan.rkt")
 
 ;; Enable test logging for counting tests and detecting failures
 (test-log-enabled? #t)
@@ -189,9 +191,23 @@
 
 (define get-next-file (next-file-generator))
 
+;; Modules this worker has already instantiated. A second dynamic-require of
+;; one is a CACHED NO-OP: it reports "pass" with 0 tests while running nothing
+;; (measured: shard 1/2 of a file with a failing test, sent after shard 0/2 to
+;; the same worker, came back pass/0). The runner's dispatch rule
+;; (suite-plan.rkt pick-eligible) prevents it; this turns a violation of that
+;; rule into a loud failure instead of a silently skipped shard.
+(define ran-modules (make-hash))
+
 (let loop ()
-  (define file (get-next-file))
-  (when file
+  (define work-line (get-next-file))
+  (when work-line
+  ;; A work line is a bare path (whole file) or "path<TAB>I/K" (shard I of K:
+  ;; the whole module instantiates, only top-level test-cases with run-order
+  ;; seq ≡ I mod K execute — suite-plan.rkt § WHALE SHARDING). The runner never
+  ;; sends this worker two shards of one file: a second dynamic-require of a
+  ;; module this namespace already ran would be a cached no-op.
+  (define-values (file shard shard-k) (parse-work-line work-line))
   ;; Snapshot test-log counters: (failures . total)
   (define pre-log (test-log))
   (define pre-fail (car pre-log))
@@ -214,6 +230,14 @@
                    (λ (e)
                      (set! ok? #f)
                      (set! error-msg (exn-message e)))])
+    (when (hash-ref ran-modules abs-file #f)
+      (error 'batch-worker
+             (string-append
+              "~a~a: this worker already instantiated that module, so a second "
+              "dynamic-require is a cached no-op that would run 0 tests. The runner "
+              "must not send one module to one worker twice (suite-plan.rkt pick-eligible).")
+             file (if shard (format " (shard ~a)" (shard-label shard shard-k)) "")))
+    (hash-set! ran-modules abs-file #t)
     ;; Restore ALL parameters to post-prelude ready state.
     ;; This gives each test file a state with all prelude registrations
     ;; present — constructors, specs, impls, etc. — matching what each
@@ -268,6 +292,12 @@
          ;; (dynamic-require "../sexp-readtable.rkt" ...) needs to resolve
          ;; relative to tests/, not to prologos/).
          [current-load-relative-directory file-dir]
+         ;; Whale sharding: run only this shard's top-level test-cases. The
+         ;; per-file thread below inherits this binding.
+         [current-test-case-around
+          (if shard
+              (make-shard-around (current-test-case-around) shard shard-k)
+              (current-test-case-around))]
          ;; Capture I/O (don't let test output pollute JSON stream)
          [current-output-port             (open-output-string)]
          [current-error-port              stderr-capture])
@@ -346,11 +376,13 @@
   (define cell-metrics (and (not (null? cell-metrics-entries)) (last cell-metrics-entries)))
 
   ;; Build result hash
-  (define result
+  (define result-base
     (hasheq 'file (path->string (file-name-from-path (string->path file)))
             'wall_ms wall-ms
             'status (cond [ok? "pass"] [timed-out? "timeout"] [else "fail"])
             'tests file-tests))
+  (define result
+    (if shard (hash-set result-base 'shard (shard-label shard shard-k)) result-base))
 
   ;; Attach optional fields
   (define result+hb  (if heartbeats (hash-set result 'heartbeats heartbeats) result))
@@ -387,16 +419,22 @@
         (hash-set result+cm 'error_output error-output)
         result+cm))
 
-  ;; Write failure log if test failed
+  ;; Write failure log if test failed. A shard logs under its own name, so a
+  ;; passing shard cannot delete a failing sibling's log below.
   (define file-name (path->string (file-name-from-path (string->path file))))
-  (define log-path (build-path failure-log-dir (string-append file-name ".log")))
+  (define log-path
+    (build-path failure-log-dir
+                (if shard
+                    (format "~a.shard-~a-of-~a.log" file-name shard shard-k)
+                    (string-append file-name ".log"))))
   (cond
     [(not ok?)
      ;; Ensure directory exists
      (make-directory* failure-log-dir)
      (call-with-output-file log-path #:exists 'replace
        (λ (out)
-         (fprintf out "=== ~a FAILED ===\n" file-name)
+         (fprintf out "=== ~a~a FAILED ===\n" file-name
+                  (if shard (format " (shard ~a)" (shard-label shard shard-k)) ""))
          (fprintf out "wall_ms: ~a\n" wall-ms)
          (fprintf out "tests: ~a (~a failures)\n\n" file-tests file-failures)
          ;; Error Diagnostics — formatted prologos errors with provenance chains

@@ -60,6 +60,22 @@
 (define (de-val entry) (vector-ref entry 2))
 (define (make-de hash key val) (vector hash key val))
 
+;; Key equality at a data entry (DEFERRED 146). `eq?` first; then the STORED HASH,
+;; and only if the hashes agree, `equal?`. Sound because CHAMP already requires the
+;; caller's hash to be consistent with `equal?` (the trie is navigated by it), so
+;; keys with different hashes cannot be equal. Worth it because Racket CS's
+;; `equal?` allocates on every top-level comparison of two distinct records
+;; (rumble/equal.ss record branch: a `deeper-context` box + a recursion closure;
+;; 64 B for a one-field struct) — and inserting a NEW key onto another key's data
+;; entry is the common case: measured over benchmarks/comparative, 20 % of
+;; data-entry comparisons reached `equal?` with differing hashes, carrying 85 % of
+;; the bytes `equal?` allocated inside CHAMP. Collision nodes need no such check:
+;; their entries share one hash by construction.
+(define-syntax-rule (de-key=? entry hash key)
+  (let ([ek (de-key entry)])
+    (or (eq? ek key)
+        (and (eqv? (de-hash entry) hash) (equal? ek key)))))
+
 ;; Collision node: stores all (key . value) pairs with identical hash.
 (struct champ-collision (hash entries) #:transparent)
 
@@ -135,8 +151,7 @@
        [(not (zero? (bitwise-and dm bit)))
         (define idx (data-index dm bit))
         (define entry (vector-ref arr idx))
-        (define ek (de-key entry))
-        (if (or (eq? ek key) (equal? ek key))
+        (if (de-key=? entry hash key)
             (de-val entry)
             'none)]
        ;; Child node at this position
@@ -186,7 +201,7 @@
         (define existing-key (de-key entry))
         (cond
           ;; Same key: update value
-          [(or (eq? existing-key key) (equal? existing-key key))
+          [(de-key=? entry hash key)
            ;; CHAMP Performance Phase 3: value-only fast path.
            ;; If new value is eq? to existing, return same node — zero allocation.
            ;; Compounds with BSP-LE Track 0 Phase 2 (merge identity): the entire
@@ -293,7 +308,7 @@
         (define idx (data-index dm bit))
         (define entry (vector-ref arr idx))
         (cond
-          [(or (eq? (de-key entry) key) (equal? (de-key entry) key))
+          [(de-key=? entry hash key)
            ;; Found: remove data entry
            (define new-dm (bitwise-and dm (bitwise-not bit)))
            (define new-arr (vec-remove arr idx))
@@ -743,8 +758,12 @@
 (define (tnode-insert! node hash key val level edit size-box)
   (cond
     [(champ-collision? node)
-     ;; Collision nodes: fall back to persistent insert (rare path)
-     (collision-insert node hash key val)]
+     ;; Collision nodes: fall back to persistent insert (rare path). The size
+     ;; box must still see a new key — the persistent path counts it at the root
+     ;; from `added?`; the transient counts in the box (as tnode-insert-join! does).
+     (define-values (coll added?) (collision-insert node hash key val))
+     (when added? (set-box! size-box (add1 (unbox size-box))))
+     (values coll added?)]
     [else
      (define seg (hash-segment hash level))
      (define bit (segment-bit seg))
@@ -759,7 +778,7 @@
         (define existing-key (de-key entry))
         (cond
           ;; Same key: update value
-          [(or (eq? existing-key key) (equal? existing-key key))
+          [(de-key=? entry hash key)
            (define existing-val (de-val entry))
            (cond
              [(eq? val existing-val)
@@ -811,14 +830,22 @@
 
 ;; Owner-ID transient delete.
 ;; size-box: (box nat) — updated when a key is removed.
-;; Returns: (values node removed?)
+;; Returns: (values node removed?). The node is never #f: deleting the last key
+;; yields `empty-node`, exactly as the persistent `champ-delete` does (`:277`) —
+;; `tnode-delete!` signals "subtree became empty" with #f to its PARENT, and the
+;; root has no parent to absorb it (freeze-node and tnode-insert! both need a node).
 (define (tchamp-delete-owned! node size-box hash key edit)
-  (tnode-delete! node hash key 0 edit size-box))
+  (define-values (new-node removed?) (tnode-delete! node hash key 0 edit size-box))
+  (values (or new-node empty-node) removed?))
 
 (define (tnode-delete! node hash key level edit size-box)
   (cond
     [(champ-collision? node)
-     (collision-delete node key)]
+     ;; Same bookkeeping as the transient collision insert: the box must see
+     ;; the removal (the persistent path counts it at the root from `removed?`).
+     (define-values (coll removed?) (collision-delete node key))
+     (when removed? (set-box! size-box (sub1 (unbox size-box))))
+     (values coll removed?)]
     [else
      (define seg (hash-segment hash level))
      (define bit (segment-bit seg))
@@ -830,7 +857,7 @@
         (define idx (data-index dm bit))
         (define entry (vector-ref arr idx))
         (cond
-          [(or (eq? (de-key entry) key) (equal? (de-key entry) key))
+          [(de-key=? entry hash key)
            (define new-dm (bitwise-and dm (bitwise-not bit)))
            (if (and (zero? new-dm) (zero? nm))
                (begin (set-box! size-box (sub1 (unbox size-box)))
@@ -892,7 +919,7 @@
         (define entry (vector-ref arr idx))
         (define existing-key (de-key entry))
         (cond
-          [(or (eq? existing-key key) (equal? existing-key key))
+          [(de-key=? entry hash key)
            (define merged (join-fn (de-val entry) val))
            (define existing-val (de-val entry))
            (if (eq? merged existing-val)

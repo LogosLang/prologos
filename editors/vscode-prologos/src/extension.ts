@@ -36,33 +36,50 @@ export function activate(context: vscode.ExtensionContext) {
     ),
   );
 
-  // Resolve Racket path — check setting, then common locations
+  // Path to the LSP server Racket file. Resolved BEFORE Racket: the server's
+  // compiled/ artifacts record which Racket version they need (see findRacket).
+  const serverModule = resolveServerPath(context);
+  outputChannel.appendLine(`Server module: ${serverModule}`);
+  const compiledVersion = compiledRacketVersion(serverModule);
+  if (compiledVersion) {
+    outputChannel.appendLine(`Server compiled with Racket ${compiledVersion}`);
+  }
+
+  // Resolve Racket path — check setting, then installed Racket(s)
   const config = vscode.workspace.getConfiguration('prologos');
   const configuredRacket = config.get<string>('racketPath');
   const racketPath = (configuredRacket && configuredRacket.length > 0)
     ? configuredRacket
-    : findRacket();
+    : findRacket(compiledVersion);
 
   if (!racketPath) {
     vscode.window.showWarningMessage(
       'Prologos: Racket not found. Set prologos.racketPath in settings for LSP features.'
     );
     outputChannel.appendLine('ERROR: Racket executable not found. Checked:');
-    outputChannel.appendLine('  /Applications/Racket v9.0/bin/racket');
-    outputChannel.appendLine('  /Applications/Racket/bin/racket');
-    outputChannel.appendLine('  /usr/local/bin/racket');
-    outputChannel.appendLine('  /opt/homebrew/bin/racket');
-    outputChannel.appendLine('  /usr/bin/racket');
+    for (const candidate of racketCandidates()) {
+      outputChannel.appendLine(`  ${candidate}`);
+    }
     outputChannel.appendLine('Set prologos.racketPath in settings.');
     // Extension still provides syntax highlighting without LSP
     return;
   }
 
-  outputChannel.appendLine(`Racket found: ${racketPath}`);
+  const runningVersion = racketVersion(racketPath);
+  outputChannel.appendLine(`Racket found: ${racketPath} (v${runningVersion ?? '?'})`);
 
-  // Path to the LSP server Racket file
-  const serverModule = resolveServerPath(context);
-  outputChannel.appendLine(`Server module: ${serverModule}`);
+  // A runtime/bytecode version skew makes server.rkt exit at load time, which
+  // the client only reports as "connection to server is erroring: write EPIPE".
+  // Name the real cause up front instead.
+  if (compiledVersion && runningVersion && compiledVersion !== runningVersion) {
+    const msg =
+      `Prologos: server.rkt was compiled with Racket ${compiledVersion} but will run ` +
+      `on Racket ${runningVersion} (${racketPath}); it will fail to load. ` +
+      `Point prologos.racketPath at Racket ${compiledVersion}, or recompile with ` +
+      `\`raco make lsp/server.rkt\` using Racket ${runningVersion}.`;
+    outputChannel.appendLine(`WARNING: ${msg}`);
+    vscode.window.showWarningMessage(msg);
+  }
 
   // Verify server file exists
   const fs = require('fs');
@@ -250,22 +267,102 @@ function resolveSourceRoot(serverModule: string): string {
 }
 
 /**
- * Find Racket executable on common macOS/Linux paths.
+ * The Racket version the LSP server's bytecode was compiled with, read from
+ * `lsp/compiled/server_rkt.dep` (whose first datum is the version string,
+ * e.g. `("9.3" tarm64osx ...)`). Undefined if not compiled yet.
  */
-function findRacket(): string | undefined {
-  const candidates = [
-    '/Applications/Racket v9.0/bin/racket',
+function compiledRacketVersion(serverModule: string): string | undefined {
+  const fs = require('fs');
+  const dep = path.join(path.dirname(serverModule), 'compiled', 'server_rkt.dep');
+  try {
+    const m = /^\(\s*"([^"]+)"/.exec(fs.readFileSync(dep, 'utf8'));
+    return m ? m[1] : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The version of a Racket executable: from its install dir name
+ * (`/Applications/Racket v9.3/...`) when it has one, else by asking it.
+ */
+function racketVersion(exe: string): string | undefined {
+  const fromDir = /Racket v(\d+(?:\.\d+)*)/.exec(exe);
+  if (fromDir) {
+    return fromDir[1];
+  }
+  try {
+    const { spawnSync } = require('child_process');
+    // `--version` prints the banner without loading racket/base — cheap.
+    const out = spawnSync(exe, ['--version'], { encoding: 'utf8', timeout: 5000 });
+    const m = /Racket v(\d+(?:\.\d+)*)/.exec(out.stdout ?? '');
+    return m ? m[1] : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d !== 0) {
+      return d;
+    }
+  }
+  return 0;
+}
+
+/**
+ * Candidate Racket executables: every `/Applications/Racket v*` install
+ * (several versions may coexist, e.g. for A/B benchmarking), then the usual
+ * unversioned locations.
+ */
+function racketCandidates(): string[] {
+  const fs = require('fs');
+  const versioned: string[] = [];
+  try {
+    for (const entry of fs.readdirSync('/Applications') as string[]) {
+      if (/^Racket v\d+(\.\d+)*$/.test(entry)) {
+        versioned.push(path.join('/Applications', entry, 'bin', 'racket'));
+      }
+    }
+  } catch {
+    // No /Applications (Linux) — the unversioned paths below still apply.
+  }
+  return [
+    ...versioned,
     '/Applications/Racket/bin/racket',
     '/usr/local/bin/racket',
     '/opt/homebrew/bin/racket',
     '/usr/bin/racket',
   ];
+}
 
+/**
+ * Find a Racket executable for the LSP server.
+ *
+ * Racket refuses to load bytecode compiled by a different version ("loading
+ * code: version mismatch"), so the right Racket is not "the first one on disk"
+ * but the one matching `wantVersion` — the version server.rkt was compiled
+ * with. With no match (or no compiled server), take the newest installed.
+ */
+function findRacket(wantVersion?: string): string | undefined {
   const fs = require('fs');
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
+  const found = racketCandidates()
+    .filter((p) => fs.existsSync(p))
+    .map((p) => ({ path: p, version: racketVersion(p) }));
+
+  if (wantVersion) {
+    const match = found.find((c) => c.version === wantVersion);
+    if (match) {
+      return match.path;
     }
   }
-  return undefined;
+
+  const newest = found
+    .filter((c) => c.version !== undefined)
+    .sort((a, b) => compareVersions(b.version!, a.version!))[0];
+  return newest?.path ?? found[0]?.path;
 }

@@ -26,7 +26,7 @@ set -u
 
 OUT="${1:?usage: spine-census-isolated.sh OUT.tsv [mode]}"
 MODE="${2:-raw-datum}"
-RACKET="${RACKET:-/Applications/Racket v9.0/bin/racket}"
+RACKET="${RACKET:-/Applications/Racket v9.3/bin/racket}"
 JOBS="${JOBS:-3}"
 
 ROOT="$(git rev-parse --show-toplevel)" || { echo "not in a git repo" >&2; exit 1; }

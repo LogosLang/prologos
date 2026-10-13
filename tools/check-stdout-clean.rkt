@@ -21,6 +21,7 @@
 ;;;   racket tools/check-stdout-clean.rkt FILE [FILE...] # check specific files
 ;;;
 ;;; Exit 0 = all clean. Exit 1 = at least one file polluted stdout.
+;;; Exit 2 = could not check (this Racket cannot load the checkout's bytecode).
 
 (require racket/cmdline
          racket/file
@@ -69,9 +70,23 @@
 ;; Errors during load are caught and treated as "clean" (the file
 ;; failed to compile, which is check-parens / raco make territory,
 ;; not stdout-pollution).
+;;
+;; EXCEPT a bytecode version mismatch: that is not the file failing to compile,
+;; it is THIS Racket being unable to load the checkout's compiled/ at all — so
+;; nothing was checked. Swallowing it made the gate vacuously green for every
+;; file after the 9.0 → 9.3 upgrade while the hook still invoked 9.0. Exit 2
+;; ("could not check") instead.
 (define (capture-load-stdout path)
   (define captured (open-output-string))
-  (with-handlers ([exn:fail? (lambda (_) "")])
+  (with-handlers ([exn:fail?
+                   (lambda (e)
+                     (when (regexp-match? #rx"version mismatch" (exn-message e))
+                       (eprintf "check-stdout-clean: CANNOT CHECK ~a — Racket ~a cannot load the compiled code:\n  ~a\n"
+                                path (version)
+                                (car (regexp-split #rx"\n" (exn-message e))))
+                       (eprintf "Run this check with the Racket that compiled the checkout (see compiled/*.dep).\n")
+                       (exit 2))
+                     "")])
     (parameterize ([current-output-port captured])
       (dynamic-require path #f))
     (get-output-string captured)))

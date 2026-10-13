@@ -42,7 +42,7 @@
 ;;;   - design doc §10.0.7 + §13.7 — A/B/C report scope
 ;;;
 ;;; Usage:
-;;;   "/Applications/Racket v9.0/bin/racket" \
+;;;   "/Applications/Racket v9.3/bin/racket" \
 ;;;     racket/prologos/benchmarks/micro/bench-tropical-fuel.rkt
 ;;;
 

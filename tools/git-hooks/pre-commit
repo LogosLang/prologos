@@ -25,7 +25,7 @@
 
 set -e
 
-RACKET="/Applications/Racket v9.0/bin/racket"
+RACKET="/Applications/Racket v9.3/bin/racket"
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 if [ -z "$REPO_ROOT" ]; then

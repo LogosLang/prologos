@@ -17,7 +17,7 @@
 ;;;     ALL cells for undeclared-writes + new-cells on every fire that changes the
 ;;;     cells CHAMP -> O(N log N)/fire. Fix = eq?-pruned CHAMP structural diff.
 ;;;
-;;; USAGE: "/Applications/Racket v9.0/bin/racket" benchmarks/micro/bench-scheduler-accumulation.rkt
+;;; USAGE: "/Applications/Racket v9.3/bin/racket" benchmarks/micro/bench-scheduler-accumulation.rkt
 ;;;
 
 (require (only-in "../../propagator.rkt"

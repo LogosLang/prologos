@@ -84,7 +84,7 @@ FILE="$1"
 [ -f "$FILE" ] || { echo "scratch-run.sh: no such file: $FILE" >&2; exit 2; }
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RACKET="${PROLOGOS_RACKET:-/Applications/Racket v9.0/bin/racket}"
+RACKET="${PROLOGOS_RACKET:-/Applications/Racket v9.3/bin/racket}"
 [ -x "$RACKET" ] || { echo "scratch-run.sh: racket not executable at: $RACKET" >&2; exit 2; }
 
 # The giant-match modules fall back to the CS INTERPRETER without this

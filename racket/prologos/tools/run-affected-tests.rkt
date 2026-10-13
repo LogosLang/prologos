@@ -31,7 +31,8 @@
          (only-in racket/future processor-count)
          json
          "dep-graph.rkt"
-         "bench-lib.rkt")
+         "bench-lib.rkt"
+         "suite-plan.rkt")
 
 ;; ============================================================
 ;; Compile-limit adoption (Rel T1 SUB.2, owner-blessed 2026-07-24)
@@ -46,8 +47,8 @@
 ;; override is respected. Manual `raco make` outside the runners needs the
 ;; var in the shell (see CLAUDE.local.md + .claude/rules/testing.md).
 ;; Evidence: docs/tracking/2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md §4.2.
-(unless (getenv "PLT_CS_COMPILE_LIMIT")
-  (putenv "PLT_CS_COMPILE_LIMIT" "1000000"))
+(void (unless (getenv "PLT_CS_COMPILE_LIMIT")
+        (putenv "PLT_CS_COMPILE_LIMIT" "1000000")))  ; `void`: a module-level #t prints
 
 ;; ============================================================
 ;; Skip list support
@@ -195,6 +196,11 @@
 ;; catching a hang. ⚠ It is strictly MORE headroom than shipped before in BOTH
 ;; modes — the effective limit was the worker's hardcoded 120s, not this number.
 (define timeout-secs (make-parameter 300))
+;; Whale sharding (suite-plan.rkt § WHALE SHARDING): a file whose historical
+;; median exceeds this many seconds runs as ⌈median/target⌉ shards (capped at
+;; --jobs) on distinct workers. 30 s: the suite's work/worker bound is ~49 s at
+;; 18 workers, so no single unit should approach it. 0 disables.
+(define shard-target-secs (make-parameter 30))
 (define do-precompile? (make-parameter #t))
 (define do-pnet-cache? (make-parameter #t))
 (define show-failures? (make-parameter #f))
@@ -235,6 +241,8 @@
     (record-timings? #f)]
    ["--timeout" secs "Per-test timeout in seconds (default: 600)"
     (timeout-secs (string->number secs))]
+   ["--shard-target" secs "Shard files whose median exceeds SECS into ceil(median/SECS) units on distinct workers (default: 30, 0=off)"
+    (shard-target-secs (string->number secs))]
    ["--no-precompile" "Skip bytecode pre-compilation step"
     (do-precompile? #f)]
    ["--no-pnet-cache" "Disable .pnet module network caching (default: enabled)"
@@ -517,13 +525,29 @@
 (define (run-tests test-paths project-root)
   (define file-count (length test-paths))
 
-  ;; Step 0: Kill stale batch workers from previous runs.
-  ;; A killed test run leaves batch-worker.rkt processes alive, consuming
-  ;; resources and potentially holding file locks. Clean them up.
+  ;; Step 0: Kill ORPHANED batch workers left by a previous, killed run of THIS
+  ;; checkout's runner.
+  ;;
+  ;; ⚠⚠ THIS WAS `pkill -f batch-worker.rkt` — MACHINE-WIDE — AND IT KILLED LIVE
+  ;; RUNS. Every runner start terminated every batch worker on the machine,
+  ;; including the workers of a suite running concurrently in another session or
+  ;; worktree. Observed twice on 2026-10-13: a full suite lost all 18 workers
+  ;; mid-run (63 and 22 of 493 units reported) within seconds of a targeted run
+  ;; starting in .claude/worktrees/deferred-sweep-146-149; the live check found
+  ;; ZERO workers alive while the runner waited out its timeout — and before
+  ;; the INCOMPLETE fix below, the victim then printed "all pass".
+  ;;
+  ;; An orphan is precisely a worker whose runner died: it is reparented to
+  ;; launchd/init (PPID 1). A live run's workers are children of a live runner.
+  ;; So: PPID 1 AND this checkout's absolute batch-worker path — never another
+  ;; run's workers, never another worktree's.
   (let ([kill-result (with-handlers ([exn? (lambda (e) "")])
                        (let-values ([(proc out in err)
                                      (subprocess #f #f #f "/usr/bin/pkill"
-                                                 "-f" "batch-worker.rkt")])
+                                                 "-P" "1"
+                                                 "-f" (path->string
+                                                       (build-path project-root "tools"
+                                                                   "batch-worker.rkt")))])
                          (subprocess-wait proc)
                          (close-input-port out)
                          (close-input-port err)
@@ -670,7 +694,8 @@
   ;; PM Track 10C: Work-stealing dispatch with LPT scheduling.
   ;; Sort files by historical wall time (heaviest first) for optimal
   ;; load balance. Workers pull files from a shared queue via stdin.
-  (define jobs (min (num-jobs) file-count))
+  ;; (`jobs` is now derived from the planned UNITS below — a sharded whale run
+  ;; alone, `--tests test-path-selection.rkt`, needs one worker per shard.)
 
   ;; Read historical timings for LPT sort.
   ;;
@@ -694,61 +719,68 @@
   (define timings-path (build-path project-root "data" "benchmarks" "timings.jsonl"))
   (define LPT-HISTORY-RUNS 5)      ;; how many recent full runs to draw on
   (define LPT-MIN-FILE-COUNT 100)  ;; below this a record is a targeted run, not a suite
+  ;; ⚠ equal?-keyed (suite-plan.rkt). This was a `for/hasheq` over file-name
+  ;; STRINGS, looked up below with a freshly built string: `eq?` never matched
+  ;; (0 of 489 hits, measured 2026-10-13), so every key was +inf.0 and dispatch
+  ;; was ALPHABETICAL — including on the run that "measured impact NIL" above.
   (define historical-times
     (if (file-exists? timings-path)
-        (with-handlers ([exn? (lambda (e) (hasheq))])
-          (define lines
-            (with-input-from-file timings-path
-              (lambda ()
-                (let loop ([acc '()])
-                  (define line (read-line))
-                  (if (eof-object? line) (reverse acc) (loop (cons line acc)))))))
-          ;; Newest-first, keep only full-suite records, take at most N.
-          (define full-runs
-            (let loop ([ls (reverse lines)] [got '()])
-              (cond
-                [(or (null? ls) (>= (length got) LPT-HISTORY-RUNS)) (reverse got)]
-                [else
-                 (define rec
-                   (with-handlers ([exn? (lambda (e) #f)])
-                     (with-input-from-string (car ls) read-json)))
-                 (loop (cdr ls)
-                       (if (and rec (>= (hash-ref rec 'file_count 0) LPT-MIN-FILE-COUNT))
-                           (cons rec got)
-                           got))])))
-          ;; file -> list of observed wall_ms, then median.
-          (define observed
-            (for*/fold ([h (hash)])
-                       ([run (in-list full-runs)]
-                        [r (in-list (hash-ref run 'results '()))])
-              (define f (hash-ref r 'file ""))
-              (hash-update h f (lambda (v) (cons (hash-ref r 'wall_ms 0) v)) '())))
-          (for/hasheq ([(f ms-list) (in-hash observed)])
-            (define sorted (sort ms-list <))
-            (values f (list-ref sorted (quotient (length sorted) 2)))))
-        (hasheq)))
+        (with-handlers ([exn? (lambda (e) (hash))])
+          (historical-medians (file->lines timings-path)
+                              #:runs LPT-HISTORY-RUNS
+                              #:min-file-count LPT-MIN-FILE-COUNT))
+        (hash)))
 
-  ;; Sort: heaviest first. Unknown files get +inf.0 (conservative).
-  (define sorted-paths
-    (sort test-paths >
-          #:key (lambda (p)
-                  (define name (path->string (file-name-from-path (string->path p))))
-                  (hash-ref historical-times name +inf.0))))
+  ;; Plan work units: heaviest first (LPT); a whale becomes K shards
+  ;; (suite-plan.rkt plan-units). Unknown files get +inf.0 (conservative: first).
+  (define units
+    (plan-units test-paths
+                (lambda (p)
+                  (hash-ref historical-times
+                            (path->string (file-name-from-path (string->path p)))
+                            #f))
+                #:target-ms (* 1000 (shard-target-secs))
+                #:max-k (num-jobs)))
+  (define unit-count (length units))
+  (define sharded-files
+    (remove-duplicates (for/list ([u (in-list units)] #:when (work-unit-shard u))
+                         (work-unit-path u))))
+  (define jobs (min (num-jobs) unit-count))
 
   ;; Resolve batch worker path
   (define batch-worker-path
     (path->string (build-path project-root "tools" "batch-worker.rkt")))
 
-  (printf "\n--- Running ~a files (~a batch workers, work-stealing, timeout: ~as) ---\n"
-          file-count jobs (timeout-secs))
+  (printf "\n--- Running ~a files~a (~a batch workers, work-stealing, timeout: ~as) ---\n"
+          file-count
+          (if (null? sharded-files)
+              ""
+              (format " as ~a units — ~a sharded: ~a" unit-count (length sharded-files)
+                      (string-join
+                       (for/list ([f (in-list sharded-files)])
+                         (format "~a×~a" (path->string (file-name-from-path (string->path f)))
+                                 (for/sum ([u (in-list units)]) (if (equal? (work-unit-path u) f) 1 0))))
+                       ", ")))
+          jobs (timeout-secs))
 
-  ;; Shared work queue: workers pull files from here.
-  ;; Sentinel 'done signals each worker to exit (one per worker).
-  (define work-queue (make-async-channel))
-  (for ([path (in-list sorted-paths)])
-    (async-channel-put work-queue path))
-  (for ([_ (in-range jobs)])
-    (async-channel-put work-queue 'done))
+  ;; Pending units + what each worker has already run. Dispatch gives a worker
+  ;; the first pending unit for a file it has NOT run (pick-eligible): two shards
+  ;; of one module in one worker would make the second a cached no-op. A worker
+  ;; with nothing eligible is retired (stdin closed). Liveness argument and its
+  ;; simulation: suite-plan.rkt pick-eligible / tests/test-suite-plan.rkt.
+  (define pending units)
+  (define worker-ran (make-hasheq))          ;; worker stdin port -> (hash path #t)
+  (define (dispatch-next! stdin)
+    (define ran (hash-ref! worker-ran stdin make-hash))
+    (define-values (u rest) (pick-eligible pending (lambda (p) (hash-ref ran p #f))))
+    (cond
+      [u (set! pending rest)
+         (hash-set! ran (work-unit-path u) #t)
+         (displayln (work-unit->line u) stdin)
+         (flush-output stdin)]
+      [else
+       (with-handlers ([exn? void])
+         (close-output-port stdin))]))
 
   ;; Spawn all batch workers in --stdin mode
   (define result-ch (make-async-channel))
@@ -770,11 +802,8 @@
                   "--file-timeout" file-timeout-arg))
     (set! all-procs (cons proc all-procs))
     (set! all-stdins (cons stdin all-stdins))
-    ;; Send first file to each worker to get them started
-    (define first-file (async-channel-try-get work-queue))
-    (when first-file
-      (displayln first-file stdin)
-      (flush-output stdin))
+    ;; Send the first unit to each worker to get them started
+    (dispatch-next! stdin)
     ;; Reader thread: parse JSONL from worker stdout → result channel
     (thread
      (λ ()
@@ -798,7 +827,7 @@
   (define collected '())
   (define timeout-count 0)
   (define bailed? #f)
-  (let loop ([remaining file-count] [count 0] [first-waited 0])
+  (let loop ([remaining unit-count] [count 0] [first-waited 0])
     (when (> remaining 0)
       ;; Track 10B: Use short timeout (30s) for the FIRST result.
       ;; If no result arrives in 30s, workers likely crashed silently.
@@ -823,21 +852,14 @@
          ;; PM Track 10C: unpack (cons worker-stdin result-hash)
          (define worker-stdin (car raw))
          (define r (cdr raw))
-         ;; Dispatch next file to this worker
-         (define next-file (async-channel-try-get work-queue))
-         (cond
-           [(and next-file (not (eq? next-file 'done)))
-            (displayln next-file worker-stdin)
-            (flush-output worker-stdin)]
-           [else
-            ;; No more files — close this worker's stdin
-            (with-handlers ([exn? void])
-              (close-output-port worker-stdin))])
+         ;; Dispatch this worker's next eligible unit (or retire it)
+         (dispatch-next! worker-stdin)
          (define ms (hash-ref r 'wall_ms))
          (define status (hash-ref r 'status))
-         (printf "[~a/~a] ~a ~a (~as)\n"
-                 (add1 count) file-count
+         (printf "[~a/~a] ~a~a ~a (~as)\n"
+                 (add1 count) unit-count
                  (hash-ref r 'file)
+                 (if (hash-ref r 'shard #f) (format " [shard ~a]" (hash-ref r 'shard)) "")
                  (status-label status)
                  (real->decimal-string (/ ms 1000.0) 1))
          (flush-output)
@@ -921,7 +943,10 @@
            (with-handlers ([exn:fail? void])
              (subprocess-kill p #t)))])))
 
-  (define file-results (reverse collected))
+  ;; One result per UNIT as it arrived; folded to one result per FILE for the
+  ;; summary counts and the timings record (suite-plan.rkt merge-shard-results).
+  (define unit-results (reverse collected))
+  (define file-results (merge-shard-results unit-results))
 
   ;; Wait for all worker processes to finish
   (for ([p (in-list all-procs)])
@@ -931,25 +956,56 @@
   (define t1 (current-inexact-monotonic-milliseconds))
   (define total-wall-ms (inexact->exact (round (- t1 t0))))
   (define total-tests (apply + (map (λ (r) (hash-ref r 'tests)) file-results)))
-  (define all-pass? (andmap (λ (r) (string=? (hash-ref r 'status) "pass")) file-results))
+  ;; ⚠ INCOMPLETE ≠ PASS. Every unit dispatched must report. The no-result
+  ;; TIMEOUT path below kills the workers but used to fall through to here with
+  ;; `bailed?` unset, so `andmap` over the results that DID arrive printed
+  ;; "all pass" and recorded the partial run to timings.jsonl — observed
+  ;; 2026-10-13: "1629 tests in 343.6s (490 files, …, all pass)" after 63 of 493
+  ;; units, with a 63-result record written as a full run. A missing result is
+  ;; now a failed, unrecorded run, whatever path produced it.
+  (define incomplete? (< (length unit-results) unit-count))
+  (define all-pass?
+    (and (not incomplete?)
+         (andmap (λ (r) (string=? (hash-ref r 'status) "pass")) file-results)))
 
   ;; Print summary
   (define failed-files
     (filter (λ (r) (not (string=? (hash-ref r 'status) "pass"))) file-results))
+  ;; Failures are LISTED per unit, so a failing shard is named as such.
+  (define failed-units
+    (filter (λ (r) (not (string=? (hash-ref r 'status) "pass"))) unit-results))
+  (define (unit-name r)
+    (if (hash-ref r 'shard #f)
+        (format "~a [shard ~a]" (hash-ref r 'file) (hash-ref r 'shard))
+        (hash-ref r 'file)))
+  ;; A passing file has no failure log of any form: clear stale per-shard logs
+  ;; (and, for a sharded file, the whole-file log) left by earlier runs.
+  (let ([fail-dir (build-path project-root "data" "benchmarks" "failures")])
+    (when (directory-exists? fail-dir)
+      (for* ([r (in-list file-results)]
+             #:when (string=? (hash-ref r 'status) "pass")
+             [p (in-list (directory-list fail-dir))])
+        (define f (hash-ref r 'file))
+        (define s (path->string p))
+        (when (or (string-prefix? s (string-append f ".shard-"))
+                  (and (hash-ref r 'shards #f) (string=? s (string-append f ".log"))))
+          (with-handlers ([exn:fail? void])
+            (delete-file (build-path fail-dir p)))))))
   (define completed-count (length file-results))
   (printf "\n~a tests in ~as (~a~a files, ~a batch workers, ~a)\n"
           total-tests
           (real->decimal-string (/ total-wall-ms 1000.0) 1)
-          (if bailed? (format "~a of " completed-count) "")
+          (if (or bailed? incomplete?) (format "~a of " completed-count) "")
           file-count
           jobs
           (cond [bailed? (format "ABORTED — ~a timeouts" timeout-count)]
+                [incomplete? (format "INCOMPLETE — ~a of ~a units reported" (length unit-results) unit-count)]
                 [all-pass? "all pass"]
                 [else (format "~a FAILURES" (length failed-files))]))
   (unless all-pass?
-    (for ([r (in-list failed-files)])
+    (for ([r (in-list failed-units)])
       (printf "\n~a\n" (make-string 60 #\─))
-      (printf "FAILED: ~a\n" (hash-ref r 'file))
+      (printf "FAILED: ~a\n" (unit-name r))
       (when (hash-has-key? r 'error_output)
         (define msg (hash-ref r 'error_output))
         ;; Print full diagnostic content inline — no need to open log files
@@ -983,19 +1039,20 @@
                 (real->decimal-string (/ total-wall-ms 1000.0) 1)
                 file-count jobs
                 (cond [bailed? (format ", ABORTED — ~a timeouts" timeout-count)]
+                      [incomplete? (format ", INCOMPLETE — ~a of ~a units reported" (length unit-results) unit-count)]
                       [all-pass? ", all pass"]
                       [else (format ", ~a FAILURES" (length failed-files))]))
         (unless all-pass?
           (printf "\nFailed files:\n")
-          (for ([r (in-list failed-files)])
-            (printf "  ~a\n" (hash-ref r 'file))
+          (for ([r (in-list failed-units)])
+            (printf "  ~a\n" (unit-name r))
             (when (hash-has-key? r 'error_output)
               (define lines (string-split (hash-ref r 'error_output) "\n"))
               (for ([line (in-list (take lines (min 5 (length lines))))])
                 (printf "    ~a\n" line))))))))
 
   ;; Record to JSONL (unless --no-record or early bail)
-  (when (and (record-timings?) (not bailed?))
+  (when (and (record-timings?) (not bailed?) (not incomplete?))
     (define timings-file (make-timings-path project-root))
     (define record
       (hasheq 'schema_version 3
@@ -1009,13 +1066,14 @@
               'total_wall_ms total-wall-ms
               'total_tests total-tests
               'file_count file-count
+              'unit_count unit-count
               'all_pass all-pass?
               'source "affected"
               'results file-results))
     (append-run-record timings-file record)
     (printf "Timings recorded to ~a\n" (path->string timings-file)))
 
-  (when bailed? (exit 2))
+  (when (or bailed? incomplete?) (exit 2))
   (unless all-pass? (exit 1)))
 
 (main)
