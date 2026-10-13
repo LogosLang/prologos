@@ -168,6 +168,27 @@
   (define-values (n3 _r) (tchamp-delete-owned! node3 sb3 2 2 edit3))
   (check-true (champ-empty? (tchamp-freeze-owned n3 (unbox sb3) edit3))))
 
+(test-case "C2c: owner-ID transient insert into / delete from a COLLISION node keeps the size"
+  ;; Found by the DEFERRED 146 model property: tnode-insert! and tnode-delete!
+  ;; returned collision-insert / collision-delete's values without touching the
+  ;; size box (tnode-insert-join!'s collision branch already did), so a frozen
+  ;; map's champ-size drifted from its contents. Keys 'a 'b 'c share hash 7.
+  (define-values (node edit size) (champ-transient-owned champ-empty))
+  (define sb (box size))
+  (define n1 (for/fold ([n node]) ([k '(a b c)])
+               (define-values (n* added?) (tchamp-insert-owned! n sb 7 k (symbol->string k) edit))
+               (check-true added?)
+               n*))
+  (check-equal? (unbox sb) 3)
+  (define-values (n2 removed?) (tchamp-delete-owned! n1 sb 7 'b edit))
+  (check-true removed?)
+  (check-equal? (unbox sb) 2)
+  (define m (tchamp-freeze-owned n2 (unbox sb) edit))
+  (check-equal? (champ-size m) 2)
+  (check-equal? (champ-lookup m 7 'a) "a")
+  (check-equal? (champ-lookup m 7 'b) 'none)
+  (check-equal? (champ-lookup m 7 'c) "c"))
+
 (test-case "C3: owner-ID transient insert-join"
   (define (sum-merge old new) (+ old new))
   (define m (champ-insert champ-empty 42 'k 10))

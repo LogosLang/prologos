@@ -743,8 +743,12 @@
 (define (tnode-insert! node hash key val level edit size-box)
   (cond
     [(champ-collision? node)
-     ;; Collision nodes: fall back to persistent insert (rare path)
-     (collision-insert node hash key val)]
+     ;; Collision nodes: fall back to persistent insert (rare path). The size
+     ;; box must still see a new key — the persistent path counts it at the root
+     ;; from `added?`; the transient counts in the box (as tnode-insert-join! does).
+     (define-values (coll added?) (collision-insert node hash key val))
+     (when added? (set-box! size-box (add1 (unbox size-box))))
+     (values coll added?)]
     [else
      (define seg (hash-segment hash level))
      (define bit (segment-bit seg))
@@ -822,7 +826,11 @@
 (define (tnode-delete! node hash key level edit size-box)
   (cond
     [(champ-collision? node)
-     (collision-delete node key)]
+     ;; Same bookkeeping as the transient collision insert: the box must see
+     ;; the removal (the persistent path counts it at the root from `removed?`).
+     (define-values (coll removed?) (collision-delete node key))
+     (when removed? (set-box! size-box (sub1 (unbox size-box))))
+     (values coll removed?)]
     [else
      (define seg (hash-segment hash level))
      (define bit (segment-bit seg))
