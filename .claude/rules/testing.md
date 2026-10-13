@@ -117,6 +117,12 @@ Allowed through: `raco`; `tools/scratch-run.sh`; `run-affected-tests.rkt` and
 carrying `timeout -k` / `--kill-after`. A bare `timeout N` is DENIED on purpose —
 see the SIGTERM fact above.
 
+It also DENIES a compile — `raco make|setup`, `raco pkg install|update`,
+`raco test --make`, however raco is spelled — unless the command itself gives
+it `PLT_CS_COMPILE_LIMIT` ≥ 1000000 (inline `VAR=… raco`, `env VAR=…`, or an
+`export` earlier in the SAME command). The hook reads only the command text, so
+an export from an earlier call does not count: inline it. Why: DEFERRED 159.
+
 **It is not committed by default.** `.claude/settings.json` is untracked in this
 repo (`.claude/settings.local.json` is the tracked one), so the hook must be
 installed per clone. To install:

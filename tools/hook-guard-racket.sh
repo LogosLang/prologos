@@ -14,10 +14,16 @@
 # Reads the hook payload on stdin, decides, and prints a PreToolUse decision.
 # Silence (exit 0, no output) = allow.
 #
-# DENIES: a command that invokes the racket binary with no timeout/gtimeout -k.
+# DENIES:
+#   · a command that invokes the racket binary with no timeout/gtimeout -k;
+#   · a COMPILE — raco make|setup, raco pkg install|update, raco test --make,
+#     however raco is spelled (bare, any path, racket -l- raco) — whose
+#     environment lacks PLT_CS_COMPILE_LIMIT >= 1000000 (DEFERRED 159; the
+#     environment model is described at guard_analyse below).
 # ALLOWS:
 #   · anything not invoking racket at all (including `raco`, which is bounded
-#     compilation — and whose path contains no "/racket" token anyway)
+#     compilation — and whose path contains no "/racket" token anyway), as
+#     long as a compile carries the limit
 #   · tools/scratch-run.sh                (bounds it itself)
 #   · run-affected-tests.rkt, bench-ab.rkt (own their workers and timeouts)
 #   · any command already wrapped in `timeout -k` / `gtimeout -k`
@@ -43,6 +49,224 @@ deny() {
   }'
   exit 0
 }
+
+# ════════════════════════════════════════════════════════════════════════════
+# COMMAND-SHAPE RULES (DEFERRED 159). These need to know WHICH word of a simple
+# command is the command, and which environment it runs with, so they work on a
+# tokenized command rather than on regexes over the raw string:
+#
+#   · split at unquoted ; & && | || ( ) ` and newlines; drop # comments; honour
+#     '…', "…" and backslash escapes (a quoted "raco make" is one word, so
+#     `git commit -m "raco make …"` and `grep "raco make"` are not compiles);
+#   · per simple command: skip shell keywords ({ ! do then …), take leading
+#     VAR=… assignments as that command's environment, then see THROUGH
+#     executors (timeout, env, nice, nohup, time, exec, xargs, sudo, …) to the
+#     command they run; `find … -exec CMD` and `bash|sh|zsh -c 'CMD'` are
+#     analysed as commands of their own, with the environment they inherit.
+#   · environment model for PLT_CS_COMPILE_LIMIT, in order of the command text:
+#     `VAR=v cmd` and `env VAR=v cmd` set it for cmd only; `export VAR=v` (or
+#     `VAR=v; export VAR`) sets it for every LATER command; a bare `VAR=v;` is a
+#     shell variable that a child does NOT see; `env -i` clears it; `unset`
+#     removes it. An export from an EARLIER Bash call is invisible here — the
+#     payload is only this command's text — so the message says to inline it.
+#
+# The analyser prints one finding per line; empty output = nothing to refuse.
+#   DENY159 <TAB> <offending simple command>
+guard_analyse() {
+  awk '
+function base(s) { sub(/.*\//, "", s); return s }
+function is_assign(t) { return t ~ /^[A-Za-z_][A-Za-z0-9_]*=/ }
+function aname(t) { return substr(t, 1, index(t, "=") - 1) }
+function aval(t) { return substr(t, index(t, "=") + 1) }
+function limit_ok(set, val) { return set && val ~ /^[0-9]+$/ && val + 0 >= 1000000 }
+function flush_word() {
+  if (have) { NT++; T[NSEG, NT] = word }
+  word = ""; have = 0
+}
+function end_seg() {
+  flush_word()
+  if (NT > 0) { SEGNT[NSEG] = NT; NSEG++ }
+  NT = 0
+}
+function tokenize(str,    n, i, c, nc, inS, inD) {
+  NSEG = 1; NT = 0; word = ""; have = 0; inS = 0; inD = 0
+  n = length(str)
+  for (i = 1; i <= n; i++) {
+    c = substr(str, i, 1)
+    if (inS) { if (c == "\047") inS = 0; else word = word c; continue }
+    if (inD) {
+      if (c == "\\" && i < n) {
+        nc = substr(str, i + 1, 1)
+        if (nc == "\"" || nc == "\\" || nc == "$" || nc == "`") { word = word nc; i++; continue }
+        if (nc == "\n") { i++; continue }
+      }
+      if (c == "\"") inD = 0; else word = word c
+      continue
+    }
+    if (c == "\\") {
+      if (i < n) { nc = substr(str, i + 1, 1); i++; if (nc != "\n") { word = word nc; have = 1 } }
+      continue
+    }
+    if (c == "\047") { inS = 1; have = 1; continue }
+    if (c == "\"") { inD = 1; have = 1; continue }
+    if (c == " " || c == "\t") { flush_word(); continue }
+    if (c == "#" && !have) { while (i < n && substr(str, i + 1, 1) != "\n") i++; continue }
+    if (c == "&") {
+      # 2>&1, >&2, &>file are redirections, not separators
+      if ((have && word ~ /[<>]$/) || substr(str, i + 1, 1) == ">") { word = word c; have = 1; continue }
+      end_seg(); continue
+    }
+    if (c == ";" || c == "|" || c == "\n" || c == "(" || c == ")" || c == "`") { end_seg(); continue }
+    word = word c; have = 1
+  }
+  end_seg()
+}
+function seg_text(s, a, b,    j, out) {
+  out = ""
+  for (j = a; j <= b; j++) out = out (j > a ? " " : "") T[s, j]
+  gsub(/[\t\n]/, " ", out)
+  return out
+}
+function enqueue(str, set, val) { QN++; QS[QN] = str; QSET[QN] = set; QVAL[QN] = val }
+
+# One simple command: tokens T[s, i..e], run with the limit state (set, val).
+function analyse_cmd(s, i, e, set, val,    t, b, j, k, sub1, c1, compiling) {
+  while (i <= e) {
+    t = T[s, i]; b = base(t)
+    if (b in EXEC) {
+      i++
+      if (b == "env" || b == "sudo") {
+        while (i <= e) {
+          t = T[s, i]
+          if (t == "-i" || t == "-" || t == "--ignore-environment") { set = 0; i++; continue }
+          if (t ~ /^-/) { if (index(ARGOPT[b], " " t " ")) i++; i++; continue }
+          if (is_assign(t)) { if (aname(t) == LIM) { set = 1; val = aval(t) }; i++; continue }
+          break
+        }
+      } else {
+        while (i <= e && T[s, i] ~ /^-./) { if (index(ARGOPT[b], " " T[s, i] " ")) i++; i++ }
+        if ((b == "timeout" || b == "gtimeout") && i <= e) i++      # the DURATION
+      }
+      continue
+    }
+    if (b == "find") {
+      for (j = i + 1; j <= e; j++)
+        if (T[s, j] == "-exec" || T[s, j] == "-execdir" || T[s, j] == "-ok" || T[s, j] == "-okdir") {
+          for (k = j + 1; k <= e && T[s, k] != ";" && T[s, k] != "+"; k++) ;
+          analyse_cmd(s, j + 1, k - 1, set, val)
+          j = k
+        }
+      return
+    }
+    if (b in SHELLS) {
+      for (j = i + 1; j < e; j++) {
+        if (T[s, j] ~ /^-[A-Za-z]*c[A-Za-z]*$/) { enqueue(T[s, j + 1], set, val); return }
+        if (T[s, j] !~ /^-/) break
+      }
+      return
+    }
+    if (b == "eval") { enqueue(seg_text(s, i + 1, e), set, val); return }
+    break
+  }
+  if (i > e) return
+
+  # ── DEFERRED 159: raco make|setup, raco pkg install|update, raco test --make,
+  # spelled as raco (any path) or as racket -l-/-l/--lib raco[/main.rkt].
+  sub1 = 0
+  if (b == "raco") sub1 = i + 1
+  else if (b == "racket")
+    for (j = i + 1; j < e; j++)
+      if ((T[s, j] == "-l-" || T[s, j] == "-l" || T[s, j] == "--lib") && T[s, j + 1] ~ /^raco(\/main(\.rkt)?)?$/) { sub1 = j + 2; break }
+  if (sub1 && sub1 <= e) {
+    compiling = 0; c1 = T[s, sub1]
+    if (c1 == "make" || c1 == "setup") compiling = 1
+    else if (c1 == "pkg" && sub1 < e && (T[s, sub1 + 1] == "install" || T[s, sub1 + 1] == "update")) compiling = 1
+    else if (c1 == "test") { for (j = sub1 + 1; j <= e; j++) if (T[s, j] == "-y" || T[s, j] == "--make") compiling = 1 }
+    if (compiling && !limit_ok(set, val)) print "DENY159\t" seg_text(s, i, e)
+  }
+}
+
+function analyse_segment(s,    i, e, set, val, pre, pv, j) {
+  i = 1; e = SEGNT[s]
+  while (i <= e && (T[s, i] in KW)) i++
+  set = EXP_SET; val = EXP_VAL; pre = 0
+  while (i <= e && is_assign(T[s, i])) {
+    if (aname(T[s, i]) == LIM) { set = 1; val = aval(T[s, i]); pre = 1; pv = val }
+    i++
+  }
+  if (i > e) {                     # VAR=v alone: a shell variable, NOT in a child env
+    if (pre) { SH_SET = 1; SH_VAL = pv; if (EXP_SET) EXP_VAL = pv }
+    return
+  }
+  if (T[s, i] == "export") {
+    for (j = i + 1; j <= e; j++) {
+      if (is_assign(T[s, j]) && aname(T[s, j]) == LIM) { EXP_SET = 1; EXP_VAL = aval(T[s, j]); SH_SET = 1; SH_VAL = EXP_VAL }
+      else if (T[s, j] == LIM && SH_SET) { EXP_SET = 1; EXP_VAL = SH_VAL }
+    }
+    return
+  }
+  if (T[s, i] == "unset") {
+    for (j = i + 1; j <= e; j++) if (T[s, j] == LIM) { EXP_SET = 0; SH_SET = 0 }
+    return
+  }
+  analyse_cmd(s, i, e, set, val)
+}
+
+{ buf = buf (NR > 1 ? "\n" : "") $0 }
+END {
+  LIM = "PLT_CS_COMPILE_LIMIT"
+  split("{ } ! if then else elif do while until", a, " "); for (k in a) KW[a[k]] = 1
+  split("timeout gtimeout env nice nohup time exec command builtin xargs sudo caffeinate stdbuf setsid", a, " ")
+  for (k in a) EXEC[a[k]] = 1
+  split("bash sh zsh dash ksh", a, " "); for (k in a) SHELLS[a[k]] = 1
+  ARGOPT["timeout"] = ARGOPT["gtimeout"] = " -k -s --kill-after --signal "
+  ARGOPT["nice"] = " -n "
+  ARGOPT["xargs"] = " -E -I -J -L -n -P -R -S -s -d -a "
+  ARGOPT["sudo"] = " -u -g -C -h -p -U -r -t -D -R -T "
+  ARGOPT["env"] = " -u -C -S -P "
+  ARGOPT["exec"] = " -a "
+  ARGOPT["time"] = " -f -o "
+  ARGOPT["caffeinate"] = " -t -w "
+  QN = 1; QS[1] = buf; QSET[1] = 0; QVAL[1] = ""
+  for (q = 1; q <= QN && q <= 32; q++) {
+    EXP_SET = QSET[q]; EXP_VAL = QVAL[q]; SH_SET = 0; SH_VAL = ""
+    tokenize(QS[q])
+    for (s = 1; s < NSEG; s++) analyse_segment(s)
+  }
+}'
+}
+
+findings="$(printf '%s' "$cmd" | guard_analyse)"
+
+while IFS=$'\t' read -r kind what; do
+  case "$kind" in
+    DENY159) deny "Refusing a compile without PLT_CS_COMPILE_LIMIT (DEFERRED 159):
+
+    $what
+
+Racket CS compiles a function larger than PLT_CS_COMPILE_LIMIT (default 10000)
+with the INTERPRETER. The compiler's giant \`match\` functions (whnf/nf,
+shift/subst, the elaborator and typing-core arms) are all larger, so a build
+without the limit is silently slow: no error, no warning. MEASURED 2026-10-13:
+main ran that way for ~6.5 h — suite 1.23-1.28x slower, single files up to 25x.
+The test runner's putenv cannot repair it afterwards: raco make never recompiles
+a .zo that is already up to date.
+
+Put the limit ON THIS COMMAND (inline):
+
+    PLT_CS_COMPILE_LIMIT=1000000 \"/Applications/Racket v9.3/bin/raco\" make -j 4 driver.rkt
+
+  or  env PLT_CS_COMPILE_LIMIT=1000000 <cmd>
+  or  export PLT_CS_COMPILE_LIMIT=1000000 && <cmd>   (in the SAME command)
+
+An export made by an EARLIER command is invisible to this check — it reads only
+this command's text — so inline it even if your shell already has it. The value
+must be a number >= 1000000. Use the quoted 9.3 binary: a bare \`raco\` on PATH
+can resolve to /opt/homebrew/bin/raco, which is Racket 9.0.
+raco setup, raco pkg install|update and raco test --make compile too; and since
+prologos-dev is a LINKED package, they rebuild the MAIN checkout's compiled/." ;;
+  esac
+done <<<"$findings"
 
 # ── Is the racket BINARY invoked? Two forms, both anchored so that merely
 # mentioning the word (grep racket, echo racket, a path in a comment) is not a
