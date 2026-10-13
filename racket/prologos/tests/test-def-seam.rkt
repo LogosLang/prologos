@@ -78,7 +78,7 @@
 ;; value kills exactly one). String-level runs cannot pin containment.
 (define (run-file-ws s)
   (define tmp (make-temporary-file "prologos-defseam-~a.prologos"))
-  (call-with-output-file tmp #:exists 'replace
+  (call-with-output-file tmp #:exists 'truncate
     (lambda (out) (display s out)))
   (define result
     (parameterize ([current-file-module-network-ref

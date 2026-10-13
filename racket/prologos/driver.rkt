@@ -96,6 +96,8 @@
          pnet-restore-rows
          restore-registries!   ;; the unit that table drives; exported for the same test
          process-file
+         call-with-file-registry-scope  ;; DEFERRED 160 (SW-27): the unit scope, for test-support
+         file-unit-scoped-params        ;; … and the list it binds, for the class-guard test
          process-string
          process-string/return-net    ;; PPN 4C Addendum Phase 3C.b.5.b — net-returning variant for cell-state inspection
          process-string-ws
@@ -2736,6 +2738,42 @@
       (current-file-module-network-ref
        (struct-copy module-network-ref mnr [prop-net driven])))))
 
+;; ═══════════════════════════════════════════════════════════════════════════
+;; DEFERRED 160 (SW-27): a program's registry state is scoped to its compilation unit
+;; ═══════════════════════════════════════════════════════════════════════════
+;; Registrations (`register-spec!`, traits, impls, ctors, …) UPDATE their parameter by
+;; assignment, and `process-file-inner` seeds each file's registry cells from those
+;; parameters (init-*-cells!). With nothing binding them per program, a `spec` from one
+;; program reached a later program in the same process — the LSP re-checking a document
+;; after the user deleted the spec still applied it ("has both a spec and inline type
+;; annotations"); a spec in `ns test` broke `defn` of the same bare name in `ns t`.
+;; `load-module` already scopes specs per module (fresh store, below); this does the same
+;; for the top-level unit, as a SCOPE rather than a restore: every parameter a unit's
+;; cells are seeded from, and every cell id it assigns, is bound to the caller's CURRENT
+;; value (so prelude/fixture state is inherited) and the persistent registry network is
+;; FORKED (`box` of the caller's network — O(1), networks are persistent values). Nothing
+;; a unit writes can escape it, by construction. The macros lists are the ones the batch
+;; worker snapshots (macros.rkt `macros-registry-params`), so the two cannot drift.
+(define (file-unit-scoped-params)
+  (append (macros-registry-params)
+          (macros-cell-id-params)
+          (list current-coercion-warnings current-deprecation-warnings current-capability-warnings
+                current-coercion-warnings-cell-id current-deprecation-warnings-cell-id
+                current-capability-warnings-cell-id
+                current-narrow-constraints current-narrow-var-constraints
+                current-narrow-constraints-cell-id current-narrow-var-constraints-cell-id
+                current-attribute-map-cell-id)))
+
+(define (call-with-file-registry-scope thunk)
+  (let bind ([ps (file-unit-scoped-params)])
+    (if (null? ps)
+        (parameterize ([current-persistent-registry-net-box
+                        (let ([b (current-persistent-registry-net-box)])
+                          (and b (box (unbox b))))])
+          (thunk))
+        (parameterize ([(car ps) ((car ps))])
+          (bind (cdr ps))))))
+
 ;; `#:evaluate? #f` — CHECK-ONLY: every top-level `eval` form is processed as
 ;; its static projection (`infer`: type + trait resolution, no `nf`), so the
 ;; file's programs are type-checked but not run. Defs, specs, relations and all
@@ -2745,7 +2783,11 @@
 ;; unaffected by construction. Consumer: the LSP diagnostics path
 ;; (lsp/server.rkt `elaborate-and-publish-diagnostics!`).
 (define (process-file path #:verbose [verbose? #f] #:source-dir [source-dir #f]
-                      #:evaluate? [evaluate? #t])
+                      #:evaluate? [evaluate? #t]
+                      ;; SW-27: run INSIDE the unit's registry scope after its last command,
+                      ;; for a caller that reads the unit's final registries (the LSP's
+                      ;; per-document spec store). Its result is discarded.
+                      #:before-unit-exit [before-unit-exit #f])
   ;; Resource-path anchoring (relative-path fix, 2026-06-29): a .prologos program's
   ;; relative `read-file`/`read-csv` paths resolve against the SOURCE FILE's
   ;; directory (location-independent, mirroring module resolution against an
@@ -2777,7 +2819,10 @@
                  [current-general-completions (make-hasheq)]
                  [current-directory (or anchor-dir (current-directory))])
     (reset-meta-store!)
-    (process-file-inner abs-path #:verbose verbose? #:evaluate? evaluate?)))
+    (call-with-file-registry-scope
+     (λ ()
+       (begin0 (process-file-inner abs-path #:verbose verbose? #:evaluate? evaluate?)
+               (when before-unit-exit (before-unit-exit)))))))
 
 (define (process-file-inner path #:verbose [verbose? #f] #:evaluate? [evaluate? #t])
   (define path-str (if (string? path) path (path->string path)))

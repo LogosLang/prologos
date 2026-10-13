@@ -37,7 +37,7 @@
 
 (define (run-file-ws s)
   (define tmp (make-temporary-file "prologos-defmacro-~a.prologos"))
-  (call-with-output-file tmp #:exists 'replace (lambda (out) (display s out)))
+  (call-with-output-file tmp #:exists 'truncate (lambda (out) (display s out)))
   (define result
     (parameterize ([current-file-module-network-ref
                     (module-network-add-import (make-module-network)

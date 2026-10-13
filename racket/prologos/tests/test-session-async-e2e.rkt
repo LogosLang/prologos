@@ -67,15 +67,18 @@
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
                  )
-    (process-file (build-path here "ws-session-e2e-03.prologos"))
-    ;; AsyncPing session registered with async types
-    (define entry (lookup-session 'AsyncPing))
-    (check-true (session-entry? entry))
-    (define st (session-entry-session-type entry))
-    (check-true (sess-async-send? st))
-    (define cont (sess-async-send-cont st))
-    (check-true (sess-async-recv? cont))
-    (check-true (sess-end? (sess-async-recv-cont cont)))))
+    ;; SW-27 (DEFERRED 160): the file's registrations live in its unit; read them there.
+    (process-file (build-path here "ws-session-e2e-03.prologos")
+      #:before-unit-exit
+      (λ ()
+        ;; AsyncPing session registered with async types
+        (define entry (lookup-session 'AsyncPing))
+        (check-true (session-entry? entry))
+        (define st (session-entry-session-type entry))
+        (check-true (sess-async-send? st))
+        (define cont (sess-async-send-cont st))
+        (check-true (sess-async-recv? cont))
+        (check-true (sess-end? (sess-async-recv-cont cont)))))))
 
 (test-case "e2e-file: mixed session has async+sync structure"
   (parameterize ([current-ns-context #f]
@@ -83,19 +86,22 @@
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
                  )
-    (process-file (build-path here "ws-session-e2e-03.prologos"))
-    (define entry (lookup-session 'MixedProto))
-    (check-true (session-entry? entry))
-    (define st (session-entry-session-type entry))
-    ;; !!Nat → ?String → !Bool → ??Nat → end
-    (check-true (sess-async-send? st))
-    (define s2 (sess-async-send-cont st))
-    (check-true (sess-recv? s2))
-    (define s3 (sess-recv-cont s2))
-    (check-true (sess-send? s3))
-    (define s4 (sess-send-cont s3))
-    (check-true (sess-async-recv? s4))
-    (check-true (sess-end? (sess-async-recv-cont s4)))))
+    ;; SW-27 (DEFERRED 160): the file's registrations live in its unit; read them there.
+    (process-file (build-path here "ws-session-e2e-03.prologos")
+      #:before-unit-exit
+      (λ ()
+        (define entry (lookup-session 'MixedProto))
+        (check-true (session-entry? entry))
+        (define st (session-entry-session-type entry))
+        ;; !!Nat → ?String → !Bool → ??Nat → end
+        (check-true (sess-async-send? st))
+        (define s2 (sess-async-send-cont st))
+        (check-true (sess-recv? s2))
+        (define s3 (sess-recv-cont s2))
+        (check-true (sess-send? s3))
+        (define s4 (sess-send-cont s3))
+        (check-true (sess-async-recv? s4))
+        (check-true (sess-end? (sess-async-recv-cont s4)))))))
 
 (test-case "e2e-file: dual of async session"
   (define results (run-file "ws-session-e2e-03.prologos"))
@@ -110,9 +116,12 @@
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
                  )
-    (process-file (build-path here "ws-session-e2e-03.prologos"))
-    (define entry (lookup-strategy 'async-plan))
-    (check-true (strategy-entry? entry))
-    (define props (strategy-entry-properties entry))
-    (check-equal? (hash-ref props ':scheduler-io) ':blocking-ok)
-    (check-equal? (hash-ref props ':fuel) 100000)))
+    ;; SW-27 (DEFERRED 160): the file's registrations live in its unit; read them there.
+    (process-file (build-path here "ws-session-e2e-03.prologos")
+      #:before-unit-exit
+      (λ ()
+        (define entry (lookup-strategy 'async-plan))
+        (check-true (strategy-entry? entry))
+        (define props (strategy-entry-properties entry))
+        (check-equal? (hash-ref props ':scheduler-io) ':blocking-ok)
+        (check-equal? (hash-ref props ':fuel) 100000)))))

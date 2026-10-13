@@ -984,7 +984,7 @@
          ;; already interned `symbol$$N` tags (serialize-sym), so symbol identity
          ;; is what the text format gave.
          (s-exp->fasl pnet-body out))
-       #:exists 'replace)
+       #:exists 'truncate)
      (rename-file-or-directory tmp-path pnet-path #t)
      pnet-path))
 

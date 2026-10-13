@@ -10,6 +10,9 @@
 ;;; Usage:
 ;;;   racket tools/parity-test.rkt           — run all solver test files
 ;;;   racket tools/parity-test.rkt FILE ...  — run specific files only
+;;;   … --output PATH                        — result file (default: a new
+;;;      data/benchmarks/runs/parity-<time>.txt; the committed baseline is
+;;;      data/benchmarks/parity-baseline.txt — DEFERRED 155)
 ;;;
 
 (require racket/system
@@ -79,7 +82,15 @@
 ;; ============================================================
 
 (define (main)
-  (define args (vector->list (current-command-line-arguments)))
+  ;; DEFERRED 155: `--output PATH` names the result file; by default each run writes
+  ;; a NEW file under data/benchmarks/runs/ (git-ignored), so running the tool never
+  ;; rewrites the committed baseline data/benchmarks/parity-baseline.txt.
+  ;; Re-baseline deliberately: --output racket/prologos/data/benchmarks/parity-baseline.txt
+  (define-values (out-arg args)
+    (let loop ([as (vector->list (current-command-line-arguments))] [out #f] [acc '()])
+      (cond [(null? as) (values out (reverse acc))]
+            [(and (equal? (car as) "--output") (pair? (cdr as))) (loop (cddr as) (cadr as) acc)]
+            [else (loop (cdr as) out (cons (car as) acc))])))
   (define files
     (if (null? args)
         solver-test-files
@@ -142,8 +153,17 @@
             (string-join (take lines (min 10 (length lines))) "\n")))
         (printf "--- ~a ---\n~a\n\n" (first r) snippet))))
 
-  ;; Write machine-readable results
-  (define out-path "racket/prologos/data/benchmarks/parity-baseline.txt")
+  ;; Write machine-readable results (DEFERRED 155: a new file per run unless --output)
+  (define out-path
+    (or out-arg
+        (let ([d (seconds->date (current-seconds))])
+          (format "racket/prologos/data/benchmarks/runs/parity-~a~a~aT~a~a~a.txt"
+                  (date-year d) (~r (date-month d) #:min-width 2 #:pad-string "0")
+                  (~r (date-day d) #:min-width 2 #:pad-string "0")
+                  (~r (date-hour d) #:min-width 2 #:pad-string "0")
+                  (~r (date-minute d) #:min-width 2 #:pad-string "0")
+                  (~r (date-second d) #:min-width 2 #:pad-string "0")))))
+  (make-parent-directory* out-path)
   (call-with-output-file out-path
     (lambda (out)
       (fprintf out "# BSP-LE Track 2B Phase 0a: Parity Baseline\n")

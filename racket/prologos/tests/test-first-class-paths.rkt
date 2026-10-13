@@ -69,7 +69,7 @@
 ;; ---- Run WS code via temp file against the shared env ----
 (define (run-ws s)
   (define tmp (make-temporary-file "prologos-fcp-~a.prologos"))
-  (call-with-output-file tmp #:exists 'replace
+  (call-with-output-file tmp #:exists 'truncate
     (lambda (out) (display s out)))
   (define result
     (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
