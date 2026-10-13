@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 162**
+> ### **NEXT FREE: 165**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7117,3 +7117,130 @@ is not established. Candidate: a precompile/dispatch race on a cold test tree, s
 0 of 1 warm ones. **Fix shape**: treat `'tests` = 0 as no-result (INCOMPLETE) unless the file is declared
 test-free, or compare against the file's last recorded count. **When**: with 160; both make "all pass" mean
 less than it says.
+
+### 162. ⬜ LPT DISPATCH WAS INERT FROM THE DAY IT SHIPPED — per-file medians keyed by file-name STRINGS in a `for/hasheq`, so 0 of 489 lookups hit, every file sorted as `+inf.0`, and dispatch ran alphabetically — **fix landed `389b3413`**; a comment still states the refuted "impact was NIL" measurement, and the class sweep is open
+
+**Found by**: the whale-sharding work (2026-10-13), from a completion log that ran in alphabetical order. A probe
+printed "runner lookup (hasheq, fresh string): +inf.0 / same data, equal?-keyed hash: 96175 / lookups that hit
+with a copied key: 0 of 489". `eq?` on strings compares allocations, and a key read from JSON is never `eq?` to
+one built from a path. As a result the slowest file, `test-path-selection.rkt`, started ~17 s into the run.
+
+**Fixed** in `389b3413`. The medians moved to `tools/suite-plan.rkt` `historical-medians` (`for/hash`), pinned by
+`tests/test-suite-plan.rkt`, which goes red when `for/hasheq` is restored. Suite: 127.6 → 110.5 s. ⚠ Both runs
+used 159's interpreted build, so the ratio holds but the absolute seconds do not.
+
+**Open**:
+1. **A comment still states the refuted measurement.** `tools/run-affected-tests.rkt:710-713` says "Measured
+   impact was NIL (median effective parallelism 8.97 poisoned vs 8.96 clean over 282 runs) — the schedule is not
+   what gates this suite." Both legs of that comparison ran the inert sort, so it compared alphabetical order
+   with alphabetical order and says nothing about LPT. The same claim is at `standups/2026-07-26_dailies.md:257`;
+   that is a dailies LOG and stays as written, with the correction recorded here and at `suite-plan.rkt:16`.
+   **Fix**: rewrite the comment to cite this entry.
+2. **The class: `eq?`-keyed tables over non-interned keys.** Sweep `racket/prologos/tools/` and `tools/` for
+   `hasheq` / `make-hasheq` / `for/hasheq` whose keys are strings, paths or other freshly built data; every such
+   lookup misses silently. **Fix shape** per site: `equal?`-keyed tables, or intern (`string->symbol`) at the
+   boundary. Add one test per table showing that a lookup with a *copied* key hits; that is the test that
+   caught this.
+3. **Which files share a worker has changed.** Since `389b3413` the dispatch order, and so the set of files that
+   share a batch worker, is different. 160 conjectures that its suite-only failures were newly exposed by this.
+
+**When**: (1) any time; it takes minutes. (2) with 160's investigation, which reads the same tools.
+
+### 163. ⬜ ⭐ EVERY RUNNER START KILLED EVERY BATCH WORKER ON THE MACHINE — Step 0's `pkill -f batch-worker.rkt` was machine-wide, so a run in any session, worktree or clone killed the workers of every concurrent suite — **fix landed `b45bbf44`**; 6 worktrees + 2 clones still carry the old runner
+
+**Found by**: the whale-sharding verification (2026-10-13), observed 3×:
+- Main's full suite lost all 18 workers, first after 63 and then after 22 of 493 units, each time seconds after a
+  run started in `.claude/worktrees/deferred-sweep-146-149`. A live check found 0 workers alive while the runner
+  waited out its timeout.
+- In the other direction, that worktree's `--all` killed the 4 workers of a sharded run in main.
+
+Before `fd2986cc`, a run that lost its workers this way printed "all pass" (164).
+
+**Fixed** in `b45bbf44` (`tools/run-affected-tests.rkt:528-550`). An orphan is exactly a worker whose runner died,
+which means it has been reparented to PID 1. Cleanup is now `pkill -P 1 -f <this checkout's absolute
+tools/batch-worker.rkt>`. Verified live:
+- During a run, the old pattern matched 4 workers and the new pattern 0.
+- A concurrent targeted run no longer disturbs the long run (5/5 units).
+- Positive control: `kill -9` of the runner only → 4 orphans with PPID 1 → the next runner start → 0.
+
+There is no unit test, because this is process-level behaviour.
+
+**Open**:
+1. **The bug is still live in every checkout that predates `b45bbf44`.** A runner started in one of them still
+   kills main's workers and everyone else's. As of 2026-10-13, found by grepping each checkout's runner for
+   `"-P" "1"`:
+   - worktrees `charming-khayyam-a7835d`, `dazzling-wescoff-4b692b`, `editor-support-path-change-a3ddf9`
+     (detached HEADs), `heuristic-thompson-a2091b` (branch `clever-bhabha-f3a408`), `par4-p0`,
+     `sleepy-kepler-8aa2cb`;
+   - clones `~/dev/projects/prologos-egraph-spike` and `~/dev/projects/prologos-preduce-auto`.
+
+   `deferred-sweep-146-149` already has the fix. **Fix**: bring each live checkout to main ≥ `b45bbf44` (merge,
+   rebase or cherry-pick the one hunk); which route is each branch owner's decision. Do `par4-p0` first, since
+   PAR 4 pins baselines; retire dead worktrees.
+2. **Agents can still do it by hand.** `.claude/settings.local.json:71` allows `Bash(pkill:*)` without a prompt,
+   and a `pkill -f racket` or `pkill -f batch-worker` from any session has the same blast radius. **Fix shape**
+   (a decision): either `tools/hook-guard-racket.sh` (159's PreToolUse guard) denies a
+   `pkill`/`killall` pattern that matches racket or batch-worker without `-P`, or the allow-list is narrowed.
+3. **Is Step 0 needed at all?** From reading the code, not from a measurement: a worker exits at stdin EOF
+   (`batch-worker.rkt:182-183`), and its stdin closes when its runner dies. So an orphan should live only until
+   its current file ends, which is bounded by `--file-timeout` (the runner passes its `--timeout`, default
+   300 s). Measure this first.
+   - If it holds, Step 0 is only a speed-up and can go, removing the last kill from the runner.
+   - If it does not, a worker-side parent watchdog is the structural form: a worker knows its own runner, but a
+     runner cannot know another runner's workers.
+4. **Past timeouts can't be attributed.** Every "TIMEOUT: No result received" in any session before `b45bbf44`
+   may have been another session's runner start rather than the change under test. 164 counts the recorded ones.
+
+**When**: (1) now, because it is live in 8 checkouts. (2) and (3) with (1).
+
+### 164. ⬜ ⭐ AN INCOMPLETE RUN REPORTED "ALL PASS" AND WAS RECORDED AS A FULL SUITE — the no-result TIMEOUT path killed the workers and fell through with `bailed?` unset, and `all-pass?` was an `andmap` over only the results that DID arrive — **fix landed `fd2986cc`**; 13 such records sit in main's `timings.jsonl`, and sibling fail-opens are open
+
+**Found by**: the whale-sharding work (2026-10-13). After 63 of 493 units (the workers had been killed by 163) the
+runner printed "1629 tests in 343.6s (490 files, …, all pass)" and appended a 63-result record to
+`timings.jsonl` as a full run. That record was removed by hand; the file is untracked.
+
+**Fixed** in `fd2986cc` (`tools/run-affected-tests.rkt:966-969` plus the summary, record and exit sites after it).
+A run with fewer results than dispatched units now prints `INCOMPLETE — n of N units reported`, exits 2 and
+records nothing. Verified two ways:
+- with a scratch test file that `(exit 0)`s its worker: "INCOMPLETE — 1 of 2 units reported", exit 2, no record;
+- in the wild, on a run that reported 22 of 493 units.
+
+**Measured: the history is polluted.** In main's `racket/prologos/data/benchmarks/timings.jsonl`, 13 of 971
+full-suite records (`file_count` ≥ 300) say `all_pass: true` with fewer results than files. Every one ran to the
+timeout wall or past it:
+- 2026-03-18 … 03-26: 9 records with **0 results** (0/372 … 0/382), wall ≈ 600 s, which is "all pass" over no
+  tests at all;
+- 2026-07-14 `64529290` 279/453; 07-17 `09f002e0` 25/455; 07-24 `94f7da34` 80/470; 07-31 `cab30b9a` 220/476.
+
+The other checkouts that have a timings file have none: `deferred-sweep-146-149` (1 full record),
+`prologos-egraph-spike` (2), `prologos-preduce-auto` (42). The causes are not established; 163 is one candidate
+and worker crashes are another. These records have no current effect on scheduling: `historical-medians` reads
+the last 5 runs with `file_count` ≥ 100 (`suite-plan.rkt:46-56`), and the newest bad record is from 07-31. Any
+longitudinal read of the file does include them (baselines, PIRs, trend tools).
+
+**Open**:
+1. **Zero tests still counts as a pass** — that is 161. Together with this entry it makes up the whole
+   invariant that "all pass" means what it says: every dispatched unit reported, AND it ran ≥ 1 test.
+2. **The re-run guard exits 0 having run nothing** (`tools/run-affected-tests.rkt:307-326`). A refused `--all`
+   prints a GUARD banner and `(exit 0)`, so `run --all && git commit`, or an agent that reads only the exit
+   status, takes "ran nothing" as green. Observed 2026-10-13: a refused run's exit 0 was briefly read as a
+   result. The tradeoff is a decision:
+   - a distinct nonzero code is honest, but makes a deliberate refusal look like a failure;
+   - keeping exit 0 means the refusal has to be unmistakable everywhere it is read.
+3. **The record reader should filter as well.** `historical-medians` should skip any record whose `results` is
+   shorter than its `file_count`, so a future fail-open of any kind cannot reach the scheduler. The same
+   predicate finds the 13 records. Whether to annotate or drop them is a decision about editing history (the
+   file is untracked).
+4. **Worker stderr is never drained.** `tools/run-affected-tests.rkt:800-815` opens it and closes it only at EOF.
+   Test output cannot reach it, because `batch-worker.rkt:303` captures `current-error-port` around each file.
+   Anything written outside that window does reach it (worker-level errors, runtime messages), and past the pipe
+   buffer (~64 KB on macOS) the worker would block. Since `fd2986cc` such a block would surface as INCOMPLETE,
+   so it is loud, but its cause would be invisible. This is a conjecture; it has never been observed.
+   **Fix**: drain stderr in the reader thread into the unit's failure log.
+5. **The records misstate their own clock.** `tools/bench-lib.rkt:249` reads `(seconds->date now #t)  ; UTC`, but
+   the `#t` argument is `local-time?`, so every `timestamp` ending in `Z` is local time. Checked:
+   `(seconds->date 0 #t)` gives hour 17, offset −25200. Anything that reads these as UTC is off by 6–7 h.
+   **Fix**: pass `#f`, or drop the `Z`. Old records stay local; whether to mark the cut-over in the record is a
+   decision.
+
+**When**: (1) and (3) together, before PAR 4 pins a baseline. (2), (4) and (5) any time.
