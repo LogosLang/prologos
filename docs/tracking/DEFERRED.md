@@ -145,6 +145,18 @@ of the 2026-06-29/07-14 batch-isolation incidents in testing.md.
 next collision pair. Single-letter spec/def names in test strings are collision
 bait until fixed.
 
+**Mechanism ESTABLISHED 2026-10-13** (checkpoint 3 gate; DEFERRED 160's `test-error-messages` sightings, and
+the same predecessor file as in 2026-07-31). Two probes, one plain Racket process, through `test-support`'s
+`run-ns-*` helpers (scratch `probe160-spec-leak.rkt`, `probe160-netbox.rkt`; copies in the
+racket-performance-probing skill): (1) `defn ok2` in `ns t` defines as `Nat -> Int`; after a program with
+`(spec ok2 Nat -> Nat)` in `ns test`, the same `defn ok2` in `ns t` fails "cannot infer the type of an
+unannotated parameter"; a same-bodied `okq` still defines. (2) That spec program CHANGES the contents of
+`prelude-persistent-registry-net-box`; with its contents restored before the victim, the victim defines as
+`Nat -> Int`. So the unforked box that `run-ns-*` share (`test-support.rkt:148`, `:167`, `:191`) carries the
+leak, keyed by the bare name across namespaces. **Fix shape** (a decision, with 160): fork the box per call as
+`with-forked-network` does for the propagator net, and/or restore it per file in the batch worker. **Open**:
+whether the driver itself (LSP, REPL: many programs in one process) has an analogous leak is UNTESTED.
+
 ## ✅ CLOSED — the two eliminator usage residuals (QTT P6 + P7, 2026-07-31)
 
 - **The Church-fold agreement hole** → ✅ `e5810cfe`. It was LIVE, not theoretical:
@@ -6906,7 +6918,7 @@ or gate the tree path on a real pool executor; the green-thread `parallel?` bran
 win and should be deleted. **When**: before PAR 4 pins its baseline — every PAR 4 A/B is
 otherwise credited with removing this defect (P0 record §5 "two baselines"). Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md).
 
-### 151. ⬜ ⭐ THE `.pnet` MODULE CACHE IS A NET LOSS: `pnet-stale?` `read`s every WHOLE file to compare a 2-element header, then the loader reads it AGAIN — 2.6 s per process start, vs 0.53 s elaborating the same 39 modules from source
+### 151. ⬜ ⭐ **FIX (a) MERGED `baa1dce2`** (`7358c7c4`, checkpoint 3); fix (b) open — THE `.pnet` MODULE CACHE IS A NET LOSS: `pnet-stale?` `read`s every WHOLE file to compare a 2-element header, then the loader reads it AGAIN — 2.6 s per process start, vs 0.53 s elaborating the same 39 modules from source
 
 [`pnet-serialize.rkt:795-806`](../../racket/prologos/pnet-serialize.rkt) `pnet-stale?`
 does `(call-with-input-file pnet-path read)` — the full datum, ~0.4–1 MB per module — to
@@ -6929,7 +6941,18 @@ loaded. `transducer.pnet` written over source-elaborated dependencies is 747 783
 "identical modulo gensym numbering" holds only for files written the same way, and part of the 15.7 MB is
 dependencies' entries repeated. That bears on fix (b), and on any cache keyed or checked by content hash.
 
-### 152. ⬜ `process-file` FORCES TWO MAJOR GCs PER CALL — `measure-memory-before`/`-after` call `(collect-garbage 'major)` unconditionally (~45 ms per file; the largest single cost of a 60 ms run)
+**Status 2026-10-13 — fix (a) merged to main in `baa1dce2` (checkpoint 3; branch `per-process-152-151` @ `7358c7c4`).**
+`PNET_VERSION` 10 → 11: a file is `(pnet-header VERSION KEY)` + body (old slots 2–30, unchanged); `pnet-stale?`
+reads only the header (an old single-datum file is stale from its first 13 bytes); the loader reads once. Staleness
+judgement unchanged (`pnet-header-fresh?`, `pnet-serialize.rkt:223`). Measured by the stream (record below): the
+stale-check read of all 40 files 1 291–1 375 → 1 ms; warm load phase (driver + prelude) CPU 2 690–2 760 → 1 540–1 550 ms,
+1 307 → 838 MB. **Warm still loses to cold and to no cache**: the loader's one text `read` is 1.24–1.32 s for
+16.9 MB. **Data for (b)**: the same bodies as `fasl` are 9.5 MB and read in 53–56 ms; that a fasl body makes a warm
+load beat no-cache (≈ 310 ms inferred) is a CONJECTURE, not measured end to end — measuring it is the next step
+(decision (xxii)). Tests: `tests/test-pnet-header.rkt` (12). Every checkout's cache regenerates once. Record:
+`docs/tracking/handoffs/2026-10-13_PER_PROCESS_152_151_NOTE.md`.
+
+### 152. ✅ **DISCHARGED `0e5da30f`** (branch `per-process-152-151`, merged to main in `baa1dce2`; the runner opts back in with `--memory-stats`, `e3efb2dc`) — `process-file` FORCES TWO MAJOR GCs PER CALL — `measure-memory-before`/`-after` call `(collect-garbage 'major)` unconditionally (~45 ms per file; the largest single cost of a 60 ms run)
 
 [`performance-counters.rkt:403-416`](../../racket/prologos/performance-counters.rkt). Found by
 PAR 4 P0 profiling (preloaded prelude, 10 reps): `measure-memory-before` + `-after` ≈ 33 %
@@ -6937,6 +6960,15 @@ of samples on every comparative file; `gc_ms` ≈ 56–60 ms per file regardless
 inflates every `process-file` measurement (bench-ab, PHASE-TIMINGS shares) and every LSP
 re-elaboration. **Fix shape**: only when a MEMORY-STATS consumer is active (a parameter, or
 the driver CLI flag), never in library calls. **When**: any time. Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md).
+
+**Status 2026-10-13 — discharged (checkpoint 3).** `measure-memory-before`/`-after` (`performance-counters.rkt:433`/`:443`)
+collect only when `memory-stats-enabled?` (`:425`): `current-memory-stats?`, `PROLOGOS_MEMORY_STATS` (anything but
+`""`/`"0"`, read per call), or `racket driver.rkt --memory-stats`. Off → no MEMORY-STATS line (omitted, not marked).
+Measured by the stream, test phase, base → fix (ABBA n=4; CPU / GC ms / major GCs): `test-transducer-01`
+1 276 / 1 067 / 36 → 208 / 14 / 0. Coordinator check: `raco test test-transducer-01` 4.43/4.58 → 1.91/1.88 s wall
+(ABAB, load 7–11; the ratio is the evidence). Tests: `tests/test-memory-stats.rkt` (6). **The runner** keeps the
+`memory` field only on request (owner decision (xii), option C): `--memory-stats` (`e3efb2dc`); checked both ways —
+off: no field, 1.7 s; on: `{gc_ms, mem_before/after/retained_bytes}`, 2.9 s. Restart the LSP server to get the fix there.
 
 ### 153. ⬜ `benchmarks/comparative/parity-adversarial.prologos` CRASHES AT HEAD — the DFS solver's `solve: Depth limit exceeded (100)` escapes `process-file` uncaught; `bench-ab` has been timing a crash for this file
 
@@ -7069,6 +7101,16 @@ var. Two layers:
 - **(a)** `tools/hook-guard-racket.sh`, the harness-enforced PreToolUse guard, denies `raco make` without
   `PLT_CS_COMPILE_LIMIT` in the command. This covers agents and subagents, which is the layer that guard exists for,
   but not humans.
+  **DONE (checkpoint 3):** `9d24d463` (merged `977c008e`) refuses `raco make|setup`, `raco pkg install|update` and
+  `raco test --make` whose environment lacks `PLT_CS_COMPILE_LIMIT` ≥ 1000000, however raco is spelled; it reads
+  inline `VAR=…`, `env VAR=…` and an earlier `export` in the same command. Since `eb2a4b72` its deny carries BOTH
+  harnesses' fields — Hermes's shell-hook bridge ignored the Claude-only output (`_parse_response` → `None`, an
+  allow). **Registered 2026-10-13**, user level, pointing at main's checkout (so the guard in force is main's):
+  Claude Code `~/.claude/settings.json` `PreToolUse` `Bash`; Hermes profile `logos-language-designer` `config.yaml`
+  `hooks.pre_tool_call` `terminal` — active after the owner's one-time consent (Hermes SKIPS an unapproved hook when
+  there is no TTY, as in the desktop app). A guard that fails to parse exits 2: Hermes then blocks (verified in
+  `shell_hooks.py:417`), and Claude Code's documented exit-2 contract is a block too (not tested here) — it fails
+  closed, loudly. Record: merge note § Checkpoint 3.
 - **(b)** The runner, and `bench-lib.rkt`'s single `raco make`, fail fast when a giant module is interpreted,
   using a ~1 ms self-check that times `whnf`/`shift` on a fixed term. Compiled vs interpreted is bimodal (`testing.md:11`
   measured `shift` at ~830×). This covers every entry point through the runner, humans included, and catches the
@@ -7126,6 +7168,14 @@ the next suite baseline is pinned. A flaky gate makes every "all pass" probabili
   only the second half. It passed alone 2/2, and in a second full run of the same code.
 - **Next**: `--all` ×N under the new runner; for any failure, replay its worker sequence from `run.json` and bisect
   the culprit as for 161. Start from the spec-store suspect.
+- **Root-caused for `test-error-messages` (checkpoint 3 gate, 2026-10-13, run `20261013T061739-12431`):** 10 350 /
+  497, the only failure `:465:2` again. The run's `'workers` record gave the victim's worker sequence (4th of 40);
+  replayed in one batch worker it fails 3/3, and the victim alone passes. **Main's own code fails the same
+  replay** (`deferred-sweep-146-149` @ `405f164e` = `01ef2542` + docs), so the checkpoint did not cause it.
+  Single-predecessor bisection: **`test-defn-multiarg-patterns.rkt` then `test-error-messages.rkt`** fails; the
+  other two predecessors do not. Renaming in a copy of the victim: `ok2` alone → pass, `ok1` alone → fail. The
+  predecessor declares `(spec ok2 Nat -> Nat)` in `ns test` (`:286`); the victim's `defn ok2` in `ns t` is checked
+  against it. **Mechanism established** — see § *Cross-FILE spec-store leakage* at the top of this file.
 
 ### 161. ✅ **DISCHARGED `2999a74b` + `8014caef`** (branch `runner-queue-gate`, merged to main in `f6e530d7`) — A FILE THAT RUNS ZERO TESTS IS COUNTED AS A PASS — `test-generators.rkt` reported `PASS (0.0s)` with 0 tests in the first `--all` after a cold rebuild of `compiled/`; the INCOMPLETE check counts units that REPORTED, not units that RAN tests
 
@@ -7202,6 +7252,8 @@ REFUTED and cites this entry. **Open 2** (the class sweep) was done on branch `g
 yet merged): `benchmark-tests.rkt`'s regression and variance tables were inert in exactly this way (`make-hasheq`
 keyed by file-name strings), fixed with a copied-key test. One latent site, `measure-production-n.rkt:91`, is
 interned literals today. The five runner files are clean.
+**Checkpoint 3**: open 2 merged in `977c008e`; the latent `measure-production-n.rkt:91` site is fixed
+(`make-hash`) in `200bc3d6` (owner decision (xviii)). Open 3 stays with 160.
 
 ### 163. ⬜ ⭐ EVERY RUNNER START KILLED EVERY BATCH WORKER ON THE MACHINE — Step 0's `pkill -f batch-worker.rkt` was machine-wide, so a run in any session, worktree or clone killed the workers of every concurrent suite — **fix landed `b45bbf44`**; 6 worktrees + 2 clones still carry the old runner
 
@@ -7242,7 +7294,15 @@ There is no unit test, because this is process-level behaviour.
    VS Code build output. Their two merged branches were deleted (`git branch -d`). **Still open: the two clones only.**
    Both hold commits and records that are not on main (`egraph-relational-spike`: 12 commits, the spike's closing
    note; `preduce-autonomy`: 62 commits, the loop's ledger and retro), so they wait on an owner decision.
-2. **Agents can still do it by hand.** `.claude/settings.local.json:71` allows `Bash(pkill:*)` without a prompt,
+   **Owner decision 2026-10-13: keep both clones as-is for now.** Their runners still carry the machine-wide
+   form (`run-affected-tests.rkt:529-530`, `"-f" "batch-worker.rkt"`) and take no suite lock; every nested
+   worktree has the scoped form (main `:723-727`).
+2. ✅ **DONE (checkpoint 3).** Guard `e9b2a30e` (merged `977c008e`): a `pkill`/`killall` whose pattern can reach a
+   racket process is refused unless parent-scoped. `8b113a9f` (owner decision (xvi)) closes the indirect forms —
+   a `pgrep` in a command that also kills is judged as the `pkill` it amounts to (co-occurrence over-approximates
+   pipe / `$(…)` / variable / file dataflow), `ps | grep PAT | … kill`, `-v`, `kill -1`, and `"$(…)"` inside quotes;
+   145 rows, 9 mutations all red. `53e6de98` narrows the allow-list to `Bash(pkill -P:*)` (decision (xvii)).
+   Registered as in 159 (a). Was: **Agents can still do it by hand.** `.claude/settings.local.json:71` allows `Bash(pkill:*)` without a prompt,
    and a `pkill -f racket` or `pkill -f batch-worker` from any session has the same blast radius. **Fix shape**
    (a decision): either `tools/hook-guard-racket.sh` (159's PreToolUse guard) denies a
    `pkill`/`killall` pattern that matches racket or batch-worker without `-P`, or the allow-list is narrowed.

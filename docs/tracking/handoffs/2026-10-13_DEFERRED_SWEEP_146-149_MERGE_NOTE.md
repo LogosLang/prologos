@@ -684,3 +684,60 @@ suite: `+10 test-suite-lock`, `+19 test-suite-plan` (18 + the guard), `+3 test-a
 - `par4-p0` → `3643f56e` (second bring-up; gate 10 339 / 495, delta exact; PAR 4 note § 7d). It now queues.
 - Still without the queue: `ciu6-path-selection` (the CIU 6 session's, at `e6394b3f`), the two clones, and the
   unmerged `guards-hook-sweep` / `per-process-152-151` worktrees until checkpoint 3.
+
+## Checkpoint 3: the guards and per-process streams → main (owner decisions (xi)–(xviii))
+
+Done in a throwaway worktree `checkpoint-3`, branched from main `56e9fb64` (main had gained two CIU 6 / PAR 4
+docs commits since `01ef2542`).
+
+| commit | what |
+|---|---|
+| `977c008e` | merge `guards-hook-sweep`: 159 (a) compile-limit guard `9d24d463`, 163 (2) kill guard `e9b2a30e`, 162 (2) `benchmark-tests.rkt` tables `d5359d2a` |
+| `baa1dce2` | merge `per-process-152-151`: 152 `0e5da30f`, 151 (a) `7358c7c4` (`PNET_VERSION` 10 → 11) |
+| `eb2a4b72` | guard: the deny carries BOTH harnesses' fields; the orphan hint names the shell's checkout (`$(git rev-parse --show-toplevel)`), not the script's |
+| `8b113a9f` | guard, decision (xvi): a `pgrep` in a command that kills is judged as the `pkill` it amounts to; `ps \| grep \| kill`; `-v`; pid `-1`; `"$(…)"` inside quotes |
+| `53e6de98` | `.claude/settings.local.json`, decision (xvii): `Bash(pkill:*)` → `Bash(pkill -P:*)`; nine unlimited-compile / 9.0-binary allow rules removed |
+| `200bc3d6` | `measure-production-n.rkt:91` `make-hash`, decision (xviii) |
+| `e3efb2dc` | runner `--memory-stats`, decision (xii) (option C) |
+| (merge) | `deferred-sweep-146-149`'s records after checkpoint 2 (`405f164e`) |
+
+**The guard was inert in Hermes as written.** `deny()` emitted only Claude Code's `hookSpecificOutput`. Hermes's bridge
+blocks only on a top-level `"decision": "block"` or exit 2, so `_parse_response` returned `None` on the old output (an
+allow), checked by calling Hermes's own parser on the guard's real output. The test table counted any output as a
+deny, so it could not see this; a new section reads the fields (8 rows; red 3 → green). The (xvi) design and its
+evidence: `8b113a9f`'s message; 145 rows, both bash 5.3 and 3.2; nine mutations, one per mechanism, all red (two
+survived the first pass, and the two ALLOW rows that kill them were added).
+
+**Commit hygiene slip, fixed before any citation.** `git add .claude/settings.local.json` (tracked, under the ignored
+`.claude/`) printed the ignored-path advice and exited non-zero, but STAGED the file; the next commit swept it in under
+the `measure-production-n` message. Those two local commits were reset and re-made one file each (`53e6de98`,
+`200bc3d6`, `e3efb2dc`); the replaced hashes were never cited.
+
+**Gate**: `--all --force-rerun`, **10 350 tests / 497 files**, exactly the prediction (checkpoint 2's 10 330 / 494
++ `test-benchmark-tests` 2 + `test-memory-stats` 6 + `test-pnet-header` 12). File by file against the last surviving
+full record (`deferred-sweep-146-149`, the F3(a) suite at `58241c0c`, 10 300 / 492): +50 = runner stream +35,
+`test-properties` −5 (the removed double count), guards +2, per-process +18; units: six new files, and
+`test-support.rkt` (0 tests) no longer a unit. **One failure, root-caused and pre-existing**: `test-error-messages`
+`:465:2`, DEFERRED 160's third sighting of that check. The run's worker record replayed it 3/3 in one worker;
+**main's own code fails the same replay**; bisection gives the pair `test-defn-multiarg-patterns.rkt` →
+`test-error-messages.rkt`; renaming `ok2` alone in a copy of the victim makes it pass. Two one-process probes then
+established the mechanism of DEFERRED § *Cross-FILE spec-store leakage* (2026-07-31): `test-support`'s `run-ns-*`
+share an unforked `prelude-persistent-registry-net-box`; a `spec` program changes its contents; restoring them removes
+the failure. Recorded in 160 and that section; the fix is the flake batch's (with 160). Merged with the failure
+recorded rather than re-run until green, since the change set provably does not affect it.
+
+**Registration (decision (xi))**, all pointing at main's checkout, so the guard in force is the version main has:
+- Claude Code, `~/.claude/settings.json` (user level): `PreToolUse` `Bash` → `tools/hook-guard-racket.sh`. Backup:
+  scratch `claude-settings.before-hooks.json`. Only the `hooks` key changed.
+- Hermes, profile `logos-language-designer` `config.yaml`: `hooks.pre_tool_call` `terminal` → the guard (timeout 10 s;
+  the guard takes ~40 ms). `hermes hooks list` parses it and shows **✗ not allowlisted**: Hermes skips an unapproved hook
+  when there is no TTY (the desktop app), so it is active only after the owner approves it once at a terminal
+  (`hermes -p logos-language-designer`, answer y, quit) and restarts the desktop app.
+- **Porting the Claude hooks**: the only one, a `PostToolUse` `Write|Edit` MacMD-Viewer opener, **never fired**: it read
+  `$TOOL_INPUT_file_path`, a variable Claude Code does not set (0 occurrences of `TOOL_INPUT_` in the 2.1.296 binary,
+  vs 35 of `CLAUDE_PROJECT_DIR`; Claude Code sends the tool input as JSON on stdin). Replaced in both harnesses by one
+  script, `~/.claude/hooks/macmd-autoopen.sh` (stdin JSON; `file_path` or `path`; the same exclusions and the same
+  `~/.claude/.macmd-autoopen` switch), checked on 9 payloads. Hermes: `hooks.post_tool_call` `write_file|patch`.
+- Hermes's own command blocklist refuses any terminal command whose TEXT matches its "kill all processes" pattern
+  (a heredoc that merely mentions the pid-`-1` form was refused while writing this note): a second, coarser layer
+  that the repo guard does not replace.
