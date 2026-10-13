@@ -392,9 +392,52 @@
 ;; base: the unconditional value (worldview = 0, always visible)
 ;; entries: (listof (cons bitmask value)) — speculative writes
 ;;   Each entry: (cons worldview-bitmask-at-write-time value)
-;;   Monotone: entries only accumulate (append)
-;;   Monotone: entries only accumulate (append)
+;;   Monotone: entries only accumulate — but as a SET (join = union), not a
+;;   sequence. The list is duplicate-free, newest first. DEFERRED 148: the
+;;   sequence monoid (cons/append) is not idempotent, so a re-write of
+;;   information already present grew the list by one per round on every
+;;   long-lived speculative cell, and — because the fire protocol diffs raw
+;;   values with `equal?` (propagator.rkt:2881, :2900) — re-scheduled every
+;;   dependent on a write that carried no information.
 (struct tagged-cell-value (base entries) #:transparent)
+
+;; ---- The entry set (DEFERRED 148) ----------------------------------------
+;; Membership is on the whole (bitmask . value) pair: bitmask by `eqv?`, value
+;; by `equal?` (short-circuits on `eq?`; on opaque structs it IS `eq?`, which
+;; is weaker but still sound — a missed duplicate is the old behaviour, never
+;; a lost entry). Entries are short, so a linear scan is the right cost.
+;; Every operation returns its input list `eq?` when nothing is new, so a
+;; no-information write yields a value `equal?` to the old one in O(1).
+(define (entry-member? e entries)
+  (define bm (car e))
+  (define v (cdr e))
+  (let loop ([es entries])
+    (cond
+      [(null? es) #f]
+      [(and (eqv? bm (caar es)) (equal? v (cdar es))) #t]
+      [else (loop (cdr es))])))
+
+;; Insert one entry at the front; the list itself when already present.
+(define (entries-add e entries)
+  (if (entry-member? e entries) entries (cons e entries)))
+
+;; Union, newer first: the entries of `new` absent from `old` go in front of
+;; `old`, keeping their own order. Returns `old` itself when nothing is new.
+;; Invariant: duplicate-free inputs give a duplicate-free output (`new` is
+;; filtered against `old`; `new` is assumed duplicate-free, which every
+;; producer in this file guarantees).
+(define (entries-union new old)
+  (cond
+    [(null? new) old]
+    [(null? old) new]
+    [else
+     (define fresh
+       (let loop ([es new])
+         (cond
+           [(null? es) '()]
+           [(entry-member? (car es) old) (loop (cdr es))]
+           [else (cons (car es) (loop (cdr es)))])))
+     (if (null? fresh) old (append fresh old))]))
 
 ;; Read: find the most-specific entries whose bitmask is a subset of worldview W.
 ;; Most-specific = highest popcount (most assumptions committed).
@@ -448,22 +491,25 @@
      ;; Unconditional write — update base
      (struct-copy tagged-cell-value tcv [base new-val])]
     [else
-     ;; Speculative write — append tagged entry
-     (struct-copy tagged-cell-value tcv
-       [entries (cons (cons worldview-bitmask new-val)
-                      (tagged-cell-value-entries tcv))])]))
+     ;; Speculative write — add the tagged entry to the set (DEFERRED 148:
+     ;; the value itself when the entry is already present)
+     (define entries (tagged-cell-value-entries tcv))
+     (define entries* (entries-add (cons worldview-bitmask new-val) entries))
+     (if (eq? entries* entries)
+         tcv
+         (struct-copy tagged-cell-value tcv [entries entries*]))]))
 
 ;; Merge: union entries from both sides. Base merges via the caller's merge-fn.
 ;; The caller (net-cell-write) applies the cell's registered merge-fn to the
-;; overall value. For tagged-cell-value, the merge unions entry lists.
+;; overall value. For tagged-cell-value, the merge unions the entry SETS.
 (define (tagged-cell-merge old new)
   (cond
     [(and (tagged-cell-value? old) (tagged-cell-value? new))
      (tagged-cell-value
       (tagged-cell-value-base new)  ;; newer base wins (or caller merges)
-      ;; NEW entries first — later writes win at same specificity
-      (append (tagged-cell-value-entries new)
-              (tagged-cell-value-entries old)))]
+      ;; NEW entries first; entries already in old are not re-added (148)
+      (entries-union (tagged-cell-value-entries new)
+                     (tagged-cell-value-entries old)))]
     [(tagged-cell-value? old)
      ;; New is plain — treat as base update
      (struct-copy tagged-cell-value old [base new])]
@@ -475,7 +521,7 @@
 ;; Returns a merge function suitable for use as a cell's merge-fn.
 ;; Analogous to make-tms-merge for TMS cells.
 ;;
-;; For tagged-cell-values: merges bases with domain-merge, unions entry lists.
+;; For tagged-cell-values: merges bases with domain-merge, unions entry SETS.
 ;; For plain values: delegates to domain-merge directly.
 (define (make-tagged-merge domain-merge)
   (lambda (old new)
@@ -483,14 +529,19 @@
       [(eq? old 'infra-bot) new]
       [(eq? new 'infra-bot) old]
       [(and (tagged-cell-value? old) (tagged-cell-value? new))
-       (tagged-cell-value
-        (domain-merge (tagged-cell-value-base old)
-                      (tagged-cell-value-base new))
-        ;; NEW entries first — later writes appear earlier in the list.
-        ;; tagged-cell-read uses strict > for popcount, so the first match
-        ;; at max specificity wins. Newest write = first in list = returned.
-        (append (tagged-cell-value-entries new)
-                (tagged-cell-value-entries old)))]
+       (define old-base (tagged-cell-value-base old))
+       (define old-entries (tagged-cell-value-entries old))
+       (define base* (domain-merge old-base (tagged-cell-value-base new)))
+       ;; NEW entries first; entries already present are not re-added (148).
+       ;; Readers do not depend on this order: the D.12 join-reader merges
+       ;; every matching entry, and the compat reader (no domain-merge) takes
+       ;; the OLDEST match, which lives in old's tail either way.
+       (define entries* (entries-union (tagged-cell-value-entries new) old-entries))
+       ;; A write that carried no information returns the old value itself,
+       ;; so the fire-protocol diff (propagator.rkt:2881) sees no change in O(1).
+       (if (and (eq? base* old-base) (eq? entries* old-entries))
+           old
+           (tagged-cell-value base* entries*))]
       [(tagged-cell-value? old)
        (struct-copy tagged-cell-value old
          [base (domain-merge (tagged-cell-value-base old) new)])]

@@ -8,6 +8,9 @@
 
 (require rackunit
          rackunit/text-ui
+         rackcheck
+         racket/list
+         racket/set
          "../decision-cell.rkt"
          "../propagator.rkt")
 
@@ -442,8 +445,167 @@
     ))
 
 ;; ============================================================
+;; DEFERRED 148: entries are a SET — the join must be idempotent
+;; ============================================================
+;; The `entries` component is semantically a set of (bitmask . value) pairs
+;; ordered by inclusion, join = union. `cons`/`append` is the sequence monoid:
+;; associative but NOT idempotent, so a re-write of information already present
+;; grew the list without bound (one duplicate per round on every long-lived
+;; speculative cell) and — because the fire protocol diffs raw values with
+;; `equal?` (propagator.rkt:2881, :2900) — re-scheduled every dependent on a
+;; write that carried no new information. These tests pin the set semantics on
+;; all three sites (tagged-cell-write, tagged-cell-merge, make-tagged-merge).
+
+;; The OLD append-based union, kept here as the reference for the refinement
+;; property: under the D.12 join-reader (domain-merge supplied) dedup must be
+;; invisible — the deduped form reads identically for every worldview.
+(define (ref-append-merge domain-merge)
+  (lambda (old new)
+    (tagged-cell-value
+     (domain-merge (tagged-cell-value-base old) (tagged-cell-value-base new))
+     (append (tagged-cell-value-entries new)
+             (tagged-cell-value-entries old)))))
+
+;; Small alphabets so the generators collide often: 3 worldview bits, 4 values.
+(define gen:bm (gen:integer-in 1 7))
+(define gen:val (gen:integer-in 0 3))
+(define gen:entry (gen:let ([bm gen:bm] [v gen:val]) (cons bm v)))
+(define gen:entries (gen:list gen:entry #:max-length 12))
+(define gen:worldview (gen:integer-in 0 7))
+
+;; Build a tcv the way production does: fold one-entry deltas through
+;; make-tagged-merge (propagator.rkt:2018 shape).
+(define (build-via-deltas tm entries)
+  (for/fold ([acc (tagged-cell-value 0 '())]) ([e (in-list entries)])
+    (tm acc (tagged-cell-value 0 (list e)))))
+
+(define tagged-cell-dedup-tests
+  (test-suite "DEFERRED 148: tagged-cell-value entries are a set"
+
+    ;; --- pins: the three sites ---
+
+    (test-case "tagged-cell-write: re-writing the same (bm . v) is a no-op"
+      (define t1 (tagged-cell-write (tagged-cell-value 'base '()) #b01 'x))
+      (define t2 (tagged-cell-write t1 #b01 'x))
+      (check-equal? (length (tagged-cell-value-entries t2)) 1)
+      (check-equal? t2 t1)
+      ;; and the entries list is the SAME object (nothing was consed)
+      (check-eq? (tagged-cell-value-entries t2) (tagged-cell-value-entries t1)))
+
+    (test-case "tagged-cell-write: same bitmask, different value is a new entry"
+      (define t1 (tagged-cell-write (tagged-cell-value 'base '()) #b01 'x))
+      (define t2 (tagged-cell-write t1 #b01 'y))
+      (check-equal? (length (tagged-cell-value-entries t2)) 2))
+
+    (test-case "tagged-cell-merge: merging a value with itself leaves entries eq?"
+      (define t (tagged-cell-value 'b (list (cons #b01 'x) (cons #b10 'y))))
+      (define r (tagged-cell-merge t t))
+      (check-eq? (tagged-cell-value-entries r) (tagged-cell-value-entries t)))
+
+    (test-case "tagged-cell-merge: union keeps newer-first among genuinely new entries"
+      (define old (tagged-cell-value 'b (list (cons #b01 'x))))
+      (define new (tagged-cell-value 'b (list (cons #b10 'y) (cons #b01 'x) (cons #b11 'z))))
+      (check-equal? (tagged-cell-value-entries (tagged-cell-merge old new))
+                    (list (cons #b10 'y) (cons #b11 'z) (cons #b01 'x))))
+
+    (test-case "make-tagged-merge: the production delta shape re-written 50× stays at 1 entry"
+      (define tm (make-tagged-merge max))
+      (define delta (tagged-cell-value 0 (list (cons #b101 42))))
+      (define final (for/fold ([acc (tagged-cell-value 0 '())]) ([_ (in-range 50)])
+                      (tm acc delta)))
+      (check-equal? (tagged-cell-value-entries final) (list (cons #b101 42))))
+
+    (test-case "make-tagged-merge: a no-information write returns a value equal? to old (scheduler diff sees no change)"
+      (define tm (make-tagged-merge max))
+      (define old (tagged-cell-value 7 (list (cons #b01 3) (cons #b10 5))))
+      (define delta (tagged-cell-value 7 (list (cons #b10 5))))
+      (define r (tm old delta))
+      (check-equal? r old)
+      (check-eq? (tagged-cell-value-entries r) (tagged-cell-value-entries old)))
+
+    (test-case "compat reader (no domain-merge): a no-information re-write cannot change the read"
+      ;; The compat path returns the OLDEST matching entry (tagged-cell-read
+      ;; builds all-matching by cons, then takes car = last in list order).
+      ;; Duplicates were prepended, so they never changed this read; the fix must
+      ;; keep it that way while leaving the value itself unchanged.
+      (define tm (make-tagged-merge (lambda (o n) n)))
+      (define t0 (tm (tagged-cell-value 'b (list (cons #b001 'x)))
+                     (tagged-cell-value 'b (list (cons #b011 'y)))))
+      (check-equal? (tagged-cell-read t0 #b011) 'x)
+      (define t1 (tm t0 (tagged-cell-value 'b (list (cons #b001 'x)))))
+      (check-equal? (tagged-cell-read t1 #b011) 'x)
+      (check-equal? t1 t0))
+
+    ;; --- properties ---
+
+    (test-case "property: tagged-cell-write is idempotent"
+      (check-property
+       (make-config #:tests 200)
+       (property ([es gen:entries] [e gen:entry])
+         (define t (for/fold ([acc (tagged-cell-value 0 '())]) ([x (in-list es)])
+                     (tagged-cell-write acc (car x) (cdr x))))
+         (define once (tagged-cell-write t (car e) (cdr e)))
+         (define twice (tagged-cell-write once (car e) (cdr e)))
+         (check-equal? twice once)
+         (check-eq? (tagged-cell-value-entries twice) (tagged-cell-value-entries once)))))
+
+    (test-case "property: make-tagged-merge is idempotent on entries (x ⊔ x = x)"
+      (check-property
+       (make-config #:tests 200)
+       (property ([es gen:entries])
+         (define tm (make-tagged-merge max))
+         (define t (build-via-deltas tm es))
+         (define r (tm t t))
+         (check-equal? r t)
+         (check-eq? (tagged-cell-value-entries r) (tagged-cell-value-entries t)))))
+
+    (test-case "property: entries never contain duplicates after any write sequence"
+      (check-property
+       (make-config #:tests 200)
+       (property ([es gen:entries])
+         (define tm (make-tagged-merge max))
+         (define entries (tagged-cell-value-entries (build-via-deltas tm es)))
+         (check-equal? (length entries) (length (remove-duplicates entries)))
+         ;; and the length is bounded by the alphabet of distinct pairs written
+         (check-equal? (length entries) (length (remove-duplicates es))))))
+
+    (test-case "property: merge is a set union (newer-first order aside)"
+      (check-property
+       (make-config #:tests 200)
+       (property ([as gen:entries] [bs gen:entries])
+         (define tm (make-tagged-merge max))
+         (define a (build-via-deltas tm as))
+         (define b (build-via-deltas tm bs))
+         (define r (tagged-cell-value-entries (tm a b)))
+         (check-equal? (length r) (length (remove-duplicates r)))
+         (check-equal? (list->set r)
+                       (set-union (list->set (tagged-cell-value-entries a))
+                                  (list->set (tagged-cell-value-entries b)))))))
+
+    (test-case "property: dedup is invisible to BOTH readers (refinement of the old append semantics)"
+      (check-property
+       (make-config #:tests 300)
+       (property ([as gen:entries] [bs gen:entries] [w gen:worldview])
+         (define tm (make-tagged-merge max))
+         (define ref (ref-append-merge max))
+         ;; a and b carry duplicates here on purpose (raw entry lists, not built
+         ;; through the deduping path) — the readers must agree regardless.
+         (define a (tagged-cell-value 0 as))
+         (define b (tagged-cell-value 0 bs))
+         ;; D.12 join-reader: order-insensitive by commutativity + idempotence of max
+         (check-equal? (tagged-cell-read (tm a b) w max)
+                       (tagged-cell-read (ref a b) w max))
+         ;; compat reader (oldest match): the tail of the list is old's entries
+         ;; in both forms, and new's matching entries survive the union exactly
+         ;; when old has no match
+         (check-equal? (tagged-cell-read (tm a b) w)
+                       (tagged-cell-read (ref a b) w)))))
+    ))
+
+;; ============================================================
 ;; Run all tests
 ;; ============================================================
 
 (run-tests tagged-cell-unit-tests)
 (run-tests tagged-cell-network-tests)
+(run-tests tagged-cell-dedup-tests)
