@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 168**
+> ### **NEXT FREE: 169**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7459,3 +7459,31 @@ naming the sub-block spelling is the monotone waypoint.
 **When**: before CIU 6 P5 (Ruling B + factoring — L2's normal form assumes L1 holds wherever an ω step can be
 written). It also bounds D4 Q_U52 §1's broadcast-ancestor question: inside one branch, the steps after an ω step are
 further fused ω steps or a sub-block, so an ω ancestor under a deep star is unobservable until this lands.
+
+### 168. ⬜ A STAR GLUED TO AN ARROW IN A TYPE IS SILENTLY NOT AN ARROW — `spec s4 Nat *-> Nat` reports "spec type for s4 has no arrow"; `<(x : Nat)*- Nat>` reports a bare "Type mismatch"
+
+**Found by** the CIU 6 1b-vi grounding audit (2026-10-13; probe
+`docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/probe-1bvi-g.prologos` on branch `ciu6-path-selection`, output beside
+it). Measured at `01ef2542`:
+
+| input (with a matching `defn`) | message |
+|---|---|
+| `spec s4 Nat *-> Nat` | "preparse: spec: spec type for s4 has no arrow but defn has 1 params" |
+| `spec s3 <(x : Nat)*- Nat> -> Nat` | "Type mismatch" |
+| `spec s2 <(x : Nat)* Nat> -> Nat` (control) | Q_U31's guided "inside `<…>`, `*` needs a SPACE before it …" |
+
+**Mechanism (read from the reader's character classes, consistent with the messages):** `-` is an identifier-continue
+character and `>` is not, so a star glued to `->` always lexes as `…*-` followed by `>`, never as `*` followed by `->`.
+The arrow disappears before the spec parser looks for it, and the message blames a missing arrow. Corpus: 0 glued `*->`
+in any `.prologos` file or test, so no program is affected. It is a typo-level diagnostic.
+
+**Why filed separately** (owner decision Q_U56, D4, 2026-10-13: "a guided diagnostic as per (a)"): CIU 6 1b-vi mints `*-`
+as an operator and gives a glued `*->` a guided message in SELECTION territory only. The type-territory message
+predates the slice and belongs to spec and arrow parsing. One part changes by itself at 1b-vi: once the closer band mints
+`*-`, `<(x : Nat)*- Nat>` should reach Q_U37's type-territory refusal and get the same "needs a SPACE" message as
+`<(x : Nat)* Nat>` (a prediction, to be pinned in 1b-vi).
+
+**Fix shape**: where the spec/arrow parser finds no arrow, check for a `…*-` lexeme followed by a `>` token and say so
+("`*->` reads as `*-` then `>` — put a space before `->`"). Never raise at the reader: a raise there aborts the whole
+file. **When**: no gate. Pick it up with the next spec-parser diagnostics work, or at CIU 6 X.close's doc-truth pass if
+still open.
