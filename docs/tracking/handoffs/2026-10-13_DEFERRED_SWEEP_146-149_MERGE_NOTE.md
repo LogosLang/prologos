@@ -70,7 +70,16 @@ different lattice, not a sweep item: it needs the domain merge at the union site
 that bitmask" to "join of all writes at that bitmask" at `meta-universe.rkt:280`,
 `propagator.rkt:4367`, `metavar-store.rkt:504`. `relations.rkt:2901` already does this join
 by bitmask *on read* for scope cells (fact rows write `x` and `y` separately at the same
-bitmask), which is evidence the keyed form is the intended semantics there. It also bears on
+bitmask) — evidence of intent, but **not** of soundness: it folds with `scope-cell-merge`,
+which is per-variable last-writer-wins (`decision-cell.rkt:938`, not commutative) over hash
+iteration order. *Correction (2026-10-13, tradeoff analysis):* the keyed form preserves the
+denotation only when the domain merge is a genuine join (ACI); at least two production
+domain merges are not (`scope-cell-merge`; the `promote-cell-to-tagged` default
+`(lambda (o n) n)`, `propagator.rkt:1809`), and the three compat readers already disagree
+with the main reader (`propagator.rkt:1616`, which joins) independently of 148. So the size
+question is downstream of a correctness one; options A–E and the discriminating
+measurements are in the session's analysis, to be folded into whichever design doc takes
+the decision. It also bears on
 **PAR 4 D.1 §6.1**: the flat record "dedups on append by construction" — pair-dedup, the same
 limitation — so its `E`-entry capacity overflows under the same chain (the arena probe's
 `overflow` counter is the tell).
