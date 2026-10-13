@@ -40,6 +40,9 @@ are all in use. **Commit messages up to and including `2792123c` use roman numer
 | SW-22 | DEFERRED 151 (b): measure a fasl `.pnet` body end to end before choosing fix vs retire; then merge it | DECIDED (owner): merge as fix (b); done, checkpoint 4 `08acff4a` |
 | SW-23 | A human-readable reader for the binary `.pnet` (owner request) | done `c6f8fff7`: `tools/pnet-dump.rkt`; main checkpoint 4 |
 | SW-24 | DEFERRED 169: keep the dependency graph current automatically, with minimal maintenance | DECIDED (owner); done `8fbaefb8` by DERIVING the graph (nothing stored); main checkpoint 5 |
+| SW-25 | The next batch is gate integrity: DEFERRED 170, 160, 81, 155 | DECIDED (owner); done — `e7cda107`, `51b6b1f9` + `922f6dd5`, `160ad2f6`, `51a24f4f` (§ SW-25) |
+| SW-26 | The batch after: silent wrong answers in the checker (DEFERRED 156 ⭐, 103 ⭐, 104, 120, 85, 86); who takes 156 (PPN 4C or the sweep) | PROPOSED — owner |
+| SW-27 | DEFERRED 160's fix shape: scope a program's registry state to its compilation unit (not restore; not FQN-keyed specs) | DECIDED (session, inside SW-25; reversible) — `51b6b1f9`; **for owner review before checkpoint 6** |
 
 ---
 
@@ -853,3 +856,37 @@ DEFERRED 170 hours earlier, A/B'd, with the observation that **SW-22's fasl spee
 frequent** (1 of 3 runs → 3 of 3) by tightening the shards' lockstep — SW-22 exposed it, the defect is older. Added
 to 170: the reproduction with no test code (6–8 % vs 0 %) and the class census (41 `'replace` sites, 18 templates,
 two shared across many files). `CLAUDE.md:34`'s wording is an owner item (protected file, edit not approved).
+
+## SW-25: gate integrity — DEFERRED 170, 160 (→ SW-27), 81, 155
+
+Owner: "let's work through the SW-25 batch". Five commits after `bac8c09c` (the owner-approved `CLAUDE.md` line):
+
+| item | commit | result |
+|---|---|---|
+| 170 temp-file race | `e7cda107` | 43 sites → `'truncate` (two in production code both censuses missed); `test-temp-file-hygiene.rkt` guard; `test-path-selection` sharded 2/3 failing → 5/5 passing |
+| 160 suite-only failures | `51b6b1f9`, `922f6dd5` | the leak was in the DRIVER; SW-27 below |
+| 81 silent count drops | `160ad2f6` | instance = 161's mechanism (already fixed); the runner now prints `COUNT DROP` per file against its last recorded pass |
+| 155 benchmarks dirty the tree | `51a24f4f` | two writers of tracked baselines, not one; both write `data/benchmarks/runs/` |
+
+**SW-27, the decision inside the batch.** 160's mechanism note left one question open — does the driver leak the way
+test-support did? It does: registrations assign their parameters and `process-file` bound none, so a deleted `spec`
+still applied when the LSP re-checked the same document. Options weighed against DESIGN_PRINCIPLES (correctness by
+construction; derived state consistent by construction; one list, not parallel lists):
+
+| option | weighed |
+|---|---|
+| fix only test-support (fresh box per call) | ends the flake, leaves the LSP bug — rejected |
+| restore by assignment around `process-file` (`dynamic-wind`) | a retraction whose correctness depends on every exit path — rejected |
+| key specs by qualified name | fixes the cross-namespace collision only; not the same-file stale spec, nor the other 23 registries — rejected |
+| **scope the unit** | bind every parameter the unit's cells are seeded from + every cell id it assigns (59) to the caller's current value, fork the registry network (O(1)); `#:before-unit-exit` is the sanctioned read — **chosen** |
+
+Cost of the choice: a caller that read a unit's registrations AFTER `process-file` returned now reads them inside it.
+On this branch: the LSP's spec-store capture and 14 test sites in 4 files (`922f6dd5`; the first full suite named them).
+Checked on the three active branches (`ciu6-path-selection`, `ppn4c-elaboration-on-network`, `par4-arena-executors`,
+commits and uncommitted work): no changed or new test calls `process-file`, so none has this shape today; a new
+registry added there without joining SW-27's list fails `test-file-unit-isolation`'s class guard on merge. It is
+for review before checkpoint 6 because it changes what `process-file` means to a caller. Found, not fixed: an LSP REPL session's registrations escape it (DEFERRED 171).
+
+Gate on the branch: 10 385 / 501, all pass, 12.5 s; delta against `e4e9e451` exactly +2 files / +11 tests
+(`test-temp-file-hygiene` 2, `test-file-unit-isolation` 5, `test-suite-plan` +4). Evidence:
+`handoffs/2026-10-13_SW25_DATA/`.

@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 171**
+> ### **NEXT FREE: 172**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -122,7 +122,11 @@ merge). It now DEFERS to preparse per the driver's own architecture comment —
 a structural single-implementation move with no demonstrated behavioral delta,
 claimed as exactly that. The defer is named scaffolding; it retires when the
 form-cell path grows a real let.
-## 🐛 Cross-FILE spec-store leakage within a batch worker (diagnosed 2026-07-31, LET P1 gate)
+## ✅ CLOSED `51b6b1f9` — Cross-FILE spec-store leakage within a batch worker (diagnosed 2026-07-31, LET P1 gate)
+
+> **Closed 2026-10-13 by SW-27 (DEFERRED 160).** The unforked box was one channel; the other was the DRIVER: registrations
+> assign their parameters and `process-file` bound none, so it leaked in the LSP and any multi-program process too. Both
+> are now scoped per compilation unit — see 160's status. The history below is kept as found.
 
 **Symptom**: `test-defn-multiarg-patterns.rkt` registered `(spec c Handle2 -1> Nat)`
 via `run-ns-ws-all`; `test-new-lattice-cell.rkt`, running LATER IN THE SAME
@@ -4414,7 +4418,7 @@ hand-written `[$bcast-step]` sentinel. Its message was reworded phase-free at
 the retired `bcast-not-yet`. **Needs a constructed-datum probe, not a grep.**
 (The binder twin below it IS reachable and is unaffected.)
 
-### 81. ⬜ The suite's `total_tests` can silently UNDER-REPORT while `all_pass` stays true
+### 81. ✅ **DISCHARGED `160ad2f6`** (SW-25: the runner names every per-file count drop) — The suite's `total_tests` can silently UNDER-REPORT while `all_pass` stays true
 
 Measured at D4.P4d slice 4d-2. Two consecutive `--all` runs on the SAME code gave
 **10061** and **10066**; the delta was entirely `test-properties.rkt`, recorded as
@@ -4433,6 +4437,17 @@ the battery delta.
 **Practical rule until fixed**: when the suite total moves in a direction the
 battery delta does not explain, diff per-file counts from `timings.jsonl`
 (`results[].tests`) before believing either figure.
+
+**Status 2026-10-13 — discharged (SW-25, `160ad2f6`).** The instance is explained: `test-properties.rkt` required
+`test-generators.rkt`, a TEST file, so its 5 tests were counted into `test-properties` only when the worker had not
+instantiated that module yet — DEFERRED 161's mechanism, fixed by `8014caef` and guarded by `test-suite-plan.rkt`
+("no test file requires another test file"); recorded counts read 13 through `58241c0c`, 8 from `61b24b02` on. The
+hazard stays general, so the runner now does the per-file diff itself: after the summary it prints
+`COUNT DROP: <file> ran N tests; at its last recorded pass (<commit>) it ran M` for every passing file below its count
+in the newest valid record where it passed (suite-plan.rkt `prior-test-counts` / `count-drops`, newest 30 records,
+73 ms worst case on main's 202 MB history). Exit code unchanged: deleting a test is legitimate. Verified end to end
+(a test case commented out → the line, naming `e4e9e451`'s 8) and by mutation. It already paid for itself: it is
+what showed that SW-27's 14 rewritten checks all still run (no drop on the four migrated files).
 
 ---
 
@@ -7008,13 +7023,21 @@ see the propagator network at all. **Fix shape**: count fires in `fire-and-colle
 `bsp_rounds`. PAR 4 needs these as phase-gate counters (P0 record §6). **When**: with PAR 4 P1
 at the latest. Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md).
 
-### 155. ⬜ RUNNING A MICRO-BENCHMARK DIRTIES THE TREE — `bench-parallel-demos.rkt` rewrites the TRACKED `data/benchmarks/parallel-demo-results.json` (PAR 2's recorded result, `ce4cde52`)
+### 155. ✅ **DISCHARGED `51a24f4f`** (SW-25: runs write `data/benchmarks/runs/`; two writers, not one) — RUNNING A MICRO-BENCHMARK DIRTIES THE TREE — `bench-parallel-demos.rkt` rewrites the TRACKED `data/benchmarks/parallel-demo-results.json` (PAR 2's recorded result, `ce4cde52`)
 
 Found when a PAR 4 P0 run overwrote it in the main checkout (restored from HEAD; both
 versions kept under the P0 data). A recorded result that any run silently replaces is not a
 record. **Fix shape**: write to an untracked `data/benchmarks/runs/<timestamp>-…json`, or
 `--output`; keep the committed file as the named baseline. Sweep the other `benchmarks/micro`
 writers. **When**: any time. Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md).
+
+**Status 2026-10-13 — discharged (SW-25, `51a24f4f`).** The sweep covered every writer of a TRACKED file under
+`racket/prologos/data/` (49 tracked files), not just `benchmarks/micro`: **two** writers, not one —
+`bench-parallel-demos.rkt` → `parallel-demo-results.json` (this entry) and `tools/parity-test.rkt` →
+`parity-baseline.txt` (BSP-LE 2B Phase 0a's baseline, rewritten on every run). Every other mention of a
+`data/benchmarks` file in code is a comment or a print. Both now write `data/benchmarks/runs/<name>-<time>.<ext>`
+(git-ignored); `--output PATH` re-records a baseline deliberately. Verified: the tracked files byte-identical after
+both ran; `runs/` ignored; `--output` honoured.
 
 ### 156. ⬜ ⭐ ON-NETWORK INFERENCE ACCEPTS ILL-TYPED PRIMITIVE-OP OPERANDS — `[int+ 1 "x"] : Int`, `[f64+ "x" "y"] : Float64`, `[int-lt 1 "x"] : Bool`, `[from-nat "x"] : Int` all type-check
 
@@ -7141,7 +7164,7 @@ var. Two layers:
 for (b) is the self-check's two modes on this machine (limited vs no-limit build) and its false-positive rate
 at load ~25. **When**: before PAR 4 pins its baseline.
 
-### 160. ⬜ ⭐ SUITE-ONLY FAILURES UNDER THE CURRENT RUNNER — a file fails inside `--all` and passes alone; 2 of 3 full runs at `fd2986cc` (`test-cond-01`: `Unbound variable classify`; `test-error-messages`: an annotated `Nat -> Nat` lambda "cannot infer the type of an unannotated parameter")
+### 160. ✅ **DISCHARGED `51b6b1f9` + `922f6dd5`** (SW-27: the leak was in the DRIVER — a program's registry state is now scoped to its compilation unit) — SUITE-ONLY FAILURES UNDER THE CURRENT RUNNER — a file fails inside `--all` and passes alone; 2 of 3 full runs at `fd2986cc` (`test-cond-01`: `Unbound variable classify`; `test-error-messages`: an annotated `Nat -> Nat` lambda "cannot infer the type of an unannotated parameter")
 
 Found during the DEFERRED 159 remedy: three full suites in main within 6 minutes (load 2–28), before
 and after the rebuild, so the build is not the cause.
@@ -7197,6 +7220,34 @@ the next suite baseline is pinned. A flaky gate makes every "all pass" probabili
   other two predecessors do not. Renaming in a copy of the victim: `ok2` alone → pass, `ok1` alone → fail. The
   predecessor declares `(spec ok2 Nat -> Nat)` in `ns test` (`:286`); the victim's `defn ok2` in `ns t` is checked
   against it. **Mechanism established** — see § *Cross-FILE spec-store leakage* at the top of this file.
+
+**Status 2026-10-13 — discharged (SW-25 batch; decision SW-27, `51b6b1f9` + `922f6dd5`).** The open question in the
+mechanism note — "whether the driver itself (LSP, REPL) has an analogous leak" — was answered first, and it changed the
+fix: **the driver leaked too**, so this was a language bug, not only a harness artifact.
+- **Mechanism.** Registrations update their parameter by ASSIGNMENT (`register-spec!`, `macros.rkt:496`, and 16+ other
+  registries), and `process-file-inner` seeds each file's registry cells from those parameters (`init-*-cells!`).
+  `process-file` bound none of them (`load-module` already scoped specs per module, `driver.rkt:3163`), so a top-level
+  program's registrations stayed in the process and seeded the next program's cells. test-support's one shared box
+  was a second channel.
+- **User-visible, measured with no test code** (`process-file` as the LSP calls it): an editor re-check of ONE document
+  after the user deleted `spec f` and annotated `f` inline failed "defn f has both a spec and inline type annotations"
+  — the deleted spec still applied; and `spec ok2` in `ns test` broke a later `defn ok2` in `ns t` (this entry's
+  `test-error-messages` message). `racket driver.rkt a b` loops `process-file` the same way (`driver.rkt:3921`).
+- **Fix (SW-27, scope not restore).** `call-with-file-registry-scope` binds every parameter a unit's cells are seeded
+  from and every cell id it assigns — 59: 24 registries + 24 cell ids (macros.rkt's ONE ordered list per family, from
+  which the batch worker's save/restore are now derived), 3+3 warnings, 2+2 narrowing, the attribute-map id — to the
+  caller's current value, and forks the registry network (O(1)). `process-file` runs in it; `#:before-unit-exit` is
+  the sanctioned read of a unit's final state (the LSP's per-document spec store; 14 test sites in 4 files, `922f6dd5`,
+  which had read it after return). test-support's `run-ns-*` calls are each a unit over a fresh box of the post-prelude
+  network.
+- **Verified.** Probes red → green on all three channels; the checkpoint-3 pair in ONE batch worker fails 3/3 on
+  `e7cda107`, passes 3/3 after; `tests/test-file-unit-isolation.rkt` (5, incl. a class guard: every parameter an
+  `init-*-cell(s)!` assigns or seeds from — 59, scanned from source — is in the scope); four mutations red; full suite
+  10 385 / 501 all pass, delta exact. Evidence: `handoffs/2026-10-13_SW25_DATA/`.
+- **Side effect, intended.** Whether typing runs in persistent or per-command attribute-map mode no longer depends on
+  an EARLIER program in the process (it did for LSP REPL evals after any document check, and for `run-ns` calls after
+  any `run-ns-ws-file-all` in the same worker).
+- **Not covered: LSP REPL sessions** → DEFERRED 171.
 
 ### 161. ✅ **DISCHARGED `2999a74b` + `8014caef`** (branch `runner-queue-gate`, merged to main in `f6e530d7`) — A FILE THAT RUNS ZERO TESTS IS COUNTED AS A PASS — `test-generators.rkt` reported `PASS (0.0s)` with 0 tests in the first `--all` after a cold rebuild of `compiled/`; the INCOMPLETE check counts units that REPORTED, not units that RAN tests
 
@@ -7556,7 +7607,7 @@ version to bump. Measured: warm derivation 37–43 ms CPU, full scan 520–536 m
 
 ---
 
-### 170. ⬜ ⭐ A SHARDED TEST FILE RACES ITS OWN TEMP FILES — `make-temporary-file` + `#:exists 'replace` lets one shard's delete-and-recreate collide with a twin shard's time-named file (`open-output-file: file exists`); `test-path-selection.rkt` fails 3 of 3 targeted runs at `a15b1a9e`
+### 170. ✅ **DISCHARGED `e7cda107`** (SW-25: 43 sites → `'truncate`, guard test) — A SHARDED TEST FILE RACES ITS OWN TEMP FILES — `make-temporary-file` + `#:exists 'replace` lets one shard's delete-and-recreate collide with a twin shard's time-named file (`open-output-file: file exists`); `test-path-selection.rkt` fails 3 of 3 targeted runs at `a15b1a9e`
 
 **Found by**: the PPN 4C checkpoint merge gate (2026-10-13, merge of `ppn4c-elaboration-on-network`
 into `a15b1a9e`): full suite 10 366 tests, 1 FAILURES — `test-path-selection.rkt` shards 1/5 and 3/5,
@@ -7612,3 +7663,27 @@ with no test code — three concurrent processes, each `make-temporary-file` the
 so concurrent workers share those name spaces (28 sites already use `'truncate`). (3) It hit the sweep branch's first
 suite after SW-24 (`test-path-selection.rkt` ×3 shards, one error each; the re-run passed): SW-22's fasl speedup
 (merged at checkpoint 4) is what made it frequent, per the table above. Probe + data: `handoffs/2026-10-13_SW24_DATA/`.
+
+**Status 2026-10-13 — discharged (SW-25, `e7cda107`).** All **43** sites → `#:exists 'truncate` (41 in `tests/`, incl.
+`test-support.rkt`'s `run-ws-file`, plus two PRODUCTION sites that both censuses missed because the keyword sits after
+the lambda: `pnet-serialize.rkt:987`, the atomic `.pnet` write's temp file, and `lsp/server.rkt:554`, the LSP's
+per-check document). `tests/test-temp-file-hygiene.rkt` reads every module under `racket/prologos` as syntax and refuses
+a temp-file path written with `'replace` (temp DIRECTORIES exempt; a power check proves the detector). Verified:
+`test-path-selection.rkt` sharded ×2 failed 2 of 3 runs before and passed 5 of 5 after; guard red with 43 → green;
+one `'replace` restored in `test-support.rkt:226` → red naming that line. Evidence: `handoffs/2026-10-13_SW25_DATA/`.
+
+### 171. ⬜ AN LSP REPL SESSION'S REGISTRATIONS ESCAPE IT — into the process, other sessions, and every later document check (measured for constructors)
+
+Found closing DEFERRED 160 (SW-27). `eval-in-session-raw!` (`lsp/server.rkt:206`) binds **6** of the 24 registry
+parameters per session (preparse, trait, impl, param-impl, capability, spec store) and writes them back; the other 18
+(ctor, type-meta, subtype, coercion, trait-laws, bundle, specialization, property, functor, precedence groups,
+operators, macros, schema, selection, session, strategy, process, propagated specs) are assigned at the PROCESS ROOT.
+Measured (`probe-repl-escape.rkt`, `handoffs/2026-10-13_SW25_DATA/`): session A evaluates `data Color := Red | Green`;
+`Red` is then registered at the process root (#f → #t) and visible INSIDE a later `process-file` of an unrelated
+document — SW-27's unit scope inherits the caller's current values, which here include the session's. The
+user-visible symptom is not yet constructed (a candidate: a document's bare `Red` pattern resolving as a constructor,
+DEFERRED 103's class). **Fix shape**: a session is a PERSISTENT unit — keep its full registry snapshot
+(`save-macros-registry-snapshot`, i.e. `macros-registry-params`, SW-27's list) in the repl-session and bind all of
+them per eval, writing back after; the same list makes it exhaustive by construction. **When**: with the next LSP
+item, or the sweep after SW-26.
+
