@@ -98,7 +98,16 @@ function end_seg() {
   if (NT > 0) { SEGNT[NSEG] = NT; NSEG++ }
   NT = 0
 }
-function tokenize(str,    n, i, c, nc, inS, inD) {
+function match_paren(str, k,    n, d, c) {   # str[k..] follows "$(": index of its ")"
+  n = length(str); d = 1
+  for (; k <= n; k++) {
+    c = substr(str, k, 1)
+    if (c == "(") d++
+    else if (c == ")" && --d == 0) return k
+  }
+  return n + 1
+}
+function tokenize(str,    n, i, c, nc, inS, inD, j) {
   NSEG = 1; NT = 0; word = ""; have = 0; inS = 0; inD = 0
   n = length(str)
   for (i = 1; i <= n; i++) {
@@ -109,6 +118,17 @@ function tokenize(str,    n, i, c, nc, inS, inD) {
         nc = substr(str, i + 1, 1)
         if (nc == "\"" || nc == "\\" || nc == "$" || nc == "`") { word = word nc; i++; continue }
         if (nc == "\n") { i++; continue }
+      }
+      # A command substitution inside "…" RUNS: analyse it as a command of its own
+      # (outside quotes the ( ) ` separators already make it a segment).
+      if (c == "$" && substr(str, i + 1, 1) == "(") {
+        j = match_paren(str, i + 2)
+        enqueue(substr(str, i + 2, j - i - 2), EXP_SET, EXP_VAL)
+        word = word substr(str, i, j - i + 1); i = j; continue
+      }
+      if (c == "`" && (j = index(substr(str, i + 1), "`"))) {
+        enqueue(substr(str, i + 1, j - 1), EXP_SET, EXP_VAL)
+        word = word substr(str, i, j + 1); i += j; continue
       }
       if (c == "\"") inD = 0; else word = word c
       continue
@@ -140,7 +160,7 @@ function seg_text(s, a, b,    j, out) {
 function enqueue(str, set, val) { QN++; QS[QN] = str; QSET[QN] = set; QVAL[QN] = val }
 
 # One simple command: tokens T[s, i..e], run with the limit state (set, val).
-function analyse_cmd(s, i, e, set, val,    t, b, j, k, sub1, c1, compiling, flags, scoped, endopt, pats, ch, n) {
+function analyse_cmd(s, i, e, set, val,    t, b, j, k, sub1, c1, compiling, flags, scoped, endopt, pats, ch, n, sig, inv, havepat) {
   while (i <= e) {
     t = T[s, i]; b = base(t)
     if (b in EXEC) {
@@ -195,12 +215,14 @@ function analyse_cmd(s, i, e, set, val,    t, b, j, k, sub1, c1, compiling, flag
     if (compiling && !limit_ok(set, val)) print "DENY159\t" seg_text(s, i, e)
   }
 
-  # ── DEFERRED 163: pkill / killall. Emit each pattern of a pkill that is NOT
-  # parent-scoped (-P/--parent), and each name of a killall (which cannot be);
-  # the shell side decides whether it can match a racket process.
-  #   PKILL|KILLALL <TAB> flags <TAB> p:<pattern> <TAB> <offending command>
-  # flags: f = full command line, i = ignore case, x = exact, r = regex (killall)
-  if (b == "pkill" || b == "killall") {
+  # ── DEFERRED 163: pkill / killall / pgrep. Emit each pattern of a pkill or pgrep
+  # that is NOT parent-scoped (-P/--parent), and each name of a killall (which
+  # cannot be); the shell side decides whether it can match a racket process. A
+  # PGREP finding only counts when the same command text also runs a kill (KILL).
+  #   PKILL|KILLALL|PGREP <TAB> flags <TAB> p:<pattern> <TAB> <offending command>
+  # flags: f = full command line, i = ignore case, x = exact, r = regex (killall),
+  #        v = inverted (every process that does NOT match)
+  if (b == "pkill" || b == "killall" || b == "pgrep") {
     flags = "-"; scoped = 0; endopt = 0; pats = ""
     for (j = i + 1; j <= e; j++) {
       t = T[s, j]
@@ -213,29 +235,85 @@ function analyse_cmd(s, i, e, set, val,    t, b, j, k, sub1, c1, compiling, flag
         else if (t == "--ignore-case") flags = flags "i"
         else if (t == "--exact") flags = flags "x"
         else if (t == "--regexp") flags = flags "r"
+        else if (t == "--inverse") flags = flags "v"
         if (t !~ /=/ && index(LONGARG, " " t " ")) j++
         continue
       }
       for (k = 2; k <= length(t); k++) {
         ch = substr(t, k, 1)
         if (index(SHORTARG[b], ch)) {               # option with an argument
-          if (b == "pkill" && ch == "P") scoped = 1
+          if (b != "killall" && ch == "P") scoped = 1
           if (b == "killall" && ch == "c") { if (k < length(t)) pats = pats SUBSEP substr(t, k + 1); else if (j < e) pats = pats SUBSEP T[s, j + 1] }
           if (k == length(t)) j++
           break
         }
-        if (b == "pkill" && ch == "f") flags = flags "f"
-        else if (ch == "i" && b == "pkill" || ch == "I") flags = flags "i"
-        else if (b == "pkill" && ch == "x") flags = flags "x"
+        if (b != "killall" && ch == "f") flags = flags "f"
+        else if (ch == "i" && b != "killall" || ch == "I") flags = flags "i"
+        else if (b != "killall" && ch == "x") flags = flags "x"
+        else if (b != "killall" && ch == "v") flags = flags "v"
         else if (b == "killall" && (ch == "m" || ch == "r")) flags = flags "r"
       }
     }
-    if (!(b == "pkill" && scoped)) {
+    if (!(b != "killall" && scoped)) {
       n = split(substr(pats, 2), PARR, SUBSEP)
-      if (pats == SUBSEP) { n = 1; PARR[1] = "" }
+      if (pats == SUBSEP || pats == "") { n = 1; PARR[1] = "" }
       for (k = 1; k <= n; k++) {
         t = PARR[k]; gsub(/[\t\n]/, " ", t)
         print toupper(b) "\t" flags "\tp:" t "\t" seg_text(s, i, e)
+      }
+    }
+  }
+
+  # ── kill: a marker (does this command text kill at all?), and the machine-wide
+  # form of kill itself: pid -1 signals EVERY process the user owns. The first -N
+  # (or -s/-n SIG) is the signal; a later -1, or one after --, is the pid.
+  if (b == "kill") {
+    print "KILL\t-\tp:\t" seg_text(s, i, e)
+    sig = 0; endopt = 0
+    for (j = i + 1; j <= e; j++) {
+      t = T[s, j]
+      if (!endopt && t == "--") { endopt = 1; continue }
+      if (!endopt && t == "-l") break
+      if (!endopt && (t == "-s" || t == "-n")) { sig = 1; j++; continue }
+      if (!endopt && !sig && t ~ /^-./) { sig = 1; continue }
+      if (t == "-1") print "KILLALLPROCS\t-\tp:\t" seg_text(s, i, e)
+    }
+  }
+
+  # ── ps … | grep PAT … | … kill: grep selects the pids from full command lines,
+  # so its pattern is a pkill -f pattern. An inverted grep (-v) is an exclusion
+  # filter in that idiom, not the selection, and is skipped.
+  if (b == "ps") print "PS\t-\tp:\t" seg_text(s, i, e)
+  if (b == "grep" || b == "egrep" || b == "fgrep") {
+    flags = "-f"; pats = ""; inv = 0; endopt = 0; havepat = 0
+    for (j = i + 1; j <= e; j++) {
+      t = T[s, j]
+      if (endopt || t !~ /^-/ || t == "-") { if (!havepat) { pats = pats SUBSEP t; havepat = 1 }; continue }
+      if (t == "--") { endopt = 1; continue }
+      if (t ~ /^--/) {
+        if (t == "--invert-match") inv = 1
+        else if (t == "--ignore-case") flags = flags "i"
+        else if (t ~ /^--regexp=/) { pats = pats SUBSEP substr(t, 10); havepat = 1 }
+        else if (t == "--regexp" && j < e) { j++; pats = pats SUBSEP T[s, j]; havepat = 1 }
+        else if (t !~ /=/ && index(GREPLONGARG, " " t " ")) j++
+        continue
+      }
+      for (k = 2; k <= length(t); k++) {
+        ch = substr(t, k, 1)
+        if (ch == "e") {                            # -e PAT / -ePAT
+          if (k < length(t)) pats = pats SUBSEP substr(t, k + 1); else if (j < e) { j++; pats = pats SUBSEP T[s, j] }
+          havepat = 1; break
+        }
+        if (index("fmABCdD", ch)) { if (k == length(t)) j++; break }
+        if (ch == "v") inv = 1
+        else if (ch == "i") flags = flags "i"
+      }
+    }
+    if (!inv && havepat) {
+      n = split(substr(pats, 2), PARR, SUBSEP)
+      for (k = 1; k <= n; k++) {
+        t = PARR[k]; gsub(/[\t\n]/, " ", t)
+        print "GREP\t" flags "\tp:" t "\t" seg_text(s, i, e)
       }
     }
   }
@@ -284,6 +362,8 @@ END {
   ARGOPT["caffeinate"] = " -t -w "
   SHORTARG["pkill"] = "FGMNPUgstuO"      # takes an argument (P = parent: scoped)
   SHORTARG["killall"] = "utcoynZ"       # c = a process name (checked as one)
+  SHORTARG["pgrep"] = SHORTARG["pkill"] "d"   # pgrep -d DELIM
+  GREPLONGARG = " --file --max-count --after-context --before-context --context --devices --directories --label --include --exclude --exclude-dir "
   LONGARG = " --parent --signal --pgroup --session --terminal --euid --uid --group --pidfile --ns --nslist --older --runstates --env --user --older-than --younger-than --context "
   QN = 1; QS[1] = buf; QSET[1] = 0; QVAL[1] = ""
   for (q = 1; q <= QN && q <= 32; q++) {
@@ -322,6 +402,10 @@ reaches_racket() { # reaches_racket <kind> <flags> <pattern>
   esac
   # killall without -m/-r compares names exactly; (1) already covered those.
   [ "$kind" = KILLALL ] && [[ "$flags" != *r* ]] && return 1
+  # -v (pkill/pgrep): every process that does NOT match — nearly everything, and
+  # racket whenever the pattern misses it. Deny it whatever the pattern (an inverted
+  # pattern that names racket still selects every OTHER process of every session).
+  [[ "$flags" == *v* ]] && return 0
   samples="$SAMPLE_NAMES"
   [ "$kind" = PKILL ] && [[ "$flags" == *f* ]] && samples="$SAMPLE_NAMES
 $SAMPLE_LINES"
@@ -330,14 +414,13 @@ $SAMPLE_LINES"
   grep $gopt -q -e "$re" <<<"$samples" 2>/dev/null
 }
 
-while IFS=$'\t' read -r kind what pat seg; do
-  case "$kind" in
-    PKILL|KILLALL)
-      reaches_racket "$kind" "$what" "${pat#p:}" || continue
-      deny "Refusing a machine-wide kill of racket processes (DEFERRED 163):
+deny163() { # deny163 <offending command> [<why this shape counts as one>]
+  deny "Refusing a machine-wide kill of racket processes (DEFERRED 163):
 
-    $seg
-
+    $1
+${2:+
+$2
+}
 pkill/killall select by process NAME or COMMAND LINE across every session on
 this machine: other agents' suites, other worktrees, the editor's LSP server.
 On 2026-10-13 a runner's \`pkill -f batch-worker.rkt\` killed all the workers of
@@ -354,7 +437,37 @@ Orphans of a runner that died (reparented to PID 1) — this checkout only:
     pkill -P 1 -f \"\$(git rev-parse --show-toplevel)/racket/prologos/tools/batch-worker.rkt\"
 
 (what run-affected-tests.rkt does since b45bbf44). Look first: pgrep -fl <pattern>.
-killall cannot be parent-scoped; use kill or pkill -P." ;;
+killall cannot be parent-scoped; use kill or pkill -P."
+}
+
+# Does this command text run a kill at all? (Then a pgrep, or a ps | grep, in it can
+# feed that kill — through a pipe, \$(…), a variable or a file — and is judged as the
+# pkill it amounts to. Co-occurrence over-approximates the dataflow; the cost is a
+# look-and-kill-something-else in ONE call, which the message says to split.)
+has_kill=0; has_ps=0
+grep -q $'^KILL\t' <<<"$findings" && has_kill=1
+grep -q $'^PS\t' <<<"$findings" && has_ps=1
+FED="A pgrep (or ps | grep) in the same command as a kill is judged as the pkill it
+amounts to: its output can reach the kill through a pipe, \$(…), a variable or a
+file. If the kill is unrelated, split it: look in one call, kill the pid you read
+in the next."
+
+while IFS=$'\t' read -r kind what pat seg; do
+  case "$kind" in
+    PKILL|KILLALL)
+      reaches_racket "$kind" "$what" "${pat#p:}" || continue
+      deny163 "$seg" ;;
+    PGREP)
+      [ "$has_kill" = 1 ] || continue
+      reaches_racket PKILL "$what" "${pat#p:}" || continue
+      deny163 "$seg" "$FED" ;;
+    GREP)
+      [ "$has_kill" = 1 ] && [ "$has_ps" = 1 ] || continue
+      reaches_racket PKILL "$what" "${pat#p:}" || continue
+      deny163 "$seg" "$FED" ;;
+    KILLALLPROCS)
+      deny163 "$seg" "kill with pid -1 signals EVERY process you own — every session's, not just
+racket's." ;;
     DENY159) deny "Refusing a compile without PLT_CS_COMPILE_LIMIT (DEFERRED 159):
 
     $what

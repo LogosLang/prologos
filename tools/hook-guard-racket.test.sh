@@ -148,6 +148,25 @@ check "empty pattern = all"     'pkill -f ""' DENY "$L163"
 check "through sudo"            'sudo pkill -f racket' DENY "$L163"
 check "through timeout"         'timeout -k 5 10 pkill -f batch-worker' DENY "$L163"
 check "after ;"                 'sleep 1; pkill -f racket || true' DENY "$L163"
+# A pgrep whose output can reach a kill IS a pkill with the same arguments. Judged by
+# co-occurrence in one command text (pipe, $(…), backticks, a variable, a temp file).
+check "kill \$(pgrep -f)"        'kill $(pgrep -f racket)' DENY "$L163"
+check "kill \`pgrep\`"           'kill `pgrep -f batch-worker`' DENY "$L163"
+check "pgrep | xargs kill"      'pgrep -f batch-worker.rkt | xargs kill' DENY "$L163"
+check "pgrep | xargs kill -9"   'pgrep -f racket | xargs kill -9' DENY "$L163"
+check "pgrep by NAME"           'kill -9 $(pgrep racket)' DENY "$L163"
+check "quoted \$(pgrep)"         'kill "$(pgrep -f run-affected-tests)"' DENY "$L163"
+check "via a variable"          'p=$(pgrep -f batch-worker); kill $p' DENY "$L163"
+check "via a file"              'pgrep -f racket > /tmp/p; xargs kill < /tmp/p' DENY "$L163"
+check "ps | grep | awk | kill"  "ps aux | grep batch-worker | awk '{print \$2}' | xargs kill" DENY "$L163"
+check "ps | grep -i | kill -9"  "ps -axo pid,command | grep -i RACKET | awk '{print \$1}' | xargs kill -9" DENY "$L163"
+check "pgrep -v = all but"      'pgrep -v -f Safari | xargs kill' DENY "$L163"
+check "pkill -v = all but"      'pkill -v Safari' DENY "$L163"
+check "kill -9 -1 = every proc" 'kill -9 -1' DENY "$L163"
+check "kill -- -1"              'kill -- -1' DENY "$L163"
+check "kill -s KILL -1"         'kill -s KILL -1' DENY "$L163"
+check "quoted \$(pkill)"         'echo "$(pkill -f racket)"' DENY "$L163"
+check "quoted \`pkill\`"         'echo "`pkill -f racket`"' DENY "$L163"
 
 echo "MUST ALLOW (parent-scoped kills, unrelated kills, read-only process queries):"
 check "orphans of THIS checkout" 'pkill -P 1 -f /Users/x/prologos/racket/prologos/tools/batch-worker.rkt' ALLOW
@@ -165,6 +184,19 @@ check "-x: exact name, not racket" 'pkill -x rack' ALLOW
 check "ps | grep"               'ps -axo pid,ppid,command | grep batch-worker' ALLOW
 check "grep mentions pkill"     'grep -n "pkill -f batch-worker" racket/prologos/tools/run-affected-tests.rkt' ALLOW
 check "echo mentions pkill"     'echo pkill -f racket' ALLOW
+check "pgrep, parent-scoped"    'kill $(pgrep -P 4242 -f batch-worker)' ALLOW
+check "pgrep -P | xargs kill"   'pgrep -P 4242 -f batch-worker | xargs kill' ALLOW
+check "pgrep unrelated + kill"  'kill $(pgrep -f Safari)' ALLOW
+check "kill a pid file"         'kill $(cat runner.pid)' ALLOW
+check "ps | grep, no kill"      'ps aux | grep racket' ALLOW
+check "ps | grep -v, unrelated" "ps aux | grep -v grep | grep Safari | awk '{print \$2}' | xargs kill" ALLOW
+check "ps | grep -v racket"     "ps aux | grep -v racket | grep Safari | awk '{print \$2}' | xargs kill" ALLOW
+check "grep a FILE, kill a pid" 'grep -c racket build.log; kill 12345' ALLOW
+check "kill -1 PID = SIGHUP"    'kill -1 12345' ALLOW
+check "kill -HUP PID"           'kill -HUP 12345' ALLOW
+check "single-quoted is text"   "git commit -m 'never: kill \$(pgrep -f racket)'" ALLOW
+check "escaped \\\$ is text"      'git commit -m "never: kill \$(pgrep -f racket)"' ALLOW
+check "quoted \$(…) unrelated"   'echo "$(date) $(pgrep -f racket | wc -l) racket procs"' ALLOW
 
 # The rows above count ANY output as a deny. Both harnesses read different fields:
 # Claude Code reads hookSpecificOutput.permissionDecision; Hermes's shell-hook bridge
