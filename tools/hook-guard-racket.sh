@@ -19,7 +19,10 @@
 #   · a COMPILE — raco make|setup, raco pkg install|update, raco test --make,
 #     however raco is spelled (bare, any path, racket -l- raco) — whose
 #     environment lacks PLT_CS_COMPILE_LIMIT >= 1000000 (DEFERRED 159; the
-#     environment model is described at guard_analyse below).
+#     environment model is described at guard_analyse below);
+#   · a pkill/killall whose pattern or name can reach a racket process (by
+#     name, by command line, or as a regex) and is not parent-scoped with
+#     pkill -P <pid> — these act machine-wide, across sessions (DEFERRED 163).
 # ALLOWS:
 #   · anything not invoking racket at all (including `raco`, which is bounded
 #     compilation — and whose path contains no "/racket" token anyway), as
@@ -51,7 +54,7 @@ deny() {
 }
 
 # ════════════════════════════════════════════════════════════════════════════
-# COMMAND-SHAPE RULES (DEFERRED 159). These need to know WHICH word of a simple
+# COMMAND-SHAPE RULES (DEFERRED 159, 163). These need to know WHICH word of a simple
 # command is the command, and which environment it runs with, so they work on a
 # tokenized command rather than on regexes over the raw string:
 #
@@ -72,6 +75,7 @@ deny() {
 #
 # The analyser prints one finding per line; empty output = nothing to refuse.
 #   DENY159 <TAB> <offending simple command>
+#   PKILL|KILLALL <TAB> <flags> <TAB> p:<pattern> <TAB> <offending command>
 guard_analyse() {
   awk '
 function base(s) { sub(/.*\//, "", s); return s }
@@ -130,7 +134,7 @@ function seg_text(s, a, b,    j, out) {
 function enqueue(str, set, val) { QN++; QS[QN] = str; QSET[QN] = set; QVAL[QN] = val }
 
 # One simple command: tokens T[s, i..e], run with the limit state (set, val).
-function analyse_cmd(s, i, e, set, val,    t, b, j, k, sub1, c1, compiling) {
+function analyse_cmd(s, i, e, set, val,    t, b, j, k, sub1, c1, compiling, flags, scoped, endopt, pats, ch, n) {
   while (i <= e) {
     t = T[s, i]; b = base(t)
     if (b in EXEC) {
@@ -184,6 +188,51 @@ function analyse_cmd(s, i, e, set, val,    t, b, j, k, sub1, c1, compiling) {
     else if (c1 == "test") { for (j = sub1 + 1; j <= e; j++) if (T[s, j] == "-y" || T[s, j] == "--make") compiling = 1 }
     if (compiling && !limit_ok(set, val)) print "DENY159\t" seg_text(s, i, e)
   }
+
+  # ── DEFERRED 163: pkill / killall. Emit each pattern of a pkill that is NOT
+  # parent-scoped (-P/--parent), and each name of a killall (which cannot be);
+  # the shell side decides whether it can match a racket process.
+  #   PKILL|KILLALL <TAB> flags <TAB> p:<pattern> <TAB> <offending command>
+  # flags: f = full command line, i = ignore case, x = exact, r = regex (killall)
+  if (b == "pkill" || b == "killall") {
+    flags = "-"; scoped = 0; endopt = 0; pats = ""
+    for (j = i + 1; j <= e; j++) {
+      t = T[s, j]
+      if (endopt || t !~ /^-/ || t == "-") { pats = pats SUBSEP t; continue }
+      if (t == "--") { endopt = 1; continue }
+      if (t ~ /^-[0-9]+$/ || t ~ /^-(SIG)?[A-Z][A-Z]+[0-9]*$/) continue   # -9, -KILL, -USR1 (not -P123)
+      if (t ~ /^--/) {
+        if (t ~ /^--parent(=|$)/) scoped = 1
+        else if (t == "--full") flags = flags "f"
+        else if (t == "--ignore-case") flags = flags "i"
+        else if (t == "--exact") flags = flags "x"
+        else if (t == "--regexp") flags = flags "r"
+        if (t !~ /=/ && index(LONGARG, " " t " ")) j++
+        continue
+      }
+      for (k = 2; k <= length(t); k++) {
+        ch = substr(t, k, 1)
+        if (index(SHORTARG[b], ch)) {               # option with an argument
+          if (b == "pkill" && ch == "P") scoped = 1
+          if (b == "killall" && ch == "c") { if (k < length(t)) pats = pats SUBSEP substr(t, k + 1); else if (j < e) pats = pats SUBSEP T[s, j + 1] }
+          if (k == length(t)) j++
+          break
+        }
+        if (b == "pkill" && ch == "f") flags = flags "f"
+        else if (ch == "i" && b == "pkill" || ch == "I") flags = flags "i"
+        else if (b == "pkill" && ch == "x") flags = flags "x"
+        else if (b == "killall" && (ch == "m" || ch == "r")) flags = flags "r"
+      }
+    }
+    if (!(b == "pkill" && scoped)) {
+      n = split(substr(pats, 2), PARR, SUBSEP)
+      if (pats == SUBSEP) { n = 1; PARR[1] = "" }
+      for (k = 1; k <= n; k++) {
+        t = PARR[k]; gsub(/[\t\n]/, " ", t)
+        print toupper(b) "\t" flags "\tp:" t "\t" seg_text(s, i, e)
+      }
+    }
+  }
 }
 
 function analyse_segment(s,    i, e, set, val, pre, pv, j) {
@@ -227,6 +276,9 @@ END {
   ARGOPT["exec"] = " -a "
   ARGOPT["time"] = " -f -o "
   ARGOPT["caffeinate"] = " -t -w "
+  SHORTARG["pkill"] = "FGMNPUgstuO"      # takes an argument (P = parent: scoped)
+  SHORTARG["killall"] = "utcoynZ"       # c = a process name (checked as one)
+  LONGARG = " --parent --signal --pgroup --session --terminal --euid --uid --group --pidfile --ns --nslist --older --runstates --env --user --older-than --younger-than --context "
   QN = 1; QS[1] = buf; QSET[1] = 0; QVAL[1] = ""
   for (q = 1; q <= QN && q <= 32; q++) {
     EXP_SET = QSET[q]; EXP_VAL = QVAL[q]; SH_SET = 0; SH_VAL = ""
@@ -238,8 +290,65 @@ END {
 
 findings="$(printf '%s' "$cmd" | guard_analyse)"
 
-while IFS=$'\t' read -r kind what; do
+# ── DEFERRED 163: can a pkill pattern / killall name reach a racket process?
+# Two tests, either suffices:
+#   (1) it NAMES one: racket, raco, batch-worker, run-affected-tests, bench-ab,
+#       prologos or .rkt, any case — this catches every checkout's absolute
+#       paths, which no fixed sample list could;
+#   (2) as the regex pkill/killall would use (grep -E is the same regcomp ERE),
+#       it matches a sample: process NAMES always, and the command LINES of
+#       live racket processes when pkill has -f. Catches `rack.t`, `.`, "".
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"
+RKT="/Applications/Racket v9.3/bin/racket"
+SAMPLE_NAMES="racket
+raco"
+SAMPLE_LINES="$RKT $ROOT/racket/prologos/tools/batch-worker.rkt --stdin --file-timeout 300
+$RKT tools/run-affected-tests.rkt --all
+$RKT $ROOT/racket/prologos/lsp/server.rkt
+$RKT -N /Applications/Racket v9.3/bin/raco -l- raco/main.rkt make -j 4 driver.rkt
+$RKT $ROOT/racket/prologos/tools/run-file.rkt probe.prologos"
+
+reaches_racket() { # reaches_racket <kind> <flags> <pattern>
+  local kind="$1" flags="$2" pat="$3" lc re samples gopt=-E
+  lc="$(printf '%s' "$pat" | tr '[:upper:]' '[:lower:]')"
+  case "$lc" in
+    *racket*|*raco*|*batch-worker*|*run-affected-tests*|*bench-ab*|*prologos*|*.rkt*) return 0 ;;
+  esac
+  # killall without -m/-r compares names exactly; (1) already covered those.
+  [ "$kind" = KILLALL ] && [[ "$flags" != *r* ]] && return 1
+  samples="$SAMPLE_NAMES"
+  [ "$kind" = PKILL ] && [[ "$flags" == *f* ]] && samples="$SAMPLE_NAMES
+$SAMPLE_LINES"
+  [[ "$flags" == *i* ]] && gopt=-Ei
+  re="$pat"; [[ "$flags" == *x* ]] && re="^($pat)\$"
+  grep $gopt -q -e "$re" <<<"$samples" 2>/dev/null
+}
+
+while IFS=$'\t' read -r kind what pat seg; do
   case "$kind" in
+    PKILL|KILLALL)
+      reaches_racket "$kind" "$what" "${pat#p:}" || continue
+      deny "Refusing a machine-wide kill of racket processes (DEFERRED 163):
+
+    $seg
+
+pkill/killall select by process NAME or COMMAND LINE across every session on
+this machine: other agents' suites, other worktrees, the editor's LSP server.
+On 2026-10-13 a runner's \`pkill -f batch-worker.rkt\` killed all the workers of
+concurrent suites in other checkouts (main lost 18 workers, twice), and before
+fd2986cc those runs went on to print \"all pass\" (DEFERRED 164).
+
+Kill only what you started:
+
+    kill <pid>                                   # from \$! or a pgrep you have read
+    pkill -P <your-runner-pid> -f <pattern>      # only that parent's children
+
+Orphans of a runner that died (reparented to PID 1) — this checkout only:
+
+    pkill -P 1 -f \"$ROOT/racket/prologos/tools/batch-worker.rkt\"
+
+(what run-affected-tests.rkt does since b45bbf44). Look first: pgrep -fl <pattern>.
+killall cannot be parent-scoped; use kill or pkill -P." ;;
     DENY159) deny "Refusing a compile without PLT_CS_COMPILE_LIMIT (DEFERRED 159):
 
     $what

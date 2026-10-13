@@ -123,6 +123,12 @@ it `PLT_CS_COMPILE_LIMIT` ≥ 1000000 (inline `VAR=… raco`, `env VAR=…`, or 
 `export` earlier in the SAME command). The hook reads only the command text, so
 an export from an earlier call does not count: inline it. Why: DEFERRED 159.
 
+And it DENIES a `pkill`/`killall` whose pattern can reach a racket process —
+it names racket, raco, batch-worker, the runner, `prologos` or `.rkt`, or as a
+regex it matches a racket process name or command line — unless it is
+parent-scoped (`pkill -P <pid>`). Those commands act on every session on the
+machine (DEFERRED 163). Kill by pid, or `pkill -P <parent> -f <pattern>`.
+
 **It is not committed by default.** `.claude/settings.json` is untracked in this
 repo (`.claude/settings.local.json` is the tracked one), so the hook must be
 installed per clone. To install:

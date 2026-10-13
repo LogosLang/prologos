@@ -122,6 +122,50 @@ check "commit msg mentions it"  'git commit -m "raco make without the limit"' AL
 check "echo raco make"          'echo raco make driver.rkt' ALLOW
 check "comment mentions it"     'git status  # then raco make driver.rkt' ALLOW
 
+# ── DEFERRED 163: pkill/killall match by name or command line across EVERY
+# session on the machine; Step 0's `pkill -f batch-worker.rkt` killed other
+# sessions' suites. Only a parent-scoped pkill (-P <pid>) may name racket.
+L163="DEFERRED 163"
+echo "MUST DENY (machine-wide kill of racket / batch workers — DEFERRED 163):"
+check "pkill -f racket"         'pkill -f racket' DENY "$L163"
+check "pkill -f batch-worker"   'pkill -f batch-worker' DENY "$L163"
+check "the old runner Step 0"   'pkill -f batch-worker.rkt' DENY "$L163"
+check "pkill racket (by name)"  'pkill racket' DENY "$L163"
+check "killall racket"          'killall racket' DENY "$L163"
+check "killall -9 racket"       'killall -9 racket' DENY "$L163"
+check "killall -m regex"        'killall -m "rack.*"' DENY "$L163"
+check "pkill -9 -f racket"      'pkill -9 -f racket' DENY "$L163"
+check "pkill -KILL -f"          'cd /tmp && pkill -KILL -f batch-worker' DENY "$L163"
+check "clustered -fi, -i regex" 'pkill -fi "RACK.T"' DENY "$L163"
+check "pkill -x racket"         'pkill -x racket' DENY "$L163"
+check "the runner by name"      'pkill -f run-affected-tests' DENY "$L163"
+check "racket.*runner regex"    'pkill -f "racket.*run-affected-tests"' DENY "$L163"
+check "regex that hits racket"  'pkill -f "rack.t"' DENY "$L163"
+check "any .rkt"                "pkill -f '\\.rkt'" DENY "$L163"
+check "every prologos process"  'pkill -f prologos' DENY "$L163"
+check "another checkout, abs"   'pkill -f /Users/x/prologos/.claude/worktrees/par4-p0/racket/prologos/tools/batch-worker.rkt' DENY "$L163"
+check "empty pattern = all"     'pkill -f ""' DENY "$L163"
+check "through sudo"            'sudo pkill -f racket' DENY "$L163"
+check "through timeout"         'timeout -k 5 10 pkill -f batch-worker' DENY "$L163"
+check "after ;"                 'sleep 1; pkill -f racket || true' DENY "$L163"
+
+echo "MUST ALLOW (parent-scoped kills, unrelated kills, read-only process queries):"
+check "orphans of THIS checkout" 'pkill -P 1 -f /Users/x/prologos/racket/prologos/tools/batch-worker.rkt' ALLOW
+check "parent-scoped"           'pkill -P 12345 -f racket' ALLOW
+check "parent-scoped, attached" 'pkill -P12345 racket' ALLOW
+check "parent-scoped, long opt" 'pkill --parent 12345 -f batch-worker' ALLOW
+check "unrelated pkill -f"      'pkill -f "sleep 999"' ALLOW
+check "unrelated pkill"         'pkill caffeinate' ALLOW
+check "unrelated pkill python"  'pkill -9 -f my-probe.py' ALLOW
+check "unrelated killall"       'killall Safari' ALLOW
+check "pgrep is read-only"      'pgrep -f racket' ALLOW
+check "pgrep -fl batch-worker"  'pgrep -fl batch-worker.rkt' ALLOW
+check "kill one pid"            'kill 12345' ALLOW
+check "-x: exact name, not racket" 'pkill -x rack' ALLOW
+check "ps | grep"               'ps -axo pid,ppid,command | grep batch-worker' ALLOW
+check "grep mentions pkill"     'grep -n "pkill -f batch-worker" racket/prologos/tools/run-affected-tests.rkt' ALLOW
+check "echo mentions pkill"     'echo pkill -f racket' ALLOW
+
 echo
 if [ "$fails" -eq 0 ]; then echo "all rows pass"; else echo "FAILURES: $fails"; fi
 exit "$fails"
