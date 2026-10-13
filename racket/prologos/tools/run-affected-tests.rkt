@@ -771,10 +771,12 @@
   ;; default, all keys compared equal, and the "LPT" sort silently degenerated to
   ;; stable (alphabetical) order.
   ;;
-  ;; Measured impact was NIL (median effective parallelism 8.97 poisoned vs 8.96 clean
-  ;; over 282 runs) — the schedule is not what gates this suite. Fixed anyway because a
-  ;; silently-degenerating optimizer is a lie in the code, and the cost of being right
-  ;; is a few lines.
+  ;; ⚠ A "measured impact NIL" claim stood here (median effective parallelism 8.97
+  ;; "poisoned" vs 8.96 "clean" over 282 runs). It is REFUTED — DEFERRED 162: both
+  ;; legs ran the INERT sort (the hasheq lookup below never hit), so it compared
+  ;; alphabetical order with alphabetical order and says nothing about LPT. With
+  ;; the sort working (389b3413) the suite went 127.6 -> 110.5 s (one run each, on
+  ;; 159's interpreted build: the ratio holds, the absolute seconds do not).
   ;;
   ;; Now: take the per-file MEDIAN over the most recent full-suite runs. Median rather
   ;; than latest because per-file wall varies 5-10% run to run; full-suite runs only
@@ -786,7 +788,7 @@
   ;; ⚠ equal?-keyed (suite-plan.rkt). This was a `for/hasheq` over file-name
   ;; STRINGS, looked up below with a freshly built string: `eq?` never matched
   ;; (0 of 489 hits, measured 2026-10-13), so every key was +inf.0 and dispatch
-  ;; was ALPHABETICAL — including on the run that "measured impact NIL" above.
+  ;; was ALPHABETICAL — including on both legs of the refuted measurement above.
   (define historical-times
     (if (file-exists? timings-path)
         (with-handlers ([exn? (lambda (e) (hash))])
