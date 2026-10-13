@@ -468,10 +468,13 @@
              (string->symbol (path->string p)))
            '()))
      ;; PM Track 10C: filter to files that actually exist (dep-graph may have stale entries)
+     ;; DEFERRED 161: test-support.rkt & co. are not test units (suite-plan.rkt
+     ;; NON-TEST-MODULES) — dispatching the worker's own fixture ran 0 tests.
      (define all-tests
-       (sort (filter (lambda (sym)
-                       (file-exists? (build-path tests-dir (symbol->string sym))))
-                     (remove-duplicates (append known-tests disk-tests)))
+       (sort (drop-non-test-modules
+              (filter (lambda (sym)
+                        (file-exists? (build-path tests-dir (symbol->string sym))))
+                      (remove-duplicates (append known-tests disk-tests))))
              symbol<?))
      (define-values (to-run skipped) (apply-skip-filter all-tests tests-dir))
      (cond
@@ -508,7 +511,7 @@
      (cond
        [force-all?
         (printf "info.rkt changed — running ALL tests.\n")
-        (define all-tests (all-test-files))
+        (define all-tests (drop-non-test-modules (all-test-files)))
         (define-values (to-run skipped) (apply-skip-filter all-tests tests-dir))
         (printf "Running ~a of ~a test files~a...\n"
                 (length to-run) (length all-tests)
@@ -541,7 +544,8 @@
              (printf "  example: ~a\n" (changed-example-name c))]))
 
         ;; Compute affected tests (pass project-root for auto-scan of new files)
-        (define affected (compute-affected-tests changes #:project-root project-root))
+        (define affected
+          (drop-non-test-modules (compute-affected-tests changes #:project-root project-root)))
 
         ;; Apply skip filter
         (define-values (to-run skipped) (apply-skip-filter affected tests-dir))
@@ -914,11 +918,14 @@
          (dispatch-next! worker-stdin)
          (define ms (hash-ref r 'wall_ms))
          (define status (hash-ref r 'status))
+         ;; A unit that says pass but ran 0 tests is labelled EMPTY: it is a
+         ;; no-result for the gate below (DEFERRED 161), not a pass.
+         (define-values (_m empty-here _f _s) (gate-verdict 1 (list r)))
          (printf "[~a/~a] ~a~a ~a (~as)\n"
                  (add1 count) unit-count
                  (hash-ref r 'file)
                  (if (hash-ref r 'shard #f) (format " [shard ~a]" (hash-ref r 'shard)) "")
-                 (status-label status)
+                 (if (pair? empty-here) "EMPTY — 0 tests" (status-label status))
                  (real->decimal-string (/ ms 1000.0) 1))
          (flush-output)
          (set! collected (cons r collected))
@@ -1021,10 +1028,14 @@
   ;; 2026-10-13: "1629 tests in 343.6s (490 files, …, all pass)" after 63 of 493
   ;; units, with a 63-result record written as a full run. A missing result is
   ;; now a failed, unrecorded run, whatever path produced it.
-  (define incomplete? (< (length unit-results) unit-count))
-  (define all-pass?
-    (and (not incomplete?)
-         (andmap (λ (r) (string=? (hash-ref r 'status) "pass")) file-results)))
+  ;; ⚠ AND every unit that reported pass must have RUN a test (DEFERRED 161):
+  ;; a unit reporting pass with 0 tests is a no-result, exactly like a missing
+  ;; one — unless its file is declared test-free (suite-plan.rkt
+  ;; TEST-FREE-FILES). The gate is suite-plan.rkt's gate-verdict, unit-tested.
+  (define-values (missing-count empty-units _failed-units stale-test-free)
+    (gate-verdict unit-count unit-results))
+  (define incomplete? (gate-incomplete? unit-count unit-results))
+  (define all-pass? (gate-all-pass? unit-count unit-results))
 
   ;; Print summary
   (define failed-files
@@ -1036,6 +1047,17 @@
     (if (hash-ref r 'shard #f)
         (format "~a [shard ~a]" (hash-ref r 'file) (hash-ref r 'shard))
         (hash-ref r 'file)))
+  (define incomplete-reason
+    (string-join
+     (append
+      (if (> missing-count 0)
+          (list (format "~a of ~a units reported" (length unit-results) unit-count))
+          '())
+      (if (pair? empty-units)
+          (list (format "~a reported PASS with 0 tests: ~a" (length empty-units)
+                        (string-join (map unit-name empty-units) ", ")))
+          '()))
+     "; "))
   ;; A passing file has no failure log of any form: clear stale per-shard logs
   ;; (and, for a sharded file, the whole-file log) left by earlier runs.
   (let ([fail-dir (build-path project-root "data" "benchmarks" "failures")])
@@ -1057,10 +1079,18 @@
           file-count
           jobs
           (cond [bailed? (format "ABORTED — ~a timeouts" timeout-count)]
-                [incomplete? (format "INCOMPLETE — ~a of ~a units reported" (length unit-results) unit-count)]
+                [incomplete? (format "INCOMPLETE — ~a" incomplete-reason)]
                 [all-pass? "all pass"]
                 [else (format "~a FAILURES" (length failed-files))]))
+  (for ([r (in-list stale-test-free)])
+    (printf "NOTE: ~a is declared test-free (suite-plan.rkt TEST-FREE-FILES) but ran ~a tests — remove the declaration.\n"
+            (unit-name r) (hash-ref r 'tests 0)))
   (unless all-pass?
+    (for ([r (in-list empty-units)])
+      (printf "\n~a\n" (make-string 60 #\─))
+      (printf "EMPTY: ~a — reported PASS but ran 0 tests: counted as NO RESULT (DEFERRED 161).\n"
+              (unit-name r))
+      (printf "    A file that genuinely holds no tests goes in suite-plan.rkt TEST-FREE-FILES.\n"))
     (for ([r (in-list failed-units)])
       (printf "\n~a\n" (make-string 60 #\─))
       (printf "FAILED: ~a\n" (unit-name r))
@@ -1097,7 +1127,7 @@
                 (real->decimal-string (/ total-wall-ms 1000.0) 1)
                 file-count jobs
                 (cond [bailed? (format ", ABORTED — ~a timeouts" timeout-count)]
-                      [incomplete? (format ", INCOMPLETE — ~a of ~a units reported" (length unit-results) unit-count)]
+                      [incomplete? (format ", INCOMPLETE — ~a" incomplete-reason)]
                       [all-pass? ", all pass"]
                       [else (format ", ~a FAILURES" (length failed-files))]))
         (unless all-pass?

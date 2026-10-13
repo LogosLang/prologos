@@ -32,7 +32,13 @@
          pick-eligible
          make-shard-around
          shard-label
-         merge-shard-results)
+         merge-shard-results
+         NON-TEST-MODULES
+         TEST-FREE-FILES
+         drop-non-test-modules
+         gate-verdict
+         gate-incomplete?
+         gate-all-pass?)
 
 ;; historical-medians : (listof string) #:runs N #:min-file-count M
 ;;                      -> (hash/c string? exact-nonnegative-integer?)  ; equal?-keyed
@@ -210,3 +216,68 @@
        (if (hash-ref seen f #f)
            (loop (cdr rs) seen acc)
            (loop (cdr rs) (hash-set seen f #t) (cons (merged f) acc)))])))
+
+;; ============================================================
+;; THE GATE — what counts as a result (DEFERRED 161 + 164)
+;; ============================================================
+;;
+;; "All pass" must mean: every dispatched unit REPORTED (164, fd2986cc), and
+;; every unit that reported pass RAN AT LEAST ONE TEST (161). A unit reporting
+;; pass with 0 tests is a NO-RESULT, like a missing one — test-generators.rkt
+;; did exactly that on a cold build and the run was recorded as "10257 tests
+;; ... all pass". It applies per UNIT, so an empty shard is caught too (a
+;; second dynamic-require of a module in one worker is a cached no-op that
+;; looks just like this). A unit that FAILED or timed out with 0 tests is a
+;; reported failure, not a missing result: it already makes the run red, and
+;; its error is the useful output.
+;;
+;; WHY AN EXPLICIT LIST, here, rather than a marker comment in each file: an
+;; exemption from a gate should be auditable in ONE place and pinned by a test
+;; (this module's purpose); a marker travels with copy-paste into a new file
+;; and exempts it silently, and the runner would have to read every test
+;; file's text to find it. A declared file that DOES run tests is reported as
+;; a stale declaration, so the list cannot rot into a blanket exemption.
+
+;; Files under tests/ named like tests that are NOT test units. test-support.rkt
+;; is the batch worker's own fixture: every worker loads it at startup
+;; (batch-worker.rkt), so dispatching it was a cached no-op that always
+;; reported pass with 0 tests — a unit that could only ever measure nothing.
+(define NON-TEST-MODULES '("test-support.rkt"))
+
+;; Units that may legitimately run 0 tests: debug scripts that print and
+;; exercise code but hold no rackunit checks (the only zero-test units in the
+;; last full run besides test-support.rkt). They still RUN (a crash fails them);
+;; they are just not required to count tests.
+(define TEST-FREE-FILES '("test-multiclause-debug.rkt" "test-p2-debug.rkt"))
+
+(define (base-name x)
+  (define s (if (symbol? x) (symbol->string x) (if (path? x) (path->string x) x)))
+  (last (string-split s "/")))
+
+;; drop-non-test-modules : (listof (or/c symbol? string? path?)) -> same
+(define (drop-non-test-modules xs)
+  (filter (lambda (x) (not (member (base-name x) NON-TEST-MODULES))) xs))
+
+(define (passed? r) (equal? (hash-ref r 'status #f) "pass"))
+
+;; gate-verdict : unit-count (listof unit-result) -> (values missing empty failed stale-test-free)
+;;   missing          dispatched units with no result
+;;   empty            results that say pass with 0 tests, file not declared test-free
+;;   failed           results that are not pass
+;;   stale-test-free  declared test-free results that ran tests (a NOTE, not a failure)
+(define (gate-verdict unit-count unit-results #:test-free [tf TEST-FREE-FILES])
+  (define (no-tests? r) (eqv? (hash-ref r 'tests 0) 0))
+  (define (declared? r) (member (base-name (hash-ref r 'file "")) tf))
+  (values (max 0 (- unit-count (length unit-results)))
+          (filter (lambda (r) (and (passed? r) (no-tests? r) (not (declared? r)))) unit-results)
+          (filter (lambda (r) (not (passed? r))) unit-results)
+          (filter (lambda (r) (and (declared? r) (not (no-tests? r)))) unit-results)))
+
+;; No result for some unit: missing, or empty.
+(define (gate-incomplete? unit-count unit-results)
+  (define-values (missing empty failed stale) (gate-verdict unit-count unit-results))
+  (or (> missing 0) (pair? empty)))
+
+(define (gate-all-pass? unit-count unit-results)
+  (define-values (missing empty failed stale) (gate-verdict unit-count unit-results))
+  (and (= missing 0) (null? empty) (null? failed)))

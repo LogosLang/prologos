@@ -188,3 +188,56 @@
   (check-equal? (hash-ref w 'error_output) "boom")
   (check-equal? (map (lambda (s) (hash-ref s 'shard)) (hash-ref w 'shards)) '("0/2" "1/2"))
   (check-equal? (cadr m) (cadr rs)))
+
+;; ========================================
+;; The gate — what counts as a result (DEFERRED 161, 164)
+;; ========================================
+
+(define (res file status tests #:shard [shard #f])
+  (define h (hasheq 'file file 'status status 'tests tests 'wall_ms 1))
+  (if shard (hash-set h 'shard shard) h))
+
+(test-case "suite-plan/gate: a unit that reports PASS with 0 tests is NO RESULT (DEFERRED 161)"
+  ;; test-generators.rkt reported pass/0 tests/0 ms on a cold build and the
+  ;; run was recorded as "10257 tests ... all pass".
+  (define-values (missing empty failed stale)
+    (gate-verdict 2 (list (res "test-generators.rkt" "pass" 0) (res "test-a.rkt" "pass" 5))))
+  (check-equal? missing 0)
+  (check-equal? (map (lambda (r) (hash-ref r 'file)) empty) '("test-generators.rkt"))
+  (check-equal? failed '())
+  (check-false (gate-all-pass? 2 (list (res "test-generators.rkt" "pass" 0) (res "test-a.rkt" "pass" 5))))
+  (check-true (gate-incomplete? 2 (list (res "test-generators.rkt" "pass" 0) (res "test-a.rkt" "pass" 5))))
+  (check-true (gate-all-pass? 2 (list (res "test-generators.rkt" "pass" 5) (res "test-a.rkt" "pass" 5)))))
+
+(test-case "suite-plan/gate: an EMPTY SHARD is no result either; a result with no 'tests key is 0"
+  (define-values (m e f s)
+    (gate-verdict 2 (list (res "w.rkt" "pass" 9 #:shard "0/2") (res "w.rkt" "pass" 0 #:shard "1/2"))))
+  (check-equal? (map (lambda (r) (hash-ref r 'shard)) e) '("1/2"))
+  (define-values (m2 e2 f2 s2) (gate-verdict 1 (list (hasheq 'file "x.rkt" 'status "pass"))))
+  (check-equal? (length e2) 1))
+
+(test-case "suite-plan/gate: a DECLARED test-free file may run 0 tests; a stale declaration is reported"
+  (define tf (car TEST-FREE-FILES))
+  (define-values (m e f stale) (gate-verdict 1 (list (res tf "pass" 0))))
+  (check-equal? e '())
+  (check-true (gate-all-pass? 1 (list (res tf "pass" 0))))
+  (define-values (m2 e2 f2 stale2) (gate-verdict 1 (list (res tf "pass" 3))))
+  (check-equal? (map (lambda (r) (hash-ref r 'file)) stale2) (list tf) "it ran tests: drop it from the list"))
+
+(test-case "suite-plan/gate: missing units are incomplete; a failure with 0 tests is a FAILURE, not empty"
+  (define rs (list (res "test-a.rkt" "fail" 0) (res "test-b.rkt" "timeout" 0)))
+  (define-values (missing empty failed stale) (gate-verdict 3 rs))
+  (check-equal? missing 1)
+  (check-equal? empty '())
+  (check-equal? (length failed) 2)
+  (check-true (gate-incomplete? 3 rs))
+  (check-false (gate-incomplete? 2 rs))
+  (check-false (gate-all-pass? 2 rs)))
+
+(test-case "suite-plan/discovery: test-support.rkt is the WORKER's fixture, not a test unit"
+  ;; Every batch worker loads it at startup (batch-worker.rkt), so dispatching
+  ;; it is a cached no-op that always reports 0 tests.
+  (check-equal? (drop-non-test-modules '(test-a.rkt test-support.rkt test-b.rkt))
+                '(test-a.rkt test-b.rkt))
+  (check-equal? (drop-non-test-modules (list "/x/tests/test-support.rkt" "/x/tests/test-a.rkt"))
+                (list "/x/tests/test-a.rkt")))
