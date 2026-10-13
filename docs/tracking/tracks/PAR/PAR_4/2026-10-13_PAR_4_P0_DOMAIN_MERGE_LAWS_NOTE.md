@@ -330,6 +330,13 @@ merge, not a rebase. Measurements taken on `par4-p0` from now on include, on the
 (`5ec697bf`) and the suite queue reach `par4-p0` at the next checkpoint merge. The merge commit's message
 carries this summary for whoever resumes on the branch.
 
+**Second bring-up, same day: `par4-p0` → `3643f56e`**, a merge of main at checkpoint 2, `01ef2542`. It brings F3(a), which
+is on P1's measured path, along with the machine-wide suite queue and the honest gate (DEFERRED 161, 164, 165). A suite
+started here now WAITS for any other suite instead of contending with it. Gate on the merged tree: **10 339 tests /
+495 files, all pass.** File by file, it equals checkpoint 2's delta plus `+9 test-arena-parity`, and nothing else.
+Rebuilt with the limit; `test-arena-parity` and `test-suite-lock` pass in place (19 tests). For P2 baselines:
+`a456c370` → `3643f56e` adds F3(a). Name the pair if a merge-law measurement spans it.
+
 ## 8. Proposed LOG entry (for whoever holds `LOG.md`)
 
 > ### P0 input from the DEFERRED sweep: 2 of 7 tagged-cell domain merges are joins; SRE's type-domain ACI declaration is fail-open — no commit on main (2026-10-13)
