@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 169**
+> ### **NEXT FREE: 170**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6918,7 +6918,7 @@ or gate the tree path on a real pool executor; the green-thread `parallel?` bran
 win and should be deleted. **When**: before PAR 4 pins its baseline — every PAR 4 A/B is
 otherwise credited with removing this defect (P0 record §5 "two baselines"). Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md).
 
-### 151. ⬜ ⭐ **FIX (a) MERGED `baa1dce2`** (`7358c7c4`, checkpoint 3); fix (b) MEASURED and built on branch `deferred-151b-pnet-fasl` (`eab8dcf7`), merge pending — THE `.pnet` MODULE CACHE IS A NET LOSS: `pnet-stale?` `read`s every WHOLE file to compare a 2-element header, then the loader reads it AGAIN — 2.6 s per process start, vs 0.53 s elaborating the same 39 modules from source
+### 151. ✅ **DISCHARGED** — fix (a) `baa1dce2` (checkpoint 3); fix (b) `08acff4a` (checkpoint 4: the body is fasl, `eab8dcf7`; the reader `tools/pnet-dump.rkt`, `c6f8fff7`) — THE `.pnet` MODULE CACHE WAS A NET LOSS: `pnet-stale?` `read`s every WHOLE file to compare a 2-element header, then the loader reads it AGAIN — 2.6 s per process start, vs 0.53 s elaborating the same 39 modules from source
 
 [`pnet-serialize.rkt:795-806`](../../racket/prologos/pnet-serialize.rkt) `pnet-stale?`
 does `(call-with-input-file pnet-path read)` — the full datum, ~0.4–1 MB per module — to
@@ -6954,18 +6954,24 @@ load beat no-cache (≈ 310 ms inferred) is a CONJECTURE, not measured end to en
 
 **Fix (b) measured end to end, 2026-10-13 (owner decision SW-22).** Branch `deferred-151b-pnet-fasl` (off main
 `2792123c`): `eab8dcf7` makes the BODY fasl and keeps the header text (`PNET_VERSION` 11 → 12; `pnet-stale?` unchanged);
-`9713a1a5` is the record (`docs/tracking/handoffs/2026-10-13_PNET_FASL_151B_DATA/README.md` on that branch).
+`9713a1a5` is the record ([`handoffs/2026-10-13_PNET_FASL_151B_DATA/README.md`](handoffs/2026-10-13_PNET_FASL_151B_DATA/README.md)).
 - **Same data**: bodies 40/40 equal to v11 modulo root path; strings and vectors come back immutable (text `read`
   made them mutable), and no production code mutates one (every `vector-set!` site is on a local `make-vector`;
   CHAMP/RRB values are rebuilt on load). Full suite on v12: 10 350 / 497, all pass.
 - **Load phase, CPU ms median** (ABBA ×4, under the exclusive suite lock, load 12–16): warm **1 450 → 285**
   (5.1×), below no-cache (530 / 546, the control), so the cache now PAYS (1.9×); cold 1 028 → 732; 809 → 405 MB.
   The ≈ 310 ms conjecture above holds (285 measured). Suite wall, one ABAB pair: 15.8 / 16.9 → 13.4 / 13.5 s.
-- **Open (a decision)**: merge the branch as fix (b). Retiring the cache would forgo the 1.9×. Costs: a `.pnet` is no
-  longer readable as text (a dump tool would restore that); fasl's format follows the Racket version, which the
-  existing rule already covers (`infrastructure-stale?`, `pnet-serialize.rkt:826`, called by `pnet-stale?` at `:836`:
-  a newer `driver_rkt.zo` makes every cache stale; and the loader's read is inside an `exn?` handler, so an
-  unreadable body falls back to source).
+- **Decided (owner, SW-22): merge as fix (b)** — merged in checkpoint 4, `08acff4a`. Retiring the cache would have
+  forgone the 1.9×. The cost, a `.pnet` no longer readable as text, is met by `tools/pnet-dump.rkt` (owner request
+  SW-23, `c6f8fff7`): summary with the loader's verdict and its reason, `--slot`, `--text` (read-back-able); it
+  reads with `pnet-serialize.rkt`'s own readers and `PNET-BODY-SLOTS`, which the writer now checks its body against.
+- **Correction.** This entry said fasl's format "follows the Racket version". That was the pre-6.90 documentation:
+  since Racket 6.90.0.21 the encoding is version-independent (Racket reference §13.10). A Racket upgrade still
+  regenerates every cache, because it rebuilds `driver_rkt.zo` (`infrastructure-stale?`), not because of fasl; and
+  the loader's read sits inside an `exn?` handler, so an unreadable body falls back to source.
+- **Measured since**: the 9.5 MB vs 4.5 MB fasl sizes are string sharing — fasl writes each distinct string object
+  once; in memory the bodies' 42 267 strings are 1 703 objects, text `read` makes 42 241 (99.9 % of the gap). The
+  fasl reader returns the shared objects, immutable, which is what makes sharing them safe.
 
 ### 152. ✅ **DISCHARGED `0e5da30f`** (branch `per-process-152-151`, merged to main in `baa1dce2`; the runner opts back in with `--memory-stats`, `e3efb2dc`) — `process-file` FORCES TWO MAJOR GCs PER CALL — `measure-memory-before`/`-after` call `(collect-garbage 'major)` unconditionally (~45 ms per file; the largest single cost of a 60 ms run)
 
@@ -7513,3 +7519,17 @@ predates the slice and belongs to spec and arrow parsing. One part changes by it
 ("`*->` reads as `*-` then `>` — put a space before `->`"). Never raise at the reader: a raise there aborts the whole
 file. **When**: no gate. Pick it up with the next spec-parser diagnostics work, or at CIU 6 X.close's doc-truth pass if
 still open.
+
+### 169. ⬜ `tools/dep-graph.rkt` IS THREE MONTHS STALE — `update-deps.rkt --check` exits 1 with 378 mismatches; targeted (affected-test) selection reads this graph
+
+Found 2026-10-13 while adding `tests/test-pnet-dump.rkt` (checkpoint 4). `racket tools/update-deps.rkt --check` on
+main's code (branch `deferred-sweep-146-149` @ `61b24b02`): **378 mismatches** — source-deps 82, test-deps 258,
+prologos-lib-deps 9, test-prologos-deps 29. By kind: MISSING 227 (151 test files absent from test-deps, 46 source
+modules, 23 + 7 prologos entries), MISMATCH 140 (edges changed), EXTRA 11 (entries for files that left). The data was
+last regenerated in `2385799d` (2026-07-02). What still works: `--all` runs every test file on disk, and the runner
+auto-scans a CHANGED test file that the graph does not list (`dep-graph.rkt:1287-1346`), so new tests are run. What
+does not: affected-test selection for a changed SOURCE module follows the stored edges, so a test that reaches the
+module only through a missing or changed edge is not selected (not measured how often). Fix shape: `racket
+tools/update-deps.rkt --write`, review the diff, and make `--check` part of a gate (pre-commit or the checkpoint
+gate) so it cannot drift again. **When**: next runner/tooling batch; before relying on targeted runs to vet a
+source change.

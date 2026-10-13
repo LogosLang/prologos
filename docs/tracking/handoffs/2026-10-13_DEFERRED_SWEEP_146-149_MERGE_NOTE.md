@@ -34,10 +34,12 @@ are all in use. **Commit messages up to and including `2792123c` use roman numer
 | SW-16 | Close `kill $(pgrep …)` / `pgrep … \| xargs kill` and kin | DECIDED, done `8b113a9f` |
 | SW-17 | Narrow `Bash(pkill:*)`; drop the unlimited-compile allow rules | DECIDED, done `53e6de98` |
 | SW-18 | `measure-production-n.rkt:91` → `make-hash` without a test | DECIDED, done `200bc3d6` |
-| SW-19 | Annotate the history records with an undeclared 0-test PASS unit (DEFERRED 161 open 1) | see § After checkpoint 3 |
-| SW-20 | DEFERRED 166: the runner names its lock path, and warns on an override; no extra flag | see § After checkpoint 3 |
-| SW-21 | `--tests` on a module that is not a test unit is refused (not run, then called INCOMPLETE) | see § After checkpoint 3 |
-| SW-22 | DEFERRED 151 (b): measure a fasl `.pnet` body end to end before choosing fix vs retire | see § After checkpoint 3 |
+| SW-19 | Annotate the history records with an undeclared 0-test PASS unit (DEFERRED 161 open 1) | DECIDED, done `c02d378a`; main checkpoint 4 |
+| SW-20 | DEFERRED 166: the runner names its lock path, and warns on an override; no extra flag | DECIDED, done `c1d4f8f3`; main checkpoint 4 |
+| SW-21 | `--tests` on a module that is not a test unit is refused (not run, then called INCOMPLETE) | DECIDED, done `6e0cc7a8`; main checkpoint 4 |
+| SW-22 | DEFERRED 151 (b): measure a fasl `.pnet` body end to end before choosing fix vs retire; then merge it | DECIDED (owner): merge as fix (b); done, checkpoint 4 `08acff4a` |
+| SW-23 | A human-readable reader for the binary `.pnet` (owner request) | done `c6f8fff7`: `tools/pnet-dump.rkt`; main checkpoint 4 |
+| SW-24 | DEFERRED 169: regenerate `dep-graph.rkt` (`update-deps --write`, 378 mismatches) and gate `--check` | OPEN (proposed) |
 
 ---
 
