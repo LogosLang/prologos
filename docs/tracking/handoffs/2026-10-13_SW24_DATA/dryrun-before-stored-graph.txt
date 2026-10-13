@@ -1,0 +1,8 @@
+Auto-scanning 1 new module(s) not in dep-graph.rkt:
+  source: merge-fn-registry.rkt → deps: ()
+Detected changes:
+  source: merge-fn-registry.rkt
+
+No tests affected by these changes.
+
+[0 test file names listed in the original output, omitted here]

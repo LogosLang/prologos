@@ -1,0 +1,24 @@
+warm derivation CPU ms: (43 39 39 37 37)
+full scan (no cache) CPU ms: (536 520 526)
+source-deps: old-regenerated 119, derived 119, differing keys 0 
+test-deps: old-regenerated 502, derived 502, differing keys 0 
+prologos-lib-deps: old-regenerated 73, derived 73, differing keys 0 
+test-prologos-deps: old-regenerated 122, derived 122, differing keys 0 
+source modules: 119 changeable modules; 114 select ≥1 test; for 109 of them the stale graph MISSED tests: 22483 missed of 38004 selected in total; 345 extra (stale) selections
+    merge-fn-registry.rkt: derived selects 452, stale missed 452
+    decision-cell.rkt: derived selects 451, stale missed 451
+    tropical-fuel-primitives.rkt: derived selects 451, stale missed 451
+    definition-entry.rkt: derived selects 417, stale missed 417
+    infra-cell.rkt: derived selects 420, stale missed 415
+    loose-bvar.rkt: derived selects 415, stale missed 415
+    ctor-registry.rkt: derived selects 412, stale missed 412
+    reader-forms.rkt: derived selects 401, stale missed 401
+library modules: 73 changeable modules; 51 select ≥1 test; for 30 of them the stale graph MISSED tests: 176 missed of 910 selected in total; 57 extra (stale) selections
+    prologos::data::option: derived selects 96, stale missed 16
+    prologos::core::eq: derived selects 83, stale missed 15
+    prologos::data::bool: derived selects 88, stale missed 15
+    prologos::data::char: derived selects 83, stale missed 15
+    prologos::data::list: derived selects 69, stale missed 15
+    prologos::data::nat: derived selects 99, stale missed 15
+    prologos::data::ordering: derived selects 88, stale missed 15
+    prologos::data::string: derived selects 85, stale missed 15

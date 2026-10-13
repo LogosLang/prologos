@@ -39,7 +39,7 @@ are all in use. **Commit messages up to and including `2792123c` use roman numer
 | SW-21 | `--tests` on a module that is not a test unit is refused (not run, then called INCOMPLETE) | DECIDED, done `6e0cc7a8`; main checkpoint 4 |
 | SW-22 | DEFERRED 151 (b): measure a fasl `.pnet` body end to end before choosing fix vs retire; then merge it | DECIDED (owner): merge as fix (b); done, checkpoint 4 `08acff4a` |
 | SW-23 | A human-readable reader for the binary `.pnet` (owner request) | done `c6f8fff7`: `tools/pnet-dump.rkt`; main checkpoint 4 |
-| SW-24 | DEFERRED 169: regenerate `dep-graph.rkt` (`update-deps --write`, 378 mismatches) and gate `--check` | OPEN (proposed) |
+| SW-24 | DEFERRED 169: keep the dependency graph current automatically, with minimal maintenance | DECIDED (owner); done `8fbaefb8` by DERIVING the graph (nothing stored); main checkpoint 5 |
 
 ---
 
@@ -827,3 +827,29 @@ pair-keyed registries; it has (the built-in numeric subtypes) — the round-trip
 
 **Found, filed**: DEFERRED 169 — `dep-graph.rkt` has not been regenerated since 2026-07-02 (`update-deps --check`:
 378 mismatches, 151 test files unlisted); `--all` is unaffected, affected-test selection is. Proposed as SW-24.
+
+## SW-24: the dependency graph is derived, never stored (`8fbaefb8`)
+
+The owner accepted the lean (regenerate + gate `--check`) and asked for automation with minimal maintenance. Reading
+`dep-graph.rkt` showed every data section is exactly what the scanners produce (`update-deps.rkt` rewrote them
+wholesale), so the stored graph was derived state kept by hand. The design weighed three options against
+"derived state consistent by construction":
+
+| option | stored | maintenance | failure mode |
+|---|---|---|---|
+| pre-commit hook runs `--write` | a 100 KB generated file, committed | none by hand | every parallel branch edits it: a merge conflict at every checkpoint; files changed outside a commit unseen |
+| `--check` in the gate | the same file | someone runs `--write` | detects drift, does not prevent it |
+| **derive on demand, content-keyed cache** | nothing in git (cache in ignored `data/cache/`) | **none** | the cache — keyed by each file's sha1 and by the tool's own source hash, and `--check` + a suite test verify it equals a full rescan |
+
+Measured: warm derivation 37–43 ms CPU (full scan 520–536 ms, once per change); the derived layers equal the old
+`--write` output exactly. What the staleness had cost: affected-test selection missed 59 % of source-module
+selections (three modules selected none of ~451); `all-test-files` held 354 of 502 tests, so "run ALL" on an
+`info.rkt` change and `benchmark-tests`' default run skipped 148. Evidence: `handoffs/2026-10-13_SW24_DATA/`.
+DEFERRED 169 discharged.
+
+**DEFERRED 170 meets this branch.** The first full suite after SW-24 failed in `test-path-selection.rkt` (three
+shards, one `file exists` error each); the re-run passed, 10 374 / 499. The PPN 4C session had filed the same race as
+DEFERRED 170 hours earlier, A/B'd, with the observation that **SW-22's fasl speedup (checkpoint 4) is what made it
+frequent** (1 of 3 runs → 3 of 3) by tightening the shards' lockstep — SW-22 exposed it, the defect is older. Added
+to 170: the reproduction with no test code (6–8 % vs 0 %) and the class census (41 `'replace` sites, 18 templates,
+two shared across many files). `CLAUDE.md:34`'s wording is an owner item (protected file, edit not approved).

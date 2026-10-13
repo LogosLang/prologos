@@ -7520,7 +7520,7 @@ predates the slice and belongs to spec and arrow parsing. One part changes by it
 file. **When**: no gate. Pick it up with the next spec-parser diagnostics work, or at CIU 6 X.close's doc-truth pass if
 still open.
 
-### 169. ⬜ `tools/dep-graph.rkt` IS THREE MONTHS STALE — `update-deps.rkt --check` exits 1 with 378 mismatches; targeted (affected-test) selection reads this graph
+### 169. ✅ **DISCHARGED `8fbaefb8`** (SW-24: the graph is DERIVED, never stored; reaches main at checkpoint 5) — `tools/dep-graph.rkt` WAS THREE MONTHS STALE — `update-deps.rkt --check` exits 1 with 378 mismatches; targeted (affected-test) selection reads this graph
 
 Found 2026-10-13 while adding `tests/test-pnet-dump.rkt` (checkpoint 4). `racket tools/update-deps.rkt --check` on
 main's code (branch `deferred-sweep-146-149` @ `61b24b02`): **378 mismatches** — source-deps 82, test-deps 258,
@@ -7533,6 +7533,26 @@ module only through a missing or changed edge is not selected (not measured how 
 tools/update-deps.rkt --write`, review the diff, and make `--check` part of a gate (pre-commit or the checkpoint
 gate) so it cannot drift again. **When**: next runner/tooling batch; before relying on targeted runs to vet a
 source change.
+
+**Status 2026-10-13 — discharged by deriving the graph instead of regenerating it (owner decision SW-24: automate,
+minimal maintenance).** Tradeoff weighed: a pre-commit `--write` hook keeps a committed generated file that every
+parallel branch edits (a merge conflict at every checkpoint) and misses files changed outside a commit; `--check` in a
+gate only detects drift. `8fbaefb8` deletes the four data sections: `derive-dep-graph` computes every layer from the
+files on disk with the same scanners, through a per-file cache (`data/cache/dep-graph.rktd`, git-ignored) keyed by each
+file's sha1 and, as a whole, by the sha1 of `dep-graph.rkt`'s own source — a scanner change invalidates it with no
+version to bump. Measured: warm derivation 37–43 ms CPU, full scan 520–536 ms; the derived layers equal what the old
+`--write` regenerates (0 differing keys in all four).
+- **What the staleness cost, measured** (`sw24-probe.rkt`, stored graph vs derived, as the runner calls
+  `compute-affected-tests`): over the 119 root source modules the stored graph MISSED 22 483 of 38 004 affected-test
+  selections (59 %), and for `merge-fn-registry.rkt`, `decision-cell.rkt`, `tropical-fuel-primitives.rkt` it selected
+  NONE of 451–452. End to end: a one-line edit to `merge-fn-registry.rkt`, `--dry-run` → "No tests affected" before,
+  "Affected tests (448 of 502, 3 skipped)" after. Library modules: 176 of 910 missed. And `all-test-files` returned
+  354 of 502 test files, so the info.rkt "run ALL" path and `benchmark-tests`' default run skipped 148.
+- `update-deps.rkt --check` now verifies the cached derivation equals a full rescan (exit 1 otherwise); `--write` is
+  retired with a message. The coherence check also runs in every full suite (`tests/test-dep-graph.rkt`, 8 cases;
+  five mutations red), which puts it in the checkpoint gate.
+- Owner item: `CLAUDE.md:34` still reads "Validate deps: `racket tools/update-deps.rkt --check`" — true, but the
+  protected-file edit to say "derived on every run; `--check` verifies its cache" was not approved in-session.
 
 ---
 
@@ -7582,3 +7602,13 @@ pair. Optionally put the pid in the template. **When**: before the next checkpoi
 branch — every `--all` run at `a15b1a9e` or later is expected to show this failure until it lands.
 Not applied by the PPN 4C session (outside its track); the measured fix is the last table row.
 Record: `tracks/PPN/PPN_4C/LOG.md` § *Checkpoint 1 merged*.
+
+*Addendum 2026-10-13 (DEFERRED-sweep session, independently, while gating SW-24):* (1) the mechanism reproduced
+with no test code — three concurrent processes, each `make-temporary-file` then write ×3 000 in one shared directory
+(`tmp-race.rkt`, 2 trials): `#:exists 'replace` failed 178–243 times per process (6–8 %), every one
+`open-output-file: file exists`; `'truncate` failed 0 of 18 000. (2) Census of the class (racket/prologos root,
+`tests/`, `tools/`): **41** `make-temporary-file` sites are then written with `'replace`, under **18** name templates;
+`prologos-test-~a.prologos` is shared by 23 test files and `prologos-ws-~a.prologos` is `test-support.rkt`'s `run-ws`,
+so concurrent workers share those name spaces (28 sites already use `'truncate`). (3) It hit the sweep branch's first
+suite after SW-24 (`test-path-selection.rkt` ×3 shards, one error each; the re-run passed): SW-22's fasl speedup
+(merged at checkpoint 4) is what made it frequent, per the table above. Probe + data: `handoffs/2026-10-13_SW24_DATA/`.

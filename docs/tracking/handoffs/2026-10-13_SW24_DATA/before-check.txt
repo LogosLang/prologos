@@ -1,0 +1,892 @@
+Scanning project for actual dependencies...
+
+=== Layer 1: Source module deps ===
+  MISSING from source-deps: subtype-predicate.rkt
+    discovered deps: (ctor-registry.rkt macros.rkt propagator.rkt sre-core.rkt substitution.rkt syntax.rkt type-lattice.rkt union-types.rkt)
+  MISSING from source-deps: form-cells.rkt
+    discovered deps: (ctor-registry.rkt elab-network-types.rkt elaborator-network.rkt errors.rkt infra-cell.rkt macros.rkt parse-reader.rkt parser.rkt rrb.rkt source-location.rkt sre-core.rkt surface-rewrite.rkt surface-syntax.rkt tree-parser.rkt)
+  MISSING from source-deps: parse-bridges.rkt
+    discovered deps: (parse-lattice.rkt)
+  MISSING from source-deps: meta-universe.rkt
+    discovered deps: (decision-cell.rkt elab-network-types.rkt hasse-registry.rkt propagator.rkt)
+  MISSING from source-deps: tree-parser.rkt
+    discovered deps: (errors.rkt macros.rkt parse-reader.rkt parser.rkt rrb.rkt surface-rewrite.rkt surface-syntax.rkt)
+  MISSING from source-deps: elab-network-types.rkt
+    discovered deps: (champ.rkt propagator.rkt)
+  MISSING from source-deps: bilattice.rkt
+    discovered deps: (propagator.rkt)
+  MISSING from source-deps: merge-fn-registry.rkt
+    discovered deps: ()
+  MISSING from source-deps: parse-lattice.rkt
+    discovered deps: ()
+  MISSING from source-deps: constraint-cell.rkt
+    discovered deps: ()
+  MISSING from source-deps: definition-entry.rkt
+    discovered deps: ()
+  MISSING from source-deps: infra-cell.rkt
+    discovered deps: (atms.rkt champ.rkt propagator.rkt)
+  MISSING from source-deps: tropical-fuel-primitives.rkt
+    discovered deps: ()
+  MISSING from source-deps: tropical-fuel.rkt
+    discovered deps: (merge-fn-registry.rkt sre-core.rkt tropical-fuel-primitives.rkt)
+  MISSING from source-deps: decision-cell.rkt
+    discovered deps: ()
+  MISSING from source-deps: specialized-cells.rkt
+    discovered deps: (propagator.rkt)
+  MISSING from source-deps: reader-forms.rkt
+    discovered deps: ()
+  MISSING from source-deps: parse-reader.rkt
+    discovered deps: (parse-lattice.rkt propagator.rkt reader-forms.rkt rrb.rkt)
+  MISSING from source-deps: cell-ops.rkt
+    discovered deps: (champ.rkt elab-network-types.rkt infra-cell.rkt propagator.rkt)
+  MISSING from source-deps: prop-observatory.rkt
+    discovered deps: (champ.rkt propagator.rkt)
+  MISSING from source-deps: observatory-serialize.rkt
+    discovered deps: (champ.rkt prop-observatory.rkt propagator.rkt trace-serialize.rkt)
+  MISSING from source-deps: sre-property-sweep.rkt
+    discovered deps: (sre-core.rkt sre-sample-generator.rkt)
+  MISSING from source-deps: sre-rewrite.rkt
+    discovered deps: (ctor-registry.rkt parse-reader.rkt rrb.rkt sre-core.rkt syntax.rkt)
+  MISSING from source-deps: ctor-registry.rkt
+    discovered deps: (mult-lattice.rkt sessions.rkt syntax.rkt term-lattice.rkt)
+  MISSING from source-deps: float-impl.rkt
+    discovered deps: ()
+  MISSING from source-deps: sre-core.rkt
+    discovered deps: (ctor-registry.rkt propagator.rkt syntax.rkt)
+  MISSING from source-deps: pnet-serialize.rkt
+    discovered deps: (champ.rkt elab-network-types.rkt foreign.rkt global-env.rkt macros.rkt multi-dispatch.rkt namespace.rkt prelude.rkt propagator.rkt rrb.rkt source-location.rkt syntax.rkt)
+  MISSING from source-deps: clock.rkt
+    discovered deps: (decision-cell.rkt merge-fn-registry.rkt propagator.rkt sre-core.rkt)
+  MISSING from source-deps: trace-serialize.rkt
+    discovered deps: (champ.rkt elaborator-network.rkt mult-lattice.rkt pretty-print.rkt propagator.rkt type-lattice.rkt)
+  MISSING from source-deps: typing-propagators.rkt
+    discovered deps: (atms.rkt classify-inhabit.rkt constraint-cell.rkt constraint-propagators.rkt decision-cell.rkt elab-network-types.rkt elab-speculation-bridge.rkt error-explanation.rkt errors.rkt global-env.rkt infra-cell.rkt merge-fn-registry.rkt metavar-store.rkt prelude.rkt pretty-print.rkt propagator.rkt qtt.rkt sign-refinement.rkt source-location.rkt sre-core.rkt substitution.rkt subtype-predicate.rkt surface-rewrite.rkt syntax.rkt trait-resolution.rkt type-lattice.rkt typing-core.rkt union-types.rkt warnings.rkt)
+  MISSING from source-deps: loose-bvar.rkt
+    discovered deps: (syntax.rkt)
+  MISSING from source-deps: sre-sample-generator.rkt
+    discovered deps: (ctor-registry.rkt sre-core.rkt)
+  MISSING from source-deps: sign-refinement.rkt
+    discovered deps: ()
+  MISSING from source-deps: union-types.rkt
+    discovered deps: (syntax.rkt)
+  MISSING from source-deps: classify-inhabit.rkt
+    discovered deps: (merge-fn-registry.rkt sre-core.rkt type-lattice.rkt)
+  MISSING from source-deps: constraint-propagators.rkt
+    discovered deps: (constraint-cell.rkt global-env.rkt macros.rkt merge-fn-registry.rkt propagator.rkt sre-core.rkt syntax.rkt)
+  MISSING from source-deps: error-explanation.rkt
+    discovered deps: (atms.rkt champ.rkt decision-cell.rkt derivation-chain-types.rkt elab-speculation-bridge.rkt propagator.rkt)
+  MISSING from source-deps: derivation-chain-types.rkt
+    discovered deps: ()
+  MISSING from source-deps: hasse-registry.rkt
+    discovered deps: (merge-fn-registry.rkt propagator.rkt sre-core.rkt)
+  MISSING from source-deps: path-ops.rkt
+    discovered deps: (syntax.rkt)
+  MISSING from source-deps: phase1d-registrations.rkt
+    discovered deps: (atms.rkt capability-inference.rkt decision-cell.rkt definition-entry.rkt effect-position.rkt io-bridge.rkt merge-fn-registry.rkt mult-lattice.rkt parse-lattice.rkt parse-reader.rkt relations.rkt session-lattice.rkt session-runtime.rkt sre-core.rkt tabling.rkt term-lattice.rkt type-lattice.rkt typing-propagators.rkt)
+  MISSING from source-deps: infra-cell-sre-registrations.rkt
+    discovered deps: (infra-cell.rkt merge-fn-registry.rkt propagator.rkt sre-core.rkt)
+  MISSING from source-deps: resolution.rkt
+    discovered deps: (elab-network-types.rkt infra-cell.rkt macros.rkt meta-universe.rkt metavar-store.rkt performance-counters.rkt propagator.rkt syntax.rkt trait-resolution.rkt unify.rkt zonk.rkt)
+  MISSING from source-deps: surface-rewrite.rkt
+    discovered deps: (ctor-registry.rkt macros.rkt parse-reader.rkt reader-forms.rkt rrb.rkt sre-rewrite.rkt)
+  MISSING from source-deps: keyword-ops.rkt
+    discovered deps: (syntax.rkt)
+  MISSING from source-deps: field-witness.rkt
+    discovered deps: (macros.rkt syntax.rkt)
+  EXTRA in source-deps: reader.rkt (in dep-graph but not found on disk)
+  EXTRA in source-deps: repl-support.rkt (in dep-graph but not found on disk)
+  EXTRA in source-deps: sexp.rkt (in dep-graph but not found on disk)
+  EXTRA in source-deps: expander.rkt (in dep-graph but not found on disk)
+  EXTRA in source-deps: main.rkt (in dep-graph but not found on disk)
+  MISMATCH in source-deps key warnings.rkt:
+    current:    ()
+    discovered: (infra-cell.rkt merge-fn-registry.rkt metavar-store.rkt propagator.rkt sre-core.rkt)
+  MISMATCH in source-deps key global-env.rkt:
+    current:    ()
+    discovered: (definition-entry.rkt infra-cell.rkt namespace.rkt)
+  MISMATCH in source-deps key atms.rkt:
+    current:    (propagator.rkt)
+    discovered: (decision-cell.rkt propagator.rkt)
+  MISMATCH in source-deps key unify.rkt:
+    current:    (metavar-store.rkt performance-counters.rkt prelude.rkt reduction.rkt source-location.rkt substitution.rkt syntax.rkt zonk.rkt)
+    discovered: (ctor-registry.rkt elaborator-network.rkt metavar-store.rkt performance-counters.rkt prelude.rkt propagator.rkt reduction.rkt source-location.rkt sre-core.rkt substitution.rkt subtype-predicate.rkt syntax.rkt type-lattice.rkt union-types.rkt zonk.rkt)
+  MISMATCH in source-deps key metavar-store.rkt:
+    current:    (champ.rkt performance-counters.rkt prelude.rkt sessions.rkt source-location.rkt syntax.rkt)
+    discovered: (cell-ops.rkt champ.rkt decision-cell.rkt global-env.rkt infra-cell.rkt meta-universe.rkt namespace.rkt performance-counters.rkt prelude.rkt propagator.rkt sessions.rkt source-location.rkt syntax.rkt)
+  MISMATCH in source-deps key global-constraints.rkt:
+    current:    (interval-domain.rkt syntax.rkt)
+    discovered: (infra-cell.rkt interval-domain.rkt metavar-store.rkt propagator.rkt syntax.rkt)
+  MISMATCH in source-deps key capability-inference.rkt:
+    current:    (atms.rkt global-env.rkt macros.rkt propagator.rkt syntax.rkt)
+    discovered: (atms.rkt champ.rkt global-env.rkt macros.rkt pretty-print.rkt prop-observatory.rkt propagator.rkt syntax.rkt)
+  MISMATCH in source-deps key substitution.rkt:
+    current:    (prelude.rkt syntax.rkt)
+    discovered: (loose-bvar.rkt namespace.rkt prelude.rkt syntax.rkt)
+  MISMATCH in source-deps key narrowing.rkt:
+    current:    (bb-optimization.rkt cfa-analysis.rkt confluence-analysis.rkt definitional-tree.rkt global-constraints.rkt global-env.rkt interval-domain.rkt macros.rkt narrowing-abstract.rkt propagator.rkt search-heuristics.rkt syntax.rkt term-lattice.rkt termination-analysis.rkt)
+    discovered: (bb-optimization.rkt cfa-analysis.rkt champ.rkt confluence-analysis.rkt definitional-tree.rkt global-constraints.rkt global-env.rkt interval-domain.rkt macros.rkt narrowing-abstract.rkt propagator.rkt rrb.rkt search-heuristics.rkt syntax.rkt term-lattice.rkt termination-analysis.rkt)
+  MISMATCH in source-deps key foreign.rkt:
+    current:    (syntax.rkt)
+    discovered: (posit-impl.rkt syntax.rkt)
+  MISMATCH in source-deps key qtt.rkt:
+    current:    (elab-speculation-bridge.rkt global-env.rkt metavar-store.rkt prelude.rkt reduction.rkt substitution.rkt syntax.rkt typing-core.rkt unify.rkt)
+    discovered: (elab-speculation-bridge.rkt global-env.rkt merge-fn-registry.rkt metavar-store.rkt prelude.rkt reduction.rkt sign-refinement.rkt sre-core.rkt substitution.rkt syntax.rkt typing-core.rkt unify.rkt)
+  MISMATCH in source-deps key wf-engine.rkt:
+    current:    (bilattice.rkt propagator.rkt relations.rkt solver.rkt stratify.rkt syntax.rkt tabling.rkt)
+    discovered: (bilattice.rkt propagator.rkt provenance.rkt relations.rkt solver.rkt stratify.rkt syntax.rkt tabling.rkt)
+  MISMATCH in source-deps key macros.rkt:
+    current:    (errors.rkt global-env.rkt namespace.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+    discovered: (errors.rkt global-env.rkt infra-cell.rkt metavar-store.rkt namespace.rkt propagator.rkt reader-forms.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+  MISMATCH in source-deps key zonk.rkt:
+    current:    (metavar-store.rkt performance-counters.rkt substitution.rkt syntax.rkt)
+    discovered: (metavar-store.rkt namespace.rkt performance-counters.rkt posit-impl.rkt prelude.rkt solver.rkt substitution.rkt syntax.rkt)
+  MISMATCH in source-deps key typing-core.rkt:
+    current:    (elab-speculation-bridge.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt performance-counters.rkt prelude.rkt pretty-print.rkt reduction.rkt substitution.rkt syntax.rkt unify.rkt warnings.rkt)
+    discovered: (champ.rkt elab-speculation-bridge.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt performance-counters.rkt prelude.rkt pretty-print.rkt reduction.rkt relations.rkt rrb.rkt sign-refinement.rkt substitution.rkt subtype-predicate.rkt syntax.rkt unify.rkt warnings.rkt)
+  MISMATCH in source-deps key elaborator.rkt:
+    current:    (champ.rkt errors.rkt foreign.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt performance-counters.rkt posit-impl.rkt prelude.rkt pretty-print.rkt processes.rkt sessions.rkt source-location.rkt substitution.rkt surface-syntax.rkt syntax.rkt warnings.rkt)
+    discovered: (champ.rkt errors.rkt foreign.rkt global-constraints.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt performance-counters.rkt posit-impl.rkt prelude.rkt pretty-print.rkt processes.rkt sessions.rkt sign-refinement.rkt solver.rkt source-location.rkt substitution.rkt surface-syntax.rkt syntax.rkt typing-core.rkt warnings.rkt)
+  MISMATCH in source-deps key relations.rkt:
+    current:    (performance-counters.rkt propagator.rkt provenance.rkt solver.rkt syntax.rkt tabling.rkt union-find.rkt)
+    discovered: (atms.rkt ctor-registry.rkt decision-cell.rkt global-env.rkt infra-cell.rkt performance-counters.rkt propagator.rkt provenance.rkt solver.rkt syntax.rkt tabling.rkt union-find.rkt)
+  MISMATCH in source-deps key repl.rkt:
+    current:    (driver.rkt errors.rkt global-env.rkt macros.rkt parser.rkt pretty-print.rkt reader.rkt sexp-readtable.rkt source-location.rkt)
+    discovered: (driver.rkt errors.rkt global-env.rkt macros.rkt namespace.rkt parse-reader.rkt parser.rkt pretty-print.rkt sexp-readtable.rkt source-location.rkt trait-resolution.rkt)
+  MISMATCH in source-deps key elab-speculation-bridge.rkt:
+    current:    (atms.rkt metavar-store.rkt performance-counters.rkt)
+    discovered: (atms.rkt elaborator-network.rkt metavar-store.rkt performance-counters.rkt propagator.rkt)
+  MISMATCH in source-deps key pretty-print.rkt:
+    current:    (atms.rkt champ.rkt metavar-store.rkt prelude.rkt processes.rkt propagator.rkt rrb.rkt sessions.rkt syntax.rkt tabling.rkt union-find.rkt)
+    discovered: (atms.rkt champ.rkt metavar-store.rkt posit-impl.rkt prelude.rkt processes.rkt propagator.rkt reader-forms.rkt rrb.rkt sessions.rkt syntax.rkt tabling.rkt union-find.rkt)
+  MISMATCH in source-deps key elaborator-network.rkt:
+    current:    (champ.rkt mult-lattice.rkt prelude.rkt propagator.rkt syntax.rkt type-lattice.rkt)
+    discovered: (champ.rkt ctor-registry.rkt decision-cell.rkt elab-network-types.rkt merge-fn-registry.rkt meta-universe.rkt mult-lattice.rkt prelude.rkt propagator.rkt sre-core.rkt syntax.rkt type-lattice.rkt)
+  MISMATCH in source-deps key session-propagators.rkt:
+    current:    (errors.rkt pretty-print.rkt processes.rkt propagator.rkt session-lattice.rkt sessions.rkt source-location.rkt)
+    discovered: (champ.rkt ctor-registry.rkt errors.rkt pretty-print.rkt processes.rkt prop-observatory.rkt propagator.rkt session-lattice.rkt sessions.rkt source-location.rkt sre-core.rkt)
+  MISMATCH in source-deps key errors.rkt:
+    current:    (source-location.rkt)
+    discovered: (derivation-chain-types.rkt source-location.rkt)
+  MISMATCH in source-deps key namespace.rkt:
+    current:    ()
+    discovered: (definition-entry.rkt infra-cell.rkt propagator.rkt)
+  MISMATCH in source-deps key driver.rkt:
+    current:    (atms.rkt cap-type-bridge.rkt capability-inference.rkt champ.rkt effect-executor.rkt elab-speculation-bridge.rkt elaborator-network.rkt elaborator.rkt errors.rkt foreign.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt performance-counters.rkt prelude.rkt pretty-print.rkt processes.rkt propagator.rkt qtt.rkt reader.rkt reduction.rkt relations.rkt session-runtime.rkt sessions.rkt sexp-readtable.rkt source-location.rkt stratified-eval.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt type-lattice.rkt typing-core.rkt typing-errors.rkt typing-sessions.rkt unify.rkt warnings.rkt zonk.rkt)
+    discovered: (atms.rkt cap-type-bridge.rkt capability-inference.rkt champ.rkt ctor-registry.rkt definition-entry.rkt effect-executor.rkt elab-speculation-bridge.rkt elaborator-network.rkt elaborator.rkt errors.rkt foreign.rkt form-cells.rkt global-constraints.rkt global-env.rkt infra-cell-sre-registrations.rkt macros.rkt meta-universe.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt narrowing.rkt parse-reader.rkt parser.rkt performance-counters.rkt phase1d-registrations.rkt pnet-serialize.rkt prelude.rkt pretty-print.rkt processes.rkt prop-observatory.rkt propagator.rkt qtt.rkt reduction.rkt relations.rkt resolution.rkt rrb.rkt session-runtime.rkt sessions.rkt sexp-readtable.rkt source-location.rkt sre-core.rkt stratified-eval.rkt surface-rewrite.rkt surface-syntax.rkt syntax.rkt term-lattice.rkt trait-resolution.rkt tree-parser.rkt type-lattice.rkt typing-core.rkt typing-errors.rkt typing-propagators.rkt typing-sessions.rkt unify.rkt warnings.rkt zonk.rkt)
+  MISMATCH in source-deps key typing-errors.rkt:
+    current:    (atms.rkt elab-speculation-bridge.rkt errors.rkt global-env.rkt performance-counters.rkt prelude.rkt pretty-print.rkt qtt.rkt reduction.rkt source-location.rkt syntax.rkt typing-core.rkt)
+    discovered: (atms.rkt elab-network-types.rkt elab-speculation-bridge.rkt error-explanation.rkt errors.rkt global-env.rkt metavar-store.rkt performance-counters.rkt prelude.rkt pretty-print.rkt propagator.rkt qtt.rkt reduction.rkt source-location.rkt syntax.rkt typing-core.rkt)
+  MISMATCH in source-deps key stratified-eval.rkt:
+    current:    (relations.rkt solver.rkt stratify.rkt syntax.rkt tabling.rkt wf-engine.rkt)
+    discovered: (propagator.rkt provenance.rkt relations.rkt solver.rkt stratify.rkt syntax.rkt tabling.rkt wf-engine.rkt)
+  MISMATCH in source-deps key reduction.rkt:
+    current:    (atms.rkt champ.rkt foreign.rkt global-env.rkt macros.rkt metavar-store.rkt performance-counters.rkt posit-impl.rkt prelude.rkt propagator.rkt provenance.rkt relations.rkt rrb.rkt solver.rkt stratified-eval.rkt substitution.rkt syntax.rkt tabling.rkt union-find.rkt)
+    discovered: (atms.rkt champ.rkt constraint-propagators.rkt definitional-tree.rkt field-witness.rkt float-impl.rkt foreign.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt narrowing.rkt performance-counters.rkt posit-impl.rkt prelude.rkt prop-observatory.rkt propagator.rkt provenance.rkt relations.rkt rrb.rkt solver.rkt stratified-eval.rkt substitution.rkt syntax.rkt tabling.rkt union-find.rkt union-types.rkt)
+  MISMATCH in source-deps key parser.rkt:
+    current:    (errors.rkt macros.rkt sexp-readtable.rkt source-location.rkt surface-syntax.rkt)
+    discovered: (errors.rkt global-env.rkt macros.rkt reader-forms.rkt sexp-readtable.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+  MISMATCH in source-deps key propagator.rkt:
+    current:    (champ.rkt)
+    discovered: (champ.rkt decision-cell.rkt merge-fn-registry.rkt performance-counters.rkt source-location.rkt tropical-fuel-primitives.rkt)
+  MISMATCH in source-deps key type-lattice.rkt:
+    current:    (prelude.rkt reduction.rkt substitution.rkt syntax.rkt zonk.rkt)
+    discovered: (ctor-registry.rkt prelude.rkt reduction.rkt substitution.rkt syntax.rkt union-types.rkt zonk.rkt)
+  ✗ 82 mismatches
+
+=== Layer 2: Test → source module deps ===
+  MISSING from test-deps: test-float-tower.rkt
+    discovered deps: #(struct:test-dep (driver.rkt reduction.rkt subtype-predicate.rkt syntax.rkt typing-core.rkt) #t)
+  MISSING from test-deps: test-spec-multiline-ws.rkt
+    discovered deps: #(struct:test-dep (parse-reader.rkt) #f)
+  MISSING from test-deps: test-propagator-patterns.rkt
+    discovered deps: #(struct:test-dep (prelude.rkt propagator.rkt syntax.rkt type-lattice.rkt typing-propagators.rkt) #f)
+  MISSING from test-deps: test-rel-t1-naf.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt namespace.rkt relations.rkt) #f)
+  MISSING from test-deps: test-f1b3-width-acceptance.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt) #f)
+  MISSING from test-deps: test-arrow-identifiers.rkt
+    discovered deps: #(struct:test-dep (errors.rkt parse-reader.rkt) #t)
+  MISSING from test-deps: test-trait-method-derive.rkt
+    discovered deps: #(struct:test-dep (driver.rkt) #t)
+  MISSING from test-deps: test-sre-sd-properties.rkt
+    discovered deps: #(struct:test-dep (driver.rkt form-cells.rkt sessions.rkt sre-core.rkt sre-property-sweep.rkt sre-sample-generator.rkt surface-rewrite.rkt syntax.rkt tropical-fuel.rkt) #f)
+  MISSING from test-deps: test-fact-corpus-gen.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt relations.rkt trait-resolution.rkt) #f)
+  MISSING from test-deps: test-component-paths-enforcement.rkt
+    discovered deps: #(struct:test-dep (infra-cell-sre-registrations.rkt merge-fn-registry.rkt propagator.rkt sre-core.rkt) #f)
+  MISSING from test-deps: test-defn-multiarg-patterns.rkt
+    discovered deps: #(struct:test-dep (errors.rkt) #t)
+  MISSING from test-deps: test-process-file-evaluate.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt global-env.rkt macros.rkt namespace.rkt) #f)
+  MISSING from test-deps: test-champ-owner-id.rkt
+    discovered deps: #(struct:test-dep (champ.rkt) #f)
+  MISSING from test-deps: test-validate.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt propagator.rkt relations.rkt) #t)
+  MISSING from test-deps: test-general-body-01.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt namespace.rkt) #f)
+  MISSING from test-deps: test-sign-refinement.rkt
+    discovered deps: #(struct:test-dep (sign-refinement.rkt) #f)
+  MISSING from test-deps: test-constraint-readiness.rkt
+    discovered deps: #(struct:test-dep (champ.rkt driver.rkt elaborator-network.rkt global-env.rkt metavar-store.rkt prelude.rkt propagator.rkt syntax.rkt type-lattice.rkt unify.rkt) #f)
+  MISSING from test-deps: test-sre-track2d.rkt
+    discovered deps: #(struct:test-dep (driver.rkt parse-reader.rkt rrb.rkt sre-rewrite.rkt surface-rewrite.rkt) #f)
+  MISSING from test-deps: test-sre-subtype.rkt
+    discovered deps: #(struct:test-dep (ctor-registry.rkt propagator.rkt sre-core.rkt subtype-predicate.rkt syntax.rkt type-lattice.rkt) #f)
+  MISSING from test-deps: test-pnet-registry-restore.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt global-constraints.rkt macros.rkt metavar-store.rkt namespace.rkt pnet-serialize.rkt typing-propagators.rkt warnings.rkt) #f)
+  MISSING from test-deps: test-dyn-rows.rkt
+    discovered deps: #(struct:test-dep (driver.rkt global-env.rkt metavar-store.rkt prelude.rkt reduction.rkt subtype-predicate.rkt syntax.rkt typing-core.rkt unify.rkt union-types.rkt) #f)
+  MISSING from test-deps: test-pnet-dump.rkt
+    discovered deps: #(struct:test-dep (pnet-serialize.rkt) #f)
+  MISSING from test-deps: test-float-conversions.rkt
+    discovered deps: #(struct:test-dep (driver.rkt reduction.rkt syntax.rkt) #t)
+  MISSING from test-deps: test-union-types-atms.rkt
+    discovered deps: #(struct:test-dep (atms.rkt classify-inhabit.rkt decision-cell.rkt elab-speculation-bridge.rkt error-explanation.rkt propagator.rkt source-location.rkt syntax.rkt typing-propagators.rkt union-types.rkt) #t)
+  MISSING from test-deps: test-module-network-01.rkt
+    discovered deps: #(struct:test-dep (definition-entry.rkt global-env.rkt infra-cell-sre-registrations.rkt infra-cell.rkt macros.rkt namespace.rkt phase1d-registrations.rkt propagator.rkt) #f)
+  MISSING from test-deps: test-goal-arg-typing.rkt
+    discovered deps: #(struct:test-dep (errors.rkt) #t)
+  MISSING from test-deps: test-reason.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt global-env.rkt macros.rkt namespace.rkt relations.rkt) #f)
+  MISSING from test-deps: test-origin-index.rkt
+    discovered deps: #(struct:test-dep (macros.rkt) #f)
+  MISSING from test-deps: test-solve-carrier.rkt
+    discovered deps: #(struct:test-dep (champ.rkt macros.rkt pnet-serialize.rkt reader-forms.rkt rrb.rkt syntax.rkt typing-core.rkt) #t)
+  MISSING from test-deps: test-branch-pu.rkt
+    discovered deps: #(struct:test-dep (atms.rkt decision-cell.rkt performance-counters.rkt propagator.rkt) #f)
+  MISSING from test-deps: test-scheduler-odiff.rkt
+    discovered deps: #(struct:test-dep (propagator.rkt) #f)
+  MISSING from test-deps: test-reducible-01.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt syntax.rkt) #t)
+  MISSING from test-deps: test-f1-records-acceptance.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt) #f)
+  MISSING from test-deps: test-relative-path-resolution.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt) #f)
+  MISSING from test-deps: test-classify-inhabit.rkt
+    discovered deps: #(struct:test-dep (classify-inhabit.rkt syntax.rkt type-lattice.rkt) #f)
+  MISSING from test-deps: test-rel-t1-typed-rows.rkt
+    discovered deps: #(struct:test-dep (champ.rkt driver.rkt errors.rkt macros.rkt metavar-store.rkt namespace.rkt pretty-print.rkt propagator.rkt relations.rkt rrb.rkt syntax.rkt typing-core.rkt) #t)
+  MISSING from test-deps: test-num-lit.rkt
+    discovered deps: #(struct:test-dep (driver.rkt parser.rkt surface-syntax.rkt syntax.rkt) #t)
+  MISSING from test-deps: test-benchmark-tests.rkt
+    discovered deps: #(struct:test-dep () #f)
+  MISSING from test-deps: test-tuple-ops.rkt
+    discovered deps: #(struct:test-dep (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt) #t)
+  MISSING from test-deps: test-schema-seal.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt global-env.rkt macros.rkt namespace.rkt relations.rkt) #f)
+  MISSING from test-deps: test-champ-diff.rkt
+    discovered deps: #(struct:test-dep (champ.rkt) #f)
+  MISSING from test-deps: test-first-class-paths.rkt
+    discovered deps: #(struct:test-dep (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt) #t)
+  MISSING from test-deps: test-residuation-propagator.rkt
+    discovered deps: #(struct:test-dep (classify-inhabit.rkt prelude.rkt propagator.rkt syntax.rkt type-lattice.rkt typing-propagators.rkt) #f)
+  MISSING from test-deps: test-annotate-invalid-timings.rkt
+    discovered deps: #(struct:test-dep () #f)
+  MISSING from test-deps: test-ctor-registry.rkt
+    discovered deps: #(struct:test-dep (ctor-registry.rkt mult-lattice.rkt syntax.rkt term-lattice.rkt) #f)
+  MISSING from test-deps: test-def-multiline-ws.rkt
+    discovered deps: #(struct:test-dep (parse-reader.rkt) #t)
+  MISSING from test-deps: test-sre-coverage.rkt
+    discovered deps: #(struct:test-dep (prelude.rkt propagator.rkt syntax.rkt type-lattice.rkt typing-propagators.rkt) #f)
+  MISSING from test-deps: test-float-core.rkt
+    discovered deps: #(struct:test-dep (driver.rkt global-env.rkt prelude.rkt pretty-print.rkt substitution.rkt syntax.rkt typing-core.rkt) #t)
+  MISSING from test-deps: test-firstclass-ops.rkt
+    discovered deps: #(struct:test-dep () #t)
+  MISSING from test-deps: test-trace-serialize.rkt
+    discovered deps: #(struct:test-dep (propagator.rkt trace-serialize.rkt type-lattice.rkt) #f)
+  MISSING from test-deps: test-merge-fn-registry.rkt
+    discovered deps: #(struct:test-dep (merge-fn-registry.rkt) #f)
+  MISSING from test-deps: test-pvec-int-helpers.rkt
+    discovered deps: #(struct:test-dep () #t)
+  MISSING from test-deps: test-arrow-acceptance.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt) #f)
+  MISSING from test-deps: test-sre-core.rkt
+    discovered deps: #(struct:test-dep (ctor-registry.rkt propagator.rkt sre-core.rkt) #f)
+  MISSING from test-deps: test-route-soundness-01.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt relations.rkt trait-resolution.rkt) #t)
+  MISSING from test-deps: test-reducible-02.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt syntax.rkt) #t)
+  MISSING from test-deps: test-elaboration-parity.rkt
+    discovered deps: #(struct:test-dep () #t)
+  MISSING from test-deps: test-defr-schema.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt macros.rkt metavar-store.rkt namespace.rkt relations.rkt trait-resolution.rkt) #f)
+  MISSING from test-deps: test-posit-float-conversions.rkt
+    discovered deps: #(struct:test-dep () #t)
+  MISSING from test-deps: test-memory-stats.rkt
+    discovered deps: #(struct:test-dep (driver.rkt performance-counters.rkt) #f)
+  MISSING from test-deps: test-meta-feedback.rkt
+    discovered deps: #(struct:test-dep (prelude.rkt propagator.rkt syntax.rkt type-lattice.rkt typing-propagators.rkt) #f)
+  MISSING from test-deps: test-pnet-header.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt macros.rkt namespace.rkt pnet-serialize.rkt) #f)
+  MISSING from test-deps: test-parse-bridges.rkt
+    discovered deps: #(struct:test-dep (parse-bridges.rkt parse-lattice.rkt) #f)
+  MISSING from test-deps: test-prelude-integrity.rkt
+    discovered deps: #(struct:test-dep (namespace.rkt) #f)
+  MISSING from test-deps: test-parse-integration.rkt
+    discovered deps: #(struct:test-dep (champ.rkt infra-cell.rkt parse-bridges.rkt parse-lattice.rkt propagator.rkt) #f)
+  MISSING from test-deps: test-source-loc-infrastructure.rkt
+    discovered deps: #(struct:test-dep (champ.rkt propagator.rkt source-location.rkt surface-syntax.rkt) #f)
+  MISSING from test-deps: test-decision-cell.rkt
+    discovered deps: #(struct:test-dep (atms.rkt decision-cell.rkt propagator.rkt) #f)
+  MISSING from test-deps: test-dual-spine-merge-key.rkt
+    discovered deps: #(struct:test-dep (driver.rkt namespace.rkt) #f)
+  MISSING from test-deps: test-record-collections.rkt
+    discovered deps: #(struct:test-dep (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt) #t)
+  MISSING from test-deps: test-foreign-marshal-ext.rkt
+    discovered deps: #(struct:test-dep (foreign.rkt posit-impl.rkt syntax.rkt) #f)
+  MISSING from test-deps: test-definition-entry-01.rkt
+    discovered deps: #(struct:test-dep (definition-entry.rkt) #f)
+  MISSING from test-deps: test-facet-tag-dispatch.rkt
+    discovered deps: #(struct:test-dep (classify-inhabit.rkt propagator.rkt syntax.rkt type-lattice.rkt typing-propagators.rkt) #f)
+  MISSING from test-deps: test-record-pnet-cache.rkt
+    discovered deps: #(struct:test-dep (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt pnet-serialize.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt) #f)
+  MISSING from test-deps: test-resolution-confluence-01.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt prelude.rkt syntax.rkt trait-resolution.rkt zonk.rkt) #t)
+  MISSING from test-deps: test-pnet-container-sentinels.rkt
+    discovered deps: #(struct:test-dep (champ.rkt pnet-serialize.rkt rrb.rkt syntax.rkt) #f)
+  MISSING from test-deps: test-retraction-stratum.rkt
+    discovered deps: #(struct:test-dep (cell-ops.rkt driver.rkt elaborator-network.rkt infra-cell.rkt metavar-store.rkt propagator.rkt syntax.rkt) #f)
+  MISSING from test-deps: test-prim-op-firstclass.rkt
+    discovered deps: #(struct:test-dep () #t)
+  MISSING from test-deps: test-sre-duality.rkt
+    discovered deps: #(struct:test-dep (ctor-registry.rkt propagator.rkt session-lattice.rkt sessions.rkt sre-core.rkt syntax.rkt) #f)
+  MISSING from test-deps: test-solver-occurs.rkt
+    discovered deps: #(struct:test-dep (relations.rkt) #f)
+  MISSING from test-deps: test-per-nogood.rkt
+    discovered deps: #(struct:test-dep (atms.rkt decision-cell.rkt propagator.rkt) #f)
+  MISSING from test-deps: test-path-selection.rkt
+    discovered deps: #(struct:test-dep (champ.rkt driver.rkt elaborator.rkt errors.rkt global-constraints.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reader-forms.rkt reduction.rkt rrb.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt typing-errors.rkt unify.rkt) #t)
+  MISSING from test-deps: test-rel-t1-acceptance.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt) #t)
+  MISSING from test-deps: test-posit-literal.rkt
+    discovered deps: #(struct:test-dep () #t)
+  MISSING from test-deps: test-def-rel-srcloc.rkt
+    discovered deps: #(struct:test-dep (macros.rkt parse-reader.rkt) #f)
+  MISSING from test-deps: test-field-witness.rkt
+    discovered deps: #(struct:test-dep (field-witness.rkt macros.rkt syntax.rkt typing-core.rkt) #f)
+  MISSING from test-deps: test-pipe-compose-e2e-02a.rkt
+    discovered deps: #(struct:test-dep (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
+  MISSING from test-deps: test-repl-session-01.rkt
+    discovered deps: #(struct:test-dep (errors.rkt repl.rkt) #f)
+  MISSING from test-deps: test-sre-algebraic.rkt
+    discovered deps: #(struct:test-dep (driver.rkt session-lattice.rkt sre-core.rkt sre-sample-generator.rkt surface-syntax.rkt syntax.rkt type-lattice.rkt) #f)
+  MISSING from test-deps: test-let-multiline-ws.rkt
+    discovered deps: #(struct:test-dep (errors.rkt parse-reader.rkt) #t)
+  MISSING from test-deps: test-functor-ws-01.rkt
+    discovered deps: #(struct:test-dep (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt namespace.rkt parse-reader.rkt parser.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt) #f)
+  MISSING from test-deps: test-rel-t1-typed-vars.rkt
+    discovered deps: #(struct:test-dep (driver.rkt elaborator.rkt errors.rkt macros.rkt namespace.rkt parser.rkt relations.rkt syntax.rkt) #t)
+  MISSING from test-deps: test-facet-sre-registration.rkt
+    discovered deps: #(struct:test-dep (constraint-cell.rkt driver.rkt merge-fn-registry.rkt propagator.rkt qtt.rkt sre-core.rkt typing-propagators.rkt warnings.rkt) #f)
+  MISSING from test-deps: test-float-literal.rkt
+    discovered deps: #(struct:test-dep (driver.rkt) #t)
+  MISSING from test-deps: test-hasse-registry.rkt
+    discovered deps: #(struct:test-dep (hasse-registry.rkt propagator.rkt sre-core.rkt) #f)
+  MISSING from test-deps: test-trait-resolution-bridge.rkt
+    discovered deps: #(struct:test-dep (champ.rkt performance-counters.rkt propagator.rkt) #f)
+  MISSING from test-deps: test-t3-equality-audit.rkt
+    discovered deps: #(struct:test-dep (syntax.rkt unify.rkt) #f)
+  MISSING from test-deps: test-exp-literal.rkt
+    discovered deps: #(struct:test-dep (driver.rkt parse-reader.rkt parser.rkt posit-impl.rkt surface-syntax.rkt syntax.rkt) #t)
+  MISSING from test-deps: test-timings-timestamp.rkt
+    discovered deps: #(struct:test-dep () #f)
+  MISSING from test-deps: test-compile-match-tree-recursive.rkt
+    discovered deps: #(struct:test-dep () #t)
+  MISSING from test-deps: test-parse-lattice.rkt
+    discovered deps: #(struct:test-dep (parse-lattice.rkt) #f)
+  MISSING from test-deps: test-record-node.rkt
+    discovered deps: #(struct:test-dep (metavar-store.rkt pnet-serialize.rkt pretty-print.rkt reduction.rkt substitution.rkt syntax.rkt trait-resolution.rkt unify.rkt union-types.rkt) #f)
+  MISSING from test-deps: test-lsp-repl-01.rkt
+    discovered deps: #(struct:test-dep (errors.rkt) #f)
+  MISSING from test-deps: test-specialized-cells.rkt
+    discovered deps: #(struct:test-dep (champ.rkt propagator.rkt) #f)
+  MISSING from test-deps: test-pipe-compose-e2e-02b.rkt
+    discovered deps: #(struct:test-dep (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
+  MISSING from test-deps: test-suite-plan.rkt
+    discovered deps: #(struct:test-dep () #f)
+  MISSING from test-deps: test-champ-key-equality.rkt
+    discovered deps: #(struct:test-dep (champ.rkt) #f)
+  MISSING from test-deps: test-spine-census.rkt
+    discovered deps: #(struct:test-dep (source-location.rkt surface-syntax.rkt) #f)
+  MISSING from test-deps: test-to-conversions.rkt
+    discovered deps: #(struct:test-dep () #t)
+  MISSING from test-deps: test-error-explanation.rkt
+    discovered deps: #(struct:test-dep (atms.rkt decision-cell.rkt elab-speculation-bridge.rkt error-explanation.rkt propagator.rkt source-location.rkt) #f)
+  MISSING from test-deps: test-attribute-record.rkt
+    discovered deps: #(struct:test-dep (constraint-cell.rkt prelude.rkt propagator.rkt syntax.rkt type-lattice.rkt typing-propagators.rkt) #f)
+  MISSING from test-deps: test-preparse-expand-parity.rkt
+    discovered deps: #(struct:test-dep (macros.rkt parse-reader.rkt surface-rewrite.rkt) #f)
+  MISSING from test-deps: test-error-surfacing.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt namespace.rkt source-location.rkt) #t)
+  MISSING from test-deps: test-tagged-cell-value.rkt
+    discovered deps: #(struct:test-dep (decision-cell.rkt propagator.rkt) #f)
+  MISSING from test-deps: test-rel-t1-pol.rkt
+    discovered deps: #(struct:test-dep (champ.rkt errors.rkt narrowing.rkt performance-counters.rkt pnet-serialize.rkt syntax.rkt) #t)
+  MISSING from test-deps: test-pretty-print-pvec.rkt
+    discovered deps: #(struct:test-dep (pretty-print.rkt syntax.rkt) #f)
+  MISSING from test-deps: test-bound-args-01.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt relations.rkt trait-resolution.rkt) #t)
+  MISSING from test-deps: test-float-traits.rkt
+    discovered deps: #(struct:test-dep () #t)
+  MISSING from test-deps: test-def-seam.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt global-env.rkt macros.rkt namespace.rkt) #t)
+  MISSING from test-deps: test-path-selection-acceptance.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt) #f)
+  MISSING from test-deps: test-let-blocks.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt global-env.rkt macros.rkt namespace.rkt reader-forms.rkt) #t)
+  MISSING from test-deps: test-schema-field-construction.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt global-env.rkt macros.rkt namespace.rkt relations.rkt) #f)
+  MISSING from test-deps: test-pvec-zip-with.rkt
+    discovered deps: #(struct:test-dep () #t)
+  MISSING from test-deps: test-bsp-fire-protocol.rkt
+    discovered deps: #(struct:test-dep (champ.rkt propagator.rkt) #f)
+  MISSING from test-deps: test-multiclause-debug.rkt
+    discovered deps: #(struct:test-dep (atms.rkt decision-cell.rkt propagator.rkt relations.rkt solver.rkt syntax.rkt) #f)
+  MISSING from test-deps: test-substitution-scaling.rkt
+    discovered deps: #(struct:test-dep (loose-bvar.rkt prelude.rkt substitution.rkt syntax.rkt) #f)
+  MISSING from test-deps: test-cell-domain-inheritance.rkt
+    discovered deps: #(struct:test-dep (merge-fn-registry.rkt propagator.rkt) #f)
+  MISSING from test-deps: test-trace-data.rkt
+    discovered deps: #(struct:test-dep (propagator.rkt) #f)
+  MISSING from test-deps: test-punify-integration.rkt
+    discovered deps: #(struct:test-dep (champ.rkt ctor-registry.rkt driver.rkt elaborator-network.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt mult-lattice.rkt namespace.rkt prelude.rkt syntax.rkt type-lattice.rkt) #t)
+  MISSING from test-deps: test-solver-context.rkt
+    discovered deps: #(struct:test-dep (atms.rkt decision-cell.rkt propagator.rkt) #f)
+  MISSING from test-deps: test-suite-lock.rkt
+    discovered deps: #(struct:test-dep () #f)
+  MISSING from test-deps: test-propagator-solver.rkt
+    discovered deps: #(struct:test-dep (decision-cell.rkt propagator.rkt relations.rkt solver.rkt syntax.rkt) #f)
+  MISSING from test-deps: test-generic-arith-03.rkt
+    discovered deps: #(struct:test-dep (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt surface-syntax.rkt syntax.rkt) #t)
+  MISSING from test-deps: test-sre-track2h.rkt
+    discovered deps: #(struct:test-dep (driver.rkt substitution.rkt subtype-predicate.rkt syntax.rkt type-lattice.rkt union-types.rkt) #f)
+  MISSING from test-deps: test-explain-provenance-01.rkt
+    discovered deps: #(struct:test-dep (bilattice.rkt propagator.rkt provenance.rkt relations.rkt solver.rkt stratified-eval.rkt syntax.rkt tabling.rkt wf-engine.rkt) #f)
+  MISSING from test-deps: test-parse-reader.rkt
+    discovered deps: #(struct:test-dep (parse-lattice.rkt parse-reader.rkt propagator.rkt rrb.rkt surface-rewrite.rkt) #f)
+  MISSING from test-deps: test-warning-accumulation.rkt
+    discovered deps: #(struct:test-dep (driver.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt prelude.rkt propagator.rkt) #t)
+  MISSING from test-deps: test-f1b5-validate-acceptance.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt) #f)
+  MISSING from test-deps: test-tropical-fuel.rkt
+    discovered deps: #(struct:test-dep (champ.rkt propagator.rkt sre-core.rkt tropical-fuel.rkt) #f)
+  MISSING from test-deps: test-f1b4-seal-acceptance.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt) #f)
+  MISSING from test-deps: test-numeric-display.rkt
+    discovered deps: #(struct:test-dep (driver.rkt posit-impl.rkt pretty-print.rkt syntax.rkt) #t)
+  MISSING from test-deps: test-validate-node.rkt
+    discovered deps: #(struct:test-dep (macros.rkt pretty-print.rkt reduction.rkt substitution.rkt syntax.rkt) #f)
+  MISSING from test-deps: test-solver-parity.rkt
+    discovered deps: #(struct:test-dep (relations.rkt solver.rkt stratified-eval.rkt syntax.rkt) #f)
+  MISSING from test-deps: test-float-ops.rkt
+    discovered deps: #(struct:test-dep (driver.rkt global-env.rkt prelude.rkt pretty-print.rkt reduction.rkt substitution.rkt syntax.rkt typing-core.rkt) #t)
+  MISSING from test-deps: test-rat-literal-in-list.rkt
+    discovered deps: #(struct:test-dep () #t)
+  MISSING from test-deps: test-functor-ws-02.rkt
+    discovered deps: #(struct:test-dep (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt namespace.rkt parse-reader.rkt parser.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt) #f)
+  MISSING from test-deps: test-qtt-union-meta.rkt
+    discovered deps: #(struct:test-dep (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt) #t)
+  MISSING from test-deps: test-ppn-track4.rkt
+    discovered deps: #(struct:test-dep (champ.rkt prelude.rkt propagator.rkt surface-rewrite.rkt syntax.rkt type-lattice.rkt typing-propagators.rkt) #f)
+  MISSING from test-deps: test-data-adt-forms.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt macros.rkt metavar-store.rkt namespace.rkt relations.rkt trait-resolution.rkt) #t)
+  MISSING from test-deps: test-forward-ref-01.rkt
+    discovered deps: #(struct:test-dep (driver.rkt errors.rkt namespace.rkt) #f)
+  MISSING from test-deps: test-clock.rkt
+    discovered deps: #(struct:test-dep (clock.rkt propagator.rkt) #f)
+  MISSING from test-deps: test-p2-debug.rkt
+    discovered deps: #(struct:test-dep (driver.rkt elab-network-types.rkt metavar-store.rkt propagator.rkt substitution.rkt syntax.rkt type-lattice.rkt typing-propagators.rkt) #f)
+  MISSING from test-deps: test-readiness-propagator.rkt
+    discovered deps: #(struct:test-dep (driver.rkt elaborator-network.rkt infra-cell.rkt metavar-store.rkt propagator.rkt resolution.rkt syntax.rkt) #f)
+  EXTRA in test-deps: test-reader.rkt (in dep-graph but not found on disk)
+  EXTRA in test-deps: test-generic-arith-02.rkt (in dep-graph but not found on disk)
+  EXTRA in test-deps: test-constraint-retry-propagator.rkt (in dep-graph but not found on disk)
+  EXTRA in test-deps: test-atms.rkt (in dep-graph but not found on disk)
+  MISMATCH in test-deps key test-implicit-map-02.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+  MISMATCH in test-deps key test-transducer-01.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+  MISMATCH in test-deps key test-reduction-perf-01-01.rkt:
+    current:    (driver.rkt global-env.rkt macros.rkt namespace.rkt parser.rkt posit-impl.rkt prelude.rkt reader.rkt reduction.rkt surface-syntax.rkt syntax.rkt)
+    discovered: (driver.rkt global-env.rkt macros.rkt namespace.rkt parse-reader.rkt parser.rkt posit-impl.rkt prelude.rkt reduction.rkt surface-syntax.rkt syntax.rkt)
+  MISMATCH in test-deps key test-sexp-reader-parity.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt sexp-readtable.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt sexp-readtable.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt)
+  MISMATCH in test-deps key test-dot-access-02.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+  MISMATCH in test-deps key test-narrow-syntax-01.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+  MISMATCH in test-deps key test-introspection.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt sexp-readtable.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt sexp-readtable.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt)
+  MISMATCH in test-deps key test-decimal-literal.rkt:
+    current:    (driver.rkt global-env.rkt parser.rkt posit-impl.rkt prelude.rkt reader.rkt surface-syntax.rkt syntax.rkt)
+    discovered: (driver.rkt global-env.rkt parse-reader.rkt parser.rkt posit-impl.rkt prelude.rkt surface-syntax.rkt syntax.rkt)
+  MISMATCH in test-deps key test-pipe-compose-e2e-01.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+  MISMATCH in test-deps key test-mixfix-01.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+  MISMATCH in test-deps key test-postfix-index-03.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+  MISMATCH in test-deps key test-higher-rank.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+  MISMATCH in test-deps key test-guards-01.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt)
+    discovered: ()
+  MISMATCH in test-deps key test-io-dep-session-02.rkt:
+    current:    (driver.rkt elaborator.rkt macros.rkt sessions.rkt)
+    discovered: (driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt sessions.rkt syntax.rkt)
+  MISMATCH in test-deps key test-tycon.rkt:
+    current:    (global-env.rkt metavar-store.rkt prelude.rkt pretty-print.rkt reduction.rkt substitution.rkt syntax.rkt trait-resolution.rkt typing-core.rkt unify.rkt zonk.rkt)
+    discovered: (driver.rkt global-env.rkt metavar-store.rkt prelude.rkt pretty-print.rkt reduction.rkt substitution.rkt syntax.rkt trait-resolution.rkt typing-core.rkt unify.rkt zonk.rkt)
+  MISMATCH in test-deps key test-mult-propagator.rkt:
+    current:    (champ.rkt driver.rkt elaborator-network.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt mult-lattice.rkt namespace.rkt prelude.rkt propagator.rkt syntax.rkt type-lattice.rkt)
+    discovered: (champ.rkt decision-cell.rkt driver.rkt elaborator-network.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt mult-lattice.rkt namespace.rkt prelude.rkt propagator.rkt syntax.rkt type-lattice.rkt)
+  MISMATCH in test-deps key test-cfa-analysis-02.rkt uses-driver?:
+    current: #t  discovered: #f
+  MISMATCH in test-deps key test-interval-domain-01.rkt uses-driver?:
+    current: #t  discovered: #f
+  MISMATCH in test-deps key test-infra-cell-01.rkt:
+    current:    (champ.rkt infra-cell.rkt propagator.rkt)
+    discovered: (infra-cell.rkt propagator.rkt)
+  MISMATCH in test-deps key test-observatory-02.rkt:
+    current:    (champ.rkt observatory-serialize.rkt prop-observatory.rkt propagator.rkt trace-serialize.rkt)
+    discovered: (champ.rkt observatory-serialize.rkt prop-observatory.rkt propagator.rkt)
+  MISMATCH in test-deps key test-elaborator.rkt:
+    current:    (elaborator.rkt errors.rkt global-env.rkt metavar-store.rkt parser.rkt prelude.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+  MISMATCH in test-deps key test-io-csv-02.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt io-ffi.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+  MISMATCH in test-deps key test-io-csv-02.rkt uses-driver?:
+    current: #f  discovered: #t
+  MISMATCH in test-deps key test-search-heuristics-01.rkt uses-driver?:
+    current: #t  discovered: #f
+  MISMATCH in test-deps key test-unified-match-01.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+  MISMATCH in test-deps key test-substitution.rkt:
+    current:    (prelude.rkt substitution.rkt syntax.rkt)
+    discovered: (champ.rkt prelude.rkt reduction.rkt rrb.rkt substitution.rkt syntax.rkt)
+  MISMATCH in test-deps key test-generators.rkt:
+    current:    (global-env.rkt metavar-store.rkt performance-counters.rkt prelude.rkt reduction.rkt syntax.rkt typing-core.rkt unify.rkt)
+    discovered: (driver.rkt global-env.rkt metavar-store.rkt performance-counters.rkt prelude.rkt reduction.rkt syntax.rkt typing-core.rkt unify.rkt)
+  MISMATCH in test-deps key test-constraint-propagators-01.rkt:
+    current:    (constraint-cell.rkt constraint-propagators.rkt driver.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt narrowing.rkt prelude.rkt propagator.rkt reduction.rkt syntax.rkt)
+    discovered: (constraint-cell.rkt constraint-propagators.rkt driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt narrowing.rkt prelude.rkt propagator.rkt reduction.rkt syntax.rkt)
+  MISMATCH in test-deps key test-hasmethod-01.rkt:
+    current:    (driver.rkt elaborator.rkt expander.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt prelude.rkt syntax.rkt trait-resolution.rkt zonk.rkt)
+    discovered: (driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt prelude.rkt syntax.rkt trait-resolution.rkt zonk.rkt)
+  MISMATCH in test-deps key test-lseq-literal.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt sexp-readtable.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt sexp-readtable.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+  MISMATCH in test-deps key test-pattern-defn-01.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+  MISMATCH in test-deps key test-char-string-02.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+  MISMATCH in test-deps key test-provenance-errors.rkt:
+    current:    (atms.rkt driver.rkt elab-speculation-bridge.rkt errors.rkt global-env.rkt metavar-store.rkt performance-counters.rkt prelude.rkt source-location.rkt syntax.rkt)
+    discovered: (atms.rkt driver.rkt elab-network-types.rkt elab-speculation-bridge.rkt error-explanation.rkt errors.rkt global-env.rkt metavar-store.rkt performance-counters.rkt prelude.rkt propagator.rkt source-location.rkt syntax.rkt)
+  MISMATCH in test-deps key test-int-patterns-01.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt)
+    discovered: ()
+  MISMATCH in test-deps key test-io-dep-session-01.rkt:
+    current:    (driver.rkt elaborator.rkt session-runtime.rkt sessions.rkt)
+    discovered: (driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt session-runtime.rkt sessions.rkt substitution.rkt syntax.rkt)
+  MISMATCH in test-deps key test-char-string-01.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+  MISMATCH in test-deps key test-set.rkt:
+    current:    (champ.rkt driver.rkt global-env.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt sexp-readtable.rkt substitution.rkt syntax.rkt typing-core.rkt)
+    discovered: (champ.rkt driver.rkt global-env.rkt parse-reader.rkt prelude.rkt pretty-print.rkt reduction.rkt sexp-readtable.rkt substitution.rkt syntax.rkt typing-core.rkt)
+  MISMATCH in test-deps key test-io-session-03.rkt:
+    current:    (driver.rkt macros.rkt sessions.rkt)
+    discovered: (driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt sessions.rkt)
+  MISMATCH in test-deps key test-extended-spec.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt parser.rkt pretty-print.rkt reader.rkt source-location.rkt surface-syntax.rkt syntax.rkt warnings.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt parse-reader.rkt parser.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt warnings.rkt)
+  MISMATCH in test-deps key test-io-session-01.rkt:
+    current:    (driver.rkt sessions.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt sessions.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+  MISMATCH in test-deps key test-io-session-01.rkt uses-driver?:
+    current: #t  discovered: #f
+  MISMATCH in test-deps key test-metavar.rkt:
+    current:    (global-env.rkt metavar-store.rkt prelude.rkt pretty-print.rkt reduction.rkt substitution.rkt syntax.rkt zonk.rkt)
+    discovered: (driver.rkt global-env.rkt metavar-store.rkt prelude.rkt pretty-print.rkt reduction.rkt substitution.rkt syntax.rkt zonk.rkt)
+  MISMATCH in test-deps key test-io-file-02.rkt:
+    current:    (driver.rkt macros.rkt sessions.rkt)
+    discovered: (driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt sessions.rkt)
+  MISMATCH in test-deps key test-unify-structural.rkt:
+    current:    (metavar-store.rkt prelude.rkt syntax.rkt unify.rkt)
+    discovered: (driver.rkt metavar-store.rkt prelude.rkt syntax.rkt unify.rkt)
+  MISMATCH in test-deps key test-first-rest-01.rkt:
+    current:    (driver.rkt namespace.rkt parser.rkt)
+    discovered: ()
+  MISMATCH in test-deps key test-trait-narrowing-01.rkt:
+    current:    (driver.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt narrowing.rkt prelude.rkt reduction.rkt syntax.rkt trait-resolution.rkt)
+    discovered: (driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt narrowing.rkt prelude.rkt reduction.rkt syntax.rkt trait-resolution.rkt)
+  MISMATCH in test-deps key test-mixed-map.rkt:
+    current:    (champ.rkt driver.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt prelude.rkt pretty-print.rkt reduction.rkt substitution.rkt syntax.rkt typing-core.rkt unify.rkt)
+    discovered: (champ.rkt driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt prelude.rkt pretty-print.rkt reduction.rkt substitution.rkt syntax.rkt typing-core.rkt unify.rkt)
+  MISMATCH in test-deps key test-cond-01.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt)
+    discovered: ()
+  MISMATCH in test-deps key test-reduction-perf-02-01.rkt:
+    current:    (driver.rkt global-env.rkt macros.rkt namespace.rkt parser.rkt prelude.rkt reader.rkt reduction.rkt surface-syntax.rkt syntax.rkt)
+    discovered: (driver.rkt global-env.rkt macros.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt reduction.rkt surface-syntax.rkt syntax.rkt)
+  MISMATCH in test-deps key test-pattern-defn-02.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+  MISMATCH in test-deps key test-nil-type.rkt:
+    current:    (champ.rkt driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+    discovered: (champ.rkt driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+  MISMATCH in test-deps key test-pipe-compose.rkt:
+    current:    (macros.rkt reader.rkt)
+    discovered: (macros.rkt parse-reader.rkt)
+  MISMATCH in test-deps key test-foreign.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt foreign.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt foreign.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt pnet-serialize.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+  MISMATCH in test-deps key test-negative-literals.rkt:
+    current:    (driver.rkt reader.rkt)
+    discovered: (driver.rkt parse-reader.rkt)
+  MISMATCH in test-deps key test-stratified-eval.rkt:
+    current:    (driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt reader.rkt relations.rkt solver.rkt stratified-eval.rkt stratify.rkt syntax.rkt trait-resolution.rkt)
+    discovered: (driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt relations.rkt solver.rkt stratified-eval.rkt stratify.rkt syntax.rkt trait-resolution.rkt)
+  MISMATCH in test-deps key test-global-constraints-01.rkt:
+    current:    (bb-optimization.rkt definitional-tree.rkt driver.rkt errors.rkt global-constraints.rkt global-env.rkt interval-domain.rkt macros.rkt metavar-store.rkt namespace.rkt narrowing.rkt prelude.rkt solver.rkt syntax.rkt trait-resolution.rkt)
+    discovered: (bb-optimization.rkt definitional-tree.rkt driver.rkt errors.rkt global-constraints.rkt global-env.rkt interval-domain.rkt macros.rkt metavar-store.rkt namespace.rkt narrowing.rkt prelude.rkt search-heuristics.rkt solver.rkt syntax.rkt trait-resolution.rkt)
+  MISMATCH in test-deps key test-global-constraints-01.rkt uses-driver?:
+    current: #t  discovered: #f
+  MISMATCH in test-deps key test-string-ops.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+  MISMATCH in test-deps key test-io-main-01.rkt:
+    current:    (capability-inference.rkt driver.rkt elaborator.rkt errors.rkt global-env.rkt io-ffi.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+    discovered: (capability-inference.rkt driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+  MISMATCH in test-deps key test-reduction-perf-01-02.rkt:
+    current:    (driver.rkt global-env.rkt macros.rkt namespace.rkt parser.rkt prelude.rkt reader.rkt reduction.rkt surface-syntax.rkt syntax.rkt)
+    discovered: (driver.rkt global-env.rkt macros.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt reduction.rkt surface-syntax.rkt syntax.rkt)
+  MISMATCH in test-deps key test-io-cap-pipeline-01.rkt uses-driver?:
+    current: #f  discovered: #t
+  MISMATCH in test-deps key test-reduction-perf-02-02.rkt:
+    current:    (driver.rkt global-env.rkt macros.rkt namespace.rkt parser.rkt prelude.rkt reader.rkt reduction.rkt surface-syntax.rkt syntax.rkt)
+    discovered: (driver.rkt global-env.rkt macros.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt reduction.rkt surface-syntax.rkt syntax.rkt)
+  MISMATCH in test-deps key test-reader-relational.rkt:
+    current:    (reader.rkt)
+    discovered: (parse-reader.rkt)
+  MISMATCH in test-deps key test-definitional-tree-01.rkt:
+    current:    (definitional-tree.rkt macros.rkt syntax.rkt)
+    discovered: (definitional-tree.rkt driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+  MISMATCH in test-deps key test-definitional-tree-01.rkt uses-driver?:
+    current: #t  discovered: #f
+  MISMATCH in test-deps key test-unify.rkt:
+    current:    (global-env.rkt metavar-store.rkt prelude.rkt reduction.rkt syntax.rkt unify.rkt)
+    discovered: (driver.rkt global-env.rkt metavar-store.rkt prelude.rkt reduction.rkt syntax.rkt unify.rkt)
+  MISMATCH in test-deps key test-cfa-analysis-01.rkt uses-driver?:
+    current: #t  discovered: #f
+  MISMATCH in test-deps key test-config-audit.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt pretty-print.rkt reader.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt warnings.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt warnings.rkt)
+  MISMATCH in test-deps key test-spec-mult-01.rkt:
+    current:    (driver.rkt macros.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+  MISMATCH in test-deps key test-io-fs-01.rkt:
+    current:    (driver.rkt foreign.rkt io-ffi.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+  MISMATCH in test-deps key test-list-literals.rkt:
+    current:    (driver.rkt errors.rkt global-env.rkt macros.rkt namespace.rkt pretty-print.rkt reader.rkt sexp-readtable.rkt syntax.rkt)
+    discovered: (driver.rkt errors.rkt global-env.rkt macros.rkt namespace.rkt parse-reader.rkt pretty-print.rkt sexp-readtable.rkt syntax.rkt)
+  MISMATCH in test-deps key test-narrow-syntax-02.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+  MISMATCH in test-deps key test-pipe-compose-e2e-03.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+  MISMATCH in test-deps key test-constraint-chain-01.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-constraints.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt narrowing.rkt parser.rkt prelude.rkt reader.rkt surface-syntax.rkt syntax.rkt)
+    discovered: (driver.rkt errors.rkt global-constraints.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt syntax.rkt)
+  MISMATCH in test-deps key test-infra-cell-parallel-01.rkt:
+    current:    (champ.rkt infra-cell.rkt propagator.rkt)
+    discovered: (infra-cell.rkt propagator.rkt)
+  MISMATCH in test-deps key test-trait-introspection-01.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt)
+    discovered: (driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt prelude.rkt syntax.rkt trait-resolution.rkt)
+  MISMATCH in test-deps key test-transducer-02.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+  MISMATCH in test-deps key test-io-file-01.rkt:
+    current:    (driver.rkt foreign.rkt io-ffi.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+  MISMATCH in test-deps key test-pretty-print.rkt:
+    current:    (prelude.rkt pretty-print.rkt sessions.rkt syntax.rkt)
+    discovered: (champ.rkt prelude.rkt pretty-print.rkt sessions.rkt syntax.rkt)
+  MISMATCH in test-deps key test-relational-e2e.rkt:
+    current:    (driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt reader.rkt relations.rkt trait-resolution.rkt)
+    discovered: (driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt relations.rkt trait-resolution.rkt)
+  MISMATCH in test-deps key test-properties.rkt:
+    current:    (global-env.rkt metavar-store.rkt performance-counters.rkt prelude.rkt reduction.rkt syntax.rkt typing-core.rkt unify.rkt zonk.rkt)
+    discovered: (driver.rkt global-env.rkt metavar-store.rkt performance-counters.rkt prelude.rkt reduction.rkt syntax.rkt typing-core.rkt unify.rkt zonk.rkt)
+  MISMATCH in test-deps key test-pvec.rkt:
+    current:    (driver.rkt global-env.rkt macros.rkt namespace.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt rrb.rkt sexp-readtable.rkt substitution.rkt syntax.rkt typing-core.rkt)
+    discovered: (driver.rkt global-env.rkt macros.rkt namespace.rkt parse-reader.rkt prelude.rkt pretty-print.rkt reduction.rkt rrb.rkt sexp-readtable.rkt substitution.rkt syntax.rkt typing-core.rkt)
+  MISMATCH in test-deps key test-io-dep-cap-02.rkt uses-driver?:
+    current: #f  discovered: #t
+  MISMATCH in test-deps key test-infra-cell-constraint-01.rkt:
+    current:    (champ.rkt elaborator-network.rkt infra-cell.rkt metavar-store.rkt propagator.rkt syntax.rkt)
+    discovered: (champ.rkt driver.rkt elaborator-network.rkt infra-cell.rkt metavar-store.rkt propagator.rkt syntax.rkt)
+  MISMATCH in test-deps key test-postfix-index-01.rkt:
+    current:    (reader.rkt)
+    discovered: (parse-reader.rkt)
+  MISMATCH in test-deps key test-property-ws.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt parser.rkt pretty-print.rkt reader.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt parse-reader.rkt parser.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+  MISMATCH in test-deps key test-architecture-selection-01.rkt:
+    current:    (effect-executor.rkt effect-ordering.rkt effect-position.rkt io-bridge.rkt processes.rkt propagator.rkt session-lattice.rkt session-runtime.rkt sessions.rkt syntax.rkt)
+    discovered: (effect-executor.rkt effect-ordering.rkt effect-position.rkt processes.rkt propagator.rkt session-lattice.rkt session-runtime.rkt sessions.rkt syntax.rkt)
+  MISMATCH in test-deps key test-io-session-02.rkt:
+    current:    (io-bridge.rkt session-runtime.rkt sessions.rkt)
+    discovered: (io-bridge.rkt processes.rkt propagator.rkt session-lattice.rkt session-runtime.rkt sessions.rkt syntax.rkt)
+  MISMATCH in test-deps key test-eq-let-surface-01.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+  MISMATCH in test-deps key test-infra-cell-registration-01.rkt:
+    current:    (atms.rkt champ.rkt elaborator-network.rkt infra-cell.rkt propagator.rkt syntax.rkt type-lattice.rkt)
+    discovered: (champ.rkt elaborator-network.rkt infra-cell.rkt propagator.rkt syntax.rkt type-lattice.rkt)
+  MISMATCH in test-deps key test-support.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-constraints.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt propagator.rkt source-location.rkt surface-syntax.rkt syntax.rkt warnings.rkt)
+  MISMATCH in test-deps key test-infra-cell-atms-01.rkt:
+    current:    (atms.rkt champ.rkt infra-cell.rkt propagator.rkt)
+    discovered: (atms.rkt decision-cell.rkt infra-cell.rkt propagator.rkt)
+  MISMATCH in test-deps key test-dot-access-01.rkt:
+    current:    (macros.rkt reader.rkt)
+    discovered: (macros.rkt parse-reader.rkt)
+  MISMATCH in test-deps key test-quote.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt sexp-readtable.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt sexp-readtable.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt)
+  MISMATCH in test-deps key test-sess-inference.rkt:
+    current:    (metavar-store.rkt prelude.rkt processes.rkt sessions.rkt substitution.rkt syntax.rkt typing-core.rkt typing-sessions.rkt)
+    discovered: (driver.rkt metavar-store.rkt prelude.rkt processes.rkt sessions.rkt substitution.rkt syntax.rkt typing-core.rkt typing-sessions.rkt)
+  MISMATCH in test-deps key test-mixfix-02.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+  MISMATCH in test-deps key test-constraint-amb-01.rkt:
+    current:    (constraint-cell.rkt constraint-propagators.rkt driver.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt prelude.rkt reduction.rkt syntax.rkt)
+    discovered: (constraint-cell.rkt constraint-propagators.rkt driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt prelude.rkt syntax.rkt)
+  MISMATCH in test-deps key test-propagator-descending-01.rkt:
+    current:    (propagator.rkt)
+    discovered: (champ.rkt propagator.rkt)
+  MISMATCH in test-deps key test-process-ws-01.rkt:
+    current:    (driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt processes.rkt reader.rkt sessions.rkt surface-syntax.rkt warnings.rkt)
+    discovered: (driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt processes.rkt sessions.rkt surface-syntax.rkt warnings.rkt)
+  MISMATCH in test-deps key test-varargs.rkt:
+    current:    (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parse-reader.rkt parser.rkt prelude.rkt pretty-print.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt)
+  MISMATCH in test-deps key test-trait-tycon-01.rkt:
+    current:    (driver.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt prelude.rkt syntax.rkt trait-resolution.rkt typing-core.rkt unify.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt unify.rkt)
+  MISMATCH in test-deps key test-io-fio-01.rkt:
+    current:    (driver.rkt foreign.rkt io-ffi.rkt)
+    discovered: (driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt multi-dispatch.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt)
+  MISMATCH in test-deps key test-defmacro.rkt:
+    current:    (macros.rkt)
+    discovered: (driver.rkt errors.rkt global-env.rkt macros.rkt namespace.rkt)
+  ✗ 259 mismatches
+
+=== Layer 3: .prologos library deps ===
+  MISSING from prologos-lib-deps: prologos::core::csv
+    discovered deps: (prologos::core::capabilities prologos::core::io prologos::core::string-ops prologos::data::char prologos::data::list prologos::data::string)
+  MISSING from prologos-lib-deps: prologos::core::io-protocols
+    discovered deps: ()
+  MISSING from prologos-lib-deps: prologos::core::fio
+    discovered deps: ()
+  MISSING from prologos-lib-deps: prologos::data::reason
+    discovered deps: (prologos::core::map prologos::core::string-ops prologos::data::list prologos::data::map-entry prologos::data::result prologos::data::string)
+  MISSING from prologos-lib-deps: prologos::core::io
+    discovered deps: ()
+  MISSING from prologos-lib-deps: prologos::core::path
+    discovered deps: (prologos::data::list)
+  MISSING from prologos-lib-deps: prologos::io::fs
+    discovered deps: ()
+  EXTRA in prologos-lib-deps: prologos::core::.#map-ops (in dep-graph but not found on disk)
+  MISMATCH in prologos-lib-deps key prologos::core::abstract-domains:
+    current:    (prologos::core::eq prologos::core::lattice prologos::core::ord prologos::data::bool prologos::data::ordering prologos::data::parity prologos::data::refined-int prologos::data::refined-rat prologos::data::sign)
+    discovered: (prologos::core::lattice prologos::data::bool prologos::data::parity prologos::data::sign)
+  ✗ 9 mismatches
+
+=== Layer 3b: Test → .prologos runtime deps ===
+  MISSING from test-prologos-deps: test-validate.rkt
+    discovered deps: (prologos::data::reason prologos::data::reason::unexpected-field)
+  MISSING from test-prologos-deps: test-narrowing-search-01.rkt
+    discovered deps: (prologos::data::bool::not prologos::data::nat::add)
+  MISSING from test-prologos-deps: test-confluence-01.rkt
+    discovered deps: (prologos::data::bool::not prologos::data::list::append prologos::data::list::head prologos::data::list::map prologos::data::nat::add prologos::data::nat::sub)
+  MISSING from test-prologos-deps: test-rel-t1-typed-rows.rkt
+    discovered deps: (prologos::data::list)
+  MISSING from test-prologos-deps: test-reducible-01.rkt
+    discovered deps: (prologos::core::collection-traits prologos::core::collections prologos::core::list prologos::core::lseq prologos::core::pvec prologos::core::set prologos::data::list prologos::data::lseq prologos::data::lseq-ops prologos::data::nat prologos::data::option)
+  MISSING from test-prologos-deps: test-io-csv-02.rkt
+    discovered deps: (prologos::core::csv prologos::core::io)
+  MISSING from test-prologos-deps: test-firstclass-ops.rkt
+    discovered deps: (prologos::data::list)
+  MISSING from test-prologos-deps: test-posit-float-conversions.rkt
+    discovered deps: (prologos::core::conversions)
+  MISSING from test-prologos-deps: test-reducible-02.rkt
+    discovered deps: (prologos::core::collection-traits prologos::core::collections prologos::core::list prologos::core::lseq prologos::core::pvec prologos::core::set prologos::data::list prologos::data::lseq prologos::data::lseq-ops prologos::data::nat prologos::data::option)
+  MISSING from test-prologos-deps: test-termination-01.rkt
+    discovered deps: (prologos::data::bool::not prologos::data::list::append prologos::data::list::head prologos::data::list::map prologos::data::nat::add prologos::data::nat::sub)
+  MISSING from test-prologos-deps: test-prim-op-firstclass.rkt
+    discovered deps: (prologos::data::list)
+  MISSING from test-prologos-deps: test-path-selection.rkt
+    discovered deps: (prologos::core::path prologos::data::nat prologos::data::nat:refer prologos::data::option prologos::data::reason prologos::data::result)
+  MISSING from test-prologos-deps: test-pipe-compose-e2e-02a.rkt
+    discovered deps: (prologos::data::list prologos::data::nat prologos::data::transducer)
+  MISSING from test-prologos-deps: test-spec-mult-01.rkt
+    discovered deps: (prologos::core::fio)
+  MISSING from test-prologos-deps: test-compile-match-tree-recursive.rkt
+    discovered deps: (prologos::data::list)
+  MISSING from test-prologos-deps: test-io-fs-01.rkt
+    discovered deps: (prologos::io::fs)
+  MISSING from test-prologos-deps: test-pipe-compose-e2e-02b.rkt
+    discovered deps: (prologos::data::list prologos::data::nat prologos::data::transducer)
+  MISSING from test-prologos-deps: test-error-surfacing.rkt
+    discovered deps: (prologos::data::list)
+  MISSING from test-prologos-deps: test-io-file-01.rkt
+    discovered deps: (prologos::core::io)
+  MISSING from test-prologos-deps: test-pvec-zip-with.rkt
+    discovered deps: (prologos::core::pvec)
+  MISSING from test-prologos-deps: test-io-fio-01.rkt
+    discovered deps: (prologos::core::fio)
+  MISSING from test-prologos-deps: test-rat-literal-in-list.rkt
+    discovered deps: (prologos::data::list)
+  MISSING from test-prologos-deps: test-constraint-amb-01.rkt
+    discovered deps: (prologos::data::nat::add)
+  EXTRA in test-prologos-deps: test-generic-arith-02.rkt (in dep-graph but not found on disk)
+  MISMATCH in test-prologos-deps key test-refined-int.rkt:
+    current:    (prologos::core::abstract-domains prologos::core::eq prologos::core::ord prologos::data::option prologos::data::ordering prologos::data::refined-int)
+    discovered: (prologos::data::option prologos::data::refined-int)
+  MISMATCH in test-prologos-deps key test-refined-rat.rkt:
+    current:    (prologos::core::abstract-domains prologos::core::eq prologos::core::ord prologos::data::option prologos::data::ordering prologos::data::refined-rat)
+    discovered: (prologos::data::option prologos::data::refined-rat)
+  MISMATCH in test-prologos-deps key test-first-rest-01.rkt:
+    current:    (prologos::core::collections prologos::data::list prologos::data::option)
+    discovered: (prologos::data::list prologos::data::list::nil)
+  MISMATCH in test-prologos-deps key test-refined-subtyping.rkt:
+    current:    (prologos::core::abstract-domains prologos::core::eq prologos::data::option prologos::data::refined-int prologos::data::refined-rat)
+    discovered: (prologos::data::option prologos::data::refined-int prologos::data::refined-rat)
+  MISMATCH in test-prologos-deps key test-io-main-01.rkt:
+    current:    (prologos::core::capabilities prologos::core::csv prologos::core::io)
+    discovered: (prologos::core::csv prologos::core::io)
+  ✗ 29 mismatches
+
+379 total mismatches found. Run with --write to update.
