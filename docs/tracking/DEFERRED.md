@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 170**
+> ### **NEXT FREE: 171**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7533,3 +7533,52 @@ module only through a missing or changed edge is not selected (not measured how 
 tools/update-deps.rkt --write`, review the diff, and make `--check` part of a gate (pre-commit or the checkpoint
 gate) so it cannot drift again. **When**: next runner/tooling batch; before relying on targeted runs to vet a
 source change.
+
+---
+
+### 170. ⬜ ⭐ A SHARDED TEST FILE RACES ITS OWN TEMP FILES — `make-temporary-file` + `#:exists 'replace` lets one shard's delete-and-recreate collide with a twin shard's time-named file (`open-output-file: file exists`); `test-path-selection.rkt` fails 3 of 3 targeted runs at `a15b1a9e`
+
+**Found by**: the PPN 4C checkpoint merge gate (2026-10-13, merge of `ppn4c-elaboration-on-network`
+into `a15b1a9e`): full suite 10 366 tests, 1 FAILURES — `test-path-selection.rkt` shards 1/5 and 3/5,
+each one test erroring `open-output-file: file exists` on a temp path such as
+`…/T/prologos-pathsel-17919073441791907344063.prologos`. The merge's own changes are docs and `.rkt`
+comments only, so it was A/B'd on main's pristine code (detached worktree, limited build,
+`racket tools/run-affected-tests.rkt --tests tests/test-path-selection.rkt`, 5 shards):
+
+| code | runs failing | per-run wall |
+|---|---|---|
+| `34602ded` (before the two 08:39 merges) | 1 of 3 | 7.5–7.9 s |
+| `1961d49d` (+ SW-19…21 runner/lock merge) | 0 of 3 | 7.4–7.5 s |
+| `a15b1a9e` (+ the fasl `.pnet` body merge `08acff4a`) | **3 of 3** | 4.0 s |
+| `a15b1a9e` with `'replace` → `'truncate` at the 4 sites below | **0 of 5** | 3.9–4.0 s |
+
+Every failing run carried the same signature (2–4 `file exists` errors per run). The merged tree
+(`a15b1a9e` + the PPN move) failed 2 of 3.
+
+**Mechanism** (read in code, then confirmed by the last table row): `make-temporary-file` names the
+file from `(current-seconds)` and `(current-inexact-milliseconds)` and creates it exclusively, retrying
+on a collision (`collects/racket/file.rkt:191-238`, Racket 9.3). The helpers then reopen it with
+`(call-with-output-file tmp #:exists 'replace …)`, and `'replace` DELETES the file and creates it
+again. Between the delete and the create, a twin shard — the same test code started at the same
+moment in another worker — can draw the same seconds-plus-milliseconds name and create it; the
+recreate then fails with "file exists", and nothing retries it. Shards of one file run the same
+sequence in lockstep, which makes the same-millisecond draw likely; the fasl `.pnet` speedup
+(7.5 s → 4.0 s) tightened the lockstep, which is why the failure went from occasional to certain. The
+defect is older than both merges (1 of 3 at `34602ded`); the speedup only exposed it. `'truncate`
+opens the existing file without deleting it, so there is no window. The sharding note at
+`tools/suite-plan.rkt:142` ("test-path-selection under K=2 and K=3, every shard, 0 failures")
+predates K=5 and the speedup.
+
+**Sites**: `tests/test-path-selection.rkt:75`, `:99`, `:142` (`run-ws`, `run-ws-raw`,
+`run-ws-pre-raw`) and `tests/test-support.rkt:226` (`run-ws`, used by many files). The same
+`make-temporary-file` + `#:exists 'replace` pair appears in 30+ further test files (census:
+`grep -l make-temporary-file tests/*.rkt` ∩ `grep -l "#:exists 'replace"`); an unsharded file can
+collide only with a concurrent file that draws the same name, so the exposure there is by chance,
+not lockstep — not measured.
+
+**Fix shape**: `#:exists 'truncate` wherever the path came from `make-temporary-file` (the file
+already exists, created exclusively); a lint or a shared helper so new tests do not reintroduce the
+pair. Optionally put the pid in the template. **When**: before the next checkpoint gate on any
+branch — every `--all` run at `a15b1a9e` or later is expected to show this failure until it lands.
+Not applied by the PPN 4C session (outside its track); the measured fix is the last table row.
+Record: `tracks/PPN/PPN_4C/LOG.md` § *Checkpoint 1 merged*.
