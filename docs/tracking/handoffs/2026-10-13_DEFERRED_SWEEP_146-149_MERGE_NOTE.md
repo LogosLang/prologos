@@ -131,9 +131,77 @@ sparse pointer form):
 
 ---
 
-## 146 ⬜ `champ-lookup` allocates 64 B per read
+## 146 ✅ `champ-lookup` "allocates 64 B per read" — misattributed; the real class fixed — `69f64caf` (+ two transient defects the tests found: `6d172922`, `3a152ac9`)
 
-(pending)
+**The entry's diagnosis is refuted.** Measured by subtraction (`champ-lookup-alloc.rkt`):
+
+| | B/op | ns/op |
+|---|---|---|
+| census harness, empty thunk | 0 | 3.6 |
+| `champ-lookup`, **stored** key, N = 16 / 256 / 4096 | **0** | 9 / 19 / 30 |
+| `champ-lookup`, **fresh** `equal?` key | 64 | 37 / 47 / 57 |
+| `equal?` on two fresh `cell-id`s alone | **64** | 35 |
+
+The census probe looked up a freshly constructed `(cell-id k)`, so it measured Racket CS's
+`equal?` on two records. That allocates on every top-level call: `rumble/equal.ss`, record
+branch, `deeper-context` box plus a recursion closure (read at `master`). Measured at 64 B for transparent,
+prefab, authentic, custom `prop:equal+hash` and opaque structs alike; fixnums cost 0 B. The
+entry's fix shape (rewrite the descent) would have changed nothing.
+
+**What production actually pays.** Census from a temporary instrumented build over `benchmarks/comparative` (19 files, six
+data-entry comparison sites; `champ_census_instrument.py`, reverted after the run):
+
+| class | comparisons | share | bytes in `equal?` |
+|---|---|---|---|
+| `eq?` hit | 238,859 | 76.3 % | 0 |
+| hashes differ (cannot be equal) | 63,127 | 20.2 % | 7.09 MB (85 %) |
+| same hash, equal (fresh key) | 11,021 | 3.5 % | 1.24 MB |
+| same hash, unequal | 0 | 0 | 0 |
+
+Class 1 is almost entirely **insert of a new key onto another key's data entry**. In proportion, all of these
+bytes are 0.04–0.25 % of a run's total allocation (1.25–1.46 GB per file, mostly loading). The fix is correct
+but its effect is small.
+
+**Fix.** One helper, `de-key=?`: `eq?`, then the **stored hash** (data entries already carry it), then
+`equal?`. It is used at all six data-entry sites. This is sound because CHAMP already requires the hash to be consistent with
+`equal?`; every production hash was checked (`equal-hash-code` ×121, `cell-id`/`prop-id` n, `eq-hash-code`
+of gensyms, `decomp-key-hash`). Before/after (`champ-ab.rkt`, `ROOT=` main vs branch, interleaved twice,
+bytes deterministic; wall not claimed at load 7.9):
+
+| pattern | N = 256 | 4096 | 65536 |
+|---|---|---|---|
+| insert new `cell-id` | 500.4 → 492.4 B | 826.2 → 809.7 | 1180.3 → 1147.2 |
+| lookup, stored key | 0.1 → 0.1 | 0.1 → 0.1 | 0.1 → 0.1 |
+| lookup, fresh key | 64.2 → 64.2 | 64.2 → 64.2 | 64.2 → 64.2 |
+
+The entry's criterion, "0 B for N ∈ {16, 256, 4096}", **already held** for production-shaped
+reads (stored key). For fresh keys it cannot be met inside CHAMP: that cost is the runtime's, and it is removable only
+upstream, by interning keys or by not re-constructing them.
+
+**Found along the way (separate commits, each pinned to fail without its fix):** the new rackcheck model property
+(owner-ID transient vs an `equal?`-keyed hash) found two latent transient defects.
+1. `tchamp-delete-owned!` returned `#f` at the root when the last key was deleted, after which freeze or insert
+   crashed (`6d172922`).
+2. `tnode-insert!` / `tnode-delete!` on a collision node didn't update the size box (`3a152ac9`).
+
+Both are latent: the first has no production caller, and the second needs full-hash collisions, which are impossible for `cell-id` keys.
+
+**Corrections owed to PAR 4.** Stage-1 contention analysis `:95, :184`; synthesis of record `:100`;
+prior-art draft `:189`. The "allocation per read" half of the persistence argument is withdrawn; the write
+half (path copy) stands. Written into PAR 4's note §7a; the edit to the synthesis of record is left unapplied.
+
+**Candidate (unnumbered):** the residual class 2 (fresh-but-equal hits, 3.5 %, 112 B each in production).
+Find which callers re-construct keys (`decomp-key-hash` pair keys are a suspect: a fresh `cons` of two
+`cell-id`s pays the pair box plus two record comparisons). The fix shape is to pass the stored key, or to intern.
+
+**Paste-ready status flip for main's `DEFERRED.md` § 146** (`⬜` → `✅`, append):
+
+> **✅ Closed 2026-10-13, `69f64caf` on `deferred-sweep-146-149`.** Misattributed: the descent allocates
+> 0 B; the 64 B was Racket CS `equal?` on the probe's freshly constructed key. Production census: 76 %
+> `eq?` hits; the real cost was new-key inserts comparing keys whose hashes already differed (85 % of
+> CHAMP's `equal?` bytes, 0.04–0.25 % of total allocation). Fixed by comparing the stored hash first at all
+> six data-entry sites. The model property also found and fixed two latent transient defects (`6d172922`,
+> `3a152ac9`). Record: merge note § 146.
 
 ## 147 ⬜ fire-protocol ceremony
 
