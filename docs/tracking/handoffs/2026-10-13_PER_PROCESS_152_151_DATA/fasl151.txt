@@ -1,0 +1,2 @@
+40 files | text bytes 16.93 MB, fasl bytes 9.51 MB | body read CPU ms: text 1291, fasl(file) 56, fasl(mem) 52 | round-trip equal (canonical): #t
+load1=10.51 40 files | text bytes 16.93 MB, fasl bytes 9.51 MB | body read CPU ms: text 1287, fasl(file) 53, fasl(mem) 50 | round-trip equal (canonical): #t

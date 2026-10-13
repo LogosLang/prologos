@@ -1,0 +1,12 @@
+--- a/racket/prologos/tools/run-affected-tests.rkt
++++ b/racket/prologos/tools/run-affected-tests.rkt
+@@ -247,6 +247,9 @@
+     (do-precompile? #f)]
+    ["--no-pnet-cache" "Disable .pnet module network caching (default: enabled)"
+     (do-pnet-cache? #f)]
++   ["--memory-stats" "Record per-file MEMORY-STATS in timings.jsonl (forces two major GCs per process-string/process-file call; DEFERRED 152)"
++    ;; batch workers are spawned after argument parsing and inherit the env
++    (putenv "PROLOGOS_MEMORY_STATS" "1")]
+    ["--failures" "Show failure logs from last run (no tests executed)"
+     (show-failures? #t)]
+    ["--bail-timeouts" n "Abort after N per-file timeouts (default: 3, 0=disable)"
