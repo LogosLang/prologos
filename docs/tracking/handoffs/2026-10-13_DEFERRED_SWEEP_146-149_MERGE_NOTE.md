@@ -11,6 +11,34 @@ any candidate for the owner's register — **unnumbered on purpose**: the branch
 reads `NEXT FREE: 146` while main's uncommitted one reads 150, so allocating here would
 re-issue a number (`workflow.md` § DEFERRED numbers are monotonic).
 
+### Owner decision ledger, `SW-n` (this session's series)
+
+`SW` = sweep. Collision-checked over 740 docs on 2026-10-13: 0 uses of `SW-n`, while `O-n`, `W-n`, `M-n` and `G-n`
+are all in use. **Commit messages up to and including `2792123c` use roman numerals: (n) is `SW-n`, e.g. (xii) = SW-12.**
+`SW-1`…`SW-3` were never recorded and are not used.
+
+| # | decision | status |
+|---|---|---|
+| SW-4 | A run the re-run guard refuses exits non-zero, with its own code (3), not 0 | DECIDED, applied `f6e530d7` |
+| SW-5 | Polluted `timings.jsonl` records are ANNOTATED (`"invalid"` key), never deleted | DECIDED, applied `f6e530d7`; main's file annotated after checkpoint 2 |
+| SW-6 | Timestamps carry an explicit offset; the record schema version is bumped | DECIDED, applied `f6e530d7` |
+| SW-7 | F3(a) and the runner stream merge in ONE checkpoint | DECIDED, done (checkpoint 2, `01ef2542`) |
+| SW-8 | The sweep session brings `par4-p0` up to main itself | DECIDED, done (`a456c370`, then `3643f56e`) |
+| SW-9 | `egraph-relational-spike` (clone `prologos-egraph-spike`): land its record on main? | DECIDED: keep the worktree and branch as they are for now |
+| SW-10 | `preduce-autonomy` (clone `prologos-preduce-auto`): land its record on main? | DECIDED: keep as they are for now |
+| SW-11 | Register the hook guard at user level in Claude Code AND Hermes; port the Claude hooks | DECIDED, done (§ Checkpoint 3) |
+| SW-12 | Suite records keep MEMORY-STATS only on request: `--memory-stats` (option C) | DECIDED, done `e3efb2dc` |
+| SW-13 | Port the MacMD-Viewer `PostToolUse` hook to Hermes (same exclusions, same switch file) | DECIDED with SW-11, done |
+| SW-14 | The compile rule also covers `raco setup`, `raco pkg install/update`, `raco test --make` | lean kept, in `9d24d463` |
+| SW-15 | Only a literal limit ≥ 1 000 000 passes (`PLT_CS_COMPILE_LIMIT=$X` is refused) | lean kept, in `9d24d463` |
+| SW-16 | Close `kill $(pgrep …)` / `pgrep … \| xargs kill` and kin | DECIDED, done `8b113a9f` |
+| SW-17 | Narrow `Bash(pkill:*)`; drop the unlimited-compile allow rules | DECIDED, done `53e6de98` |
+| SW-18 | `measure-production-n.rkt:91` → `make-hash` without a test | DECIDED, done `200bc3d6` |
+| SW-19 | Annotate the history records with an undeclared 0-test PASS unit (DEFERRED 161 open 1) | see § After checkpoint 3 |
+| SW-20 | DEFERRED 166: the runner names its lock path, and warns on an override; no extra flag | see § After checkpoint 3 |
+| SW-21 | `--tests` on a module that is not a test unit is refused (not run, then called INCOMPLETE) | see § After checkpoint 3 |
+| SW-22 | DEFERRED 151 (b): measure a fasl `.pnet` body end to end before choosing fix vs retire | see § After checkpoint 3 |
+
 ---
 
 ## 148 ✅ `tagged-cell-value` never deduplicated entries — `c62cd267`
@@ -595,7 +623,7 @@ shows that population does not reach the arms. A timing A/B waits for a quiet ma
 
 ---
 
-## Coordination: parallel streams, owner decisions (vii)/(viii), `par4-p0` brought up to main
+## Coordination: parallel streams, owner decisions SW-7/SW-8, `par4-p0` brought up to main
 
 **Parallel streams** (owner: "launch all three now"). Each runs on its own branch in a nested worktree off `58241c0c`, and
 their files are disjoint:
@@ -609,8 +637,8 @@ The coordinator (this session) reads each diff, re-runs its tests, checks its cl
 gated by a full suite with a file-by-file count, and only then moves main.
 
 **Owner decisions, 2026-10-13:**
-- **(vii)** F3(a) is folded into ONE checkpoint merge with the runner stream; it is not merged alone.
-- **(viii)** The sweep session brings `par4-p0` up to main itself, rather than relaying the request.
+- **SW-7** F3(a) is folded into ONE checkpoint merge with the runner stream; it is not merged alone.
+- **SW-8** The sweep session brings `par4-p0` up to main itself, rather than relaying the request.
 
 **`par4-p0` → `a456c370`** (merge of main into `fbd5a322`; recorded in PAR 4 note § 7d). Clean and idle when checked.
 The only overlap, `propagator.rkt`, merged to main + exactly `par4-p0`'s 6 hunks. Merged tree: 10 298 tests / 493 files,
@@ -633,7 +661,7 @@ untracked files, no racket process with its cwd inside, ignored files inspected,
 
 ---
 
-## Checkpoint 2 (owner decision (vii)): F3(a) + the runner stream → main
+## Checkpoint 2 (owner decision SW-7): F3(a) + the runner stream → main
 
 **Merges** in a throwaway worktree off main `e6394b3f` (the CIU 6 session's docs commit; the only overlap was
 `DEFERRED.md`, in different entries; no overlap with main's uncommitted working copy):
@@ -677,7 +705,7 @@ suite: `+10 test-suite-lock`, `+19 test-suite-plan` (18 + the guard), `+3 test-a
 
 **After checkpoint 2 (main = `01ef2542`).**
 - Both trees rebuilt with the limit (fingerprints match); the 8 merged test files pass on main (161 tests).
-- Main's `timings.jsonl` annotated (decision (v)): 24 records, 13 of them full-suite `all_pass` by DEFERRED 164's own
+- Main's `timings.jsonl` annotated (decision SW-5): 24 records, 13 of them full-suite `all_pass` by DEFERRED 164's own
   300-file threshold. The changed lines differ ONLY by the `"invalid"` key, and a second pass annotates 0.
 - `runner-queue-gate` worktree and branch removed (merged, clean). Its small scratch probes are preserved in the
   racket-performance-probing skill (`scripts/data/agent-evidence-2026-10-13/`).
@@ -685,7 +713,7 @@ suite: `+10 test-suite-lock`, `+19 test-suite-plan` (18 + the guard), `+3 test-a
 - Still without the queue: `ciu6-path-selection` (the CIU 6 session's, at `e6394b3f`), the two clones, and the
   unmerged `guards-hook-sweep` / `per-process-152-151` worktrees until checkpoint 3.
 
-## Checkpoint 3: the guards and per-process streams → main (owner decisions (xi)–(xviii))
+## Checkpoint 3: the guards and per-process streams → main (owner decisions SW-11–SW-18)
 
 Done in a throwaway worktree `checkpoint-3`, branched from main `56e9fb64` (main had gained two CIU 6 / PAR 4
 docs commits since `01ef2542`).
@@ -695,16 +723,16 @@ docs commits since `01ef2542`).
 | `977c008e` | merge `guards-hook-sweep`: 159 (a) compile-limit guard `9d24d463`, 163 (2) kill guard `e9b2a30e`, 162 (2) `benchmark-tests.rkt` tables `d5359d2a` |
 | `baa1dce2` | merge `per-process-152-151`: 152 `0e5da30f`, 151 (a) `7358c7c4` (`PNET_VERSION` 10 → 11) |
 | `eb2a4b72` | guard: the deny carries BOTH harnesses' fields; the orphan hint names the shell's checkout (`$(git rev-parse --show-toplevel)`), not the script's |
-| `8b113a9f` | guard, decision (xvi): a `pgrep` in a command that kills is judged as the `pkill` it amounts to; `ps \| grep \| kill`; `-v`; pid `-1`; `"$(…)"` inside quotes |
-| `53e6de98` | `.claude/settings.local.json`, decision (xvii): `Bash(pkill:*)` → `Bash(pkill -P:*)`; nine unlimited-compile / 9.0-binary allow rules removed |
-| `200bc3d6` | `measure-production-n.rkt:91` `make-hash`, decision (xviii) |
-| `e3efb2dc` | runner `--memory-stats`, decision (xii) (option C) |
+| `8b113a9f` | guard, decision SW-16: a `pgrep` in a command that kills is judged as the `pkill` it amounts to; `ps \| grep \| kill`; `-v`; pid `-1`; `"$(…)"` inside quotes |
+| `53e6de98` | `.claude/settings.local.json`, decision SW-17: `Bash(pkill:*)` → `Bash(pkill -P:*)`; nine unlimited-compile / 9.0-binary allow rules removed |
+| `200bc3d6` | `measure-production-n.rkt:91` `make-hash`, decision SW-18 |
+| `e3efb2dc` | runner `--memory-stats`, decision SW-12 (option C) |
 | (merge) | `deferred-sweep-146-149`'s records after checkpoint 2 (`405f164e`) |
 
 **The guard was inert in Hermes as written.** `deny()` emitted only Claude Code's `hookSpecificOutput`. Hermes's bridge
 blocks only on a top-level `"decision": "block"` or exit 2, so `_parse_response` returned `None` on the old output (an
 allow), checked by calling Hermes's own parser on the guard's real output. The test table counted any output as a
-deny, so it could not see this; a new section reads the fields (8 rows; red 3 → green). The (xvi) design and its
+deny, so it could not see this; a new section reads the fields (8 rows; red 3 → green). The SW-16 design and its
 evidence: `8b113a9f`'s message; 145 rows, both bash 5.3 and 3.2; nine mutations, one per mechanism, all red (two
 survived the first pass, and the two ALLOW rows that kill them were added).
 
@@ -726,7 +754,7 @@ share an unforked `prelude-persistent-registry-net-box`; a `spec` program change
 the failure. Recorded in 160 and that section; the fix is the flake batch's (with 160). Merged with the failure
 recorded rather than re-run until green, since the change set provably does not affect it.
 
-**Registration (decision (xi))**, all pointing at main's checkout, so the guard in force is the version main has:
+**Registration (decision SW-11)**, all pointing at main's checkout, so the guard in force is the version main has:
 - Claude Code, `~/.claude/settings.json` (user level): `PreToolUse` `Bash` → `tools/hook-guard-racket.sh`. Backup:
   scratch `claude-settings.before-hooks.json`. Only the `hooks` key changed.
 - Hermes, profile `logos-language-designer` `config.yaml`: `hooks.pre_tool_call` `terminal` → the guard (timeout 10 s;
