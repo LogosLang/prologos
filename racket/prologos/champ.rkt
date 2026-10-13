@@ -811,9 +811,13 @@
 
 ;; Owner-ID transient delete.
 ;; size-box: (box nat) — updated when a key is removed.
-;; Returns: (values node removed?)
+;; Returns: (values node removed?). The node is never #f: deleting the last key
+;; yields `empty-node`, exactly as the persistent `champ-delete` does (`:277`) —
+;; `tnode-delete!` signals "subtree became empty" with #f to its PARENT, and the
+;; root has no parent to absorb it (freeze-node and tnode-insert! both need a node).
 (define (tchamp-delete-owned! node size-box hash key edit)
-  (tnode-delete! node hash key 0 edit size-box))
+  (define-values (new-node removed?) (tnode-delete! node hash key 0 edit size-box))
+  (values (or new-node empty-node) removed?))
 
 (define (tnode-delete! node hash key level edit size-box)
   (cond

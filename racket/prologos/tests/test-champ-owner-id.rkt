@@ -146,6 +146,28 @@
   (check-equal? (champ-size m2) 49)
   (check-equal? (champ-lookup m2 25 25) 'none))
 
+(test-case "C2b: owner-ID transient delete of the LAST key yields an empty map, not #f"
+  ;; Found by the DEFERRED 146 model property (test-champ-key-equality.rkt):
+  ;; tnode-delete! signals an emptied subtree with #f to its parent; the public
+  ;; wrapper passed that #f out at the root, and freeze / insert then crashed.
+  (define-values (node edit size) (champ-transient-owned (champ-insert champ-empty 2 2 'two)))
+  (define size-box (box size))
+  (define-values (n* removed?) (tchamp-delete-owned! node size-box 2 2 edit))
+  (check-true removed?)
+  (check-equal? (unbox size-box) 0)
+  ;; the transient stays usable: insert into it, then freeze
+  (define-values (n2 added?) (tchamp-insert-owned! n* size-box 7 7 'seven edit))
+  (check-true added?)
+  (define m2 (tchamp-freeze-owned n2 (unbox size-box) edit))
+  (check-equal? (champ-size m2) 1)
+  (check-equal? (champ-lookup m2 7 7) 'seven)
+  (check-equal? (champ-lookup m2 2 2) 'none)
+  ;; and freezing the emptied transient directly gives an empty map
+  (define-values (node3 edit3 size3) (champ-transient-owned (champ-insert champ-empty 2 2 'two)))
+  (define sb3 (box size3))
+  (define-values (n3 _r) (tchamp-delete-owned! node3 sb3 2 2 edit3))
+  (check-true (champ-empty? (tchamp-freeze-owned n3 (unbox sb3) edit3))))
+
 (test-case "C3: owner-ID transient insert-join"
   (define (sum-merge old new) (+ old new))
   (define m (champ-insert champ-empty 42 'k 10))
