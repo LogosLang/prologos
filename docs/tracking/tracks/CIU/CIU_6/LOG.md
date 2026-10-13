@@ -148,3 +148,21 @@ are in [`../README.md`](../README.md).
   And P ⊇ L (dissolving ancestors under P gives L's answer, E6). Also measured (`probe-1bvi-i`): joining
   keys with `-` is not injective, and the strict merge refuses the resulting clash loudly.
 - **Next**: owner decision Q_U57.
+
+### Q_U57 decided: P — `*-_` names the whole collapsed path; every decision 1b-vi owed is made; two implementation facts measured for the plan — this commit (2026-10-13)
+- **Why / decision**: owner — *"`P`'s table and rationale stand as reasoned, let's go with that."* Ledgered at
+  [Q_U57](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u57). The 1b-vi row in D4's sequencing table now
+  shows all three decisions (Q_U55 A, Q_U56 (a), Q_U57 P).
+- **Measured for the implementation plan**:
+  - `probe-1bvi-k`: provenance names only what the BRANCH collapses. `e3{a.{b.c^-_}}` → `{:a {:b-c …}}`, so an
+    enclosing sub-block's head is not in the name. So `*-_`'s ancestor prefix is **static per branch**,
+    computable from the branch's own steps by `^-_`'s naming function (`select-synth-name` /
+    `select-step-output-name`, `syntax.rkt:1414`, `:1495`). Only the content key is dynamic, and the 1b-v join
+    already threads it (`select-synth-prefixed-key`, `syntax.rkt:1511`).
+  - `probe-1bvi-j`: the existing parser desugar (Q_T8 `^..`, `parser.rkt:1464`) does NOT echo the user's
+    spelling in a refusal (`app{server.ssl.nope^..}` is labelled `server.ssl.nope`). Star refusals build their label
+    with `pp-select-branch` over the stored steps (`typing-core.rkt:1628`). So a plain dissolve desugar of `*-`
+    would print the desugared form, and Q_U54 decided against exactly that (a label that names a spelling the
+    user did not write). That is a prediction, not yet measured on a `*-` refusal.
+- **Next**: the 1b-vi implementation plan (pins first; then the collapse machinery; then the table rows that
+  mint `*-` / `*-_`), with one locus choice for the owner — where total collapse is represented (see the reply).
