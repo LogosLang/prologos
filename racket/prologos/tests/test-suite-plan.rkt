@@ -354,3 +354,23 @@
   (check-true (metric-line? "CELL-METRICS:{\"cells\":37}"))
   (check-false (metric-line? "instantiate-linklet: mismatch;"))
   (check-false (metric-line? "  PERF-COUNTERS: indented is not the prefix")))
+
+;; ========================================
+;; Worker -> unit sequence (DEFERRED 160 support ii)
+;; ========================================
+
+(test-case "suite-plan/worker sequence: per worker, the exact work lines in dispatch order, replayable"
+  (define root "/p/racket/prologos/")
+  (define seqs
+    (worker-sequences root
+                      (list (list 0 101 (list (work-unit "/p/racket/prologos/tests/test-b.rkt" #f 1 1.0)
+                                              (work-unit "/p/racket/prologos/tests/test-w.rkt" 2 4 1.0)))
+                            (list 1 102 (list (work-unit "/elsewhere/test-x.rkt" #f 1 1.0))))))
+  (check-equal? (map (lambda (h) (hash-ref h 'worker)) seqs) '(0 1))
+  (check-equal? (hash-ref (car seqs) 'pid) 101)
+  (check-equal? (hash-ref (car seqs) 'units) '("tests/test-b.rkt" "tests/test-w.rkt\t2/4")
+                "relative to the project root, shard suffix kept: what batch-worker --stdin reads")
+  (check-equal? (hash-ref (cadr seqs) 'units) '("/elsewhere/test-x.rkt") "outside the root: absolute")
+  ;; each line round-trips through the worker's parser
+  (define-values (p sh k) (parse-work-line (cadr (hash-ref (car seqs) 'units))))
+  (check-equal? (list p sh k) '("tests/test-w.rkt" 2 4)))

@@ -1266,6 +1266,13 @@
   ;; this run reported: its old logs (whole-file and shard) are replaced by
   ;; this run's, so a passing file shows none — and its earlier evidence
   ;; survives in runs/<earlier-id>/.
+  ;; Which worker ran which units, in order (DEFERRED 160 support ii).
+  (define worker-seqs
+    (worker-sequences project-root
+                      (for/list ([w (in-list all-workers)])
+                        (list (worker-state-index w)
+                              (subprocess-pid (worker-state-proc w))
+                              (map cdr (reverse (worker-state-dispatched w)))))))
   (define kept-run-dir?
     (refresh-failure-views! fail-root run-dir file-results
                             ;; kept when it holds evidence: a failure / no-result,
@@ -1274,6 +1281,20 @@
                                             (ormap (lambda (w) (pair? (worker-evidence-lines w)))
                                                    all-workers))
                             #:also-files no-result-files))
+  (when kept-run-dir?
+    (with-handlers ([exn:fail? void])
+      (call-with-output-file (build-path run-dir "run.json") #:exists 'replace
+        (lambda (out)
+          (write-json (hasheq 'run_id run-id
+                              'checkout project-root
+                              'command (string-join (vector->list (current-command-line-arguments)) " ")
+                              'verdict (cond [bailed? "aborted"] [incomplete? "incomplete"]
+                                             [all-pass? "pass"] [else "fail"])
+                              'unit_count unit-count
+                              'units_reported (length unit-results)
+                              'workers worker-seqs)
+                      out)
+          (newline out)))))
   (define completed-count (length file-results))
   (printf "\n~a tests in ~as (~a~a files, ~a batch workers, ~a)\n"
           total-tests
@@ -1361,6 +1382,7 @@
               'unit_count unit-count
               'all_pass all-pass?
               'source "affected"
+              'workers worker-seqs         ; DEFERRED 160 support ii
               'results file-results))
     (append-run-record timings-file record)
     (printf "Timings recorded to ~a\n" (path->string timings-file)))

@@ -54,7 +54,8 @@
          unit-log-name
          attribute-stderr
          diagnose-worker-stderr
-         metric-line?)
+         metric-line?
+         worker-sequences)
 
 ;; historical-medians : (listof string) #:runs N #:min-file-count M
 ;;                      -> (hash/c string? exact-nonnegative-integer?)  ; equal?-keyed
@@ -432,3 +433,25 @@
   '("PERF-COUNTERS:" "PHASE-TIMINGS:" "PROVENANCE-STATS:" "MEMORY-STATS:" "CELL-METRICS:"))
 (define (metric-line? l)
   (for/or ([p (in-list METRIC-LINE-PREFIXES)]) (string-prefix? l p)))
+
+;; ============================================================
+;; WORKER -> UNIT SEQUENCE (DEFERRED 160 support ii)
+;; ============================================================
+;; 160's suite-only failures are conjectured to be state leaking between
+;; files that share a worker. To replay one, you need what that worker ran
+;; and in which order. Recorded per run: in the timings record ('workers) and
+;; in the run's failure directory (run.json). Each unit is the work line as
+;; the worker read it, relative to the project root, so a worker's history
+;; replays in ONE process from racket/prologos/:
+;;   jq -r '.workers[N].units[]' run.json \
+;;     | racket tools/batch-worker.rkt --stdin --file-timeout 300
+;; worker-sequences : root (listof (list index pid (listof work-unit))) -> jsexpr
+(define (worker-sequences root workers)
+  (define prefix (let ([r (if (path? root) (path->string root) root)])
+                   (if (string-suffix? r "/") r (string-append r "/"))))
+  (define (rel p) (if (string-prefix? p prefix) (substring p (string-length prefix)) p))
+  (for/list ([w (in-list workers)])
+    (hasheq 'worker (car w)
+            'pid (cadr w)
+            'units (for/list ([u (in-list (caddr w))])
+                     (work-unit->line (struct-copy work-unit u [path (rel (work-unit-path u))]))))))
