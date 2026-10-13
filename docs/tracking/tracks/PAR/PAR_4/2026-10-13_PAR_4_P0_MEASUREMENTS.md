@@ -4,6 +4,15 @@
 **Measured at** `7a0116ec` on branch **`par4-p0`** (nested worktree `.claude/worktrees/par4-p0`),
 commit **`4097b1c8`** — instrumentation, harness, parity skeleton and all raw data. Main has since
 moved to `f3d7f5e3` (driver/LSP/toolchain commits; none touch the measured files).
+> **Where this lives now (2026-10-13).** PAR 4 work moved to its own track branch,
+> **`par4-arena-executors`** (nested worktree `.claude/worktrees/par4-arena-executors`), created at
+> `3643f56e` — `par4-p0` with main merged in twice by the sweep session (`a456c370`, `3643f56e`; merges,
+> not rebases, so every hash cited here stays valid). `par4-p0` is kept as a frozen pointer.
+> ⚠ **Build caveat** ([merge-laws note §7c](2026-10-13_PAR_4_P0_DOMAIN_MERGE_LAWS_NOTE.md), DEFERRED 159):
+> main's tree ran an interpreted compiler from 10-12 20:24 to 10-13 02:55, and timings taken in
+> `par4-p0` before 02:17 cannot be verified as limited-build after the fact. Counts in this record
+> (rounds, fires, widths, writes, forks, routes) are unaffected; within-run A/Bs keep their direction.
+> The timing rows a decision rests on are re-measured on a verified limited build in **§10**.
 **Machine**: Apple M5 Max, 18 cores (6 S + 12 P), Racket 9.3 CS. **Ambient load** 4–9 throughout
 (another session's suite and editor processes); timings are best-of-N or interleaved, counts are
 deterministic. **Labels**: MEASUREMENT · MODEL (arithmetic over measurements) · CONJECTURE ·
@@ -33,7 +42,10 @@ erased the pre-track parallel result.
    on wide networks; `git bisect` → `a7b015dd` (2026-04-15) set `current-tree-reduce-threshold`
    to 256, which spawns ~n green threads per wide round on the sequential executor. Threshold off
    at HEAD: **4.8–5.3× faster**. DEFERRED **150** (§3).
-3. **In the large, S0 is a minority of work, concentrated in typing-heavy files** — MEASUREMENT.
+3. ⚠ **CORRECTED in §10.2** — the 7 % below divides by a window that is ~80 % the instrument's own two
+   forced major GCs (DEFERRED 152); excluding them, **S0 is 24–30 % of corpus work** and the corpus-wide
+   H-S + K=8 model is 1.26–1.34×, not 1.06×. As first written:
+   **In the large, S0 is a minority of work, concentrated in typing-heavy files** — MEASUREMENT.
    Of 1 253 ms of corpus work (prelude preloaded), BSP S0 rounds are **7.0 %**; but in
    `constraints-adversarial` the scheduler is **85 %** of command time and in `type-adversarial`
    38 %. Within S0 the **merge phase ≥ the fire phase** and `pu-value-diff` alone is 70 % of
@@ -97,6 +109,10 @@ comparative files (type-, constraints-, atms-, solve-adversarial, implicit-args)
 - **B0** = `7a0116ec` as is. **B0′** = `7a0116ec` with `current-tree-reduce-threshold` = `#f`.
   Every PAR 4 phase must be A/B'd against **B0′** (or against main after DEFERRED 150 lands) —
   otherwise PAR 4 is credited with removing a defect it did not cause (§6).
+- **Superseded 2026-10-13** (§10): main now carries the sweep's sequential fixes on the measured path
+  (146 `champ.rkt`, 147 the fire protocol — light fire 1 386 → 928 B, 148 `decision-cell.rkt`, F3(a)
+  `type-lattice.rkt`). The baseline pair for P2 is therefore **B1** = `3643f56e` (branch start, all of
+  those) and **B1′** = B1 with the tree-reduce threshold `#f`; `fbd5a322` remains the as-is record.
 
 ## 2. Large tier — the language-level corpus
 
@@ -110,7 +126,8 @@ comparative files (type-, constraints-, atms-, solve-adversarial, implicit-args)
 
 ### 2.2 Work-only Amdahl (prelude preloaded; BSP; 18 files) — `data/par4-p0/comparative-stats-bsp.jsonl`
 
-Totals: work 1 253 ms (incl. ~45 ms forced GC per file), **S0 rounds 87.6 ms = 7.0 %**
+⚠ *Corrected in §10.2: the forced GC is ~56 ms per file, 1 005 of the 1 253 ms; against work without it
+S0 is 24–30 %.* Totals: work 1 253 ms (incl. ~45 ms forced GC per file), **S0 rounds 87.6 ms = 7.0 %**
 (fire 60.2, merge 27.4); 682 rounds, 2 879 fires; elaborator quiescence calls 181, of which 162
 fire nothing. Per file, only three exceed 3 %:
 
@@ -273,7 +290,7 @@ the full suite at K=1.
 | Q4 / A-8 partition | ≤ 10 % foreign writes even round-robin; networks ≤ 205 cells | round-robin (or block-64) is adequate; no partitioner needed in P2 |
 | A-1/A-3 audit scope | ⚠ CORRECTION: **144** production call sites + 13 wrapper callers = 157 (my "130" was a space-delimited grep that missed end-of-line calls; withdrawn). Dynamically schedule-dependent: the asc/desc pair (1 production `net-new-cell-desc` site, `bilattice.rkt:102`) and append queues | static audit landed — synthesis in **§9**; Q1 not clean; nine S0 non-join merges; decision for D.2 in §9.6 |
 | ordering of the halves | H-S's sequential gain (1.31–1.52× on the heavy files) is comparable to the modelled parallel gain at today's widths; merge ≥ fire | **land the H-S sequential path first (DIRECT K=1 inside BSP's outer loop)**, measure, then K > 1 |
-| value proposition | e2e, today's corpus: S0 7 % of work; ≤ 1.2× e2e at K=8 except two files; search is DFS by necessity | PAR 4's parallel payoff is for workloads **not yet on the network** — say so in D.2, and couple its search claims to BSP-LE 3 |
+| value proposition | e2e, today's corpus: ~~S0 7 % of work; ≤ 1.2× e2e at K=8 except two files~~ **corrected §10.2: S0 24–30 % of work without the instrument's GC; corpus H-S + K=8 1.26–1.34×; the two heavy files 3.3–4.1×**; search is DFS by necessity | PAR 4's parallel payoff is for workloads **not yet on the network** — say so in D.2, and couple its search claims to BSP-LE 3 |
 
 ## 6. Phase gates — what each phase is measured against
 
@@ -475,3 +492,74 @@ executors run fires on a fixed topology, and the topology tier is the only write
 solves a fixed maze. SLG completion of a region is then S0-quiescent **and** no pending topology
 request for it — a conjunction the scheduler can expose as one event (CONJECTURE until BSP-LE 3's
 design states how it installs).
+
+## 10. Re-measured on a verified limited build, after the move to the track branch (2026-10-13)
+
+**Why.** The merge-laws note §7c ([DEFERRED 159](../../../DEFERRED.md)) showed that main's tree ran an
+interpreted compiler from 10-12 20:24 to 10-13 02:55, and that `par4-p0` timings before 02:17 cannot be
+verified after the fact. §7c's instruction: confirm a limited build, then re-run the rows a decision rests
+on. **Where**: branch `par4-arena-executors` at **B1 = `3643f56e`** — main `01ef2542` (146, 147, 148, F3(a),
+runner fixes) plus the P0 instrumentation. Build verified: `reduction` / `typing-core` / `macros` `.zo` =
+302 215 / 289 697 / 439 415 B, §7c's limited-build fingerprints. Suite at B1: **10 339 tests / 495 files,
+all pass** (= main's gate 10 330 / 494 + the 9 parity tests). Load 6–12 throughout (other sessions active).
+
+### 10.1 Medium tier — the pre-track A/B, both legs limited builds (`benchmarks/par4/demos-ab.sh`)
+
+PAR 2's code `ce4cde52` in a throwaway detached worktree (built with the limit), against B1 with the
+tree-reduce threshold at 256 (as shipped) and off; interleaved, 3 rounds, medians
+(`data/par4-p0/demos-ab-r93-limited/`):
+
+| sequential ms | PAR 2 `ce4cde52` | B1, threshold 256 | B1, threshold off | 256 → off | off vs PAR 2 |
+|---|---|---|---|---|---|
+| graph colouring 500 (3 000 props) | 1.70 | 9.20 | **1.25** | **7.4×** | 26 % faster |
+| constraint grid 12 (3 168) | 1.77 | 9.34 | **1.42** | **6.6×** | 20 % faster |
+| graph colouring 200 (1 200) | 0.57 | 2.82 | **0.47** | 6.0× | 18 % faster |
+| wave chain 1 000 (999) | 39.6 | 4.49 | **2.39** | 1.9× | 16.6× faster |
+
+§3's conclusions **hold on verified builds and the effect is larger** (6.0–7.4× vs §3's 4.8–5.3×): 147
+made the non-tree path cheaper, so the green-thread overhead is a larger share. The bisect (§3) was
+already limited-build (`bisect-demos.sh` sets the limit); §3's HEAD column is superseded by this table.
+Parallel/sequential at B1 with the threshold off: 1.20× (graph colouring 500), 1.51× (grid 12) — PAR 2's
+recorded 1.42× is recovered on grids once the defect is removed.
+
+### 10.2 Large tier — and a correction to this record's headline
+
+Corpus stats at B1 (`data/par4-p0/comparative-stats-bsp-B1.jsonl`): counts identical to P0 (682 rounds,
+2 879 fires); S0 86.7 ms vs 87.6 ms; per-file S0 within 4 %. So P0's large-tier *timings* were not
+measurably distorted by the build question.
+
+**But the denominator was.** P0 §2.2 divided S0 by the `process-file` window, and that window contains
+`measure-memory-before`/`-after`'s two forced major GCs (DEFERRED 152): `gc_ms` ≥ 51 ms on **every**
+file, including files whose remaining work is 2–3 ms — 984 of 1 274 ms at B1. CORRECTION:
+
+| forced-GC attribution | S0 share of corpus work | H-S sequential | BSP K=8 | H-S + K=8 | H-S + K=16 |
+|---|---|---|---|---|---|
+| none — as P0 §0/§2.2/§5 published | 6.8 % | 1.02× | 1.04× | 1.06× | 1.06× |
+| 51 ms/file (the smallest file's GC; lower bound) | **24 %** | 1.08× | 1.15× | **1.26×** | 1.27× |
+| all `gc_ms` in the window (upper bound) | **30 %** | 1.11× | 1.19× | **1.34×** | 1.36× |
+
+Per file, without the window's GC: `constraints-adversarial` 65 %, `type-adversarial` 53 %, `implicit-args`
+37 %, `nat-arithmetic` 30 %, `bool-logic` 22 %. The per-file models in §2.2 were computed against profiler
+**command** time, which excludes the forced GC, and they hold at B1:
+
+| file | command ms/run (P0 → B1) | `run-to-quiescence-bsp` | `bulk-merge-writes` | `fire-and-collect-writes` | H-S sequential | H-S + K=8 |
+|---|---|---|---|---|---|---|
+| constraints-adversarial | 46.5 → 48.5 | 85 → 81 % | 41 → 28 % | 34 → 47 % | 1.52 → **1.49×** | 4.43 → **4.07×** |
+| type-adversarial | 45.4 → 42.5 | 38 → 39 % | 21 → 21 % | 11 → 14 % | 1.31 → **1.35×** | 3.07 → **3.26×** |
+
+(147 moved cost from the merge phase into the fire: `bulk-merge-writes` fell, `fire-and-collect-writes`
+rose; `pu-value-diff` 70 → 74 % — the "paid twice" write remains.) **What changes**: the value
+proposition in §5 and the answer to "does PAR 4 have value before BSP-LE 3?" are *stronger* than first
+reported — S0 is a quarter to a third of today's corpus work, not a fourteenth. **Method fix**: until
+DEFERRED 152 lands (stream `per-process-152-151`), the harness's S0 share is reported against
+`total − gc` and `total − min gc` as bounds, never against the raw window.
+
+### 10.3 What the other sessions' work changes for PAR 4 (from the git log since `7a0116ec`)
+
+| work (commit) | bears on PAR 4 | consequence |
+|---|---|---|
+| 147 fire protocol (`63d8f6af`): light fire 1 386 → 928 B, read+write 2 819 → 2 232 B; **`parameterize` ≈ 496 B of the 928** (note §7b) | H-S's per-fire cost model (Stage 1's 2.8 KB) | D.2 re-bases on 928 / 2 232 B. **D.2 decision**: how fire context reaches a fire — measured 496 B (today) / 144 B (one composite parameter) / 0 B (continuation mark or executor-record field); the same choice fixes §9.5's thread-inheritance hazard |
+| F3(a) (`5ec697bf`, record `eeb08e7f`) | P1 merge laws | landed (O-7); refuted the note's C prediction; F3(b) has a single-defect witness and two sites (`type-lattice.rkt:172-173`, `:217-218`); **the comparative corpus never reaches the binder arms** (0 binder-arm merges in the corpus vs 881 in the suite) → P0.5's acceptance file must include binder merges with unsolved metas |
+| runner (`389b3413` LPT, `b45bbf44` pkill, `fd2986cc` whales, `92472849` queue, 161/164 gate) | P2's oracle is the full suite | a green suite is now honest (161, 164); 160 (suite-only failures) is still open — P2 failures must be checked file-alone before attribution. ⚠ This track's `suite-schedulers.sh` ran four full suites (00:56–01:04) before `b45bbf44`, so it would have killed any concurrent suite's workers machine-wide (DEFERRED 163) |
+| 159 (`PLT_CS_COMPILE_LIMIT`), hook stream `guards-hook-sweep` | every PAR 4 timing | every `raco make` carries the limit; verify fingerprints before a baseline (this §) |
+| stream `per-process-152-151` (152 forced GCs, 151(a) `.pnet` header) | this harness | when 152 lands, the window stops including forced GC; re-derive §10.2 directly |

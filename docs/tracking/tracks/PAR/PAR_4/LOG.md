@@ -304,3 +304,47 @@ convention (`../../README.md`).
   merge-laws note's prediction), full suite and corpus A/B. F3(b) stays a P1 design item.
   Task written as an addendum to the sweep handoff, queued behind its current item (147).
 - **Next**: D.2.
+
+*(The next two entries were proposed for this LOG by the DEFERRED-sweep session — in its merge note
+`docs/tracking/handoffs/2026-10-13_DEFERRED_SWEEP_146-149_MERGE_NOTE.md` § 148 and § F3(a) — and are
+applied here verbatim by the PAR 4 session on 2026-10-13, after the fact; the 148 entry predates
+several entries above.)*
+
+### DEFERRED 148 closed on the sweep branch; pair-dedup does not bound the heap baseline's chain — `c62cd267` (2026-10-13)
+**Why / decision**: the heap baseline's growth was two things — duplicates (closed) and an
+ascending chain per bitmask (not closable by any set-of-pairs form, flat or heap). D.1 §6.1's
+flat record inherits the second; D.2 should pick the lattice (pairs vs bitmask-keyed join)
+deliberately. **Surprise / correction**: the entry's cited sites were dead code; the live
+site was the third. The "300 s" figure does not reproduce (2.5 s). **Next**: 146.
+
+### F3(a) landed (O-7): binder arms return the unified body — `5ec697bf` (sweep branch, 2026-10-13)
+**Why / decision**: O-7. `close-expr` (the inverse of `open-expr`, generic fallback per pipeline.md) plus the four
+arms; 11 tests, mutation-checked per arm. **Surprise / correction**: the note's prediction "none of the C violations"
+is refuted. C also fell (D1c 74→28, D1d 251→187, tagged(D1) 432→366), and F3(b)'s published witness needed both
+defects (replaced: `(Bool ⊔ Pi(?m,Nat)) ⊔ Pi(Nat,?m) = Bool` vs `type-top`). The fallback is duplicated
+(`type-lattice.rkt:172-173` and `:217-218`). In the suite the defect changed 97 of 881 binder merges with no test
+observing it; the comparative corpus never reaches the arms, so it cannot serve as P2's evidence for merge-law work.
+**Next**: D.2 decides F3(b) at both sites, against the new witness; P0's corpus needs a program that reaches
+binder merges with unsolved metas.
+
+### PAR 4 moved to its own branch + worktree `par4-arena-executors`; P0's timing rows re-measured on a verified limited build — and P0's "S0 = 7 %" headline corrected to 24–30 % — `<commit below>` (2026-10-13)
+- **Why / decision**: owner — move this work to its own worktree/branch under the new process
+  (branches in nested worktrees; main receives periodic, tested checkpoint merges), and check the
+  merge-laws note §7 and the git log for other sessions' work. Branch `par4-arena-executors` created at
+  `3643f56e` (= `par4-p0` with main merged in twice by the sweep session, owner decision (viii)); the
+  worktree moved to `.claude/worktrees/par4-arena-executors`; `par4-p0` kept as a frozen pointer (records
+  cite it). Branch gate: **10 339 / 495 all pass** (= main's 10 330 / 494 + the 9 parity tests). From here,
+  PAR 4 documents and code change on this branch only.
+- **Measured** (P0 record **§10**): build fingerprints match §7c's limited build. Medium tier, both legs
+  limited (PAR 2 `ce4cde52` in a throwaway worktree vs B1 threshold 256 / off, interleaved ×3): DEFERRED
+  150's effect **holds and is larger** — 6.0–7.4× (graph colouring 500: 9.20 → 1.25 ms; PAR 2 1.70 ms).
+  Large tier: counts identical, S0 ms within 4 %.
+- **Surprise / correction** ⚠: P0 §0/§2.2/§5 divided S0 by a window that is ~80 % the instrument's own
+  two forced major GCs (DEFERRED 152 — which this track filed, and then measured through). Excluding
+  them, **S0 is 24–30 % of corpus work** (not 7 %), corpus H-S + K=8 1.26–1.34× (not 1.06×); the per-file
+  command-time models hold (1.49× / 1.35× H-S; 4.07× / 3.26× at K=8). Callouts added at each site.
+  Also from the log: this track's four suite runs (00:56–01:04) predate the machine-wide `pkill` fix
+  (`b45bbf44`, DEFERRED 163) and would have killed concurrent suites' workers. The F3(a) and 148
+  entries the sweep session proposed are applied above.
+- **Next**: D.2 — inputs now include §7b's fire-context decision, F3(b)'s two sites, the corrected value
+  proposition, B1/B1′ as the P2 baseline pair, and an acceptance file that reaches binder merges.
