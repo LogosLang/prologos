@@ -454,3 +454,30 @@ it depends on someone remembering.
   2. Paste the DEFERRED flips 146–149, the new **159** (the trap, prevention as a decision), and the **151**
      addendum.
   3. PAR 4's note §7a (Stage-1 "allocation per read" withdrawn) and §7b (the fire-context cost table).
+
+## Close-out addendum: applied to main (2026-10-13, owner-authorized)
+
+- **Main rebuilt with the limit (~02:55).** The 9 `compiled/` dirs under `racket/prologos` (707 `.zo`) were
+  *moved* to the agent's scratch dir `main-compiled-nolimit-20261012/` (the harness hard-blocks
+  `find … -exec rm -rf`; moving is reversible, and the copy is pruned after 24 h idle). Rebuilt with
+  `PLT_CS_COMPILE_LIMIT=1000000 raco make -j 8 driver.rkt lsp/server.rkt tools/run-affected-tests.rkt`
+  (19 s); 8/8 reference `.zo`s are now size-identical to the limited build.
+
+  | main, runner `fd2986cc`, `--all --force-rerun` | before | after (×2) |
+  |---|---|---|
+  | full suite | 69.5 s, 1 failure | **56.5 s** (all pass*), **57.1 s** (1 failure) |
+  | `raco test test-transducer-01` | 6.10 s | **4.53 / 4.53 / 4.55 s** (one unexplained 2.94 s reading on the cold test tree, output not captured) |
+
+  \* That "all pass" counted `test-generators` at 0 tests, which is DEFERRED 161. The single failures (`test-cond-01`
+  before, `test-error-messages` after) each pass alone, which is DEFERRED 160. The rebuild did not cause them: one
+  occurred before it. ⚠ The LSP server started before the rebuild (`lsp/server.rkt`) runs interpreted code
+  until it is restarted.
+- **Main's `DEFERRED.md`** (working copy, uncommitted alongside the other sessions' 150–158): 146–149 closed with
+  this note's paste-ready texts (148's "filed alongside" now points at PAR 4 D.2, where the owner placed the
+  keyed-map form), the 151 addendum, and **159–161 filed; register 159 → 162**. Diffed against a pre-edit copy:
+  only the register line and the four headings were replaced; everything else is additions.
+- **PAR 4 note § 7c** (main, untracked): what the trap means for PAR 4. `par4-p0` is clean now (8/8 limited,
+  `.zo`s from 02:17); timings taken in main before 02:55 need re-checking; the P2 gate is weakened by 160/161.
+- **Dailies 2026-10-12**: STATE (suite line, register, Watching (0) resolved) and a sparse LOG pointer.
+- **Next in this session: F3(a)** (owner decision O-7, handoff addendum, queued "after the item in hand (147)").
+  It was not picked up before 149: the addendum landed mid-session (02:32) after the handoff had been read.
