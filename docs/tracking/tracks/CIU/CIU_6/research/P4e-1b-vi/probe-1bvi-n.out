@@ -1,0 +1,9 @@
+0: e3 : {:a {:b {:c [PVec Int]}}} defined.
+1: {:c @[1 2]} : {:c [PVec Int]}
+2: {:q @[1 2]} : {:q [PVec Int]}
+3: {:c @[1 2]} : {:c [PVec Int]}
+4: {:c @[1 2]} : {:c [PVec Int]}
+5: {:c @[1 2]} : {:c [PVec Int]}
+6: {:p-b-c @[1 2]} : {:p-b-c [PVec Int]}
+7: {:p-q-c @[1 2]} : {:p-q-c [PVec Int]}
+--- 0 errors ---

@@ -1,0 +1,18 @@
+ns probe-1bvi-m
+
+def e3 := {:a {:b {:c @[1 2]}}}
+def t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}
+def deep := {:top {:eu {:cfg {:x 1}} :us {:cfg {:x 2}}}}
+
+;; the caret family in PATH position — does `^-_` name the projected path?
+e3.a.b.c
+e3.a.b.c^-_
+e3.a.b.c^-
+e3.a.b.c^_
+e3.a^p.b.c^-_
+t5.a.b.c.m^-_
+;; block position, for contrast
+e3{a.b.c^-_}
+;; P's equivalent for the block-position omega row
+deep{top.eu.cfg^-_ top.us.cfg^-_}
+deep{top^.eu.cfg^-_ top^.us.cfg^-_}

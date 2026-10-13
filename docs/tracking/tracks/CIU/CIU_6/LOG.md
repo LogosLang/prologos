@@ -128,7 +128,9 @@ are in [`../README.md`](../README.md).
   designed construct. It first appears in Q_U52 §2 (`783be940`, the 1b-v audit), as a token-boundary
   hazard of the `*-` spelling: `-` continues an identifier and `>` does not, so a star glued to `->`
   always lexes as `…*-` then `>`. Measured today: `spec s4 Nat *-> Nat` → "spec type for s4 has no
-  arrow"; `<(x : Nat)*- Nat>` → a bare "Type mismatch" (no lexical message), while the glued-Sigma
+  arrow"; ~~`<(x : Nat)*- Nat>` → a bare "Type mismatch" (no lexical message)~~ **withdrawn
+  2026-10-13** — the control failed the same way; isolated, it is a nameless "Unbound variable"
+  (see *Q_U58 decided … 1b-vi-A* below), while the glued-Sigma
   `<(x : Nat)* Nat>` gets Q_U31's guided "needs a SPACE" message.
 - **Next**: the `*->` handling (owner's call after the explanation), then `*-_`'s prefix rule.
 
@@ -166,3 +168,29 @@ are in [`../README.md`](../README.md).
     user did not write). That is a prediction, not yet measured on a `*-` refusal.
 - **Next**: the 1b-vi implementation plan (pins first; then the collapse machinery; then the table rows that
   mint `*-` / `*-_`), with one locus choice for the owner — where total collapse is represented (see the reply).
+
+### Q_U58 decided (M + slicing A→B→C→D); Stage 4 opened on 1b-vi — design target recorded; one published claim corrected — this commit (2026-10-13)
+- **Why / decision**: owner — *"Ok with lean on M. Proposed sequencing looks good to me. Let's record it,
+  then proceed to implementation per our Stage 4 Design Methodology (Implementation Protocol)."* Ledgered
+  at [Q_U58](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u58). The Per-Phase Protocol's mini-design and
+  mini-audit are written into D4 as [§5.P4e-1b-vi](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi):
+  the semantics stated once, principles in play, a two-column mantra check, drift risks DR-1–DR-6, the A
+  audit, and the sub-slice tracker.
+- **Phase design target (1b-vi-A)**: read §5.P4e-1b-vi; principles Correctness Through Types (correct by
+  construction), Simplicity of Foundation, Progressive Disclosure, Pragmatism with Rigor; drift risks DR-3
+  (label lies) and DR-4 (vacuous pins) are A's own; the rest are watched from B on.
+- **Surprise / correction**:
+  - **A published claim was wrong.** DEFERRED 168 and Q_U56 said `<(x : Nat)*- Nat>` reports a bare
+    "Type mismatch". Probe g's spaced control (`<(x : Nat) * Nat>` with the same `defn s1 [p] 0` body)
+    printed "Type mismatch" too, so the row measured the body, not the lexing. Isolated with bare type
+    expressions (`probe-1bvi-o`), `*-` in a type, glued or spaced, is a nameless "Unbound variable".
+    Struck through and corrected in DEFERRED 168 (main `150915c4`), Q_U56 and the earlier LOG entry. Lesson:
+    the control must differ from the case in exactly one variable; mine also differed in whether its body
+    type-checks.
+  - **Block-position ω keeps the projected key** (`deep{top:cfg*_}` → `{:top {:eu-cfg …}}`; path-position
+    `rm:cfg*_` → `{:eu-x …}`), so P through a block ω names `top-eu-cfg`, not the `top-eu-x` I had worked
+    out by hand. Found by `probe-1bvi-l` before any pin was written.
+  - **Path position has no ancestors to collapse** (`probe-1bvi-m`: every caret form refused there, "a
+    field access has no output key"). So `x.a.b*-` ≡ `x.a.b*` and `x.a.b*-_` ≡ `x.a.b*_`. This follows
+    from the decided rules; it was not decided separately, and it goes to the owner at the A checkpoint.
+- **Next**: 1b-vi-A, the stage table (`tests/test-path-selection.rkt`).

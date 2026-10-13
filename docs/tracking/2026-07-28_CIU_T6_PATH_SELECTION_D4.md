@@ -3328,7 +3328,10 @@ items of the hold-point, ruled before P4a opened:
   a designed form. `-` continues an identifier and `>` does not, so a star glued to `->`
   always lexes as `…*-` then `>`. Measured (probe `probe-1bvi-g`): 0 glued `*->` anywhere;
   in TYPE territory it is already silently not an arrow (`spec s4 Nat *-> Nat` → "has no
-  arrow"; `<(x : Nat)*- Nat>` → bare "Type mismatch"), before 1b-vi exists.
+  arrow"; ~~`<(x : Nat)*- Nat>` → bare "Type mismatch"~~ **withdrawn**: probe g's spaced
+  control failed the same way, so that row measured the defn body, not the lexing;
+  isolated with bare type expressions (`probe-1bvi-o`) `<(x : Nat)*- Nat>` — glued or spaced
+  — is a nameless "Unbound variable"), before 1b-vi exists.
   **DECIDED — (a)**: 1b-vi gives a glued `*->` in SELECTION territory a guided refusal
   ("`*->` reads as `*-` then `>` — put a space"), produced by the selection consumer, never
   raised at the reader (a reader raise is a whole-file abort). The type-territory messages
@@ -3398,7 +3401,30 @@ items of the hold-point, ruled before P4a opened:
   P does not foreclose L's outputs (they stay spellable), whereas L forecloses P's (only by
   enumeration). L and P agree at E1, E8, E10, so those cases cannot decide it.
 
-  **Next free Q-label: U58.**
+- <a id="q-u58"></a>**Q_U58 — WHERE TOTAL COLLAPSE IS REPRESENTED, AND HOW 1b-vi IS SLICED
+  [✅ DECIDED 2026-10-13, owner — "Ok with lean on M. Proposed sequencing looks good to
+  me."].** Posed once Q_U57 closed the last semantic question. Two facts measured first:
+  provenance is branch-local (`probe-1bvi-k`: `e3{a.{b.c^-_}}` → `{:a {:b-c …}}`), so
+  `*-_`'s ancestor prefix is static per branch; and the one existing parser rewrite (`^..`,
+  `parser.rkt:1464`) labels a refusal by path names, never with the user's spelling
+  (`probe-1bvi-j`), while star refusals print the stored steps (`typing-core.rkt:1628`).
+  Options: **D** rewrite in the parser (`a.b.c*-` → `a^.b^.c*`) — cheapest, but every
+  refusal label quotes a spelling the user did not write, which [Q_U54](#q-u54) decided
+  against; **M** mark in the parser, act in the walkers — the parser runs Q_U55's check and
+  marks each ancestor with a new `collapsed` continuation that prints as a plain key, the
+  star carries the `*-` / `*-_` continuation (rendered from the table), and the walkers treat
+  `collapsed` as a dissolve for PLACEMENT and as a kept key for NAMING; **W** walkers only —
+  a flag threaded through both twin walkers, the shape 1b-iii needed two reverts to land.
+  **DECIDED — M.** Reason: the collapse is recorded once, on the step, at the seat Q_U55's
+  check already runs, so no walker infers it; labels are true by construction; placement
+  reuses the dissolve arms, as C2's landings did (a prediction until 1b-vi-C runs). Cost
+  accepted: one new step continuation, which brings in the totality sites the audit counted
+  (F6). **The slicing was decided with it**: A pins first → B the `^-` fix (Q_U55's caret
+  half, independent of the star) → C the machinery, inert → D the mint (two table rows, the
+  `*->` message, the pre-mint pins flipped) → a verify round → the suite gate. Tracker:
+  [§5.P4e-1b-vi](#p4e-1b-vi).
+
+  **Next free Q-label: U59.**
 
 - <a id="q-u43"></a>**⭐ Q_U43 — THE L4 SORT CHECK MOVES TO TYPING FOR STAR-BEARING
   BRANCHES, AS [Q_U38](#q-u38)'s COROLLARY [owner, 2026-08-11 — "move the sort
@@ -9471,6 +9497,104 @@ without one. ⚠ The refusal channels are `bcast-carrier` (typing-errors.rkt) an
 here is a WHOLE-FILE ABORT, which is why P4c-4c retired its predecessor rather
 than leaving it in the tree.
 
+<a id="p4e-1b-vi"></a>
+
+##### §5.P4e-1b-vi — the star-COLLAPSE slice: design target, mini-audit, tracker  (opened 2026-10-13, branch `ciu6-path-selection`)
+
+**Design reference.** [Q_U48](#q-u48) (`*-` is total collapse) · [Q_U55](#q-u55) (refuse an
+ancestor rename under total collapse, both families) · [Q_U56](#q-u56) (`*->` guided in
+selection territory) · [Q_U57](#q-u57) (P) · [Q_U58](#q-u58) (M + this slicing). Grounding:
+[the audit](tracks/CIU/CIU_6/2026-10-13_CIU_6_P4e-1b-vi_GROUNDING_AUDIT.md) F1–F7; probes
+`probe-1bvi-{a…o}` in `tracks/CIU/CIU_6/research/P4e-1b-vi/`. Spec: §3.4 ("dropped means
+dropped"), §3.6 (monotone migration), §8 Q8 (the lexical grammar owes `*-` a clause).
+
+**The semantics, stated once — every 1b-vi pin tests this.** For a branch `s₁ … sₙ ★`
+with ★ ∈ {`*-`, `*-_`}:
+
+- **Placement.** No ancestor `s₁ … sₙ₋₁` contributes an output level (as `^` would); ★ then
+  acts as `*` / `*_` on the layer `sₙ` makes. Hence `*-` ≡ `s₁^.….sₙ₋₁^.sₙ*` whenever every
+  ancestor is a key step (audit F2).
+- **Naming** (`*-_` only, P). A lifted field `f` under content key `c` is named
+  `n(s₁)-…-n(sₙ₋₁)-c-f`, where `n` is `select-step-output-name` (`syntax.rkt:1414`): kept →
+  its name, renamed → the new name, dissolved → nothing, ordinal → nothing. Hence `*-_` ≡
+  every lifted field written with `^-_` whenever every step is a key step.
+- **Refusal** (Q_U55). An ancestor carrying a rename is refused under `*-` (and under `^-`,
+  `^-k'`); a dissolve on an ancestor is legal and redundant.
+- **Derived, not separately decided — path position, the closer seat, depth 1.** In path
+  position no step has an output key (measured, `probe-1bvi-m`: every caret form there is
+  refused, "a field access has no output key"), so there is nothing to collapse and nothing
+  to name: `x.a.b*-` ≡ `x.a.b*` and `x.a.b*-_` ≡ `x.a.b*_`. Likewise with no ancestor (E1,
+  E10). Put to the owner at the 1b-vi-A checkpoint rather than assumed.
+- **ω, measured rather than derived.** Block-position ω KEEPS the projected key
+  (`deep{top:cfg*_}` → `{:top {:eu-cfg {:x 1} :us-cfg {:x 2}}}`) where path-position ω consumes
+  it (`rm:cfg*_` → `{:eu-x 1 :us-x 2}`), so P through a block ω gives `{:top-eu-cfg …}` ≡
+  `deep{top.eu.cfg^-_ top.us.cfg^-_}` (`probe-1bvi-l`, `-m`). I had expected `top-eu-x`; the
+  probe corrected it before any pin was written.
+
+**Principles in play** (`DESIGN_PRINCIPLES.org`). *Correctness Through Types*, read as
+correct by construction: the Q_U55 check and the collapse marking each have ONE seat, and
+labels render what the user wrote. *Simplicity of Foundation*: one new continuation;
+placement reuses dissolve. *Progressive Disclosure*: `*-` is sugar a user can unfold into `^`
+and `*`, and the pins state the unfolding. *Pragmatism with Rigor*: every expected value is
+measured from today's equivalent spelling, never written by hand.
+
+**Mantra check — two columns.**
+
+| word | catalogue | challenge |
+|---|---|---|
+| all-at-once | the collapse is decided once per branch, in the parser's branch walk | the per-ancestor marking is still a left-to-right pass over steps; it is a pure function of the written branch (no state), which is the most a parse-time fact can be |
+| structurally emergent | placement should EMERGE from the dissolve arms the walkers already have, as C2's landings did | only if `collapsed` is read as dissolve at EVERY placement seat; the six cont readers (F6) are where it could be computed instead — C's audit re-derives them and must show no seat special-cases it |
+| on-network | — | path selection elaborates off-network (recursive typing/reduction walkers); 1b-vi neither worsens nor retires that. The PPN series owns the migration; named here as standing scaffolding, not rationalized |
+
+**Drift risks, named before code.**
+
+- **DR-1 twin asymmetry.** Typing and reduction differ in arm order and guards (C2's
+  `two{a.{x y}*}` panic). Every C/D edit is mutation-tested per twin.
+- **DR-2 silent classification.** A seat answering `#f` / `'flatten` for an unknown cont: the
+  six `select-star-cont` readers, `select-step-cont`'s `[else #f]`, `select-step-output-name`.
+  The totality dispatcher lands at C, before the cont is reachable from surface syntax.
+- **DR-3 label lies.** A refusal printing a spelling the user did not write (Q_U54). Gated by
+  the label rows in A's table.
+- **DR-4 vacuous pins.** A row whose target equals today's reading, or a parity between two
+  refusals. Gated by running A's table at stages B and D before any implementation: every
+  flipping row must fail, for the pre-mint reason.
+- **DR-5 scope creep.** DEFERRED 167 (in-block L1), 168 (type-territory messages), 145 (the
+  caret family's missing table) are out of scope.
+- **DR-6 battery headroom.** `test-path-selection.rkt` ran 92–176 s in the last six records
+  (sharded, `tools/suite-plan.rkt:121`). A adds batched sources only, never one
+  `process-file` per row.
+
+**Mini-audit for 1b-vi-A** (at `a2c78df3`).
+
+| what | where | consequence for A |
+|---|---|---|
+| level-3 raw runner | `run-ws-raw`, `tests/test-path-selection.rkt:97` | reuse it; A adds no temp-file write (this branch's runners still use `'replace`, which main retired under DEFERRED 170 — the next merge from main brings that fix) |
+| level-2 runner | `process-string-ws` (as `p4e1-msgs`, `:6494`) | the spellings run at both levels and must agree line for line |
+| error detection | `prologos-error`, `errors.rkt:105` | a refusal is detected by struct, never by splitting on ` : ` — a message can contain ` : ` (`<(x : Nat)…>`) |
+| pre-mint pins D flips | `:6194`, `:6195` (`p4e-star-type` → `'symbol`), `:8470` (the table is exactly two rows), `:8482` (`"*-"` has no sentinel) | listed in the D row below; A leaves them |
+| leak-gate constraint | `reader-forms.rkt:270` | D's sentinel names must keep the `$postfix-star` prefix |
+
+**1b-vi-A — the stage table.** One row per behaviour: `(id spelling flips-at pre target)`.
+A constant `1bvi-stage` ∈ A B C D is bumped as the FIRST step of each sub-slice, which turns
+exactly that sub-slice's rows red before its code exists (TDD's red step made mechanical);
+controls never flip. The rows run as two batched sources (the spellings; the equivalents),
+the spellings at level 2 and level 3 with a parity assertion; the batch fails closed if its
+result count does not match its command count, so rows cannot silently misalign.
+Retirement: at the 1b-vi close the `pre` column and `1bvi-stage` are deleted — they are
+scaffolding for the slicing, not a permanent mechanism.
+
+| sub-slice | content | status |
+|---|---|---|
+| **1b-vi-A** | the stage table, rows from today's measured equivalents | 🔄 |
+| **1b-vi-B** | `^-` / `^-k'` refuse an ancestor rename (Q_U55's caret half) | ⬜ |
+| **1b-vi-C** | the `collapsed` cont + the `*-` / `*-_` conts + the totality dispatcher + the 15 prose arms, INERT (reachable from tests only) | ⬜ |
+| **1b-vi-D** | the mint: two table rows, the `*->` message; flips `:6194`, `:6195`, `:8470`, `:8482`; arrival matrix `*-` / `*-_` 0/209 → 209/209 | ⬜ |
+| verify | adversarial round | ⬜ |
+| gate | full suite, then the checkpoint merge to main | ⬜ |
+
+Per-phase completion, in order (DESIGN_METHODOLOGY Stage 4): tests → commit → this tracker
+→ the track LOG (dailies: a pointer) → proceed.
+
 <a id="p4e-1b-v-shipped"></a>
 
 ##### §5.P4e-1b-v — WHAT SHIPPED  (A → B1 → B1b → B2a → verify, 2026-08-13)
@@ -10305,7 +10429,7 @@ moves, `walk-to-leaf` is the abort it lands in.
 | **1b-v — the `*_` slice** 🔄 **A/B1/B1b/B2a + verify SHIPPED; B2b (the mint) remains** | [Q_U39](#q-u39)'s closer-adjacent **mint** (two bare sentinels, `$postfix-star-synth`) **+ `*_`'s SEMANTICS** — the shield lift, [Q_U51](#q-u51)'s prefix join, the **key threading** both twins skip, and the ω/broadcast Record arm's missing cont test. Scoped by [Q_U52](#q-u52): the mint alone would ship a better error message and leave Q_U51's capability non-existent. | The prefix rule is RULED and forced; the mint adds ONE spelling so the sentinel question collapses to two bare atoms. Record: [§5.P4e-1b-v](#p4e-1b-v) |
 | **1b-v-B2b — the reader MINT** ✅ `940c9c88` | Widen the gate's lexeme conjunct to EXACT table membership; route the emit through the same lookup ([DEFERRED 129](DEFERRED.md)); [DEFERRED 130](DEFERRED.md)'s two refusal messages ride along. **MINIMAL by ruling** — reader-only, so the three live bands cannot regress. Preconditions the grounding found: the battery's `p4e-star-type` / `p4e-last-star-type` helpers are exact-lexeme `"*"` and structurally blind to `*_` ([DEFERRED 133](DEFERRED.md)), and the DEFERRED-108 snapshot needs a deliberate re-baseline. | Scoped by [Q_U53](#q-u53) part 1: the miss-case is ruled out at the GATE, not handled at the emit. Record: [§5.P4e-1b-v-B2b](#p4e-1b-v-b2b) · shipped: [§5.P4e-1b-v-B2b-shipped](#p4e-1b-v-b2b-shipped) |
 | **1b-v-C — the FOLD** ✅ `24fc1be4` (pins) · `a492bbb7` | `split-star-lexeme`'s suffix dispatch AND the printer's cont→lexeme delegate to the family table, so the four bands and every star label share ONE semantic authority; site 3 (`form-deps`) DERIVED, site 4 (the matrix) PINNED. Behaviour-preserving on every input. | [Q_U53](#q-u53) part 2 + [Q_U54](#q-u54) (the printer folds too; site 3 derived, site 4 pinned). Record: [§5.P4e-1b-v-C](#p4e-1b-v-c) |
-| **1b-vi — the star-COLLAPSE slice** 🔄 (**opened 2026-10-13**, CIU 6 branch `ciu6-path-selection`; grounding: [audit](tracks/CIU/CIU_6/2026-10-13_CIU_6_P4e-1b-vi_GROUNDING_AUDIT.md); [Q_U55](#q-u55) ✅ A — refuse, `^-` aligned; [Q_U56](#q-u56) ✅ (a) — `*->` guided in selection territory; [Q_U57](#q-u57) ✅ P — `*-_` names the whole collapsed path; **all owed decisions made — implementation next**) | **`*-`** ([Q_U48](#q-u48)) · the **`*-_`** decision · the cont-axis **totality dispatcher** · plus TWO owed rulings [Q_U52](#q-u52) surfaced: what "total collapse" does to a **renamed** ancestor (`^p` and `^` are mutually exclusive spellings of one step), and the **`*->` token boundary** (`>` breaks the identifier, so `x{a*-> b}` would become a `*-` step plus a stray `>`). | Split from 1b-v because those two are RULINGS, not implementation, and because `*-` is the spelling that forces the totality work. ⭐ Sequenced AFTER the fold [owner] so ruling `*-` costs a table row, not four edits. |
+| **1b-vi — the star-COLLAPSE slice** 🔄 (**opened 2026-10-13**, CIU 6 branch `ciu6-path-selection`; grounding: [audit](tracks/CIU/CIU_6/2026-10-13_CIU_6_P4e-1b-vi_GROUNDING_AUDIT.md); [Q_U55](#q-u55) ✅ A — refuse, `^-` aligned; [Q_U56](#q-u56) ✅ (a) — `*->` guided in selection territory; [Q_U57](#q-u57) ✅ P — `*-_` names the whole collapsed path; [Q_U58](#q-u58) ✅ M + slicing A→B→C→D; **implementing — tracker [§5.P4e-1b-vi](#p4e-1b-vi)**) | **`*-`** ([Q_U48](#q-u48)) · the **`*-_`** decision · the cont-axis **totality dispatcher** · plus TWO owed rulings [Q_U52](#q-u52) surfaced: what "total collapse" does to a **renamed** ancestor (`^p` and `^` are mutually exclusive spellings of one step), and the **`*->` token boundary** (`>` breaks the identifier, so `x{a*-> b}` would become a `*-` step plus a stray `>`). | Split from 1b-v because those two are RULINGS, not implementation, and because `*-` is the spelling that forces the totality work. ⭐ Sequenced AFTER the fold [owner] so ruling `*-` costs a table row, not four edits. |
 | **P4e-2** | the `.*` retirement inventory + [Q_U26](#q-u26) ravel | unchanged |
 
 **⚠ TWO HOLES C2 OPENS, AND THEY ARE C2's TO CLOSE** — both found by the

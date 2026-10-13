@@ -1,0 +1,38 @@
+0: app : {:database {:pool-size Int :url String} :server {:port Int :ssl {:cert String :enabled Bool}}} defined.
+1: env : {:dev {:db {:port Int :url String}} :prod {:db {:port Int :url String}}} defined.
+2: cloud : {:regions {:eu {:host String :port Int} :us {:host String :port Int}}} defined.
+3: t5 : {:a {:b {:c {:m {:x Int} :n {:y Int}}}}} defined.
+4: vv : {:a {:b [PVec [PVec Int]]}} defined.
+5: v3 : {:a {:b {:c [PVec [PVec Int]]}}} defined.
+6: rm : {:eu {:cfg {:x Int}} :us {:cfg {:x Int}}} defined.
+7: deep : {:top {:eu {:cfg {:x Int}} :us {:cfg {:x Int}}}} defined.
+8: ERROR: select: `:{host port}*` — `*` (flatten) joins the layer's contents keywise, and two of them carry the same key, so the join would silently drop one (layer `{:eu {:host String :port Int} :us {:host String :port Int}}`). Star a narrower layer, or select the colliding fields as separate branches
+9: @[@[@[1 2] @[3]]] : ⟨[PVec [PVec Int]]⟩
+10: @[@[@[1 2] @[3]]] : ⟨[PVec [PVec Int]]⟩
+11: {:cert "c.pem", :enabled true, :server {:port 8080}} : {:cert String :enabled Bool :server {:port Int}}
+12: {:a {:n {:y 2}, :m {:x 1}}} : {:a {:m {:x Int} :n {:y Int}}}
+13: {:a {:b-c-n {:y 2}, :b-c-m {:x 1}}} : {:a {:b-c-m {:x Int} :b-c-n {:y Int}}}
+14: ERROR: select: `:cfg*` — `*` (flatten) joins the layer's contents keywise, and two of them carry the same key, so the join would silently drop one (layer `{:eu {:x Int} :us {:x Int}}`). Star a narrower layer, or select the colliding fields as separate branches
+15: {:us-x 2, :eu-x 1} : {:eu-x Int :us-x Int}
+16: ERROR: select: `:cfg*` — `*` (flatten) joins the layer's contents keywise, and two of them carry the same key, so the join would silently drop one (layer `{:eu {:cfg {:x Int}} :us {:cfg {:x Int}}}`). Star a narrower layer, or select the colliding fields as separate branches
+17: {:top {:us-cfg {:x 2}, :eu-cfg {:x 1}}} : {:top {:eu-cfg {:x Int} :us-cfg {:x Int}}}
+18: ERROR: select: `:cfg*` — `*` (flatten) joins the layer's contents keywise, and two of them carry the same key, so the join would silently drop one (layer `{:eu {:cfg {:x Int}} :us {:cfg {:x Int}}}`). Star a narrower layer, or select the colliding fields as separate branches
+19: {:us-cfg {:x 2}, :eu-cfg {:x 1}} : {:eu-cfg {:x Int} :us-cfg {:x Int}}
+20: {:url "db", :pool-size 10} : {:pool-size Int :url String}
+21: {:database-pool-size 10, :database-url "db"} : {:database-pool-size Int :database-url String}
+22: {:cert "c.pem", :enabled true} : {:cert String :enabled Bool}
+23: {:ssl-enabled true, :ssl-cert "c.pem"} : {:ssl-cert String :ssl-enabled Bool}
+24: {:n {:y 2}, :m {:x 1}} : {:m {:x Int} :n {:y Int}}
+25: {:c-n {:y 2}, :c-m {:x 1}} : {:c-m {:x Int} :c-n {:y Int}}
+26: ERROR: `database*-` — `*` is the layer-delete operator and attaches at the END of a segment, so `database*-` is neither a field nor an operator. A field literally named `database*-` is reached with `[map-get x :database*-]`
+27: ERROR: `ssl*-` — `*` is the layer-delete operator and attaches at the END of a segment, so `ssl*-` is neither a field nor an operator. A field literally named `ssl*-` is reached with `[map-get x :ssl*-]`
+28: ERROR: `ssl*-_` — `*` is the layer-delete operator and attaches at the END of a segment, so `ssl*-_` is neither a field nor an operator. A field literally named `ssl*-_` is reached with `[map-get x :ssl*-_]`
+29: ERROR: Unbound variable
+30: ERROR: Unbound variable
+31: ERROR: `ssl*-` — `*` is the layer-delete operator and attaches at the END of a segment, so `ssl*-` is neither a field nor an operator. A field literally named `ssl*-` is reached with `[map-get x :ssl*-]`
+32: ERROR: `ssl*-_` — `*` is the layer-delete operator and attaches at the END of a segment, so `ssl*-_` is neither a field nor an operator. A field literally named `ssl*-_` is reached with `[map-get x :ssl*-_]`
+33: ERROR: `cfg*-` — `*` is the layer-delete operator and attaches at the END of a segment, so `cfg*-` is neither a field nor an operator. A field literally named `cfg*-` is reached with `[map-get x :cfg*-]`
+34: ERROR: `cfg*-_` — `*` is the layer-delete operator and attaches at the END of a segment, so `cfg*-_` is neither a field nor an operator. A field literally named `cfg*-_` is reached with `[map-get x :cfg*-_]`
+35: ERROR: `cfg*-` — `*` is the layer-delete operator and attaches at the END of a segment, so `cfg*-` is neither a field nor an operator. A field literally named `cfg*-` is reached with `[map-get x :cfg*-]`
+36: ERROR: `a*-` — `*` is the layer-delete operator and attaches at the END of a segment, so `a*-` is neither a field nor an operator. A field literally named `a*-` is reached with `[map-get x :a*-]`
+--- 15 errors ---
