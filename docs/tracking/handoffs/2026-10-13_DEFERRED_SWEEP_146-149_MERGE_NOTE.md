@@ -794,4 +794,36 @@ test files run in a throwaway detached worktree (44 and 45 tests pass). The bran
 pass, twice (in the SW-22 A/B) = 10 350 + the 4 new test cases.
 
 **SW-22, a decision left open**: merge `deferred-151b-pnet-fasl` as DEFERRED 151 fix (b). The record:
-`docs/tracking/handoffs/2026-10-13_PNET_FASL_151B_DATA/README.md` on that branch.
+`docs/tracking/handoffs/2026-10-13_PNET_FASL_151B_DATA/README.md` on that branch. *(Decided by the owner: merge.
+Done in checkpoint 4, below.)*
+
+## Checkpoint 4: SW-19 … SW-23 → main (owner decision SW-22, request SW-23)
+
+Main `34602ded` → **`a15b1a9e`** (fast-forward), built and gated in the throwaway worktree `checkpoint-4`:
+
+| commit | what |
+|---|---|
+| `1961d49d` | merge `deferred-sweep-146-149` (SW-19 `c02d378a`, SW-20 `c1d4f8f3`, SW-21 `6e0cc7a8`, the SW renaming `7e2b0467`, docs `61b24b02`) |
+| `08acff4a` | merge `deferred-151b-pnet-fasl`: the fasl body `eab8dcf7`, record `9713a1a5`, `tools/pnet-dump.rkt` `c6f8fff7`, record corrected `c6b34529` |
+| `a15b1a9e` | docs: DEFERRED 151 discharged (+ correction), DEFERRED 169 filed, ledger SW-19 … SW-24 |
+
+- **Baseline** (recorded for this checkpoint, branch `deferred-sweep-146-149` @ `61b24b02` = main's code + SW-19…21):
+  10 354 tests / 497 files, all pass.
+- **Gate** (`--all --force-rerun`, recorded, exclusive suite lock): **10 366 tests / 498 files, all pass**, 13.3 s.
+  `suite-delta.py`, file by file: `test-pnet-dump.rkt` +10 (new), `test-pnet-header.rkt` +2 — nothing else; exactly
+  the fasl branch's tests. (DEFERRED 160's order-dependent `test-error-messages.rkt` passed in this ordering.)
+- **Main's WIP**: none of the 30 files the fast-forward changed is among main's 16 uncommitted entries; 16 before and
+  after. Main's checkout rebuilt with the limit.
+- **Retired**: worktree + branch `checkpoint-4`. `deferred-151b-pnet-fasl` is merged (HEAD `c6b34529` in main) but
+  stays until its README is closed in MacMD Viewer (open file handle); remove it then.
+- **Every checkout regenerates its `.pnet` cache once** (`PNET_VERSION` 12). A long-running process that loaded the
+  old compiled code (an editor's language server) keeps working; after its restart it reads v12.
+
+**Corrections made in this round.** (1) "fasl's format follows the Racket version" — wrong since Racket 6.90.0.21
+(the encoding is version-independent); corrected in `pnet-serialize.rkt`, DEFERRED 151 and the 151B record. (2) The
+151B record explained the 9.5 vs 4.5 MB fasl sizes by "sharing" without saying which: measured, it is fasl's
+`eq?`-sharing of string leaves (99.9 % of the gap). (3) A test comment claimed the `:no-prelude` fixture has no
+pair-keyed registries; it has (the built-in numeric subtypes) — the round-trip check compares canonical forms.
+
+**Found, filed**: DEFERRED 169 — `dep-graph.rkt` has not been regenerated since 2026-07-02 (`update-deps --check`:
+378 mismatches, 151 test files unlisted); `--all` is unaffected, affected-test selection is. Proposed as SW-24.
