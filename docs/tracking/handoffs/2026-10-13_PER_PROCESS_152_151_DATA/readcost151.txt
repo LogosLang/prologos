@@ -1,0 +1,6 @@
+load1=17.49 v10: 40 files, 17.44 MB | stale-check read: 1304.0 ms (cpu 1275, 514.0 MB alloc) | full read: 1294.0 ms (cpu 1265, 514.0 MB alloc)
+load1=15.57 v11: 40 files, 16.93 MB | stale-check read: 1.0 ms (cpu 0, 0.0 MB alloc) | full read: 1294.0 ms (cpu 1259, 511.0 MB alloc)
+load1=14.40 v11: 40 files, 16.93 MB | stale-check read: 1.0 ms (cpu 1, 0.0 MB alloc) | full read: 1275.0 ms (cpu 1244, 511.0 MB alloc)
+load1=13.57 v10: 40 files, 17.44 MB | stale-check read: 1291.0 ms (cpu 1263, 513.0 MB alloc) | full read: 1315.0 ms (cpu 1280, 514.0 MB alloc)
+load1=12.07 v10: 40 files, 17.44 MB | stale-check read: 1375.0 ms (cpu 1319, 513.0 MB alloc) | full read: 1360.0 ms (cpu 1322, 514.0 MB alloc)
+load1=10.99 v11: 40 files, 16.93 MB | stale-check read: 1.0 ms (cpu 1, 0.0 MB alloc) | full read: 1346.0 ms (cpu 1307, 511.0 MB alloc)

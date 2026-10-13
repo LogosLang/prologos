@@ -1,0 +1,41 @@
+#lang racket/base
+;; pnet-fasl-probe151.rkt <v11 cache dir> — data for DEFERRED 151(b): what would the loader's
+;; body read cost as binary fasl instead of text `read`? For every v11 file: read header+body
+;; (text), convert the body with s-exp->fasl, then time (a) text read of all bodies, (b)
+;; fasl->s-exp of all bodies (from in-memory bytes, and from files written to a temp dir),
+;; and check (c) the fasl round trip is equal? to the text body for non-hash data — hashes
+;; are compared after canonicalization (key-sorted printed keys; pair keys are eq-keyed).
+(require racket/fasl racket/file racket/list)
+(define dir (vector-ref (current-command-line-arguments) 0))
+(define files (for/list ([f (in-directory dir)] #:when (regexp-match? #rx"[.]pnet$" (path->string f))) f))
+(define (read-body f) (call-with-input-file f (λ (in) (read in) (read in))))
+(define bodies (map read-body files))
+(define fasls (map s-exp->fasl bodies))
+(define tmp (make-temporary-file "pnetfasl-~a" 'directory))
+(define fasl-files
+  (for/list ([b fasls] [i (in-naturals)])
+    (define p (build-path tmp (format "~a.fasl" i)))
+    (call-with-output-file p (λ (o) (write-bytes b o)))
+    p))
+(define (canon v)
+  (cond [(hash? v) (list 'H (sort (for/list ([(k x) (in-hash v)]) (cons (format "~s" (canon k)) (canon x))) string<? #:key car))]
+        [(pair? v) (cons (canon (car v)) (canon (cdr v)))]
+        [(vector? v) (for/vector ([x v]) (canon x))]
+        [else v]))
+(define same (for/and ([b bodies] [fb fasls]) (equal? (canon b) (canon (fasl->s-exp fb)))))
+(define (timeit thunk)
+  (apply min
+         (for/list ([rep 3])
+           (collect-garbage)
+           (define c0 (current-process-milliseconds))
+           (thunk)
+           (- (current-process-milliseconds) c0))))
+(define text-ms (timeit (λ () (for ([f files]) (read-body f)))))
+(define fasl-mem-ms (timeit (λ () (for ([b fasls]) (fasl->s-exp b)))))
+(define fasl-file-ms (timeit (λ () (for ([p fasl-files]) (call-with-input-file p fasl->s-exp)))))
+(printf "~a files | text bytes ~a MB, fasl bytes ~a MB | body read CPU ms: text ~a, fasl(file) ~a, fasl(mem) ~a | round-trip equal (canonical): ~a\n"
+        (length files)
+        (/ (round (/ (for/sum ([f files]) (file-size f)) 1e4)) 100.0)
+        (/ (round (/ (for/sum ([b fasls]) (bytes-length b)) 1e4)) 100.0)
+        text-ms fasl-file-ms fasl-mem-ms same)
+(delete-directory/files tmp)

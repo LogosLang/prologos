@@ -1,0 +1,16 @@
+--- a/racket/prologos/tools/run-affected-tests.rkt
++++ b/racket/prologos/tools/run-affected-tests.rkt
+@@ -49,6 +49,13 @@
+ ;; Evidence: docs/tracking/2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md §4.2.
+ (void (unless (getenv "PLT_CS_COMPILE_LIMIT")
+         (putenv "PLT_CS_COMPILE_LIMIT" "1000000")))  ; `void`: a module-level #t prints
++
++;; DEFERRED 152: MEMORY-STATS (two forced major GCs per process-string /
++;; process-file call) is opt-in. Batch workers inherit the env, so
++;; timings.jsonl keeps its per-file `memory` field exactly as before. An
++;; explicit PROLOGOS_MEMORY_STATS=0 in the shell turns it off for one run.
++(void (unless (getenv "PROLOGOS_MEMORY_STATS")
++        (putenv "PROLOGOS_MEMORY_STATS" "1")))
+ 
+ ;; ============================================================
+ ;; Skip list support

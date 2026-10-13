@@ -1,0 +1,48 @@
+#lang racket/base
+;; pnet-diff151.rkt — DEFERRED 151(a) differential: is a v11 file's BODY the v10 file's
+;; slots 2..30, for caches written the same way (one cold run each)?
+;;   racket pnet-diff151.rkt <v10 cache dir> <v10 root> <v11 cache dir> <v11 root>
+;; Compares per module: (cddr v10-datum) vs v11 body, after replacing each tree's root
+;; path prefix in every string/path with "@ROOT@". Also compares the header key modulo root.
+;; Reports equal? count, byte sizes, and for unequal modules the first differing slot.
+(require racket/file racket/list racket/string racket/path)
+(define-values (d10 r10 d11 r11)
+  (apply values (vector->list (current-command-line-arguments))))
+(define (norm root v)
+  (let loop ([v v])
+    (cond
+      [(string? v) (string-replace v root "@ROOT@")]
+      [(path? v) (string-replace (path->string v) root "@ROOT@")]
+      [(pair? v) (cons (loop (car v)) (loop (cdr v)))]
+      [(vector? v) (for/vector #:length (vector-length v) ([x (in-vector v)]) (loop x))]
+      ;; canonical form: every hash (the serializer writes ALL hashes as hasheq,
+      ;; even equal?-keyed ones with pair keys, so two reads are never equal? by
+      ;; eq-identity of the keys) becomes a key-sorted list of printed keys
+      [(hash? v)
+       (list 'H (sort (for/list ([(k x) (in-hash v)]) (cons (format "~s" (loop k)) (loop x)))
+                      string<? #:key car))]
+      [(box? v) (box (loop (unbox v)))]
+      [else v])))
+(define (rel dir f) (path->string (find-relative-path (simplify-path dir) (simplify-path f))))
+(define files10 (for/hash ([f (in-directory d10)] #:when (regexp-match? #rx"[.]pnet$" (path->string f)))
+                  (values (rel d10 f) f)))
+(define files11 (for/hash ([f (in-directory d11)] #:when (regexp-match? #rx"[.]pnet$" (path->string f)))
+                  (values (rel d11 f) f)))
+(define common (sort (filter (λ (k) (hash-ref files11 k #f)) (hash-keys files10)) string<?))
+(printf "modules: v10 ~a, v11 ~a, common ~a\n" (hash-count files10) (hash-count files11) (length common))
+(define-values (n-eq n-ne b10 b11)
+  (for/fold ([e 0] [ne 0] [b10 0] [b11 0]) ([k common])
+    (define f10 (hash-ref files10 k)) (define f11 (hash-ref files11 k))
+    (define old (call-with-input-file f10 read))
+    (define-values (hdr body) (call-with-input-file f11 (λ (in) (let* ([h (read in)] [b (read in)]) (values h b)))))
+    (define old-body (norm r10 (cddr old)))
+    (define new-body (norm r11 body))
+    (define key-eq (equal? (norm r10 (cadr old)) (norm r11 (caddr hdr))))
+    (define same (equal? old-body new-body))
+    (unless (and same key-eq)
+      (define slot (for/first ([a old-body] [b new-body] [i (in-naturals 2)] #:unless (equal? a b)) i))
+      (printf "  DIFF ~a key-eq ~a first differing slot ~a (lengths ~a/~a)\n" k key-eq slot (length old-body) (length new-body)))
+    (values (if (and same key-eq) (add1 e) e) (if (and same key-eq) ne (add1 ne))
+            (+ b10 (file-size f10)) (+ b11 (file-size f11)))))
+(printf "equal (modulo root path): ~a / ~a   bytes v10 ~a  v11 ~a  (root lengths ~a / ~a)\n"
+        n-eq (length common) b10 b11 (string-length r10) (string-length r11))
