@@ -166,6 +166,39 @@ check "ps | grep"               'ps -axo pid,ppid,command | grep batch-worker' A
 check "grep mentions pkill"     'grep -n "pkill -f batch-worker" racket/prologos/tools/run-affected-tests.rkt' ALLOW
 check "echo mentions pkill"     'echo pkill -f racket' ALLOW
 
+# The rows above count ANY output as a deny. Both harnesses read different fields:
+# Claude Code reads hookSpecificOutput.permissionDecision; Hermes's shell-hook bridge
+# (agent/shell_hooks.py _parse_pre_tool_call) blocks only on a top-level
+# "decision": "block" and shows "reason". A deny that one harness cannot read is an allow.
+echo "DENY IS READ BY BOTH HARNESSES:"
+dialect() { # dialect "<label>" "<payload>" "<jq predicate on the output>"
+  out=$(printf '%s' "$2" | "$G")
+  if [ -n "$out" ] && jq -e "$3" >/dev/null 2>&1 <<<"$out"; then
+    printf '  ok   %s\n' "$1"
+  else
+    printf '  FAIL %s (out=%s)\n' "$1" "${out:0:160}"; fails=$((fails+1))
+  fi
+}
+cc='{"tool_name":"Bash","tool_input":{"command":"raco make driver.rkt"}}'
+dialect "Claude Code: permissionDecision deny"  "$cc" '.hookSpecificOutput.permissionDecision == "deny"'
+dialect "Hermes: decision block + reason"       "$cc" '.decision == "block" and (.reason | test("PLT_CS_COMPILE_LIMIT"))'
+# Hermes sends tool_name "terminal" with the same tool_input.command shape.
+hm='{"hook_event_name":"pre_tool_call","tool_name":"terminal","tool_input":{"command":"pkill -f batch-worker.rkt"},"session_id":"t","cwd":"/tmp"}'
+dialect "Hermes terminal payload is guarded"    "$hm" '.decision == "block"'
+dialect "Hermes payload, compile rule"          '{"hook_event_name":"pre_tool_call","tool_name":"terminal","tool_input":{"command":"raco make driver.rkt"}}' '.decision == "block"'
+out=$(printf '%s' '{"hook_event_name":"pre_tool_call","tool_name":"terminal","tool_input":{"command":"PLT_CS_COMPILE_LIMIT=1000000 raco make driver.rkt"}}' | "$G")
+if [ -z "$out" ]; then echo "  ok   Hermes payload, compliant compile allowed"; else echo "  FAIL Hermes payload, compliant compile allowed"; fails=$((fails+1)); fi
+out=$(printf '%s' '{"hook_event_name":"pre_tool_call","tool_name":"read_file","tool_input":{"path":"raco make"}}' | "$G")
+if [ -z "$out" ]; then echo "  ok   other Hermes tools pass through"; else echo "  FAIL other Hermes tools pass through"; fails=$((fails+1)); fi
+# The guard is registered ONCE (user level), so its hint cannot name the script's own
+# checkout; it names the shell's, at run time. And it must allow what it suggests.
+out=$(printf '%s' '{"tool_name":"terminal","tool_input":{"command":"pkill -f batch-worker.rkt"}}' | "$G")
+if jq -e '.reason | contains("$(git rev-parse --show-toplevel)/racket/prologos/tools/batch-worker.rkt")' >/dev/null 2>&1 <<<"$out"; then
+  echo "  ok   orphan hint names the shell's checkout, not the guard's"
+else echo "  FAIL orphan hint names the shell's checkout, not the guard's"; fails=$((fails+1)); fi
+hint=$(jq -r '.reason' <<<"$out" | grep -E '^ +pkill -P 1 -f ' | sed 's/^ *//')
+check "the guard allows its own orphan hint" "$hint" ALLOW
+
 echo
 if [ "$fails" -eq 0 ]; then echo "all rows pass"; else echo "FAILURES: $fails"; fi
 exit "$fails"

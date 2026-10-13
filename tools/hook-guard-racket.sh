@@ -43,12 +43,18 @@ cmd="$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2>/dev/null
 [ -z "$cmd" ] && exit 0
 
 deny() {
+  # One object, read by both harnesses (disjoint keys; each ignores the other's):
+  #   Claude Code  — hookSpecificOutput.permissionDecision
+  #   Hermes       — top-level decision:"block" + reason (agent/shell_hooks.py,
+  #                  _parse_pre_tool_call). Without these Hermes treats the deny as an allow.
   jq -nc --arg r "$1" '{
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
       permissionDecisionReason: $r
-    }
+    },
+    decision: "block",
+    reason: $r
   }'
   exit 0
 }
@@ -345,7 +351,7 @@ Kill only what you started:
 
 Orphans of a runner that died (reparented to PID 1) — this checkout only:
 
-    pkill -P 1 -f \"$ROOT/racket/prologos/tools/batch-worker.rkt\"
+    pkill -P 1 -f \"\$(git rev-parse --show-toplevel)/racket/prologos/tools/batch-worker.rkt\"
 
 (what run-affected-tests.rkt does since b45bbf44). Look first: pgrep -fl <pattern>.
 killall cannot be parent-scoped; use kill or pkill -P." ;;
