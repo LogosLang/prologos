@@ -31,7 +31,8 @@
          (only-in racket/future processor-count)
          json
          "dep-graph.rkt"
-         "bench-lib.rkt")
+         "bench-lib.rkt"
+         "suite-plan.rkt")
 
 ;; ============================================================
 ;; Compile-limit adoption (Rel T1 SUB.2, owner-blessed 2026-07-24)
@@ -694,39 +695,17 @@
   (define timings-path (build-path project-root "data" "benchmarks" "timings.jsonl"))
   (define LPT-HISTORY-RUNS 5)      ;; how many recent full runs to draw on
   (define LPT-MIN-FILE-COUNT 100)  ;; below this a record is a targeted run, not a suite
+  ;; ⚠ equal?-keyed (suite-plan.rkt). This was a `for/hasheq` over file-name
+  ;; STRINGS, looked up below with a freshly built string: `eq?` never matched
+  ;; (0 of 489 hits, measured 2026-10-13), so every key was +inf.0 and dispatch
+  ;; was ALPHABETICAL — including on the run that "measured impact NIL" above.
   (define historical-times
     (if (file-exists? timings-path)
-        (with-handlers ([exn? (lambda (e) (hasheq))])
-          (define lines
-            (with-input-from-file timings-path
-              (lambda ()
-                (let loop ([acc '()])
-                  (define line (read-line))
-                  (if (eof-object? line) (reverse acc) (loop (cons line acc)))))))
-          ;; Newest-first, keep only full-suite records, take at most N.
-          (define full-runs
-            (let loop ([ls (reverse lines)] [got '()])
-              (cond
-                [(or (null? ls) (>= (length got) LPT-HISTORY-RUNS)) (reverse got)]
-                [else
-                 (define rec
-                   (with-handlers ([exn? (lambda (e) #f)])
-                     (with-input-from-string (car ls) read-json)))
-                 (loop (cdr ls)
-                       (if (and rec (>= (hash-ref rec 'file_count 0) LPT-MIN-FILE-COUNT))
-                           (cons rec got)
-                           got))])))
-          ;; file -> list of observed wall_ms, then median.
-          (define observed
-            (for*/fold ([h (hash)])
-                       ([run (in-list full-runs)]
-                        [r (in-list (hash-ref run 'results '()))])
-              (define f (hash-ref r 'file ""))
-              (hash-update h f (lambda (v) (cons (hash-ref r 'wall_ms 0) v)) '())))
-          (for/hasheq ([(f ms-list) (in-hash observed)])
-            (define sorted (sort ms-list <))
-            (values f (list-ref sorted (quotient (length sorted) 2)))))
-        (hasheq)))
+        (with-handlers ([exn? (lambda (e) (hash))])
+          (historical-medians (file->lines timings-path)
+                              #:runs LPT-HISTORY-RUNS
+                              #:min-file-count LPT-MIN-FILE-COUNT))
+        (hash)))
 
   ;; Sort: heaviest first. Unknown files get +inf.0 (conservative).
   (define sorted-paths
