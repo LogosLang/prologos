@@ -34,7 +34,7 @@
 ;;;   - benchmarks/micro/bench-meta-lifecycle.rkt (with-elab-env pattern source)
 ;;;
 ;;; Usage:
-;;;   "/Applications/Racket v9.0/bin/racket" \
+;;;   "/Applications/Racket v9.3/bin/racket" \
 ;;;     racket/prologos/benchmarks/micro/bench-attribute-record.rkt
 ;;;
 

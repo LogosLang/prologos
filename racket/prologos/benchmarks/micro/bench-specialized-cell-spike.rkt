@@ -35,7 +35,7 @@
 ;;; post-spike per design doc §13.6.
 ;;;
 ;;; Usage:
-;;;   "/Applications/Racket v9.0/bin/racket" \
+;;;   "/Applications/Racket v9.3/bin/racket" \
 ;;;     racket/prologos/benchmarks/micro/bench-specialized-cell-spike.rkt
 ;;;
 

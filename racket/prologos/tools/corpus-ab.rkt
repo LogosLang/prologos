@@ -126,7 +126,7 @@
 
 ;; ⚠⚠ THE CHILD MUST BE **THIS** RACKET, NOT `find-executable-path "racket"`.
 ;; Measured on this machine: PATH resolves `racket` to /opt/homebrew/bin/racket,
-;; while the project runs on /Applications/Racket v9.0 (CLAUDE.local.md says so
+;; while the project runs on /Applications/Racket v9.3 (CLAUDE.local.md says so
 ;; explicitly). A harness that shells out by name therefore A/Bs with a DIFFERENT
 ;; COMPILER than the one you invoked it with — silently, and the result looks
 ;; like a corpus finding. This is the same family as the documented

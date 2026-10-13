@@ -11,7 +11,7 @@
 ;;   D. Aggregate suite instrumentation (process-string phase timing)
 ;;
 ;; Run from racket/prologos/:
-;;   "/Applications/Racket v9.0/bin/racket" benchmarks/micro/bench-track10b-foundation.rkt
+;;   "/Applications/Racket v9.3/bin/racket" benchmarks/micro/bench-track10b-foundation.rkt
 
 (require racket/match
          racket/list

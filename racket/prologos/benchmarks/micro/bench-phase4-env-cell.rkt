@@ -49,7 +49,7 @@
 ;;;   - global-env.rkt:192-213 — Variant A baseline lookup shape
 ;;;
 ;;; USAGE:
-;;;   "/Applications/Racket v9.0/bin/racket" \
+;;;   "/Applications/Racket v9.3/bin/racket" \
 ;;;     racket/prologos/benchmarks/micro/bench-phase4-env-cell.rkt
 ;;;
 

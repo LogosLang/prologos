@@ -35,7 +35,7 @@ Project-specific acronyms an agent will hit:
 - **Install git hooks**: `tools/install-git-hooks.sh` (one-time per clone; pre-commit + post-commit)
 - **Check delimiter balance**: `tools/check-parens.sh <file.rkt>` (also runs in pre-commit hook)
 
-Racket binary on this machine: `"/Applications/Racket v9.0/bin/racket"` (quoted for space).
+Racket binary on this machine: `"/Applications/Racket v9.3/bin/racket"` (quoted for space; on PATH via `~/.zshrc` since 2026-10-12). Racket 9.3 is the only supported version; other `/Applications/Racket v*` installs are leftovers — 9.0 cannot load the checkout's 9.3 `.zo`s.
 
 ## Architecture
 

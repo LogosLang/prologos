@@ -7,7 +7,7 @@
 ;;; simulation, content-addressed hashing, and E2E reader costs on real files.
 ;;; Run from racket/prologos/:
 ;;;
-;;;   "/Applications/Racket v9.0/bin/racket" benchmarks/micro/bench-ppn-track1.rkt
+;;;   "/Applications/Racket v9.3/bin/racket" benchmarks/micro/bench-ppn-track1.rkt
 ;;;
 
 (require "../../parse-reader.rkt"
