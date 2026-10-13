@@ -62,7 +62,7 @@
 ;; SAME lib dir + cache dir, so a second run is a cache HIT).
 (define (run-consumer!)
   (define tmp (make-temporary-file "prologos-pnet151c-~a.prologos"))
-  (call-with-output-file tmp #:exists 'replace
+  (call-with-output-file tmp #:exists 'truncate
     (lambda (out) (display consumer-src out)))
   (define results
     (parameterize ([current-file-module-network-ref (make-module-network)]

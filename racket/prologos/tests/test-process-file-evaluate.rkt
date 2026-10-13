@@ -59,7 +59,7 @@
 
 (define (run-file-ws s #:evaluate? evaluate?)
   (define tmp (make-temporary-file "prologos-evalflag-~a.prologos"))
-  (call-with-output-file tmp #:exists 'replace
+  (call-with-output-file tmp #:exists 'truncate
     (lambda (out) (display s out)))
   (define result
     (parameterize ([current-file-module-network-ref

@@ -223,7 +223,7 @@
 ;; rather than as a changed error value.
 (define (run-ns-ws-file-all s)
   (define tmp (make-temporary-file "prologos-ws-~a.prologos"))
-  (call-with-output-file tmp #:exists 'replace (lambda (out) (display s out)))
+  (call-with-output-file tmp #:exists 'truncate (lambda (out) (display s out)))
   (define rs
     (parameterize ([current-file-module-network-ref (make-module-network)]
                    [current-ns-context #f]

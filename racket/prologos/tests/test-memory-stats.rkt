@@ -126,7 +126,7 @@
 
 (test-case "memory-stats: process-string-ws and process-file honour the gate (Level 3)"
   (define tmp (make-temporary-file "mem152-~a.rkt"))
-  (with-output-to-file tmp #:exists 'replace (λ () (display "(def x : Nat 0N)\n")))
+  (with-output-to-file tmp #:exists 'truncate (λ () (display "(def x : Nat 0N)\n")))
   (define (both) (process-string-ws "def x : Nat := 0N") (process-file tmp))
   (call-with-memory-env #f
     (λ ()

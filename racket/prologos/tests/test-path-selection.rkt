@@ -72,7 +72,7 @@
 
 (define (run-ws s)
   (define tmp (make-temporary-file "prologos-pathsel-~a.prologos"))
-  (call-with-output-file tmp #:exists 'replace
+  (call-with-output-file tmp #:exists 'truncate
     (lambda (out) (display s out)))
   (define result
     (parameterize ([current-file-module-network-ref
@@ -96,7 +96,7 @@
 ;; discriminator between "counted error" and "well-typed-looking wrong value".
 (define (run-ws-raw s)
   (define tmp (make-temporary-file "prologos-pathsel-~a.prologos"))
-  (call-with-output-file tmp #:exists 'replace
+  (call-with-output-file tmp #:exists 'truncate
     (lambda (out) (display s out)))
   (define result
     (parameterize ([current-file-module-network-ref
@@ -139,7 +139,7 @@
 
 (define (run-ws-pre-raw s)
   (define tmp (make-temporary-file "prologos-pathselpre-~a.prologos"))
-  (call-with-output-file tmp #:exists 'replace
+  (call-with-output-file tmp #:exists 'truncate
     (lambda (out) (display s out)))
   ;; ⚠ `dynamic-wind`, not a trailing `delete-file`: `process-file` RAISES for any
   ;; source that hits the parse/expansion abort path, and the plain form skipped

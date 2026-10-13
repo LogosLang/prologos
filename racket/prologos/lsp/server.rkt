@@ -551,7 +551,7 @@
       (define tmp-path (make-temporary-file "prologos-lsp-~a.prologos"))
       (call-with-output-file tmp-path
         (lambda (out) (display text out))
-        #:exists 'replace)
+        #:exists 'truncate)
       (with-handlers ([exn:fail? (lambda (e)
                                    (set! errors (cons (prologos-error #f (exn-message e)) errors)))])
         ;; #:evaluate? #f — diagnostics are STATIC: type-check every form but run
