@@ -630,3 +630,47 @@ untracked files, no racket process with its cwd inside, ignored files inspected,
   other session's).
 - **Waiting on the owner:** the two sibling clones. `egraph-relational-spike` and `preduce-autonomy` hold records that are
   not on main. Scripts: `wt-inventory.sh`, `wt-precheck.sh`.
+
+---
+
+## Checkpoint 2 (owner decision (vii)): F3(a) + the runner stream → main
+
+**Merges** in a throwaway worktree off main `e6394b3f` (the CIU 6 session's docs commit; the only overlap was
+`DEFERRED.md`, in different entries; no overlap with main's uncommitted working copy):
+- `104ba643` merges `deferred-sweep-146-149` (F3(a) + records).
+- `f6e530d7` merges `runner-queue-gate` (queue + gate batch, 12 commits).
+- `8014caef` is a follow-up fix found BY the gate (below).
+- The DEFERRED and record commit sits on top.
+
+**Coordinator verification of the runner stream before merging.**
+- Read `tools/suite-lock.rkt` in full, the targeted lock path, and the agent's note.
+- Re-ran its 44 tests (10 + 28 + 3 + 3).
+- Mutation: an exclusive waiter releasing the turnstile, i.e. no writer preference, turns "a shared taker may not
+  overtake a waiting exclusive one" red.
+- Probe `lock-probe.sh`: children do NOT inherit the lock, so a SIGKILLed holder frees it at once while its child
+  runs (recorded as 166's limitation).
+- **Live queue, first real use**: a targeted `--no-wait` run during the gate suite was refused, exit 75, naming the
+  holder (pid 45290, exclusive, since 05:19:06, checkout, command). The first attempt was NOT refused: the
+  coordinator's shell had inherited `PROLOGOS_SUITE_LOCK` from the runner agent's session, so it queued on a private
+  file. Raw locks on the real file were held throughout. Filed as **DEFERRED 166**.
+
+**Gate 1** (`f6e530d7`, new runner): 10 329 tests / 494 files, all pass. The file-by-file delta against the F3(a)
+suite was exactly the runner's new tests, plus one surprise: `test-properties.rkt` reported 8 against 13 in every
+earlier record.
+- Run alone, both runners count 13.
+- The new `'workers` record gave the victim's worker sequence (worker 5, 18 units before it), and a one-process replay
+  reproduced the 8.
+- A single-file bisect named `test-generators.rkt`: `test-properties` required it, so its 5 test-cases ran inside
+  whichever unit came first. That is DEFERRED 161's original 0-test sighting, and under the new gate it would have
+  been a false INCOMPLETE.
+- **Fixed in `8014caef`**: the generators move to `tests/property-generators.rkt`, a library; a guard in
+  `test-suite-plan.rkt` refuses test files that require test files (mutation red); one worker, both orders: 5 and 8.
+
+**Gate 2** (`8014caef`): **10 330 tests / 494 files, all pass, 56.2 s** (quiet machine). File by file against the F3(a)
+suite: `+10 test-suite-lock`, `+19 test-suite-plan` (18 + the guard), `+3 test-annotate-invalid-timings`,
+`+3 test-timings-timestamp`, and `−5 test-properties` (the double count removed). Nothing else.
+
+**DEFERRED** (this commit; register 165 → 167):
+- 161 and 164 discharged; 162 and 160 status;
+- **165** filed (stale worker dependency, discharged);
+- **166** filed (silent queue bypass; the measured lock-inheritance limitation).
