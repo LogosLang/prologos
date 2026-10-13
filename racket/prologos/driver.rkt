@@ -671,7 +671,7 @@
           (loop (expr-app-arg v) (cons (expr-app-arg (expr-app-func v)) acc))]
          [else #f]))]))
 
-(define (process-command surf)
+(define (process-command surf #:evaluate? [evaluate? #t])
   ;; PPN 4C Phase 1.5: seed current-source-loc from the command's surf-node.
   ;; Elaborate-level parameterize sharpens further; this covers top-level
   ;; warnings/errors that fire outside elaborate (e.g., from process-command
@@ -798,6 +798,20 @@
                            (let ([te (check-unresolved-trait-constraints)])
                              (if (not (null? te))
                                  (car te)
+                                 (if (not evaluate?)
+                                     ;; CHECK-ONLY (`#:evaluate? #f`, the LSP
+                                     ;; diagnostics path): the STATIC projection of
+                                     ;; `eval` is `infer` — same type, same trait
+                                     ;; resolution, same printed form as the 'infer
+                                     ;; arm below, and no `nf`. Running the program
+                                     ;; is the REPL's job, on request: diagnostics
+                                     ;; on open/save must not execute user code
+                                     ;; (foray.prologos spent 231 s of a 234 s
+                                     ;; elaboration here, blocking every LSP request,
+                                     ;; and any top-level IO would run on each save).
+                                     ;; Runtime-only errors (panic, fuel) surface on
+                                     ;; evaluation, not in diagnostics.
+                                     (pp-expr (time-phase! zonk (freeze ty)))
                                  (begin
                                    (let ([val (time-phase! reduce
                                                 (nf (rewrite-specializations
@@ -829,7 +843,7 @@
                                                              (pp-expr val))])
                                            (format "~a : ~a" val-str
                                                    (pp-expr (refine-solve-row-type-for-display
-                                                             ty-nf val))))))))))))])]
+                                                             ty-nf val)))))))))))))])]
 
                   ;; (infer expr) — Track 4B Phase 9: on-network first, fallback for unhandled
                   [(list 'infer expr)
@@ -1575,17 +1589,17 @@
 ;; per-command prologos-error so the file/REPL continues past the offending
 ;; command. Deliberately NOT a blanket exn handler: any other raise still
 ;; crashes loudly (a blanket boundary would mask real compiler defects).
-(define (process-command/solve-guard surf)
+(define (process-command/solve-guard surf #:evaluate? [evaluate? #t])
   (with-handlers ([exn:prologos-solve?
                    (lambda (e) (prologos-error srcloc-unknown (exn-message e)))])
-    (process-command surf)))
+    (process-command surf #:evaluate? evaluate?)))
 
-(define (process-command/demand surf)
-  (define r (process-command/solve-guard surf))
+(define (process-command/demand surf #:evaluate? [evaluate? #t])
+  (define r (process-command/solve-guard surf #:evaluate? evaluate?))
   (if (residuation-demand? r)
       (begin
         (run-residuation-fixpoint!)
-        (let ([r2 (process-command/solve-guard surf)])
+        (let ([r2 (process-command/solve-guard surf #:evaluate? evaluate?)])
           (if (residuation-demand? r2) (residuation-demand-error r2) r2)))
       r))
 
@@ -2722,7 +2736,16 @@
       (current-file-module-network-ref
        (struct-copy module-network-ref mnr [prop-net driven])))))
 
-(define (process-file path #:verbose [verbose? #f] #:source-dir [source-dir #f])
+;; `#:evaluate? #f` — CHECK-ONLY: every top-level `eval` form is processed as
+;; its static projection (`infer`: type + trait resolution, no `nf`), so the
+;; file's programs are type-checked but not run. Defs, specs, relations and all
+;; other forms are processed exactly as with `#t`. The flag is threaded
+;; EXPLICITLY down this file's own command loop (never a parameter), so modules
+;; imported by the file — `load-module`'s separate loop — and the REPL are
+;; unaffected by construction. Consumer: the LSP diagnostics path
+;; (lsp/server.rkt `elaborate-and-publish-diagnostics!`).
+(define (process-file path #:verbose [verbose? #f] #:source-dir [source-dir #f]
+                      #:evaluate? [evaluate? #t])
   ;; Resource-path anchoring (relative-path fix, 2026-06-29): a .prologos program's
   ;; relative `read-file`/`read-csv` paths resolve against the SOURCE FILE's
   ;; directory (location-independent, mirroring module resolution against an
@@ -2754,9 +2777,9 @@
                  [current-general-completions (make-hasheq)]
                  [current-directory (or anchor-dir (current-directory))])
     (reset-meta-store!)
-    (process-file-inner abs-path #:verbose verbose?)))
+    (process-file-inner abs-path #:verbose verbose? #:evaluate? evaluate?)))
 
-(define (process-file-inner path #:verbose [verbose? #f])
+(define (process-file-inner path #:verbose [verbose? #f] #:evaluate? [evaluate? #t])
   (define path-str (if (string? path) path (path->string path)))
   (define ws? (regexp-match? #rx"\\.prologos$" path-str))
   ;; PPN Track 2B Phase 2: WS files use tree parser merge.
@@ -2811,7 +2834,7 @@
                      [t0 (if verbose? (current-inexact-monotonic-milliseconds) 0)]
                      ;; 4B.5.a: demand-aware — a USE of pending/deferred names
                      ;; triggers the sweep fixpoint + one retry (§18.21.26 W4).
-                     [result (process-command/demand surf)]
+                     [result (process-command/demand surf #:evaluate? evaluate?)]
                      [_ (when verbose?
                           (define snap-after (perf-counters-snapshot (current-perf-counters)))
                           (define elapsed (- (current-inexact-monotonic-milliseconds) t0))
