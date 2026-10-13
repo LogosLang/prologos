@@ -203,9 +203,86 @@ Find which callers re-construct keys (`decomp-key-hash` pair keys are a suspect:
 > six data-entry sites. The model property also found and fixed two latent transient defects (`6d172922`,
 > `3a152ac9`). Record: merge note § 146.
 
-## 147 ⬜ fire-protocol ceremony
+## 147 ✅ the fire protocol's ceremony — re-attributed; the light fire is under 1 KB — `63d8f6af`
 
-(pending)
+**Baseline re-derived** with the corrected `census.rkt` (which now takes the tree by `@ROOT@` substitution).
+Bytes are deterministic and reproduced across interleaved runs:
+
+| per fire (slope 8→64) | main | branch before 147 (146 + 148) | after 147 |
+|---|---|---|---|
+| read-only fire | 1 386 B | 1 313 B | **928 B** |
+| read+write fire | 2 819 B | 2 746 B | **2 232 B** |
+| `net-cell-write`, 0 / 1 / 8 deps | 481 / 529 / 801 | 481 / 529 / 801 | 416 / 513 / 785 |
+
+The main row reproduces the entry's numbers exactly, so the per-fire figures were never affected by
+146's fresh-key artefact: fire workloads look up the stored `cell-id`. 146 nonetheless took **70 of the
+73 B** off every fire, through the worklist dedup's CHAMP inserts of `prop-id`s. That was measured at
+`3a152ac9`, which has 148 and the transient fixes but not 146: 1 383 B, against 1 313 B with 146. The
+other 3 B are 148's. The "before 147" column was re-measured on a clean worktree at `bca1f47f`, twice.
+
+**The entry's attribution was partly wrong.** Measured piece by piece on the real network
+(`fire-attrib.rkt`, `fire-attrib2.rkt`). The components below are measured; the remainders are subtraction:
+
+| per read-only fire, before 147 (1 313 B, census slope) | B |
+|---|---|
+| `fire-and-collect-writes`, whole | 641 |
+| ⤷ `parameterize`, as nested in production (2 bindings at `:2863`, then 1 in `fire-propagator :374`) | **496** |
+| ⤷ `output-set` `for/hasheq` (the entry's headline site) | 32 |
+| ⤷ `champ-diff` of identical cell maps | 32 |
+| ⤷ remainder (`fire-result`, lists) | ~81 |
+| `sequential-fire-all` overhead beyond the fire | ~39 |
+| round machinery (1 313 − 680) | ~633 |
+| ⤷ worklist dedup (`dedup-pids`: a persistent-CHAMP insert per pid; 130 / 362 / 367 B per pid at N = 8 / 64 / 512) | **~362** |
+| ⤷ remainder (worklist and round bookkeeping, not attributed further) | ~270 |
+| the two `champ-fold`s (`:2041`/`:2053`) | 64 per **write**, not per fire; flat in fan-out (32 B per `node-fold` call) |
+
+The fix took 385 B off the read-only fire. The dedup (362 → 69 B per pid at N = 64) and `output-set` (32 B)
+together predict 325 B. The other ~60 B were not attributed (the dedup probe's worklist carries duplicates;
+the census's does not).
+
+**Fixes (local; the BSP loop structure is untouched):**
+1. `dedup-pids` uses a call-local mutable `hasheqv` keyed by `prop-id-n`. It is the same relation, since `prop-id` is one
+   field, and first-occurrence order is kept. Cost is 65–90 B per pid.
+2. `output-set` is replaced by `memq` over `output-cids`. It is the same `eq?` relation and allocates nothing.
+3. One fold computes both dependent flags as fixnum bits, and it is skipped when there are no dependents. With dependents it
+   saved 16 B, not the 32 B a removed fold call predicted. The residual is not in `bitwise-ior` (measured 0 B) and
+   was not chased further.
+
+**Not done, and why: the largest remaining item belongs to PAR 4.** The two `parameterize` forms are about
+496 B, more than half of the remaining 928 B. Measured alternatives:
+- one form with 3 bindings: 448 B;
+- one composite parameter holding a 3-field struct: 144 B;
+- a bare continuation mark: 0 B.
+
+The three parameters (`current-bsp-fire-round?`, `current-cell-id-namespace`, `current-source-loc`) are the
+**ambient state read by S0 fires** that the Q1 audit's §6 hands to PAR 4: parameters are inherited by executor
+threads from their creator. How fire context reaches a fire is a PAR 4 H-S decision. A sweep patch
+changing the parameter interface would pre-empt it. Recorded in PAR 4's note §7b.
+
+**Tests.** The new `tests/test-bsp-fire-protocol.rkt` (5) holds:
+- a dedup property (fresh `prop-id`s against `remove-duplicates` by `n`, with each kept element `eq?` to its first occurrence);
+- a propagator enqueued twice fires once;
+- two writers of one declared output are both merged;
+- no-dependents and plain-dependents enqueueing.
+
+Mutation check (`mutate147.sh`):
+- M1 (no dedup) and M2 (declared outputs misclassified as undeclared) each turn the new file red.
+- M3 (both flags forced to 0) passes the new file, but turns **existing** `test-ppn-track4` and `test-branch-pu` red.
+  So the merged fold was already guarded by suites that can fail.
+
+Full suite at `bca1f47f` + the change: **10 275 tests, 490/490, all pass**, 104.6 s at load 11–12. The
+first gate attempt never ran: the runner's re-run guard counted the mutation check's targeted runs, printed
+`GUARD: No .rkt files changed…` and exited 0. It was re-run with `--force-rerun`. The runner's
+history has no earlier full row for this worktree, so the 490 files are known to include the new one
+(5 tests), but the delta against 146's gate is not recorded.
+
+**Paste-ready status flip for main's `DEFERRED.md` § 147** (`⬜` → `✅`, append):
+
+> **✅ Closed 2026-10-13, `63d8f6af` on `deferred-sweep-146-149`.** Light fire 1 386 → 928 B (main →
+> branch; read+write 2 819 → 2 232 B). Re-attributed: the dominant items were `parameterize` ×2 (~496 B) and
+> the worklist dedup's persistent-set inserts (~350 B), not the `output-set` (32 B). Fixed locally: the dedup uses
+> a mutable `hasheqv`, `output-set` becomes `memq`, and the dependent folds are merged and skipped with no dependents.
+> `parameterize` is left to PAR 4 H-S (fire context is ambient state, per the Q1 audit §6). Record: merge note § 147.
 
 ## 149 ⬜ WATCHING: `test-transducer-01.rkt` 1.35× slower under 9.3
 
