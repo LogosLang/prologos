@@ -1,0 +1,3 @@
+v11 text-read : string occurrences 42267, distinct eq? objects 42241; payload bytes over occurrences 5279925, over distinct objects 5279925
+v12 fasl-read : string occurrences 42267, distinct eq? objects 1703; payload bytes over occurrences 5318943, over distinct objects 125120
+payload fasl writes: text-read 5279925 vs fasl-read 125120 — difference 5154805 bytes (file-size gap was 5 158 491)
