@@ -9585,7 +9585,7 @@ scaffolding for the slicing, not a permanent mechanism.
 
 | sub-slice | content | status |
 |---|---|---|
-| **1b-vi-A** | the stage table, rows from today's measured equivalents | 🔄 |
+| **1b-vi-A** ✅ `0b6a645f` | the stage table: 40 rows, every expected value measured from today's equivalent spelling (`probe-1bvi-p`). Red step: stage B → exactly C1–C4 red (the silent drop); stage D → 37 / 40 red, each for its measured pre-mint reason (mid-lexeme 28, postfix 2, nameless unbound 3, silent drop 4); controls green. Instrument power by mutation: an already-true target caught twice; a fixture that fails to load caught before `unbound` could accept it. Battery 573 → 575; **5.28 s per run** (per-test-case timing) | ✅ |
 | **1b-vi-B** | `^-` / `^-k'` refuse an ancestor rename (Q_U55's caret half) | ⬜ |
 | **1b-vi-C** | the `collapsed` cont + the `*-` / `*-_` conts + the totality dispatcher + the 15 prose arms, INERT (reachable from tests only) | ⬜ |
 | **1b-vi-D** | the mint: two table rows, the `*->` message; flips `:6194`, `:6195`, `:8470`, `:8482`; arrival matrix `*-` / `*-_` 0/209 → 209/209 | ⬜ |
@@ -9594,6 +9594,29 @@ scaffolding for the slicing, not a permanent mechanism.
 
 Per-phase completion, in order (DESIGN_METHODOLOGY Stage 4): tests → commit → this tracker
 → the track LOG (dailies: a pointer) → proceed.
+
+**1b-vi-A — what the slice found, and its Vision Alignment Gate.**
+
+*A third pre-mint class, and what it is not.* A star after an ω sub-block inside a block
+(`cloud{regions:{host port}*-}`) does not get the mid-lexeme refusal; it gets "`*-` — `*` is
+postfix; it attaches to the END of a segment", the message a SPACED star gets (audit F5,
+`mn{a *- b}`). It is not a new arrival route — the arrival matrix already carries it as
+`bcast-brace` (`xs:{a}%S%`, `tools/star-arrival-matrix.rkt:53`, a `}` closer Q_U35 calls usable).
+Before the mint the closer-adjacent band leaves `*-` a plain symbol, and inside an enclosing
+block that symbol is an ITEM, so it meets the payload's stray-star refusal instead of the
+top-level nameless lookup (`env{prod dev}*-` → "Unbound variable"). One unminted token, two
+consumers, two messages. The E4 rows pin it; D's mint must reach it (the matrix will show it).
+
+*A cost attribution withdrawn.* A whole-file comparison (92.1 s → 100.3 s summed shards) first read
+as "+8.3 s from the table". After folding the table into one test-case the rerun read 100.2 s, so
+that number was machine load, not the table. Measured per test-case instead: 5.28 s per run.
+
+| VAG question | catalogue | challenge — could it be more aligned? |
+|---|---|---|
+| (a) on-network | not applicable: a test-only slice | the table pins SURFACE meaning only, independent of where elaboration runs, so a later on-network migration (PPN) can keep it unchanged — this is a reason to keep pins at the surface, and it held |
+| (b) complete | 40 rows: E1–E10 × 2, depth, vectors, sub-blocks, both ω positions, path position, the hyphen clash, both Q_U55 families, both Q_U56 territories, controls | **two gaps, assigned rather than hidden.** (1) The rows reach at most 3 of the 15 `star-*` prose arms (content-collision, synth-vector-contents, dup-key); 1b-vi-C owns the other 12, through a render loop over kind × cont, since no surface row reaches most of them. (2) The echo and quote lowerings (`macros.rkt`, Q_U54's site list) are not pinned for `*-` by any row; 1b-vi-D's mini-audit must check whether the table-driven pins (C-8, C-11) already cover them |
+| (c) vision-advancing | the semantics is stated as executable equivalences — progressive disclosure made checkable | **the equivalences are 31 examples, not a law.** A generator could build, for any well-formed branch, its `^`-on-every-ancestor and `^-_`-enumeration spellings and assert `*-` / `*-_` against them over many branches. That states Q_U48 / Q_U57 as properties. Not built here (outside the decided slicing); offered to the owner at the checkpoint |
+| (d) drift risks | DR-3 label rows present (E4-, E8_, E10-, X-omega-, X-wpath-); DR-4 shown non-vacuous (stage D 37/37, mutations M1/M2); DR-6 measured | **the inherited pattern challenged: the parked-comment idiom** (`:7793`, `:8822`), replaced by executed targets; its known failure (an unreadable parked pin) cannot recur here. DR-6 did materialize (5.28 s per run, about 7 % of a single-process battery run); bounded, not removed |
 
 <a id="p4e-1b-v-shipped"></a>
 

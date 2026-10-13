@@ -194,3 +194,32 @@ are in [`../README.md`](../README.md).
     field access has no output key"). So `x.a.b*-` ≡ `x.a.b*` and `x.a.b*-_` ≡ `x.a.b*_`. This follows
     from the decided rules; it was not decided separately, and it goes to the owner at the A checkpoint.
 - **Next**: 1b-vi-A, the stage table (`tests/test-path-selection.rkt`).
+
+### 1b-vi-A shipped: the star-collapse stage table — 40 rows, targets measured, red step shown at stages B and D — `0b6a645f` (2026-10-13)
+- **Why / decision**: the first sub-slice of [Q_U58](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u58)'s
+  slicing: pins first. One row per behaviour, `(id spelling flips-at pre target)`, with every target
+  measured from today's equivalent spelling (`research/P4e-1b-vi/probe-1bvi-p`). `1bvi-stage` is bumped as
+  the first edit of each later sub-slice, so its rows go red before its code exists. Design and VAG:
+  [§5.P4e-1b-vi](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi).
+- **Evidence**: stage B → exactly C1–C4 red (the silent drop); stage D → 37 / 40 red, each for its pre-mint
+  reason; mutation M1 (an already-true target) caught twice, M2 (a broken fixture) caught before the
+  `unbound` class could accept it. Battery 573 → 575 test-cases, all pass; the table costs 5.28 s per run
+  (per-test-case timing). No production code changed, so acceptance was not re-run.
+- **Surprise / correction**:
+  - **Replaced an inherited idiom.** Earlier slices parked failing pins as comments (`test-path-selection.rkt:7793`,
+    `:8822`), and one parked pin hid an unreadable `\*` escape. Here every target is compiled and executed.
+  - **Withdrew my own cost attribution.** Two whole-file runs (92.1 s → 100.3 s summed shards) suggested "+8.3 s
+    from the table". I folded the table into one test-case on that theory; the rerun read 100.2 s, so the
+    difference was machine load. Then measured per test-case: 5.28 s. The fold stays (batches once per run,
+    not once per shard), but its saving is not shown.
+  - **Withdrew a claim before committing it.** I first wrote that `cloud{regions:{host port}*-}` reveals "a
+    fifth arrival route". It does not: the matrix already has the carrier (`bcast-brace`). Before the mint
+    the unminted `*-` is an item inside the enclosing block, so it gets the spaced-star refusal. Corrected in
+    D4 before this commit.
+  - **Hook guard, live in Hermes now**: a `raco make` without an inline `PLT_CS_COMPILE_LIMIT` was refused
+    by `tools/hook-guard-racket.sh` (DEFERRED 159), even with the variable exported earlier in the shell.
+- **Gaps assigned, not hidden** (VAG (b)): the rows reach at most 3 of the 15 `star-*` prose arms, and 1b-vi-C owns
+  the other 12; the echo and quote lowerings belong to 1b-vi-D's mini-audit. **Offered** (VAG (c)): state
+  Q_U48 / Q_U57 as generated laws rather than 31 examples.
+- **Next**: dialogue checkpoint with the owner (Stage 4 cadence), then 1b-vi-B (bump the stage to B; C1–C4
+  go red; implement the caret-family refusal).
