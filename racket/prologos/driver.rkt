@@ -3903,12 +3903,20 @@
 ;; CLI entry point — process .prologos files
 ;; ========================================
 ;; Phase 7c: enables `racket driver.rkt file.prologos` for benchmarking.
-;; Emits PERF-COUNTERS, PHASE-TIMINGS, MEMORY-STATS to stderr.
+;; Emits PERF-COUNTERS, PHASE-TIMINGS, PROVENANCE-STATS, CELL-METRICS to stderr;
+;; MEMORY-STATS only with --memory-stats (or PROLOGOS_MEMORY_STATS=1), because
+;; that record forces two major GCs per file (DEFERRED 152) — a cost no plain
+;; run, scratch run or bench-ab leg should pay.
 (module+ main
   (require racket/cmdline)
+  (define memory-stats? #f)
   (define files
     (command-line
      #:program "prologos-driver"
+     #:once-each
+     [("--memory-stats") "Emit MEMORY-STATS (forces two major GCs per file)"
+                         (set! memory-stats? #t)]
      #:args files files))
-  (for ([f (in-list files)])
-    (process-file f)))
+  (parameterize ([current-memory-stats? (or memory-stats? (current-memory-stats?))])
+    (for ([f (in-list files)])
+      (process-file f))))
