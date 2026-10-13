@@ -3321,7 +3321,73 @@ items of the hold-point, ruled before P4a opened:
   does not separate the options (no caret can follow `:`, Q_U19) and is unobservable
   until [DEFERRED 167](DEFERRED.md) (in-block L1) lands.
 
-  **Next free Q-label: U56.**
+- <a id="q-u56"></a>**Q_U56 — THE `*->` BOUNDARY IS A GUIDED DIAGNOSTIC, NOT A CONSTRUCT
+  [✅ DECIDED 2026-10-13, owner — "Yes, that looks like a guided diagnostic as per (a)"].**
+  The second of [Q_U52](#q-u52)'s deferred questions (§2). The owner asked what `*->`
+  denotes. Answer: nothing. It names a collision first written in Q_U52 (`783be940`), not
+  a designed form. `-` continues an identifier and `>` does not, so a star glued to `->`
+  always lexes as `…*-` then `>`. Measured (probe `probe-1bvi-g`): 0 glued `*->` anywhere;
+  in TYPE territory it is already silently not an arrow (`spec s4 Nat *-> Nat` → "has no
+  arrow"; `<(x : Nat)*- Nat>` → bare "Type mismatch"), before 1b-vi exists.
+  **DECIDED — (a)**: 1b-vi gives a glued `*->` in SELECTION territory a guided refusal
+  ("`*->` reads as `*-` then `>` — put a space"), produced by the selection consumer, never
+  raised at the reader (a reader raise is a whole-file abort). The type-territory messages
+  predate the slice and are filed as [DEFERRED 168](DEFERRED.md). Pin in 1b-vi: once the
+  closer band mints `*-`, `<(x : Nat)*- Nat>` reaches Q_U37's type-territory refusal and gets
+  Q_U31's "needs a SPACE" message (predicted). Rejected: (b) one message in every territory
+  now (reaches into spec parsing the slice does not otherwise touch); (c) nothing special.
+
+- <a id="q-u57"></a>**Q_U57 — `*-_`'s PREFIX: THE DELETED LAYER's KEY ONLY, OR THE WHOLE
+  COLLAPSED PATH? [⬜ PENDING — posed 2026-10-13, CIU 6 1b-vi].** [Q_U48](#q-u48) left
+  `*-_` (total collapse + provenance) open "to be decided WITH the suffix slice".
+  [Q_U51](#q-u51) fixed `*_`'s prefix as *"the key its content sat under in the DELETED
+  layer"*; the question is what counts as deleted once `-` has also collapsed every ancestor.
+  **L (layer only)** — `*-_` = `*-`'s landing + `*_`'s prefix; **P (path)** — the prefix is
+  every name the operator deleted: the collapsed ancestors' surviving output names (renames
+  honoured, `^`-dissolved ones dropped, ordinals contributing nothing — exactly `^-_`'s
+  rule) followed by the content's key. **N (not now)** — leave `*-_` unminted, with a guided
+  "not yet". Both L and P are MEASURABLE TODAY through equivalent spellings: L ≡ `^` on
+  every ancestor + `*_`; P ≡ every lifted field spelled out with `^-_` (probe
+  `probe-1bvi-h`, research/P4e-1b-vi):
+
+  | # | input under `*-_` | L | P |
+  |---|---|---|---|
+  | E1 | `app{database*-_}` (no ancestor) | `{:database-url … :database-pool-size 10}` | same — L = P = `*_` at depth 1 |
+  | E2 | `app{server.ssl*-_}` | `{:ssl-enabled true :ssl-cert …}` | `{:server-ssl-enabled true :server-ssl-cert …}` |
+  | E3 | `env{prod.db*-_ dev.db*-_}` | **ERROR** duplicate `:db-port` | `{:prod-db-url … :prod-db-port … :dev-db-url … :dev-db-port …}` |
+  | E4 | `cloud{regions:{host port}*-_}` | `{:eu-host … :eu-port … :us-host … :us-port …}` | `{:regions-eu-host … :regions-us-port …}` |
+  | E5 | `app{server^srv.ssl*-_}` | refused (Q_U55 — rename unobservable) | `{:srv-ssl-enabled … :srv-ssl-cert …}` |
+  | E6 | `app{server^.ssl*-_}` | `{:ssl-enabled … :ssl-cert …}` | `{:ssl-enabled … :ssl-cert …}` — dissolving under P gives L's answer |
+  | E7 | `t5{a.b.c*-_}` | `{:c-m {:x 1} :c-n {:y 2}}` | `{:a-b-c-m {:x 1} :a-b-c-n {:y 2}}` |
+  | E8 | `vv{a.b*-_}` (vector contents) | refused (Q_U41: no fields to prefix) | refused — same |
+  | E9 | `app{server.ssl*-_ server.port}` | `{:ssl-enabled … :ssl-cert … :server {:port 8080}}` | `{:server-ssl-enabled … :server-ssl-cert … :server {:port 8080}}` |
+  | E10 | `env{prod dev}*-_` (closer seat — no ancestors) | `{:prod-db {…} :dev-db {…}}` | same — `*-_` ≡ `*_` with nothing to collapse |
+
+  For contrast at E2/E3: `*_` keeps ancestry (`{:server {:ssl-enabled …}}`, `{:prod {:db-url …}
+  :dev {:db-url …}}`); `*-` alone collides at E3 (duplicate `:port`). Hyphen-join is not
+  injective (`{:a {:b-c 1}}` and `{:a-b {:c 2}}` both name `a-b-c`); measured (probe
+  `probe-1bvi-i`), the strict merge refuses such a clash loudly (`duplicate output key
+  :a-b-c`) — P's flat names meet it more often than L's, never silently.
+
+  **THE TWO INVARIANTS CANNOT BOTH HOLD.** *I1 — `-` is orthogonal to `_`*: in the caret
+  family `^_` and `^-_` share one naming rule (the full path) and differ only in landing; L
+  keeps that for the star (`*_` and `*-_` share the deleted-key rule). *I2 — provenance names
+  everything the operator deleted*: Q_U24's own principle ("the DELETED key is the prefix"),
+  which `^-_` satisfies (it collapses the ancestors and names them) and `*_` satisfies (it
+  deletes one layer and names it); P extends it to `*-_`. **TRADEOFFS.** *Purpose* (Q_U24/Q_U51:
+  provenance exists to remove collisions by construction): L fails at E3, the sibling case,
+  because the collapse removed exactly the keys that told the siblings apart; P succeeds.
+  *Expressivity*: P ⊇ L — every L output is reachable under P by dissolving ancestors with
+  `^` (E6), while P's output under L needs every field spelled out with `^-_`. *Composition*
+  (Simplicity of Foundation): under P the caret vocabulary edits the prefix — `^` drops a
+  segment, `^k'` renames it (E5, E6); under L, carets on ancestors do nothing, and by Q_U55
+  a rename there is refused. *Ergonomics*: L's keys are shorter; P's grow by one segment per
+  collapsed ancestor (shorten with `^`/`^k'`). *Uniformity*: L preserves I1; P makes the `-`
+  change both landing and naming. *Monotonicity*: N is the waypoint; L and P are meanings, but
+  P does not foreclose L's outputs (they stay spellable), whereas L forecloses P's (only by
+  enumeration). L and P agree at E1, E8, E10, so those cases cannot decide it.
+
+  **Next free Q-label: U58.**
 
 - <a id="q-u43"></a>**⭐ Q_U43 — THE L4 SORT CHECK MOVES TO TYPING FOR STAR-BEARING
   BRANCHES, AS [Q_U38](#q-u38)'s COROLLARY [owner, 2026-08-11 — "move the sort

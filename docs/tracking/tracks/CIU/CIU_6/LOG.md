@@ -131,3 +131,20 @@ are in [`../README.md`](../README.md).
   arrow"; `<(x : Nat)*- Nat>` → a bare "Type mismatch" (no lexical message), while the glued-Sigma
   `<(x : Nat)* Nat>` gets Q_U31's guided "needs a SPACE" message.
 - **Next**: the `*->` handling (owner's call after the explanation), then `*-_`'s prefix rule.
+
+### Q_U56 decided (`*->` is a guided diagnostic in selection territory; type territory filed as DEFERRED 168); Q_U57 posed — `*-_`'s prefix, L vs P, measured through today's equivalents — this commit (2026-10-13)
+- **Why / decision**: owner — *"Yes, that looks like a guided diagnostic as per (a)."* Ledgered as
+  [Q_U56](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u56); the pre-existing type-territory
+  messages ("has no arrow", a bare "Type mismatch") filed on main as **DEFERRED 168** (`b309f98e`).
+  Then the owner asked for the `*-_` rule "worked out in examples and tradeoffs … with more examples":
+  [Q_U57](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u57), ten cases (E1–E10) on five fixtures.
+  Both candidate prefixes are measurable today through equivalent spellings: L ≡ `^` on every ancestor
+  + `*_`, and P ≡ every lifted field written with `^-_` (probe `probe-1bvi-h`). So the table is
+  measured, not predicted.
+- **Surprise / correction**: the decision reduces to two invariants that cannot both hold. I1 (`-`
+  orthogonal to `_`, as in the caret family) gives L. I2 (provenance names everything the operator
+  deleted, Q_U24's own principle) gives P. The sibling case E3 separates them: L refuses
+  `env{prod.db*-_ dev.db*-_}` (duplicate `:db-port`), which is the collision provenance exists to remove.
+  And P ⊇ L (dissolving ancestors under P gives L's answer, E6). Also measured (`probe-1bvi-i`): joining
+  keys with `-` is not injective, and the strict merge refuses the resulting clash loudly.
+- **Next**: owner decision Q_U57.

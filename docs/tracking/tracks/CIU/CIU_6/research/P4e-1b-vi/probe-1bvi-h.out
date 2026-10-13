@@ -1,0 +1,31 @@
+0: app : {:database {:pool-size Int :url String} :server {:port Int :ssl {:cert String :enabled Bool}}} defined.
+1: env : {:dev {:db {:port Int :url String}} :prod {:db {:port Int :url String}}} defined.
+2: cloud : {:regions {:eu {:host String :port Int} :us {:host String :port Int}}} defined.
+3: t5 : {:a {:b {:c {:m {:x Int} :n {:y Int}}}}} defined.
+4: vv : {:a {:b [PVec [PVec Int]]}} defined.
+5: {:database-pool-size 10, :database-url "db"} : {:database-pool-size Int :database-url String}
+6: {:database-pool-size 10, :database-url "db"} : {:database-pool-size Int :database-url String}
+7: {:server {:cert "c.pem", :enabled true}} : {:server {:cert String :enabled Bool}}
+8: {:server {:ssl-enabled true, :ssl-cert "c.pem"}} : {:server {:ssl-cert String :ssl-enabled Bool}}
+9: {:cert "c.pem", :enabled true} : {:cert String :enabled Bool}
+10: {:ssl-enabled true, :ssl-cert "c.pem"} : {:ssl-cert String :ssl-enabled Bool}
+11: {:server-ssl-cert "c.pem", :server-ssl-enabled true} : {:server-ssl-cert String :server-ssl-enabled Bool}
+12: {:dev {:db-url "d-url", :db-port 5433}, :prod {:db-url "p-url", :db-port 5432}} : {:dev {:db-port Int :db-url String} :prod {:db-port Int :db-url String}}
+13: ERROR: duplicate output key `:port` in the select block — two branches deliver the same output key, and distinct keys are required (strict merge; the alternative is a silent last-write-wins). The key may be one a branch NAMES, or one a `*` LIFTED out of its layer. Rename an UNSTARRED branch with `^k'` (`x{k^k2}`) — a starred segment cannot carry a rename — or select the flatten in its own block. If the key was lifted, dropping the `*` does not help either: it re-nests the layer under the key the star was deleting
+14: ERROR: duplicate output key `:db-port` in the select block — two branches deliver the same output key, and distinct keys are required (strict merge; the alternative is a silent last-write-wins). The key may be one a branch NAMES, or one a `*` LIFTED out of its layer. Rename an UNSTARRED branch with `^k'` (`x{k^k2}`) — a starred segment cannot carry a rename — or select the flatten in its own block. If the key was lifted, dropping the `*` does not help either: it re-nests the layer under the key the star was deleting
+15: {:dev-db-port 5433, :prod-db-url "p-url", :prod-db-port 5432, :dev-db-url "d-url"} : {:dev-db-port Int :dev-db-url String :prod-db-port Int :prod-db-url String}
+16: {:regions {:us-host "u", :eu-port 443, :us-port 8443, :eu-host "e"}} : {:regions {:eu-host String :eu-port Int :us-host String :us-port Int}}
+17: {:us-host "u", :eu-port 443, :us-port 8443, :eu-host "e"} : {:eu-host String :eu-port Int :us-host String :us-port Int}
+18: {:regions-us-port 8443, :regions-us-host "u", :regions-eu-port 443, :regions-eu-host "e"} : {:regions-eu-host String :regions-eu-port Int :regions-us-host String :regions-us-port Int}
+19: {:srv {:ssl-enabled true, :ssl-cert "c.pem"}} : {:srv {:ssl-cert String :ssl-enabled Bool}}
+20: {:srv-ssl-enabled true, :srv-ssl-cert "c.pem"} : {:srv-ssl-cert String :srv-ssl-enabled Bool}
+21: {:ssl-enabled true, :ssl-cert "c.pem"} : {:ssl-cert String :ssl-enabled Bool}
+22: {:a {:b {:c-n {:y 2}, :c-m {:x 1}}}} : {:a {:b {:c-m {:x Int} :c-n {:y Int}}}}
+23: {:c-n {:y 2}, :c-m {:x 1}} : {:c-m {:x Int} :c-n {:y Int}}
+24: {:a-b-c-n {:y 2}, :a-b-c-m {:x 1}} : {:a-b-c-m {:x Int} :a-b-c-n {:y Int}}
+25: ERROR: select: `b*_` — `*_` prefixes the FIELDS of each content, and this layer's contents are vectors (layer `{:b [PVec [PVec Int]]}`), which concatenate into one keyless component: there are no fields to prefix. Use bare `*`
+26: {:ssl-enabled true, :ssl-cert "c.pem", :server {:port 8080}} : {:server {:port Int} :ssl-cert String :ssl-enabled Bool}
+27: {:server-ssl-cert "c.pem", :server-ssl-enabled true, :server {:port 8080}} : {:server {:port Int} :server-ssl-cert String :server-ssl-enabled Bool}
+28: {:prod-db {:url "p-url", :port 5432}, :dev-db {:url "d-url", :port 5433}} : {:dev-db {:port Int :url String} :prod-db {:port Int :url String}}
+29: ERROR: select: `*` — `*` (flatten) joins the layer's contents keywise, and two of them carry the same key, so the join would silently drop one (layer `{:dev {:db {:port Int :url String}} :prod {:db {:port Int :url String}}}`). Star a narrower layer, or select the colliding fields as separate branches
+--- 4 errors ---

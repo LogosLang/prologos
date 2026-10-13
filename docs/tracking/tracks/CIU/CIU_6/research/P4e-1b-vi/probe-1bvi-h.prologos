@@ -1,0 +1,57 @@
+ns probe-1bvi-h
+
+;; `*-_` candidate rules, measured through TODAY's equivalent spellings:
+;;   L (layer-only)  ≡ dissolve every ancestor with `^`, then `*_`
+;;   P (path)        ≡ every lifted field spelled out with `^-_` (flat, full surviving path)
+;;   `*-`            ≡ dissolve every ancestor with `^`, then `*`
+
+def app := {:server {:ssl {:enabled true :cert "c.pem"} :port 8080} :database {:url "db" :pool-size 10}}
+def env := {:prod {:db {:url "p-url" :port 5432}} :dev {:db {:url "d-url" :port 5433}}}
+def cloud := {:regions {:eu {:host "e" :port 443} :us {:host "u" :port 8443}}}
+def t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}
+def vv := {:a {:b @[@[1 2] @[3]]}}
+
+;; E1 — depth 1 (no ancestor): *_ · L · P
+app{database*_}
+app{database.url^-_ database.pool-size^-_}
+
+;; E2 — depth 2: * · *_ · *- · L · P
+app{server.ssl*}
+app{server.ssl*_}
+app{server^.ssl*}
+app{server^.ssl*_}
+app{server.ssl.enabled^-_ server.ssl.cert^-_}
+
+;; E3 — sibling branches sharing field names: *_ · *- · L · P
+env{prod.db*_ dev.db*_}
+env{prod^.db* dev^.db*}
+env{prod^.db*_ dev^.db*_}
+env{prod.db.url^-_ prod.db.port^-_ dev.db.url^-_ dev.db.port^-_}
+
+;; E4 — broadcast over a Map under an ancestor: *_ · L · P
+cloud{regions:{host port}*_}
+cloud{regions^:{host port}*_}
+cloud{regions.eu.host^-_ regions.eu.port^-_ regions.us.host^-_ regions.us.port^-_}
+
+;; E5 — renamed ancestor: *_ · P
+app{server^srv.ssl*_}
+app{server^srv.ssl.enabled^-_ server^srv.ssl.cert^-_}
+
+;; E6 — dissolved ancestor under P (dropped means dropped)
+app{server^.ssl.enabled^-_ server^.ssl.cert^-_}
+
+;; E7 — depth 3, map-valued fields: *_ · L · P
+t5{a.b.c*_}
+t5{a^.b^.c*_}
+t5{a.b.c.m^-_ a.b.c.n^-_}
+
+;; E8 — positional contents: provenance has no key
+vv{a.b*_}
+
+;; E9 — beside a keyed sibling: L · P
+app{server^.ssl*_ server.port}
+app{server.ssl.enabled^-_ server.ssl.cert^-_ server.port}
+
+;; E10 — closer seat (no ancestors at all): *_ · *
+env{prod dev}*_
+env{prod dev}*

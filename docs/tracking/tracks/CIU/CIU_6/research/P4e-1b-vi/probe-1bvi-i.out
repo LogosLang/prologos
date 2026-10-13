@@ -1,0 +1,6 @@
+0: hy : {:a {:b-c Int} :a-b {:c Int}} defined.
+1: hz : {:a {:b {:c-d Int}} :a-b {:c {:d Int}}} defined.
+2: ERROR: duplicate output key :a-b-c in the select block — distinct output keys are required (strict merge); rename a branch with `^k'`, or group same-head branches into one sub-block (`x{k.{a b}}`)
+3: {:a {:b-c-d 1}, :a-b {:c-d 2}} : {:a {:b-c-d Int} :a-b {:c-d Int}}
+4: ERROR: duplicate output key :a-b-c-d in the select block — distinct output keys are required (strict merge); rename a branch with `^k'`, or group same-head branches into one sub-block (`x{k.{a b}}`)
+--- 2 errors ---
