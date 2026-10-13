@@ -506,7 +506,8 @@
 
     ;; --all: run everything (subject to skip filter)
     [(run-all?)
-     ;; Merge dep-graph entries with any test files on disk not yet in dep-graph
+     ;; all-test-files is the disk listing since SW-24 (the graph is derived, not stored);
+     ;; the disk scan below is the same set, kept so --all never depends on the graph module
      (define known-tests (all-test-files))
      (define disk-tests
        (if (directory-exists? tests-dir)
@@ -516,7 +517,7 @@
                                     (string-suffix? s ".rkt"))))
              (string->symbol (path->string p)))
            '()))
-     ;; PM Track 10C: filter to files that actually exist (dep-graph may have stale entries)
+     ;; PM Track 10C: filter to files that actually exist (a file deleted since the listing)
      ;; DEFERRED 161: test-support.rkt & co. are not test units (suite-plan.rkt
      ;; NON-TEST-MODULES) — dispatching the worker's own fixture ran 0 tests.
      (define all-tests
