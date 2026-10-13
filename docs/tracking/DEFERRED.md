@@ -6801,7 +6801,7 @@ per row. ⚠ Keep the star and caret tables SEPARATE: [Q_U31]/[Q_U29] rule that 
 segment carries at most one operator suffix, and the guards in each splitter
 test for the OTHER family's character — two tables, two guards, by design.
 
-### 146. ✅ **DISCHARGED `69f64caf`** (branch `deferred-sweep-146-149`, not yet merged) — MISATTRIBUTED: stored-key lookups allocate 0 B; the 64 B was Racket CS `equal?` on the probe's freshly built key — ~~`champ-lookup` ALLOCATES 64 B PER READ — a lookup should allocate 0; at ~5 lookups per fire it is ~10 % of a light fire's bytes~~
+### 146. ✅ **DISCHARGED `69f64caf`** (branch `deferred-sweep-146-149`, merged to main in `11f558c8`) — MISATTRIBUTED: stored-key lookups allocate 0 B; the 64 B was Racket CS `equal?` on the probe's freshly built key — ~~`champ-lookup` ALLOCATES 64 B PER READ — a lookup should allocate 0; at ~5 lookups per fire it is ~10 % of a light fire's bytes~~
 
 Found by the PAR 4 Stage-1 allocation census (`census.rkt`, Racket 9.3:
 `champ-lookup` any N → **64 B**, 36–55 ns; `net-cell-write` 0/1/8 deps = 481/529/801 B).
@@ -6820,9 +6820,9 @@ analysis §PSF-2 ([`tracks/PAR/PAR_4/research/…CONTENTION_ANALYSIS.md`](tracks
 `eq?` hits; the real cost was new-key inserts comparing keys whose hashes already differed (85 % of
 CHAMP's `equal?` bytes, 0.04–0.25 % of total allocation). Fixed by comparing the stored hash first at all
 six data-entry sites. The model property also found and fixed two latent transient defects (`6d172922`,
-`3a152ac9`). Record: `docs/tracking/handoffs/2026-10-13_DEFERRED_SWEEP_146-149_MERGE_NOTE.md` § 146 (branch `deferred-sweep-146-149` @ `8322459b`; lands on main with the merge).
+`3a152ac9`). Record: `docs/tracking/handoffs/2026-10-13_DEFERRED_SWEEP_146-149_MERGE_NOTE.md` § 146 (branch `deferred-sweep-146-149` @ `8322459b`; merged to main in `11f558c8`).
 
-### 147. ✅ **DISCHARGED `63d8f6af`** (branch `deferred-sweep-146-149`, not yet merged) — light fire 1 386 → 928 B, RE-ATTRIBUTED (the dominant costs were `parameterize` and the worklist dedup) — THE FIRE PROTOCOL'S CEREMONY — `for/hasheq` output-set per fire (even for single-output propagators) and TWO `champ-fold` closures per slow-path write — ~1.4 KB of the 2.8 KB per read+write fire
+### 147. ✅ **DISCHARGED `63d8f6af`** (branch `deferred-sweep-146-149`, merged to main in `11f558c8`) — light fire 1 386 → 928 B, RE-ATTRIBUTED (the dominant costs were `parameterize` and the worklist dedup) — THE FIRE PROTOCOL'S CEREMONY — `for/hasheq` output-set per fire (even for single-output propagators) and TWO `champ-fold` closures per slow-path write — ~1.4 KB of the 2.8 KB per read+write fire
 
 Same census: a BSP read-only fire costs **1 386 B / ~570 ns** before any write; a
 read+write fire **2 819 B / ~1 500 ns**; breakdown 50 % ceremony, 17 % write, 33 %
@@ -6841,9 +6841,9 @@ P2; A/B with the `PERF-COUNTERS` line, not wall. Success: light fire < 1 KB.
 branch; read+write 2 819 → 2 232 B). Re-attributed: the dominant items were `parameterize` ×2 (~496 B) and
 the worklist dedup's persistent-set inserts (~362 B), not the `output-set` (32 B). Fixed locally: the dedup uses
 a mutable `hasheqv`, `output-set` becomes `memq`, and the dependent folds are merged and skipped with no dependents.
-`parameterize` is left to PAR 4 H-S (fire context is ambient state, per the Q1 audit §6). Record: `docs/tracking/handoffs/2026-10-13_DEFERRED_SWEEP_146-149_MERGE_NOTE.md` § 147 (branch `deferred-sweep-146-149` @ `8322459b`; lands on main with the merge).
+`parameterize` is left to PAR 4 H-S (fire context is ambient state, per the Q1 audit §6). Record: `docs/tracking/handoffs/2026-10-13_DEFERRED_SWEEP_146-149_MERGE_NOTE.md` § 147 (branch `deferred-sweep-146-149` @ `8322459b`; merged to main in `11f558c8`).
 
-### 148. ✅ **DISCHARGED `c62cd267`** (branch `deferred-sweep-146-149`, not yet merged) — `tagged-cell-value` NEVER DEDUPLICATES ENTRIES — the speculative append and the merge both `cons`/`append` unconditionally, so a cell re-written with the same `(bitmask . value)` grows without bound
+### 148. ✅ **DISCHARGED `c62cd267`** (branch `deferred-sweep-146-149`, merged to main in `11f558c8`) — `tagged-cell-value` NEVER DEDUPLICATES ENTRIES — the speculative append and the merge both `cons`/`append` unconditionally, so a cell re-written with the same `(bitmask . value)` grows without bound
 
 Sites: [`decision-cell.rkt:453`](../../racket/prologos/decision-cell.rkt) (speculative write:
 `(cons (cons worldview-bitmask new-val) entries)` with no membership test) and `:465`
@@ -6865,7 +6865,7 @@ not `:453`/`:465` (no production callers). Pure refinement, pinned by a rackchec
 against the old append on both reader paths. W2 re-write ×10 000: entries 10 000 → 1.
 The PAR 4 heap workload still grows (100 → 84 entries at 100 rounds) because it is an
 ascending chain per bitmask, not duplicates — the bitmask-keyed map form is a PAR 4 D.2 decision (placed there by the owner, 2026-10-13; `tracks/PAR/PAR_4/LOG.md` § DEFERRED 148), not a DEFERRED entry.
-Record: `docs/tracking/handoffs/2026-10-13_DEFERRED_SWEEP_146-149_MERGE_NOTE.md` § 148 (branch `deferred-sweep-146-149` @ `8322459b`; lands on main with the merge).
+Record: `docs/tracking/handoffs/2026-10-13_DEFERRED_SWEEP_146-149_MERGE_NOTE.md` § 148 (branch `deferred-sweep-146-149` @ `8322459b`; merged to main in `11f558c8`).
 
 ### 149. ✅ **RESOLVED, NO CODE CHANGE — NOT A 9.3 REGRESSION; the 1.35× was main's build (see 159)** — ~~WATCHING — `test-transducer-01.rkt` is reproducibly ~1.35× SLOWER under Racket 9.3 than 9.0 (4.4→6.0 s, 4.3→5.8 s, worktree-pinned interleaved A/B); three other files at parity~~
 
@@ -6884,7 +6884,7 @@ when 9.3 builds without `PLT_CS_COMPILE_LIMIT`. Main's tree is in that state: 15
 giant modules match the no-limit build (4 byte-identical), written 10-12 20:24, and they persist through runner
 suites because up-to-date `.zo`s never recompile. Profile: 41.8 % in interpreted `match` clause code plus
 13.7 % `whnf`/`nf`, against ≤ 2.3 % compiled `match` code under the matched builds. Remedy and prevention:
-DEFERRED 159. Record: `docs/tracking/handoffs/2026-10-13_DEFERRED_SWEEP_146-149_MERGE_NOTE.md` § 149 (branch `deferred-sweep-146-149` @ `8322459b`; lands on main with the merge).
+DEFERRED 159. Record: `docs/tracking/handoffs/2026-10-13_DEFERRED_SWEEP_146-149_MERGE_NOTE.md` § 149 (branch `deferred-sweep-146-149` @ `8322459b`; merged to main in `11f558c8`).
 
 ### 150. ⬜ ⭐ THE BSP MERGE SPAWNS ~n GREEN THREADS PER WIDE ROUND BY DEFAULT — `current-tree-reduce-threshold` = 256 routes every round of ≥256 fires through `tree-reduce-fire-results … #t`, which pairs write-sets via `thread` + `channel` at every tree level; on the plain SEQUENTIAL executor that is pure overhead: 4.8–5.3× slower on wide networks
 
