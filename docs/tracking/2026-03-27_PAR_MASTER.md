@@ -6,6 +6,14 @@
 
 **Relates to**: BSP-LE (supersedes Track 4), PM (substrate), SRE (decomposition = topology change), PPN (hypergraph rewriting = topology change), PRN (rewrite application = topology change).
 
+**Revised 2026-10-12** (owner): **Track 4 — Arena Executors** opened from the Track-2 "R3–R5" row; the
+undefined `R1–R5` labels are retired (work is named by Design-Methodology stage). Track 4's
+artifacts live under the new per-track layout, [`tracks/PAR/PAR_4/`](tracks/PAR/PAR_4/) (log:
+[`LOG.md`](tracks/PAR/PAR_4/LOG.md)). §Challenge 1 below is **superseded** by Track 4's Stage-1
+record — see its revision note. Staleness fixed in the same pass: the 2026-03-28 dailies had
+recorded "R3–R5 closed as answered by implementation" while this table showed ⬜; the row now
+says what happened.
+
 ---
 
 ## Key Insight
@@ -30,8 +38,9 @@ Fire functions that call `net-new-cell` or `net-add-propagator` change the latti
 | 0 | CALM topology audit + stratified topology design | ✅ | [Audit](2026-03-27_PAR_TRACK0_CALM_AUDIT.md). 2 violators (SRE, narrowing), 7+ safe. LKan/RKan CALM-safe. |
 | 1 | BSP-as-default + stratified topology | ✅ | [Design](2026-03-27_PAR_TRACK1_DESIGN.md), [PIR](2026-03-28_PAR_TRACK1_PIR.md). 380/380 GREEN. 10 bugs via diagnostic protocol. Structural propagator capture. BSP 2.3% faster than DFS. |
 | 2 (R1-R2) | True parallel execution proof-of-concept | ✅ | Racket 9 parallel threads. 13/13 stress tests PASS. 4.45× speedup (synthetic). 1.42× on graph coloring/constraint grids. |
-| 2 (R3-R5) | Contention analysis + literature survey + design doc | ⬜ | Stage 0/1 research. Racket futures + STM/WAL/FFI. Write contention without constant re-firing. |
+| 2 (R3-R5) | Contention analysis + literature survey + design doc | ➡ Track 4 | Was marked "closed, answered by implementation" in the 2026-03-28 dailies but never here. Reopened 2026-10-12 as the Stage-1 research of **Track 4**; the STM/WAL/FFI directions are answered there (STM unnecessary, WAL = the delta arena, FFI unnecessary for the signal). |
 | 3 | `:auto` heuristic + production deployment | ⬜ | Network size threshold, propagator count. Kind-aware (PTF Track 3). Like solver's `:auto` setting. |
+| **4** | **Arena Executors** — scheduler-owned spin executors, ownership-partitioned cells, direct S0 writes under chaotic iteration (barrier = stratum boundary), plus a flat storage tier for the fixnum lattices | 🔶 Stage 1 ✅ Stage 2 ✅ D.1 ✅ P0 ✅ (2026-10-13) · D.2 next | [P0](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md) · [D.1](tracks/PAR/PAR_4/2026-10-12_PAR_4_D1_DESIGN.md) · [Stage 1 synthesis](tracks/PAR/PAR_4/research/2026-10-12_PAR_4_STAGE1_RESEARCH_SYNTHESIS.md) · [contention analysis](tracks/PAR/PAR_4/research/2026-10-12_PAR_4_STAGE1_CONTENTION_ANALYSIS.md) · [Stage 2 gap analysis](tracks/PAR/PAR_4/2026-10-12_PAR_4_STAGE2_GAP_ANALYSIS.md) · [LOG](tracks/PAR/PAR_4/LOG.md). Key numbers: raw-memory handoff ~60 ns (2B's 8 µs floor was scheduler-routed signals); Chez allocator does not scale (global refill mutex); solver allocation-bound (wall ≈ bytes ÷ 2.2 GB/s); arena fire 95–131 ns / ~0 B vs 1 500 ns / 2.8 KB; same fixpoint at every K incl. async mode; 7× at K=8, 13× at K=16 at today's fire weight. |
 
 ---
 
@@ -84,6 +93,15 @@ Dynamic topology should never be supported as an inline operation (fire function
 ## Known Challenges
 
 ### Challenge 1: Racket Parallelism Limitations (Track 2 research)
+
+> ⚠ **Superseded 2026-10-12 by Track 4 Stage 1** ([record](tracks/PAR/PAR_4/research/2026-10-12_PAR_4_STAGE1_CONTENTION_ANALYSIS.md) §6).
+> The premises below predate Racket 9.0's parallel threads (`thread #:pool 'own`, shared-memory,
+> truly parallel). Measured on 9.0/9.3: the real limit is the Chez **allocator** (a global mutex on
+> allocation-area refill; places share it), not the threads; cross-thread signalling is ~60 ns via
+> boxes + fences. Of the four directions: STM is unnecessary (joins commute; ownership needs no
+> retry); WAL cells ARE the delta arena, now measured; FFI is unnecessary for the signal (8 ns
+> crossing, same hardware floor); the hybrid is moot. Kept verbatim below as the record of the
+> question as it was asked.
 
 Racket's parallelism primitives are insufficient for our needs:
 - **Futures**: Cannot perform mutation. Fire functions use `net-cell-write` which returns a new network (pure), but the BSP merge step needs to combine results from multiple futures. GC pauses affect all futures simultaneously. No true OS-thread parallelism for non-numeric workloads.
