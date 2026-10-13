@@ -327,7 +327,7 @@ observing it; the comparative corpus never reaches the arms, so it cannot serve 
 **Next**: D.2 decides F3(b) at both sites, against the new witness; P0's corpus needs a program that reaches
 binder merges with unsolved metas.
 
-### PAR 4 moved to its own branch + worktree `par4-arena-executors`; P0's timing rows re-measured on a verified limited build — and P0's "S0 = 7 %" headline corrected to 24–30 % — `<commit below>` (2026-10-13)
+### PAR 4 moved to its own branch + worktree `par4-arena-executors`; P0's timing rows re-measured on a verified limited build — and P0's "S0 = 7 %" headline corrected to 24–30 % — `3d9a208f` (2026-10-13)
 - **Why / decision**: owner — move this work to its own worktree/branch under the new process
   (branches in nested worktrees; main receives periodic, tested checkpoint merges), and check the
   merge-laws note §7 and the git log for other sessions' work. Branch `par4-arena-executors` created at
