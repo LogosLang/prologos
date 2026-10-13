@@ -1,0 +1,7 @@
+M1 fasl body read as text -> 24 tests in 0.4s (2 files, 2 batch workers, 2 FAILURES)
+M2 usage errors exit 1, not 64 -> 24 tests in 0.5s (2 files, 2 batch workers, 1 FAILURES)
+M3 canonical form = identity -> 24 tests in 0.6s (2 files, 2 batch workers, 2 FAILURES)
+M4 verdict always fresh -> 24 tests in 0.4s (2 files, 2 batch workers, 2 FAILURES)
+M5 slot names lose one -> 24 tests in 0.7s (2 files, 2 batch workers, 2 FAILURES)
+restored: both files byte-identical to the originals
+after restore -> 24 tests in 0.5s (2 files, 2 batch workers, all pass)

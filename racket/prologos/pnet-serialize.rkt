@@ -21,6 +21,7 @@
          racket/path
          racket/string
          racket/list
+         (only-in racket/fasl s-exp->fasl fasl->s-exp)   ; DEFERRED 151 (b): the body is fasl
          "prelude.rkt"
          "syntax.rkt"
          "namespace.rkt"
@@ -97,9 +98,12 @@
          foreign-module-path->require-spec
          pnet-stale?
          pnet-path-for-module
-         ;; For testing
+         ;; For testing, and for tools/pnet-dump.rkt (the layout's readers + slot names)
          PNET_VERSION
          read-pnet-header
+         read-pnet-body
+         PNET-BODY-SLOTS
+         source-hash-for-module
          make-serializer
          deep-struct->serializable
          deep-serializable->struct
@@ -198,7 +202,37 @@
 ;; (or older) file starts with `(10 ` rather than the header prefix, so it is
 ;; classified stale from its first bytes without being parsed, and is never
 ;; misread as a body. Every cache regenerates once on the bump.
-(define PNET_VERSION 11)
+;; v11 -> v12 (DEFERRED 151 fix (b), 2026-10-13): FORMAT. The header stays a text
+;; datum; after its newline the BODY is fasl (`s-exp->fasl`, Racket's binary
+;; S-expression format). Text `read` of the bodies was ~1.3 s per process start,
+;; slower than elaborating from source; fasl reads the same data in ~55 ms (load
+;; phase 1 450 -> 285 ms CPU; record: docs/tracking/handoffs/
+;; 2026-10-13_PNET_FASL_151B_DATA/README.md). The data is the same; strings and
+;; vectors now come back IMMUTABLE, and nothing mutates a deserialized one. fasl
+;; writes each distinct string object once and the reader hands back ONE shared
+;; immutable object for all its occurrences (42 267 string occurrences are 1 703
+;; objects over the prelude; text `read` made 42 241) — immutability is what makes
+;; that sharing safe. The fasl encoding is Racket-version-independent since
+;; 6.90.0.21 (Racket reference, "Fast-Load Serialization"); a new Racket rebuilds
+;; driver_rkt.zo anyway, which `infrastructure-stale?` treats as "every cache
+;; stale". A body is no longer human-readable: `racket tools/pnet-dump.rkt`
+;; prints it as text.
+(define PNET_VERSION 12)
+
+;; The body's slots in order: raw slots 2..30 of the reassembled list in
+;; `deserialize-module-state` (0 = version and 1 = source hash are the header's).
+;; The writer checks its body against this list, so the names cannot drift from
+;; the layout; tools/pnet-dump.rkt labels slots with them.
+(define PNET-BODY-SLOTS
+  '(env-snapshot specs definition-locations exports namespace          ;  2-6
+    preparse-registry ctor-registry type-meta multi-defn-registry      ;  7-10
+    subtype-registry coercion-registry capability-registry             ; 11-13
+    trait-registry impl-registry param-impl-registry                   ; 14-16
+    specialization-registry tycon-arity-extension bundle-registry      ; 17-19
+    defn-param-names trait-laws property-store functor-store           ; 20-23
+    schema-registry selection-registry session-registry                ; 24-26
+    strategy-registry process-registry                                 ; 27-28
+    user-operators user-precedence-groups))                            ; 29-30
 
 ;; DEFERRED 151 (a): the header is the file's first datum, written by `write` as
 ;; `(pnet-header <version> "<source-hash>")`. Readers PEEK for this prefix
@@ -217,6 +251,14 @@
               (= (length h) 3)
               (eq? (car h) 'pnet-header)
               h))))
+
+;; read-pnet-body : input-port -> any
+;; After `read-pnet-header` has consumed the header: the newline that ends it,
+;; then the fasl body. Raises on a truncated or non-fasl body (callers that must
+;; not raise wrap it, as `deserialize-module-state` does).
+(define (read-pnet-body in)
+  (read-char in)
+  (fasl->s-exp in))
 
 ;; The staleness judgement itself — unchanged from v10: exact version
 ;; equality and an equal source key.
@@ -926,6 +968,9 @@
              s-user-ops             ;; 29
              s-user-precs           ;; 30
              ))
+     (unless (= (length pnet-body) (length PNET-BODY-SLOTS))
+       (error 'serialize-module-state "body has ~a slots, PNET-BODY-SLOTS names ~a"
+              (length pnet-body) (length PNET-BODY-SLOTS)))
      (define pnet-path (pnet-path-for-module ns-sym))
      (make-directory* (path-only pnet-path))
      ;; Atomic write: write to temp, then rename
@@ -934,8 +979,11 @@
        (lambda (out)
          (write pnet-header out)
          (newline out)
-         (write pnet-body out)
-         (newline out))
+         ;; v12 (DEFERRED 151 b): the body as fasl. The text `read` of a 16.9 MB
+         ;; body cost ~1.3 s; fasl reads the same data in ~55 ms. Gensyms are
+         ;; already interned `symbol$$N` tags (serialize-sym), so symbol identity
+         ;; is what the text format gave.
+         (s-exp->fasl pnet-body out))
        #:exists 'replace)
      (rename-file-or-directory tmp-path pnet-path #t)
      pnet-path))
@@ -952,7 +1000,7 @@
                       (lambda (in)
                         (define h (read-pnet-header in))
                         (and (pnet-header-fresh? h ns-sym source-path)
-                             (let ([body (read in)])
+                             (let ([body (read-pnet-body in)])
                                (and (list? body)
                                     (list* (cadr h) (caddr h) body)))))))])
          (and raw
