@@ -40,7 +40,7 @@ cells for which the chaotic-iteration hypotheses do not obviously hold. Those ar
 
 | # | Document (path, date) | What it claims that bears on Track 4 | Status |
 |---|---|---|---|
-| 1 | `docs/research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md` §4.2–4.3 (2026-03-26) | Chaotic iteration = propagator scheduling, table of correspondences; worklist strategies affect efficiency not correctness | **REUSABLE** (the theorem Track 4 stands on) |
+| 1 | `docs/tracking/tracks/PPN/research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md` §4.2–4.3 (2026-03-26) | Chaotic iteration = propagator scheduling, table of correspondences; worklist strategies affect efficiency not correctness | **REUSABLE** (the theorem Track 4 stands on) |
 | 2 | `docs/research/2026-03-28_MODULE_THEORY_LATTICES.md` §7, §10-PAR, §12 (2026-03-28) | Submodule independence = parallelizability; connected components of cell/propagator graph = irreducible submodules; `:auto` has a formal basis; stratification = handling of non-monotone endomorphisms | **REUSABLE** (Q4's theory); the "~1 hour experiment" §7 is Pre-0 Q4 |
 | 3 | `docs/research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md` (2026-03-26) | CAS on cell writes; shared work-stealing worklist; topological-sort rounds = minimum rounds; futures/green threads block parallelism | **REVISED BY STAGE 1** (§2.2, §2.3, §3, §9.1–9.2); §4 prefix-scan untouched |
 | 4 | `docs/research/2026-03-28_PARALLEL_PROPAGATOR_SCHEDULING.md` (2026-03-28) | Parallel threads are the primitive; contention point is `bulk-merge-writes`; CAS-merge Phase 2; WAL = sequential merge; `:auto` by fire time vs spawn cost; "weak memory model fine because snapshots" | **REVISED BY STAGE 1** (§2.1, §3.1, §3.4, §4.4, §5.2–5.3, §6.4–6.5, §8.1, §8.8); §5.4 non-idempotent merges **OPEN** (sharpened, §4 below) |
@@ -306,7 +306,7 @@ S0 needs, and its cost is the measured 0.8 µs once per stratum transition, not 
 - `docs/research/RESEARCH_PARALLEL.md` (:529-565, :677-757, :874-900, :904-916, :1010-1035)
 - `docs/research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md` (:15-83, :125-200)
 - `docs/research/2026-03-28_PARALLEL_PROPAGATOR_SCHEDULING.md` (:24-53, :57-87, :90-121, :125-157, :160-192, :248-276)
-- `docs/research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md` (:283-325, :374-517)
+- `docs/tracking/tracks/PPN/research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md` (:283-325, :374-517)
 - `docs/research/2026-03-28_MODULE_THEORY_LATTICES.md` (:247-268, :333-338, :395-407, :411-421)
 - `docs/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md` (:10-32, :38-89, :178-187)
 - `docs/research/2026-04-30_LATTICE_HIERARCHY_AND_DISTRIBUTIVITY_FOR_PROPAGATORS.md` (:243-302)

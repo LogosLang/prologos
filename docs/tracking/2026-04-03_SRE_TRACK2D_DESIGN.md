@@ -2,18 +2,18 @@
 
 **Date**: 2026-04-03
 **Series**: [SRE (Structural Reasoning Engine)](2026-03-22_SRE_MASTER.md)
-**Prerequisites**: [SRE Track 2F ✅](2026-03-28_SRE_TRACK2F_DESIGN.md) (Algebraic Foundation — relation infrastructure), [PPN Track 3 ✅](2026-04-01_PPN_TRACK3_DESIGN.md) (form cells, dependency-set pipeline)
+**Prerequisites**: [SRE Track 2F ✅](2026-03-28_SRE_TRACK2F_DESIGN.md) (Algebraic Foundation — relation infrastructure), [PPN Track 3 ✅](tracks/PPN/PPN_3/2026-04-01_PPN_TRACK3_DESIGN.md) (form cells, dependency-set pipeline)
 **Audit**: [SRE Track 2D Stage 2 Audit](2026-04-03_SRE_TRACK2D_STAGE2_AUDIT.md)
 **Principle**: Propagator Design Mindspace ([DESIGN_METHODOLOGY.org](principles/DESIGN_METHODOLOGY.org) § Propagator Design Mindspace)
 
 **Research**:
 - [Tree Rewriting as Structural Unification](../research/2026-03-26_TREE_REWRITING_AS_STRUCTURAL_UNIFICATION.md) — rewriting IS the 4th SRE relation
 - [Hypergraph Rewriting + Propagator Parsing](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md) — DPO/SPO theory, adhesive categories, critical pairs, e-graphs, interaction nets, GoI
-- [Lattice Foundations for PPN](../research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md) — reduced product, semiring parsing
+- [Lattice Foundations for PPN](tracks/PPN/research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md) — reduced product, semiring parsing
 
 **Cross-series consumers**:
 - [Grammar Form R&D](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md) — concrete DPO/HR examples from lifted rules. Grammar productions ARE rewrite rule registrations.
-- [PPN Track 4](2026-03-26_PPN_MASTER.md) — critical pair analysis + sub-cell interfaces consumed by elaboration-on-network
+- [PPN Track 4](tracks/PPN/2026-03-26_PPN_MASTER.md) — critical pair analysis + sub-cell interfaces consumed by elaboration-on-network
 - [SRE Track 6 / PM Track 9](2026-03-22_SRE_MASTER.md) — reduction-as-rewriting shares the same relation mechanism. β/δ/ι rules as DPO spans.
 
 ---
@@ -703,5 +703,5 @@ Track 6 registers this as a rewrite rule. Track 2D provides the mechanism.
 
 - [Stage 2 Audit](2026-04-03_SRE_TRACK2D_STAGE2_AUDIT.md) — 12 rules cataloged, DPO correspondence, on-network analysis
 - [SRE Track 2H PIR](2026-04-03_SRE_TRACK2H_PIR.md) — type-tensor-core IS a DPO span at the type level
-- [PPN Master Track 4](2026-03-26_PPN_MASTER.md) — consumes critical pair analysis and sub-cell interfaces
+- [PPN Master Track 4](tracks/PPN/2026-03-26_PPN_MASTER.md) — consumes critical pair analysis and sub-cell interfaces
 - [SRE Track 6 (Reduction-on-SRE)](2026-03-22_SRE_MASTER.md) — shares the rewrite relation mechanism; adds equivalence directionality

@@ -12,7 +12,7 @@ Pre-0 benchmarks, parity skeleton.
 
 ** Stage 2 audit (2026-04-17)
 
-- =docs/tracking/2026-04-17_PPN_TRACK4C_AUDIT.md= (507 lines, commit
+- =docs/tracking/tracks/PPN/PPN_4C/2026-04-17_PPN_TRACK4C_AUDIT.md= (507 lines, commit
   =881d2282=)
 - 9 axes reframing of the "6 bridges" design note
 - Grep-backed gap analysis: 79 =solve-meta!= sites, 513 zonk reads, 76
@@ -27,7 +27,7 @@ Pre-0 benchmarks, parity skeleton.
   "measure before/during/after + memory")
 - =racket/prologos/examples/2026-04-17-ppn-track4c-adversarial.prologos=
   (per-axis stress cases)
-- =docs/tracking/2026-04-17_PPN_TRACK4C_PRE0_REPORT.md= (findings)
+- =docs/tracking/tracks/PPN/PPN_4C/2026-04-17_PPN_TRACK4C_PRE0_REPORT.md= (findings)
 - Three standout data points shaped D.2: =that-read= ~1400× faster than
   CHAMP reads (hot-path win for A2); E2 parametric path allocates 343 MB
   (19× baseline — motivates A1 rebuild); speculation primitives ~8 μs
@@ -90,11 +90,11 @@ Pre-0 benchmarks, parity skeleton.
 ** External critique handoff note
 
 Full context + decision log in:
-- =docs/tracking/handoffs/2026-04-18_PPN_4C_D2_EXTERNAL_CRITIQUE_HANDOFF.md=
+- =docs/tracking/tracks/PPN/PPN_4C/2026-04-18_PPN_4C_D2_EXTERNAL_CRITIQUE_HANDOFF.md=
   (D.2 → external handoff, 459 lines)
-- =docs/tracking/2026-04-17_PPN_TRACK4C_SELF_CRITIQUE.md= (self-critique
+- =docs/tracking/tracks/PPN/PPN_4C/2026-04-17_PPN_TRACK4C_SELF_CRITIQUE.md= (self-critique
   round, closed)
-- =docs/tracking/2026-04-18_PPN_TRACK4C_EXTERNAL_CRITIQUE.md= (external
+- =docs/tracking/tracks/PPN/PPN_4C/2026-04-18_PPN_TRACK4C_EXTERNAL_CRITIQUE.md= (external
   round, all 17 responses populated)
 
 * Today

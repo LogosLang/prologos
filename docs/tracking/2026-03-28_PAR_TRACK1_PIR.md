@@ -8,7 +8,7 @@
 **Suite health**: 380/380, 7529 tests, 148.0s, all pass
 **Design iterations**: 4 (D.1 → D.4, including external critique)
 **Design docs**: [PAR Track 1 Design](2026-03-27_PAR_TRACK1_DESIGN.md) (D.4), [Stage 2 Audit](2026-03-27_PAR_TRACK1_STAGE2_AUDIT.md), [PAR Track 0 CALM Audit](2026-03-27_PAR_TRACK0_CALM_AUDIT.md)
-**Prior PIRs**: [PPN Track 1](2026-03-26_PPN_TRACK1_PIR.md), [PPN Track 0](2026-03-26_PPN_TRACK0_PIR.md), [PM Track 10B](2026-03-26_PM_TRACK10B_PIR.md), [PM Track 10](2026-03-24_PM_TRACK10_PIR.md), [PM 8F](2026-03-24_PM_8F_PIR.md)
+**Prior PIRs**: [PPN Track 1](tracks/PPN/PPN_1/2026-03-26_PPN_TRACK1_PIR.md), [PPN Track 0](tracks/PPN/PPN_0/2026-03-26_PPN_TRACK0_PIR.md), [PM Track 10B](2026-03-26_PM_TRACK10B_PIR.md), [PM Track 10](2026-03-24_PM_TRACK10_PIR.md), [PM 8F](2026-03-24_PM_8F_PIR.md)
 **Series**: PAR (Parallel Scheduling) — first track in the series
 
 ---

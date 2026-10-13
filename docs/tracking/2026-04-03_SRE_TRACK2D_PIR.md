@@ -8,7 +8,7 @@
 **Suite health**: 384/384 files, 7526 tests, 138.1s, all pass
 **Design iterations**: D.1 → D.2 (Pre-0 data) → D.3 (self-critique, 3 lenses, 11 findings) → D.4 (incorporating findings + user discussion) → D.5 (external critique, 12 findings)
 **Design docs**: [Design](2026-04-03_SRE_TRACK2D_DESIGN.md), [Stage 2 Audit](2026-04-03_SRE_TRACK2D_STAGE2_AUDIT.md)
-**Prior PIRs**: [SRE Track 2H](2026-04-03_SRE_TRACK2H_PIR.md), [PPN Track 3](2026-04-02_PPN_TRACK3_PIR.md), [SRE Track 2G](2026-03-30_SRE_TRACK2G_PIR.md)
+**Prior PIRs**: [SRE Track 2H](2026-04-03_SRE_TRACK2H_PIR.md), [PPN Track 3](tracks/PPN/PPN_3/2026-04-02_PPN_TRACK3_PIR.md), [SRE Track 2G](2026-03-30_SRE_TRACK2G_PIR.md)
 **Series**: SRE (Structural Reasoning Engine) — Track 2D
 
 ---

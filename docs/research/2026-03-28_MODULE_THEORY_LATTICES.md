@@ -5,7 +5,7 @@
 **Status**: Stage 0/1 research — foundational theory with immediate architectural implications
 **Cross-references**:
 - PRN Master: `docs/tracking/2026-03-26_PRN_MASTER.md`
-- PPN Master: `docs/tracking/2026-03-26_PPN_MASTER.md`
+- PPN Master: `docs/tracking/tracks/PPN/2026-03-26_PPN_MASTER.md`
 - SRE Master: `docs/tracking/2026-03-22_SRE_MASTER.md`
 - PTF Master: `docs/tracking/2026-03-28_PTF_MASTER.md`
 - PAR Master: `docs/tracking/2026-03-27_PAR_MASTER.md`

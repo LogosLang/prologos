@@ -52,7 +52,7 @@ Most languages retire axis 1 well before axis 2. GHC's runtime is C and has been
 
 Active series filling out the architectural commitment that "compiler IS network": PPN, SRE, PM, BSP-LE, CIU. PPN Track 4 (compiler IS the network) is the load-bearing prerequisite for everything downstream — once it lands, the architectural claim moves from "in progress" to "delivered." All other SH-series tracks gate on it.
 
-**Compiler perf characterization** ([`2026-04-01_PPN_TRACK3_DESIGN.md`](../tracking/2026-04-01_PPN_TRACK3_DESIGN.md) §2.3): on a 70-command `.prologos` file, parse 0ms (unmeasurable), elaboration+typecheck 443ms (27%), **reduction 1049ms (64%)**. Reduction is the dominant cost. Track 9 / PReduce addresses this.
+**Compiler perf characterization** ([`2026-04-01_PPN_TRACK3_DESIGN.md`](../tracking/tracks/PPN/PPN_3/2026-04-01_PPN_TRACK3_DESIGN.md) §2.3): on a 70-command `.prologos` file, parse 0ms (unmeasurable), elaboration+typecheck 443ms (27%), **reduction 1049ms (64%)**. Reduction is the dominant cost. Track 9 / PReduce addresses this.
 
 ### Stage A.5 — runtime Racket retired (axis 1)
 
@@ -273,7 +273,7 @@ Doing them in this order is correct. Doing them in reverse means porting a slow 
 ### Architectural context
 - [Unified Propagator Network Roadmap](../tracking/2026-03-22_UNIFIED_PROPAGATOR_NETWORK_ROADMAP.md) — architectural endpoint diagram
 - [Track 9 Reduction-as-Propagators research](../tracking/2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md) — PReduce founding research; cross-series dependency
-- [PPN Master](../tracking/2026-03-26_PPN_MASTER.md) — Track 4 prerequisite chain
+- [PPN Master](../tracking/tracks/PPN/2026-03-26_PPN_MASTER.md) — Track 4 prerequisite chain
 - [FFI Master](../tracking/2026-04-28_FFI_MASTER.md) — substrate boundary work
 
 ### Self-hosting precedents (literature)

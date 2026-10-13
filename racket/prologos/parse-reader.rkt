@@ -13,7 +13,7 @@
 ;;; Each domain is an embedded lattice (Pocket Universe principle):
 ;;; a single propagator-network cell holding an RRB persistent vector.
 ;;;
-;;; See: docs/tracking/2026-03-26_PPN_TRACK1_DESIGN.md (D.9)
+;;; See: docs/tracking/tracks/PPN/PPN_1/2026-03-26_PPN_TRACK1_DESIGN.md (D.9)
 ;;;
 
 (require racket/string
@@ -1992,7 +1992,7 @@
 ;; `make-prop-network`, 5 `net-new-cell`, 5 `net-cell-write`, 1 `net-cell-read`:
 ;; a cell LEDGER written by a straight-line net1→net6 sequence. The real home
 ;; for the wiring is the reader-layer section of the PPN 4D Implementation Draft
-;; Note (`docs/tracking/2026-05-19_PPN_4D_IMPLEMENTATION_DRAFT_NOTE.md`), and it
+;; Note (`docs/tracking/tracks/PPN/PPN_4D/2026-05-19_PPN_4D_IMPLEMENTATION_DRAFT_NOTE.md`), and it
 ;; is genuinely unbuilt rather than deferred-to-a-shipped-phase.
 
 ;; Disambiguate tokens based on bracket context.

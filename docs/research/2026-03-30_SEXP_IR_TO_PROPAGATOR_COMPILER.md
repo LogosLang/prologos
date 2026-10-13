@@ -2,7 +2,7 @@
 
 **Date**: 2026-03-30
 **Context**: PPN Track 2B design review — examining what sexp path retirement means for the compiler architecture and self-hosting
-**Series**: [PPN Master](../tracking/2026-03-26_PPN_MASTER.md)
+**Series**: [PPN Master](../tracking/tracks/PPN/2026-03-26_PPN_MASTER.md)
 **Cross-references**: [LANGUAGE_VISION.org](../tracking/principles/LANGUAGE_VISION.org) § Self-Hosting, [DESIGN_PRINCIPLES.org](../tracking/principles/DESIGN_PRINCIPLES.org) § Homoiconicity as Invariant
 
 ---

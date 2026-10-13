@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 170**
+> ### **NEXT FREE: 171**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -1072,7 +1072,7 @@ skip+warn policy; these lift the skips / harden the substrate.
 
 - **GitHub Issue**: [#63](https://github.com/LogosLang/prologos/issues/63) (PRIMARY surface; queryable; linkable from PRs)
 - **MASTER_ROADMAP.org**: forward-references at OE Series Track 1 (weighted parsing) + PReduce Track 4 (cost-guided extraction)
-- **Origin**: PPN 4C Tropical Quantale Addendum 1C-vi A/B/C report (2026-05-16; `docs/tracking/2026-05-16_TROPICAL_1C_VI_ABC_REPORT.md`); design doc §13.7 cross-track note flagged as "small tool enhancement"
+- **Origin**: PPN 4C Tropical Quantale Addendum 1C-vi A/B/C report (2026-05-16; `docs/tracking/tracks/PPN/PPN_4C/2026-05-16_TROPICAL_1C_VI_ABC_REPORT.md`); design doc §13.7 cross-track note flagged as "small tool enhancement"
 - **Scope**: `tools/bench-ab.rkt` currently supports A/B (`--ref HEAD~1`); extend with `--refs` accepting multiple commit refs for multi-way comparison; markdown table generation option
 - **Consumed by**: OE Series Track 1 (weighted parsing with cost-extraction variants); PReduce Track 4 (cost-guided extraction with multiple strategies); future PAR tracks (parallel scheduler variants comparison)
 - **Not in scope for 1C-vi**: A and B baselines for THIS addendum's report are captured data files (OLD struct-field counter RETIRED at 1C-iv-b; live A re-measurement structurally impossible); a markdown report sufficed (β3 resolution per §10.0.7)
@@ -1424,7 +1424,7 @@ DEFERRED_COMPLETE.md at the 2026-07-16 F1b-opening triage.)*
 | Impl registry | 4C / Phase 7 | ⬜ planned | Instance of Hasse-registry with L_impl (specificity lattice per §6.12.6) | Written at module load when `impl X Y` declarations elaborate; read during parametric trait resolution | Inherits Hasse-registry primitive's choice (see above) |
 | Constructor inhabitant catalog | 4C / Phase 9b | ⬜ planned | Instance of Hasse-registry with L_inhabitant (subsumption lattice per §6.12.6) | Written at module load when `data X := ...` declarations elaborate; read during γ hole-fill | Inherits Hasse-registry primitive's choice (see above); M3 re-firing-on-growth semantics decided at Phase 9b mini-design |
 | `current-process-id` parameter | 4C / Phase 1e-β-iii | ⬜ planned | Racket parameter (default 0) tagging Lamport timestamps at E1 clock writes | Read at every `net-write-timestamped` call to tag the new timestamp with the process-id dimension. Under single-BSP (today) always returns 0 — the pid carries no runtime information. Parameterized per-worker in future parallel-execution contexts. | PM Track 12 evaluates: (a) keep as parameter (dynamic-scope-shaped concept matches worker identity), (b) migrate to on-network cell (if worker identity needs network participation), or (c) retire entirely when BSP-round granularity becomes the natural process boundary. |
-| `current-lattice-meta-solution-fn` callback parameter | 4C addendum S2.c-iii audit (2026-04-24) | ⬜ flagged | Racket parameter holding `meta-solution` function ([type-lattice.rkt:68](../../racket/prologos/type-lattice.rkt)). Installed by driver.rkt:2633 via `install-lattice-meta-solution-fn!`. Used by type-lattice.rkt:86, 176, 399, 403, 421 for `is-meta-unsolved?`-style checks during ground-check + subtype operations. Off-network scaffolding to break import cycle (type-lattice.rkt is leaf module; can't import metavar-store.rkt). | Set once at driver init via `install-lattice-meta-solution-fn!`; read on demand during type-lattice operations. **Mantra violations**: ❌ off-network, ❌ not structurally emergent (callback invocation is imperative), ❌ not info flow through cells. | **PM Track 12 + PPN 4C parent Phase 4 jointly retire**: when PM 12 makes module-load-time infrastructure on-network (cells accessible from leaf modules via scope chain), type-lattice.rkt's queries restructure to read directly from cells. Phase 4's CHAMP retirement provides the natural reframing point for the data flow (was reading CHAMP via callback → reads attribute-map facet via universe dispatch). See [PPN 4C parent Phase 4 row](2026-04-17_PPN_TRACK4C_DESIGN.md) for absorbed scope. The "constraint on shim signature" (post-S2.c-iii: `meta-solution` must remain a top-level definition with signature `(id) -> solution-or-#f` so the callback installation works) is not a feature — it's a constraint imposed by this scaffolding. |
+| `current-lattice-meta-solution-fn` callback parameter | 4C addendum S2.c-iii audit (2026-04-24) | ⬜ flagged | Racket parameter holding `meta-solution` function ([type-lattice.rkt:68](../../racket/prologos/type-lattice.rkt)). Installed by driver.rkt:2633 via `install-lattice-meta-solution-fn!`. Used by type-lattice.rkt:86, 176, 399, 403, 421 for `is-meta-unsolved?`-style checks during ground-check + subtype operations. Off-network scaffolding to break import cycle (type-lattice.rkt is leaf module; can't import metavar-store.rkt). | Set once at driver init via `install-lattice-meta-solution-fn!`; read on demand during type-lattice operations. **Mantra violations**: ❌ off-network, ❌ not structurally emergent (callback invocation is imperative), ❌ not info flow through cells. | **PM Track 12 + PPN 4C parent Phase 4 jointly retire**: when PM 12 makes module-load-time infrastructure on-network (cells accessible from leaf modules via scope chain), type-lattice.rkt's queries restructure to read directly from cells. Phase 4's CHAMP retirement provides the natural reframing point for the data flow (was reading CHAMP via callback → reads attribute-map facet via universe dispatch). See [PPN 4C parent Phase 4 row](tracks/PPN/PPN_4C/2026-04-17_PPN_TRACK4C_DESIGN.md) for absorbed scope. The "constraint on shim signature" (post-S2.c-iii: `meta-solution` must remain a top-level definition with signature `(id) -> solution-or-#f` so the callback installation works) is not a feature — it's a constraint imposed by this scaffolding. |
 | Per-domain meta-store parameters (3) | 4C addendum S2.d-followup audit (2026-04-25) | ⬜ flagged | `current-sess-meta-store` (metavar-store.rkt:2693), `current-mult-meta-store` (:2562), `current-level-meta-store` (:2465). Each is a Racket parameter holding `(make-hasheq)`. Off-network mantra violation; legacy from pre-network meta storage era. Parallel pattern across all 3 non-type domains. | Set at module-load via `make-parameter` default; read in fresh-X-meta + solve-X-meta! for status tracking. Coexists with `meta-domain-info` `'champ-fallback` entries that route to these stores when `'universe-active?` is #f. Post-S2.d (all 4 domains universe-active), the champ-fallback path is dead; these stores become unused. | **PM Track 12 retires**: submodule-scope primitive provides the natural retirement target — meta-store registry semantics migrate to per-submodule on-network cells. Until then, scaffolding labeled in D.3 §7.5.14.1. S2.e closes the per-domain factory + meta-store retirement together (parallel to type's `current-prop-meta-info-box` retirement timing in Phase 4). |
 | Per-domain CHAMP-box parameters (3) | 4C addendum S2.d-followup audit (2026-04-25) | ⬜ flagged | `current-sess-meta-champ-box`, `current-mult-meta-champ-box`, `current-level-meta-champ-box`. Each holds a box of CHAMP for status tracking — parallel to type's `current-prop-meta-info-box`. Off-network. | Read in `meta-domain-info` `'champ-fallback` entries (e.g., `mult-champ-fallback`, `level-champ-fallback`, `sess-champ-fallback`). Post-S2.d all 4 universe-active → champ-fallback dead path → these boxes become unread. | **PM Track 12 retires** with the meta-store parameters above. S2.e closes the dead-path retirement before PM 12 lands. |
 | Per-domain factory callbacks (3) | 4C addendum S2.d-followup audit (2026-04-25) | ⬜ flagged | `current-prop-fresh-mult-cell` (driver.rkt:2600), `current-prop-fresh-level-cell` (similar), `current-prop-fresh-sess-cell` (similar). Each is a Racket parameter holding a fresh-cell allocation closure. Used in fresh-X-meta legacy fallback path for pre-init test contexts. | Set at module-load with default `#f`; populated by driver.rkt during init. Read in fresh-X-meta legacy path (when universe is not initialized — bare-metavar-store tests not loading elaborator-network.rkt). | **PM Track 12 retires**: when test fixture infrastructure goes on-network, the pre-init fallback paths can collapse entirely — tests would call `init-meta-universes!` at setup. S2.e reviews whether these fallbacks remain needed; if not, retires before PM 12. Per D.3 §7.5.14.1 + §7.5.14.3. |
@@ -1442,7 +1442,7 @@ The 4A.c-iii-c -c gate surfaced that `racket tools/lint-parameters.rkt --strict`
 
 ### PM Track 12 design input from PPN 4C Phase 1e-α (2026-04-20) — submodule-scope primitive
 
-Phase 1e-α's η split of `merge-hasheq-union` surfaced a scope conflation in the current architecture that PM Track 12 is positioned to resolve. Core finding (from [PPN 4C D.3 §6.14.2](2026-04-17_PPN_TRACK4C_DESIGN.md)):
+Phase 1e-α's η split of `merge-hasheq-union` surfaced a scope conflation in the current architecture that PM Track 12 is positioned to resolve. Core finding (from [PPN 4C D.3 §6.14.2](tracks/PPN/PPN_4C/2026-04-17_PPN_TRACK4C_DESIGN.md)):
 
 **"Identity-or-error" at a cell needs an answer to "identity within what scope?"** Today's flat shared-persistent-registry-network can't answer this — tests legitimately redefine names across runs, and that's correct behavior under the shared-fixture architecture, not a bug. Per-site identity classification is blocked until scope is first-class on the network.
 
@@ -1467,10 +1467,10 @@ These are "snapshot cells of Racket parameters" — dual-store pattern where the
 
 | Cell / site | Live parameter (to retire) | Current merge | After PM 12 |
 |---|---|---|---|
-| `narrow-var-constraints` cell at [global-constraints.rkt:104](2026-04-17_PPN_TRACK4C_DESIGN.md) | `current-narrow-var-constraints` | `merge-last-write-wins` | `net-new-timestamped-cell` |
-| `ns-context` cell at [namespace.rkt:757](2026-04-17_PPN_TRACK4C_DESIGN.md) | `current-ns-context` | `merge-replace` | `net-new-timestamped-cell` |
-| `defn-param-names` cell at [global-env.rkt:358](2026-04-17_PPN_TRACK4C_DESIGN.md) | `current-defn-param-names` | `merge-replace` | `net-new-timestamped-cell` |
-| per-name definition cells at [global-env.rkt:121, 354](2026-04-17_PPN_TRACK4C_DESIGN.md) | `current-definition-cell-ids` (map) | `merge-replace` | `net-new-timestamped-cell` per name |
+| `narrow-var-constraints` cell at [global-constraints.rkt:104](tracks/PPN/PPN_4C/2026-04-17_PPN_TRACK4C_DESIGN.md) | `current-narrow-var-constraints` | `merge-last-write-wins` | `net-new-timestamped-cell` |
+| `ns-context` cell at [namespace.rkt:757](tracks/PPN/PPN_4C/2026-04-17_PPN_TRACK4C_DESIGN.md) | `current-ns-context` | `merge-replace` | `net-new-timestamped-cell` |
+| `defn-param-names` cell at [global-env.rkt:358](tracks/PPN/PPN_4C/2026-04-17_PPN_TRACK4C_DESIGN.md) | `current-defn-param-names` | `merge-replace` | `net-new-timestamped-cell` |
+| per-name definition cells at [global-env.rkt:121, 354](tracks/PPN/PPN_4C/2026-04-17_PPN_TRACK4C_DESIGN.md) | `current-definition-cell-ids` (map) | `merge-replace` | `net-new-timestamped-cell` per name |
 
 **Primitive ready** at [`clock.rkt`](../../racket/prologos/clock.rkt) (1e-β-iii-a, commit `4205b0ad`) with 17/17 tests GREEN. PM Track 12 activates: when the parameters retire (making cells primary state), the migration is mechanical and the timestamp-ordering becomes load-bearing. See [PM series master § Track 12](2026-03-13_PROPAGATOR_MIGRATION_MASTER.md) "Additional design input from PPN 4C Phase 1e-β-iii (2026-04-20)" for full context.
 
@@ -1784,9 +1784,9 @@ Existing pre-4C off-network registries (`register-domain!`, `register-typing-rul
 
 **Cross-references**:
 - [GitHub Issue #55](https://github.com/LogosLang/prologos/issues/55) — closed as "superseded by D.4 principled on-network design"
-- [D.4 design doc](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) §10 — D.4 canonical direct migration (replaces D.3 hybrid)
-- [D.4 design doc](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) §13.6 — Pre-0 spike plan + result
-- [§4.6 Specialized cell type framework](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) — the canonical D.4 architecture
+- [D.4 design doc](tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) §10 — D.4 canonical direct migration (replaces D.3 hybrid)
+- [D.4 design doc](tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) §13.6 — Pre-0 spike plan + result
+- [§4.6 Specialized cell type framework](tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) — the canonical D.4 architecture
 - Spike implementation: `racket/prologos/benchmarks/micro/bench-specialized-cell-spike.rkt` (throwaway; commit `7b681b9e`)
 - Spike result data: `racket/prologos/data/benchmarks/tropical-spike-d4-2026-05-14.txt`
 - D.3 historical sections marked RETIRED-PER-D.4-CANONICAL: §10.1.A (Honest framing + retirement plan), §10.A (Threshold propagator role under hybrid), §10.B (Cell Staleness Contract), §14.4 Q5 (dual classification)
@@ -1803,7 +1803,7 @@ Existing pre-4C off-network registries (`register-domain!`, `register-typing-rul
 3. Parent D.3 Phase 11b row "Scope addition (2026-05-24) — KR-1/2/3 absorption" (3C.d.4 deliverable 7)
 4. Test rename at [`tests/test-provenance-errors.rkt`](../../racket/prologos/tests/test-provenance-errors.rkt):359 reflecting partial deferral (3C.d.4 deliverable 5)
 
-**Source**: PPN 4C addendum [§9.5.4.14 KR-1/2/3 named drift](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) (captured at 3C.c-VAG close 2026-05-24, commit `25f4343c`) + [§9.5.5 Phase 3C.d mini-design](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) Q-D.1 lock + [§9.5.5.13 empirical findings](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) (commit `ebf56b80`).
+**Source**: PPN 4C addendum [§9.5.4.14 KR-1/2/3 named drift](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md) (captured at 3C.c-VAG close 2026-05-24, commit `25f4343c`) + [§9.5.5 Phase 3C.d mini-design](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md) Q-D.1 lock + [§9.5.5.13 empirical findings](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md) (commit `ebf56b80`).
 
 ### KR-1: Diagnosis-line UX regression (union error rendering)
 
@@ -1853,9 +1853,9 @@ Existing pre-4C off-network registries (`register-domain!`, `register-typing-rul
 
 ### Cross-references
 
-- Source design: PPN 4C addendum [§9.5.4.14 (KR-1/2/3 named drift)](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) + [§9.5.5 (3C.d mini-design)](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) + [§9.5.5.13 (3C.d.3 empirical findings)](2026-04-21_PPN_4C_PHASE_9_DESIGN.md)
-- 3-column adversarial Q-D.1 lock: [§9.5.5.4](2026-04-21_PPN_4C_PHASE_9_DESIGN.md)
-- Parent D.3 Phase 11b row: [PPN Track 4C D.3](2026-04-17_PPN_TRACK4C_DESIGN.md) Progress Tracker Phase 11b (2026-05-24 scope addition)
+- Source design: PPN 4C addendum [§9.5.4.14 (KR-1/2/3 named drift)](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md) + [§9.5.5 (3C.d mini-design)](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md) + [§9.5.5.13 (3C.d.3 empirical findings)](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md)
+- 3-column adversarial Q-D.1 lock: [§9.5.5.4](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md)
+- Parent D.3 Phase 11b row: [PPN Track 4C D.3](tracks/PPN/PPN_4C/2026-04-17_PPN_TRACK4C_DESIGN.md) Progress Tracker Phase 11b (2026-05-24 scope addition)
 - Skip-gated canary: [`tests/test-elaboration-parity.rkt`](../../racket/prologos/tests/test-elaboration-parity.rkt) `'union-diagnosis-restoration "Phase 11b"`
 - Test rename: [`tests/test-provenance-errors.rkt`](../../racket/prologos/tests/test-provenance-errors.rkt) "renders per-step assumption-names (diagnosis lines deferred to Phase 11b — see KR-1)"
 - Restoration substrate (still live for non-union path): [`typing-errors.rkt:173-280`](../../racket/prologos/typing-errors.rkt) (`build-derivation-chain` + `format-context-diagnosis` + `format-atms-conflict`)
@@ -1878,7 +1878,7 @@ Replace 3-pass imperative preparse with propagator-native cell-based name regist
 
 ### Cross-references
 
-- Source audit: PPN 4C addendum [§18.10.4 (FREE_ORDERING at preparse layer)](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) + [§18.5 (PM 12 boundary)](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) + [§18.11 (cyclic definitions principle)](2026-04-21_PPN_4C_PHASE_9_DESIGN.md)
+- Source audit: PPN 4C addendum [§18.10.4 (FREE_ORDERING at preparse layer)](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md) + [§18.5 (PM 12 boundary)](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md) + [§18.11 (cyclic definitions principle)](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md)
 - Original FREE_ORDERING design: [`2026-02-28_1800_FREE_ORDERING.md`](2026-02-28_1800_FREE_ORDERING.md)
 - Literate book context: [`2026-02-28_1400_LITERATE_BOOK_SYSTEM.md`](2026-02-28_1400_LITERATE_BOOK_SYSTEM.md) Phase 5a/5b/5c
 - Implementation: `macros.rkt:2366-2460` (`preparse-expand-all`), `tools/form-deps.rkt` (SCC analysis)
@@ -3355,7 +3355,7 @@ goal is to retire whole-file aborts by volume, these come first.
 > `extract-surfs-from-form-cells`'s last caller — which is exactly why the form
 > cells are write-only. **The remaining work is not wiring; it is solving the
 > preparse-macro problem that caused the revert.** See
-> [Track 3 § Phase 7 status](2026-04-01_PPN_TRACK3_DESIGN.md#p7-status).
+> [Track 3 § Phase 7 status](tracks/PPN/PPN_3/2026-04-01_PPN_TRACK3_DESIGN.md#p7-status).
 >
 > Per-item deltas: **1** reduced to the form-cell wiring · **4 RESOLVED by
 > removal** · **6 ⛔ RULED DO-NOT-DELETE 2026-08-03** — reader/parser unification
@@ -3413,12 +3413,12 @@ pinned by `tests/test-dual-spine-merge-key.rkt`. These are the residuals.
 
    | layer | owner | state | touched by this arc? |
    |---|---|---|---|
-   | the reader's 5 parse cells (char·indent·token·bracket·tree, `parse-reader.rkt`) | PPN Track 1 | cells landed, **propagator wiring unbuilt**; scoped by [4D §12](2026-05-19_PPN_4D_IMPLEMENTATION_DRAFT_NOTE.md) | **NO** |
+   | the reader's 5 parse cells (char·indent·token·bracket·tree, `parse-reader.rkt`) | PPN Track 1 | cells landed, **propagator wiring unbuilt**; scoped by [4D §12](tracks/PPN/PPN_4D/2026-05-19_PPN_4D_IMPLEMENTATION_DRAFT_NOTE.md) | **NO** |
    | the per-form cells (`form-cells.rkt`, source-line keyed) | PPN Track 3 | written, read by nothing **yet** | **NO** |
    | the merge's tree leg (`parse-top-level-forms-from-tree` → `tree-by-line` → `merge-form`) | the merge | never fired, now gated off | **YES — only this** |
 
    **PPN Track 3 Phase 7's own design says to DELETE the merge.** Verbatim
-   ([Track 3 design](2026-04-01_PPN_TRACK3_DESIGN.md) §"Phase 7: Pure Merge
+   ([Track 3 design](tracks/PPN/PPN_3/2026-04-01_PPN_TRACK3_DESIGN.md) §"Phase 7: Pure Merge
    Function + Shared Cells"): *"**Delete**: `merge-preparse-and-tree-parser`,
    `merge-form`, source-line-keyed identity matching, `tree-by-line` hash
    building. Total ~80 lines from driver.rkt."* Phase 7 shipped only its first
@@ -3512,7 +3512,7 @@ pinned by `tests/test-dual-spine-merge-key.rkt`. These are the residuals.
    `parse-reader.rkt`, `surface-rewrite.rkt`, `form-cells.rkt`). **Both** branches
    are off-network, so deleting one buys nothing on-network — it just removes the
    thing PPN 4D is the eventual successor to. (This also settles the apparent
-   conflict with [Track 3 §11's](2026-04-01_PPN_TRACK3_DESIGN.md) "tree-parsing is
+   conflict with [Track 3 §11's](tracks/PPN/PPN_3/2026-04-01_PPN_TRACK3_DESIGN.md) "tree-parsing is
    canonical": §11 described an aspiration the code never acquired, so neither
    deleting nor keeping the arms advances or retreats from it.)
 
@@ -7533,3 +7533,52 @@ module only through a missing or changed edge is not selected (not measured how 
 tools/update-deps.rkt --write`, review the diff, and make `--check` part of a gate (pre-commit or the checkpoint
 gate) so it cannot drift again. **When**: next runner/tooling batch; before relying on targeted runs to vet a
 source change.
+
+---
+
+### 170. ⬜ ⭐ A SHARDED TEST FILE RACES ITS OWN TEMP FILES — `make-temporary-file` + `#:exists 'replace` lets one shard's delete-and-recreate collide with a twin shard's time-named file (`open-output-file: file exists`); `test-path-selection.rkt` fails 3 of 3 targeted runs at `a15b1a9e`
+
+**Found by**: the PPN 4C checkpoint merge gate (2026-10-13, merge of `ppn4c-elaboration-on-network`
+into `a15b1a9e`): full suite 10 366 tests, 1 FAILURES — `test-path-selection.rkt` shards 1/5 and 3/5,
+each one test erroring `open-output-file: file exists` on a temp path such as
+`…/T/prologos-pathsel-17919073441791907344063.prologos`. The merge's own changes are docs and `.rkt`
+comments only, so it was A/B'd on main's pristine code (detached worktree, limited build,
+`racket tools/run-affected-tests.rkt --tests tests/test-path-selection.rkt`, 5 shards):
+
+| code | runs failing | per-run wall |
+|---|---|---|
+| `34602ded` (before the two 08:39 merges) | 1 of 3 | 7.5–7.9 s |
+| `1961d49d` (+ SW-19…21 runner/lock merge) | 0 of 3 | 7.4–7.5 s |
+| `a15b1a9e` (+ the fasl `.pnet` body merge `08acff4a`) | **3 of 3** | 4.0 s |
+| `a15b1a9e` with `'replace` → `'truncate` at the 4 sites below | **0 of 5** | 3.9–4.0 s |
+
+Every failing run carried the same signature (2–4 `file exists` errors per run). The merged tree
+(`a15b1a9e` + the PPN move) failed 2 of 3.
+
+**Mechanism** (read in code, then confirmed by the last table row): `make-temporary-file` names the
+file from `(current-seconds)` and `(current-inexact-milliseconds)` and creates it exclusively, retrying
+on a collision (`collects/racket/file.rkt:191-238`, Racket 9.3). The helpers then reopen it with
+`(call-with-output-file tmp #:exists 'replace …)`, and `'replace` DELETES the file and creates it
+again. Between the delete and the create, a twin shard — the same test code started at the same
+moment in another worker — can draw the same seconds-plus-milliseconds name and create it; the
+recreate then fails with "file exists", and nothing retries it. Shards of one file run the same
+sequence in lockstep, which makes the same-millisecond draw likely; the fasl `.pnet` speedup
+(7.5 s → 4.0 s) tightened the lockstep, which is why the failure went from occasional to certain. The
+defect is older than both merges (1 of 3 at `34602ded`); the speedup only exposed it. `'truncate`
+opens the existing file without deleting it, so there is no window. The sharding note at
+`tools/suite-plan.rkt:142` ("test-path-selection under K=2 and K=3, every shard, 0 failures")
+predates K=5 and the speedup.
+
+**Sites**: `tests/test-path-selection.rkt:75`, `:99`, `:142` (`run-ws`, `run-ws-raw`,
+`run-ws-pre-raw`) and `tests/test-support.rkt:226` (`run-ws`, used by many files). The same
+`make-temporary-file` + `#:exists 'replace` pair appears in 30+ further test files (census:
+`grep -l make-temporary-file tests/*.rkt` ∩ `grep -l "#:exists 'replace"`); an unsharded file can
+collide only with a concurrent file that draws the same name, so the exposure there is by chance,
+not lockstep — not measured.
+
+**Fix shape**: `#:exists 'truncate` wherever the path came from `make-temporary-file` (the file
+already exists, created exclusively); a lint or a shared helper so new tests do not reintroduce the
+pair. Optionally put the pid in the template. **When**: before the next checkpoint gate on any
+branch — every `--all` run at `a15b1a9e` or later is expected to show this failure until it lands.
+Not applied by the PPN 4C session (outside its track); the measured fix is the last table row.
+Record: `tracks/PPN/PPN_4C/LOG.md` § *Checkpoint 1 merged*.

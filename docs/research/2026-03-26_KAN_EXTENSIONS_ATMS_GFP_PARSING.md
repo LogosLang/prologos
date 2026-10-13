@@ -5,13 +5,13 @@
 **Series touches**: PRN, PPN, SRE, BSP-LE, OE, NTT
 
 **Related documents**:
-- [Lattice Foundations for PPN](2026-03-26_LATTICE_FOUNDATIONS_PPN.md) — concrete lattice design
+- [Lattice Foundations for PPN](../tracking/tracks/PPN/research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md) — concrete lattice design
 - [Hypergraph Rewriting + Propagator Parsing](2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md) — foundational research
 - [Tropical Optimization + Network Architecture](2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md) — cost-weighted rewriting
 - [Categorical Foundations](2026-03-22_CATEGORICAL_FOUNDATIONS_TYPED_PROPAGATOR_NETWORKS.md) — Kan extensions, fibrations
 - [FL-Narrowing Design](2026-03-07_FL_NARROWING_DESIGN.org) — definitional trees, needed narrowing
 - [PRN Master](../tracking/2026-03-26_PRN_MASTER.md) — theory series tracking
-- [PPN Master](../tracking/2026-03-26_PPN_MASTER.md) — parsing series tracking
+- [PPN Master](../tracking/tracks/PPN/2026-03-26_PPN_MASTER.md) — parsing series tracking
 
 ---
 

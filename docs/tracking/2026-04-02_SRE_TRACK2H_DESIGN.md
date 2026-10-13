@@ -9,10 +9,10 @@
 **Research**:
 - [Algebraic Embeddings on Lattices](../research/2026-03-28_ALGEBRAIC_EMBEDDINGS_LATTICES.md) — §2.4 Heyting algebra for error reporting, §2.5 Residuated lattice for backward propagation
 - [Module Theory on Lattices](../research/2026-03-28_MODULE_THEORY_LATTICES.md) — endomorphism ring, variance as ring action
-- [Lattice Foundations for PPN](../research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md) — reduced product, chaotic iteration
+- [Lattice Foundations for PPN](tracks/PPN/research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md) — reduced product, chaotic iteration
 
 **Cross-series consumers**:
-- [PPN Track 4](2026-03-26_PPN_MASTER.md) — elaboration on network requires well-structured type lattice (PREREQUISITE)
+- [PPN Track 4](tracks/PPN/2026-03-26_PPN_MASTER.md) — elaboration on network requires well-structured type lattice (PREREQUISITE)
 - [SRE Track 3](2026-03-22_SRE_MASTER.md) — trait resolution strategy informed by Heyting properties
 - BSP-LE — ATMS worldview management benefits from type lattice algebraic structure
 
@@ -736,7 +736,7 @@ Propagator information flow lens. 12 findings, responses inline.
 
 ### The Type Lattice as Quantale
 
-The [Lattice Foundations research](../research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md) §2.4 establishes that the type lattice is a **quantale** — a complete lattice that is simultaneously a semiring:
+The [Lattice Foundations research](tracks/PPN/research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md) §2.4 establishes that the type lattice is a **quantale** — a complete lattice that is simultaneously a semiring:
 
 - **Addition (⊕)**: union-join — `Int ⊕ String = Int | String`. Track 2H delivers this.
 - **Multiplication (⊗)**: function type application — `(A → B) ⊗ A = B`. This is PPN Track 4 scope.

@@ -73,7 +73,7 @@ in syntax.rkt and **syntax.rkt is the authority**) · `stratification.md` ·
 3. Dailies `docs/tracking/standups/2026-07-28_dailies.md` — STATE head + the last
    **5** LOG entries (the file interleaves arcs; read by TITLE).
 4. Memory `ciu-t6-records.md` — the tail block.
-5. **`docs/tracking/2026-05-19_PPN_4D_IMPLEMENTATION_DRAFT_NOTE.md` §12** — the
+5. **`docs/tracking/tracks/PPN/PPN_4D/2026-05-19_PPN_4D_IMPLEMENTATION_DRAFT_NOTE.md` §12** — the
    reader-layer seed written this session. Read if the on-network reader is in
    scope; skip for pure P4c-3 work.
 6. `racket/prologos/examples/2026-07-26-ciu-t6-path-selection.prologos` — 52 live

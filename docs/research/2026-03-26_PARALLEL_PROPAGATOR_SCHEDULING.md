@@ -6,9 +6,9 @@
 
 **Related documents**:
 - [BSP-LE Master](../tracking/2026-03-21_BSP_LE_MASTER.md) — logic engine on propagators
-- [PPN Track 1 Design](../tracking/2026-03-26_PPN_TRACK1_DESIGN.md) — tree-builder as prefix scan
+- [PPN Track 1 Design](../tracking/tracks/PPN/PPN_1/2026-03-26_PPN_TRACK1_DESIGN.md) — tree-builder as prefix scan
 - [PRN Master](../tracking/2026-03-26_PRN_MASTER.md) — theory series
-- [Hyperlattice Conjecture discussion](../tracking/2026-03-26_PPN_TRACK1_DESIGN.md#1-architectural-center) — any computation as fixpoint
+- [Hyperlattice Conjecture discussion](../tracking/tracks/PPN/PPN_1/2026-03-26_PPN_TRACK1_DESIGN.md#1-architectural-center) — any computation as fixpoint
 
 ---
 

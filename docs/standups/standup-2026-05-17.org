@@ -35,7 +35,7 @@ sub-phase commits**.
 
 *** Architectural deliverables
 
-The PIR ([[file:../tracking/2026-05-17_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_PIR.md][PIR]]) frames TWO deliveries:
+The PIR ([[file:../tracking/tracks/PPN/PPN_4C/2026-05-17_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_PIR.md][PIR]]) frames TWO deliveries:
 
 - **Delivery 1 (FORESEEN)**: Tropical quantale as first production
   optimization-quantale instantiation in our architecture

@@ -54,7 +54,7 @@ Both are **silent**. Neither is caught by the suite. The invariant "there is exa
 ## §6 Cross-references
 
 - **The #78 repair design** (what was fixed, and the explicit Option-C deferral): [`2026-07-27_PM_T10_PNET_REGISTRY_RESTORE_DEFECT_DESIGN.md`](2026-07-27_PM_T10_PNET_REGISTRY_RESTORE_DEFECT_DESIGN.md) §3.1, §5.1.
-- **PM Track 12 § submodule-scope** (the scoping mechanism §3 depends on): PM Master § Track 12 "Design input from PPN 4C Phase 1e-α"; PPN 4C [`2026-04-17_PPN_TRACK4C_DESIGN.md`](2026-04-17_PPN_TRACK4C_DESIGN.md) §6.14.2.
+- **PM Track 12 § submodule-scope** (the scoping mechanism §3 depends on): PM Master § Track 12 "Design input from PPN 4C Phase 1e-α"; PPN 4C [`2026-04-17_PPN_TRACK4C_DESIGN.md`](tracks/PPN/PPN_4C/2026-04-17_PPN_TRACK4C_DESIGN.md) §6.14.2.
 - **The 32 pre-identified migration-candidate sites** (23 `macros.rkt` registry sites among them): PM Master § Track 12.
 - **`merge-hasheq-replace` → `merge-hasheq-identity`** substitution, unlocked by submodule-scope: PM Master § Track 12.
 - **A3 parameter-leakage lint** — the tactical safety net this slice obsoletes: `.claude/rules/testing.md` § Parameter-leakage lint.
