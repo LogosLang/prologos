@@ -60,6 +60,22 @@
 (define (de-val entry) (vector-ref entry 2))
 (define (make-de hash key val) (vector hash key val))
 
+;; Key equality at a data entry (DEFERRED 146). `eq?` first; then the STORED HASH,
+;; and only if the hashes agree, `equal?`. Sound because CHAMP already requires the
+;; caller's hash to be consistent with `equal?` (the trie is navigated by it), so
+;; keys with different hashes cannot be equal. Worth it because Racket CS's
+;; `equal?` allocates on every top-level comparison of two distinct records
+;; (rumble/equal.ss record branch: a `deeper-context` box + a recursion closure;
+;; 64 B for a one-field struct) — and inserting a NEW key onto another key's data
+;; entry is the common case: measured over benchmarks/comparative, 20 % of
+;; data-entry comparisons reached `equal?` with differing hashes, carrying 85 % of
+;; the bytes `equal?` allocated inside CHAMP. Collision nodes need no such check:
+;; their entries share one hash by construction.
+(define-syntax-rule (de-key=? entry hash key)
+  (let ([ek (de-key entry)])
+    (or (eq? ek key)
+        (and (eqv? (de-hash entry) hash) (equal? ek key)))))
+
 ;; Collision node: stores all (key . value) pairs with identical hash.
 (struct champ-collision (hash entries) #:transparent)
 
@@ -135,8 +151,7 @@
        [(not (zero? (bitwise-and dm bit)))
         (define idx (data-index dm bit))
         (define entry (vector-ref arr idx))
-        (define ek (de-key entry))
-        (if (or (eq? ek key) (equal? ek key))
+        (if (de-key=? entry hash key)
             (de-val entry)
             'none)]
        ;; Child node at this position
@@ -186,7 +201,7 @@
         (define existing-key (de-key entry))
         (cond
           ;; Same key: update value
-          [(or (eq? existing-key key) (equal? existing-key key))
+          [(de-key=? entry hash key)
            ;; CHAMP Performance Phase 3: value-only fast path.
            ;; If new value is eq? to existing, return same node — zero allocation.
            ;; Compounds with BSP-LE Track 0 Phase 2 (merge identity): the entire
@@ -293,7 +308,7 @@
         (define idx (data-index dm bit))
         (define entry (vector-ref arr idx))
         (cond
-          [(or (eq? (de-key entry) key) (equal? (de-key entry) key))
+          [(de-key=? entry hash key)
            ;; Found: remove data entry
            (define new-dm (bitwise-and dm (bitwise-not bit)))
            (define new-arr (vec-remove arr idx))
@@ -763,7 +778,7 @@
         (define existing-key (de-key entry))
         (cond
           ;; Same key: update value
-          [(or (eq? existing-key key) (equal? existing-key key))
+          [(de-key=? entry hash key)
            (define existing-val (de-val entry))
            (cond
              [(eq? val existing-val)
@@ -842,7 +857,7 @@
         (define idx (data-index dm bit))
         (define entry (vector-ref arr idx))
         (cond
-          [(or (eq? (de-key entry) key) (equal? (de-key entry) key))
+          [(de-key=? entry hash key)
            (define new-dm (bitwise-and dm (bitwise-not bit)))
            (if (and (zero? new-dm) (zero? nm))
                (begin (set-box! size-box (sub1 (unbox size-box)))
@@ -904,7 +919,7 @@
         (define entry (vector-ref arr idx))
         (define existing-key (de-key entry))
         (cond
-          [(or (eq? existing-key key) (equal? existing-key key))
+          [(de-key=? entry hash key)
            (define merged (join-fn (de-val entry) val))
            (define existing-val (de-val entry))
            (if (eq? merged existing-val)
