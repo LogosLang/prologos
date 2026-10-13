@@ -15,6 +15,10 @@
 ;;   racket tools/run-affected-tests.rkt --no-precompile  # skip bytecode pre-compilation
 ;;   racket tools/run-affected-tests.rkt --no-pnet-cache # disable .pnet module network cache
 ;;   racket tools/run-affected-tests.rkt --failures      # show failure logs from last run
+;;   racket tools/run-affected-tests.rkt --no-wait       # exit 75 if the suite lock is busy
+;;
+;; Runs QUEUE machine-wide (suite-lock.rkt): a full suite takes the suite lock
+;; exclusively, a targeted run shares it; a later run waits for an earlier one.
 ;;
 ;; Automatically records per-file timing data to data/benchmarks/timings.jsonl.
 ;; Use benchmark-tests.rkt for reporting (--report, --trend, --compare, --slowest).
@@ -32,7 +36,8 @@
          json
          "dep-graph.rkt"
          "bench-lib.rkt"
-         "suite-plan.rkt")
+         "suite-plan.rkt"
+         "suite-lock.rkt")
 
 ;; ============================================================
 ;; Compile-limit adoption (Rel T1 SUB.2, owner-blessed 2026-07-24)
@@ -207,6 +212,9 @@
 (define bail-timeout-threshold (make-parameter 3))
 (define force-rerun? (make-parameter #f))
 (define force-stale-zo? (make-parameter #f))
+;; --no-wait: when the machine-wide suite lock (suite-lock.rkt) is busy, exit
+;; SUITE-LOCK-BUSY-EXIT (75) at once instead of queueing behind the holder.
+(define no-wait? (make-parameter #f))
 ;; PPN 4C Phase 3c process improvement (2026-04-20): --tests FILE...
 ;; Targeted test mode. Takes explicit file paths, skips dep-graph inference,
 ;; runs precompile-modules! (so test .zo linklets are fresh w.r.t. any
@@ -257,6 +265,8 @@
     (force-rerun? #t)]
    ["--force-stale-zo" "Run despite stale .zo files (reproduce old behavior intentionally)"
     (force-stale-zo? #t)]
+   ["--no-wait" "If another run holds the machine-wide suite lock, exit 75 instead of waiting"
+    (no-wait? #t)]
    #:multi
    ["--skip" file "Skip an additional test file (additive with .skip-tests)"
     (extra-skips (cons (string->symbol file) (extra-skips)))]
@@ -304,26 +314,70 @@
   ;; Guard: block redundant full-suite re-runs (correct-by-construction, not discipline).
   ;; If --all and timings.jsonl was written <5min ago and no .rkt files changed since,
   ;; print a warning and exit. Use --force-rerun to override.
-  (when (and (run-all?) (not (force-rerun?)))
-    (define timings-path (build-path project-root "data" "benchmarks" "timings.jsonl"))
-    (when (file-exists? timings-path)
-      (define last-mod (file-or-directory-modify-seconds timings-path))
-      (define now (current-seconds))
-      (define elapsed (- now last-mod))
-      (when (< elapsed 300)  ;; less than 5 minutes
-        (define src-dir (build-path project-root))
-        (define any-changed?
-          (for/or ([f (in-directory src-dir)]
-                   #:when (regexp-match? #rx"\\.rkt$" (path->string f)))
-            (> (file-or-directory-modify-seconds f) last-mod)))
-        (unless any-changed?
-          (printf "\n~a\n" (make-string 60 #\═))
-          (printf "GUARD: No .rkt files changed since last suite run (~as ago).\n" elapsed)
-          (printf "Read failure logs:  racket tools/run-affected-tests.rkt --failures\n")
-          (printf "Run one test:       raco test tests/test-NAME.rkt\n")
-          (printf "Force full re-run:  add --force-rerun flag\n")
-          (printf "~a\n\n" (make-string 60 #\═))
-          (exit 0)))))
+  ;; Checked before queueing for the suite lock AND again after a wait: a run
+  ;; that queued behind another full suite of this checkout may find, once it
+  ;; holds the lock, that the run it waited for has just made it redundant.
+  (define (rerun-guard!)
+    (when (and (run-all?) (not (force-rerun?)))
+      (define timings-path (build-path project-root "data" "benchmarks" "timings.jsonl"))
+      (when (file-exists? timings-path)
+        (define last-mod (file-or-directory-modify-seconds timings-path))
+        (define now (current-seconds))
+        (define elapsed (- now last-mod))
+        (when (< elapsed 300)  ;; less than 5 minutes
+          (define src-dir (build-path project-root))
+          (define any-changed?
+            (for/or ([f (in-directory src-dir)]
+                     #:when (regexp-match? #rx"\\.rkt$" (path->string f)))
+              (> (file-or-directory-modify-seconds f) last-mod)))
+          (unless any-changed?
+            (printf "\n~a\n" (make-string 60 #\═))
+            (printf "GUARD: No .rkt files changed since last suite run (~as ago).\n" elapsed)
+            (printf "Read failure logs:  racket tools/run-affected-tests.rkt --failures\n")
+            (printf "Run one test:       raco test tests/test-NAME.rkt\n")
+            (printf "Force full re-run:  add --force-rerun flag\n")
+            (printf "~a\n\n" (make-string 60 #\═))
+            (exit 0))))))
+  (rerun-guard!)
+
+  ;; Machine-wide suite QUEUE (suite-lock.rkt). A run takes the lock before it
+  ;; compiles or starts a worker and holds it to the end: 'exclusive for a
+  ;; full or suite-sized run (one worker per core), 'shared for a targeted
+  ;; run. A second run WAITS, printing who holds the lock, instead of
+  ;; contending for the cores; `--no-wait` exits 75 instead. The OS releases
+  ;; the lock if this process dies, and every `(exit n)` below releases it first.
+  (define (with-suite-lock mode thunk)
+    (define lock-path (suite-lock-path))
+    (define report (make-wait-reporter mode lock-path))
+    (define waited? #f)
+    (define t-wait (current-inexact-milliseconds))
+    (call-with-suite-lock
+     mode
+     (lambda ()
+       (when waited?
+         (printf "Suite lock acquired (~a) after waiting ~as.\n" mode
+                 (real->decimal-string (/ (- (current-inexact-milliseconds) t-wait) 1000.0) 1))
+         (rerun-guard!))
+       (thunk))
+     #:path lock-path
+     #:wait? (not (no-wait?))
+     #:checkout project-root
+     #:command (string-join (cons "run-affected-tests"
+                                  (vector->list (current-command-line-arguments)))
+                            " ")
+     #:on-wait (lambda (holders secs) (set! waited? #t) (report holders secs))
+     #:on-busy (lambda (holders)
+                 (printf "\n~a\n" (make-string 60 #\═))
+                 (printf "SUITE LOCK BUSY (--no-wait): exit ~a, nothing was run.\n"
+                         SUITE-LOCK-BUSY-EXIT)
+                 (printf "  wanted: ~a access to ~a\n" mode (path->string lock-path))
+                 (if (null? holders)
+                     (printf "  holder: unknown (no info file: it predates suite-lock.rkt, or is starting)\n")
+                     (for ([h (in-list holders)])
+                       (printf "  ~a\n" (format-holder h))))
+                 (printf "Drop --no-wait to queue behind it.\n")
+                 (printf "~a\n\n" (make-string 60 #\═))
+                 (exit SUITE-LOCK-BUSY-EXIT))))
 
   (cond
     ;; --tests FILE...: run specific files with precompile discipline.
@@ -356,6 +410,9 @@
           (for ([p (in-list normalized-files)])
             (printf "  ~a\n" p)))
         (unless (dry-run?)
+         (with-suite-lock
+          (suite-lock-mode #:all? #f #:file-count (length normalized-files))
+          (lambda ()
           ;; Scoped precompile: driver.rkt + just the targeted tests. This is
           ;; the linklet-safety guarantee for targeted runs. Fast path ~3-5s
           ;; typical (vs ~30s full-directory precompile). Skip run-tests's
@@ -396,7 +453,7 @@
                             [suppress-stale-scan? #t])
                (run-tests normalized-files project-root))]
             [else
-             (run-tests normalized-files project-root)]))])]
+             (run-tests normalized-files project-root)]))))])]
 
     ;; --all: run everything (subject to skip filter)
     [(run-all?)
@@ -431,7 +488,7 @@
           (define test-paths
             (for/list ([t (in-list to-run)])
               (path->string (build-path tests-dir (symbol->string t)))))
-          (run-tests test-paths project-root))])]
+          (with-suite-lock 'exclusive (lambda () (run-tests test-paths project-root))))])]
 
     ;; Normal mode: compute affected tests from git diff
     [else
@@ -460,7 +517,7 @@
           (define test-paths
             (for/list ([t (in-list to-run)])
               (path->string (build-path tests-dir (symbol->string t)))))
-          (run-tests test-paths project-root))]
+          (with-suite-lock 'exclusive (lambda () (run-tests test-paths project-root))))]
 
        [else
         ;; Filter out 'run-all from classified list (shouldn't be there but safety)
@@ -507,7 +564,8 @@
              (define test-paths
                (for/list ([t (in-list to-run)])
                  (path->string (build-path tests-dir (symbol->string t)))))
-             (run-tests test-paths project-root))])])]))
+             (with-suite-lock (suite-lock-mode #:all? #f #:file-count (length test-paths))
+                              (lambda () (run-tests test-paths project-root))))])])]))
 
 ;; ============================================================
 ;; Batch test execution with shared prelude
