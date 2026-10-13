@@ -2037,25 +2037,31 @@
              ;; has-component-paths? if any dependent has a non-#f paths value
              ;; containing at least one non-#f path.
              ;; BSP-LE Track 2 Phase 2: extract paths from dependent-entry structs
-            [deps (let ([has-component-paths?
-                          (champ-fold deps-champ
-                                      (lambda (_k entry found?)
-                                        (define paths (if (dependent-entry? entry)
-                                                          (dependent-entry-paths entry)
-                                                          entry))
-                                        (or found?
-                                            (and paths
-                                                 (list? paths)
-                                                 (for/or ([p (in-list paths)]) p))))
-                                      #f)]
-                        ;; Check if any dependent has an assumption tag
-                        [has-assumptions?
-                          (champ-fold deps-champ
-                                      (lambda (_k entry found?)
-                                        (or found?
-                                            (and (dependent-entry? entry)
-                                                 (dependent-entry-assumption-id entry))))
-                                      #f)])
+            [deps (let* (;; DEFERRED 147: ONE pass computing both flags as fixnum
+                         ;; bits (1 = some dependent has a component path, 2 = some
+                         ;; dependent carries an assumption), and none at all when
+                         ;; the cell has no dependents. Was two champ-folds, 32 B
+                         ;; each, on every slow-path write regardless of fan-out.
+                         [dep-flags
+                          (if (champ-empty? deps-champ)
+                              0
+                              (champ-fold deps-champ
+                                          (lambda (_k entry acc)
+                                            (define paths (if (dependent-entry? entry)
+                                                              (dependent-entry-paths entry)
+                                                              entry))
+                                            (bitwise-ior acc
+                                                   (if (and paths
+                                                            (list? paths)
+                                                            (for/or ([p (in-list paths)]) p))
+                                                       1 0)
+                                                   (if (and (dependent-entry? entry)
+                                                            (dependent-entry-assumption-id entry))
+                                                       2 0)))
+                                          0))]
+                         [has-component-paths? (eqv? 1 (bitwise-and dep-flags 1))]
+                         ;; Check if any dependent has an assumption tag
+                         [has-assumptions? (eqv? 2 (bitwise-and dep-flags 2))])
                      (if (or has-component-paths? has-assumptions?)
                          ;; Slow path: compute diff, filter dependents (+ on-network assumption check)
                          (let ([changed (if has-component-paths?
@@ -2826,21 +2832,24 @@
 ;; Contract: fire-fns MUST be pure for parallel execution.
 ;;           Propagator outputs list MUST be complete (BSP only diffs listed outputs).
 
-;; Deduplicate prop-ids using CHAMP as a set (no racket/list dependency).
+;; Deduplicate prop-ids, keeping first-occurrence order. Keyed by `prop-id-n`:
+;; `prop-id` is a one-field transparent struct, so equal?-dedup (the previous
+;; persistent CHAMP set) and n-dedup are the same relation — but a mutable eqv
+;; table on the fixnum costs 65–90 B per pid against the CHAMP set's 130–367 B
+;; (a path copy per insert; DEFERRED 147, measured N = 8 / 64 / 512). The table
+;; is local to the call, so it is not shared state.
 (define (dedup-pids pids)
-  (let loop ([todo pids]
-             [seen champ-empty]
-             [acc '()])
+  (define seen (make-hasheqv))
+  (let loop ([todo pids] [acc '()])
     (cond
       [(null? todo) (reverse acc)]
       [else
        (define pid (car todo))
-       (define h (prop-id-hash pid))
-       (if (champ-has-key? seen h pid)
-           (loop (cdr todo) seen acc)
-           (loop (cdr todo)
-                 (champ-insert seen h pid #t)
-                 (cons pid acc)))])))
+       (define n (prop-id-n pid))
+       (if (hash-ref seen n #f)
+           (loop (cdr todo) acc)
+           (begin (hash-set! seen n #t)
+                  (loop (cdr todo) (cons pid acc))))])))
 
 ;; Fire a single propagator against snapshot-net, return list of
 ;; (cell-id . new-merged-value) pairs for output cells that changed.
@@ -2892,7 +2901,10 @@
   ;; watermark. same? compares prop-cell VALUE so dependents-only entry changes
   ;; are not reported (matching the retired undeclared fold). See
   ;; docs/tracking/2026-06-03_SCHEDULER_ODIFF_OPTIMIZATION.md §7.
-  (define output-set (for/hasheq ([cid (in-list output-cids)]) (values cid #t)))
+  ;; DEFERRED 147: membership in the declared outputs is tested with `memq` over
+  ;; `output-cids` (a short list) instead of a `for/hasheq` built on EVERY fire —
+  ;; the table was consulted only when `diff-changed` is non-empty, and it was an
+  ;; eq?-table, so `memq` is the same relation at zero allocation.
   (define-values (diff-changed diff-new)
     (champ-diff (prop-network-cells snapshot-net)
                 (prop-network-cells result-net)
@@ -2903,7 +2915,7 @@
   ;; value-writes (→ merge); skip them here.
   (define undeclared-writes
     (for/fold ([acc '()]) ([p (in-list diff-changed)])
-      (if (hash-has-key? output-set (car p))
+      (if (memq (car p) output-cids)
           acc
           (cons (cons (car p) (prop-cell-value (cdr p))) acc))))
   ;; New cells (absent from snapshot) → 6-tuple with cold-side fn registries,
