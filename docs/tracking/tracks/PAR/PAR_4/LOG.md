@@ -362,3 +362,23 @@ binder merges with unsolved metas.
   derives the graph by scanning for `test-*.rkt`, which makes the branch's two-line registration of
   `test-arena-parity.rkt` obsolete, so the next main→branch merge takes main's side.
 - **Next**: unchanged — D.2 (P0.5), opening by posing O-9, O-10 and O-3 with the inputs listed above.
+
+### Main merged in (third bring-up): gate 10 394 / 502 all pass; the one predicted conflict resolved to main's derived graph — `2b1e1e78` (2026-10-13)
+- **Why / decision**: owner, at the start of the fresh session: pull in main's changes safely. Merged, never
+  rebased (W-1; hashes are cited). Main `99c893d4` = 59 commits past the merge-base `01ef2542` (checkpoints 3–6
+  of the DEFERRED sweep, PPN 4C checkpoint 1 with the PPN series move, CIU 6 dailies).
+- **Measured**: the merged tree differs from main in exactly the branch's own 135 files, each identical to
+  `ea63c032`; `tools/dep-graph.rkt` is main's (the derived graph lists `test-arena-parity.rkt`; `update-deps
+  --check` passes). Built with the limit; `reduction` / `typing-core` / `macros` / `elaborator` / `driver` `.zo`
+  equal main's checkout byte for byte (`propagator` differs by the P0 instrumentation). Gate `--all
+  --force-rerun`: **10 394 tests / 502 files, all pass** = main's 10 385 / 501 (SW-25 gate) + the 9 parity tests,
+  the predicted delta exactly. The harness runs (`p0-profile.rkt stats` smoke run on `bool-logic`).
+- **What main changes on this track's measured path** (in the merge message too): DEFERRED 152 means the P0
+  harness's window no longer holds forced major GCs (smoke run `gc_ms` 1, was ≥ 51 on every file), so P0 §10.2's
+  S0 share can be re-derived directly instead of bracketed; 151 (a)+(b) supersede P0 §0 item 5's 2.6 s load
+  figure; SW-27 puts new per-`process-file` work (registry scope: 59 parameters + a forked registry network)
+  inside the harness's window; 155 makes `demos-ab.sh`'s restore a no-op.
+- **Surprise / correction**: the relay note counted 58 commits; main had gained one more (`99c893d4`, CIU 6
+  dailies), touching no code. The runner's COUNT DROP line (`test-properties.rkt` 13 → 8 since `fd2986cc`) is
+  main's `8014caef` (the test-library double count, removed before this branch was cut), not this merge.
+- **Next**: summarise the track to the owner and wait for confirmation; then D.2 opens with O-9.
