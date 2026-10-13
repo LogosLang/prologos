@@ -942,13 +942,22 @@
   ;; STRINGS, looked up below with a freshly built string: `eq?` never matched
   ;; (0 of 489 hits, measured 2026-10-13), so every key was +inf.0 and dispatch
   ;; was ALPHABETICAL — including on both legs of the refuted measurement above.
-  (define historical-times
+  (define timings-lines
     (if (file-exists? timings-path)
-        (with-handlers ([exn? (lambda (e) (hash))])
-          (historical-medians (file->lines timings-path)
-                              #:runs LPT-HISTORY-RUNS
-                              #:min-file-count LPT-MIN-FILE-COUNT))
-        (hash)))
+        (with-handlers ([exn? (lambda (e) '())]) (file->lines timings-path))
+        '()))
+  (define historical-times
+    (with-handlers ([exn? (lambda (e) (hash))])
+      (historical-medians timings-lines
+                          #:runs LPT-HISTORY-RUNS
+                          #:min-file-count LPT-MIN-FILE-COUNT)))
+  ;; DEFERRED 81: each file's test count at its last recorded PASS — read here,
+  ;; before this run appends its own record, and reported after the summary.
+  (define prior-counts
+    (with-handlers ([exn? (lambda (e) (hash))])
+      (prior-test-counts timings-lines
+                         (for/list ([p (in-list test-paths)])
+                           (path->string (file-name-from-path (string->path p)))))))
 
   ;; Plan work units: heaviest first (LPT); a whale becomes K shards
   ;; (suite-plan.rkt plan-units). Unknown files get +inf.0 (conservative: first).
@@ -1377,6 +1386,10 @@
                 [else (format "~a FAILURES" (length failed-files))]))
   ;; DEFERRED 166 (SW-20): repeat the override warning where the eye lands.
   (let ([w (suite-lock-override-warning)]) (when w (printf "~a\n" w)))
+  ;; DEFERRED 81: a count can drop with nothing failing; name every drop.
+  (for ([d (in-list (count-drops file-results prior-counts))])
+    (printf "COUNT DROP: ~a ran ~a tests; at its last recorded pass (~a) it ran ~a. A deleted test explains this; otherwise tests are being lost silently (DEFERRED 81).\n"
+            (first d) (second d) (fourth d) (third d)))
   (for ([r (in-list stale-test-free)])
     (printf "NOTE: ~a is declared test-free (suite-plan.rkt TEST-FREE-FILES) but ran ~a tests — remove the declaration.\n"
             (unit-name r) (hash-ref r 'tests 0)))

@@ -477,3 +477,50 @@
                               (not (member b NON-TEST-MODULES)))))
       (format "~a requires ~a" (let-values ([(d n _) (split-path p)]) (path->string n)) s)))
   (check-equal? offenders '()))
+
+;; ========================================
+;; DEFERRED 81 — a passing file that ran FEWER tests than its last recorded pass
+;; ========================================
+
+;; A record whose results carry status + tests. `rs` : (listof (list file status tests))
+(define (count-record commit rs #:extra [extra (hasheq)])
+  (jsexpr->string
+   (for/fold ([h (hasheq 'commit commit 'file_count (length rs)
+                         'results (for/list ([r (in-list rs)])
+                                    (hasheq 'file (first r) 'status (second r) 'tests (third r) 'wall_ms 1)))])
+             ([(k v) (in-hash extra)])
+     (hash-set h k v))))
+
+(test-case "suite-plan/counts: the NEWEST valid passing record wins; a failed or invalid one is skipped"
+  (define lines
+    (list (count-record "aaa" '(("test-p.rkt" "pass" 13) ("test-q.rkt" "pass" 4)))
+          (count-record "bbb" '(("test-p.rkt" "pass" 12)))                       ; newer pass: wins for p
+          (count-record "ccc" '(("test-p.rkt" "fail" 2) ("test-q.rkt" "fail" 1)))  ; failed: never a baseline
+          (count-record "ddd" '(("test-p.rkt" "pass" 1)) #:extra (hasheq 'invalid "lock override"))))
+  (define prior (prior-test-counts lines (list (string-copy "test-p.rkt") "test-q.rkt" "test-new.rkt")))
+  (check-equal? (hash-ref prior "test-p.rkt" #f) '(12 "bbb"))
+  (check-equal? (hash-ref prior "test-q.rkt" #f) '(4 "aaa"))
+  (check-false (hash-ref prior "test-new.rkt" #f) "a file never recorded has no baseline"))
+
+(test-case "suite-plan/counts: a drop is named; equal, higher, failing and unknown files are not"
+  (define prior (hash "test-p.rkt" '(13 "aaa") "test-q.rkt" '(4 "aaa") "test-r.rkt" '(7 "aaa")))
+  (define now
+    (list (hasheq 'file "test-p.rkt" 'status "pass" 'tests 8)    ; the 81 shape: 13 -> 8, all pass
+          (hasheq 'file "test-q.rkt" 'status "pass" 'tests 4)    ; equal
+          (hasheq 'file "test-r.rkt" 'status "fail" 'tests 2)    ; a failure is reported as one already
+          (hasheq 'file "test-s.rkt" 'status "pass" 'tests 1)))  ; no baseline
+  (check-equal? (count-drops now prior) '(("test-p.rkt" 8 13 "aaa")))
+  (check-equal? (count-drops (list (hasheq 'file "test-q.rkt" 'status "pass" 'tests 9)) prior) '()
+                "more tests is not a drop"))
+
+(test-case "suite-plan/counts: the scan stops once every wanted file is found (it never parses older records)"
+  ;; An unparseable line OLDER than the answer would raise inside read-json; it is never reached.
+  (define lines (list "{not json" (count-record "new" '(("test-p.rkt" "pass" 3)))))
+  (check-equal? (prior-test-counts lines '("test-p.rkt")) (hash "test-p.rkt" '(3 "new"))))
+
+(test-case "suite-plan/counts: the scan is bounded — a file absent from the newest N records has no baseline"
+  (define lines (list (count-record "old" '(("test-p.rkt" "pass" 3)))
+                      (count-record "x1" '(("test-q.rkt" "pass" 1)))
+                      (count-record "x2" '(("test-q.rkt" "pass" 1)))))
+  (check-false (hash-ref (prior-test-counts lines '("test-p.rkt") #:max-records 2) "test-p.rkt" #f))
+  (check-equal? (hash-ref (prior-test-counts lines '("test-p.rkt") #:max-records 3) "test-p.rkt" #f) '(3 "old")))

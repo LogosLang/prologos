@@ -41,6 +41,8 @@
          gate-verdict
          gate-incomplete?
          gate-all-pass?
+         prior-test-counts   ;; DEFERRED 81
+         count-drops
          EXIT-PASS
          EXIT-FAILURES
          EXIT-INCOMPLETE
@@ -357,6 +359,52 @@
 (define (gate-all-pass? unit-count unit-results)
   (define-values (missing empty failed stale) (gate-verdict unit-count unit-results))
   (and (= missing 0) (null? empty) (null? failed)))
+
+;; ============================================================
+;; DEFERRED 81: a passing file that ran FEWER tests than its last recorded pass
+;; ============================================================
+;; The suite total can move for a reason no failure shows: on 2026-07 two runs of
+;; the same code recorded `test-properties.rkt` as 13 and 8 tests, both all-pass
+;; (161's mechanism: a test file required another test file, so the count depended
+;; on whether the worker had instantiated it already). Any such mechanism looks
+;; like a deleted test, so the runner names every drop and lets a reader decide.
+;;
+;; prior-test-counts : (listof string) (listof string) #:max-records N
+;;                     -> (hash/c string? (list/c exact-nonnegative-integer? string?))
+;; For each WANTED file (base name, as recorded), its `tests` in the NEWEST valid
+;; timings.jsonl record where it PASSED, with that record's commit. Targeted runs
+;; count (a count does not depend on contention). Reads the newest N records only
+;; and stops early once every wanted file is found: main's file is ~200 MB, and a
+;; scan of all of it for a file never recorded (a new test on a branch) cost ~5 s
+;; per run (measured 2026-10-13); one record parses in under 5 ms. A file absent
+;; from the newest N records has no baseline. equal?-keyed.
+(define (prior-test-counts lines wanted #:max-records [max-records 30])
+  (let loop ([ls (reverse lines)] [missing (remove-duplicates wanted)] [seen 0] [acc (hash)])
+    (cond
+      [(or (null? ls) (null? missing) (>= seen max-records)) acc]
+      [else
+       (define rec (with-handlers ([exn:fail? (lambda (e) #f)])
+                     (with-input-from-string (car ls) read-json)))
+       (define rs (and (hash? rec) (not (record-invalid-reason rec)) (hash-ref rec 'results '())))
+       (define acc*
+         (for/fold ([a acc]) ([r (in-list (if (list? rs) rs '()))])
+           (define f (hash-ref r 'file #f))
+           (define n (hash-ref r 'tests #f))
+           (if (and (member f missing) (not (hash-has-key? a f)) (passed? r)
+                    (exact-nonnegative-integer? n))
+               (hash-set a f (list n (format "~a" (hash-ref rec 'commit "?"))))
+               a)))
+       (loop (cdr ls) (filter (lambda (w) (not (hash-has-key? acc* w))) missing) (add1 seen) acc*)])))
+
+;; count-drops : (listof result) prior -> (listof (list file now before commit))
+;; Results that PASSED with fewer tests than `prior` records for their file.
+(define (count-drops file-results prior)
+  (for*/list ([r (in-list file-results)]
+              #:when (passed? r)
+              [p (in-value (hash-ref prior (hash-ref r 'file "") #f))]
+              #:when (and p (exact-nonnegative-integer? (hash-ref r 'tests #f))
+                          (< (hash-ref r 'tests) (first p))))
+    (list (hash-ref r 'file) (hash-ref r 'tests) (first p) (second p))))
 
 ;; ============================================================
 ;; EXIT STATUS — one table, so no two outcomes share a code
