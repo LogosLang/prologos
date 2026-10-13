@@ -7568,7 +7568,7 @@ naming the sub-block spelling is the monotone waypoint.
 written). It also bounds D4 Q_U52 §1's broadcast-ancestor question: inside one branch, the steps after an ω step are
 further fused ω steps or a sub-block, so an ω ancestor under a deep star is unobservable until this lands.
 
-### 168. ⬜ A STAR GLUED TO AN ARROW IN A TYPE IS SILENTLY NOT AN ARROW — `spec s4 Nat *-> Nat` reports "spec type for s4 has no arrow"; `<(x : Nat)*- Nat>` reports a bare "Type mismatch"
+### 168. ⬜ A STAR GLUED TO AN ARROW IN A TYPE IS SILENTLY NOT AN ARROW — `spec s4 Nat *-> Nat` reports "spec type for s4 has no arrow"; ~~`<(x : Nat)*- Nat>` reports a bare "Type mismatch"~~ **Withdrawn** — `<(x : Nat)*- Nat>` reports a nameless "Unbound variable" (see the correction below)
 
 **Found by** the CIU 6 1b-vi grounding audit (2026-10-13; probe
 `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/probe-1bvi-g.prologos` on branch `ciu6-path-selection`, output beside
@@ -7577,8 +7577,25 @@ it). Measured at `01ef2542`:
 | input (with a matching `defn`) | message |
 |---|---|
 | `spec s4 Nat *-> Nat` | "preparse: spec: spec type for s4 has no arrow but defn has 1 params" |
-| `spec s3 <(x : Nat)*- Nat> -> Nat` | "Type mismatch" |
+| ~~`spec s3 <(x : Nat)*- Nat> -> Nat`~~ | ~~"Type mismatch"~~ — the raw probe-g output, kept as the record; **not evidence about `*-`** (correction below) |
 | `spec s2 <(x : Nat)* Nat> -> Nat` (control) | Q_U31's guided "inside `<…>`, `*` needs a SPACE before it …" |
+
+> ⚠ **CORRECTION (2026-10-13, probe `probe-1bvi-o` on branch `ciu6-path-selection`)**: the "Type mismatch" row came
+> from a control that did not isolate the variable. Probe g's SPACED control `spec s1 <(x : Nat) * Nat> -> Nat` with the
+> same body (`defn s1 [p] 0`) ALSO prints "Type mismatch", so the body fails against the Sigma spec for its own reason
+> and the message says nothing about how `)*-` lexes. Re-measured with bare type expressions, which print `T : Type`:
+>
+> | input | message |
+> |---|---|
+> | `<(x : Nat) * Nat>` | `[Sigma Nat Nat] : [Type 0]` |
+> | `<(x : Nat)* Nat>` | Q_U31's "needs a SPACE" |
+> | `<(x : Nat)*- Nat>` | **"Unbound variable"** — no name |
+> | `<(x : Nat) *- Nat>` (spaced) | **"Unbound variable"** — no name |
+> | `spec k2 Nat *-> Nat` + `defn k2 [n] n` | "spec type for k2 has no arrow" (confirms the first row with a body that checks) |
+>
+> So in a type, `*-` (glued or spaced) is read as an identifier and reported by a lookup that does not print the name:
+> the same nameless miss the CIU 6 audit found in the closer band (F5, `mn{a}*-`). The 1b-vi prediction below concerns
+> only the GLUED form; the spaced form is a plain unbound name and stays one.
 
 **Mechanism (read from the reader's character classes, consistent with the messages):** `-` is an identifier-continue
 character and `>` is not, so a star glued to `->` always lexes as `…*-` followed by `>`, never as `*` followed by `->`.
