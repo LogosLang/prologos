@@ -311,6 +311,7 @@
    ;; (suite-lock.rkt): a concurrent suite or targeted run would be measured
    ;; as part of the program. It waits for the holders; --no-wait exits 75.
    (define lock-path (suite-lock-path))
+   (for ([line (in-list (suite-lock-banner 'exclusive lock-path))]) (printf "~a\n" line))   ; DEFERRED 166
    (call-with-suite-lock
     'exclusive
     (lambda () (run-and-record))

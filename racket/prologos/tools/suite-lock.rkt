@@ -43,6 +43,12 @@
 ;;;
 ;;; ⚠ Only runners that contain this code take part. A checkout whose runner
 ;;; predates it neither waits nor is waited for.
+;;;
+;;; ⚠ MEASURED LIMITATION (DEFERRED 166): a runner's batch workers do NOT hold
+;;; the lock. If the runner is SIGKILLed, the OS frees the lock at once while
+;;; its orphaned workers finish their current unit (they exit at stdin EOF), so
+;;; the next run can start against them: a bounded window, and only after a
+;;; crash. Probe: racket-performance-probing skill, scripts/lock-probe.sh.
 
 (require json
          racket/file
@@ -53,6 +59,8 @@
 
 (provide suite-lock-path
          default-suite-lock-path
+         suite-lock-override-warning
+         suite-lock-banner
          suite-lock-mode
          SUITE-SIZED-FILE-COUNT
          SUITE-LOCK-BUSY-EXIT
@@ -98,6 +106,25 @@
   (if (and env (not (string=? env "")))
       (simplify-path (path->complete-path (string->path env)))
       (default-suite-lock-path)))
+
+;; DEFERRED 166 (SW-20). The override is legitimate (the tests use it) but it
+;; takes a run OUT of the machine-wide queue, and an inherited value did that
+;; silently once (a subagent's export reached the coordinator's shell). So every
+;; caller prints suite-lock-banner when it takes the lock: the file it queues
+;; on, and a ⚠ line whenever the env var moved it off the default.
+;; suite-lock-override-warning : -> (or/c #f string?)
+(define (suite-lock-override-warning)
+  (define used (suite-lock-path))
+  (define dflt (default-suite-lock-path))
+  (and (not (equal? used dflt))
+       (format "⚠ PROLOGOS_SUITE_LOCK=~a takes this run OUT of the machine-wide suite queue (~a): it waits only for runs that use the same file, and runs in the real queue do not wait for it. Unset it unless that is what you meant (the tests set it on purpose)."
+               (getenv "PROLOGOS_SUITE_LOCK") (path->string dflt))))
+
+;; suite-lock-banner : mode path -> (listof string)
+(define (suite-lock-banner mode path)
+  (define w (suite-lock-override-warning))
+  (cons (format "Suite lock: ~a on ~a" mode (path->string path))
+        (if w (list w) '())))
 
 (define (sibling p suffix) (string->path (string-append (path->string p) suffix)))
 (define (intent-path p) (sibling p ".intent"))

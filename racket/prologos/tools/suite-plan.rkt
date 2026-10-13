@@ -37,6 +37,7 @@
          NON-TEST-MODULES
          TEST-FREE-FILES
          drop-non-test-modules
+         targeted-unit-problem
          gate-verdict
          gate-incomplete?
          gate-all-pass?
@@ -44,6 +45,7 @@
          EXIT-FAILURES
          EXIT-INCOMPLETE
          EXIT-GUARD-REFUSED
+         EXIT-USAGE
          FAILURE-RUNS-KEPT
          make-run-id
          runs-to-prune
@@ -102,6 +104,10 @@
 ;;     file, the newest 2026-07-31). Since fd2986cc the runner no longer
 ;;     writes them; this keeps any FUTURE fail-open of that shape away from
 ;;     the scheduler too.
+;;   - one of its units reported PASS having run 0 tests, and the file is not
+;;     declared test-free or a non-test module: before 2999a74b the gate took
+;;     that as a pass (DEFERRED 161 — 2 such records in main's file, both
+;;     `all_pass` true). A result without a 'tests key makes no claim.
 ;; A record without file_count makes no claim to check.
 (define (record-invalid-reason rec)
   (cond
@@ -111,8 +117,17 @@
      (define fc (hash-ref rec 'file_count #f))
      (define rs (hash-ref rec 'results '()))
      (define n (if (list? rs) (length rs) 0))
-     (and (exact-integer? fc) (< n fc)
-          (format "results ~a < file_count ~a (DEFERRED 164)" n fc))]))
+     (define (empty-pass? r)
+       (and (hash? r) (passed? r) (eqv? (hash-ref r 'tests #f) 0)
+            (let ([f (base-name (hash-ref r 'file ""))])
+              (not (or (member f NON-TEST-MODULES) (member f TEST-FREE-FILES))))))
+     (cond
+       [(and (exact-integer? fc) (< n fc))
+        (format "results ~a < file_count ~a (DEFERRED 164)" n fc)]
+       [(and (list? rs) (findf empty-pass? rs))
+        => (lambda (r) (format "unit ~a reported PASS with 0 tests (DEFERRED 161)"
+                               (base-name (hash-ref r 'file ""))))]
+       [else #f])]))
 
 ;; ============================================================
 ;; WHALE SHARDING
@@ -301,6 +316,24 @@
 (define (drop-non-test-modules xs)
   (filter (lambda (x) (not (member (base-name x) NON-TEST-MODULES))) xs))
 
+;; targeted-unit-problem : path-string -> (or/c #f string?)
+;; Why a path named with --tests is NOT a test unit, or #f (SW-21). Such a
+;; path used to be dispatched anyway, report PASS with 0 tests and turn the run
+;; INCOMPLETE (EMPTY): true, but it reads as a broken suite when the command
+;; simply named the wrong file. The runner refuses it with EXIT-USAGE instead.
+;; Outside a tests/ directory nothing is judged: the runner's behaviour there
+;; is unchanged.
+(define (targeted-unit-problem p)
+  (define s (if (path? p) (path->string p) p))
+  (define name (base-name s))
+  (cond
+    [(member name NON-TEST-MODULES)
+     (format "~a is the batch worker's own fixture (suite-plan.rkt NON-TEST-MODULES): every worker loads it at startup, so it can only report 0 tests" name)]
+    [(and (regexp-match? #rx"(^|/)tests/[^/]+$" s)
+          (not (regexp-match? #rx"^test-.*[.]rkt$" name)))
+     (format "~a is a test library or fixture, not a test unit (units are tests/test-*.rkt); its checks run through the test files that use it" name)]
+    [else #f]))
+
 (define (passed? r) (equal? (hash-ref r 'status #f) "pass"))
 
 ;; gate-verdict : unit-count (listof unit-result) -> (values missing empty failed stale-test-free)
@@ -337,6 +370,8 @@
 (define EXIT-FAILURES 1)       ; some unit failed or timed out
 (define EXIT-INCOMPLETE 2)     ; some unit gave no result, or the run aborted
 (define EXIT-GUARD-REFUSED 3)  ; the re-run GUARD refused: nothing was run
+(define EXIT-USAGE 64)         ; the command named nothing runnable (EX_USAGE): a
+                               ; missing file, or not a test unit (SW-21); nothing was run
 
 ;; ============================================================
 ;; FAILURE-LOG ARCHIVE (DEFERRED 160 support)

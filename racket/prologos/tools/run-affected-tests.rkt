@@ -376,6 +376,9 @@
     (define report (make-wait-reporter mode lock-path))
     (define waited? #f)
     (define t-wait (current-inexact-milliseconds))
+    ;; DEFERRED 166 (SW-20): say where this run queues, and warn when an
+    ;; inherited PROLOGOS_SUITE_LOCK took it out of the machine-wide queue.
+    (for ([line (in-list (suite-lock-banner mode lock-path))]) (printf "~a\n" line))
     (call-with-suite-lock
      mode
      (lambda ()
@@ -423,11 +426,23 @@
      ;; to the batch worker, which would produce confusing errors.
      (define missing
        (filter (lambda (p) (not (file-exists? p))) normalized-files))
+     ;; SW-21: a path that is not a test unit (test-support.rkt, a library or
+     ;; fixture under tests/) is refused, not run-then-called-INCOMPLETE.
+     (define not-units
+       (for*/list ([p (in-list normalized-files)]
+                   #:unless (member p missing)
+                   [why (in-value (targeted-unit-problem p))]
+                   #:when why)
+         (cons p why)))
      (cond
-       [(pair? missing)
+       [(or (pair? missing) (pair? not-units))
         (for ([p (in-list missing)])
           (eprintf "Error: test file not found: ~a\n" p))
-        (exit 1)]
+        (for ([pw (in-list not-units)])
+          (eprintf "Error: not a test unit: ~a\n  ~a.\n" (car pw) (cdr pw)))
+        (eprintf "Nothing was run (exit ~a). Name test files: --tests tests/test-NAME.rkt\n" EXIT-USAGE)
+        ;; SW-21: was (exit 1), the code for "a test FAILED"; nothing ran.
+        (exit EXIT-USAGE)]
        [else
         (printf "Running ~a targeted test file(s) with scoped precompile...\n"
                 (length normalized-files))
@@ -1359,6 +1374,8 @@
                 [incomplete? (format "INCOMPLETE — ~a" incomplete-reason)]
                 [all-pass? "all pass"]
                 [else (format "~a FAILURES" (length failed-files))]))
+  ;; DEFERRED 166 (SW-20): repeat the override warning where the eye lands.
+  (let ([w (suite-lock-override-warning)]) (when w (printf "~a\n" w)))
   (for ([r (in-list stale-test-free)])
     (printf "NOTE: ~a is declared test-free (suite-plan.rkt TEST-FREE-FILES) but ran ~a tests — remove the declaration.\n"
             (unit-name r) (hash-ref r 'tests 0)))

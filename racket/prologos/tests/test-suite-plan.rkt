@@ -272,16 +272,48 @@
   (check-equal? (drop-non-test-modules (list "/x/tests/test-support.rkt" "/x/tests/test-a.rkt"))
                 (list "/x/tests/test-a.rkt")))
 
+(test-case "suite-plan/targeted: --tests on a module that is not a test unit is REFUSED, not run (SW-21)"
+  ;; It used to run, report PASS with 0 tests, and be judged EMPTY -> INCOMPLETE:
+  ;; true, but it reads as a broken suite when the command named the wrong file.
+  (check-false (targeted-unit-problem "/x/racket/prologos/tests/test-a.rkt"))
+  (check-regexp-match #rx"fixture" (targeted-unit-problem "/x/tests/test-support.rkt"))
+  (check-regexp-match #rx"library" (targeted-unit-problem "/x/tests/property-generators.rkt"))
+  (check-regexp-match #rx"library" (targeted-unit-problem "/x/tests/ws-session-e2e-01.prologos"))
+  (check-false (targeted-unit-problem "/x/benchmarks/micro/bench-x.rkt")
+               "outside tests/ the runner's behaviour is unchanged")
+  (check-false (targeted-unit-problem "/x/tests/test-p2-debug.rkt") "declared test-free files still run"))
+
+;; ========================================
+;; Invalid history records (DEFERRED 161 open 1, SW-19)
+;; ========================================
+
+(test-case "suite-plan/invalid: an undeclared unit that PASSED with 0 tests invalidates its record"
+  (define (rec . results) (hasheq 'file_count (length results) 'all_pass #t 'results results))
+  (define (u f t [st "pass"]) (hasheq 'file f 'status st 'tests t))
+  (check-equal? (record-invalid-reason (rec (u "test-a.rkt" 3) (u "test-generators.rkt" 0)))
+                "unit test-generators.rkt reported PASS with 0 tests (DEFERRED 161)")
+  (check-false (record-invalid-reason (rec (u "test-a.rkt" 3) (u "test-support.rkt" 0)))
+               "the worker's fixture (NON-TEST-MODULES)")
+  (check-false (record-invalid-reason (rec (u "test-a.rkt" 3) (u "test-p2-debug.rkt" 0)))
+               "declared test-free (TEST-FREE-FILES)")
+  (check-false (record-invalid-reason (rec (u "test-a.rkt" 0 "fail")))
+               "a FAILURE with 0 tests is a failure, not an empty pass")
+  (check-false (record-invalid-reason (rec (hasheq 'file "test-a.rkt" 'status "pass")))
+               "an old record without a 'tests key makes no claim")
+  (check-equal? (record-invalid-reason (hasheq 'file_count 3 'results (list (u "test-x.rkt" 0))))
+                "results 1 < file_count 3 (DEFERRED 164)" "the 164 reason is checked first"))
+
 ;; ========================================
 ;; Exit status
 ;; ========================================
 
 (test-case "suite-plan/exit codes: ran-nothing outcomes are NONZERO and every outcome is distinct"
   ;; DEFERRED 164 open(2): the re-run GUARD exited 0 having run nothing.
-  (define codes (list EXIT-PASS EXIT-FAILURES EXIT-INCOMPLETE EXIT-GUARD-REFUSED SUITE-LOCK-BUSY-EXIT))
+  (define codes (list EXIT-PASS EXIT-FAILURES EXIT-INCOMPLETE EXIT-GUARD-REFUSED EXIT-USAGE SUITE-LOCK-BUSY-EXIT))
   (check-equal? EXIT-PASS 0)
   (check-false (zero? EXIT-GUARD-REFUSED) "a refused run must not read as green")
   (check-false (zero? SUITE-LOCK-BUSY-EXIT))
+  (check-not-equal? EXIT-USAGE EXIT-FAILURES "naming a wrong file is not a failing test (SW-21)")
   (check-equal? (length (remove-duplicates codes)) (length codes)))
 
 ;; ========================================

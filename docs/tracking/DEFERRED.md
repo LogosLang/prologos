@@ -6918,7 +6918,7 @@ or gate the tree path on a real pool executor; the green-thread `parallel?` bran
 win and should be deleted. **When**: before PAR 4 pins its baseline — every PAR 4 A/B is
 otherwise credited with removing this defect (P0 record §5 "two baselines"). Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md).
 
-### 151. ⬜ ⭐ **FIX (a) MERGED `baa1dce2`** (`7358c7c4`, checkpoint 3); fix (b) open — THE `.pnet` MODULE CACHE IS A NET LOSS: `pnet-stale?` `read`s every WHOLE file to compare a 2-element header, then the loader reads it AGAIN — 2.6 s per process start, vs 0.53 s elaborating the same 39 modules from source
+### 151. ⬜ ⭐ **FIX (a) MERGED `baa1dce2`** (`7358c7c4`, checkpoint 3); fix (b) MEASURED and built on branch `deferred-151b-pnet-fasl` (`eab8dcf7`), merge pending — THE `.pnet` MODULE CACHE IS A NET LOSS: `pnet-stale?` `read`s every WHOLE file to compare a 2-element header, then the loader reads it AGAIN — 2.6 s per process start, vs 0.53 s elaborating the same 39 modules from source
 
 [`pnet-serialize.rkt:795-806`](../../racket/prologos/pnet-serialize.rkt) `pnet-stale?`
 does `(call-with-input-file pnet-path read)` — the full datum, ~0.4–1 MB per module — to
@@ -6949,8 +6949,23 @@ stale-check read of all 40 files 1 291–1 375 → 1 ms; warm load phase (driver
 1 307 → 838 MB. **Warm still loses to cold and to no cache**: the loader's one text `read` is 1.24–1.32 s for
 16.9 MB. **Data for (b)**: the same bodies as `fasl` are 9.5 MB and read in 53–56 ms; that a fasl body makes a warm
 load beat no-cache (≈ 310 ms inferred) is a CONJECTURE, not measured end to end — measuring it is the next step
-(decision (xxii)). Tests: `tests/test-pnet-header.rkt` (12). Every checkout's cache regenerates once. Record:
+(decision SW-22). Tests: `tests/test-pnet-header.rkt` (12). Every checkout's cache regenerates once. Record:
 `docs/tracking/handoffs/2026-10-13_PER_PROCESS_152_151_NOTE.md`.
+
+**Fix (b) measured end to end, 2026-10-13 (owner decision SW-22).** Branch `deferred-151b-pnet-fasl` (off main
+`2792123c`): `eab8dcf7` makes the BODY fasl and keeps the header text (`PNET_VERSION` 11 → 12; `pnet-stale?` unchanged);
+`9713a1a5` is the record (`docs/tracking/handoffs/2026-10-13_PNET_FASL_151B_DATA/README.md` on that branch).
+- **Same data**: bodies 40/40 equal to v11 modulo root path; strings and vectors come back immutable (text `read`
+  made them mutable), and no production code mutates one (every `vector-set!` site is on a local `make-vector`;
+  CHAMP/RRB values are rebuilt on load). Full suite on v12: 10 350 / 497, all pass.
+- **Load phase, CPU ms median** (ABBA ×4, under the exclusive suite lock, load 12–16): warm **1 450 → 285**
+  (5.1×), below no-cache (530 / 546, the control), so the cache now PAYS (1.9×); cold 1 028 → 732; 809 → 405 MB.
+  The ≈ 310 ms conjecture above holds (285 measured). Suite wall, one ABAB pair: 15.8 / 16.9 → 13.4 / 13.5 s.
+- **Open (a decision)**: merge the branch as fix (b). Retiring the cache would forgo the 1.9×. Costs: a `.pnet` is no
+  longer readable as text (a dump tool would restore that); fasl's format follows the Racket version, which the
+  existing rule already covers (`infrastructure-stale?`, `pnet-serialize.rkt:826`, called by `pnet-stale?` at `:836`:
+  a newer `driver_rkt.zo` makes every cache stale; and the loader's read is inside an `exn?` handler, so an
+  unreadable body falls back to source).
 
 ### 152. ✅ **DISCHARGED `0e5da30f`** (branch `per-process-152-151`, merged to main in `baa1dce2`; the runner opts back in with `--memory-stats`, `e3efb2dc`) — `process-file` FORCES TWO MAJOR GCs PER CALL — `measure-memory-before`/`-after` call `(collect-garbage 'major)` unconditionally (~45 ms per file; the largest single cost of a 60 ms run)
 
@@ -6967,7 +6982,7 @@ collect only when `memory-stats-enabled?` (`:425`): `current-memory-stats?`, `PR
 Measured by the stream, test phase, base → fix (ABBA n=4; CPU / GC ms / major GCs): `test-transducer-01`
 1 276 / 1 067 / 36 → 208 / 14 / 0. Coordinator check: `raco test test-transducer-01` 4.43/4.58 → 1.91/1.88 s wall
 (ABAB, load 7–11; the ratio is the evidence). Tests: `tests/test-memory-stats.rkt` (6). **The runner** keeps the
-`memory` field only on request (owner decision (xii), option C): `--memory-stats` (`e3efb2dc`); checked both ways —
+`memory` field only on request (owner decision SW-12, option C): `--memory-stats` (`e3efb2dc`); checked both ways —
 off: no field, 1.7 s; on: `{gc_ms, mem_before/after/retained_bytes}`, 2.9 s. Restart the LSP server to get the fix there.
 
 ### 153. ⬜ `benchmarks/comparative/parity-adversarial.prologos` CRASHES AT HEAD — the DFS solver's `solve: Depth limit exceeded (100)` escapes `process-file` uncaught; `bench-ab` has been timing a crash for this file
@@ -7213,9 +7228,13 @@ attribution is an inference. Under the new gate the same artefact would have bee
 - Old records double-counted those 5 tests whenever the two files ran in different workers (18 counted for 13).
 
 **Open**:
-1. Main's history holds 2 records with an undeclared 0-test PASS unit (`test-generators.rkt`,
-   `test-int-list-quick.rkt`, both `all_pass` true). Annotating them is a decision: (v) said annotate, but the
+1. ✅ **DONE (SW-19)**: `c02d378a` adds the rule to `record-invalid-reason` (generic, no list: over main's 1 936 records
+   it matches exactly these 2), and main's `timings.jsonl` is annotated (2 records; only the key added; a second pass
+   annotates 0). Was: Main's history holds 2 records with an undeclared 0-test PASS unit (`test-generators.rkt`,
+   `test-int-list-quick.rkt`, both `all_pass` true). Annotating them is a decision: SW-5 said annotate, but the
    annotation tool marks only records whose results are fewer than file_count.
+   Related, SW-21 (`6e0cc7a8`): `--tests` on a module that is not a test unit (`test-support.rkt`, a library or fixture
+   under `tests/`) is refused with exit 64 instead of being run, reported EMPTY and called INCOMPLETE.
 2. `test-int-list-quick.rkt`'s 0-test record is NOT explained by the library mechanism: no test file requires it
    (census at `8014caef`).
 
@@ -7253,7 +7272,7 @@ yet merged): `benchmark-tests.rkt`'s regression and variance tables were inert i
 keyed by file-name strings), fixed with a copied-key test. One latent site, `measure-production-n.rkt:91`, is
 interned literals today. The five runner files are clean.
 **Checkpoint 3**: open 2 merged in `977c008e`; the latent `measure-production-n.rkt:91` site is fixed
-(`make-hash`) in `200bc3d6` (owner decision (xviii)). Open 3 stays with 160.
+(`make-hash`) in `200bc3d6` (owner decision SW-18). Open 3 stays with 160.
 
 ### 163. ⬜ ⭐ EVERY RUNNER START KILLED EVERY BATCH WORKER ON THE MACHINE — Step 0's `pkill -f batch-worker.rkt` was machine-wide, so a run in any session, worktree or clone killed the workers of every concurrent suite — **fix landed `b45bbf44`**; 6 worktrees + 2 clones still carry the old runner
 
@@ -7298,10 +7317,10 @@ There is no unit test, because this is process-level behaviour.
    form (`run-affected-tests.rkt:529-530`, `"-f" "batch-worker.rkt"`) and take no suite lock; every nested
    worktree has the scoped form (main `:723-727`).
 2. ✅ **DONE (checkpoint 3).** Guard `e9b2a30e` (merged `977c008e`): a `pkill`/`killall` whose pattern can reach a
-   racket process is refused unless parent-scoped. `8b113a9f` (owner decision (xvi)) closes the indirect forms —
+   racket process is refused unless parent-scoped. `8b113a9f` (owner decision SW-16) closes the indirect forms —
    a `pgrep` in a command that also kills is judged as the `pkill` it amounts to (co-occurrence over-approximates
    pipe / `$(…)` / variable / file dataflow), `ps | grep PAT | … kill`, `-v`, `kill -1`, and `"$(…)"` inside quotes;
-   145 rows, 9 mutations all red. `53e6de98` narrows the allow-list to `Bash(pkill -P:*)` (decision (xvii)).
+   145 rows, 9 mutations all red. `53e6de98` narrows the allow-list to `Bash(pkill -P:*)` (decision SW-17).
    Registered as in 159 (a). Was: **Agents can still do it by hand.** `.claude/settings.local.json:71` allows `Bash(pkill:*)` without a prompt,
    and a `pkill -f racket` or `pkill -f batch-worker` from any session has the same blast radius. **Fix shape**
    (a decision): either `tools/hook-guard-racket.sh` (159's PreToolUse guard) denies a
@@ -7370,7 +7389,7 @@ longitudinal read of the file does include them (baselines, PIRs, trend tools).
 
 **When**: (1) and (3) together, before PAR 4 pins a baseline. (2), (4) and (5) any time.
 
-**Status 2026-10-13 — open items 1–5 fixed (merged in `f6e530d7`); owner decisions (iv)–(vi) applied.**
+**Status 2026-10-13 — open items 1–5 fixed (merged in `f6e530d7`); owner decisions SW-4–SW-6 applied.**
 - **Open 1** (zero tests): fixed with 161, `2999a74b`.
 - **Open 2** (GUARD exit 0): `57a542e2`. A refusal exits **3**, and the banner says "NOTHING WAS RUN". Every exit
   code is in one table, `suite-plan.rkt` § EXIT STATUS: 0 / 1 / 2 / 3, plus 75 for a busy suite lock under `--no-wait`.
@@ -7407,7 +7426,7 @@ because the edge is dynamic (deliberately: `batch-worker.rkt` :51-53).
 1. Every checkout older than `f6e530d7` still has the gap (see 163 open 1 for the list).
 2. The full-suite precompile path was verified by reading, not by a repro.
 
-### 166. ⬜ THE SUITE QUEUE CAN BE BYPASSED SILENTLY — an inherited `PROLOGOS_SUITE_LOCK` makes a run queue on a private lock file, and nothing on screen says so; also, the lock is not held by the workers a runner spawns
+### 166. ✅ **DISCHARGED `c1d4f8f3`** (branch `deferred-sweep-146-149`; reaches main at the next checkpoint) — THE SUITE QUEUE CAN BE BYPASSED SILENTLY — an inherited `PROLOGOS_SUITE_LOCK` makes a run queue on a private lock file, and nothing on screen says so; also, the lock is not held by the workers a runner spawns
 
 **Found by** the coordinator at the checkpoint (`f6e530d7`), on the queue's first real use. A targeted `--no-wait` run went
 ahead while a full suite held the machine lock exclusively. The cause was in the shell: `PROLOGOS_SUITE_LOCK` was set
@@ -7423,6 +7442,13 @@ deliberately.
 probe `lock-probe.sh` (+ `lock-inherit.rkt`, `lock-try.rkt`; racket-performance-probing skill `scripts/`): when a lock-holding parent is SIGKILLed, another process can take the lock at once, while
 the child it spawned is still running. A SIGKILLed runner therefore frees the queue while its orphaned workers finish
 their current unit (they exit at stdin EOF). That is a bounded window of contention, and only after a crash.
+
+**Status 2026-10-13 — discharged (owner decision SW-20: no extra flag).** `suite-lock.rkt` `suite-lock-banner`: every
+runner, `bench-ab`, `benchmark-tests` and the annotate tool print `Suite lock: <mode> on <path>`; when
+`PROLOGOS_SUITE_LOCK` resolves to a file other than the default, a ⚠ line names both files, and the runner repeats it
+under its `N tests in` line. Before: 0 lines about the lock under an inherited override; after: header, ⚠, ⚠.
+The measured limitation is recorded in `suite-lock.rkt`'s header. Tests: `test-suite-lock.rkt` (9 checks; two
+mutations red).
 
 ### 167. ⬜ L1 FUSION FAILS IN BLOCK POSITION — `w4{a:b:c}` errors where the path form `w4.a:b:c` gives `@[1 2]`; zero pins anywhere for an in-block fused ω chain, and the error message is wrong under every reading
 
