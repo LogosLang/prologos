@@ -81,10 +81,13 @@
 
 ;; Load prelude via test-support.rkt (warms Racket module cache).
 ;; Must use dynamic-require (not require) to control execution order.
-(define test-support-path
-  (simplify-path (build-path (path-only (syntax-source #'here))
-                             ".." "tests" "test-support.rkt")))
-(dynamic-require test-support-path #f)
+;; ⚠ The modules come from suite-plan.rkt WORKER-DYNAMIC-MODULES — the SAME
+;; constant every precompile builds (worker-precompile-paths). raco make never
+;; follows a dynamic edge, so a module loaded here but missing there is left
+;; stale and kills every worker at load (item h, reproduced 2026-10-13).
+(define project-dir (simplify-path (build-path (path-only (syntax-source #'here)) "..")))
+(for ([worker-module (in-list WORKER-DYNAMIC-MODULES)])
+  (dynamic-require (simplify-path (build-path project-dir worker-module)) #f))
 
 ;; Save post-prelude state. Two categories:
 ;;

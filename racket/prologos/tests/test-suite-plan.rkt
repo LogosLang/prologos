@@ -374,3 +374,46 @@
   ;; each line round-trips through the worker's parser
   (define-values (p sh k) (parse-work-line (cadr (hash-ref (car seqs) 'units))))
   (check-equal? (list p sh k) '("tests/test-w.rkt" 2 4)))
+
+;; ========================================
+;; The worker's own modules are precompiled (item h)
+;; ========================================
+
+(define tools-dir (simplify-path (build-path (let-values ([(d n _) (split-path (syntax-source #'here))]) d)
+                                            ".." "tools")))
+
+(test-case "suite-plan/worker modules: the precompile set holds batch-worker.rkt and EVERY module it dynamic-requires"
+  ;; tests/test-support.rkt reaches the worker only through dynamic-require, so
+  ;; `raco make` never follows that edge: a targeted run that did not list it
+  ;; left its .zo stale after a driver.rkt rebuild, and every worker died at
+  ;; load with an instantiate-linklet mismatch (2026-10-13, reproduced).
+  (define root "/p/racket/prologos/")
+  (define ps (worker-precompile-paths root))
+  (check-not-false (member "/p/racket/prologos/tools/batch-worker.rkt" ps))
+  (check-not-false (member "/p/racket/prologos/tests/test-support.rkt" ps))
+  (for ([m (in-list WORKER-DYNAMIC-MODULES)])
+    (check-not-false (member (string-append root m) ps) m)))
+
+;; Every (dynamic-require X ...) in a datum.
+(define (dynamic-require-args d)
+  (cond
+    [(and (pair? d) (eq? (car d) 'dynamic-require) (pair? (cdr d))) (cons (cadr d) (dynamic-require-args (cddr d)))]
+    [(pair? d) (append (dynamic-require-args (car d)) (dynamic-require-args (cdr d)))]
+    [else '()]))
+(define (mentions? d sym)
+  (cond [(eq? d sym) #t] [(pair? d) (or (mentions? (car d) sym) (mentions? (cdr d) sym))] [else #f]))
+
+(test-case "suite-plan/worker modules: batch-worker.rkt dynamic-requires nothing the constant does not name"
+  ;; The STATIC half of the pin: the dynamic edge and the precompile set are
+  ;; derived from one constant, so they cannot drift apart. A new
+  ;; dynamic-require in the worker must go through WORKER-DYNAMIC-MODULES.
+  (define src
+    (parameterize ([read-accept-reader #t] [read-accept-lang #t])
+      (with-input-from-file (build-path tools-dir "batch-worker.rkt") read)))
+  (define args (dynamic-require-args src))
+  (check-true (>= (length args) 2) "the unit under test and the worker's own modules")
+  (for ([a (in-list args)])
+    (check-true (or (eq? a 'abs-file)                       ; the unit under test
+                    (mentions? a 'worker-module))            ; bound over WORKER-DYNAMIC-MODULES
+                (format "unexpected dynamic-require of ~s in batch-worker.rkt" a)))
+  (check-true (mentions? src 'WORKER-DYNAMIC-MODULES) "the worker loads its modules from the constant"))

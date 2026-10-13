@@ -441,10 +441,15 @@
           ;; global precompile since we've done the scoped one here.
           (define driver-path
             (path->string (simplify-path (build-path project-root "driver.rkt"))))
-          (define compile-paths (cons driver-path normalized-files))
+          ;; ⚠ + the batch worker's OWN modules (suite-plan.rkt
+          ;; worker-precompile-paths): it reaches tests/test-support.rkt only by
+          ;; dynamic-require, which raco make never follows, so a targeted run
+          ;; whose tests do not require test-support.rkt left its .zo stale and
+          ;; every worker died at load (item h, reproduced 2026-10-13).
+          (define worker-paths (worker-precompile-paths project-root))
           (cond
             [(do-precompile?)
-             (printf "Pre-compiling driver + ~a test file(s)...\n"
+             (printf "Pre-compiling driver + the batch worker + ~a test file(s)...\n"
                      (length normalized-files))
              (define t0 (current-inexact-monotonic-milliseconds))
              ;; STAGED + parallel via bench-lib's `raco-make-staged!`: production
@@ -453,8 +458,12 @@
              ;; does not require driver.rkt can otherwise finish before
              ;; driver_rkt.zo and look stale forever after). It also drains
              ;; raco's pipes, which the previous code did not — see raco-make!.
-             (define-values (prod-paths tst-paths)
-               (partition (lambda (p) (not (regexp-match? #rx"/tests/" p))) compile-paths))
+             (define-values (prod-targets test-targets)
+               (partition (lambda (p) (not (regexp-match? #rx"/tests/" p))) normalized-files))
+             ;; Production stage: driver.rkt, then the worker's modules (test-
+             ;; support.rkt requires driver.rkt), then any non-test targets.
+             (define prod-paths (remove-duplicates (append (list driver-path) worker-paths prod-targets)))
+             (define tst-paths (filter (lambda (p) (not (member p prod-paths))) test-targets))
              (define-values (ok output) (raco-make-staged! prod-paths tst-paths))
              (define ms (- (current-inexact-monotonic-milliseconds) t0))
              (printf "Pre-compiled in ~as\n"
@@ -726,7 +735,10 @@
   (when (do-precompile?)
     (printf "Pre-compiling modules...\n")
     (define precomp-t0 (current-inexact-monotonic-milliseconds))
-    (precompile-modules! project-root)
+    ;; The worker's own modules explicitly: tests/test-support.rkt was covered
+    ;; only by the accident of living under tests/, batch-worker.rkt not at all.
+    (precompile-modules! project-root
+                         #:extra-production (worker-precompile-paths project-root))
     (define precomp-ms (- (current-inexact-monotonic-milliseconds) precomp-t0))
     (printf "Pre-compiled in ~as\n"
             (real->decimal-string (/ precomp-ms 1000.0) 1)))
@@ -758,6 +770,19 @@
         (when (> (file-or-directory-modify-seconds driver-src)
                  (file-or-directory-modify-seconds driver-zo))
           (set! stale-files (cons (path->string driver-src) stale-files)))))
+    ;; The batch worker's own modules (item h): batch-worker.rkt and what it
+    ;; dynamic-requires — stale if their .zo is missing, older than their
+    ;; source, or older than driver_rkt.zo. Repaired in the PRODUCTION stage.
+    (let* ([driver-zo (build-path project-root "compiled" "driver_rkt.zo")]
+           [driver-ts (and (file-exists? driver-zo) (file-or-directory-modify-seconds driver-zo))])
+      (for ([src (in-list (worker-precompile-paths project-root))])
+        (define-values (dir name _d) (split-path (string->path src)))
+        (define zo (build-path dir "compiled"
+                               (string-append (regexp-replace #rx"\\.rkt$" (path->string name) "_rkt") ".zo")))
+        (when (or (not (file-exists? zo))
+                  (> (file-or-directory-modify-seconds src) (file-or-directory-modify-seconds zo))
+                  (and driver-ts (< (file-or-directory-modify-seconds zo) driver-ts)))
+          (set! stale-files (cons src stale-files)))))
     ;; Test files against production .zo.
     (let* ([driver-zo (build-path project-root "compiled" "driver_rkt.zo")]
            [driver-ts (and (file-exists? driver-zo)
@@ -784,9 +809,14 @@
          ;; Staged for the same reason as the precompile above: if driver.rkt is
          ;; among the stale set it must finish before any test .zo is written,
          ;; or the next run's scan re-flags the tests we just repaired.
-         (define-values (stale-prod stale-tests)
-           (partition (lambda (p) (not (regexp-match? #rx"/tests/" p)))
-                      (reverse stale-files)))
+         (define worker-set (worker-precompile-paths project-root))
+         (define-values (stale-prod0 stale-tests0)
+           (partition (lambda (p) (or (member p worker-set) (not (regexp-match? #rx"/tests/" p))))
+                      (remove-duplicates (reverse stale-files))))
+         ;; driver.rkt before the worker's modules (test-support requires it)
+         (define-values (stale-driver stale-rest) (partition (lambda (p) (regexp-match? #rx"/driver[.]rkt$" p)) stale-prod0))
+         (define stale-prod (append stale-driver stale-rest))
+         (define stale-tests (filter (lambda (p) (not (member p stale-prod))) stale-tests0))
          (define-values (ok output) (raco-make-staged! stale-prod stale-tests))
          (unless ok
            (eprintf "✗ Auto-recompile failed. Run `raco make` manually.\n")

@@ -55,7 +55,10 @@
          attribute-stderr
          diagnose-worker-stderr
          metric-line?
-         worker-sequences)
+         worker-sequences
+         WORKER-MODULE
+         WORKER-DYNAMIC-MODULES
+         worker-precompile-paths)
 
 ;; historical-medians : (listof string) #:runs N #:min-file-count M
 ;;                      -> (hash/c string? exact-nonnegative-integer?)  ; equal?-keyed
@@ -455,3 +458,30 @@
             'pid (cadr w)
             'units (for/list ([u (in-list (caddr w))])
                      (work-unit->line (struct-copy work-unit u [path (rel (work-unit-path u))]))))))
+
+;; ============================================================
+;; THE WORKER'S OWN MODULES (item h of the runner-queue-gate batch)
+;; ============================================================
+;; ⚠ batch-worker.rkt loads tests/test-support.rkt by DYNAMIC-require (on
+;; purpose: it must run before the worker snapshots post-prelude state; see
+;; batch-worker.rkt § Phase 1). `raco make` follows only static requires, so
+;; it never rebuilt test-support.rkt for the worker, and the default load
+;; handler trusts a stale .zo. Reproduced 2026-10-13: after a driver.rkt
+;; rebuild, `--tests tests/test-substitution.rkt` (a test that does not
+;; require test-support.rkt) left tests/compiled/test-support_rkt.zo stale and
+;; every worker died at load — "instantiate-linklet: mismatch … name:
+;; process-file31.1 … importing instance: tests/test-support.rkt" — printed
+;; as DEAD WORKERS, 0 tests, ABORTED. Even `raco make tools/batch-worker.rkt`
+;; does not reach it. So the edge is DECLARED here, ONCE: batch-worker.rkt
+;; dynamic-requires exactly WORKER-DYNAMIC-MODULES, and every precompile
+;; builds worker-precompile-paths in its production stage, after driver.rkt.
+;; tests/test-suite-plan.rkt pins both halves (a static read of the worker).
+(define WORKER-MODULE "tools/batch-worker.rkt")
+(define WORKER-DYNAMIC-MODULES '("tests/test-support.rkt"))   ; relative to racket/prologos/
+
+;; worker-precompile-paths : root -> (listof path-string)  ; absolute
+(define (worker-precompile-paths root)
+  (define r (let ([s (if (path? root) (path->string root) root)])
+              (if (string-suffix? s "/") s (string-append s "/"))))
+  (for/list ([m (in-list (cons WORKER-MODULE WORKER-DYNAMIC-MODULES))])
+    (string-append r m)))

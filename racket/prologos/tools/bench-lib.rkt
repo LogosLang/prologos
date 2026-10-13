@@ -403,7 +403,7 @@
 ;; Pre-compile all Prologos modules to .zo bytecode via `raco make`.
 ;; This reduces per-subprocess preamble overhead from ~22s to ~1s.
 ;; Returns #t on success.
-(define (precompile-modules! project-root)
+(define (precompile-modules! project-root #:extra-production [extra-production '()])
   ;; Track 10B: use absolute path for raco make.
   ;; Subprocess inherits OS CWD (not Racket current-directory).
   ;; Using absolute driver-path ensures correct compilation regardless of CWD.
@@ -424,7 +424,12 @@
         '()))
   ;; STAGED, production first — see raco-make-staged! for why the split is not
   ;; cosmetic (it is what keeps the stale-.zo heuristic honest under -j).
-  (define-values (ok output) (raco-make-staged! (list driver-path) test-files))
+  ;; #:extra-production: modules no static require reaches (the runner passes
+  ;; the batch worker's own, suite-plan.rkt worker-precompile-paths), built in
+  ;; the production stage after driver.rkt.
+  (define prod (remove-duplicates (cons driver-path extra-production)))
+  (define-values (ok output)
+    (raco-make-staged! prod (filter (lambda (t) (not (member t prod))) test-files)))
   (unless ok
     ;; The old code discarded raco's output, so a failure said only "failed".
     (eprintf "~a" output))
