@@ -619,3 +619,14 @@ fast-forwarded, rebuilt with the limit (fingerprints match), and its own test pa
 machine-wide `pkill`: 5 nested worktrees idle 8–9 weeks (`charming-khayyam`, `dazzling-wescoff`,
 `editor-support-path-change`, `heuristic-thompson`, `sleepy-kepler`) and 2 sibling clones (`prologos-egraph-spike`,
 `prologos-preduce-auto`). Left untouched: harmless unless a suite is started there.
+
+**Worktree cleanup (owner request, 2026-10-13).** The removal rule: HEAD is an ancestor of main, no tracked changes, no
+untracked files, no racket process with its cwd inside, ignored files inspected, and names cited only historically.
+- **Removed:** `charming-khayyam-a7835d` (`605b593f`), `dazzling-wescoff-4b692b` (`16b3a9d0`),
+  `editor-support-path-change-a3ddf9` (`9c0b6d31`), `heuristic-thompson-a2091b` (`c7c7f796`), `sleepy-kepler-8aa2cb`
+  (`8e09173d`).
+- **Branches deleted** (`git branch -d`, merged only): `clever-bhabha-f3a408` and `sleepy-kepler-8aa2cb`.
+- **Kept:** the active trees (`deferred-sweep-146-149`, the three agent streams, `par4-p0`, and `ciu6-path-selection`, the
+  other session's).
+- **Waiting on the owner:** the two sibling clones. `egraph-relational-spike` and `preduce-autonomy` hold records that are
+  not on main. Scripts: `wt-inventory.sh`, `wt-precheck.sh`.
