@@ -79,7 +79,8 @@ domain merges are not (`scope-cell-merge`; the `promote-cell-to-tagged` default
 with the main reader (`propagator.rkt:1616`, which joins) independently of 148. So the size
 question is downstream of a correctness one; options A–E and the discriminating
 measurements are in the session's analysis, to be folded into whichever design doc takes
-the decision. It also bears on
+the decision. **M1 measured (2026-10-13)**: 2 of 7 production domain merges are joins;
+record `docs/tracking/2026-10-13_TAGGED_CELL_DOMAIN_MERGES_M1.md`. It also bears on
 **PAR 4 D.1 §6.1**: the flat record "dedups on append by construction" — pair-dedup, the same
 limitation — so its `E`-entry capacity overflows under the same chain (the arena probe's
 `overflow` counter is the tell).
