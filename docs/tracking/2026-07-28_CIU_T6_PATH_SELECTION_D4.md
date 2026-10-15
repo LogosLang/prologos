@@ -3424,7 +3424,31 @@ items of the hold-point, ruled before P4a opened:
   `*->` message, the pre-mint pins flipped) → a verify round → the suite gate. Tracker:
   [§5.P4e-1b-vi](#p4e-1b-vi).
 
-  **Next free Q-label: U59.**
+- <a id="q-u59"></a>**Q_U59 — WHERE NOTHING CAN COLLAPSE, `*-` ≡ `*` AND `*-_` ≡ `*_`
+  (path position, the closer seat, depth 1) [✅ SETTLED 2026-10-13, owner — "Ok as settled,
+  with medium confidence"].** Derived from Q_U57's rule rather than decided separately: in
+  path position no step has an output key (measured, `probe-1bvi-m` — every caret form there
+  is refused, "a field access has no output key"), so the operator deletes no ancestor level
+  and P names none. **What the medium confidence is about, stated so it has an object:** a
+  meaning shipped here cannot later become a DIFFERENT meaning without breaking programs. The
+  monotone waypoint would have refused `*-` / `*-_` where nothing collapses ("nothing to
+  collapse — write `*`"). It was not taken because the block cases E1 and E10 are the same
+  situation and Q_U55 already keeps a redundant dissolve legal. **Revisit trigger:** a real
+  program wanting a path-position `*-_` to name the projected path (`x.a.b*-_` → `a-b-…`). That
+  would contradict P's own principle (the operator deleted nothing there), so it would be a
+  new rule, not a correction. Pinned by rows X-dot±, X-wpath±, E1±, E10±.
+
+- <a id="q-u60"></a>**Q_U60 — THE EQUIVALENCES BECOME GENERATED LAWS [✅ DECIDED 2026-10-13,
+  owner — "fold it in"].** Offered at the 1b-vi-A checkpoint (VAG (c)): 31 hand examples
+  state Q_U48 / Q_U57 by instance; a generator states them as laws. **Placement (recorded as
+  my call within the decision):** the generator lands as 1b-vi-B's FIRST step, inside the
+  stage table — its `^-` half is B's red step, its `*-` half flips at D. **Scope:** over the
+  `t5` tree, every leaf position at depth 1–3 × every assignment of {kept, `^`, rename} to its
+  ancestors, for `^-`, `^-k'`, `*-` and `*-_`, plus `*-` over the vector fixture `v3`. Each
+  generated row's law is either an equivalence with today's spelling (dissolve every
+  ancestor; the `^-_` enumeration of the lifted fields) or Q_U55's refusal.
+
+  **Next free Q-label: U61.**
 
 - <a id="q-u43"></a>**⭐ Q_U43 — THE L4 SORT CHECK MOVES TO TYPING FOR STAR-BEARING
   BRANCHES, AS [Q_U38](#q-u38)'s COROLLARY [owner, 2026-08-11 — "move the sort
@@ -9586,7 +9610,7 @@ scaffolding for the slicing, not a permanent mechanism.
 | sub-slice | content | status |
 |---|---|---|
 | **1b-vi-A** ✅ `0b6a645f` | the stage table: 40 rows, every expected value measured from today's equivalent spelling (`probe-1bvi-p`). Red step: stage B → exactly C1–C4 red (the silent drop); stage D → 37 / 40 red, each for its measured pre-mint reason (mid-lexeme 28, postfix 2, nameless unbound 3, silent drop 4); controls green. Instrument power by mutation: an already-true target caught twice; a fixture that fails to load caught before `unbound` could accept it. Battery 573 → 575; **5.28 s per run** (per-test-case timing) | ✅ |
-| **1b-vi-B** | `^-` / `^-k'` refuse an ancestor rename (Q_U55's caret half) | ⬜ |
+| **1b-vi-B** | `^-` / `^-k'` refuse an ancestor rename (Q_U55's caret half); FIRST step: the generated laws ([Q_U60](#q-u60)) join the stage table | 🔄 |
 | **1b-vi-C** | the `collapsed` cont + the `*-` / `*-_` conts + the totality dispatcher + the 15 prose arms, INERT (reachable from tests only) | ⬜ |
 | **1b-vi-D** | the mint: two table rows, the `*->` message; flips `:6194`, `:6195`, `:8470`, `:8482`; arrival matrix `*-` / `*-_` 0/209 → 209/209 | ⬜ |
 | verify | adversarial round | ⬜ |
@@ -9617,6 +9641,30 @@ that number was machine load, not the table. Measured per test-case instead: 5.2
 | (b) complete | 40 rows: E1–E10 × 2, depth, vectors, sub-blocks, both ω positions, path position, the hyphen clash, both Q_U55 families, both Q_U56 territories, controls | **two gaps, assigned rather than hidden.** (1) The rows reach at most 3 of the 15 `star-*` prose arms (content-collision, synth-vector-contents, dup-key); 1b-vi-C owns the other 12, through a render loop over kind × cont, since no surface row reaches most of them. (2) The echo and quote lowerings (`macros.rkt`, Q_U54's site list) are not pinned for `*-` by any row; 1b-vi-D's mini-audit must check whether the table-driven pins (C-8, C-11) already cover them |
 | (c) vision-advancing | the semantics is stated as executable equivalences — progressive disclosure made checkable | **the equivalences are 31 examples, not a law.** A generator could build, for any well-formed branch, its `^`-on-every-ancestor and `^-_`-enumeration spellings and assert `*-` / `*-_` against them over many branches. That states Q_U48 / Q_U57 as properties. Not built here (outside the decided slicing); offered to the owner at the checkpoint |
 | (d) drift risks | DR-3 label rows present (E4-, E8_, E10-, X-omega-, X-wpath-); DR-4 shown non-vacuous (stage D 37/37, mutations M1/M2); DR-6 measured | **the inherited pattern challenged: the parked-comment idiom** (`:7793`, `:8822`), replaced by executed targets; its known failure (an unreadable parked pin) cannot recur here. DR-6 did materialize (5.28 s per run, about 7 % of a single-process battery run); bounded, not removed |
+
+**1b-vi-B — design target and mini-audit** (at `22994c62`).
+
+*Design reference.* [Q_U55](#q-u55) (refuse a rename on an ancestor of `^-` / `^-k'`; dissolve
+legal; `^-_` keeps the rename), [Q_U60](#q-u60) (the laws land first). *Principles:* correct by
+construction (one syntactic seat, branch-local — the same scope as provenance, `probe-1bvi-k`);
+one rendering authority (Q_U54: the message's remedies are rendered by `pp-select-branch`, never
+spelled by hand in the parser). *Mantra:* the check is a pure function of one written branch,
+decided once at block close; nothing downstream infers it.
+
+*Drift risks for B.* **B-1 over-refusal** — the dissolve-only, `^-_` and no-ancestor cases must
+stay legal: the generated controls (7 per family) and K1–K3 guard it. **B-2 a shape test instead
+of the classifier** — classify with `select-step-kind` and see through ω (`bcast`), as
+`branch-problem`'s P4a / P4c-3 notes require. **B-3 advice that does not work** (P3b verify
+finding 8's class) — the table runs every remedy the message offers and asserts it is
+accepted. **B-4 scope** — the star half (`*-`, row C5) waits for D; the check is written so the
+star leaf is one more arm.
+
+| what | where | consequence |
+|---|---|---|
+| the seat | `branch-problem`, `parser.rkt:1374`, run over every branch at block close (`:1440`) | add the Q_U55 check after the positional check, so a mid-path `^-` keeps its own message |
+| the collapse conts | `syntax.rkt:863–865`: `'collapse`, `(collapse-rename . k')`, `'collapse-synth` | TOTAL = the first two; `select-cont-collapse?` (`:1375`) also answers #t for `'collapse-synth`, so it is NOT the predicate to reuse |
+| the renderer | `pp-select-branch`, `pretty-print.rkt:135` | a new require edge `parser.rkt → pretty-print.rkt`: no cycle either way (text closure over the repo's requires, controls `syntax.rkt` / `macros.rkt` / `reader-forms.rkt` reached), and it adds 6 modules to the parser's compile closure (`pretty-print`, `posit-impl`, `processes`, `rrb`, `tabling`, `union-find`) |
+| scope of a branch | a sub-block is its own branch list (`sub?` recursion) | `e3{a^p.{b.c^-}}` is NOT refused — the collapse lands under `p`, where the rename is observable |
 
 <a id="p4e-1b-v-shipped"></a>
 
