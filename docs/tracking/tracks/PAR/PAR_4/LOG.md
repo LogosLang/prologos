@@ -382,3 +382,33 @@ binder merges with unsolved metas.
   dailies), touching no code. The runner's COUNT DROP line (`test-properties.rkt` 13 → 8 since `fd2986cc`) is
   main's `8014caef` (the test-library double count, removed before this branch was cut), not this merge.
 - **Next**: summarise the track to the owner and wait for confirmation; then D.2 opens with O-9.
+
+### O-9 decided (tree path off, then deleted in P0.5) and G-2 recorded; the evidence: the suite passes with it off, the prelude caches are identical, and a merge-order census explains why and finds order-dependence elsewhere — `eb25caee` (2026-10-14)
+- **Why / decision**: owner accepted the summary and the O-9 lean: off, and delete the path. They asked first for
+  the full suite with the default off ("it *should* pass if our architecture is actually CALM; if not, it would
+  be a good indicator that there is more to fix"), and for the other evidence. They also gave guidance **G-2**:
+  measure performance (memory, cycles/time, firings) and correctness, the latter in three layers — inductive
+  (by construction: static analysis, types), co-inductive (runtime monitoring, dynamic checks, as needed),
+  and testing. Both are ledgered in D.1 §14. The record is P0 **§11**.
+- **Measured**:
+  - Full suite under `PAR4_TREE_REDUCE=off`: **10 394 / 502 all pass**.
+  - The 39 prelude caches, generated cold under 256, off and 0, are identical module by module.
+  - A merge-order census (each BSP round applied flat / again / tree-combined / reversed to one snapshot) finds:
+    - tree vs flat: **0 divergences** in 648 wide suite rounds, because no wide round carries an undeclared write;
+    - a power row flips a program's answer 3 → 1 when the shape does occur.
+  - Cold prelude elaboration: merge phase 3.03 → 0.020 ms and −7.7 MB per run, wall within noise.
+- **Surprise / correction**:
+  - The suite's pass was **predicted by structure**, so it is weak evidence for CALM. The census's reverse-order
+    column R is the test that can fail, and it does: 249 of 12 527 multi-result suite rounds (2.0 %) and 26 of
+    448 corpus rounds (5.8 %) end with different cell values. The merges involved are meta-solution output, the
+    ready queue (cell-14), attribute-map facets and tagged cells. These are the Q1 audit's predicted rows, now
+    measured in production.
+  - Contradictions differ only in *which* cell is reported, never in whether one is.
+  - Cold prelude elaboration runs only 4–5 BSP rounds; 1–2 of them are wide (the `process-file` route's widest
+    is 368 fires, as DEFERRED 150 recorded).
+  - My lean's second reason (a second merge order, chosen by round width) was stated as unmeasured. It is a real
+    mechanism (power-T) that production does not reach (T = 0).
+  - A power check of the cache comparison was itself zero-power: it overwrote a module that does not exist. It
+    was caught by its 39/39 result and redone.
+- **Next**: dailies + DEFERRED 150's status addendum on main; then pose **O-10** (first checkpoint contents),
+  which now also covers keeping the census as a standing monitor (G-2).

@@ -75,6 +75,12 @@ erased the pre-track parallel result.
    retraction — the last-writer-wins lattice is the defect, and the grow-only invalidated-bits
    lattice fixes it under every schedule.
 
+> **Added 2026-10-14 — §11 (O-9 evidence).** With DEFERRED 150's tree path off, the full suite passes, and
+> the prelude caches are identical module by module. A merge-order census shows why the suite cannot tell
+> the two apart: no round of 256+ fires carries an undeclared write. The same census measures item 7 in
+> production: 2.0 % of the suite's multi-result rounds (5.8 % of the corpus's) end with different cell
+> values when their results are applied in reverse order.
+
 ## 1. Method
 
 ### 1.1 Instruments (branch `par4-p0`, `4097b1c8`)
@@ -563,3 +569,162 @@ DEFERRED 152 lands (stream `per-process-152-151`), the harness's S0 share is rep
 | runner (`389b3413` LPT, `b45bbf44` pkill, `fd2986cc` whales, `92472849` queue, 161/164 gate) | P2's oracle is the full suite | a green suite is now honest (161, 164); 160 (suite-only failures) is still open — P2 failures must be checked file-alone before attribution. ⚠ This track's `suite-schedulers.sh` ran four full suites (00:56–01:04) before `b45bbf44`, so it would have killed any concurrent suite's workers machine-wide (DEFERRED 163) |
 | 159 (`PLT_CS_COMPILE_LIMIT`), hook stream `guards-hook-sweep` | every PAR 4 timing | every `raco make` carries the limit; verify fingerprints before a baseline (this §) |
 | stream `per-process-152-151` (152 forced GCs, 151(a) `.pnet` header) | this harness | when 152 lands, the window stops including forced GC; re-derive §10.2 directly |
+
+## 11. O-9 evidence: DEFERRED 150's tree path under the whole suite, a merge-order census, the prelude caches, cold timing (added 2026-10-14)
+
+**Why.** The owner accepted the O-9 lean ([D.1 §14](2026-10-12_PAR_4_D1_DESIGN.md): ship the fix for
+DEFERRED 150 with the tree path off, and delete it). Before that, they asked for the full suite with the
+default off, as a first pass ("it *should* pass if our architecture is actually CALM; if not, it would be a good
+indicator that there is more to fix"), and for the rest of the evidence: performance (memory, time, firings) and
+correctness. **Where**: branch `par4-arena-executors` at `eb25caee` = main `99c893d4` merged in (`2b1e1e78`) plus
+the instruments below. Builds limited (`PLT_CS_COMPILE_LIMIT=1000000`). Load average 3–9 (other sessions active).
+The timing run held the machine-wide suite lock exclusively.
+
+### 11.1 What the two paths differ in (read at main `99c893d4`)
+
+Below 256 fires, `bulk-merge-writes` (`propagator.rkt:2978`) applies each fire result in turn: that result's new
+cells, then its declared writes (merged), then its undeclared writes (by **replacement**, the DEFERRED 157
+mechanism), then its contradiction. At 256 fires or more, `tree-reduce-fire-results … #t` (`:3377`) first
+concatenates all the results, in order, through a tree of green threads (`merge-fire-results`, `:3090`, only
+appends lists). It then applies the one combined result. So the tree path does no lattice work, and it changes
+one thing: **every declared write in the round is applied before any undeclared write**, and all new cells before
+either. The two orders agree exactly when no undeclared write (and no created cell) shares a round with another
+result's write to the same cell.
+
+### 11.2 Instruments (all env-gated; behaviour-neutral when unset — gate with both unset: 10 394 / 502 all pass)
+
+| instrument | what it does |
+|---|---|
+| `PAR4_TREE_REDUCE` = `off` \| *n* (`propagator.rkt:2255` at `eb25caee`) | the default of `current-tree-reduce-threshold`; unset = 256, as shipped |
+| `PAR4_MERGE_ORDER_CENSUS=<file>` (`:3176`, called at `:3557`) | every BSP round with ≥ 2 fire results is applied to the **same snapshot** four ways: **F** flat (today's path below 256; the reference) · **C** flat again (control: anything `equal?` cannot see) · **T** tree-combined (today's path at ≥ 256) · **R** results reversed. It compares the raw value of every cell the round wrote or created (minus C's cells), the contradiction, and the worklist as a set. The extra networks are discarded and the write/change counters are unbound while they are built. It also counts the rounds that carry undeclared writes, created cells or contradictions. Per-process totals plus ≤ 300 divergence events are written at exit (plumber flush). BSP only. |
+| `benchmarks/par4/o9-merge-order-power.rkt` | power rows (§11.3) |
+| `o9-pnet-compare.rkt` | two `.pnet` trees, module by module, in `pnet-canonical` form (`tools/pnet-dump.rkt`) |
+| `o9-cold-ab.sh` (+ `hold-suite-lock.rkt`) | cold-cache prelude elaboration, 256 vs off, interleaved |
+| `o9-census-summary.py` | aggregates a census file |
+
+Data: `racket/prologos/data/par4-p0/o9/`.
+
+### 11.3 Power checks first — MEASUREMENT (`power.out`, `power.jsonl`, `power-threshold.out`, `pnet-compare.out`)
+
+| row | network (one BSP round, two writers of C) | census | C at threshold 256 / 0 / off |
+|---|---|---|---|
+| power-T | declared write 3 into a max cell; undeclared write `C := 1`, its result first | **T differs**, R differs | **3 / 1 / 3** — the tree order changes the program's answer |
+| power-T0 | the same writers, the declared result first | R differs only | 1 / 1 / 1 |
+| power-R | two undeclared read-modify-writes of an ior cell (Q1's M3) | R differs only | 2 / 2 / 2 |
+| neg-join | two declared writes into a max cell (a join) | nothing differs | 3 / 3 / 3 |
+| neg-ior | two declared writes into an ior cell | nothing differs | 6 / 6 / 6 |
+
+So the census can report T and R divergences, and the shape §11.1 predicts does change a result once the tree
+path takes it. The cache comparison can fail too: overwriting `core/ord.pnet` with `core/eq.pnet` is reported
+(1 of 39, 15 slots). A first attempt at that check overwrote a module that does not exist, compared nothing, and
+printed 39/39 identical. It was a zero-power check, caught by its own output and redone.
+
+### 11.4 Results — MEASUREMENT
+
+**The full suite with the default off**: **10 394 tests / 502 files, all pass** (`suite-off.log`; the pass
+included the prelude caches regenerated under off).
+
+**Prelude caches**, generated cold (`pnet-compile.rkt --clean`, then generate) under each setting: **39 of 39
+modules identical** for 256 vs 256 (control), 256 vs off, and 256 vs 0 (tree path on every round).
+
+**Merge-order census** (threshold 256, as shipped):
+
+| population | BSP rounds | fires | rounds ≥ 256 fires (their fires) | compared rounds (≥ 2 results) | T differs | C noise | R differs: cells | R differs: contradiction | rounds with undeclared writes (in wide rounds) |
+|---|---|---|---|---|---|---|---|---|---|
+| full suite, 18 workers (`census-suite.*`) | 15 422 | 979 335 | **648** (813 154) | 12 527 | **0** | 0 | **249** rounds, 275 cells | 11 (7 wide) — identity only, never presence | 87 (**0**) |
+| corpus, 18 files, prelude preloaded (`census-corpus.*`) | 687 | 2 901 | 0 | 448 | 0 | 0 | **26** | 0 | 0 |
+| cold prelude, `pnet-compile` / `process-file` (`census-prelude-cold.jsonl`) | 5 / 4 | 2 002 / 789 | 2 (1 581) / 1 (368) | 5 / 4 | 0 | 0 | 0 | 0 | 0 |
+
+The census suite also passes 10 394 / 502, and two census runs gave identical counts. No round in any population
+created cells (G-1's finding, again). `parity-adversarial` is excluded from the corpus rows, as in §2, because it
+crashes (DEFERRED 153).
+
+R's divergences by merge function (events naming it; suite / corpus): `meta-solution-merge`
+(`typing-propagators.rkt:968`) 117 / 17 · `resolution-stratum-merge` (the ready queue, cell-14;
+`propagator.rkt:802` at main) 74 / 4 · `attribute-map-merge-fn` (`typing-propagators.rkt:447`) 62 / 3 ·
+`make-tagged-merge`'s lambda (`decision-cell.rkt:526`) 16 / 2 · list-represented sets (`set-union-merge` and
+`set-merge`, both test fixtures; `merge-list-append`, `infra-cell.rkt:166`; `topology-request-merge`) 6 / 0 · a
+contradiction only 11 / 0. Of the events, 174 of 260 have no `tests/` frame on the stack, so test-file
+attribution is partial.
+
+**Cold-cache prelude elaboration**, `P0_NO_PNET=1` on a near-empty file, 10 interleaved rounds per leg
+(`cold-ab.jsonl`):
+
+| median | threshold 256 | off | paired difference |
+|---|---|---|---|
+| BSP merge phase (the one 368-fire round dominates) | 3.03 ms | **0.020 ms** | 151× |
+| allocation, whole run | 470.7 MB | 463.1 MB | **−7.2 … −8.1 MB** in every pair |
+| wall, whole run | 422.8 ms | 414.7 ms | −11.8 … +24.5 ms: within noise |
+| process CPU | 0.57 s | 0.56 s | — |
+| GC | 48 ms | 47 ms | — |
+| rounds / fires / widest round | 4 / 789 / 368 | 4 / 789 / 368 | identical |
+
+The medium tier, where every round is wide, stands as measured in §10.1 (6.0–7.4×). Main's merges since did not
+touch `propagator.rkt`.
+
+### 11.5 What this says about O-9
+
+- **The flip is a no-op on everything measured.** Suite, corpus and prelude all agree, and the census says why:
+  T is 0 because no wide round carries an undeclared write or a created cell (MEASUREMENT; the explanation is
+  §11.1's reading checked against the census's counts). So the suite's pass is **predicted by structure**. It is
+  real evidence for O-9: the default can change without changing any measured result. It is **weak** evidence
+  for CALM, because the suite never presents the shape (power-T) on which the two orders differ.
+- **The cost is real but concentrated.** 151× on the merge phase of a wide round and 7.7 MB per cold
+  elaboration (about 21 KB per pairwise merge, if the 367 merges of a 368-result tree account for all of it:
+  MODEL). End to end on cold elaboration it is below noise, because one round in four is wide. The 6–7× falls
+  where networks are wide every round (§10.1).
+- My lean's second reason ("a second merge order chosen by round width") is **right in mechanism** (power-T)
+  and **unreached in production** (T = 0). It argues for deleting the path rather than defaulting it off:
+  deletion removes the shape for good, with no knob left to bring it back.
+
+### 11.6 What this says about CALM — the R column
+
+The asynchronous-iteration theorem (§9.4) needs joins on every cell written during S0. A join is commutative, so
+a round's outcome cannot depend on the order its results are applied in. **R measures that order-independence
+directly, in production**:
+
+- 249 of the suite's 12 527 multi-result rounds (2.0 %) and 26 of the corpus's 448 (5.8 %) end with **different
+  cell values** when applied in reverse order. 11 suite rounds report a different contradiction cell (never a
+  different presence).
+- The merges involved are rows of the Q1 audit's table (§9.4): meta-solution output, the ready queue (cell-14),
+  the attribute map's facets, tagged cells. The static audit **predicted** these, and this is their **dynamic
+  witness**. The audit's other rows (worldview cell-1, scope cells, type cells, the constraint store, cell-15)
+  were not observed diverging. That means the suite does not put two of their writers in one round. It does not
+  show they are safe.
+- R tries ONE alternative order, so its counts are **lower bounds** on order-dependent rounds.
+- Equality is `equal?`: a set kept as a list differs by order even when its consumer would not care. Whether
+  consumers care is not measured.
+- BSP hides all of this because its order is deterministic. Under DIRECT at K > 1 the order is a race, so these
+  rounds become nondeterminism. That is O-5's reason for putting P1 (merge laws) before P2/P3, now measured in
+  production rather than only by audit.
+
+**Answer to the owner's test.** The suite passed, so this test found nothing more to fix. But by the census's own
+count it could not have found anything. The R column is the test that can, and it finds the audit's rows. In
+G-2's terms ([D.1 §14](2026-10-12_PAR_4_D1_DESIGN.md)), the census is a **co-inductive** check: a runtime
+monitor that perturbs the application order and compares outcomes. P1's "is a join" property (E) is the
+**inductive** layer, and the parity suite under several schedules is the **testing** layer. D.2 should keep the
+census as a standing check: the P0-8 exposure census (note §5) can extend it with per-cell merge-law counts, and
+P1's gate can be "R = 0 on the S0 cells P1 converts".
+
+### 11.7 Limits
+
+- BSP rounds only, so not the sequential drain.
+- Merge functions are assumed pure when applied three extra times. The census suite passing 10 394 / 502 with
+  identical counts on two runs is evidence for that, not proof.
+- R is one permutation, so its counts are lower bounds.
+- Test attribution is partial (stack frames).
+- The cold-timing wall difference is within noise; the allocation difference is not.
+
+### 11.8 Reproduce
+
+```
+cd racket/prologos
+PAR4_TREE_REDUCE=off racket tools/run-affected-tests.rkt --all --force-rerun --no-record --no-bail
+PAR4_MERGE_ORDER_CENSUS=$PWD/c.jsonl PAR4_MC_LABEL=suite racket tools/run-affected-tests.rkt --all --force-rerun --no-record --no-bail
+python3 benchmarks/par4/o9-census-summary.py c.jsonl --exclude-prelude-gen
+for r in power-R power-T power-T0 neg-join neg-ior; do PAR4_MERGE_ORDER_CENSUS=$PWD/p.jsonl PAR4_MC_LABEL=$r racket benchmarks/par4/o9-merge-order-power.rkt $r; done
+racket tools/pnet-compile.rkt --clean; [PAR4_TREE_REDUCE=off] racket tools/pnet-compile.rkt   # copy data/cache/pnet aside per leg
+racket benchmarks/par4/o9-pnet-compare.rkt <copy-A> <copy-B>
+racket benchmarks/par4/hold-suite-lock.rkt tools/suite-lock.rkt bash benchmarks/par4/o9-cold-ab.sh 10 cold-ab.jsonl
+```
+(Wrap each `racket` in `timeout -k`, per the hook guard.)
