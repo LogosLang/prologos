@@ -412,3 +412,25 @@ binder merges with unsolved metas.
     was caught by its 39/39 result and redone.
 - **Next**: dailies + DEFERRED 150's status addendum on main; then pose **O-10** (first checkpoint contents),
   which now also covers keeping the census as a standing monitor (G-2).
+
+### O-10 posed — what the first checkpoint merge carries; lean CP-2 "observe, don't select", now — docs commit on the branch (2026-10-14)
+- **Why / decision**: owner: proceed. The tradeoff analysis is D.1 **Appendix B**: an inventory, the seven
+  instruments one by one, the measured facts, options CP-1 (as is) to CP-4 (wait for P0.5), twelve worked cases,
+  and the principles table. The **lean is CP-2**: before the merge, one branch commit removes the knobs that
+  select a semantics (scheduler, solver strategy, tree threshold) and the in-fire trap and its counter; it keeps
+  the merge-order census as an opt-in and gates the two always-on counters. Main gets the documents, parity test,
+  harness and data. PENDING in §14.
+- **Measured**:
+  - **Cost when unset**: main vs branch on the medium tier, interleaved ×7, threshold off: 11 of 15 networks at
+    0.95–1.04; four at 1.06–1.09×, inside noise at this n (constraint grid 8's ranges touch).
+  - **Precedent**: main's production code reads exactly one env var, `PROLOGOS_MEMORY_STATS`, an observation
+    opt-in.
+  - **Demand**: no other worktree references any of the knobs.
+- **Surprise / correction**: main's copies of PAR 4's documents stop at O-7. Main's P0 record still states "S0
+  rounds are 7.0 %" without the correction, and DEFERRED 150's addendum on main cites a §11 that main's copy
+  lacks. That is W-1 working as designed between checkpoints, but it argues against waiting (CP-4).
+  Also: keeping a knob on the branch but not on main is not a stable state, because the next main→branch merge
+  fast-forwards the branch to the checkpoint's tree. So withholding means a removal commit; the knobs stay in
+  history at their pinned commits.
+- **Next**: the owner's O-10 decision. If CP-2: the triage commit, the gate (predicted 10 394 / 502), a harness
+  smoke run, then the checkpoint merge procedure (`branch-worktree-workflow.md` §4). Then O-3.
