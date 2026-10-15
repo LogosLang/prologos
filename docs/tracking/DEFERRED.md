@@ -6937,12 +6937,12 @@ otherwise credited with removing this defect (P0 record §5 "two baselines"). Re
 *Addendum 2026-10-14 (PAR 4 owner decision O-9 — the fix shape is decided; still open until it lands):*
 - **Decision**: production default **off**, and the tree path **deleted** — the green-thread `parallel?` branch,
   the size-switched route (`propagator.rkt:3377` at main `99c893d4`) and the `current-tree-reduce-threshold`
-  parameter. It lands in PAR 4 P0.5 (D.1 §14 O-9, on branch `par4-arena-executors`).
+  parameter. It lands in PAR 4 P0.5 (D.1 §14 O-9, [`tracks/PAR/PAR_4/2026-10-12_PAR_4_D1_DESIGN.md`](tracks/PAR/PAR_4/2026-10-12_PAR_4_D1_DESIGN.md)).
 - **Read at `99c893d4`**: the tree "reduce" does no lattice work. `merge-fire-results` (`:3090`) only appends
   lists, and the combined result then goes through the same sequential `bulk-merge-writes` (`:2978`). Its one
   semantic change: all of a round's declared writes are applied before any undeclared write (replacement,
   DEFERRED 157), so a round of 256+ fires uses a different application order.
-- **Evidence** (P0 record §11, `eb25caee` + `8278a66d` on the branch):
+- **Evidence** (P0 record §11, `eb25caee` + `8278a66d`; on main since PAR 4 checkpoint 1, `c1f389ab`):
   - the full suite passes with the default off (10 394 / 502);
   - the 39 prelude caches generated cold under 256, off and 0 are identical;
   - a merge-order census finds 0 tree-order divergences in the suite's 648 rounds of 256+ fires, because no such
