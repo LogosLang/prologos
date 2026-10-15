@@ -7957,3 +7957,19 @@ code, not run.
 - (c): before anyone relies on the editor view to answer a "why" question.
 
 **Record**: PAR 4 D.1 Appendix A.6–A.12 and LOG § *O-3 re-posed* (on branch `par4-arena-executors`).
+
+**Addendum (2026-10-14, owner guidance G-3)**: the owner wants a visual debugger as part of the language's dev
+tooling, for two purposes: demonstrating how the system works, and practical debugging and introspection. It is not
+in PAR 4's scope to deliver. Consequences for this entry:
+- (c) is **wanted, not optional polish**. It still needs an owner to place it on the roadmap.
+- (a) is sharpened by a new measurement (fixture probe `5fbb30df` on the branch). A round record must carry the
+  cell, its old value, the value it holds after the round, the round's writers and the round index. With those, a
+  cell's final value unfolds into a derivation in which every premise sits at an earlier round, so it is
+  well-founded even on a cycle.
+  - Without the old value as a premise, a join that reaches `top` names only the last writer (fixture X5).
+- New part **(d) — error explanation on rounds**. `error-explanation.rkt` cuts cycles with a visited set and a depth
+  bound of 32 (`error-explanation.rkt:164-195`): fuel, not structure. Where round records exist, a derivation over
+  rounds gives the same answer with termination by construction. *When*: with (c), or whenever error explanation is
+  next revisited.
+
+Requirements table and critique: PAR 4 D.1 Appendix A.13 (on branch `par4-arena-executors`, `47edfd8a`).
