@@ -17,6 +17,9 @@
          racket/flonum
          "prelude.rkt"
          "syntax.rkt"
+         ;; D4.P4e-1b-vi-C (C-6): the star's lexeme for the `oops` invariant strings —
+         ;; a leaf module (its only import is racket/string), acyclic, +1 module.
+         (only-in "reader-forms.rkt" postfix-star-cont->lexeme)
          "substitution.rkt"
          "global-env.rkt"
          "posit-impl.rkt"
@@ -1817,7 +1820,27 @@
                    (champ-insert a (equal-hash-code sk) sk (cdr kv)))))
            (oops "a non-map content reached the `*_` join (typing carries the user-facing refusal)"))))))
 
-(define (star-join-value layer star oops)
+;; 1b-vi-C (C-6): the lexeme of a star STEP, for reduction's internal `oops`
+;; strings — from the table, and LOUD for a cont the table does not know (the
+;; printer's own tell), never a silent bare `*`.
+(define (star-step-lexeme s)
+  (let ([c (and s (select-star-cont s))])
+    (or (and c (postfix-star-cont->lexeme c))
+        (format "«unrendered-star-cont:~s»" c))))
+
+(define (star-join-value layer star oops [prefix #f])
+  ;; ⭐ 1b-vi-C: the twin of `star-join-type`'s two additions — `prefix` extends the
+  ;; CONTENT key for `*-_` (C-4; value keys are `expr-keyword` structs, so the
+  ;; prefix is applied to their NAMES, as `synth-champ-key` already adapts), and the
+  ;; cont reads go through the closed classifier (C-1).
+  (define synth? (select-star-cont-synth? (select-star-cont star)))
+  (define (prefixed keys)
+    (if prefix
+        (for/list ([k (in-list keys)])
+          (if (expr-keyword? k)
+              (expr-keyword (select-synth-prefixed-key prefix (expr-keyword-name k)))
+              (oops "a non-keyword content key reached the `*-_` prefix (typing carries the user-facing refusal)")))
+        keys))
   (let* ([l (whnf layer)]
          ;; ⚠ 1b-v-B2a: `#f` means the layer is POSITIONAL — no keys to
          ;; synthesize from — which is [Q_U41]'s refusal condition carried in the
@@ -1892,14 +1915,14 @@
        ;; having run. Same shape as the arm-order defect A fixed, one arm over.
        ;; ⭐⭐ 1b-v-B2a — `*_`'s SHIELD COMES DOWN HERE TOO, atomically with the
        ;; typing twin. [Q_U51] ruled the prefix source, B1b landed the join.
-       (if (eq? (select-star-cont star) 'flatten-synth)
+       (if synth?
            (if keys
-               (star-synth-join-value (map cons keys contents) oops)
+               (star-synth-join-value (map cons (prefixed keys) contents) oops)
                (oops "`*_` over a keyless layer reached the value join (typing carries the user-facing refusal)"))
            (star-nominal-join-value contents oops))]
       [(not (andmap (lambda (c) (expr-rrb? (whnf c))) contents))
        (oops "mixed or leaf contents have no join (typing carries the user-facing refusal)")]
-      [(eq? (select-star-cont star) 'flatten-synth)
+      [synth?
        (oops "`*_` synthesizes keys from the deleted layer's KEYS, and this join is positional")]
       [else
        ;; BARE (C1) — was `(list (cons #f …))` here; the wrapper moved to the
@@ -2210,10 +2233,12 @@
       (let* ([rev (reverse b)]
              [star (car rev)]
              [prefix (reverse (cdr rev))]
+             ;; 1b-vi-C (C-6): name the operator as written — the branch's last star
+             [lex (star-step-lexeme (findf select-star-step? rev))]
              [oops (lambda (why)
                      (return (expr-panic (expr-string
-                       (format "select: `*` — ~a (typing carries the user-facing refusal; reaching the value layer with this shape is a compiler-invariant violation)"
-                               why)))))])
+                       (format "select: `~a` — ~a (typing carries the user-facing refusal; reaching the value layer with this shape is a compiler-invariant violation)"
+                               lex why)))))])
         (cond
           [(or (not (select-star-step? star)) (ormap select-star-step? prefix))
            (oops "a step after the flatten — `*` is only supported at the END of a branch")]
@@ -2250,7 +2275,9 @@
            ;; Seat A caller does exactly this.
            (star-keyless-landing-value
             (star-join-value (if (null? prefix) v (below-value v prefix seen))
-                             star oops)
+                             star oops
+                             ;; 1b-vi-C (C-4): the twin of typing's call — the ONE seat
+                             (select-star-provenance-prefix star seen))
             asort)])))
     ;; ⭐ 1b-iii-B1 — the LEVEL assembly guard, the reduction mirror of typing's
     ;; star L4 check in `select-level-components`. STAR-GATED for the same
@@ -2372,7 +2399,9 @@
                                    (select-synth-name (append seen (list s)))]
                                   [else name])
                             hit))]
-               [(eq? cont 'dissolve)
+               [(select-cont-dissolves-level? cont)
+                ;; ⭐ 1b-vi-C (C-3): the TWIN of typing's dissolve arm — the same
+                ;; predicate, so a total-collapse mark splices here exactly as there.
                 (below-components hit rest (append seen (list s)))]
                [else
                 (list (cons (or (and cont (select-cont-rename cont)) name)
@@ -2438,6 +2467,14 @@
         ;; one reaches HERE typing did not run, which is an invariant violation.
         [(select-steps-star-tail? steps)
          (let ([sn (car steps)] [star (cadr steps)])
+           ;; ⚠⚠ 1b-vi-C (C-5) — the twin of typing's guard: a TOTAL star never
+           ;; joins at the tail arm (every ancestor is marked and dissolves, so the
+           ;; join lands in `star-entries`). Arriving here means an ancestor was
+           ;; kept — an unmarked branch — and re-nesting would be a silent wrong value.
+           (when (select-star-cont-total? (select-star-cont star))
+             (return (expr-panic (expr-string
+               (format "select: `~a` — internal: a total collapse reached the star-TAIL arm, so an ancestor was kept (the branch was never marked; typing raises on the same test)"
+                       (star-step-lexeme star))))))
            ;; ⚠ ROUND 2, F3(b): was a HAND-COPIED `(memq (select-step-kind sn)
            ;; '(ord-step ord-branch))`. Set-equivalent, so this is drift, not
            ;; behaviour — but Q_U46's ordinal gap is scheduled to CLOSE, and a
@@ -2447,11 +2484,13 @@
            ;; whole-file abort for"); the copy sat eleven lines under it.
            (if (select-step-makes-no-layer? sn)
                (return (expr-panic (expr-string
-                 "select: `*` — an ordinal step contributes no layer to delete (typing carries the user-facing refusal)")))
+                 (format "select: `~a` — an ordinal step contributes no layer to delete (typing carries the user-facing refusal)"
+                         (star-step-lexeme star)))))
                (star-join-value (below-value v (list sn) seen) star
                                 (lambda (why)
                                   (return (expr-panic (expr-string
-                                    (format "select: `*` — ~a (typing carries the user-facing refusal; reaching the value layer with this shape is a compiler-invariant violation)" why))))))))]
+                                    (format "select: `~a` — ~a (typing carries the user-facing refusal; reaching the value layer with this shape is a compiler-invariant violation)"
+                                            (star-step-lexeme star) why))))))))]
         ;; ⚠ THE ARM ORDER ABOVE IS LOAD-BEARING, and getting it wrong is how the
         ;; first cut of C2 failed. The `@sub` arm below matches ANY sub-headed
         ;; step list and panics when anything follows it (the non-terminal-sub

@@ -302,6 +302,23 @@
   ;; writable (recorded as a Q_T2 adaptation in D4 §5.P3a).
   (define remedies
     "seal the subject against a schema (`the Schema subj`) or validate it against one")
+  ;; ⭐ D4.P4e-1b-vi-C (C-6): THE OPERATOR AS WRITTEN. A star failure carries its
+  ;; cont (`select-fail-star`); every per-branch star arm below names `op` — `*`,
+  ;; `*_`, `*-` or `*-_` — instead of a hardcoded `*`, and any advice names an
+  ;; IN-FAMILY sibling (`*-_`'s "use bare" is `*-`; telling a `*-` user to write
+  ;; `*` would change where the result lands). Rendered by the ONE printer, so a
+  ;; cont it does not know shows its LOUD tell; a missing cont is loud too.
+  ;; The two LEVEL arms (`star-dup-key`, `star-l4-mixed`) describe a level, not
+  ;; one star, and keep family-generic wording.
+  (define star-c (select-fail-star fail))
+  (define (star-lex c)
+    (if c
+        (pp-select-branch (list (make-select-star c)))
+        "«star-cont-missing»"))
+  (define op (star-lex star-c))
+  (define (op-sibling synth?)
+    (star-lex (and star-c (select-star-cont-of (select-star-cont-total? star-c) synth?))))
+  (define op-bare (op-sibling #f))
   (case (select-fail-kind fail)
     ;; ⚠ THE `bcast-not-yet` ARM IS RETIRED AT D4.P4c-4c — it named THIS SLICE as
     ;; its own discharge point ("the ω value semantics land at … P4c-4c"), and
@@ -614,11 +631,11 @@
     ;; yet" substring — five 1a-era pins assert it, and B2's seat migration
     ;; re-points them here.
     [(star-mid-branch)
-     (format "select: `~a` — `*` is only supported at the END of a branch; a step after a flatten (descending into the joined result) is not implemented yet"
-             label)]
+     (format "select: `~a` — `~a` is only supported at the END of a branch; a step after a flatten (descending into the joined result) is not implemented yet"
+             label op)]
     [(star-leaf)
-     (format "select: `~a` — `*` deletes the layer the preceding step produced and joins its CONTENTS; here the layer is `~a`, whose contents are not containers, and a leaf has no join. This is a permanent refusal, not a not-yet"
-             label (pp-expr row names))]
+     (format "select: `~a` — `~a` deletes the layer the preceding step produced and joins its CONTENTS; here the layer is `~a`, whose contents are not containers, and a leaf has no join. This is a permanent refusal, not a not-yet"
+             label op (pp-expr row names))]
     ;; ⚠⚠ 1b-iv-B2 RE-SCOPED THIS KIND, and leaving the old wording would have
     ;; made it a LIE the moment the shield came down. It used to say "the nominal
     ;; case is the next slice" — bare `*` now flattens Map-valued contents
@@ -639,21 +656,21 @@
     ;; ⚠ It stayed green because the battery's render loop PRODUCES every kind by
     ;; hand — rendering a kind proves nothing about whether anything produces it.
     [(star-hetero)
-     (format "select: `~a` — `*` (flatten) is not implemented yet for MIXED element types: the layer `~a`'s vectors do not share one element type, and the union join is not landed"
-             label (pp-expr row names))]
+     (format "select: `~a` — `~a` (flatten) is not implemented yet for MIXED element types: the layer `~a`'s vectors do not share one element type, and the union join is not landed"
+             label op (pp-expr row names))]
     [(star-omega-tuple)
      ;; ⚠ B-verify F2: this arm shipped with ONE ~a and TWO args, so `format`
      ;; RAISED on every render and the blanket hint handler swallowed it to the
      ;; bare generic — a raising arm is WORSE than the [else] trapdoor slice A
      ;; closed, and it silenced Q_U40's own ravel `vv:{0 1}*`. The battery had
      ;; pinned this kind's KIND and never its MESSAGE; all eight are pinned now.
-     (format "select: `~a` — `*` (flatten) is not implemented yet for tuple elements under a broadcast (layer `~a`): the concatenated arity is (tuple arity × the container's runtime length), which no static type carries"
-             label (pp-expr row names))]
+     (format "select: `~a` — `~a` (flatten) is not implemented yet for tuple elements under a broadcast (layer `~a`): the concatenated arity is (tuple arity × the container's runtime length), which no static type carries"
+             label op (pp-expr row names))]
     [(star-not-yet)
      ;; the residual honest not-yet (e.g. an empty row layer, whose element
      ;; type nothing names) — deliberately generic, deliberately rare.
-     (format "select: `~a` — `*` (flatten) is not implemented yet for this layer (`~a`)"
-             label (pp-expr row names))]
+     (format "select: `~a` — `~a` (flatten) is not implemented yet for this layer (`~a`)"
+             label op (pp-expr row names))]
     ;; ⭐⭐ 1b-iv-B1 [Q_U49/Q_U38] — the two kinds the NOMINAL join needs. Minted
     ;; WITH their arms and with the battery's hand-written render-loop entry in
     ;; the SAME commit: that loop cannot self-report an unlisted kind, and a `#f`
@@ -669,8 +686,8 @@
      ;; gate already folds over; this one has no other seat.
      ;; ⚠ The remedy is NOT `^k'` — a rename re-keys a BRANCH, and both colliding
      ;; keys here come from INSIDE the joined layer, where no branch names them.
-     (format "select: `~a` — `*` (flatten) joins the layer's contents keywise, and two of them carry the same key, so the join would silently drop one (layer `~a`). Star a narrower layer, or select the colliding fields as separate branches"
-             label (pp-expr row names))]
+     (format "select: `~a` — `~a` (flatten) joins the layer's contents keywise, and two of them carry the same key, so the join would silently drop one (layer `~a`). Star a narrower layer, or select the colliding fields as separate branches"
+             label op (pp-expr row names))]
     [(star-omega-nominal)
      ;; ⚠ NOT a bare not-yet, and not [Q_U49]'s nominal join either. Under ω the
      ;; ELEMENT TYPE stands for every content, so a keywise join of N contents
@@ -680,8 +697,8 @@
      ;; `{:a 1, :b 2}`, which assumes the elements carry DISJOINT keys — true of
      ;; that value, not expressible in its type. Recorded as DEFERRED rather than
      ;; silently picking a side.
-     (format "select: `~a` — `*` (flatten) cannot join Map-valued contents under `:` (broadcast): every element of `~a` shares ONE element type, so a keywise join would contribute the same keys once per element and collide for any length above 1 (the length is not statically known). Flatten a single element's layer instead, or select the fields individually"
-             label (pp-expr row names))]
+     (format "select: `~a` — `~a` (flatten) cannot join Map-valued contents under `:` (broadcast): every element of `~a` shares ONE element type, so a keywise join would contribute the same keys once per element and collide for any length above 1 (the length is not statically known). Flatten a single element's layer instead, or select the fields individually"
+             label op (pp-expr row names))]
     ;; ⚠ 1b-iv VERIFY — this arm is reached from TWO producers and used to render
     ;; the LAYER for both, so a Map-typed CONTENT was reported as "the layer …
     ;; is a `Map` type" when the layer is a record. MEASURED: `mo{o*}` on
@@ -696,13 +713,13 @@
      ;; under Q_U38's refuse-on-possibility that is a final answer. The shared
      ;; `star-nominal` message promises "the nominal case is the next slice",
      ;; which would be a lie here however many slices land.
-     (format "select: `~a` — `*` (flatten) needs to know the keys it is joining, and `~a` is a `Map` type, whose keys are not statically known (this is permanent, not a not-yet: a key collision there can be neither proven nor ruled out). Give it a record type — annotate or seal the subject against a schema"
-             label (pp-expr row names))]
+     (format "select: `~a` — `~a` (flatten) needs to know the keys it is joining, and `~a` is a `Map` type, whose keys are not statically known (this is permanent, not a not-yet: a key collision there can be neither proven nor ruled out). Give it a record type — annotate or seal the subject against a schema"
+             label op (pp-expr row names))]
     [(star-open-row)
      ;; ⚠ the render loop caught this wording never naming the OPERATOR the
      ;; user wrote — every star message names `*`.
-     (format "select: `~a` — `*` (flatten) needs the layer's full contents, and `~a`'s row is not fully known (an open `'dyn` tail, or fields not provably present); ~a"
-             label (pp-expr row names) remedies)]
+     (format "select: `~a` — `~a` (flatten) needs the layer's full contents, and `~a`'s row is not fully known (an open `'dyn` tail, or fields not provably present); ~a"
+             label op (pp-expr row names) remedies)]
     ;; ⚠⚠ 1b-v-B2a VERIFY — THIS WAS ONE MESSAGE SERVING TWO PRODUCERS WHOSE
     ;; TRUTHS ARE COMPLEMENTARY, so each falsified a different half of the same
     ;; sentence, and one of them falsified the REMEDY. Measured before the split:
@@ -730,24 +747,24 @@
     ;; collisions in the ORDINARY case, not universally"), so the message names
     ;; the synthesized key and offers the remedy that actually applies.
     [(star-synth-collision)
-     (format "select: `~a` — `*_` prefixes each content's fields with the key that content sat under, and two contents of `~a` synthesize the SAME key, so the join would silently drop one. Their own field names differ — it is the prefixed forms that meet. Rename one content with `^k'`, or select them separately"
-             label (pp-expr row names))]
+     (format "select: `~a` — `~a` prefixes each content's fields with the key that content sat under, and two contents of `~a` synthesize the SAME key, so the join would silently drop one. Their own field names differ — it is the prefixed forms that meet. Rename one content with `^k'`, or select them separately"
+             label op (pp-expr row names))]
     [(star-synth-positional)
      ;; the layer's contents sit at POSITIONS — there is no key to prefix WITH.
-     (format "select: `~a` — `*_` prefixes each lifted field with the key its content sat under, and this layer's contents sit at POSITIONS, not keys (layer `~a`): there is nothing to prefix with. Bare `*` joins these contents directly"
-             label (pp-expr row names))]
+     (format "select: `~a` — `~a` prefixes each lifted field with the key its content sat under, and this layer's contents sit at POSITIONS, not keys (layer `~a`): there is nothing to prefix with. Bare `~a` joins these contents directly"
+             label op (pp-expr row names) op-bare)]
     [(star-synth-vector-contents)
      ;; the layer HAS keys, but its contents are vectors — no FIELDS to prefix.
-     (format "select: `~a` — `*_` prefixes the FIELDS of each content, and this layer's contents are vectors (layer `~a`), which concatenate into one keyless component: there are no fields to prefix. Use bare `*`"
-             label (pp-expr row names))]
+     (format "select: `~a` — `~a` prefixes the FIELDS of each content, and this layer's contents are vectors (layer `~a`), which concatenate into one keyless component: there are no fields to prefix. Use bare `~a`"
+             label op (pp-expr row names) op-bare)]
     ;; ⭐ 1b-iii-C2 RE-SCOPED THIS KIND. It used to refuse EVERY depth-≥2 star
     ;; while the layer question was unruled; [Q_U46]/[Q_U47] ruled it and the
     ;; shield came out, so the kind now guards exactly the gap the ruling
     ;; RESERVED: an ordinal `sₙ`. Reused rather than replaced by a new kind so the
     ;; battery's hand-written render-loop list stays correct without a second edit.
     [(star-deep-prefix)
-     (format "select: `~a` — `*` deletes the layer the step before it produced, and an ORDINAL step produces no layer (it selects a position, it does not add a level). Star a named step instead (`x{a.b*}`), or select the element first and flatten separately"
-             label)]
+     (format "select: `~a` — `~a` deletes the layer the step before it produced, and an ORDINAL step produces no layer (it selects a position, it does not add a level). Star a named step instead (`x{a.b~a}`), or select the element first and flatten separately"
+             label op op)]
     ;; ⭐ 1b-iii-C2: the duplicate-output-key refusal. `label` here is the
     ;; COLLIDING KEY, not a branch spelling — the collision is a property of the
     ;; level, and naming the key is what tells the user which two branches met.

@@ -86,7 +86,9 @@
          ;; 1b-v-C [Q_U54]: the PRINTER's direction — cont → the lexeme to render.
          ;; pretty-print.rkt's star arm used to hardcode `"*_"`/`"*"`, a second
          ;; lexeme↔cont copy that was user-facing through every star refusal label.
-         postfix-star-cont->lexeme)
+         postfix-star-cont->lexeme
+         ;; 1b-vi-C: the two total-collapse rows, printer-only until 1b-vi-D mints them
+         postfix-star-pending-table)
 
 ;; The complete set. One entry today; the point is that it is ONE entry in ONE
 ;; place rather than an unfindable literal.
@@ -284,6 +286,21 @@
     ;; table became the one place the spelling↔cont pair is stated.
     ($postfix-star-synth flatten-synth "*_")))
 
+;; ⭐ D4.P4e-1b slice 1b-vi-C — the PENDING rows: the two TOTAL-collapse conts,
+;; same `(SENTINEL CONT LEXEME)` shape, NOT YET MINTED. Only the printer's
+;; direction (`postfix-star-cont->lexeme`) reads them, so a label over the IR C's
+;; tests inject renders `*-` truthfully while the reader, parser, macros, the leak
+;; and arrival gates and tools/form-deps.rkt — which iterate the table ABOVE —
+;; see exactly what they saw at 1b-v. 1b-vi-D MOVES these two rows into the table
+;; above (that move IS the mint); a C pin holds the two lists disjoint. Each
+;; spelling↔cont pair is still stated exactly once.
+;; (Why not a MINTED column on the one table: eight consumers iterate it directly
+;; — D4 §5.P4e-1b-vi, "1b-vi-C — design target", C-1.)
+(define postfix-star-pending-table
+  '(($postfix-star-collapse       flatten-collapse       "*-")
+    ;; Q_U57's P: prefix = the collapsed ancestors' surviving output names
+    ($postfix-star-collapse-synth flatten-collapse-synth "*-_")))
+
 (define (postfix-star-sentinel? x)
   (and (symbol? x) (assq x postfix-star-sentinel-table) #t))
 
@@ -307,8 +324,10 @@
 ;; the PRINTER's direction (1b-v-C [Q_U54]): the lexeme a cont renders as, or #f.
 ;; `#f` is the printer's cue to render its LOUD unknown-cont tell rather than a
 ;; silent `*` — the Q_U52 §3 hazard, closed at the one seat where it was live.
+;; 1b-vi-C: it also reads the PENDING rows — the printer must render every cont
+;; that can exist in the IR, and from C on the total conts can (via the tests).
 (define (postfix-star-cont->lexeme cont)
-  (let loop ([t postfix-star-sentinel-table])
+  (let loop ([t (append postfix-star-sentinel-table postfix-star-pending-table)])
     (cond [(null? t) #f]
           [(eq? cont (cadr (car t))) (caddr (car t))]
           [else (loop (cdr t))])))

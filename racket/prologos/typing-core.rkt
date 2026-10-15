@@ -43,7 +43,7 @@
 (provide infer check is-type infer-level
          ;; CIU T6 D4.P3a: the select walk + failure struct (consumed by the
          ;; typing-errors select hint — one walk, two consumers, no drift)
-         select-project (struct-out select-fail)
+         select-project (struct-out select-fail-info) select-fail
          select-convertible-carrier  ;; D4.P4d slice 4c: 'list | 'lseq | #f — which conversion into PVec applies
          bcast-schema-refusal   ;; D4.P4d slice 4c: 'open | 'defaulted | #f — ONE statement of the admission rule
          ;; D4.P4b-ii-1: the subject-kind × sort dispatch + the Map posture's
@@ -678,7 +678,15 @@
 ;; 'miss-closed · 'miss-dyn (unlisted on dyn) · 'unknown-presence.
 ;; `path` = the label trail to the failure (for branch-aware messages).
 ;;
-(struct select-fail (kind path label row) #:transparent)
+;; ⭐ D4.P4e-1b-vi-C (C-6): a FIFTH field, `star` — the star CONT of the failing
+;; star branch, or #f. The prose must name the operator the user wrote (`*-`,
+;; not `*`) and an in-family sibling (`*-_`'s "use bare" is `*-`), and the
+;; formatter cannot recover that from the label without re-parsing a rendering.
+;; A DEFAULTING constructor keeps every 4-argument producer and test untouched;
+;; only the two seats that build star failure closures pass it.
+(struct select-fail (kind path label row star) #:transparent
+  #:name select-fail-info #:constructor-name select-fail*)
+(define (select-fail kind path label row [star #f]) (select-fail* kind path label row star))
 
 ;; D4.P4b-ii-1 — THE MAP POSTURE's carrier (Q_U10).
 ;; `select-row-of` normally answers "here is the subject's per-field row".
@@ -919,7 +927,7 @@
   (if (select-fail-label f)
       f
       (select-fail (select-fail-kind f) (select-fail-path f) name
-                   (select-fail-row f))))
+                   (select-fail-row f) (select-fail-star f))))
 
 (define (select-index-of ctx tm n path sort)
   ;; D4.P4b-ii-1: the SORT axis reaches the nat twin too. The file's own
@@ -1626,7 +1634,11 @@
 ;; is not landed).
 (define (star-branch-entries ctx tm b path seen sort)
   (define label (string->symbol (pp-select-branch b)))
-  (define (fail-k kind [r tm]) (values #f (select-fail kind path label r)))
+  ;; 1b-vi-C (C-6): the failure carries the cont of the branch's LAST star (for a
+  ;; mid-branch star that is the one the user is told about), so the prose names
+  ;; the operator as written. `b` always holds a star here (the pre-check).
+  (define star-c (let ([s (findf select-star-step? (reverse b))]) (and s (select-star-cont s))))
+  (define (fail-k kind [r tm]) (values #f (select-fail kind path label r star-c)))
   (let* ([rev (reverse b)]
          [star (car rev)]
          [prefix (reverse (cdr rev))])
@@ -1672,7 +1684,11 @@
              ;; the bare join KEYLESS, which is Q_U47's empty-remainder case and
              ;; the behaviour that shipped at B2. The other two callers wrap
              ;; differently; see the helper's own comment.
-             (let-values ([(ty jf) (star-join-type layer star fail-k)])
+             ;; ⭐ 1b-vi-C (C-4): THIS is where a total collapse joins — every
+             ;; marked ancestor took the dissolve arm, so `seen` holds exactly
+             ;; s₁…sₙ₋₁ and `*-_`'s prefix comes from the ONE seat in syntax.rkt.
+             (let-values ([(ty jf) (star-join-type layer star fail-k
+                                                   (select-star-provenance-prefix star seen))])
                (if jf
                    (values #f jf)
                    ;; 1b-iv-B2 [Q_U49]: SPLICE if the join is nominal, one keyless
@@ -1712,7 +1728,15 @@
 ;; move together — this seat has already produced one whole-file abort from a
 ;; twin-order divergence, and the file says landing either alone is "not a
 ;; half-measure but a REGRESSION".
-(define (star-join-type layer star fail-k)
+(define (star-join-type layer star fail-k [prefix #f])
+  ;; ⭐ 1b-vi-C: `prefix` is `*-_`'s provenance prefix (C-4) or #f. It extends the
+  ;; CONTENT key — `a-b` + `c` + `m` → `a-b-c-m` — so the synth join below is
+  ;; unchanged and Q_U51's `<content key>-<field key>` rule still states the rest.
+  ;; The three cont reads go through the CLOSED classifier (C-1): with four conts,
+  ;; `(eq? cont 'flatten-synth)` would answer `*-_` as a bare `*`.
+  (define synth? (select-star-cont-synth? (select-star-cont star)))
+  (define (prefixed keys)
+    (if prefix (map (lambda (k) (select-synth-prefixed-key prefix k)) keys) keys))
   (let ([l (whnf layer)])
     ;; contents = the deleted layer's component TYPES, in the order
     ;; the join uses (canonical for a keyword row — `make-record`
@@ -1763,9 +1787,9 @@
                        ;; join. ⚠ A layer with NO keys still refuses, and through
                        ;; `star-synth-positional` — which is TRUE there and was
                        ;; false in the nominal case, the distinction 1b-iv-A fixed.
-                       (if (eq? (select-star-cont star) 'flatten-synth)
+                       (if synth?
                            (if keys
-                               (star-synth-join-type (map cons keys contents) fail-k l)
+                               (star-synth-join-type (map cons (prefixed keys) contents) fail-k l)
                                (fail-k 'star-synth-positional l))
                            (star-nominal-join-type contents fail-k l))]
                       [(andmap (lambda (c)
@@ -1781,7 +1805,7 @@
                       [(ormap (lambda (c) (expr-union? (whnf c))) contents)
                        (fail-k 'star-hetero l)]
                       [else (fail-k 'star-leaf l)])]
-                   [(eq? (select-star-cont star) 'flatten-synth)
+                   [synth?
                     ;; Q_U41: `*_` is NOMINAL-ONLY. ⚠⚠ 1b-v-B2a VERIFY — THIS ARM
                     ;; IGNORED `keys`, so a KEYED layer whose contents happen to
                     ;; be vectors (`{:a [PVec Int]}`) was told "this layer is
@@ -1847,7 +1871,7 @@
                       ;; every sub-case and `*_` never has a key to prefix with.
                       ;; That is [Q_U41] stated once at the level where it holds,
                       ;; rather than six times where five were forgotten.
-                      [(eq? (select-star-cont star) 'flatten-synth)
+                      [synth?
                        (fail-k 'star-synth-positional l)]
                       [(expr-PVec? e)
                        ;; concat of n `[PVec T]` is `[PVec T]` — spec §3.5's
@@ -2180,8 +2204,14 @@
                               (select-synth-name (append seen (list s)))]
                              [else name])])
                 (values (list (cons label (record-field ft 'present))) #f))]
-             [(eq? cont 'dissolve)
-              ;; splice: the continuation's components land at THIS level
+             [(select-cont-dissolves-level? cont)
+              ;; splice: the continuation's components land at THIS level.
+              ;; ⭐ 1b-vi-C (C-3): `select-cont-dissolves-level?`, not `(eq? cont
+              ;; 'dissolve)` — a total-collapse MARK places exactly like `^`, and
+              ;; this arm is how `*-`'s placement EMERGES. Its reduction twin
+              ;; (`branch-entries`) asks the same predicate (mutation M-typing /
+              ;; M-reduction pin both). A mark reaching the kept-key arm below
+              ;; would silently re-nest — the red step measured exactly that.
               (select-below-components ctx (whnf ft) rest
                                        (append path (list name))
                                        (append seen (list s)) sort)]
@@ -2293,8 +2323,19 @@
             ;; to make `path` carry STEPS rather than names (~20 `append path`
             ;; sites + that renderer + both twins) — its own slice, not this arm's.
             [label (string->symbol (pp-select-branch steps))]
-            [fail-k (lambda (kind r) (values #f (select-fail kind path label r)))])
+            [fail-k (lambda (kind r) (values #f (select-fail kind path label r (select-star-cont star))))])
        (cond
+         ;; ⚠⚠ 1b-vi-C (C-5) — A TOTAL STAR NEVER JOINS HERE. This arm re-nests the
+         ;; join under the KEPT ancestors that led to it; under `*-` / `*-_` every
+         ;; ancestor is marked, takes the dissolve arm, and the join lands in
+         ;; `star-branch-entries` instead. Arriving here means an ancestor was KEPT —
+         ;; the branch was never marked — and computing `*`'s re-nesting would be a
+         ;; silent wrong answer. Loud, like `select-step-kind-unhandled`: a compiler
+         ;; invariant, not a user error (the reduction twin panics on the same test).
+         [(select-star-cont-total? (select-star-cont star))
+          (error 'select-below-field
+                 "internal: the total collapse `~a` reached the star-TAIL arm, so an ancestor was kept — `select-branch-mark-total-collapse` did not run on this branch (D4.P4e-1b-vi-C, C-5)"
+                 label)]
          ;; [Q_U46]'s RESERVED GAP: an ordinal step contributes no output level
          ;; (Q_U2 Reading A), so `sₙ` made no layer for the star to delete. Guided
          ;; refusal, NOT a fall-through — falling through would compute the layer

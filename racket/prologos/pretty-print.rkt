@@ -144,6 +144,10 @@
        (string-append "^" (symbol->string (cdr c)))]
       [(and (pair? c) (eq? (car c) 'collapse-rename))
        (string-append "^-" (symbol->string (cdr c)))]
+      ;; 1b-vi-C: a total-collapse MARK renders the cont the user WROTE — `""` for
+      ;; a plain key — so a label over a marked branch is the user's spelling
+      ;; (`select-step-unmark` is the inverse; the C-2 law pins print = as written).
+      [(select-cont-collapsed? c) (if (cdr c) (cont->string (cdr c)) "")]
       [else "^?"]))
   ;; D4.P4a: the NINTH step-kind dispatch site — missed by the original
   ;; census because it OPEN-CODED the shape tests (`(and (pair? s) (eq? (car

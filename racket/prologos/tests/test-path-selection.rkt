@@ -47,7 +47,15 @@
          "../tools/star-arrival-matrix.rkt"
          ;; D4.P4b-ii-2b: the surf-* layer, for the $select-path sentinel pins
          (only-in "../surface-syntax.rkt"
-                  surf-select? surf-select-sort surf-select-branches))
+                  surf-select? surf-select-sort surf-select-branches
+                  ;; 1b-vi-C: the injection harness rebuilds a row's select
+                  surf-select surf-select-subject surf-select-srcloc)
+         ;; 1b-vi-C: `process-string-ws`'s own scoping, mirrored by the injection
+         ;; harness (and checked against it — see `1bvi-inject-batch`)
+         (only-in "../elab-network-types.rkt" make-elaboration-network)
+         (only-in "../tree-parser.rkt" current-source-str current-raw-node)
+         (only-in "../relations.rkt" exn:prologos-solve?)          ;; the solve guard
+         (only-in "../source-location.rkt" srcloc-unknown))
 
 (define-runtime-path lib-dir "../lib")
 
@@ -7622,13 +7630,39 @@
                          ;; and `*_`'s own collision (which had been borrowing bare
                          ;; `*`'s, whose prose is false for a synthesized clash).
                          star-synth-vector-contents star-synth-collision))])
-    (check-not-exn
-     (lambda ()
-       (let ([msg (te:format-select-fail (tc:select-fail kind '() 'probe-label row) '())])
-         (check-true (string? msg) (format "~a must render a string" kind))
-         (check-true (regexp-match? #rx"\\*" msg)
-                     (format "~a's message must mention the star" kind))))
-     (format "rendering ~a must not raise" kind))))
+    ;; ⭐ 1b-vi-C (C-6): × EVERY CONT on the star axis. A star failure now carries
+    ;; its cont, and a per-branch arm must name the operator AS WRITTEN — with no
+    ;; FOREIGN operator left once the written family's lexemes are removed (a `*-`
+    ;; message that still says `*` is the Q_U52 §3 hazard in prose). The two LEVEL
+    ;; kinds describe a level, not one star: family-generic by design, so they are
+    ;; held only to render and to mention a star.
+    (define level? (memq kind '(star-dup-key star-l4-mixed)))
+    (for ([c (in-list (cons #f select-star-conts))])
+      (check-not-exn
+       (lambda ()
+         (let ([msg (te:format-select-fail (tc:select-fail kind '() 'probe-label row c) '())]
+               [lex (and c (rf:postfix-star-cont->lexeme c))])
+           (check-true (string? msg) (format "~a must render a string" kind))
+           ;; with NO cont a per-branch arm names the star only through its loud
+           ;; tell (asserted below) — `*` would be the silent guess C-6 removes
+           (unless (and (not c) (not level?))
+             (check-true (regexp-match? #rx"\\*" msg)
+                         (format "~a's message must mention the star" kind)))
+           (cond
+             [level? (void)]
+             [(not c)
+              (check-true (regexp-match? #rx"«star-cont-missing»" msg)
+                          (format "~a with NO cont must say so LOUDLY, never a silent `*`" kind))]
+             [else
+              (check-true (regexp-match? (regexp (string-append "`" (regexp-quote lex) "`")) msg)
+                          (format "~a under `~a` must name `~a`: ~a" kind lex lex msg))
+              (check-false (regexp-match? #rx"«" msg) (format "~a under `~a` renders a tell: ~a" kind lex msg))
+              (if (select-star-cont-total? c)
+                  (check-false (regexp-match? #rx"[*]" (regexp-replace* #rx"[*]-_?" msg ""))
+                               (format "~a under `~a` names a NON-total star: ~a" kind lex msg))
+                  (check-false (regexp-match? #rx"[*]-" msg)
+                               (format "~a under `~a` names a TOTAL star: ~a" kind lex msg)))])))
+       (format "rendering ~a under ~a must not raise" kind c)))))
 
 (test-case "1b-iii-B1 reduction: the join concatenates in CANONICAL key order — the value layer, discriminating set"
   (define ka  (expr-keyword 'a))
@@ -9359,7 +9393,7 @@
 ;; (`"*-"` has no sentinel).
 ;; ===========================================================================
 
-(define 1bvi-stage 'B)   ;; 1b-vi-B: bumped as the slice's first edit
+(define 1bvi-stage 'C)   ;; 1b-vi-C: bumped as the first edit after the vocabulary (the injection rows go live)
 (define 1bvi-stage-order '(A B C D))
 (define (1bvi-reached? s)
   (and s (<= (index-of 1bvi-stage-order s) (index-of 1bvi-stage-order 1bvi-stage))))
@@ -9614,6 +9648,117 @@
        [else #t])]
     [else (format "unknown expectation ~s" e)]))
 
+;; ---------------------------------------------------------------------------
+;; ⭐⭐ 1b-vi-C — INJECTION: the D rows, live BEFORE the mint.
+;; C lands the machinery inert — no lexeme mints `*-` / `*-_` until D. So each D
+;; row is run as D's parser will build it: production parsing of the row's `*`
+;; spelling (`ws-string->surfs`), every star cont converted to its TOTAL sibling,
+;; every branch list marked at every level (the parser marks per
+;; `segment-select-items` return, so sub-blocks are marked too), then the
+;; production elaborate → type → reduce path. The row's D TARGET must hold.
+;; Excluded: rows whose target is a PARSER refusal (Q_U55's star half — C5, E5-
+;; and the renamed `*-` laws); the parser does not run here, so those flip at D.
+;; ⚠ THE HARNESS IS CHECKED, NOT TRUSTED: it mirrors `process-string-ws`
+;; (`driver.rkt`: a fresh network, `reset-meta-store!`, the source parameters,
+;; the solve guard), and with the IDENTITY transform it must reproduce level 2
+;; line for line. A drifted mirror then shows up as a parity failure, not as
+;; rows passing or failing for a reason that is not the walkers'.
+;; At D this becomes a parity pin: the parser's own surf must EQUAL the injected one.
+;; ---------------------------------------------------------------------------
+(define (1bvi-parser-refusal? t)
+  (and (pair? t) (eq? (car t) 'refused)
+       (for/or ([rx (in-list (cadr t))]) (regexp-match? #rx"can never appear" (object-name rx)))))
+;; Rows whose D target is about LEXING, which no injected IR can exercise:
+;; X-arrow (Q_U56's `*->`; its `*` spelling became `a*> b` at C's red step) and
+;; X-type (type territory, DEFERRED 168). ⚠ X-type first PASSED the injection
+;; VACUOUSLY: its `*` spelling `<(x : Nat)* Nat>` is a parse refusal ("needs a
+;; SPACE") that the harness passed through untransformed, and it matched the `*-`
+;; target's regex. Found by counting the injected rows, not by any failure — so the
+;; harness now fails closed on that shape (`VACUOUS`, below) instead of trusting it.
+(define 1bvi-lexeme-rows '("X-arrow" "X-type"))
+(define (1bvi-injectable? r)
+  (and (eq? (1bvi-row-flips r) 'D)
+       (regexp-match? #rx"[*]-" (1bvi-row-spelling r))
+       (not (member (1bvi-row-id r) 1bvi-lexeme-rows))
+       (not (1bvi-parser-refusal? (1bvi-row-target r)))))
+(define (1bvi-star-spelling sp) (regexp-replace* #rx"[*]-" sp "*"))
+
+(define (1bvi-totalize-step s)
+  (cond [(select-star-step? s)
+         (make-select-star (select-star-cont-of #t (select-star-cont-synth? (select-star-cont s))))]
+        [(and (pair? s) (eq? (car s) '@sub)) (cons '@sub (1bvi-totalize-branches (cdr s)))]
+        [(select-bcast-step? s) (make-select-bcast (1bvi-totalize-step (select-bcast-inner s)))]
+        [else s]))
+(define (1bvi-totalize-branches bs)
+  (for/list ([b (in-list bs)])
+    (select-branch-mark-total-collapse (map 1bvi-totalize-step b))))
+(define (1bvi-totalize-surf s)
+  (unless (surf-select? s) (error '1bvi-inject "a row's surf is not a surf-select: ~s" s))
+  (let ([subj (surf-select-subject s)])
+    (surf-select (if (surf-select? subj) (1bvi-totalize-surf subj) subj)
+                 (1bvi-totalize-branches (surf-select-branches s))
+                 (surf-select-sort s) (surf-select-srcloc s))))
+
+;; level 2 with a surf transform between parse and process. → (cons 'ok lines) | (cons 'bad why)
+(define (1bvi-inject-batch forms transform)
+  (hash-ref!
+   1bvi-cache (list 'inject transform forms)
+   (lambda ()
+     (define src (string-append 1bvi-fixtures (string-join forms "\n") "\n"))
+     (define rs
+       (with-handlers ([exn:fail? (lambda (e) (exn-message e))])
+         (parameterize ([current-prop-net-box (box (make-elaboration-network))]
+                        [current-source-str src]
+                        [current-raw-node #f])
+           (reset-meta-store!)
+           (let* ([surfs (ws-string->surfs src)]
+                  [nfix (- (length surfs) (length forms))])
+             (for/list ([sf (in-list surfs)] [i (in-naturals)])
+               (cond
+                 ;; non-vacuity: a row the transform cannot reach is never a pass
+                 [(and (prologos-error? sf) (>= i nfix) (not (eq? transform values)))
+                  (format "VACUOUS: the `*` spelling did not parse to a select, so nothing was injected (~a)"
+                          (prologos-error-message sf))]
+                 [(prologos-error? sf) sf]
+                 [else
+                   (with-handlers ([exn:prologos-solve?
+                                    (lambda (e) (prologos-error srcloc-unknown (exn-message e)))])
+                     (process-command (if (>= i nfix) (transform sf) sf)))]))))))
+     (cond
+       [(string? rs) (cons 'bad (format "the injection batch RAISED: ~a" rs))]
+       [(not (= (length rs) (+ 1bvi-fixture-count (length forms))))
+        (cons 'bad (format "the injection batch returned ~a results for ~a fixtures + ~a forms"
+                           (length rs) 1bvi-fixture-count (length forms)))]
+       [(ormap prologos-error? (take rs 1bvi-fixture-count))
+        (cons 'bad "an injection fixture failed to load")]
+       [else (cons 'ok (map 1bvi-line (drop rs 1bvi-fixture-count)))]))))
+
+(define (1bvi-inject-problems eqv)
+  (define rows (filter 1bvi-injectable? 1bvi-all-rows))
+  (define forms (map (lambda (r) (1bvi-star-spelling (1bvi-row-spelling r))) rows))
+  (define ident (1bvi-inject-batch forms values))
+  (define level2 (1bvi-batch 'string forms))
+  (define total (1bvi-inject-batch forms 1bvi-totalize-surf))
+  (append
+   (for/list ([b (in-list (list ident level2 total))]
+              [what (in-list '("injection harness, identity" "the `*` spellings, level 2" "injection, totalized"))]
+              #:unless (eq? (car b) 'ok))
+     (format "~a: ~a" what (cdr b)))
+   (if (and (eq? (car ident) 'ok) (eq? (car level2) 'ok))
+       (for/list ([f (in-list forms)] [a (in-list (cdr ident))] [b (in-list (cdr level2))]
+                  #:unless (equal? a b))
+         (format "HARNESS DRIFT: the identity injection of ~a reads ~s, `process-string-ws` reads ~s" f a b))
+       '())
+   (if (eq? (car total) 'ok)
+       (for*/list ([(r line) (in-parallel (in-list rows) (in-list (cdr total)))]
+                   [t (in-value (1bvi-row-target r))]
+                   [held (in-value (1bvi-holds? t line
+                                                (let ([x (1bvi-expand t)])
+                                                  (and (pair? x) (memq (car x) '(same equiv)) (hash-ref eqv (cadr x) #f)))))]
+                   #:unless (eq? held #t))
+         (format "[~a] INJECTED ~a — ~a; observed: ~a" (1bvi-row-id r) (1bvi-row-spelling r) held line))
+       '())))
+
 ;; ⚠ ONE test-case, ONE check, for the whole table — deliberately. The batch
 ;; cache is per process and the runner shards a file's test-cases round-robin
 ;; (`tools/suite-plan.rkt:121`), so two test-cases reading the batches paid for
@@ -9728,7 +9873,12 @@
                        #:when p)
              p)))
         '()))
-  (define problems (append batch-problems level-problems rhs-problems row-problems remedy-problems))
+  ;; 1b-vi-C: the D rows through the injected IR, from stage C on
+  (define inject-problems
+    (if (and (1bvi-reached? 'C) (eq? (car q) 'ok))
+        (1bvi-inject-problems (for/hash ([e (in-list (1bvi-equivs))] [l (in-list (cdr q))]) (values e l)))
+        '()))
+  (define problems (append batch-problems level-problems rhs-problems row-problems remedy-problems inject-problems))
   (check-equal? problems '()
                 (format "stage ~a: ~a problem(s) over ~a rows (~a hand, ~a law):\n~a" 1bvi-stage (length problems)
                         (length 1bvi-all-rows) (length 1bvi-rows) (- (length 1bvi-all-rows) (length 1bvi-rows))
@@ -9744,3 +9894,154 @@
         (check-not-equal? (1bvi-expand (1bvi-row-pre r)) (1bvi-row-target r)
                           (format "[~a] PRE = TARGET: the flip is vacuous" (1bvi-row-id r)))
         (check-false (1bvi-row-target r) (format "[~a] a control carries no TARGET" (1bvi-row-id r))))))
+
+;; ============================================================================
+;; ⭐⭐ D4.P4e-1b slice 1b-vi-C — THE VOCABULARY (C-1 the star-cont axis, C-2 the mark)
+;; ============================================================================
+;; Design: D4 §5.P4e-1b-vi, "1b-vi-C — design target and mini-audit". These are
+;; pure functions, so they are pinned directly; the walkers are pinned through
+;; the injection rows of the stage table (stage C).
+
+(define 1bvi-axis
+  ;; cont · total? · synth? · lexeme
+  '((flatten                #f #f "*")
+    (flatten-synth          #f #t "*_")
+    (flatten-collapse       #t #f "*-")
+    (flatten-collapse-synth #t #t "*-_")))
+
+(test-case "1b-vi-C C-1: the star-cont axis is a CLOSED product, and every cont has exactly one table row"
+  (check-equal? select-star-conts (map car 1bvi-axis) "the axis, in spelling order")
+  (for ([a (in-list 1bvi-axis)])
+    (define-values (c total? synth? lex) (apply values a))
+    (check-equal? (select-star-cont-total? c) total? (format "~a total?" c))
+    (check-equal? (select-star-cont-synth? c) synth? (format "~a synth?" c))
+    (check-eq? (select-star-cont-of total? synth?) c (format "~a round-trips" c))
+    (check-equal? (rf:postfix-star-cont->lexeme c) lex (format "~a renders ~s" c lex))
+    (check-equal? (pp-select-branch (list 'a (make-select-star c))) (string-append "a" lex)))
+  ;; RAISES, never answers: an unknown cont reaching a classifier is the Q_U52 §3
+  ;; hazard (a silent bare `*`), so the dispatcher's whole point is to be loud.
+  (for ([bad (in-list (list 'bogus "*" #f '(flatten)))])
+    (check-exn #rx"star continuation" (lambda () (select-star-cont-synth? bad)))
+    (check-exn #rx"star continuation" (lambda () (select-star-cont-total? bad))))
+  ;; ONE row per cont across the two lists; the pending rows are exactly the
+  ;; total ones (D moves them into the minted table) and the lists are disjoint.
+  (define minted rf:postfix-star-sentinel-table)
+  (define pending rf:postfix-star-pending-table)
+  (define rows (append minted pending))
+  (check-equal? (sort (map (lambda (r) (symbol->string (cadr r))) rows) string<?)
+                (sort (map (lambda (a) (symbol->string (car a))) 1bvi-axis) string<?)
+                "every axis cont has exactly one row, and every row's cont is on the axis")
+  (check-equal? (map cadr pending) '(flatten-collapse flatten-collapse-synth))
+  (for ([col (in-list (list car cadr caddr))])
+    (check-equal? (length (remove-duplicates (map col rows))) (length rows) "the two lists are disjoint in every column"))
+  (for ([r (in-list pending)])
+    (check-true (regexp-match? #rx"^[$]postfix-star" (symbol->string (car r)))
+                "a pending sentinel keeps the `$postfix-star` prefix the leak gates match")
+    (check-false (rf:postfix-star-lexeme->sentinel (caddr r)) "INERT: the reader does not mint a pending row")
+    (check-false (rf:postfix-star-sentinel? (car r)) "INERT: the parser does not recognize a pending sentinel")))
+
+;; branches over t5-shaped keys: every {kept, `^`, `^p`} ancestor assignment ×
+;; sₙ plain or ω × all four star conts — the population the laws quantify over.
+(define (1bvi-mark-population)
+  (for*/list ([n (in-range 0 3)]
+              [modes (in-list (apply cartesian-product (for/list ([_ (in-range n)]) '(kept dis ren))))]
+              [sn (in-list (list 'c (make-select-bcast 'c)))]
+              [a (in-list 1bvi-axis)])
+    (append (for/list ([m (in-list modes)] [k (in-list '(a b))] [i (in-naturals)])
+              (case m
+                [(kept) k]
+                [(dis) (list '@key k 'dissolve)]
+                [(ren) (list '@key k (cons 'rename (list-ref '(p q) i)))]))
+            (list sn (make-select-star (car a))))))
+
+(test-case "1b-vi-C C-2: the mark — exact shapes, and the branch itself when the star is not total"
+  (define (st c) (make-select-star c))
+  (for ([c (in-list '(flatten flatten-synth))])
+    (define b (list 'a 'b 'c (st c)))
+    (check-eq? (select-branch-mark-total-collapse b) b (format "~a: not total — the branch itself" c)))
+  (let ([b '(a b (@key c collapse))])
+    (check-eq? (select-branch-mark-total-collapse b) b "a caret leaf is not a star"))
+  (check-equal? (select-branch-mark-total-collapse (list 'a 'b 'c (st 'flatten-collapse)))
+                (list '(@key a (collapsed . #f)) '(@key b (collapsed . #f)) 'c (st 'flatten-collapse))
+                "s₁…sₙ₋₁ marked; sₙ and the star untouched")
+  (check-equal? (select-branch-mark-total-collapse
+                 (list '(@key a (rename . p)) '(@key b dissolve) 'c (st 'flatten-collapse-synth)))
+                (list '(@key a (collapsed rename . p)) '(@key b (collapsed . dissolve)) 'c (st 'flatten-collapse-synth))
+                "the WRITTEN cont rides inside the mark")
+  (for ([b (in-list (list (list 'c (st 'flatten-collapse)) (list (st 'flatten-collapse))))])
+    (check-equal? (select-branch-mark-total-collapse b) b "no ancestor, nothing to mark (Q_U59)"))
+  (check-equal? (select-branch-mark-total-collapse (list 'a 0 'b 'c (st 'flatten-collapse)))
+                (list '(@key a (collapsed . #f)) 0 '(@key b (collapsed . #f)) 'c (st 'flatten-collapse))
+                "an ordinal makes no layer and stays unmarked")
+  (check-equal? (select-branch-mark-total-collapse (list 'top (make-select-bcast 'cfg) 'x (st 'flatten-collapse)))
+                (list '(@key top (collapsed . #f)) (make-select-bcast '(@key cfg (collapsed . #f))) 'x (st 'flatten-collapse))
+                "an ω ancestor marks its INNER step (probe-1bvi-t: the lift consults it)")
+  ;; the contract: only the conts the parser lets through can be marked. A
+  ;; positional misplacement reaching here means a parser check regressed.
+  (check-exn #rx"collapse" (lambda () (select-branch-mark-total-collapse (list '(@key a synth) 'c (st 'flatten-collapse)))))
+  (check-exn #rx"collapse" (lambda () (select-branch-mark-total-collapse (list '(@key a collapse) 'c (st 'flatten-collapse))))))
+
+(test-case "1b-vi-C C-2: the mark changes PLACEMENT only — unmark ∘ mark = id, it prints and names as written"
+  (define pop (1bvi-mark-population))
+  (check-equal? (length pop) (* (+ 1 3 9) 2 4) "13 ancestor assignments × 2 leaves × 4 conts")
+  (for ([b (in-list pop)])
+    (define m (select-branch-mark-total-collapse b))
+    (define total? (select-star-cont-total? (select-star-cont (last b))))
+    (define marked (filter (lambda (s) (let ([s (if (select-bcast-step? s) (select-bcast-inner s) s)])
+                                         (and (select-key-step? s) (select-cont-collapsed? (caddr s)))))
+                           m))
+    (check-equal? (map select-step-unmark m) b (format "unmark ∘ mark ≠ id on ~s" b))
+    (check-equal? (pp-select-branch m) (pp-select-branch b) (format "a marked branch prints as written: ~s" b))
+    (check-equal? (map select-step-output-name m) (map select-step-output-name b) (format "and names as written: ~s" b))
+    (check-equal? (select-branch-mark-total-collapse m) m "marking is idempotent")
+    (check-equal? (length marked) (if total? (- (length b) 2) 0)
+                  (format "marks exist iff the star is total, on exactly s₁…sₙ₋₁: ~s" b))
+    (for ([s (in-list marked)])
+      (check-true (select-cont-dissolves-level? (caddr s)) "every mark places as a dissolve"))))
+
+(test-case "1b-vi-C C-4: the provenance prefix — ONE seat, total synth stars only, branch-local names"
+  (define (mk c . ancs) (select-branch-mark-total-collapse (append ancs (list 'c (make-select-star c)))))
+  (define (prefix b) (select-star-provenance-prefix (last b) (drop-right b 2)))
+  (check-eq? (prefix (mk 'flatten-collapse-synth 'a 'b)) 'a-b "kept ancestors name the prefix")
+  (check-eq? (prefix (mk 'flatten-collapse-synth '(@key a (rename . p)) 'b)) 'p-b "a rename is honoured (P, E5_)")
+  (check-eq? (prefix (mk 'flatten-collapse-synth '(@key a dissolve) 'b)) 'b "a dissolve drops out (E6_)")
+  (check-false (prefix (mk 'flatten-collapse-synth '(@key a dissolve))) "nothing survives — no prefix")
+  (check-false (prefix (mk 'flatten-collapse-synth)) "no ancestor — `*-_` ≡ `*_` (Q_U59)")
+  (for ([c (in-list '(flatten flatten-synth flatten-collapse))])
+    (check-false (prefix (mk c 'a 'b)) (format "~a carries no provenance prefix" c))))
+
+(test-case "1b-vi-C C-5: an UNMARKED total star is a loud invariant violation in BOTH twins — the mark is load-bearing"
+  ;; Typing: production parsing of `t5{a.b.c*}`, the cont made total, the mark
+  ;; SKIPPED. The kept ancestors route the join to the star-TAIL arm, which must
+  ;; raise rather than re-nest (computing `*`'s answer for `*-` is the silent
+  ;; wrong answer DR-2 names).
+  (define src (string-append 1bvi-fixtures "t5{a.b.c*}\n"))
+  (define raised
+    (with-handlers ([exn:fail? exn-message])
+      (parameterize ([current-prop-net-box (box (make-elaboration-network))]
+                     [current-source-str src]
+                     [current-raw-node #f])
+        (reset-meta-store!)
+        (let* ([surfs (ws-string->surfs src)]
+               [row (last surfs)]
+               [unmarked (surf-select (surf-select-subject row)
+                                      (for/list ([b (in-list (surf-select-branches row))])
+                                        (map 1bvi-totalize-step b))   ;; ⚠ no mark
+                                      (surf-select-sort row) (surf-select-srcloc row))])
+          (for ([sf (in-list (drop-right surfs 1))]) (unless (prologos-error? sf) (process-command sf)))
+          (process-command unmarked)
+          "no raise"))))
+  (check-regexp-match #rx"reached the star-TAIL arm" raised "typing: the tail-arm guard fires")
+  ;; Reduction, directly (typing would raise first on the production path):
+  ;; `{:a {:b {:m 1}}}` with `a.b*-` unmarked → the value-layer guard panics.
+  (define (kw k) (expr-keyword k))
+  (define (champ1 k v) (expr-champ (champ-insert champ-empty (equal-hash-code (kw k)) (kw k) v)))
+  (define subj (champ1 'a (champ1 'b (champ1 'm (expr-int 1)))))
+  (define r (select-reduce subj (list (list 'a 'b (make-select-star 'flatten-collapse))) 'block #f))
+  (check-true (expr-panic? r) "reduction: the tail-arm guard panics")
+  (check-regexp-match #rx"`[*]-` — internal: a total collapse reached the star-TAIL arm"
+                      (format "~a" (expr-string-val (expr-panic-msg r))))
+  ;; …and the SAME branch, marked, joins (the control: the guard is about the mark)
+  (define ok (select-reduce subj (list (select-branch-mark-total-collapse
+                                        (list 'a 'b (make-select-star 'flatten-collapse)))) 'block #f))
+  (check-false (expr-panic? ok) "marked, the total collapse joins"))

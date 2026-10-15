@@ -178,6 +178,12 @@
  ;; D4.P4e-1b (Q_U40): the flatten step. `select-star-cont` is the ONLY reader of
  ;; its continuation — `select-step-cont` deliberately answers #f (see its note).
  select-star-step? select-star-cont make-select-star
+ ;; D4.P4e-1b-vi-C: the star-cont axis (C-1) and the total-collapse mark (C-2, C-4)
+ select-star-conts select-star-cont-synth? select-star-cont-total? select-star-cont-of
+ select-star-cont-unhandled
+ select-cont-collapsed? select-cont-dissolves-level?
+ select-step-mark-collapsed select-step-unmark select-branch-mark-total-collapse
+ select-star-provenance-prefix
  select-branch-deep-star? select-steps-star-tail?
  select-step-makes-no-layer? select-branch-has-star?/deep
  select-steps-yield-bare-join?
@@ -1124,6 +1130,43 @@
 ;; are not CARET conts and must not enter that channel.
 (define (select-star-cont s) (cadr s))
 
+;; ⭐⭐ D4.P4e-1b slice 1b-vi-C — THE STAR-CONT AXIS, CLOSED (C-1).
+;; Four continuations, and they are a PRODUCT, not a list: {flatten, collapse}
+;; × {plain, synth} — `*` `*_` `*-` `*-_`, named in spelling order. Every reader
+;; that used to ask `(eq? cont 'flatten-synth)` asked ONE of these two questions
+;; and answered the other three conts with `*`'s behaviour by default; with four
+;; conts that default is a silent bare `*` for `*-` (Q_U52 §3's hazard). So the
+;; readers ask the classifier, and the classifier RAISES on anything off the
+;; axis — loud, like `select-step-kind`. The SPELLING of each cont stays in
+;; reader-forms.rkt's tables (the one place spelling↔cont is stated).
+(define select-star-conts '(flatten flatten-synth flatten-collapse flatten-collapse-synth))
+(define (select-star-cont-unhandled who c)
+  (error who
+         (string-append
+          "unknown star continuation: ~s\n"
+          "  the star-cont axis is CLOSED: ~s — {flatten, collapse} × {plain, synth}\n"
+          "  a new cont must be placed on the axis here, and given a row in\n"
+          "  reader-forms.rkt's star tables (D4.P4e-1b-vi-C)")
+         c select-star-conts))
+;; `*_` / `*-_`: synthesize provenance keys over the deleted layer (Q_U24, Q_U51)
+(define (select-star-cont-synth? c)
+  (case c
+    [(flatten flatten-collapse) #f]
+    [(flatten-synth flatten-collapse-synth) #t]
+    [else (select-star-cont-unhandled 'select-star-cont-synth? c)]))
+;; `*-` / `*-_`: TOTAL collapse — no ancestor contributes a level (Q_U48)
+(define (select-star-cont-total? c)
+  (case c
+    [(flatten flatten-synth) #f]
+    [(flatten-collapse flatten-collapse-synth) #t]
+    [else (select-star-cont-unhandled 'select-star-cont-total? c)]))
+;; the inverse: a point on the axis. Messages use it to name an in-family
+;; sibling (`*-_`'s "use bare" is `*-`, never `*`).
+(define (select-star-cont-of total? synth?)
+  (if total?
+      (if synth? 'flatten-collapse-synth 'flatten-collapse)
+      (if synth? 'flatten-synth 'flatten)))
+
 ;; D4.P4a — THE STEP-KIND TOTALITY DISPATCHER (owner ruling 2026-07-31:
 ;; route ALL EIGHT dispatch sites through this one classifier).
 ;;
@@ -1380,6 +1423,83 @@
 (define (select-cont-rename c)
   (and (pair? c) (memq (car c) '(rename collapse-rename)) (cdr c)))
 
+;; ⭐⭐ D4.P4e-1b slice 1b-vi-C — THE TOTAL-COLLAPSE MARK (C-2, Q_U58's M).
+;; Under `*-` / `*-_` no ancestor s₁…sₙ₋₁ contributes an output level. That fact
+;; is recorded ONCE, on each ancestor, as `(collapsed . c₀)` — where c₀ is the
+;; cont the user WROTE: `#f` (plain `a`), `dissolve` (`a^`) or `(rename . k)`
+;; (`a^k`, which Q_U55 lets through under `*-_` only). Nothing else is ever
+;; wrapped: the parser's checks run first and refuse every other ancestor cont.
+;;
+;; ⚠⚠ THE MARK CHANGES PLACEMENT AND NOTHING ELSE. Placement: both twins' dissolve
+;; arms test `select-cont-dissolves-level?`, so a marked ancestor splices like
+;; `^` and placement EMERGES from arms that already exist. Everything else —
+;; printing, naming — reads the step AS WRITTEN through `select-step-unmark`, so
+;; a refusal label and a provenance key are true by construction, not by one
+;; parallel arm per reader. (Why a wrapper and not two new atoms: D4
+;; §5.P4e-1b-vi, "1b-vi-C — design target", C-2.)
+;; ⚠ A mark must never reach a NON-placement arm of a walker (the kept-key arm
+;; would re-nest it): the dissolve arm is first in both twins, and the per-twin
+;; mutations M-typing / M-reduction pin that it is.
+(define (select-cont-collapsed? c) (and (pair? c) (eq? (car c) 'collapsed)))
+(define (select-cont-dissolves-level? c) (or (eq? c 'dissolve) (select-cont-collapsed? c)))
+
+(define (select-step-mark-collapsed s)
+  (define (mark name c0)
+    (unless (or (not c0) (eq? c0 'dissolve) (and (pair? c0) (eq? (car c0) 'rename)))
+      (error 'select-branch-mark-total-collapse
+             "an ancestor of a total collapse carries ~s — only a plain key, `^` or `^k` can reach here (the parser's positional check refuses the rest); a parser check has regressed"
+             c0))
+    (list '@key name (cons 'collapsed c0)))
+  (case (select-step-kind s)
+    [(key) (mark s #f)]
+    [(caret) (if (select-cont-collapsed? (caddr s)) s (mark (cadr s) (caddr s)))]
+    ;; probe-1bvi-t: the ω lift applies its INNER step per element through the
+    ;; branch walk, which honours the inner cont (`cfg^` changes the type), so the
+    ;; inner is where an ω ancestor's mark belongs. Unpinnable until DEFERRED 167.
+    [(bcast) (let* ([i (select-bcast-inner s)] [m (select-step-mark-collapsed i)])
+               (if (eq? m i) s (make-select-bcast m)))]
+    ;; an ordinal makes no layer (Q_U2); a sub-block is terminal and a star that is
+    ;; not last is typing's `star-mid-branch` — none is an ancestor with a level.
+    [(ord-step ord-branch sub star) s]
+    [else (select-step-kind-unhandled 'select-step-mark-collapsed s)]))
+
+;; the step AS WRITTEN — the inverse of the mark, for every non-placement reader
+(define (select-step-unmark s)
+  (case (select-step-kind s)
+    [(caret) (let ([c (caddr s)])
+               (cond [(not (select-cont-collapsed? c)) s]
+                     [(cdr c) (list '@key (cadr s) (cdr c))]
+                     [else (cadr s)]))]
+    [(bcast) (let* ([i (select-bcast-inner s)] [u (select-step-unmark i)])
+               (if (eq? u i) s (make-select-bcast u)))]
+    [else s]))
+
+;; Mark s₁…sₙ₋₁ iff the branch ends in a TOTAL star; otherwise the branch ITSELF
+;; (`eq?`). Pure, and branch-local: a sub-block is its own branch list and is
+;; marked where it is segmented (1b-vi-D wires this at `segment-select-items`'
+;; success return, after every parser check).
+(define (select-branch-mark-total-collapse b)
+  (let ([rev (reverse b)])
+    (if (and (pair? rev) (pair? (cdr rev))
+             (select-star-step? (car rev))
+             (select-star-cont-total? (select-star-cont (car rev))))
+        (append (map select-step-mark-collapsed (reverse (cddr rev)))
+                (list (cadr rev) (car rev)))
+        b)))
+
+;; ⭐ C-4 — `*-_`'s PREFIX (Q_U57, P), computed at ONE seat for both twins: the
+;; surviving output names of the collapsed ancestors (renames honoured, `^`
+;; dropped, ordinals nameless — `^-_`'s rule), or #f. `seen` is the walk's
+;; branch-local record of consumed steps; under a total collapse every ancestor
+;; is consumed by a dissolve arm, so `seen` is exactly s₁…sₙ₋₁.
+(define (select-star-provenance-prefix star seen)
+  (let ([c (select-star-cont star)])
+    (and (select-star-cont-total? c)
+         (select-star-cont-synth? c)
+         (let ([names (filter values (map select-step-output-name seen))])
+           (and (pair? names)
+                (string->symbol (string-join (map symbol->string names) select-synth-separator)))))))
+
 ;; the branch's LEAF collapse continuation, or #f (the `^-` family flattens
 ;; the WHOLE branch, so its walk is a pre-classified special case)
 (define (select-branch-collapse b)
@@ -1423,6 +1543,8 @@
     [(caret)
      (let ([c (select-step-cont s)])
        (cond
+         ;; 1b-vi-C: a marked ancestor names as WRITTEN (the mark is placement only)
+         [(select-cont-collapsed? c) (select-step-output-name (select-step-unmark s))]
          [(eq? c 'dissolve) #f]
          [(select-cont-rename c) => values]
          [else (cadr s)]))]
