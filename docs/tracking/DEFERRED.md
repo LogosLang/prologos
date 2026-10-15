@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 174**
+> ### **NEXT FREE: 175**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7800,3 +7800,29 @@ is delayed: refuse to commit a top-level type that still contains a hole produce
 
 **Record**: `docs/tracking/tracks/PPN/PPN_4C/audits/2026-10-13_PPN_4C_4B5b_GROUNDING_AUDIT.md` GA-4, GA-4b (on branch
 `ppn4c-elaboration-on-network`); probes `…/PPN_4C/research/4B5b/p18-*`, `p27-*`.
+
+### 174. ⬜ AN ANNOTATED SELF-REFERENTIAL DEFINITION THAT IS NOT A FUNCTION IS ACCEPTED — `def z : Int := [int+ z 1]` → `z : Int defined.`, 0 errors; any use exhausts reduction fuel (and, until DEFERRED 172 lands, crashes the file)
+
+**Found by** PPN 4C's 4B.5.b grounding audit (branch `ppn4c-elaboration-on-network` @ `0c2aaf6a`, code = main `150915c4`):
+probe p25 (`def z : Int := [int+ z 1]` + an unrelated def and use) → `z : Int defined.`, 0 errors; p24 (the same with a use
+of `z`) → `process-file` raises `reduction: fuel exhausted…` uncaught (DEFERRED 172).
+
+**Mechanism** (read in code): the annotated path pre-registers the definition's type before elaborating its body, so a
+self-reference types (the old self-recursion mechanism, gate G3 of the PPN 4C addendum). 4B.5.a's pending-referent scan
+then EXCLUDES the definition's own name (`driver.rkt:2116-2120`, the exclude list), so a self-reference never defers, and
+nothing asks whether the body is productive. Predates PPN 4C's 4B.5 arc — by reading; not measured at an old commit.
+
+**Why not in 4B.5.b**: owner decision **Q-4B5.4** (2026-10-14; PPN 4C addendum §18.21.27): 4B.5.b owns every definition
+cycle that passes through the deferral residue — inferred cycles, hole-typed spec-less `defn` groups (DEFERRED 173), and
+annotated cycles of two or more members (probe p26). A size-1 annotated cycle never enters the residue, so it needs a
+second detection site, at the annotated self-reference.
+
+**Fix shape**: reuse 4B.5.b's productivity predicate (decision Q-4B5.6: a cycle member's elaborated body must be a lambda,
+after stripping `the`) where the annotated path elaborates a body that references its own pre-registered name; a
+non-lambda self-referential body → 4B.5.b's definition-cycle diagnostic. Pins: p24, p25; G3 (annotated self-recursion
+through a lambda, probe p15) must stay green. If 4B.5.b's mini-design finds the second site cheap, it may be pulled in.
+
+**When**: after 4B.5.b ships its productivity predicate — with 4B.5.c (the 4B arc close) at the latest.
+
+**Record**: `docs/tracking/tracks/PPN/PPN_4C/audits/2026-10-13_PPN_4C_4B5b_GROUNDING_AUDIT.md` GA-5; probes
+`…/PPN_4C/research/4B5b/p24-*`, `p25-*` (on branch `ppn4c-elaboration-on-network`).
