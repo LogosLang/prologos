@@ -1416,6 +1416,11 @@
   ;;          `c^-z` → `c^z`): "collapse all but the named levels", spelled out.
   ;; The battery RUNS both remedies and requires each to be accepted (row
   ;; checks, B-3: advice that does not work).
+  ;; ⚠ REACHABILITY, measured: the ω arms of `drop-rename` / `keep-level` serve an
+  ;; ω ANCESTOR, which no block can spell today (a step after ω acts on the whole
+  ;; result, and in-block fused chains fail — DEFERRED 167), so they are unpinned
+  ;; and kept only so the remedy is right when 167 lands. The ω arm of
+  ;; `leaf-without-collapse` IS reachable (`org{db^p.admins:name^-}`, row C6).
   (define (drop-rename s)
     (cond [(not (renamed-ancestor? s)) s]
           ;; an ω step CAN carry a rename (`cfg{admins:name^alias}`): keep the `:`

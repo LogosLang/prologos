@@ -3425,7 +3425,7 @@ items of the hold-point, ruled before P4a opened:
   [§5.P4e-1b-vi](#p4e-1b-vi).
 
 - <a id="q-u59"></a>**Q_U59 — WHERE NOTHING CAN COLLAPSE, `*-` ≡ `*` AND `*-_` ≡ `*_`
-  (path position, the closer seat, depth 1) [✅ SETTLED 2026-10-13, owner — "Ok as settled,
+  (path position, the closer seat, depth 1) [✅ SETTLED 2026-10-14, owner — "Ok as settled,
   with medium confidence"].** Derived from Q_U57's rule rather than decided separately: in
   path position no step has an output key (measured, `probe-1bvi-m` — every caret form there
   is refused, "a field access has no output key"), so the operator deletes no ancestor level
@@ -3438,7 +3438,7 @@ items of the hold-point, ruled before P4a opened:
   would contradict P's own principle (the operator deleted nothing there), so it would be a
   new rule, not a correction. Pinned by rows X-dot±, X-wpath±, E1±, E10±.
 
-- <a id="q-u60"></a>**Q_U60 — THE EQUIVALENCES BECOME GENERATED LAWS [✅ DECIDED 2026-10-13,
+- <a id="q-u60"></a>**Q_U60 — THE EQUIVALENCES BECOME GENERATED LAWS [✅ DECIDED 2026-10-14,
   owner — "fold it in"].** Offered at the 1b-vi-A checkpoint (VAG (c)): 31 hand examples
   state Q_U48 / Q_U57 by instance; a generator states them as laws. **Placement (recorded as
   my call within the decision):** the generator lands as 1b-vi-B's FIRST step, inside the
@@ -9610,7 +9610,7 @@ scaffolding for the slicing, not a permanent mechanism.
 | sub-slice | content | status |
 |---|---|---|
 | **1b-vi-A** ✅ `0b6a645f` | the stage table: 40 rows, every expected value measured from today's equivalent spelling (`probe-1bvi-p`). Red step: stage B → exactly C1–C4 red (the silent drop); stage D → 37 / 40 red, each for its measured pre-mint reason (mid-lexeme 28, postfix 2, nameless unbound 3, silent drop 4); controls green. Instrument power by mutation: an already-true target caught twice; a fixture that fails to load caught before `unbound` could accept it. Battery 573 → 575; **5.28 s per run** (per-test-case timing) | ✅ |
-| **1b-vi-B** | `^-` / `^-k'` refuse an ancestor rename (Q_U55's caret half); FIRST step: the generated laws ([Q_U60](#q-u60)) join the stage table | 🔄 |
+| **1b-vi-B** ✅ `332e16a2` | `^-` / `^-k'` refuse an ancestor rename (Q_U55's caret half) with two remedies rendered by the one branch printer; FIRST step: the generated laws ([Q_U60](#q-u60)) — 61 rows. Red step: 16 rows (C1–C4 + 12 generated), each the silent drop; green after; mutation (check disabled) → the same 16. Instrument: right-hand sides checked at every stage (M3 caught); every live refusal's remedies RUN (B-3). Table 104 rows (43 hand, 61 law); battery + acceptance file 665 / 665; acceptance 88 / 88; **7.86 s per run** | ✅ |
 | **1b-vi-C** | the `collapsed` cont + the `*-` / `*-_` conts + the totality dispatcher + the 15 prose arms, INERT (reachable from tests only) | ⬜ |
 | **1b-vi-D** | the mint: two table rows, the `*->` message; flips `:6194`, `:6195`, `:8470`, `:8482`; arrival matrix `*-` / `*-_` 0/209 → 209/209 | ⬜ |
 | verify | adversarial round | ⬜ |
@@ -9665,6 +9665,25 @@ star leaf is one more arm.
 | the collapse conts | `syntax.rkt:863–865`: `'collapse`, `(collapse-rename . k')`, `'collapse-synth` | TOTAL = the first two; `select-cont-collapse?` (`:1375`) also answers #t for `'collapse-synth`, so it is NOT the predicate to reuse |
 | the renderer | `pp-select-branch`, `pretty-print.rkt:135` | a new require edge `parser.rkt → pretty-print.rkt`: no cycle either way (text closure over the repo's requires, controls `syntax.rkt` / `macros.rkt` / `reader-forms.rkt` reached), and it adds 6 modules to the parser's compile closure (`pretty-print`, `posit-impl`, `processes`, `rrb`, `tabling`, `union-find`) |
 | scope of a branch | a sub-block is its own branch list (`sub?` recursion) | `e3{a^p.{b.c^-}}` is NOT refused — the collapse lands under `p`, where the rename is observable |
+
+**1b-vi-B — what the slice found, and its Vision Alignment Gate.**
+
+*The A table had a hole of its own.* A row ahead of the stage was asserted only to FAIL its
+target, and a target whose right-hand side is refused, or whose pinned type drifted, fails too.
+So the 31 pinned types A committed were checked only in the stage-D red runs, never on the
+committed stage. Every right-hand side is now checked at every stage (mutation M3, a drifted
+type on a not-yet-live row, is caught).
+
+*An ω leaf is reachable; an ω ancestor is not.* `org{db^p.admins:name^-}` (probe s) is refused
+and both its remedies run (row C6). An ω step as an ANCESTOR cannot be spelled in a block
+(DEFERRED 167), so the remedy's ancestor-side ω arms are unpinned and marked so in the code.
+
+| VAG question | catalogue | challenge — could it be more aligned? |
+|---|---|---|
+| (a) on-network | a pure function of one written branch, decided once at block close | parse-time validation runs before any network exists; it is part of the parser's off-network scaffolding, which the PPN series owns. B adds no state and no pass. Named, not rationalized |
+| (b) complete | both total forms, several renames at once, the ω leaf (C6), the sub-block scope (K4/K5), every remedy run | (1) the ω-ANCESTOR remedy arms are unreachable and unpinned until DEFERRED 167 lands — stated in the code. (2) The remedies are rendered through the caret printer's `cont->string`, which has no table and a silent `[else "^?"]` (DEFERRED 145); B adds no caret cont, so nothing renders `^?` today |
+| (c) vision-advancing | the silent drop is gone; the remedies are generated from the steps by the one printer | **the "keep the level" remedy IS Q_U55 option C's meaning** ("collapse all but the named levels") spelled out. The refusal therefore carries its own migration path: if C is ever adopted, the refused spelling takes the meaning the message already shows. That is §3.6's monotone migration made visible to the user |
+| (d) drift risks | B-1: 14 generated controls + K1–K5 hold; B-2: classified through `select-step-kind`, ω seen through; B-3: 17 live refusals, 34 remedies, all accepted; B-4: the star arm waits for D | **inherited pattern challenged: hand-built remedy strings in the parser** (the `^..` messages spell their remedies by hand) — B renders through `pp-select-branch` instead. DR-6 grew 5.28 → 7.86 s per run. The tree-sitter tripwire fired on `parser.rkt`; B adds no syntax (it refuses a combination the grammar already accepts), so no grammar change is owed. `update-deps --check`: 375 mismatches before and after on this branch's stale stored graph — untouched, retired by the next merge from main |
 
 <a id="p4e-1b-v-shipped"></a>
 

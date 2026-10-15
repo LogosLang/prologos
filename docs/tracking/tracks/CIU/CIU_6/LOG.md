@@ -223,3 +223,31 @@ are in [`../README.md`](../README.md).
   Q_U48 / Q_U57 as generated laws rather than 31 examples.
 - **Next**: dialogue checkpoint with the owner (Stage 4 cadence), then 1b-vi-B (bump the stage to B; C1–C4
   go red; implement the caret-family refusal).
+
+### Q_U59 settled, Q_U60 decided; 1b-vi-B shipped: `^-` / `^-k'` refuse a renamed ancestor with two runnable remedies, and the equivalences are generated laws — `332e16a2` (2026-10-14)
+- **Why / decision**: owner at the A checkpoint — *"1: Ok as settled, with medium confidence · 2: fold it in ·
+  3: ok"*. Ledgered: [Q_U59](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u59) (where nothing can collapse,
+  `*-` ≡ `*` and `*-_` ≡ `*_`; the medium confidence is given an object: the monotone cost and a revisit
+  trigger), [Q_U60](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u60) (the laws, placed as B's first step —
+  my call, recorded as such). B's design target, mini-audit and VAG: [§5.P4e-1b-vi](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi).
+- **What shipped**: the check sits in `branch-problem` (`parser.rkt`, block-close validation), after the
+  positional check; TOTAL means `'collapse` / `(collapse-rename . k')`; the two remedies are step lists
+  rendered by `pp-select-branch` (new edge parser → pretty-print, acyclic, +6 modules). 61 generated law rows
+  (`^-`, `^-z`, `*-`, `*-_` over `t5`; `*-` over `v3`). Red: 16 rows; green after; mutation → the same 16.
+  Battery + acceptance file 665 / 665; acceptance 88 / 88.
+- **Surprise / correction**:
+  - **My A table had a hole.** Rows ahead of the stage were asserted only to fail their target, and a refused
+    right-hand side or a drifted pinned type also fails, so A's 31 pinned types were never verified on the
+    committed stage. Fixed: every right-hand side is checked at every stage (mutation M3 caught).
+  - **Wrote two ω arms with no test.** Probing found the ω LEAF reachable (`org{db^p.admins:name^-}`, row
+    C6, pre measured with only the check disabled) and the ω ANCESTOR unreachable (DEFERRED 167), so the
+    ancestor-side arms are kept, unpinned, and marked so in the code.
+  - **A zero-power instrument, caught by its control**: my first module-closure script reported that
+    `parser.rkt` does not reach `syntax.rkt`, which it requires directly (`module->imports` raised on an
+    undeclared module and the handler swallowed it). Replaced by a text closure checked against three positive
+    controls.
+  - **Dates**: the session crossed midnight; Q_U59 / Q_U60 were first written as 2026-10-13 and corrected to
+    2026-10-14 (the owner's answer arrived after `22994c62`, 10-13 11:11; `e3a30441` was 10-14 17:38).
+  - `git commit` failed once on a transient `index.lock` (gone on inspection, no process holding it), retried.
+- **Next**: owner checkpoint, then 1b-vi-C — the `collapsed` cont + the `*-` / `*-_` conts + the totality
+  dispatcher + the 15 prose arms, landed INERT; stage stays B until D (C flips no surface row).
