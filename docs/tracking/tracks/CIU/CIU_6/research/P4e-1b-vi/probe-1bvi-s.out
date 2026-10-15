@@ -1,0 +1,8 @@
+0: org : {:db {:admins [PVec {:name String}]}} defined.
+1: ERROR: `p` can never appear under a total collapse: `:name^-` lifts the leaf to the top of its branch and removes every ancestor level, including the one `db^p` renames. Drop `^p` (`db.admins:name^-`), or keep the level: `db^p.admins^:name`
+2: {:name @[{:name "a"} {:name "b"}]} : {:name [PVec {:name String}]}
+3: {:p {:name @[{:name "a"} {:name "b"}]}} : {:p {:name [PVec {:name String}]}}
+4: {:db {:admins @[{:name "a"} {:name "b"}]}} : {:db {:admins [PVec {:name String}]}}
+5: {:admins @[{:name "a"} {:name "b"}]} : {:admins [PVec {:name String}]}
+6: {:name @[{:name "a"} {:name "b"}]} : {:name [PVec {:name String}]}
+--- 1 errors ---

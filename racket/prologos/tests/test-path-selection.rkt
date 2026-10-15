@@ -9359,7 +9359,7 @@
 ;; (`"*-"` has no sentinel).
 ;; ===========================================================================
 
-(define 1bvi-stage 'A)
+(define 1bvi-stage 'B)   ;; 1b-vi-B: bumped as the slice's first edit
 (define 1bvi-stage-order '(A B C D))
 (define (1bvi-reached? s)
   (and s (<= (index-of 1bvi-stage-order s) (index-of 1bvi-stage-order 1bvi-stage))))
@@ -9378,8 +9378,9 @@
    "def rm := {:eu {:cfg {:x 1}} :us {:cfg {:x 2}}}\n"
    "def deep := {:top {:eu {:cfg {:x 1}} :us {:cfg {:x 2}}}}\n"
    "def hz := {:a {:b {:c-d 1}} :a-b {:c {:d 2}}}\n"
-   "def mn := {:a {:x 1} :b {:y 2}}\n"))
-(define 1bvi-fixture-count 11)
+   "def mn := {:a {:x 1} :b {:y 2}}\n"
+   "def org := {:db {:admins @[{:name \"a\"} {:name \"b\"}]}}\n"))
+(define 1bvi-fixture-count 12)
 
 (define 1bvi-rows
   '(;; ---- E1–E10 under `*-` [Q_U48]: ≡ dissolve every ancestor, then `*`
@@ -9439,19 +9440,94 @@
                               (refused (#rx"`q` can never appear under a total collapse" #rx"Drop `\\^q`" #rx"keep the level") ()))
     ("C4" "e3{a^p.b^.c^-}"  B (line "{:c @[1 2]} : {:c [PVec Int]}")
                               (refused (#rx"`p` can never appear under a total collapse" #rx"Drop `\\^p`" #rx"keep the level") ()))
+    ;; an ω LEAF under the collapse: reachable, unlike an ω ANCESTOR (DEFERRED 167),
+    ;; so the remedy's ω arm (`leaf-without-collapse`) runs here. PRE measured with
+    ;; only the new check disabled (probe-1bvi-s): the silent drop.
+    ("C6" "org{db^p.admins:name^-}" B (line "{:name @[{:name \"a\"} {:name \"b\"}]} : {:name [PVec {:name String}]}")
+                              (refused (#rx"`p` can never appear under a total collapse" #rx"Drop `\\^p`" #rx"keep the level") ()))
     ;; …and the star half (1b-vi-D), the immediate parent
     ("C5" "t5{a.b^q.c*-}"   D midlex
                               (refused (#rx"`q` can never appear under a total collapse" #rx"Drop `\\^q`" #rx"keep the level") ()))
     ;; ---- CONTROLS: a dissolve stays legal; a provenance form keeps the rename
     ("K1" "e3{a^.b.c^-}"     #f (line "{:c @[1 2]} : {:c [PVec Int]}") #f)
     ("K2" "e3{a^p.b.c^-_}"   #f (line "{:p-b-c @[1 2]} : {:p-b-c [PVec Int]}") #f)
-    ("K3" "e3{a^p.b^q.c^-_}" #f (line "{:p-q-c @[1 2]} : {:p-q-c [PVec Int]}") #f)))
+    ("K3" "e3{a^p.b^q.c^-_}" #f (line "{:p-q-c @[1 2]} : {:p-q-c [PVec Int]}") #f)
+    ;; a SUB-BLOCK is its own branch: the collapse lands UNDER `p`, where the
+    ;; rename is observable — Q_U55's check is branch-local (probe-1bvi-q)
+    ("K4" "e3{a^p.{b.c^-}}"  #f (line "{:p {:c @[1 2]}} : {:p {:c [PVec Int]}}") #f)
+    ("K5" "e3{a^p.{b.c^-q}}" #f (line "{:p {:q @[1 2]}} : {:p {:q [PVec Int]}}") #f)))
 
 (define (1bvi-row-id r) (list-ref r 0))
 (define (1bvi-row-spelling r) (list-ref r 1))
 (define (1bvi-row-flips r) (list-ref r 2))
 (define (1bvi-row-pre r) (list-ref r 3))
 (define (1bvi-row-target r) (list-ref r 4))
+
+;; ---------------------------------------------------------------------------
+;; ⭐ [Q_U60] THE LAWS, GENERATED (1b-vi-B, step 1). The hand rows above state
+;; Q_U48 / Q_U57 by instance; these state them for EVERY leaf position at depth
+;; 1–3 of `t5` × EVERY assignment of {kept, `^`, rename} to the leaf's
+;; ancestors, in four families, plus `*-` over the vector fixture `v3`:
+;;   `^-`   ≡ dissolve every ancestor, keep the leaf          | refused if an ancestor is renamed (B)
+;;   `^-z`  ≡ dissolve every ancestor, rename the leaf `^z`   | refused if an ancestor is renamed (B)
+;;   `*-`   ≡ dissolve every ancestor, then `*`               | refused if an ancestor is renamed (D)
+;;   `*-_`  ≡ every lifted field written with `^-_`, ancestors AS WRITTEN (D)
+;; The right-hand sides are today's spellings, so every expected value is
+;; measured by the run itself (`equiv`), never written down.
+;; ⚠ The trees below MIRROR the `def`s in `1bvi-fixtures`; the `*-_` field
+;; lists are the record fields at each position. If a fixture changes, these
+;; must change with it — an `equiv` whose right-hand side is REFUSED is
+;; reported as such, so a drift is loud, not a silent pass.
+;; ---------------------------------------------------------------------------
+(define 1bvi-law-positions '((t5 (a) (a b) (a b c)) (v3 (a b c))))
+(define 1bvi-law-fields '(((a) b) ((a b) c) ((a b c) m n)))   ;; t5 only
+(define 1bvi-law-renames '(p q))                              ;; ancestor i → `^`+(list-ref … i)
+
+(define (1bvi-law-rows)
+  (define (seg k mode i)
+    (case mode
+      [(kept) (symbol->string k)]
+      [(dis) (format "~a^" k)]
+      [(ren) (format "~a^~a" k (list-ref 1bvi-law-renames i))]))
+  (define (renamed-refusal names)
+    (list 'refused
+          (append (list #rx"can never appear under a total collapse" #rx"Drop `\\^" #rx"keep the level")
+                  (for/list ([n (in-list names)]) (regexp (format "`~a`" n))))
+          '()))
+  (for*/list ([entry (in-list 1bvi-law-positions)]
+              [pos (in-list (cdr entry))]
+              [subj (in-value (car entry))]
+              [ancs (in-value (drop-right pos 1))]
+              [leaf (in-value (last pos))]
+              [modes (in-list (apply cartesian-product (for/list ([_ ancs]) '(kept dis ren))))]
+              [fam (in-list (if (eq? subj 'v3) '(star) '(caret caret-k star star-synth)))])
+    (define written
+      (string-append (string-join (for/list ([k ancs] [m modes] [i (in-naturals)]) (seg k m i)) ".")
+                     (if (null? ancs) "" ".")))
+    (define all-dis
+      (string-append (string-join (for/list ([k ancs]) (format "~a^" k)) ".") (if (null? ancs) "" ".")))
+    (define names (for/list ([m modes] [i (in-naturals)] #:when (eq? m 'ren)) (list-ref 1bvi-law-renames i)))
+    (define (row suffix flips pre target)
+      (define sp (format "~a{~a~a~a}" subj written leaf suffix))
+      (list (string-append "law " sp) sp flips pre target))
+    (case fam
+      [(caret)
+       (let ([eqv `(equiv ,(format "~a{~a~a}" subj all-dis leaf))])
+         (if (pair? names) (row "^-" 'B eqv (renamed-refusal names)) (row "^-" #f eqv #f)))]
+      [(caret-k)
+       (let ([eqv `(equiv ,(format "~a{~a~a^z}" subj all-dis leaf))])
+         (if (pair? names) (row "^-z" 'B eqv (renamed-refusal names)) (row "^-z" #f eqv #f)))]
+      [(star)
+       (row "*-" 'D 'midlex
+            (if (pair? names) (renamed-refusal names) `(equiv ,(format "~a{~a~a*}" subj all-dis leaf))))]
+      [(star-synth)
+       (row "*-_" 'D 'midlex
+            `(equiv ,(format "~a{~a}" subj
+                             (string-join (for/list ([f (cdr (assoc pos 1bvi-law-fields))])
+                                            (format "~a~a.~a^-_" written leaf f))
+                                          " "))))])))
+
+(define 1bvi-all-rows (append 1bvi-rows (1bvi-law-rows)))
 
 ;; the three pre-mint refusal classes, measured at `8d404681` (probe-1bvi-p)
 (define (1bvi-expand e)
@@ -9492,12 +9568,13 @@
                            (map 1bvi-line (filter prologos-error? (take rs 1bvi-fixture-count)))))]
        [else (cons 'ok (map 1bvi-line (drop rs 1bvi-fixture-count)))]))))
 
-(define (1bvi-spellings) (map 1bvi-row-spelling 1bvi-rows))
+(define (1bvi-spellings) (map 1bvi-row-spelling 1bvi-all-rows))
+(define (1bvi-hand-spellings) (map 1bvi-row-spelling 1bvi-rows))   ;; level 2 runs these only
 (define (1bvi-equivs)
   (remove-duplicates
-   (for*/list ([r (in-list 1bvi-rows)]
+   (for*/list ([r (in-list 1bvi-all-rows)]
                [e (in-list (list (1bvi-row-pre r) (1bvi-row-target r)))]
-               #:when (and (pair? e) (eq? (car e) 'same)))
+               #:when (and (pair? e) (memq (car e) '(same equiv))))
      (cadr e))))
 
 (define (1bvi-type-of line)
@@ -9519,6 +9596,13 @@
               (for/or ([rx (in-list (caddr e))])
                 (and (regexp-match? rx msg) (format "the message must NOT match ~s" rx)))
               #t))])]
+    [(equiv)   ;; a generated LAW: the line equals today's spelling's line, which is not refused
+     (cond
+       [(not equiv-line) (format "no output for the equivalent ~s" (cadr e))]
+       [(regexp-match? #rx"^ERROR: " equiv-line)
+        (format "the law's right-hand side ~s is REFUSED today (~a)" (cadr e) equiv-line)]
+       [(not (equal? line equiv-line)) (format "expected the right-hand side's line ~s" equiv-line)]
+       [else #t])]
     [(same)
      (cond
        [(not equiv-line) (format "no output for the equivalent ~s" (cadr e))]
@@ -9539,7 +9623,7 @@
 ;; name EVERY failing row, every unusable batch and every level disagreement.
 (test-case "1b-vi-A: the stage table — batches usable, level 2 ≡ level 3, every row holds at its stage, every row ahead still FAILS its target"
   (define f (1bvi-batch 'file (1bvi-spellings)))
-  (define s (1bvi-batch 'string (1bvi-spellings)))
+  (define s (1bvi-batch 'string (1bvi-hand-spellings)))
   (define q (1bvi-batch 'file (1bvi-equivs)))
   (define batch-problems
     (append
@@ -9560,8 +9644,8 @@
         (let* ([eqv (for/hash ([e (in-list (1bvi-equivs))] [l (in-list (cdr q))]) (values e l))]
                [equiv-of (lambda (e)
                            (let ([x (1bvi-expand e)])
-                             (and (pair? x) (eq? (car x) 'same) (hash-ref eqv (cadr x) #f))))])
-          (for*/list ([(r line) (in-parallel (in-list 1bvi-rows) (in-list (cdr f)))]
+                             (and (pair? x) (memq (car x) '(same equiv)) (hash-ref eqv (cadr x) #f))))])
+          (for*/list ([(r line) (in-parallel (in-list 1bvi-all-rows) (in-list (cdr f)))]
                       [p (in-value
                           (let* ([live? (1bvi-reached? (1bvi-row-flips r))]
                                  [now (if live? (1bvi-row-target r) (1bvi-row-pre r))]
@@ -9582,15 +9666,78 @@
                       #:when p)
             p))
         '()))
-  (define problems (append batch-problems level-problems row-problems))
+  ;; ⚠ THE RIGHT-HAND SIDES, CHECKED AT EVERY STAGE (1b-vi-B; the A cut lacked it).
+  ;; A row ahead of the stage is only asserted to FAIL its target — and a target
+  ;; whose right-hand side is REFUSED, or whose pinned TYPE drifted, fails too, so
+  ;; the A table never verified its 31 pinned types until stage D. Every `same` /
+  ;; `equiv` in either column is checked NOW: accepted, and (for `same`) of
+  ;; exactly the pinned type. The expected values are measured continuously.
+  (define rhs-problems
+    (if (eq? (car q) 'ok)
+        (let ([eqv (for/hash ([e (in-list (1bvi-equivs))] [l (in-list (cdr q))]) (values e l))])
+          (remove-duplicates
+           (for*/list ([r (in-list 1bvi-all-rows)]
+                       [e (in-list (list (1bvi-row-pre r) (1bvi-row-target r)))]
+                       #:when (and (pair? e) (memq (car e) '(same equiv)))
+                       [l (in-value (hash-ref eqv (cadr e) #f))]
+                       [p (in-value
+                           (cond
+                             [(not l) (format "[~a] no output for the right-hand side ~s" (1bvi-row-id r) (cadr e))]
+                             [(regexp-match? #rx"^ERROR: " l)
+                              (format "[~a] the right-hand side ~s is REFUSED today: ~a" (1bvi-row-id r) (cadr e) l)]
+                             [(and (eq? (car e) 'same) (not (equal? (1bvi-type-of l) (caddr e))))
+                              (format "[~a] the right-hand side ~s has type ~s, pinned ~s"
+                                      (1bvi-row-id r) (cadr e) (1bvi-type-of l) (caddr e))]
+                             [else #f]))]
+                       #:when p)
+             p)))
+        '()))
+  ;; ⭐ B-3 — ADVICE THAT DOES NOT WORK (P3b verify finding 8's class). Every LIVE
+  ;; refusal that offers remedies ("Drop … (`X`), or keep the level(s): `Y`") has
+  ;; both remedies RUN on the row's own subject, and each must be accepted.
+  (define remedy-problems
+    (if (eq? (car f) 'ok)
+        (let* ([offers
+                (for*/list ([(r line) (in-parallel (in-list 1bvi-all-rows) (in-list (cdr f)))]
+                            #:when (and (1bvi-reached? (1bvi-row-flips r))
+                                        (pair? (1bvi-row-target r))
+                                        (eq? (car (1bvi-row-target r)) 'refused)
+                                        (regexp-match? #rx"can never appear under a total collapse" line))
+                            [m (in-value (regexp-match #rx"Drop [^(]*[(]`([^`]*)`[)], or keep the levels?: `([^`]*)`" line))]
+                            [subj (in-value (car (regexp-match #rx"^[^{]*" (1bvi-row-spelling r))))])
+                  (if m
+                      (list r (format "~a{~a}" subj (cadr m)) (format "~a{~a}" subj (caddr m)))
+                      (list r #f #f)))]
+               [srcs (remove-duplicates (filter values (append-map cdr offers)))]
+               [rb (if (null? srcs) (cons 'ok '()) (1bvi-batch 'file srcs))]
+               [res (if (eq? (car rb) 'ok) (for/hash ([x srcs] [l (cdr rb)]) (values x l)) (hash))])
+          (append
+           (if (eq? (car rb) 'ok) '() (list (format "remedies batch: ~a" (cdr rb))))
+           (for*/list ([o (in-list offers)]
+                       [p (in-value
+                           (cond
+                             [(not (cadr o))
+                              (format "[~a] the refusal offers no runnable remedy (no \"Drop … (`…`), or keep the level: `…`\")"
+                                      (1bvi-row-id (car o)))]
+                             [else
+                              (for/or ([src (in-list (cdr o))])
+                                (let ([l (hash-ref res src #f)])
+                                  (and l (regexp-match? #rx"^ERROR: " l)
+                                       (format "[~a] the remedy `~a` the message offers is itself REFUSED: ~a"
+                                               (1bvi-row-id (car o)) src l))))]))]
+                       #:when p)
+             p)))
+        '()))
+  (define problems (append batch-problems level-problems rhs-problems row-problems remedy-problems))
   (check-equal? problems '()
-                (format "stage ~a: ~a problem(s) over ~a rows:\n~a" 1bvi-stage (length problems)
-                        (length 1bvi-rows) (string-join problems "\n"))))
+                (format "stage ~a: ~a problem(s) over ~a rows (~a hand, ~a law):\n~a" 1bvi-stage (length problems)
+                        (length 1bvi-all-rows) (length 1bvi-rows) (- (length 1bvi-all-rows) (length 1bvi-rows))
+                        (string-join problems "\n"))))
 
 (test-case "1b-vi-A: the table is well-formed — ids unique, every flipping row's PRE differs from its TARGET"
-  (define ids (map 1bvi-row-id 1bvi-rows))
+  (define ids (map 1bvi-row-id 1bvi-all-rows))
   (check-equal? (length ids) (length (remove-duplicates ids)) "duplicate row id")
-  (for ([r (in-list 1bvi-rows)])
+  (for ([r (in-list 1bvi-all-rows)])
     (define fl (1bvi-row-flips r))
     (check-true (or (not fl) (and (memq fl 1bvi-stage-order) #t)) (format "[~a] flips-at ~s" (1bvi-row-id r) fl))
     (if fl

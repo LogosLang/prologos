@@ -31,6 +31,11 @@
                   ;; file is the ONLY producer of `(@star cont)`, minted from the
                   ;; four `segment-select-items` star bands.
                   make-select-star)
+         ;; D4.P4e-1b slice 1b-vi-B [Q_U55]: the renamed-ancestor refusal renders its
+         ;; two remedies with the ONE branch printer (Q_U54) rather than a second
+         ;; hand-written copy in this file. Acyclic (pretty-print's closure does not
+         ;; reach this module); adds 6 modules to this file's compile closure.
+         (only-in "pretty-print.rkt" pp-select-branch)
          ;; LET P4: the fused primitives moved here (the one definition —
          ;; macros.rkt consumes them at the datum level, and this module
          ;; requires macros.rkt, so they cannot live in this file).
@@ -1371,7 +1376,92 @@
            (eq? (select-step-cont s) 'dissolve))))
   ;; ---- P3b branch-close validation: positional legality of `^` conts ----
   ;; br in ORDER (head first). #f = ok, else the error message.
+  ;; ⭐ 1b-vi-B: two checks, IN ORDER — the positional check first, so a mid-path
+  ;; `^-` keeps its own message ("a LEAF continuation") rather than meeting
+  ;; Q_U55's, which presupposes a well-placed leaf.
   (define (branch-problem br)
+    (or (caret-position-problem br)
+        (total-collapse-rename-problem br)))
+  ;; ---- D4.P4e-1b slice 1b-vi-B — [Q_U55]: a RENAME on an ANCESTOR of a TOTAL
+  ;; collapse is refused. `^-` / `^-k'` lift the leaf to the top of its branch and
+  ;; remove EVERY ancestor level, so `a^p` in `a^p.b.c^-` names a level that is not
+  ;; there; today that rename is SILENTLY dropped (`e3{a^p.b.c^-}` → `{:c …}`,
+  ;; audit F1). A dissolve on an ancestor stays legal (redundant, same answer), and
+  ;; the provenance form `^-_` keeps the rename — there it is observable in the key.
+  ;; ⚠ BRANCH-LOCAL by design, the same scope provenance has (probe-1bvi-k): a
+  ;; sub-block is its own branch list, so `e3{a^p.{b.c^-}}` is NOT refused — that
+  ;; collapse lands UNDER `p`, where the rename is visible (rows K4/K5).
+  ;; ⚠ TOTAL means `'collapse` and `(collapse-rename . k')` only.
+  ;; `select-cont-collapse?` also answers #t for `'collapse-synth` (`^-_`), so it
+  ;; is NOT the predicate here.
+  ;; ⚠ Classify with `select-step-kind` and see THROUGH ω, as the positional
+  ;; check below does (P4a / P4c-3): a shape test would answer a silent #f on a
+  ;; kind it does not know.
+  ;; ⚠ 1b-vi-D adds the STAR leaf (`*-`, row C5) as one more arm of
+  ;; `total-collapse-leaf?` and of `leaf-without-collapse`.
+  (define (unwrap-bcast s) (if (eq? (select-step-kind s) 'bcast) (select-bcast-inner s) s))
+  (define (renamed-ancestor? s)
+    (let ([s (unwrap-bcast s)])
+      (and (eq? (select-step-kind s) 'caret)
+           (let ([c (select-step-cont s)]) (and (pair? c) (eq? (car c) 'rename))))))
+  (define (total-collapse-leaf? s)
+    (let ([s (unwrap-bcast s)])
+      (and (eq? (select-step-kind s) 'caret)
+           (let ([c (select-step-cont s)])
+             (or (eq? c 'collapse) (and (pair? c) (eq? (car c) 'collapse-rename)))))))
+  ;; the REMEDIES, as step lists, rendered by the ONE branch printer (Q_U54):
+  ;;   drop — the same branch with every ancestor rename removed;
+  ;;   keep — renamed ancestors keep their rename, every other plain ancestor is
+  ;;          dissolved, and the leaf loses only its collapse (`c^-` → `c`,
+  ;;          `c^-z` → `c^z`): "collapse all but the named levels", spelled out.
+  ;; The battery RUNS both remedies and requires each to be accepted (row
+  ;; checks, B-3: advice that does not work).
+  (define (drop-rename s)
+    (cond [(not (renamed-ancestor? s)) s]
+          ;; an ω step CAN carry a rename (`cfg{admins:name^alias}`): keep the `:`
+          [(eq? (select-step-kind s) 'bcast) (make-select-bcast (cadr (select-bcast-inner s)))]
+          [else (cadr s)]))
+  (define (keep-level s)
+    (cond [(renamed-ancestor? s) s]
+          [(eq? (select-step-kind s) 'key) (list '@key s 'dissolve)]
+          ;; `users:k^` dissolves exactly as `users.k^` does (P4c-3)
+          [(and (eq? (select-step-kind s) 'bcast)
+                (eq? (select-step-kind (select-bcast-inner s)) 'key))
+           (make-select-bcast (list '@key (select-bcast-inner s) 'dissolve))]
+          [else s]))
+  (define (leaf-without-collapse s)
+    (let* ([inner (unwrap-bcast s)]
+           [c (select-step-cont inner)]
+           [plain (if (pair? c) (list '@key (cadr inner) (cons 'rename (cdr c))) (cadr inner))])
+      (if (eq? (select-step-kind s) 'bcast) (make-select-bcast plain) plain)))
+  ;; "`a`" · "`a` and `b`" · "`a`, `b` and `c`" — no `string-join`: this file
+  ;; keeps out of racket/string (see the note at the `.`-join below).
+  (define (and-join strs)
+    (cond [(null? (cdr strs)) (car strs)]
+          [(null? (cddr strs)) (string-append (car strs) " and " (cadr strs))]
+          [else (string-append (car strs) ", " (and-join (cdr strs)))]))
+  (define (total-collapse-rename-problem br)
+    (and (pair? br)
+         (let* ([leaf (last br)]
+                [ancestors (drop-right br 1)]
+                [renamed (filter renamed-ancestor? ancestors)])
+           (and (total-collapse-leaf? leaf)
+                (pair? renamed)
+                (let* ([names (for/list ([s (in-list renamed)])
+                                (cdr (select-step-cont (unwrap-bcast s))))]
+                       [one? (null? (cdr names))])
+                  (format "~a can never appear under a total collapse: `~a` lifts the leaf to the top of its branch and removes every ancestor level, including the ~a ~a rename~a. Drop ~a (`~a`), or keep the level~a: `~a`"
+                          (and-join (for/list ([n names]) (format "`~a`" n)))
+                          (pp-select-branch (list leaf))
+                          (if one? "one" "ones")
+                          (and-join (for/list ([s renamed]) (format "`~a`" (pp-select-branch (list s)))))
+                          (if one? "s" "")
+                          (and-join (for/list ([n names]) (format "`^~a`" n)))
+                          (pp-select-branch (append (map drop-rename ancestors) (list leaf)))
+                          (if one? "" "s")
+                          (pp-select-branch (append (map keep-level ancestors)
+                                                    (list (leaf-without-collapse leaf))))))))))
+  (define (caret-position-problem br)
     (let check ([steps br])
       (if (null? steps)
           #f
