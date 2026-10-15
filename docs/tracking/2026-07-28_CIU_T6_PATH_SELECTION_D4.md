@@ -9613,7 +9613,8 @@ scaffolding for the slicing, not a permanent mechanism.
 | **1b-vi-B** ✅ `332e16a2` | `^-` / `^-k'` refuse an ancestor rename (Q_U55's caret half) with two remedies rendered by the one branch printer; FIRST step: the generated laws ([Q_U60](#q-u60)) — 61 rows. Red step: 16 rows (C1–C4 + 12 generated), each the silent drop; green after; mutation (check disabled) → the same 16. Instrument: right-hand sides checked at every stage (M3 caught); every live refusal's remedies RUN (B-3). Table 104 rows (43 hand, 61 law); battery + acceptance file 665 / 665; acceptance 88 / 88; **7.86 s per run** | ✅ |
 | **1b-vi-C** ✅ `3cbb1025` | the total-collapse machinery, INERT — [design target, mini-audit, findings, VAG](#p4e-1b-vi-c): the star-cont axis (4 conts, raising classifier, pending table), the `(collapsed . c₀)` mark (placement only; unmark law over 104 branches), one placement predicate in both twins, `*-_`'s prefix at one seat, tail-arm guards, prose naming the operator as written (13 arms × 4 conts). Proven by INJECTION: 53 D rows meet their D targets before the mint (harness parity 0 drift; a vacuous pass found by counting and closed). Red: 51, the silent re-nesting; 5 twin mutations red. 670 / 670; acceptance 88 / 88; **7.97 s per run** | ✅ |
 | **1b-vi-D-1** ✅ `b567b29e` | the LEVEL arms name the operators PRESENT ([design, findings, VAG](#p4e-1b-vi-d)): `select-fail`'s field becomes a list; `star-dup-key` carries every star at the level, `star-l4-mixed` its branch's; each claim scoped to the family it was measured on. Corrected a 1b-iv sentence measured false in 3 of 4 populations. M-one (one star) red on exactly the mixed row. Found C's ordinal-head defect. 580 / 580 | ✅ |
-| **1b-vi-D-2** 🔄 [design](#p4e-1b-vi-d2) | the mint: FIRST the ordinal-head fix (rows X-ord± back, an ordinal fixture in the law generator); move the two pending rows; the parser's mark call + Q_U55's star arm (C5, E5-); the `*->` message; flips `:6194`, `:6195`, `:8470`, `:8482`; arrival matrix `*-` / `*-_` 0/209 → 209/209; the grammar; parser-surf = injected-surf parity | ⬜ |
+| **1b-vi-D-2a** ✅ `84beb15a` | [an ordinal head is TRANSPARENT under a collapse](#p4e-1b-vi-d2): `select-branch-total-collapse?` (one definition) + both twins' ord-head arms descend like the bare-number arm; the generator states `ot{0.X}` ≡ `t5{X}` over four families (+61 law rows → 168). Red: C's C-5 guard RAISED on `ot{0.a*-}`. M-ord-reduction red on exactly the 24 injectable ordinal star rows. 670 / 670 | ✅ |
+| **1b-vi-D-2b** 🔄 [design](#p4e-1b-vi-d2) | the mint: move the two pending rows; the parser's mark call + Q_U55's star arm (C5, E5-); the `*->` message; flips `:6194`, `:6195`, `:8470`, `:8482`; arrival matrix `*-` / `*-_` 0/209 → 209/209; the grammar; parser-surf = injected-surf parity | ⬜ |
 | verify | adversarial round | ⬜ |
 | gate | full suite, then the checkpoint merge to main | ⬜ |
 
@@ -9976,6 +9977,19 @@ twin), no third walker has one (`select-branch-top-keys` treats star branches as
 Q_U43). *Drift risks:* **D2-R1** twin asymmetry at the ord arm → a mutation per twin; **D2-R2** the
 parser mark diverging from the injection → the parity pin; **D2-R3** an arrival context that
 mints `*` but not `*-` → the widened gate; **D2-R4** a remedy that does not run → B-3.
+
+**1b-vi-D-2a — what the step found** (`84beb15a`). *The red step was LOUD, and that is C's guard
+earning its keep:* `ot{0.a*-}` puts sₙ directly after the ordinal head, so the head arm handed
+`(a ★-)` to `select-below-field`, whose star-TAIL arm found a total star with a kept ancestor and
+raised C-5's invariant error — a guard written for "the mark did not run" caught a case my C
+design said could not arise. It is still a defect: a typing raise aborts the whole file in
+production. *Power:* M-ord-reduction is red on exactly the 24 injectable ordinal star rows (`ot`
+7 `*-` + 13 `*-_`, `ov3` 4); M-ord-typing raises. *The law is stronger than the two rows it
+replaces:* the caret families' 26 `ot` rows pin P3c's reading at every position and assignment,
+where one test (`admins{0.name^-}`) pinned it before. *Observation, not changed:* plain `*` under
+an ordinal head lands unwrapped at depth 1 (`ot{0.a*}` → `{:b …}`, 1b-iv's seat B) but wrapped
+below a dissolve (`ot{0.a^.b*}` → `@[{:c …}]`); whether that asymmetry is intended is a 1b-iv
+question, raised at the checkpoint rather than changed inside a total-collapse slice.
 
 <a id="p4e-1b-v-shipped"></a>
 

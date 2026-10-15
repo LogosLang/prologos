@@ -306,3 +306,15 @@ are in [`../README.md`](../README.md).
   - Two malformed edits stopped by the `check-parens` gate; the runner takes one `--tests` per file.
 - **Next**: 1b-vi-D-2 — FIRST the ordinal-head fix (rows back + an ordinal fixture in the
   generator), then the mint.
+
+### 1b-vi-D-2a shipped: an ordinal head is transparent under a collapse — `035aea42` (design) + `84beb15a` (2026-10-14)
+- **Why / decision**: owner — *"Excellent, let's proceed to D-2 per our stage 4 design methodology"*.
+  D-2 split into D-2a (the ordinal-head fix, still inert) and D-2b (the mint); design first
+  ([D4 §5.P4e-1b-vi, D-2](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-d2)).
+- **What shipped**: one `select-branch-total-collapse?` predicate; both twins' ord-head arms
+  descend transparently under a total collapse; the law generator borrows the base subject's
+  equivalents (`ot{0.X}` ≡ `t5{X}`, four families; `ov3`), 168 rows. 670 / 670.
+- **Surprise / correction**: the red step raised at C's C-5 guard (`ot{0.a*-}`) — loud, but a
+  production whole-file abort; my C note "ordinals make no layer" was half right. My C VAG also
+  missed DEFERRED 144 (the grammar for the whole star family, filed at 1b-v-B2b): D owes no grammar.
+- **Next**: 1b-vi-D-2b — the mint.
