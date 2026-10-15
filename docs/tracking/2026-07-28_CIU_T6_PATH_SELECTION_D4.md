@@ -9613,7 +9613,7 @@ scaffolding for the slicing, not a permanent mechanism.
 | **1b-vi-B** ✅ `332e16a2` | `^-` / `^-k'` refuse an ancestor rename (Q_U55's caret half) with two remedies rendered by the one branch printer; FIRST step: the generated laws ([Q_U60](#q-u60)) — 61 rows. Red step: 16 rows (C1–C4 + 12 generated), each the silent drop; green after; mutation (check disabled) → the same 16. Instrument: right-hand sides checked at every stage (M3 caught); every live refusal's remedies RUN (B-3). Table 104 rows (43 hand, 61 law); battery + acceptance file 665 / 665; acceptance 88 / 88; **7.86 s per run** | ✅ |
 | **1b-vi-C** ✅ `3cbb1025` | the total-collapse machinery, INERT — [design target, mini-audit, findings, VAG](#p4e-1b-vi-c): the star-cont axis (4 conts, raising classifier, pending table), the `(collapsed . c₀)` mark (placement only; unmark law over 104 branches), one placement predicate in both twins, `*-_`'s prefix at one seat, tail-arm guards, prose naming the operator as written (13 arms × 4 conts). Proven by INJECTION: 53 D rows meet their D targets before the mint (harness parity 0 drift; a vacuous pass found by counting and closed). Red: 51, the silent re-nesting; 5 twin mutations red. 670 / 670; acceptance 88 / 88; **7.97 s per run** | ✅ |
 | **1b-vi-D-1** ✅ `b567b29e` | the LEVEL arms name the operators PRESENT ([design, findings, VAG](#p4e-1b-vi-d)): `select-fail`'s field becomes a list; `star-dup-key` carries every star at the level, `star-l4-mixed` its branch's; each claim scoped to the family it was measured on. Corrected a 1b-iv sentence measured false in 3 of 4 populations. M-one (one star) red on exactly the mixed row. Found C's ordinal-head defect. 580 / 580 | ✅ |
-| **1b-vi-D-2** | the mint: FIRST the ordinal-head fix (rows X-ord± back, an ordinal fixture in the law generator); move the two pending rows; the parser's mark call + Q_U55's star arm (C5, E5-); the `*->` message; flips `:6194`, `:6195`, `:8470`, `:8482`; arrival matrix `*-` / `*-_` 0/209 → 209/209; the grammar; parser-surf = injected-surf parity | ⬜ |
+| **1b-vi-D-2** 🔄 [design](#p4e-1b-vi-d2) | the mint: FIRST the ordinal-head fix (rows X-ord± back, an ordinal fixture in the law generator); move the two pending rows; the parser's mark call + Q_U55's star arm (C5, E5-); the `*->` message; flips `:6194`, `:6195`, `:8470`, `:8482`; arrival matrix `*-` / `*-_` 0/209 → 209/209; the grammar; parser-surf = injected-surf parity | ⬜ |
 | verify | adversarial round | ⬜ |
 | gate | full suite, then the checkpoint merge to main | ⬜ |
 
@@ -9919,6 +9919,63 @@ key-headed fixtures only, which is why nothing saw it. The rows return at D-2's 
 | (b) complete | both level arms × every singleton, a mixed set and none (render loop); every family clause scoped (`stars-partial` / `stars-total`); the measured-false sentence and the cross-family clause are pinned ABSENT | the dup gate still cannot say WHICH branch delivered the key, so the message names the operators present, not the culprit. Naming the culprit needs the gate to keep provenance per component — a real improvement, not taken here |
 | (c) vision-advancing | the message is computed from the same data the walkers read; claims are emitted only for the family they were measured on | the two families' sentences are hand-scoped prose. A message generated from the landing rule itself (one rule → its sentence) would make "true by construction" literal; today it is true by measurement |
 | (d) drift risks | M-one / M-none red; the false-sentence check and the cross-family check both have shown power | the ordinal-head defect shows the law generator's fixture set is a blind spot: D-2 adds an ordinal-headed fixture to the GENERATOR, not only two hand rows |
+
+<a id="p4e-1b-vi-d2"></a>
+
+**1b-vi-D-2 — design target and mini-audit** (at `5605ee65`). Owner: *"Excellent, let's proceed
+to D-2 per our stage 4 design methodology"*. Two sub-steps, each committed on its own: **D-2a**
+fixes the ordinal head while the machinery is still inert (stage stays C, proven by injection);
+**D-2b** is the mint (stage → D, the parser builds what the injection built).
+
+*D-2a — under a collapse, an ordinal head is TRANSPARENT.* Measured at HEAD (probe-1bvi-z,
+`ot := @[t5's value]`): the caret collapse already behaves so — `ot{0.a.b.c^-}`, `^-_`, and two
+collapse branches sharing one ordinal head (`ot{0.a.b.c.m^- 0.a.b.c.n^-}`) give `t5`'s own lines.
+That is P3c's pinned reading, and it is what Q_U48 ("lands at the branch's top level") and Q_U57's
+law require of the star family. The seat: both twins' `(@ord N)` head arms
+(`typing-core.rkt:2156`, `reduction.rkt:2365`) wrap whatever the rest returns as ONE keyless
+component; the caret family never reaches them (the collapse arm is first — P3c's "collapse-first
+classification"), a total star branch does (it is deep, so it falls through). **The fix**: in each
+ord-head arm, a branch ending in a TOTAL star descends transparently — exactly the sibling
+bare-number arm's behaviour (`:2181`, `:2379`), passing `seen` unchanged (an ordinal is nameless:
+Q_U57's prefix rule). One predicate, `select-branch-total-collapse?` (syntax.rkt), shared with
+`select-branch-mark-total-collapse`, so "total" has one definition. **The law** replaces the two
+hand rows C handed over: the generator gains `ot` (four families × every position × every
+{kept, `^`, rename} assignment) and `ov3` (`*-`), each row an `equiv` with the BASE subject's law
+— `ot{0.X}` ≡ `t5{X}`'s equivalent, `ov3{0.a.b.c*-}` ≡ `v3{a^.b^.c*}`. The caret rows are live now
+(controls of P3c's reading at every position); the star rows run by injection. *Not changed:*
+plain `*` under an ordinal head — `ot{0.a*}` → `{:b …}` (unwrapped) but `ot{0.a^.b*}` →
+`@[{:c …}]` (wrapped) is 1b-iv's seat-B behaviour, recorded as an observation, not touched here.
+
+*D-2b — the mint.* Stage → D first (every D row now runs through the PARSER). Then:
+1. **Reader**: the two pending rows join `postfix-star-sentinel-table`; the pending table is
+   RETIRED (empty scaffolding is a dead path), and the printer reads the one table again.
+2. **Parser mark**: `segment-select-items`' success return marks each branch
+   (`parser.rkt:1546`), after every check — sub-blocks are marked where they are segmented.
+3. **Q_U55's star arm** (C5, E5-, the generated `*-` rename rows): `total-collapse-leaf?` gains
+   the `*-` leaf (not `*-_`: it keeps the rename). Message: the leaf is rendered as `sₙ*-`
+   ("lifts what `ssl` holds to the top of its branch"); the remedies: drop → every ancestor
+   rename removed; keep → `keep-level` over s₁…sₙ₋₁ only, sₙ stays plain, `*-` → `*`
+   (`t5{a.b^q.c*-}` → `a^.b^q.c*`, never `c^*`). B-3's runner runs both.
+4. **`*->`** (Q_U56): probed after the mint, then a guided refusal in the SELECTION consumer
+   ("`*->` reads as `*-` then `>` — put a space"), never at the reader.
+5. **Pins**: `:6202`, `:6203` → `postfix-star`; `:8516` (the table is FOUR rows); `:8530` (`*-` →
+   its sentinel); C's pending pin (`:10004`) → the table holds the whole axis.
+6. **Arrival**: the gate at `:6972` runs for `*` only; it becomes ∀ table lexeme, so every future
+   mint is checked by construction (the matrix's 209/209 per spelling becomes a pin, not a run).
+7. **Parity**: at stage D, each injected row's surf must EQUAL the parser's surf of the `*-`
+   spelling (srclocs aside) — the injection harness stops being a mirror we trust.
+8. **Grammar: none owed.** [DEFERRED 144](DEFERRED.md) already files `flatten_step` for the whole
+   family (`*_`, `*-`, `*-_`) to CIU T6's close. ⚠ My C VAG said "D owes `*-`/`*-_` to the grammar
+   or a DEFERRED entry" — it missed 144, filed at 1b-v-B2b with 1b-vi named.
+
+*Mini-audit.* Readers of the minted table: reader-forms (4 functions), `tools/form-deps.rkt:60`,
+and 8 test sites — all iterate it, so they widen by construction (C-1's reason for the pending
+table); the leak gates match the `$postfix-star` prefix, which both new sentinels keep. The
+classifier raises off the axis, so a 5th cont cannot slip in. The ord-head arms: 2 (one per
+twin), no third walker has one (`select-branch-top-keys` treats star branches as typing's, per
+Q_U43). *Drift risks:* **D2-R1** twin asymmetry at the ord arm → a mutation per twin; **D2-R2** the
+parser mark diverging from the injection → the parity pin; **D2-R3** an arrival context that
+mints `*` but not `*-` → the widened gate; **D2-R4** a remedy that does not run → B-3.
 
 <a id="p4e-1b-v-shipped"></a>
 
