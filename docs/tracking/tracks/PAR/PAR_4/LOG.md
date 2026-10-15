@@ -453,3 +453,27 @@ binder merges with unsolved metas.
   must reach the runner's workers, so it keeps its variable. Recorded in Appendix B's ledger line.
 - **Next**: checkpoint 1 — merge the branch into main in a throwaway worktree, gate, reconcile file by file, then
   fast-forward main.
+
+### Checkpoint 1: PAR 4 merged to main — gate 10 394 / 502, delta exactly `test-arena-parity` +9 — `c1f389ab` (2026-10-14)
+- **Why / decision**: O-10 = CP-2, "now". Procedure: `branch-worktree-workflow.md` §4, in a throwaway detached
+  worktree at main `7a13f566`:
+  - recorded baseline run at main;
+  - `merge --no-ff` of `3d5ecbc4`, limited build, recorded gate;
+  - the message amended with the gate before main moved;
+  - `merge --ff-only` of main's checkout and of this branch;
+  - main's tree rebuilt with the limit, and the throwaway removed.
+- **Measured**:
+  - collision surface: none, against main's commits and against main's working tree (owner WIP untouched; 16
+    entries before and after);
+  - main before the merge: **10 385 / 501**; merged: **10 394 / 502**, all pass;
+  - `suite-delta.py` over the two recorded runs: exactly `test-arena-parity.rkt` +9;
+  - the merged `racket/` equals the branch tip, and the merged docs differ from it only by main's DEFERRED and
+    dailies;
+  - main's checkout rebuilt: `reduction` / `propagator` / `stratified-eval` / `driver` `.zo` equal this branch's
+    build; `test-arena-parity`, `test-propagator-bsp` and `test-file-unit-isolation` pass in main's tree.
+- **Surprise / correction**: none in the merge. Main's PAR 4 records, which stopped at O-7 with the uncorrected
+  "S0 = 7.0 %", are now current. DEFERRED 150's addendum on main cites the merge (`67635edb`). No other branch
+  touches the merged files (`ciu6-path-selection`, `ppn4c-elaboration-on-network` checked). Main is 27 commits
+  ahead of origin; no push.
+- **Next**: owner decision **O-3** (observers, Appendix A), then the rest of D.2. D.2's inputs are in §14 and P0
+  §10–§11.
