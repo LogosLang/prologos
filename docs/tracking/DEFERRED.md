@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 176**
+> ### **NEXT FREE: 177**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7902,3 +7902,58 @@ cycle analysis will build anyway. Pin: q5-v27c's first `[g2 3N]` must print `tru
 
 **Record**: PPN 4C LOG § *Q-4B5.4 decided; main merged in; three of my DEFERRED 173 claims corrected* and the grounding
 audit's GA-10 (on the branch); probes `…/PPN_4C/research/4B5b/q5-v27*`.
+
+### 176. ⬜ THE PROPAGATOR OBSERVER'S RECORDS MISREPORT WHAT FLOWED — 45 % of BSP diff records show a value the cell does not hold; the sequential scheduler names a placeholder writer; the LSP merges every S0 run and fork in a file into one timeline that starts from the final state
+
+**Found by** PAR 4, re-posing owner decision O-3 (observers). Sources: D.1 Appendix A.6–A.7, on branch
+`par4-arena-executors`; the code is main `c1f389ab`. Two probes, with data in `data/par4-p0/o3/` (on the branch):
+- `benchmarks/par4/o3-observer-census.rkt`: 18 comparative files, with the observer installed the way the LSP installs it;
+- `benchmarks/par4/o3-observer-fixtures.rkt`: five small networks under BSP and under the sequential scheduler.
+
+1. **A BSP record's `new-value` is the written contribution, not the cell's new value** (the observer block,
+   `propagator.rkt:3557-3574`; read, then measured).
+   - 303 of 672 records (45.1 %) carry a `new-value` that the cell does not hold after the round. 283 of them are in
+     rounds where two or more propagators wrote the cell; 20 are single writers into accumulating merges.
+   - Control: fixture X1 (one writer, max merge) shows 0; X2 (two writers, set union) shows 2.
+   - The editor's scrubber assigns `newValue` as the cell's value
+     (`editors/vscode-prologos/src/propagatorView.ts:1647`), so it displays partial values.
+2. **The sequential scheduler's record names the run's first-fired propagator as the source of every diff**
+   (`propagator.rkt:2647, 2653`; read). Measured in fixtures X3 and X5: in X5, under reverse installation order, it
+   names p0 as the source of a cell that p0 never writes.
+3. **The LSP's trace is a single timeline across every quiescence call and fork in the file, and it starts from the
+   final network** (read).
+   - One accumulator is installed around the whole `process-file` (`lsp/server.rkt:547`).
+   - `make-trace-accumulator` re-stamps round numbers (`propagator.rkt:601`), erasing the boundaries between runs.
+   - The trace is built with initial = final (`lsp/server.rkt:586`).
+
+   Measured scale: `atms-adversarial` sends 111 rounds, from 108 S0 runs and 6 forks, into one timeline.
+4. **Some steps are silent** (read).
+   - Tier-1 flushes emit no record (`propagator.rkt:3431-3446`).
+   - Writes made by stratum handlers are never reported.
+
+   Measured: 6 of the 18 files emit no record at all. Whether their S0 work is Tier-1 flushes or nothing was not
+   measured.
+5. **`atms-events` is always `'()`**: `git grep` finds no production constructor.
+
+**Impact**: the editor's propagator view (`$/prologos/propagatorSnapshot`) and the observatory's traces. No compiler
+output is affected: the compiler never reads the observer, and error explanation refuses it
+(`error-explanation.rkt:22`). The impact is shown at the level of the records; the editor's display was read in
+code, not run.
+
+**Fix shape** — depends on owner decision O-3 (D.1 Appendix A.12; the lean is OB-4, "observation in logical time"):
+- (a) **BSP side, in PAR 4** (P1 or P2). Per (round, cell), record the old value, the held value and the set of
+  propagators that wrote the cell that round. This touches only `propagator.rkt`'s observer block and replaces
+  items 1–2.
+- (b) **Epoch records**, keyed by (network, epoch) and emitted by every scheduler, including Tier-1 flushes and the
+  boundary's own step. This covers item 3's run boundaries and item 4, and gives item 5 a home, since ATMS events
+  happen at stratum boundaries.
+- (c) **The LSP and editor side**, which needs an owner to place it. The visualization design
+  (`2026-03-12_PROPAGATOR_VISUALIZATION_DESIGN.md`) is complete and no active series owns it; its deferrals sit
+  under § *Propagator Observatory — Visualization Polish* above. The work: read the keyed records, capture the
+  initial network, and have the scrubber show held values.
+
+**When**:
+- (a) and (b): with O-3's implementation in PAR 4 P1 or P2;
+- (c): before anyone relies on the editor view to answer a "why" question.
+
+**Record**: PAR 4 D.1 Appendix A.6–A.12 and LOG § *O-3 re-posed* (on branch `par4-arena-executors`).
