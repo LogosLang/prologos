@@ -9612,7 +9612,8 @@ scaffolding for the slicing, not a permanent mechanism.
 | **1b-vi-A** ✅ `0b6a645f` | the stage table: 40 rows, every expected value measured from today's equivalent spelling (`probe-1bvi-p`). Red step: stage B → exactly C1–C4 red (the silent drop); stage D → 37 / 40 red, each for its measured pre-mint reason (mid-lexeme 28, postfix 2, nameless unbound 3, silent drop 4); controls green. Instrument power by mutation: an already-true target caught twice; a fixture that fails to load caught before `unbound` could accept it. Battery 573 → 575; **5.28 s per run** (per-test-case timing) | ✅ |
 | **1b-vi-B** ✅ `332e16a2` | `^-` / `^-k'` refuse an ancestor rename (Q_U55's caret half) with two remedies rendered by the one branch printer; FIRST step: the generated laws ([Q_U60](#q-u60)) — 61 rows. Red step: 16 rows (C1–C4 + 12 generated), each the silent drop; green after; mutation (check disabled) → the same 16. Instrument: right-hand sides checked at every stage (M3 caught); every live refusal's remedies RUN (B-3). Table 104 rows (43 hand, 61 law); battery + acceptance file 665 / 665; acceptance 88 / 88; **7.86 s per run** | ✅ |
 | **1b-vi-C** ✅ `3cbb1025` | the total-collapse machinery, INERT — [design target, mini-audit, findings, VAG](#p4e-1b-vi-c): the star-cont axis (4 conts, raising classifier, pending table), the `(collapsed . c₀)` mark (placement only; unmark law over 104 branches), one placement predicate in both twins, `*-_`'s prefix at one seat, tail-arm guards, prose naming the operator as written (13 arms × 4 conts). Proven by INJECTION: 53 D rows meet their D targets before the mint (harness parity 0 drift; a vacuous pass found by counting and closed). Red: 51, the silent re-nesting; 5 twin mutations red. 670 / 670; acceptance 88 / 88; **7.97 s per run** | ✅ |
-| **1b-vi-D** | the mint: move the two pending rows; the parser's mark call + Q_U55's star arm (C5, E5-); the `*->` message; flips `:6194`, `:6195`, `:8470`, `:8482`; arrival matrix `*-` / `*-_` 0/209 → 209/209; the grammar; parser-surf = injected-surf parity; an `(@ord N)`-headed row | ⬜ |
+| **1b-vi-D-1** ✅ `b567b29e` | the LEVEL arms name the operators PRESENT ([design, findings, VAG](#p4e-1b-vi-d)): `select-fail`'s field becomes a list; `star-dup-key` carries every star at the level, `star-l4-mixed` its branch's; each claim scoped to the family it was measured on. Corrected a 1b-iv sentence measured false in 3 of 4 populations. M-one (one star) red on exactly the mixed row. Found C's ordinal-head defect. 580 / 580 | ✅ |
+| **1b-vi-D-2** | the mint: FIRST the ordinal-head fix (rows X-ord± back, an ordinal fixture in the law generator); move the two pending rows; the parser's mark call + Q_U55's star arm (C5, E5-); the `*->` message; flips `:6194`, `:6195`, `:8470`, `:8482`; arrival matrix `*-` / `*-_` 0/209 → 209/209; the grammar; parser-surf = injected-surf parity | ⬜ |
 | verify | adversarial round | ⬜ |
 | gate | full suite, then the checkpoint merge to main | ⬜ |
 
@@ -9823,6 +9824,101 @@ consumers iterate the minted table directly (C-1).
 NOT dissolve sₙ (`t5{a.b^q.c*-}` → `a^.b^q.c*`, not `c^*`; B's `keep-level` would, and B-3's
 remedy run will catch it); move the two pending rows; the `*->` message; the four pre-mint pin
 flips; the grammar; the parser-surf = injected-surf parity pin; the `(@ord N)`-headed row.
+
+<a id="p4e-1b-vi-d"></a>
+
+**1b-vi-D — design target and mini-audit** (at `97d1f016`). Owner, at the C checkpoint: *"Ok to
+proceed (and would you think that passing the star through is our better option? If it doesn't
+cost us too much, it would seem to be more correct/accurate to me — do you have a challenge to
+that perspective?)"*. D runs in two steps.
+
+*D-1 — the level arms name the operators PRESENT, with each claim scoped to its family.*
+Measured before deciding (`probe-1bvi-u`, `-v`): `star-dup-key`'s sentence "dropping the `*`
+does not help either" is TRUE for `*` (`env{prod^.db dev^.db}` still collides, on `:db`) and
+FALSE for `*-` (`env{prod.db dev.db}` works) — and the level collision is the total family's
+characteristic failure (E3-). The challenge I put to "pass the star through": a LEVEL has no
+single star. One block can mix families (`env{prod^.db* dev.db*-}`), and the dup gate folds
+over component keys with no record of which branch delivered one, so passing ONE cont would
+make the message name one operator confidently — wrong in a mixed block, which is the
+"identifies the wrong thing" class this track ranks below a vague label. So: `select-fail`'s
+fifth field becomes a LIST of conts (`stars`; per-branch arms carry exactly one); `star-l4-mixed`
+carries the conts of the branch its label names; `star-dup-key` carries every star cont at the
+level (`select-branch-star-conts/deep`, the ω-transparent, sub-recursive twin of
+`select-branch-has-star?/deep`). The advice, measured across the population (probe-1bvi-v):
+
+| population | `*-_` | `*` | drop the star | own block |
+|---|---|---|---|---|
+| P1 heads differ — `env{prod.db*- dev.db*-}` | ✓ | ✓ | ✓ | ✓ |
+| P2 same head — `sh{a.b*- a.c*-}` | ✓ | ✗ (`:a`) | ✗ (`:a`) | ✓ |
+| P3 a `^` on the differing ancestor — `env{prod^.db*-_ dev^.db*-_}` | ✗ (`:db-url`), ✓ once the `^` is dropped | — | — | ✓ |
+
+so the total family's sentence offers `*-_` plus "drop any `^` on the ancestor that differs",
+and never "use `*`" (P1-only). ⚠ **Corrected while implementing:** this design first said "the
+non-total sentence keeps its measured claim". probe-1bvi-x measured that claim — "dropping the
+`*` does not help either" (1b-iv) — and it is FALSE in three of four populations: dropping ONE
+star works (`env{prod^.db dev^.db*}`), dropping the star beside a NAMED key works (`kk{a k}`),
+and in a mixed block dropping EITHER star works; only "drop every star, deleted keys equal"
+still collides. What holds everywhere is the mechanism, so both families now say it: a dropped
+star re-nests what it lifted — `*`/`*_` under the key it was deleting, a total collapse under
+its whole path — which resolves the collision unless another branch delivers that key too. `star-l4-mixed`: its "a key surviving before the star keeps the join nested" clause is
+scoped to `*`/`*_`; a total collapse always lands at its branch's top; examples render in the
+branch's own operators; its remedies hold for `*-` (`vv{a^.b* a^}` ✓, own block ✓).
+
+*D-2 — the mint.* Stage → D first. Then: the two pending rows move into the minted table; the
+parser calls `select-branch-mark-total-collapse` at `segment-select-items`' success return;
+Q_U55's star arm (its "keep the level" remedy leaves sₙ plain — `a^.b^q.c*`, not `c^*`); the
+`*->` guided message (Q_U56) in the selection consumer; the pre-mint pins flip; the arrival
+matrix gains `*-` / `*-_`; the tree-sitter grammar learns them (`grammar.js:1158`); the
+injection becomes a PARITY pin (the parser's surf must equal the injected one).
+
+*Tests for D-1 first, by injection* (live since C): E3- is strengthened (names `*-`, offers
+`*-_`, must NOT say "does not help"); new rows P2 (`X-dup-same`), the mixed block
+(`X-dup-mix`, both families named, each sentence present), L4 under `*-` (`X-l4-`), and the
+`(@ord N)`-headed pair C handed over (`X-ord-`, `X-ord_`, a top-level-vector fixture). The
+harness converts stars PER STAR in textual order (a mixed row must keep its `*`), and fails
+closed when the spelling's star count and the surf's disagree. The render loop gains the level
+kinds × {each singleton, a mixed set, none}.
+
+*Mini-audit.* `select-fail-star` has 3 readers (typing-errors' helpers, `select-fail-fill-label`,
+the render loop) and 2 producers (`star-branch-entries`, the tail arm) — all from C, all
+changed together; the two level producers are `typing-core.rkt:1528`, `:1564`. No other module
+reads the field.
+
+**1b-vi-D-1 — what the step found, and its Vision Alignment Gate** (`b567b29e`).
+
+*The answer to the owner's question, measured.* Passing the stars through IS the better option,
+and the challenge sharpened it rather than refuting it: pass the operators PRESENT, not one star.
+**M-one** (the dup gate passes only its first star — the "one star" design) is red on EXACTLY one
+row, the mixed block `env{prod^.db* dev.db*-}`; **M-none** (no stars) is red on three (E3-,
+X-dup-same, X-dup-mix). Cost: a list-valued field (one `remove-duplicates` + one collector,
+`select-branch-star-conts/deep`), two producers, two arms; 580 / 580 in the file.
+
+*Three of my own errors, each caught before commit.* (1) The design's "the non-total sentence
+keeps its measured claim" — measured false (above); my first X-dup-mix row REQUIRED the false
+sentence, so the test would have pinned it. (2) The first mixed L4 render said "under `*` and
+`*-` a key surviving before the star keeps the join nested" — picking the clause from the first
+cont and speaking it over every operator, the very error D-1 exists to remove. Caught by
+READING the rendered messages, not by the regexes, which all passed; now guarded by a render-loop
+check whose power was shown against the captured defective text (hits it, and nothing else).
+(3) Two malformed edits (one `)` too many, in the L4 arm and in M-none): both caught by the
+`check-parens` gate added after C, so neither ran.
+
+*A defect in C, found by C's own handover row.* The `(@ord N)`-headed pair: `ov{0.a.b*-_}`
+(injected) → `@[{:a-b-x 1}]`, where Q_U57's law gives `{:a-b-x 1}` (probe-1bvi-w). Three
+decisions already determine the answer — Q_U48 ("the join lands … at the branch's top level")
+with Q_U49's splice, Q_U57's law, and P3c's pinned reading that a collapse overrides an ordinal
+head's keyless sort (`admins{0.name^-}`, `tests/test-path-selection.rkt:2188`) — so it is not
+posed as a question. My C claim "ordinals make no layer and stay unmarked" was right about
+marking and wrong as a description of landing: the ordinal head SETS the landing's sort, and a
+total collapse must override it. C's 53 rows and the law generator (Q_U60) range over
+key-headed fixtures only, which is why nothing saw it. The rows return at D-2's first red step.
+
+| VAG question | catalogue | challenge — could it be more aligned? |
+|---|---|---|
+| (a) on-network | no new state: the conts are read off the written branches | the level gate still folds component keys off-network (P3c-era); D-1 neither worsens nor retires it |
+| (b) complete | both level arms × every singleton, a mixed set and none (render loop); every family clause scoped (`stars-partial` / `stars-total`); the measured-false sentence and the cross-family clause are pinned ABSENT | the dup gate still cannot say WHICH branch delivered the key, so the message names the operators present, not the culprit. Naming the culprit needs the gate to keep provenance per component — a real improvement, not taken here |
+| (c) vision-advancing | the message is computed from the same data the walkers read; claims are emitted only for the family they were measured on | the two families' sentences are hand-scoped prose. A message generated from the landing rule itself (one rule → its sentence) would make "true by construction" literal; today it is true by measurement |
+| (d) drift risks | M-one / M-none red; the false-sentence check and the cross-family check both have shown power | the ordinal-head defect shows the law generator's fixture set is a blind spot: D-2 adds an ordinal-headed fixture to the GENERATOR, not only two hand rows |
 
 <a id="p4e-1b-v-shipped"></a>
 

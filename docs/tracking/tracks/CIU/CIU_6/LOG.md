@@ -282,3 +282,27 @@ are in [`../README.md`](../README.md).
   - Measured design change: a MINTED column would have edited eight consumers D already flips.
   - `git commit` hit a transient `index.lock` again; nothing held it; retried.
 - **Next**: owner checkpoint, then 1b-vi-D — the mint (see "What C hands D" in the D4 section).
+
+### 1b-vi-D-1 shipped: the level arms name the operators PRESENT — `b567b29e` (2026-10-14)
+- **Why / decision**: owner — *"Ok to proceed (and would you think that passing the star through
+  is our better option? If it doesn't cost us too much, it would seem to be more correct/accurate
+  to me — do you have a challenge to that perspective?)"*. The challenge: a LEVEL has no single
+  star (`env{prod^.db* dev.db*-}`), so passing one would be wrong in a mixed block. The decision
+  that survived: pass the operators PRESENT (a list), and scope each claim to the family it was
+  measured on ([D4 §5.P4e-1b-vi, 1b-vi-D](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-d)).
+- **What shipped**: `select-fail`'s field is a list; `star-dup-key` carries every star at the
+  level, `star-l4-mixed` its branch's; both arms speak per family. M-one (pass one star) red on
+  exactly the mixed row; M-none red on three. 670 / 670.
+- **Surprise / correction**:
+  - **A 1b-iv sentence was false for most of its population** — "dropping the `*` does not help
+    either" (probe-1bvi-x: true for 1 of 4 shapes). Replaced by the mechanism, pinned absent.
+  - **My design text repeated it** ("the non-total sentence keeps its measured claim") and my
+    first X-dup-mix row required it — the measurement came before the commit, not after.
+  - **The regexes passed a false message**: the first mixed L4 render spoke the `*` clause over
+    `*-`. Found by reading the render; now a guard with shown power.
+  - **C's ordinal-head defect** (`ov{0.a.b*-_}` → `@[…]`, not `{:a-b-x 1}`), determined by
+    Q_U48 + Q_U49, Q_U57 and P3c's pin — not a new question. The law generator's fixture set
+    (key-headed only) is the blind spot.
+  - Two malformed edits stopped by the `check-parens` gate; the runner takes one `--tests` per file.
+- **Next**: 1b-vi-D-2 — FIRST the ordinal-head fix (rows back + an ordinal fixture in the
+  generator), then the mint.
