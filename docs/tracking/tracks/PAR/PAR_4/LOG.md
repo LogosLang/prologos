@@ -505,3 +505,33 @@ binder merges with unsolved metas.
   state, not a log. Filed the observer's pre-existing defects as DEFERRED 176 on main (`bd7ef29d`).
 - **Next**: the owner's O-3 decision. Its settling evidence includes the editor view's future (A.12). Then the rest
   of D.2.
+
+### G-3 (owner): a visual debugger is a goal → O-3's lean refined (A.13); A.8 item 4 corrected — derivations need the rounds — `5fbb30df` (probe) and the docs commit after it (2026-10-14)
+- **Why / decision**: the owner answered A.12's first settling question.
+  - A visual debugger is a project goal, both to demonstrate the concept and as a practical
+    debugging/introspection tool.
+  - It is semi-abandoned and not in PAR 4's scope, but its needs shape the design.
+
+  I recorded it as **G-3** in §14 and wrote A.13:
+  - the requirements table: each need → the record that serves it → what PAR 4 provides vs DEFERRED 176 (c)/(d);
+  - the critique of G-3, GT-1 to GT-6;
+  - self-critique SC-9 and SC-10;
+  - the refined lean.
+
+  G-3 settles OB-4 against OB-5. Refinements: one shared key space (network, epoch, round); round records of
+  (cell, old value, held value, writers, round); the execution view reserved, not built; eager epochs, lazy rounds.
+  O-3 is still PENDING.
+- **Measured** (`5fbb30df`, `data/par4-p0/o3/fixtures.out`): the fixtures now unfold each changed cell's final
+  value into a derivation over rounds.
+  - On X3's cycle the derivation is well-founded with no visited set or depth bound. It runs through intermediate
+    values (c1@r3 ← p0 reading c0@r2 = (0 2)), which no fixpoint-only method can produce.
+  - `error-explanation.rkt` cuts cycles with a visited set and depth 32 (`:164-195`).
+- **Surprise / correction**:
+  - (1) A.8 item 4 ("the explanation needs no trace") overclaimed (SC-9). The contributions need no trace, but a
+    well-founded derivation on a cycle does. Corrected in place, struck through, and in A.10's note on row 9.
+  - (2) My first derivation printer omitted the cell's own prior value as a premise, so X5's `top` named only p2
+    and hid p1's 7. Fixed in the probe before committing. The lesson is now a requirement: round records carry
+    the old value.
+  - (3) A.12 item 4 ("OB-2's run trace is not built") was too strong under G-3: demonstrating order-independence
+    needs an execution view (SC-10).
+- **Next**: the owner's O-3 decision on the refined lean. Then the rest of D.2.
