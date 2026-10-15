@@ -477,3 +477,31 @@ binder merges with unsolved metas.
   ahead of origin; no push.
 - **Next**: owner decision **O-3** (observers, Appendix A), then the rest of D.2. D.2's inputs are in §14 and P0
   §10–§11.
+
+### O-3 re-posed: observation in logical time (lean OB-4, staged); five corrections to Appendix A; DEFERRED 176 filed — `4bd8e898` (probes + data) and the docs commit after it (2026-10-14)
+- **Why / decision**: the owner opened O-3 for a deliberative decision. I re-grounded Appendix A at `2dd3ed70`
+  (`racket/` = main `c1f389ab`) and added A.6–A.12, kept apart as measurement, theorem, precedent and taste:
+  - corrections;
+  - consumer census, corpus census and fixtures;
+  - first principles;
+  - options OB-1 to OB-5 (relabelled, since "A/B/C" collided with the appendix names);
+  - eleven worked cases;
+  - a principles table and the lean.
+
+  **Lean: OB-4.** The user-facing trace is a function of the program: epochs everywhere, Kleene rounds on request,
+  and the explanation from the fixpoint equation. Telemetry is per scheduler. P2 builds the BSP replay first, as a
+  test-time parity monitor. Ledgered PENDING in §14 O-3.
+- **Measured** (`benchmarks/par4/o3-observer-census.rkt`, `o3-observer-fixtures.rkt`; data `data/par4-p0/o3/`):
+  - 303 of 672 BSP diff records (45.1 %) show a value the cell does not hold after the round; 283 of them are in
+    fan-in rounds;
+  - observing under BSP costs 0.995× wall and 1.000× allocation;
+  - 364 S0 runs average 1.9 rounds each;
+  - in all five fixtures, the changed set, the fired set and the fixpoint-equation contributions agree across
+    schedules, while the named writer, the fire count and the round count do not.
+- **Surprise / correction**: A.4's claim that write events "are scheduler-independent facts" was wrong (SC-1). A.1
+  misread the record's `new` field (SC-2). The sequential scheduler's attribution is a placeholder (SC-3). The
+  theorem that changes the question: BSP's rounds are the Kleene iterates (A.8 item 2), which the 2026-03-12
+  visualization design had guessed. So BSP is the reference dynamics, and a replay needs only the epoch's starting
+  state, not a log. Filed the observer's pre-existing defects as DEFERRED 176 on main (`bd7ef29d`).
+- **Next**: the owner's O-3 decision. Its settling evidence includes the editor view's future (A.12). Then the rest
+  of D.2.
