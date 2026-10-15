@@ -1,0 +1,15 @@
+=== test-propagator-patterns.rkt FAILED ===
+wall_ms: 416
+tests: 5 (1 failures)
+
+--- RackUnit stderr ---
+--------------------
+Track 4B: Propagator patterns P1/P2/P3 > P2: fire-once — fires once then instant no-op
+FAILURE
+name:       check-equal?
+location:   tests/test-propagator-patterns.rkt:40:7
+actual:     1000000
+expected:   1
+--------------------
+4 success(es) 1 failure(s) 0 error(s) 5 test(s) run
+

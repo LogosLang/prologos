@@ -1,0 +1,16 @@
+# PAR 4 O-9 evidence — prelude .pnet caches generated cold (tools/pnet-compile.rkt --clean, then generate)
+# under each setting, compared module by module with benchmarks/par4/o9-pnet-compare.rkt (2026-10-14,
+# branch par4-arena-executors, propagator.rkt with the O-9 knobs). Legs: 256a/256b = PAR4_TREE_REDUCE unset
+# (threshold 256, as shipped), off = PAR4_TREE_REDUCE=off, t0 = PAR4_TREE_REDUCE=0 (tree path on EVERY round).
+== 256a vs 256b   (control: same setting twice)
+modules: 39   identical: 39   different: 0
+== 256a vs off
+modules: 39   identical: 39   different: 0
+== 256a vs t0
+modules: 39   identical: 39   different: 0
+# Power check. A first attempt overwrote prologos/core/option.pnet, which does not exist (the comparison
+# enumerates A's files), so it compared nothing and printed 39/39 identical: a zero-power check, caught by
+# its own result and redone on a file that exists:
+== power check: 256a vs mut (core/ord.pnet overwritten by core/eq.pnet)
+DIFF  prologos/core/ord.pnet  slots: (env-snapshot specs definition-locations exports namespace preparse-registry ctor-registry type-meta trait-registry impl-registry tycon-arity-extension bundle-registry defn-param-names trait-laws functor-store)
+modules: 39   identical: 38   different: 1

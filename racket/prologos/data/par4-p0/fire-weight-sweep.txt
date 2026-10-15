@@ -1,0 +1,48 @@
+=== WORK=0
+heap tagged-cell-value structs, sequential, data-structure only (no network): 198.1 ns/fire, 187 B/fire
+   converged after 10 rounds
+K=1: 28.0 ns/fire  459.0 us/round (fire 447.0 + join 12.0)  1 B/fire  35687.0 fires/ms  overflow=0  hash=1991507968
+   converged after 10 rounds
+K=2: 14.2 ns/fire  232.0 us/round (fire 224.0 + join 7.0)  1 B/fire  70530.0 fires/ms  overflow=0  hash=1991507968  ✓ same as K=1
+   converged after 10 rounds
+K=4: 14.9 ns/fire  244.0 us/round (fire 235.0 + join 8.0)  1 B/fire  67149.0 fires/ms  overflow=0  hash=1991507968  ✓ same as K=1
+   converged after 10 rounds
+K=8: 14.2 ns/fire  233.0 us/round (fire 220.0 + join 12.0)  2 B/fire  70463.0 fires/ms  overflow=0  hash=1991507968  ✓ same as K=1
+   converged after 10 rounds
+K=16: 17.3 ns/fire  283.0 us/round (fire 169.0 + join 112.0)  2 B/fire  57957.0 fires/ms  overflow=0  hash=1991507968  ✓ same as K=1
+=== WORK=70
+heap tagged-cell-value structs, sequential, data-structure only (no network): 160.5 ns/fire, 187 B/fire
+   converged after 10 rounds
+K=1: 118.3 ns/fire  1939.0 us/round (fire 1919.0 + join 18.0)  3 B/fire  8450.0 fires/ms  overflow=0  hash=1991507968
+   converged after 10 rounds
+K=2: 57.4 ns/fire  941.0 us/round (fire 928.0 + join 12.0)  3 B/fire  17409.0 fires/ms  overflow=0  hash=1991507968  ✓ same as K=1
+   converged after 10 rounds
+K=4: 29.3 ns/fire  480.0 us/round (fire 473.0 + join 6.0)  2 B/fire  34128.0 fires/ms  overflow=0  hash=1991507968  ✓ same as K=1
+   converged after 10 rounds
+K=8: 19.9 ns/fire  327.0 us/round (fire 318.0 + join 8.0)  2 B/fire  50134.0 fires/ms  overflow=0  hash=1991507968  ✓ same as K=1
+   converged after 10 rounds
+K=16: 30.5 ns/fire  500.0 us/round (fire 373.0 + join 126.0)  4 B/fire  32768.0 fires/ms  overflow=0  hash=1991507968  ✓ same as K=1
+=== WORK=700
+heap tagged-cell-value structs, sequential, data-structure only (no network): 152.6 ns/fire, 187 B/fire
+   converged after 10 rounds
+K=1: 959.2 ns/fire  15716.0 us/round (fire 15674.0 + join 41.0)  25 B/fire  1042.0 fires/ms  overflow=0  hash=1991507968
+   converged after 10 rounds
+K=2: 488.2 ns/fire  7999.0 us/round (fire 7982.0 + join 16.0)  16 B/fire  2048.0 fires/ms  overflow=0  hash=1991507968  ✓ same as K=1
+   converged after 10 rounds
+K=4: 243.5 ns/fire  3989.0 us/round (fire 3977.0 + join 11.0)  11 B/fire  4108.0 fires/ms  overflow=0  hash=1991507968  ✓ same as K=1
+   converged after 10 rounds
+K=8: 131.4 ns/fire  2153.0 us/round (fire 2139.0 + join 12.0)  8 B/fire  7611.0 fires/ms  overflow=0  hash=1991507968  ✓ same as K=1
+   converged after 10 rounds
+K=16: 84.1 ns/fire  1377.0 us/round (fire 1339.0 + join 37.0)  8 B/fire  11897.0 fires/ms  overflow=0  hash=1991507968  ✓ same as K=1
+=== WORK=7000
+heap tagged-cell-value structs, sequential, data-structure only (no network): 148.2 ns/fire, 187 B/fire
+   converged after 10 rounds
+K=1: 9378.9 ns/fire  153664.0 us/round (fire 153618.0 + join 44.0)  241 B/fire  107.0 fires/ms  overflow=0  hash=1991507968
+   converged after 10 rounds
+K=2: 4876.9 ns/fire  79902.0 us/round (fire 79874.0 + join 26.0)  153 B/fire  205.0 fires/ms  overflow=0  hash=1991507968  ✓ same as K=1
+   converged after 10 rounds
+K=4: 2325.0 ns/fire  38093.0 us/round (fire 38074.0 + join 17.0)  106 B/fire  430.0 fires/ms  overflow=0  hash=1991507968  ✓ same as K=1
+   converged after 10 rounds
+K=8: 1218.3 ns/fire  19961.0 us/round (fire 19943.0 + join 16.0)  88 B/fire  821.0 fires/ms  overflow=0  hash=1991507968  ✓ same as K=1
+   converged after 10 rounds
+K=16: 690.6 ns/fire  11315.0 us/round (fire 11258.0 + join 55.0)  81 B/fire  1448.0 fires/ms  overflow=0  hash=1991507968  ✓ same as K=1

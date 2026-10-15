@@ -1,0 +1,30 @@
+# PAR 4 O-10 (CP-2) triage — checks run on the triage tree before its commit (2026-10-14).
+# Tree: branch par4-arena-executors after 931b327b, with propagator.rkt / stratified-eval.rkt rebuilt from main's
+# copies plus ONLY: the merge-order census (PAR4_MERGE_ORDER_CENSUS), and the fork / route counters behind an
+# in-process switch (par4-enable-counters!). Limited build (PLT_CS_COMPILE_LIMIT=1000000).
+
+== census still works (benchmarks/par4/o9-merge-order-power.rkt)
+power-T BSP C = 3      summary: T_cells_differ 1, R_cells_differ 1
+neg-join BSP C = 3     summary: nothing differs
+
+== harness smoke (p0-profile.rkt stats, prelude preloaded; counters switched on by the harness)
+constraints-adversarial  scheduler bsp, 214 rounds, 1 136 fires, forks 0, routes {}
+atms-adversarial         scheduler bsp, 111 rounds, 134 fires, forks 6, routes {atms 3, dfs 49, tier1 1}  (= P0 §2.4's routes)
+p0-profile.rkt census bool-logic: 1 P0 line
+
+== counters off for every other caller (process-file of atms-adversarial without par4-enable-counters!)
+counters-enabled #f   forks 0   routes #hasheq()
+
+== the CP-2 guarantee: an ambient PROLOGOS_SCHEDULER=seq PROLOGOS_SOLVER_STRATEGY=atms has no effect
+   (these three files FAILED under PROLOGOS_SCHEDULER=seq in P0 §2.5: data/par4-p0/suite/failures-seq/)
+test-retraction-stratum.rkt PASS · test-rel-t1-naf.rkt PASS · test-trait-resolution.rkt PASS — 74 tests, all pass
+
+== scripts that need a removed knob refuse instead of silently measuring BSP / threshold 256 twice
+o9-cold-ab.sh                         exit 2  "no PAR4_TREE_REDUCE knob (removed by O-10, CP-2); run it at eb25caee"
+PROLOGOS_SCHEDULER=seq p0-sweep.sh    exit 2  "PROLOGOS_SCHEDULER is set but this tree has no such knob; run at 4097b1c8"
+suite-schedulers.sh                   exit 2  "no PROLOGOS_SCHEDULER knob; run it at 4097b1c8"
+PROLOGOS_SOLVER_STRATEGY=atms p0-sweep.sh  exit 2  "... no such knob (O-10, CP-2); run at 4097b1c8"
+p0-sweep.sh with neither set          exit 0, one P0 line (BSP)
+
+== gate (--all --force-rerun, recorded)
+10394 tests in 7.9s (502 files, 18 batch workers, all pass)   — predicted 10 394 / 502 (Appendix B.5)

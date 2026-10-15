@@ -1,0 +1,14 @@
+=== test-propagator-descending-01.rkt FAILED ===
+wall_ms: 2
+tests: 15 (1 failures)
+
+--- RackUnit stderr ---
+--------------------
+desc/gauss-seidel-mixed-convergence
+FAILURE
+name:       check-equal?
+location:   tests/test-propagator-descending-01.rkt:201:2
+actual:     0
+expected:   9
+--------------------
+

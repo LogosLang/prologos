@@ -1,0 +1,9 @@
+{"kind":"summary","label":"power-R","threshold":"256","fires":2,"R_cells_differ":1,"rounds":1,"R_rounds_cells_differ":1,"compared_rounds":1,"rounds_with_undeclared":1}
+{"kind":"event","label":"power-R","order":"R","fires":2,"merges":["iorm"],"contradiction_differs":false,"results_undeclared":2,"results_new_cells":0,"results_contradiction":0,"test":null}
+{"kind":"summary","label":"power-T","threshold":"256","compared_rounds":1,"R_cells_differ":1,"R_rounds_cells_differ":1,"rounds":1,"rounds_with_undeclared":1,"T_cells_differ":1,"T_rounds_cells_differ":1,"fires":2}
+{"kind":"event","label":"power-T","order":"T","fires":2,"merges":["maxm"],"contradiction_differs":false,"results_undeclared":1,"results_new_cells":0,"results_contradiction":0,"test":null}
+{"kind":"event","label":"power-T","order":"R","fires":2,"merges":["maxm"],"contradiction_differs":false,"results_undeclared":1,"results_new_cells":0,"results_contradiction":0,"test":null}
+{"kind":"summary","label":"power-T0","threshold":"256","fires":2,"R_cells_differ":1,"rounds_with_undeclared":1,"rounds":1,"R_rounds_cells_differ":1,"compared_rounds":1}
+{"kind":"event","label":"power-T0","order":"R","fires":2,"merges":["maxm"],"contradiction_differs":false,"results_undeclared":1,"results_new_cells":0,"results_contradiction":0,"test":null}
+{"kind":"summary","label":"neg-join","threshold":"256","rounds":1,"compared_rounds":1,"fires":2}
+{"kind":"summary","label":"neg-ior","threshold":"256","fires":2,"compared_rounds":1,"rounds":1}

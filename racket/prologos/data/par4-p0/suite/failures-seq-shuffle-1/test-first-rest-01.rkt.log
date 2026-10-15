@@ -1,0 +1,155 @@
+=== test-first-rest-01.rkt FAILED ===
+wall_ms: 1562
+tests: 15 (7 failures)
+
+--- Error Diagnostics ---
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:2:0
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:2:0
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:2:0
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:2:0
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:2:0
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Buildable List)
+  --> <ws-string>:2:0
+  No instance of Buildable for List
+  Available instances: Buildable Set, Buildable PVec, Buildable List, Buildable LSeq
+  Hint: Define 'impl Buildable List' with methods 'from-seq', 'empty-coll', 'conj'.
+  = help: add an impl for (Buildable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:2:0
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+--- RackUnit stderr ---
+QUIESCENCE-WRITES:{"avg_changes":2.0,"avg_writes":2.0,"change_ratio":1.0,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":1,"hist_51_plus":0,"hist_6_10":0,"max_changes":2,"max_writes":2,"runs":1,"total_changes":2,"total_writes":2}
+--------------------
+first/list-nonempty
+ERROR
+name:       check-true
+location:   tests/test-first-rest-01.rkt:17:2
+string-contains?: contract violation
+  expected: string?
+  given: (no-instance-error (srcloc "<ws-string>" 2 0 8) "No instance of Seqable for List\n  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq\n  Hint: Define 'impl Seqable List' with method 'to-seq'." 'Seqable "List")
+--------------------
+QUIESCENCE-WRITES:{"avg_changes":2.0,"avg_writes":2.0,"change_ratio":1.0,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":1,"hist_51_plus":0,"hist_6_10":0,"max_changes":2,"max_writes":2,"runs":1,"total_changes":2,"total_writes":2}
+QUIESCENCE-WRITES:{"avg_changes":2.0,"avg_writes":2.0,"change_ratio":1.0,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":1,"hist_51_plus":0,"hist_6_10":0,"max_changes":2,"max_writes":2,"runs":1,"total_changes":2,"total_writes":2}
+--------------------
+first/list-singleton
+ERROR
+name:       check-true
+location:   tests/test-first-rest-01.rkt:29:2
+string-contains?: contract violation
+  expected: string?
+  given: (no-instance-error (srcloc "<ws-string>" 2 0 8) "No instance of Seqable for List\n  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq\n  Hint: Define 'impl Seqable List' with method 'to-seq'." 'Seqable "List")
+--------------------
+QUIESCENCE-WRITES:{"avg_changes":2.0,"avg_writes":2.0,"change_ratio":1.0,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":1,"hist_51_plus":0,"hist_6_10":0,"max_changes":2,"max_writes":2,"runs":1,"total_changes":2,"total_writes":2}
+--------------------
+second/list-nonempty
+ERROR
+name:       check-true
+location:   tests/test-first-rest-01.rkt:39:2
+string-contains?: contract violation
+  expected: string?
+  given: (no-instance-error (srcloc "<ws-string>" 2 0 9) "No instance of Seqable for List\n  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq\n  Hint: Define 'impl Seqable List' with method 'to-seq'." 'Seqable "List")
+--------------------
+QUIESCENCE-WRITES:{"avg_changes":2.0,"avg_writes":2.0,"change_ratio":1.0,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":1,"hist_51_plus":0,"hist_6_10":0,"max_changes":2,"max_writes":2,"runs":1,"total_changes":2,"total_writes":2}
+--------------------
+second/list-singleton
+ERROR
+name:       check-true
+location:   tests/test-first-rest-01.rkt:45:2
+string-contains?: contract violation
+  expected: string?
+  given: (no-instance-error (srcloc "<ws-string>" 2 0 9) "No instance of Seqable for List\n  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq\n  Hint: Define 'impl Seqable List' with method 'to-seq'." 'Seqable "List")
+--------------------
+QUIESCENCE-WRITES:{"avg_changes":2.0,"avg_writes":2.0,"change_ratio":1.0,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":1,"hist_51_plus":0,"hist_6_10":0,"max_changes":2,"max_writes":2,"runs":1,"total_changes":2,"total_writes":2}
+QUIESCENCE-WRITES:{"avg_changes":4.0,"avg_writes":4.0,"change_ratio":1.0,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":1,"hist_51_plus":0,"hist_6_10":0,"max_changes":4,"max_writes":4,"runs":1,"total_changes":4,"total_writes":4}
+--------------------
+rest/list-nonempty
+FAILURE
+name:       check-equal?
+location:   tests/test-first-rest-01.rkt:61:2
+actual:
+  (no-instance-error
+ (srcloc "<ws-string>" 2 0 7)
+ "No instance of Seqable for List\n  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq\n  Hint: Define 'impl Seqable List' with method 'to-seq'."
+ 'Seqable
+ "List")
+expected:   "'[2 3] : [prologos::data::list::List Int]"
+--------------------
+QUIESCENCE-WRITES:{"avg_changes":4.0,"avg_writes":4.0,"change_ratio":1.0,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":1,"hist_51_plus":0,"hist_6_10":0,"max_changes":4,"max_writes":4,"runs":1,"total_changes":4,"total_writes":4}
+--------------------
+rest/list-singleton
+FAILURE
+name:       check-equal?
+location:   tests/test-first-rest-01.rkt:66:2
+actual:
+  (no-instance-error
+ (srcloc "<ws-string>" 2 0 7)
+ "No instance of Buildable for List\n  Available instances: Buildable Set, Buildable PVec, Buildable List, Buildable LSeq\n  Hint: Define 'impl Buildable List' with methods 'from-seq', 'empty-coll', 'conj'."
+ 'Buildable
+ "List")
+expected:
+  "[prologos::data::list::nil Int] : [prologos::data::list::List Int]"
+--------------------
+QUIESCENCE-WRITES:{"avg_changes":4.0,"avg_writes":4.0,"change_ratio":1.0,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":1,"hist_51_plus":0,"hist_6_10":0,"max_changes":4,"max_writes":4,"runs":1,"total_changes":4,"total_writes":4}
+QUIESCENCE-WRITES:{"avg_changes":3.0,"avg_writes":3.0,"change_ratio":1.0,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":2,"hist_51_plus":0,"hist_6_10":0,"max_changes":4,"max_writes":4,"runs":2,"total_changes":6,"total_writes":6}
+--------------------
+first-of-rest
+ERROR
+name:       check-true
+location:   tests/test-first-rest-01.rkt:100:2
+string-contains?: contract violation
+  expected: string?
+  given: (no-instance-error (srcloc "<ws-string>" 2 0 14) "No instance of Seqable for List\n  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq\n  Hint: Define 'impl Seqable List' with method 'to-seq'." 'Seqable "List")
+--------------------
+
+--- Provenance Stats ---
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":1,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":1,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":1,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":1,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":1,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":1,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":1,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+

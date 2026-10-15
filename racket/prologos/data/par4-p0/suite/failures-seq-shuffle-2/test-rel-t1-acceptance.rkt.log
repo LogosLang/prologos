@@ -1,0 +1,19 @@
+=== test-rel-t1-acceptance.rkt FAILED ===
+wall_ms: 4623
+tests: 32 (1 failures)
+
+--- RackUnit stderr ---
+QUIESCENCE-WRITES:{"avg_changes":5.0,"avg_writes":10.0,"change_ratio":0.5,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":1,"hist_51_plus":0,"hist_6_10":0,"max_changes":5,"max_writes":10,"runs":1,"total_changes":5,"total_writes":10}
+--------------------
+acceptance [7] = "@[{:lv \"bicycle\"}] : [PVec {:lv String}]"
+FAILURE
+name:       check-equal?
+location:   tests/test-rel-t1-acceptance.rkt:97:10
+message:    "[7]"
+actual:     "@[{:lv \"automobile\"} {:lv \"bicycle\"}] : [PVec {:lv String}]"
+expected:   "@[{:lv \"bicycle\"}] : [PVec {:lv String}]"
+--------------------
+
+--- Provenance Stats ---
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+

@@ -1,0 +1,33 @@
+═══ PAR Track 2: Parallel Demo Benchmarks ═══
+Cores: 18 | Runs per measurement: 5
+
+═══ Graph Coloring (arc consistency) ═══
+Size     Propagators  Seq (ms)   Par (ms)   Speedup 
+----------------------------------------------------
+20       120          0.06       0.55       0.11    
+50       300          0.12       0.50       0.24    
+100      600          0.23       0.52       0.43    
+200      1200         0.47       0.66       0.70    
+500      3000         1.20       0.95       1.27    
+
+═══ Constraint Grid (row+col propagation) ═══
+Size     Propagators  Seq (ms)   Par (ms)   Speedup 
+----------------------------------------------------
+4        96           0.05       0.47       0.10    
+6        360          0.14       0.50       0.28    
+8        896          0.36       0.57       0.62    
+10       1800         0.74       0.77       0.96    
+12       3168         1.42       0.94       1.52    
+
+═══ Wave Propagation (1D chain) ═══
+Size     Propagators  Seq (ms)   Par (ms)   Speedup 
+----------------------------------------------------
+50       49           0.11       0.70       0.16    
+100      99           0.18       0.67       0.27    
+200      199          0.42       0.74       0.57    
+500      499          1.18       2.11       0.56    
+1000     999          2.42       2.67       0.91    
+
+Results written to /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/micro/../../data/benchmarks/parallel-demo-results.json
+
+Done.

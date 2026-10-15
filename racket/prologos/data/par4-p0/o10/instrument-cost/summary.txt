@@ -1,0 +1,16 @@
+network (sequential, threshold off)       main ms  branch ms  branch/main  ranges main | branch  (n=7 interleaved)
+Constraint Grid 4                            0.05       0.05        1.000  0.04-0.06 | 0.05-0.06
+Constraint Grid 6                            0.14       0.14        1.000  0.13-0.15 | 0.14-0.16
+Constraint Grid 8                            0.33       0.36        1.091  0.31-0.34 | 0.34-0.38
+Constraint Grid 10                           0.71       0.75        1.056  0.70-0.88 | 0.74-0.85
+Constraint Grid 12                           1.36       1.41        1.037  1.26-1.55 | 1.33-1.67
+Graph Coloring 20                            0.07       0.07        1.000  0.07-0.07 | 0.06-0.07
+Graph Coloring 50                            0.12       0.13        1.083  0.12-0.14 | 0.12-0.13
+Graph Coloring 100                           0.24       0.23        0.958  0.21-0.40 | 0.22-0.25
+Graph Coloring 200                           0.48       0.47        0.979  0.45-0.50 | 0.44-0.48
+Graph Coloring 500                           1.31       1.31        1.000  1.19-1.90 | 1.25-2.38
+Wave Propagation 50                          0.11       0.12        1.091  0.10-0.12 | 0.11-0.13
+Wave Propagation 100                         0.21       0.20        0.952  0.19-0.22 | 0.20-0.22
+Wave Propagation 200                         0.41       0.42        1.024  0.39-0.48 | 0.41-0.48
+Wave Propagation 500                         1.07       1.07        1.000  1.05-1.11 | 1.04-1.14
+Wave Propagation 1000                        2.35       2.38        1.013  2.31-2.57 | 2.29-2.44
