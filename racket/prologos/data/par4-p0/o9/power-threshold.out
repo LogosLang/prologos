@@ -1,0 +1,12 @@
+PAR4_TREE_REDUCE=unset  power-T BSP C = 3
+PAR4_TREE_REDUCE=unset  power-T0 BSP C = 1
+PAR4_TREE_REDUCE=unset  power-R BSP C = 2
+PAR4_TREE_REDUCE=unset  neg-join BSP C = 3
+PAR4_TREE_REDUCE=0  power-T BSP C = 1
+PAR4_TREE_REDUCE=0  power-T0 BSP C = 1
+PAR4_TREE_REDUCE=0  power-R BSP C = 2
+PAR4_TREE_REDUCE=0  neg-join BSP C = 3
+PAR4_TREE_REDUCE=off  power-T BSP C = 3
+PAR4_TREE_REDUCE=off  power-T0 BSP C = 1
+PAR4_TREE_REDUCE=off  power-R BSP C = 2
+PAR4_TREE_REDUCE=off  neg-join BSP C = 3

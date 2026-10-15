@@ -1,0 +1,4 @@
+{"kind":"summary","label":"prelude-cold-256","wide_fires":1581,"compared_rounds":5,"wide_rounds":2,"fires":2002,"wide_compared_rounds":2,"rounds":5}
+{"kind":"summary","label":"prelude-cold-off","wide_fires":1581,"compared_rounds":5,"wide_rounds":2,"fires":2002,"wide_compared_rounds":2,"rounds":5}
+{"kind":"summary","label":"noPNET-preload-empty-256","fires":789,"wide_rounds":1,"wide_fires":368,"compared_rounds":4,"wide_compared_rounds":1,"rounds":4}
+{"kind":"summary","label":"noPNET-preload-empty-off","wide_compared_rounds":1,"rounds":4,"wide_fires":368,"compared_rounds":4,"wide_rounds":1,"fires":789}
