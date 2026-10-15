@@ -6934,6 +6934,23 @@ or gate the tree path on a real pool executor; the green-thread `parallel?` bran
 win and should be deleted. **When**: before PAR 4 pins its baseline — every PAR 4 A/B is
 otherwise credited with removing this defect (P0 record §5 "two baselines"). Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md).
 
+*Addendum 2026-10-14 (PAR 4 owner decision O-9 — the fix shape is decided; still open until it lands):*
+- **Decision**: production default **off**, and the tree path **deleted** — the green-thread `parallel?` branch,
+  the size-switched route (`propagator.rkt:3377` at main `99c893d4`) and the `current-tree-reduce-threshold`
+  parameter. It lands in PAR 4 P0.5 (D.1 §14 O-9, on branch `par4-arena-executors`).
+- **Read at `99c893d4`**: the tree "reduce" does no lattice work. `merge-fire-results` (`:3090`) only appends
+  lists, and the combined result then goes through the same sequential `bulk-merge-writes` (`:2978`). Its one
+  semantic change: all of a round's declared writes are applied before any undeclared write (replacement,
+  DEFERRED 157), so a round of 256+ fires uses a different application order.
+- **Evidence** (P0 record §11, `eb25caee` + `8278a66d` on the branch):
+  - the full suite passes with the default off (10 394 / 502);
+  - the 39 prelude caches generated cold under 256, off and 0 are identical;
+  - a merge-order census finds 0 tree-order divergences in the suite's 648 rounds of 256+ fires, because no such
+    round carries an undeclared write; a constructed two-writer network shows the order changes an answer
+    (3 → 1) when the shape does occur;
+  - cold prelude elaboration: merge phase 3.03 → 0.020 ms and −7.7 MB per run (its widest round is 368 fires);
+  - wide networks: 6.0–7.4× (P0 §10.1).
+
 ### 151. ✅ **DISCHARGED** — fix (a) `baa1dce2` (checkpoint 3); fix (b) `08acff4a` (checkpoint 4: the body is fasl, `eab8dcf7`; the reader `tools/pnet-dump.rkt`, `c6f8fff7`) — THE `.pnet` MODULE CACHE WAS A NET LOSS: `pnet-stale?` `read`s every WHOLE file to compare a 2-element header, then the loader reads it AGAIN — 2.6 s per process start, vs 0.53 s elaborating the same 39 modules from source
 
 [`pnet-serialize.rkt:795-806`](../../racket/prologos/pnet-serialize.rkt) `pnet-stale?`
