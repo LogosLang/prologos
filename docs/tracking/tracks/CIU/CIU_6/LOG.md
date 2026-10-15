@@ -318,3 +318,21 @@ are in [`../README.md`](../README.md).
   production whole-file abort; my C note "ordinals make no layer" was half right. My C VAG also
   missed DEFERRED 144 (the grammar for the whole star family, filed at 1b-v-B2b): D owes no grammar.
 - **Next**: 1b-vi-D-2b — the mint.
+
+### 1b-vi-D-2b shipped: THE MINT — `*-` and `*-_` are live — `9743e93e` (2026-10-14)
+- **What shipped**: the two rows join the one star table (C's pending table retired); the parser
+  marks every branch at `segment-select-items`' one success return; Q_U55's star half with
+  remedies that run; Q_U56's guided `*->` from the selection consumer; pins flipped; the arrival
+  gate runs ∀ minted lexeme; PARITY parser = injection. 173 rows; 670 / 670; 7.65 s per run.
+- **Surprise / correction**:
+  - **Q_U56's predicted type-territory text was wrong** (the row had been written from the
+    prediction); the measured message is 1b-v's star-family one, true and more specific.
+  - **"put a space" is not a remedy** (`x{a*- > b}` still fails), and the consumer cannot tell
+    glued from spaced; `a*->b` is one token. Three shapes, each with a true message.
+  - **M-mark**: without the mark a minted `*-` is a whole-file ABORT (C-5's guard raises), not a
+    silent re-nest — loud as designed, but an abort; unreachable while the mark is pinned.
+  - **M-keep** confirmed C's handover: B's remedy would have offered `t5{a^.b^q.c^*}` (refused).
+  - My `select-star-cont-of #t #f` in the keep remedy would have rendered `*-` — caught on
+    re-read before the first run. The deps check first ran a nonexistent path and printed 0 —
+    read as "did not run", re-run at the right path: 375 = B's.
+- **Next**: owner checkpoint — the 1b-vi verify, the suite gate, the checkpoint merge to main.

@@ -3337,7 +3337,16 @@ items of the hold-point, ruled before P4a opened:
   raised at the reader (a reader raise is a whole-file abort). The type-territory messages
   predate the slice and are filed as [DEFERRED 168](DEFERRED.md). Pin in 1b-vi: once the
   closer band mints `*-`, `<(x : Nat)*- Nat>` reaches Q_U37's type-territory refusal and gets
-  Q_U31's "needs a SPACE" message (predicted). Rejected: (b) one message in every territory
+  Q_U31's "needs a SPACE" message (predicted). **Measured at 1b-vi-D-2b (probe-1bvi-aa):** the
+  refusal is Q_U37's as predicted, but the MESSAGE is the star-family one 1b-v built for `*_`
+  ("inside `<…>`, `*-` is a path-selection star operator, not a type operator — it has no
+  type-level reading, glued or spaced…"), because that arm reads the table — the prediction of
+  Q_U31's text was wrong, and the row now pins the measurement. And the selection-territory
+  text: the consumer receives `a*-` then `>` for BOTH `a*-> b` and `a*- > b`, so it cannot tell
+  glued from spaced, and the illustrative "put a space" is not a remedy (`x{a*- > b}` still
+  fails). The decision — a guided refusal from the consumer — is unchanged; the text says what is
+  true of both shapes and offers the remedy that runs (drop the `>`). A third shape, `a*->b`, is
+  ONE token (`->` continues an identifier, as in `int->string`) and gets its own text. Rejected: (b) one message in every territory
   now (reaches into spec parsing the slice does not otherwise touch); (c) nothing special.
 
 - <a id="q-u57"></a>**Q_U57 — `*-_`'s PREFIX: THE DELETED LAYER's KEY ONLY, OR THE WHOLE
@@ -9614,7 +9623,7 @@ scaffolding for the slicing, not a permanent mechanism.
 | **1b-vi-C** ✅ `3cbb1025` | the total-collapse machinery, INERT — [design target, mini-audit, findings, VAG](#p4e-1b-vi-c): the star-cont axis (4 conts, raising classifier, pending table), the `(collapsed . c₀)` mark (placement only; unmark law over 104 branches), one placement predicate in both twins, `*-_`'s prefix at one seat, tail-arm guards, prose naming the operator as written (13 arms × 4 conts). Proven by INJECTION: 53 D rows meet their D targets before the mint (harness parity 0 drift; a vacuous pass found by counting and closed). Red: 51, the silent re-nesting; 5 twin mutations red. 670 / 670; acceptance 88 / 88; **7.97 s per run** | ✅ |
 | **1b-vi-D-1** ✅ `b567b29e` | the LEVEL arms name the operators PRESENT ([design, findings, VAG](#p4e-1b-vi-d)): `select-fail`'s field becomes a list; `star-dup-key` carries every star at the level, `star-l4-mixed` its branch's; each claim scoped to the family it was measured on. Corrected a 1b-iv sentence measured false in 3 of 4 populations. M-one (one star) red on exactly the mixed row. Found C's ordinal-head defect. 580 / 580 | ✅ |
 | **1b-vi-D-2a** ✅ `84beb15a` | [an ordinal head is TRANSPARENT under a collapse](#p4e-1b-vi-d2): `select-branch-total-collapse?` (one definition) + both twins' ord-head arms descend like the bare-number arm; the generator states `ot{0.X}` ≡ `t5{X}` over four families (+61 law rows → 168). Red: C's C-5 guard RAISED on `ot{0.a*-}`. M-ord-reduction red on exactly the 24 injectable ordinal star rows. 670 / 670 | ✅ |
-| **1b-vi-D-2b** 🔄 [design](#p4e-1b-vi-d2) | the mint: move the two pending rows; the parser's mark call + Q_U55's star arm (C5, E5-); the `*->` message; flips `:6194`, `:6195`, `:8470`, `:8482`; arrival matrix `*-` / `*-_` 0/209 → 209/209; the grammar; parser-surf = injected-surf parity | ⬜ |
+| **1b-vi-D-2b** ✅ `9743e93e` | THE MINT ([design, findings, VAG](#p4e-1b-vi-d2)): the two rows join the one table (pending table retired); the parser marks at `segment-select-items`' one success return; Q_U55's star half (remedies run: 24); Q_U56's guided `*->` in the consumer (+ the one-token `a*->b`; `*>`/`*_>` improve too); pins flipped; arrival gate ∀ minted lexeme; PARITY parser = injection. Red 186; M-mark / M-star-arm / M-arrow / M-keep red. 173 rows, 670 / 670, 7.65 s per run | ✅ |
 | verify | adversarial round | ⬜ |
 | gate | full suite, then the checkpoint merge to main | ⬜ |
 
@@ -9990,6 +9999,38 @@ where one test (`admins{0.name^-}`) pinned it before. *Observation, not changed:
 an ordinal head lands unwrapped at depth 1 (`ot{0.a*}` → `{:b …}`, 1b-iv's seat B) but wrapped
 below a dissolve (`ot{0.a^.b*}` → `@[{:c …}]`); whether that asymmetry is intended is a 1b-iv
 question, raised at the checkpoint rather than changed inside a total-collapse slice.
+
+**1b-vi-D-2b — what the mint found, and the Vision Alignment Gate** (`9743e93e`).
+
+*The injection was a faithful mirror — now measured, not trusted.* PARITY holds for every
+injectable row: the parser's surf equals C's hand-built IR, marks included. Its power: with the
+parser's mark call removed, 68 rows differ (12 have no ancestor to mark, so they cannot).
+
+*A prediction refuted, honestly marked as one.* Q_U56 predicted that `<(x : Nat)*- Nat>` would
+get Q_U31's "needs a SPACE"; the row was written from that prediction. Measured: the refusal is
+Q_U37's as predicted, but the message is the star-family one 1b-v built (it reads the table) —
+true and more specific. The row now pins the measurement.
+
+*Q_U56's text, re-derived from what the consumer can see.* `a*-> b` and `a*- > b` reach the
+consumer as the same items, so a message about "glued" must be true of both; the illustrative
+"put a space" is not a remedy (`x{a*- > b}` still fails), so the message offers the one that runs
+(drop the `>`; X-arrow-fix pins it). A third shape surfaced: `a*->b` is ONE token (`->`
+continues an identifier, as in `int->string`) and arrives at the mid-lexeme message — which
+would have been false had it said "reads as `*-` then `>`" (X-arrow1 pins its absence).
+
+*M-mark is the sharpest finding of the slice.* Without the parser's mark, a minted `*-` does not
+silently re-nest — C-5's guard RAISES, and both batches report a whole-file abort. The guard
+converted a silent wrong answer into a loud one, as designed; but its loud form in typing is a
+plain `error`, i.e. an abort, not a counted refusal. That is the codebase's convention for
+internal invariants (`select-step-kind-unhandled`), and it is unreachable while the mark is
+pinned — recorded, not changed.
+
+| VAG question | catalogue | challenge — could it be more aligned? |
+|---|---|---|
+| (a) on-network | no new state: one table row pair, one pure mark call, two parser arms | the mark is computed in the parser and read by off-network walkers — PPN's to retire; the mint neither worsens nor retires it |
+| (b) complete | ∀ minted lexeme × every arrival context (was `*` only); 173 rows incl. 61 ordinal law rows; every live refusal's remedies run (24); parity for every injectable row; the four operators' `>` shapes | the arrival gate covers the TOKEN; whether `*-` behaves in every arrival context (closer band, ω path, in-block, dot) is covered by the rows that exist (E10, X-wpath, X-dot, X-sub) — not by a context × operator generator. A semantic arrival matrix would make it complete by construction |
+| (c) vision-advancing | the mint is a TABLE MOVE: nothing that iterates the table was edited, which is C-1's design claim, measured | the D4 law generator states 1b-vi's semantics; the user-facing documentation (the acceptance file, the examples) does not yet show `*-` / `*-_` at all — the 1b-vi verify should add them, so the surface a newcomer reads matches what ships |
+| (d) drift risks | D2-R1 M-ord ×2 ✓; D2-R2 parity + M-mark ✓; D2-R3 arrival ∀ lexeme ✓; D2-R4 M-keep ✓ | DR-6: 7.65 s per run at 173 rows (C: 7.97 s at 109) — within variance. update-deps 375 = B's, per section. The grammar tripwire fired again; DEFERRED 144 now records the family as final |
 
 <a id="p4e-1b-v-shipped"></a>
 
