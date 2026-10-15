@@ -434,3 +434,22 @@ binder merges with unsolved metas.
   history at their pinned commits.
 - **Next**: the owner's O-10 decision. If CP-2: the triage commit, the gate (predicted 10 394 / 502), a harness
   smoke run, then the checkpoint merge procedure (`branch-worktree-workflow.md` §4). Then O-3.
+
+### O-10 decided (CP-2): the triage commit — the semantics-selecting knobs removed, the census kept, counters off by default; gate 10 394 / 502 — `a0b78fda` (2026-10-14)
+- **Why / decision**: owner accepted CP-2. `propagator.rkt` and `stratified-eval.rkt` were rebuilt from main's
+  copies plus only the census and the switch-gated fork/route counters. Main's code therefore differs from the
+  branch's only by that observation code, and the P0 knobs stay in history at their pinned commits. Recorded in
+  D.1 §14 and Appendix B; callouts added at P0 §8 and §11.8.
+- **Measured** (`data/par4-p0/o10/triage-checks.txt`):
+  - the census power rows are unchanged;
+  - the harness's routes match P0 §2.4's;
+  - the counters stay 0 for a plain `process-file`;
+  - with `PROLOGOS_SCHEDULER=seq PROLOGOS_SOLVER_STRATEGY=atms` set, three files that failed under seq in P0 §2.5
+    now pass, so an ambient setting no longer reaches the compiler;
+  - the scripts that need a removed knob refuse with exit 2;
+  - gate **10 394 / 502 all pass**, as predicted.
+- **Surprise / correction**: one departure from B.4's wording. The counters are gated by an in-process switch that
+  the harness flips, not by the census's environment variable; that removes a second ambient read. The census
+  must reach the runner's workers, so it keeps its variable. Recorded in Appendix B's ledger line.
+- **Next**: checkpoint 1 — merge the branch into main in a throwaway worktree, gate, reconcile file by file, then
+  fast-forward main.

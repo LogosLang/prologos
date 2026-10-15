@@ -329,6 +329,11 @@ DEFERRED 154 fixes `PERF-COUNTERS`.
 
 ## 8. Reproduce
 
+> **After owner decision O-10 (CP-2, `a0b78fda`, 2026-10-14)** the knobs this section uses (`PROLOGOS_SCHEDULER`,
+> `PROLOGOS_SOLVER_STRATEGY`'s env seeding, `PAR4_TRAP_MIDRUN`) exist only up to `931b327b`. Run these commands at
+> the pinned commit below, as written. On later trees, `suite-schedulers.sh` and `p0-sweep.sh` refuse (exit 2)
+> rather than silently measuring BSP.
+
 ```
 cd .claude/worktrees/par4-p0/racket/prologos           # branch par4-p0 @ 4097b1c8
 export P0_PRELOAD=$PWD/benchmarks/par4/preload-empty.prologos
@@ -727,4 +732,7 @@ racket tools/pnet-compile.rkt --clean; [PAR4_TREE_REDUCE=off] racket tools/pnet-
 racket benchmarks/par4/o9-pnet-compare.rkt <copy-A> <copy-B>
 racket benchmarks/par4/hold-suite-lock.rkt tools/suite-lock.rkt bash benchmarks/par4/o9-cold-ab.sh 10 cold-ab.jsonl
 ```
-(Wrap each `racket` in `timeout -k`, per the hook guard.)
+(Wrap each `racket` in `timeout -k`, per the hook guard.) The `PAR4_TREE_REDUCE` legs (the off-suite, the cache
+generations, `o9-cold-ab.sh`, `power-threshold.out`) run at `eb25caee`: owner decision O-10 removed the knob in
+`a0b78fda`, and `o9-cold-ab.sh` refuses without it. The census, the power rows and the cache comparison still run
+on later trees.
