@@ -1,0 +1,30 @@
+parser.rkt             caret-position-problem                     step-cont@1486 collapse?@1490
+parser.rkt             dissolve-step?                             step-cont@1376 dissolve@1376
+parser.rkt             keep-level                                 dissolve@1431 dissolve@1435
+parser.rkt             leaf-without-collapse                      step-cont@1439 rename-pair@1440
+parser.rkt             renamed-ancestor?                          step-cont@1406 rename-pair@1406
+parser.rkt             segment-select-items                       rename-pair@1582 dissolve@1583
+parser.rkt             split-caret-lexeme                         dissolve@1185 rename-pair@1205
+parser.rkt             total-collapse-leaf?                       step-cont@1410
+parser.rkt             total-collapse-rename-problem              step-cont@1456
+pretty-print.rkt       cont->string                               dissolve@139 rename-pair@143
+pretty-print.rkt       step->string                               star-cont@197
+reduction.rkt          branch-entries                             rename@2330 step-cont@2366 rename@2370 dissolve@2375 rename@2378 out-name@2397
+reduction.rkt          star-join-value                            star-cont@1895 star-cont@1902
+syntax.rkt             select-branch-collapse                     step-cont@1406 collapse?@1407
+syntax.rkt             select-branch-keyless?                     step-cont@1482 dissolve@1482
+syntax.rkt             select-branch-top-keys                     rename@1563 out-name@1610 step-cont@1612 dissolve@1614 rename@1620
+syntax.rkt             select-cont-collapse?                      collapse?@1375
+syntax.rkt             select-cont-rename                         rename@1380 rename-pair@1381
+syntax.rkt             select-star-cont                           star-cont@1125
+syntax.rkt             select-step-cont                           step-cont@1360 step-cont@1362
+syntax.rkt             select-step-output-name                    out-name@1414 step-cont@1424 dissolve@1426 rename@1427 out-name@1433
+typing-core.rkt        join-contents                              star-cont@1766 star-cont@1784
+typing-core.rkt        select-branch-entries                      rename@2115 step-cont@2169 rename@2178 dissolve@2183 rename@2194 out-name@2217
+typing-core.rkt        star-join-type                             star-cont@1850
+-- 56 hits in 24 functions
+PASS control typing-core.rkt:select-branch-entries:dissolve
+PASS control reduction.rkt:branch-entries:dissolve
+PASS control syntax.rkt:select-step-output-name:dissolve
+PASS control pretty-print.rkt:cont->string:dissolve
+PASS control typing-core.rkt:star-join-type:star-cont

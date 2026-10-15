@@ -9611,7 +9611,7 @@ scaffolding for the slicing, not a permanent mechanism.
 |---|---|---|
 | **1b-vi-A** ✅ `0b6a645f` | the stage table: 40 rows, every expected value measured from today's equivalent spelling (`probe-1bvi-p`). Red step: stage B → exactly C1–C4 red (the silent drop); stage D → 37 / 40 red, each for its measured pre-mint reason (mid-lexeme 28, postfix 2, nameless unbound 3, silent drop 4); controls green. Instrument power by mutation: an already-true target caught twice; a fixture that fails to load caught before `unbound` could accept it. Battery 573 → 575; **5.28 s per run** (per-test-case timing) | ✅ |
 | **1b-vi-B** ✅ `332e16a2` | `^-` / `^-k'` refuse an ancestor rename (Q_U55's caret half) with two remedies rendered by the one branch printer; FIRST step: the generated laws ([Q_U60](#q-u60)) — 61 rows. Red step: 16 rows (C1–C4 + 12 generated), each the silent drop; green after; mutation (check disabled) → the same 16. Instrument: right-hand sides checked at every stage (M3 caught); every live refusal's remedies RUN (B-3). Table 104 rows (43 hand, 61 law); battery + acceptance file 665 / 665; acceptance 88 / 88; **7.86 s per run** | ✅ |
-| **1b-vi-C** | the `collapsed` cont + the `*-` / `*-_` conts + the totality dispatcher + the 15 prose arms, INERT (reachable from tests only) | ⬜ |
+| **1b-vi-C** | the `collapsed` cont + the `*-` / `*-_` conts + the totality dispatcher + the 15 prose arms, INERT (reachable from tests only) — [design target and mini-audit](#p4e-1b-vi-c); the parser's mark call and Q_U55's star arm move to D | 🔄 |
 | **1b-vi-D** | the mint: two table rows, the `*->` message; flips `:6194`, `:6195`, `:8470`, `:8482`; arrival matrix `*-` / `*-_` 0/209 → 209/209 | ⬜ |
 | verify | adversarial round | ⬜ |
 | gate | full suite, then the checkpoint merge to main | ⬜ |
@@ -9684,6 +9684,101 @@ and both its remedies run (row C6). An ω step as an ANCESTOR cannot be spelled 
 | (b) complete | both total forms, several renames at once, the ω leaf (C6), the sub-block scope (K4/K5), every remedy run | (1) the ω-ANCESTOR remedy arms are unreachable and unpinned until DEFERRED 167 lands — stated in the code. (2) The remedies are rendered through the caret printer's `cont->string`, which has no table and a silent `[else "^?"]` (DEFERRED 145); B adds no caret cont, so nothing renders `^?` today |
 | (c) vision-advancing | the silent drop is gone; the remedies are generated from the steps by the one printer | **the "keep the level" remedy IS Q_U55 option C's meaning** ("collapse all but the named levels") spelled out. The refusal therefore carries its own migration path: if C is ever adopted, the refused spelling takes the meaning the message already shows. That is §3.6's monotone migration made visible to the user |
 | (d) drift risks | B-1: 14 generated controls + K1–K5 hold; B-2: classified through `select-step-kind`, ω seen through; B-3: 17 live refusals, 34 remedies, all accepted; B-4: the star arm waits for D | **inherited pattern challenged: hand-built remedy strings in the parser** (the `^..` messages spell their remedies by hand) — B renders through `pp-select-branch` instead. DR-6 grew 5.28 → 7.86 s per run. The tree-sitter tripwire fired on `parser.rkt`; B adds no syntax (it refuses a combination the grammar already accepts), so no grammar change is owed. `update-deps --check`: 375 mismatches before and after on this branch's stale stored graph — untouched, retired by the next merge from main |
+
+<a id="p4e-1b-vi-c"></a>
+
+**1b-vi-C — design target and mini-audit** (at `bebb8f4b`). Everything below lands INERT: no
+lexeme mints a total star until D, and the one production call to the mark is D's. Measured
+first: `probe-1bvi-t` (an ω ancestor), the walker routes read at `typing-core.rkt:2087–2237`
+and `reduction.rkt:2209–2404`, and the census `research/P4e-1b-vi/census-1bvi-C.py` (56 reads
+in 24 functions, five positive controls; its first cut attributed by indentation and charged
+typing's dissolve arm to `walk-to-leaf` — the control caught it, the second cut matches parens).
+
+*The design, as six pieces.*
+
+- **C-1 the star-cont axis.** Four conts, a product {flatten, collapse} × {plain, synth}:
+  `flatten` `*`, `flatten-synth` `*_`, `flatten-collapse` `*-`, `flatten-collapse-synth` `*-_`
+  (named in spelling order). Classified by `select-star-cont-synth?` / `select-star-cont-total?`,
+  which RAISE on any other value; built by `select-star-cont-of`. The two new rows sit in
+  `postfix-star-pending-table` (`reader-forms.rkt`, the same `(SENTINEL CONT LEXEME)` shape),
+  consulted ONLY by the printer's cont→lexeme direction; the reader, parser, macros, the leak
+  and arrival gates and `tools/form-deps.rkt` keep iterating the minted table untouched. D
+  moves the two rows across — literally D's "two table rows". *Measured before choosing:* a
+  MINTED column on the one table was the first design, and eight consumers iterate that table
+  directly (`tests/…:6218`, `:6259`, `:6271`, `:8470`, `:8495`, `:9287`, `:9297`, `:9317`, and
+  `tools/form-deps.rkt:60`), so C would have edited every gate D is already scheduled to flip.
+  Each spelling↔cont pair is still stated exactly once; a C pin holds the two lists disjoint.
+- **C-2 the mark.** A marked ancestor carries `(collapsed . c₀)`, where c₀ is the cont the
+  user WROTE: `#f` for a plain key (`a` → `(@key a (collapsed . #f))`), `dissolve` for `a^`,
+  `(rename . k)` for `a^k` (reachable under `*-_` only; Q_U55 refuses it under `*-`). An ω
+  ancestor marks its inner step (probe t: the lift consults the inner cont, `cfg^` is honoured
+  per element). Ordinals make no layer and stay unmarked. `select-branch-mark-total-collapse`
+  marks s₁…sₙ₋₁ iff the branch ends in a total star and otherwise returns the branch itself
+  (`eq?`). **The mark changes PLACEMENT only**: printing and naming read the step as written
+  (`select-step-unmark`), so `pp-select-branch` of a marked branch is the user's spelling and
+  `select-step-output-name` of a marked step is the written step's — by construction, not by
+  a parallel arm per reader.
+  *Representation, decided inside M (Q_U58) and recorded rather than posed:* the wrapper
+  (R2) over two new atoms `'collapsed` / `(collapsed-rename . k)` (R1). R1 needs a printer
+  literal and a naming arm per atom in a caret vocabulary that has no table (DEFERRED 145),
+  and `collapsed-rename` would sit one letter from `collapse-rename` (the `^-k'` leaf). R2
+  routes every non-placement reader through the written step.
+- **C-3 placement.** One predicate, `select-cont-dissolves-level?` (dissolve or collapsed),
+  at both twins' dissolve arms. Then placement EMERGES, as M predicted: each marked ancestor
+  takes the dissolve arm, `seen` collects it, and `(sₙ ★)` reaches `star-branch-entries` /
+  `star-entries` — the remainder-empty landing that `s₁^.….sₙ₋₁^.sₙ*` takes today.
+- **C-4 the provenance prefix (P).** `select-star-provenance-prefix` (syntax.rkt, ONE seat):
+  for a total synth star, the joined output names of `seen`; otherwise `#f`. Both twins prefix
+  the deleted layer's content keys with it before the synth join — typing over symbols,
+  reduction over `expr-keyword` names (each layer adapts its own key shape, as `synth-champ-key`
+  already does). `seen` is branch-local (a sub-block resets it), which is Q_U57's scope.
+- **C-5 the tail-arm guards.** A total star at `select-below-field`'s or `below-value`'s
+  star-TAIL arm means an ancestor was KEPT — never marked. Both twins refuse loudly instead of
+  computing `*`'s re-nesting, which would be a silent wrong answer (DR-2).
+- **C-6 the prose.** `select-fail` gains an optional fifth field, the star cont (a defaulting
+  constructor: the 26 producers and 24 test uses are untouched). The two seats that build star
+  failure closures pass it. The 13 per-branch star arms render the operator AS WRITTEN and its
+  in-family siblings (`*-_`'s "use bare" names `*-`, E8_) through the printer; a missing cont
+  renders LOUDLY. The 2 level arms (`star-dup-key`, `star-l4-mixed`) do not know which star
+  they describe and keep family-generic wording, checked for truth under the total family.
+  Reduction's 3 internal `oops` strings name the lexeme. ⚠ **Production-visible, deliberately:**
+  `*_` users now read `*_` (not `*`) in the shared arms — the established rule "name the
+  operator the user wrote" applied uniformly instead of special-cased for `*_`.
+
+*Moved to D, where red rows drive them:* the parser's call to the mark at
+`segment-select-items`' success return (`parser.rkt:1546`, after every parser check, so no check
+ever sees a mark; sub-blocks recurse through the same return); Q_U55's star arm (C5, E5-, the
+renamed `*-` law rows); the `*->` message; moving the two pending rows into the minted table.
+
+*How an inert slice is tested — injection.* Production parsing of each D row's `*` spelling
+(`ws-string->surfs`, measured shapes: one `surf-select` per row, the closer seat a `'path`
+select over the block select) → every star cont converted to its total sibling → every branch
+list marked at every level (what D's parser will do) → `process-command` → the row's D TARGET.
+Excluded: rows whose target is a parser refusal. At D the check becomes a parity pin: the
+parser's own surf must EQUAL the injected one. Stage: `1bvi-stage` → C as the first edit after
+the vocabulary exists, so the red is the walkers' and not an unbound identifier.
+
+*The mini-audit — every reader a mark or a new star cont can meet* (census lines at `bebb8f4b`).
+
+| site | reads | decision |
+|---|---|---|
+| typing `select-branch-entries` (dissolve `:2183`; labels `:2178`, `:2194`) | placement | the predicate (C-3). A mark never reaches the label arms — the dissolve arm is first; mutation M-typing proves the arm is load-bearing |
+| reduction `branch-entries` (dissolve `:2375`; labels `:2370`, `:2378`) | the twin | the same predicate; mutation M-reduction |
+| syntax `select-step-output-name` (`:1424–1427`) | naming | a marked step names as its written step (C-2) |
+| pretty-print `cont->string` (`:139–147`) | printing | a mark renders its written cont (`""` for a plain key); the `[else "^?"]` tail stays (DEFERRED 145) |
+| syntax `select-branch-collapse`, `select-branch-keyless?`; parser `dissolve-step?` | leaf classifiers | a mark is never on a leaf — the leaf of a marked branch is the star. No change |
+| syntax `select-branch-top-keys` (`:1563–1620`) | level keys | its star shield (`:1560`) answers first, and marks exist only in star branches. No change |
+| parser `caret-position-problem`, B's helpers, `split-caret-lexeme`, `segment-select-items` | validation, minting | all run before the success return where D marks. No change |
+| typing `join-contents` (`:1766`, `:1784`), `star-join-type` (`:1850`); reduction `star-join-value` (`:1895`, `:1902`) | star cont | the classifier (C-1), raising on an unknown cont |
+| pretty-print `step->string` (`:197`) | star cont | already table-driven, with a loud tell for an unknown cont |
+| typing `select-below-field` / reduction `below-value` star-tail arms | star cont | the guards (C-5) |
+| typing `select-bcast-lift`, reduction `bcast-lift` | an ω inner | apply the inner per element through the branch walk, so the predicate places a marked inner; unpinnable until DEFERRED 167 |
+| elaborator, zonk, substitution, `pnet-serialize` | — | zero cont reads (census); the mark rides as data |
+
+*Drift risks specific to C.* **C-R1** twin placement (DR-1): a mutation per twin. **C-R2** the
+prefix computed twice: one seat. **C-R3** a production-visible change inside an inert slice: the
+`*_` wording, listed and pinned. **C-R4** the injection drifting from what D's parser builds:
+pinned at D by surf equality.
 
 <a id="p4e-1b-v-shipped"></a>
 

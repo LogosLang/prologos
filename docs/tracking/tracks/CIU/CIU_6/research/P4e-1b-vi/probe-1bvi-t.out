@@ -1,0 +1,10 @@
+0: deep : {:top {:eu {:cfg {:x Int}} :us {:cfg {:x Int}}}} defined.
+1: ow : {:top {:eu {:cfg {:x {:p Int}}} :us {:cfg {:x {:p Int}}}}} defined.
+2: ERROR: select: `:cfg*` — `*` (flatten) joins the layer's contents keywise, and two of them carry the same key, so the join would silently drop one (layer `{:eu {:cfg {:x Int}} :us {:cfg {:x Int}}}`). Star a narrower layer, or select the colliding fields as separate branches
+3: ERROR: select: `:cfg*` — `*` (flatten) joins the layer's contents keywise, and two of them carry the same key, so the join would silently drop one (layer `{:eu {:cfg {:x Int}} :us {:cfg {:x Int}}}`). Star a narrower layer, or select the colliding fields as separate branches
+4: ERROR: Could not infer type — field :x is not present in the record {:eu {:cfg {:x {:p Int}}} :us {:cfg {:x {:p Int}}}}; available fields: :eu :us; in the select branch `top.cfg.x` — bare field access (no construction) is spelled `.x`
+5: ERROR: Could not infer type — field :x is not present in the record {:eu ⟨{:x {:p Int}}⟩ :us ⟨{:x {:p Int}}⟩}; available fields: :eu :us; in the select branch `top.cfg.x` — bare field access (no construction) is spelled `.x`
+6: ERROR: Could not infer type — field :x is not present in the record {:eu {:cfg {:x {:p Int}}} :us {:cfg {:x {:p Int}}}}; available fields: :eu :us; in the select branch `top.cfg.x` — bare field access (no construction) is spelled `.x`
+7: ERROR: Could not infer type — field :x is not present in the record {:eu ⟨{:x {:p Int}}⟩ :us ⟨{:x {:p Int}}⟩}; available fields: :eu :us; in the select branch `top.cfg.x` — bare field access (no construction) is spelled `.x`
+8: ERROR: Could not infer type — field :x is not present in the record {:eu ⟨{:x {:p Int}}⟩ :us ⟨{:x {:p Int}}⟩}; available fields: :eu :us; in the select branch `top.cfg.x` — bare field access (no construction) is spelled `.x`
+--- 7 errors ---
