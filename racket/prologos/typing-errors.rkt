@@ -308,9 +308,14 @@
   ;; IN-FAMILY sibling (`*-_`'s "use bare" is `*-`; telling a `*-` user to write
   ;; `*` would change where the result lands). Rendered by the ONE printer, so a
   ;; cont it does not know shows its LOUD tell; a missing cont is loud too.
-  ;; The two LEVEL arms (`star-dup-key`, `star-l4-mixed`) describe a level, not
-  ;; one star, and keep family-generic wording.
-  (define star-c (select-fail-star fail))
+  ;; ⭐ 1b-vi-D-1 — THE LEVEL ARMS NAME THE OPERATORS PRESENT. The field is a LIST
+  ;; (`select-fail-stars`): a per-branch arm carries exactly one cont, a LEVEL arm
+  ;; (`star-dup-key`, `star-l4-mixed`) carries every operator at the level, because a
+  ;; level has no single star — `env{prod^.db* dev.db*-}` is one block, two families,
+  ;; and naming one operator there would identify the wrong thing. Each claim is
+  ;; emitted only for the family it was MEASURED true of (probe-1bvi-u, -v, -x).
+  (define stars (select-fail-stars fail))
+  (define star-c (and (pair? stars) (car stars)))
   (define (star-lex c)
     (if c
         (pp-select-branch (list (make-select-star c)))
@@ -319,6 +324,14 @@
   (define (op-sibling synth?)
     (star-lex (and star-c (select-star-cont-of (select-star-cont-total? star-c) synth?))))
   (define op-bare (op-sibling #f))
+  (define (lex-join cs [conj "and"])   ;; "`*`" / "`*` and `*-`" / "`*`, `*_` or `*-`"
+    (let ([ls (map (lambda (c) (string-append "`" (star-lex c) "`")) cs)])
+      (if (or (null? ls) (null? (cdr ls)))
+          (string-join ls "")
+          (string-append (string-join (drop-right ls 1) ", ") " " conj " " (last ls)))))
+  (define ops-all (if (null? stars) "«star-cont-missing»" (lex-join stars "or")))
+  (define stars-total (filter select-star-cont-total? stars))
+  (define stars-partial (filter (lambda (c) (not (select-star-cont-total? c))) stars))
   (case (select-fail-kind fail)
     ;; ⚠ THE `bcast-not-yet` ARM IS RETIRED AT D4.P4c-4c — it named THIS SLICE as
     ;; its own discharge point ("the ω value semantics land at … P4c-4c"), and
@@ -805,8 +818,40 @@
      ;; ⭐ The message no longer asserts WHICH kind of key collided (the gate
      ;; folds over assembled component keys and cannot tell), so it states only
      ;; what is true of both and names remedies that work for both.
-     (format "duplicate output key `:~a` in the select block — two branches deliver the same output key, and distinct keys are required (strict merge; the alternative is a silent last-write-wins). The key may be one a branch NAMES, or one a `*` LIFTED out of its layer. Rename an UNSTARRED branch with `^k'` (`x{k^k2}`) — a starred segment cannot carry a rename — or select the flatten in its own block. If the key was lifted, dropping the `*` does not help either: it re-nests the layer under the key the star was deleting"
-             label)]
+     ;; ⚠⚠ 1b-vi-D-1 — THE LAST SENTENCE WAS FALSE FOR MOST OF ITS POPULATION.
+     ;; "If the key was lifted, dropping the `*` does not help either" was written
+     ;; against ONE shape: every star dropped, and the deleted keys EQUAL. MEASURED
+     ;; (probe-1bvi-x): `env{prod^.db dev^.db}` still collides (`:db`) — the one
+     ;; shape — but dropping ONE star works (`env{prod^.db dev^.db*}`), dropping the
+     ;; star beside a NAMED key works (`kk{a k}`), and in a mixed block dropping
+     ;; EITHER star works. What is true of all four is the MECHANISM, so the message
+     ;; now states that: a dropped star re-nests what it lifted — `*`/`*_` under the
+     ;; key it was deleting, a total collapse under its whole path — which resolves
+     ;; the collision unless another branch delivers that key too.
+     ;; The total family's own remedy: `*-_` keeps each surviving ancestor's name in
+     ;; the lifted key (E3-, probe-1bvi-v's P1/P2 ✓), and a `^` on the ancestor where
+     ;; the branches differ removes exactly that name (P3: `:db-url` collides until
+     ;; the `^` is dropped). `*` is NOT offered to the total family: with a shared
+     ;; head it collides on the head (P2, `:a`).
+     (string-append
+      (format "duplicate output key `:~a` in the select block — two branches deliver the same output key, and distinct keys are required (strict merge; the alternative is a silent last-write-wins). The key may be one a branch NAMES, or one a star (~a) LIFTED out of its layer. Rename an UNSTARRED branch with `^k'` (`x{k^k2}`) — a starred segment cannot carry a rename — or select the flatten in its own block."
+              label ops-all)
+      (cond
+        [(null? stars) ""]
+        [else
+         (format " Dropping a star re-nests what it lifted — ~a — which resolves the collision unless another branch delivers that key too."
+                 (string-join
+                  (append
+                   (if (pair? stars-partial)
+                       (list (format "~a under the key the star was deleting" (lex-join stars-partial)))
+                       '())
+                   (if (pair? stars-total)
+                       (list (format "~a under its whole path" (lex-join stars-total)))
+                       '()))
+                  ", "))])
+      (if (pair? stars-total)
+          " Under a total collapse, `*-_` keeps each surviving ancestor's name in the lifted key (`x{a.k*-_ b.k*-_}` delivers `:a-k-…` beside `:b-k-…`), and an ancestor dissolved with `^` contributes no name — so drop the `^` where the branches differ."
+          ""))]
     [(star-l4-mixed)
      ;; ⚠ 1b-iii-C2: this WORDING used to assert that the STAR branch is the
      ;; keyless one, which was true while every star landed keyless. Under
@@ -865,8 +910,32 @@
      ;; ⭐ Stated from the ruling: the landing follows the CONTENTS, so the
      ;; remedy is to make the two landings agree on keyed-ness, and which
      ;; direction that is depends on what the star's contents are.
-     (format "mixed keyed/keyless sorts in the select block (L4) — `~a` is a star branch whose landing and its sibling branches' do not agree: one level assembles a Map OR a tuple, never both. A star's landing follows its CONTENTS: Map contents splice in as KEYED fields, vector contents land as ONE KEYLESS component, and a key surviving before the star keeps the join nested under it. So make the level agree — if the `*` lands keyed, stop dissolving its siblings (drop a `^`, as in `x{a* b}`); if it lands keyless, dissolve the keys that survive on the others (a `^` per surviving level, as in `x{a* b^.c^.d*}`). Selecting the flatten in its own block always works"
-             label)]
+     ;; ⭐ 1b-vi-D-1: carries the conts of the branch its LABEL names, and speaks in
+     ;; that branch's operators. The "key surviving before the star" clause is true of
+     ;; `*` / `*_` only — a total collapse removes every ancestor, so it always lands at
+     ;; its branch's top. Examples are in the branch's own family; the total family's
+     ;; are MEASURED (probe-1bvi-v: `vv{a^.b* a^}` ✓, the flatten alone ✓).
+     (let* ([total? (and star-c (select-star-cont-total? star-c))]
+            [o (if star-c op "«star-cont-missing»")])
+       (format "mixed keyed/keyless sorts in the select block (L4) — `~a` is a star branch whose landing and its sibling branches' do not agree: one level assembles a Map OR a tuple, never both. A star's landing follows its CONTENTS: Map contents splice in as KEYED fields, vector contents land as ONE KEYLESS component~a. So make the level agree — if the `~a` lands keyed, stop dissolving its siblings (drop a `^`, as in ~a); if it lands keyless, dissolve the keys that survive on the others (~a). Selecting the flatten in its own block always works"
+               label
+               ;; ONE CLAUSE PER FAMILY PRESENT — a D-1 draft picked the clause from the
+               ;; first cont and spoke it over every operator, so a mixed branch read
+               ;; "under `*` and `*-` a key surviving … keeps the join nested": false for
+               ;; `*-`, the very error this step removes. Caught reading the render.
+               (string-append
+                (if (pair? stars-partial)
+                    (format ", and under ~a a key surviving before the star keeps the join nested under it"
+                            (lex-join stars-partial))
+                    "")
+                (if (pair? stars-total)
+                    (format "; a total collapse (~a) always lands at its branch's top" (lex-join stars-total "or"))
+                    ""))
+               o
+               (if total? (format "`x{a.b~a c}`" o) (format "`x{a~a b}`" o))
+               (if total?
+                   (format "a `^` on each, as in `x{a.b~a c^}`" o)
+                   (format "a `^` per surviving level, as in `x{a~a b^.c^.d~a}`" o o))))]
     ;; ⭐ D4.P4e-1b slice 1b-iii-A — THE FAIL-KIND AXIS IS NOW TOTAL.
     ;; This arm was `#f`, and `#f` here is SILENT: it falls through `infer/err`'s
     ;; `or` chain to the generic "Could not infer type", and NESTED it is worse —

@@ -7637,32 +7637,44 @@
     ;; kinds describe a level, not one star: family-generic by design, so they are
     ;; held only to render and to mention a star.
     (define level? (memq kind '(star-dup-key star-l4-mixed)))
-    (for ([c (in-list (cons #f select-star-conts))])
+    ;; ⭐ 1b-vi-D-1: the field is a LIST of conts. A per-branch arm carries exactly one;
+    ;; a LEVEL arm carries the operators PRESENT — so a level kind is also rendered
+    ;; under a MIXED set, where naming a single operator would be the lie D-1 removes.
+    (define sets (append (list '()) (map list select-star-conts)
+                         (if level? (list '(flatten flatten-collapse)) '())))
+    (for ([cs (in-list sets)])
       (check-not-exn
        (lambda ()
-         (let ([msg (te:format-select-fail (tc:select-fail kind '() 'probe-label row c) '())]
-               [lex (and c (rf:postfix-star-cont->lexeme c))])
+         (let ([msg (te:format-select-fail (tc:select-fail kind '() 'probe-label row cs) '())]
+               [lexes (map rf:postfix-star-cont->lexeme cs)]
+               [totals (map select-star-cont-total? cs)])
            (check-true (string? msg) (format "~a must render a string" kind))
-           ;; with NO cont a per-branch arm names the star only through its loud
-           ;; tell (asserted below) — `*` would be the silent guess C-6 removes
-           (unless (and (not c) (not level?))
-             (check-true (regexp-match? #rx"\\*" msg)
-                         (format "~a's message must mention the star" kind)))
            (cond
-             [level? (void)]
-             [(not c)
+             [(null? cs)
+              ;; no cont: the operator is named only through the LOUD tell — a bare `*`
+              ;; here would be the silent guess C-6 / D-1 remove
               (check-true (regexp-match? #rx"«star-cont-missing»" msg)
-                          (format "~a with NO cont must say so LOUDLY, never a silent `*`" kind))]
+                          (format "~a with NO cont must say so LOUDLY: ~a" kind msg))]
              [else
-              (check-true (regexp-match? (regexp (string-append "`" (regexp-quote lex) "`")) msg)
-                          (format "~a under `~a` must name `~a`: ~a" kind lex lex msg))
-              (check-false (regexp-match? #rx"«" msg) (format "~a under `~a` renders a tell: ~a" kind lex msg))
-              (if (select-star-cont-total? c)
-                  (check-false (regexp-match? #rx"[*]" (regexp-replace* #rx"[*]-_?" msg ""))
-                               (format "~a under `~a` names a NON-total star: ~a" kind lex msg))
-                  (check-false (regexp-match? #rx"[*]-" msg)
-                               (format "~a under `~a` names a TOTAL star: ~a" kind lex msg)))])))
-       (format "rendering ~a under ~a must not raise" kind c)))))
+              (for ([lex (in-list lexes)])
+                (check-true (regexp-match? (regexp (string-append "`" (regexp-quote lex) "`")) msg)
+                            (format "~a under ~s must name `~a`: ~a" kind cs lex msg)))
+              (check-false (regexp-match? #rx"«" msg) (format "~a under ~s renders a tell: ~a" kind cs msg))
+              ;; a family's clause must never be spoken over the OTHER family's operator
+              (check-false (regexp-match? #rx"under [^.]*`[*]-_?`[^.]* a key surviving before the star" msg)
+                           (format "~a under ~s says a total collapse keeps the join nested: ~a" kind cs msg))
+              ;; probe-1bvi-x: FALSE for three of its four populations — must not return
+              (check-false (regexp-match? #rx"does not help either" msg)
+                           (format "~a under ~s re-asserts the measured-false sentence: ~a" kind cs msg))
+              (cond
+                [(andmap values totals)
+                 (check-false (regexp-match? #rx"[*]" (regexp-replace* #rx"[*]-_?" msg ""))
+                              (format "~a under ~s names a NON-total star: ~a" kind cs msg))]
+                [(not (ormap values totals))
+                 (check-false (regexp-match? #rx"[*]-" msg)
+                              (format "~a under ~s names a TOTAL star: ~a" kind cs msg))]
+                [else (void)])])))
+       (format "rendering ~a under ~s must not raise" kind cs)))))
 
 (test-case "1b-iii-B1 reduction: the join concatenates in CANONICAL key order — the value layer, discriminating set"
   (define ka  (expr-keyword 'a))
@@ -9413,14 +9425,22 @@
    "def deep := {:top {:eu {:cfg {:x 1}} :us {:cfg {:x 2}}}}\n"
    "def hz := {:a {:b {:c-d 1}} :a-b {:c {:d 2}}}\n"
    "def mn := {:a {:x 1} :b {:y 2}}\n"
-   "def org := {:db {:admins @[{:name \"a\"} {:name \"b\"}]}}\n"))
-(define 1bvi-fixture-count 12)
+   "def org := {:db {:admins @[{:name \"a\"} {:name \"b\"}]}}\n"
+   ;; 1b-vi-D-1: same HEAD, sibling children sharing a field (probe-1bvi-v's P2)
+   "def sh := {:a {:b {:port 1 :u 2} :c {:port 3 :v 4}}}\n"
+   ;; 1b-vi-D-1: a top-level VECTOR — an `(@ord N)`-headed branch (C's handover)
+   "def ov := @[{:a {:b {:x 1}}}]\n"))
+(define 1bvi-fixture-count 14)
 
 (define 1bvi-rows
   '(;; ---- E1–E10 under `*-` [Q_U48]: ≡ dissolve every ancestor, then `*`
     ("E1-"  "app{database*-}"              D midlex  (same "app{database*}" "{:pool-size Int :url String}"))
     ("E2-"  "app{server.ssl*-}"            D midlex  (same "app{server^.ssl*}" "{:cert String :enabled Bool}"))
-    ("E3-"  "env{prod.db*- dev.db*-}"      D midlex  (refused (#rx"duplicate output key `:port`") ()))
+    ;; ⭐ 1b-vi-D-1: the level message names the operator PRESENT and scopes its claims —
+    ;; "dropping the `*` does not help" is FALSE here (probe-1bvi-u: `env{prod.db dev.db}` works)
+    ("E3-"  "env{prod.db*- dev.db*-}"      D midlex  (refused (#rx"duplicate output key `:port`" #rx"a star [(]`[*]-`[)] LIFTED"
+                                                               #rx"`[*]-_` keeps each surviving ancestor")
+                                                              (#rx"does not help either")))
     ("E4-"  "cloud{regions:{host port}*-}" D postfix (refused (#rx"`:\\{host port\\}\\*-`" #rx"carry the same key")
                                                               (#rx"`\\*` \\(flatten\\)")))
     ("E5-"  "app{server^srv.ssl*-}"        D midlex  (refused (#rx"`srv` can never appear under a total collapse"
@@ -9465,6 +9485,32 @@
     ;; ---- [Q_U56]: the glued arrow in selection territory; type territory is a PREDICTION
     ("X-arrow"  "mn{a*-> b}"               D midlex  (refused (#rx"`\\*->` reads as `\\*-` then `>`") ()))
     ("X-type"   "<(x : Nat)*- Nat>"        D unbound (refused (#rx"needs a SPACE") ()))
+    ;; ---- 1b-vi-D-1: the LEVEL arms (probe-1bvi-u, -v). A level has no single star, so the
+    ;; message names the operators PRESENT and scopes each claim to the family it is true of.
+    ;; P2 — same head: `*` and "drop the star" do NOT help here (`:a`), `*-_` does
+    ("X-dup-same" "sh{a.b*- a.c*-}"        D midlex  (refused (#rx"duplicate output key `:port`" #rx"a star [(]`[*]-`[)] LIFTED"
+                                                               #rx"`[*]-_` keeps each surviving ancestor")
+                                                              (#rx"does not help either")))
+    ;; a MIXED block: both families named, each sentence present — one cont would lie here
+    ;; ⚠ D-1's FIRST draft of this row required "does not help either" here — and
+    ;; probe-1bvi-x measured that sentence FALSE in a mixed block (drop either star:
+    ;; it works). The row now pins the mechanism sentence, per family.
+    ("X-dup-mix" "env{prod^.db* dev.db*-}" D midlex  (refused (#rx"duplicate output key `:(port|url)`" #rx"a star [(]`[*]` or `[*]-`[)]"
+                                                               #rx"`[*]` under the key the star was deleting, `[*]-` under its whole path"
+                                                               #rx"`[*]-_` keeps each surviving ancestor")
+                                                              (#rx"does not help either")))
+    ;; L4 under `*-`: a vector join lands keyless at its branch's TOP; no "surviving key" clause
+    ("X-l4-"    "vv{a.b*- a}"              D midlex  (refused (#rx"mixed keyed/keyless" #rx"`a[.]b[*]-` is a star branch"
+                                                               #rx"a total collapse [(]`[*]-`[)] always lands at its branch's top"
+                                                               #rx"`x[{]a[.]b[*]- c\\^[}]`")
+                                                              (#rx"keeps the join nested")))
+    ;; ⚠ the `(@ord N)`-headed pair (C's handover) is OUT until D-2's FIRST red step: at
+    ;; D-1's red step `ov{0.a.b*-_}` gave `@[{:a-b-x 1}] : ⟨…⟩` where Q_U57's law
+    ;; (`ov{0.a.b.x^-_}`) gives `{:a-b-x 1}` (probe-1bvi-w). Not an open question — a DEFECT
+    ;; in C's machinery against three decisions: Q_U48 ("lands at the branch's top level")
+    ;; + Q_U49 (Map contents splice keyed), Q_U57's law, and P3c's pinned reading that a
+    ;; collapse overrides an ordinal head's keyless sort (`admins{0.name^-}`, the P3c verify
+    ;; pin). The `ov` fixture stays for the rows D-2 brings back.
     ;; ---- [Q_U55], caret half (1b-vi-B): a rename on an ancestor of `^-` / `^-k'`
     ("C1" "e3{a^p.b.c^-}"   B (line "{:c @[1 2]} : {:c [PVec Int]}")
                               (refused (#rx"`p` can never appear under a total collapse" #rx"Drop `\\^p`" #rx"keep the level") ()))
@@ -9692,17 +9738,45 @@
 (define (1bvi-totalize-branches bs)
   (for/list ([b (in-list bs)])
     (select-branch-mark-total-collapse (map 1bvi-totalize-step b))))
-(define (1bvi-totalize-surf s)
-  (unless (surf-select? s) (error '1bvi-inject "a row's surf is not a surf-select: ~s" s))
-  (let ([subj (surf-select-subject s)])
-    (surf-select (if (surf-select? subj) (1bvi-totalize-surf subj) subj)
-                 (1bvi-totalize-branches (surf-select-branches s))
-                 (surf-select-sort s) (surf-select-srcloc s))))
+;; ⭐ 1b-vi-D-1: PER STAR, not per row. A mixed row (`env{prod^.db* dev.db*-}`) must keep
+;; its `*`, so each surf star is matched to the spelling's star lexeme in TEXTUAL order —
+;; which is the surf's depth-first order: subject first, branches left to right, steps
+;; left to right, into sub-blocks and ω inners. Each match is CHECKED (the surf star's
+;; synth-ness must equal the lexeme's), and the lexeme queue must empty EXACTLY: a
+;; misaligned row raises, so the batch fails closed rather than converting the wrong star.
+(define (1bvi-star-lexemes sp) (regexp-match* #rx"[*]-?_?" sp))
+(define (1bvi-totalize-surf s lexemes)
+  (define q (box lexemes))
+  (define (step st)
+    (cond
+      [(select-star-step? st)
+       (when (null? (unbox q)) (error '1bvi-inject "the surf has more stars than the spelling ~s" lexemes))
+       (let ([lex (car (unbox q))] [c (select-star-cont st)])
+         (set-box! q (cdr (unbox q)))
+         (unless (eq? (select-star-cont-synth? c) (regexp-match? #rx"_$" lex))
+           (error '1bvi-inject "star/lexeme misalignment: cont ~s against `~a` in ~s" c lex lexemes))
+         (if (regexp-match? #rx"^[*]-" lex)
+             (make-select-star (select-star-cont-of #t (select-star-cont-synth? c)))
+             st))]
+      [(and (pair? st) (eq? (car st) '@sub)) (cons '@sub (branches (cdr st)))]
+      [(select-bcast-step? st) (make-select-bcast (step (select-bcast-inner st)))]
+      [else st]))
+  (define (branches bs)
+    (for/list ([b (in-list bs)])
+      (select-branch-mark-total-collapse (for/list ([st (in-list b)]) (step st)))))
+  (define (walk sf)
+    (unless (surf-select? sf) (error '1bvi-inject "a row's surf is not a surf-select: ~s" sf))
+    (let* ([subj (surf-select-subject sf)]
+           [subj* (if (surf-select? subj) (walk subj) subj)])
+      (surf-select subj* (branches (surf-select-branches sf)) (surf-select-sort sf) (surf-select-srcloc sf))))
+  (begin0 (walk s)
+    (unless (null? (unbox q))
+      (error '1bvi-inject "the spelling has ~a more star(s) than the surf: ~s" (length (unbox q)) lexemes))))
 
 ;; level 2 with a surf transform between parse and process. → (cons 'ok lines) | (cons 'bad why)
-(define (1bvi-inject-batch forms transform)
+(define (1bvi-inject-batch forms lexeme-lists)   ;; #f = the IDENTITY transform
   (hash-ref!
-   1bvi-cache (list 'inject transform forms)
+   1bvi-cache (list 'inject lexeme-lists forms)
    (lambda ()
      (define src (string-append 1bvi-fixtures (string-join forms "\n") "\n"))
      (define rs
@@ -9716,14 +9790,16 @@
              (for/list ([sf (in-list surfs)] [i (in-naturals)])
                (cond
                  ;; non-vacuity: a row the transform cannot reach is never a pass
-                 [(and (prologos-error? sf) (>= i nfix) (not (eq? transform values)))
+                 [(and (prologos-error? sf) (>= i nfix) lexeme-lists)
                   (format "VACUOUS: the `*` spelling did not parse to a select, so nothing was injected (~a)"
                           (prologos-error-message sf))]
                  [(prologos-error? sf) sf]
                  [else
                    (with-handlers ([exn:prologos-solve?
                                     (lambda (e) (prologos-error srcloc-unknown (exn-message e)))])
-                     (process-command (if (>= i nfix) (transform sf) sf)))]))))))
+                     (process-command (if (and (>= i nfix) lexeme-lists)
+                                          (1bvi-totalize-surf sf (list-ref lexeme-lists (- i nfix)))
+                                          sf)))]))))))
      (cond
        [(string? rs) (cons 'bad (format "the injection batch RAISED: ~a" rs))]
        [(not (= (length rs) (+ 1bvi-fixture-count (length forms))))
@@ -9736,9 +9812,9 @@
 (define (1bvi-inject-problems eqv)
   (define rows (filter 1bvi-injectable? 1bvi-all-rows))
   (define forms (map (lambda (r) (1bvi-star-spelling (1bvi-row-spelling r))) rows))
-  (define ident (1bvi-inject-batch forms values))
+  (define ident (1bvi-inject-batch forms #f))
   (define level2 (1bvi-batch 'string forms))
-  (define total (1bvi-inject-batch forms 1bvi-totalize-surf))
+  (define total (1bvi-inject-batch forms (map (lambda (r) (1bvi-star-lexemes (1bvi-row-spelling r))) rows)))
   (append
    (for/list ([b (in-list (list ident level2 total))]
               [what (in-list '("injection harness, identity" "the `*` spellings, level 2" "injection, totalized"))]

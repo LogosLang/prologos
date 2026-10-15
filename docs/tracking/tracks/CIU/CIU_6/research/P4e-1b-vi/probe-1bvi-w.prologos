@@ -1,0 +1,18 @@
+ns probe-1bvi-w
+
+def ov := @[{:a {:b {:x 1}}}]
+
+;; 1b-vi-D-1 finding: under a TOTAL collapse, what does an ORDINAL branch head do?
+;; (1) the caret collapse family through the `(@ord N)` head
+ov{0.a.b.x^-}
+ov{0.a.b^-}
+ov{0.a.b.x^-_}
+;; (2) no collapse — the head's own landing (keyless component over the element)
+ov{0.a.b.x}
+ov{0.a^.b^.x}
+;; (3) the star family today: `*` and the C-injected `*-`'s equivalent
+ov{0.a.b*}
+ov{0.a^.b*}
+;; (4) is the ordinal head itself dissolvable? (Q_T4a's ordinal-`^` shapes)
+ov{0^.a.b.x}
+ov{0^.a^.b*}

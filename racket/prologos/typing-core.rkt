@@ -678,15 +678,18 @@
 ;; 'miss-closed · 'miss-dyn (unlisted on dyn) · 'unknown-presence.
 ;; `path` = the label trail to the failure (for branch-aware messages).
 ;;
-;; ⭐ D4.P4e-1b-vi-C (C-6): a FIFTH field, `star` — the star CONT of the failing
-;; star branch, or #f. The prose must name the operator the user wrote (`*-`,
-;; not `*`) and an in-family sibling (`*-_`'s "use bare" is `*-`), and the
-;; formatter cannot recover that from the label without re-parsing a rendering.
-;; A DEFAULTING constructor keeps every 4-argument producer and test untouched;
-;; only the two seats that build star failure closures pass it.
-(struct select-fail (kind path label row star) #:transparent
+;; ⭐ D4.P4e-1b-vi-C (C-6): a FIFTH field, `stars` — the star CONTS the failure is about
+;; (a LIST since 1b-vi-D-1: a per-branch star failure carries exactly one, a LEVEL failure
+;; carries every operator present, because a level has no single star). The prose must
+;; name the operator the user wrote (`*-`, not `*`) and an in-family sibling (`*-_`'s
+;; "use bare" is `*-`), and the formatter cannot recover that from the label without
+;; re-parsing a rendering.
+;; A DEFAULTING constructor keeps every 4-argument producer and test untouched; the
+;; four seats that know the stars pass them — the two per-branch star failure closures
+;; and the two LEVEL producers (`star-l4-mixed`, `star-dup-key`).
+(struct select-fail (kind path label row stars) #:transparent
   #:name select-fail-info #:constructor-name select-fail*)
-(define (select-fail kind path label row [star #f]) (select-fail* kind path label row star))
+(define (select-fail kind path label row [stars '()]) (select-fail* kind path label row stars))
 
 ;; D4.P4b-ii-1 — THE MAP POSTURE's carrier (Q_U10).
 ;; `select-row-of` normally answers "here is the subject's per-field row".
@@ -927,7 +930,7 @@
   (if (select-fail-label f)
       f
       (select-fail (select-fail-kind f) (select-fail-path f) name
-                   (select-fail-row f) (select-fail-star f))))
+                   (select-fail-row f) (select-fail-stars f))))
 
 (define (select-index-of ctx tm n path sort)
   ;; D4.P4b-ii-1: the SORT axis reaches the nat twin too. The file's own
@@ -1533,12 +1536,13 @@
           (if (and (ormap select-branch-has-star?/deep branches)
                    (ormap (lambda (c) (car c)) cs)
                    (ormap (lambda (c) (not (car c))) cs))
-              (values #f (select-fail 'star-l4-mixed path
-                                      (string->symbol
-                                       (pp-select-branch
-                                        (findf select-branch-has-star?/deep
-                                               branches)))
-                                      tm))
+              ;; 1b-vi-D-1: carry the conts of the branch the label NAMES, so the
+              ;; message speaks in that branch's operators
+              (let ([star-br (findf select-branch-has-star?/deep branches)])
+                (values #f (select-fail 'star-l4-mixed path
+                                        (string->symbol (pp-select-branch star-br))
+                                        tm
+                                        (remove-duplicates (select-branch-star-conts/deep star-br)))))
               ;; ⭐⭐ 1b-iii-C2 — THE DUPLICATE-OUTPUT-KEY SEAT, and C2 is what makes
               ;; it necessary. `select-branch-top-keys` answers `'()` for a star
               ;; branch, so the parser's `dup-output-key` gate cannot see a deep
@@ -1569,7 +1573,11 @@
                                       [(memq (car ks) seen) (car ks)]
                                       [else (loop (cdr ks) (cons (car ks) seen))])))])
                 (if dup
-                    (values #f (select-fail 'star-dup-key path dup tm))
+                    ;; 1b-vi-D-1: EVERY operator present at the level — the gate cannot
+                    ;; say which branch delivered `dup`, so it must not name just one
+                    (values #f (select-fail 'star-dup-key path dup tm
+                                            (remove-duplicates
+                                             (append-map select-branch-star-conts/deep branches))))
                     (values cs #f)))))
         (let-values ([(es bf) (select-branch-entries ctx tm (car bs) path '() sort)])
           (if bf
@@ -1638,7 +1646,7 @@
   ;; mid-branch star that is the one the user is told about), so the prose names
   ;; the operator as written. `b` always holds a star here (the pre-check).
   (define star-c (let ([s (findf select-star-step? (reverse b))]) (and s (select-star-cont s))))
-  (define (fail-k kind [r tm]) (values #f (select-fail kind path label r star-c)))
+  (define (fail-k kind [r tm]) (values #f (select-fail kind path label r (if star-c (list star-c) '()))))
   (let* ([rev (reverse b)]
          [star (car rev)]
          [prefix (reverse (cdr rev))])
@@ -2323,7 +2331,7 @@
             ;; to make `path` carry STEPS rather than names (~20 `append path`
             ;; sites + that renderer + both twins) — its own slice, not this arm's.
             [label (string->symbol (pp-select-branch steps))]
-            [fail-k (lambda (kind r) (values #f (select-fail kind path label r (select-star-cont star))))])
+            [fail-k (lambda (kind r) (values #f (select-fail kind path label r (list (select-star-cont star)))))])
        (cond
          ;; ⚠⚠ 1b-vi-C (C-5) — A TOTAL STAR NEVER JOINS HERE. This arm re-nests the
          ;; join under the KEPT ancestors that led to it; under `*-` / `*-_` every

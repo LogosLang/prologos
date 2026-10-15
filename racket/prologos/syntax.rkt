@@ -184,7 +184,7 @@
  select-cont-collapsed? select-cont-dissolves-level?
  select-step-mark-collapsed select-step-unmark select-branch-mark-total-collapse
  select-star-provenance-prefix
- select-branch-deep-star? select-steps-star-tail?
+ select-branch-deep-star? select-steps-star-tail? select-branch-star-conts/deep
  select-step-makes-no-layer? select-branch-has-star?/deep
  select-steps-yield-bare-join?
  ;; [Q_U44] canonical key order — ONE definition, shared by both twins.
@@ -1064,6 +1064,17 @@
 ;; through `select-bcast-inner` first; the new predicate joined the family
 ;; without it. Unwrapping is the two-line repair, and it means "ANYWHERE" is now
 ;; true rather than aspirational.
+;; ⭐ 1b-vi-D-1: the star CONTS anywhere in a branch, in textual order — the same walk as
+;; `select-branch-has-star?/deep` below (ω-transparent, into sub-blocks). A LEVEL failure
+;; carries these so its message names the operators PRESENT rather than one guessed star.
+(define (select-branch-star-conts/deep b)
+  (append-map (lambda (s0)
+                (let ([s (if (eq? (select-step-kind s0) 'bcast) (select-bcast-inner s0) s0)])
+                  (cond [(select-star-step? s) (list (select-star-cont s))]
+                        [(select-sub-step? s) (append-map select-branch-star-conts/deep (cdr s))]
+                        [else '()])))
+              b))
+
 (define (select-branch-has-star?/deep b)
   (ormap (lambda (s0)
            (let ([s (if (eq? (select-step-kind s0) 'bcast)

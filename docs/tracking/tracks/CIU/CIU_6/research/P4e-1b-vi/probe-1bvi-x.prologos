@@ -1,0 +1,22 @@
+ns probe-1bvi-x
+
+def env := {:prod {:db {:url "p-url" :port 5432}} :dev {:db {:url "d-url" :port 5433}}}
+def kk := {:a {:k 1} :k 2}
+
+;; 1b-vi-D-1: is `star-dup-key`'s sentence "If the key was lifted, dropping the `*`
+;; does not help either: it re-nests the layer under the key the star was deleting"
+;; true outside the one population it was written against (1b-iv)?
+;; (1) both branches `*`, the deleted keys EQUAL — drop both `*`s / drop one
+env{prod^.db* dev^.db*}
+env{prod^.db dev^.db}
+env{prod^.db dev^.db*}
+;; (2) a LIFTED key colliding with a key another branch NAMES — drop the `*`
+kk{a* k}
+kk{a k}
+;; (3) a MIXED block — drop the `*` / drop the `*-` (spelled by its ≡)
+env{prod^.db* dev^.db*}
+env{prod^.db dev^.db*}
+env{prod^.db* dev.db}
+;; (4) the generic remedy "select the flatten in its own block"
+kk{a*}
+kk{k}
