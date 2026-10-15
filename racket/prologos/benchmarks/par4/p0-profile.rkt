@@ -19,8 +19,10 @@
 ;;;   profile  — sampling profiler (1 ms); inclusive/self ms of the scheduler's functions
 ;;;              and the top self-time functions (Amdahl attribution).
 ;;;
-;;; Scheduler is chosen by PROLOGOS_SCHEDULER (bsp | seq | seq-shuffle) — read by
-;;; propagator.rkt at load (PAR 4 P0 knob). Requires are RELATIVE (testing.md:39).
+;;; Scheduler: BSP (the default). The P0 knob that chose bsp | seq | seq-shuffle (PROLOGOS_SCHEDULER) and the
+;;; in-fire topology counter were removed by owner decision O-10 (CP-2, 2026-10-14); rows that need them run
+;;; at their pinned commits (4097b1c8, fbd5a322). The fork and route counters are switched on below with
+;;; (par4-enable-counters!) — off for every other caller. Requires are RELATIVE (testing.md:39).
 (require racket/list racket/math racket/port json
          (only-in profile profile-thunk)
          (only-in profile/analyzer profile-nodes node-id node-total node-self
@@ -33,7 +35,7 @@
                   prop-network-merge-fns prop-network-propagators prop-network-cells
                   propagator-outputs propagator-inputs prop-cell-value
                   cell-id-hash prop-id-hash cell-id-n
-                  par4-scheduler-mode par4-fork-count par4-midrun-topology)
+                  current-use-bsp-scheduler? par4-enable-counters! par4-fork-count)
          (only-in "../../champ.rkt" champ-lookup champ-size champ-fold)
          (only-in "../../metavar-store.rkt" current-quiescence-scheduler)
          (only-in "../../decision-cell.rkt" tagged-cell-value? tagged-cell-value-entries)
@@ -45,6 +47,8 @@
     (values (string->symbol (vector-ref a 0)) (vector-ref a 1))))
 
 (define (now) (current-inexact-monotonic-milliseconds))
+(define (scheduler-name) (if (current-use-bsp-scheduler?) "bsp" "seq"))
+(par4-enable-counters!)   ;; fork + route counters on for this process only (propagator.rkt, O-10 CP-2)
 (define (bytes-now) (current-memory-use 'cumulative))
 (define (r3 x) (if (real? x) (/ (round (* 1000 (exact->inexact x))) 1000.0) x))
 
@@ -98,7 +102,6 @@
                          calls))
        res]))
   (define f0 (unbox par4-fork-count))
-  (define mt0 (for/vector ([x (in-vector par4-midrun-topology)]) x))
   (define routes0 (hash-copy par4-solve-routes))
   (define g0 (current-gc-milliseconds))
   (define b0 (bytes-now)) (define t0 (now))
@@ -123,14 +126,11 @@
   (define c-fires (map caddr calls))
   (define c-edges '(0 1 5 20 100 1000))   ; fires per call: 0|1|2-5|6-20|21-100|101-1000|1001+
   (hasheq
-   'file file 'mode "stats" 'scheduler (symbol->string par4-scheduler-mode) 'no_pnet no-pnet?
+   'file file 'mode "stats" 'scheduler (scheduler-name) 'no_pnet no-pnet?
    'preload (or (getenv "P0_PRELOAD") "")
    'total_ms (r3 total-ms) 'total_mb (r3 (/ total-bytes 1e6)) 'gc_ms gc-ms
    'bytes_per_us (r3 (/ total-bytes (* 1000 total-ms)))
    'forks (- (unbox par4-fork-count) f0)
-   'midrun_props (- (vector-ref par4-midrun-topology 0) (vector-ref mt0 0))
-   'midrun_cells (- (vector-ref par4-midrun-topology 1) (vector-ref mt0 1))
-   'midrun_rounds (- (vector-ref par4-midrun-topology 2) (vector-ref mt0 2))
    'solve_routes (for/hasheq ([(k v) par4-solve-routes]) (values k (- v (hash-ref routes0 k 0))))
    'bsp_rounds (length rs) 'bsp_fires fires 'bsp_writes (for/sum ([r rs]) (cadddr r))
    'bsp_fire_ms (r3 fire-ms) 'bsp_merge_ms (r3 merge-ms)
@@ -267,7 +267,7 @@
                   'cc_all (components (λ (c) #f))
                   'cc_without_degree_ge_64 (components (λ (c) (>= (hash-ref deg c 0) 64)))
                   'cc_without_degree_ge_16 (components (λ (c) (>= (hash-ref deg c 0) 16)))))))
-  (hasheq 'file file 'mode "census" 'scheduler (symbol->string par4-scheduler-mode)
+  (hasheq 'file file 'mode "census" 'scheduler (scheduler-name)
           'rounds n-rounds 'forks (- (unbox par4-fork-count) f0)
           'writes (apply + (hash-values writes-by-merge))
           'writes_by_merge (top writes-by-merge 30)
@@ -302,7 +302,7 @@
   (for ([n nodes]) (hash-update! by-name (nm n) (λ (v) (list (+ (car v) (node-total n)) (+ (cadr v) (node-self n)))) '(0 0)))
   (define pt (profile-total-time captured))
   (define (ms x) (r3 (exact->inexact x)))
-  (hasheq 'file file 'mode "profile" 'scheduler (symbol->string par4-scheduler-mode)
+  (hasheq 'file file 'mode "profile" 'scheduler (scheduler-name)
           'wall_ms (r3 total-ms) 'gc_ms (- (current-gc-milliseconds) g0)
           'profile_total_ms (ms pt) 'samples (profile-sample-number captured)
           'watch (for/hasheq ([w watch] #:when (hash-ref by-name w #f))

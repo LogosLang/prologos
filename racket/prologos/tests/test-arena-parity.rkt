@@ -57,7 +57,8 @@
 
 ;; EXPLICIT schedule (env-independent): Gauss–Seidel sweeps over the propagators in the given
 ;; order, firing each directly, until a sweep changes no cell. Divergence rows use TWO such
-;; orders, so they never depend on which drain PROLOGOS_SCHEDULER selected.
+;; orders, so they never depend on which drain is the default (P0 selected it with PROLOGOS_SCHEDULER, a knob
+;; removed by owner decision O-10).
 (define (run-order cell-specs prop-specs seeds order)
   (define-values (net cv) (build cell-specs prop-specs seeds (range (length prop-specs))))
   (define fires (for/list ([i order])

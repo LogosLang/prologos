@@ -11,6 +11,10 @@ ROUNDS="${1:-7}"; OUT="$2"
 HERE="$(cd "$(dirname "$0")/../.." && pwd)"            # racket/prologos of this tree
 R="/Applications/Racket v9.3/bin/racket"
 cd "$HERE"
+# The PAR4_TREE_REDUCE knob was removed by owner decision O-10 (CP-2); without it the "off" leg would silently
+# equal the 256 leg, so refuse. Run at eb25caee (or 8278a66d), where the knob exists.
+grep -q 'getenv "PAR4_TREE_REDUCE"' propagator.rkt || {
+  echo "o9-cold-ab.sh: this tree has no PAR4_TREE_REDUCE knob (removed by O-10, CP-2); run it at eb25caee" >&2; exit 2; }
 for r in $(seq 1 "$ROUNDS"); do
   for leg in 256 off; do
     if [ "$leg" = off ]; then E="PAR4_TREE_REDUCE=off"; else E="PAR4_NOOP=1"; fi

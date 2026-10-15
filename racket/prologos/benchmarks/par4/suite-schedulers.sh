@@ -9,6 +9,10 @@
 set -u
 OUT="$1"; mkdir -p "$OUT"
 HERE="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$HERE"
+# The PROLOGOS_SCHEDULER knob was removed by owner decision O-10 (CP-2, 2026-10-14). Without it every mode
+# would silently run BSP, so refuse; run this at the record's pinned commit (4097b1c8).
+grep -q 'getenv "PROLOGOS_SCHEDULER"' propagator.rkt || {
+  echo "suite-schedulers.sh: this tree has no PROLOGOS_SCHEDULER knob (removed by O-10, CP-2); run it at 4097b1c8" >&2; exit 2; }
 R="/Applications/Racket v9.3/bin/racket"
 run() {  # name, env...
   local name="$1"; shift

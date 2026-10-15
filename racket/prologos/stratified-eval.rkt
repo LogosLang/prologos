@@ -40,7 +40,7 @@
  stratified-explain-goal
  ;; Phase 0a (Track 2B): Strategy override for parity testing
  current-solver-strategy-override
- ;; PAR 4 P0 route counter
+ ;; PAR 4 route counter (written only when par4-counters-enabled is switched on)
  par4-solve-routes
  ;; D4 structured answer type (re-exported from provenance.rkt via relations.rkt)
  (struct-out answer-result)
@@ -174,16 +174,14 @@
 ;; Track 2B Phase 0a: Strategy override for parity testing.
 ;; When non-#f, overrides the per-expression solver-config strategy.
 ;; Allows running the entire test suite under :atms without modifying tests.
-(define current-solver-strategy-override
-  ;; PAR 4 P0 (2026-10-13): PROLOGOS_SOLVER_STRATEGY = atms | depth-first | auto
-  ;; seeds the override from the environment (read once), so a corpus/suite run can
-  ;; force a route without code edits. Unset → #f (unchanged behaviour).
-  (make-parameter (let ([s (getenv "PROLOGOS_SOLVER_STRATEGY")])
-                    (and s (member s '("atms" "depth-first" "auto")) (string->symbol s)))))
-;; PAR 4 P0: how many solve queries took each route (tier1 | dfs | atms). Read by
+(define current-solver-strategy-override (make-parameter #f))
+;; PAR 4: how many solve queries took each route (tier1 | dfs | atms). Written only after a measurement
+;; harness calls (par4-enable-counters!) (propagator.rkt; O-10 decision CP-2); read by
 ;; benchmarks/par4/p0-profile.rkt; never reset by the compiler.
 (define par4-solve-routes (make-hasheq))
-(define (par4-route! r) (hash-set! par4-solve-routes r (add1 (hash-ref par4-solve-routes r 0))))
+(define (par4-route! r)
+  (when (unbox par4-counters-enabled)
+    (hash-set! par4-solve-routes r (add1 (hash-ref par4-solve-routes r 0)))))
 
 ;; Rel T1 A.2b (SCAFFOLDING — retirement owner: BSP-LE Track 3). #t iff any
 ;; relation reachable from goal-name has a clause carrying a body-local variable
@@ -301,10 +299,7 @@
          ;; Phase 10a: wire :execution config to BSP scheduler override.
          ;; :parallel (default) → BSP. :sequential → Gauss-Seidel.
          (parameterize ([current-use-bsp-scheduler?
-                         ;; PAR 4 P0: the PROLOGOS_SCHEDULER knob (seq modes) wins, so a
-                         ;; whole-suite DIRECT-K=1 run reaches ATMS queries too.
-                         (and (eq? (solver-config-execution config) 'parallel)
-                              (eq? par4-scheduler-mode 'bsp))]
+                         (eq? (solver-config-execution config) 'parallel)]
                         [current-is-eval-fn
                          (or (current-is-eval-fn)
                              (lambda (x) x))])

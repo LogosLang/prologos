@@ -198,10 +198,10 @@
  wrap-with-worldview
  ;; Track 8 C5a: Global BSP scheduler override for A/B benchmarking
  current-use-bsp-scheduler?
- ;; PAR 4 P0 instrumentation (env knob + fork counter)
- par4-scheduler-mode
+ ;; PAR 4 observation counters (O-10 / CP-2): off unless a measurement harness switches them on
+ par4-counters-enabled
+ par4-enable-counters!
  par4-fork-count
- par4-midrun-topology   ;; PAR 4 P0: (vector deferred-props new-cells rounds-with-either) created INSIDE fires, applied mid-S0
  ;; CALM topology guard: #t during BSP fire rounds
  current-bsp-fire-round?
  ;; PAR Track 1: Decomposition request protocol
@@ -1233,7 +1233,7 @@
 ;; Resets hot state (worklist, fuel) and contradiction.
 ;; O(1): two struct allocations. All data shared until child writes (CoW).
 (define (fork-prop-network net [fuel 1000000])
-  (set-box! par4-fork-count (add1 (unbox par4-fork-count)))  ;; PAR 4 P0
+  (when (unbox par4-counters-enabled) (set-box! par4-fork-count (add1 (unbox par4-fork-count))))  ;; PAR 4
   ;; D.4 1C-iv-a (§10.0.6 γ1): fork-prop-network cell-reset.
   ;; Sub-network gets fresh worklist + new fuel budget. Cells are SHARED with
   ;; parent via CHAMP structural sharing (prop-network-cells net) — under D.4,
@@ -2183,35 +2183,14 @@
 ;; This is the correct level for a full A/B comparison — it catches every quiescence
 ;; invocation (unify.rkt, bridges, tabling, not just metavar-store).
 ;; PPN 4C Phase 3A.d (2026-05-22): elab-speculation.rkt retired (zero callers; stranded).
-;; PAR 4 P0 (2026-10-13): PROLOGOS_SCHEDULER env knob, read ONCE at module load, so a
-;; whole test suite / corpus run can be driven under another scheduler without code edits:
-;;   unset | "bsp"      → BSP (the default, unchanged)
-;;   "seq"              → sequential Gauss-Seidel drain (= DIRECT at K=1: writes visible
-;;                        immediately — chaotic iteration with one executor)
-;;   "seq-shuffle"      → the sequential drain, picking the NEXT propagator uniformly at
-;;                        random from the worklist (seed: PROLOGOS_SCHED_SEED, default 1).
-;;                        Adversarial schedule-independence test for PAR 4 A-1/A-3.
-(define par4-scheduler-mode
-  (let ([m (getenv "PROLOGOS_SCHEDULER")])
-    (cond [(member m '("seq" "seq-shuffle")) (string->symbol m)] [else 'bsp])))
-(define par4-shuffle-rng
-  (and (eq? par4-scheduler-mode 'seq-shuffle)
-       (let ([g (make-pseudo-random-generator)]
-             [seed (or (string->number (or (getenv "PROLOGOS_SCHED_SEED") "1")) 1)])
-         (parameterize ([current-pseudo-random-generator g]) (random-seed seed))
-         g)))
-;; Remove and return a uniformly random element of the list in box `b`.
-(define (par4-pick-random! b rng)
-  (define l (unbox b))
-  (define i (random (length l) rng))
-  (let loop ([l l] [i i] [acc '()])
-    (if (zero? i)
-        (begin (set-box! b (append (reverse acc) (cdr l))) (car l))
-        (loop (cdr l) (sub1 i) (cons (car l) acc)))))
-;; PAR 4 P0: fork counter (read by benchmarks/par4/p0-profile.rkt; never reset by the
-;; compiler). Single-threaded increment; the BSP fire phase does not fork.
+;; PAR 4 observation counters (O-10 decision CP-2, 2026-10-14): a measurement harness switches them on
+;; in-process with (par4-enable-counters!); otherwise nothing is written. Read by
+;; benchmarks/par4/p0-profile.rkt. (The P0 knobs that SELECTED a semantics — PROLOGOS_SCHEDULER,
+;; PAR4_TREE_REDUCE, PAR4_TRAP_MIDRUN — were removed by the same decision; they run at 4097b1c8 / eb25caee.)
+(define par4-counters-enabled (box #f))
+(define (par4-enable-counters!) (set-box! par4-counters-enabled #t))
 (define par4-fork-count (box 0))
-(define current-use-bsp-scheduler? (make-parameter (eq? par4-scheduler-mode 'bsp)))  ;; PAR Track 1 Phase 5: BSP is the default
+(define current-use-bsp-scheduler? (make-parameter #t))  ;; PAR Track 1 Phase 5: BSP is the default
 
 ;; CALM topology guard: #t only during a fire-and-collect-writes fire round.
 ;; NOT an error gate — net-new-cell and net-add-propagator ARE allowed in-fire
@@ -2249,13 +2228,7 @@
 ;; At N=256: pool 1.2x faster. At N=512: pool 1.6x faster. Below 256: sequential wins.
 ;; Thread-based (Phase 2b) was 9-10x slower at all N. Pool eliminates thread creation
 ;; overhead but retains dispatch cost (chunk build + semaphore + result collect ~60-140us).
-;; PAR 4 O-9 evidence (2026-10-14): PAR4_TREE_REDUCE env knob for this parameter's DEFAULT, read
-;; once at load so a whole suite / corpus can run under it: unset → 256 (as shipped), "off" → #f,
-;; a number → that number. Behaviour-neutral when unset.
-(define par4-tree-threshold-default
-  (let ([v (getenv "PAR4_TREE_REDUCE")])
-    (cond [(not v) 256] [(equal? v "off") #f] [(string->number v) => values] [else 256])))
-(define current-tree-reduce-threshold (make-parameter par4-tree-threshold-default))
+(define current-tree-reduce-threshold (make-parameter 256))
 
 ;; B2f Phase 0: Per-quiescence cell-write instrumentation.
 ;; When non-#f, these are boxes that net-cell-write increments.
@@ -2792,9 +2765,8 @@
         [(<= (unbox remaining-fuel) 0) (finalize net)]
         [(null? (unbox wl)) (finalize net)]
         [else
-         (define pid (if par4-shuffle-rng
-                         (par4-pick-random! wl par4-shuffle-rng)
-                         (let ([p (car (unbox wl))]) (set-box! wl (cdr (unbox wl))) p)))
+         (define pid (car (unbox wl)))
+         (set-box! wl (cdr (unbox wl)))
          (set-box! remaining-fuel (sub1 (unbox remaining-fuel)))
          (define prop (champ-lookup (prop-network-propagators net)
                                      (prop-id-hash pid) pid))
@@ -3109,21 +3081,6 @@
 
 ;; Collect all deferred propagators from fire results.
 ;; Returns list of (list input-ids output-ids fire-fn) specs.
-;; PAR 4 P0 (topology probe): structure created INSIDE fires under BSP and applied between rounds
-;; of the S0 inner loop (not at the topology stratum). Behaviour-neutral counter.
-(define par4-midrun-topology (vector 0 0 0))
-(define (par4-count-midrun! all-results)
-  (define np (for*/sum ([r (in-list all-results)] #:when (fire-result? r)) (length (fire-result-new-propagators r))))
-  (define nc (for*/sum ([r (in-list all-results)] #:when (fire-result? r)) (length (fire-result-new-cells r))))
-  (vector-set! par4-midrun-topology 0 (+ np (vector-ref par4-midrun-topology 0)))
-  (vector-set! par4-midrun-topology 1 (+ nc (vector-ref par4-midrun-topology 1)))
-  (when (or (> np 0) (> nc 0))
-    (vector-set! par4-midrun-topology 2 (add1 (vector-ref par4-midrun-topology 2)))
-    ;; PAR4_TRAP_MIDRUN=1: make any test that reaches the unstratified path FAIL (census by suite).
-    (when par4-trap-midrun?
-      (error 'par4-midrun-topology "structure created inside a fire, applied mid-S0: ~a propagators, ~a cells" np nc))))
-(define par4-trap-midrun? (and (getenv "PAR4_TRAP_MIDRUN") #t))
-
 ;; ---- PAR 4 O-9 evidence: merge-order census (2026-10-14) ----
 ;; PAR4_MERGE_ORDER_CENSUS=<file>: for every BSP round with >= 2 fire results, apply the round's
 ;; results to the SAME snapshot in four ways and compare the resulting networks:
@@ -3220,7 +3177,7 @@
     (define label (or (getenv "PAR4_MC_LABEL") ""))
     (define summary
       (string-append "{\"kind\":\"summary\",\"label\":" (par4-json-str label)
-                     ",\"threshold\":" (par4-json-str par4-tree-threshold-default)
+                     ",\"threshold\":" (par4-json-str (current-tree-reduce-threshold))
                      (apply string-append
                             (for/list ([(key v) (in-hash par4-mc)])
                               (format ",~a:~a" (par4-json-str key) v)))
@@ -3556,7 +3513,7 @@
                      ;; PAR 4 O-9 evidence: merge-order census (env-gated; after the merge timing)
                      [_par4-mc (when par4-mc-path (par4-merge-census! snapshot+fuel all-writes n))]
                      ;; Apply deferred propagators
-                     [deferred-props (begin (par4-count-midrun! all-writes) (collect-deferred-propagators all-writes))]
+                     [deferred-props (collect-deferred-propagators all-writes)]
                      [merged-with-props
                       (for/fold ([n merged])
                                 ([spec (in-list deferred-props)])

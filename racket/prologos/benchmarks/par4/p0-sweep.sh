@@ -5,10 +5,15 @@
 #   benchmarks/par4/p0-sweep.sh MODE OUT.jsonl [FILES...]
 #
 # MODE: stats | census | profile (see p0-profile.rkt). FILES default: the comparative
-# corpus. Scheduler: export PROLOGOS_SCHEDULER=bsp|seq|seq-shuffle (+ PROLOGOS_SCHED_SEED).
+# corpus. Scheduler: BSP. (P0 chose it with PROLOGOS_SCHEDULER, removed by owner decision O-10, CP-2;
+# a seq/seq-shuffle sweep runs at 4097b1c8.)
 set -u
 MODE="$1"; OUT="$2"; shift 2
 HERE="$(cd "$(dirname "$0")/../.." && pwd)"          # racket/prologos
+if [ -n "${PROLOGOS_SCHEDULER:-}" ] && ! grep -q 'getenv "PROLOGOS_SCHEDULER"' "$HERE/propagator.rkt"; then
+  echo "p0-sweep.sh: PROLOGOS_SCHEDULER is set but this tree has no such knob (O-10, CP-2); run at 4097b1c8" >&2; exit 2; fi
+if [ -n "${PROLOGOS_SOLVER_STRATEGY:-}" ] && ! grep -q 'getenv "PROLOGOS_SOLVER_STRATEGY"' "$HERE/stratified-eval.rkt"; then
+  echo "p0-sweep.sh: PROLOGOS_SOLVER_STRATEGY is set but this tree has no such knob (O-10, CP-2); run at 4097b1c8" >&2; exit 2; fi
 RACKET="/Applications/Racket v9.3/bin/racket"
 if [ "$#" -eq 0 ]; then set -- "$HERE"/benchmarks/comparative/*.prologos; fi
 : > "$OUT"
