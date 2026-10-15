@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 175**
+> ### **NEXT FREE: 176**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7756,12 +7756,35 @@ unaffected.
 **Related**: PPN 4C 4B.5.b's productivity check would reject the unproductive definition cycles that reach this (p23/p26,
 accepted at definition today) — not the general case.
 
+**Addendum (2026-10-14)**: also reached while a `def` is processed, not only at a top-level evaluation:
+`def rec1 : Int -> _ := [fn [x : Int] [rec1 x]]` then `def s : String := [rec1 3]` → the same uncaught raise under
+`process-command/demand` (q5-h06p on the branch). Whether type checking or the def's value evaluation reached `whnf` was
+not determined.
+
 **When**: independent of 4B.5.b; the next sweep, or with POL work.
 
 **Record**: `docs/tracking/tracks/PPN/PPN_4C/audits/2026-10-13_PPN_4C_4B5b_GROUNDING_AUDIT.md` GA-5 (on branch
 `ppn4c-elaboration-on-network` until its next checkpoint merge); probes `…/PPN_4C/research/4B5b/p23-*`–`p26-*`.
 
-### 173. ⬜ ⭐ A SPEC-LESS MUTUAL `defn` CAN COMMIT A TYPE WITH A HOLE — `g2 : Nat -> _ defined.`, after which every use of `g2` type-checks (`[int+ [g2 3N] 1] : Int`, a Bool used as an Int, 0 errors); live on main since PPN 4C 4B.5.a (`2d791705`)
+### 173. ⬜ ⭐ A SPEC-LESS MUTUAL `defn` CAN COMMIT A TYPE WITH A HOLE — `g2 : Nat -> _ defined.`, after which every use of `g2` type-checks (`def s : String := [g2 3N]` accepted, 0 errors; g2 returns Bool); ~~live on main since PPN 4C 4B.5.a (`2d791705`)~~ widened by PPN 4C 4B.5.a (`2d791705`) — a committed hole predates it (CORRECTED 2026-10-14, see the callout)
+
+> ⚠ **CORRECTION (2026-10-14, PPN 4C session; controls q5-v27, q5-v27b, q5-v27c, q5-h06q on the branch)** — three
+> claims of this entry as filed on 2026-10-13 (`96274f3d`) were wrong or mis-attributed:
+> 1. ~~"`[int+ [g2 3N] 1] : Int`, a Bool used as an Int" demonstrates the hole~~ **Withdrawn**: with both functions
+>    spec'd `Nat -> Bool` (no hole anywhere, q5-v27) the same line is still accepted, `: Int`, 0 errors. That
+>    acceptance is DEFERRED 156 (primitive ops do not constrain their operands). I ran no spec'd control before
+>    filing. The hole's own effect, measured with a discriminating use: `def s : String := [g2 3N]` is **accepted**
+>    with the spec-less pair (p27b: `s : String defined.`, 0 errors) and refused with the spec'd pair (q5-v27b:
+>    *Type mismatch, Expected: String, Got: Bool*).
+> 2. ~~"`[p27::f2 2N] : _` (does not reduce)"~~ is not the hole: the spec'd pair prints `[q5v27::f2 2N] : Bool` too.
+>    The demand trigger looks only at the use's own names, so a use of a committed g2 whose body calls the
+>    still-deferred f2 evaluates before the sweep completes f2 (q5-v27c: after a direct use of f2, `[g2 3N]` gives
+>    `true`). Filed separately as DEFERRED 175.
+> 3. ~~"live on main since 4B.5.a"~~: a committed type with a hole **predates** 4B.5.a.
+>    `def rec1 : Int -> _ := [fn [x : Int] [rec1 x]]` → `rec1 : Int -> _ defined.` (q5-h06q; no forward reference,
+>    no deferral). What 4B.5.a added: a group that HM types fully (p27: both `Nat -> Bool`) commits a hole, because
+>    the deferred member's pre-register is re-written with holes and its partner is typed in a different command.
+>    The fix shape below covers both: never commit a top-level type that contains a hole.
 
 **Found by** PPN 4C's 4B.5.b grounding audit, probe p27 (branch `ppn4c-elaboration-on-network` @ `0c2aaf6a`, code = main
 `150915c4`):
@@ -7773,8 +7796,9 @@ defn g2 | zero -> [f2 zero] | suc n -> [f2 n]
 [int+ [g2 3N] 1]
 ```
 
-→ `f2 : Nat -> Bool defined.` · **`g2 : Nat -> _ defined.`** · `[p27::f2 2N] : _` (does not reduce; cause not
-investigated) · **`[int+ [p27::f2 2N] 1] : Int`** — 0 errors. The pair is well typed (both `Nat -> Bool`).
+→ `f2 : Nat -> Bool defined.` · **`g2 : Nat -> _ defined.`** · `[p27::f2 2N] : _` ~~(does not reduce; cause not
+investigated)~~ (DEFERRED 175) · ~~**`[int+ [p27::f2 2N] 1] : Int`**~~ (DEFERRED 156, correction 1) — 0 errors. The pair is
+well typed (both `Nat -> Bool`).
 
 **Mechanism** (read in code; consistent with p27 and p18): f2's body references g2, a same-file def-head not yet defined
 (`'pending`), so 4B.5.a's annotated deferral arm (`driver.rkt:2116-2130`) defers f2 and leaves its pre-register in place,
@@ -7789,7 +7813,8 @@ wildcard and survives f's removal; `[g 1N]` prints `[p18::f 0N] : String`. The 4
 **Before 4B.5.a** both files errored (f's forward reference was an immediate Unbound) — inferred from the 4B.5 design's p2
 record at `5b0c78ed` (3 × Unbound), not re-measured.
 
-**Why ⭐**: silent acceptance at zero errors, and DEFERRED 156's operand contract would not catch it (`_` unifies with `Int`).
+**Why ⭐**: silent acceptance at zero errors (`def s : String := [g2 3N]`, p27b), and DEFERRED 156's operand contract would
+not catch it (`_` unifies with any type).
 
 **Fix shape**: in-track — PPN 4C 4B.5.b (decision Q-4B5.4, addendum §18.21.27): members whose types have holes are typed
 as a group and commit only when every member checks against the group's final, hole-free environment; a hole left in a
@@ -7826,3 +7851,37 @@ through a lambda, probe p15) must stay green. If 4B.5.b's mini-design finds the 
 
 **Record**: `docs/tracking/tracks/PPN/PPN_4C/audits/2026-10-13_PPN_4C_4B5b_GROUNDING_AUDIT.md` GA-5; probes
 `…/PPN_4C/research/4B5b/p24-*`, `p25-*` (on branch `ppn4c-elaboration-on-network`).
+
+### 175. ⬜ ⭐ A TOP-LEVEL USE OF A COMMITTED DEFINITION THAT CALLS A STILL-DEFERRED ONE EVALUATES TO A STUCK TERM — `[g2 3N]` prints `[q5v27::f2 2N] : Bool` instead of `true`, 0 errors (PPN 4C 4B.5.a's demand trigger is shallow)
+
+**Found by** PPN 4C (branch `ppn4c-elaboration-on-network` @ `569b797e`, code = main `104c9780`), control probes for the
+correction of DEFERRED 173. q5-v27c:
+
+```
+spec f2 Nat -> Bool
+defn f2 | zero -> true      | suc n -> [g2 n]
+spec g2 Nat -> Bool
+defn g2 | zero -> [f2 zero] | suc n -> [f2 n]
+[g2 3N]          ;; → [q5v27c::f2 2N] : Bool     (stuck)
+[f2 2N]          ;; → true : Bool
+[g2 3N]          ;; → true : Bool
+```
+
+**Mechanism** (read in code; consistent with q5-v27c): f2 references g2 before g2 is defined, so 4B.5.a defers f2 (its
+type is pre-registered from the spec); g2 types against that and commits. A top-level use triggers the sweep only when the
+use's OWN names are pending or deferred (`residuation-demand-name`, `driver.rkt:1499-1512`): `[g2 3N]` names only g2,
+which is committed, so it evaluates at once, reaches f2, whose value is not yet there, and stops. `[f2 2N]` names f2,
+which is in the residue, so it triggers the sweep, and every later use reduces. The canonical G1 case passes only
+because its use names the deferred member (`[even? 4N]`).
+
+**Why ⭐**: a wrong value at zero errors, in the exact feature 4B.5.a shipped (spec'd mutual recursion).
+
+**Fix shape**: in-track (PPN 4C 4B.5.b, which owns the sweep). Simplest and sound: an evaluated top-level command runs the
+sweep fixpoint first whenever the residue has ANY outstanding item, whatever names the command mentions. The narrower
+alternative — demand closed transitively over committed bodies' references — needs a reference graph that 4B.5.b's
+cycle analysis will build anyway. Pin: q5-v27c's first `[g2 3N]` must print `true : Bool`.
+
+**When**: 4B.5.b.
+
+**Record**: PPN 4C LOG § *Q-4B5.4 decided; main merged in; three of my DEFERRED 173 claims corrected* and the grounding
+audit's GA-10 (on the branch); probes `…/PPN_4C/research/4B5b/q5-v27*`.
