@@ -6776,6 +6776,13 @@ this lands; they are the acceptance tests.
 Found by the grammar-drift tripwire firing on `940c9c88` (CIU T6 slice
 1b-v-B2b), which is exactly what it exists for.
 
+**2026-10-14 — THE FAMILY IS NOW FINAL** (CIU T6 1b-vi-D-2b, `9743e93e` on
+`ciu6-path-selection`; the tripwire fired again, as expected): the compiler mints
+all four — `*`, `*_`, `*-`, `*-_` — closer-adjacent and fused. The `*->` boundary is
+decided ([Q_U56](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u56)): not a construct; the
+selection consumer refuses it, guided, so the grammar needs no `*->` form either.
+The fix shape below is unchanged.
+
 **THE FACT** (verified): `editors/tree-sitter-prologos/grammar.js` has
 `flatten_step: $ => token.immediate('*')`. The compiler now mints `*_`
 closer-adjacent (`x{a}*_`, `[f x]*_`, `xs:{a}*_`), so the grammar consumes the
