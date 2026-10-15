@@ -2161,6 +2161,16 @@
              [ef (values #f ef)]
              [(null? rest)
               (values (list (cons #f (record-field elem 'present))) #f)]
+             ;; ⭐ 1b-vi-D-2a — UNDER A TOTAL COLLAPSE THE ORDINAL HEAD IS TRANSPARENT:
+             ;; descend exactly as the bare-number arm below does, so the rest's own
+             ;; arms place the join at the branch's top (Q_U48) and `seen` stays
+             ;; unchanged (an ordinal is nameless — Q_U57's prefix rule). Without it
+             ;; this arm wraps the collapse in ONE keyless component (`ov{0.a.b*-_}` →
+             ;; `@[{:a-b-x 1}]`, probe-1bvi-w), or — when sₙ is the head's next step —
+             ;; the star-tail guard fires. The caret family never gets here (the
+             ;; collapse arm is first: P3c). Twin: reduction.rkt's ord-head arm.
+             [(select-branch-total-collapse? b)
+              (select-branch-entries ctx (whnf elem) rest (append path (list n)) seen sort)]
              [else
               (let-values ([(ft bf) (select-below-field ctx (whnf elem) rest
                                                         (append path (list n)) '() sort)])

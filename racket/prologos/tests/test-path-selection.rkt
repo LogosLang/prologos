@@ -9428,9 +9428,11 @@
    "def org := {:db {:admins @[{:name \"a\"} {:name \"b\"}]}}\n"
    ;; 1b-vi-D-1: same HEAD, sibling children sharing a field (probe-1bvi-v's P2)
    "def sh := {:a {:b {:port 1 :u 2} :c {:port 3 :v 4}}}\n"
-   ;; 1b-vi-D-1: a top-level VECTOR — an `(@ord N)`-headed branch (C's handover)
-   "def ov := @[{:a {:b {:x 1}}}]\n"))
-(define 1bvi-fixture-count 14)
+   ;; 1b-vi-D-2a: ORDINAL-headed twins of `t5` and `v3` — the generator states
+   ;; `ot{0.X}` ≡ `t5{X}` under every collapse (an ordinal head is transparent)
+   "def ot := @[{:a {:b {:c {:m {:x 1} :n {:y 2}}}}}]\n"
+   "def ov3 := @[{:a {:b {:c @[@[1 2] @[3]]}}}]\n"))
+(define 1bvi-fixture-count 15)
 
 (define 1bvi-rows
   '(;; ---- E1–E10 under `*-` [Q_U48]: ≡ dissolve every ancestor, then `*`
@@ -9504,13 +9506,9 @@
                                                                #rx"a total collapse [(]`[*]-`[)] always lands at its branch's top"
                                                                #rx"`x[{]a[.]b[*]- c\\^[}]`")
                                                               (#rx"keeps the join nested")))
-    ;; ⚠ the `(@ord N)`-headed pair (C's handover) is OUT until D-2's FIRST red step: at
-    ;; D-1's red step `ov{0.a.b*-_}` gave `@[{:a-b-x 1}] : ⟨…⟩` where Q_U57's law
-    ;; (`ov{0.a.b.x^-_}`) gives `{:a-b-x 1}` (probe-1bvi-w). Not an open question — a DEFECT
-    ;; in C's machinery against three decisions: Q_U48 ("lands at the branch's top level")
-    ;; + Q_U49 (Map contents splice keyed), Q_U57's law, and P3c's pinned reading that a
-    ;; collapse overrides an ordinal head's keyless sort (`admins{0.name^-}`, the P3c verify
-    ;; pin). The `ov` fixture stays for the rows D-2 brings back.
+    ;; ⚠ the `(@ord N)`-headed pair C handed over is now GENERATED, not hand-written: the
+    ;; law rows over `ot` / `ov3` (1b-vi-D-2a, below `1bvi-law-positions`). D-1's red step
+    ;; found the defect they pin — `ov{0.a.b*-_}` gave `@[{:a-b-x 1}]` (probe-1bvi-w).
     ;; ---- [Q_U55], caret half (1b-vi-B): a rename on an ancestor of `^-` / `^-k'`
     ("C1" "e3{a^p.b.c^-}"   B (line "{:c @[1 2]} : {:c [PVec Int]}")
                               (refused (#rx"`p` can never appear under a total collapse" #rx"Drop `\\^p`" #rx"keep the level") ()))
@@ -9559,7 +9557,14 @@
 ;; must change with it — an `equiv` whose right-hand side is REFUSED is
 ;; reported as such, so a drift is loud, not a silent pass.
 ;; ---------------------------------------------------------------------------
-(define 1bvi-law-positions '((t5 (a) (a b) (a b c)) (v3 (a b c))))
+;; (SUBJECT BASE . POSITIONS). BASE #f: the subject's own law. Otherwise SUBJECT is
+;; BASE's value under one ordinal head, and every row borrows BASE's equivalent:
+;; `ot{0.X}` ≡ `t5{X}` — ⭐ 1b-vi-D-2a, AN ORDINAL HEAD IS TRANSPARENT UNDER A COLLAPSE.
+;; The caret rows pin what P3c decided (`admins{0.name^-}` re-keys) at every position and
+;; ancestor assignment; the star rows pin what Q_U48 / Q_U57 require of `*-` / `*-_`,
+;; which C's machinery got wrong (it wrapped the join in the ordinal's keyless component).
+(define 1bvi-law-positions '((t5 #f (a) (a b) (a b c)) (v3 #f (a b c))
+                             (ot t5 (a) (a b) (a b c)) (ov3 v3 (a b c))))
 (define 1bvi-law-fields '(((a) b) ((a b) c) ((a b c) m n)))   ;; t5 only
 (define 1bvi-law-renames '(p q))                              ;; ancestor i → `^`+(list-ref … i)
 
@@ -9575,12 +9580,14 @@
                   (for/list ([n (in-list names)]) (regexp (format "`~a`" n))))
           '()))
   (for*/list ([entry (in-list 1bvi-law-positions)]
-              [pos (in-list (cdr entry))]
+              [pos (in-list (cddr entry))]
               [subj (in-value (car entry))]
+              [base (in-value (or (cadr entry) (car entry)))]
+              [head (in-value (if (cadr entry) "0." ""))]
               [ancs (in-value (drop-right pos 1))]
               [leaf (in-value (last pos))]
               [modes (in-list (apply cartesian-product (for/list ([_ ancs]) '(kept dis ren))))]
-              [fam (in-list (if (eq? subj 'v3) '(star) '(caret caret-k star star-synth)))])
+              [fam (in-list (if (eq? base 'v3) '(star) '(caret caret-k star star-synth)))])
     (define written
       (string-append (string-join (for/list ([k ancs] [m modes] [i (in-naturals)]) (seg k m i)) ".")
                      (if (null? ancs) "" ".")))
@@ -9588,21 +9595,21 @@
       (string-append (string-join (for/list ([k ancs]) (format "~a^" k)) ".") (if (null? ancs) "" ".")))
     (define names (for/list ([m modes] [i (in-naturals)] #:when (eq? m 'ren)) (list-ref 1bvi-law-renames i)))
     (define (row suffix flips pre target)
-      (define sp (format "~a{~a~a~a}" subj written leaf suffix))
+      (define sp (format "~a{~a~a~a~a}" subj head written leaf suffix))
       (list (string-append "law " sp) sp flips pre target))
     (case fam
       [(caret)
-       (let ([eqv `(equiv ,(format "~a{~a~a}" subj all-dis leaf))])
+       (let ([eqv `(equiv ,(format "~a{~a~a}" base all-dis leaf))])
          (if (pair? names) (row "^-" 'B eqv (renamed-refusal names)) (row "^-" #f eqv #f)))]
       [(caret-k)
-       (let ([eqv `(equiv ,(format "~a{~a~a^z}" subj all-dis leaf))])
+       (let ([eqv `(equiv ,(format "~a{~a~a^z}" base all-dis leaf))])
          (if (pair? names) (row "^-z" 'B eqv (renamed-refusal names)) (row "^-z" #f eqv #f)))]
       [(star)
        (row "*-" 'D 'midlex
-            (if (pair? names) (renamed-refusal names) `(equiv ,(format "~a{~a~a*}" subj all-dis leaf))))]
+            (if (pair? names) (renamed-refusal names) `(equiv ,(format "~a{~a~a*}" base all-dis leaf))))]
       [(star-synth)
        (row "*-_" 'D 'midlex
-            `(equiv ,(format "~a{~a}" subj
+            `(equiv ,(format "~a{~a}" base
                              (string-join (for/list ([f (cdr (assoc pos 1bvi-law-fields))])
                                             (format "~a~a.~a^-_" written leaf f))
                                           " "))))])))

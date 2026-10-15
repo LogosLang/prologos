@@ -2366,16 +2366,20 @@
            ;; P3c: ordinal BRANCH — keyless component over the element
            (let* ([n (cadr (car b))]
                   [elem (index-into v n n)])
-             (if (null? (cdr b))
-                 (list (cons #f elem))
-                 ;; 1b-iv-B2 [Q_U49] — SEAT B keyless, the twin of typing's
-                 ;; ord-branch arm. `(cdr b)` is the step list we pass down, so
-                 ;; `select-steps-star-tail?` answers exactly "is this a BARE star
-                 ;; join?" here as well.
-                 (let ([bv (below-value elem (cdr b) '())])
-                   (if (select-steps-yield-bare-join? (cdr b))
-                       (star-keyless-landing-value bv asort)
-                       (list (cons #f bv))))))]
+             (cond
+               [(null? (cdr b)) (list (cons #f elem))]
+               ;; ⭐ 1b-vi-D-2a — the twin of typing's: under a TOTAL collapse the
+               ;; ordinal head is transparent, exactly the bare-number arm below.
+               [(select-branch-total-collapse? b) (branch-entries elem (cdr b) seen asort)]
+               [else
+                ;; 1b-iv-B2 [Q_U49] — SEAT B keyless, the twin of typing's
+                ;; ord-branch arm. `(cdr b)` is the step list we pass down, so
+                ;; `select-steps-star-tail?` answers exactly "is this a BARE star
+                ;; join?" here as well.
+                (let ([bv (below-value elem (cdr b) '())])
+                  (if (select-steps-yield-bare-join? (cdr b))
+                      (star-keyless-landing-value bv asort)
+                      (list (cons #f bv))))]))]
           [(number? (car b))
            ;; bare-number STEP chain (splice continuation): transparent
            (let ([elem (index-into v (car b) (car b))])

@@ -183,6 +183,7 @@
  select-star-cont-unhandled
  select-cont-collapsed? select-cont-dissolves-level?
  select-step-mark-collapsed select-step-unmark select-branch-mark-total-collapse
+ select-branch-total-collapse?
  select-star-provenance-prefix
  select-branch-deep-star? select-steps-star-tail? select-branch-star-conts/deep
  select-step-makes-no-layer? select-branch-has-star?/deep
@@ -1485,15 +1486,27 @@
                (if (eq? u i) s (make-select-bcast u)))]
     [else s]))
 
+;; ⭐ 1b-vi-D-2a: "the branch ends in a TOTAL star" — ONE definition, read by the
+;; mark below AND by both twins' ordinal-head arms, so "total" cannot mean two
+;; things. (`*-` / `*-_`; the classifier raises on anything off the axis.)
+(define (select-branch-total-collapse? b)
+  (let ([rev (reverse b)])
+    (and (pair? rev)
+         (select-star-step? (car rev))
+         (select-star-cont-total? (select-star-cont (car rev))))))
+
 ;; Mark s₁…sₙ₋₁ iff the branch ends in a TOTAL star; otherwise the branch ITSELF
 ;; (`eq?`). Pure, and branch-local: a sub-block is its own branch list and is
 ;; marked where it is segmented (1b-vi-D wires this at `segment-select-items`'
 ;; success return, after every parser check).
+;; ⚠ An ordinal step is left UNMARKED (it has no cont to wrap) — and that is NOT
+;; "an ordinal makes no layer" by itself: an ordinal HEAD sets its branch's
+;; landing (one keyless component). Under a total collapse both twins' ord-head
+;; arms descend transparently instead (1b-vi-D-2a, `select-branch-total-collapse?`).
 (define (select-branch-mark-total-collapse b)
   (let ([rev (reverse b)])
     (if (and (pair? rev) (pair? (cdr rev))
-             (select-star-step? (car rev))
-             (select-star-cont-total? (select-star-cont (car rev))))
+             (select-branch-total-collapse? b))
         (append (map select-step-mark-collapsed (reverse (cddr rev)))
                 (list (cadr rev) (car rev)))
         b)))
