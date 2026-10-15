@@ -87,7 +87,17 @@
                           #:when (equal? (net-cell-read (bsp-round-network-snapshot r) (vector-ref cv i))
                                          (list-ref xs i)))
                 k))))
-  (hasheq 'depth depth 'rounds (length rs) 'writes (length diffs) 'final xs 'changed changed
+  ;; detail: per record k (1-based), per written cell: old value, value HELD after the round, and the writers
+  (define detail
+    (for/list ([r rs] [k (in-naturals 1)])
+      (define by-cell (make-hash))
+      (for ([d (bsp-round-cell-diffs r)])
+        (define i (cell-idx cv (cell-diff-cell-id d)))
+        (when i (hash-update! by-cell i (λ (ws) (cons (hash-ref pid->idx (prop-id-n (cell-diff-source-propagator d))) ws)) '())))
+      (cons k (for/list ([i (sort (hash-keys by-cell) <)])
+                (list i (net-cell-read (bsp-round-network-snapshot r) (vector-ref cv i))
+                      (sort (remove-duplicates (hash-ref by-cell i)) <))))))
+  (hasheq 'detail detail 'x0 x0 'depth depth 'rounds (length rs) 'writes (length diffs) 'final xs 'changed changed
           'fired-set fired-set 'fires (length fired-list) 'attr attr 'shown-not-held shown-not-held
           'fixeq fixeq))
 
@@ -146,4 +156,34 @@
   (printf "  across schedules: final ~a · changed ~a · fired-set ~a · fires ~a · rounds ~a · writes ~a · attr ~a · fix-eq ~a\n"
           (same 'final) (same 'changed) (same 'fired-set) (same 'fires) (same 'rounds) (same 'writes)
           (same 'attr) (same 'fixeq))
-  (printf "  fix-eq (bsp's x*): ~s\n" (hash-ref (cdr (car results)) 'fixeq)))
+  (printf "  fix-eq (bsp's x*): ~s\n" (hash-ref (cdr (car results)) 'fixeq))
+  (define bsp (cdr (car results)))
+  (define detail (hash-ref bsp 'detail))
+  (printf "  BSP rounds as (cell held-after-round writers):\n")
+  (for ([kd detail]) (printf "    r~a ~s\n" (car kd) (cdr kd)))
+  ;; derivation in logical time: cell i's value after round k came from writers w in round k, each reading its
+  ;; inputs as they stood after round k-1 — i.e. at the latest round m <= k-1 that changed them (or x0).
+  ;; The cell's own value after round m < k is a premise too (x_k = x_(k-1) ⊔ writes): without it a join that
+  ;; goes to top names only the last writer (X5). m < k strictly in both edges, so the unfolding is well-founded
+  ;; even on a cycle (X3), with no visited set or depth bound.
+  (define (last-change i before)
+    (for/last ([kd detail] #:when (and (< (car kd) before) (assoc i (cdr kd)))) (car kd)))
+  (define (derive i k indent)
+    (define entry (and k (assoc i (cdr (assoc k detail)))))
+    (cond
+      [(not entry) (printf "~ac~a = ~s (initial)\n" indent i (list-ref (hash-ref bsp 'x0) i))]
+      [else
+       (printf "~ac~a@r~a = ~s  <- ~a\n" indent i k (cadr entry)
+               (string-join (map (λ (w) (format "p~a" w)) (caddr entry)) " ⊔ "))
+       (define prior (last-change i k))
+       (define init (list-ref (hash-ref bsp 'x0) i))
+       (cond [prior (printf "~a  ⊔ own prior value:\n" indent)
+                    (derive i prior (string-append indent "    "))]
+             [(not (member init '(() 0 bot none)))      ; x0_c is a premise unless it is the fixture's bottom
+              (printf "~a  ⊔ own initial value ~s\n" indent init)])
+       (for ([w (caddr entry)])
+         (for ([in (car (list-ref props w))])
+           (derive in (last-change in k) (string-append indent "    "))))]))
+  (for ([i (hash-ref bsp 'changed)])
+    (printf "  derivation of c~a's final value:\n" i)
+    (derive i (last-change i +inf.0) "    ")))
