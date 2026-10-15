@@ -9611,8 +9611,8 @@ scaffolding for the slicing, not a permanent mechanism.
 |---|---|---|
 | **1b-vi-A** ✅ `0b6a645f` | the stage table: 40 rows, every expected value measured from today's equivalent spelling (`probe-1bvi-p`). Red step: stage B → exactly C1–C4 red (the silent drop); stage D → 37 / 40 red, each for its measured pre-mint reason (mid-lexeme 28, postfix 2, nameless unbound 3, silent drop 4); controls green. Instrument power by mutation: an already-true target caught twice; a fixture that fails to load caught before `unbound` could accept it. Battery 573 → 575; **5.28 s per run** (per-test-case timing) | ✅ |
 | **1b-vi-B** ✅ `332e16a2` | `^-` / `^-k'` refuse an ancestor rename (Q_U55's caret half) with two remedies rendered by the one branch printer; FIRST step: the generated laws ([Q_U60](#q-u60)) — 61 rows. Red step: 16 rows (C1–C4 + 12 generated), each the silent drop; green after; mutation (check disabled) → the same 16. Instrument: right-hand sides checked at every stage (M3 caught); every live refusal's remedies RUN (B-3). Table 104 rows (43 hand, 61 law); battery + acceptance file 665 / 665; acceptance 88 / 88; **7.86 s per run** | ✅ |
-| **1b-vi-C** | the `collapsed` cont + the `*-` / `*-_` conts + the totality dispatcher + the 15 prose arms, INERT (reachable from tests only) — [design target and mini-audit](#p4e-1b-vi-c); the parser's mark call and Q_U55's star arm move to D | 🔄 |
-| **1b-vi-D** | the mint: two table rows, the `*->` message; flips `:6194`, `:6195`, `:8470`, `:8482`; arrival matrix `*-` / `*-_` 0/209 → 209/209 | ⬜ |
+| **1b-vi-C** ✅ `3cbb1025` | the total-collapse machinery, INERT — [design target, mini-audit, findings, VAG](#p4e-1b-vi-c): the star-cont axis (4 conts, raising classifier, pending table), the `(collapsed . c₀)` mark (placement only; unmark law over 104 branches), one placement predicate in both twins, `*-_`'s prefix at one seat, tail-arm guards, prose naming the operator as written (13 arms × 4 conts). Proven by INJECTION: 53 D rows meet their D targets before the mint (harness parity 0 drift; a vacuous pass found by counting and closed). Red: 51, the silent re-nesting; 5 twin mutations red. 670 / 670; acceptance 88 / 88; **7.97 s per run** | ✅ |
+| **1b-vi-D** | the mint: move the two pending rows; the parser's mark call + Q_U55's star arm (C5, E5-); the `*->` message; flips `:6194`, `:6195`, `:8470`, `:8482`; arrival matrix `*-` / `*-_` 0/209 → 209/209; the grammar; parser-surf = injected-surf parity; an `(@ord N)`-headed row | ⬜ |
 | verify | adversarial round | ⬜ |
 | gate | full suite, then the checkpoint merge to main | ⬜ |
 
@@ -9779,6 +9779,50 @@ the vocabulary exists, so the red is the walkers' and not an unbound identifier.
 prefix computed twice: one seat. **C-R3** a production-visible change inside an inert slice: the
 `*_` wording, listed and pinned. **C-R4** the injection drifting from what D's parser builds:
 pinned at D by surf equality.
+
+**1b-vi-C — what the slice found, and its Vision Alignment Gate** (`3cbb1025`).
+
+*M's prediction held when run.* Placement EMERGED: one predicate, `select-cont-dissolves-level?`,
+at the two dissolve arms, and no walker computes the collapse. The red step measured the
+alternative exactly: with the walkers untouched, a marked ancestor took the kept-key arm and
+re-nested (E2- answered `{:server {:cert … :enabled …}}`), 51 problems, none loud.
+
+*The injection route, and the hole I found in it.* 53 D rows (29 hand, 24 law) meet their D
+targets before anything is minted. The harness mirrors `process-string-ws` and is checked
+rather than trusted: with the identity transform it reproduces level 2 line for line (0 drift).
+Counting the injected rows exposed **X-type passing vacuously**. Its `*` spelling is a parse
+refusal ("`*` needs a SPACE"), the harness passed it through untransformed, and it matched the
+`*-` target's regex. The lexeme rows (X-arrow, X-type) are now excluded by name, and any other
+row that does not parse to a select reads `VACUOUS`, which no target accepts. Proved by putting
+X-type back: exactly that one problem.
+
+*Mutations, one seat in one twin each — all red:* M-typing (the C-5 guard raises — the twin
+drift was converted into a loud failure by the guard written for it), M-reduction 38,
+M-prefix-typing 19, M-prefix-reduction 18, M-guard-typing (the C-5 pin). **My first
+M-prefix-typing was malformed** (one `)` too many): a read error, so it proved nothing; redone.
+
+*Two more of my own slips, both caught by gates.* (1) The render loop's inherited "must mention
+`*`" check failed for a missing cont — a test defect, caught by the battery and NOT by my
+scratch, because the scratch ran only the 1b-vi section and that loop lives in 1b-iii's. A
+section scratch is not the battery. (2) A harness edit left an extra `)`; `check-parens` said
+so, my command did not stop on it, and the first non-vacuity probe ran against a file that
+did not compile. Rerun after the fix.
+
+*Design changed during C, by measurement:* the MINTED column became a pending table — eight
+consumers iterate the minted table directly (C-1).
+
+| VAG question | catalogue | challenge — could it be more aligned? |
+|---|---|---|
+| (a) on-network | no new state: the mark, the classifier and the prefix are pure functions of a written branch | the mark is a parse-time annotation on IR the off-network walkers read; that scaffolding is the PPN series' to retire, and C neither worsens nor retires it |
+| (b) complete | 4 conts classified at every reader (raise off-axis); 13 per-branch arms × 4 conts + the missing cont pinned; marks proven never to reach a non-placement arm (M-typing / M-reduction); every reader in the census decided | (1) the ω-ANCESTOR mark is unpinnable until DEFERRED 167. (2) The two level arms stay family-generic: a `*-` user in a level collision still reads "a `*` LIFTED". (3) **No `(@ord N)`-headed `*-` / `*-_` row exists**: that head arm resets `seen` and enters through `select-below-field`, a route the 53 rows never take — D adds the row, with a top-level-vector fixture |
+| (c) vision-advancing | placement emerges from existing arms; labels and provenance keys are true by construction (unmark law over 104 branches); the prose reads the operator from data, not from guesses per arm | the injection harness MIRRORS driver internals — a second copy of `process-string-ws`'s scoping. Mitigated by the parity check; retired in substance at D, where the parser's own surf must equal the injected one |
+| (d) drift risks | C-R1 mutations ✓; C-R2 one seat, both calls mutated ✓; C-R3 the `*_` wording (no pin asserted the old text — a fixed-string grep with a positive control); C-R4 → D | DR-6: 7.86 → 7.97 s per run, within the variance measured at A — no cost claimed. **The tree-sitter tripwire fired on `reader-forms.rkt`; C mints nothing**, but `flatten_step` is `token.immediate('*')` only (`editors/tree-sitter-prologos/grammar.js:1158`), so D owes `*-` / `*-_` to the grammar or a DEFERRED entry. `update-deps --check`: 375 before and after |
+
+**What C hands D** (D's red rows drive each): call `select-branch-mark-total-collapse` at
+`segment-select-items`' success return; Q_U55's star arm — and its "keep the level" remedy must
+NOT dissolve sₙ (`t5{a.b^q.c*-}` → `a^.b^q.c*`, not `c^*`; B's `keep-level` would, and B-3's
+remedy run will catch it); move the two pending rows; the `*->` message; the four pre-mint pin
+flips; the grammar; the parser-surf = injected-surf parity pin; the `(@ord N)`-headed row.
 
 <a id="p4e-1b-v-shipped"></a>
 

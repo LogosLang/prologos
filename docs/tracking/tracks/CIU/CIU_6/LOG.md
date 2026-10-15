@@ -251,3 +251,34 @@ are in [`../README.md`](../README.md).
   - `git commit` failed once on a transient `index.lock` (gone on inspection, no process holding it), retried.
 - **Next**: owner checkpoint, then 1b-vi-C — the `collapsed` cont + the `*-` / `*-_` conts + the totality
   dispatcher + the 15 prose arms, landed INERT; stage stays B until D (C flips no surface row).
+
+### 1b-vi-C shipped: the total-collapse machinery, inert, proven by injection — `6142d318` (design) + `3cbb1025` (code) (2026-10-14)
+- **Why / decision**: owner — *"Let's proceed with Slice C per our Stage 4 Design Methodology
+  (Implementation Protocol)"*. Design target and mini-audit committed before any code
+  ([§5.P4e-1b-vi, 1b-vi-C](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-c)). Two
+  representation choices made inside Q_U58's M and recorded, not posed: the mark is a wrapper
+  `(collapsed . c₀)` around the WRITTEN cont (so printing and naming read the step as written),
+  and the two new spellings live in a printer-only pending table rather than a MINTED column.
+  Q_U55's star arm and the parser's mark call moved to D, where red rows drive them.
+- **What shipped**: a closed star-cont axis (4 conts, a raising classifier at the 5 readers); the
+  mark (unmark ∘ mark = id, prints and names as written — law over 104 branches); ONE placement
+  predicate at both twins' dissolve arms (placement emerged, as M predicted); `*-_`'s prefix at
+  one seat; tail-arm guards in both twins; `select-fail` carries the star cont and the 13
+  per-branch arms name the operator as written (render loop: every kind × every cont + missing).
+  INJECTION: each D row's `*` spelling parsed by production, conts made total, every branch list
+  marked, run through `process-command` — 53 D rows meet their D targets before the mint.
+  670 / 670; acceptance 88 / 88; 7.97 s per run.
+- **Surprise / correction**:
+  - **A vacuous pass, found by counting.** X-type's `*` spelling is a parse refusal that matched
+    its `*-` target; the harness passed it through untouched. Closed: lexeme rows excluded by
+    name, any other unparsed row reads `VACUOUS` (proved by putting X-type back).
+  - **A malformed mutation** (one `)` too many): a read error proved nothing; redone → red (19).
+  - **A section scratch is not the battery**: my test defect in the 1b-iii render loop surfaced
+    only in the battery. **A command that did not gate on `check-parens`** ran a probe against a
+    non-compiling file. **The patch tool's fuzzy match dropped a word** from an existing comment
+    (my `old_string` misquoted it); caught in the diff review, restored.
+  - The census's first cut attributed by indentation and charged typing's dissolve arm to
+    `walk-to-leaf`; its positive control caught it.
+  - Measured design change: a MINTED column would have edited eight consumers D already flips.
+  - `git commit` hit a transient `index.lock` again; nothing held it; retried.
+- **Next**: owner checkpoint, then 1b-vi-D — the mint (see "What C hands D" in the D4 section).
