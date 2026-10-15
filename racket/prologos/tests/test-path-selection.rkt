@@ -6199,8 +6199,10 @@
   ;; [Q_U53] part 1 at the gate: exact membership, nothing wider.
   (check-equal? (p4e-star-type "cfg{a}*_ ") 'postfix-star
                 "`*_` is ONE token; the widened gate MINTS it (it was `symbol` before B2b)")
-  (check-equal? (p4e-star-type "cfg{a}*- ") 'symbol "`*-`")
-  (check-equal? (p4e-star-type "cfg{a}*-_ ") 'symbol "`*-_`")
+  ;; ⭐ 1b-vi-D-2b FLIPPED THESE TWO: the mint puts `*-` / `*-_` in the table, so the
+  ;; gate mints them exactly as B2b made it mint `*_` — the same contrast, one slice on.
+  (check-equal? (p4e-star-type "cfg{a}*- ") 'postfix-star "`*-` is ONE token; minted since 1b-vi-D-2b")
+  (check-equal? (p4e-star-type "cfg{a}*-_ ") 'postfix-star "`*-_` is ONE token; minted since 1b-vi-D-2b")
   ;; ⚠⚠ THE LAST-STAR ROW WAS VACUOUS ON ITS FIRST DRAFT AND THE POWER-CHECK
   ;; CAUGHT IT. It read `.(1 * 2)` … `cfg{a}*_`, where the blind helper reports
   ;; `symbol` (the arithmetic star) and the widened one ALSO reports `symbol`
@@ -6969,19 +6971,24 @@
   ;; `mixfix!` while losing one arrival context passed green, and `mixfix!` is
   ;; Q_U34's gate, i.e. exactly what P4e-1 is about to touch. Its stronger twin
   ;; (the abort pin) was already using `list->seteq` twenty lines above.
-  (for ([c (in-list star-carriers)])
+  ;; ⭐ 1b-vi-D-2b: ∀ MINTED LEXEME, not `*` alone. The gate ran for the bare star
+  ;; only, so `*_` (1b-v) and now `*-` / `*-_` were measured by the matrix TOOL once
+  ;; and never pinned. Reading the table makes every future mint checked by
+  ;; construction — an arrival context that mints `*` but not `*-` goes red here.
+  (for* ([lex (in-list (map caddr rf:postfix-star-sentinel-table))]
+         [c (in-list star-carriers)])
     (define non-minting
       (for/list ([k (in-list star-contexts)]
-                 #:unless (star-mints? (string-append star-prelude (star-cell-source k c 0))))
+                 #:unless (star-mints? (string-append star-prelude (star-cell-source k c 0 lex))))
         (car k)))
     (if (star-minting-carrier? c)
         (check-equal? (list->seteq (map string->symbol non-minting))
                       (seteq 'mixfix!)
-                      (format "carrier ~a must mint in every arrival context and ONLY fail in mixfix"
-                              (car c)))
+                      (format "`~a`: carrier ~a must mint in every arrival context and ONLY fail in mixfix"
+                              lex (car c)))
         (check-equal? (list->seteq (map string->symbol non-minting))
                       (list->seteq (map (lambda (k) (string->symbol (car k))) star-contexts))
-                      (format "control carrier ~a must never mint, anywhere" (car c))))))
+                      (format "`~a`: control carrier ~a must never mint, anywhere" lex (car c))))))
 
 ;; ---------------------------------------------------------------------------
 ;; D4.P4e-1a slice 1a-ii — THE TIER-O ARMS, LANDED INERT
@@ -8512,10 +8519,15 @@
   ;; `$postfix-star`, so nothing on the surface moves. The only way to know the
   ;; wiring is live is to exercise the table directly and to mutate it — both
   ;; done at B1. These pins are what keep B2 from drifting it.
-  ;; ⚠ The set is deliberately TWO, not four: [Q_U52] split `*-`/`*-_` to 1b-vi.
+  ;; ⚠ The set was TWO until 1b-vi-D-2b: [Q_U52] split `*-`/`*-_` to 1b-vi, and C
+  ;; held them in a printer-only pending table until the mint moved them here.
   (check-equal? (map car rf:postfix-star-sentinel-table)
-                '($postfix-star $postfix-star-synth)
-                "the family is exactly the two spellings 1b-v mints")
+                '($postfix-star $postfix-star-synth $postfix-star-collapse $postfix-star-collapse-synth)
+                "the family is exactly the four spellings of the star-cont axis")
+  (check-equal? (rf:postfix-star-sentinel-cont '$postfix-star-collapse) 'flatten-collapse)
+  (check-equal? (rf:postfix-star-sentinel-cont '$postfix-star-collapse-synth) 'flatten-collapse-synth)
+  (check-equal? (rf:postfix-star-sentinel-lexeme '$postfix-star-collapse) "*-")
+  (check-equal? (rf:postfix-star-sentinel-lexeme '$postfix-star-collapse-synth) "*-_")
   (check-equal? (rf:postfix-star-sentinel-cont '$postfix-star) 'flatten)
   (check-equal? (rf:postfix-star-sentinel-cont '$postfix-star-synth) 'flatten-synth)
   ;; the reverse direction is not decoration — `unmint-star-for-echo` and both
@@ -8525,8 +8537,10 @@
   ;; the reader's direction, which B2 turns on
   (check-equal? (rf:postfix-star-lexeme->sentinel "*") '$postfix-star)
   (check-equal? (rf:postfix-star-lexeme->sentinel "*_") '$postfix-star-synth)
-  (check-false (rf:postfix-star-lexeme->sentinel "*-")
-               "`*-` is 1b-vi's — minting it here would meet a cont no consumer knows")
+  (check-equal? (rf:postfix-star-lexeme->sentinel "*-") '$postfix-star-collapse
+                "`*-` mints since 1b-vi-D-2b (it was #f: no consumer knew its cont before C)")
+  (check-equal? (rf:postfix-star-lexeme->sentinel "*-_") '$postfix-star-collapse-synth)
+  (check-false (rf:postfix-star-lexeme->sentinel "*_-") "the order is part of the lexeme")
   (check-false (rf:postfix-star-lexeme->sentinel "a*")
                "the table is exact, not a prefix match")
   ;; the predicate every census site now delegates to
@@ -9405,7 +9419,7 @@
 ;; (`"*-"` has no sentinel).
 ;; ===========================================================================
 
-(define 1bvi-stage 'C)   ;; 1b-vi-C: bumped as the first edit after the vocabulary (the injection rows go live)
+(define 1bvi-stage 'D)   ;; 1b-vi-D-2b: the mint — every D row now runs through the PARSER
 (define 1bvi-stage-order '(A B C D))
 (define (1bvi-reached? s)
   (and s (<= (index-of 1bvi-stage-order s) (index-of 1bvi-stage-order 1bvi-stage))))
@@ -9486,7 +9500,23 @@
     ("X-wpath_" "rm:cfg*-_"                D midlex  (same "rm:cfg*_" "{:eu-x Int :us-x Int}"))
     ;; ---- [Q_U56]: the glued arrow in selection territory; type territory is a PREDICTION
     ("X-arrow"  "mn{a*-> b}"               D midlex  (refused (#rx"`\\*->` reads as `\\*-` then `>`") ()))
-    ("X-type"   "<(x : Nat)*- Nat>"        D unbound (refused (#rx"needs a SPACE") ()))
+    ;; 1b-vi-D-2b: the ONE-TOKEN shape — `->` continues an identifier, so `a*->b` is
+    ;; one lexeme and must not be told it "reads as `*-` then `>`" (probe-1bvi-aa)
+    ("X-arrow1" "mn{a*->b}"                D midlex  (refused (#rx"there is no `\\*->` operator" #rx"`a\\*- b`")
+                                                              (#rx"reads as")))
+    ;; the `>` arm names the operator AS WRITTEN — it also covers `*>` / `*_>`, which read
+    ;; "field :> is not present" before D-2b (a production-visible improvement, pinned)
+    ("X-arrow_" "mn{a*-_> b}"              D midlex  (refused (#rx"there is no `\\*-_>` operator" #rx"`a\\*-_` ends its branch") ()))
+    ("X-arrow0" "mn{a*> b}"                D midlex  (refused (#rx"there is no `\\*>` operator" #rx"`a\\*` ends its branch") ()))
+    ;; the remedy both arrow messages offer, RUN (probe-1bvi-ab)
+    ("X-arrow-fix" "mn{a*- b}"             D midlex  (line "{:b {:y 2}, :x 1} : {:b {:y Int} :x Int}"))
+    ;; ⚠ 1b-vi-D-2b: this target was Q_U56's PREDICTION (Q_U31's "needs a SPACE"),
+    ;; written before the mint and marked predicted in D4. MEASURED at the mint:
+    ;; Q_U37's type-territory refusal fires as predicted, but with the star-family
+    ;; message 1b-v built for `*_` — it reads the table, so `*-` gets it too. True
+    ;; and more specific than the prediction; the target is the measurement.
+    ("X-type"   "<(x : Nat)*- Nat>"        D unbound (refused (#rx"inside `<…>`, `\\*-` is a path-selection star operator, not a type operator"
+                                                               #rx"glued or spaced" #rx"`<[(]x : A[)] [*] B>`") ()))
     ;; ---- 1b-vi-D-1: the LEVEL arms (probe-1bvi-u, -v). A level has no single star, so the
     ;; message names the operators PRESENT and scopes each claim to the family it is true of.
     ;; P2 — same head: `*` and "drop the star" do NOT help here (`:a`), `*-_` does
@@ -9728,7 +9758,7 @@
 ;; SPACE") that the harness passed through untransformed, and it matched the `*-`
 ;; target's regex. Found by counting the injected rows, not by any failure — so the
 ;; harness now fails closed on that shape (`VACUOUS`, below) instead of trusting it.
-(define 1bvi-lexeme-rows '("X-arrow" "X-type"))
+(define 1bvi-lexeme-rows '("X-arrow" "X-arrow1" "X-arrow_" "X-arrow0" "X-type"))
 (define (1bvi-injectable? r)
   (and (eq? (1bvi-row-flips r) 'D)
        (regexp-match? #rx"[*]-" (1bvi-row-spelling r))
@@ -9815,6 +9845,42 @@
        [(ormap prologos-error? (take rs 1bvi-fixture-count))
         (cons 'bad "an injection fixture failed to load")]
        [else (cons 'ok (map 1bvi-line (drop rs 1bvi-fixture-count)))]))))
+
+;; ⭐ 1b-vi-D-2b — PARITY. From stage D the parser builds the IR the injection built
+;; by hand; the two must be the SAME surf (srclocs aside: `*-` is one column longer
+;; than `*`). Without this the injection harness is a mirror we trusted for a whole
+;; slice. Compared level by level down the subject chain: branches (marks included)
+;; and sort. Fails closed: a parse that raised, a refusal, or a row count mismatch.
+(define (1bvi-select-shape sf)
+  (if (surf-select? sf)
+      (list 'select (1bvi-select-shape (surf-select-subject sf)) (surf-select-branches sf) (surf-select-sort sf))
+      'subject))
+(define (1bvi-parse-forms forms)
+  (define src (string-append 1bvi-fixtures (string-join forms "\n") "\n"))
+  (with-handlers ([exn:fail? (lambda (e) (exn-message e))])
+    (parameterize ([current-prop-net-box (box (make-elaboration-network))]
+                   [current-source-str src]
+                   [current-raw-node #f])
+      (reset-meta-store!)
+      (drop (ws-string->surfs src) 1bvi-fixture-count))))
+(define (1bvi-parity-problems)
+  (define rows (filter 1bvi-injectable? 1bvi-all-rows))
+  (define real (1bvi-parse-forms (map 1bvi-row-spelling rows)))
+  (define star (1bvi-parse-forms (map (lambda (r) (1bvi-star-spelling (1bvi-row-spelling r))) rows)))
+  (cond
+    [(string? real) (list (format "parity: parsing the D spellings RAISED: ~a" real))]
+    [(string? star) (list (format "parity: parsing the `*` spellings RAISED: ~a" star))]
+    [(not (= (length real) (length star) (length rows)))
+     (list (format "parity: ~a rows, ~a parsed D surfs, ~a parsed `*` surfs" (length rows) (length real) (length star)))]
+    [else
+     (for/list ([r (in-list rows)] [a (in-list real)] [b (in-list star)]
+                #:unless (and (surf-select? a) (surf-select? b)
+                              (equal? (1bvi-select-shape a)
+                                      (1bvi-select-shape (1bvi-totalize-surf b (1bvi-star-lexemes (1bvi-row-spelling r)))))))
+       (format "[~a] PARITY ~a — the parser's surf ≠ the injected one: ~s | ~s"
+               (1bvi-row-id r) (1bvi-row-spelling r)
+               (if (surf-select? a) (1bvi-select-shape a) a)
+               (if (surf-select? b) (1bvi-select-shape (1bvi-totalize-surf b (1bvi-star-lexemes (1bvi-row-spelling r)))) b)))]))
 
 (define (1bvi-inject-problems eqv)
   (define rows (filter 1bvi-injectable? 1bvi-all-rows))
@@ -9961,7 +10027,9 @@
     (if (and (1bvi-reached? 'C) (eq? (car q) 'ok))
         (1bvi-inject-problems (for/hash ([e (in-list (1bvi-equivs))] [l (in-list (cdr q))]) (values e l)))
         '()))
-  (define problems (append batch-problems level-problems rhs-problems row-problems remedy-problems inject-problems))
+  ;; 1b-vi-D-2b: the parser builds what the injection built
+  (define parity-problems (if (1bvi-reached? 'D) (1bvi-parity-problems) '()))
+  (define problems (append batch-problems level-problems rhs-problems row-problems remedy-problems inject-problems parity-problems))
   (check-equal? problems '()
                 (format "stage ~a: ~a problem(s) over ~a rows (~a hand, ~a law):\n~a" 1bvi-stage (length problems)
                         (length 1bvi-all-rows) (length 1bvi-rows) (- (length 1bvi-all-rows) (length 1bvi-rows))
@@ -10006,22 +10074,21 @@
   (for ([bad (in-list (list 'bogus "*" #f '(flatten)))])
     (check-exn #rx"star continuation" (lambda () (select-star-cont-synth? bad)))
     (check-exn #rx"star continuation" (lambda () (select-star-cont-total? bad))))
-  ;; ONE row per cont across the two lists; the pending rows are exactly the
-  ;; total ones (D moves them into the minted table) and the lists are disjoint.
-  (define minted rf:postfix-star-sentinel-table)
-  (define pending rf:postfix-star-pending-table)
-  (define rows (append minted pending))
+  ;; ONE row per cont. C held the two total rows in a printer-only PENDING table;
+  ;; 1b-vi-D-2b moved them here and RETIRED that table (empty scaffolding is a
+  ;; dead path), so the minted table alone must cover the axis, once per cont.
+  (define rows rf:postfix-star-sentinel-table)
   (check-equal? (sort (map (lambda (r) (symbol->string (cadr r))) rows) string<?)
                 (sort (map (lambda (a) (symbol->string (car a))) 1bvi-axis) string<?)
                 "every axis cont has exactly one row, and every row's cont is on the axis")
-  (check-equal? (map cadr pending) '(flatten-collapse flatten-collapse-synth))
   (for ([col (in-list (list car cadr caddr))])
-    (check-equal? (length (remove-duplicates (map col rows))) (length rows) "the two lists are disjoint in every column"))
-  (for ([r (in-list pending)])
+    (check-equal? (length (remove-duplicates (map col rows))) (length rows) "no column repeats"))
+  (for ([r (in-list rows)])
     (check-true (regexp-match? #rx"^[$]postfix-star" (symbol->string (car r)))
-                "a pending sentinel keeps the `$postfix-star` prefix the leak gates match")
-    (check-false (rf:postfix-star-lexeme->sentinel (caddr r)) "INERT: the reader does not mint a pending row")
-    (check-false (rf:postfix-star-sentinel? (car r)) "INERT: the parser does not recognize a pending sentinel")))
+                "every sentinel keeps the `$postfix-star` prefix the leak gates match")
+    (check-equal? (rf:postfix-star-lexeme->sentinel (caddr r)) (car r) "the reader mints every row")
+    (check-true (rf:postfix-star-sentinel? (car r)) "the parser recognizes every row")
+    (check-equal? (rf:postfix-star-cont->lexeme (cadr r)) (caddr r) "the printer renders every row")))
 
 ;; branches over t5-shaped keys: every {kept, `^`, `^p`} ancestor assignment ×
 ;; sₙ plain or ω × all four star conts — the population the laws quantify over.
