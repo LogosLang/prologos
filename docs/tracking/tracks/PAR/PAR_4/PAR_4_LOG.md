@@ -596,3 +596,40 @@ binder merges with unsolved metas.
 
   It must also re-run `check-xlinks` over them. Historical dailies entries stay as written.
 - **Next**: draft D.2.
+
+### D.2 drafted (new file, owner) with its self-critique; the D.3 agent critique round planned — docs commit on the branch (2026-10-15)
+- **Why / decision**: the owner confirmed D.2 goes in a new file, and asked that, once it is drafted carefully, an
+  agent workflow critique it adversarially under `CRITIQUE_METHODOLOGY.org`. Three documents, all on the branch:
+  - [`2026-10-15_PAR_4_D2_DESIGN.md`](2026-10-15_PAR_4_D2_DESIGN.md), the design of record. D.1 gets a "superseded"
+    callout and stays as the record.
+  - `critiques/2026-10-15_PAR_4_D2_SELF_CRITIQUE.md`: 19 findings under P/R/M and the SRE lattice lens; 13 applied to
+    D.2, 4 open, 2 rejected.
+  - `critiques/2026-10-15_PAR_4_D3_CRITIQUE_PLAN.md`: the proposed workflow. Wave 1 is ten critics (C1–C10); a
+    triage; wave 2 is chosen from the triage (settlers, defenders, gap critics); the synthesis of record is written by
+    hand. It waits for the owner's go.
+
+  The `critiques/` subdirectory follows the 2026-10-13 role-subdirectory decision for new documents; nothing existing
+  was moved.
+- **The design sentence, revised**: S0 runs under the asynchronous-iteration hypotheses *by construction*:
+  - join merges, from combinators or E-checked, with the rest fenced;
+  - monotone fires, or fires in a declared stratum;
+  - no topology change inside a fire (G-1).
+
+  Given that, K executors own cells round-robin, write their own cells directly, send deltas to foreign owners,
+  detect quiescence by a double-counted scan, and meet only at the stratum boundary. K = 1 is the same code.
+- **Surprise / correction**:
+  - (1) **The fire-side laws were missing from O-5's P1 list.** The Q1 audit's 8 absence-reading fires, 7 unstable
+    latches and 3 live non-monotone fires are races at K > 1. D.2 adds P1b and poses it as O-13.
+  - (2) **The fenced type cells may hold most of today's S0 work**, so the K > 1 models (4.07× / 3.26×, corpus
+    1.26–1.34×) overstate the value realizable before PPN 4C. P0-8 now measures the type-cell share, and O-12 poses
+    the fence.
+  - (3) **D.1 A.13.4 item 4 placed the cost of keeping epoch start states in P2.** At K = 1 the persistent network
+    makes it a pointer; the question belongs to P3.
+  - (4) Self-critique **D2L-1**: the two-phase worldview fixes the merge, but its derived read is anti-monotone, so
+    fires compute on labelled values and `live` is read only at boundaries.
+  - (5) **D2P-3**: fire-once is legal only on a stable latch.
+  - (6) **D2R-1**: the 11 `current-bsp-fire-round?` reads split 9 + 2, and the parameter is still deletable.
+  - (7) The O-3 entry's "P2 measures the cost of keeping epoch starts" is corrected by (3).
+  - Grounding: `racket/` production code is identical to main; every cited site was re-derived at HEAD (the audit's
+    files are unchanged since `7a0116ec`).
+- **Next**: the owner's go-ahead to launch wave 1, and O-11, O-12, O-13 (D.2 §15), which may wait for the critique.
