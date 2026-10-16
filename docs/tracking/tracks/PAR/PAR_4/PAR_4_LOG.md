@@ -633,3 +633,11 @@ binder merges with unsolved metas.
   - Grounding: `racket/` production code is identical to main; every cited site was re-derived at HEAD (the audit's
     files are unchanged since `7a0116ec`).
 - **Next**: the owner's go-ahead to launch wave 1, and O-11, O-12, O-13 (D.2 §15), which may wait for the critique.
+
+### D.3 wave 1 launched: ten isolated critics (C1–C10) against D.2 — docs commit on the branch (2026-10-15)
+- **Why / decision**: owner: "Let's do the first wave now." Every critic receives the briefing committed here,
+  `critiques/2026-10-15_PAR_4_D3_WAVE1_BRIEFING.md`, verbatim. It contains the project summary, the reading list, the
+  methodology's external briefing, the rules (read-only, probes in per-critic scratch, no rebuild, no suite, no
+  `pkill`, evidence classes, power checks) and the JSON finding schema. Each critic also gets its own charge, per
+  the plan's table. The charges are recorded in the synthesis when it is written.
+- **Next**: triage of the returned findings by hand, then the wave-2 composition reported to the owner.
