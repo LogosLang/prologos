@@ -3,7 +3,8 @@
 Entry shape = the dailies' (`DAILIES_METHODOLOGY.org`): `### <outcome headline> — \`hash\` (date)`
 with **Why / decision**, **Surprise / correction**, **Next**. The dailies' STATE head stays the
 re-grounding surface; its sparse LOG points here. Opened 2026-10-12 with the per-track-log
-convention (`../../README.md`).
+convention (`../../README.md`). Named `LOG.md` until 2026-10-15, when it was renamed `PAR_4_LOG.md` under the owner's
+`{SERIES}_{TRACK}_LOG.md` convention; on `main` it keeps the old name until checkpoint 2.
 
 ### R3 measurement day, recorded first as the ad-hoc "PSF" probe series — no commit (2026-10-12)
 - **Why / decision**: owner reopened the 2B parallel-search question ("a 1–10 ns switching
@@ -576,3 +577,22 @@ binder merges with unsolved metas.
   as the record of the first design. D.1's sections and its §14 ledger are cited by number from DEFERRED, the LOG
   and the dailies, and an in-place rewrite would move them. D.2 carries the live ledger, and D.1 §14 points to it.
   Then a P/R/M/S self-critique (`CRITIQUE_METHODOLOGY.org`) and the owner critique round.
+
+### Process correction (owner): the track log is named for the track — `LOG.md` → `PAR_4_LOG.md` — docs commit on the branch (2026-10-15)
+- **Why / decision**: the owner: "Log files should follow our {SERIES}_{TRACK}_LOG.md naming convention. Having 30
+  files all named the same thing is unclear." Renamed with `git mv` in a commit of its own, so `git log --follow`
+  keeps the history. Path-shaped citations were rewritten: the PAR stub README and the Stage-1 prior-art draft.
+  Prose that states a past fact ("Not edited: `LOG.md`", merge-laws note §0, §8) was left as written.
+  The owner also confirmed D.2 goes in a new file, and asked for an agent-driven adversarial critique of D.2 under
+  `CRITIQUE_METHODOLOGY.org` once it is drafted.
+- **Surprise / correction**: PPN 4C renamed its log on 2026-10-13, as part of the role-subdirectory decision, but
+  to `PPN4C_LOG.md`, without the underscore that `{SERIES}_{TRACK}` implies (`1fe0ddf1`, on its branch). CIU 6
+  still uses `LOG.md`. Neither belongs to this session, so the discrepancy goes to the owner via the dailies rather
+  than being fixed here.
+- **Main-side links** keep `PAR_4/LOG.md` until checkpoint 2 brings the rename. Checkpoint 2 must then rewrite:
+  - the markdown links in `2026-03-27_PAR_MASTER.md` and `MASTER_ROADMAP.org`;
+  - `tracks/README.md:53`'s example;
+  - the dailies STATE pointer.
+
+  It must also re-run `check-xlinks` over them. Historical dailies entries stay as written.
+- **Next**: draft D.2.

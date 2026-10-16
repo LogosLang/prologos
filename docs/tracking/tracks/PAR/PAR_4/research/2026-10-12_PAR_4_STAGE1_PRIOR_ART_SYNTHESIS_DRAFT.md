@@ -1,7 +1,7 @@
 # PAR 4 · Stage 1 — Prior-Art Synthesis (DRAFT): what our own corpus already settled, what Track 4 can reuse, what the Stage-1 numbers refute
 
 **Serves**: PAR 4 — Arena Executors (`2026-03-27_PAR_MASTER.md:43`). **Status**: DRAFT input to the
-Stage-1 synthesis of record (`LOG.md` § "Stage-1 research synthesis commissioned"); a sibling
+Stage-1 synthesis of record (`PAR_4_LOG.md` § "Stage-1 research synthesis commissioned"); a sibling
 draft covers the external frontier. **Written at** `7a0116ec`; no source changes, no probes run.
 **Method**: full read of the two Track-4 records and the design rules, sectioned reads of the
 eleven corpus documents named in the brief, `mempalace search` for cross-checks (hits are
@@ -298,7 +298,7 @@ S0 needs, and its cost is the measured 0.8 µs once per stratum transition, not 
 
 - `docs/tracking/tracks/PAR/PAR_4/research/2026-10-12_PAR_4_STAGE1_CONTENTION_ANALYSIS.md` (§1–§9)
 - `docs/tracking/tracks/PAR/PAR_4/2026-10-12_PAR_4_STAGE2_GAP_ANALYSIS.md` (§0–§5)
-- `docs/tracking/tracks/PAR/PAR_4/LOG.md`
+- `docs/tracking/tracks/PAR/PAR_4/PAR_4_LOG.md`
 - `docs/tracking/2026-03-27_PAR_MASTER.md` (:3-30, :36-43, :95-117, :149-151)
 - `docs/tracking/2026-04-10_BSP_LE_TRACK2B_DESIGN.md` (:1070-1139)
 - `docs/tracking/handoffs/2026-04-16_BSP_LE_2B_HANDOFF.md` (:105-134)
