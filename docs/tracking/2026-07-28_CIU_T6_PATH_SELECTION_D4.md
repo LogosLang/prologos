@@ -3457,7 +3457,62 @@ items of the hold-point, ruled before P4a opened:
   generated row's law is either an equivalence with today's spelling (dissolve every
   ancestor; the `^-_` enumeration of the lifted fields) or Q_U55's refusal.
 
-  **Next free Q-label: U61.**
+- <a id="q-u61"></a>**Q_U61 — A PLAIN `*` UNDER AN ORDINAL HEAD: DOES A KEYLESS LANDING
+  SPLICE THROUGH THE ORDINAL'S TUPLE AT EVERY DEPTH, OR NEVER? [⏳ POSED 2026-10-14 — owner:
+  "open up what the behavior looks like … numerous worked examples … checked against our
+  original design spec and intents"].** Found at 1b-vi-D-2a as an observation; measured in full
+  by probe-1bvi-ac (45 lines; `t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}`, `ot := @[t5's value]`,
+  `ot2 := @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]`, `vhm := @[@[{:x 1}] @[{:y 2}]]`).
+
+  **The rules on record.** Spec §3.3: an ordinal branch is a KEYLESS component, honestly nested
+  (`ot{0.a^}` → `@[{:b …}]`, measured). [Q_U47](#q-u47): the join lands as the component the
+  REMAINDER (branch − star − sₙ) would produce — keyed iff the remainder names a key; "an ordinal
+  head names nothing". [Q_U49](#q-u49): a keyless landing of Map contents SPLICES into the
+  enclosing level — decided AT THE ORDINAL HEAD: "Seat B keyless (ordinal head) `vhm{0.{0}*}` →
+  `{:x 1}`".
+
+  **Measured today** (key head beside ordinal head):
+
+  | key head | → | ordinal head | → today | Q_U47 + Q_U49 predict |
+  |---|---|---|---|---|
+  | `t5{a*}` | `{:b …}` | `ot{0.a*}` | `{:b …}` | `{:b …}` ✓ |
+  | `t5{a.b*}` | `{:a {:c …}}` | `ot{0.a.b*}` | `@[{:a {:c …}}]` | keyed remainder (`a`) inside the ordinal's component ✓ |
+  | `t5{a^.b*}` | `{:c …}` | `ot{0.a^.b*}` | **`@[{:c …}]`** | remainder `0.a^` names nothing → splice → `{:c …}` ✗ |
+  | `t5{a^.b^.c*}` | `{:m … :n …}` | `ot{0.a^.b^.c*}` | **`@[{:m … :n …}]`** | `{:m … :n …}` ✗ |
+  | `v3{a^.b^.c*}` | `⟨[PVec [PVec Int]]⟩` | `ov3{0.a^.b^.c*}` | **`⟨⟨[PVec [PVec Int]]⟩⟩`** | ONE keyless component, `⟨[PVec [PVec Int]]⟩` ✗ |
+  | — | | `ot2{0.a* 1.a*}` | refused, dup `:b` | refused ✓ (both splice `:b`) |
+  | — | | `ot2{0.a^.b* 1.a^.b*}` | **`@[{:k 1} {:k 2}]`** | refused, dup `:k` ✗ |
+
+  So today is NEITHER reading: depth 1 splices (decided), depth ≥ 2 wraps (never decided). The
+  cause is mechanical — seat B's test `select-steps-yield-bare-join? rest` is true only when sₙ★
+  directly follows the ordinal, so a dissolved ancestor in between routes the join into the
+  ordinal's component. **Census** (tests + examples + lib, control 18 shapes found in the probe):
+  9 pinned ordinal-head stars, ALL depth 1; **0** pins at depth ≥ 2.
+
+  **The two coherent readings.**
+  - **S — splice through, at every depth** (Q_U47 + Q_U49 applied literally). Changes the four ✗
+    rows; flips 0 existing pins. One rule at an ordinal head for every family: a keyless landing
+    escapes to the block — `*` (this), `*-` (D-2a), `^-` (P3c's pinned reading). Restores Q_U48's
+    `*-` ≡ "`^` on every key ancestor, then `*`" at ordinal heads. COST: `ot2{0.a^.b* 1.a^.b*}`
+    goes from a 2-tuple to a dup-key refusal — but the tuple stays spellable without the star,
+    `ot2{0.a^.b^ 1.a^.b^}` → `@[{:k 1} {:k 2}]` (measured), and the refusal can say so.
+  - **W — the ordinal wraps, always** (spec §3.3's honest nesting wins). Changes `ot{0.a*}` →
+    `@[{:b …}]`, `vhm{0.{0}*}` → `@[{:x 1}]`, `ot2{0.a* 1.a*}` → a 2-tuple; flips all 9 pins and
+    REVERSES Q_U49's decided seat-B example. COST: at an ordinal head the star then duplicates
+    `^` — `ot{0.a*}` would equal `ot{0.a^}` (`@[{:b …}]`, measured) — which is Q_U49's own
+    "no-op with extra steps" argument, one head kind over. And the collapse families would still
+    escape (P3c), so the ordinal head would mean different things to `*` and `*-`.
+
+  **My recommendation: S** (medium-high confidence): it is what Q_U47/Q_U49 already say, the
+  wrap at depth ≥ 2 has no decision or pin behind it, it makes one rule for all three families,
+  and W's honest-nesting gain is already available through `^`. The honest cost of S is the
+  spec's own principle: §3.3's honest nesting yields at an ordinal head whenever a star's landing
+  is keyless — as Q_U49 already made it yield at depth 1.
+  **Adjacent, not part of this question:** `ot2{0.a.b*-_ 1.a.b*-_}` is refused (dup `:a-b-k`)
+  because ordinals contribute nothing to a provenance prefix (Q_U57, `^-_`'s rule) — positional
+  provenance would be a separate question.
+
+  **Next free Q-label: U62.**
 
 - <a id="q-u43"></a>**⭐ Q_U43 — THE L4 SORT CHECK MOVES TO TYPING FOR STAR-BEARING
   BRANCHES, AS [Q_U38](#q-u38)'s COROLLARY [owner, 2026-08-11 — "move the sort
