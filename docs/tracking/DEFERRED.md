@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 177**
+> ### **NEXT FREE: 179**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7988,3 +7988,84 @@ follow is now decided (PAR 4 D.1 §14 O-3, `1e1684e2` on the branch).
 - (c) and (d) remain outside PAR 4 and still need a roadmap home, which is the owner's call.
 
 The entry stays open until the fixes land.
+
+### 177. ⬜ ⭐ THE ATMS SOLVER RETURNS ANSWERS THAT DFS REJECTS — `(= x 1) (= x 2)` in one clause gives `{:x 2}`; `(= x 1) (= y 2) (= x y)` gives `{:x 1, :y 2}`; a caller's `x = 1` is invisible inside a branch, which then answers `{:x 2}` as well
+
+**Found by** PAR 4's D.3 adversarial critique round. Critic C9 (red team) found it; C4 independently measured the
+read-side mechanism. Reproduced by hand on 2026-10-15 with `tools/scratch-run.sh` on the two probe files. The code
+is main `c1f389ab`. The probes are kept on branch `par4-arena-executors` in
+`racket/prologos/benchmarks/par4/d3-wave1/C9/`: `c1-overwrite.prologos` and `c4-varvar.prologos`.
+
+| query | `:strategy atms` | `:strategy depth-first` |
+|---|---|---|
+| `two ?x` with `&> (= x 1) (= x 2)` | `@[{:x 2}]` | `@[]` |
+| `(rel [?x] (= ?x 1) (pick ?x))`, `pick` ∈ {`x = 1`, `x = 2`} | `@[{:x 2} {:x 1}]` | `@[{:x 1}]` |
+| `clash ?x ?y` with `&> (= x 1) (= y 2) (= x y)` | `@[{:x 1, :y 2}]` | `@[]` |
+| `agree ?x ?y` with `&> (= x 1) (= y 1) (= x y)` (control) | `@[{:x 1, :y 1}]` | `@[{:x 1, :y 1}]` |
+
+Three mechanisms (read in code; C9 also measured each at the lattice level):
+1. **A tagged read drops the base whenever an entry matches.** `tagged-cell-read` returns the base only when no entry
+   matches (`decision-cell.rkt:470`), so a branch's binding hides the caller's. This explains row 2.
+   - C4 measured the read to be non-monotone in the cell's own merge order on 768 of 9 600 random cases over a
+     set-union domain.
+   - A reader that joins the base in showed 0 of 9 600.
+2. **`unify-fire` drops a var-var conflict.** When both sides are bound and differ, it returns the network unchanged
+   (`relations.rkt:2112-2120`), so no conflict reaches any merge. This explains row 3.
+3. **Per-key last-writer-wins.** `scope-cell-merge` lets the newer binding win per key (`decision-cell.rkt:938-955`),
+   so `x = 2` overwrites `x = 1`. This explains row 1.
+
+**Reach**: `:strategy atms`, and `:strategy auto`, the default (`solver.rkt:77`), above its DFS↔ATMS crossover
+(threshold 256, `solver.rkt:76`). The crossover's reach is not measured. The answers are wrong under every scheduler,
+so order-differential instruments (PAR 4's merge-order census and replay monitor) cannot see this.
+
+**Fix shape**. All three parts are needed; each covers a different row.
+- (a) The read becomes `base ⊔ ⨆{v | label ⊆ W}`. That is ATMS label semantics, and a join-homomorphism into the
+  domain at each worldview W.
+- (b) `unify-fire` writes each side's value into the other, so the conflict reaches the merge.
+- (c) A per-key flat lattice with ⊤, as in PAR 4 D.2 P1a row 2. A ⊤ inside a branch's entry becomes that branch's
+  nogood; a ⊤ in the base becomes the query's failure.
+
+Test layer: a DFS-vs-ATMS answer-set differential over the relational tests and examples. It can fail on errors that
+do not depend on the schedule.
+
+**When**: with PAR 4 P1a (D.3 triage clusters CL-5 and CL-6), unless the owner wants a shipped solver strategy's
+wrong answers fixed sooner.
+
+**Record**: PAR 4 D.3 wave-1 triage §1, §3 CL-6 and §4 PD-1
+(`docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-15_PAR_4_D3_WAVE1_TRIAGE.md` on the branch).
+
+### 178. ⬜ BSP'S TIER-1 FLUSH RETURNS A NETWORK THAT IS NOT A FIXPOINT — it fires the fire-once, empty-input propagators, then clears the whole worklist, discarding the dependents its own writes enqueued (`propagator.rkt:3431-3445`)
+
+**Found by** PAR 4's D.3 round: critics C2 (reality check) and C5 (theory), independently. Reproduced by hand on
+2026-10-15 with C2's `probe-tier1.rkt` (on branch `par4-arena-executors`, in
+`racket/prologos/benchmarks/par4/d3-wave1/C2/`).
+
+The probe network: a copy propagator A → B, already quiescent, then a fire-once propagator with no inputs that
+writes A := 7.
+
+| scheduler path | A | B | B after a second run |
+|---|---|---|---|
+| Tier 1 | 7 | **0** | **0** |
+| Tier 2 control (same writer, not fire-once) | 7 | 7 | 7 |
+| the drain | 7 | 7 | 7 |
+
+The run reports no contradiction and an empty worklist, so callers cannot tell.
+
+**Reach**: not measured. Tier 1 requires worldview cell = 0 and a worklist made only of fire-once, empty-input
+propagators (`propagator.rkt:3411-3430`), whose outputs must already have dependents.
+- Production installers of that shape are at `relations.rkt:2148, 2161, 2183, 2636, 2699`.
+- They take the fire-once path when `current-worldview-bitmask` ≠ 0 (`relations.rkt:2140`), and that can differ from
+  the cell.
+
+Two related gaps, both read in code:
+- Tier-1 fires run outside `fire-and-collect-writes`. `current-bsp-fire-round?` is therefore `#f`, so an install
+  inside such a fire takes the inline branch, where P0's in-fire trap cannot see it.
+- Tier 1 emits no observer record (DEFERRED 176 item 4).
+
+**Fix shape**: either delete the Tier-1 branch, since BSP's inner loop already handles these propagators, or keep the
+dependents that the flushed writes enqueue on the worklist. PAR 4 D.2 had planned to keep Tier 1 "as is"; that is
+corrected in the D.3 triage (SC-20). Under PAR 4 P2, Tier 1 becomes the first pass of the K = 1 worklist.
+
+**When**: PAR 4 P0.5 (with DEFERRED 150), or sooner if a trap measures production reach.
+
+**Record**: PAR 4 D.3 wave-1 triage §1 and §4 PD-2 (on the branch).
