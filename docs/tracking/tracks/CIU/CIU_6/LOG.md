@@ -336,3 +336,18 @@ are in [`../README.md`](../README.md).
     re-read before the first run. The deps check first ran a nonexistent path and printed 0 —
     read as "did not run", re-run at the right path: 375 = B's.
 - **Next**: owner checkpoint — the 1b-vi verify, the suite gate, the checkpoint merge to main.
+
+### Q_U61 posed + acceptance §M (2026-10-14)
+- **Why / decision**: owner — *"Let's open up what the behavior looks like for this `ot`… numerous
+  worked examples … checked against our original design spec and intents. And yes we should add
+  all new syntax developed into the acceptance file."*
+- **Q_U61 (posed, pending)**: probe-1bvi-ac (45 lines) measured a plain `*` under an ordinal head
+  against spec §3.3, Q_U47 and Q_U49. Today splices at depth 1 (Q_U49's decided seat B, 9 pins) and
+  wraps at depth ≥ 2 (no decision, 0 pins — a seat-B predicate that only sees sₙ★ right after the
+  ordinal). Options S (splice through; what Q_U47/Q_U49 say) and W (always wrap; honest nesting);
+  recommendation S. [D4 Q_U61](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u61).
+- **Acceptance §M**: 20 live forms, 3 commented refusals with measured messages; 108 / 108.
+- **Surprise / correction**: the corpus check passes a FILE argument as zero files — re-run on
+  directories (+6 ERROR nodes, inside the ratchet). `server.ssl*->port` splits at `>` while
+  `mn{a*->b}` fuses — each shape already gets the message true of it.
+- **Next**: owner decision on Q_U61; then the rest of the 1b-vi verify, the suite gate, the merge.

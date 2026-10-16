@@ -10087,6 +10087,21 @@ pinned — recorded, not changed.
 | (c) vision-advancing | the mint is a TABLE MOVE: nothing that iterates the table was edited, which is C-1's design claim, measured | the D4 law generator states 1b-vi's semantics; the user-facing documentation (the acceptance file, the examples) does not yet show `*-` / `*-_` at all — the 1b-vi verify should add them, so the surface a newcomer reads matches what ships |
 | (d) drift risks | D2-R1 M-ord ×2 ✓; D2-R2 parity + M-mark ✓; D2-R3 arrival ∀ lexeme ✓; D2-R4 M-keep ✓ | DR-6: 7.65 s per run at 173 rows (C: 7.97 s at 109) — within variance. update-deps 375 = B's, per section. The grammar tripwire fired again; DEFERRED 144 now records the family as final |
 
+**1b-vi verify, step 1 — the acceptance file shows what shipped** (owner: *"we should add all new
+syntax developed into the acceptance file, both for demonstration of the features as well as
+verification that they work"*). §M in `examples/2026-07-26-ciu-t6-path-selection.prologos`, on the
+guild hall's own subjects: 20 live forms (markers 94–113) — the `*` / `*-` / `*-_` / `*_`
+contrasts, Q_U48's ≡, Q_U57's prefix (renamed and dissolved ancestors), branch-locality, Q_U59
+where nothing collapses, the closer seat, the dot path, ω, the ordinal head under a collapse
+(new fixture `guilds := @[app-config]`), and the remedy Q_U55 offers, run. The three refusals
+(Q_U55, Q_U56, L4) are COMMENTED with their measured messages — Gate 1 requires 0 errors, and each
+is pinned live in the stage table. `run-file --check` 108 / 108 (was 88); the harness 110 / 110;
+a corrupted marker turns exactly `[110]` red. *Two measurement slips of mine, both caught:* the
+corpus check first ran on a FILE path, which the script reads as zero files and passes; re-run on
+one-file directories — ERROR 31 → 37, unparsed bytes 41 → 48, 0 swallows, 0 MISSING (within the
+ratchet; the six are DEFERRED 144's `}*-` gap). Plain `*` under an ordinal head is deliberately
+absent from §M until [Q_U61](#q-u61) is decided.
+
 <a id="p4e-1b-v-shipped"></a>
 
 ##### §5.P4e-1b-v — WHAT SHIPPED  (A → B1 → B1b → B2a → verify, 2026-08-13)
