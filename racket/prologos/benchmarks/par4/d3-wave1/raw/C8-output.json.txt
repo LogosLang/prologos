@@ -1,0 +1,161 @@
+{
+  "critic": "C8 Cross-track",
+  "summary": "D.2 deliberately leaves PPN's lattice to PPN and BSP-LE 3's mechanisms to BSP-LE 3, and that is the right instinct. The contracts in §11 are stated at the level of lattice writes, though, and the live code and the neighbouring designs show that the hazards sit one level up, in decisions, nesting, and how roles are assigned. Five of the problems are grounded in probes: (1) P1a row 8's 'clash ⇒ ⊤' contradicts PPN 4C T-3's decided Role-A union semantics and adds a schedule dependence there. (2) The per-binding guard/NAF mask is anti-monotone, so 'retract by growth' makes a premature narrow permanent. (3) BC-3 routes SLG discovery through a strata loop that throws an exception at discovery depth 23. (4) Promoted tagged cells get fresh merge closures that commute only modulo entry order, which a per-function, equal?-based E cannot cover. (5) The BSP-LE master's own completion definition is unsound even under BSP. Further gaps are left uncovered: PC-1…PC-4 cover only rows 8 and 9, while P1b's trait/hasmethod disposition contradicts PPN 4C Phase 7, rows 4–7 change PPN-designed cells, and PC-1 is not tied to PPN's own retirement route (PM 12 / parent Phase 4). Nested S0 runs inside the NAF handler, the BSP-replay derivation of fenced type cells (G-3, DEFERRED 176(d)), and the global-only detector that both neighbours want made local are not addressed. No live branch collides at the code level today.",
+  "strongest_point_in_favour": "D.2's cross-track posture is the right one. It does not redesign the type lattice that PPN owns: the deepest defect (the meta-blocked type merge) is fenced, with an exit criterion and an owner (O-12), and the fenced set is reported in every epoch record. Its P1a targets also agree with algebras PPN 4C had already declared in its own lattice catalog: the ready-queue as a 'monotone set union (free join-semilattice)', and the worldview 'DERIVED … reduce(OR, committed-bits)' (PPN_TRACK4C_DESIGN.md:1299-1318 on ppn4c-elaboration-on-network). P1a supplies exactly the precondition the owner's 'cut anywhere, ship, resume' vision lacks: PPN's own SC-R3 (PPN_4C_PHASE_9_DESIGN.md:12683-12695) concedes that the theorem holds only if every S0 merge is a join. Join combinators plus E are the work that turns PPN's pause cut from conjecture into theorem. Finally, no live branch changes the scheduler or the merges today (PPN 4C's branch changes no compiler code since main), so the sequencing window is genuinely open.",
+  "findings": [
+    {
+      "id": "C8-1",
+      "lens": "cross-track",
+      "section": "D.2 §6.3 row 8; §11 PC-2; §15 O-12",
+      "claim_attacked": "split (O-12): (i) a *clash* (rigid heads differ, so no solution can unify them) ⇒ ⊤, in P1, a local fix — stated for both `type-unify-or-top` (:203) and `type-lattice-merge` (:156), 'F3(b) at :172-173 and :217-218'",
+      "severity": "major",
+      "evidence": "MEASUREMENT, probe-f3b-roles.rkt. Role A (type-lattice-merge): Bool ⊔ Pi(Nat,Nat) = expr-union(Bool, Pi(Nat,Nat)), not top. Bool ⊔ Pi(?m,Nat) with ?m unsolved = Bool (F3(b)). The same arguments with ?m := Nat give expr-union(Bool, Pi(?pm1,Nat)). Role B (type-unify-or-top) gives type-top / Bool / type-top for the same three cases. Power row: Bool ⊔ Bool is not top. So 'clash ⇒ ⊤' matches Role B's own ground arm and contradicts Role A's, which is PPN 4C T-3 Commit B's decided set-union semantics (type-lattice.rkt:141-155). Under the proposed rule, a Role A cell merged before ?m is solved goes to top, which absorbs everything, while one merged after ?m is solved goes to a union. The result then depends on when the solution arrives, which is the schedule dependence P1a exists to remove. Role A is installed on S0 cells: sre-identify-sub-cell allocates type sub-cells with (sre-domain-merge domain sre-equality) (sre-core.rkt:2277-2297), which is type-lattice-merge (unify.rkt:70-73). Meanwhile elaborator-network.rkt:359-365 moved its own sub-cells to Role B. Which role a cell carries is therefore a live PPN T-3 decision, and it is not uniform.",
+      "evidence_class": "MEASUREMENT",
+      "direction": "Split row 8 by role so that each merge's meta arm agrees with its own ground arm. For Role B, clash ⇒ ⊤, landing in P1a as written. For Role A, clash ⇒ the union the ground arm already builds (or the PC-2 residual), never ⊤. Move the role-per-cell assignment, including the sre-core.rkt:2280 vs elaborator-network.rkt:360 divergence, into PC-2 as PPN's decision, and give E's row-8 samples both roles.",
+      "falsifier": "A census of installed merges over the suite finds no S0-written cell whose installed merge is type-lattice-merge, or PPN withdraws T-3's union semantics.",
+      "confidence": "high"
+    },
+    {
+      "id": "C8-2",
+      "lens": "cross-track",
+      "section": "D.2 §11 PC-1; §6.5; §12.3 Orthogonality; §15 O-12 'Settles it'",
+      "claim_attacked": "PC-1: 'the type merge must be a function of its two arguments; meta solutions are read as cells by the caller, not through current-lattice-meta-solution-fn inside the merge'",
+      "severity": "major",
+      "evidence": "PPN already has a retirement route for this parameter: 'gated on PM Track 12 (module loading on network) + import restructuring; PPN 4C parent Phase 4 (CHAMP retirement)' (PPN_4C_PHASE_9_DESIGN.md:2045, branch ppn4c-elaboration-on-network). type-lattice.rkt:78-80 says the same ('retained pending PM Track 12'). Parent Phase 4 (⬜) makes 'the attribute-map :type facet … sole meta store' (PPN_TRACK4C_DESIGN.md:78). Import restructuring lets the merge read the meta cell directly. That removes the parameter but keeps a three-input merge, which stays E-false and fenced. Probe row A3 (probe-f3b-roles.out) shows a second problem: with ?m solved, Role A keeps the raw Pi(?pm1,Nat) inside the union, because resolve-top resolves only top-level metas (type-lattice.rkt:176-185). A two-argument merge cannot canonicalize solved metas, so values written before a solution persist in a form unequal to their zonked twin. If the solutions live in the attribute map (PPN Phase 4), 'read as cells by the caller' means a propagator reading the :type of the meta's position (q) to rewrite position p, inside the cell that carries 79 % of S0 writes. D.2 cites neither PM 12 nor Phase 4.",
+      "evidence_class": "MEASUREMENT",
+      "direction": "Write PC-1 as an acceptance criterion on PPN 4C parent Phase 4 and on PM 12's parameter-retirement row, saying explicitly that replacing the parameter with a cell read inside the merge does not discharge PC-1. Name the flow: a per-meta propagator reads the meta's solution (its cell, or its attribute-map position under declared component paths) and writes zonked values to dependents. The merge then sees only its two arguments plus residuals (PC-2). O-12's settling evidence should be PPN Phase 4 / PM 12's schedule, not a generic 'PPN schedule'.",
+      "falsifier": "PPN's Phase 4 design already specifies a two-argument type merge whose metas are zonked by propagators. In the branch's design docs, 'meta-solution-fn' appears once in the parent design and once in the Phase-9 addendum, both times as the scaffolding note.",
+      "confidence": "medium"
+    },
+    {
+      "id": "C8-3",
+      "lens": "cross-track",
+      "section": "D.2 §6.4 P1b (absence-reading row); §6.3 rows 4-7; §11 PC-1…PC-4; self-critique D2R-5",
+      "claim_attacked": "'trait/hasmethod bridges that *choose* on a meta-containing type → **declared stratum** (they are decisions, not monotone inference)'; and PC-1…PC-4, which cover only P1a rows 8 and 9",
+      "severity": "major",
+      "evidence": "The P1b sites are metavar-store.rkt:692 (trait bridge) and :850 (hasmethod bridge), plus typing-propagators.rkt:2586 (constraint creation) and :2605 ('S1 trait-resolution — P2 fire-once'). PPN 4C Phase 7 (⬜, PPN_TRACK4C_DESIGN.md:81) designs the same work as monotone S0 work over worldview-labelled candidates: 'Parametric trait-resolution — per-(meta, trait) propagators … ATMS branching on multi-candidate … Set-latch fan-in for dict aggregation. Retires Bridge 1.' P1b would move those sites out of S0 into a stratum, so PAR 4 would either build what PPN 7 deletes or fix the form PPN 7 must take. P1a rows 4-7 also change merges that PPN designed: the attribute-map facets (typing-propagators.rkt:400-419), cell-14 (allocated in PPN 4C 2A.0 `a8ef9e3f`, given merge-list-append by its 2A.b mini-design, PPN_4C_PHASE_9_DESIGN.md:3157), and fork-on-union cell-15 (PPN 4C 3A). In row 6's favour, PPN's own catalog declares the ready-queue a 'monotone set union (free join-semilattice)' and the worldview 'DERIVED … reduce(OR, committed-bits)' (PPN_TRACK4C_DESIGN.md:1299-1318). D.2 rows 1 and 6 restore PPN's designed algebra but do not cite it. PPN's SC-R3 census (33 LWW allocations, PPN_4C_PHASE_9_DESIGN.md:12683-12695) overlaps P0 §9.4 and is not cited either.",
+      "evidence_class": "PRECEDENT",
+      "direction": "Add a contract (PC-5): P1b's trait/hasmethod sites stay fenced in S0, not moved to a stratum, until PPN 7's per-(meta, trait) propagators land, unless PAR and PPN agree on S0 + ATMS as the shared target. Add another (PC-6) covering rows 4-7, with PPN's §6.11.8 catalog as the agreed algebra. Offer `join:flat` (write-once ⇒ ⊤ on a second, different write) as the shared conversion for the LWW cells counted in both PPN's SC-R3 and PAR's P0 §9.4.",
+      "falsifier": "The owner places trait/hasmethod resolution in PAR 4's P1b and re-scopes PPN 7 to consume a stratum.",
+      "confidence": "high"
+    },
+    {
+      "id": "C8-4",
+      "lens": "cross-track",
+      "section": "D.2 §11 BC-3; §8 ('strata outer loop | unchanged')",
+      "claim_attacked": "BC-3 'Producers, consumers and tables are created only by topology requests applied at the topology stratum (G-1)', together with §8's 'strata outer loop | unchanged (stratification.md)'",
+      "severity": "major",
+      "evidence": "MEASUREMENT, probe-outer-cap.rkt. The probe builds a chain in which each level is discovered by an S0 fire that writes a callback-topology-request into cell 6 and is installed by the topology tier. N = 5, 15, 20, 21, 22 complete. N = 23, 24, 25, 40 raise 'run-to-quiescence-bsp: stratum handlers: >20 outer iterations — possible infinite loop' (propagator.rkt:3619-3623, :3631-3634). That is an uncaught exception, not a classified contradiction. BC-3 sends every producer, consumer and table creation through this loop. SLG call-variant tabling discovers subgoals level by level from S0 bindings (reaches(a,Y) → reaches(b,Y) → …), so a terminating tabled program with discovery depth ≥ 23 crashes. Today tables are keyed by predicate name and installed eagerly (relations.rkt:2550-2565), so production never hits the cap. Each discovery level also costs one epoch boundary (detector, epoch record, and at K > 1 the RM-2 materialization); this cost is unmeasured for this shape.",
+      "evidence_class": "MEASUREMENT",
+      "direction": "State the strata loop's termination as a lattice measure. Topology requests form a monotone set over a finite universe (call variants × clauses), so the loop is bounded by that set's height. Budget it as fuel, and make exhaustion a classified contradiction under every scheduler, as S-6 already does for S0. BC-3 should add that the per-level epoch cost is part of the workload model BSP-LE 3 supplies to P4 (BC-7).",
+      "falsifier": "BSP-LE 3's design installs tables eagerly per predicate, so discovery depth is the static predicate depth, which is small.",
+      "confidence": "high"
+    },
+    {
+      "id": "C8-5",
+      "lens": "cross-track",
+      "section": "D.2 §11 BC-2; §6.3 row 1",
+      "claim_attacked": "BC-2: 'The worldview lattice is P1a row 1's two-phase set (O-6). Guards retract by growth; the seed's guard bug (c) is the same mechanism as DEFERRED 157.'",
+      "severity": "major",
+      "evidence": "Both the seed's per-binding guard clear (seed :106-113) and NAF's per-binding mask (relations.rkt:204) compute mask = (OR failing) & ~(OR passing), which is anti-monotone in the passing set. MEASUREMENT, probe-guard-mask.rkt, with the rows sharing the guard bit G as the seed specifies (seed :111-113): over the complete binding set the mask is 2 (clears B1 only); over a partial set with only the failing row it is 3 (clears G too). Under ior invalidation, once the early mask has been written, the passing row is dead ('alive #f'). Power row: the failing row is cleared by the correct mask. DEFERRED 157(b)'s 'Then the guard is monotone' holds for the cell write, not for the decision. Seed bug (b) shows that today's single-bit guard also decides on a worldview-collapsed, order-dependent value. Today bug (c) (seed :81-85) re-projects an S0 narrow away, an accidental undo; P1a row 1 removes that undo, so any premature narrow becomes permanent.",
+      "evidence_class": "MEASUREMENT",
+      "direction": "BC-2 should state that invalidated bits are written only by boundary (value-tier) handlers, and only when the decision reads a completed input: the guard's generator table must be complete per BC-4. This is the seed's piece 3; process-naf-request (relations.rkt:206) already works this way. S0 fires never write invalidated bits. Label 157(b)'s 'monotone' claim as a claim about the write only.",
+      "falsifier": "BSP-LE 3 gives each binding row its own guard bit with no shared G, which makes the mask monotone in the binding set.",
+      "confidence": "high"
+    },
+    {
+      "id": "C8-6",
+      "lens": "cross-track",
+      "section": "D.2 §11 BC-6; §6.7 (executor pool, owned records); §9 scheduler-state cells; §16 R-5",
+      "claim_attacked": "BC-6 'Forks happen at boundaries only, and copy the template (≈ 20 records today)'; and missing: what happens when a stratum handler starts its own S0 run",
+      "severity": "major",
+      "evidence": "process-naf-request (an S1 value-tier handler, relations.rkt:206) forks the populated main network (relations.rkt:218) and calls run-to-quiescence on the fork inside the handler (:283). Branch PUs also fork the parent network (propagator.rkt:2407). P0 Q2 measured only the per-query fork of the empty solver template (relations.rkt:3117; P0 record :294). DEFERRED 176 item 3 counts 108 S0 runs and 6 forks in atms-adversarial alone. D.2 models one process-wide pool ('parked between solves; one semaphore wake per solve') and a single ArenaSchedulerNet (epoch, boundary-epoch, lanes, idle-epoch, assignment; §9 :380-390). It says nothing about an S0 run started from inside another run's boundary handler. R-5 removes nested quiescence inside fires, but nested quiescence inside handlers remains, and BSP-LE 3's stratified negation over tables has exactly this shape.",
+      "evidence_class": "PRECEDENT",
+      "direction": "Key the scheduler state (epoch counters, assignment, lanes, executor counters) by network id, as the observation keys already are. State that a nested run on a fork is its own region: it either runs at K = 1 on the handler thread or uses the pool re-entrantly with per-network slots. Restate BC-6 as: forks happen at boundaries, their cost is the boundary materialization (RM-2), and NAF forks copy the populated network, not the template. Add a parity row: NAF over a table at K > 1.",
+      "falsifier": "A P3 prototype runs the NAF fixtures with nested runs at K ∈ {4, 8} with the scheduler state unchanged, and parity stays green.",
+      "confidence": "medium"
+    },
+    {
+      "id": "C8-7",
+      "lens": "cross-track",
+      "section": "D.2 §7 observation contract; §6.6 replay monitor; G-3; DEFERRED 176 (d)",
+      "claim_attacked": "'Round records are the Kleene iterates, on request. Under BSP they are the run; under DIRECT they come from the replay.' and 'They depend on the program only, under H.'",
+      "severity": "major",
+      "evidence": "On fenced cells, which means every type cell until PPN delivers (O-12), H fails. §6.6 says 'A difference on a fenced cell is a measurement of order-dependence, not a failure'. P0 §9.4 says that on these cells 'the BSP result is a deterministic function of BSP's round structure and its bulk-merge order — not the least fixpoint of any lattice'. So for a fenced cell, the replay derivation can explain a value the run did not produce. DEFERRED 176 (d) (error explanation on rounds) and D.1 A.13.2's 'why is c ⊤?' are mostly about type errors, which live in exactly these cells. D.1 A.13.3 GT-2 resolved the tension with 'the replay mismatch as the bridge'. D.2 instead makes the replay monitor a test-time instrument (§6.6) and reserves the execution view (§7 :330), so nothing tells the consumer when the derivation and the run diverge.",
+      "evidence_class": "THEOREM",
+      "direction": "Take the records of fenced cells from the run itself. At K > 1, fenced cells are written only in the deterministic sub-run on the scheduler thread; at K = 1, DIRECT is deterministic. Recording (cell, old, held, writers, sub-round) as it happens is therefore cheap and reproducible. Alternatively, the epoch record carries a per-fenced-cell 'replay agrees' bit, computed lazily when rounds are requested. Until either exists, the contract labels a fenced cell's derivation 'canonical replay, not the run'.",
+      "falsifier": "The P2 replay monitor over the suite at K = 1 shows 0 differences on fenced type cells.",
+      "confidence": "medium"
+    },
+    {
+      "id": "C8-8",
+      "lens": "cross-track",
+      "section": "D.2 §11 BC-1; §6.3 (E; join combinators; row 3)",
+      "claim_attacked": "BC-1 'Every cell BSP-LE 3 writes in S0 has an E-checked join merge, or is fenced'; §6.3 'E is evaluated once per merge function, not per cell, so its cost is a registration-time cost'",
+      "severity": "major",
+      "evidence": "MEASUREMENT, probe-promote-merge-identity.rkt. Two cells with the same merge share one merge object before promotion (eq? #t). After promote-cell-to-tagged (propagator.rkt:1804) each gets a fresh make-tagged-merge closure (eq? #f), and promotion happens at run time (relations.rkt:2228, :2273, :2676, :2759, :3145; typing-propagators.rkt:1211). MEASUREMENT, probe-tagged-merge-order.rkt. make-tagged-merge (decision-cell.rkt:526) returns entries ((4 . 7) (2 . 5)) or ((2 . 5) (4 . 7)) depending on order: equal? #f, equal as sets #t. Power row: the same order twice gives equal? #t. An E check using equal? therefore fences every tagged cell; E needs the readers' equivalence. The combinator library (§6.3) has no tagged constructor. BSP-LE 3's own cells are already non-joins: table-registry-merge is per-key new-wins (atms.rkt:90) and table-answer-merge is a list dedup-append (atms.rkt:100), both registered as lattices (phase1d-registrations.rkt:148, :152). The seed's co-change site 3 lives in net-cell-write, not in a merge: a plain write into a tagged cell is tagged from current-worldview-bitmask or the worldview cell's current value (propagator.rkt:2001-2025), where E cannot see it.",
+      "evidence_class": "MEASUREMENT",
+      "direction": "Add `join:tagged d` (entries a set keyed by label, base joined by d), whose join declaration derives from d's, so a promoted cell is a join by construction with no per-closure sampling. E states its equivalence per domain. BC-1 names the table cells' targets: answers as `join:set` over (answer, support set), per PUnify Part 3 §9.6; the registry as `join:flat` per key. Promotion becomes a topology action in the same request as the writers it serves (BC-3), which also removes the representation-dependent tag gate from S0.",
+      "falsifier": "E as specified already quotients tagged values by entry order and caches its verdicts by domain merge. Neither D.2 nor the merge-laws note says so.",
+      "confidence": "medium"
+    },
+    {
+      "id": "C8-9",
+      "lens": "cross-track",
+      "section": "D.2 §5 design sentence; §6.7 Detection; §9 detector and counters; §11 BC-4",
+      "claim_attacked": "'detector: Σprod = Σcons ∧ ∀i idle-epochᵢ = e' (counters keyed by executor only) and BC-4 'SLG completion of a region = S0-quiescent for the epoch ∧ no pending topology request for the region' ('region' is undefined)",
+      "severity": "minor",
+      "evidence": "PPN 4C GR-6 (PPN_4C_PHASE_9_DESIGN.md:12655-12663): 'synchronization is per stratum, on its predecessors' completion (local quiescence), not one global barrier … Partial-order synchronization would be a scheduling change, which is PAR's territory'. The owner's third answer (§18.21.27.4) adds that partitions synchronize at stratum transitions. SLG completes per SCC leader, and that is what lets NAF read a completed table early. D.2 does not cite GR-6. Its executor counters (§9 :384-386) have no region dimension, so local quiescence would require reshaping the counters rather than refining them.",
+      "evidence_class": "PRECEDENT",
+      "direction": "Key prod, cons and idle-epoch by (executor, region), with region = network id at first (forks already have ids). A region is quiescent when its sums balance; global quiescence is all regions. Define BC-4's 'region' as that key. P3 still ships only the global detector, but local completion (BSP-LE 3) and per-stratum synchronization (PPN GR-6) become refinements rather than a redesign.",
+      "falsifier": "The owner declines GR-6 and BSP-LE 3's design accepts global-only completion.",
+      "confidence": "medium"
+    },
+    {
+      "id": "C8-10",
+      "lens": "cross-track",
+      "section": "D.2 §11 BC-5; §4 PAR_4.close (doc-truth sweep)",
+      "claim_attacked": "BC-5 'No definition may assume rounds (\"complete when a full round adds nothing\" is stated as epoch quiescence)'",
+      "severity": "minor",
+      "evidence": "MEASUREMENT, probe-table-completion.rkt. Chain a→b→c→t plus a→t, with t a set-union table cell, under BSP: in round 1, t is unchanged while c changes; in round 2, t gains 'via-chain'. The BSP-LE master's definition, 'complete when its table cell has quiesced (no new answers after a full round)' (2026-03-21_BSP_LE_MASTER.md:149) and 'Completion = quiescence of the table cell … a threshold check on the table cell's stability' (:154), is a per-cell, one-round test and is unsound even under BSP. BC-5's paraphrase ('a full round adds nothing', a global test) silently repairs it. Other text that assumes rounds: master :152 ('BSP-compatible propagators'); master Track 4 :199 ('Must preserve BSP's core invariants (superstep structure…)'), although PAR master :5 records BSP-LE Track 4 as superseded; master open question Q5 (:255); and the seed's 'between-round handler' (seed :84, :115), which actually means the stratum-boundary value tier (propagator.rkt:3578-3646). PAR_4.close's sweep (D.2 :91) lists the PAR master, roadmap, stratification.md and propagator-design.md, but not the BSP-LE master or the seed.",
+      "evidence_class": "MEASUREMENT",
+      "direction": "Propose the master edits (owner-owned surface): completion = S0 quiescent ∧ no pending topology request in the table's dependency closure (BC-4), never a per-cell or per-round test; mark Track 4 superseded by PAR; answer Q5 by pointing at PAR 4. Add the BSP-LE master and the seed to PAR_4.close's doc-truth sweep.",
+      "falsifier": "None. This concerns documentation; the probe shows the per-cell definition fails.",
+      "confidence": "high"
+    },
+    {
+      "id": "C8-11",
+      "lens": "cross-track",
+      "section": "D.2 §15 O-11 'Settles it'; §7",
+      "claim_attacked": "'Settles it: whether any on-network consumer of observations is planned (G-3's debugger is outside)'",
+      "severity": "minor",
+      "evidence": "PPN 4C Q-4B5.10, DECIDED 2026-10-14 (PPN_4C_PHASE_9_DESIGN.md:12617): the open-`_` diagnostic is 'a first-class datum (position, the cell's partial information, the cut that reached it, provenance) … the datum always exists', emitted by the network. PPN's design note (:12700-12703) gives its cell a set-union merge keyed by position. This planned on-network consumer needs the cut's identity (D.2's (network, epoch) key) and always-present provenance. D.2's round records are produced only on request, and at K > 1 possibly only at test time (RM-2).",
+      "evidence_class": "PRECEDENT",
+      "direction": "Record PPN's datum as O-11's settling evidence. Whatever O-11 decides about scoping requests, make the (network, epoch) key a cell readable by propagators. Source always-present provenance from ATMS labels and support sets (always-on lattice content), and keep round records as the debugger's lazy layer.",
+      "falsifier": "PPN's datum design takes the cut identity from its own commitment-cut machinery and needs no scheduler key.",
+      "confidence": "medium"
+    },
+    {
+      "id": "C8-12",
+      "lens": "cross-track",
+      "section": "D.2 §12.2 codebase reality check; §11",
+      "claim_attacked": "missing: live branches that touch propagator.rkt's scheduler or the merges",
+      "severity": "minor",
+      "evidence": "MEASUREMENT, branches.sh → branches.out (three-dot diffs since each merge-base, over propagator, type-lattice, decision-cell, typing-propagators, relations, metavar-store, atms, sre-core, qtt, resolution, classify-inhabit, elaborator-network and stratified-eval). ciu6-path-selection (22 commits ahead of main), ppn4c-elaboration-on-network (16 ahead; only an example file changed) and deferred-sweep-146-149 (1 ahead) change none of these files. Power row: par4-p0 against 4097b1c8~5 shows +96/−35 on propagator.rkt. f3a-census instruments type-lattice.rkt and is a measurement branch, 'never merged'. preduce-autonomy (62 ahead, last commit 2026-06-11, worktree /Users/avanti/dev/projects/prologos-preduce-auto) changes propagator.rkt by +207 lines. It pre-allocates cell-ids 20 and 21; the seed's prototyped guard-pending cell was also 'cell-id 20' (seed :117). It also changes dependent filtering for pointwise merges, with a recorded lesson that 'a superset … consumed FIRE-ONCE dependents' single shot on no-change wakes and broke trait resolution', which bears on P2's enqueue rule and the factored self-clear (D2R-3).",
+      "evidence_class": "MEASUREMENT",
+      "direction": "List preduce-autonomy in §12.2 as a watched branch, and turn its pointwise-delta enqueue rule into a P2 parity row in case it merges. Allocate well-known cell ids from one register (make-prop-network / preallocated-cell-ns, propagator.rkt:3336) and name BSP-LE 3's guard-pending cell there.",
+      "falsifier": "preduce-autonomy is abandoned (the owner retires its worktree).",
+      "confidence": "high"
+    }
+  ],
+  "sections_examined": ["§0", "§1", "§2", "§4", "§5", "§6.1", "§6.3", "§6.4", "§6.5", "§6.6", "§6.7", "§6.8", "§7", "§8", "§9", "§10", "§11", "§12", "§13", "§15", "§16", "self-critique (all)", "D.1 A.13 (G-3)", "P0 §9.4, Q2 row", "merge-laws note §2", "BSP-LE 3 seed (all)", "BSP-LE master Track 3/4, Q5", "PAR master header", "PPN 4C LOG (2026-10-13…14 entries)", "PPN 4C addendum §18.21.27-§18.21.27.4, :2035-2091, :3157", "PPN 4C parent design tracker rows 4/7/9b, §6.11.8", "DEFERRED 157, 176 (main)"],
+  "probes": [
+    "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3/C8/probe-f3b-roles.rkt -> probe-f3b-roles.out",
+    "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3/C8/probe-outer-cap.rkt -> probe-outer-cap.out",
+    "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3/C8/probe-table-completion.rkt -> probe-table-completion.out",
+    "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3/C8/probe-guard-mask.rkt -> probe-guard-mask.out",
+    "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3/C8/probe-promote-merge-identity.rkt -> probe-promote-merge-identity.out",
+    "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3/C8/probe-tagged-merge-order.rkt -> probe-tagged-merge-order.out",
+    "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3/C8/branches.sh -> branches.out"
+  ]
+}

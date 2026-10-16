@@ -1,0 +1,30 @@
+ns probes::c9c1
+
+;; C9 (c): does the on-network solver OVERWRITE a binding today (scope-cell-merge
+;; per key, new wins, decision-cell.rkt:938), and where would D.2 P1a row 2's
+;; flat lattice (different => top) change an answer?
+
+solver atms-s
+  :strategy atms
+
+solver dfs-s
+  :strategy depth-first
+
+defr pick [?x]
+  &> (= x 1)
+  &> (= x 2)
+
+defr two [?x]
+  &> (= x 1) (= x 2)
+
+;; Q1 conflicting bindings in ONE conjunction (no branching)
+solve-with atms-s (two ?x)
+solve-with dfs-s (two ?x)
+
+;; Q2 caller binds x=1, callee branches on x in {1,2}: only clause 1 is consistent
+solve-with atms-s (pick 1)
+solve-with dfs-s (pick 1)
+
+;; Q3 the same with the binding coming from an inline conjunction
+solve-with atms-s (rel [?x] (= ?x 1) (pick ?x))
+solve-with dfs-s (rel [?x] (= ?x 1) (pick ?x))

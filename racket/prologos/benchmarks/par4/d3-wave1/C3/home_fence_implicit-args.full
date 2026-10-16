@@ -1,0 +1,19 @@
+PERF-COUNTERS:{"cell_allocs":411,"constraint_count":0,"constraint_retries":0,"elaborate_steps":111,"inert_dependent_skips":0,"infer_steps":103,"meta_created":10,"meta_solved":10,"prop_allocs":0,"prop_firings":0,"reduce_steps":179,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":33,"zonk_steps":95}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":4,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+(list "id : [Pi [x :0 <[Type 0]>] x -> x] defined." "const : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] x y -> x]] defined." (type-mismatch-error (srcloc "<unknown>" 0 0 0) "Type mismatch" "[Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [Pi [a <x y -> z>] [Pi [b <y>] [Pi [c <x>] z]]]]]]" "[Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [Pi [a <x y -> z>] [Pi [b <y>] [Pi [c <x>] x y -> z]]]]]]" "[fn [x :0 <[Type 0]>] [fn [y :0 <[Type 0]>] [fn [z :0 <[Type 0]>] [fn [a <x y -> z>] [fn [b <y>] [fn [c <x>] a]]]]]]" '()) (type-mismatch-error (srcloc "<unknown>" 0 0 0) "Type mismatch" "[Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [Pi [a <y -> z>] [Pi [b <x -> y>] [Pi [c <x>] z]]]]]]" "[Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [Pi [a <y -> z>] [Pi [b <x -> y>] [Pi [c <x>] y -> z]]]]]]" "[fn [x :0 <[Type 0]>] [fn [y :0 <[Type 0]>] [fn [z :0 <[Type 0]>] [fn [a <y -> z>] [fn [b <x -> y>] [fn [c <x>] a]]]]]]" '()) "42 : Int" "true : Bool" "1 : Int" "[fn [x <2>] [fn [y <false>] x]] : ?bvar1 ?bvar1 -> ?bvar3" (inference-failed-error (srcloc "<unknown>" 0 0 0) "Could not infer type" "[prologos::core::compose [Type 0] ?bvar0 -> ?bvar1 [Type 0] benchmarks::comparative::implicit-args::id benchmarks::comparative::implicit-args::id 7]") (parse-error (srcloc "/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/implicit-args.prologos" 24 9 18) "fn: all parameters except body must be bare symbols or a binder (x : T)" #f))
+file /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/implicit-args.prologos
+fires 150  fenced-fires(any output attribute-map) 130  share 0.8666666666666667
+home histogram (K=8 RR, home = owner of first output): ((1 . 130) (5 . 6) (6 . 6) (4 . 4) (2 . 2) (3 . 2))
+max-home share 0.8666666666666667
+first-output merge (top 6): (("attribute-map-merge-fn" . 130) ("meta-solution-merge" . 20))
+first-output cell (top 6): (("49:attribute-map-merge-fn" . 130) ("53:meta-solution-merge" . 6) ("54:meta-solution-merge" . 6) ("52:meta-solution-merge" . 4) ("50:meta-solution-merge" . 2) ("51:meta-solution-merge" . 2))
+runs with fires 5 (of 5 observed)
+per productive run: (run rounds rounds-with-fenced-fire phase-switches fires fenced-fires)
+  7 10 10 3 52 46
+  4 8 8 3 48 42
+  2 5 5 2 26 22
+  0 3 3 2 12 10
+  1 3 3 2 12 10
+totals: rounds 29 rounds-with-fenced 29 phase-switches 12

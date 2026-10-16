@@ -1,0 +1,2656 @@
+;; compile-linklet: phase: 0
+;; compile-linklet: module: (p4-asm configure-runtime)
+;; compile-linklet: name: module
+;; compile-linklet: step: linklet
+;; ---------------------
+(linklet
+  ((.get-syntax-literal!) (.set-transformer!) (configure)) ()
+  (void) (configure #f) (void))
+;; compile-linklet: step: schemified
+;; ---------------------
+(lambda (instance-variable-reference .get-syntax-literal!1
+         .set-transformer!2 configure3)
+  (print-as-expression #t)
+  '#<void>)
+;; compile-linklet: passes: assembly
+;; ---------------------
+output of np-generate-code (assembly):
+
+entry.4:
+0:       subi           %trap, %trap, 1, #t
+4:       beq            lt.3(144)
+ej.5:
+8:       cmpi           %ac0, 4
+12:      bne            lf.2(116)
+dcl.6:
+16:      ldri           %lr, %tc, 144
+20:      cmp            %sfp, %lr
+24:      bcs            overflowed.1(80)
+post-overflow-check.0:
+28:      movzi          %r0, 14, 0
+32:      addi           %sfp, %sfp, 8, #f
+docall.7:
+36:      movzi          %xp, 0, 0
+40:      movki          %xp, 0, 1
+44:      movki          %xp, 0, 2
+48:      movki          %xp, 0, 3
+52:      relocation:    (arm64-abs 0 (object \x31;/print-as-expression.rkt-io.sls-1/print-as-expression-0))
+52:      lduri          %cp, %xp, 5
+56:      adr            %lr, 36
+60:      stri           %lr, %sfp, 0
+64:      movzi          %ac0, 1, 0
+68:      lduri          %jmptmp, %xp, 13
+72:      br             %jmptmp
+rpl.8:
+76:      code-top-link  
+84:      mrv pt:        (0 1 continue)
+mrvl.9:
+92:      subi           %sfp, %sfp, 8, #f
+96:      movzi          %ac0, 46, 0
+100:     lduri          %jmptmp, %sfp, 0
+104:     br             %jmptmp
+overflowed.1:
+108:     movzi          %jmptmp, 0, 0
+112:     movki          %jmptmp, 0, 1
+116:     movki          %jmptmp, 0, 2
+120:     movki          %jmptmp, 0, 3
+124:     blr            %jmptmp
+128:     relocation:    (arm64-call 65 (library-code #(libspec dooverflow 158)))
+128:     b              post-overflow-check.0(-104)
+lf.2:
+132:     movzi          %jmptmp, 0, 0
+136:     movki          %jmptmp, 0, 1
+140:     movki          %jmptmp, 0, 2
+144:     movki          %jmptmp, 0, 3
+148:     br             %jmptmp
+152:     relocation:    (arm64-jump 65 (library-code #(libspec doargerr 176)))
+lt.3:
+152:     movzi          %jmptmp, 0, 0
+156:     movki          %jmptmp, 0, 1
+160:     movki          %jmptmp, 0, 2
+164:     movki          %jmptmp, 0, 3
+168:     br             %jmptmp
+172:     relocation:    (arm64-jump 65 (library-code #(libspec event-detour 180)))
+172:     <end>
+
+dcl.10:
+0:       movzi          %ac0, 0, 0
+4:       movki          %ac0, 0, 1
+8:       movki          %ac0, 0, 2
+12:      movki          %ac0, 0, 3
+16:      relocation:    (arm64-abs 0 (closure . #($c-func (...) #f (...) #f)))
+16:      lduri          %jmptmp, %sfp, 0
+20:      br             %jmptmp
+24:      <end>
+;; compile-linklet: step: compiled
+;; ---------------------
+done
+;; compile-linklet: phase: 1
+;; compile-linklet: module: #f
+;; compile-linklet: name: module
+;; compile-linklet: step: linklet
+;; ---------------------
+(linklet
+  (() (.syntax-literals)
+      ()
+      (make-self-ctor-checked-struct-info))
+  ()
+  (make-self-ctor-checked-struct-info
+    (lambda ()
+      (list (unsafe-vector*-ref .syntax-literals 0)
+        (unsafe-vector*-ref .syntax-literals 1)
+        (unsafe-vector*-ref .syntax-literals 2)
+        (list
+          (unsafe-vector*-ref .syntax-literals 3)
+          (unsafe-vector*-ref .syntax-literals 4))
+        (list #f #f) #t))
+    '(b a)
+    (list (list) (list))
+    (lambda () (unsafe-vector*-ref .syntax-literals 5))))
+;; compile-linklet: step: schemified
+;; ---------------------
+(lambda (instance-variable-reference .syntax-literals1
+         make-self-ctor-checked-struct-info2)
+  (let ([app_8 (variable-ref/no-check
+                 make-self-ctor-checked-struct-info2)])
+    (#%app app_8
+      (#%name
+        \x5B;...e/define-struct.rkt:760:40
+        (lambda ()
+          (let ([app_4 (unsafe-vector*-ref .syntax-literals1 0)])
+            (let ([app_5 (unsafe-vector*-ref .syntax-literals1 1)])
+              (let ([app_6 (unsafe-vector*-ref .syntax-literals1 2)])
+                (let ([app_7 (let ([app_3 (unsafe-vector*-ref
+                                            .syntax-literals1
+                                            3)])
+                               (list
+                                 app_3
+                                 (unsafe-vector*-ref
+                                   .syntax-literals1
+                                   4)))])
+                  (list app_4 app_5 app_6 app_7 (list #f #f) #t)))))))
+      '(b a) (list (list) (list))
+      (#%name
+        \x5B;...e/define-struct.rkt:808:55
+        (lambda () (unsafe-vector*-ref .syntax-literals1 5))))))
+;; compile-linklet: step: compiled
+;; ---------------------
+done
+;; compile-linklet: phase: 0
+;; compile-linklet: module: p4-asm
+;; compile-linklet: name: module
+;; compile-linklet: step: linklet
+;; ---------------------
+(linklet ((.get-syntax-literal!) (.set-transformer!))
+  (cas read-acquire read-plain publish-release publish-plain
+       copy-then-set alloc-node alloc-pair node-b node-a node?
+       node1.1.unreadable:node1.1 struct:node)
+  (void)
+  (define-values (struct:node node1.1.unreadable:node1.1 node?
+                  node-a node-b)
+    (let-values ([(struct:_1 make-_2 ?_3 -ref_4 -set!_5)
+                  (let-values ()
+                    (let-values ()
+                      (make-struct-type 'node #f 2 0 #f (list (cons prop:authentic #t))
+                        (current-inspector) #f '(0 1) #f 'node)))])
+      (values struct:_1 make-_2 ?_3
+        (make-struct-field-accessor -ref_4 0 'a)
+        (make-struct-field-accessor -ref_4 1 'b))))
+  (define-values (alloc-pair)
+    (#%name alloc-pair (lambda (x_7) (cons x_7 x_7))))
+  (define-values (alloc-node)
+    (#%name
+      alloc-node
+      (lambda (x_8) (node1.1.unreadable:node1.1 x_8 x_8))))
+  (define-values (copy-then-set)
+    (#%name
+      copy-then-set
+      (lambda (v_9 x_10)
+        (let-values ([(n_11) (vector-copy v_9)])
+          (begin (vector-set! n_11 0 x_10) n_11)))))
+  (define-values (publish-plain)
+    (#%name
+      publish-plain
+      (lambda (bx_12 v_13) (set-box! bx_12 v_13))))
+  (define-values (publish-release)
+    (#%name
+      publish-release
+      (lambda (bx_14 v_15)
+        (begin (memory-order-release) (set-box! bx_14 v_15)))))
+  (define-values (read-plain)
+    (#%name read-plain (lambda (bx_16) (unbox bx_16))))
+  (define-values (read-acquire)
+    (#%name
+      read-acquire
+      (lambda (bx_17)
+        (let-values ([(v_18) (unbox bx_17)])
+          (begin (memory-order-acquire) v_18)))))
+  (define-values (cas)
+    (#%name
+      cas
+      (lambda (bx_19 old_20 new_21)
+        (box-cas! bx_19 old_20 new_21))))
+  (void))
+;; compile-linklet: step: schemified
+;; ---------------------
+(lambda (instance-variable-reference .get-syntax-literal!1
+         .set-transformer!2 cas3 read-acquire4 read-plain5
+         publish-release6 publish-plain7 copy-then-set8 alloc-node9
+         alloc-pair10 node-b11 node-a12 node?13 node1.114
+         struct:node15)
+  (begin
+    (define finish17
+      (make-struct-type-install-properties 'node 2 0 #f (list (cons prop:authentic #t))
+        (current-inspector) #f '(0 1) #f 'node))
+    (define struct:node
+      (make-record-type-descriptor 'node #f #f #f #f '(2 . 0)))
+    (define effect18 (finish17 struct:node))
+    (define node1.1.unreadable:node1.1
+      (#%struct-constructor
+        (#%name
+          node
+          (record-constructor
+            (make-record-constructor-descriptor struct:node #f #f)))
+        4))
+    (define node?16
+      (#%name node? (record-predicate struct:node)))
+    (define node?
+      (#%struct-predicate
+        (#%name node? (lambda (v) (node?16 v)))))
+    (begin
+      (define node-a19
+        (#%name node-a (record-accessor struct:node 0)))
+      (define node-a
+        (#%struct-field-accessor
+          (#%name
+            node-a
+            (lambda (s)
+              (if (node?16 s)
+                  (node-a19 s)
+                  (#%struct-ref-error s 'node 'a))))
+          struct:node
+          0)))
+    (begin
+      (define node-b20
+        (#%name node-b (record-accessor struct:node 1)))
+      (define node-b
+        (#%struct-field-accessor
+          (#%name
+            node-b
+            (lambda (s)
+              (if (node?16 s)
+                  (node-b20 s)
+                  (#%struct-ref-error s 'node 'b))))
+          struct:node
+          1))))
+  (define alloc-pair
+    (#%name alloc-pair (lambda (x_7) (cons x_7 x_7))))
+  (define alloc-node
+    (#%name
+      alloc-node
+      (lambda (x_8) (unsafe-struct struct:node x_8 x_8))))
+  (define copy-then-set
+    (#%name
+      copy-then-set
+      (lambda (v_9 x_10)
+        (let ([n_11 (vector-copy v_9)])
+          (begin (vector-set! n_11 0 x_10) n_11)))))
+  (define publish-plain
+    (#%name
+      publish-plain
+      (lambda (bx_12 v_13) (set-box! bx_12 v_13))))
+  (define publish-release
+    (#%name
+      publish-release
+      (lambda (bx_14 v_15)
+        (begin (memory-order-release) (set-box! bx_14 v_15)))))
+  (define read-plain
+    (#%name read-plain (lambda (bx_16) (unbox bx_16))))
+  (define read-acquire
+    (#%name
+      read-acquire
+      (lambda (bx_17)
+        (let ([v_18 (unbox bx_17)])
+          (begin (memory-order-acquire) v_18)))))
+  (define cas
+    (#%name
+      cas
+      (lambda (bx_19 old_20 new_21)
+        (box-cas! bx_19 old_20 new_21))))
+  (set-consistent-variables!/define
+    (vector struct:node15 node1.114 node?13 node-a12 node-b11
+      alloc-pair10 alloc-node9 copy-then-set8 publish-plain7
+      publish-release6 read-plain5 read-acquire4 cas3)
+    (vector struct:node node1.1.unreadable:node1.1 node? node-a node-b
+      alloc-pair alloc-node copy-then-set publish-plain
+      publish-release read-plain read-acquire cas)))
+;; compile-linklet: passes: assembly
+;; ---------------------
+output of np-generate-code (assembly):
+
+entry.102:
+0:       cmpi           %ac0, 16
+4:       bne            lf.98(1888)
+dcl.103:
+8:       ldri           %lr, %tc, 144
+12:      cmp            %sfp, %lr
+16:      bcs            overflowed.97(1852)
+post-overflow-check.64:
+20:      subi           %trap, %trap, 1, #t
+24:      beq            lt.96(1788)
+ej.65:
+28:      addi           %sfp, %sfp, 112, #f
+docall.104:
+32:      movzi          %xp, 0, 0
+36:      movki          %xp, 0, 1
+40:      movki          %xp, 0, 2
+44:      movki          %xp, 0, 3
+48:      relocation:    (arm64-abs 0 (object current-inspector.rkt-rumble.sls-current-inspector-0))
+48:      lduri          %cp, %xp, 5
+52:      adr            %lr, 36
+56:      stri           %lr, %sfp, 0
+60:      movzi          %ac0, 0, 0
+64:      lduri          %jmptmp, %xp, 13
+68:      br             %jmptmp
+rpl.105:
+72:      code-top-link  
+80:      mrv pt:        (8191 14 error)
+88:      subi           %sfp, %sfp, 112, #f
+92:      movzi          %lr, 0, 0
+96:      movki          %lr, 0, 1
+100:     movki          %lr, 0, 2
+104:     movki          %lr, 0, 3
+108:     relocation:    (arm64-abs 5 (object prop:authentic.rkt-rumble.sls-prop:authentic-0))
+108:     ldri           %r15, %lr, 0
+112:     subi           %xp, %ap, 7, #f
+116:     addi           %ap, %ap, 16, #f
+120:     ldri           %lr, %tc, 160
+124:     cmp            %lr, %ap
+128:     bcc            Lget-room.95(1660)
+ej.66:
+132:     sturi          %r15, %xp, 7
+136:     movzi          %lr, 14, 0
+140:     sturi          %lr, %xp, 15
+144:     mov            %r15, %xp
+148:     subi           %xp, %ap, 7, #f
+152:     addi           %ap, %ap, 16, #f
+156:     ldri           %lr, %tc, 160
+160:     cmp            %lr, %ap
+164:     bcc            Lget-room.94(1600)
+ej.67:
+168:     sturi          %r15, %xp, 7
+172:     movzi          %lr, 38, 0
+176:     sturi          %lr, %xp, 15
+180:     movzi          %lr, 6, 0
+184:     stri           %lr, %sfp, 120
+188:     stri           %xp, %sfp, 128
+192:     stri           %ac0, %sfp, 136
+196:     movzi          %lr, 6, 0
+200:     stri           %lr, %sfp, 144
+204:     movzi          %lr, 0, 0
+208:     movki          %lr, 0, 1
+212:     movki          %lr, 0, 2
+216:     movki          %lr, 0, 3
+220:     relocation:    (arm64-abs 0 (object (0 1)))
+220:     stri           %lr, %sfp, 152
+224:     movzi          %lr, 6, 0
+228:     stri           %lr, %sfp, 160
+232:     movzi          %lr, 0, 0
+236:     movki          %lr, 0, 1
+240:     movki          %lr, 0, 2
+244:     movki          %lr, 0, 3
+248:     relocation:    (arm64-abs 0 (object node))
+248:     stri           %lr, %sfp, 168
+252:     movzi          %r0, 0, 0
+256:     movki          %r0, 0, 1
+260:     movki          %r0, 0, 2
+264:     movki          %r0, 0, 3
+268:     relocation:    (arm64-abs 0 (object node))
+268:     movzi          %r1, 16, 0
+272:     movzi          %r2, 0, 0
+276:     addi           %sfp, %sfp, 112, #f
+docall.106:
+280:     movzi          %xp, 0, 0
+284:     movki          %xp, 0, 1
+288:     movki          %xp, 0, 2
+292:     movki          %xp, 0, 3
+296:     relocation:    (arm64-abs 0 (object make-struct-type-install-properties.rkt-rumble.sls-make-struct-type-install-properties-0))
+296:     lduri          %cp, %xp, 5
+300:     adr            %lr, 36
+304:     stri           %lr, %sfp, 0
+308:     movzi          %ac0, 10, 0
+312:     lduri          %jmptmp, %xp, 13
+316:     br             %jmptmp
+rpl.107:
+320:     code-top-link  
+328:     mrv pt:        (8191 14 error)
+336:     subi           %sfp, %sfp, 112, #f
+340:     movzi          %lr, 6, 0
+344:     stri           %lr, %sfp, 128
+348:     movzi          %lr, 6, 0
+352:     stri           %lr, %sfp, 136
+356:     movzi          %lr, 0, 0
+360:     movki          %lr, 0, 1
+364:     movki          %lr, 0, 2
+368:     movki          %lr, 0, 3
+372:     relocation:    (arm64-abs 0 (object (2 . 0)))
+372:     stri           %lr, %sfp, 144
+376:     movzi          %r0, 0, 0
+380:     movki          %r0, 0, 1
+384:     movki          %r0, 0, 2
+388:     movki          %r0, 0, 3
+392:     relocation:    (arm64-abs 0 (object node))
+392:     movzi          %r1, 6, 0
+396:     movzi          %r2, 6, 0
+400:     stri           %ac0, %sfp, 112
+404:     addi           %sfp, %sfp, 120, #f
+docall.108:
+408:     movzi          %xp, 0, 0
+412:     movki          %xp, 0, 1
+416:     movki          %xp, 0, 2
+420:     movki          %xp, 0, 3
+424:     relocation:    (arm64-abs 0 (object make-record-type-descriptor))
+424:     lduri          %cp, %xp, 5
+428:     adr            %lr, 36
+432:     stri           %lr, %sfp, 0
+436:     movzi          %ac0, 6, 0
+440:     lduri          %jmptmp, %xp, 13
+444:     br             %jmptmp
+rpl.109:
+448:     code-top-link  
+456:     mrv pt:        (16383 15 error)
+464:     subi           %sfp, %sfp, 120, #f
+468:     mov            %r0, %ac0
+472:     ldri           %ac0, %sfp, 112
+476:     stri           %r0, %sfp, 120
+480:     addi           %sfp, %sfp, 128, #f
+docall.110:
+484:     mov            %cp, %ac0
+488:     adr            %lr, 36
+492:     stri           %lr, %sfp, 0
+496:     movzi          %ac0, 1, 0
+500:     lduri          %jmptmp, %cp, 3
+504:     br             %jmptmp
+rpl.111:
+508:     code-top-link  
+516:     mrv pt:        (24575 16 error)
+524:     subi           %sfp, %sfp, 128, #f
+528:     ldri           %r0, %sfp, 120
+532:     subi           %xp, %ap, 3, #f
+536:     addi           %ap, %ap, 16, #f
+540:     ldri           %lr, %tc, 160
+544:     cmp            %lr, %ap
+548:     bcc            Lget-room.93(1192)
+ej.68:
+552:     movzi          %lr, 0, 0
+556:     movki          %lr, 0, 1
+560:     movki          %lr, 0, 2
+564:     movki          %lr, 0, 3
+568:     relocation:    (arm64-abs 65 (code #($c-func (...) #f #f #f) 64 1 "node" ...))
+568:     sturi          %lr, %xp, 3
+572:     sturi          %r0, %xp, 11
+576:     mov            %r14, %xp
+580:     subi           %xp, %ap, 3, #f
+584:     addi           %ap, %ap, 32, #f
+588:     ldri           %lr, %tc, 160
+592:     cmp            %lr, %ap
+596:     bcc            Lget-room.92(1120)
+ej.69:
+600:     mov            %r15, %xp
+604:     movzi          %lr, 0, 0
+608:     movki          %lr, 0, 1
+612:     movki          %lr, 0, 2
+616:     movki          %lr, 0, 3
+620:     relocation:    (arm64-abs 65 (library #(libspec wrapper-apply 626)))
+620:     sturi          %lr, %r15, 3
+624:     sturi          %r14, %r15, 11
+628:     movzi          %lr, 32, 0
+632:     sturi          %lr, %r15, 19
+636:     movzi          %lr, 25366, 0
+640:     sturi          %lr, %r15, 27
+644:     subi           %xp, %ap, 3, #f
+648:     addi           %ap, %ap, 16, #f
+652:     ldri           %lr, %tc, 160
+656:     cmp            %lr, %ap
+660:     bcc            Lget-room.91(1032)
+ej.70:
+664:     movzi          %lr, 0, 0
+668:     movki          %lr, 0, 1
+672:     movki          %lr, 0, 2
+676:     movki          %lr, 0, 3
+680:     relocation:    (arm64-abs 65 (code #($c-func (...) #f #f #f) 64 1 "node?" ...))
+680:     sturi          %lr, %xp, 3
+684:     sturi          %r0, %xp, 11
+688:     mov            %r13, %xp
+692:     subi           %xp, %ap, 3, #f
+696:     addi           %ap, %ap, 32, #f
+700:     ldri           %lr, %tc, 160
+704:     cmp            %lr, %ap
+708:     bcc            Lget-room.90(960)
+ej.71:
+712:     mov            %r14, %xp
+716:     movzi          %lr, 0, 0
+720:     movki          %lr, 0, 1
+724:     movki          %lr, 0, 2
+728:     movki          %lr, 0, 3
+732:     relocation:    (arm64-abs 65 (library #(libspec wrapper-apply 626)))
+732:     sturi          %lr, %r14, 3
+736:     sturi          %r13, %r14, 11
+740:     movzi          %lr, 16, 0
+744:     sturi          %lr, %r14, 19
+748:     movzi          %lr, 28694, 0
+752:     sturi          %lr, %r14, 27
+756:     subi           %xp, %ap, 3, #f
+760:     addi           %ap, %ap, 16, #f
+764:     ldri           %lr, %tc, 160
+768:     cmp            %lr, %ap
+772:     bcc            Lget-room.89(872)
+ej.72:
+776:     movzi          %lr, 0, 0
+780:     movki          %lr, 0, 1
+784:     movki          %lr, 0, 2
+788:     movki          %lr, 0, 3
+792:     relocation:    (arm64-abs 65 (code #($c-func (...) #f #f #f) 64 1 "node-a" ...))
+792:     sturi          %lr, %xp, 3
+796:     sturi          %r0, %xp, 11
+800:     mov            %r12, %xp
+804:     subi           %xp, %ap, 7, #f
+808:     addi           %ap, %ap, 16, #f
+812:     ldri           %lr, %tc, 160
+816:     cmp            %lr, %ap
+820:     bcc            Lget-room.88(800)
+ej.73:
+824:     sturi          %r0, %xp, 7
+828:     movzi          %lr, 0, 0
+832:     sturi          %lr, %xp, 15
+836:     mov            %r9, %xp
+840:     subi           %xp, %ap, 3, #f
+844:     addi           %ap, %ap, 32, #f
+848:     ldri           %lr, %tc, 160
+852:     cmp            %lr, %ap
+856:     bcc            Lget-room.87(740)
+ej.74:
+860:     mov            %r13, %xp
+864:     movzi          %lr, 0, 0
+868:     movki          %lr, 0, 1
+872:     movki          %lr, 0, 2
+876:     movki          %lr, 0, 3
+880:     relocation:    (arm64-abs 65 (library #(libspec wrapper-apply 626)))
+880:     sturi          %lr, %r13, 3
+884:     sturi          %r12, %r13, 11
+888:     movzi          %lr, 16, 0
+892:     sturi          %lr, %r13, 19
+896:     sturi          %r9, %r13, 27
+900:     subi           %xp, %ap, 3, #f
+904:     addi           %ap, %ap, 16, #f
+908:     ldri           %lr, %tc, 160
+912:     cmp            %lr, %ap
+916:     bcc            Lget-room.86(656)
+ej.75:
+920:     movzi          %lr, 0, 0
+924:     movki          %lr, 0, 1
+928:     movki          %lr, 0, 2
+932:     movki          %lr, 0, 3
+936:     relocation:    (arm64-abs 65 (code #($c-func (...) #f #f #f) 64 1 "node-b" ...))
+936:     sturi          %lr, %xp, 3
+940:     sturi          %r0, %xp, 11
+944:     mov            %r12, %xp
+948:     subi           %xp, %ap, 7, #f
+952:     addi           %ap, %ap, 16, #f
+956:     ldri           %lr, %tc, 160
+960:     cmp            %lr, %ap
+964:     bcc            Lget-room.85(584)
+ej.76:
+968:     sturi          %r0, %xp, 7
+972:     movzi          %lr, 8, 0
+976:     sturi          %lr, %xp, 15
+980:     mov            %r9, %xp
+984:     subi           %xp, %ap, 3, #f
+988:     addi           %ap, %ap, 32, #f
+992:     ldri           %lr, %tc, 160
+996:     cmp            %lr, %ap
+1000:    bcc            Lget-room.84(524)
+ej.77:
+1004:    movzi          %lr, 0, 0
+1008:    movki          %lr, 0, 1
+1012:    movki          %lr, 0, 2
+1016:    movki          %lr, 0, 3
+1020:    relocation:    (arm64-abs 65 (library #(libspec wrapper-apply 626)))
+1020:    sturi          %lr, %xp, 3
+1024:    sturi          %r12, %xp, 11
+1028:    movzi          %lr, 16, 0
+1032:    sturi          %lr, %xp, 19
+1036:    sturi          %r9, %xp, 27
+1040:    mov            %r12, %xp
+1044:    subi           %xp, %ap, 3, #f
+1048:    addi           %ap, %ap, 16, #f
+1052:    ldri           %lr, %tc, 160
+1056:    cmp            %lr, %ap
+1060:    bcc            Lget-room.83(440)
+ej.78:
+1064:    mov            %r9, %xp
+1068:    movzi          %lr, 0, 0
+1072:    movki          %lr, 0, 1
+1076:    movki          %lr, 0, 2
+1080:    movki          %lr, 0, 3
+1084:    relocation:    (arm64-abs 65 (code #($c-func (...) #f #f #f) 64 1 "alloc-node" ...))
+1084:    sturi          %lr, %r9, 3
+1088:    sturi          %r0, %r9, 11
+1092:    subi           %xp, %ap, 1, #f
+1096:    addi           %ap, %ap, 112, #f
+1100:    ldri           %lr, %tc, 160
+1104:    cmp            %lr, %ap
+1108:    bcc            Lget-room.82(368)
+ej.79:
+1112:    mov            %r1, %xp
+1116:    sturi          %r0, %r1, 9
+1120:    sturi          %r15, %r1, 17
+1124:    sturi          %r14, %r1, 25
+1128:    sturi          %r13, %r1, 33
+1132:    sturi          %r12, %r1, 41
+1136:    movzi          %lr, 0, 0
+1140:    movki          %lr, 0, 1
+1144:    movki          %lr, 0, 2
+1148:    movki          %lr, 0, 3
+1152:    relocation:    (arm64-abs 0 (closure . #($c-func (...) #f (...) #f)))
+1152:    sturi          %lr, %r1, 49
+1156:    sturi          %r9, %r1, 57
+1160:    movzi          %lr, 0, 0
+1164:    movki          %lr, 0, 1
+1168:    movki          %lr, 0, 2
+1172:    movki          %lr, 0, 3
+1176:    relocation:    (arm64-abs 0 (closure . #($c-func (...) #f (...) #f)))
+1176:    sturi          %lr, %r1, 65
+1180:    movzi          %lr, 0, 0
+1184:    movki          %lr, 0, 1
+1188:    movki          %lr, 0, 2
+1192:    movki          %lr, 0, 3
+1196:    relocation:    (arm64-abs 0 (closure . #($c-func (...) #f (...) #f)))
+1196:    sturi          %lr, %r1, 73
+1200:    movzi          %lr, 0, 0
+1204:    movki          %lr, 0, 1
+1208:    movki          %lr, 0, 2
+1212:    movki          %lr, 0, 3
+1216:    relocation:    (arm64-abs 0 (closure . #($c-func (...) #f (...) #f)))
+1216:    sturi          %lr, %r1, 81
+1220:    movzi          %lr, 0, 0
+1224:    movki          %lr, 0, 1
+1228:    movki          %lr, 0, 2
+1232:    movki          %lr, 0, 3
+1236:    relocation:    (arm64-abs 0 (closure . #($c-func (...) #f (...) #f)))
+1236:    sturi          %lr, %r1, 89
+1240:    movzi          %lr, 0, 0
+1244:    movki          %lr, 0, 1
+1248:    movki          %lr, 0, 2
+1252:    movki          %lr, 0, 3
+1256:    relocation:    (arm64-abs 0 (closure . #($c-func (...) #f (...) #f)))
+1256:    sturi          %lr, %r1, 97
+1260:    movzi          %lr, 0, 0
+1264:    movki          %lr, 0, 1
+1268:    movki          %lr, 0, 2
+1272:    movki          %lr, 0, 3
+1276:    relocation:    (arm64-abs 0 (closure . #($c-func (...) #f (...) #f)))
+1276:    sturi          %lr, %r1, 105
+1280:    movzi          %lr, 208, 0
+1284:    sturi          %lr, %r1, 1
+1288:    subi           %xp, %ap, 1, #f
+1292:    addi           %ap, %ap, 112, #f
+1296:    ldri           %lr, %tc, 160
+1300:    cmp            %lr, %ap
+1304:    bcc            Lget-room.81(148)
+ej.80:
+1308:    mov            %r0, %xp
+1312:    ldri           %lr, %sfp, 104
+1316:    sturi          %lr, %r0, 9
+1320:    ldri           %lr, %sfp, 96
+1324:    sturi          %lr, %r0, 17
+1328:    ldri           %lr, %sfp, 88
+1332:    sturi          %lr, %r0, 25
+1336:    ldri           %lr, %sfp, 80
+1340:    sturi          %lr, %r0, 33
+1344:    ldri           %lr, %sfp, 72
+1348:    sturi          %lr, %r0, 41
+1352:    ldri           %lr, %sfp, 64
+1356:    sturi          %lr, %r0, 49
+1360:    ldri           %lr, %sfp, 56
+1364:    sturi          %lr, %r0, 57
+1368:    ldri           %lr, %sfp, 48
+1372:    sturi          %lr, %r0, 65
+1376:    ldri           %lr, %sfp, 40
+1380:    sturi          %lr, %r0, 73
+1384:    ldri           %lr, %sfp, 32
+1388:    sturi          %lr, %r0, 81
+1392:    ldri           %lr, %sfp, 24
+1396:    sturi          %lr, %r0, 89
+1400:    ldri           %lr, %sfp, 16
+1404:    sturi          %lr, %r0, 97
+1408:    ldri           %lr, %sfp, 8
+1412:    sturi          %lr, %r0, 105
+1416:    movzi          %lr, 208, 0
+1420:    sturi          %lr, %r0, 1
+1424:    movzi          %xp, 0, 0
+1428:    movki          %xp, 0, 1
+1432:    movki          %xp, 0, 2
+1436:    movki          %xp, 0, 3
+1440:    relocation:    (arm64-abs 0 (object set-consistent-variables!/define.rkt-linklet.sls-set-consistent-variables!/define-0))
+1440:    lduri          %cp, %xp, 5
+1444:    movzi          %ac0, 2, 0
+1448:    lduri          %jmptmp, %xp, 13
+1452:    br             %jmptmp
+Lget-room.81:
+1456:    movzi          %jmptmp, 0, 0
+1460:    movki          %jmptmp, 0, 1
+1464:    movki          %jmptmp, 0, 2
+1468:    movki          %jmptmp, 0, 3
+1472:    blr            %jmptmp
+1476:    relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+1476:    b              ej.80(-172)
+Lget-room.82:
+1480:    movzi          %jmptmp, 0, 0
+1484:    movki          %jmptmp, 0, 1
+1488:    movki          %jmptmp, 0, 2
+1492:    movki          %jmptmp, 0, 3
+1496:    blr            %jmptmp
+1500:    relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+1500:    b              ej.79(-392)
+Lget-room.83:
+1504:    movzi          %jmptmp, 0, 0
+1508:    movki          %jmptmp, 0, 1
+1512:    movki          %jmptmp, 0, 2
+1516:    movki          %jmptmp, 0, 3
+1520:    blr            %jmptmp
+1524:    relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+1524:    b              ej.78(-464)
+Lget-room.84:
+1528:    movzi          %jmptmp, 0, 0
+1532:    movki          %jmptmp, 0, 1
+1536:    movki          %jmptmp, 0, 2
+1540:    movki          %jmptmp, 0, 3
+1544:    blr            %jmptmp
+1548:    relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+1548:    b              ej.77(-548)
+Lget-room.85:
+1552:    movzi          %jmptmp, 0, 0
+1556:    movki          %jmptmp, 0, 1
+1560:    movki          %jmptmp, 0, 2
+1564:    movki          %jmptmp, 0, 3
+1568:    blr            %jmptmp
+1572:    relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+1572:    b              ej.76(-608)
+Lget-room.86:
+1576:    movzi          %jmptmp, 0, 0
+1580:    movki          %jmptmp, 0, 1
+1584:    movki          %jmptmp, 0, 2
+1588:    movki          %jmptmp, 0, 3
+1592:    blr            %jmptmp
+1596:    relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+1596:    b              ej.75(-680)
+Lget-room.87:
+1600:    movzi          %jmptmp, 0, 0
+1604:    movki          %jmptmp, 0, 1
+1608:    movki          %jmptmp, 0, 2
+1612:    movki          %jmptmp, 0, 3
+1616:    blr            %jmptmp
+1620:    relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+1620:    b              ej.74(-764)
+Lget-room.88:
+1624:    movzi          %jmptmp, 0, 0
+1628:    movki          %jmptmp, 0, 1
+1632:    movki          %jmptmp, 0, 2
+1636:    movki          %jmptmp, 0, 3
+1640:    blr            %jmptmp
+1644:    relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+1644:    b              ej.73(-824)
+Lget-room.89:
+1648:    movzi          %jmptmp, 0, 0
+1652:    movki          %jmptmp, 0, 1
+1656:    movki          %jmptmp, 0, 2
+1660:    movki          %jmptmp, 0, 3
+1664:    blr            %jmptmp
+1668:    relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+1668:    b              ej.72(-896)
+Lget-room.90:
+1672:    movzi          %jmptmp, 0, 0
+1676:    movki          %jmptmp, 0, 1
+1680:    movki          %jmptmp, 0, 2
+1684:    movki          %jmptmp, 0, 3
+1688:    blr            %jmptmp
+1692:    relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+1692:    b              ej.71(-984)
+Lget-room.91:
+1696:    movzi          %jmptmp, 0, 0
+1700:    movki          %jmptmp, 0, 1
+1704:    movki          %jmptmp, 0, 2
+1708:    movki          %jmptmp, 0, 3
+1712:    blr            %jmptmp
+1716:    relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+1716:    b              ej.70(-1056)
+Lget-room.92:
+1720:    movzi          %jmptmp, 0, 0
+1724:    movki          %jmptmp, 0, 1
+1728:    movki          %jmptmp, 0, 2
+1732:    movki          %jmptmp, 0, 3
+1736:    blr            %jmptmp
+1740:    relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+1740:    b              ej.69(-1144)
+Lget-room.93:
+1744:    movzi          %jmptmp, 0, 0
+1748:    movki          %jmptmp, 0, 1
+1752:    movki          %jmptmp, 0, 2
+1756:    movki          %jmptmp, 0, 3
+1760:    blr            %jmptmp
+1764:    relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+1764:    b              ej.68(-1216)
+Lget-room.94:
+1768:    movzi          %jmptmp, 0, 0
+1772:    movki          %jmptmp, 0, 1
+1776:    movki          %jmptmp, 0, 2
+1780:    movki          %jmptmp, 0, 3
+1784:    blr            %jmptmp
+1788:    relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+1788:    b              ej.67(-1624)
+Lget-room.95:
+1792:    movzi          %jmptmp, 0, 0
+1796:    movki          %jmptmp, 0, 1
+1800:    movki          %jmptmp, 0, 2
+1804:    movki          %jmptmp, 0, 3
+1808:    blr            %jmptmp
+1812:    relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+1812:    b              ej.66(-1684)
+lt.96:
+1816:    addi           %sfp, %sfp, 112, #f
+docall.112:
+1820:    adr            %lr, 44
+1824:    stri           %lr, %sfp, 0
+1828:    movzi          %jmptmp, 0, 0
+1832:    movki          %jmptmp, 0, 1
+1836:    movki          %jmptmp, 0, 2
+1840:    movki          %jmptmp, 0, 3
+1844:    br             %jmptmp
+1848:    relocation:    (arm64-jump 65 (library-code #(libspec event 32816)))
+rpl.113:
+1848:    code-top-link  
+1856:    mrv pt:        (8191 14 continue)
+mrvl.114:
+1864:    subi           %sfp, %sfp, 112, #f
+1868:    b              ej.65(-1844)
+overflowed.97:
+1872:    movzi          %jmptmp, 0, 0
+1876:    movki          %jmptmp, 0, 1
+1880:    movki          %jmptmp, 0, 2
+1884:    movki          %jmptmp, 0, 3
+1888:    blr            %jmptmp
+1892:    relocation:    (arm64-call 65 (library-code #(libspec dooverflow 158)))
+1892:    b              post-overflow-check.64(-1876)
+lf.98:
+1896:    movzi          %jmptmp, 0, 0
+1900:    movki          %jmptmp, 0, 1
+1904:    movki          %jmptmp, 0, 2
+1908:    movki          %jmptmp, 0, 3
+1912:    br             %jmptmp
+1916:    relocation:    (arm64-jump 65 (library-code #(libspec doargerr 176)))
+1916:    <end>
+
+node: 
+entry.115:
+0:       cmpi           %ac0, 2
+4:       bne            lf.101(72)
+dcl.116:
+8:       lduri          %r15, %cp, 11
+12:      subi           %xp, %ap, 1, #f
+16:      addi           %ap, %ap, 32, #f
+20:      ldri           %lr, %tc, 160
+24:      cmp            %lr, %ap
+28:      bcc            Lget-room.100(24)
+ej.99:
+32:      mov            %ac0, %xp
+36:      sturi          %r15, %ac0, 1
+40:      sturi          %r0, %ac0, 9
+44:      sturi          %r1, %ac0, 17
+48:      lduri          %jmptmp, %sfp, 0
+52:      br             %jmptmp
+Lget-room.100:
+56:      movzi          %jmptmp, 0, 0
+60:      movki          %jmptmp, 0, 1
+64:      movki          %jmptmp, 0, 2
+68:      movki          %jmptmp, 0, 3
+72:      blr            %jmptmp
+76:      relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+76:      b              ej.99(-48)
+lf.101:
+80:      movzi          %jmptmp, 0, 0
+84:      movki          %jmptmp, 0, 1
+88:      movki          %jmptmp, 0, 2
+92:      movki          %jmptmp, 0, 3
+96:      br             %jmptmp
+100:     relocation:    (arm64-jump 65 (library-code #(libspec doargerr 176)))
+100:     <end node>
+
+node?: 
+entry.117:
+0:       cmpi           %ac0, 1
+4:       bne            lf.59(100)
+dcl.118:
+8:       lduri          %r15, %cp, 11
+12:      andi           %lr, %r0, 7
+16:      cmpi           %lr, 7
+20:      bne            lf.58(72)
+lt.119:
+24:      lduri          %r14, %r0, 1
+28:      andi           %lr, %r14, 7
+32:      cmpi           %lr, 7
+36:      bne            lf.58(56)
+lt.120:
+40:      lduri          %lr, %r15, 9
+44:      lduri          %r14, %r14, 9
+48:      lduri          %lr, %lr, 1
+52:      lduri          %r13, %r14, 1
+56:      cmp            %lr, %r13
+60:      bgt            lf.58(32)
+lt.121:
+64:      lsri           %lr, %lr, 1
+68:      addi           %lr, %lr, 1, #f
+72:      ldr            %lr, %r14, %lr
+76:      cmp            %r15, %lr
+80:      bne            lf.58(12)
+lt.122:
+84:      movzi          %ac0, 14, 0
+88:      lduri          %jmptmp, %sfp, 0
+92:      br             %jmptmp
+lf.58:
+96:      movzi          %ac0, 6, 0
+100:     lduri          %jmptmp, %sfp, 0
+104:     br             %jmptmp
+lf.59:
+108:     movzi          %jmptmp, 0, 0
+112:     movki          %jmptmp, 0, 1
+116:     movki          %jmptmp, 0, 2
+120:     movki          %jmptmp, 0, 3
+124:     br             %jmptmp
+128:     relocation:    (arm64-jump 65 (library-code #(libspec doargerr 176)))
+128:     <end node?>
+
+node-a: 
+entry.123:
+0:       cmpi           %ac0, 1
+4:       bne            lf.63(224)
+dcl.124:
+8:       lduri          %r15, %cp, 11
+12:      andi           %lr, %r0, 7
+16:      cmpi           %lr, 7
+20:      bne            lf.62(72)
+lt.125:
+24:      lduri          %r14, %r0, 1
+28:      andi           %lr, %r14, 7
+32:      cmpi           %lr, 7
+36:      bne            lf.62(56)
+lt.126:
+40:      lduri          %lr, %r15, 9
+44:      lduri          %r14, %r14, 9
+48:      lduri          %lr, %lr, 1
+52:      lduri          %r13, %r14, 1
+56:      cmp            %lr, %r13
+60:      bgt            lf.62(32)
+lt.127:
+64:      lsri           %lr, %lr, 1
+68:      addi           %lr, %lr, 1, #f
+72:      ldr            %lr, %r14, %lr
+76:      cmp            %r15, %lr
+80:      bne            lf.62(12)
+ej.128:
+84:      lduri          %ac0, %r0, 9
+88:      lduri          %jmptmp, %sfp, 0
+92:      br             %jmptmp
+lf.62:
+96:      subi           %trap, %trap, 1, #t
+100:     beq            lt.61(64)
+ej.60:
+104:     movzi          %r1, 0, 0
+108:     movki          %r1, 0, 1
+112:     movki          %r1, 0, 2
+116:     movki          %r1, 0, 3
+120:     relocation:    (arm64-abs 0 (object node))
+120:     movzi          %r2, 0, 0
+124:     movki          %r2, 0, 1
+128:     movki          %r2, 0, 2
+132:     movki          %r2, 0, 3
+136:     relocation:    (arm64-abs 0 (object a))
+136:     movzi          %xp, 0, 0
+140:     movki          %xp, 0, 1
+144:     movki          %xp, 0, 2
+148:     movki          %xp, 0, 3
+152:     relocation:    (arm64-abs 0 (object struct-ref-error.rkt-rumble.sls-struct-ref-error-0))
+152:     lduri          %cp, %xp, 5
+156:     movzi          %ac0, 3, 0
+160:     lduri          %jmptmp, %xp, 13
+164:     br             %jmptmp
+lt.61:
+168:     stri           %r0, %sfp, 8
+172:     addi           %sfp, %sfp, 16, #f
+docall.129:
+176:     adr            %lr, 44
+180:     stri           %lr, %sfp, 0
+184:     movzi          %jmptmp, 0, 0
+188:     movki          %jmptmp, 0, 1
+192:     movki          %jmptmp, 0, 2
+196:     movki          %jmptmp, 0, 3
+200:     br             %jmptmp
+204:     relocation:    (arm64-jump 65 (library-code #(libspec event 32817)))
+rpl.130:
+204:     code-top-link  
+212:     mrv pt:        (1 2 continue)
+mrvl.131:
+220:     subi           %sfp, %sfp, 16, #f
+224:     ldri           %r0, %sfp, 8
+228:     b              ej.60(-128)
+lf.63:
+232:     movzi          %jmptmp, 0, 0
+236:     movki          %jmptmp, 0, 1
+240:     movki          %jmptmp, 0, 2
+244:     movki          %jmptmp, 0, 3
+248:     br             %jmptmp
+252:     relocation:    (arm64-jump 65 (library-code #(libspec doargerr 176)))
+252:     <end node-a>
+
+node-b: 
+entry.132:
+0:       cmpi           %ac0, 1
+4:       bne            lf.54(224)
+dcl.133:
+8:       lduri          %r15, %cp, 11
+12:      andi           %lr, %r0, 7
+16:      cmpi           %lr, 7
+20:      bne            lf.53(72)
+lt.134:
+24:      lduri          %r14, %r0, 1
+28:      andi           %lr, %r14, 7
+32:      cmpi           %lr, 7
+36:      bne            lf.53(56)
+lt.135:
+40:      lduri          %lr, %r15, 9
+44:      lduri          %r14, %r14, 9
+48:      lduri          %lr, %lr, 1
+52:      lduri          %r13, %r14, 1
+56:      cmp            %lr, %r13
+60:      bgt            lf.53(32)
+lt.136:
+64:      lsri           %lr, %lr, 1
+68:      addi           %lr, %lr, 1, #f
+72:      ldr            %lr, %r14, %lr
+76:      cmp            %r15, %lr
+80:      bne            lf.53(12)
+ej.137:
+84:      lduri          %ac0, %r0, 17
+88:      lduri          %jmptmp, %sfp, 0
+92:      br             %jmptmp
+lf.53:
+96:      subi           %trap, %trap, 1, #t
+100:     beq            lt.52(64)
+ej.51:
+104:     movzi          %r1, 0, 0
+108:     movki          %r1, 0, 1
+112:     movki          %r1, 0, 2
+116:     movki          %r1, 0, 3
+120:     relocation:    (arm64-abs 0 (object node))
+120:     movzi          %r2, 0, 0
+124:     movki          %r2, 0, 1
+128:     movki          %r2, 0, 2
+132:     movki          %r2, 0, 3
+136:     relocation:    (arm64-abs 0 (object b))
+136:     movzi          %xp, 0, 0
+140:     movki          %xp, 0, 1
+144:     movki          %xp, 0, 2
+148:     movki          %xp, 0, 3
+152:     relocation:    (arm64-abs 0 (object struct-ref-error.rkt-rumble.sls-struct-ref-error-0))
+152:     lduri          %cp, %xp, 5
+156:     movzi          %ac0, 3, 0
+160:     lduri          %jmptmp, %xp, 13
+164:     br             %jmptmp
+lt.52:
+168:     stri           %r0, %sfp, 8
+172:     addi           %sfp, %sfp, 16, #f
+docall.138:
+176:     adr            %lr, 44
+180:     stri           %lr, %sfp, 0
+184:     movzi          %jmptmp, 0, 0
+188:     movki          %jmptmp, 0, 1
+192:     movki          %jmptmp, 0, 2
+196:     movki          %jmptmp, 0, 3
+200:     br             %jmptmp
+204:     relocation:    (arm64-jump 65 (library-code #(libspec event 32817)))
+rpl.139:
+204:     code-top-link  
+212:     mrv pt:        (1 2 continue)
+mrvl.140:
+220:     subi           %sfp, %sfp, 16, #f
+224:     ldri           %r0, %sfp, 8
+228:     b              ej.51(-128)
+lf.54:
+232:     movzi          %jmptmp, 0, 0
+236:     movki          %jmptmp, 0, 1
+240:     movki          %jmptmp, 0, 2
+244:     movki          %jmptmp, 0, 3
+248:     br             %jmptmp
+252:     relocation:    (arm64-jump 65 (library-code #(libspec doargerr 176)))
+252:     <end node-b>
+
+alloc-node: 
+entry.141:
+0:       cmpi           %ac0, 1
+4:       bne            lf.57(72)
+dcl.142:
+8:       lduri          %r15, %cp, 11
+12:      subi           %xp, %ap, 1, #f
+16:      addi           %ap, %ap, 32, #f
+20:      ldri           %lr, %tc, 160
+24:      cmp            %lr, %ap
+28:      bcc            Lget-room.56(24)
+ej.55:
+32:      mov            %ac0, %xp
+36:      sturi          %r15, %ac0, 1
+40:      sturi          %r0, %ac0, 9
+44:      sturi          %r0, %ac0, 17
+48:      lduri          %jmptmp, %sfp, 0
+52:      br             %jmptmp
+Lget-room.56:
+56:      movzi          %jmptmp, 0, 0
+60:      movki          %jmptmp, 0, 1
+64:      movki          %jmptmp, 0, 2
+68:      movki          %jmptmp, 0, 3
+72:      blr            %jmptmp
+76:      relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+76:      b              ej.55(-48)
+lf.57:
+80:      movzi          %jmptmp, 0, 0
+84:      movki          %jmptmp, 0, 1
+88:      movki          %jmptmp, 0, 2
+92:      movki          %jmptmp, 0, 3
+96:      br             %jmptmp
+100:     relocation:    (arm64-jump 65 (library-code #(libspec doargerr 176)))
+100:     <end alloc-node>
+
+alloc-pair: 
+entry.143:
+0:       cmpi           %ac0, 1
+4:       bne            lf.44(64)
+dcl.144:
+8:       subi           %xp, %ap, 7, #f
+12:      addi           %ap, %ap, 16, #f
+16:      ldri           %lr, %tc, 160
+20:      cmp            %lr, %ap
+24:      bcc            Lget-room.43(20)
+ej.42:
+28:      mov            %ac0, %xp
+32:      sturi          %r0, %ac0, 7
+36:      sturi          %r0, %ac0, 15
+40:      lduri          %jmptmp, %sfp, 0
+44:      br             %jmptmp
+Lget-room.43:
+48:      movzi          %jmptmp, 0, 0
+52:      movki          %jmptmp, 0, 1
+56:      movki          %jmptmp, 0, 2
+60:      movki          %jmptmp, 0, 3
+64:      blr            %jmptmp
+68:      relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+68:      b              ej.42(-44)
+lf.44:
+72:      movzi          %jmptmp, 0, 0
+76:      movki          %jmptmp, 0, 1
+80:      movki          %jmptmp, 0, 2
+84:      movki          %jmptmp, 0, 3
+88:      br             %jmptmp
+92:      relocation:    (arm64-jump 65 (library-code #(libspec doargerr 176)))
+92:      <end alloc-pair>
+
+publish-plain: 
+entry.145:
+0:       cmpi           %ac0, 2
+4:       bne            lf.50(236)
+dcl.146:
+8:       andi           %lr, %r0, 7
+12:      cmpi           %lr, 7
+16:      bne            lf.49(116)
+lt.147:
+20:      lduri          %lr, %r0, 1
+24:      andi           %lr, %lr, 511
+28:      cmpi           %lr, 30
+32:      bne            lf.49(100)
+lt.148:
+36:      addi           %r15, %r0, 9, #f
+40:      tsti           %sp, %r1, 7
+44:      bne            lf.48(16)
+lt.149:
+48:      stri           %r1, %r15, 0
+52:      movzi          %ac0, 46, 0
+56:      lduri          %jmptmp, %sfp, 0
+60:      br             %jmptmp
+lf.48:
+64:      dmbishst       
+68:      stri           %r1, %r15, 0
+72:      ldri           %td, %tc, 160
+76:      cmp            %ap, %td
+80:      bcs            lf.47(24)
+ej.46:
+84:      subi           %td, %td, 8, #f
+88:      stri           %td, %tc, 160
+92:      stri           %r15, %td, 0
+96:      movzi          %ac0, 46, 0
+100:     lduri          %jmptmp, %sfp, 0
+104:     br             %jmptmp
+lf.47:
+108:     movzi          %jmptmp, 0, 0
+112:     movki          %jmptmp, 0, 1
+116:     movki          %jmptmp, 0, 2
+120:     movki          %jmptmp, 0, 3
+124:     blr            %jmptmp
+128:     relocation:    (arm64-call 65 (library-code #(libspec scan-remembered-set 374)))
+128:     ldri           %td, %tc, 160
+132:     b              ej.46(-52)
+lf.49:
+136:     subi           %trap, %trap, 1, #t
+140:     bne            ej.45(68)
+lt.150:
+144:     stri           %r0, %sfp, 8
+148:     stri           %r1, %sfp, 16
+152:     addi           %sfp, %sfp, 24, #f
+docall.151:
+156:     adr            %lr, 44
+160:     stri           %lr, %sfp, 0
+164:     movzi          %jmptmp, 0, 0
+168:     movki          %jmptmp, 0, 1
+172:     movki          %jmptmp, 0, 2
+176:     movki          %jmptmp, 0, 3
+180:     br             %jmptmp
+184:     relocation:    (arm64-jump 65 (library-code #(libspec event 32817)))
+rpl.152:
+184:     code-top-link  
+192:     mrv pt:        (3 3 continue)
+mrvl.153:
+200:     subi           %sfp, %sfp, 24, #f
+204:     ldri           %r0, %sfp, 8
+208:     ldri           %r1, %sfp, 16
+ej.45:
+212:     movzi          %xp, 0, 0
+216:     movki          %xp, 0, 1
+220:     movki          %xp, 0, 2
+224:     movki          %xp, 0, 3
+228:     relocation:    (arm64-abs 0 (object set-box!.rkt-rumble.sls-set-box!-0))
+228:     lduri          %cp, %xp, 5
+232:     movzi          %ac0, 2, 0
+236:     lduri          %jmptmp, %xp, 13
+240:     br             %jmptmp
+lf.50:
+244:     movzi          %jmptmp, 0, 0
+248:     movki          %jmptmp, 0, 1
+252:     movki          %jmptmp, 0, 2
+256:     movki          %jmptmp, 0, 3
+260:     br             %jmptmp
+264:     relocation:    (arm64-jump 65 (library-code #(libspec doargerr 176)))
+264:     <end publish-plain>
+
+copy-then-set: 
+entry.154:
+0:       subi           %trap, %trap, 1, #t
+4:       beq            lt.38(348)
+ej.155:
+8:       cmpi           %ac0, 2
+12:      bne            lf.37(320)
+dcl.156:
+16:      mov            %r2, %r1
+20:      ldri           %lr, %tc, 144
+24:      cmp            %sfp, %lr
+28:      bcs            overflowed.36(280)
+post-overflow-check.30:
+32:      stri           %r2, %sfp, 8
+36:      addi           %sfp, %sfp, 16, #f
+docall.157:
+40:      movzi          %xp, 0, 0
+44:      movki          %xp, 0, 1
+48:      movki          %xp, 0, 2
+52:      movki          %xp, 0, 3
+56:      relocation:    (arm64-abs 0 (object vector-copy.rkt-rumble.sls-vector-copy-0))
+56:      lduri          %cp, %xp, 5
+60:      adr            %lr, 36
+64:      stri           %lr, %sfp, 0
+68:      movzi          %ac0, 1, 0
+72:      lduri          %jmptmp, %xp, 13
+76:      br             %jmptmp
+rpl.158:
+80:      code-top-link  
+88:      mrv pt:        (1 2 error)
+96:      subi           %sfp, %sfp, 16, #f
+100:     mov            %r0, %ac0
+104:     ldri           %r2, %sfp, 8
+108:     andi           %lr, %r0, 7
+112:     cmpi           %lr, 7
+116:     bne            lf.35(112)
+lt.159:
+120:     lduri          %lr, %r0, 1
+124:     tsti           %sp, %lr, 15
+128:     bne            lf.35(100)
+lt.160:
+132:     cmpi           %lr, 8
+136:     bls            lf.35(92)
+lt.161:
+140:     addi           %r15, %r0, 9, #f
+144:     tsti           %sp, %r2, 7
+148:     bne            lf.34(16)
+lt.162:
+152:     stri           %r2, %r15, 0
+ej.31:
+156:     mov            %ac0, %r0
+160:     lduri          %jmptmp, %sfp, 0
+164:     br             %jmptmp
+lf.34:
+168:     dmbishst       
+172:     stri           %r2, %r15, 0
+176:     ldri           %td, %tc, 160
+180:     cmp            %ap, %td
+184:     bcs            lf.33(16)
+ej.32:
+188:     subi           %td, %td, 8, #f
+192:     stri           %td, %tc, 160
+196:     stri           %r15, %td, 0
+200:     b              ej.31(-48)
+lf.33:
+204:     movzi          %jmptmp, 0, 0
+208:     movki          %jmptmp, 0, 1
+212:     movki          %jmptmp, 0, 2
+216:     movki          %jmptmp, 0, 3
+220:     blr            %jmptmp
+224:     relocation:    (arm64-call 65 (library-code #(libspec scan-remembered-set 374)))
+224:     ldri           %td, %tc, 160
+228:     b              ej.32(-44)
+lf.35:
+232:     movzi          %r1, 0, 0
+236:     stri           %r0, %sfp, 16
+240:     addi           %sfp, %sfp, 24, #f
+docall.163:
+244:     movzi          %xp, 0, 0
+248:     movki          %xp, 0, 1
+252:     movki          %xp, 0, 2
+256:     movki          %xp, 0, 3
+260:     relocation:    (arm64-abs 0 (object vector-set!.rkt-rumble.sls-vector-set!-0))
+260:     lduri          %cp, %xp, 5
+264:     adr            %lr, 36
+268:     stri           %lr, %sfp, 0
+272:     movzi          %ac0, 3, 0
+276:     lduri          %jmptmp, %xp, 13
+280:     br             %jmptmp
+rpl.164:
+284:     code-top-link  
+292:     mrv pt:        (2 3 continue)
+mrvl.165:
+300:     subi           %sfp, %sfp, 24, #f
+304:     ldri           %r0, %sfp, 16
+308:     b              ej.31(-156)
+overflowed.36:
+312:     movzi          %jmptmp, 0, 0
+316:     movki          %jmptmp, 0, 1
+320:     movki          %jmptmp, 0, 2
+324:     movki          %jmptmp, 0, 3
+328:     blr            %jmptmp
+332:     relocation:    (arm64-call 65 (library-code #(libspec dooverflow 158)))
+332:     b              post-overflow-check.30(-304)
+lf.37:
+336:     movzi          %jmptmp, 0, 0
+340:     movki          %jmptmp, 0, 1
+344:     movki          %jmptmp, 0, 2
+348:     movki          %jmptmp, 0, 3
+352:     br             %jmptmp
+356:     relocation:    (arm64-jump 65 (library-code #(libspec doargerr 176)))
+lt.38:
+356:     movzi          %jmptmp, 0, 0
+360:     movki          %jmptmp, 0, 1
+364:     movki          %jmptmp, 0, 2
+368:     movki          %jmptmp, 0, 3
+372:     br             %jmptmp
+376:     relocation:    (arm64-jump 65 (library-code #(libspec event-detour 180)))
+376:     <end copy-then-set>
+
+read-plain: 
+entry.166:
+0:       cmpi           %ac0, 1
+4:       bne            lf.41(140)
+dcl.167:
+8:       andi           %lr, %r0, 7
+12:      cmpi           %lr, 7
+16:      bne            lf.40(28)
+lt.168:
+20:      lduri          %lr, %r0, 1
+24:      andi           %lr, %lr, 255
+28:      cmpi           %lr, 30
+32:      bne            lf.40(12)
+lt.169:
+36:      lduri          %ac0, %r0, 9
+40:      lduri          %jmptmp, %sfp, 0
+44:      br             %jmptmp
+lf.40:
+48:      subi           %trap, %trap, 1, #t
+52:      bne            ej.39(60)
+lt.170:
+56:      stri           %r0, %sfp, 8
+60:      addi           %sfp, %sfp, 16, #f
+docall.171:
+64:      adr            %lr, 44
+68:      stri           %lr, %sfp, 0
+72:      movzi          %jmptmp, 0, 0
+76:      movki          %jmptmp, 0, 1
+80:      movki          %jmptmp, 0, 2
+84:      movki          %jmptmp, 0, 3
+88:      br             %jmptmp
+92:      relocation:    (arm64-jump 65 (library-code #(libspec event 32817)))
+rpl.172:
+92:      code-top-link  
+100:     mrv pt:        (1 2 continue)
+mrvl.173:
+108:     subi           %sfp, %sfp, 16, #f
+112:     ldri           %r0, %sfp, 8
+ej.39:
+116:     movzi          %xp, 0, 0
+120:     movki          %xp, 0, 1
+124:     movki          %xp, 0, 2
+128:     movki          %xp, 0, 3
+132:     relocation:    (arm64-abs 0 (object unbox.rkt-rumble.sls-unbox-0))
+132:     lduri          %cp, %xp, 5
+136:     movzi          %ac0, 1, 0
+140:     lduri          %jmptmp, %xp, 13
+144:     br             %jmptmp
+lf.41:
+148:     movzi          %jmptmp, 0, 0
+152:     movki          %jmptmp, 0, 1
+156:     movki          %jmptmp, 0, 2
+160:     movki          %jmptmp, 0, 3
+164:     br             %jmptmp
+168:     relocation:    (arm64-jump 65 (library-code #(libspec doargerr 176)))
+168:     <end read-plain>
+
+publish-release: 
+entry.174:
+0:       cmpi           %ac0, 2
+4:       bne            lf.22(240)
+dcl.175:
+8:       dmbish         
+12:      andi           %lr, %r0, 7
+16:      cmpi           %lr, 7
+20:      bne            lf.21(116)
+lt.176:
+24:      lduri          %lr, %r0, 1
+28:      andi           %lr, %lr, 511
+32:      cmpi           %lr, 30
+36:      bne            lf.21(100)
+lt.177:
+40:      addi           %r15, %r0, 9, #f
+44:      tsti           %sp, %r1, 7
+48:      bne            lf.20(16)
+lt.178:
+52:      stri           %r1, %r15, 0
+56:      movzi          %ac0, 46, 0
+60:      lduri          %jmptmp, %sfp, 0
+64:      br             %jmptmp
+lf.20:
+68:      dmbishst       
+72:      stri           %r1, %r15, 0
+76:      ldri           %td, %tc, 160
+80:      cmp            %ap, %td
+84:      bcs            lf.19(24)
+ej.18:
+88:      subi           %td, %td, 8, #f
+92:      stri           %td, %tc, 160
+96:      stri           %r15, %td, 0
+100:     movzi          %ac0, 46, 0
+104:     lduri          %jmptmp, %sfp, 0
+108:     br             %jmptmp
+lf.19:
+112:     movzi          %jmptmp, 0, 0
+116:     movki          %jmptmp, 0, 1
+120:     movki          %jmptmp, 0, 2
+124:     movki          %jmptmp, 0, 3
+128:     blr            %jmptmp
+132:     relocation:    (arm64-call 65 (library-code #(libspec scan-remembered-set 374)))
+132:     ldri           %td, %tc, 160
+136:     b              ej.18(-52)
+lf.21:
+140:     subi           %trap, %trap, 1, #t
+144:     bne            ej.17(68)
+lt.179:
+148:     stri           %r0, %sfp, 8
+152:     stri           %r1, %sfp, 16
+156:     addi           %sfp, %sfp, 24, #f
+docall.180:
+160:     adr            %lr, 44
+164:     stri           %lr, %sfp, 0
+168:     movzi          %jmptmp, 0, 0
+172:     movki          %jmptmp, 0, 1
+176:     movki          %jmptmp, 0, 2
+180:     movki          %jmptmp, 0, 3
+184:     br             %jmptmp
+188:     relocation:    (arm64-jump 65 (library-code #(libspec event 32817)))
+rpl.181:
+188:     code-top-link  
+196:     mrv pt:        (3 3 continue)
+mrvl.182:
+204:     subi           %sfp, %sfp, 24, #f
+208:     ldri           %r0, %sfp, 8
+212:     ldri           %r1, %sfp, 16
+ej.17:
+216:     movzi          %xp, 0, 0
+220:     movki          %xp, 0, 1
+224:     movki          %xp, 0, 2
+228:     movki          %xp, 0, 3
+232:     relocation:    (arm64-abs 0 (object set-box!.rkt-rumble.sls-set-box!-0))
+232:     lduri          %cp, %xp, 5
+236:     movzi          %ac0, 2, 0
+240:     lduri          %jmptmp, %xp, 13
+244:     br             %jmptmp
+lf.22:
+248:     movzi          %jmptmp, 0, 0
+252:     movki          %jmptmp, 0, 1
+256:     movki          %jmptmp, 0, 2
+260:     movki          %jmptmp, 0, 3
+264:     br             %jmptmp
+268:     relocation:    (arm64-jump 65 (library-code #(libspec doargerr 176)))
+268:     <end publish-release>
+
+cas: 
+entry.183:
+0:       cmpi           %ac0, 3
+4:       bne            lf.29(192)
+dcl.184:
+8:       andi           %lr, %r0, 7
+12:      cmpi           %lr, 7
+16:      bne            lf.28(160)
+lt.185:
+20:      lduri          %lr, %r0, 1
+24:      andi           %lr, %lr, 511
+28:      cmpi           %lr, 30
+32:      bne            lf.28(144)
+lt.186:
+36:      addi           %r15, %r0, 9, #f
+40:      tsti           %sp, %r2, 7
+44:      bne            lf.27(48)
+lt.187:
+48:      ldxr           %sp, %lr, %r15
+52:      cmp            %lr, %r1
+56:      bnei           12
+60:      stxr           %r14, %r2, %r15
+64:      cmpi           %r14, 0
+68:      bne            lf.26(12)
+lt.24:
+72:      movzi          %ac0, 14, 0
+76:      lduri          %jmptmp, %sfp, 0
+80:      br             %jmptmp
+lf.26:
+84:      movzi          %ac0, 6, 0
+88:      lduri          %jmptmp, %sfp, 0
+92:      br             %jmptmp
+lf.27:
+96:      dmbishst       
+100:     ldxr           %sp, %lr, %r15
+104:     cmp            %lr, %r1
+108:     bnei           12
+112:     stxr           %r14, %r2, %r15
+116:     cmpi           %r14, 0
+120:     bne            lf.26(-40)
+lt.188:
+124:     ldri           %td, %tc, 160
+128:     cmp            %ap, %td
+132:     bcs            lf.25(16)
+ej.23:
+136:     subi           %td, %td, 8, #f
+140:     stri           %td, %tc, 160
+144:     stri           %r15, %td, 0
+148:     b              lt.24(-80)
+lf.25:
+152:     movzi          %jmptmp, 0, 0
+156:     movki          %jmptmp, 0, 1
+160:     movki          %jmptmp, 0, 2
+164:     movki          %jmptmp, 0, 3
+168:     blr            %jmptmp
+172:     relocation:    (arm64-call 65 (library-code #(libspec scan-remembered-set 374)))
+172:     ldri           %td, %tc, 160
+176:     b              ej.23(-44)
+lf.28:
+180:     movzi          %jmptmp, 0, 0
+184:     movki          %jmptmp, 0, 1
+188:     movki          %jmptmp, 0, 2
+192:     movki          %jmptmp, 0, 3
+196:     br             %jmptmp
+200:     relocation:    (arm64-jump 65 (library-code #(libspec box-cas! 52234)))
+lf.29:
+200:     movzi          %jmptmp, 0, 0
+204:     movki          %jmptmp, 0, 1
+208:     movki          %jmptmp, 0, 2
+212:     movki          %jmptmp, 0, 3
+216:     br             %jmptmp
+220:     relocation:    (arm64-jump 65 (library-code #(libspec doargerr 176)))
+220:     <end cas>
+
+read-acquire: 
+entry.189:
+0:       cmpi           %ac0, 1
+4:       bne            lf.16(216)
+dcl.190:
+8:       andi           %lr, %r0, 7
+12:      cmpi           %lr, 7
+16:      bne            lf.15(32)
+lt.191:
+20:      lduri          %lr, %r0, 1
+24:      andi           %lr, %lr, 255
+28:      cmpi           %lr, 30
+32:      bne            lf.15(16)
+lt.192:
+36:      lduri          %ac0, %r0, 9
+ej.12:
+40:      dmbishld       
+44:      lduri          %jmptmp, %sfp, 0
+48:      br             %jmptmp
+lf.15:
+52:      ldri           %lr, %tc, 144
+56:      cmp            %sfp, %lr
+60:      bcs            overflowed.14(136)
+post-overflow-check.11:
+64:      subi           %trap, %trap, 1, #t
+68:      bne            ej.13(60)
+lt.193:
+72:      stri           %r0, %sfp, 8
+76:      addi           %sfp, %sfp, 16, #f
+docall.194:
+80:      adr            %lr, 44
+84:      stri           %lr, %sfp, 0
+88:      movzi          %jmptmp, 0, 0
+92:      movki          %jmptmp, 0, 1
+96:      movki          %jmptmp, 0, 2
+100:     movki          %jmptmp, 0, 3
+104:     br             %jmptmp
+108:     relocation:    (arm64-jump 65 (library-code #(libspec event 32816)))
+rpl.195:
+108:     code-top-link  
+116:     mrv pt:        (1 2 continue)
+mrvl.196:
+124:     subi           %sfp, %sfp, 16, #f
+128:     ldri           %r0, %sfp, 8
+ej.13:
+132:     addi           %sfp, %sfp, 8, #f
+docall.197:
+136:     movzi          %xp, 0, 0
+140:     movki          %xp, 0, 1
+144:     movki          %xp, 0, 2
+148:     movki          %xp, 0, 3
+152:     relocation:    (arm64-abs 0 (object unbox.rkt-rumble.sls-unbox-0))
+152:     lduri          %cp, %xp, 5
+156:     adr            %lr, 36
+160:     stri           %lr, %sfp, 0
+164:     movzi          %ac0, 1, 0
+168:     lduri          %jmptmp, %xp, 13
+172:     br             %jmptmp
+rpl.198:
+176:     code-top-link  
+184:     mrv pt:        (0 1 error)
+192:     subi           %sfp, %sfp, 8, #f
+196:     b              ej.12(-160)
+overflowed.14:
+200:     movzi          %jmptmp, 0, 0
+204:     movki          %jmptmp, 0, 1
+208:     movki          %jmptmp, 0, 2
+212:     movki          %jmptmp, 0, 3
+216:     blr            %jmptmp
+220:     relocation:    (arm64-call 65 (library-code #(libspec dooverflow 158)))
+220:     b              post-overflow-check.11(-160)
+lf.16:
+224:     movzi          %jmptmp, 0, 0
+228:     movki          %jmptmp, 0, 1
+232:     movki          %jmptmp, 0, 2
+236:     movki          %jmptmp, 0, 3
+240:     br             %jmptmp
+244:     relocation:    (arm64-jump 65 (library-code #(libspec doargerr 176)))
+244:     <end read-acquire>
+
+dcl.199:
+0:       movzi          %ac0, 0, 0
+4:       movki          %ac0, 0, 1
+8:       movki          %ac0, 0, 2
+12:      movki          %ac0, 0, 3
+16:      relocation:    (arm64-abs 0 (closure . #($c-func (...) #f (...) #f)))
+16:      lduri          %jmptmp, %sfp, 0
+20:      br             %jmptmp
+24:      <end>
+;; compile-linklet: step: compiled
+;; ---------------------
+done
+;; compile-linklet: phase: 1
+;; compile-linklet: module: p4-asm
+;; compile-linklet: name: module
+;; compile-linklet: step: linklet
+;; ---------------------
+(linklet
+  ((.get-syntax-literal!)
+    (.set-transformer!)
+    (make-self-ctor-checked-struct-info))
+  ()
+  (let-values ([(node)
+                (make-self-ctor-checked-struct-info
+                  (lambda ()
+                    (list (.get-syntax-literal! 0) (.get-syntax-literal! 1)
+                      (.get-syntax-literal! 2)
+                      (list
+                        (.get-syntax-literal! 3)
+                        (.get-syntax-literal! 4))
+                      (list #f #f) #t))
+                  '(b a)
+                  (list (list) (list))
+                  (lambda () (.get-syntax-literal! 5)))])
+    (begin (.set-transformer! 'node node) (void)))
+  (void))
+;; compile-linklet: step: schemified
+;; ---------------------
+(lambda (instance-variable-reference .get-syntax-literal!1
+         .set-transformer!2 make-self-ctor-checked-struct-info3)
+  (call-with-module-prompt
+    (lambda ()
+      (let ([node (#%app make-self-ctor-checked-struct-info3
+                    (#%name
+                      \x5B;...e/define-struct.rkt:760:40
+                      (lambda ()
+                        (let ([app_5 (#%app/value
+                                       .get-syntax-literal!1
+                                       0)])
+                          (let ([app_6 (#%app/value
+                                         .get-syntax-literal!1
+                                         1)])
+                            (let ([app_7 (#%app/value
+                                           .get-syntax-literal!1
+                                           2)])
+                              (let ([app_8 (let ([app_4 (#%app/value
+                                                          .get-syntax-literal!1
+                                                          3)])
+                                             (list
+                                               app_4
+                                               (#%app/value
+                                                 .get-syntax-literal!1
+                                                 4)))])
+                                (list app_5 app_6 app_7 app_8 (list #f #f)
+                                  #t)))))))
+                    '(b a) (list (list) (list))
+                    (#%name
+                      \x5B;...e/define-struct.rkt:808:55
+                      (lambda () (#%app/value .get-syntax-literal!1 5))))])
+        (begin
+          (#%app/value .set-transformer!2 'node node)
+          '#<void>))))
+  '#<void>)
+;; compile-linklet: passes: assembly
+;; ---------------------
+output of np-generate-code (assembly):
+
+entry.230:
+0:       subi           %trap, %trap, 1, #t
+4:       beq            lt.217(224)
+ej.231:
+8:       cmpi           %ac0, 4
+12:      bne            lf.216(196)
+dcl.232:
+16:      ldri           %r15, %sfp, 8
+20:      ldri           %lr, %tc, 144
+24:      cmp            %sfp, %lr
+28:      bcs            overflowed.215(156)
+post-overflow-check.212:
+32:      subi           %xp, %ap, 3, #f
+36:      addi           %ap, %ap, 32, #f
+40:      ldri           %lr, %tc, 160
+44:      cmp            %lr, %ap
+48:      bcc            Lget-room.214(112)
+ej.213:
+52:      mov            %r0, %xp
+56:      movzi          %lr, 0, 0
+60:      movki          %lr, 0, 1
+64:      movki          %lr, 0, 2
+68:      movki          %lr, 0, 3
+72:      relocation:    (arm64-abs 65 (code #($c-func (...) #f #f #f) 64 3 #f ...))
+72:      sturi          %lr, %r0, 3
+76:      sturi          %r2, %r0, 11
+80:      sturi          %r1, %r0, 19
+84:      sturi          %r15, %r0, 27
+88:      addi           %sfp, %sfp, 8, #f
+docall.233:
+92:      movzi          %xp, 0, 0
+96:      movki          %xp, 0, 1
+100:     movki          %xp, 0, 2
+104:     movki          %xp, 0, 3
+108:     relocation:    (arm64-abs 0 (object call-with-module-prompt.rkt-linklet.sls-call-with-module-prompt-0))
+108:     lduri          %cp, %xp, 5
+112:     adr            %lr, 36
+116:     stri           %lr, %sfp, 0
+120:     movzi          %ac0, 1, 0
+124:     lduri          %jmptmp, %xp, 13
+128:     br             %jmptmp
+rpl.234:
+132:     code-top-link  
+140:     mrv pt:        (0 1 continue)
+mrvl.235:
+148:     subi           %sfp, %sfp, 8, #f
+152:     movzi          %ac0, 46, 0
+156:     lduri          %jmptmp, %sfp, 0
+160:     br             %jmptmp
+Lget-room.214:
+164:     movzi          %jmptmp, 0, 0
+168:     movki          %jmptmp, 0, 1
+172:     movki          %jmptmp, 0, 2
+176:     movki          %jmptmp, 0, 3
+180:     blr            %jmptmp
+184:     relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+184:     b              ej.213(-136)
+overflowed.215:
+188:     movzi          %jmptmp, 0, 0
+192:     movki          %jmptmp, 0, 1
+196:     movki          %jmptmp, 0, 2
+200:     movki          %jmptmp, 0, 3
+204:     blr            %jmptmp
+208:     relocation:    (arm64-call 65 (library-code #(libspec dooverflow 158)))
+208:     b              post-overflow-check.212(-180)
+lf.216:
+212:     movzi          %jmptmp, 0, 0
+216:     movki          %jmptmp, 0, 1
+220:     movki          %jmptmp, 0, 2
+224:     movki          %jmptmp, 0, 3
+228:     br             %jmptmp
+232:     relocation:    (arm64-jump 65 (library-code #(libspec doargerr 176)))
+lt.217:
+232:     movzi          %jmptmp, 0, 0
+236:     movki          %jmptmp, 0, 1
+240:     movki          %jmptmp, 0, 2
+244:     movki          %jmptmp, 0, 3
+248:     br             %jmptmp
+252:     relocation:    (arm64-jump 65 (library-code #(libspec event-detour 180)))
+252:     <end>
+
+entry.236:
+0:       subi           %trap, %trap, 1, #t
+4:       beq            lt.229(580)
+ej.237:
+8:       cmpi           %ac0, 0
+12:      bne            lf.228(552)
+dcl.238:
+16:      ldri           %lr, %tc, 144
+20:      cmp            %sfp, %lr
+24:      bcs            overflowed.227(516)
+post-overflow-check.218:
+28:      subi           %xp, %ap, 3, #f
+32:      addi           %ap, %ap, 16, #f
+36:      ldri           %lr, %tc, 160
+40:      cmp            %lr, %ap
+44:      bcc            Lget-room.226(472)
+ej.219:
+48:      mov            %r15, %xp
+52:      movzi          %lr, 0, 0
+56:      movki          %lr, 0, 1
+60:      movki          %lr, 0, 2
+64:      movki          %lr, 0, 3
+68:      relocation:    (arm64-abs 65 (code #($c-func (...) #f #f #f) 64 1 "[...e/define-struct.rkt:808:55" ...))
+68:      sturi          %lr, %r15, 3
+72:      lduri          %lr, %cp, 19
+76:      sturi          %lr, %r15, 11
+80:      subi           %xp, %ap, 7, #f
+84:      addi           %ap, %ap, 32, #f
+88:      ldri           %lr, %tc, 160
+92:      cmp            %lr, %ap
+96:      bcc            Lget-room.225(396)
+ej.220:
+100:     mov            %r2, %xp
+104:     movzi          %lr, 38, 0
+108:     sturi          %lr, %r2, 7
+112:     addi           %lr, %r2, 16, #f
+116:     sturi          %lr, %r2, 15
+120:     movzi          %lr, 38, 0
+124:     sturi          %lr, %r2, 23
+128:     movzi          %lr, 38, 0
+132:     sturi          %lr, %r2, 31
+136:     subi           %xp, %ap, 3, #f
+140:     addi           %ap, %ap, 16, #f
+144:     ldri           %lr, %tc, 160
+148:     cmp            %lr, %ap
+152:     bcc            Lget-room.224(316)
+ej.221:
+156:     movzi          %lr, 0, 0
+160:     movki          %lr, 0, 1
+164:     movki          %lr, 0, 2
+168:     movki          %lr, 0, 3
+172:     relocation:    (arm64-abs 65 (code #($c-func (...) #f #f #f) 64 1 "[...e/define-struct.rkt:760:40" ...))
+172:     sturi          %lr, %xp, 3
+176:     lduri          %lr, %cp, 19
+180:     sturi          %lr, %xp, 11
+184:     lduri          %lr, %cp, 27
+188:     andi           %lr, %lr, 7
+192:     cmpi           %lr, 5
+196:     bne            lf.223(164)
+lt.239:
+200:     lduri          %ac0, %cp, 27
+ej.222:
+204:     stri           %r15, %sfp, 40
+208:     mov            %r0, %xp
+212:     movzi          %r1, 0, 0
+216:     movki          %r1, 0, 1
+220:     movki          %r1, 0, 2
+224:     movki          %r1, 0, 3
+228:     relocation:    (arm64-abs 0 (object (b a)))
+228:     stri           %cp, %sfp, 8
+232:     addi           %sfp, %sfp, 32, #f
+docall.240:
+236:     mov            %cp, %ac0
+240:     adr            %lr, 36
+244:     stri           %lr, %sfp, 0
+248:     movzi          %ac0, 4, 0
+252:     lduri          %jmptmp, %cp, 3
+256:     br             %jmptmp
+rpl.241:
+260:     code-top-link  
+268:     mrv pt:        (1 4 error)
+276:     subi           %sfp, %sfp, 32, #f
+280:     ldri           %cp, %sfp, 8
+284:     mov            %r1, %ac0
+288:     movzi          %r0, 0, 0
+292:     movki          %r0, 0, 1
+296:     movki          %r0, 0, 2
+300:     movki          %r0, 0, 3
+304:     relocation:    (arm64-abs 0 (object node))
+304:     addi           %sfp, %sfp, 8, #f
+docall.242:
+308:     lduri          %cp, %cp, 11
+312:     adr            %lr, 36
+316:     stri           %lr, %sfp, 0
+320:     movzi          %ac0, 2, 0
+324:     lduri          %jmptmp, %cp, 3
+328:     br             %jmptmp
+rpl.243:
+332:     code-top-link  
+340:     mrv pt:        (0 1 continue)
+mrvl.244:
+348:     subi           %sfp, %sfp, 8, #f
+352:     movzi          %ac0, 46, 0
+356:     lduri          %jmptmp, %sfp, 0
+360:     br             %jmptmp
+lf.223:
+364:     lduri          %r0, %cp, 27
+368:     movzi          %r1, 32, 0
+372:     stri           %cp, %sfp, 8
+376:     stri           %r15, %sfp, 16
+380:     stri           %r2, %sfp, 24
+384:     stri           %xp, %sfp, 32
+388:     addi           %sfp, %sfp, 40, #f
+docall.245:
+392:     movzi          %xp, 0, 0
+396:     movki          %xp, 0, 1
+400:     movki          %xp, 0, 2
+404:     movki          %xp, 0, 3
+408:     relocation:    (arm64-abs 0 (object slow-extract-procedure.rkt-rumble.sls-slow-extract-procedure-0))
+408:     lduri          %cp, %xp, 5
+412:     adr            %lr, 36
+416:     stri           %lr, %sfp, 0
+420:     movzi          %ac0, 2, 0
+424:     lduri          %jmptmp, %xp, 13
+428:     br             %jmptmp
+rpl.246:
+432:     code-top-link  
+440:     mrv pt:        (15 5 error)
+448:     subi           %sfp, %sfp, 40, #f
+452:     ldri           %cp, %sfp, 8
+456:     ldri           %r15, %sfp, 16
+460:     ldri           %r2, %sfp, 24
+464:     ldri           %xp, %sfp, 32
+468:     b              ej.222(-268)
+Lget-room.224:
+472:     movzi          %jmptmp, 0, 0
+476:     movki          %jmptmp, 0, 1
+480:     movki          %jmptmp, 0, 2
+484:     movki          %jmptmp, 0, 3
+488:     blr            %jmptmp
+492:     relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+492:     b              ej.221(-340)
+Lget-room.225:
+496:     movzi          %jmptmp, 0, 0
+500:     movki          %jmptmp, 0, 1
+504:     movki          %jmptmp, 0, 2
+508:     movki          %jmptmp, 0, 3
+512:     blr            %jmptmp
+516:     relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+516:     b              ej.220(-420)
+Lget-room.226:
+520:     movzi          %jmptmp, 0, 0
+524:     movki          %jmptmp, 0, 1
+528:     movki          %jmptmp, 0, 2
+532:     movki          %jmptmp, 0, 3
+536:     blr            %jmptmp
+540:     relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+540:     b              ej.219(-496)
+overflowed.227:
+544:     movzi          %jmptmp, 0, 0
+548:     movki          %jmptmp, 0, 1
+552:     movki          %jmptmp, 0, 2
+556:     movki          %jmptmp, 0, 3
+560:     blr            %jmptmp
+564:     relocation:    (arm64-call 65 (library-code #(libspec dooverflow 158)))
+564:     b              post-overflow-check.218(-540)
+lf.228:
+568:     movzi          %jmptmp, 0, 0
+572:     movki          %jmptmp, 0, 1
+576:     movki          %jmptmp, 0, 2
+580:     movki          %jmptmp, 0, 3
+584:     br             %jmptmp
+588:     relocation:    (arm64-jump 65 (library-code #(libspec doargerr 176)))
+lt.229:
+588:     movzi          %jmptmp, 0, 0
+592:     movki          %jmptmp, 0, 1
+596:     movki          %jmptmp, 0, 2
+600:     movki          %jmptmp, 0, 3
+604:     br             %jmptmp
+608:     relocation:    (arm64-jump 65 (library-code #(libspec event-detour 180)))
+608:     <end>
+
+[...e/define-struct.rkt:808:55: 
+entry.247:
+0:       subi           %trap, %trap, 1, #t
+4:       beq            lt.201(48)
+ej.248:
+8:       cmpi           %ac0, 0
+12:      bne            lf.200(20)
+dcl.249:
+16:      movzi          %r0, 40, 0
+20:      lduri          %cp, %cp, 11
+24:      movzi          %ac0, 1, 0
+28:      lduri          %jmptmp, %cp, 3
+32:      br             %jmptmp
+lf.200:
+36:      movzi          %jmptmp, 0, 0
+40:      movki          %jmptmp, 0, 1
+44:      movki          %jmptmp, 0, 2
+48:      movki          %jmptmp, 0, 3
+52:      br             %jmptmp
+56:      relocation:    (arm64-jump 65 (library-code #(libspec doargerr 176)))
+lt.201:
+56:      movzi          %jmptmp, 0, 0
+60:      movki          %jmptmp, 0, 1
+64:      movki          %jmptmp, 0, 2
+68:      movki          %jmptmp, 0, 3
+72:      br             %jmptmp
+76:      relocation:    (arm64-jump 65 (library-code #(libspec event-detour 180)))
+76:      <end [...e/define-struct.rkt:808:55>
+
+[...e/define-struct.rkt:760:40: 
+entry.250:
+0:       subi           %trap, %trap, 1, #t
+4:       beq            lt.211(668)
+ej.251:
+8:       cmpi           %ac0, 0
+12:      bne            lf.210(640)
+dcl.252:
+16:      stri           %cp, %sfp, 8
+20:      ldri           %lr, %tc, 144
+24:      cmp            %sfp, %lr
+28:      bcs            overflowed.209(600)
+post-overflow-check.202:
+32:      movzi          %r0, 0, 0
+36:      addi           %sfp, %sfp, 16, #f
+docall.253:
+40:      lduri          %lr, %sfp, -8
+44:      lduri          %cp, %lr, 11
+48:      adr            %lr, 36
+52:      stri           %lr, %sfp, 0
+56:      movzi          %ac0, 1, 0
+60:      lduri          %jmptmp, %cp, 3
+64:      br             %jmptmp
+rpl.254:
+68:      code-top-link  
+76:      mrv pt:        (1 2 error)
+84:      subi           %sfp, %sfp, 16, #f
+88:      stri           %ac0, %sfp, 16
+92:      movzi          %r0, 8, 0
+96:      addi           %sfp, %sfp, 24, #f
+docall.255:
+100:     lduri          %lr, %sfp, -16
+104:     lduri          %cp, %lr, 11
+108:     adr            %lr, 36
+112:     stri           %lr, %sfp, 0
+116:     movzi          %ac0, 1, 0
+120:     lduri          %jmptmp, %cp, 3
+124:     br             %jmptmp
+rpl.256:
+128:     code-top-link  
+136:     mrv pt:        (3 3 error)
+144:     subi           %sfp, %sfp, 24, #f
+148:     stri           %ac0, %sfp, 24
+152:     movzi          %r0, 16, 0
+156:     addi           %sfp, %sfp, 32, #f
+docall.257:
+160:     lduri          %lr, %sfp, -24
+164:     lduri          %cp, %lr, 11
+168:     adr            %lr, 36
+172:     stri           %lr, %sfp, 0
+176:     movzi          %ac0, 1, 0
+180:     lduri          %jmptmp, %cp, 3
+184:     br             %jmptmp
+rpl.258:
+188:     code-top-link  
+196:     mrv pt:        (7 4 error)
+204:     subi           %sfp, %sfp, 32, #f
+208:     stri           %ac0, %sfp, 32
+212:     movzi          %r0, 24, 0
+216:     addi           %sfp, %sfp, 40, #f
+docall.259:
+220:     lduri          %lr, %sfp, -32
+224:     lduri          %cp, %lr, 11
+228:     adr            %lr, 36
+232:     stri           %lr, %sfp, 0
+236:     movzi          %ac0, 1, 0
+240:     lduri          %jmptmp, %cp, 3
+244:     br             %jmptmp
+rpl.260:
+248:     code-top-link  
+256:     mrv pt:        (15 5 error)
+264:     subi           %sfp, %sfp, 40, #f
+268:     mov            %r15, %ac0
+272:     movzi          %r0, 32, 0
+276:     stri           %r15, %sfp, 40
+280:     addi           %sfp, %sfp, 48, #f
+docall.261:
+284:     lduri          %lr, %sfp, -40
+288:     lduri          %cp, %lr, 11
+292:     adr            %lr, 36
+296:     stri           %lr, %sfp, 0
+300:     movzi          %ac0, 1, 0
+304:     lduri          %jmptmp, %cp, 3
+308:     br             %jmptmp
+rpl.262:
+312:     code-top-link  
+320:     mrv pt:        (30 6 error)
+328:     subi           %sfp, %sfp, 48, #f
+332:     ldri           %r15, %sfp, 40
+336:     subi           %xp, %ap, 7, #f
+340:     addi           %ap, %ap, 32, #f
+344:     ldri           %lr, %tc, 160
+348:     cmp            %lr, %ap
+352:     bcc            Lget-room.208(252)
+ej.203:
+356:     sturi          %r15, %xp, 7
+360:     addi           %lr, %xp, 16, #f
+364:     sturi          %lr, %xp, 15
+368:     sturi          %ac0, %xp, 23
+372:     movzi          %lr, 38, 0
+376:     sturi          %lr, %xp, 31
+380:     mov            %r15, %xp
+384:     subi           %xp, %ap, 7, #f
+388:     addi           %ap, %ap, 32, #f
+392:     ldri           %lr, %tc, 160
+396:     cmp            %lr, %ap
+400:     bcc            Lget-room.207(180)
+ej.204:
+404:     movzi          %lr, 6, 0
+408:     sturi          %lr, %xp, 7
+412:     addi           %lr, %xp, 16, #f
+416:     sturi          %lr, %xp, 15
+420:     movzi          %lr, 6, 0
+424:     sturi          %lr, %xp, 23
+428:     movzi          %lr, 38, 0
+432:     sturi          %lr, %xp, 31
+436:     mov            %r14, %xp
+440:     subi           %xp, %ap, 7, #f
+444:     addi           %ap, %ap, 96, #f
+448:     ldri           %lr, %tc, 160
+452:     cmp            %lr, %ap
+456:     bcc            Lget-room.206(100)
+ej.205:
+460:     mov            %ac0, %xp
+464:     ldri           %lr, %sfp, 16
+468:     sturi          %lr, %ac0, 7
+472:     addi           %lr, %ac0, 16, #f
+476:     sturi          %lr, %ac0, 15
+480:     ldri           %lr, %sfp, 24
+484:     sturi          %lr, %ac0, 23
+488:     addi           %lr, %ac0, 32, #f
+492:     sturi          %lr, %ac0, 31
+496:     ldri           %lr, %sfp, 32
+500:     sturi          %lr, %ac0, 39
+504:     addi           %lr, %ac0, 48, #f
+508:     sturi          %lr, %ac0, 47
+512:     sturi          %r15, %ac0, 55
+516:     addi           %lr, %ac0, 64, #f
+520:     sturi          %lr, %ac0, 63
+524:     sturi          %r14, %ac0, 71
+528:     addi           %lr, %ac0, 80, #f
+532:     sturi          %lr, %ac0, 79
+536:     movzi          %lr, 14, 0
+540:     sturi          %lr, %ac0, 87
+544:     movzi          %lr, 38, 0
+548:     sturi          %lr, %ac0, 95
+552:     lduri          %jmptmp, %sfp, 0
+556:     br             %jmptmp
+Lget-room.206:
+560:     movzi          %jmptmp, 0, 0
+564:     movki          %jmptmp, 0, 1
+568:     movki          %jmptmp, 0, 2
+572:     movki          %jmptmp, 0, 3
+576:     blr            %jmptmp
+580:     relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+580:     b              ej.205(-124)
+Lget-room.207:
+584:     movzi          %jmptmp, 0, 0
+588:     movki          %jmptmp, 0, 1
+592:     movki          %jmptmp, 0, 2
+596:     movki          %jmptmp, 0, 3
+600:     blr            %jmptmp
+604:     relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+604:     b              ej.204(-204)
+Lget-room.208:
+608:     movzi          %jmptmp, 0, 0
+612:     movki          %jmptmp, 0, 1
+616:     movki          %jmptmp, 0, 2
+620:     movki          %jmptmp, 0, 3
+624:     blr            %jmptmp
+628:     relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+628:     b              ej.203(-276)
+overflowed.209:
+632:     movzi          %jmptmp, 0, 0
+636:     movki          %jmptmp, 0, 1
+640:     movki          %jmptmp, 0, 2
+644:     movki          %jmptmp, 0, 3
+648:     blr            %jmptmp
+652:     relocation:    (arm64-call 65 (library-code #(libspec dooverflow 158)))
+652:     b              post-overflow-check.202(-624)
+lf.210:
+656:     movzi          %jmptmp, 0, 0
+660:     movki          %jmptmp, 0, 1
+664:     movki          %jmptmp, 0, 2
+668:     movki          %jmptmp, 0, 3
+672:     br             %jmptmp
+676:     relocation:    (arm64-jump 65 (library-code #(libspec doargerr 176)))
+lt.211:
+676:     movzi          %jmptmp, 0, 0
+680:     movki          %jmptmp, 0, 1
+684:     movki          %jmptmp, 0, 2
+688:     movki          %jmptmp, 0, 3
+692:     br             %jmptmp
+696:     relocation:    (arm64-jump 65 (library-code #(libspec event-detour 180)))
+696:     <end [...e/define-struct.rkt:760:40>
+
+dcl.263:
+0:       movzi          %ac0, 0, 0
+4:       movki          %ac0, 0, 1
+8:       movki          %ac0, 0, 2
+12:      movki          %ac0, 0, 3
+16:      relocation:    (arm64-abs 0 (closure . #($c-func (...) #f (...) #f)))
+16:      lduri          %jmptmp, %sfp, 0
+20:      br             %jmptmp
+24:      <end>
+;; compile-linklet: step: compiled
+;; ---------------------
+done
+;; compile-linklet: module: p4-asm
+;; compile-linklet: name: syntax-literals
+;; compile-linklet: step: linklet
+;; ---------------------
+(linklet
+  ((deserialize-module-path-indexes syntax-module-path-index-shift syntax-shift-phase-level
+     force-syntax-object module-use deserialize)
+    (.mpi-vector)
+    (.deserialized-syntax-vector)
+    (.namespace .phase .self .inspector .bulk-binding-registry
+      .set-transformer!))
+  (.get-syntax-literal! get-encoded-root-expand-ctx)
+  (define-values (.syntax-literals) (make-vector 7 #f))
+  (define-values (.get-syntax-literal!)
+    (lambda (pos)
+      (let-values ([(ready-stx)
+                    (unsafe-vector*-ref .syntax-literals pos)])
+        (if ready-stx
+            ready-stx
+            (force-syntax-object .syntax-literals pos (unsafe-vector*-ref .mpi-vector 1)
+              .self .phase .inspector .deserialized-syntax-vector
+              .bulk-binding-registry #f)))))
+  (define-values (get-encoded-root-expand-ctx)
+    (lambda () (.get-syntax-literal! 6))))
+;; compile-linklet: step: schemified
+;; ---------------------
+(lambda (instance-variable-reference deserialize-module-path-indexes1
+         syntax-module-path-index-shift2 syntax-shift-phase-level3
+         force-syntax-object4 module-use5 deserialize6 .mpi-vector7
+         .deserialized-syntax-vector8 .namespace9 .phase10 .self11
+         .inspector12 .bulk-binding-registry13 .set-transformer!14
+         .get-syntax-literal!15 get-encoded-root-expand-ctx16)
+  (define .syntax-literals (make-vector 7 #f))
+  (define .get-syntax-literal!
+    (#%name
+      \x5B;
+      (lambda (pos)
+        (let ([ready-stx (unsafe-vector*-ref .syntax-literals pos)])
+          (if ready-stx
+              ready-stx
+              (force-syntax-object4 .syntax-literals pos (unsafe-vector*-ref .mpi-vector7 1)
+                .self11 .phase10 .inspector12 .deserialized-syntax-vector8
+                .bulk-binding-registry13 #f))))))
+  (define get-encoded-root-expand-ctx
+    (#%name \x5B; (lambda () (.get-syntax-literal! 6))))
+  (set-consistent-variables!/define
+    (vector
+      .get-syntax-literal!15
+      get-encoded-root-expand-ctx16)
+    (vector .get-syntax-literal! get-encoded-root-expand-ctx)))
+;; compile-linklet: passes: assembly
+;; ---------------------
+output of np-generate-code (assembly):
+
+entry.285:
+0:       cmpi           %ac0, 17
+4:       bne            lf.280(712)
+dcl.286:
+8:       ldri           %r13, %sfp, 16
+12:      ldri           %r12, %sfp, 40
+16:      ldri           %r9, %sfp, 48
+20:      ldri           %r7, %sfp, 64
+24:      ldri           %r6, %sfp, 72
+28:      ldri           %r5, %sfp, 80
+32:      ldri           %r4, %sfp, 88
+36:      ldri           %r15, %sfp, 104
+40:      ldri           %r14, %sfp, 112
+44:      ldri           %lr, %tc, 144
+48:      cmp            %sfp, %lr
+52:      bcs            overflowed.279(640)
+post-overflow-check.268:
+56:      subi           %trap, %trap, 1, #t
+60:      beq            lt.278(504)
+ej.269:
+64:      movzi          %r0, 56, 0
+68:      movzi          %r1, 6, 0
+72:      stri           %r13, %sfp, 16
+76:      stri           %r12, %sfp, 40
+80:      stri           %r9, %sfp, 48
+84:      stri           %r7, %sfp, 64
+88:      stri           %r6, %sfp, 72
+92:      stri           %r5, %sfp, 80
+96:      stri           %r4, %sfp, 88
+100:     stri           %r15, %sfp, 104
+104:     stri           %r14, %sfp, 112
+108:     addi           %sfp, %sfp, 120, #f
+docall.287:
+112:     movzi          %xp, 0, 0
+116:     movki          %xp, 0, 1
+120:     movki          %xp, 0, 2
+124:     movki          %xp, 0, 3
+128:     relocation:    (arm64-abs 0 (object make-vector))
+128:     lduri          %cp, %xp, 5
+132:     adr            %lr, 36
+136:     stri           %lr, %sfp, 0
+140:     movzi          %ac0, 2, 0
+144:     lduri          %jmptmp, %xp, 13
+148:     br             %jmptmp
+rpl.288:
+152:     code-top-link  
+160:     mrv pt:        (14258 15 error)
+168:     subi           %sfp, %sfp, 120, #f
+172:     ldri           %r13, %sfp, 16
+176:     ldri           %r12, %sfp, 40
+180:     ldri           %r9, %sfp, 48
+184:     ldri           %r7, %sfp, 64
+188:     ldri           %r6, %sfp, 72
+192:     ldri           %r5, %sfp, 80
+196:     ldri           %r4, %sfp, 88
+200:     ldri           %r15, %sfp, 104
+204:     ldri           %r14, %sfp, 112
+208:     subi           %xp, %ap, 3, #f
+212:     addi           %ap, %ap, 80, #f
+216:     ldri           %lr, %tc, 160
+220:     cmp            %lr, %ap
+224:     bcc            Lget-room.277(316)
+ej.270:
+228:     mov            %r3, %xp
+232:     movzi          %lr, 0, 0
+236:     movki          %lr, 0, 1
+240:     movki          %lr, 0, 2
+244:     movki          %lr, 0, 3
+248:     relocation:    (arm64-abs 65 (code #($c-func (...) #f #f #f) 0 8 "[" ...))
+248:     sturi          %lr, %r3, 3
+252:     sturi          %r6, %r3, 11
+256:     sturi          %r12, %r3, 19
+260:     sturi          %r5, %r3, 27
+264:     sturi          %r7, %r3, 35
+268:     sturi          %r4, %r3, 43
+272:     sturi          %r9, %r3, 51
+276:     sturi          %r13, %r3, 59
+280:     sturi          %ac0, %r3, 67
+284:     subi           %xp, %ap, 3, #f
+288:     addi           %ap, %ap, 80, #f
+292:     ldri           %lr, %tc, 160
+296:     cmp            %lr, %ap
+300:     bcc            Lget-room.276(216)
+ej.271:
+304:     mov            %r2, %xp
+308:     movzi          %lr, 0, 0
+312:     movki          %lr, 0, 1
+316:     movki          %lr, 0, 2
+320:     movki          %lr, 0, 3
+324:     relocation:    (arm64-abs 65 (code #($c-func (...) #f #f #f) 0 8 "[" ...))
+324:     sturi          %lr, %r2, 3
+328:     sturi          %r6, %r2, 11
+332:     sturi          %r12, %r2, 19
+336:     sturi          %r5, %r2, 27
+340:     sturi          %r7, %r2, 35
+344:     sturi          %r4, %r2, 43
+348:     sturi          %r9, %r2, 51
+352:     sturi          %r13, %r2, 59
+356:     sturi          %ac0, %r2, 67
+360:     subi           %xp, %ap, 1, #f
+364:     addi           %ap, %ap, 32, #f
+368:     ldri           %lr, %tc, 160
+372:     cmp            %lr, %ap
+376:     bcc            Lget-room.275(116)
+ej.272:
+380:     mov            %r1, %xp
+384:     sturi          %r2, %r1, 9
+388:     sturi          %r3, %r1, 17
+392:     movzi          %lr, 32, 0
+396:     sturi          %lr, %r1, 1
+400:     subi           %xp, %ap, 1, #f
+404:     addi           %ap, %ap, 32, #f
+408:     ldri           %lr, %tc, 160
+412:     cmp            %lr, %ap
+416:     bcc            Lget-room.274(52)
+ej.273:
+420:     mov            %r0, %xp
+424:     sturi          %r15, %r0, 9
+428:     sturi          %r14, %r0, 17
+432:     movzi          %lr, 32, 0
+436:     sturi          %lr, %r0, 1
+440:     movzi          %xp, 0, 0
+444:     movki          %xp, 0, 1
+448:     movki          %xp, 0, 2
+452:     movki          %xp, 0, 3
+456:     relocation:    (arm64-abs 0 (object set-consistent-variables!/define.rkt-linklet.sls-set-consistent-variables!/define-0))
+456:     lduri          %cp, %xp, 5
+460:     movzi          %ac0, 2, 0
+464:     lduri          %jmptmp, %xp, 13
+468:     br             %jmptmp
+Lget-room.274:
+472:     movzi          %jmptmp, 0, 0
+476:     movki          %jmptmp, 0, 1
+480:     movki          %jmptmp, 0, 2
+484:     movki          %jmptmp, 0, 3
+488:     blr            %jmptmp
+492:     relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+492:     b              ej.273(-76)
+Lget-room.275:
+496:     movzi          %jmptmp, 0, 0
+500:     movki          %jmptmp, 0, 1
+504:     movki          %jmptmp, 0, 2
+508:     movki          %jmptmp, 0, 3
+512:     blr            %jmptmp
+516:     relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+516:     b              ej.272(-140)
+Lget-room.276:
+520:     movzi          %jmptmp, 0, 0
+524:     movki          %jmptmp, 0, 1
+528:     movki          %jmptmp, 0, 2
+532:     movki          %jmptmp, 0, 3
+536:     blr            %jmptmp
+540:     relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+540:     b              ej.271(-240)
+Lget-room.277:
+544:     movzi          %jmptmp, 0, 0
+548:     movki          %jmptmp, 0, 1
+552:     movki          %jmptmp, 0, 2
+556:     movki          %jmptmp, 0, 3
+560:     blr            %jmptmp
+564:     relocation:    (arm64-call 65 (library-code #(libspec get-room 178)))
+564:     b              ej.270(-340)
+lt.278:
+568:     stri           %r13, %sfp, 16
+572:     stri           %r12, %sfp, 40
+576:     stri           %r9, %sfp, 48
+580:     stri           %r7, %sfp, 64
+584:     stri           %r6, %sfp, 72
+588:     stri           %r5, %sfp, 80
+592:     stri           %r4, %sfp, 88
+596:     stri           %r15, %sfp, 104
+600:     stri           %r14, %sfp, 112
+604:     addi           %sfp, %sfp, 120, #f
+docall.289:
+608:     adr            %lr, 44
+612:     stri           %lr, %sfp, 0
+616:     movzi          %jmptmp, 0, 0
+620:     movki          %jmptmp, 0, 1
+624:     movki          %jmptmp, 0, 2
+628:     movki          %jmptmp, 0, 3
+632:     br             %jmptmp
+636:     relocation:    (arm64-jump 65 (library-code #(libspec event 32816)))
+rpl.290:
+636:     code-top-link  
+644:     mrv pt:        (14258 15 continue)
+mrvl.291:
+652:     subi           %sfp, %sfp, 120, #f
+656:     ldri           %r13, %sfp, 16
+660:     ldri           %r12, %sfp, 40
+664:     ldri           %r9, %sfp, 48
+668:     ldri           %r7, %sfp, 64
+672:     ldri           %r6, %sfp, 72
+676:     ldri           %r5, %sfp, 80
+680:     ldri           %r4, %sfp, 88
+684:     ldri           %r15, %sfp, 104
+688:     ldri           %r14, %sfp, 112
+692:     b              ej.269(-632)
+overflowed.279:
+696:     movzi          %jmptmp, 0, 0
+700:     movki          %jmptmp, 0, 1
+704:     movki          %jmptmp, 0, 2
+708:     movki          %jmptmp, 0, 3
+712:     blr            %jmptmp
+716:     relocation:    (arm64-call 65 (library-code #(libspec dooverflow 158)))
+716:     b              post-overflow-check.268(-664)
+lf.280:
+720:     movzi          %jmptmp, 0, 0
+724:     movki          %jmptmp, 0, 1
+728:     movki          %jmptmp, 0, 2
+732:     movki          %jmptmp, 0, 3
+736:     br             %jmptmp
+740:     relocation:    (arm64-jump 65 (library-code #(libspec doargerr 176)))
+740:     <end>
+
+[: 
+entry.292:
+0:       cmpi           %ac0, 0
+4:       bne            lf.284(176)
+dcl.293:
+8:       lduri          %lr, %cp, 67
+12:      lduri          %ac0, %lr, 57
+16:      cmpi           %ac0, 6
+20:      bne            lt.283(152)
+lf.294:
+24:      subi           %trap, %trap, 1, #t
+28:      beq            lt.282(80)
+ej.281:
+32:      lduri          %lr, %cp, 43
+36:      lduri          %r15, %cp, 51
+40:      lduri          %r14, %cp, 27
+44:      lduri          %r13, %cp, 35
+48:      lduri          %r12, %cp, 11
+52:      lduri          %r9, %cp, 19
+56:      stri           %r12, %sfp, 8
+60:      stri           %r13, %sfp, 16
+64:      stri           %r14, %sfp, 24
+68:      stri           %r15, %sfp, 32
+72:      stri           %lr, %sfp, 40
+76:      movzi          %lr, 6, 0
+80:      stri           %lr, %sfp, 48
+84:      lduri          %r0, %cp, 67
+88:      movzi          %r1, 48, 0
+92:      lduri          %r2, %r9, 17
+96:      lduri          %cp, %cp, 59
+100:     movzi          %ac0, 9, 0
+104:     lduri          %jmptmp, %cp, 3
+108:     br             %jmptmp
+lt.282:
+112:     stri           %cp, %sfp, 56
+116:     addi           %sfp, %sfp, 64, #f
+docall.295:
+120:     adr            %lr, 44
+124:     stri           %lr, %sfp, 0
+128:     movzi          %jmptmp, 0, 0
+132:     movki          %jmptmp, 0, 1
+136:     movki          %jmptmp, 0, 2
+140:     movki          %jmptmp, 0, 3
+144:     br             %jmptmp
+148:     relocation:    (arm64-jump 65 (library-code #(libspec event 32817)))
+rpl.296:
+148:     code-top-link  
+156:     mrv pt:        (64 8 continue)
+mrvl.297:
+164:     subi           %sfp, %sfp, 64, #f
+168:     ldri           %cp, %sfp, 56
+172:     b              ej.281(-144)
+lt.283:
+176:     lduri          %jmptmp, %sfp, 0
+180:     br             %jmptmp
+lf.284:
+184:     movzi          %jmptmp, 0, 0
+188:     movki          %jmptmp, 0, 1
+192:     movki          %jmptmp, 0, 2
+196:     movki          %jmptmp, 0, 3
+200:     br             %jmptmp
+204:     relocation:    (arm64-jump 65 (library-code #(libspec doargerr 176)))
+204:     <end [>
+
+[: 
+entry.298:
+0:       cmpi           %ac0, 1
+4:       bne            lf.267(188)
+dcl.299:
+8:       mov            %r1, %r0
+12:      lduri          %lr, %cp, 67
+16:      addi           %r15, %r1, 9, #f
+20:      ldr            %ac0, %lr, %r15
+24:      cmpi           %ac0, 6
+28:      bne            lt.266(156)
+lf.300:
+32:      subi           %trap, %trap, 1, #t
+36:      beq            lt.265(76)
+ej.264:
+40:      lduri          %lr, %cp, 43
+44:      lduri          %r15, %cp, 51
+48:      lduri          %r14, %cp, 27
+52:      lduri          %r13, %cp, 35
+56:      lduri          %r12, %cp, 11
+60:      lduri          %r9, %cp, 19
+64:      stri           %r12, %sfp, 8
+68:      stri           %r13, %sfp, 16
+72:      stri           %r14, %sfp, 24
+76:      stri           %r15, %sfp, 32
+80:      stri           %lr, %sfp, 40
+84:      movzi          %lr, 6, 0
+88:      stri           %lr, %sfp, 48
+92:      lduri          %r0, %cp, 67
+96:      lduri          %r2, %r9, 17
+100:     lduri          %cp, %cp, 59
+104:     movzi          %ac0, 9, 0
+108:     lduri          %jmptmp, %cp, 3
+112:     br             %jmptmp
+lt.265:
+116:     stri           %cp, %sfp, 56
+120:     stri           %r1, %sfp, 64
+124:     addi           %sfp, %sfp, 72, #f
+docall.301:
+128:     adr            %lr, 44
+132:     stri           %lr, %sfp, 0
+136:     movzi          %jmptmp, 0, 0
+140:     movki          %jmptmp, 0, 1
+144:     movki          %jmptmp, 0, 2
+148:     movki          %jmptmp, 0, 3
+152:     br             %jmptmp
+156:     relocation:    (arm64-jump 65 (library-code #(libspec event 32817)))
+rpl.302:
+156:     code-top-link  
+164:     mrv pt:        (192 9 continue)
+mrvl.303:
+172:     subi           %sfp, %sfp, 72, #f
+176:     ldri           %cp, %sfp, 56
+180:     ldri           %r1, %sfp, 64
+184:     b              ej.264(-148)
+lt.266:
+188:     lduri          %jmptmp, %sfp, 0
+192:     br             %jmptmp
+lf.267:
+196:     movzi          %jmptmp, 0, 0
+200:     movki          %jmptmp, 0, 1
+204:     movki          %jmptmp, 0, 2
+208:     movki          %jmptmp, 0, 3
+212:     br             %jmptmp
+216:     relocation:    (arm64-jump 65 (library-code #(libspec doargerr 176)))
+216:     <end [>
+
+dcl.304:
+0:       movzi          %ac0, 0, 0
+4:       movki          %ac0, 0, 1
+8:       movki          %ac0, 0, 2
+12:      movki          %ac0, 0, 3
+16:      relocation:    (arm64-abs 0 (closure . #($c-func (...) #f (...) #f)))
+16:      lduri          %jmptmp, %sfp, 0
+20:      br             %jmptmp
+24:      <end>
+;; compile-linklet: step: compiled
+;; ---------------------
+done

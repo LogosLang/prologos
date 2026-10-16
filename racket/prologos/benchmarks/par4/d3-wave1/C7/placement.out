@@ -1,0 +1,20 @@
+file constraints-adversarial.prologos: 214 observed rounds
+  rounds width>=2: 203 rounds, 1125 fires, distinct first outputs 284 (25.0% of fires)
+    K=4: model (width/min(width,K)) parallelism 3.13  | placed by first-output owner 1.09  | power row: placed by propagator-id hash 2.89
+    K=8: model (width/min(width,K)) parallelism 4.39  | placed by first-output owner 1.11  | power row: placed by propagator-id hash 4.08
+    K=16: model (width/min(width,K)) parallelism 5.11  | placed by first-output owner 1.12  | power row: placed by propagator-id hash 4.77
+  rounds width>=8: 38 rounds, 601 fires, distinct first outputs 70 (12.0% of fires)
+    K=4: model (width/min(width,K)) parallelism 3.62  | placed by first-output owner 1.09  | power row: placed by propagator-id hash 3.54
+    K=8: model (width/min(width,K)) parallelism 6.6  | placed by first-output owner 1.13  | power row: placed by propagator-id hash 6.2
+    K=16: model (width/min(width,K)) parallelism 10.93  | placed by first-output owner 1.13  | power row: placed by propagator-id hash 9.54
+  first-output merge in rounds >= 8 wide (fires): ((attribute-map-merge-fn . 529) (meta-solution-merge . 72))
+file type-adversarial.prologos: 185 observed rounds
+  rounds width>=2: 171 rounds, 1126 fires, distinct first outputs 266 (24.0% of fires)
+    K=4: model (width/min(width,K)) parallelism 3.24  | placed by first-output owner 1.12  | power row: placed by propagator-id hash 3.04
+    K=8: model (width/min(width,K)) parallelism 4.77  | placed by first-output owner 1.13  | power row: placed by propagator-id hash 4.19
+    K=16: model (width/min(width,K)) parallelism 5.8  | placed by first-output owner 1.15  | power row: placed by propagator-id hash 5.47
+  rounds width>=8: 33 rounds, 663 fires, distinct first outputs 66 (10.0% of fires)
+    K=4: model (width/min(width,K)) parallelism 3.75  | placed by first-output owner 1.12  | power row: placed by propagator-id hash 3.56
+    K=8: model (width/min(width,K)) parallelism 6.77  | placed by first-output owner 1.13  | power row: placed by propagator-id hash 6.2
+    K=16: model (width/min(width,K)) parallelism 11.84  | placed by first-output owner 1.14  | power row: placed by propagator-id hash 10.87
+  first-output merge in rounds >= 8 wide (fires): ((attribute-map-merge-fn . 573) (meta-solution-merge . 78) (merge-set-union . 4) (resolution-stratum-merge . 4) (...s/decision-cell.rkt:582:2 . 4))

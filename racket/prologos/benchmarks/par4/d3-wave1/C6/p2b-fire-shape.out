@@ -1,0 +1,5 @@
+fire-entry shapes, M=2000000
+  no context: 0.016392 B/fire  2.4814453125 ns/fire (r=33920)
+  parameterize current-source-loc (today's fire-propagator): 144.194432 B/fire  44.926025390625 ns/fire (r=33920)
+  wcm private key, fire-fn in tail position (D.2 proposal): 32.020288 B/fire  7.7435302734375 ns/fire (r=33920)
+  wcm private key, fire reads the mark: 32.038464 B/fire  12.281494140625 ns/fire (r=33920)

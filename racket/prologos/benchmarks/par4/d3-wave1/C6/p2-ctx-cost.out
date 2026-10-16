@@ -1,0 +1,23 @@
+M = 2000000 iterations per row; bytes/op and ns/op (ns is secondary: machine loaded)
+  loop overhead (body = fixnum): 0.008232 B/op  0.8304443359375 ns/op
+  parameterize 1 binding: 144.237032 B/op  54.8714599609375 ns/op
+  parameterize 2 then nested 1 (today's shape): 528.4224 B/op  111.4840087890625 ns/op
+  with-continuation-mark (non-tail body): 0.008232 B/op  0.7855224609375 ns/op
+  wcm + read mark with default tag: 32.029728 B/op  10.5360107421875 ns/op
+  wcm + read mark with private tag: 32.030368 B/op  12.3504638671875 ns/op
+  call-with-parameterization (captured): 48.126296 B/op  18.2305908203125 ns/op
+  parameter read, no parameterize: 0.138464 B/op  23.4224853515625 ns/op
+  wcm around an opaque call (mark must exist): 32.012128 B/op  6.175048828125 ns/op
+  parameterize 1 around an opaque call: 144.195152 B/op  44.7445068359375 ns/op
+  read mark only (installed once outside loop): 0.025832 B/op  5.560546875 ns/op
+  read mark only, private tag: 0.026472 B/op  7.64794921875 ns/op
+depth rows (depth B/op ns/op), includes the recursion itself:
+  recursion only        (0 0.01656 1.968994140625)
+  mark read (set at base) (0 0.042 6.33056640625)
+  param read (pz at base) (0 0.06808 11.629638671875)
+  recursion only        (100 1.69576 97.1044921875)
+  mark read (set at base) (100 1.73624 101.959228515625)
+  param read (pz at base) (100 1.44368 108.330078125)
+  recursion only        (1000 75.68616 916.639404296875)
+  mark read (set at base) (1000 75.32992 910.64453125)
+  param read (pz at base) (1000 76.2672 928.729248046875)

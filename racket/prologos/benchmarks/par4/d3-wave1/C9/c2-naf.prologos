@@ -1,0 +1,23 @@
+ns probes::c9naf
+
+;; C9 (h): forks and nested S0 runs. Each on-network solve forks the solver template
+;; (relations.rkt:3117); each NAF request forks the main network inside the S1 handler
+;; and runs a nested run-to-quiescence on the fork (relations.rkt:218, :283).
+
+solver atms-s
+  :strategy atms
+
+defr edge [?from ?to]
+  || "a" "b"
+     "b" "c"
+     "c" "d"
+
+defr blocked [?node]
+  || "c"
+
+defr open-edge [?from ?to]
+  &> (edge from to) (not (blocked to))
+
+solve-with atms-s (open-edge "a" ?d)
+solve-with atms-s (open-edge "b" ?d)
+solve-with atms-s (open-edge ?s ?d)

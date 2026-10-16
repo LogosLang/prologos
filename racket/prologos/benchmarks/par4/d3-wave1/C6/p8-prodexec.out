@@ -1,0 +1,20 @@
+mode par file /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/constraints-adversarial.prologos
+  BSP rounds through the executor: 212 (fires 1142); width>=8: 38 rounds, 611 fires, 592 parallel threads created (est.)
+  executor time: width>=8 17.0 ms (27.1 us/fire), width<8 11.0 ms; process-file wall 217.0 ms (incl. prelude load)
+mode seq file /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/constraints-adversarial.prologos
+  BSP rounds through the executor: 212 (fires 1142); width>=8: 38 rounds, 611 fires, 592 parallel threads created (est.)
+  executor time: width>=8 3.0 ms (5.0 us/fire), width<8 8.0 ms; process-file wall 190.0 ms (incl. prelude load)
+mode par file /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/constraints-adversarial.prologos
+  BSP rounds through the executor: 212 (fires 1142); width>=8: 38 rounds, 611 fires, 592 parallel threads created (est.)
+  executor time: width>=8 16.0 ms (25.6 us/fire), width<8 10.0 ms; process-file wall 201.0 ms (incl. prelude load)
+mode seq file /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/constraints-adversarial.prologos
+  BSP rounds through the executor: 212 (fires 1142); width>=8: 38 rounds, 611 fires, 592 parallel threads created (est.)
+  executor time: width>=8 3.0 ms (4.7 us/fire), width<8 7.0 ms; process-file wall 183.0 ms (incl. prelude load)
+installed executor at load: #<procedure:...ogos/propagator.rkt:3693:2> (procedure? #t)
+mode par file /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos
+  BSP rounds through the executor: 182 (fires 1112); width>=8: 32 rounds, 642 fires, 540 parallel threads created (est.)
+  executor time: width>=8 15.0 ms (23.6 us/fire), width<8 7.0 ms; process-file wall 208.0 ms (incl. prelude load)
+installed executor at load: #<procedure:...ogos/propagator.rkt:3693:2> (procedure? #t)
+mode seq file /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos
+  BSP rounds through the executor: 182 (fires 1112); width>=8: 32 rounds, 642 fires, 540 parallel threads created (est.)
+  executor time: width>=8 2.0 ms (3.9 us/fire), width<8 4.0 ms; process-file wall 185.0 ms (incl. prelude load)

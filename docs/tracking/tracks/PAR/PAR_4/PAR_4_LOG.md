@@ -641,3 +641,39 @@ binder merges with unsolved metas.
   `pkill`, evidence classes, power checks) and the JSON finding schema. Each critic also gets its own charge, per
   the plan's table. The charges are recorded in the synthesis when it is written.
 - **Next**: triage of the returned findings by hand, then the wave-2 composition reported to the owner.
+
+### D.3 wave 1 returned and triaged: 103 findings in 18 clusters; two production defects reproduced and filed (DEFERRED 177, 178); wave 2 proposed — docs and data commit on the branch (2026-10-15)
+- **Why / decision**: all ten critics returned between 23:24 and 23:29. I read every report in full, re-checked by hand
+  the claims the triage rests on, and wrote the triage by hand:
+  [`critiques/2026-10-15_PAR_4_D3_WAVE1_TRIAGE.md`](critiques/2026-10-15_PAR_4_D3_WAVE1_TRIAGE.md).
+  - The critics' probes and outputs, and the raw returns of C1–C5, C8 and C9, are kept in
+    `racket/prologos/benchmarks/par4/d3-wave1/`, so the scratch cache's pruning cannot lose the evidence. The directory is under
+    `benchmarks/` rather than `data/` because probes print by design, and the pre-commit stdout-clean gate treats
+    `data/` as production.
+  - Wave 2 waits for the owner's go.
+- **Result**: 103 findings: 5 blockers, 69 major, 29 minor. Every critic's strongest point in favour is the same:
+  correctness before parallelism, and K = 1 before K > 1. The five clusters that change the design most:
+  - CL-1: the attribute map is one hub cell.
+  - CL-2: production BSP fires wide rounds on OS threads.
+  - CL-3: the idle-epoch detector is unsound.
+  - CL-4: the fence is ill-defined.
+  - CL-5: two defects in production today.
+- **Spot checks by hand**: `driver.rkt:567`; the attribute map's `:type` facet merges with `type-unify-or-top`, and
+  there is one attribute-map cell; `tagged-cell-read` drops the base; `pool-dispatch` dispatches min(k, n) thunks;
+  `current-source-loc` has 5 reads, not 13. Two critics' probes re-run:
+  - C2's Tier-1 probe: B = 0, against 7 for both controls.
+  - C9's ATMS-against-DFS programs: `@[{:x 2}]` against `@[]`, `@[{:x 2} {:x 1}]` against `@[{:x 1}]`, and
+    `@[{:x 1, :y 2}]` against `@[]`.
+- **Surprise / correction**: eleven self-corrections, SC-11…SC-21. Five matter most:
+  - SC-11: P0's timings include the production thread executor.
+  - SC-13: Q4's foreign-write metric cannot see balance.
+  - SC-14: D.2's epoch counter broke D.1's sound reset flag, and D.2 dropped D.1's counted fire requests.
+  - SC-15: the fence cannot be a monotone map from SRE's FOUR lattice.
+  - SC-16: "ownership is the theorem's hypothesis" is wrong. Joins carry correctness once the state is refined to
+    (cell, writer) components; owning storage is a cost choice.
+
+  Callouts were added to D.2 (before §0) and to the P0 record (§0). D.2's text is otherwise left as it was critiqued.
+- **Filed on main**: DEFERRED 177 (ATMS wrong answers; three mechanisms) and 178 (Tier-1 not a fixpoint). NEXT FREE
+  is now 179.
+- **Next**: the owner's go for wave 2 (triage §7, W2-1…W2-10). Then the synthesis of record, D.3, and owner decisions
+  from O-14 onwards.

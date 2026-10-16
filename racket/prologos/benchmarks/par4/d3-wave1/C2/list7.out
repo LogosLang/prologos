@@ -1,0 +1,169 @@
+=== resolution-stratum-request-cell-id : PRODUCTION
+./propagator.rkt:102: resolution-stratum-request-cell-id
+./propagator.rkt:717:(define resolution-stratum-request-cell-id (cell-id 14))
+./propagator.rkt:1134:  (unless (equal? actual-resolution-cid resolution-stratum-request-cell-id)
+./propagator.rkt:1136:           "resolution-stratum-request-cell-id allocation drift: expected ~a, got ~a"
+./propagator.rkt:1137:           resolution-stratum-request-cell-id actual-resolution-cid))
+./metavar-store.rkt:450:     (define rq-cid resolution-stratum-request-cell-id)
+./metavar-store.rkt:1683:(register-stratum-handler! resolution-stratum-request-cell-id
+=== resolution-stratum-request-cell-id : NON-PRODUCTION (tests/tools/benchmarks)
+./tests/test-readiness-propagator.rkt:273:  (let ([entries (elab-cell-read enet resolution-stratum-request-cell-id)])
+=== fork-on-union-request-cell-id : PRODUCTION
+./propagator.rkt:106: fork-on-union-request-cell-id
+./propagator.rkt:742:(define fork-on-union-request-cell-id (cell-id 15))
+./propagator.rkt:1151:  (unless (equal? actual-fork-on-union-cid fork-on-union-request-cell-id)
+./propagator.rkt:1153:           "fork-on-union-request-cell-id allocation drift: expected ~a, got ~a"
+./propagator.rkt:1154:           fork-on-union-request-cell-id actual-fork-on-union-cid))
+./typing-propagators.rkt:629:     (net-cell-write net fork-on-union-request-cell-id
+./typing-propagators.rkt:1515:(register-stratum-handler! fork-on-union-request-cell-id
+./data/probes/2026-05-24-3C-d-3-w1-empirical-probe.rkt:175:    (define net2 (net-cell-write net1 fork-on-union-request-cell-id
+./data/probes/2026-05-24-3C-d-3-w1-empirical-probe.rkt:199:    (define net2 (net-cell-write net1 fork-on-union-request-cell-id
+=== fork-on-union-request-cell-id : NON-PRODUCTION (tests/tools/benchmarks)
+./tests/test-union-types-atms.rkt:239:    (define net2 (net-cell-write net1 fork-on-union-request-cell-id
+./tests/test-union-types-atms.rkt:257:    (check-equal? (net-cell-read net4 fork-on-union-request-cell-id) (hasheq)
+./tests/test-union-types-atms.rkt:604:    (define net2 (net-cell-write net1 fork-on-union-request-cell-id
+./tests/test-union-types-atms.rkt:621:    (check-equal? (net-cell-read net3 fork-on-union-request-cell-id) (hasheq)
+./tests/test-union-types-atms.rkt:642:    (define net2 (net-cell-write net1 fork-on-union-request-cell-id
+./tests/test-union-types-atms.rkt:666:    (define net2 (net-cell-write net1 fork-on-union-request-cell-id
+./tests/test-union-types-atms.rkt:742:    (define net2 (net-cell-write net1 fork-on-union-request-cell-id
+./tests/test-union-types-atms.rkt:776:    (define net2 (net-cell-write net1 fork-on-union-request-cell-id
+./tests/test-union-types-atms.rkt:802:    (define net2 (net-cell-write net1 fork-on-union-request-cell-id
+./tests/test-union-types-atms.rkt:818:    (define net2 (net-cell-write net1 fork-on-union-request-cell-id
+./tests/test-union-types-atms.rkt:882:    (define net2 (net-cell-write net1 fork-on-union-request-cell-id
+./tests/test-union-types-atms.rkt:906:    (define net2 (net-cell-write net1 fork-on-union-request-cell-id
+=== resolution-stratum-merge : PRODUCTION
+./propagator.rkt:104: resolution-stratum-merge
+./propagator.rkt:806:(define (resolution-stratum-merge old new)
+./propagator.rkt:1130:    (net-register-specialized-cell net3 '() resolution-stratum-merge
+=== resolution-stratum-merge : NON-PRODUCTION (tests/tools/benchmarks)
+=== fork-on-union-request-merge : PRODUCTION
+./propagator.rkt:108: fork-on-union-request-merge
+./propagator.rkt:819:(define (fork-on-union-request-merge old new)
+./propagator.rkt:1147:    (net-register-specialized-cell net4 (hasheq) fork-on-union-request-merge
+=== fork-on-union-request-merge : NON-PRODUCTION (tests/tools/benchmarks)
+=== type-lattice-merge : PRODUCTION
+./unify.rkt:71:  (hasheq 'equality type-lattice-merge
+./subtype-predicate.rkt:417:  (hasheq 'equality type-lattice-merge
+./type-lattice.rkt:38:         type-lattice-merge
+./type-lattice.rkt:156:(define (type-lattice-merge v1 v2)
+./type-lattice.rkt:318:            (define dom-result (type-lattice-merge (expr-Pi-domain a) (expr-Pi-domain b)))
+./type-lattice.rkt:364:                   [(-) (type-lattice-merge c1 c2)]                 ;; contravariant → join (antitone)
+./elaborator-network.rkt:22:         "type-lattice.rkt"     ;; type-lattice-merge (Role A), type-unify-or-top (Role B, T-3 Commit A)
+./classify-inhabit.rkt:32:(require (only-in "type-lattice.rkt" type-lattice-merge type-unify-or-top type-bot type-bot? type-top type-top?)
+./typing-propagators.rkt:27:         (only-in "type-lattice.rkt" type-bot type-bot? type-top type-top? type-lattice-merge type-unify-or-top has-unsolved-meta?)
+./phase1d-registrations.rkt:68:         (only-in "type-lattice.rkt" type-lattice-merge)
+./phase1d-registrations.rkt:264:(register-merge-fn!/lattice type-lattice-merge #:for-domain 'type)
+=== type-lattice-merge : NON-PRODUCTION (tests/tools/benchmarks)
+./tests/test-sre-algebraic.rkt:146:  (define result (test-distributive td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:288:  (check-eq? (test-sd-vee td type-samples #f type-lattice-merge) axiom-untested))
+./tests/test-sre-algebraic.rkt:292:  (check-eq? (test-sd-wedge td type-samples #f type-lattice-merge) axiom-untested))
+./tests/test-sre-algebraic.rkt:296:  (define result (test-sd-vee td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:304:  (define result (test-sd-wedge td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:361:  (define ev (test-sd-vee/detailed td type-samples #f type-lattice-merge))
+./tests/test-sre-algebraic.rkt:370:  (define ev (test-sd-vee/detailed td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:385:  (define ev-vee (test-sd-vee/detailed td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:386:  (define wrap-vee (test-sd-vee td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:395:  (define ev (test-sd-vee/detailed td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:459:  (define ev (test-sd-vee/detailed td gen-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:617:  (check-eq? (test-pseudo-complement-rel td type-samples #f type-lattice-merge)
+./tests/test-sre-algebraic.rkt:625:              td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:633:                  td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:638:  (check-eq? (test-pseudo-complement-abs td type-samples #f type-lattice-merge)
+./tests/test-sre-algebraic.rkt:641:                  td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:670:  (check-eq? (test-relatively-complemented td type-samples #f type-lattice-merge)
+./tests/test-sre-algebraic.rkt:678:                  td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:693:  (check-eq? (test-stone-identity td type-samples #f type-lattice-merge)
+./tests/test-sre-algebraic.rkt:701:                  td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:732:  (check-eq? (test-modular td type-samples #f type-lattice-merge) axiom-untested)
+./tests/test-sre-algebraic.rkt:738:              td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:745:  (define result (test-modular td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:750:  (check-eq? (test-whitmans-condition td type-samples #f type-lattice-merge)
+./tests/test-sre-algebraic.rkt:756:              td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:783:  (check-eq? (test-sectionally-complemented td type-samples #f type-lattice-merge)
+./tests/test-sre-algebraic.rkt:789:                  td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:818:  (check-eq? (test-has-complement td type-samples #f type-lattice-merge)
+./tests/test-sre-algebraic.rkt:826:              td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:838:                  td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:873:  (check-eq? (test-no-m3-sublattice td type-samples #f type-lattice-merge)
+./tests/test-sre-algebraic.rkt:880:  (check-eq? (test-no-n5-sublattice td type-samples #f type-lattice-merge)
+./tests/test-sre-algebraic.rkt:888:              td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:896:              td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:933:  (check-eq? (test-anti-exchange td type-samples #f type-lattice-merge)
+./tests/test-sre-algebraic.rkt:941:              td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:950:             type-samples type-bot type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:960:             type-samples type-bot type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:961:  (check-equal? (sample-closure-on-J '() J type-lattice-meet type-lattice-merge)
+./tests/test-sre-algebraic.rkt:1025:  (check-eq? (test-trivial-congruence td type-samples #f type-lattice-merge)
+./tests/test-sre-algebraic.rkt:1034:                  td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:1041:                  td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:1060:                  td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:1066:                  td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:1100:  (check-eq? (test-admits-day-doubling td type-samples #f type-lattice-merge)
+./tests/test-sre-algebraic.rkt:1108:              td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:1116:                  td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:1124:              td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-sre-algebraic.rkt:1156:              td type-samples type-lattice-meet type-lattice-merge))
+./tests/test-type-lattice.rkt:27:     (check-equal? (type-lattice-merge type-bot type-bot) type-bot))
+./tests/test-type-lattice.rkt:30:     (check-equal? (type-lattice-merge type-bot (expr-Nat)) (expr-Nat)))
+./tests/test-type-lattice.rkt:33:     (check-equal? (type-lattice-merge (expr-Nat) type-bot) (expr-Nat)))
+./tests/test-type-lattice.rkt:36:     (check-equal? (type-lattice-merge (expr-Nat) (expr-Nat)) (expr-Nat)))
+./tests/test-type-lattice.rkt:42:     (check-equal? (type-lattice-merge (expr-Nat) (expr-Bool))
+./tests/test-type-lattice.rkt:46:     (check-equal? (type-lattice-merge type-top (expr-Nat)) type-top)
+./tests/test-type-lattice.rkt:47:     (check-equal? (type-lattice-merge (expr-Bool) type-top) type-top)
+./tests/test-type-lattice.rkt:48:     (check-equal? (type-lattice-merge type-top type-top) type-top))))
+./tests/test-type-lattice.rkt:61:     (define result (type-lattice-merge pi1 pi2))
+./tests/test-type-lattice.rkt:69:     (define result (type-lattice-merge s1 s2))
+./tests/test-type-lattice.rkt:78:     (check-equal? (type-lattice-merge pi1 pi2)
+./tests/test-type-lattice.rkt:85:     (define result (type-lattice-merge t1 t2))
+./tests/test-type-lattice.rkt:95:     (check-equal? (type-lattice-merge t1 t2)
+./tests/test-type-lattice.rkt:101:     (define result (type-lattice-merge t1 t2))
+./tests/test-type-lattice.rkt:109:     (define result (type-lattice-merge t1 t2))
+./tests/test-type-lattice.rkt:116:     (define result (type-lattice-merge t1 t2))
+./tests/test-type-lattice.rkt:180:     (define-values (net1 cid1) (net-new-cell net0 type-bot type-lattice-merge type-lattice-contradicts?))
+./tests/test-type-lattice.rkt:181:     (define-values (net2 cid2) (net-new-cell net1 type-bot type-lattice-merge type-lattice-contradicts?))
+./tests/test-type-lattice.rkt:191:   (test-case "Incompatible writes under type-lattice-merge (Role A): Nat then Bool → union [T-3 Commit B]"
+./tests/test-type-lattice.rkt:196:     (define-values (net1 cid) (net-new-cell net0 type-bot type-lattice-merge type-lattice-contradicts?))
+./tests/test-type-lattice.rkt:262:       (define result (type-lattice-merge (expr-meta 'x #f) (expr-Nat)))
+./tests/test-type-lattice.rkt:269:       (define result (type-lattice-merge (expr-Nat) (expr-meta 'y #f)))
+./tests/test-type-lattice.rkt:276:       (define result (type-lattice-merge (expr-Nat) (expr-meta 'a #f)))
+./tests/test-type-lattice.rkt:287:       (define result (type-lattice-merge (expr-Nat) (expr-meta 'a #f)))
+./benchmarks/micro/bench-classify-e2e.rkt:77:    #:merge-registry type-lattice-merge
+./benchmarks/micro/bench-sre-track2h.rkt:142:(displayln "M1: type-lattice-merge (equality join)")
+./benchmarks/micro/bench-sre-track2h.rkt:143:(define m1a (bench "M1a equal (Nat,Nat)" 10000 (type-lattice-merge (expr-Nat) (expr-Nat))))
+./benchmarks/micro/bench-sre-track2h.rkt:144:(define m1b (bench "M1b bot identity" 10000 (type-lattice-merge type-bot (expr-Int))))
+./benchmarks/micro/bench-sre-track2h.rkt:146:  (type-lattice-merge (expr-Nat) (expr-String))))
+./benchmarks/micro/bench-sre-track2h.rkt:148:  (type-lattice-merge pi-nat-bool pi-nat-bool)))
+./benchmarks/micro/bench-sre-track2h.rkt:254:  (type-lattice-merge (deep-pi 10) (deep-pi 10))))
+./benchmarks/micro/bench-sre-track2h.rkt:479:  (define lhs (type-lattice-meet a (type-lattice-merge b c)))
+./benchmarks/micro/bench-sre-track2h.rkt:480:  (define rhs (type-lattice-merge (type-lattice-meet a b)
+./benchmarks/micro/bench-classify-vs-sre.rkt:92:    #:merge-registry type-lattice-merge
+=== type-unify-or-top : PRODUCTION
+./cap-type-bridge.rkt:197:        (net-new-cell net func-type type-unify-or-top type-lattice-contradicts?))
+./session-type-bridge.rkt:121:    (net-new-cell net type-bot type-unify-or-top type-lattice-contradicts?))
+./session-type-bridge.rkt:131:    (net-new-cell net type-bot type-unify-or-top type-lattice-contradicts?))
+./type-lattice.rkt:39:         type-unify-or-top           ;; PPN 4C Path T-3 Commit A: Role B equality-enforce helper
+./type-lattice.rkt:203:(define (type-unify-or-top v1 v2)
+./elaborator-network.rkt:22:         "type-lattice.rkt"     ;; type-lattice-merge (Role A), type-unify-or-top (Role B, T-3 Commit A)
+./elaborator-network.rkt:143:                  (make-tagged-merge type-unify-or-top)
+./elaborator-network.rkt:196:       (define unified (type-unify-or-top va vb))
+./elaborator-network.rkt:221:     (define merged (type-unify-or-top va vb))
+./elaborator-network.rkt:374:         (net-new-cell net type-bot type-unify-or-top type-lattice-contradicts?))]
+./elaborator-network.rkt:377:     (net-new-cell net type-bot type-unify-or-top type-lattice-contradicts?)]
+./elaborator-network.rkt:380:     (net-new-cell net expr type-unify-or-top type-lattice-contradicts?)]))
+./elaborator-network.rkt:944:       (define unified (type-unify-or-top va vb))
+./elaborator-network.rkt:1060:(current-type-universe-merge    (compound-tagged-merge type-unify-or-top))
+./elaborator-network.rkt:1148:        (define unified (type-unify-or-top va vb))
+./classify-inhabit.rkt:32:(require (only-in "type-lattice.rkt" type-lattice-merge type-unify-or-top type-bot type-bot? type-top type-top?)
+./classify-inhabit.rkt:171:         [else (type-unify-or-top c1 c2)]))
+./typing-propagators.rkt:27:         (only-in "type-lattice.rkt" type-bot type-bot? type-top type-top? type-lattice-merge type-unify-or-top has-unsolved-meta?)
+./typing-propagators.rkt:653:  (type-map-write net tm-cid position (type-unify-or-top current expected)))
+=== type-unify-or-top : NON-PRODUCTION (tests/tools/benchmarks)
+./tests/test-sre-subtype.rkt:151:    (net-new-cell net0 t1 type-unify-or-top type-lattice-contradicts?))
+./tests/test-sre-subtype.rkt:153:    (net-new-cell net1 t2 type-unify-or-top type-lattice-contradicts?))
+./tests/test-type-lattice.rkt:213:       (net-new-cell net0 type-bot type-unify-or-top type-lattice-contradicts?))
+./tests/test-type-lattice.rkt:292:       (define result (type-unify-or-top (expr-Nat) (expr-meta 'a #f)))
+./tests/test-type-lattice.rkt:347:     (define r (type-unify-or-top a b))
+./tests/test-type-lattice.rkt:348:     (check-equal? r (type-unify-or-top b a))
+./tests/test-type-lattice.rkt:349:     (check-equal? (type-unify-or-top r a) r)
+./tests/test-type-lattice.rkt:350:     (check-equal? (type-unify-or-top r b) r))
+./benchmarks/micro/bench-meta-lifecycle.rkt:342:(define merge-fn (compound-tagged-merge type-unify-or-top))

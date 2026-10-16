@@ -1,0 +1,8 @@
+(A) SRE test samples, no callback
+  type-unify-or-top (installed): C 0  A 0  I 0   (6 samples)
+  seeded generic non-join (LWW): C 180  A 0  I 0   (6 samples)
+  arm-local mutant (meta arm)  : C 0  A 0  I 0   (6 samples)
+(B) representative samples, callback installed (all metas unsolved)
+  type-unify-or-top (installed): C 18  A 0  I 0   (9 samples)
+  seeded generic non-join (LWW): C 648  A 0  I 0   (9 samples)
+  arm-local mutant (meta arm)  : C 378  A 63  I 0   (9 samples)

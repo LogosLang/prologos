@@ -1,0 +1,24 @@
+== T1 Tier-1 flush: lfp is a=5 b=5
+  BSP  q quiesced before p   (Tier 1 eligible)  a=5 b=0 worklist-left=0  NOT A FIXPOINT (dependent q dropped)
+  BSP  control (q installed after p: Tier 2)  a=5 b=5 worklist-left=0  fixpoint
+  SEQ  q quiesced before p   (Tier 1 eligible)  a=5 b=5 worklist-left=0  fixpoint
+  SEQ  control (q installed after p: Tier 2)  a=5 b=5 worklist-left=0  fixpoint
+== K-FO fire-once on an unstable latch (b := a, a goes 1 then 2): Kleene/lfp b=2
+  BSP  b=1
+  SEQ  b=2
+== K-UR undeclared read (lfp o=5)
+  BSP  o=1
+  SEQ  o=1
+== K-WL fenced sub-run: same queued SET {q1,q2}, two enqueue orders
+  BSP  t1-first: f=a   t2-first: f=b
+  SEQ  t1-first: f=a   t2-first: f=b
+== A-ALT f under the K=1 schedules (no fence) — compare with the alternation's {q,r}-in-one-round
+  install (q p r)   BSP f=r   SEQ f=q
+  install (p q r)   BSP f=r   SEQ f=r
+  install (r p q)   BSP f=r   SEQ f=r
+  install (r q p)   BSP f=r   SEQ f=q
+== F-CH changes to c for the same fixpoint (c=16), by schedule
+  BSP install 1..16  c=16  changes=1
+  BSP install 16..1  c=16  changes=16
+  SEQ install 1..16  c=16  changes=1
+  SEQ install 16..1  c=16  changes=16

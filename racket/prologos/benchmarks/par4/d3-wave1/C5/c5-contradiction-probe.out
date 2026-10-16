@@ -1,0 +1,3 @@
+== WHICH: reported contradiction cell by install order
+  BSP  c1-installed-first: c1   c2-installed-first: c2
+  SEQ  c1-installed-first: c2   c2-installed-first: c1

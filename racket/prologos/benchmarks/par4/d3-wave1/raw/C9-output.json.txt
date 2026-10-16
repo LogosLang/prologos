@@ -1,0 +1,153 @@
+{
+  "critic": "C9 Red team",
+  "summary": "I tested D.2 at the propagator level, with real-network probes and small .prologos programs. Two of its correctness claims fail as written. S-9 and the P2/P3 replay-monitor gate break as soon as a converted (join) cell reads a fenced cell. And the attribute map is one module-level cell: its :type facet uses the F3(b) merge, and it takes 74–80 % of the S0 writes and productive fires on the two heavy files D.2 cites. A per-cell fence and per-cell homes therefore serialize nearly all elaboration, before or after PPN 4C. The labelled-read rule D2L-1 relies on is not monotone: tagged-cell-read drops the base. That already gives wrong answers in relational programs, and P1a row 2's flat lattice never sees the conflict. Change-counted fuel, fire-once 'productive', epoch/late-write tags across the fence alternation, and the contradiction payload are each order-dependent or under-specified in ways my probes show. The direction of D.2 is sound; the lattice-level alternatives it points at all checked out where I tried them.",
+  "strongest_point_in_favour": "D.2 builds correctness before parallelism: join merges and monotone fires as the precondition of parallel S0, with BSP kept as the Kleene-iterate replay oracle. Wherever I tested the lattice-level alternative D.2 names, it holds. A base-joined labelled read is order-independent (B1: 5 under all orders and schedulers). A statically labelled fire writing a tagged cell is correct under the two-phase worldview (B2 static-tagged: 0 at the boundary in both orders). Every schedule stays under the Σ-heights bound (E1: 17–32 changes against a bound of 152). The :usage lean is sound arithmetic: +, · and ⊔ are monotone on m0<m1<mw over all 81 pairs, which settles D2L-5. A fire writing both a fenced and an unfenced cell gave the BSP result (A2). The fence also does what it promises for fenced cells themselves: K>1 is deterministic by construction.",
+  "findings": [
+    {
+      "id": "C9-1",
+      "lens": "red-team",
+      "section": "D.2 §10.2 S-9; §6.3 'The fence'; §6.6 Gate; §6.7 Gate",
+      "claim_attacked": "S-9: 'an unfenced fire reads a fenced cell at K > 1 | same result as K = 1'; §6.6: 'The replay monitor over the suite shows 0 differences on converted cells'",
+      "severity": "major",
+      "evidence": "c9-fence.rkt, on the real propagator.rkt. T is a fenced LWW cell. out is a set-union JOIN (a converted cell) written by an unfenced fire F that reads T. A1b: BSP gives T,out = (late (early late)). K1 DIRECT (D.2's K=1, no fence) gives (late (early late)). K>1F, D.2's alternation, gives (late (late)): DIRECT over unfenced fires to quiescence, then a BSP sub-run of the fenced ones publishing at its own quiescence. Printed: 'K>1F vs K1 DIFFER (S-9 expects same); K>1F vs BSP DIFFER'. A1, another install order: BSP and drain give (w1 (w1 w2)); K1 and K>1F give (w2 (w2)). So the converted cell differs between P2's K=1 DIRECT and the BSP replay. Mechanism: §6.3 fences WRITERS ('every propagator with a fenced output'). But the value history of a non-join cell depends on the schedule, so any reader that joins over it carries the order-dependence into converted cells.",
+      "evidence_class": "MEASUREMENT",
+      "direction": "Fence the downstream cone, not the writer set. A monotone 'order-exposed' mark should flow from each E-false cell along dependency edges at the topology tier; reachability only grows with topology, so this is a monotone cell. Then: (i) the replay monitor's 'converted' comparison excludes exposed cells; (ii) epoch records report the exposed set as the fence's extent; (iii) if K-independence is claimed, S-9's expected value becomes 'K=1 runs the same alternation'.",
+      "falsifier": "A definition of the fence and of K=1 in D.2 under which A1b's out agrees across K1, K>1F and BSP; or a demonstration that no production converted cell reads an E-false cell.",
+      "confidence": "high"
+    },
+    {
+      "id": "C9-2",
+      "lens": "red-team",
+      "section": "D.2 §2 item 3; §6.3 row 8 + 'The fence (kept per cell)'; §6.7 Ownership; §13 row 1",
+      "claim_attacked": "§13: 'the attribute map is 79 % of S0 writes (P0 §2.3) and is non-join only through two facets'; §5: 'a fire runs on the executor that owns its first output'; §2 item 3: the realizable K>1 share is 'the S0 work not writing type cells'",
+      "severity": "blocker",
+      "evidence": "Code. The attribute map is ONE module-level cell (typing-propagators.rkt:2988-2998, init-attribute-map-cell!). Its :type facet merges via merge-classify-inhabit (typing-propagators.rkt:401-406), which calls type-unify-or-top (classify-inhabit.rkt:171): row 8's F3(b) merge. E, evaluated 'on the merge installed on the cell' with powered samples, therefore fails on attribute-map-merge-fn. Under D.2's per-cell fence the whole map is fenced. P0 §9.6 (P0_MEASUREMENTS.md:455) and D.2 §13 omit :type. Measurement: c9-census.rkt counts production BSP observer diffs grouped by cell over process-file. type-adversarial: the top cell is the attribute map, with 203/273 writes = 74.4 % of writes and of productive fires. constraints-adversarial: 224/280 = 80.0 %. Power row: on c2-naf the top cell is not the attribute map (#f). All 7 unstable-latch sites read and write tm-cid (typing-propagators.rkt:1768, 1778, 2665, 2686, 2781, 2854, 2882). Consequences: the unfenced share before PPN 4C is at most 25.6 % / 20.0 % of productive fires, which is P0-8's owed number by fires. Even unfenced, homing each fire on the owner of its first output puts ≥74 % of productive fires on one executor. With equal fire weight (CONJECTURE), Amdahl gives ≈1.29× / 1.21× at K=8 and ≤1.34× / 1.25× for any K, against D.2's 4.07× / 3.26× models.",
+      "evidence_class": "MEASUREMENT",
+      "direction": "Make ownership, E and the fence per component, not per cell. The components already exist as dependency keys (#:component-paths (cons tm-cid (cons pos facet))). Either the attribute map becomes a family of per-position cells with per-facet merges, or the owned-record layer keys ownership by (cell, component). Then a fire's home is the owner of its first output component, and only the :type component is fenced until O-12(ii) lands. Re-run the H-S + K models against that granularity before P3's gate.",
+      "falsifier": "A P0-8 run showing that the attribute map's E verdict is true at P1a (the :type facet is not type-unify-or-top), or that the heavy files' S0 writes spread over many cells once Tier-1 flushes are counted.",
+      "confidence": "high"
+    },
+    {
+      "id": "C9-3",
+      "lens": "red-team",
+      "section": "D.2 §6.3 row 3 (tagged cells) and row 1 'Read side (D2L-1)'; §6.5",
+      "claim_attacked": "row 3: 'an order-independent read needs an ACI domain merge'; row 1: 'inside S0 fires compute on labelled values and never filter by live'",
+      "severity": "major",
+      "evidence": "tagged-cell-read (decision-cell.rkt:452-477) returns the join of matching entries and falls back to the base only when none match. The base is never joined in, so the read is not monotone in the tagged order: adding an entry below the base lowers the read. c9-labelled.rkt B1, domain merge max (ACI). A writes the base 5 unlabelled; B writes 2 under bit 0; C reads under bit 0 into a max cell. Explicit orders give out = 2/5/2/2; BSP 2, drain 2, drain with reversed install 5: ORDER-DEPENDENT. With read = base ⊔ entries, out = 5 under all six runs. Direct check: (tagged-cell-read (tagged-cell-value 5 ((1 . 2))) 1 max) = 2. Real program (c1-overwrite.prologos): `solve-with atms-s (rel [?x] (= ?x 1) (pick ?x))` with pick ∈ {x=1, x=2} returns ATMS @[{:x 2} {:x 1}] against DFS @[{:x 1}]. B4 reproduces this with the real scope-cell-merge: base {x 1}, entry (2 . {x 2}). The production read gives {x 2} under LWW and also under D.2 row 2's flat merge. Base ⊔ entry under the flat merge gives {x top}: branch 2 is inconsistent, as DFS says.",
+      "evidence_class": "MEASUREMENT",
+      "direction": "The labelled read under worldview W is the join over every labelled value whose label is ⊆ W, the base included as the value labelled ∅ (ATMS label semantics). The base flows into every branch's view, so a branch-local conflict reaches the domain merge, and row 2's ⊤ becomes reachable.",
+      "falsifier": "A schedule-independent B1 result under the production read, or a DFS-matching Q3 answer from the on-network solver at HEAD.",
+      "confidence": "high"
+    },
+    {
+      "id": "C9-4",
+      "lens": "red-team",
+      "section": "D.2 §6.3 row 1 (two-phase worldview, D2L-1); §6.5; §11 BC-2",
+      "claim_attacked": "'live is read only at boundaries; the scheduler may skip work whose assumptions are invalidated (invalidation is permanent)'; D2L-1 'fires compute on labelled values'",
+      "severity": "major",
+      "evidence": "Production has an S0 invalidator: guard-fire (relations.rkt:2331-2349) AND-NOTs a bit of cell-1 from inside a fire. Readers whose outer bitmask is 0 stay unwrapped (maybe-wrap-worldview relations.rkt:2082-2088) and read cell-1 (propagator.rkt:1601-1606). c9-labelled.rkt B2: T has base 1 and an entry (bit0 . 7). Today: guard-first 1, reader-first 7. Under D.2's two-phase set with a live-filtering reader: 1 vs 7, still order-dependent. D2L-1's static label writing a PLAIN cell gives 7 in both orders, with live = 0: the invalidated branch's 7 is now unconditional. This is because net-cell-write tags only when the OLD value is already a tagged-cell-value (propagator.rkt:2003-2027: else new-val). The same fire writing a TAGGED cell is correct: the boundary read under live = 0 gives 0. Retry: B3 shows a grow-only invalidated bit can never be live again (live 1 → 0 → 0 after re-assume), so a retry needs a fresh id. Production provides fresh ids: counter cell atms.rkt:255-262, one hypothesis per speculation elab-speculation-bridge.rkt:213-217, per-command reset driver.rkt:697-699 and metavar-store.rkt:2873-2876. But the snapshot restore elab-speculation-bridge.rkt:317-318 rewinds cell-1 wholesale, a non-monotone act the two-phase set does not mention.",
+      "evidence_class": "MEASUREMENT",
+      "direction": "Close labelledness downstream. When a labelled propagator is installed, the topology tier promotes each of its outputs to a tagged cell, so a label can never be dropped by a write. Move every S0 reader of cell-1 to a static label. State as invariants that assumption ids are never reused in a network's lifetime and that snapshot restores are boundary acts that never re-live an invalidated id.",
+      "falsifier": "A census showing that every production fire with a non-zero captured bitmask writes only tagged cells, and that no unwrapped S0 fire reads a tagged cell while an S0 invalidator is live.",
+      "confidence": "high"
+    },
+    {
+      "id": "C9-5",
+      "lens": "red-team",
+      "section": "D.2 §6.3 row 2 (F1 bands → flat per key with ⊤); §16 R-4",
+      "claim_attacked": "row 2 testing column: 'CONJECTURE that no program relies on overwrite; a ⊤ surfacing as a failure falsifies it'; R-4 signal: '⊤ contradictions in the suite after P1a'",
+      "severity": "major",
+      "evidence": "I found no LEGITIMATE overwrite in 4 patterns; each overwrite is a wrong answer today. c1-overwrite.prologos: Q1 `two ?x` (= x 1)(= x 2) gives ATMS @[{:x 2}] vs DFS @[]. Q3 (C9-3) gives @[{:x 2} {:x 1}] vs @[{:x 1}]. c4-varvar.prologos: clash (= x 1)(= y 2)(= x y) gives ATMS @[{:x 1, :y 2}] vs DFS @[]. The agree control gives @[{:x 1, :y 1}] both ways. Only Q1's conflict reaches scope-cell-merge (decision-cell.rkt:938-955, through the bitmask-0 direct writes at relations.rkt:2141-2142). There row 2 yields ⊤, whose meaning (network contradiction, i.e. an error, vs the DFS answer []) is unspecified, and for tagged entries it must be per-branch. Q3's conflict never meets a merge: the base-dropping read (C9-3). c4's conflict is dropped inside the fire: unify-fire returns `net` when both sides are bound and differ (relations.rkt:2112-2120). R-4's ⊤ signal cannot see Q3 or c4. These answers are wrong under every schedule, so the census R column and the replay monitor (both order-differentials) are blind to them.",
+      "evidence_class": "MEASUREMENT",
+      "direction": "A ⊤ component in a tagged entry should become a write of that entry's label to the nogood cell (per-branch failure). In the base it should become the failure of the query scope, not a network contradiction. unify-fire should write each side's binding into the other so conflicts reach the merge. Row 2's testing column should be a DFS-vs-on-network answer-set differential over the relational tests: the only instrument here that can fail on schedule-independent errors.",
+      "falsifier": "A relational program where today's on-network answer depends on a later binding legitimately replacing an earlier different one, under the same label, and still matches DFS.",
+      "confidence": "high"
+    },
+    {
+      "id": "C9-6",
+      "lens": "red-team",
+      "section": "D.2 §6.4 'unstable latch' row; §6.6 self-clear (D2R-3); §7 epoch records",
+      "claim_attacked": "'Each site either drops fire-once and re-fires on growth, or latches only on a value that cannot grow (a ground type)'; 'The fire-once self-clear is factored out … and called by both schedulers'; epoch records 'the set of propagators fired … depend on the program only, under H'",
+      "severity": "major",
+      "evidence": "c9-fireonce.rkt D1: fire-once F latches on the first GROUND value of a fenced LWW cell x (written a, then b). BSP leaves x = b and out = a under all 3 install orders: a ground value of a non-inflationary cell is not stable. All 7 unstable-latch sites read tm-cid, the map C9-2 shows is fenced. D2/D2': two STABLE fire-once writers of the same constant, with epoch 2 re-raising the trigger. BSP clears both, because 'productive' means differs from the snapshot (propagator.rkt:2897-2904, :3534-3538); epoch 2 fires (). D.2's K=1 DIRECT executor, with productive = changed the live cell, clears only the first writer; epoch 2 fires (B), or (A) under the other install order. So the fired set differs between P2 and its BSP replay and depends on install order. The production drain lacks fire-once entirely (fires (A B)). The self-clear also rewrites the input cells' prop-cell dependents (propagator.rkt:3540-3542, :1827-1836), a structural write to other executors' cells inside S0 at K>1. And a K>1 writer cannot know whether its foreign delta changed the owner's cell.",
+      "evidence_class": "MEASUREMENT",
+      "direction": "Declare fire-once as a latch predicate: the fire writes iff its trigger holds. 'Productive' then means 'trigger held', which is schedule-independent. Clearance is a grow-only fired-set cell homed at the propagator's executor, consulted when a dependent is enqueued; dependents are never mutated in S0. 'Ground ⇒ stable' is admissible only when the input cell is E-true (inflationary).",
+      "falsifier": "A definition of 'productive' usable by DIRECT, by K>1 foreign writes and by BSP that gives identical fired sets in D2'; or proof that no unstable-latch site reads an E-false cell.",
+      "confidence": "high"
+    },
+    {
+      "id": "C9-7",
+      "lens": "red-team",
+      "section": "D.2 §5 diagram; §6.3 alternation; §6.7 'Late writes', 'Contradiction'; §8 epoch counters; §11 BC-4; §10.2 S-7, S-10",
+      "claim_attacked": "'a write carrying epoch ≤ boundary-epoch is a classified contradiction'; 'Contradiction: ⊤ in the contradiction cell; executors see it at their next lane check and stop. Monotone.'; §8 'epoch counters | bounded by the number of stratum transitions'",
+      "severity": "major",
+      "evidence": "THEOREM from D.2's text. Hypotheses: (1) the detector writes boundary-epoch := e at Σprod = Σcons ∧ idle-epochs = e (§5, §6.7); (2) the fence needs 'the DIRECT run quiesces' before each sub-run (§6.3); (3) writes tagged ≤ boundary-epoch are 'late-s0-write. Then either the second DIRECT half of an alternation (still epoch e) is classified late, or each half bumps the epoch. In the second case §8's bound fails: A3 gives d alternations per S0 run. Records come per half, and BC-4's 'S0-quiescent for the epoch' fires with fenced work pending. Stratum handlers also write S0 cells after boundary-epoch := e (typing-propagators.rkt:1491-1506 writes cell-1 at the value tier; relations.rkt:238-240, :350-353). Contradiction payload, c9-contradiction.rkt, with two independent contradictions X, Y. BSP reports X or Y by install order: (0 1 2 3 4 5)→X, (2 3 0 1 4 5)→Y. Under the drain the held state at stop varies: X ∈ {bot, x2, top}, Z2 ∈ {0, 1, 2}. Code: the write path REPLACES the recorded id (propagator.rkt:2102-2105, `[contradiction cid]`); the undeclared path keeps the first (:3066-3067).",
+      "evidence_class": "THEOREM",
+      "direction": "Make two distinct events. Half-quiescence is a local count that never writes boundary-epoch. Epoch quiescence means no DIRECT work and no fenced work, and is the only writer of boundary-epoch. Handler writes carry epoch e+1. The contradiction payload is a set (join) of (cell, reason). Diagnostics are computed from the payload, or from the BSP replay of the epoch, never from cells read at the K>1 stop.",
+      "falsifier": "D.2 text placing the detector only after the fenced sub-run and exempting handler writes from epoch tags; and a payload definition that is a join.",
+      "confidence": "medium"
+    },
+    {
+      "id": "C9-8",
+      "lens": "red-team",
+      "section": "D.2 §6.6 fuel row; §8 rows 1–3; §10.2 S-6",
+      "claim_attacked": "S-6: 'budget ≥ Σ heights never exhausts on finite height; below it, 'tropical-fuel-exhausted under every schedule'; §6.6 'fuel counts changes (strict increases)' vs §8 'fuel counts changes, which includes non-ascending ones'",
+      "severity": "major",
+      "evidence": "c9-fuel.rkt E1: 16 producers and one max-join, all reaching the same fixpoint J = 16. Changes: J-last 17, drain 17, J-after-each 32. BSP printed 34 = 2×17, because a counting merge wrapper runs in the fire and again in bulk-merge-writes. Printed: 'budget B=25 exhausts under (bsp J-after-each) and not under (drain J-last)'. The BSP entry is the double-count artefact; the real contrast is J-after-each vs J-last and the drain. So exhaustion below the bound is schedule-dependent, and only the upper half of S-6 holds (all runs ≤ the bound of 152). E2: a fenced LWW cell T in a cycle with two constant writers. BSP at fuel 50/500 made 52/502 changes; the drain made 33/333. Strict increases in the merge's own induced order: 3 / 1. Strict-increase fuel would never stop this. The state at exhaustion depends on schedule and budget: T = a (BSP, 50) vs b. Also, 'budget at Σ heights' needs declared heights, which types, attribute maps and sets lack.",
+      "evidence_class": "MEASUREMENT",
+      "direction": "Fuel counts every change (merged ≠ old). Exhaustion is a deterministic contradiction only when the budget is derived from declared per-cell heights in merge-props; below that, report a classified schedule-dependent outcome. Charge fenced cells to their own budget, so an oscillating fenced cell is reported as itself. Restate S-6 accordingly.",
+      "falsifier": "A definition of 'change' under which E1's counts coincide across fair schedules, or production lattices with declared finite heights.",
+      "confidence": "high"
+    },
+    {
+      "id": "C9-9",
+      "lens": "red-team",
+      "section": "D.2 §6.3 row 4 (:usage lean); self-critique D2L-5",
+      "claim_attacked": "'writes carry totals computed inside the fire; the cell merge is the pointwise join on the multiplicity information order'",
+      "severity": "minor",
+      "evidence": "c9-usage.rkt, with the real prelude.rkt and qtt.rkt ops. G1: + · ⊔ are monotone on m0<m1<mw over all 81 pairs of pairs, and ⊔ = max. A fold of monotone binary ops is monotone at every arity, which settles D2L-5 in favour of the lean. G2, linear x: three children f x x y, fire total via foldl add-usage (typing-propagators.rkt:1796) = (mw), rejected, which is correct. If the same three usages MET IN THE CELL under the lean's max: (m1), accepted, an under-count. Today's merge on an identical re-write gives (mw); the equal? guard at typing-propagators.rkt:466 hides it. Sibling branches, x used in one branch only: join-branches (qtt.rkt:130-135, 180-182, owner ruling linear-per-path) = #f; max = (m1), an affine leak. Both branches use x once: join-branches (m1), add-usage (mw).",
+      "evidence_class": "THEOREM",
+      "direction": "State two structural obligations next to the lean. Each :usage position has exactly one writer, which computes the total from per-child cells. The alternation is a gated join, equality at m1 positions, evaluated in a fire over exact totals (or encoded as a flat lattice at linear positions, where disagreement gives ⊤), never by the cell merge. This matters when eliminators move on-network.",
+      "falsifier": "A :usage position with two production writers whose totals must be summed, or an alternation site where branch usages are meant to meet in the cell.",
+      "confidence": "high"
+    },
+    {
+      "id": "C9-10",
+      "lens": "red-team",
+      "section": "D.2 §7 keys; §9 EpochRecord / scheduler cells; §11 BC-6",
+      "claim_attacked": "'keyed by one shared key space (network, epoch, round). Forks are their own network ids'; EpochRecord join = map-join-flat, ⊤ on a second different write (D2L-3)",
+      "severity": "minor",
+      "evidence": "prop-network has no identity field (propagator.rkt:450: hot warm cold). fork-prop-network shares cells and cold (:1235-1259). c9-fuel.rkt E3: two forks of one template have cold eq? #t, equal? #t, same cell-1 and fuel. Every on-network solve forks the same template (relations.rkt:3117); census on c2-naf.prologos shows forks = 6 for 3 solves. The NAF S1 handler forks main and runs a NESTED run-to-quiescence inside the handler (relations.rkt:218, :281-283). The nested path is code-cited only: my power row c3-naf-nested.prologos was refused by the floundering check, and the census saw max BSP stack depth 1, so I claim no dynamic count. §9's epoch, boundary-epoch and exec-* are single process-wide cells. Unless a pure O(1) fork mints a fresh id, the second solve's (network, epoch 0) record collides and becomes ⊤. With nested runs, a shared boundary-epoch makes the resumed outer run's writes 'late'.",
+      "evidence_class": "PRECEDENT",
+      "direction": "Mint network ids at fork as a value taken from a monotone counter cell on the scheduler net: forking becomes a topology request. Key scheduler cells by network. Either forbid nested S0 runs in handlers, routing NAF's inner solve through a topology request, or give each nested run its own scheduler-state slice.",
+      "falsifier": "A D.2 mechanism that assigns fork ids and per-network epoch and boundary cells.",
+      "confidence": "medium"
+    },
+    {
+      "id": "C9-11",
+      "lens": "red-team",
+      "section": "D.2 §6.3 'The simpler alternative (D2P-5)' decision rule; §6.2 P0-8; §2 item 3",
+      "claim_attacked": "'Decision rule: if P0-8 measures a small S0 share outside type-cell writers, take the whole-network rule; otherwise the alternation'",
+      "severity": "major",
+      "evidence": "c9-fence.rkt A3: a dependency chain crossing the fence d times, with half the fires fenced. For d = 1/4/16/64: DIRECT-quiescence detections 1/4/16/64, sub-run rounds 1/4/16/64, alternations 0/3/15/63, against BSP rounds 2/8/32/128. The alternation has as many global synchronizations as BSP has rounds (2d), whatever the share. The fence's parallel slack is set by crossing depth on the critical path, which a share measurement cannot see. With the attribute map fenced (C9-2), every typing chain crosses at each AST level.",
+      "evidence_class": "MEASUREMENT",
+      "direction": "P0-8 should measure fenced↔free crossings on the critical path of each S0 run (the alternation count), alongside the share. The D2P-5 rule should compare alternations per S0 run with BSP rounds; the alternation pays only when crossings ≪ rounds.",
+      "falsifier": "A P0-8 measurement showing ≤ 2 alternations per S0 run on the corpus with type cells fenced.",
+      "confidence": "medium"
+    }
+  ],
+  "sections_examined": ["§0", "§2", "§5", "§6.1", "§6.2", "§6.3", "§6.4", "§6.5", "§6.6", "§6.7", "§7", "§8", "§9", "§10.2", "§11", "§12.2", "§13", "§15", "§16", "self-critique D2L-1, D2L-2, D2L-5, D2P-3, D2P-5, D2R-3", "P0 §9.6 (P0_MEASUREMENTS.md:440-460)"],
+  "probes": [
+    "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3/C9/c9-fence.rkt -> c9-fence.out (A1, A1b S-9/replay; A2 fenced+unfenced writer; A3 crossing depth)",
+    "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3/C9/c9-census.rkt -> census-type-adversarial.out, census-constraints-adversarial.out, census-c2-naf.out, census-c3-naf-nested.out (per-cell write share, forks, nesting depth)",
+    "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3/C9/c9-labelled.rkt -> c9-labelled.out (B1 base-dropping read, B2 live vs static labels, B3 retry, B4 Q3 at lattice level)",
+    "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3/C9/c1-overwrite.prologos -> c1-overwrite.out (ATMS vs DFS: Q1, Q2, Q3)",
+    "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3/C9/c4-varvar.prologos -> c4-varvar.out (var-var clash dropped in unify-fire; agree control)",
+    "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3/C9/c2-naf.prologos -> c2-naf.out (NAF solves; forks counted by c9-census)",
+    "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3/C9/c3-naf-nested.prologos -> c3-naf-nested.out (failed power row: refused by the floundering check)",
+    "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3/C9/c9-fuel.rkt -> c9-fuel.out (E1 change counts by schedule, E2 fenced LWW oscillator, E3 fork identity)",
+    "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3/C9/c9-fireonce.rkt -> c9-fireonce.out (D1 latch on ground value of fenced cell, D2/D2' productive and fired sets)",
+    "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3/C9/c9-contradiction.rkt -> c9-contradiction.out (reported contradiction cell and held state by schedule)",
+    "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3/C9/c9-usage.rkt -> c9-usage.out (G1 monotonicity, G2 children and branches)"
+  ]
+}

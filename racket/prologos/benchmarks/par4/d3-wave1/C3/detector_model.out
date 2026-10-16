@@ -1,0 +1,10 @@
+S1 mark=epoch      notify=none      states=   226 correct-declarations=    1 PREMATURE=YES WRONG-FIXPOINT=no
+   shortest premature witness: E1:IDLE-MARK ; E0:FIRE(sendB) ; E0:IDLE-MARK ; E1:DRAIN(1) ; DET:read E0 ; DET:read E1 ; DET:read E0 ; DET:read E1 -> DECLARE
+S1 mark=epoch+cons notify=none      states=   265 correct-declarations=    1 PREMATURE=no WRONG-FIXPOINT=no
+S2 mark=epoch+cons notify=none      states=    42 correct-declarations=    0 PREMATURE=no WRONG-FIXPOINT=YES
+   shortest wrong-fixpoint witness: E0:FIRE(writeA_depB) [dependent on B never notified] ; E0:IDLE-MARK ; E1:IDLE-MARK ; DET:read E0 ; DET:read E1 ; DET:read E0 ; DET:read E1 -> DECLARE
+S2 mark=epoch+cons notify=uncounted states=    72 correct-declarations=    1 PREMATURE=YES WRONG-FIXPOINT=no
+   shortest premature witness: E1:IDLE-MARK ; E0:FIRE(writeA_depB) ; E0:IDLE-MARK ; DET:read E0 ; DET:read E1 ; DET:read E0 ; DET:read E1 -> DECLARE
+S2 mark=epoch+cons notify=counted   states=   265 correct-declarations=    1 PREMATURE=no WRONG-FIXPOINT=no
+S2 mark=epoch      notify=counted   states=   226 correct-declarations=    1 PREMATURE=YES WRONG-FIXPOINT=no
+   shortest premature witness: E1:IDLE-MARK ; E0:FIRE(writeA_depB) ; E0:IDLE-MARK ; E1:DRAIN(1) ; DET:read E0 ; DET:read E1 ; DET:read E0 ; DET:read E1 -> DECLARE

@@ -1,0 +1,5 @@
+n=8  sequential: 8/8 outputs reached   pool K=8: 8/8   thread-per-round: 8/8
+n=10  sequential: 10/10 outputs reached   pool K=8: 8/10   thread-per-round: 10/10
+n=16  sequential: 16/16 outputs reached   pool K=8: 16/16   thread-per-round: 16/16
+n=17  sequential: 17/17 outputs reached   pool K=8: 16/17   thread-per-round: 17/17
+n=23  sequential: 23/23 outputs reached   pool K=8: 16/23   thread-per-round: 23/23

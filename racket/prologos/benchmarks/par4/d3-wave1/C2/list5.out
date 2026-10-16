@@ -1,0 +1,38 @@
+=== run-to-quiescence : PRODUCTION
+./relations.rkt:283:         (define fork3 (run-to-quiescence fork2))
+./relations.rkt:3158:       (define net5 (run-to-quiescence net3))
+./tabling.rkt:163:    [network (run-to-quiescence (table-store-network ts))]))
+./capability-inference.rkt:30:         "propagator.rkt"     ;; prop-network, cells, propagators, run-to-quiescence
+./session-runtime.rkt:236:   (run-to-quiescence (runtime-network-prop-net rnet))
+./driver.rkt:3847:(current-prop-run-quiescence run-to-quiescence)
+./propagator.rkt:152: run-to-quiescence
+./propagator.rkt:2620:(define (run-to-quiescence net)
+./unify.rkt:340:            (define pnet7 (run-to-quiescence pnet6))
+./unify.rkt:392:     (define pnet7 (run-to-quiescence pnet6))
+./unify.rkt:432:     (define pnet* (run-to-quiescence pnet-final))
+./metavar-store.rkt:1766:(define current-quiescence-scheduler (make-parameter run-to-quiescence))
+./elaborator-network.rkt:247:  (define net* (run-to-quiescence (elab-network-prop-net enet)))
+./performance-counters.rkt:158:   prop-firings           ;; propagator firings in run-to-quiescence
+./data/probes/2026-05-24-3C-d-3-w1-empirical-probe.rkt:177:    (define net3 (run-to-quiescence net2))
+./data/probes/2026-05-24-3C-d-3-w1-empirical-probe.rkt:201:    (define net3 (run-to-quiescence net2))
+./prop-observatory.rkt:171:     (run-to-quiescence net)]
+./prop-observatory.rkt:206:               (run-to-quiescence net)))
+=== run-to-quiescence : NON-PRODUCTION (tests/tools/benchmarks)
+=== run-to-quiescence-bsp : PRODUCTION
+./cap-type-bridge.rkt:245:  (define net-final (run-to-quiescence-bsp net2))
+./propagator.rkt:154: run-to-quiescence-bsp
+./propagator.rkt:2624:      (run-to-quiescence-bsp net)
+./propagator.rkt:3401:(define (run-to-quiescence-bsp net #:executor [executor (or (current-parallel-executor)
+./propagator.rkt:3620:                            (error 'run-to-quiescence-bsp
+./propagator.rkt:3632:               (error 'run-to-quiescence-bsp
+./session-type-bridge.rkt:386:  (define net3 (run-to-quiescence-bsp net2))
+./typing-propagators.rkt:3054:    (define net3 (run-to-quiescence-bsp net2-limited))
+=== run-to-quiescence-bsp : NON-PRODUCTION (tests/tools/benchmarks)
+=== fork-prop-network : PRODUCTION
+./relations.rkt:218:    (define forked (net-cell-reset (fork-prop-network main-net)
+./relations.rkt:3117:       (define net0 (fork-prop-network (get-or-create-solver-template fuel) fuel))
+./propagator.rkt:86: fork-prop-network
+./propagator.rkt:1235:(define (fork-prop-network net [fuel 1000000])
+./propagator.rkt:1298:        (let ([child-box (box (fork-prop-network parent-net))])
+./propagator.rkt:2407:  (define forked (fork-prop-network parent-net))
+=== fork-prop-network : NON-PRODUCTION (tests/tools/benchmarks)

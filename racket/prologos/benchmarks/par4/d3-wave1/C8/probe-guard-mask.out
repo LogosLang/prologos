@@ -1,0 +1,5 @@
+mask over complete binding set: 2  (clears B1 only)
+mask over partial binding set:  3  (clears G and B1)
+passing row alive, mask computed at completion: #t
+passing row alive, mask also computed early:   #f  (premature narrow is permanent under ior)
+power row: failing row alive after correct mask: #f (must be #f)
