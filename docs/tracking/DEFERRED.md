@@ -7980,3 +7980,11 @@ in PAR 4's scope to deliver. Consequences for this entry:
   next revisited.
 
 Requirements table and critique: PAR 4 D.1 Appendix A.13 (on branch `par4-arena-executors`, `47edfd8a`).
+
+**Addendum (2026-10-15, owner decision O-3 = OB-4, "observation in logical time")**: the contract this entry's fixes
+follow is now decided (PAR 4 D.1 §14 O-3, `1e1684e2` on the branch).
+- (a) and (b) land in PAR 4. D.2 places them in P1 or P2 for the round records and in P2 for the epoch records, the
+  shared (network, epoch, round) keys and the replay.
+- (c) and (d) remain outside PAR 4 and still need a roadmap home, which is the owner's call.
+
+The entry stays open until the fixes land.
