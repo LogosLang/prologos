@@ -535,3 +535,44 @@ binder merges with unsolved metas.
   - (3) A.12 item 4 ("OB-2's run trace is not built") was too strong under G-3: demonstrating order-independence
     needs an execution view (SC-10).
 - **Next**: the owner's O-3 decision on the refined lean. Then the rest of D.2.
+
+### O-3 decided: OB-4 as refined in A.13.4; O-11 ledgered; P0.5's three owner decisions made → D.2 drafting next — docs commit on the branch (2026-10-15)
+- **Why / decision**: the owner: "Agreed with your reasoning and leans." Recorded **DECIDED 2026-10-15** in §14 O-3,
+  in the A.12 and A.13 ledger lines and in Appendix A's callout. The date is the owner's reply; it came after
+  midnight, the day after the 2026-10-14 commits.
+  - The §14 entry places the consequences by phase:
+    - P1 or P2: round records of (cell, old, held, writers, round), i.e. DEFERRED 176 (a);
+    - P2: the shared key space, epoch records (176 (b)), records delivered as data, telemetry per scheduler, the
+      BSP replay first as a test-time parity monitor, and the cost of keeping epoch start states;
+    - P3: DIRECT telemetry, with the execution view reserved;
+    - not PAR 4: 176 (c) and (d).
+  - SC-6 (whether the observation request is a scheduler cell or a scoping parameter) is ledgered as **O-11**,
+    PENDING, to be posed inside D.2 with the record schema.
+  - §3's P0.5 row is now 🔄: O-9, O-10 and O-3 are made, and D.2 is drafted next.
+- **D.2's inputs, gathered here so the draft starts from files, not memory**:
+  1. **Phase order**, O-5: P0.5 defects → P0-8 exposure census → P1 merge laws → P2 DIRECT K=1 → P3 K>1; P4/P5
+     co-designed with BSP-LE 3. §3's P1–P3 rows predate it, so D.2 rewrites the tracker.
+  2. **The P0.5 defect batch**:
+     - DEFERRED 150, the tree path deleted (O-9);
+     - 157(a);
+     - 158, the in-fire topology path retired (G-1);
+     - an acceptance file that reaches binder-arm merges (P0 §10.3: the corpus reaches 0 of them, the suite 881).
+  3. **The corrected value proposition** (P0 §10): S0 is 24–30 % of corpus work; corpus H-S + K=8 is 1.26–1.34×;
+     per-file 1.49× / 1.35× (H-S) and 4.07× / 3.26× (K=8).
+  4. **P1's merge-law plan** (merge-laws note §5): F1 bands, F2 facets, F3(b) at its two sites, E ("is a join" as
+     a checked property), cells 14–15 and the worldview lattice (O-6). G-2's layers for each.
+  5. **The fire context** (note §7b): `parameterize` ≈ 496 of a light fire's 928 B; a continuation mark or a field
+     on the executor record costs 0 B. This also closes P0 §9.5's thread-inheritance hazard.
+  6. **Baselines** for P2: B1 / B1′ (P0 §1.3). After O-9, B1′ (threshold off) is the defect-fixed baseline.
+  7. **O-2's fuel restatement**: fuel counts changes, not fires, which closes `stratification.md:150-153`; P0-5's
+     spread.
+  8. **O-3's phase placement**, above, and **O-11**, to pose.
+  9. **The owed measurement**: A-12, allocation-bounded scaling per fire at K > 1 (P0 §7).
+  10. **BSP-LE 3's integration contract** (O-5: it may start after P1).
+  11. **Carrying the corrections forward**: §14's O-2 and Q1-audit callouts, A-2's falsity for nine cells, A-8
+      refuted for cell-1.
+- **Surprise / correction**: none.
+- **Next**: draft D.2 on the owner's go-ahead. Lean on placement: a new file, `…_PAR_4_D2_DESIGN.md`, with D.1 kept
+  as the record of the first design. D.1's sections and its §14 ledger are cited by number from DEFERRED, the LOG
+  and the dailies, and an in-place rewrite would move them. D.2 carries the live ledger, and D.1 §14 points to it.
+  Then a P/R/M/S self-critique (`CRITIQUE_METHODOLOGY.org`) and the owner critique round.
