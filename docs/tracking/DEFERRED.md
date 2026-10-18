@@ -8221,7 +8221,7 @@ to hit it.
 - **Lost assignments**: direct parameter assignments made in a fire are lost (W2-5, power rows).
 
 **Fix shape**: delete the installation and the executor and keep the `current-parallel-executor` seam (PAR 4
-O-14, PENDING). Independently of that, exceptions become data at the fire wrapper that every scheduler shares, and
+O-14, **DECIDED (a) 2026-10-18**, `329319cb` on the branch). Independently of that, exceptions become data at the fire wrapper that every scheduler shares, and
 the boundary re-raises one canonically (synthesis §5.5).
 
 **When**: PAR 4 P0.5.
