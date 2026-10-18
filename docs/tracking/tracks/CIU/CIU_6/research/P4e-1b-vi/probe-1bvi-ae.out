@@ -1,0 +1,80 @@
+PERF-COUNTERS:{"cell_allocs":3236,"constraint_count":0,"constraint_retries":0,"elaborate_steps":279,"inert_dependent_skips":0,"infer_steps":816,"meta_created":4,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":1860,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":45,"zonk_steps":887}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":1,"qtt_ms":1,"reduce_ms":2,"trait_resolve_ms":0,"type_check_ms":3,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":57,"atms_nogood_count":2,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":57,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: t5 : {:a {:b {:c {:m {:x Int} :n {:y Int}}}}} defined.
+1: ot : [PVec {:a {:b {:c {:m {:x Int} :n {:y Int}}}}}] defined.
+2: oo : [PVec [PVec {:a {:b {:c {:m {:x Int} :n {:y Int}}}}}]] defined.
+3: ot2 : [PVec {:a {:b {:k Int}}}] defined.
+4: v3 : {:a {:b {:c [PVec [PVec Int]]}}} defined.
+5: ov3 : [PVec {:a {:b {:c [PVec [PVec Int]]}}}] defined.
+6: vhm : ⟨[PVec {:x Int}] [PVec {:y Int}]⟩ defined.
+7: w : {:v [PVec {:a {:b {:k Int}}}]} defined.
+8: fleet : [PVec {:meta {:id {:n Int}} :net {:tls {:port Int}} :tags [PVec Int]}] defined.
+9: @[{:c {:n {:y 2}, :m {:x 1}}}] : ⟨{:c {:m {:x Int} :n {:y Int}}}⟩
+10: {:c {:n {:y 2}, :m {:x 1}}} : {:c {:m {:x Int} :n {:y Int}}}
+11: @[{:c {:n {:y 2}, :m {:x 1}}}] : ⟨{:c {:m {:x Int} :n {:y Int}}}⟩
+12: @[{:c {:n {:y 2}, :m {:x 1}}}] : ⟨{:c {:m {:x Int} :n {:y Int}}}⟩
+13: {:c {:n {:y 2}, :m {:x 1}}} : {:c {:m {:x Int} :n {:y Int}}}
+14: @[{:k 1} {:k 2}] : ⟨{:k Int} {:k Int}⟩
+15: ERROR: duplicate output key `:k` in the select block — two branches deliver the same output key, and distinct keys are required (strict merge; the alternative is a silent last-write-wins). The key may be one a branch NAMES, or one a star (`*`) LIFTED out of its layer. Rename an UNSTARRED branch with `^k'` (`x{k^k2}`) — a starred segment cannot carry a rename — or select the flatten in its own block. Dropping the star of ONE ordinal-headed branch trades the collision for a keyed/keyless mix (L4): without its star that element lands as one keyless tuple component. Dropping it on every branch here gives a tuple of the elements. Through an ordinal, a star whose remainder names no key lands its fields at this level (Q_U61), so an element's lifted fields meet the level's other keys. `*_` cannot tell elements apart either: an ordinal contributes no name to its prefix. To keep each element as its own tuple component, end EVERY branch here with `^` instead of its star (`x{0.a^.b^ 1.a^.b^}`).
+16: {:a {:b {:c {:n {:y 2}, :m {:x 1}}}}} : {:a {:b {:c {:m {:x Int} :n {:y Int}}}}}
+17: {:a {:b {:c {:n {:y 2}, :m {:x 1}}}}} : {:a {:b {:c {:m {:x Int} :n {:y Int}}}}}
+18: {:c {:n {:y 2}, :m {:x 1}}} : {:c {:m {:x Int} :n {:y Int}}}
+19: {:c {:n {:y 2}, :m {:x 1}}} : {:c {:m {:x Int} :n {:y Int}}}
+20: {:a {:b {:c @[{:x 1}]}}} : {:a {:b {:c ⟨{:x Int}⟩}}}
+21: @[{:x 1}] : ⟨{:x Int}⟩
+22: @[@[@[1 2] @[3]]] : ⟨[PVec [PVec Int]]⟩
+23: @[@[@[1 2] @[3]]] : ⟨[PVec [PVec Int]]⟩
+24: @[{:x 1}] : ⟨{:x Int}⟩
+25: @[{:x 1}] : ⟨{:x Int}⟩
+26: @[{:b {:c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:b {:c {:m {:x Int} :n {:y Int}}}}⟩
+27: @[@[{:b {:c {:n {:y 2}, :m {:x 1}}}}]] : ⟨⟨{:b {:c {:m {:x Int} :n {:y Int}}}}⟩⟩
+28: @[{:c {:n {:y 2}, :m {:x 1}}}] : ⟨{:c {:m {:x Int} :n {:y Int}}}⟩
+29: @[@[{:c {:n {:y 2}, :m {:x 1}}}]] : ⟨⟨{:c {:m {:x Int} :n {:y Int}}}⟩⟩
+30: @[{:n {:y 2}, :m {:x 1}}] : ⟨{:m {:x Int} :n {:y Int}}⟩
+31: @[@[{:x 1} {:y 2}]] : ⟨⟨{:x Int} {:y Int}⟩⟩
+32: @[{:a {:c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:a {:c {:m {:x Int} :n {:y Int}}}}⟩
+33: @[{:a {:c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:a {:c {:m {:x Int} :n {:y Int}}}}⟩
+34: @[{:y 2, :x 1}] : ⟨{:x Int :y Int}⟩
+35: {:y 2, :x 1} : {:x Int :y Int}
+36: @[{:n {:y 2}, :x 1}] : ⟨{:n {:y Int} :x Int}⟩
+37: ERROR: mixed keyed/keyless sorts in the select block (L4) — `0.a^.b^.c^.m*` is a star branch whose landing and its sibling branches' do not agree: one level assembles a Map OR a tuple, never both. A star's landing follows its CONTENTS: Map contents splice in as KEYED fields, vector contents land as ONE KEYLESS component, and under `*` a key surviving before the star keeps the join nested under it. Here every branch is ordinal-headed, and under an ordinal head a star's landing passes through only when nothing between the ordinal and the star names a key; otherwise an ordinal-headed branch is ONE keyless tuple component, whatever its `^`s (a `^-` collapse aside: it lands one keyed field). So make every branch a tuple component: keep a key before each star (`x{0.a.b* 1.a.b*}`, a tuple of records), or end the branch with `^` instead of its star (`x{0.a^.b^ 1.a^.b^}`). Selecting the flatten in its own block always works
+38: {:y 2, :x 1} : {:x Int :y Int}
+39: {:n {:y 2}, :x 1} : {:n {:y Int} :x Int}
+40: @[{:n 1, :port 443}] : ⟨{:n Int :port Int}⟩
+41: {:n 1, :port 443} : {:n Int :port Int}
+42: @[{:n 1, :port 443} {:n 2, :port 8443}] : ⟨{:n Int :port Int} {:n Int :port Int}⟩
+43: ERROR: duplicate output key `:n` in the select block — two branches deliver the same output key, and distinct keys are required (strict merge; the alternative is a silent last-write-wins). The key may be one a branch NAMES, or one a star (`*`) LIFTED out of its layer. Rename an UNSTARRED branch with `^k'` (`x{k^k2}`) — a starred segment cannot carry a rename — or select the flatten in its own block. Dropping the star of ONE ordinal-headed branch trades the collision for a keyed/keyless mix (L4): without its star that element lands as one keyless tuple component. Dropping it on every branch here gives a tuple of the elements. Through an ordinal, a star whose remainder names no key lands its fields at this level (Q_U61), so an element's lifted fields meet the level's other keys. `*_` cannot tell elements apart either: an ordinal contributes no name to its prefix. To keep each element as its own tuple component, end EVERY branch here with `^` instead of its star (`x{0.a^.b^ 1.a^.b^}`).
+44: @[{:n 1, :port 443} {:n 2, :port 8443}] : [PVec {:n Int :port Int}]
+45: @[@[{:n 1} {:port 443}]] : ⟨⟨{:n Int} {:port Int}⟩⟩
+46: @[{:n 1} {:n 2}] : ⟨{:n Int} {:n Int}⟩
+47: @[{:n 1, :tags @[1 2]}] : ⟨{:n Int :tags [PVec Int]}⟩
+48: ERROR: mixed keyed/keyless sorts in the select block (L4) — `0.meta^.id*` is a star branch whose landing and its sibling branches' do not agree: one level assembles a Map OR a tuple, never both. A star's landing follows its CONTENTS: Map contents splice in as KEYED fields, vector contents land as ONE KEYLESS component, and under `*` a key surviving before the star keeps the join nested under it. Here every branch is ordinal-headed, and under an ordinal head a star's landing passes through only when nothing between the ordinal and the star names a key; otherwise an ordinal-headed branch is ONE keyless tuple component, whatever its `^`s (a `^-` collapse aside: it lands one keyed field). So make every branch a tuple component: keep a key before each star (`x{0.a.b* 1.a.b*}`, a tuple of records), or end the branch with `^` instead of its star (`x{0.a^.b^ 1.a^.b^}`). Selecting the flatten in its own block always works
+49: @[{:n 1} {:n 2}] : ⟨{:n Int} {:n Int}⟩
+50: @[{:n 1, :port 443} {:n 2, :port 8443}] : ⟨{:n Int :port Int} {:n Int :port Int}⟩
+51: {:k 1} : {:k Int}
+52: {:k 1} : {:k Int}
+53: {:k 1} : {:k Int}
+54: @[{:c {:n {:y 2}, :m {:x 1}}}] : ⟨{:c {:m {:x Int} :n {:y Int}}}⟩
+55: {:c {:n {:y 2}, :m {:x 1}}} : {:c {:m {:x Int} :n {:y Int}}}
+56: @[{:a {:c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:a {:c {:m {:x Int} :n {:y Int}}}}⟩
+57: @[{:b-c {:n {:y 2}, :m {:x 1}}}] : ⟨{:b-c {:m {:x Int} :n {:y Int}}}⟩
+58: {:b-c {:n {:y 2}, :m {:x 1}}} : {:b-c {:m {:x Int} :n {:y Int}}}
+59: @[{:c {:n {:y 2}, :m {:x 1}}}] : ⟨{:c {:m {:x Int} :n {:y Int}}}⟩
+60: {:c {:n {:y 2}, :m {:x 1}}} : {:c {:m {:x Int} :n {:y Int}}}
+61: @[@[@[@[1 2] @[3]]]] : ⟨⟨[PVec [PVec Int]]⟩⟩
+62: @[@[@[1 2] @[3]]] : ⟨[PVec [PVec Int]]⟩
+63: @[@[{:c {:n {:y 2}, :m {:x 1}}}]] : ⟨⟨{:c {:m {:x Int} :n {:y Int}}}⟩⟩
+64: {:x 1} : {:x Int}
+65: @[@[{:x 1}]] : ⟨⟨{:x Int}⟩⟩
+66: ERROR: `*` — `*` is postfix; it attaches to the END of a segment
+67: @[{:n 1, :port 443} {:n 2}] : ⟨{:n Int :port Int} {:n Int}⟩
+68: @[{:n 1} {:port 8443}] : ⟨{:n Int} {:port Int}⟩
+69: {:n 1, :port 8443} : {:n Int :port Int}
+70: @[{:n 1} {:port 8443}] : ⟨{:n Int} {:port Int}⟩
+71: @[{:n 1} {:port 443} {:n 2} {:port 8443}] : ⟨{:n Int} {:port Int} {:n Int} {:port Int}⟩
+72: @[{:n 1, :port 443}] : ⟨{:n Int :port Int}⟩
+73: @[{:n 1} {:n 2}] : ⟨{:n Int} {:n Int}⟩
+
+--- 5 errors ---

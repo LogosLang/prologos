@@ -3517,31 +3517,170 @@ items of the hold-point, ruled before P4a opened:
 
 - <a id="q-u62"></a>**Q_U62 — AN ORDINAL HEAD, THEN A SUB-BLOCK THAT HOLDS THE STAR: DOES
   Q_U61'S PASS-THROUGH CROSS THE SUB-BLOCK? [⏳ PENDING — posed 2026-10-18 at the
-  [1b-vi verify](#p4e-1b-vi-verify) (finding VS-3). Not a regression: E changed none of these.]**
+  [1b-vi verify](#p4e-1b-vi-verify) (finding VS-3); opened with worked examples the same day at the
+  owner's request — "walk through the design space in played out examples". Not a regression: E
+  changed none of these.]**
 
-  Measured (verify probe v5 at `64368197`, and VS's probe; `ot := @[t5's value]`,
-  `oo := @[@[t5's value]]`, `ot2 := @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]`):
+  **The question in one line.** `ot{0.a^.b*}` splices (S, [Q_U61](#q-u61)); `ot{0.a^.{b*}}` wraps
+  (today). Is the wrap the rule (B), or a gap S should close (S+)?
 
-  | spelling | today | the nearest settled spelling |
+  **Where the code decides it.** The ordinal-head arm (`typing-core.rkt:2205`; twin
+  `reduction.rkt:2380`) descends transparently only when `select-steps-yield-bare-join?`
+  (`syntax.rkt:1125`) sees a step-chain tail `(… sₙ ★)`. A sub-block is not one, so the `else` arm
+  makes the sub-level the ordinal's one component.
+
+  **The rules on record, quoted.** Spec §3.3: keyless branches (`^`-terminated, or ordinal) are
+  "tuple components in written order"; "Honest nesting: `{p₁^ … pₙ^}` denotes an n-tuple *always* —
+  including n = 1 … There is no implicit splice." Spec §3.4: `^`'s empty continuation, "mid-path:
+  dissolve the level, splice content upward". [Q_U47](#q-u47): the join lands as the component
+  "branch-minus-star-minus-`sₙ`" would produce — computed in the star's OWN branch.
+  [Q_U49](#q-u49): Map contents "contribute KEYED COMPONENTS to the **enclosing level** — it
+  splices". [Q_U61](#q-u61): at an ordinal head a star whose remainder names no key passes through.
+  Spec §4's L2 (`{p:a p:b} ⟶ p:{a b}`) is stated for broadcast spines under Ruling B merges, not
+  for ordinal prefixes.
+
+  **Worked examples** — research/P4e-1b-vi/probe-1bvi-ae (74 lines at `48fe3b48`); `ae:N` = line N
+  of its `.out`; `{:c …}` = `{:c {:n {:y 2}, :m {:x 1}}}` and `{:b-c …}` the same contents under
+  `:b-c`. The S+ column is the step-chain spelling S already decides, measured beside it.
+
+  *A — the shapes VS-3 found.*
+
+  | spelling | today (= B) | S+ would give | read off |
+  |---|---|---|---|
+  | `ot{0.a^.{b*}}` | `@[{:c …}]` ae:9 | `{:c …}` | `ot{0.a^.b*}` ae:10 |
+  | `ot{0.{a^.b*}}` | `@[{:c …}]` ae:11 | `{:c …}` | ae:10 |
+  | `oo{0.{0.a^.b*}}` | `@[{:c …}]` ae:12 | `{:c …}` | `oo{0 .0.a^.b*}` ae:13 |
+  | `ot2{0.a^.{b*} 1.a^.{b*}}` | `@[{:k 1} {:k 2}]` ae:14 | refused, dup `:k` | `ot2{0.a^.b* 1.a^.b*}` ae:15 |
+
+  *B — key heads: a one-branch sub-block is transparent only where a dissolve splices it.*
+
+  | sub-block | → | step chain | → |
+  |---|---|---|---|
+  | `t5{a.{b}}` | `{:a {:b {:c …}}}` ae:16 | `t5{a.b}` | the same, ae:17 |
+  | `t5{a^.{b*}}` | `{:c …}` ae:18 | `t5{a^.b*}` | the same, ae:19 |
+  | `v3{a^.b^.{c*}}` | `@[@[@[1 2] @[3]]]` ae:22 | `v3{a^.b^.c*}` | the same, ae:23 |
+  | `t5{a^.b^.c^.{m^}}` | `@[{:x 1}]` ae:24 | `t5{a^.b^.c^.m^}` | the same, ae:25 |
+  | `t5{a.b.c.{m^}}` | `{:a {:b {:c @[{:x 1}]}}}` ae:20 | `t5{a.b.c.m^}` | **`@[{:x 1}]` ae:21 — differ** |
+
+  The rows that agree all pass through a dissolve, which splices the sub-level into a BLOCK (§3.4).
+  Without one, honest nesting shows (ae:20 vs ae:21): `p.{q}` ≡ `p.q` is not a law at key heads.
+
+  *C — an ordinal head with NO star: the sub-block is the ordinal's one component, always.*
+
+  | spelling | → |
+  |---|---|
+  | `ot{0.a^}` | `@[{:b {:c …}}]` ae:26 |
+  | `ot{0.{a^}}` | `@[@[{:b {:c …}}]]` ae:27 |
+  | `ot{0.a^.b^}` | `@[{:c …}]` ae:28 |
+  | `ot{0.a^.{b^}}` | `@[@[{:c …}]]` ae:29 |
+  | `ot{0.a^.b^.c^.{m n}}` | `@[{:n {:y 2}, :m {:x 1}}]` ae:30 |
+  | `ot{0.a^.b^.c^.{m^ n^}}` | `@[@[{:x 1} {:y 2}]]` ae:31 |
+
+  An ordinal head is a SLOT: whatever its branch delivers is one component (ae:29, against the key
+  head's ae:24, where the dissolve fed a block). B keeps this unconditional; S+ adds one exception, a
+  sub-block whose every branch is a pass-through star.
+
+  *D — multi-branch sub-blocks, factored and unfactored.*
+
+  | spelling | today (= B) | S+ |
   |---|---|---|
-  | `ot{0.a^.{b*}}` | `@[{:c …}]` — wraps | `t5{a^.{b*}}` → `{:c …}`, ≡ `t5{a^.b*}`; `ot{0.a^.b*}` → `{:c …}` (E) |
-  | `ot{0.{a^.b*}}` | `@[{:c …}]` | `t5{{a^.b*}}` is a parse error (no block opens with a sub-block) |
-  | `oo{0.{0.a^.b*}}` | `@[{:c …}]` | `oo{0 .0.a^.b*}` → `{:c …}` |
-  | `ot2{0.a^.{b*} 1.a^.{b*}}` | `@[{:k 1} {:k 2}]` | `ot2{0.a^.b* 1.a^.b*}` → refused, dup `:k` (U61-4) |
+  | `ot{0.a^.b^.c^.{m* n*}}` | `@[{:y 2, :x 1}]` ae:34 | `{:y 2, :x 1}` (ae:35) |
+  | `ot{0.a^.b^.c^.m* 0.a^.b^.c^.n*}` | `{:y 2, :x 1}` ae:35 | the same |
+  | `ot{0.a^.b^.c^.{m* n}}` | `@[{:n {:y 2}, :x 1}]` ae:36 | the same (not every branch passes) |
+  | `ot{0.a^.b^.c^.m* 0.a^.b^.c^.n}` | refused, L4 ae:37 | the same |
 
-  **S+** — the pass-through crosses a TERMINAL sub-block whose every branch passes its landing
-  through: the remainder's no-key test (Q_U47) reads into the sub-block. **B** — a sub-block is a
-  landing boundary at an ordinal head: the element's tuple component is the sub-level's record
-  (today). Census: zero uses in `tests/`, `examples/`, `lib/` (pattern power: 3 hits in v5, 0 on
-  two step-chain controls), so neither option breaks a program today.
-  **Lean: S+, medium.** It is Q_U47's test applied to a remainder that contains a sub-block, and
-  under a key head a one-branch sub-block after a dissolve is already transparent (`t5{a^.{b*}}` ≡
-  `t5{a^.b*}`) — S+ restores that ≡ at ordinal heads exactly as E did for step chains.
-  **Counter-case (B):** a sub-block is where Q_U55 made a collapse branch-local, so reading it as a
-  boundary is not arbitrary, and B keeps `0.{…}` as the spelling for WANTING one tuple component
-  around a spliced join. (Q_U55's locality is about a rename's scope, though: under `a^` the
-  collapse still lands at the top, `t5{a^.{b.c*-}}`.) **Settling evidence:** whether a sub-block
-  should bound where a landing goes, or only where names are visible.
+  Under S+, deleting ONE star (`n*` → `n`, row 1 → row 3) moves the WHOLE sub-block from spliced
+  to wrapped: where `m*`'s fields land depends on a sibling. Under B the braces alone decide. Row 4:
+  factoring across an ordinal prefix is not a law today under either reading.
+
+  *E — a realistic subject:* `fleet := @[{:meta {:id {:n 1}} :net {:tls {:port 443}} :tags @[1 2]}
+  {:meta {:id {:n 2}} :net {:tls {:port 8443}} :tags @[3]}]`.
+
+  | intent | under B | under S+ |
+  |---|---|---|
+  | element 0's lifted fields, spliced | `fleet{0.meta^.id* 0.net^.tls*}` → `{:n 1, :port 443}` ae:41 | that, or `fleet{0.{meta^.id* net^.tls*}}` |
+  | element 0 as ONE record component | `fleet{0.{meta^.id* net^.tls*}}` → `@[{:n 1, :port 443}]` ae:40 | `fleet{0}:{meta^.id* net^.tls*}` → the same, ae:72 |
+  | elements 0, 1 as records, one shape | `fleet{0.{meta^.id* net^.tls*} 1.{meta^.id* net^.tls*}}` → `@[{:n 1, :port 443} {:n 2, :port 8443}]` ae:42 | `fleet{0 1}:{meta^.id* net^.tls*}` → the same, ae:50 |
+  | the same, unfactored | refused, dup `:n` ae:43 | the same |
+  | records of DIFFERENT shapes | `fleet{0.{meta^.id* net^.tls*} 1.{meta^.id*}}` → `@[{:n 1, :port 443} {:n 2}]` ae:67 | **no spelling found**: the sub-blocks splice into a dup `:n`, and `{0 1}:` takes one shape |
+  | one lifted field per element | `fleet{0.{meta^.id*} 1.{net^.tls*}}` → `@[{:n 1} {:port 8443}]` ae:68 | `fleet{0.meta^.id^ 1.net^.tls^}` → the same, ae:70 (S+ reads ae:68's spelling as `{:n 1, :port 8443}`, ae:69) |
+  | lifted fields beside a kept key | `fleet{0.{meta^.id* tags}}` → `@[{:n 1, :tags @[1 2]}]` ae:47 | the same; unfactored is refused, L4 ae:48 |
+  | every element | `fleet:{meta^.id* net^.tls*}` → `@[{:n 1, :port 443} {:n 2, :port 8443}] : [PVec {:n Int :port Int}]` ae:44 | the same |
+
+  *F — only at a HEAD.* After a dissolved key a bare number makes no level (Q_U2), and a sub-block
+  splices there today: `w{v^.0.a^.{b*}}` → `{:k 1}` ae:52, ≡ `w{v^.0.a^.b*}` ae:51;
+  `w{v^.{0.a^.b*}}` → `{:k 1}` ae:53. The question exists only where an ordinal HEADS a branch.
+
+  *G — every star family behaves alike.* `ot{0.{a.b*-}}` → `@[{:c …}]` ae:54 vs `ot{0.a.b*-}` →
+  `{:c …}` ae:55 · `ot{0.a^.{b*_}}` → `@[{:b-c …}]` ae:57 vs `ot{0.a^.b*_}` → `{:b-c …}` ae:58 ·
+  `ot{0.{a.b.c^-}}` → `@[{:c …}]` ae:59 vs `ot{0.a.b.c^-}` → `{:c …}` ae:60 · `ot{0.a.{b*-}}` →
+  `@[{:a {:c …}}]` ae:56 (Q_U55: the collapse is branch-local and `a` survives — wraps under both).
+  One decision covers `*`, `*-`, `*_`, `*-_` and `^-`.
+
+  *H — the star OUTSIDE the braces is already decided.* `vhm{0.{0}*}` → `{:x 1}` ae:64 ([Q_U49](#q-u49)'s
+  seat B) vs `vhm{0.{0}}` → `@[@[{:x 1}]]` ae:65. Under B, where the star stands is the spelling:
+  outside the braces it is the ordinal branch's own star and escapes; inside, it belongs to the
+  sub-level. Vector contents: `ov3{0.a^.b^.{c*}}` → `@[@[@[@[1 2] @[3]]]]` ae:61 vs the chain's
+  `@[@[@[1 2] @[3]]]` ae:62.
+
+  **The options, played out.**
+  - **B — braces scope a landing (today).** A star lands in the level whose braces enclose it; an
+    ordinal head is a slot holding what its branch delivers, the one exception being S's star in the
+    branch's own step chain.
+  - **S+ — a sub-block of pass-through stars passes through.** Changes A, D row 1, E's ae:40 / 42 /
+    67 / 68, G's sub-block rows, H's ae:61 — each to its step-chain spelling.
+  - **S1 — only a ONE-branch sub-block is transparent** (`0.P.{X}` ≡ `0.P.X`). Rejected-with-reason:
+    `p.{q}` ≡ `p.q` holds nowhere as a law (ae:20/21, ae:27, ae:29), so S1 stacks a second exception
+    (one branch, star-bearing, ordinal-headed) on top of S.
+  - **F — factoring over an ordinal prefix** (`0.P.{q r}` ≡ `{0.P.q 0.P.r}`). **Refuted by
+    measurement**: without stars it would split one component into two (ae:30), and with a kept key
+    the factored program is legal where the unfactored is refused (ae:36 vs ae:37). Ordinals are
+    positions, not keys; L2 is a keyed-merge law (spec §4, Ruling B case 3).
+  - **R — refuse an ordinal-headed sub-block holding a pass-through star**, deciding later.
+    Rejected-with-reason: it refuses ae:42 and ae:67, shapes nothing else spells under B.
+
+  **Weighed adversarially.**
+  - *Principles.* B is derived, not added: Q_U47 and Q_U49 place a landing by the star's own branch
+    and its ENCLOSING level, which for `{b*}` is the sub-level; §3.3 then makes the sub-level the
+    ordinal's one component. S+ needs a new rule — a level that is itself a landing — which no decision
+    states and §3.3's "no implicit splice" argues against. B keeps placement LOCAL (D rows 1 and 3).
+  - *Ergonomics.* For S+: someone who learned S as "a star escapes an ordinal" expects ae:9 to splice,
+    and B answers `@[…]` silently — no refusal tells them. For B: `0.{…}` means "element 0, reshaped,
+    as one component" unconditionally (C, E), which is how a reader parses braces, and the splice is
+    one edit away (the unfactored chain).
+  - *Expressivity.* Under B every S+ answer is spellable: S+ fires only when every sub-branch is a
+    pass-through star, so the unfactored step chains always exist (ae:35, ae:41). Under S+ the B
+    answers come back through `{N M}:` (ae:50, ae:72) or `^` (ae:70) EXCEPT records of different
+    shapes per element (ae:67). So B ⊇ S+ — an argument over the operators, not a proof.
+
+  ~~**Lean: S+, medium.** It is Q_U47's test applied to a remainder that contains a sub-block, and
+  under a key head a one-branch sub-block after a dissolve is already transparent~~ **CORRECTED the
+  same day, after probe-1bvi-ae.** That lean read Q_U47's remainder ACROSS the sub-block; Q_U47
+  computes it inside the star's own branch, and Q_U49 splices into the ENCLOSING level, which is the
+  sub-block. The key-head evidence (ae:18/19) is the dissolve feeding a block (§3.4); without a
+  dissolve a one-branch sub-block is not transparent there either (ae:20/21).
+  **Lean: B, medium-high.** It is what the rules on record already say; it keeps an ordinal-headed
+  sub-block one component unconditionally (C); it keeps placement local (D); and it is the more
+  expressive reading (ae:67).
+  **Counter-case (S+), at its strongest:** Q_U61 chose S over honest nesting so that a star at an
+  ordinal head escapes; under B that sentence needs a qualifier ("in the branch's own step chain"),
+  and `ot{0.X}` ≡ `t5{X}` stays a law of step chains only. If S's intent is "escape" rather than
+  "Q_U47 and Q_U49 applied literally", S+ is its natural extension.
+  **Settling evidence:** whether braces should bound where a star lands (B), or only where names are
+  visible (S+).
+
+  **Side findings (SB-n), each measured:**
+  - **SB-1 — the dup refusal's tuple remedy is false where an element has several branches.** On
+    `fleet{0.meta^.id* 0.net^.tls* 1.meta^.id* 1.net^.tls*}` (ae:43) it says "To keep each element
+    as its own tuple component, end EVERY branch here with `^`"; run, that gives a 4-tuple of
+    branches, `@[{:n 1} {:port 443} {:n 2} {:port 8443}]` (ae:71). The true remedy depends on this
+    decision — under B the sub-block (ae:42), under S+ `{0 1}:` (ae:50) and nothing for different
+    shapes. A VF-3-class defect in `0988a4f0`; fixed after Q_U62 is decided.
+  - **SB-2 — the L4 refusal at an all-ordinal level does not offer the factored sub-block**, the
+    spelling that works under both readings (ae:37's input; ae:36 → `@[{:n {:y 2}, :x 1}]`).
+  - **SB-3 — `vhm{0.{0*}}` reports "`*` is postfix; it attaches to the END of a segment"** (ae:66),
+    though the star does end segment `0`. [Q_U46](#q-u46)'s gap 1 made a star after an ordinal a
+    GUIDED error naming the reason (an ordinal makes no layer); this spelling misses it. Pre-existing.
 
 - <a id="q-u43"></a>**⭐ Q_U43 — THE L4 SORT CHECK MOVES TO TYPING FOR STAR-BEARING
   BRANCHES, AS [Q_U38](#q-u38)'s COROLLARY [owner, 2026-08-11 — "move the sort

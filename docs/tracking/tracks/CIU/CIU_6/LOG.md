@@ -423,3 +423,22 @@ are in [`../README.md`](../README.md).
 - **Next**: [Q_U62](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62) (an ordinal head then a sub-block; lean
   S+, medium) — pending, owner. Then the 1b-vi close: the stage table's `pre` column and `1bvi-stage` retire. Then
   P4e-2.
+
+### Q_U62 opened with worked examples; my lean corrected S+ → B; SB-1…3 found (2026-10-18)
+- **Why / decision**: the owner — *"Let's open what Q_U62 is with many, multiple worked examples … walk through the
+  design space in played out examples."* Still PENDING; nothing decided.
+- **What shipped**: probe-1bvi-ae (74 lines, nine families: the VS-3 shapes, key-head transparency, star-free ordinal
+  sub-blocks, factored vs unfactored, a realistic `fleet` subject, the bare-number control, every star family, the star
+  outside the braces, heterogeneous per-element records) and the
+  [Q_U62 ledger entry](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62) rewritten around it: five options (B, S+,
+  S1, F, R), F refuted by measurement (factoring across an ordinal prefix is not a law), S1 and R rejected with reasons.
+  Every quoted value checked mechanically against its probe line (39 values, 0 mismatches; three seeded errors caught).
+- **Surprise / correction**: my posing lean (S+, medium; also in the checkpoint entry above) read Q_U47's remainder
+  ACROSS the sub-block. Q_U47 computes it in the star's own branch and Q_U49 splices into the ENCLOSING level — the
+  sub-block — so B is what the rules on record already say. New lean **B, medium-high**. And the measurement corrected a
+  second expectation: `fleet{0 1}:{…}` spells per-element records for a subset, so S+ loses only records of DIFFERENT
+  shapes per element (ae:67). Side findings: **SB-1** the dup refusal's "end EVERY branch with `^`" remedy is false when
+  an element has several branches (ae:71 — a 4-tuple of branches), a VF-3-class defect in my `0988a4f0`, its fix
+  depending on Q_U62; **SB-2** the all-ordinal L4 refusal omits the factored sub-block; **SB-3** `vhm{0.{0*}}` gets a
+  misleading "`*` is postfix" message (pre-existing).
+- **Next**: the owner's decision on Q_U62; then SB-1's fix under it.
