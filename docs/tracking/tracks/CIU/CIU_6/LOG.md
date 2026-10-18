@@ -408,3 +408,18 @@ are in [`../README.md`](../README.md).
   main's DEFERRED 170 fix is now merged, and this gate ran the file sharded ×5 green.
 - **Next**: the checkpoint merge to main; the DEFERRED "on the branch" passages flipped to the merge hash; dailies.
   Q_U62 stays pending (owner).
+
+### CIU 6 checkpoint merged to main: `83fe4fb4` — 1b-vi through its verify (2026-10-18)
+- **Why / decision**: the owner — *"Let's proceed."* — the checkpoint closing the verify → gate → merge plan.
+- **What shipped**: `83fe4fb4` on main (parents `74f70310` main, `32fe9c52` this branch), made in a throwaway
+  `--detach` worktree and fast-forwarded into main's checkout (main's 16 owner-WIP files untouched: no overlap with the
+  branch's 99). Its tree equals the gated tree (`b630da40` both), so the gate above IS this merge's gate; the clean
+  merge tree, built with the limit (`reduction_rkt.zo` fingerprint equal to this branch's), ran the merged test files
+  plus main's temp-file guard targeted: **697 / 697**, acceptance **112 / 112**. No instrumentation to triage (no
+  tools, 0 environment knobs; the census finds main's own opt-in). The branch fast-forwarded to the merge. On main:
+  the five DEFERRED passages saying "until the next checkpoint merge" (167 ×2, 168, 179, 180) and two probe locations
+  now cite `83fe4fb4`; the dailies carry the STATE line and a pointer.
+- **Surprise / correction**: none beyond the gate entry's.
+- **Next**: [Q_U62](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62) (an ordinal head then a sub-block; lean
+  S+, medium) — pending, owner. Then the 1b-vi close: the stage table's `pre` column and `1bvi-stage` retire. Then
+  P4e-2.
