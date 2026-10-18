@@ -1,0 +1,5 @@
+"c{a}*-\n" => last-star-type postfix-star  mints? #t
+"c{a}* -\n" => last-star-type postfix-star  mints? #t
+"c{a}*-_\n" => last-star-type postfix-star  mints? #t
+"c{a}* -_\n" => last-star-type postfix-star  mints? #t
+"c{a}*\n" => last-star-type postfix-star  mints? #t
