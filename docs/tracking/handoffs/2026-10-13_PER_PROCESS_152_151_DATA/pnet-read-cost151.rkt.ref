@@ -1,0 +1,30 @@
+#lang racket/base
+;; pnet-read-cost151.rkt <cache dir> — DEFERRED 151(a): cost of what pnet-stale? reads vs
+;; what the loader reads, over every cached .pnet. Works on v10 (one datum) and v11
+;; (header datum + body datum) caches:
+;;   stale-check read = the FIRST datum (v10: the whole file; v11: the header only)
+;;   full read        = every datum in the file (what the loader must parse)
+;; Each measured 3x after a major GC; the minimum is reported (ms), plus CPU and bytes.
+(require racket/list)
+(define dir (vector-ref (current-command-line-arguments) 0))
+(define files (for/list ([f (in-directory dir)] #:when (regexp-match? #rx"[.]pnet$" (path->string f))) f))
+(define total-bytes (for/sum ([f files]) (file-size f)))
+(define (read-first in) (read in))
+(define (read-all in) (let loop () (unless (eof-object? (read in)) (loop))))
+(define (measure reader)
+  (for/list ([rep 3])
+    (collect-garbage)
+    (define t0 (current-inexact-monotonic-milliseconds))
+    (define c0 (current-process-milliseconds))
+    (define m0 (current-memory-use 'cumulative))
+    (for ([f files]) (call-with-input-file f reader))
+    (list (- (current-inexact-monotonic-milliseconds) t0)
+          (- (current-process-milliseconds) c0)
+          (- (current-memory-use 'cumulative) m0))))
+(define (best rs) (argmin car rs))
+(define first-r (best (measure read-first)))
+(define all-r (best (measure read-all)))
+(printf "~a files, ~a MB | stale-check read: ~a ms (cpu ~a, ~a MB alloc) | full read: ~a ms (cpu ~a, ~a MB alloc)\n"
+        (length files) (/ (round (/ total-bytes 1e4)) 100.0)
+        (round (car first-r)) (cadr first-r) (round (/ (caddr first-r) 1e6))
+        (round (car all-r)) (cadr all-r) (round (/ (caddr all-r) 1e6)))

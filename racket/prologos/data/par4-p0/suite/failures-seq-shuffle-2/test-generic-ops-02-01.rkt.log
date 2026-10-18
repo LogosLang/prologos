@@ -1,0 +1,65 @@
+=== test-generic-ops-02-01.rkt FAILED ===
+wall_ms: 551
+tests: 4 (3 failures)
+
+--- Error Diagnostics ---
+error[E1004]: no instance found for (Seqable List)
+  --> <string>:1:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <string>:1:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <string>:1:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+--- RackUnit stderr ---
+QUIESCENCE-WRITES:{"avg_changes":4.0,"avg_writes":4.0,"change_ratio":1.0,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":1,"hist_51_plus":0,"hist_6_10":0,"max_changes":4,"max_writes":4,"runs":1,"total_changes":4,"total_writes":4}
+--------------------
+generic-ops/gfilter: keep zeros
+ERROR
+name:       check-true
+location:   tests/test-generic-ops-02-01.rkt:106:2
+string-contains?: contract violation
+  expected: string?
+  given: (no-instance-error (srcloc "<string>" 1 6 30) "No instance of Seqable for List\n  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq\n  Hint: Define 'impl Seqable List' with method 'to-seq'." 'Seqable "List")
+--------------------
+QUIESCENCE-WRITES:{"avg_changes":4.0,"avg_writes":4.0,"change_ratio":1.0,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":1,"hist_51_plus":0,"hist_6_10":0,"max_changes":4,"max_writes":4,"runs":1,"total_changes":4,"total_writes":4}
+--------------------
+generic-ops/gfilter: keep none
+ERROR
+name:       check-true
+location:   tests/test-generic-ops-02-01.rkt:112:2
+string-contains?: contract violation
+  expected: string?
+  given: (no-instance-error (srcloc "<string>" 1 6 24) "No instance of Seqable for List\n  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq\n  Hint: Define 'impl Seqable List' with method 'to-seq'." 'Seqable "List")
+--------------------
+QUIESCENCE-WRITES:{"avg_changes":4.0,"avg_writes":4.0,"change_ratio":1.0,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":1,"hist_51_plus":0,"hist_6_10":0,"max_changes":4,"max_writes":4,"runs":1,"total_changes":4,"total_writes":4}
+--------------------
+generic-ops/gconcat: List append
+ERROR
+name:       check-true
+location:   tests/test-generic-ops-02-01.rkt:122:2
+string-contains?: contract violation
+  expected: string?
+  given: (no-instance-error (srcloc "<string>" 1 6 24) "No instance of Seqable for List\n  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq\n  Hint: Define 'impl Seqable List' with method 'to-seq'." 'Seqable "List")
+--------------------
+
+--- Provenance Stats ---
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":1,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":1,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":1,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+

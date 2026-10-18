@@ -1,0 +1,8 @@
+Skipping 3 known pathological test(s):
+
+Detected changes:
+  source: merge-fn-registry.rkt
+
+Affected tests (448 of 502, 3 skipped):
+
+[451 test file names listed in the original output, omitted here]

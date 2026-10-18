@@ -1,0 +1,22 @@
+=== test-retraction-stratum.rkt FAILED ===
+wall_ms: 3
+tests: 40 (2 failures)
+
+--- RackUnit stderr ---
+--------------------
+integration: record + run-to-quiescence retracts scoped cells via handler
+FAILURE
+name:       check-equal?
+location:   tests/test-retraction-stratum.rkt:381:4
+actual:     2
+expected:   1
+--------------------
+--------------------
+integration: multi-aid retraction via cell accumulation
+FAILURE
+name:       check-equal?
+location:   tests/test-retraction-stratum.rkt:414:4
+actual:     3
+expected:   1
+--------------------
+

@@ -1,0 +1,50 @@
+modules: v11 40, v12 40, common 40
+  DIFF prologos/core.pnet key-eq #f first differing slot #f
+  DIFF prologos/core/abstract-domains.pnet key-eq #f first differing slot #f
+  DIFF prologos/core/algebra.pnet key-eq #f first differing slot #f
+  DIFF prologos/core/arithmetic.pnet key-eq #f first differing slot #f
+  DIFF prologos/core/capabilities.pnet key-eq #f first differing slot #f
+  DIFF prologos/core/collection-traits.pnet key-eq #f first differing slot #f
+  DIFF prologos/core/collections.pnet key-eq #f first differing slot #f
+  DIFF prologos/core/conversions.pnet key-eq #f first differing slot #f
+  DIFF prologos/core/eq.pnet key-eq #f first differing slot #f
+  DIFF prologos/core/generic-ops.pnet key-eq #f first differing slot #f
+  DIFF prologos/core/hashable.pnet key-eq #f first differing slot #f
+  DIFF prologos/core/io.pnet key-eq #f first differing slot #f
+  DIFF prologos/core/lattice.pnet key-eq #f first differing slot #f
+  DIFF prologos/core/list.pnet key-eq #f first differing slot #f
+  DIFF prologos/core/lseq.pnet key-eq #f first differing slot #f
+  DIFF prologos/core/map.pnet key-eq #f first differing slot #f
+  DIFF prologos/core/ord.pnet key-eq #f first differing slot #f
+  DIFF prologos/core/propagator.pnet key-eq #f first differing slot #f
+  DIFF prologos/core/pvec.pnet key-eq #f first differing slot #f
+  DIFF prologos/core/set.pnet key-eq #f first differing slot #f
+  DIFF prologos/core/string-ops.pnet key-eq #f first differing slot #f
+  DIFF prologos/data/bool.pnet key-eq #f first differing slot #f
+  DIFF prologos/data/char.pnet key-eq #f first differing slot #f
+  DIFF prologos/data/datum.pnet key-eq #f first differing slot #f
+  DIFF prologos/data/eq.pnet key-eq #f first differing slot #f
+  DIFF prologos/data/list.pnet key-eq #f first differing slot #f
+  DIFF prologos/data/lseq-ops.pnet key-eq #f first differing slot #f
+  DIFF prologos/data/lseq.pnet key-eq #f first differing slot #f
+  DIFF prologos/data/map-entry.pnet key-eq #f first differing slot #f
+  DIFF prologos/data/nat.pnet key-eq #f first differing slot #f
+  DIFF prologos/data/option.pnet key-eq #f first differing slot #f
+  DIFF prologos/data/ordering.pnet key-eq #f first differing slot #f
+  DIFF prologos/data/pair.pnet key-eq #f first differing slot #f
+  DIFF prologos/data/parity.pnet key-eq #f first differing slot #f
+  DIFF prologos/data/reason.pnet key-eq #f first differing slot #f
+  DIFF prologos/data/result.pnet key-eq #f first differing slot #f
+  DIFF prologos/data/set.pnet key-eq #f first differing slot #f
+  DIFF prologos/data/sign.pnet key-eq #f first differing slot #f
+  DIFF prologos/data/string.pnet key-eq #f first differing slot #f
+  DIFF prologos/data/transducer.pnet key-eq #f first differing slot #f
+equal (modulo root path, canonical hashes): 0 / 40   bytes v11 17045297  v12 4500087
+what norm erases (count per kind, v11 text -> v12 fasl):
+  flonum             24 -> 24
+  hash-eq-imm        2248 -> 2248
+  string-MUT         42267 -> 0   <-- DIFFERS
+  string-imm         0 -> 42267   <-- DIFFERS
+  sym-interned       658177 -> 658177
+  vector-MUT         370777 -> 0   <-- DIFFERS
+  vector-imm         0 -> 370777   <-- DIFFERS

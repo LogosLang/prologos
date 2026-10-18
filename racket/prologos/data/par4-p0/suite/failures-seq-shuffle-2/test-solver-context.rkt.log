@@ -1,0 +1,15 @@
+=== test-solver-context.rkt FAILED ===
+wall_ms: 6
+tests: 30 (1 failures)
+
+--- RackUnit stderr ---
+--------------------
+Phase 5: fire-once propagator pattern > fire-once propagator fires once then is no-op
+FAILURE
+name:       check-equal?
+location:   tests/test-solver-context.rkt:288:6
+actual:     2
+expected:   1
+--------------------
+0 success(es) 1 failure(s) 0 error(s) 1 test(s) run
+

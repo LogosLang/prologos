@@ -73,7 +73,7 @@
 ;; Keep using process-file so a revival is caught on the path it would revive on.)
 (define (run-file-fixture str)
   (define tmp (make-temporary-file "mergekey-~a.prologos"))
-  (call-with-output-file tmp #:exists 'replace
+  (call-with-output-file tmp #:exists 'truncate
     (lambda (out) (display str out)))
   (define result
     (parameterize ([current-file-module-network-ref (make-module-network)]

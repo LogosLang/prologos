@@ -16,7 +16,7 @@
 ;;; Bridges are STRATIFICATION-AGNOSTIC (D.4): pure data transformations
 ;;; that don't assume whether parse and elaborate share a stratum.
 ;;;
-;;; See: docs/tracking/2026-03-26_PPN_TRACK0_LATTICE_DESIGN.md §3
+;;; See: docs/tracking/tracks/PPN/PPN_0/2026-03-26_PPN_TRACK0_LATTICE_DESIGN.md §3
 ;;;
 
 (require racket/set

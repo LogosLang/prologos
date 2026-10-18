@@ -5,11 +5,11 @@
 **Series touches**: PPN (Track 2), SRE, PRN
 
 **Related documents**:
-- [PPN Track 1 Design](../tracking/2026-03-26_PPN_TRACK1_DESIGN.md) — tree mutation API
+- [PPN Track 1 Design](../tracking/tracks/PPN/PPN_1/2026-03-26_PPN_TRACK1_DESIGN.md) — tree mutation API
 - [SRE Research](2026-03-22_STRUCTURAL_REASONING_ENGINE.md) — structural decomposition
 - [Grammar Toplevel Form](2026-03-26_GRAMMAR_TOPLEVEL_FORM.md) — multi-view grammar spec
 - [PRN Master](../tracking/2026-03-26_PRN_MASTER.md) — theory series
-- [PPN Master](../tracking/2026-03-26_PPN_MASTER.md) — Track 2 notes
+- [PPN Master](../tracking/tracks/PPN/2026-03-26_PPN_MASTER.md) — Track 2 notes
 
 ---
 

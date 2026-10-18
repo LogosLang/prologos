@@ -11,6 +11,39 @@ any candidate for the owner's register — **unnumbered on purpose**: the branch
 reads `NEXT FREE: 146` while main's uncommitted one reads 150, so allocating here would
 re-issue a number (`workflow.md` § DEFERRED numbers are monotonic).
 
+### Owner decision ledger, `SW-n` (this session's series)
+
+`SW` = sweep. Collision-checked over 740 docs on 2026-10-13: 0 uses of `SW-n`, while `O-n`, `W-n`, `M-n` and `G-n`
+are all in use. **Commit messages up to and including `2792123c` use roman numerals: (n) is `SW-n`, e.g. (xii) = SW-12.**
+`SW-1`…`SW-3` were never recorded and are not used.
+
+| # | decision | status |
+|---|---|---|
+| SW-4 | A run the re-run guard refuses exits non-zero, with its own code (3), not 0 | DECIDED, applied `f6e530d7` |
+| SW-5 | Polluted `timings.jsonl` records are ANNOTATED (`"invalid"` key), never deleted | DECIDED, applied `f6e530d7`; main's file annotated after checkpoint 2 |
+| SW-6 | Timestamps carry an explicit offset; the record schema version is bumped | DECIDED, applied `f6e530d7` |
+| SW-7 | F3(a) and the runner stream merge in ONE checkpoint | DECIDED, done (checkpoint 2, `01ef2542`) |
+| SW-8 | The sweep session brings `par4-p0` up to main itself | DECIDED, done (`a456c370`, then `3643f56e`) |
+| SW-9 | `egraph-relational-spike` (clone `prologos-egraph-spike`): land its record on main? | DECIDED: keep the worktree and branch as they are for now |
+| SW-10 | `preduce-autonomy` (clone `prologos-preduce-auto`): land its record on main? | DECIDED: keep as they are for now |
+| SW-11 | Register the hook guard at user level in Claude Code AND Hermes; port the Claude hooks | DECIDED, done (§ Checkpoint 3) |
+| SW-12 | Suite records keep MEMORY-STATS only on request: `--memory-stats` (option C) | DECIDED, done `e3efb2dc` |
+| SW-13 | Port the MacMD-Viewer `PostToolUse` hook to Hermes (same exclusions, same switch file) | DECIDED with SW-11, done |
+| SW-14 | The compile rule also covers `raco setup`, `raco pkg install/update`, `raco test --make` | lean kept, in `9d24d463` |
+| SW-15 | Only a literal limit ≥ 1 000 000 passes (`PLT_CS_COMPILE_LIMIT=$X` is refused) | lean kept, in `9d24d463` |
+| SW-16 | Close `kill $(pgrep …)` / `pgrep … \| xargs kill` and kin | DECIDED, done `8b113a9f` |
+| SW-17 | Narrow `Bash(pkill:*)`; drop the unlimited-compile allow rules | DECIDED, done `53e6de98` |
+| SW-18 | `measure-production-n.rkt:91` → `make-hash` without a test | DECIDED, done `200bc3d6` |
+| SW-19 | Annotate the history records with an undeclared 0-test PASS unit (DEFERRED 161 open 1) | DECIDED, done `c02d378a`; main checkpoint 4 |
+| SW-20 | DEFERRED 166: the runner names its lock path, and warns on an override; no extra flag | DECIDED, done `c1d4f8f3`; main checkpoint 4 |
+| SW-21 | `--tests` on a module that is not a test unit is refused (not run, then called INCOMPLETE) | DECIDED, done `6e0cc7a8`; main checkpoint 4 |
+| SW-22 | DEFERRED 151 (b): measure a fasl `.pnet` body end to end before choosing fix vs retire; then merge it | DECIDED (owner): merge as fix (b); done, checkpoint 4 `08acff4a` |
+| SW-23 | A human-readable reader for the binary `.pnet` (owner request) | done `c6f8fff7`: `tools/pnet-dump.rkt`; main checkpoint 4 |
+| SW-24 | DEFERRED 169: keep the dependency graph current automatically, with minimal maintenance | DECIDED (owner); done `8fbaefb8` by DERIVING the graph (nothing stored); main checkpoint 5 |
+| SW-25 | The next batch is gate integrity: DEFERRED 170, 160, 81, 155 | DECIDED (owner); done — `e7cda107`, `51b6b1f9` + `922f6dd5`, `160ad2f6`, `51a24f4f` (§ SW-25) |
+| SW-26 | The batch after: silent wrong answers in the checker (DEFERRED 156 ⭐, 103 ⭐, 104, 120, 85, 86); who takes 156 | DECIDED (owner) for 156: **PPN 4C takes it** (it may resolve within that track; note in `tracks/PPN/PPN_4C/`); 103/104/120/85/86 not yet placed |
+| SW-27 | DEFERRED 160's fix shape: scope a program's registry state to its compilation unit (not restore; not FQN-keyed specs) | DECIDED (owner: "reasonable, for now") — `51b6b1f9`; **160 stays OPEN**: specs should be namespace-qualified, an architectural fix for PM 12B (free ordering) / PM 11 = PPN 8 (incremental) |
+
 ---
 
 ## 148 ✅ `tagged-cell-value` never deduplicated entries — `c62cd267`
@@ -595,7 +628,7 @@ shows that population does not reach the arms. A timing A/B waits for a quiet ma
 
 ---
 
-## Coordination: parallel streams, owner decisions (vii)/(viii), `par4-p0` brought up to main
+## Coordination: parallel streams, owner decisions SW-7/SW-8, `par4-p0` brought up to main
 
 **Parallel streams** (owner: "launch all three now"). Each runs on its own branch in a nested worktree off `58241c0c`, and
 their files are disjoint:
@@ -609,8 +642,8 @@ The coordinator (this session) reads each diff, re-runs its tests, checks its cl
 gated by a full suite with a file-by-file count, and only then moves main.
 
 **Owner decisions, 2026-10-13:**
-- **(vii)** F3(a) is folded into ONE checkpoint merge with the runner stream; it is not merged alone.
-- **(viii)** The sweep session brings `par4-p0` up to main itself, rather than relaying the request.
+- **SW-7** F3(a) is folded into ONE checkpoint merge with the runner stream; it is not merged alone.
+- **SW-8** The sweep session brings `par4-p0` up to main itself, rather than relaying the request.
 
 **`par4-p0` → `a456c370`** (merge of main into `fbd5a322`; recorded in PAR 4 note § 7d). Clean and idle when checked.
 The only overlap, `propagator.rkt`, merged to main + exactly `par4-p0`'s 6 hunks. Merged tree: 10 298 tests / 493 files,
@@ -633,7 +666,7 @@ untracked files, no racket process with its cwd inside, ignored files inspected,
 
 ---
 
-## Checkpoint 2 (owner decision (vii)): F3(a) + the runner stream → main
+## Checkpoint 2 (owner decision SW-7): F3(a) + the runner stream → main
 
 **Merges** in a throwaway worktree off main `e6394b3f` (the CIU 6 session's docs commit; the only overlap was
 `DEFERRED.md`, in different entries; no overlap with main's uncommitted working copy):
@@ -674,3 +707,201 @@ suite: `+10 test-suite-lock`, `+19 test-suite-plan` (18 + the guard), `+3 test-a
 - 161 and 164 discharged; 162 and 160 status;
 - **165** filed (stale worker dependency, discharged);
 - **166** filed (silent queue bypass; the measured lock-inheritance limitation).
+
+**After checkpoint 2 (main = `01ef2542`).**
+- Both trees rebuilt with the limit (fingerprints match); the 8 merged test files pass on main (161 tests).
+- Main's `timings.jsonl` annotated (decision SW-5): 24 records, 13 of them full-suite `all_pass` by DEFERRED 164's own
+  300-file threshold. The changed lines differ ONLY by the `"invalid"` key, and a second pass annotates 0.
+- `runner-queue-gate` worktree and branch removed (merged, clean). Its small scratch probes are preserved in the
+  racket-performance-probing skill (`scripts/data/agent-evidence-2026-10-13/`).
+- `par4-p0` → `3643f56e` (second bring-up; gate 10 339 / 495, delta exact; PAR 4 note § 7d). It now queues.
+- Still without the queue: `ciu6-path-selection` (the CIU 6 session's, at `e6394b3f`), the two clones, and the
+  unmerged `guards-hook-sweep` / `per-process-152-151` worktrees until checkpoint 3.
+
+## Checkpoint 3: the guards and per-process streams → main (owner decisions SW-11–SW-18)
+
+Done in a throwaway worktree `checkpoint-3`, branched from main `56e9fb64` (main had gained two CIU 6 / PAR 4
+docs commits since `01ef2542`).
+
+| commit | what |
+|---|---|
+| `977c008e` | merge `guards-hook-sweep`: 159 (a) compile-limit guard `9d24d463`, 163 (2) kill guard `e9b2a30e`, 162 (2) `benchmark-tests.rkt` tables `d5359d2a` |
+| `baa1dce2` | merge `per-process-152-151`: 152 `0e5da30f`, 151 (a) `7358c7c4` (`PNET_VERSION` 10 → 11) |
+| `eb2a4b72` | guard: the deny carries BOTH harnesses' fields; the orphan hint names the shell's checkout (`$(git rev-parse --show-toplevel)`), not the script's |
+| `8b113a9f` | guard, decision SW-16: a `pgrep` in a command that kills is judged as the `pkill` it amounts to; `ps \| grep \| kill`; `-v`; pid `-1`; `"$(…)"` inside quotes |
+| `53e6de98` | `.claude/settings.local.json`, decision SW-17: `Bash(pkill:*)` → `Bash(pkill -P:*)`; nine unlimited-compile / 9.0-binary allow rules removed |
+| `200bc3d6` | `measure-production-n.rkt:91` `make-hash`, decision SW-18 |
+| `e3efb2dc` | runner `--memory-stats`, decision SW-12 (option C) |
+| (merge) | `deferred-sweep-146-149`'s records after checkpoint 2 (`405f164e`) |
+
+**The guard was inert in Hermes as written.** `deny()` emitted only Claude Code's `hookSpecificOutput`. Hermes's bridge
+blocks only on a top-level `"decision": "block"` or exit 2, so `_parse_response` returned `None` on the old output (an
+allow), checked by calling Hermes's own parser on the guard's real output. The test table counted any output as a
+deny, so it could not see this; a new section reads the fields (8 rows; red 3 → green). The SW-16 design and its
+evidence: `8b113a9f`'s message; 145 rows, both bash 5.3 and 3.2; nine mutations, one per mechanism, all red (two
+survived the first pass, and the two ALLOW rows that kill them were added).
+
+**Commit hygiene slip, fixed before any citation.** `git add .claude/settings.local.json` (tracked, under the ignored
+`.claude/`) printed the ignored-path advice and exited non-zero, but STAGED the file; the next commit swept it in under
+the `measure-production-n` message. Those two local commits were reset and re-made one file each (`53e6de98`,
+`200bc3d6`, `e3efb2dc`); the replaced hashes were never cited.
+
+**Gate**: `--all --force-rerun`, **10 350 tests / 497 files**, exactly the prediction (checkpoint 2's 10 330 / 494
++ `test-benchmark-tests` 2 + `test-memory-stats` 6 + `test-pnet-header` 12). File by file against the last surviving
+full record (`deferred-sweep-146-149`, the F3(a) suite at `58241c0c`, 10 300 / 492): +50 = runner stream +35,
+`test-properties` −5 (the removed double count), guards +2, per-process +18; units: six new files, and
+`test-support.rkt` (0 tests) no longer a unit. **One failure, root-caused and pre-existing**: `test-error-messages`
+`:465:2`, DEFERRED 160's third sighting of that check. The run's worker record replayed it 3/3 in one worker;
+**main's own code fails the same replay**; bisection gives the pair `test-defn-multiarg-patterns.rkt` →
+`test-error-messages.rkt`; renaming `ok2` alone in a copy of the victim makes it pass. Two one-process probes then
+established the mechanism of DEFERRED § *Cross-FILE spec-store leakage* (2026-07-31): `test-support`'s `run-ns-*`
+share an unforked `prelude-persistent-registry-net-box`; a `spec` program changes its contents; restoring them removes
+the failure. Recorded in 160 and that section; the fix is the flake batch's (with 160). Merged with the failure
+recorded rather than re-run until green, since the change set provably does not affect it.
+
+**Registration (decision SW-11)**, all pointing at main's checkout, so the guard in force is the version main has:
+- Claude Code, `~/.claude/settings.json` (user level): `PreToolUse` `Bash` → `tools/hook-guard-racket.sh`. Backup:
+  scratch `claude-settings.before-hooks.json`. Only the `hooks` key changed.
+- Hermes, profile `logos-language-designer` `config.yaml`: `hooks.pre_tool_call` `terminal` → the guard (timeout 10 s;
+  the guard takes ~40 ms). `hermes hooks list` parses it and shows **✗ not allowlisted**: Hermes skips an unapproved hook
+  when there is no TTY (the desktop app), so it is active only after the owner approves it once at a terminal
+  (`hermes -p logos-language-designer`, answer y, quit) and restarts the desktop app.
+- **Porting the Claude hooks**: the only one, a `PostToolUse` `Write|Edit` MacMD-Viewer opener, **never fired**: it read
+  `$TOOL_INPUT_file_path`, a variable Claude Code does not set (0 occurrences of `TOOL_INPUT_` in the 2.1.296 binary,
+  vs 35 of `CLAUDE_PROJECT_DIR`; Claude Code sends the tool input as JSON on stdin). Replaced in both harnesses by one
+  script, `~/.claude/hooks/macmd-autoopen.sh` (stdin JSON; `file_path` or `path`; the same exclusions and the same
+  `~/.claude/.macmd-autoopen` switch), checked on 9 payloads. Hermes: `hooks.post_tool_call` `write_file|patch`.
+- Hermes's own command blocklist refuses any terminal command whose TEXT matches its "kill all processes" pattern
+  (a heredoc that merely mentions the pid-`-1` form was refused while writing this note): a second, coarser layer
+  that the repo guard does not replace.
+
+**Hooks live (2026-10-13, after the owner's consent and a desktop restart).** `hermes hooks list`: both ✓ allowed;
+`hooks doctor`: healthy. Live check: this session's `raco make` without the limit was refused before it ran, with
+the guard's 159 message.
+
+## After checkpoint 3: SW-19 … SW-22 (branch `deferred-sweep-146-149`, merge pending)
+
+Designators renamed from roman numerals to `SW-n` first (`7e2b0467`; ledger at the top of this note). Each item was
+red before its change (an end-to-end run of the old behaviour, plus failing tests), then green, then mutation-checked.
+
+| SW | commit | what | evidence |
+|---|---|---|---|
+| 19 | `c02d378a` | `record-invalid-reason`: an undeclared unit that PASSED with 0 tests invalidates its record (DEFERRED 161 open 1) | generic rule; over main's 1 936 records it matches exactly the 2 that 161 names; main's `timings.jsonl` annotated (2 records, only the key added; second pass 0) |
+| 20 | `c1d4f8f3` | every run prints `Suite lock: <mode> on <path>`; an env override is a ⚠ line at the top and under the summary (DEFERRED 166) | before: 0 lock lines under an inherited override; after: header + ⚠ + ⚠ |
+| 21 | `6e0cc7a8` | `--tests` on a non-unit (`test-support.rkt`, a library/fixture under `tests/`) is refused, exit 64; a missing file exits 64 too (was 1) | before: EMPTY → INCOMPLETE, exit 2; after: the reason, exit 64, nothing run |
+| 22 | branch `deferred-151b-pnet-fasl`: `eab8dcf7`, record `9713a1a5` | fasl `.pnet` body (`PNET_VERSION` 12), measured end to end | warm load 1 450 → 285 ms CPU, below no-cache (546): the cache now pays; bodies 40/40 equal; full suite 10 350 / 497 on v12 |
+
+Mutations (one per mechanism, all red): SW-19 rule off; SW-19 exclusions dropped; SW-21 refusal off; SW-21 library
+rule off; SW-20 never warns; SW-20 warns on the default path. Each intermediate commit was compiled and its three
+test files run in a throwaway detached worktree (44 and 45 tests pass). The branch's full suite: 10 354 / 497, all
+pass, twice (in the SW-22 A/B) = 10 350 + the 4 new test cases.
+
+**SW-22, a decision left open**: merge `deferred-151b-pnet-fasl` as DEFERRED 151 fix (b). The record:
+`docs/tracking/handoffs/2026-10-13_PNET_FASL_151B_DATA/README.md` on that branch. *(Decided by the owner: merge.
+Done in checkpoint 4, below.)*
+
+## Checkpoint 4: SW-19 … SW-23 → main (owner decision SW-22, request SW-23)
+
+Main `34602ded` → **`a15b1a9e`** (fast-forward), built and gated in the throwaway worktree `checkpoint-4`:
+
+| commit | what |
+|---|---|
+| `1961d49d` | merge `deferred-sweep-146-149` (SW-19 `c02d378a`, SW-20 `c1d4f8f3`, SW-21 `6e0cc7a8`, the SW renaming `7e2b0467`, docs `61b24b02`) |
+| `08acff4a` | merge `deferred-151b-pnet-fasl`: the fasl body `eab8dcf7`, record `9713a1a5`, `tools/pnet-dump.rkt` `c6f8fff7`, record corrected `c6b34529` |
+| `a15b1a9e` | docs: DEFERRED 151 discharged (+ correction), DEFERRED 169 filed, ledger SW-19 … SW-24 |
+
+- **Baseline** (recorded for this checkpoint, branch `deferred-sweep-146-149` @ `61b24b02` = main's code + SW-19…21):
+  10 354 tests / 497 files, all pass.
+- **Gate** (`--all --force-rerun`, recorded, exclusive suite lock): **10 366 tests / 498 files, all pass**, 13.3 s.
+  `suite-delta.py`, file by file: `test-pnet-dump.rkt` +10 (new), `test-pnet-header.rkt` +2 — nothing else; exactly
+  the fasl branch's tests. (DEFERRED 160's order-dependent `test-error-messages.rkt` passed in this ordering.)
+- **Main's WIP**: none of the 30 files the fast-forward changed is among main's 16 uncommitted entries; 16 before and
+  after. Main's checkout rebuilt with the limit.
+- **Retired**: worktree + branch `checkpoint-4`. `deferred-151b-pnet-fasl` is merged (HEAD `c6b34529` in main) but
+  stays until its README is closed in MacMD Viewer (open file handle); remove it then.
+- **Every checkout regenerates its `.pnet` cache once** (`PNET_VERSION` 12). A long-running process that loaded the
+  old compiled code (an editor's language server) keeps working; after its restart it reads v12.
+
+**Corrections made in this round.** (1) "fasl's format follows the Racket version" — wrong since Racket 6.90.0.21
+(the encoding is version-independent); corrected in `pnet-serialize.rkt`, DEFERRED 151 and the 151B record. (2) The
+151B record explained the 9.5 vs 4.5 MB fasl sizes by "sharing" without saying which: measured, it is fasl's
+`eq?`-sharing of string leaves (99.9 % of the gap). (3) A test comment claimed the `:no-prelude` fixture has no
+pair-keyed registries; it has (the built-in numeric subtypes) — the round-trip check compares canonical forms.
+
+**Found, filed**: DEFERRED 169 — `dep-graph.rkt` has not been regenerated since 2026-07-02 (`update-deps --check`:
+378 mismatches, 151 test files unlisted); `--all` is unaffected, affected-test selection is. Proposed as SW-24.
+
+## SW-24: the dependency graph is derived, never stored (`8fbaefb8`)
+
+The owner accepted the lean (regenerate + gate `--check`) and asked for automation with minimal maintenance. Reading
+`dep-graph.rkt` showed every data section is exactly what the scanners produce (`update-deps.rkt` rewrote them
+wholesale), so the stored graph was derived state kept by hand. The design weighed three options against
+"derived state consistent by construction":
+
+| option | stored | maintenance | failure mode |
+|---|---|---|---|
+| pre-commit hook runs `--write` | a 100 KB generated file, committed | none by hand | every parallel branch edits it: a merge conflict at every checkpoint; files changed outside a commit unseen |
+| `--check` in the gate | the same file | someone runs `--write` | detects drift, does not prevent it |
+| **derive on demand, content-keyed cache** | nothing in git (cache in ignored `data/cache/`) | **none** | the cache — keyed by each file's sha1 and by the tool's own source hash, and `--check` + a suite test verify it equals a full rescan |
+
+Measured: warm derivation 37–43 ms CPU (full scan 520–536 ms, once per change); the derived layers equal the old
+`--write` output exactly. What the staleness had cost: affected-test selection missed 59 % of source-module
+selections (three modules selected none of ~451); `all-test-files` held 354 of 502 tests, so "run ALL" on an
+`info.rkt` change and `benchmark-tests`' default run skipped 148. Evidence: `handoffs/2026-10-13_SW24_DATA/`.
+DEFERRED 169 discharged.
+
+**DEFERRED 170 meets this branch.** The first full suite after SW-24 failed in `test-path-selection.rkt` (three
+shards, one `file exists` error each); the re-run passed, 10 374 / 499. The PPN 4C session had filed the same race as
+DEFERRED 170 hours earlier, A/B'd, with the observation that **SW-22's fasl speedup (checkpoint 4) is what made it
+frequent** (1 of 3 runs → 3 of 3) by tightening the shards' lockstep — SW-22 exposed it, the defect is older. Added
+to 170: the reproduction with no test code (6–8 % vs 0 %) and the class census (41 `'replace` sites, 18 templates,
+two shared across many files). `CLAUDE.md:34`'s wording is an owner item (protected file, edit not approved).
+
+## SW-25: gate integrity — DEFERRED 170, 160 (→ SW-27), 81, 155
+
+Owner: "let's work through the SW-25 batch". Five commits after `bac8c09c` (the owner-approved `CLAUDE.md` line):
+
+| item | commit | result |
+|---|---|---|
+| 170 temp-file race | `e7cda107` | 43 sites → `'truncate` (two in production code both censuses missed); `test-temp-file-hygiene.rkt` guard; `test-path-selection` sharded 2/3 failing → 5/5 passing |
+| 160 suite-only failures | `51b6b1f9`, `922f6dd5` | the leak was in the DRIVER; SW-27 below — MITIGATED, still open (owner, below) |
+| 81 silent count drops | `160ad2f6` | instance = 161's mechanism (already fixed); the runner now prints `COUNT DROP` per file against its last recorded pass |
+| 155 benchmarks dirty the tree | `51a24f4f` | two writers of tracked baselines, not one; both write `data/benchmarks/runs/` |
+
+**SW-27, the decision inside the batch.** 160's mechanism note left one question open — does the driver leak the way
+test-support did? It does: registrations assign their parameters and `process-file` bound none, so a deleted `spec`
+still applied when the LSP re-checked the same document. Options weighed against DESIGN_PRINCIPLES (correctness by
+construction; derived state consistent by construction; one list, not parallel lists):
+
+| option | weighed |
+|---|---|
+| fix only test-support (fresh box per call) | ends the flake, leaves the LSP bug — rejected |
+| restore by assignment around `process-file` (`dynamic-wind`) | a retraction whose correctness depends on every exit path — rejected |
+| key specs by qualified name | fixes the cross-namespace collision only; not the same-file stale spec, nor the other 23 registries — rejected |
+| **scope the unit** | bind every parameter the unit's cells are seeded from + every cell id it assigns (59) to the caller's current value, fork the registry network (O(1)); `#:before-unit-exit` is the sanctioned read — **chosen** |
+
+Cost of the choice: a caller that read a unit's registrations AFTER `process-file` returned now reads them inside it.
+On this branch: the LSP's spec-store capture and 14 test sites in 4 files (`922f6dd5`; the first full suite named them).
+Checked on the three active branches (`ciu6-path-selection`, `ppn4c-elaboration-on-network`, `par4-arena-executors`,
+commits and uncommitted work): no changed or new test calls `process-file`, so none has this shape today; a new
+registry added there without joining SW-27's list fails `test-file-unit-isolation`'s class guard on merge. It is
+for review before checkpoint 6 because it changes what `process-file` means to a caller. Found, not fixed: an LSP REPL session's registrations escape it (DEFERRED 171).
+
+Gate on the branch: 10 385 / 501, all pass, 12.5 s; delta against `e4e9e451` exactly +2 files / +11 tests
+(`test-temp-file-hygiene` 2, `test-file-unit-isolation` 5, `test-suite-plan` +4). Evidence:
+`handoffs/2026-10-13_SW25_DATA/`.
+
+### Owner decisions on SW-25's results (2026-10-13)
+
+- **SW-27 accepted for now; DEFERRED 160 stays open.** Owner: treating each program as self-contained is reasonable for
+  now, but properly speaking a `spec` should be fully qualified to its namespace, and a more complete solution falls into
+  the scope of incremental compilation and free ordering of modules — possibly several tracks' worth. 160's entry now
+  reads MITIGATED with that remainder, the roadmap rows that own it (PM Track 12B, `MASTER_ROADMAP.org:322`; PM Track 11
+  = PPN 8, `:56`, `:516`) and the questions that design must answer; the 2026-07-31 cross-file section likewise.
+  The owner's general point, recorded as practice: **many deferrals are like this** — a fix-around can remove the
+  symptom while the architectural take is still owed; such an entry stays open, names the remainder and the track that
+  owns it, and says which part the patch covers.
+- **156 → PPN 4C** (SW-26, for 156 only). Relayed by a note in that track's directory. Caveat recorded in 156 and in the
+  note: the fallback PPN 4C's A3 phase plans to retire is the only path that catches 156 today, so it resolves there only
+  if the on-network rules gain an operand contract.
+- **Checkpoint 6**: approved — § Checkpoint 6 below.

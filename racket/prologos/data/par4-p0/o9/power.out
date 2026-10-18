@@ -1,0 +1,5 @@
+power-R BSP C = 2
+power-T BSP C = 3
+power-T0 BSP C = 1
+neg-join BSP C = 3
+neg-ior BSP C = 6

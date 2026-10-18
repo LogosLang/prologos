@@ -1,0 +1,21 @@
+detect.rkt — quiescence detection. Free parameters: K executors (#:pool 'own threads);
+  CHAIN: fan=1, one message alive at a time (D hops); BURST: fan=4 depth=6 (5461 msgs, a 4^6 leaf wave).
+  processor-count=18. Each row: best of 5 trials; consumed count asserted equal across schemes.
+K= 4  CHAIN fan=1 depth=20000  rounds   msgs=20001  best-of-5 13.7 ms  = 686.6 ns/msg  rounds=17354 (791.3 ns/round)
+K= 4  CHAIN fan=1 depth=20000  scan     msgs=20001  best-of-5 4.0 ms  = 197.8 ns/msg
+K= 4  CHAIN fan=1 depth=20000  atomic   msgs=20001  best-of-5 3.5 ms  = 172.5 ns/msg
+K= 4  BURST fan=4 depth=6  rounds   msgs=5461  best-of-5 0.1 ms  = 24.2 ns/msg  rounds=7 (18857.1 ns/round)
+K= 4  BURST fan=4 depth=6  scan     msgs=5461  best-of-5 0.2 ms  = 27.5 ns/msg
+K= 4  BURST fan=4 depth=6  atomic   msgs=5461  best-of-5 0.3 ms  = 54.6 ns/msg
+K= 8  CHAIN fan=1 depth=20000  rounds   msgs=20001  best-of-5 52.0 ms  = 2600.0 ns/msg  rounds=18113 (2871.0 ns/round)
+K= 8  CHAIN fan=1 depth=20000  scan     msgs=20001  best-of-5 6.7 ms  = 336.0 ns/msg
+K= 8  CHAIN fan=1 depth=20000  atomic   msgs=20001  best-of-5 7.2 ms  = 359.9 ns/msg
+K= 8  BURST fan=4 depth=6  rounds   msgs=5461  best-of-5 0.3 ms  = 47.1 ns/msg  rounds=7 (36714.3 ns/round)
+K= 8  BURST fan=4 depth=6  scan     msgs=5461  best-of-5 0.3 ms  = 53.7 ns/msg
+K= 8  BURST fan=4 depth=6  atomic   msgs=5461  best-of-5 0.5 ms  = 99.1 ns/msg
+K=16  CHAIN fan=1 depth=20000  rounds   msgs=20001  best-of-5 117.2 ms  = 5858.4 ns/msg  rounds=18211 (6434.2 ns/round)
+K=16  CHAIN fan=1 depth=20000  scan     msgs=20001  best-of-5 9.7 ms  = 485.2 ns/msg
+K=16  CHAIN fan=1 depth=20000  atomic   msgs=20001  best-of-5 10.2 ms  = 511.6 ns/msg
+K=16  BURST fan=4 depth=6  rounds   msgs=5461  best-of-5 0.5 ms  = 92.3 ns/msg  rounds=6 (84000.0 ns/round)
+K=16  BURST fan=4 depth=6  scan     msgs=5461  best-of-5 0.4 ms  = 79.7 ns/msg
+K=16  BURST fan=4 depth=6  atomic   msgs=5461  best-of-5 0.9 ms  = 167.2 ns/msg

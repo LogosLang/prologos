@@ -40,6 +40,8 @@
  stratified-explain-goal
  ;; Phase 0a (Track 2B): Strategy override for parity testing
  current-solver-strategy-override
+ ;; PAR 4 route counter (written only when par4-counters-enabled is switched on)
+ par4-solve-routes
  ;; D4 structured answer type (re-exported from provenance.rkt via relations.rkt)
  (struct-out answer-result)
  (struct-out provenance-data)
@@ -173,6 +175,13 @@
 ;; When non-#f, overrides the per-expression solver-config strategy.
 ;; Allows running the entire test suite under :atms without modifying tests.
 (define current-solver-strategy-override (make-parameter #f))
+;; PAR 4: how many solve queries took each route (tier1 | dfs | atms). Written only after a measurement
+;; harness calls (par4-enable-counters!) (propagator.rkt; O-10 decision CP-2); read by
+;; benchmarks/par4/p0-profile.rkt; never reset by the compiler.
+(define par4-solve-routes (make-hasheq))
+(define (par4-route! r)
+  (when (unbox par4-counters-enabled)
+    (hash-set! par4-solve-routes r (add1 (hash-ref par4-solve-routes r 0)))))
 
 ;; Rel T1 A.2b (SCAFFOLDING — retirement owner: BSP-LE Track 3). #t iff any
 ;; relation reachable from goal-name has a clause carrying a body-local variable
@@ -232,7 +241,7 @@
      ;; 0.49us vs 1.11us DFS vs 30.6us ATMS (62x speedup over full ATMS).
      (define tier-1-result (tier-1-direct-fact-return store goal-name goal-args query-vars))
      (cond
-       [tier-1-result tier-1-result]
+       [tier-1-result (par4-route! 'tier1) tier-1-result]
        [else
      ;; Phase 6: adaptive strategy dispatch.
      ;; :depth-first → DFS (existing solve-goal)
@@ -284,6 +293,7 @@
                   (not (reachable-has-guard? store goal-name)))])]
          [else #f]))
 
+     (par4-route! (if use-propagator? 'atms 'dfs))
      (if use-propagator?
          ;; Propagator-native solver (Phase 6+7+8)
          ;; Phase 10a: wire :execution config to BSP scheduler override.

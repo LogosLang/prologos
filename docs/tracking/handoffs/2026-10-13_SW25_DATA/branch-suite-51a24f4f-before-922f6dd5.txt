@@ -1,0 +1,6 @@
+--- Running 501 files as 502 units — 1 sharded: test-path-selection.rkt×2 (18 batch workers, work-stealing, timeout: 300s) ---
+10385 tests in 8.3s (501 files, 18 batch workers, 4 FAILURES)
+FAILED: test-property-ws.rkt
+FAILED: test-functor-ws-02.rkt
+FAILED: test-session-async-e2e.rkt
+FAILED: test-session-e2e-ws.rkt

@@ -6,11 +6,11 @@
 **Status**: Vision document. Syntax design follows PPN Tracks 1-3 implementation.
 
 **Related documents**:
-- [PPN Master](../tracking/2026-03-26_PPN_MASTER.md) — series tracking
+- [PPN Master](../tracking/tracks/PPN/2026-03-26_PPN_MASTER.md) — series tracking
 - [PRN Master](../tracking/2026-03-26_PRN_MASTER.md) — theory series
 - [Hypergraph Rewriting + Propagator Parsing](2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md) — Engelfriet-Heyker, HR grammars
 - [Kan Extensions, ATMS, GFP Parsing](2026-03-26_KAN_EXTENSIONS_ATMS_GFP_PARSING.md) — bilattice, disambiguation
-- [Lattice Foundations for PPN](2026-03-26_LATTICE_FOUNDATIONS_PPN.md) — concrete lattice design
+- [Lattice Foundations for PPN](../tracking/tracks/PPN/research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md) — concrete lattice design
 - [Tropical Optimization](2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md) — cost-weighted selection, lossy grammars
 - [NTT Syntax Design](../tracking/2026-03-22_NTT_SYNTAX_DESIGN.md) — typing discipline
 - [Toplevel Forms Reference](../tracking/TOPLEVEL_FORMS_REFERENCE.org) — existing config language

@@ -167,7 +167,7 @@ applied at design-cycle scale**:
   all in addendum; 1V closes Phase 1 entirely
 
 **D.1 drafted** (=fc4b9d3e=) at
-=docs/tracking/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md=:
+=docs/tracking/tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md=:
 - 1179 lines / 78KB / 18 sections + 50+ subsections
 - Scope: γ-bundle-wide Phase 1 closure
 - §4 multi-quantale composition NTT model (TypeFacetQ + TropicalFuelQ

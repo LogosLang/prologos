@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 167**
+> ### **NEXT FREE: 181**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -122,7 +122,12 @@ merge). It now DEFERS to preparse per the driver's own architecture comment —
 a structural single-implementation move with no demonstrated behavioral delta,
 claimed as exactly that. The defer is named scaffolding; it retires when the
 form-cell path grows a real let.
-## 🐛 Cross-FILE spec-store leakage within a batch worker (diagnosed 2026-07-31, LET P1 gate)
+## 🟡 MITIGATED `51b6b1f9` (SW-27) — Cross-FILE spec-store leakage within a batch worker (diagnosed 2026-07-31, LET P1 gate)
+
+> **Mitigated 2026-10-13 by SW-27 (DEFERRED 160).** The unforked box was one channel; the other was the DRIVER: registrations
+> assign their parameters and `process-file` bound none, so it leaked in the LSP and any multi-program process too. Both
+> are now scoped per compilation unit. Still open (owner): specs keyed by bare name rather than by namespace — see 160.
+> The history below is kept as found.
 
 **Symptom**: `test-defn-multiarg-patterns.rkt` registered `(spec c Handle2 -1> Nat)`
 via `run-ns-ws-all`; `test-new-lattice-cell.rkt`, running LATER IN THE SAME
@@ -144,6 +149,18 @@ of the 2026-06-29/07-14 batch-isolation incidents in testing.md.
 **Watch**: any NEW test file addition reshuffles workers and can surface the
 next collision pair. Single-letter spec/def names in test strings are collision
 bait until fixed.
+
+**Mechanism ESTABLISHED 2026-10-13** (checkpoint 3 gate; DEFERRED 160's `test-error-messages` sightings, and
+the same predecessor file as in 2026-07-31). Two probes, one plain Racket process, through `test-support`'s
+`run-ns-*` helpers (scratch `probe160-spec-leak.rkt`, `probe160-netbox.rkt`; copies in the
+racket-performance-probing skill): (1) `defn ok2` in `ns t` defines as `Nat -> Int`; after a program with
+`(spec ok2 Nat -> Nat)` in `ns test`, the same `defn ok2` in `ns t` fails "cannot infer the type of an
+unannotated parameter"; a same-bodied `okq` still defines. (2) That spec program CHANGES the contents of
+`prelude-persistent-registry-net-box`; with its contents restored before the victim, the victim defines as
+`Nat -> Int`. So the unforked box that `run-ns-*` share (`test-support.rkt:148`, `:167`, `:191`) carries the
+leak, keyed by the bare name across namespaces. **Fix shape** (a decision, with 160): fork the box per call as
+`with-forked-network` does for the propagator net, and/or restore it per file in the batch worker. **Open**:
+whether the driver itself (LSP, REPL: many programs in one process) has an analogous leak is UNTESTED.
 
 ## ✅ CLOSED — the two eliminator usage residuals (QTT P6 + P7, 2026-07-31)
 
@@ -1060,7 +1077,7 @@ skip+warn policy; these lift the skips / harden the substrate.
 
 - **GitHub Issue**: [#63](https://github.com/LogosLang/prologos/issues/63) (PRIMARY surface; queryable; linkable from PRs)
 - **MASTER_ROADMAP.org**: forward-references at OE Series Track 1 (weighted parsing) + PReduce Track 4 (cost-guided extraction)
-- **Origin**: PPN 4C Tropical Quantale Addendum 1C-vi A/B/C report (2026-05-16; `docs/tracking/2026-05-16_TROPICAL_1C_VI_ABC_REPORT.md`); design doc §13.7 cross-track note flagged as "small tool enhancement"
+- **Origin**: PPN 4C Tropical Quantale Addendum 1C-vi A/B/C report (2026-05-16; `docs/tracking/tracks/PPN/PPN_4C/2026-05-16_TROPICAL_1C_VI_ABC_REPORT.md`); design doc §13.7 cross-track note flagged as "small tool enhancement"
 - **Scope**: `tools/bench-ab.rkt` currently supports A/B (`--ref HEAD~1`); extend with `--refs` accepting multiple commit refs for multi-way comparison; markdown table generation option
 - **Consumed by**: OE Series Track 1 (weighted parsing with cost-extraction variants); PReduce Track 4 (cost-guided extraction with multiple strategies); future PAR tracks (parallel scheduler variants comparison)
 - **Not in scope for 1C-vi**: A and B baselines for THIS addendum's report are captured data files (OLD struct-field counter RETIRED at 1C-iv-b; live A re-measurement structurally impossible); a markdown report sufficed (β3 resolution per §10.0.7)
@@ -1412,7 +1429,7 @@ DEFERRED_COMPLETE.md at the 2026-07-16 F1b-opening triage.)*
 | Impl registry | 4C / Phase 7 | ⬜ planned | Instance of Hasse-registry with L_impl (specificity lattice per §6.12.6) | Written at module load when `impl X Y` declarations elaborate; read during parametric trait resolution | Inherits Hasse-registry primitive's choice (see above) |
 | Constructor inhabitant catalog | 4C / Phase 9b | ⬜ planned | Instance of Hasse-registry with L_inhabitant (subsumption lattice per §6.12.6) | Written at module load when `data X := ...` declarations elaborate; read during γ hole-fill | Inherits Hasse-registry primitive's choice (see above); M3 re-firing-on-growth semantics decided at Phase 9b mini-design |
 | `current-process-id` parameter | 4C / Phase 1e-β-iii | ⬜ planned | Racket parameter (default 0) tagging Lamport timestamps at E1 clock writes | Read at every `net-write-timestamped` call to tag the new timestamp with the process-id dimension. Under single-BSP (today) always returns 0 — the pid carries no runtime information. Parameterized per-worker in future parallel-execution contexts. | PM Track 12 evaluates: (a) keep as parameter (dynamic-scope-shaped concept matches worker identity), (b) migrate to on-network cell (if worker identity needs network participation), or (c) retire entirely when BSP-round granularity becomes the natural process boundary. |
-| `current-lattice-meta-solution-fn` callback parameter | 4C addendum S2.c-iii audit (2026-04-24) | ⬜ flagged | Racket parameter holding `meta-solution` function ([type-lattice.rkt:68](../../racket/prologos/type-lattice.rkt)). Installed by driver.rkt:2633 via `install-lattice-meta-solution-fn!`. Used by type-lattice.rkt:86, 176, 399, 403, 421 for `is-meta-unsolved?`-style checks during ground-check + subtype operations. Off-network scaffolding to break import cycle (type-lattice.rkt is leaf module; can't import metavar-store.rkt). | Set once at driver init via `install-lattice-meta-solution-fn!`; read on demand during type-lattice operations. **Mantra violations**: ❌ off-network, ❌ not structurally emergent (callback invocation is imperative), ❌ not info flow through cells. | **PM Track 12 + PPN 4C parent Phase 4 jointly retire**: when PM 12 makes module-load-time infrastructure on-network (cells accessible from leaf modules via scope chain), type-lattice.rkt's queries restructure to read directly from cells. Phase 4's CHAMP retirement provides the natural reframing point for the data flow (was reading CHAMP via callback → reads attribute-map facet via universe dispatch). See [PPN 4C parent Phase 4 row](2026-04-17_PPN_TRACK4C_DESIGN.md) for absorbed scope. The "constraint on shim signature" (post-S2.c-iii: `meta-solution` must remain a top-level definition with signature `(id) -> solution-or-#f` so the callback installation works) is not a feature — it's a constraint imposed by this scaffolding. |
+| `current-lattice-meta-solution-fn` callback parameter | 4C addendum S2.c-iii audit (2026-04-24) | ⬜ flagged | Racket parameter holding `meta-solution` function ([type-lattice.rkt:68](../../racket/prologos/type-lattice.rkt)). Installed by driver.rkt:2633 via `install-lattice-meta-solution-fn!`. Used by type-lattice.rkt:86, 176, 399, 403, 421 for `is-meta-unsolved?`-style checks during ground-check + subtype operations. Off-network scaffolding to break import cycle (type-lattice.rkt is leaf module; can't import metavar-store.rkt). | Set once at driver init via `install-lattice-meta-solution-fn!`; read on demand during type-lattice operations. **Mantra violations**: ❌ off-network, ❌ not structurally emergent (callback invocation is imperative), ❌ not info flow through cells. | **PM Track 12 + PPN 4C parent Phase 4 jointly retire**: when PM 12 makes module-load-time infrastructure on-network (cells accessible from leaf modules via scope chain), type-lattice.rkt's queries restructure to read directly from cells. Phase 4's CHAMP retirement provides the natural reframing point for the data flow (was reading CHAMP via callback → reads attribute-map facet via universe dispatch). See [PPN 4C parent Phase 4 row](tracks/PPN/PPN_4C/2026-04-17_PPN_TRACK4C_DESIGN.md) for absorbed scope. The "constraint on shim signature" (post-S2.c-iii: `meta-solution` must remain a top-level definition with signature `(id) -> solution-or-#f` so the callback installation works) is not a feature — it's a constraint imposed by this scaffolding. |
 | Per-domain meta-store parameters (3) | 4C addendum S2.d-followup audit (2026-04-25) | ⬜ flagged | `current-sess-meta-store` (metavar-store.rkt:2693), `current-mult-meta-store` (:2562), `current-level-meta-store` (:2465). Each is a Racket parameter holding `(make-hasheq)`. Off-network mantra violation; legacy from pre-network meta storage era. Parallel pattern across all 3 non-type domains. | Set at module-load via `make-parameter` default; read in fresh-X-meta + solve-X-meta! for status tracking. Coexists with `meta-domain-info` `'champ-fallback` entries that route to these stores when `'universe-active?` is #f. Post-S2.d (all 4 domains universe-active), the champ-fallback path is dead; these stores become unused. | **PM Track 12 retires**: submodule-scope primitive provides the natural retirement target — meta-store registry semantics migrate to per-submodule on-network cells. Until then, scaffolding labeled in D.3 §7.5.14.1. S2.e closes the per-domain factory + meta-store retirement together (parallel to type's `current-prop-meta-info-box` retirement timing in Phase 4). |
 | Per-domain CHAMP-box parameters (3) | 4C addendum S2.d-followup audit (2026-04-25) | ⬜ flagged | `current-sess-meta-champ-box`, `current-mult-meta-champ-box`, `current-level-meta-champ-box`. Each holds a box of CHAMP for status tracking — parallel to type's `current-prop-meta-info-box`. Off-network. | Read in `meta-domain-info` `'champ-fallback` entries (e.g., `mult-champ-fallback`, `level-champ-fallback`, `sess-champ-fallback`). Post-S2.d all 4 universe-active → champ-fallback dead path → these boxes become unread. | **PM Track 12 retires** with the meta-store parameters above. S2.e closes the dead-path retirement before PM 12 lands. |
 | Per-domain factory callbacks (3) | 4C addendum S2.d-followup audit (2026-04-25) | ⬜ flagged | `current-prop-fresh-mult-cell` (driver.rkt:2600), `current-prop-fresh-level-cell` (similar), `current-prop-fresh-sess-cell` (similar). Each is a Racket parameter holding a fresh-cell allocation closure. Used in fresh-X-meta legacy fallback path for pre-init test contexts. | Set at module-load with default `#f`; populated by driver.rkt during init. Read in fresh-X-meta legacy path (when universe is not initialized — bare-metavar-store tests not loading elaborator-network.rkt). | **PM Track 12 retires**: when test fixture infrastructure goes on-network, the pre-init fallback paths can collapse entirely — tests would call `init-meta-universes!` at setup. S2.e reviews whether these fallbacks remain needed; if not, retires before PM 12. Per D.3 §7.5.14.1 + §7.5.14.3. |
@@ -1430,7 +1447,7 @@ The 4A.c-iii-c -c gate surfaced that `racket tools/lint-parameters.rkt --strict`
 
 ### PM Track 12 design input from PPN 4C Phase 1e-α (2026-04-20) — submodule-scope primitive
 
-Phase 1e-α's η split of `merge-hasheq-union` surfaced a scope conflation in the current architecture that PM Track 12 is positioned to resolve. Core finding (from [PPN 4C D.3 §6.14.2](2026-04-17_PPN_TRACK4C_DESIGN.md)):
+Phase 1e-α's η split of `merge-hasheq-union` surfaced a scope conflation in the current architecture that PM Track 12 is positioned to resolve. Core finding (from [PPN 4C D.3 §6.14.2](tracks/PPN/PPN_4C/2026-04-17_PPN_TRACK4C_DESIGN.md)):
 
 **"Identity-or-error" at a cell needs an answer to "identity within what scope?"** Today's flat shared-persistent-registry-network can't answer this — tests legitimately redefine names across runs, and that's correct behavior under the shared-fixture architecture, not a bug. Per-site identity classification is blocked until scope is first-class on the network.
 
@@ -1455,10 +1472,10 @@ These are "snapshot cells of Racket parameters" — dual-store pattern where the
 
 | Cell / site | Live parameter (to retire) | Current merge | After PM 12 |
 |---|---|---|---|
-| `narrow-var-constraints` cell at [global-constraints.rkt:104](2026-04-17_PPN_TRACK4C_DESIGN.md) | `current-narrow-var-constraints` | `merge-last-write-wins` | `net-new-timestamped-cell` |
-| `ns-context` cell at [namespace.rkt:757](2026-04-17_PPN_TRACK4C_DESIGN.md) | `current-ns-context` | `merge-replace` | `net-new-timestamped-cell` |
-| `defn-param-names` cell at [global-env.rkt:358](2026-04-17_PPN_TRACK4C_DESIGN.md) | `current-defn-param-names` | `merge-replace` | `net-new-timestamped-cell` |
-| per-name definition cells at [global-env.rkt:121, 354](2026-04-17_PPN_TRACK4C_DESIGN.md) | `current-definition-cell-ids` (map) | `merge-replace` | `net-new-timestamped-cell` per name |
+| `narrow-var-constraints` cell at [global-constraints.rkt:104](tracks/PPN/PPN_4C/2026-04-17_PPN_TRACK4C_DESIGN.md) | `current-narrow-var-constraints` | `merge-last-write-wins` | `net-new-timestamped-cell` |
+| `ns-context` cell at [namespace.rkt:757](tracks/PPN/PPN_4C/2026-04-17_PPN_TRACK4C_DESIGN.md) | `current-ns-context` | `merge-replace` | `net-new-timestamped-cell` |
+| `defn-param-names` cell at [global-env.rkt:358](tracks/PPN/PPN_4C/2026-04-17_PPN_TRACK4C_DESIGN.md) | `current-defn-param-names` | `merge-replace` | `net-new-timestamped-cell` |
+| per-name definition cells at [global-env.rkt:121, 354](tracks/PPN/PPN_4C/2026-04-17_PPN_TRACK4C_DESIGN.md) | `current-definition-cell-ids` (map) | `merge-replace` | `net-new-timestamped-cell` per name |
 
 **Primitive ready** at [`clock.rkt`](../../racket/prologos/clock.rkt) (1e-β-iii-a, commit `4205b0ad`) with 17/17 tests GREEN. PM Track 12 activates: when the parameters retire (making cells primary state), the migration is mechanical and the timestamp-ordering becomes load-bearing. See [PM series master § Track 12](2026-03-13_PROPAGATOR_MIGRATION_MASTER.md) "Additional design input from PPN 4C Phase 1e-β-iii (2026-04-20)" for full context.
 
@@ -1772,9 +1789,9 @@ Existing pre-4C off-network registries (`register-domain!`, `register-typing-rul
 
 **Cross-references**:
 - [GitHub Issue #55](https://github.com/LogosLang/prologos/issues/55) — closed as "superseded by D.4 principled on-network design"
-- [D.4 design doc](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) §10 — D.4 canonical direct migration (replaces D.3 hybrid)
-- [D.4 design doc](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) §13.6 — Pre-0 spike plan + result
-- [§4.6 Specialized cell type framework](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) — the canonical D.4 architecture
+- [D.4 design doc](tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) §10 — D.4 canonical direct migration (replaces D.3 hybrid)
+- [D.4 design doc](tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) §13.6 — Pre-0 spike plan + result
+- [§4.6 Specialized cell type framework](tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) — the canonical D.4 architecture
 - Spike implementation: `racket/prologos/benchmarks/micro/bench-specialized-cell-spike.rkt` (throwaway; commit `7b681b9e`)
 - Spike result data: `racket/prologos/data/benchmarks/tropical-spike-d4-2026-05-14.txt`
 - D.3 historical sections marked RETIRED-PER-D.4-CANONICAL: §10.1.A (Honest framing + retirement plan), §10.A (Threshold propagator role under hybrid), §10.B (Cell Staleness Contract), §14.4 Q5 (dual classification)
@@ -1791,7 +1808,7 @@ Existing pre-4C off-network registries (`register-domain!`, `register-typing-rul
 3. Parent D.3 Phase 11b row "Scope addition (2026-05-24) — KR-1/2/3 absorption" (3C.d.4 deliverable 7)
 4. Test rename at [`tests/test-provenance-errors.rkt`](../../racket/prologos/tests/test-provenance-errors.rkt):359 reflecting partial deferral (3C.d.4 deliverable 5)
 
-**Source**: PPN 4C addendum [§9.5.4.14 KR-1/2/3 named drift](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) (captured at 3C.c-VAG close 2026-05-24, commit `25f4343c`) + [§9.5.5 Phase 3C.d mini-design](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) Q-D.1 lock + [§9.5.5.13 empirical findings](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) (commit `ebf56b80`).
+**Source**: PPN 4C addendum [§9.5.4.14 KR-1/2/3 named drift](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md) (captured at 3C.c-VAG close 2026-05-24, commit `25f4343c`) + [§9.5.5 Phase 3C.d mini-design](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md) Q-D.1 lock + [§9.5.5.13 empirical findings](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md) (commit `ebf56b80`).
 
 ### KR-1: Diagnosis-line UX regression (union error rendering)
 
@@ -1841,9 +1858,9 @@ Existing pre-4C off-network registries (`register-domain!`, `register-typing-rul
 
 ### Cross-references
 
-- Source design: PPN 4C addendum [§9.5.4.14 (KR-1/2/3 named drift)](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) + [§9.5.5 (3C.d mini-design)](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) + [§9.5.5.13 (3C.d.3 empirical findings)](2026-04-21_PPN_4C_PHASE_9_DESIGN.md)
-- 3-column adversarial Q-D.1 lock: [§9.5.5.4](2026-04-21_PPN_4C_PHASE_9_DESIGN.md)
-- Parent D.3 Phase 11b row: [PPN Track 4C D.3](2026-04-17_PPN_TRACK4C_DESIGN.md) Progress Tracker Phase 11b (2026-05-24 scope addition)
+- Source design: PPN 4C addendum [§9.5.4.14 (KR-1/2/3 named drift)](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md) + [§9.5.5 (3C.d mini-design)](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md) + [§9.5.5.13 (3C.d.3 empirical findings)](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md)
+- 3-column adversarial Q-D.1 lock: [§9.5.5.4](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md)
+- Parent D.3 Phase 11b row: [PPN Track 4C D.3](tracks/PPN/PPN_4C/2026-04-17_PPN_TRACK4C_DESIGN.md) Progress Tracker Phase 11b (2026-05-24 scope addition)
 - Skip-gated canary: [`tests/test-elaboration-parity.rkt`](../../racket/prologos/tests/test-elaboration-parity.rkt) `'union-diagnosis-restoration "Phase 11b"`
 - Test rename: [`tests/test-provenance-errors.rkt`](../../racket/prologos/tests/test-provenance-errors.rkt) "renders per-step assumption-names (diagnosis lines deferred to Phase 11b — see KR-1)"
 - Restoration substrate (still live for non-union path): [`typing-errors.rkt:173-280`](../../racket/prologos/typing-errors.rkt) (`build-derivation-chain` + `format-context-diagnosis` + `format-atms-conflict`)
@@ -1866,7 +1883,7 @@ Replace 3-pass imperative preparse with propagator-native cell-based name regist
 
 ### Cross-references
 
-- Source audit: PPN 4C addendum [§18.10.4 (FREE_ORDERING at preparse layer)](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) + [§18.5 (PM 12 boundary)](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) + [§18.11 (cyclic definitions principle)](2026-04-21_PPN_4C_PHASE_9_DESIGN.md)
+- Source audit: PPN 4C addendum [§18.10.4 (FREE_ORDERING at preparse layer)](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md) + [§18.5 (PM 12 boundary)](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md) + [§18.11 (cyclic definitions principle)](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md)
 - Original FREE_ORDERING design: [`2026-02-28_1800_FREE_ORDERING.md`](2026-02-28_1800_FREE_ORDERING.md)
 - Literate book context: [`2026-02-28_1400_LITERATE_BOOK_SYSTEM.md`](2026-02-28_1400_LITERATE_BOOK_SYSTEM.md) Phase 5a/5b/5c
 - Implementation: `macros.rkt:2366-2460` (`preparse-expand-all`), `tools/form-deps.rkt` (SCC analysis)
@@ -3343,7 +3360,7 @@ goal is to retire whole-file aborts by volume, these come first.
 > `extract-surfs-from-form-cells`'s last caller — which is exactly why the form
 > cells are write-only. **The remaining work is not wiring; it is solving the
 > preparse-macro problem that caused the revert.** See
-> [Track 3 § Phase 7 status](2026-04-01_PPN_TRACK3_DESIGN.md#p7-status).
+> [Track 3 § Phase 7 status](tracks/PPN/PPN_3/2026-04-01_PPN_TRACK3_DESIGN.md#p7-status).
 >
 > Per-item deltas: **1** reduced to the form-cell wiring · **4 RESOLVED by
 > removal** · **6 ⛔ RULED DO-NOT-DELETE 2026-08-03** — reader/parser unification
@@ -3401,12 +3418,12 @@ pinned by `tests/test-dual-spine-merge-key.rkt`. These are the residuals.
 
    | layer | owner | state | touched by this arc? |
    |---|---|---|---|
-   | the reader's 5 parse cells (char·indent·token·bracket·tree, `parse-reader.rkt`) | PPN Track 1 | cells landed, **propagator wiring unbuilt**; scoped by [4D §12](2026-05-19_PPN_4D_IMPLEMENTATION_DRAFT_NOTE.md) | **NO** |
+   | the reader's 5 parse cells (char·indent·token·bracket·tree, `parse-reader.rkt`) | PPN Track 1 | cells landed, **propagator wiring unbuilt**; scoped by [4D §12](tracks/PPN/PPN_4D/2026-05-19_PPN_4D_IMPLEMENTATION_DRAFT_NOTE.md) | **NO** |
    | the per-form cells (`form-cells.rkt`, source-line keyed) | PPN Track 3 | written, read by nothing **yet** | **NO** |
    | the merge's tree leg (`parse-top-level-forms-from-tree` → `tree-by-line` → `merge-form`) | the merge | never fired, now gated off | **YES — only this** |
 
    **PPN Track 3 Phase 7's own design says to DELETE the merge.** Verbatim
-   ([Track 3 design](2026-04-01_PPN_TRACK3_DESIGN.md) §"Phase 7: Pure Merge
+   ([Track 3 design](tracks/PPN/PPN_3/2026-04-01_PPN_TRACK3_DESIGN.md) §"Phase 7: Pure Merge
    Function + Shared Cells"): *"**Delete**: `merge-preparse-and-tree-parser`,
    `merge-form`, source-line-keyed identity matching, `tree-by-line` hash
    building. Total ~80 lines from driver.rkt."* Phase 7 shipped only its first
@@ -3500,7 +3517,7 @@ pinned by `tests/test-dual-spine-merge-key.rkt`. These are the residuals.
    `parse-reader.rkt`, `surface-rewrite.rkt`, `form-cells.rkt`). **Both** branches
    are off-network, so deleting one buys nothing on-network — it just removes the
    thing PPN 4D is the eventual successor to. (This also settles the apparent
-   conflict with [Track 3 §11's](2026-04-01_PPN_TRACK3_DESIGN.md) "tree-parsing is
+   conflict with [Track 3 §11's](tracks/PPN/PPN_3/2026-04-01_PPN_TRACK3_DESIGN.md) "tree-parsing is
    canonical": §11 described an aspiration the code never acquired, so neither
    deleting nor keeping the arms advances or retreats from it.)
 
@@ -4402,7 +4419,7 @@ hand-written `[$bcast-step]` sentinel. Its message was reworded phase-free at
 the retired `bcast-not-yet`. **Needs a constructed-datum probe, not a grep.**
 (The binder twin below it IS reachable and is unaffected.)
 
-### 81. ⬜ The suite's `total_tests` can silently UNDER-REPORT while `all_pass` stays true
+### 81. ✅ **DISCHARGED `160ad2f6`** (SW-25: the runner names every per-file count drop) — The suite's `total_tests` can silently UNDER-REPORT while `all_pass` stays true
 
 Measured at D4.P4d slice 4d-2. Two consecutive `--all` runs on the SAME code gave
 **10061** and **10066**; the delta was entirely `test-properties.rkt`, recorded as
@@ -4421,6 +4438,17 @@ the battery delta.
 **Practical rule until fixed**: when the suite total moves in a direction the
 battery delta does not explain, diff per-file counts from `timings.jsonl`
 (`results[].tests`) before believing either figure.
+
+**Status 2026-10-13 — discharged (SW-25, `160ad2f6`).** The instance is explained: `test-properties.rkt` required
+`test-generators.rkt`, a TEST file, so its 5 tests were counted into `test-properties` only when the worker had not
+instantiated that module yet — DEFERRED 161's mechanism, fixed by `8014caef` and guarded by `test-suite-plan.rkt`
+("no test file requires another test file"); recorded counts read 13 through `58241c0c`, 8 from `61b24b02` on. The
+hazard stays general, so the runner now does the per-file diff itself: after the summary it prints
+`COUNT DROP: <file> ran N tests; at its last recorded pass (<commit>) it ran M` for every passing file below its count
+in the newest valid record where it passed (suite-plan.rkt `prior-test-counts` / `count-drops`, newest 30 records,
+73 ms worst case on main's 202 MB history). Exit code unchanged: deleting a test is legitimate. Verified end to end
+(a test case commented out → the line, naming `e4e9e451`'s 8) and by mutation. It already paid for itself: it is
+what showed that SW-27's 14 rewritten checks all still run (no drop on the four migrated files).
 
 ---
 
@@ -6748,6 +6776,13 @@ this lands; they are the acceptance tests.
 Found by the grammar-drift tripwire firing on `940c9c88` (CIU T6 slice
 1b-v-B2b), which is exactly what it exists for.
 
+**2026-10-14 — THE FAMILY IS NOW FINAL** (CIU T6 1b-vi-D-2b, `9743e93e` on
+`ciu6-path-selection`; the tripwire fired again, as expected): the compiler mints
+all four — `*`, `*_`, `*-`, `*-_` — closer-adjacent and fused. The `*->` boundary is
+decided ([Q_U56](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u56)): not a construct; the
+selection consumer refuses it, guided, so the grammar needs no `*->` form either.
+The fix shape below is unchanged.
+
 **THE FACT** (verified): `editors/tree-sitter-prologos/grammar.js` has
 `flatten_step: $ => token.immediate('*')`. The compiler now mints `*_`
 closer-adjacent (`x{a}*_`, `[f x]*_`, `xs:{a}*_`), so the grammar consumes the
@@ -6906,7 +6941,24 @@ or gate the tree path on a real pool executor; the green-thread `parallel?` bran
 win and should be deleted. **When**: before PAR 4 pins its baseline — every PAR 4 A/B is
 otherwise credited with removing this defect (P0 record §5 "two baselines"). Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md).
 
-### 151. ⬜ ⭐ THE `.pnet` MODULE CACHE IS A NET LOSS: `pnet-stale?` `read`s every WHOLE file to compare a 2-element header, then the loader reads it AGAIN — 2.6 s per process start, vs 0.53 s elaborating the same 39 modules from source
+*Addendum 2026-10-14 (PAR 4 owner decision O-9 — the fix shape is decided; still open until it lands):*
+- **Decision**: production default **off**, and the tree path **deleted** — the green-thread `parallel?` branch,
+  the size-switched route (`propagator.rkt:3377` at main `99c893d4`) and the `current-tree-reduce-threshold`
+  parameter. It lands in PAR 4 P0.5 (D.1 §14 O-9, [`tracks/PAR/PAR_4/2026-10-12_PAR_4_D1_DESIGN.md`](tracks/PAR/PAR_4/2026-10-12_PAR_4_D1_DESIGN.md)).
+- **Read at `99c893d4`**: the tree "reduce" does no lattice work. `merge-fire-results` (`:3090`) only appends
+  lists, and the combined result then goes through the same sequential `bulk-merge-writes` (`:2978`). Its one
+  semantic change: all of a round's declared writes are applied before any undeclared write (replacement,
+  DEFERRED 157), so a round of 256+ fires uses a different application order.
+- **Evidence** (P0 record §11, `eb25caee` + `8278a66d`; on main since PAR 4 checkpoint 1, `c1f389ab`):
+  - the full suite passes with the default off (10 394 / 502);
+  - the 39 prelude caches generated cold under 256, off and 0 are identical;
+  - a merge-order census finds 0 tree-order divergences in the suite's 648 rounds of 256+ fires, because no such
+    round carries an undeclared write; a constructed two-writer network shows the order changes an answer
+    (3 → 1) when the shape does occur;
+  - cold prelude elaboration: merge phase 3.03 → 0.020 ms and −7.7 MB per run (its widest round is 368 fires);
+  - wide networks: 6.0–7.4× (P0 §10.1).
+
+### 151. ✅ **DISCHARGED** — fix (a) `baa1dce2` (checkpoint 3); fix (b) `08acff4a` (checkpoint 4: the body is fasl, `eab8dcf7`; the reader `tools/pnet-dump.rkt`, `c6f8fff7`) — THE `.pnet` MODULE CACHE WAS A NET LOSS: `pnet-stale?` `read`s every WHOLE file to compare a 2-element header, then the loader reads it AGAIN — 2.6 s per process start, vs 0.53 s elaborating the same 39 modules from source
 
 [`pnet-serialize.rkt:795-806`](../../racket/prologos/pnet-serialize.rkt) `pnet-stale?`
 does `(call-with-input-file pnet-path read)` — the full datum, ~0.4–1 MB per module — to
@@ -6929,7 +6981,39 @@ loaded. `transducer.pnet` written over source-elaborated dependencies is 747 783
 "identical modulo gensym numbering" holds only for files written the same way, and part of the 15.7 MB is
 dependencies' entries repeated. That bears on fix (b), and on any cache keyed or checked by content hash.
 
-### 152. ⬜ `process-file` FORCES TWO MAJOR GCs PER CALL — `measure-memory-before`/`-after` call `(collect-garbage 'major)` unconditionally (~45 ms per file; the largest single cost of a 60 ms run)
+**Status 2026-10-13 — fix (a) merged to main in `baa1dce2` (checkpoint 3; branch `per-process-152-151` @ `7358c7c4`).**
+`PNET_VERSION` 10 → 11: a file is `(pnet-header VERSION KEY)` + body (old slots 2–30, unchanged); `pnet-stale?`
+reads only the header (an old single-datum file is stale from its first 13 bytes); the loader reads once. Staleness
+judgement unchanged (`pnet-header-fresh?`, `pnet-serialize.rkt:223`). Measured by the stream (record below): the
+stale-check read of all 40 files 1 291–1 375 → 1 ms; warm load phase (driver + prelude) CPU 2 690–2 760 → 1 540–1 550 ms,
+1 307 → 838 MB. **Warm still loses to cold and to no cache**: the loader's one text `read` is 1.24–1.32 s for
+16.9 MB. **Data for (b)**: the same bodies as `fasl` are 9.5 MB and read in 53–56 ms; that a fasl body makes a warm
+load beat no-cache (≈ 310 ms inferred) is a CONJECTURE, not measured end to end — measuring it is the next step
+(decision SW-22). Tests: `tests/test-pnet-header.rkt` (12). Every checkout's cache regenerates once. Record:
+`docs/tracking/handoffs/2026-10-13_PER_PROCESS_152_151_NOTE.md`.
+
+**Fix (b) measured end to end, 2026-10-13 (owner decision SW-22).** Branch `deferred-151b-pnet-fasl` (off main
+`2792123c`): `eab8dcf7` makes the BODY fasl and keeps the header text (`PNET_VERSION` 11 → 12; `pnet-stale?` unchanged);
+`9713a1a5` is the record ([`handoffs/2026-10-13_PNET_FASL_151B_DATA/README.md`](handoffs/2026-10-13_PNET_FASL_151B_DATA/README.md)).
+- **Same data**: bodies 40/40 equal to v11 modulo root path; strings and vectors come back immutable (text `read`
+  made them mutable), and no production code mutates one (every `vector-set!` site is on a local `make-vector`;
+  CHAMP/RRB values are rebuilt on load). Full suite on v12: 10 350 / 497, all pass.
+- **Load phase, CPU ms median** (ABBA ×4, under the exclusive suite lock, load 12–16): warm **1 450 → 285**
+  (5.1×), below no-cache (530 / 546, the control), so the cache now PAYS (1.9×); cold 1 028 → 732; 809 → 405 MB.
+  The ≈ 310 ms conjecture above holds (285 measured). Suite wall, one ABAB pair: 15.8 / 16.9 → 13.4 / 13.5 s.
+- **Decided (owner, SW-22): merge as fix (b)** — merged in checkpoint 4, `08acff4a`. Retiring the cache would have
+  forgone the 1.9×. The cost, a `.pnet` no longer readable as text, is met by `tools/pnet-dump.rkt` (owner request
+  SW-23, `c6f8fff7`): summary with the loader's verdict and its reason, `--slot`, `--text` (read-back-able); it
+  reads with `pnet-serialize.rkt`'s own readers and `PNET-BODY-SLOTS`, which the writer now checks its body against.
+- **Correction.** This entry said fasl's format "follows the Racket version". That was the pre-6.90 documentation:
+  since Racket 6.90.0.21 the encoding is version-independent (Racket reference §13.10). A Racket upgrade still
+  regenerates every cache, because it rebuilds `driver_rkt.zo` (`infrastructure-stale?`), not because of fasl; and
+  the loader's read sits inside an `exn?` handler, so an unreadable body falls back to source.
+- **Measured since**: the 9.5 MB vs 4.5 MB fasl sizes are string sharing — fasl writes each distinct string object
+  once; in memory the bodies' 42 267 strings are 1 703 objects, text `read` makes 42 241 (99.9 % of the gap). The
+  fasl reader returns the shared objects, immutable, which is what makes sharing them safe.
+
+### 152. ✅ **DISCHARGED `0e5da30f`** (branch `per-process-152-151`, merged to main in `baa1dce2`; the runner opts back in with `--memory-stats`, `e3efb2dc`) — `process-file` FORCES TWO MAJOR GCs PER CALL — `measure-memory-before`/`-after` call `(collect-garbage 'major)` unconditionally (~45 ms per file; the largest single cost of a 60 ms run)
 
 [`performance-counters.rkt:403-416`](../../racket/prologos/performance-counters.rkt). Found by
 PAR 4 P0 profiling (preloaded prelude, 10 reps): `measure-memory-before` + `-after` ≈ 33 %
@@ -6937,6 +7021,15 @@ of samples on every comparative file; `gc_ms` ≈ 56–60 ms per file regardless
 inflates every `process-file` measurement (bench-ab, PHASE-TIMINGS shares) and every LSP
 re-elaboration. **Fix shape**: only when a MEMORY-STATS consumer is active (a parameter, or
 the driver CLI flag), never in library calls. **When**: any time. Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md).
+
+**Status 2026-10-13 — discharged (checkpoint 3).** `measure-memory-before`/`-after` (`performance-counters.rkt:433`/`:443`)
+collect only when `memory-stats-enabled?` (`:425`): `current-memory-stats?`, `PROLOGOS_MEMORY_STATS` (anything but
+`""`/`"0"`, read per call), or `racket driver.rkt --memory-stats`. Off → no MEMORY-STATS line (omitted, not marked).
+Measured by the stream, test phase, base → fix (ABBA n=4; CPU / GC ms / major GCs): `test-transducer-01`
+1 276 / 1 067 / 36 → 208 / 14 / 0. Coordinator check: `raco test test-transducer-01` 4.43/4.58 → 1.91/1.88 s wall
+(ABAB, load 7–11; the ratio is the evidence). Tests: `tests/test-memory-stats.rkt` (6). **The runner** keeps the
+`memory` field only on request (owner decision SW-12, option C): `--memory-stats` (`e3efb2dc`); checked both ways —
+off: no field, 1.7 s; on: `{gc_ms, mem_before/after/retained_bytes}`, 2.9 s. Restart the LSP server to get the fix there.
 
 ### 153. ⬜ `benchmarks/comparative/parity-adversarial.prologos` CRASHES AT HEAD — the DFS solver's `solve: Depth limit exceeded (100)` escapes `process-file` uncaught; `bench-ab` has been timing a crash for this file
 
@@ -6955,7 +7048,7 @@ see the propagator network at all. **Fix shape**: count fires in `fire-and-colle
 `bsp_rounds`. PAR 4 needs these as phase-gate counters (P0 record §6). **When**: with PAR 4 P1
 at the latest. Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md).
 
-### 155. ⬜ RUNNING A MICRO-BENCHMARK DIRTIES THE TREE — `bench-parallel-demos.rkt` rewrites the TRACKED `data/benchmarks/parallel-demo-results.json` (PAR 2's recorded result, `ce4cde52`)
+### 155. ✅ **DISCHARGED `51a24f4f`** (SW-25: runs write `data/benchmarks/runs/`; two writers, not one) — RUNNING A MICRO-BENCHMARK DIRTIES THE TREE — `bench-parallel-demos.rkt` rewrites the TRACKED `data/benchmarks/parallel-demo-results.json` (PAR 2's recorded result, `ce4cde52`)
 
 Found when a PAR 4 P0 run overwrote it in the main checkout (restored from HEAD; both
 versions kept under the P0 data). A recorded result that any run silently replaces is not a
@@ -6963,7 +7056,15 @@ record. **Fix shape**: write to an untracked `data/benchmarks/runs/<timestamp>-�
 `--output`; keep the committed file as the named baseline. Sweep the other `benchmarks/micro`
 writers. **When**: any time. Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md).
 
-### 156. ⬜ ⭐ ON-NETWORK INFERENCE ACCEPTS ILL-TYPED PRIMITIVE-OP OPERANDS — `[int+ 1 "x"] : Int`, `[f64+ "x" "y"] : Float64`, `[int-lt 1 "x"] : Bool`, `[from-nat "x"] : Int` all type-check
+**Status 2026-10-13 — discharged (SW-25, `51a24f4f`).** The sweep covered every writer of a TRACKED file under
+`racket/prologos/data/` (49 tracked files), not just `benchmarks/micro`: **two** writers, not one —
+`bench-parallel-demos.rkt` → `parallel-demo-results.json` (this entry) and `tools/parity-test.rkt` →
+`parity-baseline.txt` (BSP-LE 2B Phase 0a's baseline, rewritten on every run). Every other mention of a
+`data/benchmarks` file in code is a comment or a print. Both now write `data/benchmarks/runs/<name>-<time>.<ext>`
+(git-ignored); `--output PATH` re-records a baseline deliberately. Verified: the tracked files byte-identical after
+both ran; `runs/` ignored; `--output` honoured.
+
+### 156. ⬜ ⭐ → PPN 4C (owner, SW-26) — ON-NETWORK INFERENCE ACCEPTS ILL-TYPED PRIMITIVE-OP OPERANDS — `[int+ 1 "x"] : Int`, `[f64+ "x" "y"] : Float64`, `[int-lt 1 "x"] : Bool`, `[from-nat "x"] : Int` all type-check
 
 **Found by**: the LSP check-only diagnostics work (2026-10-13) — `[int+ k "x"]` printed as a
 stuck term `[int+ 3 "x"] : Int` instead of an error. **The mechanism**: every primitive op
@@ -6988,6 +7089,16 @@ mismatch is a contradiction on-network rather than a silently ignored child. Cen
 `register-typing-rule!` site with arity > 0 for the same gap. Regression pins: the probe
 expressions above must error in both `#:evaluate?` modes; `[int+ 1 2]` stays `Int`.
 **When**: soon — it is a correctness gap visible to every editor user.
+
+**Owner decision 2026-10-13 (SW-26): PPN 4C takes this** — it may resolve within that track. Relayed by a note in the
+PPN 4C track directory (`tracks/PPN/PPN_4C/2026-10-13_PPN_4C_NOTE_FROM_DEFERRED_SWEEP.md`, on its branch once that
+session commits it). Its natural home is the design's §6.4 *Aspect-coverage completion (A3, Phase 6)*
+(`tracks/PPN/PPN_4C/2026-04-17_PPN_TRACK4C_DESIGN.md`, "Problem: 76 `register-typing-rule!` entries vs ~326 `expr-*`
+structs"). **Caveat, from the mechanism above**: A3 aims to make the `infer/err` fallback reachable only for genuinely
+unrepresentable cases, and that fallback is the ONLY path that catches this hole today (`[f64+ (the Float64 1.0) "x"]`
+errors because `the` forces it). So 156 resolves inside PPN 4C only if the on-network rules gain an operand contract;
+retiring the fallback without one would make it worse (zero cases caught instead of some). The regression pins above
+should be in place before A3 retires anything.
 
 ### 157. ⬜ ⭐ BSP LOSES UPDATES TODAY: UNDECLARED WRITES BYPASS THE MERGE, AND THE RELATIONAL GUARD RETRACTS THROUGH A LAST-WRITER-WINS CELL — two failing guards in one round clear only ONE worldview bit, whether or not the output is declared
 
@@ -7069,6 +7180,16 @@ var. Two layers:
 - **(a)** `tools/hook-guard-racket.sh`, the harness-enforced PreToolUse guard, denies `raco make` without
   `PLT_CS_COMPILE_LIMIT` in the command. This covers agents and subagents, which is the layer that guard exists for,
   but not humans.
+  **DONE (checkpoint 3):** `9d24d463` (merged `977c008e`) refuses `raco make|setup`, `raco pkg install|update` and
+  `raco test --make` whose environment lacks `PLT_CS_COMPILE_LIMIT` ≥ 1000000, however raco is spelled; it reads
+  inline `VAR=…`, `env VAR=…` and an earlier `export` in the same command. Since `eb2a4b72` its deny carries BOTH
+  harnesses' fields — Hermes's shell-hook bridge ignored the Claude-only output (`_parse_response` → `None`, an
+  allow). **Registered 2026-10-13**, user level, pointing at main's checkout (so the guard in force is main's):
+  Claude Code `~/.claude/settings.json` `PreToolUse` `Bash`; Hermes profile `logos-language-designer` `config.yaml`
+  `hooks.pre_tool_call` `terminal` — active after the owner's one-time consent (Hermes SKIPS an unapproved hook when
+  there is no TTY, as in the desktop app). A guard that fails to parse exits 2: Hermes then blocks (verified in
+  `shell_hooks.py:417`), and Claude Code's documented exit-2 contract is a block too (not tested here) — it fails
+  closed, loudly. Record: merge note § Checkpoint 3.
 - **(b)** The runner, and `bench-lib.rkt`'s single `raco make`, fail fast when a giant module is interpreted,
   using a ~1 ms self-check that times `whnf`/`shift` on a fixed term. Compiled vs interpreted is bimodal (`testing.md:11`
   measured `shift` at ~830×). This covers every entry point through the runner, humans included, and catches the
@@ -7078,7 +7199,7 @@ var. Two layers:
 for (b) is the self-check's two modes on this machine (limited vs no-limit build) and its false-positive rate
 at load ~25. **When**: before PAR 4 pins its baseline.
 
-### 160. ⬜ ⭐ SUITE-ONLY FAILURES UNDER THE CURRENT RUNNER — a file fails inside `--all` and passes alone; 2 of 3 full runs at `fd2986cc` (`test-cond-01`: `Unbound variable classify`; `test-error-messages`: an annotated `Nat -> Nat` lambda "cannot infer the type of an unannotated parameter")
+### 160. 🟡 MITIGATED by SW-27 (`51b6b1f9` + `922f6dd5`: a program's registry state is scoped to its compilation unit) — **OPEN: specs are keyed by BARE name, not by namespace**; the architectural fix belongs to PM Track 12B (free ordering) and PM Track 11 = PPN 8 (incremental) — SUITE-ONLY FAILURES UNDER THE CURRENT RUNNER — a file fails inside `--all` and passes alone; 2 of 3 full runs at `fd2986cc` (`test-cond-01`: `Unbound variable classify`; `test-error-messages`: an annotated `Nat -> Nat` lambda "cannot infer the type of an unannotated parameter")
 
 Found during the DEFERRED 159 remedy: three full suites in main within 6 minutes (load 2–28), before
 and after the rebuild, so the build is not the cause.
@@ -7126,6 +7247,56 @@ the next suite baseline is pinned. A flaky gate makes every "all pass" probabili
   only the second half. It passed alone 2/2, and in a second full run of the same code.
 - **Next**: `--all` ×N under the new runner; for any failure, replay its worker sequence from `run.json` and bisect
   the culprit as for 161. Start from the spec-store suspect.
+- **Root-caused for `test-error-messages` (checkpoint 3 gate, 2026-10-13, run `20261013T061739-12431`):** 10 350 /
+  497, the only failure `:465:2` again. The run's `'workers` record gave the victim's worker sequence (4th of 40);
+  replayed in one batch worker it fails 3/3, and the victim alone passes. **Main's own code fails the same
+  replay** (`deferred-sweep-146-149` @ `405f164e` = `01ef2542` + docs), so the checkpoint did not cause it.
+  Single-predecessor bisection: **`test-defn-multiarg-patterns.rkt` then `test-error-messages.rkt`** fails; the
+  other two predecessors do not. Renaming in a copy of the victim: `ok2` alone → pass, `ok1` alone → fail. The
+  predecessor declares `(spec ok2 Nat -> Nat)` in `ns test` (`:286`); the victim's `defn ok2` in `ns t` is checked
+  against it. **Mechanism established** — see § *Cross-FILE spec-store leakage* at the top of this file.
+
+**Status 2026-10-13 — mitigated, still open (SW-25 batch; decision SW-27, `51b6b1f9` + `922f6dd5`; see the owner's
+note below).** The open question in the
+mechanism note — "whether the driver itself (LSP, REPL) has an analogous leak" — was answered first, and it changed the
+fix: **the driver leaked too**, so this was a language bug, not only a harness artifact.
+- **Mechanism.** Registrations update their parameter by ASSIGNMENT (`register-spec!`, `macros.rkt:498`, and 16+ other
+  registries), and `process-file-inner` seeds each file's registry cells from those parameters (`init-*-cells!`).
+  `process-file` bound none of them (`load-module` already scoped specs per module, `driver.rkt:3208`), so a top-level
+  program's registrations stayed in the process and seeded the next program's cells. test-support's one shared box
+  was a second channel.
+- **User-visible, measured with no test code** (`process-file` as the LSP calls it): an editor re-check of ONE document
+  after the user deleted `spec f` and annotated `f` inline failed "defn f has both a spec and inline type annotations"
+  — the deleted spec still applied; and `spec ok2` in `ns test` broke a later `defn ok2` in `ns t` (this entry's
+  `test-error-messages` message). `racket driver.rkt a b` loops `process-file` the same way (`driver.rkt:3967`).
+- **Fix (SW-27, scope not restore).** `call-with-file-registry-scope` binds every parameter a unit's cells are seeded
+  from and every cell id it assigns — 59: 24 registries + 24 cell ids (macros.rkt's ONE ordered list per family, from
+  which the batch worker's save/restore are now derived), 3+3 warnings, 2+2 narrowing, the attribute-map id — to the
+  caller's current value, and forks the registry network (O(1)). `process-file` runs in it; `#:before-unit-exit` is
+  the sanctioned read of a unit's final state (the LSP's per-document spec store; 14 test sites in 4 files, `922f6dd5`,
+  which had read it after return). test-support's `run-ns-*` calls are each a unit over a fresh box of the post-prelude
+  network.
+- **Verified.** Probes red → green on all three channels; the checkpoint-3 pair in ONE batch worker fails 3/3 on
+  `e7cda107`, passes 3/3 after; `tests/test-file-unit-isolation.rkt` (5, incl. a class guard: every parameter an
+  `init-*-cell(s)!` assigns or seeds from — 59, scanned from source — is in the scope); four mutations red; full suite
+  10 385 / 501 all pass, delta exact. Evidence: `handoffs/2026-10-13_SW25_DATA/`.
+- **Side effect, intended.** Whether typing runs in persistent or per-command attribute-map mode no longer depends on
+  an EARLIER program in the process (it did for LSP REPL evals after any document check, and for `run-ns` calls after
+  any `run-ns-ws-file-all` in the same worker).
+- **Not covered: LSP REPL sessions** → DEFERRED 171.
+
+**Owner, 2026-10-13 — why this stays open.** SW-27 (each program self-contained) is reasonable for now. Properly
+speaking, a `spec` should be **fully qualified to its namespace**: today the spec store is keyed by the bare symbol
+(`macros.rkt:490` "symbol → spec-entry"; lookups by `bare-fname`, `elaborator.rkt:385`), so within ONE process unit two
+namespaces still share a key space — SW-27 removed the cross-PROGRAM channel, not the cross-NAMESPACE one. A complete
+solution falls into the scope of **incremental compilation** (PM Track 11, `MASTER_ROADMAP.org:56`, = PPN Track 8,
+`:516`) and **free ordering of modules** (PM Track 12B, `:322`, Stage-0 note
+`2026-06-06_PM_TRACK12B_FREE_ORDERING_ON_NETWORK.md`), and may take several tracks' worth of scope. Questions that
+design must answer, none measured here: what a spec's key is (FQN, or the namespace it is declared in); how a spec
+propagated from an import (`current-propagated-specs`) is named when two imports export the same bare name; and what
+replaces per-unit SCOPING once modules are elaborated in free order on one network — the unit boundary SW-27 relies
+on is exactly what free ordering dissolves. Until then: SW-27 holds per program, and DEFERRED 171 (REPL sessions) is
+the known gap in it.
 
 ### 161. ✅ **DISCHARGED `2999a74b` + `8014caef`** (branch `runner-queue-gate`, merged to main in `f6e530d7`) — A FILE THAT RUNS ZERO TESTS IS COUNTED AS A PASS — `test-generators.rkt` reported `PASS (0.0s)` with 0 tests in the first `--all` after a cold rebuild of `compiled/`; the INCOMPLETE check counts units that REPORTED, not units that RAN tests
 
@@ -7163,9 +7334,13 @@ attribution is an inference. Under the new gate the same artefact would have bee
 - Old records double-counted those 5 tests whenever the two files ran in different workers (18 counted for 13).
 
 **Open**:
-1. Main's history holds 2 records with an undeclared 0-test PASS unit (`test-generators.rkt`,
-   `test-int-list-quick.rkt`, both `all_pass` true). Annotating them is a decision: (v) said annotate, but the
+1. ✅ **DONE (SW-19)**: `c02d378a` adds the rule to `record-invalid-reason` (generic, no list: over main's 1 936 records
+   it matches exactly these 2), and main's `timings.jsonl` is annotated (2 records; only the key added; a second pass
+   annotates 0). Was: Main's history holds 2 records with an undeclared 0-test PASS unit (`test-generators.rkt`,
+   `test-int-list-quick.rkt`, both `all_pass` true). Annotating them is a decision: SW-5 said annotate, but the
    annotation tool marks only records whose results are fewer than file_count.
+   Related, SW-21 (`6e0cc7a8`): `--tests` on a module that is not a test unit (`test-support.rkt`, a library or fixture
+   under `tests/`) is refused with exit 64 instead of being run, reported EMPTY and called INCOMPLETE.
 2. `test-int-list-quick.rkt`'s 0-test record is NOT explained by the library mechanism: no test file requires it
    (census at `8014caef`).
 
@@ -7202,6 +7377,8 @@ REFUTED and cites this entry. **Open 2** (the class sweep) was done on branch `g
 yet merged): `benchmark-tests.rkt`'s regression and variance tables were inert in exactly this way (`make-hasheq`
 keyed by file-name strings), fixed with a copied-key test. One latent site, `measure-production-n.rkt:91`, is
 interned literals today. The five runner files are clean.
+**Checkpoint 3**: open 2 merged in `977c008e`; the latent `measure-production-n.rkt:91` site is fixed
+(`make-hash`) in `200bc3d6` (owner decision SW-18). Open 3 stays with 160.
 
 ### 163. ⬜ ⭐ EVERY RUNNER START KILLED EVERY BATCH WORKER ON THE MACHINE — Step 0's `pkill -f batch-worker.rkt` was machine-wide, so a run in any session, worktree or clone killed the workers of every concurrent suite — **fix landed `b45bbf44`**; 6 worktrees + 2 clones still carry the old runner
 
@@ -7242,7 +7419,15 @@ There is no unit test, because this is process-level behaviour.
    VS Code build output. Their two merged branches were deleted (`git branch -d`). **Still open: the two clones only.**
    Both hold commits and records that are not on main (`egraph-relational-spike`: 12 commits, the spike's closing
    note; `preduce-autonomy`: 62 commits, the loop's ledger and retro), so they wait on an owner decision.
-2. **Agents can still do it by hand.** `.claude/settings.local.json:71` allows `Bash(pkill:*)` without a prompt,
+   **Owner decision 2026-10-13: keep both clones as-is for now.** Their runners still carry the machine-wide
+   form (`run-affected-tests.rkt:529-530`, `"-f" "batch-worker.rkt"`) and take no suite lock; every nested
+   worktree has the scoped form (main `:723-727`).
+2. ✅ **DONE (checkpoint 3).** Guard `e9b2a30e` (merged `977c008e`): a `pkill`/`killall` whose pattern can reach a
+   racket process is refused unless parent-scoped. `8b113a9f` (owner decision SW-16) closes the indirect forms —
+   a `pgrep` in a command that also kills is judged as the `pkill` it amounts to (co-occurrence over-approximates
+   pipe / `$(…)` / variable / file dataflow), `ps | grep PAT | … kill`, `-v`, `kill -1`, and `"$(…)"` inside quotes;
+   145 rows, 9 mutations all red. `53e6de98` narrows the allow-list to `Bash(pkill -P:*)` (decision SW-17).
+   Registered as in 159 (a). Was: **Agents can still do it by hand.** `.claude/settings.local.json:71` allows `Bash(pkill:*)` without a prompt,
    and a `pkill -f racket` or `pkill -f batch-worker` from any session has the same blast radius. **Fix shape**
    (a decision): either `tools/hook-guard-racket.sh` (159's PreToolUse guard) denies a
    `pkill`/`killall` pattern that matches racket or batch-worker without `-P`, or the allow-list is narrowed.
@@ -7310,7 +7495,7 @@ longitudinal read of the file does include them (baselines, PIRs, trend tools).
 
 **When**: (1) and (3) together, before PAR 4 pins a baseline. (2), (4) and (5) any time.
 
-**Status 2026-10-13 — open items 1–5 fixed (merged in `f6e530d7`); owner decisions (iv)–(vi) applied.**
+**Status 2026-10-13 — open items 1–5 fixed (merged in `f6e530d7`); owner decisions SW-4–SW-6 applied.**
 - **Open 1** (zero tests): fixed with 161, `2999a74b`.
 - **Open 2** (GUARD exit 0): `57a542e2`. A refusal exits **3**, and the banner says "NOTHING WAS RUN". Every exit
   code is in one table, `suite-plan.rkt` § EXIT STATUS: 0 / 1 / 2 / 3, plus 75 for a busy suite lock under `--no-wait`.
@@ -7347,7 +7532,7 @@ because the edge is dynamic (deliberately: `batch-worker.rkt` :51-53).
 1. Every checkout older than `f6e530d7` still has the gap (see 163 open 1 for the list).
 2. The full-suite precompile path was verified by reading, not by a repro.
 
-### 166. ⬜ THE SUITE QUEUE CAN BE BYPASSED SILENTLY — an inherited `PROLOGOS_SUITE_LOCK` makes a run queue on a private lock file, and nothing on screen says so; also, the lock is not held by the workers a runner spawns
+### 166. ✅ **DISCHARGED `c1d4f8f3`** (branch `deferred-sweep-146-149`; reaches main at the next checkpoint) — THE SUITE QUEUE CAN BE BYPASSED SILENTLY — an inherited `PROLOGOS_SUITE_LOCK` makes a run queue on a private lock file, and nothing on screen says so; also, the lock is not held by the workers a runner spawns
 
 **Found by** the coordinator at the checkpoint (`f6e530d7`), on the queue's first real use. A targeted `--no-wait` run went
 ahead while a full suite held the machine lock exclusively. The cause was in the shell: `PROLOGOS_SUITE_LOCK` was set
@@ -7363,3 +7548,574 @@ deliberately.
 probe `lock-probe.sh` (+ `lock-inherit.rkt`, `lock-try.rkt`; racket-performance-probing skill `scripts/`): when a lock-holding parent is SIGKILLed, another process can take the lock at once, while
 the child it spawned is still running. A SIGKILLed runner therefore frees the queue while its orphaned workers finish
 their current unit (they exit at stdin EOF). That is a bounded window of contention, and only after a crash.
+
+**Status 2026-10-13 — discharged (owner decision SW-20: no extra flag).** `suite-lock.rkt` `suite-lock-banner`: every
+runner, `bench-ab`, `benchmark-tests` and the annotate tool print `Suite lock: <mode> on <path>`; when
+`PROLOGOS_SUITE_LOCK` resolves to a file other than the default, a ⚠ line names both files, and the runner repeats it
+under its `N tests in` line. Before: 0 lines about the lock under an inherited override; after: header, ⚠, ⚠.
+The measured limitation is recorded in `suite-lock.rkt`'s header. Tests: `test-suite-lock.rkt` (9 checks; two
+mutations red).
+
+### 167. ⬜ L1 FUSION FAILS IN BLOCK POSITION — `w4{a:b:c}` errors where the path form `w4.a:b:c` gives `@[1 2]`; zero pins anywhere for an in-block fused ω chain, and the error message is wrong under every reading
+
+**Found by** the CIU 6 1b-vi grounding audit (2026-10-13, branch `ciu6-path-selection` @ `01ef2542` = main), while
+working out what "total collapse" (`*-`, D4 Q_U48) would do to a broadcast ancestor. Probe
+`docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/probe-1bvi-f.prologos` (on the branch until the next checkpoint
+merge; output beside it), run with `tools/scratch-run.sh`:
+
+| input | result |
+|---|---|
+| `uu.a:0:userName` (path) | `@["L" "J"] : [PVec String]` |
+| `uu{a:0:userName}` (block) | ERROR — "broadcast `:userName` fails on every element — … the subject (branch `a.0`) is a tuple (nat-keyed row); a keyed block selects NAMED fields …" |
+| `w4.a:b:c` (path) | `@[1 2] : [PVec Int]` |
+| `w4{a:b:c}` (block) | ERROR — "broadcast `:c` fails on every element — … field :c is not present in the record {:b {:c Int}}; available fields: :b; in the select branch `a.b.c` …" |
+| `w4{a:{b.c}}`, `w4{a:b}` (block) | `{:a @[{:b {:c 1}} {:b {:c 2}}]}` |
+
+(`uu := {:a @[@[{:userName "L"}] @[{:userName "J"}]]}`, `w4 := {:a @[{:b {:c 1}} {:b {:c 2}}]}`.)
+
+**Mechanism — not traced; read from the message only (conjecture).** The second ω step is looked up in the ORIGINAL
+element (`:c` in `{:b {:c Int}}`), i.e. the in-block walk does not compose the chain the way the path walk does. The
+spec states L1 unconditionally (`docs/research/2026-07-28_path-selection-spec.md` §3.2.2 and §4 L1: `x:f:g` ≡ mapping
+the composite). The battery pins L1 three times, all in PATH position (`tests/test-path-selection.rkt` test-cases
+"P4c-4c: L1 FUSION is a THEOREM", "P4d-s1: L1 fusion holds across row layers", "P4d-s4a: L1 FUSION as a theorem").
+`grep -E '[a-z0-9]+\{[a-z]+:[a-z0-9]+:[a-z0-9]+'` over D4, this file and the battery finds no in-block chain at all.
+What a fused in-block chain SHOULD return (per-element projection keeps keys: `{:a @[{:b {:c 1}} …]}`, the same as
+`w4{a:{b.c}}`) is itself unstated — a decision, not only a fix. Under any reading the message is wrong: it names a
+field `:c` the user never asked of that record, and renders the branch as `a.b.c`, a spelling that means something else.
+
+**Fix shape**: decide the in-block meaning of `x{a:b:c}` (projection along the composite, keyed per element — the
+recommended reading, since it agrees with the sub-block spelling `a:{b.c}`), then compose the chain in the block walk
+(typing and reduction twins) and pin L1 in block position beside the three path pins. Until then a guided refusal
+naming the sub-block spelling is the monotone waypoint.
+
+**When**: before CIU 6 P5 (Ruling B + factoring — L2's normal form assumes L1 holds wherever an ω step can be
+written). It also bounds D4 Q_U52 §1's broadcast-ancestor question: inside one branch, the steps after an ω step are
+further fused ω steps or a sub-block, so an ω ancestor under a deep star is unobservable until this lands.
+
+> ⚠ **ADDENDUM (2026-10-18, CIU 6 1b-vi verify, branch `ciu6-path-selection` @ `0988a4f0` — on the branch until the
+> next checkpoint merge)**: ~~"an ω ancestor under a deep star is unobservable until this lands"~~ **Withdrawn** —
+> under a TOTAL collapse it was a **whole-file abort**: `ow{top:cfg.x*-}` (`ow := {:top {:eu {:cfg {:x {:p 1}}} :us
+> {:cfg {:x {:p 2}}}}}`) printed no result line at all, not even the `def` above it. Mechanism (read, then measured):
+> typing's ω arms hand the steps after `:` straight to `select-below-field`'s star-tail arm, whose C-5 invariant
+> `error`ed before the presence check that refuses `*` and `^-` per command. Three verify lenses found it
+> independently (D4 §5.P4e-1b-vi `#p4e-1b-vi-verify`, VF-1; probes `research/P4e-1b-vi/verify/v1`, `v2`, `v6`).
+> 🟡 **MITIGATED for the collapse families only**: the parser now refuses a total collapse (`*-`, `*-_`, `^-`,
+> `^-k'`, `^-_`) under an ω ancestor with THIS entry's waypoint — a guided refusal naming the sub-block spelling
+> (`top:{cfg.x*-}`, measured `{:top {:eu {:p 1}, :us {:p 2}}}`). **OPEN, unchanged**: the in-block meaning of a
+> fused chain and of a `.` step after ω; every other spelling still gets the misleading message above
+> (`ow{top:cfg.x}` → "field :x is not present in the record {:eu …}"); the waypoint can widen to every in-block
+> step after ω when this entry's decision is taken.
+
+### 168. ⬜ A STAR GLUED TO AN ARROW IN A TYPE IS SILENTLY NOT AN ARROW — `spec s4 Nat *-> Nat` reports "spec type for s4 has no arrow"; ~~`<(x : Nat)*- Nat>` reports a bare "Type mismatch"~~ **Withdrawn** — `<(x : Nat)*- Nat>` reports a nameless "Unbound variable" (see the correction below)
+
+**Found by** the CIU 6 1b-vi grounding audit (2026-10-13; probe
+`docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/probe-1bvi-g.prologos` on branch `ciu6-path-selection`, output beside
+it). Measured at `01ef2542`:
+
+| input (with a matching `defn`) | message |
+|---|---|
+| `spec s4 Nat *-> Nat` | "preparse: spec: spec type for s4 has no arrow but defn has 1 params" |
+| ~~`spec s3 <(x : Nat)*- Nat> -> Nat`~~ | ~~"Type mismatch"~~ — the raw probe-g output, kept as the record; **not evidence about `*-`** (correction below) |
+| `spec s2 <(x : Nat)* Nat> -> Nat` (control) | Q_U31's guided "inside `<…>`, `*` needs a SPACE before it …" |
+
+> ⚠ **CORRECTION (2026-10-13, probe `probe-1bvi-o` on branch `ciu6-path-selection`)**: the "Type mismatch" row came
+> from a control that did not isolate the variable. Probe g's SPACED control `spec s1 <(x : Nat) * Nat> -> Nat` with the
+> same body (`defn s1 [p] 0`) ALSO prints "Type mismatch", so the body fails against the Sigma spec for its own reason
+> and the message says nothing about how `)*-` lexes. Re-measured with bare type expressions, which print `T : Type`:
+>
+> | input | message |
+> |---|---|
+> | `<(x : Nat) * Nat>` | `[Sigma Nat Nat] : [Type 0]` |
+> | `<(x : Nat)* Nat>` | Q_U31's "needs a SPACE" |
+> | `<(x : Nat)*- Nat>` | **"Unbound variable"** — no name |
+> | `<(x : Nat) *- Nat>` (spaced) | **"Unbound variable"** — no name |
+> | `spec k2 Nat *-> Nat` + `defn k2 [n] n` | "spec type for k2 has no arrow" (confirms the first row with a body that checks) |
+>
+> So in a type, `*-` (glued or spaced) is read as an identifier and reported by a lookup that does not print the name:
+> the same nameless miss the CIU 6 audit found in the closer band (F5, `mn{a}*-`). The 1b-vi prediction below concerns
+> only the GLUED form; the spaced form is a plain unbound name and stays one.
+
+**Mechanism (read from the reader's character classes, consistent with the messages):** `-` is an identifier-continue
+character and `>` is not, so a star glued to `->` always lexes as `…*-` followed by `>`, never as `*` followed by `->`.
+The arrow disappears before the spec parser looks for it, and the message blames a missing arrow. Corpus: 0 glued `*->`
+in any `.prologos` file or test, so no program is affected. It is a typo-level diagnostic.
+
+**Why filed separately** (owner decision Q_U56, D4, 2026-10-13: "a guided diagnostic as per (a)"): CIU 6 1b-vi mints `*-`
+as an operator and gives a glued `*->` a guided message in SELECTION territory only. The type-territory message
+predates the slice and belongs to spec and arrow parsing. One part changes by itself at 1b-vi: once the closer band mints
+`*-`, `<(x : Nat)*- Nat>` should reach Q_U37's type-territory refusal and get the same "needs a SPACE" message as
+`<(x : Nat)* Nat>` (a prediction, to be pinned in 1b-vi).
+
+**Fix shape**: where the spec/arrow parser finds no arrow, check for a `…*-` lexeme followed by a `>` token and say so
+("`*->` reads as `*-` then `>` — put a space before `->`"). Never raise at the reader: a raise there aborts the whole
+file. **When**: no gate. Pick it up with the next spec-parser diagnostics work, or at CIU 6 X.close's doc-truth pass if
+still open.
+
+> **ADDENDUM (2026-10-18, CIU 6 1b-vi verify finding VM-9; probe `research/P4e-1b-vi/verify/v5` line 16, on branch
+> `ciu6-path-selection` until the next checkpoint merge)**: a SPACED `*-`, `*-_` or `*_` inside `<…>` reports a bare,
+> nameless "Unbound variable" (`<(x : Nat) *- Nat>`), while the glued forms get the guided type-territory text ("inside
+> `<…>`, `*-` is a path-selection star operator, not a type operator — it has no type-level reading, glued or spaced.
+> …"). The text's "or spaced" is true of the operator, but no spaced spelling ever shows it. **Fix shape**: give a
+> spaced star-family symbol inside `<…>` the same guided text, in this entry's (type) territory.
+
+### 169. ✅ **DISCHARGED `8fbaefb8`** (SW-24: the graph is DERIVED, never stored; reaches main at checkpoint 5) — `tools/dep-graph.rkt` WAS THREE MONTHS STALE — `update-deps.rkt --check` exits 1 with 378 mismatches; targeted (affected-test) selection reads this graph
+
+Found 2026-10-13 while adding `tests/test-pnet-dump.rkt` (checkpoint 4). `racket tools/update-deps.rkt --check` on
+main's code (branch `deferred-sweep-146-149` @ `61b24b02`): **378 mismatches** — source-deps 82, test-deps 258,
+prologos-lib-deps 9, test-prologos-deps 29. By kind: MISSING 227 (151 test files absent from test-deps, 46 source
+modules, 23 + 7 prologos entries), MISMATCH 140 (edges changed), EXTRA 11 (entries for files that left). The data was
+last regenerated in `2385799d` (2026-07-02). What still works: `--all` runs every test file on disk, and the runner
+auto-scans a CHANGED test file that the graph does not list (`dep-graph.rkt:1287-1346`), so new tests are run. What
+does not: affected-test selection for a changed SOURCE module follows the stored edges, so a test that reaches the
+module only through a missing or changed edge is not selected (not measured how often). Fix shape: `racket
+tools/update-deps.rkt --write`, review the diff, and make `--check` part of a gate (pre-commit or the checkpoint
+gate) so it cannot drift again. **When**: next runner/tooling batch; before relying on targeted runs to vet a
+source change.
+
+**Status 2026-10-13 — discharged by deriving the graph instead of regenerating it (owner decision SW-24: automate,
+minimal maintenance).** Tradeoff weighed: a pre-commit `--write` hook keeps a committed generated file that every
+parallel branch edits (a merge conflict at every checkpoint) and misses files changed outside a commit; `--check` in a
+gate only detects drift. `8fbaefb8` deletes the four data sections: `derive-dep-graph` computes every layer from the
+files on disk with the same scanners, through a per-file cache (`data/cache/dep-graph.rktd`, git-ignored) keyed by each
+file's sha1 and, as a whole, by the sha1 of `dep-graph.rkt`'s own source — a scanner change invalidates it with no
+version to bump. Measured: warm derivation 37–43 ms CPU, full scan 520–536 ms; the derived layers equal what the old
+`--write` regenerates (0 differing keys in all four).
+- **What the staleness cost, measured** (`sw24-probe.rkt`, stored graph vs derived, as the runner calls
+  `compute-affected-tests`): over the 119 root source modules the stored graph MISSED 22 483 of 38 004 affected-test
+  selections (59 %), and for `merge-fn-registry.rkt`, `decision-cell.rkt`, `tropical-fuel-primitives.rkt` it selected
+  NONE of 451–452. End to end: a one-line edit to `merge-fn-registry.rkt`, `--dry-run` → "No tests affected" before,
+  "Affected tests (448 of 502, 3 skipped)" after. Library modules: 176 of 910 missed. And `all-test-files` returned
+  354 of 502 test files, so the info.rkt "run ALL" path and `benchmark-tests`' default run skipped 148.
+- `update-deps.rkt --check` now verifies the cached derivation equals a full rescan (exit 1 otherwise); `--write` is
+  retired with a message. The coherence check also runs in every full suite (`tests/test-dep-graph.rkt`, 8 cases;
+  five mutations red), which puts it in the checkpoint gate.
+- Owner item: `CLAUDE.md:34` still reads "Validate deps: `racket tools/update-deps.rkt --check`" — true, but the
+  protected-file edit to say "derived on every run; `--check` verifies its cache" was not approved in-session.
+
+---
+
+### 170. ✅ **DISCHARGED `e7cda107`** (SW-25: 43 sites → `'truncate`, guard test) — A SHARDED TEST FILE RACES ITS OWN TEMP FILES — `make-temporary-file` + `#:exists 'replace` lets one shard's delete-and-recreate collide with a twin shard's time-named file (`open-output-file: file exists`); `test-path-selection.rkt` fails 3 of 3 targeted runs at `a15b1a9e`
+
+**Found by**: the PPN 4C checkpoint merge gate (2026-10-13, merge of `ppn4c-elaboration-on-network`
+into `a15b1a9e`): full suite 10 366 tests, 1 FAILURES — `test-path-selection.rkt` shards 1/5 and 3/5,
+each one test erroring `open-output-file: file exists` on a temp path such as
+`…/T/prologos-pathsel-17919073441791907344063.prologos`. The merge's own changes are docs and `.rkt`
+comments only, so it was A/B'd on main's pristine code (detached worktree, limited build,
+`racket tools/run-affected-tests.rkt --tests tests/test-path-selection.rkt`, 5 shards):
+
+| code | runs failing | per-run wall |
+|---|---|---|
+| `34602ded` (before the two 08:39 merges) | 1 of 3 | 7.5–7.9 s |
+| `1961d49d` (+ SW-19…21 runner/lock merge) | 0 of 3 | 7.4–7.5 s |
+| `a15b1a9e` (+ the fasl `.pnet` body merge `08acff4a`) | **3 of 3** | 4.0 s |
+| `a15b1a9e` with `'replace` → `'truncate` at the 4 sites below | **0 of 5** | 3.9–4.0 s |
+
+Every failing run carried the same signature (2–4 `file exists` errors per run). The merged tree
+(`a15b1a9e` + the PPN move) failed 2 of 3.
+
+**Mechanism** (read in code, then confirmed by the last table row): `make-temporary-file` names the
+file from `(current-seconds)` and `(current-inexact-milliseconds)` and creates it exclusively, retrying
+on a collision (`collects/racket/file.rkt:191-238`, Racket 9.3). The helpers then reopen it with
+`(call-with-output-file tmp #:exists 'replace …)`, and `'replace` DELETES the file and creates it
+again. Between the delete and the create, a twin shard — the same test code started at the same
+moment in another worker — can draw the same seconds-plus-milliseconds name and create it; the
+recreate then fails with "file exists", and nothing retries it. Shards of one file run the same
+sequence in lockstep, which makes the same-millisecond draw likely; the fasl `.pnet` speedup
+(7.5 s → 4.0 s) tightened the lockstep, which is why the failure went from occasional to certain. The
+defect is older than both merges (1 of 3 at `34602ded`); the speedup only exposed it. `'truncate`
+opens the existing file without deleting it, so there is no window. The sharding note at
+`tools/suite-plan.rkt:142` ("test-path-selection under K=2 and K=3, every shard, 0 failures")
+predates K=5 and the speedup.
+
+**Sites**: `tests/test-path-selection.rkt:75`, `:99`, `:142` (`run-ws`, `run-ws-raw`,
+`run-ws-pre-raw`) and `tests/test-support.rkt:226` (`run-ws`, used by many files). The same
+`make-temporary-file` + `#:exists 'replace` pair appears in 30+ further test files (census:
+`grep -l make-temporary-file tests/*.rkt` ∩ `grep -l "#:exists 'replace"`); an unsharded file can
+collide only with a concurrent file that draws the same name, so the exposure there is by chance,
+not lockstep — not measured.
+
+**Fix shape**: `#:exists 'truncate` wherever the path came from `make-temporary-file` (the file
+already exists, created exclusively); a lint or a shared helper so new tests do not reintroduce the
+pair. Optionally put the pid in the template. **When**: before the next checkpoint gate on any
+branch — every `--all` run at `a15b1a9e` or later is expected to show this failure until it lands.
+Not applied by the PPN 4C session (outside its track); the measured fix is the last table row.
+Record: `tracks/PPN/PPN_4C/LOG.md` § *Checkpoint 1 merged*.
+
+*Addendum 2026-10-13 (DEFERRED-sweep session, independently, while gating SW-24):* (1) the mechanism reproduced
+with no test code — three concurrent processes, each `make-temporary-file` then write ×3 000 in one shared directory
+(`tmp-race.rkt`, 2 trials): `#:exists 'replace` failed 178–243 times per process (6–8 %), every one
+`open-output-file: file exists`; `'truncate` failed 0 of 18 000. (2) Census of the class (racket/prologos root,
+`tests/`, `tools/`): **41** `make-temporary-file` sites are then written with `'replace`, under **18** name templates;
+`prologos-test-~a.prologos` is shared by 23 test files and `prologos-ws-~a.prologos` is `test-support.rkt`'s `run-ws`,
+so concurrent workers share those name spaces (28 sites already use `'truncate`). (3) It hit the sweep branch's first
+suite after SW-24 (`test-path-selection.rkt` ×3 shards, one error each; the re-run passed): SW-22's fasl speedup
+(merged at checkpoint 4) is what made it frequent, per the table above. Probe + data: `handoffs/2026-10-13_SW24_DATA/`.
+
+**Status 2026-10-13 — discharged (SW-25, `e7cda107`).** All **43** sites → `#:exists 'truncate` (41 in `tests/`, incl.
+`test-support.rkt`'s `run-ws-file`, plus two PRODUCTION sites that both censuses missed because the keyword sits after
+the lambda: `pnet-serialize.rkt:987`, the atomic `.pnet` write's temp file, and `lsp/server.rkt:554`, the LSP's
+per-check document). `tests/test-temp-file-hygiene.rkt` reads every module under `racket/prologos` as syntax and refuses
+a temp-file path written with `'replace` (temp DIRECTORIES exempt; a power check proves the detector). Verified:
+`test-path-selection.rkt` sharded ×2 failed 2 of 3 runs before and passed 5 of 5 after; guard red with 43 → green;
+one `'replace` restored in `test-support.rkt:226` → red naming that line. Evidence: `handoffs/2026-10-13_SW25_DATA/`.
+
+### 171. ⬜ AN LSP REPL SESSION'S REGISTRATIONS ESCAPE IT — into the process, other sessions, and every later document check (measured for constructors)
+
+Found closing DEFERRED 160 (SW-27). `eval-in-session-raw!` (`lsp/server.rkt:206`) binds **6** of the 24 registry
+parameters per session (preparse, trait, impl, param-impl, capability, spec store) and writes them back; the other 18
+(ctor, type-meta, subtype, coercion, trait-laws, bundle, specialization, property, functor, precedence groups,
+operators, macros, schema, selection, session, strategy, process, propagated specs) are assigned at the PROCESS ROOT.
+Measured (`probe-repl-escape.rkt`, `handoffs/2026-10-13_SW25_DATA/`): session A evaluates `data Color := Red | Green`;
+`Red` is then registered at the process root (#f → #t) and visible INSIDE a later `process-file` of an unrelated
+document — SW-27's unit scope inherits the caller's current values, which here include the session's. The
+user-visible symptom is not yet constructed (a candidate: a document's bare `Red` pattern resolving as a constructor,
+DEFERRED 103's class). **Fix shape**: a session is a PERSISTENT unit — keep its full registry snapshot
+(`save-macros-registry-snapshot`, i.e. `macros-registry-params`, SW-27's list) in the repl-session and bind all of
+them per eval, writing back after; the same list makes it exhaustive by construction. **When**: with the next LSP
+item, or the sweep after SW-26.
+
+### 172. ⬜ A PROGRAM THAT EXHAUSTS REDUCTION FUEL CRASHES `process-file` — the `error 'reduction` at `reduction.rkt:2861` is an uncaught `exn:fail`, so every result in the file is lost, not just the offending command's
+
+**Found by** PPN 4C's 4B.5.b grounding audit (probes p23/p24, branch `ppn4c-elaboration-on-network` @ `0c2aaf6a`, code =
+main `150915c4`): `def z : Int := [int+ z 1]` then `z` → `process-file` raises `reduction: fuel exhausted after too many
+reduction steps` (a `whnf` / `reduce-int-binary` stack) and returns nothing; the file's `z : Int defined.` is lost with it.
+Without the use (p25) the same file runs: `z : Int defined.`, 0 errors. Measured with the audit's `probe-print.rkt`
+(process-file, one file per process).
+
+**Mechanism** (read in code): `whnf` decrements `current-reduction-fuel` (1M steps, bound per command at `driver.rkt:731`)
+and raises a plain `error` at 0 (`reduction.rkt:2861`). The file loop converts exactly one exception class per command,
+POL.4's distinguished `exn:prologos-solve` (`process-command/solve-guard`, `driver.rkt:1594`) — by design, "any other raise
+still crashes loudly (a blanket boundary would mask real compiler defects)". Fuel exhaustion is not a compiler defect: it
+is the program's own non-termination, reachable by any non-terminating evaluation (a spec'd `defn loop` reaches it —
+`tests/test-reduction-perf-01-02.rkt:43`), not only by the definition cycles that found it.
+
+**Pinned today**: `tests/test-reduction-perf-01-02.rkt:43` (skipped in the suite as pathological) expects the raise at
+`run-ns` level (`check-exn … "fuel exhausted"`); the fix flips it deliberately.
+
+**Fix shape**: raise a distinguished `exn:prologos-fuel` (sibling of `exn:prologos-solve`) and convert it in
+`process-command/solve-guard` to a per-command `prologos-error` that names the evaluation that did not finish within the
+limit. Check whether type-checking-time `whnf` (conversion under dependent types) can reach the same raise; convert there
+too. Not measured: the LSP path (`process-file #:evaluate? #f`) evaluates no top-level expression, so it is presumably
+unaffected.
+
+**Related**: PPN 4C 4B.5.b's productivity check would reject the unproductive definition cycles that reach this (p23/p26,
+accepted at definition today) — not the general case.
+
+**Addendum (2026-10-14)**: also reached while a `def` is processed, not only at a top-level evaluation:
+`def rec1 : Int -> _ := [fn [x : Int] [rec1 x]]` then `def s : String := [rec1 3]` → the same uncaught raise under
+`process-command/demand` (q5-h06p on the branch). Whether type checking or the def's value evaluation reached `whnf` was
+not determined.
+
+**When**: independent of 4B.5.b; the next sweep, or with POL work.
+
+**Record**: `docs/tracking/tracks/PPN/PPN_4C/audits/2026-10-13_PPN_4C_4B5b_GROUNDING_AUDIT.md` GA-5 (on branch
+`ppn4c-elaboration-on-network` until its next checkpoint merge); probes `…/PPN_4C/research/4B5b/p23-*`–`p26-*`.
+
+### 173. ⬜ ⭐ A SPEC-LESS MUTUAL `defn` CAN COMMIT A TYPE WITH A HOLE — `g2 : Nat -> _ defined.`, after which every use of `g2` type-checks (`def s : String := [g2 3N]` accepted, 0 errors; g2 returns Bool); ~~live on main since PPN 4C 4B.5.a (`2d791705`)~~ widened by PPN 4C 4B.5.a (`2d791705`) — a committed hole predates it (CORRECTED 2026-10-14, see the callout)
+
+> ⚠ **CORRECTION (2026-10-14, PPN 4C session; controls q5-v27, q5-v27b, q5-v27c, q5-h06q on the branch)** — three
+> claims of this entry as filed on 2026-10-13 (`96274f3d`) were wrong or mis-attributed:
+> 1. ~~"`[int+ [g2 3N] 1] : Int`, a Bool used as an Int" demonstrates the hole~~ **Withdrawn**: with both functions
+>    spec'd `Nat -> Bool` (no hole anywhere, q5-v27) the same line is still accepted, `: Int`, 0 errors. That
+>    acceptance is DEFERRED 156 (primitive ops do not constrain their operands). I ran no spec'd control before
+>    filing. The hole's own effect, measured with a discriminating use: `def s : String := [g2 3N]` is **accepted**
+>    with the spec-less pair (p27b: `s : String defined.`, 0 errors) and refused with the spec'd pair (q5-v27b:
+>    *Type mismatch, Expected: String, Got: Bool*).
+> 2. ~~"`[p27::f2 2N] : _` (does not reduce)"~~ is not the hole: the spec'd pair prints `[q5v27::f2 2N] : Bool` too.
+>    The demand trigger looks only at the use's own names, so a use of a committed g2 whose body calls the
+>    still-deferred f2 evaluates before the sweep completes f2 (q5-v27c: after a direct use of f2, `[g2 3N]` gives
+>    `true`). Filed separately as DEFERRED 175.
+> 3. ~~"live on main since 4B.5.a"~~: a committed type with a hole **predates** 4B.5.a.
+>    `def rec1 : Int -> _ := [fn [x : Int] [rec1 x]]` → `rec1 : Int -> _ defined.` (q5-h06q; no forward reference,
+>    no deferral). What 4B.5.a added: a group that HM types fully (p27: both `Nat -> Bool`) commits a hole, because
+>    the deferred member's pre-register is re-written with holes and its partner is typed in a different command.
+>    The fix shape below covers both: never commit a top-level type that contains a hole.
+
+**Found by** PPN 4C's 4B.5.b grounding audit, probe p27 (branch `ppn4c-elaboration-on-network` @ `0c2aaf6a`, code = main
+`150915c4`):
+
+```
+defn f2 | zero -> true      | suc n -> [g2 n]
+defn g2 | zero -> [f2 zero] | suc n -> [f2 n]
+[g2 3N]
+[int+ [g2 3N] 1]
+```
+
+→ `f2 : Nat -> Bool defined.` · **`g2 : Nat -> _ defined.`** · `[p27::f2 2N] : _` ~~(does not reduce; cause not
+investigated)~~ (DEFERRED 175) · ~~**`[int+ [p27::f2 2N] 1] : Int`**~~ (DEFERRED 156, correction 1) — 0 errors. The pair is
+well typed (both `Nat -> Bool`).
+
+**Mechanism** (read in code; consistent with p27 and p18): f2's body references g2, a same-file def-head not yet defined
+(`'pending`), so 4B.5.a's annotated deferral arm (`driver.rkt:2116-2130`) defers f2 and leaves its pre-register in place,
+re-written meta-free with `unsolved-metas-to-holes ∘ freeze` (`:2123`): for a spec-less `defn`, `Nat -> ?m` becomes
+`Nat -> _`. g2 then sees f2 as `'ground`, is not deferred, types its arms against the wildcard and commits `Nat -> _`. A
+hole unifies with anything, so no use of g2 is checked. Sibling, p18 (an ill-typed pair: `f | zero -> 0N | suc n -> [g n]`,
+`g | zero -> "s" | suc n -> [f n]`): f's branch mismatch IS reported, but g commits `Nat -> String` against f's later-refuted
+wildcard and survives f's removal; `[g 1N]` prints `[p18::f 0N] : String`. The 4B.5.a design called the premature
+`'ground` "benign under placeholder-keyed completion tracking" (addendum §18.21.26.5); that holds only for a hole-free
+(spec'd) pre-registered type.
+
+**Before 4B.5.a** both files errored (f's forward reference was an immediate Unbound) — inferred from the 4B.5 design's p2
+record at `5b0c78ed` (3 × Unbound), not re-measured.
+
+**Why ⭐**: silent acceptance at zero errors (`def s : String := [g2 3N]`, p27b), and DEFERRED 156's operand contract would
+not catch it (`_` unifies with any type).
+
+**Fix shape**: in-track — PPN 4C 4B.5.b (decision Q-4B5.4, addendum §18.21.27): members whose types have holes are typed
+as a group and commit only when every member checks against the group's final, hole-free environment; a hole left in a
+committed top-level type is an error ("cannot infer the type of `g2` — annotate it"), never a commit. Stop-gap if 4B.5.b
+is delayed: refuse to commit a top-level type that still contains a hole produced on the deferral path.
+
+**When**: 4B.5.b, the next PPN 4C slice; before any user-facing claim that spec-less mutual recursion works.
+
+**Record**: `docs/tracking/tracks/PPN/PPN_4C/audits/2026-10-13_PPN_4C_4B5b_GROUNDING_AUDIT.md` GA-4, GA-4b (on branch
+`ppn4c-elaboration-on-network`); probes `…/PPN_4C/research/4B5b/p18-*`, `p27-*`.
+
+### 174. ⬜ AN ANNOTATED SELF-REFERENTIAL DEFINITION THAT IS NOT A FUNCTION IS ACCEPTED — `def z : Int := [int+ z 1]` → `z : Int defined.`, 0 errors; any use exhausts reduction fuel (and, until DEFERRED 172 lands, crashes the file)
+
+**Found by** PPN 4C's 4B.5.b grounding audit (branch `ppn4c-elaboration-on-network` @ `0c2aaf6a`, code = main `150915c4`):
+probe p25 (`def z : Int := [int+ z 1]` + an unrelated def and use) → `z : Int defined.`, 0 errors; p24 (the same with a use
+of `z`) → `process-file` raises `reduction: fuel exhausted…` uncaught (DEFERRED 172).
+
+**Mechanism** (read in code): the annotated path pre-registers the definition's type before elaborating its body, so a
+self-reference types (the old self-recursion mechanism, gate G3 of the PPN 4C addendum). 4B.5.a's pending-referent scan
+then EXCLUDES the definition's own name (`driver.rkt:2116-2120`, the exclude list), so a self-reference never defers, and
+nothing asks whether the body is productive. Predates PPN 4C's 4B.5 arc — by reading; not measured at an old commit.
+
+**Why not in 4B.5.b**: owner decision **Q-4B5.4** (2026-10-14; PPN 4C addendum §18.21.27): 4B.5.b owns every definition
+cycle that passes through the deferral residue — inferred cycles, hole-typed spec-less `defn` groups (DEFERRED 173), and
+annotated cycles of two or more members (probe p26). A size-1 annotated cycle never enters the residue, so it needs a
+second detection site, at the annotated self-reference.
+
+**Fix shape**: reuse 4B.5.b's productivity predicate (decision Q-4B5.6: a cycle member's elaborated body must be a lambda,
+after stripping `the`) where the annotated path elaborates a body that references its own pre-registered name; a
+non-lambda self-referential body → 4B.5.b's definition-cycle diagnostic. Pins: p24, p25; G3 (annotated self-recursion
+through a lambda, probe p15) must stay green. If 4B.5.b's mini-design finds the second site cheap, it may be pulled in.
+
+**When**: after 4B.5.b ships its productivity predicate — with 4B.5.c (the 4B arc close) at the latest.
+
+**Record**: `docs/tracking/tracks/PPN/PPN_4C/audits/2026-10-13_PPN_4C_4B5b_GROUNDING_AUDIT.md` GA-5; probes
+`…/PPN_4C/research/4B5b/p24-*`, `p25-*` (on branch `ppn4c-elaboration-on-network`).
+
+### 175. ⬜ ⭐ A TOP-LEVEL USE OF A COMMITTED DEFINITION THAT CALLS A STILL-DEFERRED ONE EVALUATES TO A STUCK TERM — `[g2 3N]` prints `[q5v27::f2 2N] : Bool` instead of `true`, 0 errors (PPN 4C 4B.5.a's demand trigger is shallow)
+
+**Found by** PPN 4C (branch `ppn4c-elaboration-on-network` @ `569b797e`, code = main `104c9780`), control probes for the
+correction of DEFERRED 173. q5-v27c:
+
+```
+spec f2 Nat -> Bool
+defn f2 | zero -> true      | suc n -> [g2 n]
+spec g2 Nat -> Bool
+defn g2 | zero -> [f2 zero] | suc n -> [f2 n]
+[g2 3N]          ;; → [q5v27c::f2 2N] : Bool     (stuck)
+[f2 2N]          ;; → true : Bool
+[g2 3N]          ;; → true : Bool
+```
+
+**Mechanism** (read in code; consistent with q5-v27c): f2 references g2 before g2 is defined, so 4B.5.a defers f2 (its
+type is pre-registered from the spec); g2 types against that and commits. A top-level use triggers the sweep only when the
+use's OWN names are pending or deferred (`residuation-demand-name`, `driver.rkt:1499-1512`): `[g2 3N]` names only g2,
+which is committed, so it evaluates at once, reaches f2, whose value is not yet there, and stops. `[f2 2N]` names f2,
+which is in the residue, so it triggers the sweep, and every later use reduces. The canonical G1 case passes only
+because its use names the deferred member (`[even? 4N]`).
+
+**Why ⭐**: a wrong value at zero errors, in the exact feature 4B.5.a shipped (spec'd mutual recursion).
+
+**Fix shape**: in-track (PPN 4C 4B.5.b, which owns the sweep). Simplest and sound: an evaluated top-level command runs the
+sweep fixpoint first whenever the residue has ANY outstanding item, whatever names the command mentions. The narrower
+alternative — demand closed transitively over committed bodies' references — needs a reference graph that 4B.5.b's
+cycle analysis will build anyway. Pin: q5-v27c's first `[g2 3N]` must print `true : Bool`.
+
+**When**: 4B.5.b.
+
+**Record**: PPN 4C LOG § *Q-4B5.4 decided; main merged in; three of my DEFERRED 173 claims corrected* and the grounding
+audit's GA-10 (on the branch); probes `…/PPN_4C/research/4B5b/q5-v27*`.
+
+### 176. ⬜ THE PROPAGATOR OBSERVER'S RECORDS MISREPORT WHAT FLOWED — 45 % of BSP diff records show a value the cell does not hold; the sequential scheduler names a placeholder writer; the LSP merges every S0 run and fork in a file into one timeline that starts from the final state
+
+**Found by** PAR 4, re-posing owner decision O-3 (observers). Sources: D.1 Appendix A.6–A.7, on branch
+`par4-arena-executors`; the code is main `c1f389ab`. Two probes, with data in `data/par4-p0/o3/` (on the branch):
+- `benchmarks/par4/o3-observer-census.rkt`: 18 comparative files, with the observer installed the way the LSP installs it;
+- `benchmarks/par4/o3-observer-fixtures.rkt`: five small networks under BSP and under the sequential scheduler.
+
+1. **A BSP record's `new-value` is the written contribution, not the cell's new value** (the observer block,
+   `propagator.rkt:3557-3574`; read, then measured).
+   - 303 of 672 records (45.1 %) carry a `new-value` that the cell does not hold after the round. 283 of them are in
+     rounds where two or more propagators wrote the cell; 20 are single writers into accumulating merges.
+   - Control: fixture X1 (one writer, max merge) shows 0; X2 (two writers, set union) shows 2.
+   - The editor's scrubber assigns `newValue` as the cell's value
+     (`editors/vscode-prologos/src/propagatorView.ts:1647`), so it displays partial values.
+2. **The sequential scheduler's record names the run's first-fired propagator as the source of every diff**
+   (`propagator.rkt:2647, 2653`; read). Measured in fixtures X3 and X5: in X5, under reverse installation order, it
+   names p0 as the source of a cell that p0 never writes.
+3. **The LSP's trace is a single timeline across every quiescence call and fork in the file, and it starts from the
+   final network** (read).
+   - One accumulator is installed around the whole `process-file` (`lsp/server.rkt:547`).
+   - `make-trace-accumulator` re-stamps round numbers (`propagator.rkt:601`), erasing the boundaries between runs.
+   - The trace is built with initial = final (`lsp/server.rkt:586`).
+
+   Measured scale: `atms-adversarial` sends 111 rounds, from 108 S0 runs and 6 forks, into one timeline.
+4. **Some steps are silent** (read).
+   - Tier-1 flushes emit no record (`propagator.rkt:3431-3446`).
+   - Writes made by stratum handlers are never reported.
+
+   Measured: 6 of the 18 files emit no record at all. Whether their S0 work is Tier-1 flushes or nothing was not
+   measured.
+5. **`atms-events` is always `'()`**: `git grep` finds no production constructor.
+
+**Impact**: the editor's propagator view (`$/prologos/propagatorSnapshot`) and the observatory's traces. No compiler
+output is affected: the compiler never reads the observer, and error explanation refuses it
+(`error-explanation.rkt:22`). The impact is shown at the level of the records; the editor's display was read in
+code, not run.
+
+**Fix shape** — depends on owner decision O-3 (D.1 Appendix A.12; the lean is OB-4, "observation in logical time"):
+- (a) **BSP side, in PAR 4** (P1 or P2). Per (round, cell), record the old value, the held value and the set of
+  propagators that wrote the cell that round. This touches only `propagator.rkt`'s observer block and replaces
+  items 1–2.
+- (b) **Epoch records**, keyed by (network, epoch) and emitted by every scheduler, including Tier-1 flushes and the
+  boundary's own step. This covers item 3's run boundaries and item 4, and gives item 5 a home, since ATMS events
+  happen at stratum boundaries.
+- (c) **The LSP and editor side**, which needs an owner to place it. The visualization design
+  (`2026-03-12_PROPAGATOR_VISUALIZATION_DESIGN.md`) is complete and no active series owns it; its deferrals sit
+  under § *Propagator Observatory — Visualization Polish* above. The work: read the keyed records, capture the
+  initial network, and have the scrubber show held values.
+
+**When**:
+- (a) and (b): with O-3's implementation in PAR 4 P1 or P2;
+- (c): before anyone relies on the editor view to answer a "why" question.
+
+**Record**: PAR 4 D.1 Appendix A.6–A.12 and LOG § *O-3 re-posed* (on branch `par4-arena-executors`).
+
+**Addendum (2026-10-14, owner guidance G-3)**: the owner wants a visual debugger as part of the language's dev
+tooling, for two purposes: demonstrating how the system works, and practical debugging and introspection. It is not
+in PAR 4's scope to deliver. Consequences for this entry:
+- (c) is **wanted, not optional polish**. It still needs an owner to place it on the roadmap.
+- (a) is sharpened by a new measurement (fixture probe `5fbb30df` on the branch). A round record must carry the
+  cell, its old value, the value it holds after the round, the round's writers and the round index. With those, a
+  cell's final value unfolds into a derivation in which every premise sits at an earlier round, so it is
+  well-founded even on a cycle.
+  - Without the old value as a premise, a join that reaches `top` names only the last writer (fixture X5).
+- New part **(d) — error explanation on rounds**. `error-explanation.rkt` cuts cycles with a visited set and a depth
+  bound of 32 (`error-explanation.rkt:164-195`): fuel, not structure. Where round records exist, a derivation over
+  rounds gives the same answer with termination by construction. *When*: with (c), or whenever error explanation is
+  next revisited.
+
+Requirements table and critique: PAR 4 D.1 Appendix A.13 (on branch `par4-arena-executors`, `47edfd8a`).
+
+**Addendum (2026-10-15, owner decision O-3 = OB-4, "observation in logical time")**: the contract this entry's fixes
+follow is now decided (PAR 4 D.1 §14 O-3, `1e1684e2` on the branch).
+- (a) and (b) land in PAR 4. D.2 places them in P1 or P2 for the round records and in P2 for the epoch records, the
+  shared (network, epoch, round) keys and the replay.
+- (c) and (d) remain outside PAR 4 and still need a roadmap home, which is the owner's call.
+
+The entry stays open until the fixes land.
+
+### 177. ⬜ ⭐ THE ATMS SOLVER RETURNS ANSWERS THAT DFS REJECTS — `(= x 1) (= x 2)` in one clause gives `{:x 2}`; `(= x 1) (= y 2) (= x y)` gives `{:x 1, :y 2}`; a caller's `x = 1` is invisible inside a branch, which then answers `{:x 2}` as well
+
+**Found by** PAR 4's D.3 adversarial critique round. Critic C9 (red team) found it; C4 independently measured the
+read-side mechanism. Reproduced by hand on 2026-10-15 with `tools/scratch-run.sh` on the two probe files. The code
+is main `c1f389ab`. The probes are kept on branch `par4-arena-executors` in
+`racket/prologos/benchmarks/par4/d3-wave1/C9/`: `c1-overwrite.prologos` and `c4-varvar.prologos`.
+
+| query | `:strategy atms` | `:strategy depth-first` |
+|---|---|---|
+| `two ?x` with `&> (= x 1) (= x 2)` | `@[{:x 2}]` | `@[]` |
+| `(rel [?x] (= ?x 1) (pick ?x))`, `pick` ∈ {`x = 1`, `x = 2`} | `@[{:x 2} {:x 1}]` | `@[{:x 1}]` |
+| `clash ?x ?y` with `&> (= x 1) (= y 2) (= x y)` | `@[{:x 1, :y 2}]` | `@[]` |
+| `agree ?x ?y` with `&> (= x 1) (= y 1) (= x y)` (control) | `@[{:x 1, :y 1}]` | `@[{:x 1, :y 1}]` |
+
+Three mechanisms (read in code; C9 also measured each at the lattice level):
+1. **A tagged read drops the base whenever an entry matches.** `tagged-cell-read` returns the base only when no entry
+   matches (`decision-cell.rkt:470`), so a branch's binding hides the caller's. This explains row 2.
+   - C4 measured the read to be non-monotone in the cell's own merge order on 768 of 9 600 random cases over a
+     set-union domain.
+   - A reader that joins the base in showed 0 of 9 600.
+2. **`unify-fire` drops a var-var conflict.** When both sides are bound and differ, it returns the network unchanged
+   (`relations.rkt:2112-2120`), so no conflict reaches any merge. This explains row 3.
+3. **Per-key last-writer-wins.** `scope-cell-merge` lets the newer binding win per key (`decision-cell.rkt:938-955`),
+   so `x = 2` overwrites `x = 1`. This explains row 1.
+
+**Reach**: `:strategy atms`, and `:strategy auto`, the default (`solver.rkt:77`), above its DFS↔ATMS crossover
+(threshold 256, `solver.rkt:76`). The crossover's reach is not measured. The answers are wrong under every scheduler,
+so order-differential instruments (PAR 4's merge-order census and replay monitor) cannot see this.
+
+**Fix shape**. All three parts are needed; each covers a different row.
+- (a) The read becomes `base ⊔ ⨆{v | label ⊆ W}`. That is ATMS label semantics, and a join-homomorphism into the
+  domain at each worldview W.
+- (b) `unify-fire` writes each side's value into the other, so the conflict reaches the merge.
+- (c) A per-key flat lattice with ⊤, as in PAR 4 D.2 P1a row 2. A ⊤ inside a branch's entry becomes that branch's
+  nogood; a ⊤ in the base becomes the query's failure.
+
+Test layer: a DFS-vs-ATMS answer-set differential over the relational tests and examples. It can fail on errors that
+do not depend on the schedule.
+
+**When**: with PAR 4 P1a (D.3 triage clusters CL-5 and CL-6), unless the owner wants a shipped solver strategy's
+wrong answers fixed sooner.
+
+**Record**: PAR 4 D.3 wave-1 triage §1, §3 CL-6 and §4 PD-1
+(`docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-15_PAR_4_D3_WAVE1_TRIAGE.md` on the branch).
+
+### 178. ⬜ BSP'S TIER-1 FLUSH RETURNS A NETWORK THAT IS NOT A FIXPOINT — it fires the fire-once, empty-input propagators, then clears the whole worklist, discarding the dependents its own writes enqueued (`propagator.rkt:3431-3445`)
+
+**Found by** PAR 4's D.3 round: critics C2 (reality check) and C5 (theory), independently. Reproduced by hand on
+2026-10-15 with C2's `probe-tier1.rkt` (on branch `par4-arena-executors`, in
+`racket/prologos/benchmarks/par4/d3-wave1/C2/`).
+
+The probe network: a copy propagator A → B, already quiescent, then a fire-once propagator with no inputs that
+writes A := 7.
+
+| scheduler path | A | B | B after a second run |
+|---|---|---|---|
+| Tier 1 | 7 | **0** | **0** |
+| Tier 2 control (same writer, not fire-once) | 7 | 7 | 7 |
+| the drain | 7 | 7 | 7 |
+
+The run reports no contradiction and an empty worklist, so callers cannot tell.
+
+**Reach**: not measured. Tier 1 requires worldview cell = 0 and a worklist made only of fire-once, empty-input
+propagators (`propagator.rkt:3411-3430`), whose outputs must already have dependents.
+- Production installers of that shape are at `relations.rkt:2148, 2161, 2183, 2636, 2699`.
+- They take the fire-once path when `current-worldview-bitmask` ≠ 0 (`relations.rkt:2140`), and that can differ from
+  the cell.
+
+Two related gaps, both read in code:
+- Tier-1 fires run outside `fire-and-collect-writes`. `current-bsp-fire-round?` is therefore `#f`, so an install
+  inside such a fire takes the inline branch, where P0's in-fire trap cannot see it.
+- Tier 1 emits no observer record (DEFERRED 176 item 4).
+
+**Fix shape**: either delete the Tier-1 branch, since BSP's inner loop already handles these propagators, or keep the
+dependents that the flushed writes enqueue on the worklist. PAR 4 D.2 had planned to keep Tier 1 "as is"; that is
+corrected in the D.3 triage (SC-20). Under PAR 4 P2, Tier 1 becomes the first pass of the K = 1 worklist.
+
+**When**: PAR 4 P0.5 (with DEFERRED 150), or sooner if a trap measures production reach.
+
+**Record**: PAR 4 D.3 wave-1 triage §1 and §4 PD-2 (on the branch).
+
+### 179. ⬜ Q_U56'S GUIDED `*->` TEXT MISSES THE BLOCK-CLOSER POSITION — `env{prod dev}*->` reports the comparison-keyword hint ("comparison keywords are spelled lt/le/gt/ge …"), not the star-family diagnostic
+
+**Found by** the CIU 6 1b-vi verify (2026-10-18; lens VS, finding VS-7; D4 §5.P4e-1b-vi `#p4e-1b-vi-verify`), re-measured
+on the main thread: probe `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/verify/v5-misc.prologos` line 15, branch
+`ciu6-path-selection` @ `0988a4f0` (on the branch until the next checkpoint merge).
+
+| input | message |
+|---|---|
+| `env{prod dev}*->` | "hint: comparison keywords are spelled lt/le/gt/ge in Prologos (< and <= conflict with angle-bracket syntax) …" |
+| `mn{a*->b}`, `mn{a*-> b}`, `mn{a*- > b}`, `t5{a.{b*-> c}}`, `t5{a.{b}*-> c}` (controls) | Q_U56's guided text ("there is no `*->` operator … drop the `>`" / "end the segment there …") |
+
+**Mechanism — conjecture, from the messages only**: the closer band mints `}*-`, and the `>` after the closed block is
+then read by the generic top-level `>` handling, outside the selection consumer that carries Q_U56's arm. **Fix shape**:
+give the closer-band star followed by `>` Q_U56's message ("drop the `>`"), in the consumer — never the reader (a
+reader raise aborts the whole file). **When**: no gate; with the star-family grammar work (DEFERRED 144) at CIU 6 T6's
+close, or with the next Q_U56-family message work.
+
+### 180. ⬜ THE STAR ARRIVAL INSTRUMENT CANNOT TELL A ONE-TOKEN `*-` FROM `*` THEN `-` — `star-last-token-type` / `star-mints?` answer `postfix-star` / `#t` for `c{a}*-` and `c{a}* -` alike (and for `-_`), so the flipped arrival pins' "is ONE token" lost its power at the 1b-vi mint
+
+**Found by** the CIU 6 1b-vi verify (2026-10-18; lens VI, finding VI-10), re-measured on the main thread: probe
+`docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/verify/v9-arrival.rkt` + `.out` (branch `ciu6-path-selection`, on the
+branch until the next checkpoint merge). The instrument is `tools/star-arrival-matrix.rkt` (first/last star-family token,
+lexeme not compared); its readers are the arrival gate and the `p4e-star-type` pins in `tests/test-path-selection.rkt`.
+
+**Impact, at the level shown**: none observed — nothing mis-mints today; the reader and the parity pin (the parser's surf
+equals the injected IR, 68 rows) both hold. This is instrument POWER: a regression that split `*-` into `*` and `-` would
+pass the arrival gate. **Fix shape**: require the minting token's LEXEME to equal the table lexeme under test (the gate
+already iterates the table). **When**: with DEFERRED 144, or the next edit of the arrival matrix.

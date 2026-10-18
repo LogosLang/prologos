@@ -257,6 +257,9 @@
     (do-precompile? #f)]
    ["--no-pnet-cache" "Disable .pnet module network caching (default: enabled)"
     (do-pnet-cache? #f)]
+   ["--memory-stats" "Record per-file MEMORY-STATS in timings.jsonl (forces two major GCs per process-string/process-file call, so slower; DEFERRED 152)"
+    ;; batch workers are spawned after argument parsing and inherit the environment
+    (putenv "PROLOGOS_MEMORY_STATS" "1")]
    ["--failures" "Show failure logs from last run (no tests executed)"
     (show-failures? #t)]
    ["--failures-run" id "Show the archived failure logs of run ID (or 'latest'), from data/benchmarks/failures/runs/"
@@ -373,6 +376,9 @@
     (define report (make-wait-reporter mode lock-path))
     (define waited? #f)
     (define t-wait (current-inexact-milliseconds))
+    ;; DEFERRED 166 (SW-20): say where this run queues, and warn when an
+    ;; inherited PROLOGOS_SUITE_LOCK took it out of the machine-wide queue.
+    (for ([line (in-list (suite-lock-banner mode lock-path))]) (printf "~a\n" line))
     (call-with-suite-lock
      mode
      (lambda ()
@@ -420,11 +426,23 @@
      ;; to the batch worker, which would produce confusing errors.
      (define missing
        (filter (lambda (p) (not (file-exists? p))) normalized-files))
+     ;; SW-21: a path that is not a test unit (test-support.rkt, a library or
+     ;; fixture under tests/) is refused, not run-then-called-INCOMPLETE.
+     (define not-units
+       (for*/list ([p (in-list normalized-files)]
+                   #:unless (member p missing)
+                   [why (in-value (targeted-unit-problem p))]
+                   #:when why)
+         (cons p why)))
      (cond
-       [(pair? missing)
+       [(or (pair? missing) (pair? not-units))
         (for ([p (in-list missing)])
           (eprintf "Error: test file not found: ~a\n" p))
-        (exit 1)]
+        (for ([pw (in-list not-units)])
+          (eprintf "Error: not a test unit: ~a\n  ~a.\n" (car pw) (cdr pw)))
+        (eprintf "Nothing was run (exit ~a). Name test files: --tests tests/test-NAME.rkt\n" EXIT-USAGE)
+        ;; SW-21: was (exit 1), the code for "a test FAILED"; nothing ran.
+        (exit EXIT-USAGE)]
        [else
         (printf "Running ~a targeted test file(s) with scoped precompile...\n"
                 (length normalized-files))
@@ -488,7 +506,8 @@
 
     ;; --all: run everything (subject to skip filter)
     [(run-all?)
-     ;; Merge dep-graph entries with any test files on disk not yet in dep-graph
+     ;; all-test-files is the disk listing since SW-24 (the graph is derived, not stored);
+     ;; the disk scan below is the same set, kept so --all never depends on the graph module
      (define known-tests (all-test-files))
      (define disk-tests
        (if (directory-exists? tests-dir)
@@ -498,7 +517,7 @@
                                     (string-suffix? s ".rkt"))))
              (string->symbol (path->string p)))
            '()))
-     ;; PM Track 10C: filter to files that actually exist (dep-graph may have stale entries)
+     ;; PM Track 10C: filter to files that actually exist (a file deleted since the listing)
      ;; DEFERRED 161: test-support.rkt & co. are not test units (suite-plan.rkt
      ;; NON-TEST-MODULES) — dispatching the worker's own fixture ran 0 tests.
      (define all-tests
@@ -923,13 +942,22 @@
   ;; STRINGS, looked up below with a freshly built string: `eq?` never matched
   ;; (0 of 489 hits, measured 2026-10-13), so every key was +inf.0 and dispatch
   ;; was ALPHABETICAL — including on both legs of the refuted measurement above.
-  (define historical-times
+  (define timings-lines
     (if (file-exists? timings-path)
-        (with-handlers ([exn? (lambda (e) (hash))])
-          (historical-medians (file->lines timings-path)
-                              #:runs LPT-HISTORY-RUNS
-                              #:min-file-count LPT-MIN-FILE-COUNT))
-        (hash)))
+        (with-handlers ([exn? (lambda (e) '())]) (file->lines timings-path))
+        '()))
+  (define historical-times
+    (with-handlers ([exn? (lambda (e) (hash))])
+      (historical-medians timings-lines
+                          #:runs LPT-HISTORY-RUNS
+                          #:min-file-count LPT-MIN-FILE-COUNT)))
+  ;; DEFERRED 81: each file's test count at its last recorded PASS — read here,
+  ;; before this run appends its own record, and reported after the summary.
+  (define prior-counts
+    (with-handlers ([exn? (lambda (e) (hash))])
+      (prior-test-counts timings-lines
+                         (for/list ([p (in-list test-paths)])
+                           (path->string (file-name-from-path (string->path p)))))))
 
   ;; Plan work units: heaviest first (LPT); a whale becomes K shards
   ;; (suite-plan.rkt plan-units). Unknown files get +inf.0 (conservative: first).
@@ -1356,6 +1384,12 @@
                 [incomplete? (format "INCOMPLETE — ~a" incomplete-reason)]
                 [all-pass? "all pass"]
                 [else (format "~a FAILURES" (length failed-files))]))
+  ;; DEFERRED 166 (SW-20): repeat the override warning where the eye lands.
+  (let ([w (suite-lock-override-warning)]) (when w (printf "~a\n" w)))
+  ;; DEFERRED 81: a count can drop with nothing failing; name every drop.
+  (for ([d (in-list (count-drops file-results prior-counts))])
+    (printf "COUNT DROP: ~a ran ~a tests; at its last recorded pass (~a) it ran ~a. A deleted test explains this; otherwise tests are being lost silently (DEFERRED 81).\n"
+            (first d) (second d) (fourth d) (third d)))
   (for ([r (in-list stale-test-free)])
     (printf "NOTE: ~a is declared test-free (suite-plan.rkt TEST-FREE-FILES) but ran ~a tests — remove the declaration.\n"
             (unit-name r) (hash-ref r 'tests 0)))

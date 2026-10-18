@@ -1315,7 +1315,7 @@ stratification UnifiedLoop
 
 ## 17. Proposed Extensions from PPN Track 2 (Surface Normalization)
 
-PPN Track 2 ([design document](2026-03-28_PPN_TRACK2_DESIGN.md) §3.12) modeled the surface normalization pipeline in NTT syntax, revealing three gaps. These proposed extensions are needed for the PPN/PRN vision of rewriting-as-propagators.
+PPN Track 2 ([design document](tracks/PPN/PPN_2/2026-03-28_PPN_TRACK2_DESIGN.md) §3.12) modeled the surface normalization pipeline in NTT syntax, revealing three gaps. These proposed extensions are needed for the PPN/PRN vision of rewriting-as-propagators.
 
 ### 17.1 `rewrite` Form — First-Class DPO Rewrite Rules
 
@@ -1413,7 +1413,7 @@ This is the polynomial functor's data-dependent arity: the number of output posi
 
 ## 17b. Proposed Extension from PPN 4C Addendum Phase 4A (Env-Network)
 
-PPN 4C Addendum Phase 4A mini-design (2026-05-26) modeled the per-file env-network in NTT syntax (see [PPN 4C Phase 9+ Addendum design §18.15.6](2026-04-21_PPN_4C_PHASE_9_DESIGN.md)) and surfaced an NTT gap: the existing `bridge` form (§6) models **cross-DOMAIN bridges within a single prop-network**, but does NOT model **cross-NETWORK bridges between separate prop-network instances**.
+PPN 4C Addendum Phase 4A mini-design (2026-05-26) modeled the per-file env-network in NTT syntax (see [PPN 4C Phase 9+ Addendum design §18.15.6](tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md)) and surfaced an NTT gap: the existing `bridge` form (§6) models **cross-DOMAIN bridges within a single prop-network**, but does NOT model **cross-NETWORK bridges between separate prop-network instances**.
 
 ### 17b.1 The Gap
 
@@ -1506,6 +1506,6 @@ DESIGN NOTE — NTT gap flagged for future NTT design work. Not blocking PPN 4C 
 | [Unified Infrastructure Roadmap](2026-03-22_PM_UNIFIED_INFRASTRUCTURE_ROADMAP.md) | On-network / off-network boundary analysis |
 | [PM Track 10 Design](2026-03-24_PM_TRACK10_DESIGN.md) | Discovered serialize/fork gaps; NTT case study §15.4 |
 | [PM Track 10 Stage 2 Audit](2026-03-24_PM_TRACK10_STAGE2_AUDIT.md) | Module loading infrastructure analysis |
-| [PPN Track 2 Design](2026-03-28_PPN_TRACK2_DESIGN.md) | Surface normalization NTT modeling (§3.12); proposed `rewrite`, `refine`, `:foreach` extensions (§17) |
+| [PPN Track 2 Design](tracks/PPN/PPN_2/2026-03-28_PPN_TRACK2_DESIGN.md) | Surface normalization NTT modeling (§3.12); proposed `rewrite`, `refine`, `:foreach` extensions (§17) |
 | [Module Theory on Lattices](../research/2026-03-28_MODULE_THEORY_LATTICES.md) | Parse tree as module over rewrite ring — module theory grounding for §17 |
 | [Algebraic Embeddings on Lattices](../research/2026-03-28_ALGEBRAIC_EMBEDDINGS_LATTICES.md) | Pocket Universe principle — lattice embedding grounding for `:embedded` kind |

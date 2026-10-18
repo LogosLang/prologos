@@ -304,3 +304,152 @@ convention (`../../README.md`).
   merge-laws note's prediction), full suite and corpus A/B. F3(b) stays a P1 design item.
   Task written as an addendum to the sweep handoff, queued behind its current item (147).
 - **Next**: D.2.
+
+*(The next two entries were proposed for this LOG by the DEFERRED-sweep session — in its merge note
+`docs/tracking/handoffs/2026-10-13_DEFERRED_SWEEP_146-149_MERGE_NOTE.md` § 148 and § F3(a) — and are
+applied here verbatim by the PAR 4 session on 2026-10-13, after the fact; the 148 entry predates
+several entries above.)*
+
+### DEFERRED 148 closed on the sweep branch; pair-dedup does not bound the heap baseline's chain — `c62cd267` (2026-10-13)
+**Why / decision**: the heap baseline's growth was two things — duplicates (closed) and an
+ascending chain per bitmask (not closable by any set-of-pairs form, flat or heap). D.1 §6.1's
+flat record inherits the second; D.2 should pick the lattice (pairs vs bitmask-keyed join)
+deliberately. **Surprise / correction**: the entry's cited sites were dead code; the live
+site was the third. The "300 s" figure does not reproduce (2.5 s). **Next**: 146.
+
+### F3(a) landed (O-7): binder arms return the unified body — `5ec697bf` (sweep branch, 2026-10-13)
+**Why / decision**: O-7. `close-expr` (the inverse of `open-expr`, generic fallback per pipeline.md) plus the four
+arms; 11 tests, mutation-checked per arm. **Surprise / correction**: the note's prediction "none of the C violations"
+is refuted. C also fell (D1c 74→28, D1d 251→187, tagged(D1) 432→366), and F3(b)'s published witness needed both
+defects (replaced: `(Bool ⊔ Pi(?m,Nat)) ⊔ Pi(Nat,?m) = Bool` vs `type-top`). The fallback is duplicated
+(`type-lattice.rkt:172-173` and `:217-218`). In the suite the defect changed 97 of 881 binder merges with no test
+observing it; the comparative corpus never reaches the arms, so it cannot serve as P2's evidence for merge-law work.
+**Next**: D.2 decides F3(b) at both sites, against the new witness; P0's corpus needs a program that reaches
+binder merges with unsolved metas.
+
+### PAR 4 moved to its own branch + worktree `par4-arena-executors`; P0's timing rows re-measured on a verified limited build — and P0's "S0 = 7 %" headline corrected to 24–30 % — `3d9a208f` (2026-10-13)
+- **Why / decision**: owner — move this work to its own worktree/branch under the new process
+  (branches in nested worktrees; main receives periodic, tested checkpoint merges), and check the
+  merge-laws note §7 and the git log for other sessions' work. Branch `par4-arena-executors` created at
+  `3643f56e` (= `par4-p0` with main merged in twice by the sweep session, owner decision (viii)); the
+  worktree moved to `.claude/worktrees/par4-arena-executors`; `par4-p0` kept as a frozen pointer (records
+  cite it). Branch gate: **10 339 / 495 all pass** (= main's 10 330 / 494 + the 9 parity tests). From here,
+  PAR 4 documents and code change on this branch only.
+- **Measured** (P0 record **§10**): build fingerprints match §7c's limited build. Medium tier, both legs
+  limited (PAR 2 `ce4cde52` in a throwaway worktree vs B1 threshold 256 / off, interleaved ×3): DEFERRED
+  150's effect **holds and is larger** — 6.0–7.4× (graph colouring 500: 9.20 → 1.25 ms; PAR 2 1.70 ms).
+  Large tier: counts identical, S0 ms within 4 %.
+- **Surprise / correction** ⚠: P0 §0/§2.2/§5 divided S0 by a window that is ~80 % the instrument's own
+  two forced major GCs (DEFERRED 152 — which this track filed, and then measured through). Excluding
+  them, **S0 is 24–30 % of corpus work** (not 7 %), corpus H-S + K=8 1.26–1.34× (not 1.06×); the per-file
+  command-time models hold (1.49× / 1.35× H-S; 4.07× / 3.26× at K=8). Callouts added at each site.
+  Also from the log: this track's four suite runs (00:56–01:04) predate the machine-wide `pkill` fix
+  (`b45bbf44`, DEFERRED 163) and would have killed concurrent suites' workers. The F3(a) and 148
+  entries the sweep session proposed are applied above.
+- **Next**: D.2 — inputs now include §7b's fire-context decision, F3(b)'s two sites, the corrected value
+  proposition, B1/B1′ as the P2 baseline pair, and an acceptance file that reaches binder merges.
+
+### Relay to a fresh session: the two owner decisions the move left open are ledgered as O-9 / O-10; main is 57 commits ahead, one file overlapping — docs commit on the branch (2026-10-13)
+- **Why / decision**: the owner continues PAR 4 in a fresh session from a relay note
+  (`DAILIES_METHODOLOGY.org` §Relay Notes). Its grounding pass (obligation 4) found the two decisions
+  the move/re-measure report put to the owner only in the chat, so D.1 §14 now ledgers them as
+  PENDING: **O-9** DEFERRED 150's production default (lean: off) and **O-10** what the first checkpoint
+  merge brings to `main` (parity test + harness certainly; the env-gated P0 instrumentation kept or
+  stripped). O-3 (observers, Appendix A) is still pending too.
+- **Surprise / correction**: none in PAR's records. `main` is 57 commits past the branch's merge-base
+  `01ef2542` (PPN series move; SW-24/25/27 of the DEFERRED sweep, with DEFERRED 160 reopened as
+  MITIGATED; register at NEXT FREE 172). Only `tools/dep-graph.rkt` changed on both sides: SW-24
+  derives the graph by scanning for `test-*.rkt`, which makes the branch's two-line registration of
+  `test-arena-parity.rkt` obsolete, so the next main→branch merge takes main's side.
+- **Next**: unchanged — D.2 (P0.5), opening by posing O-9, O-10 and O-3 with the inputs listed above.
+
+### Main merged in (third bring-up): gate 10 394 / 502 all pass; the one predicted conflict resolved to main's derived graph — `2b1e1e78` (2026-10-13)
+- **Why / decision**: owner, at the start of the fresh session: pull in main's changes safely. Merged, never
+  rebased (W-1; hashes are cited). Main `99c893d4` = 59 commits past the merge-base `01ef2542` (checkpoints 3–6
+  of the DEFERRED sweep, PPN 4C checkpoint 1 with the PPN series move, CIU 6 dailies).
+- **Measured**: the merged tree differs from main in exactly the branch's own 135 files, each identical to
+  `ea63c032`; `tools/dep-graph.rkt` is main's (the derived graph lists `test-arena-parity.rkt`; `update-deps
+  --check` passes). Built with the limit; `reduction` / `typing-core` / `macros` / `elaborator` / `driver` `.zo`
+  equal main's checkout byte for byte (`propagator` differs by the P0 instrumentation). Gate `--all
+  --force-rerun`: **10 394 tests / 502 files, all pass** = main's 10 385 / 501 (SW-25 gate) + the 9 parity tests,
+  the predicted delta exactly. The harness runs (`p0-profile.rkt stats` smoke run on `bool-logic`).
+- **What main changes on this track's measured path** (in the merge message too): DEFERRED 152 means the P0
+  harness's window no longer holds forced major GCs (smoke run `gc_ms` 1, was ≥ 51 on every file), so P0 §10.2's
+  S0 share can be re-derived directly instead of bracketed; 151 (a)+(b) supersede P0 §0 item 5's 2.6 s load
+  figure; SW-27 puts new per-`process-file` work (registry scope: 59 parameters + a forked registry network)
+  inside the harness's window; 155 makes `demos-ab.sh`'s restore a no-op.
+- **Surprise / correction**: the relay note counted 58 commits; main had gained one more (`99c893d4`, CIU 6
+  dailies), touching no code. The runner's COUNT DROP line (`test-properties.rkt` 13 → 8 since `fd2986cc`) is
+  main's `8014caef` (the test-library double count, removed before this branch was cut), not this merge.
+- **Next**: summarise the track to the owner and wait for confirmation; then D.2 opens with O-9.
+
+### O-9 decided (tree path off, then deleted in P0.5) and G-2 recorded; the evidence: the suite passes with it off, the prelude caches are identical, and a merge-order census explains why and finds order-dependence elsewhere — `eb25caee` (2026-10-14)
+- **Why / decision**: owner accepted the summary and the O-9 lean: off, and delete the path. They asked first for
+  the full suite with the default off ("it *should* pass if our architecture is actually CALM; if not, it would
+  be a good indicator that there is more to fix"), and for the other evidence. They also gave guidance **G-2**:
+  measure performance (memory, cycles/time, firings) and correctness, the latter in three layers — inductive
+  (by construction: static analysis, types), co-inductive (runtime monitoring, dynamic checks, as needed),
+  and testing. Both are ledgered in D.1 §14. The record is P0 **§11**.
+- **Measured**:
+  - Full suite under `PAR4_TREE_REDUCE=off`: **10 394 / 502 all pass**.
+  - The 39 prelude caches, generated cold under 256, off and 0, are identical module by module.
+  - A merge-order census (each BSP round applied flat / again / tree-combined / reversed to one snapshot) finds:
+    - tree vs flat: **0 divergences** in 648 wide suite rounds, because no wide round carries an undeclared write;
+    - a power row flips a program's answer 3 → 1 when the shape does occur.
+  - Cold prelude elaboration: merge phase 3.03 → 0.020 ms and −7.7 MB per run, wall within noise.
+- **Surprise / correction**:
+  - The suite's pass was **predicted by structure**, so it is weak evidence for CALM. The census's reverse-order
+    column R is the test that can fail, and it does: 249 of 12 527 multi-result suite rounds (2.0 %) and 26 of
+    448 corpus rounds (5.8 %) end with different cell values. The merges involved are meta-solution output, the
+    ready queue (cell-14), attribute-map facets and tagged cells. These are the Q1 audit's predicted rows, now
+    measured in production.
+  - Contradictions differ only in *which* cell is reported, never in whether one is.
+  - Cold prelude elaboration runs only 4–5 BSP rounds; 1–2 of them are wide (the `process-file` route's widest
+    is 368 fires, as DEFERRED 150 recorded).
+  - My lean's second reason (a second merge order, chosen by round width) was stated as unmeasured. It is a real
+    mechanism (power-T) that production does not reach (T = 0).
+  - A power check of the cache comparison was itself zero-power: it overwrote a module that does not exist. It
+    was caught by its 39/39 result and redone.
+- **Next**: dailies + DEFERRED 150's status addendum on main; then pose **O-10** (first checkpoint contents),
+  which now also covers keeping the census as a standing monitor (G-2).
+
+### O-10 posed — what the first checkpoint merge carries; lean CP-2 "observe, don't select", now — docs commit on the branch (2026-10-14)
+- **Why / decision**: owner: proceed. The tradeoff analysis is D.1 **Appendix B**: an inventory, the seven
+  instruments one by one, the measured facts, options CP-1 (as is) to CP-4 (wait for P0.5), twelve worked cases,
+  and the principles table. The **lean is CP-2**: before the merge, one branch commit removes the knobs that
+  select a semantics (scheduler, solver strategy, tree threshold) and the in-fire trap and its counter; it keeps
+  the merge-order census as an opt-in and gates the two always-on counters. Main gets the documents, parity test,
+  harness and data. PENDING in §14.
+- **Measured**:
+  - **Cost when unset**: main vs branch on the medium tier, interleaved ×7, threshold off: 11 of 15 networks at
+    0.95–1.04; four at 1.06–1.09×, inside noise at this n (constraint grid 8's ranges touch).
+  - **Precedent**: main's production code reads exactly one env var, `PROLOGOS_MEMORY_STATS`, an observation
+    opt-in.
+  - **Demand**: no other worktree references any of the knobs.
+- **Surprise / correction**: main's copies of PAR 4's documents stop at O-7. Main's P0 record still states "S0
+  rounds are 7.0 %" without the correction, and DEFERRED 150's addendum on main cites a §11 that main's copy
+  lacks. That is W-1 working as designed between checkpoints, but it argues against waiting (CP-4).
+  Also: keeping a knob on the branch but not on main is not a stable state, because the next main→branch merge
+  fast-forwards the branch to the checkpoint's tree. So withholding means a removal commit; the knobs stay in
+  history at their pinned commits.
+- **Next**: the owner's O-10 decision. If CP-2: the triage commit, the gate (predicted 10 394 / 502), a harness
+  smoke run, then the checkpoint merge procedure (`branch-worktree-workflow.md` §4). Then O-3.
+
+### O-10 decided (CP-2): the triage commit — the semantics-selecting knobs removed, the census kept, counters off by default; gate 10 394 / 502 — `a0b78fda` (2026-10-14)
+- **Why / decision**: owner accepted CP-2. `propagator.rkt` and `stratified-eval.rkt` were rebuilt from main's
+  copies plus only the census and the switch-gated fork/route counters. Main's code therefore differs from the
+  branch's only by that observation code, and the P0 knobs stay in history at their pinned commits. Recorded in
+  D.1 §14 and Appendix B; callouts added at P0 §8 and §11.8.
+- **Measured** (`data/par4-p0/o10/triage-checks.txt`):
+  - the census power rows are unchanged;
+  - the harness's routes match P0 §2.4's;
+  - the counters stay 0 for a plain `process-file`;
+  - with `PROLOGOS_SCHEDULER=seq PROLOGOS_SOLVER_STRATEGY=atms` set, three files that failed under seq in P0 §2.5
+    now pass, so an ambient setting no longer reaches the compiler;
+  - the scripts that need a removed knob refuse with exit 2;
+  - gate **10 394 / 502 all pass**, as predicted.
+- **Surprise / correction**: one departure from B.4's wording. The counters are gated by an in-process switch that
+  the harness flips, not by the census's environment variable; that removes a second ambient read. The census
+  must reach the runner's workers, so it keeps its variable. Recorded in Appendix B's ledger line.
+- **Next**: checkpoint 1 — merge the branch into main in a throwaway worktree, gate, reconcile file by file, then
+  fast-forward main.

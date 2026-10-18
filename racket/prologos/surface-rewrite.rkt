@@ -6,7 +6,7 @@
 ;;; PPN Track 2: Replaces the imperative preparse pipeline in macros.rkt
 ;;; with registered rewrite rules operating on parse tree nodes.
 ;;;
-;;; Design: docs/tracking/2026-03-28_PPN_TRACK2_DESIGN.md
+;;; Design: docs/tracking/tracks/PPN/PPN_2/2026-03-28_PPN_TRACK2_DESIGN.md
 ;;; Research: docs/research/2026-03-26_TREE_REWRITING_AS_STRUCTURAL_UNIFICATION.md
 ;;;
 ;;; Architecture:

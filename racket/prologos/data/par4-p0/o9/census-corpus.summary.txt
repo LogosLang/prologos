@@ -1,0 +1,16 @@
+excluded labels: ['parity-adversarial']
+processes: 12  thresholds: ['256']
+  R_cells_differ                               26
+  R_rounds_cells_differ                        26
+  compared_rounds                              448
+  fires                                        2901
+  rounds                                       687
+events: 26 (cap 300 per process); in rounds >= 256 fires: 0
+  by order: {'R': 26}
+  by (order, merge function) — events naming it:
+      17  R  meta-solution-merge
+       4  R  resolution-stratum-merge
+       3  R  attribute-map-merge-fn
+       2  R  ...s/decision-cell.rkt:527:2
+  by test file (first tests/ frame on the stack):
+      26  (no tests/ frame on the stack)

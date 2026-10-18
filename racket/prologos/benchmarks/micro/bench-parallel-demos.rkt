@@ -15,6 +15,7 @@
          racket/port
          racket/future  ;; for processor-count
          racket/path
+         (only-in racket/file make-parent-directory*)  ;; DEFERRED 155: runs/ dir
          json)
 
 ;; ============================================================
@@ -322,13 +323,27 @@
                             'runs RUNS
                             'timestamp (current-seconds))))
 
-(define json-path
+;; DEFERRED 155: each run writes a NEW file under data/benchmarks/runs/ (git-ignored),
+;; or `--output PATH`. data/benchmarks/parallel-demo-results.json is PAR 2's recorded
+;; result (ce4cde52) — re-baseline it only deliberately, with --output.
+(define data-dir
   (build-path (path-only (resolved-module-path-name
                            (variable-reference->resolved-module-path
                             (#%variable-reference))))
-              ".." ".." "data" "benchmarks" "parallel-demo-results.json"))
+              ".." ".." "data" "benchmarks"))
+(define json-path
+  (let ([args (vector->list (current-command-line-arguments))])
+    (cond
+      [(member "--output" args) => (lambda (tail) (string->path (cadr tail)))]
+      [else
+       (define d (seconds->date (current-seconds)))
+       (define (pad2 n) (~r n #:min-width 2 #:pad-string "0"))
+       (build-path data-dir "runs"
+                   (format "parallel-demos-~a~a~aT~a~a~a.json" (date-year d) (pad2 (date-month d))
+                           (pad2 (date-day d)) (pad2 (date-hour d)) (pad2 (date-minute d)) (pad2 (date-second d))))])))
 
-(call-with-output-file json-path #:exists 'replace
+(make-parent-directory* json-path)
+(call-with-output-file json-path #:exists 'truncate
   (lambda (out) (write-json all-data out)))
 (printf "\nResults written to ~a\n" json-path)
 

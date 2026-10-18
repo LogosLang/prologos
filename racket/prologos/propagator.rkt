@@ -198,6 +198,10 @@
  wrap-with-worldview
  ;; Track 8 C5a: Global BSP scheduler override for A/B benchmarking
  current-use-bsp-scheduler?
+ ;; PAR 4 observation counters (O-10 / CP-2): off unless a measurement harness switches them on
+ par4-counters-enabled
+ par4-enable-counters!
+ par4-fork-count
  ;; CALM topology guard: #t during BSP fire rounds
  current-bsp-fire-round?
  ;; PAR Track 1: Decomposition request protocol
@@ -1229,6 +1233,7 @@
 ;; Resets hot state (worklist, fuel) and contradiction.
 ;; O(1): two struct allocations. All data shared until child writes (CoW).
 (define (fork-prop-network net [fuel 1000000])
+  (when (unbox par4-counters-enabled) (set-box! par4-fork-count (add1 (unbox par4-fork-count))))  ;; PAR 4
   ;; D.4 1C-iv-a (§10.0.6 γ1): fork-prop-network cell-reset.
   ;; Sub-network gets fresh worklist + new fuel budget. Cells are SHARED with
   ;; parent via CHAMP structural sharing (prop-network-cells net) — under D.4,
@@ -2178,6 +2183,13 @@
 ;; This is the correct level for a full A/B comparison — it catches every quiescence
 ;; invocation (unify.rkt, bridges, tabling, not just metavar-store).
 ;; PPN 4C Phase 3A.d (2026-05-22): elab-speculation.rkt retired (zero callers; stranded).
+;; PAR 4 observation counters (O-10 decision CP-2, 2026-10-14): a measurement harness switches them on
+;; in-process with (par4-enable-counters!); otherwise nothing is written. Read by
+;; benchmarks/par4/p0-profile.rkt. (The P0 knobs that SELECTED a semantics — PROLOGOS_SCHEDULER,
+;; PAR4_TREE_REDUCE, PAR4_TRAP_MIDRUN — were removed by the same decision; they run at 4097b1c8 / eb25caee.)
+(define par4-counters-enabled (box #f))
+(define (par4-enable-counters!) (set-box! par4-counters-enabled #t))
+(define par4-fork-count (box 0))
 (define current-use-bsp-scheduler? (make-parameter #t))  ;; PAR Track 1 Phase 5: BSP is the default
 
 ;; CALM topology guard: #t only during a fire-and-collect-writes fire round.
@@ -3069,6 +3081,124 @@
 
 ;; Collect all deferred propagators from fire results.
 ;; Returns list of (list input-ids output-ids fire-fn) specs.
+;; ---- PAR 4 O-9 evidence: merge-order census (2026-10-14) ----
+;; PAR4_MERGE_ORDER_CENSUS=<file>: for every BSP round with >= 2 fire results, apply the round's
+;; results to the SAME snapshot in four ways and compare the resulting networks:
+;;   F  flat, in result order          — today's path below the threshold (the reference)
+;;   C  flat again (control)           — differences here are the instrument's (equal?-blind values)
+;;   T  one tree-combined result       — today's path at >= 256 fires (threshold as shipped)
+;;   R  flat, results REVERSED         — is the round's outcome independent of application order?
+;; Compared: raw cell values of every cell the round wrote or created (equal?, minus C's cells),
+;; the network's contradiction, and the worklist as a SET. Behaviour-neutral: the extra networks
+;; are discarded and built with the write/change counters unbound; BSP only (not the sequential
+;; drain). Per-process totals + up to 300 divergence events are appended to the file at exit
+;; (plumber flush); PAR4_MC_LABEL tags the process. Merge functions are assumed pure here.
+(define par4-mc-path (getenv "PAR4_MERGE_ORDER_CENSUS"))
+(define par4-mc (make-hasheq))
+(define par4-mc-events '())
+(define par4-mc-nevents 0)
+(define (par4-mc-inc! k [d 1]) (hash-set! par4-mc k (+ d (hash-ref par4-mc k 0))))
+(define (par4-raw-cell net cid)
+  (or (and (eq? cid fuel-cell-id) (prop-net-warm-fuel-cell-cache (prop-network-warm net)))
+      (and (eq? cid worldview-cache-cell-id) (prop-net-warm-worldview-cache-cache (prop-network-warm net)))
+      (champ-lookup (prop-network-cells net) (cell-id-hash cid) cid)))
+(define (par4-round-cids all-results)
+  (define s (make-hash))
+  (for ([r (in-list all-results)])
+    (cond [(fire-result? r)
+           (for ([w (in-list (fire-result-value-writes r))]) (hash-set! s (car w) #t))
+           (for ([w (in-list (fire-result-undeclared-writes r))]) (hash-set! s (car w) #t))
+           (for ([c (in-list (fire-result-new-cells r))]) (hash-set! s (car c) #t))]
+          [(list? r) (for ([w (in-list r)]) (when (pair? w) (hash-set! s (car w) #t)))]))
+  (hash-keys s))
+(define (par4-wl-set net) (for/hash ([p (in-list (prop-network-worklist net))]) (values p #t)))
+;; -> (values differing-cids contradiction-differs? worklist-set-differs?)
+(define (par4-net-diff a b cids)
+  (values (for/list ([cid (in-list cids)]
+                     #:unless (let ([x (par4-raw-cell a cid)] [y (par4-raw-cell b cid)])
+                                (cond [(and (eq? x 'none) (eq? y 'none)) #t]
+                                      [(or (eq? x 'none) (eq? y 'none)) #f]
+                                      [else (equal? (prop-cell-value x) (prop-cell-value y))])))
+            cid)
+          (not (equal? (prop-network-contradiction a) (prop-network-contradiction b)))
+          (not (equal? (par4-wl-set a) (par4-wl-set b)))))
+(define (par4-merge-name net cid)
+  (define f (champ-lookup (prop-network-merge-fns net) (cell-id-hash cid) cid))
+  (format "~a" (if (procedure? f) (or (object-name f) "anon") f)))
+(define (par4-context-test-file)
+  (for/or ([fr (in-list (continuation-mark-set->context (current-continuation-marks)))])
+    (define src (and (cdr fr) (srcloc-source (cdr fr))))
+    (define m (and src (regexp-match #rx"/(tests/test-[^/]*[.]rkt)$" (format "~a" src))))
+    (and m (cadr m))))
+(define (par4-merge-census! base all-results n)
+  (par4-mc-inc! 'rounds) (par4-mc-inc! 'fires n)
+  (define wide? (>= n 256))
+  (when wide? (par4-mc-inc! 'wide_rounds) (par4-mc-inc! 'wide_fires n))
+  (define frs (filter fire-result? all-results))
+  (define n-und (for/sum ([r (in-list frs)]) (if (null? (fire-result-undeclared-writes r)) 0 1)))
+  (define n-new (for/sum ([r (in-list frs)]) (if (null? (fire-result-new-cells r)) 0 1)))
+  (define n-con (for/sum ([r (in-list frs)]) (if (fire-result-contradiction r) 1 0)))
+  (define (flag! k c) (when (> c 0) (par4-mc-inc! k) (when wide? (par4-mc-inc! (string->symbol (format "wide_~a" k))))))
+  (flag! 'rounds_with_undeclared n-und) (flag! 'rounds_with_new_cells n-new) (flag! 'rounds_with_contradiction n-con)
+  (when (>= (length all-results) 2)
+    (par4-mc-inc! 'compared_rounds)
+    (when wide? (par4-mc-inc! 'wide_compared_rounds))
+    (parameterize ([current-quiescence-write-counter #f] [current-quiescence-change-counter #f])
+      (define cids (par4-round-cids all-results))
+      (define flat (bulk-merge-writes base all-results))
+      (define flat2 (bulk-merge-writes base all-results))
+      (define comb (tree-reduce-fire-results all-results #f))
+      (define tree (if comb (bulk-merge-writes base (list comb)) base))
+      (define rev (bulk-merge-writes base (reverse all-results)))
+      (define-values (c-cells c-con c-wl) (par4-net-diff flat flat2 cids))
+      (when (or (pair? c-cells) c-con c-wl)
+        (par4-mc-inc! 'C_noise_rounds) (par4-mc-inc! 'C_noise_cells (length c-cells)))
+      (define noise (for/hash ([c (in-list c-cells)]) (values c #t)))
+      (for ([kind (in-list '(T R))] [other (in-list (list tree rev))])
+        (define-values (dc dcon dwl) (par4-net-diff flat other cids))
+        (define real (filter (lambda (c) (not (hash-ref noise c #f))) dc))
+        (define (k s) (string->symbol (format "~a_~a" kind s)))
+        (when (pair? real) (par4-mc-inc! (k "rounds_cells_differ")) (par4-mc-inc! (k "cells_differ") (length real))
+          (when wide? (par4-mc-inc! (k "wide_rounds_cells_differ"))))
+        (when (and dcon (not c-con)) (par4-mc-inc! (k "rounds_contradiction_differs"))
+          (when (not (eq? (not (prop-network-contradiction flat)) (not (prop-network-contradiction other))))
+            (par4-mc-inc! (k "rounds_contradiction_presence_differs")))
+          (when wide? (par4-mc-inc! (k "wide_rounds_contradiction_differs"))))
+        (when (and dwl (not c-wl)) (par4-mc-inc! (k "rounds_worklist_differs")))
+        (when (and (or (pair? real) (and dcon (not c-con))) (< par4-mc-nevents 300))
+          (set! par4-mc-nevents (add1 par4-mc-nevents))
+          (set! par4-mc-events
+                (cons (list kind n (sort (for/list ([c (in-list real)]) (par4-merge-name flat c)) string<?)
+                            (and dcon #t) n-und n-new n-con (par4-context-test-file))
+                      par4-mc-events)))))))
+(define (par4-json-str s) (format "~s" (format "~a" s)))
+(define (par4-mc-flush!)
+  (when (or (positive? (hash-count par4-mc)) (pair? par4-mc-events))
+    (define label (or (getenv "PAR4_MC_LABEL") ""))
+    (define summary
+      (string-append "{\"kind\":\"summary\",\"label\":" (par4-json-str label)
+                     ",\"threshold\":" (par4-json-str (current-tree-reduce-threshold))
+                     (apply string-append
+                            (for/list ([(key v) (in-hash par4-mc)])
+                              (format ",~a:~a" (par4-json-str key) v)))
+                     "}\n"))
+    (define events
+      (apply string-append
+             (for/list ([e (in-list (reverse par4-mc-events))])
+               (format "{\"kind\":\"event\",\"label\":~a,\"order\":~a,\"fires\":~a,\"merges\":[~a],\"contradiction_differs\":~a,\"results_undeclared\":~a,\"results_new_cells\":~a,\"results_contradiction\":~a,\"test\":~a}\n"
+                       (par4-json-str label) (par4-json-str (list-ref e 0)) (list-ref e 1)
+                       (apply string-append (let loop ([l (list-ref e 2)] [first? #t])
+                                              (if (null? l) '()
+                                                  (cons (string-append (if first? "" ",") (par4-json-str (car l)))
+                                                        (loop (cdr l) #f)))))
+                       (if (list-ref e 3) "true" "false") (list-ref e 4) (list-ref e 5) (list-ref e 6)
+                       (if (list-ref e 7) (par4-json-str (list-ref e 7)) "null")))))
+    (with-output-to-file par4-mc-path #:exists 'append
+      (lambda () (write-string (string-append summary events))))
+    (hash-clear! par4-mc) (set! par4-mc-events '()) (set! par4-mc-nevents 0)))
+(when par4-mc-path
+  (void (plumber-add-flush! (current-plumber) (lambda (h) (par4-mc-flush!)))))
+
 (define (collect-deferred-propagators all-results)
   (for*/list ([result (in-list all-results)]
               #:when (fire-result? result)
@@ -3380,6 +3510,8 @@
                                        snapshot+fuel))
                                  (bulk-merge-writes snapshot+fuel all-writes))]
                      [t-merge-end (current-inexact-monotonic-milliseconds)]
+                     ;; PAR 4 O-9 evidence: merge-order census (env-gated; after the merge timing)
+                     [_par4-mc (when par4-mc-path (par4-merge-census! snapshot+fuel all-writes n))]
                      ;; Apply deferred propagators
                      [deferred-props (collect-deferred-propagators all-writes)]
                      [merged-with-props

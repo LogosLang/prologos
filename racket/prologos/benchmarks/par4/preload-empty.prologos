@@ -1,0 +1,3 @@
+ns p0-empty
+
+def x : Int := 1

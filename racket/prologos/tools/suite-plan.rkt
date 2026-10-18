@@ -37,13 +37,17 @@
          NON-TEST-MODULES
          TEST-FREE-FILES
          drop-non-test-modules
+         targeted-unit-problem
          gate-verdict
          gate-incomplete?
          gate-all-pass?
+         prior-test-counts   ;; DEFERRED 81
+         count-drops
          EXIT-PASS
          EXIT-FAILURES
          EXIT-INCOMPLETE
          EXIT-GUARD-REFUSED
+         EXIT-USAGE
          FAILURE-RUNS-KEPT
          make-run-id
          runs-to-prune
@@ -102,6 +106,10 @@
 ;;     file, the newest 2026-07-31). Since fd2986cc the runner no longer
 ;;     writes them; this keeps any FUTURE fail-open of that shape away from
 ;;     the scheduler too.
+;;   - one of its units reported PASS having run 0 tests, and the file is not
+;;     declared test-free or a non-test module: before 2999a74b the gate took
+;;     that as a pass (DEFERRED 161 — 2 such records in main's file, both
+;;     `all_pass` true). A result without a 'tests key makes no claim.
 ;; A record without file_count makes no claim to check.
 (define (record-invalid-reason rec)
   (cond
@@ -111,8 +119,17 @@
      (define fc (hash-ref rec 'file_count #f))
      (define rs (hash-ref rec 'results '()))
      (define n (if (list? rs) (length rs) 0))
-     (and (exact-integer? fc) (< n fc)
-          (format "results ~a < file_count ~a (DEFERRED 164)" n fc))]))
+     (define (empty-pass? r)
+       (and (hash? r) (passed? r) (eqv? (hash-ref r 'tests #f) 0)
+            (let ([f (base-name (hash-ref r 'file ""))])
+              (not (or (member f NON-TEST-MODULES) (member f TEST-FREE-FILES))))))
+     (cond
+       [(and (exact-integer? fc) (< n fc))
+        (format "results ~a < file_count ~a (DEFERRED 164)" n fc)]
+       [(and (list? rs) (findf empty-pass? rs))
+        => (lambda (r) (format "unit ~a reported PASS with 0 tests (DEFERRED 161)"
+                               (base-name (hash-ref r 'file ""))))]
+       [else #f])]))
 
 ;; ============================================================
 ;; WHALE SHARDING
@@ -301,6 +318,24 @@
 (define (drop-non-test-modules xs)
   (filter (lambda (x) (not (member (base-name x) NON-TEST-MODULES))) xs))
 
+;; targeted-unit-problem : path-string -> (or/c #f string?)
+;; Why a path named with --tests is NOT a test unit, or #f (SW-21). Such a
+;; path used to be dispatched anyway, report PASS with 0 tests and turn the run
+;; INCOMPLETE (EMPTY): true, but it reads as a broken suite when the command
+;; simply named the wrong file. The runner refuses it with EXIT-USAGE instead.
+;; Outside a tests/ directory nothing is judged: the runner's behaviour there
+;; is unchanged.
+(define (targeted-unit-problem p)
+  (define s (if (path? p) (path->string p) p))
+  (define name (base-name s))
+  (cond
+    [(member name NON-TEST-MODULES)
+     (format "~a is the batch worker's own fixture (suite-plan.rkt NON-TEST-MODULES): every worker loads it at startup, so it can only report 0 tests" name)]
+    [(and (regexp-match? #rx"(^|/)tests/[^/]+$" s)
+          (not (regexp-match? #rx"^test-.*[.]rkt$" name)))
+     (format "~a is a test library or fixture, not a test unit (units are tests/test-*.rkt); its checks run through the test files that use it" name)]
+    [else #f]))
+
 (define (passed? r) (equal? (hash-ref r 'status #f) "pass"))
 
 ;; gate-verdict : unit-count (listof unit-result) -> (values missing empty failed stale-test-free)
@@ -326,6 +361,52 @@
   (and (= missing 0) (null? empty) (null? failed)))
 
 ;; ============================================================
+;; DEFERRED 81: a passing file that ran FEWER tests than its last recorded pass
+;; ============================================================
+;; The suite total can move for a reason no failure shows: on 2026-07 two runs of
+;; the same code recorded `test-properties.rkt` as 13 and 8 tests, both all-pass
+;; (161's mechanism: a test file required another test file, so the count depended
+;; on whether the worker had instantiated it already). Any such mechanism looks
+;; like a deleted test, so the runner names every drop and lets a reader decide.
+;;
+;; prior-test-counts : (listof string) (listof string) #:max-records N
+;;                     -> (hash/c string? (list/c exact-nonnegative-integer? string?))
+;; For each WANTED file (base name, as recorded), its `tests` in the NEWEST valid
+;; timings.jsonl record where it PASSED, with that record's commit. Targeted runs
+;; count (a count does not depend on contention). Reads the newest N records only
+;; and stops early once every wanted file is found: main's file is ~200 MB, and a
+;; scan of all of it for a file never recorded (a new test on a branch) cost ~5 s
+;; per run (measured 2026-10-13); one record parses in under 5 ms. A file absent
+;; from the newest N records has no baseline. equal?-keyed.
+(define (prior-test-counts lines wanted #:max-records [max-records 30])
+  (let loop ([ls (reverse lines)] [missing (remove-duplicates wanted)] [seen 0] [acc (hash)])
+    (cond
+      [(or (null? ls) (null? missing) (>= seen max-records)) acc]
+      [else
+       (define rec (with-handlers ([exn:fail? (lambda (e) #f)])
+                     (with-input-from-string (car ls) read-json)))
+       (define rs (and (hash? rec) (not (record-invalid-reason rec)) (hash-ref rec 'results '())))
+       (define acc*
+         (for/fold ([a acc]) ([r (in-list (if (list? rs) rs '()))])
+           (define f (hash-ref r 'file #f))
+           (define n (hash-ref r 'tests #f))
+           (if (and (member f missing) (not (hash-has-key? a f)) (passed? r)
+                    (exact-nonnegative-integer? n))
+               (hash-set a f (list n (format "~a" (hash-ref rec 'commit "?"))))
+               a)))
+       (loop (cdr ls) (filter (lambda (w) (not (hash-has-key? acc* w))) missing) (add1 seen) acc*)])))
+
+;; count-drops : (listof result) prior -> (listof (list file now before commit))
+;; Results that PASSED with fewer tests than `prior` records for their file.
+(define (count-drops file-results prior)
+  (for*/list ([r (in-list file-results)]
+              #:when (passed? r)
+              [p (in-value (hash-ref prior (hash-ref r 'file "") #f))]
+              #:when (and p (exact-nonnegative-integer? (hash-ref r 'tests #f))
+                          (< (hash-ref r 'tests) (first p))))
+    (list (hash-ref r 'file) (hash-ref r 'tests) (first p) (second p))))
+
+;; ============================================================
 ;; EXIT STATUS — one table, so no two outcomes share a code
 ;; ============================================================
 ;; ⚠ A run that RAN NOTHING must not exit 0 (DEFERRED 164 open 2): the re-run
@@ -337,6 +418,8 @@
 (define EXIT-FAILURES 1)       ; some unit failed or timed out
 (define EXIT-INCOMPLETE 2)     ; some unit gave no result, or the run aborted
 (define EXIT-GUARD-REFUSED 3)  ; the re-run GUARD refused: nothing was run
+(define EXIT-USAGE 64)         ; the command named nothing runnable (EX_USAGE): a
+                               ; missing file, or not a test unit (SW-21); nothing was run
 
 ;; ============================================================
 ;; FAILURE-LOG ARCHIVE (DEFERRED 160 support)

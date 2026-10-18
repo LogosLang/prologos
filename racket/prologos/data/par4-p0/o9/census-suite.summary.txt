@@ -1,0 +1,38 @@
+processes: 18  thresholds: ['256']  (excluded 1 prelude-generation process(es): {'kind': 'summary', 'label': 'suite', 'threshold': '256', 'wide_rounds': 2, 'fires': 2002, 'wide_compared_rounds': 2, 'rounds': 5, 'wide_fires': 1581, 'compared_rounds': 5})
+  R_cells_differ                               275
+  R_rounds_cells_differ                        249
+  R_rounds_contradiction_differs               11
+  R_wide_rounds_contradiction_differs          7
+  compared_rounds                              12527
+  fires                                        979335
+  rounds                                       15422
+  rounds_with_contradiction                    46
+  rounds_with_undeclared                       87
+  wide_compared_rounds                         648
+  wide_fires                                   813154
+  wide_rounds                                  648
+  wide_rounds_with_contradiction               7
+events: 260 (cap 300 per process); in rounds >= 256 fires: 7
+  by order: {'R': 260}
+  by (order, merge function) — events naming it:
+     117  R  meta-solution-merge
+      74  R  resolution-stratum-merge
+      62  R  attribute-map-merge-fn
+      16  R  ...s/decision-cell.rkt:527:2
+      11  R  (contradiction only)
+       3  R  set-union-merge
+       1  R  merge-list-append
+       1  R  set-merge
+       1  R  topology-request-merge
+  by test file (first tests/ frame on the stack):
+     174  (no tests/ frame on the stack)
+      52  tests/test-support.rkt
+      17  tests/test-varargs.rkt
+       4  tests/test-solver-parity.rkt
+       4  tests/test-validate.rkt
+       3  tests/test-path-selection.rkt
+       2  tests/test-reason.rkt
+       1  tests/test-pipe-compose-e2e-02b.rkt
+       1  tests/test-stratified-eval.rkt
+       1  tests/test-rel-t1-naf.rkt
+       1  tests/test-bare-methods.rkt

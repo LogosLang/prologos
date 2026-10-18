@@ -1,0 +1,478 @@
+=== test-firstclass-ops.rkt FAILED ===
+wall_ms: 935
+tests: 31 (18 failures)
+
+--- Error Diagnostics ---
+error[E1004]: no instance found for (Buildable List)
+  --> <ws-string>:2:6
+  No instance of Buildable for List
+  Available instances: Buildable Set, Buildable PVec, Buildable List, Buildable LSeq
+  Hint: Define 'impl Buildable List' with methods 'from-seq', 'empty-coll', 'conj'.
+  = help: add an impl for (Buildable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Neg Int)
+  --> <ws-string>:3:10
+  No instance of Neg for Int
+  Available instances: Neg Float32, Neg Int, Neg Posit32, Neg Posit64, Neg Posit8, Neg Posit16, Neg Rat, Neg Float64
+  Hint: Define 'impl Neg Int' with method 'neg'.
+  = help: add an impl for (Neg Int) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:4:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Buildable List)
+  --> <ws-string>:5:6
+  No instance of Buildable for List
+  Available instances: Buildable Set, Buildable PVec, Buildable List, Buildable LSeq
+  Hint: Define 'impl Buildable List' with methods 'from-seq', 'empty-coll', 'conj'.
+  = help: add an impl for (Buildable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:7:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Reducible List)
+  --> <ws-string>:10:6
+  No instance of Reducible for List
+  Available instances: Reducible PVec, Reducible Set, Reducible List, Reducible LSeq
+  Hint: Define 'impl Reducible List' with method 'reduce'.
+  = help: add an impl for (Reducible List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Add Int)
+  --> <ws-string>:2:13
+  No instance of Add for Int
+  Available instances: Add Posit16, Add Float64, Add Posit64, Add Nat, Add Posit32, Add Rat, Add Int, Add String, Add Posit8, Add Float32
+  Hint: Define 'impl Add Int' with method 'add'.
+  = help: add an impl for (Add Int) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Mul Int)
+  --> <ws-string>:3:13
+  No instance of Mul for Int
+  Available instances: Mul Rat, Mul Nat, Mul Posit8, Mul Posit32, Mul Float64, Mul Posit16, Mul Posit64, Mul Int, Mul Float32
+  Hint: Define 'impl Mul Int' with method 'mul'.
+  = help: add an impl for (Mul Int) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:4:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Add Posit32)
+  --> <ws-string>:5:13
+  No instance of Add for Posit32
+  Available instances: Add Posit16, Add Float64, Add Posit64, Add Nat, Add Posit32, Add Rat, Add Int, Add String, Add Posit8, Add Float32
+  Hint: Define 'impl Add Posit32' with method 'add'.
+  = help: add an impl for (Add Posit32) or pass the dictionary explicitly
+
+Error at <unknown>
+  Could not infer type
+  Expression: [prologos::core::arithmetic::+ 7]
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:2:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:4:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:5:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:6:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:7:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+Error at <unknown>
+  Could not infer type
+  Expression: [+ 7 [fn [x <_>] [int* x 2]]]
+
+Error at <unknown>
+  Could not infer type
+  Expression: [fn [x <_>] [int* x 2]]
+
+Error at <unknown>
+  Could not infer type
+  Expression: [+ 7 [fn [x <_>] [int* x 2]]]
+
+Error at <unknown>
+  Could not infer type
+  Expression: [fn [x <_>] [int* x 2]]
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:10:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:2:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:3:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+Error at <unknown>
+  Could not infer type — hint (issue #70): a generic numeric op (+, -, *, /, <, …) over an unannotated parameter can't infer its numeric type here; annotate the parameter (e.g. [fn [x : Int] …]) or use a concrete-op section (e.g. [int* _ 2] / [int+ _ 1]).
+  Expression: [fn [x <_>] [+ x 1]]
+
+Error at <unknown>
+  Could not infer type
+  Expression: [+ 7 [fn [x <_>] [int* x 2]]]
+
+error[E1004]: no instance found for (Reducible List)
+  --> <ws-string>:2:6
+  No instance of Reducible for List
+  Available instances: Reducible PVec, Reducible Set, Reducible List, Reducible LSeq
+  Hint: Define 'impl Reducible List' with method 'reduce'.
+  = help: add an impl for (Reducible List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:3:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:4:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Reducible List)
+  --> <ws-string>:5:6
+  No instance of Reducible for List
+  Available instances: Reducible PVec, Reducible Set, Reducible List, Reducible LSeq
+  Hint: Define 'impl Reducible List' with method 'reduce'.
+  = help: add an impl for (Reducible List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:6:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Buildable List)
+  --> <ws-string>:11:6
+  No instance of Buildable for List
+  Available instances: Buildable Set, Buildable PVec, Buildable List, Buildable LSeq
+  Hint: Define 'impl Buildable List' with methods 'from-seq', 'empty-coll', 'conj'.
+  = help: add an impl for (Buildable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:13:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Buildable List)
+  --> <ws-string>:14:6
+  No instance of Buildable for List
+  Available instances: Buildable Set, Buildable PVec, Buildable List, Buildable LSeq
+  Hint: Define 'impl Buildable List' with methods 'from-seq', 'empty-coll', 'conj'.
+  = help: add an impl for (Buildable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Reducible List)
+  --> <ws-string>:15:6
+  No instance of Reducible for List
+  Available instances: Reducible PVec, Reducible Set, Reducible List, Reducible LSeq
+  Hint: Define 'impl Reducible List' with method 'reduce'.
+  = help: add an impl for (Reducible List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Buildable List)
+  --> <ws-string>:2:6
+  No instance of Buildable for List
+  Available instances: Buildable Set, Buildable PVec, Buildable List, Buildable LSeq
+  Hint: Define 'impl Buildable List' with methods 'from-seq', 'empty-coll', 'conj'.
+  = help: add an impl for (Buildable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Buildable List)
+  --> <ws-string>:3:6
+  No instance of Buildable for List
+  Available instances: Buildable Set, Buildable PVec, Buildable List, Buildable LSeq
+  Hint: Define 'impl Buildable List' with methods 'from-seq', 'empty-coll', 'conj'.
+  = help: add an impl for (Buildable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:4:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:5:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Buildable List)
+  --> <ws-string>:6:6
+  No instance of Buildable for List
+  Available instances: Buildable Set, Buildable PVec, Buildable List, Buildable LSeq
+  Hint: Define 'impl Buildable List' with methods 'from-seq', 'empty-coll', 'conj'.
+  = help: add an impl for (Buildable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:7:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Buildable List)
+  --> <ws-string>:8:6
+  No instance of Buildable for List
+  Available instances: Buildable Set, Buildable PVec, Buildable List, Buildable LSeq
+  Hint: Define 'impl Buildable List' with methods 'from-seq', 'empty-coll', 'conj'.
+  = help: add an impl for (Buildable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:9:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Buildable List)
+  --> <ws-string>:10:6
+  No instance of Buildable for List
+  Available instances: Buildable Set, Buildable PVec, Buildable List, Buildable LSeq
+  Hint: Define 'impl Buildable List' with methods 'from-seq', 'empty-coll', 'conj'.
+  = help: add an impl for (Buildable List) or pass the dictionary explicitly
+
+error[E1004]: no instance found for (Seqable List)
+  --> <ws-string>:11:6
+  No instance of Seqable for List
+  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq
+  Hint: Define 'impl Seqable List' with method 'to-seq'.
+  = help: add an impl for (Seqable List) or pass the dictionary explicitly
+
+Error at <unknown>
+  Could not infer type
+  Expression: [+ 7 [fn [x <_>] [int* x 2]]]
+
+Error at <unknown>
+  Could not infer type
+  Expression: [fn [x <_>] [int* x 2]]
+
+--- RackUnit stderr ---
+QUIESCENCE-WRITES:{"avg_changes":2.769230769230769,"avg_writes":2.769230769230769,"change_ratio":1.0,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":13,"hist_51_plus":0,"hist_6_10":0,"max_changes":4,"max_writes":4,"runs":13,"total_changes":36,"total_writes":36}
+--------------------
+e1/derived-methods-bare-under-map
+FAILURE
+name:       check-equal?
+location:   tests/test-firstclass-ops.rkt:52:2
+actual:
+  "#(struct:no-instance-error #(struct:srcloc <ws-string> 2 6 10) No instance of Buildable for List\n  Available instances: Buildable Set, Buildable PVec, Buildable List, Buildable LSeq\n  Hint: Define 'impl Buildable List' with methods 'from-seq', 'empty-coll', 'conj'. Buildable List)"
+expected:   "'[1 2 3] : [prologos::data::list::List Int]"
+--------------------
+--------------------
+e1/to-X-bare-under-map
+FAILURE
+name:       check-equal?
+location:   tests/test-firstclass-ops.rkt:56:2
+actual:
+  "#(struct:no-instance-error #(struct:srcloc <ws-string> 4 6 17) No instance of Seqable for List\n  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq\n  Hint: Define 'impl Seqable List' with method 'to-seq'. Seqable List)"
+expected:   "'[1.0f 2.0f 3.0f] : [prologos::data::list::List Float64]"
+--------------------
+--------------------
+e1/where-constrained-defn-bare-under-map
+FAILURE
+name:       check-equal?
+location:   tests/test-firstclass-ops.rkt:61:2
+actual:
+  "#(struct:no-instance-error #(struct:srcloc <ws-string> 7 6 15) No instance of Seqable for List\n  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq\n  Hint: Define 'impl Seqable List' with method 'to-seq'. Seqable List)"
+expected:   "'[1.0f 2.0f 3.0f] : [prologos::data::list::List Float64]"
+--------------------
+--------------------
+e1/non-regressions
+FAILURE
+name:       check-equal?
+location:   tests/test-firstclass-ops.rkt:66:2
+actual:
+  "#(struct:no-instance-error #(struct:srcloc <ws-string> 10 6 16) No instance of Reducible for List\n  Available instances: Reducible PVec, Reducible Set, Reducible List, Reducible LSeq\n  Hint: Define 'impl Reducible List' with method 'reduce'. Reducible List)"
+expected:   "6 : Int"
+--------------------
+QUIESCENCE-WRITES:{"avg_changes":2.25,"avg_writes":2.25,"change_ratio":1.0,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":8,"hist_51_plus":0,"hist_6_10":0,"max_changes":4,"max_writes":4,"runs":8,"total_changes":18,"total_writes":18}
+--------------------
+e2/op-values-under-hofs
+FAILURE
+name:       check-equal?
+location:   tests/test-firstclass-ops.rkt:92:2
+actual:
+  "#(struct:no-instance-error #(struct:srcloc <ws-string> 2 13 1) No instance of Add for Int\n  Available instances: Add Posit16, Add Float64, Add Posit64, Add Nat, Add Posit32, Add Rat, Add Int, Add String, Add Posit8, Add Float32\n  Hint: Define 'impl Add Int' with method 'add'. Add Int)"
+expected:   "6 : Int"
+--------------------
+QUIESCENCE-WRITES:{"avg_changes":4.0,"avg_writes":4.0,"change_ratio":1.0,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":5,"hist_51_plus":0,"hist_6_10":0,"max_changes":4,"max_writes":4,"runs":5,"total_changes":20,"total_writes":20}
+--------------------
+e3/documented-idiom-int*-section
+FAILURE
+name:       check-equal?
+location:   tests/test-firstclass-ops.rkt:145:2
+actual:
+  "#(struct:no-instance-error #(struct:srcloc <ws-string> 2 6 17) No instance of Seqable for List\n  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq\n  Hint: Define 'impl Seqable List' with method 'to-seq'. Seqable List)"
+expected:   "'[2 4 6] : [prologos::data::list::List Int]"
+--------------------
+--------------------
+e3/prim-family-and-unary-sections
+FAILURE
+name:       check-equal?
+location:   tests/test-firstclass-ops.rkt:153:2
+actual:
+  "#(struct:no-instance-error #(struct:srcloc <ws-string> 4 6 22) No instance of Seqable for List\n  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq\n  Hint: Define 'impl Seqable List' with method 'to-seq'. Seqable List)"
+expected:   "'[2.0f 4.0f] : [prologos::data::list::List Float64]"
+--------------------
+QUIESCENCE-WRITES:{"avg_changes":4.0,"avg_writes":4.0,"change_ratio":1.0,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":1,"hist_51_plus":0,"hist_6_10":0,"max_changes":4,"max_writes":4,"runs":1,"total_changes":4,"total_writes":4}
+--------------------
+i71/e3-contract-preserved
+FAILURE
+name:       check-equal?
+location:   tests/test-firstclass-ops.rkt:214:2
+actual:
+  "#(struct:no-instance-error #(struct:srcloc <ws-string> 10 6 17) No instance of Seqable for List\n  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq\n  Hint: Define 'impl Seqable List' with method 'to-seq'. Seqable List)"
+expected:   "'[2 4 6] : [prologos::data::list::List Int]"
+--------------------
+QUIESCENCE-WRITES:{"avg_changes":4.0,"avg_writes":4.0,"change_ratio":1.0,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":2,"hist_51_plus":0,"hist_6_10":0,"max_changes":4,"max_writes":4,"runs":2,"total_changes":8,"total_writes":8}
+--------------------
+i70/flagship-fixed-by-e5-b
+FAILURE
+name:       check-equal?
+location:   tests/test-firstclass-ops.rkt:234:2
+actual:
+  "#(struct:no-instance-error #(struct:srcloc <ws-string> 2 6 14) No instance of Seqable for List\n  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq\n  Hint: Define 'impl Seqable List' with method 'to-seq'. Seqable List)"
+expected:   "'[2 3 4] : [prologos::data::list::List Int]"
+--------------------
+QUIESCENCE-WRITES:{"avg_changes":3.3333333333333335,"avg_writes":3.3333333333333335,"change_ratio":1.0,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":9,"hist_51_plus":0,"hist_6_10":0,"max_changes":4,"max_writes":4,"runs":9,"total_changes":30,"total_writes":30}
+--------------------
+e4/posit-values-under-hofs
+FAILURE
+name:       check-equal?
+location:   tests/test-firstclass-ops.rkt:286:2
+actual:
+  "#(struct:no-instance-error #(struct:srcloc <ws-string> 2 6 18) No instance of Reducible for List\n  Available instances: Reducible PVec, Reducible Set, Reducible List, Reducible LSeq\n  Hint: Define 'impl Reducible List' with method 'reduce'. Reducible List)"
+expected:   "4.0 : Posit32"
+--------------------
+--------------------
+e4/float-values-under-hofs
+FAILURE
+name:       check-equal?
+location:   tests/test-firstclass-ops.rkt:291:2
+actual:
+  "#(struct:no-instance-error #(struct:srcloc <ws-string> 5 6 21) No instance of Reducible for List\n  Available instances: Reducible PVec, Reducible Set, Reducible List, Reducible LSeq\n  Hint: Define 'impl Reducible List' with method 'reduce'. Reducible List)"
+expected:   "6.0f : Float64"
+--------------------
+--------------------
+e4/conversion-values-and-sections
+FAILURE
+name:       check-equal?
+location:   tests/test-firstclass-ops.rkt:300:2
+actual:
+  "#(struct:no-instance-error #(struct:srcloc <ws-string> 11 6 19) No instance of Buildable for List\n  Available instances: Buildable Set, Buildable PVec, Buildable List, Buildable LSeq\n  Hint: Define 'impl Buildable List' with methods 'from-seq', 'empty-coll', 'conj'. Buildable List)"
+expected:   "'[3/2 5/2] : [prologos::data::list::List Rat]"
+--------------------
+--------------------
+e4/conversion-section-under-map-fixed-by-e5-b
+FAILURE
+name:       check-equal?
+location:   tests/test-firstclass-ops.rkt:306:2
+actual:
+  "#(struct:no-instance-error #(struct:srcloc <ws-string> 14 6 23) No instance of Buildable for List\n  Available instances: Buildable Set, Buildable PVec, Buildable List, Buildable LSeq\n  Hint: Define 'impl Buildable List' with methods 'from-seq', 'empty-coll', 'conj'. Buildable List)"
+expected:   "'[3/2] : [prologos::data::list::List Rat]"
+--------------------
+--------------------
+e4/pre-e4-eta-non-regression
+FAILURE
+name:       check-equal?
+location:   tests/test-firstclass-ops.rkt:309:2
+actual:
+  "#(struct:no-instance-error #(struct:srcloc <ws-string> 15 6 16) No instance of Reducible for List\n  Available instances: Reducible PVec, Reducible Set, Reducible List, Reducible LSeq\n  Hint: Define 'impl Reducible List' with method 'reduce'. Reducible List)"
+expected:   "6 : Int"
+--------------------
+QUIESCENCE-WRITES:{"avg_changes":4.0,"avg_writes":4.0,"change_ratio":1.0,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":10,"hist_51_plus":0,"hist_6_10":0,"max_changes":4,"max_writes":4,"runs":10,"total_changes":40,"total_writes":40}
+--------------------
+e5b/generic-sections-and-lambdas-under-hofs
+FAILURE
+name:       check-equal?
+location:   tests/test-firstclass-ops.rkt:351:2
+actual:
+  "#(struct:no-instance-error #(struct:srcloc <ws-string> 2 6 14) No instance of Buildable for List\n  Available instances: Buildable Set, Buildable PVec, Buildable List, Buildable LSeq\n  Hint: Define 'impl Buildable List' with methods 'from-seq', 'empty-coll', 'conj'. Buildable List)"
+expected:   "'[2 3 4] : [prologos::data::list::List Int]"
+--------------------
+--------------------
+e5b/mixed-numerics-widen-not-reject
+FAILURE
+name:       check-true
+location:   tests/test-firstclass-ops.rkt:358:2
+params:     '(#f)
+--------------------
+--------------------
+e5b/float-conversion-sections-both-widths
+FAILURE
+name:       check-equal?
+location:   tests/test-firstclass-ops.rkt:361:2
+actual:
+  "#(struct:no-instance-error #(struct:srcloc <ws-string> 8 6 23) No instance of Buildable for List\n  Available instances: Buildable Set, Buildable PVec, Buildable List, Buildable LSeq\n  Hint: Define 'impl Buildable List' with methods 'from-seq', 'empty-coll', 'conj'. Buildable List)"
+expected:   "'[3/2 5/2] : [prologos::data::list::List Rat]"
+--------------------
+--------------------
+e5b/trait-method-body-in-hole-lambda
+FAILURE
+name:       check-equal?
+location:   tests/test-firstclass-ops.rkt:366:2
+actual:
+  "#(struct:no-instance-error #(struct:srcloc <ws-string> 11 6 23) No instance of Seqable for List\n  Available instances: Seqable Set, Seqable List, Seqable PVec, Seqable LSeq\n  Hint: Define 'impl Seqable List' with method 'to-seq'. Seqable List)"
+expected:   "'[1 2 3] : [prologos::data::list::List Int]"
+--------------------
+
+--- Provenance Stats ---
+PROVENANCE-STATS:{"atms_hypothesis_count":6,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":6,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":4,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":6,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":5,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":2,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":1,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":2,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":2,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":9,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":9,"speculation_pruned_count":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":10,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":10,"speculation_pruned_count":0}
+

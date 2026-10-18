@@ -28,7 +28,7 @@
 ;; simple Nat-literal fixtures need no prelude (5N is a built-in literal).
 (define (run-file-fixture str)
   (define tmp (make-temporary-file "fwdref-~a.prologos"))
-  (call-with-output-file tmp #:exists 'replace
+  (call-with-output-file tmp #:exists 'truncate
     (lambda (out) (display str out)))
   (define result
     (parameterize ([current-file-module-network-ref (make-module-network)]

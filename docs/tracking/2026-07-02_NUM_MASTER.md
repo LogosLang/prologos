@@ -35,7 +35,7 @@ Series founded 2026-07-02, seeded from the in-flight Numerics track. **Track 1**
 ## Cross-series relationships
 
 - **UCS Series (track 5)** — the *general* `Type@named-property` refinement surface + `trait`-as-type-producer + full (liquid-typing) inference is UCS-owned; Track 1 ships only the fixed built-in Sign refinement slice. Note: [`2026-06-30_TRAITS_AS_REFINEMENT_TYPING_NOTE.md`](2026-06-30_TRAITS_AS_REFINEMENT_TYPING_NOTE.md).
-- **PPN Series** — bringing numeric typing + refinement fully on-network (retiring Track 1 N5's function-level scaffolding) is a future PPN track. Note: [`2026-06-30_NUMERICS_ON_NETWORK_PPN_NOTE.md`](2026-06-30_NUMERICS_ON_NETWORK_PPN_NOTE.md).
+- **PPN Series** — bringing numeric typing + refinement fully on-network (retiring Track 1 N5's function-level scaffolding) is a future PPN track. Note: [`2026-06-30_NUMERICS_ON_NETWORK_PPN_NOTE.md`](tracks/PPN/2026-06-30_NUMERICS_ON_NETWORK_PPN_NOTE.md).
 - **DEMO Series (Track 1)** — the dependency-resolver demo's JSON numbers spawned Num Track 1; DEMO P1 (JSON parser) unblocks after Track 1 completes.
 
 ## Candidate future tracks (unscheduled)

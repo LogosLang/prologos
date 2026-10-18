@@ -1,0 +1,3 @@
+== round 1  load averages: 11.50 12.07 10.13
+== round 2  load averages: 11.30 12.02 10.12
+== round 3  load averages: 10.78 11.89 10.10

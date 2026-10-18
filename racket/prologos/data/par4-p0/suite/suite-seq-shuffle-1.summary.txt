@@ -1,0 +1,57 @@
+[32/489] test-collection-fns-01.rkt FAIL (1.5s)
+[41/489] test-collection-fns-02.rkt FAIL (1.7s)
+[80/489] test-eq-let-surface-01.rkt FAIL (1.7s)
+[94/489] test-firstclass-ops.rkt FAIL (0.9s)
+[103/489] test-first-rest-01.rkt FAIL (1.6s)
+[110/489] test-generic-ops-01-01.rkt FAIL (0.6s)
+[111/489] test-generic-ops-01-02.rkt FAIL (0.6s)
+[115/489] test-generic-ops-02-01.rkt FAIL (0.5s)
+[120/489] test-hasmethod-01.rkt FAIL (0.7s)
+[122/489] test-generic-ops-02-02.rkt FAIL (1.2s)
+[137/489] test-error-surfacing.rkt FAIL (5.4s)
+[195/489] test-method-resolution.rkt FAIL (1.0s)
+[264/489] test-propagator-descending-01.rkt FAIL (0.0s)
+[276/489] test-propagator-patterns.rkt FAIL (0.5s)
+[281/489] test-prelude-system-01.rkt FAIL (1.9s)
+[286/489] test-prim-op-firstclass.rkt FAIL (2.0s)
+[287/489] test-path-selection-acceptance.rkt FAIL (5.2s)
+[311/489] test-reducible-02.rkt FAIL (1.9s)
+[315/489] test-retraction-stratum.rkt FAIL (0.0s)
+[321/489] test-rel-t1-naf.rkt FAIL (1.4s)
+[324/489] test-relational-e2e.rkt FAIL (1.7s)
+[325/489] test-punify-integration.rkt FAIL (5.4s)
+[353/489] test-rel-t1-acceptance.rkt FAIL (4.3s)
+[360/489] test-solver-context.rkt FAIL (0.0s)
+[450/489] test-trait-resolution.rkt FAIL (1.3s)
+[454/489] test-union-types-atms.rkt FAIL (0.0s)
+[485/489] test-trait-method-derive.rkt FAIL (4.4s)
+[489/489] test-path-selection.rkt FAIL (75.0s)
+10255 tests in 101.8s (489 files, 18 batch workers, 28 FAILURES)
+FAILED: test-collection-fns-01.rkt
+FAILED: test-collection-fns-02.rkt
+FAILED: test-eq-let-surface-01.rkt
+FAILED: test-firstclass-ops.rkt
+FAILED: test-first-rest-01.rkt
+FAILED: test-generic-ops-01-01.rkt
+FAILED: test-generic-ops-01-02.rkt
+FAILED: test-generic-ops-02-01.rkt
+FAILED: test-hasmethod-01.rkt
+FAILED: test-generic-ops-02-02.rkt
+FAILED: test-error-surfacing.rkt
+FAILED: test-method-resolution.rkt
+FAILED: test-propagator-descending-01.rkt
+FAILED: test-propagator-patterns.rkt
+FAILED: test-prelude-system-01.rkt
+FAILED: test-prim-op-firstclass.rkt
+FAILED: test-path-selection-acceptance.rkt
+FAILED: test-reducible-02.rkt
+FAILED: test-retraction-stratum.rkt
+FAILED: test-rel-t1-naf.rkt
+FAILED: test-relational-e2e.rkt
+FAILED: test-punify-integration.rkt
+FAILED: test-rel-t1-acceptance.rkt
+FAILED: test-solver-context.rkt
+FAILED: test-trait-resolution.rkt
+FAILED: test-union-types-atms.rkt
+FAILED: test-trait-method-derive.rkt
+FAILED: test-path-selection.rkt

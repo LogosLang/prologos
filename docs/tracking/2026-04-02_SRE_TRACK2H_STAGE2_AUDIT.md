@@ -301,4 +301,4 @@ Track 2H must validate with property inference:
 - **SRE Track 3** (Trait Resolution): Benefits from Heyting properties for resolution strategy
 - **Research**: [Algebraic Embeddings on Lattices](../research/2026-03-28_ALGEBRAIC_EMBEDDINGS_LATTICES.md) — Heyting algebra enables pseudo-complement error reporting
 - **Research**: [Module Theory on Lattices](../research/2026-03-28_MODULE_THEORY_LATTICES.md) — per-relation properties as sub-rings
-- **Research**: [Lattice Foundations for PPN](../research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md) — lattice theory foundations
+- **Research**: [Lattice Foundations for PPN](tracks/PPN/research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md) — lattice theory foundations

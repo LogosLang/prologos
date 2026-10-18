@@ -1,0 +1,7 @@
+== round 1  load averages: 5.19 4.88 4.47
+== round 2  load averages: 5.18 4.88 4.48
+== round 3  load averages: 5.18 4.88 4.48
+== round 4  load averages: 5.08 4.86 4.47
+== round 5  load averages: 5.16 4.88 4.48
+== round 6  load averages: 5.16 4.88 4.48
+== round 7  load averages: 5.14 4.88 4.48
