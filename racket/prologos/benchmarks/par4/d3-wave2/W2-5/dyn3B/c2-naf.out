@@ -1,0 +1,2 @@
+STATS3 file=/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/par4/d3-wave1/C9/c2-naf.prologos results=7 rounds=9 fires=34 control-divergent=0 nested=0 stale-params=96 ms=189.0
+DEP WV-POISON fires=5 stale-rounds=n/a fns=...logos/relations.rkt:2840:5×3, discrim-fire×2

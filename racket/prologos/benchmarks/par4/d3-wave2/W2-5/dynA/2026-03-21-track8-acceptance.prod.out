@@ -1,0 +1,17 @@
+RESULT 0.0: church-two : [Int -> Int] Int -> Int defined.
+RESULT 0.1: church-result : Int defined.
+RESULT 0.2: mixed : {:a Int :b String} defined.
+RESULT 0.3: 7 : Int
+RESULT 0.4: 12 : Int
+RESULT 0.5: true : Bool
+RESULT 0.6: xs : [prologos::data::list::List Int] defined.
+RESULT 0.7: [prologos::data::option::some Int 1] : [prologos::data::option::Option Int]
+RESULT 0.8: [prologos::data::option::some [prologos::data::list::List Int] '[2 3]] : [prologos::data::option::Option [prologos::data::list::List Int]]
+RESULT 0.9: 3N : Nat
+RESULT 0.10: pv : [PVec Int] defined.
+RESULT 0.11: 10 : Int
+RESULT 0.12: 30 : Int
+RESULT 0.13: m : {:age Int :name String} defined.
+RESULT 0.14: "Alice" : String
+RESULT 0.15: 30 : Int
+STATS leg=prod files=1 params=219 rounds=31 wide-rounds(>=8)=4 fires=147 reentrant=0 ms=173.0

@@ -1,0 +1,203 @@
+PERF-COUNTERS:{"cell_allocs":8735,"constraint_count":0,"constraint_retries":0,"elaborate_steps":859,"inert_dependent_skips":0,"infer_steps":426,"meta_created":101,"meta_solved":40,"prop_allocs":0,"prop_firings":0,"reduce_steps":12178,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":359,"zonk_steps":1369}
+PHASE-TIMINGS:{"elaborate_ms":2,"parse_ms":5,"qtt_ms":1,"reduce_ms":16,"trait_resolve_ms":0,"type_check_ms":69,"zonk_ms":2}
+PROVENANCE-STATS:{"atms_hypothesis_count":26,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: 0N : Nat
+1: 42N : Nat
+2: nat-double : Nat -> Nat defined.
+3: 6N : Nat
+4: true : Bool
+5: 7N : Nat
+6: 42 : Int
+7: 0 : Int
+8: 7 : Int
+9: 7 : Int
+10: -3 : Int
+11: 42 : Int
+12: 3 : Int
+13: 2 : Int
+14: -7 : Int
+15: 7 : Int
+16: 7 : Int
+17: 7 : Int
+18: 42 : Int
+19: 3 : Int
+20: 14 : Int
+21: true : Bool
+22: true : Bool
+23: true : Bool
+24: true : Bool
+25: answer : Int defined.
+26: 50 : Int
+27: 1764 : Int
+28: square-int : Int -> Int defined.
+29: 49 : Int
+30: abs-diff : Int Int -> Int defined.
+31: 7 : Int
+32: my-list : [prologos::data::list::List Int] defined.
+33: [prologos::data::option::some Int 10] : [prologos::data::option::Option Int]
+34: [prologos::data::option::some Int 30] : [prologos::data::option::Option Int]
+35: [prologos::data::option::none Int] : [prologos::data::option::Option Int]
+36: [prologos::data::option::none Int] : [prologos::data::option::Option Int]
+37: '[10 20 30] : [prologos::data::list::List Int]
+38: '[30 40 50] : [prologos::data::list::List Int]
+39: 5 : Int
+40: is-even? : Int -> Bool defined.
+41: true : Bool
+42: false : Bool
+43: 3/7 : Rat
+44: 1/2 : Rat
+45: 2 : Rat
+46: 1 : Rat
+47: 7/12 : Rat
+48: 1/2 : Rat
+49: 1/2 : Rat
+50: 3/2 : Rat
+51: -3/7 : Rat
+52: 3/7 : Rat
+53: 3 : Int
+54: 7 : Int
+55: 3 : Int
+56: 2 : Int
+57: true : Bool
+58: true : Bool
+59: true : Bool
+60: false : Bool
+61: pi-approx : Rat defined.
+62: 355/113 : Rat
+63: 355 : Int
+64: 113 : Int
+65: recip : Rat -> Rat defined.
+66: 7/3 : Rat
+67: 2 : Rat
+68: 11/6 : Rat
+69: 42 : Int
+70: 0 : Int
+71: 15 : Int
+72: 42 : Rat
+73: -7 : Rat
+74: 7/2 : Rat
+75: 10 : Rat
+76: 1 : Rat
+77: 0.5p8 : Posit8
+78: 1p8 : Posit8
+79: 2p8 : Posit8
+80: 30 : Int
+81: 1/2 : Rat
+82: 7N : Nat
+83: true : Bool
+84: true : Bool
+85: true : Bool
+86: 30 : Int
+87: 42 : Int
+88: generic-double : [Pi [x :0 <[Type 0]>] [x x -> x] x -> x] defined.
+89: 42 : Int
+90: 1/2 : Rat
+91: 2p8 : Posit8
+92: 10N : Nat
+93: 0p8 : Posit8
+94: 1p8 : Posit8
+95: 2p8 : Posit8
+96: NaR : Posit8
+97: 2p8 : Posit8
+98: 2p8 : Posit8
+99: 1p8 : Posit8
+100: 2p8 : Posit8
+101: -1p8 : Posit8
+102: 1p8 : Posit8
+103: 1p8 : Posit8
+104: true : Bool
+105: true : Bool
+106: 1 : Rat
+107: 2 : Rat
+108: 1/2 : Rat
+109: 0.5p8 : Posit8
+110: 0.34p8 : Posit8
+111: 1p8 : Posit8
+112: 2p8 : Posit8
+113: 1p16 : Posit16
+114: 2p16 : Posit16
+115: 1 : Rat
+116: 1.0 : Posit32
+117: 2.0 : Posit32
+118: 1 : Rat
+119: 3.14 : Posit32
+120: 2.718 : Posit32
+121: 0.5 : Posit32
+122: 4.0 : Posit32
+123: 9.8596 : Posit32
+124: 42.5 : Posit32
+125: 2p8 : Posit8
+126: 9.8596 : Posit32
+127: int-list : [prologos::data::list::List Int] defined.
+128: 15 : Int
+129: 120 : Int
+130: '[1 2 3 4 5] : [prologos::data::list::List Int]
+131: 55 : Int
+132: 120 : Int
+133: 10 : Int
+134: '[1 4 9 16 25] : [prologos::data::list::List Int]
+135: 55 : Int
+136: gcd : Int Int -> Int defined.
+137: 4 : Int
+138: 7 : Int
+139: 1 : Int
+140: fib-helper : Int Int Int -> Int defined.
+141: fib : Int -> Int defined.
+142: 0 : Int
+143: 1 : Int
+144: 55 : Int
+145: 6765 : Int
+146: 832040 : Int
+147: '[0 1 1 2 3 5 8 13 21 34 55] : [prologos::data::list::List Int]
+148: fact : Int -> Int defined.
+149: 120 : Int
+150: 3628800 : Int
+151: 2432902008176640000 : Int
+152: e-term : Int -> Rat defined.
+153: 1 : Rat
+154: 1 : Rat
+155: 1/2 : Rat
+156: 1/6 : Rat
+157: 1/24 : Rat
+158: 1/120 : Rat
+159: e-approx : Int -> Rat defined.
+160: 685/252 : Rat
+161: int-pow : Int Int -> Int defined.
+162: 1024 : Int
+163: 243 : Int
+164: collatz-len : Int Int -> Int defined.
+165: 16 : Int
+166: 8 : Int
+167: 9 : Int
+168: 111 : Int
+169: pythagorean? : Int Int Int -> Bool defined.
+170: true : Bool
+171: true : Bool
+172: false : Bool
+173: golden-approx : Int -> Rat defined.
+174: 8/5 : Rat
+175: 34/21 : Rat
+176: 987/610 : Rat
+177: p8-roundtrip-exact? : Rat -> Bool defined.
+178: true : Bool
+179: true : Bool
+180: false : Bool
+181: false : Bool
+182: 11/32 : Rat
+183: ERROR: preparse: if: if requires: (if cond then else) or (if ResultType cond then else)
+184: ERROR: Unbound variable
+185: ERROR: Unbound variable
+186: ERROR: Unbound variable
+187: ERROR: Unbound variable
+188: start : Nat defined.
+189: as-int : Int defined.
+190: 36 : Int
+191: as-rat : Rat defined.
+192: 1/36 : Rat
+193: as-posit : Posit8 defined.
+194: 0.027p8 : Posit8
+195: 7/256 : Rat
+
+--- 5 errors ---
+W24 {"exec":"prod","exec_fires":1043,"exec_rounds":280,"exec_wide_rounds":19,"file":"numerics-tutorial-demo.prologos","perf_fields_worker":"()","perf_incs_in_exec_main":78,"perf_incs_in_exec_worker":0,"race_rounds_any_worker_set":0,"race_rounds_multi_worker_set":0,"race_unbox_main_prop-net-box":34,"race_unbox_main_registry-net-box":88,"strat":"auto","wall_ms":318.0}

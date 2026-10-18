@@ -1,0 +1,62 @@
+PERF-COUNTERS:{"cell_allocs":2418,"constraint_count":0,"constraint_retries":0,"elaborate_steps":237,"inert_dependent_skips":0,"infer_steps":162,"meta_created":7,"meta_solved":7,"prop_allocs":0,"prop_firings":0,"reduce_steps":345,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":104,"zonk_steps":296}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":1,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":3,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":33,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":1,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: Color : [Type 0] defined.
+1: Red : examples::ppn-track3::Color defined.
+2: Green : examples::ppn-track3::Color defined.
+3: Blue : examples::ppn-track3::Color defined.
+4: Point : [Type 0] defined.
+5: MkPoint : Int Int -> examples::ppn-track3::Point defined.
+6: Shape : [Type 0] defined.
+7: Circle : Int -> examples::ppn-track3::Shape defined.
+8: Rectangle : Int Int -> examples::ppn-track3::Shape defined.
+9: Describable-describe : [Pi [x :0 <[Type 0]>] [x -> Int] x -> Int] defined.
+10: describe : [Pi [x :0 <[Type 0]>] [x -> Int] x -> Int] defined.
+11: Wrapper : [Type 0] defined.
+12: MkWrapper : Int -> examples::ppn-track3::Wrapper defined.
+13: Animal : [Type 0] defined.
+14: Cat : String -> examples::ppn-track3::Animal defined.
+15: Dog : String -> examples::ppn-track3::Animal defined.
+16: Direction : [Type 0] defined.
+17: North : examples::ppn-track3::Direction defined.
+18: South : examples::ppn-track3::Direction defined.
+19: East : examples::ppn-track3::Direction defined.
+20: West : examples::ppn-track3::Direction defined.
+21: greeting : String defined.
+22: magic : Int defined.
+23: is-zero : Int -> Bool defined.
+24: true : Bool
+25: false : Bool
+26: inc : Int -> Int defined.
+27: 42 : Int
+28: ERROR: fn: all parameters except body must be bare symbols or a binder (x : T)
+29: 1 : Int
+30: let-result : Int defined.
+31: 30 : Int
+32: OK
+33: Int
+34: color-to-int : examples::ppn-track3::Color -> Int defined.
+35: 1 : Int
+36: 3 : Int
+37: shape-area : Int -> Int defined.
+38: 25 : Int
+39: Color--Describable--describe : examples::ppn-track3::Color -> Int defined.
+40: Color--Describable--dict : examples::ppn-track3::Color -> Int defined.
+41: piped : Int defined.
+42: 8 : Int
+43: double-inc : Int -> Int defined.
+44: 42 : Int
+45: 7 : Int
+46: 7 : Int
+47: my-list : [prologos::data::list::List Int] defined.
+48: double : Int -> Int defined.
+49: 42 : Int
+50: triple : Int -> Int defined.
+51: 42 : Int
+52: dir-to-int : examples::ppn-track3::Direction -> Int defined.
+53: 1 : Int
+54: 4 : Int
+
+--- 1 errors ---
+W24 {"exec":"prod","exec_fires":70,"exec_rounds":20,"exec_wide_rounds":1,"file":"2026-04-02-ppn-track3.prologos","outer_hist":{"0":17},"outer_max":0,"outer_runs":17,"strat":"auto","wall_ms":168.0}

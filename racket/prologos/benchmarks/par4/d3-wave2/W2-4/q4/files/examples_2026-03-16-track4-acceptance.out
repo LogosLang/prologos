@@ -1,0 +1,215 @@
+warning: duplicate implicit binder A in metadata (using inline version)
+warning: duplicate implicit binder A in metadata (using inline version)
+warning: duplicate implicit binder B in metadata (using inline version)
+warning: duplicate implicit binder A in metadata (using inline version)
+warning: duplicate implicit binder A in metadata (using inline version)
+warning: duplicate implicit binder B in metadata (using inline version)
+PERF-COUNTERS:{"cell_allocs":8920,"constraint_count":0,"constraint_retries":0,"elaborate_steps":1323,"inert_dependent_skips":0,"infer_steps":1886,"meta_created":258,"meta_solved":196,"prop_allocs":0,"prop_firings":0,"reduce_steps":6532,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":12,"unify_steps":658,"zonk_steps":2908}
+PHASE-TIMINGS:{"elaborate_ms":4,"parse_ms":5,"qtt_ms":1,"reduce_ms":9,"trait_resolve_ms":0,"type_check_ms":202,"zonk_ms":3}
+PROVENANCE-STATS:{"atms_hypothesis_count":124,"atms_nogood_count":26,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":87,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: a1-int : Int | String defined.
+1: a1-str : Int | String defined.
+2: 42 : Int | String
+3: "hello" : Int | String
+4: tag-int : Int -> Int | String defined.
+5: tag-str : String -> Int | String defined.
+6: 10 : Int | String
+7: "world" : Int | String
+8: a3-val : Bool | Int defined.
+9: a3-num : Bool | Int defined.
+10: a4-int : Int | String | Bool defined.
+11: a4-str : Int | String | Bool defined.
+12: a4-bool : Int | String | Bool defined.
+13: accept-either : Int | String -> Bool defined.
+14: true : Bool
+15: true : Bool
+16: b1-int : Int | Bool | String defined.
+17: b1-bool : Int | Bool | String defined.
+18: b1-str : Int | Bool | String defined.
+19: b2-deep : Int | Bool | String | Char defined.
+20: classify-deep : Int -> Int | Bool | String defined.
+21: 100 : Int | Bool | String
+22: accept-nested : Int | Bool | String -> Bool defined.
+23: true : Bool
+24: true : Bool
+25: true : Bool
+26: b5 : Int | String | Bool defined.
+27: c1 : {:name String :role String} defined.
+28: {:name "alice", :role "admin"} : {:name String :role String}
+29: c2 : {:x Int :y Int :z Int} defined.
+30: {:y 2, :x 1, :z 3} : {:x Int :y Int :z Int}
+31: c4 : {:active Bool :age Int :name String} defined.
+32: {:active true, :name "alice", :age 30} : {:active Bool :age Int :name String}
+33: c5-str : {:key String} defined.
+34: c5-int : {:count Int} defined.
+35: 7 : Int
+36: 300 : Int
+37: 0 : Int
+38: 7 : Int
+39: 99 : Int
+40: 0 : Int
+41: 42 : Int
+42: 0 : Int
+43: 42 : Int
+44: 25 : Int
+45: 7 : Int
+46: 5/6 : Rat
+47: 5/7 : Rat
+48: 2/5 : Rat
+49: 1/4 : Rat
+50: 1/2 : Rat
+51: 19 : Int
+52: 45 : Int
+53: 15 : Int
+54: 19 : Int
+55: true : Bool
+56: false : Bool
+57: true : Bool
+58: prologos::data::ordering::lt-ord : prologos::data::ordering::Ordering
+59: true : Bool
+60: true : Bool
+61: 7 : Int
+62: 7 : Int
+63: 42 : Int
+64: my-not : Bool -> Bool defined.
+65: false : Bool
+66: true : Bool
+67: my-and : Bool Bool -> Bool defined.
+68: true : Bool
+69: false : Bool
+70: false : Bool
+71: my-or : Bool Bool -> Bool defined.
+72: true : Bool
+73: false : Bool
+74: peano-add : Nat Nat -> Nat defined.
+75: 5N : Nat
+76: 0N : Nat
+77: 2N : Nat
+78: peano-mul : Nat Nat -> Nat defined.
+79: 6N : Nat
+80: 9N : Nat
+81: nat-to-int : Nat -> Int defined.
+82: 0 : Int
+83: 5 : Int
+84: nat-max : Nat Nat -> Nat defined.
+85: 5N : Nat
+86: 5N : Nat
+87: 30 : Int
+88: 58 : Int
+89: 42 : Int
+90: 33 : Int
+91: 30 : Int
+92: 58 : Int
+93: 42 : Int
+94: 33 : Int
+95: 5/6 : Rat
+96: 1/2 : Rat
+97: 2/5 : Rat
+98: 7/4 : Rat
+99: 5/6 : Rat
+100: 2/5 : Rat
+101: 1/2 : Rat
+102: 7/4 : Rat
+103: '[2 3 4] : [prologos::data::list::List Int]
+104: '[1 4 9 16] : [prologos::data::list::List Int]
+105: inc : Int -> Int defined.
+106: dbl : Int -> Int defined.
+107: sqr : Int -> Int defined.
+108: 11 : Int
+109: 12 : Int
+110: 16 : Int
+111: 12 : Int
+112: 21 : Int
+113: 16 : Int
+114: 36 : Int
+115: apply-fn : [Int -> Int] Int -> Int defined.
+116: 42 : Int
+117: 36 : Int
+118: twice-fn : [Int -> Int] Int -> Int defined.
+119: 42 : Int
+120: 12 : Int
+121: '[30 20 10] : [prologos::data::list::List Int]
+122: 42 : Int
+123: 25 : Int
+124: 42 : Int
+125: 20 : Int
+126: 30 : Int
+127: 42 : Int
+128: 156 : Int
+129: make-adder : Int Int -> Int defined.
+130: 42 : Int
+131: 42 : Int
+132: make-linear : Int Int Int -> Int defined.
+133: 13 : Int
+134: 42 : Int
+135: "no" : String
+136: 2 : Int
+137: [prologos::data::option::some Int 42] : [prologos::data::option::Option Int]
+138: [prologos::data::option::some String "hello"] : [prologos::data::option::Option String]
+139: [prologos::data::option::some Bool true] : [prologos::data::option::Option Bool]
+140: [prologos::data::option::some ?meta3186 1/2] : [prologos::data::option::Option ?meta3186]
+141: [prologos::data::option::none ?meta3197] : [prologos::data::option::Option ?meta3197]
+142: [prologos::data::result::ok Int ?meta3206 42] : [prologos::data::result::Result Int ?meta3206]
+143: [prologos::data::result::ok String ?meta3222 "success"] : [prologos::data::result::Result String ?meta3222]
+144: [prologos::data::result::err ?meta3239 String "failed"] : [prologos::data::result::Result ?meta3239 String]
+145: [prologos::data::result::err ?meta3257 Int 404] : [prologos::data::result::Result ?meta3257 Int]
+146: [prologos::data::option::some [prologos::data::option::Option Int] [prologos::data::option::some Int 42]] : [prologos::data::option::Option [prologos::data::option::Option Int]]
+147: [prologos::data::option::some [prologos::data::option::Option ?meta3292] [prologos::data::option::none ?meta3292]] : [prologos::data::option::Option [prologos::data::option::Option ?meta3292]]
+148: [prologos::data::option::some [prologos::data::option::Option [prologos::data::option::Option String]] [prologos::data::option::some [prologos::data::option::Option String] [prologos::data::option::some String "deep"]]] : [prologos::data::option::Option [prologos::data::option::Option [prologos::data::option::Option String]]]
+149: '[1 2 3] : [prologos::data::list::List Int]
+150: '["hello" "world"] : [prologos::data::list::List String]
+151: '[true false true] : [prologos::data::list::List Bool]
+152: [prologos::data::option::some Int 1] : [prologos::data::option::Option Int]
+153: [prologos::data::option::some [prologos::data::list::List Int] '[2 3]] : [prologos::data::option::Option [prologos::data::list::List Int]]
+154: 5N : Nat
+155: '[2 4 6] : [prologos::data::list::List Int]
+156: '[3 2 1] : [prologos::data::list::List Int]
+157: '[1 2 3 4 5 6] : [prologos::data::list::List Int]
+158: '['[1 2] '[3 4] '[5 6]] : [prologos::data::list::List [prologos::data::list::List Int]]
+159: [prologos::data::list::nil ?meta3554] : [prologos::data::list::List ?meta3554]
+160: 0N : Nat
+161: '[1 2 3] : [prologos::data::list::List Int]
+162: '[true false] : [prologos::data::list::List Bool]
+163: '["a" "b" "c"] : [prologos::data::list::List String]
+164: '[1/2 1/3 1/4] : [prologos::data::list::List ?meta3622]
+165: '['[1 2] '[3 4]] : [prologos::data::list::List [prologos::data::list::List Int]]
+166: [prologos::data::list::nil ?meta3642] : [prologos::data::list::List ?meta3642]
+167: f1 : Int -> Int defined.
+168: f2 : Int -> Int defined.
+169: f3 : Int -> Int defined.
+170: 37 : Int
+171: both-unions : Int | String Int | Bool -> Int defined.
+172: 0 : Int
+173: 0 : Int
+174: '[1 2 3 4 5 6 7 8 9 10] : [prologos::data::list::List Int]
+175: 10N : Nat
+176: my-id : [Pi [x :0 <[Type 0]>] x -> x] defined.
+177: 42 : Int
+178: "hello" : String
+179: true : Bool
+180: 1/2 : ?meta3779
+181: 0N : Nat
+182: my-const : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] x y -> x]] defined.
+183: 42 : Int
+184: true : Bool
+185: 15 : Int
+186: 12 : Int
+187: 26 : Int
+188: 120 : Int
+189: 1 : Int | String
+190: 2 : Int | String
+191: "a" : Int | String
+192: "b" : Int | String
+193: 3 : Int
+194: 5/6 : Rat
+195: 12 : Int
+196: 1/2 : Rat
+197: 49 : Int
+198: 25/36 : Rat
+199: 24 : Int
+200: 42 : Int | String
+201: "poly" : Int | String
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":1235,"exec_rounds":217,"exec_wide_rounds":49,"file":"2026-03-16-track4-acceptance.prologos","handler_calls":15,"handler_produced_s0":7,"outer_continuations":7,"outer_hist":{"0":85,"1":7},"outer_max":1,"outer_runs":92,"strat":"auto","wall_ms":421.0}

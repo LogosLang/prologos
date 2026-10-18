@@ -1,0 +1,3 @@
+POWER c2 fire-once (Tier 1): tier1-eligible #t, B = 0, non-fixpoint propagators ((0 (21)))
+POWER c2 plain (Tier 2 control): tier1-eligible #f, B = 7, non-fixpoint propagators ()
+W24Q3 2026-03-18-track7-acceptance.prologos {"dfs-0-arity":5,"queries":17,"tier1-direct-fact-return":9,"tier2-entered":3,"tier2-nonfixpoint":1} examples ((ancestor-e (w24v0 w24v1) #f ((0 (1)))))

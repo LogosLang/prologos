@@ -1,0 +1,9 @@
+RESULT 0: atms-s : Solver defined.
+RESULT 1: dfs-s : Solver defined.
+RESULT 2: clash : _ defined.
+RESULT 3: agree : _ defined.
+RESULT 4: @[{:x 1, :y 2}] : [PVec {:x Int :y Int}]
+RESULT 5: @[] : [PVec {:x Int :y Int}]
+RESULT 6: @[{:x 1, :y 1}] : [PVec {:x Int :y Int}]
+RESULT 7: @[{:x 1, :y 1}] : [PVec {:x Int :y Int}]
+STATS2 leg=fresh rounds=6 fires=12 control-divergent=0 thread-divergent=0 reentrant=0

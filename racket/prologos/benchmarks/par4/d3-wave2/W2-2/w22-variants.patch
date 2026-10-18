@@ -1,0 +1,293 @@
+--- pristine/racket/prologos/driver.rkt	2026-10-18 09:42:47
++++ tree/racket/prologos/driver.rkt	2026-10-18 09:48:09
+@@ -564,7 +564,9 @@
+ ;; PAR Track 2 R2: Enable parallel thread executor globally.
+ ;; The BSP scheduler uses parallel threads for worklists > 8 propagators.
+ ;; Below threshold, falls back to sequential (no thread overhead).
+-(current-parallel-executor (make-parallel-thread-fire-all))
++;; W2-2 scratch variant: W22_EXEC_OFF=1 -> do not install the thread executor (BSP falls back
++;; to sequential-fire-all, propagator.rkt run-to-quiescence-bsp's #:executor default).
++(unless (getenv "W22_EXEC_OFF") (current-parallel-executor (make-parallel-thread-fire-all)))
+ 
+ ;; PTF Track 1 Phase 0: If set to a box, after each process-command the
+ ;; elab-network is stored there for analysis. Default #f (no capture).
+--- pristine/racket/prologos/propagator.rkt	2026-10-18 09:42:47
++++ tree/racket/prologos/propagator.rkt	2026-10-18 09:58:25
+@@ -143,6 +143,9 @@
+  ;; PPN Track 4 Phase 1a: component-indexed firing
+  pu-value-diff
+  filter-dependents-by-paths
++ w22-register-keyed-merge!
++ w22-keyed-diff
++ w22-monitor-snapshot
+  ;; Threshold propagators (Phase 2.5b)
+  make-threshold-fire-fn
+  make-barrier-fire-fn
+@@ -1693,6 +1696,198 @@
+     ;; Non-structured or type mismatch → everything changed
+     [else #f]))
+ 
++;; ======================================================================
++;; W2-2 (PAR 4 D.3 wave 2) scratch variant — NOT production code.
++;; W22_KEYED_DIFF=1   : for a merge registered as KEY-PRESERVING (its result keeps every key of
++;;                      `old` outside `new`'s keys eq? to before, and drops no key of `old`), the
++;;                      slow-path diff examines only the written value's keys.
++;; W22_KEYED_MONITOR=full|<n> : equivalence monitor; on every (or every n-th) eligible write
++;;                      compute BOTH diffs, compare as multisets, count mismatches; the FULL diff
++;;                      is returned to the scheduler (the run stays on the reference path).
++;; W22_KEYED_POWER=1  : the keyed diff deliberately drops the first key of the written value
++;;                      (power row: the monitor must catch it; with the monitor off it is returned).
++;; W22_MONITOR_OUT=<file> : one JSON line per process, appended at exit.
++(define w22-keyed-diff? (and (getenv "W22_KEYED_DIFF") #t))
++(define w22-power? (and (getenv "W22_KEYED_POWER") #t))
++(define w22-monitor-every
++  (let ([m (getenv "W22_KEYED_MONITOR")])
++    (cond [(not m) #f] [(equal? m "full") 1] [else (string->number m)])))
++(define w22-keyed-merges (box '()))
++(define (w22-register-keyed-merge! f) (set-box! w22-keyed-merges (cons f (unbox w22-keyed-merges))))
++;; monitor counters (fxvector-free; boxes updated with box-cas! so the thread executor cannot lose counts)
++(define (w22-inc! b [d 1]) (let loop () (define o (unbox b)) (unless (box-cas! b o (+ o d)) (loop))))
++(define w22-n-slow (box 0))         ; slow-path diffs requested (component-path dependents)
++(define w22-n-eligible (box 0))     ; ... of which on a registered key-preserving merge with hash values
++(define w22-n-compared (box 0))     ; monitor comparisons made
++(define w22-n-mismatch (box 0))     ; keyed != full (as multisets)
++(define w22-n-delta-small (box 0))  ; eligible writes whose written value has fewer keys than the merged map
++(define w22-n-delta-full (box 0))   ; eligible writes whose written value has as many keys (full-map writes, e.g. bulk)
++(define w22-keys-full (box 0))      ; sum over eligible writes of keys the full diff walks (|merged| + |old|)
++(define w22-keys-keyed (box 0))     ; sum over eligible writes of keys the keyed diff walks (|new|)
++(define w22-keys-full-small (box 0)); same two sums restricted to small-delta writes
++(define w22-keys-keyed-small (box 0))
++(define w22-first-mismatch (box #f))
++(define (w22-monitor-snapshot)
++  (list (cons 'keyed_diff w22-keyed-diff?) (cons 'power w22-power?) (cons 'monitor_every w22-monitor-every)
++        (cons 'slow_diffs (unbox w22-n-slow)) (cons 'eligible (unbox w22-n-eligible))
++        (cons 'compared (unbox w22-n-compared)) (cons 'mismatches (unbox w22-n-mismatch))
++        (cons 'delta_small (unbox w22-n-delta-small)) (cons 'delta_full (unbox w22-n-delta-full))
++        (cons 'keys_full_diff (unbox w22-keys-full)) (cons 'keys_keyed_diff (unbox w22-keys-keyed))
++        (cons 'keys_full_diff_small (unbox w22-keys-full-small)) (cons 'keys_keyed_diff_small (unbox w22-keys-keyed-small))
++        (cons 'first_mismatch (let ([m (unbox w22-first-mismatch)]) (if m (format "~s" m) "none")))))
++(define (w22-json-str v)
++  (cond [(boolean? v) (if v "true" "false")] [(number? v) (number->string v)]
++        [else (let ([o (open-output-string)]) (write (format "~a" v) o) (get-output-string o))]))
++(when (and w22-monitor-every (getenv "W22_MONITOR_OUT"))
++  (plumber-add-flush! (current-plumber)
++    (lambda (_h)
++      (with-output-to-file (getenv "W22_MONITOR_OUT") #:exists 'append
++        (lambda ()
++          (printf "{\"file\":~a,~a}\n" (w22-json-str (or (getenv "W22_FILE") "?"))
++                  (apply string-append
++                         (for/list ([p (in-list (w22-monitor-snapshot))] [i (in-naturals)])
++                           (format "~a\"~a\":~a" (if (zero? i) "" ",") (car p) (w22-json-str (cdr p)))))))))))
++;; keyed diff: pu-value-diff's per-key logic, restricted to `delta`'s keys. Exactly pu-value-diff
++;; when merged keeps every key of old outside delta's keys eq? (so the full diff skips them by eq?)
++;; and drops no key of old outside delta's keys (so the removed-key loop finds nothing there).
++(define (w22-keyed-diff old-val new-val delta)
++  (define changed '())
++  (define skip-first? w22-power?)
++  (for ([(k _d) (in-hash delta)])
++    (if skip-first?
++        (set! skip-first? #f)              ; POWER ROW: drop one key
++        (let ([v (hash-ref new-val k 'pu-diff-absent)]
++              [old-v (hash-ref old-val k 'pu-diff-absent)])
++          (cond
++            [(eq? v 'pu-diff-absent)       ; key removed by the merge
++             (unless (eq? old-v 'pu-diff-absent) (set! changed (cons k changed)))]
++            [(or (eq? v old-v) (equal? v old-v)) (void)]
++            [(and (hash? v) (immutable? v) (hash? old-v) (immutable? old-v))
++             (for ([(fk fv) (in-hash v)])
++               (define old-fv (hash-ref old-v fk 'pu-diff-absent))
++               (unless (or (eq? fv old-fv) (equal? fv old-fv))
++                 (set! changed (cons (cons k fk) changed))))
++             (for ([(fk _fv) (in-hash old-v)])
++               (unless (hash-has-key? v fk)
++                 (set! changed (cons (cons k fk) changed))))]
++            [(and (hash? v) (immutable? v) (eq? old-v 'pu-diff-absent))
++             (for ([(fk _fv) (in-hash v)])
++               (set! changed (cons (cons k fk) changed)))]
++            [else (set! changed (cons k changed))]))))
++  changed)
++(define (w22-multiset l)
++  (define h (make-hash))
++  (for ([x (in-list (or l '()))]) (hash-set! h x (add1 (hash-ref h x 0))))
++  h)
++(define w22-tick (box 0))
++;; The slow-path diff entry point (replaces the direct pu-value-diff call in net-cell-write).
++(define (w22-diff merge-fn old-val merged written)
++  (cond
++    [(not (or w22-keyed-diff? w22-monitor-every)) (pu-value-diff old-val merged)]
++    [else
++     (when w22-monitor-every (w22-inc! w22-n-slow))
++     (cond
++       [(and (memq merge-fn (unbox w22-keyed-merges))
++             (hash? old-val) (immutable? old-val)
++             (hash? merged) (immutable? merged)
++             (hash? written))
++        (cond
++          [w22-monitor-every
++           (w22-inc! w22-n-eligible)
++           (define nw (hash-count written)) (define nm (hash-count merged))
++           (define full-keys (+ nm (hash-count old-val)))
++           (w22-inc! w22-keys-full full-keys) (w22-inc! w22-keys-keyed nw)
++           (if (< nw nm)
++               (begin (w22-inc! w22-n-delta-small) (w22-inc! w22-keys-full-small full-keys)
++                      (w22-inc! w22-keys-keyed-small nw))
++               (w22-inc! w22-n-delta-full))
++           (define full (pu-value-diff old-val merged))
++           (define t (let loop () (define o (unbox w22-tick)) (if (box-cas! w22-tick o (add1 o)) o (loop))))
++           (when (zero? (modulo t w22-monitor-every))
++             (w22-inc! w22-n-compared)
++             (define keyed (w22-keyed-diff old-val merged written))
++             (unless (equal? (w22-multiset full) (w22-multiset keyed))
++               (w22-inc! w22-n-mismatch)
++               (unless (unbox w22-first-mismatch)
++                 (set-box! w22-first-mismatch
++                           (list 'full full 'keyed keyed 'written-keys (hash-keys written)
++                                 'old-count (hash-count old-val) 'merged-count nm)))))
++           full]
++          [else (w22-keyed-diff old-val merged written)])]
++       [else (pu-value-diff old-val merged)])]))
++
++;; ---------------------------------------------------------------- W2-2: delta-carried writes
++;; W22_DELTA_WRITES=1 : during a BSP fire, every slow-path write to a cell whose merge is registered
++;;   key-preserving records (initial-old, last-merged, joined delta). fire-and-collect-writes then
++;;   carries the joined delta as the cell's value write instead of the fire's whole post-fire map,
++;;   provided the chain is closed: initial-old eq? the snapshot's value and last-merged eq? the
++;;   result's value (no unrecorded write touched the cell). Otherwise it falls back to the whole map.
++;; With W22_KEYED_MONITOR set, bulk-merge-writes computes merge(canon, whole) AND merge(canon, delta),
++;;   counts inequalities, and writes the WHOLE map (reference path). W22_DW_POWER=1 drops the first
++;;   key of each carried delta (power row: the monitor must catch it).
++(define w22-delta-writes? (and (getenv "W22_DELTA_WRITES") #t))
++(define w22-dw-power? (and (getenv "W22_DW_POWER") #t))
++(define w22-fire-deltas (make-parameter #f))
++(struct w22-dual (full delta))
++(define w22-dw-used (box 0)) (define w22-dw-fallback (box 0)) (define w22-dw-noentry (box 0))
++(define w22-dw-compared (box 0)) (define w22-dw-mismatch (box 0)) (define w22-dw-first (box #f))
++(define w22-dw-delta-keys (box 0)) (define w22-dw-full-keys (box 0))
++(define (w22-record-delta! cid merge-fn old-val written merged)
++  (define tbl (w22-fire-deltas))
++  (when (and tbl (memq merge-fn (unbox w22-keyed-merges)) (hash? written) (hash? old-val))
++    (define k (cell-id-n cid))
++    (define e (hash-ref tbl k #f))
++    (define last (if (eq? merged old-val) old-val merged))
++    (cond
++      [(not e) (hash-set! tbl k (vector old-val last written))]
++      [(eq? (vector-ref e 1) old-val)
++       (vector-set! e 1 last)
++       (vector-set! e 2 (merge-fn (vector-ref e 2) written))]
++      [else (vector-set! e 0 'w22-broken)])))      ; a write we did not see came in between
++(define (w22-drop-first h) (let ([ks (hash-keys h)]) (if (null? ks) h (hash-remove h (car ks)))))
++(define (w22-delta-or-full tbl cid old new)
++  (define e (hash-ref tbl (cell-id-n cid) #f))
++  (cond
++    [(not e) (when w22-monitor-every (w22-inc! w22-dw-noentry)) new]
++    [(and (eq? (vector-ref e 0) old) (eq? (vector-ref e 1) new))
++     (define d (if w22-dw-power? (w22-drop-first (vector-ref e 2)) (vector-ref e 2)))
++     (cond [w22-monitor-every
++            (w22-inc! w22-dw-used) (w22-inc! w22-dw-delta-keys (hash-count d))
++            (when (hash? new) (w22-inc! w22-dw-full-keys (hash-count new)))
++            (w22-dual new d)]
++           [else d])]
++    [else (when w22-monitor-every (w22-inc! w22-dw-fallback)) new]))
++(define (w22-bulk-monitor n cid dual)
++  (define h (cell-id-hash cid))
++  (define merge-fn (champ-lookup (prop-network-merge-fns n) h cid))
++  (define canon (prop-cell-value (champ-lookup (prop-network-cells n) h cid)))
++  (define m-full (merge-fn canon (w22-dual-full dual)))
++  (define m-delta (merge-fn canon (w22-dual-delta dual)))
++  (w22-inc! w22-dw-compared)
++  (unless (equal? m-full m-delta)
++    (w22-inc! w22-dw-mismatch)
++    (unless (unbox w22-dw-first)
++      (define paths (pu-value-diff m-delta m-full))
++      (set-box! w22-dw-first
++                (list 'paths (if (list? paths) (let loop ([p paths] [i 0]) (if (or (null? p) (= i 4)) '() (cons (car p) (loop (cdr p) (add1 i))))) paths)
++                      'n-paths (if (list? paths) (length paths) paths)
++                      'facet-values
++                      (for/list ([p (in-list (if (list? paths) paths '()))] [i (in-range 2)] #:when (pair? p))
++                        (list p 'full (format "~.a" (hash-ref (hash-ref m-full (car p) (hasheq)) (cdr p) 'absent))
++                              'delta (format "~.a" (hash-ref (hash-ref m-delta (car p) (hasheq)) (cdr p) 'absent))))))))
++  (net-cell-write n cid (w22-dual-full dual)))
++(when (and w22-monitor-every (getenv "W22_MONITOR_OUT"))
++  (void
++   (plumber-add-flush! (current-plumber)
++    (lambda (_h)
++      (with-output-to-file (getenv "W22_MONITOR_OUT") #:exists 'append
++        (lambda ()
++          (printf "{\"kind\":\"dw\",\"file\":~a,\"delta_writes\":~a,\"dw_power\":~a,\"used\":~a,\"fallback_chain\":~a,\"no_entry\":~a,\"compared\":~a,\"mismatches\":~a,\"delta_keys\":~a,\"full_keys\":~a,\"first_mismatch\":~a}\n"
++                  (w22-json-str (or (getenv "W22_FILE") "?")) (w22-json-str w22-delta-writes?) (w22-json-str w22-dw-power?)
++                  (unbox w22-dw-used) (unbox w22-dw-fallback) (unbox w22-dw-noentry)
++                  (unbox w22-dw-compared) (unbox w22-dw-mismatch) (unbox w22-dw-delta-keys) (unbox w22-dw-full-keys)
++                  (w22-json-str (let ([m (unbox w22-dw-first)]) (if m (format "~s" m) "none"))))))))))
++
+ ;; PPN Track 4 Phase 1a: filter dependent prop-ids by component paths.
+ ;; PPN Track 4B Phase 0a: multi-path support — each dependent stores a
+ ;; LIST of paths, not a single path. A propagator fires if ANY of its
+@@ -2026,6 +2221,7 @@
+       ;; (net-cell-write). See net-cell-read branch for full retirement rationale.
+       [else new-val]))
+   (define merged (merge-fn old-val actual-new-val))
++  (when w22-delta-writes? (w22-record-delta! cid merge-fn old-val actual-new-val merged))  ; W2-2
+   (if (or (eq? merged old-val) (equal? merged old-val))
+       net  ;; No change — return same network (critical for termination)
+       (let* (;; B2f Phase 0: count writes that actually change the CHAMP
+@@ -2070,7 +2266,7 @@
+                      (if (or has-component-paths? has-assumptions?)
+                          ;; Slow path: compute diff, filter dependents (+ on-network assumption check)
+                          (let ([changed (if has-component-paths?
+-                                            (pu-value-diff old-val merged)
++                                            (w22-diff merge-fn old-val merged actual-new-val)  ; W2-2 variant hook
+                                             #f)])
+                            (filter-dependents-by-paths deps-champ changed
+                                                        (if has-assumptions? net #f)))
+@@ -2880,10 +3076,16 @@
+     (error 'fire-and-collect-writes "unknown propagator: ~a" pid))
+   ;; Fire propagator against snapshot (with CALM topology guard).
+   ;; Phase 2b: set cell-id namespace for parallel-safe cell allocation.
++  (define w22-tbl (and w22-delta-writes? (make-hasheqv)))   ; W2-2 delta-carried writes
+   (define result-net
+-    (parameterize ([current-bsp-fire-round? #t]
+-                   [current-cell-id-namespace namespace-idx])
+-      (fire-propagator prop snapshot-net)))  ;; PPN 4C Phase 1.5
++    (if w22-tbl
++        (parameterize ([current-bsp-fire-round? #t]
++                       [current-cell-id-namespace namespace-idx]
++                       [w22-fire-deltas w22-tbl])
++          (fire-propagator prop snapshot-net))
++        (parameterize ([current-bsp-fire-round? #t]
++                       [current-cell-id-namespace namespace-idx])
++          (fire-propagator prop snapshot-net))))  ;; PPN 4C Phase 1.5
+   ;; Diff output cells for value writes (correct delta for merge-based cells).
+   ;; A1: previously added decomp-request-cell-id unconditionally as a catch-all
+   ;; for topology writes. No longer needed — topology cells are each propagator's
+@@ -2901,7 +3103,7 @@
+       (define new (net-cell-read-raw result-net cid))
+       (if (equal? old new)
+           writes
+-          (cons (cons cid new) writes))))
++          (cons (cons cid (if w22-tbl (w22-delta-or-full w22-tbl cid old new) new)) writes))))
+   ;; Scheduler O(network-diff): replace the two O(network-size) champ-fold scans
+   ;; (undeclared-writes + new-cells) with ONE eq?-pruned champ-diff over the cells
+   ;; CHAMP. Identical sub-tries share structure and are eq?-skipped wholesale, so
+@@ -3038,7 +3240,8 @@
+     (define net-with-values
+       (for/fold ([n net-with-cells])
+                 ([w (in-list writes)])
+-        (net-cell-write n (car w) (cdr w))))
++        (let ([v (cdr w)])                                   ; W2-2: monitor dual writes
++          (if (w22-dual? v) (w22-bulk-monitor n (car w) v) (net-cell-write n (car w) v)))))
+     ;; Apply undeclared writes (e.g., contradiction writes to input cells).
+     ;; These use net-cell-reset + manual dependent enqueue to avoid double-merge.
+     (define net-with-undeclared
+--- pristine/racket/prologos/typing-propagators.rkt	2026-10-18 09:42:47
++++ tree/racket/prologos/typing-propagators.rkt	2026-10-18 09:48:09
+@@ -468,6 +468,10 @@
+           (if (equal? merged-record old-record)
+               result  ;; no change at this position
+               (hash-set result pos merged-record))]))]))
++
++;; W2-2 scratch variant: attribute-map-merge-fn folds over `new`'s keys starting from `old`, so every
++;; key of `old` outside `new`'s keys is kept eq? and none is dropped (the keyed-diff precondition).
++(w22-register-keyed-merge! attribute-map-merge-fn)
+ 
+ ;; --- that-read / that-write: the attribute record API ---
+ ;;

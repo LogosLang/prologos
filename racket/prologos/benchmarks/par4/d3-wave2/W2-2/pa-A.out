@@ -1,0 +1,19 @@
+solve: Depth limit exceeded (100)
+  context...:
+   /Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-2/tree/racket/prologos/relations.rkt:1175:0: solve-goals
+   .../private/map.rkt:40:19: loop
+   /Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-2/tree/racket/prologos/relations.rkt:1501:3
+   .../private/map.rkt:40:19: loop
+   /Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-2/tree/racket/prologos/relations.rkt:1487:0: solve-app-goal
+   /Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-2/tree/racket/prologos/relations.rkt:1175:0: solve-goals
+   .../private/map.rkt:40:19: loop
+   /Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-2/tree/racket/prologos/relations.rkt:1501:3
+   .../private/map.rkt:40:19: loop
+   /Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-2/tree/racket/prologos/relations.rkt:1487:0: solve-app-goal
+   /Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-2/tree/racket/prologos/relations.rkt:1175:0: solve-goals
+   .../private/map.rkt:40:19: loop
+   /Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-2/tree/racket/prologos/relations.rkt:1501:3
+   .../private/map.rkt:40:19: loop
+   /Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-2/tree/racket/prologos/relations.rkt:1487:0: solve-app-goal
+   /Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-2/tree/racket/prologos/relations.rkt:1175:0: solve-goals
+   ...

@@ -1,0 +1,7 @@
+N=1  ok depth 1  | instrument: runs 1, max outer-round 0
+N=5  ok depth 5  | instrument: runs 1, max outer-round 4
+N=11  ok depth 11  | instrument: runs 1, max outer-round 10
+N=12  ok depth 12  | instrument: runs 1, max outer-round 11
+N=15  ok depth 15  | instrument: runs 1, max outer-round 14
+N=22  ok depth 22  | instrument: runs 1, max outer-round 21
+N=23  ERROR: run-to-quiescence-bsp: stratum handlers: >20 outer iterations — possible infinite loop  | instrument: runs 1, max outer-round 21

@@ -1,0 +1,74 @@
+PERF-COUNTERS:{"cell_allocs":2848,"constraint_count":0,"constraint_retries":0,"elaborate_steps":626,"inert_dependent_skips":0,"infer_steps":1002,"meta_created":220,"meta_solved":122,"prop_allocs":0,"prop_firings":0,"reduce_steps":6494,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":14,"unify_steps":240,"zonk_steps":1836}
+PHASE-TIMINGS:{"elaborate_ms":3,"parse_ms":2,"qtt_ms":0,"reduce_ms":9,"trait_resolve_ms":0,"type_check_ms":99,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":14,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":14,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: '[1N 2N 3N] : [prologos::data::list::List Nat]
+1: [prologos::data::list::nil Nat] : [prologos::data::list::List Nat]
+2: '[0N 1N 2N] : [prologos::data::list::List Nat]
+3: [prologos::data::option::some Nat 10N] : [prologos::data::option::Option Nat]
+4: [prologos::data::option::some [prologos::data::list::List Nat] '[20N 30N]] : [prologos::data::option::Option [prologos::data::list::List Nat]]
+5: 4N : Nat
+6: [prologos::data::option::some Nat 20N] : [prologos::data::option::Option Nat]
+7: [prologos::data::option::some Nat 30N] : [prologos::data::option::Option Nat]
+8: '[2N 3N 4N] : [prologos::data::list::List Nat]
+9: '[3N 4N] : [prologos::data::list::List Nat]
+10: '[3N 2N 1N] : [prologos::data::list::List Nat]
+11: '[1N 2N 3N 4N] : [prologos::data::list::List Nat]
+12: 6N : Nat
+13: 10N : Nat
+14: true : Bool
+15: true : Bool
+16: '[1N 2N] : [prologos::data::list::List Nat]
+17: '[3N 4N] : [prologos::data::list::List Nat]
+18: '[[pair 1N 10N] [pair 2N 20N] [pair 3N 30N]] : [prologos::data::list::List [Sigma Nat Nat]]
+19: '[1N 2N 3N] : [prologos::data::list::List Nat]
+20: '[1N 2N 3N] : [prologos::data::list::List Nat]
+21: '[0N 1N 2N 3N 4N] : [prologos::data::list::List Nat]
+22: [prologos::data::option::some Nat 42N] : [prologos::data::option::Option Nat]
+23: [prologos::data::option::none Nat] : [prologos::data::option::Option Nat]
+24: true : Bool
+25: true : Bool
+26: 42N : Nat
+27: 0N : Nat
+28: [prologos::data::result::ok Nat ?meta2610 42N] : [prologos::data::result::Result Nat ?meta2610]
+29: [prologos::data::result::err ?meta2625 String "failure"] : [prologos::data::result::Result ?meta2625 String]
+30: true : Bool
+31: true : Bool
+32: @[1N 2N 3N] : [PVec Nat]
+33: @[2N 3N 4N] : [PVec Nat]
+34: @[2N 3N] : [PVec Nat]
+35: 6N : Nat
+36: {:c 3N, :a 1N, :b 2N} : {:a Nat :b Nat :c Nat}
+37: {} : [Map Keyword Nat]
+38: {:a 1N, :b 2N} : {:a Nat :b Nat}
+39: 1N : Nat
+40: {:b 2N} : {:b Nat}
+41: 3N : Nat
+42: true : Bool
+43: '[:a :b] : [prologos::data::list::List Keyword]
+44: '[1N 2N] : [prologos::data::list::List Nat]
+45: {:a 2N, :b 3N} : {:a Nat :b Nat}
+46: #{3N 1N 2N} : [Set Nat]
+47: #{42N} : [Set Nat]
+48: #{3N 4N 2N} : [Set Nat]
+49: 6N : Nat
+50: ~[1N 2N 3N] : [prologos::data::lseq::LSeq Nat]
+51: '[1N 2N 3N] : [prologos::data::list::List Nat]
+52: ~[2N 3N 4N] : [prologos::data::lseq::LSeq Nat]
+53: ~[1N 2N] : [prologos::data::lseq::LSeq Nat]
+54: '[1N 2N] : [prologos::data::list::List Nat]
+55: 3N : Nat
+56: @[1N 2N 3N] : [PVec Nat]
+57: '[1N 2N 3N] : [prologos::data::list::List Nat]
+58: xs : [prologos::data::list::List Nat] defined.
+59: 10N : Nat
+60: 30N : Nat
+61: config : {:port Nat :timeout Nat} defined.
+62: ERROR: keyword index `[:port]` was retired — spell the field `m.port` or use `[get m :port]`
+63: ERROR: keyword index `[:timeout]` was retired — spell the field `m.timeout` or use `[get m :timeout]`
+64: nested : {:app {:port Nat} :db {:host Nat :port Nat}} defined.
+65: ERROR: keyword index `[:port]` was retired — spell the field `m.port` or use `[get m :port]`
+66: 8080N : Nat
+
+--- 3 errors ---
+W24 {"exec":"prod","exec_fires":1180,"exec_rounds":214,"exec_wide_rounds":39,"file":"audit-07-collections.prologos","handler_calls":9,"outer_hist":{"0":69},"outer_max":0,"outer_runs":69,"strat":"auto","wall_ms":263.0}

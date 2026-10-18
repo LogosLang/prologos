@@ -1,0 +1,48 @@
+PERF-COUNTERS:{"cell_allocs":1854,"constraint_count":0,"constraint_retries":0,"elaborate_steps":238,"inert_dependent_skips":0,"infer_steps":708,"meta_created":1,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":216,"resolution_cycles":0,"solver_backtracks":159,"solver_col_compares":473,"solver_row_scans":317,"solver_unifies":605,"trait_resolve_steps":0,"unify_steps":3,"zonk_steps":340}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":1,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":2,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: vehicle : _ defined.
+1: license : _ defined.
+2: @[{}] : _
+3: @[] : _
+4: light-vehicle : _ defined.
+5: @[{}] : _
+6: @[] : _
+7: @[{:lv "bicycle"}] : [PVec {:lv String}]
+8: edge : _ defined.
+9: blk : _ defined.
+10: twohop : _ defined.
+11: safe-twohop : _ defined.
+12: @[{:c "w"}] : [PVec {:c String}]
+13: reaches : _ defined.
+14: @[{:c "y"} {:c "z"} {:c "w"}] : [PVec {:c String}]
+15: safe-reach : _ defined.
+16: @[{:c "y"} {:c "w"}] : [PVec {:c String}]
+17: weighted-edge : _ defined.
+18: positive-edge : _ defined.
+19: @[{:from "a", :to "b", :w 3} {:from "c", :to "d", :w 5}] : [PVec {:from String :to String :w Int}]
+20: @[{:from "a"} {:from "c"}] : [PVec {:from String}]
+21: @[{} {}] : _
+22: @[{:a "x", :c "z"} {:a "x", :c "w"}] : [PVec {:a String :c String}]
+23: @[{:c "y"} {:c "z"} {:c "w"}] : [PVec {:c String}]
+24: @[{:v "x"} {:v "y"} {:v "y"}] : [PVec {:v String}]
+25: reach-one : {:a String :c String} defined.
+26: "z" : String
+27: twohops : [PVec {:a String :c String}] defined.
+28: @[{:c "z", :a "x"} {:c "w", :a "x"}] : [PVec {:a String :c String}]
+29: fruit-color : _ defined.
+30: blue-or-yellow : _ defined.
+31: @[{:f "blueberry"} {:f "banana"}] : [PVec {:f String}]
+32: fruit-not-of-color : _ defined.
+33: @[{:f "blueberry"} {:f "banana"}] : [PVec {:f String}]
+34: fruit-not-of-color2 : _ defined.
+35: @[{:f "blueberry"} {:f "banana"}] : [PVec {:f String}]
+36: rg-fruits : _ defined.
+37: @[{:f "blueberry"} {:f "banana"}] : [PVec {:f String}]
+38: @[] : [PVec {:fruit String}]
+39: blues : [PVec {:f String}] defined.
+40: @[{:f "blueberry"} {:f "banana"}] : [PVec {:f String}]
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":22,"exec_rounds":22,"file":"2026-07-19-rel-t1-acceptance.prologos","forks":0,"routes":{"dfs":20},"strat":"dfs","wall_ms":175.0}

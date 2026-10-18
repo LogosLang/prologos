@@ -1,0 +1,12 @@
+400 random tagged inputs × 8 boundary viewpoints V = 3 200 checks per row
+  closure-evaluated, outputs labelled by read-W | additive f: unsound 0/3200, incomplete 0/3200
+  closure-evaluated, outputs labelled by read-W | non-additive f: unsound 0/3200, incomplete 0/3200
+  per input label (static-label fires), labelled | additive f: unsound 0/3200, incomplete 0/3200
+  per input label (static-label fires), labelled | non-additive f: unsound 0/3200, incomplete 4/3200
+  POWER plain output read at a viewpoint V0 (random) | additive f: unsound 393/3200, incomplete 402/3200
+  POWER plain output read at a viewpoint V0 (random) | non-additive f: unsound 188/3200, incomplete 181/3200
+  POWER under-labelled: read at b|extra, write under b | additive f: unsound 63/3200, incomplete 0/3200
+  POWER under-labelled: read at b|extra, write under b | non-additive f: unsound 31/3200, incomplete 4/3200
+  POWER closure-evaluated but production reader (drops base) | additive f: unsound 0/3200, incomplete 0/3200
+  POWER closure-evaluated but production reader (drops base) | non-additive f: unsound 0/3200, incomplete 91/3200
+witness (C4-7): entries {1:{a}, 2:{b}}, V=3: f(ev_V) = #<seteq: both> ; per-label output read at V = #<seteq:> ; closure output = #<seteq: both>

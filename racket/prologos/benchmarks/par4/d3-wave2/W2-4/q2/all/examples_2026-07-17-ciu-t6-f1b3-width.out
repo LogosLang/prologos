@@ -1,0 +1,20 @@
+PERF-COUNTERS:{"cell_allocs":594,"constraint_count":0,"constraint_retries":0,"elaborate_steps":59,"inert_dependent_skips":0,"infer_steps":137,"meta_created":8,"meta_solved":4,"prop_allocs":0,"prop_firings":0,"reduce_steps":192,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":37,"zonk_steps":135}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":3,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":2,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":4,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: pick : [Pi [x :0 <[Type 0]>] x x -> x] defined.
+1: wn : {:a Int} defined.
+2: ww : {:a Int :b Int} defined.
+3: {:a 1} : {:a Int}
+4: ERROR: Could not infer type — argument of type {:a Int} does not match the expected parameter type {:a Int :b Int}
+5: wempty : {} defined.
+6: {} : {}
+7: wclash : {:a String :b Int} defined.
+8: ERROR: Could not infer type — argument of type {:a String :b Int} does not match the expected parameter type {:a Int}
+9: pth : Path defined.
+10: idint : Int -> Int defined.
+11: wui : {:a _ :b _ | _} defined.
+12: {:a 1, :b 2} : {:a _ :b _ | _}
+
+--- 2 errors ---
+W24 {"exec":"prod","exec_fires":97,"exec_rounds":29,"exec_wide_rounds":4,"file":"2026-07-17-ciu-t6-f1b3-width.prologos","perf_fields_worker":"()","perf_incs_in_exec_main":14,"perf_incs_in_exec_worker":0,"race_rounds_any_worker_set":0,"race_rounds_multi_worker_set":0,"race_unbox_main_prop-net-box":14,"strat":"auto","wall_ms":7.0}

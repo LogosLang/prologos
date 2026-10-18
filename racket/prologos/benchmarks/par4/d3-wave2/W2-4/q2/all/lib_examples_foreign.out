@@ -1,0 +1,56 @@
+PERF-COUNTERS:{"cell_allocs":1980,"constraint_count":0,"constraint_retries":0,"elaborate_steps":100,"inert_dependent_skips":0,"infer_steps":66,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":238,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":27,"zonk_steps":136}
+PHASE-TIMINGS:{"elaborate_ms":14,"parse_ms":2,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":1,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":18,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: ERROR: preparse: ns: namespace name cannot contain a `$dot-access` segment (those are the record access / broadcast operators). Use `::` for a hierarchical namespace (e.g. `examples::…`) or a single segment (e.g. `examples`). The only option `ns` accepts is `:no-prelude`.
+1: 3N : Nat
+2: 2N : Nat
+3: true : Bool
+4: false : Bool
+5: 1N : Nat
+6: 3N : Nat
+7: 3N : Nat
+8: 2N : Nat
+9: true : Bool
+10: 3N : Nat
+11: 2N : Nat
+12: true : Bool
+13: 5N : Nat
+14: 1N : Nat
+15: 3N : Nat
+16: the-answer : Nat defined.
+17: 42N : Nat
+18: hello-len : Nat defined.
+19: 11N : Nat
+20: is-empty : Bool defined.
+21: true : Bool
+22: countdown : Nat defined.
+23: 10N : Nat
+24: repeated-len : Nat defined.
+25: 12N : Nat
+26: n : Nat defined.
+27: n-plus-one : Nat defined.
+28: 4N : Nat
+29: a : Nat defined.
+30: b : Nat defined.
+31: remainder-ab : Nat defined.
+32: 1N : Nat
+33: v : Nat defined.
+34: v-is-zero : Bool defined.
+35: true : Bool
+36: base : Nat defined.
+37: 4N : Nat
+38: bumped : Nat defined.
+39: 6N : Nat
+40: ten : Nat defined.
+41: 12N : Nat
+42: OK
+43: OK
+44: OK
+45: ERROR: preparse: struct-copy: contract violation
+  expected: ns-context?
+  given: #f
+46: ERROR: Unbound variable
+
+--- 3 errors ---
+W24 {"exec":"prod","exec_fires":51,"exec_rounds":21,"file":"foreign.prologos","perf_fields_worker":"()","perf_incs_in_exec_main":0,"perf_incs_in_exec_worker":0,"race_rounds_any_worker_set":0,"race_rounds_multi_worker_set":0,"strat":"auto","wall_ms":29.0}

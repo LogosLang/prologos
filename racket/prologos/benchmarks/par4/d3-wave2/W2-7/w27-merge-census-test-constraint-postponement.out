@@ -1,0 +1,6 @@
+W27-MERGE-CENSUS test-constraint-postponement.rkt
+  BSP rounds observed: 49
+  HUB attribute-map (:type facet = Role B): cells 1, S0 writes 51, writes holding an applied meta 0
+  other meta-solution-merge: cells 1, S0 writes 17, writes holding an applied meta 0
+  other resolution-stratum-merge: cells 1, S0 writes 2, writes holding an applied meta 0
+  other merge-set-union: cells 1, S0 writes 2, writes holding an applied meta 0

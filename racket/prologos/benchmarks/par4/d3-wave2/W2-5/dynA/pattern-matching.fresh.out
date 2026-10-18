@@ -1,0 +1,14 @@
+RESULT 0.0: List : [Type 0] defined.
+RESULT 0.1: A : [Type 0] -> benchmarks::comparative::pattern-matching::List defined.
+RESULT 0.2: where : benchmarks::comparative::pattern-matching::List defined.
+RESULT 0.3: ERROR: Unbound variable
+RESULT 0.4: ERROR: Unbound variable
+RESULT 0.5: ERROR: unreachable match arm: arm 2 can never run, because arm 1 matches everything — and an unreachable arm is never type-checked, so mistakes in it go unreported. If a name there was meant as a CONSTRUCTOR, it was not recognised as one (check the spelling, and that its type is imported) and so became a catch-all variable pattern instead.
+RESULT 0.6: ERROR: unreachable match arm: arm 2 can never run, because arm 1 matches everything — and an unreachable arm is never type-checked, so mistakes in it go unreported. If a name there was meant as a CONSTRUCTOR, it was not recognised as one (check the spelling, and that its type is imported) and so became a catch-all variable pattern instead.
+RESULT 0.7: ERROR: unreachable match arm: arm 2 can never run, because arm 1 matches everything — and an unreachable arm is never type-checked, so mistakes in it go unreported. If a name there was meant as a CONSTRUCTOR, it was not recognised as one (check the spelling, and that its type is imported) and so became a catch-all variable pattern instead.
+RESULT 0.8: ERROR: unreachable match arm: arm 2 can never run, because arm 1 matches everything — and an unreachable arm is never type-checked, so mistakes in it go unreported. If a name there was meant as a CONSTRUCTOR, it was not recognised as one (check the spelling, and that its type is imported) and so became a catch-all variable pattern instead.
+RESULT 0.9: ERROR: def: expected ':', got cons
+RESULT 0.10: ERROR: Unbound variable
+RESULT 0.11: ERROR: fn: all parameters except body must be bare symbols or a binder (x : T)
+RESULT 0.12: ERROR: fn: all parameters except body must be bare symbols or a binder (x : T)
+STATS leg=fresh files=1 params=219 rounds=0 wide-rounds(>=8)=0 fires=0 reentrant=0 ms=3.0

@@ -1,0 +1,25 @@
+ns probes::w26x
+
+;; W2-6 (PAR 4 D.3 wave 2): ground truth for the lattice model's calibration rows.
+;; R5: two INDEPENDENT branch sites joined by a var-var unify installed unlabelled (outer bitmask 0).
+;; R6: Q3 of C9's c1-overwrite with the base write AFTER the branching goal.
+;; R7: one branch site, a ground base binding on the other side of a var-var unify.
+
+solver atms-s
+  :strategy atms
+
+solver dfs-s
+  :strategy depth-first
+
+defr pick [?x]
+  &> (= x 1)
+  &> (= x 2)
+
+solve-with atms-s (rel [?x ?y] (pick ?x) (pick ?y) (= ?x ?y))
+solve-with dfs-s (rel [?x ?y] (pick ?x) (pick ?y) (= ?x ?y))
+
+solve-with atms-s (rel [?x] (pick ?x) (= ?x 2))
+solve-with dfs-s (rel [?x] (pick ?x) (= ?x 2))
+
+solve-with atms-s (rel [?x ?y] (pick ?x) (= ?y 1) (= ?x ?y))
+solve-with dfs-s (rel [?x ?y] (pick ?x) (= ?y 1) (= ?x ?y))

@@ -1,0 +1,22 @@
+ns probes::w2u9
+
+;; W2-10 u9: what does a user see when a process runs out of :fuel (spawn-with)?
+;; rt-execute-process maps ANY contradiction to 'contradiction (session-runtime.rkt:1077-1079), and the
+;; driver prints it as "protocol violation" (driver.rkt:1340-1344).
+
+session S
+  ! Nat
+  end
+
+defproc sender : S
+  self ! 42N
+  stop
+
+strategy tiny
+  :fuel 1
+
+strategy roomy
+  :fuel 100000
+
+spawn-with roomy sender
+spawn-with tiny sender

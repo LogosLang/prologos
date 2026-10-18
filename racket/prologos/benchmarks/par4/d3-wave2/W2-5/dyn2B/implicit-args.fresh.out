@@ -1,0 +1,11 @@
+RESULT 0: id : [Pi [x :0 <[Type 0]>] x -> x] defined.
+RESULT 1: const : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] x y -> x]] defined.
+RESULT 2: ERROR: Type mismatch
+RESULT 3: ERROR: Type mismatch
+RESULT 4: 42 : Int
+RESULT 5: true : Bool
+RESULT 6: 1 : Int
+RESULT 7: [fn [x <2>] [fn [y <false>] x]] : ?bvar1 ?bvar1 -> ?bvar3
+RESULT 8: ERROR: Could not infer type
+RESULT 9: ERROR: fn: all parameters except body must be bare symbols or a binder (x : T)
+STATS2 leg=fresh rounds=29 fires=150 control-divergent=0 thread-divergent=0 reentrant=0

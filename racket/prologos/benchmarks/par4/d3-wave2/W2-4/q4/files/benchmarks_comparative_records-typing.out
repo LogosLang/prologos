@@ -1,0 +1,41 @@
+PERF-COUNTERS:{"cell_allocs":1521,"constraint_count":0,"constraint_retries":0,"elaborate_steps":180,"inert_dependent_skips":0,"infer_steps":371,"meta_created":22,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":495,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":36,"zonk_steps":354}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":1,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":1,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":10,"atms_nogood_count":2,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":4,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: p1 : {:age Int :city String :name String} defined.
+1: "alice" : String
+2: 30 : Int
+3: "nyc" : String
+4: p2 : {:x Int :y Int :z Int} defined.
+5: 1 : Int
+6: 2 : Int
+7: 3 : Int
+8: nested : {:a {:b {:c Int}} :k String} defined.
+9: 42 : Int
+10: "v" : String
+11: q0 : {:one Int | _} defined.
+12: q1 : {:one Int :two Int | _} defined.
+13: q2 : {:one Int :three Int :two Int | _} defined.
+14: 1 : Int
+15: 3 : Int
+16: q3 : {:one Int :three Int | _} defined.
+17: 1 : Int
+18: 3 : Int
+19: m1 : [Map Keyword Int] defined.
+20: m2 : [Map Keyword Int] defined.
+21: m3 : [Map Keyword String] defined.
+22: mu : [Map Keyword Int | String] defined.
+23: r1 : {:f1 Int :f2 Int :f3 Int :f4 Int} defined.
+24: 1 : Int
+25: 4 : Int
+26: r2 : [Map Keyword Int] defined.
+27: r3 : {:s1 Int :s2 Int :s3 Int | _} defined.
+28: 2 : Int
+29: big : {:aa Int :bb Int :cc Int :dd Int :ee Int :ff Int :gg Int :hh Int} defined.
+30: 1 : Int
+31: 5 : Int
+32: 8 : Int
+33: bigm : [Map Keyword Int] defined.
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":10,"exec_rounds":10,"file":"records-typing.prologos","outer_hist":{"0":10},"outer_max":0,"outer_runs":10,"strat":"auto","wall_ms":7.0}

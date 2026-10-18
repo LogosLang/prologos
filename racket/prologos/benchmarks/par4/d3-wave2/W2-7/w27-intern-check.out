@@ -1,0 +1,4 @@
+eq? (expr-Nat) (expr-Nat): #f
+eq? (expr-zero) (expr-zero): #f
+eq? (expr-bvar 0) (expr-bvar 0): #f
+eq? (expr-fvar 'f) (expr-fvar 'f): #f

@@ -1,0 +1,35 @@
+RESULT 0: p1 : {:age Int :city String :name String} defined.
+RESULT 1: "alice" : String
+RESULT 2: 30 : Int
+RESULT 3: "nyc" : String
+RESULT 4: p2 : {:x Int :y Int :z Int} defined.
+RESULT 5: 1 : Int
+RESULT 6: 2 : Int
+RESULT 7: 3 : Int
+RESULT 8: nested : {:a {:b {:c Int}} :k String} defined.
+RESULT 9: 42 : Int
+RESULT 10: "v" : String
+RESULT 11: q0 : {:one Int | _} defined.
+RESULT 12: q1 : {:one Int :two Int | _} defined.
+RESULT 13: q2 : {:one Int :three Int :two Int | _} defined.
+RESULT 14: 1 : Int
+RESULT 15: 3 : Int
+RESULT 16: q3 : {:one Int :three Int | _} defined.
+RESULT 17: 1 : Int
+RESULT 18: 3 : Int
+RESULT 19: m1 : [Map Keyword Int] defined.
+RESULT 20: m2 : [Map Keyword Int] defined.
+RESULT 21: m3 : [Map Keyword String] defined.
+RESULT 22: mu : [Map Keyword Int | String] defined.
+RESULT 23: r1 : {:f1 Int :f2 Int :f3 Int :f4 Int} defined.
+RESULT 24: 1 : Int
+RESULT 25: 4 : Int
+RESULT 26: r2 : [Map Keyword Int] defined.
+RESULT 27: r3 : {:s1 Int :s2 Int :s3 Int | _} defined.
+RESULT 28: 2 : Int
+RESULT 29: big : {:aa Int :bb Int :cc Int :dd Int :ee Int :ff Int :gg Int :hh Int} defined.
+RESULT 30: 1 : Int
+RESULT 31: 5 : Int
+RESULT 32: 8 : Int
+RESULT 33: bigm : [Map Keyword Int] defined.
+STATS2 leg=persistcap rounds=10 fires=10 control-divergent=0 thread-divergent=0 reentrant=0

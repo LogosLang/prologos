@@ -1,0 +1,5 @@
+constraints-adversarial.1.json: T=10.372 ms | heaviest-fire share of its round (time-weighted) 0.789 | rounds with >=2 fires >20us: 16 of 214 | work/span comp-edges 1.28, cell-edges 1.27, no-edges (T / sum of each run's heaviest fire) 3.18
+type-adversarial.1.json: T=7.469 ms | heaviest-fire share of its round (time-weighted) 0.685 | rounds with >=2 fires >20us: 20 of 185 | work/span comp-edges 1.49, cell-edges 1.46, no-edges (T / sum of each run's heaviest fire) 3.18
+implicit-args.json: T=0.395 ms | heaviest-fire share of its round (time-weighted) 0.754 | rounds with >=2 fires >20us: 0 of 29 | work/span comp-edges 1.33, cell-edges 1.33, no-edges (T / sum of each run's heaviest fire) 3.56
+bool-logic.json: T=0.266 ms | heaviest-fire share of its round (time-weighted) 0.414 | rounds with >=2 fires >20us: 0 of 14 | work/span comp-edges 2.77, cell-edges 2.42, no-edges (T / sum of each run's heaviest fire) 3.86
+scheduler-adversarial.json: T=0.160 ms | heaviest-fire share of its round (time-weighted) 0.375 | rounds with >=2 fires >20us: 0 of 8 | work/span comp-edges 2.67, cell-edges 2.67, no-edges (T / sum of each run's heaviest fire) 4.57

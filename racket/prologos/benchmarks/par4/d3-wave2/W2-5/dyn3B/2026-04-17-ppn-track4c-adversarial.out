@@ -1,0 +1,2 @@
+STATS3 file=/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/examples/2026-04-17-ppn-track4c-adversarial.prologos results=7 rounds=21 fires=99 control-divergent=0 nested=0 stale-params=95 ms=204.0
+DEP current-impl-registry fires=1 stale-rounds=21 fns=...ing-propagators.rkt:861:2×1

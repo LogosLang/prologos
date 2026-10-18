@@ -1,0 +1,38 @@
+file                                                  seq          fresh           prod        persist     persistcap
+2026-03-14-wfle-acceptance                    d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s98/a0/r0   d0/s81/a0/r0   seq rounds=58 wide=0 fires=62
+2026-03-19-punify-acceptance                  d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s98/a0/r0   d0/s80/a0/r0   seq rounds=95 wide=2 fires=187
+2026-03-21-track8-acceptance                  d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s93/a0/r0   d0/s76/a0/r0   seq rounds=31 wide=4 fires=147
+2026-03-28-sudoku-demo                        d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   seq rounds=0 wide=0 fires=0
+2026-04-08-bsp-le-track2                      d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s94/a0/r0   d0/s77/a0/r0   seq rounds=27 wide=0 fires=27
+2026-04-17-ppn-track4c-adversarial            d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s95/a0/r0   d0/s77/a0/r0   seq rounds=21 wide=2 fires=99
+2026-05-08-propagator-demo                    d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s95/a0/r0   d0/s78/a0/r0   seq rounds=2 wide=0 fires=2
+2026-07-31-solve-carrier                      d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s96/a0/r0   d0/s78/a0/r0   seq rounds=59 wide=8 fires=290
+atms-adversarial                              d0/s0/a0/r0    d1/s0/a0/r0    d1/s0/a0/r0   d0/s95/a0/r0   d1/s77/a0/r0   seq rounds=111 wide=2 fires=134
+bool-logic                                    d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s81/a0/r0   d0/s64/a0/r0   seq rounds=14 wide=4 fires=78
+c1-overwrite                                  d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s96/a0/r0   d0/s78/a0/r0   seq rounds=9 wide=0 fires=19
+c2-naf                                        d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s96/a0/r0   d0/s78/a0/r0   seq rounds=9 wide=1 fires=34
+c3-naf-nested                                 d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s95/a0/r0   d0/s78/a0/r0   seq rounds=2 wide=0 fires=2
+c4-varvar                                     d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s96/a0/r0   d0/s78/a0/r0   seq rounds=6 wide=0 fires=12
+church-folds                                  d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   seq rounds=0 wide=0 fires=0
+constraints-adversarial                       d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s94/a0/r0   d0/s77/a0/r0   seq rounds=212 wide=38 fires=1142
+dependent-types                               d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   seq rounds=0 wide=0 fires=0
+higher-order                                  d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   seq rounds=0 wide=0 fires=0
+implicit-args                                 d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s81/a0/r0   d0/s64/a0/r0   seq rounds=29 wide=5 fires=150
+narrowing-demo                                d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s95/a0/r0   d0/s78/a0/r0   seq rounds=3 wide=0 fires=7
+nat-arithmetic                                d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s81/a0/r0   d0/s64/a0/r0   seq rounds=10 wide=3 fires=50
+pairs-sigma                                   d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   seq rounds=0 wide=0 fires=0
+parity-adversarial                          d0/s0/a0/r0/X  d0/s0/a0/r0/X  d0/s0/a0/r0/X d0/s95/a0/r0/X d0/s77/a0/r0/X   seq rounds=26 wide=2 fires=62
+pattern-matching                              d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   seq rounds=0 wide=0 fires=0
+records-seal-validate                         d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s90/a0/r0   d0/s73/a0/r0   seq rounds=21 wide=1 fires=52
+records-typing                                d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s80/a0/r0   d0/s63/a0/r0   seq rounds=10 wide=0 fires=10
+recursive-types                               d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   seq rounds=0 wide=0 fires=0
+relational-demo                               d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s94/a0/r0   d0/s77/a0/r0   seq rounds=10 wide=0 fires=10
+scheduler-adversarial                         d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s94/a0/r0   d0/s77/a0/r0   seq rounds=8 wide=3 fires=61
+simple-typed                                  d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s81/a0/r0   d0/s64/a0/r0   seq rounds=2 wide=0 fires=7
+solve-adversarial                             d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d1/s96/a0/r0   d0/s79/a0/r0   seq rounds=77 wide=0 fires=77
+solve-scale                                   d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s94/a0/r0   d0/s77/a0/r0   seq rounds=6 wide=0 fires=6
+type-adversarial                              d0/s0/a0/r0    d0/s0/a0/r0    d0/s0/a0/r0   d0/s96/a0/r0   d0/s78/a0/r0   seq rounds=182 wide=32 fires=1112
+
+legend: d=#results differing from seq, s=#params stale (not equal?) at >=1 round, a=#params assigned inside fires, r=#re-entrant executor calls, X=harness exception
+
+assigned-in-fire params (leg: param -> #files):

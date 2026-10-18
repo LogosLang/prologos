@@ -1,0 +1,18 @@
+== test-tagged-cell-value.rkt
+12 success(es) 0 failure(s) 0 error(s) 12 test(s) run
+0
+51 tests passed
+== test-solver-context.rkt
+5 success(es) 0 failure(s) 0 error(s) 5 test(s) run
+0
+30 tests passed
+== test-speculation-bridge.rkt
+7 success(es) 0 failure(s) 0 error(s) 7 test(s) run
+0
+27 tests passed
+== test-union-types-atms.rkt
+raco test: (file "/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/tests/test-union-types-atms.rkt")
+27 tests passed
+== test-solver-parity.rkt
+raco test: (file "/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/tests/test-solver-parity.rkt")
+15 tests passed

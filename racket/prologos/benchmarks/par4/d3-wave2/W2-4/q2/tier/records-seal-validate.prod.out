@@ -1,0 +1,32 @@
+PERF-COUNTERS:{"cell_allocs":1125,"constraint_count":0,"constraint_retries":0,"elaborate_steps":126,"inert_dependent_skips":0,"infer_steps":127,"meta_created":7,"meta_solved":1,"prop_allocs":0,"prop_firings":0,"reduce_steps":378,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":15,"zonk_steps":269}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":1,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":2,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: Person : [Type 0] defined.
+1: Cfg : [Type 0] defined.
+2: Checked : [Type 0] defined.
+3: a1 : benchmarks::records-seal-validate::Person defined.
+4: a2 : benchmarks::records-seal-validate::Person defined.
+5: {:name "carol", :age 40} : benchmarks::records-seal-validate::Person
+6: c1 : benchmarks::records-seal-validate::Cfg defined.
+7: "localhost" : String
+8: cg : benchmarks::records-seal-validate::Checked defined.
+9: m : {:age Int :name String | _} defined.
+10: [prologos::data::result::ok {:name "eve", :age 20}] : [prologos::data::result::Result benchmarks::records-seal-validate::Person [Map Keyword prologos::data::reason::Reason]]
+11: bad : {:age String :name String | _} defined.
+12: [prologos::data::result::err {:age [prologos::data::reason::type-mismatch "Int" "String"]}] : [prologos::data::result::Result benchmarks::records-seal-validate::Person [Map Keyword prologos::data::reason::Reason]]
+13: [prologos::data::result::ok {:host "localhost", :port 8080}] : [prologos::data::result::Result benchmarks::records-seal-validate::Cfg [Map Keyword prologos::data::reason::Reason]]
+14: [prologos::data::result::err {:age [prologos::data::reason::check-failed "(> _ 0)"]}] : [prologos::data::result::Result benchmarks::records-seal-validate::Checked [Map Keyword prologos::data::reason::Reason]]
+15: [prologos::data::result::ok {:name "hank", :age 9}] : [prologos::data::result::Result benchmarks::records-seal-validate::Checked [Map Keyword prologos::data::reason::Reason]]
+16: [prologos::data::result::ok {:name "i", :age 1}] : [prologos::data::result::Result benchmarks::records-seal-validate::Person [Map Keyword prologos::data::reason::Reason]]
+17: [prologos::data::result::ok {:name "j", :age 2}] : [prologos::data::result::Result benchmarks::records-seal-validate::Person [Map Keyword prologos::data::reason::Reason]]
+18: [prologos::data::result::ok {:name "k", :age 3}] : [prologos::data::result::Result benchmarks::records-seal-validate::Person [Map Keyword prologos::data::reason::Reason]]
+19: selection NameOnly from Person registered.
+20: [prologos::data::result::ok {:name "leo", :age 7}] : [prologos::data::result::Result benchmarks::records-seal-validate::NameOnly [Map Keyword prologos::data::reason::Reason]]
+21: manual-ok : Bool defined.
+22: manual-ok2 : Bool defined.
+23: "eve" : String
+24: 20 : Int
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":52,"exec_rounds":21,"exec_wide_rounds":1,"file":"records-seal-validate.prologos","perf_fields_worker":"()","perf_incs_in_exec_main":0,"perf_incs_in_exec_worker":0,"race_rounds_any_worker_set":0,"race_rounds_multi_worker_set":0,"strat":"auto","wall_ms":38.0}

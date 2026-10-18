@@ -1,0 +1,17 @@
+4 success(es) 0 failure(s) 0 error(s) 4 test(s) run
+0
+1 success(es) 0 failure(s) 0 error(s) 1 test(s) run
+0
+1 success(es) 0 failure(s) 0 error(s) 1 test(s) run
+0
+7 success(es) 0 failure(s) 0 error(s) 7 test(s) run
+0
+3 success(es) 0 failure(s) 0 error(s) 3 test(s) run
+0
+1 success(es) 0 failure(s) 0 error(s) 1 test(s) run
+0
+17 tests passed
+'(0 . 17)
+real 0.18
+user 0.14
+sys 0.03

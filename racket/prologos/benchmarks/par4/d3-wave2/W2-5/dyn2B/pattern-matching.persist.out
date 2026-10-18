@@ -1,0 +1,14 @@
+RESULT 0: List : [Type 0] defined.
+RESULT 1: A : [Type 0] -> benchmarks::comparative::pattern-matching::List defined.
+RESULT 2: where : benchmarks::comparative::pattern-matching::List defined.
+RESULT 3: ERROR: Unbound variable
+RESULT 4: ERROR: Unbound variable
+RESULT 5: ERROR: unreachable match arm: arm 2 can never run, because arm 1 matches everything — and an unreachable arm is never type-checked, so mistakes in it go unreported. If a name there was meant as a CONSTRUCTOR, it was not recognised as one (check the spelling, and that its type is imported) and so became a catch-all variable pattern instead.
+RESULT 6: ERROR: unreachable match arm: arm 2 can never run, because arm 1 matches everything — and an unreachable arm is never type-checked, so mistakes in it go unreported. If a name there was meant as a CONSTRUCTOR, it was not recognised as one (check the spelling, and that its type is imported) and so became a catch-all variable pattern instead.
+RESULT 7: ERROR: unreachable match arm: arm 2 can never run, because arm 1 matches everything — and an unreachable arm is never type-checked, so mistakes in it go unreported. If a name there was meant as a CONSTRUCTOR, it was not recognised as one (check the spelling, and that its type is imported) and so became a catch-all variable pattern instead.
+RESULT 8: ERROR: unreachable match arm: arm 2 can never run, because arm 1 matches everything — and an unreachable arm is never type-checked, so mistakes in it go unreported. If a name there was meant as a CONSTRUCTOR, it was not recognised as one (check the spelling, and that its type is imported) and so became a catch-all variable pattern instead.
+RESULT 9: ERROR: def: expected ':', got cons
+RESULT 10: ERROR: Unbound variable
+RESULT 11: ERROR: fn: all parameters except body must be bare symbols or a binder (x : T)
+RESULT 12: ERROR: fn: all parameters except body must be bare symbols or a binder (x : T)
+STATS2 leg=persist rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0

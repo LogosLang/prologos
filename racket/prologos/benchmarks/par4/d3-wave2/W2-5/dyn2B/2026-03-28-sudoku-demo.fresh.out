@@ -1,0 +1,7 @@
+RESULT 0: val : _ defined.
+RESULT 1: neq : _ defined.
+RESULT 2: cell : _ defined.
+RESULT 3: row-ok : _ defined.
+RESULT 4: col-ok : _ defined.
+RESULT 5: ERROR: solve expects 1 argument, got 16
+STATS2 leg=fresh rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0

@@ -1,0 +1,8 @@
+RESULT 0.0: ERROR: Could not infer type
+RESULT 0.1: a1-fold-sum : Int defined.
+RESULT 0.2: a5-id : [Pi [x :0 <[Type 0]>] x -> x] defined.
+RESULT 0.3: a5-call : Nat defined.
+RESULT 0.4: a3-lam : Nat -> Nat defined.
+RESULT 0.5: a3-app : Nat defined.
+RESULT 0.6: a3-pair : [prologos::data::list::List Nat] defined.
+STATS leg=prod files=1 params=219 rounds=21 wide-rounds(>=8)=2 fires=99 reentrant=0 ms=156.0

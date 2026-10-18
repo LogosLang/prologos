@@ -1,0 +1,99 @@
+RESULT 0.0: color : _ defined.
+RESULT 0.1: @[{:c "red"}] : [PVec {:c String}]
+RESULT 0.2: @[{:fruit "banana"}] : [PVec {:fruit String}]
+RESULT 0.3: @[{:fruit "apple", :hue "red"} {:fruit "banana", :hue "yellow"} {:fruit "grape", :hue "purple"} {:fruit "lime", :hue "green"}] : [PVec {:fruit String :hue String}]
+RESULT 0.4: edge : _ defined.
+RESULT 0.5: path : _ defined.
+RESULT 0.6: @[{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}] : [PVec {:dest String}]
+RESULT 0.7: @[{:src "d"} {:src "a"} {:src "b"} {:src "c"}] : [PVec {:src String}]
+RESULT 0.8: same-pair : _ defined.
+RESULT 0.9: @[{:x "hello"}] : [PVec {:x String}]
+RESULT 0.10: @[{:r "hello"}] : [PVec {:r String}]
+RESULT 0.11: blocked : _ defined.
+RESULT 0.12: reachable : _ defined.
+RESULT 0.13: @[{:dest "b"}] : [PVec {:dest String}]
+RESULT 0.14: lookup : _ defined.
+RESULT 0.15: @[{:v "localhost"}] : [PVec {:v String}]
+RESULT 0.16: @[{:k "host"}] : [PVec {:k String}]
+RESULT 0.17: default-config : Solver defined.
+RESULT 0.18: wf-solver : Solver defined.
+RESULT 0.19: strat-solver : Solver defined.
+RESULT 0.20: @[{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}] : [PVec {:dest String}]
+RESULT 0.21: @[{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}] : [PVec {:dest String}]
+RESULT 0.22: @[{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}] : [PVec {:dest String}]
+RESULT 0.23: p-holds : _ defined.
+RESULT 0.24: q-holds : _ defined.
+RESULT 0.25: @[] : _
+RESULT 0.26: paradox : _ defined.
+RESULT 0.27: @[] : _
+RESULT 0.28: @[{:cycle '["paradox"], :certainty :unknown}] : _
+RESULT 0.29: unfounded : _ defined.
+RESULT 0.30: @[] : _
+RESULT 0.31: fact-a : _ defined.
+RESULT 0.32: @[{}] : _
+RESULT 0.33: depends-on-a : _ defined.
+RESULT 0.34: @[] : _
+RESULT 0.35: @[{:dest "b"}] : [PVec {:dest String}]
+RESULT 0.36: quaker : _ defined.
+RESULT 0.37: republican : _ defined.
+RESULT 0.38: pacifist : _ defined.
+RESULT 0.39: hawk : _ defined.
+RESULT 0.40: @[] : _
+RESULT 0.41: @[] : _
+RESULT 0.42: move : _ defined.
+RESULT 0.43: win : _ defined.
+RESULT 0.44: @[] : [PVec {:pos String}]
+RESULT 0.45: odd-path : _ defined.
+RESULT 0.46: @[] : [PVec {:to String}]
+RESULT 0.47: @[{:provenance {:depth 0N, :clause-id :path/2-0, :derivation {:rule :path/2-0, :goal :path, :children '[{:rule :edge/2-0, :goal :edge, :children nil, :args '["a" "b"]}], :args '["a" "b"]}}}] : _
+RESULT 0.48: @[{:provenance {:depth 0N, :clause-id :reachable/2-0, :derivation {:rule :reachable/2-0, :goal :reachable, :children '[{:rule :edge/2-0, :goal :edge, :children nil, :args '["a" "b"]}], :args '["a" "b"]}}, :certainty :definite}] : _
+RESULT 0.49: @[{:cycle '["paradox"], :certainty :unknown}] : _
+RESULT 0.50: @[{:cycle '["pacifist" "hawk"], :certainty :unknown}] : _
+RESULT 0.51: parent-child : _ defined.
+RESULT 0.52: @[{:who "bob", :provenance {:depth 0N, :clause-id :parent-child/2-0, :derivation {:rule :parent-child/2-0, :goal :parent-child, :children nil, :args '["tom" "bob"]}}} {:who "liz", :provenance {:depth 0N, :clause-id :parent-child/2-1, :derivation {:rule :parent-child/2-1, :goal :parent-child, :children nil, :args '["tom" "liz"]}}}] : [PVec {:who String | _}]
+RESULT 0.53: summary-solver : Solver defined.
+RESULT 0.54: @[{:provenance {:depth 0N, :clause-id :parent-child/2-0, :derivation {:rule :parent-child/2-0, :goal :parent-child, :children nil, :args '["tom" "bob"]}}, :who "bob"} {:provenance {:depth 0N, :clause-id :parent-child/2-1, :derivation {:rule :parent-child/2-1, :goal :parent-child, :children nil, :args '["tom" "liz"]}}, :who "liz"}] : [PVec {:who String | _}]
+RESULT 0.55: wf-full : Solver defined.
+RESULT 0.56: @[{:provenance {:depth 0N, :clause-id :reachable/2-0, :derivation {:rule :reachable/2-0, :goal :reachable, :children '[{:rule :edge/2-0, :goal :edge, :children nil, :args '["a" "b"]}], :args '["a" "b"]}}, :to "b", :certainty :definite}] : [PVec {:to String | _}]
+RESULT 0.57: wf-tabled : Solver defined.
+RESULT 0.58: @[{}] : _
+RESULT 0.59: @[{:dest "b"}] : [PVec {:dest String}]
+RESULT 0.60: @[] : [PVec {:pos String}]
+RESULT 0.61: add-one-int : _ defined.
+RESULT 0.62: @[{:r 6}] : [PVec {:r Int}]
+RESULT 0.63: add-one-nat : _ defined.
+RESULT 0.64: @[{:r 6N}] : [PVec {:r Nat}]
+RESULT 0.65: double-int : _ defined.
+RESULT 0.66: @[{:r 10}] : [PVec {:r Int}]
+RESULT 0.67: weighted-edge : _ defined.
+RESULT 0.68: positive-edge : _ defined.
+RESULT 0.69: @[{:from "a", :to "b", :w 3} {:from "c", :to "d", :w 5}] : [PVec {:from String :to String :w Int}]
+RESULT 0.70: weighted-edge-nat : _ defined.
+RESULT 0.71: positive-edge-nat : _ defined.
+RESULT 0.72: @[{:from "a", :to "b", :w 3N} {:from "c", :to "d", :w 5N}] : [PVec {:from String :to String :w Nat}]
+RESULT 0.73: describe : _ defined.
+RESULT 0.74: @[{:name "unknown"}] : [PVec {:name String}]
+RESULT 0.75: @[{:detail "engineer"}] : [PVec {:detail String}]
+RESULT 0.76: @[{:detail "designer", :level "junior"}] : [PVec {:detail String :level String}]
+RESULT 0.77: @[{:from "a", :to "c"} {:from "b", :to "d"} {:from "c", :to "e"}] : [PVec {:from String :to String}]
+RESULT 0.78: {:dest "b"} : {:dest String}
+RESULT 0.79: none : {:dest String}
+RESULT 0.80: Employee : [Type 0] defined.
+RESULT 0.81: employees : _ defined.
+RESULT 0.82: @[{:name "alice", :salary 100000}] : [PVec {:name String :salary Int}]
+RESULT 0.83: empty-rel : _ defined.
+RESULT 0.84: @[] : _
+RESULT 0.85: just-one : _ defined.
+RESULT 0.86: @[{}] : _
+RESULT 0.87: chain : _ defined.
+RESULT 0.88: @[{}] : _
+RESULT 0.89: @[{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}] : [PVec {:dest String}]
+RESULT 0.90: @[{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}] : [PVec {:dest String}]
+RESULT 0.91: @[{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}] : [PVec {:dest String}]
+RESULT 0.92: @[{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}] : [PVec {:dest String}]
+RESULT 0.93: @[{}] : _
+RESULT 0.94: @[{:item "apple", :hue "red"} {:item "banana", :hue "yellow"} {:item "grape", :hue "purple"} {:item "lime", :hue "green"}] : [PVec {:hue String :item String}]
+RESULT 0.95: @[{:dest "b"}] : [PVec {:dest String}]
+RESULT 0.96: my-add : Nat Nat -> Nat defined.
+RESULT 0.97: 7N : Nat
+STATS leg=fresh files=1 params=219 rounds=58 wide-rounds(>=8)=0 fires=62 reentrant=0 ms=197.0

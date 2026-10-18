@@ -1,0 +1,51 @@
+PERF-COUNTERS:{"cell_allocs":1953,"constraint_count":0,"constraint_retries":0,"elaborate_steps":228,"inert_dependent_skips":0,"infer_steps":167,"meta_created":11,"meta_solved":2,"prop_allocs":0,"prop_firings":0,"reduce_steps":1594,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":102,"zonk_steps":317}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":1,"qtt_ms":0,"reduce_ms":2,"trait_resolve_ms":0,"type_check_ms":1,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":21,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: a1 : Nat defined.
+1: a2 : Bool defined.
+2: a3 : String defined.
+3: b1 : Nat defined.
+4: b2 : Bool defined.
+5: b3 : String defined.
+6: c1 : Nat defined.
+7: c2 : Nat defined.
+8: d1 : [prologos::data::list::List Nat] defined.
+9: d2 : [Map Keyword Nat] defined.
+10: inc : Nat -> Nat defined.
+11: 6N : Nat
+12: my-add2 : Nat Nat -> Nat defined.
+13: 7N : Nat
+14: is-zero : Nat -> Bool defined.
+15: true : Bool
+16: false : Bool
+17: my-pred : Nat -> Nat defined.
+18: 4N : Nat
+19: 0N : Nat
+20: my-double : Nat -> Nat defined.
+21: 6N : Nat
+22: mc-zero : Nat -> Bool defined.
+23: true : Bool
+24: false : Bool
+25: compute : Nat -> Nat defined.
+26: 8N : Nat
+27: not2 : Bool -> Bool defined.
+28: false : Bool
+29: my-head : [prologos::data::list::List Nat] -> Nat defined.
+30: 10N : Nat
+31: 0N : Nat
+32: apply-twice : [Nat -> Nat] Nat -> Nat defined.
+33: 7N : Nat
+34: ERROR: Unbound variable
+35: ERROR: Unbound variable
+36: ERROR: Unbound variable
+37: base : Nat defined.
+38: add-base : Nat -> Nat defined.
+39: 142N : Nat
+40: opt-val : [prologos::data::option::Option Nat] defined.
+41: opt-none : [prologos::data::option::Option Nat] defined.
+42: 7N : Nat
+43: 30N : Nat
+
+--- 3 errors ---
+W24 {"exec":"prod","exec_fires":53,"exec_rounds":22,"file":"audit-02-def-spec-defn.prologos","perf_fields_worker":"()","perf_incs_in_exec_main":0,"perf_incs_in_exec_worker":0,"race_rounds_any_worker_set":0,"race_rounds_multi_worker_set":0,"strat":"auto","wall_ms":174.0}

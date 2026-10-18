@@ -1,0 +1,50 @@
+
+=== Q2 matrix: every repair x workload x memory; recommended protocol (count before send, prod-lane) ===
+    fences: - = none; pub = release (a store-store fence) before every cons/indicator/credit publication
+--- D2
+CASCADE  D2     SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=   5052  PREMATURE STALE
+      (0.1s)
+CASCADE  D2     TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=  19272  PREMATURE STALE
+      (0.3s)
+CASCADE  D2     PSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=  58050  PREMATURE STALE
+      (1.1s)
+CASCADE  D2     PSO SEP fr=counted   bnd=Q   scans=2 fences=pub send=prod-lane pub=ind-cons states=  20682  PREMATURE STALE
+      (0.3s)
+SENDWRITE D2     SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=   4998  PREMATURE STALE
+      (0.1s)
+SENDWRITE D2     TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=  26577  PREMATURE STALE
+      (0.4s)
+SENDWRITE D2     PSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states= 109333  PREMATURE STALE
+      (2.3s)
+SENDWRITE D2     PSO SEP fr=counted   bnd=Q   scans=2 fences=pub send=prod-lane pub=ind-cons states=  27137  PREMATURE STALE
+      (0.4s)
+FREQ     D2     SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=   3956  PREMATURE STALE
+      (0.0s)
+FREQ     D2     TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=  13922  PREMATURE STALE
+      (0.2s)
+FREQ     D2     PSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=  53920  PREMATURE STALE
+      (1.0s)
+FREQ     D2     PSO SEP fr=counted   bnd=Q   scans=2 fences=pub send=prod-lane pub=ind-cons states=  22277  PREMATURE STALE
+      (0.3s)
+BOUNCE   D2     SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=  15844  PREMATURE STALE
+      (0.2s)
+BOUNCE   D2     TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=  65998  PREMATURE STALE
+      (1.1s)
+BOUNCE   D2     PSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=1348466  PREMATURE STALE
+      (33.9s)
+BOUNCE   D2     PSO SEP fr=counted   bnd=Q   scans=2 fences=pub send=prod-lane pub=ind-cons states= 161058  PREMATURE STALE
+      (2.8s)
+SEEDS2   D2     SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=   6056  PREMATURE STALE
+      (0.1s)
+SEEDS2   D2     TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=  29602  PREMATURE STALE
+      (0.5s)
+SEEDS2   D2     PSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states= 134820  PREMATURE STALE
+      (2.9s)
+SEEDS2   D2     PSO SEP fr=counted   bnd=Q   scans=2 fences=pub send=prod-lane pub=ind-cons states=  29467  PREMATURE STALE
+      (0.5s)
+K3       D2     SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states= 647037  PREMATURE STALE
+      (13.6s)
+K3       D2     TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=3252384  PREMATURE STALE
+      (81.0s)
+K3       D2     PSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons LIMIT (state limit 6000000)
+      (154.7s)

@@ -1,0 +1,17 @@
+RESULT 0: parent : _ defined.
+RESULT 1: @[{:who "bob"}] : [PVec {:who String}]
+RESULT 2: @[{:x "alice", :y "bob"} {:x "bob", :y "carol"} {:x "bob", :y "dave"} {:x "carol", :y "eve"}] : [PVec {:x String :y String}]
+RESULT 3: @[] : [PVec {:child String}]
+RESULT 4: ancestor : _ defined.
+RESULT 5: @[{:who "bob"} {:who "carol"} {:who "dave"} {:who "eve"}] : [PVec {:who String}]
+RESULT 6: @[{:who "carol"} {:who "alice"} {:who "bob"}] : [PVec {:who String}]
+RESULT 7: append-data : _ defined.
+RESULT 8: @[{:result "ab"}] : [PVec {:result String}]
+RESULT 9: course-data : _ defined.
+RESULT 10: prereq : _ defined.
+RESULT 11: needs : _ defined.
+RESULT 12: @[{:req "CS301"} {:req "CS201"} {:req "MA301"} {:req "CS101"} {:req "MA101"}] : [PVec {:req String}]
+RESULT 13: @[{:req "CS201"} {:req "MA301"} {:req "CS101"} {:req "MA101"}] : [PVec {:req String}]
+RESULT 14: @[{:code "CS101", :title "Intro to CS"} {:code "CS201", :title "Data Structures"} {:code "CS301", :title "Algorithms"} {:code "CS401", :title "Compilers"}] : [PVec {:code String :title String}]
+RESULT 15: @[{:req "CS201"} {:req "MA301"}] : [PVec {:req String}]
+STATS2 leg=persistcap rounds=10 fires=10 control-divergent=0 thread-divergent=0 reentrant=0

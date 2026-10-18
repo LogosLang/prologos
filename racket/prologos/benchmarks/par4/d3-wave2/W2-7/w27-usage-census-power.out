@@ -1,0 +1,10 @@
+POWER fixture final: pos-a (m1) pos-b (mw)
+W27-USAGE POWER (expect 2 exercised: pos-a other-writer; pos-b same-writer down mw->m1 absorbed by add-usage)
+  BSP rounds 2, fires 4
+  :usage writes seen by the merge: first (old=bot) 3 | equal re-write 0 | EXERCISED (old≠bot, X≠old) 1
+  :usage positions 2; positions with >1 distinct writer pid 1
+    exercised by writer: ((same-writer . 1))
+    exercised by relation old->X: ((down . 1))
+    exercised by writer kind: (("...27-usage-census.rkt:136:31" . 1))
+    e.g. same-writer down old=(mw) X=(m1) | today add-usage=(mw)  chain-max=(mw)  flat=TOP  replace=(m1)  [...27-usage-census.rkt:136:31]
+  writer kinds (top 14): (("...27-usage-census.rkt:136:31" . 2) ("...27-usage-census.rkt:132:31" . 1) ("...27-usage-census.rkt:134:31" . 1))

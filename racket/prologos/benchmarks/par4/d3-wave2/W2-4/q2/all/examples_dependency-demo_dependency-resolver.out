@@ -1,0 +1,28 @@
+PERF-COUNTERS:{"cell_allocs":795,"constraint_count":0,"constraint_retries":0,"elaborate_steps":117,"inert_dependent_skips":0,"infer_steps":364,"meta_created":10,"meta_solved":5,"prop_allocs":0,"prop_firings":0,"reduce_steps":9411,"resolution_cycles":0,"solver_backtracks":98,"solver_col_compares":514,"solver_row_scans":466,"solver_unifies":625,"trait_resolve_steps":0,"unify_steps":5,"zonk_steps":183}
+PHASE-TIMINGS:{"elaborate_ms":2,"parse_ms":1,"qtt_ms":0,"reduce_ms":11,"trait_resolve_ms":0,"type_check_ms":5,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+== dependency edges (parsed from deps.csv) ==
+== transitive dependencies of app ==
+== copyleft transitive deps of app (the audit finding) ==
+== provenance: app -> fmt ==
+0: unit : Unit
+1: '['["package" "dep"] '["app" "left"] '["app" "right"] '["left" "shared"] '["right" "shared"] '["right" "logger"] '["shared" "util"] '["logger" "fmt"] '[""]] : [prologos::data::list::List [prologos::data::list::List String]]
+2: Package : [Type 0] defined.
+3: package : _ defined.
+4: depends : _ defined.
+5: copyleft : _ defined.
+6: needs : _ defined.
+7: unit : Unit
+8: @[{:dep "left"} {:dep "right"} {:dep "shared"} {:dep "util"} {:dep "shared"} {:dep "logger"} {:dep "util"} {:dep "fmt"}] : [PVec {:dep String}]
+9: risky-dep : _ defined.
+10: unit : Unit
+11: @[{:dep "logger", :lic "GPL-3.0"} {:dep "fmt", :lic "LGPL-2.1"}] : [PVec {:dep String :lic String}]
+12: unit : Unit
+13: @[{:provenance {:depth 0N, :clause-id :needs/2-1, :derivation {:rule :needs/2-1, :goal :needs, :children '[{:rule :depends/2-1, :goal :depends, :children nil, :args '["app" "right"]} {:rule :needs/2-1, :goal :needs, :children '[{:rule :depends/2-4, :goal :depends, :children nil, :args '["right" "logger"]} {:rule :needs/2-0, :goal :needs, :children '[{:rule :depends/2-6, :goal :depends, :children nil, :args '["logger" "fmt"]}], :args '["logger" "fmt"]}], :args '["right" "fmt"]}], :args '["app" "fmt"]}}}] : _
+14: session Announce defined.
+15: defproc announcer : [!String . end] type-checked.
+16: announcer: process : [!String . end] executed. Protocol completed.
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":157,"exec_rounds":23,"exec_wide_rounds":7,"file":"dependency-resolver.prologos","perf_fields_worker":"()","perf_incs_in_exec_main":9,"perf_incs_in_exec_worker":0,"race_rounds_any_worker_set":0,"race_rounds_multi_worker_set":0,"race_unbox_main_prop-net-box":11,"race_unbox_main_registry-net-box":4,"strat":"auto","wall_ms":182.0}

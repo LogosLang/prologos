@@ -1,0 +1,5 @@
+W27-USAGE /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/higher-order.prologos
+  facet writes through the wrapped merge: #hash()
+  BSP rounds 0, fires 0
+  :usage writes seen by the merge: first (old=bot) 0 | equal re-write 0 | EXERCISED (old≠bot, X≠old) 0
+  :usage positions 0; positions with >1 distinct writer pid 0

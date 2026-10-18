@@ -689,3 +689,51 @@ binder merges with unsolved metas.
     `current-parallel-executor` injection point, so nothing else needs a rebuild.
 - **Next**: read every return in full, then write the synthesis of record by hand: a response to every wave-1 and
   wave-2 finding, then D.3, then owner decisions O-14 onwards.
+
+### D.3 wave 2 returned and synthesized: K > 1 has no workload here; the sequential levers measure 2.2× / 2.0×; four production defects reproduced and filed or amended; O-14 posed — docs and data commit on the branch (2026-10-18)
+- **Why / decision**: all ten wave-2 agents returned (deleg_a0a8ad64, 3921 s; the machine had restarted beforehand,
+  and every agent's scratch output survived). I read every return in full:
+  - W2-1 and W2-2 have no summary file, so they were recovered from the batch message in this profile's session
+    database;
+  - W2-3…W2-10 came from their summary files.
+
+  I then wrote the synthesis of record by hand:
+  [`critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md`](critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md). It gives a response
+  to every one of the 140 findings (96 accept, 22 amend, 21 defer, 1 reject), self-corrections SC-22…SC-31, the
+  sequel's inheritance (§4), and the decision queue (§7).
+- **Measured / reproduced**: hand-checks in synthesis §1.
+  - Reproduced at user level:
+    - one `not` goal under `:auto` gives DEFERRED 177's wrong answers in a plain `solve`;
+    - two new ATMS shapes: `(pick ?x) (pick ?y) (= ?x ?y)` loses `{x 2, y 2}`, and `(pick ?x) (= ?x 2)` returns
+      `{x 1} {x 2} {x 1}`;
+    - an inline `{:timeout 100}` override turns a well-founded query into `solve: Depth limit exceeded (100)`,
+      which aborts the file;
+    - the production executor hangs on a fire exception at N = 12 and raises at N = 4.
+  - Read in the code: the keyed-diff theorem (`propagator.rkt:1657-1694`, `typing-propagators.rkt:447-470`) and the
+    `current-impl-registry` default argument (`constraint-propagators.rkt:55`).
+  - Replicated across two agents with separate code: S0 work/span 1.28 / 1.49.
+  - W2-2's timed legs (heavy files): as-is → executor off → executor off with the keyed diff is 66.3 → 44.1 →
+    30.0 ms and 63.5 → 40.9 → 32.1 ms. The keyed diff's monitor shows 0 / 2992 mismatches, and its power row is
+    caught on 1980.
+- **Surprise / correction**:
+  - SC-22: the triage's component-ownership lean would have bought balance and ≤ 1.05×. The dependency chain is
+    the limit.
+  - SC-23: W2-2 Q4's "P2 gives 3.2–3.3×" contradicts its own leg E, which puts 66 % of the time outside BSP. P2
+    over the P0.5 build is ≤ ≈ 2.2× / 1.9×.
+  - SC-28: P0 §4.1's "0 premature" detector rows could not fail, because they contain no cascade.
+  - SC-29: PAR 2's demos do not propagate.
+  - SC-31: three P1b classes matter at K = 1.
+  - Across the round: output parity has no power (W2-2, W2-5, W2-4), so every gate becomes a per-write or per-fire
+    differential with a power row.
+- **Evidence**: `racket/prologos/benchmarks/par4/d3-wave2/` (README there). It holds 6.8 MB: W2-2's 33 MB archived
+  tree was not kept (a patch regenerates it), and a full copy of `propagator.rkt` is stored as a diff.
+- **Posed**: O-14 in [D.2 §15](2026-10-15_PAR_4_D2_DESIGN.md): remove the production thread executor in P0.5. The
+  lean is to delete it and keep the `current-parallel-executor` seam. A second callout before D.2 §0 points to the
+  synthesis.
+- **Filed on main** (register 181 → 183):
+  - DEFERRED 181: a fire exception hangs the production executor.
+  - DEFERRED 182: an inline solver override resets every unnamed key.
+  - Addenda: 177 (reach and two shapes; the fix shape needs a viewpoint per propagator and lifted fires), 178 (not
+    reached by production paths; deleted by P2) and 157 (the S1 NAF handler is a second writer of cell 1, PD-10).
+- **Next**: the owner's decision on O-14, then O-15 (scope: the K > 1 sequel), O-16 (budgets and the surface
+  contract) and O-17 (who owns 177's fix). After those, D.3, written from the synthesis.

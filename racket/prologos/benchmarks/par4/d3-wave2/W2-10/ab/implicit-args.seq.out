@@ -1,0 +1,11 @@
+0: id : [Pi [x :0 <[Type 0]>] x -> x] defined.
+1: const : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] x y -> x]] defined.
+2: ERROR@?: Type mismatch
+3: ERROR@?: Type mismatch
+4: 42 : Int
+5: true : Bool
+6: 1 : Int
+7: [fn [x <2>] [fn [y <false>] x]] : ?bvar1 ?bvar1 -> ?bvar3
+8: ERROR@?: Could not infer type
+9: ERROR@?: fn: all parameters except body must be bare symbols or a binder (x : T)
+-- leg seq: 10 results, 4.0 ms | observer: 29 BSP rounds in 5 runs, 37 diffs, 0 runs ending contradicted

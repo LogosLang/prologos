@@ -1,0 +1,24 @@
+R1  per-key replacement map, declared outputs, different keys
+   BSP       #hasheq((k1 . new1) (k2 . old))  LOST UPDATE
+   BSP+Δ     #hasheq((k1 . new1) (k2 . new2))  correct
+   DRAIN     #hasheq((k1 . new1) (k2 . new2))  correct
+R1u per-key replacement map, UNDECLARED outputs
+   BSP       #hasheq((k1 . new1) (k2 . old))  LOST UPDATE
+   BSP+Δ     #hasheq((k1 . new1) (k2 . new2))  correct
+   DRAIN     #hasheq((k1 . new1) (k2 . new2))  correct
+R2  read-modify-write, replacement merge (cell-1 AND-NOT shape), w0 = #b111
+   BSP       6  LOST UPDATE
+   BSP+Δ     6  LOST UPDATE
+   DRAIN     4  correct
+R5  undeclared writes into a JOIN (max) cell, 5 then 3
+   BSP       5  correct
+   BSP+Δ     5  correct
+   DRAIN     5  correct
+R3  CONTROL join (ior), declared
+   BSP       3  correct
+   BSP+Δ     3  correct
+   DRAIN     3  correct
+R5' undeclared writes into a JOIN (max) cell, 3 then 5 (install order reversed)
+   BSP       3  LOST UPDATE
+   BSP+Δ     5  correct
+   DRAIN     5  correct

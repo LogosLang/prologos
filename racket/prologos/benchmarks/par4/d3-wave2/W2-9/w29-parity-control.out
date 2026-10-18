@@ -1,0 +1,2 @@
+parity-adversarial.prologos executor=seq: RAISED: solve: Depth limit exceeded (100)
+parity-adversarial.prologos executor=prod: RAISED: solve: Depth limit exceeded (100)

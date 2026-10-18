@@ -1,0 +1,10 @@
+ns probes::w2u7
+
+;; W2-10 u7: E1006 (union exhaustion) messages carry "because:" lines computed IN an S0 fire
+;; (typing-propagators.rkt:1379-1421 -> error-explanation.rkt static-reverse-walk over the whole net).
+def a : <Int | String> := true
+def b : <Nat | Bool> := "s"
+spec f <Int | String> -> Int
+defn f [x] 0
+[f true]
+def c : <[List Int] | Bool> := '["a" "b"]

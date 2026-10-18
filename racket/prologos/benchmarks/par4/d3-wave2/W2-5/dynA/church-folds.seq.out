@@ -1,0 +1,10 @@
+RESULT 0.0: church-zero : [Pi [x :0 <[Type 0]>] [x -> x] x -> x] defined.
+RESULT 0.1: ERROR: Type mismatch
+RESULT 0.2: ERROR: Type mismatch
+RESULT 0.3: ERROR: Type mismatch
+RESULT 0.4: ERROR: def requires: (def name <type> body) or (def name : type body)
+RESULT 0.5: ERROR: def requires: (def name <type> body) or (def name : type body)
+RESULT 0.6: ERROR: def requires: (def name <type> body) or (def name : type body)
+RESULT 0.7: ERROR: Unbound variable
+RESULT 0.8: ERROR: Unbound variable
+STATS leg=seq files=1 params=219 rounds=0 wide-rounds(>=8)=0 fires=0 reentrant=0 ms=2.0

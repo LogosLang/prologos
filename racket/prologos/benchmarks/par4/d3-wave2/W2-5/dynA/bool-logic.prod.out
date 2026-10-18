@@ -1,0 +1,18 @@
+RESULT 0.0: not : Bool -> Bool defined.
+RESULT 0.1: and : Bool Bool -> Bool defined.
+RESULT 0.2: or : Bool Bool -> Bool defined.
+RESULT 0.3: ERROR: Type mismatch
+RESULT 0.4: ERROR: Type mismatch
+RESULT 0.5: true : Bool
+RESULT 0.6: false : Bool
+RESULT 0.7: true : Bool
+RESULT 0.8: true : Bool
+RESULT 0.9: ERROR: Unbound variable
+RESULT 0.10: ERROR: Unbound variable
+RESULT 0.11: ERROR: Unbound variable
+RESULT 0.12: ERROR: Unbound variable
+RESULT 0.13: true : Bool
+RESULT 0.14: a : Bool defined.
+RESULT 0.15: b : Bool defined.
+RESULT 0.16: true : Bool
+STATS leg=prod files=1 params=219 rounds=14 wide-rounds(>=8)=4 fires=78 reentrant=0 ms=14.0

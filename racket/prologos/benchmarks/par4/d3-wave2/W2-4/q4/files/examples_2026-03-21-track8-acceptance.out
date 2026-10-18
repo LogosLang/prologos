@@ -1,0 +1,23 @@
+PERF-COUNTERS:{"cell_allocs":727,"constraint_count":0,"constraint_retries":0,"elaborate_steps":66,"inert_dependent_skips":0,"infer_steps":86,"meta_created":15,"meta_solved":11,"prop_allocs":0,"prop_firings":0,"reduce_steps":367,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":35,"zonk_steps":169}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":5,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":2,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":2,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: church-two : [Int -> Int] Int -> Int defined.
+1: church-result : Int defined.
+2: mixed : {:a Int :b String} defined.
+3: 7 : Int
+4: 12 : Int
+5: true : Bool
+6: xs : [prologos::data::list::List Int] defined.
+7: [prologos::data::option::some Int 1] : [prologos::data::option::Option Int]
+8: [prologos::data::option::some [prologos::data::list::List Int] '[2 3]] : [prologos::data::option::Option [prologos::data::list::List Int]]
+9: 3N : Nat
+10: pv : [PVec Int] defined.
+11: 10 : Int
+12: 30 : Int
+13: m : {:age Int :name String} defined.
+14: "Alice" : String
+15: 30 : Int
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":147,"exec_rounds":31,"exec_wide_rounds":4,"file":"2026-03-21-track8-acceptance.prologos","handler_calls":2,"outer_hist":{"0":12},"outer_max":0,"outer_runs":12,"strat":"auto","wall_ms":165.0}

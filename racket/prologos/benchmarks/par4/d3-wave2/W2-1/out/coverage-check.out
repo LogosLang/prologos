@@ -1,0 +1,8 @@
+constraints-adversarial.prologos: result ok | quiescence calls 53, with non-empty worklist 5 (queued 20), of which Tier-1-shaped 0 | executor calls 214 fires 1136
+church-folds.prologos: result ok | quiescence calls 1, with non-empty worklist 0 (queued 0), of which Tier-1-shaped 0 | executor calls 0 fires 0
+dependent-types.prologos: result ok | quiescence calls 1, with non-empty worklist 0 (queued 0), of which Tier-1-shaped 0 | executor calls 0 fires 0
+higher-order.prologos: result ok | quiescence calls 3, with non-empty worklist 0 (queued 0), of which Tier-1-shaped 0 | executor calls 0 fires 0
+pairs-sigma.prologos: result ok | quiescence calls 4, with non-empty worklist 0 (queued 0), of which Tier-1-shaped 0 | executor calls 0 fires 0
+pattern-matching.prologos: result ok | quiescence calls 2, with non-empty worklist 0 (queued 0), of which Tier-1-shaped 0 | executor calls 0 fires 0
+recursive-types.prologos: result ok | quiescence calls 3, with non-empty worklist 0 (queued 0), of which Tier-1-shaped 0 | executor calls 0 fires 0
+solve-scale.prologos: result ok | quiescence calls 1, with non-empty worklist 0 (queued 0), of which Tier-1-shaped 0 | executor calls 6 fires 6

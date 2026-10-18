@@ -1,0 +1,291 @@
+warning: unsafe negation: variable v in a `not` goal at top level is not bound by any positive goal (floundering)
+PERF-COUNTERS:{"cell_allocs":12392,"constraint_count":0,"constraint_retries":0,"elaborate_steps":2034,"inert_dependent_skips":0,"infer_steps":4017,"meta_created":224,"meta_solved":76,"prop_allocs":0,"prop_firings":0,"reduce_steps":896215,"resolution_cycles":0,"solver_backtracks":16,"solver_col_compares":121,"solver_row_scans":139,"solver_unifies":18,"trait_resolve_steps":2,"unify_steps":679,"zonk_steps":3266}
+PHASE-TIMINGS:{"elaborate_ms":3,"parse_ms":6,"qtt_ms":2,"reduce_ms":1404,"trait_resolve_ms":0,"type_check_ms":80,"zonk_ms":3}
+PROVENANCE-STATS:{"atms_hypothesis_count":108,"atms_nogood_count":4,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":56,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: Approx-spacing : [Pi [x :0 <[Type 0]>] [x -> x] x -> x] defined.
+1: spacing : [Pi [x :0 <[Type 0]>] [x -> x] x -> x] defined.
+2: suc-all : [prologos::data::list::List Nat] -> [prologos::data::list::List Nat] defined.
+3: double-all : [prologos::data::list::List Nat] -> [prologos::data::list::List Nat] defined.
+4: evens : [prologos::data::list::List Nat] -> [prologos::data::list::List Nat] defined.
+5: fib : Int -> Int defined.
+6: fib-rec : Int Int Int -> Int defined.
+7: 3 : Int
+8: '[0 1 1 2 3 5 8 13 21 34] : [prologos::data::list::List Int]
+9: square : Int -> Int defined.
+10: 324 : Int
+11: sum-squares : Int Int -> Int defined.
+12: 25 : Int
+13: my-add : Int Int -> Int defined.
+14: 9 : Int
+15: 6N : Nat
+16: twice-double : Int -> Int defined.
+17: 16 : Int
+18: 64 : Int
+19: my-cons : [Pi [x :0 <[Type 0]>] x [prologos::data::list::List x] -> [prologos::data::list::List x]] defined.
+20: ERROR: Type mismatch
+21: '["a" | ["b" "c"]] : [prologos::data::list::List String]
+22: ERROR: Unbound variable
+23: '[1 | [2 3]] : [prologos::data::list::List Int]
+24: [prologos::data::list::List Int]
+25: t : Int -> Bool defined.
+26: one-two defined (arities: 1, 2).
+27: false : Bool
+28: true : Bool
+29: false : Bool
+30: 4.134 : Posit32
+31: 10.57133335 : Posit32
+32: 0 : Int
+33: 3.0f : Float64
+34: xor : _ defined.
+35: 1 : Int
+36: ERROR: Could not infer type
+37: @[1 "a" 3N 3.14 10.4f {:a 1}] : ⟨Int String Nat Posit32 Float64 {:a Int}⟩
+38: 0.0 : Posit32
+39: identity : [Pi [x :0 <[Type 0]>] x -> x] defined.
+40: 3.3 : Posit32
+41: 2 : Rat
+42: '[3 4 5] : [prologos::data::list::List Int]
+43: pow : Int Int -> Int defined.
+44: 32 : Int
+45: my-sub : Int Int -> Int defined.
+46: -0.9f : Float64
+47: 1/10 : Rat
+48: 3.14p : Posit64
+49: {:a 3, :b "hi"} : {:a Int :b String}
+50: @[1 "hello" 3.13 {:a 10}] : ⟨Int String Posit32 {:a Int}⟩
+51: m : {:a {:a1 Int} :b {:b1 Int :b2 Int}} defined.
+52: ERROR: Could not infer type — select: the subject is not a record, so it has no fields to access
+53: m : {:a Int} defined.
+54: 12 : Int
+55: 0.0f : Float64
+56: 0p : Posit64
+57: 0.0 : Posit32
+58: 0f32 : Float32
+59: 3.14160156 : Posit32
+60: vehicle : _ defined.
+61: license : _ defined.
+62: light-vehicle : _ defined.
+63: @[{:lv "golf-cart"} {:lv "bicycle"}] : [PVec {:lv String}]
+64: @[{}] : _
+65: @[{:v "bicycle"} {:v "golf-cart"} {:v "automobile"}] : [PVec {:v String}]
+66: @[] : _
+67: @[{:v "automobile"}] : [PVec {:v String}]
+68: @[{:v "golf-cart"} {:v "bicycle"}] : [PVec {:v String}]
+69: @[{:v "golf-cart"} {:v "bicycle"}] : [PVec {:v String}]
+70: VHS : [Type 0] defined.
+71: movie : examples::foray::VHS defined.
+72: movie2 : {:rewound Bool :title String :year Int} defined.
+73: movie3 : examples::foray::VHS defined.
+74: {:rewound false, :year 1998, :title "Lost in Space"} : examples::foray::VHS
+75: movie4 : {:rewound Bool :title String} defined.
+76: rewound? : examples::foray::VHS -> Bool defined.
+77: true : Bool
+78: false : Bool
+79: ERROR: Could not infer type — argument of type {:rewound Bool :title String} does not match the expected parameter type examples::foray::VHS
+80: movies : _ defined.
+81: ready-to-watch : _ defined.
+82: ready : [PVec {:m String}] defined.
+83: (panic "get: index 0 out of bounds for PVec of length 0").m : String
+84: fruit-color : _ defined.
+85: fruits-colors : [PVec {:color String :fruit String}] defined.
+86: plus-ten : Int -> Int defined.
+87: 13 : Int
+88: {:c "hi", :a 1, :b 2} : {:a Int :b Int :c String}
+89: @[1 "hi" 3.12 7.23p 74.1f] : ⟨Int String Posit32 Posit64 Float64⟩
+90: phi : Posit32 defined.
+91: phi : Posit64 defined.
+92: phi-float : Float64 defined.
+93: 1.618033988749895p : Posit64
+94: 1.618033988749895f : Float64
+95: 0.6180339887498948p : Posit64
+96: ERROR: Could not infer type — hint (issue #70): a generic numeric op (+, -, *, /, <, …) over an unannotated parameter can't infer its numeric type here; annotate the parameter (e.g. [fn [x : Int] …]) or use a concrete-op section (e.g. [int* _ 2] / [int+ _ 1]).
+97: 0.416352201 : Posit32
+98: 0.416352201 : Posit32
+99: 0.416352201 : Posit32
+100: @[{:c "red"} {:c "green"}] : [PVec {:c String}]
+101: apple-color : [PVec {:c String}] defined.
+102: @["red" "green"] : [PVec String]
+103: @["red" "green"] : [PVec String]
+104: @[{:c "yellow"}] : [PVec {:c String}]
+105: @[] : [PVec {:🍎 String}]
+106: blue-or-yellow : _ defined.
+107: fruit-not-of-color : _ defined.
+108: green-fruits : _ defined.
+109: red-fruits : _ defined.
+110: red-or-green-fruits : _ defined.
+111: neither-red-nor-green : _ defined.
+112: @[] : [PVec {:f String}]
+113: @[] : [PVec {:🐠 String}]
+114: @[{:🐦 "blueberry"}] : [PVec {:🐦 String}]
+115: @[{:🤶 "pear"} {:🤶 "apple"} {:🤶 "avocado"}] : [PVec {:🤶 String}]
+116: @[] : [PVec {:🍆 String}]
+117: @[{:🐒 "blueberry"}] : [PVec {:🐒 String}]
+118: red : [PVec {:f String}] defined.
+119: today-ish : String defined.
+120: now : String defined.
+121: env : _ -> String defined.
+122: user : {:address {:street String :zip Int} :age Int :aliases [PVec String] :date String :name String} defined.
+123: @["Ally Ali"] : [PVec String]
+124: 12345 : Int
+125: "today" : String
+126: app-config : {:admins [PVec {:name String :role Keyword}] :database {:pool-size Int :url String} :date String :features [PVec Keyword] :name String :server {:host String :port Int :ssl {:cert-path String :enabled Bool}} :version String} defined.
+127: {:server {:ssl {:cert "/etc/ssl/cert.pem", :ssl true}}} : {:server {:ssl {:cert String :ssl Bool}}}
+128: Server : [Type 0] defined.
+129: Conf : [Type 0] defined.
+130: ERROR: schema examples::foray::Conf: field :servers expected [PVec examples::foray::Server], got [PVec {:host String :port Int}]
+131: values : [PVec [PVec Int]] defined.
+132: ERROR: block keys are written bare — `x{0}`, not `x{:0}`
+133: ERROR: `*` — `*` is postfix; it attaches to the END of a segment
+134: one-minus : Posit64 -> Posit64 defined.
+135: floatOneMinus : Float64 -> Float64 defined.
+136: ERROR: `#:spec` / `#.:spec` was retired — nil-safe field access is spelled `#.spec`
+137: prod-one-minus : [prologos::data::list::List Posit32] -> Posit32 defined.
+138: independent-occurence : [PVec Posit32] -> Posit32 defined.
+139: ERROR: preparse: spec: :over requires a trait variable name
+140: ERROR: Unbound variable
+141: ERROR: Unbound variable
+142: ERROR: preparse: spec: :over requires a trait variable name
+143: ERROR: preparse: trait: trait Spacing: method must be (name : type ...), got :where
+144: ERROR: defn: expected <ReturnType> or : ReturnType, got (#<syntax:/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/lib/examples/foray.prologos:795:2 :spec> #<syntax:/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/lib/examples/foray.prologos:795:9 Probability> #<syntax:/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/lib/examples/foray.prologos:795:21 ->> #<syntax:/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/lib/examples/foray.prologos:795:24 Probability>)
+145: dexterity : Int defined.
+146: blocking-stats : [PVec {:block Posit32 :item String}] defined.
+warning: implicit coercion from Int to Posit32 (loss of exactness)
+147: @[0.22 0.12 0.1] : [PVec Posit32]
+148: 0.382240001 : Posit32
+149: 0.657 : Posit32
+150: 0.487999998 : Posit32
+151: 0.578125 : Posit32
+152: 1.0 : Posit32
+153: 1f32 : Float32
+154: 1p : Posit64
+155: 1.0f : Float64
+156: 1.0 : Posit32
+157: 0.99999994f32 : Float32
+158: 1.0p : Posit64
+159: 1.0f : Float64
+160: ERROR: Type mismatch
+161: true : Bool
+162: 1p : Posit64
+163: ERROR: Could not infer type
+164: ERROR: Could not infer type
+165: ERROR: Could not infer type — hint (issue #70): a generic numeric op (+, -, *, /, <, …) over an unannotated parameter can't infer its numeric type here; annotate the parameter (e.g. [fn [x : Int] …]) or use a concrete-op section (e.g. [int* _ 2] / [int+ _ 1]).
+166: 0.36 : Posit32
+167: ERROR: Unbound variable
+168: @[@[@["Alice"] @["Bob"]] :auth] : ⟨[PVec ⟨String⟩] Keyword⟩
+169: ERROR: Unbound variable
+170: ERROR: Unbound variable
+171: ERROR: Unbound variable
+172: ERROR: Unbound variable
+173: ERROR: Unbound variable
+174: ERROR: Unbound variable
+175: 1.618033988749895p : Posit64
+176: phi : Posit64 defined.
+177: @[:caching :auth] : ⟨Keyword Keyword⟩
+178: {:ssl true, :port 8080} : {:port Int :ssl Bool}
+179: {:ssl true, :pool-size 10, :port 8080, :version "1.0.0"} : {:pool-size Int :port Int :ssl Bool :version String}
+180: {:ssl true, :pool-size 10, :port 8080, :version "1.0.0"} : {:pool-size Int :port Int :ssl Bool :version String}
+181: 15 : Int
+182: 524160 : Int
+183: {:database {:url "localhost/db-path", :pool-size 10}} : {:database {:pool-size Int :url String}}
+184: @[{:url "localhost/db-path", :pool-size 10}] : ⟨{:pool-size Int :url String}⟩
+185: {:url "localhost/db-path"} : {:url String}
+186: users : [PVec [PVec {:age Int :userName String}]] defined.
+187: {:name "John"} : {:name String}
+188: @["Lisa" "John" "Mike"] : [PVec String]
+189: @[@["Lisa"] @["John"] @["Mike"]] : [PVec ⟨String⟩]
+190: ERROR: Unbound variable
+191: @[@["Lisa" 30] @["John" 25] @["Mike" 35]] : [PVec ⟨String Int⟩]
+192: @[{:userName "Lisa"} {:userName "John"} {:userName "Mike"}] : [PVec {:userName String}]
+193: @[{:userName "Lisa", :age 30} {:userName "John", :age 25} {:userName "Mike", :age 35}] : [PVec {:age Int :userName String}]
+194: @["Alice" "Bob"] : [PVec String]
+195: @[{:name "Alice"} {:name "Bob"}] : [PVec {:name String}]
+196: {:admins @[{:name "Alice", :role :super} {:name "Bob", :role :regular}]} : {:admins [PVec {:name String :role Keyword}]}
+197: ERROR: duplicate output key :admins in the select block — distinct output keys are required (strict merge); rename a branch with `^k'`, or group same-head branches into one sub-block (`x{k.{a b}}`)
+198: ERROR: duplicate output key :admins in the select block — distinct output keys are required (strict merge); rename a branch with `^k'`, or group same-head branches into one sub-block (`x{k.{a b}}`)
+199: {:admins @[{:name "Alice", :role :super} {:name "Bob", :role :regular}]} : {:admins [PVec {:name String :role Keyword}]}
+200: @[@[@["Alice"] @["Bob"]] @[@[:super] @[:regular]]] : ⟨[PVec ⟨String⟩] [PVec ⟨Keyword⟩]⟩
+201: {:database {:url "localhost/db-path", :pool-size 10}, :server {:ssl {:cert-path "/etc/ssl/cert.pem", :enabled true}, :host "localhost", :port 8080}} : {:database {:pool-size Int :url String} :server {:host String :port Int :ssl {:cert-path String :enabled Bool}}}
+202: {:database {:pool-size 10}, :server {:ssl {:enabled true}, :port 8080}} : {:database {:pool-size Int} :server {:port Int :ssl {:enabled Bool}}}
+203: {:ssl {:enabled true}, :pool-size 10, :port 8080} : {:pool-size Int :port Int :ssl {:enabled Bool}}
+204: {:ssl true, :pool-size 10, :port 8080} : {:pool-size Int :port Int :ssl Bool}
+205: ERROR: mixed keyed/keyless sorts in the select block (L4) — every branch keeps a key (`k`, `^k'`, `^_`) or drops one (`k^`, `{N}`); one level assembles a Map OR a tuple, never both
+206: {:name @[{:name "Alice"} {:name "Bob"}]} : {:name [PVec {:name String}]}
+207: @[@[@["Alice"] @["Bob"]]] : ⟨[PVec ⟨String⟩]⟩
+208: {:admins @[{:name "Alice"} {:name "Bob"}]} : {:admins [PVec {:name String}]}
+209: resp : {:items [PVec {:author {:handle String :name String} :id Int :kind Keyword :tags [PVec Keyword]}] :links {:next String :prev String} :meta {:page Int :per Int :total Int}} defined.
+210: {:page 2, :total 1203, :nextLink "/v1/feed?page=3"} : {:nextLink String :page Int :total Int}
+211: {:items @[{:author "Ines", :kind :article, :id 101} {:author "Kofi", :kind :video, :id 102}]} : {:items [PVec {:author String :id Int :kind Keyword}]}
+212: {:items @[{:author {:author-name "Ines"}, :id 101} {:author {:author-name "Kofi"}, :id 102}]} : {:items [PVec {:author {:author-name String} :id Int}]}
+213: @[@[:pl :types] @[:systems]] : [PVec [PVec Keyword]]
+214: @[:pl :types :systems] : [PVec Keyword]
+215: green-fruit : [PVec {:f String}] defined.
+216: @["apple" "pear" "avocado"] : [PVec String]
+217: regions : {:ap {:host String :port Int} :eu {:host String :port Int} :us {:host String :port Int}} defined.
+218: {:ap "ap.example.com", :eu "eu.example.com", :us "us.example.com"} : {:ap String :eu String :us String}
+219: Name : [Type 0] defined.
+220: Address : [Type 0] defined.
+221: Date : [Type 0] defined.
+222: business : {:agent-info {:name {:first String :last String} :type String} :business-info {:id String :name String :principle-office {:city String :state String :street String :zip Int} :status Keyword :type String} :filing-history [PVec {:effective-date {:day Int :month Int :year Int} :filing-date {:day Int :month Int :year Int} :filing-number String :filing-type String}]} defined.
+223: FilingHistory : [Type 0] defined.
+224: filing-history : _ defined.
+225: @[{:filing-number "04166121"}] : [PVec {:filing-number String}]
+226: week-passed : Int -> Posit64 defined.
+warning: implicit coercion from Int to Posit64 (loss of exactness)
+227: false : Bool
+228: 2.726899383983573f : Float64
+229: @[{:filing-number "04166120"} {:filing-number "04166121"}] : [PVec {:filing-number String}]
+230: @["04166120" "04166121"] : [PVec String]
+231: biz-info : {:id String :name String :principle-office {:city String :state String :street String :zip Int} :status Keyword :type String} defined.
+232: @[{:effective-date {:month 2, :year 2013, :day 12}, :filing-type "Affidavit of Publication", :filing-date {:month 1, :year 2013, :day 31}, :filing-number "04166120"} {:effective-date {:month 2, :year 2013, :day 12}, :filing-type "Articles of Organization", :filing-date {:month 2, :year 2013, :day 1}, :filing-number "04166121"}] : [PVec {:effective-date {:day Int :month Int :year Int} :filing-date {:day Int :month Int :year Int} :filing-number String :filing-type String}]
+233: ERROR: inside a select block, narrow with `.{…}` — write `business-info.{…}`, not `business-info{…}`
+234: {:business-name "JMZI, L.L.C", :business-type "Domestic Limited Liability Company"} : {:business-name String :business-type String}
+235: admins : [PVec {:name String :role Keyword}] defined.
+236: i : Int defined.
+237: @[{:name "Alice", :role :super} {:name "Bob", :role :regular}] : [PVec {:name String :role Keyword}]
+238: {:url "localhost/db-path", :pool-size 10} : {:pool-size Int :url String}
+239: {:ssl {:cert-path "/etc/ssl/cert.pem", :enabled true}, :host "localhost", :port 8080} : {:host String :port Int :ssl {:cert-path String :enabled Bool}}
+240: "today" : String
+241: "localhost/db-path" : String
+242: 10 : Int
+243: p1 : {:x Posit32 :y Posit32} defined.
+244: p2 : {:x Posit32 :y Posit32} defined.
+245: p3 : {:x Posit32 :y Posit32 :z Int} defined.
+246: p4 : {:x Posit32 :z Int} defined.
+247: Point : [Type 0] defined.
+248: p5 : examples::foray::Point defined.
+249: {:y 9.3, :x 8.2} : examples::foray::Point
+250: point-add : examples::foray::Point examples::foray::Point -> examples::foray::Point defined.
+251: point-add2 : examples::foray::Point examples::foray::Point -> examples::foray::Point defined.
+252: point-identity : examples::foray::Point -> examples::foray::Point defined.
+253: {:y 4.56, :x 3.14} : examples::foray::Point
+254: {:y 9.38, :x 7.39, :z 38} : examples::foray::Point
+255: ERROR: Could not infer type — argument of type {:x Posit32 :z Int} does not match the expected parameter type examples::foray::Point
+256: {:y 7.76999998, :x 4.35} : examples::foray::Point
+257: {:y 13.94, :x 10.53} : examples::foray::Point
+258: bool : _ defined.
+259: @[{:p 1} {:p 0}] : [PVec {:p Int}]
+260: truths : _ defined.
+261: @[{:v1 "golf-cart"} {:v1 "bicycle"}] : [PVec {:v1 String}]
+262: @[{:b1 1, :b2 1}] : [PVec {:b1 Int :b2 Int}]
+263: needs-rewind : [PVec {:title String :year Int}] defined.
+264: @[{:year 2014, :title "Interstellar"} {:year 1994, :title "Pulp Fiction"} {:year 1993, :title "The Nightmare Before Christmas"}] : [PVec {:title String :year Int}]
+265: my-double : Nat -> Nat defined.
+266: 6N : Nat
+267: '[{:x 33N}] : _
+268: nat-add : Nat Nat -> Nat defined.
+269: '[{:y 0N, :x 3N} {:y 1N, :x 2N} {:y 2N, :x 1N} {:y 3N, :x 0N}] : _
+270: '[{:y 4N}] : _
+271: edge : _ defined.
+272: path : _ defined.
+273: @[{:p 1}] : [PVec {:p Int}]
+274: collect-bad : [Int -> Bool] Int Int -> [prologos::data::list::List Int] defined.
+275: p64-ok? : Int -> Bool defined.
+276: bad-p64 : Int -> [prologos::data::list::List Int] defined.
+277: '[18 20 21 22 24 25 26 28 29 30 31 33 35 36 37 39 40 41 42 44 45 47 48 50 52 53 55 56 58 60 61 62 63 65 66 67 69 70 71 72 74 75 77 78 79 80 81 82 84 88 89 90 91 93 94 96 97 99 100 101 104 105 106 109 110 112 113 116 117 119 120 121 122 123 124 126 130 132 134 138 139 140 142 143 144 148 150 151 153 154 155 156 157 158 160 162 163 164 165 168 169 175 176 177 178 180 182 183 186 188 191 192 194 195 197 198 199 200] : [prologos::data::list::List Int]
+278: i2f : [Pi [x :0 <[Type 0]>] Int -> Float64] defined.
+279: f64-ok? : Int -> Bool defined.
+280: '[49 98 103 107 161 187 196 197 206 214 237 239 249 253 322 347] : [prologos::data::list::List Int]
+
+--- 33 errors ---
+W24 {"exec":"prod","exec_fires":1512,"exec_rounds":313,"exec_wide_rounds":50,"file":"foray.prologos","forks":25,"routes":{"atms":16,"tier1":12},"strat":"atms","wall_ms":1740.0}

@@ -1,0 +1,6 @@
+Suite lock: exclusive on /Users/avanti/Library/Caches/prologos/suite.lock
+⏳ suite lock busy — waiting 0s for exclusive access (/Users/avanti/Library/Caches/prologos/suite.lock)
+     pid 88439  exclusive  holding  since 10:00:33 (3s)  /Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-2/  hold-suite-lock bash /Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-2/round.sh 0 /Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-2/t2
+prod: wall-ms min 58 med 59 p90 62 max 62 CV 0.027 | wide-round fire-ms min 15.2 med 15.5 max 15.9 CV 0.014
+seq: wall-ms min 37 med 38 p90 41 max 42 CV 0.038 | wide-round fire-ms min 2.2 med 2.3 max 2.5 CV 0.038
+raw: ((prod 62 15.9) (seq 38 2.4) (prod 59 15.4) (seq 37 2.3) (prod 59 15.2) (seq 38 2.2) (prod 61 15.2) (seq 40 2.4) (prod 59 15.3) (seq 38 2.3) (prod 58 15.6) (seq 37 2.2) (prod 58 15.5) (seq 38 2.2) (prod 59 15.6) (seq 38 2.3) (prod 58 15.4) (seq 39 2.3) (prod 59 15.4) (seq 38 2.2) (prod 59 15.8) (seq 39 2.4) (prod 59 15.7) (seq 37 2.2) (prod 58 15.3) (seq 38 2.3) (prod 62 15.6) (seq 42 2.5) (prod 62 15.7) (seq 41 2.4))

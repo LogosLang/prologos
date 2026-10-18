@@ -1,0 +1,27 @@
+RESULT 0: '[{:b false}] : _
+RESULT 1: '[{:b true}] : _
+RESULT 2: '[{:b false}] : _
+RESULT 3: '[{:y 0N, :x 0N}] : _
+RESULT 4: '[{:y 0N, :x 3N} {:y 1N, :x 2N} {:y 2N, :x 1N} {:y 3N, :x 0N}] : _
+RESULT 5: '[{:x 23N}] : _
+RESULT 6: '[{:y 0N, :x 5N} {:y 1N, :x 4N} {:y 2N, :x 3N} {:y 3N, :x 2N} {:y 4N, :x 1N} {:y 5N, :x 0N}] : _
+RESULT 7: '[{:y 0N, :x 4N} {:y 1N, :x 3N} {:y 2N, :x 2N} {:y 3N, :x 1N} {:y 4N, :x 0N}] : _
+RESULT 8: '[{:y 5N}] : _
+RESULT 9: '[{:a true, :b true}] : _
+RESULT 10: '[{:a false, :b false}] : _
+RESULT 11: '[{:a true, :b false} {:a false, :b true}] : _
+RESULT 12: nil : _
+RESULT 13: @[{:x 5}] : _
+RESULT 14: positive? : Nat -> Bool defined.
+RESULT 15: '[{:n [suc ?suc0_1923]}] : _
+RESULT 16: '[{:n 0N}] : _
+RESULT 17: my-double : Nat -> Nat defined.
+RESULT 18: '[{:x 3N}] : _
+RESULT 19: '[{:y 0N, :x 3N}] : _
+RESULT 20: safe-min : Nat Nat -> Nat defined.
+RESULT 21: apply-op : [Nat Nat -> Nat] Nat Nat -> Nat defined.
+RESULT 22: 7N : Nat
+RESULT 23: '[{:y 0N, :x 7N} {:y 1N, :x 6N} {:y 2N, :x 5N} {:y 3N, :x 4N} {:y 4N, :x 3N} {:y 5N, :x 2N} {:y 6N, :x 1N} {:y 7N, :x 0N}] : _
+RESULT 24: halves : Nat -> Nat defined.
+RESULT 25: '[{:x 5N}] : _
+STATS2 leg=persist rounds=3 fires=7 control-divergent=0 thread-divergent=0 reentrant=0

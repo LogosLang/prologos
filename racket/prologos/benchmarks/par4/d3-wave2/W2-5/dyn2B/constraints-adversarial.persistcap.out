@@ -1,0 +1,71 @@
+RESULT 0: id : [Pi [x :0 <[Type 0]>] x -> x] defined.
+RESULT 1: const : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] x y -> x]] defined.
+RESULT 2: flip : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [x y -> z] y x -> z]]] defined.
+RESULT 3: compose : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [y -> z] [x -> y] x -> z]]] defined.
+RESULT 4: on : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [y y -> z] [x -> y] x x -> z]]] defined.
+RESULT 5: apply : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [x -> y] x -> y]] defined.
+RESULT 6: twice : [Pi [x :0 <[Type 0]>] [x -> x] x -> x] defined.
+RESULT 7: thrice : [Pi [x :0 <[Type 0]>] [x -> x] x -> x] defined.
+RESULT 8: a1 : Int defined.
+RESULT 9: a2 : Int defined.
+RESULT 10: a3 : Int defined.
+RESULT 11: a4 : Int defined.
+RESULT 12: a5 : Int defined.
+RESULT 13: a6 : Int defined.
+RESULT 14: a7 : Int defined.
+RESULT 15: a8 : Int defined.
+RESULT 16: a9 : Int defined.
+RESULT 17: a10 : Int defined.
+RESULT 18: deep1 : Int defined.
+RESULT 19: deep2 : Int defined.
+RESULT 20: deep3 : Int defined.
+RESULT 21: d1 : Int defined.
+RESULT 22: d2 : Bool defined.
+RESULT 23: d3 : String defined.
+RESULT 24: d4 : Int defined.
+RESULT 25: d5 : String defined.
+RESULT 26: ERROR: Could not infer type
+RESULT 27: ERROR: Could not infer type
+RESULT 28: d8 : Int defined.
+RESULT 29: ERROR: Could not infer type
+RESULT 30: d10 : Int defined.
+RESULT 31: e1 : Bool defined.
+RESULT 32: e2 : Bool defined.
+RESULT 33: e3 : Bool defined.
+RESULT 34: p1 : Int defined.
+RESULT 35: p2 : Int defined.
+RESULT 36: 2 : Int
+RESULT 37: 4 : Int
+RESULT 38: 6 : Int
+RESULT 39: 8 : Int
+RESULT 40: 10 : Int
+RESULT 41: 12 : Int
+RESULT 42: 14 : Int
+RESULT 43: 16 : Int
+RESULT 44: 18 : Int
+RESULT 45: 20 : Int
+RESULT 46: 1 : Int
+RESULT 47: 4 : Int
+RESULT 48: 9 : Int
+RESULT 49: 16 : Int
+RESULT 50: 25 : Int
+RESULT 51: 1 : Int
+RESULT 52: 2 : Int
+RESULT 53: 3 : Int
+RESULT 54: true : Bool
+RESULT 55: false : Bool
+RESULT 56: 1 : Int
+RESULT 57: true : Bool
+RESULT 58: "a" : String
+RESULT 59: [fn [x <2>] [fn [y <1>] x]] : ?bvar1 ?bvar1 -> ?bvar3
+RESULT 60: [fn [x <false>] [fn [y <true>] x]] : ?bvar1 ?bvar1 -> ?bvar3
+RESULT 61: [fn [x <[fn [x <1>] x]>] x] : ?bvar0 -> ?bvar1
+RESULT 62: [fn [x <[fn [x <true>] x]>] x] : ?bvar0 -> ?bvar1
+RESULT 63: 1 : Int
+RESULT 64: ERROR: Could not infer type
+RESULT 65: [fn [x <[fn [x <1>] x]>] [fn [y <[fn [y <2>] y]>] x]] : ?bvar1 ?bvar1 -> ?bvar3
+RESULT 66: mix1 : Int defined.
+RESULT 67: mix2 : Int defined.
+RESULT 68: mix3 : Int defined.
+STATS2 leg=persistcap rounds=212 fires=1142 control-divergent=0 thread-divergent=4 reentrant=0
+DIVFN ...ing-propagators.rkt:861:2 count=4 example: first-diff path=("struct:fire-result.1" car cdr #(struct:expr-meta meta2333 #f) :constraints) main=#(struct:constraint-set #<set: #(struct:constraint-candidate Eq (Bool) Bool--Eq--dict) #(struct:constraint-candidate Eq (Posit16) Posit16--Eq--dict) #(struct:co… executor=constraint-top

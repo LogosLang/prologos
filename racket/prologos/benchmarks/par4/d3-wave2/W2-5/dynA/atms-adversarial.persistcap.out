@@ -1,0 +1,203 @@
+RESULT 0.0: known-fact : _ defined.
+RESULT 0.1: @[{:x 42}] : [PVec {:x Int}]
+RESULT 0.2: double : _ defined.
+RESULT 0.3: @[{:result 42}] : [PVec {:result Int}]
+RESULT 0.4: triple : _ defined.
+RESULT 0.5: six-times : _ defined.
+RESULT 0.6: @[{:result 42}] : [PVec {:result Int}]
+RESULT 0.7: @[{}] : _
+RESULT 0.8: @[{}] : _
+RESULT 0.9: @[{:r1 2}] : [PVec {:r1 Int}]
+RESULT 0.10: @[{:r2 4}] : [PVec {:r2 Int}]
+RESULT 0.11: @[{:r3 6}] : [PVec {:r3 Int}]
+RESULT 0.12: @[{:r4 8}] : [PVec {:r4 Int}]
+RESULT 0.13: @[{:r5 10}] : [PVec {:r5 Int}]
+RESULT 0.14: @[{:r6 12}] : [PVec {:r6 Int}]
+RESULT 0.15: @[{:r7 14}] : [PVec {:r7 Int}]
+RESULT 0.16: @[{:r8 16}] : [PVec {:r8 Int}]
+RESULT 0.17: @[{:r9 18}] : [PVec {:r9 Int}]
+RESULT 0.18: @[{:r10 20}] : [PVec {:r10 Int}]
+RESULT 0.19: binary-choice : _ defined.
+RESULT 0.20: @[{:x "left", :y 1} {:x "right", :y 2}] : [PVec {:x String :y Int}]
+RESULT 0.21: binary-shared : _ defined.
+RESULT 0.22: @[{:x 10, :r 11} {:x 20, :r 22}] : [PVec {:r Int :x Int}]
+RESULT 0.23: binary-deep : _ defined.
+RESULT 0.24: @[{:a 1, :b 11, :c 22} {:a 2, :b 22, :c 66}] : [PVec {:a Int :b Int :c Int}]
+RESULT 0.25: color-code : _ defined.
+RESULT 0.26: @[{:code 1}] : [PVec {:code Int}]
+RESULT 0.27: @[{:code 10}] : [PVec {:code Int}]
+RESULT 0.28: @[{:name "red", :code 1} {:name "green", :code 2} {:name "blue", :code 3} {:name "yellow", :code 4} {:name "cyan", :code 5} {:name "magenta", :code 6} {:name "white", :code 7} {:name "black", :code 8} {:name "orange", :code 9} {:name "purple", :code 10}] : [PVec {:code Int :name String}]
+RESULT 0.29: @[{:name "cyan"}] : [PVec {:name String}]
+RESULT 0.30: level1 : _ defined.
+RESULT 0.31: level2 : _ defined.
+RESULT 0.32: level3 : _ defined.
+RESULT 0.33: @[{:x "a", :y "p", :z 1} {:x "b", :y "p", :z 1} {:x "a", :y "q", :z 1} {:x "b", :y "q", :z 1} {:x "a", :y "p", :z 2} {:x "b", :y "p", :z 2} {:x "a", :y "q", :z 2} {:x "b", :y "q", :z 2}] : [PVec {:x String :y String :z Int}]
+RESULT 0.34: level4 : _ defined.
+RESULT 0.35: @[{:x "a", :y "p", :z 1, :w "i"} {:x "b", :y "p", :z 1, :w "i"} {:x "a", :y "q", :z 1, :w "i"} {:x "b", :y "q", :z 1, :w "i"} {:x "a", :y "p", :z 2, :w "i"} {:x "b", :y "p", :z 2, :w "i"} {:x "a", :y "q", :z 2, :w "i"} {:x "b", :y "q", :z 2, :w "i"} {:x "a", :y "p", :z 1, :w "ii"} {:x "b", :y "p", :z 1, :w "ii"} {:x "a", :y "q", :z 1, :w "ii"} {:x "b", :y "q", :z 1, :w "ii"} {:x "a", :y "p", :z 2, :w "ii"} {:x "b", :y "p", :z 2, :w "ii"} {:x "a", :y "q", :z 2, :w "ii"} {:x "b", :y "q", :z 2, :w "ii"}] : [PVec {:w String :x String :y String :z Int}]
+RESULT 0.36: contradicting : _ defined.
+RESULT 0.37: @[{:x 1, :y "one"} {:x 2, :y unknown} {:x 3, :y "three"}] : [PVec {:x Int :y String}]
+RESULT 0.38: many-fail : _ defined.
+RESULT 0.39: @[{:x 1} {:x unknown} {:x 3} {:x unknown} {:x 5} {:x unknown} {:x 7}] : [PVec {:x Int}]
+RESULT 0.40: expensive-fact : _ defined.
+RESULT 0.41: @[{:r1 25}] : [PVec {:r1 Int}]
+RESULT 0.42: @[{:r2 25}] : [PVec {:r2 Int}]
+RESULT 0.43: @[{:r3 25}] : [PVec {:r3 Int}]
+RESULT 0.44: @[{:r4 49}] : [PVec {:r4 Int}]
+RESULT 0.45: @[{:r5 49}] : [PVec {:r5 Int}]
+RESULT 0.46: @[{:r6 49}] : [PVec {:r6 Int}]
+RESULT 0.47: @[{:rep1 25}] : [PVec {:rep1 Int}]
+RESULT 0.48: @[{:rep2 25}] : [PVec {:rep2 Int}]
+RESULT 0.49: @[{:rep3 25}] : [PVec {:rep3 Int}]
+RESULT 0.50: @[{:rep4 25}] : [PVec {:rep4 Int}]
+RESULT 0.51: @[{:rep5 25}] : [PVec {:rep5 Int}]
+RESULT 0.52: @[{:rep6 25}] : [PVec {:rep6 Int}]
+RESULT 0.53: @[{:rep7 25}] : [PVec {:rep7 Int}]
+RESULT 0.54: @[{:rep8 25}] : [PVec {:rep8 Int}]
+RESULT 0.55: @[{:rep9 25}] : [PVec {:rep9 Int}]
+RESULT 0.56: @[{:rep10 25}] : [PVec {:rep10 Int}]
+RESULT 0.57: @[{:v1 1}] : _
+RESULT 0.58: @[{:v2 2}] : _
+RESULT 0.59: @[{:v3 3}] : _
+RESULT 0.60: @[{:v4 4}] : _
+RESULT 0.61: @[{:v5 5}] : _
+RESULT 0.62: @[{:v6 6}] : _
+RESULT 0.63: @[{:v7 7}] : _
+RESULT 0.64: @[{:v8 8}] : _
+RESULT 0.65: @[{:v9 9}] : _
+RESULT 0.66: @[{:v10 10}] : _
+RESULT 0.67: @[{:v11 11}] : _
+RESULT 0.68: @[{:v12 12}] : _
+RESULT 0.69: @[{:v13 13}] : _
+RESULT 0.70: @[{:v14 14}] : _
+RESULT 0.71: @[{:v15 15}] : _
+RESULT 0.72: @[{:v16 16}] : _
+RESULT 0.73: @[{:v17 17}] : _
+RESULT 0.74: @[{:v18 18}] : _
+RESULT 0.75: @[{:v19 19}] : _
+RESULT 0.76: @[{:v20 20}] : _
+RESULT 0.77: @[{:v21 21}] : _
+RESULT 0.78: @[{:v22 22}] : _
+RESULT 0.79: @[{:v23 23}] : _
+RESULT 0.80: @[{:v24 24}] : _
+RESULT 0.81: @[{:v25 25}] : _
+RESULT 0.82: @[{:v26 26}] : _
+RESULT 0.83: @[{:v27 27}] : _
+RESULT 0.84: @[{:v28 28}] : _
+RESULT 0.85: @[{:v29 29}] : _
+RESULT 0.86: @[{:v30 30}] : _
+RESULT 0.87: @[{:v31 31}] : _
+RESULT 0.88: @[{:v32 32}] : _
+RESULT 0.89: @[{:v33 33}] : _
+RESULT 0.90: @[{:v34 34}] : _
+RESULT 0.91: @[{:v35 35}] : _
+RESULT 0.92: @[{:v36 36}] : _
+RESULT 0.93: @[{:v37 37}] : _
+RESULT 0.94: @[{:v38 38}] : _
+RESULT 0.95: @[{:v39 39}] : _
+RESULT 0.96: @[{:v40 40}] : _
+RESULT 0.97: @[{:v41 41}] : _
+RESULT 0.98: @[{:v42 42}] : _
+RESULT 0.99: @[{:v43 43}] : _
+RESULT 0.100: @[{:v44 44}] : _
+RESULT 0.101: @[{:v45 45}] : _
+RESULT 0.102: @[{:v46 46}] : _
+RESULT 0.103: @[{:v47 47}] : _
+RESULT 0.104: @[{:v48 48}] : _
+RESULT 0.105: @[{:v49 49}] : _
+RESULT 0.106: @[{:v50 50}] : _
+RESULT 0.107: @[{:x 42, :y 42, :z 42}] : [PVec {:x Int :y Int :z Int}]
+RESULT 0.108: @[{:a [pair ?b ?c], :b b_g2405, :c [some 99], :d 99}] : [PVec {:a _ :b _ :c _ :d Int}]
+RESULT 0.109: @[] : [PVec {:p _ :q _ :r _ :s _}]
+RESULT 0.110: @[{:a 100, :b 100, :c 100, :d 100, :e 100, :f 100}] : [PVec {:a Int :b Int :c Int :d Int :e Int :f Int}]
+RESULT 0.111: choose-sign : _ defined.
+RESULT 0.112: @[{:n 7, :doubled 14, :sign "positive"} {:n 7, :doubled 14, :sign "negative"}] : [PVec {:doubled Int :n Int :sign String}]
+RESULT 0.113: choose-color : _ defined.
+RESULT 0.114: @[{:a 10, :b 20, :c c_g2446, :sum 30, :color "red", :label "done"} {:a 10, :b 20, :c c_g2446, :sum 30, :color "blue", :label "done"} {:a 10, :b 20, :c c_g2446, :sum 30, :color "green", :label "done"}] : [PVec {:a Int :b Int :c _ :color String :label String :sum Int}]
+RESULT 0.115: @[{:x [pair ?a ?b]}] : [PVec {:x _}]
+RESULT 0.116: @[{:result [pair [pair ?a ?b] [pair ?c ?d]]}] : [PVec {:result _}]
+RESULT 0.117: @[{:v1 42, :v2 42, :v3 42, :v4 42, :v5 42, :v6 42, :v7 42, :v8 42, :v9 42, :v10 42}] : [PVec {:v1 Int :v10 Int :v2 Int :v3 Int :v4 Int :v5 Int :v6 Int :v7 Int :v8 Int :v9 Int}]
+RESULT 0.118: @[{:x [some [some [some [some 42]]]], :y [some [some [some 42]]], :z [some [some 42]], :w [some 42], :v 42}] : [PVec {:v Int :w _ :x _ :y _ :z _}]
+RESULT 0.119: has-value : _ defined.
+RESULT 0.120: @[{:result "not-found"}] : [PVec {:result String}]
+RESULT 0.121: candidate : _ defined.
+RESULT 0.122: @[{:x 6, :label "passed"} {:x 4, :label "passed"} {:x 2, :label "passed"} {:x 8, :label "passed"}] : [PVec {:label String :x Int}]
+RESULT 0.123: mixed-candidate : _ defined.
+RESULT 0.124: @[{:x 2} {:x 4}] : [PVec {:x Int}]
+STATS leg=persistcap files=1 params=219 rounds=111 wide-rounds(>=8)=2 fires=134 reentrant=0 ms=1315.0
+PARAM current-attribute-map-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 49) executor=#f
+PARAM current-bundle-registry stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#hasheq((BoundedLattice . #(struct:bundle-entry BoundedLattice (A) ((L… executor=#hasheq()
+PARAM current-bundle-registry-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 32) executor=#f
+PARAM current-capability-constraint-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 24) executor=#f
+PARAM current-capability-registry stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#hasheq((AppendCap . #(struct:capability-meta prologos::core::capabili… executor=#hasheq()
+PARAM current-capability-registry-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 25) executor=#f
+PARAM current-capability-warnings-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 46) executor=#f
+PARAM current-coercion-registry-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 24) executor=#f
+PARAM current-coercion-warnings-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 44) executor=#f
+PARAM current-command-atms stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#&#(struct:solver-state #(struct:solver-context #(struct:cell-id 20) #… executor=#f
+PARAM current-constraint-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 20) executor=#f
+PARAM current-constraint-status-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 28) executor=#f
+PARAM current-context-assumptions stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#&() executor=#f
+PARAM current-ctor-registry stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#hasheq((check-failed . #(struct:ctor-meta Reason () (String) (#f) 1))… executor=#hasheq((false . #(struct:ctor-meta Bool () () () 1)) (suc . #(struct:…
+PARAM current-ctor-registry-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 21) executor=#f
+PARAM current-defn-param-names stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#hasheq((* . (A $Mul-A x y)) (+ . (A $Add-A x y)) (- . (A $Sub-A x y))… executor=#hasheq()
+PARAM current-deprecation-warnings-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 45) executor=#f
+PARAM current-error-descriptor-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 30) executor=#f
+PARAM current-file-module-network-ref stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:module-network-ref #(struct:prop-network #(struct:prop-net-ho… executor=#(struct:module-network-ref #(struct:prop-network #(struct:prop-net-ho…
+PARAM current-form-cell-map stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#hasheq((0 . #(struct:cell-id 37)) (30 . #(struct:cell-id 38)) (33 . #… executor=#hasheq()
+PARAM current-functor-store stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#hasheq((AppResult . #(struct:functor-entry AppResult ((A Type 0)) (Ei… executor=#hasheq()
+PARAM current-functor-store-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 27) executor=#f
+PARAM current-hasmethod-cell-map-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 29) executor=#f
+PARAM current-hasmethod-constraint-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 23) executor=#f
+PARAM current-hasmethod-wakeup-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 27) executor=#f
+PARAM current-impl-registry stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#hasheq((Bool--Eq . #(struct:impl-entry Eq (Bool) Bool--Eq--dict)) (Bo… executor=#hasheq()
+PARAM current-impl-registry-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 30) executor=#f
+PARAM current-level-meta-universe-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 34) executor=#f
+PARAM current-macro-registry-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 43) executor=#f
+PARAM current-module-registry stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#hasheq((prologos::core . #(struct:module-info prologos::core (id cons… executor=#hasheq()
+PARAM current-module-registry-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 37) executor=#f
+PARAM current-mult-meta-universe-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 33) executor=#f
+PARAM current-narrow-constraints-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 47) executor=#f
+PARAM current-narrow-var-constraints-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 48) executor=#f
+PARAM current-ns-context stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:ns-context benchmarks::comparative::atms-adversarial #hasheq(… executor=#f
+PARAM current-ns-context-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 38) executor=#f
+PARAM current-param-impl-registry stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#hasheq((HasTop . (#(struct:param-impl-entry HasTop ((FlatVal A)) (A) … executor=#hasheq()
+PARAM current-param-impl-registry-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 31) executor=#f
+PARAM current-persistent-registry-net-box stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#&#(struct:prop-network #(struct:prop-net-hot ()) #(struct:prop-net-wa… executor=#f
+PARAM current-preparse-registry stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#hasheq(($compose . expand-compose-sexp) ($list-literal . expand-list-… executor=#hasheq(($compose . expand-compose-sexp) ($list-literal . expand-list-…
+PARAM current-preparse-registry-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 36) executor=#f
+PARAM current-process-registry-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 40) executor=#f
+PARAM current-prop-meta-info-box stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#&#(struct:champ-root #(struct:champ-node 0 0 #() #f) 0) executor=#f
+PARAM current-propagated-specs stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#<seteq: compare take-while PVec--Buildable--dict all? interval-inters… executor=#<seteq:>
+PARAM current-propagated-specs-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 38) executor=#f
+PARAM current-property-store stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#hasheq((commutative-add-laws . #(struct:property-entry commutative-ad… executor=#hasheq()
+PARAM current-property-store-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 26) executor=#f
+PARAM current-relation-store stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#hasheq((known-fact . #(struct:relation-info known-fact 1 (#(struct:va… executor=#hasheq()
+PARAM current-relation-store-version stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=1 executor=0
+PARAM current-schema-registry-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 20) executor=#f
+PARAM current-selection-registry-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 34) executor=#f
+PARAM current-session-meta-universe-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 35) executor=#f
+PARAM current-session-registry-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 35) executor=#f
+PARAM current-spec-store stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#hasheq((* . #(struct:spec-entry (((Mul A) -> A A -> A)) #f #f #(struc… executor=#hasheq()
+PARAM current-spec-store-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 37) executor=#f
+PARAM current-specialization-registry stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#hash(((new-lattice-cell . Interval) . #(struct:specialization-entry n… executor=#hash()
+PARAM current-specialization-registry-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 33) executor=#f
+PARAM current-speculation-failures stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#&() executor=#f
+PARAM current-strategy-registry-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 39) executor=#f
+PARAM current-subtype-registry stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#hash(((prologos::core::capabilities::StatCap . IOCap) . #t) ((StdioCa… executor=#hash(((NonZeroRat . Rat) . #t) ((PosRat . NonZeroRat) . #t) ((NegInt …
+PARAM current-subtype-registry-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 23) executor=#f
+PARAM current-trait-cell-map-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 22) executor=#f
+PARAM current-trait-constraint-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 21) executor=#f
+PARAM current-trait-laws stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#hasheq((Abs . ((- :name "non-negative" (:forall ($brace-params x : A)… executor=#hasheq()
+PARAM current-trait-laws-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 29) executor=#f
+PARAM current-trait-registry stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#hasheq((Abs . #(struct:trait-meta Abs ((A Type 0)) (#(struct:trait-me… executor=#hasheq()
+PARAM current-trait-registry-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 28) executor=#f
+PARAM current-trait-wakeup-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 26) executor=#f
+PARAM current-tycon-arity-extension stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#hasheq((Abs . 1) (Add . 1) (AdditiveIdentity . 1) (Buildable . 1) (Di… executor=#hasheq()
+PARAM current-type-meta stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#hasheq((Bool . (true false)) (Datum . (datum-sym datum-kw datum-nat d… executor=#hasheq((Bool . (true false)) (Nat . (zero suc)) (Unit . (unit)))
+PARAM current-type-meta-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 22) executor=#f
+PARAM current-type-meta-universe-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 32) executor=#f
+PARAM current-unsolved-metas-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 31) executor=#f
+PARAM current-user-operators-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 42) executor=#f
+PARAM current-user-precedence-groups-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 41) executor=#f
+PARAM current-wakeup-registry-cell-id stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:cell-id 25) executor=#f
+PARAM current-worldview-hasse-registry-handle stale-eq=111 stale-equal=111 assigned-in-fire=0 submitter=#(struct:hasse-registry-handle #(struct:cell-id 36) worldview #<proced… executor=#f

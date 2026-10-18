@@ -1,0 +1,155 @@
+PERF-COUNTERS:{"cell_allocs":6740,"constraint_count":0,"constraint_retries":0,"elaborate_steps":885,"inert_dependent_skips":0,"infer_steps":2077,"meta_created":193,"meta_solved":126,"prop_allocs":0,"prop_firings":0,"reduce_steps":3879,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":10,"unify_steps":538,"zonk_steps":1580}
+PHASE-TIMINGS:{"elaborate_ms":4,"parse_ms":4,"qtt_ms":1,"reduce_ms":5,"trait_resolve_ms":0,"type_check_ms":66,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":40,"atms_nogood_count":3,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":18,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: ERROR: Unbound variable
+1: Describable-describe : [Pi [x :0 <[Type 0]>] [x -> String] x -> String] defined.
+2: describe : [Pi [x :0 <[Type 0]>] [x -> String] x -> String] defined.
+3: x : Int defined.
+4: y : Int defined.
+5: z : Int defined.
+6: n : Nat defined.
+7: m : Nat defined.
+8: b : Bool defined.
+9: c : Bool defined.
+10: greeting : String defined.
+11: ERROR: Unbound variable
+12: xs : [prologos::data::list::List Int] defined.
+13: ERROR: Could not infer type
+14: ERROR: Unbound variable
+15: opt : [prologos::data::option::Option Int] defined.
+16: nothing : [prologos::data::option::Option _] defined.
+17: my-id : [Pi [x :0 <[Type 0]>] x -> x] defined.
+18: 42 : Int
+19: "hello" : String
+20: true : Bool
+21: my-compose : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [y -> z] [x -> y] x -> z]]] defined.
+22: inc : Int -> Int defined.
+23: dbl : Int -> Int defined.
+24: 12 : Int
+25: my-flip : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [x y -> z] y x -> z]]] defined.
+26: -7 : Int
+27: ERROR: Type mismatch
+28: a : Int defined.
+29: b : { | _} defined.
+30: c : Int defined.
+31: true : Bool
+32: true : Bool
+33: true : Bool
+34: prologos::data::ordering::gt-ord : prologos::data::ordering::Ordering
+35: 8 : Int
+36: ERROR: Could not infer type
+37: ERROR: Could not infer type
+38: ERROR: Could not infer type
+39: is-zero : Nat -> Bool defined.
+40: true : Bool
+41: false : Bool
+42: ERROR: No instance of Describable for Nat
+  Available instances: Describable Bool, Describable Int
+  Hint: Define 'impl Describable Nat' with method 'describe'.
+43: ERROR: No instance of Describable for Nat
+  Available instances: Describable Bool, Describable Int
+  Hint: Define 'impl Describable Nat' with method 'describe'.
+44: my-head : [prologos::data::list::List _] -> [prologos::data::option::Option _] defined.
+45: [prologos::data::option::some ?meta2415 1] : [prologos::data::option::Option _]
+46: [prologos::data::option::none ?meta2415] : [prologos::data::option::Option _]
+47: sum-list : [prologos::data::list::List Int] -> Int defined.
+48: 15 : Int
+49: ERROR: Type mismatch
+50: ERROR: Could not infer type
+51: ERROR: Type level must be a natural number, got l
+52: ERROR: Could not infer type
+53: ERROR: Unbound variable
+54: ERROR: Unbound variable
+55: person : {:active Bool :age Int :name String} defined.
+56: "Alice" : String
+57: 30 : Int
+58: company : {:ceo {:name String :title String} :name String} defined.
+59: "Bob" : String
+60: ERROR: Unbound variable
+61: ERROR: Could not infer type
+62: ERROR: Could not infer type
+63: ERROR: Unbound variable
+64: ERROR: Unbound variable
+65: Int--Describable--describe : Int -> String defined.
+66: Int--Describable--dict : Int -> String defined.
+67: Bool--Describable--describe : Bool -> String defined.
+68: Bool--Describable--dict : Bool -> String defined.
+69: "an integer" : String
+70: "truth" : String
+71: n1 : Nat defined.
+72: n2 : Nat defined.
+73: ERROR: Could not infer type
+74: ERROR: Unbound variable
+75: ERROR: Unbound variable
+76: [prologos::data::option::some Int 42] : [prologos::data::option::Option Int]
+77: 11 : Int
+78: ERROR: Unbound variable
+79: ERROR: Unbound variable
+80: ERROR: Unbound variable
+81: "foobar" : String
+82: ERROR: Unbound variable
+83: 65 : Int
+84: i1 : Int defined.
+85: i2 : Int defined.
+86: i3 : Int defined.
+87: g1 : Int defined.
+88: g2 : { | _} defined.
+89: p1 : Posit32 defined.
+90: p2 : Posit32 defined.
+91: 1 : Int
+92: "equal" : String
+93: ERROR: Could not infer type
+94: let-x : Int defined.
+95: let-y : Int defined.
+96: 30 : Int
+97: do-x : Int defined.
+98: do-y : Int defined.
+99: 43 : Int
+100: 8 : Int
+101: 55 : Int
+102: ERROR: Unbound variable
+103: lazy-nats : [prologos::data::lseq::LSeq Int] defined.
+104: ERROR: Could not infer type
+105: ERROR: Unbound variable
+106: doubled : [prologos::data::lseq::LSeq Int] defined.
+107: ERROR: Could not infer type
+108: ERROR: Unbound variable
+109: ERROR: Unbound variable
+110: just-int : Int defined.
+111: ERROR: Could not infer type
+112: ERROR: Unbound variable
+113: ERROR: Could not infer type
+114: ERROR: Unbound variable
+115: '[2 4 6] : [prologos::data::list::List Int]
+116: nums : [prologos::data::list::List Int] defined.
+117: [prologos::data::option::some Int 10] : [prologos::data::option::Option Int]
+118: [prologos::data::option::some [prologos::data::list::List Int] '[20 30 40 50]] : [prologos::data::option::Option [prologos::data::list::List Int]]
+119: 5N : Nat
+120: '[50 40 30 20 10] : [prologos::data::list::List Int]
+121: '[1 2 3 4] : [prologos::data::list::List Int]
+122: '[30 40 50] : [prologos::data::list::List Int]
+123: ERROR: Could not infer type
+124: ERROR: Could not infer type
+125: my-net : PropNetwork defined.
+126: false : Bool
+127: ERROR: Unbound variable
+128: ERROR: solve: Unknown relation: type-of
+129: ERROR: solve: Unknown relation: type-of
+130: ERROR: solve: Unknown relation: type-of
+131: ERROR: solve: Unknown relation: type-of
+132: ERROR: solve: Unknown relation: type-of
+133: alice : {:name String :score Int} defined.
+134: bob : {:name String :score Int} defined.
+135: "Alice" : String
+136: 200 : Int
+137: u : Int | String defined.
+138: v : Int | String defined.
+139: just-u : Int | String defined.
+140: ERROR: Type mismatch
+141: ERROR: Unbound variable
+142: comp-data : {:x Int :y Int :z Int} defined.
+143: 10 : Int
+
+--- 49 errors ---
+W24 {"exec":"prod","exec_fires":1240,"exec_rounds":238,"exec_wide_rounds":35,"file":"2026-03-25-track10b.prologos","perf_fields_worker":"(reduce-steps)","perf_incs_in_exec_main":128,"perf_incs_in_exec_worker":17,"race_rounds_any_worker_set":0,"race_rounds_multi_worker_set":0,"race_unbox_main_prop-net-box":98,"race_unbox_main_registry-net-box":52,"race_unbox_worker_prop-net-box":9,"race_unbox_worker_registry-net-box":12,"strat":"auto","wall_ms":313.0}

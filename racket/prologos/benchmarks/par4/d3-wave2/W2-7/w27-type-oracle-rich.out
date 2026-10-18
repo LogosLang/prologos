@@ -1,0 +1,82 @@
+W27 type-oracle (rich) — universe 60 terms, ground universe 28, |G| = 44
+ARM CENSUS (pm1,pm2,mm1 unsolved; pm3 := Nat): ((trivial . 294) (unify-success . 390) (fallback . 2216) (ground-clash . 700))
+  fallback BLOCKED (oracle unifiable): 120 ; fallback CLASH: 2096 ; clash share 95.0%
+  blocked by shape: ((meta-union . 66) (mult-meta . 42) (flex-app . 12))
+    shortest blocked [mult-meta]: #(struct:expr-Pi #(struct:mult-meta mm1) #(struct:expr-Nat) #(struct:expr-Nat))  ⊔  #(struct:expr-Pi mw #(struct:expr-Nat) #(struct:expr-Nat))
+    shortest blocked [meta-union]: #(struct:expr-union #(struct:expr-Nat) #(struct:expr-meta pm1 #f))  ⊔  #(struct:expr-Nat)
+    shortest blocked [flex-app]: #(struct:expr-app #(struct:expr-meta pm1 #f) #(struct:expr-Nat))  ⊔  #(struct:expr-Nat)
+    shortest blocked [other]: none
+  unify-success pairs the oracle says CANNOT unify: 94   by shape ((other . 72) (meta-union . 12) (flex-app . 10))
+    shortest: #(struct:expr-app #(struct:expr-meta pm1 #f) #(struct:expr-Nat))  ⊔  #(struct:expr-meta pm1 #f)
+  oracle evaluations that raised: 0
+
+POWER (ground universe):
+G0 type-unify-or-top, ground  [784 pairs]
+  erased contradictions: 0   by arm ()   by shape ()
+    shortest erased: none
+  false contradictions: 0   by shape ()
+  C violations 0 ; non-inflationary 0 ; A violations 0/20000
+
+Role B variants:
+V0 type-unify-or-top today  [3600 pairs]
+  erased contradictions: 2190   by arm ((fallback . 2096) (unify-success . 94))   by shape ((other . 976) (meta-union . 572) (mult-meta . 486) (flex-app . 156))
+    shortest erased: #(struct:expr-app #(struct:expr-meta pm1 #f) #(struct:expr-Nat))  ⊔  #(struct:expr-Unit)
+  false contradictions: 0   by shape ()
+  C violations 732 ; non-inflationary 740 ; A violations 495/20000
+V2 try-unify-pure fails => ⊤ (fallback deleted)  [3600 pairs]
+  erased contradictions: 94   by arm ((unify-success . 94))   by shape ((other . 72) (meta-union . 12) (flex-app . 10))
+    shortest erased: #(struct:expr-app #(struct:expr-meta pm1 #f) #(struct:expr-Nat))  ⊔  #(struct:expr-meta pm1 #f)
+  false contradictions: 120   by shape ((meta-union . 66) (mult-meta . 42) (flex-app . 12))
+  C violations 6 ; non-inflationary 6 ; A violations 0/20000
+
+DETAIL flex-app blocked pairs (12):
+  (?pm1 Nat) ⊔ ?pm3  -> today ?pm3
+  (?pm1 Nat) ⊔ Bool  -> today Bool
+  (?pm1 Nat) ⊔ Nat  -> today Nat
+  Π(Nat,(?pm1 bvar)) ⊔ Π(Nat,Vec(Bool,bvar))  -> today Π(Nat,Vec(Bool,bvar))
+  Π(Nat,(?pm1 bvar)) ⊔ Π(Nat,Bool)  -> today Π(Nat,Bool)
+  Π(Nat,(?pm1 bvar)) ⊔ Π(Nat,Nat)  -> today Π(Nat,Nat)
+  Π(Nat,Vec(Bool,bvar)) ⊔ Π(Nat,(?pm1 bvar))  -> today Π(Nat,Vec(Bool,bvar))
+  Π(Nat,Bool) ⊔ Π(Nat,(?pm1 bvar))  -> today Π(Nat,Bool)
+  Π(Nat,Nat) ⊔ Π(Nat,(?pm1 bvar))  -> today Π(Nat,Nat)
+  ?pm3 ⊔ (?pm1 Nat)  -> today ?pm3
+  Bool ⊔ (?pm1 Nat)  -> today Bool
+  Nat ⊔ (?pm1 Nat)  -> today Nat
+DETAIL V2 C violations:
+  ?pm1 ⊔ ?pm2 = ?pm2  but  ?pm1
+  ?pm2 ⊔ ?pm1 = ?pm1  but  ?pm2
+  Π(?pm1,?pm2) ⊔ Π(?pm2,Π(bvar,bvar)) = Π(?pm2,Π(bvar,bvar))  but  Π(?pm1,Π(bvar,bvar))
+  Π(?pm2,Π(bvar,bvar)) ⊔ Π(?pm1,?pm2) = Π(?pm1,Π(bvar,bvar))  but  Π(?pm2,Π(bvar,bvar))
+  Nat|?pm1 ⊔ ?pm1|?pm2 = Nat|?pm2  but  Nat|?pm1
+  ?pm1|?pm2 ⊔ Nat|?pm1 = Nat|?pm1  but  Nat|?pm2
+DETAIL success-arm erasures (oracle: not unifiable; try-unify-pure succeeds) by kind: ((occurs-check . 46) (repeated-meta-one-side . 26) (shared-meta-both-sides . 22))
+  e.g. [occurs-check] (?pm1 Nat) ⊔ ?pm1 -> (?pm1 Nat)
+  e.g. [shared-meta-both-sides] (?pm1 Nat) ⊔ (tycon ?pm1) -> (tycon Nat)
+  e.g. [repeated-meta-one-side] Π(Nat,Vec(Nat,bvar)) ⊔ Π(Nat,?pm2) -> Π(Nat,Vec(Nat,bvar))
+DETAIL the 'repeated-meta-one-side' success-arm erasures (all of them):
+  Σ(?pm1,Vec(Bool,bvar)) ⊔ Σ(Nat,?pm2) -> Σ(Nat,Vec(Bool,bvar))
+  Σ(Nat,Vec(Bool,bvar)) ⊔ Σ(Nat,?pm2) -> Σ(Nat,Vec(Bool,bvar))
+  Σ(Nat,?pm2) ⊔ Σ(?pm1,Vec(Bool,bvar)) -> Σ(Nat,Vec(Bool,bvar))
+  Σ(Nat,?pm2) ⊔ Σ(Nat,Vec(Bool,bvar)) -> Σ(Nat,Vec(Bool,bvar))
+  Π(?pm2,Π(bvar,bvar)) ⊔ Π(Type,Π(bvar,?pm1)) -> Π(Type,Π(bvar,bvar))
+  Π(Type,Π(bvar,?pm1)) ⊔ Π(?pm2,Π(bvar,bvar)) -> Π(Type,Π(bvar,bvar))
+  Π(Type,Π(bvar,?pm1)) ⊔ Π(Type,Π(bvar,bvar)) -> Π(Type,Π(bvar,bvar))
+  Π(Type,Π(bvar,Nat)) ⊔ Π(?pm1,?pm2) -> Π(Type,Π(bvar,Nat))
+  Π(Type,Π(bvar,bvar)) ⊔ Π(Type,Π(bvar,?pm1)) -> Π(Type,Π(bvar,bvar))
+  Π(Type,Π(bvar,bvar)) ⊔ Π(?pm1,?pm2) -> Π(Type,Π(bvar,bvar))
+  Π(?pm1,Vec(Bool,bvar)) ⊔ Π(Bool,?pm2) -> Π(Bool,Vec(Bool,bvar))
+  Π(?pm1,Vec(Bool,bvar)) ⊔ Π(Nat,?pm2) -> Π(Nat,Vec(Bool,bvar))
+  Π(Nat,Vec(?pm1,bvar)) ⊔ Π(Nat,?pm2) -> Π(Nat,Vec(?pm1,bvar))
+  Π(Nat,Vec(Nat,bvar)) ⊔ Π(?pm1,?pm2) -> Π(Nat,Vec(Nat,bvar))
+  Π(Nat,Vec(Nat,bvar)) ⊔ Π(Nat,?pm2) -> Π(Nat,Vec(Nat,bvar))
+  Π(Nat,Vec(Bool,bvar)) ⊔ Π(?pm1,?pm2) -> Π(Nat,Vec(Bool,bvar))
+  Π(Nat,Vec(Bool,bvar)) ⊔ Π(Nat,?pm2) -> Π(Nat,Vec(Bool,bvar))
+  Π(?pm1,?pm2) ⊔ Π(Type,Π(bvar,Nat)) -> Π(Type,Π(bvar,Nat))
+  Π(?pm1,?pm2) ⊔ Π(Type,Π(bvar,bvar)) -> Π(Type,Π(bvar,bvar))
+  Π(?pm1,?pm2) ⊔ Π(Nat,Vec(Nat,bvar)) -> Π(Nat,Vec(Nat,bvar))
+  Π(?pm1,?pm2) ⊔ Π(Nat,Vec(Bool,bvar)) -> Π(Nat,Vec(Bool,bvar))
+  Π(Bool,?pm2) ⊔ Π(?pm1,Vec(Bool,bvar)) -> Π(Bool,Vec(Bool,bvar))
+  Π(Nat,?pm2) ⊔ Π(?pm1,Vec(Bool,bvar)) -> Π(Nat,Vec(Bool,bvar))
+  Π(Nat,?pm2) ⊔ Π(Nat,Vec(?pm1,bvar)) -> Π(Nat,Vec(?pm1,bvar))
+  Π(Nat,?pm2) ⊔ Π(Nat,Vec(Nat,bvar)) -> Π(Nat,Vec(Nat,bvar))
+  Π(Nat,?pm2) ⊔ Π(Nat,Vec(Bool,bvar)) -> Π(Nat,Vec(Bool,bvar))

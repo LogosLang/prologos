@@ -1,0 +1,126 @@
+RESULT 0: known-fact : _ defined.
+RESULT 1: @[{:x 42}] : [PVec {:x Int}]
+RESULT 2: double : _ defined.
+RESULT 3: @[{:result 42}] : [PVec {:result Int}]
+RESULT 4: triple : _ defined.
+RESULT 5: six-times : _ defined.
+RESULT 6: @[{:result 42}] : [PVec {:result Int}]
+RESULT 7: @[{}] : _
+RESULT 8: @[{}] : _
+RESULT 9: @[{:r1 2}] : [PVec {:r1 Int}]
+RESULT 10: @[{:r2 4}] : [PVec {:r2 Int}]
+RESULT 11: @[{:r3 6}] : [PVec {:r3 Int}]
+RESULT 12: @[{:r4 8}] : [PVec {:r4 Int}]
+RESULT 13: @[{:r5 10}] : [PVec {:r5 Int}]
+RESULT 14: @[{:r6 12}] : [PVec {:r6 Int}]
+RESULT 15: @[{:r7 14}] : [PVec {:r7 Int}]
+RESULT 16: @[{:r8 16}] : [PVec {:r8 Int}]
+RESULT 17: @[{:r9 18}] : [PVec {:r9 Int}]
+RESULT 18: @[{:r10 20}] : [PVec {:r10 Int}]
+RESULT 19: binary-choice : _ defined.
+RESULT 20: @[{:x "left", :y 1} {:x "right", :y 2}] : [PVec {:x String :y Int}]
+RESULT 21: binary-shared : _ defined.
+RESULT 22: @[{:x 10, :r 11} {:x 20, :r 22}] : [PVec {:r Int :x Int}]
+RESULT 23: binary-deep : _ defined.
+RESULT 24: @[{:a 1, :b 11, :c 22} {:a 2, :b 22, :c 66}] : [PVec {:a Int :b Int :c Int}]
+RESULT 25: color-code : _ defined.
+RESULT 26: @[{:code 1}] : [PVec {:code Int}]
+RESULT 27: @[{:code 10}] : [PVec {:code Int}]
+RESULT 28: @[{:name "red", :code 1} {:name "green", :code 2} {:name "blue", :code 3} {:name "yellow", :code 4} {:name "cyan", :code 5} {:name "magenta", :code 6} {:name "white", :code 7} {:name "black", :code 8} {:name "orange", :code 9} {:name "purple", :code 10}] : [PVec {:code Int :name String}]
+RESULT 29: @[{:name "cyan"}] : [PVec {:name String}]
+RESULT 30: level1 : _ defined.
+RESULT 31: level2 : _ defined.
+RESULT 32: level3 : _ defined.
+RESULT 33: @[{:x "a", :y "p", :z 1} {:x "b", :y "p", :z 1} {:x "a", :y "q", :z 1} {:x "b", :y "q", :z 1} {:x "a", :y "p", :z 2} {:x "b", :y "p", :z 2} {:x "a", :y "q", :z 2} {:x "b", :y "q", :z 2}] : [PVec {:x String :y String :z Int}]
+RESULT 34: level4 : _ defined.
+RESULT 35: @[{:x "a", :y "p", :z 1, :w "i"} {:x "b", :y "p", :z 1, :w "i"} {:x "a", :y "q", :z 1, :w "i"} {:x "b", :y "q", :z 1, :w "i"} {:x "a", :y "p", :z 2, :w "i"} {:x "b", :y "p", :z 2, :w "i"} {:x "a", :y "q", :z 2, :w "i"} {:x "b", :y "q", :z 2, :w "i"} {:x "a", :y "p", :z 1, :w "ii"} {:x "b", :y "p", :z 1, :w "ii"} {:x "a", :y "q", :z 1, :w "ii"} {:x "b", :y "q", :z 1, :w "ii"} {:x "a", :y "p", :z 2, :w "ii"} {:x "b", :y "p", :z 2, :w "ii"} {:x "a", :y "q", :z 2, :w "ii"} {:x "b", :y "q", :z 2, :w "ii"}] : [PVec {:w String :x String :y String :z Int}]
+RESULT 36: contradicting : _ defined.
+RESULT 37: @[{:x 1, :y "one"} {:x 2, :y unknown} {:x 3, :y "three"}] : [PVec {:x Int :y String}]
+RESULT 38: many-fail : _ defined.
+RESULT 39: @[{:x 1} {:x unknown} {:x 3} {:x unknown} {:x 5} {:x unknown} {:x 7}] : [PVec {:x Int}]
+RESULT 40: expensive-fact : _ defined.
+RESULT 41: @[{:r1 25}] : [PVec {:r1 Int}]
+RESULT 42: @[{:r2 25}] : [PVec {:r2 Int}]
+RESULT 43: @[{:r3 25}] : [PVec {:r3 Int}]
+RESULT 44: @[{:r4 49}] : [PVec {:r4 Int}]
+RESULT 45: @[{:r5 49}] : [PVec {:r5 Int}]
+RESULT 46: @[{:r6 49}] : [PVec {:r6 Int}]
+RESULT 47: @[{:rep1 25}] : [PVec {:rep1 Int}]
+RESULT 48: @[{:rep2 25}] : [PVec {:rep2 Int}]
+RESULT 49: @[{:rep3 25}] : [PVec {:rep3 Int}]
+RESULT 50: @[{:rep4 25}] : [PVec {:rep4 Int}]
+RESULT 51: @[{:rep5 25}] : [PVec {:rep5 Int}]
+RESULT 52: @[{:rep6 25}] : [PVec {:rep6 Int}]
+RESULT 53: @[{:rep7 25}] : [PVec {:rep7 Int}]
+RESULT 54: @[{:rep8 25}] : [PVec {:rep8 Int}]
+RESULT 55: @[{:rep9 25}] : [PVec {:rep9 Int}]
+RESULT 56: @[{:rep10 25}] : [PVec {:rep10 Int}]
+RESULT 57: @[{:v1 1}] : _
+RESULT 58: @[{:v2 2}] : _
+RESULT 59: @[{:v3 3}] : _
+RESULT 60: @[{:v4 4}] : _
+RESULT 61: @[{:v5 5}] : _
+RESULT 62: @[{:v6 6}] : _
+RESULT 63: @[{:v7 7}] : _
+RESULT 64: @[{:v8 8}] : _
+RESULT 65: @[{:v9 9}] : _
+RESULT 66: @[{:v10 10}] : _
+RESULT 67: @[{:v11 11}] : _
+RESULT 68: @[{:v12 12}] : _
+RESULT 69: @[{:v13 13}] : _
+RESULT 70: @[{:v14 14}] : _
+RESULT 71: @[{:v15 15}] : _
+RESULT 72: @[{:v16 16}] : _
+RESULT 73: @[{:v17 17}] : _
+RESULT 74: @[{:v18 18}] : _
+RESULT 75: @[{:v19 19}] : _
+RESULT 76: @[{:v20 20}] : _
+RESULT 77: @[{:v21 21}] : _
+RESULT 78: @[{:v22 22}] : _
+RESULT 79: @[{:v23 23}] : _
+RESULT 80: @[{:v24 24}] : _
+RESULT 81: @[{:v25 25}] : _
+RESULT 82: @[{:v26 26}] : _
+RESULT 83: @[{:v27 27}] : _
+RESULT 84: @[{:v28 28}] : _
+RESULT 85: @[{:v29 29}] : _
+RESULT 86: @[{:v30 30}] : _
+RESULT 87: @[{:v31 31}] : _
+RESULT 88: @[{:v32 32}] : _
+RESULT 89: @[{:v33 33}] : _
+RESULT 90: @[{:v34 34}] : _
+RESULT 91: @[{:v35 35}] : _
+RESULT 92: @[{:v36 36}] : _
+RESULT 93: @[{:v37 37}] : _
+RESULT 94: @[{:v38 38}] : _
+RESULT 95: @[{:v39 39}] : _
+RESULT 96: @[{:v40 40}] : _
+RESULT 97: @[{:v41 41}] : _
+RESULT 98: @[{:v42 42}] : _
+RESULT 99: @[{:v43 43}] : _
+RESULT 100: @[{:v44 44}] : _
+RESULT 101: @[{:v45 45}] : _
+RESULT 102: @[{:v46 46}] : _
+RESULT 103: @[{:v47 47}] : _
+RESULT 104: @[{:v48 48}] : _
+RESULT 105: @[{:v49 49}] : _
+RESULT 106: @[{:v50 50}] : _
+RESULT 107: @[{:x 42, :y 42, :z 42}] : [PVec {:x Int :y Int :z Int}]
+RESULT 108: @[{:a [pair ?b ?c], :b b_g2433, :c [some 99], :d 99}] : [PVec {:a _ :b _ :c _ :d Int}]
+RESULT 109: @[] : [PVec {:p _ :q _ :r _ :s _}]
+RESULT 110: @[{:a 100, :b 100, :c 100, :d 100, :e 100, :f 100}] : [PVec {:a Int :b Int :c Int :d Int :e Int :f Int}]
+RESULT 111: choose-sign : _ defined.
+RESULT 112: @[{:n 7, :doubled 14, :sign "positive"} {:n 7, :doubled 14, :sign "negative"}] : [PVec {:doubled Int :n Int :sign String}]
+RESULT 113: choose-color : _ defined.
+RESULT 114: @[{:a 10, :b 20, :c c_g2477, :sum 30, :color "red", :label "done"} {:a 10, :b 20, :c c_g2477, :sum 30, :color "blue", :label "done"} {:a 10, :b 20, :c c_g2477, :sum 30, :color "green", :label "done"}] : [PVec {:a Int :b Int :c _ :color String :label String :sum Int}]
+RESULT 115: @[{:x [pair ?a ?b]}] : [PVec {:x _}]
+RESULT 116: @[{:result [pair [pair ?a ?b] [pair ?c ?d]]}] : [PVec {:result _}]
+RESULT 117: @[{:v1 42, :v2 42, :v3 42, :v4 42, :v5 42, :v6 42, :v7 42, :v8 42, :v9 42, :v10 42}] : [PVec {:v1 Int :v10 Int :v2 Int :v3 Int :v4 Int :v5 Int :v6 Int :v7 Int :v8 Int :v9 Int}]
+RESULT 118: @[{:x [some [some [some [some 42]]]], :y [some [some [some 42]]], :z [some [some 42]], :w [some 42], :v 42}] : [PVec {:v Int :w _ :x _ :y _ :z _}]
+RESULT 119: has-value : _ defined.
+RESULT 120: @[{:result "not-found"}] : [PVec {:result String}]
+RESULT 121: candidate : _ defined.
+RESULT 122: @[{:x 8, :label "passed"} {:x 2, :label "passed"} {:x 4, :label "passed"} {:x 6, :label "passed"}] : [PVec {:label String :x Int}]
+RESULT 123: mixed-candidate : _ defined.
+RESULT 124: @[{:x 2} {:x 4}] : [PVec {:x Int}]
+STATS2 leg=fresh rounds=111 fires=134 control-divergent=0 thread-divergent=0 reentrant=0

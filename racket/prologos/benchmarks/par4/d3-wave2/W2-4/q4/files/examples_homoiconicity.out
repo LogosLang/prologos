@@ -1,0 +1,100 @@
+PERF-COUNTERS:{"cell_allocs":3894,"constraint_count":0,"constraint_retries":0,"elaborate_steps":410,"inert_dependent_skips":0,"infer_steps":509,"meta_created":37,"meta_solved":25,"prop_allocs":0,"prop_firings":0,"reduce_steps":1448,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":171,"zonk_steps":395}
+PHASE-TIMINGS:{"elaborate_ms":2,"parse_ms":3,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":70,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":28,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: my-sym : prologos::data::datum::Datum defined.
+1: ERROR: Type mismatch
+2: my-kw : prologos::data::datum::Datum defined.
+3: my-bool : prologos::data::datum::Datum defined.
+4: my-empty : prologos::data::datum::Datum defined.
+5: ERROR: Type mismatch
+6: [prologos::data::datum::datum-sym 'add] : prologos::data::datum::Datum
+7: ERROR: Unbound variable
+8: [prologos::data::datum::datum-kw :hello] : prologos::data::datum::Datum
+9: [prologos::data::datum::datum-bool true] : prologos::data::datum::Datum
+10: prologos::data::datum::datum-nil : prologos::data::datum::Datum
+11: ERROR: Unbound variable
+12: ERROR: Unbound variable
+13: ERROR: Unbound variable
+14: ERROR: Unbound variable
+15: ERROR: Unbound variable
+16: ERROR: Unexpected datum: ()
+17: ERROR: Unbound variable
+18: ERROR: Unbound variable
+19: ERROR: expand-1 expects 1 argument, got 2
+20: ERROR: expand-1 expects 1 argument, got 2
+21: ERROR: expand-1 expects 1 argument, got 2
+22: extract-nat : prologos::data::datum::Datum -> Nat defined.
+23: ERROR: Too many arguments to 'examples::homoiconicity::extract-nat'
+24: ERROR: Too many arguments to 'prologos::data::datum::sym?'
+25: ERROR: Too many arguments to 'prologos::data::datum::sym?'
+26: datum-head : prologos::data::datum::Datum -> prologos::data::datum::Datum defined.
+27: ERROR: Too many arguments to 'examples::homoiconicity::datum-head'
+28: [prologos::data::datum::datum-cons [prologos::data::datum::datum-sym 'add] [prologos::data::datum::datum-cons [prologos::data::datum::datum-nat 10N] [prologos::data::datum::datum-cons [prologos::data::datum::datum-nat 20N] prologos::data::datum::datum-nil]]] : prologos::data::datum::Datum
+29: ERROR: Unbound variable
+30: ERROR: Type mismatch
+31: ERROR: Type mismatch
+32: ERROR: Unbound variable
+33: ERROR: Unbound variable
+34: x : prologos::data::datum::Datum defined.
+35: [prologos::data::datum::datum-sym 'result] : prologos::data::datum::Datum
+36: ERROR: Could not infer type
+37: 2N : Nat
+38: 2N : Nat
+39: 4N : Nat
+40: ERROR: Could not infer type
+41: ERROR: Could not infer type
+42: ERROR: Could not infer type
+43: (add 5 5)
+44: (add 5 5)
+45: (boolrec _ (suc zero) unit true)
+46: input: (boolrec _ (suc zero) unit true)
+47: 3N : Nat
+48: 2N : Nat
+49: 2N : Nat
+50: suc-fn : Nat -> Nat defined.
+51: is-positive : Nat -> Bool defined.
+52: sum-rf : Nat Nat -> Nat defined.
+53: ERROR: Type mismatch
+54: ERROR: Unbound variable
+55: ERROR: Unbound variable
+56: ERROR: Unbound variable
+57: sum-all : [prologos::data::list::List Nat] -> Nat defined.
+58: [reduce 3 | zero -> [prologos::data::nat::add [prologos::data::nat::add 0N 1] 2] | suc x -> [suc [prologos::data::nat::add [prologos::data::nat::add [prologos::data::nat::add 0N 1] 2] x]]] : Nat
+59: [reduce 10 | zero -> [prologos::data::nat::add [prologos::data::nat::add [prologos::data::nat::add [prologos::data::nat::add [prologos::data::nat::add [prologos::data::nat::add [prologos::data::nat::add [prologos::data::nat::add [prologos::data::nat::add 0N 1] 2] 3] 4] 5] 6] 7] 8] 9] | suc x -> [suc [prologos::data::nat::add [prologos::data::nat::add [prologos::data::nat::add [prologos::data::nat::add [prologos::data::nat::add [prologos::data::nat::add [prologos::data::nat::add [prologos::data::nat::add [prologos::data::nat::add [prologos::data::nat::add 0N 1] 2] 3] 4] 5] 6] 7] 8] 9] x]]] : Nat
+60: first-plus-rest : Nat [prologos::data::list::List Nat] -> Nat defined.
+61: ERROR: Could not infer type
+62: count-them : [Pi [x :0 <[Type 0]>] [prologos::data::list::List x] -> Nat] defined.
+63: 3N : Nat
+64: 0N : Nat
+65: ERROR: Too many arguments to 'prologos::data::datum::datum-cons'
+66: ERROR: Unbound variable
+67: ERROR: Unbound variable
+68: make-call : prologos::data::datum::Datum prologos::data::datum::Datum prologos::data::datum::Datum -> prologos::data::datum::Datum defined.
+69: ERROR: Too many arguments to 'examples::homoiconicity::make-call'
+70: ERROR: Too many arguments to 'examples::homoiconicity::make-call'
+71: wrap-in : prologos::data::datum::Datum prologos::data::datum::Datum -> prologos::data::datum::Datum defined.
+72: ERROR: Too many arguments to 'examples::homoiconicity::wrap-in'
+73: ERROR: Too many arguments to 'examples::homoiconicity::wrap-in'
+74: ERROR: Unbound variable
+75: ERROR: Too many arguments to 'examples::homoiconicity::wrap-in'
+76: ERROR: Too many arguments to 'examples::homoiconicity::wrap-in'
+77: [foreign code] : Char -> Int
+78: ERROR: Unbound variable
+79: ERROR: Unbound variable
+80: ERROR: Unbound variable
+81: ERROR: Unbound variable
+82: ERROR: Unbound variable
+83: ERROR: Too many arguments to 'examples::homoiconicity::wrap-in'
+84: (suc (suc 3))
+85: ERROR: Could not infer type
+86: ERROR: Could not infer type
+87: ERROR: Unbound variable
+88: ERROR: Too many arguments to 'examples::homoiconicity::datum-head'
+89: ERROR: Unbound variable
+90: ERROR: Unbound variable
+91: ERROR: Unbound variable
+92: ERROR: Unbound variable
+
+--- 56 errors ---
+W24 {"exec":"prod","exec_fires":350,"exec_rounds":26,"exec_wide_rounds":14,"file":"homoiconicity.prologos","outer_hist":{"0":8},"outer_max":0,"outer_runs":8,"strat":"auto","wall_ms":231.0}

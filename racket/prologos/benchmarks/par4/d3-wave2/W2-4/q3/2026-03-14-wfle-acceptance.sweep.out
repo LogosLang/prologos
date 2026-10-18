@@ -1,0 +1,21 @@
+user break
+  context...:
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/champ.rkt:971:0: freeze-node
+   [repeats 2 more times]
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/propagator.rkt:2271:0: net-add-propagator
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/propagator.rkt:2364:0: net-add-fire-once-propagator
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/relations.rkt:734:0: install-discrimination-propagators
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/relations.rkt:2577:0: install-clause-propagators-inner
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/relations.rkt:2384:0: install-conjunction
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/relations.rkt:2577:0: install-clause-propagators-inner
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/relations.rkt:2384:0: install-conjunction
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/relations.rkt:2577:0: install-clause-propagators-inner
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/relations.rkt:2384:0: install-conjunction
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/relations.rkt:2577:0: install-clause-propagators-inner
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/relations.rkt:2384:0: install-conjunction
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/relations.rkt:2577:0: install-clause-propagators-inner
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/relations.rkt:2384:0: install-conjunction
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/relations.rkt:2577:0: install-clause-propagators-inner
+   ...
+POWER c2 fire-once (Tier 1): tier1-eligible #t, B = 0, non-fixpoint propagators ((0 (21)))
+POWER c2 plain (Tier 2 control): tier1-eligible #f, B = 7, non-fixpoint propagators ()

@@ -1,0 +1,7 @@
+RESULT 0.0: val : _ defined.
+RESULT 0.1: neq : _ defined.
+RESULT 0.2: cell : _ defined.
+RESULT 0.3: row-ok : _ defined.
+RESULT 0.4: col-ok : _ defined.
+RESULT 0.5: ERROR: solve expects 1 argument, got 16
+STATS leg=persistcap files=1 params=219 rounds=0 wide-rounds(>=8)=0 fires=0 reentrant=0 ms=3.0

@@ -1,0 +1,115 @@
+PERF-COUNTERS:{"cell_allocs":4808,"constraint_count":0,"constraint_retries":0,"elaborate_steps":602,"inert_dependent_skips":0,"infer_steps":396,"meta_created":6,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":464,"resolution_cycles":0,"solver_backtracks":10,"solver_col_compares":68,"solver_row_scans":77,"solver_unifies":24,"trait_resolve_steps":0,"unify_steps":80,"zonk_steps":518}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":6,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":7,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":48,"atms_nogood_count":8,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":12,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: Direction : [Type 0] defined.
+1: north : acceptance::track7::Direction defined.
+2: south : acceptance::track7::Direction defined.
+3: east : acceptance::track7::Direction defined.
+4: west : acceptance::track7::Direction defined.
+5: Tree : [Type 0] defined.
+6: A : acceptance::track7::Tree defined.
+7: ERROR: Unbound variable
+8: ERROR: Unbound variable
+9: Color : [Type 0] defined.
+10: red : acceptance::track7::Color defined.
+11: green : acceptance::track7::Color defined.
+12: blue : acceptance::track7::Color defined.
+13: Pixel : [Type 0] defined.
+14: pixel : acceptance::track7::Color Int Int -> acceptance::track7::Pixel defined.
+15: Weekday : [Type 0] defined.
+16: ERROR: Unbound variable
+17: Month : [Type 0] defined.
+18: ERROR: Unbound variable
+19: ERROR: Unbound variable
+20: Planet : [Type 0] defined.
+21: ERROR: Unbound variable
+22: session Ping defined.
+23: defproc pinger : [!String . end] type-checked.
+24: session ReqResp defined.
+25: defproc requester : [!String . [?Int . end]] type-checked.
+26: session Handshake defined.
+27: ERROR: Process handshaker does not implement session protocol [?Int . [?String . [!Int . [?Bool . end]]]]
+28: session KeyValueStore defined.
+29: ERROR: Process kv-handler does not implement session protocol [&{ :get: [!String . [?String . end]], :put: [!String . [!String . end]], :del: [!String . end] }]
+30: session AsyncLog defined.
+31: defproc logger : [!!String . [!!String . [!!String . end]]] type-checked.
+32: session MixedIO defined.
+33: defproc mixed-client : [!String . [??Int . [!!Bool . [?String . end]]]] type-checked.
+34: dual acceptance::track7::Ping = [?String . end]
+35: dual acceptance::track7::ReqResp = [?String . [!Int . end]]
+36: dual acceptance::track7::AsyncLog = [??String . [??String . [??String . end]]]
+37: strategy fair-round-robin defined.
+38: strategy priority-io defined.
+39: session Auth defined.
+40: session Stream defined.
+41: session Heartbeat defined.
+42: defproc auth-client : [!String . [!String . [?Bool . end]]] type-checked.
+43: defproc stream-reader : [?Int . [?Int . [?Int . end]]] type-checked.
+44: defproc heartbeat-client : [!Bool . [?Bool . end]] type-checked.
+45: c1-id : Int -> Int defined.
+46: 42 : Int
+47: ERROR: Unbound variable
+48: safe-node : _ defined.
+49: danger : _ defined.
+50: truly-safe : _ defined.
+51: @[{:who "a"} {:who "b"} {:who "d"}] : [PVec {:who String}]
+52: primes-small : _ defined.
+53: ancestor-e : _ defined.
+54: classify-depth : Nat -> String defined.
+55: "zero" : String
+56: "one" : String
+57: "two" : String
+58: "three-or-more" : String
+59: double : Int -> Int defined.
+60: doubled-pair : _ defined.
+61: @[{:y 10}] : [PVec {:y Int}]
+62: @[{:y 14}] : [PVec {:y Int}]
+63: protocol-info : _ defined.
+64: @[{:name "ReqResp", :count 2} {:name "Auth", :count 3}] : [PVec {:count Int :name String}]
+65: @[{:kind "multi", :count 4}] : [PVec {:count Int :kind String}]
+66: compass-opposite : _ defined.
+67: @[{:opp "S"}] : [PVec {:opp String}]
+68: @[{:dir "E"}] : [PVec {:dir String}]
+69: session Calculator defined.
+70: add-result : Int Int -> Int defined.
+71: defproc calc-client : [!Int . [!Int . [?Int . end]]] type-checked.
+72: 136 : Int
+73: 77/60 : Rat
+74: i4-f1 : Int -> Int defined.
+75: i4-f2 : Int -> Int defined.
+76: i4-f3 : Int -> Int defined.
+77: i4-f4 : Int -> Int defined.
+78: i4-f5 : Int -> Int defined.
+79: i4-f6 : Int -> Int defined.
+80: i4-f7 : Int -> Int defined.
+81: i4-f8 : Int -> Int defined.
+82: i4-f9 : Int -> Int defined.
+83: i4-f10 : Int -> Int defined.
+84: 55 : Int
+85: j1-val : Int | String defined.
+86: j2-val : Int | Bool defined.
+87: j4-color : _ defined.
+88: j4-u : Int | String defined.
+89: @[{:which "red"} {:which "blue"}] : [PVec {:which String}]
+90: session J5Proto1 defined.
+91: j5a : Int | String defined.
+92: j5b : Int | String defined.
+93: session J5Proto2 defined.
+94: j5c : Int | Bool defined.
+95: 42 : Int
+96: 3 : Int
+97: all-directions : _ defined.
+98: @[{:d "N"} {:d "S"} {:d "E"} {:d "W"}] : [PVec {:d String}]
+99: @[{:opp "W"}] : [PVec {:opp String}]
+100: dual acceptance::track7::Ping = [?String . end]
+101: dual acceptance::track7::ReqResp = [?String . [!Int . end]]
+102: @[{:y 6}] : [PVec {:y Int}]
+103: @[{:kind "one-way", :count 1}] : [PVec {:count Int :kind String}]
+104: 11 : Int
+105: 42 : Int | String
+106: 1 : Int | String
+107: 30 : Int
+
+--- 9 errors ---
+W24 {"exec":"prod","exec_fires":210,"exec_rounds":42,"exec_wide_rounds":5,"file":"2026-03-18-track7-acceptance.prologos","forks":0,"routes":{"dfs":4,"tier1":8},"strat":"dfs","wall_ms":232.0}

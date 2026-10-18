@@ -1,0 +1,8 @@
+RESULT 0.0: atms-s : Solver defined.
+RESULT 0.1: edge : _ defined.
+RESULT 0.2: blocked : _ defined.
+RESULT 0.3: open-edge : _ defined.
+RESULT 0.4: @[{:d "b"}] : [PVec {:d String}]
+RESULT 0.5: @[] : [PVec {:d String}]
+RESULT 0.6: @[{:s "c", :d "d"} {:s "a", :d "b"}] : [PVec {:d String :s String}]
+STATS leg=wvpoison files=1 params=219 rounds=9 wide-rounds(>=8)=1 fires=34 reentrant=0 ms=159.0

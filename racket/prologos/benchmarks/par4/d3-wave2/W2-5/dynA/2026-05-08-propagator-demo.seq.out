@@ -1,0 +1,8 @@
+RESULT 0.0: wf-solver : Solver defined.
+RESULT 0.1: edge : _ defined.
+RESULT 0.2: vertex : _ defined.
+RESULT 0.3: path : _ defined.
+RESULT 0.4: unreachable-from-a : _ defined.
+RESULT 0.5: @[{:dest "b"} {:dest "c"} {:dest "e"} {:dest "d"}] : [PVec {:dest String}]
+RESULT 0.6: @[{:x "a"} {:x "f"}] : [PVec {:x String}]
+STATS leg=seq files=1 params=219 rounds=2 wide-rounds(>=8)=0 fires=2 reentrant=0 ms=151.0

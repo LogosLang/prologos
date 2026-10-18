@@ -1,0 +1,101 @@
+PERF-COUNTERS:{"cell_allocs":2474,"constraint_count":0,"constraint_retries":0,"elaborate_steps":227,"inert_dependent_skips":0,"infer_steps":188,"meta_created":16,"meta_solved":16,"prop_allocs":0,"prop_firings":0,"reduce_steps":2164,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":70,"zonk_steps":363}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":2,"qtt_ms":0,"reduce_ms":4,"trait_resolve_ms":0,"type_check_ms":32,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":7,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: 7N : Nat
+1: 3N : Nat
+2: 12N : Nat
+3: '[{:y 0N, :x 5N} {:y 1N, :x 4N} {:y 2N, :x 3N} {:y 3N, :x 2N} {:y 4N, :x 1N} {:y 5N, :x 0N}] : _
+4: '[{:y 5N}] : _
+5: nil : _
+6: '[{:y 0N, :x 3N}] : _
+7: '[{:y 0N, :x 5N} {:y 1N, :x 4N} {:y 2N, :x 3N} {:y 3N, :x 2N} {:y 4N, :x 1N} {:y 5N, :x 0N}] : _
+8: '[{:y 0N, :x 5N} {:y 1N, :x 4N} {:y 2N, :x 3N} {:y 3N, :x 2N} {:y 4N, :x 1N} {:y 5N, :x 0N}] : _
+9: positive? : Nat -> Bool defined.
+10: '[{:n [suc ?suc0_1935]}] : _
+11: '[{:n 0N}] : _
+12: Instances of Eq:
+  Rat
+  String
+  Int
+  Posit8
+  Ordering
+  Nat
+  Posit64
+  Float64
+  Posit16
+  Float32
+  Posit32
+  Bool
+  Char
+13: Instances of Add:
+  Posit16
+  Float64
+  Posit64
+  Nat
+  Posit32
+  Rat
+  Int
+  String
+  Posit8
+  Float32
+14: Methods of Eq:
+  eq? : (-> A (-> A Bool))
+15: Methods of Ord:
+  compare : (-> A (-> A Ordering))
+16: Nat satisfies Eq: true
+17: Nat satisfies Add: true
+18: Bool satisfies Add: false
+19: my-double : Nat -> Nat defined.
+20: 6N : Nat
+21: '[{:x 3N}] : _
+22: '[{:x 5N}] : _
+23: '[{:a true, :b true}] : _
+24: '[{:a false, :b false}] : _
+25: '[{:a true, :b false} {:a false, :b true}] : _
+26: 7N : Nat
+27: 10N : Nat
+28: even? : Nat -> Bool defined.
+29: true : Bool
+30: false : Bool
+31: nil : _
+32: Instances of Ord:
+  Posit16
+  Nat
+  Bool
+  Posit32
+  Char
+  Posit8
+  Float64
+  Rat
+  Posit64
+  Int
+  Float32
+  String
+33: prologos::data::ordering::lt-ord : prologos::data::ordering::Ordering
+34: prologos::data::ordering::lt-ord : prologos::data::ordering::Ordering
+35: true : Bool
+36: false : Bool
+37: triple : Nat -> Nat defined.
+38: 9N : Nat
+39: nil : _
+40: half-diff : Nat Nat -> Nat defined.
+41: 4N : Nat
+42: 3N : Nat
+43: 2N : Nat
+44: 6N : Nat
+45: false : Bool
+46: prologos::data::ordering::lt-ord : prologos::data::ordering::Ordering
+47: '[{:y 0N, :x 3N} {:y 1N, :x 2N} {:y 2N, :x 1N} {:y 3N, :x 0N}] : _
+48: half : Nat -> Nat defined.
+49: collatz-step : Nat -> Nat defined.
+50: 3N : Nat
+51: 10N : Nat
+52: Methods of Mul:
+  mul : (-> A (-> A A))
+53: Nat satisfies Mul: true
+54: nil : _
+55: No instances found for trait Num
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":273,"exec_rounds":61,"exec_wide_rounds":7,"file":"2026-03-09-fc-trait-rel-dom.prologos","handler_calls":6,"outer_hist":{"0":27},"outer_max":0,"outer_runs":27,"strat":"auto","wall_ms":190.0}

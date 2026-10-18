@@ -1,0 +1,2 @@
+ 9:56  up  3:35, 10 users, load averages: 3.14 3.26 3.80
+ 9:57  up  3:35, 10 users, load averages: 3.18 3.27 3.79

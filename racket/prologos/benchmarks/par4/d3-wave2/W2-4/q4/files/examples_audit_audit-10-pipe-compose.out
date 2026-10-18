@@ -1,0 +1,21 @@
+PERF-COUNTERS:{"cell_allocs":628,"constraint_count":0,"constraint_retries":0,"elaborate_steps":77,"inert_dependent_skips":0,"infer_steps":69,"meta_created":4,"meta_solved":4,"prop_allocs":0,"prop_firings":0,"reduce_steps":475,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":19,"zonk_steps":68}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":3,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":3,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: 3N : Nat
+1: 11N : Nat
+2: 5N : Nat
+3: 10N : Nat
+4: 2N : Nat
+5: 7N : Nat
+6: 8N : Nat
+7: ERROR: Type mismatch
+8: ERROR: Unbound variable
+9: suc-fn : Nat -> Nat defined.
+10: ERROR: Unbound variable
+11: pos? : Nat -> Bool defined.
+12: ERROR: Unbound variable
+13: ERROR: Unbound variable
+
+--- 5 errors ---
+W24 {"exec":"prod","exec_fires":71,"exec_rounds":16,"exec_wide_rounds":4,"file":"audit-10-pipe-compose.prologos","handler_calls":1,"outer_hist":{"0":8},"outer_max":0,"outer_runs":8,"strat":"auto","wall_ms":147.0}

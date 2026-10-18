@@ -1,0 +1,10 @@
+RESULT 0: church-zero : [Pi [x :0 <[Type 0]>] [x -> x] x -> x] defined.
+RESULT 1: ERROR: Type mismatch
+RESULT 2: ERROR: Type mismatch
+RESULT 3: ERROR: Type mismatch
+RESULT 4: ERROR: def requires: (def name <type> body) or (def name : type body)
+RESULT 5: ERROR: def requires: (def name <type> body) or (def name : type body)
+RESULT 6: ERROR: def requires: (def name <type> body) or (def name : type body)
+RESULT 7: ERROR: Unbound variable
+RESULT 8: ERROR: Unbound variable
+STATS2 leg=persist rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0

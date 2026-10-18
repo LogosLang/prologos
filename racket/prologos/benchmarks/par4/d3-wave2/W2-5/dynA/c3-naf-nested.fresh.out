@@ -1,0 +1,7 @@
+RESULT 0.0: atms-s : Solver defined.
+RESULT 0.1: edge : _ defined.
+RESULT 0.2: ERROR: unsafe negation: variable z in a `not` goal of relation sink is not bound by any positive goal (floundering)
+RESULT 0.3: ERROR: unsafe negation: variable z in a `not` goal of relation nonsink is not bound by any positive goal (floundering)
+RESULT 0.4: ERROR: solve: Unknown relation: sink — its defr failed to register (see the earlier error)
+RESULT 0.5: ERROR: solve: Unknown relation: nonsink — its defr failed to register (see the earlier error)
+STATS leg=fresh files=1 params=219 rounds=2 wide-rounds(>=8)=0 fires=2 reentrant=0 ms=165.0

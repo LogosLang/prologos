@@ -1,0 +1,10 @@
+fire: internal fault in propagator 2
+  context...:
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/propagator.rkt:2876:0: fire-and-collect-writes
+   /Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-10/exec-exn.rkt:45:30
+   /Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-10/exec-exn.rkt:37:4
+fire: internal fault in propagator 6
+  context...:
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/propagator.rkt:2876:0: fire-and-collect-writes
+   /Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-10/exec-exn.rkt:45:30
+   /Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-10/exec-exn.rkt:37:4

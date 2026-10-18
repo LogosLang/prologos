@@ -1,0 +1,15 @@
+RESULT 0: Tree : [Type 0] defined.
+RESULT 1: A : [Type 0] -> benchmarks::comparative::recursive-types::Tree defined.
+RESULT 2: where : benchmarks::comparative::recursive-types::Tree defined.
+RESULT 3: ERROR: Unbound variable
+RESULT 4: ERROR: Unbound variable
+RESULT 5: ERROR: Type mismatch
+RESULT 6: ERROR: Type mismatch
+RESULT 7: ERROR: Unbound variable
+RESULT 8: add : Nat Nat -> Nat defined.
+RESULT 9: max-nat : Nat Nat -> Nat defined.
+RESULT 10: ERROR: def: expected ':', got node
+RESULT 11: ERROR: Unbound variable
+RESULT 12: ERROR: Unbound variable
+RESULT 13: ERROR: fn: all parameters except body must be bare symbols or a binder (x : T)
+STATS2 leg=persistcap rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0

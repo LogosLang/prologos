@@ -1,0 +1,12 @@
+# 1 constraints-adversarial B 10:08:21 4.62 4.87 4.40
+# 1 constraints-adversarial D 10:08:23 4.62 4.87 4.40
+# 1 constraints-adversarial E 10:08:25 4.49 4.84 4.39
+# 1 type-adversarial B 10:08:26 4.49 4.84 4.39
+# 1 type-adversarial D 10:08:28 4.49 4.84 4.39
+# 1 type-adversarial E 10:08:30 4.53 4.84 4.39
+# 2 constraints-adversarial B 10:08:32 4.53 4.84 4.39
+# 2 constraints-adversarial D 10:08:34 4.53 4.84 4.39
+# 2 constraints-adversarial E 10:08:36 4.65 4.86 4.40
+# 2 type-adversarial B 10:08:37 4.65 4.86 4.40
+# 2 type-adversarial D 10:08:39 4.65 4.86 4.40
+# 2 type-adversarial E 10:08:41 4.76 4.88 4.41
