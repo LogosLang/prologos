@@ -677,3 +677,15 @@ binder merges with unsolved metas.
   is now 179.
 - **Next**: the owner's go for wave 2 (triage §7, W2-1…W2-10). Then the synthesis of record, D.3, and owner decisions
   from O-14 onwards.
+
+### D.3 wave 2 launched: ten agents (seven settlers, two defenders, one gap critic) — docs commit on the branch (2026-10-15)
+- **Why / decision**: the owner said "Go for Wave 2." Every agent receives
+  `critiques/2026-10-15_PAR_4_D3_WAVE2_BRIEFING.md` verbatim. It contains the rules, a shared return schema with
+  verdicts, a defence or findings, and power checks, and all ten charges (W2-1…W2-10, as proposed in triage §7). The
+  charges are recorded there.
+  - W2-2 alone may build, and only in a `git archive` copy under scratch. Both of its variants sit behind
+    environment switches in one build, and it times only while holding the suite lock.
+  - Every agent runs at most one Racket process at a time. Fires are observed through the exported
+    `current-parallel-executor` injection point, so nothing else needs a rebuild.
+- **Next**: read every return in full, then write the synthesis of record by hand: a response to every wave-1 and
+  wave-2 finding, then D.3, then owner decisions O-14 onwards.
