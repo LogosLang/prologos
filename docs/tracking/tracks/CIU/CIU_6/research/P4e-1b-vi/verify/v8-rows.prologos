@@ -1,0 +1,64 @@
+ns v8rows
+def ot2 := @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]
+def t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}
+def mn := {:a {:x 1} :b {:y 2}}
+def env := {:prod {:db {:url "p-url" :port 5432}} :dev {:db {:url "d-url" :port 5433}}}
+def ow := {:top {:eu {:cfg {:x {:p 1}}} :us {:cfg {:x {:p 2}}}}}
+def og := {:db {:admins @[{:name {:f {:z 1}}} {:name {:f {:z 2}}}]}}
+def ovv := @[@[{:a {:b {:k 1}}}] @[{:a {:b {:k 2}}}]]
+def vo := @[{:a @[{:n 1} {:n 2}]}]
+def vk2 := @[{:a {:b {:k 1}} :c {:d {:j 3}}} {:a {:b {:k 2}} :c {:d {:j 4}}}]
+def vhm2 := @[@[{:x 1}] @[{:x 2}]]
+def rv := {:xs @[{:a {:k 1}} {:a {:k 2}}] :k 9}
+def w := {:v @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]}
+def mx := {:m {:x 1 :y 2} :a {:b @[@[1 2] @[3]]}}
+def t3x := {:a {:b {:q {:r 1}}} :c {:k 1} :d {:k 2}}
+;; the verify round's new stage-table rows, measured
+ow{top:cfg.x*-}
+ow{top:cfg.x*-_}
+ow{top^:cfg.x*-}
+ow{top:cfg.x^-}
+og{db.admins:name.f*-}
+ow{top:{cfg.x*-}}
+ow{top:{cfg.x*-_}}
+ow{top^:{cfg.x*-}}
+ow{top:{cfg.x^-}}
+og{db.admins:{name.f*-}}
+ot2:{a^.b*}
+ot2:{a.b*-}
+ot2:{a.b*-_}
+ovv:{0.a^.b*}
+vk2:{a^.b* c}
+vk2:{a^.b* c^.d*}
+vk2:{c^.d* a^.b*}
+vo:{a:n}
+ot2{0.a^.b* 1.a^.b}
+ot2{0.a.b*- 1.a.b}
+ot2{0.a.b*_ 1.a^.b}
+ot2{0.a.b^ 1.a.b}
+ot2{0.a.b*_ 1.a.b*_}
+ot2{0.a.b*- 1.a.b*-}
+ot2{0.a^.b*- 1.a^.b*-_}
+vhm2{0.{0}* 1.{0}*}
+vhm2{0.{0} 1.{0}}
+ot2{0.a.b.k^- 1.a^.b*}
+ot2{0.a.b.k^-k2 1.a^.b*}
+rv{xs^.{0.a*} k}
+rv{xs^.{0.a*} k^k2}
+w{v^.0.a^.b* v^.1.a^.b*}
+w{v^.0.a^.b v^.1.a^.b*}
+w{v^.0.a^.b^ v^.1.a^.b^}
+ot2{0.a^.b* 1.a^.b*}
+ot2{0.a^.b*_ 1.a^.b*_}
+mx{m* a.b*-}
+mx{a.b*- m*}
+mx{a.b*- m^}
+t3x{a.{b*-_} c* d*}
+mn{a*->b*->a}
+mn{a*- b*- a}
+mn{a*-_->b}
+mn{a*-_ b}
+mn{a*_->b}
+mn{a*_ b}
+t5{a.b^..c*-}
+env{prod.db*- dev.db*-}

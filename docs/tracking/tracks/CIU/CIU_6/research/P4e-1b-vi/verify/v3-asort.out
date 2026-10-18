@@ -1,0 +1,21 @@
+0: vk : [PVec {:a {:b {:k Int}}}] defined.
+1: vkz : [PVec {:a {:b {:k Int}} :z Int}] defined.
+2: ovv : [PVec [PVec {:a {:b {:k Int}}}]] defined.
+3: vk2 : [PVec {:a {:b {:k Int}} :c {:d {:j Int}}}] defined.
+4: vo : [PVec {:a [PVec {:n Int}]}] defined.
+5: wk : {:xs [PVec {:a {:b {:k Int}}}]} defined.
+6: @[@[{:k 1}] @[{:k 2}]] : [PVec {:k Int}]
+7: @[@[{:k 1}] @[{:k 2}]] : [PVec {:k Int}]
+8: @[@[{:a-b-k 1}] @[{:a-b-k 2}]] : [PVec {:a-b-k Int}]
+9: @[@[{:k 1}] @[{:k 2}]] : [PVec {:k Int}]
+10: r1 : [PVec {:k Int}] defined.
+11: none : [PVec Int]
+12: ERROR: panic: select: internal — a flatten's keyless component beside keyed siblings reached the value layer (typing's star L4 check refuses this block)
+13: @[@[{:k 1} {:j 3}] @[{:k 2} {:j 4}]] : [PVec {:j Int :k Int}]
+14: @[@[{:j 3} {:k 1}] @[{:j 4} {:k 2}]] : [PVec {:j Int :k Int}]
+15: @[{:a @[1 2]}] : [PVec {:a [PVec {:n Int}]}]
+16: {:xs @[{:k 1} {:k 2}]} : {:xs [PVec {:k Int}]}
+17: @[{:b {:k 1}} {:b {:k 2}}] : [PVec {:b {:k Int}}]
+18: @[@[{:k 1}] @[{:k 2}]] : [PVec ⟨{:k Int}⟩]
+19: {:q @[{:a @[{:n 1} {:n 2}]}]} : {:q [PVec {:a [PVec {:n Int}]}]}
+--- 1 errors ---

@@ -1,0 +1,4 @@
+ns v1omegacrash
+def ow := {:top {:eu {:cfg {:x {:p 1}}} :us {:cfg {:x {:p 2}}}}}
+;; Cluster A (L1-1 / L2-1 / L4-1): an ω step as an ANCESTOR of a total star
+ow{top:cfg.x*-}

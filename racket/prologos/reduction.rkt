@@ -2149,7 +2149,12 @@
     ;; buried in an output slot. Stated because a "map semantics" intuition
     ;; would expect per-element recovery, and that is exactly the drift the
     ;; ruling forbids.
-    (define (bcast-lift v s)
+    ;; ⭐ 1b-vi verify (VF-2): `asort` is THREADED here as in every sibling — the
+    ;; typing twin passes its inherited sort to `select-bcast-lift` (and from it to
+    ;; `select-project`, typing-core.rkt:1265/1388). Reading the closure's OUTER
+    ;; `sort` instead lost Q_U20's 'block under a path-position ω sub inner:
+    ;; `vo:{a:n}` → value `@[{:a @[1 2]}]` beside type `[PVec {:a [PVec {:n Int}]}]`.
+    (define (bcast-lift v s [asort sort])
       (let* ([inner (select-bcast-inner s)]
              ;; same diagnostic-label guard as the typing twin: a sub inner's
              ;; `select-step-name` is the RAW LIST — never interpolate it.
@@ -2173,7 +2178,7 @@
              (champ-fold c
                          (lambda (k val _acc)
                            (tchamp-insert! t (equal-hash-code k) k
-                                           (bcast-apply (whnf val) inner)))
+                                           (bcast-apply (whnf val) inner asort)))
                          (void))
              (expr-champ (tchamp-freeze t)))]
           [else
@@ -2181,20 +2186,20 @@
              (expr-rrb
               (rrb-from-list
                (for/list ([i (in-range (rrb-size r))])
-                 (bcast-apply (whnf (rrb-get r i)) inner)))))])))
+                 (bcast-apply (whnf (rrb-get r i)) inner asort)))))])))
     ;; Apply ONE step to ONE element, yielding the leaf value — the reduction
     ;; analogue of typing's `select-project ctx elem (list (list inner)) sort`.
     ;; It mirrors the top-level sort dispatch at the tail of this function
     ;; rather than re-deciding it, so a third sort cannot inherit path
     ;; semantics here silently.
-    (define (bcast-apply v inner)
+    (define (bcast-apply v inner [asort sort])
       ;; ⭐ Q_U20 [owner, 2026-08-05] — the ATOMIC TWIN of typing's rule: a SUB
       ;; inner ASSEMBLES, always, regardless of the outer selector's sort. The
       ;; symbol path below mirrors the top-level sort dispatch unchanged.
       (if (select-sub-step? inner)
           (entries->value (level-entries v (cdr inner) 'block))
-      (let ([entries (branch-entries v (list inner) '())])
-        (case sort
+      (let ([entries (branch-entries v (list inner) '() asort)])
+        (case asort
           [(block) (entries->value entries)]
           [(path)
            (if (and (pair? entries) (null? (cdr entries)))
@@ -2203,7 +2208,7 @@
                         (expr-string
                          (format "select: a broadcast step must yield exactly ONE component per element, got ~a (malformed carrier)"
                                  (length entries))))))]
-          [else (select-sort-unhandled 'select-bcast-apply sort)]))))
+          [else (select-sort-unhandled 'select-bcast-apply asort)]))))
     ;; D4.P3b — one branch's entries at the CURRENT level, mirroring
     ;; typing-core's select-branch-entries over champs (the same shared
     ;; syntax.rkt walk classifies steps, so meaning cannot drift from the
@@ -2274,7 +2279,7 @@
            ;; too, so A1 and A2 splice from the same line — the typing twin's
            ;; Seat A caller does exactly this.
            (star-keyless-landing-value
-            (star-join-value (if (null? prefix) v (below-value v prefix seen))
+            (star-join-value (if (null? prefix) v (below-value v prefix seen asort))
                              star oops
                              ;; 1b-vi-C (C-4): the twin of typing's call — the ONE seat
                              (select-star-provenance-prefix star seen))
@@ -2334,7 +2339,7 @@
                         ;; raise, which `process-command/solve-guard` does not
                         ;; catch (whole-file abort); reduction-first types a
                         ;; refusal over a value that would have worked.
-                        [(bcast) (bcast-lift v s)]
+                        [(bcast) (bcast-lift v s asort)]
                         [else (select-step-kind-unhandled 'select-walk-to-leaf s)])])
             (if (null? (cdr steps))
                 hit
@@ -2375,7 +2380,7 @@
                [(select-steps-yield-bare-join? (cdr b)) (branch-entries elem (cdr b) seen asort)]
                [else
                 ;; a remainder that names a key: one keyless component (spec §3.3)
-                (list (cons #f (below-value elem (cdr b) '())))]))]
+                (list (cons #f (below-value elem (cdr b) '() asort)))]))]
           [(number? (car b))
            ;; bare-number STEP chain (splice continuation): transparent
            (let ([elem (index-into v (car b) (car b))])
@@ -2402,10 +2407,10 @@
                [(select-cont-dissolves-level? cont)
                 ;; ⭐ 1b-vi-C (C-3): the TWIN of typing's dissolve arm — the same
                 ;; predicate, so a total-collapse mark splices here exactly as there.
-                (below-components hit rest (append seen (list s)))]
+                (below-components hit rest (append seen (list s)) asort)]
                [else
                 (list (cons (or (and cont (select-cont-rename cont)) name)
-                            (below-value hit rest (append seen (list s)))))]))]
+                            (below-value hit rest (append seen (list s)) asort)))]))]
           ;; ⚠ POLARITY CORRECTED at D4.P4c-4b: NOT unreachable-at-head — `users:name`
           ;; reaches the branch head ($select-path consumes the subject). Reduction
           ;; KEEPS its raise here deliberately: typing now refuses through its
@@ -2424,17 +2429,25 @@
            (let* ([s (car b)]
                   [rest (cdr b)]
                   [label (select-step-output-name s)]
-                  [hit (bcast-lift v s)])
+                  [hit (bcast-lift v s asort)])
              (if (null? rest)
                  (list (cons label hit))
                  ;; continue against the RE-WRAPPED result — this is what makes
                  ;; `x:s:t` fuse to one layer rather than nest
-                 (list (cons label (below-value hit rest seen)))))]
+                 (list (cons label (below-value hit rest seen asort)))))]
           [else (select-step-kind-unhandled 'select-branch-entries (car b))])))
     ;; the COMPONENTS a dissolved head splices (terminal sub-block = that
     ;; block's level, fresh branches; else the steps continue as one branch).
     ;; D4.P3a verify hardening carried: a sub-block is TERMINAL.
-    (define (below-components v steps seen)
+    ;; ⭐ 1b-vi verify (VF-2): `asort` threaded — the twin of typing's
+    ;; `select-below-components … sort`. Without it the dissolve arm's splice fell
+    ;; back to the OUTER sort, so under a path-position ω sub inner (Q_U20: assembles
+    ;; at 'block) a keyless landing reached through a dissolve stayed one component in
+    ;; the VALUE while typing spliced it: `vk:{a^.b*}` → `@[@[{:k 1}] @[{:k 2}]]` beside
+    ;; `[PVec {:k Int}]`, then `none`, a panic beside a keyed sibling, and a value that
+    ;; changed with branch order. The 1b-vi mint (`*-`) and E (an ordinal head passes
+    ;; through) routed new spellings into this seat; the seat predates them.
+    (define (below-components v steps seen [asort sort])
       (cond
         ;; ⚠⚠ VERIFY ROUND 1 — THIS ARM PANICKED ON A SHAPE C2 MADE REACHABLE, and
         ;; its message asserted the shape was impossible. `x{k^.{a b}*}` is a
@@ -2451,12 +2464,12 @@
         ;; and hoisted its tail arm for it — then declared this sibling safe
         ;; "verified, not assumed", having checked typing's twin and not this one.
         [(and (pair? (car steps)) (eq? (car (car steps)) '@sub) (null? (cdr steps)))
-         (level-entries v (cdr (car steps)))]
-        [else (branch-entries v steps seen)]))
+         (level-entries v (cdr (car steps)) asort)]
+        [else (branch-entries v steps seen asort)]))
     ;; the VALUE below a kept/renamed head: terminal sub-block assembles
     ;; honestly (incl. the keyless 1-tuple); ordinal steps descend with no
     ;; level (Q_U2); keyed chains build their nested level.
-    (define (below-value v steps seen)
+    (define (below-value v steps seen [asort sort])
       (cond
         ;; ⭐⭐ 1b-iii-C2 — THE STAR-TAIL ARM, twin of typing's. Exactly `(sₙ ★)`;
         ;; returns the join BARE for the caller to wrap. AHEAD of the memq arm for
@@ -2486,7 +2499,7 @@
                (return (expr-panic (expr-string
                  (format "select: `~a` — an ordinal step contributes no layer to delete (typing carries the user-facing refusal)"
                          (star-step-lexeme star)))))
-               (star-join-value (below-value v (list sn) seen) star
+               (star-join-value (below-value v (list sn) seen asort) star
                                 (lambda (why)
                                   (return (expr-panic (expr-string
                                     (format "select: `~a` — ~a (typing carries the user-facing refusal; reaching the value layer with this shape is a compiler-invariant violation)"
@@ -2530,7 +2543,7 @@
         ;; round 2 pinned the message there as part of this fix.
         [(and (pair? (car steps)) (eq? (car (car steps)) '@sub))
          (if (null? (cdr steps))
-             (entries->value (level-entries v (cdr (car steps))))
+             (entries->value (level-entries v (cdr (car steps)) asort))
              (return (expr-panic
                       (expr-string
                        "select: internal — steps follow a sub-block that is not terminal (typing carries the user-facing refusal; reaching the value layer with this shape is a compiler-invariant violation)"))))]
@@ -2540,7 +2553,7 @@
          (let ([elem (index-into v (car steps) (car steps))])
            (if (null? (cdr steps))
                elem
-               (below-value elem (cdr steps) seen)))]
+               (below-value elem (cdr steps) seen asort)))]
         ;; D4.P4a site 8: was a bare `[else …]`. The guard must list EXACTLY
         ;; what that else caught. ⚠ The twins are NOT symmetric here, and the
         ;; first version of this comment said they were (corrected at the P4a
@@ -2553,16 +2566,16 @@
         ;; claimed. What both twins genuinely omitted in the first cut, and
         ;; what is actually load-bearing here, is `ord-branch`.
         [(memq (select-step-kind (car steps)) '(key caret sub ord-branch))
-         (entries->value (branch-entries v steps seen))]
+         (entries->value (branch-entries v steps seen asort))]
         ;; ✅ D4.P4c-4c: the value semantics LANDED. `bcast` still does NOT join
         ;; the memq above, and now for a second reason: that arm runs
         ;; `entries->value`, which would wrap the broadcast result in a spurious
         ;; level. ω descends transparently, like the ordinal arm above it.
         [(eq? (select-step-kind (car steps)) 'bcast)
-         (let ([hit (bcast-lift v (car steps))])
+         (let ([hit (bcast-lift v (car steps) asort)])
            (if (null? (cdr steps))
                hit
-               (below-value hit (cdr steps) seen)))]
+               (below-value hit (cdr steps) seen asort)))]
         [else (select-step-kind-unhandled 'select-below-value (car steps))]))
     ;; D4.P4a: HOIST the subject's whnf out of the per-branch lambda. The
     ;; header comment above has claimed since P3a that the subject is

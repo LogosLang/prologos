@@ -35,7 +35,9 @@
                   ;; (one call, at `segment-select-items`' success return) and the
                   ;; star half of Q_U55 (the `*-` leaf, its `*` remedy)
                   select-branch-mark-total-collapse
-                  select-star-step? select-star-cont select-star-cont-of)
+                  select-star-step? select-star-cont select-star-cont-of
+                  ;; 1b-vi verify (VF-1): the ω-ancestor refusal covers `*-_` too
+                  select-star-cont-total?)
          ;; D4.P4e-1b slice 1b-vi-B [Q_U55]: the renamed-ancestor refusal renders its
          ;; two remedies with the ONE branch printer (Q_U54) rather than a second
          ;; hand-written copy in this file. Acyclic (pretty-print's closure does not
@@ -1251,14 +1253,36 @@
     ;; (`int->string`), so `a*->b` fuses into a single lexeme and arrives HERE —
     ;; not as `a*-` then `>` (that shape is the item arm in `segment-select-items`).
     ;; Measured (probe-1bvi-aa); the remedy `x{a*- b}` is run by the battery.
-    [(regexp-match #rx"^(.*)[*]->(.*)$" str)
+    ;; ⭐ 1b-vi verify (VF-4: VM-7, VS-7, VM-8): EVERY star lexeme glued to `->`, split at
+    ;; the FIRST one, and every later one in the remainder rewritten too. The greedy
+    ;; `^(.*)[*]->` split `a*->b*->c` at the LAST arrow and offered `a*->b*- c`, refused
+    ;; again; and `a*_->b` / `a*-_->b` fell to the generic text naming `*`. A plain `*->`
+    ;; keeps its measured reading (`*-` then `>`); the others are the lexeme then `->`.
+    [(regexp-match #rx"^(.*?)[*](-_|-|_)?->(.*)$" str)
      => (lambda (m)
-          (format (string-append
-                   "`~a` — there is no `*->` operator: `*-` (the total collapse) attaches at the"
-                   " END of a segment, and `->` is the function arrow, which means nothing inside"
-                   " a selection. If you meant the total collapse, end the segment there and"
-                   " write what follows as its own branch: `~a*-~a`")
-                  str (cadr m) (if (string=? (caddr m) "") "" (string-append " " (caddr m)))))]
+          (let* ([pre (cadr m)] [suf (caddr m)] [post (cadddr m)]
+                 [fix-star (lambda (suf) (string-append "*" (or suf "-")))]
+                 [post* (regexp-replace #rx" +$"
+                                        (regexp-replace* #rx"[*](-_|-|_)?->" post
+                                                         (lambda (all g) (string-append (fix-star g) " ")))
+                                        "")]
+                 [tail (if (string=? post* "") "" (string-append " " post*))])
+            (if (not suf)
+                (format (string-append
+                         "`~a` — there is no `*->` operator: `*-` (the total collapse) attaches at the"
+                         " END of a segment, and `->` is the function arrow, which means nothing inside"
+                         " a selection. If you meant the total collapse, end the segment there and"
+                         " write what follows as its own branch: `~a*-~a`")
+                        str pre tail)
+                (let ([op (string-append "*" suf)])
+                  (format (string-append
+                           "`~a` — there is no `~a->` operator: `~a` (~a) attaches at the END of a"
+                           " segment, and `->` is the function arrow, which means nothing inside a"
+                           " selection. End the segment at the star and write what follows as its"
+                           " own branch: `~a~a~a`")
+                          str op op
+                          (if (string=? suf "_") "the provenance flatten" "the total collapse with provenance")
+                          pre op tail)))))]
     [else
      (format (string-append
               "`~a` — `*` is the layer-delete operator and attaches at the END of a"
@@ -1400,6 +1424,9 @@
   ;; Q_U55's, which presupposes a well-placed leaf.
   (define (branch-problem br)
     (or (caret-position-problem br)
+        ;; 1b-vi verify (VF-1): before Q_U55's check — the shape is unsupported
+        ;; whatever its renames, and the sub-block remedy keeps a rename legal
+        (total-collapse-omega-problem br)
         (total-collapse-rename-problem br)))
   ;; ---- D4.P4e-1b slice 1b-vi-B — [Q_U55]: a RENAME on an ANCESTOR of a TOTAL
   ;; collapse is refused. `^-` / `^-k'` lift the leaf to the top of its branch and
@@ -1442,6 +1469,10 @@
   ;;          `c^-z` → `c^z`): "collapse all but the named levels", spelled out.
   ;; The battery RUNS both remedies and requires each to be accepted (row
   ;; checks, B-3: advice that does not work).
+  ;; ⚠ 1b-vi verify (VF-1): these ω-ancestor arms are now UNREACHABLE BY CONSTRUCTION —
+  ;; `total-collapse-omega-problem` runs first and refuses every total collapse under an
+  ;; ω ancestor. (The claim below was half right: the shape PARSES, and under a total
+  ;; star it aborted the whole file, which is why that check exists.)
   ;; ⚠ REACHABILITY, measured: the ω arms of `drop-rename` / `keep-level` serve an
   ;; ω ANCESTOR, which no block can spell today (a step after ω acts on the whole
   ;; result, and in-block fused chains fail — DEFERRED 167), so they are unpinned
@@ -1471,6 +1502,23 @@
     (cond [(null? (cdr strs)) (car strs)]
           [(null? (cddr strs)) (string-append (car strs) " and " (cadr strs))]
           [else (string-append (car strs) ", " (and-join (cdr strs)))]))
+  ;; ⭐ 1b-vi verify (VF-5: VT-4, VS-6, VM-6) — Q_T8 desugars `P.L^..` to `P^.L^P` BEFORE
+  ;; this check runs (the `|.|` arm below), so `t5{a.b^..c*-}` was told about a rename
+  ;; `b^a` and to "Drop `^a`" — text the user never wrote. A literal `a^.b^a` is the same
+  ;; steps, so the message cannot know which was typed; it names BOTH: `b^a` (how
+  ;; `a.b^..` is read). Answers the parent's name when `s` is `L^P` right after `P^`.
+  (define (dotdot-reading br s)
+    (let loop ([prev #f] [ss br])
+      (cond [(null? ss) #f]
+            [(eq? (car ss) s)
+             (and prev
+                  (eq? (select-step-kind s) 'caret)
+                  (eq? (select-step-kind prev) 'caret)
+                  (eq? (select-step-cont prev) 'dissolve)
+                  (let ([c (select-step-cont s)])
+                    (and (pair? c) (eq? (car c) 'rename) (eq? (cdr c) (cadr prev))))
+                  (cadr prev))]
+            [else (loop (car ss) (cdr ss))])))
   (define (total-collapse-rename-problem br)
     (and (pair? br)
          (let* ([leaf (last br)]
@@ -1491,7 +1539,11 @@
                               (format "`~a` lifts what `~a` holds" (pp-select-branch (list sn leaf)) (pp-select-branch (list sn)))
                               (format "`~a` lifts the leaf" (pp-select-branch (list leaf))))
                           (if one? "one" "ones")
-                          (and-join (for/list ([s renamed]) (format "`~a`" (pp-select-branch (list s)))))
+                          (and-join (for/list ([s renamed])
+                                      (let ([par (dotdot-reading br s)])
+                                        (if par
+                                            (format "`~a` (how `~a.~a^..` is read)" (pp-select-branch (list s)) par (cadr s))
+                                            (format "`~a`" (pp-select-branch (list s)))))))
                           (if one? "s" "")
                           (and-join (for/list ([n names]) (format "`^~a`" n)))
                           (pp-select-branch (append (map drop-rename ancestors) (list leaf)))
@@ -1502,6 +1554,55 @@
                                        (list sn (make-select-star (select-star-cont-of #f #f))))
                                (append (map keep-level ancestors)
                                        (list (leaf-without-collapse leaf)))))))))))
+;; ---- ⭐⭐ 1b-vi verify (VF-1) — A TOTAL COLLAPSE UNDER AN ω ANCESTOR IS REFUSED HERE.
+  ;; Measured (verify probe v1): `ow{top:cfg.x*-}` ABORTED THE WHOLE FILE — no result
+  ;; line, not even the `def`s above it — because typing's ω arms hand the steps after
+  ;; `:` straight to `select-below-field`, whose star-TAIL arm raises its C-5 invariant
+  ;; before the presence check that refuses `*` and `^-` per command. Three verify
+  ;; lenses found it independently; the comment above ("no block can spell today")
+  ;; had read DEFERRED 167 as "unobservable", and 167 itself says so. Every sibling
+  ;; spelling is refused per command today (`ow{top:cfg.x}`, `ow{top:cfg.x*}`,
+  ;; `ow{top:cfg.x^-}`, `ow{top^:cfg^.x*}` — v2), because a step after an IN-BLOCK ω
+  ;; acts on the whole broadcast result (167). So this is 167's own recommended
+  ;; waypoint — "a guided refusal naming the sub-block spelling" — scoped to the
+  ;; collapse families, BOTH of them (Q_U55's one rule): `*-`, `*-_`, `^-`, `^-k'`,
+  ;; `^-_`. The remedy nests the rest of the branch in each ω's own block, where the
+  ;; collapse is branch-local and the broadcast's key stays (measured, v6:
+  ;; `ow{top:{cfg.x*-}}` → `{:top {:eu {:p 1}, :us {:p 2}}}`). It does not claim to be
+  ;; Q_U48's meaning of the refused form: that meaning needs 167 (v6: `top^:{…}`
+  ;; lands as one keyless component, an ω result being a layer of its own).
+  ;; ⚠ An ω sₙ is NOT an ancestor (`wv{a.rs:x*-}`, `org{db^p.admins:name^-}` stay legal).
+  (define (any-total-collapse-leaf? s)
+    (let ([s (unwrap-bcast s)])
+      (or (and (eq? (select-step-kind s) 'caret)
+               (let ([c (select-step-cont s)]) (and c (select-cont-collapse? c))))
+          (and (select-star-step? s) (select-star-cont-total? (select-star-cont s))))))
+  (define (omega-step? s) (eq? (select-step-kind s) 'bcast))
+  ;; nest the steps after EVERY ω ancestor in that ω's own block (right to left), so
+  ;; the remedy is legal in one step: `a:b.c:d.e*-` → `a:{b.c:{d.e*-}}`
+  (define (omega-remedy steps above-n)
+    (let-values ([(pre post) (splitf-at steps (lambda (s) (not (omega-step? s))))])
+      (if (or (null? post) (>= (length pre) above-n)
+              (select-sub-step? (select-bcast-inner (car post))))
+          steps
+          (append pre
+                  (list (make-select-bcast
+                         (list '@sub (omega-remedy (cons (select-bcast-inner (car post)) (cdr post))
+                                                   (- above-n (length pre))))))))))
+  (define (total-collapse-omega-problem br)
+    (and (pair? br) (pair? (cdr br))
+         (let* ([leaf (last br)]
+                [ancestors (drop-right br 1)]
+                [star? (select-star-step? (unwrap-bcast leaf))]
+                ;; the steps STRICTLY above sₙ (star family) or above the leaf (caret)
+                [above (if star? (drop-right ancestors 1) ancestors)]
+                [w (findf omega-step? above)])
+           (and (any-total-collapse-leaf? leaf)
+                w
+                (format "a total collapse cannot sit under a broadcast yet: `~a` follows the broadcast `~a`, and a step after an in-block broadcast acts on the whole broadcast result, not on each element (DEFERRED 167). Write the rest of the branch as the broadcast's own block, where the collapse is branch-local and the broadcast's key stays: `~a`"
+                        (pp-select-branch (if star? (list (last ancestors) leaf) (list leaf)))
+                        (pp-select-branch (append (takef above (lambda (s) (not (eq? s w)))) (list w)))
+                        (pp-select-branch (omega-remedy br (length above))))))))
   (define (caret-position-problem br)
     (let check ([steps br])
       (if (null? steps)

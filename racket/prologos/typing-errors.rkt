@@ -332,6 +332,9 @@
   (define ops-all (if (null? stars) "«star-cont-missing»" (lex-join stars "or")))
   (define stars-total (filter select-star-cont-total? stars))
   (define stars-partial (filter (lambda (c) (not (select-star-cont-total? c))) stars))
+  ;; ⭐ 1b-vi verify (VF-3): the ordinal facts at the failing level (`select-level-ordinal-fact`)
+  ;; — a list of flags, or #f. `'()` for every kind that does not carry them.
+  (define ord (let ([o (select-fail-ordinal fail)]) (if (list? o) o '())))
   (case (select-fail-kind fail)
     ;; ⚠ THE `bcast-not-yet` ARM IS RETIRED AT D4.P4c-4c — it named THIS SLICE as
     ;; its own discharge point ("the ω value semantics land at … P4c-4c"), and
@@ -838,6 +841,17 @@
               label ops-all)
       (cond
         [(null? stars) ""]
+        ;; ⭐ 1b-vi verify (VF-3, VM-2): under an ordinal HEAD the mechanism sentence is
+        ;; FALSE — measured: `ot2{0.a^.b* 1.a^.b}` and `rv{xs^.{0.a} k}` trade the
+        ;; collision for L4, because without its star the element is one keyless tuple
+        ;; component. A bare ordinal STEP after a dissolve never wraps, so there the
+        ;; generic sentence stays true (`w{v^.0.a^.b v^.1.a^.b*}` works).
+        [(memq 'head ord)
+         (string-append
+          " Dropping the star of ONE ordinal-headed branch trades the collision for a keyed/keyless mix (L4): without its star that element lands as one keyless tuple component."
+          (if (memq 'all-head ord)
+              " Dropping it on every branch here gives a tuple of the elements."
+              ""))]
         [else
          (format " Dropping a star re-nests what it lifted — ~a — which resolves the collision unless another branch delivers that key too."
                  (string-join
@@ -849,7 +863,9 @@
                        (list (format "~a under its whole path" (lex-join stars-total)))
                        '()))
                   ", "))])
-      (if (pair? stars-total)
+      ;; 1b-vi verify (VM-4 / VI-2): NOT when every colliding branch arrives through an
+      ;; ordinal — measured `ot2{0.a.b*- 1.a.b*-}` → `*-_` collides again (`:a-b-k`)
+      (if (and (pair? stars-total) (not (memq 'all ord)))
           " Under a total collapse, `*-_` keeps each surviving ancestor's name in the lifted key (`x{a.k*-_ b.k*-_}` delivers `:a-k-…` beside `:b-k-…`), and an ancestor dissolved with `^` contributes no name — so drop the `^` where the branches differ."
           "")
       ;; ⭐ 1b-vi-E [Q_U61] — S's COST, NAMED. Measured on `ot2{0.a^.b* 1.a^.b*}`
@@ -858,11 +874,25 @@
       ;; collision for an L4 mix. The tuple the user most likely meant is spelled
       ;; with `^` (measured `@[{:k 1} {:k 2}]`); a provenance star cannot help,
       ;; because an ordinal contributes no name to its prefix (Q_U57).
-      (if (select-fail-ordinal fail)
+      ;; ⭐⭐ 1b-vi verify (VF-3) — EVERY CLAUSE SCOPED TO THE POPULATION IT WAS MEASURED
+      ;; ON (`select-level-ordinal-fact`). E's first wording held for `ot2` alone; its
+      ;; tuple remedy failed on three populations it was emitted for (VM-3: a `{0}`
+      ;; sₙ, a keyed `^-` sibling, a third branch left starred) and the provenance
+      ;; caveat was gated on a synth star being present, i.e. missing exactly when the
+      ;; `*-_` advice was given (VM-4). Now: the reason whenever a landing passes
+      ;; through an ordinal; the caveat always with it; the tuple remedy only when EVERY
+      ;; branch passes through, applied to every one, and only where sₙ is a key.
+      (if (memq 'passes ord)
           (string-append
-           " Under an ordinal head a keyless landing splices into the block, so the lifted fields of two elements meet at one level — to keep each element as its own tuple component, end those branches with `^` instead of the star (`x{0.a^.b^ 1.a^.b^}`)."
-           (if (ormap select-star-cont-synth? stars)
-               " (An ordinal contributes no name to a `*_` / `*-_` prefix, so the provenance form cannot tell two elements apart.)"
+           " Through an ordinal, a star whose remainder names no key lands its fields at this level (Q_U61), so an element's lifted fields meet the level's other keys. "
+           ;; the provenance form OF EACH FAMILY PRESENT (D-1's rule: no clause spoken over
+           ;; an operator that is not there)
+           (format "~a cannot tell elements apart either: an ordinal contributes no name to its prefix."
+                   (cond [(null? stars-partial) "`*-_`"]
+                         [(null? stars-total) "`*_`"]
+                         [else "`*_` or `*-_`"]))
+           (if (memq 'key-tails ord)
+               " To keep each element as its own tuple component, end EVERY branch here with `^` instead of its star (`x{0.a^.b^ 1.a^.b^}`)."
                ""))
           ""))]
     [(star-l4-mixed)
@@ -930,7 +960,13 @@
      ;; are MEASURED (probe-1bvi-v: `vv{a^.b* a^}` ✓, the flatten alone ✓).
      (let* ([total? (and star-c (select-star-cont-total? star-c))]
             [o (if star-c op "«star-cont-missing»")])
-       (format "mixed keyed/keyless sorts in the select block (L4) — `~a` is a star branch whose landing and its sibling branches' do not agree: one level assembles a Map OR a tuple, never both. A star's landing follows its CONTENTS: Map contents splice in as KEYED fields, vector contents land as ONE KEYLESS component~a. So make the level agree — if the `~a` lands keyed, stop dissolving its siblings (drop a `^`, as in ~a); if it lands keyless, dissolve the keys that survive on the others (~a). Selecting the flatten in its own block always works"
+       ;; ⭐ 1b-vi verify (VF-3, VM-1): at a level of ORDINAL heads the agree-clause is
+       ;; false — measured `ot2{0.a^.b* 1.a^.b}` → its remedy `ot2{0.a^.b* 1.a.b}` →
+       ;; the same L4: an ordinal-headed sibling is keyless whatever its `^`s. When every
+       ;; delivered branch is an ordinal head the clause is replaced; when some are, the
+       ;; generic clause stays (it holds for the key-headed ones) and the ordinal fact is
+       ;; added. Both remedies measured: `ot2{0.a.b* 1.a.b*}`, `ot2{0.a^.b^ 1.a^.b^}`.
+       (format "mixed keyed/keyless sorts in the select block (L4) — `~a` is a star branch whose landing and its sibling branches' do not agree: one level assembles a Map OR a tuple, never both. A star's landing follows its CONTENTS: Map contents splice in as KEYED fields, vector contents land as ONE KEYLESS component~a. ~a. Selecting the flatten in its own block always works"
                label
                ;; ONE CLAUSE PER FAMILY PRESENT — a D-1 draft picked the clause from the
                ;; first cont and spoke it over every operator, so a mixed branch read
@@ -944,11 +980,27 @@
                 (if (pair? stars-total)
                     (format "; a total collapse (~a) always lands at its branch's top" (lex-join stars-total "or"))
                     ""))
-               o
-               (if total? (format "`x{a.b~a c}`" o) (format "`x{a~a b}`" o))
-               (if total?
-                   (format "a `^` on each, as in `x{a.b~a c^}`" o)
-                   (format "a `^` per surviving level, as in `x{a~a b^.c^.d~a}`" o o))))]
+               (let ([agree
+                      (format "So make the level agree — if the `~a` lands keyed, stop dissolving its siblings (drop a `^`, as in ~a); if it lands keyless, dissolve the keys that survive on the others (~a)"
+                              o
+                              (if total? (format "`x{a.b~a c}`" o) (format "`x{a~a b}`" o))
+                              (if total?
+                                  (format "a `^` on each, as in `x{a.b~a c^}`" o)
+                                  (format "a `^` per surviving level, as in `x{a~a b^.c^.d~a}`" o o)))]
+                     [ordinal-fact
+                      "under an ordinal head a star's landing passes through only when nothing between the ordinal and the star names a key; otherwise an ordinal-headed branch is ONE keyless tuple component, whatever its `^`s (a `^-` collapse aside: it lands one keyed field)"])
+                 (cond
+                   ;; the remedies by FAMILY: a total collapse keeps no key to nest under,
+                   ;; so it is offered only the `^` ending (measured, verify probe v8)
+                   [(memq 'all-head ord)
+                    (string-append
+                     "Here every branch is ordinal-headed, and " ordinal-fact
+                     (if total?
+                         (format ". So make every branch a tuple component: end each starred branch with `^` instead of its `~a` (`x{0.a.b^ 1.a.b^}`) — a total collapse keeps no key to nest under" o)
+                         (format ". So make every branch a tuple component: keep a key before each star (`x{0.a.b~a 1.a.b~a}`, a tuple of records), or end the branch with `^` instead of its star (`x{0.a^.b^ 1.a^.b^}`)" o o)))]
+                   [(or (memq 'head ord) (memq 'wrap ord))
+                    (string-append agree "; and " ordinal-fact)]
+                   [else agree]))))]
     ;; ⭐ D4.P4e-1b slice 1b-iii-A — THE FAIL-KIND AXIS IS NOW TOTAL.
     ;; This arm was `#f`, and `#f` here is SILENT: it falls through `infer/err`'s
     ;; `or` chain to the generic "Could not infer type", and NESTED it is worse —

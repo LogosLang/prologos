@@ -187,7 +187,7 @@
  select-star-provenance-prefix
  select-branch-deep-star? select-steps-star-tail? select-branch-star-conts/deep
  select-step-makes-no-layer? select-branch-has-star?/deep
- select-steps-yield-bare-join? select-branch-ordinal-passes-through?
+ select-steps-yield-bare-join? select-branch-ordinal-facts select-level-ordinal-fact select-branch-level-star-conts
  ;; [Q_U44] canonical key order — ONE definition, shared by both twins.
  canonical-keyword-key? canonical-keyword-key<?
  select-step-cont select-cont-collapse? select-cont-rename
@@ -1115,15 +1115,99 @@
       (let ([i (if (eq? (select-step-kind s) 'bcast) (select-bcast-inner s) s)])
         (and (eq? (select-step-kind i) 'caret)
              (select-cont-dissolves-level? (select-step-cont i))))))
+;; ⚠ 1b-vi verify (VT-7): the skip runs over the steps STRICTLY ABOVE sₙ — `(cddr ss)`,
+;; not `(cdr ss)`. With `(cdr ss)` a sₙ that itself names no key was consumed, leaving
+;; `(★)` (no star tail) — unobservable only because the parser refuses `a^*`; the
+;; question is about the remainder, which never includes sₙ.
+;; ⚠ The ω unwrap in `select-step-names-no-key?` above is UNREACHABLE until DEFERRED 167
+;; (VI-8): an ω step between the head and sₙ is an in-block step after ω, refused per
+;; command today (and, under a total star, at the parser — VF-1).
 (define (select-steps-yield-bare-join? steps)
   (let loop ([ss steps])
-    (if (and (pair? ss) (pair? (cdr ss)) (select-step-names-no-key? (car ss)))
+    (if (and (pair? ss) (pair? (cdr ss)) (pair? (cddr ss)) (select-step-names-no-key? (car ss)))
         (loop (cdr ss))
         (select-steps-star-tail? ss))))
-;; the branch-level form: an ORDINAL-headed branch whose star landing passes through
-;; to the block — read by the dup gate, so its refusal can name the cost of S
-(define (select-branch-ordinal-passes-through? b)
-  (and (pair? b) (select-ord-step? (car b)) (select-steps-yield-bare-join? (cdr b))))
+;; ⭐⭐ 1b-vi verify (VF-3) — THE ORDINAL FACTS AT A LEVEL, read by BOTH level gates
+;; (`star-dup-key`, `star-l4-mixed`) so their prose says only what is true there. One fact
+;; per branch DELIVERED to the level, seen through the routes that splice into it —
+;; leading DISSOLVES (a dissolved head splices what is below it: `w{v^.0.a^.b*}`) and a
+;; TERMINAL sub-block reached through them (`rv{xs^.{0.a*} k}`):
+;;   'head       an ordinal HEAD `(@ord N)` whose star landing passes through (S, Q_U61)
+;;   'head-wrap  an ordinal HEAD that does not — ONE keyless tuple component, whatever
+;;               its `^`s (spec §3.3)
+;;   'mid        a BARE number after a dissolve whose star landing passes through — an
+;;               ordinal STEP makes no level at all (Q_U2), so it never wraps
+;;   #f          anything else
+;; The two ordinal forms must stay apart: dropping one star resolves a collision through
+;; a bare number (`w{v^.0.a^.b v^.1.a^.b*}`) and trades it for an L4 mix under a head.
+;; Before the verify the dup gate read `(car b)` only (VT-5, VS-5, VM-11, VI-7) and the
+;; L4 gate read nothing (VM-1); the prose then offered remedies measured false there.
+(define (select-branch-delivered b)
+  ;; the branch lists whose components land at THIS level, through the splicing routes
+  (cond
+    [(null? b) (list b)]
+    [(and (select-sub-step? (car b)) (null? (cdr b)))
+     (append-map select-branch-delivered (cdr (car b)))]
+    [(and (eq? (select-step-kind (car b)) 'caret)
+          (select-cont-dissolves-level? (select-step-cont (car b)))
+          (pair? (cdr b)))
+     (select-branch-delivered (cdr b))]
+    [else (list b)]))
+(define (select-delivered-ordinal-fact d)
+  (cond
+    [(null? d) #f]
+    ;; IN THE TWINS' ARM ORDER: the `^-` collapse arm precedes the ordinal arm in both
+    ;; walkers, so an ordinal-headed collapse lands ONE KEYED field — not a tuple
+    ;; component. Read as an ordinal head, `ot2{0.a.b.k^- 1.a^.b*}` was told that
+    ;; dropping the star "on every branch gives a tuple" — measured L4 (verify v7:27).
+    [(select-branch-collapse d) #f]
+    [(select-ord-step? (car d)) (if (select-steps-yield-bare-join? (cdr d)) 'head 'head-wrap)]
+    [(number? (car d)) (and (select-steps-yield-bare-join? (cdr d)) 'mid)]
+    [else #f]))
+(define (select-branch-ordinal-facts b)
+  (map select-delivered-ordinal-fact (select-branch-delivered b)))
+;; the star's sₙ is a NAMED key — where `^` instead of the star is spellable (a `{0}` sₙ
+;; cannot take one: `vhm2{0.{0}^ 1.{0}^}` is a parse error, verify probe v4)
+(define (select-delivered-key-tail? d)
+  (let ([r (reverse d)])
+    (and (pair? r) (pair? (cdr r)) (select-star-step? (car r))
+         (memq (select-step-kind (cadr r)) '(key caret)) #t)))
+;; the LEVEL's summary — #f, or a list of the flags that hold:
+;;   'passes    some delivered branch passes a landing through an ordinal ('head / 'mid)
+;;   'head      some does so through a HEAD
+;;   'all       EVERY delivered branch passes through an ordinal
+;;   'key-tails … and every one's sₙ is a named key (the `^` remedy is spellable)
+;;   'wrap      some delivered branch is an ordinal head that does not ('head-wrap)
+;;   'all-head  EVERY delivered branch is an ordinal head ('head / 'head-wrap)
+(define (select-level-ordinal-fact branches)
+  (let* ([ds (append-map select-branch-delivered branches)]
+         [fs (map select-delivered-ordinal-fact ds)]
+         [passes? (lambda (f) (memq f '(head mid)))]
+         [head? (lambda (f) (memq f '(head head-wrap)))]
+         [all? (and (pair? fs) (andmap passes? fs))]
+         [flags (append (if (ormap passes? fs) '(passes) '())
+                        (if (memq 'head fs) '(head) '())
+                        (if all? '(all) '())
+                        (if (and all? (andmap select-delivered-key-tail? ds)) '(key-tails) '())
+                        (if (memq 'head-wrap fs) '(wrap) '())
+                        (if (and (pair? fs) (andmap head? fs)) '(all-head) '()))])
+    (and (pair? flags) flags)))
+;; ⭐ 1b-vi verify (VM-10) — the star conts whose LANDINGS REACH THIS LEVEL, for the
+;; level gates' prose. `select-branch-star-conts/deep` walks into EVERY sub-block, so a
+;; star sealed under a KEPT key (`t3x{a.{b*-_} c* d*}`) was named as a possible lifter
+;; of the colliding key and drew the total-collapse sentence. A star's landing reaches
+;; the level when it is the branch's own tail `(sₙ ★)` after steps that name no key, or
+;; sits in a terminal sub-block reached through such steps — the same routes
+;; `select-steps-yield-bare-join?` and the dissolve arms take.
+(define (select-branch-level-star-conts b)
+  (cond
+    [(null? b) '()]
+    [(select-steps-star-tail? b) (list (select-star-cont (cadr b)))]
+    [(and (select-sub-step? (car b)) (null? (cdr b)))
+     (append-map select-branch-level-star-conts (cdr (car b)))]
+    [(and (pair? (cdr b)) (select-step-names-no-key? (car b)))
+     (select-branch-level-star-conts (cdr b))]
+    [else '()]))
 
 (define (make-select-star cont) (list '@star cont))
 
@@ -1484,7 +1568,9 @@
     [(caret) (if (select-cont-collapsed? (caddr s)) s (mark (cadr s) (caddr s)))]
     ;; probe-1bvi-t: the ω lift applies its INNER step per element through the
     ;; branch walk, which honours the inner cont (`cfg^` changes the type), so the
-    ;; inner is where an ω ancestor's mark belongs. Unpinnable until DEFERRED 167.
+    ;; inner is where an ω ancestor's mark belongs. Unreachable until DEFERRED 167: the
+    ;; parser refuses a total collapse under an ω ancestor (1b-vi verify VF-1) — that
+    ;; shape aborted the whole file before, so "unpinnable" had hidden a crash.
     [(bcast) (let* ([i (select-bcast-inner s)] [m (select-step-mark-collapsed i)])
                (if (eq? m i) s (make-select-bcast m)))]
     ;; an ordinal makes no layer (Q_U2); a sub-block is terminal and a star that is
@@ -1503,9 +1589,11 @@
                (if (eq? u i) s (make-select-bcast u)))]
     [else s]))
 
-;; ⭐ 1b-vi-D-2a: "the branch ends in a TOTAL star" — ONE definition, read by the
-;; mark below AND by both twins' ordinal-head arms, so "total" cannot mean two
-;; things. (`*-` / `*-_`; the classifier raises on anything off the axis.)
+;; ⭐ 1b-vi-D-2a: "the branch ends in a TOTAL star" — ONE definition, read by the mark
+;; below, so "total" cannot mean two things. (`*-` / `*-_`; the classifier raises on
+;; anything off the axis.) ⚠ 1b-vi-E retired its other readers: the twins' ordinal-head
+;; arms now ask `select-steps-yield-bare-join?` (Q_U61), which a marked branch answers
+;; #t because its ancestors name no key (corrected at the 1b-vi verify, VT-6).
 (define (select-branch-total-collapse? b)
   (let ([rev (reverse b)])
     (and (pair? rev)
@@ -1519,7 +1607,8 @@
 ;; ⚠ An ordinal step is left UNMARKED (it has no cont to wrap) — and that is NOT
 ;; "an ordinal makes no layer" by itself: an ordinal HEAD sets its branch's
 ;; landing (one keyless component). Under a total collapse both twins' ord-head
-;; arms descend transparently instead (1b-vi-D-2a, `select-branch-total-collapse?`).
+;; arms descend transparently instead — since 1b-vi-E because the MARKED ancestors
+;; name no key (`select-steps-yield-bare-join?`), not through this predicate.
 (define (select-branch-mark-total-collapse b)
   (let ([rev (reverse b)])
     (if (and (pair? rev) (pair? (cdr rev))

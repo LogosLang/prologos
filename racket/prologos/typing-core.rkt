@@ -1509,9 +1509,10 @@
 ;; Duplicates/mixing were excluded at the parser's shared-walk checks, so
 ;; plain append assembles safely.
 (define (select-level-components ctx tm branches path sort)
-  (let loop ([bs branches] [comps '()])
+  ;; `per` — each branch with its own components, for the L4 label (1b-vi verify VM-5)
+  (let loop ([bs branches] [comps '()] [per '()])
     (if (null? bs)
-        (let ([cs (reverse comps)])
+        (let ([cs (reverse comps)] [per (reverse per)])
           ;; ⭐ 1b-iii-B1 — [Q_U43]'s ACTUAL migration + [Q_U44]'s obligation. The
           ;; parser's L4 gate answers `'()` for a star branch (it cannot know a
           ;; subject-derived sort), so THIS is the first seat that can check
@@ -1542,12 +1543,24 @@
                    (ormap (lambda (c) (car c)) cs)
                    (ormap (lambda (c) (not (car c))) cs))
               ;; 1b-vi-D-1: carry the conts of the branch the label NAMES, so the
-              ;; message speaks in that branch's operators
-              (let ([star-br (findf select-branch-has-star?/deep branches)])
+              ;; message speaks in that branch's operators.
+              ;; ⭐ 1b-vi verify (VM-5): NAME THE STAR BRANCH WHOSE LANDING IS KEYLESS when
+              ;; there is one — it is the branch the level disagrees with. The first star
+              ;; branch was named instead, so `mx{m* a.b*-}` spoke `*`'s clause (and its
+              ;; "drop a `^`", with no `^` anywhere) while `mx{a.b*- m*}` spoke `*-`'s:
+              ;; the text depended on branch order. The fallback is the old `findf`, so the
+              ;; label can never be `#f` (the landmine noted above).
+              (let ([star-br (or (for/first ([pb (in-list per)]
+                                             #:when (and (select-branch-has-star?/deep (car pb))
+                                                         (ormap (lambda (c) (not (car c))) (cdr pb))))
+                                   (car pb))
+                                 (findf select-branch-has-star?/deep branches))])
                 (values #f (select-fail 'star-l4-mixed path
                                         (string->symbol (pp-select-branch star-br))
                                         tm
-                                        (remove-duplicates (select-branch-star-conts/deep star-br)))))
+                                        (remove-duplicates (select-branch-star-conts/deep star-br))
+                                        ;; 1b-vi verify VF-3: the ordinal facts at this level
+                                        (select-level-ordinal-fact branches))))
               ;; ⭐⭐ 1b-iii-C2 — THE DUPLICATE-OUTPUT-KEY SEAT, and C2 is what makes
               ;; it necessary. `select-branch-top-keys` answers `'()` for a star
               ;; branch, so the parser's `dup-output-key` gate cannot see a deep
@@ -1580,16 +1593,20 @@
                 (if dup
                     ;; 1b-vi-D-1: EVERY operator present at the level — the gate cannot
                     ;; say which branch delivered `dup`, so it must not name just one
+                    ;; 1b-vi verify (VM-10): only the stars whose landings REACH this
+                    ;; level — a star sealed under a kept key cannot have lifted `dup`
                     (values #f (select-fail 'star-dup-key path dup tm
                                             (remove-duplicates
-                                             (append-map select-branch-star-conts/deep branches))
-                                            ;; 1b-vi-E [Q_U61]: S's cost, named in the refusal
-                                            (ormap select-branch-ordinal-passes-through? branches)))
+                                             (append-map select-branch-level-star-conts branches))
+                                            ;; 1b-vi-E [Q_U61] + verify VF-3: S's cost, named in
+                                            ;; the refusal — 'all | 'mixed | #f, seen through
+                                            ;; dissolves and terminal sub-blocks
+                                            (select-level-ordinal-fact branches)))
                     (values cs #f)))))
         (let-values ([(es bf) (select-branch-entries ctx tm (car bs) path '() sort)])
           (if bf
               (values #f bf)
-              (loop (cdr bs) (append (reverse es) comps)))))))
+              (loop (cdr bs) (append (reverse es) comps) (cons (cons (car bs) es) per)))))))
 
 ;; D4.P3b/P3c — one branch's components at the CURRENT level, as
 ;; (values (listof (key-or-#f . record-field)) fail-or-#f).
@@ -2174,7 +2191,11 @@
              ;; and Q_U49 places it at the ENCLOSING level — so descend exactly as the
              ;; bare-number arm below does, and the rest's own arms (the dissolve arm,
              ;; the star arm) place the join where a key-headed branch's would land:
-             ;; `ot{0.X}` ≡ `t5{X}` by construction. `seen` stays unchanged (an
+             ;; `ot{0.X}` ≡ `t5{X}` for every STEP CHAIN X. ⚠ Not for a SUB-BLOCK after the
+             ;; head (1b-vi verify VS-3, measured): `ot{0.a^.{b*}}` and `oo{0.{0.a^.b*}}`
+             ;; still wrap while `t5{a^.{b*}}` splices — the predicate recognises a
+             ;; `(sₙ ★)` tail only. Whether S extends there is posed as Q_U62, not
+             ;; decided here ("by construction" was claimed and measured false). `seen` stays unchanged (an
              ;; ordinal is nameless — Q_U57). ONE arm for every family: a total
              ;; collapse passes because its ancestors are marked (this subsumes
              ;; 1b-vi-D-2a's arm), and depth 1 is 1b-iv's seat B. Seat B used to
@@ -2353,6 +2374,12 @@
          ;; the branch was never marked — and computing `*`'s re-nesting would be a
          ;; silent wrong answer. Loud, like `select-step-kind-unhandled`: a compiler
          ;; invariant, not a user error (the reduction twin panics on the same test).
+         ;; ⚠ 1b-vi verify (VF-1): the claim "arriving here means an ancestor was KEPT"
+         ;; was FALSE on one route — an ω ANCESTOR: the ω arms (this function's and
+         ;; `select-branch-entries`') hand the steps after `:` straight here, so
+         ;; `ow{top:cfg.x*-}` aborted the whole file. The parser now refuses a total
+         ;; collapse under an ω ancestor (`total-collapse-omega-problem`), which makes
+         ;; the claim true again by construction; the stage table pins the shapes.
          [(select-star-cont-total? (select-star-cont star))
           (error 'select-below-field
                  "internal: the total collapse `~a` reached the star-TAIL arm, so an ancestor was kept — `select-branch-mark-total-collapse` did not run on this branch (D4.P4e-1b-vi-C, C-5)"

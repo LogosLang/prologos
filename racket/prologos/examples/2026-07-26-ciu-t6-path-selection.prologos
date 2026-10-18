@@ -660,8 +660,12 @@ guild-pair{0.server^.ssl^ 1.server^.ssl^}
 ;;
 ;; Two ordinal branches whose keyless landings splice to one level (Q_U61's cost):
 ;; guild-pair{0.server^.ssl* 1.server^.ssl*}
-;;   ERROR: duplicate output key `:cert-path` in the select block — … Under an
-;;   ordinal head a keyless landing splices into the block, so the lifted fields of
-;;   two elements meet at one level — to keep each element as its own tuple
-;;   component, end those branches with `^` instead of the star
-;;   (`x{0.a^.b^ 1.a^.b^}`).                                            (M17)
+;;   ERROR: duplicate output key `:cert-path` in the select block — … Dropping the
+;;   star of ONE ordinal-headed branch trades the collision for a keyed/keyless mix
+;;   (L4): without its star that element lands as one keyless tuple component.
+;;   Dropping it on every branch here gives a tuple of the elements. Through an
+;;   ordinal, a star whose remainder names no key lands its fields at this level
+;;   (Q_U61), so an element's lifted fields meet the level's other keys. `*_` cannot
+;;   tell elements apart either: an ordinal contributes no name to its prefix. To
+;;   keep each element as its own tuple component, end EVERY branch here with `^`
+;;   instead of its star (`x{0.a^.b^ 1.a^.b^}`).   (M17; re-measured at the 1b-vi verify)

@@ -1,0 +1,16 @@
+0: ow : {:top {:eu {:cfg {:x {:p Int}}} :us {:cfg {:x {:p Int}}}}} defined.
+1: og : {:db {:admins [PVec {:name {:f {:z Int}}}]}} defined.
+2: dz : {:top {:eu {:cfg {:x {:v Int}}} :us {:cfg {:x {:w Int}}}}} defined.
+3: @[{:eu {:p 1}, :us {:p 2}}] : ⟨{:eu {:p Int} :us {:p Int}}⟩
+4: {:top {:eu {:p 1}, :us {:p 2}}} : {:top {:eu {:p Int} :us {:p Int}}}
+5: @[{:eu {:p 1}, :us {:p 2}}] : ⟨{:eu {:p Int} :us {:p Int}}⟩
+6: @[{:eu {:x {:p 1}}, :us {:x {:p 2}}}] : ⟨{:eu {:x {:p Int}} :us {:x {:p Int}}}⟩
+7: {:top {:eu {:x {:p 1}}, :us {:x {:p 2}}}} : {:top {:eu {:x {:p Int}} :us {:x {:p Int}}}}
+8: @[{:eu {:cfg-x-p 1}, :us {:cfg-x-p 2}}] : ⟨{:eu {:cfg-x-p Int} :us {:cfg-x-p Int}}⟩
+9: {:top {:eu {:cfg-x-p 1}, :us {:cfg-x-p 2}}} : {:top {:eu {:cfg-x-p Int} :us {:cfg-x-p Int}}}
+10: @[{:eu {:v 1}, :us {:w 2}}] : ⟨{:eu {:v Int} :us {:w Int}}⟩
+11: @[@[{:z 1} {:z 2}]] : ⟨[PVec {:z Int}]⟩
+12: {:db {:admins @[{:z 1} {:z 2}]}} : {:db {:admins [PVec {:z Int}]}}
+13: ERROR: broadcast fails at field :f — Could not infer type — field :f is not present in the record {:z Int}; available fields: :z; in the select branch `db.admins.name.f` — bare field access (no construction) is spelled `.f`
+14: {:db {:admins @[{:f {:z 1}} {:f {:z 2}}]}} : {:db {:admins [PVec {:f {:z Int}}]}}
+--- 1 errors ---

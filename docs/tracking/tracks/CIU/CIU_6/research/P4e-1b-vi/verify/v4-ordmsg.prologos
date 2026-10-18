@@ -1,0 +1,40 @@
+ns v4ordmsg
+def ot2 := @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]
+def ot3 := @[{:a {:b {:k 1}}} {:a {:b {:k 2}}} {:a {:b {:k 3}}}]
+def vhm2 := @[@[{:x 1}] @[{:x 2}]]
+def rv := {:xs @[{:a {:k 1}} {:a {:k 2}}] :k 9}
+def w := {:v @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]}
+def mx := {:m {:x 1 :y 2} :a {:b @[@[1 2] @[3]]}}
+def t3x := {:a {:b {:q {:r 1}}} :c {:k 1} :d {:k 2}}
+;; Cluster C — ordinal-level message truth; each refusal followed by the remedy it offers
+;; L3-1: L4 at an ordinal level; its remedy "drop a ^"
+ot2{0.a^.b* 1.a^.b}
+ot2{0.a^.b* 1.a.b}
+;; L3-2: dup; "dropping a star … resolves the collision"
+ot2{0.a^.b* 1.a^.b*}
+ot2{0.a^.b* 1.a^.b}
+;; L3-4 / L4-2: dup under *-; the *-_ sentence, then the *-_ spelling, then the tuple
+ot2{0.a.b*- 1.a.b*-}
+ot2{0.a.b*-_ 1.a.b*-_}
+ot2{0.a.b^ 1.a.b^}
+ot2{0.a^.b^ 1.a^.b^}
+;; L3-3a / L4-4: {0} sub-block sn
+vhm2{0.{0}* 1.{0}*}
+vhm2{0.{0}^ 1.{0}^}
+vhm2{0 .0 1 .0}
+vhm2{0.{0} 1.{0}}
+;; L3-3b: collision with a keyed ordinal ^- branch
+ot2{0.a.b.k^- 1.a^.b*}
+ot2{0.a.b.k^- 1.a^.b^}
+;; L3-3c: a third pass-through branch present
+ot3{0.a^.b* 1.a^.b* 2.a^.b*_}
+ot3{0.a^.b^ 1.a^.b^ 2.a^.b*_}
+;; L3-11 / L4-7: ordinal pass-through reaching the level through a dissolved head
+rv{xs^.{0.a*} k}
+w{v^.0.a^.b* v^.1.a^.b*}
+;; L3-5: L4 names only the first star branch (order)
+mx{m* a.b*-}
+mx{a.b*- m*}
+;; L3-10: a star sealed in a kept sub-block listed as a lifter
+t3x{a.{b*-_} c* d*}
+t3x{c* d*}
