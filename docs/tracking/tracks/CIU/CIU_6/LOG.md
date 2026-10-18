@@ -385,3 +385,26 @@ are in [`../README.md`](../README.md).
   (they collided with the fusion law L1 and the mixing rule L4). One unattributed extra mutation red, consistent
   with DEFERRED 170's race (unmerged here).
 - **Next**: Q_U62 posed (pending, owner). Merge main into the branch, the full-suite gate, the checkpoint merge.
+
+### Main merged in (first bring-up) `9d0dea51`, then the full-suite gate: 10 426 / 502 files, all pass, reconciled file by file (2026-10-18)
+- **Why / decision**: the owner — *"Let's proceed."* — verify → merge main in → suite gate → checkpoint merge (the plan
+  on main's dailies, `9533811d`).
+- **What shipped**: the prediction held (made read-only while the lenses ran): one file changed on both sides,
+  `tests/test-path-selection.rkt`, merged clean with main's three `#:exists 'replace` → `'truncate` hunks (DEFERRED 170);
+  the merged tree differs from main in exactly the branch's 99 files, and the only branch file the merge moved is that
+  one, by exactly main's hunks; eight shared modules' `.zo`s equal main's checkout. **Gate** (`--all` at `9d0dea51`):
+  **10 426 tests, 502 files, 506 units, all pass** (`test-path-selection` sharded ×5). Reconciled against the two
+  recorded full runs of main-equivalent code that total main's 10 394 (PAR 4 `931b327b`, PPN 4C `39eba17d`): the ONLY
+  per-file differences are the branch's two test files — `test-path-selection` 573 → 581 (+8), `-acceptance` 90 → 114
+  (+24); all 500 others equal to the test. Acceptance `run-file --check` 112 / 112; `update-deps --check`: "The cached
+  derivation equals a full rescan. ✓" (main's SW-24 replaced the mismatch count).
+- **Surprise / correction**: (1) I committed the merge before the gate; the procedure keeps it `--no-commit` so a red
+  gate is a `merge --abort`. The gate was green, and the message is left unamended because the recorded run cites
+  `9d0dea51`. (2) The first acceptance smoke-run died on `instantiate-linklet: mismatch … process-file31.1`: main
+  changed `driver.rkt`'s `process-file`, and my rebuild targets left `tools/run-file.rkt`'s `.zo` stale. A build-target
+  omission, not a defect; after a main merge every tool to be run belongs in the `raco make` list. (3) The runner's
+  `total_wall_ms` reads ≈ 8 s in every recorded full run (7 948, 8 403 in the references); per-file walls sum to 77.3 s —
+  not this run's wall. (4) The verify's one unattributed mutation red (Q_N4, under VF3-collapse) stays unattributed;
+  main's DEFERRED 170 fix is now merged, and this gate ran the file sharded ×5 green.
+- **Next**: the checkpoint merge to main; the DEFERRED "on the branch" passages flipped to the merge hash; dailies.
+  Q_U62 stays pending (owner).
