@@ -1,0 +1,15 @@
+ns probe-1bvi-ad
+
+def ot2 := @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]
+
+;; 1b-vi-E, E-R3: the dup refusal S creates, and every remedy its message offers
+ot2{0.a^.b* 1.a^.b*}
+;; "select the flatten in its own block"
+ot2{0.a^.b*}
+;; "dropping a star re-nests what it lifted" — both / one
+ot2{0.a^.b 1.a^.b}
+ot2{0.a^.b 1.a^.b*}
+;; "rename an UNSTARRED branch" — none is unstarred here; the tuple spelling instead
+ot2{0.a^.b^ 1.a^.b^}
+;; `*_` (the provenance sibling): does the prefix disambiguate? (ordinals nameless)
+ot2{0.a^.b*_ 1.a^.b*_}

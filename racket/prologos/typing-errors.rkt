@@ -851,6 +851,19 @@
                   ", "))])
       (if (pair? stars-total)
           " Under a total collapse, `*-_` keeps each surviving ancestor's name in the lifted key (`x{a.k*-_ b.k*-_}` delivers `:a-k-…` beside `:b-k-…`), and an ancestor dissolved with `^` contributes no name — so drop the `^` where the branches differ."
+          "")
+      ;; ⭐ 1b-vi-E [Q_U61] — S's COST, NAMED. Measured on `ot2{0.a^.b* 1.a^.b*}`
+      ;; (probe-1bvi-ad): the generic remedies above hold, but none says why two
+      ;; POSITIONAL branches meet at one level, and dropping ONE star trades the
+      ;; collision for an L4 mix. The tuple the user most likely meant is spelled
+      ;; with `^` (measured `@[{:k 1} {:k 2}]`); a provenance star cannot help,
+      ;; because an ordinal contributes no name to its prefix (Q_U57).
+      (if (select-fail-ordinal fail)
+          (string-append
+           " Under an ordinal head a keyless landing splices into the block, so the lifted fields of two elements meet at one level — to keep each element as its own tuple component, end those branches with `^` instead of the star (`x{0.a^.b^ 1.a^.b^}`)."
+           (if (ormap select-star-cont-synth? stars)
+               " (An ordinal contributes no name to a `*_` / `*-_` prefix, so the provenance form cannot tell two elements apart.)"
+               ""))
           ""))]
     [(star-l4-mixed)
      ;; ⚠ 1b-iii-C2: this WORDING used to assert that the STAR branch is the

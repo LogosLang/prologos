@@ -187,7 +187,7 @@
  select-star-provenance-prefix
  select-branch-deep-star? select-steps-star-tail? select-branch-star-conts/deep
  select-step-makes-no-layer? select-branch-has-star?/deep
- select-steps-yield-bare-join?
+ select-steps-yield-bare-join? select-branch-ordinal-passes-through?
  ;; [Q_U44] canonical key order — ONE definition, shared by both twins.
  canonical-keyword-key? canonical-keyword-key<?
  select-step-cont select-cont-collapse? select-cont-rename
@@ -1102,11 +1102,28 @@
 ;; on exactly `(sₙ ★)` because a KEYED prefix step has to re-nest. That reason is
 ;; precisely what does NOT apply to a step making no layer, which is why skipping
 ;; those here is the same rule rather than a relaxation of it.
+;; ⭐⭐ 1b-vi-E [Q_U61] — S: A DISSOLVED STEP NAMES NO KEY EITHER. The question this
+;; predicate answers is Q_U47's — does the remainder (branch − star − sₙ) name a key?
+;; — and a `^` dissolve (or a total-collapse mark, which places like `^`) names none,
+;; exactly as an ordinal makes no layer. Before E the loop skipped only the latter, so
+;; `ot{0.a^.b*}` wrapped the join in the ordinal's tuple (`@[{:c …}]`) while
+;; `ot{0.a*}` spliced it (Q_U49's decided seat B) — a depth-dependent landing that no
+;; decision stated and no pin held (census: 9 pins, all depth 1). `select-step-
+;; makes-no-layer?` itself is NOT widened: four other seats ask that narrower question.
+(define (select-step-names-no-key? s)
+  (or (select-step-makes-no-layer? s)
+      (let ([i (if (eq? (select-step-kind s) 'bcast) (select-bcast-inner s) s)])
+        (and (eq? (select-step-kind i) 'caret)
+             (select-cont-dissolves-level? (select-step-cont i))))))
 (define (select-steps-yield-bare-join? steps)
   (let loop ([ss steps])
-    (if (and (pair? ss) (pair? (cdr ss)) (select-step-makes-no-layer? (car ss)))
+    (if (and (pair? ss) (pair? (cdr ss)) (select-step-names-no-key? (car ss)))
         (loop (cdr ss))
         (select-steps-star-tail? ss))))
+;; the branch-level form: an ORDINAL-headed branch whose star landing passes through
+;; to the block — read by the dup gate, so its refusal can name the cost of S
+(define (select-branch-ordinal-passes-through? b)
+  (and (pair? b) (select-ord-step? (car b)) (select-steps-yield-bare-join? (cdr b))))
 
 (define (make-select-star cont) (list '@star cont))
 

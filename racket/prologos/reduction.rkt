@@ -2368,18 +2368,14 @@
                   [elem (index-into v n n)])
              (cond
                [(null? (cdr b)) (list (cons #f elem))]
-               ;; ⭐ 1b-vi-D-2a — the twin of typing's: under a TOTAL collapse the
-               ;; ordinal head is transparent, exactly the bare-number arm below.
-               [(select-branch-total-collapse? b) (branch-entries elem (cdr b) seen asort)]
+               ;; ⭐⭐ 1b-vi-E [Q_U61] — the twin of typing's: when no step between the
+               ;; head and sₙ names a key the landing is keyless and passes through —
+               ;; descend exactly as the bare-number arm below. Subsumes 1b-vi-D-2a's
+               ;; total-collapse arm and 1b-iv's seat-B splice (deleted, not kept).
+               [(select-steps-yield-bare-join? (cdr b)) (branch-entries elem (cdr b) seen asort)]
                [else
-                ;; 1b-iv-B2 [Q_U49] — SEAT B keyless, the twin of typing's
-                ;; ord-branch arm. `(cdr b)` is the step list we pass down, so
-                ;; `select-steps-star-tail?` answers exactly "is this a BARE star
-                ;; join?" here as well.
-                (let ([bv (below-value elem (cdr b) '())])
-                  (if (select-steps-yield-bare-join? (cdr b))
-                      (star-keyless-landing-value bv asort)
-                      (list (cons #f bv))))]))]
+                ;; a remainder that names a key: one keyless component (spec §3.3)
+                (list (cons #f (below-value elem (cdr b) '())))]))]
           [(number? (car b))
            ;; bare-number STEP chain (splice continuation): transparent
            (let ([elem (index-into v (car b) (car b))])

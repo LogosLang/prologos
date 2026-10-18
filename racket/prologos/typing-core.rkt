@@ -687,9 +687,14 @@
 ;; A DEFAULTING constructor keeps every 4-argument producer and test untouched; the
 ;; four seats that know the stars pass them — the two per-branch star failure closures
 ;; and the two LEVEL producers (`star-l4-mixed`, `star-dup-key`).
-(struct select-fail (kind path label row stars) #:transparent
+;; ⭐ 1b-vi-E [Q_U61]: a SIXTH field, `ordinal` — #t when a branch at a colliding level
+;; is ordinal-headed and passes its keyless landing through to the block (S). Only the
+;; dup gate knows the branches; the formatter needs the fact to say WHY two positional
+;; branches meet at one level and to name the tuple spelling. Defaulting, as `stars`.
+(struct select-fail (kind path label row stars ordinal) #:transparent
   #:name select-fail-info #:constructor-name select-fail*)
-(define (select-fail kind path label row [stars '()]) (select-fail* kind path label row stars))
+(define (select-fail kind path label row [stars '()] [ordinal #f])
+  (select-fail* kind path label row stars ordinal))
 
 ;; D4.P4b-ii-1 — THE MAP POSTURE's carrier (Q_U10).
 ;; `select-row-of` normally answers "here is the subject's per-field row".
@@ -930,7 +935,7 @@
   (if (select-fail-label f)
       f
       (select-fail (select-fail-kind f) (select-fail-path f) name
-                   (select-fail-row f) (select-fail-stars f))))
+                   (select-fail-row f) (select-fail-stars f) (select-fail-ordinal f))))
 
 (define (select-index-of ctx tm n path sort)
   ;; D4.P4b-ii-1: the SORT axis reaches the nat twin too. The file's own
@@ -1577,7 +1582,9 @@
                     ;; say which branch delivered `dup`, so it must not name just one
                     (values #f (select-fail 'star-dup-key path dup tm
                                             (remove-duplicates
-                                             (append-map select-branch-star-conts/deep branches))))
+                                             (append-map select-branch-star-conts/deep branches))
+                                            ;; 1b-vi-E [Q_U61]: S's cost, named in the refusal
+                                            (ormap select-branch-ordinal-passes-through? branches)))
                     (values cs #f)))))
         (let-values ([(es bf) (select-branch-entries ctx tm (car bs) path '() sort)])
           (if bf
@@ -2161,33 +2168,29 @@
              [ef (values #f ef)]
              [(null? rest)
               (values (list (cons #f (record-field elem 'present))) #f)]
-             ;; ⭐ 1b-vi-D-2a — UNDER A TOTAL COLLAPSE THE ORDINAL HEAD IS TRANSPARENT:
-             ;; descend exactly as the bare-number arm below does, so the rest's own
-             ;; arms place the join at the branch's top (Q_U48) and `seen` stays
-             ;; unchanged (an ordinal is nameless — Q_U57's prefix rule). Without it
-             ;; this arm wraps the collapse in ONE keyless component (`ov{0.a.b*-_}` →
-             ;; `@[{:a-b-x 1}]`, probe-1bvi-w), or — when sₙ is the head's next step —
-             ;; the star-tail guard fires. The caret family never gets here (the
-             ;; collapse arm is first: P3c). Twin: reduction.rkt's ord-head arm.
-             [(select-branch-total-collapse? b)
+             ;; ⭐⭐ 1b-vi-E [Q_U61] — THE ORDINAL HEAD PASSES A KEYLESS LANDING THROUGH.
+             ;; When no step between this head and sₙ names a key (Q_U47's remainder
+             ;; test, `select-steps-yield-bare-join?`), the star's landing is keyless,
+             ;; and Q_U49 places it at the ENCLOSING level — so descend exactly as the
+             ;; bare-number arm below does, and the rest's own arms (the dissolve arm,
+             ;; the star arm) place the join where a key-headed branch's would land:
+             ;; `ot{0.X}` ≡ `t5{X}` by construction. `seen` stays unchanged (an
+             ;; ordinal is nameless — Q_U57). ONE arm for every family: a total
+             ;; collapse passes because its ancestors are marked (this subsumes
+             ;; 1b-vi-D-2a's arm), and depth 1 is 1b-iv's seat B. Seat B used to
+             ;; splice HERE, after `select-below-field`, recognising only `(sₙ ★)`
+             ;; right after the head — that path is gone, not kept beside this one.
+             ;; Twin: reduction.rkt's ord-head arm.
+             [(select-steps-yield-bare-join? rest)
               (select-branch-entries ctx (whnf elem) rest (append path (list n)) seen sort)]
              [else
+              ;; a remainder that names a key: the join nests under it, inside the
+              ;; ordinal's own keyless component (spec §3.3's honest nesting)
               (let-values ([(ft bf) (select-below-field ctx (whnf elem) rest
                                                         (append path (list n)) '() sort)])
-                (cond
-                  [bf (values #f bf)]
-                  ;; ⭐⭐ 1b-iv-B2 [Q_U49] — SEAT B's KEYLESS LANDING, the shape the
-                  ;; grounding audit reported as needing a contract change in both
-                  ;; twins. It does not: `rest` is the very step list we passed
-                  ;; down, so `select-steps-star-tail?` answers EXACTLY the
-                  ;; question "is `ft` a BARE star join?" — true only when the tail
-                  ;; arm fired at THIS level, false for `(b c ★)` where the walk
-                  ;; re-nests and `ft` is a row, not a join. Without that test we
-                  ;; would splice any Map-typed field, which is why the
-                  ;; single-value return looked like a blocker.
-                  [(select-steps-yield-bare-join? rest)
-                   (values (star-keyless-landing ft sort) #f)]
-                  [else (values (list (cons #f (record-field ft 'present))) #f)]))])))]
+                (if bf
+                    (values #f bf)
+                    (values (list (cons #f (record-field ft 'present))) #f)))])))]
       [(number? (car b))
        ;; a bare-number STEP chain (dissolve-splice continuation): descend
        ;; transparently; an ordinal-terminal chain is a keyless component.

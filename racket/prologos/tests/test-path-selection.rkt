@@ -9419,8 +9419,8 @@
 ;; (`"*-"` has no sentinel).
 ;; ===========================================================================
 
-(define 1bvi-stage 'D)   ;; 1b-vi-D-2b: the mint — every D row now runs through the PARSER
-(define 1bvi-stage-order '(A B C D))
+(define 1bvi-stage 'E)   ;; 1b-vi-E: Q_U61's S — an ordinal head passes a keyless `*` landing through
+(define 1bvi-stage-order '(A B C D E))
 (define (1bvi-reached? s)
   (and s (<= (index-of 1bvi-stage-order s) (index-of 1bvi-stage-order 1bvi-stage))))
 
@@ -9445,8 +9445,12 @@
    ;; 1b-vi-D-2a: ORDINAL-headed twins of `t5` and `v3` — the generator states
    ;; `ot{0.X}` ≡ `t5{X}` under every collapse (an ordinal head is transparent)
    "def ot := @[{:a {:b {:c {:m {:x 1} :n {:y 2}}}}}]\n"
-   "def ov3 := @[{:a {:b {:c @[@[1 2] @[3]]}}}]\n"))
-(define 1bvi-fixture-count 15)
+   "def ov3 := @[{:a {:b {:c @[@[1 2] @[3]]}}}]\n"
+   ;; 1b-vi-E [Q_U61]: two elements (where the splice and the tuple pull apart),
+   ;; and Q_U49's own decided seat-B subject
+   "def ot2 := @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]\n"
+   "def vhm := @[@[{:x 1}] @[{:y 2}]]\n"))
+(define 1bvi-fixture-count 17)
 
 (define 1bvi-rows
   '(;; ---- E1–E10 under `*-` [Q_U48]: ≡ dissolve every ancestor, then `*`
@@ -9456,7 +9460,7 @@
     ;; "dropping the `*` does not help" is FALSE here (probe-1bvi-u: `env{prod.db dev.db}` works)
     ("E3-"  "env{prod.db*- dev.db*-}"      D midlex  (refused (#rx"duplicate output key `:port`" #rx"a star [(]`[*]-`[)] LIFTED"
                                                                #rx"`[*]-_` keeps each surviving ancestor")
-                                                              (#rx"does not help either")))
+                                                              (#rx"does not help either" #rx"ordinal head")))
     ("E4-"  "cloud{regions:{host port}*-}" D postfix (refused (#rx"`:\\{host port\\}\\*-`" #rx"carry the same key")
                                                               (#rx"`\\*` \\(flatten\\)")))
     ("E5-"  "app{server^srv.ssl*-}"        D midlex  (refused (#rx"`srv` can never appear under a total collapse"
@@ -9563,7 +9567,39 @@
     ;; a SUB-BLOCK is its own branch: the collapse lands UNDER `p`, where the
     ;; rename is observable — Q_U55's check is branch-local (probe-1bvi-q)
     ("K4" "e3{a^p.{b.c^-}}"  #f (line "{:p {:c @[1 2]}} : {:p {:c [PVec Int]}}") #f)
-    ("K5" "e3{a^p.{b.c^-q}}" #f (line "{:p {:q @[1 2]}} : {:p {:q [PVec Int]}}") #f)))
+    ("K5" "e3{a^p.{b.c^-q}}" #f (line "{:p {:q @[1 2]}} : {:p {:q [PVec Int]}}") #f)
+    ;; ---- [Q_U61] S (1b-vi-E): an ordinal head passes a star's landing through when the
+    ;; landing is KEYLESS (Q_U47: every step between the head and sₙ names no key), and
+    ;; Q_U49 splices it there. PRE = the measured wrap (probe-1bvi-ac), which no decision
+    ;; stated and no pin held.
+    ("U61-1" "ot{0.a^.b*}"     E (line "@[{:c {:n {:y 2}, :m {:x 1}}}] : ⟨{:c {:m {:x Int} :n {:y Int}}}⟩")
+                                 (equiv "t5{a^.b*}"))
+    ("U61-2" "ot{0.a^.b^.c*}"  E (line "@[{:n {:y 2}, :m {:x 1}}] : ⟨{:m {:x Int} :n {:y Int}}⟩")
+                                 (equiv "t5{a^.b^.c*}"))
+    ("U61-3" "ov3{0.a^.b^.c*}" E (line "@[@[@[@[1 2] @[3]]]] : ⟨⟨[PVec [PVec Int]]⟩⟩")
+                                 (equiv "v3{a^.b^.c*}"))
+    ;; the cost S names: two elements' spliced keys now meet at one level
+    ;; …and the refusal NAMES that cost and the tuple spelling (probe-1bvi-ad: the
+    ;; generic remedies hold, but none says why two positions meet, and dropping ONE
+    ;; star trades the collision for an L4 mix)
+    ("U61-4" "ot2{0.a^.b* 1.a^.b*}" E (line "@[{:k 1} {:k 2}] : ⟨{:k Int} {:k Int}⟩")
+                                      (refused (#rx"duplicate output key `:k`"
+                                                #rx"Under an ordinal head a keyless landing splices into the block"
+                                                #rx"`x[{]0[.]a\\^[.]b\\^ 1[.]a\\^[.]b\\^[}]`")
+                                               (#rx"no name to a")))
+    ("U61-5" "ot2{0.a^.b*_ 1.a^.b*_}" E (line "@[{:b-k 1} {:b-k 2}] : ⟨{:b-k Int} {:b-k Int}⟩")
+                                        (refused (#rx"duplicate output key `:b-k`"
+                                                  #rx"Under an ordinal head a keyless landing splices into the block"
+                                                  #rx"An ordinal contributes no name to a `[*]_` / `[*]-_` prefix") ()))
+    ;; ---- CONTROLS that must NOT move: a remainder that names a key stays inside the
+    ;; ordinal's component; depth 1 is Q_U49's decided seat B; the tuple stays
+    ;; spellable without a star.
+    ("U61-K1" "ot{0.a.b*}"     #f (line "@[{:a {:c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:a {:c {:m {:x Int} :n {:y Int}}}}⟩") #f)
+    ("U61-K2" "ot{0.a^.b.c*}"  #f (line "@[{:b {:n {:y 2}, :m {:x 1}}}] : ⟨{:b {:m {:x Int} :n {:y Int}}}⟩") #f)
+    ("U61-K3" "ot{0.a^p.b*}"   #f (line "@[{:p {:c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:p {:c {:m {:x Int} :n {:y Int}}}}⟩") #f)
+    ("U61-K4" "ot{0.a*}"       #f (equiv "t5{a*}") #f)
+    ("U61-K5" "vhm{0.{0}* 1.{0}*}" #f (line "{:y 2, :x 1} : {:x Int :y Int}") #f)
+    ("U61-K6" "ot2{0.a^.b^ 1.a^.b^}" #f (line "@[{:k 1} {:k 2}] : ⟨{:k Int} {:k Int}⟩") #f)))
 
 (define (1bvi-row-id r) (list-ref r 0))
 (define (1bvi-row-spelling r) (list-ref r 1))
@@ -9617,7 +9653,10 @@
               [ancs (in-value (drop-right pos 1))]
               [leaf (in-value (last pos))]
               [modes (in-list (apply cartesian-product (for/list ([_ ancs]) '(kept dis ren))))]
-              [fam (in-list (if (eq? base 'v3) '(star) '(caret caret-k star star-synth)))])
+              [fam (in-list (append (if (eq? base 'v3) '(star) '(caret caret-k star star-synth))
+                                    ;; 1b-vi-E [Q_U61]: plain `*`, ordinal subjects only
+                                    (if (cadr entry) '(plain-star) '())))]
+              #:unless (and (eq? fam 'plain-star) (not (andmap (lambda (m) (eq? m 'dis)) modes))))
     (define written
       (string-append (string-join (for/list ([k ancs] [m modes] [i (in-naturals)]) (seg k m i)) ".")
                      (if (null? ancs) "" ".")))
@@ -9628,6 +9667,10 @@
       (define sp (format "~a{~a~a~a~a}" subj head written leaf suffix))
       (list (string-append "law " sp) sp flips pre target))
     (case fam
+      ;; ⭐ 1b-vi-E [Q_U61] S: with every ancestor dissolved the remainder after the ordinal
+      ;; names no key, so the landing passes through: `ot{0.X*}` ≡ `t5{X*}`. (Kept or
+      ;; renamed ancestors name a key and stay inside the tuple — hand controls U61-K*.)
+      [(plain-star) (row "*" #f `(equiv ,(format "~a{~a~a*}" base written leaf)) #f)]
       [(caret)
        (let ([eqv `(equiv ,(format "~a{~a~a}" base all-dis leaf))])
          (if (pair? names) (row "^-" 'B eqv (renamed-refusal names)) (row "^-" #f eqv #f)))]

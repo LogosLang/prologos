@@ -613,6 +613,25 @@ app-config{server^srv.ssl*}
 app-config{server.ssl*- name}
 ;;113=> {:cert-path "/etc/ssl/cert.pem", :enabled true, :name "GuildHall"} : {:cert-path String :enabled Bool :name String}
 
+;; M16 — a plain `*` under an ORDINAL head [Q_U61, decided S]: the ordinal is a
+;; keyless tuple component (spec §3.3), so when nothing between it and the star names
+;; a key the landing is keyless, and Q_U49 splices it into the block — exactly where
+;; the key-headed `app-config{server^.ssl*}` lands (M3)…
+guilds{0.server^.ssl*}
+;;114=> {:cert-path "/etc/ssl/cert.pem", :enabled true} : {:cert-path String :enabled Bool}
+
+;; …while a surviving key keeps the join nested under it, INSIDE the element's tuple
+guilds{0.server.ssl*}
+;;115=> @[{:server {:cert-path "/etc/ssl/cert.pem", :enabled true}}] : ⟨{:server {:cert-path String :enabled Bool}}⟩
+
+;; M17 — S's cost, and its remedy: two elements' spliced fields would meet at one
+;; level (refused below); a tuple of the two is spelled with `^`, not `*`
+def guild-pair := @[app-config app-config]
+;;116=> guild-pair : [PVec {:admins [PVec {:name String :role Keyword}] :database {:pool-size Int :url String} :date String :features [PVec Keyword] :name String :server {:host String :port Int :ssl {:cert-path String :enabled Bool}} :version String}] defined.
+
+guild-pair{0.server^.ssl^ 1.server^.ssl^}
+;;117=> @[{:cert-path "/etc/ssl/cert.pem", :enabled true} {:cert-path "/etc/ssl/cert.pem", :enabled true}] : ⟨{:cert-path String :enabled Bool} {:cert-path String :enabled Bool}⟩
+
 ;; —— §M edge cases: REFUSALS (commented — this file runs with 0 errors; each is
 ;; pinned live in tests/test-path-selection.rkt's 1b-vi stage table). Messages
 ;; MEASURED on this file's subjects (probe: accept-ref, 2026-10-14). ——
@@ -638,3 +657,11 @@ app-config{server.ssl*- name}
 ;;   collapse (`*-`) always lands at its branch's top. So make the level agree — if
 ;;   the `*-` lands keyed, stop dissolving its siblings (drop a `^`, as in
 ;;   `x{a.b*- c}`) … Selecting the flatten in its own block always works  (M15)
+;;
+;; Two ordinal branches whose keyless landings splice to one level (Q_U61's cost):
+;; guild-pair{0.server^.ssl* 1.server^.ssl*}
+;;   ERROR: duplicate output key `:cert-path` in the select block — … Under an
+;;   ordinal head a keyless landing splices into the block, so the lifted fields of
+;;   two elements meet at one level — to keep each element as its own tuple
+;;   component, end those branches with `^` instead of the star
+;;   (`x{0.a^.b^ 1.a^.b^}`).                                            (M17)
