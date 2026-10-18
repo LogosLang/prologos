@@ -1,0 +1,13 @@
+0: e3 : {:a {:b {:c [PVec Int]}}} defined.
+1: t5 : {:a {:b {:c {:m {:x Int} :n {:y Int}}}}} defined.
+2: deep : {:top {:eu {:cfg {:x Int}} :us {:cfg {:x Int}}}} defined.
+3: @[1 2] : [PVec Int]
+4: ERROR: `^` re-keys the OUTPUT of a selection, and a field access has no output key — it yields the value. Use a select block if you want to rename: `x{field^alias}`
+5: ERROR: `^` re-keys the OUTPUT of a selection, and a field access has no output key — it yields the value. Use a select block if you want to rename: `x{field^alias}`
+6: ERROR: `^` re-keys the OUTPUT of a selection, and a field access has no output key — it yields the value. Use a select block if you want to rename: `x{field^alias}`
+7: ERROR: `^` re-keys the OUTPUT of a selection, and a field access has no output key — it yields the value. Use a select block if you want to rename: `x{field^alias}`
+8: ERROR: `^` re-keys the OUTPUT of a selection, and a field access has no output key — it yields the value. Use a select block if you want to rename: `x{field^alias}`
+9: {:a-b-c @[1 2]} : {:a-b-c [PVec Int]}
+10: {:top-eu-cfg {:x 1}, :top-us-cfg {:x 2}} : {:top-eu-cfg {:x Int} :top-us-cfg {:x Int}}
+11: {:us-cfg {:x 2}, :eu-cfg {:x 1}} : {:eu-cfg {:x Int} :us-cfg {:x Int}}
+--- 5 errors ---

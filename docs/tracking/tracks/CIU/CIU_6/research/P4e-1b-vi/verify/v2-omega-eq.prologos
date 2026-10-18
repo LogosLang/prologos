@@ -1,0 +1,20 @@
+ns v2omegaeq
+def ow := {:top {:eu {:cfg {:x {:p 1}}} :us {:cfg {:x {:p 2}}}}}
+def og := {:db {:admins @[{:name {:f {:z 1}}} {:name {:f {:z 2}}}]}}
+def dz := {:top {:eu {:cfg {:x {:v 1}}} :us {:cfg {:x {:w 2}}}}}
+;; what every sibling spelling of the crashing shapes does today (Q_U48: *- ≡ ^ on every ancestor, then *)
+ow{top:cfg.x*}
+ow{top^:cfg^.x*}
+ow{top^:cfg.x*}
+ow{top:cfg.x^-}
+ow{top:cfg.x^-_}
+ow{top:cfg.x*_}
+ow{top:cfg}
+ow{top:cfg.x}
+ow{top:{cfg.x*-}}
+og{db.admins:name.f*}
+og{db^.admins^:name^.f*}
+og{db.admins:name.f^-}
+og{db.admins:name.f}
+dz{top:{cfg.x*-}}
+ow.top:cfg.x*-

@@ -1,0 +1,54 @@
+0: ot2 : [PVec {:a {:b {:k Int}}}] defined.
+1: ot3 : [PVec {:a {:b {:k Int}}}] defined.
+2: vhm2 : [PVec [PVec {:x Int}]] defined.
+3: rv : {:k Int :xs [PVec {:a {:k Int}}]} defined.
+4: w : {:v [PVec {:a {:b {:k Int}}}]} defined.
+5: mx : {:a {:b [PVec [PVec Int]]} :m {:x Int :y Int}} defined.
+6: ow : {:top {:eu {:cfg {:x {:p Int}}} :us {:cfg {:x {:p Int}}}}} defined.
+7: og : {:db {:admins [PVec {:name {:f {:z Int}}}]}} defined.
+8: m3 : {:a {:x Int} :b {:y Int} :c {:z Int}} defined.
+9: mn : {:a {:x Int} :b {:y Int}} defined.
+10: t5 : {:a {:b {:c {:m {:x Int} :n {:y Int}}}}} defined.
+11: ovn : [PVec {:a [PVec {:x Int}]}] defined.
+12: vn : {:a [PVec {:x Int}]} defined.
+13: @[{:a {:k 1}} {:b {:k 2}}] : ⟨{:a {:k Int}} {:b {:k Int}}⟩
+14: @[{:k 1} {:b {:k 2}}] : ⟨{:k Int} {:b {:k Int}}⟩
+15: @[{:a {:k 1}} {:a {:k 2}}] : ⟨{:a {:k Int}} {:a {:k Int}}⟩
+16: @[{:k 1} {:k 2}] : ⟨{:k Int} {:k Int}⟩
+17: {:k 1} : {:k Int}
+18: @[{:k 1} {:k 2} {:a {:b-k 3}}] : ⟨{:k Int} {:k Int} {:a {:b-k Int}}⟩
+19: @[{:k 1} {:k 2} {:k 3}] : ⟨{:k Int} {:k Int} {:k Int}⟩
+20: ERROR: mixed keyed/keyless sorts in the select block (L4) — `1.a^.b*` is a star branch whose landing and its sibling branches' do not agree: one level assembles a Map OR a tuple, never both. A star's landing follows its CONTENTS: Map contents splice in as KEYED fields, vector contents land as ONE KEYLESS component, and under `*` a key surviving before the star keeps the join nested under it. Here every branch is ordinal-headed, and under an ordinal head a star's landing passes through only when nothing between the ordinal and the star names a key; any other ordinal-headed branch is ONE keyless tuple component, whatever its `^`s. So make every branch a tuple component: keep a key before each star, written `*` (`x{0.a.b* 1.a.b*}`, a tuple of records), or end the branch with `^` instead of its star (`x{0.a^.b^ 1.a^.b^}`). Selecting the flatten in its own block always works
+21: @[{:b {:k 1}} {:b {:k 2}}] : ⟨{:b {:k Int}} {:b {:k Int}}⟩
+22: ERROR: mixed keyed/keyless sorts in the select block (L4) — `0.a.b*-` is a star branch whose landing and its sibling branches' do not agree: one level assembles a Map OR a tuple, never both. A star's landing follows its CONTENTS: Map contents splice in as KEYED fields, vector contents land as ONE KEYLESS component; a total collapse (`*-`) always lands at its branch's top. Here every branch is ordinal-headed, and under an ordinal head a star's landing passes through only when nothing between the ordinal and the star names a key; any other ordinal-headed branch is ONE keyless tuple component, whatever its `^`s. So make every branch a tuple component: keep a key before each star, written `*` (`x{0.a.b* 1.a.b*}`, a tuple of records), or end the branch with `^` instead of its star (`x{0.a^.b^ 1.a^.b^}`). Selecting the flatten in its own block always works
+23: @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}] : ⟨{:a {:b {:k Int}}} {:a {:b {:k Int}}}⟩
+24: @[{:k 1} {:k 2}] : ⟨{:k Int} {:k Int}⟩
+25: ERROR: mixed keyed/keyless sorts in the select block (L4) — `1.{0}*` is a star branch whose landing and its sibling branches' do not agree: one level assembles a Map OR a tuple, never both. A star's landing follows its CONTENTS: Map contents splice in as KEYED fields, vector contents land as ONE KEYLESS component, and under `*` a key surviving before the star keeps the join nested under it. Here every branch is ordinal-headed, and under an ordinal head a star's landing passes through only when nothing between the ordinal and the star names a key; any other ordinal-headed branch is ONE keyless tuple component, whatever its `^`s. So make every branch a tuple component: keep a key before each star, written `*` (`x{0.a.b* 1.a.b*}`, a tuple of records), or end the branch with `^` instead of its star (`x{0.a^.b^ 1.a^.b^}`). Selecting the flatten in its own block always works
+26: @[@[{:x 1}] @[{:x 2}]] : ⟨⟨{:x Int}⟩ ⟨{:x Int}⟩⟩
+27: ERROR: mixed keyed/keyless sorts in the select block (L4) — every branch keeps a key (`k`, `^k'`, `^_`) or drops one (`k^`, `{N}`); one level assembles a Map OR a tuple, never both
+28: {:k 2, :k2 1} : {:k Int :k2 Int}
+29: @[{:b {:k 1}} {:b {:k 2}} {:b {:k 3}}] : ⟨{:b {:k Int}} {:b {:k Int}} {:b {:k Int}}⟩
+30: ERROR: mixed keyed/keyless sorts in the select block (L4) — every branch keeps a key (`k`, `^k'`, `^_`) or drops one (`k^`, `{N}`); one level assembles a Map OR a tuple, never both
+31: {:k 1, :k2 9} : {:k Int :k2 Int}
+32: {:k 2, :b {:k 1}} : {:b {:k Int} :k Int}
+33: ERROR: duplicate output key :b in the select block — distinct output keys are required (strict merge); rename a branch with `^k'`, or group same-head branches into one sub-block (`x{k.{a b}}`)
+34: @[{:k 1} {:k 2}] : ⟨{:k Int} {:k Int}⟩
+35: @[@[@[1 2] @[3]] {:y 2, :x 1}] : ⟨[PVec [PVec Int]] {:x Int :y Int}⟩
+36: @[{:y 2, :x 1} @[@[1 2] @[3]]] : ⟨{:x Int :y Int} [PVec [PVec Int]]⟩
+37: {:top {:eu {:p 1}, :us {:p 2}}} : {:top {:eu {:p Int} :us {:p Int}}}
+38: {:top {:eu {:x {:p 1}}, :us {:x {:p 2}}}} : {:top {:eu {:x {:p Int}} :us {:x {:p Int}}}}
+39: {:top {:eu {:cfg-x {:p 1}}, :us {:cfg-x {:p 2}}}} : {:top {:eu {:cfg-x {:p Int}} :us {:cfg-x {:p Int}}}}
+40: {:db {:admins @[{:f {:z 1}} {:f {:z 2}}]}} : {:db {:admins [PVec {:f {:z Int}}]}}
+41: {:db {:admins @[{:z 1} {:z 2}]}} : {:db {:admins [PVec {:z Int}]}}
+42: ERROR: `a*->b*->c` — there is no `*->` operator: `*-` (the total collapse) attaches at the END of a segment, and `->` is the function arrow, which means nothing inside a selection. If you meant the total collapse, end the segment there and write what follows as its own branch: `a*- b*- c`
+43: {:c {:z 3}, :y 2, :x 1} : {:c {:z Int} :x Int :y Int}
+44: ERROR: `a*-_->b` — there is no `*-_->` operator: `*-_` (the total collapse with provenance) attaches at the END of a segment, and `->` is the function arrow, which means nothing inside a selection. End the segment at the star and write what follows as its own branch: `a*-_ b`
+45: {:a-x 1, :b {:y 2}} : {:a-x Int :b {:y Int}}
+46: ERROR: `a*_->b` — there is no `*_->` operator: `*_` (the provenance flatten) attaches at the END of a segment, and `->` is the function arrow, which means nothing inside a selection. End the segment at the star and write what follows as its own branch: `a*_ b`
+47: {:a-x 1, :b {:y 2}} : {:a-x Int :b {:y Int}}
+48: ERROR: `a` can never appear under a total collapse: `c*-` lifts what `c` holds to the top of its branch and removes every ancestor level, including the one `b^a` (how `a.b^..` is read) renames. Drop `^a` (`a^.b.c*-`), or keep the level: `a^.b^a.c*`
+49: {:n {:y 2}, :m {:x 1}} : {:m {:x Int} :n {:y Int}}
+50: {:a {:n {:y 2}, :m {:x 1}}} : {:a {:m {:x Int} :n {:y Int}}}
+51: ERROR: a bare `.` cannot follow a `^` continuation — parent-key collapse attaches to the plain leaf as `k^..`
+52: ERROR: a bare `.` cannot follow a `^` continuation — parent-key collapse attaches to the plain leaf as `k^..`
+--- 12 errors ---

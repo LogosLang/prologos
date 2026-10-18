@@ -71,3 +71,340 @@ are in [`../README.md`](../README.md).
   ([Q_U52](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u52) §1–2): what total collapse
   does to a **renamed** ancestor (`t4{a^p.b.c*-}`), and the **`*->` token boundary**. Opens
   with the grounding mini-audit, re-deriving those counts at this HEAD.
+
+### W-1 decided: CIU 6's track documents ride the branch; shared registers go to main — no commit (2026-10-13)
+- **Why / decision**: owner — *"B — … work on specific parts of the system happen under separate
+  worktrees/branchs with periodic and regular merges back into main, so that work can safely happen
+  concurrently."* So this LOG, D4's ledger and per-slice records, and the track's
+  research artifacts are committed on `ciu6-path-selection` with the code they describe, and reach `main` at
+  checkpoint merges. `DEFERRED.md` (a register every session allocates from) and the dailies (cross-track
+  STATE) are committed on `main` directly. Rejected: PAR 4's docs-on-main practice, which suits a branch
+  whose code never merges; here it would make main cite unmerged hashes as ✅ between checkpoints.
+- **Surprise / correction**: this supersedes the tracking skill's standing rule "commit the track's
+  documents to main at every milestone" for tracks whose code merges to main; the skill was amended the
+  same day.
+- **Next**: the 1b-vi grounding audit.
+
+### 1b-vi grounding audit: the renamed-ancestor question belongs to the collapse family (`^-` has the same unruled hole), `*->` predates 1b-vi, and L1 fails in block position (DEFERRED 167) — this commit (2026-10-13)
+- **Why / decision**: owner — a short audit first, plus a review of the spec "as a suggestion to review,
+  not a commandment". Record: [`2026-10-13_CIU_6_P4e-1b-vi_GROUNDING_AUDIT.md`](2026-10-13_CIU_6_P4e-1b-vi_GROUNDING_AUDIT.md);
+  probes and outputs in `research/P4e-1b-vi/`. The branch was first fast-forwarded over 20 main commits
+  (sweep + runner-queue merges, F3(a) in `substitution.rkt`/`type-lattice.rkt`) to `01ef2542`; battery 573
+  test-cases, 663/663 with the acceptance test file, acceptance markers 88/88. Findings: (1) `^-` silently
+  drops a re-keyed ancestor (`e3{a^p.b.c^-}` → `{:c …}`) while `^-_` honors it (`{:p-b-c …}`), unpinned and
+  unused. `*-` is `^-` ∘ `*` (one operator suffix per segment), so the decision is one rule for both
+  families. Posed as **[Q_U55](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u55)** (pending), options
+  A refuse / B total wins / C explicit wins, with the tradeoff analysis in the ledger. (2) In type territory
+  `Nat *-> Nat` is already not an arrow ("has no arrow"); 0 glued `*->` anywhere. (3) An in-block fused ω chain
+  errors (`w4{a:b:c}`) where the path form works, with zero pins: filed **DEFERRED 167** on main. It also
+  makes the broadcast-ancestor half of Q_U52 §1 unobservable for now. (4) The totality census: 6
+  `select-star-cont` readers (5 binary), 15 `star-*` prose arms in `format-select-fail`, 3 internal `oops`
+  strings, 2 deliberate `"*"` selectors; the battery pins `cfg{a}*-`/`*-_` as unminted (`:6194–6195`), and 1b-vi
+  flips them deliberately. (5) A spec → D4 departures table is owed (D4 §1.2 maps only the old PS rulings
+  onto the spec).
+- **Surprise / correction**: my first census pattern for "`*-` glued after an identifier" was zero-power
+  (`\]` is not an escape inside an ERE bracket, so it demanded a literal `)]*-`) and reported **0**. Running it
+  on positive controls before committing caught it. The corrected pattern finds 3 hits, all the posit names
+  `p*-to-rat` / `p*-if-nar` in comments. `p*-if-nar` is a live keyword-only form (`elaborator.rkt:947`), so
+  identifiers containing `*-` exist outside selection territory and stay safe by Q_U37's territory scoping.
+  Fail-open watch: 8-of-N. Also: Q_U52 §1's "a broadcast ancestor is unwritable" is true but does not
+  separate the options; the case is blocked one step earlier, by DEFERRED 167.
+- **Next**: owner decision Q_U55; then the `*->` boundary (Q_U52 §2, reframed by F5: a message and a
+  territory, zero programs at stake); then `*-_`'s prefix rule; then implementation, opening with the
+  totality dispatcher's pins.
+
+### Q_U55 decided: A — a rename on an ancestor of a total collapse is refused, in BOTH collapse families; dissolve stays legal; provenance forms keep the rename — this commit (2026-10-13)
+- **Why / decision**: owner — *"I'm good with Option A (refuse) on Q_55. And that we fix `^-` to be in
+  line with the behavior as well, for consistency."* Recorded in D4's ledger
+  ([Q_U55](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u55)) with the reason (monotone waypoint;
+  the silent drop becomes a guided error; `^-` costs nothing to align — 0 uses, 0 pins) and the
+  implementation shape (a syntactic check in the shared branch walk, not typing; failing-first pins in
+  both families; the `^-` half lands in 1b-vi with the `*-` mint).
+- **Surprise / correction**: the rule turned out narrower than posed. Probe `probe-1bvi-g` shows
+  `^_` and the `^-` family are already refused on an ancestor ("attaches to the branch's LAST segment" /
+  "a LEAF continuation"), so the only spellable ancestor continuations are dissolve `^` (legal, redundant)
+  and rename `^k'` (refused under `*-`/`^-`/`^-k'`, legal under `^-_` and — pending — `*-_`).
+- **Also from this probe, for the `*->` question** (owner asked what `*->` denotes): it is not a
+  designed construct. It first appears in Q_U52 §2 (`783be940`, the 1b-v audit), as a token-boundary
+  hazard of the `*-` spelling: `-` continues an identifier and `>` does not, so a star glued to `->`
+  always lexes as `…*-` then `>`. Measured today: `spec s4 Nat *-> Nat` → "spec type for s4 has no
+  arrow"; ~~`<(x : Nat)*- Nat>` → a bare "Type mismatch" (no lexical message)~~ **withdrawn
+  2026-10-13** — the control failed the same way; isolated, it is a nameless "Unbound variable"
+  (see *Q_U58 decided … 1b-vi-A* below), while the glued-Sigma
+  `<(x : Nat)* Nat>` gets Q_U31's guided "needs a SPACE" message.
+- **Next**: the `*->` handling (owner's call after the explanation), then `*-_`'s prefix rule.
+
+### Q_U56 decided (`*->` is a guided diagnostic in selection territory; type territory filed as DEFERRED 168); Q_U57 posed — `*-_`'s prefix, L vs P, measured through today's equivalents — this commit (2026-10-13)
+- **Why / decision**: owner — *"Yes, that looks like a guided diagnostic as per (a)."* Ledgered as
+  [Q_U56](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u56); the pre-existing type-territory
+  messages ("has no arrow", a bare "Type mismatch") filed on main as **DEFERRED 168** (`b309f98e`).
+  Then the owner asked for the `*-_` rule "worked out in examples and tradeoffs … with more examples":
+  [Q_U57](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u57), ten cases (E1–E10) on five fixtures.
+  Both candidate prefixes are measurable today through equivalent spellings: L ≡ `^` on every ancestor
+  + `*_`, and P ≡ every lifted field written with `^-_` (probe `probe-1bvi-h`). So the table is
+  measured, not predicted.
+- **Surprise / correction**: the decision reduces to two invariants that cannot both hold. I1 (`-`
+  orthogonal to `_`, as in the caret family) gives L. I2 (provenance names everything the operator
+  deleted, Q_U24's own principle) gives P. The sibling case E3 separates them: L refuses
+  `env{prod.db*-_ dev.db*-_}` (duplicate `:db-port`), which is the collision provenance exists to remove.
+  And P ⊇ L (dissolving ancestors under P gives L's answer, E6). Also measured (`probe-1bvi-i`): joining
+  keys with `-` is not injective, and the strict merge refuses the resulting clash loudly.
+- **Next**: owner decision Q_U57.
+
+### Q_U57 decided: P — `*-_` names the whole collapsed path; every decision 1b-vi owed is made; two implementation facts measured for the plan — this commit (2026-10-13)
+- **Why / decision**: owner — *"`P`'s table and rationale stand as reasoned, let's go with that."* Ledgered at
+  [Q_U57](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u57). The 1b-vi row in D4's sequencing table now
+  shows all three decisions (Q_U55 A, Q_U56 (a), Q_U57 P).
+- **Measured for the implementation plan**:
+  - `probe-1bvi-k`: provenance names only what the BRANCH collapses. `e3{a.{b.c^-_}}` → `{:a {:b-c …}}`, so an
+    enclosing sub-block's head is not in the name. So `*-_`'s ancestor prefix is **static per branch**,
+    computable from the branch's own steps by `^-_`'s naming function (`select-synth-name` /
+    `select-step-output-name`, `syntax.rkt:1414`, `:1495`). Only the content key is dynamic, and the 1b-v join
+    already threads it (`select-synth-prefixed-key`, `syntax.rkt:1511`).
+  - `probe-1bvi-j`: the existing parser desugar (Q_T8 `^..`, `parser.rkt:1464`) does NOT echo the user's
+    spelling in a refusal (`app{server.ssl.nope^..}` is labelled `server.ssl.nope`). Star refusals build their label
+    with `pp-select-branch` over the stored steps (`typing-core.rkt:1628`). So a plain dissolve desugar of `*-`
+    would print the desugared form, and Q_U54 decided against exactly that (a label that names a spelling the
+    user did not write). That is a prediction, not yet measured on a `*-` refusal.
+- **Next**: the 1b-vi implementation plan (pins first; then the collapse machinery; then the table rows that
+  mint `*-` / `*-_`), with one locus choice for the owner — where total collapse is represented (see the reply).
+
+### Q_U58 decided (M + slicing A→B→C→D); Stage 4 opened on 1b-vi — design target recorded; one published claim corrected — this commit (2026-10-13)
+- **Why / decision**: owner — *"Ok with lean on M. Proposed sequencing looks good to me. Let's record it,
+  then proceed to implementation per our Stage 4 Design Methodology (Implementation Protocol)."* Ledgered
+  at [Q_U58](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u58). The Per-Phase Protocol's mini-design and
+  mini-audit are written into D4 as [§5.P4e-1b-vi](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi):
+  the semantics stated once, principles in play, a two-column mantra check, drift risks DR-1–DR-6, the A
+  audit, and the sub-slice tracker.
+- **Phase design target (1b-vi-A)**: read §5.P4e-1b-vi; principles Correctness Through Types (correct by
+  construction), Simplicity of Foundation, Progressive Disclosure, Pragmatism with Rigor; drift risks DR-3
+  (label lies) and DR-4 (vacuous pins) are A's own; the rest are watched from B on.
+- **Surprise / correction**:
+  - **A published claim was wrong.** DEFERRED 168 and Q_U56 said `<(x : Nat)*- Nat>` reports a bare
+    "Type mismatch". Probe g's spaced control (`<(x : Nat) * Nat>` with the same `defn s1 [p] 0` body)
+    printed "Type mismatch" too, so the row measured the body, not the lexing. Isolated with bare type
+    expressions (`probe-1bvi-o`), `*-` in a type, glued or spaced, is a nameless "Unbound variable".
+    Struck through and corrected in DEFERRED 168 (main `150915c4`), Q_U56 and the earlier LOG entry. Lesson:
+    the control must differ from the case in exactly one variable; mine also differed in whether its body
+    type-checks.
+  - **Block-position ω keeps the projected key** (`deep{top:cfg*_}` → `{:top {:eu-cfg …}}`; path-position
+    `rm:cfg*_` → `{:eu-x …}`), so P through a block ω names `top-eu-cfg`, not the `top-eu-x` I had worked
+    out by hand. Found by `probe-1bvi-l` before any pin was written.
+  - **Path position has no ancestors to collapse** (`probe-1bvi-m`: every caret form refused there, "a
+    field access has no output key"). So `x.a.b*-` ≡ `x.a.b*` and `x.a.b*-_` ≡ `x.a.b*_`. This follows
+    from the decided rules; it was not decided separately, and it goes to the owner at the A checkpoint.
+- **Next**: 1b-vi-A, the stage table (`tests/test-path-selection.rkt`).
+
+### 1b-vi-A shipped: the star-collapse stage table — 40 rows, targets measured, red step shown at stages B and D — `0b6a645f` (2026-10-13)
+- **Why / decision**: the first sub-slice of [Q_U58](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u58)'s
+  slicing: pins first. One row per behaviour, `(id spelling flips-at pre target)`, with every target
+  measured from today's equivalent spelling (`research/P4e-1b-vi/probe-1bvi-p`). `1bvi-stage` is bumped as
+  the first edit of each later sub-slice, so its rows go red before its code exists. Design and VAG:
+  [§5.P4e-1b-vi](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi).
+- **Evidence**: stage B → exactly C1–C4 red (the silent drop); stage D → 37 / 40 red, each for its pre-mint
+  reason; mutation M1 (an already-true target) caught twice, M2 (a broken fixture) caught before the
+  `unbound` class could accept it. Battery 573 → 575 test-cases, all pass; the table costs 5.28 s per run
+  (per-test-case timing). No production code changed, so acceptance was not re-run.
+- **Surprise / correction**:
+  - **Replaced an inherited idiom.** Earlier slices parked failing pins as comments (`test-path-selection.rkt:7793`,
+    `:8822`), and one parked pin hid an unreadable `\*` escape. Here every target is compiled and executed.
+  - **Withdrew my own cost attribution.** Two whole-file runs (92.1 s → 100.3 s summed shards) suggested "+8.3 s
+    from the table". I folded the table into one test-case on that theory; the rerun read 100.2 s, so the
+    difference was machine load. Then measured per test-case: 5.28 s. The fold stays (batches once per run,
+    not once per shard), but its saving is not shown.
+  - **Withdrew a claim before committing it.** I first wrote that `cloud{regions:{host port}*-}` reveals "a
+    fifth arrival route". It does not: the matrix already has the carrier (`bcast-brace`). Before the mint
+    the unminted `*-` is an item inside the enclosing block, so it gets the spaced-star refusal. Corrected in
+    D4 before this commit.
+  - **Hook guard, live in Hermes now**: a `raco make` without an inline `PLT_CS_COMPILE_LIMIT` was refused
+    by `tools/hook-guard-racket.sh` (DEFERRED 159), even with the variable exported earlier in the shell.
+- **Gaps assigned, not hidden** (VAG (b)): the rows reach at most 3 of the 15 `star-*` prose arms, and 1b-vi-C owns
+  the other 12; the echo and quote lowerings belong to 1b-vi-D's mini-audit. **Offered** (VAG (c)): state
+  Q_U48 / Q_U57 as generated laws rather than 31 examples.
+- **Next**: dialogue checkpoint with the owner (Stage 4 cadence), then 1b-vi-B (bump the stage to B; C1–C4
+  go red; implement the caret-family refusal).
+
+### Q_U59 settled, Q_U60 decided; 1b-vi-B shipped: `^-` / `^-k'` refuse a renamed ancestor with two runnable remedies, and the equivalences are generated laws — `332e16a2` (2026-10-14)
+- **Why / decision**: owner at the A checkpoint — *"1: Ok as settled, with medium confidence · 2: fold it in ·
+  3: ok"*. Ledgered: [Q_U59](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u59) (where nothing can collapse,
+  `*-` ≡ `*` and `*-_` ≡ `*_`; the medium confidence is given an object: the monotone cost and a revisit
+  trigger), [Q_U60](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u60) (the laws, placed as B's first step —
+  my call, recorded as such). B's design target, mini-audit and VAG: [§5.P4e-1b-vi](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi).
+- **What shipped**: the check sits in `branch-problem` (`parser.rkt`, block-close validation), after the
+  positional check; TOTAL means `'collapse` / `(collapse-rename . k')`; the two remedies are step lists
+  rendered by `pp-select-branch` (new edge parser → pretty-print, acyclic, +6 modules). 61 generated law rows
+  (`^-`, `^-z`, `*-`, `*-_` over `t5`; `*-` over `v3`). Red: 16 rows; green after; mutation → the same 16.
+  Battery + acceptance file 665 / 665; acceptance 88 / 88.
+- **Surprise / correction**:
+  - **My A table had a hole.** Rows ahead of the stage were asserted only to fail their target, and a refused
+    right-hand side or a drifted pinned type also fails, so A's 31 pinned types were never verified on the
+    committed stage. Fixed: every right-hand side is checked at every stage (mutation M3 caught).
+  - **Wrote two ω arms with no test.** Probing found the ω LEAF reachable (`org{db^p.admins:name^-}`, row
+    C6, pre measured with only the check disabled) and the ω ANCESTOR unreachable (DEFERRED 167), so the
+    ancestor-side arms are kept, unpinned, and marked so in the code.
+  - **A zero-power instrument, caught by its control**: my first module-closure script reported that
+    `parser.rkt` does not reach `syntax.rkt`, which it requires directly (`module->imports` raised on an
+    undeclared module and the handler swallowed it). Replaced by a text closure checked against three positive
+    controls.
+  - **Dates**: the session crossed midnight; Q_U59 / Q_U60 were first written as 2026-10-13 and corrected to
+    2026-10-14 (the owner's answer arrived after `22994c62`, 10-13 11:11; `e3a30441` was 10-14 17:38).
+  - `git commit` failed once on a transient `index.lock` (gone on inspection, no process holding it), retried.
+- **Next**: owner checkpoint, then 1b-vi-C — the `collapsed` cont + the `*-` / `*-_` conts + the totality
+  dispatcher + the 15 prose arms, landed INERT; stage stays B until D (C flips no surface row).
+
+### 1b-vi-C shipped: the total-collapse machinery, inert, proven by injection — `6142d318` (design) + `3cbb1025` (code) (2026-10-14)
+- **Why / decision**: owner — *"Let's proceed with Slice C per our Stage 4 Design Methodology
+  (Implementation Protocol)"*. Design target and mini-audit committed before any code
+  ([§5.P4e-1b-vi, 1b-vi-C](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-c)). Two
+  representation choices made inside Q_U58's M and recorded, not posed: the mark is a wrapper
+  `(collapsed . c₀)` around the WRITTEN cont (so printing and naming read the step as written),
+  and the two new spellings live in a printer-only pending table rather than a MINTED column.
+  Q_U55's star arm and the parser's mark call moved to D, where red rows drive them.
+- **What shipped**: a closed star-cont axis (4 conts, a raising classifier at the 5 readers); the
+  mark (unmark ∘ mark = id, prints and names as written — law over 104 branches); ONE placement
+  predicate at both twins' dissolve arms (placement emerged, as M predicted); `*-_`'s prefix at
+  one seat; tail-arm guards in both twins; `select-fail` carries the star cont and the 13
+  per-branch arms name the operator as written (render loop: every kind × every cont + missing).
+  INJECTION: each D row's `*` spelling parsed by production, conts made total, every branch list
+  marked, run through `process-command` — 53 D rows meet their D targets before the mint.
+  670 / 670; acceptance 88 / 88; 7.97 s per run.
+- **Surprise / correction**:
+  - **A vacuous pass, found by counting.** X-type's `*` spelling is a parse refusal that matched
+    its `*-` target; the harness passed it through untouched. Closed: lexeme rows excluded by
+    name, any other unparsed row reads `VACUOUS` (proved by putting X-type back).
+  - **A malformed mutation** (one `)` too many): a read error proved nothing; redone → red (19).
+  - **A section scratch is not the battery**: my test defect in the 1b-iii render loop surfaced
+    only in the battery. **A command that did not gate on `check-parens`** ran a probe against a
+    non-compiling file. **The patch tool's fuzzy match dropped a word** from an existing comment
+    (my `old_string` misquoted it); caught in the diff review, restored.
+  - The census's first cut attributed by indentation and charged typing's dissolve arm to
+    `walk-to-leaf`; its positive control caught it.
+  - Measured design change: a MINTED column would have edited eight consumers D already flips.
+  - `git commit` hit a transient `index.lock` again; nothing held it; retried.
+- **Next**: owner checkpoint, then 1b-vi-D — the mint (see "What C hands D" in the D4 section).
+
+### 1b-vi-D-1 shipped: the level arms name the operators PRESENT — `b567b29e` (2026-10-14)
+- **Why / decision**: owner — *"Ok to proceed (and would you think that passing the star through
+  is our better option? If it doesn't cost us too much, it would seem to be more correct/accurate
+  to me — do you have a challenge to that perspective?)"*. The challenge: a LEVEL has no single
+  star (`env{prod^.db* dev.db*-}`), so passing one would be wrong in a mixed block. The decision
+  that survived: pass the operators PRESENT (a list), and scope each claim to the family it was
+  measured on ([D4 §5.P4e-1b-vi, 1b-vi-D](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-d)).
+- **What shipped**: `select-fail`'s field is a list; `star-dup-key` carries every star at the
+  level, `star-l4-mixed` its branch's; both arms speak per family. M-one (pass one star) red on
+  exactly the mixed row; M-none red on three. 670 / 670.
+- **Surprise / correction**:
+  - **A 1b-iv sentence was false for most of its population** — "dropping the `*` does not help
+    either" (probe-1bvi-x: true for 1 of 4 shapes). Replaced by the mechanism, pinned absent.
+  - **My design text repeated it** ("the non-total sentence keeps its measured claim") and my
+    first X-dup-mix row required it — the measurement came before the commit, not after.
+  - **The regexes passed a false message**: the first mixed L4 render spoke the `*` clause over
+    `*-`. Found by reading the render; now a guard with shown power.
+  - **C's ordinal-head defect** (`ov{0.a.b*-_}` → `@[…]`, not `{:a-b-x 1}`), determined by
+    Q_U48 + Q_U49, Q_U57 and P3c's pin — not a new question. The law generator's fixture set
+    (key-headed only) is the blind spot.
+  - Two malformed edits stopped by the `check-parens` gate; the runner takes one `--tests` per file.
+- **Next**: 1b-vi-D-2 — FIRST the ordinal-head fix (rows back + an ordinal fixture in the
+  generator), then the mint.
+
+### 1b-vi-D-2a shipped: an ordinal head is transparent under a collapse — `035aea42` (design) + `84beb15a` (2026-10-14)
+- **Why / decision**: owner — *"Excellent, let's proceed to D-2 per our stage 4 design methodology"*.
+  D-2 split into D-2a (the ordinal-head fix, still inert) and D-2b (the mint); design first
+  ([D4 §5.P4e-1b-vi, D-2](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-d2)).
+- **What shipped**: one `select-branch-total-collapse?` predicate; both twins' ord-head arms
+  descend transparently under a total collapse; the law generator borrows the base subject's
+  equivalents (`ot{0.X}` ≡ `t5{X}`, four families; `ov3`), 168 rows. 670 / 670.
+- **Surprise / correction**: the red step raised at C's C-5 guard (`ot{0.a*-}`) — loud, but a
+  production whole-file abort; my C note "ordinals make no layer" was half right. My C VAG also
+  missed DEFERRED 144 (the grammar for the whole star family, filed at 1b-v-B2b): D owes no grammar.
+- **Next**: 1b-vi-D-2b — the mint.
+
+### 1b-vi-D-2b shipped: THE MINT — `*-` and `*-_` are live — `9743e93e` (2026-10-14)
+- **What shipped**: the two rows join the one star table (C's pending table retired); the parser
+  marks every branch at `segment-select-items`' one success return; Q_U55's star half with
+  remedies that run; Q_U56's guided `*->` from the selection consumer; pins flipped; the arrival
+  gate runs ∀ minted lexeme; PARITY parser = injection. 173 rows; 670 / 670; 7.65 s per run.
+- **Surprise / correction**:
+  - **Q_U56's predicted type-territory text was wrong** (the row had been written from the
+    prediction); the measured message is 1b-v's star-family one, true and more specific.
+  - **"put a space" is not a remedy** (`x{a*- > b}` still fails), and the consumer cannot tell
+    glued from spaced; `a*->b` is one token. Three shapes, each with a true message.
+  - **M-mark**: without the mark a minted `*-` is a whole-file ABORT (C-5's guard raises), not a
+    silent re-nest — loud as designed, but an abort; unreachable while the mark is pinned.
+  - **M-keep** confirmed C's handover: B's remedy would have offered `t5{a^.b^q.c^*}` (refused).
+  - My `select-star-cont-of #t #f` in the keep remedy would have rendered `*-` — caught on
+    re-read before the first run. The deps check first ran a nonexistent path and printed 0 —
+    read as "did not run", re-run at the right path: 375 = B's.
+- **Next**: owner checkpoint — the 1b-vi verify, the suite gate, the checkpoint merge to main.
+
+### Q_U61 posed + acceptance §M (2026-10-14)
+- **Why / decision**: owner — *"Let's open up what the behavior looks like for this `ot`… numerous
+  worked examples … checked against our original design spec and intents. And yes we should add
+  all new syntax developed into the acceptance file."*
+- **Q_U61 (posed, pending)**: probe-1bvi-ac (45 lines) measured a plain `*` under an ordinal head
+  against spec §3.3, Q_U47 and Q_U49. Today splices at depth 1 (Q_U49's decided seat B, 9 pins) and
+  wraps at depth ≥ 2 (no decision, 0 pins — a seat-B predicate that only sees sₙ★ right after the
+  ordinal). Options S (splice through; what Q_U47/Q_U49 say) and W (always wrap; honest nesting);
+  recommendation S. [D4 Q_U61](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u61).
+- **Acceptance §M**: 20 live forms, 3 commented refusals with measured messages; 108 / 108.
+- **Surprise / correction**: the corpus check passes a FILE argument as zero files — re-run on
+  directories (+6 ERROR nodes, inside the ratchet). `server.ssl*->port` splits at `>` while
+  `mn{a*->b}` fuses — each shape already gets the message true of it.
+- **Next**: owner decision on Q_U61; then the rest of the 1b-vi verify, the suite gate, the merge.
+
+### 1b-vi-E shipped: Q_U61 = S — `67979e59` (decision + design) + `a41f8362` (2026-10-14)
+- **Why / decision**: owner — *"Reading S looks good to me."* An ordinal head passes a keyless star
+  landing through at every depth ([D4 Q_U61](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u61),
+  [1b-vi-E](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-e)).
+- **What shipped**: `select-step-names-no-key?` inside `select-steps-yield-bare-join?`; one
+  transparent arm per twin (D-2a's arm and seat B's splice deleted); the dup refusal names S's cost
+  and the `^` tuple spelling via a `select-fail` field `ordinal`. Stage E; 187 rows; 694 / 694;
+  acceptance M16/M17, 112 / 112.
+- **Surprise / correction**: S REMOVED code (two arms); the mutations prove the one arm carries all
+  three cases. probe-1bvi-ad found the generic dup text true but silent on why two positions meet
+  and on the tuple remedy — fixed in the slice, as the S cost analysis promised. My message-row
+  regexes were case-wrong on the first run (test defect, fixed). One more transient `index.lock`
+  (no holder; retried).
+- **Next**: the rest of the 1b-vi verify, the suite gate, the checkpoint merge to main.
+
+### 1b-vi verify: three BLOCKING defects found and fixed — a whole-file abort, a twin value/type split, ordinal-level prose false on most of its population — `0988a4f0` (2026-10-18)
+- **Why / decision**: the owner — *"Let's proceed."* — to the verify, the suite gate and the checkpoint merge.
+  Four read-only lenses at `64368197` (VT twins, VS silent answers, VM message truth, VI instruments), adjudicated
+  on the main thread: 36 raw → 34 survive, 2 killed
+  ([D4 §5.P4e-1b-vi verify](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-verify)). The standing
+  question ("one seat, not its sibling") answered YES five times.
+- **What shipped**: VF-1 a parser refusal of a total collapse under an ω ancestor (was a whole-file abort;
+  DEFERRED 167's waypoint, both collapse families); VF-2 `asort` threaded through five reduction helpers
+  (a value/type split at 0 errors); VF-3 one ordinal fact for both level gates, every sentence scoped to its
+  measured population, every remedy run; VF-4 / VF-5 and nine more. Stage V: 250 rows (106 hand, 144 law), a
+  size pin predicted before the run; ten mutations, each red on its own pins; 695 / 695; acceptance 112 / 112.
+- **Surprise / correction**: my own E work. E's VAG said the refusal "names S's cost"; it did so for the one
+  population probe-1bvi-ad measured, and six sentences in the two level arms were false elsewhere. And three
+  comments claiming a shape unreachable or a law "by construction" were wrong (VF-1's ω route, VF-2's
+  "threaded", E's `ot{0.X}` ≡ `t5{X}` over sub-blocks → Q_U62). The lenses' L1-…L4- ids were renamed VT/VS/VM/VI
+  (they collided with the fusion law L1 and the mixing rule L4). One unattributed extra mutation red, consistent
+  with DEFERRED 170's race (unmerged here).
+- **Next**: Q_U62 posed (pending, owner). Merge main into the branch, the full-suite gate, the checkpoint merge.
+
+### Main merged in (first bring-up) `9d0dea51`, then the full-suite gate: 10 426 / 502 files, all pass, reconciled file by file (2026-10-18)
+- **Why / decision**: the owner — *"Let's proceed."* — verify → merge main in → suite gate → checkpoint merge (the plan
+  on main's dailies, `9533811d`).
+- **What shipped**: the prediction held (made read-only while the lenses ran): one file changed on both sides,
+  `tests/test-path-selection.rkt`, merged clean with main's three `#:exists 'replace` → `'truncate` hunks (DEFERRED 170);
+  the merged tree differs from main in exactly the branch's 99 files, and the only branch file the merge moved is that
+  one, by exactly main's hunks; eight shared modules' `.zo`s equal main's checkout. **Gate** (`--all` at `9d0dea51`):
+  **10 426 tests, 502 files, 506 units, all pass** (`test-path-selection` sharded ×5). Reconciled against the two
+  recorded full runs of main-equivalent code that total main's 10 394 (PAR 4 `931b327b`, PPN 4C `39eba17d`): the ONLY
+  per-file differences are the branch's two test files — `test-path-selection` 573 → 581 (+8), `-acceptance` 90 → 114
+  (+24); all 500 others equal to the test. Acceptance `run-file --check` 112 / 112; `update-deps --check`: "The cached
+  derivation equals a full rescan. ✓" (main's SW-24 replaced the mismatch count).
+- **Surprise / correction**: (1) I committed the merge before the gate; the procedure keeps it `--no-commit` so a red
+  gate is a `merge --abort`. The gate was green, and the message is left unamended because the recorded run cites
+  `9d0dea51`. (2) The first acceptance smoke-run died on `instantiate-linklet: mismatch … process-file31.1`: main
+  changed `driver.rkt`'s `process-file`, and my rebuild targets left `tools/run-file.rkt`'s `.zo` stale. A build-target
+  omission, not a defect; after a main merge every tool to be run belongs in the `raco make` list. (3) The runner's
+  `total_wall_ms` reads ≈ 8 s in every recorded full run (7 948, 8 403 in the references); per-file walls sum to 77.3 s —
+  not this run's wall. (4) The verify's one unattributed mutation red (Q_N4, under VF3-collapse) stays unattributed;
+  main's DEFERRED 170 fix is now merged, and this gate ran the file sharded ×5 green.
+- **Next**: the checkpoint merge to main; the DEFERRED "on the branch" passages flipped to the merge hash; dailies.
+  Q_U62 stays pending (owner).

@@ -1,0 +1,18 @@
+ns v6omegaremedy
+def ow := {:top {:eu {:cfg {:x {:p 1}}} :us {:cfg {:x {:p 2}}}}}
+def og := {:db {:admins @[{:name {:f {:z 1}}} {:name {:f {:z 2}}}]}}
+def dz := {:top {:eu {:cfg {:x {:v 1}}} :us {:cfg {:x {:w 2}}}}}
+;; VF-1: candidate remedies for a total collapse under an omega ancestor
+;; Q_U48 meaning of top:cfg.x*- is top^ / :cfg^ / x* — measured where spellable
+ow{top^:{cfg.x*-}}
+ow{top:{cfg.x*-}}
+ow{top^:{cfg^.x*}}
+ow{top^:{cfg.x^-}}
+ow{top:{cfg.x^-}}
+ow{top^:{cfg.x*-_}}
+ow{top:{cfg.x*-_}}
+dz{top^:{cfg.x*-}}
+og{db^.admins^:{name.f*-}}
+og{db.admins:{name.f*-}}
+og{db^.admins^:{name:f*-}}
+og{db.admins:{name.f^-}}

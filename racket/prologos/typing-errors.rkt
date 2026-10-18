@@ -302,6 +302,39 @@
   ;; writable (recorded as a Q_T2 adaptation in D4 §5.P3a).
   (define remedies
     "seal the subject against a schema (`the Schema subj`) or validate it against one")
+  ;; ⭐ D4.P4e-1b-vi-C (C-6): THE OPERATOR AS WRITTEN. A star failure carries its
+  ;; cont (`select-fail-star`); every per-branch star arm below names `op` — `*`,
+  ;; `*_`, `*-` or `*-_` — instead of a hardcoded `*`, and any advice names an
+  ;; IN-FAMILY sibling (`*-_`'s "use bare" is `*-`; telling a `*-` user to write
+  ;; `*` would change where the result lands). Rendered by the ONE printer, so a
+  ;; cont it does not know shows its LOUD tell; a missing cont is loud too.
+  ;; ⭐ 1b-vi-D-1 — THE LEVEL ARMS NAME THE OPERATORS PRESENT. The field is a LIST
+  ;; (`select-fail-stars`): a per-branch arm carries exactly one cont, a LEVEL arm
+  ;; (`star-dup-key`, `star-l4-mixed`) carries every operator at the level, because a
+  ;; level has no single star — `env{prod^.db* dev.db*-}` is one block, two families,
+  ;; and naming one operator there would identify the wrong thing. Each claim is
+  ;; emitted only for the family it was MEASURED true of (probe-1bvi-u, -v, -x).
+  (define stars (select-fail-stars fail))
+  (define star-c (and (pair? stars) (car stars)))
+  (define (star-lex c)
+    (if c
+        (pp-select-branch (list (make-select-star c)))
+        "«star-cont-missing»"))
+  (define op (star-lex star-c))
+  (define (op-sibling synth?)
+    (star-lex (and star-c (select-star-cont-of (select-star-cont-total? star-c) synth?))))
+  (define op-bare (op-sibling #f))
+  (define (lex-join cs [conj "and"])   ;; "`*`" / "`*` and `*-`" / "`*`, `*_` or `*-`"
+    (let ([ls (map (lambda (c) (string-append "`" (star-lex c) "`")) cs)])
+      (if (or (null? ls) (null? (cdr ls)))
+          (string-join ls "")
+          (string-append (string-join (drop-right ls 1) ", ") " " conj " " (last ls)))))
+  (define ops-all (if (null? stars) "«star-cont-missing»" (lex-join stars "or")))
+  (define stars-total (filter select-star-cont-total? stars))
+  (define stars-partial (filter (lambda (c) (not (select-star-cont-total? c))) stars))
+  ;; ⭐ 1b-vi verify (VF-3): the ordinal facts at the failing level (`select-level-ordinal-fact`)
+  ;; — a list of flags, or #f. `'()` for every kind that does not carry them.
+  (define ord (let ([o (select-fail-ordinal fail)]) (if (list? o) o '())))
   (case (select-fail-kind fail)
     ;; ⚠ THE `bcast-not-yet` ARM IS RETIRED AT D4.P4c-4c — it named THIS SLICE as
     ;; its own discharge point ("the ω value semantics land at … P4c-4c"), and
@@ -614,11 +647,11 @@
     ;; yet" substring — five 1a-era pins assert it, and B2's seat migration
     ;; re-points them here.
     [(star-mid-branch)
-     (format "select: `~a` — `*` is only supported at the END of a branch; a step after a flatten (descending into the joined result) is not implemented yet"
-             label)]
+     (format "select: `~a` — `~a` is only supported at the END of a branch; a step after a flatten (descending into the joined result) is not implemented yet"
+             label op)]
     [(star-leaf)
-     (format "select: `~a` — `*` deletes the layer the preceding step produced and joins its CONTENTS; here the layer is `~a`, whose contents are not containers, and a leaf has no join. This is a permanent refusal, not a not-yet"
-             label (pp-expr row names))]
+     (format "select: `~a` — `~a` deletes the layer the preceding step produced and joins its CONTENTS; here the layer is `~a`, whose contents are not containers, and a leaf has no join. This is a permanent refusal, not a not-yet"
+             label op (pp-expr row names))]
     ;; ⚠⚠ 1b-iv-B2 RE-SCOPED THIS KIND, and leaving the old wording would have
     ;; made it a LIE the moment the shield came down. It used to say "the nominal
     ;; case is the next slice" — bare `*` now flattens Map-valued contents
@@ -639,21 +672,21 @@
     ;; ⚠ It stayed green because the battery's render loop PRODUCES every kind by
     ;; hand — rendering a kind proves nothing about whether anything produces it.
     [(star-hetero)
-     (format "select: `~a` — `*` (flatten) is not implemented yet for MIXED element types: the layer `~a`'s vectors do not share one element type, and the union join is not landed"
-             label (pp-expr row names))]
+     (format "select: `~a` — `~a` (flatten) is not implemented yet for MIXED element types: the layer `~a`'s vectors do not share one element type, and the union join is not landed"
+             label op (pp-expr row names))]
     [(star-omega-tuple)
      ;; ⚠ B-verify F2: this arm shipped with ONE ~a and TWO args, so `format`
      ;; RAISED on every render and the blanket hint handler swallowed it to the
      ;; bare generic — a raising arm is WORSE than the [else] trapdoor slice A
      ;; closed, and it silenced Q_U40's own ravel `vv:{0 1}*`. The battery had
      ;; pinned this kind's KIND and never its MESSAGE; all eight are pinned now.
-     (format "select: `~a` — `*` (flatten) is not implemented yet for tuple elements under a broadcast (layer `~a`): the concatenated arity is (tuple arity × the container's runtime length), which no static type carries"
-             label (pp-expr row names))]
+     (format "select: `~a` — `~a` (flatten) is not implemented yet for tuple elements under a broadcast (layer `~a`): the concatenated arity is (tuple arity × the container's runtime length), which no static type carries"
+             label op (pp-expr row names))]
     [(star-not-yet)
      ;; the residual honest not-yet (e.g. an empty row layer, whose element
      ;; type nothing names) — deliberately generic, deliberately rare.
-     (format "select: `~a` — `*` (flatten) is not implemented yet for this layer (`~a`)"
-             label (pp-expr row names))]
+     (format "select: `~a` — `~a` (flatten) is not implemented yet for this layer (`~a`)"
+             label op (pp-expr row names))]
     ;; ⭐⭐ 1b-iv-B1 [Q_U49/Q_U38] — the two kinds the NOMINAL join needs. Minted
     ;; WITH their arms and with the battery's hand-written render-loop entry in
     ;; the SAME commit: that loop cannot self-report an unlisted kind, and a `#f`
@@ -669,8 +702,8 @@
      ;; gate already folds over; this one has no other seat.
      ;; ⚠ The remedy is NOT `^k'` — a rename re-keys a BRANCH, and both colliding
      ;; keys here come from INSIDE the joined layer, where no branch names them.
-     (format "select: `~a` — `*` (flatten) joins the layer's contents keywise, and two of them carry the same key, so the join would silently drop one (layer `~a`). Star a narrower layer, or select the colliding fields as separate branches"
-             label (pp-expr row names))]
+     (format "select: `~a` — `~a` (flatten) joins the layer's contents keywise, and two of them carry the same key, so the join would silently drop one (layer `~a`). Star a narrower layer, or select the colliding fields as separate branches"
+             label op (pp-expr row names))]
     [(star-omega-nominal)
      ;; ⚠ NOT a bare not-yet, and not [Q_U49]'s nominal join either. Under ω the
      ;; ELEMENT TYPE stands for every content, so a keywise join of N contents
@@ -680,8 +713,8 @@
      ;; `{:a 1, :b 2}`, which assumes the elements carry DISJOINT keys — true of
      ;; that value, not expressible in its type. Recorded as DEFERRED rather than
      ;; silently picking a side.
-     (format "select: `~a` — `*` (flatten) cannot join Map-valued contents under `:` (broadcast): every element of `~a` shares ONE element type, so a keywise join would contribute the same keys once per element and collide for any length above 1 (the length is not statically known). Flatten a single element's layer instead, or select the fields individually"
-             label (pp-expr row names))]
+     (format "select: `~a` — `~a` (flatten) cannot join Map-valued contents under `:` (broadcast): every element of `~a` shares ONE element type, so a keywise join would contribute the same keys once per element and collide for any length above 1 (the length is not statically known). Flatten a single element's layer instead, or select the fields individually"
+             label op (pp-expr row names))]
     ;; ⚠ 1b-iv VERIFY — this arm is reached from TWO producers and used to render
     ;; the LAYER for both, so a Map-typed CONTENT was reported as "the layer …
     ;; is a `Map` type" when the layer is a record. MEASURED: `mo{o*}` on
@@ -696,13 +729,13 @@
      ;; under Q_U38's refuse-on-possibility that is a final answer. The shared
      ;; `star-nominal` message promises "the nominal case is the next slice",
      ;; which would be a lie here however many slices land.
-     (format "select: `~a` — `*` (flatten) needs to know the keys it is joining, and `~a` is a `Map` type, whose keys are not statically known (this is permanent, not a not-yet: a key collision there can be neither proven nor ruled out). Give it a record type — annotate or seal the subject against a schema"
-             label (pp-expr row names))]
+     (format "select: `~a` — `~a` (flatten) needs to know the keys it is joining, and `~a` is a `Map` type, whose keys are not statically known (this is permanent, not a not-yet: a key collision there can be neither proven nor ruled out). Give it a record type — annotate or seal the subject against a schema"
+             label op (pp-expr row names))]
     [(star-open-row)
      ;; ⚠ the render loop caught this wording never naming the OPERATOR the
      ;; user wrote — every star message names `*`.
-     (format "select: `~a` — `*` (flatten) needs the layer's full contents, and `~a`'s row is not fully known (an open `'dyn` tail, or fields not provably present); ~a"
-             label (pp-expr row names) remedies)]
+     (format "select: `~a` — `~a` (flatten) needs the layer's full contents, and `~a`'s row is not fully known (an open `'dyn` tail, or fields not provably present); ~a"
+             label op (pp-expr row names) remedies)]
     ;; ⚠⚠ 1b-v-B2a VERIFY — THIS WAS ONE MESSAGE SERVING TWO PRODUCERS WHOSE
     ;; TRUTHS ARE COMPLEMENTARY, so each falsified a different half of the same
     ;; sentence, and one of them falsified the REMEDY. Measured before the split:
@@ -730,24 +763,24 @@
     ;; collisions in the ORDINARY case, not universally"), so the message names
     ;; the synthesized key and offers the remedy that actually applies.
     [(star-synth-collision)
-     (format "select: `~a` — `*_` prefixes each content's fields with the key that content sat under, and two contents of `~a` synthesize the SAME key, so the join would silently drop one. Their own field names differ — it is the prefixed forms that meet. Rename one content with `^k'`, or select them separately"
-             label (pp-expr row names))]
+     (format "select: `~a` — `~a` prefixes each content's fields with the key that content sat under, and two contents of `~a` synthesize the SAME key, so the join would silently drop one. Their own field names differ — it is the prefixed forms that meet. Rename one content with `^k'`, or select them separately"
+             label op (pp-expr row names))]
     [(star-synth-positional)
      ;; the layer's contents sit at POSITIONS — there is no key to prefix WITH.
-     (format "select: `~a` — `*_` prefixes each lifted field with the key its content sat under, and this layer's contents sit at POSITIONS, not keys (layer `~a`): there is nothing to prefix with. Bare `*` joins these contents directly"
-             label (pp-expr row names))]
+     (format "select: `~a` — `~a` prefixes each lifted field with the key its content sat under, and this layer's contents sit at POSITIONS, not keys (layer `~a`): there is nothing to prefix with. Bare `~a` joins these contents directly"
+             label op (pp-expr row names) op-bare)]
     [(star-synth-vector-contents)
      ;; the layer HAS keys, but its contents are vectors — no FIELDS to prefix.
-     (format "select: `~a` — `*_` prefixes the FIELDS of each content, and this layer's contents are vectors (layer `~a`), which concatenate into one keyless component: there are no fields to prefix. Use bare `*`"
-             label (pp-expr row names))]
+     (format "select: `~a` — `~a` prefixes the FIELDS of each content, and this layer's contents are vectors (layer `~a`), which concatenate into one keyless component: there are no fields to prefix. Use bare `~a`"
+             label op (pp-expr row names) op-bare)]
     ;; ⭐ 1b-iii-C2 RE-SCOPED THIS KIND. It used to refuse EVERY depth-≥2 star
     ;; while the layer question was unruled; [Q_U46]/[Q_U47] ruled it and the
     ;; shield came out, so the kind now guards exactly the gap the ruling
     ;; RESERVED: an ordinal `sₙ`. Reused rather than replaced by a new kind so the
     ;; battery's hand-written render-loop list stays correct without a second edit.
     [(star-deep-prefix)
-     (format "select: `~a` — `*` deletes the layer the step before it produced, and an ORDINAL step produces no layer (it selects a position, it does not add a level). Star a named step instead (`x{a.b*}`), or select the element first and flatten separately"
-             label)]
+     (format "select: `~a` — `~a` deletes the layer the step before it produced, and an ORDINAL step produces no layer (it selects a position, it does not add a level). Star a named step instead (`x{a.b~a}`), or select the element first and flatten separately"
+             label op op)]
     ;; ⭐ 1b-iii-C2: the duplicate-output-key refusal. `label` here is the
     ;; COLLIDING KEY, not a branch spelling — the collision is a property of the
     ;; level, and naming the key is what tells the user which two branches met.
@@ -788,8 +821,80 @@
      ;; ⭐ The message no longer asserts WHICH kind of key collided (the gate
      ;; folds over assembled component keys and cannot tell), so it states only
      ;; what is true of both and names remedies that work for both.
-     (format "duplicate output key `:~a` in the select block — two branches deliver the same output key, and distinct keys are required (strict merge; the alternative is a silent last-write-wins). The key may be one a branch NAMES, or one a `*` LIFTED out of its layer. Rename an UNSTARRED branch with `^k'` (`x{k^k2}`) — a starred segment cannot carry a rename — or select the flatten in its own block. If the key was lifted, dropping the `*` does not help either: it re-nests the layer under the key the star was deleting"
-             label)]
+     ;; ⚠⚠ 1b-vi-D-1 — THE LAST SENTENCE WAS FALSE FOR MOST OF ITS POPULATION.
+     ;; "If the key was lifted, dropping the `*` does not help either" was written
+     ;; against ONE shape: every star dropped, and the deleted keys EQUAL. MEASURED
+     ;; (probe-1bvi-x): `env{prod^.db dev^.db}` still collides (`:db`) — the one
+     ;; shape — but dropping ONE star works (`env{prod^.db dev^.db*}`), dropping the
+     ;; star beside a NAMED key works (`kk{a k}`), and in a mixed block dropping
+     ;; EITHER star works. What is true of all four is the MECHANISM, so the message
+     ;; now states that: a dropped star re-nests what it lifted — `*`/`*_` under the
+     ;; key it was deleting, a total collapse under its whole path — which resolves
+     ;; the collision unless another branch delivers that key too.
+     ;; The total family's own remedy: `*-_` keeps each surviving ancestor's name in
+     ;; the lifted key (E3-, probe-1bvi-v's P1/P2 ✓), and a `^` on the ancestor where
+     ;; the branches differ removes exactly that name (P3: `:db-url` collides until
+     ;; the `^` is dropped). `*` is NOT offered to the total family: with a shared
+     ;; head it collides on the head (P2, `:a`).
+     (string-append
+      (format "duplicate output key `:~a` in the select block — two branches deliver the same output key, and distinct keys are required (strict merge; the alternative is a silent last-write-wins). The key may be one a branch NAMES, or one a star (~a) LIFTED out of its layer. Rename an UNSTARRED branch with `^k'` (`x{k^k2}`) — a starred segment cannot carry a rename — or select the flatten in its own block."
+              label ops-all)
+      (cond
+        [(null? stars) ""]
+        ;; ⭐ 1b-vi verify (VF-3, VM-2): under an ordinal HEAD the mechanism sentence is
+        ;; FALSE — measured: `ot2{0.a^.b* 1.a^.b}` and `rv{xs^.{0.a} k}` trade the
+        ;; collision for L4, because without its star the element is one keyless tuple
+        ;; component. A bare ordinal STEP after a dissolve never wraps, so there the
+        ;; generic sentence stays true (`w{v^.0.a^.b v^.1.a^.b*}` works).
+        [(memq 'head ord)
+         (string-append
+          " Dropping the star of ONE ordinal-headed branch trades the collision for a keyed/keyless mix (L4): without its star that element lands as one keyless tuple component."
+          (if (memq 'all-head ord)
+              " Dropping it on every branch here gives a tuple of the elements."
+              ""))]
+        [else
+         (format " Dropping a star re-nests what it lifted — ~a — which resolves the collision unless another branch delivers that key too."
+                 (string-join
+                  (append
+                   (if (pair? stars-partial)
+                       (list (format "~a under the key the star was deleting" (lex-join stars-partial)))
+                       '())
+                   (if (pair? stars-total)
+                       (list (format "~a under its whole path" (lex-join stars-total)))
+                       '()))
+                  ", "))])
+      ;; 1b-vi verify (VM-4 / VI-2): NOT when every colliding branch arrives through an
+      ;; ordinal — measured `ot2{0.a.b*- 1.a.b*-}` → `*-_` collides again (`:a-b-k`)
+      (if (and (pair? stars-total) (not (memq 'all ord)))
+          " Under a total collapse, `*-_` keeps each surviving ancestor's name in the lifted key (`x{a.k*-_ b.k*-_}` delivers `:a-k-…` beside `:b-k-…`), and an ancestor dissolved with `^` contributes no name — so drop the `^` where the branches differ."
+          "")
+      ;; ⭐ 1b-vi-E [Q_U61] — S's COST, NAMED. Measured on `ot2{0.a^.b* 1.a^.b*}`
+      ;; (probe-1bvi-ad): the generic remedies above hold, but none says why two
+      ;; POSITIONAL branches meet at one level, and dropping ONE star trades the
+      ;; collision for an L4 mix. The tuple the user most likely meant is spelled
+      ;; with `^` (measured `@[{:k 1} {:k 2}]`); a provenance star cannot help,
+      ;; because an ordinal contributes no name to its prefix (Q_U57).
+      ;; ⭐⭐ 1b-vi verify (VF-3) — EVERY CLAUSE SCOPED TO THE POPULATION IT WAS MEASURED
+      ;; ON (`select-level-ordinal-fact`). E's first wording held for `ot2` alone; its
+      ;; tuple remedy failed on three populations it was emitted for (VM-3: a `{0}`
+      ;; sₙ, a keyed `^-` sibling, a third branch left starred) and the provenance
+      ;; caveat was gated on a synth star being present, i.e. missing exactly when the
+      ;; `*-_` advice was given (VM-4). Now: the reason whenever a landing passes
+      ;; through an ordinal; the caveat always with it; the tuple remedy only when EVERY
+      ;; branch passes through, applied to every one, and only where sₙ is a key.
+      (if (memq 'passes ord)
+          (string-append
+           " Through an ordinal, a star whose remainder names no key lands its fields at this level (Q_U61), so an element's lifted fields meet the level's other keys. "
+           ;; the provenance form OF EACH FAMILY PRESENT (D-1's rule: no clause spoken over
+           ;; an operator that is not there)
+           (format "~a cannot tell elements apart either: an ordinal contributes no name to its prefix."
+                   (cond [(null? stars-partial) "`*-_`"]
+                         [(null? stars-total) "`*_`"]
+                         [else "`*_` or `*-_`"]))
+           (if (memq 'key-tails ord)
+               " To keep each element as its own tuple component, end EVERY branch here with `^` instead of its star (`x{0.a^.b^ 1.a^.b^}`)."
+               ""))
+          ""))]
     [(star-l4-mixed)
      ;; ⚠ 1b-iii-C2: this WORDING used to assert that the STAR branch is the
      ;; keyless one, which was true while every star landed keyless. Under
@@ -848,8 +953,54 @@
      ;; ⭐ Stated from the ruling: the landing follows the CONTENTS, so the
      ;; remedy is to make the two landings agree on keyed-ness, and which
      ;; direction that is depends on what the star's contents are.
-     (format "mixed keyed/keyless sorts in the select block (L4) — `~a` is a star branch whose landing and its sibling branches' do not agree: one level assembles a Map OR a tuple, never both. A star's landing follows its CONTENTS: Map contents splice in as KEYED fields, vector contents land as ONE KEYLESS component, and a key surviving before the star keeps the join nested under it. So make the level agree — if the `*` lands keyed, stop dissolving its siblings (drop a `^`, as in `x{a* b}`); if it lands keyless, dissolve the keys that survive on the others (a `^` per surviving level, as in `x{a* b^.c^.d*}`). Selecting the flatten in its own block always works"
-             label)]
+     ;; ⭐ 1b-vi-D-1: carries the conts of the branch its LABEL names, and speaks in
+     ;; that branch's operators. The "key surviving before the star" clause is true of
+     ;; `*` / `*_` only — a total collapse removes every ancestor, so it always lands at
+     ;; its branch's top. Examples are in the branch's own family; the total family's
+     ;; are MEASURED (probe-1bvi-v: `vv{a^.b* a^}` ✓, the flatten alone ✓).
+     (let* ([total? (and star-c (select-star-cont-total? star-c))]
+            [o (if star-c op "«star-cont-missing»")])
+       ;; ⭐ 1b-vi verify (VF-3, VM-1): at a level of ORDINAL heads the agree-clause is
+       ;; false — measured `ot2{0.a^.b* 1.a^.b}` → its remedy `ot2{0.a^.b* 1.a.b}` →
+       ;; the same L4: an ordinal-headed sibling is keyless whatever its `^`s. When every
+       ;; delivered branch is an ordinal head the clause is replaced; when some are, the
+       ;; generic clause stays (it holds for the key-headed ones) and the ordinal fact is
+       ;; added. Both remedies measured: `ot2{0.a.b* 1.a.b*}`, `ot2{0.a^.b^ 1.a^.b^}`.
+       (format "mixed keyed/keyless sorts in the select block (L4) — `~a` is a star branch whose landing and its sibling branches' do not agree: one level assembles a Map OR a tuple, never both. A star's landing follows its CONTENTS: Map contents splice in as KEYED fields, vector contents land as ONE KEYLESS component~a. ~a. Selecting the flatten in its own block always works"
+               label
+               ;; ONE CLAUSE PER FAMILY PRESENT — a D-1 draft picked the clause from the
+               ;; first cont and spoke it over every operator, so a mixed branch read
+               ;; "under `*` and `*-` a key surviving … keeps the join nested": false for
+               ;; `*-`, the very error this step removes. Caught reading the render.
+               (string-append
+                (if (pair? stars-partial)
+                    (format ", and under ~a a key surviving before the star keeps the join nested under it"
+                            (lex-join stars-partial))
+                    "")
+                (if (pair? stars-total)
+                    (format "; a total collapse (~a) always lands at its branch's top" (lex-join stars-total "or"))
+                    ""))
+               (let ([agree
+                      (format "So make the level agree — if the `~a` lands keyed, stop dissolving its siblings (drop a `^`, as in ~a); if it lands keyless, dissolve the keys that survive on the others (~a)"
+                              o
+                              (if total? (format "`x{a.b~a c}`" o) (format "`x{a~a b}`" o))
+                              (if total?
+                                  (format "a `^` on each, as in `x{a.b~a c^}`" o)
+                                  (format "a `^` per surviving level, as in `x{a~a b^.c^.d~a}`" o o)))]
+                     [ordinal-fact
+                      "under an ordinal head a star's landing passes through only when nothing between the ordinal and the star names a key; otherwise an ordinal-headed branch is ONE keyless tuple component, whatever its `^`s (a `^-` collapse aside: it lands one keyed field)"])
+                 (cond
+                   ;; the remedies by FAMILY: a total collapse keeps no key to nest under,
+                   ;; so it is offered only the `^` ending (measured, verify probe v8)
+                   [(memq 'all-head ord)
+                    (string-append
+                     "Here every branch is ordinal-headed, and " ordinal-fact
+                     (if total?
+                         (format ". So make every branch a tuple component: end each starred branch with `^` instead of its `~a` (`x{0.a.b^ 1.a.b^}`) — a total collapse keeps no key to nest under" o)
+                         (format ". So make every branch a tuple component: keep a key before each star (`x{0.a.b~a 1.a.b~a}`, a tuple of records), or end the branch with `^` instead of its star (`x{0.a^.b^ 1.a^.b^}`)" o o)))]
+                   [(or (memq 'head ord) (memq 'wrap ord))
+                    (string-append agree "; and " ordinal-fact)]
+                   [else agree]))))]
     ;; ⭐ D4.P4e-1b slice 1b-iii-A — THE FAIL-KIND AXIS IS NOW TOTAL.
     ;; This arm was `#f`, and `#f` here is SILENT: it falls through `infer/err`'s
     ;; `or` chain to the generic "Could not infer type", and NESTED it is worse —

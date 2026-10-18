@@ -1,0 +1,17 @@
+ns probe-1bvi-u
+
+def env := {:prod {:db {:url "p-url" :port 5432}} :dev {:db {:url "d-url" :port 5433}}}
+
+;; 1b-vi-D, step 1: does `star-dup-key`'s advice hold for the TOTAL family?
+;; E3- `env{prod.db*- dev.db*-}` is refused here (duplicate `:port`). The message says
+;; "dropping the `*` does not help either: it re-nests the layer under the key the
+;; star was deleting". Measured with today's equivalent spellings:
+;; (1) `*-` dropped entirely — every level comes back
+env{prod.db dev.db}
+;; (2) `*-` → `*` — the ancestors survive as distinguishing levels
+env{prod.db* dev.db*}
+;; (3) `*-` → `*-_` (E3_'s ≡: provenance keys)
+env{prod.db.url^-_ prod.db.port^-_ dev.db.url^-_ dev.db.port^-_}
+;; (4) bare `*`'s own collision, for contrast — dropping its `*` does NOT help
+env{prod^.db* dev^.db*}
+env{prod^.db dev^.db}

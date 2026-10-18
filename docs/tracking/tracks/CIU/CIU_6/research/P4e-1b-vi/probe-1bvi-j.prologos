@@ -1,0 +1,9 @@
+ns probe-1bvi-j
+
+def app := {:server {:ssl {:enabled true :cert "c.pem"} :port 8080} :database {:url "db" :pool-size 10}}
+
+;; does a parser-desugared form (Q_T8 `^..`) echo the user's spelling or the desugared one in a refusal label?
+app{server.ssl.nope^..}
+app{server.ssl.enabled^..}
+;; control: the same refusal without the desugar
+app{server.ssl.nope}

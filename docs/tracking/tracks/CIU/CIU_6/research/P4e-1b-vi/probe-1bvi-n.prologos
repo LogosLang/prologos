@@ -1,0 +1,13 @@
+ns probe-1bvi-n
+
+def e3 := {:a {:b {:c @[1 2]}}}
+
+;; Q_U55 rows for the caret family — today's reading (1b-vi-B flips the renamed-ancestor ones)
+e3{a^p.b.c^-}
+e3{a^p.b.c^-q}
+e3{a.b^q.c^-}
+e3{a^p.b^.c^-}
+;; controls that never flip
+e3{a^.b.c^-}
+e3{a^p.b.c^-_}
+e3{a^p.b^q.c^-_}

@@ -1,0 +1,19 @@
+0: ow : {:top {:eu {:cfg {:x {:p Int}}} :us {:cfg {:x {:p Int}}}}} defined.
+1: og : {:db {:admins [PVec {:name {:f {:z Int}}}]}} defined.
+2: dz : {:top {:eu {:cfg {:x {:v Int}}} :us {:cfg {:x {:w Int}}}}} defined.
+3: ERROR: Could not infer type — field :x is not present in the record {:eu {:cfg {:x {:p Int}}} :us {:cfg {:x {:p Int}}}}; available fields: :eu :us; in the select branch `top.cfg.x` — bare field access (no construction) is spelled `.x`
+4: ERROR: Could not infer type — field :x is not present in the record {:eu ⟨{:x {:p Int}}⟩ :us ⟨{:x {:p Int}}⟩}; available fields: :eu :us; in the select branch `top.cfg.x` — bare field access (no construction) is spelled `.x`
+5: ERROR: Could not infer type — field :x is not present in the record {:eu {:cfg {:x {:p Int}}} :us {:cfg {:x {:p Int}}}}; available fields: :eu :us; in the select branch `top.cfg.x` — bare field access (no construction) is spelled `.x`
+6: ERROR: Could not infer type — field :x is not present in the record {:eu {:cfg {:x {:p Int}}} :us {:cfg {:x {:p Int}}}}; available fields: :eu :us; in the select branch `top.cfg.x` — bare field access (no construction) is spelled `.x`
+7: ERROR: Could not infer type — field :x is not present in the record {:eu {:cfg {:x {:p Int}}} :us {:cfg {:x {:p Int}}}}; available fields: :eu :us; in the select branch `top.cfg.x` — bare field access (no construction) is spelled `.x`
+8: ERROR: Could not infer type — field :x is not present in the record {:eu {:cfg {:x {:p Int}}} :us {:cfg {:x {:p Int}}}}; available fields: :eu :us; in the select branch `top.cfg.x` — bare field access (no construction) is spelled `.x`
+9: {:top {:eu {:cfg {:x {:p 1}}}, :us {:cfg {:x {:p 2}}}}} : {:top {:eu {:cfg {:x {:p Int}}} :us {:cfg {:x {:p Int}}}}}
+10: ERROR: Could not infer type — field :x is not present in the record {:eu {:cfg {:x {:p Int}}} :us {:cfg {:x {:p Int}}}}; available fields: :eu :us; in the select branch `top.cfg.x` — bare field access (no construction) is spelled `.x`
+11: {:top {:eu {:p 1}, :us {:p 2}}} : {:top {:eu {:p Int} :us {:p Int}}}
+12: ERROR: Could not infer type — select: `f` (branch `db.admins.name`) is not a field of a vector element position — a vector subject takes ordinal steps (`.N`) or ordinal branches (`x{N M}`). To reach fields of EACH element, broadcast instead: `xs:f` or `xs:{…}`
+13: ERROR: Could not infer type — select: `f` (branch `db.admins.name`) is not a field of a vector element position — a vector subject takes ordinal steps (`.N`) or ordinal branches (`x{N M}`). To reach fields of EACH element, broadcast instead: `xs:f` or `xs:{…}`
+14: ERROR: Could not infer type — select: `f` (branch `db.admins.name`) is not a field of a vector element position — a vector subject takes ordinal steps (`.N`) or ordinal branches (`x{N M}`). To reach fields of EACH element, broadcast instead: `xs:f` or `xs:{…}`
+15: ERROR: Could not infer type — select: `f` (branch `db.admins.name`) is not a field of a vector element position — a vector subject takes ordinal steps (`.N`) or ordinal branches (`x{N M}`). To reach fields of EACH element, broadcast instead: `xs:f` or `xs:{…}`
+16: {:top {:eu {:v 1}, :us {:w 2}}} : {:top {:eu {:v Int} :us {:w Int}}}
+17: ERROR: Could not infer type — field :x is not present in the record {:eu {:x {:p Int}} :us {:x {:p Int}}}; available fields: :eu :us
+--- 12 errors ---

@@ -1,0 +1,13 @@
+0: e3 : {:a {:b {:c [PVec Int]}}} defined.
+1: t5 : {:a {:b {:c {:m {:x Int} :n {:y Int}}}}} defined.
+2: ERROR: `p` can never appear under a total collapse: `c^-` lifts the leaf to the top of its branch and removes every ancestor level, including the one `a^p` renames. Drop `^p` (`a.b.c^-`), or keep the level: `a^p.b^.c`
+3: ERROR: `p` can never appear under a total collapse: `c^-q` lifts the leaf to the top of its branch and removes every ancestor level, including the one `a^p` renames. Drop `^p` (`a.b.c^-q`), or keep the level: `a^p.b^.c^q`
+4: ERROR: `p` and `q` can never appear under a total collapse: `c^-` lifts the leaf to the top of its branch and removes every ancestor level, including the ones `a^p` and `b^q` rename. Drop `^p` and `^q` (`a.b.c^-`), or keep the levels: `a^p.b^q.c`
+5: {:c @[1 2]} : {:c [PVec Int]}
+6: {:p-b-c @[1 2]} : {:p-b-c [PVec Int]}
+7: {:p {:c @[1 2]}} : {:p {:c [PVec Int]}}
+8: {:a {:b {:c @[1 2]}}} : {:a {:b {:c [PVec Int]}}}
+9: ERROR: the `^-` collapse family ends a branch — it is a LEAF continuation
+10: {:c @[1 2]} : {:c [PVec Int]}
+11: {:p {:c @[1 2]}} : {:p {:c [PVec Int]}}
+--- 4 errors ---

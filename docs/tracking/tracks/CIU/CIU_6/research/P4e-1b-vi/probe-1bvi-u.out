@@ -1,0 +1,7 @@
+0: env : {:dev {:db {:port Int :url String}} :prod {:db {:port Int :url String}}} defined.
+1: {:dev {:db {:url "d-url", :port 5433}}, :prod {:db {:url "p-url", :port 5432}}} : {:dev {:db {:port Int :url String}} :prod {:db {:port Int :url String}}}
+2: {:dev {:url "d-url", :port 5433}, :prod {:url "p-url", :port 5432}} : {:dev {:port Int :url String} :prod {:port Int :url String}}
+3: {:dev-db-port 5433, :prod-db-url "p-url", :prod-db-port 5432, :dev-db-url "d-url"} : {:dev-db-port Int :dev-db-url String :prod-db-port Int :prod-db-url String}
+4: ERROR: duplicate output key `:port` in the select block — two branches deliver the same output key, and distinct keys are required (strict merge; the alternative is a silent last-write-wins). The key may be one a branch NAMES, or one a `*` LIFTED out of its layer. Rename an UNSTARRED branch with `^k'` (`x{k^k2}`) — a starred segment cannot carry a rename — or select the flatten in its own block. If the key was lifted, dropping the `*` does not help either: it re-nests the layer under the key the star was deleting
+5: ERROR: duplicate output key :db in the select block — distinct output keys are required (strict merge); rename a branch with `^k'`, or group same-head branches into one sub-block (`x{k.{a b}}`)
+--- 2 errors ---

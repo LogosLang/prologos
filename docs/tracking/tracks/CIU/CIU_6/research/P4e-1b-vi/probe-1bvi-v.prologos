@@ -1,0 +1,27 @@
+ns probe-1bvi-v
+
+def env := {:prod {:db {:url "p-url" :port 5432}} :dev {:db {:url "d-url" :port 5433}}}
+def sh := {:a {:b {:port 1 :u 2} :c {:port 3 :v 4}}}
+def vv := {:a {:b @[@[1 2] @[3]]}}
+
+;; 1b-vi-D-1: which remedies hold for a TOTAL collapse's level collision, across the
+;; population? `*-` is spelled by its equivalent (`^` on every ancestor, then `*`),
+;; `*-_` by its equivalent (every lifted field as `^-_`) — 1b-vi-C's laws.
+;; P2 — same HEAD, sibling children sharing a field: `sh{a.b*- a.c*-}`
+sh{a^.b* a^.c*}
+;;   remedy `*-_`  (sh{a.b*-_ a.c*-_})
+sh{a.b.port^-_ a.b.u^-_ a.c.port^-_ a.c.v^-_}
+;;   remedy `*`    (keeps the levels — but the shared head `a` now collides)
+sh{a.b* a.c*}
+;;   remedy: drop the star
+sh{a.b a.c}
+;; P3 — `*-_` with a `^` on the ancestor that DIFFERS: `env{prod^.db*-_ dev^.db*-_}`
+env{prod^.db.url^-_ prod^.db.port^-_ dev^.db.url^-_ dev^.db.port^-_}
+;;   …and with the `^` dropped (it is redundant under a total collapse)
+env{prod.db.url^-_ prod.db.port^-_ dev.db.url^-_ dev.db.port^-_}
+;; L4 under `*-`: a vector join lands ONE keyless component at the top: `vv{a.b*- a}`
+vv{a^.b* a}
+;;   remedy: dissolve the sibling's surviving key
+vv{a^.b* a^}
+;;   remedy: the flatten in its own block
+vv{a^.b*}

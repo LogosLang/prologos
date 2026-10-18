@@ -1,0 +1,9 @@
+0: e3 : {:a {:b {:c [PVec Int]}}} defined.
+1: t5 : {:a {:b {:c {:m {:x Int} :n {:y Int}}}}} defined.
+2: {:a {:c @[1 2]}} : {:a {:c [PVec Int]}}
+3: {:a {:b-c @[1 2]}} : {:a {:b-c [PVec Int]}}
+4: {:b-c @[1 2]} : {:b-c [PVec Int]}
+5: {:p {:b-c @[1 2]}} : {:p {:b-c [PVec Int]}}
+6: {:a {:b {:c-n {:y 2}, :c-m {:x 1}}}} : {:a {:b {:c-m {:x Int} :c-n {:y Int}}}}
+7: {:a {:b {:c-n {:y 2}, :c-m {:x 1}}}} : {:a {:b {:c-m {:x Int} :c-n {:y Int}}}}
+--- 0 errors ---

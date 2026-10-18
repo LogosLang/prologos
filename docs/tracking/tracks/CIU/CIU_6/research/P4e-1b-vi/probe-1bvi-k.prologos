@@ -1,0 +1,13 @@
+ns probe-1bvi-k
+
+def e3 := {:a {:b {:c @[1 2]}}}
+def t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}
+
+;; does `^-_`'s provenance name reach ABOVE the branch, into an enclosing sub-block's head?
+e3{a.{b.c^-}}
+e3{a.{b.c^-_}}
+e3{a^.{b.c^-_}}
+e3{a^p.{b.c^-_}}
+;; and `*_` inside a sub-block, for the star-side baseline
+t5{a.{b.c*_}}
+t5{a.b.{c*_}}

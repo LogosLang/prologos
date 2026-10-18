@@ -1,0 +1,16 @@
+ns probe-1bvi-q
+
+def e3 := {:a {:b {:c @[1 2]}}}
+def t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}
+
+;; the sub-block scopes the check: the collapse lands UNDER `p`, so the rename is observable
+e3{a^p.{b.c^-}}
+e3{a^p.{b.c^-q}}
+;; depth-1 law shapes: `^-` / `^-k'` with no ancestor are the plain / renamed leaf
+t5{a^-}
+t5{a}
+t5{a^-z}
+t5{a^z}
+;; `*-_` at depth 1 ≡ the `^-_` enumeration of the lifted fields
+t5{a*_}
+t5{a.b^-_}

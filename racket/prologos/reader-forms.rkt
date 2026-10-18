@@ -282,7 +282,17 @@
     ;; Q_U24's provenance form. Its rule is `^-_`'s (synthesize over the DELETED
     ;; layer), NOT `^_`'s — recorded on the row itself since 1b-v-C, when this
     ;; table became the one place the spelling↔cont pair is stated.
-    ($postfix-star-synth flatten-synth "*_")))
+    ($postfix-star-synth flatten-synth "*_")
+    ;; ⭐ D4.P4e-1b slice 1b-vi-D-2b — THE MINT: the two TOTAL-collapse conts
+    ;; (Q_U48's `*-`, Q_U57's `*-_`). 1b-vi-C held them in a printer-only PENDING
+    ;; table (so the IR its tests injected could be labelled truthfully while every
+    ;; consumer of THIS table saw 1b-v's family); moving them here IS the mint, and
+    ;; the pending table is retired with the move. Every consumer that iterates
+    ;; this table — the reader's mint gate, the parser, macros, the leak and arrival
+    ;; gates, tools/form-deps.rkt — widens by construction.
+    ($postfix-star-collapse       flatten-collapse       "*-")
+    ;; Q_U57's P: prefix = the collapsed ancestors' surviving output names
+    ($postfix-star-collapse-synth flatten-collapse-synth "*-_")))
 
 (define (postfix-star-sentinel? x)
   (and (symbol? x) (assq x postfix-star-sentinel-table) #t))
@@ -307,6 +317,7 @@
 ;; the PRINTER's direction (1b-v-C [Q_U54]): the lexeme a cont renders as, or #f.
 ;; `#f` is the printer's cue to render its LOUD unknown-cont tell rather than a
 ;; silent `*` — the Q_U52 §3 hazard, closed at the one seat where it was live.
+;; (1b-vi-C read a PENDING table here too; 1b-vi-D-2b minted its rows and retired it.)
 (define (postfix-star-cont->lexeme cont)
   (let loop ([t postfix-star-sentinel-table])
     (cond [(null? t) #f]

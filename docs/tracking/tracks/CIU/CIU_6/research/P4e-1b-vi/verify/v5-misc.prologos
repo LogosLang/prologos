@@ -1,0 +1,31 @@
+ns v5misc
+def t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}
+def ot := @[{:a {:b {:c {:m {:x 1} :n {:y 2}}}}}]
+def oo := @[@[{:a {:b {:c {:m {:x 1} :n {:y 2}}}}}]]
+def og := {:db {:admins @[{:name {:f {:z 1}}} {:name {:f {:z 2}}}]}}
+def mn := {:a {:x 1} :b {:y 2}}
+def m3 := {:a {:x 1} :b {:y 2} :c {:z 3}}
+def env := {:prod {:db {:url "p-url" :port 5432}} :dev {:db {:url "d-url" :port 5433}}}
+;; F5 (L1-4 / L2-6 / L3-6): ^.. under a total collapse
+t5{a.b^..c*-}
+t5{a.b^..c*}
+;; F6 (L2-4): Q_U55 star refusal on an ω-over-PVec leaf, then both remedies
+og{db^p.admins:name*-}
+og{db.admins:name*-}
+og{db^p.admins^:name*}
+;; F4 (L3-7 / L2-7 / L3-8): Q_U56 shapes
+m3{a*->b*->c}
+mn{a*-_->b}
+mn{a*_->b}
+env{prod dev}*->
+;; L3-9: type position, spaced
+<(x : Nat) *- Nat>
+<(x : Nat)*- Nat>
+;; L2-3 (Q_U62 candidate): an ordinal head, then a sub-block holding the star
+ot{0.a^.{b*}}
+t5{a^.{b*}}
+ot{0.a^.b*}
+oo{0.{0.a^.b*}}
+oo{0 .0.a^.b*}
+ot{0.{a^.b*}}
+t5{{a^.b*}}

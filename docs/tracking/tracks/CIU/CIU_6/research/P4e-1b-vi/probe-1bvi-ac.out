@@ -1,0 +1,46 @@
+0: t5 : {:a {:b {:c {:m {:x Int} :n {:y Int}}}}} defined.
+1: ot : [PVec {:a {:b {:c {:m {:x Int} :n {:y Int}}}}}] defined.
+2: ot2 : [PVec {:a {:b {:k Int}}}] defined.
+3: vhm : ⟨[PVec {:x Int}] [PVec {:y Int}]⟩ defined.
+4: v3 : {:a {:b {:c [PVec [PVec Int]]}}} defined.
+5: ov3 : [PVec {:a {:b {:c [PVec [PVec Int]]}}}] defined.
+6: wm : {:a [PVec {:b {:c {:x Int}}}]} defined.
+7: @[{:a {:b {:c {:n {:y 2}, :m {:x 1}}}}}] : ⟨{:a {:b {:c {:m {:x Int} :n {:y Int}}}}}⟩
+8: @[{:a {:b {:c {:n {:y 2}, :m {:x 1}}}}}] : ⟨{:a {:b {:c {:m {:x Int} :n {:y Int}}}}}⟩
+9: @[{:b {:c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:b {:c {:m {:x Int} :n {:y Int}}}}⟩
+10: @[{:c {:n {:y 2}, :m {:x 1}}}] : ⟨{:c {:m {:x Int} :n {:y Int}}}⟩
+11: @[{:n {:y 2}, :m {:x 1}}] : ⟨{:m {:x Int} :n {:y Int}}⟩
+12: {:b {:c {:n {:y 2}, :m {:x 1}}}} : {:b {:c {:m {:x Int} :n {:y Int}}}}
+13: {:b {:c {:n {:y 2}, :m {:x 1}}}} : {:b {:c {:m {:x Int} :n {:y Int}}}}
+14: {:a {:c {:n {:y 2}, :m {:x 1}}}} : {:a {:c {:m {:x Int} :n {:y Int}}}}
+15: @[{:a {:c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:a {:c {:m {:x Int} :n {:y Int}}}}⟩
+16: {:c {:n {:y 2}, :m {:x 1}}} : {:c {:m {:x Int} :n {:y Int}}}
+17: @[{:c {:n {:y 2}, :m {:x 1}}}] : ⟨{:c {:m {:x Int} :n {:y Int}}}⟩
+18: {:n {:y 2}, :m {:x 1}} : {:m {:x Int} :n {:y Int}}
+19: @[{:n {:y 2}, :m {:x 1}}] : ⟨{:m {:x Int} :n {:y Int}}⟩
+20: {:b {:n {:y 2}, :m {:x 1}}} : {:b {:m {:x Int} :n {:y Int}}}
+21: @[{:b {:n {:y 2}, :m {:x 1}}}] : ⟨{:b {:m {:x Int} :n {:y Int}}}⟩
+22: {:a {:n {:y 2}, :m {:x 1}}} : {:a {:m {:x Int} :n {:y Int}}}
+23: @[{:a {:n {:y 2}, :m {:x 1}}}] : ⟨{:a {:m {:x Int} :n {:y Int}}}⟩
+24: @[@[@[1 2] @[3]]] : ⟨[PVec [PVec Int]]⟩
+25: @[@[@[@[1 2] @[3]]]] : ⟨⟨[PVec [PVec Int]]⟩⟩
+26: {:a {:b @[@[1 2] @[3]]}} : {:a {:b [PVec [PVec Int]]}}
+27: @[{:a {:b @[@[1 2] @[3]]}}] : ⟨{:a {:b [PVec [PVec Int]]}}⟩
+28: {:x 1} : {:x Int}
+29: ERROR: `N.M` reads as a decimal literal inside a select block — for element N then index M write `x{N .M}` (spaced) or `x{N.{M}}`
+30: @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}] : ⟨{:a {:b {:k Int}}} {:a {:b {:k Int}}}⟩
+31: @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}] : ⟨{:a {:b {:k Int}}} {:a {:b {:k Int}}}⟩
+32: @[{:k 1} {:k 2}] : ⟨{:k Int} {:k Int}⟩
+33: @[{:k 1} {:k 2}] : ⟨{:k Int} {:k Int}⟩
+34: ERROR: duplicate output key `:b` in the select block — two branches deliver the same output key, and distinct keys are required (strict merge; the alternative is a silent last-write-wins). The key may be one a branch NAMES, or one a star (`*`) LIFTED out of its layer. Rename an UNSTARRED branch with `^k'` (`x{k^k2}`) — a starred segment cannot carry a rename — or select the flatten in its own block. Dropping a star re-nests what it lifted — `*` under the key the star was deleting — which resolves the collision unless another branch delivers that key too.
+35: @[{:k 1} {:k 2}] : ⟨{:k Int} {:k Int}⟩
+36: @[{:a {:k 1}} {:a {:k 2}}] : ⟨{:a {:k Int}} {:a {:k Int}}⟩
+37: {:y 2, :x 1} : {:x Int :y Int}
+38: {:a {:c {:x 1}}} : {:a {:c {:x Int}}}
+39: {:c {:x 1}} : {:c {:x Int}}
+40: {:x 1} : {:x Int}
+41: {:c {:n {:y 2}, :m {:x 1}}} : {:c {:m {:x Int} :n {:y Int}}}
+42: {:c {:n {:y 2}, :m {:x 1}}} : {:c {:m {:x Int} :n {:y Int}}}
+43: ERROR: duplicate output key `:k` in the select block — two branches deliver the same output key, and distinct keys are required (strict merge; the alternative is a silent last-write-wins). The key may be one a branch NAMES, or one a star (`*-`) LIFTED out of its layer. Rename an UNSTARRED branch with `^k'` (`x{k^k2}`) — a starred segment cannot carry a rename — or select the flatten in its own block. Dropping a star re-nests what it lifted — `*-` under its whole path — which resolves the collision unless another branch delivers that key too. Under a total collapse, `*-_` keeps each surviving ancestor's name in the lifted key (`x{a.k*-_ b.k*-_}` delivers `:a-k-…` beside `:b-k-…`), and an ancestor dissolved with `^` contributes no name — so drop the `^` where the branches differ.
+44: ERROR: duplicate output key `:a-b-k` in the select block — two branches deliver the same output key, and distinct keys are required (strict merge; the alternative is a silent last-write-wins). The key may be one a branch NAMES, or one a star (`*-_`) LIFTED out of its layer. Rename an UNSTARRED branch with `^k'` (`x{k^k2}`) — a starred segment cannot carry a rename — or select the flatten in its own block. Dropping a star re-nests what it lifted — `*-_` under its whole path — which resolves the collision unless another branch delivers that key too. Under a total collapse, `*-_` keeps each surviving ancestor's name in the lifted key (`x{a.k*-_ b.k*-_}` delivers `:a-k-…` beside `:b-k-…`), and an ancestor dissolved with `^` contributes no name — so drop the `^` where the branches differ.
+--- 4 errors ---

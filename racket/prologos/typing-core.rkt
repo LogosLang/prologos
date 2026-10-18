@@ -43,7 +43,7 @@
 (provide infer check is-type infer-level
          ;; CIU T6 D4.P3a: the select walk + failure struct (consumed by the
          ;; typing-errors select hint — one walk, two consumers, no drift)
-         select-project (struct-out select-fail)
+         select-project (struct-out select-fail-info) select-fail
          select-convertible-carrier  ;; D4.P4d slice 4c: 'list | 'lseq | #f — which conversion into PVec applies
          bcast-schema-refusal   ;; D4.P4d slice 4c: 'open | 'defaulted | #f — ONE statement of the admission rule
          ;; D4.P4b-ii-1: the subject-kind × sort dispatch + the Map posture's
@@ -678,7 +678,23 @@
 ;; 'miss-closed · 'miss-dyn (unlisted on dyn) · 'unknown-presence.
 ;; `path` = the label trail to the failure (for branch-aware messages).
 ;;
-(struct select-fail (kind path label row) #:transparent)
+;; ⭐ D4.P4e-1b-vi-C (C-6): a FIFTH field, `stars` — the star CONTS the failure is about
+;; (a LIST since 1b-vi-D-1: a per-branch star failure carries exactly one, a LEVEL failure
+;; carries every operator present, because a level has no single star). The prose must
+;; name the operator the user wrote (`*-`, not `*`) and an in-family sibling (`*-_`'s
+;; "use bare" is `*-`), and the formatter cannot recover that from the label without
+;; re-parsing a rendering.
+;; A DEFAULTING constructor keeps every 4-argument producer and test untouched; the
+;; four seats that know the stars pass them — the two per-branch star failure closures
+;; and the two LEVEL producers (`star-l4-mixed`, `star-dup-key`).
+;; ⭐ 1b-vi-E [Q_U61]: a SIXTH field, `ordinal` — #t when a branch at a colliding level
+;; is ordinal-headed and passes its keyless landing through to the block (S). Only the
+;; dup gate knows the branches; the formatter needs the fact to say WHY two positional
+;; branches meet at one level and to name the tuple spelling. Defaulting, as `stars`.
+(struct select-fail (kind path label row stars ordinal) #:transparent
+  #:name select-fail-info #:constructor-name select-fail*)
+(define (select-fail kind path label row [stars '()] [ordinal #f])
+  (select-fail* kind path label row stars ordinal))
 
 ;; D4.P4b-ii-1 — THE MAP POSTURE's carrier (Q_U10).
 ;; `select-row-of` normally answers "here is the subject's per-field row".
@@ -919,7 +935,7 @@
   (if (select-fail-label f)
       f
       (select-fail (select-fail-kind f) (select-fail-path f) name
-                   (select-fail-row f))))
+                   (select-fail-row f) (select-fail-stars f) (select-fail-ordinal f))))
 
 (define (select-index-of ctx tm n path sort)
   ;; D4.P4b-ii-1: the SORT axis reaches the nat twin too. The file's own
@@ -1493,9 +1509,10 @@
 ;; Duplicates/mixing were excluded at the parser's shared-walk checks, so
 ;; plain append assembles safely.
 (define (select-level-components ctx tm branches path sort)
-  (let loop ([bs branches] [comps '()])
+  ;; `per` — each branch with its own components, for the L4 label (1b-vi verify VM-5)
+  (let loop ([bs branches] [comps '()] [per '()])
     (if (null? bs)
-        (let ([cs (reverse comps)])
+        (let ([cs (reverse comps)] [per (reverse per)])
           ;; ⭐ 1b-iii-B1 — [Q_U43]'s ACTUAL migration + [Q_U44]'s obligation. The
           ;; parser's L4 gate answers `'()` for a star branch (it cannot know a
           ;; subject-derived sort), so THIS is the first seat that can check
@@ -1525,12 +1542,25 @@
           (if (and (ormap select-branch-has-star?/deep branches)
                    (ormap (lambda (c) (car c)) cs)
                    (ormap (lambda (c) (not (car c))) cs))
-              (values #f (select-fail 'star-l4-mixed path
-                                      (string->symbol
-                                       (pp-select-branch
-                                        (findf select-branch-has-star?/deep
-                                               branches)))
-                                      tm))
+              ;; 1b-vi-D-1: carry the conts of the branch the label NAMES, so the
+              ;; message speaks in that branch's operators.
+              ;; ⭐ 1b-vi verify (VM-5): NAME THE STAR BRANCH WHOSE LANDING IS KEYLESS when
+              ;; there is one — it is the branch the level disagrees with. The first star
+              ;; branch was named instead, so `mx{m* a.b*-}` spoke `*`'s clause (and its
+              ;; "drop a `^`", with no `^` anywhere) while `mx{a.b*- m*}` spoke `*-`'s:
+              ;; the text depended on branch order. The fallback is the old `findf`, so the
+              ;; label can never be `#f` (the landmine noted above).
+              (let ([star-br (or (for/first ([pb (in-list per)]
+                                             #:when (and (select-branch-has-star?/deep (car pb))
+                                                         (ormap (lambda (c) (not (car c))) (cdr pb))))
+                                   (car pb))
+                                 (findf select-branch-has-star?/deep branches))])
+                (values #f (select-fail 'star-l4-mixed path
+                                        (string->symbol (pp-select-branch star-br))
+                                        tm
+                                        (remove-duplicates (select-branch-star-conts/deep star-br))
+                                        ;; 1b-vi verify VF-3: the ordinal facts at this level
+                                        (select-level-ordinal-fact branches))))
               ;; ⭐⭐ 1b-iii-C2 — THE DUPLICATE-OUTPUT-KEY SEAT, and C2 is what makes
               ;; it necessary. `select-branch-top-keys` answers `'()` for a star
               ;; branch, so the parser's `dup-output-key` gate cannot see a deep
@@ -1561,12 +1591,22 @@
                                       [(memq (car ks) seen) (car ks)]
                                       [else (loop (cdr ks) (cons (car ks) seen))])))])
                 (if dup
-                    (values #f (select-fail 'star-dup-key path dup tm))
+                    ;; 1b-vi-D-1: EVERY operator present at the level — the gate cannot
+                    ;; say which branch delivered `dup`, so it must not name just one
+                    ;; 1b-vi verify (VM-10): only the stars whose landings REACH this
+                    ;; level — a star sealed under a kept key cannot have lifted `dup`
+                    (values #f (select-fail 'star-dup-key path dup tm
+                                            (remove-duplicates
+                                             (append-map select-branch-level-star-conts branches))
+                                            ;; 1b-vi-E [Q_U61] + verify VF-3: S's cost, named in
+                                            ;; the refusal — 'all | 'mixed | #f, seen through
+                                            ;; dissolves and terminal sub-blocks
+                                            (select-level-ordinal-fact branches)))
                     (values cs #f)))))
         (let-values ([(es bf) (select-branch-entries ctx tm (car bs) path '() sort)])
           (if bf
               (values #f bf)
-              (loop (cdr bs) (append (reverse es) comps)))))))
+              (loop (cdr bs) (append (reverse es) comps) (cons (cons (car bs) es) per)))))))
 
 ;; D4.P3b/P3c — one branch's components at the CURRENT level, as
 ;; (values (listof (key-or-#f . record-field)) fail-or-#f).
@@ -1626,7 +1666,11 @@
 ;; is not landed).
 (define (star-branch-entries ctx tm b path seen sort)
   (define label (string->symbol (pp-select-branch b)))
-  (define (fail-k kind [r tm]) (values #f (select-fail kind path label r)))
+  ;; 1b-vi-C (C-6): the failure carries the cont of the branch's LAST star (for a
+  ;; mid-branch star that is the one the user is told about), so the prose names
+  ;; the operator as written. `b` always holds a star here (the pre-check).
+  (define star-c (let ([s (findf select-star-step? (reverse b))]) (and s (select-star-cont s))))
+  (define (fail-k kind [r tm]) (values #f (select-fail kind path label r (if star-c (list star-c) '()))))
   (let* ([rev (reverse b)]
          [star (car rev)]
          [prefix (reverse (cdr rev))])
@@ -1672,7 +1716,11 @@
              ;; the bare join KEYLESS, which is Q_U47's empty-remainder case and
              ;; the behaviour that shipped at B2. The other two callers wrap
              ;; differently; see the helper's own comment.
-             (let-values ([(ty jf) (star-join-type layer star fail-k)])
+             ;; ⭐ 1b-vi-C (C-4): THIS is where a total collapse joins — every
+             ;; marked ancestor took the dissolve arm, so `seen` holds exactly
+             ;; s₁…sₙ₋₁ and `*-_`'s prefix comes from the ONE seat in syntax.rkt.
+             (let-values ([(ty jf) (star-join-type layer star fail-k
+                                                   (select-star-provenance-prefix star seen))])
                (if jf
                    (values #f jf)
                    ;; 1b-iv-B2 [Q_U49]: SPLICE if the join is nominal, one keyless
@@ -1712,7 +1760,15 @@
 ;; move together — this seat has already produced one whole-file abort from a
 ;; twin-order divergence, and the file says landing either alone is "not a
 ;; half-measure but a REGRESSION".
-(define (star-join-type layer star fail-k)
+(define (star-join-type layer star fail-k [prefix #f])
+  ;; ⭐ 1b-vi-C: `prefix` is `*-_`'s provenance prefix (C-4) or #f. It extends the
+  ;; CONTENT key — `a-b` + `c` + `m` → `a-b-c-m` — so the synth join below is
+  ;; unchanged and Q_U51's `<content key>-<field key>` rule still states the rest.
+  ;; The three cont reads go through the CLOSED classifier (C-1): with four conts,
+  ;; `(eq? cont 'flatten-synth)` would answer `*-_` as a bare `*`.
+  (define synth? (select-star-cont-synth? (select-star-cont star)))
+  (define (prefixed keys)
+    (if prefix (map (lambda (k) (select-synth-prefixed-key prefix k)) keys) keys))
   (let ([l (whnf layer)])
     ;; contents = the deleted layer's component TYPES, in the order
     ;; the join uses (canonical for a keyword row — `make-record`
@@ -1763,9 +1819,9 @@
                        ;; join. ⚠ A layer with NO keys still refuses, and through
                        ;; `star-synth-positional` — which is TRUE there and was
                        ;; false in the nominal case, the distinction 1b-iv-A fixed.
-                       (if (eq? (select-star-cont star) 'flatten-synth)
+                       (if synth?
                            (if keys
-                               (star-synth-join-type (map cons keys contents) fail-k l)
+                               (star-synth-join-type (map cons (prefixed keys) contents) fail-k l)
                                (fail-k 'star-synth-positional l))
                            (star-nominal-join-type contents fail-k l))]
                       [(andmap (lambda (c)
@@ -1781,7 +1837,7 @@
                       [(ormap (lambda (c) (expr-union? (whnf c))) contents)
                        (fail-k 'star-hetero l)]
                       [else (fail-k 'star-leaf l)])]
-                   [(eq? (select-star-cont star) 'flatten-synth)
+                   [synth?
                     ;; Q_U41: `*_` is NOMINAL-ONLY. ⚠⚠ 1b-v-B2a VERIFY — THIS ARM
                     ;; IGNORED `keys`, so a KEYED layer whose contents happen to
                     ;; be vectors (`{:a [PVec Int]}`) was told "this layer is
@@ -1847,7 +1903,7 @@
                       ;; every sub-case and `*_` never has a key to prefix with.
                       ;; That is [Q_U41] stated once at the level where it holds,
                       ;; rather than six times where five were forgotten.
-                      [(eq? (select-star-cont star) 'flatten-synth)
+                      [synth?
                        (fail-k 'star-synth-positional l)]
                       [(expr-PVec? e)
                        ;; concat of n `[PVec T]` is `[PVec T]` — spec §3.5's
@@ -2129,23 +2185,33 @@
              [ef (values #f ef)]
              [(null? rest)
               (values (list (cons #f (record-field elem 'present))) #f)]
+             ;; ⭐⭐ 1b-vi-E [Q_U61] — THE ORDINAL HEAD PASSES A KEYLESS LANDING THROUGH.
+             ;; When no step between this head and sₙ names a key (Q_U47's remainder
+             ;; test, `select-steps-yield-bare-join?`), the star's landing is keyless,
+             ;; and Q_U49 places it at the ENCLOSING level — so descend exactly as the
+             ;; bare-number arm below does, and the rest's own arms (the dissolve arm,
+             ;; the star arm) place the join where a key-headed branch's would land:
+             ;; `ot{0.X}` ≡ `t5{X}` for every STEP CHAIN X. ⚠ Not for a SUB-BLOCK after the
+             ;; head (1b-vi verify VS-3, measured): `ot{0.a^.{b*}}` and `oo{0.{0.a^.b*}}`
+             ;; still wrap while `t5{a^.{b*}}` splices — the predicate recognises a
+             ;; `(sₙ ★)` tail only. Whether S extends there is posed as Q_U62, not
+             ;; decided here ("by construction" was claimed and measured false). `seen` stays unchanged (an
+             ;; ordinal is nameless — Q_U57). ONE arm for every family: a total
+             ;; collapse passes because its ancestors are marked (this subsumes
+             ;; 1b-vi-D-2a's arm), and depth 1 is 1b-iv's seat B. Seat B used to
+             ;; splice HERE, after `select-below-field`, recognising only `(sₙ ★)`
+             ;; right after the head — that path is gone, not kept beside this one.
+             ;; Twin: reduction.rkt's ord-head arm.
+             [(select-steps-yield-bare-join? rest)
+              (select-branch-entries ctx (whnf elem) rest (append path (list n)) seen sort)]
              [else
+              ;; a remainder that names a key: the join nests under it, inside the
+              ;; ordinal's own keyless component (spec §3.3's honest nesting)
               (let-values ([(ft bf) (select-below-field ctx (whnf elem) rest
                                                         (append path (list n)) '() sort)])
-                (cond
-                  [bf (values #f bf)]
-                  ;; ⭐⭐ 1b-iv-B2 [Q_U49] — SEAT B's KEYLESS LANDING, the shape the
-                  ;; grounding audit reported as needing a contract change in both
-                  ;; twins. It does not: `rest` is the very step list we passed
-                  ;; down, so `select-steps-star-tail?` answers EXACTLY the
-                  ;; question "is `ft` a BARE star join?" — true only when the tail
-                  ;; arm fired at THIS level, false for `(b c ★)` where the walk
-                  ;; re-nests and `ft` is a row, not a join. Without that test we
-                  ;; would splice any Map-typed field, which is why the
-                  ;; single-value return looked like a blocker.
-                  [(select-steps-yield-bare-join? rest)
-                   (values (star-keyless-landing ft sort) #f)]
-                  [else (values (list (cons #f (record-field ft 'present))) #f)]))])))]
+                (if bf
+                    (values #f bf)
+                    (values (list (cons #f (record-field ft 'present))) #f)))])))]
       [(number? (car b))
        ;; a bare-number STEP chain (dissolve-splice continuation): descend
        ;; transparently; an ordinal-terminal chain is a keyless component.
@@ -2180,8 +2246,14 @@
                               (select-synth-name (append seen (list s)))]
                              [else name])])
                 (values (list (cons label (record-field ft 'present))) #f))]
-             [(eq? cont 'dissolve)
-              ;; splice: the continuation's components land at THIS level
+             [(select-cont-dissolves-level? cont)
+              ;; splice: the continuation's components land at THIS level.
+              ;; ⭐ 1b-vi-C (C-3): `select-cont-dissolves-level?`, not `(eq? cont
+              ;; 'dissolve)` — a total-collapse MARK places exactly like `^`, and
+              ;; this arm is how `*-`'s placement EMERGES. Its reduction twin
+              ;; (`branch-entries`) asks the same predicate (mutation M-typing /
+              ;; M-reduction pin both). A mark reaching the kept-key arm below
+              ;; would silently re-nest — the red step measured exactly that.
               (select-below-components ctx (whnf ft) rest
                                        (append path (list name))
                                        (append seen (list s)) sort)]
@@ -2293,8 +2365,25 @@
             ;; to make `path` carry STEPS rather than names (~20 `append path`
             ;; sites + that renderer + both twins) — its own slice, not this arm's.
             [label (string->symbol (pp-select-branch steps))]
-            [fail-k (lambda (kind r) (values #f (select-fail kind path label r)))])
+            [fail-k (lambda (kind r) (values #f (select-fail kind path label r (list (select-star-cont star)))))])
        (cond
+         ;; ⚠⚠ 1b-vi-C (C-5) — A TOTAL STAR NEVER JOINS HERE. This arm re-nests the
+         ;; join under the KEPT ancestors that led to it; under `*-` / `*-_` every
+         ;; ancestor is marked, takes the dissolve arm, and the join lands in
+         ;; `star-branch-entries` instead. Arriving here means an ancestor was KEPT —
+         ;; the branch was never marked — and computing `*`'s re-nesting would be a
+         ;; silent wrong answer. Loud, like `select-step-kind-unhandled`: a compiler
+         ;; invariant, not a user error (the reduction twin panics on the same test).
+         ;; ⚠ 1b-vi verify (VF-1): the claim "arriving here means an ancestor was KEPT"
+         ;; was FALSE on one route — an ω ANCESTOR: the ω arms (this function's and
+         ;; `select-branch-entries`') hand the steps after `:` straight here, so
+         ;; `ow{top:cfg.x*-}` aborted the whole file. The parser now refuses a total
+         ;; collapse under an ω ancestor (`total-collapse-omega-problem`), which makes
+         ;; the claim true again by construction; the stage table pins the shapes.
+         [(select-star-cont-total? (select-star-cont star))
+          (error 'select-below-field
+                 "internal: the total collapse `~a` reached the star-TAIL arm, so an ancestor was kept — `select-branch-mark-total-collapse` did not run on this branch (D4.P4e-1b-vi-C, C-5)"
+                 label)]
          ;; [Q_U46]'s RESERVED GAP: an ordinal step contributes no output level
          ;; (Q_U2 Reading A), so `sₙ` made no layer for the star to delete. Guided
          ;; refusal, NOT a fall-through — falling through would compute the layer

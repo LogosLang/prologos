@@ -1,0 +1,21 @@
+ns probe-1bvi-d
+
+def w3 := {:a @[{:b {:c @[1 2]}} {:b {:c @[3]}}]}
+def mn := {:a {:x 1} :b {:y 2}}
+
+;; --- ω ancestor between the root and the star
+w3{a:b.c}
+w3{a:b.c*}
+w3{a^:b.c*}
+w3{a:b^.c*}
+w3{a^:b^.c*}
+w3.a:b.c*
+
+;; --- closer band, unminted spelling
+mn{a}*-
+mn{a}*-_
+
+;; --- type position
+spec g2 Nat *-> Nat
+defn g2 [n] n
+spec g3 <(x : Nat)*- Nat>

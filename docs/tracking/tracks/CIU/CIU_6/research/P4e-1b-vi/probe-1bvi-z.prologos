@@ -1,0 +1,27 @@
+ns probe-1bvi-z
+
+def ot := @[{:a {:b {:c {:m {:x 1} :n {:y 2}}}}}]
+def ov3 := @[{:a {:b {:c @[@[1 2] @[3]]}}}]
+def ow := {:p @[{:a {:x 1 :y 2}}]}
+
+;; 1b-vi-D-2 design: the ordinal-head fix's equivalences and edges, measured at HEAD.
+;; (1) can two collapse branches share ONE ordinal head? (the generator's per-field ≡)
+ot{0.a.b.c.m^- 0.a.b.c.n^-}
+ot{0.a.b.c.m^-_ 0.a.b.c.n^-_}
+ot{0.a^.b.c.m^- 0.a^.b.c.n^-}
+ot{0.a^p.b.c.m^-_ 0.a^p.b.c.n^-_}
+;; (2) depth 1 and 2 under an ordinal head (generator positions (a) (a b))
+ot{0.a.b^-}
+ot{0.a.b.c^-}
+ot{0.a.b.c^-_}
+;; (3) a star directly after / one below the ordinal head (`*` today)
+ot{0*}
+ot{0.a*}
+ot{0.a^.b*}
+;; (4) vector contents under an ordinal head
+ov3{0.a.b.c*}
+ov3{0.a^.b^.c*}
+;; (5) an ordinal head INSIDE a sub-block
+ow{p.{0.a.x^-}}
+ow{p.{0.a*}}
+ow{p.{0.a.x^- 0.a.y^-}}

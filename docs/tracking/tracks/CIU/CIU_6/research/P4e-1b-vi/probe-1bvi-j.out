@@ -1,0 +1,5 @@
+0: app : {:database {:pool-size Int :url String} :server {:port Int :ssl {:cert String :enabled Bool}}} defined.
+1: ERROR: Could not infer type — field :nope is not present in the record {:cert String :enabled Bool}; available fields: :cert :enabled; in the select branch `server.ssl.nope` — bare field access (no construction) is spelled `.nope`
+2: {:server {:ssl true}} : {:server {:ssl Bool}}
+3: ERROR: Could not infer type — field :nope is not present in the record {:cert String :enabled Bool}; available fields: :cert :enabled; in the select branch `server.ssl.nope` — bare field access (no construction) is spelled `.nope`
+--- 2 errors ---

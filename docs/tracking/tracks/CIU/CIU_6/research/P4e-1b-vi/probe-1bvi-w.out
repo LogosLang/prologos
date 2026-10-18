@@ -1,0 +1,11 @@
+0: ov : [PVec {:a {:b {:x Int}}}] defined.
+1: {:x 1} : {:x Int}
+2: {:b {:x 1}} : {:b {:x Int}}
+3: {:a-b-x 1} : {:a-b-x Int}
+4: @[{:a {:b {:x 1}}}] : ⟨{:a {:b {:x Int}}}⟩
+5: @[{:x 1}] : ⟨{:x Int}⟩
+6: @[{:a {:x 1}}] : ⟨{:a {:x Int}}⟩
+7: @[{:x 1}] : ⟨{:x Int}⟩
+8: ERROR: an ordinal has no key — `^` re-keys a NAMED segment; rename the nominal segment instead and then descend (e.g. `admins^first.0`)
+9: ERROR: an ordinal has no key — `^` re-keys a NAMED segment; rename the nominal segment instead and then descend (e.g. `admins^first.0`)
+--- 2 errors ---

@@ -1,0 +1,13 @@
+0: mn : {:a {:x Int} :b {:y Int}} defined.
+1: t5 : {:a {:b {:c {:m {:x Int} :n {:y Int}}}}} defined.
+2: ERROR: `>` after `a*-` is neither a field nor a selection operator — there is no `*->` operator: a glued `*->` reads as `*-` then `>`, and the `>` would become a branch of its own. Drop the `>`: `a*-` ends its branch, and each field after it is a branch of its own
+3: ERROR: `>` after `a*-` is neither a field nor a selection operator — there is no `*->` operator: a glued `*->` reads as `*-` then `>`, and the `>` would become a branch of its own. Drop the `>`: `a*-` ends its branch, and each field after it is a branch of its own
+4: ERROR: `>` after `a*-_` is neither a field nor a selection operator — there is no `*-_>` operator: a glued `*-_>` reads as `*-_` then `>`, and the `>` would become a branch of its own. Drop the `>`: `a*-_` ends its branch, and each field after it is a branch of its own
+5: ERROR: `>` after `a*` is neither a field nor a selection operator — there is no `*>` operator: a glued `*>` reads as `*` then `>`, and the `>` would become a branch of its own. Drop the `>`: `a*` ends its branch, and each field after it is a branch of its own
+6: ERROR: `>` after `a.b.c*-` is neither a field nor a selection operator — there is no `*->` operator: a glued `*->` reads as `*-` then `>`, and the `>` would become a branch of its own. Drop the `>`: `a.b.c*-` ends its branch, and each field after it is a branch of its own
+7: ERROR: `a*->b` — there is no `*->` operator: `*-` (the total collapse) attaches at the END of a segment, and `->` is the function arrow, which means nothing inside a selection. If you meant the total collapse, end the segment there and write what follows as its own branch: `a*- b`
+8: {:b {:y 2}, :x 1} : {:b {:y Int} :x Int}
+9: {:a-x 1, :b {:y 2}} : {:a-x Int :b {:y Int}}
+10: {:b {:y 2}, :x 1} : {:b {:y Int} :x Int}
+11: {:n {:y 2}, :m {:x 1}} : {:m {:x Int} :n {:y Int}}
+--- 6 errors ---

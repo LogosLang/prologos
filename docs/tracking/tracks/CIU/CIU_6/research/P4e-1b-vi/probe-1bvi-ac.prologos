@@ -1,0 +1,54 @@
+ns probe-1bvi-ac
+
+def t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}
+def ot := @[{:a {:b {:c {:m {:x 1} :n {:y 2}}}}}]
+def ot2 := @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]
+def vhm := @[@[{:x 1}] @[{:y 2}]]
+def v3 := {:a {:b {:c @[@[1 2] @[3]]}}}
+def ov3 := @[{:a {:b {:c @[@[1 2] @[3]]}}}]
+def wm := {:a @[{:b {:c {:x 1}}}]}
+
+;; ---- G1. honest nesting baselines (spec §3.3): an ordinal branch is a keyless component
+ot{0}
+ot{0.a}
+ot{0.a^}
+ot{0.a^.b^.c}
+ot{0.a^.b^.c^}
+;; ---- G2. plain `*`, Map contents: KEY head vs ORDINAL head, side by side
+t5{a*}
+ot{0.a*}
+t5{a.b*}
+ot{0.a.b*}
+t5{a^.b*}
+ot{0.a^.b*}
+t5{a^.b^.c*}
+ot{0.a^.b^.c*}
+t5{a^.b.c*}
+ot{0.a^.b.c*}
+t5{a.b^.c*}
+ot{0.a.b^.c*}
+;; ---- G3. vector contents, and Q_U49's DECIDED seat-B example
+v3{a^.b^.c*}
+ov3{0.a^.b^.c*}
+v3{a.b.c*}
+ov3{0.a.b.c*}
+vhm{0.{0}*}
+vhm{0.0*}
+;; ---- G4. TWO ordinal branches in one block — where splicing and the tuple pull apart
+ot2{0 1}
+ot2{0.a 1.a}
+ot2{0.a^.b^.k 1.a^.b^.k}
+ot2{0.a^.b^ 1.a^.b^}
+ot2{0.a* 1.a*}
+ot2{0.a^.b* 1.a^.b*}
+ot2{0.a.b* 1.a.b*}
+vhm{0.{0}* 1.{0}*}
+;; ---- G5. a MID-branch ordinal (Q_U2: descends, no level) — for contrast
+wm{a.0.b*}
+wm{a^.0.b*}
+wm{a^.0.b^.c*}
+;; ---- G6. the collapse families at an ordinal head (P3c; D-2a), for reference
+ot{0.a.b.c^-}
+ot{0.a.b*-}
+ot2{0.a.b*- 1.a.b*-}
+ot2{0.a.b*-_ 1.a.b*-_}
