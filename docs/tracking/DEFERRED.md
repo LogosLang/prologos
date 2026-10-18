@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 179**
+> ### **NEXT FREE: 181**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7592,6 +7592,20 @@ naming the sub-block spelling is the monotone waypoint.
 written). It also bounds D4 Q_U52 §1's broadcast-ancestor question: inside one branch, the steps after an ω step are
 further fused ω steps or a sub-block, so an ω ancestor under a deep star is unobservable until this lands.
 
+> ⚠ **ADDENDUM (2026-10-18, CIU 6 1b-vi verify, branch `ciu6-path-selection` @ `0988a4f0` — on the branch until the
+> next checkpoint merge)**: ~~"an ω ancestor under a deep star is unobservable until this lands"~~ **Withdrawn** —
+> under a TOTAL collapse it was a **whole-file abort**: `ow{top:cfg.x*-}` (`ow := {:top {:eu {:cfg {:x {:p 1}}} :us
+> {:cfg {:x {:p 2}}}}}`) printed no result line at all, not even the `def` above it. Mechanism (read, then measured):
+> typing's ω arms hand the steps after `:` straight to `select-below-field`'s star-tail arm, whose C-5 invariant
+> `error`ed before the presence check that refuses `*` and `^-` per command. Three verify lenses found it
+> independently (D4 §5.P4e-1b-vi `#p4e-1b-vi-verify`, VF-1; probes `research/P4e-1b-vi/verify/v1`, `v2`, `v6`).
+> 🟡 **MITIGATED for the collapse families only**: the parser now refuses a total collapse (`*-`, `*-_`, `^-`,
+> `^-k'`, `^-_`) under an ω ancestor with THIS entry's waypoint — a guided refusal naming the sub-block spelling
+> (`top:{cfg.x*-}`, measured `{:top {:eu {:p 1}, :us {:p 2}}}`). **OPEN, unchanged**: the in-block meaning of a
+> fused chain and of a `.` step after ω; every other spelling still gets the misleading message above
+> (`ow{top:cfg.x}` → "field :x is not present in the record {:eu …}"); the waypoint can widen to every in-block
+> step after ω when this entry's decision is taken.
+
 ### 168. ⬜ A STAR GLUED TO AN ARROW IN A TYPE IS SILENTLY NOT AN ARROW — `spec s4 Nat *-> Nat` reports "spec type for s4 has no arrow"; ~~`<(x : Nat)*- Nat>` reports a bare "Type mismatch"~~ **Withdrawn** — `<(x : Nat)*- Nat>` reports a nameless "Unbound variable" (see the correction below)
 
 **Found by** the CIU 6 1b-vi grounding audit (2026-10-13; probe
@@ -7636,6 +7650,13 @@ predates the slice and belongs to spec and arrow parsing. One part changes by it
 ("`*->` reads as `*-` then `>` — put a space before `->`"). Never raise at the reader: a raise there aborts the whole
 file. **When**: no gate. Pick it up with the next spec-parser diagnostics work, or at CIU 6 X.close's doc-truth pass if
 still open.
+
+> **ADDENDUM (2026-10-18, CIU 6 1b-vi verify finding VM-9; probe `research/P4e-1b-vi/verify/v5` line 16, on branch
+> `ciu6-path-selection` until the next checkpoint merge)**: a SPACED `*-`, `*-_` or `*_` inside `<…>` reports a bare,
+> nameless "Unbound variable" (`<(x : Nat) *- Nat>`), while the glued forms get the guided type-territory text ("inside
+> `<…>`, `*-` is a path-selection star operator, not a type operator — it has no type-level reading, glued or spaced.
+> …"). The text's "or spaced" is true of the operator, but no spaced spelling ever shows it. **Fix shape**: give a
+> spaced star-family symbol inside `<…>` the same guided text, in this entry's (type) territory.
 
 ### 169. ✅ **DISCHARGED `8fbaefb8`** (SW-24: the graph is DERIVED, never stored; reaches main at checkpoint 5) — `tools/dep-graph.rkt` WAS THREE MONTHS STALE — `update-deps.rkt --check` exits 1 with 378 mismatches; targeted (affected-test) selection reads this graph
 
@@ -8069,3 +8090,32 @@ corrected in the D.3 triage (SC-20). Under PAR 4 P2, Tier 1 becomes the first pa
 **When**: PAR 4 P0.5 (with DEFERRED 150), or sooner if a trap measures production reach.
 
 **Record**: PAR 4 D.3 wave-1 triage §1 and §4 PD-2 (on the branch).
+
+### 179. ⬜ Q_U56'S GUIDED `*->` TEXT MISSES THE BLOCK-CLOSER POSITION — `env{prod dev}*->` reports the comparison-keyword hint ("comparison keywords are spelled lt/le/gt/ge …"), not the star-family diagnostic
+
+**Found by** the CIU 6 1b-vi verify (2026-10-18; lens VS, finding VS-7; D4 §5.P4e-1b-vi `#p4e-1b-vi-verify`), re-measured
+on the main thread: probe `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/verify/v5-misc.prologos` line 15, branch
+`ciu6-path-selection` @ `0988a4f0` (on the branch until the next checkpoint merge).
+
+| input | message |
+|---|---|
+| `env{prod dev}*->` | "hint: comparison keywords are spelled lt/le/gt/ge in Prologos (< and <= conflict with angle-bracket syntax) …" |
+| `mn{a*->b}`, `mn{a*-> b}`, `mn{a*- > b}`, `t5{a.{b*-> c}}`, `t5{a.{b}*-> c}` (controls) | Q_U56's guided text ("there is no `*->` operator … drop the `>`" / "end the segment there …") |
+
+**Mechanism — conjecture, from the messages only**: the closer band mints `}*-`, and the `>` after the closed block is
+then read by the generic top-level `>` handling, outside the selection consumer that carries Q_U56's arm. **Fix shape**:
+give the closer-band star followed by `>` Q_U56's message ("drop the `>`"), in the consumer — never the reader (a
+reader raise aborts the whole file). **When**: no gate; with the star-family grammar work (DEFERRED 144) at CIU 6 T6's
+close, or with the next Q_U56-family message work.
+
+### 180. ⬜ THE STAR ARRIVAL INSTRUMENT CANNOT TELL A ONE-TOKEN `*-` FROM `*` THEN `-` — `star-last-token-type` / `star-mints?` answer `postfix-star` / `#t` for `c{a}*-` and `c{a}* -` alike (and for `-_`), so the flipped arrival pins' "is ONE token" lost its power at the 1b-vi mint
+
+**Found by** the CIU 6 1b-vi verify (2026-10-18; lens VI, finding VI-10), re-measured on the main thread: probe
+`docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/verify/v9-arrival.rkt` + `.out` (branch `ciu6-path-selection`, on the
+branch until the next checkpoint merge). The instrument is `tools/star-arrival-matrix.rkt` (first/last star-family token,
+lexeme not compared); its readers are the arrival gate and the `p4e-star-type` pins in `tests/test-path-selection.rkt`.
+
+**Impact, at the level shown**: none observed — nothing mis-mints today; the reader and the parity pin (the parser's surf
+equals the injected IR, 68 rows) both hold. This is instrument POWER: a regression that split `*-` into `*` and `-` would
+pass the arrival gate. **Fix shape**: require the minting token's LEXEME to equal the table lexeme under test (the gate
+already iterates the table). **When**: with DEFERRED 144, or the next edit of the arrival matrix.
