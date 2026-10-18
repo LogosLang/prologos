@@ -7560,7 +7560,7 @@ mutations red).
 
 **Found by** the CIU 6 1b-vi grounding audit (2026-10-13, branch `ciu6-path-selection` @ `01ef2542` = main), while
 working out what "total collapse" (`*-`, D4 Q_U48) would do to a broadcast ancestor. Probe
-`docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/probe-1bvi-f.prologos` (on the branch until the next checkpoint
+`docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/probe-1bvi-f.prologos` (on main since the checkpoint merge `83fe4fb4`;
 merge; output beside it), run with `tools/scratch-run.sh`:
 
 | input | result |
@@ -7592,8 +7592,8 @@ naming the sub-block spelling is the monotone waypoint.
 written). It also bounds D4 Q_U52 §1's broadcast-ancestor question: inside one branch, the steps after an ω step are
 further fused ω steps or a sub-block, so an ω ancestor under a deep star is unobservable until this lands.
 
-> ⚠ **ADDENDUM (2026-10-18, CIU 6 1b-vi verify, branch `ciu6-path-selection` @ `0988a4f0` — on the branch until the
-> next checkpoint merge)**: ~~"an ω ancestor under a deep star is unobservable until this lands"~~ **Withdrawn** —
+> ⚠ **ADDENDUM (2026-10-18, CIU 6 1b-vi verify, branch `ciu6-path-selection` @ `0988a4f0`, on
+> main since the checkpoint merge `83fe4fb4`)**: ~~"an ω ancestor under a deep star is unobservable until this lands"~~ **Withdrawn** —
 > under a TOTAL collapse it was a **whole-file abort**: `ow{top:cfg.x*-}` (`ow := {:top {:eu {:cfg {:x {:p 1}}} :us
 > {:cfg {:x {:p 2}}}}}`) printed no result line at all, not even the `def` above it. Mechanism (read, then measured):
 > typing's ω arms hand the steps after `:` straight to `select-below-field`'s star-tail arm, whose C-5 invariant
@@ -7610,7 +7610,7 @@ further fused ω steps or a sub-block, so an ω ancestor under a deep star is un
 
 **Found by** the CIU 6 1b-vi grounding audit (2026-10-13; probe
 `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/probe-1bvi-g.prologos` on branch `ciu6-path-selection`, output beside
-it). Measured at `01ef2542`:
+it; on main since `83fe4fb4`). Measured at `01ef2542`:
 
 | input (with a matching `defn`) | message |
 |---|---|
@@ -7618,7 +7618,7 @@ it). Measured at `01ef2542`:
 | ~~`spec s3 <(x : Nat)*- Nat> -> Nat`~~ | ~~"Type mismatch"~~ — the raw probe-g output, kept as the record; **not evidence about `*-`** (correction below) |
 | `spec s2 <(x : Nat)* Nat> -> Nat` (control) | Q_U31's guided "inside `<…>`, `*` needs a SPACE before it …" |
 
-> ⚠ **CORRECTION (2026-10-13, probe `probe-1bvi-o` on branch `ciu6-path-selection`)**: the "Type mismatch" row came
+> ⚠ **CORRECTION (2026-10-13, probe `probe-1bvi-o` on branch `ciu6-path-selection`; on main since `83fe4fb4`)**: the "Type mismatch" row came
 > from a control that did not isolate the variable. Probe g's SPACED control `spec s1 <(x : Nat) * Nat> -> Nat` with the
 > same body (`defn s1 [p] 0`) ALSO prints "Type mismatch", so the body fails against the Sigma spec for its own reason
 > and the message says nothing about how `)*-` lexes. Re-measured with bare type expressions, which print `T : Type`:
@@ -7651,8 +7651,8 @@ predates the slice and belongs to spec and arrow parsing. One part changes by it
 file. **When**: no gate. Pick it up with the next spec-parser diagnostics work, or at CIU 6 X.close's doc-truth pass if
 still open.
 
-> **ADDENDUM (2026-10-18, CIU 6 1b-vi verify finding VM-9; probe `research/P4e-1b-vi/verify/v5` line 16, on branch
-> `ciu6-path-selection` until the next checkpoint merge)**: a SPACED `*-`, `*-_` or `*_` inside `<…>` reports a bare,
+> **ADDENDUM (2026-10-18, CIU 6 1b-vi verify finding VM-9; probe `research/P4e-1b-vi/verify/v5` line 16, on main
+> since the checkpoint merge `83fe4fb4`)**: a SPACED `*-`, `*-_` or `*_` inside `<…>` reports a bare,
 > nameless "Unbound variable" (`<(x : Nat) *- Nat>`), while the glued forms get the guided type-territory text ("inside
 > `<…>`, `*-` is a path-selection star operator, not a type operator — it has no type-level reading, glued or spaced.
 > …"). The text's "or spaced" is true of the operator, but no spaced spelling ever shows it. **Fix shape**: give a
@@ -8095,7 +8095,7 @@ corrected in the D.3 triage (SC-20). Under PAR 4 P2, Tier 1 becomes the first pa
 
 **Found by** the CIU 6 1b-vi verify (2026-10-18; lens VS, finding VS-7; D4 §5.P4e-1b-vi `#p4e-1b-vi-verify`), re-measured
 on the main thread: probe `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/verify/v5-misc.prologos` line 15, branch
-`ciu6-path-selection` @ `0988a4f0` (on the branch until the next checkpoint merge).
+`ciu6-path-selection` @ `0988a4f0` (on main since the checkpoint merge `83fe4fb4`).
 
 | input | message |
 |---|---|
@@ -8111,8 +8111,8 @@ close, or with the next Q_U56-family message work.
 ### 180. ⬜ THE STAR ARRIVAL INSTRUMENT CANNOT TELL A ONE-TOKEN `*-` FROM `*` THEN `-` — `star-last-token-type` / `star-mints?` answer `postfix-star` / `#t` for `c{a}*-` and `c{a}* -` alike (and for `-_`), so the flipped arrival pins' "is ONE token" lost its power at the 1b-vi mint
 
 **Found by** the CIU 6 1b-vi verify (2026-10-18; lens VI, finding VI-10), re-measured on the main thread: probe
-`docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/verify/v9-arrival.rkt` + `.out` (branch `ciu6-path-selection`, on the
-branch until the next checkpoint merge). The instrument is `tools/star-arrival-matrix.rkt` (first/last star-family token,
+`docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/verify/v9-arrival.rkt` + `.out` (branch `ciu6-path-selection`; on main
+since the checkpoint merge `83fe4fb4`). The instrument is `tools/star-arrival-matrix.rkt` (first/last star-family token,
 lexeme not compared); its readers are the arrival gate and the `p4e-star-type` pins in `tests/test-path-selection.rkt`.
 
 **Impact, at the level shown**: none observed — nothing mis-mints today; the reader and the parity pin (the parser's surf
