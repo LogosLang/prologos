@@ -359,14 +359,107 @@ The rest moves to the sequel. O-13 is re-posed narrowed.
 
 | label | question | lean | posed |
 |---|---|---|---|
-| **O-14** | remove the production thread executor (`driver.rkt:567`) in P0.5 | remove; keep the executor seam | 2026-10-18, D.2 §15 |
-| O-15 | scope: the asynchronous K > 1 design and BSP-K move to a sequel track | move both; PAR 4 = P0.5, P0-8, P1a, P1b (K = 1 core), P2, faults, observation | next |
+| **O-14** | remove the production thread executor (`driver.rkt:567`) in P0.5 | remove; keep the executor seam | **DECIDED (a) 2026-10-18**, with G-4 (§8) |
+| O-15 | scope, reframed by G-4: how the exploration portfolio (§8) and PAR 4's K = 1 work are organised | PAR 4 = K = 1 + the shared substrate; a separate PAR track runs the portfolio concurrently, starting with the profile | **posed 2026-10-18**, D.2 §15 |
 | O-16 | budgets and the surface contract: what `:fuel` and `:timeout` count; the dead strategy keys; override semantics (re-opens O-2) | after O-15 | queued |
 | O-17 | who owns DEFERRED 177's fix: PAR 4 P1a rows 1–3, or BSP-LE 3 | after O-15 | queued |
 | O-11, O-12, O-13 | re-posed with this round's amendments: O-11 gains (c); O-12 changes shape at K = 1 (no fence; the replay classifies row 8); O-13 narrows to the K = 1 core | with D.3 | queued |
 
 Minor cross-track proposals go to the owner with D.3 rather than as decisions: PC-5 and PC-6, BC-2/3/4/6, the
 BSP-LE master edit (C8-10), and branch `preduce-autonomy`'s pre-allocated cell ids (C8-12).
+
+**Update 2026-10-18.**
+- O-14 is DECIDED (a).
+- The owner's guidance G-4, given with it, reframes O-15: the K > 1 work is not a sequel that waits, but an
+  exploration program across several parallel and distributed architectures (§8).
+- O-15 is posed in D.2 §15 on that framing.
+
+---
+
+## 8. After O-14: G-4 and the exploration portfolio (2026-10-18)
+
+**G-4** (owner, given with O-14): *"we're also trying to explore the space of new frontiers of what is possible. …
+The goal is to combine CALM with distributed, incremental compilation, and put these distributed, parallel compute
+approaches into practicle compiler practice. So we should probalby be exploring multiple variations of
+parallel/distributed architecture to discover what works best."*
+
+**What this round's negative result does and does not say.**
+- **It is a strong-scaling (Amdahl) result:** a fixed workload, within one command, at the granularity of fires and
+  S0 runs. It measured work/span 1.28 / 1.49 there.
+- **It says nothing about weak scaling** (Gustafson 1988; `docs/research/RESEARCH_PARALLEL.md` §2.3). Weak scaling
+  is what happens to span when the problem grows with the processors.
+- **In a compiler, the problem grows by adding definitions, modules, documents and edits, not by lengthening the
+  inference chain of one command.** So the Gustafson axis lives at the coarser granularities, which nobody has
+  measured.
+- **There is a measured hint.** W2-1 found that the largest S0 run is only 8–11 % of a heavy file's S0 time, so
+  T / max-run is 9–12. That is an upper bound on parallelism *across* S0 runs, if they are independent; their
+  dependencies were not measured.
+
+Hence the conjecture this program tests, labelled CONJECTURE: span grows sublinearly in program size at the
+definition and module granularities, so scaled speedup exists there even though strong speedup does not exist
+below them.
+
+**The parallelism hierarchy of this compiler, finest to coarsest.** The theory column names what each level rests
+on, so that a variant can be checked and critiqued.
+
+| level | unit of parallel work | rests on | measured so far |
+|---|---|---|---|
+| fire | fires in one BSP round | BSP; Brent's work–span bound | work/span 1.28 / 1.49; realized 0.84–0.96× (W2-1, W2-8) |
+| S0 run | asynchronous chaotic iteration within one run | Üresin–Dubois / Bertsekas asynchronous iteration; Mattern termination detection | ≤ 3 % over rounds (W2-8); sound detector found (W2-3) |
+| across S0 runs | independent runs within one command | the same; independence measured from the trace | **not measured**; T / max-run 9–12 is the bound if independent |
+| definition | top-level definitions and commands of one module | CALM: definition types are monotone interface cells; defaulting, zonk-final and diagnostics are boundaries | **not measured**; PPN 4C's batching is the precondition |
+| module | modules in the import DAG | build-system theory (Mokhov, Mitchell and Peyton Jones, *Build Systems à la Carte*, 2018); the `.pnet` cache as a content-addressed artifact | **not measured**; the test runner's process-level parallelism is the existing precedent |
+| machine | networks on separate processes or hosts exchanging cell deltas | CALM (Hellerstein and Alvaro, 2020); lattice dataflow (Hydroflow); distributed progress tracking (Naiad / timely dataflow, Murray et al., SOSP 2013) | **not measured** |
+| search (orthogonal) | worldviews or OR-branches | OR-parallel logic programming (Aurora, Muse); ATMS worldviews are independent until a nogood joins them | **not measured**; BSP-LE 3 is the named workload |
+| topology (orthogonal) | rewrites of disjoint sub-networks at the topology stratum | parallel rewriting in adhesive categories (PAR master Q2) | **not measured** |
+| incremental (orthogonal) | the changed cone after an edit | an edit is a retraction. Making it monotone needs a version-indexed lattice, as in differential dataflow (McSherry et al., CIDR 2013): collections indexed by partially ordered times. **CONJECTURE**: the same construction places the edit's non-monotonicity at a version boundary for propagator cells | **not measured** |
+
+**The first step is an instrument, not an executor.** A hierarchical parallelism profile reports work, span and
+self-parallelism at every level of the table. Precedents: Kremlin's hierarchical critical-path analysis (Garcia et
+al., PLDI 2011) and Cilkview (He, Leiserson and Leiserson, SPAA 2010). Requirements:
+- It is run on today's corpus **and on generated programs of growing size**, which is the Gustafson test: does span
+  grow slower than work, at which level?
+- It needs no rebuild at the fire and S0-run levels. W2-1's `gran_analyze.py` and the BSP trace already give the
+  per-run DAG.
+- The levels across runs and definitions need a read trace on global-environment lookups per command.
+
+It decides where the first prototype goes, and it can fail: it may find no level with slack.
+
+**The portfolio.** `XV-n` is a variant; each has an entry condition and a kill criterion. Under G-4 a refuted
+variant is a result (it maps an edge of the design space), and it is written up as such.
+
+| id | variant | level | entry condition | kill criterion |
+|---|---|---|---|---|
+| XV-1 | round-synchronous BSP-K (snapshot, dynamic placement, pid-order fold) | fire | a workload with productive wide rounds; W2-8's intersection-merge networks as the first | no workload in which it beats the best sequential path by ≥ 1.5× |
+| XV-2 | asynchronous owned-slot executors with W2-3's SEEDS detector | S0 run | the profile shows asynchrony buying > 10 % over rounds somewhere | the bound from the trace DAG stays within 3 % of rounds |
+| XV-3 | parallel independent S0 runs within a command | across S0 runs | the profile shows independent runs that carry ≥ 30 % of S0 | measured independence below that |
+| XV-4 | definition-level parallel elaboration over monotone interface cells | definition | PPN 4C's on-network elaboration exposes definition dependencies as cells | span ≈ work on scaled programs |
+| XV-5 | module-level parallel and incremental build over `.pnet` artifacts | module | the module DAG is wide on scaled programs | the DAG is chain-shaped |
+| XV-6 | networks across processes exchanging deltas at stratum boundaries; Naiad-style progress tracking for distributed quiescence | machine | XV-4 or XV-5 shows scaled speedup on one machine | communication cost exceeds the slack the profile shows |
+| XV-7 | OR-parallel worldviews for search | search | BSP-LE 3's on-network search workload exists | the worldviews are not independent in practice |
+| XV-8 | version-indexed cells for incremental re-propagation | incremental | a design note shows that propagator cells admit the construction | the construction needs a non-monotone step inside S0 |
+
+**What every variant needs from PAR 4.** This is why PAR 4's K = 1 work is the substrate rather than a detour from
+the frontier:
+- **a fast sequential baseline** (P0.5, P2). Speedups are measured against the best sequential path, never against
+  a slowed one. Bailey's *Twelve Ways to Fool the Masses* (1991) names that pitfall, and today's thread executor was
+  an instance of it;
+- **the fault channel** (§5.5): exceptions as data, a prerequisite for any concurrent variant (DEFERRED 181);
+- **an oracle and differentials** (§5.2, §5.4): BSP replay at K = 1, per-write and per-fire differentials with power
+  rows, and α-normalised comparison. This is what makes exploring many variants safe and cheap, because each
+  variant is judged against one reference;
+- **fire context without ambient parameters** (§5.3), for any thread that outlives a `parameterize`;
+- **scheduler state keyed by network id** (CL-11), for concurrent networks at any level above the fire;
+- **the executor seam**, kept by O-14.
+
+**Two tensions to put to the owner** (proposals, not edits):
+- `DESIGN_PRINCIPLES.org:856-860` defers the distributed-concurrent runtime "to the self-hosted era (post-PPN 4C,
+  post-SH Series)". G-4 explores now. They are compatible if every variant lives at the scheduler and networking
+  layer and leaves the networks unchanged, as `:837-850` and the *Anti-Pattern: Scheduler-Coupled Optimization*
+  section that follows require. The deferral sentence should then say that the *production* runtime waits, and
+  exploration does not.
+- PAR master Track 3 (":auto heuristic + production deployment") assumed the thread executor that O-14 removes. Its
+  row needs restating as a consumer of the portfolio's results.
 
 ---
 

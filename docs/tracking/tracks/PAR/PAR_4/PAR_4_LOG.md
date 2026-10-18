@@ -737,3 +737,22 @@ binder merges with unsolved metas.
     reached by production paths; deleted by P2) and 157 (the S1 NAF handler is a second writer of cell 1, PD-10).
 - **Next**: the owner's decision on O-14, then O-15 (scope: the K > 1 sequel), O-16 (budgets and the surface
   contract) and O-17 (who owns 177's fix). After those, D.3, written from the synthesis.
+
+### O-14 DECIDED (a): the production thread executor goes in P0.5; owner guidance G-4 (explore several parallel and distributed architectures) reframes the K > 1 work as an exploration portfolio; O-15 posed on that framing — docs commit on the branch (2026-10-18)
+- **Why / decision**: the owner chose (a): "We wouldn't want to give a path that is knowingly worse." P0.5 deletes
+  `driver.rkt:567`'s installation and `make-parallel-thread-fire-all`, and keeps the `current-parallel-executor`
+  seam. With it came G-4: combine CALM with distributed, incremental compilation, and explore multiple variations of
+  parallel and distributed architecture.
+- **Reading**: this round's negative result is a *strong-scaling* (Amdahl) result inside one command, at the fire
+  and S0-run granularities. The *weak-scaling* (Gustafson) axis, where the problem grows by definitions, modules,
+  documents and edits, has not been measured. W2-1's T / max-run = 9–12 across S0 runs is the one hint.
+- **Written**: synthesis §8. It holds the compiler's parallelism hierarchy with the theory each level rests on, the
+  hierarchical parallelism profile as the first step (Kremlin HCPA, Cilkview; run on scaled programs, which is the
+  Gustafson test), portfolio XV-1…XV-8 with entry and kill criteria, the substrate every variant needs from PAR 4,
+  and two tensions proposed to the owner (`DESIGN_PRINCIPLES.org:856-860`'s deferral to the self-hosted era; PAR
+  master Track 3's premise). D.2 §15 records O-14 DECIDED, G-4 and O-15. The D.2 callout and synthesis §7 are
+  updated.
+- **Posed**: O-15, how the portfolio and PAR 4's K = 1 work are organised. The lean is (a): two concurrent tracks,
+  with PAR 4 building K = 1 plus the shared substrate, and a separate PAR track, which the owner numbers, running
+  the portfolio from now on, profile first.
+- **Next**: the owner's decision on O-15; then O-16 and O-17; then D.3.
