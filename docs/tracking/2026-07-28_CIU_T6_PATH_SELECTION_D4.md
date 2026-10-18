@@ -9679,7 +9679,7 @@ scaffolding for the slicing, not a permanent mechanism.
 | **1b-vi-C** ✅ `3cbb1025` | the total-collapse machinery, INERT — [design target, mini-audit, findings, VAG](#p4e-1b-vi-c): the star-cont axis (4 conts, raising classifier, pending table), the `(collapsed . c₀)` mark (placement only; unmark law over 104 branches), one placement predicate in both twins, `*-_`'s prefix at one seat, tail-arm guards, prose naming the operator as written (13 arms × 4 conts). Proven by INJECTION: 53 D rows meet their D targets before the mint (harness parity 0 drift; a vacuous pass found by counting and closed). Red: 51, the silent re-nesting; 5 twin mutations red. 670 / 670; acceptance 88 / 88; **7.97 s per run** | ✅ |
 | **1b-vi-D-1** ✅ `b567b29e` | the LEVEL arms name the operators PRESENT ([design, findings, VAG](#p4e-1b-vi-d)): `select-fail`'s field becomes a list; `star-dup-key` carries every star at the level, `star-l4-mixed` its branch's; each claim scoped to the family it was measured on. Corrected a 1b-iv sentence measured false in 3 of 4 populations. M-one (one star) red on exactly the mixed row. Found C's ordinal-head defect. 580 / 580 | ✅ |
 | **1b-vi-D-2a** ✅ `84beb15a` | [an ordinal head is TRANSPARENT under a collapse](#p4e-1b-vi-d2): `select-branch-total-collapse?` (one definition) + both twins' ord-head arms descend like the bare-number arm; the generator states `ot{0.X}` ≡ `t5{X}` over four families (+61 law rows → 168). Red: C's C-5 guard RAISED on `ot{0.a*-}`. M-ord-reduction red on exactly the 24 injectable ordinal star rows. 670 / 670 | ✅ |
-| **1b-vi-E** 🔄 [design](#p4e-1b-vi-e) | [Q_U61](#q-u61)'s S: an ordinal head passes a keyless star landing through at every depth — one predicate (`select-steps-yield-bare-join?` + `select-step-names-no-key?`), both twins' transparent arm, seat B's in-arm splice deleted | 🔄 |
+| **1b-vi-E** ✅ `a41f8362` | [Q_U61](#q-u61)'s S ([design, findings, VAG](#p4e-1b-vi-e)): an ordinal head passes a keyless star landing through at every depth — one predicate (`select-steps-yield-bare-join?` + `select-step-names-no-key?`), one arm per twin subsuming D-2a's arm and seat B's splice (deleted); the dup refusal names S's cost and the tuple spelling (`select-fail` field `ordinal`). 187 rows; 694 / 694; acceptance 112 / 112. Mutations: names 52, typing 11, reduction 9, ordinal 2 | ✅ |
 | **1b-vi-D-2b** ✅ `9743e93e` | THE MINT ([design, findings, VAG](#p4e-1b-vi-d2)): the two rows join the one table (pending table retired); the parser marks at `segment-select-items`' one success return; Q_U55's star half (remedies run: 24); Q_U56's guided `*->` in the consumer (+ the one-token `a*->b`; `*>`/`*_>` improve too); pins flipped; arrival gate ∀ minted lexeme; PARITY parser = injection. Red 186; M-mark / M-star-arm / M-arrow / M-keep red. 173 rows, 670 / 670, 7.65 s per run | ✅ |
 | verify | adversarial round | ⬜ |
 | gate | full suite, then the checkpoint merge to main | ⬜ |
@@ -10142,6 +10142,31 @@ at the edit — if seat B was its last caller in a twin, it goes too. *Drift ris
 asymmetry → a mutation per twin; **E-R2** the deleted seat-B path covering a depth-1 shape the new
 route does not (`vh{0.{0}*}`: sₙ is a SUB-BLOCK) → the 9 pins; **E-R3** a message whose advice fails
 on the ordinal population → run it.
+
+**1b-vi-E — what the slice found, and its Vision Alignment Gate** (`a41f8362`).
+
+*The decision removed code.* S needed no new mechanism: the question was already asked, by
+`select-steps-yield-bare-join?`, for one kind of key-less step. Widening the step kind made two
+arms redundant — D-2a's total-collapse arm and 1b-iv's seat-B splice — and both are gone. The
+mutations show the single arm now carries all three cases: disabling the predicate's new half reds
+52 rows including every ordinal `*-` / `*-_` law (D-2a's case), and disabling typing's arm reds the
+depth-1 controls (seat B's case).
+
+*S's cost was real, and the message now names it.* `ot2{0.a^.b* 1.a^.b*}` changed from a 2-tuple to
+a refusal. Running every remedy the refusal offered (probe-1bvi-ad) showed the generic text held
+but told the user neither why two positions met nor how to get the tuple; dropping ONE star traded
+the collision for an L4 mix. The fix needed a fact only the dup gate has (the branches), passed the
+way C passed the stars: a defaulting field.
+
+*My one slip:* the two message rows' regexes were lower-case where the sentences start upper-case —
+red for the wrong reason on the first green run; read, not re-run, and fixed in the tests.
+
+| VAG question | catalogue | challenge — could it be more aligned? |
+|---|---|---|
+| (a) on-network | no new state; one predicate widened, two arms deleted | as before: the walkers are off-network (PPN's); E neither worsens nor retires it |
+| (b) complete | the generator states S at every all-`^` position (`ot`, `ov3`); 6 controls pin what must not move; 4 mutations red | an ω step between the ordinal and sₙ (`ot{0.xs:k^.b*}`-shaped) is covered by the predicate (it sees through ω) but no row reaches it — DEFERRED 167's in-block ω limits apply; noted, not pinned |
+| (c) vision-advancing | one rule at an ordinal head for `*`, `*-` and `^-`: a keyless landing passes through; Q_U48's `*-` ≡ "`^` on every key ancestor, then `*`" now holds there too (both sides pinned against `t5`) | §3.3's honest nesting now yields wherever a star's landing is keyless — the documented price of S. The positional-provenance gap (`*-_` cannot tell elements apart) is named in the message; whether ordinals should contribute to a prefix is a separate question, not posed here |
+| (d) drift risks | E-R1 twin mutations ✓; E-R2 the 9 depth-1 pins green through the route change ✓; E-R3 every remedy run, message fixed ✓ | update-deps 375 unchanged; acceptance M16/M17 show both sides of the rule on the guild hall |
 
 <a id="p4e-1b-v-shipped"></a>
 

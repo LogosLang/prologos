@@ -351,3 +351,18 @@ are in [`../README.md`](../README.md).
   directories (+6 ERROR nodes, inside the ratchet). `server.ssl*->port` splits at `>` while
   `mn{a*->b}` fuses — each shape already gets the message true of it.
 - **Next**: owner decision on Q_U61; then the rest of the 1b-vi verify, the suite gate, the merge.
+
+### 1b-vi-E shipped: Q_U61 = S — `67979e59` (decision + design) + `a41f8362` (2026-10-14)
+- **Why / decision**: owner — *"Reading S looks good to me."* An ordinal head passes a keyless star
+  landing through at every depth ([D4 Q_U61](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u61),
+  [1b-vi-E](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-e)).
+- **What shipped**: `select-step-names-no-key?` inside `select-steps-yield-bare-join?`; one
+  transparent arm per twin (D-2a's arm and seat B's splice deleted); the dup refusal names S's cost
+  and the `^` tuple spelling via a `select-fail` field `ordinal`. Stage E; 187 rows; 694 / 694;
+  acceptance M16/M17, 112 / 112.
+- **Surprise / correction**: S REMOVED code (two arms); the mutations prove the one arm carries all
+  three cases. probe-1bvi-ad found the generic dup text true but silent on why two positions meet
+  and on the tuple remedy — fixed in the slice, as the S cost analysis promised. My message-row
+  regexes were case-wrong on the first run (test defect, fixed). One more transient `index.lock`
+  (no holder; retried).
+- **Next**: the rest of the 1b-vi verify, the suite gate, the checkpoint merge to main.
