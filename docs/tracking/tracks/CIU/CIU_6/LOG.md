@@ -366,3 +366,22 @@ are in [`../README.md`](../README.md).
   regexes were case-wrong on the first run (test defect, fixed). One more transient `index.lock`
   (no holder; retried).
 - **Next**: the rest of the 1b-vi verify, the suite gate, the checkpoint merge to main.
+
+### 1b-vi verify: three BLOCKING defects found and fixed — a whole-file abort, a twin value/type split, ordinal-level prose false on most of its population — `0988a4f0` (2026-10-18)
+- **Why / decision**: the owner — *"Let's proceed."* — to the verify, the suite gate and the checkpoint merge.
+  Four read-only lenses at `64368197` (VT twins, VS silent answers, VM message truth, VI instruments), adjudicated
+  on the main thread: 36 raw → 34 survive, 2 killed
+  ([D4 §5.P4e-1b-vi verify](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-verify)). The standing
+  question ("one seat, not its sibling") answered YES five times.
+- **What shipped**: VF-1 a parser refusal of a total collapse under an ω ancestor (was a whole-file abort;
+  DEFERRED 167's waypoint, both collapse families); VF-2 `asort` threaded through five reduction helpers
+  (a value/type split at 0 errors); VF-3 one ordinal fact for both level gates, every sentence scoped to its
+  measured population, every remedy run; VF-4 / VF-5 and nine more. Stage V: 250 rows (106 hand, 144 law), a
+  size pin predicted before the run; ten mutations, each red on its own pins; 695 / 695; acceptance 112 / 112.
+- **Surprise / correction**: my own E work. E's VAG said the refusal "names S's cost"; it did so for the one
+  population probe-1bvi-ad measured, and six sentences in the two level arms were false elsewhere. And three
+  comments claiming a shape unreachable or a law "by construction" were wrong (VF-1's ω route, VF-2's
+  "threaded", E's `ot{0.X}` ≡ `t5{X}` over sub-blocks → Q_U62). The lenses' L1-…L4- ids were renamed VT/VS/VM/VI
+  (they collided with the fusion law L1 and the mixing rule L4). One unattributed extra mutation red, consistent
+  with DEFERRED 170's race (unmerged here).
+- **Next**: Q_U62 posed (pending, owner). Merge main into the branch, the full-suite gate, the checkpoint merge.

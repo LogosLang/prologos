@@ -3515,6 +3515,34 @@ items of the hold-point, ruled before P4a opened:
 
   **Next free Q-label: U62.**
 
+- <a id="q-u62"></a>**Q_U62 — AN ORDINAL HEAD, THEN A SUB-BLOCK THAT HOLDS THE STAR: DOES
+  Q_U61'S PASS-THROUGH CROSS THE SUB-BLOCK? [⏳ PENDING — posed 2026-10-18 at the
+  [1b-vi verify](#p4e-1b-vi-verify) (finding VS-3). Not a regression: E changed none of these.]**
+
+  Measured (verify probe v5 at `64368197`, and VS's probe; `ot := @[t5's value]`,
+  `oo := @[@[t5's value]]`, `ot2 := @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]`):
+
+  | spelling | today | the nearest settled spelling |
+  |---|---|---|
+  | `ot{0.a^.{b*}}` | `@[{:c …}]` — wraps | `t5{a^.{b*}}` → `{:c …}`, ≡ `t5{a^.b*}`; `ot{0.a^.b*}` → `{:c …}` (E) |
+  | `ot{0.{a^.b*}}` | `@[{:c …}]` | `t5{{a^.b*}}` is a parse error (no block opens with a sub-block) |
+  | `oo{0.{0.a^.b*}}` | `@[{:c …}]` | `oo{0 .0.a^.b*}` → `{:c …}` |
+  | `ot2{0.a^.{b*} 1.a^.{b*}}` | `@[{:k 1} {:k 2}]` | `ot2{0.a^.b* 1.a^.b*}` → refused, dup `:k` (U61-4) |
+
+  **S+** — the pass-through crosses a TERMINAL sub-block whose every branch passes its landing
+  through: the remainder's no-key test (Q_U47) reads into the sub-block. **B** — a sub-block is a
+  landing boundary at an ordinal head: the element's tuple component is the sub-level's record
+  (today). Census: zero uses in `tests/`, `examples/`, `lib/` (pattern power: 3 hits in v5, 0 on
+  two step-chain controls), so neither option breaks a program today.
+  **Lean: S+, medium.** It is Q_U47's test applied to a remainder that contains a sub-block, and
+  under a key head a one-branch sub-block after a dissolve is already transparent (`t5{a^.{b*}}` ≡
+  `t5{a^.b*}`) — S+ restores that ≡ at ordinal heads exactly as E did for step chains.
+  **Counter-case (B):** a sub-block is where Q_U55 made a collapse branch-local, so reading it as a
+  boundary is not arbitrary, and B keeps `0.{…}` as the spelling for WANTING one tuple component
+  around a spliced join. (Q_U55's locality is about a rename's scope, though: under `a^` the
+  collapse still lands at the top, `t5{a^.{b.c*-}}`.) **Settling evidence:** whether a sub-block
+  should bound where a landing goes, or only where names are visible.
+
 - <a id="q-u43"></a>**⭐ Q_U43 — THE L4 SORT CHECK MOVES TO TYPING FOR STAR-BEARING
   BRANCHES, AS [Q_U38](#q-u38)'s COROLLARY [owner, 2026-08-11 — "move the sort
   check to typing per Q_U38's corollary"].** Q_U38 moved the COLLISION check;
@@ -9679,9 +9707,9 @@ scaffolding for the slicing, not a permanent mechanism.
 | **1b-vi-C** ✅ `3cbb1025` | the total-collapse machinery, INERT — [design target, mini-audit, findings, VAG](#p4e-1b-vi-c): the star-cont axis (4 conts, raising classifier, pending table), the `(collapsed . c₀)` mark (placement only; unmark law over 104 branches), one placement predicate in both twins, `*-_`'s prefix at one seat, tail-arm guards, prose naming the operator as written (13 arms × 4 conts). Proven by INJECTION: 53 D rows meet their D targets before the mint (harness parity 0 drift; a vacuous pass found by counting and closed). Red: 51, the silent re-nesting; 5 twin mutations red. 670 / 670; acceptance 88 / 88; **7.97 s per run** | ✅ |
 | **1b-vi-D-1** ✅ `b567b29e` | the LEVEL arms name the operators PRESENT ([design, findings, VAG](#p4e-1b-vi-d)): `select-fail`'s field becomes a list; `star-dup-key` carries every star at the level, `star-l4-mixed` its branch's; each claim scoped to the family it was measured on. Corrected a 1b-iv sentence measured false in 3 of 4 populations. M-one (one star) red on exactly the mixed row. Found C's ordinal-head defect. 580 / 580 | ✅ |
 | **1b-vi-D-2a** ✅ `84beb15a` | [an ordinal head is TRANSPARENT under a collapse](#p4e-1b-vi-d2): `select-branch-total-collapse?` (one definition) + both twins' ord-head arms descend like the bare-number arm; the generator states `ot{0.X}` ≡ `t5{X}` over four families (+61 law rows → 168). Red: C's C-5 guard RAISED on `ot{0.a*-}`. M-ord-reduction red on exactly the 24 injectable ordinal star rows. 670 / 670 | ✅ |
-| **1b-vi-E** ✅ `a41f8362` | [Q_U61](#q-u61)'s S ([design, findings, VAG](#p4e-1b-vi-e)): an ordinal head passes a keyless star landing through at every depth — one predicate (`select-steps-yield-bare-join?` + `select-step-names-no-key?`), one arm per twin subsuming D-2a's arm and seat B's splice (deleted); the dup refusal names S's cost and the tuple spelling (`select-fail` field `ordinal`). 187 rows; 694 / 694; acceptance 112 / 112. Mutations: names 52, typing 11, reduction 9, ordinal 2 | ✅ |
 | **1b-vi-D-2b** ✅ `9743e93e` | THE MINT ([design, findings, VAG](#p4e-1b-vi-d2)): the two rows join the one table (pending table retired); the parser marks at `segment-select-items`' one success return; Q_U55's star half (remedies run: 24); Q_U56's guided `*->` in the consumer (+ the one-token `a*->b`; `*>`/`*_>` improve too); pins flipped; arrival gate ∀ minted lexeme; PARITY parser = injection. Red 186; M-mark / M-star-arm / M-arrow / M-keep red. 173 rows, 670 / 670, 7.65 s per run | ✅ |
-| verify | adversarial round | ⬜ |
+| **1b-vi-E** ✅ `a41f8362` | [Q_U61](#q-u61)'s S ([design, findings, VAG](#p4e-1b-vi-e)): an ordinal head passes a keyless star landing through at every depth — one predicate (`select-steps-yield-bare-join?` + `select-step-names-no-key?`), one arm per twin subsuming D-2a's arm and seat B's splice (deleted); the dup refusal names S's cost and the tuple spelling (`select-fail` field `ordinal`). 187 rows; 694 / 694; acceptance 112 / 112. Mutations: names 52, typing 11, reduction 9, ordinal 2 | ✅ |
+| **verify** ✅ `0988a4f0` | [adversarial round, adjudicated](#p4e-1b-vi-verify): 4 lenses at `64368197`, 36 raw → 34 survive, 2 killed. 3 BLOCKING fixed — VF-1 a whole-file abort (ω ancestor of a total collapse; parser refusal, 167's waypoint), VF-2 a twin value/type split (reduction's `asort`), VF-3 the ordinal-level prose (E's sentence among it); VF-4/VF-5 + 9 more fixed; 2 filed (179, 180) + addenda to 167/168; Q_U62 posed. Stage V: 250 rows (106 hand, 144 law); 695 / 695; acceptance 112 / 112; 10 mutations red | ✅ |
 | gate | full suite, then the checkpoint merge to main | ⬜ |
 
 Per-phase completion, in order (DESIGN_METHODOLOGY Stage 4): tests → commit → this tracker
@@ -10169,6 +10197,74 @@ red for the wrong reason on the first green run; read, not re-run, and fixed in 
 | (d) drift risks | E-R1 twin mutations ✓; E-R2 the 9 depth-1 pins green through the route change ✓; E-R3 every remedy run, message fixed ✓ | update-deps 375 unchanged; acceptance M16/M17 show both sides of the rule on the guild hall |
 
 <a id="p4e-1b-v-shipped"></a>
+
+<a id="p4e-1b-vi-verify"></a>
+
+**1b-vi verify, step 2 — the adversarial verify, adjudicated** (lenses at `64368197`; fixes
+`0988a4f0`; probes `tracks/CIU/CIU_6/research/P4e-1b-vi/verify/` v1–v8, each with its HEAD
+`.out` and its post-fix `.after.out`).
+
+*Method.* Four read-only lenses, each a Hermes subagent pinned to `643681972acc` (each
+verified it) and probing through `tools/scratch-run.sh` in its own scratch directory: **VT**
+twins and routes (the standing question head-on), **VS** silent wrong answers and branch
+order, **VM** message truth with every offered remedy run, **VI** instrument power. (The
+`.claude/workflows` runners are a Claude Code tool; this is the same shape — parallel
+read-only facets, then adjudication on the main thread.) The lenses numbered their findings
+L1-…L4-; renamed here because "L1" (fusion) and "L4" (the mixing rule) are this document's
+own designators. **Every finding was re-measured on the main thread before anything acted on
+it**: 36 raw, 34 reproduce, 2 killed on adjudication.
+
+*The standing question — one seat, not its sibling — YES, five times.* (1) The ω arms are a
+second route to the star-tail arm, so the C-5 guard's premise ("arriving here means an
+ancestor was kept") was false on it, beside three comments calling the shape unreachable.
+(2) 1b-iv-B2 threaded `asort` into three reduction helpers; five siblings kept reading the
+outer sort — the comment naming that fix says "the feed was threaded". (3) E's ordinal fact
+read the branch head; a dissolved head or a terminal sub-block delivers the same fields by
+another route. (4) The dup gate got E's ordinal fact and the L4 gate beside it did not.
+(5) Q_U56's one-token arm covered one lexeme of the four-row star table; its item-shape
+sibling iterates all four.
+
+| id | severity (lenses) | measured at `64368197` | disposition |
+|---|---|---|---|
+| **VF-1** | BLOCKING (VT-1 = VS-1 = VI-1, independently) | `ow{top:cfg.x*-}` **aborts the whole file** — no result line, not even the `def`s (v1). Every sibling spelling is a per-command refusal (DEFERRED 167: a step after an in-block ω acts on the whole result; v2) | `total-collapse-omega-problem` at branch close (parser.rkt), before Q_U55's check: a total collapse under an ω ANCESTOR is refused — both families, Q_U55's one rule — with the branch-local sub-block remedy rendered by the one printer (`top:{cfg.x*-}`, measured: v6). This is 167's own recommended waypoint; Q_U48's meaning of the refused form needs 167 (`top^:{…}` lands keyless — an ω result is a layer of its own) |
+| **VF-2** | BLOCKING (VT-2, VS-2; VT-3 older, same class) | `vk:{a^.b*}` → `@[@[{:k 1}] @[{:k 2}]] : [PVec {:k Int}]` at 0 errors; then `none`, an internal panic beside a keyed sibling, a value that changes with branch order; `vo:{a:n}` likewise (v3) | `asort` threaded through `below-components`, `below-value`, `bcast-lift`, `bcast-apply` and `walk-to-leaf`'s ω, mirroring typing's `sort` at every seat; census: every helper call now passes a sort except Q_U20's forced `'block` and the top level |
+| **VF-3** | BLOCKING (VM-1/2/3/4, VI-2/4; MINOR VT-5, VS-5, VM-11, VI-7) | at ordinal levels the gates offered remedies measured false: E's tuple remedy (a `{0}` sₙ, a keyed `^-` sibling, a third starred branch), "dropping a star resolves it", the `*-_` advice, L4's "drop a `^`" (v4); the fact read the head only | `select-level-ordinal-fact` (syntax.rkt): the branches DELIVERED to the level — through dissolves and terminal sub-blocks — classified in the twins' arm order (`'head` / `'head-wrap` / `'mid` / `#f`: a `^-` collapse lands keyed; a bare ordinal step never wraps), summarised as flags read by BOTH gates. Every sentence scoped to the population it was measured on; every remedy run (v7, v8) |
+| **VF-4** | BLOCKING-contrived (VM-7) + MINOR (VS-7a, VM-8) | `m3{a*->b*->c}` offered `a*->b*- c`, refused again; `a*_->b`, `a*-_->b` got the generic text naming `*` | one-token arm: non-greedy, every star lexeme, every later arrow rewritten |
+| **VF-5** | MAJOR (VT-4, VS-6, VM-6) | `t5{a.b^..c*-}` told of a rename `b^a` and to "Drop `^a`" — the desugar, not what was written | names both: `` `b^a` (how `a.b^..` is read) `` (a literal `a^.b^a` is the same steps) |
+| VM-5 | MAJOR | `mx{m* a.b*-}` named `m*` and offered "drop a `^`" with no `^` present; reversed, named `a.b*-` — text depended on branch order | the L4 label names the star branch whose landing is KEYLESS (fallback: the first). 1b-iii-C2 R3's byte-identity pin (2) re-expressed on purpose; its new remedy run |
+| VM-10 | MINOR | a star sealed under a kept key (`t3x{a.{b*-_} c* d*}`) was named as a possible lifter, and drew the total-collapse sentence | `select-branch-level-star-conts`: the stars whose landings reach the level |
+| VT-6, VT-7, VI-8 | MINOR | stale comments after E; the skip could consume sₙ (latent); an ω unwrap with no reachable input | corrected; the skip stops above sₙ; marked unreachable until 167 |
+| VI-3 | MAJOR | the render loop built every fail with five arguments — blind to the ordinal field | × the ordinal facts, with VF-3's invariants as checks (mutation VF3-prose reds them) |
+| VI-5 | MAJOR | nothing pinned the table's size: a filter dropping a family stayed green | size pin, PREDICTED before the run from positions × assignments (106 hand; 144 law; `*` 22, `*-` 44, `*-_` 26, `^-` 26, `^-z` 26) |
+| VI-6, VI-9 | MINOR | Q_U61's other half (a remainder naming a key stays in the tuple) held at 3 hand points; U61-5's PRE was predicted; the all-`^` plain-star laws were filed as controls | the plain-`*` law over EVERY assignment with a `wrapped` target (+18); all-`^` depth ≥ 2 flip at E with the wrap as PRE; U61-5 marked |
+| VS-3 | — | `ot{0.a^.{b*}}` and `oo{0.{0.a^.b*}}` WRAP while `t5{a^.{b*}}` splices: E's "`ot{0.X}` ≡ `t5{X}` by construction" holds for step chains only | the comment corrected; posed as [Q_U62](#q-u62) — pre-existing behaviour, zero uses (census with a positive control) |
+| VS-7b, VI-10 | MINOR | `env{prod dev}*->` gets a comparison-keyword hint; the arrival gate cannot tell a one-token `*-` from `*` then `-` | filed: DEFERRED 179, 180 |
+| VM-9 | MINOR | inside `<…>` a SPACED `*-` / `*-_` / `*_` reports a bare "Unbound variable" | addendum to DEFERRED 168 |
+| VI-7's M7 | — | the stage table's "every row ahead still fails" arm iterates nothing at the last stage | inherent to a stage table (the scaffolding retires at the 1b-vi close); recorded |
+| ~~VS-4~~, ~~VM-12~~ | **killed** | Q_U55's remedies on `og{db^p.admins:name*-}`, and "Drop `^p`" on `sh{a^p.b*- a.c*-}`, meet a second refusal | each remedy fixes the problem its message reports; the next refusal (the permanent ω Map join; a dup the original also carries) is an independent problem the input already had — not a false remedy |
+
+*Mutations* (`mutate-V.sh`, each restored under checksum; every one red on its own pins
+only): VF1-off → the whole table fails CLOSED (the batch raises); VF2-dissolve → V-as1…7;
+VF2-bcast → V-as8; VF3-head → V-or6 (the sub-block route); VF3-collapse → V-or5;
+VF3-prose → U61-4/5, V-or3…6 and the render loop's invariant; L35-label → V-l4a and the R3
+pin; L310-stars → V-dup-sealed; VF4-greedy → V-arrow2; VF5-dotdot → V-dotdot. One extra red
+under VF3-collapse, at the Q_N4 multiplicity test (`:797`), which the mutated predicate
+cannot reach: unattributed — the per-run log was deleted before it was read — and consistent
+with DEFERRED 170's temp-file race, which this branch carries until main is merged in. The
+post-merge full suite is the check.
+
+*Self-correction.* E's VAG said the message "names S's cost"; it named it for the one
+population probe-1bvi-ad measured. The skill rule written that same hour ("run every remedy
+the refusal offers on the newly-refused population") was applied to one population, not to
+the populations the flag covers. Six sentences in the two level arms were false somewhere
+they were emitted.
+
+| VAG question | catalogue | challenge — could it be more aligned? |
+|---|---|---|
+| (a) on-network | no new state; facts are pure functions of the branch lists | the walkers stay off-network (PPN's); VF-2 is the twin-drift class that a single on-network walker would remove by construction — evidence for that migration, not a substitute |
+| (b) complete | 45 rows + 18 laws + a size pin + 10 mutations; every remedy run | the ordinal fact is CLASSIFIED by a function that must mirror the walkers' arm order (VF3-collapse shows the cost of not mirroring); it would be correct by construction if the walkers RETURNED the fact with their components — the same twin-walker drift the off-network walkers owe PPN's on-network walk; recorded as pressure on that migration, not filed separately |
+| (c) vision-advancing | a crash and a silent split removed; prose true on every measured population | VF-1 is a waypoint (167), not the meaning; Q_U62 is open |
+| (d) drift risks | three "unreachable"/"by construction" comments were wrong in this slice | each corrected comment now cites the probe that measured it |
 
 ##### §5.P4e-1b-v — WHAT SHIPPED  (A → B1 → B1b → B2a → verify, 2026-08-13)
 
