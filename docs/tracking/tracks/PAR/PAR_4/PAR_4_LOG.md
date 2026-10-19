@@ -926,3 +926,13 @@ binder merges with unsolved metas.
     P0.5, or the order stays "row 1 after P2".
 - **Next**: the owner decides O-17. If (a) or (b): a docs-only checkpoint of PAR 4, then the worktree, build, kickoff
   and start prompt, as for PAR 4B. Then D.3.
+
+### O-17 DECIDED (a): BSP-LE Track 3 owns DEFERRED 177's fix as its Stage A, as a concurrent track; P1a gives up rows 1–3 — docs commit on the branch (2026-10-19)
+- **Why / decision**: the owner chose: *"Ok, with BSP-LE 3 (a). Good to generate the kickoff."* The consequences are
+  written by phase in D.2 §15 O-17.
+  - PAR 4 P1a keeps row 4 and row 8.
+  - PAR 4 owes BSP-LE 3 the Tier-1 predicate seam in P0.5 (W2-6-3), plus the projection and tag-gate sites on request.
+  - PPN 4C gets a note before the premise set reaches `meta-universe.rkt`.
+  - The BSP-LE master and roadmap rows are proposals.
+- **Next**: a docs-only checkpoint of PAR 4 to main, so BSP-LE 3's kickoff cites main. Then its worktree
+  (`bsple3-tabling`), a build, the kickoff and log, and the start prompt.
