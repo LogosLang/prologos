@@ -1,5 +1,12 @@
 # BSP-LE 3 — Kickoff: Tabling, opening with Stage A, the ATMS label semantics (DEFERRED 177's fix)
 
+> **Moved 2026-10-19** (`18b94286`, owner decision, in this track's first session): the BSP-LE series now lives in
+> `docs/tracking/tracks/BSP-LE/`. This kickoff is in `BSP-LE_3/handoffs/`, the log is
+> [`LOG_BSP-LE_3.md`](../LOG_BSP-LE_3.md), the master moved with the series (its line numbers are unchanged), and
+> new files are named `YYYY-MM-DD_BSP-LE_3_<KIND>.md`, so §4's Stage-1 record is
+> `research/YYYY-MM-DD_BSP-LE_3_STAGE1_<TOPIC>.md`. The links below were rewritten by the move; the prose is as
+> written at `76a9e59f`, so "the master stays flat" and the `BSP_LE` spellings are historical.
+
 **Track**: BSP-LE Track 3, Tabling (SLG memoization). The row is
 [`docs/tracking/tracks/BSP-LE/2026-03-21_BSP_LE_MASTER.md`](../../2026-03-21_BSP_LE_MASTER.md):55, and the scope section is
 `:142-187`. On 2026-10-19 the owner placed DEFERRED 177's fix in this track as its first stage (PAR 4 decision O-17
