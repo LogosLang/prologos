@@ -809,3 +809,32 @@ binder merges with unsolved metas.
 - **Posed**: O-18 in D.2 §15 (lean (a): checkpoint first).
 - **Next**: on the owner's go, the checkpoint, then the PAR 4B worktree, scaffold and kickoff, then a one-line
   start prompt for the new session. This session continues PAR 4: O-16, O-17, then D.3.
+
+### O-18 DECIDED (a) and the PAR 4B setup approved; main merged in (second bring-up, conflict-free; main's gate carries over); PAR master rows updated — `19a38f83` + `696ceee9` (2026-10-18)
+- **Why / decision**:
+  - The owner approved the PAR 4B organisation ("let's go forward with that approach") and O-18 (a): checkpoint 2
+    first.
+  - They authorized the PAR master rows ("Fine to update the PAR master rows on this").
+  - Ledgered in D.2 §15 (`19a38f83`).
+- **Main merged in**: `696ceee9`, main's code through the CIU 6 checkpoint `83fe4fb4`.
+  - Predicted conflict-free (no file changed on both sides), and it was.
+  - The merged tree differs from main in exactly the branch's own 1615 files (docs, `benchmarks/par4/`,
+    `data/par4-p0/o3/`). Nothing in `racket/` or `tools/` differs outside those, so the merged code is main's code.
+  - The `.zo` files for reduction, driver, typing-core, parser and propagator are byte-identical to main's checkout.
+  - Gate: main's own carries over (10 426 / 502 at `9d0dea51`, whose code is `83fe4fb4`'s; no code moves since).
+  - Targeted run: `test-arena-parity` + `test-path-selection`, 590 tests, all pass. `update-deps --check`: the
+    cached derivation equals a full rescan.
+  - The pre-commit tree-sitter tripwire fired on CIU 6's `parser.rkt` and `reader-forms.rkt`. Those are main's
+    changes, already handled by CIU 6, not PAR 4's.
+- **PAR master** (owner-authorized):
+  - a dated revision note;
+  - Track 3 restated (its premise, PAR 2's thread executor, is withdrawn by O-14; it becomes the production
+    deployment of whatever Track 4B shows to win; the original text is kept in the row);
+  - Track 4's row brought current;
+  - a Track 4B row added;
+  - the Track 4 log link follows the rename.
+
+  Also updated: the series stub `tracks/PAR/README.md` (Track 4 and 4B rows), `tracks/README.md`'s Current list, and
+  a path-only fix in `MASTER_ROADMAP.org` for the log rename. The roadmap's PAR status line ("D.2 next") is stale,
+  and its text stays a proposal to the owner.
+- **Next**: checkpoint 2 to main, then the PAR 4B worktree, scaffold and kickoff.

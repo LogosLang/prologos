@@ -50,7 +50,7 @@ track's reasoning hard to follow. So **the decision/surprise journal moves to th
   **Surprise / correction**, **Next**. One entry per commit or per decision/surprise.
 - The **dailies keep the STATE head** (the re-grounding surface — HEAD, suite, where we
   are, NEXT, blockers, watching) and a **sparse LOG** whose entries POINT at the track
-  LOG entry (`→ tracks/PAR/PAR_4/LOG.md § <headline>`) rather than restating it.
+  LOG entry (`→ tracks/PAR/PAR_4/PAR_4_LOG.md § <headline>`) rather than restating it.
 - Relay notes and handoffs are unchanged: a handoff lives in the track directory.
 
 ## Naming
@@ -61,7 +61,9 @@ lhc, 2026-08-17): `2026-10-12_PAR_4_STAGE2_GAP_ANALYSIS.md`, matching the direct
 `MASTER_ROADMAP.org`; a session does not coin one. A MOVED file keeps its old basename (PPN's
 `…_PPN_TRACK4C_DESIGN.md`); new files in a moved series follow the rule.
 
-Current: `tracks/PAR/PAR_4/` — PAR Track 4, Arena Executors (Stage 1 + Stage 2 written; D.1 next). Stage-1 research artifacts live in the track's `research/` subdirectory, named `…_STAGE1_<TOPIC>.md`.
+Current: `tracks/PAR/PAR_4/` — PAR Track 4, Arena Executors (D.2 and its D.3 critique written; D.3 next).
+`tracks/PAR/PAR_4B/` — PAR Track 4B, the parallel and distributed architecture portfolio (opened 2026-10-18 on branch
+`par4b-parallelism-portfolio`; Stage 1 next). Stage-1 research artifacts live in the track's `research/` subdirectory, named `…_STAGE1_<TOPIC>.md`.
 `tracks/CIU/CIU_6/` — CIU Track 6, Anonymous Records, Collections & Path Selection: a track
 already deep in implementation when the layout arrived (2026-10-13). Its flat documents of
 record stay where they are and are indexed in `tracks/CIU/README.md`; the directory holds the

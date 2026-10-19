@@ -7,7 +7,8 @@ exist in the new layout.
 
 | Track | Directory | State |
 |---|---|---|
-| 2 (R3–R5) — contention analysis → literature survey → design doc | [`PAR_4/`](PAR_4/) · log: [`PAR_4/PAR_4_LOG.md`](PAR_4/PAR_4_LOG.md) | R3 measured 2026-10-12 (as the "PSF" probe series, renamed) |
+| 4 — Arena Executors (opened from 2 (R3–R5)) | [`PAR_4/`](PAR_4/) · log: [`PAR_4/PAR_4_LOG.md`](PAR_4/PAR_4_LOG.md) | D.2 + D.3 critique done 2026-10-18; checkpoint 2; D.3 next |
+| 4B — parallel and distributed architecture portfolio | `PAR_4B/` on branch `par4b-parallelism-portfolio` (reaches main at its first checkpoint) | opened 2026-10-18; Stage 1 (profile + survey) next |
 
 The flat master's Track table, its Challenge-1 section and `MASTER_ROADMAP.org` §PAR were
 updated 2026-10-12 (owner-authorized) to reflect Track 4 and to fix the stale "R3–R5 ⬜" row.
