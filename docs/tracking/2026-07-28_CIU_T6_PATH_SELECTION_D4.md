@@ -3517,7 +3517,8 @@ items of the hold-point, ruled before P4a opened:
 
 - <a id="q-u62"></a>**Q_U62 — AN ORDINAL HEAD, THEN A SUB-BLOCK THAT HOLDS THE STAR: DOES
   Q_U61'S PASS-THROUGH CROSS THE SUB-BLOCK? [⏳ OWNER LEAN B (slight), 2026-10-19 — "I do think B
-  has a slight lean than the S+ reading." Joint with my lean; under critique ([UC-n](#q-u62-critique)),
+  has a slight lean than the S+ reading." Joint with my lean; under critique ([UC-n](#q-u62-critique)).
+  2026-10-19 01:11 the owner asked for R worked out beside B before weighing in — [done](#q-u62-r);
   decision next. Posed 2026-10-18 at the [1b-vi verify](#p4e-1b-vi-verify) (finding VS-3); opened
   with worked examples the same day at the owner's request — "walk through the design space in
   played out examples". Not a regression: E changed none of these.]**
@@ -3725,6 +3726,79 @@ items of the hold-point, ruled before P4a opened:
   a measured unconditional law, and UC-2 is the spec's own load-bearing reason; UC-3 and UC-4 are
   documentation costs, not incoherence. B over R, because R's cost is concrete and its hedge has no
   demand behind it.
+  <a id="q-u62-r"></a>**R worked out beside B** (owner, 2026-10-19 — "I'd have to see R worked out
+  alongside B in multiple, clear, worked examples to make a weigh-in on either. I don't have an
+  intuition for what R is, otherwise."). research/P4e-1b-vi/probe-1bvi-ag (80 lines at `4765f8a1`);
+  `ag:N` = its line N.
+
+  **What R is.** R refuses exactly the shapes where B and S+ disagree — an ordinal head over a sub-block
+  whose every branch is a star that would pass through — and leaves everything else as it is today
+  (B and S+ agree there). R is not implemented, so its refusal is design; what IS measured is what a
+  user writes instead, and both recipes are spellings that run today:
+  - **one component** (B's meaning): the broadcast over a one-element ordinal block, `x{N}:{P.{X}}`;
+  - **spliced** (S+'s meaning): the unfactored step chains, which S already decides.
+
+  So the three options differ only in what `x{N.{X}}` is a synonym for, on these shapes: under **B** it
+  means `x{N}:{X}`; under **S+** it means the unfactored chains; under **R** it means nothing yet.
+
+  **The shapes R refuses, side by side.**
+
+  | program | B gives | under R | B's meaning, spelled under R | S+'s meaning, spelled under R |
+  |---|---|---|---|---|
+  | `ot{0.a^.{b*}}` | `@[{:c …}]` ae:9 | refused | `ot{0}:{a^.{b*}}` → `@[{:c …}]` ag:7 | `ot{0.a^.b*}` → `{:c …}` ae:10 |
+  | `oo{0.{0.a^.b*}}` | `@[{:c …}]` ae:12 | refused | `oo{0}:{0.a^.b*}` → `@[{:c …}]` ag:9 | `oo{0 .0.a^.b*}` → `{:c …}` ae:13 |
+  | `ot2{0.a^.{b*} 1.a^.{b*}}` | `@[{:k 1} {:k 2}]` ae:14 | refused | `ot2{0 1}:{a^.b*}` → `@[{:k 1} {:k 2}]` ag:10 | `ot2{0.a^.b* 1.a^.b*}` → refused, dup `:k` ae:15 |
+  | `ot{0.a^.b^.c^.{m* n*}}` | `@[{:y 2, :x 1}]` ae:34 | refused | `ot{0}:{a^.b^.c^.{m* n*}}` → `@[{:y 2, :x 1}]` ag:12 | `ot{0.a^.b^.c^.m* 0.a^.b^.c^.n*}` → `{:y 2, :x 1}` ae:35 |
+  | `fleet{0.{meta^.id* net^.tls*}}` | `@[{:n 1, :port 443}]` ae:40 | refused | `fleet{0}:{meta^.id* net^.tls*}` → `@[{:n 1, :port 443}]` ag:13 | `fleet{0.meta^.id* 0.net^.tls*}` → `{:n 1, :port 443}` ae:41 |
+  | `fleet{0.{meta^.id* net^.tls*} 1.{meta^.id* net^.tls*}}` | `@[{:n 1, :port 443} {:n 2, :port 8443}]` ae:42 | refused | `fleet{0 1}:{meta^.id* net^.tls*}` → `@[{:n 1, :port 443} {:n 2, :port 8443}]` ag:14 | the unfactored chains → refused, dup `:n` ae:43 |
+  | `fleet{0.{meta^.id*} 1.{net^.tls*}}` | `@[{:n 1} {:port 8443}]` ae:68 | refused | `fleet{0.meta^.id^ 1.net^.tls^}` → `@[{:n 1} {:port 8443}]` ag:16 | `fleet{0.meta^.id* 1.net^.tls*}` → `{:n 1, :port 8443}` ae:69 |
+  | `fleet{0.{meta^.id* net^.tls*} 1.{meta^.id*}}` | `@[{:n 1, :port 443} {:n 2}]` ae:67 | refused | **no spelling**: `{0 1}:` takes one shape (ag:21 gives both elements a port) | refused, dup `:n` ag:22 |
+  | `ot{0.{a.b*-}}` | `@[{:c …}]` ae:54 | refused | `ot{0}:{a.b*-}` → `@[{:c …}]` ag:17 | `ot{0.a.b*-}` → `{:c …}` ae:55 |
+  | `ot{0.a^.{b*_}}` | `@[{:b-c …}]` ae:57 | refused | `ot{0}:{a^.b*_}` → `@[{:b-c …}]` ag:18 | `ot{0.a^.b*_}` → `{:b-c …}` ae:58 |
+  | `ov3{0.a^.b^.{c*}}` | `@[@[@[@[1 2] @[3]]]]` ae:61 | refused | `ov3{0}:{a^.b^.c*}` → `@[@[@[@[1 2] @[3]]]]` ag:20 | `ov3{0.a^.b^.c*}` → `@[@[@[1 2] @[3]]]` ae:62 |
+
+  **Over R's WHOLE refused population in probe-1bvi-af's grid** (26 shapes — `*` 5, `*-` 5, `*_` 4,
+  `*-_` 4, `^-` 4, `^-_` 4): the one-component recipe reproduces B's value **26 / 26**, the spliced recipe
+  reproduces S+'s reading (the unwrapped key-head value) **26 / 26**, and the two differ on all 26.
+
+  **What R leaves alone** (the same under B, S+ and R): `ot{0.a^.b^.c^.{m* n}}` → `@[{:n {:y 2}, :x 1}]`
+  ag:23 · `fleet{0.{meta^.id* tags}}` → `@[{:n 1, :tags @[1 2]}]` ag:24 · `ot{0.a.{b*}}` →
+  `@[{:a {:c …}}]` ag:25 · `ot{0.a^.b^.c^.{m n}}` → `@[{:n {:y 2}, :m {:x 1}}]` ag:26 · `vhm{0.{0}*}` →
+  `{:x 1}` ag:27 · every step chain (`ot{0.a^.b*}` → `{:c …}`, ae:10).
+
+  **R's message — PROPOSED text, not implemented**, rendered from the user's branch by the one branch
+  printer (as VF-1's broadcast refusal is):
+  > `ot{0.a^.{b*}}` — every branch of the sub-block after the ordinal is a star whose fields could pass
+  > through it, and whether they stay inside element 0 or pass through the ordinal to this level is not
+  > decided yet (Q_U62). For element 0 as one component, write `ot{0}:{a^.{b*}}`; for its fields at this
+  > level, `ot{0.a^.b*}`.
+
+  It must offer only the recipe that works: on the two-element row the spliced chains collide (ae:43), and
+  on the different-shapes row neither recipe exists, so the message can only say to select each element
+  in its own block (`fleet{0}:{meta^.id* net^.tls*}`, ag:13).
+
+  **Changing course later.**
+
+  | starting from | later decision | programs written in the meantime |
+  |---|---|---|
+  | R | B or S+ | nothing breaks: only refused programs gain a meaning |
+  | B | S+ | the refused-under-R shapes change: wrapped → spliced (a type change, `⟨{…}⟩` → `{…}`, so consumers fail type-checking rather than run wrong); tuples → duplicate-key refusals (ae:14, ae:42) |
+  | S+ | B | the reverse: spliced → wrapped, and the duplicate-key refusals become tuples |
+
+  **R, weighed against B.**
+  - *What R buys:* neither reading is foreclosed, so the later decision breaks nothing (the monotone-
+    migration rule).
+  - *What R costs:* (1) records of different shapes per element (ae:67) have no spelling until the
+    decision; (2) the natural spelling `x{N.{…}}` is an error, and the user must learn `x{N}:{…}`, a
+    broadcast over a one-element block; (3) its trigger reads every sub-branch — `{m* n*}` refused,
+    `{m* n}` accepted (ag:23); (4) its message needs per-shape care (above); (5) Q_U62 stays open, owing
+    a DEFERRED entry and a trigger to decide it (first-class selectors, §7.5, or first demand).
+  - *What it shows about B:* on every shape R refuses, B's `x{N.{X}}` is exactly `x{N}:{X}` (measured
+    26 / 26 and on every hand row). B adds over R only the different-shapes records (ae:67) and the
+    shorter spelling; S+ adds over R only the shorter spelling of the unfactored chains.
+  - *Rejected variant R2* — refuse every ordinal-headed sub-block holding any star: it would also refuse
+    ag:23 and ag:24, where B and S+ agree, so it forecloses nothing more and costs more.
+
   **Left open by B (PENDING, non-blocking; done after the decision):**
   - **UC-7** pin B as generated laws — UC-1's grid as `wrapped` rows in the stage table;
   - **UC-8** SB-1 and SB-2 under B — the remedy "group each element's branches in one sub-block after

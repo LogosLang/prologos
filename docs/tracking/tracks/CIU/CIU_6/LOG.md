@@ -456,3 +456,17 @@ are in [`../README.md`](../README.md).
 - **Surprise / correction**: none against the record; my lean firms from medium-high to high.
 - **Next**: the owner's decision — B, or R as the waypoint. Then UC-7 (B as generated laws), UC-8 (SB-1/SB-2 under B),
   UC-9 (S's scope in Q_U61 + a spec note).
+
+### Q_U62: R worked out beside B — each refused shape's two readings both spellable today (26/26 + 26/26); decision still next — `a593fdc6` (2026-10-19)
+- **Why / decision**: the owner (2026-10-19 01:11) — *"I'd have to see R worked out alongside B in multiple, clear,
+  worked examples to make a weigh-in on either. I don't have an intuition for what R is, otherwise."*
+- **What shipped**: probe-1bvi-ag (80 lines) and the ledger section
+  [R worked out beside B](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62-r): R defined as refusing exactly
+  where B and S+ disagree; eleven refused programs side by side (B's value; R's refusal; B's meaning and S+'s meaning,
+  each spelled under R and measured); over R's whole refused population in af's grid the one-component recipe
+  `x{N}:{P.{X}}` reproduces B 26/26 and the unfactored chains reproduce S+'s reading 26/26. R's message drafted
+  (proposed, not implemented); a migration table; R's costs; R2 rejected. 34 quoted values checked, 0 mismatches.
+- **Surprise / correction**: the measurement reframes the decision. On these shapes B makes `x{N.{X}}` a synonym for
+  `x{N}:{X}`, S+ makes it a synonym for the unfactored chains, and R leaves it unassigned. B's only extra
+  expressivity over R is records of different shapes per element (ae:67).
+- **Next**: the owner's decision — B, S+ or R.
