@@ -37,7 +37,9 @@
                   select-branch-mark-total-collapse
                   select-star-step? select-star-cont select-star-cont-of
                   ;; 1b-vi verify (VF-1): the ω-ancestor refusal covers `*-_` too
-                  select-star-cont-total?)
+                  select-star-cont-total?
+                  ;; 1b-vi close (DEFERRED 185, SB-3): Q_U46's reserved gap, one text
+                  select-ordinal-star-message)
          ;; D4.P4e-1b slice 1b-vi-B [Q_U55]: the renamed-ancestor refusal renders its
          ;; two remedies with the ONE branch printer (Q_U54) rather than a second
          ;; hand-written copy in this file. Acyclic (pretty-print's closure does not
@@ -1811,6 +1813,15 @@
             ;; (star name). `(closed-acc)` unconditionally is CORRECT here —
             ;; a bare identifier item always starts a branch, exactly like its
             ;; neighbour `plain-key?` (the audit's C2 adjudication).
+            ;; ⭐ 1b-vi close (DEFERRED 185, SB-3): a star-family item right after an
+            ;; ordinal HEAD — `vhm{0*}`, `vhm{0.{0*}}`. The reader leaves `0*` as `0` then
+            ;; `*` (Q_U27: byte-identical to `{0 *}`), so `split-star-lexeme` saw a bare
+            ;; `*` and said "`*` is postfix" — false, the star does end segment `0`. This
+            ;; is [Q_U46]'s reserved gap, the one typing refuses for `y{a[0]*}`: ONE text.
+            [(and (symbol? it) (regexp-match? #rx"^[*]-?_?$" (symbol->string it))
+                  (pair? cur) (pair? (car cur)) (eq? (car (car cur)) '@ord)
+                  (null? (cdr cur)))
+             (fail (select-ordinal-star-message (format "~a~a" (cadr (car cur)) it) it))]
             [(star-sym? it)
              (let-values ([(name cont) (split-star-lexeme it)])
                (cond

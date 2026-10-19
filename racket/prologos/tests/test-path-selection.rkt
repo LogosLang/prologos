@@ -7661,7 +7661,11 @@
                            '(passes head all key-tails all-head multi groupable cross)
                            '(passes head all key-tails all-head multi groupable)
                            '(passes head all all-head multi)
-                           '(passes head wrap all-head multi groupable))
+                           '(passes head wrap all-head multi groupable)
+                           ;; 1b-vi close (DEFERRED 185): which remedies a passing head can spell
+                           '(passes head all key-tails all-head head-key-tails head-dissolves)
+                           '(passes head all key-tails all-head head-key-tails)
+                           '(passes head all all-head head-dissolves))
                      (list #f)))
     (for* ([cs (in-list sets)] [ord (in-list ords)])
       (check-not-exn
@@ -7723,7 +7727,18 @@
                 ;; 1b-vi-F (SB-2)
                 (check-equal? (regexp-match? #rx"group its branches in ONE sub-block" msg)
                               (and (memq 'multi ord) (memq 'groupable ord) #t)
-                              (format "L4 under ~s ~s: the grouping remedy exactly where it is spellable: ~a" cs ord msg)))])))
+                              (format "L4 under ~s ~s: the grouping remedy exactly where it is spellable: ~a" cs ord msg))
+                ;; 1b-vi close (DEFERRED 185, SB-4): a remedy appears only under the flag that
+                ;; makes it spellable; with neither flag, dropping the star is offered
+                (check-equal? (regexp-match? #rx"with `\\^` instead of its" msg)
+                              (and (memq 'head-key-tails ord) #t)
+                              (format "L4 under ~s ~s: the `^` remedy exactly where every passing head has a key sₙ: ~a" cs ord msg))
+                (when (regexp-match? #rx"keep a key before each star" msg)
+                  (check-not-false (memq 'head-dissolves ord)
+                                   (format "L4 under ~s ~s: keep-a-key offered with no dissolved key to keep: ~a" cs ord msg)))
+                (unless (or (memq 'head-key-tails ord) (memq 'head-dissolves ord))
+                  (check-true (regexp-match? #rx"drop each `" msg)
+                              (format "L4 under ~s ~s: no spellable remedy but drop-the-star is not offered: ~a" cs ord msg))))])))
        (format "rendering ~a under ~s ~s must not raise" kind cs ord)))))
 
 (test-case "1b-iii-B1 reduction: the join concatenates in CANONICAL key order — the value layer, discriminating set"
@@ -9471,8 +9486,8 @@
 ;; (`"*-"` has no sentinel).
 ;; ===========================================================================
 
-(define 1bvi-stage 'F)   ;; 1b-vi-F: Q_U62 = B — B pinned as laws; SB-1 / SB-2's remedies under B (D4 #q-u62)
-(define 1bvi-stage-order '(A B C D E V F))
+(define 1bvi-stage 'G)   ;; 1b-vi close: DEFERRED 185 — SB-3 (Q_U46's gap, one text) + SB-4 (remedies the branch can spell)
+(define 1bvi-stage-order '(A B C D E V F G))
 (define (1bvi-reached? s)
   (and s (<= (index-of 1bvi-stage-order s) (index-of 1bvi-stage-order 1bvi-stage))))
 
@@ -9718,7 +9733,7 @@
     ("V-or1" "ot2{0.a^.b* 1.a^.b}" V (refused (#rx"drop a `\\^`") ())
              (refused (#rx"Here every branch is ordinal-headed"
                        #rx"keep a key before each star [(]`x[{]0[.]a[.]b[*] 1[.]a[.]b[*][}]`"
-                       #rx"end the branch with `\\^` instead of its star")
+                       #rx"end the branch with `\\^` instead of its `[*]`")
                       (#rx"drop a `\\^`")))
     ;; PRE derived from the HEAD arm's code (the same arm, label and cont as V-or1's
     ;; measured PRE), not run at HEAD
@@ -9837,7 +9852,33 @@
     ;; ---- controls: ONE branch per element keeps the `^` remedy and gets no grouping
     ("SB-c3" "ot2{0.a^.b* 1.a^.b*}" #f
              (refused (#rx"end EVERY branch here with `\\^`" #rx"a tuple of the elements") (#rx"group")) #f)
-    ("SB-c4" "ot2{0.a^.b* 1.a^.b}" #f (refused (#rx"Here every branch is ordinal-headed") (#rx"group")) #f)))
+    ("SB-c4" "ot2{0.a^.b* 1.a^.b}" #f (refused (#rx"Here every branch is ordinal-headed") (#rx"group")) #f)
+    ;; ================= 1b-vi close — DEFERRED 185 (SB-3 + SB-4) =================
+    ;; ---- SB-4: at a level of ordinal heads each remedy is offered only where every
+    ;; passing head can SPELL it (probe-1bvi-ai:31/32; scratch sb34:10/11)
+    ("G-SB4a" "vhm{0.{0}* 0.{0}}" G
+              (refused (#rx"keep a key before each star" #rx"end the branch with `\\^` instead of its star") ())
+              (refused (#rx"Here every branch is ordinal-headed" #rx"drop each `[*]` [(]`x[{]0[.][{]0[}] 1[.][{]0[}][}]`[)]")
+                       (#rx"keep a key before each star" #rx"with `\\^` instead of its")))
+    ("G-SB4a-K" "vhm{0.{0} 0.{0}}" #f (line "@[@[{:x 1}] @[{:x 1}]] : ⟨⟨{:x Int}⟩ ⟨{:x Int}⟩⟩") #f)
+    ("G-SB4b" "ot2{0.a* 1.a}" G
+              (refused (#rx"keep a key before each star" #rx"end the branch with `\\^` instead of its star") ())
+              (refused (#rx"end the branch with `\\^` instead of its `[*]`")
+                       (#rx"keep a key before each star" #rx"drop each `")))
+    ("G-SB4b-K" "ot2{0.a^ 1.a}" #f (line "@[{:b {:k 1}} {:a {:b {:k 2}}}] : ⟨{:b {:k Int}} {:a {:b {:k Int}}}⟩") #f)
+    ;; ---- SB-3: a star right after an ordinal HEAD is Q_U46's reserved gap — the text
+    ;; typing gives `v3{a.b.c[0]*}`, now from ONE definition at both seats
+    ("G-SB3a" "vhm{0*}" G (refused (#rx"`[*]` is postfix") ())
+              (refused (#rx"select: `0[*]` — `[*]` deletes the layer the step before it produced, and an ORDINAL step produces no layer")
+                       (#rx"is postfix")))
+    ("G-SB3b" "vhm{0.{0*}}" G (refused (#rx"`[*]` is postfix") ())
+              (refused (#rx"select: `0[*]` — `[*]` deletes the layer") (#rx"is postfix")))
+    ("G-SB3c" "vhm{0*_}" G (refused (#rx"is postfix") ())
+              (refused (#rx"select: `0[*]_` — `[*]_` deletes the layer") (#rx"is postfix")))
+    ("G-SB3d" "vhm{0*-}" G (refused (#rx"is postfix") ())
+              (refused (#rx"select: `0[*]-` — `[*]-` deletes the layer") (#rx"is postfix")))
+    ("G-SB3-c" "v3{a.b.c[0]*}" #f
+               (refused (#rx"`[*]` deletes the layer the step before it produced, and an ORDINAL step produces no layer") ()) #f)))
 
 (define (1bvi-row-id r) (list-ref r 0))
 (define (1bvi-row-spelling r) (list-ref r 1))
@@ -10369,9 +10410,10 @@
                             string<? #:key car))
                 ;; measured at the verify, and predicted beforehand from positions × assignments
                 ;; (plain `*`: 1 + 3 + 9 over `ot` + 9 over `ov3` = 22; `*-`: 13 + 9 + 13 + 9 = 44)
-                ;; 1b-vi-F, predicted before its run: 21 hand rows (+2, SB1-c1b / SB2-c, at review); `sub-block` laws over `ot` =
+                ;; 1b-vi-F, predicted before its run: 21 hand rows (+2, SB1-c1b / SB2-c, at review);
+                ;; 1b-vi close (DEFERRED 185): +9 hand rows (G-SB4a/-K, G-SB4b/-K, G-SB3a…d, G-SB3-c); `sub-block` laws over `ot` =
                 ;; (1 + 2 + 4 kept/dissolved assignments) × 6 families = 42, over `ov3` = 4 × 2 = 8
-                '(129 194 (("*" . 22) ("*-" . 44) ("*-_" . 26) ("^-" . 26) ("^-z" . 26)
+                '(138 194 (("*" . 22) ("*-" . 44) ("*-_" . 26) ("^-" . 26) ("^-z" . 26)
                            ("{}*" . 11) ("{}*-" . 11) ("{}*-_" . 7) ("{}*_" . 7) ("{}^-" . 7) ("{}^-_" . 7)))
                 "hand rows, law rows, law rows per family"))
 

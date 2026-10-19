@@ -779,8 +779,8 @@
     ;; RESERVED: an ordinal `sₙ`. Reused rather than replaced by a new kind so the
     ;; battery's hand-written render-loop list stays correct without a second edit.
     [(star-deep-prefix)
-     (format "select: `~a` — `~a` deletes the layer the step before it produced, and an ORDINAL step produces no layer (it selects a position, it does not add a level). Star a named step instead (`x{a.b~a}`), or select the element first and flatten separately"
-             label op op)]
+     ;; 1b-vi close (DEFERRED 185): one text, shared with the parser's seat
+     (select-ordinal-star-message label op)]
     ;; ⭐ 1b-iii-C2: the duplicate-output-key refusal. `label` here is the
     ;; COLLIDING KEY, not a branch spelling — the collision is a property of the
     ;; level, and naming the key is what tells the user which two branches met.
@@ -1014,9 +1014,25 @@
                    [(memq 'all-head ord)
                     (string-append
                      "Here every branch is ordinal-headed, and " ordinal-fact
-                     (if total?
-                         (format ". So make every branch a tuple component: end each starred branch with `^` instead of its `~a` (`x{0.a.b^ 1.a.b^}`) — a total collapse keeps no key to nest under" o)
-                         (format ". So make every branch a tuple component: keep a key before each star (`x{0.a.b~a 1.a.b~a}`, a tuple of records), or end the branch with `^` instead of its star (`x{0.a^.b^ 1.a^.b^}`)" o o))
+                     ;; ⭐ 1b-vi close (DEFERRED 185, SB-4): each remedy is offered only where
+                     ;; every passing head can SPELL it. Measured unspellable: "keep a key" on
+                     ;; `ot2{0.a* 1.a}` (no dissolved key; its `^` remedy runs), both on
+                     ;; `vhm{0.{0}* 0.{0}}` (no key at all; `{0}^` is a parse error). Dropping the
+                     ;; star is then the remedy: an ordinal head without one is a keyless component.
+                     (let* ([kt? (memq 'head-key-tails ord)]
+                            [dis? (memq 'head-dissolves ord)]
+                            [rems (if total?
+                                      (if kt?
+                                          (list (format "end each starred branch with `^` instead of its `~a` (`x{0.a.b^ 1.a.b^}`) — a total collapse keeps no key to nest under" o))
+                                          '())
+                                      (append
+                                       (if dis? (list (format "keep a key before each star (`x{0.a.b~a 1.a.b~a}`, a tuple of records)" o o)) '())
+                                       (if kt? (list (format "end the branch with `^` instead of its `~a` (`x{0.a^.b^ 1.a^.b^}`)" o)) '())))])
+                       (string-append
+                        ". So make every branch a tuple component: "
+                        (if (null? rems)
+                            (format "drop each `~a` (`x{0.{0} 1.{0}}`) — without its star an ordinal-headed branch is one keyless component" o)
+                            (string-join rems ", or "))))
                      ;; ⭐ 1b-vi-F [Q_U62] = B (SB-2): one element heading several branches can be
                      ;; kept as ONE component by grouping them — measured for `*`, `*_` and `*-`
                      ;; (`ot{0.a^.b^.c^.{m* n}}` → `@[{:n {:y 2}, :x 1}]`)
