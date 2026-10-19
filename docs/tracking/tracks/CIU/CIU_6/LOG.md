@@ -442,3 +442,17 @@ are in [`../README.md`](../README.md).
   depending on Q_U62; **SB-2** the all-ordinal L4 refusal omits the factored sub-block; **SB-3** `vhm{0.{0*}}` gets a
   misleading "`*` is postfix" message (pre-existing).
 - **Next**: the owner's decision on Q_U62; then SB-1's fix under it.
+
+### Q_U62: owner lean B (slight); the joint lean critiqued — B's law measured unconditional, 98/98; decision next — `990fafb7` (2026-10-19)
+- **Why / decision**: the owner (2026-10-19 00:22) — *"I do think B has a slight lean than the S+ reading."* A lean, so
+  ledgered OWNER LEAN under critique; it agrees with mine, so the stance is joint and was critiqued as such
+  ([D4 Q_U62 critique](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62-critique), UC-1…9).
+- **What shipped**: probe-1bvi-af (generated, 102 pairs): `x{0.P.{X}}` ≡ `y{P.{X}}` WRAPPED holds on 98/98 comparable
+  pairs — six star families × 15 positions/assignments plus vector contents; 4 pairs refused identically on both sides.
+  The step-chain control fails the wrap where S passes, so the comparison discriminates. Under S+ (derived) the same
+  grid splits 26 / 72 — a two-case law. Critique: for B, UC-1 (the law) and UC-2 (spec §3.3/§7.5: honest nesting
+  "holds because branch count becomes runtime-known"); against, UC-3 (the silent surprise) and UC-4 (S's scope must
+  be stated); UC-5 weighs R, the monotone-migration hedge.
+- **Surprise / correction**: none against the record; my lean firms from medium-high to high.
+- **Next**: the owner's decision — B, or R as the waypoint. Then UC-7 (B as generated laws), UC-8 (SB-1/SB-2 under B),
+  UC-9 (S's scope in Q_U61 + a spec note).

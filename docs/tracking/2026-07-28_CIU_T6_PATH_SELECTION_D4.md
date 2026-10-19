@@ -3516,10 +3516,11 @@ items of the hold-point, ruled before P4a opened:
   **Next free Q-label: U62.**
 
 - <a id="q-u62"></a>**Q_U62 — AN ORDINAL HEAD, THEN A SUB-BLOCK THAT HOLDS THE STAR: DOES
-  Q_U61'S PASS-THROUGH CROSS THE SUB-BLOCK? [⏳ PENDING — posed 2026-10-18 at the
-  [1b-vi verify](#p4e-1b-vi-verify) (finding VS-3); opened with worked examples the same day at the
-  owner's request — "walk through the design space in played out examples". Not a regression: E
-  changed none of these.]**
+  Q_U61'S PASS-THROUGH CROSS THE SUB-BLOCK? [⏳ OWNER LEAN B (slight), 2026-10-19 — "I do think B
+  has a slight lean than the S+ reading." Joint with my lean; under critique ([UC-n](#q-u62-critique)),
+  decision next. Posed 2026-10-18 at the [1b-vi verify](#p4e-1b-vi-verify) (finding VS-3); opened
+  with worked examples the same day at the owner's request — "walk through the design space in
+  played out examples". Not a regression: E changed none of these.]**
 
   **The question in one line.** `ot{0.a^.b*}` splices (S, [Q_U61](#q-u61)); `ot{0.a^.{b*}}` wraps
   (today). Is the wrap the rule (B), or a gap S should close (S+)?
@@ -3681,6 +3682,55 @@ items of the hold-point, ruled before P4a opened:
   - **SB-3 — `vhm{0.{0*}}` reports "`*` is postfix; it attaches to the END of a segment"** (ae:66),
     though the star does end segment `0`. [Q_U46](#q-u46)'s gap 1 made a star after an ordinal a
     GUIDED error naming the reason (an ordinal makes no layer); this spelling misses it. Pre-existing.
+
+  <a id="q-u62-critique"></a>**Critique of the joint lean B (UC-n), 2026-10-19** — the owner's slight
+  lean agrees with mine, so the stance is now joint and gets its own critique (standing process).
+  - **UC-1 (for B, measured) — B has an UNCONDITIONAL compositional law.**
+    `x{0.P.{X}}` ≡ the element's key-head reading `y{P.{X}}`, WRAPPED (value in `@[…]`, type in `⟨…⟩`).
+    research/P4e-1b-vi/probe-1bvi-af (generated, 102 pairs at `0e562181`): six families (`*`, `*-`,
+    `*_`, `*-_`, `^-`, `^-_`) × 15 leaf positions and kept/dissolved ancestor assignments over
+    `t5`/`ot`, plus vector contents over `v3`/`ov3` — the law holds on **98 / 98** comparable pairs;
+    the other 4 are refused identically on both sides (`*_` over vector contents). Negative control:
+    for a STEP CHAIN the wrapped law fails where S passes (`ot{0.a^.b*}` → `{:c …}`, ae:10), so the
+    comparison discriminates. Under S+ (derived from S's table, not measured) the same 98 split in
+    two: the 26 whose `P` dissolves every ancestor (or is empty) would read UNwrapped, the other 72
+    wrapped — a two-case law whose case depends on `P` and on `X`'s family together.
+  - **UC-2 (for B, the spec's stated rationale — argument, not measurement).** Spec §3.3 grounds
+    honest nesting in "uniformity, the fusion law, and forward-compatibility with first-class
+    selectors, where branch count becomes runtime-known"; §7.5 (OUTLOOK, load-bearing) repeats it.
+    Under B, `0.{S}` needs only `S`'s RESULT (a record or a tuple, then wrapped): compositional in the
+    selector. Under S+ it needs an intensional property of `S` — whether every branch passes its
+    landing through — so a first-class selector's type would have to carry that property for the
+    parent level's sort to stay static. Not impossible; a cost S+ adds to §7.5.
+  - **UC-3 (against B) — the silent surprise.** Someone who learned S as "a star escapes an ordinal"
+    writes `ot{0.a^.{b*}}` and gets `@[{:c …}]`; B has nothing to refuse, so no message helps. A
+    warning on a legal program is not proposed. Mitigation: the acceptance file shows `0.{…}` as
+    "element N as one component" beside the escaping spellings.
+  - **UC-4 (against B) — statement debt.** Q_U61's S has to carry its scope ("a star in the ordinal
+    branch's OWN step chain"), and the spec states neither S nor its scope yet — a departure to record
+    (a proposal; the spec is a guide reviewed per slice).
+  - **UC-5 — the monotone-migration hedge, R.** A refusal shipped today can become a meaning later
+    without breaking a program; a meaning cannot. With the owner's confidence "slight", that argues
+    for R as a waypoint. Weighed: R refuses ae:42 and ae:67 now — the per-element records, and
+    SB-1's remedy under B with them — while the risk it hedges (wanting S+ later) has no demand
+    evidence (census 0 under both readings). R fits uncertainty about the DIRECTION; B fits
+    uncertainty about the MARGIN.
+  - **UC-6 (my own claims, re-checked).** "B ⊇ S+": S+ fires only when every sub-branch passes, so
+    the unfactored step chains always exist, recursively for nested sub-blocks — still an argument
+    over the operators. "No S+ spelling for ae:67": searched `{N M}:` (one shape only), `^` (one
+    field per element), a key-naming branch (adds a key) and a block over `{0 1}`'s tuple (the same
+    question one level down); none inside the selection algebra. "B is what the rules say": Q_U49's
+    "enclosing level" re-read, quoted above.
+  **My lean after the critique: B, firmed from medium-high to high** — UC-1 turns "B is coherent" into
+  a measured unconditional law, and UC-2 is the spec's own load-bearing reason; UC-3 and UC-4 are
+  documentation costs, not incoherence. B over R, because R's cost is concrete and its hedge has no
+  demand behind it.
+  **Left open by B (PENDING, non-blocking; done after the decision):**
+  - **UC-7** pin B as generated laws — UC-1's grid as `wrapped` rows in the stage table;
+  - **UC-8** SB-1 and SB-2 under B — the remedy "group each element's branches in one sub-block after
+    its ordinal" (ae:42, ae:67, ae:36), offered only where every branch is ordinal-headed and the
+    grouping is spellable (a rest that already opens with a sub-block cannot be grouped — to measure);
+  - **UC-9** restate S's scope in [Q_U61](#q-u61)'s entry and propose the spec note (UC-4).
 
 - <a id="q-u43"></a>**⭐ Q_U43 — THE L4 SORT CHECK MOVES TO TYPING FOR STAR-BEARING
   BRANCHES, AS [Q_U38](#q-u38)'s COROLLARY [owner, 2026-08-11 — "move the sort
