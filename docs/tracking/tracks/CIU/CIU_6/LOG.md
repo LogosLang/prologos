@@ -510,5 +510,5 @@ are in [`../README.md`](../README.md).
 - **Self-correction**: `'cross` was first written as "more than one ordinal", which would offer a grouping
   that still collides (`fleet{0.meta^.id* 0.meta^.id* 1.meta^.id*}`). Tightened before the commit and
   pinned (SB1-c1b, F3).
-- **Next**: the DEFERRED 115 addendum (DC-2) and the SB-3 / SB-4 filing on main; then the 1b-vi close
-  (the `pre` column and `1bvi-stage` scaffolding retire), then P4e-2.
+- **Filed on main `e751736c`**: the DEFERRED 115 addendum (DC-2, L★'s side condition) and DEFERRED 185 (SB-3 + SB-4).
+- **Next**: the 1b-vi close (the `pre` column and `1bvi-stage` scaffolding retire), then P4e-2.

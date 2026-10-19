@@ -3702,6 +3702,7 @@ items of the hold-point, ruled before P4a opened:
   - **SB-3 — `vhm{0.{0*}}` reports "`*` is postfix; it attaches to the END of a segment"** (ae:66),
     though the star does end segment `0`. [Q_U46](#q-u46)'s gap 1 made a star after an ordinal a
     GUIDED error naming the reason (an ordinal makes no layer); this spelling misses it. Pre-existing.
+    Filed with SB-4 as [DEFERRED 185](DEFERRED.md) (2026-10-19).
 
   <a id="q-u62-critique"></a>**Critique of the joint lean B (UC-n), 2026-10-19** — the owner's slight
   lean agrees with mine, so the stance is now joint and gets its own critique (standing process).
@@ -3839,7 +3840,7 @@ items of the hold-point, ruled before P4a opened:
     readings be written, and what a star-moving rewrite must respect. Consequence: L★ as a REWRITE (P5's
     normal forms; messages printing a factored spelling) needs a side condition — not across an
     ordinal head's braces when every ancestor between them dissolves. Filed as an addendum to
-    DEFERRED 115 (L2's star side condition; P5 owns both).
+    [DEFERRED 115](DEFERRED.md) (L2's star side condition; P5 owns both; main `e751736c`).
   - **DC-3 — composition, for B (measured instances).** B adds an equivalence between ordinal sub-blocks and
     broadcast, `x{N.{X} M.{X}}` ≡ `x{N M}:{X}`: `@[{:k 1} {:k 2}]` both, ah:13/14; `@[{:n 1} {:n 2}]`
     both, ah:15/16; and 26 / 26 single-element shapes (probe-1bvi-ag). Under S+ it fails. It gives P5's
@@ -10042,7 +10043,7 @@ scaffolding for the slicing, not a permanent mechanism.
 | **1b-vi-E** ✅ `a41f8362` | [Q_U61](#q-u61)'s S ([design, findings, VAG](#p4e-1b-vi-e)): an ordinal head passes a keyless star landing through at every depth — one predicate (`select-steps-yield-bare-join?` + `select-step-names-no-key?`), one arm per twin subsuming D-2a's arm and seat B's splice (deleted); the dup refusal names S's cost and the tuple spelling (`select-fail` field `ordinal`). 187 rows; 694 / 694; acceptance 112 / 112. Mutations: names 52, typing 11, reduction 9, ordinal 2 | ✅ |
 | **verify** ✅ `0988a4f0` | [adversarial round, adjudicated](#p4e-1b-vi-verify): 4 lenses at `64368197`, 36 raw → 34 survive, 2 killed. 3 BLOCKING fixed — VF-1 a whole-file abort (ω ancestor of a total collapse; parser refusal, 167's waypoint), VF-2 a twin value/type split (reduction's `asort`), VF-3 the ordinal-level prose (E's sentence among it); VF-4/VF-5 + 9 more fixed; 2 filed (179, 180) + addenda to 167/168; Q_U62 posed. Stage V: 250 rows (106 hand, 144 law); 695 / 695; acceptance 112 / 112; 10 mutations red | ✅ |
 | **gate** ✅ `83fe4fb4` | main merged in clean (`9d0dea51`; one shared file, main's 3 hunks exactly); full suite at `9d0dea51`: **10 426 / 502 files, all pass**, reconciled file by file against main's 10 394 (+8 `test-path-selection`, +24 `-acceptance` — exactly the branch's two test files); **checkpoint merge to main `83fe4fb4`**, its tree byte-identical to the gated tree; clean merge tree 697 / 697 + acceptance 112 / 112. NEXT: [Q_U62](#q-u62) (pending), then the 1b-vi close (the `pre` column and `1bvi-stage` retire, above) | ✅ |
-| **F** ✅ `3fcb720a` | [Q_U62 = B pinned; SB-1 / SB-2 under B](#p4e-1b-vi-f): B made a contract (50 `sub-block` laws + 12 hand rows); the dup refusal stops offering `^` where an element heads several branches (it kept the BRANCHES apart, a 4-tuple) and offers grouping where it resolves; the all-ordinal L4 offers grouping where spellable; S's scope stated in Q_U61; acceptance M18. Every remedy run per family (probe-1bvi-ai). SB-4 found (pre-existing, filed with SB-3). | battery + acceptance **701 / 701**; `run-file --check` 116 / 116; mutations F1–F7 each red on their own rows (F6 / F7, S+ at either twin seat: 64 / 63) |
+| **F** ✅ `3fcb720a` | [Q_U62 = B pinned; SB-1 / SB-2 under B](#p4e-1b-vi-f): B made a contract (50 `sub-block` laws + 12 hand rows); the dup refusal stops offering `^` where an element heads several branches (it kept the BRANCHES apart, a 4-tuple) and offers grouping where it resolves; the all-ordinal L4 offers grouping where spellable; S's scope stated in Q_U61; acceptance M18. Every remedy run per family (probe-1bvi-ai). SB-4 found (pre-existing; filed with SB-3 as DEFERRED 185, main `e751736c`). | battery + acceptance **701 / 701**; `run-file --check` 116 / 116; mutations F1–F7 each red on their own rows (F6 / F7, S+ at either twin seat: 64 / 63) |
 
 Per-phase completion, in order (DESIGN_METHODOLOGY Stage 4): tests → commit → this tracker
 → the track LOG (dailies: a pointer) → proceed.
@@ -10641,7 +10642,7 @@ offers two remedies, and neither can be spelled there: "keep a key before each s
 has no key) and "end the branch with `^`" (`vhm{0.{0}^ 0.{0}}` is a parse error, ai:32). The working
 remedy is dropping the star, `vhm{0.{0} 0.{0}}` (the shape of ai:19), or the own-block route. It
 came from VF-3's arm in `0988a4f0`, and it is the same class as SB-3: key- and postfix-shaped advice
-on paths made only of ordinals.
+on paths made only of ordinals. Filed as [DEFERRED 185](DEFERRED.md) (on main, `e751736c`).
 
 **Mutations F1–F7** (`mutate-F.sh`; each file restored under checksum) — each red on its own rows:
 
