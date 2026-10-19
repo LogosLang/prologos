@@ -1,0 +1,2 @@
+C9-CENSUS file=/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3/C9/c3-naf-nested.prologos rounds=2 fires=2 productive_fires=0 writes=0 distinct_cells_written=0
+  nested S0: rounds observed with >=2 run-to-quiescence-bsp frames on the stack = 0 of 2 (max depth 1); forks = 0

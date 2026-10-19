@@ -1,0 +1,99 @@
+PERF-COUNTERS:{"cell_allocs":4079,"constraint_count":0,"constraint_retries":0,"elaborate_steps":730,"inert_dependent_skips":0,"infer_steps":1200,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":829,"resolution_cycles":0,"solver_backtracks":22,"solver_col_compares":217,"solver_row_scans":192,"solver_unifies":193,"trait_resolve_steps":0,"unify_steps":98,"zonk_steps":922}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":3,"qtt_ms":0,"reduce_ms":2,"trait_resolve_ms":0,"type_check_ms":3,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: @[{:x 42}] : _
+1: @[{:x "hello"}] : _
+2: @[{:a b, :b b}] : _
+3: @[] : _
+4: @[{:v 99}] : _
+5: @[{:x 42}] : _
+6: @[] : _
+7: @[] : _
+8: @[] : _
+9: @[{:n 0N}] : _
+10: @[{:n 5N}] : _
+11: @[] : _
+12: @[] : _
+13: color : _ defined.
+14: @[{:hex "#FF0000"}] : [PVec {:hex String}]
+15: @[{:hex "#A52A2A"}] : [PVec {:hex String}]
+16: @[{:name "red", :hex "#FF0000"} {:name "green", :hex "#00FF00"} {:name "blue", :hex "#0000FF"} {:name "yellow", :hex "#FFFF00"} {:name "cyan", :hex "#00FFFF"} {:name "magenta", :hex "#FF00FF"} {:name "white", :hex "#FFFFFF"} {:name "black", :hex "#000000"} {:name "orange", :hex "#FFA500"} {:name "purple", :hex "#800080"} {:name "pink", :hex "#FFC0CB"} {:name "brown", :hex "#A52A2A"}] : [PVec {:hex String :name String}]
+17: @[{:r 255, :g 255, :b 255}] : [PVec {:b Int :g Int :r Int}]
+18: @[{:r 0, :g 128, :b 255}] : [PVec {:b Int :g Int :r Int}]
+19: @[{:a 1, :b 2, :c 3, :d 4, :e 5}] : [PVec {:a Int :b Int :c Int :d Int :e Int}]
+20: @[{:a "a", :b "b", :c "c", :d "d", :e "e", :f "f", :g "g", :h "h"}] : [PVec {:a String :b String :c String :d String :e String :f String :g String :h String}]
+21: @[{:x 30}] : _
+22: @[{:y 42}] : _
+23: @[{:a2 9, :b2 16, :sum 25}] : [PVec {:a2 Int :b2 Int :sum Int}]
+24: @[{:v1 3, :v2 9, :v3 19, :v4 38}] : [PVec {:v1 Int :v2 Int :v3 Int :v4 Int}]
+25: @[{:x 42}] : _
+26: @[] : _
+27: @[{:none none}] : _
+28: @[] : _
+29: @[] : _
+30: @[{:a 1}] : _
+31: @[{:b 2}] : _
+32: @[{:c 3}] : _
+33: @[{:d 4}] : _
+34: @[{:e 5}] : _
+35: @[{:f 6}] : _
+36: @[{:g 7}] : _
+37: @[{:h 8}] : _
+38: @[{:i 9}] : _
+39: @[{:j 10}] : _
+40: @[{:k 11}] : _
+41: @[{:l 12}] : _
+42: @[{:m 13}] : _
+43: @[{:n 14}] : _
+44: @[{:o 15}] : _
+45: @[{:p 16}] : _
+46: @[{:q 17}] : _
+47: @[{:r 18}] : _
+48: @[{:s 19}] : _
+49: @[{:t 20}] : _
+50: flip-bool : Bool -> Bool defined.
+51: ERROR: Unbound variable
+52: ERROR: Unbound variable
+53: ERROR: Unbound variable
+54: ERROR: Unbound variable
+55: {:hex "#FF0000"} : {:hex String}
+56: {:name "red", :hex "#FF0000"} : {:hex String :name String}
+57: none : _
+58: {:x 42} : _
+59: @[{:x 42, :y 42, :z 42}] : [PVec {:x Int :y Int :z Int}]
+60: @[{:a [pair ?b ?c], :b [some 99], :c c_g2095, :d 99}] : [PVec {:a _ :b _ :c _ :d Int}]
+61: @[] : [PVec {:w _ :x _ :y _ :z _}]
+62: @[{:h1 "#FF0000"}] : [PVec {:h1 String}]
+63: @[{:h2 "#0000FF"}] : [PVec {:h2 String}]
+64: @[{:h3 "#00FF00"}] : [PVec {:h3 String}]
+65: @[{:h4 "#FFFF00"}] : [PVec {:h4 String}]
+66: @[{:h5 "#00FFFF"}] : [PVec {:h5 String}]
+67: @[{:h6 "#FF00FF"}] : [PVec {:h6 String}]
+68: @[{:h7 "#FFFFFF"}] : [PVec {:h7 String}]
+69: @[{:h8 "#000000"}] : [PVec {:h8 String}]
+70: @[{:h9 "#FFA500"}] : [PVec {:h9 String}]
+71: @[{:h10 "#800080"}] : [PVec {:h10 String}]
+72: compute-sum : _ defined.
+73: compute-prod : _ defined.
+74: @[{:result 7}] : [PVec {:result Int}]
+75: @[{:result 42}] : [PVec {:result Int}]
+76: compute-both : _ defined.
+77: @[{:sum 8, :prod 15}] : [PVec {:prod Int :sum Int}]
+78: safe-double : _ defined.
+79: @[{:result 10}] : [PVec {:result Int}]
+80: positive-double : _ defined.
+81: @[{:result 14}] : [PVec {:result Int}]
+82: five-computations : _ defined.
+83: @[{:r1 11, :r2 12, :r3 13, :r4 14, :r5 15}] : [PVec {:r1 Int :r2 Int :r3 Int :r4 Int :r5 Int}]
+84: pair-builder : _ defined.
+85: @[{:result [pair ?x ?y]}] : [PVec {:result _}]
+86: add-ten : _ defined.
+87: add-twenty : _ defined.
+88: @[{:result 25}] : [PVec {:result Int}]
+89: @[{:x 3, :y 4, :z 7, :sum 14, :prod 12, :label "computed"}] : [PVec {:label String :prod Int :sum Int :x Int :y Int :z Int}]
+90: @[{:inner 30, :outer [pair ?inner (some ?inner)]}] : [PVec {:inner Int :outer _}]
+91: @[{:src 42, :a 42, :b 42, :c 42, :d 42, :e 42}] : [PVec {:a Int :b Int :c Int :d Int :e Int :src Int}]
+
+--- 4 errors ---
+W24 {"exec":"prod","exec_fires":77,"exec_rounds":77,"file":"solve-adversarial.prologos","nonfix_examples":"()","strat":"auto","wall_ms":184.0}

@@ -1,0 +1,13 @@
+PERF-COUNTERS:{"cell_allocs":281,"constraint_count":0,"constraint_retries":0,"elaborate_steps":98,"inert_dependent_skips":0,"infer_steps":86,"meta_created":31,"meta_solved":17,"prop_allocs":0,"prop_firings":0,"reduce_steps":1990,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":33,"zonk_steps":247}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":0,"qtt_ms":0,"reduce_ms":3,"trait_resolve_ms":0,"type_check_ms":11,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":2,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":40,"propagators":3}
+0: suc-all : [prologos::data::list::List Nat] -> [prologos::data::list::List Nat] defined.
+1: '[2N 3N] : [prologos::data::list::List Nat]
+2: '[2N 3N 4N 5N 6N] : [prologos::data::list::List Nat]
+3: 20N : Nat
+4: factorial : Nat -> Nat defined.
+5: 24N : Nat
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":291,"exec_rounds":33,"exec_wide_rounds":9,"file":"foray-min.prologos","perf_fields_worker":"(reduce-steps)","perf_incs_in_exec_main":79,"perf_incs_in_exec_worker":19,"race_rounds_any_worker_set":0,"race_rounds_multi_worker_set":0,"race_unbox_main_prop-net-box":71,"race_unbox_main_registry-net-box":16,"race_unbox_worker_prop-net-box":12,"race_unbox_worker_registry-net-box":16,"strat":"auto","wall_ms":185.0}

@@ -1,0 +1,111 @@
+2026-03-14-wfle-acceptance.fresh STATS2 leg=fresh rounds=58 fires=62 control-divergent=0 thread-divergent=0 reentrant=0
+2026-03-14-wfle-acceptance.persist STATS2 leg=persist rounds=58 fires=62 control-divergent=0 thread-divergent=0 reentrant=0
+2026-03-14-wfle-acceptance.persistcap STATS2 leg=persistcap rounds=58 fires=62 control-divergent=0 thread-divergent=0 reentrant=0
+2026-03-19-punify-acceptance.fresh STATS2 leg=fresh rounds=95 fires=187 control-divergent=0 thread-divergent=0 reentrant=0
+2026-03-19-punify-acceptance.persist STATS2 leg=persist rounds=95 fires=187 control-divergent=0 thread-divergent=2 reentrant=0
+DIVFN ...ing-propagators.rkt:861:2 count=2 example: first-diff path=("struct:fire-result.1" car cdr #(struct:expr-meta meta2214 #f) :constraints) main=#(struct:constraint-set #<set: #(struct:constraint-candidate Seqable (List) List--Seqable--dict) #(struct:constraint-candidate Seqable (LSeq) LSeq--Seqable--dic… executor=constraint-top
+2026-03-19-punify-acceptance.persistcap STATS2 leg=persistcap rounds=95 fires=187 control-divergent=0 thread-divergent=2 reentrant=0
+DIVFN ...ing-propagators.rkt:861:2 count=2 example: first-diff path=("struct:fire-result.1" car cdr #(struct:expr-meta meta2214 #f) :constraints) main=#(struct:constraint-set #<set: #(struct:constraint-candidate Seqable (List) List--Seqable--dict) #(struct:constraint-candidate Seqable (LSeq) LSeq--Seqable--dic… executor=constraint-top
+2026-03-21-track8-acceptance.fresh STATS2 leg=fresh rounds=31 fires=147 control-divergent=0 thread-divergent=0 reentrant=0
+2026-03-21-track8-acceptance.persist STATS2 leg=persist rounds=31 fires=147 control-divergent=0 thread-divergent=2 reentrant=0
+DIVFN ...ing-propagators.rkt:861:2 count=2 example: first-diff path=("struct:fire-result.1" car cdr #(struct:expr-meta meta1945 #f) :constraints) main=#(struct:constraint-set #<set: #(struct:constraint-candidate Seqable (List) List--Seqable--dict) #(struct:constraint-candidate Seqable (LSeq) LSeq--Seqable--dic… executor=constraint-top
+2026-03-21-track8-acceptance.persistcap STATS2 leg=persistcap rounds=31 fires=147 control-divergent=0 thread-divergent=2 reentrant=0
+DIVFN ...ing-propagators.rkt:861:2 count=2 example: first-diff path=("struct:fire-result.1" car cdr #(struct:expr-meta meta1945 #f) :constraints) main=#(struct:constraint-set #<set: #(struct:constraint-candidate Seqable (List) List--Seqable--dict) #(struct:constraint-candidate Seqable (LSeq) LSeq--Seqable--dic… executor=constraint-top
+2026-03-28-sudoku-demo.fresh STATS2 leg=fresh rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0
+2026-03-28-sudoku-demo.persist STATS2 leg=persist rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0
+2026-03-28-sudoku-demo.persistcap STATS2 leg=persistcap rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0
+2026-04-08-bsp-le-track2.fresh STATS2 leg=fresh rounds=27 fires=27 control-divergent=0 thread-divergent=0 reentrant=0
+2026-04-08-bsp-le-track2.persist STATS2 leg=persist rounds=27 fires=27 control-divergent=0 thread-divergent=0 reentrant=0
+2026-04-08-bsp-le-track2.persistcap STATS2 leg=persistcap rounds=27 fires=27 control-divergent=0 thread-divergent=0 reentrant=0
+2026-04-17-ppn-track4c-adversarial.fresh STATS2 leg=fresh rounds=21 fires=99 control-divergent=0 thread-divergent=0 reentrant=0
+2026-04-17-ppn-track4c-adversarial.persist STATS2 leg=persist rounds=21 fires=99 control-divergent=0 thread-divergent=1 reentrant=0
+DIVFN ...ing-propagators.rkt:861:2 count=1 example: first-diff path=("struct:fire-result.1" car cdr #(struct:expr-meta meta1875 #f) :constraints) main=#(struct:constraint-set #<set: #(struct:constraint-candidate Seqable (List) List--Seqable--dict) #(struct:constraint-candidate Seqable (LSeq) LSeq--Seqable--dic… executor=constraint-top
+2026-04-17-ppn-track4c-adversarial.persistcap STATS2 leg=persistcap rounds=21 fires=99 control-divergent=0 thread-divergent=1 reentrant=0
+DIVFN ...ing-propagators.rkt:861:2 count=1 example: first-diff path=("struct:fire-result.1" car cdr #(struct:expr-meta meta1875 #f) :constraints) main=#(struct:constraint-set #<set: #(struct:constraint-candidate Seqable (List) List--Seqable--dict) #(struct:constraint-candidate Seqable (LSeq) LSeq--Seqable--dic… executor=constraint-top
+2026-05-08-propagator-demo.fresh STATS2 leg=fresh rounds=2 fires=2 control-divergent=0 thread-divergent=0 reentrant=0
+2026-05-08-propagator-demo.persist STATS2 leg=persist rounds=2 fires=2 control-divergent=0 thread-divergent=0 reentrant=0
+2026-05-08-propagator-demo.persistcap STATS2 leg=persistcap rounds=2 fires=2 control-divergent=0 thread-divergent=0 reentrant=0
+2026-07-31-solve-carrier.fresh STATS2 leg=fresh rounds=59 fires=290 control-divergent=0 thread-divergent=0 reentrant=0
+2026-07-31-solve-carrier.persist STATS2 leg=persist rounds=59 fires=290 control-divergent=0 thread-divergent=5 reentrant=0
+DIVFN ...ing-propagators.rkt:861:2 count=5 example: first-diff path=("struct:fire-result.1" car cdr #(struct:expr-meta meta1934 #f) :constraints) main=#(struct:constraint-set #<set: #(struct:constraint-candidate Buildable (List) List--Buildable--dict) #(struct:constraint-candidate Buildable (LSeq) LSeq--Builda… executor=constraint-top
+2026-07-31-solve-carrier.persistcap STATS2 leg=persistcap rounds=59 fires=290 control-divergent=0 thread-divergent=5 reentrant=0
+DIVFN ...ing-propagators.rkt:861:2 count=5 example: first-diff path=("struct:fire-result.1" car cdr #(struct:expr-meta meta1934 #f) :constraints) main=#(struct:constraint-set #<set: #(struct:constraint-candidate Buildable (List) List--Buildable--dict) #(struct:constraint-candidate Buildable (LSeq) LSeq--Builda… executor=constraint-top
+atms-adversarial.fresh STATS2 leg=fresh rounds=111 fires=134 control-divergent=0 thread-divergent=0 reentrant=0
+atms-adversarial.persist STATS2 leg=persist rounds=111 fires=134 control-divergent=0 thread-divergent=0 reentrant=0
+atms-adversarial.persistcap STATS2 leg=persistcap rounds=111 fires=134 control-divergent=0 thread-divergent=0 reentrant=0
+bool-logic.fresh STATS2 leg=fresh rounds=14 fires=78 control-divergent=0 thread-divergent=0 reentrant=0
+bool-logic.persist STATS2 leg=persist rounds=14 fires=78 control-divergent=0 thread-divergent=0 reentrant=0
+bool-logic.persistcap STATS2 leg=persistcap rounds=14 fires=78 control-divergent=0 thread-divergent=0 reentrant=0
+c1-overwrite.fresh STATS2 leg=fresh rounds=9 fires=19 control-divergent=0 thread-divergent=0 reentrant=0
+c1-overwrite.persist STATS2 leg=persist rounds=9 fires=19 control-divergent=0 thread-divergent=0 reentrant=0
+c1-overwrite.persistcap STATS2 leg=persistcap rounds=9 fires=19 control-divergent=0 thread-divergent=0 reentrant=0
+c2-naf.fresh STATS2 leg=fresh rounds=9 fires=34 control-divergent=0 thread-divergent=0 reentrant=0
+c2-naf.persist STATS2 leg=persist rounds=9 fires=34 control-divergent=0 thread-divergent=0 reentrant=0
+c2-naf.persistcap STATS2 leg=persistcap rounds=9 fires=34 control-divergent=0 thread-divergent=0 reentrant=0
+c3-naf-nested.fresh STATS2 leg=fresh rounds=2 fires=2 control-divergent=0 thread-divergent=0 reentrant=0
+c3-naf-nested.persist STATS2 leg=persist rounds=2 fires=2 control-divergent=0 thread-divergent=0 reentrant=0
+c3-naf-nested.persistcap STATS2 leg=persistcap rounds=2 fires=2 control-divergent=0 thread-divergent=0 reentrant=0
+c4-varvar.fresh STATS2 leg=fresh rounds=6 fires=12 control-divergent=0 thread-divergent=0 reentrant=0
+c4-varvar.persist STATS2 leg=persist rounds=6 fires=12 control-divergent=0 thread-divergent=0 reentrant=0
+c4-varvar.persistcap STATS2 leg=persistcap rounds=6 fires=12 control-divergent=0 thread-divergent=0 reentrant=0
+church-folds.fresh STATS2 leg=fresh rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0
+church-folds.persist STATS2 leg=persist rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0
+church-folds.persistcap STATS2 leg=persistcap rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0
+constraints-adversarial.fresh STATS2 leg=fresh rounds=212 fires=1142 control-divergent=0 thread-divergent=0 reentrant=0
+constraints-adversarial.persist STATS2 leg=persist rounds=212 fires=1142 control-divergent=0 thread-divergent=4 reentrant=0
+DIVFN ...ing-propagators.rkt:861:2 count=4 example: first-diff path=("struct:fire-result.1" car cdr #(struct:expr-meta meta2333 #f) :constraints) main=#(struct:constraint-set #<set: #(struct:constraint-candidate Eq (Bool) Bool--Eq--dict) #(struct:constraint-candidate Eq (Posit16) Posit16--Eq--dict) #(struct:co… executor=constraint-top
+constraints-adversarial.persistcap STATS2 leg=persistcap rounds=212 fires=1142 control-divergent=0 thread-divergent=4 reentrant=0
+DIVFN ...ing-propagators.rkt:861:2 count=4 example: first-diff path=("struct:fire-result.1" car cdr #(struct:expr-meta meta2333 #f) :constraints) main=#(struct:constraint-set #<set: #(struct:constraint-candidate Eq (Bool) Bool--Eq--dict) #(struct:constraint-candidate Eq (Posit16) Posit16--Eq--dict) #(struct:co… executor=constraint-top
+dependent-types.fresh STATS2 leg=fresh rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0
+dependent-types.persist STATS2 leg=persist rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0
+dependent-types.persistcap STATS2 leg=persistcap rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0
+higher-order.fresh STATS2 leg=fresh rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0
+higher-order.persist STATS2 leg=persist rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0
+higher-order.persistcap STATS2 leg=persistcap rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0
+implicit-args.fresh STATS2 leg=fresh rounds=29 fires=150 control-divergent=0 thread-divergent=0 reentrant=0
+implicit-args.persist STATS2 leg=persist rounds=29 fires=150 control-divergent=0 thread-divergent=0 reentrant=0
+implicit-args.persistcap STATS2 leg=persistcap rounds=29 fires=150 control-divergent=0 thread-divergent=0 reentrant=0
+narrowing-demo.fresh STATS2 leg=fresh rounds=3 fires=7 control-divergent=0 thread-divergent=0 reentrant=0
+narrowing-demo.persist STATS2 leg=persist rounds=3 fires=7 control-divergent=0 thread-divergent=0 reentrant=0
+narrowing-demo.persistcap STATS2 leg=persistcap rounds=3 fires=7 control-divergent=0 thread-divergent=0 reentrant=0
+nat-arithmetic.fresh STATS2 leg=fresh rounds=10 fires=50 control-divergent=0 thread-divergent=0 reentrant=0
+nat-arithmetic.persist STATS2 leg=persist rounds=10 fires=50 control-divergent=0 thread-divergent=0 reentrant=0
+nat-arithmetic.persistcap STATS2 leg=persistcap rounds=10 fires=50 control-divergent=0 thread-divergent=0 reentrant=0
+pairs-sigma.fresh STATS2 leg=fresh rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0
+pairs-sigma.persist STATS2 leg=persist rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0
+pairs-sigma.persistcap STATS2 leg=persistcap rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0
+parity-adversarial.fresh STATS2 leg=fresh rounds=26 fires=62 control-divergent=0 thread-divergent=0 reentrant=0
+parity-adversarial.persist STATS2 leg=persist rounds=26 fires=62 control-divergent=0 thread-divergent=0 reentrant=0
+parity-adversarial.persistcap STATS2 leg=persistcap rounds=26 fires=62 control-divergent=0 thread-divergent=0 reentrant=0
+pattern-matching.fresh STATS2 leg=fresh rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0
+pattern-matching.persist STATS2 leg=persist rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0
+pattern-matching.persistcap STATS2 leg=persistcap rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0
+records-seal-validate.fresh STATS2 leg=fresh rounds=21 fires=52 control-divergent=0 thread-divergent=0 reentrant=0
+records-seal-validate.persist STATS2 leg=persist rounds=21 fires=52 control-divergent=0 thread-divergent=0 reentrant=0
+records-seal-validate.persistcap STATS2 leg=persistcap rounds=21 fires=52 control-divergent=0 thread-divergent=0 reentrant=0
+records-typing.fresh STATS2 leg=fresh rounds=10 fires=10 control-divergent=0 thread-divergent=0 reentrant=0
+records-typing.persist STATS2 leg=persist rounds=10 fires=10 control-divergent=0 thread-divergent=0 reentrant=0
+records-typing.persistcap STATS2 leg=persistcap rounds=10 fires=10 control-divergent=0 thread-divergent=0 reentrant=0
+recursive-types.fresh STATS2 leg=fresh rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0
+recursive-types.persist STATS2 leg=persist rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0
+recursive-types.persistcap STATS2 leg=persistcap rounds=0 fires=0 control-divergent=0 thread-divergent=0 reentrant=0
+relational-demo.fresh STATS2 leg=fresh rounds=10 fires=10 control-divergent=0 thread-divergent=0 reentrant=0
+relational-demo.persist STATS2 leg=persist rounds=10 fires=10 control-divergent=0 thread-divergent=0 reentrant=0
+relational-demo.persistcap STATS2 leg=persistcap rounds=10 fires=10 control-divergent=0 thread-divergent=0 reentrant=0
+scheduler-adversarial.fresh STATS2 leg=fresh rounds=8 fires=61 control-divergent=0 thread-divergent=0 reentrant=0
+scheduler-adversarial.persist STATS2 leg=persist rounds=8 fires=61 control-divergent=0 thread-divergent=0 reentrant=0
+scheduler-adversarial.persistcap STATS2 leg=persistcap rounds=8 fires=61 control-divergent=0 thread-divergent=0 reentrant=0
+simple-typed.fresh STATS2 leg=fresh rounds=2 fires=7 control-divergent=0 thread-divergent=0 reentrant=0
+simple-typed.persist STATS2 leg=persist rounds=2 fires=7 control-divergent=0 thread-divergent=0 reentrant=0
+simple-typed.persistcap STATS2 leg=persistcap rounds=2 fires=7 control-divergent=0 thread-divergent=0 reentrant=0
+solve-adversarial.fresh STATS2 leg=fresh rounds=77 fires=77 control-divergent=0 thread-divergent=0 reentrant=0
+solve-adversarial.persist STATS2 leg=persist rounds=77 fires=77 control-divergent=0 thread-divergent=0 reentrant=0
+solve-adversarial.persistcap STATS2 leg=persistcap rounds=77 fires=77 control-divergent=0 thread-divergent=0 reentrant=0
+solve-scale.fresh STATS2 leg=fresh rounds=6 fires=6 control-divergent=0 thread-divergent=0 reentrant=0
+solve-scale.persist STATS2 leg=persist rounds=6 fires=6 control-divergent=0 thread-divergent=0 reentrant=0
+solve-scale.persistcap STATS2 leg=persistcap rounds=6 fires=6 control-divergent=0 thread-divergent=0 reentrant=0
+type-adversarial.fresh STATS2 leg=fresh rounds=182 fires=1112 control-divergent=0 thread-divergent=0 reentrant=0
+type-adversarial.persist STATS2 leg=persist rounds=182 fires=1112 control-divergent=0 thread-divergent=15 reentrant=0
+DIVFN ...ing-propagators.rkt:861:2 count=15 example: first-diff path=("struct:fire-result.1" car cdr #(struct:expr-meta meta2153 #f) :constraints) main=#(struct:constraint-set #<set: #(struct:constraint-candidate Eq (Bool) Bool--Eq--dict) #(struct:constraint-candidate Eq (Posit16) Posit16--Eq--dict) #(struct:co… executor=constraint-top
+type-adversarial.persistcap STATS2 leg=persistcap rounds=182 fires=1112 control-divergent=0 thread-divergent=15 reentrant=0
+DIVFN ...ing-propagators.rkt:861:2 count=15 example: first-diff path=("struct:fire-result.1" car cdr #(struct:expr-meta meta2153 #f) :constraints) main=#(struct:constraint-set #<set: #(struct:constraint-candidate Eq (Bool) Bool--Eq--dict) #(struct:constraint-candidate Eq (Posit16) Posit16--Eq--dict) #(struct:co… executor=constraint-top

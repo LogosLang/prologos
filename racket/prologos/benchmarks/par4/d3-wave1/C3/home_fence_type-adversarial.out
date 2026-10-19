@@ -1,0 +1,21 @@
+file /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos
+fires 1112  fenced-fires(any output attribute-map) 930  share 0.8363309352517986
+home histogram (K=8 RR, home = owner of first output): ((1 . 942) (6 . 50) (0 . 40) (7 . 26) (4 . 17) (3 . 15) (2 . 12) (5 . 10))
+max-home share 0.8471223021582733
+first-output merge (top 6): (("attribute-map-merge-fn" . 930) ("meta-solution-merge" . 108) ("resolution-stratum-merge" . 30) ("merge-set-union" . 22) ("...s/decision-cell.rkt:582:2" . 22))
+first-output cell (top 6): (("49:attribute-map-merge-fn" . 930) ("14:resolution-stratum-merge" . 30) ("32:...s/decision-cell.rkt:582:2" . 22) ("39:merge-set-union" . 14) ("70:meta-solution-merge" . 12) ("108:meta-solution-merge" . 7))
+runs with fires 37 (of 37 observed)
+per productive run: (run rounds rounds-with-fenced-fire phase-switches fires fenced-fires)
+  34 8 8 2 123 111
+  55 13 13 5 78 71
+  27 8 8 2 65 58
+  69 8 6 4 62 51
+  30 7 7 2 58 52
+  53 7 7 4 52 48
+  58 7 7 6 51 44
+  16 7 7 2 50 46
+  72 8 6 4 48 40
+  10 5 5 3 47 41
+  32 7 5 3 40 29
+  20 6 4 3 38 31
+totals: rounds 182 rounds-with-fenced 157 phase-switches 69

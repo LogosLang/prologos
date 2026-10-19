@@ -1,0 +1,8 @@
+0: session S defined.
+1: defproc sender : [!Nat . end] type-checked.
+2: strategy tiny defined.
+3: strategy roomy defined.
+4: sender: process : [!Nat . end] executed. Protocol completed.
+5: ERROR: sender process execution failed: protocol violation ([!Nat . end])
+
+--- 1 errors ---

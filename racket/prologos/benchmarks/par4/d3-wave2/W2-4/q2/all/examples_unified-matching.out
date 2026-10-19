@@ -1,0 +1,99 @@
+Hole ??__cond-fail : Int
+Context:
+  x : Int  (w)
+PERF-COUNTERS:{"cell_allocs":3931,"constraint_count":0,"constraint_retries":0,"elaborate_steps":596,"inert_dependent_skips":0,"infer_steps":414,"meta_created":26,"meta_solved":12,"prop_allocs":0,"prop_firings":0,"reduce_steps":5325,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":255,"zonk_steps":807}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":3,"qtt_ms":1,"reduce_ms":5,"trait_resolve_ms":0,"type_check_ms":7,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":21,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: zero? : Nat -> Bool defined.
+1: true : Bool
+2: false : Bool
+3: false : Bool
+4: my-not : Bool -> Bool defined.
+5: false : Bool
+6: true : Bool
+7: is-one : Nat -> Bool defined.
+8: false : Bool
+9: true : Bool
+10: false : Bool
+11: pred2 : Nat -> Nat defined.
+12: 0N : Nat
+13: 0N : Nat
+14: 3N : Nat
+15: is-zero-lit : Nat -> Bool defined.
+16: true : Bool
+17: false : Bool
+18: false : Bool
+19: always-zero : Nat -> Nat defined.
+20: 0N : Nat
+21: 0N : Nat
+22: my-head : [prologos::data::list::List Nat] -> Nat defined.
+23: 1N : Nat
+24: 42N : Nat
+25: unwrap-or-zero : [prologos::data::option::Option Nat] -> Nat defined.
+26: 42N : Nat
+27: 0N : Nat
+28: my-pred : Nat -> Nat defined.
+29: 0N : Nat
+30: 0N : Nat
+31: 4N : Nat
+32: double-pred : Nat -> Nat defined.
+33: 0N : Nat
+34: 0N : Nat
+35: 1N : Nat
+36: 3N : Nat
+37: my-add : Nat Nat -> Nat defined.
+38: 3N : Nat
+39: 5N : Nat
+40: 10N : Nat
+41: my-mult : Nat Nat -> Nat defined.
+42: 0N : Nat
+43: 12N : Nat
+44: 14N : Nat
+45: my-and : Bool Bool -> Bool defined.
+46: true : Bool
+47: false : Bool
+48: false : Bool
+49: classify : Nat -> Nat defined.
+50: 0N : Nat
+51: 1N : Nat
+52: 5N : Nat
+53: safe-head : [prologos::data::list::List Nat] -> Nat defined.
+54: 1N : Nat
+55: 42N : Nat
+56: 0N : Nat
+57: fib : Nat -> Nat defined.
+58: 0N : Nat
+59: 1N : Nat
+60: 1N : Nat
+61: 2N : Nat
+62: 3N : Nat
+63: 5N : Nat
+64: 8N : Nat
+65: 1N : Nat
+66: 3N : Nat
+67: false : Bool
+68: true : Bool
+69: fib-int : Int -> Int defined.
+70: 0 : Int
+71: 1 : Int
+72: 5 : Int
+73: 55 : Int
+74: fact : Int -> Int defined.
+75: 1 : Int
+76: 120 : Int
+77: abs-val : Int -> Int defined.
+78: 5 : Int
+79: 0 : Int
+80: 7 : Int
+81: sign : Int -> Int defined.
+82: -1 : Int
+83: 0 : Int
+84: 1 : Int
+85: classify-cond : Int -> Int defined.
+86: -1 : Int
+87: 0 : Int
+88: 1 : Int
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":204,"exec_rounds":86,"exec_wide_rounds":1,"file":"unified-matching.prologos","perf_fields_worker":"()","perf_incs_in_exec_main":8,"perf_incs_in_exec_worker":0,"race_rounds_any_worker_set":0,"race_rounds_multi_worker_set":0,"race_unbox_main_prop-net-box":4,"race_unbox_main_registry-net-box":8,"strat":"auto","wall_ms":196.0}

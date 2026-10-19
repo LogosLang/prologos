@@ -1,0 +1,34 @@
+ns probes::w27row2
+
+;; W2-7 Q4: fresh row-2 programs (not in C9's set) to validate the lattice model's TODAY column against the real
+;; on-network solver, and its DFS column against the real DFS solver.
+
+solver atms-s
+  :strategy atms
+
+solver dfs-s
+  :strategy depth-first
+
+defr pick [?x]
+  &> (= x 1)
+  &> (= x 2)
+
+;; Q4 two independent choices joined by a var-var unification
+solve-with atms-s (rel [?x ?y] (pick ?x) (pick ?y) (= ?x ?y))
+solve-with dfs-s (rel [?x ?y] (pick ?x) (pick ?y) (= ?x ?y))
+
+;; Q5 a branch binding followed by a base binding
+solve-with atms-s (rel [?x] (pick ?x) (= ?x 1))
+solve-with dfs-s (rel [?x] (pick ?x) (= ?x 1))
+
+;; Q6 a base binding reaching a branch variable through var-var unification
+solve-with atms-s (rel [?x ?y] (pick ?x) (= ?y 2) (= ?x ?y))
+solve-with dfs-s (rel [?x ?y] (pick ?x) (= ?y 2) (= ?x ?y))
+
+;; Q7 binding completeness: the bound side must reach the unbound side
+solve-with atms-s (rel [?x ?y] (= ?y 2) (= ?x ?y))
+solve-with dfs-s (rel [?x ?y] (= ?y 2) (= ?x ?y))
+
+;; Q8 two choices, a base binding, and a var-var link
+solve-with atms-s (rel [?x ?y] (pick ?x) (pick ?y) (= ?x 1) (= ?y ?x))
+solve-with dfs-s (rel [?x ?y] (pick ?x) (pick ?y) (= ?x 1) (= ?y ?x))

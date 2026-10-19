@@ -1,0 +1,10 @@
+reduction: fuel exhausted after too many reduction steps
+  context...:
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/reduction.rkt:2744:0: whnf
+   [repeats 65532 more times]
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/driver.rkt:1599:0: process-command/demand
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/driver.rkt:2827:0: process-file-inner
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/driver.rkt:2823:5
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/tools/run-file.rkt:85:0: run-print
+   /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/tools/run-file.rkt:94:0
+   body of "/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/tools/run-file.rkt"

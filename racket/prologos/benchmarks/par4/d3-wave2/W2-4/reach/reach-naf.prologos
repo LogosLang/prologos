@@ -1,0 +1,40 @@
+ns probes::w24naf
+
+;; W2-4: does `:strategy auto` (the default) route PD-1 shapes to ATMS? A clause carrying a NAF goal
+;; makes `auto` pick the on-network solver (stratified-eval.rkt Check 1), whatever the size.
+
+solver dfs-s
+  :strategy depth-first
+
+defr blocked [?x]
+  || 99
+
+defr tagged [?x ?c]
+  &> (= x 1) (= c 1) (not (blocked x))
+  &> (= x 2) (= c 2) (not (blocked x))
+
+;; Q1 caller binds c = 1: only clause 1 is consistent
+solve (tagged ?x 1)
+solve-with dfs-s (tagged ?x 1)
+
+;; Q2 control: no caller binding
+solve (tagged ?x ?c)
+solve-with dfs-s (tagged ?x ?c)
+
+;; Q3 conflicting bindings in one clause (DEFERRED 177 row 1 shape)
+defr two-naf [?x]
+  &> (= x 1) (= x 2) (not (blocked x))
+solve (two-naf ?x)
+solve-with dfs-s (two-naf ?x)
+
+;; Q4 var-var clash (row 3 shape)
+defr clash-naf [?x ?y]
+  &> (= x 1) (= y 2) (= x y) (not (blocked x))
+solve (clash-naf ?x ?y)
+solve-with dfs-s (clash-naf ?x ?y)
+
+;; Q5 control: var-var agree
+defr agree-naf [?x ?y]
+  &> (= x 1) (= y 1) (= x y) (not (blocked x))
+solve (agree-naf ?x ?y)
+solve-with dfs-s (agree-naf ?x ?y)

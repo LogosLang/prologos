@@ -1,0 +1,62 @@
+uptime before: 10:29  up  4:08, 10 users, load averages: 5.00 6.34 5.84
+detect-w23.rkt — quiescence-detector repairs. K executors = #:pool 'own threads; detector = main thread.
+  CHAIN: one message alive (D hops). BURST: fan 4, depth 6 (5461 msgs). CASCADE: fan 1, each hop = L local fires.
+  WORK=20 fixnum iterations per local fire; REPS=7 (modes interleaved per rep); processor-count=18
+K=2  CHAIN   fan=1 depth=20000 L=0  seq       msgs=20001  best 0.1 ms = 4.3 ns/msg   median 4.7 ns/msg   (one thread, no lanes, no detector)
+K=2  CHAIN   fan=1 depth=20000 L=0  rounds    msgs=20001  best 6.1 ms = 306.1 ns/msg   median 324.1 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)  rounds=17225
+K=2  CHAIN   fan=1 depth=20000 L=0  scan      msgs=20001  best 2.5 ms = 125.9 ns/msg   median 135.1 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CHAIN   fan=1 depth=20000 L=0  atomic    msgs=20001  best 2.4 ms = 122.2 ns/msg   median 128.2 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CHAIN   fan=1 depth=20000 L=0  d2        msgs=20001  best 2.1 ms = 104.2 ns/msg   median 108.5 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CHAIN   fan=1 depth=20000 L=0  flag      msgs=20001  best 2.2 ms = 110.5 ns/msg   median 113.0 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CHAIN   fan=1 depth=20000 L=0  act       msgs=20001  best 2.2 ms = 109.1 ns/msg   median 111.3 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CHAIN   fan=1 depth=20000 L=0  quiet     msgs=20001  best 2.2 ms = 108.9 ns/msg   median 111.1 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CHAIN   fan=1 depth=20000 L=0  defer     msgs=20001  best 2.2 ms = 110.5 ns/msg   median 115.4 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CHAIN   fan=1 depth=20000 L=0  seeds     msgs=20001  best 2.0 ms = 102.2 ns/msg   median 111.2 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CHAIN   fan=1 depth=20000 L=0  seeds1    msgs=20001  best 2.1 ms = 104.8 ns/msg   median 111.3 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CHAIN   fan=1 depth=20000 L=0  logseeds  msgs=20001  best 1.6 ms = 81.0 ns/msg   median 82.8 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CHAIN   fan=1 depth=20000 L=0  logseeds1  msgs=20001  best 1.7 ms = 84.0 ns/msg   median 86.0 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CHAIN   fan=1 depth=20000 L=0  credit    msgs=20001  best 106.5 ms = 5325.5 ns/msg   median 5338.5 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  BURST   fan=4 depth=6     L=0  seq       msgs=5461  best 0.0 ms = 2.4 ns/msg   median 2.6 ns/msg   (one thread, no lanes, no detector)
+K=2  BURST   fan=4 depth=6     L=0  rounds    msgs=5461  best 0.2 ms = 28.0 ns/msg   median 29.5 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)  rounds=7
+K=2  BURST   fan=4 depth=6     L=0  scan      msgs=5461  best 0.2 ms = 36.6 ns/msg   median 37.7 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  BURST   fan=4 depth=6     L=0  atomic    msgs=5461  best 0.3 ms = 53.5 ns/msg   median 57.5 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  BURST   fan=4 depth=6     L=0  d2        msgs=5461  best 0.2 ms = 32.4 ns/msg   median 36.1 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  BURST   fan=4 depth=6     L=0  flag      msgs=5461  best 0.2 ms = 34.1 ns/msg   median 35.2 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  BURST   fan=4 depth=6     L=0  act       msgs=5461  best 0.2 ms = 33.1 ns/msg   median 35.2 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  BURST   fan=4 depth=6     L=0  quiet     msgs=5461  best 0.2 ms = 34.4 ns/msg   median 35.9 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  BURST   fan=4 depth=6     L=0  defer     msgs=5461  best 0.2 ms = 32.6 ns/msg   median 33.7 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  BURST   fan=4 depth=6     L=0  seeds     msgs=5461  best 0.2 ms = 33.1 ns/msg   median 35.2 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  BURST   fan=4 depth=6     L=0  seeds1    msgs=5461  best 0.2 ms = 31.9 ns/msg   median 35.2 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  BURST   fan=4 depth=6     L=0  logseeds  msgs=5461  best 0.1 ms = 25.6 ns/msg   median 29.3 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  BURST   fan=4 depth=6     L=0  logseeds1  msgs=5461  best 0.1 ms = 26.7 ns/msg   median 29.1 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  BURST   fan=4 depth=6     L=0  credit    msgs=5461  best 3.9 ms = 709.8 ns/msg   median 737.2 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CASCADE fan=1 depth=2000  L=8  seq       msgs=2001  best 0.3 ms = 162.9 ns/msg   median 172.4 ns/msg   (one thread, no lanes, no detector)
+K=2  CASCADE fan=1 depth=2000  L=8  d2        msgs=2001  best 0.1 ms = 28.5 ns/msg   median 34.0 ns/msg   premature-trials 7/7 (late fires 37, lost msgs 13986)
+K=2  CASCADE fan=1 depth=2000  L=8  flag      msgs=2001  best 1.1 ms = 547.7 ns/msg   median 557.2 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CASCADE fan=1 depth=2000  L=8  act       msgs=2001  best 1.1 ms = 549.7 ns/msg   median 551.7 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CASCADE fan=1 depth=2000  L=8  quiet     msgs=2001  best 1.1 ms = 546.2 ns/msg   median 554.7 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CASCADE fan=1 depth=2000  L=8  defer     msgs=2001  best 1.0 ms = 516.2 ns/msg   median 533.7 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CASCADE fan=1 depth=2000  L=8  seeds     msgs=2001  best 1.1 ms = 525.7 ns/msg   median 537.2 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CASCADE fan=1 depth=2000  L=8  seeds1    msgs=2001  best 1.0 ms = 510.2 ns/msg   median 543.7 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CASCADE fan=1 depth=2000  L=8  logseeds  msgs=2001  best 0.7 ms = 332.3 ns/msg   median 337.8 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CASCADE fan=1 depth=2000  L=8  logseeds1  msgs=2001  best 0.7 ms = 337.3 ns/msg   median 346.3 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CASCADE fan=1 depth=2000  L=8  credit    msgs=2001  best 2.1 ms = 1043.0 ns/msg   median 1079.5 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CASCADE2 fan=2 depth=9   L=8  seq       msgs=1023  best 0.2 ms = 162.3 ns/msg   median 171.1 ns/msg   (one thread, no lanes, no detector)
+K=2  CASCADE2 fan=2 depth=9   L=8  d2        msgs=1023  best 0.2 ms = 180.8 ns/msg   median 199.4 ns/msg   premature-trials 7/7 (late fires 2253, lost msgs 2819)
+K=2  CASCADE2 fan=2 depth=9   L=8  flag      msgs=1023  best 0.3 ms = 322.6 ns/msg   median 344.1 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CASCADE2 fan=2 depth=9   L=8  act       msgs=1023  best 0.3 ms = 326.5 ns/msg   median 332.4 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CASCADE2 fan=2 depth=9   L=8  quiet     msgs=1023  best 0.3 ms = 326.5 ns/msg   median 334.3 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CASCADE2 fan=2 depth=9   L=8  defer     msgs=1023  best 0.3 ms = 316.7 ns/msg   median 338.2 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CASCADE2 fan=2 depth=9   L=8  seeds     msgs=1023  best 0.3 ms = 313.8 ns/msg   median 336.3 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CASCADE2 fan=2 depth=9   L=8  seeds1    msgs=1023  best 0.3 ms = 313.8 ns/msg   median 330.4 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CASCADE2 fan=2 depth=9   L=8  logseeds  msgs=1023  best 0.2 ms = 209.2 ns/msg   median 213.1 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CASCADE2 fan=2 depth=9   L=8  logseeds1  msgs=1023  best 0.2 ms = 210.2 ns/msg   median 220.9 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+K=2  CASCADE2 fan=2 depth=9   L=8  credit    msgs=1023  best 0.5 ms = 509.3 ns/msg   median 531.8 ns/msg   premature-trials 0/7 (late fires 0, lost msgs 0)
+user break
+  context...:
+   /Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-3/detect-w23.rkt:107:0: trial
+   /Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-3/detect-w23.rkt:384:0: run
+   /Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-3/detect-w23.rkt:417:0
+   body of "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-3/detect-w23.rkt"
+uptime after: 10:36  up  4:14, 10 users, load averages: 6.35 6.27 5.96
+Suite lock: exclusive on /Users/avanti/Library/Caches/prologos/suite.lock

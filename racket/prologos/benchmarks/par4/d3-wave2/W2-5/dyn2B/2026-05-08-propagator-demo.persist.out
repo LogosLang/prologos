@@ -1,0 +1,8 @@
+RESULT 0: wf-solver : Solver defined.
+RESULT 1: edge : _ defined.
+RESULT 2: vertex : _ defined.
+RESULT 3: path : _ defined.
+RESULT 4: unreachable-from-a : _ defined.
+RESULT 5: @[{:dest "b"} {:dest "c"} {:dest "e"} {:dest "d"}] : [PVec {:dest String}]
+RESULT 6: @[{:x "a"} {:x "f"}] : [PVec {:x String}]
+STATS2 leg=persist rounds=2 fires=2 control-divergent=0 thread-divergent=0 reentrant=0

@@ -1,0 +1,18 @@
+RESULT 0: not : Bool -> Bool defined.
+RESULT 1: and : Bool Bool -> Bool defined.
+RESULT 2: or : Bool Bool -> Bool defined.
+RESULT 3: ERROR: Type mismatch
+RESULT 4: ERROR: Type mismatch
+RESULT 5: true : Bool
+RESULT 6: false : Bool
+RESULT 7: true : Bool
+RESULT 8: true : Bool
+RESULT 9: ERROR: Unbound variable
+RESULT 10: ERROR: Unbound variable
+RESULT 11: ERROR: Unbound variable
+RESULT 12: ERROR: Unbound variable
+RESULT 13: true : Bool
+RESULT 14: a : Bool defined.
+RESULT 15: b : Bool defined.
+RESULT 16: true : Bool
+STATS2 leg=persistcap rounds=14 fires=78 control-divergent=0 thread-divergent=0 reentrant=0

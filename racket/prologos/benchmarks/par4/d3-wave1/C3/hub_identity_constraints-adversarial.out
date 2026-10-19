@@ -1,0 +1,5 @@
+file /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/constraints-adversarial.prologos
+largest snapshot: 111 cells, 657 propagators
+cell 49 degree 1247 merge attribute-map-merge-fn; propagators with it as FIRST output: 595
+cell 10 degree 62 merge classify-inhabit-request-merge; propagators with it as FIRST output: 0
+cell 109 degree 4 merge meta-solution-merge; propagators with it as FIRST output: 4

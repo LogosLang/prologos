@@ -1,0 +1,18 @@
+W2-2 Q4 single instrument: main-thread sampler 1 ms, executor OFF in every leg, 2 processes x 40 reps per (file,leg), under the suite lock
+legs: B = exec off; D = exec off + keyed diff; E = D + delta-carried writes
+file/leg                  allprocess-command          bsp          fcw         bulk    bulk/diff   bulk/merge   bulk/other    bsp/other      outside outside/diff     diff-all    merge-all  fcw: under-write champ-diff fcw-self read-raw other
+constraints-/B           3246         2718         1915          850         1052          541          473           38           13          803          431         1733          479      808     15      7      7     13   wall/rep [46.85, 47.13]
+constraints-/D           2094         1566         1170          110         1037          404          575           58           23          396            0          406          579       47     21     11      5     26   wall/rep [31.54, 31.47]
+constraints-/E           1327          817          278          178           78            3            5           70           22          539            0            8            9       93     19     20      7     39   wall/rep [20.85, 21.4]
+type-adversa/B           3007         2236         1375          604          745          358          344           43           26          861          277         1117          350      548     15     16      2     23   wall/rep [42.05, 48.0]
+type-adversa/D           2359         1586          956          151          779          285          432           62           26          631            2          288          440       96     13     12      2     28   wall/rep [34.27, 38.45]
+type-adversa/E           1851         1076          323          197           92            1            9           82           34          753            4            6           16      101     27     24      7     38   wall/rep [28.97, 28.98]
+
+P2 (DIRECT, K=1) removes: bulk-merge-writes (the second application of every write) + the fire ceremony (champ-diff of the cells CHAMP, value-writes compare/read-raw, fcw self).
+It keeps: fire bodies incl. their writes (fcw under-write/other), elaborator work outside BSP. bsp/other (round bookkeeping) is the upper-bound extra.
+  constraints-/B: T=2718 bulk=1052 ceremony=29 bsp-other=13 -> removable 39.8%..40.3% -> P2 gain over this leg 1.66x..1.67x
+  constraints-/D: T=1566 bulk=1037 ceremony=37 bsp-other=23 -> removable 68.6%..70.1% -> P2 gain over this leg 3.18x..3.34x
+  constraints-/E: T=817 bulk=78 ceremony=46 bsp-other=22 -> removable 15.2%..17.9% -> P2 gain over this leg 1.18x..1.22x
+  type-adversa/B: T=2236 bulk=745 ceremony=33 bsp-other=26 -> removable 34.8%..36.0% -> P2 gain over this leg 1.53x..1.56x
+  type-adversa/D: T=1586 bulk=779 ceremony=27 bsp-other=26 -> removable 50.8%..52.5% -> P2 gain over this leg 2.03x..2.10x
+  type-adversa/E: T=1076 bulk=92 ceremony=58 bsp-other=34 -> removable 13.9%..17.1% -> P2 gain over this leg 1.16x..1.21x

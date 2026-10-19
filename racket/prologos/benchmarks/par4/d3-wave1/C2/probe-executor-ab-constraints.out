@@ -1,0 +1,3 @@
+prod: wall-ms med 63 | S0 fire-ms med 25.16 | merge-ms med 16.25 | rounds 214 | rounds>=8 38 | fire-ms in rounds>=8 med 15.66
+seq: wall-ms med 42 | S0 fire-ms med 10.23 | merge-ms med 11.91 | rounds 214 | rounds>=8 38 | fire-ms in rounds>=8 med 2.87
+raw: ((prod 61 25.1) (seq 44 10.33) (prod 62 24.14) (seq 42 10.13) (prod 63 25.61) (seq 40 10.01) (prod 64 25.48) (seq 41 10.23) (prod 63 25.16) (seq 42 10.46))

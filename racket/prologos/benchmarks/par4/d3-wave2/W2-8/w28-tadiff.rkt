@@ -1,0 +1,17 @@
+#lang racket/base
+(require racket/port racket/list
+         (only-in (file "/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/driver.rkt") process-file current-use-pnet-cache? current-pnet-write-enabled?)
+         (only-in (file "/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/propagator.rkt") current-parallel-executor)
+         (only-in (file "/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/errors.rkt") prologos-error? prologos-error-message))
+(define (result->string r) (cond [(prologos-error? r) (format "ERROR: ~a" (prologos-error-message r))] [(string? r) r] [else (format "~a" r)]))
+(define (run f) (parameterize ([current-output-port (open-output-nowhere)] [current-error-port (open-output-nowhere)] [current-pnet-write-enabled? #f]) (map result->string (process-file f))))
+(define f "/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos")
+(void (run "/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/par4/preload-empty.prologos"))
+(define EXEC-OFF (equal? (getenv "W28_EXEC_OFF") "1"))
+(define (run* f) (if EXEC-OFF (parameterize ([current-parallel-executor #f]) (run f)) (run f)))
+(printf "executor ~a\n" (if EXEC-OFF "sequential (#f)" "production (driver.rkt:567)"))
+(define runs (for/list ([i 6]) (run* f)))
+(define a (car runs)) (define b (cadr runs)) (define c (caddr runs))
+(printf "line-23 per run: ~a\n" (for/list ([r runs]) (if (regexp-match? #rx"Buildable" (list-ref r 23)) 'B 'S)))
+(printf "lines ~a; a=b ~a b=c ~a\n" (length a) (equal? a b) (equal? b c))
+(for ([x a] [y b] [i (in-naturals)] #:unless (equal? x y)) (printf "~a:\n  A ~a\n  B ~a\n" i (substring x 0 (min 200 (string-length x))) (substring y 0 (min 200 (string-length y)))))

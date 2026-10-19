@@ -1,0 +1,23 @@
+ns probes::w2u8
+
+;; W2-10 u8: does an inline override keep the named solver's other keys?
+;; wf-solver has :semantics well-founded; {:timeout 100} should only add a budget.
+;; (Pattern from examples/2026-03-14-wfle-acceptance.prologos rows C and I6.)
+
+solver wf-solver
+  :semantics well-founded
+
+defr p-holds []
+  &> (not (q-holds))
+
+defr q-holds []
+  &> (not (p-holds))
+
+defr paradox []
+  &> (not (paradox))
+
+solve-with wf-solver (p-holds)
+solve-with wf-solver {:timeout 100} (p-holds)
+solve-with wf-solver (paradox)
+solve-with wf-solver {:timeout 100} (paradox)
+solve-with wf-solver {:semantics well-founded :timeout 100} (paradox)

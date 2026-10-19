@@ -1,0 +1,5 @@
+== K-OSC monotone fires, replacement merge on a fenced cell
+  BSP fuel=200  f=a  contradiction=#(struct:cell-id 11)  observer-records=99
+  SEQ fuel=200  f=a  contradiction=#(struct:cell-id 11)  observer-records=1
+  BSP fuel=2000  f=a  contradiction=#(struct:cell-id 11)  observer-records=999
+  SEQ fuel=2000  f=a  contradiction=#(struct:cell-id 11)  observer-records=1

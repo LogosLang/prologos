@@ -1,0 +1,30 @@
+RESULT 0: quest : _ defined.
+RESULT 1: @[{:t "Rescue the cat", :g "Alice", :r 50} {:t "Map the catacombs", :g "Bob", :r 200} {:t "Debug the compiler", :g "Alice", :r 9000}] : [PVec {:g String :r Int :t String}]
+RESULT 2: @[{:t "Rescue the cat", :r 50} {:t "Debug the compiler", :r 9000}] : [PVec {:r Int :t String}]
+RESULT 3: quests : [PVec {:g String :r Int :t String}] defined.
+RESULT 4: alice-quests : [PVec {:r Int :t String}] defined.
+RESULT 5: @[50 200 9000] : [PVec Int]
+RESULT 6: @["Rescue the cat" "Debug the compiler"] : [PVec String]
+RESULT 7: 3 : Int
+RESULT 8: [prologos::data::option::some {:g String :r Int :t String} {:g "Alice", :t "Rescue the cat", :r 50}] : [prologos::data::option::Option {:g String :r Int :t String}]
+RESULT 9: '[{:t "Rescue the cat", :r 50} {:t "Debug the compiler", :r 9000}] : [prologos::data::list::List {:r Int :t String}]
+RESULT 10: @[50 200 9000] : [PVec Int]
+RESULT 11: @[{:g "Bob", :t "Map the catacombs", :r 200} {:g "Alice", :t "Debug the compiler", :r 9000}] : [PVec {:g String :r Int :t String}]
+RESULT 12: 3N : Nat
+RESULT 13: twice : _ defined.
+RESULT 14: @[{:n 1} {:n 1} {:n 2}] : [PVec {:n Int}]
+RESULT 15: @[] : [PVec {:r Int :t String}]
+RESULT 16: {:t "Map the catacombs", :r 200} : {:r Int :t String}
+RESULT 17: none : {:r Int :t String}
+RESULT 18: @[{:t "Map the catacombs", :r 200, :provenance {:depth 0N, :clause-id :quest/3-1, :derivation {:rule :quest/3-1, :goal :quest, :children nil, :args '["Map the catacombs" "Bob" 200]}}}] : [PVec {:r Int :t String | _}]
+RESULT 19: val : _ defined.
+RESULT 20: @[{:k :a, :v 1} {:k :b, :v "two"}] : [PVec {:k Keyword :v Int | String}]
+RESULT 21: only-a : [PVec {:v Int | String}] defined.
+RESULT 22: @[{:v 1}] : [PVec {:v Int}]
+RESULT 23: @[{:t "Map the catacombs", :r 200}] : [PVec {:r Int :t String}]
+RESULT 24: @[{:t "Map the catacombs", :r 200}] : [PVec {:r Int :t String}]
+RESULT 25: 1 : Int
+RESULT 26: 2 : Int
+RESULT 27: ERROR: quest is a relation, not a function — a query is written (quest …). At command position or on a `def`/`let` binding RHS that carries an implicit solve; elsewhere write `solve (quest …)` explicitly.
+STATS2 leg=persist rounds=59 fires=290 control-divergent=0 thread-divergent=5 reentrant=0
+DIVFN ...ing-propagators.rkt:861:2 count=5 example: first-diff path=("struct:fire-result.1" car cdr #(struct:expr-meta meta1934 #f) :constraints) main=#(struct:constraint-set #<set: #(struct:constraint-candidate Buildable (List) List--Buildable--dict) #(struct:constraint-candidate Buildable (LSeq) LSeq--Builda… executor=constraint-top

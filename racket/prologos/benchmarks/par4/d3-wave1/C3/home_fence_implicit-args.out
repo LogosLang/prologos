@@ -1,0 +1,14 @@
+file /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/implicit-args.prologos
+fires 150  fenced-fires(any output attribute-map) 130  share 0.8666666666666667
+home histogram (K=8 RR, home = owner of first output): ((1 . 130) (5 . 6) (6 . 6) (4 . 4) (2 . 2) (3 . 2))
+max-home share 0.8666666666666667
+first-output merge (top 6): (("attribute-map-merge-fn" . 130) ("meta-solution-merge" . 20))
+first-output cell (top 6): (("49:attribute-map-merge-fn" . 130) ("53:meta-solution-merge" . 6) ("54:meta-solution-merge" . 6) ("52:meta-solution-merge" . 4) ("50:meta-solution-merge" . 2) ("51:meta-solution-merge" . 2))
+runs with fires 5 (of 5 observed)
+per productive run: (run rounds rounds-with-fenced-fire phase-switches fires fenced-fires)
+  7 10 10 3 52 46
+  4 8 8 3 48 42
+  2 5 5 2 26 22
+  0 3 3 2 12 10
+  1 3 3 2 12 10
+totals: rounds 29 rounds-with-fenced 29 phase-switches 12

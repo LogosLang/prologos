@@ -1,0 +1,10 @@
+collect-trip-bytes = 8388608
+(compute K 1 wall-ms 455.0 MB 3.0 gcs 0 gc-wall-ms 0.0 gc-share 0.0) speedup 1.0
+(compute K 2 wall-ms 240.0 MB 3.0 gcs 0 gc-wall-ms 0.0 gc-share 0.0) speedup 1.9
+(compute K 4 wall-ms 121.0 MB 3.0 gcs 0 gc-wall-ms 0.0 gc-share 0.0) speedup 3.76
+(cons K 1 wall-ms 110.0 MB 5122.0 gcs 606 gc-wall-ms 5.0 gc-share 0.04) speedup 1.0
+(cons K 2 wall-ms 128.0 MB 5127.0 gcs 601 gc-wall-ms 19.0 gc-share 0.15) speedup 0.86
+(cons K 4 wall-ms 148.0 MB 5138.0 gcs 593 gc-wall-ms 27.0 gc-share 0.19) speedup 0.74
+(champ K 1 wall-ms 128.0 MB 1537.0 gcs 183 gc-wall-ms 2.0 gc-share 0.01) speedup 1.0
+(champ K 2 wall-ms 79.0 MB 1539.0 gcs 183 gc-wall-ms 7.0 gc-share 0.09) speedup 1.62
+(champ K 4 wall-ms 53.0 MB 1542.0 gcs 182 gc-wall-ms 8.0 gc-share 0.14) speedup 2.42

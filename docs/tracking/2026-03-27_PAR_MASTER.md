@@ -9,10 +9,31 @@
 **Revised 2026-10-12** (owner): **Track 4 — Arena Executors** opened from the Track-2 "R3–R5" row; the
 undefined `R1–R5` labels are retired (work is named by Design-Methodology stage). Track 4's
 artifacts live under the new per-track layout, [`tracks/PAR/PAR_4/`](tracks/PAR/PAR_4/) (log:
-[`LOG.md`](tracks/PAR/PAR_4/LOG.md)). §Challenge 1 below is **superseded** by Track 4's Stage-1
+[`PAR_4_LOG.md`](tracks/PAR/PAR_4/PAR_4_LOG.md), renamed from `LOG.md` 2026-10-15). §Challenge 1 below is **superseded** by Track 4's Stage-1
 record — see its revision note. Staleness fixed in the same pass: the 2026-03-28 dailies had
 recorded "R3–R5 closed as answered by implementation" while this table showed ⬜; the row now
 says what happened.
+
+**Revised 2026-10-18** (owner-authorized: "Fine to update the PAR master rows on this").
+- Track 4's D.3 critique round (two agent waves and a hand-written synthesis) measured that K > 1 has no workload
+  in the repository today. The heavy files' S0 work/span is 1.28 / 1.49, which is ≤ 1.05× on command time for every
+  ownership unit. The sequential levers measure 2.2× / 2.0×.
+- The owner then decided:
+  - **O-14**: PAR 2's production thread executor is deleted in Track 4's P0.5. It was 1.50–1.55× slower on the
+    heavy files and hangs on a fire exception (DEFERRED 181).
+  - **G-4**: explore several parallel and distributed architectures, combining CALM with distributed, incremental
+    compilation.
+  - **O-15**: that exploration is its own track, **Track 4B**.
+  - **O-18**: Track 4's documents and evidence reach main at checkpoint 2.
+- Rows changed in this pass:
+  - Track 3 is restated, because its premise was the executor O-14 removes.
+  - Track 4's row is brought current.
+  - Track 4B is added.
+  - The Track 4 log link follows its rename.
+
+Records: Track 4's design D.2 §15 (decisions) and the D.3 synthesis
+([`tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md`](tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md),
+§8 for Track 4B's portfolio).
 
 ---
 
@@ -39,8 +60,9 @@ Fire functions that call `net-new-cell` or `net-add-propagator` change the latti
 | 1 | BSP-as-default + stratified topology | ✅ | [Design](2026-03-27_PAR_TRACK1_DESIGN.md), [PIR](2026-03-28_PAR_TRACK1_PIR.md). 380/380 GREEN. 10 bugs via diagnostic protocol. Structural propagator capture. BSP 2.3% faster than DFS. |
 | 2 (R1-R2) | True parallel execution proof-of-concept | ✅ | Racket 9 parallel threads. 13/13 stress tests PASS. 4.45× speedup (synthetic). 1.42× on graph coloring/constraint grids. |
 | 2 (R3-R5) | Contention analysis + literature survey + design doc | ➡ Track 4 | Was marked "closed, answered by implementation" in the 2026-03-28 dailies but never here. Reopened 2026-10-12 as the Stage-1 research of **Track 4**; the STM/WAL/FFI directions are answered there (STM unnecessary, WAL = the delta arena, FFI unnecessary for the signal). |
-| 3 | `:auto` heuristic + production deployment | ⬜ | Network size threshold, propagator count. Kind-aware (PTF Track 3). Like solver's `:auto` setting. |
-| **4** | **Arena Executors** — scheduler-owned spin executors, ownership-partitioned cells, direct S0 writes under chaotic iteration (barrier = stratum boundary), plus a flat storage tier for the fixnum lattices | 🔶 Stage 1 ✅ Stage 2 ✅ D.1 ✅ P0 ✅ (2026-10-13) · D.2 next | [P0](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md) · [D.1](tracks/PAR/PAR_4/2026-10-12_PAR_4_D1_DESIGN.md) · [Stage 1 synthesis](tracks/PAR/PAR_4/research/2026-10-12_PAR_4_STAGE1_RESEARCH_SYNTHESIS.md) · [contention analysis](tracks/PAR/PAR_4/research/2026-10-12_PAR_4_STAGE1_CONTENTION_ANALYSIS.md) · [Stage 2 gap analysis](tracks/PAR/PAR_4/2026-10-12_PAR_4_STAGE2_GAP_ANALYSIS.md) · [LOG](tracks/PAR/PAR_4/LOG.md). Key numbers: raw-memory handoff ~60 ns (2B's 8 µs floor was scheduler-routed signals); Chez allocator does not scale (global refill mutex); solver allocation-bound (wall ≈ bytes ÷ 2.2 GB/s); arena fire 95–131 ns / ~0 B vs 1 500 ns / 2.8 KB; same fixpoint at every K incl. async mode; 7× at K=8, 13× at K=16 at today's fire weight. |
+| 3 | `:auto` heuristic + production deployment | ⬜ restated 2026-10-18 | **Premise withdrawn**: it assumed PAR 2's thread executor, which Track 4 measured 1.50–1.55× *slower* on the heavy files and which hangs on a fire exception (DEFERRED 181); O-14 deletes it. **Restated** as the production deployment of whatever Track 4B shows to win: a selection among measured variants (like the solver's `:auto`), with K defaulting to 1 until a measurement says otherwise. Opens when a Track 4B variant passes its gate. Original text: network size threshold, propagator count, kind-aware (PTF Track 3). |
+| **4** | **Arena Executors** — K = 1 correctness and performance: the P0.5 defect batch (including deleting the production thread executor, O-14), merge laws and the K = 1 core of the fire laws, DIRECT S0 at K = 1 with BSP as the replay oracle; plus the substrate every parallel variant needs (fault channel, oracle and per-write/per-fire differentials, fire context without ambient parameters, scheduler state keyed by network id, the executor seam). K > 1 moved to Track 4B (O-15) | 🔶 Stage 1 ✅ Stage 2 ✅ D.1 ✅ P0 ✅ D.2 ✅ D.3 critique ✅ (two waves + synthesis, 2026-10-18) · checkpoint 2 (O-18) · O-16, O-17, then D.3 | [D.2](tracks/PAR/PAR_4/2026-10-15_PAR_4_D2_DESIGN.md) · [D.3 synthesis](tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md) · [P0](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md) · [D.1](tracks/PAR/PAR_4/2026-10-12_PAR_4_D1_DESIGN.md) (superseded) · [Stage 1 synthesis](tracks/PAR/PAR_4/research/2026-10-12_PAR_4_STAGE1_RESEARCH_SYNTHESIS.md) · [Stage 2 gap analysis](tracks/PAR/PAR_4/2026-10-12_PAR_4_STAGE2_GAP_ANALYSIS.md) · [LOG](tracks/PAR/PAR_4/PAR_4_LOG.md). Key numbers (D.3): S0 work/span 1.28 / 1.49 on the heavy files, so K > 1 is ≤ 1.05× on command time under any ownership unit; executor off + keyed diff measured 2.2× / 2.0× on the heavy files; production defects found and filed: DEFERRED 177 (addendum), 178, 181, 182. P0's microbenchmark scaling (7× at K = 8 at today's fire weight) did not survive on real workloads: the dependency chain, not the fire cost, is the limit (synthesis §0). |
+| **4B** | **Parallel and distributed architecture portfolio** (exploration; owner guidance G-4) — measure the compiler's parallelism hierarchy (fire, S0 run, across runs, definition, module, machine; plus search, topology, incremental), then prototype variants XV-1…XV-8 behind Track 4's executor seam, each with an entry condition and a kill criterion; a refuted variant is a result. Workloads for the weak-scaling (Gustafson) test: the standard library first, generated programs second | 🔶 opened 2026-10-18 · Stage 1 (hierarchical parallelism profile + survey) next | Branch `par4b-parallelism-portfolio`; kickoff and log in `tracks/PAR/PAR_4B/` on that branch until its first checkpoint. Charter: Track 4's D.3 synthesis §8 and D.2 §15 (G-4, O-15). Every variant is judged against Track 4's oracle and the best sequential build. |
 
 ---
 

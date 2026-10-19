@@ -1,0 +1,15 @@
+== E1: changes to reach the SAME fixpoint (J = 16), by schedule
+  (bsp J= 16 changes 34 strict-incs 34)
+  (drain J= 16 changes 17 strict-incs 17)
+  (J-after-each J= 16 changes 32 strict-incs 32)
+  (J-last J= 16 changes 17 strict-incs 17)
+  change counts range 17..34: a change-counted budget B=25 exhausts under (bsp J-after-each) and not under (drain J-last)
+  Σ (values reached) bound = 152 (s_i reach i+1 => Σ = 136, J reaches 16)
+== E2: fenced LWW cell T in a cycle with two monotone constant writers
+  (bsp fuel 50 T a contradiction #t changes-charged-to-T 52 strict-increases 3)
+  (bsp fuel 500 T b contradiction #t changes-charged-to-T 502 strict-increases 3)
+  (drain fuel 50 T b contradiction #t changes-charged-to-T 33 strict-increases 1)
+  (drain fuel 500 T b contradiction #t changes-charged-to-T 333 strict-increases 1)
+== E3: two forks of one template (relations.rkt:3117 forks one per solve)
+  struct fields of prop-network: (hot warm cold) — no identity field
+  cold eq? #t; equal? #t; cell-1 equal? #t; fuel equal? #t

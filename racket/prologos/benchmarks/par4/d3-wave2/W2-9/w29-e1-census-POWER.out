@@ -1,0 +1,5 @@
+POWER a: undeclared cell read -> ((L0 0) (L1 1) (L3 1) (LP -) (LP-raised -))
+POWER b: declared-only -> ((L0 0) (L1 0) (L3 0) (LP -) (LP-raised -))
+POWER c: undeclared path read (raises on poison) -> ((L0 0) (L1 0) (L3 0) (LP -) (LP-raised 1))
+POWER e: undeclared path read (branches on it, no raise) -> ((L0 0) (L1 0) (L3 0) (LP 1) (LP-raised -))
+POWER d: impure (box counter) -> ((L0 1) (L1 -) (L3 -) (LP -) (LP-raised -))

@@ -1,0 +1,8 @@
+RESULT 0: atms-s : Solver defined.
+RESULT 1: edge : _ defined.
+RESULT 2: blocked : _ defined.
+RESULT 3: open-edge : _ defined.
+RESULT 4: @[{:d "b"}] : [PVec {:d String}]
+RESULT 5: @[] : [PVec {:d String}]
+RESULT 6: @[{:s "c", :d "d"} {:s "a", :d "b"}] : [PVec {:d String :s String}]
+STATS2 leg=fresh rounds=9 fires=34 control-divergent=0 thread-divergent=0 reentrant=0

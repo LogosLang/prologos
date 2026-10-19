@@ -1,0 +1,4 @@
+sequential N=12: bytes written into the protocol stream: 0 ""
+thread-per-round N=12: bytes written into the protocol stream: 0 ""
+persistent-worker N=12: bytes written into the protocol stream: 4 "LEAK"
+persistent-worker N=2: bytes written into the protocol stream: 4 "LEAK"

@@ -1,0 +1,9 @@
+RESULT 0.0: atms-s : Solver defined.
+RESULT 0.1: dfs-s : Solver defined.
+RESULT 0.2: clash : _ defined.
+RESULT 0.3: agree : _ defined.
+RESULT 0.4: @[{:x 1, :y 2}] : [PVec {:x Int :y Int}]
+RESULT 0.5: @[] : [PVec {:x Int :y Int}]
+RESULT 0.6: @[{:x 1, :y 1}] : [PVec {:x Int :y Int}]
+RESULT 0.7: @[{:x 1, :y 1}] : [PVec {:x Int :y Int}]
+STATS leg=prod files=1 params=219 rounds=6 wide-rounds(>=8)=0 fires=12 reentrant=0 ms=157.0

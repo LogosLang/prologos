@@ -1,0 +1,20 @@
+=== net-cell-replace : PRODUCTION
+./propagator.rkt:92: net-cell-replace  ;; Track 7 post-fix: bypass merge for S(-1) retraction
+./propagator.rkt:2116:(define (net-cell-replace net cid new-val)
+./propagator.rkt:2121:    (error 'net-cell-replace "unknown cell: ~a" cid))
+./elab-network-types.rkt:149:  (define pnet* (net-cell-replace pnet cid val))
+./metavar-store.rkt:1621:          (if (equal? val cleaned) n (net-cell-replace n cid cleaned))]))]))
+=== net-cell-replace : NON-PRODUCTION (tests/tools/benchmarks)
+=== net-cell-reset : PRODUCTION
+./relations.rkt:218:    (define forked (net-cell-reset (fork-prop-network main-net)
+./propagator.rkt:213: net-cell-reset
+./propagator.rkt:1267:  (define forked+cell (net-cell-reset forked fuel-cell-id fuel))
+./propagator.rkt:1268:  (define forked+both (net-cell-reset forked+cell fuel-budget-cell-id fuel))
+./propagator.rkt:1776:(define (net-cell-reset net cid new-val)
+./propagator.rkt:1781:    (error 'net-cell-reset "unknown cell: ~a" cid))
+./propagator.rkt:1816:             [net1 (net-cell-reset net cid (tagged-cell-value val '()))]
+./propagator.rkt:3615:                    (define cleared (net-cell-reset processed req-cid reset-val))
+./warnings.rkt:108:    (define (clr net cid) (if cid (net-cell-reset net cid '()) net))
+./typing-propagators.rkt:3053:    (define net2-limited (net-cell-reset net2w fuel-cell-id TYPING-FUEL-LIMIT))
+./typing-propagators.rkt:3056:    (define net3-restored (net-cell-reset net3 fuel-cell-id saved-fuel))
+=== net-cell-reset : NON-PRODUCTION (tests/tools/benchmarks)

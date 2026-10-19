@@ -1,0 +1,12 @@
+Part 1: test-solver-context.rkt:341-362 sequence (expects 2 answers: val-left, val-right)
+  A production merge, production API: answers (val-left val-right) ; cell-1 at the end = 11
+  B ior merge, production API (C4-4): answers (val-right) ; cell-1 at the end = 11
+  C ior merge, W per query, production read: answers (val-left val-right) ; goal entries ((2 . val-right) (1 . val-left)) ; cell-1 at the end = 11
+  D replacement merge, W per query, production read: answers (val-left val-right) ; goal entries ((2 . val-right) (1 . val-left)) ; cell-1 at the end = 11
+  E ior merge, W per query, ev_W read: answers (val-left val-right) ; goal entries ((2 . val-right) (1 . val-left)) ; cell-1 at the end = 11
+
+Part 2: information half as α = (C, X) vs today's projection (decisions-state-bitmask, replacement)
+  test-solver-context.rkt:117-140 sequence (assume h0, assume h1, narrow h1):
+    today's projection non-monotone steps (ior order): 1 ; α non-monotone steps: 0 ; live(α) ≠ today's cell-1: 0
+  500 random op sequences (1115 steps): projection non-monotone 215 ; α non-monotone 0 ; live(α) ≠ projection 0
+  POWER: the method flags the projection (must be > 0 when a narrow occurs) — see the line above

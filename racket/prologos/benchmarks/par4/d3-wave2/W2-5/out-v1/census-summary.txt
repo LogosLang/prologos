@@ -1,0 +1,293 @@
+W2-5 static census at ROOT=/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos
+files scanned: 123 ; top-level defs: 3968 ; parameters (define p (make-parameter..)): 219 ; textual non-comment make-parameter lines: 219
+adders (primitive + wrappers by fixpoint): 27
+  ADDER net-add-broadcast-propagator ((pos 4) (pos 5)) primitive
+  ADDER elab-add-broadcast-propagator ((pos 5) (pos 4)) elab-network-types.rkt:224 formal result-merge-fn passed as fire
+  ADDER install-type->constraint-propagator ((pos 3)) constraint-propagators.rkt:238 formal type-tag-fn called inside installed fire
+  ADDER net-add-parallel-map-propagator ((pos 4)) propagator.rkt:2528 formal make-fire-fn called as fire factory
+  ADDER add-readiness-set-latch! ((pos 2)) metavar-store.rkt:441 formal action-thunk called inside installed fire
+  ADDER net-add-cross-domain-propagator ((pos 4) (pos 3)) propagator.rkt:4563 formal gamma-fn called inside installed fire
+  ADDER elab-add-fire-once-propagator ((pos 3)) elab-network-types.rkt:201 formal fire-fn passed as fire
+  ADDER net-new-cell ((pos 2) (pos 3)) primitive
+  ADDER elab-add-propagator ((pos 3)) elab-network-types.rkt:182 formal fire-fn passed as fire
+  ADDER install-constraint->type-propagator ((pos 3)) constraint-propagators.rkt:255 formal type-from-candidate-fn called inside installed fire
+  ADDER net-new-cell-desc ((pos 2) (pos 3)) primitive
+  ADDER rt-add-session-advance-in-rnet ((pos 4) (pos 3)) session-runtime.rkt:478 formal extract passed as fire
+  ADDER install-constraint->method-propagator ((pos 2)) constraint-propagators.rkt:279 formal install-fn called inside installed fire
+  ADDER rt-add-session-advance ((pos 3) (pos 4)) session-runtime.rkt:379 formal expected-shape? called inside installed fire
+  ADDER net-new-cell-with-merge ((pos 3) (pos 1)) infra-cell.rkt:275 formal contradicts? passed as fire
+  ADDER net-add-propagator ((pos 3)) primitive
+  ADDER install-result->constraint-propagator ((pos 3)) constraint-propagators.rkt:302 formal result-type-tag-fn called inside installed fire
+  ADDER rt-add-propagator ((pos 3)) session-runtime.rkt:489 formal fire-fn passed as fire
+  ADDER net-new-cell-widen ((pos 2) (pos 3) (pos 4) (pos 5)) primitive
+  ADDER elab-new-infra-cell ((pos 2)) elab-network-types.rkt:159 formal merge-fn passed as fire
+  ADDER register-merge-fn!/lattice ((pos 0)) primitive
+  ADDER net-add-threshold ((pos 5) (pos 2)) propagator.rkt:2575 formal body-fn passed as fire
+  ADDER decompose-1 ((pos 10)) elaborator-network.rkt:684 formal ctor passed as fire
+  ADDER module-network-install-fire-once ((pos 3)) namespace.rkt:311 formal fire-fn passed as fire
+  ADDER net-add-fire-once-propagator ((pos 3)) primitive
+  ADDER net-add-barrier ((pos 4)) propagator.rkt:2588 formal body-fn passed as fire
+  ADDER register/minimal ((pos 1)) phase1d-registrations.rkt:104 formal merge-fn passed as fire
+fire roots: 188  (by kind: #hasheq((def . 72) (factory-def . 3) (factory-lambda . 41) (lambda . 65) (local . 7)))
+reached top-level defs: 1226
+
+== GLOBAL: production reads per parameter of interest ==
+  current-source-loc read 5: driver.rkt:681(process-command); elaborator.rkt:1149(elaborate); propagator.rkt:2289(net-add-propagator); propagator.rkt:2372(net-add-fire-once-propagator); propagator.rkt:2460(net-add-broadcast-propagator)
+  current-source-loc assign 0: 
+  current-source-loc bind 3: propagator.rkt:378(fire-propagator); driver.rkt:681(process-command); elaborator.rkt:1149(elaborate)
+  current-source-loc firstclass 0: 
+  current-worldview-bitmask read 21: cell-ops.rkt:84(worldview-visible?); meta-universe.rkt:289(resolve-worldview-bitmask); elab-speculation-bridge.rkt:299(with-speculative-rollback); meta-universe.rkt:313(compound-cell-component-write); metavar-store.rkt:504(add-readiness-set-latch!); typing-propagators.rkt:700(tagged-attribute-map-read-with-base-merge); metavar-store.rkt:1485(current-speculation-assumption); propagator.rkt:1601(net-cell-read); propagator.rkt:2013(net-cell-write/slow-path); relations.rkt:2083(maybe-wrap-worldview); relations.rkt:2141(install-goal-propagator); relations.rkt:2154(install-goal-propagator); relations.rkt:2176(install-goal-propagator); relations.rkt:2362(install-goal-propagator); relations.rkt:2431(install-conjunction); relations.rkt:2506(install-one-clause-concurrent); relations.rkt:2687(install-clause-propagators-inner); propagator.rkt:3492(run-to-quiescence-bsp); propagator.rkt:4067(net-cell-write-widen); propagator.rkt:4481(resolve-worldview-bitmask/pnet); propagator.rkt:4520(compound-cell-component-write/pnet)
+  current-worldview-bitmask assign 0: 
+  current-worldview-bitmask bind 8: elab-speculation-bridge.rkt:298(with-speculative-rollback); relations.rkt:2087(maybe-wrap-worldview); propagator.rkt:2178(wrap-with-worldview); relations.rkt:2364(install-goal-propagator); relations.rkt:2439(install-conjunction); relations.rkt:2463(install-conjunction); relations.rkt:2517(install-one-clause-concurrent); relations.rkt:2689(install-clause-propagators-inner)
+  current-worldview-bitmask firstclass 0: 
+  current-bsp-fire-round? read 11: constraint-propagators.rkt:288(install-constraint->method-propagator); narrowing.rkt:296(make-branch-fire-fn); narrowing.rkt:348(make-rule-fire-fn); elaborator-network.rkt:897(maybe-decompose); propagator.rkt:2343(net-add-propagator); sre-core.rkt:2469(sre-maybe-decompose); propagator.rkt:2517(net-add-broadcast-propagator); sre-core.rkt:2689(sre-duality-propagate-one); sre-core.rkt:2712(sre-duality-propagate-one); sre-core.rkt:2804(sre-duality-propagate-both); sre-core.rkt:2817(sre-duality-propagate-both)
+  current-bsp-fire-round? assign 0: 
+  current-bsp-fire-round? bind 1: propagator.rkt:2884(fire-and-collect-writes)
+  current-bsp-fire-round? firstclass 0: 
+  current-cell-id-namespace read 4: propagator.rkt:1326(net-new-cell); propagator.rkt:1371(net-register-specialized-cell); propagator.rkt:1452(net-new-cell-desc); propagator.rkt:1498(net-new-cells-batch-inner)
+  current-cell-id-namespace assign 0: 
+  current-cell-id-namespace bind 1: propagator.rkt:2885(fire-and-collect-writes)
+  current-cell-id-namespace firstclass 0: 
+
+== FIRE-REACHABLE parameter READS: 70 parameters ==
+current-bb-state | def bb-optimization.rkt:42 | assigned: parameterize | fire-reads 2: narrowing.rkt:654(run-narrowing-search); narrowing.rkt:814(narrow-dt-search) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-bsp-fire-round? | def propagator.rkt:2202 | assigned: parameterize | fire-reads 10: constraint-propagators.rkt:288(install-constraint->method-propagator); narrowing.rkt:296(make-branch-fire-fn); narrowing.rkt:348(make-rule-fire-fn); elaborator-network.rkt:897(maybe-decompose); propagator.rkt:2343(net-add-propagator); sre-core.rkt:2469(sre-maybe-decompose); sre-core.rkt:2689(sre-duality-propagate-one); sre-core.rkt:2712(sre-duality-propagate-one); sre-core.rkt:2804(sre-duality-propagate-both); sre-core.rkt:2817(sre-duality-propagate-both) | reached-from-root-modules: classify-inhabit.rkt,direct-in-root:constraint-propagators.rkt,elaborator-network.rkt,narrowing.rkt,reduction.rkt,session-lattice.rkt,sre-core.rkt,type-lattice.rkt,typing-propagators.rkt
+current-bsp-observer | def propagator.rkt:576 | assigned: parameterize | fire-reads 3: prop-observatory.rkt:205(capture-network); propagator.rkt:2625(run-to-quiescence); propagator.rkt:3405(run-to-quiescence-bsp) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-bsp-round-stats | def propagator.rkt:582 | assigned: never-assigned(default) | fire-reads 1: propagator.rkt:3545(run-to-quiescence-bsp) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-capability-registry | def macros.rkt:8201 | assigned: parameterize,direct(fn) | fire-reads 1: macros.rkt:8211(read-capability-registry) | reached-from-root-modules: cap-type-bridge.rkt
+current-capability-registry-cell-id | def macros.rkt:558 | assigned: direct(fn) | fire-reads 1: macros.rkt:8211(read-capability-registry) | reached-from-root-modules: cap-type-bridge.rkt
+current-cell-id-namespace | def propagator.rkt:2222 | assigned: parameterize | fire-reads 3: propagator.rkt:1326(net-new-cell); propagator.rkt:1371(net-register-specialized-cell); propagator.rkt:1452(net-new-cell-desc) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,narrowing.rkt,reduction.rkt,session-lattice.rkt,sre-core.rkt,type-lattice.rkt,typing-propagators.rkt
+current-cfa-result | def cfa-analysis.rkt:73 | assigned: direct(fn) | fire-reads 1: cfa-analysis.rkt:288(cfa-ensure-analyzed!) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-check-fire-invariants? | def propagator.rkt:2247 | assigned: never-assigned(default) | fire-reads 1: propagator.rkt:2951(fire-and-collect-writes) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-coercion-registry | def macros.rkt:8065 | assigned: parameterize,direct(fn) | fire-reads 1: macros.rkt:8102(read-coercion-registry) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-coercion-registry-cell-id | def macros.rkt:557 | assigned: direct(fn) | fire-reads 1: macros.rkt:8102(read-coercion-registry) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-command-atms | def elab-speculation-bridge.rkt:104 | assigned: parameterize,direct(fn) | fire-reads 1: error-explanation.rkt:261(derivation-chain-for/union-contradict) | reached-from-root-modules: typing-propagators.rkt
+current-confluence-registry | def confluence-analysis.rkt:67 | assigned: direct(fn) | fire-reads 2: confluence-analysis.rkt:71(register-confluence!); confluence-analysis.rkt:74(lookup-confluence) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-ctor-registry | def macros.rkt:7984 | assigned: parameterize,direct(fn),install-time | fire-reads 1: macros.rkt:7996(read-ctor-registry) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,narrowing.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-ctor-registry-cell-id | def macros.rkt:554 | assigned: direct(fn) | fire-reads 1: macros.rkt:7996(read-ctor-registry) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,narrowing.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-def-tree-registry | def definitional-tree.rkt:66 | assigned: direct(fn) | fire-reads 1: definitional-tree.rkt:73(lookup-def-tree) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-domain-classification-lookup | def propagator.rkt:1417 | assigned: module-level | fire-reads 1: propagator.rkt:1422(enforce-component-paths!) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,narrowing.rkt,reduction.rkt,session-lattice.rkt,sre-core.rkt,type-lattice.rkt,typing-propagators.rkt
+current-file-module-network-ref | def namespace.rkt:431 | assigned: parameterize,direct(fn) | fire-reads 3: global-env.rkt:99(global-env-lookup-status); global-env.rkt:240(external-definitions-snapshot); global-env.rkt:252(external-definition-names) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-hasmethod-resolution-bridge-fn | def metavar-store.rkt:737 | assigned: module-level | fire-reads 1: metavar-store.rkt:805(register-hasmethod-constraint!) | reached-from-root-modules: direct-in-root:metavar-store.rkt
+current-impl-registry | def macros.rkt:8320 | assigned: parameterize,direct(fn) | fire-reads 1: constraint-propagators.rkt:55(build-trait-constraint) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-is-eval-fn | def relations.rkt:128 | assigned: parameterize | fire-reads 7: stratified-eval.rkt:304(stratified-solve-goal); relations.rkt:1209(solve-single-goal); relations.rkt:1257(solve-single-goal); relations.rkt:1783(explain-single-goal); relations.rkt:1818(explain-single-goal); relations.rkt:2172(install-goal-propagator); relations.rkt:2254(install-goal-propagator) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-lattice-meta-solution-fn | def type-lattice.rkt:66 | assigned: install-time | fire-reads 5: type-lattice.rkt:86(has-unsolved-meta?); type-lattice.rkt:180(type-lattice-merge); type-lattice.rkt:421(try-unify-pure); type-lattice.rkt:425(try-unify-pure); type-lattice.rkt:443(try-unify-pure) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-level-meta-universe-cell-id | def meta-universe.rkt:115 | assigned: direct(fn) | fire-reads 1: metavar-store.rkt:2292(meta-domain-info) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-mult-meta-universe-cell-id | def meta-universe.rkt:114 | assigned: direct(fn) | fire-reads 2: metavar-store.rkt:2289(meta-domain-info); driver.rkt:3906(<module-level>) | reached-from-root-modules: classify-inhabit.rkt,direct-in-root:driver.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-naf-deferred? | def wf-engine.rkt:129 | assigned: direct(fn) | fire-reads 1: wf-engine.rkt:204(probe-single-predicate) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-naf-oracle | def relations.rkt:367 | assigned: parameterize | fire-reads 2: relations.rkt:1225(solve-single-goal); relations.rkt:1795(explain-single-goal) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-narrow-constraints | def global-constraints.rkt:71 | assigned: parameterize | fire-reads 1: global-constraints.rkt:125(read-narrow-constraints) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-narrow-constraints-cell-id | def global-constraints.rkt:87 | assigned: direct(fn) | fire-reads 1: global-constraints.rkt:124(read-narrow-constraints) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-narrow-intervals | def narrowing.rkt:531 | assigned: parameterize | fire-reads 4: narrowing.rkt:737(narrow-dt-search); narrowing.rkt:799(narrow-dt-search); narrowing.rkt:800(narrow-dt-search); narrowing.rkt:863(narrow-dt-search) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-narrow-search-config | def search-heuristics.rkt:51 | assigned: never-assigned(default) | fire-reads 2: narrowing.rkt:640(run-narrowing-search); narrowing.rkt:745(narrow-dt-search) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-narrow-var-constraints | def global-constraints.rkt:76 | assigned: parameterize,direct(fn) | fire-reads 1: global-constraints.rkt:130(read-narrow-var-constraints) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-narrow-var-constraints-cell-id | def global-constraints.rkt:88 | assigned: direct(fn) | fire-reads 1: global-constraints.rkt:129(read-narrow-var-constraints) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-nat-value-cache | def reduction.rkt:1114 | assigned: parameterize | fire-reads 1: reduction.rkt:1117(nat-value) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-nbe-depth | def reduction.rkt:4798 | assigned: parameterize | fire-reads 1: reduction.rkt:4836(nbe-open-nf) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-nf-cache | def reduction.rkt:4780 | assigned: parameterize | fire-reads 1: reduction.rkt:4944(nf) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-observatory | def prop-observatory.rkt:107 | assigned: parameterize | fire-reads 1: prop-observatory.rkt:167(capture-network) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-parallel-executor | def propagator.rkt:3675 | assigned: module-level | fire-reads 1: propagator.rkt:3401(run-to-quiescence-bsp) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-perf-counters | def performance-counters.rkt:171 | assigned: parameterize | fire-reads 9: performance-counters.rkt:186(perf-inc-reduce!); performance-counters.rkt:218(perf-inc-solver-backtrack!); performance-counters.rkt:222(perf-inc-solver-unify!); performance-counters.rkt:226(perf-inc-zonk!); performance-counters.rkt:235(perf-inc-prop-firing!); performance-counters.rkt:239(perf-inc-cell-alloc!); performance-counters.rkt:244(perf-inc-inert-dependent-skip!); performance-counters.rkt:253(perf-inc-solver-row-scan!); performance-counters.rkt:257(perf-inc-solver-col-compare!) | reached-from-root-modules: cap-type-bridge.rkt,capability-inference.rkt,classify-inhabit.rkt,constraint-propagators.rkt,driver.rkt,effect-bridge.rkt,effect-ordering.rkt,elaborator-network.rkt,io-bridge.rkt,metavar-store.rkt,narrowing.rkt,propagator.rkt,reduction.rkt,relations.rkt,session-lattice.rkt,session-propagators.rkt,session-runtime.rkt,sre-core.rkt,type-lattice.rkt,typing-propagators.rkt,wf-propagators.rkt
+current-persistent-registry-net-box | def metavar-store.rkt:1468 | assigned: parameterize,direct(fn) | fire-reads 2: global-constraints.rkt:116(narrow-cell-read-safe); macros.rkt:545(macros-cell-read-safe) | reached-from-root-modules: cap-type-bridge.rkt,classify-inhabit.rkt,elaborator-network.rkt,narrowing.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-prop-meta-info-box | def metavar-store.rkt:1416 | assigned: parameterize,direct(fn) | fire-reads 1: metavar-store.rkt:2250(type-champ-fallback) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-prop-net-box | def metavar-store.rkt:1407 | assigned: parameterize,direct(fn) | fire-reads 2: metavar-store.rkt:1797(prop-meta-id->cell-id); metavar-store.rkt:2314(meta-domain-solution) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-punify-enabled? | def ctor-registry.rkt:390 | assigned: never-assigned(default) | fire-reads 1: relations.rkt:1670(solve-goal) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-quiescence-change-counter | def propagator.rkt:2238 | assigned: parameterize | fire-reads 2: propagator.rkt:1934(net-cell-write); propagator.rkt:2032(net-cell-write/slow-path) | reached-from-root-modules: cap-type-bridge.rkt,capability-inference.rkt,classify-inhabit.rkt,constraint-propagators.rkt,driver.rkt,effect-bridge.rkt,effect-ordering.rkt,elaborator-network.rkt,io-bridge.rkt,metavar-store.rkt,narrowing.rkt,propagator.rkt,reduction.rkt,relations.rkt,session-lattice.rkt,session-propagators.rkt,session-runtime.rkt,sre-core.rkt,type-lattice.rkt,typing-propagators.rkt,wf-propagators.rkt
+current-quiescence-stats | def performance-counters.rkt:761 | assigned: parameterize | fire-reads 1: performance-counters.rkt:768(perf-record-quiescence-writes!) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-quiescence-write-counter | def propagator.rkt:2237 | assigned: parameterize | fire-reads 1: propagator.rkt:1902(net-cell-write) | reached-from-root-modules: cap-type-bridge.rkt,capability-inference.rkt,classify-inhabit.rkt,constraint-propagators.rkt,driver.rkt,effect-bridge.rkt,effect-ordering.rkt,elaborator-network.rkt,io-bridge.rkt,metavar-store.rkt,narrowing.rkt,propagator.rkt,reduction.rkt,relations.rkt,session-lattice.rkt,session-propagators.rkt,session-runtime.rkt,sre-core.rkt,type-lattice.rkt,typing-propagators.rkt,wf-propagators.rkt
+current-reduction-fuel | def reduction.rkt:2742 | assigned: parameterize | fire-reads 1: reduction.rkt:2858(whnf-impl) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-relation-store | def relations.rkt:822 | assigned: direct(fn) | fire-reads 10: reduction.rkt:699(run-solve-goal); reduction.rkt:708(run-solve-goal); reduction.rkt:736(run-solve-goal); reduction.rkt:781(run-solve-goal); reduction.rkt:805(run-solve-one-goal); reduction.rkt:825(run-solve-one-goal); reduction.rkt:861(run-solve-one-goal); reduction.rkt:905(run-solve-one-goal); reduction.rkt:932(run-explain-goal); reduction.rkt:965(run-explain-goal) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-session-meta-universe-cell-id | def meta-universe.rkt:116 | assigned: direct(fn) | fire-reads 1: metavar-store.rkt:2295(meta-domain-info) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-solver-strategy-override | def stratified-eval.rkt:177 | assigned: never-assigned(default) | fire-reads 1: stratified-eval.rkt:251(stratified-solve-goal) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-source-loc | def source-location.rkt:36 | assigned: parameterize | fire-reads 2: propagator.rkt:2289(net-add-propagator); propagator.rkt:2372(net-add-fire-once-propagator) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,narrowing.rkt,reduction.rkt,session-lattice.rkt,sre-core.rkt,type-lattice.rkt,typing-propagators.rkt
+current-sre-debug? | def sre-core.rkt:2094 | assigned: never-assigned(default) | fire-reads 1: sre-core.rkt:2549(sre-make-equality-propagator) | reached-from-root-modules: sre-core.rkt
+current-structural-meta-lookup | def elaborator-network.rkt:308 | assigned: module-level | fire-reads 1: elaborator-network.rkt:366(identify-sub-cell) | reached-from-root-modules: elaborator-network.rkt
+current-structural-mult-bridge | def elaborator-network.rkt:315 | assigned: module-level | fire-reads 1: elaborator-network.rkt:485(decompose-pi) | reached-from-root-modules: elaborator-network.rkt
+current-subtype-check-count | def subtype-predicate.rkt:65 | assigned: direct(fn) | fire-reads 1: subtype-predicate.rkt:75(bump-subtype-count!) | reached-from-root-modules: typing-propagators.rkt
+current-subtype-registry | def macros.rkt:8033 | assigned: parameterize,direct(fn),install-time | fire-reads 1: macros.rkt:8043(read-subtype-registry) | reached-from-root-modules: typing-propagators.rkt
+current-subtype-registry-cell-id | def macros.rkt:556 | assigned: direct(fn) | fire-reads 1: macros.rkt:8043(read-subtype-registry) | reached-from-root-modules: typing-propagators.rkt
+current-termination-registry | def termination-analysis.rkt:73 | assigned: direct(fn) | fire-reads 2: termination-analysis.rkt:77(register-termination!); termination-analysis.rkt:80(lookup-termination) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-trait-registry | def macros.rkt:8276 | assigned: parameterize,direct(fn) | fire-reads 1: macros.rkt:8285(read-trait-registry) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-trait-registry-cell-id | def macros.rkt:562 | assigned: direct(fn) | fire-reads 1: macros.rkt:8285(read-trait-registry) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-trait-resolution-bridge-fn | def metavar-store.rkt:733 | assigned: module-level | fire-reads 1: metavar-store.rkt:663(register-trait-constraint!) | reached-from-root-modules: direct-in-root:metavar-store.rkt
+current-tree-reduce-threshold | def propagator.rkt:2231 | assigned: never-assigned(default) | fire-reads 1: propagator.rkt:3505(run-to-quiescence-bsp) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-type-meta | def macros.rkt:7987 | assigned: parameterize,direct(fn),module-level | fire-reads 1: macros.rkt:7999(read-type-meta) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-type-meta-cell-id | def macros.rkt:555 | assigned: direct(fn) | fire-reads 1: macros.rkt:7999(read-type-meta) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-type-meta-universe-cell-id | def meta-universe.rkt:113 | assigned: direct(fn) | fire-reads 1: metavar-store.rkt:2285(meta-domain-info) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-use-bsp-scheduler? | def propagator.rkt:2193 | assigned: parameterize | fire-reads 1: propagator.rkt:2623(run-to-quiescence) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-wf-table-store | def wf-engine.rkt:423 | assigned: parameterize,direct(fn) | fire-reads 2: wf-engine.rkt:443(wf-solve-goal-tabled); wf-engine.rkt:466(wf-solve-goal-tabled) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-whnf-cache | def reduction.rkt:2739 | assigned: parameterize | fire-reads 1: reduction.rkt:2745(whnf) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-worker-pool | def propagator.rkt:3744 | assigned: never-assigned(default) | fire-reads 1: propagator.rkt:3402(run-to-quiescence-bsp) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,reduction.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+current-worldview-bitmask | def propagator.rkt:2170 | assigned: parameterize | fire-reads 16: cell-ops.rkt:84(worldview-visible?); meta-universe.rkt:289(resolve-worldview-bitmask); metavar-store.rkt:504(add-readiness-set-latch!); propagator.rkt:1601(net-cell-read); propagator.rkt:2013(net-cell-write/slow-path); relations.rkt:2083(maybe-wrap-worldview); relations.rkt:2141(install-goal-propagator); relations.rkt:2154(install-goal-propagator); relations.rkt:2176(install-goal-propagator); relations.rkt:2362(install-goal-propagator); relations.rkt:2431(install-conjunction); relations.rkt:2506(install-one-clause-concurrent); relations.rkt:2687(install-clause-propagators-inner); propagator.rkt:3492(run-to-quiescence-bsp); propagator.rkt:4481(resolve-worldview-bitmask/pnet); propagator.rkt:4520(compound-cell-component-write/pnet) | reached-from-root-modules: bilattice.rkt,cap-type-bridge.rkt,capability-inference.rkt,classify-inhabit.rkt,constraint-propagators.rkt,direct-in-root:metavar-store.rkt,driver.rkt,effect-bridge.rkt,effect-ordering.rkt,elaborator-network.rkt,io-bridge.rkt,metavar-store.rkt,narrowing.rkt,propagator.rkt,reduction.rkt,relations.rkt,session-lattice.rkt,session-propagators.rkt,session-runtime.rkt,sre-core.rkt,type-lattice.rkt,typing-propagators.rkt,wf-propagators.rkt
+current-zonk-call-counts | def zonk.rkt:39 | assigned: direct(fn) | fire-reads 1: zonk.rkt:48(zonk-count!) | reached-from-root-modules: classify-inhabit.rkt,elaborator-network.rkt,session-lattice.rkt,type-lattice.rkt,typing-propagators.rkt
+
+== FIRE-REACHABLE parameter ASSIGNMENTS (p v) ==
+  current-cfa-result cfa-analysis.rkt:290 in cfa-ensure-analyzed!
+  current-confluence-registry confluence-analysis.rkt:70 in register-confluence!
+  current-naf-deferred? wf-engine.rkt:145 in make-wf-naf-oracle
+  current-naf-deferred? wf-engine.rkt:200 in probe-single-predicate
+  current-subtype-check-count subtype-predicate.rkt:77 in bump-subtype-count!
+  current-termination-registry termination-analysis.rkt:76 in register-termination!
+  current-wf-table-store wf-engine.rkt:450 in wf-solve-goal-tabled
+  current-wf-table-store wf-engine.rkt:485 in wf-solve-goal-tabled
+
+== FIRE-REACHABLE parameterize BINDINGS ==
+  current-bb-state narrowing.rkt:659 in run-narrowing-search
+  current-bb-state narrowing.rkt:820 in narrow-dt-search
+  current-bsp-fire-round? propagator.rkt:2884 in fire-and-collect-writes
+  current-bsp-observer prop-observatory.rkt:204 in capture-network
+  current-cell-id-namespace propagator.rkt:2885 in fire-and-collect-writes
+  current-is-eval-fn stratified-eval.rkt:303 in stratified-solve-goal
+  current-is-eval-fn reduction.rkt:701 in run-solve-goal
+  current-is-eval-fn reduction.rkt:717 in run-solve-goal
+  current-is-eval-fn reduction.rkt:738 in run-solve-goal
+  current-is-eval-fn reduction.rkt:783 in run-solve-goal
+  current-is-eval-fn reduction.rkt:807 in run-solve-one-goal
+  current-is-eval-fn reduction.rkt:833 in run-solve-one-goal
+  current-is-eval-fn reduction.rkt:863 in run-solve-one-goal
+  current-is-eval-fn reduction.rkt:907 in run-solve-one-goal
+  current-is-eval-fn reduction.rkt:934 in run-explain-goal
+  current-is-eval-fn reduction.rkt:967 in run-explain-goal
+  current-naf-oracle wf-engine.rkt:251 in wf-iterate
+  current-naf-oracle wf-engine.rkt:255 in wf-iterate
+  current-naf-oracle wf-engine.rkt:437 in wf-solve-goal-tabled
+  current-narrow-constraints narrowing.rkt:658 in run-narrowing-search
+  current-narrow-constraints narrowing.rkt:819 in narrow-dt-search
+  current-narrow-intervals narrowing.rkt:657 in run-narrowing-search
+  current-narrow-intervals narrowing.rkt:818 in narrow-dt-search
+  current-nbe-depth reduction.rkt:4840 in nbe-open-nf
+  current-quiescence-change-counter propagator.rkt:2761 in run-to-quiescence-drain
+  current-quiescence-change-counter propagator.rkt:3146 in par4-merge-census!
+  current-quiescence-write-counter propagator.rkt:2760 in run-to-quiescence-drain
+  current-quiescence-write-counter propagator.rkt:3146 in par4-merge-census!
+  current-source-loc propagator.rkt:378 in fire-propagator
+  current-use-bsp-scheduler? stratified-eval.rkt:301 in stratified-solve-goal
+  current-wf-table-store stratified-eval.rkt:234 in stratified-solve-goal
+  current-worldview-bitmask relations.rkt:2087 in maybe-wrap-worldview
+  current-worldview-bitmask propagator.rkt:2178 in wrap-with-worldview
+  current-worldview-bitmask relations.rkt:2364 in install-goal-propagator
+  current-worldview-bitmask relations.rkt:2439 in install-conjunction
+  current-worldview-bitmask relations.rkt:2463 in install-conjunction
+  current-worldview-bitmask relations.rkt:2517 in install-one-clause-concurrent
+  current-worldview-bitmask relations.rkt:2689 in install-clause-propagators-inner
+
+== FIRE-REACHABLE MUTATION SITES (non-local) ==
+  (hash-set! module-var ctor-registry.rkt 156 domain-table extra-domain-tables)
+  (hash-set! module-var loose-bvar.rkt 111 loose-bvar-range range-memo)
+  (hash-ref! module-var loose-bvar.rkt 232 struct-field-info struct-type-cache)
+  (hash-set! module-var macros.rkt 8093 cache-coercion-fn! coercion-fn-cache)
+  (set-box! module-var propagator.rkt 1236 fork-prop-network par4-fork-count)
+  (hash-set! module-var propagator.rkt 3100 par4-mc-inc! par4-mc)
+  (hash-set! module-var reduction.rkt 4831 nbe-scan-poisoned? nbe-scan-cache)
+  (set-box! module-var relations.rkt 3074 get-or-create-solver-template solver-network-template)
+  (hash-set! module-var stratified-eval.rkt 184 par4-route! par4-solve-routes)
+  (set-box! module-var subtype-predicate.rkt 81 bump-subtype-count! global-subtype-total)
+  (set-box! module-var subtype-predicate.rkt 83 bump-subtype-count! global-subtype-compound)
+  (set! module-var-set! propagator.rkt 3169 par4-merge-census! par4-mc-nevents)
+  (set! module-var-set! propagator.rkt 3170 par4-merge-census! par4-mc-events)
+
+== FIRE-REACHABLE MUTATION SITES (local-or-field; review) count: 130 ==
+  (set-box! local-or-field bb-optimization.rkt 83 bb-update-bound! (bb-state-cost-bound bb))
+  (hash-ref! local-or-field cfa-analysis.rkt 216 cfa-solve flow-sets)
+  (vector-set! local-or-field champ.rkt 213 node-insert new-arr)
+  (vector-set! local-or-field champ.rkt 238 node-insert new-arr)
+  (vector-set! local-or-field champ.rkt 349 node-delete new-arr)
+  (vector-set! local-or-field champ.rkt 606 vec-insert new)
+  (vector-set! local-or-field champ.rkt 651 vec-remove-insert-node new)
+  (hash-set! local-or-field champ.rkt 677 champ-transient ht)
+  (set-tchamp-root-size! local-or-field champ.rkt 685 tchamp-insert! troot)
+  (hash-set! local-or-field champ.rkt 686 tchamp-insert! ht)
+  (set-tchamp-root-size! local-or-field champ.rkt 694 tchamp-delete! troot)
+  (hash-remove! local-or-field champ.rkt 695 tchamp-delete! ht)
+  (set-box! local-or-field champ.rkt 765 tnode-insert! size-box)
+  (vector-set! local-or-field champ.rkt 791 tnode-insert! oarr)
+  (set-box! local-or-field champ.rkt 810 tnode-insert! size-box)
+  (vector-set! local-or-field champ.rkt 820 tnode-insert! (champ-node-content owned))
+  (set-box! local-or-field champ.rkt 828 tnode-insert! size-box)
+  (vector-set! local-or-field champ.rkt 991 freeze-node copy)
+  (hash-update! local-or-field definitional-tree.rkt 189 build-or-tree groups)
+  (hash-update! local-or-field error-explanation.rkt 107 build-reverse-index ht)
+  (hash-set! local-or-field error-explanation.rkt 195 static-reverse-walk visited)
+  (set-box! local-or-field error-explanation.rkt 199 static-reverse-walk collected)
+  (hash-set! local-or-field narrowing.rkt 1339 collect-narrow-logic-vars seen)
+  (set-perf-counters-reduce-steps! local-or-field performance-counters.rkt 187 perf-inc-reduce! pc)
+  (set-perf-counters-solver-backtracks! local-or-field performance-counters.rkt 219 perf-inc-solver-backtrack! pc)
+  (set-perf-counters-solver-unifies! local-or-field performance-counters.rkt 223 perf-inc-solver-unify! pc)
+  (set-perf-counters-zonk-steps! local-or-field performance-counters.rkt 227 perf-inc-zonk! pc)
+  (set-perf-counters-prop-firings! local-or-field performance-counters.rkt 236 perf-inc-prop-firing! pc)
+  (set-perf-counters-cell-allocs! local-or-field performance-counters.rkt 240 perf-inc-cell-alloc! pc)
+  (set-perf-counters-inert-dependent-skips! local-or-field performance-counters.rkt 245 perf-inc-inert-dependent-skip! pc)
+  (set-perf-counters-solver-row-scans! local-or-field performance-counters.rkt 254 perf-inc-solver-row-scan! pc)
+  (set-perf-counters-solver-col-compares! local-or-field performance-counters.rkt 258 perf-inc-solver-col-compare! pc)
+  (set-box! local-or-field performance-counters.rkt 770 perf-record-quiescence-writes! (quiescence-stats-runs qs))
+  (set-box! local-or-field performance-counters.rkt 771 perf-record-quiescence-writes! (quiescence-stats-total-writes qs))
+  (set-box! local-or-field performance-counters.rkt 772 perf-record-quiescence-writes! (quiescence-stats-total-changes qs))
+  (set-box! local-or-field performance-counters.rkt 773 perf-record-quiescence-writes! (quiescence-stats-max-writes qs))
+  (set-box! local-or-field performance-counters.rkt 774 perf-record-quiescence-writes! (quiescence-stats-max-changes qs))
+  (set-box! local-or-field performance-counters.rkt 777 perf-record-quiescence-writes! bx)
+  (set-box! local-or-field prop-observatory.rkt 131 observatory-register-capture! box)
+  (set-box! local-or-field prop-observatory.rkt 142 observatory-next-sequence! box)
+  (set-box! local-or-field propagator.rkt 1903 net-cell-write wc)
+  (set-box! local-or-field propagator.rkt 1935 net-cell-write cc)
+  (set-box! local-or-field propagator.rkt 2033 net-cell-write/slow-path cc)
+  (set-box! local-or-field propagator.rkt 2769 run-to-quiescence-drain wl)
+  (set-box! local-or-field propagator.rkt 2770 run-to-quiescence-drain remaining-fuel)
+  (set-box! local-or-field propagator.rkt 2781 run-to-quiescence-drain wl)
+  (set-box! local-or-field propagator.rkt 2810 run-to-quiescence-inner/traced wl)
+  (set-box! local-or-field propagator.rkt 2811 run-to-quiescence-inner/traced remaining-fuel)
+  (set-box! local-or-field propagator.rkt 2819 run-to-quiescence-inner/traced wl)
+  (hash-set! local-or-field propagator.rkt 2863 dedup-pids seen)
+  (hash-set! local-or-field propagator.rkt 3109 par4-round-cids s)
+  (hash-set! local-or-field propagator.rkt 3110 par4-round-cids s)
+  (hash-set! local-or-field propagator.rkt 3111 par4-round-cids s)
+  (hash-set! local-or-field propagator.rkt 3112 par4-round-cids s)
+  (hash-set! local-or-field propagator.rkt 3538 run-to-quiescence-bsp fired-set)
+  (set-box! local-or-field propagator.rkt 3550 run-to-quiescence-bsp stats-box)
+  (set-box! local-or-field propagator.rkt 3827 pool-dispatch (vector-ref (worker-pool-work-slots pool) i))
+  (set-box! local-or-field propagator.rkt 600 make-trace-accumulator counter)
+  (set-box! local-or-field propagator.rkt 602 make-trace-accumulator rounds)
+  (hash-set! local-or-field reduction.rkt 1129 nat-value cache)
+  (hash-set! local-or-field reduction.rkt 2759 whnf cache)
+  (set-box! local-or-field reduction.rkt 2862 whnf-impl fuel)
+  (hash-set! local-or-field reduction.rkt 4954 nf cache)
+  (hash-set! local-or-field relations.rkt 1020 collect-logic-vars-in-expr vars)
+  (hash-set! local-or-field relations.rkt 1286 collect-clause-vars vars)
+  (hash-set! local-or-field relations.rkt 1298 collect-goal-vars vars)
+  (hash-set! local-or-field relations.rkt 1303 collect-goal-vars vars)
+  (hash-set! local-or-field relations.rkt 1320 collect-solver-term-vars vars)
+  (hash-set! local-or-field relations.rkt 1359 collect-ast-vars vars)
+  (hash-set! local-or-field relations.rkt 1360 collect-ast-vars vars)
+  (hash-set! local-or-field relations.rkt 1364 collect-ast-vars vars)
+  (hash-set! local-or-field relations.rkt 1365 collect-ast-vars vars)
+  (hash-set! local-or-field relations.rkt 1366 collect-ast-vars vars)
+  (hash-set! local-or-field relations.rkt 1367 collect-ast-vars vars)
+  (hash-set! local-or-field relations.rkt 1391 collect-positive-binder-vars vars)
+  (hash-set! local-or-field relations.rkt 1393 collect-positive-binder-vars vars)
+  (hash-set! local-or-field relations.rkt 1402 clause-floundering-msg bound)
+  (hash-set! local-or-field relations.rkt 1533 solve-app-goal fresh-map)
+  (hash-set! local-or-field relations.rkt 1925 explain-app-goal fresh-map)
+  (hash-update! local-or-field relations.rkt 2906 dissolve-solver-pu merged-by-bm)
+  (hash-update! local-or-field relations.rkt 2927 dissolve-solver-pu entry-groups)
+  (vector-set! local-or-field rrb.rkt 129 rrb-set new-tail)
+  (vector-set! local-or-field rrb.rkt 141 set-in-trie new-arr)
+  (vector-set! local-or-field rrb.rkt 148 set-in-trie new-children)
+  (vector-set! local-or-field rrb.rkt 206 push-tail new-children)
+  (vector-set! local-or-field rrb.rkt 286 remove-rightmost-leaf new-children)
+  (vector-set! local-or-field rrb.rkt 543 rrb-transient buf)
+  (set-trrb-buf! local-or-field rrb.rkt 559 trrb-push! t)
+  (vector-set! local-or-field rrb.rkt 560 trrb-push! (trrb-buf t))
+  (set-trrb-size! local-or-field rrb.rkt 561 trrb-push! t)
+  (vector-set! local-or-field rrb.rkt 570 trrb-update! (trrb-buf t))
+  (set-box! local-or-field search-heuristics.rkt 105 solution-counter-decrement! counter)
+  (hash-set! local-or-field sre-core.rkt 2648 sre-make-duality-propagator h)
+  (hash-set! local-or-field sre-core.rkt 2649 sre-make-duality-propagator h)
+  (hash-set! local-or-field stratify.rkt 102 tarjan-scc on-stack)
+  (hash-set! local-or-field stratify.rkt 134 stratify scc-membership)
+  (set-box! local-or-field stratify.rkt 69 tarjan-scc index-counter)
+  (hash-set! local-or-field stratify.rkt 70 tarjan-scc indices)
+  (hash-set! local-or-field stratify.rkt 71 tarjan-scc lowlinks)
+  (hash-set! local-or-field stratify.rkt 73 tarjan-scc on-stack)
+  (hash-set! local-or-field stratify.rkt 87 tarjan-scc lowlinks)
+  (hash-set! local-or-field stratify.rkt 92 tarjan-scc lowlinks)
+  (hash-set! local-or-field tabling.rkt 202 wf-all-mode-merge best)
+  (hash-set! local-or-field zonk.rkt 49 zonk-count! h)

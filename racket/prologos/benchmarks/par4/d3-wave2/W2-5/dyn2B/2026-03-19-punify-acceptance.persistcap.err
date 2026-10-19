@@ -1,0 +1,4 @@
+PERF-COUNTERS:{"cell_allocs":7644,"constraint_count":0,"constraint_retries":0,"elaborate_steps":1030,"inert_dependent_skips":0,"infer_steps":1606,"meta_created":22,"meta_solved":16,"prop_allocs":0,"prop_firings":0,"reduce_steps":1300,"resolution_cycles":0,"solver_backtracks":68,"solver_col_compares":164,"solver_row_scans":122,"solver_unifies":513,"trait_resolve_steps":2,"unify_steps":175,"zonk_steps":1341}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":5,"qtt_ms":0,"reduce_ms":3,"trait_resolve_ms":0,"type_check_ms":12,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":78,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":2,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}

@@ -1,0 +1,13 @@
+C5 (PAR 4 D.3, Theory) — can D.2 §6.7's epoch-tagged late-write check miss a late S0 write?
+SC   W=ctw  D=plain  MISSED late write reachable
+SC   W=ctw  D=fence  MISSED late write reachable
+SC   W=wtc  D=plain  never missed
+SC   W=wtc  D=fence  never missed
+SC   W=wtcF D=plain  never missed
+SC   W=wtcF D=fence  never missed
+TSO  W=ctw  D=plain  MISSED late write reachable
+TSO  W=ctw  D=fence  MISSED late write reachable
+TSO  W=wtc  D=plain  MISSED late write reachable
+TSO  W=wtc  D=fence  MISSED late write reachable
+TSO  W=wtcF D=plain  MISSED late write reachable
+TSO  W=wtcF D=fence  never missed

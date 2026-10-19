@@ -1,0 +1,6 @@
+0: ERROR@?: Int | String
+1: ERROR@?: Nat | Bool
+2: f : Int | String -> Int defined.
+3: ERROR@?: Could not infer type
+4: ERROR@?: [prologos::data::list::List Int] | Bool
+-- leg prod: 5 results, 180.0 ms | observer: 2 BSP rounds in 1 runs, 1 diffs, 0 runs ending contradicted

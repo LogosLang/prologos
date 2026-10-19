@@ -1,0 +1,260 @@
+{
+ "1": {
+  "agent": "W2-1 granularity settler",
+  "role": "settler",
+  "summary": "With the thread executor off, an injected sequential timing executor gives the same fire sequence as the analysis run on every rep, and its count-based numbers match C3, C7 and C10 exactly. Q1: under D.2's per-cell home rule at K=8 the busiest executor holds 0.986/0.967 of fire time on the two heavy files, which is worse than by count (0.893/0.847). Q2: per-component ownership fixes balance, with the busiest share by time about 1/K (0.14 at K=8). It does not give speedup: time-weighted parallelism per round is 1.19/1.35 at K=8. The cap is the dependency structure, not the ownership unit: work/span is 1.28/1.49, and homing by propagator id hits the same ceiling. Q3: per-component fencing (only :type and type cells) still fences 85\u201392% of fire time; per-cell fencing fences 97\u201399%. D.2's alternation needs at most 2 switches per S0 run (mean 1.44\u20131.55, at most 1 on the critical path), so C9-11's 'as many syncs as BSP rounds' does not hold on the corpus. Q4: 6 of the 17 medium-tier files run no BSP S0 at all, and across the 17 the S0 fire time is 1.47 ms out of 127 ms of commands (1.2%); the relational and solver files run about one fire per S0 run. Verdict: P3 has no workload in this repo under any ownership unit. The zero-overhead bound is \u22641.05\u20131.06\u00d7 on the heavy-file commands without a fence and \u22641.01\u00d7 with D.2's fence at either granularity. So C10-6's deferral holds and D2P-5 selects the whole-network rule (i).",
+  "verdicts": [
+   {
+    "question": "Q1. Under D.2's per-cell home rule (a fire runs on the owner of its first output; round-robin; K=8), is the busiest executor's share by fire time \u2265 0.8 on the two heavy files?",
+    "clusters_and_findings": [
+     "CL-1",
+     "C3-1",
+     "C7-2",
+     "C10-1"
+    ],
+    "verdict": "holds-with-amendment",
+    "amendment": "Measured by time the share is higher than by count: 0.986\u20130.987 (constraints-adversarial) and 0.965\u20130.969 (type-adversarial), against 0.893/0.847 by count. The fires homed elsewhere (meta-solution, classify-inhabit-request, resolution cells) are the cheap ones: p50 fire 1 \u00b5s, p90 23\u201334 \u00b5s. Effective parallelism per round by time is 1.01/1.02 at K = 4, 8 and 16. Fire time includes BSP's per-fire collect step (fire-and-collect-writes, propagator.rkt:2876-2983).",
+    "evidence": "MEASUREMENT. Probe gran-probe.rkt, which injects a timing executor through current-parallel-executor (propagator.rkt:3675, called at :3497) making the same calls as sequential-fire-all (:3295). Command: timeout -k 10 900 racket benchmarks/par4/hold-suite-lock.rkt tools/suite-lock.rkt /bin/bash lockrun.sh, i.e. 3 interleaved runs per heavy file, each with 7 timing reps. Fire time is the per-fire median over the reps. Suite lock held exclusively; load 3.44\u21923.65 on 18 cores (6P+12E). Output (ranges over the 3 runs): constraints-adversarial: 1136 fires, S0 fire 10.02\u201310.44 ms; CELL K=8 busiest count 0.893, time 0.986\u20130.987. type-adversarial: 1140 fires, 7.32\u20137.54 ms; count 0.847, time 0.965\u20130.969. Rule source: D.2 \u00a76.7 (2026-10-15_PAR_4_D2_DESIGN.md:305).",
+    "evidence_class": "MEASUREMENT",
+    "power_check": "Calibration: the count-based numbers reproduce C3 and C10 exactly (0.893/0.847; implicit-args 0.867, matching C3's 0.8667). The per-round count parallelism for width \u22652 matches C7: 1.11/1.13 at K=8. The same instrument with homing by propagator id gives a busiest share of 0.140\u20130.162 by time, so it reports balance where balance exists. All 7 timing reps reproduce the analysed fire sequence (rep_seq_match all true). Across the 3 locked runs the time shares move by \u22640.003.",
+    "confidence": "high"
+   },
+   {
+    "question": "Q2. Under per-component ownership (component = (position, facet); home = owner of the first component written, from the delta keys or the declared #:component-paths), what are the busiest share by time and the effective parallelism at K \u2208 {4,8,16}? Does it restore the parallelism the K>1 models assume (CL-1's direction)?",
+    "clusters_and_findings": [
+     "CL-1",
+     "C7-2",
+     "C10-1",
+     "C3-1"
+    ],
+    "verdict": "fails",
+    "amendment": "Per-component ownership removes the hub imbalance but not the limit on speedup. Busiest share by time at K=4/8/16: constraints 0.264/0.143\u20130.146/0.088\u20130.093; type 0.267\u20130.270/0.141\u20130.147/0.094\u20130.100. That is about 1/K, the same as the power row. Effective parallelism per round, by count: 2.12/3.12/3.61 and 2.32/3.11/3.67. By time: 1.15/1.19\u20131.20/1.22\u20131.23 and 1.29\u20131.30/1.34\u20131.35/1.39\u20131.40. The asynchronous bound with zero overhead, max(span, busiest load) per run, is 1.26\u20131.28 and 1.46\u20131.49 at every K. That equals work/span, so the dependency chain binds and the ownership unit does not. Why: in each round one heavy :type fire holds 79%/69% of the round's time, only 16 of 214 and 20 of 185 rounds have two or more fires over 20 \u00b5s, and the top decile of fires holds 72% of the time. The static rule (write profile, otherwise the declared #:component-paths, used for 617/631 fires) agrees with the post-hoc delta rule to within 0.01. Homing components by hash instead of first-seen order changes nothing material. The models assumed 4.07\u00d7/3.26\u00d7 at K=8 (D.2 \u00a72 item 3).",
+    "evidence": "MEASUREMENT. Same probe and runs as Q1; analysis gran_analyze.py, tables in results/heavy-final.txt. Component units are the paths pu-value-diff returns for each value write against the snapshot (propagator.rkt:1657): (position . facet) for the attribute map (typing-propagators.rkt:447), or the key for flat compound cells. Declared input paths are read from the dependent-entry (propagator.rkt:2319-2324). Dependency edges: a fire in round r depends on any fire in round r\u22121 whose changed units meet its declared watched paths, the rule filter-dependents-by-paths applies (:1707). Coverage: 100% of fires in rounds >0 have a predecessor. diag.py: work/span with component edges 1.28/1.49 against cell edges 1.27/1.46. If edges inside a run are dropped, T divided by the sum of each run's heaviest fire is 3.18 on both files.",
+    "evidence_class": "MEASUREMENT",
+    "power_check": "Power row, homing by propagator id: count parallelism at K=8 is 4.06/3.96 (C7 got 4.08/4.19 with a pid hash), so the round structure is wide by count and the method can report parallelism. Time-weighted, the same row gives only 1.24\u20131.25/1.33\u20131.34, and its async bound is 1.26\u20131.28/1.48\u20131.49. The edge matcher discriminates where the network allows it: on bool-logic work/span is 2.77 with component edges against 2.42 with cell edges.",
+    "confidence": "high"
+   },
+   {
+    "question": "Q3a. Per-cell against per-component fencing: how many fenced\u2194free alternations occur per S0 run on the critical path? Is C9-11's 'the alternation has as many global synchronizations as BSP has rounds' true on the corpus?",
+    "clusters_and_findings": [
+     "CL-4",
+     "C9-11",
+     "C3-2"
+    ],
+    "verdict": "holds-with-amendment",
+    "amendment": "The rounds-proportional claim fails on the corpus. Crossings on the critical causal chain: per-cell mean 0.47/0.44 per run, max 1 (31/27 per file); per-component mean 0.55/0.49, max 1 (36/30 per file). Simulating D.2 \u00a76.3's schedule (free phase first, each phase run to quiescence, a fire placed in the first phase of its colour after its predecessors) gives 1.47/1.44 switches per run under per-cell fencing and 1.55/1.49 under per-component, max 2. That is 97/88 and 102/91 per file, against 214/185 BSP rounds. C9's own falsifier ('\u2264 2 alternations per S0 run with type cells fenced') is met. C9-11's direction still holds: switches plus the 61\u201366 run-end detections come to about 0.75\u20130.8 of the BSP round count, which is not \u226a rounds. ESTIMATE: at 7.3\u201315 \u00b5s per park/wake (P0 \u00a74; C6-5), about 100 switches cost 0.7\u20133 ms per heavy file, more than the 0.6\u20131.5 ms of free work there is to parallelize.",
+    "evidence": "MEASUREMENT (gran_analyze.py alternations(), same DAG as Q2; results/heavy-final.txt). The round-order proxy (C3's metric) gives 79/74 under per-cell fencing; C3 reported 82/69 on first-in-process runs.",
+    "evidence_class": "MEASUREMENT",
+    "power_check": "A self-test on synthetic chains gives FUFU=3, FFF=0, FUUUF=2. A random colouring (pid parity) on the same DAGs gives up to 6 (constraints) and 5 (type) alternations per run, so the \u22641\u20132 measured is a property of the real fences, not a ceiling of the counter.",
+    "confidence": "high"
+   },
+   {
+    "question": "Q3b. What share of fires and of fire time is fenced per cell against per component (per component = only the attribute map's :type components plus the type cells)? Does component-granular fencing leave K>1 work (CL-4 direction (ii))?",
+    "clusters_and_findings": [
+     "CL-4",
+     "C3-2",
+     "C10-2",
+     "C1-2",
+     "C9-11"
+    ],
+    "verdict": "fails",
+    "amendment": "Per-cell (attribute map or type-cell output): fires 0.890/0.854, time 0.986\u20130.988/0.973\u20130.974. Per-component, static per propagator (optimistic for propagators that never write): fires 0.358/0.331, time 0.913\u20130.918/0.853\u20130.854. Per-fire delta oracle: time 0.897\u20130.903/0.829\u20130.831. Conservative variant: time 0.960\u20130.962/0.911\u20130.913. The fence covers almost the same time at either granularity, because the heavy fires are exactly the :type writers: 286/241 :type units written, against 8/22 other facets. Zero-overhead async bounds at K=8: per-cell home with per-cell fence 1.00/1.01; per-component with the static fence 1.04\u20131.05/1.08; with the delta fence 1.06/1.11. So whole-network K=1 (option i) gives up \u22641\u20132% of S0 fire time against the per-cell alternation, and \u22645\u201311% against per-component fencing (\u22641.3% of command). C3-2/C10-2's point, that D.2's own D2P-5 rule picks option (i), holds at both granularities. Type cells proper contribute nothing in S0: the type meta universe, cell 32, is an output of 27 fires and is never written.",
+    "evidence": "MEASUREMENT (results/heavy-final.txt). Type cells were identified as: merge named type-unify-or-top or type-lattice-merge; or merge eq? to current-type-universe-merge (meta-universe.rkt:178, set at elaborator-network.rkt:1060); or cell id = current-type-meta-universe-cell-id (meta-universe.rkt:207); or a contradiction fn from elaborator-network.rkt (elab-fresh-meta, :138-144). The :type facet reaches type-unify-or-top through facet-merge (typing-propagators.rkt:401-406) and classify-inhabit.rkt:171.",
+    "evidence_class": "MEASUREMENT",
+    "power_check": "The classifier separates in both directions: under the per-fire delta it marks 17.8\u201319.5% of fires fenced and 80% free. The random-colouring row gives 0.48\u20130.55 of time fenced. The type-cell detector finds the type universe (cell 32, compound-tagged-merge closure decision-cell.rkt:582) where it exists. The merge census covers every S0 output merge: attribute-map, meta-solution, classify-inhabit-request, resolution-stratum, set-union, tagged :527, table-answer, compound :582, viability, worldview-cache.",
+    "confidence": "high"
+   },
+   {
+    "question": "Q4. Do Q1\u2013Q3 hold beyond the two heavy files, on \u22658 of the 19 medium-tier files (one per process)?",
+    "clusters_and_findings": [
+     "CL-1",
+     "CL-4",
+     "CL-16",
+     "C10-6"
+    ],
+    "verdict": "holds-with-amendment",
+    "amendment": "All 17 non-heavy files were run, one per process, 5 timing reps each. 6 run no BSP S0 at all: church-folds, dependent-types, higher-order, pairs-sigma, pattern-matching, recursive-types. The other 11 have 6\u2013150 fires and 0.009\u20130.395 ms of S0 fire time, 0.1\u201311% of the command; together, 1.47 ms of S0 fire over 127 ms of commands (1.2%). Per-cell K=8 busiest share by time is \u22650.75 on 9 of the 11 (parity-adversarial 0.34, atms 0.75). The per-component K=8 busiest share by time is 0.14\u20130.62. Per-round time parallelism, per component at K=8: 1.0\u20131.85. work/span: 1.0\u20132.77. Per-component fenced time on the elaboration files: 0.29\u20130.90. The solver files show 0: their S0 fires are attribute-map fires that write nothing, plus solver cells. D.2-schedule switches \u22642 per run. Time-weighted medium-tier async bounds at K=8: per-cell with per-cell fence 1.04; per-component with per-component fence 1.13; per-component without a fence 1.60; homing by pid 1.63. The relational and solver files (atms-adversarial 134 fires in 108 runs, solve-adversarial 77/77, solve-scale 6/6, parity-adversarial 62/21) run about one fire per S0 run, with \u22640.14 ms of S0 fire (\u22640.5% of command). parity-adversarial raises 'solve: Depth limit exceeded (100)' out of process-file under the production executor as well, so its numbers cover the prefix before the raise.",
+    "evidence": "MEASUREMENT. bash run-all.sh 5 \u2192 out/*.json and out/run-all.log (load 3.1\u21923.8); gran_analyze.py \u2192 results/all.summary.json, results/table-all.txt, results/medium-aggregate.txt. coverage-check.rkt (out/coverage-check.out): on the 6 zero-fire files the elaborator's quiescence scheduler (metavar-store.rkt:1766) is entered 1\u20134 times, always with an empty worklist, and 0 of those entries are Tier-1-shaped. control-raise.rkt (results/control-raise.out) shows the parity-adversarial raise is the same with the production and the sequential executor.",
+    "evidence_class": "MEASUREMENT",
+    "power_check": "coverage-check on constraints-adversarial sees 1136 executor fires, so the executor instrument does see S0 work where it exists. The zero-fire files are real zeros, not blind spots, except Tier-1 flushes outside the elaborator entry (propagator.rkt:3431-3445), which the executor cannot see. Those are fire-once propagators with empty inputs. implicit-args reproduces C3 exactly (150 fires, 0.867).",
+    "confidence": "high"
+   },
+   {
+    "question": "Verdict: does P3 have a workload under any ownership unit? (C10-6: defer K>1 to a sequel; CL-16 scope)",
+    "clusters_and_findings": [
+     "CL-16",
+     "CL-1",
+     "CL-4",
+     "C10-6",
+     "C7-3"
+    ],
+    "verdict": "holds",
+    "amendment": "C10-6 holds: there is no workload in the repo today for any unit (cell, component or propagator id) or any K in {4,8,16}. Best case (per-component or pid homing, no fence, zero coordination cost): S0 fire speedup \u22641.28/1.49 on the heavy files, which is \u22641.05/1.06 on the command since S0 fire is 0.22/0.17 of the command. With D.2's fence at component granularity: \u22641.05/1.08 S0, \u22641.01 command. Medium tier: \u22641.6\u00d7 on 1.2% of command time. After P2-lite (one full pu-value-diff removed per compound write) S0 fire time falls 48%/40% and work/span is unchanged (1.27\u20131.29/1.47\u20131.49), so P3's absolute target shrinks further. ESTIMATE: the median S0 run does 54\u201363 \u00b5s of fire work; one semaphore wake (7.3\u201315 \u00b5s) plus ~1.5 fence switches per run eat more than the \u226412\u201320 \u00b5s a 1.28\u20131.49\u00d7 bound could save on it. The one place with slack is across S0 runs: the largest run is 8\u201311% of S0, so T over the max run is 9\u201312. CONJECTURE: that slack is reachable only by command- or definition-level parallelism. Inter-run dependencies were not measured. What would change this: a program whose S0 runs show work/span \u22653 and S0 share \u226530% (BSP-LE 3 search on the network is the named candidate). gran-probe.rkt measures any .prologos file without a rebuild.",
+    "evidence": "Synthesis of Q1\u2013Q4 (results/heavy-final.txt, results/medium-aggregate.txt). Amdahl inputs: S0 fire share 0.218\u20130.229 and 0.168\u20130.178 of median command wall (timing reps, no observer). Bounds: 1/(1\u22120.22\u00b7(1\u22121/1.28)) = 1.05; 1/(1\u22120.17\u00b7(1\u22121/1.49)) = 1.06. Per-run S0 fire: p50 0.063/0.054 ms, max 0.84/0.81 ms.",
+    "evidence_class": "MEASUREMENT",
+    "power_check": "The bounds are upper bounds (zero overhead, perfect placement, BSP's own dependency DAG) and are reported next to the power rows (pid homing) that reach the same cap. The cap is not an artifact of the probe: with intra-run edges removed it rises to 3.18, so the instrument can show parallelism the dependencies do not allow.",
+    "confidence": "high"
+   }
+  ],
+  "findings": [
+   {
+    "id": "W2-1-1",
+    "lens": "M (measurement) / red-team",
+    "section": "D.2 \u00a72 item 3 (K>1 models 4.07\u00d7/3.26\u00d7), \u00a76.7 Ownership, \u00a716 R-1; triage CL-1 direction",
+    "claim_attacked": "The hub cell and the home rule are what limit K>1, so making the component the unit of ownership (CL-1's direction) recovers the modelled parallelism.",
+    "severity": "blocker",
+    "evidence": "On the heavy files, per-component ownership gives a busiest share by time of about 1/K (0.14 at K=8), but time-weighted parallelism is 1.19/1.35 per round. The zero-overhead async bound is work/span = 1.28/1.49 at any K, and pid homing (perfect balance) gives the same. In each round one :type fire holds 69\u201379% of the round's time, and those fires form a chain (3.0\u20133.2 rounds per run on average). Component edges rather than cell edges change work/span only from 1.27 to 1.28 and from 1.46 to 1.49.",
+    "evidence_class": "MEASUREMENT",
+    "direction": "Replace D.2 \u00a72 item 3's models, which assume every fire is parallel (fire time / min(width, K)), with a work/span model computed from the dependency DAG (gran_analyze.py). State P3's value as min(K, work/span, 1/busiest-share) \u00d7 the S0 share. Read P3's entry gate from this instrument rather than from ownership balance.",
+    "falsifier": "A corpus file where gran-probe.rkt measures work/span \u22653 within S0 runs, with S0 fire \u226530% of the command.",
+    "confidence": "high"
+   },
+   {
+    "id": "W2-1-2",
+    "lens": "M",
+    "section": "D.2 \u00a72 item 2, \u00a76.6; triage CL-16 (C10-3)",
+    "claim_attacked": "P2 (DIRECT) is the main sequential lever; C10-3's P2-lite (a keyed diff) is an ESTIMATE.",
+    "severity": "major",
+    "evidence": "An independent instrument corroborates C10-3. Timing pu-value-diff on every live (snapshot, result) pair of a compound write, min of 5, and removing one diff per written compound cell per fire, removes 4.90\u20134.99 ms of 10.02\u201310.44 ms of S0 fire time (48%) on constraints-adversarial and 2.92\u20132.98 of 7.32\u20137.54 ms (40%) on type-adversarial. That is about 22 \u00b5s per attribute-map write, against C10's 23.8 \u00b5s. It is a lower bound on the in-fire diff cost, because a fire that writes k facets through k that-writes pays k diffs (net-cell-write's component-path diff, propagator.rkt:2042-2072). It is not a command-time measurement; W2-2 owns that.",
+    "evidence_class": "MEASUREMENT",
+    "direction": "Let W2-2's keyed-diff leg be the command-time check. Treat the per-write diff as the first cost to absorb at K=1. Note that it shrinks the absolute target of K>1 while leaving work/span unchanged (1.27\u20131.29/1.47\u20131.49).",
+    "falsifier": "W2-2's keyed-diff leg showing < 20% less S0 fire time on the heavy files.",
+    "confidence": "medium"
+   },
+   {
+    "id": "W2-1-3",
+    "lens": "M / scope",
+    "section": "D.2 \u00a71 scope, \u00a76.8; W2-8's proposed first targets (relational and solver files)",
+    "claim_attacked": "The relational and solver workloads in the repo are S0 workloads that K>1 could target first.",
+    "severity": "major",
+    "evidence": "6 of the 19 comparative files run no BSP S0: the elaborator's quiescence scheduler only ever sees empty worklists (coverage-check.out). The relational and solver files run about one fire per S0 run: atms-adversarial 134 fires in 108 runs, solve-adversarial 77/77, solve-scale 6/6, parity-adversarial 62/21. Their S0 fire time is 0.009\u20130.141 ms, 0.1\u20130.5% of the command, and solve-adversarial's 77 fires write nothing. Across the 17 non-heavy files S0 fire is 1.2% of command time.",
+    "evidence_class": "MEASUREMENT",
+    "direction": "Cite these numbers in the CL-16 scope decision. A K>1 target must be a workload that does not exist yet (BSP-LE 3 search on the network), which supports C10-6's sequel.",
+    "falsifier": "A test or example in the repo whose S0 fire time is >30% of its command with work/span \u22653, measured by gran-probe.rkt.",
+    "confidence": "high"
+   },
+   {
+    "id": "W2-1-4",
+    "lens": "M (instrument hygiene)",
+    "section": "P0 census baselines; triage CL-1 replication table",
+    "claim_attacked": "Per-file fire counts (P0's census 1142/1112, C3) are properties of the file.",
+    "severity": "minor",
+    "evidence": "The first file processed in a process does different S0 work. Without a preload: 1142 fires/212 rounds and 1112/182 on the first rep, then 1136/214 and 1140/185 on reps 2\u20133. With a preload: 1136/214 and 1140/185 on every rep. The executor (production or sequential) makes no difference (results/fire-count-check.out). Separately, parity-adversarial raises 'solve: Depth limit exceeded (100)' out of process-file under both executors (results/control-raise.out), so any timing of that file measures only the prefix before the raise.",
+    "evidence_class": "MEASUREMENT",
+    "direction": "Pin a preload, or state first-in-process, in every per-file count used as a baseline. Flag parity-adversarial's raise in the medium-tier harnesses.",
+    "falsifier": "The same counts on the first and later reps without a preload.",
+    "confidence": "high"
+   }
+  ],
+  "probes": [
+   "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-1/gran-probe.rkt \u2192 out/<file>.json (19 files), out/run-all.log; locked/<heavy>.{1,2,3}.json, locked/lockrun.log",
+   "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-1/run-all.sh \u2192 out/run-all.log",
+   "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-1/lockrun.sh (run under benchmarks/par4/hold-suite-lock.rkt) \u2192 locked/lockrun.log",
+   "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-1/gran_analyze.py \u2192 results/all.summary.json, results/locked.summary.json",
+   "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-1/table.py \u2192 results/table-all.txt, results/table-locked.txt, results/heavy-final.txt, results/medium-aggregate.txt",
+   "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-1/diag.py \u2192 locked/diag.out",
+   "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-1/coverage-check.rkt \u2192 out/coverage-check.out",
+   "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-1/fire-count-check.rkt \u2192 results/fire-count-check.out",
+   "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-1/control-raise.rkt \u2192 results/control-raise.out"
+  ]
+ },
+ "2": {
+  "agent": "W2-2 P2-lite settler",
+  "role": "settler",
+  "summary": "I made one scratch build (git archive of 07fe9a12, whose racket/prologos is identical to df80be74) with five switches set by environment variables. They turn off the thread executor (EXEC_OFF), turn on the keyed diff (KEYED_DIFF) and the delta-carried writes (DELTA_WRITES), and run the equivalence monitors and their power rows. The legs were timed in two schedules: A\u2013D \u00d7 8 rounds, then A\u2013E \u00d7 8 rounds. Each round used rotated leg order, held the suite lock and ran 18 comparative files with 5 reps per process. Turning off the thread executor saves about 35 % on the two heavy files (\u224822\u201325 ms each) and about 22 % on the medium tier. The keyed diff matches the full diff on all 2992 eligible writes (0 mismatches); its power row (drop one key) is caught on 1980 writes. Its speedup is 1.47\u20131.49\u00d7 / 1.23\u20131.27\u00d7 with the executor off, but only 1.13\u20131.23\u00d7 with it on. Delta-carried writes fitted in bounded time and were built. With all three changes the heavy files run 3.45\u00d7 / 2.52\u00d7 faster than today and the medium tier 1.65\u00d7. They are not exactly equivalent: 2 of 1034 carried writes merged to a different value (an unsolved-meta classifier). From one instrument (the main-thread sampler, executor off), P2 would still give 3.2\u20133.3\u00d7 / 2.0\u20132.1\u00d7 over the build with the executor off and the keyed diff on, but only about 1.07\u20131.22\u00d7 after delta-carried writes; by then about 2/3 of command time is outside BSP. Printed program outputs could not detect a deliberately wrong diff, so a per-write monitor is the only instrument for equivalence that has power.",
+  "verdicts": [
+   {
+    "question": "Q1. How much command time does removing the thread executor save on the two heavy files, and on the medium tier?",
+    "clusters_and_findings": [
+     "CL-2",
+     "C2-1",
+     "C6-1",
+     "C7-1",
+     "C10-4"
+    ],
+    "verdict": "holds",
+    "amendment": "Quantified. The saving is concentrated in files with wide BSP rounds. 11 of the 16 non-heavy files are at parity (0.96\u20131.05), so P0.5 is a ~1.5\u00d7 win on the heavy files and ~1.08\u00d7 on the rest. About 7 ms of the heavy-file saving is GC: the GC time inside each heavy run drops from 8 ms to \u22641 ms.",
+    "evidence": "MEASUREMENT. Command time is the wall time of process-file after an in-process preload (w22-time.rkt): the median over 8 interleaved processes of each process's median of 5 reps, under the suite lock (hold-suite-lock.rkt). Load is `uptime` 1-min: t1 2.49\u20133.87, t2 3.75\u20137.01. Leg A = as-is, B = W22_EXEC_OFF=1 (driver.rkt:567 is skipped, so BSP falls back to sequential-fire-all through the #:executor default at propagator.rkt:3401). Results, A\u2192B: constraints-adversarial 66.3\u219244.1 ms (t1; range A 63\u201367, B 43\u201346) and 71.5\u219246.8 (t2); type-adversarial 63.5\u219240.9 (t1) and 67.1\u219243.1 (t2). The heavy pair summed: 129.9\u219285.0 (0.654) and 138.5\u219290.0 (0.649). Medium tier, 18 files: 245.4\u2192192.2 (0.783) and 259.6\u2192202.6 (0.780). The other 16: 115.5\u2192107.2 (0.928) and 121.1\u2192112.6 (0.930). Per-file B/A: implicit-args 0.52\u20130.54, bool-logic 0.60\u20130.63, scheduler-adversarial 0.72\u20130.77, nat-arithmetic 0.74\u20130.78, records-seal-validate 0.81\u20130.85; the rest 0.96\u20131.05. S0 fire-ms (current-bsp-round-stats): 27.1\u219210.6 and 23.9\u21927.4. The GC time inside each heavy run drops from 8 ms to \u22641 ms. This reproduces C2's 63 vs 42 ms. Command: `LEGSET=\"A B C D\" hold-suite-lock.rkt suite-lock.rkt bash round.sh r OUT` for r = 0..7, then `summarize.py t1/legs.jsonl`.",
+    "evidence_class": "MEASUREMENT",
+    "power_check": "Every JSON row carries `executor_installed` (true in A and C, false in B and D), so the switch is verified per process, not assumed. The two independent schedules agree within 0.005 on every tier ratio. The per-process total ranges do not overlap on the heavy files (A 126.9\u2013161.4 vs B 82.8\u201397.4 ms). The same method resolves the 7 % effect on the 16-file subset. The parity files have S0 fire-ms \u2248 0, so no executor effect is expected there: the null result has a mechanism, not just a lack of resolution.",
+    "confidence": "high"
+   },
+   {
+    "question": "Q2. Is the keyed diff's output identical to the full diff on every write? (equivalence monitor + power row)",
+    "clusters_and_findings": [
+     "CL-16",
+     "C10-3"
+    ],
+    "verdict": "holds",
+    "amendment": "It holds for every merge registered key-preserving; today that is attribute-map-merge-fn, which covers 2992 of the 3072 diffs (97.4 %). Other merges must keep the full diff unless they satisfy the hypothesis. Two caveats. (1) Under BSP's whole-map write in bulk-merge-writes, the keyed diff walks every key and saves nothing there; it pays only on in-fire writes and on writes outside BSP. (2) End-to-end output equality is not a valid substitute for the monitor (see power_check).",
+    "evidence": "THEOREM. Hypothesis H: for a merge m, every key k outside keys(new) has m(old,new)[k] eq? old[k] (old keeps every such key). Under H, pu-value-diff(old, m(old,new)) equals, as a multiset, the same per-key logic restricted to keys(new). Proof: pu-value-diff (propagator.rkt:1657-1694) skips eq? values in its first loop. Its removed-key loop can only fire on keys of new, because H keeps every other key of old. attribute-map-merge-fn (typing-propagators.rkt:447-470) folds from old and only hash-sets keys of new, so H holds. Its non-hash arms either return new (the keyed diff is guarded off when old is not a hash) or return old (an eq? no-change exit, where no diff is computed). MEASUREMENT. A full monitor (W22_KEYED_MONITOR=full) computes both diffs on every eligible slow-path write, compares them as multisets and returns the full diff. Over 19 files, one per process: eligible 2992, compared 2992, mismatches 0 with the executor off (mon/mon-execoff.jsonl). With the executor on it is again 2992/0 (mon/dw-execon.jsonl; the counters use box-cas!). Of the eligible writes, 2226 had a written value smaller than the map; there the full diff walks 1,121,184 keys and the keyed diff 63,592. 766 were whole-map writes (bulk). Command: `./monitor.sh mon/mon-execoff.jsonl W22_EXEC_OFF=1`.",
+    "evidence_class": "THEOREM",
+    "power_check": "Power row: W22_KEYED_POWER=1 makes the keyed diff drop the first key of the written value. The monitor flags 1980 of 2992 writes, in every one of the 9 files that has eligible writes (e.g. constraints 878/1324, type 745/1146; mon/power-execoff.jsonl). The uncaught ~1012 are whole-map writes and writes whose dropped key did not change. Second power test, end to end: the same wrong diff returned to the scheduler (leg P, monitor off) changed NO deterministic file's printed-result fingerprint (17/17 SAME, pw/legs.jsonl). type-adversarial's output already differs between runs within leg A. So an 'outputs identical' check would have been vacuous here; only the per-write monitor can fail.",
+    "confidence": "high"
+   },
+   {
+    "question": "Q3. Command time for as-is / executor off / keyed diff / both (heavy + medium, \u22657 interleaved runs, suite lock, uptime). Is C10-3's estimate borne out by its keyed-diff part? Delta-carried writes: implement or estimate.",
+    "clusters_and_findings": [
+     "CL-16",
+     "C10-3",
+     "CL-2"
+    ],
+    "verdict": "holds-with-amendment",
+    "amendment": "(a) C10's keyed-diff part (1.48\u00d7 / 1.35\u00d7) is borne out on constraints-adversarial only relative to the executor-off baseline (1.47\u20131.49\u00d7). type-adversarial gets 1.23\u20131.27\u00d7. Against today's production build (executor on), the keyed diff alone gives only 1.21\u20131.23\u00d7 / 1.13\u20131.14\u00d7, because C10's sampler did not see the worker threads. Outside the two heavy files it gives nothing (C/A 1.005 on the other 16). (b) Delta-carried writes were implemented (chain-checked, falling back to the whole map) and reach 3.45\u00d7 / 2.52\u00d7 over as-is. C10's 4.4\u00d7 / 2.2\u00d7 is therefore not borne out on constraints, and on type it is exceeded only by counting the executor's removal. Without that removal, E/B is 2.26\u00d7 / 1.62\u00d7. (c) Delta-carried writes are not exactly equivalent on today's merges (2/1034 writes differ). The difference is a non-join meta-vs-meta :type merge, not a bug in the variant (finding W2-2-1).",
+    "evidence": "MEASUREMENT. Same harness and lock as Q1, plus leg C = W22_KEYED_DIFF=1, D = EXEC_OFF+KEYED and E = D + W22_DELTA_WRITES=1. Each row lists A / B / C / D / E in ms. constraints t1: 66.3 / 44.1 / 54.7 / 30.0. constraints t2: 71.5 / 46.8 / 58.3 / 31.4 / 20.7. type t1: 63.5 / 40.9 / 56.1 / 32.1. type t2: 67.1 / 43.1 / 58.8 / 35.1 / 26.6. Heavy pair t2: 138.5 / 90.0 / 117.1 / 66.5 / 47.3 (E/A 0.341). Medium-18 t2: 259.6 / 202.6 / 238.8 / 181.7 / 157.4 (E/A 0.606). Other 16 t2: 121.1 / 112.6 / 121.7 / 115.2 / 110.2. S0 merge-ms D\u2192E: 10.7\u21920.8 and 7.3\u21921.1. Delta-carried-writes monitor (W22_KEYED_MONITOR=full with DELTA_WRITES; bulk-merge-writes computes merge(canon, whole) and merge(canon, delta) and writes the whole map): 1034 carried, 0 chain fallbacks, 331 with no entry, 2 mismatches, both in type-adversarial. The first mismatch: position (id ?meta1890 42), facet :type; the whole-map path gives classifier meta1890 and the delta path meta1889 (mon/dw-execoff.jsonl). A carried delta averages 1.6 keys, against 255 for the whole map. Commands: `LEGSET=\"A B C D E\" \u2026 round.sh` \u00d7 8, then `summarize2.py t2/legs.jsonl`.",
+    "evidence_class": "MEASUREMENT",
+    "power_check": "Timing: the two schedules (t1, t2) reproduce every leg ratio within \u00b10.04. The heavy per-process ranges separate the legs (D 63.9\u201388.8 vs E 45.1\u201358.4 vs B 82.8\u201397.4 ms). The leg flags (`keyed`, `exec_off`, `executor_installed`) are verified per row. The delta monitor's power row (W22_DW_POWER=1 drops one key of each carried delta) catches 857 of 1034 writes (mon/dwpower-execoff.jsonl). Without it, the same monitor reported 2. So the 2 are real, and 0 would have been detectable.",
+    "confidence": "high"
+   },
+   {
+    "question": "Q4. Re-derive P2's model with the executor off and the keyed diff on, from a single instrument. What gain would P2 still have?",
+    "clusters_and_findings": [
+     "CL-16",
+     "C10-3",
+     "C10-6",
+     "C7-7"
+    ],
+    "verdict": "holds-with-amendment",
+    "amendment": "Over the build with the executor off and the keyed diff on, P2 would still give 3.2\u20133.3\u00d7 (constraints) and 2.0\u20132.1\u00d7 (type). Most of that is bulk-merge-writes re-merging and re-diffing whole maps, which delta-carried writes also remove. After them, P2's marginal gain is 1.07\u20131.22\u00d7 / 1.07\u20131.21\u00d7. That is consistent with C10's \u22641.28\u00d7 on constraints but exceeds C10's \u22641.09\u00d7 on type. After P0.5 and P2-lite with delta writes, 66\u201370 % of command time is outside BSP, so S0 scheduling caps the further gain at about 1.5\u00d7. Under DIRECT the keyed diff is still needed: the in-fire diff that DIRECT keeps was 25 % of command time with the executor off (669 of 2718 samples) and disappears only with the keyed diff.",
+    "evidence": "MEASUREMENT, one instrument: a 1 ms sampler on the main thread (w22-split.rkt, adapted from C10's split-probe.rkt), executor OFF in every leg so that every fire runs on the sampled thread. 2 processes \u00d7 40 reps per (file, leg), under the suite lock, 1-min load 4.49\u20134.76. Samples are classified by stack. DIRECT removes bulk-merge-writes and the fire ceremony (champ-diff, fire-and-collect-writes self time, read-raw); round bookkeeping (bsp/other) is the upper bound. It keeps the fire bodies and their writes. In each row, T = samples inside process-command. constraints: B T=2718, bulk 1052, ceremony 29 \u2192 1.66\u20131.67\u00d7. D T=1566, bulk 1037, ceremony 37 \u2192 3.18\u20133.34\u00d7. E T=817, bulk 78, ceremony 46, outside-BSP 539 \u2192 1.18\u20131.22\u00d7; 1.07\u00d7 if bulk's topology and new-cell share is kept. type: B T=2236, bulk 745 \u2192 1.53\u20131.56\u00d7. D T=1586, bulk 779 \u2192 2.03\u20132.10\u00d7. E T=1076, bulk 92, ceremony 58, outside 753 \u2192 1.16\u20131.21\u00d7 (lower bound 1.07\u00d7). The next hot spot inside fires is `member` in filter-dependents-by-paths (propagator.rkt:1741-1744): 22\u201349 samples, 3\u20135 % of T. Command: `hold-suite-lock.rkt \u2026 bash split.sh`; the output and model are in split/model.txt.",
+    "evidence_class": "MEASUREMENT",
+    "power_check": "The instrument detects the change it should. Between legs B and D the in-fire pu-value-diff samples fall from 669 to 0, and the outside-BSP diff from 431 to 0. Between D and E, bulk/merge falls from 575 to 5 and bulk/diff from 404 to 3. Sampler wall per rep tracks the timed legs (constraints D 31.5 vs timed 30.0\u201331.4; E 21.1 vs 20.7). Limit: the fire-propagator frame is a tail call and does not appear in the stack, so body and ceremony are split by callee class (under-write / champ-diff / self / read-raw / other). The ceremony bound is therefore stated as a range, not as one number.",
+    "confidence": "medium"
+   }
+  ],
+  "findings": [
+   {
+    "id": "W2-2-1",
+    "lens": "semantics / merge rows (CL-14 evidence)",
+    "section": "D.2 P2-lite / \u00a76 merge contract; C10-3",
+    "claim_attacked": "Carrying a fire's delta instead of its whole post-fire map is semantics-preserving (merge(canon, snap \u2294 d) = merge(canon, d) because canon \u2292 snap).",
+    "severity": "major",
+    "evidence": "In 1 of 517 carried writes per run of type-adversarial, merge(canon, whole map) \u2260 merge(canon, delta) at facet :type of position (id ?meta1890 42): the whole-map path gives classifier meta1890 and the delta path meta1889. The :type facet's classify-inhabit merge on two unsolved-meta classifiers is not absorptive, so BSP's re-merge of the snapshot's stale value changes the result. Monitor: mon/dw-execoff.jsonl, 2/1034; power row 857/1034. Printed outputs are unchanged, but see W2-2-2.",
+    "evidence_class": "MEASUREMENT",
+    "direction": "The attribute-map cell should receive only the information the fire added (its delta). The :type facet's merge needs a join on meta-vs-meta (or the ev_W / unify-fire treatment W2-6 and W2-7 settle) before any write path is called equivalent. Until then, delta-carried writes and DIRECT are expected to differ from BSP on this row.",
+    "falsifier": "Show that merge-classify-inhabit is ACI plus absorption on classifier pairs with unsolved metas (aci-laws.rkt with meta samples), or that the two values zonk to the same type at the end of the command.",
+    "confidence": "medium"
+   },
+   {
+    "id": "W2-2-2",
+    "lens": "instrument power",
+    "section": "D.2 \u00a710.2 parity suite; any A/B whose criterion is 'outputs identical'",
+    "claim_attacked": "Identical printed results across a scheduler or diff variant on the comparative corpus show the variant computes the same thing.",
+    "severity": "major",
+    "evidence": "A deliberately wrong keyed diff (drops one key, so it drops dependent enqueues), returned to the scheduler, left the printed-result fingerprints of all 17 deterministic files unchanged (pw/legs.jsonl). The per-write monitor caught it on 1980 of 2992 writes. type-adversarial's printed output also differs from run to run within one process, even as-is, so its fingerprint cannot be compared at all.",
+    "evidence_class": "MEASUREMENT",
+    "direction": "Parity in PAR 4 should be judged by per-write differential monitors at the cell or diff level (a reference value computed beside the variant, plus a power row). The corpus output comparison is a smoke test, not evidence.",
+    "falsifier": "A corpus or suite file whose printed output changes under the wrong-diff leg P.",
+    "confidence": "high"
+   }
+  ],
+  "probes": [
+   "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-2/apply-variants.py + apply-delta.py (scratch-only edits; full diff in w22-variants.patch)",
+   "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-2/w22-time.rkt + round.sh + summarize.py/summarize2.py -> t1/legs.jsonl, t1/summary.txt, t1/schedule.txt (A\u2013D \u00d78); t2/legs.jsonl, t2/summary.txt, t2/schedule.txt (A\u2013E \u00d78)",
+   "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-2/monitor.sh -> mon/mon-execoff.jsonl, mon/power-execoff.jsonl, mon/dw-execoff.jsonl, mon/dwpower-execoff.jsonl, mon/dw-execon.jsonl",
+   "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-2/round.sh (LEGSET=\"A P\") -> pw/legs.jsonl (output-fingerprint power row)",
+   "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-2/w22-split.rkt + split.sh -> split/split.jsonl, split/model.txt",
+   "/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3w2/W2-2/RESULTS.md (summary table)"
+  ]
+ }
+}

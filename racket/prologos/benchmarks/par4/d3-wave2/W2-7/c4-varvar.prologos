@@ -1,0 +1,22 @@
+ns probes::c9c4
+
+;; C9 (c) control rows: a var-var unification between two DIFFERENT bindings. unify-fire
+;; (relations.rkt:2112-2120) returns the network unchanged when both sides are bound and differ,
+;; so the conflict never reaches scope-cell-merge (D.2 P1a row 2's flat lattice cannot see it).
+
+solver atms-s
+  :strategy atms
+
+solver dfs-s
+  :strategy depth-first
+
+defr clash [?x ?y]
+  &> (= x 1) (= y 2) (= x y)
+
+defr agree [?x ?y]
+  &> (= x 1) (= y 1) (= x y)
+
+solve-with atms-s (clash ?x ?y)
+solve-with dfs-s (clash ?x ?y)
+solve-with atms-s (agree ?x ?y)
+solve-with dfs-s (agree ?x ?y)

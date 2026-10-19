@@ -1,0 +1,3 @@
+POWER c2 fire-once (Tier 1): tier1-eligible #t, B = 0, non-fixpoint propagators ((0 (21)))
+POWER c2 plain (Tier 2 control): tier1-eligible #f, B = 7, non-fixpoint propagators ()
+W24Q3 foray.prologos {"dfs-0-arity":3,"queries":26,"tier1-direct-fact-return":13,"tier2-entered":10,"tier2-nonfixpoint":3} examples ((light-vehicle (w24v0) #f ((0 (1)))) (truths (w24v0 w24v1 w24v2 w24v3) #f ((6 (26)) (7 (26)))) (fruit-not-of-color (w24v0 w24v1) #f ((0 (1)))))

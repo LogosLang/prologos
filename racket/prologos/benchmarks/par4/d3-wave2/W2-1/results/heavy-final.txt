@@ -1,0 +1,62 @@
+===== constraints-adversarial.prologos (3 locked runs x 7 timing reps; ranges over runs)
+ fires 1136 runs 66 rounds 214 S0 fire ms 10.023–10.442 S0/cmd 0.218–0.229 W/S 1.26–1.28 productive 280 prod time share 0.932–0.937 p50/p90/p99/max us [1.0, 34.0, 123.0, 170.0]
+  CELL   K=4  busiest count 0.912 time 0.988–0.989 | eff.par/round count 1.09 time 1.01
+  CELL   K=8  busiest count 0.893 time 0.986–0.987 | eff.par/round count 1.11 time 1.01
+  CELL   K=16 busiest count 0.889 time 0.985–0.986 | eff.par/round count 1.11 time 1.01
+  COMP_D K=4  busiest count 0.252 time 0.264–0.266 | eff.par/round count 2.12 time 1.15
+  COMP_D K=8  busiest count 0.131 time 0.143–0.146 | eff.par/round count 3.12 time 1.19–1.2
+  COMP_D K=16 busiest count 0.071 time 0.085–0.093 | eff.par/round count 3.61 time 1.22–1.23
+  COMP_S K=4  busiest count 0.253 time 0.264–0.266 | eff.par/round count 2.12 time 1.15
+  COMP_S K=8  busiest count 0.132 time 0.143–0.146 | eff.par/round count 3.12 time 1.19–1.2
+  COMP_S K=16 busiest count 0.072 time 0.088–0.093 | eff.par/round count 3.61 time 1.22–1.23
+  COMP_H K=4  busiest count 0.27 time 0.275–0.285 | eff.par/round count 2.07 time 1.17
+  COMP_H K=8  busiest count 0.141 time 0.138–0.145 | eff.par/round count 2.73 time 1.2–1.21
+  COMP_H K=16 busiest count 0.089 time 0.105–0.106 | eff.par/round count 3.1 time 1.22–1.23
+  PID    K=4  busiest count 0.256 time 0.261–0.277 | eff.par/round count 2.89 time 1.2–1.21
+  PID    K=8  busiest count 0.133 time 0.14–0.143 | eff.par/round count 4.06 time 1.24–1.25
+  PID    K=16 busiest count 0.072 time 0.087–0.09 | eff.par/round count 4.66 time 1.25–1.26
+  F_CELL   fenced fires 0.89 time 0.986–0.988 | crit-path alternations/run mean 0.47 max 1 total 31 | D.2-schedule switches/run mean 1.47 max 2 total 97 | round-order proxy 79
+  F_COMPd  fenced fires 0.195 time 0.897–0.903 | crit-path alternations/run mean 0.55 max 1 total 36 | D.2-schedule switches/run mean 1.55 max 2 total 102 | round-order proxy 32
+  F_COMPs  fenced fires 0.358 time 0.913–0.918 | crit-path alternations/run mean 0.55 max 1 total 36 | D.2-schedule switches/run mean 1.55 max 2 total 102 | round-order proxy 10
+  F_COMPc  fenced fires 0.883 time 0.96–0.962 | crit-path alternations/run mean 0.47 max 1 total 31 | D.2-schedule switches/run mean 1.47 max 2 total 97 | round-order proxy 79
+  F_RAND   fenced fires 0.489 time 0.48–0.49 | crit-path alternations/run mean 1.27 max 6 total 84 | D.2-schedule switches/run mean 1.97 max 6 total 130 | round-order proxy 16
+  bound CELL+F_CELL      K=4 rb 1.0 async 1.0 K=8 rb 1.0 async 1.0 K=16 rb 1.0 async 1.0
+  bound CELL+NONE        K=4 rb 1.01 async 1.01 K=8 rb 1.01 async 1.01 K=16 rb 1.01 async 1.01
+  bound COMP_S+F_COMPs   K=4 rb 1.03 async 1.03 K=8 rb 1.03–1.04 async 1.04–1.05 K=16 rb 1.04 async 1.05
+  bound COMP_S+F_COMPc   K=4 rb 1.01 async 1.01 K=8 rb 1.01 async 1.01 K=16 rb 1.01 async 1.01
+  bound COMP_D+F_COMPd   K=4 rb 1.04 async 1.04–1.05 K=8 rb 1.05 async 1.06 K=16 rb 1.05–1.06 async 1.06–1.07
+  bound COMP_S+NONE      K=4 rb 1.15 async 1.23–1.24 K=8 rb 1.19–1.2 async 1.26–1.28 K=16 rb 1.22–1.23 async 1.26–1.28
+  bound COMP_D+NONE      K=4 rb 1.15 async 1.22–1.23 K=8 rb 1.19–1.2 async 1.26–1.28 K=16 rb 1.22–1.23 async 1.26–1.28
+  bound PID+NONE         K=4 rb 1.2–1.21 async 1.26–1.28 K=8 rb 1.24–1.25 async 1.26–1.28 K=16 rb 1.25–1.26 async 1.26–1.28
+  p2lite: S0 fire ms 5.12–5.48 diff removed 4.903–4.994 W/S 1.27–1.29 fenced comp time 0.869–0.879 COMP_S+F_COMPs K8 async 1.07–1.08 COMP_S+NONE K8 async 1.27–1.29
+===== type-adversarial.prologos (3 locked runs x 7 timing reps; ranges over runs)
+ fires 1140 runs 61 rounds 185 S0 fire ms 7.324–7.544 S0/cmd 0.168–0.178 W/S 1.48–1.49 productive 273 prod time share 0.902–0.904 p50/p90/p99/max us [1.0, 23.0, 87.0, 127.0]
+  CELL   K=4  busiest count 0.856 time 0.967–0.97 | eff.par/round count 1.12 time 1.02
+  CELL   K=8  busiest count 0.847 time 0.965–0.969 | eff.par/round count 1.13 time 1.02
+  CELL   K=16 busiest count 0.841 time 0.965–0.968 | eff.par/round count 1.14 time 1.02
+  COMP_D K=4  busiest count 0.26 time 0.267–0.27 | eff.par/round count 2.32 time 1.29–1.3
+  COMP_D K=8  busiest count 0.144 time 0.141–0.147 | eff.par/round count 3.11 time 1.35
+  COMP_D K=16 busiest count 0.096 time 0.094–0.1 | eff.par/round count 3.68 time 1.39–1.4
+  COMP_S K=4  busiest count 0.26 time 0.267–0.27 | eff.par/round count 2.32 time 1.29–1.3
+  COMP_S K=8  busiest count 0.144 time 0.141–0.147 | eff.par/round count 3.11 time 1.34–1.35
+  COMP_S K=16 busiest count 0.096 time 0.094–0.1 | eff.par/round count 3.67 time 1.39
+  COMP_H K=4  busiest count 0.276 time 0.285–0.297 | eff.par/round count 2.1 time 1.27
+  COMP_H K=8  busiest count 0.142 time 0.152–0.157 | eff.par/round count 2.7 time 1.38
+  COMP_H K=16 busiest count 0.091 time 0.125–0.13 | eff.par/round count 2.98 time 1.4–1.41
+  PID    K=4  busiest count 0.262 time 0.275–0.286 | eff.par/round count 2.92 time 1.28–1.29
+  PID    K=8  busiest count 0.14 time 0.155–0.162 | eff.par/round count 3.96 time 1.33–1.34
+  PID    K=16 busiest count 0.076 time 0.084–0.111 | eff.par/round count 5.21 time 1.43–1.44
+  F_CELL   fenced fires 0.854 time 0.973–0.974 | crit-path alternations/run mean 0.44 max 1 total 27 | D.2-schedule switches/run mean 1.44 max 2 total 88 | round-order proxy 74
+  F_COMPd  fenced fires 0.178 time 0.829–0.831 | crit-path alternations/run mean 0.54 max 1 total 33 | D.2-schedule switches/run mean 1.54 max 2 total 94 | round-order proxy 36
+  F_COMPs  fenced fires 0.331 time 0.853–0.854 | crit-path alternations/run mean 0.49 max 1 total 30 | D.2-schedule switches/run mean 1.49 max 2 total 91 | round-order proxy 17
+  F_COMPc  fenced fires 0.835 time 0.911–0.913 | crit-path alternations/run mean 0.44 max 1 total 27 | D.2-schedule switches/run mean 1.44 max 2 total 88 | round-order proxy 74
+  F_RAND   fenced fires 0.498 time 0.53–0.546 | crit-path alternations/run mean 1.23 max 5 total 75 | D.2-schedule switches/run mean 1.85 max 5 total 113 | round-order proxy 17
+  bound CELL+F_CELL      K=4 rb 1.0 async 1.0–1.01 K=8 rb 1.0 async 1.01 K=16 rb 1.0 async 1.01
+  bound CELL+NONE        K=4 rb 1.02 async 1.02 K=8 rb 1.02 async 1.02 K=16 rb 1.02 async 1.02
+  bound COMP_S+F_COMPs   K=4 rb 1.06 async 1.07 K=8 rb 1.07 async 1.08 K=16 rb 1.07–1.08 async 1.09
+  bound COMP_S+F_COMPc   K=4 rb 1.03 async 1.03 K=8 rb 1.03 async 1.03 K=16 rb 1.03 async 1.03–1.04
+  bound COMP_D+F_COMPd   K=4 rb 1.07 async 1.09 K=8 rb 1.08–1.09 async 1.11 K=16 rb 1.09–1.1 async 1.11–1.12
+  bound COMP_S+NONE      K=4 rb 1.29–1.3 async 1.46–1.48 K=8 rb 1.34–1.35 async 1.47–1.48 K=16 rb 1.39 async 1.47–1.49
+  bound COMP_D+NONE      K=4 rb 1.29–1.3 async 1.46–1.48 K=8 rb 1.35 async 1.48–1.49 K=16 rb 1.39–1.4 async 1.48–1.49
+  bound PID+NONE         K=4 rb 1.28–1.29 async 1.48–1.49 K=8 rb 1.33–1.34 async 1.48–1.49 K=16 rb 1.43–1.44 async 1.48–1.49
+  p2lite: S0 fire ms 4.378–4.623 diff removed 2.921–2.981 W/S 1.47–1.49 fenced comp time 0.816–0.823 COMP_S+F_COMPs K8 async 1.12 COMP_S+NONE K8 async 1.46–1.47

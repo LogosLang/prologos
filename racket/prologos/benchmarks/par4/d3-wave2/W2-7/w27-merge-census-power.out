@@ -1,0 +1,3 @@
+POWER sre-identify-sub-cell (expect ROLE-A) -> ROLE-A type-lattice-merge
+POWER elab meta cell shape (expect TAGGED-ROLE-B) -> ROLE-B (behavioural) decision-cell.rkt:527:2
+POWER raw type-unify-or-top (expect ROLE-B) -> ROLE-B type-unify-or-top

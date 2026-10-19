@@ -1,0 +1,6 @@
+A(S-6 as written) BSP: out=16 ascents-of-out=2 join-fires=1 fuel-used=1
+A(S-6 as written) seq-drain: out=16 ascents-of-out=1 join-fires=17 fuel-used=17
+B(upstream producers) BSP: out=16 ascents-of-out=2 join-fires=2 fuel-used=18
+B(upstream producers) seq-drain: out=16 ascents-of-out=1 join-fires=17 fuel-used=49
+B-rev BSP: out=16 ascents-of-out=2 join-fires=2 fuel-used=18
+B-rev seq-drain: out=16 ascents-of-out=16 join-fires=17 fuel-used=49

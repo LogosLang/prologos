@@ -1,0 +1,58 @@
+=== FLAGD: reset flag (busy at drain, idle when the worklist empties) + cons published after the cascade ===
+CASCADE  FLAGD  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=   4546  sound+live
+      (0.1s)
+CASCADE  FLAGD  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  60988  sound+live
+      (1.2s)
+CASCADE  FLAGD  TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 254312  sound+live
+      (6.0s)
+CASCADE  FLAGD  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  24654  sound+live
+      (0.4s)
+SENDWRITE FLAGD  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=   4920  sound+live
+      (0.1s)
+SENDWRITE FLAGD  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  65884  sound+live
+      (1.3s)
+SENDWRITE FLAGD  TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 373539  sound+live
+      (9.5s)
+SENDWRITE FLAGD  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  30200  sound+live
+      (0.6s)
+FREQ     FLAGD  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=   3888  sound+live
+      (0.1s)
+FREQ     FLAGD  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  53194  sound+live
+      (1.2s)
+FREQ     FLAGD  TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 193002  sound+live
+      (4.7s)
+FREQ     FLAGD  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  15846  sound+live
+      (0.3s)
+BOUNCE   FLAGD  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=  22618  sound+live
+      (0.4s)
+BOUNCE   FLAGD  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 400821  sound+live
+      (9.5s)
+BOUNCE   FLAGD  TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=2240713  sound+live
+      (59.5s)
+BOUNCE   FLAGD  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states= 181073  sound+live
+      (3.6s)
+SEEDS2   FLAGD  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=   5458  sound+live
+      (0.1s)
+SEEDS2   FLAGD  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  68240  sound+live
+      (1.3s)
+SEEDS2   FLAGD  TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 331396  sound+live
+      (8.0s)
+SEEDS2   FLAGD  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  30750  sound+live
+      (0.5s)
+K3       FLAGD  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY LIMIT (state limit 6000000)
+      (162.3s)
+CONTRA   FLAGD  TSO SEP fr=counted   bnd=QCH scans=2 fences=- send=prod-lane pub=ind-cons states=  70681  sound+live
+      (1.0s)
+  FLAG (cons at drain) with every fixed read order, for comparison — CASCADE and BOUNCE:
+BOUNCE   FLAGD  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=  22618  sound+live
+      (0.3s)
+BOUNCE   FLAGD  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=PIC states=  24476  sound+live
+      (0.3s)
+BOUNCE   FLAGD  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=IPC states=  24567  sound+live
+      (0.3s)
+BOUNCE   FLAGD  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ICP states=  21062  sound+live
+      (0.3s)
+BOUNCE   FLAGD  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=CPI states=  18867  sound+live
+      (0.3s)
+BOUNCE   FLAGD  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=CIP states=  18928  sound+live
+      (0.3s)

@@ -1,0 +1,3 @@
+POWER c2 fire-once (Tier 1): tier1-eligible #t, B = 0, non-fixpoint propagators ((0 (21)))
+POWER c2 plain (Tier 2 control): tier1-eligible #f, B = 7, non-fixpoint propagators ()
+W24Q3 2026-07-06-ciu-t6-f1-records.prologos {"queries":2,"tier1-direct-fact-return":2} examples ()

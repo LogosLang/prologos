@@ -1,0 +1,22 @@
+car: contract violation
+  expected: pair?
+  given: '()
+version 9.3  vm chez-scheme  arch aarch64  machine-os macosx
+futures-enabled? #t  processor-count 18
+Q1 parallel check (k wall-ms process-cpu-ms), same total work:
+  (1 121.0 121)
+  (2 61.0 123)
+Q3a (param mark) per context: ((creator: set-by-creator mark-by-creator) (coroutine-child: (set-by-creator #f)) (parallel-child: (set-by-creator #f)))
+Q3b main sees q-at-load
+Q3b executor reads (q) plainly: q-at-executor-creation
+Q3b after main's direct assignment, main sees q-assigned-directly-by-main; executor sees q-at-executor-creation
+Q3b executor under call-with-parameterization(main's): q-at-load
+Q3b executor under captured parameterize: q-parameterized-by-solve
+'ok
+Q3b box reached via inherited parameter: same object? #t, main now reads 42
+Q3c inside a default prompt: param=param-outside-prompt mark(default tag)=#f mark(private tag)=mark-outside-prompt
+#<thread:...C6/p1-semantics.rkt:92:21>
+EXC: thread-dead? #t  done-flag #f  (a spinner waiting on done-flag would wait forever)
+EXC transported: exn? #t  mark at raise point via exn marks: srcloc-of-fire
+#<thread:...C6/p1-semantics.rkt:45:12>
+done

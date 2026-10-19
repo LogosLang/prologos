@@ -1,0 +1,3 @@
+POWER c2 fire-once (Tier 1): tier1-eligible #t, B = 0, non-fixpoint propagators ((0 (21)))
+POWER c2 plain (Tier 2 control): tier1-eligible #f, B = 7, non-fixpoint propagators ()
+W24Q3 2026-07-19-rel-t1-acceptance.prologos {"dfs-0-arity":3,"queries":22,"tier1-direct-fact-return":9,"tier2-entered":10,"tier2-nonfixpoint":5} examples ((safe-twohop (w24v0 w24v1) #f ((0 (1)))) (safe-reach (w24v0 w24v1) #f ((0 (1)))) (fruit-not-of-color2 (w24v0 w24v1) #f ((0 (1)))) (light-vehicle (w24v0) #f ((0 (1)))) (fruit-not-of-color (w24v0 w24v1) #f ((0 (1)))))

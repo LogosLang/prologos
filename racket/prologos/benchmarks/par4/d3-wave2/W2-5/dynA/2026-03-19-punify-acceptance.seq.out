@@ -1,0 +1,174 @@
+RESULT 0.0: Triple : [Type 0] defined.
+RESULT 0.1: A : acceptance::punify::Triple defined.
+RESULT 0.2: B : acceptance::punify::Triple defined.
+RESULT 0.3: C : acceptance::punify::Triple defined.
+RESULT 0.4: := : acceptance::punify::Triple defined.
+RESULT 0.5: triple : acceptance::punify::Triple defined.
+RESULT 0.6: A : acceptance::punify::Triple defined.
+RESULT 0.7: B : acceptance::punify::Triple defined.
+RESULT 0.8: C : acceptance::punify::Triple defined.
+RESULT 0.9: Tree : [Pi [x :0 <[Type 0]>] [Type 0]] defined.
+RESULT 0.10: leaf : [Pi [x :0 <[Type 0]>] x -> [acceptance::punify::Tree x]] defined.
+RESULT 0.11: node : [Pi [x :0 <[Type 0]>] [acceptance::punify::Tree x] [acceptance::punify::Tree x] -> [acceptance::punify::Tree x]] defined.
+RESULT 0.12: Outer : [Type 0] defined.
+RESULT 0.13: A : acceptance::punify::Outer defined.
+RESULT 0.14: B : acceptance::punify::Outer defined.
+RESULT 0.15: C : acceptance::punify::Outer defined.
+RESULT 0.16: := : acceptance::punify::Outer defined.
+RESULT 0.17: outer : acceptance::punify::Outer defined.
+RESULT 0.18: A : acceptance::punify::Outer defined.
+RESULT 0.19: B : acceptance::punify::Outer defined.
+RESULT 0.20: C : acceptance::punify::Outer defined.
+RESULT 0.21: Inner : [Type 0] defined.
+RESULT 0.22: A : acceptance::punify::Inner defined.
+RESULT 0.23: B : acceptance::punify::Inner defined.
+RESULT 0.24: := : acceptance::punify::Inner defined.
+RESULT 0.25: inner : acceptance::punify::Inner defined.
+RESULT 0.26: A : acceptance::punify::Inner defined.
+RESULT 0.27: B : acceptance::punify::Inner defined.
+RESULT 0.28: Matrix : [Type 0] defined.
+RESULT 0.29: A : acceptance::punify::Matrix defined.
+RESULT 0.30: := : acceptance::punify::Matrix defined.
+RESULT 0.31: matrix : acceptance::punify::Matrix defined.
+RESULT 0.32: A : acceptance::punify::Matrix defined.
+RESULT 0.33: A : acceptance::punify::Matrix defined.
+RESULT 0.34: Row : [Type 0] defined.
+RESULT 0.35: A : acceptance::punify::Row defined.
+RESULT 0.36: B : acceptance::punify::Row defined.
+RESULT 0.37: := : acceptance::punify::Row defined.
+RESULT 0.38: row : acceptance::punify::Row defined.
+RESULT 0.39: A : acceptance::punify::Row defined.
+RESULT 0.40: B : acceptance::punify::Row defined.
+RESULT 0.41: Edge : [Type 0] defined.
+RESULT 0.42: A : acceptance::punify::Edge defined.
+RESULT 0.43: := : acceptance::punify::Edge defined.
+RESULT 0.44: edge : acceptance::punify::Edge defined.
+RESULT 0.45: A : acceptance::punify::Edge defined.
+RESULT 0.46: A : acceptance::punify::Edge defined.
+RESULT 0.47: Graph : [Type 0] defined.
+RESULT 0.48: A : acceptance::punify::Graph defined.
+RESULT 0.49: := : acceptance::punify::Graph defined.
+RESULT 0.50: graph : acceptance::punify::Graph defined.
+RESULT 0.51: A : acceptance::punify::Graph defined.
+RESULT 0.52: Env : [Type 0] defined.
+RESULT 0.53: K : acceptance::punify::Env defined.
+RESULT 0.54: V : acceptance::punify::Env defined.
+RESULT 0.55: R : acceptance::punify::Env defined.
+RESULT 0.56: := : acceptance::punify::Env defined.
+RESULT 0.57: env : acceptance::punify::Env defined.
+RESULT 0.58: K : acceptance::punify::Env defined.
+RESULT 0.59: V : acceptance::punify::Env defined.
+RESULT 0.60: R : acceptance::punify::Env defined.
+RESULT 0.61: EvenOdd : [Pi [x :0 <[Type 0]>] [Type 0]] defined.
+RESULT 0.62: even : [Pi [x :0 <[Type 0]>] x -> [acceptance::punify::EvenOdd x]] defined.
+RESULT 0.63: odd : [Pi [x :0 <[Type 0]>] x -> [acceptance::punify::EvenOdd x]] defined.
+RESULT 0.64: Copy : [Type 0] defined.
+RESULT 0.65: A : acceptance::punify::Copy defined.
+RESULT 0.66: := : acceptance::punify::Copy defined.
+RESULT 0.67: copy : acceptance::punify::Copy defined.
+RESULT 0.68: A : acceptance::punify::Copy defined.
+RESULT 0.69: A : acceptance::punify::Copy defined.
+RESULT 0.70: Describable-describe : [Pi [x :0 <[Type 0]>] [x -> String] x -> String] defined.
+RESULT 0.71: describe : [Pi [x :0 <[Type 0]>] [x -> String] x -> String] defined.
+RESULT 0.72: @[{:y 2, :x 1, :z 3}] : _
+RESULT 0.73: @[{:c 3, :a 1, :b 2, :x 1}] : _
+RESULT 0.74: @[{:c 3, :a 1, :y 2, :b 2, :x 1}] : _
+RESULT 0.75: @[{:a 1, :b 1, :c 1, :x 1, :y 1, :w 1}] : [PVec {:a Int :b Int :c Int :w Int :x Int :y Int}]
+RESULT 0.76: @[{:a 2, :y y2, :b 3, :y2 y2, :x 1, :r 1}] : _
+RESULT 0.77: @[{:c y, :a 1, :y y, :b x, :x x, :z 1}] : _
+RESULT 0.78: @[{:a [leaf 1], :b [inner 1 2], :c [leaf 2], :x 1, :y 2, :z 2}] : [PVec {:a _ :b _ :c _ :x Int :y Int :z Int}]
+RESULT 0.79: @[{:original [node [leaf 1] [node [leaf 2] [leaf 3]]], :duplicate [node [leaf 1] [node [leaf 2] [leaf 3]]], :l [leaf 1], :r [node [leaf 2] [leaf 3]]}] : [PVec {:duplicate _ :l _ :original _ :r _}]
+RESULT 0.80: @[{:a 10, :b 10, :c 20, :d 20, :x 10, :y 20}] : [PVec {:a Int :b Int :c Int :d Int :x Int :y Int}]
+RESULT 0.81: @[{:rest "nil", :val 42, :x "foo", :r 42}] : _
+RESULT 0.82: @[{:c x, :a 1, :b 2, :x x}] : _
+RESULT 0.83: @[{:y 42, :x 42}] : _
+RESULT 0.84: @[{:a 1, :b 2, :c [inner 1 2]}] : [PVec {:a Int :b Int :c _}]
+RESULT 0.85: color : _ defined.
+RESULT 0.86: @[{:hex "#ff0000"}] : [PVec {:hex String}]
+RESULT 0.87: @[{:name "blue"}] : [PVec {:name String}]
+RESULT 0.88: link : _ defined.
+RESULT 0.89: reachable : _ defined.
+RESULT 0.90: @[{:to "b"} {:to "c"} {:to "d"}] : [PVec {:to String}]
+RESULT 0.91: @[{:from "c"} {:from "a"} {:from "b"}] : [PVec {:from String}]
+RESULT 0.92: same-start : _ defined.
+RESULT 0.93: @[{:x "a", :y "a"} {:x "b", :y "b"} {:x "c", :y "c"}] : [PVec {:x String :y String}]
+RESULT 0.94: not-linked-to-d : _ defined.
+RESULT 0.95: @[{:to "c"}] : [PVec {:to String}]
+RESULT 0.96: @[{:from "b"}] : [PVec {:from String}]
+RESULT 0.97: @[{:from "a", :to "b"} {:from "b", :to "c"} {:from "c", :to "d"}] : [PVec {:from String :to String}]
+RESULT 0.98: classify-sign : _ defined.
+RESULT 0.99: @[{:label "positive"}] : [PVec {:label String}]
+RESULT 0.100: @[{:label "zero"}] : [PVec {:label String}]
+RESULT 0.101: color-hex : _ defined.
+RESULT 0.102: @[{:hex "#FF0000"}] : [PVec {:hex String}]
+RESULT 0.103: @[{:name "green"}] : [PVec {:name String}]
+RESULT 0.104: is-zero : Int -> Bool defined.
+RESULT 0.105: true : Bool
+RESULT 0.106: false : Bool
+RESULT 0.107: 7 : Int
+RESULT 0.108: 30 : Int
+RESULT 0.109: 7 : Int
+RESULT 0.110: 16 : Int
+RESULT 0.111: make-adder : Int Int -> Int defined.
+RESULT 0.112: add5 : Int -> Int defined.
+RESULT 0.113: 15 : Int
+RESULT 0.114: [prologos::data::option::some Int 1] : [prologos::data::option::Option Int]
+RESULT 0.115: [prologos::data::option::some [prologos::data::list::List Int] '[2 3]] : [prologos::data::option::Option [prologos::data::list::List Int]]
+RESULT 0.116: 3N : Nat
+RESULT 0.117: my-map : {:age Int :name String} defined.
+RESULT 0.118: "alice" : String
+RESULT 0.119: 30 : Int
+RESULT 0.120: true : Bool
+RESULT 0.121: true : Bool
+RESULT 0.122: true : Bool
+RESULT 0.123: 5 : Int
+RESULT 0.124: 5N : Nat
+RESULT 0.125: true : Bool
+RESULT 0.126: false : Bool
+RESULT 0.127: @[{:r 7}] : _
+RESULT 0.128: {:r 30} : _
+RESULT 0.129: double-check : _ defined.
+RESULT 0.130: @[{:r 10}] : [PVec {:r Int}]
+RESULT 0.131: tripled : _ defined.
+RESULT 0.132: @[{:r 21}] : [PVec {:r Int}]
+RESULT 0.133: safe-div : _ defined.
+RESULT 0.134: @[{:r 5}] : [PVec {:r Int}]
+RESULT 0.135: @[{:r 16}] : _
+RESULT 0.136: ERROR: Unbound variable
+RESULT 0.137: ERROR: Unbound variable
+RESULT 0.138: ERROR: Unbound variable
+RESULT 0.139: ERROR: Unbound variable
+RESULT 0.140: ERROR: Unbound variable
+RESULT 0.141: flip : Bool -> Bool defined.
+RESULT 0.142: ERROR: Unbound variable
+RESULT 0.143: '[{:b false}] : _
+RESULT 0.144: @[{:x 10, :y 15}] : [PVec {:x Int :y Int}]
+RESULT 0.145: fav : _ defined.
+RESULT 0.146: {:color "blue"} : {:color String}
+RESULT 0.147: @[{:x 1}] : _
+RESULT 0.148: @[{:y 2}] : _
+RESULT 0.149: none : {:color String}
+RESULT 0.150: @[{:x 7, :y 14, :z [some 7]}] : [PVec {:x Int :y Int :z _}]
+RESULT 0.151: {:a 10, :b 20} : _
+RESULT 0.152: factorial-check : _ defined.
+RESULT 0.153: @[{:r 1}] : [PVec {:r Int}]
+RESULT 0.154: @[{:r 20}] : [PVec {:r Int}]
+RESULT 0.155: in-range : _ defined.
+RESULT 0.156: @[{}] : _
+RESULT 0.157: @[] : _
+RESULT 0.158: @[{:x 42}] : _
+RESULT 0.159: @[{:x 42}] : _
+RESULT 0.160: @[{:a 1, :b 2}] : _
+RESULT 0.161: @[{:b 2, :x 1}] : _
+RESULT 0.162: @[{:active true, :name "alice", :age 30}] : _
+RESULT 0.163: @[{:c 5, :y 2, :w 4, :x 1, :z 3}] : _
+RESULT 0.164: @[{:a 1, :b 2, :c 3, :d 3, :e 5, :f 8}] : [PVec {:a Int :b Int :c Int :d Int :e Int :f Int}]
+RESULT 0.165: @[{:x 30, :y 30, :z 60}] : [PVec {:x Int :y Int :z Int}]
+RESULT 0.166: @[{:a 3, :b 4, :sum 7, :prod 12}] : [PVec {:a Int :b Int :prod Int :sum Int}]
+RESULT 0.167: @[{:from "a", :to "c", :via "b"} {:from "b", :to "d", :via "c"}] : [PVec {:from String :to String :via String}]
+RESULT 0.168: @[{:a 1, :b 2, :c 2, :d 1}] : [PVec {:a Int :b Int :c Int :d Int}]
+RESULT 0.169: @[{:x 42, :y 42}] : [PVec {:x Int :y Int}]
+RESULT 0.170: my-add : Nat Nat -> Nat defined.
+RESULT 0.171: 7N : Nat
+RESULT 0.172: ERROR: Unbound variable
+STATS leg=seq files=1 params=219 rounds=95 wide-rounds(>=8)=2 fires=187 reentrant=0 ms=210.0

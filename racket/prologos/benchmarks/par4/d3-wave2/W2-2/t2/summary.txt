@@ -1,0 +1,41 @@
+file                                         A               B               C               D               E  B/A  C/A  D/A  E/A  fp=A?
+atms-adversarial.prologos       29.6[ 29- 35]  30.2[ 27- 36]  30.9[ 28- 34]  29.9[ 29- 38]  29.5[ 28- 35]  1.02 1.04 1.01 1.00  yyyyy
+bool-logic.prologos              5.9[  5-  7]   3.5[  3-  4]   5.8[  5-  7]   3.5[  3-  4]   3.4[  3-  4]  0.60 0.99 0.60 0.58  yyyyy
+church-folds.prologos            2.0[  2-  2]   2.0[  2-  2]   2.0[  2-  2]   2.1[  2-  2]   2.1[  2-  2]  0.97 1.01 1.04 1.04  yyyyy
+constraints-adversarial.prolog  71.5[ 64- 81]  46.8[ 43- 54]  58.3[ 54- 66]  31.4[ 30- 44]  20.7[ 20- 28]  0.66 0.82 0.44 0.29  yyyyy
+dependent-types.prologos         1.8[  2-  2]   1.9[  2-  2]   1.9[  2-  2]   1.8[  2-  2]   1.8[  2-  2]  1.03 1.02 1.02 1.00  yyyyy
+higher-order.prologos            2.4[  2-  3]   2.5[  2-  3]   2.5[  2-  3]   2.5[  2-  3]   2.4[  2-  3]  1.02 1.02 1.02 1.00  yyyyy
+implicit-args.prologos           6.5[  6-  8]   3.4[  3-  4]   6.2[  6-  8]   3.4[  3-  4]   3.2[  3-  4]  0.52 0.96 0.52 0.48  yyyyy
+nat-arithmetic.prologos          3.2[  3-  4]   2.5[  2-  3]   3.2[  3-  4]   2.5[  2-  3]   2.3[  2-  3]  0.78 0.99 0.77 0.71  yyyyy
+pairs-sigma.prologos             2.6[  2-  3]   2.6[  2-  3]   2.5[  2-  3]   2.7[  2-  3]   2.6[  2-  3]  0.99 0.95 1.05 1.02  yyyyy
+pattern-matching.prologos        2.4[  2-  3]   2.4[  2-  3]   2.4[  2-  3]   2.5[  2-  3]   2.4[  2-  3]  0.99 0.99 1.04 1.00  yyyyy
+records-seal-validate.prologos   7.0[  6-  8]   5.6[  5-  7]   7.1[  6-  8]   5.8[  5-  7]   5.6[  5-  7]  0.81 1.02 0.83 0.81  yyyyy
+records-typing.prologos          5.9[  6-  8]   6.1[  6-  7]   6.0[  6-  7]   6.2[  6-  8]   5.8[  6-  7]  1.04 1.03 1.05 1.00  yyyyy
+recursive-types.prologos         3.5[  3-  4]   3.6[  3-  4]   3.4[  3-  4]   3.5[  3-  4]   3.3[  3-  4]  1.02 0.96 1.01 0.95  yyyyy
+scheduler-adversarial.prologos   9.4[  8- 10]   6.7[  6-  8]   8.8[  8- 10]   6.8[  6-  8]   6.4[  6-  7]  0.72 0.94 0.72 0.68  yyyyy
+simple-typed.prologos            2.0[  2-  2]   2.0[  2-  2]   2.0[  2-  2]   2.1[  2-  2]   2.0[  2-  2]  1.00 1.01 1.06 1.01  yyyyy
+solve-adversarial.prologos      21.1[ 20- 23]  21.8[ 21- 24]  21.4[ 21- 24]  23.6[ 21- 28]  21.6[ 20- 23]  1.03 1.02 1.12 1.02  yyyyy
+solve-scale.prologos            15.7[ 15- 16]  16.0[ 15- 17]  15.6[ 15- 16]  16.2[ 15- 21]  15.6[ 15- 17]  1.02 0.99 1.04 1.00  yyyyy
+type-adversarial.prologos       67.1[ 63- 85]  43.1[ 39- 45]  58.8[ 56- 71]  35.1[ 32- 45]  26.6[ 24- 30]  0.64 0.88 0.52 0.40  yyyyy
+processes per leg: {'A': 8, 'B': 8, 'C': 8, 'D': 8, 'E': 8}
+S0 fire_ms / merge_ms medians (heavy):
+   constraints-adversarial. A: fire 29.1 merge 16.7 gc 8  B: fire 11.3 merge 12.9 gc 1  C: fire 23.5 merge 14.8 gc 8  D: fire 2.5 merge 10.7 gc 1  E: fire 2.7 merge 0.8 gc 1
+   type-adversarial.prologo A: fire 24.9 merge 11.8 gc 8  B: fire 7.8 merge 8.5 gc 0  C: fire 21.2 merge 10.7 gc 8  D: fire 2.9 merge 7.3 gc 1  E: fire 2.7 merge 1.1 gc 0
+HEAVY-2: A=138.5 B=90.0 C=117.1 D=66.5 E=47.3   B/A=0.649 C/A=0.845 D/A=0.480 E/A=0.341   D/B=0.740 E/D=0.710 E/B=0.525
+    leg A: per-process total min 126.9 med 138.5 max 161.4
+    leg B: per-process total min 82.8 med 90.4 max 97.4
+    leg C: per-process total min 110.8 med 119.1 max 135.9
+    leg D: per-process total min 63.9 med 66.7 max 88.8
+    leg E: per-process total min 45.1 med 47.0 max 58.4
+MEDIUM-18: A=259.6 B=202.6 C=238.8 D=181.7 E=157.4   B/A=0.780 C/A=0.920 D/A=0.700 E/A=0.606   D/B=0.897 E/D=0.867 E/B=0.777
+    leg A: per-process total min 242.2 med 261.1 max 291.5
+    leg B: per-process total min 188.5 med 202.6 max 219.7
+    leg C: per-process total min 225.4 med 240.7 max 268.1
+    leg D: per-process total min 171.3 med 182.0 max 227.3
+    leg E: per-process total min 152.4 med 156.3 max 184.9
+MEDIUM-minus-heavy-16: A=121.1 B=112.6 C=121.7 D=115.2 E=110.2   B/A=0.930 C/A=1.005 D/A=0.951 E/A=0.910   D/B=1.022 E/D=0.957 E/B=0.978
+    leg A: per-process total min 115.3 med 122.5 max 132.8
+    leg B: per-process total min 103.8 med 114.1 max 122.3
+    leg C: per-process total min 113.6 med 121.6 max 132.2
+    leg D: per-process total min 107.4 med 115.3 max 138.5
+    leg E: per-process total min 106.6 med 109.8 max 126.4

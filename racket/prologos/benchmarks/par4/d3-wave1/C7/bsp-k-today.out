@@ -1,0 +1,50 @@
+PERF-COUNTERS:{"cell_allocs":59,"constraint_count":0,"constraint_retries":0,"elaborate_steps":2,"inert_dependent_skips":0,"infer_steps":1,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":2,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":1,"zonk_steps":2}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":0,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":3063,"constraint_count":0,"constraint_retries":0,"elaborate_steps":468,"inert_dependent_skips":0,"infer_steps":273,"meta_created":60,"meta_solved":52,"prop_allocs":0,"prop_firings":0,"reduce_steps":1042,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":4,"unify_steps":218,"zonk_steps":770}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":1,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":30,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":3063,"constraint_count":0,"constraint_retries":0,"elaborate_steps":468,"inert_dependent_skips":0,"infer_steps":273,"meta_created":60,"meta_solved":52,"prop_allocs":0,"prop_firings":0,"reduce_steps":1042,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":4,"unify_steps":218,"zonk_steps":770}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":1,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":29,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":3063,"constraint_count":0,"constraint_retries":0,"elaborate_steps":468,"inert_dependent_skips":0,"infer_steps":273,"meta_created":60,"meta_solved":52,"prop_allocs":0,"prop_firings":0,"reduce_steps":1042,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":4,"unify_steps":218,"zonk_steps":770}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":1,"qtt_ms":1,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":49,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":3063,"constraint_count":0,"constraint_retries":0,"elaborate_steps":468,"inert_dependent_skips":0,"infer_steps":273,"meta_created":60,"meta_solved":52,"prop_allocs":0,"prop_firings":0,"reduce_steps":1042,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":4,"unify_steps":218,"zonk_steps":770}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":1,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":28,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":3063,"constraint_count":0,"constraint_retries":0,"elaborate_steps":468,"inert_dependent_skips":0,"infer_steps":273,"meta_created":60,"meta_solved":52,"prop_allocs":0,"prop_firings":0,"reduce_steps":1042,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":4,"unify_steps":218,"zonk_steps":770}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":1,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":49,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":3063,"constraint_count":0,"constraint_retries":0,"elaborate_steps":468,"inert_dependent_skips":0,"infer_steps":273,"meta_created":60,"meta_solved":52,"prop_allocs":0,"prop_firings":0,"reduce_steps":1042,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":4,"unify_steps":218,"zonk_steps":770}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":1,"qtt_ms":1,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":31,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":3063,"constraint_count":0,"constraint_retries":0,"elaborate_steps":468,"inert_dependent_skips":0,"infer_steps":273,"meta_created":60,"meta_solved":52,"prop_allocs":0,"prop_firings":0,"reduce_steps":1042,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":4,"unify_steps":218,"zonk_steps":770}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":1,"qtt_ms":1,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":53,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":3063,"constraint_count":0,"constraint_retries":0,"elaborate_steps":468,"inert_dependent_skips":0,"infer_steps":273,"meta_created":60,"meta_solved":52,"prop_allocs":0,"prop_firings":0,"reduce_steps":1042,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":4,"unify_steps":218,"zonk_steps":770}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":1,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":30,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":3063,"constraint_count":0,"constraint_retries":0,"elaborate_steps":468,"inert_dependent_skips":0,"infer_steps":273,"meta_created":60,"meta_solved":52,"prop_allocs":0,"prop_firings":0,"reduce_steps":1042,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":4,"unify_steps":218,"zonk_steps":770}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":1,"qtt_ms":1,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":51,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+file /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/constraints-adversarial.prologos reps 4
+leg rounds fires wide-rounds(>=8) fire-ms fire-ms-in-wide merge-ms wall-ms same-result
+seq 214 1136 38 9.65 2.61 11.86 40.3 #f
+thr 214 1136 38 25.17 16.12 15.73 60.89 #f
+seq 214 1136 38 9.6 2.61 11.6 39.2 #f
+thr 214 1136 38 25.04 15.57 15.78 60.41 #f
+seq 214 1136 38 10.46 2.88 12.2 43.44 #f
+thr 214 1136 38 26.82 16.98 16.71 66.58 #f
+seq 214 1136 38 9.93 2.73 12.26 41.7 #f
+thr 214 1136 38 26.38 17.0 15.66 64.68 #f

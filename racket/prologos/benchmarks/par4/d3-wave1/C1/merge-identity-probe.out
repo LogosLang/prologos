@@ -1,0 +1,7 @@
+registry size at load: 15
+POWER lookup-merge-fn-domain merge-set-union = monotone-set (expect monotone-set)
+before promotion: installed merge of c1 eq? merge-set-union = #t ; domain = monotone-set ; cell-domain = monotone-set
+after promotion: installed merge of c1 registered domain = #f (#f = unknown to the eq?-keyed registry)
+after promotion: cell-domain of c1 (Tier 3 record) = monotone-set
+after promotion: c1's merge eq? c2's merge = #f (two cells, same domain merge)
+after promotion: c1's merge eq? merge-set-union = #f

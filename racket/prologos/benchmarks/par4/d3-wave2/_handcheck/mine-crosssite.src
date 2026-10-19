@@ -1,0 +1,14 @@
+ns probes::w26x
+solver atms-s
+  :strategy atms
+solver dfs-s
+  :strategy depth-first
+defr pick [?x]
+  &> (= x 1)
+  &> (= x 2)
+solve-with atms-s (rel [?x ?y] (pick ?x) (pick ?y) (= ?x ?y))
+solve-with dfs-s (rel [?x ?y] (pick ?x) (pick ?y) (= ?x ?y))
+solve-with atms-s (rel [?x] (pick ?x) (= ?x 2))
+solve-with dfs-s (rel [?x] (pick ?x) (= ?x 2))
+solve-with atms-s (rel [?x ?y] (pick ?x) (= ?y 1) (= ?x ?y))
+solve-with dfs-s (rel [?x ?y] (pick ?x) (= ?y 1) (= ?x ?y))

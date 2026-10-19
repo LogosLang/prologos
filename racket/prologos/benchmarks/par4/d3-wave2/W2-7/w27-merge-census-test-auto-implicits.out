@@ -1,0 +1,4 @@
+W27-MERGE-CENSUS test-auto-implicits.rkt
+  BSP rounds observed: 50
+  HUB attribute-map (:type facet = Role B): cells 1, S0 writes 44, writes holding an applied meta 0
+  other meta-solution-merge: cells 1, S0 writes 16, writes holding an applied meta 0

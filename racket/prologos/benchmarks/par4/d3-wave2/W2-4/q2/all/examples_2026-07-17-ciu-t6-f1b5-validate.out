@@ -1,0 +1,35 @@
+PERF-COUNTERS:{"cell_allocs":1256,"constraint_count":0,"constraint_retries":0,"elaborate_steps":143,"inert_dependent_skips":0,"infer_steps":163,"meta_created":11,"meta_solved":5,"prop_allocs":0,"prop_firings":0,"reduce_steps":869,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":46,"zonk_steps":300}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":1,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":5,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":11,"atms_nogood_count":1,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":2,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: Person : [Type 0] defined.
+1: Cfg : [Type 0] defined.
+2: Checked : [Type 0] defined.
+3: WithUnion : [Type 0] defined.
+4: wi : f1b5-validate-acceptance::WithUnion defined.
+5: 3 : Int | String
+6: ws : f1b5-validate-acceptance::WithUnion defined.
+7: WithFn : [Type 0] defined.
+8: idi : Int -> Int defined.
+9: wf : f1b5-validate-acceptance::WithFn defined.
+10: 4 : Int
+11: m : {:age Int :name String | _} defined.
+12: [prologos::data::result::ok {:name "alice", :age 30}] : [prologos::data::result::Result f1b5-validate-acceptance::Person [Map Keyword prologos::data::reason::Reason]]
+13: bad : {:age String :name String | _} defined.
+14: [prologos::data::result::err {:age [prologos::data::reason::type-mismatch "Int" "String"]}] : [prologos::data::result::Result f1b5-validate-acceptance::Person [Map Keyword prologos::data::reason::Reason]]
+15: [prologos::data::result::ok {:host "localhost", :port 8080}] : [prologos::data::result::Result f1b5-validate-acceptance::Cfg [Map Keyword prologos::data::reason::Reason]]
+16: [prologos::data::result::err {:age [prologos::data::reason::check-failed "(> _ 0)"]}] : [prologos::data::result::Result f1b5-validate-acceptance::Checked [Map Keyword prologos::data::reason::Reason]]
+17: [prologos::data::result::ok {:name "fred", :age 5}] : [prologos::data::result::Result f1b5-validate-acceptance::Checked [Map Keyword prologos::data::reason::Reason]]
+18: true : Bool
+19: ERROR: validate: unknown schema Nope — declare it with `schema Nope …` first
+20: ERROR: panic: Checked: field :age failed check (> _ 0) (sealed definition forced at commit)
+21: cgood : f1b5-validate-acceptance::Checked defined.
+22: cm : {:age Int :name String | _} defined.
+23: ERROR: panic: Checked: field :age failed check (> _ 0) (sealed definition forced at commit)
+24: selection NameOnly from Person registered.
+25: [prologos::data::result::ok {:name "hana"}] : [prologos::data::result::Result f1b5-validate-acceptance::NameOnly [Map Keyword prologos::data::reason::Reason]]
+26: [prologos::data::result::ok {:name "ada", :age 9}] : [prologos::data::result::Result f1b5-validate-acceptance::NameOnly [Map Keyword prologos::data::reason::Reason]]
+27: [prologos::data::result::err {:name prologos::data::reason::missing-required}] : [prologos::data::result::Result f1b5-validate-acceptance::NameOnly [Map Keyword prologos::data::reason::Reason]]
+
+--- 3 errors ---
+W24 {"exec":"prod","exec_fires":124,"exec_rounds":28,"exec_wide_rounds":4,"file":"2026-07-17-ciu-t6-f1b5-validate.prologos","perf_fields_worker":"()","perf_incs_in_exec_main":0,"perf_incs_in_exec_worker":0,"race_rounds_any_worker_set":0,"race_rounds_multi_worker_set":0,"strat":"auto","wall_ms":39.0}

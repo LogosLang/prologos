@@ -1,0 +1,99 @@
+PERF-COUNTERS:{"cell_allocs":4082,"constraint_count":0,"constraint_retries":0,"elaborate_steps":394,"inert_dependent_skips":0,"infer_steps":621,"meta_created":36,"meta_solved":5,"prop_allocs":0,"prop_firings":0,"reduce_steps":1113,"resolution_cycles":0,"solver_backtracks":1,"solver_col_compares":16,"solver_row_scans":12,"solver_unifies":2,"trait_resolve_steps":0,"unify_steps":117,"zonk_steps":685}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":3,"qtt_ms":1,"reduce_ms":2,"trait_resolve_ms":0,"type_check_ms":5,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":55,"atms_nogood_count":24,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":46,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: Point : [Type 0] defined.
+1: q : {:a Int} defined.
+2: 1 : Int
+3: 2 : Int
+4: m : {:a {:a1 Int} :b {:b1 Int}} defined.
+5: 1 : Int
+6: het : {:n Int :s String} defined.
+7: 1 : Int
+8: "x" : String
+9: am : [Map Keyword Int] defined.
+10: 1 : Int
+11: p : f1-records-acceptance::Point defined.
+12: 1.0 : Posit32
+13: idm : [Map Keyword Int] -> [Map Keyword Int] defined.
+14: {:a 1} : [Map Keyword Int]
+15: r : {:a Int :b Int} defined.
+16: {:a 1, :b 2} : [Map Keyword Int]
+17: {:a 1, :b "hi"} : {:a Int :b String}
+18: {} : {}
+19: '[:n :s] : [List Keyword]
+20: '[1 "x"] : [List Int | String]
+21: 2N : Nat
+22: true : Bool
+23: 1 : Int | Nil
+24: 1 : Int
+25: e : [Map Keyword Int] defined.
+26: [foreign time/ms] : Float64
+27: 250.8p : Posit64
+28: ERROR: Could not infer type — field :z is not present in the record {:n Int :s String}; available fields: :n :s
+29: {:a 2} : {:a Int}
+30: {:a 1} : [Map Keyword Int]
+31: 1 : Int
+32: 1 : Int
+33: 1 : Int | Nil
+34: {:n 7, :s 7} : {:n Int :s Int}
+35: nil : [List ?meta1747]
+36: kk : Keyword defined.
+37: {:a 5} : {:a Int | _}
+38: ERROR: Could not infer type
+39: @[1 2 3] : [PVec Int]
+40: @[1 "a" true] : ⟨Int String Bool⟩
+41: t2 : ⟨Int String⟩ defined.
+42: 1 : Int
+43: "a" : String
+44: tr : ⟨{:a Int} {:b Int}⟩ defined.
+45: 2 : Int
+46: idp : [PVec Int | String] -> [PVec Int | String] defined.
+47: @[1 "a"] : [PVec Int | String]
+48: vv : [PVec Int | String] defined.
+49: ERROR: Could not infer type — index 5 is out of range for the 2-tuple ⟨Int String⟩ — valid indices 0–1
+50: tp : ⟨Int String Bool⟩ defined.
+51: "a" : String
+52: @[1 "a" true 2] : ⟨Int String Bool Int⟩
+53: @[1 "a"] : ⟨Int String⟩
+54: @[1 "a" true 1 "a" true] : ⟨Int String Bool Int String Bool⟩
+55: @["a" true] : ⟨String Bool⟩
+56: @["x" "a" true] : ⟨String String Bool⟩
+57: '[1 "a" true] : [List Bool | Int | String]
+58: @[1 1 1] : ⟨Int Int Int⟩
+59: @[1 "a" true] : [PVec Bool | Int | String]
+60: @[1 "a" true] : [PVec Bool | Int | String]
+61: MyVec : [Type 0] defined.
+62: av : f1-records-acceptance::MyVec defined.
+63: 2 : Int
+64: ERROR: Could not infer type
+65: ERROR: Could not infer type
+66: ERROR: Could not infer type
+67: am : [Map String Int] defined.
+68: dk : Keyword defined.
+69: 1 : Int
+70: hu : Int | String defined.
+71: 1 : Int | String
+72: bu : Bool | Int | String defined.
+73: "a" : Bool | Int | String
+74: dm : { | _} defined.
+75: dm2 : {:a Int :b String | _} defined.
+76: 1 : Int
+77: <error> : ?meta1866
+78: hm : [Map String Int | String] defined.
+79: dd : {:a? Int :b? Int | _} defined.
+80: sol-parent : _ defined.
+81: @[{:y "bob"} {:y "charlie"}] : [PVec {:y String}]
+82: {:y "bob"} : {:y String}
+83: none : {:y String}
+84: @[{:x "alice", :y "bob"} {:x "alice", :y "charlie"}] : [PVec {:x String :y String}]
+85: ERROR: Could not infer type
+86: {:a 2, :b 3} : [Map Keyword Int]
+87: dm : {:a Int :b String | _} defined.
+88: ERROR: definition dx stores an undischarged open-row projection: projecting an unknown field on an open row yields an observation the type checker cannot commit to a stored type. Annotate to discharge it — `def dx : <type> := …`
+89: wdd : {:p? Int :q? String | _} defined.
+90: {:q "s", :p 1} : {:p? Int :q? String | _}
+91: "s" : ?meta1914
+
+--- 8 errors ---
+W24 {"exec":"prod","exec_fires":73,"exec_rounds":42,"exec_wide_rounds":1,"file":"2026-07-06-ciu-t6-f1-records.prologos","forks":0,"routes":{"dfs":1,"tier1":3},"strat":"auto","wall_ms":41.0}

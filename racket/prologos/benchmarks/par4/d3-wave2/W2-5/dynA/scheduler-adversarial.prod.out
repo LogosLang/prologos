@@ -1,0 +1,24 @@
+RESULT 0.0: deep-id : [prologos::data::option::Option [prologos::data::option::Option [prologos::data::option::Option [prologos::data::option::Option Nat]]]] -> [prologos::data::option::Option [prologos::data::option::Option [prologos::data::option::Option [prologos::data::option::Option Nat]]]] defined.
+RESULT 0.1: deep-val : [prologos::data::option::Option [prologos::data::option::Option [prologos::data::option::Option [prologos::data::option::Option Nat]]]] defined.
+RESULT 0.2: [prologos::data::option::some [prologos::data::option::Option [prologos::data::option::Option [prologos::data::option::Option Nat]]] [prologos::data::option::some [prologos::data::option::Option [prologos::data::option::Option Nat]] [prologos::data::option::some [prologos::data::option::Option Nat] [prologos::data::option::some Nat 42N]]]] : [prologos::data::option::Option [prologos::data::option::Option [prologos::data::option::Option [prologos::data::option::Option Nat]]]]
+RESULT 0.3: ERROR: Type mismatch
+RESULT 0.4: wide-val : [Sigma [Sigma Nat Bool] [Sigma Int String]] defined.
+RESULT 0.5: ERROR: Unbound variable
+RESULT 0.6: poly-map : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [x -> y] [prologos::data::list::List x] -> [prologos::data::list::List y]]] defined.
+RESULT 0.7: ERROR: Unbound variable
+RESULT 0.8: ERROR: Unbound variable
+RESULT 0.9: ERROR: Unbound variable
+RESULT 0.10: ERROR: Unbound variable
+RESULT 0.11: ERROR: Unbound variable
+RESULT 0.12: ERROR: Unbound variable
+RESULT 0.13: ERROR: Unbound variable
+RESULT 0.14: ERROR: Unbound variable
+RESULT 0.15: ERROR: Unbound variable
+RESULT 0.16: ERROR: Unbound variable
+RESULT 0.17: ERROR: Unbound variable
+RESULT 0.18: ERROR: Unbound variable
+RESULT 0.19: ERROR: Unbound variable
+RESULT 0.20: ERROR: Unbound variable
+RESULT 0.21: ERROR: Unbound variable
+RESULT 0.22: ERROR: Unbound variable
+STATS leg=prod files=1 params=219 rounds=8 wide-rounds(>=8)=3 fires=61 reentrant=0 ms=165.0

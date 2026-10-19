@@ -1,0 +1,105 @@
+PERF-COUNTERS:{"cell_allocs":4708,"constraint_count":0,"constraint_retries":0,"elaborate_steps":546,"inert_dependent_skips":0,"infer_steps":1599,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":587,"resolution_cycles":0,"solver_backtracks":472,"solver_col_compares":1176,"solver_row_scans":935,"solver_unifies":1531,"trait_resolve_steps":0,"unify_steps":6,"zonk_steps":764}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":3,"qtt_ms":0,"reduce_ms":28,"trait_resolve_ms":0,"type_check_ms":4,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":2,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: color : _ defined.
+1: @[{:c "red"}] : [PVec {:c String}]
+2: @[{:fruit "banana"}] : [PVec {:fruit String}]
+3: @[{:fruit "apple", :hue "red"} {:fruit "banana", :hue "yellow"} {:fruit "grape", :hue "purple"} {:fruit "lime", :hue "green"}] : [PVec {:fruit String :hue String}]
+4: edge : _ defined.
+5: path : _ defined.
+6: @[{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}] : [PVec {:dest String}]
+7: @[{:src "d"} {:src "a"} {:src "b"} {:src "c"}] : [PVec {:src String}]
+8: same-pair : _ defined.
+9: @[{:x "hello"}] : [PVec {:x String}]
+10: @[{:r "hello"}] : [PVec {:r String}]
+11: blocked : _ defined.
+12: reachable : _ defined.
+13: @[{:dest "b"}] : [PVec {:dest String}]
+14: lookup : _ defined.
+15: @[{:v "localhost"}] : [PVec {:v String}]
+16: @[{:k "host"}] : [PVec {:k String}]
+17: default-config : Solver defined.
+18: wf-solver : Solver defined.
+19: strat-solver : Solver defined.
+20: @[{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}] : [PVec {:dest String}]
+21: @[{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}] : [PVec {:dest String}]
+22: @[{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}] : [PVec {:dest String}]
+23: p-holds : _ defined.
+24: q-holds : _ defined.
+25: @[] : _
+26: paradox : _ defined.
+27: @[] : _
+28: @[{:cycle '["paradox"], :certainty :unknown}] : _
+29: unfounded : _ defined.
+30: @[] : _
+31: fact-a : _ defined.
+32: @[{}] : _
+33: depends-on-a : _ defined.
+34: @[] : _
+35: @[{:dest "b"}] : [PVec {:dest String}]
+36: quaker : _ defined.
+37: republican : _ defined.
+38: pacifist : _ defined.
+39: hawk : _ defined.
+40: @[] : _
+41: @[] : _
+42: move : _ defined.
+43: win : _ defined.
+44: @[] : [PVec {:pos String}]
+45: odd-path : _ defined.
+46: @[] : [PVec {:to String}]
+47: @[{:provenance {:depth 0N, :clause-id :path/2-0, :derivation {:rule :path/2-0, :goal :path, :children '[{:rule :edge/2-0, :goal :edge, :children nil, :args '["a" "b"]}], :args '["a" "b"]}}}] : _
+48: @[{:provenance {:depth 0N, :clause-id :reachable/2-0, :derivation {:rule :reachable/2-0, :goal :reachable, :children '[{:rule :edge/2-0, :goal :edge, :children nil, :args '["a" "b"]}], :args '["a" "b"]}}, :certainty :definite}] : _
+49: @[{:cycle '["paradox"], :certainty :unknown}] : _
+50: @[{:cycle '["pacifist" "hawk"], :certainty :unknown}] : _
+51: parent-child : _ defined.
+52: @[{:who "bob", :provenance {:depth 0N, :clause-id :parent-child/2-0, :derivation {:rule :parent-child/2-0, :goal :parent-child, :children nil, :args '["tom" "bob"]}}} {:who "liz", :provenance {:depth 0N, :clause-id :parent-child/2-1, :derivation {:rule :parent-child/2-1, :goal :parent-child, :children nil, :args '["tom" "liz"]}}}] : [PVec {:who String | _}]
+53: summary-solver : Solver defined.
+54: @[{:provenance {:depth 0N, :clause-id :parent-child/2-0, :derivation {:rule :parent-child/2-0, :goal :parent-child, :children nil, :args '["tom" "bob"]}}, :who "bob"} {:provenance {:depth 0N, :clause-id :parent-child/2-1, :derivation {:rule :parent-child/2-1, :goal :parent-child, :children nil, :args '["tom" "liz"]}}, :who "liz"}] : [PVec {:who String | _}]
+55: wf-full : Solver defined.
+56: @[{:provenance {:depth 0N, :clause-id :reachable/2-0, :derivation {:rule :reachable/2-0, :goal :reachable, :children '[{:rule :edge/2-0, :goal :edge, :children nil, :args '["a" "b"]}], :args '["a" "b"]}}, :to "b", :certainty :definite}] : [PVec {:to String | _}]
+57: wf-tabled : Solver defined.
+58: @[{}] : _
+59: @[{:dest "b"}] : [PVec {:dest String}]
+60: @[] : [PVec {:pos String}]
+61: add-one-int : _ defined.
+62: @[{:r 6}] : [PVec {:r Int}]
+63: add-one-nat : _ defined.
+64: @[{:r 6N}] : [PVec {:r Nat}]
+65: double-int : _ defined.
+66: @[{:r 10}] : [PVec {:r Int}]
+67: weighted-edge : _ defined.
+68: positive-edge : _ defined.
+69: @[{:from "a", :to "b", :w 3} {:from "c", :to "d", :w 5}] : [PVec {:from String :to String :w Int}]
+70: weighted-edge-nat : _ defined.
+71: positive-edge-nat : _ defined.
+72: @[{:from "a", :to "b", :w 3N} {:from "c", :to "d", :w 5N}] : [PVec {:from String :to String :w Nat}]
+73: describe : _ defined.
+74: @[{:name "unknown"}] : [PVec {:name String}]
+75: @[{:detail "engineer"}] : [PVec {:detail String}]
+76: @[{:detail "designer", :level "junior"}] : [PVec {:detail String :level String}]
+77: @[{:from "a", :to "c"} {:from "b", :to "d"} {:from "c", :to "e"}] : [PVec {:from String :to String}]
+78: {:dest "b"} : {:dest String}
+79: none : {:dest String}
+80: Employee : [Type 0] defined.
+81: employees : _ defined.
+82: @[{:name "alice", :salary 100000}] : [PVec {:name String :salary Int}]
+83: empty-rel : _ defined.
+84: @[] : _
+85: just-one : _ defined.
+86: @[{}] : _
+87: chain : _ defined.
+88: @[{}] : _
+89: @[{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}] : [PVec {:dest String}]
+90: @[{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}] : [PVec {:dest String}]
+91: @[{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}] : [PVec {:dest String}]
+92: @[{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}] : [PVec {:dest String}]
+93: @[{}] : _
+94: @[{:item "apple", :hue "red"} {:item "banana", :hue "yellow"} {:item "grape", :hue "purple"} {:item "lime", :hue "green"}] : [PVec {:hue String :item String}]
+95: @[{:dest "b"}] : [PVec {:dest String}]
+96: my-add : Nat Nat -> Nat defined.
+97: 7N : Nat
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":62,"exec_rounds":58,"file":"2026-03-14-wfle-acceptance.prologos","perf_fields_worker":"()","perf_incs_in_exec_main":0,"perf_incs_in_exec_worker":0,"race_rounds_any_worker_set":0,"race_rounds_multi_worker_set":0,"strat":"auto","wall_ms":220.0}

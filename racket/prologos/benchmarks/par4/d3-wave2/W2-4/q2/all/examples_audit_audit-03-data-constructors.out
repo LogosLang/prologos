@@ -1,0 +1,51 @@
+PERF-COUNTERS:{"cell_allocs":1961,"constraint_count":0,"constraint_retries":0,"elaborate_steps":190,"inert_dependent_skips":0,"infer_steps":186,"meta_created":30,"meta_solved":17,"prop_allocs":0,"prop_firings":0,"reduce_steps":1531,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":69,"zonk_steps":401}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":1,"qtt_ms":0,"reduce_ms":2,"trait_resolve_ms":0,"type_check_ms":7,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":17,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":2,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: Direction : [Type 0] defined.
+1: North : examples::audit::data-constructors::Direction defined.
+2: South : examples::audit::data-constructors::Direction defined.
+3: East : examples::audit::data-constructors::Direction defined.
+4: West : examples::audit::data-constructors::Direction defined.
+5: Shape : [Type 0] defined.
+6: Circle : Nat -> examples::audit::data-constructors::Shape defined.
+7: Rect : Nat Nat -> examples::audit::data-constructors::Shape defined.
+8: MyBox : [Pi [x :0 <[Type 0]>] [Type 0]] defined.
+9: MkBox : [Pi [x :0 <[Type 0]>] x -> [examples::audit::data-constructors::MyBox x]] defined.
+10: 0N : Nat
+11: 1N : Nat
+12: 3N : Nat
+13: [prologos::data::option::some Nat 42N] : [prologos::data::option::Option Nat]
+14: [prologos::data::option::none ?meta1904] : [prologos::data::option::Option ?meta1904]
+15: [prologos::data::list::nil ?meta1912] : [prologos::data::list::List ?meta1912]
+16: '[1N] : [prologos::data::list::List Nat]
+17: '[1N 2N] : [prologos::data::list::List Nat]
+18: [prologos::data::result::ok Nat ?meta1967 42N] : [prologos::data::result::Result Nat ?meta1967]
+19: [prologos::data::result::err ?meta1982 String "failure"] : [prologos::data::result::Result ?meta1982 String]
+20: [pair 1N true] : [Sigma Nat Bool]
+21: examples::audit::data-constructors::North : examples::audit::data-constructors::Direction
+22: examples::audit::data-constructors::South : examples::audit::data-constructors::Direction
+23: [examples::audit::data-constructors::Circle 5N] : examples::audit::data-constructors::Shape
+24: [examples::audit::data-constructors::Rect 3N 4N] : examples::audit::data-constructors::Shape
+25: [examples::audit::data-constructors::MkBox Nat 42N] : [examples::audit::data-constructors::MyBox Nat]
+26: [examples::audit::data-constructors::MkBox Bool true] : [examples::audit::data-constructors::MyBox Bool]
+27: direction-name : examples::audit::data-constructors::Direction -> Nat defined.
+28: 0N : Nat
+29: 3N : Nat
+30: area : examples::audit::data-constructors::Shape -> Nat defined.
+31: 25N : Nat
+32: 12N : Nat
+33: unwrap-nat : [prologos::data::option::Option Nat] -> Nat defined.
+34: 42N : Nat
+35: 0N : Nat
+36: list-len : [prologos::data::list::List Nat] -> Nat defined.
+37: 3N : Nat
+38: 0N : Nat
+39: fib : Nat -> Nat defined.
+40: 8N : Nat
+41: '[1N 2N 3N] : [prologos::data::list::List Nat]
+42: [prologos::data::list::nil ?meta2127] : [prologos::data::list::List ?meta2127]
+43: '[true false true] : [prologos::data::list::List Bool]
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":221,"exec_rounds":50,"exec_wide_rounds":6,"file":"audit-03-data-constructors.prologos","perf_fields_worker":"(reduce-steps)","perf_incs_in_exec_main":49,"perf_incs_in_exec_worker":9,"race_rounds_any_worker_set":0,"race_rounds_multi_worker_set":0,"race_unbox_main_prop-net-box":41,"race_unbox_main_registry-net-box":16,"race_unbox_worker_prop-net-box":6,"race_unbox_worker_registry-net-box":8,"strat":"auto","wall_ms":182.0}

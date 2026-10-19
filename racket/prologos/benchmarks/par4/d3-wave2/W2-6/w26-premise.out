@@ -1,0 +1,5 @@
+TODAY (W = cell-1): reads along the command (bot Bool Bool top Bool) ; non-monotone steps 1 ; final read Bool (test-speculation-bridge.rkt:69-88 expects the committed Bool)
+B-BARE (W = 0): reads along the command (bot bot bot bot bot) ; non-monotone steps 0 ; final read bot (test-speculation-bridge.rkt:69-88 expects the committed Bool)
+B-LIVE (W = C ∧ ¬X): reads along the command (bot Bool Bool top Bool) ; non-monotone steps 1 ; final read Bool (test-speculation-bridge.rkt:69-88 expects the committed Bool)
+B-PREMISE (W = 0 ∪ P): reads along the command (bot bot Bool Bool Bool) ; non-monotone steps 0 ; final read Bool (test-speculation-bridge.rkt:69-88 expects the committed Bool)
+the thunk of h2 itself reads at its own W = h1|h2 (elab-speculation-bridge.rkt:296-300): top

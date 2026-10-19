@@ -1,0 +1,47 @@
+B1 attribute-map-merge-fn restricted to the :type facet (one position), exhaustive
+  POWER/ground: :type facet, ground classifiers [|U|=13]: I 0  C 0  A 0  Abs 0
+  with unsolved metas ?pm1 ?pm2 in classifiers [|U|=31]: I 0  C 122  A 2160  Abs 0
+
+B2 the fence as a map from SRE's property lattice (sre-core.rkt:246-260) to {free < fenced}
+  order (a ⊑ b iff a ⊔ b = b):
+    prop-unknown ⊑ prop-confirmed
+    prop-unknown ⊑ prop-refuted
+    prop-unknown ⊑ prop-contradicted
+    prop-confirmed ⊑ prop-contradicted
+    prop-refuted ⊑ prop-contradicted
+  unknown ⊔ refuted = prop-refuted   (an UNDECLARED merge whose sample fails is refuted, not contradicted)
+  monotone maps: 6 of 16
+  monotone with confirmed↦free, contradicted↦fenced: 2
+    ((prop-unknown free) (prop-confirmed free) (prop-refuted free) (prop-contradicted fenced))
+    ((prop-unknown free) (prop-confirmed free) (prop-refuted fenced) (prop-contradicted fenced))
+  ... of which fail-closed (unknown↦fenced): 0
+  D.2 literal "contradicted ⇒ fenced": monotone? #t ; refuted ↦ free ; unknown ↦ free
+  POWER: fail-closed map (fenced unless confirmed) monotone? #f
+
+B3 two-phase worldview, 3 assumption bits: x = (C, I), join = (ior, ior)
+  2P-set join (ior, ior) [|U|=64]: I 0  C 0  A 0  Abs 0
+  POWER: replacement merge on the same carrier [|U|=64]: I 0  C 4032  A 0  Abs 0
+  live = C ∧ ¬I: pairs x ⊑ y with live(x) ⊄ live(y) (non-monotone): 217 of 729 ordered pairs
+  live(x ⊔ y) ≠ live(x) ∪ live(y) (not join-preserving, so not a Galois left adjoint): 2368 of 4096 pairs
+  POWER: committed-only read C: non-monotone pairs 0, non-join-preserving 0
+  REAL tagged-cell-read at W = live(x): monotonicity violations over 300 tagged values × ordered pairs: 15206
+  POWER/control: same read at W = C (committed only): 22005
+
+B4 'fires compute on labelled values' — per-entry lift vs pointwise evaluation (real tagged-cell-read)
+  additive f, per-entry lift ≠ pointwise: 0 of 2400 (t, W)
+  non-additive monotone f ('both a and b'), per-entry lift ≠ pointwise: 36 of 2400
+  non-additive f, lift evaluated on the ∪-closure of labels ≠ pointwise: 0 of 2400
+  witness: entries {1:{a}, 2:{b}}; at W=3 pointwise f = #<seteq: both>, per-entry lift = #<seteq:>
+
+B5 :usage — candidate orders for one usage coordinate
+  addS (⊥ strict): monotone(chain) #t  monotone(flat) #t  C 0  A 0
+  addW (ω absorbs ⊥): monotone(chain) #t  monotone(flat) #t  C 0  A 2
+  mulS (0 absorbs ⊥): monotone(chain) #f  monotone(flat) #t  C 0  A 0
+    addW witness: (⊥+m1)+m1 = bot  vs  ⊥+(m1+m1) = mw
+  arity-3 child vectors whose foldl total depends on child order: addS 0, addW 3 (of 64)
+  max as merge on the chain: C 0 A 0
+  interval join (max lo, min hi) [|U|=7]: I 0  C 0  A 0  Abs 0
+  POWER: mult-add as a merge (the semiring +, today's :usage facet-merge) [|U|=3]: I 1  C 0  A 0  Abs 1
+  interval add: monotone #t  C 0  A 0 ; interval mul: monotone #t
+  example: usage m1 + unknown·m1  = chain bot ; interval (m1 . mw)  (declared m0 can already be rejected: lo = m1)
+  today (prelude.rkt:37, typing-propagators.rkt:1699): m1 + mw·m1 = mw ; mult-add(m1, ?meta) = mw

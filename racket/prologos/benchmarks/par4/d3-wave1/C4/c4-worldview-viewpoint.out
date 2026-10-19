@@ -1,0 +1,6 @@
+PRODUCTION cell-1 merge (replacement)
+  cell-1 after amb 11, after with-worldview{left} 1, {right} 10
+  solve-all answers: (val-left val-right)   (test expects 2: val-left, val-right)
+cell-1 merge = bitwise-ior (D.2 row 1, committed component)
+  cell-1 after amb 11, after with-worldview{left} 11, {right} 11
+  solve-all answers: (val-right)   (test expects 2: val-left, val-right)

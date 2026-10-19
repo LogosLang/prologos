@@ -1,0 +1,36 @@
+PERF-COUNTERS:{"cell_allocs":1312,"constraint_count":0,"constraint_retries":0,"elaborate_steps":233,"inert_dependent_skips":0,"infer_steps":115,"meta_created":58,"meta_solved":44,"prop_allocs":0,"prop_firings":0,"reduce_steps":1708,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":120,"zonk_steps":500}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":1,"qtt_ms":0,"reduce_ms":3,"trait_resolve_ms":0,"type_check_ms":78,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: double-it : [Pi [x :0 <[Type 0]>] [x x -> x] x -> x] defined.
+1: 42 : Int
+2: 1/2 : Rat
+3: 10N : Nat
+4: 2p8 : Posit8
+5: square-it : [Pi [x :0 <[Type 0]>] [x x -> x] x -> x] defined.
+6: 49 : Int
+7: 9/4 : Rat
+8: same? : [Pi [x :0 <[Type 0]>] [x x -> Bool] x x -> Bool] defined.
+9: true : Bool
+10: true : Bool
+11: false : Bool
+12: diff : [Pi [x :0 <[Type 0]>] [x x -> x] [x -> x] x x -> x] defined.
+13: 7 : Int
+14: 1/2 : Rat
+15: sum-of-squares : [Pi [x :0 <[Type 0]>] [x x -> x] [x x -> x] x x -> x] defined.
+16: 25 : Int
+17: 1/2 : Rat
+18: 55 : Int
+19: 120 : Int
+20: 30 : Int
+21: 1/2 : Rat
+22: 7N : Nat
+23: 4.0 : Posit32
+24: true : Bool
+25: true : Bool
+26: 7 : Int
+27: 42 : Int
+28: 7 : Int
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":588,"exec_rounds":105,"exec_wide_rounds":15,"file":"generic-numerics.prologos","perf_fields_worker":"()","perf_incs_in_exec_main":52,"perf_incs_in_exec_worker":0,"race_rounds_any_worker_set":0,"race_rounds_multi_worker_set":0,"race_unbox_main_prop-net-box":44,"race_unbox_main_registry-net-box":16,"strat":"auto","wall_ms":260.0}

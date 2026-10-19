@@ -1,0 +1,71 @@
+0: id : [Pi [x :0 <[Type 0]>] x -> x] defined.
+1: const : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] x y -> x]] defined.
+2: flip : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [x y -> z] y x -> z]]] defined.
+3: compose : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [y -> z] [x -> y] x -> z]]] defined.
+4: on : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [y y -> z] [x -> y] x x -> z]]] defined.
+5: apply : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [x -> y] x -> y]] defined.
+6: twice : [Pi [x :0 <[Type 0]>] [x -> x] x -> x] defined.
+7: thrice : [Pi [x :0 <[Type 0]>] [x -> x] x -> x] defined.
+8: a1 : Int defined.
+9: a2 : Int defined.
+10: a3 : Int defined.
+11: a4 : Int defined.
+12: a5 : Int defined.
+13: a6 : Int defined.
+14: a7 : Int defined.
+15: a8 : Int defined.
+16: a9 : Int defined.
+17: a10 : Int defined.
+18: deep1 : Int defined.
+19: deep2 : Int defined.
+20: deep3 : Int defined.
+21: d1 : Int defined.
+22: d2 : Bool defined.
+23: d3 : String defined.
+24: d4 : Int defined.
+25: d5 : String defined.
+26: ERROR: Could not infer type
+27: ERROR: Could not infer type
+28: d8 : Int defined.
+29: ERROR: Could not infer type
+30: d10 : Int defined.
+31: e1 : Bool defined.
+32: e2 : Bool defined.
+33: e3 : Bool defined.
+34: p1 : Int defined.
+35: p2 : Int defined.
+36: 2 : Int
+37: 4 : Int
+38: 6 : Int
+39: 8 : Int
+40: 10 : Int
+41: 12 : Int
+42: 14 : Int
+43: 16 : Int
+44: 18 : Int
+45: 20 : Int
+46: 1 : Int
+47: 4 : Int
+48: 9 : Int
+49: 16 : Int
+50: 25 : Int
+51: 1 : Int
+52: 2 : Int
+53: 3 : Int
+54: true : Bool
+55: false : Bool
+56: 1 : Int
+57: true : Bool
+58: "a" : String
+59: [fn [x <2>] [fn [y <1>] x]] : ?bvar1 ?bvar1 -> ?bvar3
+60: [fn [x <false>] [fn [y <true>] x]] : ?bvar1 ?bvar1 -> ?bvar3
+61: [fn [x <[fn [x <1>] x]>] x] : ?bvar0 -> ?bvar1
+62: [fn [x <[fn [x <true>] x]>] x] : ?bvar0 -> ?bvar1
+63: 1 : Int
+64: ERROR: Could not infer type
+65: [fn [x <[fn [x <1>] x]>] [fn [y <[fn [y <2>] y]>] x]] : ?bvar1 ?bvar1 -> ?bvar3
+66: mix1 : Int defined.
+67: mix2 : Int defined.
+68: mix3 : Int defined.
+
+--- 4 errors ---

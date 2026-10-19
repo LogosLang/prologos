@@ -1,0 +1,7 @@
+ground truth at t5/t6: worklists = #(0 3), quiescent? = #f
+A-D2-idle-epoch: scan1 #t scan2 #t -> declares quiescence: #t   <-- PREMATURE: t7 writes tagged epoch 1 <= boundary-epoch => 'late-s0-write
+B-D1-reset-flag: scan1 #f scan2 #f -> declares quiescence: #f
+C-cons-after-cascade: scan1 #f scan2 #f -> declares quiescence: #f
+D-activation-counters: scan1 #f scan2 #f -> declares quiescence: #f
+E-credit-recovery: scan1 #f scan2 #f -> declares quiescence: #f
+POWER (t8, truly quiescent): A=#t B=#t C=#t D=#t E=#t

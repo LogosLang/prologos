@@ -1,0 +1,93 @@
+RESULT 0.0: @[{:x 42}] : _
+RESULT 0.1: @[{:x "hello"}] : _
+RESULT 0.2: @[{:a b, :b b}] : _
+RESULT 0.3: @[] : _
+RESULT 0.4: @[{:v 99}] : _
+RESULT 0.5: @[{:x 42}] : _
+RESULT 0.6: @[] : _
+RESULT 0.7: @[] : _
+RESULT 0.8: @[] : _
+RESULT 0.9: @[{:n 0N}] : _
+RESULT 0.10: @[{:n 5N}] : _
+RESULT 0.11: @[] : _
+RESULT 0.12: @[] : _
+RESULT 0.13: color : _ defined.
+RESULT 0.14: @[{:hex "#FF0000"}] : [PVec {:hex String}]
+RESULT 0.15: @[{:hex "#A52A2A"}] : [PVec {:hex String}]
+RESULT 0.16: @[{:name "red", :hex "#FF0000"} {:name "green", :hex "#00FF00"} {:name "blue", :hex "#0000FF"} {:name "yellow", :hex "#FFFF00"} {:name "cyan", :hex "#00FFFF"} {:name "magenta", :hex "#FF00FF"} {:name "white", :hex "#FFFFFF"} {:name "black", :hex "#000000"} {:name "orange", :hex "#FFA500"} {:name "purple", :hex "#800080"} {:name "pink", :hex "#FFC0CB"} {:name "brown", :hex "#A52A2A"}] : [PVec {:hex String :name String}]
+RESULT 0.17: @[{:r 255, :g 255, :b 255}] : [PVec {:b Int :g Int :r Int}]
+RESULT 0.18: @[{:r 0, :g 128, :b 255}] : [PVec {:b Int :g Int :r Int}]
+RESULT 0.19: @[{:a 1, :b 2, :c 3, :d 4, :e 5}] : [PVec {:a Int :b Int :c Int :d Int :e Int}]
+RESULT 0.20: @[{:a "a", :b "b", :c "c", :d "d", :e "e", :f "f", :g "g", :h "h"}] : [PVec {:a String :b String :c String :d String :e String :f String :g String :h String}]
+RESULT 0.21: @[{:x 30}] : _
+RESULT 0.22: @[{:y 42}] : _
+RESULT 0.23: @[{:a2 9, :b2 16, :sum 25}] : [PVec {:a2 Int :b2 Int :sum Int}]
+RESULT 0.24: @[{:v1 3, :v2 9, :v3 19, :v4 38}] : [PVec {:v1 Int :v2 Int :v3 Int :v4 Int}]
+RESULT 0.25: @[{:x 42}] : _
+RESULT 0.26: @[] : _
+RESULT 0.27: @[{:none none}] : _
+RESULT 0.28: @[] : _
+RESULT 0.29: @[] : _
+RESULT 0.30: @[{:a 1}] : _
+RESULT 0.31: @[{:b 2}] : _
+RESULT 0.32: @[{:c 3}] : _
+RESULT 0.33: @[{:d 4}] : _
+RESULT 0.34: @[{:e 5}] : _
+RESULT 0.35: @[{:f 6}] : _
+RESULT 0.36: @[{:g 7}] : _
+RESULT 0.37: @[{:h 8}] : _
+RESULT 0.38: @[{:i 9}] : _
+RESULT 0.39: @[{:j 10}] : _
+RESULT 0.40: @[{:k 11}] : _
+RESULT 0.41: @[{:l 12}] : _
+RESULT 0.42: @[{:m 13}] : _
+RESULT 0.43: @[{:n 14}] : _
+RESULT 0.44: @[{:o 15}] : _
+RESULT 0.45: @[{:p 16}] : _
+RESULT 0.46: @[{:q 17}] : _
+RESULT 0.47: @[{:r 18}] : _
+RESULT 0.48: @[{:s 19}] : _
+RESULT 0.49: @[{:t 20}] : _
+RESULT 0.50: flip-bool : Bool -> Bool defined.
+RESULT 0.51: ERROR: Unbound variable
+RESULT 0.52: ERROR: Unbound variable
+RESULT 0.53: ERROR: Unbound variable
+RESULT 0.54: ERROR: Unbound variable
+RESULT 0.55: {:hex "#FF0000"} : {:hex String}
+RESULT 0.56: {:name "red", :hex "#FF0000"} : {:hex String :name String}
+RESULT 0.57: none : _
+RESULT 0.58: {:x 42} : _
+RESULT 0.59: @[{:x 42, :y 42, :z 42}] : [PVec {:x Int :y Int :z Int}]
+RESULT 0.60: @[{:a [pair ?b ?c], :b [some 99], :c c_g2059, :d 99}] : [PVec {:a _ :b _ :c _ :d Int}]
+RESULT 0.61: @[] : [PVec {:w _ :x _ :y _ :z _}]
+RESULT 0.62: @[{:h1 "#FF0000"}] : [PVec {:h1 String}]
+RESULT 0.63: @[{:h2 "#0000FF"}] : [PVec {:h2 String}]
+RESULT 0.64: @[{:h3 "#00FF00"}] : [PVec {:h3 String}]
+RESULT 0.65: @[{:h4 "#FFFF00"}] : [PVec {:h4 String}]
+RESULT 0.66: @[{:h5 "#00FFFF"}] : [PVec {:h5 String}]
+RESULT 0.67: @[{:h6 "#FF00FF"}] : [PVec {:h6 String}]
+RESULT 0.68: @[{:h7 "#FFFFFF"}] : [PVec {:h7 String}]
+RESULT 0.69: @[{:h8 "#000000"}] : [PVec {:h8 String}]
+RESULT 0.70: @[{:h9 "#FFA500"}] : [PVec {:h9 String}]
+RESULT 0.71: @[{:h10 "#800080"}] : [PVec {:h10 String}]
+RESULT 0.72: compute-sum : _ defined.
+RESULT 0.73: compute-prod : _ defined.
+RESULT 0.74: @[{:result 7}] : [PVec {:result Int}]
+RESULT 0.75: @[{:result 42}] : [PVec {:result Int}]
+RESULT 0.76: compute-both : _ defined.
+RESULT 0.77: @[{:sum 8, :prod 15}] : [PVec {:prod Int :sum Int}]
+RESULT 0.78: safe-double : _ defined.
+RESULT 0.79: @[{:result 10}] : [PVec {:result Int}]
+RESULT 0.80: positive-double : _ defined.
+RESULT 0.81: @[{:result 14}] : [PVec {:result Int}]
+RESULT 0.82: five-computations : _ defined.
+RESULT 0.83: @[{:r1 11, :r2 12, :r3 13, :r4 14, :r5 15}] : [PVec {:r1 Int :r2 Int :r3 Int :r4 Int :r5 Int}]
+RESULT 0.84: pair-builder : _ defined.
+RESULT 0.85: @[{:result [pair ?x ?y]}] : [PVec {:result _}]
+RESULT 0.86: add-ten : _ defined.
+RESULT 0.87: add-twenty : _ defined.
+RESULT 0.88: @[{:result 25}] : [PVec {:result Int}]
+RESULT 0.89: @[{:x 3, :y 4, :z 7, :sum 14, :prod 12, :label "computed"}] : [PVec {:label String :prod Int :sum Int :x Int :y Int :z Int}]
+RESULT 0.90: @[{:inner 30, :outer [pair ?inner (some ?inner)]}] : [PVec {:inner Int :outer _}]
+RESULT 0.91: @[{:src 42, :a 42, :b 42, :c 42, :d 42, :e 42}] : [PVec {:a Int :b Int :c Int :d Int :e Int :src Int}]
+STATS leg=fresh files=1 params=219 rounds=77 wide-rounds(>=8)=0 fires=77 reentrant=0 ms=176.0

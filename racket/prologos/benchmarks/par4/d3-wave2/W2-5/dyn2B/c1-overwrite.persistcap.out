@@ -1,0 +1,11 @@
+RESULT 0: atms-s : Solver defined.
+RESULT 1: dfs-s : Solver defined.
+RESULT 2: pick : _ defined.
+RESULT 3: two : _ defined.
+RESULT 4: @[{:x 2}] : [PVec {:x Int}]
+RESULT 5: @[] : [PVec {:x Int}]
+RESULT 6: @[{}] : _
+RESULT 7: @[{}] : _
+RESULT 8: @[{:x 2} {:x 1}] : [PVec {:x Int}]
+RESULT 9: @[{:x 1}] : [PVec {:x Int}]
+STATS2 leg=persistcap rounds=9 fires=19 control-divergent=0 thread-divergent=0 reentrant=0

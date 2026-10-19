@@ -1,0 +1,71 @@
+PERF-COUNTERS:{"cell_allocs":151,"constraint_count":0,"constraint_retries":0,"elaborate_steps":14,"inert_dependent_skips":0,"infer_steps":17,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":5,"resolution_cycles":0,"solver_backtracks":1,"solver_col_compares":1,"solver_row_scans":4,"solver_unifies":1,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":19}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":0,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":136,"constraint_count":0,"constraint_retries":0,"elaborate_steps":14,"inert_dependent_skips":0,"infer_steps":17,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":4,"resolution_cycles":0,"solver_backtracks":1,"solver_col_compares":1,"solver_row_scans":4,"solver_unifies":1,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":19}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":0,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":136,"constraint_count":0,"constraint_retries":0,"elaborate_steps":14,"inert_dependent_skips":0,"infer_steps":17,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":4,"resolution_cycles":0,"solver_backtracks":1,"solver_col_compares":1,"solver_row_scans":4,"solver_unifies":1,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":19}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":0,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":205,"constraint_count":0,"constraint_retries":0,"elaborate_steps":20,"inert_dependent_skips":0,"infer_steps":30,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":8,"resolution_cycles":0,"solver_backtracks":2,"solver_col_compares":2,"solver_row_scans":7,"solver_unifies":2,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":29}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":0,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":226,"constraint_count":0,"constraint_retries":0,"elaborate_steps":23,"inert_dependent_skips":0,"infer_steps":38,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":11,"resolution_cycles":0,"solver_backtracks":6,"solver_col_compares":6,"solver_row_scans":9,"solver_unifies":8,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":31}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":0,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":248,"constraint_count":0,"constraint_retries":0,"elaborate_steps":35,"inert_dependent_skips":0,"infer_steps":80,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":8,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":5,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":46}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":0,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+--------------------
+A.2b: NAF over a JOIN rule generator (body-local var) — routed to DFS, correct
+FAILURE
+name:       check-true
+location:   tests/test-rel-t1-naf.rkt:153:2
+params:     '(#f)
+message:    "the unblocked two-hop target must be in the solution"
+--------------------
+PERF-COUNTERS:{"cell_allocs":248,"constraint_count":0,"constraint_retries":0,"elaborate_steps":39,"inert_dependent_skips":0,"infer_steps":85,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":9,"resolution_cycles":0,"solver_backtracks":1,"solver_col_compares":1,"solver_row_scans":6,"solver_unifies":1,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":50}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":0,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+--------------------
+A.2b: NAF over a RECURSIVE rule generator — routed to DFS, complete + correct
+FAILURE
+name:       check-true
+location:   tests/test-rel-t1-naf.rkt:173:2
+params:     '(#f)
+message:
+  "the transitively-reachable unblocked target must be present (recursion not dropped)"
+--------------------
+PERF-COUNTERS:{"cell_allocs":92,"constraint_count":0,"constraint_retries":0,"elaborate_steps":9,"inert_dependent_skips":0,"infer_steps":12,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":0,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":1,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":13}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":0,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":136,"constraint_count":0,"constraint_retries":0,"elaborate_steps":12,"inert_dependent_skips":0,"infer_steps":16,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":6,"resolution_cycles":0,"solver_backtracks":2,"solver_col_compares":1,"solver_row_scans":2,"solver_unifies":2,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":17}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":0,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":150,"constraint_count":0,"constraint_retries":0,"elaborate_steps":29,"inert_dependent_skips":0,"infer_steps":52,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":18,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":6,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":38}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":4,"trait_resolve_ms":0,"type_check_ms":0,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+--------------------
+A.4: guard over a multi-fact generator filters per-row (routed to DFS)
+FAILURE
+name:       check-false
+location:   tests/test-rel-t1-naf.rkt:259:2
+params:     '(#t)
+message:    "the w=0 edge (b→c) is filtered out"
+--------------------
+PERF-COUNTERS:{"cell_allocs":180,"constraint_count":0,"constraint_retries":0,"elaborate_steps":34,"inert_dependent_skips":0,"infer_steps":76,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":18,"resolution_cycles":0,"solver_backtracks":4,"solver_col_compares":10,"solver_row_scans":9,"solver_unifies":16,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":40}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":0,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+3/12 test failures
+'(3 . 12)

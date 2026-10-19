@@ -1,0 +1,13 @@
+SB litmus, N=1000000 lockstep iterations; count of iterations where neither thread saw the other's write
+  fixnum stores, no fence:                    17294
+  pointer stores (auto dmb ishst), no fence:  84469
+  fixnum, memory-order-acquire between:       0
+  fixnum, memory-order-release between:       0
+  pointer, memory-order-acquire between:      0
+  pointer, memory-order-release between:      0
+  fixnum stores, no fence:                    192
+  pointer stores (auto dmb ishst), no fence:  86017
+  fixnum, memory-order-acquire between:       0
+  fixnum, memory-order-release between:       0
+  pointer, memory-order-acquire between:      0
+  pointer, memory-order-release between:      0

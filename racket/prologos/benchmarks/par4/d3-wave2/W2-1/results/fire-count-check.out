@@ -1,0 +1,8 @@
+constraints-adversarial.prologos prod preload: (fires rounds) per rep ((1136 214) (1136 214) (1136 214))
+constraints-adversarial.prologos prod nopreload: (fires rounds) per rep ((1142 212) (1136 214) (1136 214))
+constraints-adversarial.prologos seq preload: (fires rounds) per rep ((1136 214) (1136 214) (1136 214))
+constraints-adversarial.prologos seq nopreload: (fires rounds) per rep ((1142 212) (1136 214) (1136 214))
+type-adversarial.prologos prod preload: (fires rounds) per rep ((1140 185) (1140 185) (1140 185))
+type-adversarial.prologos prod nopreload: (fires rounds) per rep ((1112 182) (1140 185) (1140 185))
+type-adversarial.prologos seq preload: (fires rounds) per rep ((1140 185) (1140 185) (1140 185))
+type-adversarial.prologos seq nopreload: (fires rounds) per rep ((1112 182) (1140 185) (1140 185))

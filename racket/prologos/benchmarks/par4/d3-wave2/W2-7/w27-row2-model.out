@@ -1,0 +1,44 @@
+model DFS == measured DFS (validates the model's DFS):
+  C9 Q1 two ?x                 True   dfs=[]
+  C9 Q2 pick 1                 True   dfs=[()]
+  C9 Q3 x=1, pick x            True   dfs=[(('x', 1),)]
+  C9 c4 clash                  True   dfs=[]
+  C9 c4 agree                  True   dfs=[(('x', 1), ('y', 1))]
+  W27 Q4 pick x, pick y, x=y   True   dfs=[(('x', 1), ('y', 1)), (('x', 2), ('y', 2))]
+  W27 Q5 pick x, x=1           True   dfs=[(('x', 1),)]
+  W27 Q6 pick x, y=2, x=y      True   dfs=[(('x', 2), ('y', 2))]
+  W27 Q7 y=2, x=y (control)    True   dfs=[(('x', 2), ('y', 2))]
+  W27 Q8 pick,pick,x=1,y=x (ctl) True   dfs=[(('x', 1), ('y', 1))]
+
+model TODAY vs measured on-network answers (as multisets / as sets):
+  C9 Q1 two ?x                 multiset True  set True   model=[(('x', 2),)]  measured=[(('x', 2),)]
+  C9 Q2 pick 1                 multiset True  set True   model=[()]  measured=[()]
+  C9 Q3 x=1, pick x            multiset True  set True   model=[(('x', 1),), (('x', 2),)]  measured=[(('x', 2),), (('x', 1),)]
+  C9 c4 clash                  multiset True  set True   model=[(('x', 1), ('y', 2))]  measured=[(('x', 1), ('y', 2))]
+  C9 c4 agree                  multiset True  set True   model=[(('x', 1), ('y', 1))]  measured=[(('x', 1), ('y', 1))]
+  W27 Q4 pick x, pick y, x=y   multiset False  set False   model=[(('x', 1), ('y', 1)), (('x', 1), ('y', 2)), (('x', 2), ('y', 1)), (('x', 2), ('y', 2))]  measured=[(('x', 1), ('y', 1))]
+  W27 Q5 pick x, x=1           multiset False  set True   model=[(('x', 1),), (('x', 2),)]  measured=[(('x', 1),), (('x', 2),), (('x', 1),)]
+  W27 Q6 pick x, y=2, x=y      multiset False  set False   model=[(('x', 1), ('y', 2)), (('x', 2), ('y', 2))]  measured=[(('x', 1), ('y', 2))]
+  W27 Q7 y=2, x=y (control)    multiset True  set True   model=[(('x', 2), ('y', 2))]  measured=[(('x', 2), ('y', 2))]
+  W27 Q8 pick,pick,x=1,y=x (ctl) multiset False  set False   model=[(('x', 1), ('y', 1)), (('x', 1), ('y', 2)), (('x', 2), ('y', 1)), (('x', 2), ('y', 2))]  measured=[(('x', 1), ('y', 1))]
+
+answer-set agreement with the MEASURED DFS answers (multiset), per configuration:
+  PROPOSED, TOP = NOGOOD (base TOP = query failure)    10/10  wrong on: -
+  PROPOSED, TOP = NET-CONTRADICTION                    5/10  wrong on: ['C9 Q3 x=1, pick x', 'W27 Q4 pick x, pick y, x=y', 'W27 Q5 pick x, x=1', 'W27 Q6 pick x, y=2, x=y', 'W27 Q8 pick,pick,x=1,y=x (ctl)']
+      C9 Q3 x=1, pick x: got []  DFS [(('x', 1),)]
+      W27 Q4 pick x, pick y, x=y: got []  DFS [(('x', 1), ('y', 1)), (('x', 2), ('y', 2))]
+      W27 Q5 pick x, x=1: got []  DFS [(('x', 1),)]
+  PROPOSED, TOP = BASE-ONLY                            5/10  wrong on: ['C9 Q3 x=1, pick x', 'W27 Q4 pick x, pick y, x=y', 'W27 Q5 pick x, x=1', 'W27 Q6 pick x, y=2, x=y', 'W27 Q8 pick,pick,x=1,y=x (ctl)']
+      C9 Q3 x=1, pick x: got [(('x', 1),), (('x', 'TOP'),)]  DFS [(('x', 1),)]
+      W27 Q4 pick x, pick y, x=y: got [(('x', 1), ('y', 1)), (('x', 'TOP'), ('y', 'TOP')), (('x', 'TOP'), ('y', 'TOP')), (('x', 2), ('y', 2))]  DFS [(('x', 1), ('y', 1)), (('x', 2), ('y', 2))]
+      W27 Q5 pick x, x=1: got [(('x', 1),), (('x', 'TOP'),)]  DFS [(('x', 1),)]
+  ablate ev_W join (shadowing read)                    5/10  wrong on: ['C9 Q3 x=1, pick x', 'W27 Q4 pick x, pick y, x=y', 'W27 Q5 pick x, x=1', 'W27 Q6 pick x, y=2, x=y', 'W27 Q8 pick,pick,x=1,y=x (ctl)']
+      C9 Q3 x=1, pick x: got [(('x', 1),), (('x', 2),)]  DFS [(('x', 1),)]
+      W27 Q4 pick x, pick y, x=y: got [(('x', 1), ('y', 1)), (('x', 1), ('y', 2)), (('x', 2), ('y', 1)), (('x', 2), ('y', 2))]  DFS [(('x', 1), ('y', 1)), (('x', 2), ('y', 2))]
+      W27 Q5 pick x, x=1: got [(('x', 1),), (('x', 2),)]  DFS [(('x', 1),)]
+  ablate both-sides unify (one direction only)         9/10  wrong on: ['W27 Q7 y=2, x=y (control)']
+      W27 Q7 y=2, x=y (control): got [(('y', 2),)]  DFS [(('x', 2), ('y', 2))]
+  ablate per-entry lift (fire reads at its label)      9/10  wrong on: ['W27 Q4 pick x, pick y, x=y']
+      W27 Q4 pick x, pick y, x=y: got [(('x', 1), ('y', 1)), (('x', 1), ('y', 2)), (('x', 2), ('y', 1)), (('x', 2), ('y', 2))]  DFS [(('x', 1), ('y', 1)), (('x', 2), ('y', 2))]
+
+TODAY's model vs measured DFS: 3 / 10

@@ -1,0 +1,22 @@
+ns probes::c9naf2
+
+;; C9 (h) power row: a NAF whose inner goal keeps a FREE variable, so process-naf-request
+;; installs it on a fork and runs a NESTED run-to-quiescence inside the S1 handler
+;; (relations.rkt:265-283) instead of the DFS shortcut for ground inner goals (:288).
+
+solver atms-s
+  :strategy atms
+
+defr edge [?from ?to]
+  || "a" "b"
+     "b" "c"
+     "c" "d"
+
+defr sink [?n]
+  &> (edge "c" n) (not (edge n ?z))
+
+defr nonsink [?n]
+  &> (edge "a" n) (not (edge n ?z))
+
+solve-with atms-s (sink ?n)
+solve-with atms-s (nonsink ?n)

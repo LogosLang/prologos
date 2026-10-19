@@ -1,0 +1,62 @@
+PERF-COUNTERS:{"cell_allocs":2435,"constraint_count":0,"constraint_retries":0,"elaborate_steps":142,"inert_dependent_skips":0,"infer_steps":0,"meta_created":27,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":156274,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":254}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":1,"qtt_ms":0,"reduce_ms":330,"trait_resolve_ms":0,"type_check_ms":4,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: 7N : Nat
+1: 12N : Nat
+2: 10N : Nat
+3: 7N : Nat
+4: 4N : Nat
+5: 256N : Nat
+6: true : Bool
+7: false : Bool
+8: true : Bool
+9: true : Bool
+10: true : Bool
+11: true : Bool
+12: true : Bool
+13: 3N : Nat
+14: 5N : Nat
+15: 8N : Nat
+16: 2N : Nat
+17: 30 : Int
+18: 7 : Int
+19: 20 : Int
+20: 3 : Int
+21: 1 : Int
+22: -5 : Int
+23: 7 : Int
+24: true : Bool
+25: true : Bool
+26: true : Bool
+27: -7 : Int
+28: -1 : Int
+29: 42 : Int
+30: 1/2 : Rat
+31: -3/7 : Rat
+32: 5/6 : Rat
+33: 1/6 : Rat
+34: 1/2 : Rat
+35: 3/2 : Rat
+36: -3/7 : Rat
+37: 3/7 : Rat
+38: 3 : Int
+39: 7 : Int
+40: true : Bool
+41: true : Bool
+42: 5 : Rat
+43: 3.14 : Posit32
+44: 42.0 : Posit32
+45: 0.5 : Posit32
+46: 3.0 : Posit32
+47: 6.0 : Posit32
+48: -3.14 : Posit32
+49: 3.14 : Posit32
+50: 5N : Nat
+51: 7N : Nat
+52: 20N : Nat
+53: true : Bool
+54: true : Bool
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":164,"exec_rounds":64,"file":"audit-09-numerics.prologos","perf_fields_worker":"()","perf_incs_in_exec_main":0,"perf_incs_in_exec_worker":0,"race_rounds_any_worker_set":0,"race_rounds_multi_worker_set":0,"strat":"auto","wall_ms":510.0}

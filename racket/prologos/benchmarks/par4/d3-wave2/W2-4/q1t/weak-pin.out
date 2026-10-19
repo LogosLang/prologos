@@ -1,0 +1,2 @@
+parent(alice y)  ATMS(solve-goal-propagator): (#hasheq((y . bob)))   DFS(solve-goal): (#hasheq((y . bob)) #hasheq((y . carol)) #hasheq((y . dave)))
+parent(x carol)  ATMS(solve-goal-propagator): (#hasheq((x . bob)))   DFS(solve-goal): (#hasheq((x . alice)) #hasheq((x . bob)) #hasheq((x . dave)))

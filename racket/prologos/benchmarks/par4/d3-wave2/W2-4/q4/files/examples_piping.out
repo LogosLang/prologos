@@ -1,0 +1,41 @@
+PERF-COUNTERS:{"cell_allocs":1511,"constraint_count":0,"constraint_retries":0,"elaborate_steps":411,"inert_dependent_skips":0,"infer_steps":177,"meta_created":9,"meta_solved":9,"prop_allocs":0,"prop_firings":0,"reduce_steps":5551,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":87,"zonk_steps":676}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":2,"qtt_ms":0,"reduce_ms":7,"trait_resolve_ms":0,"type_check_ms":93,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: 1N : Nat
+1: 2N : Nat
+2: 3N : Nat
+3: 1N : Nat
+4: 2N : Nat
+5: 3N : Nat
+6: 5N : Nat
+7: 2N : Nat
+8: 5N : Nat
+9: suc-fn : Nat -> Nat defined.
+10: positive? : Nat -> Bool defined.
+11: is-zero : Nat -> Bool defined.
+12: gt1? : Nat -> Bool defined.
+13: nums3 : [prologos::data::list::List Nat] defined.
+14: nums5 : [prologos::data::list::List Nat] defined.
+15: sum-rf : Nat Nat -> Nat defined.
+16: count-rf : Nat Nat -> Nat defined.
+17: 9N : Nat
+18: 10N : Nat
+19: 14N : Nat
+20: '[1N 2N 3N 4N 5N] : [prologos::data::list::List Nat]
+21: 3N : Nat
+22: '[4N 3N 2N] : [prologos::data::list::List Nat]
+23: '[4N 3N 2N] : [prologos::data::list::List Nat]
+24: '[4N 3N 2N 1N] : [prologos::data::list::List Nat]
+25: '[4N 3N 2N] : [prologos::data::list::List Nat]
+26: '[4N 3N 2N 1N] : [prologos::data::list::List Nat]
+27: '[5N 4N 3N 2N] : [prologos::data::list::List Nat]
+28: '[5N 4N 3N 2N] : [prologos::data::list::List Nat]
+29: '[8N 6N 4N 2N] : [prologos::data::list::List Nat]
+30: '[5N 4N 3N 2N] : [prologos::data::list::List Nat]
+31: 4N : Nat
+32: 6N : Nat
+33: 20N : Nat
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":885,"exec_rounds":109,"exec_wide_rounds":31,"file":"piping.prologos","outer_hist":{"0":22},"outer_max":0,"outer_runs":22,"strat":"auto","wall_ms":259.0}

@@ -1,0 +1,6 @@
+propagator 0: inputs (20) outputs (1) flags 0
+cell 1 after the run: 11 ; after re-firing propagator 0: 111
+answers from the run's result:           (#hasheq((v0 . #(struct:expr-string "bicycle"))))
+answers after S0 re-fires propagator 0:  (#hasheq((v0 . #(struct:expr-string "automobile"))) #hasheq((v0 . #(struct:expr-string "bicycle"))))
+production solve-goal-propagator:        (#hasheq((v0 . #(struct:expr-string "bicycle"))))
+DFS solve-goal:                          (#hasheq((v0 . #(struct:expr-string "bicycle"))))

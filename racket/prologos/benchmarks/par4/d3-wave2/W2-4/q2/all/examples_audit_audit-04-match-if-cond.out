@@ -1,0 +1,46 @@
+Hole ??__cond-fail : Nat
+Context:
+  x : Nat  (w)
+PERF-COUNTERS:{"cell_allocs":1599,"constraint_count":0,"constraint_retries":0,"elaborate_steps":283,"inert_dependent_skips":0,"infer_steps":211,"meta_created":24,"meta_solved":11,"prop_allocs":0,"prop_firings":0,"reduce_steps":2275,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":124,"zonk_steps":409}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":1,"qtt_ms":0,"reduce_ms":2,"trait_resolve_ms":0,"type_check_ms":5,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":10,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: nat-to-str : Nat -> Nat defined.
+1: 0N : Nat
+2: 1N : Nat
+3: 2N : Nat
+4: 99N : Nat
+5: bool-to-nat : Bool -> Nat defined.
+6: 1N : Nat
+7: 0N : Nat
+8: is-empty : [prologos::data::list::List Nat] -> Bool defined.
+9: true : Bool
+10: false : Bool
+11: second-elem : [prologos::data::list::List Nat] -> Nat defined.
+12: 20N : Nat
+13: 0N : Nat
+14: get-or-default : [prologos::data::option::Option Nat] -> Nat defined.
+15: 42N : Nat
+16: 0N : Nat
+17: result-val : [prologos::data::result::Result Nat String] -> Nat defined.
+18: 42N : Nat
+19: 0N : Nat
+20: always-one : Nat -> Nat defined.
+21: 1N : Nat
+22: 1N : Nat
+23: 1N : Nat
+24: 2N : Nat
+25: abs-diff : Nat Nat -> Nat defined.
+26: 4N : Nat
+27: 4N : Nat
+28: clamp-val : Nat -> Nat defined.
+29: 5N : Nat
+30: 7N : Nat
+31: 10N : Nat
+32: classify : Nat -> Nat defined.
+33: 0N : Nat
+34: 1N : Nat
+35: 2N : Nat
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":127,"exec_rounds":39,"exec_wide_rounds":3,"file":"audit-04-match-if-cond.prologos","perf_fields_worker":"()","perf_incs_in_exec_main":32,"perf_incs_in_exec_worker":0,"race_rounds_any_worker_set":0,"race_rounds_multi_worker_set":0,"race_unbox_main_prop-net-box":16,"race_unbox_main_registry-net-box":24,"strat":"auto","wall_ms":176.0}

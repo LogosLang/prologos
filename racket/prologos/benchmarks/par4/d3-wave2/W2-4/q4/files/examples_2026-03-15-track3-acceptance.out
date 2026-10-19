@@ -1,0 +1,82 @@
+PERF-COUNTERS:{"cell_allocs":3315,"constraint_count":0,"constraint_retries":0,"elaborate_steps":454,"inert_dependent_skips":0,"infer_steps":284,"meta_created":36,"meta_solved":36,"prop_allocs":0,"prop_firings":0,"reduce_steps":2100,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":193,"zonk_steps":691}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":3,"qtt_ms":0,"reduce_ms":3,"trait_resolve_ms":0,"type_check_ms":77,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":23,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: zero? : Nat -> Bool defined.
+1: true : Bool
+2: false : Bool
+3: false : Bool
+4: my-not : Bool -> Bool defined.
+5: false : Bool
+6: true : Bool
+7: my-and : Bool Bool -> Bool defined.
+8: true : Bool
+9: false : Bool
+10: my-or : Bool Bool -> Bool defined.
+11: true : Bool
+12: true : Bool
+13: my-xor : Bool Bool -> Bool defined.
+14: true : Bool
+15: false : Bool
+16: true : Bool
+17: false : Bool
+18: 1 : Int
+19: "no" : String
+20: add : Nat Nat -> Nat defined.
+21: mult : Nat Nat -> Nat defined.
+22: double : Nat -> Nat defined.
+23: 3N : Nat
+24: 0N : Nat
+25: 6N : Nat
+26: 4N : Nat
+27: my-id : [Pi [x :0 <[Type 0]>] x -> x] defined.
+28: my-const : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] x y -> x]] defined.
+29: 0N : Nat
+30: true : Bool
+31: "hello" : String
+32: 42 : Int
+33: "hello" : String
+34: true : Bool
+35: apply : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [x -> y] x x -> y]] defined.
+36: ERROR: Type mismatch
+37: double : Int -> Int defined.
+38: triple : Int -> Int defined.
+39: 6 : Int
+40: 12 : Int
+41: 15 : Int
+42: 45 : Int
+43: compose : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [y -> z] [x -> y] x -> z]]] defined.
+44: 12 : Int
+45: 24 : Int
+46: true : Bool
+47: false : Bool
+48: true : Bool
+49: prologos::data::ordering::lt-ord : prologos::data::ordering::Ordering
+50: prologos::data::ordering::eq-ord : prologos::data::ordering::Ordering
+51: true : Bool
+52: true : Bool
+53: nums : [prologos::data::list::List Nat] defined.
+54: 3N : Nat
+55: opt-some : [prologos::data::option::Option Nat] defined.
+56: opt-none : [prologos::data::option::Option Nat] defined.
+57: ok-val : [prologos::data::result::Result Nat String] defined.
+58: err-val : [prologos::data::result::Result Nat String] defined.
+59: my-int : Int defined.
+60: my-neg : Int defined.
+61: 42 : Int
+62: -7 : Int
+63: greeting : String defined.
+64: "hello world" : String
+65: 11 : Int
+66: "hello world" : String
+67: 4 : Int
+68: 5N : Nat
+69: 6N : Nat
+70: "track 3 acceptance" : String
+71: true : Bool
+72: true : Bool
+73: true : Bool
+74: "cell-primary" : String
+
+--- 1 errors ---
+W24 {"exec":"prod","exec_fires":555,"exec_rounds":123,"exec_wide_rounds":19,"file":"2026-03-15-track3-acceptance.prologos","handler_calls":1,"outer_hist":{"0":48},"outer_max":0,"outer_runs":48,"strat":"auto","wall_ms":251.0}

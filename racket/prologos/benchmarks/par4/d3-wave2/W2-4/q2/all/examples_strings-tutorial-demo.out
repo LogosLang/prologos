@@ -1,0 +1,152 @@
+PERF-COUNTERS:{"cell_allocs":6386,"constraint_count":0,"constraint_retries":0,"elaborate_steps":467,"inert_dependent_skips":0,"infer_steps":208,"meta_created":3,"meta_solved":3,"prop_allocs":0,"prop_firings":0,"reduce_steps":18575,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":137,"zonk_steps":845}
+PHASE-TIMINGS:{"elaborate_ms":2,"parse_ms":4,"qtt_ms":0,"reduce_ms":24,"trait_resolve_ms":0,"type_check_ms":111,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":24,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: "hello" : String
+1: "" : String
+2: "line one\nline two" : String
+3: greeting : String defined.
+4: "hello, prologos!" : String
+5: [Type 0]
+6: letter : Char defined.
+7: \a : Char
+8: ERROR: Unbound variable
+9: ERROR: Unbound variable
+10: ERROR: Unbound variable
+11: ERROR: Unbound variable
+12: \space : Char
+13: \newline : Char
+14: \tab : Char
+15: \A : Char
+16: true : Bool
+17: ERROR: Too many arguments to 'prologos::data::char::alpha?'
+18: ERROR: Too many arguments to 'prologos::data::char::numeric?'
+19: false : Bool
+20: true : Bool
+21: true : Bool
+22: true : Bool
+23: 65 : Int
+24: 97 : Int
+25: \A : Char
+26: \λ : Char
+27: \A : Char
+28: \z : Char
+29: "hello world" : String
+30: "one two three" : String
+31: "left + right" : String
+32: 5 : Int
+33: 0 : Int
+34: 8 : Int
+35: \h : Char
+36: \o : Char
+37: "hello" : String
+38: "world" : String
+39: "A" : String
+40: ERROR: Too many arguments to 'prologos::data::string::repeat-char'
+41: ERROR: Too many arguments to 'prologos::data::string::repeat-char'
+42: "42" : String
+43: "0" : String
+44: true : Bool
+45: false : Bool
+46: true : Bool
+47: true : Bool
+48: false : Bool
+49: true : Bool
+50: true : Bool
+51: true : Bool
+52: false : Bool
+53: true : Bool
+54: false : Bool
+55: true : Bool
+56: prologos::data::ordering::lt-ord : prologos::data::ordering::Ordering
+57: [prologos::data::option::some Int 6] : [prologos::data::option::Option Int]
+58: [prologos::data::option::none Int] : [prologos::data::option::Option Int]
+59: true : Bool
+60: false : Bool
+61: true : Bool
+62: false : Bool
+63: true : Bool
+64: "HELLO" : String
+65: "hello" : String
+66: "Hello World" : String
+67: "HELLO" : String
+68: "hello world" : String
+69: "hllowrld" : String
+70: "123456" : String
+71: "olleh" : String
+72: "racecar" : String
+73: "hahaha" : String
+74: "-----" : String
+75: '["a" "b" "c"] : [prologos::data::list::List String]
+76: '["one" "two" "three"] : [prologos::data::list::List String]
+77: '["a" "b" "c"] : [prologos::data::list::List String]
+78: "a, b, c" : String
+79: "hi" : String
+80: "" : String
+81: '["hello" "world" "foo"] : [prologos::data::list::List String]
+82: '["hello" "world"] : [prologos::data::list::List String]
+83: "line 1\nline 2" : String
+84: "hello world" : String
+85: [prologos::data::option::some [Sigma String String] [pair "key" "value=extra"]] : [prologos::data::option::Option [Sigma String String]]
+86: [prologos::data::option::none [Sigma String String]] : [prologos::data::option::Option [Sigma String String]]
+87: "hell0 w0rld" : String
+88: "hello prologos" : String
+89: "f0o bar boo" : String
+90: [prologos::data::option::some String "example.com"] : [prologos::data::option::Option String]
+91: [prologos::data::option::none String] : [prologos::data::option::Option String]
+92: [prologos::data::option::some String "readme"] : [prologos::data::option::Option String]
+93: [prologos::data::option::none String] : [prologos::data::option::Option String]
+94: "hello" : String
+95: "hello  " : String
+96: "  hello" : String
+97: true : Bool
+98: false : Bool
+99: true : Bool
+100: false : Bool
+101: count-char : Int Char -> Int defined.
+102: 5 : Int
+103: "hel" : String
+104: "hi" : String
+105: "lo" : String
+106: ERROR: Too many arguments to 'prologos::core::string-ops::pad-start'
+107: "   hi" : String
+108: ERROR: Too many arguments to 'prologos::core::string-ops::pad-end'
+109: "name      " : String
+110: ERROR: Too many arguments to 'prologos::core::string-ops::pad-start'
+111: '["abc" "def" "gh"] : [prologos::data::list::List String]
+112: '["ab" "cd" "ef"] : [prologos::data::list::List String]
+113: '["hell" "o wo" "rld"] : [prologos::data::list::List String]
+114: date-str : String defined.
+115: date-parts : [prologos::data::list::List String] defined.
+116: '["2026" "02" "21"] : [prologos::data::list::List String]
+117: reformatted : String defined.
+118: "21/02/2026" : String
+119: raw-input : String defined.
+120: cleaned : String defined.
+121: "helloworld" : String
+122: user-name : String defined.
+123: hour : Int defined.
+124: time-greeting : String defined.
+125: "Good afternoon, Alice!" : String
+126: filename : String defined.
+127: ext : String defined.
+128: "gz" : String
+129: sentence : String defined.
+130: the-parts : [prologos::data::list::List String] defined.
+131: 4N : Nat
+132: rot13-char : Char -> Char defined.
+133: title : String defined.
+134: "The Quick Brown Fox Jumps Over The Lazy Dog" : String
+135: silly : String defined.
+136: "olleh dlrow oof" : String
+137: '[\a \b \c] : [prologos::data::list::List Char]
+138: '[\h \e \l \l \o] : [prologos::data::list::List Char]
+139: "hi" : String
+140: original : String defined.
+141: as-list : [prologos::data::list::List Char] defined.
+142: reversed-list : [prologos::data::list::List Char] defined.
+143: back-to-string : String defined.
+144: "olleh" : String
+
+--- 11 errors ---
+W24 {"exec":"prod","exec_fires":933,"exec_rounds":206,"exec_wide_rounds":44,"file":"strings-tutorial-demo.prologos","perf_fields_worker":"()","perf_incs_in_exec_main":12,"perf_incs_in_exec_worker":0,"race_rounds_any_worker_set":0,"race_rounds_multi_worker_set":0,"race_unbox_main_prop-net-box":8,"strat":"auto","wall_ms":327.0}

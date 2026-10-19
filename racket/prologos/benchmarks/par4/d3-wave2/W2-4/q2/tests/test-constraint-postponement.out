@@ -1,0 +1,47 @@
+PERF-COUNTERS:{"cell_allocs":0,"constraint_count":0,"constraint_retries":0,"elaborate_steps":0,"inert_dependent_skips":0,"infer_steps":0,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":0,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":0,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":37,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":60,"constraint_count":0,"constraint_retries":0,"elaborate_steps":4,"inert_dependent_skips":0,"infer_steps":0,"meta_created":3,"meta_solved":3,"prop_allocs":0,"prop_firings":0,"reduce_steps":59,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":18}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":1,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":41,"propagators":21}
+PERF-COUNTERS:{"cell_allocs":45,"constraint_count":0,"constraint_retries":0,"elaborate_steps":3,"inert_dependent_skips":0,"infer_steps":0,"meta_created":2,"meta_solved":2,"prop_allocs":0,"prop_firings":0,"reduce_steps":47,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":13}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":1,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":41,"propagators":14}
+PERF-COUNTERS:{"cell_allocs":45,"constraint_count":0,"constraint_retries":0,"elaborate_steps":4,"inert_dependent_skips":0,"infer_steps":0,"meta_created":3,"meta_solved":3,"prop_allocs":0,"prop_firings":0,"reduce_steps":68,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":18}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":1,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":41,"propagators":21}
+PERF-COUNTERS:{"cell_allocs":45,"constraint_count":0,"constraint_retries":0,"elaborate_steps":3,"inert_dependent_skips":0,"infer_steps":0,"meta_created":2,"meta_solved":2,"prop_allocs":0,"prop_firings":0,"reduce_steps":18,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":13}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":0,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":41,"propagators":14}
+PERF-COUNTERS:{"cell_allocs":45,"constraint_count":0,"constraint_retries":0,"elaborate_steps":2,"inert_dependent_skips":0,"infer_steps":0,"meta_created":1,"meta_solved":1,"prop_allocs":0,"prop_firings":0,"reduce_steps":10,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":8}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":0,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":41,"propagators":7}
+PERF-COUNTERS:{"cell_allocs":45,"constraint_count":0,"constraint_retries":0,"elaborate_steps":4,"inert_dependent_skips":0,"infer_steps":0,"meta_created":3,"meta_solved":3,"prop_allocs":0,"prop_firings":0,"reduce_steps":42,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":18}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":1,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":41,"propagators":21}
+PERF-COUNTERS:{"cell_allocs":45,"constraint_count":0,"constraint_retries":0,"elaborate_steps":5,"inert_dependent_skips":0,"infer_steps":0,"meta_created":3,"meta_solved":3,"prop_allocs":0,"prop_firings":0,"reduce_steps":223,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":20}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":40,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":41,"propagators":23}
+PERF-COUNTERS:{"cell_allocs":45,"constraint_count":0,"constraint_retries":0,"elaborate_steps":18,"inert_dependent_skips":0,"infer_steps":0,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":83,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":31}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":2,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":41,"propagators":33}
+PERF-COUNTERS:{"cell_allocs":45,"constraint_count":0,"constraint_retries":0,"elaborate_steps":3,"inert_dependent_skips":0,"infer_steps":0,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":36,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":6}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":0,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":41,"propagators":4}
+PERF-COUNTERS:{"cell_allocs":45,"constraint_count":0,"constraint_retries":0,"elaborate_steps":2,"inert_dependent_skips":0,"infer_steps":0,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":8,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":4}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":0,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":41,"propagators":2}
+21 tests passed
+'(0 . 21)
+W24T {"rounds":49,"rounds_with_2plus_worker_threads_setting":0,"rounds_with_worker_set":0,"set_main_prop-net-box":2,"unbox_main_prop-net-box":51,"unbox_worker_prop-net-box":19,"wide_rounds":14}

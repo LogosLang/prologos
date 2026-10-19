@@ -1,0 +1,4 @@
+W27-MERGE-CENSUS test-unify-cell-driven.rkt
+  BSP rounds observed: 12
+  HUB attribute-map (:type facet = Role B): cells 1, S0 writes 16, writes holding an applied meta 0
+  other meta-solution-merge: cells 1, S0 writes 2, writes holding an applied meta 0

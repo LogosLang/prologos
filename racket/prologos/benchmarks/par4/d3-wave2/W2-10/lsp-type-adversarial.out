@@ -1,0 +1,93 @@
+0: id : [Pi [x :0 <[Type 0]>] x -> x] defined.
+1: const : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] x y -> x]] defined.
+2: flip : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [x y -> z] y x -> z]]] defined.
+3: Int
+4: String
+5: Bool
+6: Int
+7: String
+8: Int
+9: Int
+10: apply : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [x -> y] x -> y]] defined.
+11: compose : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [y -> z] [x -> y] x -> z]]] defined.
+12: Int
+13: Int
+14: Int
+15: Int
+16: Int
+17: Bool
+18: Bool
+19: Int
+20: Int
+21: xs : [prologos::data::list::List Int] defined.
+22: [prologos::data::list::List Int]
+23: [prologos::data::list::List Int]
+24: Nat
+25: [prologos::data::list::List Int]
+26: opt : [prologos::data::option::Option Int] defined.
+27: ERROR@?: Unbound variable
+28: r : [prologos::data::result::Result Int _] defined.
+29: p : [Sigma Int String] defined.
+30: Int
+31: String
+32: np : [Sigma [Sigma Int Int] [Sigma Int Int]] defined.
+33: Int
+34: Int
+35: ERROR@?: Unbound variable
+36: ERROR@?: Unbound variable
+37: ERROR@?: Unbound variable
+38: ERROR@?: defn: expected 'name <type>' in parameter list, got (int+ x 1)
+39: ERROR@?: defn: expected 'name <type>' in parameter list, got (map (#<syntax:/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos:120:40 fn> #<syntax:/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos:120:44 (x : Int)> #<syntax:/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos:120:54 (int+ x 10)>) xs)
+40: nat-to-int defined (arities: 1, 2).
+41: Int
+42: Int
+43: Int
+44: v01 : Int defined.
+45: v02 : Int defined.
+46: v03 : Int defined.
+47: v04 : Int defined.
+48: v05 : Int defined.
+49: v06 : Int defined.
+50: v07 : Int defined.
+51: v08 : Int defined.
+52: v09 : Int defined.
+53: v10 : Int defined.
+54: v11 : String defined.
+55: v12 : String defined.
+56: v13 : String defined.
+57: v14 : String defined.
+58: v15 : String defined.
+59: v16 : Bool defined.
+60: v17 : Bool defined.
+61: v18 : [prologos::data::list::List Int] defined.
+62: v19 : [prologos::data::option::Option Int] defined.
+63: v20 : [prologos::data::option::Option _] defined.
+64: ERROR@?: Unbound variable
+65: ERROR@?: Unbound variable
+66: Int
+67: Bool
+68: wrap-int : Int -> [prologos::data::option::Option Int] defined.
+69: unwrap-or : [prologos::data::option::Option Int] Int -> Int defined.
+70: Int
+71: Int
+72: Int
+73: triple : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] x y z -> [Sigma x [Sigma x x]]]]] defined.
+74: [Sigma Int [Sigma String Bool]]
+75: [Sigma [prologos::data::option::Option Int] [Sigma [prologos::data::list::List Int] Bool]]
+76: ERROR@?: Unbound variable
+77: Int
+78: Int
+79: Int
+80: ERROR@?: Unbound variable
+81: ERROR@?: Unbound variable
+82: ERROR@?: Unbound variable
+83: ERROR@?: Unbound variable
+84: ERROR@?: No instance of Eq for [Sigma Int Int] ⏎   Available instances: Eq Rat, Eq String, Eq Int, Eq Posit8, Eq Ordering, Eq Nat, Eq Posit64, Eq Float64, Eq Posit16, Eq Float32, Eq Posit32, Eq Bool, Eq Char ⏎   Hint: Define 'impl Eq [Sigma Int Int]' with method 'eq?'.
+85: ERROR@?: No instance of Eq for Option-Int ⏎   Available instances: Eq Rat, Eq String, Eq Int, Eq Posit8, Eq Ordering, Eq Nat, Eq Posit64, Eq Float64, Eq Posit16, Eq Float32, Eq Posit32, Eq Bool, Eq Char ⏎   Hint: Define 'impl Eq Option-Int' with method 'eq?'.
+86: Bool
+87: ERROR@?: defn: expected 'name <type>' in parameter list, got (filter (#<syntax:/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos:223:34 fn> #<syntax:/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos:223:38 (x : Int)> #<syntax:/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos:223:48 (int-lt 20 x)>) xs)
+88: ERROR@?: Unbound variable
+89: ERROR@?: Unbound variable
+90: ERROR@?: Unbound variable
+91: ERROR@?: Unbound variable
+-- leg prod: 92 results, 257.0 ms | observer: 182 BSP rounds in 61 runs, 267 diffs, 0 runs ending contradicted

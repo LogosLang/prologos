@@ -1,0 +1,4 @@
+round 0: t changed? #t   t held = (direct)   cells written = (#(struct:cell-id 21) #(struct:cell-id 23))
+round 1: t changed? #f   t held = (direct)   cells written = (#(struct:cell-id 22))
+round 2: t changed? #t   t held = (direct via-chain)   cells written = (#(struct:cell-id 23))
+final t = (direct via-chain)
