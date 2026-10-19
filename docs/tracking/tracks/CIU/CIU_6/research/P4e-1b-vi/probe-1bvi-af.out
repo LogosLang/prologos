@@ -1,0 +1,214 @@
+PERF-COUNTERS:{"cell_allocs":9171,"constraint_count":0,"constraint_retries":0,"elaborate_steps":464,"inert_dependent_skips":0,"infer_steps":690,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":3978,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":26,"zonk_steps":1832}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":3,"qtt_ms":0,"reduce_ms":5,"trait_resolve_ms":0,"type_check_ms":7,"zonk_ms":2}
+PROVENANCE-STATS:{"atms_hypothesis_count":36,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":36,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: t5 : {:a {:b {:c {:m {:x Int} :n {:y Int}}}}} defined.
+1: ot : [PVec {:a {:b {:c {:m {:x Int} :n {:y Int}}}}}] defined.
+2: v3 : {:a {:b {:c [PVec [PVec Int]]}}} defined.
+3: ov3 : [PVec {:a {:b {:c [PVec [PVec Int]]}}}] defined.
+4: @[{:b {:c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:b {:c {:m {:x Int} :n {:y Int}}}}⟩
+5: {:b {:c {:n {:y 2}, :m {:x 1}}}} : {:b {:c {:m {:x Int} :n {:y Int}}}}
+6: @[{:b {:c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:b {:c {:m {:x Int} :n {:y Int}}}}⟩
+7: {:b {:c {:n {:y 2}, :m {:x 1}}}} : {:b {:c {:m {:x Int} :n {:y Int}}}}
+8: @[{:a-b {:c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:a-b {:c {:m {:x Int} :n {:y Int}}}}⟩
+9: {:a-b {:c {:n {:y 2}, :m {:x 1}}}} : {:a-b {:c {:m {:x Int} :n {:y Int}}}}
+10: @[{:a-b {:c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:a-b {:c {:m {:x Int} :n {:y Int}}}}⟩
+11: {:a-b {:c {:n {:y 2}, :m {:x 1}}}} : {:a-b {:c {:m {:x Int} :n {:y Int}}}}
+12: @[{:a {:b {:c {:n {:y 2}, :m {:x 1}}}}}] : ⟨{:a {:b {:c {:m {:x Int} :n {:y Int}}}}}⟩
+13: {:a {:b {:c {:n {:y 2}, :m {:x 1}}}}} : {:a {:b {:c {:m {:x Int} :n {:y Int}}}}}
+14: @[{:a {:b {:c {:n {:y 2}, :m {:x 1}}}}}] : ⟨{:a {:b {:c {:m {:x Int} :n {:y Int}}}}}⟩
+15: {:a {:b {:c {:n {:y 2}, :m {:x 1}}}}} : {:a {:b {:c {:m {:x Int} :n {:y Int}}}}}
+16: @[{:a {:c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:a {:c {:m {:x Int} :n {:y Int}}}}⟩
+17: {:a {:c {:n {:y 2}, :m {:x 1}}}} : {:a {:c {:m {:x Int} :n {:y Int}}}}
+18: @[{:a {:c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:a {:c {:m {:x Int} :n {:y Int}}}}⟩
+19: {:a {:c {:n {:y 2}, :m {:x 1}}}} : {:a {:c {:m {:x Int} :n {:y Int}}}}
+20: @[{:a {:b-c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:a {:b-c {:m {:x Int} :n {:y Int}}}}⟩
+21: {:a {:b-c {:n {:y 2}, :m {:x 1}}}} : {:a {:b-c {:m {:x Int} :n {:y Int}}}}
+22: @[{:a {:b-c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:a {:b-c {:m {:x Int} :n {:y Int}}}}⟩
+23: {:a {:b-c {:n {:y 2}, :m {:x 1}}}} : {:a {:b-c {:m {:x Int} :n {:y Int}}}}
+24: @[{:a {:b {:c {:n {:y 2}, :m {:x 1}}}}}] : ⟨{:a {:b {:c {:m {:x Int} :n {:y Int}}}}}⟩
+25: {:a {:b {:c {:n {:y 2}, :m {:x 1}}}}} : {:a {:b {:c {:m {:x Int} :n {:y Int}}}}}
+26: @[{:a {:b {:c {:n {:y 2}, :m {:x 1}}}}}] : ⟨{:a {:b {:c {:m {:x Int} :n {:y Int}}}}}⟩
+27: {:a {:b {:c {:n {:y 2}, :m {:x 1}}}}} : {:a {:b {:c {:m {:x Int} :n {:y Int}}}}}
+28: @[{:c {:n {:y 2}, :m {:x 1}}}] : ⟨{:c {:m {:x Int} :n {:y Int}}}⟩
+29: {:c {:n {:y 2}, :m {:x 1}}} : {:c {:m {:x Int} :n {:y Int}}}
+30: @[{:c {:n {:y 2}, :m {:x 1}}}] : ⟨{:c {:m {:x Int} :n {:y Int}}}⟩
+31: {:c {:n {:y 2}, :m {:x 1}}} : {:c {:m {:x Int} :n {:y Int}}}
+32: @[{:b-c {:n {:y 2}, :m {:x 1}}}] : ⟨{:b-c {:m {:x Int} :n {:y Int}}}⟩
+33: {:b-c {:n {:y 2}, :m {:x 1}}} : {:b-c {:m {:x Int} :n {:y Int}}}
+34: @[{:b-c {:n {:y 2}, :m {:x 1}}}] : ⟨{:b-c {:m {:x Int} :n {:y Int}}}⟩
+35: {:b-c {:n {:y 2}, :m {:x 1}}} : {:b-c {:m {:x Int} :n {:y Int}}}
+36: @[{:b {:c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:b {:c {:m {:x Int} :n {:y Int}}}}⟩
+37: {:b {:c {:n {:y 2}, :m {:x 1}}}} : {:b {:c {:m {:x Int} :n {:y Int}}}}
+38: @[{:b {:c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:b {:c {:m {:x Int} :n {:y Int}}}}⟩
+39: {:b {:c {:n {:y 2}, :m {:x 1}}}} : {:b {:c {:m {:x Int} :n {:y Int}}}}
+40: @[{:a {:b {:n {:y 2}, :m {:x 1}}}}] : ⟨{:a {:b {:m {:x Int} :n {:y Int}}}}⟩
+41: {:a {:b {:n {:y 2}, :m {:x 1}}}} : {:a {:b {:m {:x Int} :n {:y Int}}}}
+42: @[{:a {:b {:n {:y 2}, :m {:x 1}}}}] : ⟨{:a {:b {:m {:x Int} :n {:y Int}}}}⟩
+43: {:a {:b {:n {:y 2}, :m {:x 1}}}} : {:a {:b {:m {:x Int} :n {:y Int}}}}
+44: @[{:a {:b {:c-n {:y 2}, :c-m {:x 1}}}}] : ⟨{:a {:b {:c-m {:x Int} :c-n {:y Int}}}}⟩
+45: {:a {:b {:c-n {:y 2}, :c-m {:x 1}}}} : {:a {:b {:c-m {:x Int} :c-n {:y Int}}}}
+46: @[{:a {:b {:c-n {:y 2}, :c-m {:x 1}}}}] : ⟨{:a {:b {:c-m {:x Int} :c-n {:y Int}}}}⟩
+47: {:a {:b {:c-n {:y 2}, :c-m {:x 1}}}} : {:a {:b {:c-m {:x Int} :c-n {:y Int}}}}
+48: @[{:a {:b {:c {:n {:y 2}, :m {:x 1}}}}}] : ⟨{:a {:b {:c {:m {:x Int} :n {:y Int}}}}}⟩
+49: {:a {:b {:c {:n {:y 2}, :m {:x 1}}}}} : {:a {:b {:c {:m {:x Int} :n {:y Int}}}}}
+50: @[{:a {:b {:c {:n {:y 2}, :m {:x 1}}}}}] : ⟨{:a {:b {:c {:m {:x Int} :n {:y Int}}}}}⟩
+51: {:a {:b {:c {:n {:y 2}, :m {:x 1}}}}} : {:a {:b {:c {:m {:x Int} :n {:y Int}}}}}
+52: @[{:a {:n {:y 2}, :m {:x 1}}}] : ⟨{:a {:m {:x Int} :n {:y Int}}}⟩
+53: {:a {:n {:y 2}, :m {:x 1}}} : {:a {:m {:x Int} :n {:y Int}}}
+54: @[{:a {:n {:y 2}, :m {:x 1}}}] : ⟨{:a {:m {:x Int} :n {:y Int}}}⟩
+55: {:a {:n {:y 2}, :m {:x 1}}} : {:a {:m {:x Int} :n {:y Int}}}
+56: @[{:a {:c-n {:y 2}, :c-m {:x 1}}}] : ⟨{:a {:c-m {:x Int} :c-n {:y Int}}}⟩
+57: {:a {:c-n {:y 2}, :c-m {:x 1}}} : {:a {:c-m {:x Int} :c-n {:y Int}}}
+58: @[{:a {:c-n {:y 2}, :c-m {:x 1}}}] : ⟨{:a {:c-m {:x Int} :c-n {:y Int}}}⟩
+59: {:a {:c-n {:y 2}, :c-m {:x 1}}} : {:a {:c-m {:x Int} :c-n {:y Int}}}
+60: @[{:a {:c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:a {:c {:m {:x Int} :n {:y Int}}}}⟩
+61: {:a {:c {:n {:y 2}, :m {:x 1}}}} : {:a {:c {:m {:x Int} :n {:y Int}}}}
+62: @[{:a {:c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:a {:c {:m {:x Int} :n {:y Int}}}}⟩
+63: {:a {:c {:n {:y 2}, :m {:x 1}}}} : {:a {:c {:m {:x Int} :n {:y Int}}}}
+64: @[{:b {:n {:y 2}, :m {:x 1}}}] : ⟨{:b {:m {:x Int} :n {:y Int}}}⟩
+65: {:b {:n {:y 2}, :m {:x 1}}} : {:b {:m {:x Int} :n {:y Int}}}
+66: @[{:b {:n {:y 2}, :m {:x 1}}}] : ⟨{:b {:m {:x Int} :n {:y Int}}}⟩
+67: {:b {:n {:y 2}, :m {:x 1}}} : {:b {:m {:x Int} :n {:y Int}}}
+68: @[{:b {:c-n {:y 2}, :c-m {:x 1}}}] : ⟨{:b {:c-m {:x Int} :c-n {:y Int}}}⟩
+69: {:b {:c-n {:y 2}, :c-m {:x 1}}} : {:b {:c-m {:x Int} :c-n {:y Int}}}
+70: @[{:b {:c-n {:y 2}, :c-m {:x 1}}}] : ⟨{:b {:c-m {:x Int} :c-n {:y Int}}}⟩
+71: {:b {:c-n {:y 2}, :c-m {:x 1}}} : {:b {:c-m {:x Int} :c-n {:y Int}}}
+72: @[{:b {:c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:b {:c {:m {:x Int} :n {:y Int}}}}⟩
+73: {:b {:c {:n {:y 2}, :m {:x 1}}}} : {:b {:c {:m {:x Int} :n {:y Int}}}}
+74: @[{:b {:c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:b {:c {:m {:x Int} :n {:y Int}}}}⟩
+75: {:b {:c {:n {:y 2}, :m {:x 1}}}} : {:b {:c {:m {:x Int} :n {:y Int}}}}
+76: @[{:n {:y 2}, :m {:x 1}}] : ⟨{:m {:x Int} :n {:y Int}}⟩
+77: {:n {:y 2}, :m {:x 1}} : {:m {:x Int} :n {:y Int}}
+78: @[{:n {:y 2}, :m {:x 1}}] : ⟨{:m {:x Int} :n {:y Int}}⟩
+79: {:n {:y 2}, :m {:x 1}} : {:m {:x Int} :n {:y Int}}
+80: @[{:c-n {:y 2}, :c-m {:x 1}}] : ⟨{:c-m {:x Int} :c-n {:y Int}}⟩
+81: {:c-n {:y 2}, :c-m {:x 1}} : {:c-m {:x Int} :c-n {:y Int}}
+82: @[{:c-n {:y 2}, :c-m {:x 1}}] : ⟨{:c-m {:x Int} :c-n {:y Int}}⟩
+83: {:c-n {:y 2}, :c-m {:x 1}} : {:c-m {:x Int} :c-n {:y Int}}
+84: @[{:c {:n {:y 2}, :m {:x 1}}}] : ⟨{:c {:m {:x Int} :n {:y Int}}}⟩
+85: {:c {:n {:y 2}, :m {:x 1}}} : {:c {:m {:x Int} :n {:y Int}}}
+86: @[{:c {:n {:y 2}, :m {:x 1}}}] : ⟨{:c {:m {:x Int} :n {:y Int}}}⟩
+87: {:c {:n {:y 2}, :m {:x 1}}} : {:c {:m {:x Int} :n {:y Int}}}
+88: @[{:a {:b {:c {:x 1}}}}] : ⟨{:a {:b {:c {:x Int}}}}⟩
+89: {:a {:b {:c {:x 1}}}} : {:a {:b {:c {:x Int}}}}
+90: @[{:a {:b {:c {:x 1}}}}] : ⟨{:a {:b {:c {:x Int}}}}⟩
+91: {:a {:b {:c {:x 1}}}} : {:a {:b {:c {:x Int}}}}
+92: @[{:a {:b {:c {:m-x 1}}}}] : ⟨{:a {:b {:c {:m-x Int}}}}⟩
+93: {:a {:b {:c {:m-x 1}}}} : {:a {:b {:c {:m-x Int}}}}
+94: @[{:a {:b {:c {:m-x 1}}}}] : ⟨{:a {:b {:c {:m-x Int}}}}⟩
+95: {:a {:b {:c {:m-x 1}}}} : {:a {:b {:c {:m-x Int}}}}
+96: @[{:a {:b {:c {:m {:x 1}}}}}] : ⟨{:a {:b {:c {:m {:x Int}}}}}⟩
+97: {:a {:b {:c {:m {:x 1}}}}} : {:a {:b {:c {:m {:x Int}}}}}
+98: @[{:a {:b {:c {:m {:x 1}}}}}] : ⟨{:a {:b {:c {:m {:x Int}}}}}⟩
+99: {:a {:b {:c {:m {:x 1}}}}} : {:a {:b {:c {:m {:x Int}}}}}
+100: @[{:a {:b {:x 1}}}] : ⟨{:a {:b {:x Int}}}⟩
+101: {:a {:b {:x 1}}} : {:a {:b {:x Int}}}
+102: @[{:a {:b {:x 1}}}] : ⟨{:a {:b {:x Int}}}⟩
+103: {:a {:b {:x 1}}} : {:a {:b {:x Int}}}
+104: @[{:a {:b {:m-x 1}}}] : ⟨{:a {:b {:m-x Int}}}⟩
+105: {:a {:b {:m-x 1}}} : {:a {:b {:m-x Int}}}
+106: @[{:a {:b {:m-x 1}}}] : ⟨{:a {:b {:m-x Int}}}⟩
+107: {:a {:b {:m-x 1}}} : {:a {:b {:m-x Int}}}
+108: @[{:a {:b {:m {:x 1}}}}] : ⟨{:a {:b {:m {:x Int}}}}⟩
+109: {:a {:b {:m {:x 1}}}} : {:a {:b {:m {:x Int}}}}
+110: @[{:a {:b {:m {:x 1}}}}] : ⟨{:a {:b {:m {:x Int}}}}⟩
+111: {:a {:b {:m {:x 1}}}} : {:a {:b {:m {:x Int}}}}
+112: @[{:a {:c {:x 1}}}] : ⟨{:a {:c {:x Int}}}⟩
+113: {:a {:c {:x 1}}} : {:a {:c {:x Int}}}
+114: @[{:a {:c {:x 1}}}] : ⟨{:a {:c {:x Int}}}⟩
+115: {:a {:c {:x 1}}} : {:a {:c {:x Int}}}
+116: @[{:a {:c {:m-x 1}}}] : ⟨{:a {:c {:m-x Int}}}⟩
+117: {:a {:c {:m-x 1}}} : {:a {:c {:m-x Int}}}
+118: @[{:a {:c {:m-x 1}}}] : ⟨{:a {:c {:m-x Int}}}⟩
+119: {:a {:c {:m-x 1}}} : {:a {:c {:m-x Int}}}
+120: @[{:a {:c {:m {:x 1}}}}] : ⟨{:a {:c {:m {:x Int}}}}⟩
+121: {:a {:c {:m {:x 1}}}} : {:a {:c {:m {:x Int}}}}
+122: @[{:a {:c {:m {:x 1}}}}] : ⟨{:a {:c {:m {:x Int}}}}⟩
+123: {:a {:c {:m {:x 1}}}} : {:a {:c {:m {:x Int}}}}
+124: @[{:a {:x 1}}] : ⟨{:a {:x Int}}⟩
+125: {:a {:x 1}} : {:a {:x Int}}
+126: @[{:a {:x 1}}] : ⟨{:a {:x Int}}⟩
+127: {:a {:x 1}} : {:a {:x Int}}
+128: @[{:a {:m-x 1}}] : ⟨{:a {:m-x Int}}⟩
+129: {:a {:m-x 1}} : {:a {:m-x Int}}
+130: @[{:a {:m-x 1}}] : ⟨{:a {:m-x Int}}⟩
+131: {:a {:m-x 1}} : {:a {:m-x Int}}
+132: @[{:a {:m {:x 1}}}] : ⟨{:a {:m {:x Int}}}⟩
+133: {:a {:m {:x 1}}} : {:a {:m {:x Int}}}
+134: @[{:a {:m {:x 1}}}] : ⟨{:a {:m {:x Int}}}⟩
+135: {:a {:m {:x 1}}} : {:a {:m {:x Int}}}
+136: @[{:b {:c {:x 1}}}] : ⟨{:b {:c {:x Int}}}⟩
+137: {:b {:c {:x 1}}} : {:b {:c {:x Int}}}
+138: @[{:b {:c {:x 1}}}] : ⟨{:b {:c {:x Int}}}⟩
+139: {:b {:c {:x 1}}} : {:b {:c {:x Int}}}
+140: @[{:b {:c {:m-x 1}}}] : ⟨{:b {:c {:m-x Int}}}⟩
+141: {:b {:c {:m-x 1}}} : {:b {:c {:m-x Int}}}
+142: @[{:b {:c {:m-x 1}}}] : ⟨{:b {:c {:m-x Int}}}⟩
+143: {:b {:c {:m-x 1}}} : {:b {:c {:m-x Int}}}
+144: @[{:b {:c {:m {:x 1}}}}] : ⟨{:b {:c {:m {:x Int}}}}⟩
+145: {:b {:c {:m {:x 1}}}} : {:b {:c {:m {:x Int}}}}
+146: @[{:b {:c {:m {:x 1}}}}] : ⟨{:b {:c {:m {:x Int}}}}⟩
+147: {:b {:c {:m {:x 1}}}} : {:b {:c {:m {:x Int}}}}
+148: @[{:b {:x 1}}] : ⟨{:b {:x Int}}⟩
+149: {:b {:x 1}} : {:b {:x Int}}
+150: @[{:b {:x 1}}] : ⟨{:b {:x Int}}⟩
+151: {:b {:x 1}} : {:b {:x Int}}
+152: @[{:b {:m-x 1}}] : ⟨{:b {:m-x Int}}⟩
+153: {:b {:m-x 1}} : {:b {:m-x Int}}
+154: @[{:b {:m-x 1}}] : ⟨{:b {:m-x Int}}⟩
+155: {:b {:m-x 1}} : {:b {:m-x Int}}
+156: @[{:b {:m {:x 1}}}] : ⟨{:b {:m {:x Int}}}⟩
+157: {:b {:m {:x 1}}} : {:b {:m {:x Int}}}
+158: @[{:b {:m {:x 1}}}] : ⟨{:b {:m {:x Int}}}⟩
+159: {:b {:m {:x 1}}} : {:b {:m {:x Int}}}
+160: @[{:c {:x 1}}] : ⟨{:c {:x Int}}⟩
+161: {:c {:x 1}} : {:c {:x Int}}
+162: @[{:c {:x 1}}] : ⟨{:c {:x Int}}⟩
+163: {:c {:x 1}} : {:c {:x Int}}
+164: @[{:c {:m-x 1}}] : ⟨{:c {:m-x Int}}⟩
+165: {:c {:m-x 1}} : {:c {:m-x Int}}
+166: @[{:c {:m-x 1}}] : ⟨{:c {:m-x Int}}⟩
+167: {:c {:m-x 1}} : {:c {:m-x Int}}
+168: @[{:c {:m {:x 1}}}] : ⟨{:c {:m {:x Int}}}⟩
+169: {:c {:m {:x 1}}} : {:c {:m {:x Int}}}
+170: @[{:c {:m {:x 1}}}] : ⟨{:c {:m {:x Int}}}⟩
+171: {:c {:m {:x 1}}} : {:c {:m {:x Int}}}
+172: @[{:x 1}] : ⟨{:x Int}⟩
+173: {:x 1} : {:x Int}
+174: @[{:x 1}] : ⟨{:x Int}⟩
+175: {:x 1} : {:x Int}
+176: @[{:m-x 1}] : ⟨{:m-x Int}⟩
+177: {:m-x 1} : {:m-x Int}
+178: @[{:m-x 1}] : ⟨{:m-x Int}⟩
+179: {:m-x 1} : {:m-x Int}
+180: @[{:m {:x 1}}] : ⟨{:m {:x Int}}⟩
+181: {:m {:x 1}} : {:m {:x Int}}
+182: @[{:m {:x 1}}] : ⟨{:m {:x Int}}⟩
+183: {:m {:x 1}} : {:m {:x Int}}
+184: @[{:a {:b @[@[@[1 2] @[3]]]}}] : ⟨{:a {:b ⟨[PVec [PVec Int]]⟩}}⟩
+185: {:a {:b @[@[@[1 2] @[3]]]}} : {:a {:b ⟨[PVec [PVec Int]]⟩}}
+186: @[{:a {:b @[@[@[1 2] @[3]]]}}] : ⟨{:a {:b ⟨[PVec [PVec Int]]⟩}}⟩
+187: {:a {:b @[@[@[1 2] @[3]]]}} : {:a {:b ⟨[PVec [PVec Int]]⟩}}
+188: ERROR: select: `c*_` — `*_` prefixes the FIELDS of each content, and this layer's contents are vectors (layer `{:c [PVec [PVec Int]]}`), which concatenate into one keyless component: there are no fields to prefix. Use bare `*`
+189: ERROR: select: `c*_` — `*_` prefixes the FIELDS of each content, and this layer's contents are vectors (layer `{:c [PVec [PVec Int]]}`), which concatenate into one keyless component: there are no fields to prefix. Use bare `*`
+190: @[{:a @[@[@[1 2] @[3]]]}] : ⟨{:a ⟨[PVec [PVec Int]]⟩}⟩
+191: {:a @[@[@[1 2] @[3]]]} : {:a ⟨[PVec [PVec Int]]⟩}
+192: @[{:a @[@[@[1 2] @[3]]]}] : ⟨{:a ⟨[PVec [PVec Int]]⟩}⟩
+193: {:a @[@[@[1 2] @[3]]]} : {:a ⟨[PVec [PVec Int]]⟩}
+194: ERROR: select: `c*_` — `*_` prefixes the FIELDS of each content, and this layer's contents are vectors (layer `{:c [PVec [PVec Int]]}`), which concatenate into one keyless component: there are no fields to prefix. Use bare `*`
+195: ERROR: select: `c*_` — `*_` prefixes the FIELDS of each content, and this layer's contents are vectors (layer `{:c [PVec [PVec Int]]}`), which concatenate into one keyless component: there are no fields to prefix. Use bare `*`
+196: @[{:b @[@[@[1 2] @[3]]]}] : ⟨{:b ⟨[PVec [PVec Int]]⟩}⟩
+197: {:b @[@[@[1 2] @[3]]]} : {:b ⟨[PVec [PVec Int]]⟩}
+198: @[{:b @[@[@[1 2] @[3]]]}] : ⟨{:b ⟨[PVec [PVec Int]]⟩}⟩
+199: {:b @[@[@[1 2] @[3]]]} : {:b ⟨[PVec [PVec Int]]⟩}
+200: ERROR: select: `c*_` — `*_` prefixes the FIELDS of each content, and this layer's contents are vectors (layer `{:c [PVec [PVec Int]]}`), which concatenate into one keyless component: there are no fields to prefix. Use bare `*`
+201: ERROR: select: `c*_` — `*_` prefixes the FIELDS of each content, and this layer's contents are vectors (layer `{:c [PVec [PVec Int]]}`), which concatenate into one keyless component: there are no fields to prefix. Use bare `*`
+202: @[@[@[@[1 2] @[3]]]] : ⟨⟨[PVec [PVec Int]]⟩⟩
+203: @[@[@[1 2] @[3]]] : ⟨[PVec [PVec Int]]⟩
+204: @[@[@[@[1 2] @[3]]]] : ⟨⟨[PVec [PVec Int]]⟩⟩
+205: @[@[@[1 2] @[3]]] : ⟨[PVec [PVec Int]]⟩
+206: ERROR: select: `c*_` — `*_` prefixes the FIELDS of each content, and this layer's contents are vectors (layer `{:c [PVec [PVec Int]]}`), which concatenate into one keyless component: there are no fields to prefix. Use bare `*`
+207: ERROR: select: `c*_` — `*_` prefixes the FIELDS of each content, and this layer's contents are vectors (layer `{:c [PVec [PVec Int]]}`), which concatenate into one keyless component: there are no fields to prefix. Use bare `*`
+
+--- 8 errors ---
