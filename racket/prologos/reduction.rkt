@@ -3798,6 +3798,13 @@
          ;; D4.P3c: rrb subjects admitted — ordinal branches select over
          ;; vectors/tuples (`het{2 0}`); per-branch dispatch inside.
          [(or (expr-champ? subj*) (expr-rrb? subj*)) (select-reduce subj* branches sort tier)]
+         ;; ⭐ 1b-vi close — A PANIC SUBJECT PROPAGATES. An inner selection that aborts
+         ;; (`ot2{2}`, a runtime ordinal miss) reduces to `expr-panic`; with a star after
+         ;; its block (`ot2{2}*`) that panic becomes THIS node's subject, which matched no
+         ;; arm and stayed stuck — printed as a VALUE, `(panic …).* : {…}`, at zero errors
+         ;; (probe-p4e2-b:4). The ratified whole-node abort (Q_U7 rider) says the whole
+         ;; selection aborts; strictness in the subject gives exactly that.
+         [(expr-panic? subj*) subj*]
          ;; D4.P3a verify hardening: a GROUND non-map subject can never
          ;; become a champ — panic per the node's own tier discipline
          ;; (the nested descent one level down is already loud; only the

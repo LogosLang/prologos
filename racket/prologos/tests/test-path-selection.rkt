@@ -9878,7 +9878,18 @@
     ("G-SB3d" "vhm{0*-}" G (refused (#rx"is postfix") ())
               (refused (#rx"select: `0[*]-` — `[*]-` deletes the layer") (#rx"is postfix")))
     ("G-SB3-c" "v3{a.b.c[0]*}" #f
-               (refused (#rx"`[*]` deletes the layer the step before it produced, and an ORDINAL step produces no layer") ()) #f)))
+               (refused (#rx"`[*]` deletes the layer the step before it produced, and an ORDINAL step produces no layer") ()) #f)
+    ;; ---- a BURIED PANIC (found opening P4e-2, probe-p4e2-b:4): a star after a block whose
+    ;; ordinal misses at runtime printed the panic as a VALUE, `(panic …).*`, beside a type
+    ;; — the ratified whole-node abort says the selection aborts. The inner select aborts
+    ;; correctly (the control); the outer node was left stuck on a panic subject.
+    ("G-pan1" "ot2{2}*" G
+              (line "(panic \"select: index 2 out of bounds for the vector of length 2 (at `2`)\").* : {:a {:b {:k Int}}}")
+              (refused (#rx"panic: select: index 2 out of bounds for the vector of length 2") (#rx"[.][*]")))
+    ("G-pan2" "ot2{5.a}*" G
+              (line "(panic \"select: index 5 out of bounds for the vector of length 2 (at `5`)\").* : {:a {:b {:k Int}}}")
+              (refused (#rx"panic: select: index 5 out of bounds for the vector of length 2") (#rx"[.][*]")))
+    ("G-pan-c" "ot2{5.a}" #f (refused (#rx"panic: select: index 5 out of bounds for the vector of length 2") ()) #f)))
 
 (define (1bvi-row-id r) (list-ref r 0))
 (define (1bvi-row-spelling r) (list-ref r 1))
@@ -10411,9 +10422,10 @@
                 ;; measured at the verify, and predicted beforehand from positions × assignments
                 ;; (plain `*`: 1 + 3 + 9 over `ot` + 9 over `ov3` = 22; `*-`: 13 + 9 + 13 + 9 = 44)
                 ;; 1b-vi-F, predicted before its run: 21 hand rows (+2, SB1-c1b / SB2-c, at review);
-                ;; 1b-vi close (DEFERRED 185): +9 hand rows (G-SB4a/-K, G-SB4b/-K, G-SB3a…d, G-SB3-c); `sub-block` laws over `ot` =
+                ;; 1b-vi close (DEFERRED 185): +9 hand rows (G-SB4a/-K, G-SB4b/-K, G-SB3a…d, G-SB3-c);
+                ;; +3 for the buried panic (G-pan1, G-pan2, G-pan-c); `sub-block` laws over `ot` =
                 ;; (1 + 2 + 4 kept/dissolved assignments) × 6 families = 42, over `ov3` = 4 × 2 = 8
-                '(138 194 (("*" . 22) ("*-" . 44) ("*-_" . 26) ("^-" . 26) ("^-z" . 26)
+                '(141 194 (("*" . 22) ("*-" . 44) ("*-_" . 26) ("^-" . 26) ("^-z" . 26)
                            ("{}*" . 11) ("{}*-" . 11) ("{}*-_" . 7) ("{}*_" . 7) ("{}^-" . 7) ("{}^-_" . 7)))
                 "hand rows, law rows, law rows per family"))
 
