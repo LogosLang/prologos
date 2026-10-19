@@ -1,8 +1,8 @@
 # BSP-LE Track 2B D.7 External Critique — P/R/M Three-Lens Analysis
 
 **Date**: 2026-04-10
-**Design reviewed**: D.7 (`docs/tracking/2026-04-10_BSP_LE_TRACK2B_DESIGN.md`)
-**Self-critique reviewed**: `docs/tracking/2026-04-10_BSP_LE_TRACK2B_SELF_CRITIQUE.md` (15 findings, 5 revised via self-hosting lens)
+**Design reviewed**: D.7 (`docs/tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-10_BSP_LE_TRACK2B_DESIGN.md`)
+**Self-critique reviewed**: `docs/tracking/tracks/BSP-LE/BSP-LE_2B/critiques/2026-04-10_BSP_LE_TRACK2B_SELF_CRITIQUE.md` (15 findings, 5 revised via self-hosting lens)
 **Methodology**: `docs/tracking/principles/CRITIQUE_METHODOLOGY.org`
 
 ---

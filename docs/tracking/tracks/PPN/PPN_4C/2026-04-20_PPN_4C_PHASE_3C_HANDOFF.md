@@ -129,7 +129,7 @@ Total scope: ~120-200 LoC across 3 commits.
 
 30. [`docs/research/2026-03-28_MODULE_THEORY_LATTICES.md`](../../../../research/2026-03-28_MODULE_THEORY_LATTICES.md) — Module Theory lens. Phase 3's Realization B is an instance.
 
-31. [`docs/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../../../../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — Phase 9 hypercube context (deferred scope; Phase 3+9 joint mini-design item).
+31. [`docs/tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../../BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — Phase 9 hypercube context (deferred scope; Phase 3+9 joint mini-design item).
 
 ---
 

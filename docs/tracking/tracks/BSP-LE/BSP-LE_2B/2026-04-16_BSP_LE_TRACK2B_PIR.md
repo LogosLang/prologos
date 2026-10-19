@@ -7,10 +7,10 @@
 **File delta**: 383 → 399 (+16 files)
 **Code delta**: +4348/-489 across 28 files; core solver: +2010/-343 in relations.rkt/propagator.rkt/stratified-eval.rkt/solver.rkt
 **Suite health**: 399/399 files, 7765 tests, 121s wall-clock, all pass
-**Design docs**: [Design](2026-04-10_BSP_LE_TRACK2B_DESIGN.md) (D.1→D.13), [Self-Critique](2026-04-10_BSP_LE_TRACK2B_SELF_CRITIQUE.md), [External Critique](2026-04-10_BSP_LE_TRACK2B_EXTERNAL_CRITIQUE.md), [Critique Response](2026-04-10_BSP_LE_TRACK2B_CRITIQUE_RESPONSE.md)
+**Design docs**: [Design](2026-04-10_BSP_LE_TRACK2B_DESIGN.md) (D.1→D.13), [Self-Critique](critiques/2026-04-10_BSP_LE_TRACK2B_SELF_CRITIQUE.md), [External Critique](critiques/2026-04-10_BSP_LE_TRACK2B_EXTERNAL_CRITIQUE.md), [Critique Response](critiques/2026-04-10_BSP_LE_TRACK2B_CRITIQUE_RESPONSE.md)
 **Handoff**: [2026-04-16_BSP_LE_2B_HANDOFF.md](handoffs/2026-04-16_BSP_LE_2B_HANDOFF.md)
-**Dailies**: [2026-04-12_dailies.md](standups/2026-04-12_dailies.md)
-**Predecessor PIR**: [BSP-LE Track 2](2026-04-10_BSP_LE_TRACK2_PIR.md)
+**Dailies**: [2026-04-12_dailies.md](../../../standups/2026-04-12_dailies.md)
+**Predecessor PIR**: [BSP-LE Track 2](../BSP-LE_2/2026-04-10_BSP_LE_TRACK2_PIR.md)
 
 ---
 
@@ -728,8 +728,8 @@ Track spanned multiple sessions; context compacted at Phase T boundary. The hand
 | `racket/prologos/propagator.rkt` | BSP scheduler, worker pool, fire-once flags, Tier 1 flush | Well-known cells (cell-ids 0-5), `PROP-FIRE-ONCE`/`PROP-EMPTY-INPUTS` flags, `run-to-quiescence-bsp` Tier 1 check + fired-set, `make-worker-pool`, general strata-list loop (~2665) |
 | `racket/prologos/stratified-eval.rkt` | Universal dispatch, Tier 1, adaptive :auto | `stratified-solve-goal` (~177): Tier 1 check, adaptive NAF/guard/threshold dispatch |
 | `racket/prologos/tests/test-solver-parity.rkt` | DFS↔ATMS parity regression | 15 tests, 10 divergence classes, unresolved-var normalization |
-| `docs/tracking/2026-04-10_BSP_LE_TRACK2B_DESIGN.md` | D.13 design | Phase R architecture, 2a-2d optimization, adaptive dispatch |
-| `docs/tracking/handoffs/2026-04-16_BSP_LE_2B_HANDOFF.md` | Session handoff | Context preservation across compaction |
+| `docs/tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-10_BSP_LE_TRACK2B_DESIGN.md` | D.13 design | Phase R architecture, 2a-2d optimization, adaptive dispatch |
+| `docs/tracking/tracks/BSP-LE/BSP-LE_2B/handoffs/2026-04-16_BSP_LE_2B_HANDOFF.md` | Session handoff | Context preservation across compaction |
 | `docs/tracking/standups/2026-04-12_dailies.md` | Session log | Phase R through Phase T detailed narrative |
 | `tools/parity-test.rkt` | Systematic parity sweep | 15-file comparison under both strategies |
 

@@ -1,14 +1,14 @@
 # BSP-LE 3 — Kickoff: Tabling, opening with Stage A, the ATMS label semantics (DEFERRED 177's fix)
 
 **Track**: BSP-LE Track 3, Tabling (SLG memoization). The row is
-[`docs/tracking/2026-03-21_BSP_LE_MASTER.md`](../../../2026-03-21_BSP_LE_MASTER.md):55, and the scope section is
+[`docs/tracking/tracks/BSP-LE/2026-03-21_BSP_LE_MASTER.md`](../../2026-03-21_BSP_LE_MASTER.md):55, and the scope section is
 `:142-187`. On 2026-10-19 the owner placed DEFERRED 177's fix in this track as its first stage (PAR 4 decision O-17
 (a)).
 **Branch**: `bsple3-tabling`, worktree `.claude/worktrees/bsple3-tabling`, branched from main `99cbd9f5`, which is PAR 4
 checkpoint 3 `dba9f502` plus DEFERRED's O-17 addendum. **Written at** that commit. Racket 9.3 CS, macOS, 18 cores
 (6P + 12E).
-**Log**: [`BSP_LE_3_LOG.md`](BSP_LE_3_LOG.md).
-**Series stub**: [`../README.md`](../README.md). The master stays flat; edits proposed to the owner are listed there.
+**Log**: [`LOG_BSP-LE_3.md`](../LOG_BSP-LE_3.md).
+**Series stub**: [`../../README.md`](../../README.md). The master stays flat; edits proposed to the owner are listed there.
 **Siblings** (live in their own sessions): PAR 4 (`par4-arena-executors`), PAR 4B (`par4b-parallelism-portfolio`),
 PPN 4C (`ppn4c-elaboration-on-network`), CIU 6 (`ciu6-path-selection`).
 
@@ -37,7 +37,7 @@ PPN 4C (`ppn4c-elaboration-on-network`), CIU 6 (`ciu6-path-selection`).
   concurrently, as we just did with the PAR 4B?... it seems like having that working would be a good capstone for some
   of this work in PAR..."*
 - **The decision** (O-17 (a), 2026-10-19): *"Ok, with BSP-LE 3 (a). Good to generate the kickoff."* The analysis is in
-  PAR 4 D.2 §15 O-17 ([`../../PAR/PAR_4/2026-10-15_PAR_4_D2_DESIGN.md`](../../PAR/PAR_4/2026-10-15_PAR_4_D2_DESIGN.md)).
+  PAR 4 D.2 §15 O-17 ([`../../../PAR/PAR_4/2026-10-15_PAR_4_D2_DESIGN.md`](../../../PAR/PAR_4/2026-10-15_PAR_4_D2_DESIGN.md)).
   Its reasons:
   - Track 3's tables and the fix share one lattice.
   - One instrument, the DFS-vs-ATMS differential, gates both the fix and Track 3's retirement obligations.
@@ -61,16 +61,16 @@ So the track has two stages, and the first ends in its own checkpoint:
 | input | where |
 |---|---|
 | **The defect and the fix shape.** Three wrong-answer rows, three mechanisms, and fix parts (a)–(c). The 2026-10-18 addendum adds a wider reach (one `not` goal under `:auto`), two more shapes, and parts (d)–(f) (per-propagator viewpoint, lifted readers, premise set P). The 2026-10-19 addendum places it here | `docs/tracking/DEFERRED.md` §177 |
-| The same fix written as design rows 1–3, with the ordering constraint (W2-6-3) | PAR 4 D.3 synthesis §5.7 ([`../../PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md`](../../PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md)); SC-24 and SC-30 in its §2; PD-1 and PD-10 in its §6 |
+| The same fix written as design rows 1–3, with the ordering constraint (W2-6-3) | PAR 4 D.3 synthesis §5.7 ([`../../../PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md`](../../../PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md)); SC-24 and SC-30 in its §2; PD-1 and PD-10 in its §6 |
 | **The lattice-level models**, which serve as the executable spec. W2-6: all six parts give DFS's answers on 8/8 rows under 3 schedules, and dropping any one breaks a row. W2-7: 10/10 when ⊤ under ev_W is read as the nogood of the joined labels | `racket/prologos/benchmarks/par4/d3-wave2/W2-6/` (`w26-label-soundness.rkt`, `w26-viewpoint.rkt`, `w26-premise.rkt`, `w26-combined.rkt`, `w26-parity-ext.rkt`); `…/W2-7/` (`w27-row2-model.py`, `w27-row2.prologos`, Q4–Q8) |
 | The reach: `:auto` routes to ATMS on one `not` goal, or at ≥ 256 facts + clauses, unless Check 3 or Check 4 fires (`stratified-eval.rkt:253-293`). In-repo, 12 of 293 auto-routed queries take ATMS, and 460 solve lines match DFS | `…/d3-wave2/W2-4/` (`README.md`, `reach/`, `compare.py`) |
 | The wave-1 probes (C9 red team; C4 read-side mechanism) | `…/d3-wave1/C9/`, `…/d3-wave1/C4/` |
 | **A second writer of the worldview cell**: the S1 NAF handler AND-NOTs cell 1 while the projection also writes it. Row 1 removes it | DEFERRED §157, addendum 2026-10-18 (PD-10) |
 | A budget trip inside a branch becomes a nogood today; the fix makes it a classified outcome | DEFERRED §184 (solver half); PAR 4 D.2 §15 O-16 part 3 |
-| **This track's charter**: the retirement obligations (Check 3: body-local variables; Check 4: guards), the four table-format co-change sites, and the prototyped mechanisms | BSP-LE master `:142-187`; [`../../../2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md`](../../../2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md); DEFERRED §§ "Rel T1 A.2b DFS-routing scaffolding → BSP-LE Track 3" and "Rel T1 A.4 guard DFS-routing scaffolding" |
+| **This track's charter**: the retirement obligations (Check 3: body-local variables; Check 4: guards), the four table-format co-change sites, and the prototyped mechanisms | BSP-LE master `:142-187`; [`../2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md`](../2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md); DEFERRED §§ "Rel T1 A.2b DFS-routing scaffolding → BSP-LE Track 3" and "Rel T1 A.4 guard DFS-routing scaffolding" |
 | **The shared lattice**: support-set tables. Unconditional answers have support ∅ and hold in every world; conditional answers are worldview-filtered. ⚠ It reads answers "consistent with W" (`:618`), which is weaker than label ⊆ W, and that reading admits 177's leak shape. Pin ⊆ once, for both uses | `docs/tracking/2026-03-19_PUNIFY_PART3_ATMS_SOLVER_ARCHITECTURE.md` §9.6 (`:612-620`) and §9 |
 | What shipped the solver, and the parity suite that could not see this (15 hand-built cases, `set-equal?`) | BSP-LE Track 2 design and PIR, Track 2B design (D.13) and PIR (`docs/tracking/2026-04-*_BSP_LE_TRACK2*`); `racket/prologos/tests/test-solver-parity.rkt` |
-| Our TMS prior art | `docs/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md`; `docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org` (Phases 5–6) |
+| Our TMS prior art | `docs/tracking/tracks/BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md`; `docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org` (Phases 5–6) |
 
 **Theory the fix rests on** (PRECEDENT; verify each in its primary source during the survey):
 - De Kleer's ATMS (*An Assumption-based TMS*, Artificial Intelligence 28, 1986): a datum holds in environment W iff
@@ -220,7 +220,7 @@ reach census, the survey, and the questions Stage 2 must answer.
 
 1. `docs/tracking/principles/HANDOFF_PROTOCOL.org` (hot-load), then the dailies STATE **from main**:
    `git show main:docs/tracking/standups/<latest> > $TMPDIR/d.md`, because the branch's copy goes stale.
-2. This kickoff, then [`BSP_LE_3_LOG.md`](BSP_LE_3_LOG.md) and [`../README.md`](../README.md).
+2. This kickoff, then [`LOG_BSP-LE_3.md`](../LOG_BSP-LE_3.md) and [`../../README.md`](../../README.md).
 3. DEFERRED §177 in full (body and both addenda), §157's 2026-10-18 addendum, and §184.
 4. The PAR 4 D.3 synthesis: §0, §2 (SC-24, SC-30), **§5.7**, §6. Then PAR 4 D.2 §15: **O-17** and O-16 (part 3).
 5. The BSP-LE master: the track table, §Track 2, **§Track 3**, §Track 5. Then the Track 3 seed and the two DEFERRED

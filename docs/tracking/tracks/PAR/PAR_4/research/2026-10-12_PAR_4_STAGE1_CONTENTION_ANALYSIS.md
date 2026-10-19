@@ -8,7 +8,7 @@ cores (6 "Super" + 12 "Performance"), Racket **9.3** CS / Chez 10.5.0 (first mea
 floors re-verified unchanged on 9.3). **Probes**: profile skill `racket-performance-probing/scripts/`
 (re-runnable; names cited per finding). **Prior record this supersedes**:
 `2026-04-10_BSP_LE_TRACK2B_DESIGN.md` §"Investigation Results" (lines ~1070–1129) and
-`handoffs/2026-04-16_BSP_LE_2B_HANDOFF.md` §3.9 "Racket parallelism ceiling (accepted)".
+`tracks/BSP-LE/BSP-LE_2B/handoffs/2026-04-16_BSP_LE_2B_HANDOFF.md` §3.9 "Racket parallelism ceiling (accepted)".
 
 > Owner's framing that this record confirms with numbers: *parallel search is scheduler
 > technology; per-core executors are children of the scheduler.* The one ingredient the

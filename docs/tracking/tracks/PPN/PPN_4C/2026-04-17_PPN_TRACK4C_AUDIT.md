@@ -2,7 +2,7 @@
 
 **Date**: 2026-04-17
 **Series**: PPN (Propagator-Parsing-Network) — Track 4C
-**Prior art consumed**: [4C Design Note](../research/2026-04-07_PPN_TRACK4C_DESIGN_NOTE.md), [PPN Master §4](../2026-03-26_PPN_MASTER.md), [Track 4 PIR](../PPN_4A/2026-04-04_PPN_TRACK4_PIR.md), [Track 4B PIR](../PPN_4B/2026-04-07_PPN_TRACK4B_PIR.md), [BSP-LE 2B PIR](../../../2026-04-16_BSP_LE_TRACK2B_PIR.md), [Hypergraph Rewriting Research](../../../../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md), [Adhesive Categories Research](../../../../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md), [Attribute Grammar Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md), [Prologos Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md), [NTT Syntax Design](../../../2026-03-22_NTT_SYNTAX_DESIGN.md), [SEXP IR to Propagator Compiler](../../../../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md)
+**Prior art consumed**: [4C Design Note](../research/2026-04-07_PPN_TRACK4C_DESIGN_NOTE.md), [PPN Master §4](../2026-03-26_PPN_MASTER.md), [Track 4 PIR](../PPN_4A/2026-04-04_PPN_TRACK4_PIR.md), [Track 4B PIR](../PPN_4B/2026-04-07_PPN_TRACK4B_PIR.md), [BSP-LE 2B PIR](../../BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md), [Hypergraph Rewriting Research](../../../../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md), [Adhesive Categories Research](../../../../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md), [Attribute Grammar Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md), [Prologos Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md), [NTT Syntax Design](../../../2026-03-22_NTT_SYNTAX_DESIGN.md), [SEXP IR to Propagator Compiler](../../../../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md)
 **Purpose**: Code-grounded audit preceding Stage 3 design.
 **Status**: Draft — pre-D.1.
 
@@ -409,7 +409,7 @@ Applying the ten load-bearing principles to 4C scope:
 | BSP-LE 1.5 as 4C sub-track (inline) | 4C unblocked immediately; shared context | Larger 4C scope; requires cell-based TMS design within 4C |
 | BSP-LE 1.5 skipped — Phase 8 uses existing ATMS | Fastest path | ATMS architecturally insufficient per 4B PIR §12 |
 
-**Recommendation**: BSP-LE 1.5 as a 4C sub-track. Union types require cell-based TMS; the design is already scoped in [BSP-LE 1.5 Design Note](../../../../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) (if this doc exists — Stage 3 verifies). Keeps the logical boundary tight: 4C delivers elaboration on-network *including* the TMS substrate it needs.
+**Recommendation**: BSP-LE 1.5 as a 4C sub-track. Union types require cell-based TMS; the design is already scoped in [BSP-LE 1.5 Design Note](../../BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) (if this doc exists — Stage 3 verifies). Keeps the logical boundary tight: 4C delivers elaboration on-network *including* the TMS substrate it needs.
 
 ---
 

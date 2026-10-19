@@ -7,7 +7,7 @@
 **Test delta**: 7313 → 7330 (+17 acceptance tests in `test-champ-owner-id.rkt`)
 **Code delta**: +450 / −64 across 3 .rkt files (0 new source files; 1 new test file)
 **Suite health**: 7330 tests, 378 files, 232.9s, all pass
-**Design docs**: [CHAMP Performance Audit](2026-03-21_CHAMP_PERFORMANCE_AUDIT.md), [CHAMP Performance Design](2026-03-21_CHAMP_PERFORMANCE_DESIGN.md)
+**Design docs**: [CHAMP Performance Audit](audits/2026-03-21_CHAMP_PERFORMANCE_AUDIT.md), [CHAMP Performance Design](2026-03-21_CHAMP_PERFORMANCE_DESIGN.md)
 **Prior work**: [BSP-LE Track 0 PIR](2026-03-21_BSP_LE_TRACK0_PIR.md) (identified CHAMP as actual bottleneck; Phase 5 rejected due to transient overhead)
 **Prior PIRs**: BSP-LE Track 0, PUnify Parts 1-2, Track 7
 

@@ -10,7 +10,7 @@
 ;;   - run-to-quiescence: worklist loop cost
 ;;   - Change/no-change ratio measurement
 ;;
-;; Design doc: docs/tracking/2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md
+;; Design doc: docs/tracking/tracks/BSP-LE/BSP-LE_0/2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md
 
 (require racket/list
          "../../tools/bench-micro.rkt"

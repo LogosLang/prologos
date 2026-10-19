@@ -123,8 +123,8 @@ Steps:
 
 ### §2.6 Session-Specific — RELATED PRIOR ART (referenced by design)
 
-20. [`docs/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md`](../../../../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) — TMS design note (informed Phase 1 substrate reconciliation framing)
-21. [`docs/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../../../../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — hypercube primitives (Gray code, subcube, all-reduce) — referenced by Phase 3B
+20. [`docs/tracking/tracks/BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md`](../../BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) — TMS design note (informed Phase 1 substrate reconciliation framing)
+21. [`docs/tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../../BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — hypercube primitives (Gray code, subcube, all-reduce) — referenced by Phase 3B
 22. [`docs/research/2026-03-28_MODULE_THEORY_LATTICES.md`](../../../../research/2026-03-28_MODULE_THEORY_LATTICES.md) — Module Theory framing used in research doc §6 and Lens S
 
 ### §2.7 Session-Specific — CODE FILES FOR PHASE 1A (READ WHEN STARTING)

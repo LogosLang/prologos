@@ -30,7 +30,7 @@ E-graphs, when properly grounded in adhesive category theory + module theory, ar
 
 - **SRE Track 2D** ships 13 concrete DPO rewrite rules + structural-confluence-by-construction (`prop:ctor-desc-tag`); the rule-registry pattern PReduce generalizes
 - **PPN 4C Phase 1B** ([Tropical Quantale Addendum](../tracking/tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md)) is shipping the tropical-fuel quantale substrate including residuation operator — the cost-extraction algebra
-- **BSP-LE Track 2B** ([PIR](../tracking/2026-04-16_BSP_LE_TRACK2B_PIR.md)) ships hypercube worldview Q_n + bitmask subcube pruning + ATMS speculation — the search infrastructure for non-confluent rule scenarios
+- **BSP-LE Track 2B** ([PIR](../tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md)) ships hypercube worldview Q_n + bitmask subcube pruning + ATMS speculation — the search infrastructure for non-confluent rule scenarios
 - **PRN master** ([2026-03-26](../tracking/2026-03-26_PRN_MASTER.md)) conjectures e-graph + DPO unification; finds "E-graphs are adhesive (CALCO 2025)" already cataloged
 - **Module Theory research** ([2026-03-28](2026-03-28_MODULE_THEORY_LATTICES.md)) §6 frames e-graphs as quotient modules
 - **`.pnet`** content-addressable serialization exists; round-trip extension to network-as-value is SH Track 1
@@ -664,7 +664,7 @@ For Prologos: the scheduler IS the propagator scheduler; schedule expressions co
 - [`2026-03-26_KAN_EXTENSIONS_ATMS_GFP_PARSING.md`](2026-03-26_KAN_EXTENSIONS_ATMS_GFP_PARSING.md) — 4-level optimization strategy
 - [`2026-03-28_MODULE_THEORY_LATTICES.md`](2026-03-28_MODULE_THEORY_LATTICES.md) §6 — e-graphs as quotient modules
 - [`2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md`](2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md) — adhesive-DPO foundations
-- [`2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — Q_n hypercube + bitmask
+- [`2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — Q_n hypercube + bitmask
 - [`2026-04-21_TROPICAL_QUANTALE_RESEARCH.md`](2026-04-21_TROPICAL_QUANTALE_RESEARCH.md) — cost-extraction algebra
 - [`2026-04-30_LATTICE_VARIETY_AND_CANONICAL_FORM_FOR_SRE.md`](2026-04-30_LATTICE_VARIETY_AND_CANONICAL_FORM_FOR_SRE.md) — adjacent canonical form
 - [`2026-04-30_PROPAGATOR_NETWORK_AS_SUPEROPTIMIZING_COMPILER.md`](2026-04-30_PROPAGATOR_NETWORK_AS_SUPEROPTIMIZING_COMPILER.md) — comparative landscape

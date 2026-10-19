@@ -4,12 +4,12 @@
 **Series**: BSP-LE (Logic Engine on Propagators)
 **Scope**: DFS↔Propagator parity validation, fact-row isolation, NAF/guard as async propagators, parallel executor default, `:auto` deployment
 **Status**: D.13 — Phase R: on-network redesign (mantra audit). NAF as inner sub-query + S1 threshold propagator. Relations on-network. All writes propagator-mediated.
-**Self-critique**: [P/R/M Analysis](2026-04-10_BSP_LE_TRACK2B_SELF_CRITIQUE.md) (15 findings, 5 revised via self-hosting lens)
-**External critique**: [Architect Review](2026-04-10_BSP_LE_TRACK2B_EXTERNAL_CRITIQUE.md) (18 findings, 2 critical, 8 major)
-**Critique response**: [Response](2026-04-10_BSP_LE_TRACK2B_CRITIQUE_RESPONSE.md) (15 actions incorporated)
-**Predecessor**: [BSP-LE Track 2 PIR](2026-04-10_BSP_LE_TRACK2_PIR.md) — ATMS Solver + Cell-Based TMS
-**Design doc**: [BSP-LE Track 2 Design](2026-04-07_BSP_LE_TRACK2_DESIGN.md) (D.13, ~2000 lines)
-**Prior art**: [Track 2 Session Handoff](standups/2026-04-09_2300_session_handoff.md), [Track 2 PIR §10-§12](2026-04-10_BSP_LE_TRACK2_PIR.md)
+**Self-critique**: [P/R/M Analysis](critiques/2026-04-10_BSP_LE_TRACK2B_SELF_CRITIQUE.md) (15 findings, 5 revised via self-hosting lens)
+**External critique**: [Architect Review](critiques/2026-04-10_BSP_LE_TRACK2B_EXTERNAL_CRITIQUE.md) (18 findings, 2 critical, 8 major)
+**Critique response**: [Response](critiques/2026-04-10_BSP_LE_TRACK2B_CRITIQUE_RESPONSE.md) (15 actions incorporated)
+**Predecessor**: [BSP-LE Track 2 PIR](../BSP-LE_2/2026-04-10_BSP_LE_TRACK2_PIR.md) — ATMS Solver + Cell-Based TMS
+**Design doc**: [BSP-LE Track 2 Design](../BSP-LE_2/2026-04-07_BSP_LE_TRACK2_DESIGN.md) (D.13, ~2000 lines)
+**Prior art**: [Track 2 Session Handoff](../BSP-LE_2/handoffs/2026-04-09_2300_session_handoff.md), [Track 2 PIR §10-§12](../BSP-LE_2/2026-04-10_BSP_LE_TRACK2_PIR.md)
 
 ---
 

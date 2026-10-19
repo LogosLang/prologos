@@ -8,7 +8,7 @@
 - Algebraic Embeddings note: `../research/2026-03-28_ALGEBRAIC_EMBEDDINGS_LATTICES.md`
 - PTF Master: `../tracking/2026-03-28_PTF_MASTER.md`
 - SRE Master: `../tracking/2026-03-22_SRE_MASTER.md`
-- BSP-LE Master: `../tracking/2026-03-21_BSP_LE_MASTER.md`
+- BSP-LE Master: `../tracking/tracks/BSP-LE/2026-03-21_BSP_LE_MASTER.md`
 
 ---
 

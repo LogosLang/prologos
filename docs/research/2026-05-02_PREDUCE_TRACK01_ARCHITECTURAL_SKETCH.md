@@ -11,9 +11,9 @@
 - [Module Theory on Lattices](2026-03-28_MODULE_THEORY_LATTICES.md) §6 — e-graphs as quotient modules
 - [Hypergraph Rewriting + Propagator Parsing](2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md) — DPO + e-graphs + IN/GoI landscape
 - [Adhesive Categories and Parse Trees](2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md) — adhesive-DPO foundations
-- [Hypercube BSP-LE Design Addendum](2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — Q_n hypercube + bitmask
+- [Hypercube BSP-LE Design Addendum](../tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — Q_n hypercube + bitmask
 - [Kan Extensions, ATMS, GFP Parsing](2026-03-26_KAN_EXTENSIONS_ATMS_GFP_PARSING.md) — 4-level optimization strategy
-- [BSP-LE Track 2B PIR](../tracking/2026-04-16_BSP_LE_TRACK2B_PIR.md) — speculation infrastructure
+- [BSP-LE Track 2B PIR](../tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md) — speculation infrastructure
 - [PRN Master](../tracking/2026-03-26_PRN_MASTER.md) — confirmed findings + universal primitives
 - [PPN 4C Tropical Quantale Addendum](../tracking/tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) — substrate gating-dependency
 
@@ -44,7 +44,7 @@ Foundational mechanics live elsewhere; 0.1 references rather than reproduces:
 - **Cost algebra**: [Tropical Quantale Research](2026-04-21_TROPICAL_QUANTALE_RESEARCH.md) — semirings, quantales, residuation, modules
 - **Quotient module framing**: [Module Theory on Lattices](2026-03-28_MODULE_THEORY_LATTICES.md) §6
 - **Adhesive grounding**: [Adhesive Categories and Parse Trees](2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md) + Biondo-Castelnovo-Gadducci CALCO 2025
-- **Speculation infrastructure**: [BSP-LE Track 2B PIR](../tracking/2026-04-16_BSP_LE_TRACK2B_PIR.md) + [Hypercube BSP-LE](2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md)
+- **Speculation infrastructure**: [BSP-LE Track 2B PIR](../tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md) + [Hypercube BSP-LE](../tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md)
 - **PPN Track 1 D.7 PU pattern**: per the founding-conversation reference
 
 ---
@@ -80,7 +80,7 @@ These are settled by existing infrastructure — the architectural design space 
 | **On-network discipline** | Mantra non-negotiable per [`on-network.md`](../../.claude/rules/on-network.md) | Every layer is cells with monotone merges; off-network state is debt |
 | **SRE rule-registry pattern** | SRE Track 2D (13 DPO rules); `prop:ctor-desc-tag` for confluence-by-construction | PReduce's rule registry generalizes the SRE form-registry pattern; existing SRE rules become rule-registry entries with property-tag = `confluence-by-construction` |
 | **PPN 4C Phase 1B substrate** | In flight per [`PPN 4C Tropical Quantale Addendum`](../tracking/tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) — ships `tropical-fuel.rkt` + residuation operator + SRE quantale-property declarations | PReduce inherits cost algebra without recreating; extraction algorithm IS the residual operator |
-| **BSP-LE 2B speculation** | [PIR](../tracking/2026-04-16_BSP_LE_TRACK2B_PIR.md): Q_n hypercube worldview + bitmask subcube + ATMS nogoods + S(-1) retraction | PReduce's speculative cost-bounded reduction consumes this directly; non-confluent rule cases handled |
+| **BSP-LE 2B speculation** | [PIR](../tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md): Q_n hypercube worldview + bitmask subcube + ATMS nogoods + S(-1) retraction | PReduce's speculative cost-bounded reduction consumes this directly; non-confluent rule cases handled |
 | **Adhesive guarantee for e-graphs** | Biondo-Castelnovo-Gadducci CALCO 2025 (e-graphs adhesive); SRE Track 2D + [Adhesive Categories](2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md) | PReduce's e-class cells inherit DPO toolkit; critical-pair analysis transfers |
 | **Quotient-module framing** | [Module Theory §6](2026-03-28_MODULE_THEORY_LATTICES.md) — e-graphs as quotient modules | Cost-guided extraction = residuation on the quotient module; algebraic frame for rule composition |
 | **Lévy-optimal sharing requires hashcons** | HVM2 demonstrates; e-graphs research §7.2 | Sharing is realized via shared e-class cells (CHAMP-derived structural identity); per-node PUs would break this |
@@ -183,7 +183,7 @@ A rule's tags can stack — a rule can be both `IN-fragment` and `confluence-by-
 - If IN-fragment promotion analysis (Track 0.2) turns out to apply to fewer rules than expected, the taxonomy might collapse toward alternative (a)
 - If rule property tags are too coarse to express scheduler-relevant distinctions, expansion toward (b)'s rule-kind specificity may be needed
 
-**References**: Lafont 1990; Biondo-Castelnovo-Gadducci CALCO 2025; SRE Track 2 PIR (`prop:ctor-desc-tag`); [BSP-LE Track 2B PIR](../tracking/2026-04-16_BSP_LE_TRACK2B_PIR.md); Architecture AD; [E-Graphs Research §7](2026-05-02_E_GRAPHS_RESEARCH.md).
+**References**: Lafont 1990; Biondo-Castelnovo-Gadducci CALCO 2025; SRE Track 2 PIR (`prop:ctor-desc-tag`); [BSP-LE Track 2B PIR](../tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md); Architecture AD; [E-Graphs Research §7](2026-05-02_E_GRAPHS_RESEARCH.md).
 
 ### §5.2 Persistence-regime axis (determines cacheability across sessions)
 
@@ -241,7 +241,7 @@ The two-stratum architecture (S0 monotone + S(-1) retraction) is the minimum tha
 - If a third class of rewrites emerges that requires fixpoint of S0 OR S(-1) before evaluating (e.g., a re-saturation phase after retraction), a third stratum may be warranted
 - If effect-stratum coordination turns out to require deeper integration (rather than handoff via topology requests), the effect stratum may need to be modeled within PReduce rather than treated as boundary
 
-**References**: [`stratification.md`](../../.claude/rules/stratification.md); [BSP-LE Track 2B PIR](../tracking/2026-04-16_BSP_LE_TRACK2B_PIR.md); Architecture AD; PReduce master Track 7 (effect-stratum boundary protocol).
+**References**: [`stratification.md`](../../.claude/rules/stratification.md); [BSP-LE Track 2B PIR](../tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md); Architecture AD; PReduce master Track 7 (effect-stratum boundary protocol).
 
 ---
 
@@ -341,7 +341,7 @@ Catalog of decisions Track 1+ tracks will need to make. Not 0.1's resolution tar
 - [Module Theory on Lattices](2026-03-28_MODULE_THEORY_LATTICES.md) §6 — quotient module framing
 - [Hypergraph Rewriting + Propagator Parsing](2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md) — DPO + e-graphs + IN/GoI landscape
 - [Adhesive Categories and Parse Trees](2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md) — adhesive-DPO foundations
-- [Hypercube BSP-LE Design Addendum](2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — Q_n hypercube + bitmask
+- [Hypercube BSP-LE Design Addendum](../tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — Q_n hypercube + bitmask
 - [Kan Extensions, ATMS, GFP Parsing](2026-03-26_KAN_EXTENSIONS_ATMS_GFP_PARSING.md) — 4-level optimization strategy
 - [Categorical Foundations of Typed Propagator Networks](2026-03-22_CATEGORICAL_FOUNDATIONS_TYPED_PROPAGATOR_NETWORKS.md) §10 — Lafont + GoI grounding
 - [Propagator Network as Super-Optimizing Compiler](2026-04-30_PROPAGATOR_NETWORK_AS_SUPEROPTIMIZING_COMPILER.md) — comparative landscape; super-optimization argument
@@ -350,7 +350,7 @@ Catalog of decisions Track 1+ tracks will need to make. Not 0.1's resolution tar
 - [PRN Master](../tracking/2026-03-26_PRN_MASTER.md) — confirmed findings + universal primitives (rule registration §3 is load-bearing)
 - [SH Master](../tracking/2026-04-30_SH_MASTER.md) — self-hosting series; PReduce is critical cross-series dependency
 - [PPN 4C Tropical Quantale Addendum Design](../tracking/tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) — substrate prerequisite (Phase 1B residuation operator)
-- [BSP-LE Track 2B PIR](../tracking/2026-04-16_BSP_LE_TRACK2B_PIR.md) — speculation infrastructure
+- [BSP-LE Track 2B PIR](../tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md) — speculation infrastructure
 - [SRE Master](../tracking/2026-03-22_SRE_MASTER.md) — form registry (generalizes into PReduce's unified rule registry)
 
 ### §10.3 Project rules + methodology

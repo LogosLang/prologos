@@ -5,8 +5,8 @@ Append-only, newest at the bottom. Entry shape: `### <outcome headline> — \`ha
 convention `{SERIES}_{TRACK}_LOG.md`).
 
 **Earlier history** (before this directory existed) lives in the flat corpus: the BSP-LE master
-(`docs/tracking/2026-03-21_BSP_LE_MASTER.md`, §Track 3), the Track 3 seed
-(`docs/tracking/2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md`), and DEFERRED's two Rel T1 scaffolding sections. The track
+(`docs/tracking/tracks/BSP-LE/2026-03-21_BSP_LE_MASTER.md`, §Track 3), the Track 3 seed
+(`docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md`), and DEFERRED's two Rel T1 scaffolding sections. The track
 had no design and no commits.
 
 ### BSP-LE 3 opened, with Stage A (the ATMS label semantics, DEFERRED 177's fix) placed first by owner decision (PAR 4 O-17 (a)) — docs commit on the branch (2026-10-19)
@@ -26,7 +26,7 @@ had no design and no commits.
     `propagator`, `relations`, `decision-cell` and `atms`. `timings.jsonl` copied.
   - The three probes behind 177 re-run on main's code: the same wrong answers.
 - **Records**:
-  - the kickoff [`2026-10-19_BSP_LE_3_KICKOFF.md`](2026-10-19_BSP_LE_3_KICKOFF.md): the charter, the inputs, the
+  - the kickoff [`2026-10-19_BSP-LE_3_KICKOFF.md`](handoffs/2026-10-19_BSP-LE_3_KICKOFF.md): the charter, the inputs, the
     contract with PAR 4, PPN 4C and PAR 4B, the method by stage, and Stage 1's differential and survey;
   - the series stub [`../README.md`](../README.md), which carries the proposed master and roadmap edits, unapplied.
 - **Next**: a fresh session runs the kickoff's §0, reads in its §6 order, summarises back to the owner, and waits for

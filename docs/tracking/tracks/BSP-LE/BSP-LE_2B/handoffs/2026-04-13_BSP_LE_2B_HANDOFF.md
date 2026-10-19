@@ -3,7 +3,7 @@
 ## §1: Current Work State
 
 **Track**: BSP-LE Track 2B — Parity Deployment + Parallel Search
-**Design**: D.12 (`docs/tracking/2026-04-10_BSP_LE_TRACK2B_DESIGN.md`)
+**Design**: D.12 (`docs/tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-10_BSP_LE_TRACK2B_DESIGN.md`)
 **Last commit**: `472db662` — all-specificity merge in tagged-cell-read + leaf bitmask filter
 **Suite health**: 398/398 files, 7745-7750 tests, ~120s, all pass
 **Dailies**: `docs/tracking/standups/2026-04-12_dailies.md`
@@ -41,10 +41,10 @@ The fix: fact rows should use `install-one-clause-concurrent` style per-row inst
 
 | Document | Lines | Why |
 |---|---|---|
-| `docs/tracking/2026-04-10_BSP_LE_TRACK2B_DESIGN.md` | ~600 | D.12 design: stratified NAF, Phase structure, all benchmark data |
-| `docs/tracking/2026-04-10_BSP_LE_TRACK2B_SELF_CRITIQUE.md` | ~170 | 15 findings with D.7 outcomes |
-| `docs/tracking/2026-04-10_BSP_LE_TRACK2B_EXTERNAL_CRITIQUE.md` | ~135 | 18 findings (2 critical) |
-| `docs/tracking/2026-04-10_BSP_LE_TRACK2B_CRITIQUE_RESPONSE.md` | ~130 | 15 actions, all resolved |
+| `docs/tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-10_BSP_LE_TRACK2B_DESIGN.md` | ~600 | D.12 design: stratified NAF, Phase structure, all benchmark data |
+| `docs/tracking/tracks/BSP-LE/BSP-LE_2B/critiques/2026-04-10_BSP_LE_TRACK2B_SELF_CRITIQUE.md` | ~170 | 15 findings with D.7 outcomes |
+| `docs/tracking/tracks/BSP-LE/BSP-LE_2B/critiques/2026-04-10_BSP_LE_TRACK2B_EXTERNAL_CRITIQUE.md` | ~135 | 18 findings (2 critical) |
+| `docs/tracking/tracks/BSP-LE/BSP-LE_2B/critiques/2026-04-10_BSP_LE_TRACK2B_CRITIQUE_RESPONSE.md` | ~130 | 15 actions, all resolved |
 | `docs/tracking/standups/2026-04-12_dailies.md` | ~80 | Current session log, NAF design evolution |
 | This handoff document | — | State transfer |
 

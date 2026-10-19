@@ -37,38 +37,38 @@ The track folds in Track 1.5 (Cell-Based TMS) because the TMS rearchitecture sho
 
 | Document | Lines | Role |
 |----------|-------|------|
-| [Logic Engine Design](../tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org) | 2892 | Comprehensive blueprint: Phases 4-7 define BSP-LE scope. Persistent ATMS, TMS cells, two-tier activation, BSP parallel worldview exploration, solver language. |
-| [PUnify Part 3: Multiverse Multiplexer](../tracking/2026-03-19_PUNIFY_PART3_ATMS_SOLVER_ARCHITECTURE.md) | 959 | Detailed solver architecture: clause-as-assumption, goal-as-propagator, propagator taxonomy mapping, categorical composition (lattice domains + Galois connections + strata tower). DFS→ATMS migration path. |
+| [Logic Engine Design](../../../2026-02-24_LOGIC_ENGINE_DESIGN.org) | 2892 | Comprehensive blueprint: Phases 4-7 define BSP-LE scope. Persistent ATMS, TMS cells, two-tier activation, BSP parallel worldview exploration, solver language. |
+| [PUnify Part 3: Multiverse Multiplexer](../../../2026-03-19_PUNIFY_PART3_ATMS_SOLVER_ARCHITECTURE.md) | 959 | Detailed solver architecture: clause-as-assumption, goal-as-propagator, propagator taxonomy mapping, categorical composition (lattice domains + Galois connections + strata tower). DFS→ATMS migration path. |
 | [Cell-Based TMS Design Note](2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) | 101 | TMS rearchitecture: worldview as cell value, migration phases A-D, scope estimate (~450 lines). |
-| [BSP-LE Series Master](../tracking/2026-03-21_BSP_LE_MASTER.md) | 224 | Series tracking: 6 tracks + Track 1.5, dependency graph, scope summaries, success criteria. |
+| [BSP-LE Series Master](../2026-03-21_BSP_LE_MASTER.md) | 224 | Series tracking: 6 tracks + Track 1.5, dependency graph, scope summaries, success criteria. |
 
 ### 2.2 Infrastructure Predecessors
 
 | Document | Role |
 |----------|------|
-| [PAR Track 1 Design](../tracking/2026-03-27_PAR_TRACK1_DESIGN.md) | BSP-as-default: CALM audit, dynamic topology guards, stratified barrier protocol. BSP is now the production scheduler. |
-| [PAR Track 1 PIR](../tracking/2026-03-28_PAR_TRACK1_PIR.md) | BSP deployment: 10 bugs found (CALM violations, decomp-request invisible to diff, infinite loops), all resolved. |
-| [PPN Track 4B Design](../tracking/tracks/PPN/PPN_4B/2026-04-05_PPN_TRACK4B_DESIGN.md) | Attribute evaluation: 5-facet attribute-map cell, P1/P2/P3 propagator patterns, on-main-network typing. Discovered need for cell-based TMS (Phase 8 blocked). |
-| [PPN Track 4B PIR](../tracking/tracks/PPN/PPN_4B/2026-04-07_PPN_TRACK4B_PIR.md) | 90% on-network typing, 6 imperative bridges documented. TMS is the architectural bottleneck. |
+| [PAR Track 1 Design](../../../2026-03-27_PAR_TRACK1_DESIGN.md) | BSP-as-default: CALM audit, dynamic topology guards, stratified barrier protocol. BSP is now the production scheduler. |
+| [PAR Track 1 PIR](../../../2026-03-28_PAR_TRACK1_PIR.md) | BSP deployment: 10 bugs found (CALM violations, decomp-request invisible to diff, infinite loops), all resolved. |
+| [PPN Track 4B Design](../../PPN/PPN_4B/2026-04-05_PPN_TRACK4B_DESIGN.md) | Attribute evaluation: 5-facet attribute-map cell, P1/P2/P3 propagator patterns, on-main-network typing. Discovered need for cell-based TMS (Phase 8 blocked). |
+| [PPN Track 4B PIR](../../PPN/PPN_4B/2026-04-07_PPN_TRACK4B_PIR.md) | 90% on-network typing, 6 imperative bridges documented. TMS is the architectural bottleneck. |
 
 ### 2.3 Categorical and Theoretical Foundations
 
 | Document | Lines | Key Insight |
 |----------|-------|-------------|
-| [Categorical Foundations](2026-03-22_CATEGORICAL_FOUNDATIONS_TYPED_PROPAGATOR_NETWORKS.md) | ~800 | Polynomial functor interfaces for propagator networks. Dual quantale enrichment (correctness lattice + tropical optimization lattice). |
-| [Categorical Structure of Five Systems](../tracking/2026-03-21_CATEGORICAL_STRUCTURE_FIVE_SYSTEMS.org) | ~400 | Precise categorical structure of each subsystem: elaboration, type inference, trait resolution, pattern matching, logic engine. |
-| [Propagator Network Taxonomy](../tracking/2026-03-21_PROPAGATOR_NETWORK_TAXONOMY.org) | ~300 | Cross-disciplinary classification: structural, lifecycle, scheduling patterns. |
-| [Module Theory on Lattices](2026-03-28_MODULE_THEORY_LATTICES.md) | ~200 | E-graphs as quotient modules. ATMS as module over Boolean assumption algebra. Residuation replaces narrowing search. |
-| [Tropical Optimization](2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md) | ~300 | Cost-weighted rewriting via tropical semirings. ATMS worldview selection as shortest-path in min-plus algebra. |
+| [Categorical Foundations](../../../../research/2026-03-22_CATEGORICAL_FOUNDATIONS_TYPED_PROPAGATOR_NETWORKS.md) | ~800 | Polynomial functor interfaces for propagator networks. Dual quantale enrichment (correctness lattice + tropical optimization lattice). |
+| [Categorical Structure of Five Systems](../../../2026-03-21_CATEGORICAL_STRUCTURE_FIVE_SYSTEMS.org) | ~400 | Precise categorical structure of each subsystem: elaboration, type inference, trait resolution, pattern matching, logic engine. |
+| [Propagator Network Taxonomy](../../../2026-03-21_PROPAGATOR_NETWORK_TAXONOMY.org) | ~300 | Cross-disciplinary classification: structural, lifecycle, scheduling patterns. |
+| [Module Theory on Lattices](../../../../research/2026-03-28_MODULE_THEORY_LATTICES.md) | ~200 | E-graphs as quotient modules. ATMS as module over Boolean assumption algebra. Residuation replaces narrowing search. |
+| [Tropical Optimization](../../../../research/2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md) | ~300 | Cost-weighted rewriting via tropical semirings. ATMS worldview selection as shortest-path in min-plus algebra. |
 
 ### 2.4 Related Vision Documents
 
 | Document | Role |
 |----------|------|
-| [Relational Language Vision](../tracking/principles/RELATIONAL_LANGUAGE_VISION.org) | Three-layer model: functional, relational, solver. The solver language vision. |
-| [FL Narrowing Design](../tracking/2026-03-07_FL_NARROWING_DESIGN.org) | Definitional trees, residuation-first principle. Narrowing already installs propagators. |
-| [Well-Founded Logic Engine](../tracking/2026-03-14_WELL_FOUNDED_LOGIC_ENGINE_DESIGN.md) | WF-LE bilattice oracle for 3-valued NAF. `current-naf-oracle` parameter. |
-| [Parallel Propagator Scheduling](2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md) | Topological-sort rounds, CAS cell writes, work-stealing. OR-parallel foundation. |
+| [Relational Language Vision](../../../principles/RELATIONAL_LANGUAGE_VISION.org) | Three-layer model: functional, relational, solver. The solver language vision. |
+| [FL Narrowing Design](../../../2026-03-07_FL_NARROWING_DESIGN.org) | Definitional trees, residuation-first principle. Narrowing already installs propagators. |
+| [Well-Founded Logic Engine](../../../2026-03-14_WELL_FOUNDED_LOGIC_ENGINE_DESIGN.md) | WF-LE bilattice oracle for 3-valued NAF. `current-naf-oracle` parameter. |
+| [Parallel Propagator Scheduling](../../../../research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md) | Topological-sort rounds, CAS cell writes, work-stealing. OR-parallel foundation. |
 
 ### 2.5 Research Synthesis: Key Architectural Decisions from Prior Art
 

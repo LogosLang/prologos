@@ -36,7 +36,7 @@ Two threads in our existing work converge on the same gap.
 
 **Thread A: SRE Track 2G/2H finding.** Track 2G's algebraic-property registry discovered that "the type lattice [is] NOT distributive under equality merge — type lattice redesign needed for Heyting" ([SRE_MASTER §Track 2G notes](../tracking/2026-03-22_SRE_MASTER.md)). Track 2H delivered a Heyting redesign with union join, complete meet, tensor, and pseudo-complement scaffolding ([Track 2H PIR](../tracking/2026-04-03_SRE_TRACK2H_PIR.md)). What Track 2G did not do — because the vocabulary did not exist yet in our infrastructure — was name *which lattice variety V* the redesigned type lattice now lives in. We declared properties (Heyting, distributivity per relation) but not the variety, and we have no canonical-form algorithm derived from that variety.
 
-**Thread B: Hyperlattice Conjecture optimality claim.** [`structural-thinking.md`](../../.claude/rules/structural-thinking.md) §1 states: "the Hasse diagram of the lattice IS the optimal parallel decomposition of that computation." Today the evidence for this claim is *one* worked example — the ATMS worldview space being Q_n with hypercube Hasse ([HYPERCUBE_BSP_LE_DESIGN_ADDENDUM](2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md)). Boolean is the easy case. The conjecture asserts something across *all* lattices we work with. The gap between "asserted across all" and "evidenced for one" is a place we want to keep closing.
+**Thread B: Hyperlattice Conjecture optimality claim.** [`structural-thinking.md`](../../.claude/rules/structural-thinking.md) §1 states: "the Hasse diagram of the lattice IS the optimal parallel decomposition of that computation." Today the evidence for this claim is *one* worked example — the ATMS worldview space being Q_n with hypercube Hasse ([HYPERCUBE_BSP_LE_DESIGN_ADDENDUM](../tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md)). Boolean is the easy case. The conjecture asserts something across *all* lattices we work with. The gap between "asserted across all" and "evidenced for one" is a place we want to keep closing.
 
 This note frames a research direction that addresses both: **identify the lattice variety V each SRE domain lives in, and use the canonical-form theory of FL_V(X) — the relatively free lattice in V — to give the Hyperlattice optimality claim a per-variety algebraic backbone.**
 
@@ -302,7 +302,7 @@ Estimated scope: 1-2 weeks of design (Stage 2/3) plus 2-3 weeks of implementatio
 - [`structural-thinking.md`](../../.claude/rules/structural-thinking.md) — Hyperlattice Conjecture, SRE lattice lens
 - [SRE Master](../tracking/2026-03-22_SRE_MASTER.md) — Track 2G (algebraic foundation), Track 2H (type lattice Heyting redesign)
 - [Track 2H Design](../tracking/2026-04-02_SRE_TRACK2H_DESIGN.md), [Track 2H PIR](../tracking/2026-04-03_SRE_TRACK2H_PIR.md)
-- [HYPERCUBE_BSP_LE_DESIGN_ADDENDUM](2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — current evidence base for Hasse optimality
+- [HYPERCUBE_BSP_LE_DESIGN_ADDENDUM](../tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — current evidence base for Hasse optimality
 - [Adhesive Categories and Parse Trees](2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md) — SRE Track 2D foundation
 - Companion note: [2026-04-30_WIDENING_NARROWING_INFINITE_DOMAINS_FOR_UCS.md](2026-04-30_WIDENING_NARROWING_INFINITE_DOMAINS_FOR_UCS.md) — limit-case half of the picture
 

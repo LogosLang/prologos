@@ -3,7 +3,7 @@
 **Date**: 2026-03-21
 **Scope**: `champ.rkt` — the persistent hash trie underlying all propagator network state
 **Motivation**: BSP-LE Track 0 Phase 0 baselines revealed that CHAMP operations (0.27–1.08μs) are 10× more expensive than struct-copy (0.03μs). Phase 5's transient CHAMP attempt regressed 44% for small batches. The CHAMP is the actual bottleneck — not the network struct layout.
-**Prior work**: [Cell/Propagator Allocation Audit](2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md), [BSP-LE Track 0 PIR](2026-03-21_BSP_LE_TRACK0_PIR.md)
+**Prior work**: [Cell/Propagator Allocation Audit](2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md), [BSP-LE Track 0 PIR](../2026-03-21_BSP_LE_TRACK0_PIR.md)
 
 ---
 

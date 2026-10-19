@@ -86,7 +86,7 @@ the full suite to diagnose**), `pipeline.md`, `prologos-syntax.md`.
    (892 L) — §11 = the **Rel T2 "The Fact Store" charter seed**, §12 = Q_A–Q_D
    **parked for that charter**, §14 = the D.2 addendum with the measured findings.
    Read §1 (frame), §11, §12, §14 at minimum; the rest when Rel T2 opens.
-6. `docs/tracking/2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md` (143 L) — the retirement
+6. `docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md` (143 L) — the retirement
    owner for the A.2b/A.4 DFS-routing scaffolds and Aspect-B on-network row
    computation. Needed to keep saying honestly what is deferred where.
 7. `docs/tracking/2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md` (185 L) — where C.d

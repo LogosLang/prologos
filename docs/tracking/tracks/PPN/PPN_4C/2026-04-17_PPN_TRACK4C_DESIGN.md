@@ -16,7 +16,7 @@
 - D.2 refinement (2026-04-18, O3 incorporation — provenance as structural emergence): new §6.1.1 specifies the provenance infrastructure. Per [Module Theory §5-6](../../../../research/2026-03-28_MODULE_THEORY_LATTICES.md) + [Hypergraph Rewriting §6.3](../../../../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md), provenance is structurally emergent from the propagator-firing dependency graph — not a new data structure. Three structural sources compose: ATMS assumption tagging, `:trace :structural` mode, source-location registry. **Error-reporting via backward residuation** on the Module-Theoretic chain structure — in 4C scope per user direction. Intended use case: first-class compiler and error features (not a debugging aid) — precise source-code mapping, human-readable messages with derivation context, machine-readable traces for IDE/LSP tooling. New **Phase 11b** (diagnostic infrastructure) added to Progress Tracker, consuming the provenance infrastructure built in Phases 3/4/9/11. `derivation-chain-for(position, tag)` helper API shape deferred to phase-time mini-design.
 - D.2 self-critique round closed (2026-04-18): P1 resolved-by-design — Option A scaffold-period concern dissolves under phase sequencing (no alternative code path exists during Phases 9-11b; Phase 12 retires atomically). All P/R/M/SRE findings now resolved. D.2 ready for external critique. Full round summary in [`2026-04-17_PPN_TRACK4C_SELF_CRITIQUE.md`](2026-04-17_PPN_TRACK4C_SELF_CRITIQUE.md) §8.
 - **D.3 (2026-04-18) — external critique round closed**: all 17 findings from [`2026-04-18_PPN_TRACK4C_EXTERNAL_CRITIQUE.md`](2026-04-18_PPN_TRACK4C_EXTERNAL_CRITIQUE.md) resolved. Notable outcomes absorbed into D.2 structure as in-place refinements: **R2** Phase 12 sub-split 12a/b/c/d + pipeline premise refined (post-Tracks-2/3/4A/4B, not 14-file cascade). **M2** tropical-lattice fuel cell adopted as lean — first practical tropical-lattice in Prologos production; template for upcoming PReduce. **M4** Phase 11b diagnostic as read-time derivation (option b); **trace monoidal category theory** (Joyal-Street-Verity 1996, Hasegawa 1997, Abramsky-Haghverdi-Scott 2002) raised as research input to the Phase 11b mini-design. **P3** Phase 6 structural-coverage lean over discipline coverage. **S2** §6.5.1 added (tag distributivity); **S3** §6.12.6 added (L_impl and L_inhabitant instantiations). **R1** §17 Reality-Check Artifacts appendix added (reproducible grep commands). Six findings (P3, P4, M1, M3, S1, C1, C2) deferred to phase-time mini-design with obligation lists in Progress Tracker rows. Parity skeleton [`test-elaboration-parity.rkt`](../../../../../racket/prologos/tests/test-elaboration-parity.rkt) committed at D.3 per M3 methodology.
-**Prior art**: [4C Audit](2026-04-17_PPN_TRACK4C_AUDIT.md), [4C Design Note](../research/2026-04-07_PPN_TRACK4C_DESIGN_NOTE.md), [PPN Master](../2026-03-26_PPN_MASTER.md), [PPN 4 PIR](../PPN_4A/2026-04-04_PPN_TRACK4_PIR.md), [PPN 4B PIR](../PPN_4B/2026-04-07_PPN_TRACK4B_PIR.md), [BSP-LE 2B PIR](../../../2026-04-16_BSP_LE_TRACK2B_PIR.md), [Cell-Based TMS Design Note](../../../../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md), [NTT Syntax Design](../../../2026-03-22_NTT_SYNTAX_DESIGN.md), [Hypergraph Rewriting Research](../../../../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md), [Adhesive Categories Research](../../../../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md), [Attribute Grammars Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md), [Prologos Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md), [Grammar Toplevel Form](../../../../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md), [SEXP IR to Propagator Compiler](../../../../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md).
+**Prior art**: [4C Audit](2026-04-17_PPN_TRACK4C_AUDIT.md), [4C Design Note](../research/2026-04-07_PPN_TRACK4C_DESIGN_NOTE.md), [PPN Master](../2026-03-26_PPN_MASTER.md), [PPN 4 PIR](../PPN_4A/2026-04-04_PPN_TRACK4_PIR.md), [PPN 4B PIR](../PPN_4B/2026-04-07_PPN_TRACK4B_PIR.md), [BSP-LE 2B PIR](../../BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md), [Cell-Based TMS Design Note](../../BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md), [NTT Syntax Design](../../../2026-03-22_NTT_SYNTAX_DESIGN.md), [Hypergraph Rewriting Research](../../../../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md), [Adhesive Categories Research](../../../../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md), [Attribute Grammars Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md), [Prologos Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md), [Grammar Toplevel Form](../../../../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md), [SEXP IR to Propagator Compiler](../../../../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md).
 
 ---
 
@@ -694,7 +694,7 @@ When the classifier is compound (e.g., `Pi(m, dom, cod)`), γ does not "walk int
 
 **Multi-candidate case fires ATMS fork**:
 
-When the Hasse index returns multiple candidates at the same specificity level, γ writes one candidate per branch via ATMS assumption-tagging (Phase 10 substrate: [cell-based TMS](../../../../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) + worldview bitmask). Branch contradiction retracts via S(-1). Single-candidate case writes INHABITANT directly.
+When the Hasse index returns multiple candidates at the same specificity level, γ writes one candidate per branch via ATMS assumption-tagging (Phase 10 substrate: [cell-based TMS](../../BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) + worldview bitmask). Branch contradiction retracts via S(-1). Single-candidate case writes INHABITANT directly.
 
 **Network Reality Check** (Track 4 §9 methodology):
 - `net-add-propagator` calls: 1 γ-propagator per position (fire-once at readiness); 1 SRE ctor-desc propagator per compound-classifier decomposition.
@@ -1116,7 +1116,7 @@ Each facet registration is atomic — Tier 1 (SRE domain) + Tier 2 (`register-me
 - **Phase C**: migrate speculation users (elab-speculation-bridge, union type checking) to cell-based worldview.
 - **Phase D**: `current-speculation-stack` parameter retired.
 
-See [Cell-Based TMS Design Note](../../../../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) for the detailed migration path. Scope estimate: ~450 lines.
+See [Cell-Based TMS Design Note](../../BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) for the detailed migration path. Scope estimate: ~450 lines.
 
 **Phase 8 (union types via ATMS)** builds on cell-based TMS. **Mechanistically, ATMS branching on a union type IS applying SRE ctor-desc to the ⊕ constructor**: a union type `A | B` is `A ⊕ B` in the TypeFacet quantale; ctor-desc of the ⊕ constructor yields two components; ATMS branching instantiates the structural decomposition into per-component branches. Each branch is ONE COMPONENT of the ⊕ structural decomposition, tagged with its own assumption. **PUnify within each branch** resolves sub-expressions against the component type.
 
@@ -1155,7 +1155,7 @@ merge-viable-branches:
 
 ### §6.11 Design Lenses — Hyperlattice Conjecture / SRE / Hypercube Applied
 
-Per user direction 2026-04-17: apply the SRE lens ([`structural-thinking.md`](../../../../../.claude/rules/structural-thinking.md)) + Hypercube perspective ([BSP-LE Hypercube Addendum](../../../../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md)) to strengthen the Hyperlattice Conjecture argument specifically within 4C.
+Per user direction 2026-04-17: apply the SRE lens ([`structural-thinking.md`](../../../../../.claude/rules/structural-thinking.md)) + Hypercube perspective ([BSP-LE Hypercube Addendum](../../BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md)) to strengthen the Hyperlattice Conjecture argument specifically within 4C.
 
 The Conjecture ([DESIGN_PRINCIPLES.org](../../../principles/DESIGN_PRINCIPLES.org) §Hyperlattice Conjecture) has two parts:
 1. **Universal computational substrate** — every computable function is a fixpoint on lattices.
@@ -1189,7 +1189,7 @@ The AttributeRecord is a **product** of 6 facet lattices. Its Hasse diagram is t
 
 #### §6.11.3 Phase 10 (union types via ATMS) — hypercube structure explicit
 
-The worldview space for N union branches IS Q_N (Boolean lattice = hypercube), per [Hypercube Addendum §1](../../../../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md). This STRUCTURAL IDENTITY — not metaphor — implies three optimizations to incorporate in Phase 10 design:
+The worldview space for N union branches IS Q_N (Boolean lattice = hypercube), per [Hypercube Addendum §1](../../BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md). This STRUCTURAL IDENTITY — not metaphor — implies three optimizations to incorporate in Phase 10 design:
 
 1. **Gray-code branch traversal** (Hypercube Addendum §2.1). When `atms-amb` creates M branches, explore them in Gray-code order (one-assumption-change between successors). CHAMP structural sharing reuses O(affected cells) per fork instead of O(all cells). Phase 10's fork strategy follows Gray-code.
 
@@ -1298,7 +1298,7 @@ Deeper per-lattice treatments live in referenced subsections; this catalog is th
 
 **Worldview Q_n** (§6.10, Phase 9, BSP-LE 1.5)
 
-- **Classification**: VALUE (bitmask) — but with rich hypercube adjacency structure per [BSP-LE Track 2 Hypercube Addendum](../../../../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md).
+- **Classification**: VALUE (bitmask) — but with rich hypercube adjacency structure per [BSP-LE Track 2 Hypercube Addendum](../../BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md).
 - **Algebra**: Boolean, complemented, distributive, Heyting, frame. Q_n for n assumptions.
 - **Primary/Derived**: **DERIVED** from decision cells (per BSP-LE Track 2 D.1 self-critique finding — decision cells are primary, worldview is the union of committed assumption bits). The derivation is reflected in the A/B commitment flow: worldview = reduce(OR, committed-bits).
 - **Hasse**: hypercube Q_n. Each worldview is a vertex; edges = Hamming distance 1 (one assumption differs). Adjacency structure enables Gray-code traversal, bitmask subcube membership (O(1) nogood containment), hypercube all-reduce (log₂ diameter).
@@ -2143,7 +2143,7 @@ Genuine design decision points to work through in dialogue. Phase 0 Pre-0 measur
 1. **Residuation formalization** — **RESOLVED by D.2 restructure + BSP-LE solver audit (2026-04-17)**:
    - **Check direction (α)** — tag-dispatched merge on the shared TypeFacet carrier (D.2 §6.1, §6.2). Residuation is internal to the quantale; CLASSIFIER × INHABITANT cross-tag merge IS the quantale residual computation.
    - **Hole-fill direction (γ)** — reactive propagator on the attribute-map (§6.2.1). Fires at two-threshold readiness (CLASSIFIER ground + INHABITANT bot). Hasse-indexed inhabitant catalog (type-env + constructor signatures). SRE ctor-desc decomposition handles compound-classifier structure. ATMS-branching on multi-candidate. Reuses BSP + stratification + ATMS + worldview substrate — **NO** general BSP-LE solver invocation.
-   - **Why not general solver invocation**: audit showed BSP-LE's search machinery is structurally relation-with-atoms (goal-desc kinds, clause-info, unify-terms, discrimination). Generalization is future BSP-LE Track 6 ([BSP-LE Master](../../../2026-03-21_BSP_LE_MASTER.md)), not 4C scope.
+   - **Why not general solver invocation**: audit showed BSP-LE's search machinery is structurally relation-with-atoms (goal-desc kinds, clause-info, unify-terms, discrimination). Generalization is future BSP-LE Track 6 ([BSP-LE Master](../../BSP-LE/2026-03-21_BSP_LE_MASTER.md)), not 4C scope.
    - **Shared-carrier tag scheme** (D.2 §6.1): `:type` and `:term` as tag-layers, not separate facets. Residuation laws verified by SRE property inference (§6.9). Status: implementation-ready; lattice-law corner cases enumerated in §6.2 for verification at Phase 2.
 
    Q1 CLOSED. Sub-question remaining: property inference pass at Phase 2 (A9 facet SRE registration) may surface specific lattice-law corner cases to address; expected based on Track 3 §12 + SRE 2G precedent.

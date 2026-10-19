@@ -1,8 +1,8 @@
 # Hypercube Structure of the Worldview Space — BSP-LE Track 2 Design Addendum
 
 **Date**: 2026-04-08
-**Parent design**: [BSP-LE Track 2 D.6](../tracking/2026-04-07_BSP_LE_TRACK2_DESIGN.md)
-**Source**: [Hypercube Conversation](../standups/standup-2026-04-08.org) § "Hypercube Conversation"
+**Parent design**: [BSP-LE Track 2 D.6](../BSP-LE_2/2026-04-07_BSP_LE_TRACK2_DESIGN.md)
+**Source**: [Hypercube Conversation](../../../../standups/standup-2026-04-08.org) § "Hypercube Conversation"
 **Status**: Draft — captures design implications while context is fresh
 
 ---
@@ -191,9 +191,9 @@ The adjacency structure adds new bridge possibilities:
 
 | Document | Relevance |
 |---|---|
-| [Parent design D.6](../tracking/2026-04-07_BSP_LE_TRACK2_DESIGN.md) | This addendum extends Phases 3, 6, 9-10 |
-| [Parallel Propagator Scheduling](2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md) | Array programming patterns, prefix scan = butterfly |
-| [Propagator Taxonomy](2026-03-28_PROPAGATOR_TAXONOMY.md) | Broadcast, scatter, gather kinds |
-| [Categorical Foundations](2026-03-22_CATEGORICAL_FOUNDATIONS_TYPED_PROPAGATOR_NETWORKS.md) | Polynomial functors, Kan extensions |
-| [DESIGN_PRINCIPLES.org](../tracking/principles/DESIGN_PRINCIPLES.org) § Hyperlattice Conjecture | Motivation |
-| [Hypercube Conversation](../standups/standup-2026-04-08.org) § "Hypercube Conversation" | Source research |
+| [Parent design D.6](../BSP-LE_2/2026-04-07_BSP_LE_TRACK2_DESIGN.md) | This addendum extends Phases 3, 6, 9-10 |
+| [Parallel Propagator Scheduling](../../../../research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md) | Array programming patterns, prefix scan = butterfly |
+| [Propagator Taxonomy](../../../../research/2026-03-28_PROPAGATOR_TAXONOMY.md) | Broadcast, scatter, gather kinds |
+| [Categorical Foundations](../../../../research/2026-03-22_CATEGORICAL_FOUNDATIONS_TYPED_PROPAGATOR_NETWORKS.md) | Polynomial functors, Kan extensions |
+| [DESIGN_PRINCIPLES.org](../../../principles/DESIGN_PRINCIPLES.org) § Hyperlattice Conjecture | Motivation |
+| [Hypercube Conversation](../../../../standups/standup-2026-04-08.org) § "Hypercube Conversation" | Source research |

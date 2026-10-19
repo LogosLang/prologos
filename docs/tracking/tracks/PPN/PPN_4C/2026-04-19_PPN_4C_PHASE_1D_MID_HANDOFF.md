@@ -118,7 +118,7 @@ After 1d close: Phase 1e (correctness refactors), Phase 1f (enforcement), Phase 
 
 23. [`docs/tracking/tracks/PPN/PPN_4B/2026-04-07_PPN_TRACK4B_PIR.md`](../PPN_4B/2026-04-07_PPN_TRACK4B_PIR.md) — Track 4B PIR; §12 notes zonk retirement still deferred; §1 "side effects ARE attributes"
 
-24. [`docs/tracking/2026-04-16_BSP_LE_TRACK2B_PIR.md`](../../../2026-04-16_BSP_LE_TRACK2B_PIR.md) — BSP-LE 2B PIR. §16.4 Module Theory Resolution B; §16.5 skip-the-mechanism; §16.8 per-variable split entries
+24. [`docs/tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md`](../../BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md) — BSP-LE 2B PIR. §16.4 Module Theory Resolution B; §16.5 skip-the-mechanism; §16.8 per-variable split entries
 
 ### §2.7 Session-Specific — RESEARCH (cited by D.3)
 
@@ -134,9 +134,9 @@ After 1d close: Phase 1e (correctness refactors), Phase 1f (enforcement), Phase 
 
 30. [`docs/tracking/2026-03-22_NTT_SYNTAX_DESIGN.md`](../../../2026-03-22_NTT_SYNTAX_DESIGN.md) — NTT guiderails. §7.6 `:trace` modes (Phase 11b)
 
-31. [`docs/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../../../../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — **CRITICAL for Hasse-registry (Phase 2b) context**. Q_n hypercube, Gray-code, subcube pruning via bitmask.
+31. [`docs/tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../../BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — **CRITICAL for Hasse-registry (Phase 2b) context**. Q_n hypercube, Gray-code, subcube pruning via bitmask.
 
-32. [`docs/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md`](../../../../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) — BSP-LE 1.5 → Phase 9
+32. [`docs/tracking/tracks/BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md`](../../BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) — BSP-LE 1.5 → Phase 9
 
 33. [`docs/research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md`](../../../../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md) — `grammar` form vision
 
@@ -184,7 +184,7 @@ After 1d close: Phase 1e (correctness refactors), Phase 1f (enforcement), Phase 
     - `current-source-loc` parameter
     - `hasse-registry-handle` Racket struct
 
-54. [`docs/tracking/2026-03-21_BSP_LE_MASTER.md`](../../../2026-03-21_BSP_LE_MASTER.md) — BSP-LE Master (Track 6 "General Residual Solver" forward reference)
+54. [`docs/tracking/tracks/BSP-LE/2026-03-21_BSP_LE_MASTER.md`](../../BSP-LE/2026-03-21_BSP_LE_MASTER.md) — BSP-LE Master (Track 6 "General Residual Solver" forward reference)
 
 ---
 

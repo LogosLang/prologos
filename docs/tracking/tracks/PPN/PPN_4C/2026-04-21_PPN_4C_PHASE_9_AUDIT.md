@@ -49,13 +49,13 @@ Queries performed (consolidated): worldview paths, speculation APIs, ATMS infras
 - [`docs/research/2026-04-21_TROPICAL_QUANTALE_RESEARCH.md`](../../../../research/2026-04-21_TROPICAL_QUANTALE_RESEARCH.md) — 1000 lines, 12 sections, foundational tropical-quantale theory + Prologos synthesis
 
 ### §2.2 Prior design notes and addenda
-- [`docs/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md`](../../../../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) — 2026-04-06 TMS design note. **SUPERSEDED IN PART** by BSP-LE Track 2B (see §3.1 finding).
-- [`docs/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../../../../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — hypercube structure + Gray code + bitmask subcube design; **LARGELY IMPLEMENTED** (see §3.5).
+- [`docs/tracking/tracks/BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md`](../../BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) — 2026-04-06 TMS design note. **SUPERSEDED IN PART** by BSP-LE Track 2B (see §3.1 finding).
+- [`docs/tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../../BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — hypercube structure + Gray code + bitmask subcube design; **LARGELY IMPLEMENTED** (see §3.5).
 - [`docs/research/2026-03-28_MODULE_THEORY_LATTICES.md`](../../../../research/2026-03-28_MODULE_THEORY_LATTICES.md) — module-theoretic foundations
 
 ### §2.3 Completed-track PIRs (state-of-the-art baseline)
-- [`docs/tracking/2026-04-10_BSP_LE_TRACK2_PIR.md`](../../../2026-04-10_BSP_LE_TRACK2_PIR.md) — BSP-LE 2 completion. Claims `current-speculation-stack` RETIRED (residual sites remain per §3.1).
-- [`docs/tracking/2026-04-16_BSP_LE_TRACK2B_PIR.md`](../../../2026-04-16_BSP_LE_TRACK2B_PIR.md) — BSP-LE 2B closure. Decision-cells-primary + tagged-cell-value + hypercube pattern established.
+- [`docs/tracking/tracks/BSP-LE/BSP-LE_2/2026-04-10_BSP_LE_TRACK2_PIR.md`](../../BSP-LE/BSP-LE_2/2026-04-10_BSP_LE_TRACK2_PIR.md) — BSP-LE 2 completion. Claims `current-speculation-stack` RETIRED (residual sites remain per §3.1).
+- [`docs/tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md`](../../BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md) — BSP-LE 2B closure. Decision-cells-primary + tagged-cell-value + hypercube pattern established.
 - [`docs/tracking/tracks/PPN/PPN_4B/2026-04-07_PPN_TRACK4B_PIR.md`](../PPN_4B/2026-04-07_PPN_TRACK4B_PIR.md) — Track 4B speculation state.
 
 ### §2.4 PPN 4C current design
@@ -688,12 +688,12 @@ Audit captures candidate risks; Design finalizes named list for VAG:
 
 ### §7.1 Prologos internal
 - [`docs/research/2026-04-21_TROPICAL_QUANTALE_RESEARCH.md`](../../../../research/2026-04-21_TROPICAL_QUANTALE_RESEARCH.md) (commit `de357aa1`)
-- [`docs/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md`](../../../../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md)
-- [`docs/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../../../../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md)
+- [`docs/tracking/tracks/BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md`](../../BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md)
+- [`docs/tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../../BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md)
 - [`docs/research/2026-03-28_MODULE_THEORY_LATTICES.md`](../../../../research/2026-03-28_MODULE_THEORY_LATTICES.md)
 - [`docs/tracking/tracks/PPN/PPN_4C/2026-04-17_PPN_TRACK4C_DESIGN.md`](2026-04-17_PPN_TRACK4C_DESIGN.md) § 6.10, 6.11.3, 6.15.6
-- [`docs/tracking/2026-04-10_BSP_LE_TRACK2_PIR.md`](../../../2026-04-10_BSP_LE_TRACK2_PIR.md)
-- [`docs/tracking/2026-04-16_BSP_LE_TRACK2B_PIR.md`](../../../2026-04-16_BSP_LE_TRACK2B_PIR.md)
+- [`docs/tracking/tracks/BSP-LE/BSP-LE_2/2026-04-10_BSP_LE_TRACK2_PIR.md`](../../BSP-LE/BSP-LE_2/2026-04-10_BSP_LE_TRACK2_PIR.md)
+- [`docs/tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md`](../../BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md)
 - [`docs/tracking/tracks/PPN/PPN_4C/2026-04-20_PPN_4C_PHASE_9_HANDOFF.md`](2026-04-20_PPN_4C_PHASE_9_HANDOFF.md)
 - [`.claude/rules/propagator-design.md`](../../../../../.claude/rules/propagator-design.md) (silent-write-drop hazard)
 - [`.claude/rules/stratification.md`](../../../../../.claude/rules/stratification.md) (stratum handler pattern)
