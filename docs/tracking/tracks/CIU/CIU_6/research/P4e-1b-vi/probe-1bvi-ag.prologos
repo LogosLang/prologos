@@ -1,0 +1,94 @@
+ns probe-1bvi-ag
+
+;; Q_U62 — R worked out beside B. R refuses exactly where B and S+ disagree: an ordinal head over a
+;; sub-block whose every branch passes its star's landing through. R itself is not implemented; this
+;; probe measures what a user writes INSTEAD under R — both recipes — on every shape R refuses.
+;; Measured at 4765f8a1.
+
+def t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}
+def ot := @[{:a {:b {:c {:m {:x 1} :n {:y 2}}}}}]
+def oo := @[@[{:a {:b {:c {:m {:x 1} :n {:y 2}}}}}]]
+def ot2 := @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]
+def ov3 := @[{:a {:b {:c @[@[1 2] @[3]]}}}]
+def vhm := @[@[{:x 1}] @[{:y 2}]]
+def fleet := @[{:meta {:id {:n 1}} :net {:tls {:port 443}} :tags @[1 2]} {:meta {:id {:n 2}} :net {:tls {:port 8443}} :tags @[3]}]
+
+;; ---- A. R's "one component" recipe, x{N}:{P.{X}}, on the hand examples R refuses
+ot{0}:{a^.{b*}}
+ot{0}:{a^.b*}
+oo{0}:{0.a^.b*}
+ot2{0 1}:{a^.b*}
+ot2{0.a^.b^ 1.a^.b^}
+ot{0}:{a^.b^.c^.{m* n*}}
+fleet{0}:{meta^.id* net^.tls*}
+fleet{0 1}:{meta^.id* net^.tls*}
+fleet{0 1}:{meta^.id*}
+fleet{0.meta^.id^ 1.net^.tls^}
+ot{0}:{a.b*-}
+ot{0}:{a^.b*_}
+ot{0}:{a.b.c^-}
+ov3{0}:{a^.b^.c*}
+;; ---- B. the heterogeneous records (B's ae:67) — the nearest R spellings, each a different shape
+fleet{0 1}:{meta^.id* net^.tls*}
+fleet{0.meta^.id* 0.net^.tls* 1.meta^.id*}
+;; ---- C. the shapes R does NOT refuse (B and S+ agree there) — re-measured
+ot{0.a^.b^.c^.{m* n}}
+fleet{0.{meta^.id* tags}}
+ot{0.a.{b*}}
+ot{0.a^.b^.c^.{m n}}
+vhm{0.{0}*}
+
+;; ---- D. R's two recipes over its WHOLE refused population in probe-1bvi-af's grid (generated):
+;; per shape: the one-component recipe, then the spliced recipe (the unfactored step chain)
+ot{0}:{a*}
+ot{0.a*}
+ot{0}:{a*-}
+ot{0.a*-}
+ot{0}:{a*_}
+ot{0.a*_}
+ot{0}:{a*-_}
+ot{0.a*-_}
+ot{0}:{a^-}
+ot{0.a^-}
+ot{0}:{a^-_}
+ot{0.a^-_}
+ot{0}:{a^.{b*}}
+ot{0.a^.b*}
+ot{0}:{a^.{b*-}}
+ot{0.a^.b*-}
+ot{0}:{a^.{b*_}}
+ot{0.a^.b*_}
+ot{0}:{a^.{b*-_}}
+ot{0.a^.b*-_}
+ot{0}:{a^.{b^-}}
+ot{0.a^.b^-}
+ot{0}:{a^.{b^-_}}
+ot{0.a^.b^-_}
+ot{0}:{a^.b^.{c*}}
+ot{0.a^.b^.c*}
+ot{0}:{a^.b^.{c*-}}
+ot{0.a^.b^.c*-}
+ot{0}:{a^.b^.{c*_}}
+ot{0.a^.b^.c*_}
+ot{0}:{a^.b^.{c*-_}}
+ot{0.a^.b^.c*-_}
+ot{0}:{a^.b^.{c^-}}
+ot{0.a^.b^.c^-}
+ot{0}:{a^.b^.{c^-_}}
+ot{0.a^.b^.c^-_}
+ot{0}:{a^.b^.c^.{m*}}
+ot{0.a^.b^.c^.m*}
+ot{0}:{a^.b^.c^.{m*-}}
+ot{0.a^.b^.c^.m*-}
+ot{0}:{a^.b^.c^.{m*_}}
+ot{0.a^.b^.c^.m*_}
+ot{0}:{a^.b^.c^.{m*-_}}
+ot{0.a^.b^.c^.m*-_}
+ot{0}:{a^.b^.c^.{m^-}}
+ot{0.a^.b^.c^.m^-}
+ot{0}:{a^.b^.c^.{m^-_}}
+ot{0.a^.b^.c^.m^-_}
+ov3{0}:{a^.b^.{c*}}
+ov3{0.a^.b^.c*}
+ov3{0}:{a^.b^.{c*-}}
+ov3{0.a^.b^.c*-}
