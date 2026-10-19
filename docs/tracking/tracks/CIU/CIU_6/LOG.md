@@ -512,3 +512,42 @@ are in [`../README.md`](../README.md).
   pinned (SB1-c1b, F3).
 - **Filed on main `e751736c`**: the DEFERRED 115 addendum (DC-2, L★'s side condition) and DEFERRED 185 (SB-3 + SB-4).
 - **Next**: the 1b-vi close (the `pre` column and `1bvi-stage` scaffolding retire), then P4e-2.
+
+### 1b-vi close, item 1: DEFERRED 185 (Q_U46's ordinal-star gap, one text; remedies the branch can spell) + a buried panic — `a9788c0a` · `55b7df16` (2026-10-19)
+- **Why**: the owner approved the close ("Ok to proceed on 1"), in four items: 185; the star family in the grammar
+  (144 / 179 / 180); retiring the stage scaffolding; the close note, suite and checkpoint.
+- **What shipped**: [§1b-vi CLOSE](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close):
+  - A star right after an ordinal head (`vhm{0*}`, `vhm{0.{0*}}`) now gets Q_U46's refusal from one
+    definition shared with typing.
+  - The all-ordinal L4 offers each remedy only where every passing head can spell it; otherwise
+    "drop each `*`", which runs.
+  - `ot2{2}*` no longer prints a runtime miss as a value (a panic subject propagates).
+  - Red steps were run against the OLD code; mutations G1–G4 and the panic arm each turned their own rows
+    red; 701 / 701.
+- **Surprise / correction**:
+  - 185 was wider than filed: one meaning had five messages, depending on spelling. My SB-3 sentence ("Q_U46's
+    gap 1 made a star after an ordinal a guided error; this spelling misses it") was written from the record:
+    only the bracket spelling reached it. Struck in the ledger.
+  - The reader seats (`vhm.0*`, `vv:0*`, `y.a.0*` → bare "Unbound variable"; `y{a.0*}` → "stray `.`") go to
+    P4e-2, which opens the same recognizer.
+  - The panic was found while measuring P4e-2's question, not by any 1b-vi row.
+- **Next**: item 2 (the grammar).
+
+### Q_U63 opened: does ravel `.*` add expressivity, or only notation? (PENDING) — docs commit on the branch (2026-10-19)
+- **Why**: the owner — *"On 2. I want to open up whether this syntax/spelling offers any true increase in
+  expressivity?"* (2026-10-19). Item 3 (the rest of P4e) is to be walked through together, later.
+- **What**: [Q_U63](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u63), probes `research/P4e-2/probe-p4e2-a`
+  / `-b`.
+  - In the whole language ravel is notation (Felleisen: a fixed context, `concat`).
+  - In the selector language it is a real increase, by exactly one primitive: join at the focus = bind with
+    an identity step. That step is missing at three places: a runtime-length subject, an element reached by
+    an ordinal (Q_U46's gap), and a Map's values.
+  - Options: K (`.*`), E (an identity step ε), A (APL full ravel), N (library only).
+  - My lean: E over K, medium.
+- **Surprise / correction**:
+  - Under Q_U40's OUTER rule a named step cannot ravel (`w{v*}` is a 1-tuple of `v`). I expected `w.v*` to
+    ravel and said so in chat before measuring; it does not.
+  - RV-1: Q_U40's record states `vv:{0 1}*` → `⟨1 2 3 4⟩` as falling out; measured, it is refused as
+    not-yet.
+  - RV-3: `.*` already means "unrestricted" in `selection` declarations.
+- **Next**: the owner's answer on Q_U63; P4e-2's grounding audit waits for it.

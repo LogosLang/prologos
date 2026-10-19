@@ -1,0 +1,33 @@
+ns probe-p4e2-a
+;; P4e-2 — does ravel `.*` (Q_U26) add expressivity? Output line N = the Nth top-level form.
+def values := @[@[1 2 3] @[4 5 6] @[7 8 9]]
+def w := {:v @[@[1 2] @[3]]}
+def rowsv := @[{:tags @[1 2]} {:tags @[3]}]
+def m := {:a {:x 1} :b {:y 2}}
+def t3 := @[@[@[1 2] @[3]] @[@[4]]]
+def vv := @[@[1 2] @[3 4]]
+;; A — what Q_U26 promises, as it reads today
+values.*
+;; B — join already spellable: after a step that makes the layer (bind)
+rowsv:tags*
+w.v*
+w{v*}
+m{a b}*
+;; B' — ravel of a SUBJECT, with the lengths written out (a block of ordinals, then `*`)
+values{0 1 2}*
+vv:{0 1}*
+values:{0 1 2}*
+;; C — where the written-out lengths stop: too few is silent, too many refuses
+values{0 1}*
+values{0 1 2 3}*
+;; C' — flatten ELEMENT 0 (the ordinal gap Q_U46 reserved)
+t3{0*}
+t3{0.{0 1}*}
+t3{0}*
+;; D — depth: one join vs APL's full ravel (rank 3)
+t3{0 1}*
+t3{0 1}*{0 1 2}*
+;; E — a Map focus: join every value without naming keys
+m.*
+;; F — outside the path language
+concat '['[1 2] '[3]]

@@ -1,0 +1,29 @@
+PERF-COUNTERS:{"cell_allocs":987,"constraint_count":0,"constraint_retries":0,"elaborate_steps":129,"inert_dependent_skips":0,"infer_steps":479,"meta_created":27,"meta_solved":13,"prop_allocs":0,"prop_firings":0,"reduce_steps":639,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":90,"zonk_steps":249}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":2,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":41,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":41,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: values : [PVec [PVec Int]] defined.
+1: w : {:v [PVec [PVec Int]]} defined.
+2: rowsv : [PVec {:tags [PVec Int]}] defined.
+3: m : {:a {:x Int} :b {:y Int}} defined.
+4: t3 : [PVec [PVec [PVec Int]]] defined.
+5: vv : [PVec [PVec Int]] defined.
+6: ERROR: Unbound variable
+7: @[1 2 3] : [PVec Int]
+8: @[@[1 2] @[3]] : [PVec [PVec Int]]
+9: @[@[@[1 2] @[3]]] : ⟨[PVec [PVec Int]]⟩
+10: {:y 2, :x 1} : {:x Int :y Int}
+11: @[1 2 3 4 5 6 7 8 9] : [PVec Int]
+12: ERROR: select: `*` — `*` (flatten) is not implemented yet for tuple elements under a broadcast (layer `[PVec ⟨Int Int⟩]`): the concatenated arity is (tuple arity × the container's runtime length), which no static type carries
+13: ERROR: select: `*` — `*` (flatten) is not implemented yet for tuple elements under a broadcast (layer `[PVec ⟨Int Int Int⟩]`): the concatenated arity is (tuple arity × the container's runtime length), which no static type carries
+14: @[1 2 3 4 5 6] : [PVec Int]
+15: (panic "select: index 3 out of bounds for the vector of length 3 (at `3`)").* : [PVec Int]
+16: ERROR: select: `0*` — `*` deletes the layer the step before it produced, and an ORDINAL step produces no layer (it selects a position, it does not add a level). Star a named step instead (`x{a.b*}`), or select the element first and flatten separately
+17: @[@[1 2 3]] : ⟨[PVec Int]⟩
+18: @[@[1 2] @[3]] : [PVec [PVec Int]]
+19: @[@[1 2] @[3] @[4]] : [PVec [PVec Int]]
+20: @[1 2 3 4] : [PVec Int]
+21: ERROR: Unbound variable
+22: ERROR: Could not infer type
+
+--- 6 errors ---
