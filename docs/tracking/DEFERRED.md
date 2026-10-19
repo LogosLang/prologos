@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 192**
+> ### **NEXT FREE: 193**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -8261,6 +8261,19 @@ consequences for this entry:
   derivation label) pairs at the answer boundary, so labels must be in bijection with derivations: per call instance,
   with failed derivations as nogoods.
 
+**Addendum 2026-10-19 (BSP-LE 3, owner decision BL-7): ground fact rows are data.** The owner, verbatim: *"Ground fact
+rows are data, principally. So I don't see the need for them to be taken as assumptions and moved off any
+fast-path."* `docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-10-19_BSP-LE_3_DECISIONS.md` § *BL-7 decision* (branch `bsple3-tabling`, `0c0d1aa3`).
+- Today the on-network path gives every matching fact row its own ATMS assumption and worldview bit
+  (`racket/prologos/relations.rkt:2644-2660`), and every matching clause one too (`:2725-2743`). Bindings are written
+  one tuple at a time into shared scope cells, so alternatives are kept apart by worldview bits.
+- **The fact-row site is now outside the decided meaning.** Stage A's D.1 owes a binding carrier that brings many rows
+  to later goals as data. The conjecture is relation-valued goal answers, a bag of binding rows per goal. D.1 places it
+  in Stage A or with Stage B's tables.
+- **The clause site is BL-8** (pending, posed at D.1). If it goes the same way, assumptions remain only at `not` and
+  guards (`:2215`, `:2261`).
+- Non-ground `||` rows are accepted silently today: **192**.
+
 ### 178. ⬜ BSP'S TIER-1 FLUSH RETURNS A NETWORK THAT IS NOT A FIXPOINT — it fires the fire-once, empty-input propagators, then clears the whole worklist, discarding the dependents its own writes enqueued (`propagator.rkt:3431-3445`)
 
 **Found by** PAR 4's D.3 round: critics C2 (reality check) and C5 (theory), independently. Reproduced by hand on
@@ -8812,3 +8825,41 @@ differential) is 187/188.
   191 is latent in the corpus: `racket/prologos/lib/examples/foray.prologos:505-507` (`defr movies : VHS`) holds three
   `false` fact rows. The only query grounds that column (`:1247`), but `solve (movies r title year)` would print `none`.
 
+### 192. ⬜ A NON-GROUND TERM IN A `||` FACT ROW IS ACCEPTED SILENTLY, AND ITS COLUMN PRINTS `unknown` — `defr n2 [?x ?y] || 1 ?y` then `solve (n2 ?a ?b)` prints `@[{:a 1, :b unknown} {:a 2, :b 3}] : [PVec {:a Int :b Int}]`, and `solve (n2 1 5)` prints `@[]`
+
+**Found by** BSP-LE 3's decision BL-7 (owner, 2026-10-19: *"Ground fact rows are data, principally … Our `defr` with
+`||` denote a grounded table of facts"*), `docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-10-19_BSP-LE_3_DECISIONS.md` § *BL-7 decision* (branch `bsple3-tabling`, `0c0d1aa3`). Probe: `docs/tracking/tracks/BSP-LE/BSP-LE_3/research/decisions/bl7/bl7-ground-rows.{prologos,out}`,
+default `solve`, main's code. Line numbers below are the `.out`'s printed indices.
+
+**Observations**:
+- A bare name (`|| 1 y`) and a logic variable (`|| 1 ?y`) are both accepted at `defr`, with no error or warning.
+- The row prints `:b unknown` while the row type says `:b Int` (`1:`, `3:`). This holds through the fast path and
+  through the strategy dispatch alike (`11:`–`13:`).
+- The row is not a universally quantified Prolog fact either: `solve (n2 1 5)` prints `@[]` (`4:`).
+- Controls:
+  - ground rows (`6:`), a facts-plus-rules relation (`8:`) and a recursive relation (`10:`) are right;
+  - the Prolog fact `n4(1, _)` spelled as a rule, `defr n4 [?x ?y] &> (= x 1)`, gives `@[{:a 1}]` for
+    `solve (n4 ?a 5)` (`15:`).
+- **Demand**: 0 of 1109 `||` rows in 187 `.prologos` files hold a non-ground term. The scan has power: it finds both of
+  the probe's rows (`research/decisions/bl7/census-ground-rows.{py,out}`). `.rkt` test strings are not scanned.
+
+**Mechanism** (read in code at `0c0d1aa3`, not traced at runtime):
+- `extract-facts-and-clauses` stores each row's AST terms as they are (`racket/prologos/relations.rkt:903-930`). Nothing
+  checks that a row is ground.
+- The schema'd relations' gate `check-relation-schema-facts-only` (`racket/prologos/driver.rkt:525`) refuses rule
+  clauses. Its message says "fully-ground rows" (`:530-531`), but it does not check groundness, and unschema'd relations
+  have no gate.
+- `ground->prologos-expr` prints any term it does not recognize as `unknown` (`racket/prologos/reduction.rkt:355`),
+  consistent with the output.
+
+**Fix shape** (follows from the decided meaning): refuse a non-ground term in a `||` row at registration.
+- The message names the relation, the row and the column, and points at the `&>` spelling (`n4` above).
+- A bare name that resolves to no definition is the same error.
+- Test both forms beside a ground control.
+- Bulk import (`:from`, `:source`) must enforce the same rule at load.
+
+**When**: low cost, any time; before Rel Track 2's bulk import.
+
+**Owner**: Rel Track 2. Registration and ingest are its files (kickoff
+`docs/tracking/tracks/REL/REL_2/handoffs/2026-10-19_REL_2_KICKOFF.md` §3.1, branch `rel2-fact-store`). The `driver.rkt`
+gate is PAR 4's file, so it is requested by note.
