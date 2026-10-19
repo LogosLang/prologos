@@ -489,3 +489,26 @@ are in [`../README.md`](../README.md).
   check.
 - **Next**: UC-7 (pin B as generated laws), UC-8 (SB-1/SB-2 under B), UC-9 (S's scope), the typing-core comment; DEFERRED
   115 addendum + SB-3 filing on main.
+
+### P4e-1b-vi-F — Q_U62 = B pinned; SB-1 / SB-2's remedies under B — `3fcb720a` (2026-10-19)
+- **Why**: the owner decided B "for now". B was already the code's behaviour, so F makes it a
+  contract and corrects the two refusals whose remedies were false or missing under B (UC-7, UC-8, UC-9).
+- **What shipped**: [§1b-vi-F](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-f):
+  - 50 `sub-block` laws + 23 hand rows (stage F; size pin 129 / 194, predicted).
+  - The dup refusal no longer offers `^` where an element heads several branches. It kept the BRANCHES
+    apart: `fleet{0.meta^.id 0.net^.tls 1.meta^.id 1.net^.tls}` → a 4-tuple. It now offers grouping
+    each element's branches, only where that resolves the collision (pairwise-distinct ordinals).
+  - The all-ordinal L4 refusal offers grouping where the rests can be wrapped.
+  - S's scope is stated in Q_U61.
+  - Acceptance M18.
+  - Every remedy was run per family (`*`, `*_`, `*-`, `*-_`; probe-1bvi-ai, 40 lines).
+  - Battery + acceptance 701 / 701; run-file --check 116 / 116.
+  - Mutations F1–F7 each red on their own rows; S+ at either twin seat turns 64 / 63 red.
+- **Surprise**: SB-4, a pre-existing VF-3-class defect. On a vector-only path, the all-ordinal L4 refusal
+  offers two remedies that cannot be spelled there ("keep a key", and `vhm{0.{0}^ 0.{0}}` is a parse
+  error). It is filed with SB-3.
+- **Self-correction**: `'cross` was first written as "more than one ordinal", which would offer a grouping
+  that still collides (`fleet{0.meta^.id* 0.meta^.id* 1.meta^.id*}`). Tightened before the commit and
+  pinned (SB1-c1b, F3).
+- **Next**: the DEFERRED 115 addendum (DC-2) and the SB-3 / SB-4 filing on main; then the 1b-vi close
+  (the `pre` column and `1bvi-stage` scaffolding retire), then P4e-2.

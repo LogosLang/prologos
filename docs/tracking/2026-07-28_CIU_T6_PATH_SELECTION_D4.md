@@ -3465,6 +3465,14 @@ items of the hold-point, ruled before P4a opened:
   by probe-1bvi-ac (45 lines; `t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}`, `ot := @[t5's value]`,
   `ot2 := @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]`, `vhm := @[@[{:x 1}] @[{:y 2}]]`).
 
+  **Scope of S (stated 2026-10-19, when [Q_U62](#q-u62) was decided B; UC-9).** S governs the
+  ordinal branch's OWN step chain: the steps from the head to its star, and the chain may pass
+  through a sub-block that the star follows (`ot{0.a^.{b}*}` → `{:c …}`, the same as
+  `ot{0.a^.b*}`: probe-1bvi-ah:9/10). A star INSIDE a sub-block after the head belongs to the
+  sub-block's branch. It lands in the sub-level (Q_U49), and the sub-level is the element's one
+  component: `ot{0.a^.{b*}}` → `@[{:c …}]` (ae:9) vs `ot{0.a^.b*}` → `{:c …}` (ae:10). The spec
+  states neither S nor this scope; the note is proposed to the owner (UC-4), not applied.
+
   **The rules on record.** Spec §3.3: an ordinal branch is a KEYLESS component, honestly nested
   (`ot{0.a^}` → `@[{:b …}]`, measured). [Q_U47](#q-u47): the join lands as the component the
   REMAINDER (branch − star − sₙ) would produce — keyed iff the remainder names a key; "an ordinal
@@ -3857,7 +3865,7 @@ items of the hold-point, ruled before P4a opened:
   Correctness favours B mildly (no new rule; an oracle). Ergonomics: B's rule is one local sentence
   (DC-1); its cost is DC-5.
 
-  **Left open by B (PENDING, non-blocking; done after the decision):**
+  **Left open by B (non-blocking; done after the decision — UC-7, UC-8 and UC-9 at [1b-vi-F](#p4e-1b-vi-f)):**
   - **UC-7** pin B as generated laws — UC-1's grid as `wrapped` rows in the stage table;
   - **UC-8** SB-1 and SB-2 under B — the remedy "group each element's branches in one sub-block after
     its ordinal" (ae:42, ae:67, ae:36), offered only where every branch is ordinal-headed and the
@@ -10034,6 +10042,7 @@ scaffolding for the slicing, not a permanent mechanism.
 | **1b-vi-E** ✅ `a41f8362` | [Q_U61](#q-u61)'s S ([design, findings, VAG](#p4e-1b-vi-e)): an ordinal head passes a keyless star landing through at every depth — one predicate (`select-steps-yield-bare-join?` + `select-step-names-no-key?`), one arm per twin subsuming D-2a's arm and seat B's splice (deleted); the dup refusal names S's cost and the tuple spelling (`select-fail` field `ordinal`). 187 rows; 694 / 694; acceptance 112 / 112. Mutations: names 52, typing 11, reduction 9, ordinal 2 | ✅ |
 | **verify** ✅ `0988a4f0` | [adversarial round, adjudicated](#p4e-1b-vi-verify): 4 lenses at `64368197`, 36 raw → 34 survive, 2 killed. 3 BLOCKING fixed — VF-1 a whole-file abort (ω ancestor of a total collapse; parser refusal, 167's waypoint), VF-2 a twin value/type split (reduction's `asort`), VF-3 the ordinal-level prose (E's sentence among it); VF-4/VF-5 + 9 more fixed; 2 filed (179, 180) + addenda to 167/168; Q_U62 posed. Stage V: 250 rows (106 hand, 144 law); 695 / 695; acceptance 112 / 112; 10 mutations red | ✅ |
 | **gate** ✅ `83fe4fb4` | main merged in clean (`9d0dea51`; one shared file, main's 3 hunks exactly); full suite at `9d0dea51`: **10 426 / 502 files, all pass**, reconciled file by file against main's 10 394 (+8 `test-path-selection`, +24 `-acceptance` — exactly the branch's two test files); **checkpoint merge to main `83fe4fb4`**, its tree byte-identical to the gated tree; clean merge tree 697 / 697 + acceptance 112 / 112. NEXT: [Q_U62](#q-u62) (pending), then the 1b-vi close (the `pre` column and `1bvi-stage` retire, above) | ✅ |
+| **F** ✅ `3fcb720a` | [Q_U62 = B pinned; SB-1 / SB-2 under B](#p4e-1b-vi-f): B made a contract (50 `sub-block` laws + 12 hand rows); the dup refusal stops offering `^` where an element heads several branches (it kept the BRANCHES apart, a 4-tuple) and offers grouping where it resolves; the all-ordinal L4 offers grouping where spellable; S's scope stated in Q_U61; acceptance M18. Every remedy run per family (probe-1bvi-ai). SB-4 found (pre-existing, filed with SB-3). | battery + acceptance **701 / 701**; `run-file --check` 116 / 116; mutations F1–F7 each red on their own rows (F6 / F7, S+ at either twin seat: 64 / 63) |
 
 Per-phase completion, in order (DESIGN_METHODOLOGY Stage 4): tests → commit → this tracker
 → the track LOG (dailies: a pointer) → proceed.
@@ -10588,6 +10597,81 @@ they were emitted.
 | (b) complete | 45 rows + 18 laws + a size pin + 10 mutations; every remedy run | the ordinal fact is CLASSIFIED by a function that must mirror the walkers' arm order (VF3-collapse shows the cost of not mirroring); it would be correct by construction if the walkers RETURNED the fact with their components — the same twin-walker drift the off-network walkers owe PPN's on-network walk; recorded as pressure on that migration, not filed separately |
 | (c) vision-advancing | a crash and a silent split removed; prose true on every measured population | VF-1 is a waypoint (167), not the meaning; Q_U62 is open |
 | (d) drift risks | three "unreachable"/"by construction" comments were wrong in this slice | each corrected comment now cites the probe that measured it |
+
+<a id="p4e-1b-vi-f"></a>
+##### §5.P4e-1b-vi-F — Q_U62 = B PINNED; SB-1 / SB-2 UNDER B  (`3fcb720a`, 2026-10-19)
+
+**What.** [Q_U62](#q-u62) = B was already the code's behaviour, so F does not change the semantics.
+It makes B a pinned contract and corrects the two refusals whose remedies were false or missing
+once one element heads several branches. Probe: research/P4e-1b-vi/probe-1bvi-ai (40 lines at
+`3fcb720a`; `ai:N` = its line N).
+
+- **B as a contract (UC-7).** A `sub-block` law family states `ot{0.P.{X}}` ≡ `t5{P.{X}}`, wrapped
+  as the element's one component. It covers every star family over Map contents and `*` / `*-`
+  over `ov3`'s vector contents, at each kept/dissolved assignment of P. The 50 rows were predicted
+  before the run (7 assignments × 6 families + 4 × 2). Twelve hand rows (U62-1..12) pin the
+  examples the decision was argued on: the wrap (`ot{0.a^.{b*}}` → `@[{:c …}]`, ai:35;
+  `oo{0.{0.a^.b*}}`, ai:36), the tuple of records (`ot2{0.a^.{b*} 1.a^.{b*}}` →
+  `@[{:k 1} {:k 2}]`, ai:37), records of different shapes (`fleet{0.{meta^.id* net^.tls*} 1.{meta^.id*}}`
+  → `@[{:n 1, :port 443} {:n 2}]`, ai:38), DC-3's broadcast equivalence, DC-1's factored splice,
+  and L★ with a kept key (DC-2's side that holds).
+- **SB-1, corrected (UC-8).** With one ordinal heading several branches, the dup refusal's `^`
+  remedy kept each BRANCH apart: `fleet{0.meta^.id 0.net^.tls 1.meta^.id 1.net^.tls}` →
+  `@[{:id {:n 1}} {:tls {:port 443}} {:id {:n 2}} {:tls {:port 8443}}]` (ai:8), a 4-tuple, and
+  "a tuple of the elements" was a tuple of the branches. Now the level fact carries `'multi`. The
+  `^` remedy is withheld, the sentence says "of the branches", and grouping is offered where it
+  resolves the collision: `fleet{0.{meta^.id* net^.tls*} 1.{meta^.id* net^.tls*}}` →
+  `@[{:n 1, :port 443} {:n 2, :port 8443}]` (ai:7). Measured for each family: `*-` ai:10, `*_`
+  ai:12, `*-_` ai:14. Grouping is offered only when the colliding branches sit under PAIRWISE-
+  DISTINCT ordinals (`'cross`). Within one element it cannot help (`fleet{0.meta^.id* 0.meta^.id*}`,
+  ai:15), and with two of three colliders under one ordinal it would still collide (ai:17).
+- **SB-2, corrected (UC-8).** The all-ordinal L4 refusal now also offers the grouping where the
+  rests can be wrapped (`'groupable`): `ot{0.a^.b^.c^.{m* n}}` → `@[{:n {:y 2}, :x 1}]` (ai:21);
+  `*_` ai:25, `*-` ai:27, `*-_` ai:30. A rest that opens with a sub-block cannot be grouped
+  (`vhm{0.{{0}*}}` does not parse), so `vhm{0.{0}* 0.{0}}` gets no grouping (ai:31). The existing
+  remedies still run on the new population: a key kept before each star ai:22, `^` ai:23, the
+  total family's `^` ai:28.
+- **S's scope stated (UC-9)** in [Q_U61](#q-u61)'s entry; the spec note is proposed, not applied.
+- **Acceptance M18:** braces scope a landing, shown on the file's own subjects: records of
+  different shapes, the broadcast, and the star after the braces. Plus the multi-branch
+  refusal, commented, with its remedy run.
+
+**Finding SB-4 (pre-existing, filed with SB-3).** On a vector-only path, the all-ordinal L4 refusal
+offers two remedies, and neither can be spelled there: "keep a key before each star" (the path
+has no key) and "end the branch with `^`" (`vhm{0.{0}^ 0.{0}}` is a parse error, ai:32). The working
+remedy is dropping the star, `vhm{0.{0} 0.{0}}` (the shape of ai:19), or the own-block route. It
+came from VF-3's arm in `0988a4f0`, and it is the same class as SB-3: key- and postfix-shaped advice
+on paths made only of ordinals.
+
+**Mutations F1–F7** (`mutate-F.sh`; each file restored under checksum) — each red on its own rows:
+
+| mutation | rows red |
+|---|---|
+| F1: SB-1's grouping arm off | SB1, SB1-c1 + the render invariant |
+| F2: "of the branches" off | SB1, SB1-c1, SB1-c1b, SB1-c2 + the render invariant |
+| F3: `'cross` loosened to "more than one ordinal" | SB1-c1b |
+| F4: SB-2's clause off | SB2 + the render invariant |
+| F5: `'groupable` ignores a sub-block rest | SB2-c |
+| F6: a trailing sub-block passes at the TYPING seat | 64 rows: U62-1..9, U62-12, the `sub-block` laws, … |
+| F7: the same at the REDUCTION seat | 63 rows |
+
+F6 and F7 are cruder than S+: they pass a trailing sub-block whatever the chain names, so U62-12
+(a kept key) goes red as well. The rows that S+ itself would flip are U62-1..6 and the
+dissolved-assignment laws. Both twins are pinned independently.
+
+*Self-corrections.* (1) `'cross` was first written as "more than one ordinal is involved". On
+review, `fleet{0.meta^.id* 0.meta^.id* 1.meta^.id*}` would have been offered a grouping that still
+collides. It now requires pairwise-distinct ordinals, pinned by SB1-c1b and F3. (2) A scripted
+ledger edit truncated this file (−8 716 lines, uncommitted). It was caught by the diff stat,
+restored, and redone behind a size assertion. (3) A LOG heading carried a hash I had typed and
+not read back; it was caught by `git cat-file` before the commit.
+
+| VAG question | catalogue | challenge — could it be more aligned? |
+|---|---|---|
+| (a) on-network | no new state; `'multi` / `'groupable` / `'cross` are pure functions of the branch lists | the level facts are a third walker mirroring the two twins' arm order (the verify's (b)); one on-network walker would make them consistent by construction |
+| (b) complete | 23 hand rows + 50 laws + 7 mutations; every remedy run per family | SB-4 shows the arm's remedies are still chosen by shape flags, not by whether the user's path can spell them; a remedy generator that tries its own output would close the class |
+| (c) vision-advancing | a decided meaning is now a pinned law; two messages true on every measured population | the L★ side condition (DC-2) is a debt for P5's normal forms; until then nothing rewrites stars, so it cannot fire |
+| (d) drift risks | the ordinal-head comment called the matter undecided; now it states the decision | F6/F7 show the decision lives in one predicate per twin; a future "simplification" that widens it to sub-blocks flips 63 pins, by design |
 
 ##### §5.P4e-1b-v — WHAT SHIPPED  (A → B1 → B1b → B2a → verify, 2026-08-13)
 
