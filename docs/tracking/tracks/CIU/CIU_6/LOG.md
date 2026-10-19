@@ -470,3 +470,22 @@ are in [`../README.md`](../README.md).
   `x{N}:{X}`, S+ makes it a synonym for the unfactored chains, and R leaves it unassigned. B's only extra
   expressivity over R is records of different shapes per element (ae:67).
 - **Next**: the owner's decision — B, S+ or R.
+
+### Q_U62 DECIDED = B (braces scope a landing); the decision critiqued on the owner's four dimensions — `93f36b3a` (2026-10-19)
+- **Why / decision**: the owner (2026-10-19 01:33) — *"On the language design front, I want to balance ergonomics,
+  expressivity, composition, and correctness. I think I'm landing B still as well. Happy for a critique or pushback on
+  these dimensions and choices, but if B is clear on this, then let's go with that for now."*
+- **What shipped**: [the decision](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62) and its critique
+  ([DC-1…7](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62-dc)), measured by probe-1bvi-ah: under B the
+  SPLICED reading is also factored, `fleet{0.{meta^.id net^.tls}*}` → `{:n 1, :port 443}` ≡ the unfactored chains
+  (DC-1: B's rule is one sentence — a star inside the braces lands in the element, a star after them escapes); L★
+  (`x{p* q*} ≡ x{p q}*`) holds at key heads and with a kept key but fails across an ordinal head's braces exactly where
+  B and S+ disagree (DC-2, a side condition for P5 → DEFERRED 115 addendum); `x{N.{X} M.{X}}` ≡ `x{N M}:{X}` (DC-3, a
+  normal-form question for P5, DC-7). Verdict: B is clear on all four dimensions.
+- **Surprise / correction**: DC-2 is a real cost I had not stated before measuring — B's star-position semantics is
+  exactly what breaks L★ at one shape. And DC-4 corrects a tempting overclaim: S+ would not be riskier to build (one
+  widened shared predicate); B's correctness edge is that it needs no rule. Process slip, caught before commit: a
+  scripted ledger edit truncated the D4 (−8 716 lines, uncommitted); restored from `1d254b21` and redone with a size
+  check.
+- **Next**: UC-7 (pin B as generated laws), UC-8 (SB-1/SB-2 under B), UC-9 (S's scope), the typing-core comment; DEFERRED
+  115 addendum + SB-3 filing on main.

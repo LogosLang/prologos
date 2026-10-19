@@ -3516,12 +3516,23 @@ items of the hold-point, ruled before P4a opened:
   **Next free Q-label: U62.**
 
 - <a id="q-u62"></a>**Q_U62 — AN ORDINAL HEAD, THEN A SUB-BLOCK THAT HOLDS THE STAR: DOES
-  Q_U61'S PASS-THROUGH CROSS THE SUB-BLOCK? [⏳ OWNER LEAN B (slight), 2026-10-19 — "I do think B
-  has a slight lean than the S+ reading." Joint with my lean; under critique ([UC-n](#q-u62-critique)).
-  2026-10-19 01:11 the owner asked for R worked out beside B before weighing in — [done](#q-u62-r);
-  decision next. Posed 2026-10-18 at the [1b-vi verify](#p4e-1b-vi-verify) (finding VS-3); opened
-  with worked examples the same day at the owner's request — "walk through the design space in
-  played out examples". Not a regression: E changed none of these.]**
+  Q_U61'S PASS-THROUGH CROSS THE SUB-BLOCK? [✅ DECIDED 2026-10-19, owner — "On the language design
+  front, I want to balance ergonomics, expressivity, composition, and correctness. I think I'm landing
+  B still as well. Happy for a critique or pushback on these dimensions and choices, but if B is clear
+  on this, then let's go with that for now." Critiqued on those four dimensions ([DC-n](#q-u62-dc)):
+  B is clear. Earlier the same night: OWNER LEAN B (slight), critiqued ([UC-n](#q-u62-critique)); R
+  worked out beside B at the owner's request ([R beside B](#q-u62-r)). Posed 2026-10-18 at the
+  [1b-vi verify](#p4e-1b-vi-verify) (finding VS-3); opened with worked examples the same day at the
+  owner's request — "walk through the design space in played out examples". Not a regression: E
+  changed none of these.]**
+
+  **DECIDED — B: braces scope a landing.** A star inside an ordinal-headed sub-block lands in the
+  sub-level, and the sub-level is the element's ONE tuple component (Q_U49's "enclosing level", spec
+  §3.3's slot). A star in the ordinal branch's own chain — including one written after the braces —
+  passes through (S, Q_U61). Both readings stay spellable and factored: one component `x{N.{X}}`
+  (≡ `x{N}:{X}`), spliced `x{N.{X'}*}` with the stars moved outside the braces (DC-1). B is what the
+  code already does, so no semantics change; the follow-ups are pins, two messages and a statement of
+  S's scope (UC-7…9, DC-7).
 
   **The question in one line.** `ot{0.a^.b*}` splices (S, [Q_U61](#q-u61)); `ot{0.a^.{b*}}` wraps
   (today). Is the wrap the rule (B), or a gap S should close (S+)?
@@ -3799,12 +3810,61 @@ items of the hold-point, ruled before P4a opened:
   - *Rejected variant R2* — refuse every ordinal-headed sub-block holding any star: it would also refuse
     ag:23 and ag:24, where B and S+ agree, so it forecloses nothing more and costs more.
 
+  <a id="q-u62-dc"></a>**Critique of the decision on the owner's four dimensions (DC-n), 2026-10-19** —
+  research/P4e-1b-vi/probe-1bvi-ah (25 lines at `b511593d`); `ah:N` = its line N.
+  - **DC-1 — ergonomics and expressivity, for B (a prediction, confirmed).** Under B the SPLICED reading
+    is spelled factored too: keep the keys inside the braces and put one star after them.
+    `fleet{0.{meta^.id net^.tls}*}` → `{:n 1, :port 443}` ah:4, ≡ the unfactored
+    `fleet{0.meta^.id* 0.net^.tls*}` → `{:n 1, :port 443}` ah:5 · `ot{0.a^.b^.c^.{m n}*}` → `{:y 2, :x 1}`
+    ah:7 ≡ ah:8 · `ot{0.a^.{b}*}` → `{:c …}` ah:9 ≡ `ot{0.a^.b*}` ah:10. So B's whole rule for a user is
+    one sentence — *a star inside the braces lands in the element; a star after the braces escapes it* —
+    and the verbosity objection (repeating `0.` for each subtree) dissolves. Limit: the outer star needs
+    container contents; over lifted scalars it is a permanent guided refusal
+    (`fleet{0.{meta^.id* net^.tls*}*}`, ah:12).
+  - **DC-2 — composition, against B (measured).** [Q_U45](#q-u45)'s L★, `x{p₁* … pₙ*} ≡ x{p₁ … pₙ}*` for
+    Map contents (the law [Q_U49](#q-u49) cites), does not survive an ordinal head's braces under B.
+    It holds at key heads (`t5{a.b.c.{m* n*}}` ≡ `t5{a.b.c.{m n}*}`, ah:17/18; dissolved, ah:19/20) and at
+    an ordinal head with a kept key (`@[{:a {:b {:c {:y 2, :x 1}}}}]` both sides, ah:21/22); it FAILS
+    exactly where B and S+ disagree — `ot{0.a^.b^.c^.{m* n*}}` → `@[{:y 2, :x 1}]` ah:23 vs
+    `ot{0.a^.b^.c^.{m n}*}` → `{:y 2, :x 1}` ah:24. Under S+ it would hold. This is DC-1's other face: at an
+    ordinal head the star's position relative to the braces carries meaning, which is what lets both
+    readings be written, and what a star-moving rewrite must respect. Consequence: L★ as a REWRITE (P5's
+    normal forms; messages printing a factored spelling) needs a side condition — not across an
+    ordinal head's braces when every ancestor between them dissolves. Filed as an addendum to
+    DEFERRED 115 (L2's star side condition; P5 owns both).
+  - **DC-3 — composition, for B (measured instances).** B adds an equivalence between ordinal sub-blocks and
+    broadcast, `x{N.{X} M.{X}}` ≡ `x{N M}:{X}`: `@[{:k 1} {:k 2}]` both, ah:13/14; `@[{:n 1} {:n 2}]`
+    both, ah:15/16; and 26 / 26 single-element shapes (probe-1bvi-ag). Under S+ it fails. It gives P5's
+    L2 normal form ("ω steps outermost-shared", spec §4) something to choose: the broadcast form when the
+    sub-blocks agree, the sub-blocks when they differ (ae:67). PENDING for P5 as **DC-7** (non-blocking).
+  - **DC-4 — correctness.** B is today's tested behaviour, and its law (UC-1) is a test oracle; but no pin
+    holds it, so a later edit could flip it unnoticed — UC-7 pins it now. A later CHANGE of decision would
+    surface as a type change (`⟨{…}⟩` ↔ `{…}`), so consumers fail type-checking rather than run wrong.
+    Exactness: B's advantage is not implementation risk — S+ would be one widened shared predicate
+    (`select-steps-yield-bare-join?`, `syntax.rkt:1125`, read by both twins) — it is that B needs no new
+    rule at all. Open correctness debts: SB-1's false remedy (UC-8) and the comment at
+    `typing-core.rkt:2192` that calls this undecided.
+  - **DC-5 — ergonomics, against B (residual).** At an ordinal head braces are not mere grouping: adding
+    them changes the result (ae:9 vs ae:10), while after a dissolve at a key head they do not (ae:18/19).
+    Types surface it at the use site; SB-1's corrected message and an acceptance example teach the rule.
+  - **DC-6 — "for now".** Starting from B, a later change breaks programs written meanwhile (the
+    migration table above), at the type level. Acceptable with zero uses today. The natural moment to
+    revisit is P5's L★ side condition (DC-2) or first-class selectors (§7.5, where UC-2 argues for B).
+  **Is B clear on the four dimensions?** Yes. Expressivity: B is the strongest of the three — every S+
+  answer is spellable, factored (DC-1), and the different-shapes records exist only under B (ae:67).
+  Composition is a trade with a winner: B keeps an unconditional law (UC-1) and gains one (DC-3) at the
+  price of L★'s side condition at one shape (DC-2), where S+ keeps L★ but splits UC-1 in two cases.
+  Correctness favours B mildly (no new rule; an oracle). Ergonomics: B's rule is one local sentence
+  (DC-1); its cost is DC-5.
+
   **Left open by B (PENDING, non-blocking; done after the decision):**
   - **UC-7** pin B as generated laws — UC-1's grid as `wrapped` rows in the stage table;
   - **UC-8** SB-1 and SB-2 under B — the remedy "group each element's branches in one sub-block after
     its ordinal" (ae:42, ae:67, ae:36), offered only where every branch is ordinal-headed and the
     grouping is spellable (a rest that already opens with a sub-block cannot be grouped — to measure);
   - **UC-9** restate S's scope in [Q_U61](#q-u61)'s entry and propose the spec note (UC-4).
+  - **DC-7** (P5, non-blocking) — the normal form between `x{N.{X} M.{X}}` and `x{N M}:{X}` (DC-3), and
+    L★'s side condition at an ordinal head (DC-2, DEFERRED 115).
 
 - <a id="q-u43"></a>**⭐ Q_U43 — THE L4 SORT CHECK MOVES TO TYPING FOR STAR-BEARING
   BRANCHES, AS [Q_U38](#q-u38)'s COROLLARY [owner, 2026-08-11 — "move the sort
