@@ -1,0 +1,37 @@
+ns probe-1bvi-ah
+
+;; Q_U62 = B, the decided reading under critique (DC-n). Prediction under test: under B the
+;; SPLICED reading also has a factored spelling — keep the keys inside the braces and put ONE star
+;; after them, `x{N.{p q}*}` (a star outside the braces is the ordinal branch's own star, which S
+;; passes through; Q_U49 splices Map contents). Measured at b511593d.
+
+def t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}
+def ot := @[{:a {:b {:c {:m {:x 1} :n {:y 2}}}}}]
+def ot2 := @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]
+def fleet := @[{:meta {:id {:n 1}} :net {:tls {:port 443}} :tags @[1 2]} {:meta {:id {:n 2}} :net {:tls {:port 8443}} :tags @[3]}]
+
+;; ---- the factored spliced spelling, beside the unfactored one S decides
+fleet{0.{meta^.id net^.tls}*}
+fleet{0.meta^.id* 0.net^.tls*}
+fleet{0.{meta^.id net^.tls}}
+ot{0.a^.b^.c^.{m n}*}
+ot{0.a^.b^.c^.m* 0.a^.b^.c^.n*}
+ot{0.a^.{b}*}
+ot{0.a^.b*}
+ot2{0.a^.{b}* 1.a^.{b}*}
+;; ---- the star after braces whose branches already lift (scalar contents)
+fleet{0.{meta^.id* net^.tls*}*}
+;; ---- the one-component synonym B adds, x{N.{X} M.{X}} ≡ x{N M}:{X}
+ot2{0.a^.{b*} 1.a^.{b*}}
+ot2{0 1}:{a^.b*}
+fleet{0.{meta^.id*} 1.{meta^.id*}}
+fleet{0 1}:{meta^.id*}
+;; ---- L★ (Q_U45/Q_U49: x{p* q*} ≡ x{p q}* for Map contents) across braces, by head and ancestors
+t5{a.b.c.{m* n*}}
+t5{a.b.c.{m n}*}
+t5{a^.b^.c^.{m* n*}}
+t5{a^.b^.c^.{m n}*}
+ot{0.a.b.c.{m* n*}}
+ot{0.a.b.c.{m n}*}
+ot{0.a^.b^.c^.{m* n*}}
+ot{0.a^.b^.c^.{m n}*}
