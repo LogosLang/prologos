@@ -7830,8 +7830,8 @@ not determined.
 
 **Addendum 2026-10-19 (PAR 4 O-16 DECIDED (a), part 3).** Every budget exhaustion becomes a classified outcome of
 the command that ran out, on one channel, and never a whole-file abort. The fix shape above already has that form.
-Record: PAR 4 D.2 §15 O-16 (`docs/tracking/tracks/PAR/PAR_4/2026-10-15_PAR_4_D2_DESIGN.md`, on branch
-`par4-arena-executors` until PAR 4's next checkpoint).
+Record: PAR 4 D.2 §15 O-16 (`docs/tracking/tracks/PAR/PAR_4/2026-10-15_PAR_4_D2_DESIGN.md`, on main since PAR 4
+checkpoint 3 `dba9f502`).
 
 **Record**: `docs/tracking/tracks/PPN/PPN_4C/audits/2026-10-13_PPN_4C_4B5b_GROUNDING_AUDIT.md` GA-5 (on branch
 `ppn4c-elaboration-on-network` until its next checkpoint merge); probes `…/PPN_4C/research/4B5b/p23-*`–`p26-*`.
@@ -8115,6 +8115,19 @@ wrong answers fixed sooner.
 - **Owner decision pending**: whether PAR 4 P1a or BSP-LE 3 owns the fix (O-17 in the synthesis). Record: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §5.7, §6
   (on main since PAR 4 checkpoint 2 `8a11ee1a`).
 
+**Addendum 2026-10-19: owner decision O-17 (a). BSP-LE Track 3 owns the fix, as its Stage A.** This supersedes the
+**When** line above.
+- The fix runs as a concurrent track: branch `bsple3-tabling`, worktree `.claude/worktrees/bsple3-tabling`, kickoff
+  `docs/tracking/tracks/BSP_LE/BSP_LE_3/2026-10-19_BSP_LE_3_KICKOFF.md` on that branch.
+- **Stage A** is the six parts (a)–(f) above, plus the DFS-vs-ATMS answer-set differential with a deliberate-error
+  row. It checkpoints to main before any tabling work. Track 3's tables share the label lattice (PUnify Part 3 §9.6),
+  with the read rule pinned to label ⊆ W.
+- **PAR 4 P1a gives up rows 1–3.** PAR 4 owes the Tier-1 predicate seam in P0.5 (W2-6-3: BSP takes the Tier-1 flush
+  when the worldview cell is zero, `propagator.rkt:3410-3430`), and the projection (`:978-987`) and tag-gate
+  (`:1993`) sites on request.
+- **An exhaustion inside a branch is not a nogood** (PAR 4 O-16 part 3; DEFERRED 184's solver half).
+- **Record**: PAR 4 D.2 §15 O-17 (on main since PAR 4 checkpoint 3 `dba9f502`).
+
 ### 178. ⬜ BSP'S TIER-1 FLUSH RETURNS A NETWORK THAT IS NOT A FIXPOINT — it fires the fire-once, empty-input propagators, then clears the whole worklist, discarding the dependents its own writes enqueued (`propagator.rkt:3431-3445`)
 
 **Found by** PAR 4's D.3 round: critics C2 (reality check) and C5 (theory), independently. Reproduced by hand on
@@ -8276,8 +8289,8 @@ decided with O-16.
 - **Natural home**: BSP-LE Track 5, Solver Language ("make `solver-config` knobs operational", `:timeout` included;
   `docs/tracking/2026-03-21_BSP_LE_MASTER.md:203-213`). Who implements it is not decided; O-17 asks the same question
   for 177.
-- **Record**: PAR 4 D.2 §15 O-16 (`docs/tracking/tracks/PAR/PAR_4/2026-10-15_PAR_4_D2_DESIGN.md`, on branch
-  `par4-arena-executors` until PAR 4's next checkpoint).
+- **Record**: PAR 4 D.2 §15 O-16 (`docs/tracking/tracks/PAR/PAR_4/2026-10-15_PAR_4_D2_DESIGN.md`, on main since
+  PAR 4 checkpoint 3 `dba9f502`).
 
 ---
 
@@ -8335,7 +8348,7 @@ the library.
 - Inside an ATMS branch this meets DEFERRED 177's fix: ⊤ under ev_W is a nogood only for a *logical* contradiction.
 - The typing half is elaboration on the network (PPN 4C's ground).
 
-**When**: the solver half goes with whoever owns 177's fix (PAR 4 O-17); the typing half with PPN 4C, or a sweep.
-First, the census of `TYPING-FUEL-LIMIT` trips.
+**When**: the solver half goes with 177's fix, which BSP-LE Track 3 owns as its Stage A (PAR 4 O-17 DECIDED (a),
+2026-10-19). The typing half goes with PPN 4C, or a sweep. First, the census of `TYPING-FUEL-LIMIT` trips.
 
 **Record**: PAR 4 D.3 synthesis §5.6; PAR 4 D.2 §15 O-16, facts 1 and 4, and part 3.
