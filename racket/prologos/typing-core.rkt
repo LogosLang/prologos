@@ -1601,7 +1601,19 @@
                                             ;; 1b-vi-E [Q_U61] + verify VF-3: S's cost, named in
                                             ;; the refusal — 'all | 'mixed | #f, seen through
                                             ;; dissolves and terminal sub-blocks
-                                            (select-level-ordinal-fact branches)))
+                                            ;; 1b-vi-F [Q_U62] (SB-1): + 'cross when the branches
+                                            ;; that deliver `dup` sit under PAIRWISE-DISTINCT ordinal
+                                            ;; heads — only then does grouping each element's
+                                            ;; branches resolve it (`fleet{0.meta^.id* 0.meta^.id*}`
+                                            ;; cannot, nor can `… 0.meta^.id* 1.meta^.id*`)
+                                            (let* ([of (select-level-ordinal-fact branches)]
+                                                   [ix (for/list ([pb (in-list per)]
+                                                                  #:when (assq dup (cdr pb)))
+                                                         (let ([b (car pb)])
+                                                           (and (pair? b) (select-ord-step? (car b)) (cadr (car b)))))]
+                                                   [cross? (and (pair? ix) (pair? (cdr ix)) (andmap values ix)
+                                                                (= (length (remove-duplicates ix)) (length ix)))])
+                                              (if (and of cross?) (cons 'cross of) of))))
                     (values cs #f)))))
         (let-values ([(es bf) (select-branch-entries ctx tm (car bs) path '() sort)])
           (if bf
@@ -2191,12 +2203,13 @@
              ;; and Q_U49 places it at the ENCLOSING level — so descend exactly as the
              ;; bare-number arm below does, and the rest's own arms (the dissolve arm,
              ;; the star arm) place the join where a key-headed branch's would land:
-             ;; `ot{0.X}` ≡ `t5{X}` for every STEP CHAIN X. ⚠ Not for a SUB-BLOCK after the
-             ;; head (1b-vi verify VS-3, measured): `ot{0.a^.{b*}}` and `oo{0.{0.a^.b*}}`
-             ;; still wrap while `t5{a^.{b*}}` splices — the predicate recognises a
-             ;; `(sₙ ★)` tail only. Whether S extends there is posed as Q_U62, not
-             ;; decided here ("by construction" was claimed and measured false). `seen` stays unchanged (an
-             ;; ordinal is nameless — Q_U57). ONE arm for every family: a total
+             ;; `ot{0.X}` ≡ `t5{X}` for every STEP CHAIN X. NOT for a sub-block after the
+             ;; head, by DECISION — Q_U62 = B (owner, 2026-10-19): braces scope a landing.
+             ;; A star inside the braces lands in the sub-level (Q_U49's "enclosing level"),
+             ;; and the sub-level is this element's ONE component (the `else` arm below):
+             ;; `ot{0.P.{X}}` ≡ `t5{P.{X}}` wrapped, pinned as the `sub-block` laws. A star
+             ;; AFTER the braces is this branch's own and passes (`ot{0.a^.{b}*}` → `{:c …}`).
+             ;; `seen` stays unchanged (an ordinal is nameless — Q_U57). ONE arm for every family: a total
              ;; collapse passes because its ancestors are marked (this subsumes
              ;; 1b-vi-D-2a's arm), and depth 1 is 1b-iv's seat B. Seat B used to
              ;; splice HERE, after `select-below-field`, recognising only `(sₙ ★)`

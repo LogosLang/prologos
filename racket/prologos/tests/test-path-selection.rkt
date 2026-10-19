@@ -7656,7 +7656,12 @@
     ;; do not pass through, and a head beside a non-passing head.
     (define ords (if level?
                      (list #f '(passes head all key-tails all-head) '(passes head) '(passes all key-tails)
-                           '(passes head all all-head) '(wrap all-head) '(passes head wrap))
+                           '(passes head all all-head) '(wrap all-head) '(passes head wrap)
+                           ;; 1b-vi-F: an element heading several branches (SB-1 / SB-2)
+                           '(passes head all key-tails all-head multi groupable cross)
+                           '(passes head all key-tails all-head multi groupable)
+                           '(passes head all all-head multi)
+                           '(passes head wrap all-head multi groupable))
                      (list #f)))
     (for* ([cs (in-list sets)] [ord (in-list ords)])
       (check-not-exn
@@ -7698,14 +7703,27 @@
                 (when (memq 'all ord)
                   (check-false (regexp-match? #rx"keeps each surviving ancestor" msg)
                                (format "dup under ~s ~s offers `*-_` where every branch is ordinal: ~a" cs ord msg)))
-                (check-equal? (regexp-match? #rx"end EVERY branch here with `\\^`" msg) (and (memq 'key-tails ord) #t)
-                              (format "dup under ~s ~s: the `^` remedy iff every sₙ is a key: ~a" cs ord msg))
+                (check-equal? (regexp-match? #rx"end EVERY branch here with `\\^`" msg)
+                              (and (memq 'key-tails ord) (not (memq 'multi ord)) #t)
+                              (format "dup under ~s ~s: the `^` remedy iff every sₙ is a key and no element has two branches: ~a" cs ord msg))
+                ;; 1b-vi-F (SB-1): grouping iff an element heads several branches, grouping is
+                ;; spellable, and the collision crosses elements
+                (check-equal? (regexp-match? #rx"group each element's branches" msg)
+                              (and (memq 'passes ord) (memq 'multi ord) (memq 'groupable ord) (memq 'cross ord) #t)
+                              (format "dup under ~s ~s: the grouping remedy exactly where it is true: ~a" cs ord msg))
+                (when (memq 'multi ord)
+                  (check-false (regexp-match? #rx"a tuple of the elements" msg)
+                               (format "dup under ~s ~s: an element with two branches makes a tuple of BRANCHES: ~a" cs ord msg)))
                 (when (memq 'passes ord)
                   (check-true (regexp-match? #rx"cannot tell elements apart" msg)
                               (format "dup under ~s ~s must say provenance cannot help: ~a" cs ord msg))))
               (when (and ord (eq? kind 'star-l4-mixed) (memq 'all-head ord))
                 (check-false (regexp-match? #rx"drop a `\\^`" msg)
-                             (format "L4 under ~s ~s offers drop-a-`^` at a level of ordinal heads: ~a" cs ord msg)))])))
+                             (format "L4 under ~s ~s offers drop-a-`^` at a level of ordinal heads: ~a" cs ord msg))
+                ;; 1b-vi-F (SB-2)
+                (check-equal? (regexp-match? #rx"group its branches in ONE sub-block" msg)
+                              (and (memq 'multi ord) (memq 'groupable ord) #t)
+                              (format "L4 under ~s ~s: the grouping remedy exactly where it is spellable: ~a" cs ord msg)))])))
        (format "rendering ~a under ~s ~s must not raise" kind cs ord)))))
 
 (test-case "1b-iii-B1 reduction: the join concatenates in CANONICAL key order — the value layer, discriminating set"
@@ -9453,8 +9471,8 @@
 ;; (`"*-"` has no sentinel).
 ;; ===========================================================================
 
-(define 1bvi-stage 'V)   ;; the 1b-vi VERIFY round: four adversarial lenses, adjudicated (D4 #p4e-1b-vi-verify)
-(define 1bvi-stage-order '(A B C D E V))
+(define 1bvi-stage 'F)   ;; 1b-vi-F: Q_U62 = B — B pinned as laws; SB-1 / SB-2's remedies under B (D4 #q-u62)
+(define 1bvi-stage-order '(A B C D E V F))
 (define (1bvi-reached? s)
   (and s (<= (index-of 1bvi-stage-order s) (index-of 1bvi-stage-order 1bvi-stage))))
 
@@ -9495,8 +9513,11 @@
    "def rv := {:xs @[{:a {:k 1}} {:a {:k 2}}] :k 9}\n"
    "def w := {:v @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]}\n"
    "def mx := {:m {:x 1 :y 2} :a {:b @[@[1 2] @[3]]}}\n"
-   "def t3x := {:a {:b {:q {:r 1}}} :c {:k 1} :d {:k 2}}\n"))
-(define 1bvi-fixture-count 27)
+   "def t3x := {:a {:b {:q {:r 1}}} :c {:k 1} :d {:k 2}}\n"
+   ;; 1b-vi-F (Q_U62): a doubly-ordinal subject, and per-element records over a realistic one
+   "def oo := @[@[{:a {:b {:c {:m {:x 1} :n {:y 2}}}}}]]\n"
+   "def fleet := @[{:meta {:id {:n 1}} :net {:tls {:port 443}} :tags @[1 2]} {:meta {:id {:n 2}} :net {:tls {:port 8443}} :tags @[3]}]\n"))
+(define 1bvi-fixture-count 29)
 
 (define 1bvi-rows
   '(;; ---- E1–E10 under `*-` [Q_U48]: ≡ dissolve every ancestor, then `*`
@@ -9750,7 +9771,73 @@
     ("V-arrow_K" "mn{a*_ b}" #f (line "{:a-x 1, :b {:y 2}} : {:a-x Int :b {:y Int}}") #f)
     ;; ---- VF-5: Q_U55 over a `^..` branch names the spelling that produces the rename
     ("V-dotdot" "t5{a.b^..c*-}" V (refused (#rx"including the one `b\\^a` renames") ())
-             (refused (#rx"`b\\^a` [(]how `a[.]b\\^[.][.]` is read[)]") ()))))
+             (refused (#rx"`b\\^a` [(]how `a[.]b\\^[.][.]` is read[)]") ()))
+    ;; ================= 1b-vi-F — Q_U62 = B (D4 #q-u62) =================
+    ;; B is today's behaviour, so its pins are CONTROLS (they never flip); what flips at F
+    ;; are SB-1 / SB-2's messages. Values measured: probes 1bvi-ae / -ag / -ah.
+    ;; ---- braces scope a landing: a star INSIDE an ordinal-headed sub-block lands in the
+    ;; sub-level, which is the element's one tuple component (generated: the `sub-block` laws)
+    ("U62-1" "ot{0.a^.{b*}}" #f (line "@[{:c {:n {:y 2}, :m {:x 1}}}] : ⟨{:c {:m {:x Int} :n {:y Int}}}⟩") #f)
+    ("U62-2" "ot{0.{a^.b*}}" #f (line "@[{:c {:n {:y 2}, :m {:x 1}}}] : ⟨{:c {:m {:x Int} :n {:y Int}}}⟩") #f)
+    ("U62-3" "oo{0.{0.a^.b*}}" #f (line "@[{:c {:n {:y 2}, :m {:x 1}}}] : ⟨{:c {:m {:x Int} :n {:y Int}}}⟩") #f)
+    ("U62-4" "ot2{0.a^.{b*} 1.a^.{b*}}" #f (line "@[{:k 1} {:k 2}] : ⟨{:k Int} {:k Int}⟩") #f)
+    ("U62-5" "ot{0.a^.b^.c^.{m* n*}}" #f (line "@[{:y 2, :x 1}] : ⟨{:x Int :y Int}⟩") #f)
+    ("U62-6" "ov3{0.a^.b^.{c*}}" #f (line "@[@[@[@[1 2] @[3]]]] : ⟨⟨[PVec [PVec Int]]⟩⟩") #f)
+    ;; records of DIFFERENT shapes per element — spellable only under B (D4 ae:67)
+    ("U62-7" "fleet{0.{meta^.id* net^.tls*} 1.{meta^.id*}}" #f
+             (line "@[{:n 1, :port 443} {:n 2}] : ⟨{:n Int :port Int} {:n Int}⟩") #f)
+    ;; DC-3: ordinal sub-blocks ≡ a broadcast over the ordinal block
+    ("U62-8" "fleet{0.{meta^.id* net^.tls*} 1.{meta^.id* net^.tls*}}" #f (equiv "fleet{0 1}:{meta^.id* net^.tls*}") #f)
+    ("U62-9" "ot{0.a^.{b*}}" #f (equiv "ot{0}:{a^.{b*}}") #f)
+    ;; DC-1: the SPLICED reading, factored — the star moves outside the braces (S passes it)
+    ("U62-10" "fleet{0.{meta^.id net^.tls}*}" #f (equiv "fleet{0.meta^.id* 0.net^.tls*}") #f)
+    ("U62-11" "ot{0.a^.b^.c^.{m n}*}" #f (equiv "ot{0.a^.b^.c^.m* 0.a^.b^.c^.n*}") #f)
+    ;; DC-2: L★ (`x{p* q*}` ≡ `x{p q}*`) holds with a kept key; across the braces with every
+    ;; ancestor dissolved it does not (U62-5 wraps, U62-11's left side escapes) — DEFERRED 115
+    ("U62-12" "ot{0.a.b.c.{m* n*}}" #f (equiv "ot{0.a.b.c.{m n}*}") #f)
+    ;; ---- SB-1 (UC-8): "end EVERY branch with `^`" kept each BRANCH apart, not each element
+    ;; (measured: a 4-tuple), and "a tuple of the elements" was a tuple of the branches. Under
+    ;; B the remedy is grouping each element's branches — offered only when it is spellable and
+    ;; the colliding branches sit under DIFFERENT ordinals.
+    ("SB1" "fleet{0.meta^.id* 0.net^.tls* 1.meta^.id* 1.net^.tls*}" F
+           (refused (#rx"end EVERY branch here with `\\^`" #rx"a tuple of the elements") ())
+           (refused (#rx"duplicate output key `:n`"
+                     #rx"group each element's branches in ONE sub-block after its ordinal"
+                     #rx"`x[{]0[.][{]a\\^[.]b[*] c\\^[.]d[*][}] 1[.][{]a\\^[.]b[*] c\\^[.]d[*][}][}]`"
+                     #rx"keys collide only within one element"
+                     #rx"a tuple of the branches")
+                    (#rx"end EVERY branch here with `\\^`" #rx"a tuple of the elements")))
+    ("SB1-K1" "fleet{0.{meta^.id* net^.tls*} 1.{meta^.id* net^.tls*}}" #f
+              (line "@[{:n 1, :port 443} {:n 2, :port 8443}] : ⟨{:n Int :port Int} {:n Int :port Int}⟩") #f)
+    ("SB1-K2" "fleet{0.meta^.id 0.net^.tls 1.meta^.id 1.net^.tls}" #f
+              (line "@[{:id {:n 1}} {:tls {:port 443}} {:id {:n 2}} {:tls {:port 8443}}] : ⟨{:id {:n Int}} {:tls {:port Int}} {:id {:n Int}} {:tls {:port Int}}⟩") #f)
+    ;; within ONE element, grouping cannot help and `^` repeats the element (`@[{:n 1} {:n 1}]`)
+    ("SB1-c1" "fleet{0.meta^.id* 0.meta^.id*}" F
+              (refused (#rx"end EVERY branch here with `\\^`" #rx"a tuple of the elements") ())
+              (refused (#rx"duplicate output key `:n`" #rx"a tuple of the branches")
+                       (#rx"group each element" #rx"end EVERY branch here" #rx"a tuple of the elements")))
+    ;; two of the three colliders share element 0: grouping would still collide there
+    ("SB1-c1b" "fleet{0.meta^.id* 0.meta^.id* 1.meta^.id*}" #f
+               (refused (#rx"duplicate output key `:n`" #rx"a tuple of the branches") (#rx"group each element")) #f)
+    ;; a rest that opens with a sub-block cannot be grouped (`vhm{0.{{0}*}}` does not parse)
+    ("SB1-c2" "vhm{0.{0}* 0.{0}*}" F
+              (refused (#rx"duplicate output key `:x`" #rx"a tuple of the elements") ())
+              (refused (#rx"duplicate output key `:x`" #rx"a tuple of the branches")
+                       (#rx"group each element" #rx"a tuple of the elements")))
+    ;; ---- SB-2 (UC-8): the all-ordinal L4 refusal now offers the grouping that works
+    ("SB2" "ot{0.a^.b^.c^.m* 0.a^.b^.c^.n}" F
+           (refused (#rx"Here every branch is ordinal-headed") (#rx"group"))
+           (refused (#rx"Here every branch is ordinal-headed"
+                     #rx"group its branches in ONE sub-block after the ordinal"
+                     #rx"`x[{]0[.][{]a\\^[.]b[*] c[}][}]`")
+                    ()))
+    ;; a rest opening with a sub-block cannot be grouped: no grouping offered (`'groupable`)
+    ("SB2-c" "vhm{0.{0}* 0.{0}}" #f (refused (#rx"Here every branch is ordinal-headed") (#rx"group")) #f)
+    ("SB2-K" "ot{0.a^.b^.c^.{m* n}}" #f (line "@[{:n {:y 2}, :x 1}] : ⟨{:n {:y Int} :x Int}⟩") #f)
+    ;; ---- controls: ONE branch per element keeps the `^` remedy and gets no grouping
+    ("SB-c3" "ot2{0.a^.b* 1.a^.b*}" #f
+             (refused (#rx"end EVERY branch here with `\\^`" #rx"a tuple of the elements") (#rx"group")) #f)
+    ("SB-c4" "ot2{0.a^.b* 1.a^.b}" #f (refused (#rx"Here every branch is ordinal-headed") (#rx"group")) #f)))
 
 (define (1bvi-row-id r) (list-ref r 0))
 (define (1bvi-row-spelling r) (list-ref r 1))
@@ -9806,7 +9893,15 @@
               [modes (in-list (apply cartesian-product (for/list ([_ ancs]) '(kept dis ren))))]
               [fam (in-list (append (if (eq? base 'v3) '(star) '(caret caret-k star star-synth))
                                     ;; 1b-vi-E [Q_U61]: plain `*`, ordinal subjects only
-                                    (if (cadr entry) '(plain-star) '())))])
+                                    (if (cadr entry) '(plain-star) '())
+                                    ;; 1b-vi-F [Q_U62] = B: the star inside braces, ordinal subjects
+                                    (if (cadr entry) '(sub-block) '())))]
+              ;; B's law over kept / dissolved ancestors (probe-1bvi-af's grid); every family over
+              ;; Map contents, `*` and `*-` over vector contents (`*_` there is refused on both sides)
+              #:unless (and (eq? fam 'sub-block) (memq 'ren modes))
+              [sfx (in-list (cond [(not (eq? fam 'sub-block)) '(#f)]
+                                  [(eq? base 'v3) '("*" "*-")]
+                                  [else '("*" "*-" "*_" "*-_" "^-" "^-_")]))])
     (define written
       (string-append (string-join (for/list ([k ancs] [m modes] [i (in-naturals)]) (seg k m i)) ".")
                      (if (null? ancs) "" ".")))
@@ -9817,6 +9912,16 @@
       (define sp (format "~a{~a~a~a~a}" subj head written leaf suffix))
       (list (string-append "law " sp) sp flips pre target))
     (case fam
+      ;; ⭐⭐ 1b-vi-F [Q_U62] = B — BRACES SCOPE A LANDING: `ot{0.P.{X}}` is the element's
+      ;; key-head reading `t5{P.{X}}`, WRAPPED as the ordinal's one tuple component, for every
+      ;; star family and every kept/dissolved assignment (98 / 98 in probe-1bvi-af). At depth 1
+      ;; the right-hand side drops the braces (`t5{{X}}` does not parse; `t5{X}` is the block).
+      [(sub-block)
+       (let ([sp (format "~a{~a~a{~a~a}}" subj head written leaf sfx)]
+             [rhs (if (null? ancs)
+                      (format "~a{~a~a}" base leaf sfx)
+                      (format "~a{~a{~a~a}}" base written leaf sfx))])
+         (list (string-append "law " sp) sp #f `(wrapped ,rhs) #f))]
       ;; ⭐ 1b-vi-E [Q_U61] S: with every ancestor dissolved the remainder after the ordinal
       ;; names no key, so the landing passes through: `ot{0.X*}` ≡ `t5{X*}`. (Kept or
       ;; renamed ancestors name a key and stay inside the tuple — hand controls U61-K*.)
@@ -10254,14 +10359,20 @@
 (test-case "1b-vi verify (VI-5): the table's SIZE is pinned — a generator or filter regression that drops rows fails here"
   ;; One check holds all the rows, so the runner's COUNT DROP cannot see inside it; a
   ;; filter that silently dropped a family (e.g. `*-_` laws) would have stayed green.
-  (define (fam r) (cadr (regexp-match #rx"([*^][-_z]*)[}]$" (1bvi-row-spelling r))))
+  ;; a law whose star sits inside braces (1b-vi-F's `sub-block` family) counts as `{}`+family
+  (define (fam r)
+    (let ([m (regexp-match #rx"([*^][-_z]*)([}]+)$" (1bvi-row-spelling r))])
+      (string-append (if (> (string-length (caddr m)) 1) "{}" "") (cadr m))))
   (define laws (1bvi-law-rows))
   (check-equal? (list (length 1bvi-rows) (length laws)
                       (sort (hash->list (for/fold ([h (hash)]) ([r (in-list laws)]) (hash-update h (fam r) add1 0)))
                             string<? #:key car))
                 ;; measured at the verify, and predicted beforehand from positions × assignments
                 ;; (plain `*`: 1 + 3 + 9 over `ot` + 9 over `ov3` = 22; `*-`: 13 + 9 + 13 + 9 = 44)
-                '(106 144 (("*" . 22) ("*-" . 44) ("*-_" . 26) ("^-" . 26) ("^-z" . 26)))
+                ;; 1b-vi-F, predicted before its run: 21 hand rows (+2, SB1-c1b / SB2-c, at review); `sub-block` laws over `ot` =
+                ;; (1 + 2 + 4 kept/dissolved assignments) × 6 families = 42, over `ov3` = 4 × 2 = 8
+                '(129 194 (("*" . 22) ("*-" . 44) ("*-_" . 26) ("^-" . 26) ("^-z" . 26)
+                           ("{}*" . 11) ("{}*-" . 11) ("{}*-_" . 7) ("{}*_" . 7) ("{}^-" . 7) ("{}^-_" . 7)))
                 "hand rows, law rows, law rows per family"))
 
 (test-case "1b-vi-A: the table is well-formed — ids unique, every flipping row's PRE differs from its TARGET"

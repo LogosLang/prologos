@@ -1179,18 +1179,32 @@
 ;;   'key-tails … and every one's sₙ is a named key (the `^` remedy is spellable)
 ;;   'wrap      some delivered branch is an ordinal head that does not ('head-wrap)
 ;;   'all-head  EVERY delivered branch is an ordinal head ('head / 'head-wrap)
+;;   'multi     … and some ordinal heads SEVERAL of them (one element, several branches)
+;;   'groupable … and every head's rest can be wrapped in braces (non-empty, not opening
+;;              with a sub-block: `vhm{0.{{0}*}}` does not parse)
+;; ⭐⭐ 1b-vi-F [Q_U62] = B (SB-1, SB-2): with 'multi, "end EVERY branch with `^`" keeps each
+;; BRANCH apart, not each element (measured: a 4-tuple, probe-1bvi-ae:71), and "a tuple of
+;; the elements" is a tuple of the branches; under B the remedy that keeps each element ONE
+;; component is grouping its branches in one sub-block after its ordinal (ae:42, ae:36).
 (define (select-level-ordinal-fact branches)
   (let* ([ds (append-map select-branch-delivered branches)]
          [fs (map select-delivered-ordinal-fact ds)]
          [passes? (lambda (f) (memq f '(head mid)))]
          [head? (lambda (f) (memq f '(head head-wrap)))]
          [all? (and (pair? fs) (andmap passes? fs))]
+         [all-head? (and (pair? fs) (andmap head? fs))]
+         [idxs (if all-head? (map (lambda (d) (cadr (car d))) ds) '())]
+         [multi? (let dup? ([xs idxs]) (and (pair? xs) (or (and (member (car xs) (cdr xs)) #t) (dup? (cdr xs)))))]
+         [groupable? (and all-head?
+                          (andmap (lambda (d) (and (pair? (cdr d)) (not (select-sub-step? (cadr d))))) ds))]
          [flags (append (if (ormap passes? fs) '(passes) '())
                         (if (memq 'head fs) '(head) '())
                         (if all? '(all) '())
                         (if (and all? (andmap select-delivered-key-tail? ds)) '(key-tails) '())
                         (if (memq 'head-wrap fs) '(wrap) '())
-                        (if (and (pair? fs) (andmap head? fs)) '(all-head) '()))])
+                        (if all-head? '(all-head) '())
+                        (if multi? '(multi) '())
+                        (if groupable? '(groupable) '()))])
     (and (pair? flags) flags)))
 ;; ⭐ 1b-vi verify (VM-10) — the star conts whose LANDINGS REACH THIS LEVEL, for the
 ;; level gates' prose. `select-branch-star-conts/deep` walks into EVERY sub-block, so a

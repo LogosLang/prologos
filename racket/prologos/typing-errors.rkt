@@ -849,9 +849,13 @@
         [(memq 'head ord)
          (string-append
           " Dropping the star of ONE ordinal-headed branch trades the collision for a keyed/keyless mix (L4): without its star that element lands as one keyless tuple component."
-          (if (memq 'all-head ord)
-              " Dropping it on every branch here gives a tuple of the elements."
-              ""))]
+          (cond
+            ;; 1b-vi-F (SB-1): with one element heading several branches the tuple is of the
+            ;; BRANCHES — measured `@[{:id {:n 1}} {:tls {:port 443}} {:id {:n 2}} …]`
+            [(and (memq 'all-head ord) (memq 'multi ord))
+             " Dropping it on every branch here gives a tuple of the branches, one component each."]
+            [(memq 'all-head ord) " Dropping it on every branch here gives a tuple of the elements."]
+            [else ""]))]
         [else
          (format " Dropping a star re-nests what it lifted — ~a — which resolves the collision unless another branch delivers that key too."
                  (string-join
@@ -891,9 +895,24 @@
                    (cond [(null? stars-partial) "`*-_`"]
                          [(null? stars-total) "`*_`"]
                          [else "`*_` or `*-_`"]))
-           (if (memq 'key-tails ord)
-               " To keep each element as its own tuple component, end EVERY branch here with `^` instead of its star (`x{0.a^.b^ 1.a^.b^}`)."
-               ""))
+           (cond
+             ;; ⭐ 1b-vi-F [Q_U62] = B (SB-1): with one element heading several branches the `^`
+             ;; remedy kept each BRANCH apart (measured: a 4-tuple, probe-1bvi-ae:71). Under B the
+             ;; remedy is grouping — inside the braces a star lands in the element's record — and
+             ;; it resolves the collision only when the colliding branches sit under DIFFERENT
+             ;; ordinals ('cross). The example speaks the operator present, in the shape measured
+             ;; per family (dissolved ancestors for `*` / `*_`, kept ones for a total collapse).
+             [(memq 'multi ord)
+              (if (and (memq 'groupable ord) (memq 'cross ord) (pair? stars))
+                  (let* ([c (car stars)] [l (star-lex c)]
+                         [g (if (select-star-cont-total? c)
+                                (format "{a.b~a c.d~a}" l l)
+                                (format "{a^.b~a c^.d~a}" l l))])
+                    (format " To keep each element as its own tuple component, group each element's branches in ONE sub-block after its ordinal (`x{0.~a 1.~a}`): inside the braces a star lands in that element's record (Q_U62), so keys collide only within one element." g g))
+                  "")]
+             [(memq 'key-tails ord)
+              " To keep each element as its own tuple component, end EVERY branch here with `^` instead of its star (`x{0.a^.b^ 1.a^.b^}`)."]
+             [else ""]))
           ""))]
     [(star-l4-mixed)
      ;; ⚠ 1b-iii-C2: this WORDING used to assert that the STAR branch is the
@@ -997,7 +1016,14 @@
                      "Here every branch is ordinal-headed, and " ordinal-fact
                      (if total?
                          (format ". So make every branch a tuple component: end each starred branch with `^` instead of its `~a` (`x{0.a.b^ 1.a.b^}`) — a total collapse keeps no key to nest under" o)
-                         (format ". So make every branch a tuple component: keep a key before each star (`x{0.a.b~a 1.a.b~a}`, a tuple of records), or end the branch with `^` instead of its star (`x{0.a^.b^ 1.a^.b^}`)" o o)))]
+                         (format ". So make every branch a tuple component: keep a key before each star (`x{0.a.b~a 1.a.b~a}`, a tuple of records), or end the branch with `^` instead of its star (`x{0.a^.b^ 1.a^.b^}`)" o o))
+                     ;; ⭐ 1b-vi-F [Q_U62] = B (SB-2): one element heading several branches can be
+                     ;; kept as ONE component by grouping them — measured for `*`, `*_` and `*-`
+                     ;; (`ot{0.a^.b^.c^.{m* n}}` → `@[{:n {:y 2}, :x 1}]`)
+                     (if (and (memq 'multi ord) (memq 'groupable ord))
+                         (format "; or, to keep each element as ONE component, group its branches in ONE sub-block after the ordinal (`x{0.{~a c}}`) — inside the braces a star lands in the element's record (Q_U62), and the sub-block's own branches must agree like any block's"
+                                 (if total? (format "a.b~a" o) (format "a^.b~a" o)))
+                         ""))]
                    [(or (memq 'head ord) (memq 'wrap ord))
                     (string-append agree "; and " ordinal-fact)]
                    [else agree]))))]
