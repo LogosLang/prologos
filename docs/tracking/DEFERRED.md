@@ -7652,6 +7652,18 @@ further fused ω steps or a sub-block, so an ω ancestor under a deep star is un
 > (`ow{top:cfg.x}` → "field :x is not present in the record {:eu …}"); the waypoint can widen to every in-block
 > step after ω when this entry's decision is taken.
 
+> **ADDENDUM (2026-10-19, CIU 6 Q_U63 finding RV-4; probe
+> `docs/tracking/tracks/CIU/CIU_6/research/P4e-2/probe-p4e2-c` lines 26–28, branch `ciu6-path-selection` @ `21ac833a`).**
+> The same class meets a STAR. With `tw := {:teams @[{:m @[1]} {:m @[2 3]}] :name "x"}`:
+> - the path `tw.teams:m*` → `@[1 2 3]`;
+> - the block `tw{teams:m*}`, and `tw{teams:m* name}`, are refused with "`*` (flatten) cannot join Map-valued
+>   contents under `:` …";
+> - in a block the broadcast does not apply its step (as `w4{a:b}` above), so the star meets the team records.
+>
+> **Why it now matters more:** Q_U63 (the ravel question, PENDING) leans to `x:*`, a broadcast of the identity then
+> a join. In block position that spelling (`x{a:*}`) sits on exactly this route, so this entry's fix gates
+> block-position ravel under that option.
+
 ### 168. ⬜ A STAR GLUED TO AN ARROW IN A TYPE IS SILENTLY NOT AN ARROW — `spec s4 Nat *-> Nat` reports "spec type for s4 has no arrow"; ~~`<(x : Nat)*- Nat>` reports a bare "Type mismatch"~~ **Withdrawn** — `<(x : Nat)*- Nat>` reports a nameless "Unbound variable" (see the correction below)
 
 **Found by** the CIU 6 1b-vi grounding audit (2026-10-13; probe
