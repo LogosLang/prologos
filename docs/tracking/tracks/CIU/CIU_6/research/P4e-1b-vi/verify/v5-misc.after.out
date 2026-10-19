@@ -1,0 +1,26 @@
+0: t5 : {:a {:b {:c {:m {:x Int} :n {:y Int}}}}} defined.
+1: ot : [PVec {:a {:b {:c {:m {:x Int} :n {:y Int}}}}}] defined.
+2: oo : [PVec [PVec {:a {:b {:c {:m {:x Int} :n {:y Int}}}}}]] defined.
+3: og : {:db {:admins [PVec {:name {:f {:z Int}}}]}} defined.
+4: mn : {:a {:x Int} :b {:y Int}} defined.
+5: m3 : {:a {:x Int} :b {:y Int} :c {:z Int}} defined.
+6: env : {:dev {:db {:port Int :url String}} :prod {:db {:port Int :url String}}} defined.
+7: ERROR: `a` can never appear under a total collapse: `c*-` lifts what `c` holds to the top of its branch and removes every ancestor level, including the one `b^a` (how `a.b^..` is read) renames. Drop `^a` (`a^.b.c*-`), or keep the level: `a^.b^a.c*`
+8: {:a {:n {:y 2}, :m {:x 1}}} : {:a {:m {:x Int} :n {:y Int}}}
+9: ERROR: `p` can never appear under a total collapse: `:name*-` lifts what `:name` holds to the top of its branch and removes every ancestor level, including the one `db^p` renames. Drop `^p` (`db.admins:name*-`), or keep the level: `db^p.admins^:name*`
+10: ERROR: select: `:name*-` — `*-` (flatten) cannot join Map-valued contents under `:` (broadcast): every element of `[PVec {:name {:f {:z Int}}}]` shares ONE element type, so a keywise join would contribute the same keys once per element and collide for any length above 1 (the length is not statically known). Flatten a single element's layer instead, or select the fields individually
+11: ERROR: select: `:name*` — `*` (flatten) cannot join Map-valued contents under `:` (broadcast): every element of `[PVec {:name {:f {:z Int}}}]` shares ONE element type, so a keywise join would contribute the same keys once per element and collide for any length above 1 (the length is not statically known). Flatten a single element's layer instead, or select the fields individually
+12: ERROR: `a*->b*->c` — there is no `*->` operator: `*-` (the total collapse) attaches at the END of a segment, and `->` is the function arrow, which means nothing inside a selection. If you meant the total collapse, end the segment there and write what follows as its own branch: `a*- b*- c`
+13: ERROR: `a*-_->b` — there is no `*-_->` operator: `*-_` (the total collapse with provenance) attaches at the END of a segment, and `->` is the function arrow, which means nothing inside a selection. End the segment at the star and write what follows as its own branch: `a*-_ b`
+14: ERROR: `a*_->b` — there is no `*_->` operator: `*_` (the provenance flatten) attaches at the END of a segment, and `->` is the function arrow, which means nothing inside a selection. End the segment at the star and write what follows as its own branch: `a*_ b`
+15: ERROR: hint: comparison keywords are spelled lt/le/gt/ge in Prologos (< and <= conflict with angle-bracket syntax); values: ord-lt/ord-le/ord-gt/ord-ge
+16: ERROR: Unbound variable
+17: ERROR: inside `<…>`, `*-` is a path-selection star operator, not a type operator — it has no type-level reading, glued or spaced. For a product type write `<(x : A) * B>` (a spaced bare `*`)
+18: @[{:c {:n {:y 2}, :m {:x 1}}}] : ⟨{:c {:m {:x Int} :n {:y Int}}}⟩
+19: {:c {:n {:y 2}, :m {:x 1}}} : {:c {:m {:x Int} :n {:y Int}}}
+20: {:c {:n {:y 2}, :m {:x 1}}} : {:c {:m {:x Int} :n {:y Int}}}
+21: @[{:c {:n {:y 2}, :m {:x 1}}}] : ⟨{:c {:m {:x Int} :n {:y Int}}}⟩
+22: {:c {:n {:y 2}, :m {:x 1}}} : {:c {:m {:x Int} :n {:y Int}}}
+23: @[{:c {:n {:y 2}, :m {:x 1}}}] : ⟨{:c {:m {:x Int} :n {:y Int}}}⟩
+24: ERROR: `($brace-params a^ ($dot-access b*))` is not a valid selection branch — block branches are field names (e.g. `x{name server.{host}}`)
+--- 11 errors ---

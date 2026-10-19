@@ -1,0 +1,3 @@
+0: ow : {:top {:eu {:cfg {:x {:p Int}}} :us {:cfg {:x {:p Int}}}}} defined.
+1: ERROR: a total collapse cannot sit under a broadcast yet: `x*-` follows the broadcast `top:cfg`, and a step after an in-block broadcast acts on the whole broadcast result, not on each element (DEFERRED 167). Write the rest of the branch as the broadcast's own block, where the collapse is branch-local and the broadcast's key stays: `top:{cfg.x*-}`
+--- 1 errors ---

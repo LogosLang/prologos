@@ -1,0 +1,15 @@
+ns probe-1bvi-o
+
+;; type-territory controls that ISOLATE the glued star: a bare type expression
+;; prints `T : Type`, so a parse difference shows directly.
+<(x : Nat) * Nat>
+<(x : Nat)* Nat>
+<(x : Nat)*- Nat>
+<(x : Nat) *- Nat>
+<(x : Nat) -> Nat>
+<(x : Nat)-> Nat>
+;; the spec-level form, with a body that checks under the intended reading
+spec k1 Nat -> Nat
+defn k1 [n] n
+spec k2 Nat *-> Nat
+defn k2 [n] n

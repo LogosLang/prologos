@@ -1,0 +1,16 @@
+0: t5 : {:a {:b {:c {:m {:x Int} :n {:y Int}}}}} defined.
+1: w2 : {:a [PVec {:b [PVec Int]}]} defined.
+2: {:a {:b {:n {:y 2}, :m {:x 1}}}} : {:a {:b {:m {:x Int} :n {:y Int}}}}
+3: {:p {:b {:n {:y 2}, :m {:x 1}}}} : {:p {:b {:m {:x Int} :n {:y Int}}}}
+4: {:n {:y 2}, :m {:x 1}} : {:m {:x Int} :n {:y Int}}
+5: {:p {:n {:y 2}, :m {:x 1}}} : {:p {:m {:x Int} :n {:y Int}}}
+6: {:a {:b {:c-n {:y 2}, :c-m {:x 1}}}} : {:a {:b {:c-m {:x Int} :c-n {:y Int}}}}
+7: {:p {:b {:c-n {:y 2}, :c-m {:x 1}}}} : {:p {:b {:c-m {:x Int} :c-n {:y Int}}}}
+8: {:b {:c-n {:y 2}, :c-m {:x 1}}} : {:b {:c-m {:x Int} :c-n {:y Int}}}
+9: {:a @[{:b @[1 2]} {:b @[3]}]} : {:a [PVec {:b [PVec Int]}]}
+10: ERROR: select: `:b*` — `*` (flatten) cannot join Map-valued contents under `:` (broadcast): every element of `[PVec {:b [PVec Int]}]` shares ONE element type, so a keywise join would contribute the same keys once per element and collide for any length above 1 (the length is not statically known). Flatten a single element's layer instead, or select the fields individually
+11: @[1 2 3] : [PVec Int]
+12: ERROR: select: `:b*` — `*` (flatten) cannot join Map-valued contents under `:` (broadcast): every element of `[PVec {:b [PVec Int]}]` shares ONE element type, so a keywise join would contribute the same keys once per element and collide for any length above 1 (the length is not statically known). Flatten a single element's layer instead, or select the fields individually
+13: ERROR: select: `:b*` — `*` (flatten) cannot join Map-valued contents under `:` (broadcast): every element of `[PVec {:b [PVec Int]}]` shares ONE element type, so a keywise join would contribute the same keys once per element and collide for any length above 1 (the length is not statically known). Flatten a single element's layer instead, or select the fields individually
+14: k1 : Int defined.
+--- 3 errors ---

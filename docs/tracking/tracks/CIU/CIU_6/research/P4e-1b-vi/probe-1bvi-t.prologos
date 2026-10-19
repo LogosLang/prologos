@@ -1,0 +1,17 @@
+ns probe-1bvi-t
+
+def deep := {:top {:eu {:cfg {:x 1}} :us {:cfg {:x 2}}}}
+def ow := {:top {:eu {:cfg {:x {:p 1}}} :us {:cfg {:x {:p 2}}}}}
+
+;; 1b-vi-C: an ω step as an ANCESTOR of a star — does placement honour a cont there?
+;; (1) the ω step as sₙ, the reference
+deep{top:cfg*}
+deep{top^:cfg*}
+;; (2) the ω step as an ANCESTOR of sₙ — kept, then dissolved
+ow{top:cfg.x*}
+ow{top:cfg^.x*}
+;; (3) the same without a star — is a dissolve on an ω step honoured at all?
+ow{top:cfg.x}
+ow{top:cfg^.x}
+;; (4) the equivalence `*-` would have to meet: every ancestor dissolved
+ow{top^:cfg^.x*}

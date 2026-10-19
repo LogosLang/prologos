@@ -1,0 +1,9 @@
+0: uu : {:a [PVec [PVec {:userName String}]]} defined.
+1: w4 : {:a [PVec {:b {:c Int}}]} defined.
+2: @["L" "J"] : [PVec String]
+3: ERROR: broadcast `:userName` fails on every element — Could not infer type — select: the subject (branch `a.0`) is a tuple (nat-keyed row); a keyed block selects NAMED fields — ordinal selection is `x{N M}`, single-element extraction `x.N`
+4: @[1 2] : [PVec Int]
+5: ERROR: broadcast `:c` fails on every element — Could not infer type — field :c is not present in the record {:b {:c Int}}; available fields: :b; in the select branch `a.b.c` — bare field access (no construction) is spelled `.c`
+6: {:a @[{:b {:c 1}} {:b {:c 2}}]} : {:a [PVec {:b {:c Int}}]}
+7: {:a @[{:b {:c 1}} {:b {:c 2}}]} : {:a [PVec {:b {:c Int}}]}
+--- 2 errors ---

@@ -1,0 +1,24 @@
+ns probe-1bvi-g
+
+def e3 := {:a {:b {:c @[1 2]}}}
+
+;; --- which ancestor key continuations are spellable mid-path (Q_U55's rule needs the list)
+e3{a^_.b.c}
+e3{a^_.b.c^-}
+e3{a^_.b.c^-_}
+e3{a^-.b.c}
+e3{a^-q.b.c}
+
+;; --- `*` glued to `->` / `)` — the cases Q_U52 §2 names, as they read today
+spec s1 <(x : Nat) * Nat> -> Nat
+defn s1 [p] 0
+spec s2 <(x : Nat)* Nat> -> Nat
+defn s2 [p] 0
+spec s3 <(x : Nat)*- Nat> -> Nat
+defn s3 [p] 0
+spec s4 Nat *-> Nat
+defn s4 [n] n
+spec s5 Nat -> Nat
+defn s5
+  | zero -> 1
+  | n -> n

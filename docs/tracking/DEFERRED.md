@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 176**
+> ### **NEXT FREE: 183**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6776,6 +6776,13 @@ this lands; they are the acceptance tests.
 Found by the grammar-drift tripwire firing on `940c9c88` (CIU T6 slice
 1b-v-B2b), which is exactly what it exists for.
 
+**2026-10-14 — THE FAMILY IS NOW FINAL** (CIU T6 1b-vi-D-2b, `9743e93e` on
+`ciu6-path-selection`; the tripwire fired again, as expected): the compiler mints
+all four — `*`, `*_`, `*-`, `*-_` — closer-adjacent and fused. The `*->` boundary is
+decided ([Q_U56](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u56)): not a construct; the
+selection consumer refuses it, guided, so the grammar needs no `*->` form either.
+The fix shape below is unchanged.
+
 **THE FACT** (verified): `editors/tree-sitter-prologos/grammar.js` has
 `flatten_step: $ => token.immediate('*')`. The compiler now mints `*_`
 closer-adjacent (`x{a}*_`, `[f x]*_`, `xs:{a}*_`), so the grammar consumes the
@@ -6937,12 +6944,12 @@ otherwise credited with removing this defect (P0 record §5 "two baselines"). Re
 *Addendum 2026-10-14 (PAR 4 owner decision O-9 — the fix shape is decided; still open until it lands):*
 - **Decision**: production default **off**, and the tree path **deleted** — the green-thread `parallel?` branch,
   the size-switched route (`propagator.rkt:3377` at main `99c893d4`) and the `current-tree-reduce-threshold`
-  parameter. It lands in PAR 4 P0.5 (D.1 §14 O-9, on branch `par4-arena-executors`).
+  parameter. It lands in PAR 4 P0.5 (D.1 §14 O-9, [`tracks/PAR/PAR_4/2026-10-12_PAR_4_D1_DESIGN.md`](tracks/PAR/PAR_4/2026-10-12_PAR_4_D1_DESIGN.md)).
 - **Read at `99c893d4`**: the tree "reduce" does no lattice work. `merge-fire-results` (`:3090`) only appends
   lists, and the combined result then goes through the same sequential `bulk-merge-writes` (`:2978`). Its one
   semantic change: all of a round's declared writes are applied before any undeclared write (replacement,
   DEFERRED 157), so a round of 256+ fires uses a different application order.
-- **Evidence** (P0 record §11, `eb25caee` + `8278a66d` on the branch):
+- **Evidence** (P0 record §11, `eb25caee` + `8278a66d`; on main since PAR 4 checkpoint 1, `c1f389ab`):
   - the full suite passes with the default off (10 394 / 502);
   - the 39 prelude caches generated cold under 256, off and 0 are identical;
   - a merge-order census finds 0 tree-order divergences in the suite's 648 rounds of 256+ fires, because no such
@@ -7116,6 +7123,26 @@ read (the two-phase-set construction; Shapiro et al. 2011, CRDTs). Then the guar
 and needs no read-modify-write. Language-level impact — a failed guard's tagged writes staying
 visible — is CONJECTURE (not reproduced; the ATMS route is itself incomplete, Rel T1 A.2b).
 **When**: before PAR 4 P3 (K > 1 makes the race real at every round), or with BSP-LE 3. Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md) §9.
+
+**Addendum 2026-10-18 (PAR 4 D.3 wave 2, agent W2-4; PD-10 in the synthesis): the S1 NAF handler has the same
+shape.** `process-naf-request` (`relations.rkt:206-354`) records a NAF failure as an AND-NOT read-modify-write
+directly on cell 1:
+- the per-binding path at `:240`;
+- the shared-bit path at `:350-353`.
+
+It does not write the decisions cell that cell 1 is projected from. Cell 1 therefore has a second writer: the
+worldview projection propagator, which `make-solver-context` installs on every query network (`atms.rkt:237`;
+`propagator.rkt:978-987`) and which writes cell 1 by replacement. After the run, the projection's output disagrees
+with cell 1, so the result is not a fixpoint of its own S0 propagators.
+- **Measured**: 12 of 76 ATMS query networks built on the production path are flagged, all of them relations with
+  `not` goals. On `examples/2026-07-19-rel-t1-acceptance.prologos`, `light-vehicle` gives `{"bicycle"}`, equal to
+  DFS. After one re-fire of the projection it gives `{"automobile"} {"bicycle"}`, an answer DFS rejects.
+- **Reach today**: latent. Nothing re-fires the projection after the handler, and none of the 12 queries that `auto`
+  routes to ATMS in the repo is flagged.
+- **Fix shape**: (b)'s growth construction, extended to the handler. NAF and guard verdicts are written as nogoods
+  (or invalidated bits) that the projection reads, so cell 1 has one writer, α(assumptions, decisions, nogoods).
+- **Evidence** (on branch `par4-arena-executors`): `racket/prologos/benchmarks/par4/d3-wave2/W2-4/` (`q3-cell1.rkt`,
+  `q3-tier1-sweep.rkt`). W2-4-2 adds the `truths` rows to (a)'s parity set. Record: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §6.
 
 ### 158. ⬜ PROPAGATORS INSTALLED INSIDE A FIRE LOSE THEIR FLAGS — the BSP scheduler re-installs them from `(inputs outputs fire-fn)` only, dropping `PROP-FIRE-ONCE`, `#:assumption`, `#:component-paths` and srcloc; a fire-once propagator installed in a fire fires on every input change
 
@@ -7553,7 +7580,7 @@ mutations red).
 
 **Found by** the CIU 6 1b-vi grounding audit (2026-10-13, branch `ciu6-path-selection` @ `01ef2542` = main), while
 working out what "total collapse" (`*-`, D4 Q_U48) would do to a broadcast ancestor. Probe
-`docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/probe-1bvi-f.prologos` (on the branch until the next checkpoint
+`docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/probe-1bvi-f.prologos` (on main since the checkpoint merge `83fe4fb4`;
 merge; output beside it), run with `tools/scratch-run.sh`:
 
 | input | result |
@@ -7585,11 +7612,25 @@ naming the sub-block spelling is the monotone waypoint.
 written). It also bounds D4 Q_U52 §1's broadcast-ancestor question: inside one branch, the steps after an ω step are
 further fused ω steps or a sub-block, so an ω ancestor under a deep star is unobservable until this lands.
 
+> ⚠ **ADDENDUM (2026-10-18, CIU 6 1b-vi verify, branch `ciu6-path-selection` @ `0988a4f0`, on
+> main since the checkpoint merge `83fe4fb4`)**: ~~"an ω ancestor under a deep star is unobservable until this lands"~~ **Withdrawn** —
+> under a TOTAL collapse it was a **whole-file abort**: `ow{top:cfg.x*-}` (`ow := {:top {:eu {:cfg {:x {:p 1}}} :us
+> {:cfg {:x {:p 2}}}}}`) printed no result line at all, not even the `def` above it. Mechanism (read, then measured):
+> typing's ω arms hand the steps after `:` straight to `select-below-field`'s star-tail arm, whose C-5 invariant
+> `error`ed before the presence check that refuses `*` and `^-` per command. Three verify lenses found it
+> independently (D4 §5.P4e-1b-vi `#p4e-1b-vi-verify`, VF-1; probes `research/P4e-1b-vi/verify/v1`, `v2`, `v6`).
+> 🟡 **MITIGATED for the collapse families only**: the parser now refuses a total collapse (`*-`, `*-_`, `^-`,
+> `^-k'`, `^-_`) under an ω ancestor with THIS entry's waypoint — a guided refusal naming the sub-block spelling
+> (`top:{cfg.x*-}`, measured `{:top {:eu {:p 1}, :us {:p 2}}}`). **OPEN, unchanged**: the in-block meaning of a
+> fused chain and of a `.` step after ω; every other spelling still gets the misleading message above
+> (`ow{top:cfg.x}` → "field :x is not present in the record {:eu …}"); the waypoint can widen to every in-block
+> step after ω when this entry's decision is taken.
+
 ### 168. ⬜ A STAR GLUED TO AN ARROW IN A TYPE IS SILENTLY NOT AN ARROW — `spec s4 Nat *-> Nat` reports "spec type for s4 has no arrow"; ~~`<(x : Nat)*- Nat>` reports a bare "Type mismatch"~~ **Withdrawn** — `<(x : Nat)*- Nat>` reports a nameless "Unbound variable" (see the correction below)
 
 **Found by** the CIU 6 1b-vi grounding audit (2026-10-13; probe
 `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/probe-1bvi-g.prologos` on branch `ciu6-path-selection`, output beside
-it). Measured at `01ef2542`:
+it; on main since `83fe4fb4`). Measured at `01ef2542`:
 
 | input (with a matching `defn`) | message |
 |---|---|
@@ -7597,7 +7638,7 @@ it). Measured at `01ef2542`:
 | ~~`spec s3 <(x : Nat)*- Nat> -> Nat`~~ | ~~"Type mismatch"~~ — the raw probe-g output, kept as the record; **not evidence about `*-`** (correction below) |
 | `spec s2 <(x : Nat)* Nat> -> Nat` (control) | Q_U31's guided "inside `<…>`, `*` needs a SPACE before it …" |
 
-> ⚠ **CORRECTION (2026-10-13, probe `probe-1bvi-o` on branch `ciu6-path-selection`)**: the "Type mismatch" row came
+> ⚠ **CORRECTION (2026-10-13, probe `probe-1bvi-o` on branch `ciu6-path-selection`; on main since `83fe4fb4`)**: the "Type mismatch" row came
 > from a control that did not isolate the variable. Probe g's SPACED control `spec s1 <(x : Nat) * Nat> -> Nat` with the
 > same body (`defn s1 [p] 0`) ALSO prints "Type mismatch", so the body fails against the Sigma spec for its own reason
 > and the message says nothing about how `)*-` lexes. Re-measured with bare type expressions, which print `T : Type`:
@@ -7629,6 +7670,13 @@ predates the slice and belongs to spec and arrow parsing. One part changes by it
 ("`*->` reads as `*-` then `>` — put a space before `->`"). Never raise at the reader: a raise there aborts the whole
 file. **When**: no gate. Pick it up with the next spec-parser diagnostics work, or at CIU 6 X.close's doc-truth pass if
 still open.
+
+> **ADDENDUM (2026-10-18, CIU 6 1b-vi verify finding VM-9; probe `research/P4e-1b-vi/verify/v5` line 16, on main
+> since the checkpoint merge `83fe4fb4`)**: a SPACED `*-`, `*-_` or `*_` inside `<…>` reports a bare,
+> nameless "Unbound variable" (`<(x : Nat) *- Nat>`), while the glued forms get the guided type-territory text ("inside
+> `<…>`, `*-` is a path-selection star operator, not a type operator — it has no type-level reading, glued or spaced.
+> …"). The text's "or spaced" is true of the operator, but no spaced spelling ever shows it. **Fix shape**: give a
+> spaced star-family symbol inside `<…>` the same guided text, in this entry's (type) territory.
 
 ### 169. ✅ **DISCHARGED `8fbaefb8`** (SW-24: the graph is DERIVED, never stored; reaches main at checkpoint 5) — `tools/dep-graph.rkt` WAS THREE MONTHS STALE — `update-deps.rkt --check` exits 1 with 378 mismatches; targeted (affected-test) selection reads this graph
 
@@ -7902,3 +7950,311 @@ cycle analysis will build anyway. Pin: q5-v27c's first `[g2 3N]` must print `tru
 
 **Record**: PPN 4C LOG § *Q-4B5.4 decided; main merged in; three of my DEFERRED 173 claims corrected* and the grounding
 audit's GA-10 (on the branch); probes `…/PPN_4C/research/4B5b/q5-v27*`.
+
+### 176. ⬜ THE PROPAGATOR OBSERVER'S RECORDS MISREPORT WHAT FLOWED — 45 % of BSP diff records show a value the cell does not hold; the sequential scheduler names a placeholder writer; the LSP merges every S0 run and fork in a file into one timeline that starts from the final state
+
+**Found by** PAR 4, re-posing owner decision O-3 (observers). Sources: D.1 Appendix A.6–A.7, on branch
+`par4-arena-executors`; the code is main `c1f389ab`. Two probes, with data in `data/par4-p0/o3/` (on the branch):
+- `benchmarks/par4/o3-observer-census.rkt`: 18 comparative files, with the observer installed the way the LSP installs it;
+- `benchmarks/par4/o3-observer-fixtures.rkt`: five small networks under BSP and under the sequential scheduler.
+
+1. **A BSP record's `new-value` is the written contribution, not the cell's new value** (the observer block,
+   `propagator.rkt:3557-3574`; read, then measured).
+   - 303 of 672 records (45.1 %) carry a `new-value` that the cell does not hold after the round. 283 of them are in
+     rounds where two or more propagators wrote the cell; 20 are single writers into accumulating merges.
+   - Control: fixture X1 (one writer, max merge) shows 0; X2 (two writers, set union) shows 2.
+   - The editor's scrubber assigns `newValue` as the cell's value
+     (`editors/vscode-prologos/src/propagatorView.ts:1647`), so it displays partial values.
+2. **The sequential scheduler's record names the run's first-fired propagator as the source of every diff**
+   (`propagator.rkt:2647, 2653`; read). Measured in fixtures X3 and X5: in X5, under reverse installation order, it
+   names p0 as the source of a cell that p0 never writes.
+3. **The LSP's trace is a single timeline across every quiescence call and fork in the file, and it starts from the
+   final network** (read).
+   - One accumulator is installed around the whole `process-file` (`lsp/server.rkt:547`).
+   - `make-trace-accumulator` re-stamps round numbers (`propagator.rkt:601`), erasing the boundaries between runs.
+   - The trace is built with initial = final (`lsp/server.rkt:586`).
+
+   Measured scale: `atms-adversarial` sends 111 rounds, from 108 S0 runs and 6 forks, into one timeline.
+4. **Some steps are silent** (read).
+   - Tier-1 flushes emit no record (`propagator.rkt:3431-3446`).
+   - Writes made by stratum handlers are never reported.
+
+   Measured: 6 of the 18 files emit no record at all. Whether their S0 work is Tier-1 flushes or nothing was not
+   measured.
+5. **`atms-events` is always `'()`**: `git grep` finds no production constructor.
+
+**Impact**: the editor's propagator view (`$/prologos/propagatorSnapshot`) and the observatory's traces. No compiler
+output is affected: the compiler never reads the observer, and error explanation refuses it
+(`error-explanation.rkt:22`). The impact is shown at the level of the records; the editor's display was read in
+code, not run.
+
+**Fix shape** — depends on owner decision O-3 (D.1 Appendix A.12; the lean is OB-4, "observation in logical time"):
+- (a) **BSP side, in PAR 4** (P1 or P2). Per (round, cell), record the old value, the held value and the set of
+  propagators that wrote the cell that round. This touches only `propagator.rkt`'s observer block and replaces
+  items 1–2.
+- (b) **Epoch records**, keyed by (network, epoch) and emitted by every scheduler, including Tier-1 flushes and the
+  boundary's own step. This covers item 3's run boundaries and item 4, and gives item 5 a home, since ATMS events
+  happen at stratum boundaries.
+- (c) **The LSP and editor side**, which needs an owner to place it. The visualization design
+  (`2026-03-12_PROPAGATOR_VISUALIZATION_DESIGN.md`) is complete and no active series owns it; its deferrals sit
+  under § *Propagator Observatory — Visualization Polish* above. The work: read the keyed records, capture the
+  initial network, and have the scrubber show held values.
+
+**When**:
+- (a) and (b): with O-3's implementation in PAR 4 P1 or P2;
+- (c): before anyone relies on the editor view to answer a "why" question.
+
+**Record**: PAR 4 D.1 Appendix A.6–A.12 and LOG § *O-3 re-posed* (on branch `par4-arena-executors`).
+
+**Addendum (2026-10-14, owner guidance G-3)**: the owner wants a visual debugger as part of the language's dev
+tooling, for two purposes: demonstrating how the system works, and practical debugging and introspection. It is not
+in PAR 4's scope to deliver. Consequences for this entry:
+- (c) is **wanted, not optional polish**. It still needs an owner to place it on the roadmap.
+- (a) is sharpened by a new measurement (fixture probe `5fbb30df` on the branch). A round record must carry the
+  cell, its old value, the value it holds after the round, the round's writers and the round index. With those, a
+  cell's final value unfolds into a derivation in which every premise sits at an earlier round, so it is
+  well-founded even on a cycle.
+  - Without the old value as a premise, a join that reaches `top` names only the last writer (fixture X5).
+- New part **(d) — error explanation on rounds**. `error-explanation.rkt` cuts cycles with a visited set and a depth
+  bound of 32 (`error-explanation.rkt:164-195`): fuel, not structure. Where round records exist, a derivation over
+  rounds gives the same answer with termination by construction. *When*: with (c), or whenever error explanation is
+  next revisited.
+
+Requirements table and critique: PAR 4 D.1 Appendix A.13 (on branch `par4-arena-executors`, `47edfd8a`).
+
+**Addendum (2026-10-15, owner decision O-3 = OB-4, "observation in logical time")**: the contract this entry's fixes
+follow is now decided (PAR 4 D.1 §14 O-3, `1e1684e2` on the branch).
+- (a) and (b) land in PAR 4. D.2 places them in P1 or P2 for the round records and in P2 for the epoch records, the
+  shared (network, epoch, round) keys and the replay.
+- (c) and (d) remain outside PAR 4 and still need a roadmap home, which is the owner's call.
+
+The entry stays open until the fixes land.
+
+### 177. ⬜ ⭐ THE ATMS SOLVER RETURNS ANSWERS THAT DFS REJECTS — `(= x 1) (= x 2)` in one clause gives `{:x 2}`; `(= x 1) (= y 2) (= x y)` gives `{:x 1, :y 2}`; a caller's `x = 1` is invisible inside a branch, which then answers `{:x 2}` as well
+
+**Found by** PAR 4's D.3 adversarial critique round. Critic C9 (red team) found it; C4 independently measured the
+read-side mechanism. Reproduced by hand on 2026-10-15 with `tools/scratch-run.sh` on the two probe files. The code
+is main `c1f389ab`. The probes are kept on branch `par4-arena-executors` in
+`racket/prologos/benchmarks/par4/d3-wave1/C9/`: `c1-overwrite.prologos` and `c4-varvar.prologos`.
+
+| query | `:strategy atms` | `:strategy depth-first` |
+|---|---|---|
+| `two ?x` with `&> (= x 1) (= x 2)` | `@[{:x 2}]` | `@[]` |
+| `(rel [?x] (= ?x 1) (pick ?x))`, `pick` ∈ {`x = 1`, `x = 2`} | `@[{:x 2} {:x 1}]` | `@[{:x 1}]` |
+| `clash ?x ?y` with `&> (= x 1) (= y 2) (= x y)` | `@[{:x 1, :y 2}]` | `@[]` |
+| `agree ?x ?y` with `&> (= x 1) (= y 1) (= x y)` (control) | `@[{:x 1, :y 1}]` | `@[{:x 1, :y 1}]` |
+
+Three mechanisms (read in code; C9 also measured each at the lattice level):
+1. **A tagged read drops the base whenever an entry matches.** `tagged-cell-read` returns the base only when no entry
+   matches (`decision-cell.rkt:470`), so a branch's binding hides the caller's. This explains row 2.
+   - C4 measured the read to be non-monotone in the cell's own merge order on 768 of 9 600 random cases over a
+     set-union domain.
+   - A reader that joins the base in showed 0 of 9 600.
+2. **`unify-fire` drops a var-var conflict.** When both sides are bound and differ, it returns the network unchanged
+   (`relations.rkt:2112-2120`), so no conflict reaches any merge. This explains row 3.
+3. **Per-key last-writer-wins.** `scope-cell-merge` lets the newer binding win per key (`decision-cell.rkt:938-955`),
+   so `x = 2` overwrites `x = 1`. This explains row 1.
+
+**Reach**: `:strategy atms`, and `:strategy auto`, the default (`solver.rkt:77`), above its DFS↔ATMS crossover
+(threshold 256, `solver.rkt:76`). The crossover's reach is not measured. The answers are wrong under every scheduler,
+so order-differential instruments (PAR 4's merge-order census and replay monitor) cannot see this.
+
+**Fix shape**. All three parts are needed; each covers a different row.
+- (a) The read becomes `base ⊔ ⨆{v | label ⊆ W}`. That is ATMS label semantics, and a join-homomorphism into the
+  domain at each worldview W.
+- (b) `unify-fire` writes each side's value into the other, so the conflict reaches the merge.
+- (c) A per-key flat lattice with ⊤, as in PAR 4 D.2 P1a row 2. A ⊤ inside a branch's entry becomes that branch's
+  nogood; a ⊤ in the base becomes the query's failure.
+
+Test layer: a DFS-vs-ATMS answer-set differential over the relational tests and examples. It can fail on errors that
+do not depend on the schedule.
+
+**When**: with PAR 4 P1a (D.3 triage clusters CL-5 and CL-6), unless the owner wants a shipped solver strategy's
+wrong answers fixed sooner.
+
+**Record**: PAR 4 D.3 wave-1 triage §1, §3 CL-6 and §4 PD-1
+(`docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-15_PAR_4_D3_WAVE1_TRIAGE.md` on the branch).
+
+**Addendum 2026-10-18 (PAR 4 D.3 wave 2; synthesis SC-24 and SC-30).**
+- **Reach is wider than stated above.** `:strategy auto` picks ATMS (`stratified-eval.rkt:253-293`) when either of
+  these holds:
+  - a clause of the queried relation carries a `not` goal (`:265-270`);
+  - facts + clauses ≥ 256 (`:272-276`).
+
+  It also requires that no reachable relation has a body-local variable or a guard (`:292-293`). With **one `not`
+  goal**, all three rows above reproduce under a plain `solve`. Reproduced by hand with
+  `racket/prologos/benchmarks/par4/d3-wave2/W2-4/reach/reach-naf.prologos` (W2-4). In-repo programs do not hit it:
+  12 of 293 auto-routed queries take ATMS, and all 460 solve lines match DFS. No test pins a wrong answer, and none
+  could catch one.
+- **Two more wrong-answer shapes**, reproduced by hand with `…/d3-wave2/W2-6/w26-crosssite.prologos` (W2-6):
+
+| query (`pick` ∈ {`x = 1`, `x = 2`}) | `:strategy atms` | `:strategy depth-first` |
+|---|---|---|
+| `(rel [?x ?y] (pick ?x) (pick ?y) (= ?x ?y))` | `@[{:x 1, :y 1}]` (**loses** `{x 2, y 2}`) | `@[{:x 1, :y 1} {:x 2, :y 2}]` |
+| `(rel [?x] (pick ?x) (= ?x 2))` | `@[{:x 1} {:x 2} {:x 1}]` | `@[{:x 2}]` |
+| `(rel [?x ?y] (pick ?x) (= ?y 1) (= ?x ?y))` (control) | `@[{:x 1, :y 1}]` | `@[{:x 1, :y 1}]` |
+
+  W2-7 found three more programs, among its Q4–Q8, that give wrong answers on today's solver
+  (`…/d3-wave2/W2-7/`).
+- **The fix shape above is not enough.** (a)+(b)+(c) fixes the three rows above, but not the two new shapes. In
+  W2-6's lattice-level model on the real substrate, those also need:
+  - (d) no network-wide tag source or viewpoint: labels come from the writing propagator, and the viewpoint is per
+    propagator or per query;
+  - (e) unlabelled readers lifted per entry, or on the union-closure of their input labels;
+  - (f) a premise set P, so that elaboration's commit-by-keeping-the-bit keeps working (`meta-universe.rkt:257-263`).
+
+  With all six, the model gives DFS's answers on 8/8 rows under 3 schedules, and dropping any one part breaks at
+  least one row. W2-7's model gives 10/10 when ⊤ under ev_W is read as the nogood of the joined labels (an empty
+  label set means the query fails) and never as a network contradiction.
+- **Test layer**: the rows above, plus W2-7's Q4–Q8, in `test-solver-parity.rkt`.
+- **Owner decision pending**: whether PAR 4 P1a or BSP-LE 3 owns the fix (O-17 in the synthesis). Record: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §5.7, §6
+  (on branch `par4-arena-executors`).
+
+### 178. ⬜ BSP'S TIER-1 FLUSH RETURNS A NETWORK THAT IS NOT A FIXPOINT — it fires the fire-once, empty-input propagators, then clears the whole worklist, discarding the dependents its own writes enqueued (`propagator.rkt:3431-3445`)
+
+**Found by** PAR 4's D.3 round: critics C2 (reality check) and C5 (theory), independently. Reproduced by hand on
+2026-10-15 with C2's `probe-tier1.rkt` (on branch `par4-arena-executors`, in
+`racket/prologos/benchmarks/par4/d3-wave1/C2/`).
+
+The probe network: a copy propagator A → B, already quiescent, then a fire-once propagator with no inputs that
+writes A := 7.
+
+| scheduler path | A | B | B after a second run |
+|---|---|---|---|
+| Tier 1 | 7 | **0** | **0** |
+| Tier 2 control (same writer, not fire-once) | 7 | 7 | 7 |
+| the drain | 7 | 7 | 7 |
+
+The run reports no contradiction and an empty worklist, so callers cannot tell.
+
+**Reach**: not measured. Tier 1 requires worldview cell = 0 and a worklist made only of fire-once, empty-input
+propagators (`propagator.rkt:3411-3430`), whose outputs must already have dependents.
+- Production installers of that shape are at `relations.rkt:2148, 2161, 2183, 2636, 2699`.
+- They take the fire-once path when `current-worldview-bitmask` ≠ 0 (`relations.rkt:2140`), and that can differ from
+  the cell.
+
+Two related gaps, both read in code:
+- Tier-1 fires run outside `fire-and-collect-writes`. `current-bsp-fire-round?` is therefore `#f`, so an install
+  inside such a fire takes the inline branch, where P0's in-fire trap cannot see it.
+- Tier 1 emits no observer record (DEFERRED 176 item 4).
+
+**Fix shape**: either delete the Tier-1 branch, since BSP's inner loop already handles these propagators, or keep the
+dependents that the flushed writes enqueue on the worklist. PAR 4 D.2 had planned to keep Tier 1 "as is"; that is
+corrected in the D.3 triage (SC-20). Under PAR 4 P2, Tier 1 becomes the first pass of the K = 1 worklist.
+
+**When**: PAR 4 P0.5 (with DEFERRED 150), or sooner if a trap measures production reach.
+
+**Record**: PAR 4 D.3 wave-1 triage §1 and §4 PD-2 (on the branch).
+
+**Addendum 2026-10-18 (PAR 4 D.3 wave 2, W2-4 and W2-9).** Today's production paths cannot reach it:
+- Every top-level query network carries the worldview projection propagator on its worklist (`atms.rkt:237`), so
+  Tier 1's all-fire-once predicate is false.
+- The NAF S1 fork builds its inner goal over fresh inner-scope cells (`relations.rkt:278`), whose flushed writes
+  have no dependents.
+- The generic non-fixpoint detector (`…/d3-wave2/W2-4/q3-tier1-sweep.rkt`) finds 0 Tier-1 entries in 76 production
+  ATMS query networks. The same detector does flag C2's network.
+
+The fix shape is now "**deleted by PAR 4 P2**", which deletes the Tier-1 branch (W2-9-3), with an interim fix only
+if P2 slips. Tier-1 dispatch reads cell 1 (`propagator.rkt:3410`), so PAR 4 P1a row 1 lands with or after the
+deletion (W2-6-3). Record: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §5.2, §6.
+
+### 179. ⬜ Q_U56'S GUIDED `*->` TEXT MISSES THE BLOCK-CLOSER POSITION — `env{prod dev}*->` reports the comparison-keyword hint ("comparison keywords are spelled lt/le/gt/ge …"), not the star-family diagnostic
+
+**Found by** the CIU 6 1b-vi verify (2026-10-18; lens VS, finding VS-7; D4 §5.P4e-1b-vi `#p4e-1b-vi-verify`), re-measured
+on the main thread: probe `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/verify/v5-misc.prologos` line 15, branch
+`ciu6-path-selection` @ `0988a4f0` (on main since the checkpoint merge `83fe4fb4`).
+
+| input | message |
+|---|---|
+| `env{prod dev}*->` | "hint: comparison keywords are spelled lt/le/gt/ge in Prologos (< and <= conflict with angle-bracket syntax) …" |
+| `mn{a*->b}`, `mn{a*-> b}`, `mn{a*- > b}`, `t5{a.{b*-> c}}`, `t5{a.{b}*-> c}` (controls) | Q_U56's guided text ("there is no `*->` operator … drop the `>`" / "end the segment there …") |
+
+**Mechanism — conjecture, from the messages only**: the closer band mints `}*-`, and the `>` after the closed block is
+then read by the generic top-level `>` handling, outside the selection consumer that carries Q_U56's arm. **Fix shape**:
+give the closer-band star followed by `>` Q_U56's message ("drop the `>`"), in the consumer — never the reader (a
+reader raise aborts the whole file). **When**: no gate; with the star-family grammar work (DEFERRED 144) at CIU 6 T6's
+close, or with the next Q_U56-family message work.
+
+### 180. ⬜ THE STAR ARRIVAL INSTRUMENT CANNOT TELL A ONE-TOKEN `*-` FROM `*` THEN `-` — `star-last-token-type` / `star-mints?` answer `postfix-star` / `#t` for `c{a}*-` and `c{a}* -` alike (and for `-_`), so the flipped arrival pins' "is ONE token" lost its power at the 1b-vi mint
+
+**Found by** the CIU 6 1b-vi verify (2026-10-18; lens VI, finding VI-10), re-measured on the main thread: probe
+`docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/verify/v9-arrival.rkt` + `.out` (branch `ciu6-path-selection`; on main
+since the checkpoint merge `83fe4fb4`). The instrument is `tools/star-arrival-matrix.rkt` (first/last star-family token,
+lexeme not compared); its readers are the arrival gate and the `p4e-star-type` pins in `tests/test-path-selection.rkt`.
+
+**Impact, at the level shown**: none observed — nothing mis-mints today; the reader and the parity pin (the parser's surf
+equals the injected IR, 68 rows) both hold. This is instrument POWER: a regression that split `*-` into `*` and `-` would
+pass the arrival gate. **Fix shape**: require the minting token's LEXEME to equal the table lexeme under test (the gate
+already iterates the table). **When**: with DEFERRED 144, or the next edit of the arrival matrix.
+
+### 181. ⬜ ⭐ A FIRE THAT RAISES HANGS THE PRODUCTION BSP EXECUTOR — on any round of ≥ 8 fires, `make-parallel-thread-fire-all` (installed at load, `driver.rkt:567`) loses the exception with its thread and the joiner blocks forever in `channel-get`; the LSP, whose error port goes nowhere, wedges with an empty log
+
+**Found by** PAR 4's D.3 round, wave 2. Gap critic W2-10 found it; C6-4 had predicted it for P3's persistent
+executors. Reproduced by hand on 2026-10-18 with `exec-exn.rkt` (on branch `par4-arena-executors`,
+`racket/prologos/benchmarks/par4/d3-wave2/W2-10/`). The probe is one round of N propagators over one source cell,
+in which one fire raises.
+
+| executor | N = 4 | N = 12 |
+|---|---|---|
+| `sequential-fire-all` | raises | raises |
+| production `make-parallel-thread-fire-all` | raises (below its threshold of 8 it runs sequentially) | **hangs**; the text goes to the run's error port |
+| a persistent worker (P3's shape) | **hangs** | **hangs**; the text goes to the creation-time stderr |
+
+Power rows: with no raising fire, all six legs return ok.
+
+**Mechanism** (read in code): each chunk runs in `thread #:pool 'own` and calls `channel-put` only after its fires
+succeed (`propagator.rkt:3715-3721`). The joiner reads every channel with `channel-get` (`:3726`), and there is no
+handler. `fire-propagator` (`:377-379`) has none either. The LSP sends its error and output ports to nowhere
+(`lsp/server.rkt:543-545`), and `$/cancelRequest` is a no-op (`:453`).
+
+**Reach**: any exception inside a fire or a merge in a wide round. For example, whnf's `error 'reduction "fuel
+exhausted"` (`reduction.rkt:2861`) is reachable from merges (`type-lattice.rkt:300-301`, `:403-404`) and from user
+`net-add-prop` fires (`reduction.rkt:4440`). The debug invariant checks in `fire-and-collect-writes` (`:2951-2964`,
+documented as "caught LOUDLY") would hang instead of reporting. No user-level program in the corpus has been shown
+to hit it.
+
+**The same executor's other measured defects** (PAR 4 D.3 wave 2):
+- **Cost**: 1.50–1.55× on the two heavy comparative files and 1.28× on the medium tier (W2-2, timed under the suite
+  lock; about 7 ms of it is GC).
+- **Counter races**: the perf counters (`performance-counters.rkt:181-195`, documented as deterministic) lose 36–180
+  increments per run (W2-4).
+- **Lost assignments**: direct parameter assignments made in a fire are lost (W2-5, power rows).
+
+**Fix shape**: delete the installation and the executor and keep the `current-parallel-executor` seam (PAR 4
+O-14, **DECIDED (a) 2026-10-18**, `329319cb` on the branch). Independently of that, exceptions become data at the fire wrapper that every scheduler shares, and
+the boundary re-raises one canonically (synthesis §5.5).
+
+**When**: PAR 4 P0.5.
+
+**Record**: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §1, §5.1, §5.5 (on branch `par4-arena-executors`); O-14 in `…/PAR_4/2026-10-15_PAR_4_D2_DESIGN.md` §15.
+
+### 182. ⬜ ⭐ AN INLINE SOLVER OVERRIDE RESETS EVERY KEY IT DOES NOT NAME — `solve-with wf-solver {:timeout 100} (p-holds)` drops `:semantics well-founded`, runs stratified DFS on cyclic negation, and aborts the whole file with an uncaught `solve: Depth limit exceeded (100)`
+
+**Found by** PAR 4's D.3 round, wave 2 (gap critic W2-10). Reproduced by hand on 2026-10-18 with `u8a.prologos` and
+`u8b.prologos` (on branch `par4-arena-executors`, `racket/prologos/benchmarks/par4/d3-wave2/W2-10/`):
+- `solve-with wf-solver (p-holds)` gives `@[]`.
+- With `{:timeout 100}`, the file aborts: no later result is printed.
+- `{:semantics well-founded :timeout 100}` gives `@[]`.
+
+**Mechanism** (W2-10, read in code): `elaborator.rkt:3128` builds the override with `make-solver-config`, which
+fills in every default (`solver.rkt:73-100`). `reduction.rkt:4675-4690` then merges all of those keys over the named
+solver. `:strategy` is reset as well: under `atms-s`, `{:timeout 0}` returns DFS's `@[]` (W2-10 `u3`).
+
+**Masked in the repo**: `examples/2026-03-14-wfle-acceptance.prologos:642` ("I6: WF with timeout override …
+accepted via solver config merge") therefore runs stratified semantics. Its answers happen to coincide.
+
+**Related surface gaps** (W2-10, measured or read in code):
+- (a) `:timeout`, documented in milliseconds (`docs/spec/grammar.org:1427`), is implemented as fuel = ms × 1000
+  fires (`relations.rkt:3115-3116`). `:timeout 0` still returns the full answers.
+- (b) `:parallelism`, `:fairness` and `:scheduler-io` are validated (`macros.rkt:1017-1028`) and never read; only
+  `:fuel` is read (`driver.rkt:1332`). An acceptance file declares two of them
+  (`examples/2026-03-18-track7-acceptance.prologos:161-168`).
+
+**Fix shape**: an override carries only the keys it names; build it as a partial map, not with
+`make-solver-config`. The meaning of `:timeout` and the dead keys are posed to the owner with PAR 4's budgets
+decision (O-16 in the synthesis; it re-opens O-2).
+
+**When**: the override fix is independent and small, so it could land at any time. The surface questions are
+decided with O-16.
+
+**Record**: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §1, §5.6 (on branch `par4-arena-executors`).

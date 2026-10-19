@@ -1,0 +1,9 @@
+0: [Sigma Nat Nat] : [Type 0]
+1: ERROR: inside `<…>`, `*` needs a SPACE before it — glued to a closing bracket, `*` is the path-selection flatten operator, not a type operator. For a product type write `<(x : A) * B>`, not `<(x : A)* B>`
+2: ERROR: Unbound variable
+3: ERROR: Unbound variable
+4: Nat -> Nat : [Type 0]
+5: Nat -> Nat : [Type 0]
+6: k1 : Nat -> Nat defined.
+7: ERROR: preparse: spec: spec type for k2 has no arrow but defn has 1 params
+--- 4 errors ---

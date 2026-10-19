@@ -1,0 +1,12 @@
+0: e3 : {:a {:b {:c [PVec Int]}}} defined.
+1: ERROR: `^_` synthesizes the leaf key from the surviving path — it attaches to the branch's LAST segment
+2: ERROR: `^_` synthesizes the leaf key from the surviving path — it attaches to the branch's LAST segment
+3: ERROR: `^_` synthesizes the leaf key from the surviving path — it attaches to the branch's LAST segment
+4: ERROR: the `^-` collapse family ends a branch — it is a LEAF continuation
+5: ERROR: the `^-` collapse family ends a branch — it is a LEAF continuation
+6: ERROR: Type mismatch
+7: ERROR: inside `<…>`, `*` needs a SPACE before it — glued to a closing bracket, `*` is the path-selection flatten operator, not a type operator. For a product type write `<(x : A) * B>`, not `<(x : A)* B>`
+8: ERROR: Type mismatch
+9: ERROR: preparse: spec: spec type for s4 has no arrow but defn has 1 params
+10: ERROR: cannot infer the type of an unannotated parameter — it is used here in a way that requires a known type (e.g. field projection `.field` or arithmetic). Annotate the parameter (`[x : T]`) or add a `spec`.
+--- 10 errors ---

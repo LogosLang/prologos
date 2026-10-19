@@ -1,0 +1,13 @@
+ns probe-1bvi-s
+
+def org := {:db {:admins @[{:name "a"} {:name "b"}]}}
+
+;; an ω LEAF under a total collapse, with a renamed key ancestor
+org{db^p.admins:name^-}
+;; the remedies 1b-vi-B would offer
+org{db.admins:name^-}
+org{db^p.admins^:name}
+;; reference points
+org{db.admins:name}
+org{db^.admins:name}
+org{db^.admins^:name}

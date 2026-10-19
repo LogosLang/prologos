@@ -1,0 +1,13 @@
+0: env : {:dev {:db {:port Int :url String}} :prod {:db {:port Int :url String}}} defined.
+1: kk : {:a {:k Int} :k Int} defined.
+2: ERROR: duplicate output key `:port` in the select block — two branches deliver the same output key, and distinct keys are required (strict merge; the alternative is a silent last-write-wins). The key may be one a branch NAMES, or one a `*` LIFTED out of its layer. Rename an UNSTARRED branch with `^k'` (`x{k^k2}`) — a starred segment cannot carry a rename — or select the flatten in its own block. If the key was lifted, dropping the `*` does not help either: it re-nests the layer under the key the star was deleting
+3: ERROR: duplicate output key :db in the select block — distinct output keys are required (strict merge); rename a branch with `^k'`, or group same-head branches into one sub-block (`x{k.{a b}}`)
+4: {:url "d-url", :port 5433, :db {:url "p-url", :port 5432}} : {:db {:port Int :url String} :port Int :url String}
+5: ERROR: duplicate output key `:k` in the select block — two branches deliver the same output key, and distinct keys are required (strict merge; the alternative is a silent last-write-wins). The key may be one a branch NAMES, or one a `*` LIFTED out of its layer. Rename an UNSTARRED branch with `^k'` (`x{k^k2}`) — a starred segment cannot carry a rename — or select the flatten in its own block. If the key was lifted, dropping the `*` does not help either: it re-nests the layer under the key the star was deleting
+6: {:a {:k 1}, :k 2} : {:a {:k Int} :k Int}
+7: ERROR: duplicate output key `:port` in the select block — two branches deliver the same output key, and distinct keys are required (strict merge; the alternative is a silent last-write-wins). The key may be one a branch NAMES, or one a `*` LIFTED out of its layer. Rename an UNSTARRED branch with `^k'` (`x{k^k2}`) — a starred segment cannot carry a rename — or select the flatten in its own block. If the key was lifted, dropping the `*` does not help either: it re-nests the layer under the key the star was deleting
+8: {:url "d-url", :port 5433, :db {:url "p-url", :port 5432}} : {:db {:port Int :url String} :port Int :url String}
+9: {:url "p-url", :dev {:db {:url "d-url", :port 5433}}, :port 5432} : {:dev {:db {:port Int :url String}} :port Int :url String}
+10: {:k 1} : {:k Int}
+11: {:k 2} : {:k Int}
+--- 4 errors ---

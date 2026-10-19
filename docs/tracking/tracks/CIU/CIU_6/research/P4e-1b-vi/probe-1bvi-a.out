@@ -1,0 +1,26 @@
+0: e3 : {:a {:b {:c [PVec Int]}}} defined.
+1: t4 : {:a {:b {:c ⟨{:x Int} {:y Int}⟩}}} defined.
+2: v3 : {:a {:b {:c [PVec [PVec Int]]}}} defined.
+3: dd : {:p {:u [PVec Int] :w [PVec Int]} :q {:v [PVec Int]}} defined.
+4: {:c @[1 2]} : {:c [PVec Int]}
+5: {:c @[1 2]} : {:c [PVec Int]}
+6: {:c @[1 2]} : {:c [PVec Int]}
+7: {:q @[1 2]} : {:q [PVec Int]}
+8: {:a-b-c @[1 2]} : {:a-b-c [PVec Int]}
+9: {:p-b-c @[1 2]} : {:p-b-c [PVec Int]}
+10: {:b-c @[1 2]} : {:b-c [PVec Int]}
+11: {:p-q-c @[1 2]} : {:p-q-c [PVec Int]}
+12: ERROR: select: `c*` — `*` (flatten) is not implemented yet for this layer (`{:c ⟨{:x Int} {:y Int}⟩}`)
+13: ERROR: select: `c*` — `*` (flatten) is not implemented yet for this layer (`{:c ⟨{:x Int} {:y Int}⟩}`)
+14: ERROR: select: `c*` — `*` (flatten) is not implemented yet for this layer (`{:c ⟨{:x Int} {:y Int}⟩}`)
+15: ERROR: select: `c*` — `*` (flatten) is not implemented yet for this layer (`{:c ⟨{:x Int} {:y Int}⟩}`)
+16: ERROR: select: `c*_` — `*` (flatten) is not implemented yet for this layer (`{:c ⟨{:x Int} {:y Int}⟩}`)
+17: ERROR: select: `c*_` — `*` (flatten) is not implemented yet for this layer (`{:c ⟨{:x Int} {:y Int}⟩}`)
+18: {:a {:b @[@[1 2] @[3]]}} : {:a {:b [PVec [PVec Int]]}}
+19: @[@[@[1 2] @[3]]] : ⟨[PVec [PVec Int]]⟩
+20: {:p {:b @[@[1 2] @[3]]}} : {:p {:b [PVec [PVec Int]]}}
+21: ERROR: `c*-` — `*` is the layer-delete operator and attaches at the END of a segment, so `c*-` is neither a field nor an operator. A field literally named `c*-` is reached with `[map-get x :c*-]`
+22: ERROR: `c*-_` — `*` is the layer-delete operator and attaches at the END of a segment, so `c*-_` is neither a field nor an operator. A field literally named `c*-_` is reached with `[map-get x :c*-_]`
+23: ERROR: `u*-` — `*` is the layer-delete operator and attaches at the END of a segment, so `u*-` is neither a field nor an operator. A field literally named `u*-` is reached with `[map-get x :u*-]`
+24: ERROR: `u*-` — `*` is the layer-delete operator and attaches at the END of a segment, so `u*-` is neither a field nor an operator. A field literally named `u*-` is reached with `[map-get x :u*-]`
+--- 10 errors ---

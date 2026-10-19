@@ -1,0 +1,9 @@
+ns probe-1bvi-i
+
+def hy := {:a {:b-c 1} :a-b {:c 2}}
+def hz := {:a {:b {:c-d 1}} :a-b {:c {:d 2}}}
+
+;; hyphen-join is not injective — does the strict merge catch the clash?
+hy{a.b-c^-_ a-b.c^-_}
+hz{a.b*_ a-b.c*_}
+hz{a.b.c-d^-_ a-b.c.d^-_}

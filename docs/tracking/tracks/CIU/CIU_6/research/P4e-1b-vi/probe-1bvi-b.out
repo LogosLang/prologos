@@ -1,0 +1,14 @@
+0: mn : {:a {:x Int} :b {:y Int}} defined.
+1: w : {:a [PVec {:b [PVec [PVec Int]]}]} defined.
+2: ERROR: select: `:b*` — `*` (flatten) cannot join Map-valued contents under `:` (broadcast): every element of `[PVec {:b [PVec [PVec Int]]}]` shares ONE element type, so a keywise join would contribute the same keys once per element and collide for any length above 1 (the length is not statically known). Flatten a single element's layer instead, or select the fields individually
+3: @[@[1] @[2] @[3]] : [PVec [PVec Int]]
+4: ERROR: `b^*` — a segment name may not contain `^`; `^` re-keys and `*` deletes a layer, and a segment carries at most one operator suffix. Spell them as separate segments — `x{k^.f*}` re-keys above and flattens below
+5: ERROR: select: `:b*` — `*` (flatten) cannot join Map-valued contents under `:` (broadcast): every element of `[PVec {:b [PVec [PVec Int]]}]` shares ONE element type, so a keywise join would contribute the same keys once per element and collide for any length above 1 (the length is not statically known). Flatten a single element's layer instead, or select the fields individually
+6: ERROR: `a*-` — `*` is the layer-delete operator and attaches at the END of a segment, so `a*-` is neither a field nor an operator. A field literally named `a*-` is reached with `[map-get x :a*-]`
+7: ERROR: `a*-` — `*` is the layer-delete operator and attaches at the END of a segment, so `a*-` is neither a field nor an operator. A field literally named `a*-` is reached with `[map-get x :a*-]`
+8: ERROR: `*-` — `*` is postfix; it attaches to the END of a segment
+9: ERROR: `a*-b` — `*` is the layer-delete operator and attaches at the END of a segment, so `a*-b` is neither a field nor an operator. A field literally named `a*-b` is reached with `[map-get x :a*-b]`
+10: ERROR: Unbound variable
+11: ERROR: Unbound variable
+12: ERROR: `a*-` — `*` is the layer-delete operator and attaches at the END of a segment, so `a*-` is neither a field nor an operator. A field literally named `a*-` is reached with `[map-get x :a*-]`
+--- 10 errors ---

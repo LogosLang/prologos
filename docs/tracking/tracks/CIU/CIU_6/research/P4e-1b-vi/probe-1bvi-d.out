@@ -1,0 +1,12 @@
+0: w3 : {:a [PVec {:b {:c [PVec Int]}}]} defined.
+1: mn : {:a {:x Int} :b {:y Int}} defined.
+2: ERROR: Could not infer type — select: `c` (branch `a.b`) is not a field of a vector element position — a vector subject takes ordinal steps (`.N`) or ordinal branches (`x{N M}`). To reach fields of EACH element, broadcast instead: `xs:c` or `xs:{…}`
+3: ERROR: Could not infer type — select: `c` (branch `a.b`) is not a field of a vector element position — a vector subject takes ordinal steps (`.N`) or ordinal branches (`x{N M}`). To reach fields of EACH element, broadcast instead: `xs:c` or `xs:{…}`
+4: ERROR: Could not infer type — select: `c` (branch `a.b`) is not a field of a vector element position — a vector subject takes ordinal steps (`.N`) or ordinal branches (`x{N M}`). To reach fields of EACH element, broadcast instead: `xs:c` or `xs:{…}`
+5: ERROR: Could not infer type — select: `c` (branch `a.b`) is not a field of a vector element position — a vector subject takes ordinal steps (`.N`) or ordinal branches (`x{N M}`). To reach fields of EACH element, broadcast instead: `xs:c` or `xs:{…}`
+6: ERROR: Could not infer type — select: `c` (branch `a.b`) is not a field of a vector element position — a vector subject takes ordinal steps (`.N`) or ordinal branches (`x{N M}`). To reach fields of EACH element, broadcast instead: `xs:c` or `xs:{…}`
+7: ERROR: Could not infer type — select: `c` is not a field of a vector element position — a vector subject takes ordinal steps (`.N`) or ordinal branches (`x{N M}`). To reach fields of EACH element, broadcast instead: `xs:c` or `xs:{…}`
+8: ERROR: Unbound variable
+9: ERROR: Unbound variable
+10: ERROR: preparse: spec: spec type for g2 has no arrow but defn has 1 params
+--- 9 errors ---

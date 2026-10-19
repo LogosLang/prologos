@@ -178,9 +178,16 @@
  ;; D4.P4e-1b (Q_U40): the flatten step. `select-star-cont` is the ONLY reader of
  ;; its continuation — `select-step-cont` deliberately answers #f (see its note).
  select-star-step? select-star-cont make-select-star
- select-branch-deep-star? select-steps-star-tail?
+ ;; D4.P4e-1b-vi-C: the star-cont axis (C-1) and the total-collapse mark (C-2, C-4)
+ select-star-conts select-star-cont-synth? select-star-cont-total? select-star-cont-of
+ select-star-cont-unhandled
+ select-cont-collapsed? select-cont-dissolves-level?
+ select-step-mark-collapsed select-step-unmark select-branch-mark-total-collapse
+ select-branch-total-collapse?
+ select-star-provenance-prefix
+ select-branch-deep-star? select-steps-star-tail? select-branch-star-conts/deep
  select-step-makes-no-layer? select-branch-has-star?/deep
- select-steps-yield-bare-join?
+ select-steps-yield-bare-join? select-branch-ordinal-facts select-level-ordinal-fact select-branch-level-star-conts
  ;; [Q_U44] canonical key order — ONE definition, shared by both twins.
  canonical-keyword-key? canonical-keyword-key<?
  select-step-cont select-cont-collapse? select-cont-rename
@@ -1058,6 +1065,17 @@
 ;; through `select-bcast-inner` first; the new predicate joined the family
 ;; without it. Unwrapping is the two-line repair, and it means "ANYWHERE" is now
 ;; true rather than aspirational.
+;; ⭐ 1b-vi-D-1: the star CONTS anywhere in a branch, in textual order — the same walk as
+;; `select-branch-has-star?/deep` below (ω-transparent, into sub-blocks). A LEVEL failure
+;; carries these so its message names the operators PRESENT rather than one guessed star.
+(define (select-branch-star-conts/deep b)
+  (append-map (lambda (s0)
+                (let ([s (if (eq? (select-step-kind s0) 'bcast) (select-bcast-inner s0) s0)])
+                  (cond [(select-star-step? s) (list (select-star-cont s))]
+                        [(select-sub-step? s) (append-map select-branch-star-conts/deep (cdr s))]
+                        [else '()])))
+              b))
+
 (define (select-branch-has-star?/deep b)
   (ormap (lambda (s0)
            (let ([s (if (eq? (select-step-kind s0) 'bcast)
@@ -1084,11 +1102,112 @@
 ;; on exactly `(sₙ ★)` because a KEYED prefix step has to re-nest. That reason is
 ;; precisely what does NOT apply to a step making no layer, which is why skipping
 ;; those here is the same rule rather than a relaxation of it.
+;; ⭐⭐ 1b-vi-E [Q_U61] — S: A DISSOLVED STEP NAMES NO KEY EITHER. The question this
+;; predicate answers is Q_U47's — does the remainder (branch − star − sₙ) name a key?
+;; — and a `^` dissolve (or a total-collapse mark, which places like `^`) names none,
+;; exactly as an ordinal makes no layer. Before E the loop skipped only the latter, so
+;; `ot{0.a^.b*}` wrapped the join in the ordinal's tuple (`@[{:c …}]`) while
+;; `ot{0.a*}` spliced it (Q_U49's decided seat B) — a depth-dependent landing that no
+;; decision stated and no pin held (census: 9 pins, all depth 1). `select-step-
+;; makes-no-layer?` itself is NOT widened: four other seats ask that narrower question.
+(define (select-step-names-no-key? s)
+  (or (select-step-makes-no-layer? s)
+      (let ([i (if (eq? (select-step-kind s) 'bcast) (select-bcast-inner s) s)])
+        (and (eq? (select-step-kind i) 'caret)
+             (select-cont-dissolves-level? (select-step-cont i))))))
+;; ⚠ 1b-vi verify (VT-7): the skip runs over the steps STRICTLY ABOVE sₙ — `(cddr ss)`,
+;; not `(cdr ss)`. With `(cdr ss)` a sₙ that itself names no key was consumed, leaving
+;; `(★)` (no star tail) — unobservable only because the parser refuses `a^*`; the
+;; question is about the remainder, which never includes sₙ.
+;; ⚠ The ω unwrap in `select-step-names-no-key?` above is UNREACHABLE until DEFERRED 167
+;; (VI-8): an ω step between the head and sₙ is an in-block step after ω, refused per
+;; command today (and, under a total star, at the parser — VF-1).
 (define (select-steps-yield-bare-join? steps)
   (let loop ([ss steps])
-    (if (and (pair? ss) (pair? (cdr ss)) (select-step-makes-no-layer? (car ss)))
+    (if (and (pair? ss) (pair? (cdr ss)) (pair? (cddr ss)) (select-step-names-no-key? (car ss)))
         (loop (cdr ss))
         (select-steps-star-tail? ss))))
+;; ⭐⭐ 1b-vi verify (VF-3) — THE ORDINAL FACTS AT A LEVEL, read by BOTH level gates
+;; (`star-dup-key`, `star-l4-mixed`) so their prose says only what is true there. One fact
+;; per branch DELIVERED to the level, seen through the routes that splice into it —
+;; leading DISSOLVES (a dissolved head splices what is below it: `w{v^.0.a^.b*}`) and a
+;; TERMINAL sub-block reached through them (`rv{xs^.{0.a*} k}`):
+;;   'head       an ordinal HEAD `(@ord N)` whose star landing passes through (S, Q_U61)
+;;   'head-wrap  an ordinal HEAD that does not — ONE keyless tuple component, whatever
+;;               its `^`s (spec §3.3)
+;;   'mid        a BARE number after a dissolve whose star landing passes through — an
+;;               ordinal STEP makes no level at all (Q_U2), so it never wraps
+;;   #f          anything else
+;; The two ordinal forms must stay apart: dropping one star resolves a collision through
+;; a bare number (`w{v^.0.a^.b v^.1.a^.b*}`) and trades it for an L4 mix under a head.
+;; Before the verify the dup gate read `(car b)` only (VT-5, VS-5, VM-11, VI-7) and the
+;; L4 gate read nothing (VM-1); the prose then offered remedies measured false there.
+(define (select-branch-delivered b)
+  ;; the branch lists whose components land at THIS level, through the splicing routes
+  (cond
+    [(null? b) (list b)]
+    [(and (select-sub-step? (car b)) (null? (cdr b)))
+     (append-map select-branch-delivered (cdr (car b)))]
+    [(and (eq? (select-step-kind (car b)) 'caret)
+          (select-cont-dissolves-level? (select-step-cont (car b)))
+          (pair? (cdr b)))
+     (select-branch-delivered (cdr b))]
+    [else (list b)]))
+(define (select-delivered-ordinal-fact d)
+  (cond
+    [(null? d) #f]
+    ;; IN THE TWINS' ARM ORDER: the `^-` collapse arm precedes the ordinal arm in both
+    ;; walkers, so an ordinal-headed collapse lands ONE KEYED field — not a tuple
+    ;; component. Read as an ordinal head, `ot2{0.a.b.k^- 1.a^.b*}` was told that
+    ;; dropping the star "on every branch gives a tuple" — measured L4 (verify v7:27).
+    [(select-branch-collapse d) #f]
+    [(select-ord-step? (car d)) (if (select-steps-yield-bare-join? (cdr d)) 'head 'head-wrap)]
+    [(number? (car d)) (and (select-steps-yield-bare-join? (cdr d)) 'mid)]
+    [else #f]))
+(define (select-branch-ordinal-facts b)
+  (map select-delivered-ordinal-fact (select-branch-delivered b)))
+;; the star's sₙ is a NAMED key — where `^` instead of the star is spellable (a `{0}` sₙ
+;; cannot take one: `vhm2{0.{0}^ 1.{0}^}` is a parse error, verify probe v4)
+(define (select-delivered-key-tail? d)
+  (let ([r (reverse d)])
+    (and (pair? r) (pair? (cdr r)) (select-star-step? (car r))
+         (memq (select-step-kind (cadr r)) '(key caret)) #t)))
+;; the LEVEL's summary — #f, or a list of the flags that hold:
+;;   'passes    some delivered branch passes a landing through an ordinal ('head / 'mid)
+;;   'head      some does so through a HEAD
+;;   'all       EVERY delivered branch passes through an ordinal
+;;   'key-tails … and every one's sₙ is a named key (the `^` remedy is spellable)
+;;   'wrap      some delivered branch is an ordinal head that does not ('head-wrap)
+;;   'all-head  EVERY delivered branch is an ordinal head ('head / 'head-wrap)
+(define (select-level-ordinal-fact branches)
+  (let* ([ds (append-map select-branch-delivered branches)]
+         [fs (map select-delivered-ordinal-fact ds)]
+         [passes? (lambda (f) (memq f '(head mid)))]
+         [head? (lambda (f) (memq f '(head head-wrap)))]
+         [all? (and (pair? fs) (andmap passes? fs))]
+         [flags (append (if (ormap passes? fs) '(passes) '())
+                        (if (memq 'head fs) '(head) '())
+                        (if all? '(all) '())
+                        (if (and all? (andmap select-delivered-key-tail? ds)) '(key-tails) '())
+                        (if (memq 'head-wrap fs) '(wrap) '())
+                        (if (and (pair? fs) (andmap head? fs)) '(all-head) '()))])
+    (and (pair? flags) flags)))
+;; ⭐ 1b-vi verify (VM-10) — the star conts whose LANDINGS REACH THIS LEVEL, for the
+;; level gates' prose. `select-branch-star-conts/deep` walks into EVERY sub-block, so a
+;; star sealed under a KEPT key (`t3x{a.{b*-_} c* d*}`) was named as a possible lifter
+;; of the colliding key and drew the total-collapse sentence. A star's landing reaches
+;; the level when it is the branch's own tail `(sₙ ★)` after steps that name no key, or
+;; sits in a terminal sub-block reached through such steps — the same routes
+;; `select-steps-yield-bare-join?` and the dissolve arms take.
+(define (select-branch-level-star-conts b)
+  (cond
+    [(null? b) '()]
+    [(select-steps-star-tail? b) (list (select-star-cont (cadr b)))]
+    [(and (select-sub-step? (car b)) (null? (cdr b)))
+     (append-map select-branch-level-star-conts (cdr (car b)))]
+    [(and (pair? (cdr b)) (select-step-names-no-key? (car b)))
+     (select-branch-level-star-conts (cdr b))]
+    [else '()]))
 
 (define (make-select-star cont) (list '@star cont))
 
@@ -1123,6 +1242,43 @@
 ;; `select-step-cont` — see that function's note: `'flatten`/`'flatten-synth`
 ;; are not CARET conts and must not enter that channel.
 (define (select-star-cont s) (cadr s))
+
+;; ⭐⭐ D4.P4e-1b slice 1b-vi-C — THE STAR-CONT AXIS, CLOSED (C-1).
+;; Four continuations, and they are a PRODUCT, not a list: {flatten, collapse}
+;; × {plain, synth} — `*` `*_` `*-` `*-_`, named in spelling order. Every reader
+;; that used to ask `(eq? cont 'flatten-synth)` asked ONE of these two questions
+;; and answered the other three conts with `*`'s behaviour by default; with four
+;; conts that default is a silent bare `*` for `*-` (Q_U52 §3's hazard). So the
+;; readers ask the classifier, and the classifier RAISES on anything off the
+;; axis — loud, like `select-step-kind`. The SPELLING of each cont stays in
+;; reader-forms.rkt's tables (the one place spelling↔cont is stated).
+(define select-star-conts '(flatten flatten-synth flatten-collapse flatten-collapse-synth))
+(define (select-star-cont-unhandled who c)
+  (error who
+         (string-append
+          "unknown star continuation: ~s\n"
+          "  the star-cont axis is CLOSED: ~s — {flatten, collapse} × {plain, synth}\n"
+          "  a new cont must be placed on the axis here, and given a row in\n"
+          "  reader-forms.rkt's star tables (D4.P4e-1b-vi-C)")
+         c select-star-conts))
+;; `*_` / `*-_`: synthesize provenance keys over the deleted layer (Q_U24, Q_U51)
+(define (select-star-cont-synth? c)
+  (case c
+    [(flatten flatten-collapse) #f]
+    [(flatten-synth flatten-collapse-synth) #t]
+    [else (select-star-cont-unhandled 'select-star-cont-synth? c)]))
+;; `*-` / `*-_`: TOTAL collapse — no ancestor contributes a level (Q_U48)
+(define (select-star-cont-total? c)
+  (case c
+    [(flatten flatten-synth) #f]
+    [(flatten-collapse flatten-collapse-synth) #t]
+    [else (select-star-cont-unhandled 'select-star-cont-total? c)]))
+;; the inverse: a point on the axis. Messages use it to name an in-family
+;; sibling (`*-_`'s "use bare" is `*-`, never `*`).
+(define (select-star-cont-of total? synth?)
+  (if total?
+      (if synth? 'flatten-collapse-synth 'flatten-collapse)
+      (if synth? 'flatten-synth 'flatten)))
 
 ;; D4.P4a — THE STEP-KIND TOTALITY DISPATCHER (owner ruling 2026-07-31:
 ;; route ALL EIGHT dispatch sites through this one classifier).
@@ -1380,6 +1536,100 @@
 (define (select-cont-rename c)
   (and (pair? c) (memq (car c) '(rename collapse-rename)) (cdr c)))
 
+;; ⭐⭐ D4.P4e-1b slice 1b-vi-C — THE TOTAL-COLLAPSE MARK (C-2, Q_U58's M).
+;; Under `*-` / `*-_` no ancestor s₁…sₙ₋₁ contributes an output level. That fact
+;; is recorded ONCE, on each ancestor, as `(collapsed . c₀)` — where c₀ is the
+;; cont the user WROTE: `#f` (plain `a`), `dissolve` (`a^`) or `(rename . k)`
+;; (`a^k`, which Q_U55 lets through under `*-_` only). Nothing else is ever
+;; wrapped: the parser's checks run first and refuse every other ancestor cont.
+;;
+;; ⚠⚠ THE MARK CHANGES PLACEMENT AND NOTHING ELSE. Placement: both twins' dissolve
+;; arms test `select-cont-dissolves-level?`, so a marked ancestor splices like
+;; `^` and placement EMERGES from arms that already exist. Everything else —
+;; printing, naming — reads the step AS WRITTEN through `select-step-unmark`, so
+;; a refusal label and a provenance key are true by construction, not by one
+;; parallel arm per reader. (Why a wrapper and not two new atoms: D4
+;; §5.P4e-1b-vi, "1b-vi-C — design target", C-2.)
+;; ⚠ A mark must never reach a NON-placement arm of a walker (the kept-key arm
+;; would re-nest it): the dissolve arm is first in both twins, and the per-twin
+;; mutations M-typing / M-reduction pin that it is.
+(define (select-cont-collapsed? c) (and (pair? c) (eq? (car c) 'collapsed)))
+(define (select-cont-dissolves-level? c) (or (eq? c 'dissolve) (select-cont-collapsed? c)))
+
+(define (select-step-mark-collapsed s)
+  (define (mark name c0)
+    (unless (or (not c0) (eq? c0 'dissolve) (and (pair? c0) (eq? (car c0) 'rename)))
+      (error 'select-branch-mark-total-collapse
+             "an ancestor of a total collapse carries ~s — only a plain key, `^` or `^k` can reach here (the parser's positional check refuses the rest); a parser check has regressed"
+             c0))
+    (list '@key name (cons 'collapsed c0)))
+  (case (select-step-kind s)
+    [(key) (mark s #f)]
+    [(caret) (if (select-cont-collapsed? (caddr s)) s (mark (cadr s) (caddr s)))]
+    ;; probe-1bvi-t: the ω lift applies its INNER step per element through the
+    ;; branch walk, which honours the inner cont (`cfg^` changes the type), so the
+    ;; inner is where an ω ancestor's mark belongs. Unreachable until DEFERRED 167: the
+    ;; parser refuses a total collapse under an ω ancestor (1b-vi verify VF-1) — that
+    ;; shape aborted the whole file before, so "unpinnable" had hidden a crash.
+    [(bcast) (let* ([i (select-bcast-inner s)] [m (select-step-mark-collapsed i)])
+               (if (eq? m i) s (make-select-bcast m)))]
+    ;; an ordinal makes no layer (Q_U2); a sub-block is terminal and a star that is
+    ;; not last is typing's `star-mid-branch` — none is an ancestor with a level.
+    [(ord-step ord-branch sub star) s]
+    [else (select-step-kind-unhandled 'select-step-mark-collapsed s)]))
+
+;; the step AS WRITTEN — the inverse of the mark, for every non-placement reader
+(define (select-step-unmark s)
+  (case (select-step-kind s)
+    [(caret) (let ([c (caddr s)])
+               (cond [(not (select-cont-collapsed? c)) s]
+                     [(cdr c) (list '@key (cadr s) (cdr c))]
+                     [else (cadr s)]))]
+    [(bcast) (let* ([i (select-bcast-inner s)] [u (select-step-unmark i)])
+               (if (eq? u i) s (make-select-bcast u)))]
+    [else s]))
+
+;; ⭐ 1b-vi-D-2a: "the branch ends in a TOTAL star" — ONE definition, read by the mark
+;; below, so "total" cannot mean two things. (`*-` / `*-_`; the classifier raises on
+;; anything off the axis.) ⚠ 1b-vi-E retired its other readers: the twins' ordinal-head
+;; arms now ask `select-steps-yield-bare-join?` (Q_U61), which a marked branch answers
+;; #t because its ancestors name no key (corrected at the 1b-vi verify, VT-6).
+(define (select-branch-total-collapse? b)
+  (let ([rev (reverse b)])
+    (and (pair? rev)
+         (select-star-step? (car rev))
+         (select-star-cont-total? (select-star-cont (car rev))))))
+
+;; Mark s₁…sₙ₋₁ iff the branch ends in a TOTAL star; otherwise the branch ITSELF
+;; (`eq?`). Pure, and branch-local: a sub-block is its own branch list and is
+;; marked where it is segmented (1b-vi-D wires this at `segment-select-items`'
+;; success return, after every parser check).
+;; ⚠ An ordinal step is left UNMARKED (it has no cont to wrap) — and that is NOT
+;; "an ordinal makes no layer" by itself: an ordinal HEAD sets its branch's
+;; landing (one keyless component). Under a total collapse both twins' ord-head
+;; arms descend transparently instead — since 1b-vi-E because the MARKED ancestors
+;; name no key (`select-steps-yield-bare-join?`), not through this predicate.
+(define (select-branch-mark-total-collapse b)
+  (let ([rev (reverse b)])
+    (if (and (pair? rev) (pair? (cdr rev))
+             (select-branch-total-collapse? b))
+        (append (map select-step-mark-collapsed (reverse (cddr rev)))
+                (list (cadr rev) (car rev)))
+        b)))
+
+;; ⭐ C-4 — `*-_`'s PREFIX (Q_U57, P), computed at ONE seat for both twins: the
+;; surviving output names of the collapsed ancestors (renames honoured, `^`
+;; dropped, ordinals nameless — `^-_`'s rule), or #f. `seen` is the walk's
+;; branch-local record of consumed steps; under a total collapse every ancestor
+;; is consumed by a dissolve arm, so `seen` is exactly s₁…sₙ₋₁.
+(define (select-star-provenance-prefix star seen)
+  (let ([c (select-star-cont star)])
+    (and (select-star-cont-total? c)
+         (select-star-cont-synth? c)
+         (let ([names (filter values (map select-step-output-name seen))])
+           (and (pair? names)
+                (string->symbol (string-join (map symbol->string names) select-synth-separator)))))))
+
 ;; the branch's LEAF collapse continuation, or #f (the `^-` family flattens
 ;; the WHOLE branch, so its walk is a pre-classified special case)
 (define (select-branch-collapse b)
@@ -1423,6 +1673,8 @@
     [(caret)
      (let ([c (select-step-cont s)])
        (cond
+         ;; 1b-vi-C: a marked ancestor names as WRITTEN (the mark is placement only)
+         [(select-cont-collapsed? c) (select-step-output-name (select-step-unmark s))]
          [(eq? c 'dissolve) #f]
          [(select-cont-rename c) => values]
          [else (cadr s)]))]

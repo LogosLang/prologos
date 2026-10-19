@@ -1,0 +1,23 @@
+ns v3asort
+def vk := @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]
+def vkz := @[{:a {:b {:k 1}} :z 5} {:a {:b {:k 2}} :z 6}]
+def ovv := @[@[{:a {:b {:k 1}}}] @[{:a {:b {:k 2}}}]]
+def vk2 := @[{:a {:b {:k 1}} :c {:d {:j 3}}} {:a {:b {:k 2}} :c {:d {:j 4}}}]
+def vo := @[{:a @[{:n 1} {:n 2}]}]
+def wk := {:xs @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]}
+;; Cluster B (L1-2 / L2-2 / L1-3): an ω sub inner in PATH position (Q_U20: assembles at 'block)
+vk:{a^.b*}
+vk:{a.b*-}
+vk:{a.b*-_}
+ovv:{0.a^.b*}
+def r1 := ovv:{0.a^.b*}
+r1:k
+vkz:{a^.b* z}
+vk2:{a^.b* c^.d*}
+vk2:{c^.d* a^.b*}
+vo:{a:n}
+;; controls: block outer (same inner), depth-1, starless
+wk{xs:{a^.b*}}
+vk:{a*}
+vk:{a^.b^}
+{:q vo}{q:{a:n}}

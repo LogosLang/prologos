@@ -520,3 +520,152 @@ regions:{host port}*_
 ;; L4 — the contrast: bare `*` at the same seat lifts the fields UNPREFIXED
 app-config{database}*
 ;;93=> {:url "localhost/guild-db", :pool-size 10} : {:pool-size Int :url String}
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; §M  TOTAL COLLAPSE — `*-` lifts a layer's contents to the TOP of its branch;
+;;     `*-_` keeps the collapsed path as a PREFIX   [Q_U48 · Q_U55 · Q_U56 ·
+;;     Q_U57 · Q_U59 · D4.P4e-1b-vi ✅]
+;; ───────────────────────────────────────────────────────────────────────────
+;; `*-` is to `*` what `^-` is to `^`: the TOTAL form beside the selective one.
+;; `*` deletes ONE layer and the surviving ancestors keep their keys; `*-` also
+;; collapses every ancestor, so the join lands at the top of its branch —
+;; `*-` ≡ `^` on every ancestor, then `*` (Q_U48). `*-_` lifts the same way and
+;; names each lifted field by everything it deleted: the collapsed ancestors'
+;; surviving output names, then the content key (Q_U57). Where nothing
+;; collapses they are just `*` / `*_` (Q_U59).
+
+;; M1 — the contrast: a deep `*` keeps the ancestor that names its landing (Q_U47)
+app-config{server.ssl*}
+;;94=> {:server {:cert-path "/etc/ssl/cert.pem", :enabled true}} : {:server {:cert-path String :enabled Bool}}
+
+;; M2 — `*-` collapses `server` too: the fields land at the top
+app-config{server.ssl*-}
+;;95=> {:cert-path "/etc/ssl/cert.pem", :enabled true} : {:cert-path String :enabled Bool}
+
+;; M3 — …which is exactly `^` on every ancestor, then `*` (Q_U48's ≡)
+app-config{server^.ssl*}
+;;96=> {:cert-path "/etc/ssl/cert.pem", :enabled true} : {:cert-path String :enabled Bool}
+
+;; M4 — `*-_`: the same lift, each field named by the whole collapsed path (Q_U57)
+app-config{server.ssl*-_}
+;;97=> {:server-ssl-cert-path "/etc/ssl/cert.pem", :server-ssl-enabled true} : {:server-ssl-cert-path String :server-ssl-enabled Bool}
+
+;; M5 — the contrast: `*_` prefixes by the deleted LAYER only, and `server` survives
+app-config{server.ssl*_}
+;;98=> {:server {:ssl-enabled true, :ssl-cert-path "/etc/ssl/cert.pem"}} : {:server {:ssl-cert-path String :ssl-enabled Bool}}
+
+;; M6 — a renamed ancestor's NEW name is what the prefix carries…
+app-config{server^srv.ssl*-_}
+;;99=> {:srv-ssl-cert-path "/etc/ssl/cert.pem", :srv-ssl-enabled true} : {:srv-ssl-cert-path String :srv-ssl-enabled Bool}
+
+;; M7 — …and a dissolved one (`^`) contributes no name at all
+app-config{server^.ssl*-_}
+;;100=> {:ssl-enabled true, :ssl-cert-path "/etc/ssl/cert.pem"} : {:ssl-cert-path String :ssl-enabled Bool}
+
+;; M8 — the collapse is BRANCH-LOCAL: a sibling keeps its own ancestry
+app-config{server.ssl*- server.port}
+;;101=> {:cert-path "/etc/ssl/cert.pem", :enabled true, :server {:port 8080}} : {:cert-path String :enabled Bool :server {:port Int}}
+
+;; M9 — nothing above to collapse: `*-` is `*` (compare L4, result 93; Q_U59)
+app-config{database*-}
+;;102=> {:url "localhost/guild-db", :pool-size 10} : {:pool-size Int :url String}
+
+;; M10 — the closer seat reads the same table: `}*-` / `}*-_` (compare L4 / L1)
+app-config{database}*-
+;;103=> {:url "localhost/guild-db", :pool-size 10} : {:pool-size Int :url String}
+
+app-config{database}*-_
+;;104=> {:database-pool-size 10, :database-url "localhost/guild-db"} : {:database-pool-size Int :database-url String}
+
+;; M11 — the dot path: each `.` level is its own select (Q_U13), so the only
+;; layer `*-_` deletes here is `ssl` — the same prefix `*_` gives
+app-config.server.ssl*-
+;;105=> {:cert-path "/etc/ssl/cert.pem", :enabled true} : {:cert-path String :enabled Bool}
+
+app-config.server.ssl*-_
+;;106=> {:ssl-enabled true, :ssl-cert-path "/etc/ssl/cert.pem"} : {:ssl-cert-path String :ssl-enabled Bool}
+
+;; M12 — ω over a Map: nothing collapses above each region, so this is L3's answer
+regions:{host port}*-_
+;;107=> {:us-host "us.example.com", :ap-port 8443, :ap-host "ap.example.com", :eu-port 443, :us-port 443, :eu-host "eu.example.com"} : {:ap-host String :ap-port Int :eu-host String :eu-port Int :us-host String :us-port Int}
+
+;; M13 — under a collapse an ORDINAL head is transparent (P3c for `^-`;
+;; D4.P4e-1b-vi-D-2a for `*-`): element 0's fields land at the top, as M2's do
+def guilds := @[app-config]
+;;108=> guilds : [PVec {:admins [PVec {:name String :role Keyword}] :database {:pool-size Int :url String} :date String :features [PVec Keyword] :name String :server {:host String :port Int :ssl {:cert-path String :enabled Bool}} :version String}] defined.
+
+guilds{0.server.ssl*-}
+;;109=> {:cert-path "/etc/ssl/cert.pem", :enabled true} : {:cert-path String :enabled Bool}
+
+guilds{0.server.ssl*-_}
+;;110=> {:server-ssl-cert-path "/etc/ssl/cert.pem", :server-ssl-enabled true} : {:server-ssl-cert-path String :server-ssl-enabled Bool}
+
+;; …the same answer field by field with the caret collapse (the law the battery
+;; generates over every position: `ot{0.X}` ≡ `t5{X}`)
+guilds{0.server.ssl.enabled^- 0.server.ssl.cert-path^-}
+;;111=> {:cert-path "/etc/ssl/cert.pem", :enabled true} : {:cert-path String :enabled Bool}
+
+;; M14 — Q_U55's refusal (below) offers "keep the level" — and it runs
+app-config{server^srv.ssl*}
+;;112=> {:srv {:cert-path "/etc/ssl/cert.pem", :enabled true}} : {:srv {:cert-path String :enabled Bool}}
+
+;; M15 — beside a KEYED sibling the lifted fields are just more keys
+app-config{server.ssl*- name}
+;;113=> {:cert-path "/etc/ssl/cert.pem", :enabled true, :name "GuildHall"} : {:cert-path String :enabled Bool :name String}
+
+;; M16 — a plain `*` under an ORDINAL head [Q_U61, decided S]: the ordinal is a
+;; keyless tuple component (spec §3.3), so when nothing between it and the star names
+;; a key the landing is keyless, and Q_U49 splices it into the block — exactly where
+;; the key-headed `app-config{server^.ssl*}` lands (M3)…
+guilds{0.server^.ssl*}
+;;114=> {:cert-path "/etc/ssl/cert.pem", :enabled true} : {:cert-path String :enabled Bool}
+
+;; …while a surviving key keeps the join nested under it, INSIDE the element's tuple
+guilds{0.server.ssl*}
+;;115=> @[{:server {:cert-path "/etc/ssl/cert.pem", :enabled true}}] : ⟨{:server {:cert-path String :enabled Bool}}⟩
+
+;; M17 — S's cost, and its remedy: two elements' spliced fields would meet at one
+;; level (refused below); a tuple of the two is spelled with `^`, not `*`
+def guild-pair := @[app-config app-config]
+;;116=> guild-pair : [PVec {:admins [PVec {:name String :role Keyword}] :database {:pool-size Int :url String} :date String :features [PVec Keyword] :name String :server {:host String :port Int :ssl {:cert-path String :enabled Bool}} :version String}] defined.
+
+guild-pair{0.server^.ssl^ 1.server^.ssl^}
+;;117=> @[{:cert-path "/etc/ssl/cert.pem", :enabled true} {:cert-path "/etc/ssl/cert.pem", :enabled true}] : ⟨{:cert-path String :enabled Bool} {:cert-path String :enabled Bool}⟩
+
+;; —— §M edge cases: REFUSALS (commented — this file runs with 0 errors; each is
+;; pinned live in tests/test-path-selection.rkt's 1b-vi stage table). Messages
+;; MEASURED on this file's subjects (probe: accept-ref, 2026-10-14). ——
+;;
+;; A rename on an ancestor of `*-` can never be observed (Q_U55) — `*-_` keeps it (M6):
+;; app-config{server^srv.ssl*-}
+;;   ERROR: `srv` can never appear under a total collapse: `ssl*-` lifts what `ssl`
+;;   holds to the top of its branch and removes every ancestor level, including the
+;;   one `server^srv` renames. Drop `^srv` (`server.ssl*-`), or keep the level:
+;;   `server^srv.ssl*`                                   (both remedies: M2, M14)
+;;
+;; There is no `*->` operator (Q_U56) — a guided refusal, never a reader abort:
+;; app-config{server.ssl*-> port}
+;;   ERROR: `>` after `server.ssl*-` is neither a field nor a selection operator —
+;;   there is no `*->` operator: a glued `*->` reads as `*-` then `>`, and the `>`
+;;   would become a branch of its own. Drop the `>`: `server.ssl*-` ends its branch,
+;;   and each field after it is a branch of its own
+;;
+;; A lifted Map is KEYED material, so a keyless sibling is an L4 mix:
+;; app-config{server.ssl*- version^}
+;;   ERROR: mixed keyed/keyless sorts in the select block (L4) — `server.ssl*-` is a
+;;   star branch whose landing and its sibling branches' do not agree … a total
+;;   collapse (`*-`) always lands at its branch's top. So make the level agree — if
+;;   the `*-` lands keyed, stop dissolving its siblings (drop a `^`, as in
+;;   `x{a.b*- c}`) … Selecting the flatten in its own block always works  (M15)
+;;
+;; Two ordinal branches whose keyless landings splice to one level (Q_U61's cost):
+;; guild-pair{0.server^.ssl* 1.server^.ssl*}
+;;   ERROR: duplicate output key `:cert-path` in the select block — … Dropping the
+;;   star of ONE ordinal-headed branch trades the collision for a keyed/keyless mix
+;;   (L4): without its star that element lands as one keyless tuple component.
+;;   Dropping it on every branch here gives a tuple of the elements. Through an
+;;   ordinal, a star whose remainder names no key lands its fields at this level
+;;   (Q_U61), so an element's lifted fields meet the level's other keys. `*_` cannot
+;;   tell elements apart either: an ordinal contributes no name to its prefix. To
+;;   keep each element as its own tuple component, end EVERY branch here with `^`
+;;   instead of its star (`x{0.a^.b^ 1.a^.b^}`).   (M17; re-measured at the 1b-vi verify)

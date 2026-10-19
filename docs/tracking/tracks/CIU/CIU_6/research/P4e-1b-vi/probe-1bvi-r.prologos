@@ -1,0 +1,19 @@
+ns probe-1bvi-r
+
+def e3 := {:a {:b {:c @[1 2]}}}
+def t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}
+
+;; 1b-vi-B: the caret half of Q_U55, as a user reads it
+e3{a^p.b.c^-}
+e3{a^p.b.c^-q}
+t5{a^p.b^q.c^-}
+;; still legal: a dissolve, a provenance form, a sub-block head, no ancestor at all
+e3{a^.b.c^-}
+e3{a^p.b.c^-_}
+e3{a^p.{b.c^-}}
+e3{a^-}
+;; the positional check still comes first
+e3{a.b^-.c}
+;; the two remedies the first message offers
+e3{a.b.c^-}
+e3{a^p.b^.c}

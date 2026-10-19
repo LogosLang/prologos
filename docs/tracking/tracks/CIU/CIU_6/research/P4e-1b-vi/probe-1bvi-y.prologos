@@ -1,0 +1,14 @@
+ns probe-1bvi-y
+
+def t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}
+def vv := {:a {:b @[@[1 2] @[3]]}}
+
+;; 1b-vi-D-1: the total family's L4 examples, by their ≡ (`*-` ≡ `^` on every ancestor, then `*`)
+;; keyed contents beside a keyed sibling — `x{a.b*- c}`:  t5{a.b.c*- a}
+t5{a^.b^.c* a}
+;; …and the L4 that rule predicts when the sibling is dissolved: t5{a.b.c*- a^}
+t5{a^.b^.c* a^}
+;; keyless contents beside a dissolved sibling — `x{a.b*- c^}`:  vv{a.b*- a^}
+vv{a^.b* a^}
+;; …and the L4 it fixes: vv{a.b*- a}
+vv{a^.b* a}

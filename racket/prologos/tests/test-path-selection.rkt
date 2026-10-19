@@ -47,7 +47,15 @@
          "../tools/star-arrival-matrix.rkt"
          ;; D4.P4b-ii-2b: the surf-* layer, for the $select-path sentinel pins
          (only-in "../surface-syntax.rkt"
-                  surf-select? surf-select-sort surf-select-branches))
+                  surf-select? surf-select-sort surf-select-branches
+                  ;; 1b-vi-C: the injection harness rebuilds a row's select
+                  surf-select surf-select-subject surf-select-srcloc)
+         ;; 1b-vi-C: `process-string-ws`'s own scoping, mirrored by the injection
+         ;; harness (and checked against it — see `1bvi-inject-batch`)
+         (only-in "../elab-network-types.rkt" make-elaboration-network)
+         (only-in "../tree-parser.rkt" current-source-str current-raw-node)
+         (only-in "../relations.rkt" exn:prologos-solve?)          ;; the solve guard
+         (only-in "../source-location.rkt" srcloc-unknown))
 
 (define-runtime-path lib-dir "../lib")
 
@@ -6191,8 +6199,10 @@
   ;; [Q_U53] part 1 at the gate: exact membership, nothing wider.
   (check-equal? (p4e-star-type "cfg{a}*_ ") 'postfix-star
                 "`*_` is ONE token; the widened gate MINTS it (it was `symbol` before B2b)")
-  (check-equal? (p4e-star-type "cfg{a}*- ") 'symbol "`*-`")
-  (check-equal? (p4e-star-type "cfg{a}*-_ ") 'symbol "`*-_`")
+  ;; ⭐ 1b-vi-D-2b FLIPPED THESE TWO: the mint puts `*-` / `*-_` in the table, so the
+  ;; gate mints them exactly as B2b made it mint `*_` — the same contrast, one slice on.
+  (check-equal? (p4e-star-type "cfg{a}*- ") 'postfix-star "`*-` is ONE token; minted since 1b-vi-D-2b")
+  (check-equal? (p4e-star-type "cfg{a}*-_ ") 'postfix-star "`*-_` is ONE token; minted since 1b-vi-D-2b")
   ;; ⚠⚠ THE LAST-STAR ROW WAS VACUOUS ON ITS FIRST DRAFT AND THE POWER-CHECK
   ;; CAUGHT IT. It read `.(1 * 2)` … `cfg{a}*_`, where the blind helper reports
   ;; `symbol` (the arithmetic star) and the widened one ALSO reports `symbol`
@@ -6961,19 +6971,24 @@
   ;; `mixfix!` while losing one arrival context passed green, and `mixfix!` is
   ;; Q_U34's gate, i.e. exactly what P4e-1 is about to touch. Its stronger twin
   ;; (the abort pin) was already using `list->seteq` twenty lines above.
-  (for ([c (in-list star-carriers)])
+  ;; ⭐ 1b-vi-D-2b: ∀ MINTED LEXEME, not `*` alone. The gate ran for the bare star
+  ;; only, so `*_` (1b-v) and now `*-` / `*-_` were measured by the matrix TOOL once
+  ;; and never pinned. Reading the table makes every future mint checked by
+  ;; construction — an arrival context that mints `*` but not `*-` goes red here.
+  (for* ([lex (in-list (map caddr rf:postfix-star-sentinel-table))]
+         [c (in-list star-carriers)])
     (define non-minting
       (for/list ([k (in-list star-contexts)]
-                 #:unless (star-mints? (string-append star-prelude (star-cell-source k c 0))))
+                 #:unless (star-mints? (string-append star-prelude (star-cell-source k c 0 lex))))
         (car k)))
     (if (star-minting-carrier? c)
         (check-equal? (list->seteq (map string->symbol non-minting))
                       (seteq 'mixfix!)
-                      (format "carrier ~a must mint in every arrival context and ONLY fail in mixfix"
-                              (car c)))
+                      (format "`~a`: carrier ~a must mint in every arrival context and ONLY fail in mixfix"
+                              lex (car c)))
         (check-equal? (list->seteq (map string->symbol non-minting))
                       (list->seteq (map (lambda (k) (string->symbol (car k))) star-contexts))
-                      (format "control carrier ~a must never mint, anywhere" (car c))))))
+                      (format "`~a`: control carrier ~a must never mint, anywhere" lex (car c))))))
 
 ;; ---------------------------------------------------------------------------
 ;; D4.P4e-1a slice 1a-ii — THE TIER-O ARMS, LANDED INERT
@@ -7622,13 +7637,76 @@
                          ;; and `*_`'s own collision (which had been borrowing bare
                          ;; `*`'s, whose prose is false for a synthesized clash).
                          star-synth-vector-contents star-synth-collision))])
-    (check-not-exn
-     (lambda ()
-       (let ([msg (te:format-select-fail (tc:select-fail kind '() 'probe-label row) '())])
-         (check-true (string? msg) (format "~a must render a string" kind))
-         (check-true (regexp-match? #rx"\\*" msg)
-                     (format "~a's message must mention the star" kind))))
-     (format "rendering ~a must not raise" kind))))
+    ;; ⭐ 1b-vi-C (C-6): × EVERY CONT on the star axis. A star failure now carries
+    ;; its cont, and a per-branch arm must name the operator AS WRITTEN — with no
+    ;; FOREIGN operator left once the written family's lexemes are removed (a `*-`
+    ;; message that still says `*` is the Q_U52 §3 hazard in prose). The two LEVEL
+    ;; kinds describe a level, not one star: family-generic by design, so they are
+    ;; held only to render and to mention a star.
+    (define level? (memq kind '(star-dup-key star-l4-mixed)))
+    ;; ⭐ 1b-vi-D-1: the field is a LIST of conts. A per-branch arm carries exactly one;
+    ;; a LEVEL arm carries the operators PRESENT — so a level kind is also rendered
+    ;; under a MIXED set, where naming a single operator would be the lie D-1 removes.
+    (define sets (append (list '()) (map list select-star-conts)
+                         (if level? (list '(flatten flatten-collapse)) '())))
+    ;; ⭐ 1b-vi verify (VI-3): × the ORDINAL FACTS a level failure carries. The loop built
+    ;; every fail with five arguments, so the E sentence and every guard here were blind
+    ;; to it. One set per population the probes reached: two ordinal heads ('all), a head
+    ;; beside a key ('mixed), bare numbers after a dissolve ('mid), a level of heads that
+    ;; do not pass through, and a head beside a non-passing head.
+    (define ords (if level?
+                     (list #f '(passes head all key-tails all-head) '(passes head) '(passes all key-tails)
+                           '(passes head all all-head) '(wrap all-head) '(passes head wrap))
+                     (list #f)))
+    (for* ([cs (in-list sets)] [ord (in-list ords)])
+      (check-not-exn
+       (lambda ()
+         (let ([msg (te:format-select-fail (tc:select-fail kind '() 'probe-label row cs ord) '())]
+               [lexes (map rf:postfix-star-cont->lexeme cs)]
+               [totals (map select-star-cont-total? cs)])
+           (check-true (string? msg) (format "~a must render a string" kind))
+           (cond
+             [(null? cs)
+              ;; no cont: the operator is named only through the LOUD tell — a bare `*`
+              ;; here would be the silent guess C-6 / D-1 remove
+              (check-true (regexp-match? #rx"«star-cont-missing»" msg)
+                          (format "~a with NO cont must say so LOUDLY: ~a" kind msg))]
+             [else
+              (for ([lex (in-list lexes)])
+                (check-true (regexp-match? (regexp (string-append "`" (regexp-quote lex) "`")) msg)
+                            (format "~a under ~s must name `~a`: ~a" kind cs lex msg)))
+              (check-false (regexp-match? #rx"«" msg) (format "~a under ~s renders a tell: ~a" kind cs msg))
+              ;; a family's clause must never be spoken over the OTHER family's operator
+              (check-false (regexp-match? #rx"under [^.]*`[*]-_?`[^.]* a key surviving before the star" msg)
+                           (format "~a under ~s says a total collapse keeps the join nested: ~a" kind cs msg))
+              ;; probe-1bvi-x: FALSE for three of its four populations — must not return
+              (check-false (regexp-match? #rx"does not help either" msg)
+                           (format "~a under ~s re-asserts the measured-false sentence: ~a" kind cs msg))
+              (cond
+                [(andmap values totals)
+                 (check-false (regexp-match? #rx"[*]" (regexp-replace* #rx"[*]-_?" msg ""))
+                              (format "~a under ~s names a NON-total star: ~a" kind cs msg))]
+                [(not (ormap values totals))
+                 (check-false (regexp-match? #rx"[*]-" msg)
+                              (format "~a under ~s names a TOTAL star: ~a" kind cs msg))]
+                [else (void)])
+              ;; VF-3's invariants, each a sentence measured false on a population
+              (when (and ord (eq? kind 'star-dup-key))
+                (when (memq 'head ord)
+                  (check-false (regexp-match? #rx"resolves the collision" msg)
+                               (format "dup under ~s ~s offers drop-a-star at an ordinal HEAD: ~a" cs ord msg)))
+                (when (memq 'all ord)
+                  (check-false (regexp-match? #rx"keeps each surviving ancestor" msg)
+                               (format "dup under ~s ~s offers `*-_` where every branch is ordinal: ~a" cs ord msg)))
+                (check-equal? (regexp-match? #rx"end EVERY branch here with `\\^`" msg) (and (memq 'key-tails ord) #t)
+                              (format "dup under ~s ~s: the `^` remedy iff every sₙ is a key: ~a" cs ord msg))
+                (when (memq 'passes ord)
+                  (check-true (regexp-match? #rx"cannot tell elements apart" msg)
+                              (format "dup under ~s ~s must say provenance cannot help: ~a" cs ord msg))))
+              (when (and ord (eq? kind 'star-l4-mixed) (memq 'all-head ord))
+                (check-false (regexp-match? #rx"drop a `\\^`" msg)
+                             (format "L4 under ~s ~s offers drop-a-`^` at a level of ordinal heads: ~a" cs ord msg)))])))
+       (format "rendering ~a under ~s ~s must not raise" kind cs ord)))))
 
 (test-case "1b-iii-B1 reduction: the join concatenates in CANONICAL key order — the value layer, discriminating set"
   (define ka  (expr-keyword 'a))
@@ -8132,9 +8210,18 @@
   (define base (line "pc{db.hosts* ports^}"))
   (check-true (regexp-match? #rx"mixed keyed/keyless sorts" base)
               (format "the keyed-star population must reach the L4 gate: ~a" base))
-  ;; (2) starring the keyless sibling is a NON-ACTION — byte-identical message.
-  (check-equal? (msg "pc{db.hosts* ports*}") (msg "pc{db.hosts* ports^}")
-                "starring a sibling that keeps no key leaves the error unchanged")
+  ;; (2) starring the keyless sibling is still a NON-ACTION — the level stays mixed.
+  ;;     ⚠ 1b-vi verify (VM-5): no longer byte-identical, ON PURPOSE. The L4 label now
+  ;;     names the star branch whose landing is KEYLESS (`ports*`), not the first star
+  ;;     branch — the text had depended on branch order (`mx{m* a.b*-}`). So the user IS
+  ;;     told something new here, and what it says is an action: dissolve the keys that
+  ;;     survive on the others — run below.
+  (check-true (regexp-match? #rx"mixed keyed/keyless sorts" (msg "pc{db.hosts* ports*}"))
+              "starring a sibling that keeps no key leaves the level mixed")
+  (check-true (regexp-match? #rx"`ports[*]` is a star branch" (msg "pc{db.hosts* ports*}"))
+              "the label names the star branch whose landing is keyless")
+  (check-false (regexp-match? #rx"keyed/keyless|ERROR|error" (line "pc{db^.hosts* ports*}"))
+               "the action that message offers works")
   ;; (3) at depth 3 ONE caret is not enough — also byte-identical.
   (check-equal? (msg "d3{a* x^.y.z*}") (msg "d3{a* x.y.z*}")
                 "one caret at depth 3 is a non-action; the message must not imply otherwise")
@@ -8466,10 +8553,15 @@
   ;; `$postfix-star`, so nothing on the surface moves. The only way to know the
   ;; wiring is live is to exercise the table directly and to mutate it — both
   ;; done at B1. These pins are what keep B2 from drifting it.
-  ;; ⚠ The set is deliberately TWO, not four: [Q_U52] split `*-`/`*-_` to 1b-vi.
+  ;; ⚠ The set was TWO until 1b-vi-D-2b: [Q_U52] split `*-`/`*-_` to 1b-vi, and C
+  ;; held them in a printer-only pending table until the mint moved them here.
   (check-equal? (map car rf:postfix-star-sentinel-table)
-                '($postfix-star $postfix-star-synth)
-                "the family is exactly the two spellings 1b-v mints")
+                '($postfix-star $postfix-star-synth $postfix-star-collapse $postfix-star-collapse-synth)
+                "the family is exactly the four spellings of the star-cont axis")
+  (check-equal? (rf:postfix-star-sentinel-cont '$postfix-star-collapse) 'flatten-collapse)
+  (check-equal? (rf:postfix-star-sentinel-cont '$postfix-star-collapse-synth) 'flatten-collapse-synth)
+  (check-equal? (rf:postfix-star-sentinel-lexeme '$postfix-star-collapse) "*-")
+  (check-equal? (rf:postfix-star-sentinel-lexeme '$postfix-star-collapse-synth) "*-_")
   (check-equal? (rf:postfix-star-sentinel-cont '$postfix-star) 'flatten)
   (check-equal? (rf:postfix-star-sentinel-cont '$postfix-star-synth) 'flatten-synth)
   ;; the reverse direction is not decoration — `unmint-star-for-echo` and both
@@ -8479,8 +8571,10 @@
   ;; the reader's direction, which B2 turns on
   (check-equal? (rf:postfix-star-lexeme->sentinel "*") '$postfix-star)
   (check-equal? (rf:postfix-star-lexeme->sentinel "*_") '$postfix-star-synth)
-  (check-false (rf:postfix-star-lexeme->sentinel "*-")
-               "`*-` is 1b-vi's — minting it here would meet a cont no consumer knows")
+  (check-equal? (rf:postfix-star-lexeme->sentinel "*-") '$postfix-star-collapse
+                "`*-` mints since 1b-vi-D-2b (it was #f: no consumer knew its cont before C)")
+  (check-equal? (rf:postfix-star-lexeme->sentinel "*-_") '$postfix-star-collapse-synth)
+  (check-false (rf:postfix-star-lexeme->sentinel "*_-") "the order is part of the lexeme")
   (check-false (rf:postfix-star-lexeme->sentinel "a*")
                "the table is exact, not a prefix match")
   ;; the predicate every census site now delegates to
@@ -9318,3 +9412,1015 @@
     (check-equal? (rf:postfix-star-cont->lexeme (cadr row)) (caddr row)
                   (format "row ~s round-trips cont → lexeme" row))))
 
+
+;; ===========================================================================
+;; ⭐⭐ D4.P4e-1b slice 1b-vi — THE STAR-COLLAPSE STAGE TABLE  (1b-vi-A)
+;; ===========================================================================
+;; [Q_U48] `*-` is total collapse · [Q_U55] a RENAME on an ancestor is refused
+;; under total collapse, in both families · [Q_U56] a glued `*->` gets a guided
+;; message in selection territory · [Q_U57] P: `*-_` names the whole collapsed
+;; path · [Q_U58] M (mark in the parser, act in the walkers) + the slicing
+;; A → B → C → D. D4 §5.P4e-1b-vi states the semantics once; every row tests it.
+;;
+;; ONE ROW PER BEHAVIOUR: (ID SPELLING FLIPS-AT PRE TARGET)
+;;   FLIPS-AT  the sub-slice whose code makes TARGET true ('B or 'D), or #f for
+;;             a CONTROL (PRE holds forever; TARGET is #f).
+;;   PRE / TARGET — an expectation:
+;;     (same EQUIV TYPE)  the spelling's line equals EQUIV's line, and EQUIV —
+;;                        today's spelling of the same meaning — is a VALUE whose
+;;                        type renders exactly TYPE. The expected answer is
+;;                        MEASURED from today's code (probe `probe-1bvi-p`),
+;;                        never written by hand.
+;;     (line LIT)         the line is exactly LIT.
+;;     (refused RXS NOT-RXS) a counted error (`prologos-error?`, never a
+;;                        string test — a message can contain " : ") whose
+;;                        message matches every RX and no NOT-RX.
+;;     midlex / postfix / unbound  the three PRE-MINT refusal classes, measured.
+;;
+;; WHY A STAGE CONSTANT AND NOT PARKED COMMENTS. This battery's earlier slices
+;; parked their failing pins as COMMENTS (:7793, :8822). Parked text is never
+;; read by the compiler: one parked pin carried an invalid `\*` escape that would
+;; have stopped the battery from READING when un-parked (D4 §5.P4e-1b-v). Here
+;; every target is compiled and executed on every run — the rows ahead of the
+;; stage are asserted to FAIL their target, which is both the non-vacuity proof
+;; (DR-4) and the proof that 1b-vi-C's machinery stays inert. Bumping
+;; `1bvi-stage` is the FIRST edit of each sub-slice: exactly that sub-slice's
+;; rows go red before its code exists.
+;; ⚠ SCAFFOLDING, retired at the 1b-vi close: delete `1bvi-stage` and the PRE
+;; column then (D4 §5.P4e-1b-vi).
+;; ⚠ D flips four pins OUTSIDE this table, which predate it: :6194, :6195
+;; (`p4e-star-type` → 'symbol), :8470 (the table is exactly two rows), :8482
+;; (`"*-"` has no sentinel).
+;; ===========================================================================
+
+(define 1bvi-stage 'V)   ;; the 1b-vi VERIFY round: four adversarial lenses, adjudicated (D4 #p4e-1b-vi-verify)
+(define 1bvi-stage-order '(A B C D E V))
+(define (1bvi-reached? s)
+  (and s (<= (index-of 1bvi-stage-order s) (index-of 1bvi-stage-order 1bvi-stage))))
+
+;; ⚠ Subjects avoid the `s`+digit shape (DEFERRED 122).
+(define 1bvi-fixtures
+  (string-append
+   "ns p4e1bvi\n"
+   "def app := {:server {:ssl {:enabled true :cert \"c.pem\"} :port 8080} :database {:url \"db\" :pool-size 10}}\n"
+   "def env := {:prod {:db {:url \"p-url\" :port 5432}} :dev {:db {:url \"d-url\" :port 5433}}}\n"
+   "def cloud := {:regions {:eu {:host \"e\" :port 443} :us {:host \"u\" :port 8443}}}\n"
+   "def t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}\n"
+   "def vv := {:a {:b @[@[1 2] @[3]]}}\n"
+   "def v3 := {:a {:b {:c @[@[1 2] @[3]]}}}\n"
+   "def e3 := {:a {:b {:c @[1 2]}}}\n"
+   "def rm := {:eu {:cfg {:x 1}} :us {:cfg {:x 2}}}\n"
+   "def deep := {:top {:eu {:cfg {:x 1}} :us {:cfg {:x 2}}}}\n"
+   "def hz := {:a {:b {:c-d 1}} :a-b {:c {:d 2}}}\n"
+   "def mn := {:a {:x 1} :b {:y 2}}\n"
+   "def org := {:db {:admins @[{:name \"a\"} {:name \"b\"}]}}\n"
+   ;; 1b-vi-D-1: same HEAD, sibling children sharing a field (probe-1bvi-v's P2)
+   "def sh := {:a {:b {:port 1 :u 2} :c {:port 3 :v 4}}}\n"
+   ;; 1b-vi-D-2a: ORDINAL-headed twins of `t5` and `v3` — the generator states
+   ;; `ot{0.X}` ≡ `t5{X}` under every collapse (an ordinal head is transparent)
+   "def ot := @[{:a {:b {:c {:m {:x 1} :n {:y 2}}}}}]\n"
+   "def ov3 := @[{:a {:b {:c @[@[1 2] @[3]]}}}]\n"
+   ;; 1b-vi-E [Q_U61]: two elements (where the splice and the tuple pull apart),
+   ;; and Q_U49's own decided seat-B subject
+   "def ot2 := @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]\n"
+   "def vhm := @[@[{:x 1}] @[{:y 2}]]\n"
+   ;; the 1b-vi VERIFY (stage V): an ω-ancestor tree, a path-position ω pair, the
+   ;; ordinal-level populations, an L4 order pair, a sealed sub-block star
+   "def ow := {:top {:eu {:cfg {:x {:p 1}}} :us {:cfg {:x {:p 2}}}}}\n"
+   "def og := {:db {:admins @[{:name {:f {:z 1}}} {:name {:f {:z 2}}}]}}\n"
+   "def ovv := @[@[{:a {:b {:k 1}}}] @[{:a {:b {:k 2}}}]]\n"
+   "def vo := @[{:a @[{:n 1} {:n 2}]}]\n"
+   "def vk2 := @[{:a {:b {:k 1}} :c {:d {:j 3}}} {:a {:b {:k 2}} :c {:d {:j 4}}}]\n"
+   "def vhm2 := @[@[{:x 1}] @[{:x 2}]]\n"
+   "def rv := {:xs @[{:a {:k 1}} {:a {:k 2}}] :k 9}\n"
+   "def w := {:v @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]}\n"
+   "def mx := {:m {:x 1 :y 2} :a {:b @[@[1 2] @[3]]}}\n"
+   "def t3x := {:a {:b {:q {:r 1}}} :c {:k 1} :d {:k 2}}\n"))
+(define 1bvi-fixture-count 27)
+
+(define 1bvi-rows
+  '(;; ---- E1–E10 under `*-` [Q_U48]: ≡ dissolve every ancestor, then `*`
+    ("E1-"  "app{database*-}"              D midlex  (same "app{database*}" "{:pool-size Int :url String}"))
+    ("E2-"  "app{server.ssl*-}"            D midlex  (same "app{server^.ssl*}" "{:cert String :enabled Bool}"))
+    ;; ⭐ 1b-vi-D-1: the level message names the operator PRESENT and scopes its claims —
+    ;; "dropping the `*` does not help" is FALSE here (probe-1bvi-u: `env{prod.db dev.db}` works)
+    ("E3-"  "env{prod.db*- dev.db*-}"      D midlex  (refused (#rx"duplicate output key `:port`" #rx"a star [(]`[*]-`[)] LIFTED"
+                                                               #rx"`[*]-_` keeps each surviving ancestor")
+                                                              (#rx"does not help either" #rx"ordinal")))
+    ("E4-"  "cloud{regions:{host port}*-}" D postfix (refused (#rx"`:\\{host port\\}\\*-`" #rx"carry the same key")
+                                                              (#rx"`\\*` \\(flatten\\)")))
+    ("E5-"  "app{server^srv.ssl*-}"        D midlex  (refused (#rx"`srv` can never appear under a total collapse"
+                                                               #rx"Drop `\\^srv`" #rx"keep the level") ()))
+    ("E6-"  "app{server^.ssl*-}"           D midlex  (same "app{server^.ssl*}" "{:cert String :enabled Bool}"))
+    ("E7-"  "t5{a.b.c*-}"                  D midlex  (same "t5{a^.b^.c*}" "{:m {:x Int} :n {:y Int}}"))
+    ("E8-"  "vv{a.b*-}"                    D midlex  (same "vv{a^.b*}" "⟨[PVec [PVec Int]]⟩"))
+    ("E9-"  "app{server.ssl*- server.port}" D midlex (same "app{server^.ssl* server.port}"
+                                                           "{:cert String :enabled Bool :server {:port Int}}"))
+    ("E10-" "env{prod dev}*-"              D unbound (refused (#rx"^select: `\\*-` — " #rx"carry the same key")
+                                                              (#rx"`\\*` \\(flatten\\)")))
+    ;; ---- E1–E10 under `*-_` [Q_U57 P]: ≡ every lifted field written with `^-_`
+    ("E1_"  "app{database*-_}"             D midlex  (same "app{database*_}" "{:database-pool-size Int :database-url String}"))
+    ("E2_"  "app{server.ssl*-_}"           D midlex  (same "app{server.ssl.enabled^-_ server.ssl.cert^-_}"
+                                                           "{:server-ssl-cert String :server-ssl-enabled Bool}"))
+    ("E3_"  "env{prod.db*-_ dev.db*-_}"    D midlex  (same "env{prod.db.url^-_ prod.db.port^-_ dev.db.url^-_ dev.db.port^-_}"
+                                                           "{:dev-db-port Int :dev-db-url String :prod-db-port Int :prod-db-url String}"))
+    ("E4_"  "cloud{regions:{host port}*-_}" D postfix (same "cloud{regions.eu.host^-_ regions.eu.port^-_ regions.us.host^-_ regions.us.port^-_}"
+                                                            "{:regions-eu-host String :regions-eu-port Int :regions-us-host String :regions-us-port Int}"))
+    ("E5_"  "app{server^srv.ssl*-_}"       D midlex  (same "app{server^srv.ssl.enabled^-_ server^srv.ssl.cert^-_}"
+                                                           "{:srv-ssl-cert String :srv-ssl-enabled Bool}"))
+    ("E6_"  "app{server^.ssl*-_}"          D midlex  (same "app{server^.ssl.enabled^-_ server^.ssl.cert^-_}"
+                                                           "{:ssl-cert String :ssl-enabled Bool}"))
+    ("E7_"  "t5{a.b.c*-_}"                 D midlex  (same "t5{a.b.c.m^-_ a.b.c.n^-_}" "{:a-b-c-m {:x Int} :a-b-c-n {:y Int}}"))
+    ("E8_"  "vv{a.b*-_}"                   D midlex  (refused (#rx"`b\\*-_`" #rx"no fields to prefix" #rx"Use bare `\\*-`") ()))
+    ("E9_"  "app{server.ssl*-_ server.port}" D midlex (same "app{server.ssl.enabled^-_ server.ssl.cert^-_ server.port}"
+                                                            "{:server {:port Int} :server-ssl-cert String :server-ssl-enabled Bool}"))
+    ("E10_" "env{prod dev}*-_"             D unbound (same "env{prod dev}*_" "{:dev-db {:port Int :url String} :prod-db {:port Int :url String}}"))
+    ;; ---- depth, vectors, sub-blocks, ω, the hyphen clash
+    ("X-v3"     "v3{a.b.c*-}"              D midlex  (same "v3{a^.b^.c*}" "⟨[PVec [PVec Int]]⟩"))
+    ("X-sub-"   "t5{a.{b.c*-}}"            D midlex  (same "t5{a.{b^.c*}}" "{:a {:m {:x Int} :n {:y Int}}}"))
+    ("X-sub_"   "t5{a.{b.c*-_}}"           D midlex  (same "t5{a.{b.c.m^-_ b.c.n^-_}}" "{:a {:b-c-m {:x Int} :b-c-n {:y Int}}}"))
+    ("X-omega-" "deep{top:cfg*-}"          D midlex  (refused (#rx"`:cfg\\*-`" #rx"carry the same key") (#rx"`\\*` \\(flatten\\)")))
+    ;; block-position ω KEEPS the projected key — measured, not derived (probe-1bvi-l)
+    ("X-omega_" "deep{top:cfg*-_}"         D midlex  (same "deep{top.eu.cfg^-_ top.us.cfg^-_}" "{:top-eu-cfg {:x Int} :top-us-cfg {:x Int}}"))
+    ("X-hyphen" "hz{a.b*-_ a-b.c*-_}"      D midlex  (refused (#rx"duplicate output key `?:a-b-c-d") ()))
+    ;; ---- path position: no step has an output key, so nothing collapses or is named (derived)
+    ("X-dot-"   "app.server.ssl*-"         D midlex  (same "app.server.ssl*" "{:cert String :enabled Bool}"))
+    ("X-dot_"   "app.server.ssl*-_"        D midlex  (same "app.server.ssl*_" "{:ssl-cert String :ssl-enabled Bool}"))
+    ("X-wpath-" "rm:cfg*-"                 D midlex  (refused (#rx"`:cfg\\*-`" #rx"carry the same key") (#rx"`\\*` \\(flatten\\)")))
+    ("X-wpath_" "rm:cfg*-_"                D midlex  (same "rm:cfg*_" "{:eu-x Int :us-x Int}"))
+    ;; ---- [Q_U56]: the glued arrow in selection territory; type territory is a PREDICTION
+    ("X-arrow"  "mn{a*-> b}"               D midlex  (refused (#rx"`\\*->` reads as `\\*-` then `>`") ()))
+    ;; 1b-vi-D-2b: the ONE-TOKEN shape — `->` continues an identifier, so `a*->b` is
+    ;; one lexeme and must not be told it "reads as `*-` then `>`" (probe-1bvi-aa)
+    ("X-arrow1" "mn{a*->b}"                D midlex  (refused (#rx"there is no `\\*->` operator" #rx"`a\\*- b`")
+                                                              (#rx"reads as")))
+    ;; the `>` arm names the operator AS WRITTEN — it also covers `*>` / `*_>`, which read
+    ;; "field :> is not present" before D-2b (a production-visible improvement, pinned)
+    ("X-arrow_" "mn{a*-_> b}"              D midlex  (refused (#rx"there is no `\\*-_>` operator" #rx"`a\\*-_` ends its branch") ()))
+    ("X-arrow0" "mn{a*> b}"                D midlex  (refused (#rx"there is no `\\*>` operator" #rx"`a\\*` ends its branch") ()))
+    ;; the remedy both arrow messages offer, RUN (probe-1bvi-ab)
+    ("X-arrow-fix" "mn{a*- b}"             D midlex  (line "{:b {:y 2}, :x 1} : {:b {:y Int} :x Int}"))
+    ;; ⚠ 1b-vi-D-2b: this target was Q_U56's PREDICTION (Q_U31's "needs a SPACE"),
+    ;; written before the mint and marked predicted in D4. MEASURED at the mint:
+    ;; Q_U37's type-territory refusal fires as predicted, but with the star-family
+    ;; message 1b-v built for `*_` — it reads the table, so `*-` gets it too. True
+    ;; and more specific than the prediction; the target is the measurement.
+    ("X-type"   "<(x : Nat)*- Nat>"        D unbound (refused (#rx"inside `<…>`, `\\*-` is a path-selection star operator, not a type operator"
+                                                               #rx"glued or spaced" #rx"`<[(]x : A[)] [*] B>`") ()))
+    ;; ---- 1b-vi-D-1: the LEVEL arms (probe-1bvi-u, -v). A level has no single star, so the
+    ;; message names the operators PRESENT and scopes each claim to the family it is true of.
+    ;; P2 — same head: `*` and "drop the star" do NOT help here (`:a`), `*-_` does
+    ("X-dup-same" "sh{a.b*- a.c*-}"        D midlex  (refused (#rx"duplicate output key `:port`" #rx"a star [(]`[*]-`[)] LIFTED"
+                                                               #rx"`[*]-_` keeps each surviving ancestor")
+                                                              (#rx"does not help either")))
+    ;; a MIXED block: both families named, each sentence present — one cont would lie here
+    ;; ⚠ D-1's FIRST draft of this row required "does not help either" here — and
+    ;; probe-1bvi-x measured that sentence FALSE in a mixed block (drop either star:
+    ;; it works). The row now pins the mechanism sentence, per family.
+    ("X-dup-mix" "env{prod^.db* dev.db*-}" D midlex  (refused (#rx"duplicate output key `:(port|url)`" #rx"a star [(]`[*]` or `[*]-`[)]"
+                                                               #rx"`[*]` under the key the star was deleting, `[*]-` under its whole path"
+                                                               #rx"`[*]-_` keeps each surviving ancestor")
+                                                              (#rx"does not help either")))
+    ;; L4 under `*-`: a vector join lands keyless at its branch's TOP; no "surviving key" clause
+    ("X-l4-"    "vv{a.b*- a}"              D midlex  (refused (#rx"mixed keyed/keyless" #rx"`a[.]b[*]-` is a star branch"
+                                                               #rx"a total collapse [(]`[*]-`[)] always lands at its branch's top"
+                                                               #rx"`x[{]a[.]b[*]- c\\^[}]`")
+                                                              (#rx"keeps the join nested")))
+    ;; ⚠ the `(@ord N)`-headed pair C handed over is now GENERATED, not hand-written: the
+    ;; law rows over `ot` / `ov3` (1b-vi-D-2a, below `1bvi-law-positions`). D-1's red step
+    ;; found the defect they pin — `ov{0.a.b*-_}` gave `@[{:a-b-x 1}]` (probe-1bvi-w).
+    ;; ---- [Q_U55], caret half (1b-vi-B): a rename on an ancestor of `^-` / `^-k'`
+    ("C1" "e3{a^p.b.c^-}"   B (line "{:c @[1 2]} : {:c [PVec Int]}")
+                              (refused (#rx"`p` can never appear under a total collapse" #rx"Drop `\\^p`" #rx"keep the level") ()))
+    ("C2" "e3{a^p.b.c^-q}"  B (line "{:q @[1 2]} : {:q [PVec Int]}")
+                              (refused (#rx"`p` can never appear under a total collapse" #rx"Drop `\\^p`" #rx"keep the level") ()))
+    ("C3" "e3{a.b^q.c^-}"   B (line "{:c @[1 2]} : {:c [PVec Int]}")
+                              (refused (#rx"`q` can never appear under a total collapse" #rx"Drop `\\^q`" #rx"keep the level") ()))
+    ("C4" "e3{a^p.b^.c^-}"  B (line "{:c @[1 2]} : {:c [PVec Int]}")
+                              (refused (#rx"`p` can never appear under a total collapse" #rx"Drop `\\^p`" #rx"keep the level") ()))
+    ;; an ω LEAF under the collapse: reachable, unlike an ω ANCESTOR (DEFERRED 167),
+    ;; so the remedy's ω arm (`leaf-without-collapse`) runs here. PRE measured with
+    ;; only the new check disabled (probe-1bvi-s): the silent drop.
+    ("C6" "org{db^p.admins:name^-}" B (line "{:name @[{:name \"a\"} {:name \"b\"}]} : {:name [PVec {:name String}]}")
+                              (refused (#rx"`p` can never appear under a total collapse" #rx"Drop `\\^p`" #rx"keep the level") ()))
+    ;; …and the star half (1b-vi-D), the immediate parent
+    ("C5" "t5{a.b^q.c*-}"   D midlex
+                              (refused (#rx"`q` can never appear under a total collapse" #rx"Drop `\\^q`" #rx"keep the level") ()))
+    ;; ---- CONTROLS: a dissolve stays legal; a provenance form keeps the rename
+    ("K1" "e3{a^.b.c^-}"     #f (line "{:c @[1 2]} : {:c [PVec Int]}") #f)
+    ("K2" "e3{a^p.b.c^-_}"   #f (line "{:p-b-c @[1 2]} : {:p-b-c [PVec Int]}") #f)
+    ("K3" "e3{a^p.b^q.c^-_}" #f (line "{:p-q-c @[1 2]} : {:p-q-c [PVec Int]}") #f)
+    ;; a SUB-BLOCK is its own branch: the collapse lands UNDER `p`, where the
+    ;; rename is observable — Q_U55's check is branch-local (probe-1bvi-q)
+    ("K4" "e3{a^p.{b.c^-}}"  #f (line "{:p {:c @[1 2]}} : {:p {:c [PVec Int]}}") #f)
+    ("K5" "e3{a^p.{b.c^-q}}" #f (line "{:p {:q @[1 2]}} : {:p {:q [PVec Int]}}") #f)
+    ;; ---- [Q_U61] S (1b-vi-E): an ordinal head passes a star's landing through when the
+    ;; landing is KEYLESS (Q_U47: every step between the head and sₙ names no key), and
+    ;; Q_U49 splices it there. PRE = the measured wrap (probe-1bvi-ac), which no decision
+    ;; stated and no pin held.
+    ("U61-1" "ot{0.a^.b*}"     E (line "@[{:c {:n {:y 2}, :m {:x 1}}}] : ⟨{:c {:m {:x Int} :n {:y Int}}}⟩")
+                                 (equiv "t5{a^.b*}"))
+    ("U61-2" "ot{0.a^.b^.c*}"  E (line "@[{:n {:y 2}, :m {:x 1}}] : ⟨{:m {:x Int} :n {:y Int}}⟩")
+                                 (equiv "t5{a^.b^.c*}"))
+    ("U61-3" "ov3{0.a^.b^.c*}" E (line "@[@[@[@[1 2] @[3]]]] : ⟨⟨[PVec [PVec Int]]⟩⟩")
+                                 (equiv "v3{a^.b^.c*}"))
+    ;; the cost S names: two elements' spliced keys now meet at one level
+    ;; …and the refusal NAMES that cost and the tuple spelling (probe-1bvi-ad: the
+    ;; generic remedies hold, but none says why two positions meet, and dropping ONE
+    ;; star trades the collision for an L4 mix). ⚠ Re-targeted at the 1b-vi VERIFY: E's
+    ;; first wording was measured on this population only, and its tuple remedy and
+    ;; provenance caveat were false on others (VF-3; rows V-or*).
+    ("U61-4" "ot2{0.a^.b* 1.a^.b*}" E (line "@[{:k 1} {:k 2}] : ⟨{:k Int} {:k Int}⟩")
+                                      (refused (#rx"duplicate output key `:k`"
+                                                #rx"Through an ordinal, a star whose remainder names no key"
+                                                #rx"`x[{]0[.]a\\^[.]b\\^ 1[.]a\\^[.]b\\^[}]`"
+                                                #rx"`[*]_` cannot tell elements apart either")
+                                               (#rx"resolves the collision")))
+    ;; ⚠ U61-5's PRE was PREDICTED, not measured (no committed probe ran this spelling
+    ;; before E — verify finding VI-9); it is dead data at every later stage.
+    ("U61-5" "ot2{0.a^.b*_ 1.a^.b*_}" E (line "@[{:b-k 1} {:b-k 2}] : ⟨{:b-k Int} {:b-k Int}⟩")
+                                        (refused (#rx"duplicate output key `:b-k`"
+                                                  #rx"Through an ordinal"
+                                                  #rx"`[*]_` cannot tell elements apart either")
+                                                 (#rx"resolves the collision")))
+    ;; ---- CONTROLS that must NOT move: a remainder that names a key stays inside the
+    ;; ordinal's component; depth 1 is Q_U49's decided seat B; the tuple stays
+    ;; spellable without a star.
+    ("U61-K1" "ot{0.a.b*}"     #f (line "@[{:a {:c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:a {:c {:m {:x Int} :n {:y Int}}}}⟩") #f)
+    ("U61-K2" "ot{0.a^.b.c*}"  #f (line "@[{:b {:n {:y 2}, :m {:x 1}}}] : ⟨{:b {:m {:x Int} :n {:y Int}}}⟩") #f)
+    ("U61-K3" "ot{0.a^p.b*}"   #f (line "@[{:p {:c {:n {:y 2}, :m {:x 1}}}}] : ⟨{:p {:c {:m {:x Int} :n {:y Int}}}}⟩") #f)
+    ("U61-K4" "ot{0.a*}"       #f (equiv "t5{a*}") #f)
+    ("U61-K5" "vhm{0.{0}* 1.{0}*}" #f (line "{:y 2, :x 1} : {:x Int :y Int}") #f)
+    ("U61-K6" "ot2{0.a^.b^ 1.a^.b^}" #f (line "@[{:k 1} {:k 2}] : ⟨{:k Int} {:k Int}⟩") #f)
+    ;; ================= THE 1b-vi VERIFY (stage V) — D4 #p4e-1b-vi-verify =================
+    ;; Every TARGET is measured (verify probe v8); every PRE is the HEAD measurement
+    ;; (v1–v5) unless marked. `abort` = the whole batch raised (it cannot be a per-row line).
+    ;; ---- VF-1: a total collapse under an ω ANCESTOR was a WHOLE-FILE ABORT (typing's C-5
+    ;; guard raised, v1). The parser now refuses it — both collapse families, Q_U55's one
+    ;; rule — with the branch-local sub-block remedy, which runs (V-omK*). A regression to
+    ;; the raise fails this whole table closed (`1bvi-batch`: RAISED).
+    ("V-om1" "ow{top:cfg.x*-}" V abort
+             (refused (#rx"a total collapse cannot sit under a broadcast yet" #rx"`x[*]-` follows the broadcast `top:cfg`"
+                       #rx"DEFERRED 167" #rx"`top:[{]cfg[.]x[*]-[}]`") ()))
+    ("V-om2" "ow{top:cfg.x*-_}" V abort (refused (#rx"`x[*]-_` follows the broadcast" #rx"`top:[{]cfg[.]x[*]-_[}]`") ()))
+    ("V-om3" "ow{top^:cfg.x*-}" V abort (refused (#rx"follows the broadcast `top\\^:cfg`" #rx"`top\\^:[{]cfg[.]x[*]-[}]`") ()))
+    ("V-om4" "og{db.admins:name.f*-}" V abort
+             (refused (#rx"`f[*]-` follows the broadcast `db[.]admins:name`" #rx"`db[.]admins:[{]name[.]f[*]-[}]`") ()))
+    ("V-om5" "ow{top:cfg.x^-}" V (refused (#rx"field :x is not present") ())
+             (refused (#rx"`x\\^-` follows the broadcast `top:cfg`" #rx"`top:[{]cfg[.]x\\^-[}]`") ()))
+    ("V-omK1" "ow{top:{cfg.x*-}}" #f (line "{:top {:eu {:p 1}, :us {:p 2}}} : {:top {:eu {:p Int} :us {:p Int}}}") #f)
+    ("V-omK2" "ow{top:{cfg.x*-_}}" #f (line "{:top {:eu {:cfg-x-p 1}, :us {:cfg-x-p 2}}} : {:top {:eu {:cfg-x-p Int} :us {:cfg-x-p Int}}}") #f)
+    ("V-omK3" "ow{top^:{cfg.x*-}}" #f (line "@[{:eu {:p 1}, :us {:p 2}}] : ⟨{:eu {:p Int} :us {:p Int}}⟩") #f)
+    ("V-omK4" "ow{top:{cfg.x^-}}" #f (line "{:top {:eu {:x {:p 1}}, :us {:x {:p 2}}}} : {:top {:eu {:x {:p Int}} :us {:x {:p Int}}}}") #f)
+    ("V-omK5" "og{db.admins:{name.f*-}}" #f (line "{:db {:admins @[{:z 1} {:z 2}]}} : {:db {:admins [PVec {:z Int}]}}") #f)
+    ;; ---- VF-2: the reduction twin dropped `asort` in five helpers, so under a path-
+    ;; position ω sub inner (Q_U20: 'block) the VALUE kept a keyless landing that the TYPE
+    ;; spliced — 0 errors, then `none`, a panic, and a branch-order-dependent value (v3).
+    ;; Each target's value now has the shape its type states.
+    ("V-as1" "ot2:{a^.b*}" V (line "@[@[{:k 1}] @[{:k 2}]] : [PVec {:k Int}]") (line "@[{:k 1} {:k 2}] : [PVec {:k Int}]"))
+    ("V-as2" "ot2:{a.b*-}" V (line "@[@[{:k 1}] @[{:k 2}]] : [PVec {:k Int}]") (line "@[{:k 1} {:k 2}] : [PVec {:k Int}]"))
+    ("V-as3" "ot2:{a.b*-_}" V (line "@[@[{:a-b-k 1}] @[{:a-b-k 2}]] : [PVec {:a-b-k Int}]")
+             (line "@[{:a-b-k 1} {:a-b-k 2}] : [PVec {:a-b-k Int}]"))
+    ("V-as4" "ovv:{0.a^.b*}" V (line "@[@[{:k 1}] @[{:k 2}]] : [PVec {:k Int}]") (line "@[{:k 1} {:k 2}] : [PVec {:k Int}]"))
+    ("V-as5" "vk2:{a^.b* c}" V (refused (#rx"internal — a flatten's keyless component beside keyed siblings") ())
+             (line "@[{:c {:d {:j 3}}, :k 1} {:c {:d {:j 4}}, :k 2}] : [PVec {:c {:d {:j Int}} :k Int}]"))
+    ("V-as6" "vk2:{a^.b* c^.d*}" V (line "@[@[{:k 1} {:j 3}] @[{:k 2} {:j 4}]] : [PVec {:j Int :k Int}]")
+             (line "@[{:k 1, :j 3} {:k 2, :j 4}] : [PVec {:j Int :k Int}]"))
+    ("V-as7" "vk2:{c^.d* a^.b*}" V (line "@[@[{:j 3} {:k 1}] @[{:j 4} {:k 2}]] : [PVec {:j Int :k Int}]")
+             (line "@[{:k 1, :j 3} {:k 2, :j 4}] : [PVec {:j Int :k Int}]"))
+    ;; VT-3 — the same class one helper over, older than the slice (`bcast-apply`)
+    ("V-as8" "vo:{a:n}" V (line "@[{:a @[1 2]}] : [PVec {:a [PVec {:n Int}]}]")
+             (line "@[{:a @[{:n 1} {:n 2}]}] : [PVec {:a [PVec {:n Int}]}]"))
+    ;; ---- VF-3: the ordinal-level prose. E's sentence held for `ot2` alone; at other
+    ;; ordinal populations the level gates offered remedies measured false (VM-1…4,
+    ;; VI-2/4). Each sentence is now scoped by `select-level-ordinal-fact`.
+    ("V-or1" "ot2{0.a^.b* 1.a^.b}" V (refused (#rx"drop a `\\^`") ())
+             (refused (#rx"Here every branch is ordinal-headed"
+                       #rx"keep a key before each star [(]`x[{]0[.]a[.]b[*] 1[.]a[.]b[*][}]`"
+                       #rx"end the branch with `\\^` instead of its star")
+                      (#rx"drop a `\\^`")))
+    ;; PRE derived from the HEAD arm's code (the same arm, label and cont as V-or1's
+    ;; measured PRE), not run at HEAD
+    ("V-or2" "ot2{0.a.b*- 1.a.b}" V (refused (#rx"drop a `\\^`") ())
+             (refused (#rx"Here every branch is ordinal-headed" #rx"end each starred branch with `\\^` instead of its `[*]-`"
+                       #rx"a total collapse keeps no key to nest under")
+                      (#rx"drop a `\\^`" #rx"keep a key before each star")))
+    ("V-or3" "ot2{0.a.b*- 1.a.b*-}" V (refused (#rx"`[*]-_` keeps each surviving ancestor") ())
+             (refused (#rx"duplicate output key `:k`" #rx"`[*]-_` cannot tell elements apart either"
+                       #rx"end EVERY branch here with `\\^` instead of its star")
+                      (#rx"`[*]-_` keeps each surviving ancestor" #rx"resolves the collision" #rx"`[*]_`")))
+    ("V-or4" "vhm2{0.{0}* 1.{0}*}" V (refused (#rx"end those branches with `\\^`") ())
+             (refused (#rx"duplicate output key `:x`" #rx"Dropping it on every branch here gives a tuple")
+                      (#rx"end EVERY branch here with `\\^`" #rx"resolves the collision")))
+    ("V-or5" "ot2{0.a.b.k^- 1.a^.b*}" V (refused (#rx"end those branches with `\\^`") ())
+             (refused (#rx"Dropping the star of ONE ordinal-headed branch")
+                      (#rx"Dropping it on every branch" #rx"end EVERY branch" #rx"resolves the collision")))
+    ("V-or6" "rv{xs^.{0.a*} k}" V (refused (#rx"resolves the collision") (#rx"ordinal"))
+             (refused (#rx"Dropping the star of ONE ordinal-headed branch" #rx"Through an ordinal")
+                      (#rx"resolves the collision" #rx"end EVERY branch")))
+    ("V-or7" "w{v^.0.a^.b* v^.1.a^.b*}" V (refused (#rx"resolves the collision") (#rx"ordinal"))
+             (refused (#rx"resolves the collision" #rx"Through an ordinal" #rx"end EVERY branch here with `\\^`")
+                      (#rx"ONE ordinal-headed")))
+    ;; every remedy those messages offer, run on its own subject (verify probes v7, v8)
+    ("V-orK1" "ot2{0.a.b* 1.a.b*}" #f (line "@[{:a {:k 1}} {:a {:k 2}}] : ⟨{:a {:k Int}} {:a {:k Int}}⟩") #f)
+    ("V-orK2" "ot2{0.a.b^ 1.a.b}" #f (line "@[{:k 1} {:a {:b {:k 2}}}] : ⟨{:k Int} {:a {:b {:k Int}}}⟩") #f)
+    ("V-orK3" "ot2{0.a^.b 1.a^.b}" #f (line "@[{:b {:k 1}} {:b {:k 2}}] : ⟨{:b {:k Int}} {:b {:k Int}}⟩") #f)
+    ("V-orK4" "vhm2{0.{0} 1.{0}}" #f (line "@[@[{:x 1}] @[{:x 2}]] : ⟨⟨{:x Int}⟩ ⟨{:x Int}⟩⟩") #f)
+    ("V-orK5" "ot2{0.a.b.k^-k2 1.a^.b*}" #f (line "{:k 2, :k2 1} : {:k Int :k2 Int}") #f)
+    ("V-orK6" "rv{xs^.{0.a*} k^k2}" #f (line "{:k 1, :k2 9} : {:k Int :k2 Int}") #f)
+    ("V-orK7" "w{v^.0.a^.b v^.1.a^.b*}" #f (line "{:k 2, :b {:k 1}} : {:b {:k Int} :k Int}") #f)
+    ("V-orK8" "w{v^.0.a^.b^ v^.1.a^.b^}" #f (line "@[{:k 1} {:k 2}] : ⟨{:k Int} {:k Int}⟩") #f)
+    ("V-orK9" "ot2{0.a^.b*- 1.a^.b*-_}" #f (line "{:k 1, :b-k 2} : {:b-k Int :k Int}") #f)
+    ("V-orK10" "ot2{0.a.b*_ 1.a.b*_}" #f (line "@[{:a {:b-k 1}} {:a {:b-k 2}}] : ⟨{:a {:b-k Int}} {:a {:b-k Int}}⟩") #f)
+    ;; ---- VM-5: the L4 label names the star branch whose landing is KEYLESS — the text
+    ;; no longer depends on branch order
+    ("V-l4a" "mx{m* a.b*-}" V (refused (#rx"`m[*]` is a star branch") ())
+             (refused (#rx"`a[.]b[*]-` is a star branch" #rx"a total collapse [(]`[*]-`[)] always lands at its branch's top") ()))
+    ("V-l4b" "mx{a.b*- m*}" #f (refused (#rx"`a[.]b[*]-` is a star branch") ()) #f)
+    ("V-l4K" "mx{a.b*- m^}" #f (line "@[@[@[1 2] @[3]] {:y 2, :x 1}] : ⟨[PVec [PVec Int]] {:x Int :y Int}⟩") #f)
+    ;; ---- VM-10: a star SEALED under a kept key cannot have lifted the colliding key
+    ("V-dup-sealed" "t3x{a.{b*-_} c* d*}" V (refused (#rx"`[*]-_` keeps each surviving ancestor") ())
+             (refused (#rx"duplicate output key `:k`" #rx"one a star [(]`[*]`[)] LIFTED") (#rx"`[*]-_`")))
+    ;; ---- VF-4: Q_U56's one-token arm — split at the FIRST arrow, every star lexeme
+    ("V-arrow2" "mn{a*->b*->a}" V (refused (#rx"`a[*]->b[*]- a`") ())
+             (refused (#rx"write what follows as its own branch: `a[*]- b[*]- a`") ()))
+    ("V-arrow2K" "mn{a*- b*- a}" #f (line "{:a {:x 1}, :y 2, :x 1} : {:a {:x Int} :x Int :y Int}") #f)
+    ("V-arrow-_" "mn{a*-_->b}" V midlex (refused (#rx"there is no `[*]-_->` operator" #rx"`a[*]-_ b`") ()))
+    ("V-arrow_" "mn{a*_->b}" V midlex (refused (#rx"there is no `[*]_->` operator" #rx"`a[*]_ b`") ()))
+    ("V-arrow_K" "mn{a*_ b}" #f (line "{:a-x 1, :b {:y 2}} : {:a-x Int :b {:y Int}}") #f)
+    ;; ---- VF-5: Q_U55 over a `^..` branch names the spelling that produces the rename
+    ("V-dotdot" "t5{a.b^..c*-}" V (refused (#rx"including the one `b\\^a` renames") ())
+             (refused (#rx"`b\\^a` [(]how `a[.]b\\^[.][.]` is read[)]") ()))))
+
+(define (1bvi-row-id r) (list-ref r 0))
+(define (1bvi-row-spelling r) (list-ref r 1))
+(define (1bvi-row-flips r) (list-ref r 2))
+(define (1bvi-row-pre r) (list-ref r 3))
+(define (1bvi-row-target r) (list-ref r 4))
+
+;; ---------------------------------------------------------------------------
+;; ⭐ [Q_U60] THE LAWS, GENERATED (1b-vi-B, step 1). The hand rows above state
+;; Q_U48 / Q_U57 by instance; these state them for EVERY leaf position at depth
+;; 1–3 of `t5` × EVERY assignment of {kept, `^`, rename} to the leaf's
+;; ancestors, in four families, plus `*-` over the vector fixture `v3`:
+;;   `^-`   ≡ dissolve every ancestor, keep the leaf          | refused if an ancestor is renamed (B)
+;;   `^-z`  ≡ dissolve every ancestor, rename the leaf `^z`   | refused if an ancestor is renamed (B)
+;;   `*-`   ≡ dissolve every ancestor, then `*`               | refused if an ancestor is renamed (D)
+;;   `*-_`  ≡ every lifted field written with `^-_`, ancestors AS WRITTEN (D)
+;; The right-hand sides are today's spellings, so every expected value is
+;; measured by the run itself (`equiv`), never written down.
+;; ⚠ The trees below MIRROR the `def`s in `1bvi-fixtures`; the `*-_` field
+;; lists are the record fields at each position. If a fixture changes, these
+;; must change with it — an `equiv` whose right-hand side is REFUSED is
+;; reported as such, so a drift is loud, not a silent pass.
+;; ---------------------------------------------------------------------------
+;; (SUBJECT BASE . POSITIONS). BASE #f: the subject's own law. Otherwise SUBJECT is
+;; BASE's value under one ordinal head, and every row borrows BASE's equivalent:
+;; `ot{0.X}` ≡ `t5{X}` — ⭐ 1b-vi-D-2a, AN ORDINAL HEAD IS TRANSPARENT UNDER A COLLAPSE.
+;; The caret rows pin what P3c decided (`admins{0.name^-}` re-keys) at every position and
+;; ancestor assignment; the star rows pin what Q_U48 / Q_U57 require of `*-` / `*-_`,
+;; which C's machinery got wrong (it wrapped the join in the ordinal's keyless component).
+(define 1bvi-law-positions '((t5 #f (a) (a b) (a b c)) (v3 #f (a b c))
+                             (ot t5 (a) (a b) (a b c)) (ov3 v3 (a b c))))
+(define 1bvi-law-fields '(((a) b) ((a b) c) ((a b c) m n)))   ;; t5 only
+(define 1bvi-law-renames '(p q))                              ;; ancestor i → `^`+(list-ref … i)
+
+(define (1bvi-law-rows)
+  (define (seg k mode i)
+    (case mode
+      [(kept) (symbol->string k)]
+      [(dis) (format "~a^" k)]
+      [(ren) (format "~a^~a" k (list-ref 1bvi-law-renames i))]))
+  (define (renamed-refusal names)
+    (list 'refused
+          (append (list #rx"can never appear under a total collapse" #rx"Drop `\\^" #rx"keep the level")
+                  (for/list ([n (in-list names)]) (regexp (format "`~a`" n))))
+          '()))
+  (for*/list ([entry (in-list 1bvi-law-positions)]
+              [pos (in-list (cddr entry))]
+              [subj (in-value (car entry))]
+              [base (in-value (or (cadr entry) (car entry)))]
+              [head (in-value (if (cadr entry) "0." ""))]
+              [ancs (in-value (drop-right pos 1))]
+              [leaf (in-value (last pos))]
+              [modes (in-list (apply cartesian-product (for/list ([_ ancs]) '(kept dis ren))))]
+              [fam (in-list (append (if (eq? base 'v3) '(star) '(caret caret-k star star-synth))
+                                    ;; 1b-vi-E [Q_U61]: plain `*`, ordinal subjects only
+                                    (if (cadr entry) '(plain-star) '())))])
+    (define written
+      (string-append (string-join (for/list ([k ancs] [m modes] [i (in-naturals)]) (seg k m i)) ".")
+                     (if (null? ancs) "" ".")))
+    (define all-dis
+      (string-append (string-join (for/list ([k ancs]) (format "~a^" k)) ".") (if (null? ancs) "" ".")))
+    (define names (for/list ([m modes] [i (in-naturals)] #:when (eq? m 'ren)) (list-ref 1bvi-law-renames i)))
+    (define (row suffix flips pre target)
+      (define sp (format "~a{~a~a~a~a}" subj head written leaf suffix))
+      (list (string-append "law " sp) sp flips pre target))
+    (case fam
+      ;; ⭐ 1b-vi-E [Q_U61] S: with every ancestor dissolved the remainder after the ordinal
+      ;; names no key, so the landing passes through: `ot{0.X*}` ≡ `t5{X*}`. (Kept or
+      ;; renamed ancestors name a key and stay inside the tuple — hand controls U61-K*.)
+      ;; 1b-vi verify (VI-6, VI-9): EVERY assignment. A kept or renamed ancestor names a
+      ;; key, so the join stays inside the ordinal's tuple: `t5{X*}` WRAPPED. All-`^` at
+      ;; depth ≥ 2 FLIPPED at E (PRE = the wrap, probe-1bvi-ac); depth 1 is seat B (1b-iv).
+      [(plain-star)
+       (let ([rhs (format "~a{~a~a*}" base written leaf)])
+         (cond [(not (andmap (lambda (m) (eq? m 'dis)) modes)) (row "*" #f `(wrapped ,rhs) #f)]
+               [(null? ancs) (row "*" #f `(equiv ,rhs) #f)]
+               [else (row "*" 'E `(wrapped ,rhs) `(equiv ,rhs))]))]
+      [(caret)
+       (let ([eqv `(equiv ,(format "~a{~a~a}" base all-dis leaf))])
+         (if (pair? names) (row "^-" 'B eqv (renamed-refusal names)) (row "^-" #f eqv #f)))]
+      [(caret-k)
+       (let ([eqv `(equiv ,(format "~a{~a~a^z}" base all-dis leaf))])
+         (if (pair? names) (row "^-z" 'B eqv (renamed-refusal names)) (row "^-z" #f eqv #f)))]
+      [(star)
+       (row "*-" 'D 'midlex
+            (if (pair? names) (renamed-refusal names) `(equiv ,(format "~a{~a~a*}" base all-dis leaf))))]
+      [(star-synth)
+       (row "*-_" 'D 'midlex
+            `(equiv ,(format "~a{~a}" base
+                             (string-join (for/list ([f (cdr (assoc pos 1bvi-law-fields))])
+                                            (format "~a~a.~a^-_" written leaf f))
+                                          " "))))])))
+
+(define 1bvi-all-rows (append 1bvi-rows (1bvi-law-rows)))
+
+;; the three pre-mint refusal classes, measured at `8d404681` (probe-1bvi-p)
+(define (1bvi-expand e)
+  (case e
+    [(midlex)  '(refused (#rx"is neither a field nor an operator") ())]
+    [(postfix) '(refused (#rx"`\\*` is postfix; it attaches to the END of a segment") ())]
+    [(unbound) '(refused (#rx"^Unbound variable$") ())]
+    ;; the 1b-vi verify: a measured WHOLE-FILE ABORT — no per-row line exists to match
+    [(abort) '(raised)]
+    [else e]))
+
+;; One line per result. An error is a STRUCT test, never a string test.
+(define (1bvi-line r)
+  (if (prologos-error? r)
+      (string-append "ERROR: " (format "~a" (prologos-error-message r)))
+      (format "~a" r)))
+
+;; → (cons 'ok lines) or (cons 'bad reason). Fails CLOSED: a raise, a fixture
+;; that did not load (every later line would read `Unbound variable`, which the
+;; `unbound` class would then accept — the false green noted at :117), or a
+;; result count that does not match the command count (rows would misalign).
+(define 1bvi-cache (make-hash))
+(define (1bvi-batch level forms)
+  (hash-ref!
+   1bvi-cache (cons level forms)
+   (lambda ()
+     (define src (string-append 1bvi-fixtures (string-join forms "\n") "\n"))
+     (define rs
+       (with-handlers ([exn:fail? (lambda (e) (exn-message e))])
+         (case level
+           [(file) (run-ws-raw src)]
+           [(string) (process-string-ws src)])))
+     (cond
+       [(string? rs) (cons 'bad (format "the ~a batch RAISED — a whole-file abort: ~a" level rs))]
+       [(not (= (length rs) (+ 1bvi-fixture-count (length forms))))
+        (cons 'bad (format "the ~a batch returned ~a results for ~a fixtures + ~a forms"
+                           level (length rs) 1bvi-fixture-count (length forms)))]
+       [(ormap prologos-error? (take rs 1bvi-fixture-count))
+        (cons 'bad (format "a ~a fixture failed to load: ~a" level
+                           (map 1bvi-line (filter prologos-error? (take rs 1bvi-fixture-count)))))]
+       [else (cons 'ok (map 1bvi-line (drop rs 1bvi-fixture-count)))]))))
+
+(define (1bvi-spellings) (map 1bvi-row-spelling 1bvi-all-rows))
+(define (1bvi-hand-spellings) (map 1bvi-row-spelling 1bvi-rows))   ;; level 2 runs these only
+(define (1bvi-equivs)
+  (remove-duplicates
+   (for*/list ([r (in-list 1bvi-all-rows)]
+               [e (in-list (list (1bvi-row-pre r) (1bvi-row-target r)))]
+               #:when (and (pair? e) (memq (car e) '(same equiv wrapped))))
+     (cadr e))))
+
+(define (1bvi-type-of line)
+  (let ([m (regexp-match #rx"^.* : (.*)$" line)]) (and m (cadr m))))
+
+;; does LINE satisfy expectation E? → #t, or a string saying why not
+(define (1bvi-holds? e line equiv-line)
+  (match-1bvi (1bvi-expand e) line equiv-line))
+(define (match-1bvi e line equiv-line)
+  (case (car e)
+    [(line) (or (equal? line (cadr e)) (format "expected the line ~s" (cadr e)))]
+    [(refused)
+     (cond
+       [(not (regexp-match? #rx"^ERROR: " line)) "expected a refusal (a counted error)"]
+       [else
+        (let ([msg (substring line 7)])
+          (or (for/or ([rx (in-list (cadr e))])
+                (and (not (regexp-match? rx msg)) (format "the message must match ~s" rx)))
+              (for/or ([rx (in-list (caddr e))])
+                (and (regexp-match? rx msg) (format "the message must NOT match ~s" rx)))
+              #t))])]
+    [(equiv)   ;; a generated LAW: the line equals today's spelling's line, which is not refused
+     (cond
+       [(not equiv-line) (format "no output for the equivalent ~s" (cadr e))]
+       [(regexp-match? #rx"^ERROR: " equiv-line)
+        (format "the law's right-hand side ~s is REFUSED today (~a)" (cadr e) equiv-line)]
+       [(not (equal? line equiv-line)) (format "expected the right-hand side's line ~s" equiv-line)]
+       [else #t])]
+    [(same)
+     (cond
+       [(not equiv-line) (format "no output for the equivalent ~s" (cadr e))]
+       [(regexp-match? #rx"^ERROR: " equiv-line)
+        (format "the equivalent ~s is REFUSED today (~a) — the expected value is lost" (cadr e) equiv-line)]
+       [(not (equal? (1bvi-type-of equiv-line) (caddr e)))
+        (format "the equivalent ~s now has type ~s, pinned ~s" (cadr e) (1bvi-type-of equiv-line) (caddr e))]
+       [(not (equal? line equiv-line)) (format "expected the equivalent's line ~s" equiv-line)]
+       [else #t])]
+    ;; ⭐ 1b-vi verify (VI-6) — Q_U61's OTHER half as a law: a remainder that names a key
+    ;; keeps the join INSIDE the ordinal's one keyless tuple component, so `ot{0.X*}` is
+    ;; `t5{X*}` wrapped — value in `@[…]`, type in `⟨…⟩`. Before, only 3 hand points
+    ;; held it, and a predicate testing sₙ's parent alone passed every row.
+    [(wrapped)
+     (cond
+       [(not equiv-line) (format "no output for the equivalent ~s" (cadr e))]
+       [(regexp-match? #rx"^ERROR: " equiv-line)
+        (format "the wrapped right-hand side ~s is REFUSED today (~a)" (cadr e) equiv-line)]
+       [else
+        (let* ([m (regexp-match #rx"^(.*) : (.*)$" equiv-line)]
+               [want (format "@[~a] : ⟨~a⟩" (cadr m) (caddr m))])
+          (or (equal? line want) (format "expected the WRAPPED right-hand side ~s" want)))])]
+    [(raised) "a measured whole-file abort is not a per-row expectation"]
+    [else (format "unknown expectation ~s" e)]))
+
+;; ---------------------------------------------------------------------------
+;; ⭐⭐ 1b-vi-C — INJECTION: the D rows, live BEFORE the mint.
+;; C lands the machinery inert — no lexeme mints `*-` / `*-_` until D. So each D
+;; row is run as D's parser will build it: production parsing of the row's `*`
+;; spelling (`ws-string->surfs`), every star cont converted to its TOTAL sibling,
+;; every branch list marked at every level (the parser marks per
+;; `segment-select-items` return, so sub-blocks are marked too), then the
+;; production elaborate → type → reduce path. The row's D TARGET must hold.
+;; Excluded: rows whose target is a PARSER refusal (Q_U55's star half — C5, E5-
+;; and the renamed `*-` laws); the parser does not run here, so those flip at D.
+;; ⚠ THE HARNESS IS CHECKED, NOT TRUSTED: it mirrors `process-string-ws`
+;; (`driver.rkt`: a fresh network, `reset-meta-store!`, the source parameters,
+;; the solve guard), and with the IDENTITY transform it must reproduce level 2
+;; line for line. A drifted mirror then shows up as a parity failure, not as
+;; rows passing or failing for a reason that is not the walkers'.
+;; At D this becomes a parity pin: the parser's own surf must EQUAL the injected one.
+;; ---------------------------------------------------------------------------
+(define (1bvi-parser-refusal? t)
+  (and (pair? t) (eq? (car t) 'refused)
+       (for/or ([rx (in-list (cadr t))]) (regexp-match? #rx"can never appear" (object-name rx)))))
+;; Rows whose D target is about LEXING, which no injected IR can exercise:
+;; X-arrow (Q_U56's `*->`; its `*` spelling became `a*> b` at C's red step) and
+;; X-type (type territory, DEFERRED 168). ⚠ X-type first PASSED the injection
+;; VACUOUSLY: its `*` spelling `<(x : Nat)* Nat>` is a parse refusal ("needs a
+;; SPACE") that the harness passed through untransformed, and it matched the `*-`
+;; target's regex. Found by counting the injected rows, not by any failure — so the
+;; harness now fails closed on that shape (`VACUOUS`, below) instead of trusting it.
+(define 1bvi-lexeme-rows '("X-arrow" "X-arrow1" "X-arrow_" "X-arrow0" "X-type"))
+(define (1bvi-injectable? r)
+  (and (eq? (1bvi-row-flips r) 'D)
+       (regexp-match? #rx"[*]-" (1bvi-row-spelling r))
+       (not (member (1bvi-row-id r) 1bvi-lexeme-rows))
+       (not (1bvi-parser-refusal? (1bvi-row-target r)))))
+(define (1bvi-star-spelling sp) (regexp-replace* #rx"[*]-" sp "*"))
+
+(define (1bvi-totalize-step s)
+  (cond [(select-star-step? s)
+         (make-select-star (select-star-cont-of #t (select-star-cont-synth? (select-star-cont s))))]
+        [(and (pair? s) (eq? (car s) '@sub)) (cons '@sub (1bvi-totalize-branches (cdr s)))]
+        [(select-bcast-step? s) (make-select-bcast (1bvi-totalize-step (select-bcast-inner s)))]
+        [else s]))
+(define (1bvi-totalize-branches bs)
+  (for/list ([b (in-list bs)])
+    (select-branch-mark-total-collapse (map 1bvi-totalize-step b))))
+;; ⭐ 1b-vi-D-1: PER STAR, not per row. A mixed row (`env{prod^.db* dev.db*-}`) must keep
+;; its `*`, so each surf star is matched to the spelling's star lexeme in TEXTUAL order —
+;; which is the surf's depth-first order: subject first, branches left to right, steps
+;; left to right, into sub-blocks and ω inners. Each match is CHECKED (the surf star's
+;; synth-ness must equal the lexeme's), and the lexeme queue must empty EXACTLY: a
+;; misaligned row raises, so the batch fails closed rather than converting the wrong star.
+(define (1bvi-star-lexemes sp) (regexp-match* #rx"[*]-?_?" sp))
+(define (1bvi-totalize-surf s lexemes)
+  (define q (box lexemes))
+  (define (step st)
+    (cond
+      [(select-star-step? st)
+       (when (null? (unbox q)) (error '1bvi-inject "the surf has more stars than the spelling ~s" lexemes))
+       (let ([lex (car (unbox q))] [c (select-star-cont st)])
+         (set-box! q (cdr (unbox q)))
+         (unless (eq? (select-star-cont-synth? c) (regexp-match? #rx"_$" lex))
+           (error '1bvi-inject "star/lexeme misalignment: cont ~s against `~a` in ~s" c lex lexemes))
+         (if (regexp-match? #rx"^[*]-" lex)
+             (make-select-star (select-star-cont-of #t (select-star-cont-synth? c)))
+             st))]
+      [(and (pair? st) (eq? (car st) '@sub)) (cons '@sub (branches (cdr st)))]
+      [(select-bcast-step? st) (make-select-bcast (step (select-bcast-inner st)))]
+      [else st]))
+  (define (branches bs)
+    (for/list ([b (in-list bs)])
+      (select-branch-mark-total-collapse (for/list ([st (in-list b)]) (step st)))))
+  (define (walk sf)
+    (unless (surf-select? sf) (error '1bvi-inject "a row's surf is not a surf-select: ~s" sf))
+    (let* ([subj (surf-select-subject sf)]
+           [subj* (if (surf-select? subj) (walk subj) subj)])
+      (surf-select subj* (branches (surf-select-branches sf)) (surf-select-sort sf) (surf-select-srcloc sf))))
+  (begin0 (walk s)
+    (unless (null? (unbox q))
+      (error '1bvi-inject "the spelling has ~a more star(s) than the surf: ~s" (length (unbox q)) lexemes))))
+
+;; level 2 with a surf transform between parse and process. → (cons 'ok lines) | (cons 'bad why)
+(define (1bvi-inject-batch forms lexeme-lists)   ;; #f = the IDENTITY transform
+  (hash-ref!
+   1bvi-cache (list 'inject lexeme-lists forms)
+   (lambda ()
+     (define src (string-append 1bvi-fixtures (string-join forms "\n") "\n"))
+     (define rs
+       (with-handlers ([exn:fail? (lambda (e) (exn-message e))])
+         (parameterize ([current-prop-net-box (box (make-elaboration-network))]
+                        [current-source-str src]
+                        [current-raw-node #f])
+           (reset-meta-store!)
+           (let* ([surfs (ws-string->surfs src)]
+                  [nfix (- (length surfs) (length forms))])
+             (for/list ([sf (in-list surfs)] [i (in-naturals)])
+               (cond
+                 ;; non-vacuity: a row the transform cannot reach is never a pass
+                 [(and (prologos-error? sf) (>= i nfix) lexeme-lists)
+                  (format "VACUOUS: the `*` spelling did not parse to a select, so nothing was injected (~a)"
+                          (prologos-error-message sf))]
+                 [(prologos-error? sf) sf]
+                 [else
+                   (with-handlers ([exn:prologos-solve?
+                                    (lambda (e) (prologos-error srcloc-unknown (exn-message e)))])
+                     (process-command (if (and (>= i nfix) lexeme-lists)
+                                          (1bvi-totalize-surf sf (list-ref lexeme-lists (- i nfix)))
+                                          sf)))]))))))
+     (cond
+       [(string? rs) (cons 'bad (format "the injection batch RAISED: ~a" rs))]
+       [(not (= (length rs) (+ 1bvi-fixture-count (length forms))))
+        (cons 'bad (format "the injection batch returned ~a results for ~a fixtures + ~a forms"
+                           (length rs) 1bvi-fixture-count (length forms)))]
+       [(ormap prologos-error? (take rs 1bvi-fixture-count))
+        (cons 'bad "an injection fixture failed to load")]
+       [else (cons 'ok (map 1bvi-line (drop rs 1bvi-fixture-count)))]))))
+
+;; ⭐ 1b-vi-D-2b — PARITY. From stage D the parser builds the IR the injection built
+;; by hand; the two must be the SAME surf (srclocs aside: `*-` is one column longer
+;; than `*`). Without this the injection harness is a mirror we trusted for a whole
+;; slice. Compared level by level down the subject chain: branches (marks included)
+;; and sort. Fails closed: a parse that raised, a refusal, or a row count mismatch.
+(define (1bvi-select-shape sf)
+  (if (surf-select? sf)
+      (list 'select (1bvi-select-shape (surf-select-subject sf)) (surf-select-branches sf) (surf-select-sort sf))
+      'subject))
+(define (1bvi-parse-forms forms)
+  (define src (string-append 1bvi-fixtures (string-join forms "\n") "\n"))
+  (with-handlers ([exn:fail? (lambda (e) (exn-message e))])
+    (parameterize ([current-prop-net-box (box (make-elaboration-network))]
+                   [current-source-str src]
+                   [current-raw-node #f])
+      (reset-meta-store!)
+      (drop (ws-string->surfs src) 1bvi-fixture-count))))
+(define (1bvi-parity-problems)
+  (define rows (filter 1bvi-injectable? 1bvi-all-rows))
+  (define real (1bvi-parse-forms (map 1bvi-row-spelling rows)))
+  (define star (1bvi-parse-forms (map (lambda (r) (1bvi-star-spelling (1bvi-row-spelling r))) rows)))
+  (cond
+    [(string? real) (list (format "parity: parsing the D spellings RAISED: ~a" real))]
+    [(string? star) (list (format "parity: parsing the `*` spellings RAISED: ~a" star))]
+    [(not (= (length real) (length star) (length rows)))
+     (list (format "parity: ~a rows, ~a parsed D surfs, ~a parsed `*` surfs" (length rows) (length real) (length star)))]
+    [else
+     (for/list ([r (in-list rows)] [a (in-list real)] [b (in-list star)]
+                #:unless (and (surf-select? a) (surf-select? b)
+                              (equal? (1bvi-select-shape a)
+                                      (1bvi-select-shape (1bvi-totalize-surf b (1bvi-star-lexemes (1bvi-row-spelling r)))))))
+       (format "[~a] PARITY ~a — the parser's surf ≠ the injected one: ~s | ~s"
+               (1bvi-row-id r) (1bvi-row-spelling r)
+               (if (surf-select? a) (1bvi-select-shape a) a)
+               (if (surf-select? b) (1bvi-select-shape (1bvi-totalize-surf b (1bvi-star-lexemes (1bvi-row-spelling r)))) b)))]))
+
+(define (1bvi-inject-problems eqv)
+  (define rows (filter 1bvi-injectable? 1bvi-all-rows))
+  (define forms (map (lambda (r) (1bvi-star-spelling (1bvi-row-spelling r))) rows))
+  (define ident (1bvi-inject-batch forms #f))
+  (define level2 (1bvi-batch 'string forms))
+  (define total (1bvi-inject-batch forms (map (lambda (r) (1bvi-star-lexemes (1bvi-row-spelling r))) rows)))
+  (append
+   (for/list ([b (in-list (list ident level2 total))]
+              [what (in-list '("injection harness, identity" "the `*` spellings, level 2" "injection, totalized"))]
+              #:unless (eq? (car b) 'ok))
+     (format "~a: ~a" what (cdr b)))
+   (if (and (eq? (car ident) 'ok) (eq? (car level2) 'ok))
+       (for/list ([f (in-list forms)] [a (in-list (cdr ident))] [b (in-list (cdr level2))]
+                  #:unless (equal? a b))
+         (format "HARNESS DRIFT: the identity injection of ~a reads ~s, `process-string-ws` reads ~s" f a b))
+       '())
+   (if (eq? (car total) 'ok)
+       (for*/list ([(r line) (in-parallel (in-list rows) (in-list (cdr total)))]
+                   [t (in-value (1bvi-row-target r))]
+                   [held (in-value (1bvi-holds? t line
+                                                (let ([x (1bvi-expand t)])
+                                                  (and (pair? x) (memq (car x) '(same equiv wrapped)) (hash-ref eqv (cadr x) #f)))))]
+                   #:unless (eq? held #t))
+         (format "[~a] INJECTED ~a — ~a; observed: ~a" (1bvi-row-id r) (1bvi-row-spelling r) held line))
+       '())))
+
+;; ⚠ ONE test-case, ONE check, for the whole table — deliberately. The batch
+;; cache is per process and the runner shards a file's test-cases round-robin
+;; (`tools/suite-plan.rkt:121`), so two test-cases reading the batches paid for
+;; them once per shard: measured +8.3 s on the battery (92.1 → 100.3 s summed) with
+;; the first cut's two test-cases. And rackunit stops a test-case at its first
+;; failing check, so a single combined problem list is also what lets a red run
+;; name EVERY failing row, every unusable batch and every level disagreement.
+(test-case "1b-vi-A: the stage table — batches usable, level 2 ≡ level 3, every row holds at its stage, every row ahead still FAILS its target"
+  (define f (1bvi-batch 'file (1bvi-spellings)))
+  (define s (1bvi-batch 'string (1bvi-hand-spellings)))
+  (define q (1bvi-batch 'file (1bvi-equivs)))
+  (define batch-problems
+    (append
+     (if (memq 1bvi-stage 1bvi-stage-order) '() (list (format "unknown stage ~s" 1bvi-stage)))
+     (for/list ([b (in-list (list f s q))]
+                [what (in-list '("spellings, level 3" "spellings, level 2" "equivalents, level 3"))]
+                #:unless (eq? (car b) 'ok))
+       (format "~a: ~a" what (cdr b)))))
+  (define level-problems
+    (if (and (eq? (car f) 'ok) (eq? (car s) 'ok))
+        (for/list ([r (in-list 1bvi-rows)] [a (in-list (cdr f))] [b (in-list (cdr s))]
+                   #:unless (equal? a b))
+          (format "[~a] ~a reads differently at level 2 (`process-string-ws`) and level 3 (a `.prologos` file): ~a | ~a"
+                  (1bvi-row-id r) (1bvi-row-spelling r) b a))
+        '()))
+  (define row-problems
+    (if (and (eq? (car f) 'ok) (eq? (car q) 'ok))
+        (let* ([eqv (for/hash ([e (in-list (1bvi-equivs))] [l (in-list (cdr q))]) (values e l))]
+               [equiv-of (lambda (e)
+                           (let ([x (1bvi-expand e)])
+                             (and (pair? x) (memq (car x) '(same equiv wrapped)) (hash-ref eqv (cadr x) #f))))])
+          (for*/list ([(r line) (in-parallel (in-list 1bvi-all-rows) (in-list (cdr f)))]
+                      [p (in-value
+                          (let* ([live? (1bvi-reached? (1bvi-row-flips r))]
+                                 [now (if live? (1bvi-row-target r) (1bvi-row-pre r))]
+                                 [held (1bvi-holds? now line (equiv-of now))])
+                            (cond
+                              [(not (eq? held #t))
+                               (format "[~a] ~a — ~a (~a); observed: ~a"
+                                       (1bvi-row-id r) (1bvi-row-spelling r)
+                                       (if live? "TARGET" "PRE") held line)]
+                              ;; non-vacuity: a row not yet live must FAIL its target
+                              [(and (not live?) (1bvi-row-target r)
+                                    (eq? #t (1bvi-holds? (1bvi-row-target r) line
+                                                         (equiv-of (1bvi-row-target r)))))
+                               (format "[~a] ~a — its TARGET already holds before stage ~a: the row is vacuous, or ~a's code leaked early; observed: ~a"
+                                       (1bvi-row-id r) (1bvi-row-spelling r)
+                                       (1bvi-row-flips r) (1bvi-row-flips r) line)]
+                              [else #f])))]
+                      #:when p)
+            p))
+        '()))
+  ;; ⚠ THE RIGHT-HAND SIDES, CHECKED AT EVERY STAGE (1b-vi-B; the A cut lacked it).
+  ;; A row ahead of the stage is only asserted to FAIL its target — and a target
+  ;; whose right-hand side is REFUSED, or whose pinned TYPE drifted, fails too, so
+  ;; the A table never verified its 31 pinned types until stage D. Every `same` /
+  ;; `equiv` in either column is checked NOW: accepted, and (for `same`) of
+  ;; exactly the pinned type. The expected values are measured continuously.
+  (define rhs-problems
+    (if (eq? (car q) 'ok)
+        (let ([eqv (for/hash ([e (in-list (1bvi-equivs))] [l (in-list (cdr q))]) (values e l))])
+          (remove-duplicates
+           (for*/list ([r (in-list 1bvi-all-rows)]
+                       [e (in-list (list (1bvi-row-pre r) (1bvi-row-target r)))]
+                       #:when (and (pair? e) (memq (car e) '(same equiv wrapped)))
+                       [l (in-value (hash-ref eqv (cadr e) #f))]
+                       [p (in-value
+                           (cond
+                             [(not l) (format "[~a] no output for the right-hand side ~s" (1bvi-row-id r) (cadr e))]
+                             [(regexp-match? #rx"^ERROR: " l)
+                              (format "[~a] the right-hand side ~s is REFUSED today: ~a" (1bvi-row-id r) (cadr e) l)]
+                             [(and (eq? (car e) 'same) (not (equal? (1bvi-type-of l) (caddr e))))
+                              (format "[~a] the right-hand side ~s has type ~s, pinned ~s"
+                                      (1bvi-row-id r) (cadr e) (1bvi-type-of l) (caddr e))]
+                             [else #f]))]
+                       #:when p)
+             p)))
+        '()))
+  ;; ⭐ B-3 — ADVICE THAT DOES NOT WORK (P3b verify finding 8's class). Every LIVE
+  ;; refusal that offers remedies ("Drop … (`X`), or keep the level(s): `Y`") has
+  ;; both remedies RUN on the row's own subject, and each must be accepted.
+  (define remedy-problems
+    (if (eq? (car f) 'ok)
+        (let* ([offers
+                (for*/list ([(r line) (in-parallel (in-list 1bvi-all-rows) (in-list (cdr f)))]
+                            #:when (and (1bvi-reached? (1bvi-row-flips r))
+                                        (pair? (1bvi-row-target r))
+                                        (eq? (car (1bvi-row-target r)) 'refused)
+                                        (regexp-match? #rx"can never appear under a total collapse" line))
+                            [m (in-value (regexp-match #rx"Drop [^(]*[(]`([^`]*)`[)], or keep the levels?: `([^`]*)`" line))]
+                            [subj (in-value (car (regexp-match #rx"^[^{]*" (1bvi-row-spelling r))))])
+                  (if m
+                      (list r (format "~a{~a}" subj (cadr m)) (format "~a{~a}" subj (caddr m)))
+                      (list r #f #f)))]
+               [srcs (remove-duplicates (filter values (append-map cdr offers)))]
+               [rb (if (null? srcs) (cons 'ok '()) (1bvi-batch 'file srcs))]
+               [res (if (eq? (car rb) 'ok) (for/hash ([x srcs] [l (cdr rb)]) (values x l)) (hash))])
+          (append
+           (if (eq? (car rb) 'ok) '() (list (format "remedies batch: ~a" (cdr rb))))
+           (for*/list ([o (in-list offers)]
+                       [p (in-value
+                           (cond
+                             [(not (cadr o))
+                              (format "[~a] the refusal offers no runnable remedy (no \"Drop … (`…`), or keep the level: `…`\")"
+                                      (1bvi-row-id (car o)))]
+                             [else
+                              (for/or ([src (in-list (cdr o))])
+                                (let ([l (hash-ref res src #f)])
+                                  (and l (regexp-match? #rx"^ERROR: " l)
+                                       (format "[~a] the remedy `~a` the message offers is itself REFUSED: ~a"
+                                               (1bvi-row-id (car o)) src l))))]))]
+                       #:when p)
+             p)))
+        '()))
+  ;; 1b-vi-C: the D rows through the injected IR, from stage C on
+  (define inject-problems
+    (if (and (1bvi-reached? 'C) (eq? (car q) 'ok))
+        (1bvi-inject-problems (for/hash ([e (in-list (1bvi-equivs))] [l (in-list (cdr q))]) (values e l)))
+        '()))
+  ;; 1b-vi-D-2b: the parser builds what the injection built
+  (define parity-problems (if (1bvi-reached? 'D) (1bvi-parity-problems) '()))
+  (define problems (append batch-problems level-problems rhs-problems row-problems remedy-problems inject-problems parity-problems))
+  (check-equal? problems '()
+                (format "stage ~a: ~a problem(s) over ~a rows (~a hand, ~a law):\n~a" 1bvi-stage (length problems)
+                        (length 1bvi-all-rows) (length 1bvi-rows) (- (length 1bvi-all-rows) (length 1bvi-rows))
+                        (string-join problems "\n"))))
+
+(test-case "1b-vi verify (VI-5): the table's SIZE is pinned — a generator or filter regression that drops rows fails here"
+  ;; One check holds all the rows, so the runner's COUNT DROP cannot see inside it; a
+  ;; filter that silently dropped a family (e.g. `*-_` laws) would have stayed green.
+  (define (fam r) (cadr (regexp-match #rx"([*^][-_z]*)[}]$" (1bvi-row-spelling r))))
+  (define laws (1bvi-law-rows))
+  (check-equal? (list (length 1bvi-rows) (length laws)
+                      (sort (hash->list (for/fold ([h (hash)]) ([r (in-list laws)]) (hash-update h (fam r) add1 0)))
+                            string<? #:key car))
+                ;; measured at the verify, and predicted beforehand from positions × assignments
+                ;; (plain `*`: 1 + 3 + 9 over `ot` + 9 over `ov3` = 22; `*-`: 13 + 9 + 13 + 9 = 44)
+                '(106 144 (("*" . 22) ("*-" . 44) ("*-_" . 26) ("^-" . 26) ("^-z" . 26)))
+                "hand rows, law rows, law rows per family"))
+
+(test-case "1b-vi-A: the table is well-formed — ids unique, every flipping row's PRE differs from its TARGET"
+  (define ids (map 1bvi-row-id 1bvi-all-rows))
+  (check-equal? (length ids) (length (remove-duplicates ids)) "duplicate row id")
+  (for ([r (in-list 1bvi-all-rows)])
+    (define fl (1bvi-row-flips r))
+    (check-true (or (not fl) (and (memq fl 1bvi-stage-order) #t)) (format "[~a] flips-at ~s" (1bvi-row-id r) fl))
+    (if fl
+        (check-not-equal? (1bvi-expand (1bvi-row-pre r)) (1bvi-row-target r)
+                          (format "[~a] PRE = TARGET: the flip is vacuous" (1bvi-row-id r)))
+        (check-false (1bvi-row-target r) (format "[~a] a control carries no TARGET" (1bvi-row-id r))))))
+
+;; ============================================================================
+;; ⭐⭐ D4.P4e-1b slice 1b-vi-C — THE VOCABULARY (C-1 the star-cont axis, C-2 the mark)
+;; ============================================================================
+;; Design: D4 §5.P4e-1b-vi, "1b-vi-C — design target and mini-audit". These are
+;; pure functions, so they are pinned directly; the walkers are pinned through
+;; the injection rows of the stage table (stage C).
+
+(define 1bvi-axis
+  ;; cont · total? · synth? · lexeme
+  '((flatten                #f #f "*")
+    (flatten-synth          #f #t "*_")
+    (flatten-collapse       #t #f "*-")
+    (flatten-collapse-synth #t #t "*-_")))
+
+(test-case "1b-vi-C C-1: the star-cont axis is a CLOSED product, and every cont has exactly one table row"
+  (check-equal? select-star-conts (map car 1bvi-axis) "the axis, in spelling order")
+  (for ([a (in-list 1bvi-axis)])
+    (define-values (c total? synth? lex) (apply values a))
+    (check-equal? (select-star-cont-total? c) total? (format "~a total?" c))
+    (check-equal? (select-star-cont-synth? c) synth? (format "~a synth?" c))
+    (check-eq? (select-star-cont-of total? synth?) c (format "~a round-trips" c))
+    (check-equal? (rf:postfix-star-cont->lexeme c) lex (format "~a renders ~s" c lex))
+    (check-equal? (pp-select-branch (list 'a (make-select-star c))) (string-append "a" lex)))
+  ;; RAISES, never answers: an unknown cont reaching a classifier is the Q_U52 §3
+  ;; hazard (a silent bare `*`), so the dispatcher's whole point is to be loud.
+  (for ([bad (in-list (list 'bogus "*" #f '(flatten)))])
+    (check-exn #rx"star continuation" (lambda () (select-star-cont-synth? bad)))
+    (check-exn #rx"star continuation" (lambda () (select-star-cont-total? bad))))
+  ;; ONE row per cont. C held the two total rows in a printer-only PENDING table;
+  ;; 1b-vi-D-2b moved them here and RETIRED that table (empty scaffolding is a
+  ;; dead path), so the minted table alone must cover the axis, once per cont.
+  (define rows rf:postfix-star-sentinel-table)
+  (check-equal? (sort (map (lambda (r) (symbol->string (cadr r))) rows) string<?)
+                (sort (map (lambda (a) (symbol->string (car a))) 1bvi-axis) string<?)
+                "every axis cont has exactly one row, and every row's cont is on the axis")
+  (for ([col (in-list (list car cadr caddr))])
+    (check-equal? (length (remove-duplicates (map col rows))) (length rows) "no column repeats"))
+  (for ([r (in-list rows)])
+    (check-true (regexp-match? #rx"^[$]postfix-star" (symbol->string (car r)))
+                "every sentinel keeps the `$postfix-star` prefix the leak gates match")
+    (check-equal? (rf:postfix-star-lexeme->sentinel (caddr r)) (car r) "the reader mints every row")
+    (check-true (rf:postfix-star-sentinel? (car r)) "the parser recognizes every row")
+    (check-equal? (rf:postfix-star-cont->lexeme (cadr r)) (caddr r) "the printer renders every row")))
+
+;; branches over t5-shaped keys: every {kept, `^`, `^p`} ancestor assignment ×
+;; sₙ plain or ω × all four star conts — the population the laws quantify over.
+(define (1bvi-mark-population)
+  (for*/list ([n (in-range 0 3)]
+              [modes (in-list (apply cartesian-product (for/list ([_ (in-range n)]) '(kept dis ren))))]
+              [sn (in-list (list 'c (make-select-bcast 'c)))]
+              [a (in-list 1bvi-axis)])
+    (append (for/list ([m (in-list modes)] [k (in-list '(a b))] [i (in-naturals)])
+              (case m
+                [(kept) k]
+                [(dis) (list '@key k 'dissolve)]
+                [(ren) (list '@key k (cons 'rename (list-ref '(p q) i)))]))
+            (list sn (make-select-star (car a))))))
+
+(test-case "1b-vi-C C-2: the mark — exact shapes, and the branch itself when the star is not total"
+  (define (st c) (make-select-star c))
+  (for ([c (in-list '(flatten flatten-synth))])
+    (define b (list 'a 'b 'c (st c)))
+    (check-eq? (select-branch-mark-total-collapse b) b (format "~a: not total — the branch itself" c)))
+  (let ([b '(a b (@key c collapse))])
+    (check-eq? (select-branch-mark-total-collapse b) b "a caret leaf is not a star"))
+  (check-equal? (select-branch-mark-total-collapse (list 'a 'b 'c (st 'flatten-collapse)))
+                (list '(@key a (collapsed . #f)) '(@key b (collapsed . #f)) 'c (st 'flatten-collapse))
+                "s₁…sₙ₋₁ marked; sₙ and the star untouched")
+  (check-equal? (select-branch-mark-total-collapse
+                 (list '(@key a (rename . p)) '(@key b dissolve) 'c (st 'flatten-collapse-synth)))
+                (list '(@key a (collapsed rename . p)) '(@key b (collapsed . dissolve)) 'c (st 'flatten-collapse-synth))
+                "the WRITTEN cont rides inside the mark")
+  (for ([b (in-list (list (list 'c (st 'flatten-collapse)) (list (st 'flatten-collapse))))])
+    (check-equal? (select-branch-mark-total-collapse b) b "no ancestor, nothing to mark (Q_U59)"))
+  (check-equal? (select-branch-mark-total-collapse (list 'a 0 'b 'c (st 'flatten-collapse)))
+                (list '(@key a (collapsed . #f)) 0 '(@key b (collapsed . #f)) 'c (st 'flatten-collapse))
+                "an ordinal makes no layer and stays unmarked")
+  (check-equal? (select-branch-mark-total-collapse (list 'top (make-select-bcast 'cfg) 'x (st 'flatten-collapse)))
+                (list '(@key top (collapsed . #f)) (make-select-bcast '(@key cfg (collapsed . #f))) 'x (st 'flatten-collapse))
+                "an ω ancestor marks its INNER step (probe-1bvi-t: the lift consults it)")
+  ;; the contract: only the conts the parser lets through can be marked. A
+  ;; positional misplacement reaching here means a parser check regressed.
+  (check-exn #rx"collapse" (lambda () (select-branch-mark-total-collapse (list '(@key a synth) 'c (st 'flatten-collapse)))))
+  (check-exn #rx"collapse" (lambda () (select-branch-mark-total-collapse (list '(@key a collapse) 'c (st 'flatten-collapse))))))
+
+(test-case "1b-vi-C C-2: the mark changes PLACEMENT only — unmark ∘ mark = id, it prints and names as written"
+  (define pop (1bvi-mark-population))
+  (check-equal? (length pop) (* (+ 1 3 9) 2 4) "13 ancestor assignments × 2 leaves × 4 conts")
+  (for ([b (in-list pop)])
+    (define m (select-branch-mark-total-collapse b))
+    (define total? (select-star-cont-total? (select-star-cont (last b))))
+    (define marked (filter (lambda (s) (let ([s (if (select-bcast-step? s) (select-bcast-inner s) s)])
+                                         (and (select-key-step? s) (select-cont-collapsed? (caddr s)))))
+                           m))
+    (check-equal? (map select-step-unmark m) b (format "unmark ∘ mark ≠ id on ~s" b))
+    (check-equal? (pp-select-branch m) (pp-select-branch b) (format "a marked branch prints as written: ~s" b))
+    (check-equal? (map select-step-output-name m) (map select-step-output-name b) (format "and names as written: ~s" b))
+    (check-equal? (select-branch-mark-total-collapse m) m "marking is idempotent")
+    (check-equal? (length marked) (if total? (- (length b) 2) 0)
+                  (format "marks exist iff the star is total, on exactly s₁…sₙ₋₁: ~s" b))
+    (for ([s (in-list marked)])
+      (check-true (select-cont-dissolves-level? (caddr s)) "every mark places as a dissolve"))))
+
+(test-case "1b-vi-C C-4: the provenance prefix — ONE seat, total synth stars only, branch-local names"
+  (define (mk c . ancs) (select-branch-mark-total-collapse (append ancs (list 'c (make-select-star c)))))
+  (define (prefix b) (select-star-provenance-prefix (last b) (drop-right b 2)))
+  (check-eq? (prefix (mk 'flatten-collapse-synth 'a 'b)) 'a-b "kept ancestors name the prefix")
+  (check-eq? (prefix (mk 'flatten-collapse-synth '(@key a (rename . p)) 'b)) 'p-b "a rename is honoured (P, E5_)")
+  (check-eq? (prefix (mk 'flatten-collapse-synth '(@key a dissolve) 'b)) 'b "a dissolve drops out (E6_)")
+  (check-false (prefix (mk 'flatten-collapse-synth '(@key a dissolve))) "nothing survives — no prefix")
+  (check-false (prefix (mk 'flatten-collapse-synth)) "no ancestor — `*-_` ≡ `*_` (Q_U59)")
+  (for ([c (in-list '(flatten flatten-synth flatten-collapse))])
+    (check-false (prefix (mk c 'a 'b)) (format "~a carries no provenance prefix" c))))
+
+(test-case "1b-vi-C C-5: an UNMARKED total star is a loud invariant violation in BOTH twins — the mark is load-bearing"
+  ;; Typing: production parsing of `t5{a.b.c*}`, the cont made total, the mark
+  ;; SKIPPED. The kept ancestors route the join to the star-TAIL arm, which must
+  ;; raise rather than re-nest (computing `*`'s answer for `*-` is the silent
+  ;; wrong answer DR-2 names).
+  (define src (string-append 1bvi-fixtures "t5{a.b.c*}\n"))
+  (define raised
+    (with-handlers ([exn:fail? exn-message])
+      (parameterize ([current-prop-net-box (box (make-elaboration-network))]
+                     [current-source-str src]
+                     [current-raw-node #f])
+        (reset-meta-store!)
+        (let* ([surfs (ws-string->surfs src)]
+               [row (last surfs)]
+               [unmarked (surf-select (surf-select-subject row)
+                                      (for/list ([b (in-list (surf-select-branches row))])
+                                        (map 1bvi-totalize-step b))   ;; ⚠ no mark
+                                      (surf-select-sort row) (surf-select-srcloc row))])
+          (for ([sf (in-list (drop-right surfs 1))]) (unless (prologos-error? sf) (process-command sf)))
+          (process-command unmarked)
+          "no raise"))))
+  (check-regexp-match #rx"reached the star-TAIL arm" raised "typing: the tail-arm guard fires")
+  ;; Reduction, directly (typing would raise first on the production path):
+  ;; `{:a {:b {:m 1}}}` with `a.b*-` unmarked → the value-layer guard panics.
+  (define (kw k) (expr-keyword k))
+  (define (champ1 k v) (expr-champ (champ-insert champ-empty (equal-hash-code (kw k)) (kw k) v)))
+  (define subj (champ1 'a (champ1 'b (champ1 'm (expr-int 1)))))
+  (define r (select-reduce subj (list (list 'a 'b (make-select-star 'flatten-collapse))) 'block #f))
+  (check-true (expr-panic? r) "reduction: the tail-arm guard panics")
+  (check-regexp-match #rx"`[*]-` — internal: a total collapse reached the star-TAIL arm"
+                      (format "~a" (expr-string-val (expr-panic-msg r))))
+  ;; …and the SAME branch, marked, joins (the control: the guard is about the mark)
+  (define ok (select-reduce subj (list (select-branch-mark-total-collapse
+                                        (list 'a 'b (make-select-star 'flatten-collapse)))) 'block #f))
+  (check-false (expr-panic? ok) "marked, the total collapse joins"))

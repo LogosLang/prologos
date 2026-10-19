@@ -1,0 +1,33 @@
+ns probe-1bvi-a
+
+def e3 := {:a {:b {:c @[1 2]}}}
+def t4 := {:a {:b {:c @[{:x 1} {:y 2}]}}}
+def v3 := {:a {:b {:c @[@[1 2] @[3]]}}}
+def dd := {:p {:u @[1] :w @[9]} :q {:v @[2]}}
+
+;; --- caret precedent: collapse with explicit ancestor continuations
+e3{a.b.c^-}
+e3{a^p.b.c^-}
+e3{a^.b.c^-}
+e3{a^p.b.c^-q}
+e3{a.b.c^-_}
+e3{a^p.b.c^-_}
+e3{a^.b.c^-_}
+e3{a^p.b^q.c^-_}
+
+;; --- star today: selective landing (Q_U47) under renames
+t4{a.b.c*}
+t4{a^p.b.c*}
+t4{a^.b^.c*}
+t4{a^p.b^.c*}
+t4{a.b.c*_}
+t4{a^p.b.c*_}
+v3{a.b.c*}
+v3{a^.b^.c*}
+v3{a^p.b.c*}
+
+;; --- the spellings 1b-vi mints, as they read today
+t4{a.b.c*-}
+t4{a.b.c*-_}
+dd{p.u*-}
+dd{p.u*- q.v*-}

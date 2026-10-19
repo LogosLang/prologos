@@ -1,0 +1,45 @@
+ns probe-1bvi-l
+
+def app := {:server {:ssl {:enabled true :cert "c.pem"} :port 8080} :database {:url "db" :pool-size 10}}
+def env := {:prod {:db {:url "p-url" :port 5432}} :dev {:db {:url "d-url" :port 5433}}}
+def cloud := {:regions {:eu {:host "e" :port 443} :us {:host "u" :port 8443}}}
+def t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}
+def vv := {:a {:b @[@[1 2] @[3]]}}
+def v3 := {:a {:b {:c @[@[1 2] @[3]]}}}
+def rm := {:eu {:cfg {:x 1}} :us {:cfg {:x 2}}}
+def deep := {:top {:eu {:cfg {:x 1}} :us {:cfg {:x 2}}}}
+
+;; --- `*-` equivalents not in probe h (dissolve every ancestor, then `*`)
+cloud{regions^:{host port}*}
+vv{a^.b*}
+v3{a^.b^.c*}
+app{server^.ssl* server.port}
+;; --- landing inside a sub-block (branch-local)
+t5{a.{b^.c*}}
+t5{a.{b.c.m^-_ b.c.n^-_}}
+;; --- omega band, top level and under a key ancestor
+rm:cfg*
+rm:cfg*_
+deep{top:cfg*}
+deep{top:cfg*_}
+deep{top^:cfg*}
+deep{top^:cfg*_}
+;; --- dot band (path position)
+app.database*
+app.database*_
+app.server.ssl*
+app.server.ssl*_
+t5.a.b.c*
+t5.a.b.c*_
+;; --- today's reading of every spelling 1b-vi mints, per band
+app{database*-}
+app{server.ssl*-}
+app{server.ssl*-_}
+env{prod dev}*-
+env{prod dev}*-_
+app.server.ssl*-
+app.server.ssl*-_
+rm:cfg*-
+rm:cfg*-_
+deep{top:cfg*-}
+mn{a*-> b}

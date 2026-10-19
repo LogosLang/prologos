@@ -1,0 +1,17 @@
+ns probe-1bvi-ab
+
+def mn := {:a {:x 1} :b {:y 2}}
+def t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}
+
+;; 1b-vi-D-2b: the Q_U56 messages in full, per operator, and the remedy they offer
+mn{a*-> b}
+mn{a*- > b}
+mn{a*-_> b}
+mn{a*> b}
+t5{a.b.c*->}
+mn{a*->b}
+;; the remedy: drop the `>` / end the segment and write the rest as its own branch
+mn{a*- b}
+mn{a*-_ b}
+mn{a* b}
+t5{a.b.c*-}

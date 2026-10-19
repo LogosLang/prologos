@@ -1,0 +1,19 @@
+0: ot : [PVec {:a {:b {:c {:m {:x Int} :n {:y Int}}}}}] defined.
+1: ov3 : [PVec {:a {:b {:c [PVec [PVec Int]]}}}] defined.
+2: ow : {:p [PVec {:a {:x Int :y Int}}]} defined.
+3: {:n {:y 2}, :m {:x 1}} : {:m {:x Int} :n {:y Int}}
+4: {:a-b-c-n {:y 2}, :a-b-c-m {:x 1}} : {:a-b-c-m {:x Int} :a-b-c-n {:y Int}}
+5: {:n {:y 2}, :m {:x 1}} : {:m {:x Int} :n {:y Int}}
+6: {:p-b-c-n {:y 2}, :p-b-c-m {:x 1}} : {:p-b-c-m {:x Int} :p-b-c-n {:y Int}}
+7: {:b {:c {:n {:y 2}, :m {:x 1}}}} : {:b {:c {:m {:x Int} :n {:y Int}}}}
+8: {:c {:n {:y 2}, :m {:x 1}}} : {:c {:m {:x Int} :n {:y Int}}}
+9: {:a-b-c {:n {:y 2}, :m {:x 1}}} : {:a-b-c {:m {:x Int} :n {:y Int}}}
+10: ERROR: `*` — `*` is postfix; it attaches to the END of a segment
+11: {:b {:c {:n {:y 2}, :m {:x 1}}}} : {:b {:c {:m {:x Int} :n {:y Int}}}}
+12: @[{:c {:n {:y 2}, :m {:x 1}}}] : ⟨{:c {:m {:x Int} :n {:y Int}}}⟩
+13: @[{:a {:b @[@[1 2] @[3]]}}] : ⟨{:a {:b [PVec [PVec Int]]}}⟩
+14: @[@[@[@[1 2] @[3]]]] : ⟨⟨[PVec [PVec Int]]⟩⟩
+15: {:p {:x 1}} : {:p {:x Int}}
+16: {:p {:y 2, :x 1}} : {:p {:x Int :y Int}}
+17: {:p {:y 2, :x 1}} : {:p {:x Int :y Int}}
+--- 1 errors ---

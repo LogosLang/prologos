@@ -1,0 +1,11 @@
+ns probe-1bvi-f
+
+def uu := {:a @[@[{:userName "L"}] @[{:userName "J"}]]}
+def w4 := {:a @[{:b {:c 1}} {:b {:c 2}}]}
+
+uu.a:0:userName
+uu{a:0:userName}
+w4.a:b:c
+w4{a:b:c}
+w4{a:{b.c}}
+w4{a:b}
