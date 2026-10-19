@@ -8244,6 +8244,23 @@ Whether Stage A widens to cover these, or narrows its gate, is owner decision BL
 because they are not label semantics: **190** (the drain has no stratum layer) and **191** (`false` prints `none`).
 The scheduler dependence in the Stage-1 addendum above has its mechanism in 190.
 
+**Addendum 2026-10-19 (BSP-LE 3 owner decision BL-1: multiplicity is part of the contract).** Ledger:
+`docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-10-19_BSP-LE_3_DECISIONS.md` BL-1 §10 (branch `bsple3-tabling`, `a74d2294`).
+The owner reaffirmed Rel T1 POL.1: *"We have intentionally went with multisets/bags for our default `solve`, mirroring
+very much the semantics of `findall`. I would expect the order in the result of such to change based on search strategy
+involved, but I'd be surprised if an exhaustive search would change the overall count or multiplicity."* Stage A's gate
+therefore checks **bags**: multiset equality against DFS and the ℕ-semiring derivation count, insensitive to order. The
+consequences for this entry:
+- **Bag-only differences are wrong answers**, not presentation:
+  - forced ATMS returns the right set with the wrong multiplicity on 161 generated lines (BSP) and 200 (drain);
+  - under `:auto`, `(rel [?x] (= x 1) (pick x) (not …))` prints `{x 1}` three times where DFS prints it once (fixture
+    M6).
+- **The parity instrument checks less than the contract.** `racket/prologos/tests/test-solver-parity.rkt:74-82`
+  compares `list->set`, so it must compare multisets.
+- **The fix must give each derivation its own label** (BL-1 §10 MC-2). Counts are read off a set of (answer,
+  derivation label) pairs at the answer boundary, so labels must be in bijection with derivations: per call instance,
+  with failed derivations as nogoods.
+
 ### 178. ⬜ BSP'S TIER-1 FLUSH RETURNS A NETWORK THAT IS NOT A FIXPOINT — it fires the fire-once, empty-input propagators, then clears the whole worklist, discarding the dependents its own writes enqueued (`propagator.rkt:3431-3445`)
 
 **Found by** PAR 4's D.3 round: critics C2 (reality check) and C5 (theory), independently. Reproduced by hand on
