@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 190**
+> ### **NEXT FREE: 192**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -8220,6 +8220,30 @@ Findings:
   answers `{:x 2}` under ATMS, where DFS answers `@[]`. The same query on the facts-only relation itself takes the
   direct-fact fast path, which is wrong under EVERY strategy: filed as 187.
 
+**Addendum 2026-10-19 (BSP-LE 3 Stage 2).** Record: `docs/tracking/tracks/BSP-LE/BSP-LE_3/audits/2026-10-19_BSP-LE_3_STAGE2_AUDIT.md` (branch `bsple3-tabling`, `40b9e57a`), §2 and §5.
+The six fix parts are confirmed. (a) alone changes 0 of 310 re-reads; (a)+(c) changes 116, all of them reads whose
+join holds ⊤. (b) in its additive form preserves every join, and (c) is one arm (`decision-cell.rkt:953`). They are
+**not sufficient**. These families of ATMS-path wrong answers lie outside (a)-(f), and each is visible under `:auto`
+today:
+- **SG-3, no failure channel.** A goal that fails without two writes meeting in one key writes nothing: no viable
+  fact (`relations.rkt:2619-2620`), no viable clause (`:2718`), or ground = ground never compared (`:2167`). For
+  example, with `defr q1 [?x] &> (= 1 x)`, the query `(rel [?a] (= ?a 5) (q1 2))` answers `@[{:a 5}]` where DFS answers
+  `@[]`. 7 of 7 probes are wrong, all of them *extra*.
+- **SG-4, the table consumer is on the default path.** Tabling is `'by-default` (`solver.rkt:78`), so a relation's
+  second call in one query reads a table. The consumer treats a bound argument as free (`relations.rkt:2810-2811`).
+  `(e3 ?a ?b) (e3 ?b ?c)` gives `{:a 1, :b 1, :c 1}`; DFS gives `{:a 1, :b 2, :c 3}`. 4 of 4 probes are wrong.
+- **SG-5, `is` is evaluated once, at install**, by a fire-once with no inputs (`:2175`, `:2183`). For example,
+  `(double 21 ?r)` prints `{:r unknown}`. It is 59 of the 68 `unresolved` corpus lines in Stage 1.
+- **SG-6, non-ground scope-cell values** (`resolve-term`, `:2052-2055`). A flat ⊤ would turn these over-general
+  answers into missing ones.
+- **SG-7, bare names.** With a `not` and two branching calls, only the first call's variable is bound. The mechanism
+  is not yet measured.
+
+Whether Stage A widens to cover these, or narrows its gate, is owner decision BL-4 (pending), in
+`docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-10-19_BSP-LE_3_DECISIONS.md`. Two more families are filed separately,
+because they are not label semantics: **190** (the drain has no stratum layer) and **191** (`false` prints `none`).
+The scheduler dependence in the Stage-1 addendum above has its mechanism in 190.
+
 ### 178. ⬜ BSP'S TIER-1 FLUSH RETURNS A NETWORK THAT IS NOT A FIXPOINT — it fires the fire-once, empty-input propagators, then clears the whole worklist, discarding the dependents its own writes enqueued (`propagator.rkt:3431-3445`)
 
 **Found by** PAR 4's D.3 round: critics C2 (reality check) and C5 (theory), independently. Reproduced by hand on
@@ -8661,3 +8685,64 @@ import).
 **Owner**: PM (the module system). PAR 4B does not edit `namespace.rkt`.
 
 **When**: low cost; with or before the next standard-library change.
+
+### 190. ⬜ ⭐ UNDER `:execution :sequential`, `not` IS IGNORED: THE SEQUENTIAL DRAIN HAS NO STRATUM LAYER — `(= ?x 1) (not (blocked ?x))` with `blocked = {1}` answers `@[{:x 1}]` instead of `@[]`; with `:strategy auto`, 8 of 13 probe queries are wrong
+
+**Found by** BSP-LE 3's Stage-2 census (WORLDVIEW_NOGOODS, GQ-2). Record: `docs/tracking/tracks/BSP-LE/BSP-LE_3/audits/2026-10-19_BSP-LE_3_STAGE2_AUDIT.md` SG-1 (branch `bsple3-tabling`,
+`40b9e57a`). Probe: `docs/tracking/tracks/BSP-LE/BSP-LE_3/research/stage2/worldview/gq2-naf.prologos`, plus the
+variant `gq2-naf-autoseq.prologos` with comparator `gq2-autoseq-cmp.py`/`.out`.
+
+| query (`blocked = {1}`, `pick` = `x=1 \| x=2`) | DFS | BSP (`:parallel`) | drain (`:sequential`) |
+|---|---|---|---|
+| `(= ?x 1) (not (blocked ?x))` | `@[]` | `@[]` | **`@[{:x 1}]`** |
+| `(= ?x 2) (not (blocked ?x))` (control) | `{2}` | `{2}` | `{2}` |
+| `(pick ?x) (not (blocked ?x))` | `{2}` | `{2}` | **`{1, 2}`** |
+
+- Forced ATMS: the drain is wrong on 11 of 13 queries, BSP on 3 of 13.
+- `solver s :strategy auto :execution :sequential`: Check 1 routes 9 of the 13 to ATMS, and **8 are wrong**, every one
+  of them ATMS-routed. The routing code never reads `execution` (`racket/prologos/stratified-eval.rkt:299-336`).
+
+**Mechanism** (read in code at `026973fc`, `racket/prologos/propagator.rkt`):
+- The stratum-handler registry is registered at `:3358-3359`. It is read in one place, `:3587`, inside
+  `run-to-quiescence-bsp` (`:3401`).
+- The drain (`run-to-quiescence-inner` → `run-to-quiescence-drain`, `:2720-2785`) has no stratum dispatch.
+- So the NAF request cell fills (`relations.rkt:2234-2238`) and is never read. The NAF bit stays set, and the
+  conjunction passes the answer read.
+- Every elaboration value-tier handler is skipped under the drain as well.
+- PRECEDENT: PAR 4 P0 §4.4 (`docs/tracking/tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md:293-299`) found that
+  the drain "has no stratum layer", measured on the suite. This entry is the user-visible consequence on the solver
+  path.
+- It is the mechanism of the scheduler dependence in 177's Stage-1 addendum (1090 against 881 wrong lines).
+
+**Fix shape**: move stratum dispatch into `run-to-quiescence`, so that both schedulers run S0 to quiescence and then
+the strata (PAR 4 D.2 §6.6's "DIRECT S0 inside BSP's stratum loop" is the same shape). Alternatively, as a waypoint,
+refuse `:execution :sequential` for queries that reach a `not`, or route them to DFS.
+
+**When**: before BSP-LE 3 Stage A's checkpoint claims the scheduler half of RC-6's prediction. Which track lands it is
+part of owner decision BL-4.
+
+**Owner**: PAR 4 (`propagator.rkt`), with BSP-LE 3 (the solver's refusal waypoint).
+
+### 191. ⬜ A BOOLEAN `false` ANSWER PRINTS AS `none`, UNDER EVERY STRATEGY — `defr flag [?b] || true false` then `solve (flag ?b)` prints `@[{:b true} {:b none}] : [PVec {:b Bool}]`
+
+**Found by** BSP-LE 3's Stage-2 census (ANSWERS_CORPUS, probe 4 row f0). Record: `docs/tracking/tracks/BSP-LE/BSP-LE_3/audits/2026-10-19_BSP-LE_3_STAGE2_AUDIT.md` SG-8. Output:
+`docs/tracking/tracks/BSP-LE/BSP-LE_3/research/stage2/answers/p4-variants.{dfs,atms,auto}.out`, line 8, identical on
+all three legs.
+
+**Mechanism** (read in code at `026973fc`):
+- `normalize-solver-value` maps `false` to Racket `#f` (`racket/prologos/relations.rkt:405`). The direct-fact path
+  uses it (`:3042`).
+- The answer row builder reads `(hash-ref answer qv #f)` and prints `none` when the value is `#f`
+  (`racket/prologos/reduction.rkt:302-303`). An absent value and the Boolean `false` are therefore the same value
+  there.
+- A clause binding `(= b false)` prints `false` correctly (row f1), because it never passes through the normalizer.
+
+The printed `none` contradicts the row's own type, `{:b Bool}`.
+
+**Fix shape**: read with a sentinel that cannot be a value (`(hash-ref answer qv absent)`), or keep `false` as its
+expression in `normalize-solver-value`. Then add a test row with a `false` fact under each strategy.
+
+**When**: low cost, any time. It is independent of 177. The sibling class (a bug under every strategy, found by the
+differential) is 187/188.
+
+**Owner**: BSP-LE 3 (the solver files) or whoever next touches `reduction.rkt`'s answer printing.
