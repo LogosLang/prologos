@@ -852,3 +852,24 @@ binder merges with unsolved metas.
   synthesis changes: every response was made from the full returns.
 - **Next**: a correction merge carries this to main before PAR 4B's first commit, so that PAR 4B branches with the
   complete file.
+
+### Checkpoint 2 merged to main `8a11ee1a`, with its evidence correction `a01f3fc7`; PAR 4B opened from main (`d179ae46` on `par4b-parallelism-portfolio`) — (2026-10-18)
+- **Checkpoint 2** (`8a11ee1a`, O-18): a throwaway detached worktree at main, `git merge --no-ff`. The merge's tree
+  equals the gated branch tip's tree (`cb7c27b0`; tip `5ce40c67`). Main was fast-forwarded; it had no overlap with
+  the owner's dirty and untracked files. The branch was fast-forwarded, and the throwaway worktree removed.
+  - Follow-up on main (`3a007832`): every DEFERRED citation of PAR 4 material "on the branch" now cites the
+    checkpoint (the 157 addendum, 176, 177 and its addendum, 178 and its addendum, 181, 182, and the 148 note's log
+    path), plus the dailies STATE.
+- **Correction merge** (`a01f3fc7`): the evidence fix `19566691` (all ten wave-2 returns), by the same procedure;
+  the trees are equal (`d1264289`).
+  - *Deviation*: the merge message's gate line shows an empty "()" where it named the command
+    `git diff --name-only main a01f3fc7`. An unquoted heredoc ran the backticked text as a command substitution.
+    Main had already moved to the merge, so the message stays as it is and the deviation is recorded here.
+- **PAR 4B opened**:
+  - Worktree `.claude/worktrees/par4b-parallelism-portfolio`, branched from main `a01f3fc7`.
+  - Built with the limit: `reduction`, `driver` and `propagator` `.zo` identical to main's checkout. `timings.jsonl`
+    copied.
+  - Its kickoff and log are committed as `d179ae46` on its branch: `tracks/PAR/PAR_4B/2026-10-18_PAR_4B_KICKOFF.md`
+    and `PAR_4B_LOG.md`.
+  - The owner starts its session from the sidebar, with the start prompt given in this session's reply.
+- **Next (this session)**: O-16 (budgets and the surface contract; re-opens O-2), then O-17, then D.3.
