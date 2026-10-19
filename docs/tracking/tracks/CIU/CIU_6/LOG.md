@@ -551,3 +551,23 @@ are in [`../README.md`](../README.md).
     not-yet.
   - RV-3: `.*` already means "unrestricted" in `selection` declarations.
 - **Next**: the owner's answer on Q_U63; P4e-2's grounding audit waits for it.
+
+### Q_U63 worked out: five options over eleven intents, against the principles; a fifth option (J, `x:*`) found; lean revised E → J — docs commit on the branch (2026-10-19)
+- **Why**: the owner — *"I think it would do us well to work out these options in worked examples, and consider their
+  design tradeoffs against our design principles and expressivity. I'm still not seeing a clear choice among what has
+  been considered."*
+- **What**: [Q_U63, worked out](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u63-worked) with probe
+  `research/P4e-2/probe-p4e2-c` (29 lines):
+  - each intent's value measured through today's nearest spelling;
+  - each option's spelling for it;
+  - a trade-off table against the principles as worded;
+  - the laws each option makes checkable.
+- **Surprise / correction**:
+  - Writing the spellings out produced option **J: `x:*`**, a broadcast of the identity, then join. It is built
+    entirely from `:` and `*` under Q_U40's rule, with the identity kept as an IR step, so `syntax.rkt:891`'s
+    one-step invariant holds. It removes K's glyph collisions and E's do-nothing token.
+  - My lean moves from "E over K" to **J, medium-high**; the old lean is struck in the ledger.
+  - A cannot express a one-level ravel at runtime length.
+  - RV-4: `tw{teams:m*}` is refused in a block where the path form works; that is DEFERRED 167's class
+    (addendum on main).
+- **Next**: the owner's decision on Q_U63; 1b-vi close item 2 (the grammar) proceeds meanwhile.

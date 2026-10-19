@@ -3947,13 +3947,95 @@ items of the hold-point, ruled before P4a opened:
     stay unspellable inside a selector.
   Whichever option: one level (μ) or full (APL)? Q_U26's example (rank 2) does not tell them apart.
 
-  **My lean: E over K, medium.** The gap is the missing UNIT, and join is already the star's job. E adds
+  ~~**My lean: E over K, medium.**~~ **Superseded** by the worked-out lean below (option J, which this pass
+  found: E's identity kept in the IR without a surface token). The gap is the missing UNIT, and join is already the star's job. E adds
   the identity element to the path algebra and derives ravel, a Map's values, and element-flatten
   from operators that exist. K adds a second join beside `*` that differs only in where the layer
   comes from. **Counter-case:** ε does nothing alone, and users will ask what `x.ε` is for; `.*` reads
   as one idea, and K was already decided. **What would settle it:** whether selectors will be stored
   and composed as values (§7.5), and whether faces (b) and (c) are wanted. No census can show that;
   it is the owner's call.
+
+  <a id="q-u63-worked"></a>**Worked out (2026-10-19, second pass — the owner: "I think it would do us well to
+  work out these options in worked examples, and consider their design tradeoffs against our design
+  principles and expressivity. I'm still not seeing a clear choice among what has been considered.")**
+  Probe research/P4e-2/probe-p4e2-c (29 lines at `cee02607`; `c:N` = its line N). None of the options
+  exists, so each value below is the value of TODAY's nearest spelling, which the option must equal;
+  the probe measures that spelling.
+
+  **A fifth option, found by writing the spellings out — J: `x:*`, "broadcast the identity, then join".**
+  Under Q_U40's rule the star deletes the layer the preceding step made. A broadcast over the identity
+  makes exactly the layer whose contents are the elements, so `values:*` IS join, built from `:` and `*`
+  as users learn them from `rows:tags*` (spec §3.5's own example is `build.modules:diags*:msg`). The
+  parser builds `(@bcast ε)` with ε an explicit identity STEP in the IR, so the invariant at
+  `syntax.rkt:891` ("a broadcast-of-nothing is UNCONSTRUCTIBLE") stays true. J is E with the identity kept
+  in the algebra and given no surface token.
+
+  **The intents, under every option** (fixtures as in the probe; `{:c …}`-style abbreviations not used):
+
+  | # | intent | today's nearest spelling → measured | K `.*` | E `:ε*` | J `:*` | A full ravel | N library |
+  |---|---|---|---|---|---|---|---|
+  | 1 | flatten a matrix of ANY length | `values{0 1 2}*` → `@[1 2 3 4 5 6 7 8 9]` (c:9); the same selector on `vv` → panic (c:10) | `values.*` | `values:ε*` | `values:*` | `values.*` | `[flatten values]`: no PVec flatten exists |
+  | 2 | rank 3, one level | `t3{0 1}*` → `@[@[1 2] @[3] @[4]]` (c:12) | `t3.*` | `t3:ε*` | `t3:*` | **not expressible**: A always goes to rank 1 | `[flatten t3]` |
+  | 3 | rank 3, full | `t3{0 1}*{0 1 2}*` → `@[1 2 3 4]` (c:13) | `t3.*.*` | `t3:ε*:ε*` | `t3:*:*` | `t3.*` | `[flatten [flatten t3]]` |
+  | 4 | flatten element 0 | `t3.0{0 1}*` → `@[1 2 3]` (c:14) | `t3.0.*` | `t3.0:ε*` | `t3.0:*` | `t3.0.*` | `[flatten t3.0]` |
+  | 5 | a Map's values, keywise | `m{a b}*` → `{:y 2, :x 1}` (c:16) | `m.*` | `m:ε*` | `m:*` | undefined on Maps | no Map join exists |
+  | 6 | …with provenance | `m{a b}*_` → `{:a-x 1, :b-y 2}` (c:17) | `m.*_` (a new family member) | `m:ε*_` | `m:*_` (the family, free) | undefined | none |
+  | 7 | a Map of vectors | `mv{a b}*` → `@[1 2 3]` (c:18) | `mv.*` | `mv:ε*` | `mv:*` | `mv.*` | none |
+  | 8 | records, keywise; the collision | `rr{0 1}*` → `{:a 1, :b 2}` (c:19); `rc{0 1}*` refused, "would silently drop one" (c:20) | `rr.*` | `rr:ε*` | `rr:*` | `rr.*` | none |
+  | 9 | flatten, then project | `groups{0 1}*:name` → `@["a" "b" "c"]` (c:21) | `groups.*:name` | `groups:ε*:name` | `groups:*:name` | `groups.*:name` | a function result, then a path |
+  | 10 | (bind, which exists) | `teams:members*:name` → `@["a" "b" "c"]` (c:22) | same | same | same | same | same |
+  | 11 | in BLOCK position | path `tw.teams:m*` → `@[1 2 3]` (c:28); block `tw{teams:m*}` refused (c:26): DEFERRED 167's class | `x{a.*}`: a new block arm | `x{a:ε*}`: waits on 167 | `x{a:*}`: waits on 167 | new arm | n/a |
+
+  **Laws each option makes checkable.** Bind = map then join (the monad law `m >>= f = join (fmap f m)`):
+  `x:k*` ≡ `x:k:*` under J, ≡ `x:k.*` under K, ≡ `x:k:ε*` under E; on known lengths `groups:*:name` ≡
+  `groups{0 1}*:name` (c:21). Functor identity `x:ε ≡ x` is a surface law under E only; under J it holds
+  in the IR. A has no join law (it is not a join).
+
+  **Weighed against the principles, as `DESIGN_PRINCIPLES.org` words them:**
+
+  | principle (quoted) | K `.*` | E `:ε*` | J `:*` | A full | N |
+  |---|---|---|---|---|---|
+  | Simplicity of Foundation — "Complexity is built through composition, not special cases" | ✗ `.` + `*` does not compose: under Q_U40 a `.` makes no layer, so `.*` is its own rule | ✓ one new step kind; ravel composed | ✓ no new token; ravel composed from `:` and `*`; one grammar production (`:` then a star) | ✗ its own rule plus a type-level rank recursion | ✓ nothing added |
+  | Correct by Construction / Correctness Through Types | ~ a new typing rule (it can reuse the join) | ✓ reuses Q_U40's join and Q_U38's collision refusal (c:20) unchanged | ✓ same as E; `(@bcast ε)` keeps the one-step invariant | ✗ needs `Flatten : Type → Type`; tuples and Maps unruled | ✓ |
+  | First-Class by Default (§7.5 selectors) | ~ a step, but not decomposable | ✓ ε is the unit of path composition | ✓ ε is the unit, in the algebra (PF's `data Step` gains one kind) | ✓ the one rank-polymorphic selector | ✗ a stored selector cannot flatten |
+  | Progressive Disclosure; Pragmatism with Rigor — "not Greek letters" | ✗ `.*` reads as a wildcard, and IS one in `selection` declarations (RV-3) | ✗ a visible token that does nothing alone | ✓ "each, joined", the reading of `rows:tags*` without a field | ✓ one familiar word, "flatten everything" | ✓ a named function |
+  | The Most Generalizable Interface | ✓ any container the join takes | ✓ | ✓ | ~ vectors only, until Maps/tuples are ruled | ~ one function per collection, unless a generic `join` |
+  | expressivity in selectors (Felleisen) | closes faces (a)–(c) | closes (a)–(c) | closes (a)–(c) | closes (a)–(c) at rank 1 only; loses one-level ravel (row 2) | none |
+  | migration and record | Q_U26 as decided; claims the glyph retired as row-splat (spec §2.1) | revises Q_U26 | revises Q_U26 | revises Q_U26 | revises Q_U26; the monotone waypoint |
+
+  **Hazards found while writing the spellings.**
+  - **K:** one character apart, opposite meanings. `x{a*}` splats `a`'s fields into the block; `x{a.*}`
+    would join `a`'s values and keep them under `:a`. Likewise `w.v*` is the identity (a:8) while
+    `w.v.*` would ravel.
+  - **J:** `w.v*` vs `w.v:*` is the same distance. But the `:` is the visible "for each" users already
+    read in `rows:tags*`, and the meaning follows from it.
+
+  **What J settles elsewhere.** Q_U46's reserved gap keeps its refusal (`t3{0*}`), and its remedy text,
+  which DEFERRED 185 left open, becomes `t3.0:*`. P4e-2's `.*` reclamation is not needed. Its
+  retirement inventory still runs, and the `selection`-declaration wildcard (RV-3) keeps its meaning
+  with no clash.
+
+  **Lean, revised: J, medium-high** (it supersedes "E over K").
+  - *Why:*
+    - the only option built entirely from operators and rules already on record;
+    - no new surface token;
+    - the whole star family follows for free (`m:*_`, row 6);
+    - first-class selectors get their unit;
+    - the glyph collisions of K disappear.
+  - *Counter-case:*
+    1. J revises an owner decision (Q_U26, K).
+    2. `:*` is a glued form readers have not seen; they must learn that a `:` can stand with no field.
+    3. In block position J waits on DEFERRED 167 (row 11).
+    4. A's one-word "flatten everything" is the most familiar surface for newcomers. It is also the
+       only rank-polymorphic selector, if first-class selectors are applied at several ranks.
+  - *What would settle it:* whether first-class selectors are expected to be rank-polymorphic. If yes,
+    A earns a place beside J (as a library selector, not as the join). Also, whether keeping Q_U26's
+    spelling outweighs K's two hazards.
+
+  **RV-4.** `tw{teams:m*}` is refused with a message about "Map-valued contents" (c:26), while the path
+  `tw.teams:m*` → `@[1 2 3]` (c:28). In a block the broadcast does not apply its step (DEFERRED 167's
+  `w4{a:b}` returns `a` untouched), so the star meets the team records. Filed as an addendum to 167.
 
   **Side findings (RV-n):**
   - **RV-1.** Q_U40's record says `vv:{0 1}*` → `⟨1 2 3 4⟩`, "a matrix RAVEL falls out with no special
