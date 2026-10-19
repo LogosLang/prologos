@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 186**
+> ### **NEXT FREE: 187**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -8404,3 +8404,56 @@ whether the user's own branch can spell it. The arm has the branch: on a path wi
 and send `{N*}` to Q_U46's ordinal-star message. The class-level cure (1b-vi-F's VAG (b)) is a remedy generator that
 renders its suggestion on the user's branch and runs it, as the battery's remedy rows already do by hand.
 **When**: the 1b-vi close, or the next edit of the level arms, whichever comes first.
+
+### 186. ⬜ ⭐ A MODULE ALREADY IN THE REGISTRY BRINGS NONE OF ITS REGISTRY STATE TO A LATER IMPORTER — the second `process-file` of a file in one process loses imported instances and constructors (`e1 : Bool defined.` → `No instance of Eq for Int`); `core::csv` elaborated after its closure was imported directly fails E2001
+
+**Found by** PAR 4B SP-2, 2026-10-19 (branch `par4b-parallelism-portfolio` @ `c6b6dc19`; compiler code = main `a01f3fc7`
+= main `1120c2d4`). The module-level profile needs a module's elaboration to be a function of its source and its
+imports' results, and two censuses checked that. Every module was elaborated from source (`.pnet` reads off). Record:
+`docs/tracking/tracks/PAR/PAR_4B/research/2026-10-19_PAR_4B_STAGE1_PARALLELISM_PROFILE.md` §4.7 (on the branch until
+its next checkpoint merge).
+- **Re-run census, measured.** `process-file` the same file twice in one process and compare the results. This is how
+  the LSP checks a document (`lsp/server.rkt:536-566`, one `process-file` per check, no module-registry reset) and how
+  `racket driver.rkt a b` runs (`driver.rkt:3967`). 20 of 52 library modules and 3 of 19 comparative files differ on
+  the second run, always toward errors.
+  - constraints-adversarial, 4 → 10 errors. `e1 : Bool defined.` → `No instance of Eq for Int` (also Bool and
+    String), and `d8 : Int defined.` → `Could not infer type`.
+  - `data::list`, 0 → 3 errors: `Eq expects 3 arguments, got 1`; `unreachable match arm …` (a constructor read as a
+    variable); `Unbound variable`.
+
+  Repro: `racket/prologos/benchmarks/par4b/profile/sp2-rerun-diff.rkt FILE` prints every differing result; its output
+  on five files is `…/research/profile/sp2/repro/rerun-diff.out` (30 differing results). Not reproduced in the editor
+  itself.
+- **Order census, measured.** For each module b, a top-level file imports b's closure directly, in topological order,
+  and then b. 1 of 52 fails: `prologos::core::csv`, with `E2001: Required capability ReadCap not available in scope`.
+  The same module loads clean alone and through its own imports. Minimal repro (`…/sp2/repro/csv-after-capabilities.prologos`,
+  `.pnet` reads off): `ns r :no-prelude` / `require [prologos::core::capabilities :refer []]` /
+  `require [prologos::core::csv :refer []]`. With fresh `.pnet` caches it passes, because csv is then not elaborated.
+  The census detects errors only; a module that elaborates differently without erroring would not be seen.
+
+**Mechanism.** The paths are from code reading; that they cause these symptoms is CONJECTURE. `load-module` has three
+paths, and only two carry registry state to the importer:
+- the `.pnet` hit restores every registry into parameter AND cell (`restore-registries!`, `driver.rkt:3132`, #78);
+- the source path re-propagates the module's registries to the caller's parameters (`:3336-3361`);
+- the memory hit returns the cached module-info and nothing else (`:3039-3045`).
+
+Before SW-27, a source load's registrations leaked to the process root, which hid the gap. Since SW-27 (160,
+`51b6b1f9`), a unit's registrations end with the unit. So a module first loaded inside unit 1 is a memory hit in
+unit 2: it brings its env (share-by-reference, `:3040-3044`) but not its instances, constructors or capabilities.
+
+The csv case happens inside ONE unit. It may instead be the parameter-only propagation at `:3361` meeting cell-primary
+readers (`macros.rkt:8210-8211`), which is #78's polarity on the miss path. Not verified.
+
+**Why it matters.** It breaks HIT ≡ MISS (#78's invariant) on the third path. Any build that reuses a loaded module
+computes something else on a hit: the LSP's second check, an incremental rebuild, or a parallel module build whose
+workers keep what they loaded. PAR 4B's module-level ceilings (profile §4) assume the opposite.
+
+**Fix shape.** Make the memory hit restore what the `.pnet` hit restores: the module-info keeps its registry deltas, as
+the `.pnet` does (`pnet-restore-rows`), and `restore-registries!` runs on both hits. Then re-run both censuses, which
+become the regression gates (0 of 52 and 0 of 19 on re-run; 0 of 52 on order).
+
+**Related**: 160 (SW-27, the scope that exposed it), 171 (REPL sessions: the converse, registrations escaping), #78.
+
+**Owner**: PM (`load-module`). PAR 4B does not edit `driver.rkt`.
+
+**When**: before any PAR 4B XV-5 or XV-8 spike relies on reusing loaded modules. The LSP path argues for sooner.
