@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 187**
+> ### **NEXT FREE: 189**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -8154,6 +8154,40 @@ wrong answers fixed sooner.
 - **An exhaustion inside a branch is not a nogood** (PAR 4 O-16 part 3; DEFERRED 184's solver half).
 - **Record**: PAR 4 D.2 §15 O-17 (on main since PAR 4 checkpoint 3 `dba9f502`).
 
+**Addendum 2026-10-19 (BSP-LE 3 Stage 1).** Record: `docs/tracking/tracks/BSP-LE/BSP-LE_3/research/2026-10-19_BSP-LE_3_STAGE1_DIFFERENTIAL.md` §2-§4 and §7; instrument and data in `docs/tracking/tracks/BSP-LE/BSP-LE_3/research/stage1/`
+(`166afd41`, `0b303034`); both on branch `bsple3-tabling` until BSP-LE 3's next checkpoint. The answer-set
+differential this entry's test layer asks for now exists, and it has power:
+- seeded mutations of real outputs flag exactly their line with the expected class (171 of 171), while reorderings
+  and fresh-name renamings flag nothing (47 of 47);
+- the generated programs have a third leg, the perfect model of the ground program, and a seeded wrong rule in that
+  oracle is caught (356 and 252 lines).
+
+Findings:
+- **Measured reach.**
+  - In-repo, under `:strategy auto`, 28 of 357 route records take ATMS. Every one that has a reference agrees with DFS,
+    except four lines in PAR 4's probe files that were written to reproduce this entry. "In-repo programs do not hit
+    it" holds.
+  - On 2156 generated queries (120 programs × 4 variants):
+    - DFS matches the perfect model on every query;
+    - forced ATMS is wrong on 881 (41 %);
+    - a plain `solve` is wrong on 337 (16 %), every one of them routed through Check 1 (a `not` goal).
+
+    On the generator profile calibrated to the corpus's clause shapes, a plain `solve` is wrong on 48 of 1092 (4.4 %).
+- **Correction: the "control" row of the 2026-10-18 addendum is masked.** `(rel [?x ?y] (pick ?x) (= ?y 1) (= ?x ?y))`
+  agrees only because `1` is `pick`'s first clause. With `pick`'s clauses reversed it answers `@[{:x 2, :y 1}]` against
+  DFS's `@[{:x 1, :y 1}]`, and with the constant `2` it fails as W2-7 Q6 already showed. It is a wrong-answer row, not
+  a control. Under the metamorphic closure, 20 generated query positions agree in one variant and fail in another.
+- **Correction: the wrong answers depend on the scheduler.** Both schedulers are wrong, but not identically. Under
+  `:execution :sequential` (the Gauss-Seidel drain), answer sets differ from BSP's on 10 of 78 known-row queries, and
+  generated queries are wrong on 1090 lines against BSP's 881. So "order-differential instruments … cannot see this"
+  (above) holds only where the two schedulers' wrong answers coincide, and a fix verified under BSP alone is not
+  verified under the drain.
+- **ATMS answers also depend on clause order**: 92 of 1078 clause-order pairs of generated queries change their answer
+  set (DFS: 0).
+- **One more path to the row-1 mechanism: a repeated variable in a call.** `&> (e2 x x)` over the single fact `(2, 3)`
+  answers `{:x 2}` under ATMS, where DFS answers `@[]`. The same query on the facts-only relation itself takes the
+  direct-fact fast path, which is wrong under EVERY strategy: filed as 187.
+
 ### 178. ⬜ BSP'S TIER-1 FLUSH RETURNS A NETWORK THAT IS NOT A FIXPOINT — it fires the fire-once, empty-input propagators, then clears the whole worklist, discarding the dependents its own writes enqueued (`propagator.rkt:3431-3445`)
 
 **Found by** PAR 4's D.3 round: critics C2 (reality check) and C5 (theory), independently. Reproduced by hand on
@@ -8482,3 +8516,62 @@ become the regression gates (0 of 52 and 0 of 19 on re-run; 0 of 52 on order).
 **Owner**: PM (`load-module`). PAR 4B does not edit `driver.rkt`.
 
 **When**: before any PAR 4B XV-5 or XV-8 spike relies on reusing loaded modules. The LSP path argues for sooner.
+
+### 187. ⬜ THE DIRECT-FACT FAST PATH IGNORES A REPEATED QUERY VARIABLE, UNDER EVERY STRATEGY — `solve (e2 ?a ?a)` over the single fact `(2, 3)` answers `@[{:a 3, :a 3}]` instead of `@[]`; `(e3 ?a ?b ?a)` returns both `(1 2 1)` and `(1 2 3)`
+
+**Found by** BSP-LE 3's Stage-1 differential: the generated workload, program census-f2 `p27`, in all four of its
+metamorphic variants. Reproduced by hand at `2d04ae79` with `tier1-repeat.prologos`, in `docs/tracking/tracks/BSP-LE/BSP-LE_3/research/stage1/` `w2-known/` (on branch
+`bsple3-tabling`). The direct-fact fast path is `tier-1-direct-fact-return`; it is not BSP's Tier-1 flush of 178.
+Output under each forced strategy and under `:auto` (`w2/tier1-repeat.{dfs,atms,auto}.out`):
+
+| query | facts | every strategy | expected |
+|---|---|---|---|
+| `(e2 ?a ?a)` | `(2, 3)` | `@[{:a 3, :a 3}]` | `@[]` |
+| `(e2d ?a ?a)` (control) | `(2, 3)`, `(2, 2)` | `@[{:a 3, :a 3} {:a 2, :a 2}]` | `@[{:a 2}]` |
+| `(e3 ?a ?b ?a)` | `(1, 2, 1)`, `(1, 2, 3)` | both rows | `@[{:a 1, :b 2}]` |
+| `(rel [?a] (e2 ?a ?a))` (the dispatch, not the fast path) | `(2, 3)` | DFS `@[]`, ATMS `@[{:a 2}]` | `@[]` |
+
+**Mechanism** (read in code; the route record confirms that the path is taken):
+- `stratified-solve-goal` calls the fast path BEFORE the strategy dispatch (`racket/prologos/stratified-eval.rkt:242`
+  on main). It applies to a relation with one variant, facts, and no clauses
+  (`racket/prologos/relations.rkt:3018`).
+- Its per-row fold binds a query-variable position with `hash-set` (`relations.rkt:3046`), without checking an earlier
+  binding of the same variable. So the last column wins, and a row is rejected only when a ground argument differs.
+- Because the fast path precedes the dispatch, DFS cannot serve as a reference here. The forced-DFS leg prints the
+  same wrong answer, with route record `tier1`.
+- The doubled key in the printed answer is a separate anomaly, present on every route: 188.
+
+**Reach**: a `solve` on a facts-only relation that repeats a variable. In-repo: 0 top-level queries. The census
+pattern matches 2 of 2 positive strings and 0 of 2 negatives; its one hit is a `(= ...)` look-alike.
+
+**Fix shape**: in the fold, when the variable is already bound, keep the row only if the value is `equal?` to the
+existing binding, and reject it otherwise. It is the fast path's copy of 177's row 1, a binding overwritten instead of
+joined.
+
+**When**: in BSP-LE 3 Stage A's slice "the fixes that need no new machinery" (the kickoff's §4, Stage 4 item 2), if
+the owner places it there. The differential then gains a fast-path leg against the oracle.
+
+**Owner**: BSP-LE 3 (the solver files, under the contract in the kickoff's §3).
+
+### 188. ⬜ A REPEATED QUERY VARIABLE PRINTS TWICE IN EVERY ANSWER — `solve-with dfs-s (q ?a ?a)` prints `@[{:a 2, :a 2}]`, on the direct-fact fast path, DFS and ATMS alike
+
+**Found by** the controls for 187 (`dupkey-control.prologos`, `w2/dupkey-control.auto.out` in `docs/tracking/tracks/BSP-LE/BSP-LE_3/research/stage1/`, `0b303034`, on
+branch `bsple3-tabling`). A clause relation `q` over the facts `(2, 3)` and `(2, 2)` prints:
+- `@[{:a 2, :a 2}]` through DFS, which is the right answer set with the key twice;
+- `@[{:a 2, :a 2} {:a 2, :a 2}]` through ATMS;
+- `@[{:a 3, :a 3} {:a 2, :a 2}]` through the fast path (187).
+
+**Mechanism**: from reading, not measured further.
+- `extract-query-info` (`racket/prologos/reduction.rkt:400-402` on main) keeps duplicate free-argument names.
+- `answers->champ-list` (`reduction.rkt:295-305`) inserts one entry per query-variable occurrence, and the result
+  holds two `:a` entries.
+- Not measured: whether `champ-insert` should have replaced the first entry. The keys come from
+  `query-var->champ-key` and are equal in content, so a non-replacing insert would be a CHAMP defect with wider reach.
+- Also not measured: what a reader (`get`, path selection) does with such a map.
+
+**Fix shape**: drop duplicate query variables in `extract-query-info`, keeping the first occurrence. Before relying on
+that, measure `champ-insert` on two equal fresh keys.
+
+**When**: with 187.
+
+**Owner**: BSP-LE 3 for the query-variable list. Whoever owns `champ.rkt`, if the insert is at fault.
