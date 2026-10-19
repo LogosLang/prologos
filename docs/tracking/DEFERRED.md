@@ -6899,7 +6899,7 @@ three sites via one helper (`entries-union`); the live site was `make-tagged-mer
 not `:453`/`:465` (no production callers). Pure refinement, pinned by a rackcheck property
 against the old append on both reader paths. W2 re-write ×10 000: entries 10 000 → 1.
 The PAR 4 heap workload still grows (100 → 84 entries at 100 rounds) because it is an
-ascending chain per bitmask, not duplicates — the bitmask-keyed map form is a PAR 4 D.2 decision (placed there by the owner, 2026-10-13; `tracks/PAR/PAR_4/LOG.md` § DEFERRED 148), not a DEFERRED entry.
+ascending chain per bitmask, not duplicates — the bitmask-keyed map form is a PAR 4 D.2 decision (placed there by the owner, 2026-10-13; `tracks/PAR/PAR_4/PAR_4_LOG.md` § DEFERRED 148), not a DEFERRED entry.
 Record: `docs/tracking/handoffs/2026-10-13_DEFERRED_SWEEP_146-149_MERGE_NOTE.md` § 148 (branch `deferred-sweep-146-149` @ `8322459b`; merged to main in `11f558c8`).
 
 ### 149. ✅ **RESOLVED, NO CODE CHANGE — NOT A 9.3 REGRESSION; the 1.35× was main's build (see 159)** — ~~WATCHING — `test-transducer-01.rkt` is reproducibly ~1.35× SLOWER under Racket 9.3 than 9.0 (4.4→6.0 s, 4.3→5.8 s, worktree-pinned interleaved A/B); three other files at parity~~
@@ -7141,7 +7141,7 @@ with cell 1, so the result is not a fixpoint of its own S0 propagators.
   routes to ATMS in the repo is flagged.
 - **Fix shape**: (b)'s growth construction, extended to the handler. NAF and guard verdicts are written as nogoods
   (or invalidated bits) that the projection reads, so cell 1 has one writer, α(assumptions, decisions, nogoods).
-- **Evidence** (on branch `par4-arena-executors`): `racket/prologos/benchmarks/par4/d3-wave2/W2-4/` (`q3-cell1.rkt`,
+- **Evidence** (on main since PAR 4 checkpoint 2 `8a11ee1a`): `racket/prologos/benchmarks/par4/d3-wave2/W2-4/` (`q3-cell1.rkt`,
   `q3-tier1-sweep.rkt`). W2-4-2 adds the `truths` rows to (a)'s parity set. Record: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §6.
 
 ### 158. ⬜ PROPAGATORS INSTALLED INSIDE A FIRE LOSE THEIR FLAGS — the BSP scheduler re-installs them from `(inputs outputs fire-fn)` only, dropping `PROP-FIRE-ONCE`, `#:assumption`, `#:component-paths` and srcloc; a fire-once propagator installed in a fire fires on every input change
@@ -7953,8 +7953,8 @@ audit's GA-10 (on the branch); probes `…/PPN_4C/research/4B5b/q5-v27*`.
 
 ### 176. ⬜ THE PROPAGATOR OBSERVER'S RECORDS MISREPORT WHAT FLOWED — 45 % of BSP diff records show a value the cell does not hold; the sequential scheduler names a placeholder writer; the LSP merges every S0 run and fork in a file into one timeline that starts from the final state
 
-**Found by** PAR 4, re-posing owner decision O-3 (observers). Sources: D.1 Appendix A.6–A.7, on branch
-`par4-arena-executors`; the code is main `c1f389ab`. Two probes, with data in `data/par4-p0/o3/` (on the branch):
+**Found by** PAR 4, re-posing owner decision O-3 (observers). Sources: D.1 Appendix A.6–A.7 (on main since PAR 4
+checkpoint 2 `8a11ee1a`); the code is main `c1f389ab`. Two probes, with data in `data/par4-p0/o3/` (on main since PAR 4 checkpoint 2 `8a11ee1a`):
 - `benchmarks/par4/o3-observer-census.rkt`: 18 comparative files, with the observer installed the way the LSP installs it;
 - `benchmarks/par4/o3-observer-fixtures.rkt`: five small networks under BSP and under the sequential scheduler.
 
@@ -8004,13 +8004,13 @@ code, not run.
 - (a) and (b): with O-3's implementation in PAR 4 P1 or P2;
 - (c): before anyone relies on the editor view to answer a "why" question.
 
-**Record**: PAR 4 D.1 Appendix A.6–A.12 and LOG § *O-3 re-posed* (on branch `par4-arena-executors`).
+**Record**: PAR 4 D.1 Appendix A.6–A.12 and LOG § *O-3 re-posed* (on main since PAR 4 checkpoint 2 `8a11ee1a`).
 
 **Addendum (2026-10-14, owner guidance G-3)**: the owner wants a visual debugger as part of the language's dev
 tooling, for two purposes: demonstrating how the system works, and practical debugging and introspection. It is not
 in PAR 4's scope to deliver. Consequences for this entry:
 - (c) is **wanted, not optional polish**. It still needs an owner to place it on the roadmap.
-- (a) is sharpened by a new measurement (fixture probe `5fbb30df` on the branch). A round record must carry the
+- (a) is sharpened by a new measurement (fixture probe `5fbb30df`, on main since PAR 4 checkpoint 2 `8a11ee1a`). A round record must carry the
   cell, its old value, the value it holds after the round, the round's writers and the round index. With those, a
   cell's final value unfolds into a derivation in which every premise sits at an earlier round, so it is
   well-founded even on a cycle.
@@ -8020,10 +8020,10 @@ in PAR 4's scope to deliver. Consequences for this entry:
   rounds gives the same answer with termination by construction. *When*: with (c), or whenever error explanation is
   next revisited.
 
-Requirements table and critique: PAR 4 D.1 Appendix A.13 (on branch `par4-arena-executors`, `47edfd8a`).
+Requirements table and critique: PAR 4 D.1 Appendix A.13 (on main since PAR 4 checkpoint 2 `8a11ee1a`, `47edfd8a`).
 
 **Addendum (2026-10-15, owner decision O-3 = OB-4, "observation in logical time")**: the contract this entry's fixes
-follow is now decided (PAR 4 D.1 §14 O-3, `1e1684e2` on the branch).
+follow is now decided (PAR 4 D.1 §14 O-3, `1e1684e2`, on main since PAR 4 checkpoint 2 `8a11ee1a`).
 - (a) and (b) land in PAR 4. D.2 places them in P1 or P2 for the round records and in P2 for the epoch records, the
   shared (network, epoch, round) keys and the replay.
 - (c) and (d) remain outside PAR 4 and still need a roadmap home, which is the owner's call.
@@ -8034,7 +8034,7 @@ The entry stays open until the fixes land.
 
 **Found by** PAR 4's D.3 adversarial critique round. Critic C9 (red team) found it; C4 independently measured the
 read-side mechanism. Reproduced by hand on 2026-10-15 with `tools/scratch-run.sh` on the two probe files. The code
-is main `c1f389ab`. The probes are kept on branch `par4-arena-executors` in
+is main `c1f389ab`. The probes are kept on main since PAR 4 checkpoint 2 `8a11ee1a` in
 `racket/prologos/benchmarks/par4/d3-wave1/C9/`: `c1-overwrite.prologos` and `c4-varvar.prologos`.
 
 | query | `:strategy atms` | `:strategy depth-first` |
@@ -8073,7 +8073,7 @@ do not depend on the schedule.
 wrong answers fixed sooner.
 
 **Record**: PAR 4 D.3 wave-1 triage §1, §3 CL-6 and §4 PD-1
-(`docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-15_PAR_4_D3_WAVE1_TRIAGE.md` on the branch).
+(`docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-15_PAR_4_D3_WAVE1_TRIAGE.md`; on main since PAR 4 checkpoint 2 `8a11ee1a`).
 
 **Addendum 2026-10-18 (PAR 4 D.3 wave 2; synthesis SC-24 and SC-30).**
 - **Reach is wider than stated above.** `:strategy auto` picks ATMS (`stratified-eval.rkt:253-293`) when either of
@@ -8108,12 +8108,12 @@ wrong answers fixed sooner.
   label set means the query fails) and never as a network contradiction.
 - **Test layer**: the rows above, plus W2-7's Q4–Q8, in `test-solver-parity.rkt`.
 - **Owner decision pending**: whether PAR 4 P1a or BSP-LE 3 owns the fix (O-17 in the synthesis). Record: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §5.7, §6
-  (on branch `par4-arena-executors`).
+  (on main since PAR 4 checkpoint 2 `8a11ee1a`).
 
 ### 178. ⬜ BSP'S TIER-1 FLUSH RETURNS A NETWORK THAT IS NOT A FIXPOINT — it fires the fire-once, empty-input propagators, then clears the whole worklist, discarding the dependents its own writes enqueued (`propagator.rkt:3431-3445`)
 
 **Found by** PAR 4's D.3 round: critics C2 (reality check) and C5 (theory), independently. Reproduced by hand on
-2026-10-15 with C2's `probe-tier1.rkt` (on branch `par4-arena-executors`, in
+2026-10-15 with C2's `probe-tier1.rkt` (on main since PAR 4 checkpoint 2 `8a11ee1a`, in
 `racket/prologos/benchmarks/par4/d3-wave1/C2/`).
 
 The probe network: a copy propagator A → B, already quiescent, then a fire-once propagator with no inputs that
@@ -8144,7 +8144,7 @@ corrected in the D.3 triage (SC-20). Under PAR 4 P2, Tier 1 becomes the first pa
 
 **When**: PAR 4 P0.5 (with DEFERRED 150), or sooner if a trap measures production reach.
 
-**Record**: PAR 4 D.3 wave-1 triage §1 and §4 PD-2 (on the branch).
+**Record**: PAR 4 D.3 wave-1 triage §1 and §4 PD-2 (on main since PAR 4 checkpoint 2 `8a11ee1a`).
 
 **Addendum 2026-10-18 (PAR 4 D.3 wave 2, W2-4 and W2-9).** Today's production paths cannot reach it:
 - Every top-level query network carries the worldview projection propagator on its worklist (`atms.rkt:237`), so
@@ -8190,7 +8190,7 @@ already iterates the table). **When**: with DEFERRED 144, or the next edit of th
 ### 181. ⬜ ⭐ A FIRE THAT RAISES HANGS THE PRODUCTION BSP EXECUTOR — on any round of ≥ 8 fires, `make-parallel-thread-fire-all` (installed at load, `driver.rkt:567`) loses the exception with its thread and the joiner blocks forever in `channel-get`; the LSP, whose error port goes nowhere, wedges with an empty log
 
 **Found by** PAR 4's D.3 round, wave 2. Gap critic W2-10 found it; C6-4 had predicted it for P3's persistent
-executors. Reproduced by hand on 2026-10-18 with `exec-exn.rkt` (on branch `par4-arena-executors`,
+executors. Reproduced by hand on 2026-10-18 with `exec-exn.rkt` (on main since PAR 4 checkpoint 2 `8a11ee1a`,
 `racket/prologos/benchmarks/par4/d3-wave2/W2-10/`). The probe is one round of N propagators over one source cell,
 in which one fire raises.
 
@@ -8221,17 +8221,17 @@ to hit it.
 - **Lost assignments**: direct parameter assignments made in a fire are lost (W2-5, power rows).
 
 **Fix shape**: delete the installation and the executor and keep the `current-parallel-executor` seam (PAR 4
-O-14, **DECIDED (a) 2026-10-18**, `329319cb` on the branch). Independently of that, exceptions become data at the fire wrapper that every scheduler shares, and
+O-14, **DECIDED (a) 2026-10-18**, `329319cb`, on main since PAR 4 checkpoint 2 `8a11ee1a`). Independently of that, exceptions become data at the fire wrapper that every scheduler shares, and
 the boundary re-raises one canonically (synthesis §5.5).
 
 **When**: PAR 4 P0.5.
 
-**Record**: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §1, §5.1, §5.5 (on branch `par4-arena-executors`); O-14 in `…/PAR_4/2026-10-15_PAR_4_D2_DESIGN.md` §15.
+**Record**: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §1, §5.1, §5.5 (on main since PAR 4 checkpoint 2 `8a11ee1a`); O-14 in `…/PAR_4/2026-10-15_PAR_4_D2_DESIGN.md` §15.
 
 ### 182. ⬜ ⭐ AN INLINE SOLVER OVERRIDE RESETS EVERY KEY IT DOES NOT NAME — `solve-with wf-solver {:timeout 100} (p-holds)` drops `:semantics well-founded`, runs stratified DFS on cyclic negation, and aborts the whole file with an uncaught `solve: Depth limit exceeded (100)`
 
 **Found by** PAR 4's D.3 round, wave 2 (gap critic W2-10). Reproduced by hand on 2026-10-18 with `u8a.prologos` and
-`u8b.prologos` (on branch `par4-arena-executors`, `racket/prologos/benchmarks/par4/d3-wave2/W2-10/`):
+`u8b.prologos` (on main since PAR 4 checkpoint 2 `8a11ee1a`, `racket/prologos/benchmarks/par4/d3-wave2/W2-10/`):
 - `solve-with wf-solver (p-holds)` gives `@[]`.
 - With `{:timeout 100}`, the file aborts: no later result is printed.
 - `{:semantics well-founded :timeout 100}` gives `@[]`.
@@ -8257,4 +8257,4 @@ decision (O-16 in the synthesis; it re-opens O-2).
 **When**: the override fix is independent and small, so it could land at any time. The surface questions are
 decided with O-16.
 
-**Record**: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §1, §5.6 (on branch `par4-arena-executors`).
+**Record**: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §1, §5.6 (on main since PAR 4 checkpoint 2 `8a11ee1a`).
