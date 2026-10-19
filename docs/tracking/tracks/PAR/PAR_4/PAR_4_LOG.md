@@ -899,3 +899,30 @@ binder merges with unsolved metas.
     nogood, i.e. silently fewer answers.
 - **Next**: the owner decides O-16; then O-17 (who owns 177's fix, which O-16's part 3 now meets: an exhaustion inside
   an ATMS branch), then D.3.
+
+### O-16 DECIDED (a), with the labels' cost conditioned; O-17 posed (who owns 177's fix; lean: BSP-LE Track 3's Stage A, as a concurrent track) — docs commit on the branch; main `ab41836c` (2026-10-19)
+- **Why / decision**:
+  - The owner chose (a): *"I like the idea of logical time for (a) — I'd want to make sure that measurement doesn't
+    add anything beyond noise (or then at least can be toggled as extra debug information?)."* The condition costs no
+    semantics. Production certifies with the change counter (depth ≤ L ≤ changes), at the cost of today's fuel
+    decrement, and falls back to an exact BSP replay when the counter passes B. The depth labels ship on only if
+    P2's A/B, powered with an injected cost of the noise's size, puts them within noise; otherwise they are a debug
+    toggle. The verdict is a function of the program either way.
+  - On main (`ab41836c`): 182's surface questions are marked decided, with BSP-LE Track 5 as their natural home; a
+    172 addendum; DEFERRED **183** (a session `:fuel` trip is reported as a protocol violation) and **184** (a
+    network budget trip is never read by the solver or typing), each reproduced by hand or re-checked with a powered
+    grep. NEXT FREE is 185.
+  - The owner also asked to find the track that owns the ATMS fix ("I believe it's in the BSP-LE series") and to
+    start it concurrently, as PAR 4B was. No BSP-LE track holds it. 177 says "with PAR 4 P1a", and its addendum
+    left O-17 open. So O-17 is posed in D.2 §15 with lean (a): BSP-LE Track 3 owns it as its Stage A, with the label
+    semantics plus the DFS-vs-ATMS differential, checkpointed before tabling. The alternatives are (b) a 2B addendum
+    and (c) P1a.
+- **Surprise / correction**:
+  - Track 3's tables (PUnify Part 3 §9.6) and 177's fix are one lattice. But §9.6 reads answers "consistent with W",
+    which is weaker than ⊆ W. Read that way, a branch's binding leaks into a sibling branch, which is 177's leak
+    shape. The read rule must be pinned to ⊆ once, for both.
+  - The concurrency map is clean: no active worktree touches the fix's files. The one real coupling is W2-6-3. BSP's
+    Tier-1 predicate reads the worldview cell (`propagator.rkt:3410-3430`), so PAR 4 would land a seam for it in
+    P0.5, or the order stays "row 1 after P2".
+- **Next**: the owner decides O-17. If (a) or (b): a docs-only checkpoint of PAR 4, then the worktree, build, kickoff
+  and start prompt, as for PAR 4B. Then D.3.
