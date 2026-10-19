@@ -8549,6 +8549,18 @@ become the regression gates (0 of 52 and 0 of 19 on re-run; 0 of 52 on order).
 
 **When**: before any PAR 4B XV-5 or XV-8 spike relies on reusing loaded modules. The LSP path argues for sooner.
 
+*Addendum 2026-10-19 (PAR 4B SP-3; branch `par4b-parallelism-portfolio` @ `1c2c7c56`, compiler code = main `a01f3fc7`):*
+a THIRD trigger, measured. A file processed after a DIFFERENT file that imported the same modules is degraded on its
+FIRST run: `process-file benchmarks/par4/preload-empty.prologos` (a one-`def` file that loads the prelude), then the
+target. 3 of 19 comparative files differ from a fresh process, and they are the re-run census's three:
+constraints-adversarial 4 → 10 errors, type-adversarial 20 → 28, scheduler-adversarial 18 → 19. The other 16 are
+identical (result hashes equal). This is the setup of PAR 4's W2-1 / W2-8 probes and of PAR 4B SP-1, so their
+heavy-file profiles were taken on the degraded elaboration. Re-measured fresh: work/span 1.29 / 1.58 against 1.26 /
+1.49 in the same session; the run structure is unchanged (66 / 61 runs) and 2 / 3 commands fire differently
+(profile record §5.6, branch `02e720b5`). It also means a batch run that processes several user files in one process
+(`racket driver.rkt a b`, `driver.rkt:3967`) degrades every file after the first that shares imports with an earlier
+one; that consequence is from reading, not measured.
+
 ### 187. ⬜ THE DIRECT-FACT FAST PATH IGNORES A REPEATED QUERY VARIABLE, UNDER EVERY STRATEGY — `solve (e2 ?a ?a)` over the single fact `(2, 3)` answers `@[{:a 3, :a 3}]` instead of `@[]`; `(e3 ?a ?b ?a)` returns both `(1 2 1)` and `(1 2 3)`
 
 **Found by** BSP-LE 3's Stage-1 differential: the generated workload, program census-f2 `p27`, in all four of its
@@ -8607,3 +8619,45 @@ that, measure `champ-insert` on two equal fresh keys.
 **When**: with 187.
 
 **Owner**: BSP-LE 3 for the query-variable list. Whoever owns `champ.rkt`, if the insert is at fault.
+
+### 189. ⬜ A PRELUDE MODULE THAT FAILS TO LOAD IS DROPPED IN SILENCE — a user file then elaborates without it, and the only symptom is a later `Unbound variable` or `No instance`
+
+**Found by** PAR 4B SP-3, 2026-10-19 (branch `par4b-parallelism-portfolio` @ `1c2c7c56`; compiler code = main
+`a01f3fc7`), while a scratch copy of `racket/prologos` that had lost `lib/prologos/data/` ran every user file with a
+3-module registry instead of 39 and printed nothing about it.
+
+**Measured** (scratch copy of the tree, `.pnet` reads off). Append `def sp3-broken := [sp3-no-such-function 1N]` to
+`lib/prologos/data/nat.prologos`, then:
+- a user file (`ns repro189`, prelude on) with `def two := [+ 1N 1N]` and `def same := [eq? 2N 2N]`: `two : Nat
+  defined.`, then `ERROR Unbound variable` for `same`. The registry holds 18 modules instead of 39. No result and no
+  stderr line names `data::nat` or the prelude;
+- the same module imported explicitly (`ns repro189b :no-prelude`, `imports [prologos::data::nat :refer-all]`):
+  `ERROR preparse: imports: Error loading module prologos::data::nat: Unbound variable`. The failure is reported;
+- with `nat.prologos` restored: 39 modules, both definitions elaborate.
+
+Repro files: `docs/tracking/tracks/PAR/PAR_4B/research/profile/sp3/repro189/` and the printer
+`racket/prologos/benchmarks/par4b/profile/sp3-show-results.rkt ROOT FILE`; record: profile §5.8 (branch `02e720b5`,
+on main at its next checkpoint merge).
+
+**Mechanism** (read, and the repro agrees). `process-ns-declaration` wraps each prelude import in
+`(with-handlers ([exn:fail? (lambda (e) (void))]) (process-imports req))` (`racket/prologos/namespace.rkt:972`; the
+library branch's `prologos::core` import likewise, `:965`). The comment gives the intent: "one failure doesn't prevent
+loading of subsequent modules". The cost is that the exception is discarded instead of reported, so one failing module
+silently removes every prelude import that depends on it. The same file's explicit `imports` path reports the error.
+
+**Why it matters.** Whoever edits the standard library and introduces an error sees every user file fail far from the
+cause (here 21 modules gone, reported as an unbound name in user code). A tool that copies or relocates the tree meets
+it as wrong results, not as an error. And a measurement silently runs on a smaller prelude: SP-3 caught it only
+because a result hash differed from the real tree's.
+
+**Fix shape.** Keep loading the remaining prelude modules, but return the failure: emit one diagnostic per failed
+prelude import (the module name and the underlying error, as the explicit path prints it), attached to the `ns` form.
+The repro above is the regression test: its user file must then report `data::nat`.
+
+**Related**: 186 (module loading that computes something else without saying so); 31 item 3 (`load-module` skipped
+a library module's error surf in silence until `7a5f7689`; this is the same class one level up, at the prelude
+import).
+
+**Owner**: PM (the module system). PAR 4B does not edit `namespace.rkt`.
+
+**When**: low cost; with or before the next standard-library change.
